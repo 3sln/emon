@@ -6,6 +6,9 @@
 //      `Range` still works (spooled); a read that fails is `io`; a stream longer than its bound is `input-bytes`;
 //   4. `asset.bytes()` and `asset.blob()` agree, `external` HTML in its browser form (object URLs) shows the asset;
 //   5. tesseract.js, through plan/fulfil, reads a scanned page; what it recorded replays NATIVELY (the Rust host) to the same bundle;
+//   5b. the render port (P11.4c): the renderer is opened by the first request that needs it (never for a born-digital document that asks for no raster),
+//      asked for whole pages, closed, its failures are answers and a fault of the source under its read is the conversion's; and pdfium's own
+//      WebAssembly build in the page records the transcript Node recorded;
 //   6. the JS heap at the 32 MiB `assets-bytes` default, in `inline` and `external` modes (measured, printed).
 //
 //   node test/driver/wasm/check.mjs --wasm PATH       prints `  ok ` and `  FAIL ` lines, exits 1 on a FAIL
@@ -13,7 +16,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { startServer, repo } from './server.mjs';
+import { startServer, repo, pdfiumFile } from './server.mjs';
 import { launch, harnessPage } from './browser.mjs';
 import { bigImagePdf, pictureBookPdf } from './fixtures.mjs';
 
@@ -30,6 +33,7 @@ const bad = (...x) => {
 };
 const check = (c, ...msg) => (c ? ok(...msg) : bad(...msg));
 const pct = (a, b) => ((100 * a) / b).toFixed(1) + '%';
+const pdfiumInCache = () => !!pdfiumFile('lib/pdfium.wasm');
 const MiB = 1024 * 1024;
 
 const server = await startServer({ wasm });
@@ -238,6 +242,112 @@ try {
     // and the browser replays what the native host recorded: no engine, no port
     const nat = await page.evaluate((s) => window.H.run({ path: s, adapter: 'array', replayDir: 'test/ocr/scan/h-keyword', replay: ['transcript.edn'] }), scan);
     check(nat.exit === 0 && JSON.stringify(JSON.parse(nat.out.slice(nat.out.indexOf('\n') + 1, nat.out.indexOf('\n== json-pretty')))).includes('"kind":"scanned"'), 'the browser replays the transcript the native Tesseract recorded (test/ocr/scan/h-keyword): the scan is OCR\'d with no engine run');
+  }
+
+  // ---------------------------------------------------------------------------------------------------- 5b. the render port (P11.4c)
+  // a renderer is opened by the first request that needs it (a born-digital document under `ocr=never` never opens it), asked for whole pages only (a page
+  // and its crops are one render), its documents are closed, its failures are answers, and a fault of the source under its read is the conversion's
+  const rport = await page.evaluate(async () => {
+    const fetchU8 = async (p) => new Uint8Array(await (await fetch('/repo/' + p)).arrayBuffer());
+    const e = await window.H.load();
+    const fake = (log, over = {}) => ({
+      layers: over.layers ?? 0b111,
+      producer: { renderer: 'fake-renderer' },
+      async open(doc, limits) {
+        log.opens++;
+        log.size = doc.size;
+        log.pixels = limits.pixels;
+        if (over.readWhole) log.whole = (await doc.read(0, doc.size)).length;
+        return {
+          async render(r, sink) {
+            log.renders.push(r);
+            if (over.fail) return { status: 'failed', reason: 'on purpose' };
+            const [w, h] = [Math.floor((612 * r.dpi) / 72 + 0.5), Math.floor((792 * r.dpi) / 72 + 0.5)];
+            const rgb = sink ? sink(w * h * 3) : new Uint8Array(w * h * 3);
+            rgb.fill(255);
+            return { width: w, height: h, rgb };
+          },
+          close() {
+            log.closed++;
+          },
+        };
+      },
+    });
+    const log = () => ({ opens: 0, closed: 0, renders: [] });
+    const out = {};
+    const plain = await fetchU8('test/corpus/synth/pdf/h-plain.pdf');
+    const chart = await fetchU8('test/assets/fig/fig-vector-chart.pdf');
+    const json = async (u8, o) => {
+      const m = await e.convert(u8, o);
+      const j = m.json();
+      const n = m.assets.length;
+      const notes = m.stats.notes;
+      const t = o.record ? new TextDecoder().decode(m.transcript().get('transcript.edn')) : '';
+      m.dispose();
+      return { j, n, notes, t };
+    };
+    // 1. a born-digital document that asks for nothing never loads the renderer
+    let l = log();
+    const none = await json(plain, { ocr: 'never' });
+    const never = await json(plain, { ocr: 'never', ports: { render: fake(l) } });
+    out.never = { opens: l.opens, renders: l.renders.length, same: never.j === none.j };
+    // 2. under `always` it asks for its rasters: one open, the whole file given, two renders a page, the document closed, the same Model
+    l = log();
+    const base = await json(plain, {});
+    const asked = await json(plain, { ports: { render: fake(l, { readWhole: true }) }, record: true });
+    out.asked = { opens: l.opens, closed: l.closed, renders: l.renders.length, layers: [...new Set(l.renders.map((r) => r.layer))].sort(), size: l.size, whole: l.whole, plain: plain.length, same: asked.j === base.j, pixels: l.pixels, producer: asked.t.includes('fake-renderer') };
+    // 3. a figure document: the page is rendered once for its two crops
+    l = log();
+    const fig = await json(chart, { assets: 'figures', ocr: 'never', ports: { render: fake(l) } });
+    out.fig = { opens: l.opens, renders: l.renders.length, assets: fig.n, closed: l.closed };
+    // 4. a failed render is an answer: no asset, a note, and the conversion goes on
+    l = log();
+    const fail = await json(chart, { assets: 'figures', ocr: 'never', ports: { render: fake(l, { fail: true }) } });
+    out.fail = { assets: fail.n, notes: fail.notes.filter((x) => x.includes('on purpose')).length, renders: l.renders.length };
+    // 5. a layer the renderer says it cannot separate is never asked of it
+    l = log();
+    await json(plain, { ports: { render: fake(l, { layers: 0b1 }) } });
+    out.layers = { layers: [...new Set(l.renders.map((r) => r.layer))], renders: l.renders.length };
+    // 6. a source that fails the renderer's whole-file read ends the conversion with the source's error, not a failed page
+    const src = { size: plain.length, read: async (o, n) => { if (n === plain.length) throw new Error('the network went away'); return plain.slice(o, o + n); } };
+    try {
+      await e.convert(src, { lazy: true, chunk: 512, ports: { render: fake(log(), { readWhole: true }) } });
+      out.fault = 'converted';
+    } catch (err) {
+      out.fault = err.code;
+    }
+    return out;
+  });
+  check(rport.never.opens === 0 && rport.never.renders === 0 && rport.never.same, 'render port: a born-digital document that asks for no raster (ocr=never) never opens the renderer, and its Model is the one without it: ' + JSON.stringify(rport.never));
+  check(rport.asked.opens === 1 && rport.asked.closed === 1 && rport.asked.renders >= 2 && rport.asked.renders % 2 === 0 && rport.asked.layers.join() === '0,1' && rport.asked.same, 'render port: under ocr=always a page asks for its two rasters (layers 0 and 1): one open, the document closed, ' + rport.asked.renders + ' renders, the Model the one without a renderer');
+  check(rport.asked.size === rport.asked.plain && rport.asked.whole === rport.asked.plain && rport.asked.pixels > 0 && rport.asked.producer, 'render port: the renderer is given the document\'s size and the whole file (the one whole read, SPEC 13.1), the conversion\'s pixels limit (' + rport.asked.pixels + ', the module\'s), and its producer is in the recorded transcript');
+  check(rport.fig.opens === 1 && rport.fig.renders === 1 && rport.fig.assets === 2 && rport.fig.closed === 1, 'render port: a figure document gets its two crops from ONE whole-page render: ' + JSON.stringify(rport.fig));
+  check(rport.fail.assets === 0 && rport.fail.notes >= 1 && rport.fail.renders === 1, 'render port: a failed render is an answer (no asset, a note saying why), asked of the renderer once for the page and not an error: ' + JSON.stringify(rport.fail));
+  check(rport.layers.layers.join() === '0', 'render port: a layer the renderer does not list (layers: 0b1) is never asked of it: ' + JSON.stringify(rport.layers));
+  check(rport.fault === 'io', 'render port: a source that fails the renderer\'s whole read ends the conversion with `io`: ' + rport.fault);
+
+  // pdfium's own WebAssembly build, in the page (the main thread; the demo runs it in a Worker): the bundle the Node recording made
+  if (pdfiumInCache()) {
+    const dir = 'test/pdfium-wasm/replay/fig-vector-chart';
+    const real = await page.evaluate(async () => {
+      const u8 = new Uint8Array(await (await fetch('/repo/test/assets/fig/fig-vector-chart.pdf')).arrayBuffer());
+      const e = await window.H.load();
+      const render = window.H.sdk.pdfiumRenderer({ module: () => import('/pdfium/lib/pdfium.mjs'), wasm: '/pdfium/lib/pdfium.wasm' });
+      const m = await e.convert(u8, { assets: 'figures', ocr: 'never', record: true, ports: { render } });
+      const r = { json: m.json(), files: [...m.transcript()].map(([n, d]) => [n, btoa(String.fromCharCode(...d))]), assets: m.assets.map((a) => a.name + ':' + a.size) };
+      m.dispose();
+      await render.terminate();
+      return r;
+    });
+    const mine = Object.fromEntries(real.files);
+    const same = Object.keys(mine).length > 0 && Object.entries(mine).every(([n, b]) => fs.existsSync(path.join(repo, dir, n)) && fs.readFileSync(path.join(repo, dir, n)).toString('base64') === b) && fs.readdirSync(path.join(repo, dir)).length === Object.keys(mine).length;
+    check(same, 'pdfium-wasm in Chrome (the real build behind pdfiumRenderer): the transcript it records is, byte for byte, the one Node recorded (' + dir + ', ' + real.assets.join(' ') + ')');
+    if (fs.existsSync(rust)) {
+      const r = spawnSync(rust, ['--ocr=never', '--assets=figures', `--replay=${path.join(repo, dir)}`, '--out=json', path.join(repo, 'test/assets/fig/fig-vector-chart.pdf')], { maxBuffer: 1 << 30 });
+      check(r.status === 0 && r.stdout.toString() === real.json, 'pdfium-wasm in Chrome: its Model is, byte for byte, the Rust host\'s replay of that transcript');
+    }
+  } else {
+    console.log('  SKIP pdfium-wasm in Chrome -- pdfium\'s wasm build is not in .cache/pdfium (bb pdfium-fetch --platform wasm)');
   }
 
   // ---------------------------------------------------------------------------------------------------- 6. the heap
