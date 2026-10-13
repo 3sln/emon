@@ -10,9 +10,9 @@
                                    ol-new ol-set ol-get ow-new ow-count ol-count olf-px olf-py olf-pw olf-ph lh-first lh-count
                                    fe-new fe-set ea-owords xo-body-share]]
             [emon.norm :refer [nm-view nm-paper-gray]]
-            [emon.scan :refer [sc-prep sc-sel-base sc-aux-base sc-share-base sc-partner-base]]
+            [emon.scan :refer [sc-prep sc-sel-base sc-sel-max sc-aux-base sc-share-base sc-partner-base]]
             [emon.retarget :refer [rt-prep rt-decide rt-turns rt-erase-into rt-ask-view rt-adopt rt-line-state
-                                   rtp-q rtp-body rtp-erased rtp-nl rtp-nc rtp-cell0 rtp-line0 rtp-brun rtp-primary rtp-hash rt-lines rt-line-conf rt-max]]
+                                   rtp-q rtp-body rtp-erased rtp-nl rtp-nc rtp-cell0 rtp-line0 rtp-brun rtp-primary rtp-hash rt-lines rt-line-conf rt-max rt-cap rt-permille]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
 
@@ -216,3 +216,35 @@
         (assert-eq (rt-line-state oruns olines owords rtp scr 0 0 -1 0 1) 4 "the cells read what the line did, and surer: the line is replaced by them")
         (cells-set rtp (+ (rtp-cell0) 5) -1)
         (assert-eq (rt-line-state oruns olines owords rtp scr 0 0 -1 0 1) 0 "a cell that was not read keeps the line")))))
+
+(deftest test-a-share-of-a-big-page-is-counted-in-64-bits
+  (comment "D521: 3 000 000 painted pixels of a 2550 x 3300 page: 3 000 000 * 1000 is past 2^31, an overflow panic on Rust and a wrapped (negative) share on the others")
+  (assert-eq (rt-permille 3000000 (+ (* 2550 3300) 1)) 356 "a share of 8 415 001 pixels")
+  (assert-eq (rt-permille 1 2) 500 "and a small one is as it was")
+  (assert-eq (rt-permille 0 5) 0 "and none is none"))
+
+(deftest test-a-body-ink-run-of-more-lines-than-the-scratch-holds-is-cut-not-read-past-it
+  (comment "D523: the per-line regions of `scr` are `sc-sel-max` (1500) cells each and the last ends the scratch; a body-ink run of 1600 lines wrote its flag for line 1500 past the end")
+  (let [^Cells oruns (new-cells)
+        ^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells rtp (new-cells)
+        ^Cells scr (new-cells)
+        ^:mut ^I32 i 0]
+    (sc-prep scr)
+    (rtt-line olines owords feats 0 900)
+    (let [^I32 fr (rtt-run oruns olines owords 0 0)
+          ^I32 l1 (ol-count olines)
+          ^I32 w1 (ow-count owords)]
+      (while (< i 1600)
+        (do (rtt-line olines owords feats (* i 10) 900)
+            (set i (+ i 1))))
+      (let [^I32 br (rtt-run oruns olines owords l1 w1)]
+        (rt-prep rtp)
+        (cells-set rtp (rtp-brun) br)
+        (assert-eq (rt-cap 1600) (sc-sel-max) "a count over the region is the region's")
+        (assert-eq (rt-cap 7) 7 "and one under it is its own")
+        (let [^I32 n (rt-adopt rtp oruns fr olines owords scr)]
+          (assert-that (<= n (sc-sel-max)) "the selection holds no more than the scratch has room for")
+          (assert-that (> n 1400) "and the 1500 lines it counts are read, bar the few that lie over the first pass's line"))))))

@@ -675,6 +675,21 @@ func RtEraseInto(src *port.Bitmap, gray *port.Bitmap, ws *port.Cells, mask *port
 	return 0
 }
 
+func RtCap(n int32) int32 {
+	// `n` lines, but at most `sc-sel-max` (D523): the per-line regions of `scr` (`sc-share-base`, `sc-aux-base`, `sc-partner-base`, `sc-bonly-base`) are
+	// that long and the last ends the scratch, so a page of more lines than that wrote the next region's cells, and past the last, off the end.
+	if n > scan.ScSelMax() {
+		return scan.ScSelMax()
+	}
+	return n
+}
+
+func RtPermille(n int32, d int32) int32 {
+	// `n` per mille of `d`, in 64 bits (D521): a page of 2550 x 3300 pixels with a quarter of it painted over has more than 2^31 / 1000 pixels, and `n` * 1000 wrapped
+	// on Go, Java and C# and was an overflow panic on Rust. `d` is positive.
+	return int32((int64(n) * 1000) / int64(d))
+}
+
 func RtMeasure(page int32, bms *port.BitmapSet, k0 int32, src *port.Bitmap, ws *port.Cells, dpi int32, oruns *port.Cells, run int32, olines *port.Cells, owords *port.Cells, scr *port.Cells, rtp *port.Cells) int32 {
 	// Make the BODY-INK VIEW of the raster `src` the first pass read (`rt-erase-into`; the kin-made bitmaps `rv-erased`, `rv-mask`, `rv-body-mask`, `rv-emap`
 	// of page `page`, 0-based, from the page's view ids) and measure, of every line of the first pass `run`, the share (per mille) of its ink that the view paints
@@ -689,7 +704,7 @@ func RtMeasure(page int32, bms *port.BitmapSet, k0 int32, src *port.Bitmap, ws *
 	var emap *port.Bitmap = port.BmsPut(bms, plan.PuViewId(page, RvEmap()), w, h, 1)
 	var binary *port.Bitmap = port.BmsGet(bms, plan.PuViewId(page, k0+1))
 	var l0 int32 = evidence.OrGet(oruns, run, evidence.OrfLfirst())
-	var ln int32 = evidence.OrGet(oruns, run, evidence.OrfLcount())
+	var ln int32 = RtCap(evidence.OrGet(oruns, run, evidence.OrfLcount()))
 	var k int32 = 0
 	var f int32 = 0
 	var c int32 = 0
@@ -716,7 +731,7 @@ func RtMeasure(page int32, bms *port.BitmapSet, k0 int32, src *port.Bitmap, ws *
 			j += 1
 		}
 		if ink > 0 {
-			port.CellsSet(scr, scan.ScShareBase()+k, (both*1000)/ink)
+			port.CellsSet(scr, scan.ScShareBase()+k, RtPermille(both, ink))
 		} else {
 			port.CellsSet(scr, scan.ScShareBase()+k, -1)
 		}
@@ -725,7 +740,7 @@ func RtMeasure(page int32, bms *port.BitmapSet, k0 int32, src *port.Bitmap, ws *
 		}
 		k += 1
 	}
-	port.CellsSet(rtp, RtpErased(), (norm.NmBoxInk(emap, 0, 0, w, h)*1000)/((w*h)+1))
+	port.CellsSet(rtp, RtpErased(), RtPermille(norm.NmBoxInk(emap, 0, 0, w, h), (w*h)+1))
 	return touched
 }
 
@@ -1213,6 +1228,7 @@ func RtAdopt(rtp *port.Cells, oruns *port.Cells, fr int32, olines *port.Cells, o
 	// the measure `rt-measure` left in `scr`). `rtp-primary` is the run the lines came from.
 	var fl0 int32 = evidence.OrGet(oruns, fr, evidence.OrfLfirst())
 	var fnl int32 = evidence.OrGet(oruns, fr, evidence.OrfLcount())
+	var nk int32 = RtCap(fnl)
 	var brun int32 = port.CellsAt(rtp, RtpBrun())
 	var rrun int32 = port.CellsAt(rtp, RtpRrun())
 	var q int32 = port.CellsAt(rtp, RtpQ())
@@ -1254,7 +1270,7 @@ func RtAdopt(rtp *port.Cells, oruns *port.Cells, fr int32, olines *port.Cells, o
 		return n
 	}
 	// the first pass is the page's reading: decide every line, then write the selection in the first pass's order
-	for k < fnl {
+	for k < nk {
 		s = RtLineState(oruns, olines, owords, rtp, scr, k, fl0+k, brun, fl0, fnl)
 		port.CellsSet(scr, scan.ScAuxBase()+k, s)
 		k += 1
@@ -1262,7 +1278,7 @@ func RtAdopt(rtp *port.Cells, oruns *port.Cells, fr int32, olines *port.Cells, o
 	// text the first pass did not read and the body-ink pass did: lines of its run that no first-pass line covers, on a page that runs down in one column
 	if brun >= 0 {
 		bl0 = evidence.OrGet(oruns, brun, evidence.OrfLfirst())
-		bn = evidence.OrGet(oruns, brun, evidence.OrfLcount())
+		bn = RtCap(evidence.OrGet(oruns, brun, evidence.OrfLcount()))
 		mono = rtMonotone(olines, fl0, fnl)
 		b = 0
 		for b < bn {
@@ -1280,7 +1296,7 @@ func RtAdopt(rtp *port.Cells, oruns *port.Cells, fr int32, olines *port.Cells, o
 		}
 	}
 	k = 0
-	for k < fnl {
+	for k < nk {
 		l = fl0 + k
 		s = port.CellsAt(scr, scan.ScAuxBase()+k)
 		if brun >= 0 {

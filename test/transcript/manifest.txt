@@ -94,6 +94,7 @@ ocr/scan/h-keyword/transcript.edn
 ocr/scan/h-plain/transcript.edn
 ocr/scan/table-simple-ruled/transcript.edn
 render/render/transcript.edn
+retarget/replay/born-icdar-us-034/transcript.edn
 retarget/replay/born-wm-gray-behind/transcript.edn
 retarget/replay/ovl-h-numbered/transcript.edn
 retarget/replay/ovl-stamp-seal/transcript.edn

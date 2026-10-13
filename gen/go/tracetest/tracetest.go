@@ -857,9 +857,9 @@ func TestTheKeySortIsStableByIndex(emonT *testing.T) {
 	port.AssertEq(emonT, port.CellsAt(idx, 3), 2, "the later one last")
 }
 
-func ttTraceBin(bin *port.Bitmap, dpi100 int32, comps *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells, pts *port.Cells, refs *port.Cells, views *port.Cells, inks *port.Cells) int32 {
-	// As `tt-trace`, but as the BINARY view of a page (fixed layer -1, every component takes the majority layer of an all-zero label image).
-	var lab *port.Bitmap = port.BitmapNew(port.BitmapW(bin), port.BitmapH(bin), 1)
+func ttTraceLab(bin *port.Bitmap, lab *port.Bitmap, dpi100 int32, comps *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells, pts *port.Cells, refs *port.Cells, views *port.Cells, inks *port.Cells) int32 {
+	// As `tt-trace`, but as the BINARY view of a page (fixed layer -1: every component takes the majority layer of the label image `lab`, its pixels'
+	// layer ids) with ONE `inks` row.
 	var rn *port.Cells = port.NewCells()
 	var ri *port.Cells = port.NewCells()
 	var cs *port.Cells = port.NewCells()
@@ -877,6 +877,11 @@ func ttTraceBin(bin *port.Bitmap, dpi100 int32, comps *port.Cells, rules *port.C
 	evidence.IkNew(inks, 0, 0)
 	port.CellsSet(inks, 2, 8421504)
 	return trace.TrTrace(views, inks, 0, 0, -1, 0, bin, bin, lab, comps, rules, prims, tlines, pts, refs, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6)
+}
+
+func ttTraceBin(bin *port.Bitmap, dpi100 int32, comps *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells, pts *port.Cells, refs *port.Cells, views *port.Cells, inks *port.Cells) int32 {
+	// As `tt-trace`, but as the BINARY view of a page (fixed layer -1, every component takes the majority layer of an all-zero label image).
+	return ttTraceLab(bin, port.BitmapNew(port.BitmapW(bin), port.BitmapH(bin), 1), dpi100, comps, rules, prims, tlines, pts, refs, views, inks)
 }
 
 func ttGray(g *port.Bitmap, x0 int32, y0 int32, x1 int32, y1 int32, v int32) int32 {
@@ -1033,4 +1038,27 @@ func TestAJustifiedWordSpaceJoinsALineAndAGutterDoesNot(emonT *testing.T) {
 	ttTrace(b, 7200, comps, rules, prims, tlines, pts, refs, views, inks)
 	port.AssertEq(emonT, evidence.TlCount(tlines), 3, "one line above, two below")
 	port.AssertEq(emonT, evidence.TlGet(tlines, 0, 12), 8, "the first of eight components")
+}
+
+func TestAPixelNoLayerClaimsIsNotLayer8AndAComponentOverSuchPixelsHasNoInkRow(emonT *testing.T) {
+	var b *port.Bitmap = port.BitmapNew(60, 40, 1)
+	var lab *port.Bitmap = port.BitmapNew(60, 40, 1)
+	var comps *port.Cells = port.NewCells()
+	var rules *port.Cells = port.NewCells()
+	var prims *port.Cells = port.NewCells()
+	var tlines *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var views *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	// ink 20 x 10; the layer ids under it are 255, what `nm-layers` leaves in the assignment (-1) when it finds no seed: K = 0, and `inks` has one row
+	// that is some other raster's. The component took layer 8 for it, row 0 + 8 - 1 = 7 of `inks`, and `tr-emit-components` read past the rows (D520).
+	ttRect(b, 10, 10, 30, 20)
+	ttGray(lab, 0, 0, 60, 40, 255)
+	port.AssertEq(emonT, ttTraceLab(b, lab, 7200, comps, rules, prims, tlines, pts, refs, views, inks), 1, "one component")
+	port.AssertEq(emonT, evidence.CoGet(comps, 0, evidence.CfInk()), -1, "and no layer: no ink row")
+	ttGray(lab, 10, 10, 30, 20, 1)
+	var comps2 *port.Cells = port.NewCells()
+	port.AssertEq(emonT, ttTraceLab(b, lab, 7200, comps2, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), 1, "one component")
+	port.AssertEq(emonT, evidence.CoGet(comps2, 0, evidence.CfInk()), 0, "and a pixel of layer 1 is layer 1's, row 0, still")
 }

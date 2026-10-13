@@ -605,6 +605,19 @@ public static class Retarget {
         }
         return 0;
     }
+    public static int RtCap(int n) {
+        // `n` lines, but at most `sc-sel-max` (D523): the per-line regions of `scr` (`sc-share-base`, `sc-aux-base`, `sc-partner-base`, `sc-bonly-base`) are
+        // that long and the last ends the scratch, so a page of more lines than that wrote the next region's cells, and past the last, off the end.
+        if (n > Scan.ScSelMax()) {
+            return Scan.ScSelMax();
+        }
+        return n;
+    }
+    public static int RtPermille(int n, int d) {
+        // `n` per mille of `d`, in 64 bits (D521): a page of 2550 x 3300 pixels with a quarter of it painted over has more than 2^31 / 1000 pixels, and `n` * 1000 wrapped
+        // on Go, Java and C# and was an overflow panic on Rust. `d` is positive.
+        return (int) ((((long) n) * 1000) / ((long) d));
+    }
     public static int RtMeasure(int page, emon.Port.BitmapSet bms, int k0, emon.Port.Bitmap src, emon.Port.Cells ws, int dpi, emon.Port.Cells oruns, int run, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells scr, emon.Port.Cells rtp) {
         // Make the BODY-INK VIEW of the raster `src` the first pass read (`rt-erase-into`; the kin-made bitmaps `rv-erased`, `rv-mask`, `rv-body-mask`, `rv-emap`
         // of page `page`, 0-based, from the page's view ids) and measure, of every line of the first pass `run`, the share (per mille) of its ink that the view paints
@@ -619,7 +632,7 @@ public static class Retarget {
         emon.Port.Bitmap emap = emon.Port.BmsPut(bms, Plan.PuViewId(page, RvEmap()), w, h, 1);
         emon.Port.Bitmap binary = emon.Port.BmsGet(bms, Plan.PuViewId(page, k0 + 1));
         int l0 = Evidence.OrGet(oruns, run, Evidence.OrfLfirst());
-        int ln = Evidence.OrGet(oruns, run, Evidence.OrfLcount());
+        int ln = RtCap(Evidence.OrGet(oruns, run, Evidence.OrfLcount()));
         int k = 0;
         int f = 0;
         int c = 0;
@@ -646,7 +659,7 @@ public static class Retarget {
                 j += 1;
             }
             if (ink > 0) {
-                emon.Port.CellsSet(scr, Scan.ScShareBase() + k, (both * 1000) / ink);
+                emon.Port.CellsSet(scr, Scan.ScShareBase() + k, RtPermille(both, ink));
             } else {
                 emon.Port.CellsSet(scr, Scan.ScShareBase() + k, -1);
             }
@@ -655,7 +668,7 @@ public static class Retarget {
             }
             k += 1;
         }
-        emon.Port.CellsSet(rtp, RtpErased(), (Norm.NmBoxInk(emap, 0, 0, w, h) * 1000) / ((w * h) + 1));
+        emon.Port.CellsSet(rtp, RtpErased(), RtPermille(Norm.NmBoxInk(emap, 0, 0, w, h), (w * h) + 1));
         return touched;
     }
     public static int RtAskView(emon.Port.Cells rq, int id, int vid, emon.Port.Bitmap v, int dpi, emon.Port.Cells loc, emon.Port.Cells rtp) {
@@ -1122,6 +1135,7 @@ public static class Retarget {
         // the measure `rt-measure` left in `scr`). `rtp-primary` is the run the lines came from.
         int fl0 = Evidence.OrGet(oruns, fr, Evidence.OrfLfirst());
         int fnl = Evidence.OrGet(oruns, fr, Evidence.OrfLcount());
+        int nk = RtCap(fnl);
         int brun = emon.Port.CellsAt(rtp, RtpBrun());
         int rrun = emon.Port.CellsAt(rtp, RtpRrun());
         int q = emon.Port.CellsAt(rtp, RtpQ());
@@ -1163,7 +1177,7 @@ public static class Retarget {
             return n;
         }
         // the first pass is the page's reading: decide every line, then write the selection in the first pass's order
-        while (k < fnl) {
+        while (k < nk) {
             s = RtLineState(oruns, olines, owords, rtp, scr, k, fl0 + k, brun, fl0, fnl);
             emon.Port.CellsSet(scr, Scan.ScAuxBase() + k, s);
             k += 1;
@@ -1171,7 +1185,7 @@ public static class Retarget {
         // text the first pass did not read and the body-ink pass did: lines of its run that no first-pass line covers, on a page that runs down in one column
         if (brun >= 0) {
             bl0 = Evidence.OrGet(oruns, brun, Evidence.OrfLfirst());
-            bn = Evidence.OrGet(oruns, brun, Evidence.OrfLcount());
+            bn = RtCap(Evidence.OrGet(oruns, brun, Evidence.OrfLcount()));
             mono = RtMonotone(olines, fl0, fnl);
             b = 0;
             while (b < bn) {
@@ -1189,7 +1203,7 @@ public static class Retarget {
             }
         }
         k = 0;
-        while (k < fnl) {
+        while (k < nk) {
             l = fl0 + k;
             s = emon.Port.CellsAt(scr, Scan.ScAuxBase() + k);
             if (brun >= 0) {

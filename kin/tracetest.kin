@@ -9,7 +9,7 @@
             [emon.port :refer [bitmap-new bitmap-w bitmap-h bitmap-u8 bitmap-set-u8 cells-len cells-at cells-set cells-push]]
             [emon.evidence :refer [vw-new vk-binary ik-new co-count co-get rl-count rl-get pm-count pm-get tl-count tl-get
                                    cf-x0 cf-y0 cf-x1 cf-y1 cf-pxx cf-pxy cf-pxw cf-pxh cf-area cf-fill cf-stroke cf-kind cf-conf cf-holes cf-parent
-                                   cf-pfirst cf-pcount cf-gray
+                                   cf-pfirst cf-pcount cf-gray cf-ink
                                    rlf-x0 rlf-y0 rlf-x1 rlf-y1 rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1 rlf-thick rlf-style rlf-conf rlf-rcount rlf-flags
                                    pmf-kind pmf-cx pmf-cy pmf-rx pmf-ry pmf-fill pmf-conf pmf-flags pmf-rcount pmf-pcount pmf-color
                                    tlf-ink tlf-height tlf-conf
@@ -615,11 +615,11 @@
 
 ;; ---------------------------------------------------------------- P6.4b (D259-D265)
 
-(defn ^I32 tt-trace-bin [^Bitmap bin ^I32 dpi100 ^:mut ^Cells comps ^:mut ^Cells rules ^:mut ^Cells prims ^:mut ^Cells tlines ^:mut ^Cells pts
+(defn ^I32 tt-trace-lab [^Bitmap bin ^Bitmap lab ^I32 dpi100 ^:mut ^Cells comps ^:mut ^Cells rules ^:mut ^Cells prims ^:mut ^Cells tlines ^:mut ^Cells pts
                          ^:mut ^Cells refs ^:mut ^Cells views ^:mut ^Cells inks]
-  (comment "As `tt-trace`, but as the BINARY view of a page (fixed layer -1, every component takes the majority layer of an all-zero label image).")
-  (let [^Bitmap lab (bitmap-new (bitmap-w bin) (bitmap-h bin) 1)
-        ^:mut ^Cells rn (new-cells)
+  (comment "As `tt-trace`, but as the BINARY view of a page (fixed layer -1: every component takes the majority layer of the label image `lab`, its pixels'")
+  (comment "layer ids) with ONE `inks` row.")
+  (let [^:mut ^Cells rn (new-cells)
         ^:mut ^Cells ri (new-cells)
         ^:mut ^Cells cs (new-cells)
         ^:mut ^Cells vr (new-cells)
@@ -636,6 +636,11 @@
     (ik-new inks 0 0)
     (cells-set inks 2 8421504)
     (return (tr-trace views inks 0 0 -1 0 bin bin lab comps rules prims tlines pts refs rn ri cs vr pc sg mem s1 s2 s3 s4 s5 s6))))
+
+(defn ^I32 tt-trace-bin [^Bitmap bin ^I32 dpi100 ^:mut ^Cells comps ^:mut ^Cells rules ^:mut ^Cells prims ^:mut ^Cells tlines ^:mut ^Cells pts
+                         ^:mut ^Cells refs ^:mut ^Cells views ^:mut ^Cells inks]
+  (comment "As `tt-trace`, but as the BINARY view of a page (fixed layer -1, every component takes the majority layer of an all-zero label image).")
+  (return (tt-trace-lab bin (bitmap-new (bitmap-w bin) (bitmap-h bin) 1) dpi100 comps rules prims tlines pts refs views inks)))
 
 (defn ^I32 tt-gray [^Bitmap g ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 v]
   (comment "Gray `v` in [x0, x1) x [y0, y1).")
@@ -751,3 +756,19 @@
     (tt-trace b 7200 comps rules prims tlines pts refs views inks)
     (assert-eq (tl-count tlines) 3 "one line above, two below")
     (assert-eq (tl-get tlines 0 12) 8 "the first of eight components")))
+
+(deftest test-a-pixel-no-layer-claims-is-not-layer-8-and-a-component-over-such-pixels-has-no-ink-row
+  (let [^Bitmap b (bitmap-new 60 40 1)
+        ^Bitmap lab (bitmap-new 60 40 1)
+        ^Cells comps (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells tlines (new-cells)
+        ^Cells pts (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)]
+    (comment "ink 20 x 10; the layer ids under it are 255, what `nm-layers` leaves in the assignment (-1) when it finds no seed: K = 0, and `inks` has one row")
+    (comment "that is some other raster's. The component took layer 8 for it, row 0 + 8 - 1 = 7 of `inks`, and `tr-emit-components` read past the rows (D520).")
+    (tt-rect b 10 10 30 20)
+    (tt-gray lab 0 0 60 40 255)
+    (assert-eq (tt-trace-lab b lab 7200 comps rules prims tlines pts refs views inks) 1 "one component")
+    (assert-eq (co-get comps 0 (cf-ink)) -1 "and no layer: no ink row")
+    (tt-gray lab 10 10 30 20 1)
+    (let [^Cells comps2 (new-cells)]
+      (assert-eq (tt-trace-lab b lab 7200 comps2 (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)) 1 "one component")
+      (assert-eq (co-get comps2 0 (cf-ink)) 0 "and a pixel of layer 1 is layer 1's, row 0, still"))))

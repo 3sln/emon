@@ -31,7 +31,7 @@
 ;;
 ;; THE PLAN'S SCRATCH `rtp` (the caller's, `rt-prep` makes it) holds what was decided, so that the three functions agree: see the `rtp-*`.
 (ns emon.retarget
-  (:require [emon.lang :refer [I32 Cells Bitmap BitmapSet]]
+  (:require [emon.lang :refer [I32 Cells Bitmap BitmapSet i64 i32]]
             [emon.port :refer [cells-len cells-at cells-set cells-push bms-put bms-get bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8
                                bitmap-hash bitmap-quarter-into bitmap-lut-into]]
             [emon.plan :refer [rq-render an-find an-ok an-arg pu-id pu-view-id pi-ocr pi-render-text-only lay-text-only]]
@@ -435,6 +435,17 @@
           (set y (+ y 1))))
     (return 0)))
 
+(defn ^:pub ^I32 rt-cap [^I32 n]
+  (comment "`n` lines, but at most `sc-sel-max` (D523): the per-line regions of `scr` (`sc-share-base`, `sc-aux-base`, `sc-partner-base`, `sc-bonly-base`) are")
+  (comment "that long and the last ends the scratch, so a page of more lines than that wrote the next region's cells, and past the last, off the end.")
+  (if (> n (sc-sel-max)) (return (sc-sel-max)))
+  (return n))
+
+(defn ^:pub ^I32 rt-permille [^I32 n ^I32 d]
+  (comment "`n` per mille of `d`, in 64 bits (D521): a page of 2550 x 3300 pixels with a quarter of it painted over has more than 2^31 / 1000 pixels, and `n` * 1000 wrapped")
+  (comment "on Go, Java and C# and was an overflow panic on Rust. `d` is positive.")
+  (return (i32 (quot (* (i64 n) 1000) (i64 d)))))
+
 (defn ^:pub ^I32 rt-measure [^I32 page ^BitmapSet bms ^I32 k0 ^Bitmap src ^:mut ^Cells ws ^I32 dpi
                              ^Cells oruns ^I32 run ^Cells olines ^Cells owords ^:mut ^Cells scr ^:mut ^Cells rtp]
   (comment "Make the BODY-INK VIEW of the raster `src` the first pass read (`rt-erase-into`; the kin-made bitmaps `rv-erased`, `rv-mask`, `rv-body-mask`, `rv-emap`")
@@ -450,7 +461,7 @@
         ^Bitmap emap (bms-put bms (pu-view-id page (rv-emap)) w h 1)
         ^Bitmap binary (bms-get bms (pu-view-id page (+ k0 1)))
         ^I32 l0 (or-get oruns run (orf-lfirst))
-        ^I32 ln (or-get oruns run (orf-lcount))
+        ^I32 ln (rt-cap (or-get oruns run (orf-lcount)))
         ^:mut ^I32 k 0
         ^:mut ^I32 f 0
         ^:mut ^I32 c 0
@@ -476,11 +487,11 @@
                 (set both (+ both (nm-box-both binary emap bx by (+ bx (ow-get owords wi (owf-pw))) (+ by (ow-get owords wi (owf-ph))))))
                 (set j (+ j 1))))
           (if (> ink 0)
-            (cells-set scr (+ (sc-share-base) k) (quot (* both 1000) ink))
+            (cells-set scr (+ (sc-share-base) k) (rt-permille both ink))
             (cells-set scr (+ (sc-share-base) k) -1))
           (if (>= (cells-at scr (+ (sc-share-base) k)) (rt-touch)) (set touched (+ touched 1)))
           (set k (+ k 1))))
-    (cells-set rtp (rtp-erased) (quot (* (nm-box-ink emap 0 0 w h) 1000) (+ (* w h) 1)))
+    (cells-set rtp (rtp-erased) (rt-permille (nm-box-ink emap 0 0 w h) (+ (* w h) 1)))
     (return touched)))
 
 ;; ------------------------------------------------------------- asking
@@ -873,6 +884,7 @@
   (comment "the measure `rt-measure` left in `scr`). `rtp-primary` is the run the lines came from.")
   (let [^I32 fl0 (or-get oruns fr (orf-lfirst))
         ^I32 fnl (or-get oruns fr (orf-lcount))
+        ^I32 nk (rt-cap fnl)
         ^I32 brun (cells-at rtp (rtp-brun))
         ^I32 rrun (cells-at rtp (rtp-rrun))
         ^I32 q (cells-at rtp (rtp-q))
@@ -909,14 +921,14 @@
                 (set k (+ k 1))))
           (return n)))
     (comment "the first pass is the page's reading: decide every line, then write the selection in the first pass's order")
-    (while (< k fnl)
+    (while (< k nk)
       (do (set s (rt-line-state oruns olines owords rtp scr k (+ fl0 k) brun fl0 fnl))
           (cells-set scr (+ (sc-aux-base) k) s)
           (set k (+ k 1))))
     (comment "text the first pass did not read and the body-ink pass did: lines of its run that no first-pass line covers, on a page that runs down in one column")
     (if (>= brun 0)
       (do (set bl0 (or-get oruns brun (orf-lfirst)))
-          (set bn (or-get oruns brun (orf-lcount)))
+          (set bn (rt-cap (or-get oruns brun (orf-lcount))))
           (set mono (rt-monotone olines fl0 fnl))
           (set b 0)
           (while (< b bn)
@@ -928,7 +940,7 @@
                         (cells-set scr (+ (sc-bonly-base) b) 1)))))
                 (set b (+ b 1))))))
     (set k 0)
-    (while (< k fnl)
+    (while (< k nk)
       (do (set l (+ fl0 k))
           (set s (cells-at scr (+ (sc-aux-base) k)))
           (if (>= brun 0)

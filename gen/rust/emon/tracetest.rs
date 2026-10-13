@@ -842,9 +842,9 @@ fn test_the_key_sort_is_stable_by_index() {
     crate::testport::assert_eq(crate::port::cells_at(idx, 2), 0, "equal keys by index");
     crate::testport::assert_eq(crate::port::cells_at(idx, 3), 2, "the later one last");
 }
-pub(crate) fn tt_trace_bin(bin: &crate::port::Bitmap, dpi100: i32, mut comps: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut inks: &mut crate::port::Cells) -> i32 {
-    // As `tt-trace`, but as the BINARY view of a page (fixed layer -1, every component takes the majority layer of an all-zero label image).
-    let lab: &crate::port::Bitmap = &crate::port::bitmap_new(crate::port::bitmap_w(bin), crate::port::bitmap_h(bin), 1);
+pub(crate) fn tt_trace_lab(bin: &crate::port::Bitmap, lab: &crate::port::Bitmap, dpi100: i32, mut comps: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut inks: &mut crate::port::Cells) -> i32 {
+    // As `tt-trace`, but as the BINARY view of a page (fixed layer -1: every component takes the majority layer of the label image `lab`, its pixels'
+    // layer ids) with ONE `inks` row.
     let mut rn: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let mut ri: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let mut cs: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -862,6 +862,10 @@ pub(crate) fn tt_trace_bin(bin: &crate::port::Bitmap, dpi100: i32, mut comps: &m
     ik_new(inks, 0, 0);
     crate::port::cells_set(inks, 2, 8421504);
     return tr_trace(views, inks, 0, 0, -1, 0, bin, bin, lab, comps, rules, prims, tlines, pts, refs, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6);
+}
+pub(crate) fn tt_trace_bin(bin: &crate::port::Bitmap, dpi100: i32, mut comps: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut inks: &mut crate::port::Cells) -> i32 {
+    // As `tt-trace`, but as the BINARY view of a page (fixed layer -1, every component takes the majority layer of an all-zero label image).
+    return tt_trace_lab(bin, &crate::port::bitmap_new(crate::port::bitmap_w(bin), crate::port::bitmap_h(bin), 1), dpi100, comps, rules, prims, tlines, pts, refs, views, inks);
 }
 pub(crate) fn tt_gray(g: &crate::port::Bitmap, x0: i32, y0: i32, x1: i32, y1: i32, v: i32) -> i32 {
     // Gray `v` in [x0, x1) x [y0, y1).
@@ -1017,4 +1021,27 @@ fn test_a_justified_word_space_joins_a_line_and_a_gutter_does_not() {
     tt_trace(b, 7200, comps, rules, prims, tlines, pts, refs, views, inks);
     crate::testport::assert_eq(tl_count(tlines), 3, "one line above, two below");
     crate::testport::assert_eq(tl_get(tlines, 0, 12), 8, "the first of eight components");
+}
+#[test]
+fn test_a_pixel_no_layer_claims_is_not_layer_8_and_a_component_over_such_pixels_has_no_ink_row() {
+    let b: &crate::port::Bitmap = &crate::port::bitmap_new(60, 40, 1);
+    let lab: &crate::port::Bitmap = &crate::port::bitmap_new(60, 40, 1);
+    let comps: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let prims: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tlines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let views: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    // ink 20 x 10; the layer ids under it are 255, what `nm-layers` leaves in the assignment (-1) when it finds no seed: K = 0, and `inks` has one row
+    // that is some other raster's. The component took layer 8 for it, row 0 + 8 - 1 = 7 of `inks`, and `tr-emit-components` read past the rows (D520).
+    tt_rect(b, 10, 10, 30, 20);
+    tt_gray(lab, 0, 0, 60, 40, 255);
+    crate::testport::assert_eq(tt_trace_lab(b, lab, 7200, comps, rules, prims, tlines, pts, refs, views, inks), 1, "one component");
+    crate::testport::assert_eq(co_get(comps, 0, cf_ink()), -1, "and no layer: no ink row");
+    tt_gray(lab, 10, 10, 30, 20, 1);
+    let comps2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::testport::assert_eq(tt_trace_lab(b, lab, 7200, comps2, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 1, "one component");
+    crate::testport::assert_eq(co_get(comps2, 0, cf_ink()), 0, "and a pixel of layer 1 is layer 1's, row 0, still");
 }

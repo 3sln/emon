@@ -88,8 +88,11 @@
                          [i] (range 1 (inc n)))))))))
 
 (defn gold-words [id]
-  (let [g (json/parse-string (slurp (str "test/corpus/synth/gold/" (:gold (get fixtures id) (last (str/split (str/replace (:pdf (get fixtures id)) #"\.pdf$" "") #"/"))) ".gold.json")))]
-    (words (str/join " " (body-texts (get g "model" g))))))
+  ;; `:gold :none` (D522): a fixture with no body text to hold the word error rate to (an ICDAR table page: its gold is the table's cells) is held to
+  ;; the other three checks, and to converting at all with and without the targeted passes
+  (when-not (= :none (:gold (get fixtures id)))
+   (let [g(json/parse-string (slurp (str "test/corpus/synth/gold/" (:gold (get fixtures id) (last (str/split (str/replace (:pdf (get fixtures id)) #"\.pdf$" "") #"/"))) ".gold.json")))]
+     (words (str/join " " (body-texts (get g "model" g)))))))
 
 (defn wer [model gold]
   (let [ws (words (str/join " " (body-texts model)))]
@@ -159,8 +162,8 @@
             gw (gold-words id)
             mj (json/parse-string (:out j))
             mb (json/parse-string (:out b))
-            wj (wer mj gw)
-            wb (wer mb gw)
+            wj (if gw (wer mj gw) 0.0)
+            wb (if gw (wer mb gw) 0.0)
             lk (fn [m] (count (filter (set leak) (words (str/join " " (body-texts m))))))]
         ;; the hidden setting `no-retarget` is a field of the Rust, Go, Java and C# Options, not a key of kin's options text, so the C binding (which
         ;; speaks only that text, SPEC 13) has no way to say it: the first-pass transcript gives the same JSON on each host that has the field
@@ -168,7 +171,9 @@
           (check (same? b (apply drive drv (concat flags ["--no-retarget" "--out=json" (str "--replay=" fp) pdf])))
                  id ": the " label " Engine gives the same JSON for `no-retarget` over the first-pass transcript"))
         (check (and (zero? (:exit j)) (zero? (:exit b)) (<= wj (+ wb 0.005)))
-               id (format ": body word error rate %.4f with the targeted passes, %.4f without (the same transcript, `no-retarget`)" wj wb))
+               id (if gw
+                    (format ": body word error rate %.4f with the targeted passes, %.4f without (the same transcript, `no-retarget`)" wj wb)
+                    ": converts with the targeted passes and without them (`:gold :none`, no body text to score)"))
         (when (seq leak)
           (check (<= (lk mj) (lk mb))
                  id ": words of what is not the body (" (pr-str leak) ") in the body: " (lk mj) " with the passes, " (lk mb) " without")))

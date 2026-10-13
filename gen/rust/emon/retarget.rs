@@ -607,6 +607,19 @@ pub fn rt_erase_into(src: &crate::port::Bitmap, gray: &crate::port::Bitmap, mut 
     }
     return 0;
 }
+pub fn rt_cap(n: i32) -> i32 {
+    // `n` lines, but at most `sc-sel-max` (D523): the per-line regions of `scr` (`sc-share-base`, `sc-aux-base`, `sc-partner-base`, `sc-bonly-base`) are
+    // that long and the last ends the scratch, so a page of more lines than that wrote the next region's cells, and past the last, off the end.
+    if n > sc_sel_max() {
+        return sc_sel_max();
+    }
+    return n;
+}
+pub fn rt_permille(n: i32, d: i32) -> i32 {
+    // `n` per mille of `d`, in 64 bits (D521): a page of 2550 x 3300 pixels with a quarter of it painted over has more than 2^31 / 1000 pixels, and `n` * 1000 wrapped
+    // on Go, Java and C# and was an overflow panic on Rust. `d` is positive.
+    return (((n as i64) * 1000) / (d as i64)) as i32;
+}
 pub fn rt_measure(page: i32, bms: &crate::port::BitmapSet, k0: i32, src: &crate::port::Bitmap, mut ws: &mut crate::port::Cells, dpi: i32, oruns: &mut crate::port::Cells, run: i32, olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, mut rtp: &mut crate::port::Cells) -> i32 {
     // Make the BODY-INK VIEW of the raster `src` the first pass read (`rt-erase-into`; the kin-made bitmaps `rv-erased`, `rv-mask`, `rv-body-mask`, `rv-emap`
     // of page `page`, 0-based, from the page's view ids) and measure, of every line of the first pass `run`, the share (per mille) of its ink that the view paints
@@ -621,7 +634,7 @@ pub fn rt_measure(page: i32, bms: &crate::port::BitmapSet, k0: i32, src: &crate:
     let emap: &crate::port::Bitmap = crate::port::bms_put(bms, pu_view_id(page, rv_emap()), w, h, 1);
     let binary: &crate::port::Bitmap = crate::port::bms_get(bms, pu_view_id(page, k0 + 1));
     let l0: i32 = or_get(oruns, run, orf_lfirst());
-    let ln: i32 = or_get(oruns, run, orf_lcount());
+    let ln: i32 = rt_cap(or_get(oruns, run, orf_lcount()));
     let mut k: i32 = 0;
     let mut f: i32 = 0;
     let mut c: i32 = 0;
@@ -648,7 +661,7 @@ pub fn rt_measure(page: i32, bms: &crate::port::BitmapSet, k0: i32, src: &crate:
             j += 1;
         }
         if ink > 0 {
-            crate::port::cells_set(scr, sc_share_base() + k, (both * 1000) / ink);
+            crate::port::cells_set(scr, sc_share_base() + k, rt_permille(both, ink));
         } else {
             crate::port::cells_set(scr, sc_share_base() + k, -1);
         }
@@ -657,7 +670,7 @@ pub fn rt_measure(page: i32, bms: &crate::port::BitmapSet, k0: i32, src: &crate:
         }
         k += 1;
     }
-    crate::port::cells_set(rtp, rtp_erased(), (nm_box_ink(emap, 0, 0, w, h) * 1000) / ((w * h) + 1));
+    crate::port::cells_set(rtp, rtp_erased(), rt_permille(nm_box_ink(emap, 0, 0, w, h), (w * h) + 1));
     return touched;
 }
 pub fn rt_ask_view(mut rq: &mut crate::port::Cells, id: i32, vid: i32, v: &crate::port::Bitmap, dpi: i32, loc: &mut crate::port::Cells, mut rtp: &mut crate::port::Cells) -> i32 {
@@ -1124,6 +1137,7 @@ pub fn rt_adopt(mut rtp: &mut crate::port::Cells, oruns: &mut crate::port::Cells
     // the measure `rt-measure` left in `scr`). `rtp-primary` is the run the lines came from.
     let fl0: i32 = or_get(oruns, fr, orf_lfirst());
     let fnl: i32 = or_get(oruns, fr, orf_lcount());
+    let nk: i32 = rt_cap(fnl);
     let brun: i32 = crate::port::cells_at(rtp, rtp_brun());
     let rrun: i32 = crate::port::cells_at(rtp, rtp_rrun());
     let q: i32 = crate::port::cells_at(rtp, rtp_q());
@@ -1165,7 +1179,7 @@ pub fn rt_adopt(mut rtp: &mut crate::port::Cells, oruns: &mut crate::port::Cells
         return n;
     }
     // the first pass is the page's reading: decide every line, then write the selection in the first pass's order
-    while k < fnl {
+    while k < nk {
         s = rt_line_state(oruns, olines, owords, rtp, scr, k, fl0 + k, brun, fl0, fnl);
         crate::port::cells_set(scr, sc_aux_base() + k, s);
         k += 1;
@@ -1173,7 +1187,7 @@ pub fn rt_adopt(mut rtp: &mut crate::port::Cells, oruns: &mut crate::port::Cells
     // text the first pass did not read and the body-ink pass did: lines of its run that no first-pass line covers, on a page that runs down in one column
     if brun >= 0 {
         bl0 = or_get(oruns, brun, orf_lfirst());
-        bn = or_get(oruns, brun, orf_lcount());
+        bn = rt_cap(or_get(oruns, brun, orf_lcount()));
         mono = rt_monotone(olines, fl0, fnl);
         b = 0;
         while b < bn {
@@ -1191,7 +1205,7 @@ pub fn rt_adopt(mut rtp: &mut crate::port::Cells, oruns: &mut crate::port::Cells
         }
     }
     k = 0;
-    while k < fnl {
+    while k < nk {
         l = fl0 + k;
         s = crate::port::cells_at(scr, sc_aux_base() + k);
         if brun >= 0 {
