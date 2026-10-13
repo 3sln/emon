@@ -292,9 +292,9 @@ pub(crate) fn pc_run(p: &[u8], deep: i32, mut r: &mut crate::port::Cells, mut st
         }
         if (deep == 1) && (keep == 1) {
             crate::port::buf_append_blob(clean, p, i, i + (12 + ln));
-            if kind == T_IDAT {
-                crate::port::buf_append_blob(idat, p, i + 8, i + (8 + ln));
-            }
+        }
+        if (deep != 0) && (kind == T_IDAT) {
+            crate::port::buf_append_blob(idat, p, i + 8, i + (8 + ln));
         }
         i += 12 + ln;
     }
@@ -374,18 +374,33 @@ pub(crate) fn pc_run(p: &[u8], deep: i32, mut r: &mut crate::port::Cells, mut st
         crate::port::cells_set(r, R_LIMIT, ic_clamp(rawl));
         return ic_limit();
     }
-    crate::port::cells_drop(out, 0);
-    s = iz_zlib(crate::port::buf_blob(idat), 0, crate::port::buf_len(idat), out, st);
-    if s != 0 {
-        return ic_failed();
-    }
-    if (crate::port::cells_len(out) as i64) != rawl {
-        return ic_failed();
+    if deep == 2 {
+        // deep 2 inflates into `clean`, a byte a byte, and keeps it for the caller (`emon.pngread`, D492)
+        crate::port::buf_truncate(clean, 0);
+        s = iz_zlib_buf(crate::port::buf_blob(idat), 0, crate::port::buf_len(idat), clean, st);
+        if s != 0 {
+            return ic_failed();
+        }
+        if (crate::port::buf_len(clean) as i64) != rawl {
+            return ic_failed();
+        }
+    } else {
+        crate::port::cells_drop(out, 0);
+        s = iz_zlib(crate::port::buf_blob(idat), 0, crate::port::buf_len(idat), out, st);
+        if s != 0 {
+            return ic_failed();
+        }
+        if (crate::port::cells_len(out) as i64) != rawl {
+            return ic_failed();
+        }
     }
     if iz_consumed(st) != crate::port::buf_len(idat) {
         return ic_failed();
     }
-    crate::port::cells_free(out);
+    // deep 1 lets the inflated bytes go
+    if deep == 1 {
+        crate::port::cells_free(out);
+    }
     crate::port::cells_free(st);
     return ic_ok();
 }

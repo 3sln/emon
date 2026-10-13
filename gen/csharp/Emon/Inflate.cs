@@ -126,14 +126,23 @@ public static class Inflate {
     internal const int WSize = 1984;
     internal const int LitBits = 10;
     internal const int DistBits = 8;
-    internal static int IzInit(emon.Port.Cells st, int start, int end, emon.Port.Cells @out) {
+    internal static int IzInitSt(emon.Port.Cells st, int start, int end) {
         emon.Port.CellsDrop(st, 0);
         emon.Port.CellsGrow(st, WSize, 0);
         emon.Port.CellsSet(st, WPos, start);
         emon.Port.CellsSet(st, WEnd, end);
         emon.Port.CellsSet(st, WLimit, emon.Port.LimitOf(1));
-        emon.Port.CellsSet(st, WBase, emon.Port.CellsLen(@out));
         emon.Port.CellsSet(st, WA, 1);
+        return 0;
+    }
+    internal static int IzInit(emon.Port.Cells st, int start, int end, emon.Port.Cells @out) {
+        IzInitSt(st, start, end);
+        emon.Port.CellsSet(st, WBase, emon.Port.CellsLen(@out));
+        return 0;
+    }
+    internal static int IzInitB(emon.Port.Cells st, int start, int end, emon.Port.Buf @out) {
+        IzInitSt(st, start, end);
+        emon.Port.CellsSet(st, WBase, emon.Port.BufLen(@out));
         return 0;
     }
     internal static int IzFail(emon.Port.Cells st, int code) {
@@ -331,6 +340,14 @@ public static class Inflate {
         emon.Port.CellsPush(@out, b);
         return 0;
     }
+    internal static int IzPutB(emon.Port.Cells st, emon.Port.Buf @out, int b) {
+        // `iz-put`, onto a `Buf`.
+        if ((emon.Port.BufLen(@out) - emon.Port.CellsAt(st, WBase)) >= emon.Port.CellsAt(st, WLimit)) {
+            emon.Port.LimitBreach(1, (emon.Port.BufLen(@out) - emon.Port.CellsAt(st, WBase)) + 1);
+        }
+        emon.Port.BufPush(@out, b);
+        return 0;
+    }
     internal static int IzCodes(emon.Port.Cells st, byte[] src, emon.Port.Cells @out) {
         // The symbols of one compressed block, up to its end-of-block, by the
         // lookup tables (`iz-fast`) with the bit-by-bit walk as the fallback.
@@ -508,6 +525,172 @@ public static class Inflate {
         }
         return 0;
     }
+    internal static int IzCodesB(emon.Port.Cells st, byte[] src, emon.Port.Buf @out) {
+        // `iz-codes` onto a `Buf` (a byte a byte, not a cell): the same loop, with `buf-at` and `buf-push` for `cells-at` and
+        // `cells-push`, a run of the last byte one `buf-grow` and a match one `buf-copy-back` (bulk forms, whose per-byte loops are
+        // `iz-codes`'s own). A law holds its output to the Cells one's on every stream of the inflate vectors (D492).
+        int buf = emon.Port.CellsAt(st, WBuf);
+        int cnt = emon.Port.CellsAt(st, WCnt);
+        int pos = emon.Port.CellsAt(st, WPos);
+        int end = emon.Port.CellsAt(st, WEnd);
+        int @base = emon.Port.CellsAt(st, WBase);
+        int limit = emon.Port.CellsAt(st, WLimit);
+        int lmask = ((1) << (emon.Port.CellsAt(st, WLb))) - 1;
+        int dmask = ((1) << (emon.Port.CellsAt(st, WDb))) - 1;
+        int n = emon.Port.BufLen(@out);
+        int sa = emon.Port.CellsAt(st, WA);
+        int sb = emon.Port.CellsAt(st, WB);
+        int ss = 0;
+        int e = 0;
+        int l = 0;
+        int sym = 0;
+        int x = 0;
+        int ln = 0;
+        int dsym = 0;
+        int dist = 0;
+        int k = 0;
+        while (@base >= 0) {
+            if (ss >= 2700) {
+                sa = sa % 65521;
+                sb = sb % 65521;
+                ss = 0;
+            }
+            while ((cnt < 24) && (pos < end)) {
+                buf |= (emon.Port.BlobU8(src, pos)) << (cnt);
+                pos += 1;
+                cnt += 8;
+            }
+            e = emon.Port.CellsAt(st, WLt + (buf & lmask));
+            l = e & 15;
+            if ((e != 0) && (l <= cnt)) {
+                buf = (buf) >> (l);
+                cnt -= l;
+                sym = (e) >> (4);
+            } else {
+                IzPark(st, buf, cnt, pos);
+                sym = IzDecode(st, src, WLc, WLs);
+                if (emon.Port.CellsAt(st, WErr) != 0) {
+                    return 0;
+                }
+                buf = emon.Port.CellsAt(st, WBuf);
+                cnt = emon.Port.CellsAt(st, WCnt);
+                pos = emon.Port.CellsAt(st, WPos);
+            }
+            if (sym < 256) {
+                if ((n - @base) >= limit) {
+                    emon.Port.LimitBreach(1, (n - @base) + 1);
+                }
+                emon.Port.BufPush(@out, sym);
+                n += 1;
+                sa += sym;
+                sb += sa;
+                ss += 1;
+            }
+            if (sym == 256) {
+                IzPark(st, buf, cnt, pos);
+                emon.Port.CellsSet(st, WA, sa % 65521);
+                emon.Port.CellsSet(st, WB, sb % 65521);
+                return 0;
+            }
+            if (sym > 256) {
+                sym -= 257;
+                if (sym >= 29) {
+                    IzPark(st, buf, cnt, pos);
+                    IzFail(st, IzBadCode());
+                    return 0;
+                }
+                x = IzLext[sym];
+                while ((cnt < x) && (pos < end)) {
+                    buf |= (emon.Port.BlobU8(src, pos)) << (cnt);
+                    pos += 1;
+                    cnt += 8;
+                }
+                if (cnt < x) {
+                    IzPark(st, buf, cnt, pos);
+                    IzFail(st, IzTruncated());
+                    return 0;
+                }
+                ln = IzLbase[sym] + (buf & (((1) << (x)) - 1));
+                buf = (buf) >> (x);
+                cnt -= x;
+                while ((cnt < 24) && (pos < end)) {
+                    buf |= (emon.Port.BlobU8(src, pos)) << (cnt);
+                    pos += 1;
+                    cnt += 8;
+                }
+                e = emon.Port.CellsAt(st, WDt + (buf & dmask));
+                l = e & 15;
+                if ((e != 0) && (l <= cnt)) {
+                    buf = (buf) >> (l);
+                    cnt -= l;
+                    dsym = (e) >> (4);
+                } else {
+                    IzPark(st, buf, cnt, pos);
+                    dsym = IzDecode(st, src, WDc, WDs);
+                    if (emon.Port.CellsAt(st, WErr) != 0) {
+                        return 0;
+                    }
+                    buf = emon.Port.CellsAt(st, WBuf);
+                    cnt = emon.Port.CellsAt(st, WCnt);
+                    pos = emon.Port.CellsAt(st, WPos);
+                }
+                if (dsym >= 30) {
+                    IzPark(st, buf, cnt, pos);
+                    IzFail(st, IzBadCode());
+                    return 0;
+                }
+                x = IzDext[dsym];
+                while ((cnt < x) && (pos < end)) {
+                    buf |= (emon.Port.BlobU8(src, pos)) << (cnt);
+                    pos += 1;
+                    cnt += 8;
+                }
+                if (cnt < x) {
+                    IzPark(st, buf, cnt, pos);
+                    IzFail(st, IzTruncated());
+                    return 0;
+                }
+                dist = IzDbase[dsym] + (buf & (((1) << (x)) - 1));
+                buf = (buf) >> (x);
+                cnt -= x;
+                if (dist > (n - @base)) {
+                    IzPark(st, buf, cnt, pos);
+                    IzFail(st, IzBadDistance());
+                    return 0;
+                }
+                if (((n - @base) + ln) > limit) {
+                    // Over the limit part-way: byte by byte to the breach.
+                    k = 0;
+                    while (k < ln) {
+                        x = emon.Port.BufAt(@out, emon.Port.BufLen(@out) - dist);
+                        IzPutB(st, @out, x);
+                        k += 1;
+                    }
+                }
+                ss += ln;
+                if (dist == 1) {
+                    // A run of the last byte: one fill, and the sums in closed form, as `iz-codes` does it.
+                    x = emon.Port.BufAt(@out, n - 1);
+                    emon.Port.BufGrow(@out, ln, x);
+                    n += ln;
+                    sb += (ln * sa) + (x * ((ln * (ln + 1)) / 2));
+                    sa += ln * x;
+                } else {
+                    // A match: one copy (`buf-copy-back`: a distance under the length repeats), then the sums over what it made.
+                    emon.Port.BufCopyBack(@out, dist, ln);
+                    k = 0;
+                    while (k < ln) {
+                        x = emon.Port.BufAt(@out, n + k);
+                        sa += x;
+                        sb += sa;
+                        k += 1;
+                    }
+                    n += ln;
+                }
+            }
+        }
+        return 0;
+    }
     internal static int IzSum(emon.Port.Cells st, emon.Port.Cells @out, int from, int to) {
         // Fold out[from, to) into the Adler-32 in the state, byte by byte
         // with the modulus every 3000 (the stored blocks' share; the hot loop
@@ -529,6 +712,71 @@ public static class Inflate {
         }
         emon.Port.CellsSet(st, WA, a % 65521);
         emon.Port.CellsSet(st, WB, b % 65521);
+        return 0;
+    }
+    internal static int IzSumB(emon.Port.Cells st, emon.Port.Buf @out, int from, int to) {
+        // `iz-sum` over a `Buf`.
+        int a = emon.Port.CellsAt(st, WA);
+        int b = emon.Port.CellsAt(st, WB);
+        int i = from;
+        int ss = 0;
+        while (i < to) {
+            a += emon.Port.BufAt(@out, i);
+            b += a;
+            i += 1;
+            ss += 1;
+            if (ss >= 3000) {
+                a = a % 65521;
+                b = b % 65521;
+                ss = 0;
+            }
+        }
+        emon.Port.CellsSet(st, WA, a % 65521);
+        emon.Port.CellsSet(st, WB, b % 65521);
+        return 0;
+    }
+    internal static int IzStoredB(emon.Port.Cells st, byte[] src, emon.Port.Buf @out) {
+        // `iz-stored` onto a `Buf`.
+        int pos = emon.Port.CellsAt(st, WPos);
+        int end = emon.Port.CellsAt(st, WEnd);
+        int n = 0;
+        int avail = 0;
+        int from = 0;
+        int k = 0;
+        emon.Port.CellsSet(st, WBuf, 0);
+        emon.Port.CellsSet(st, WCnt, 0);
+        if ((pos + 4) > end) {
+            emon.Port.CellsSet(st, WPos, end);
+            IzFail(st, IzTruncated());
+            return 0;
+        }
+        n = emon.Port.BlobU16Le(src, pos);
+        if (n != (65535 - emon.Port.BlobU16Le(src, pos + 2))) {
+            emon.Port.CellsSet(st, WPos, pos + 4);
+            IzFail(st, IzBadStoredLength());
+            return 0;
+        }
+        pos += 4;
+        avail = end - pos;
+        if (n < avail) {
+            avail = n;
+        }
+        if (((emon.Port.BufLen(@out) - emon.Port.CellsAt(st, WBase)) + avail) > emon.Port.CellsAt(st, WLimit)) {
+            while (k < avail) {
+                IzPutB(st, @out, emon.Port.BlobU8(src, pos + k));
+                k += 1;
+            }
+        }
+        from = emon.Port.BufLen(@out);
+        while (k < avail) {
+            emon.Port.BufPush(@out, emon.Port.BlobU8(src, pos + k));
+            k += 1;
+        }
+        IzSumB(st, @out, from, emon.Port.BufLen(@out));
+        emon.Port.CellsSet(st, WPos, pos + k);
+        if (k < n) {
+            IzFail(st, IzTruncated());
+        }
         return 0;
     }
     internal static int IzStored(emon.Port.Cells st, byte[] src, emon.Port.Cells @out) {
@@ -579,7 +827,7 @@ public static class Inflate {
         }
         return 0;
     }
-    internal static int IzFixed(emon.Port.Cells st, byte[] src, emon.Port.Cells @out) {
+    internal static int IzFixedTables(emon.Port.Cells st) {
         // A block with the fixed codes (3.2.6): literals 0-143 have length 8,
         // 144-255 length 9, 256-279 length 7, 280-287 length 8; distances
         // are 30 codes of length 5 (symbols 30 and 31 never occur).
@@ -608,9 +856,18 @@ public static class Inflate {
         IzBuild(st, WDc, WDs, WLen, 30);
         IzFast(st, WLc, WLs, WLt, LitBits, WLb);
         IzFast(st, WDc, WDs, WDt, DistBits, WDb);
+        return 0;
+    }
+    internal static int IzFixed(emon.Port.Cells st, byte[] src, emon.Port.Cells @out) {
+        IzFixedTables(st);
         return IzCodes(st, src, @out);
     }
-    internal static int IzDynamic(emon.Port.Cells st, byte[] src, emon.Port.Cells @out) {
+    internal static int IzFixedB(emon.Port.Cells st, byte[] src, emon.Port.Buf @out) {
+        IzFixedTables(st);
+        return IzCodesB(st, src, @out);
+    }
+    internal static int IzDynamicTables(emon.Port.Cells st, byte[] src) {
+        // Builds the block's tables; a bad header latches its error in the state (`iz-fail`), which the caller looks at.
         // A block with its own codes (3.2.7): HLIT, HDIST, HCLEN, the code-length
         // code's lengths in a fixed permuted order, then the literal/length and
         // distance code lengths coded with that code (16 repeats the previous
@@ -724,7 +981,21 @@ public static class Inflate {
         }
         IzFast(st, WLc, WLs, WLt, LitBits, WLb);
         IzFast(st, WDc, WDs, WDt, DistBits, WDb);
+        return 0;
+    }
+    internal static int IzDynamic(emon.Port.Cells st, byte[] src, emon.Port.Cells @out) {
+        IzDynamicTables(st, src);
+        if (emon.Port.CellsAt(st, WErr) != 0) {
+            return 0;
+        }
         return IzCodes(st, src, @out);
+    }
+    internal static int IzDynamicB(emon.Port.Cells st, byte[] src, emon.Port.Buf @out) {
+        IzDynamicTables(st, src);
+        if (emon.Port.CellsAt(st, WErr) != 0) {
+            return 0;
+        }
+        return IzCodesB(st, src, @out);
     }
     internal static int IzBlocks(emon.Port.Cells st, byte[] src, emon.Port.Cells @out) {
         // Blocks until one says it is the last: BFINAL, then BTYPE (0 stored,
@@ -755,20 +1026,42 @@ public static class Inflate {
         }
         return 0;
     }
+    internal static int IzBlocksB(emon.Port.Cells st, byte[] src, emon.Port.Buf @out) {
+        // `iz-blocks` onto a `Buf`.
+        int last = 0;
+        int kind = 0;
+        while (last == 0) {
+            last = IzBits(st, src, 1);
+            kind = IzBits(st, src, 2);
+            if (emon.Port.CellsAt(st, WErr) != 0) {
+                return emon.Port.CellsAt(st, WErr);
+            }
+            if (kind == 0) {
+                IzStoredB(st, src, @out);
+            }
+            if (kind == 1) {
+                IzFixedB(st, src, @out);
+            }
+            if (kind == 2) {
+                IzDynamicB(st, src, @out);
+            }
+            if (kind == 3) {
+                IzFail(st, IzBadBlockType());
+            }
+            if (emon.Port.CellsAt(st, WErr) != 0) {
+                return emon.Port.CellsAt(st, WErr);
+            }
+        }
+        return 0;
+    }
     public static int IzRaw(byte[] src, int start, int end, emon.Port.Cells @out, emon.Port.Cells st) {
         // Inflate a bare RFC 1951 stream in src[start, end). See the head
         // of the file for what `out`, `st` and the answer mean.
         IzInit(st, start, end, @out);
         return IzBlocks(st, src, @out);
     }
-    public static int IzZlib(byte[] src, int start, int end, emon.Port.Cells @out, emon.Port.Cells st) {
-        // Inflate an RFC 1950 stream: CMF and FLG, the deflate data, and the
-        // big-endian Adler-32 of the output. §2.2: CM must be 8, CINFO at most
-        // 7, and CMF*256+FLG a multiple of 31; FDICT means a preset
-        // dictionary the stream does not carry (`need-dict`). §2.3 says a
-        // decompressor MUST check the Adler-32; a mismatch is `bad-checksum`
-        // and the output is kept.
-        IzInit(st, start, end, @out);
+    internal static int IzZlibHead(emon.Port.Cells st, byte[] src, int start, int end) {
+        // The two header bytes: 0, or the status to answer.
         if ((end - start) < 2) {
             emon.Port.CellsSet(st, WPos, end);
             IzFail(st, IzTruncated());
@@ -776,8 +1069,6 @@ public static class Inflate {
         }
         int cmf = emon.Port.BlobU8(src, start);
         int flg = emon.Port.BlobU8(src, start + 1);
-        int status = 0;
-        int pos = 0;
         emon.Port.CellsSet(st, WPos, start + 2);
         if (((cmf & 15) != 8) || ((cmf / 16) > 7) || ((((cmf * 256) + flg) % 31) != 0)) {
             IzFail(st, IzBadHeader());
@@ -787,11 +1078,11 @@ public static class Inflate {
             IzFail(st, IzNeedDict());
             return IzNeedDict();
         }
-        status = IzBlocks(st, src, @out);
-        if (status != 0) {
-            return status;
-        }
-        pos = emon.Port.CellsAt(st, WPos);
+        return 0;
+    }
+    internal static int IzZlibTail(emon.Port.Cells st, byte[] src, int end) {
+        // The Adler-32 after the blocks: 0, or the status to answer.
+        int pos = emon.Port.CellsAt(st, WPos);
         if ((pos + 4) > end) {
             emon.Port.CellsSet(st, WPos, end);
             IzFail(st, IzTruncated());
@@ -805,5 +1096,42 @@ public static class Inflate {
             return IzBadChecksum();
         }
         return 0;
+    }
+    public static int IzRawBuf(byte[] src, int start, int end, emon.Port.Buf @out, emon.Port.Cells st) {
+        // `iz-raw`, appending to a `Buf` (see `iz-zlib-buf`).
+        IzInitB(st, start, end, @out);
+        return IzBlocksB(st, src, @out);
+    }
+    public static int IzZlib(byte[] src, int start, int end, emon.Port.Cells @out, emon.Port.Cells st) {
+        // Inflate an RFC 1950 stream: CMF and FLG, the deflate data, and the
+        // big-endian Adler-32 of the output. §2.2: CM must be 8, CINFO at most
+        // 7, and CMF*256+FLG a multiple of 31; FDICT means a preset
+        // dictionary the stream does not carry (`need-dict`). §2.3 says a
+        // decompressor MUST check the Adler-32; a mismatch is `bad-checksum`
+        // and the output is kept.
+        IzInit(st, start, end, @out);
+        int status = IzZlibHead(st, src, start, end);
+        if (status != 0) {
+            return status;
+        }
+        status = IzBlocks(st, src, @out);
+        if (status != 0) {
+            return status;
+        }
+        return IzZlibTail(st, src, end);
+    }
+    public static int IzZlibBuf(byte[] src, int start, int end, emon.Port.Buf @out, emon.Port.Cells st) {
+        // `iz-zlib`, appending to a `Buf` (a byte a byte instead of a cell: a quarter of the memory, for the image data of a big
+        // bitmap). The same status, the same prefix kept on an error, the same `st` (D492).
+        IzInitB(st, start, end, @out);
+        int status = IzZlibHead(st, src, start, end);
+        if (status != 0) {
+            return status;
+        }
+        status = IzBlocksB(st, src, @out);
+        if (status != 0) {
+            return status;
+        }
+        return IzZlibTail(st, src, end);
     }
 }

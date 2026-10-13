@@ -25,7 +25,6 @@ import (
 	"strings"
 	"testing"
 
-	_ "emon/pngenc" // the canonical PNG writer: a transcript's files need it
 	"emon/ocr"
 	"emon/plan"
 	"emon/planrun"

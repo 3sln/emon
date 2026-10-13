@@ -90,7 +90,7 @@ fi
 if [ "${EMON_JAVA_LINT:-}" = 1 ]; then
   lintdir=$(mktemp -d "${TMPDIR:-/tmp}/emon-java-lint.XXXXXX")
   lint=$(cd "$mod" && "$JDK/bin/javac" -Xlint:all,-restricted -implicit:none -encoding UTF-8 -d "$lintdir" -cp classes \
-    src/emon/Planrun.java src/emon/PngRead.java src/emon/RenderPort.java src/emon/api/*.java src/emon/ffi/*.java src/Main.java src/EngineTest.java 2>&1) || true
+    src/emon/Planrun.java src/emon/RenderPort.java src/emon/api/*.java src/emon/ffi/*.java src/Main.java src/EngineTest.java 2>&1) || true
   rm -rf "$lintdir"
   if [ -n "$lint" ]; then echo "$lint" | head -60 >&2; echo "emon-java: the host files are not lint-clean" >&2; exit 1; fi
 fi

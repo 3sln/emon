@@ -2,7 +2,7 @@
 //
 // THE FILE IS KIN'S (`kin/transcript.kin`): the format (version 1, byte for byte), the kind names, the escaping of the producer, the reader and
 // its refusals, the map a replay is answered from and the count of entries it never asked for. This file keeps what is not observable: the
-// bitmaps (a PNG each; `port.PngDecode` reads them until P10.11's transcript PNG reader), the in-memory `Transcript` the embedder holds and the
+// bitmaps (a PNG each; kin's `emon.pngread` reads and writes them, `pngenc` makes the buffers, P10.11, D489), the in-memory `Transcript` the embedder holds and the
 // `Replayer` that answers the loop from kin's map.
 //
 // It is here, in `planrun`, and no longer in `port`, for `planrun`'s reason (D405): the generated `transcript` imports `port`, so `port` cannot import
@@ -14,6 +14,7 @@ package planrun
 
 import (
 	"emon/planloop"
+	"emon/pngenc"
 	"emon/port"
 	"emon/transcript"
 	"emon/transcriptctx"
@@ -126,7 +127,7 @@ func (t *Transcript) ToFiles() []File {
 		if e.Bitmap != nil {
 			var name strings.Builder
 			transcript.TrBitmapName(int32(n), &name)
-			files = append(files, File{name.String(), port.PngEncode(e.Bitmap)})
+			files = append(files, File{name.String(), pngenc.Encode(e.Bitmap)})
 		}
 	}
 	return files
@@ -162,7 +163,7 @@ func TranscriptFromFiles(files map[string][]byte) (*Transcript, error) {
 			if !ok {
 				return nil, Bad(name.String() + " " + tbName(transcript.TbBitmapMissing()))
 			}
-			b, err := port.PngDecode(png)
+			b, err := pngenc.Decode(png)
 			if err != nil {
 				return nil, Bad(err.Error())
 			}

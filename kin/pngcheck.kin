@@ -5,7 +5,8 @@
 ;; `p` is the whole file as a `Blob`. It decides, by name, whether a PNG may be read, BEFORE a platform library is asked for a pixel:
 ;; the library (Rust's `png` through the `image` crate, Go's `image/png`) then only turns input kin has accepted into samples, so
 ;; two libraries' leniency is never a difference between hosts (D389 patched it, twice, by hand: `png_sound` and `imgPngSound`; this
-;; is the one copy). `deep` is 1 when pixels are wanted; with 0 the chunk structure, the checksums and the header's answer (size,
+;; is the one copy). `deep` is 1 when pixels are wanted (2: the same, and the inflated bytes are left in `clean`, a Buf, a byte a
+;; byte, for the caller, as `emon.pngread` wants them, and no clean PNG is made; `out` is not used); with 0 the chunk structure, the checksums and the header's answer (size,
 ;; resolution, orientation, the colour model) are given and the image data is not looked at, as before.
 ;;
 ;; WHAT IT ACCEPTS (a refusal is `ic-failed`, damaged, unless it says otherwise):
@@ -17,7 +18,8 @@
 ;;   not read). With `deep`, the IDATs joined are ONE zlib stream (the header, the Adler-32 checked, by `emon.inflate`) that
 ;;   holds exactly the bytes the header says (the filter byte and the packed samples of every row, interlaced passes included)
 ;;   and ends at the end of the data (a byte after it is a fault). The pixels bound (`limit-of` 9) is checked from the header,
-;;   and the bytes of the image data against the stream bound (`limit-of` 1): the validator keeps the inflated bytes, a cell each.
+;;   and the bytes of the image data against the stream bound (`limit-of` 1): at `deep` 1 the validator inflates into a Cells, a cell a
+;;   byte, and lets it go; at 2 into a Buf, a byte a byte, and keeps it.
 ;;
 ;; WHAT THE LIBRARY IS SHOWN: `clean`, a PNG made of the chunks that matter and nothing else, each copied as it was: IHDR, PLTE
 ;; (a palette image's), tRNS, IDAT, IEND. The animation chunks (acTL, fcTL, fdAT: a PNG's frame is its default image), the
@@ -36,7 +38,7 @@
             [emon.imgcheck :refer [ic-ok ic-failed ic-unsupported ic-limit ic-u32 ic-clamp]]
             [emon.tiffcheck :refer [tc-exif]]
             [emon.png :refer [pn-crc-table]]
-            [emon.inflate :refer [iz-zlib iz-consumed]]
+            [emon.inflate :refer [iz-zlib iz-zlib-buf iz-consumed]]
             [kin.lang :refer [defn defconst defdata return let set while if comment do
                               + - * < > <= >= == != and or bit-and bit-xor quot rem]]))
 
@@ -243,8 +245,9 @@
                 (set keep 1)
                 (set done 1)))
           (if (and (== deep 1) (== keep 1))
-            (do (buf-append-blob clean p i (+ i (+ 12 ln)))
-                (if (== kind T_IDAT) (buf-append-blob idat p (+ i 8) (+ i (+ 8 ln))))))
+            (buf-append-blob clean p i (+ i (+ 12 ln))))
+          (if (and (!= deep 0) (== kind T_IDAT))
+            (buf-append-blob idat p (+ i 8) (+ i (+ 8 ln))))
           (set i (+ i (+ 12 ln)))))
     ;; the header
     (if (or (== w 0) (== h 0)) (return (ic-failed)))
@@ -299,12 +302,19 @@
     (if (> rawl (i64 (limit-of 1)))
       (do (cells-set r R_LIMIT (ic-clamp rawl))
           (return (ic-limit))))
-    (cells-drop out 0)
-    (set s (iz-zlib (buf-blob idat) 0 (buf-len idat) out st))
-    (if (!= s 0) (return (ic-failed)))
-    (if (!= (i64 (cells-len out)) rawl) (return (ic-failed)))
+    (if (== deep 2)
+      (do (comment "deep 2 inflates into `clean`, a byte a byte, and keeps it for the caller (`emon.pngread`, D492)")
+          (buf-truncate clean 0)
+          (set s (iz-zlib-buf (buf-blob idat) 0 (buf-len idat) clean st))
+          (if (!= s 0) (return (ic-failed)))
+          (if (!= (i64 (buf-len clean)) rawl) (return (ic-failed))))
+      (do (cells-drop out 0)
+          (set s (iz-zlib (buf-blob idat) 0 (buf-len idat) out st))
+          (if (!= s 0) (return (ic-failed)))
+          (if (!= (i64 (cells-len out)) rawl) (return (ic-failed)))))
     (if (!= (iz-consumed st) (buf-len idat)) (return (ic-failed)))
-    (cells-free out)
+    (comment "deep 1 lets the inflated bytes go")
+    (if (== deep 1) (cells-free out))
     (cells-free st)
     (return (ic-ok))))
 

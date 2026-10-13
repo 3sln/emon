@@ -180,6 +180,38 @@ func BufAppendBlob(b *Buf, blob []byte, start int32, end int32) {
 	b.B = append(b.B, blob[start:end]...)
 }
 
+// @kin:link:form:buf-grow: {:template "port.BufGrow({0}, {1}, {2})" :import "emon/port" :arity 3}
+//
+// See the Rust half: appends n copies of the low eight bits of v.
+func BufGrow(b *Buf, n int32, v int32) {
+	at := len(b.B)
+	b.B = append(b.B, make([]byte, n)...)
+	if byte(v) != 0 {
+		fill := b.B[at:]
+		for i := range fill {
+			fill[i] = byte(v)
+		}
+	}
+}
+
+// @kin:link:form:buf-copy-back: {:template "port.BufCopyBack({0}, {1}, {2})" :import "emon/port" :arity 3}
+//
+// See the Rust half: appends n bytes, byte k the one dist before it (an overlapping match repeats).
+func BufCopyBack(b *Buf, dist int32, n int32) {
+	l := len(b.B)
+	if dist <= 0 || int(dist) > l || n < 0 {
+		panic("BufCopyBack out of range")
+	}
+	if dist >= n {
+		b.B = append(b.B, b.B[l-int(dist):l-int(dist)+int(n)]...)
+		return
+	}
+	b.B = append(b.B, make([]byte, n)...)
+	for k := 0; k < int(n); k++ {
+		b.B[l+k] = b.B[l-int(dist)+k]
+	}
+}
+
 // @kin:link:form:buf-copy-into: {:template "port.BufCopyInto({0}, {1})" :import "emon/port" :arity 2}
 //
 // `(buf-copy-into dst src)`: dst becomes a copy of src (see `cells-copy-into`).
@@ -696,6 +728,21 @@ func CryptoAesEncrypt(key []byte, koff int32, klen int32, data []byte, doff int3
 }
 
 // ;; P6.3 bulk forms (D197): see the Rust half for the contracts.
+
+// @kin:link:form:bitmap-put-span: {:template "port.BitmapPutSpan({0}, {1}, {2}, {3}, {4}, {5})" :import "emon/port" :arity 6}
+//
+// See the Rust half: the bytes y*Stride+off+k := the low eight bits of src[from+k], k in 0..n. Answers 0.
+func BitmapPutSpan(b *Bitmap, y, off int32, src *Cells, from, n int32) int32 {
+	at := int(y)*int(b.Stride) + int(off)
+	if n < 0 || from < 0 || int(from)+int(n) > len(src.V) {
+		panic("bitmap-put-span")
+	}
+	d := b.D[at : at+int(n)]
+	for i, v := range src.V[from : from+n] {
+		d[i] = byte(v)
+	}
+	return 0
+}
 
 // @kin:link:form:bitmap-gray-into: {:template "port.BitmapGrayInto({0}, {1})" :import "emon/port" :arity 2}
 func BitmapGrayInto(src, dst *Bitmap) int32 {

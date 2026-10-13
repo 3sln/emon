@@ -158,14 +158,25 @@ const litBits int32 = 10
 
 const distBits int32 = 8
 
-func izInit(st *port.Cells, start int32, end int32, out *port.Cells) int32 {
+func izInitSt(st *port.Cells, start int32, end int32) int32 {
 	port.CellsDrop(st, 0)
 	port.CellsGrow(st, wSize, 0)
 	port.CellsSet(st, wPos, start)
 	port.CellsSet(st, wEnd, end)
 	port.CellsSet(st, wLimit, port.LimitOf(1))
-	port.CellsSet(st, wBase, port.CellsLen(out))
 	port.CellsSet(st, wA, 1)
+	return 0
+}
+
+func izInit(st *port.Cells, start int32, end int32, out *port.Cells) int32 {
+	izInitSt(st, start, end)
+	port.CellsSet(st, wBase, port.CellsLen(out))
+	return 0
+}
+
+func izInitB(st *port.Cells, start int32, end int32, out *port.Buf) int32 {
+	izInitSt(st, start, end)
+	port.CellsSet(st, wBase, port.BufLen(out))
 	return 0
 }
 
@@ -372,6 +383,15 @@ func izPut(st *port.Cells, out *port.Cells, b int32) int32 {
 	return 0
 }
 
+func izPutB(st *port.Cells, out *port.Buf, b int32) int32 {
+	// `iz-put`, onto a `Buf`.
+	if (port.BufLen(out) - port.CellsAt(st, wBase)) >= port.CellsAt(st, wLimit) {
+		port.LimitBreach(1, (port.BufLen(out)-port.CellsAt(st, wBase))+1)
+	}
+	port.BufPush(out, b)
+	return 0
+}
+
 func izCodes(st *port.Cells, src []byte, out *port.Cells) int32 {
 	// The symbols of one compressed block, up to its end-of-block, by the
 	// lookup tables (`iz-fast`) with the bit-by-bit walk as the fallback.
@@ -550,6 +570,173 @@ func izCodes(st *port.Cells, src []byte, out *port.Cells) int32 {
 	return 0
 }
 
+func izCodesB(st *port.Cells, src []byte, out *port.Buf) int32 {
+	// `iz-codes` onto a `Buf` (a byte a byte, not a cell): the same loop, with `buf-at` and `buf-push` for `cells-at` and
+	// `cells-push`, a run of the last byte one `buf-grow` and a match one `buf-copy-back` (bulk forms, whose per-byte loops are
+	// `iz-codes`'s own). A law holds its output to the Cells one's on every stream of the inflate vectors (D492).
+	var buf int32 = port.CellsAt(st, wBuf)
+	var cnt int32 = port.CellsAt(st, wCnt)
+	var pos int32 = port.CellsAt(st, wPos)
+	var end int32 = port.CellsAt(st, wEnd)
+	var base int32 = port.CellsAt(st, wBase)
+	var limit int32 = port.CellsAt(st, wLimit)
+	var lmask int32 = ((1) << uint(port.CellsAt(st, wLb))) - 1
+	var dmask int32 = ((1) << uint(port.CellsAt(st, wDb))) - 1
+	var n int32 = port.BufLen(out)
+	var sa int32 = port.CellsAt(st, wA)
+	var sb int32 = port.CellsAt(st, wB)
+	var ss int32 = 0
+	var e int32 = 0
+	var l int32 = 0
+	var sym int32 = 0
+	var x int32 = 0
+	var ln int32 = 0
+	var dsym int32 = 0
+	var dist int32 = 0
+	var k int32 = 0
+	for base >= 0 {
+		if ss >= 2700 {
+			sa = sa % 65521
+			sb = sb % 65521
+			ss = 0
+		}
+		for (cnt < 24) && (pos < end) {
+			buf |= (port.BlobU8(src, pos)) << uint(cnt)
+			pos += 1
+			cnt += 8
+		}
+		e = port.CellsAt(st, wLt+(buf&lmask))
+		l = e & 15
+		if (e != 0) && (l <= cnt) {
+			buf = (buf) >> uint(l)
+			cnt -= l
+			sym = (e) >> uint(4)
+		} else {
+			izPark(st, buf, cnt, pos)
+			sym = izDecode(st, src, wLc, wLs)
+			if port.CellsAt(st, wErr) != 0 {
+				return 0
+			}
+			buf = port.CellsAt(st, wBuf)
+			cnt = port.CellsAt(st, wCnt)
+			pos = port.CellsAt(st, wPos)
+		}
+		if sym < 256 {
+			if (n - base) >= limit {
+				port.LimitBreach(1, (n-base)+1)
+			}
+			port.BufPush(out, sym)
+			n += 1
+			sa += sym
+			sb += sa
+			ss += 1
+		}
+		if sym == 256 {
+			izPark(st, buf, cnt, pos)
+			port.CellsSet(st, wA, sa%65521)
+			port.CellsSet(st, wB, sb%65521)
+			return 0
+		}
+		if sym > 256 {
+			sym -= 257
+			if sym >= 29 {
+				izPark(st, buf, cnt, pos)
+				izFail(st, IzBadCode())
+				return 0
+			}
+			x = izLext[sym]
+			for (cnt < x) && (pos < end) {
+				buf |= (port.BlobU8(src, pos)) << uint(cnt)
+				pos += 1
+				cnt += 8
+			}
+			if cnt < x {
+				izPark(st, buf, cnt, pos)
+				izFail(st, IzTruncated())
+				return 0
+			}
+			ln = izLbase[sym] + (buf & (((1) << uint(x)) - 1))
+			buf = (buf) >> uint(x)
+			cnt -= x
+			for (cnt < 24) && (pos < end) {
+				buf |= (port.BlobU8(src, pos)) << uint(cnt)
+				pos += 1
+				cnt += 8
+			}
+			e = port.CellsAt(st, wDt+(buf&dmask))
+			l = e & 15
+			if (e != 0) && (l <= cnt) {
+				buf = (buf) >> uint(l)
+				cnt -= l
+				dsym = (e) >> uint(4)
+			} else {
+				izPark(st, buf, cnt, pos)
+				dsym = izDecode(st, src, wDc, wDs)
+				if port.CellsAt(st, wErr) != 0 {
+					return 0
+				}
+				buf = port.CellsAt(st, wBuf)
+				cnt = port.CellsAt(st, wCnt)
+				pos = port.CellsAt(st, wPos)
+			}
+			if dsym >= 30 {
+				izPark(st, buf, cnt, pos)
+				izFail(st, IzBadCode())
+				return 0
+			}
+			x = izDext[dsym]
+			for (cnt < x) && (pos < end) {
+				buf |= (port.BlobU8(src, pos)) << uint(cnt)
+				pos += 1
+				cnt += 8
+			}
+			if cnt < x {
+				izPark(st, buf, cnt, pos)
+				izFail(st, IzTruncated())
+				return 0
+			}
+			dist = izDbase[dsym] + (buf & (((1) << uint(x)) - 1))
+			buf = (buf) >> uint(x)
+			cnt -= x
+			if dist > (n - base) {
+				izPark(st, buf, cnt, pos)
+				izFail(st, IzBadDistance())
+				return 0
+			}
+			if ((n - base) + ln) > limit {
+				// Over the limit part-way: byte by byte to the breach.
+				k = 0
+				for k < ln {
+					x = port.BufAt(out, port.BufLen(out)-dist)
+					izPutB(st, out, x)
+					k += 1
+				}
+			}
+			ss += ln
+			if dist == 1 {
+				// A run of the last byte: one fill, and the sums in closed form, as `iz-codes` does it.
+				x = port.BufAt(out, n-1)
+				port.BufGrow(out, ln, x)
+				n += ln
+				sb += (ln * sa) + (x * ((ln * (ln + 1)) / 2))
+				sa += ln * x
+			} else {
+				// A match: one copy (`buf-copy-back`: a distance under the length repeats), then the sums over what it made.
+				port.BufCopyBack(out, dist, ln)
+				k = 0
+				for k < ln {
+					x = port.BufAt(out, n+k)
+					sa += x
+					sb += sa
+					k += 1
+				}
+				n += ln
+			}
+		}
+	}
+	return 0
+}
+
 func izSum(st *port.Cells, out *port.Cells, from int32, to int32) int32 {
 	// Fold out[from, to) into the Adler-32 in the state, byte by byte
 	// with the modulus every 3000 (the stored blocks' share; the hot loop
@@ -571,6 +758,73 @@ func izSum(st *port.Cells, out *port.Cells, from int32, to int32) int32 {
 	}
 	port.CellsSet(st, wA, a%65521)
 	port.CellsSet(st, wB, b%65521)
+	return 0
+}
+
+func izSumB(st *port.Cells, out *port.Buf, from int32, to int32) int32 {
+	// `iz-sum` over a `Buf`.
+	var a int32 = port.CellsAt(st, wA)
+	var b int32 = port.CellsAt(st, wB)
+	var i int32 = from
+	var ss int32 = 0
+	for i < to {
+		a += port.BufAt(out, i)
+		b += a
+		i += 1
+		ss += 1
+		if ss >= 3000 {
+			a = a % 65521
+			b = b % 65521
+			ss = 0
+		}
+	}
+	port.CellsSet(st, wA, a%65521)
+	port.CellsSet(st, wB, b%65521)
+	return 0
+}
+
+func izStoredB(st *port.Cells, src []byte, out *port.Buf) int32 {
+	// `iz-stored` onto a `Buf`.
+	var pos int32 = port.CellsAt(st, wPos)
+	var end int32 = port.CellsAt(st, wEnd)
+	var n int32 = 0
+	var avail int32 = 0
+	var from int32 = 0
+	var k int32 = 0
+	port.CellsSet(st, wBuf, 0)
+	port.CellsSet(st, wCnt, 0)
+	if (pos + 4) > end {
+		port.CellsSet(st, wPos, end)
+		izFail(st, IzTruncated())
+		return 0
+	}
+	n = port.BlobU16Le(src, pos)
+	if n != (65535 - port.BlobU16Le(src, pos+2)) {
+		port.CellsSet(st, wPos, pos+4)
+		izFail(st, IzBadStoredLength())
+		return 0
+	}
+	pos += 4
+	avail = end - pos
+	if n < avail {
+		avail = n
+	}
+	if ((port.BufLen(out) - port.CellsAt(st, wBase)) + avail) > port.CellsAt(st, wLimit) {
+		for k < avail {
+			izPutB(st, out, port.BlobU8(src, pos+k))
+			k += 1
+		}
+	}
+	from = port.BufLen(out)
+	for k < avail {
+		port.BufPush(out, port.BlobU8(src, pos+k))
+		k += 1
+	}
+	izSumB(st, out, from, port.BufLen(out))
+	port.CellsSet(st, wPos, pos+k)
+	if k < n {
+		izFail(st, IzTruncated())
+	}
 	return 0
 }
 
@@ -623,7 +877,7 @@ func izStored(st *port.Cells, src []byte, out *port.Cells) int32 {
 	return 0
 }
 
-func izFixed(st *port.Cells, src []byte, out *port.Cells) int32 {
+func izFixedTables(st *port.Cells) int32 {
 	// A block with the fixed codes (3.2.6): literals 0-143 have length 8,
 	// 144-255 length 9, 256-279 length 7, 280-287 length 8; distances
 	// are 30 codes of length 5 (symbols 30 and 31 never occur).
@@ -652,10 +906,21 @@ func izFixed(st *port.Cells, src []byte, out *port.Cells) int32 {
 	izBuild(st, wDc, wDs, wLen, 30)
 	izFast(st, wLc, wLs, wLt, litBits, wLb)
 	izFast(st, wDc, wDs, wDt, distBits, wDb)
+	return 0
+}
+
+func izFixed(st *port.Cells, src []byte, out *port.Cells) int32 {
+	izFixedTables(st)
 	return izCodes(st, src, out)
 }
 
-func izDynamic(st *port.Cells, src []byte, out *port.Cells) int32 {
+func izFixedB(st *port.Cells, src []byte, out *port.Buf) int32 {
+	izFixedTables(st)
+	return izCodesB(st, src, out)
+}
+
+func izDynamicTables(st *port.Cells, src []byte) int32 {
+	// Builds the block's tables; a bad header latches its error in the state (`iz-fail`), which the caller looks at.
 	// A block with its own codes (3.2.7): HLIT, HDIST, HCLEN, the code-length
 	// code's lengths in a fixed permuted order, then the literal/length and
 	// distance code lengths coded with that code (16 repeats the previous
@@ -769,7 +1034,23 @@ func izDynamic(st *port.Cells, src []byte, out *port.Cells) int32 {
 	}
 	izFast(st, wLc, wLs, wLt, litBits, wLb)
 	izFast(st, wDc, wDs, wDt, distBits, wDb)
+	return 0
+}
+
+func izDynamic(st *port.Cells, src []byte, out *port.Cells) int32 {
+	izDynamicTables(st, src)
+	if port.CellsAt(st, wErr) != 0 {
+		return 0
+	}
 	return izCodes(st, src, out)
+}
+
+func izDynamicB(st *port.Cells, src []byte, out *port.Buf) int32 {
+	izDynamicTables(st, src)
+	if port.CellsAt(st, wErr) != 0 {
+		return 0
+	}
+	return izCodesB(st, src, out)
 }
 
 func izBlocks(st *port.Cells, src []byte, out *port.Cells) int32 {
@@ -802,6 +1083,35 @@ func izBlocks(st *port.Cells, src []byte, out *port.Cells) int32 {
 	return 0
 }
 
+func izBlocksB(st *port.Cells, src []byte, out *port.Buf) int32 {
+	// `iz-blocks` onto a `Buf`.
+	var last int32 = 0
+	var kind int32 = 0
+	for last == 0 {
+		last = izBits(st, src, 1)
+		kind = izBits(st, src, 2)
+		if port.CellsAt(st, wErr) != 0 {
+			return port.CellsAt(st, wErr)
+		}
+		if kind == 0 {
+			izStoredB(st, src, out)
+		}
+		if kind == 1 {
+			izFixedB(st, src, out)
+		}
+		if kind == 2 {
+			izDynamicB(st, src, out)
+		}
+		if kind == 3 {
+			izFail(st, IzBadBlockType())
+		}
+		if port.CellsAt(st, wErr) != 0 {
+			return port.CellsAt(st, wErr)
+		}
+	}
+	return 0
+}
+
 func IzRaw(src []byte, start int32, end int32, out *port.Cells, st *port.Cells) int32 {
 	// Inflate a bare RFC 1951 stream in src[start, end). See the head
 	// of the file for what `out`, `st` and the answer mean.
@@ -809,14 +1119,8 @@ func IzRaw(src []byte, start int32, end int32, out *port.Cells, st *port.Cells) 
 	return izBlocks(st, src, out)
 }
 
-func IzZlib(src []byte, start int32, end int32, out *port.Cells, st *port.Cells) int32 {
-	// Inflate an RFC 1950 stream: CMF and FLG, the deflate data, and the
-	// big-endian Adler-32 of the output. §2.2: CM must be 8, CINFO at most
-	// 7, and CMF*256+FLG a multiple of 31; FDICT means a preset
-	// dictionary the stream does not carry (`need-dict`). §2.3 says a
-	// decompressor MUST check the Adler-32; a mismatch is `bad-checksum`
-	// and the output is kept.
-	izInit(st, start, end, out)
+func izZlibHead(st *port.Cells, src []byte, start int32, end int32) int32 {
+	// The two header bytes: 0, or the status to answer.
 	if (end - start) < 2 {
 		port.CellsSet(st, wPos, end)
 		izFail(st, IzTruncated())
@@ -824,8 +1128,6 @@ func IzZlib(src []byte, start int32, end int32, out *port.Cells, st *port.Cells)
 	}
 	var cmf int32 = port.BlobU8(src, start)
 	var flg int32 = port.BlobU8(src, start+1)
-	var status int32 = 0
-	var pos int32 = 0
 	port.CellsSet(st, wPos, start+2)
 	if ((cmf & 15) != 8) || ((cmf / 16) > 7) || ((((cmf * 256) + flg) % 31) != 0) {
 		izFail(st, IzBadHeader())
@@ -835,11 +1137,12 @@ func IzZlib(src []byte, start int32, end int32, out *port.Cells, st *port.Cells)
 		izFail(st, IzNeedDict())
 		return IzNeedDict()
 	}
-	status = izBlocks(st, src, out)
-	if status != 0 {
-		return status
-	}
-	pos = port.CellsAt(st, wPos)
+	return 0
+}
+
+func izZlibTail(st *port.Cells, src []byte, end int32) int32 {
+	// The Adler-32 after the blocks: 0, or the status to answer.
+	var pos int32 = port.CellsAt(st, wPos)
 	if (pos + 4) > end {
 		port.CellsSet(st, wPos, end)
 		izFail(st, IzTruncated())
@@ -853,4 +1156,44 @@ func IzZlib(src []byte, start int32, end int32, out *port.Cells, st *port.Cells)
 		return IzBadChecksum()
 	}
 	return 0
+}
+
+func IzRawBuf(src []byte, start int32, end int32, out *port.Buf, st *port.Cells) int32 {
+	// `iz-raw`, appending to a `Buf` (see `iz-zlib-buf`).
+	izInitB(st, start, end, out)
+	return izBlocksB(st, src, out)
+}
+
+func IzZlib(src []byte, start int32, end int32, out *port.Cells, st *port.Cells) int32 {
+	// Inflate an RFC 1950 stream: CMF and FLG, the deflate data, and the
+	// big-endian Adler-32 of the output. §2.2: CM must be 8, CINFO at most
+	// 7, and CMF*256+FLG a multiple of 31; FDICT means a preset
+	// dictionary the stream does not carry (`need-dict`). §2.3 says a
+	// decompressor MUST check the Adler-32; a mismatch is `bad-checksum`
+	// and the output is kept.
+	izInit(st, start, end, out)
+	var status int32 = izZlibHead(st, src, start, end)
+	if status != 0 {
+		return status
+	}
+	status = izBlocks(st, src, out)
+	if status != 0 {
+		return status
+	}
+	return izZlibTail(st, src, end)
+}
+
+func IzZlibBuf(src []byte, start int32, end int32, out *port.Buf, st *port.Cells) int32 {
+	// `iz-zlib`, appending to a `Buf` (a byte a byte instead of a cell: a quarter of the memory, for the image data of a big
+	// bitmap). The same status, the same prefix kept on an error, the same `st` (D492).
+	izInitB(st, start, end, out)
+	var status int32 = izZlibHead(st, src, start, end)
+	if status != 0 {
+		return status
+	}
+	status = izBlocksB(st, src, out)
+	if status != 0 {
+		return status
+	}
+	return izZlibTail(st, src, end)
 }

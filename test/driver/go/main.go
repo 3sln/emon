@@ -38,7 +38,6 @@ import (
 
 	"emon"
 	"emon/planrun"
-	_ "emon/pngenc"
 	"emon/port"
 )
 

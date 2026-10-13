@@ -215,6 +215,40 @@ public final class Port {
         b.n += k;
     }
 
+    // @kin:link:form:buf-grow: {:template "emon.Port.bufGrow({0}, {1}, {2})" :arity 3}
+    // See the Rust half: appends n copies of the low eight bits of v.
+    public static void bufGrow(Buf b, int n, int v) {
+        if (n < 0) {
+            throw new IndexOutOfBoundsException();
+        }
+        if (b.n + n > b.v.length) {
+            b.v = java.util.Arrays.copyOf(b.v, Math.max(b.n + n, b.v.length * 2));
+        }
+        java.util.Arrays.fill(b.v, b.n, b.n + n, (byte) v);
+        b.n += n;
+    }
+
+    // @kin:link:form:buf-copy-back: {:template "emon.Port.bufCopyBack({0}, {1}, {2})" :arity 3}
+    // See the Rust half: appends n bytes, byte k the one dist before it (an overlapping match repeats).
+    public static void bufCopyBack(Buf b, int dist, int n) {
+        if (dist <= 0 || dist > b.n || n < 0) {
+            throw new IndexOutOfBoundsException();
+        }
+        if (b.n + n > b.v.length) {
+            b.v = java.util.Arrays.copyOf(b.v, Math.max(b.n + n, b.v.length * 2));
+        }
+        byte[] v = b.v;
+        int at = b.n;
+        if (dist >= n) {
+            System.arraycopy(v, at - dist, v, at, n);
+        } else {
+            for (int k = 0; k < n; k++) {
+                v[at + k] = v[at - dist + k];
+            }
+        }
+        b.n = at + n;
+    }
+
     // @kin:link:form:buf-copy-into: {:template "emon.Port.bufCopyInto({0}, {1})" :arity 2}
     //
     // `(buf-copy-into dst src)`: dst becomes a copy of src (see `cells-copy-into`).
@@ -799,6 +833,21 @@ public final class Port {
     }
 
     // ;; P6.3 bulk forms (D197): see the Rust half for the contracts.
+
+    // @kin:link:form:bitmap-put-span: {:template "emon.Port.bitmapPutSpan({0}, {1}, {2}, {3}, {4}, {5})" :arity 6}
+    // See the Rust half: the bytes y*stride+off+k := the low eight bits of src[from+k], k in 0..n. Answers 0.
+    public static int bitmapPutSpan(Bitmap b, int y, int off, Cells src, int from, int n) {
+        int at = y * b.stride + off;
+        if (n < 0 || at < 0 || at + n > b.d.length || from < 0 || from + n > src.n) {
+            throw new IndexOutOfBoundsException("bitmap-put-span");
+        }
+        byte[] d = b.d;
+        int[] s = src.v;
+        for (int k = 0; k < n; k++) {
+            d[at + k] = (byte) s[from + k];
+        }
+        return 0;
+    }
 
     // @kin:link:form:bitmap-gray-into: {:template "emon.Port.bitmapGrayInto({0}, {1})" :arity 2}
     public static int bitmapGrayInto(Bitmap src, Bitmap dst) {

@@ -291,9 +291,9 @@ public static class Pngcheck {
             }
             if ((deep == 1) && (keep == 1)) {
                 emon.Port.BufAppendBlob(clean, p, i, i + (12 + ln));
-                if (kind == TIdat) {
-                    emon.Port.BufAppendBlob(idat, p, i + 8, i + (8 + ln));
-                }
+            }
+            if ((deep != 0) && (kind == TIdat)) {
+                emon.Port.BufAppendBlob(idat, p, i + 8, i + (8 + ln));
             }
             i += 12 + ln;
         }
@@ -373,18 +373,33 @@ public static class Pngcheck {
             emon.Port.CellsSet(r, RLimit, Imgcheck.IcClamp(rawl));
             return Imgcheck.IcLimit();
         }
-        emon.Port.CellsDrop(@out, 0);
-        s = Inflate.IzZlib(emon.Port.BufBlob(idat), 0, emon.Port.BufLen(idat), @out, st);
-        if (s != 0) {
-            return Imgcheck.IcFailed();
-        }
-        if (((long) emon.Port.CellsLen(@out)) != rawl) {
-            return Imgcheck.IcFailed();
+        if (deep == 2) {
+            // deep 2 inflates into `clean`, a byte a byte, and keeps it for the caller (`emon.pngread`, D492)
+            emon.Port.BufTruncate(clean, 0);
+            s = Inflate.IzZlibBuf(emon.Port.BufBlob(idat), 0, emon.Port.BufLen(idat), clean, st);
+            if (s != 0) {
+                return Imgcheck.IcFailed();
+            }
+            if (((long) emon.Port.BufLen(clean)) != rawl) {
+                return Imgcheck.IcFailed();
+            }
+        } else {
+            emon.Port.CellsDrop(@out, 0);
+            s = Inflate.IzZlib(emon.Port.BufBlob(idat), 0, emon.Port.BufLen(idat), @out, st);
+            if (s != 0) {
+                return Imgcheck.IcFailed();
+            }
+            if (((long) emon.Port.CellsLen(@out)) != rawl) {
+                return Imgcheck.IcFailed();
+            }
         }
         if (Inflate.IzConsumed(st) != emon.Port.BufLen(idat)) {
             return Imgcheck.IcFailed();
         }
-        emon.Port.CellsFree(@out);
+        // deep 1 lets the inflated bytes go
+        if (deep == 1) {
+            emon.Port.CellsFree(@out);
+        }
         emon.Port.CellsFree(st);
         return Imgcheck.IcOk();
     }

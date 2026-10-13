@@ -163,7 +163,11 @@
               png (str tam "/bitmap-0000.png")]
           (fs/create-dirs tam)
           (doseq [f (fs/list-dir rep)] (fs/copy f (str tam "/" (fs/file-name f)) {:replace-existing true}))
-          (let [m @(process {:out :string :err :string} "magick" png "-fill" "black" "-draw" (str "point " x "," y) png)
+          ;; ImageMagick writes what it likes (a drawn point gives RGBA): the transcript reader is kin's `emon.pngread` (P10.11, D489) and reads emon's own
+          ;; canonical PNGs only, so the colour type the file had, 8 bits, no alpha, is asked for.
+          (let [ty (str/trim (:out @(process {:out :string :err :string} "magick" "identify" "-format" "%[type]" png)))
+                m @(process {:out :string :err :string} "magick" png "-fill" "black" "-draw" (str "point " x "," y)
+                            "-alpha" "off" "-depth" "8" "-define" (str "png:color-type=" (if (str/starts-with? ty "Gray") "0" "2")) png)
                 tr (apply drive rdrv (concat flags ["--out=bundle" (str "--replay=" tam) pdf]))
                 tg (apply drive gdrv (concat flags ["--out=bundle" (str "--replay=" tam) pdf]))]
             (check (and (zero? (:exit m)) (= 4 (:exit tr)) (= 4 (:exit tg))

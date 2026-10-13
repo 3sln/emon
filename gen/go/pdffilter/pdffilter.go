@@ -507,7 +507,7 @@ func PfFlate(src []byte, s int32, e int32, out *port.Cells, st *port.Cells) int3
 	return 8
 }
 
-func pfPaeth(a int32, b int32, c int32) int32 {
+func PfPaeth(a int32, b int32, c int32) int32 {
 	// PNG's Paeth predictor: whichever of left, above, upper-left is
 	// closest to left + above - upper-left, ties to left then above.
 	var p int32 = (a + b) - c
@@ -569,7 +569,7 @@ func pfPngSlow(in *port.Cells, pos int32, out *port.Cells, rb int32, rowb int32,
 			v = x + ((a + b) / 2)
 		}
 		if t == 4 {
-			v = x + pfPaeth(a, b, c)
+			v = x + PfPaeth(a, b, c)
 		}
 		port.CellsPush(out, v&255)
 		i += 1
@@ -658,7 +658,7 @@ func pfPng(in *port.Cells, from int32, to int32, out *port.Cells, rowb int32, bp
 				c = port.CellsAt(out, ((rb+i)-rowb)-1)
 				for i < avail {
 					b = port.CellsAt(out, (rb+i)-rowb)
-					a = (port.CellsAt(in, pos+i) + pfPaeth(a, b, c)) & 255
+					a = (port.CellsAt(in, pos+i) + PfPaeth(a, b, c)) & 255
 					port.CellsSet(out, rb+i, a)
 					c = b
 					i += 1
@@ -688,7 +688,7 @@ func pfPng(in *port.Cells, from int32, to int32, out *port.Cells, rowb int32, bp
 				a = port.CellsAt(out, (rb+i)-bpp)
 				b = port.CellsAt(out, (rb+i)-rowb)
 				c = port.CellsAt(out, ((rb+i)-rowb)-bpp)
-				port.CellsSet(out, rb+i, (x+pfPaeth(a, b, c))&255)
+				port.CellsSet(out, rb+i, (x+PfPaeth(a, b, c))&255)
 				i += 1
 			}
 		}

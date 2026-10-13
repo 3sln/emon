@@ -348,9 +348,9 @@ func pcRun(p []byte, deep int32, r *port.Cells, st *port.Cells, out *port.Cells,
 		}
 		if (deep == 1) && (keep == 1) {
 			port.BufAppendBlob(clean, p, i, i+(12+ln))
-			if kind == tIdat {
-				port.BufAppendBlob(idat, p, i+8, i+(8+ln))
-			}
+		}
+		if (deep != 0) && (kind == tIdat) {
+			port.BufAppendBlob(idat, p, i+8, i+(8+ln))
 		}
 		i += 12 + ln
 	}
@@ -430,18 +430,33 @@ func pcRun(p []byte, deep int32, r *port.Cells, st *port.Cells, out *port.Cells,
 		port.CellsSet(r, rLimit, imgcheck.IcClamp(rawl))
 		return imgcheck.IcLimit()
 	}
-	port.CellsDrop(out, 0)
-	s = inflate.IzZlib(port.BufBlob(idat), 0, port.BufLen(idat), out, st)
-	if s != 0 {
-		return imgcheck.IcFailed()
-	}
-	if int64(port.CellsLen(out)) != rawl {
-		return imgcheck.IcFailed()
+	if deep == 2 {
+		// deep 2 inflates into `clean`, a byte a byte, and keeps it for the caller (`emon.pngread`, D492)
+		port.BufTruncate(clean, 0)
+		s = inflate.IzZlibBuf(port.BufBlob(idat), 0, port.BufLen(idat), clean, st)
+		if s != 0 {
+			return imgcheck.IcFailed()
+		}
+		if int64(port.BufLen(clean)) != rawl {
+			return imgcheck.IcFailed()
+		}
+	} else {
+		port.CellsDrop(out, 0)
+		s = inflate.IzZlib(port.BufBlob(idat), 0, port.BufLen(idat), out, st)
+		if s != 0 {
+			return imgcheck.IcFailed()
+		}
+		if int64(port.CellsLen(out)) != rawl {
+			return imgcheck.IcFailed()
+		}
 	}
 	if inflate.IzConsumed(st) != port.BufLen(idat) {
 		return imgcheck.IcFailed()
 	}
-	port.CellsFree(out)
+	// deep 1 lets the inflated bytes go
+	if deep == 1 {
+		port.CellsFree(out)
+	}
 	port.CellsFree(st)
 	return imgcheck.IcOk()
 }

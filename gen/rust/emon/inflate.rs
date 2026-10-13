@@ -123,14 +123,23 @@ pub(crate) const W_DT: i32 = 1728;
 pub(crate) const W_SIZE: i32 = 1984;
 pub(crate) const LIT_BITS: i32 = 10;
 pub(crate) const DIST_BITS: i32 = 8;
-pub(crate) fn iz_init(mut st: &mut crate::port::Cells, start: i32, end: i32, out: &mut crate::port::Cells) -> i32 {
+pub(crate) fn iz_init_st(mut st: &mut crate::port::Cells, start: i32, end: i32) -> i32 {
     crate::port::cells_drop(st, 0);
     crate::port::cells_grow(st, W_SIZE, 0);
     crate::port::cells_set(st, W_POS, start);
     crate::port::cells_set(st, W_END, end);
     crate::port::cells_set(st, W_LIMIT, crate::port::limit_of(1));
-    crate::port::cells_set(st, W_BASE, crate::port::cells_len(out));
     crate::port::cells_set(st, W_A, 1);
+    return 0;
+}
+pub(crate) fn iz_init(mut st: &mut crate::port::Cells, start: i32, end: i32, out: &mut crate::port::Cells) -> i32 {
+    iz_init_st(st, start, end);
+    crate::port::cells_set(st, W_BASE, crate::port::cells_len(out));
+    return 0;
+}
+pub(crate) fn iz_init_b(mut st: &mut crate::port::Cells, start: i32, end: i32, out: &mut crate::port::Buf) -> i32 {
+    iz_init_st(st, start, end);
+    crate::port::cells_set(st, W_BASE, crate::port::buf_len(out));
     return 0;
 }
 pub(crate) fn iz_fail(mut st: &mut crate::port::Cells, code: i32) -> i32 {
@@ -328,6 +337,14 @@ pub(crate) fn iz_put(mut st: &mut crate::port::Cells, mut out: &mut crate::port:
     crate::port::cells_push(out, b);
     return 0;
 }
+pub(crate) fn iz_put_b(mut st: &mut crate::port::Cells, mut out: &mut crate::port::Buf, b: i32) -> i32 {
+    // `iz-put`, onto a `Buf`.
+    if (crate::port::buf_len(out) - crate::port::cells_at(st, W_BASE)) >= crate::port::cells_at(st, W_LIMIT) {
+        crate::port::limit_breach(1, (crate::port::buf_len(out) - crate::port::cells_at(st, W_BASE)) + 1);
+    }
+    crate::port::buf_push(out, b);
+    return 0;
+}
 pub(crate) fn iz_codes(mut st: &mut crate::port::Cells, src: &[u8], mut out: &mut crate::port::Cells) -> i32 {
     // The symbols of one compressed block, up to its end-of-block, by the
     // lookup tables (`iz-fast`) with the bit-by-bit walk as the fallback.
@@ -505,6 +522,172 @@ pub(crate) fn iz_codes(mut st: &mut crate::port::Cells, src: &[u8], mut out: &mu
     }
     return 0;
 }
+pub(crate) fn iz_codes_b(mut st: &mut crate::port::Cells, src: &[u8], mut out: &mut crate::port::Buf) -> i32 {
+    // `iz-codes` onto a `Buf` (a byte a byte, not a cell): the same loop, with `buf-at` and `buf-push` for `cells-at` and
+    // `cells-push`, a run of the last byte one `buf-grow` and a match one `buf-copy-back` (bulk forms, whose per-byte loops are
+    // `iz-codes`'s own). A law holds its output to the Cells one's on every stream of the inflate vectors (D492).
+    let mut buf: i32 = crate::port::cells_at(st, W_BUF);
+    let mut cnt: i32 = crate::port::cells_at(st, W_CNT);
+    let mut pos: i32 = crate::port::cells_at(st, W_POS);
+    let end: i32 = crate::port::cells_at(st, W_END);
+    let base: i32 = crate::port::cells_at(st, W_BASE);
+    let limit: i32 = crate::port::cells_at(st, W_LIMIT);
+    let lmask: i32 = ((1) << (crate::port::cells_at(st, W_LB))) - 1;
+    let dmask: i32 = ((1) << (crate::port::cells_at(st, W_DB))) - 1;
+    let mut n: i32 = crate::port::buf_len(out);
+    let mut sa: i32 = crate::port::cells_at(st, W_A);
+    let mut sb: i32 = crate::port::cells_at(st, W_B);
+    let mut ss: i32 = 0;
+    let mut e: i32 = 0;
+    let mut l: i32 = 0;
+    let mut sym: i32 = 0;
+    let mut x: i32 = 0;
+    let mut ln: i32 = 0;
+    let mut dsym: i32 = 0;
+    let mut dist: i32 = 0;
+    let mut k: i32 = 0;
+    while base >= 0 {
+        if ss >= 2700 {
+            sa = sa % 65521;
+            sb = sb % 65521;
+            ss = 0;
+        }
+        while (cnt < 24) && (pos < end) {
+            buf |= (crate::port::blob_u8(src, pos)) << (cnt);
+            pos += 1;
+            cnt += 8;
+        }
+        e = crate::port::cells_at(st, W_LT + (buf & lmask));
+        l = e & 15;
+        if (e != 0) && (l <= cnt) {
+            buf = (buf) >> (l);
+            cnt -= l;
+            sym = (e) >> (4);
+        } else {
+            iz_park(st, buf, cnt, pos);
+            sym = iz_decode(st, src, W_LC, W_LS);
+            if crate::port::cells_at(st, W_ERR) != 0 {
+                return 0;
+            }
+            buf = crate::port::cells_at(st, W_BUF);
+            cnt = crate::port::cells_at(st, W_CNT);
+            pos = crate::port::cells_at(st, W_POS);
+        }
+        if sym < 256 {
+            if (n - base) >= limit {
+                crate::port::limit_breach(1, (n - base) + 1);
+            }
+            crate::port::buf_push(out, sym);
+            n += 1;
+            sa += sym;
+            sb += sa;
+            ss += 1;
+        }
+        if sym == 256 {
+            iz_park(st, buf, cnt, pos);
+            crate::port::cells_set(st, W_A, sa % 65521);
+            crate::port::cells_set(st, W_B, sb % 65521);
+            return 0;
+        }
+        if sym > 256 {
+            sym -= 257;
+            if sym >= 29 {
+                iz_park(st, buf, cnt, pos);
+                iz_fail(st, iz_bad_code());
+                return 0;
+            }
+            x = IZ_LEXT[(sym) as usize];
+            while (cnt < x) && (pos < end) {
+                buf |= (crate::port::blob_u8(src, pos)) << (cnt);
+                pos += 1;
+                cnt += 8;
+            }
+            if cnt < x {
+                iz_park(st, buf, cnt, pos);
+                iz_fail(st, iz_truncated());
+                return 0;
+            }
+            ln = IZ_LBASE[(sym) as usize] + (buf & (((1) << (x)) - 1));
+            buf = (buf) >> (x);
+            cnt -= x;
+            while (cnt < 24) && (pos < end) {
+                buf |= (crate::port::blob_u8(src, pos)) << (cnt);
+                pos += 1;
+                cnt += 8;
+            }
+            e = crate::port::cells_at(st, W_DT + (buf & dmask));
+            l = e & 15;
+            if (e != 0) && (l <= cnt) {
+                buf = (buf) >> (l);
+                cnt -= l;
+                dsym = (e) >> (4);
+            } else {
+                iz_park(st, buf, cnt, pos);
+                dsym = iz_decode(st, src, W_DC, W_DS);
+                if crate::port::cells_at(st, W_ERR) != 0 {
+                    return 0;
+                }
+                buf = crate::port::cells_at(st, W_BUF);
+                cnt = crate::port::cells_at(st, W_CNT);
+                pos = crate::port::cells_at(st, W_POS);
+            }
+            if dsym >= 30 {
+                iz_park(st, buf, cnt, pos);
+                iz_fail(st, iz_bad_code());
+                return 0;
+            }
+            x = IZ_DEXT[(dsym) as usize];
+            while (cnt < x) && (pos < end) {
+                buf |= (crate::port::blob_u8(src, pos)) << (cnt);
+                pos += 1;
+                cnt += 8;
+            }
+            if cnt < x {
+                iz_park(st, buf, cnt, pos);
+                iz_fail(st, iz_truncated());
+                return 0;
+            }
+            dist = IZ_DBASE[(dsym) as usize] + (buf & (((1) << (x)) - 1));
+            buf = (buf) >> (x);
+            cnt -= x;
+            if dist > (n - base) {
+                iz_park(st, buf, cnt, pos);
+                iz_fail(st, iz_bad_distance());
+                return 0;
+            }
+            if ((n - base) + ln) > limit {
+                // Over the limit part-way: byte by byte to the breach.
+                k = 0;
+                while k < ln {
+                    x = crate::port::buf_at(out, crate::port::buf_len(out) - dist);
+                    iz_put_b(st, out, x);
+                    k += 1;
+                }
+            }
+            ss += ln;
+            if dist == 1 {
+                // A run of the last byte: one fill, and the sums in closed form, as `iz-codes` does it.
+                x = crate::port::buf_at(out, n - 1);
+                crate::port::buf_grow(out, ln, x);
+                n += ln;
+                sb += (ln * sa) + (x * ((ln * (ln + 1)) / 2));
+                sa += ln * x;
+            } else {
+                // A match: one copy (`buf-copy-back`: a distance under the length repeats), then the sums over what it made.
+                crate::port::buf_copy_back(out, dist, ln);
+                k = 0;
+                while k < ln {
+                    x = crate::port::buf_at(out, n + k);
+                    sa += x;
+                    sb += sa;
+                    k += 1;
+                }
+                n += ln;
+            }
+        }
+    }
+    return 0;
+}
 pub(crate) fn iz_sum(mut st: &mut crate::port::Cells, out: &mut crate::port::Cells, from: i32, to: i32) -> i32 {
     // Fold out[from, to) into the Adler-32 in the state, byte by byte
     // with the modulus every 3000 (the stored blocks' share; the hot loop
@@ -526,6 +709,71 @@ pub(crate) fn iz_sum(mut st: &mut crate::port::Cells, out: &mut crate::port::Cel
     }
     crate::port::cells_set(st, W_A, a % 65521);
     crate::port::cells_set(st, W_B, b % 65521);
+    return 0;
+}
+pub(crate) fn iz_sum_b(mut st: &mut crate::port::Cells, out: &mut crate::port::Buf, from: i32, to: i32) -> i32 {
+    // `iz-sum` over a `Buf`.
+    let mut a: i32 = crate::port::cells_at(st, W_A);
+    let mut b: i32 = crate::port::cells_at(st, W_B);
+    let mut i: i32 = from;
+    let mut ss: i32 = 0;
+    while i < to {
+        a += crate::port::buf_at(out, i);
+        b += a;
+        i += 1;
+        ss += 1;
+        if ss >= 3000 {
+            a = a % 65521;
+            b = b % 65521;
+            ss = 0;
+        }
+    }
+    crate::port::cells_set(st, W_A, a % 65521);
+    crate::port::cells_set(st, W_B, b % 65521);
+    return 0;
+}
+pub(crate) fn iz_stored_b(mut st: &mut crate::port::Cells, src: &[u8], mut out: &mut crate::port::Buf) -> i32 {
+    // `iz-stored` onto a `Buf`.
+    let mut pos: i32 = crate::port::cells_at(st, W_POS);
+    let end: i32 = crate::port::cells_at(st, W_END);
+    let mut n: i32 = 0;
+    let mut avail: i32 = 0;
+    let mut from: i32 = 0;
+    let mut k: i32 = 0;
+    crate::port::cells_set(st, W_BUF, 0);
+    crate::port::cells_set(st, W_CNT, 0);
+    if (pos + 4) > end {
+        crate::port::cells_set(st, W_POS, end);
+        iz_fail(st, iz_truncated());
+        return 0;
+    }
+    n = crate::port::blob_u16le(src, pos);
+    if n != (65535 - crate::port::blob_u16le(src, pos + 2)) {
+        crate::port::cells_set(st, W_POS, pos + 4);
+        iz_fail(st, iz_bad_stored_length());
+        return 0;
+    }
+    pos += 4;
+    avail = end - pos;
+    if n < avail {
+        avail = n;
+    }
+    if ((crate::port::buf_len(out) - crate::port::cells_at(st, W_BASE)) + avail) > crate::port::cells_at(st, W_LIMIT) {
+        while k < avail {
+            iz_put_b(st, out, crate::port::blob_u8(src, pos + k));
+            k += 1;
+        }
+    }
+    from = crate::port::buf_len(out);
+    while k < avail {
+        crate::port::buf_push(out, crate::port::blob_u8(src, pos + k));
+        k += 1;
+    }
+    iz_sum_b(st, out, from, crate::port::buf_len(out));
+    crate::port::cells_set(st, W_POS, pos + k);
+    if k < n {
+        iz_fail(st, iz_truncated());
+    }
     return 0;
 }
 pub(crate) fn iz_stored(mut st: &mut crate::port::Cells, src: &[u8], mut out: &mut crate::port::Cells) -> i32 {
@@ -576,7 +824,7 @@ pub(crate) fn iz_stored(mut st: &mut crate::port::Cells, src: &[u8], mut out: &m
     }
     return 0;
 }
-pub(crate) fn iz_fixed(mut st: &mut crate::port::Cells, src: &[u8], mut out: &mut crate::port::Cells) -> i32 {
+pub(crate) fn iz_fixed_tables(mut st: &mut crate::port::Cells) -> i32 {
     // A block with the fixed codes (3.2.6): literals 0-143 have length 8,
     // 144-255 length 9, 256-279 length 7, 280-287 length 8; distances
     // are 30 codes of length 5 (symbols 30 and 31 never occur).
@@ -605,9 +853,18 @@ pub(crate) fn iz_fixed(mut st: &mut crate::port::Cells, src: &[u8], mut out: &mu
     iz_build(st, W_DC, W_DS, W_LEN, 30);
     iz_fast(st, W_LC, W_LS, W_LT, LIT_BITS, W_LB);
     iz_fast(st, W_DC, W_DS, W_DT, DIST_BITS, W_DB);
+    return 0;
+}
+pub(crate) fn iz_fixed(mut st: &mut crate::port::Cells, src: &[u8], mut out: &mut crate::port::Cells) -> i32 {
+    iz_fixed_tables(st);
     return iz_codes(st, src, out);
 }
-pub(crate) fn iz_dynamic(mut st: &mut crate::port::Cells, src: &[u8], mut out: &mut crate::port::Cells) -> i32 {
+pub(crate) fn iz_fixed_b(mut st: &mut crate::port::Cells, src: &[u8], mut out: &mut crate::port::Buf) -> i32 {
+    iz_fixed_tables(st);
+    return iz_codes_b(st, src, out);
+}
+pub(crate) fn iz_dynamic_tables(mut st: &mut crate::port::Cells, src: &[u8]) -> i32 {
+    // Builds the block's tables; a bad header latches its error in the state (`iz-fail`), which the caller looks at.
     // A block with its own codes (3.2.7): HLIT, HDIST, HCLEN, the code-length
     // code's lengths in a fixed permuted order, then the literal/length and
     // distance code lengths coded with that code (16 repeats the previous
@@ -721,7 +978,21 @@ pub(crate) fn iz_dynamic(mut st: &mut crate::port::Cells, src: &[u8], mut out: &
     }
     iz_fast(st, W_LC, W_LS, W_LT, LIT_BITS, W_LB);
     iz_fast(st, W_DC, W_DS, W_DT, DIST_BITS, W_DB);
+    return 0;
+}
+pub(crate) fn iz_dynamic(mut st: &mut crate::port::Cells, src: &[u8], mut out: &mut crate::port::Cells) -> i32 {
+    iz_dynamic_tables(st, src);
+    if crate::port::cells_at(st, W_ERR) != 0 {
+        return 0;
+    }
     return iz_codes(st, src, out);
+}
+pub(crate) fn iz_dynamic_b(mut st: &mut crate::port::Cells, src: &[u8], mut out: &mut crate::port::Buf) -> i32 {
+    iz_dynamic_tables(st, src);
+    if crate::port::cells_at(st, W_ERR) != 0 {
+        return 0;
+    }
+    return iz_codes_b(st, src, out);
 }
 pub(crate) fn iz_blocks(mut st: &mut crate::port::Cells, src: &[u8], mut out: &mut crate::port::Cells) -> i32 {
     // Blocks until one says it is the last: BFINAL, then BTYPE (0 stored,
@@ -752,20 +1023,42 @@ pub(crate) fn iz_blocks(mut st: &mut crate::port::Cells, src: &[u8], mut out: &m
     }
     return 0;
 }
+pub(crate) fn iz_blocks_b(mut st: &mut crate::port::Cells, src: &[u8], mut out: &mut crate::port::Buf) -> i32 {
+    // `iz-blocks` onto a `Buf`.
+    let mut last: i32 = 0;
+    let mut kind: i32 = 0;
+    while last == 0 {
+        last = iz_bits(st, src, 1);
+        kind = iz_bits(st, src, 2);
+        if crate::port::cells_at(st, W_ERR) != 0 {
+            return crate::port::cells_at(st, W_ERR);
+        }
+        if kind == 0 {
+            iz_stored_b(st, src, out);
+        }
+        if kind == 1 {
+            iz_fixed_b(st, src, out);
+        }
+        if kind == 2 {
+            iz_dynamic_b(st, src, out);
+        }
+        if kind == 3 {
+            iz_fail(st, iz_bad_block_type());
+        }
+        if crate::port::cells_at(st, W_ERR) != 0 {
+            return crate::port::cells_at(st, W_ERR);
+        }
+    }
+    return 0;
+}
 pub fn iz_raw(src: &[u8], start: i32, end: i32, mut out: &mut crate::port::Cells, mut st: &mut crate::port::Cells) -> i32 {
     // Inflate a bare RFC 1951 stream in src[start, end). See the head
     // of the file for what `out`, `st` and the answer mean.
     iz_init(st, start, end, out);
     return iz_blocks(st, src, out);
 }
-pub fn iz_zlib(src: &[u8], start: i32, end: i32, mut out: &mut crate::port::Cells, mut st: &mut crate::port::Cells) -> i32 {
-    // Inflate an RFC 1950 stream: CMF and FLG, the deflate data, and the
-    // big-endian Adler-32 of the output. §2.2: CM must be 8, CINFO at most
-    // 7, and CMF*256+FLG a multiple of 31; FDICT means a preset
-    // dictionary the stream does not carry (`need-dict`). §2.3 says a
-    // decompressor MUST check the Adler-32; a mismatch is `bad-checksum`
-    // and the output is kept.
-    iz_init(st, start, end, out);
+pub(crate) fn iz_zlib_head(mut st: &mut crate::port::Cells, src: &[u8], start: i32, end: i32) -> i32 {
+    // The two header bytes: 0, or the status to answer.
     if (end - start) < 2 {
         crate::port::cells_set(st, W_POS, end);
         iz_fail(st, iz_truncated());
@@ -773,8 +1066,6 @@ pub fn iz_zlib(src: &[u8], start: i32, end: i32, mut out: &mut crate::port::Cell
     }
     let cmf: i32 = crate::port::blob_u8(src, start);
     let flg: i32 = crate::port::blob_u8(src, start + 1);
-    let mut status: i32 = 0;
-    let mut pos: i32 = 0;
     crate::port::cells_set(st, W_POS, start + 2);
     if ((cmf & 15) != 8) || ((cmf / 16) > 7) || ((((cmf * 256) + flg) % 31) != 0) {
         iz_fail(st, iz_bad_header());
@@ -784,11 +1075,11 @@ pub fn iz_zlib(src: &[u8], start: i32, end: i32, mut out: &mut crate::port::Cell
         iz_fail(st, iz_need_dict());
         return iz_need_dict();
     }
-    status = iz_blocks(st, src, out);
-    if status != 0 {
-        return status;
-    }
-    pos = crate::port::cells_at(st, W_POS);
+    return 0;
+}
+pub(crate) fn iz_zlib_tail(mut st: &mut crate::port::Cells, src: &[u8], end: i32) -> i32 {
+    // The Adler-32 after the blocks: 0, or the status to answer.
+    let pos: i32 = crate::port::cells_at(st, W_POS);
     if (pos + 4) > end {
         crate::port::cells_set(st, W_POS, end);
         iz_fail(st, iz_truncated());
@@ -802,4 +1093,41 @@ pub fn iz_zlib(src: &[u8], start: i32, end: i32, mut out: &mut crate::port::Cell
         return iz_bad_checksum();
     }
     return 0;
+}
+pub fn iz_raw_buf(src: &[u8], start: i32, end: i32, mut out: &mut crate::port::Buf, mut st: &mut crate::port::Cells) -> i32 {
+    // `iz-raw`, appending to a `Buf` (see `iz-zlib-buf`).
+    iz_init_b(st, start, end, out);
+    return iz_blocks_b(st, src, out);
+}
+pub fn iz_zlib(src: &[u8], start: i32, end: i32, mut out: &mut crate::port::Cells, mut st: &mut crate::port::Cells) -> i32 {
+    // Inflate an RFC 1950 stream: CMF and FLG, the deflate data, and the
+    // big-endian Adler-32 of the output. §2.2: CM must be 8, CINFO at most
+    // 7, and CMF*256+FLG a multiple of 31; FDICT means a preset
+    // dictionary the stream does not carry (`need-dict`). §2.3 says a
+    // decompressor MUST check the Adler-32; a mismatch is `bad-checksum`
+    // and the output is kept.
+    iz_init(st, start, end, out);
+    let mut status: i32 = iz_zlib_head(st, src, start, end);
+    if status != 0 {
+        return status;
+    }
+    status = iz_blocks(st, src, out);
+    if status != 0 {
+        return status;
+    }
+    return iz_zlib_tail(st, src, end);
+}
+pub fn iz_zlib_buf(src: &[u8], start: i32, end: i32, mut out: &mut crate::port::Buf, mut st: &mut crate::port::Cells) -> i32 {
+    // `iz-zlib`, appending to a `Buf` (a byte a byte instead of a cell: a quarter of the memory, for the image data of a big
+    // bitmap). The same status, the same prefix kept on an error, the same `st` (D492).
+    iz_init_b(st, start, end, out);
+    let mut status: i32 = iz_zlib_head(st, src, start, end);
+    if status != 0 {
+        return status;
+    }
+    status = iz_blocks_b(st, src, out);
+    if status != 0 {
+        return status;
+    }
+    return iz_zlib_tail(st, src, end);
 }
