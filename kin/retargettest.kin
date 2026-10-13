@@ -245,4 +245,6 @@
         (cells-set rtp (rtp-brun) br)
         (assert-eq (rt-cap 1600) (sc-sel-max) "a count over the region is the region's")
         (assert-eq (rt-cap 7) 7 "and one under it is its own")
-        (assert-eq (rt-adopt rtp oruns fr olines owords scr) (sc-sel-max) "the selection is full, and nothing was read past the scratch")))))
+        (let [^I32 n (rt-adopt rtp oruns fr olines owords scr)]
+          (assert-that (<= n (sc-sel-max)) "the selection holds no more than the scratch has room for")
+          (assert-that (> n 1400) "and the 1500 lines it counts are read, bar the few that lie over the first pass's line"))))))

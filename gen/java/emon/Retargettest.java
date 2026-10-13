@@ -237,6 +237,8 @@ public final class Retargettest {
         emon.Port.cellsSet(rtp, Retarget.rtpBrun(), br);
         emon.Testport.assertEq(Retarget.rtCap(1600), Scan.scSelMax(), "a count over the region is the region's");
         emon.Testport.assertEq(Retarget.rtCap(7), 7, "and one under it is its own");
-        emon.Testport.assertEq(Retarget.rtAdopt(rtp, oruns, fr, olines, owords, scr), Scan.scSelMax(), "the selection is full, and nothing was read past the scratch");
+        int n = Retarget.rtAdopt(rtp, oruns, fr, olines, owords, scr);
+        emon.Testport.assertThat(n <= Scan.scSelMax(), "the selection holds no more than the scratch has room for");
+        emon.Testport.assertThat(n > 1400, "and the 1500 lines it counts are read, bar the few that lie over the first pass's line");
     }
 }

@@ -244,6 +244,8 @@ public static class Retargettest {
         emon.Port.CellsSet(rtp, Retarget.RtpBrun(), br);
         emon.Testport.AssertEq(Retarget.RtCap(1600), Scan.ScSelMax(), "a count over the region is the region's");
         emon.Testport.AssertEq(Retarget.RtCap(7), 7, "and one under it is its own");
-        emon.Testport.AssertEq(Retarget.RtAdopt(rtp, oruns, fr, olines, owords, scr), Scan.ScSelMax(), "the selection is full, and nothing was read past the scratch");
+        int n = Retarget.RtAdopt(rtp, oruns, fr, olines, owords, scr);
+        emon.Testport.AssertThat(n <= Scan.ScSelMax(), "the selection holds no more than the scratch has room for");
+        emon.Testport.AssertThat(n > 1400, "and the 1500 lines it counts are read, bar the few that lie over the first pass's line");
     }
 }

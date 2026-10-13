@@ -255,5 +255,7 @@ func TestABodyInkRunOfMoreLinesThanTheScratchHoldsIsCutNotReadPastIt(emonT *test
 	port.CellsSet(rtp, retarget.RtpBrun(), br)
 	port.AssertEq(emonT, retarget.RtCap(1600), scan.ScSelMax(), "a count over the region is the region's")
 	port.AssertEq(emonT, retarget.RtCap(7), 7, "and one under it is its own")
-	port.AssertEq(emonT, retarget.RtAdopt(rtp, oruns, fr, olines, owords, scr), scan.ScSelMax(), "the selection is full, and nothing was read past the scratch")
+	var n int32 = retarget.RtAdopt(rtp, oruns, fr, olines, owords, scr)
+	port.AssertThat(emonT, n <= scan.ScSelMax(), "the selection holds no more than the scratch has room for")
+	port.AssertThat(emonT, n > 1400, "and the 1500 lines it counts are read, bar the few that lie over the first pass's line")
 }

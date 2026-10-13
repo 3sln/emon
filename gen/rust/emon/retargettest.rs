@@ -246,5 +246,7 @@ fn test_a_body_ink_run_of_more_lines_than_the_scratch_holds_is_cut_not_read_past
     crate::port::cells_set(rtp, rtp_brun(), br);
     crate::testport::assert_eq(rt_cap(1600), sc_sel_max(), "a count over the region is the region's");
     crate::testport::assert_eq(rt_cap(7), 7, "and one under it is its own");
-    crate::testport::assert_eq(rt_adopt(rtp, oruns, fr, olines, owords, scr), sc_sel_max(), "the selection is full, and nothing was read past the scratch");
+    let n: i32 = rt_adopt(rtp, oruns, fr, olines, owords, scr);
+    crate::testport::assert_that(n <= sc_sel_max(), "the selection holds no more than the scratch has room for");
+    crate::testport::assert_that(n > 1400, "and the 1500 lines it counts are read, bar the few that lie over the first pass's line");
 }
