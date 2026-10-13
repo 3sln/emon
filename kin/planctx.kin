@@ -17,6 +17,7 @@
 ;;   fetch-round the misses in a row (a round of requests starts it over); round the round the outstanding requests belong to
 ;;   outk        what `reqs` holds: 0 nothing, 1 `bytes` requests, 2 a round of requests
 ;;   err, err-limit, err-actual  the error's name (`pe`), and a limit's value and the number it reached (a unit status for `pe-unit-failed`)
+;;   elapsed     the milliseconds the current unit has run, rounded up, put by the host (its clock) before each `pl-after`; `stage-ms` is judged against it
 ;;   phase, page which unit the engine is on (`ph`) and which page it is
 ;;   t-*         the totals the finished units folded in (what the host's RunStats reads)
 (ns emon.planctx
@@ -26,4 +27,5 @@
       ^Text msg
       ^I32 max-rounds ^I32 fetch-limit ^I32 attempts ^I32 rounds ^I32 requests ^I32 fetch-rounds ^I32 bytes-requests
       ^I32 fetch-round ^I32 round ^I32 outk ^I32 err ^I32 err-limit ^I32 err-actual ^I32 phase ^I32 page
+      ^I32 elapsed
       ^I32 t-attempts ^I32 t-fetch-rounds ^I32 t-bytes-requests ^I32 t-requests])

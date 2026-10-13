@@ -31,6 +31,7 @@ public final class Planctx {
         public int errActual = 0;
         public int phase = 0;
         public int page = 0;
+        public int elapsed = 0;
         public int tAttempts = 0;
         public int tFetchRounds = 0;
         public int tBytesRequests = 0;
@@ -66,6 +67,7 @@ public final class Planctx {
             c.errActual = this.errActual;
             c.phase = this.phase;
             c.page = this.page;
+            c.elapsed = this.elapsed;
             c.tAttempts = this.tAttempts;
             c.tFetchRounds = this.tFetchRounds;
             c.tBytesRequests = this.tBytesRequests;

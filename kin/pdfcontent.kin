@@ -225,7 +225,7 @@
 (defconst ^I32 S_DW2V 7)         ;; hundredths of 1/1000 em
 (defconst ^I32 S_DW2W 8)
 (defconst ^I32 C_FIDS 64)        ;; 512 font handles: a font's id is its index
-(defconst ^I32 MAX_FIDS 512)
+(defconst ^I32 MAX_FIDS 512)     ;; the slab; the limit `fonts-per-doc` (kind 14) is ranged 0..MAX_FIDS (P10.4 close, D498)
 ;; Page part, reset by `pc-page`.
 (defconst ^I32 C_PAGE 576)
 (defconst ^I32 C_WARN 577)
@@ -252,6 +252,7 @@
 (defconst ^I32 C_INTEXT 598)
 (defconst ^I32 C_GSBASE 599)
 (defconst ^I32 C_SSTAT 633)      ;; the last non-zero status of a stream decode (`pf-status`)
+(defconst ^I32 C_FIDLIM 634)     ;; limit-of FONTS_PER_DOC
 (defconst ^I32 C_TOK 632)        ;; what `pc-lex-one` read
 (defconst ^I32 C_FSTACK 600)     ;; 32 object numbers of the forms being run
 (defconst ^I32 MAX_FORMS 32)
@@ -346,6 +347,7 @@
 (defconst ^I32 W_TEXT 256)       ;; a show operator outside BT or with no font
 (defconst ^I32 W_PROPS 512)      ;; a /Properties name was not found
 (defconst ^I32 W_PATHS 1024)     ;; more paths or images than a page records (PATH_ROWS)
+(defconst ^I32 W_FONTS 2048)     ;; text was shown in a font past `fonts-per-doc`: it has no evidence id (-1) and no `fonts` row
 
 ;; ------------------------------------------------------------- small things
 
@@ -727,6 +729,7 @@
           (set i (+ i 1))))
     (cells-set cx C_OPLIM (limit-of 5))
     (cells-set cx C_FLIM (limit-of 6))
+    (cells-set cx C_FIDLIM (limit-of 14))
     (cells-set cx C_MCTOP -1)
     (return 0)))
 
@@ -1054,13 +1057,15 @@
 
 (defn ^I32 pc-font-id [^:mut ^Cells cx ^I32 key]
   (comment "The evidence id of a font dictionary: its index in the order the")
-  (comment "document first showed it (-1 past 512 fonts).")
+  (comment "document first showed it. THE BUDGET `fonts-per-doc` (kind 14, at most MAX_FIDS = 512): the font past it has no id, -1, which is the")
+  (comment "evidence's 'no font' (its glyphs carry -1 and it has no `fonts` row); the text is still read in the font's own encoding, and the page")
+  (comment "that shows it is flagged (W_FONTS). The same on every host, since the decision is made here.")
   (let [^I32 n (cells-at cx C_NFONT)
         ^:mut ^I32 i 0]
     (while (< i n)
       (do (if (== (cells-at cx (+ C_FIDS i)) key) (return i))
           (set i (+ i 1))))
-    (if (>= n MAX_FIDS) (return -1))
+    (if (>= n (cells-at cx C_FIDLIM)) (return -1))
     (cells-set cx (+ C_FIDS n) key)
     (cells-set cx C_NFONT (+ n 1))
     (return n)))
@@ -1218,6 +1223,7 @@
     (if (>= slot 0)
       (do (set sat (+ C_SLOTS (* slot SLOT_STRIDE)))
           (set fid (cells-at cx (+ sat S_ID)))
+          (if (< fid 0) (pc-warn-set cx W_FONTS))
           (if (== (cells-at cx (+ sat S_STATUS)) 0)
             (do (set cnt (pc-f-map f0 f1 f2 f3 slot code))
                 (set how (pc-f-how f0 f1 f2 f3 slot))

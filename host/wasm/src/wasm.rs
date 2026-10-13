@@ -147,6 +147,13 @@ pub extern "C" fn emon_const(i: u32) -> i32 {
     shared::constant(i)
 }
 
+// The page's clock, in milliseconds (`performance.now()`): the module has none (no imports), so the JS SDK sets it before it steps, and the loop's
+// `stage-ms` (P10.4, SPEC 7.4) is judged against the time between two settings. Unset, no stage is ever late.
+#[no_mangle]
+pub extern "C" fn emon_clock(ms: f64) {
+    crate::plan::set_clock_ms(ms);
+}
+
 // ------------------------------------------------------------------------------------------------ sessions
 
 // Open a session over an input of `len` bytes (a number: an input over the engine's bound is refused by name, not wrapped, and before

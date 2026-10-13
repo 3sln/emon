@@ -422,12 +422,48 @@ pub struct Totals {
     pub page_requests: Vec<i32>,
 }
 
+// THE HOST'S CLOCK (D396: a clock is the host's; P10.4, `stage-ms`, SPEC 7.4). The loop reads it for one thing: the milliseconds the current unit
+// has run, rounded up, which it hands kin (`Plan::elapsed`) before each `pl_after`; whether that is too long is kin's (`pl-stage-over`). Native, it
+// is a monotonic clock. The browser has none Rust can read (`Instant::now` is unimplemented on wasm32-unknown-unknown): its JS SDK sets it
+// (`set_clock_ms`, the `emon_clock` export) with `performance.now()` before it steps, which is what the unit's time is measured against there.
+#[cfg(not(target_arch = "wasm32"))]
+mod clock {
+    use std::sync::OnceLock;
+    use std::time::Instant;
+    static ORIGIN: OnceLock<Instant> = OnceLock::new();
+    pub fn now_ns() -> u64 {
+        ORIGIN.get_or_init(Instant::now).elapsed().as_nanos().min(u64::MAX as u128) as u64
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+mod clock {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NOW_NS: AtomicU64 = AtomicU64::new(0);
+    pub fn now_ns() -> u64 {
+        NOW_NS.load(Ordering::Relaxed)
+    }
+    pub fn set_ms(ms: f64) {
+        if ms.is_finite() && ms >= 0.0 {
+            NOW_NS.store((ms * 1_000_000.0) as u64, Ordering::Relaxed);
+        }
+    }
+}
+
+// The browser's clock, set by the JS SDK before it steps a session.
+#[cfg(target_arch = "wasm32")]
+pub fn set_clock_ms(ms: f64) {
+    clock::set_ms(ms);
+}
+
 pub struct Machine {
     p: Plan,
     bitmaps: Bitmaps,
     all: Bitmaps,
     reqs: Vec<Request>,
     staged: HashMap<i32, Option<Arc<Bitmap>>>,
+    // when the current unit began, on the host's clock
+    t0: u64,
 }
 
 impl Machine {
@@ -435,7 +471,13 @@ impl Machine {
         let mut p = Plan::new();
         p.max_rounds = cfg.max_rounds;
         p.fetch_limit = cfg.fetch_rounds;
-        Machine { p, bitmaps: Bitmaps::new(), all: Bitmaps::new(), reqs: Vec::new(), staged: HashMap::new() }
+        Machine { p, bitmaps: Bitmaps::new(), all: Bitmaps::new(), reqs: Vec::new(), staged: HashMap::new(), t0: clock::now_ns() }
+    }
+
+    // The milliseconds the current unit has run, rounded up (any time at all is one), saturated at i32::MAX.
+    fn elapsed_ms(&self) -> i32 {
+        let ns = clock::now_ns().saturating_sub(self.t0);
+        (ns / 1_000_000 + u64::from(ns % 1_000_000 != 0)).min(i32::MAX as u64) as i32
     }
 
     // What the current unit has counted.
@@ -446,7 +488,7 @@ impl Machine {
     // The error kin holds, as the loop reports it.
     fn error(&self) -> PlanError {
         let code = self.p.err;
-        if code == lp::pe_max_rounds() || code == lp::pe_fetch_rounds() || code == lp::pe_ocr_requests() {
+        if code == lp::pe_max_rounds() || code == lp::pe_fetch_rounds() || code == lp::pe_ocr_requests() || code == lp::pe_stage_ms() {
             PlanError::Limit { name: pe_name(code), limit: self.p.err_limit, actual: self.p.err_actual }
         } else if code == lp::pe_unit_failed() {
             PlanError::Unit(self.p.err_actual)
@@ -485,6 +527,7 @@ impl Machine {
         let status = unit(&mut self.p.ans, &mut self.p.rq, &bms, &mut payload);
         let made = bms.made();
         drop(bms);
+        self.p.elapsed = self.elapsed_ms();
         let act = lp::pl_after(&mut self.p, status);
         if act == lp::act_done() {
             Ok(Next::Done)
@@ -612,6 +655,7 @@ impl Machine {
     // The unit is finished: its accounting joins the totals, and the next unit starts with no answers and no bitmaps.
     pub fn end_unit(&mut self) {
         lp::pl_fold(&mut self.p);
+        self.t0 = clock::now_ns();
         self.bitmaps.clear();
         self.all.clear();
         self.reqs.clear();

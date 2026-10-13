@@ -448,7 +448,8 @@
       frees ["emon_free_buf" "emon_free_error" "emon_free_model" "emon_free_step" "emon_free_files" "emon_free_asset_info"]
       ;; the browser binding's exports and their C counterparts; the linear-memory plumbing has none (a C caller has pointers)
       wasm-exports (set (map second (re-seq #"(?s)#\[no_mangle\]\s*pub (?:unsafe )?extern \"C\" fn (emon_[a-z0-9_]+)" (slurp "host/wasm/src/wasm.rs"))))
-      plumbing #{"emon_alloc" "emon_free" "emon_out_ptr" "emon_out_len" "emon_out_free"}
+      ;; `emon_clock` is the browser's clock for `stage-ms` (D501): a native host (the C binding) has its own monotonic clock in the Machine
+      plumbing #{"emon_alloc" "emon_free" "emon_out_ptr" "emon_out_len" "emon_out_free" "emon_clock"}
       alias {"emon_model_free" "emon_free_model" "emon_stats" "emon_model_stats" "emon_finish_intake" "emon_finish_intake"}
       wasm-missing (for [w (sort wasm-exports) :when (not (plumbing w)) :let [c (get alias w w)] :when (not (contains? defined c))] [w c])
       input-fields (every? #(re-find (re-pattern (str "\\b" % "\\b")) hcode) ["data" "source" "password" "read_at" "length"])
@@ -585,17 +586,21 @@
     (doseq [[f i n] hits] (bad f ":" i " names the limit `" n "` as a string: a name is kin's table's (kin/limits.kin)"))
     (when (empty? hits)
       (ok "LIMIT NAMES: no host library (Rust, Go, Java, C#, the wasm binding, the JS SDK) types a limit name as a string but `input-bytes` where it raises that one itself")))
-  ;; the copies of a default that a host cannot read from kin
-  (doseq [[file re limit expect what]
-          [["host/js/src/index.js" #"limits\?\.\['input-bytes'\] \?\? (1 << 30)" "input-bytes" (* 1 (bit-shift-left 1 30)) "the SDK's spool bound"]
-           ["host/rust/src/pdfium.rs" #"Pdfium \{ max_pixels: (1 << 28) \}" "pixels" (bit-shift-left 1 28) "the pdfium port's render bound"]
-           ["host/go/pdfium/pdfium.go" #"&Pdfium\{MaxPixels: (1 << 28)\}" "pixels" (bit-shift-left 1 28) "the pdfium port's render bound"]
-           ["host/java/emon/ffi/Pdfium.java" #"long maxPixels = (1L << 28)" "pixels" (bit-shift-left 1 28) "the pdfium port's render bound"]
-           ["host/csharp/Emon/Ffi/Pdfium.cs" #"long MaxPixels = (1L << 28)" "pixels" (bit-shift-left 1 28) "the pdfium port's render bound"]]]
-    (let [text (slurp file) m (re-find re text) d (:default (by-name limit))]
-      (cond (nil? m) (bad file " no longer has the copy of the `" limit "` default (" what ") this check holds to the table; update the check or use the table")
-            (not= d expect) (bad file " copies the `" limit "` default as " expect " (" what ") but kin/limits.kin says " d)
-            :else (ok "LIMIT DEFAULT COPY: " file " (" what ") is the `" limit "` default, " d))))
+  ;; NO COPY of a default (P10.4 close, D498): the pdfium ports read `pixels` through `limit-of` at each render, and the SDK reads `input-bytes` from the
+  ;; module (`emon_const(100 + kind)`: kin's table); a host binding that still types the number is the drift this check exists to find
+  (doseq [[file reads copy limit what]
+          [["host/js/src/index.js" #"this\.w\.inputBytes" #"input-bytes'\]\s*\?\?\s*(1\s*<<\s*30|1073741824)" "input-bytes" "the SDK's spool bound"]
+           ["host/js/src/wasm.js" #"emon_const\(100\)" #"1\s*<<\s*30|1073741824" "input-bytes" "the SDK's spool bound (the module's export of kin's table)"]
+           ["host/rust/src/pdfium.rs" #"port::limit_of\(9\)" #"1\s*<<\s*28|268435456" "pixels" "the pdfium port's render bound"]
+           ["host/go/pdfium/pdfium.go" #"port\.LimitOf\(9\)" #"1\s*<<\s*28|268435456" "pixels" "the pdfium port's render bound"]
+           ["host/java/emon/ffi/Pdfium.java" #"Port\.limitOf\(9\)" #"1L?\s*<<\s*28|268435456" "pixels" "the pdfium port's render bound"]
+           ["host/csharp/Emon/Ffi/Pdfium.cs" #"Port\.LimitOf\(9\)" #"1L?\s*<<\s*28|268435456" "pixels" "the pdfium port's render bound"]]]
+    (let [text (slurp file) kind (:kind (by-name limit))
+          want (if (= limit "input-bytes") 0 9)]
+      (cond (not= kind want) (bad "kin/limits.kin: `" limit "` is kind " kind ", and " file " reads kind " want " (" what ")")
+            (not (re-find reads text)) (bad file " does not read the `" limit "` default from kin (" what "): it should be " reads)
+            (re-find copy text) (bad file " still types the `" limit "` default (" what "): read it from kin's table")
+            :else (ok "LIMIT DEFAULT READ: " file " (" what ") reads `" limit "` from kin's table, no copy of " (:default (by-name limit))))))
   ;; the C binding and the pod (P9.4) parse options with kin's `cf-parse`; held to it
   (doseq [[what dir] [["C binding" "host/c"] ["pod" "host/pod"]]]
     (if (fs/exists? dir)

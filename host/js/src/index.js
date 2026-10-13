@@ -220,6 +220,7 @@ export class Emon {
     const chunk = options.chunk ?? this.defaults.chunk ?? 65536;
     const pw = typeof password === 'string' ? new TextEncoder().encode(password) : password || new Uint8Array(0);
     const text = new TextEncoder().encode(optionLines(options, chunk, !!options.record));
+    w.x.emon_clock(performance.now()); // the first unit's clock starts here
     const h = w.withBytes(pw, (pp, pl) => w.withBytes(text, (op, ol) => w.x.emon_open(source.size, chunk, mode, pp, pl, op, ol)));
     if (h < 0) throw this._error(h);
     return { h, chunk };
@@ -335,6 +336,8 @@ export class Emon {
         await this._fetch(h, source, pairs(w.outI32()), chunk, ctx);
       }
       for (;;) {
+        // the browser's clock is the page's (D396): the module has none, so the loop's `stage-ms` is judged against what is set here
+        w.x.emon_clock(performance.now());
         const st = w.x.emon_step(h);
         if (st === 0) return ctx;
         if (st === 1) {
@@ -379,7 +382,7 @@ export class Emon {
    */
   async convert(input, options = {}) {
     const { src, password } = this._input(input);
-    const source = await toSource(src, { lazy: options.lazy, max: options.limits?.['input-bytes'] ?? 1 << 30 });
+    const source = await toSource(src, { lazy: options.lazy, max: options.limits?.['input-bytes'] ?? this.w.inputBytes });
     const { h, chunk } = this._open(source, password, 0, options);
     const ctx = await this._run(h, source, chunk, options, 0);
     const w = this.w;
@@ -418,7 +421,7 @@ export class Emon {
     const out = [];
     for (const input of list) {
       const { src, password } = this._input(input);
-      const source = await toSource(src, { lazy: options.lazy, max: options.limits?.['input-bytes'] ?? 1 << 30 });
+      const source = await toSource(src, { lazy: options.lazy, max: options.limits?.['input-bytes'] ?? this.w.inputBytes });
       const { h, chunk } = this._open(source, password, 1, { ...options, ports: undefined, record: false, transcript: undefined });
       await this._run(h, source, chunk, { ...options, ports: undefined, transcript: undefined }, 1);
       const rc = this.w.x.emon_finish_intake(h);

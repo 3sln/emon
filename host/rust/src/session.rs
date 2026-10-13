@@ -330,6 +330,8 @@ pub fn constant(i: u32) -> i32 {
         13 => emon::plan::ps_limit(),
         14 => emon::ocr::ocw_dict(),
         15 => emon::ocr::ocw_numeric(),
+        // 100 + K: the default of kin's limit K (`emon.limits`), so a binding that must say a default (the JS SDK's `input-bytes`) reads kin's
+        k if k >= 100 => crate::port::limit_default((k - 100) as i32).unwrap_or(-1),
         _ => -1,
     }
 }

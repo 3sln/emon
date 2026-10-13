@@ -222,6 +222,26 @@ public final class Planlooptest {
         emon.Testport.assertEq(p.rounds, 1, "the round was counted first");
         tErr(0, p, Planloop.peOcrRequests(), "ocr-requests", "the limit is 100000 and this run reached 100001");
     }
+    public static void testAStagesWallClockIsKinsToJudgeAnd0IsOff() {
+        // `stage-ms` (kind 15, P10.4): the host supplies the milliseconds, kin says whether they are too many. 0 is off, whatever the clock says; a stage
+        // that has used the bound has reached it (the host rounds up, so any time is a millisecond).
+        emon.Testport.assertEq(Planloop.plStageOver(0, 2147483647), 0, "off is off");
+        emon.Testport.assertEq(Planloop.plStageOver(0, 0), 0, "off, and no time");
+        emon.Testport.assertEq(Planloop.plStageOver(1, 0), 0, "no time has passed");
+        emon.Testport.assertEq(Planloop.plStageOver(1, 1), 1, "a millisecond is the bound");
+        emon.Testport.assertEq(Planloop.plStageOver(100, 99), 0, "one under");
+        emon.Testport.assertEq(Planloop.plStageOver(100, 100), 1, "reached");
+        emon.Testport.assertEq(Planloop.plStageOver(100, 5000), 1, "past");
+    }
+    public static void testWithStageMsOffTheLoopIgnoresTheClock() {
+        emon.Planctx.Plan p = new emon.Planctx.Plan();
+        tInit(p, 5, 24);
+        Planloop.plAttempt(p);
+        p.elapsed = 2147483647;
+        tRender(p, 1);
+        emon.Testport.assertEq(Planloop.plAfter(p, Plan.usRequests()), Planloop.actRequests(), "an hour of wall-clock is nothing when the limit is off");
+        emon.Testport.assertEq(p.err, 0, "no error");
+    }
     public static void testAMissIsNotARoundAndFetchRoundsIsANamedLimit() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         tInit(p, 5, 2);
@@ -768,6 +788,10 @@ public final class Planlooptest {
     public static void testTheOcrRequestsLimitIsNamedAsTheTableNamesIt() {
         StringBuilder a = emon.Testport.newText();
         tName(0, "ocr-requests", Planloop.peEmitName(a, Planloop.peOcrRequests()), a);
+    }
+    public static void testTheStageMsLimitIsNamedAsTheTableNamesIt() {
+        StringBuilder a = emon.Testport.newText();
+        tName(0, "stage-ms", Planloop.peEmitName(a, Planloop.peStageMs()), a);
     }
     public static void testADocumentsStatusIsNamedAndHasAClass() {
         StringBuilder a = emon.Testport.newText();

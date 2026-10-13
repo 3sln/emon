@@ -56,16 +56,14 @@ var (
 	lock sync.Mutex
 )
 
-// Pdfium is the default Renderer.
-type Pdfium struct {
-	// MaxPixels refuses a render larger than this many pixels (`failed`), before any memory is asked for.
-	MaxPixels int64
-}
+// Pdfium is the default Renderer. A render larger than the `pixels` limit (kin's table, read through `port.LimitOf(9)` at each render, so a
+// conversion's `limit.pixels` applies to rendering too) is refused (`failed`), before any memory is asked for (P10.4).
+type Pdfium struct{}
 
 // New initialises the library (once per process) and answers a Renderer.
 func New() *Pdfium {
 	initOnce.Do(func() { C.init_once() })
-	return &Pdfium{MaxPixels: 1 << 28}
+	return &Pdfium{}
 }
 
 // Layers: full, no text, text only.
@@ -194,8 +192,9 @@ func (p *Pdfium) Render(input port.RenderSource, password []byte, req port.Rende
 
 	w := port.PixelsOf(float64(C.FPDF_GetPageWidthF(page)), req.Dpi)
 	hh := port.PixelsOf(float64(C.FPDF_GetPageHeightF(page)), req.Dpi)
-	if int64(w)*int64(hh) > p.MaxPixels {
-		return nil, failed("%dx%d pixels is over the limit of %d", w, hh, p.MaxPixels)
+	maxPixels := int64(port.LimitOf(9))
+	if int64(w)*int64(hh) > maxPixels {
+		return nil, failed("%dx%d pixels is over the limit of %d", w, hh, maxPixels)
 	}
 
 	flags := C.int(flagReverse)

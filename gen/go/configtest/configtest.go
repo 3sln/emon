@@ -94,7 +94,7 @@ func tIsKey(emonT *testing.T, b []byte, want int32, name string) int32 {
 }
 
 func TestTheLimitsHaveTheirNamesInKin(emonT *testing.T) {
-	port.AssertEq(emonT, limits.LmCount(), 14, "fourteen limits")
+	port.AssertEq(emonT, limits.LmCount(), 16, "sixteen limits")
 	tLimitName(emonT, 0, "input-bytes")
 	tLimitName(emonT, 1, "stream-bytes")
 	tLimitName(emonT, 2, "total-bytes")
@@ -109,6 +109,8 @@ func TestTheLimitsHaveTheirNamesInKin(emonT *testing.T) {
 	tLimitName(emonT, 11, "note-bodies")
 	tLimitName(emonT, 12, "note-refs")
 	tLimitName(emonT, 13, "asset-placements")
+	tLimitName(emonT, 14, "fonts-per-doc")
+	tLimitName(emonT, 15, "stage-ms")
 }
 
 func TestTheLimitsHaveTheirDefaultsAndRangesInKin(emonT *testing.T) {
@@ -126,6 +128,9 @@ func TestTheLimitsHaveTheirDefaultsAndRangesInKin(emonT *testing.T) {
 	port.AssertEq(emonT, limits.LmDefault(11), 4096, "note-bodies")
 	port.AssertEq(emonT, limits.LmDefault(12), 8192, "note-refs")
 	port.AssertEq(emonT, limits.LmDefault(13), 4096, "asset-placements")
+	port.AssertEq(emonT, limits.LmDefault(14), 512, "fonts-per-doc is the slab")
+	port.AssertEq(emonT, limits.LmHi(14), 512, "and cannot be raised past it")
+	port.AssertEq(emonT, limits.LmDefault(15), 0, "stage-ms is off")
 	port.AssertEq(emonT, limits.LmLo(3), 0, "a limit is not negative")
 	port.AssertEq(emonT, limits.LmHi(3), 2147483647, "a limit fits 31 bits")
 	port.AssertEq(emonT, limits.LmHi(6), 32, "form-depth is the stack of the forms being run")
@@ -173,15 +178,17 @@ func TestEveryLimitSaysWhatHappensAtItsBound(emonT *testing.T) {
 	port.AssertEq(emonT, limits.LmOnHit(11), 1, "note-bodies is a budget")
 	port.AssertEq(emonT, limits.LmOnHit(12), 1, "note-refs is a budget")
 	port.AssertEq(emonT, limits.LmOnHit(13), 1, "asset-placements is a budget")
-	port.AssertEq(emonT, limits.LmOnHit(14), 0, "past the table")
+	port.AssertEq(emonT, limits.LmOnHit(14), 1, "fonts-per-doc is a budget")
+	port.AssertEq(emonT, limits.LmOnHit(15), 0, "stage-ms breaches")
+	port.AssertEq(emonT, limits.LmOnHit(16), 0, "past the table")
 	port.AssertEq(emonT, limits.LmOnHit(-1), 0, "before the table")
 }
 
 func TestAKindOutsideTheTableHasNoNameAndADefaultOfNothing(emonT *testing.T) {
-	port.AssertEq(emonT, limits.LmDefault(14), 0, "past the table")
+	port.AssertEq(emonT, limits.LmDefault(16), 0, "past the table")
 	port.AssertEq(emonT, limits.LmDefault(-1), 0, "before the table")
-	port.AssertEq(emonT, limits.LmNameLen(14), 0, "no name")
-	port.AssertEq(emonT, limits.LmNameCh(14, 0), -1, "no character")
+	port.AssertEq(emonT, limits.LmNameLen(16), 0, "no name")
+	port.AssertEq(emonT, limits.LmNameCh(16, 0), -1, "no character")
 	port.AssertEq(emonT, limits.LmNameCh(0, 11), -1, "past the name's end")
 	port.AssertEq(emonT, limits.LmNameCh(0, -1), -1, "before the name")
 	port.AssertEq(emonT, limits.SgDefault(2), 0, "no setting")
@@ -424,4 +431,14 @@ func TestTheLimitsOfP104AreFoundByTheirNames(emonT *testing.T) {
 	port.CellsDrop(t, 0)
 	tCps(t, port.TextBlob("note-refs"))
 	port.AssertEq(emonT, config.CfLimitFind(t, 0, 9), 12, "note-refs")
+	port.CellsDrop(t, 0)
+	tCps(t, port.TextBlob("fonts-per-doc"))
+	port.AssertEq(emonT, config.CfLimitFind(t, 0, 13), 14, "fonts-per-doc")
+	port.CellsDrop(t, 0)
+	tCps(t, port.TextBlob("stage-ms"))
+	port.AssertEq(emonT, config.CfLimitFind(t, 0, 8), 15, "stage-ms")
+}
+
+func TestFontsPerDocCannotBeRaisedPastItsSlab(emonT *testing.T) {
+	tRefused(emonT, port.TextBlob("limit.fonts-per-doc=513"), "limit.fonts-per-doc is out of range 0..512")
 }

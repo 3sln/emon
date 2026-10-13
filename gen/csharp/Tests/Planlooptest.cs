@@ -237,6 +237,28 @@ public static class Planlooptest {
         TErr(0, p, Planloop.PeOcrRequests(), "ocr-requests", "the limit is 100000 and this run reached 100001");
     }
     [Xunit.Fact]
+    public static void TestAStagesWallClockIsKinsToJudgeAnd0IsOff() {
+        // `stage-ms` (kind 15, P10.4): the host supplies the milliseconds, kin says whether they are too many. 0 is off, whatever the clock says; a stage
+        // that has used the bound has reached it (the host rounds up, so any time is a millisecond).
+        emon.Testport.AssertEq(Planloop.PlStageOver(0, 2147483647), 0, "off is off");
+        emon.Testport.AssertEq(Planloop.PlStageOver(0, 0), 0, "off, and no time");
+        emon.Testport.AssertEq(Planloop.PlStageOver(1, 0), 0, "no time has passed");
+        emon.Testport.AssertEq(Planloop.PlStageOver(1, 1), 1, "a millisecond is the bound");
+        emon.Testport.AssertEq(Planloop.PlStageOver(100, 99), 0, "one under");
+        emon.Testport.AssertEq(Planloop.PlStageOver(100, 100), 1, "reached");
+        emon.Testport.AssertEq(Planloop.PlStageOver(100, 5000), 1, "past");
+    }
+    [Xunit.Fact]
+    public static void TestWithStageMsOffTheLoopIgnoresTheClock() {
+        emon.Planctx.Plan p = new emon.Planctx.Plan();
+        TInit(p, 5, 24);
+        Planloop.PlAttempt(p);
+        p.Elapsed = 2147483647;
+        TRender(p, 1);
+        emon.Testport.AssertEq(Planloop.PlAfter(p, Plan.UsRequests()), Planloop.ActRequests(), "an hour of wall-clock is nothing when the limit is off");
+        emon.Testport.AssertEq(p.Err, 0, "no error");
+    }
+    [Xunit.Fact]
     public static void TestAMissIsNotARoundAndFetchRoundsIsANamedLimit() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         TInit(p, 5, 2);
@@ -821,6 +843,11 @@ public static class Planlooptest {
     public static void TestTheOcrRequestsLimitIsNamedAsTheTableNamesIt() {
         System.Text.StringBuilder a = emon.Testport.NewText();
         TName(0, "ocr-requests", Planloop.PeEmitName(a, Planloop.PeOcrRequests()), a);
+    }
+    [Xunit.Fact]
+    public static void TestTheStageMsLimitIsNamedAsTheTableNamesIt() {
+        System.Text.StringBuilder a = emon.Testport.NewText();
+        TName(0, "stage-ms", Planloop.PeEmitName(a, Planloop.PeStageMs()), a);
     }
     [Xunit.Fact]
     public static void TestADocumentsStatusIsNamedAndHasAClass() {

@@ -28,8 +28,8 @@ public sealed unsafe class Pdfium : RenderPort.IRenderer {
     // The source being read: set under Lock for the duration of one render (the callback is one static function per process).
     private static RenderPort.ISource current;
 
-    /// A render larger than this many pixels is refused (`failed`), before any memory is asked for.
-    public long MaxPixels = 1L << 28;
+    // A render larger than the `pixels` limit (kin's table, read through Port.LimitOf(9) at each render, so a conversion's `limit.pixels` applies to
+    // rendering too) is refused (`failed`), before any memory is asked for (P10.4).
 
     // The P/Invoke declarations. "pdfium" is a LOGICAL name: Native's one DllImport resolver maps it to the run-time path
     // (see Native.Resolve). `unsigned long` is `nuint`: right for the Unix targets (LP64), where this binding is used.
@@ -306,8 +306,9 @@ public sealed unsafe class Pdfium : RenderPort.IRenderer {
         try {
             int w = RenderPort.PixelsOf((double) pageWidth(page), req.Dpi);
             int h = RenderPort.PixelsOf((double) pageHeight(page), req.Dpi);
-            if ((long) w * (long) h > MaxPixels) {
-                throw new RenderPort.RenderError(false, w + "x" + h + " pixels is over the limit of " + MaxPixels);
+            long maxPixels = Port.LimitOf(9);
+            if ((long) w * (long) h > maxPixels) {
+                throw new RenderPort.RenderError(false, w + "x" + h + " pixels is over the limit of " + maxPixels);
             }
             int flags = FpdfReverseByteOrder;
             switch (req.Layer) {

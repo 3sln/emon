@@ -105,6 +105,7 @@ public final class Pdfcontent {
     public static final int C_INTEXT = 598;
     public static final int C_GSBASE = 599;
     public static final int C_SSTAT = 633;
+    public static final int C_FIDLIM = 634;
     public static final int C_TOK = 632;
     public static final int C_FSTACK = 600;
     public static final int MAX_FORMS = 32;
@@ -192,6 +193,7 @@ public final class Pdfcontent {
     public static final int W_TEXT = 256;
     public static final int W_PROPS = 512;
     public static final int W_PATHS = 1024;
+    public static final int W_FONTS = 2048;
     public static int pcWs(int c) {
         if ((c == 32) || ((c == 10) || ((c == 13) || ((c == 9) || ((c == 12) || (c == 0)))))) {
             return 1;
@@ -673,6 +675,7 @@ public final class Pdfcontent {
         }
         emon.Port.cellsSet(cx, C_OPLIM, emon.Port.limitOf(5));
         emon.Port.cellsSet(cx, C_FLIM, emon.Port.limitOf(6));
+        emon.Port.cellsSet(cx, C_FIDLIM, emon.Port.limitOf(14));
         emon.Port.cellsSet(cx, C_MCTOP, -1);
         return 0;
     }
@@ -1144,7 +1147,9 @@ public final class Pdfcontent {
     }
     public static int pcFontId(emon.Port.Cells cx, int key) {
         // The evidence id of a font dictionary: its index in the order the
-        // document first showed it (-1 past 512 fonts).
+        // document first showed it. THE BUDGET `fonts-per-doc` (kind 14, at most MAX_FIDS = 512): the font past it has no id, -1, which is the
+        // evidence's 'no font' (its glyphs carry -1 and it has no `fonts` row); the text is still read in the font's own encoding, and the page
+        // that shows it is flagged (W_FONTS). The same on every host, since the decision is made here.
         int n = emon.Port.cellsAt(cx, C_NFONT);
         int i = 0;
         while (i < n) {
@@ -1153,7 +1158,7 @@ public final class Pdfcontent {
             }
             i += 1;
         }
-        if (n >= MAX_FIDS) {
+        if (n >= emon.Port.cellsAt(cx, C_FIDLIM)) {
             return -1;
         }
         emon.Port.cellsSet(cx, C_FIDS + n, key);
@@ -1341,6 +1346,9 @@ public final class Pdfcontent {
         if (slot >= 0) {
             sat = C_SLOTS + (slot * SLOT_STRIDE);
             fid = emon.Port.cellsAt(cx, sat + S_ID);
+            if (fid < 0) {
+                pcWarnSet(cx, W_FONTS);
+            }
             if (emon.Port.cellsAt(cx, sat + S_STATUS) == 0) {
                 cnt = pcFMap(f0, f1, f2, f3, slot, code);
                 how = pcFHow(f0, f1, f2, f3, slot);

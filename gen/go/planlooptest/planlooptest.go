@@ -254,6 +254,28 @@ func TestOneRequestPastOcrRequestsIsTheNamedError(emonT *testing.T) {
 	tErr(emonT, p, planloop.PeOcrRequests(), "ocr-requests", "the limit is 100000 and this run reached 100001")
 }
 
+func TestAStagesWallClockIsKinsToJudgeAnd0IsOff(emonT *testing.T) {
+	// `stage-ms` (kind 15, P10.4): the host supplies the milliseconds, kin says whether they are too many. 0 is off, whatever the clock says; a stage
+	// that has used the bound has reached it (the host rounds up, so any time is a millisecond).
+	port.AssertEq(emonT, planloop.PlStageOver(0, 2147483647), 0, "off is off")
+	port.AssertEq(emonT, planloop.PlStageOver(0, 0), 0, "off, and no time")
+	port.AssertEq(emonT, planloop.PlStageOver(1, 0), 0, "no time has passed")
+	port.AssertEq(emonT, planloop.PlStageOver(1, 1), 1, "a millisecond is the bound")
+	port.AssertEq(emonT, planloop.PlStageOver(100, 99), 0, "one under")
+	port.AssertEq(emonT, planloop.PlStageOver(100, 100), 1, "reached")
+	port.AssertEq(emonT, planloop.PlStageOver(100, 5000), 1, "past")
+}
+
+func TestWithStageMsOffTheLoopIgnoresTheClock(emonT *testing.T) {
+	var p *planctx.Plan = planctx.NewPlan()
+	tInit(p, 5, 24)
+	planloop.PlAttempt(p)
+	p.Elapsed = 2147483647
+	tRender(p, 1)
+	port.AssertEq(emonT, planloop.PlAfter(p, plan.UsRequests()), planloop.ActRequests(), "an hour of wall-clock is nothing when the limit is off")
+	port.AssertEq(emonT, p.Err, 0, "no error")
+}
+
 func TestAMissIsNotARoundAndFetchRoundsIsANamedLimit(emonT *testing.T) {
 	var p *planctx.Plan = planctx.NewPlan()
 	tInit(p, 5, 2)
@@ -842,6 +864,11 @@ func TestTheStalledErrorAndThePhasesAreNamed(emonT *testing.T) {
 func TestTheOcrRequestsLimitIsNamedAsTheTableNamesIt(emonT *testing.T) {
 	var a *strings.Builder = port.NewText()
 	tName(emonT, "ocr-requests", planloop.PeEmitName(a, planloop.PeOcrRequests()), a)
+}
+
+func TestTheStageMsLimitIsNamedAsTheTableNamesIt(emonT *testing.T) {
+	var a *strings.Builder = port.NewText()
+	tName(emonT, "stage-ms", planloop.PeEmitName(a, planloop.PeStageMs()), a)
 }
 
 func TestADocumentsStatusIsNamedAndHasAClass(emonT *testing.T) {

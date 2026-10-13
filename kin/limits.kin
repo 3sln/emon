@@ -16,6 +16,9 @@
 ;; BUDGET (the work stops there and the conversion goes on: a value that cannot be followed reads as absent, a form that is too deep is skipped with a
 ;; warning, a candidate past the cap is dropped; never an error: failing a long book for its 4097th footnote would be worse than dropping it); 2 RESERVED
 ;; (named and ranged so that `limit.NAME` and the environment already mean it, but nothing reads it yet: SPEC 7.4 names it ahead of the feature).
+;; TWO ROWS ARE NOT COUNTS OF A DOCUMENT'S THINGS (P10.4 close): 14 `fonts-per-doc` is a budget ranged 0..512, the slab of font handles in `emon.pdfcontent`
+;; (the font past it has evidence id -1 and its page is flagged); 15 `stage-ms` is a time, the milliseconds a unit of the plan loop may run, where 0 is OFF
+;; (the default): the host's clock supplies the elapsed time and `pl-stage-over` of `emon.planloop` decides (D498, D501).
 ;; `bb limits` reports the column, where each bound is read and which law or fixture exercises it.
 (ns emon.limits
   (:require [emon.lang :refer [I32]]
@@ -31,7 +34,9 @@
          116 104 112 97 103 101 115 112 105 120 101 108 115 111 99 114
          45 114 101 113 117 101 115 116 115 110 111 116 101 45 98 111
          100 105 101 115 110 111 116 101 45 114 101 102 115 97 115 115
-         101 116 45 112 108 97 99 101 109 101 110 116 115]
+         101 116 45 112 108 97 99 101 109 101 110 116 115
+         102 111 110 116 115 45 112 101 114 45 100 111 99
+         115 116 97 103 101 45 109 115]
   :accessors {^I32 lm-char-at [^I32 ignored ^I32 i]})
 
 (defdata ^:pub lm-rows
@@ -50,7 +55,9 @@
          100000 0 2147483647 93 12 0        ;; 10 ocr-requests
          4096 0 2147483647 105 11 1         ;; 11 note-bodies
          8192 0 2147483647 116 9 1          ;; 12 note-refs
-         4096 0 2147483647 125 16 1]        ;; 13 asset-placements
+         4096 0 2147483647 125 16 1         ;; 13 asset-placements
+         512 0 512 141 13 1                 ;; 14 fonts-per-doc (the slab of font handles in `emon.pdfcontent` is 512 cells: `MAX_FIDS`)
+         0 0 2147483647 154 8 0]            ;; 15 stage-ms (0 is OFF; the host supplies the elapsed milliseconds, kin decides: `pl-stage-over`)
   :accessors {^I32 lm-row-count [^I32 ignored]
               ^I32 lm-row-at [^I32 ignored ^I32 row ^I32 field]})
 

@@ -12,7 +12,7 @@
 ;;              detector  how many candidates a heuristic looks at (a seal, a signature, a witness line); measured, SPEC 9.x
 ;;              reported  reaching it is already reported (a warning bit, a ledger flag, a `budget` reason), so it is not silent
 ;;              unread    nothing on the conversion path reads what it bounds yet
-;;              default   the same number as a limit's default, copied into a host binding the embedder constructs
+;;              default   (none left: P10.4 closed the copies of a default, D499-D500; `:copy true` on a :b entry marks the two that were)
 [;; ------------------------------------------------------------------------------------------ became limits, or began to be read
  {:class :b :wired true :limit "total-bytes" :where "kin/pdfdoc.kin pd-total-add (D_TOTB)" :value "1 GiB"
   :guards "decoded bytes of every stream a unit reads through pd-stream-data" :reason "named in the table since P10.10 and read by nothing; `bb fuzz` set EMON_LIMIT_TOTAL_BYTES in vain"}
@@ -26,15 +26,16 @@
   :guards "image placements that make pixels, a document" :reason "a catalogue can pass it; the rest are `budget` assets (SPEC 10.11), which stays"}
  {:class :b :limit "form-depth" :where "kin/limits.kin range" :value "0..32"
   :guards "the range was 0..2^31-1 but MAX_FORMS (the stack of forms being run) is 32 cells, so a larger value did nothing" :reason "the range now says what the bound can be"}
- ;; ------------------------------------------------------------------------------------------ should become limits, and have not
- {:class :b-open :where "kin/pdfcontent.kin MAX_FIDS" :value "512" :guards "fonts a document's content shows (evidence ids)"
-  :reason "a merged document can carry more and its text in the 513th font gets id -1; the ids sit in a slab of `cx`, so naming it needs a re-layout of the context (C_FIDS is followed by C_ constants)"}
- {:class :b-open :where "host/*/pdfium (Rust max_pixels, Go MaxPixels, Java maxPixels, C# MaxPixels)" :value "1<<28"
-  :guards "pixels of one render" :reason "a copy of the pixels default in a port the embedder constructs (`failed`, not a breach); it should read limit 9; four host edits, held back while a merge is running on the hosts"}
- {:class :b-open :where "host/js/src/index.js (two sites)" :value "1<<30" :guards "bytes a streamed source is spooled to"
-  :reason "a copy of the input-bytes default; the browser does not read kin's table, so `bb embedders` holds the copy to it"}
- {:class :b-open :where "SPEC 7.4: wall-clock per stage" :value "none" :guards "time"
-  :reason "SPEC says host-enforced; no host enforces anything (the Run reads no clock, and the browser has none: host/rust/src/engine.rs); an embedder's own timer or cancellation is the answer today"}
+ ;; ------------------------------------------------------------------------------------------ the four that P10.4 left open, closed (D498-D502)
+ {:class :b :limit "fonts-per-doc" :where "kin/pdfcontent.kin pc-font-id (was MAX_FIDS 512, id -1)" :value "512 (0..512)"
+  :guards "fonts a document's content shows (evidence ids)" :reason "a budget: the font past it has id -1 (the evidence's 'no font'), no `fonts` row, and its page is flagged W_FONTS (2048); the slab stays 512, so the range ends there (D498)"}
+ {:class :b :copy true :limit "pixels" :where "host/*/pdfium (Rust max_pixels, Go MaxPixels, Java maxPixels, C# MaxPixels)" :value "was 1<<28"
+  :guards "pixels of one render" :reason "the four pdfium ports read `limit-of 9` at each render; the field is gone, so `limit.pixels` applies to rendering too (D499)"}
+ {:class :b :copy true :limit "input-bytes" :where "host/js/src/index.js (two sites)" :value "was 1<<30" :guards "bytes a streamed source is spooled to"
+  :reason "the SDK reads the default from the module (`emon_const(100 + kind)`, kin's table); `bb embedders` holds it (D500)"}
+ {:class :b :limit "stage-ms" :where "kin/planloop.kin pl-after (pl-stage-over); host/*/ Machine (the clock)" :value "0 = off (0..2^31-1)"
+  :guards "wall-clock per stage (a unit: the document pass, the asset unit, a page, the document unit, the figures unit)"
+  :reason "kin decides (the limit row, the name, `pl-stage-over`); each host supplies the milliseconds the unit has run, from its own monotonic clock, before every `pl-after`; a named breach `stage-ms` with the limit and what it reached (D501)"}
  ;; ------------------------------------------------------------------------------------------ recursion: the stack
  {:class :c :why :stack :where "kin/pdflex.kin MAX_NEST" :value "128" :guards "array and dictionary nesting of one object" :reason "recursive descent (pl-array / pl-dict)"}
  {:class :c :why :stack :where "kin/pdfdoc.kin pd-walk" :value "64" :guards "page-tree depth" :reason "recursive walk; a deeper node is dropped with a warning bit"}
@@ -75,6 +76,4 @@
  {:class :c :why :unread :where "kin/pdfmeta.kin PM_OL_MAX, PM_ND_MAX, PM_DEPTH" :value "200000, 50000, 64" :guards "outline rows; named destinations; outline depth"
   :reason "`emon.pdfmeta` is read by `bb catalog` and its laws; no stage of the conversion consumes it yet (checked: no `pm-run` outside the module), so a limit would bound nothing; name them when a stage reads them"}
  {:class :c :why :unread :limit "pattern-depth" :where "SPEC 7.4: pattern/Type3 recursion" :value "8" :guards "recursion into a tiling pattern or a Type3 glyph procedure"
-  :reason "emon interprets neither (fuserules: \"a tiling pattern emon does not interpret\"; no CharProc is run): the limit is named so that the environment and `limit.pattern-depth` already mean it; `on-hit` is reserved"}
- ;; ------------------------------------------------------------------------------------------ copies of a default
- {:class :c :why :default :where "host/*/pdfium MaxPixels (= pixels), host/js/src/index.js (= input-bytes)" :value "1<<28, 1<<30" :guards "see :b-open above" :reason "held to the table by `bb embedders`"}]
+  :reason "emon interprets neither (fuserules: \"a tiling pattern emon does not interpret\"; no CharProc is run): the limit is named so that the environment and `limit.pattern-depth` already mean it; `on-hit` is reserved"}]

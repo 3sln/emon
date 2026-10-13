@@ -9,6 +9,8 @@ export class Wasm {
     this.kind = { render: this.x.emon_const(0), decode: this.x.emon_const(1), ocr: this.x.emon_const(2), bytes: this.x.emon_const(3), crop: this.x.emon_const(4), decodeImg: this.x.emon_const(5) };
     this.status = { ok: this.x.emon_const(10), failed: this.x.emon_const(11), unsupported: this.x.emon_const(12), limit: this.x.emon_const(13) };
     this.ocrWord = { dict: this.x.emon_const(14), numeric: this.x.emon_const(15) };
+    // kin's table of limits, by its kind: `emon_const(100 + K)` is the default of limit K (`input-bytes` is 0), so no default is typed here
+    this.inputBytes = this.x.emon_const(100);
   }
 
   /**

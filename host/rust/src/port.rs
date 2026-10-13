@@ -691,6 +691,15 @@ pub fn limit_name(kind: i32) -> String {
     }
 }
 
+// The default of limit `kind` in kin's table, or None for a kind it has no row for (a binding that must say a default, the browser SDK's, reads this).
+pub fn limit_default(kind: i32) -> Option<i32> {
+    if kind < 0 || kind >= crate::emon::limits::lm_count() {
+        None
+    } else {
+        Some(crate::emon::limits::lm_default(kind))
+    }
+}
+
 // The environment variable of a name: `input-bytes` is `EMON_LIMIT_INPUT_BYTES`.
 fn env_name(prefix: &str, name: &str) -> String {
     format!("{}{}", prefix, name.to_uppercase().replace('-', "_"))

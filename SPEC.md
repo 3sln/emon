@@ -964,7 +964,13 @@ fetch rounds per unit (D058);
 decompressed bytes per stream and in total (the zip-bomb bound);
 object count; indirect-reference depth; content-stream operators per page;
 XObject/Form nesting depth; pattern/Type3 recursion; pages; pixels per render
-and in total; OCR requests and rounds; wall-clock per stage (host-enforced);
+and in total; OCR requests and rounds; wall-clock per stage (`stage-ms`, D501: the
+host owns the clock and supplies the milliseconds a unit has run, rounded up, before
+every step of the plan loop; kin owns the limit, its name and the decision, and a
+stage that has used its bound is the named error `stage-ms`; 0, the default, is off;
+a call into a unit is not interrupted, so a hang inside one attempt is the
+embedder's own timer's to cut); fonts per document (`fonts-per-doc`, D498: a
+budget, not an error: the font past it has no evidence id and its page is flagged);
 and, when assets are on, pixels and bytes per asset and bytes per document
 (§10.11) — which, unlike the others, degrade to a `noasset` reason and never
 fail a page.

@@ -35,6 +35,9 @@ public final class Planloop {
     public static int peOcrRequests() {
         return 9;
     }
+    public static int peStageMs() {
+        return 10;
+    }
     public static int peEmitName(StringBuilder t, int code) {
         if (code == 0) {
             emon.Port.textAscii(t, "none");
@@ -74,6 +77,10 @@ public final class Planloop {
         }
         if (code == 9) {
             emon.Port.textAscii(t, "ocr-requests");
+            return 1;
+        }
+        if (code == 10) {
+            emon.Port.textAscii(t, "stage-ms");
             return 1;
         }
         return 0;
@@ -488,8 +495,25 @@ public final class Planloop {
         p.outk = 2;
         return actRequests();
     }
+    public static int plStageOver(int limit, int elapsed) {
+        // WALL-CLOCK PER STAGE (SPEC 7.4, P10.4): 1 when a stage has used its `stage-ms`. 0 is OFF, whatever the clock says. The clock is the host's
+        // (D396): it supplies the milliseconds since the unit began, rounded UP, so that any time at all is one; whether that is too long is decided here.
+        if (limit <= 0) {
+            return 0;
+        }
+        if (elapsed >= limit) {
+            return 1;
+        }
+        return 0;
+    }
     public static int plAfter(emon.Planctx.Plan p, int status) {
         // The unit answered `status` (`us-*`): what the host does next (`act-*`).
+        // Before anything else, the stage's clock (`stage-ms`): the host put the milliseconds this unit has run into `elapsed`. This is the natural
+        // point between rounds, between fetches and between units: an attempt that is still running is not interrupted, and one that finished past
+        // the bound is refused (the bound is the conversion's, and a unit that took longer than it was allowed has not kept it).
+        if (plStageOver(emon.Port.limitOf(15), p.elapsed) == 1) {
+            return plLimit(p, peStageMs(), emon.Port.limitOf(15), p.elapsed);
+        }
         if (status == Plan.usNeedBytes()) {
             p.fetchRound += 1;
             p.fetchRounds += 1;
