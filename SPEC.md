@@ -3289,7 +3289,7 @@ commit (the ratchet). Metrics:
 | Blocks | per-kind precision/recall at IoU ≥ 0.5 (DocLayNet classes mapped to Model kinds) |
 | Headings | detection P/R; level accuracy; hierarchy TEDS |
 | Tables | TEDS and TEDS-structure-only; cross-page merge P/R; ICDAR 2013's own **adjacency-relation F1** (`table-adj-f1`, D227) |
-| Graphics (D227) | `rule-p`, `rule-r`: length-weighted, a predicted `grl` stretch matching a truth rule of its orientation (≤ 150 centi-degrees) within half their thicknesses plus max(1 pt, 1 px of the variant's dpi); `fill-p`, `fill-r` by area; `twin-gap` (a document's `pdf/` table TEDS-lite minus its scan variant's, recorded); `tag-verdict-acc` (tagged-table verdicts equal to the fixture's declared truth); `tag-table-agree` (the share of tagged `Table` elements confirmed, on the real corpus: recorded, not ratcheted) |
+| Graphics (D227) | `rule-p`, `rule-r`: length-weighted, a predicted `grl` stretch matching a truth rule of its orientation (≤ 150 centi-degrees) within half their thicknesses plus max(1 pt, 1 px of the variant's dpi); `fill-p`, `fill-r` by area; `twin-gap` (a document's `pdf/` table TEDS-lite minus its scan variant's, recorded); `tag-verdict-acc` (tagged-table verdicts equal to the fixture's declared truth); `tag-table-agree` (the share of tagged `Table` elements confirmed, on the real corpus: recorded, not ratcheted); `rule-ghost` (lower is better: body words that are only rule marks, beyond the gold's, over the body's words; D1325) |
 | Furniture | P/R of dropped running elements; label accuracy |
 | Figures | detection P/R; `kind` accuracy |
 | Seals/signatures | detection P/R; `name`/`text` CER |
@@ -3338,9 +3338,17 @@ commit (the ratchet). Metrics:
    (pdfminer.six, D094's third-party-oracle exception) kept where poppler's
    render (`pdftoppm`) has ink under them, written once into
    `gold/STEM.rules.json`; the document's scan variants inherit it through
-   the variant's known transform (dpi, MANIFEST `facts.skew`, `facts.turns`);
+   the variant's known transform (dpi, MANIFEST `facts.skew`, `facts.turns`,
+   and the shift ImageMagick's `-rotate A -gravity center -crop WxH+0+0`
+   adds to a turned page, D1322: the content lands `floor((W' - W) / 2 + 1.5)`
+   pixels left and `floor((H' - H) / 2 + 1.5)` up, W' x H' being the turned
+   page's box);
    a table drawn in an image takes its rules from the generator that drew it,
-   mapped through the placement the generator chose.
+   mapped through the placement the generator chose. **Rule ghosts (D1325)**:
+   `rule-ghost` (lower is better) is the share of a prediction's body words
+   that are only rule marks (`|` `_` an em dash, runs of up to three) beyond
+   the gold's own count of them, on the documents whose rules are measured: a
+   border read by the engine as a letter and left in the body.
 3. **A hand-labelled real-world set**, small and hard: court filings (Bates
    numbers, stamps), invoices, annual reports (multi-page tables), scientific
    papers (two columns, formulas), government forms (seals, signatures),
