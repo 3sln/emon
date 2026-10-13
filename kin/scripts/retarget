@@ -7,7 +7,9 @@
 ;; bitmaps the page units read (D196: from P6.3 on kin reads pixels, so a transcript must carry them) and nothing that kin does not read. This gate only REPLAYS
 ;; them, through the whole Engine on Rust and Go, and holds:
 ;;
-;;   1. IDENTITY: both Engines give the identical bundle (JSON, HTML, evidence dump) and it is the bundle the recording made (SHA-256);
+;;   1. IDENTITY: both Engines give the identical bundle (JSON, HTML, evidence dump) and it is the bundle the recording made (SHA-256); so do
+;;      the Java Engine, the C# Engine and the C binding when their toolchains are there (P9.5, D494; each is left out LOUDLY without one; the pod
+;;      has no transcript to replay), also under `no-retarget`, and a changed pixel is `transcript-miss` on each;
 ;;   2. THE ROUNDS: the plan/fulfil rounds of every page unit are at most 5 (D207), its targeted requests at most `rt-max` (24); every kin-made-view request names
 ;;      its view from `KIN_VIEW_BASE` up and carries the view's pixel hash (two cells after the pixel box); the dump names the pass each run was (`oruns` `pass`):
 ;;      the fixture's passes are there;
@@ -17,10 +19,13 @@
 ;;   4. NOTHING IS GUESSED: a replay of a transcript whose decode bitmap has ONE other pixel is `transcript-miss` on both Engines: the view kin made from it
 ;;      has another hash, and the transcript holds no answer for that request.
 (require '[babashka.fs :as fs]
+         '[babashka.classpath :as cp]
          '[babashka.process :refer [process]]
          '[cheshire.core :as json]
          '[clojure.edn :as edn]
          '[clojure.string :as str])
+(cp/add-classpath "tools/lib")
+(require '[extra-hosts :as xh])
 
 (def fails (atom 0))
 (defn ok [& xs] (println (str "  ok   " (apply str xs))))
@@ -48,6 +53,9 @@
 (def gdrv (when (fs/which "go") (build-driver "kin/scripts/emon-go-build" "Go")))
 (when-not rdrv (println "  SKIP rust engine -- cargo not on PATH"))
 (when-not gdrv (println "  SKIP go engine   -- go not on PATH"))
+;; THE OTHER HOSTS (P9.5, D494): the Java and C# Engines and the C binding replay the same transcripts WITH their pixels (the pod has no transcript to
+;; replay); each is left out LOUDLY without its toolchain
+(def extras (xh/engines {:hosts [:java :csharp :c] :on-fail bad}))
 
 (defn drive [drv & a]
   (let [r @(apply process {:out :string :err :string} (abs drv) (map str a))]
@@ -121,6 +129,9 @@
       ;; 1 ---------------------------------------------------------------------------------------------------------------------------
       (check (and (zero? (:exit rr)) (same? rr rg))
              id ": the Rust Engine and the Go Engine replay the committed transcript to the IDENTICAL bundle (" (count (:out rr)) " bytes)")
+      (doseq [{:keys [label drv]} extras]
+        (check (same? rr (apply drive drv (concat flags ["--out=bundle" (str "--replay=" rep) pdf])))
+               id ": the " label " Engine replays it to the identical bundle too"))
       (check (and want (= want (sha256 (:out rr)))) id ": and it is the bundle the live recording made (SHA-256 " (when want (subs want 0 12)) ")")
       ;; 2 ---------------------------------------------------------------------------------------------------------------------------
       (let [es (entries rep)
@@ -151,6 +162,11 @@
             wj (wer mj gw)
             wb (wer mb gw)
             lk (fn [m] (count (filter (set leak) (words (str/join " " (body-texts m))))))]
+        ;; the hidden setting `no-retarget` is a field of the Rust, Go, Java and C# Options, not a key of kin's options text, so the C binding (which
+        ;; speaks only that text, SPEC 13) has no way to say it: the first-pass transcript gives the same JSON on each host that has the field
+        (doseq [{:keys [label drv host]} extras :when (not= host :c)]
+          (check (same? b (apply drive drv (concat flags ["--no-retarget" "--out=json" (str "--replay=" fp) pdf])))
+                 id ": the " label " Engine gives the same JSON for `no-retarget` over the first-pass transcript"))
         (check (and (zero? (:exit j)) (zero? (:exit b)) (<= wj (+ wb 0.005)))
                id (format ": body word error rate %.4f with the targeted passes, %.4f without (the same transcript, `no-retarget`)" wj wb))
         (when (seq leak)
@@ -169,12 +185,16 @@
                 m @(process {:out :string :err :string} "magick" png "-fill" "black" "-draw" (str "point " x "," y)
                             "-alpha" "off" "-depth" "8" "-define" (str "png:color-type=" (if (str/starts-with? ty "Gray") "0" "2")) png)
                 tr (apply drive rdrv (concat flags ["--out=bundle" (str "--replay=" tam) pdf]))
-                tg (apply drive gdrv (concat flags ["--out=bundle" (str "--replay=" tam) pdf]))]
+                tg (apply drive gdrv (concat flags ["--out=bundle" (str "--replay=" tam) pdf]))
+                tx (for [{:keys [drv]} extras] (apply drive drv (concat flags ["--out=bundle" (str "--replay=" tam) pdf])))]
             (check (and (zero? (:exit m)) (= 4 (:exit tr)) (= 4 (:exit tg))
-                        (str/includes? (:err tr) "error: transcript-miss") (str/includes? (:err tg) "error: transcript-miss"))
-                   id ": a replay whose decode bitmap has one other pixel is transcript-miss on both Engines (the view kin made has another hash), nothing guessed"))))))
+                        (str/includes? (:err tr) "error: transcript-miss") (str/includes? (:err tg) "error: transcript-miss")
+                        (every? #(and (= 4 (:exit %)) (str/includes? (:err %) "error: transcript-miss")) tx))
+                   id ": a replay whose decode bitmap has one other pixel is transcript-miss on both Engines" (when (seq extras) (str " and on " (xh/names extras)))
+                   " (the view kin made has another hash), nothing guessed"))))))
   (when (zero? @fails)
-    (ok "targeted rounds: the passes the first pass calls for, in at most 5 rounds, from recorded pixels, on Rust and Go")))
+    (ok "targeted rounds: the passes the first pass calls for, in at most 5 rounds, from recorded pixels, on Rust and Go"
+        (when (seq extras) (str " (and the same bundle on " (xh/names extras) ")")))))
 
 (when (empty? ids) (println "  SKIP no retarget transcripts committed (bb retarget-record)"))
 (when (pos? @fails) (System/exit 1))

@@ -6,7 +6,9 @@
 ;; answered for each, recorded on Rust by `bb fusion-record --artifacts` (slim: answers only, no bitmap). This gate only REPLAYS them, with the
 ;; default settings (born-digital pages OCR'd under `always`, P7.S), through the whole Engine on Rust and Go, and holds:
 ;;
-;;   1. IDENTITY: both Engines give the identical bundle (JSON, HTML, evidence dump), and it is the bundle the recording made (SHA-256);
+;;   1. IDENTITY: both Engines give the identical bundle (JSON, HTML, evidence dump), and it is the bundle the recording made (SHA-256); so do
+;;      the Java Engine, the C# Engine and the C binding when their toolchains are there (P9.5, D494; each is left out LOUDLY without one; the pod
+;;      has no transcript to replay);
 ;;   2. THE BODY HAS NO WATERMARK: no word of the watermark is in the body (`watermark-leak` 0), the ledger holds it as `watermark` on every page
 ;;      that has it, and the dump names the defence that took each word out (`fa` rows with `defence` 2: recurrence), a row a word;
 ;;   3. NO BODY WORD IS LOST: the word error rate of the body against the document's own text (test/artifacts/gold/body.txt: the watermark is in no gold)
@@ -14,9 +16,12 @@
 ;;   4. WHAT THE DEFENCES ARE WORTH: with EMON_P73_DRIVER=PATH (a driver built from the P7.3 sources) the same transcripts are converted by that
 ;;      engine and its watermark-leak and CER are printed beside this one's (skipped otherwise).
 (require '[babashka.fs :as fs]
+         '[babashka.classpath :as cp]
          '[babashka.process :refer [process]]
          '[cheshire.core :as json]
          '[clojure.string :as str])
+(cp/add-classpath "tools/lib")
+(require '[extra-hosts :as xh])
 
 (def fails (atom 0))
 (defn ok [& xs] (println (str "  ok   " (apply str xs))))
@@ -47,6 +52,8 @@
 (def gdrv (when (fs/which "go") (build-driver "kin/scripts/emon-go-build" "Go")))
 (when-not rdrv (println "  SKIP rust engine -- cargo not on PATH"))
 (when-not gdrv (println "  SKIP go engine   -- go not on PATH"))
+;; THE OTHER HOSTS (P9.5, D494): the Java and C# Engines and the C binding replay the same transcripts (the pod has no transcript to replay); each is left out LOUDLY without its toolchain
+(def extras (xh/engines {:hosts [:java :csharp :c] :on-fail bad}))
 
 (defn drive [drv & a]
   (let [r @(apply process {:out :string :err :string} (abs drv) (map str a))]
@@ -98,6 +105,10 @@
           want (get digests id)]
       (check (and (zero? (:exit rr)) (= (:out rr) (:out rg)) (= (:err rr) (:err rg)))
              id ": the Rust Engine and the Go Engine replay the committed transcript to the IDENTICAL bundle (" (count (:out rr)) " bytes)")
+      (doseq [{:keys [label drv]} extras]
+        (let [rx (drive drv flag "--out=bundle" (str "--replay=" rep) pdf)]
+          (check (and (= (:exit rr) (:exit rx)) (= (:out rr) (:out rx)) (= (:err rr) (:err rx)))
+                 id ": the " label " Engine replays it to the identical bundle too")))
       (check (and want (= want (sha256 (:out rr)))) id ": and it is the bundle the live recording made (SHA-256 " (when want (subs want 0 12)) ")")
       (let [j (drive rdrv flag "--out=json" (str "--replay=" rep) pdf)
             e (drive rdrv flag "--out=evidence" (str "--replay=" rep) pdf)
@@ -129,4 +140,5 @@
 (when (empty? ids) (println "  SKIP no watermark transcripts committed (bb fusion-record --artifacts)"))
 (when (pos? @fails) (System/exit 1))
 (when (and rdrv gdrv (seq ids) (zero? @fails))
-  (ok "watermarks: raster watermarks under born-digital text, read by OCR, are held out of the body by the defence that names them, on Rust and Go"))
+  (ok "watermarks: raster watermarks under born-digital text, read by OCR, are held out of the body by the defence that names them, on Rust and Go"
+      (when (seq extras) (str " (and the same bundle on " (xh/names extras) ")"))))

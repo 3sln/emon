@@ -7,7 +7,9 @@
 ;; certificate and no /Name, unsigned) and `sig-scan` (a scanned page with a pen signature over a rule). test/signatures/replay/ID is what the live ports answered, recorded by `bb sigs-record` on
 ;; Rust (pdfium, Tesseract) WITH the bitmaps the page units read. This gate only REPLAYS them, through the whole Engine on Rust and Go, and holds:
 ;;
-;;   1. IDENTITY: both Engines give the identical bundle (JSON, HTML, evidence dump) and it is the bundle the recording made (SHA-256);
+;;   1. IDENTITY: both Engines give the identical bundle (JSON, HTML, evidence dump) and it is the bundle the recording made (SHA-256); so do
+;;      the Java Engine, the C# Engine and the C binding when their toolchains are there (P9.5, D494; each is left out LOUDLY without one; the pod
+;;      has no transcript to replay, and joins only (4));
 ;;   2. THE NODES: the seal nodes of the body are the gold's: subkind, page, colour, the typed NAME of a signature, and for a digital signature the name, date, reason, location and whether it is
 ;;      signed (nothing is verified); nothing else is a node (`sig-negatives` has none);
 ;;   3. NOTHING LEAKS AND NOTHING IS LOST: no body word that is not the page's own (a stroke OCR read as letters), and every word of the page's own text is in the body (the scan has OCR's errors
@@ -16,10 +18,13 @@
 ;;   5. THE METRICS: signature precision and recall, initials precision and recall, signature name accuracy, digital-signature field accuracy, over the four fixtures; and the scoreboard's
 ;;      `emon-sigs` (the scorer's `seal-sig-p`, `seal-init-p`, `digsig-acc` ... over the same replays) holds.
 (require '[babashka.fs :as fs]
+         '[babashka.classpath :as cp]
          '[babashka.process :refer [process]]
          '[cheshire.core :as json]
          '[clojure.edn :as edn]
          '[clojure.string :as str])
+(cp/add-classpath "tools/lib")
+(require '[extra-hosts :as xh])
 
 (def fails (atom 0))
 (defn ok [& xs] (println (str "  ok   " (apply str xs))))
@@ -44,6 +49,10 @@
 (def gdrv (when (fs/which "go") (build-driver "kin/scripts/emon-go-build" "Go")))
 (when-not rdrv (println "  SKIP rust engine -- cargo not on PATH"))
 (when-not gdrv (println "  SKIP go engine   -- go not on PATH"))
+;; THE OTHER HOSTS (P9.5, D494): the Java and C# Engines and the C binding replay the same transcripts WITH their pixels; the pod has no transcript to
+;; replay, so it joins only the plain conversion of `sig-digital` (4). Each is left out LOUDLY without its toolchain.
+(def extras (xh/engines {:hosts [:java :csharp :c] :on-fail bad}))
+(def pods (xh/engines {:hosts [:pod] :on-fail bad}))
 
 (defn drive [drv & a]
   (let [r @(apply process {:out :string :err :string} (abs drv) (map str a))]
@@ -112,6 +121,9 @@
       ;; 1 ---------------------------------------------------------------------------------------------------------------------------
       (check (and (zero? (:exit rr)) (same? rr rg))
              id ": the Rust Engine and the Go Engine replay the committed transcript to the IDENTICAL bundle (" (count (:out rr)) " bytes)")
+      (doseq [{:keys [label drv]} extras]
+        (check (same? rr (drive drv "--out=bundle" (str "--replay=" rep) pdf))
+               id ": the " label " Engine replays it to the identical bundle too"))
       (check (and want (= want (sha256 (:out rr)))) id ": and it is the bundle the live recording made (SHA-256 " (when want (subs want 0 12)) ")")
       ;; 2 ---------------------------------------------------------------------------------------------------------------------------
       (let [m (model-of rdrv rep pdf)
@@ -151,6 +163,9 @@
         ps (mapv view (seals (json/parse-string (:out a))))
         [pairs extra] (pair-up want ps)]
     (check (and (zero? (:exit a)) (same? a b)) "sig-digital: with no OCR and no pixel, the Rust and the Go Engine give the identical JSON")
+    (doseq [{:keys [label drv]} (concat extras pods)]
+      (check (same? a (drive drv "--out=json" pdf))
+             "sig-digital: and the " label " host gives the identical JSON"))
     (check (and (every? (fn [[g p]] (node-ok? g p)) pairs) (empty? extra))
            "sig-digital: and the three signature fields are nodes (" (count ps) "): signed with a /Name, signed with a certificate's name, unsigned"))
   ;; 5 -----------------------------------------------------------------------------------------------------------------------------
@@ -171,7 +186,8 @@
            (when-let [l (some #(when (str/includes? % "accuracy[emon-sigs]") (str/trim %)) (str/split-lines (:out r)))]
              (str " (" (str/replace l #"^ok +accuracy\[emon-sigs\]: " "") ")"))))
   (when (zero? @fails)
-    (ok "signatures: handwritten signatures and initials (vector and raster, over rules and by cues that are shapes) and digital signature fields are nodes of their own, their strokes are out of the body; on Rust and Go")))
+    (ok "signatures: handwritten signatures and initials (vector and raster, over rules and by cues that are shapes) and digital signature fields are nodes of their own, their strokes are out of the body; on Rust and Go"
+        (when (seq extras) (str " (and the same bundle on " (xh/names extras) ")")))))
 
 (when (empty? ids) (println "  SKIP no signature transcripts committed (bb sigs-record)"))
 (when (pos? @fails) (System/exit 1))

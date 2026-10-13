@@ -12,6 +12,12 @@
 ;;
 ;; The gates do not run this: they REPLAY the committed transcripts (`bb ocr`), which is why a gate never depends on whose Tesseract
 ;; is installed (D008, D095).
+;;
+;; RUST ONLY, BY DESIGN (P9.5, D494). This is a LIVE recorder: it asks the Rust host's Tesseract binding to read the scans, and scores what it said.
+;; The Java and C# hosts have bindings of their own (`emon-java --tesseract`, `emon-cs --tesseract`: D453, D458 hold them to the Rust recordings of the
+;; born-digital fixtures entry for entry), but a live Tesseract over a SCANNED page reads the page each host's JPEG decoder made (D190: the last bits
+;; differ), so a number per host would measure the decoders, not the engine; the cross-host claim is made where it can be exact, on the committed
+;; transcripts: `bb ocr`, `bb fusion`, `bb retarget`, `bb sealpx`, `bb sigs` replay them on every host.
 (require '[babashka.process :refer [shell]]
          '[clojure.string :as str])
 

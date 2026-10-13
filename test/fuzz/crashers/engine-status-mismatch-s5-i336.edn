@@ -1,0 +1,4 @@
+;; Saved by `bb fuzz` (D106, D384). Reproduce the unminimised mutant with
+;;   bb fuzz --seed 5 --only 336 --dump /tmp/mutant
+;; `:status :open` = a known failure (reported, not gating); once fixed, change it to `:fixed` (must pass).
+{:index 336, :signature ["engine-status-mismatch"], :ops ["dup[488,546)" "jpeg SOF precision"], :seed 5, :status :fixed, :original-bytes 944, :bytes 36, :fixture "test/image/jpeg-jfif-cm.jpg", :detail ["engine-status-mismatch *: c: [:err \"undecodable\"] | rust: [:err \"undecodable\"] | go: [:err \"undecodable\"] | pod: [:err \"undecodable\"] | csharp: [:err \"unsupported-image\"] | java: [:err \"undecodable\"] | wasm: [:err \"undecodable\"]"]}

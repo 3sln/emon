@@ -2,6 +2,8 @@
   "bb accuracy: score a predictor over the synthetic corpus and ratchet (D023, D077, D078).
 
     bb accuracy                        predictor \"emon\": the Rust Engine's driver (P1.10); the ratchet binds it (D078, D145)
+                                       AND (P9.5, D494) the same documents converted by the Go host, the Java host, the C# host, the C binding and the pod (each left out
+                                       LOUDLY without its toolchain) must print the Rust predictor's Model byte for byte, so they have its score (`accuracy[hosts]`)
     bb accuracy --predictor oracle     reference: gold -> Model, must score perfect
     bb accuracy --predictor degraded   fixture: damaged gold, proves the metrics move
     bb accuracy --predictor fixtures   both of the above
@@ -55,6 +57,7 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
             [babashka.process :as proc]
             [cheshire.core :as json]
             [clojure.string :as str]
+            [extra-hosts :as xh]
             [pyjson])
   (:import (java.math BigDecimal RoundingMode)))
 
@@ -219,6 +222,8 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
 
 ;; ------------------------------------------------------------------ run ----
 
+(def RAW (atom {}))   ; [variant doc-id] -> {:in input :out the Rust predictor's JSON, byte for byte}: what the other hosts are held to (P9.5, D494)
+
 (defn run-predictor
   "-> [model why]; model is nil when the predictor is not available yet."
   [cmd doc-id variant inp gold-path]
@@ -229,7 +234,8 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
         (= (:exit r) UNAVAILABLE) [nil (str/trim (:err r))]
         (not= (:exit r) 0) (do (println (format "FAIL predictor exited %d on %s/%s: %s" (:exit r) variant doc-id (str/trim (:err r))))
                                (System/exit 1))
-        :else [(pyjson/parse (:out r)) ""]))))
+        :else (do (when (= cmd (PREDICTORS "emon")) (swap! RAW assoc [variant doc-id] {:in inp :out (:out r)}))
+                  [(pyjson/parse (:out r)) ""])))))
 
 (def ^:dynamic *variants* nil)   ; a set of variant names, or nil for every one
 (def ^:dynamic *ids* nil)        ; a set of document ids, or nil for every one
@@ -464,6 +470,33 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
             [fails board])
           [fails board])))))
 
+(defn cross-hosts
+  "P9.5 (D494): the scorer reads the Model, so every host that gives the Rust predictor's JSON byte for byte over the same documents gets its score. The Go
+  host, the Java host, the C# host, the C binding and the pod (each LEFT OUT LOUDLY without its toolchain) convert every document the run scored, and each
+  must print the Model the Rust Engine did; two workers at a time. -> the number of differing documents."
+  []
+  (let [raw @RAW
+        extras (xh/engines {:hosts [:go :java :csharp :c :pod]
+                            :on-fail (fn [& m] (println "  FAIL" (apply str m)) (System/exit 1))})
+        docs (vec (sort-by (comp str key) raw))
+        t0 (System/currentTimeMillis)
+        diffs (atom [])
+        work (fn [part]
+               (doseq [[[variant doc-id] {:keys [in out]}] part
+                       {:keys [label drv]} extras]
+                 (let [r (xh/run drv [in])]
+                   (when-not (and (zero? (:exit r)) (= out (:out r)))
+                     (swap! diffs conj (format "%s/%s: the %s host gives %s" variant doc-id label
+                                               (if (zero? (:exit r)) "another Model than Rust's" (str "exit " (:exit r) ": " (str/trim (:err r))))))))))
+        halves (partition-all (max 1 (quot (inc (count docs)) 2)) docs)]
+    (when (and (seq extras) (seq docs))
+      (run! deref (doall (map #(future (work %)) halves)))
+      (doseq [d (take 20 @diffs)] (println "  FAIL accuracy cross-host:" d))
+      (when (empty? @diffs)
+        (println (format "  ok   accuracy[hosts]: %d documents converted by %s: the Rust predictor's Model, byte for byte, so the same score (%d s)"
+                         (count docs) (xh/names extras) (quot (- (System/currentTimeMillis) t0) 1000)))))
+    (count @diffs)))
+
 (defn -main [& argv]
   (loop [a argv, pred "emon", update false, only nil]
     (if (seq a)
@@ -494,7 +527,11 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
             [fails _] (reduce (fn [[fails board] [name cmd]]
                                 (let [[f board] (do-predictor name cmd board update only)]
                                   [(+ fails f) board]))
-                              [0 board] runs)]
+                              [0 board] runs)
+            ;; the other hosts, over the documents the Rust predictor scored (only the plain `emon` predictor, whole: not --only, not --update)
+            fails (if (and (zero? fails) (= pred "emon") (nil? only) (not update) (seq @RAW))
+                    (+ fails (cross-hosts))
+                    fails)]
         (System/exit (if (pos? fails) 1 0))))))
 
 (when (= *file* (System/getProperty "babashka.file"))

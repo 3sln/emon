@@ -16,7 +16,10 @@
 ;;      and every alternative with its full text, alternatives on most of the words;
 ;;   3. a first CER of that evidence against the page's gold, under a ceiling;
 ;;   4. a replay never guesses: a changed request is `transcript-miss` on both;
-;;   5. (P6.5) the committed SCAN transcripts of test/ocr/scan/, through the WHOLE Engine on Rust and on Go to one Model, the Model's
+;;      (1-4 are the spike's page through the per-host REPLAY DRIVERS test/ocr/rust and test/ocr/go, which print the evidence dump: Rust and Go
+;;      only by design (P9.5, D494); the Java and C# Engines and the C binding are held to the same transcripts in 5 and 6.)
+;;   5. (P6.5) the committed SCAN transcripts of test/ocr/scan/, through the WHOLE Engine on Rust and on Go (and Java and C# when their toolchains are
+;;      there, P9.1, P9.2, and the C binding, P9.5; the pod has no transcript to replay) to one Model, the Model's
 ;;      provenance, `transcript-miss` for a changed request, the no-engine conversion, and the `emon-replay` accuracy ratchet;
 ;;   6. (P9.3) the same scans through the BROWSER (the WASM host and the JS SDK in a headless Chrome, when the toolchain is there):
 ;;      the committed transcripts replayed to the Rust Engine's identical bundle, `transcript-miss` for a changed request, and the
@@ -192,6 +195,12 @@
         3 (do (println (str "  " (str/trim (:err r)) " (the C# arm is left out)")) nil)
         (do (bad "the C# Engine driver did not build:\n" (:err r)) nil)))))
 
+;; THE C BINDING (P9.5, D494) replays them too (the step API over a replayed transcript): optional, left out LOUDLY without a C compiler (EMON_SKIP_C=1 on purpose);
+;; the pod has no transcript to replay
+(cp/add-classpath "tools/lib")
+(require '[extra-hosts :as xh])
+(def c-driver (delay (first (xh/engines {:hosts [:c] :on-fail bad}))))
+
 (when (seq scan-ids)
   (let [rdrv (when (fs/which "cargo") (build-driver "kin/scripts/emon-rs-build" {} "Rust"))
         gdrv (when (fs/which "go") (build-driver "kin/scripts/emon-go-build" {} "Go"))
@@ -221,6 +230,9 @@
               (let [rc (drive cdrv "--out=bundle" (str "--replay=" dir) pdf)]
                 (check (same? rr rc)
                        id ": THE C# ENGINE replays the Tesseract transcript to the identical bundle, byte for byte")))
+            (when-let [{cd :drv} @c-driver]
+              (check (same? rr (drive cd "--out=bundle" (str "--replay=" dir) pdf))
+                     id ": THE C BINDING replays the Tesseract transcript to the identical bundle, byte for byte"))
             (check (and (str/includes? (:out rr) "\"ocr\":\"always\"") (str/includes? (:out rr) "\"kind\":\"scanned\"")
                         (str/includes? (:out rr) "\"src\":[\"ocr\",\"infer\"]") (str/includes? (:out rr) "\"ocr-only\""))
                    id ": the Model says where the text came from (settings.ocr, scanned pages, ocr sources, ocr-only)")
@@ -242,7 +254,11 @@
               (when cdrv
                 (let [tc (drive cdrv "--out=bundle" (str "--replay=" tam) pdf)]
                   (check (and (= 4 (:exit tc)) (same? tg tc))
-                         id ": the same changed request is transcript-miss on the C# Engine, with the same stderr (the sentence is kin's)"))))
+                         id ": the same changed request is transcript-miss on the C# Engine, with the same stderr (the sentence is kin's)")))
+              (when-let [{cd :drv} @c-driver]
+                (let [tc (drive cd "--out=bundle" (str "--replay=" tam) pdf)]
+                  (check (and (= 4 (:exit tc)) (same? tg tc))
+                         id ": the same changed request is transcript-miss on the C binding, with the same stderr (the sentence is kin's)"))))
             ;; no transcript, no port
             (let [nr (drive rdrv "--out=bundle" pdf)
                   ng (drive gdrv "--out=bundle" pdf)]
@@ -254,7 +270,10 @@
                        id ": and the same on the Java Engine"))
               (when cdrv
                 (check (same? nr (drive cdrv "--out=bundle" pdf))
-                       id ": and the same on the C# Engine")))))
+                       id ": and the same on the C# Engine"))
+              (when-let [{cd :drv} @c-driver]
+                (check (same? nr (drive cd "--out=bundle" pdf))
+                       id ": and the same on the C binding")))))
         ;; THE BROWSER (P9.3, D356, D358): the Rust host built for wasm32, driven by the JS SDK in a headless Chrome, replays the same
         ;; committed transcripts to the Rust Engine's bundle; a changed request is `transcript-miss` there too; and with no OCR port and no
         ;; transcript the scan converts to pages with no text, as on Rust (`unsupported` is an answer: the SPEC 7.3 rule for a browser with no engine).
@@ -337,6 +356,10 @@
               (let [rc (drive cdrv "--out=bundle" (str "--replay=" dir) pdf)]
                 (check (and (zero? (:exit rc)) (= (:out rr) (:out rc)) (= (:err rr) (:err rc)))
                        id ": and the C# Engine replays it to the same bundle")))
+            (when-let [{cd :drv} @c-driver]
+              (let [rc (drive cd "--out=bundle" (str "--replay=" dir) pdf)]
+                (check (and (zero? (:exit rc)) (= (:out rr) (:out rc)) (= (:err rr) (:err rc)))
+                       id ": and the C binding replays it to the same bundle")))
             (check (and (str/includes? (:out rr) "\"ocr\":\"always\"") (str/includes? (:out rr) "\"src\":[\"ocr\",\"infer\"]"))
                    id ": the Model says where the text came from")))
         (let [r @(process {:out :string :err :string} "bb" "tools/accuracy/accuracy.clj" "--predictor" "emon-replay-px"

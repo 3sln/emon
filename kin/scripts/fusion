@@ -9,7 +9,9 @@
 ;; never whose pdfium or Tesseract is installed (SPEC 7.3). It holds:
 ;;
 ;;   1. IDENTITY: the Rust Engine and the Go Engine replay every transcript to the identical bundle (JSON, HTML, evidence dump version
-;;      "2": the correspondence groups, the verdicts and the rules that made them), and it is the bundle the recording made;
+;;      "2": the correspondence groups, the verdicts and the rules that made them), and it is the bundle the recording made; so do the Java
+;;      Engine, the C# Engine and (P9.5, D494) the C binding when their toolchains are there (each is left out LOUDLY without one; the pod has no
+;;      transcript to replay);
 ;;   2. A REPLAY NEVER GUESSES: a changed OCR request is `transcript-miss` on both;
 ;;   3. NO ENGINE, NO CHANGE: the default policy with no transcript and no port (every `render` and `ocr` answered `unsupported`) converts
 ;;      to exactly the bundle of a `--ocr=never` run, on both Engines (the fusion stages do nothing when no answer came: G1, D201);
@@ -80,6 +82,12 @@
         3 (do (println (str "  " (str/trim (:err r)) " (the C# arm is left out)")) nil)
         (do (bad "the C# Engine driver did not build:\n" (:err r)) nil)))))
 
+;; THE C BINDING (P9.5, D494) replays them as well (the step API with a replayed transcript): optional, left out LOUDLY without a C compiler (EMON_SKIP_C=1 on purpose);
+;; the pod has no transcript to replay
+(cp/add-classpath "tools/lib")
+(require '[extra-hosts :as xh])
+(def cbind (first (xh/engines {:hosts [:c] :on-fail bad})))
+
 (defn drive [drv & a]
   (let [r @(apply process {:out :string :err :string} (abs drv) (map str a))]
     {:exit (:exit r) :out (:out r) :err (:err r)}))
@@ -105,6 +113,10 @@
           (let [rc (drive cdrv flag "--out=bundle" (str "--replay=" (dir id)) (pdf id))]
             (check (same? rr rc)
                    id ": THE C# ENGINE replays it to the identical bundle too (fusion over real pdfium and Tesseract answers)")))
+        (when cbind
+          (let [rc (drive (:drv cbind) flag "--out=bundle" (str "--replay=" (dir id)) (pdf id))]
+            (check (same? rr rc)
+                   id ": THE C BINDING replays it to the identical bundle too (the step API over a transcript of real pdfium and Tesseract answers)")))
         (check (and want (= want (sha256 (:out rr))))
                id ": and it is the bundle the live recording made (SHA-256 " (when want (subs want 0 12)) ")")
         (let [edn (slurp (str (dir id) "/transcript.edn"))
@@ -112,17 +124,23 @@
           (fs/create-dirs tam)
           (spit (str tam "/transcript.edn") (str/replace edn #"(:kind :ocr :req \[\d+ 3 \d+ \d+ )3 " (fn [[_ p]] (str p "4 "))))
           (let [tr (drive rdrv flag "--out=bundle" (str "--replay=" tam) (pdf id))
-                tg (drive gdrv flag "--out=bundle" (str "--replay=" tam) (pdf id))]
+                tg (drive gdrv flag "--out=bundle" (str "--replay=" tam) (pdf id))
+                tx (for [d [jdrv cdrv (:drv cbind)] :when d] (drive d flag "--out=bundle" (str "--replay=" tam) (pdf id)))]
             (check (and (not= edn (slurp (str tam "/transcript.edn")))
                         (= 4 (:exit tr)) (= 4 (:exit tg))
-                        (str/includes? (:err tr) "error: transcript-miss") (str/includes? (:err tg) "error: transcript-miss"))
-                   id ": a changed request (psm 3 -> 4) is transcript-miss on both Engines, nothing guessed")))
+                        (str/includes? (:err tr) "error: transcript-miss") (str/includes? (:err tg) "error: transcript-miss")
+                        (every? #(and (= 4 (:exit %)) (str/includes? (:err %) "error: transcript-miss")) tx))
+                   id ": a changed request (psm 3 -> 4) is transcript-miss on both Engines" (when (seq tx) " and on every other host that is here") ", nothing guessed")))
         (let [nr (drive rdrv flag "--out=bundle" (pdf id))
               ng (drive gdrv flag "--out=bundle" (pdf id))
               pr (drive rdrv "--ocr=never" "--out=bundle" (pdf id))
               pg (drive gdrv "--ocr=never" "--out=bundle" (pdf id))]
-          (check (and (zero? (:exit nr)) (same? nr ng) (same? nr pr) (same? ng pg))
-                 id ": with no engine the policy changes nothing: the default run's bundle is the `--ocr=never` run's (G1, D201), the same on both"))))
+            (check (and (zero? (:exit nr)) (same? nr ng) (same? nr pr) (same? ng pg))
+                 id ": with no engine the policy changes nothing: the default run's bundle is the `--ocr=never` run's (G1, D201), the same on both")
+          ;; and on the other hosts, and on the pod, which has no transcript but converts: the default run is theirs too
+          (doseq [{:keys [label drv]} (concat (when jdrv [{:label "Java" :drv jdrv}]) (when cdrv [{:label "C#" :drv cdrv}]) (when cbind [cbind]))]
+            (check (and (same? nr (drive drv flag "--out=bundle" (pdf id))) (same? pr (drive drv "--ocr=never" "--out=bundle" (pdf id))))
+                   id ": and the " label " host gives the same bundle with no engine, under the default policy and under `--ocr=never`")))))
     ;; 4-5: the contract and the accuracy ------------------------------------------------------------------------------------------
     (let [idset (set ids)
           _ (alter-var-root #'A/*variants* (constantly #{"pdf"}))
@@ -240,6 +258,9 @@
             agree (+ (get rules 310 0) (get rules 311 0))]
         (check (and (zero? (:exit rr)) (same? rr rg))
                id ": the Rust Engine and the Go Engine replay the derived transcript to the IDENTICAL bundle")
+        (doseq [{:keys [label drv]} (concat (when jdrv [{:label "Java" :drv jdrv}]) (when cdrv [{:label "C#" :drv cdrv}]) (when cbind [cbind]))]
+          (check (same? rr (drive drv flag "--out=bundle" (str "--replay=" d) pdf))
+                 id ": and the " label " host replays it to the identical bundle"))
         (check (and (zero? (:exit fr)) (zero? (:exit pr)) dump (< fused plain) (<= fused (+ ocr-only 0.005)) (< fused 0.02))
                (format "%s: CER of the fused text %.4f: below the hidden layer alone's %.4f, within 0.005 of the new OCR's alone %.4f, under 0.02"
                        id fused plain ocr-only))

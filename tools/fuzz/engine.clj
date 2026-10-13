@@ -14,8 +14,14 @@
 ;;
 ;; An answer is `[:ok digest]`, `[:err name]`, `[:panic]`, `[:crash exit]` or `[:hang]`. Only the error NAME is
 ;; compared between hosts (SPEC 7.4, D058): the message after it is a host's own words.
+;;
+;; THE HOSTS (P9.5, D495): Rust and Go run every file in both arms, and the browser (a normal arm: the runner stages a file outside the repository for
+;; the page, and gives it the bounds the native drivers get from EMON_LIMIT_*) a sample of them; the SAMPLED HOSTS, the Java host, the C# host, the C
+;; binding and the pod (`build-extra-drivers`, each left out LOUDLY without its toolchain), run the in-memory arm of 1 file in `--extra-every`, so four
+;; more hosts take the time of about one, and are judged with the rest (status, output, panic, crash, hang, resident set).
 (ns fuzz.engine
   (:require [babashka.fs :as fs]
+            [extra-hosts :as xh]
             [babashka.process :as p]
             [clojure.string :as str]
             [cheshire.core :as json])
@@ -91,14 +97,23 @@
       3 (do (println (str "  " (str/trim (:err r)) " (the wasm arm is left out)")) nil)
       (do (println "  FAIL the wasm module did not build:\n" (:err r)) nil))))
 
+(defn- sdk-limits
+  "The browser's spelling of the EMON_LIMIT_* pokes a native driver is given: `EMON_LIMIT_STREAM_BYTES` -> {\"stream-bytes\" n} (the SDK's `limits`)."
+  [env]
+  (into {} (for [[k v] env :let [m (re-find #"^EMON_LIMIT_(.+)$" (str k))] :when m]
+             [(str/lower-case (str/replace (second m) "_" "-")) (if (string? v) (parse-long v) v)])))
+
 (defn run-wasm
-  "Every file through the browser, array adapter: {file {:exit :out :err}}. One headless Chrome for the batch."
-  [wasm files work]
+  "Every file through the browser, array adapter: {file {:exit :out :err}}. One headless Chrome for the batch. `env` is the limits environment the
+   native drivers are run with (D385): the browser is given the same bounds as the SDK's `limits`, so the same breach is named (a file outside the
+   repository is staged by the runner: D495)."
+  [wasm files work & [env]]
   (when (seq files)
     (let [base (str work "/wasm-" (System/nanoTime))
           outd (str base "/out")
           _ (fs/create-dirs base)
-          jobs (vec (for [[i f] (map-indexed vector files)] {:id (str i) :path f :adapter "array"}))
+          limits (sdk-limits env)
+          jobs (vec (for [[i f] (map-indexed vector files)] (cond-> {:id (str i) :path f :adapter "array"} (seq limits) (assoc :limits limits))))
           jf (str base "/jobs.json")]
       (spit jf (json/generate-string jobs))
       (let [r (p/shell {:out :string :err :string :continue true :extra-env {"EMON_WASM_MODULE" wasm}}
@@ -151,9 +166,10 @@
 (def fuzz-limits {"EMON_LIMIT_STREAM_BYTES" 33554432 "EMON_LIMIT_TOTAL_BYTES" 134217728 "EMON_LIMIT_PIXELS" 33554432})
 
 (defn run-case
-  "Every host's arms over one file: {[host arm] run}. `ctx` has :drivers {host [cmd...]}, :arms [[name flags]], :wall-ms, :env."
-  [{:keys [drivers arms wall-ms env]} file]
-  (into {} (for [[h cmd] drivers [arm flags] arms] [[h arm] (run-driver cmd flags file wall-ms env)])))
+  "Every host's arms over one file: {[host arm] run}. `ctx` has :drivers {host [cmd...]}, :arms [[name flags]], :wall-ms, :env, and :host-arms
+   {host [[name flags]]} for a host that runs fewer arms than the rest (the sampled hosts of D495: the in-memory arm only)."
+  [{:keys [drivers arms host-arms wall-ms env]} file]
+  (into {} (for [[h cmd] drivers [arm flags] (get host-arms h arms)] [[h arm] (run-driver cmd flags file wall-ms env)])))
 
 (defn run-many
   "Files through the drivers, `(:workers ctx)` at a time (each worker runs its case's processes one after another, so at
@@ -175,5 +191,15 @@
           (if (zero? (:exit r))
             [h [(str/trim (:out r))]]
             (do (println "  FAIL the" h "driver did not build:\n" (:err r)) nil)))))
+
+(defn build-extra-drivers
+  "{host [exe]} for the sampled hosts of P9.5 (D495): java, csharp, c and pod, built by the repository's own scripts, each LEFT OUT LOUDLY without its
+   toolchain (`SKIP java -- why`, `EMON_SKIP_JAVA=1` on purpose). They run the in-memory arm only, on a sample of the engine arm's files."
+  []
+  (into {}
+        (for [{:keys [host drv]} (xh/engines {:hosts [:java :csharp :c :pod] :on-fail (fn [& m] (println "  FAIL" (apply str m)))})]
+          [(name host) [drv]])))
+
+(def extra-arms [["bytes" ["--out=bundle"]]])
 
 (defn base-flags [] ["--out=bundle"])

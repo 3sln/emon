@@ -10,7 +10,11 @@
 ;;
 ;;   1. the Rust replay and the Go replay print the IDENTICAL dump (every request and answer, each bitmap's
 ;;      pixel hash, each file's hash), and it is the dump the live recording printed. THE TRANSCRIPT IS THE
-;;      IDENTITY MECHANISM: two hosts, two bindings, one set of pixels;
+;;      IDENTITY MECHANISM: two hosts, two bindings, one set of pixels. The Java host and the C# host replay it
+;;      too (P9.5, D494: test/render/{java,csharp}, built by kin/scripts/emon-plandrv-build; left out LOUDLY
+;;      without their toolchains), to the same dump, and a changed request is `transcript-miss` on each.
+;;      Rust and Go only, by design: the LIVE recorder (`bb render-record`: pdfium through the Rust FFI and, with
+;;      --go, Go's cgo) and the pixel checks of 3 (`facts`, `crops`), which only the Rust driver has;
 ;;   2. the answers are what the requests ask: sizes follow the geometry (floor(pt*dpi/72 + 1/2)), a crop is
 ;;      its rectangle, a page that is not there and a crop outside the page are `failed`, the watermark layers
 ;;      and a layer nobody has are `unsupported`: all of them answers, transcribed, replayed;
@@ -43,6 +47,14 @@
 (def rust (if (fs/which "rustc") (built "rust" (l/build-rust work nil)) (do (println "  SKIP rust   -- rustc not on PATH") nil)))
 (def go (if (fs/which "go") (built "go" (l/build-go work nil)) (do (println "  SKIP go     -- go not on PATH") nil)))
 
+;; THE OTHER HOSTS (P9.5, D494): the Java and the C# host replay the same transcript through a driver of their own (test/render/{java,csharp}, built by
+;; kin/scripts/emon-plandrv-build over the host's library tree); each is left out LOUDLY without its toolchain (EMON_SKIP_JAVA / EMON_SKIP_CSHARP on purpose).
+;; The C binding and the pod are not here: they convert documents, and this unit asks for renders and crops by number. `facts` and `crops` (3) are
+;; Rust's: they read pixels, which no other host's driver prints.
+(cp/add-classpath "tools/lib")
+(require '[extra-hosts :as xh])
+(def plans (xh/plan-drivers {:tool :render :on-fail bad}))
+
 (def dargs (l/driver-args l/cases))
 (defn run [prog dir & extra]
   (let [r (apply l/exec work prog "replay" dir (concat dargs extra))]
@@ -67,6 +79,10 @@
            (count (str/split-lines want)) " lines: every request and answer, each bitmap's pixel hash, each file's hash)")
     (check (and (zero? (:exit rg)) (= (:out rr) (:out rg)))
            "GO REPLAYS THE PDFIUM TRANSCRIPT: the identical dump, byte for byte")
+    (doseq [{:keys [label drv]} plans]
+      (let [rx (run drv t)]
+        (check (and (zero? (:exit rx)) (= (:out rr) (:out rx)))
+               (str/upper-case label) " REPLAYS THE PDFIUM TRANSCRIPT: the identical dump, byte for byte")))
     ;; 2. what the answers are ----------------------------------------------
     (check (= nreq (count entries) 17) nreq " requests, " (count entries) " answered, one round")
     (check (every? #(= 3 (:ch %)) (vals bm)) (count bm) " bitmaps, all RGB")
@@ -103,7 +119,7 @@
     (let [bytes (reduce + (map fs/size (fs/list-dir tdir)))]
       (check (< bytes 400000) "the committed transcript is " bytes " bytes, " (count (fs/list-dir tdir)) " files"))
     ;; 4. a replay never guesses --------------------------------------------
-    (doseq [[name prog] [["rust" rust] ["go" go]]]
+    (doseq [[name prog] (concat [["rust" rust] ["go" go]] (for [{:keys [label drv]} plans] [label drv]))]
       (let [args (map #(if (= % "0:0:72:1") "0:0:73:1" %) dargs)
             r (apply l/exec work prog "replay" t args)]
         (check (and (= 3 (:exit r)) (= "error: transcript-miss" (str/trim (:out r))))
@@ -111,4 +127,4 @@
 
 (when (pos? @fails) (System/exit 1))
 (when (and rust go (zero? @fails))
-  (ok "one pdfium transcript, recorded on Rust, replayed on Rust and Go: one dump, one set of pixels"))
+  (ok "one pdfium transcript, recorded on Rust, replayed on Rust and Go" (when (seq plans) (str ", " (xh/names plans))) ": one dump, one set of pixels"))

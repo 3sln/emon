@@ -7,7 +7,9 @@
 ;; as a strip (the polar unwarp) and cuts the centre and the stamp out of the page's pixels, and each is read as a targeted `seal-strip` request named by its pixel hash. This gate only
 ;; REPLAYS them, through the whole Engine on Rust and Go, and holds:
 ;;
-;;   1. IDENTITY: both Engines give the identical bundle (JSON, HTML, evidence dump) and it is the bundle the recording made (SHA-256);
+;;   1. IDENTITY: both Engines give the identical bundle (JSON, HTML, evidence dump) and it is the bundle the recording made (SHA-256); so do
+;;      the Java Engine, the C# Engine and the C binding when their toolchains are there (P9.5, D494; each is left out LOUDLY without one; the pod
+;;      has no transcript to replay), and a changed pixel is `transcript-miss` on each;
 ;;   2. THE ROUNDS: at most 5 rounds a page unit, at most 24 targeted requests, every kin-made view named with its hash, and a page with a seal has its `seal-strip` runs in the dump;
 ;;   3. THE NODES (born-digital fixtures): the seal nodes of the body are the gold's: subkind, colour, text, the NAME and the DATE (read off the text by `emon.sealfield`); no word of a seal
 ;;      is in the body outside its node (seal-leak 0) and every word of the page's own text is (none lost); the page of pictures has no seal node;
@@ -15,11 +17,14 @@
 ;;      the seal's words are out of the body (the words of the gold's seal text found in the body are no more than the same transcript gives with `no-retarget`... which is no seal at all);
 ;;   5. NOTHING IS GUESSED: a replay whose page bitmap has one other pixel is `transcript-miss` on both Engines.
 (require '[babashka.fs :as fs]
+         '[babashka.classpath :as cp]
          '[babashka.process :refer [process]]
          '[cheshire.core :as json]
          '[clojure.edn :as edn]
          '[clojure.set :as set]
          '[clojure.string :as str])
+(cp/add-classpath "tools/lib")
+(require '[extra-hosts :as xh])
 
 (def fails (atom 0))
 (defn ok [& xs] (println (str "  ok   " (apply str xs))))
@@ -46,6 +51,9 @@
 (def gdrv (when (fs/which "go") (build-driver "kin/scripts/emon-go-build" "Go")))
 (when-not rdrv (println "  SKIP rust engine -- cargo not on PATH"))
 (when-not gdrv (println "  SKIP go engine   -- go not on PATH"))
+;; THE OTHER HOSTS (P9.5, D494): the Java and C# Engines and the C binding replay the same transcripts WITH their pixels (the pod has no transcript to
+;; replay); each is left out LOUDLY without its toolchain
+(def extras (xh/engines {:hosts [:java :csharp :c] :on-fail bad}))
 
 (defn drive [drv & a]
   (let [r @(apply process {:out :string :err :string} (abs drv) (map str a))]
@@ -106,6 +114,9 @@
       ;; 1 ---------------------------------------------------------------------------------------------------------------------------
       (check (and (zero? (:exit rr)) (same? rr rg))
              id ": the Rust Engine and the Go Engine replay the committed transcript to the IDENTICAL bundle (" (count (:out rr)) " bytes)")
+      (doseq [{:keys [label drv]} extras]
+        (check (same? rr (drive drv "--out=bundle" (str "--replay=" rep) pdf))
+               id ": the " label " Engine replays it to the identical bundle too"))
       (check (and want (= want (sha256 (:out rr)))) id ": and it is the bundle the live recording made (SHA-256 " (when want (subs want 0 12)) ")")
       ;; 2 ---------------------------------------------------------------------------------------------------------------------------
       (let [es (entries rep)
@@ -166,10 +177,12 @@
                 m @(process {:out :string :err :string} "magick" png "-fill" (get (get fixtures id) :miss-color "black") "-draw" (str "point " x "," y)
                             "-alpha" "off" "-depth" "8" "-define" (str "png:color-type=" (if (str/starts-with? ty "Gray") "0" "2")) png)
                 tr (drive rdrv "--out=bundle" (str "--replay=" tam) pdf)
-                tg (drive gdrv "--out=bundle" (str "--replay=" tam) pdf)]
+                tg (drive gdrv "--out=bundle" (str "--replay=" tam) pdf)
+                tx (for [{:keys [drv]} extras] (drive drv "--out=bundle" (str "--replay=" tam) pdf))]
             (check (and (zero? (:exit m)) (= 4 (:exit tr)) (= 4 (:exit tg))
-                        (str/includes? (:err tr) "error: transcript-miss") (str/includes? (:err tg) "error: transcript-miss"))
-                   id ": a replay whose page bitmap has one other pixel is transcript-miss on both Engines, nothing guessed"))))))
+                        (str/includes? (:err tr) "error: transcript-miss") (str/includes? (:err tg) "error: transcript-miss")
+                        (every? #(and (= 4 (:exit %)) (str/includes? (:err %) "error: transcript-miss")) tx))
+                   id ": a replay whose page bitmap has one other pixel is transcript-miss on both Engines" (when (seq extras) (str " and on " (xh/names extras))) ", nothing guessed"))))))
   (let [{:keys [gold pred tp name-n name-ok date-n date-ok]} @scan-totals]
     (when (pos? gold)
       (ok (format "scanned pages: seal precision %.2f, recall %.2f (%d of %d gold, %d nodes); name accuracy %d of %d, date accuracy %d of %d"
@@ -182,7 +195,8 @@
            (when-let [l (some #(when (str/includes? % "accuracy[emon-sealpx]") (str/trim %)) (str/split-lines (:out r)))]
              (str " (" (str/replace l #"^ok +accuracy\[emon-sealpx\]: " "") ")"))))
   (when (zero? @fails)
-    (ok "seals from pixels: the strips, the centres and the crops read, the nodes, names and dates the gold's, on Rust and Go")))
+    (ok "seals from pixels: the strips, the centres and the crops read, the nodes, names and dates the gold's, on Rust and Go"
+        (when (seq extras) (str " (and the same bundle on " (xh/names extras) ")")))))
 
 (when (empty? ids) (println "  SKIP no sealpx transcripts committed (bb sealpx-record)"))
 (when (pos? @fails) (System/exit 1))

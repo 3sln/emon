@@ -113,6 +113,7 @@ export async function run(job) {
   const opts = { keepEvidence: true, chunk: job.chunk ?? (adapter === 'async512' || adapter === 'lazy' ? 512 : undefined) };
   if (job.assets && job.assets !== 'none') opts.assets = job.assets;
   if (job.record) opts.record = true;
+  if (job.limits) opts.limits = job.limits; // `{ 'stream-bytes': n, ... }`: the SDK's `limits`, what EMON_LIMIT_* is to a native driver (`bb fuzz`, D495)
   if (job.ocr) {
     const p = await ocrPort();
     opts.ports = { ocr: p };
