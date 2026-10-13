@@ -1,0 +1,68 @@
+# The browser demo on GitHub Pages (P11.4c, D1446): built from the tagged tree when a release is published (or by hand), deployed as it is built.
+#   gh workflow run pages.yml [-f ref=main]
+# `bb demo` builds the static site: the page, the JS SDK, emon.wasm (the pinned nightly, for the unwinding std), pdfium's WebAssembly build (`bb pdfium-fetch
+# --platform wasm`, sha-checked against tools/pdfium/pdfium.edn) and tesseract.js with its model (`npm ci`, pinned by host/js/package-lock.json), and fails when a
+# size budget is over. Settings > Pages > Source must be "GitHub Actions".
+name: pages
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: emon ref to publish (branch, tag or sha)
+        type: string
+        default: main
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# one deployment at a time; a deployment in progress is finished, not cancelled
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+    working-directory: emon
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ inputs.ref }}
+          path: emon
+      - uses: actions/checkout@v4
+        with:
+          repository: 3sln/kin
+          path: kin
+      - uses: ./emon/.github/actions/setup
+      - name: The pinned nightly for the WebAssembly module (the unwinding std)
+        run: rustup toolchain install nightly-2026-09-16 -c rust-src -t wasm32-unknown-unknown
+      - name: pdfium's WebAssembly build (checksum-verified)
+        run: bb pdfium-fetch --platform wasm
+      - name: tesseract.js and its model (pinned by the lockfile)
+        run: npm ci --prefix host/js
+      - name: Build the site
+        run: bb demo --out _site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: emon/_site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

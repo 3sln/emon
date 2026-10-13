@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>emon demo</title>
+<meta name="description" content="emon turns PDFs and images into semantic HTML, in your browser. Nothing is uploaded.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<header>
+  <h1>emon</h1>
+  <p class="lede">PDFs and images to <strong>semantic HTML</strong>: headings, paragraphs, tables, lists, figures, footnotes. It runs in this page, in WebAssembly. <strong>Nothing is uploaded</strong>: the file stays in your browser.</p>
+</header>
+
+<main>
+  <p id="notice" class="error" role="alert" hidden></p>
+
+  <section aria-labelledby="try">
+    <h2 id="try">Convert a document</h2>
+    <div id="drop" role="button" tabindex="0" aria-describedby="drop-help">
+      <strong>Drop a PDF or an image here</strong> or choose a file
+      <span id="drop-help" class="help">PDF, PNG, JPEG or TIFF</span>
+    </div>
+    <input id="file" type="file" accept="application/pdf,image/png,image/jpeg,image/tiff,.pdf,.png,.jpg,.jpeg,.tif,.tiff" hidden>
+    <p class="row"><span>Or try a sample:</span> <span id="samples" class="samples"></span></p>
+    <details class="options">
+      <summary>Options</summary>
+      <label>Text recognition (OCR)
+        <select id="ocr">
+          <option value="auto" selected>auto: read a page when its text is missing or broken</option>
+          <option value="always">always: read every page, and fuse it with the text layer</option>
+          <option value="never">never: use the text layer only</option>
+        </select>
+      </label>
+      <label class="check"><input id="figures" type="checkbox"> Figures as images (pdfium draws each chart, logo and diagram)</label>
+    </details>
+    <p id="status" role="status" aria-live="polite">Pick a file to begin.</p>
+    <progress id="busy" hidden></progress>
+  </section>
+
+  <section id="out" aria-labelledby="result" hidden>
+    <h2 id="result">Result</h2>
+    <div class="pair">
+      <div class="pane">
+        <h3>The document</h3>
+        <div id="source" class="frame"></div>
+      </div>
+      <div class="pane">
+        <div role="tablist" aria-label="emon's output" class="tabs">
+          <button role="tab" id="tab-html" aria-selected="true" aria-controls="p-html">HTML</button>
+          <button role="tab" id="tab-json" aria-selected="false" aria-controls="p-json">JSON</button>
+          <button role="tab" id="tab-stats" aria-selected="false" aria-controls="p-stats">Details</button>
+          <span class="downloads"><a id="dl-html" download>Download HTML</a> <a id="dl-json" download>Download JSON</a></span>
+        </div>
+        <div role="tabpanel" id="p-html" aria-labelledby="tab-html" class="frame">
+          <iframe id="html" sandbox title="emon's HTML for the document"></iframe>
+        </div>
+        <div role="tabpanel" id="p-json" aria-labelledby="tab-json" class="frame" hidden>
+          <pre><code id="json"></code></pre>
+        </div>
+        <div role="tabpanel" id="p-stats" aria-labelledby="tab-stats" class="frame" hidden>
+          <dl id="stats"></dl>
+        </div>
+      </div>
+    </div>
+    <p class="help">The HTML is shown in a sandboxed frame without scripts; its figures are inline images. The JSON is emon's Model, the same on every platform emon runs on.</p>
+  </section>
+
+  <section aria-labelledby="notes">
+    <h2 id="notes">Good to know</h2>
+    <ul>
+      <li><strong>It loads what the document needs.</strong> A PDF with a healthy text layer never loads pdfium (5 MiB of WebAssembly, for drawing pages) or Tesseract (10 MiB, for reading pictures of text).</li>
+      <li><strong>Fonts.</strong> pdfium draws a font that a PDF names but does not embed from its own built-in set, not from your system's fonts, so the lettering inside a figure may differ a little from a desktop viewer's. The text of the HTML is the PDF's own and does not depend on it.</li>
+      <li><strong>Browsers.</strong> emon's module needs WebAssembly's standardised exception handling: Chrome 137, Firefox 131, Safari 18.4 or newer. Large pages are limited to 64 megapixels when drawn.</li>
+      <li><strong>Free software.</strong> emon is MIT-licensed; pdfium, Tesseract and the other components this page ships are listed, with their licences, in <a href="THIRD_PARTY_NOTICES.md">THIRD_PARTY_NOTICES.md</a>. <a href="build.json">build.json</a> has the versions and checksums of this build.</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

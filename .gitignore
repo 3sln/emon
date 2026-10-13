@@ -12,6 +12,8 @@ __pycache__/
 .emit-stamp
 .emit-stamp.tmp
 .cache/
+# The built demo site (bb demo --out _site, the pages workflow).
+/_site/
 
 # Agent worktrees and local tooling.
 .claude/
