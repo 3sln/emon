@@ -28,14 +28,16 @@
 
 ;; ------------------------------------------------------------------------------------------------ policy
 
+;; FTL, AGG 2.3, libtiff and Adobe's Core 14 AFM notice (pdfium's FreeType and AGG, Leptonica's TIFF codec, the font
+;; metrics) are permissive, attribution-only licences the SPEC list did not name; the maintainer allowed them by signing
+;; off D526 (2026-10-13).
 (def allowed-exact
-  #{"MIT" "Apache-2.0" "BSD-2-Clause" "BSD-3-Clause" "ISC" "Zlib" "BSL-1.0" "MPL-2.0"})
+  #{"MIT" "Apache-2.0" "BSD-2-Clause" "BSD-3-Clause" "ISC" "Zlib" "BSL-1.0" "MPL-2.0"
+    "FTL" "LicenseRef-AGG-2.3" "libtiff" "LicenseRef-Adobe-Core14-AFM"})
 (def allowed-prefix ["libpng" "IJG" "Unicode-"])
 
-;; Licences the SPEC list does not name, carried by components a release bundle will hold (pdfium's FreeType and AGG,
-;; libtiff, Adobe's font metrics). They are permissive and attribution-only, but a maintainer has not yet said so: the audit
-;; passes them with a NOTE until D526 is signed off, and drops them from here if the sign-off says no.
-(def pending-decision #{"FTL" "LicenseRef-AGG-2.3" "libtiff" "LicenseRef-Adobe-Core14-AFM"})
+;; Licences awaiting a maintainer's decision: passed with a NOTE until one is made. Empty since D526's sign-off.
+(def pending-decision #{})
 
 (def deny-re #"(?i)jbig2dec(?!ode)|(?<![a-z])[al]?gpl(?![a-z])|gnu (?:affero|general|lesser)")
 (def gpl-re #"(?i)(?<![a-z])[al]?gpl(?![a-z])|gnu (?:affero|general|lesser)")
