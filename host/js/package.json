@@ -1,6 +1,7 @@
 {
   "name": "@3sln/emon",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "description": "emon's JavaScript SDK: PDFs and images to semantic HTML in the browser, over the WASM binding (DEVLOG P9.3). The library has no dependencies; the devDependencies are the browser test harness and the tesseract.js engine the OCR adapter drives.",
   "type": "module",

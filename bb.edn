@@ -129,6 +129,8 @@
   version {:doc "The package version (P11.1, D1401): version.edn is the single source.  bb version | set X.Y.Z | bump major|minor|patch | --check TAG (every manifest equals the tag, leading v optional; lists the ones that do not) | --self-test (on a temporary copy). NOT a gate."
            :override-builtin true
            :task (apply shell "bb" "tools/version.clj" *command-line-args*)}
+  release-audit {:doc "Is the tree one we may publish under MIT (P11.3, D1410)?  LICENSE is MIT; release/third-party.edn lists every Rust crate of Cargo.lock, every npm package and the native libraries and data a release artifact carries or links, each with an allowed SPDX licence; no jbig2dec and no GPL-family component is in the inventory, Cargo.lock, a build script's link line or a host source's library names; THIRD_PARTY_NOTICES.md is what the inventory generates.  bb release-audit [--write | --import-texts | --self-test]"
+                 :task (apply shell "bb" "tools/release_audit.clj" *command-line-args*)}
   corpus-test {:doc "SigV4 vectors, then a push/pull round trip against a local MinIO. NOT a gate."
                :task (do (shell "bb" "-cp" "tools" "tools/corpus_test.clj")
                          (shell "bb" "-cp" "tools" "tools/corpus_roundtrip.clj"))}}}
