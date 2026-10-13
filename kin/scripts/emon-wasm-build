@@ -67,7 +67,7 @@ for m in $keep; do echo "pub mod $m;"; done > "$crate/src/emon.rs.new"
 put "$crate/src/emon.rs.new" "$crate/src/emon.rs"
 rm -f "$crate/src/emon.rs.new"
 
-for f in lib port plan source engine imgdec tess render pdfium pdfimg pdfcodecs; do put "host/rust/src/$f.rs" "$crate/src/$f.rs"; done
+for f in lib port plan source engine imgdec tess render pdfium pdfimg pdfcodecs session; do put "host/rust/src/$f.rs" "$crate/src/$f.rs"; done
 put host/wasm/src/wasm.rs "$crate/src/wasm.rs"
 cat > "$crate/Cargo.toml.new" <<'TOML'
 [package]

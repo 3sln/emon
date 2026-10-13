@@ -23,35 +23,16 @@
 // MEMORY. Everything crosses as integers and byte ranges of linear memory; the host allocates with `emon_alloc` and frees with
 // `emon_free`. Results are written to ONE shared output buffer (`emon_out_ptr`, `emon_out_len`) that the next call overwrites.
 #![allow(clippy::missing_safety_doc)]
-
-use crate::emon;
-use crate::engine::{parse_options, ChunkCache, Engine, Error, HtmlAssets, HtmlOptions, JsonOptions, Model, Ocr, OcrPort, Run};
-use crate::plan::{self, Answer, Bitmaps, PlanError, Range, Replayer, Request, Transcript};
-use crate::port::{Bitmap, Cells};
+//
+// THE SESSION is `crate::session` (D481), shared with the C binding: the state machine over the engine's `Run`, the input-bytes
+// check, the error mapping. This file is the linear-memory layer over it: pointers, the output buffer, the exports.
+use crate::engine::{Error, JsonOptions, Model};
+use crate::session as shared;
+use crate::session::{Fault, Session, Step};
 use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet};
 use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::sync::Arc;
 
 // ------------------------------------------------------------------------------------------------ the world
-
-struct Session {
-    cache: Arc<ChunkCache>,
-    run: Option<Run>,
-    idx: usize,
-    js_ocr: bool,
-    // replay: the files being collected, then the replayer; record: the transcript made
-    files: BTreeMap<String, Vec<u8>>,
-    replay: bool,
-    replayer: Option<Replayer>,
-    recording: Option<Transcript>,
-    local: Box<dyn FnMut(&Request, &Bitmaps) -> Result<Answer, PlanError>>,
-    // a round of requests is in progress (the Run holds it: its requests, the answers offered so far, the bitmaps), and the ids of
-    // those that are the host's to answer
-    in_round: bool,
-    external: BTreeSet<i32>,
-    done: bool,
-}
 
 #[derive(Default)]
 struct World {
@@ -81,19 +62,23 @@ fn put_error(e: &Error) -> i32 {
     -1
 }
 
+// A session call's failure: the engine's (`name\nmessage`) or the caller's mistake (`usage\nmessage`).
+fn put_fault(f: &Fault) -> i32 {
+    match f {
+        Fault::Engine(e) => put_error(e),
+        Fault::Usage(m) => {
+            put_str(&format!("usage\n{}", m));
+            -1
+        }
+    }
+}
+
 // A panic that is not kin's (kin's are caught inside the loop and named): a bug in this file.
 fn guard(f: impl FnOnce() -> i32) -> i32 {
     match catch_unwind(AssertUnwindSafe(f)) {
         Ok(v) => v,
         Err(p) => {
-            let m = if let Some(s) = p.downcast_ref::<String>() {
-                s.clone()
-            } else if let Some(s) = p.downcast_ref::<&str>() {
-                s.to_string()
-            } else {
-                "a panic".to_string()
-            };
-            put_str(&format!("internal\n{}", m));
+            put_str(&format!("internal\n{}", shared::panic_message(p)));
             -2
         }
     }
@@ -159,111 +144,34 @@ pub extern "C" fn emon_out_free() {
 // 0 kind render, 1 decode, 2 ocr, 3 bytes, 4 crop, 5 decode-img; 10 status ok, 11 failed, 12 unsupported, 13 limit.
 #[no_mangle]
 pub extern "C" fn emon_const(i: u32) -> i32 {
-    match i {
-        0 => plan::KIND_RENDER,
-        1 => plan::KIND_DECODE,
-        2 => plan::KIND_OCR,
-        3 => plan::KIND_BYTES,
-        4 => plan::KIND_CROP,
-        5 => plan::KIND_DECODE_IMG,
-        10 => plan::STATUS_OK,
-        11 => plan::STATUS_FAILED,
-        12 => emon::plan::ps_unsupported(),
-        13 => emon::plan::ps_limit(),
-        14 => emon::ocr::ocw_dict(),
-        15 => emon::ocr::ocw_numeric(),
-        _ => -1,
-    }
-}
-
-// ------------------------------------------------------------------------------------------------ options
-
-// The same list as the drivers' `--html=`.
-fn parse_html(list: &str) -> Result<HtmlOptions, String> {
-    let mut o = HtmlOptions::default();
-    for item in list.split(',').filter(|s| !s.is_empty()) {
-        match item {
-            "ids" => o.ids = true,
-            "geometry" => o.geometry = true,
-            "ledger" => o.ledger = true,
-            "pretty" => o.pretty = true,
-            "drop-furniture" => o.furniture_drop = true,
-            "no-milestones" => o.milestones = false,
-            "initials-plain" => o.initials_plain = true,
-            "align-style" => o.align_style = true,
-            "assets=inline" => o.assets = HtmlAssets::Inline,
-            "assets=external" => o.assets = HtmlAssets::External,
-            "assets=omit" => o.assets = HtmlAssets::Omit,
-            other => match (other.strip_prefix("confidence="), other.strip_prefix("prefix=")) {
-                (Some(n), _) => o.confidence_below = Some(n.parse().map_err(|_| "confidence=N wants a number".to_string())?),
-                (_, Some(p)) => o.asset_prefix = p.to_string(),
-                _ => return Err(format!("unknown html option {}", other)),
-            },
-        }
-    }
-    Ok(o)
+    shared::constant(i)
 }
 
 // ------------------------------------------------------------------------------------------------ sessions
 
-// The `ocr` port of a session whose host has an engine: its presence makes the decode answers keep their pixels (the engine
-// reads them); it is never asked, the requests go out to the host (`emon_step` status 2).
-struct HostOcr;
-
-impl Ocr for HostOcr {
-    fn fulfil(&self, _req: &Request, _bitmaps: &Bitmaps, _keep_binary: bool) -> Result<Answer, PlanError> {
-        Err(PlanError::Fulfil("an ocr request is the host's to fulfil".to_string()))
-    }
-}
-
-// Open a session over an input of `len` bytes (a number: an input over 2^32 is refused by name, not wrapped), read in chunks of
-// `chunk` bytes. `mode`: 0 convert, 1 intake only. Answers a handle (> 0) or -1 with the error in OUT.
+// Open a session over an input of `len` bytes (a number: an input over the engine's bound is refused by name, not wrapped, and before
+// its chunks are allocated), read in chunks of `chunk` bytes. `mode`: 0 convert, 1 intake only. Answers a handle (> 0) or -1 with
+// the error in OUT.
 #[no_mangle]
 pub unsafe extern "C" fn emon_open(len: f64, chunk: u32, mode: u32, password_ptr: u32, password_len: u32, opts_ptr: u32, opts_len: u32) -> i32 {
     guard(|| {
-        let mut p = match parse_options(text(opts_ptr, opts_len)) {
-            Ok(p) => p,
-            Err(m) => {
-                put_str(&format!("usage\n{}", m));
-                return -1;
-            }
-        };
-        // the chunk is the caller's argument (the browser's source decides it), not an option
-        p.config.chunk_size = if chunk == 0 { 65536 } else { chunk as usize };
         let password = if password_len > 0 { Some(bytes(password_ptr, password_len).to_vec()) } else { None };
-        // an input longer than a `Src` can address is refused by the engine's own check against the LENGTH; `u32::MAX` stands for
-        // every length that does not fit, which the check refuses too
-        let ulen = if len > i32::MAX as f64 { i32::MAX as usize + 1 } else { len as usize };
-        let cache = ChunkCache::pushed(ulen, p.config.chunk_size);
-        let engine = Engine::new(p.config.clone());
-        let idx = 0usize;
-        let run = match engine.start_pushed(idx, cache.clone(), password, &p.options, mode == 1) {
-            Ok(r) => r,
-            Err(e) => return put_error(&e),
-        };
-        let keep = p.record || p.js_ocr;
-        let ocr = if p.js_ocr { Some(OcrPort(Arc::new(HostOcr))) } else { None };
-        let source: Arc<dyn crate::source::ByteSource> = cache.clone();
-        let local = Box::new(crate::engine::port_fulfiller(source, idx, keep, p.record, ocr, None));
-        let mut recording = None;
-        if p.record {
-            let mut t = Transcript::default();
-            t.inputs = vec![(idx as i32, ulen as i32)];
-            t.producer = p.producer.clone();
-            recording = Some(t);
+        // the chunk is the caller's argument (the browser's source decides it), not an option
+        let chunk = if chunk == 0 { 65536 } else { chunk as usize };
+        match Session::open(len as u64, Some(chunk), mode == 1, password, text(opts_ptr, opts_len)) {
+            Ok(s) => world(|w| {
+                w.sessions.push(Some(Box::new(s)));
+                w.sessions.len() as i32
+            }),
+            Err(f) => put_fault(&f),
         }
-        let s = Session { cache, run: Some(run), idx, js_ocr: p.js_ocr, files: BTreeMap::new(), replay: false, replayer: None, recording, local, in_round: false, external: BTreeSet::new(), done: false };
-        world(|w| {
-            w.sessions.push(Some(Box::new(s)));
-            w.sessions.len() as i32
-        })
     })
 }
 
 // SPEC 13.1: intake round 0 reads the first and the last chunk. OUT: pairs [offset length]; answers how many.
 #[no_mangle]
 pub extern "C" fn emon_prefetch(h: i32) -> i32 {
-    guard(|| match session(h, |s| s.cache.prefetch_ranges(s.idx as i32)) {
+    guard(|| match session(h, |s| s.prefetch()) {
         Some(r) => {
             put_ranges(&r);
             r.len() as i32
@@ -272,11 +180,11 @@ pub extern "C" fn emon_prefetch(h: i32) -> i32 {
     })
 }
 
-fn put_ranges(r: &[Range]) {
+fn put_ranges(r: &[(u64, u64)]) {
     let mut v = Vec::new();
-    for x in r {
-        v.push(x.offset);
-        v.push(x.length);
+    for &(offset, length) in r {
+        v.push(offset as i32);
+        v.push(length as i32);
     }
     put_i32s(&v);
 }
@@ -286,7 +194,7 @@ fn put_ranges(r: &[Range]) {
 pub unsafe extern "C" fn emon_provide(h: i32, offset: u32, ptr: u32, len: u32) -> i32 {
     guard(|| {
         let data = bytes(ptr, len);
-        match session(h, |s| s.cache.provide(offset as usize, data)) {
+        match session(h, |s| s.provide(offset as usize, data)) {
             Some(()) => 0,
             None => -1,
         }
@@ -299,7 +207,7 @@ pub unsafe extern "C" fn emon_provide(h: i32, offset: u32, ptr: u32, len: u32) -
 pub unsafe extern "C" fn emon_fail(h: i32, short: u32, ptr: u32, len: u32) -> i32 {
     guard(|| {
         let m = text(ptr, len).to_string();
-        match session(h, |s| s.cache.fail(short != 0, &m)) {
+        match session(h, |s| s.fail(short != 0, &m)) {
             Some(()) => 0,
             None => -1,
         }
@@ -313,9 +221,7 @@ pub unsafe extern "C" fn emon_replay_file(h: i32, name_ptr: u32, name_len: u32, 
     guard(|| {
         let name = text(name_ptr, name_len).to_string();
         let data = bytes(ptr, len).to_vec();
-        match session(h, |s| {
-            s.files.insert(name, data);
-        }) {
+        match session(h, |s| s.replay_file(name, data)) {
             Some(()) => 0,
             None => -1,
         }
@@ -324,198 +230,58 @@ pub unsafe extern "C" fn emon_replay_file(h: i32, name_ptr: u32, name_len: u32, 
 
 #[no_mangle]
 pub extern "C" fn emon_replay_end(h: i32) -> i32 {
-    guard(|| {
-        let r = session(h, |s| -> Result<(), Error> {
-            let t = Transcript::from_files(&s.files).map_err(Error::Plan)?;
-            t.check_inputs(&[(s.idx as i32, s.cache.length() as i32)]).map_err(Error::Plan)?;
-            s.replayer = Some(Replayer::new(&t));
-            s.replay = true;
-            s.files = BTreeMap::new();
-            Ok(())
-        });
-        match r {
-            Some(Ok(())) => 0,
-            Some(Err(e)) => put_error(&e),
-            None => -1,
-        }
+    guard(|| match session(h, |s| s.replay_end()) {
+        Some(Ok(())) => 0,
+        Some(Err(e)) => put_error(&e),
+        None => -1,
     })
-}
-
-// The requests the host fulfils: `ocr`, when it has an engine (kin's `pl-route`). (`render` and `crop` would be pdfium's WebAssembly
-// build, SPEC 7.3: not built, so they are answered `unsupported` here like any request no port is configured for.)
-fn is_external(s: &Session, kind: i32) -> bool {
-    plan::route(kind, s.js_ocr, false) == plan::Route::Ocr
 }
 
 // Walk the session on: 0 done, 1 bytes needed (OUT: pairs), 2 requests for the host (OUT: count, then n and n cells each), -1 error.
-fn step(s: &mut Session) -> Result<(i32, Vec<u8>), Error> {
-    loop {
-        if s.in_round {
-            let run = s.run.as_mut().expect("a round in progress has a run");
-            if let Some(e) = run.source_error() {
-                return Err(e);
-            }
-            if s.replay {
-                // the whole round from the transcript: a request it has no answer for is `transcript-miss`
-                let r = s.replayer.as_mut().expect("a replay has a replayer");
-                let entries = run.fulfil(r)?;
-                if let Some(t) = s.recording.as_mut() {
-                    t.entries.extend(entries);
-                }
-                s.in_round = false;
-                continue;
-            }
-            // 1. the input bytes the local requests read (which requests those are is kin's, `pl-route`; the spans they name too)
-            let reqs: Vec<Request> = run.requests().to_vec();
-            let mut local: Vec<&Request> = Vec::new();
-            for r in &reqs {
-                if !run.has_answer(r.id()) && !s.external.contains(&r.id()) {
-                    local.push(r);
-                }
-            }
-            let mut want: Vec<(u64, u64)> = Vec::new();
-            for r in &local {
-                want.extend(plan::spans(r, s.idx as i32));
-            }
-            let missing = {
-                let mut out: Vec<Range> = Vec::new();
-                for &(off, len) in &want {
-                    for r in s.cache.missing(s.idx as i32, off, len) {
-                        if !out.contains(&r) {
-                            out.push(r);
-                        }
-                    }
-                }
-                out.sort_by_key(|r| r.offset);
-                out
-            };
-            if !missing.is_empty() {
-                let mut v = Vec::new();
-                for x in &missing {
-                    v.push(x.offset);
-                    v.push(x.length);
-                }
-                return Ok((1, v.iter().flat_map(|x| x.to_le_bytes()).collect()));
-            }
-            // 2. the local requests, answered here
-            for req in &local {
-                let a = (s.local)(req, run.bitmaps()).map_err(|e| run.error_of(e))?;
-                run.offer(a)?;
-            }
-            // 3. what the host still owes
-            let mut owed: Vec<&Request> = Vec::new();
-            for r in &reqs {
-                if s.external.contains(&r.id()) && !run.has_answer(r.id()) {
-                    owed.push(r);
-                }
-            }
-            if !owed.is_empty() {
-                let mut v: Vec<u8> = Vec::new();
-                v.extend_from_slice(&(owed.len() as i32).to_le_bytes());
-                for r in owed {
-                    v.extend_from_slice(&(r.rec.len() as i32).to_le_bytes());
-                    for c in &r.rec {
-                        v.extend_from_slice(&c.to_le_bytes());
-                    }
-                }
-                return Ok((2, v));
-            }
-            // 4. the round is answered: the unit is re-run on the answers
-            let entries = run.commit()?;
-            if let Some(t) = s.recording.as_mut() {
-                t.entries.extend(entries);
-            }
-            s.in_round = false;
-            s.external.clear();
-            continue;
-        }
-        let run = s.run.as_mut().expect("a session that is not done has a run");
-        match run.step()? {
-            plan::Next::Done => {
-                // a replay that left recorded entries unasked is a transcript of another run, as it is natively
-                if let Some(r) = s.replayer.as_mut() {
-                    r.check_done().map_err(Error::Plan)?;
-                }
-                return Ok((0, Vec::new()));
-            }
-            plan::Next::Fetch(reqs) => {
-                let mut v = Vec::new();
-                for r in &reqs {
-                    v.push(r.field(emon::plan::bq_offset()));
-                    v.push(r.field(emon::plan::bq_length()));
-                }
-                return Ok((1, v.iter().flat_map(|x| x.to_le_bytes()).collect()));
-            }
-            plan::Next::Requests(reqs, _) => {
-                s.external.clear();
-                for r in &reqs {
-                    if !s.replay && is_external(s, r.kind()) {
-                        s.external.insert(r.id());
-                    }
-                }
-                s.in_round = true;
-            }
-        }
-    }
-}
-
 #[no_mangle]
 pub extern "C" fn emon_step(h: i32) -> i32 {
-    guard(|| {
-        let r = session(h, |s| {
-            if s.done {
-                return Err(Error::Internal("the session is finished".to_string()));
-            }
-            let r = step(s);
-            if r.is_err() || matches!(r, Ok((0, _))) {
-                s.done = true;
-            }
-            r
-        });
-        match r {
-            Some(Ok((status, out))) => {
-                put(out);
-                status
-            }
-            Some(Err(e)) => put_error(&e),
-            None => -1,
+    guard(|| match session(h, |s| s.step()) {
+        Some(Ok(Step::Done)) => {
+            put(Vec::new());
+            0
         }
+        Some(Ok(Step::Bytes(r))) => {
+            put_ranges(&r);
+            1
+        }
+        Some(Ok(Step::Requests(owed))) => {
+            let mut v: Vec<u8> = Vec::new();
+            v.extend_from_slice(&(owed.len() as i32).to_le_bytes());
+            for rec in owed {
+                v.extend_from_slice(&(rec.len() as i32).to_le_bytes());
+                for c in &rec {
+                    v.extend_from_slice(&c.to_le_bytes());
+                }
+            }
+            put(v);
+            2
+        }
+        Some(Err(e)) => put_error(&e),
+        None => -1,
     })
+}
+
+// What a session's answer made of the call: 0, or -1 with the caller's mistake in OUT.
+fn answered(r: Option<Result<(), Fault>>) -> i32 {
+    match r {
+        Some(Ok(())) => 0,
+        Some(Err(f)) => put_fault(&f),
+        None => -1,
+    }
 }
 
 // A request the host was owed, answered by a raw record (`[len kind id status ...]`; a failed or unsupported one is four cells).
 #[no_mangle]
 pub unsafe extern "C" fn emon_answer(h: i32, ptr: u32, ncells: u32) -> i32 {
     guard(|| {
-        let b = bytes(ptr, ncells * 4);
-        let rec: Vec<i32> = b.chunks_exact(4).map(|c| i32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
-        answer(h, rec, None)
+        let rec = ints_from(ptr, ncells);
+        answered(session(h, |s| s.answer(rec)))
     })
-}
-
-fn answer(h: i32, rec: Vec<i32>, bitmap: Option<Arc<Bitmap>>) -> i32 {
-    let r = session(h, |s| -> Result<(), String> {
-        if rec.len() < 4 || rec[0] as usize != rec.len() {
-            return Err("an answer is a record [len kind id status ...]".to_string());
-        }
-        if !s.in_round {
-            return Err("no requests are owed".to_string());
-        }
-        let run = s.run.as_mut().ok_or("no requests are owed")?;
-        let id = rec[2];
-        if !s.external.contains(&id) || run.has_answer(id) {
-            return Err(format!("request {} is not owed an answer", id));
-        }
-        run.offer(Answer { rec, bitmap }).map_err(|e| e.to_string())
-    });
-    match r {
-        Some(Ok(())) => 0,
-        Some(Err(m)) => {
-            put_str(&format!("usage\n{}", m));
-            -1
-        }
-        None => -1,
-    }
 }
 
 // An `ocr` answer from the flat integer form the JS adapter makes of its engine's reading; the form and the record are kin's
@@ -523,34 +289,21 @@ fn answer(h: i32, rec: Vec<i32>, bitmap: Option<Arc<Bitmap>>) -> i32 {
 #[no_mangle]
 pub unsafe extern "C" fn emon_answer_ocr(h: i32, id: i32, ptr: u32, ncells: u32) -> i32 {
     guard(|| {
-        let mut flat = cells_from(ptr, ncells);
-        let mut out = Cells::new();
-        if emon::ocrport::ox_flat(&mut flat, id, &mut out) != 0 {
-            put_str("usage\nthe ocr form is malformed");
-            return -1;
-        }
-        answer(h, to_vec(&out), None)
+        let flat = ints_from(ptr, ncells);
+        answered(session(h, |s| s.answer_ocr(id, &flat)))
     })
 }
 
-fn to_vec(c: &Cells) -> Vec<i32> {
-    (0..crate::port::cells_len(c)).map(|i| crate::port::cells_at(c, i)).collect()
-}
-
-// The cells of `ncells` little-endian i32s at `ptr` in the module's memory.
-unsafe fn cells_from(ptr: u32, ncells: u32) -> Cells {
-    let mut c = Cells::new();
-    for x in bytes(ptr, ncells * 4).chunks_exact(4) {
-        crate::port::cells_push(&mut c, i32::from_le_bytes([x[0], x[1], x[2], x[3]]));
-    }
-    c
+// The `ncells` little-endian i32s at `ptr` in the module's memory.
+unsafe fn ints_from(ptr: u32, ncells: u32) -> Vec<i32> {
+    bytes(ptr, ncells * 4).chunks_exact(4).map(|c| i32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect()
 }
 
 // An `ocr` request's policy is kin's (`emon.ocrport`), and the JS adapters ask it here. `ptr`/`ncells`: the request record
 // `[len kind id arg...]`. The index of the argument its first language is at (after a kin-made view's pixel hash).
 #[no_mangle]
 pub unsafe extern "C" fn emon_ocr_lang_first(ptr: u32, ncells: u32) -> i32 {
-    guard(|| emon::ocrport::op_lang_first(&mut cells_from(ptr, ncells)))
+    guard(|| shared::ocr_lang_first(&ints_from(ptr, ncells)))
 }
 
 // The installed models that read the request: `inst` holds their names as code points separated by 0; OUT is the i32 indices into
@@ -558,11 +311,8 @@ pub unsafe extern "C" fn emon_ocr_lang_first(ptr: u32, ncells: u32) -> i32 {
 #[no_mangle]
 pub unsafe extern "C" fn emon_ocr_models(ptr: u32, ncells: u32, iptr: u32, icells: u32) -> i32 {
     guard(|| {
-        let mut req = cells_from(ptr, ncells);
-        let mut inst = cells_from(iptr, icells);
-        let mut out = Cells::new();
-        let n = emon::ocrport::op_models(&mut req, &mut inst, &mut out);
-        put_i32s(&to_vec(&out));
+        let (n, indices) = shared::ocr_models(&ints_from(ptr, ncells), &ints_from(iptr, icells));
+        put_i32s(&indices);
         n
     })
 }
@@ -570,29 +320,26 @@ pub unsafe extern "C" fn emon_ocr_models(ptr: u32, ncells: u32, iptr: u32, icell
 // A line's type from the engine's block type (Tesseract's PolyBlockType).
 #[no_mangle]
 pub extern "C" fn emon_ocr_block_type(poly: i32) -> i32 {
-    guard(|| emon::ocrport::op_block_type(poly))
+    guard(|| shared::ocr_block_type(poly))
 }
 
 // The language the engine read a word in (the model's name as code points), as a request spells it: one packed cell.
 #[no_mangle]
 pub unsafe extern "C" fn emon_ocr_word_lang(ptr: u32, ncells: u32) -> i32 {
-    guard(|| emon::ocrport::op_word_lang(&mut cells_from(ptr, ncells)))
+    guard(|| shared::ocr_word_lang(&ints_from(ptr, ncells)))
 }
 
 // The bitmap a request names (an `ocr` request's `bitmap` argument, or the answer of any request already answered), as a
 // canonical PNG in OUT: what the host's recogniser reads. Answers the PNG's length, or -1.
 #[no_mangle]
 pub extern "C" fn emon_bitmap_png(h: i32, id: i32) -> i32 {
-    guard(|| {
-        let png = session(h, |s| if s.in_round { s.run.as_ref().and_then(|r| r.bitmap(id)).map(|b| plan::png_encode(&b)) } else { None });
-        match png {
-            Some(Some(b)) => {
-                let n = b.len() as i32;
-                put(b);
-                n
-            }
-            _ => -1,
+    guard(|| match session(h, |s| s.bitmap_png(id)) {
+        Some(Some(b)) => {
+            let n = b.len() as i32;
+            put(b);
+            n
         }
+        _ => -1,
     })
 }
 
@@ -600,7 +347,7 @@ pub extern "C" fn emon_bitmap_png(h: i32, id: i32) -> i32 {
 // last two the low 32 bits).
 #[no_mangle]
 pub extern "C" fn emon_stats(h: i32) -> i32 {
-    guard(|| match session(h, |s| (s.cache.reads(), s.cache.bytes_read())) {
+    guard(|| match session(h, |s| s.source_stats()) {
         Some((reads, bytes)) => {
             put_i32s(&[reads as i32, bytes as i32]);
             0
@@ -613,7 +360,7 @@ pub extern "C" fn emon_stats(h: i32) -> i32 {
 #[no_mangle]
 pub extern "C" fn emon_transcript(h: i32) -> i32 {
     guard(|| {
-        let r = session(h, |s| s.recording.as_ref().map(|t| t.to_files()));
+        let r = session(h, |s| s.transcript());
         match r {
             Some(Some(files)) => {
                 let mut v: Vec<u8> = Vec::new();
@@ -635,35 +382,30 @@ pub extern "C" fn emon_transcript(h: i32) -> i32 {
 // The end of a conversion: a Model handle (> 0) or the error. The session is spent.
 #[no_mangle]
 pub extern "C" fn emon_finish(h: i32) -> i32 {
-    guard(|| {
-        let run = session(h, |s| s.run.take()).flatten();
-        let Some(run) = run else { return -1 };
-        match run.into_model() {
-            Ok((m, st)) => {
-                put_i32s(&[st.attempts, st.fetch_rounds, st.bytes_requests, st.requests, st.source_reads as i32, st.bytes_fetched as i32, st.input_bytes as i32]);
-                world(|w| {
-                    w.models.push(Some(Box::new(m)));
-                    w.models.len() as i32
-                })
-            }
-            Err(e) => put_error(&e),
+    guard(|| match session(h, |s| s.finish()) {
+        Some(Ok((m, st))) => {
+            put_i32s(&[st.attempts, st.fetch_rounds, st.bytes_requests, st.requests, st.source_reads as i32, st.bytes_fetched as i32, st.input_bytes as i32]);
+            world(|w| {
+                w.models.push(Some(Box::new(m)));
+                w.models.len() as i32
+            })
         }
+        Some(Err(Fault::Engine(e))) => put_error(&e),
+        // the session was finished already: nothing to say
+        Some(Err(Fault::Usage(_))) | None => -1,
     })
 }
 
 // The end of an intake: OUT is the driver's line `FORMAT MAJOR.MINOR pages=N encrypted=B bytes=N`.
 #[no_mangle]
 pub extern "C" fn emon_finish_intake(h: i32) -> i32 {
-    guard(|| {
-        let run = session(h, |s| s.run.take()).flatten();
-        let Some(run) = run else { return -1 };
-        match run.into_intake() {
-            Ok((i, _)) => {
-                put_str(&format!("{} {}.{} pages={} encrypted={} bytes={}", i.format, i.version.0, i.version.1, i.pages, i.encrypted, i.bytes));
-                0
-            }
-            Err(e) => put_error(&e),
+    guard(|| match session(h, |s| s.finish_intake()) {
+        Some(Ok(line)) => {
+            put_str(&line);
+            0
         }
+        Some(Err(Fault::Engine(e))) => put_error(&e),
+        Some(Err(Fault::Usage(_))) | None => -1,
     })
 }
 
@@ -708,7 +450,7 @@ pub extern "C" fn emon_model_json(h: i32, pretty: u32) -> i32 {
 #[no_mangle]
 pub unsafe extern "C" fn emon_model_html(h: i32, opts_ptr: u32, opts_len: u32) -> i32 {
     guard(|| {
-        let o = match parse_html(text(opts_ptr, opts_len)) {
+        let o = match shared::parse_html(text(opts_ptr, opts_len)) {
             Ok(o) => o,
             Err(m) => {
                 put_str(&format!("usage\n{}", m));

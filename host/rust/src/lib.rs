@@ -23,6 +23,8 @@ pub mod pdfium;
 pub mod plan;
 pub mod port;
 pub mod render;
+// the step session both bindings share (D481): the inverted API's state machine over `engine::Run`, so `wasm.rs` and `capi.rs` are only ABI
+pub mod session;
 pub mod source;
 // the browser's binding (P9.3): a C ABI over the engine's `Run` for the JS SDK (`host/js/`); assembled in by
 // `kin/scripts/emon-wasm-build` from `host/wasm/src/wasm.rs`, which the native crate never has
