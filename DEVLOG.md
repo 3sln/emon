@@ -1384,8 +1384,9 @@ analysis beyond "top-to-bottom lines on a single column".
   more files, whose `/P` is written unsigned (4294965956), found the lexer's saturating
   integers: an int object now keeps its value modulo 2^32 too (`pl-int-wrapped`).
   **Gates**: `bb unit` 192 laws on every arm; `bb unit red` fails on every arm.
-- [ ] P3.3 — Remaining non-image filters: `LZWDecode` (early change),
+- [x] P3.3 — Remaining non-image filters: `LZWDecode` (early change),
   `RunLengthDecode`, TIFF predictor 2; `Crypt` filter identity.
+  *Done*: pulled forward into P3.1 and decided in D064 (`kin/pdffilter.kin`: LZW with `/EarlyChange`, RunLength, TIFF predictor 2 at 8 and 16 bits, `Crypt` as the identity; laws in `kin/pdffiltertest.kin`, vectors in `kin/scripts/lzw-vectors`); LZW speed D421-D425 (P10.3a).
 - [x] P3.4 — Fonts, the long tail: predefined CJK CMaps (as `defdata`),
   CID orderings → Unicode (Adobe-Japan1/GB1/CNS1/Korea1 tables), embedded font
   program glyph names (emon's own `cff`, `cmap`, a Type 1 eexec reader, TrueType
@@ -1548,9 +1549,10 @@ analysis beyond "top-to-bottom lines on a single column".
   8,000**. **Fixtures**: label ranges of every style, an odd tree, outlines with named
   destinations, circular outlines, UTF-16/PDFDoc/UTF-8 metadata plain and encrypted by
   AES-256, AES-128 and RC4-128.
-- [ ] P3.10 — Text-layer oracle (SPEC §14.5): per-character comparison
+- [x] P3.10 — Text-layer oracle (SPEC §14.5): per-character comparison
   against a pinned reference extractor on a born-digital corpus; committed
   expectations.
+  *Done* (P1.7, D105; figures re-run for P1.12, D127): `tools/oracle/content-corpus.py` compares emon's glyph stream character by character with pdfminer.six (pinned `==20260107` in `tools/oracle/requirements-baselines.txt`) on the real born-digital sample (99.599 per cent of 2,009,346 characters matched, 100.000 per cent of the glyphs emon is sure of, geometry 99.86 per cent within 0.05 pt); the expectations are committed as `test/content/real.txt` (120 pages whose glyph streams pdfminer agreed with, ratcheted by `kin/pdfcontenttest.kin`), with `test/content/synth.txt` and `kin/scripts/content-check` for the synthetic set. The oracle is offline, as SPEC 14.5 says.
 - [x] **P3.11 — Canonical PNG writer, DEFLATE compressor, and the `Buf` port**
   (D117, SPEC §10.11). No dependency: may be taken at any time.
   **DONE (D123, D124).** `Buf` is in all four host trees and `bb hosts` agrees on its
@@ -1903,8 +1905,11 @@ analysis beyond "top-to-bottom lines on a single column".
   GoToR/Launch links, tagged `/Link` elements.
 - [ ] P4.8 — Locale: keyword tables (start with en, de, fr, es, pt, it, nl,
   zh, ja), dehyphenation with emon's own Liang `hyphen` (D021, D029).
+  **DONE IN PART.** *Built*: the locale tag reaches kin (`Options::locale`, `settings.locale`, `sc-lang` maps it to the OCR language, D185's `lg-*` language code); one-letter-word tables for en, de, fr, es, pt, it, nl used by the initials' join (D185, `kin/initial.kin`); a flat multi-language caption keyword table `nt-kw` (D233: `Table Figure ... Abbildung Tabelle Diagramm ...`) standing in for the locale tables. *Without a locale the engine keeps the printed hyphen* (D138, D029).
+  **Left**: (1) real per-locale keyword tables (captions, notes, table words, `Total`-style footers) for en, de, fr, es, pt, it, nl, zh, ja, replacing `nt-kw` (named in `kin/notes.kin`'s head as "the proper locale tables replace it", D233; `kin/heading.kin` has none by D168); only enabled by an explicit hint, never by `/Lang` alone (D021); (2) dehyphenation with a Liang pattern engine and per-language pattern data: `pa-join` still never dehyphenates, with or without a locale (D112, D138; SPEC 3.6's with-a-locale half is unbuilt; `hyphen-acc` with a locale is not yet reachable); (3) the zh and ja one-letter/initial tables (D185 lists seven languages only).
 - [ ] P4.9 — Code blocks, quotes, formulas (placeholder by font/glyph
   signals), form fields into the flow.
+  **NOT STARTED** (audited at d79d0b1). The Model has `code`, `quote` and `formula` kinds (`nk-code`, `nk-quote`, `nk-formula` in `kin/model.kin`) and the serializers/`restruct` know how to carry them, but no stage writes a `code` or `formula` node and none classifies a `quote` (only `emon.sealmark` and `restruct` mention them); AcroForm `fields` are read (P3.8, D122) and are not put into the flow. The P4.1 survey already named it: the ViT paper's display equations come out as two columns (formula, equation number).
 - [x] P4.10 — Initials on the text layer (SPEC 10.9, D108, D109; new
   `kin/initial.kin`). *After P1.8 and P1.12* (it reads v2 glyph sizes,
   baselines and fonts), *before P4.2 and P4.4* (the inventory and heading
@@ -2143,8 +2148,11 @@ analysis beyond "top-to-bottom lines on a single column".
   worktree has no `corpus/` (they read it by path), none of them P5.5's; Go, Java and C# run the same generated laws (`bb check` builds them).
 - [ ] P5.5b — `form` profile (key/value grids: label cells and value cells, often ruled; SPEC 10.5), moved out of P5.5
   unchanged; reads `grl`/`gfl` like every profile. The `bank-statement` miss of D182 is its first fixture.
+  **NOT STARTED** (audited at d79d0b1): `kin/table.kin` has the ruled, partial, shaded and whitespace profiles and the struct candidate (P5.1, P5.2, P5.5) and no `form` profile; the `bank-statement` table is still found, where it is, by the shaded and whitespace profiles (D391 and D460 fixed their rows on tilted scans), not by key/value grid logic.
 - [ ] P5.6 — TEDS in `bb accuracy`; PubTabNet/FinTabNet/ICDAR scored. ICDAR 2013's adjacency F1 (`table-adj-f1`) comes
   with P6.8.
+  **DONE IN PART.** *Done*: ICDAR 2013 is scored live (66 PDFs: D182 `block-table` P 0.78 R 0.86, `table-teds-lite` 0.48, struct 0.68; not a gate) and `table-adj-f1` landed with P6.8 (D227); the TEDS stand-ins `table-teds-lite` and `table-teds-struct-lite` are gated per document.
+  **Left**: (1) real TEDS (tree edit distance over table HTML) and hierarchy TEDS: `tools/accuracy/score.clj` still lists `table.teds` among its `STUBS` and scores the cell-sequence stand-in; (2) FinTabNet-OTSL and cTDaR are imported but not scored: they are image datasets that D182 could only refuse as `unsupported-format` until P6.1, which has since landed (D187-D190), so they can now run through the raster intake and OCR; (3) PubTabNet is not imported (the corpus manifest notes it).
 
 ## Phase 6 — Raster, tracer, OCR
 
@@ -2345,10 +2353,12 @@ analysis beyond "top-to-bottom lines on a single column".
   same as P2.7's whole-page `ras-sauvola` on the same page (rust 219 vs 219) with 2r+2 integral rows instead of 70 MB, and is **the one stage
   over the SPEC 12.3 budget** (normalization 0.12 s a page on Rust): at an unloaded machine's speed it is roughly 0.1-0.15 s, so it is the
   P6.3a candidate (`bitmap-sauvola-band`, bit-identical to the kin reference). On the 130 dpi scans `nm-view` is 60-95 ms (rust), 80-100 (go).
+  **DONE IN PART** (audited at d79d0b1; the module, laws, bulk forms, bench and `bb ink` are built and wired into the page unit by P7.4, D343). **Left**: (1) the `bb ink` targets that D239 missed and nothing since has recorded as met: body-glyph ink in body layers 0.974 against 0.98, the document's own seals and stamps in colour layers 0.925 against 0.95, the pen signature in colour layers 0.931 (a 3 px stroke loses its chroma at JPEG q45); (2) deskew: D264 raised "within 0.1 degree" to 0.946 (scan-ovl) and 0.973 (scan-color) against the 95 per cent target (met since D264 on both sets), but "all within 0.3 degree" is still missed on scan-ovl (97.3 per cent, worst 0.37 degree); (3) banded Sauvola is the one stage over SPEC 12.3's 0.12 s a page on Rust under load (P6.3a's candidate, only if `bb fusion-bench` shows it over: D368 measured the whole page unit, not the stage); (4) `bb ink` is not a gate and does not read the transcripts' bitmaps (D368): no ratchet holds the layer purity or the deskew.
 - [ ] P6.3a — Raster kernels as host-accelerable whole-stage forms (D093): SIMD and GPU implementations of the P6.3 and
   P6.4 bulk forms behind the same declarations. **Not on the fusion path**: taken under P10.3 only if `bb fusion-bench`
   shows a raster stage over its SPEC 12.3 budget. Gate: every accelerated implementation bit-identical to the kin
   reference over the corpus.
+  **NOT STARTED** (audited at d79d0b1): no SIMD or GPU form exists; D093 only reserves the shape. Conditional by its own brief: nothing in D368 or D409-D411 (`bb perf`: raster and tracer bets 0.3-1.9x of native) shows a raster stage over budget except the banded Sauvola of P6.3's entry, so it stays unscheduled unless `bb fusion-bench` or a per-stage bench says otherwise.
 - [x] **P6.4 — Tracer: runs, components, contours, rules, primitives, text lines without OCR** (SPEC §8.2, §8.4.4, D198).
   **Wave 2.** Depends on P6.3 (binary and ink-mask views). Parallel with P7.1 and P7.2.
   *Brief*: a kin module `emon.trace` over a page's binary view and ink masks, writing the trace bundle.
@@ -2594,6 +2604,7 @@ analysis beyond "top-to-bottom lines on a single column".
   geometry test), one `op` row. *Done when*: `initial-image` and `initial-vector` score `initial-r` 1.0 and
   `first-word-acc` 1.0 on `pdf/` and `scan/` under `emon-replay` of their committed transcripts, and the scanned variants of
   every P2.13 initials document have no single-letter heading.
+  **NOT STARTED** (audited at d79d0b1). Its dependencies have landed (P6.4, P7.4 with `rt-plan`, D343-D350) but there is no `initial` pass kind (`kin/evidence.kin`'s `op` table ends at `op-re-rotated` 8; the brief's row 9 is not there), and P4.10 recorded the two glyph-less initials (`initial-image`, `initial-vector`) as the ones it cannot find (P4.10's entry above: "glyph-less, P6.7's").
 - [x] **P6.8 — The graphics corpus, rule truth from an oracle, and the graphics metrics** (SPEC §14.2 "Graphics",
   §14.3 "Rule and fill truth"; D227). **Wave 1**, no kin: parallel with everything. Depends on nothing new; if P6.6 has
   not merged, take only new files and rebase onto it for the shared ones (named below).
@@ -3104,6 +3115,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   upright twins (CER within 0.005); targeted requests a page median ≤ 12, OCR time ≤ 1.5× the first pass
   (`bb fusion-bench`); a replay of a kin-made-view request with one changed pixel is `transcript-miss` (law).
   *Done when*: the above in this entry; rounds never exceed 5.
+  **DONE IN PART (D343-D350).** *Built*: `kin/retarget.kin` + `kin/pageink.kin` (the ink layers and the tracer wired into the page unit, D343), `rq-ocr-view` (D344), the body-ink, line, cell and quarter-turned passes with the scan adoption rules (D344, D345, D350), born-digital runs as witnesses with rows 221 and 222 (D346), `bb retarget`, `bb retarget-record` and the transcript-miss law (D347), `--no-retarget`, `--stats`, `bb fusion-bench` (D348). *Measured*: `scan-ovl/all` CER 0.2497 -> 0.2161 (13.5 per cent), requests a page median 3, OCR time 0.58 of the first pass. **Left** (D348, D349): (1) the 10 per cent CER gain on `scan/all` and `scan-color/all` (0.0938 -> 0.0941; 0.1520 -> 0.1511): their pages hold no foreign ink, so the brief's measure is met on `scan-ovl` only; (2) `op-text-only` (3 of the brief) is built and never asked; (3) row 160 (two OCR runs of one place) is not built; (4) `op-line` and `op-cell` for born-digital pages; (5) TIFF raster-input page units; (6) the live Go driver for recording; (7) SROIE and mapo80 measures.
 
 - [ ] **P7.5 — Watermarks, backgrounds, bleed-through, ghosts: the six defences** (SPEC §9.5 "Against what is built",
   D015, D204). **Wave 4, critical path.** Depends on P7.3 and P6.4.
@@ -3152,6 +3164,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   is the OCR word's own angle (the `tlines` half needs P6.4 in the page unit) and no committed transcript has a diagonal ghost (Tesseract does not read text turned by 20 degrees), so 231/232 are
   laws only (D311); P7.0's triage rows keep defence 0 (D312); the live sets (SROIE `*.watermark.png`, mapo80 `stamp-ghost`, `emon-live` scans) were not run: the corpus is not in this worktree.
   `scan/`, `scan-color/` and `scan-ovl/` are not fused (they are OCR-only already), so nothing of P7.5 reaches them until P7.4.
+  **Left (refreshed at d79d0b1; D311, D313, D343-D348 supersede "inert until wired")**: the ink layers and the body-ink pass are wired now (P7.4: rows 221, 222 and 251 are live; on the 22 fusion documents 221 and 222 do not fire and 251 fires 8 times, D346) and `watermark-leak` is 0 on every variant (D348). Still missing: (1) bleed-through (a `light` layer with mirrored `tlines`): no row, `kin/artifact.kin` still says so; (2) defence 1 by an optional-content group's NAME (the marks carry only the object and its default state, D309); (3) defence 2's other keys (the same image XObject or component shape recurring); (4) defence 4's `tlines` half and rows 231/232: laws only, no committed transcript has a diagonal ghost (D311); (5) the live sets: SROIE `*.watermark.png`, `ghost-rate` on the scan variants and mapo80 `stamp-ghost` (0.8039 after P8.2, D418, against the first target 0.2); (6) a watermark on one page only, over the body, with no PDF mark.
 
 - [x] **P7.6 — `hidden-text` (prior OCR layers)** (SPEC §9.4's hidden row, D155, D208). **Wave 4.** Depends on P7.3.
   *Brief*: `kin/hidden.kin` and rows 300-399: `hidden-text` words (and P7.0's `occluded`-under-a-scan words) are
@@ -3223,6 +3236,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   *Departures from the brief, each a decision below*: candidates are read from the page's VECTOR paths and the glyphs' inks, not from P6.4's primitives and colour components (D314); a word is a seal's by its ink or its turn
   along the arc, and black upright text inside a ring is body text (D315); raster candidates, `scan-ovl`, mapo80's `stamp-ghost` and the P6.3/P6.4 wiring are NOT done (D316); `name` and `date` are P8.2's (as briefed).
   *Open*: the items of D316. This entry stays open until a raster seal is a candidate (P7.S fuses image pages; the tracer's wiring then has pixels to run on) and `stamp-ghost` is measured.
+  **Left (refreshed at d79d0b1)**: D316's raster half was then built by P8.2 (D412-D418: `emon.sealpx` finds raster seals and stamps on born-digital and scan pages from the tracer's primitives, with polar unwarp, name and date) and P8.3 (D426-D433: signatures and initials from strokes and from pixels, digital signatures), and the tracer is in the page unit (D343), so what remains of P7.7's own measures is: (1) `block-seal` P/R >= 0.9 on the scans (`scan-ovl`: precision 1.00, recall 0.57 by P8.2's count, 0.36-0.45 in `emon-sealpx`/`emon-sigs`; the three other gold signatures are overlays with no rule or cue, D433); (2) mapo80 `stamp-ghost` <= 0.1 (measured 0.8039, D418; faint stamps have no colour layer, so `sx-find` has no primitive to start from: a pixel-level finder is the next step); (3) SROIE `*.stamp.png` unmeasured (D316); (4) the seal stage on raster input files (`kin/engine.kin`'s arenas exist, the seal stages are not wired there, D418); (5) faint stamps, the second strip (tops inward) and the locale hint at `sm-write` (D418).
 
 - [ ] **P7.G — Graphics fusion: the tracer and OCR as witnesses of rules and fills; health per region; regions;
   where graphics meet words** (SPEC §9.9, §9.3, §9.7, §8.4.5 columns 30-31; D218, D221-D224, D228). **Wave 4.** Depends
@@ -3296,6 +3310,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   the page unit** (P7.4 wires it; D331): `test/fusion/graphics/`, `tools/fusion/record-graphics.clj`, `bb gfuse`, and every live measure of the brief (rule and fill P/R, TEDS-lite BEFORE and AFTER, `twin-gap`, the rule-ghost counts, ICDAR, the 5 ms budget).
   **Merge note for P7.4**: it fills `inks`, `rules`, `prims` (and `oblocks`) in the evidence arenas of the page units; `gf_fuse` reads them from `finish_pdf` through the argument list in both Engines and needs nothing else; the page unit's `gf-page` call that the brief says changes
   does not exist on main.
+  **Left (refreshed at d79d0b1)**: the merge note is satisfied: P7.4 put the tracer in the page unit (D343) and `gf_fuse` reads its rows; the vector-only identity and the graphics contract hold per document in `bb fusion` (D368). Still not built (D331): `test/fusion/graphics/`, `tools/fusion/record-graphics.clj`, the `bb gfuse` gate and the `emon-gfuse` predictor (none exist in `kin/scripts/` or `tools/fusion/`), and so none of the live measures of the brief: rule and fill P/R on the scans, `table-teds-lite` BEFORE and AFTER with `twin-gap`, the `mixed-*` image tables found, the rule-ghost counts, ICDAR 2013 against D182, and the 5 ms `gf-page` budget.
 
 - [ ] **P7.S — The switch: born-digital pages OCR'd under `always`; the `bb fusion` gate; the cost** (SPEC §8.3 first
   pass, §9.8, §12.3; D038, D212 (3) superseded, D200, D201, D210). **Wave 5, the end of the critical path.** Depends on
@@ -3405,6 +3420,8 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   packed big-endian, as before. (7) `RunStats`' timing (D367: a timing wrapper round the ports' fulfiller and three clocks) is optional for identity. (8) The host tests that said "a born-digital page asks nothing" now
   say it asks two renders (`record_and_replay_with_a_born_digital_page_asking_for_its_rasters`).
 
+  **Left (refreshed at d79d0b1; the switch itself, `bb fusion` and the contract are done)**: (1) SPEC 12.3's `witness` <= 0.30 of `full` is NOT MET (0.48; D364, D369): the maintainer decides whether the default flips, and cheaper witness lines or a lighter `no-text` OCR would be the work; (2) `bb ink` and `bb trace` do not read the transcripts' bitmaps and are not gates, so their targets are not ratcheted (D368); (3) pages with no text layer and no DCT scan (a Flate or CCITT page image, outlined text on its own page) are still not read: the render-as-scan unit (D212 reading a render, `pk-none` first under `always`); (4) `witness` runs no targeted pass of P7.4 on a page that does not escalate; (5) the 20 stale `emon-live` scan metrics (D369) were chased by D391, D420 and D459-D460 and are not all back. The Java and C# wiring list above is superseded by P9.1 and P9.2 (D449-D458).
+
 ## Phase 8 — Figures, seals, signatures
 
 - [x] **P8.1 — Figure classification and placeholders (SPEC §10.6, D020).** Its candidate regions are P7.G's `grg` `figure`
@@ -3430,6 +3447,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   *Measured* (D418): the born-digital raster seals and stamps are all found with their colour, name and date (precision and recall 1.00, name 2 of 2, date 2 of 2; BEFORE they were text in the body), the negatives have no node, nothing of the page's own text is lost and no seal word is in the body; the three scanned
   `scan-ovl` seal pages: precision 1.00, recall 0.57 (4 of 7 gold; the `emon-sealpx` entry: `block-seal-p` 1.0, `-r` 0.36); `stamp-ghost` on mapo80 **0.8039 -> 0.8039 (target 0.2 NOT reached; reasons below)**; live scan seals, after the merge of main (`f3dd65f`): `scan-ovl/seals` CER 0.2903 -> 0.2898, WER 0.3213 -> 0.3206, bow-f1 0.7926 -> 0.7964, bow-r 0.6815 -> 0.6879, bow-p 0.9470 -> 0.9456 (the one metric still behind, 0.0014: two misread ring words, `GRERK` for CLERK and `DFFICIAL` for OFFICIAL, that the engine was 899 and 553 per mille sure of); `scan/seals` CER 0.2232 -> 0.1310, bow-p 0.909 -> 0.900 (D418); name accuracy 1.0 on the vector seals of `emon-fusion` `pdf/seals`.
   *Why stamp-ghost is not reached*: (1) the mapo80 stamps are FAINT: over a tinted ground the tracer classes their ink as `body` or `background`, there is NO colour layer, so no ring or rectangle primitive exists to start from (`sx-find` reads the primitives of the colour layers only); (2) many labelled boxes are the page's own text (a date line, `Copy to:`); (3) the English model reads a Cyrillic ring as noise that the page's own lines still hold. A pixel-level finder that does not wait for the layers is the next step.
+  **Left** (D418; stays open): (1) the seal stages are not wired for raster input files (the ink arenas of `rs-page` and raster finishing are in `kin/engine.kin`, the stage calls are not); (2) faint stamps the ink layers do not separate: mapo80 `stamp-ghost` 0.8039 against <= 0.2, so a pixel-level finder that does not wait for the layers; (3) `scan-ovl` seal recall 0.57 (4 of 7 gold; `emon-sealpx` `block-seal-r` 0.36); (4) the second strip (tops inward), the locale hint at `sm-write`, the date of a scanned seal when the engine drops it (the refit was run at the merge: D420).
   *Not built / open*: raster input files (the ink arenas of `rs-page`/raster finishing are in `kin/engine.kin` on main now, but wiring the seal stages there is not done: left noted), faint stamps the layers do not separate (the mapo80 stamps), the second strip (tops inward), the locale hint at `sm-write`, the date of a scanned seal when the engine drops it, `bb calibration --refit` at the merge (D418).
 - [x] **P8.3 — Handwritten signatures and initials; digital signatures (from P3.8) into `seal` nodes.** Refines P7.7's signature candidates (D205).
   **DONE (D426-D433), on branch `worktree-agent-a648734f91063daab` (on the P8.2 branch `worktree-agent-ad48790c01e456141`, so on main at f3dd65f).** *Built*: `kin/sigmark.kin` (`emon.sigmark`: vector pen strokes as clusters, their cues as SHAPES (a rule they stand on, a colon token, a label under it; P7.7's English words kept as the hint),
@@ -3497,6 +3515,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   -W -H` over the same rectangle (different rasterisers: a sanity bound, not
   identity); a transcript recorded live on Rust replays byte-identical JSON, HTML
   (three modes) and asset files on Rust and Go; the logo fixture has one asset.
+  **Left (refreshed at d79d0b1; P8.1, P6.1a and P7.G regions have landed since D354 was written)**: the render half and its gates are done (D351-D355: `bb asset` section 7, `bb identity` third pass, one asset for the logo, crops within 8 of `pdftoppm`). Missing: (1) `cropped` from a PDF image's own pixels (a scanned page, a photo a figure is part of): D354 (1) waited for P6.1a's `decode-img`, which exists now (D332-D338), but `as-do-crop` is not pointed at it, so such a figure is still `rendered`; (2) figures in raster inputs: `en-figures` runs for a PDF only (`kin/engine.kin`, D380 (2)), so the raster crop is exercised by laws on a hand-made Model and the end-to-end IoU >= 0.9 fixtures (a figure pasted into a PNG and a TIFF page by ImageMagick) do not exist; (3) the tagged `Figure` source (D353); (4) the mapo80 seals through `figures` and the Chrome-made documents (inline SVG, `border-radius`, 10 degrees, text over a photo; D354 (6), the hand-made PDFs of D355 stand in).
 
 ## Phase 9 — The remaining host layers and bindings
 
@@ -3848,7 +3867,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
     a self-test plants a violation in each language and requires it to be caught.
   - Later needs, noted not built: optionally, limit-breach panics turned into a latched status, which would drop the
     nightly pin for wasm. (The OPEN `ev-emit`/`pl-emit` variant was built with S2, D381.)
-- [ ] P10.7 — OCR adapter policy into kin (D396). A spike found the request and answer policy copied into every OCR host
+- [x] P10.7 — OCR adapter policy into kin (D396). A spike found the request and answer policy copied into every OCR host
   (`tess.rs`, `tess.go`, `ocr.js`, `tesseract.js`, the wasm `build_ocr`, and Java and C# on unmerged branches), and the copies
   had drifted: Rust and Go read a request's languages from cell 9 for a kin-made view (bitmap id from `view-base`, D196) and
   cell 7 otherwise, the others always from cell 7; Rust and Go map an ISO 15924 script in a language cell to the installed models
@@ -3859,6 +3878,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   its OCR adapter now reads cells or maps names; there is nothing else to port). Decisions: D397.
   `ox-flat` is the one OCR interchange (so `build_ocr` leaves wasm.rs). A string abstraction for model names is not planned
   for now (code-point Cells and the `op-find` name table stay).
+  *Done* (D396-D397; Java and C# adopted `Ocrport` when P9.1 and P9.2 merged, D449-D458: `host/java/emon/ffi/Tess.java`, `host/csharp/Emon/Ffi/Tess.cs` and both `Ports` call it, as do Rust, Go, the wasm binding and the JS SDK).
 - [x] P10.8 — The plan machine in kin (D396; D356, D362). `emon.planloop` owns one attempt's accounting, max-rounds and
   fetch-rounds, the answered set, sorting answers by id, transcript entries, the fetch planner (one copy of plan_fetch),
   routing a request kind to a port or an `unsupported` answer, and every status and limit name as a defenum. The host keeps the
@@ -3900,7 +3920,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   and Go `panicError`'s message parse, Go's `planError` Sscanf of the rounds limit and fuzz.clj's `limit-of-panic` are deleted. **Java and C# are
   not on main: when they merge they adopt `Config`/`Parsed` for their Options (Java's still has the removed `ocrBornDigital`: that drift ends
   there), catch `Port.Breach` by type where they now parse a message, and use the `Port` of this item (already on main).**
-- [ ] P10.11 — Image input: kin validators in front of platform decoders (D396(4); D188-D190, D337, D705). For each lossless
+- [x] P10.11 — Image input: kin validators in front of platform decoders (D396(4); D188-D190, D337, D705). For each lossless
   format, kin parses the container and decides accept/refuse, dimensions, colour type, limits (pixel/byte bombs) and the D188
   reduction; the platform library (Rust `png`/`image`, Go `image/png`/`x/image`, Java ImageIO, browser) only produces pixels for
   input kin has accepted, so two libraries' leniency is never a cross-host difference. Decode in kin only where a platform falls
@@ -3921,6 +3941,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   `Pngcheck.pcCheck` / `Tiffcheck.tcCheck` / `Tiffcheck.tcExif` / `Ccitt.ccDecode` first and keeps only what their platform lacks (the
   JPEG codec, LZW/PackBits/Deflate if their library has none, the 8-bit reduction and the PNG library behind `clean`); the CCITT
   decoder needs a zeroed `Buf` of `rows * stride` bytes from the caller (D447).** `bb perf` has the row (bet `ccitt`, Group 4 against the `fax` crate, kept only in `tools/perf`'s Cargo.toml as a reference): kin is 1.06x fax on a scanned page (full inputs), 1.10x on a noise page, 1.23x on a blank one, 1.15x on the quick synthetic text page (D447).
+  *Done* (D444-D448, D489-D493; Java and C# adopted the validators and `Ccitt.ccDecode` when P9.1 and P9.2 merged, D449-D458, and keep only the JPEG codec, the PNG library behind `clean` (Java) or kin's inflate and PNG filters (C#), and the colour step). Every done-when holds. *Optional, owned and not blocking*: a JPEG header validator (D190 keeps JPEG native; it is the one `known` class of `bb fuzz`), a palette pixel outside its palette, and the TIFF decompressors and 8-bit reduction as host code (D188).
 
 ---
 
