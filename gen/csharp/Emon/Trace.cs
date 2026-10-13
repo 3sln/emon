@@ -710,8 +710,9 @@ public static class Trace {
                     rs += emon.Port.BitmapU8(gray, x, y, 0);
                     if (@fixed < 0) {
                         lab = emon.Port.BitmapU8(labels, x, y, 0);
+                        // an id over 8 names no layer: 255 is a pixel `nm-layers` left unassigned (it returns early with no seed, K = 0, and every non-paper bin still -1), and counting it as layer 8 read `inks` row `ink0` + 7, past the rows there (D1340)
                         if (lab > 8) {
-                            lab = 8;
+                            lab = 0;
                         }
                         v = emon.Port.CellsAt(s1, (c * 9) + lab);
                         emon.Port.CellsSet(s1, (c * 9) + lab, v + 1);

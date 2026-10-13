@@ -224,3 +224,36 @@ func TestALineIsReadAgainByItsCellsOnlyWhenNoTextIsLostAndTheyAreSurer(emonT *te
 	port.CellsSet(rtp, retarget.RtpCell0()+5, -1)
 	port.AssertEq(emonT, retarget.RtLineState(oruns, olines, owords, rtp, scr, 0, 0, -1, 0, 1), 0, "a cell that was not read keeps the line")
 }
+
+func TestAShareOfABigPageIsCountedIn64Bits(emonT *testing.T) {
+	// D1341: 3 000 000 painted pixels of a 2550 x 3300 page: 3 000 000 * 1000 is past 2^31, an overflow panic on Rust and a wrapped (negative) share on the others
+	port.AssertEq(emonT, retarget.RtPermille(3000000, (2550*3300)+1), 356, "a share of 8 415 001 pixels")
+	port.AssertEq(emonT, retarget.RtPermille(1, 2), 500, "and a small one is as it was")
+	port.AssertEq(emonT, retarget.RtPermille(0, 5), 0, "and none is none")
+}
+
+func TestABodyInkRunOfMoreLinesThanTheScratchHoldsIsCutNotReadPastIt(emonT *testing.T) {
+	// D1340: the per-line regions of `scr` are `sc-sel-max` (1500) cells each and the last ends the scratch; a body-ink run of 1600 lines wrote its flag for line 1500 past the end
+	var oruns *port.Cells = port.NewCells()
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var rtp *port.Cells = port.NewCells()
+	var scr *port.Cells = port.NewCells()
+	var i int32 = 0
+	scan.ScPrep(scr)
+	rttLine(olines, owords, feats, 0, 900)
+	var fr int32 = rttRun(oruns, olines, owords, 0, 0)
+	var l1 int32 = evidence.OlCount(olines)
+	var w1 int32 = evidence.OwCount(owords)
+	for i < 1600 {
+		rttLine(olines, owords, feats, i*10, 900)
+		i += 1
+	}
+	var br int32 = rttRun(oruns, olines, owords, l1, w1)
+	retarget.RtPrep(rtp)
+	port.CellsSet(rtp, retarget.RtpBrun(), br)
+	port.AssertEq(emonT, retarget.RtCap(1600), scan.ScSelMax(), "a count over the region is the region's")
+	port.AssertEq(emonT, retarget.RtCap(7), 7, "and one under it is its own")
+	port.AssertEq(emonT, retarget.RtAdopt(rtp, oruns, fr, olines, owords, scr), scan.ScSelMax(), "the selection is full, and nothing was read past the scratch")
+}

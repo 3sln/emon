@@ -843,9 +843,9 @@ public static class Tracetest {
         emon.Testport.AssertEq(emon.Port.CellsAt(idx, 2), 0, "equal keys by index");
         emon.Testport.AssertEq(emon.Port.CellsAt(idx, 3), 2, "the later one last");
     }
-    internal static int TtTraceBin(emon.Port.Bitmap bin, int dpi100, emon.Port.Cells comps, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells views, emon.Port.Cells inks) {
-        // As `tt-trace`, but as the BINARY view of a page (fixed layer -1, every component takes the majority layer of an all-zero label image).
-        emon.Port.Bitmap lab = emon.Port.BitmapNew(emon.Port.BitmapW(bin), emon.Port.BitmapH(bin), 1);
+    internal static int TtTraceLab(emon.Port.Bitmap bin, emon.Port.Bitmap lab, int dpi100, emon.Port.Cells comps, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells views, emon.Port.Cells inks) {
+        // As `tt-trace`, but as the BINARY view of a page (fixed layer -1: every component takes the majority layer of the label image `lab`, its pixels'
+        // layer ids) with ONE `inks` row.
         emon.Port.Cells rn = emon.Port.NewCells();
         emon.Port.Cells ri = emon.Port.NewCells();
         emon.Port.Cells cs = emon.Port.NewCells();
@@ -863,6 +863,10 @@ public static class Tracetest {
         Evidence.IkNew(inks, 0, 0);
         emon.Port.CellsSet(inks, 2, 8421504);
         return Trace.TrTrace(views, inks, 0, 0, -1, 0, bin, bin, lab, comps, rules, prims, tlines, pts, refs, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6);
+    }
+    internal static int TtTraceBin(emon.Port.Bitmap bin, int dpi100, emon.Port.Cells comps, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells views, emon.Port.Cells inks) {
+        // As `tt-trace`, but as the BINARY view of a page (fixed layer -1, every component takes the majority layer of an all-zero label image).
+        return TtTraceLab(bin, emon.Port.BitmapNew(emon.Port.BitmapW(bin), emon.Port.BitmapH(bin), 1), dpi100, comps, rules, prims, tlines, pts, refs, views, inks);
     }
     internal static int TtGray(emon.Port.Bitmap g, int x0, int y0, int x1, int y1, int v) {
         // Gray `v` in [x0, x1) x [y0, y1).
@@ -1018,5 +1022,28 @@ public static class Tracetest {
         TtTrace(b, 7200, comps, rules, prims, tlines, pts, refs, views, inks);
         emon.Testport.AssertEq(Evidence.TlCount(tlines), 3, "one line above, two below");
         emon.Testport.AssertEq(Evidence.TlGet(tlines, 0, 12), 8, "the first of eight components");
+    }
+    [Xunit.Fact]
+    public static void TestAPixelNoLayerClaimsIsNotLayer8AndAComponentOverSuchPixelsHasNoInkRow() {
+        emon.Port.Bitmap b = emon.Port.BitmapNew(60, 40, 1);
+        emon.Port.Bitmap lab = emon.Port.BitmapNew(60, 40, 1);
+        emon.Port.Cells comps = emon.Port.NewCells();
+        emon.Port.Cells rules = emon.Port.NewCells();
+        emon.Port.Cells prims = emon.Port.NewCells();
+        emon.Port.Cells tlines = emon.Port.NewCells();
+        emon.Port.Cells pts = emon.Port.NewCells();
+        emon.Port.Cells refs = emon.Port.NewCells();
+        emon.Port.Cells views = emon.Port.NewCells();
+        emon.Port.Cells inks = emon.Port.NewCells();
+        // ink 20 x 10; the layer ids under it are 255, what `nm-layers` leaves in the assignment (-1) when it finds no seed: K = 0, and `inks` has one row
+        // that is some other raster's. The component took layer 8 for it, row 0 + 8 - 1 = 7 of `inks`, and `tr-emit-components` read past the rows (D1340).
+        TtRect(b, 10, 10, 30, 20);
+        TtGray(lab, 0, 0, 60, 40, 255);
+        emon.Testport.AssertEq(TtTraceLab(b, lab, 7200, comps, rules, prims, tlines, pts, refs, views, inks), 1, "one component");
+        emon.Testport.AssertEq(Evidence.CoGet(comps, 0, Evidence.CfInk()), -1, "and no layer: no ink row");
+        TtGray(lab, 10, 10, 30, 20, 1);
+        emon.Port.Cells comps2 = emon.Port.NewCells();
+        emon.Testport.AssertEq(TtTraceLab(b, lab, 7200, comps2, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), 1, "one component");
+        emon.Testport.AssertEq(Evidence.CoGet(comps2, 0, Evidence.CfInk()), 0, "and a pixel of layer 1 is layer 1's, row 0, still");
     }
 }

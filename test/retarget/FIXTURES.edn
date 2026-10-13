@@ -13,4 +13,10 @@
  "ovl-table-simple-ruled" {:pdf "test/corpus/synth/scan-ovl/table-simple-ruled.pdf" :gold "table-simple-ruled" :kind :scan
                           :passes ["first" "re-rotated"] :leak ["copy"] :miss [100 100]}
  "born-wm-gray-behind"   {:pdf "test/corpus/synth/pdf/wm-gray-behind.pdf" :gold "wm-gray-behind" :kind :born
-                          :passes ["first" "body-ink"] :miss [100 100]}}
+                          :passes ["first" "body-ink"] :miss [100 100]}
+ ;; D1340: ICDAR 2013 us-034 (a real table page; the PDF is kept here, 23 KB) crashed the Engine live: the tracer's `tr-measure` counted the pixels
+ ;; `nm-layers` leaves unassigned (it finds no seed: K = 0) as layer 8 and read an `inks` row that is not there. Recorded live; nothing in it is a
+ ;; body-ink pass (no `:miss`: no request of it names a kin-made view), so it holds only what the Engine must do: convert, identically on every host.
+ ;; `:gold :none`: no body text to score.
+ "born-icdar-us-034"     {:pdf "test/retarget/pdf/icdar-us-034.pdf" :gold :none :kind :born
+                          :passes ["first"]}}

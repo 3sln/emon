@@ -213,4 +213,37 @@ public static class Retargettest {
         emon.Port.CellsSet(rtp, Retarget.RtpCell0() + 5, -1);
         emon.Testport.AssertEq(Retarget.RtLineState(oruns, olines, owords, rtp, scr, 0, 0, -1, 0, 1), 0, "a cell that was not read keeps the line");
     }
+    [Xunit.Fact]
+    public static void TestAShareOfABigPageIsCountedIn64Bits() {
+        // D1341: 3 000 000 painted pixels of a 2550 x 3300 page: 3 000 000 * 1000 is past 2^31, an overflow panic on Rust and a wrapped (negative) share on the others
+        emon.Testport.AssertEq(Retarget.RtPermille(3000000, (2550 * 3300) + 1), 356, "a share of 8 415 001 pixels");
+        emon.Testport.AssertEq(Retarget.RtPermille(1, 2), 500, "and a small one is as it was");
+        emon.Testport.AssertEq(Retarget.RtPermille(0, 5), 0, "and none is none");
+    }
+    [Xunit.Fact]
+    public static void TestABodyInkRunOfMoreLinesThanTheScratchHoldsIsCutNotReadPastIt() {
+        // D1340: the per-line regions of `scr` are `sc-sel-max` (1500) cells each and the last ends the scratch; a body-ink run of 1600 lines wrote its flag for line 1500 past the end
+        emon.Port.Cells oruns = emon.Port.NewCells();
+        emon.Port.Cells olines = emon.Port.NewCells();
+        emon.Port.Cells owords = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells rtp = emon.Port.NewCells();
+        emon.Port.Cells scr = emon.Port.NewCells();
+        int i = 0;
+        Scan.ScPrep(scr);
+        RttLine(olines, owords, feats, 0, 900);
+        int fr = RttRun(oruns, olines, owords, 0, 0);
+        int l1 = Evidence.OlCount(olines);
+        int w1 = Evidence.OwCount(owords);
+        while (i < 1600) {
+            RttLine(olines, owords, feats, i * 10, 900);
+            i += 1;
+        }
+        int br = RttRun(oruns, olines, owords, l1, w1);
+        Retarget.RtPrep(rtp);
+        emon.Port.CellsSet(rtp, Retarget.RtpBrun(), br);
+        emon.Testport.AssertEq(Retarget.RtCap(1600), Scan.ScSelMax(), "a count over the region is the region's");
+        emon.Testport.AssertEq(Retarget.RtCap(7), 7, "and one under it is its own");
+        emon.Testport.AssertEq(Retarget.RtAdopt(rtp, oruns, fr, olines, owords, scr), Scan.ScSelMax(), "the selection is full, and nothing was read past the scratch");
+    }
 }

@@ -215,3 +215,36 @@ fn test_a_line_is_read_again_by_its_cells_only_when_no_text_is_lost_and_they_are
     crate::port::cells_set(rtp, rtp_cell0() + 5, -1);
     crate::testport::assert_eq(rt_line_state(oruns, olines, owords, rtp, scr, 0, 0, -1, 0, 1), 0, "a cell that was not read keeps the line");
 }
+#[test]
+fn test_a_share_of_a_big_page_is_counted_in_64_bits() {
+    // D1341: 3 000 000 painted pixels of a 2550 x 3300 page: 3 000 000 * 1000 is past 2^31, an overflow panic on Rust and a wrapped (negative) share on the others
+    crate::testport::assert_eq(rt_permille(3000000, (2550 * 3300) + 1), 356, "a share of 8 415 001 pixels");
+    crate::testport::assert_eq(rt_permille(1, 2), 500, "and a small one is as it was");
+    crate::testport::assert_eq(rt_permille(0, 5), 0, "and none is none");
+}
+#[test]
+fn test_a_body_ink_run_of_more_lines_than_the_scratch_holds_is_cut_not_read_past_it() {
+    // D1340: the per-line regions of `scr` are `sc-sel-max` (1500) cells each and the last ends the scratch; a body-ink run of 1600 lines wrote its flag for line 1500 past the end
+    let oruns: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rtp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut i: i32 = 0;
+    sc_prep(scr);
+    rtt_line(olines, owords, feats, 0, 900);
+    let fr: i32 = rtt_run(oruns, olines, owords, 0, 0);
+    let l1: i32 = ol_count(olines);
+    let w1: i32 = ow_count(owords);
+    while i < 1600 {
+        rtt_line(olines, owords, feats, i * 10, 900);
+        i += 1;
+    }
+    let br: i32 = rtt_run(oruns, olines, owords, l1, w1);
+    rt_prep(rtp);
+    crate::port::cells_set(rtp, rtp_brun(), br);
+    crate::testport::assert_eq(rt_cap(1600), sc_sel_max(), "a count over the region is the region's");
+    crate::testport::assert_eq(rt_cap(7), 7, "and one under it is its own");
+    crate::testport::assert_eq(rt_adopt(rtp, oruns, fr, olines, owords, scr), sc_sel_max(), "the selection is full, and nothing was read past the scratch");
+}
