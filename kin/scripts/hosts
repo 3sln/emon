@@ -10,7 +10,200 @@
 ;; next to the code fixes the drift; this fixes the other half, which is a
 ;; function ported to three runtimes with the fourth's annotation never
 ;; written.
-(require '[kin.host] '[kin.project :as kp] '[emon.targets :as t] '[emon.project :as p])
+(require '[kin.host] '[kin.project :as kp] '[emon.targets :as t] '[emon.project :as p]
+         '[babashka.fs :as fs] '[clojure.string :as str])
+
+;; ============================================================================================================================
+;; THE STAGE CALLS STAY IN KIN (DEVLOG P10.6 S5, D362, D396, D1161)
+;;
+;; The hosts are ports and a driver. Kin sequences every stage (the document pass, the page units, the document unit, the asset
+;; and figures units: `emon.engine`), so a host file that names a GENERATED module -- Rust `crate::emon::pdfdoc`, a Go import
+;; `"emon/pdfdoc"`, Java `emon.Pdfdoc`, C# `emon.Pdfdoc` -- is either a file of one of four kinds, or a stage call that crept
+;; back out of kin:
+;;
+;;   :driver   the loop and the units it drives: the one generated entry (`emon.engine`), the contexts it takes (`emon.enctx`) and the
+;;             names of a document's status (`emon.planloop`); never a text-layer stage
+;;   :machine  the plan/fulfil machine and its transcript (`emon.planloop`, `emon.plan`, `emon.transcript`), the await driver's half
+;;   :port     a port, its native fulfilment and the FFI: the codecs and OCR policy kin keeps for them (`emon.ccitt`, `emon.ocrport`, ...)
+;;   :api      the public API: the Model's accessors, the options' parse, the serialisers
+;;   :test     a host's own tests and drivers
+;;
+;; Each row below says which generated modules ONE file may name. A file not in the table names none; a file naming a module its
+;; row does not grant, or a row granting a module its file no longer names, FAILS: the table is the tree, frozen. To change it a
+;; stage call has to be argued for in the DEVLOG, not slipped in.
+;; ============================================================================================================================
+
+(def stage-allow
+  (mapv (fn [[role file mods]] {:role role :file file :mods (set (remove str/blank? (str/split mods #"\s+")))})
+        [[:driver  "host/rust/src/engine.rs"            "config enctx engine html json model plan planloop"]
+         [:machine "host/rust/src/plan.rs"              "plan planctx planloop png transcript transcriptctx"]
+         [:driver  "host/rust/src/session.rs"           "ocr ocrport plan"]
+         [:port    "host/rust/src/imgdec.rs"            "ccitt imgcheck pngcheck tiffcheck"]
+         [:port    "host/rust/src/pdfimg.rs"            "ccitt"]
+         [:port    "host/rust/src/port.rs"              "limits"]
+         [:port    "host/rust/src/render.rs"            "plan"]
+         [:port    "host/rust/src/tess.rs"              "ocr ocrport plan"]
+         [:test    "host/rust/tests/engine.rs"          "ocr plan"]
+         [:driver  "host/go/engine.go"                  "config enctx engine html model plan planloop"]
+         [:machine "host/go/planrun/planrun.go"         "plan planctx planloop"]
+         [:machine "host/go/planrun/transcript.go"      "planloop transcript transcriptctx"]
+         [:port    "host/go/imgdec.go"                  "ccitt imgcheck pngcheck tiffcheck"]
+         [:port    "host/go/pdfimg.go"                  "ccitt"]
+         [:port    "host/go/pngenc/pngenc.go"           "png"]
+         [:port    "host/go/port/port.go"               "limits"]
+         [:port    "host/go/tess.go"                    "ocr ocrport plan"]
+         [:api     "host/go/model.go"                   "html json model"]
+         [:test    "host/go/engine_test.go"             "ocr plan"]
+         [:driver  "host/java/emon/api/Engine.java"     "enctx model plan planloop"]
+         [:driver  "host/java/emon/api/Units.java"      "enctx engine planloop"]
+         [:machine "host/java/emon/Planrun.java"        "plan planctx planloop png transcript transcriptctx"]
+         [:port    "host/java/emon/api/ChunkCache.java" "planloop"]
+         [:port    "host/java/emon/api/ImgDec.java"     "ccitt imgcheck pngcheck tiffcheck"]
+         [:port    "host/java/emon/api/PdfImg.java"     "plan"]
+         [:port    "host/java/emon/api/Ports.java"      "plan planloop"]
+         [:port    "host/java/emon/Port.java"           "limits"]
+         [:port    "host/java/emon/RenderPort.java"     "plan"]
+         [:port    "host/java/emon/ffi/Tess.java"       "ocr ocrport plan"]
+         [:api     "host/java/emon/api/Model.java"      "enctx html json model"]
+         [:api     "host/java/emon/api/Node.java"       "enctx model"]
+         [:api     "host/java/emon/api/Options.java"    "config enctx html"]
+         [:test    "test/driver/java/EngineTest.java"   "ocr plan"]
+         [:driver  "host/csharp/Emon/Api/Engine.cs"     "enctx model plan planloop"]
+         [:driver  "host/csharp/Emon/Api/Units.cs"      "enctx engine planloop"]
+         [:machine "host/csharp/Emon/Planrun.cs"        "plan planctx planloop png transcript transcriptctx"]
+         [:port    "host/csharp/Emon/Api/ChunkCache.cs" "planloop"]
+         [:port    "host/csharp/Emon/Api/ImgDec.cs"     "ccitt imgcheck inflate pdffilter pngcheck tiffcheck"]
+         [:port    "host/csharp/Emon/Api/PdfImg.cs"     "plan"]
+         [:port    "host/csharp/Emon/Api/Ports.cs"      "plan planloop"]
+         [:port    "host/csharp/Emon/Port.cs"           "limits"]
+         [:port    "host/csharp/Emon/RenderPort.cs"     "plan"]
+         [:port    "host/csharp/Emon/Ffi/Tess.cs"       "ocr ocrport plan"]
+         [:api     "host/csharp/Emon/Api/Asset.cs"      "enctx model"]
+         [:api     "host/csharp/Emon/Api/Model.cs"      "enctx html json model"]
+         [:api     "host/csharp/Emon/Api/Node.cs"       "enctx model"]
+         [:api     "host/csharp/Emon/Api/Options.cs"    "config enctx html"]
+         [:test    "test/driver/csharp/EngineTest.cs"   "ocr plan"]]))
+
+(defn gen-modules
+  "Every module kin generates: `plan`, `pdfdoc`, `engine`, ... (the Rust file names of gen/rust/emon)."
+  []
+  (set (map #(fs/strip-ext (fs/file-name %)) (fs/list-dir "gen/rust/emon"))))
+
+(defn- cap [m] (str (str/upper-case (subs m 0 1)) (subs m 1)))
+
+(defn- blank-comments
+  "Text with block comments and line comments removed, and (when `strings?`) string contents too: a mention in prose is not a call."
+  [text strings?]
+  (->> (str/split-lines (str/replace text #"(?s)/\*.*?\*/" ""))
+       (map #(cond-> % strings? (str/replace #"\"(\\.|[^\"\\])*\"" "\"\"") true (str/replace #"//.*$" "")))
+       (str/join "\n")))
+
+(defn stage-refs
+  "The generated modules a host file names, as a set of lower-case module names. `path` picks the language and where the file stands (Rust inside
+   the crate says `crate::emon::pdfdoc`; Rust outside it says `emon::emon::pdfdoc`, `emon::plan` there is the HOST's own module; a Java or C# file
+   of the base package `emon` may name a generated class bare, any other only qualified)."
+  [mods path text]
+  (let [classes (into {} (map (fn [m] [(cap m) m]) mods))
+        in-crate? (some #(str/starts-with? path %) ["host/rust/src/" "host/wasm/" "host/c/src/"])]
+    (set
+     (cond
+       (str/ends-with? path ".rs")
+       (let [t (blank-comments text true)
+             pre (if in-crate? "\\bemon::" "\\bemon::emon::")
+             direct (map second (re-seq (re-pattern (str pre "([a-z0-9_]+)")) t))
+             listed (mapcat (fn [[_ l]] (map #(first (str/split (str/trim %) #"::")) (str/split l #",")))
+                            (re-seq (re-pattern (str pre "\\{([^}]*)\\}")) t))]
+         (filter mods (concat direct listed)))
+
+       (str/ends-with? path ".go")
+       (->> (re-seq #"\"emon/([a-z0-9]+)\"" (blank-comments text false)) (map second) (filter mods))
+
+       (or (str/ends-with? path ".java") (str/ends-with? path ".cs"))
+       (let [t (blank-comments text true)
+             base? (re-find #"(?m)^(package|namespace) emon\s*;" t)
+             q (map second (re-seq #"\bemon\.([A-Z][A-Za-z0-9]*)\b" t))
+             b (when base? (map second (re-seq #"(?<![\w.])([A-Z][A-Za-z0-9]*)\s*\." t)))]
+         (keep classes (concat q b)))))))
+
+(defn host-sources
+  "Path -> text of every host source file the rule covers: the four host trees, the wasm, C and pod bindings, and the drivers and tests of test/driver."
+  []
+  (into {}
+        (for [root ["host" "test/driver"]
+              f (fs/glob root "**/*.{rs,go,java,cs}")
+              :let [p (str f)]
+              :when (not (re-find #"/(node_modules|target)/" p))]
+          [p (slurp p)])))
+
+(defn stage-violations
+  "What is wrong with the files' naming of generated modules, as strings (empty when the tree holds the table)."
+  [mods allow files]
+  (let [rows (into {} (map (juxt :file identity) allow))
+        seen (for [[p text] (sort-by key files)
+                   :let [refs (stage-refs mods p text)]
+                   :when (or (seq refs) (contains? rows p))]
+               [p refs])]
+    (concat
+     (for [[p refs] seen :let [row (rows p)] :when (and (nil? row) (seq refs))]
+       (str p " names generated module(s) " (str/join ", " (sort refs))
+            " but is no driver, port, fulfilment or API file of the allowlist (kin/scripts/hosts): a stage call belongs in kin (emon.engine)"))
+     (for [[p refs] seen :let [row (rows p)] :when row
+           :let [extra (remove (:mods row) refs)] :when (seq extra)]
+       (str p " (" (name (:role row)) ") names " (str/join ", " (sort extra)) ", which its row does not grant (" (str/join ", " (sort (:mods row))) ")"))
+     (for [[p refs] seen :let [row (rows p)] :when row
+           :let [stale (remove (set refs) (:mods row))] :when (seq stale)]
+       (str p " (" (name (:role row)) ") no longer names " (str/join ", " (sort stale)) ": tighten its row"))
+     (for [row allow :when (not (contains? files (:file row)))]
+       (str (:file row) " is in the allowlist but is not a host file")))))
+
+(defn stage-check! []
+  (let [mods (gen-modules)
+        files (host-sources)
+        bad (stage-violations mods stage-allow files)]
+    (if (seq bad)
+      (do (println "  FAIL a host file names a generated stage module it should not:")
+          (doseq [b bad] (println "   " b))
+          (System/exit 1))
+      (println (str "  ok   no host file calls a generated stage outside the allowlist: " (count stage-allow) " files name generated modules ("
+                    (str/join ", " (map (fn [[r n]] (str n " " (name r))) (sort-by (comp name key) (frequencies (map :role stage-allow)))))
+                    "); the document pass, the page units, the document unit and the asset units are each one call of emon.engine")))
+    ;; THE SELF-TEST: the check must be able to fail. Plant a call in a file of each language, outside the allowlist and inside a driver's
+    ;; row, in a comment and a string (which must NOT count), and in a file the table does not know; every plant must be caught or passed
+    ;; over exactly as claimed, or the gate itself is broken.
+    (let [plant (fn [p add] (update files p str "\n" add))
+          caught? (fn [what fs* needle]
+                    (let [v (stage-violations mods stage-allow fs*)]
+                      (if (some #(str/includes? % needle) v)
+                        true
+                        (do (println (str "  FAIL the stage check missed a planted violation: " what)) (System/exit 1)))))
+          clean? (fn [what fs*]
+                   (if (empty? (stage-violations mods stage-allow fs*))
+                     true
+                     (do (println (str "  FAIL the stage check flagged what is no call: " what)) (System/exit 1))))]
+      (caught? "Rust: a text-layer stage in a port" (plant "host/rust/src/tess.rs" "fn f() { crate::emon::pdfdoc::pd_open_pw(); }") "tess.rs")
+      (caught? "Rust: a text-layer stage in the driver" (plant "host/rust/src/engine.rs" "use crate::emon::pdfcontent::*;") "pdfcontent")
+      (caught? "Rust: a braced import of one" (plant "host/rust/src/engine.rs" "use crate::emon::{asset, model};") "asset")
+      (caught? "Go: an import in the API" (plant "host/go/model.go" "import \"emon/pdfdoc\"") "model.go")
+      (caught? "Go: an import in the driver" (plant "host/go/engine.go" "import \"emon/pageunit\"") "pageunit")
+      (caught? "Java: a qualified call in the API" (plant "host/java/emon/api/Model.java" "int x = emon.Pdfdoc.pdPgCount(null);") "Model.java")
+      (caught? "Java: a call in the driver" (plant "host/java/emon/api/Units.java" "emon.Pdfcontent.pcDocument();") "pdfcontent")
+      (caught? "Java: a bare call in the base package" (plant "host/java/emon/Port.java" "int y = Pdfx.pxIndexBuild();") "pdfx")
+      (caught? "C#: a qualified call in the API" (plant "host/csharp/Emon/Api/Node.cs" "emon.Pdfdoc.PdPgCount(null);") "Node.cs")
+      (caught? "C#: a call in the driver" (plant "host/csharp/Emon/Api/Units.cs" "emon.Pageunit.PuRunPdf();") "pageunit")
+      (caught? "C#: a bare call in the base package" (plant "host/csharp/Emon/Port.cs" "var z = Gfuse.GfDoc();") "gfuse")
+      (caught? "a new file naming a stage" (assoc files "host/rust/src/stages.rs" "use crate::emon::tlhealth::th_run;") "stages.rs")
+      (caught? "a row granting what is no longer named" (dissoc files "host/rust/src/pdfimg.rs") "pdfimg.rs")
+      (clean? "a mention in a Rust comment and a string"
+              (plant "host/rust/src/tess.rs" "// crate::emon::pdfdoc::pd_open_pw, and \"crate::emon::pdfx\" in a string"))
+      (clean? "a mention in a Go comment" (plant "host/go/model.go" "// import \"emon/pdfdoc\""))
+      (clean? "a mention in Java and C# comments and strings"
+              (-> (plant "host/java/emon/api/Model.java" "// emon.Pdfdoc.pdPgCount, \"emon.Pdfx\"")
+                  (update "host/csharp/Emon/Api/Node.cs" str "\n/* emon.Pdfdoc.PdPgCount */ var s = \"emon.Pdfx\";")))
+      (clean? "the host's own `plan` module, outside the crate"
+              (plant "host/rust/tests/engine.rs" "use emon::plan::Request;"))
+      (println "  ok   the stage check fails on a stage call planted in each language (a port, an API file, a driver row, a new file, a stale row) and passes over a comment, a string and the host's own `plan`"))))
+
+(stage-check!)
 
 (let [scans @t/scans
       bad (kin.host/disagreements scans)]

@@ -138,6 +138,7 @@ type Cfg struct {
 	Lims    *port.Cells
 	Prod    *port.Cells
 	Msg     *strings.Builder
+	Nort    int32
 }
 
 func NewCfg() *Cfg {
@@ -163,6 +164,7 @@ func NewCfg() *Cfg {
 		Lims:    port.NewCells(),
 		Prod:    port.NewCells(),
 		Msg:     &strings.Builder{},
+		Nort:    0,
 	}
 }
 func (d *Cfg) Clone() *Cfg {
@@ -188,6 +190,7 @@ func (d *Cfg) Clone() *Cfg {
 	port.CellsCopyInto(c.Lims, d.Lims)
 	port.CellsCopyInto(c.Prod, d.Prod)
 	c.Msg.WriteString(d.Msg.String())
+	c.Nort = d.Nort
 	return c
 }
 
@@ -259,6 +262,14 @@ type Doc struct {
 	Hassnap  int32
 	Fcode    int32
 	Fnode    int32
+	Pscr     *port.Cells
+	Kind     int32
+	Ifmt     int32
+	Ipages   int32
+	Imajor   int32
+	Iminor   int32
+	Ienc     int32
+	Rfrom    int32
 }
 
 func NewDoc() *Doc {
@@ -330,6 +341,14 @@ func NewDoc() *Doc {
 		Hassnap:  0,
 		Fcode:    0,
 		Fnode:    0,
+		Pscr:     port.NewCells(),
+		Kind:     0,
+		Ifmt:     0,
+		Ipages:   0,
+		Imajor:   0,
+		Iminor:   0,
+		Ienc:     0,
+		Rfrom:    0,
 	}
 }
 func (d *Doc) Clone() *Doc {
@@ -401,6 +420,212 @@ func (d *Doc) Clone() *Doc {
 	c.Hassnap = d.Hassnap
 	c.Fcode = d.Fcode
 	c.Fnode = d.Fnode
+	port.CellsCopyInto(c.Pscr, d.Pscr)
+	c.Kind = d.Kind
+	c.Ifmt = d.Ifmt
+	c.Ipages = d.Ipages
+	c.Imajor = d.Imajor
+	c.Iminor = d.Iminor
+	c.Ienc = d.Ienc
+	c.Rfrom = d.Rfrom
+	return c
+}
+
+type Pass struct {
+	Ar    *port.Cells
+	Dc    *port.Cells
+	Ca    *port.Cells
+	Cb    *port.Cells
+	St    *port.Cells
+	Cx    *port.Cells
+	Ox    *port.Cells
+	Cs    *port.Cells
+	Xo    *port.Cells
+	F0    *port.Cells
+	F1    *port.Cells
+	F2    *port.Cells
+	F3    *port.Cells
+	Gx    *port.Cells
+	Tle   *port.Cells
+	Tlf   *port.Cells
+	Thsc  *port.Cells
+	Sp    *port.Cells
+	Rs1   *port.Cells
+	Rs2   *port.Cells
+	Gcand *port.Cells
+	Gmeas *port.Cells
+	Fo    *port.Cells
+	Fr    *port.Cells
+	Qidx  *port.Cells
+	Qw    *port.Cells
+	Qseen *port.Cells
+	Xm    *port.Cells
+	Nd    *port.Cells
+	Nt    *port.Cells
+	Sk    *port.Cells
+	So    *port.Cells
+	Wk    *port.Cells
+	Sa    *port.Cells
+	Ha    *port.Cells
+	Hb    *port.Cells
+	Hh    *port.Cells
+	Vfs   *port.Cells
+	Vfm   *port.Cells
+	Vaq   *port.Cells
+	Vfd   *port.Cells
+	Vsg   *port.Cells
+	Ax    *port.Cells
+	Aout  *port.Cells
+	Arec  *port.Cells
+	Amrec *port.Cells
+	Asmp  *port.Cells
+	Amsmp *port.Cells
+	Adata *port.Cells
+	Arows *port.Cells
+	Atmp  *port.Cells
+	Aws   *port.Cells
+	Az    *port.Buf
+	Glob  *port.Cells
+	Words *port.Cells
+	Hs    *port.Cells
+	Fz0   *port.Cells
+	Fz1   *port.Cells
+	Fz2   *port.Cells
+	Fz3   *port.Cells
+	Fz4   *port.Cells
+	Zb    *port.Buf
+}
+
+func NewPass() *Pass {
+	return &Pass{
+		Ar:    port.NewCells(),
+		Dc:    port.NewCells(),
+		Ca:    port.NewCells(),
+		Cb:    port.NewCells(),
+		St:    port.NewCells(),
+		Cx:    port.NewCells(),
+		Ox:    port.NewCells(),
+		Cs:    port.NewCells(),
+		Xo:    port.NewCells(),
+		F0:    port.NewCells(),
+		F1:    port.NewCells(),
+		F2:    port.NewCells(),
+		F3:    port.NewCells(),
+		Gx:    port.NewCells(),
+		Tle:   port.NewCells(),
+		Tlf:   port.NewCells(),
+		Thsc:  port.NewCells(),
+		Sp:    port.NewCells(),
+		Rs1:   port.NewCells(),
+		Rs2:   port.NewCells(),
+		Gcand: port.NewCells(),
+		Gmeas: port.NewCells(),
+		Fo:    port.NewCells(),
+		Fr:    port.NewCells(),
+		Qidx:  port.NewCells(),
+		Qw:    port.NewCells(),
+		Qseen: port.NewCells(),
+		Xm:    port.NewCells(),
+		Nd:    port.NewCells(),
+		Nt:    port.NewCells(),
+		Sk:    port.NewCells(),
+		So:    port.NewCells(),
+		Wk:    port.NewCells(),
+		Sa:    port.NewCells(),
+		Ha:    port.NewCells(),
+		Hb:    port.NewCells(),
+		Hh:    port.NewCells(),
+		Vfs:   port.NewCells(),
+		Vfm:   port.NewCells(),
+		Vaq:   port.NewCells(),
+		Vfd:   port.NewCells(),
+		Vsg:   port.NewCells(),
+		Ax:    port.NewCells(),
+		Aout:  port.NewCells(),
+		Arec:  port.NewCells(),
+		Amrec: port.NewCells(),
+		Asmp:  port.NewCells(),
+		Amsmp: port.NewCells(),
+		Adata: port.NewCells(),
+		Arows: port.NewCells(),
+		Atmp:  port.NewCells(),
+		Aws:   port.NewCells(),
+		Az:    port.NewBuf(),
+		Glob:  port.NewCells(),
+		Words: port.NewCells(),
+		Hs:    port.NewCells(),
+		Fz0:   port.NewCells(),
+		Fz1:   port.NewCells(),
+		Fz2:   port.NewCells(),
+		Fz3:   port.NewCells(),
+		Fz4:   port.NewCells(),
+		Zb:    port.NewBuf(),
+	}
+}
+func (d *Pass) Clone() *Pass {
+	c := NewPass()
+	port.CellsCopyInto(c.Ar, d.Ar)
+	port.CellsCopyInto(c.Dc, d.Dc)
+	port.CellsCopyInto(c.Ca, d.Ca)
+	port.CellsCopyInto(c.Cb, d.Cb)
+	port.CellsCopyInto(c.St, d.St)
+	port.CellsCopyInto(c.Cx, d.Cx)
+	port.CellsCopyInto(c.Ox, d.Ox)
+	port.CellsCopyInto(c.Cs, d.Cs)
+	port.CellsCopyInto(c.Xo, d.Xo)
+	port.CellsCopyInto(c.F0, d.F0)
+	port.CellsCopyInto(c.F1, d.F1)
+	port.CellsCopyInto(c.F2, d.F2)
+	port.CellsCopyInto(c.F3, d.F3)
+	port.CellsCopyInto(c.Gx, d.Gx)
+	port.CellsCopyInto(c.Tle, d.Tle)
+	port.CellsCopyInto(c.Tlf, d.Tlf)
+	port.CellsCopyInto(c.Thsc, d.Thsc)
+	port.CellsCopyInto(c.Sp, d.Sp)
+	port.CellsCopyInto(c.Rs1, d.Rs1)
+	port.CellsCopyInto(c.Rs2, d.Rs2)
+	port.CellsCopyInto(c.Gcand, d.Gcand)
+	port.CellsCopyInto(c.Gmeas, d.Gmeas)
+	port.CellsCopyInto(c.Fo, d.Fo)
+	port.CellsCopyInto(c.Fr, d.Fr)
+	port.CellsCopyInto(c.Qidx, d.Qidx)
+	port.CellsCopyInto(c.Qw, d.Qw)
+	port.CellsCopyInto(c.Qseen, d.Qseen)
+	port.CellsCopyInto(c.Xm, d.Xm)
+	port.CellsCopyInto(c.Nd, d.Nd)
+	port.CellsCopyInto(c.Nt, d.Nt)
+	port.CellsCopyInto(c.Sk, d.Sk)
+	port.CellsCopyInto(c.So, d.So)
+	port.CellsCopyInto(c.Wk, d.Wk)
+	port.CellsCopyInto(c.Sa, d.Sa)
+	port.CellsCopyInto(c.Ha, d.Ha)
+	port.CellsCopyInto(c.Hb, d.Hb)
+	port.CellsCopyInto(c.Hh, d.Hh)
+	port.CellsCopyInto(c.Vfs, d.Vfs)
+	port.CellsCopyInto(c.Vfm, d.Vfm)
+	port.CellsCopyInto(c.Vaq, d.Vaq)
+	port.CellsCopyInto(c.Vfd, d.Vfd)
+	port.CellsCopyInto(c.Vsg, d.Vsg)
+	port.CellsCopyInto(c.Ax, d.Ax)
+	port.CellsCopyInto(c.Aout, d.Aout)
+	port.CellsCopyInto(c.Arec, d.Arec)
+	port.CellsCopyInto(c.Amrec, d.Amrec)
+	port.CellsCopyInto(c.Asmp, d.Asmp)
+	port.CellsCopyInto(c.Amsmp, d.Amsmp)
+	port.CellsCopyInto(c.Adata, d.Adata)
+	port.CellsCopyInto(c.Arows, d.Arows)
+	port.CellsCopyInto(c.Atmp, d.Atmp)
+	port.CellsCopyInto(c.Aws, d.Aws)
+	port.BufCopyInto(c.Az, d.Az)
+	port.CellsCopyInto(c.Glob, d.Glob)
+	port.CellsCopyInto(c.Words, d.Words)
+	port.CellsCopyInto(c.Hs, d.Hs)
+	port.CellsCopyInto(c.Fz0, d.Fz0)
+	port.CellsCopyInto(c.Fz1, d.Fz1)
+	port.CellsCopyInto(c.Fz2, d.Fz2)
+	port.CellsCopyInto(c.Fz3, d.Fz3)
+	port.CellsCopyInto(c.Fz4, d.Fz4)
+	port.BufCopyInto(c.Zb, d.Zb)
 	return c
 }
 

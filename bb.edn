@@ -66,7 +66,7 @@
         :task (apply shell "bb" "tools/perf/perf.clj" *command-line-args*)}
   drift {:doc "Is the committed generated code what the sources say?"
          :task (shell "kin/scripts/drift")}
-  hosts {:doc "Do the four host trees agree, and do the call sites match?"
+  hosts {:doc "Do the four host trees agree, do the call sites match, and does no host file name a generated stage module outside the driver, port, fulfilment and API allowlist (P10.6 S5, D1161; self-tested by planting a violation in each language)?"
          :task (shell "kin/scripts/hosts")}
   accuracy {:doc "Score predictions against the synthetic gold and ratchet test/scoreboard.edn (a gate since P1.10, D145).  bb accuracy [--predictor emon|oracle|degraded|fixtures] [--update] [--only ID]"
             :task (apply shell "bb" "tools/accuracy/accuracy.clj" *command-line-args*)}

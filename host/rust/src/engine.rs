@@ -41,24 +41,11 @@
 //
 // NOTHING IN THIS FILE NAMES A FILESYSTEM (D058): inputs are `source::ByteSource`s.
 
-use crate::emon::enctx::{Arenas, Cfg, Doc, EvArenas, Scratch};
-use crate::emon::engine::{en_finish_pdf, en_finish_raster, en_seal};
+use crate::emon::enctx::{Arenas, Cfg, Doc, EvArenas, Pass, Scratch};
+use crate::emon::engine::{at_failed, at_intake, at_internal, at_miss, at_requests, en_asset_figures, en_asset_unit, en_attempt, en_finish, en_fmt_jpeg, en_fmt_pdf, en_fmt_png, en_page, en_seal};
 use crate::emon::html::*;
 use crate::emon::json::*;
-use crate::emon::inline::il_fonts;
-use crate::emon::asset::*;
-use crate::emon::figclass::fc_images;
 use crate::emon::model::*;
-use crate::emon::pageunit::{pu_plan, pu_run_pdf};
-use crate::emon::pdfannot::pa_run;
-use crate::emon::rasterin::*;
-use crate::emon::pdfcontent::*;
-use crate::emon::pdfdoc::*;
-use crate::emon::pdfmeta::pm_run;
-use crate::emon::pdfstruct::{tg_join, tg_read};
-use crate::emon::pdfx::px_index_build;
-use crate::emon::gfuse::{gf_doc, gfx_mode};
-use crate::emon::tlhealth::th_run;
 use crate::imgdec;
 use crate::pdfimg::{self, PdfCodecs};
 use crate::plan::{self, Answer, Fulfiller, Misses, NoMisses, PlanError, Range, Replayer, Request, SyncFulfiller};
@@ -1035,14 +1022,13 @@ fn decode_img(req: &Request, source: &Arc<dyn ByteSource>, idx: usize, codecs: O
     }
 }
 
-// One attempt's end for a raster input: it missed, it asked for something, or it finished.
+// One attempt's end, for either kind of input: it missed, it asked for something, or it finished.
 enum RStep {
     Miss,
     Requests,
     Done(Outcome),
     // the document pass is done and the page units are next (P7.U)
-    Pdf(Box<PdfDoc>),
-    Raster(Box<RasterDoc>),
+    Doc(Box<UnitDoc>),
 }
 
 // The locale hint's code points (kin's `loc`: what `emon.scan` reads the OCR language from); empty for none.
@@ -1056,78 +1042,51 @@ fn locale_cells(opts: &Options) -> Cells {
     c
 }
 
-// ONE ATTEMPT OF THE RASTER UNIT, from scratch on fresh arenas, as `attempt` is for a PDF. An image's pages are made
-// by kin's `rs_unit` (decode, then OCR: P6.5), and its OCR lines are the text layer's lines to everything after (D213):
-// the stages below are `attempt`'s, in its order, with the glyph-fed ones given empty arenas.
-// What the raster document pass leaves for its page units and the document unit (P7.U).
-struct RasterDoc {
+// What the document pass leaves for the page units and the document unit (P7.U, D195): kin's contexts (`emon.enctx`), and what the input said it is.
+// `doc.kind` says whether it is a PDF (the text layer's arenas, the catalogue's extras, the plan of what each page's unit will ask) or a raster input.
+struct UnitDoc {
     m: Arenas,
     ev: EvArenas,
     doc: Doc,
     info: Intake,
 }
 
-fn attempt_raster(view: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize, fmt: i32, opts: &Options, intake_only: bool, len: u64) -> RStep {
-    let mut m = Arenas::new();
-    model_init(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut m.ledger, &mut m.layout);
-    let mut mask = Cells::new();
-    let status = rs_doc(view, idx as i32, fmt, answers, rq, &mut m.nodes, &mut m.attrs, &mut m.text, &mut m.pages, &mut mask);
-    if view.missed() {
-        return RStep::Miss;
-    }
-    match status {
-        0 => {}
-        1 => return RStep::Requests,
-        s if s == crate::emon::planloop::ds_undecodable() || s == crate::emon::planloop::ds_unsupported_image() => return RStep::Done(Outcome::Failed(damaged(idx, s))),
-        s => return RStep::Done(Outcome::Failed(Error::Internal(format!("the raster unit answered status {}", s)))),
-    }
-    let format = if fmt == rs_png() {
+// What kin's document pass says the input is (`Doc`'s `kind`, `ifmt`, `ipages`, `imajor`, `iminor`, `ienc`).
+fn intake_of(doc: &Doc, len: u64) -> Intake {
+    let format = if doc.ifmt == en_fmt_pdf() {
+        "pdf"
+    } else if doc.ifmt == en_fmt_png() {
         "png"
-    } else if fmt == rs_jpeg() {
+    } else if doc.ifmt == en_fmt_jpeg() {
         "jpeg"
     } else {
         "tiff"
     };
-    let info = Intake { format, version: (0, 0), pages: page_count(&mut m.pages).max(0) as usize, encrypted: false, bytes: len };
-    if intake_only {
-        return RStep::Done(Outcome::Intake(info));
-    }
-    let mut doc = Doc::new();
-    doc.mask = mask;
-    doc.loc = locale_cells(opts);
-    RStep::Raster(Box::new(RasterDoc { m, ev: EvArenas::new(), doc, info }))
+    Intake { format, version: (doc.imajor, doc.iminor), pages: doc.ipages.max(0) as usize, encrypted: doc.ienc == 1, bytes: len }
 }
 
-// One frame's page unit (P7.U): its own requests and answers; it writes nothing until its answers are in.
-fn unit_raster(d: &mut RasterDoc, f: usize, idx: usize, len: u64, opts: &Options, answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet) -> i32 {
-    let mut scr = Cells::new();
-    rs_page(
-        f as i32, idx as i32, len as i32, opts.ocr.code(), answers, rq, &mut d.doc.loc, bms, &mut d.doc.mask,
-        &mut d.ev.epages, &mut d.ev.views, &mut d.doc.et, &mut d.ev.feats, &mut d.ev.images, &mut d.ev.oruns, &mut d.ev.oblocks, &mut d.ev.olines, &mut d.ev.owords, &mut d.ev.osyms, &mut d.ev.oalts,
-        &mut d.doc.wd, &mut d.doc.ln, &mut scr,
-    )
+// One page's (a raster input's frame's) unit (P7.U, D195): its own requests and answers and its `BitmapSet`; it writes nothing until its answers are in,
+// and never reads the input. One call of kin's.
+fn unit_page(d: &mut UnitDoc, i: usize, idx: usize, len: u64, opts: &Options, answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet) -> i32 {
+    en_page(&mut cfg_of(opts), &mut d.doc, &mut d.ev, i as i32, idx as i32, len as i32, answers, rq, bms)
 }
 
-// The raster document unit: stage 3 over the frames' OCR lines, in kin (`emon.engine`).
-fn finish_raster(d: RasterDoc, opts: &Options) -> Outcome {
-    let RasterDoc { mut m, mut ev, mut doc, info } = d;
-    let rfrom = match info.format {
-        "png" => afm_png(),
-        "jpeg" => afm_jpeg(),
-        _ => afm_tiff(),
-    };
+// The document unit (stage 3) over the text layer and whatever the page units added to it: fusion, the evidence, furniture, tables, headings,
+// paragraphs and columns, the Model. All of it is kin's (`emon.engine`), whatever the kind of the input.
+fn finish_doc(d: UnitDoc, opts: &Options) -> Outcome {
+    let UnitDoc { mut m, mut ev, mut doc, info } = d;
     let mut s = Scratch::new();
-    let r = en_finish_raster(&mut cfg_of(opts), &mut doc, &mut ev, &mut m, &mut s);
-    finished(r, doc, m, info, opts, rfrom)
+    let r = en_finish(&mut cfg_of(opts), &mut doc, &mut ev, &mut m, &mut s);
+    finished(r, doc, m, info, opts)
 }
 
 // What kin's document unit answered (`emon.engine`: 0 built, 1 built with the asset unit still to run, 2 `pl-check`, 3 `model-check`, 4 `model-check-assets`).
-fn finished(r: i32, mut doc: Doc, m: Arenas, info: Intake, opts: &Options, rfrom: i32) -> Outcome {
+fn finished(r: i32, mut doc: Doc, m: Arenas, info: Intake, opts: &Options) -> Outcome {
     match r {
         0 | 1 => {
             let evidence = if opts.keep_evidence { Some(std::mem::take(&mut doc.evidence)) } else { None };
             // `figures` leaves the asset stage to the asset unit (D351): what it needs
-            let pending = if r == 1 { Some(PendingAssets { cand: std::mem::take(&mut doc.cand), cbytes: std::mem::take(&mut doc.cbytes), rfrom }) } else { None };
+            let pending = if r == 1 { Some(PendingAssets { cand: std::mem::take(&mut doc.cand), cbytes: std::mem::take(&mut doc.cbytes), rfrom: doc.rfrom }) } else { None };
             Outcome::Built(Built { arenas: m, evidence, intake: info, pending })
         }
         2 => Outcome::Failed(Error::Internal(format!("pl-check {}", doc.fcode))),
@@ -1149,6 +1108,7 @@ fn cfg_of(opts: &Options) -> Cfg {
     c.tbyte = opts.assets_bytes;
     c.sigs = if opts.asset_signatures { 1 } else { 0 };
     c.keep = opts.keep_evidence as i32;
+    c.nort = opts.no_retarget as i32;
     if opts.locale.is_some() {
         c.haveloc = 1;
         c.lcl = locale_cells(opts);
@@ -1166,21 +1126,25 @@ fn seal_arenas(m: &mut Arenas, opts: &Options) -> Option<Error> {
     }
 }
 
-// The unit of one input: a PNG, JPEG or TIFF (by kin's sniff) is read by the raster unit, anything else by the
-// PDF one (`attempt`, which refuses what is not a PDF by name).
+// ONE ATTEMPT OF THE DOCUMENT PASS for one input, from scratch on a fresh view and fresh contexts: kin's `en-attempt` (a PNG, JPEG or TIFF by its sniff is
+// read by the raster unit, anything else by the PDF one, which refuses what is not a PDF by name). A miss at any checkpoint ends it at once: what a missed
+// attempt computed is never looked at, and a failure or a panic in one that missed is a miss, never reported (SPEC 13.1).
 fn dispatch(view: &Src, pw: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize, opts: &Options, intake_only: bool, len: u64) -> RStep {
-    let fmt = rs_sniff(view);
-    if view.missed() {
-        return RStep::Miss;
-    }
-    if fmt != rs_none() {
-        return attempt_raster(view, answers, rq, idx, fmt, opts, intake_only, len);
-    }
-    match attempt(view, pw, idx, opts, intake_only, len) {
-        Step::Miss => RStep::Miss,
-        Step::Requests => RStep::Requests,
-        Step::Done(o) => RStep::Done(o),
-        Step::Pdf(d) => RStep::Pdf(d),
+    let (mut m, mut ev, mut doc) = (Arenas::new(), EvArenas::new(), Doc::new());
+    let r = en_attempt(view, pw, &mut cfg_of(opts), &mut doc, &mut ev, &mut m, &mut Pass::new(), answers, rq, idx as i32, intake_only as i32);
+    if r == at_miss() {
+        RStep::Miss
+    } else if r == at_requests() {
+        RStep::Requests
+    } else if r == at_failed() {
+        RStep::Done(Outcome::Failed(status_name(idx, doc.fcode)))
+    } else if r == at_internal() {
+        RStep::Done(Outcome::Failed(Error::Internal(format!("the raster unit answered status {}", doc.fcode))))
+    } else if r == at_intake() {
+        RStep::Done(Outcome::Intake(intake_of(&doc, len)))
+    } else {
+        let info = intake_of(&doc, len);
+        RStep::Doc(Box::new(UnitDoc { m, ev, doc, info }))
     }
 }
 
@@ -1282,12 +1246,6 @@ pub struct Engine {
     cfg: Config,
 }
 
-// What the document pass leaves for the page units (P7.U).
-enum DocKind {
-    Pdf(Box<PdfDoc>),
-    Raster(Box<RasterDoc>),
-}
-
 // The result of one input's unit, kept from the attempt that did not miss.
 struct Built {
     arenas: Arenas,
@@ -1365,16 +1323,6 @@ enum Mode<'a> {
     Replay(&'a Transcript),
 }
 
-// One attempt's end: it missed (discard it, fetch, re-run), asked for something (OCR of a scanned page: the loop
-// fulfils it and re-runs the unit on the answers) or it finished.
-enum Step {
-    Miss,
-    Requests,
-    Done(Outcome),
-    // the document pass is done; the page units are next (P7.U)
-    Pdf(Box<PdfDoc>),
-}
-
 // A residency map of `n` chunks, none resident.
 fn zeros(n: usize) -> Cells {
     let mut c = Cells::new();
@@ -1396,229 +1344,11 @@ fn text_of(cells: &mut Cells, start: i32, len: i32) -> String {
     s
 }
 
-// What the PDF document pass leaves for its page units and the document unit (P7.U, D195): the text layer's arenas, the
-// catalogue's extras, the plan of what each page's unit will ask, and the evidence arenas the units fill.
-struct PdfDoc {
-    ev: EvArenas,
-    doc: Doc,
-    info: Intake,
-}
-
-// ONE ATTEMPT OF THE DOCUMENT PASS for one input: everything kin does that READS THE INPUT, from scratch, on a fresh view
-// and fresh arenas: the text layer, the catalogue and the tagged tree, and the plan of the page units (which pages are
-// scanned, where their image streams are). A miss at any checkpoint ends it at once (`Step::Miss`): what a missed attempt
-// computed is never looked at, and a failure or a panic in one that missed is a miss, never reported (SPEC 13.1). The page
-// units (`unit_pdf`) and the document unit (`finish_pdf`) follow and never read the input.
-fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, len: u64) -> Step {
-    let mut ar = Cells::new();
-    let mut dc = Cells::new();
-    let mut a = Cells::new();
-    let mut b = Cells::new();
-    let mut st = Cells::new();
-    let mut pg = Cells::new();
-    let ostatus = pd_open_pw(view, pw, &mut ar, &mut dc, &mut a, &mut b, &mut st);
-    if view.missed() || ostatus == pd_need_bytes() {
-        return Step::Miss;
-    }
-    if ostatus != 0 {
-        return Step::Done(Outcome::Failed(status_name(idx, ostatus)));
-    }
-    let intake = |np: i32, dc: &mut Cells| Intake {
-        format: "pdf",
-        version: (pd_version_major(dc), pd_version_minor(dc)),
-        pages: np.max(0) as usize,
-        encrypted: pd_encrypted(dc) == 1,
-        bytes: len,
-    };
-    if intake_only {
-        let np = pd_pages(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut pg);
-        if view.missed() {
-            return Step::Miss;
-        }
-        if np < 0 {
-            return Step::Done(Outcome::Failed(damaged(idx, crate::emon::planloop::ds_no_pages())));
-        }
-        return Step::Done(Outcome::Intake(intake(np, &mut dc)));
-    }
-    let mut cx = Cells::new();
-    let mut ox = Cells::new();
-    let mut cs = Cells::new();
-    let mut out = Cells::new();
-    let mut f0 = Cells::new();
-    let mut f1 = Cells::new();
-    let mut f2 = Cells::new();
-    let mut f3 = Cells::new();
-    let mut gl = Cells::new();
-    let mut et = Cells::new();
-    let mut mk = Cells::new();
-    let mut fnt = Cells::new();
-    let mut wd = Cells::new();
-    let mut ln = Cells::new();
-    let mut pa = Cells::new();
-    let mut im = Cells::new();
-    let mut pts = Cells::new();
-    let mut gx = Cells::new();
-    let status = pc_document(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut cx, &mut ox, &mut cs, &mut out, &mut f0, &mut f1, &mut f2, &mut f3, &mut gl, &mut et, &mut mk, &mut fnt, &mut pg, &mut wd, &mut ln, &mut pa, &mut im, &mut pts, &mut gx);
-    if view.missed() || status == pd_need_bytes() {
-        return Step::Miss;
-    }
-    if status != 0 {
-        return Step::Done(Outcome::Failed(damaged(idx, crate::emon::planloop::ds_content_failed())));
-    }
-    let np = pd_pg_count(&mut pg);
-    let info = intake(np, &mut dc);
-    // THE PLAN OF THE PAGE UNITS (P6.5, D212, P7.U): a page with no text layer and one JPEG image that covers it is a scanned
-    // page (a `decode` of the stream, then an `ocr` of its bitmap, in its own unit); its stream is located here, the one place
-    // that reads the input. A page with a text layer is left as the text layer made it (fusion, P7.3, is what weighs a second
-    // reading against it).
-    // The text layer's own triage and health (P7.0, D195, D208): `epages`, the stage-1 features, the flow COPIED into `fw`/`fl`
-    // without the words that failed a P3.6 check (set aside in `fa`, written to the ledger after `fu_write`), and the font health
-    // in `hl`. Stage 3 reads `fw`/`fl` from here on, never `wd`/`ln`; the scanned pages' lines join them after the page units.
-    let (mut tl_epages, mut tl_feats, mut fw, mut fl, mut fa, mut hl, mut hsc) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    th_run(&mut pg, &mut gl, &mut et, &mut mk, &mut fnt, &mut wd, &mut ln, &mut im, &mut tl_epages, &mut tl_feats, &mut fw, &mut fl, &mut fa, &mut hl, &mut hsc);
-    let nl0 = cells_len(&ln) / 16;
-    let (mut plan, mut sp) = (Cells::new(), Cells::new());
-    let (mut rs1, mut rs2) = (Cells::new(), Cells::new());
-    pu_plan(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut pg, &mut im, &mut wd, opts.ocr.code(), opts.ocr_scope.code(), &mut fw, &mut fl, &mut et, &mut hl, &mut sp, &mut plan, &mut rs1, &mut rs2);
-    if view.missed() {
-        return Step::Miss;
-    }
-    // The fused graphics (P5.5a, D270): the vector source's rules and fills of every page, which the table stage reads instead of `paths`
-    // (until P7.3 moves it into the page units, SPEC 9.9).
-    let (mut grl, mut gfl, mut gcand, mut gmeas) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    gf_doc(&mut pa, &mut pts, &mut mk, &mut im, np, gfx_mode(), &mut grl, &mut gfl, &mut gcand, &mut gmeas);
-    // P3.13 (SPEC 10.11): the asset candidates are made by the ASSET UNIT (`asset_unit`, P6.1a), which runs after this pass and reads
-    // the input again, because a codec image's pixels are the host's and ask the plan/fulfil loop; the placements it works from are kept.
-    let (cand, cbytes) = (Cells::new(), Buf::new());
-    let aim = if opts.assets != Assets::None { im.clone() } else { Cells::new() };
-    // P8.1 (SPEC 10.6): what each image placement's dictionary says, which the figures' kinds are read from (one more read of the input)
-    let (mut fi, mut fo, mut fr) = (Cells::new(), Cells::new(), Cells::new());
-    fc_images(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut im, &mut fo, &mut fr, &mut fi);
-    if view.missed() {
-        return Step::Miss;
-    }
-    let snap = if opts.keep_evidence { Some((gl.clone(), mk.clone(), fnt.clone())) } else { None };
-    // With fusion on (every policy but `never`), the text layer's `epages` and `feats` are the evidence's own: the OCR of a born-digital page adds its
-    // feature rows to the same arena, and alignment reads both (P7.3). Without it they are dropped, as before, so the dump is the one it always was.
-    let fusion = opts.ocr.code() != 0;
-    let mut ev0 = EvArenas::new();
-    if fusion {
-        ev0.epages = tl_epages;
-        ev0.feats = tl_feats;
-    }
-    // The catalogue's extras and the tagged tree (P3.9, P3.7): the Info /Title and /PageLabels, and the tree's trust
-    // (D076), which the furniture stage weighs the tree's /Artifact marks by.
-    let (mut idx, mut txt, mut w, mut seen) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    let (mut md, mut xm, mut ol, mut lb, mut nd, mut nt) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    let (mut ss, mut se, mut sk, mut sc, mut so, mut sa, mut wk) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    let (mut ha, mut hb, mut hh) = (Cells::new(), Cells::new(), Cells::new());
-    px_index_build(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut pg, &mut idx);
-    pm_run(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut pg, &mut idx, &mut txt, &mut w, &mut seen, &mut md, &mut xm, &mut ol, &mut lb, &mut nd, &mut nt);
-    tg_read(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut pg, &mut idx, &mut txt, &mut w, &mut seen, &mut ss, &mut se, &mut sk, &mut sc, &mut so, &mut wk, &mut md);
-    tg_join(&mut ss, &mut se, &mut sk, &mut sc, &mut so, &mut sa, &mut gl, &mut mk, &mut fnt, &mut pg, &mut ha, &mut hb, &mut hh);
-    // inline styles and links (P4.7): what each font says of weight and slant, and the link annotations (P3.8)
-    let (mut ift, mut fs, mut fm, mut an, mut aq, mut fd, mut sg) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    il_fonts(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut fnt, &mut et, &mut ift);
-    pa_run(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut pg, &mut idx, &mut txt, &mut w, &mut fs, &mut seen, &mut fm, &mut an, &mut aq, &mut fd, &mut sg);
-    if view.missed() {
-        return Step::Miss;
-    }
-    let mut mask = Cells::new();
-    for _ in 0..np.max(0) {
-        cells_push(&mut mask, 0);
-    }
-    let mut doc = Doc::new();
-    doc.hl = hl;
-    doc.et = et;
-    doc.gl = gl;
-    doc.mk = mk;
-    doc.fnt = fnt;
-    doc.wd = wd;
-    doc.ln = ln;
-    doc.fw = fw;
-    doc.fl = fl;
-    doc.fa = fa;
-    doc.nl0 = nl0;
-    doc.pa = pa;
-    doc.im = im;
-    doc.grl = grl;
-    doc.gfl = gfl;
-    doc.ift = ift;
-    doc.an = an;
-    doc.pts = if fusion { pts } else { Cells::new() };
-    doc.pg = pg;
-    doc.txt = txt;
-    doc.md = md;
-    doc.lb = lb;
-    doc.ol = ol;
-    doc.ss = ss;
-    doc.se = se;
-    doc.sc = sc;
-    doc.plan = plan;
-    doc.mask = mask;
-    doc.loc = locale_cells(opts);
-    if let Some((g, k, f)) = snap {
-        doc.snapg = g;
-        doc.snapk = k;
-        doc.snapf = f;
-        doc.hassnap = 1;
-    }
-    doc.cand = cand;
-    doc.cbytes = cbytes;
-    doc.aim = aim;
-    doc.fi = fi;
-    Step::Pdf(Box::new(PdfDoc { ev: ev0, doc, info }))
-}
-
-// THE ASSET UNIT (P6.1a, D117, D291, SPEC 10.11): the candidates of the document's image placements, in its own plan/fulfil
-// loop. It re-opens the document (the document pass's arenas are gone) and runs `as_collect` over the placements the document
-// pass kept: a codec image whose pixels are the host's is asked for, with the bytes kin made itself in `payload`; the unit is
-// run again with the answers and makes the candidates. Answers 0 (the candidates are in `d.cand`, `d.cbytes`), 1 (it asked) or
-// 7 (the source missed).
-fn asset_unit(view: &Src, pw: &Src, idx: usize, d: &mut PdfDoc, opts: &Options, answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet, payload: &mut Buf) -> i32 {
-    let (mut ar, mut dc, mut a, mut b, mut st) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    let ostatus = pd_open_pw(view, pw, &mut ar, &mut dc, &mut a, &mut b, &mut st);
-    if view.missed() || ostatus == pd_need_bytes() {
-        return 7;
-    }
-    if ostatus != 0 {
-        return 100 + ostatus;
-    }
-    let (mut aout, mut arec, mut amrec, mut asmp, mut amsmp, mut adata, mut arows, mut atmp, mut aws) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    let (mut glob, mut words, mut hs) = (Cells::new(), Cells::new(), Cells::new());
-    let mut az = Buf::new();
-    d.doc.cbytes = Buf::new();
-    let rc = as_collect(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut d.doc.aim, &mut d.doc.pa, &mut d.doc.gl, &mut d.doc.pg, opts.asset_pixels, opts.assets_bytes, opts.assets.level(), &mut Cells::new(), &mut d.doc.cand, &mut d.doc.cbytes, &mut aout, &mut arec, &mut amrec, &mut asmp, &mut amsmp, &mut adata, &mut arows, &mut atmp, &mut aws, &mut az, idx as i32, answers, rq, payload, bms, &mut glob, &mut words, &mut hs);
-    if view.missed() || rc == 12 {
-        return 7;
-    }
-    rc
-}
-
-// One page's unit (P7.U, D195): its own requests and answers and its `BitmapSet`; a scanned page is read, any other is
-// left as the text layer made it. It writes nothing until its answers are in, and never reads the input.
-fn unit_pdf(d: &mut PdfDoc, i: usize, idx: usize, opts: &Options, answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet) -> i32 {
-    let mut scr = Cells::new();
-    let x = &mut d.doc;
-    pu_run_pdf(
-        i as i32, idx as i32, opts.ocr.code(), &mut x.plan, answers, rq, &mut x.loc, bms, &mut x.mask, &mut scr,
-        &mut d.ev.epages, &mut d.ev.views, &mut x.et, &mut d.ev.feats, &mut d.ev.images, &mut d.ev.oruns, &mut d.ev.oblocks, &mut d.ev.olines, &mut d.ev.owords, &mut d.ev.osyms, &mut d.ev.oalts,
-        &mut x.wd, &mut x.ln,
-        2 * opts.no_retarget as i32, &mut x.fw, &mut x.fl, &mut x.hl, &mut d.ev.refs, &mut x.cg, &mut d.ev.tlines,
-        &mut x.xs0, &mut x.xs1, &mut x.xs2, &mut x.xs3, &mut x.xs4, &mut x.xs5,
-        &mut d.ev.inks, &mut d.ev.comps, &mut d.ev.rules, &mut d.ev.prims, &mut d.ev.pts,
-        &mut x.ys0, &mut x.ys1, &mut x.ys2, &mut x.ys3, &mut x.ys4, &mut x.ys5, &mut x.ys6, &mut x.ys7, &mut x.ys8, &mut x.ys9, &mut x.ys10, &mut x.ys11, &mut x.ys12, &mut x.ys13, &mut x.ys14, &mut x.ys15, &mut x.ys16, &mut x.ys17, &mut x.ys18,
-    )
-}
-
-// The document unit (stage 3) over the text layer and whatever the page units added to it: fusion, the evidence, furniture, tables, headings,
-// paragraphs and columns, the Model. All of it is kin's (`emon.engine`).
-fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
-    let PdfDoc { mut ev, mut doc, info } = d;
-    let mut m = Arenas::new();
-    let mut s = Scratch::new();
-    let r = en_finish_pdf(&mut cfg_of(opts), &mut doc, &mut ev, &mut m, &mut s);
-    finished(r, doc, m, info, opts, 0)
+// THE ASSET UNIT (P6.1a, D117, D291, SPEC 10.11): the candidates of the document's image placements, in its own plan/fulfil loop, one call of kin's
+// (`en-asset-unit`). It re-opens the document (the document pass's arenas are gone) and collects the placements the document pass kept; a codec image whose
+// pixels are the host's is asked for through `rq`. Answers 0 (the candidates are in `d.doc.cand`, `d.doc.cbytes`), 1 (it asked) or 7 (the source missed).
+fn asset_unit(view: &Src, pw: &Src, idx: usize, d: &mut UnitDoc, opts: &Options, answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet, payload: &mut Buf) -> i32 {
+    en_asset_unit(view, pw, &mut cfg_of(opts), &mut d.doc, &mut Pass::new(), idx as i32, answers, rq, bms, payload)
 }
 
 impl ChunkCache {
@@ -1860,7 +1590,7 @@ pub struct Run {
     cache: Option<Arc<ChunkCache>>,
     misses: Box<dyn Misses>,
     outcome: Outcome,
-    docslot: Option<DocKind>,
+    docslot: Option<Box<UnitDoc>>,
     failed: Option<Error>,
     fig_pend: Option<PendingAssets>,
     fig_done: Option<Arenas>,
@@ -1959,8 +1689,7 @@ impl Run {
     // What the document pass built, for the schedule: 0 nothing, 1 a PDF, 2 a raster input; and its page count.
     fn doc_kind(&self) -> (i32, usize) {
         match &self.docslot {
-            Some(DocKind::Pdf(d)) => (1, d.info.pages),
-            Some(DocKind::Raster(d)) => (2, d.info.pages),
+            Some(d) => (d.doc.kind, d.info.pages),
             None => (0, 0),
         }
     }
@@ -1994,12 +1723,8 @@ impl Run {
                             self.outcome = o;
                             plan::UNIT_DONE
                         }
-                        Ok(RStep::Pdf(d)) => {
-                            self.docslot = Some(DocKind::Pdf(d));
-                            plan::UNIT_DONE
-                        }
-                        Ok(RStep::Raster(d)) => {
-                            self.docslot = Some(DocKind::Raster(d));
+                        Ok(RStep::Doc(d)) => {
+                            self.docslot = Some(d);
                             plan::UNIT_DONE
                         }
                         Err(p) => {
@@ -2028,8 +1753,8 @@ impl Run {
                 let mut unit_a = |answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet, payload: &mut Buf| -> i32 {
                     let view = self.base.view();
                     let doc = match &mut self.docslot {
-                        Some(DocKind::Pdf(doc)) => doc,
-                        _ => {
+                        Some(doc) => doc,
+                        None => {
                             self.outcome = Outcome::Failed(Error::Internal("the asset unit has no document".to_string()));
                             return plan::UNIT_DONE;
                         }
@@ -2070,8 +1795,7 @@ impl Run {
                 let (idx, len) = (self.idx, self.len);
                 let mut unit_p = |answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet, _payload: &mut Buf| -> i32 {
                     let r = catch_unwind(AssertUnwindSafe(|| match &mut self.docslot {
-                        Some(DocKind::Pdf(doc)) => unit_pdf(doc, i, idx, &self.opts, answers, rq, bms),
-                        Some(DocKind::Raster(doc)) => unit_raster(doc, i, idx, len, &self.opts, answers, rq, bms),
+                        Some(doc) => unit_page(doc, i, idx, len, &self.opts, answers, rq, bms),
                         None => 99,
                     }));
                     match r {
@@ -2106,8 +1830,7 @@ impl Run {
                 // the document unit is kin too: a panic in it (a bug, or a limit breach) is the Engine's named error, never the embedder's (P10.5, D386)
                 let opts = &self.opts;
                 self.outcome = match self.docslot.take() {
-                    Some(DocKind::Pdf(doc)) => finish_guarded(|| finish_pdf(*doc, opts)),
-                    Some(DocKind::Raster(doc)) => finish_guarded(|| finish_raster(*doc, opts)),
+                    Some(doc) => finish_guarded(|| finish_doc(*doc, opts)),
                     None => Outcome::None,
                 };
                 #[cfg(not(target_arch = "wasm32"))]
@@ -2249,15 +1972,7 @@ impl Kind {
 // the Model's settings and every figure's and seal's asset or reason, and any `crop` or `decode` request it has no answer to into `rq`
 // (then its results are meaningless: the loop answers and runs it again).
 fn asset_stage_figures(m: &mut Arenas, p: &mut PendingAssets, opts: &Options, input: i32, nbytes: i32, ans: &mut Cells, rq: &mut Cells, bms: &BitmapSet) {
-    let sigs = if opts.asset_signatures { 1 } else { 0 };
-    as_settings(&mut m.nodes, &mut m.attrs, &mut m.text, opts.assets.level(), opts.asset_dpi, opts.asset_pixels, opts.asset_bytes, opts.assets_bytes, sigs);
-    let (mut ws, mut rows, mut tmp, mut rec, mut bx) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    let mut z = Buf::new();
-    as_run_figures(
-        &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.pages, &mut p.cand, &mut p.cbytes, &mut m.assets, &mut m.uses, &mut m.abytes,
-        opts.asset_bytes, opts.assets_bytes, sigs, opts.asset_dpi, opts.asset_pixels, input, nbytes, p.rfrom, ans, rq, bms,
-        &mut ws, &mut z, &mut rows, &mut tmp, &mut rec, &mut bx,
-    );
+    en_asset_figures(&mut cfg_of(opts), m, &mut p.cand, &mut p.cbytes, p.rfrom, &mut Pass::new(), input, nbytes, ans, rq, bms);
 }
 
 // A page of the Model's page table (SPEC 3.7). Sizes are in centipoints (1/100 point), as displayed.

@@ -5,6 +5,242 @@ namespace emon;
 
 
 public static class Engine {
+    public static int AtBuilt() {
+        return 0;
+    }
+    public static int AtMiss() {
+        return 1;
+    }
+    public static int AtRequests() {
+        return 2;
+    }
+    public static int AtFailed() {
+        return 3;
+    }
+    public static int AtInternal() {
+        return 4;
+    }
+    public static int AtIntake() {
+        return 5;
+    }
+    public static int EnKindPdf() {
+        return 1;
+    }
+    public static int EnKindRaster() {
+        return 2;
+    }
+    public static int EnFmtPdf() {
+        return 0;
+    }
+    public static int EnFmtPng() {
+        return 1;
+    }
+    public static int EnFmtJpeg() {
+        return 2;
+    }
+    public static int EnFmtTiff() {
+        return 3;
+    }
+    internal static int EnLocale(emon.Enctx.Cfg c, emon.Enctx.Doc d) {
+        // The locale hint's code points (kin's `loc`: what `emon.scan` reads the OCR language from); empty for none.
+        if (c.Haveloc != 0) {
+            emon.Port.CellsCopyInto(d.Loc, c.Lcl);
+        }
+        return 0;
+    }
+    internal static int EnInfoPdf(emon.Enctx.Doc d, emon.Enctx.Pass p, int np) {
+        // What stage 0 says of a PDF: the version and whether it is encrypted from the document table, the page count (never below 0).
+        d.Kind = EnKindPdf();
+        d.Ifmt = EnFmtPdf();
+        d.Imajor = Pdfdoc.PdVersionMajor(p.Dc);
+        d.Iminor = Pdfdoc.PdVersionMinor(p.Dc);
+        d.Ienc = Pdfdoc.PdEncrypted(p.Dc);
+        if (np < 0) {
+            d.Ipages = 0;
+        } else {
+            d.Ipages = np;
+        }
+        return 0;
+    }
+    internal static int EnAttemptRaster(emon.Port.Src view, emon.Enctx.Cfg c, emon.Enctx.Doc d, emon.Enctx.Arenas m, emon.Port.Cells ans, emon.Port.Cells rq, int idx, int fmt, int intakeOnly) {
+        // ONE ATTEMPT OF THE RASTER UNIT, from scratch on fresh arenas, as `en-attempt-pdf` is for a PDF. An image's pages are made by `rs-doc` (decode, then
+        // OCR: P6.5), and its OCR lines are the text layer's lines to everything after (D213): the stages after it are the PDF's, in its order, with the
+        // glyph-fed ones given empty arenas. The Model the pass begins is `m`'s (its pages and nodes).
+        Model.ModelInit(m.Nodes, m.Attrs, m.Regions, m.Text, m.Pages, m.Ledger, m.Layout);
+        int status = Rasterin.RsDoc(view, idx, fmt, ans, rq, m.Nodes, m.Attrs, m.Text, m.Pages, d.Mask);
+        int np = Model.PageCount(m.Pages);
+        if (emon.Port.SrcMissed(view)) {
+            return AtMiss();
+        }
+        if (status == 1) {
+            return AtRequests();
+        }
+        if ((status == Planloop.DsUndecodable()) || (status == Planloop.DsUnsupportedImage())) {
+            d.Fcode = status;
+            return AtFailed();
+        }
+        if (status != 0) {
+            d.Fcode = status;
+            return AtInternal();
+        }
+        d.Kind = EnKindRaster();
+        d.Ifmt = EnFmtTiff();
+        if (fmt == Rasterin.RsPng()) {
+            d.Ifmt = EnFmtPng();
+        }
+        if (fmt == Rasterin.RsJpeg()) {
+            d.Ifmt = EnFmtJpeg();
+        }
+        if (np < 0) {
+            d.Ipages = 0;
+        } else {
+            d.Ipages = np;
+        }
+        d.Rfrom = Model.AfmTiff();
+        if (fmt == Rasterin.RsPng()) {
+            d.Rfrom = Model.AfmPng();
+        }
+        if (fmt == Rasterin.RsJpeg()) {
+            d.Rfrom = Model.AfmJpeg();
+        }
+        if (intakeOnly != 0) {
+            return AtIntake();
+        }
+        EnLocale(c, d);
+        return AtBuilt();
+    }
+    internal static int EnAttemptPdf(emon.Port.Src view, emon.Port.Src pw, emon.Enctx.Cfg c, emon.Enctx.Doc d, emon.Enctx.EvArenas ev, emon.Enctx.Pass p, int idx, int intakeOnly) {
+        // ONE ATTEMPT OF THE DOCUMENT PASS for one input: everything kin does that READS THE INPUT, from scratch, on a fresh view and fresh arenas: the text
+        // layer, the catalogue and the tagged tree, and the plan of the page units (which pages are scanned, where their image streams are). A miss at any
+        // checkpoint ends it at once (`at-miss`): what a missed attempt computed is never looked at (SPEC 13.1). The page units (`en-page`) and the document unit
+        // (`en-finish-pdf`) follow and never read the input.
+        int ostatus = Pdfdoc.PdOpenPw(view, pw, p.Ar, p.Dc, p.Ca, p.Cb, p.St);
+        if (emon.Port.SrcMissed(view) || (ostatus == Pdfdoc.PdNeedBytes())) {
+            return AtMiss();
+        }
+        if (ostatus != 0) {
+            d.Fcode = ostatus;
+            return AtFailed();
+        }
+        if (intakeOnly != 0) {
+            int inp = Pdfdoc.PdPages(view, p.Ar, p.Dc, p.Ca, p.Cb, p.St, d.Pg);
+            if (emon.Port.SrcMissed(view)) {
+                return AtMiss();
+            }
+            if (inp < 0) {
+                d.Fcode = Planloop.DsNoPages();
+                return AtFailed();
+            }
+            EnInfoPdf(d, p, inp);
+            return AtIntake();
+        }
+        int status = Pdfcontent.PcDocument(view, p.Ar, p.Dc, p.Ca, p.Cb, p.St, p.Cx, p.Ox, p.Cs, p.Xo, p.F0, p.F1, p.F2, p.F3, d.Gl, d.Et, d.Mk, d.Fnt, d.Pg, d.Wd, d.Ln, d.Pa, d.Im, d.Pts, p.Gx);
+        if (emon.Port.SrcMissed(view) || (status == Pdfdoc.PdNeedBytes())) {
+            return AtMiss();
+        }
+        if (status != 0) {
+            d.Fcode = Planloop.DsContentFailed();
+            return AtFailed();
+        }
+        int np = Pdfdoc.PdPgCount(d.Pg);
+        int fusion = 0;
+        if (c.Ocr != 0) {
+            fusion = 1;
+        }
+        EnInfoPdf(d, p, np);
+        Tlhealth.ThRun(d.Pg, d.Gl, d.Et, d.Mk, d.Fnt, d.Wd, d.Ln, d.Im, p.Tle, p.Tlf, d.Fw, d.Fl, d.Fa, d.Hl, p.Thsc);
+        d.Nl0 = emon.Port.CellsLen(d.Ln) / 16;
+        Pageunit.PuPlan(view, p.Ar, p.Dc, p.Ca, p.Cb, p.St, d.Pg, d.Im, d.Wd, c.Ocr, c.Scope, d.Fw, d.Fl, d.Et, d.Hl, p.Sp, d.Plan, p.Rs1, p.Rs2);
+        if (emon.Port.SrcMissed(view)) {
+            return AtMiss();
+        }
+        Gfuse.GfDoc(d.Pa, d.Pts, d.Mk, d.Im, np, Gfuse.GfxMode(), d.Grl, d.Gfl, p.Gcand, p.Gmeas);
+        if (c.Level != 0) {
+            emon.Port.CellsCopyInto(d.Aim, d.Im);
+        }
+        Figclass.FcImages(view, p.Ar, p.Dc, p.Ca, p.Cb, p.St, d.Im, p.Fo, p.Fr, d.Fi);
+        if (emon.Port.SrcMissed(view)) {
+            return AtMiss();
+        }
+        if (c.Keep != 0) {
+            emon.Port.CellsCopyInto(d.Snapg, d.Gl);
+            emon.Port.CellsCopyInto(d.Snapk, d.Mk);
+            emon.Port.CellsCopyInto(d.Snapf, d.Fnt);
+            d.Hassnap = 1;
+        }
+        if (fusion == 1) {
+            emon.Port.CellsSwap(ev.Epages, p.Tle);
+            emon.Port.CellsSwap(ev.Feats, p.Tlf);
+        }
+        Pdfx.PxIndexBuild(view, p.Ar, p.Dc, p.Ca, p.Cb, p.St, d.Pg, p.Qidx);
+        Pdfmeta.PmRun(view, p.Ar, p.Dc, p.Ca, p.Cb, p.St, d.Pg, p.Qidx, d.Txt, p.Qw, p.Qseen, d.Md, p.Xm, d.Ol, d.Lb, p.Nd, p.Nt);
+        Pdfstruct.TgRead(view, p.Ar, p.Dc, p.Ca, p.Cb, p.St, d.Pg, p.Qidx, d.Txt, p.Qw, p.Qseen, d.Ss, d.Se, p.Sk, d.Sc, p.So, p.Wk, d.Md);
+        Pdfstruct.TgJoin(d.Ss, d.Se, p.Sk, d.Sc, p.So, p.Sa, d.Gl, d.Mk, d.Fnt, d.Pg, p.Ha, p.Hb, p.Hh);
+        Inline.IlFonts(view, p.Ar, p.Dc, p.Ca, p.Cb, p.St, d.Fnt, d.Et, d.Ift);
+        Pdfannot.PaRun(view, p.Ar, p.Dc, p.Ca, p.Cb, p.St, d.Pg, p.Qidx, d.Txt, p.Qw, p.Vfs, p.Qseen, p.Vfm, d.An, p.Vaq, p.Vfd, p.Vsg);
+        if (emon.Port.SrcMissed(view)) {
+            return AtMiss();
+        }
+        int i = 0;
+        while (i < np) {
+            emon.Port.CellsPush(d.Mask, 0);
+            i += 1;
+        }
+        if (fusion == 0) {
+            emon.Port.CellsFree(d.Pts);
+        }
+        EnLocale(c, d);
+        return AtBuilt();
+    }
+    public static int EnAttempt(emon.Port.Src view, emon.Port.Src pw, emon.Enctx.Cfg c, emon.Enctx.Doc d, emon.Enctx.EvArenas ev, emon.Enctx.Arenas m, emon.Enctx.Pass p, emon.Port.Cells ans, emon.Port.Cells rq, int idx, int intakeOnly) {
+        // THE UNIT OF ONE INPUT (the document pass, P7.U): a PNG, JPEG or TIFF (by `rs-sniff`) is read by the raster unit, anything else by the PDF one, which
+        // refuses what is not a PDF by name. `d`, `ev`, `m` and `p` are fresh contexts, made for this attempt. Answers `at-built` (the page units are next: `kind`),
+        // `at-miss`, `at-requests`, `at-failed`, `at-internal` or `at-intake`, as above.
+        int fmt = Rasterin.RsSniff(view);
+        if (emon.Port.SrcMissed(view)) {
+            return AtMiss();
+        }
+        if (fmt != Rasterin.RsNone()) {
+            return EnAttemptRaster(view, c, d, m, ans, rq, idx, fmt, intakeOnly);
+        }
+        return EnAttemptPdf(view, pw, c, d, ev, p, idx, intakeOnly);
+    }
+    public static int EnPage(emon.Enctx.Cfg c, emon.Enctx.Doc d, emon.Enctx.EvArenas ev, int i, int idx, int nbytes, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms) {
+        // One page's unit (P7.U, D195; a frame's, for a raster input): its own requests and answers and its `BitmapSet`; a scanned page is read, any other is
+        // left as the text layer made it. It writes nothing until its answers are in, and never reads the input. Answers `us-done`, `us-requests`, or a status.
+        emon.Port.CellsDrop(d.Pscr, 0);
+        if (d.Kind == EnKindPdf()) {
+            return Pageunit.PuRunPdf(i, idx, c.Ocr, d.Plan, ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, 2 * c.Nort, d.Fw, d.Fl, d.Hl, ev.Refs, d.Cg, ev.Tlines, d.Xs0, d.Xs1, d.Xs2, d.Xs3, d.Xs4, d.Xs5, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys1, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18);
+        }
+        return Rasterin.RsPage(i, idx, nbytes, c.Ocr, ans, rq, d.Loc, bms, d.Mask, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, d.Pscr);
+    }
+    public static int EnAssetUnit(emon.Port.Src view, emon.Port.Src pw, emon.Enctx.Cfg c, emon.Enctx.Doc d, emon.Enctx.Pass p, int idx, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms, emon.Port.Buf payload) {
+        // THE ASSET UNIT (P6.1a, D117, D291, SPEC 10.11): the candidates of the document's image placements, in its own plan/fulfil loop. It re-opens the document
+        // (the document pass's arenas are gone) and runs `as-collect` over the placements the document pass kept: a codec image whose pixels are the host's is
+        // asked for, with the bytes kin made itself in `payload`; the unit is run again with the answers and makes the candidates. `p` is fresh for the attempt.
+        // Answers 0 (the candidates are in `cand`, `cbytes`), 1 (it asked), 7 (the source missed) or 100 and the open's status.
+        int ostatus = Pdfdoc.PdOpenPw(view, pw, p.Ar, p.Dc, p.Ca, p.Cb, p.St);
+        if (emon.Port.SrcMissed(view) || (ostatus == Pdfdoc.PdNeedBytes())) {
+            return 7;
+        }
+        if (ostatus != 0) {
+            return 100 + ostatus;
+        }
+        emon.Port.BufTruncate(d.Cbytes, 0);
+        int rc = Asset.AsCollect(view, p.Ar, p.Dc, p.Ca, p.Cb, p.St, d.Aim, d.Pa, d.Gl, d.Pg, c.Pixels, c.Tbyte, c.Level, p.Ax, d.Cand, d.Cbytes, p.Aout, p.Arec, p.Amrec, p.Asmp, p.Amsmp, p.Adata, p.Arows, p.Atmp, p.Aws, p.Az, idx, ans, rq, payload, bms, p.Glob, p.Words, p.Hs);
+        if (emon.Port.SrcMissed(view) || (rc == 12)) {
+            return 7;
+        }
+        return rc;
+    }
+    public static int EnAssetFigures(emon.Enctx.Cfg c, emon.Enctx.Arenas m, emon.Port.Cells cand, emon.Port.Buf cbytes, int rfrom, emon.Enctx.Pass p, int input, int nbytes, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms) {
+        // P8.5's asset stage at the level `figures` (SPEC 10.11, D351): one attempt of the asset unit, on copies the caller made of the Model and the candidates
+        // (`cand`, `cbytes`: the document unit's; `rfrom` is 0 for a PDF or the `afm` of a raster input's format). It writes the Model's settings and every figure's
+        // and seal's asset or reason, and any `crop` or `decode` request it has no answer to into `rq` (then its results are meaningless: the loop answers and
+        // runs it again). `p` is fresh for the attempt.
+        Asset.AsSettings(m.Nodes, m.Attrs, m.Text, c.Level, c.Dpi, c.Pixels, c.Abyte, c.Tbyte, c.Sigs);
+        return Asset.AsRunFigures(m.Nodes, m.Attrs, m.Regions, m.Pages, cand, cbytes, m.Assets, m.Uses, m.Abytes, c.Abyte, c.Tbyte, c.Sigs, c.Dpi, c.Pixels, input, nbytes, rfrom, ans, rq, bms, p.Fz0, p.Zb, p.Fz1, p.Fz2, p.Fz3, p.Fz4);
+    }
     public static int EnDump(emon.Port.Cells et, emon.Port.Cells gl, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells mk, emon.Port.Cells fnt, emon.Port.Cells grl, emon.Port.Cells gfl, emon.Port.Cells ggp, emon.Port.Cells grg, emon.Enctx.EvArenas ev, System.Text.StringBuilder t) {
         // The evidence dump of a conversion, OPEN (`}` is the caller's, who may add a member first): `ev` is what the OCR stages made, the rest the text layer's.
         // Version "1", or "2" with the four graphics arrays when the document has fused graphics (P5.5a, D270).
@@ -197,5 +433,12 @@ public static class Engine {
         Model.ModelInit(m.Nodes, m.Attrs, m.Regions, m.Text, m.Pages, m.Ledger, m.Layout);
         Para.PaPages(d.Pg, m.Pages);
         return EnStage3(c, d, ev, m, s, np, 0);
+    }
+    public static int EnFinish(emon.Enctx.Cfg c, emon.Enctx.Doc d, emon.Enctx.EvArenas ev, emon.Enctx.Arenas m, emon.Enctx.Scratch s) {
+        // The document unit of whatever kind the document pass made (`kind`): `en-finish-pdf` or `en-finish-raster`. Answers as the file's head says.
+        if (d.Kind == EnKindPdf()) {
+            return EnFinishPdf(c, d, ev, m, s);
+        }
+        return EnFinishRaster(c, d, ev, m, s);
     }
 }

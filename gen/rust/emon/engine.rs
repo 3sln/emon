@@ -15,10 +15,17 @@ use crate::emon::inline::*;
 use crate::emon::lists::*;
 use crate::emon::model::*;
 use crate::emon::notes::*;
+use crate::emon::pageunit::*;
 use crate::emon::para::*;
+use crate::emon::pdfannot::*;
+use crate::emon::pdfcontent::*;
 use crate::emon::pdfdoc::*;
+use crate::emon::pdfmeta::*;
 use crate::emon::pdfstruct::*;
+use crate::emon::pdfx::*;
+use crate::emon::planloop::*;
 use crate::emon::player::*;
+use crate::emon::rasterin::*;
 use crate::emon::rasterplan::*;
 use crate::emon::restruct::*;
 use crate::emon::scan::*;
@@ -28,6 +35,242 @@ use crate::emon::table::*;
 use crate::emon::tagtable::*;
 use crate::emon::tlhealth::*;
 
+pub fn at_built() -> i32 {
+    return 0;
+}
+pub fn at_miss() -> i32 {
+    return 1;
+}
+pub fn at_requests() -> i32 {
+    return 2;
+}
+pub fn at_failed() -> i32 {
+    return 3;
+}
+pub fn at_internal() -> i32 {
+    return 4;
+}
+pub fn at_intake() -> i32 {
+    return 5;
+}
+pub fn en_kind_pdf() -> i32 {
+    return 1;
+}
+pub fn en_kind_raster() -> i32 {
+    return 2;
+}
+pub fn en_fmt_pdf() -> i32 {
+    return 0;
+}
+pub fn en_fmt_png() -> i32 {
+    return 1;
+}
+pub fn en_fmt_jpeg() -> i32 {
+    return 2;
+}
+pub fn en_fmt_tiff() -> i32 {
+    return 3;
+}
+pub(crate) fn en_locale(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::enctx::Doc) -> i32 {
+    // The locale hint's code points (kin's `loc`: what `emon.scan` reads the OCR language from); empty for none.
+    if c.haveloc != 0 {
+        crate::port::cells_copy_into(&mut d.loc, &mut c.lcl);
+    }
+    return 0;
+}
+pub(crate) fn en_info_pdf(d: &mut crate::emon::enctx::Doc, p: &mut crate::emon::enctx::Pass, np: i32) -> i32 {
+    // What stage 0 says of a PDF: the version and whether it is encrypted from the document table, the page count (never below 0).
+    d.kind = en_kind_pdf();
+    d.ifmt = en_fmt_pdf();
+    d.imajor = pd_version_major(&mut p.dc);
+    d.iminor = pd_version_minor(&mut p.dc);
+    d.ienc = pd_encrypted(&mut p.dc);
+    if np < 0 {
+        d.ipages = 0;
+    } else {
+        d.ipages = np;
+    }
+    return 0;
+}
+pub(crate) fn en_attempt_raster(view: &crate::port::Src, c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::enctx::Doc, m: &mut crate::emon::enctx::Arenas, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, idx: i32, fmt: i32, intake_only: i32) -> i32 {
+    // ONE ATTEMPT OF THE RASTER UNIT, from scratch on fresh arenas, as `en-attempt-pdf` is for a PDF. An image's pages are made by `rs-doc` (decode, then
+    // OCR: P6.5), and its OCR lines are the text layer's lines to everything after (D213): the stages after it are the PDF's, in its order, with the
+    // glyph-fed ones given empty arenas. The Model the pass begins is `m`'s (its pages and nodes).
+    model_init(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut m.ledger, &mut m.layout);
+    let status: i32 = rs_doc(view, idx, fmt, ans, rq, &mut m.nodes, &mut m.attrs, &mut m.text, &mut m.pages, &mut d.mask);
+    let np: i32 = page_count(&mut m.pages);
+    if crate::port::src_missed(view) {
+        return at_miss();
+    }
+    if status == 1 {
+        return at_requests();
+    }
+    if (status == ds_undecodable()) || (status == ds_unsupported_image()) {
+        d.fcode = status;
+        return at_failed();
+    }
+    if status != 0 {
+        d.fcode = status;
+        return at_internal();
+    }
+    d.kind = en_kind_raster();
+    d.ifmt = en_fmt_tiff();
+    if fmt == rs_png() {
+        d.ifmt = en_fmt_png();
+    }
+    if fmt == rs_jpeg() {
+        d.ifmt = en_fmt_jpeg();
+    }
+    if np < 0 {
+        d.ipages = 0;
+    } else {
+        d.ipages = np;
+    }
+    d.rfrom = afm_tiff();
+    if fmt == rs_png() {
+        d.rfrom = afm_png();
+    }
+    if fmt == rs_jpeg() {
+        d.rfrom = afm_jpeg();
+    }
+    if intake_only != 0 {
+        return at_intake();
+    }
+    en_locale(c, d);
+    return at_built();
+}
+pub(crate) fn en_attempt_pdf(view: &crate::port::Src, pw: &crate::port::Src, c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::enctx::Doc, ev: &mut crate::emon::enctx::EvArenas, p: &mut crate::emon::enctx::Pass, idx: i32, intake_only: i32) -> i32 {
+    // ONE ATTEMPT OF THE DOCUMENT PASS for one input: everything kin does that READS THE INPUT, from scratch, on a fresh view and fresh arenas: the text
+    // layer, the catalogue and the tagged tree, and the plan of the page units (which pages are scanned, where their image streams are). A miss at any
+    // checkpoint ends it at once (`at-miss`): what a missed attempt computed is never looked at (SPEC 13.1). The page units (`en-page`) and the document unit
+    // (`en-finish-pdf`) follow and never read the input.
+    let ostatus: i32 = pd_open_pw(view, pw, &mut p.ar, &mut p.dc, &mut p.ca, &mut p.cb, &mut p.st);
+    if crate::port::src_missed(view) || (ostatus == pd_need_bytes()) {
+        return at_miss();
+    }
+    if ostatus != 0 {
+        d.fcode = ostatus;
+        return at_failed();
+    }
+    if intake_only != 0 {
+        let inp: i32 = pd_pages(view, &mut p.ar, &mut p.dc, &mut p.ca, &mut p.cb, &mut p.st, &mut d.pg);
+        if crate::port::src_missed(view) {
+            return at_miss();
+        }
+        if inp < 0 {
+            d.fcode = ds_no_pages();
+            return at_failed();
+        }
+        en_info_pdf(d, p, inp);
+        return at_intake();
+    }
+    let status: i32 = pc_document(view, &mut p.ar, &mut p.dc, &mut p.ca, &mut p.cb, &mut p.st, &mut p.cx, &mut p.ox, &mut p.cs, &mut p.xo, &mut p.f0, &mut p.f1, &mut p.f2, &mut p.f3, &mut d.gl, &mut d.et, &mut d.mk, &mut d.fnt, &mut d.pg, &mut d.wd, &mut d.ln, &mut d.pa, &mut d.im, &mut d.pts, &mut p.gx);
+    if crate::port::src_missed(view) || (status == pd_need_bytes()) {
+        return at_miss();
+    }
+    if status != 0 {
+        d.fcode = ds_content_failed();
+        return at_failed();
+    }
+    let np: i32 = pd_pg_count(&mut d.pg);
+    let mut fusion: i32 = 0;
+    if c.ocr != 0 {
+        fusion = 1;
+    }
+    en_info_pdf(d, p, np);
+    th_run(&mut d.pg, &mut d.gl, &mut d.et, &mut d.mk, &mut d.fnt, &mut d.wd, &mut d.ln, &mut d.im, &mut p.tle, &mut p.tlf, &mut d.fw, &mut d.fl, &mut d.fa, &mut d.hl, &mut p.thsc);
+    d.nl0 = crate::port::cells_len(&mut d.ln) / 16;
+    pu_plan(view, &mut p.ar, &mut p.dc, &mut p.ca, &mut p.cb, &mut p.st, &mut d.pg, &mut d.im, &mut d.wd, c.ocr, c.scope, &mut d.fw, &mut d.fl, &mut d.et, &mut d.hl, &mut p.sp, &mut d.plan, &mut p.rs1, &mut p.rs2);
+    if crate::port::src_missed(view) {
+        return at_miss();
+    }
+    gf_doc(&mut d.pa, &mut d.pts, &mut d.mk, &mut d.im, np, gfx_mode(), &mut d.grl, &mut d.gfl, &mut p.gcand, &mut p.gmeas);
+    if c.level != 0 {
+        crate::port::cells_copy_into(&mut d.aim, &mut d.im);
+    }
+    fc_images(view, &mut p.ar, &mut p.dc, &mut p.ca, &mut p.cb, &mut p.st, &mut d.im, &mut p.fo, &mut p.fr, &mut d.fi);
+    if crate::port::src_missed(view) {
+        return at_miss();
+    }
+    if c.keep != 0 {
+        crate::port::cells_copy_into(&mut d.snapg, &mut d.gl);
+        crate::port::cells_copy_into(&mut d.snapk, &mut d.mk);
+        crate::port::cells_copy_into(&mut d.snapf, &mut d.fnt);
+        d.hassnap = 1;
+    }
+    if fusion == 1 {
+        crate::port::cells_swap(&mut ev.epages, &mut p.tle);
+        crate::port::cells_swap(&mut ev.feats, &mut p.tlf);
+    }
+    px_index_build(view, &mut p.ar, &mut p.dc, &mut p.ca, &mut p.cb, &mut p.st, &mut d.pg, &mut p.qidx);
+    pm_run(view, &mut p.ar, &mut p.dc, &mut p.ca, &mut p.cb, &mut p.st, &mut d.pg, &mut p.qidx, &mut d.txt, &mut p.qw, &mut p.qseen, &mut d.md, &mut p.xm, &mut d.ol, &mut d.lb, &mut p.nd, &mut p.nt);
+    tg_read(view, &mut p.ar, &mut p.dc, &mut p.ca, &mut p.cb, &mut p.st, &mut d.pg, &mut p.qidx, &mut d.txt, &mut p.qw, &mut p.qseen, &mut d.ss, &mut d.se, &mut p.sk, &mut d.sc, &mut p.so, &mut p.wk, &mut d.md);
+    tg_join(&mut d.ss, &mut d.se, &mut p.sk, &mut d.sc, &mut p.so, &mut p.sa, &mut d.gl, &mut d.mk, &mut d.fnt, &mut d.pg, &mut p.ha, &mut p.hb, &mut p.hh);
+    il_fonts(view, &mut p.ar, &mut p.dc, &mut p.ca, &mut p.cb, &mut p.st, &mut d.fnt, &mut d.et, &mut d.ift);
+    pa_run(view, &mut p.ar, &mut p.dc, &mut p.ca, &mut p.cb, &mut p.st, &mut d.pg, &mut p.qidx, &mut d.txt, &mut p.qw, &mut p.vfs, &mut p.qseen, &mut p.vfm, &mut d.an, &mut p.vaq, &mut p.vfd, &mut p.vsg);
+    if crate::port::src_missed(view) {
+        return at_miss();
+    }
+    let mut i: i32 = 0;
+    while i < np {
+        crate::port::cells_push(&mut d.mask, 0);
+        i += 1;
+    }
+    if fusion == 0 {
+        crate::port::cells_free(&mut d.pts);
+    }
+    en_locale(c, d);
+    return at_built();
+}
+pub fn en_attempt(view: &crate::port::Src, pw: &crate::port::Src, c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::enctx::Doc, ev: &mut crate::emon::enctx::EvArenas, m: &mut crate::emon::enctx::Arenas, p: &mut crate::emon::enctx::Pass, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, idx: i32, intake_only: i32) -> i32 {
+    // THE UNIT OF ONE INPUT (the document pass, P7.U): a PNG, JPEG or TIFF (by `rs-sniff`) is read by the raster unit, anything else by the PDF one, which
+    // refuses what is not a PDF by name. `d`, `ev`, `m` and `p` are fresh contexts, made for this attempt. Answers `at-built` (the page units are next: `kind`),
+    // `at-miss`, `at-requests`, `at-failed`, `at-internal` or `at-intake`, as above.
+    let fmt: i32 = rs_sniff(view);
+    if crate::port::src_missed(view) {
+        return at_miss();
+    }
+    if fmt != rs_none() {
+        return en_attempt_raster(view, c, d, m, ans, rq, idx, fmt, intake_only);
+    }
+    return en_attempt_pdf(view, pw, c, d, ev, p, idx, intake_only);
+}
+pub fn en_page(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::enctx::Doc, ev: &mut crate::emon::enctx::EvArenas, i: i32, idx: i32, nbytes: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, bms: &crate::port::BitmapSet) -> i32 {
+    // One page's unit (P7.U, D195; a frame's, for a raster input): its own requests and answers and its `BitmapSet`; a scanned page is read, any other is
+    // left as the text layer made it. It writes nothing until its answers are in, and never reads the input. Answers `us-done`, `us-requests`, or a status.
+    crate::port::cells_drop(&mut d.pscr, 0);
+    if d.kind == en_kind_pdf() {
+        return pu_run_pdf(i, idx, c.ocr, &mut d.plan, ans, rq, &mut d.loc, bms, &mut d.mask, &mut d.pscr, &mut ev.epages, &mut ev.views, &mut d.et, &mut ev.feats, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts, &mut d.wd, &mut d.ln, 2 * c.nort, &mut d.fw, &mut d.fl, &mut d.hl, &mut ev.refs, &mut d.cg, &mut ev.tlines, &mut d.xs0, &mut d.xs1, &mut d.xs2, &mut d.xs3, &mut d.xs4, &mut d.xs5, &mut ev.inks, &mut ev.comps, &mut ev.rules, &mut ev.prims, &mut ev.pts, &mut d.ys0, &mut d.ys1, &mut d.ys2, &mut d.ys3, &mut d.ys4, &mut d.ys5, &mut d.ys6, &mut d.ys7, &mut d.ys8, &mut d.ys9, &mut d.ys10, &mut d.ys11, &mut d.ys12, &mut d.ys13, &mut d.ys14, &mut d.ys15, &mut d.ys16, &mut d.ys17, &mut d.ys18);
+    }
+    return rs_page(i, idx, nbytes, c.ocr, ans, rq, &mut d.loc, bms, &mut d.mask, &mut ev.epages, &mut ev.views, &mut d.et, &mut ev.feats, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts, &mut d.wd, &mut d.ln, &mut d.pscr);
+}
+pub fn en_asset_unit(view: &crate::port::Src, pw: &crate::port::Src, c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::enctx::Doc, p: &mut crate::emon::enctx::Pass, idx: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, bms: &crate::port::BitmapSet, mut payload: &mut crate::port::Buf) -> i32 {
+    // THE ASSET UNIT (P6.1a, D117, D291, SPEC 10.11): the candidates of the document's image placements, in its own plan/fulfil loop. It re-opens the document
+    // (the document pass's arenas are gone) and runs `as-collect` over the placements the document pass kept: a codec image whose pixels are the host's is
+    // asked for, with the bytes kin made itself in `payload`; the unit is run again with the answers and makes the candidates. `p` is fresh for the attempt.
+    // Answers 0 (the candidates are in `cand`, `cbytes`), 1 (it asked), 7 (the source missed) or 100 and the open's status.
+    let ostatus: i32 = pd_open_pw(view, pw, &mut p.ar, &mut p.dc, &mut p.ca, &mut p.cb, &mut p.st);
+    if crate::port::src_missed(view) || (ostatus == pd_need_bytes()) {
+        return 7;
+    }
+    if ostatus != 0 {
+        return 100 + ostatus;
+    }
+    crate::port::buf_truncate(&mut d.cbytes, 0);
+    let rc: i32 = as_collect(view, &mut p.ar, &mut p.dc, &mut p.ca, &mut p.cb, &mut p.st, &mut d.aim, &mut d.pa, &mut d.gl, &mut d.pg, c.pixels, c.tbyte, c.level, &mut p.ax, &mut d.cand, &mut d.cbytes, &mut p.aout, &mut p.arec, &mut p.amrec, &mut p.asmp, &mut p.amsmp, &mut p.adata, &mut p.arows, &mut p.atmp, &mut p.aws, &mut p.az, idx, ans, rq, payload, bms, &mut p.glob, &mut p.words, &mut p.hs);
+    if crate::port::src_missed(view) || (rc == 12) {
+        return 7;
+    }
+    return rc;
+}
+pub fn en_asset_figures(c: &mut crate::emon::enctx::Cfg, m: &mut crate::emon::enctx::Arenas, mut cand: &mut crate::port::Cells, mut cbytes: &mut crate::port::Buf, rfrom: i32, p: &mut crate::emon::enctx::Pass, input: i32, nbytes: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, bms: &crate::port::BitmapSet) -> i32 {
+    // P8.5's asset stage at the level `figures` (SPEC 10.11, D351): one attempt of the asset unit, on copies the caller made of the Model and the candidates
+    // (`cand`, `cbytes`: the document unit's; `rfrom` is 0 for a PDF or the `afm` of a raster input's format). It writes the Model's settings and every figure's
+    // and seal's asset or reason, and any `crop` or `decode` request it has no answer to into `rq` (then its results are meaningless: the loop answers and
+    // runs it again). `p` is fresh for the attempt.
+    as_settings(&mut m.nodes, &mut m.attrs, &mut m.text, c.level, c.dpi, c.pixels, c.abyte, c.tbyte, c.sigs);
+    return as_run_figures(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.pages, cand, cbytes, &mut m.assets, &mut m.uses, &mut m.abytes, c.abyte, c.tbyte, c.sigs, c.dpi, c.pixels, input, nbytes, rfrom, ans, rq, bms, &mut p.fz0, &mut p.zb, &mut p.fz1, &mut p.fz2, &mut p.fz3, &mut p.fz4);
+}
 pub fn en_dump(et: &mut crate::port::Cells, gl: &mut crate::port::Cells, wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, mk: &mut crate::port::Cells, fnt: &mut crate::port::Cells, grl: &mut crate::port::Cells, gfl: &mut crate::port::Cells, ggp: &mut crate::port::Cells, grg: &mut crate::port::Cells, ev: &mut crate::emon::enctx::EvArenas, mut t: &mut String) -> i32 {
     // The evidence dump of a conversion, OPEN (`}` is the caller's, who may add a member first): `ev` is what the OCR stages made, the rest the text layer's.
     // Version "1", or "2" with the four graphics arrays when the document has fused graphics (P5.5a, D270).
@@ -220,4 +463,11 @@ pub fn en_finish_pdf(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::enctx
     model_init(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut m.ledger, &mut m.layout);
     pa_pages(&mut d.pg, &mut m.pages);
     return en_stage3(c, d, ev, m, s, np, 0);
+}
+pub fn en_finish(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::enctx::Doc, ev: &mut crate::emon::enctx::EvArenas, m: &mut crate::emon::enctx::Arenas, s: &mut crate::emon::enctx::Scratch) -> i32 {
+    // The document unit of whatever kind the document pass made (`kind`): `en-finish-pdf` or `en-finish-raster`. Answers as the file's head says.
+    if d.kind == en_kind_pdf() {
+        return en_finish_pdf(c, d, ev, m, s);
+    }
+    return en_finish_raster(c, d, ev, m, s);
 }

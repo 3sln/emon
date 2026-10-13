@@ -98,6 +98,7 @@ public static class Enctx {
         public emon.Port.Cells Lims = emon.Port.NewCells();
         public emon.Port.Cells Prod = emon.Port.NewCells();
         public System.Text.StringBuilder Msg = new System.Text.StringBuilder();
+        public int Nort = 0;
         public Cfg() {
         }
         public Cfg Clone() {
@@ -123,6 +124,7 @@ public static class Enctx {
             emon.Port.CellsCopyInto(c.Lims, this.Lims);
             emon.Port.CellsCopyInto(c.Prod, this.Prod);
             c.Msg.Append(this.Msg.ToString());
+            c.Nort = this.Nort;
             return c;
         }
     }
@@ -194,6 +196,14 @@ public static class Enctx {
         public int Hassnap = 0;
         public int Fcode = 0;
         public int Fnode = 0;
+        public emon.Port.Cells Pscr = emon.Port.NewCells();
+        public int Kind = 0;
+        public int Ifmt = 0;
+        public int Ipages = 0;
+        public int Imajor = 0;
+        public int Iminor = 0;
+        public int Ienc = 0;
+        public int Rfrom = 0;
         public Doc() {
         }
         public Doc Clone() {
@@ -265,6 +275,146 @@ public static class Enctx {
             c.Hassnap = this.Hassnap;
             c.Fcode = this.Fcode;
             c.Fnode = this.Fnode;
+            emon.Port.CellsCopyInto(c.Pscr, this.Pscr);
+            c.Kind = this.Kind;
+            c.Ifmt = this.Ifmt;
+            c.Ipages = this.Ipages;
+            c.Imajor = this.Imajor;
+            c.Iminor = this.Iminor;
+            c.Ienc = this.Ienc;
+            c.Rfrom = this.Rfrom;
+            return c;
+        }
+    }
+    public sealed class Pass {
+        public emon.Port.Cells Ar = emon.Port.NewCells();
+        public emon.Port.Cells Dc = emon.Port.NewCells();
+        public emon.Port.Cells Ca = emon.Port.NewCells();
+        public emon.Port.Cells Cb = emon.Port.NewCells();
+        public emon.Port.Cells St = emon.Port.NewCells();
+        public emon.Port.Cells Cx = emon.Port.NewCells();
+        public emon.Port.Cells Ox = emon.Port.NewCells();
+        public emon.Port.Cells Cs = emon.Port.NewCells();
+        public emon.Port.Cells Xo = emon.Port.NewCells();
+        public emon.Port.Cells F0 = emon.Port.NewCells();
+        public emon.Port.Cells F1 = emon.Port.NewCells();
+        public emon.Port.Cells F2 = emon.Port.NewCells();
+        public emon.Port.Cells F3 = emon.Port.NewCells();
+        public emon.Port.Cells Gx = emon.Port.NewCells();
+        public emon.Port.Cells Tle = emon.Port.NewCells();
+        public emon.Port.Cells Tlf = emon.Port.NewCells();
+        public emon.Port.Cells Thsc = emon.Port.NewCells();
+        public emon.Port.Cells Sp = emon.Port.NewCells();
+        public emon.Port.Cells Rs1 = emon.Port.NewCells();
+        public emon.Port.Cells Rs2 = emon.Port.NewCells();
+        public emon.Port.Cells Gcand = emon.Port.NewCells();
+        public emon.Port.Cells Gmeas = emon.Port.NewCells();
+        public emon.Port.Cells Fo = emon.Port.NewCells();
+        public emon.Port.Cells Fr = emon.Port.NewCells();
+        public emon.Port.Cells Qidx = emon.Port.NewCells();
+        public emon.Port.Cells Qw = emon.Port.NewCells();
+        public emon.Port.Cells Qseen = emon.Port.NewCells();
+        public emon.Port.Cells Xm = emon.Port.NewCells();
+        public emon.Port.Cells Nd = emon.Port.NewCells();
+        public emon.Port.Cells Nt = emon.Port.NewCells();
+        public emon.Port.Cells Sk = emon.Port.NewCells();
+        public emon.Port.Cells So = emon.Port.NewCells();
+        public emon.Port.Cells Wk = emon.Port.NewCells();
+        public emon.Port.Cells Sa = emon.Port.NewCells();
+        public emon.Port.Cells Ha = emon.Port.NewCells();
+        public emon.Port.Cells Hb = emon.Port.NewCells();
+        public emon.Port.Cells Hh = emon.Port.NewCells();
+        public emon.Port.Cells Vfs = emon.Port.NewCells();
+        public emon.Port.Cells Vfm = emon.Port.NewCells();
+        public emon.Port.Cells Vaq = emon.Port.NewCells();
+        public emon.Port.Cells Vfd = emon.Port.NewCells();
+        public emon.Port.Cells Vsg = emon.Port.NewCells();
+        public emon.Port.Cells Ax = emon.Port.NewCells();
+        public emon.Port.Cells Aout = emon.Port.NewCells();
+        public emon.Port.Cells Arec = emon.Port.NewCells();
+        public emon.Port.Cells Amrec = emon.Port.NewCells();
+        public emon.Port.Cells Asmp = emon.Port.NewCells();
+        public emon.Port.Cells Amsmp = emon.Port.NewCells();
+        public emon.Port.Cells Adata = emon.Port.NewCells();
+        public emon.Port.Cells Arows = emon.Port.NewCells();
+        public emon.Port.Cells Atmp = emon.Port.NewCells();
+        public emon.Port.Cells Aws = emon.Port.NewCells();
+        public emon.Port.Buf Az = emon.Port.NewBuf();
+        public emon.Port.Cells Glob = emon.Port.NewCells();
+        public emon.Port.Cells Words = emon.Port.NewCells();
+        public emon.Port.Cells Hs = emon.Port.NewCells();
+        public emon.Port.Cells Fz0 = emon.Port.NewCells();
+        public emon.Port.Cells Fz1 = emon.Port.NewCells();
+        public emon.Port.Cells Fz2 = emon.Port.NewCells();
+        public emon.Port.Cells Fz3 = emon.Port.NewCells();
+        public emon.Port.Cells Fz4 = emon.Port.NewCells();
+        public emon.Port.Buf Zb = emon.Port.NewBuf();
+        public Pass() {
+        }
+        public Pass Clone() {
+            Pass c = new Pass();
+            emon.Port.CellsCopyInto(c.Ar, this.Ar);
+            emon.Port.CellsCopyInto(c.Dc, this.Dc);
+            emon.Port.CellsCopyInto(c.Ca, this.Ca);
+            emon.Port.CellsCopyInto(c.Cb, this.Cb);
+            emon.Port.CellsCopyInto(c.St, this.St);
+            emon.Port.CellsCopyInto(c.Cx, this.Cx);
+            emon.Port.CellsCopyInto(c.Ox, this.Ox);
+            emon.Port.CellsCopyInto(c.Cs, this.Cs);
+            emon.Port.CellsCopyInto(c.Xo, this.Xo);
+            emon.Port.CellsCopyInto(c.F0, this.F0);
+            emon.Port.CellsCopyInto(c.F1, this.F1);
+            emon.Port.CellsCopyInto(c.F2, this.F2);
+            emon.Port.CellsCopyInto(c.F3, this.F3);
+            emon.Port.CellsCopyInto(c.Gx, this.Gx);
+            emon.Port.CellsCopyInto(c.Tle, this.Tle);
+            emon.Port.CellsCopyInto(c.Tlf, this.Tlf);
+            emon.Port.CellsCopyInto(c.Thsc, this.Thsc);
+            emon.Port.CellsCopyInto(c.Sp, this.Sp);
+            emon.Port.CellsCopyInto(c.Rs1, this.Rs1);
+            emon.Port.CellsCopyInto(c.Rs2, this.Rs2);
+            emon.Port.CellsCopyInto(c.Gcand, this.Gcand);
+            emon.Port.CellsCopyInto(c.Gmeas, this.Gmeas);
+            emon.Port.CellsCopyInto(c.Fo, this.Fo);
+            emon.Port.CellsCopyInto(c.Fr, this.Fr);
+            emon.Port.CellsCopyInto(c.Qidx, this.Qidx);
+            emon.Port.CellsCopyInto(c.Qw, this.Qw);
+            emon.Port.CellsCopyInto(c.Qseen, this.Qseen);
+            emon.Port.CellsCopyInto(c.Xm, this.Xm);
+            emon.Port.CellsCopyInto(c.Nd, this.Nd);
+            emon.Port.CellsCopyInto(c.Nt, this.Nt);
+            emon.Port.CellsCopyInto(c.Sk, this.Sk);
+            emon.Port.CellsCopyInto(c.So, this.So);
+            emon.Port.CellsCopyInto(c.Wk, this.Wk);
+            emon.Port.CellsCopyInto(c.Sa, this.Sa);
+            emon.Port.CellsCopyInto(c.Ha, this.Ha);
+            emon.Port.CellsCopyInto(c.Hb, this.Hb);
+            emon.Port.CellsCopyInto(c.Hh, this.Hh);
+            emon.Port.CellsCopyInto(c.Vfs, this.Vfs);
+            emon.Port.CellsCopyInto(c.Vfm, this.Vfm);
+            emon.Port.CellsCopyInto(c.Vaq, this.Vaq);
+            emon.Port.CellsCopyInto(c.Vfd, this.Vfd);
+            emon.Port.CellsCopyInto(c.Vsg, this.Vsg);
+            emon.Port.CellsCopyInto(c.Ax, this.Ax);
+            emon.Port.CellsCopyInto(c.Aout, this.Aout);
+            emon.Port.CellsCopyInto(c.Arec, this.Arec);
+            emon.Port.CellsCopyInto(c.Amrec, this.Amrec);
+            emon.Port.CellsCopyInto(c.Asmp, this.Asmp);
+            emon.Port.CellsCopyInto(c.Amsmp, this.Amsmp);
+            emon.Port.CellsCopyInto(c.Adata, this.Adata);
+            emon.Port.CellsCopyInto(c.Arows, this.Arows);
+            emon.Port.CellsCopyInto(c.Atmp, this.Atmp);
+            emon.Port.CellsCopyInto(c.Aws, this.Aws);
+            emon.Port.BufCopyInto(c.Az, this.Az);
+            emon.Port.CellsCopyInto(c.Glob, this.Glob);
+            emon.Port.CellsCopyInto(c.Words, this.Words);
+            emon.Port.CellsCopyInto(c.Hs, this.Hs);
+            emon.Port.CellsCopyInto(c.Fz0, this.Fz0);
+            emon.Port.CellsCopyInto(c.Fz1, this.Fz1);
+            emon.Port.CellsCopyInto(c.Fz2, this.Fz2);
+            emon.Port.CellsCopyInto(c.Fz3, this.Fz3);
+            emon.Port.CellsCopyInto(c.Fz4, this.Fz4);
+            emon.Port.BufCopyInto(c.Zb, this.Zb);
             return c;
         }
     }
