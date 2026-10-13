@@ -6,6 +6,7 @@
 ;;
 ;;   .cache/pdfium/<version>/<platform>/{lib,include,licenses,...}     the unpacked archive
 ;;   .cache/pdfium/current -> <version>/<platform>                      the one the build scripts use
+;;                                                                      (not for `--platform wasm` or `--no-current`, P11.4c)
 ;;
 ;; The archive is checked against the SHA-256 in tools/pdfium/pdfium.edn BEFORE it is unpacked. On macOS the
 ;; dylib's install name is `./libpdfium.dylib`, which a linked binary would look for in its working
@@ -64,6 +65,8 @@
     (when-not p (println "FAIL no pinned pdfium for" platform) (System/exit 1))
     (let [d (fetch! (:version pin) platform (:sha256 p))
           cur ".cache/pdfium/current"]
-      (fs/delete-if-exists cur)
-      (fs/create-sym-link cur (str/replace d ".cache/pdfium/" ""))
+      ;; The browser build (P11.4c) is not a library a host links: it must never become `current`.
+      (when-not (or (contains? args "--no-current") (= platform "wasm"))
+        (fs/delete-if-exists cur)
+        (fs/create-sym-link cur (str/replace d ".cache/pdfium/" "")))
       (println "pdfium" (:version pin) platform "at" d))))
