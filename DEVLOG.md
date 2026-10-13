@@ -9290,6 +9290,11 @@ them; offer them upstream when they have proved general.
 
 ## Parking lot
 
+- **After the first release** (maintainer, 2026-10-13): niche edge cases wait
+  until after the first release. That is P4.9 (code blocks, quotes, formulas),
+  P6.7 (initials from ink), P6.3a (GPU raster kernels) and P4.8's remaining
+  locale extras (per-locale keyword tables, Liang dehyphenation, zh/ja). They
+  stay open, unticked, and are not scheduled before release.
 - **nome as an optional corpus producer** (D041): allowed by the maintainer
   as an external dev-time tool; deferred until nome is complete.
 - **A kin PDF renderer**, written in emon (nome's rasteriser as reference
