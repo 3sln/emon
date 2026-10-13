@@ -36,6 +36,12 @@
         have (set (with-transcript "test/sealpx/replay"))]
     (vec (for [[k v] (sort fx) :when (and (= :scan (:kind v)) (contains? have k))] (:gold-id v)))))
 
+;; the graphics set's documents as `--docs VARIANT/ID` pairs (kin/scripts/gfuse, P7.G): the fixtures that have a transcript
+(defn gfuse-docs []
+  (let [fx (edn/read-string (slurp "test/fusion/graphics/FIXTURES.edn"))
+        have (set (with-transcript "test/fusion/graphics"))]
+    (vec (for [[k v] (sort fx) :when (contains? have k)] (str (:variant v) "/" (:doc v))))))
+
 ;; ------------------------------------------------------------------------------------------------------------------ the steps, in the order that is right
 ;; :cmd is a vector, or a function giving one; :covers the replay gates it re-derives; :writes the committed files or directories it may change.
 (def steps
@@ -60,6 +66,8 @@
     :cmd ["bb" "fusion-record" "--seals" "--digests"] :writes ["test/seals/replay/DIGESTS.edn"]}
    {:id "sealpx" :why "the seals-from-pixels set's digests" :covers ["sealpx"]
     :cmd ["bb" "sealpx-record" "--digests"] :writes ["test/sealpx/replay/DIGESTS.edn"]}
+   {:id "gfuse" :why "the graphics-fusion set's digests (JSON, HTML, evidence of every fixture)" :covers ["gfuse"]
+    :cmd ["bb" "gfuse-record" "--digests"] :writes ["test/fusion/graphics/DIGESTS.edn"]}
    {:id "sigs" :why "the signatures set's digests" :covers ["sigs"]
     :cmd ["bb" "sigs-record" "--digests"] :writes ["test/signatures/replay/DIGESTS.edn"]}
    {:id "retarget" :why "the targeted-rounds set's digests (Rust and Go must agree; D487)" :covers ["retarget"]
@@ -73,6 +81,8 @@
     :cmd (fn [] (accuracy "emon-fusion" "--variants" "pdf" "--ids" (str/join "," (with-transcript "test/fusion/replay")))) :writes ["test/scoreboard.edn"]}
    {:id "board-sealpx" :why "scoreboard `emon-sealpx` conf rows" :covers ["sealpx"]
     :cmd (fn [] (accuracy "emon-sealpx" "--variants" "scan-ovl" "--ids" (str/join "," (sealpx-scan-ids)))) :writes ["test/scoreboard.edn"]}
+   {:id "board-gfuse" :why "scoreboard `emon-gfuse` conf rows" :covers ["gfuse"]
+    :cmd (fn [] (accuracy "emon-gfuse" "--docs" (str/join "," (gfuse-docs)))) :writes ["test/scoreboard.edn"]}
    {:id "board-sigs" :why "scoreboard `emon-sigs` conf rows" :covers ["sigs"]
     :cmd (fn [] (accuracy "emon-sigs")) :writes ["test/scoreboard.edn"]}
    {:id "board-ocr-scans" :why "ocr section 5: scoreboard `emon-replay` conf rows (the slim scan transcripts)" :covers ["ocr"]

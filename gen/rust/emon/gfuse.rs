@@ -766,9 +766,27 @@ pub(crate) fn gf_trace_only(bits: i32) -> i32 {
     }
     return 0;
 }
+pub(crate) fn gf_line_at(gc: &mut crate::port::Cells, c: i32, t: i32) -> i32 {
+    // Where a rule's centre line lies across its axis at position `t` along it (a line that is a little slanted is followed, past its ends too).
+    let x0: i32 = gcat(gc, c, C_EX0);
+    let y0: i32 = gcat(gc, c, C_EY0);
+    let x1: i32 = gcat(gc, c, C_EX1);
+    let y1: i32 = gcat(gc, c, C_EY1);
+    if gcat(gc, c, C_CLS) == go_h() {
+        if x1 == x0 {
+            return y0;
+        }
+        return y0 + ((((y1 - y0) as i64).wrapping_mul((t - x0) as i64) / ((x1 - x0) as i64)) as i32);
+    }
+    if y1 == y0 {
+        return x0;
+    }
+    return x0 + ((((x1 - x0) as i64).wrapping_mul((t - y0) as i64) / ((y1 - y0) as i64)) as i32);
+}
 pub(crate) fn gf_run_unit(mut gc: &mut crate::port::Cells, mut aux: &mut crate::port::Cells, mut un: &mut crate::port::Cells, n: i32, s: i32, e: i32, gid: i32, cls: i32, vecexact: i32, q0: i32, q1: i32) -> i32 {
     // One run of elementary intervals `q0..q1` that only the tracer covers, as a unit: the tracer members it overlaps give its position (their mean), its
     // thickness (the greatest), and the colour, style and confidence of the longest overlap; when ONE member is the whole run its centre line is copied.
+    // A run of several pieces of a scanned rule follows their slant (D513): its centre line runs through where the pieces lie at its two ends, not flat at their mean.
     let epb: i32 = n * A_EP;
     let bitb: i32 = n * A_BITS;
     let ordb: i32 = n * A_ORD;
@@ -785,6 +803,8 @@ pub(crate) fn gf_run_unit(mut gc: &mut crate::port::Cells, mut aux: &mut crate::
     let mut thick: i32 = 0;
     let mut q: i32 = q0;
     let mut oc: i32 = 0;
+    let mut plo: i32 = 0;
+    let mut phi: i32 = 0;
     let mut perp: i32 = 0;
     while j < e {
         c = crate::port::cells_at(aux, ordb + j);
@@ -793,6 +813,8 @@ pub(crate) fn gf_run_unit(mut gc: &mut crate::port::Cells, mut aux: &mut crate::
             if ov > 0 {
                 cnt += 1;
                 psum += gf_perp_of(gc, c);
+                plo += gf_line_at(gc, c, lo);
+                phi += gf_line_at(gc, c, hi);
                 thick = gf_max(thick, gcat(gc, c, C_T));
                 if ov > bestov {
                     bestov = ov;
@@ -829,13 +851,13 @@ pub(crate) fn gf_run_unit(mut gc: &mut crate::port::Cells, mut aux: &mut crate::
         unput(un, u, 15, best);
     } else if cls == go_h() {
         unput(un, u, 11, lo);
-        unput(un, u, 12, perp);
+        unput(un, u, 12, plo / gf_max(cnt, 1));
         unput(un, u, 13, hi);
-        unput(un, u, 14, perp);
+        unput(un, u, 14, phi / gf_max(cnt, 1));
     } else {
-        unput(un, u, 11, perp);
+        unput(un, u, 11, plo / gf_max(cnt, 1));
         unput(un, u, 12, lo);
-        unput(un, u, 13, perp);
+        unput(un, u, 13, phi / gf_max(cnt, 1));
         unput(un, u, 14, hi);
     }
     return u;
@@ -1303,17 +1325,17 @@ pub(crate) fn gf_emit_vec_rules(ctx: &mut crate::port::Cells, gc: &mut crate::po
     return kept;
 }
 pub(crate) fn gf_unit_box(un: &mut crate::port::Cells, u: i32, mut gv: &mut crate::port::Cells) -> i32 {
-    // A rule unit's box into gv[0..3]: its run along the axis, its thickness across it.
+    // A rule unit's box into gv[0..3]: its run along the axis, its thickness across it (the box holds a slanted centre line whole, D513).
     let half: i32 = (gf_max(unat(un, u, 6), 1) + 1) / 2;
     if unat(un, u, 2) == go_h() {
         crate::port::cells_set(gv, 0, unat(un, u, 3));
-        crate::port::cells_set(gv, 1, unat(un, u, 5) - half);
+        crate::port::cells_set(gv, 1, gf_min(unat(un, u, 12), unat(un, u, 14)) - half);
         crate::port::cells_set(gv, 2, unat(un, u, 4));
-        crate::port::cells_set(gv, 3, unat(un, u, 5) + half);
+        crate::port::cells_set(gv, 3, gf_max(unat(un, u, 12), unat(un, u, 14)) + half);
     } else {
-        crate::port::cells_set(gv, 0, unat(un, u, 5) - half);
+        crate::port::cells_set(gv, 0, gf_min(unat(un, u, 11), unat(un, u, 13)) - half);
         crate::port::cells_set(gv, 1, unat(un, u, 3));
-        crate::port::cells_set(gv, 2, unat(un, u, 5) + half);
+        crate::port::cells_set(gv, 2, gf_max(unat(un, u, 11), unat(un, u, 13)) + half);
         crate::port::cells_set(gv, 3, unat(un, u, 4));
     }
     return 0;

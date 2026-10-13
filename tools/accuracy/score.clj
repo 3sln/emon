@@ -49,7 +49,9 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
 (def SIM 0.5)
 (def LOWER-IS-BETTER #{"cer" "wer" "watermark-leak" "initial-false-heading" "align-wrong"
                        ;; the fusion metrics (D206, SPEC 14.2)
-                       "ghost-rate" "seal-leak" "src-ocr-share" "tl-override"})
+                       "ghost-rate" "seal-leak" "src-ocr-share" "tl-override"
+                       ;; a border read as a letter and left in the body (P7.G, D517)
+                       "rule-ghost"})
 
 ;; ------------------------------------------------------------ python-isms ----
 

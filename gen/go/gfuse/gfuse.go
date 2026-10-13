@@ -880,9 +880,28 @@ func gfTraceOnly(bits int32) int32 {
 	return 0
 }
 
+func gfLineAt(gc *port.Cells, c int32, t int32) int32 {
+	// Where a rule's centre line lies across its axis at position `t` along it (a line that is a little slanted is followed, past its ends too).
+	var x0 int32 = gcat(gc, c, cEx0)
+	var y0 int32 = gcat(gc, c, cEy0)
+	var x1 int32 = gcat(gc, c, cEx1)
+	var y1 int32 = gcat(gc, c, cEy1)
+	if gcat(gc, c, cCls) == glayer.GoH() {
+		if x1 == x0 {
+			return y0
+		}
+		return y0 + int32((int64(y1-y0)*int64(t-x0))/int64(x1-x0))
+	}
+	if y1 == y0 {
+		return x0
+	}
+	return x0 + int32((int64(x1-x0)*int64(t-y0))/int64(y1-y0))
+}
+
 func gfRunUnit(gc *port.Cells, aux *port.Cells, un *port.Cells, n int32, s int32, e int32, gid int32, cls int32, vecexact int32, q0 int32, q1 int32) int32 {
 	// One run of elementary intervals `q0..q1` that only the tracer covers, as a unit: the tracer members it overlaps give its position (their mean), its
 	// thickness (the greatest), and the colour, style and confidence of the longest overlap; when ONE member is the whole run its centre line is copied.
+	// A run of several pieces of a scanned rule follows their slant (D513): its centre line runs through where the pieces lie at its two ends, not flat at their mean.
 	var epb int32 = n * aEp
 	var bitb int32 = n * aBits
 	var ordb int32 = n * aOrd
@@ -899,6 +918,8 @@ func gfRunUnit(gc *port.Cells, aux *port.Cells, un *port.Cells, n int32, s int32
 	var thick int32 = 0
 	var q int32 = q0
 	var oc int32 = 0
+	var plo int32 = 0
+	var phi int32 = 0
 	var perp int32 = 0
 	for j < e {
 		c = port.CellsAt(aux, ordb+j)
@@ -907,6 +928,8 @@ func gfRunUnit(gc *port.Cells, aux *port.Cells, un *port.Cells, n int32, s int32
 			if ov > 0 {
 				cnt += 1
 				psum += gfPerpOf(gc, c)
+				plo += gfLineAt(gc, c, lo)
+				phi += gfLineAt(gc, c, hi)
 				thick = gfMax(thick, gcat(gc, c, cT))
 				if ov > bestov {
 					bestov = ov
@@ -943,13 +966,13 @@ func gfRunUnit(gc *port.Cells, aux *port.Cells, un *port.Cells, n int32, s int32
 		unput(un, u, 15, best)
 	} else if cls == glayer.GoH() {
 		unput(un, u, 11, lo)
-		unput(un, u, 12, perp)
+		unput(un, u, 12, plo/gfMax(cnt, 1))
 		unput(un, u, 13, hi)
-		unput(un, u, 14, perp)
+		unput(un, u, 14, phi/gfMax(cnt, 1))
 	} else {
-		unput(un, u, 11, perp)
+		unput(un, u, 11, plo/gfMax(cnt, 1))
 		unput(un, u, 12, lo)
-		unput(un, u, 13, perp)
+		unput(un, u, 13, phi/gfMax(cnt, 1))
 		unput(un, u, 14, hi)
 	}
 	return u
@@ -1432,17 +1455,17 @@ func gfEmitVecRules(ctx *port.Cells, gc *port.Cells, n int32, aux *port.Cells, o
 }
 
 func gfUnitBox(un *port.Cells, u int32, gv *port.Cells) int32 {
-	// A rule unit's box into gv[0..3]: its run along the axis, its thickness across it.
+	// A rule unit's box into gv[0..3]: its run along the axis, its thickness across it (the box holds a slanted centre line whole, D513).
 	var half int32 = (gfMax(unat(un, u, 6), 1) + 1) / 2
 	if unat(un, u, 2) == glayer.GoH() {
 		port.CellsSet(gv, 0, unat(un, u, 3))
-		port.CellsSet(gv, 1, unat(un, u, 5)-half)
+		port.CellsSet(gv, 1, gfMin(unat(un, u, 12), unat(un, u, 14))-half)
 		port.CellsSet(gv, 2, unat(un, u, 4))
-		port.CellsSet(gv, 3, unat(un, u, 5)+half)
+		port.CellsSet(gv, 3, gfMax(unat(un, u, 12), unat(un, u, 14))+half)
 	} else {
-		port.CellsSet(gv, 0, unat(un, u, 5)-half)
+		port.CellsSet(gv, 0, gfMin(unat(un, u, 11), unat(un, u, 13))-half)
 		port.CellsSet(gv, 1, unat(un, u, 3))
-		port.CellsSet(gv, 2, unat(un, u, 5)+half)
+		port.CellsSet(gv, 2, gfMax(unat(un, u, 11), unat(un, u, 13))+half)
 		port.CellsSet(gv, 3, unat(un, u, 4))
 	}
 	return 0

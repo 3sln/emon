@@ -426,6 +426,51 @@ fn test_a_lattice_in_an_image_is_a_table_in_image_region_and_its_words_know_it()
     crate::testport::assert_eq(gl_check(grl, gfl, ggp, grg, refs), 0, "sound");
 }
 #[test]
+fn test_a_scanned_rule_in_pieces_keeps_its_slant_when_the_pieces_are_one_run() {
+    // D513: a rule of a scan, turned by 0.6 degrees and found in three pieces, is one run of the tracer alone; its centre line follows the pieces, it is not flat.
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gfl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ggp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fx: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gfa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let prims: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oblocks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let m: i32 = im_new(im, 1, 10000, 10000, 40000, 40000, 7, 600, 600);
+    crate::testport::assert_eq(m, 0, "the image placement");
+    // the engine's line separator (a `bt-line` block) under the pieces joins them to one group: two tracer pieces are never joined to each other
+    let b: i32 = ob_new(oblocks, 1, 12000, 15100, 38000, 15170, ob_block(), -1, 0);
+    ob_set(oblocks, b, obf_btype(), 3);
+    gu_trace(rules, 12000, 15000, 20000, 15083, 900);
+    gu_trace(rules, 20000, 15083, 30000, 15187, 900);
+    gu_trace(rules, 30000, 15187, 38000, 15270, 900);
+    crate::testport::assert_eq(gu_fuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa), 1, "fused");
+    crate::testport::assert_eq(ggp_count(ggp), 1, "one group: the three pieces and the line the engine saw under them");
+    crate::testport::assert_eq(ggp_get(ggp, 0, 5), 3, "three tracer members");
+    crate::testport::assert_eq(ggp_get(ggp, 0, 7), 1, "and one OCR member");
+    crate::testport::assert_eq(grl_count(grl), 1, "one rule: the run");
+    crate::testport::assert_eq(grl_get(grl, 0, 16), 530, "by row 530");
+    crate::testport::assert_eq(grl_get(grl, 0, 10), go_h(), "horizontal");
+    crate::testport::assert_eq(grl_get(grl, 0, 5), 12000, "from the left end of the first piece");
+    crate::testport::assert_eq(grl_get(grl, 0, 7), 38000, "to the right end of the last");
+    crate::testport::assert_that((grl_get(grl, 0, 6) >= 14998) && (grl_get(grl, 0, 6) <= 15002), "at the height of the first piece there");
+    crate::testport::assert_that((grl_get(grl, 0, 8) >= 15268) && (grl_get(grl, 0, 8) <= 15272), "and at the height of the last piece at the other end: the line is not flat");
+    crate::testport::assert_that((grl_get(grl, 0, 11) > 17900) && (grl_get(grl, 0, 11) < 17980), "its angle is 0.6 degrees (page space has y down: 179.4)");
+    crate::testport::assert_that(grl_get(grl, 0, 2) <= 14950, "its box holds the line whole: the top");
+    crate::testport::assert_that(grl_get(grl, 0, 4) >= 15300, "and the bottom");
+    crate::testport::assert_eq(gl_check(grl, gfl, ggp, grg, refs), 0, "sound");
+}
+#[test]
 fn test_a_tint_over_a_pattern_gives_its_colour_and_a_tint_in_a_good_image_region_is_a_fill() {
     let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();

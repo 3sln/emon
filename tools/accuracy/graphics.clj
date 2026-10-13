@@ -85,19 +85,37 @@
   [t w h [x y]]
   (case (long t) 0 [x y] 90 [(- h y) x] 180 [(- w x) (- h y)] 270 [y (- w x)]))
 
+(defn crop-shift
+  "The translation, in points, that the twins' ImageMagick `-rotate DEG -gravity center -crop WxH+0+0` adds to a content turned by `deg` degrees about the page's
+  centre (P7.G, D514): `-rotate` grows the canvas to the box of its three shears and the crop takes the middle of that canvas, but one pixel (and half a pixel of
+  rounding) too far out, so the content lands at (-s, -t) pixels with s = floor((W' - W) / 2 + 1.5), t = floor((H' - H) / 2 + 1.5) for the rotated box W' x H' of
+  a W x H page (measured against ImageMagick 7 at twelve angles and three sizes). Nothing when the angle is 0 (a no-op to ImageMagick) or when the page's dpi is not known."
+  [deg w h dpi]
+  (if (or (nil? dpi) (< (Math/abs (double deg)) 1e-9))
+    [0.0 0.0]
+    (let [pw (Math/round (* w (/ dpi 72.0))) ph (Math/round (* h (/ dpi 72.0)))
+          th (Math/toRadians (Math/abs (double deg))) c (Math/cos th) s (Math/sin th)
+          wb (+ (* pw c) (* ph s)) hb (+ (* ph c) (* pw s))
+          sx (Math/floor (+ (/ (- wb pw) 2.0) 1.5)) sy (Math/floor (+ (/ (- hb ph) 2.0) 1.5))
+          k (/ 72.0 dpi)]
+      [(- (* sx k)) (- (* sy k))])))
+
 (defn truth-for
   "The rule truth (a parsed rules.json: cpt) of a document, as it is in `variant`'s pages:
   {page {:rules [[x0 y0 x1 y1 thickness]] :fills [[x0 y0 x1 y1]]}} in points; `facts` is the MANIFEST entry's."
   [truth facts variant]
   (let [skews (case variant "scan" (get facts "skew-scan") "scan-color" (get facts "skew") "scan-ovl" (get facts "skew-ovl") nil)
-        turns (when (= variant "scan-ovl") (get facts "turns"))]
+        turns (when (= variant "scan-ovl") (get facts "turns"))
+        dpi (case variant "scan" (get-in facts ["dpi" "scan"]) ("scan-color" "scan-ovl") (get-in facts ["dpi" "scan-color"]) nil)]
     (into {}
           (for [pg (get truth "pages")
                 :let [n (get pg "n") w (/ (get pg "w") 100.0) h (/ (get pg "h") 100.0)
                       t (get turns (str n) 0)
                       [w h] (if (#{90 270} t) [h w] [w h])
                       deg (if skews (nth skews (dec n) 0.0) 0.0)
-                      mv (fn [p] (rotate-pt deg (/ w 2.0) (/ h 2.0) (turn-pt t (/ (get pg "w") 100.0) (/ (get pg "h") 100.0) p)))
+                      [sx sy] (crop-shift deg w h dpi)
+                      mv (fn [p] (let [[x y] (rotate-pt deg (/ w 2.0) (/ h 2.0) (turn-pt t (/ (get pg "w") 100.0) (/ (get pg "h") 100.0) p))]
+                                   [(+ x sx) (+ y sy)]))
                       ]]
             [n {:rules (vec (for [[x0 y0 x1 y1 th] (get pg "rules")
                                   :let [[a b] (mv [(/ x0 100.0) (/ y0 100.0)]) [c d] (mv [(/ x1 100.0) (/ y1 100.0)])]]
@@ -106,7 +124,7 @@
                                   :let [[ax ay] (turn-pt t (/ (get pg "w") 100.0) (/ (get pg "h") 100.0) [(/ x0 100.0) (/ y0 100.0)])
                                         [bx by] (turn-pt t (/ (get pg "w") 100.0) (/ (get pg "h") 100.0) [(/ x1 100.0) (/ y1 100.0)])
                                         [lx hx] [(min ax bx) (max ax bx)] [ly hy] [(min ay by) (max ay by)]
-                                        [mx my] (rotate-pt deg (/ w 2.0) (/ h 2.0) [(/ (+ lx hx) 2) (/ (+ ly hy) 2)])
+                                        [mx my] (let [[x y] (rotate-pt deg (/ w 2.0) (/ h 2.0) [(/ (+ lx hx) 2) (/ (+ ly hy) 2)])] [(+ x sx) (+ y sy)])
                                         hw (/ (- hx lx) 2) hh (/ (- hy ly) 2)]]
                               [(- mx hw) (- my hh) (+ mx hw) (+ my hh)]))}]))))
 
@@ -214,10 +232,37 @@
     {"gfx.rule.gold" (:rg acc) "gfx.rule.gold-ok" (:rgo acc) "gfx.rule.pred" (:rp acc) "gfx.rule.pred-ok" (:rpo acc)
      "gfx.fill.gold" (:fg acc) "gfx.fill.gold-ok" (:fgo acc) "gfx.fill.pred" (:fp acc) "gfx.fill.pred-ok" (:fpo acc)}))
 
+;; ------------------------------------------------------------------ rule ghosts (P7.G, D517)
+
+(def RULE-MARKS #"^[|¦│┃_‗—–=~\\/]{1,3}$")
+
+(defn- body-words
+  "The words of every leaf text of a body."
+  [body]
+  (vec (for [n (tree-seq map? #(get % "children") body)
+             :when (and (string? (get n "text")) (empty? (get n "children")))
+             w (str/split (str/trim (get n "text")) #"\s+")
+             :when (seq w)]
+         w)))
+
+(defn ghost-counts
+  "{words, ghosts}: the words of the prediction's body, and those of them that are only rule marks (| _ — =) beyond the gold's own count of such words:
+  a border read by the engine as a letter, that fusion should have kept out of the body (row 601)."
+  [pred gold]
+  (let [pw (body-words (get pred "body"))
+        gw (body-words (get-in gold ["model" "body"]))
+        marks (fn [ws] (count (filter #(re-matches RULE-MARKS %) ws)))]
+    {:words (count pw) :ghosts (max 0 (- (marks pw) (marks gw)))}))
+
 (defn add-counts!
   "Adds one document's graphics counts through `add` (k v). `opts`: :variant, :rules (parsed rules.json or nil), :facts (the
   MANIFEST entry's facts), :dump (a parsed dump, or nil/:none for a predictor with none)."
   [add pred gold {:keys [variant rules facts dump] :as opts}]
+  ;; rule ghosts: on the documents whose rules are measured
+  (when rules
+    (let [{:keys [words ghosts]} (ghost-counts pred gold)]
+      (add "gfx.ghost.words" words)
+      (add "gfx.ghost.n" ghosts)))
   ;; table adjacency: whenever the gold annotates tables
   (when (some #{"table"} (get-in gold ["annotated" "structure"]))
     (let [g (relations (get-in gold ["model" "body"])) p (relations (get pred "body"))
@@ -255,5 +300,6 @@
               (-> m (set* "table-adj-p" pp) (set* "table-adj-r" rr)
                   (set* "table-adj-f1" (if (zero? (+ pp rr)) 0.0 (/ (* 2 pp rr) (+ pp rr))))))
             m)
-        m (if (contains? c "gfx.tag.n") (set* m "tag-verdict-acc" (/ (double (c "gfx.tag.ok")) (c "gfx.tag.n"))) m)]
+        m (if (contains? c "gfx.tag.n") (set* m "tag-verdict-acc" (/ (double (c "gfx.tag.ok")) (c "gfx.tag.n"))) m)
+        m (if (pos? (get c "gfx.ghost.words" 0)) (set* m "rule-ghost" (/ (double (c "gfx.ghost.n")) (c "gfx.ghost.words"))) m)]
     m))

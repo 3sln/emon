@@ -1,0 +1,219 @@
+#!/usr/bin/env bb
+;; GRAPHICS FUSION on real renders and a real OCR engine's reading, replayed from transcripts WITH THEIR PIXELS: the tracer and OCR as witnesses of the rules and fills
+;; the vector source draws, and the only witnesses of those it does not.   kin/scripts/gfuse     (DEVLOG P7.G, SPEC 9.9, D221-D224, D325-D331, D512-D519)
+;;
+;; THE LIVE ENGINES ARE NOT HERE. `tools/fusion/record-graphics.clj` (`bb gfuse-record`) converted each document of test/fusion/graphics/FIXTURES.edn with the Engine's default
+;; settings, pdfium rendering a born-digital page and Tesseract reading every page, and committed what they answered WITH the bitmaps the page units read (the tracer's input), cut
+;; down to the ones a replay needs (test/fusion/graphics/ID/, and the SHA-256 of each replay's bundle in DIGESTS.edn). The set: ruled, unruled, partly ruled and shaded tables, rules
+;; under a soft mask and hidden ones, rules painted in an image, a table drawn in an image, and the scans of some of them (one turned by 2.4 degrees). This gate only REPLAYS, so it
+;; tests emon and never whose pdfium, Tesseract or ImageMagick is installed (SPEC 7.3). It holds:
+;;
+;;   1. IDENTITY: the Rust Engine and the Go Engine replay every transcript to the identical bundle (JSON, HTML, evidence dump) and it is the bundle the recording made (SHA-256);
+;;      so do the Java Engine, the C# Engine and the C binding where their toolchains are (each is left out LOUDLY without one); and a changed OCR request is `transcript-miss`
+;;      on all of them, nothing guessed;
+;;   2. THE GRAPHICS CONTRACT (D222): the tables of an image-free born-digital document are the vector source's alone (the `--ocr=never` run's), cell for cell, under fusion;
+;;   3. RULES AND FILLS, by length and area against the rule truth of tools/oracle/rules.py, for the VECTOR source alone, the TRACER alone and the FUSED run: on born-digital pages
+;;      without images the fused rules and fills are the vector's (rule P at least 0.98, rule R and fill P and R at least 0.99, never worse than the vector source's, better where it draws a rule the render does not
+;;      show: the soft mask); on scans (where the tracer is all there is) the rules fusion keeps are at least as precise as the tracer's (and the recall it gives up is said aloud, D518);
+;;   4. IMAGE TABLES: the tables drawn in an image are found (block-table recall 1.0 at the tables' level, a `table-in-image` region in the dump) and their words are in their cells;
+;;   5. TABLES: TEDS-lite and ICDAR adjacency F1 of the fused tables are never below the vector source's on a born-digital page without images; the `twin-gap` of each document
+;;      (its born-digital TEDS-lite minus its scan's) is printed and its median held to its recorded ceiling;
+;;   6. RULE GHOSTS: the body words that are only rule marks (`|` `_`) beyond the gold's own, counted per fixture and held to the recorded ceiling (the `rule-ghost` metric is ratcheted);
+;;   7. THE COST: the document unit (where `gf-fuse` runs) takes at most 5 ms a page of the vector source's conversion (RunStats' `finish-us`, Rust, best of three), live;
+;;   8. THE RATCHET: the scoreboard's `emon-gfuse` entry (rule-p/r, fill-p/r, table-adj, TEDS-lite, rule-ghost, ... of the fixtures, replayed) holds.
+(require '[babashka.fs :as fs]
+         '[babashka.classpath :as cp]
+         '[babashka.process :refer [process sh]]
+         '[cheshire.core :as json]
+         '[clojure.string :as str])
+(cp/add-classpath "tools")
+(cp/add-classpath "tools/lib")
+(require '[extra-hosts :as xh]
+         '[fusion.gfuse-lib :as l])
+
+(def fails (atom 0))
+(defn ok [& xs] (println (str "  ok   " (apply str xs))))
+(defn bad [& xs] (swap! fails inc) (println (str "  FAIL " (apply str xs))))
+(defn check [pass? & msg] (if pass? (apply ok msg) (apply bad msg)))
+
+(def ids l/ids)
+(def work (str (fs/create-temp-dir {:prefix "emon-gfuse."})))
+(.addShutdownHook (Runtime/getRuntime) (Thread. #(fs/delete-tree work)))
+
+(defn build-driver [script what]
+  (let [r @(process {:out :string :err :string} script)]
+    (if (zero? (:exit r)) (str/trim (:out r)) (do (bad "the " what " Engine driver did not build:\n" (:err r)) nil))))
+
+(def rdrv (when (fs/which "cargo") (build-driver "kin/scripts/emon-rs-build" "Rust")))
+(when-not rdrv (println "  SKIP rust engine -- cargo not on PATH"))
+;; Go, Java, C# and the C binding (P9.5, D494): arms, each left out LOUDLY without its toolchain
+(def extras (xh/engines {:hosts [:go :java :csharp :c] :on-fail bad}))
+
+(defn drive [drv & a] (apply l/drive drv a))
+(defn same? [a b] (and (= (:exit a) (:exit b)) (= (:out a) (:out b)) (= (:err a) (:err b))))
+(defn pct [x] (format "%.3f" (double x)))
+
+;; ---------------------------------------------------------------------------------------------------- the ceilings and floors this gate holds (recorded at D515)
+(def twin-gap-ceiling 0.15)     ; the median of (born-digital TEDS-lite - scan TEDS-lite) over the documents that have both; recorded 0.143
+(def ghost-ceiling 3)           ; body words that are only rule marks beyond the gold's, over the scanned fixtures; recorded 3 (2 when the scan's rules are kept, D518)
+(def budget-ms 5.0)             ; the document unit, a page, vector source alone
+;; the one image-free document whose tables fusion may change, and why (D222: say so)
+(def contract-exempt {"gfx-softmask-rule" "its rule under a soft mask is not shown by the render, so fusion drops it: the table is read without it"})
+
+(when (and rdrv (seq ids))
+  (ok (count ids) " fixtures: " (str/join " " (for [[c n] (sort (frequencies (mapcat #(:class (get l/fixtures %)) ids)))] (str (name c) "=" n))))
+  ;; 1: identity ---------------------------------------------------------------------------------------------------------------------------------------------------
+  (doseq [id ids]
+    (let [rep (str "--replay=" (l/replay-dir id))
+          in (l/input-of id)
+          rr (drive rdrv "--out=bundle" rep in)
+          want (get l/digests id)]
+      (check (and (zero? (:exit rr)) (pos? (count (:out rr))))
+             id ": the Rust Engine replays the committed transcript (" (count (:out rr)) " bytes of bundle: JSON, HTML, evidence)")
+      (doseq [{:keys [label drv]} extras]
+        (check (same? rr (drive drv "--out=bundle" rep in)) id ": the " label " Engine replays it to the identical bundle"))
+      (check (and want (= want (l/sha256 (:out rr)))) id ": and it is the bundle the live recording made (SHA-256 " (when want (subs want 0 12)) ")")
+      (let [edn (slurp (str (l/replay-dir id) "/transcript.edn"))
+            tam (str work "/tamper-" id)
+            tampered (str/replace edn #"(:kind :ocr :req \[\d+ 3 \d+ \d+ )3 " (fn [[_ p]] (str p "4 ")))]
+        (fs/create-dirs tam)
+        (doseq [f (fs/list-dir (l/replay-dir id))] (fs/copy f (str tam "/" (fs/file-name f)) {:replace-existing true}))
+        (spit (str tam "/transcript.edn") tampered)
+        (let [tr (drive rdrv "--out=bundle" (str "--replay=" tam) in)
+              tx (for [{:keys [drv]} extras] (drive drv "--out=bundle" (str "--replay=" tam) in))]
+          (check (and (not= edn tampered) (= 4 (:exit tr)) (str/includes? (:err tr) "error: transcript-miss")
+                      (every? #(and (= 4 (:exit %)) (str/includes? (:err %) "error: transcript-miss")) tx))
+                 id ": a changed request (psm 3 -> 4) is transcript-miss on Rust" (when (seq extras) (str " and on " (xh/names extras))) ", nothing guessed")))))
+
+  ;; the runs every other section reads -----------------------------------------------------------------------------------------------------------------------------
+  (def runs (into {} (for [id ids] [id {:fused (l/run-fused rdrv id) :vector (l/run-vector rdrv id)}])))
+  (doseq [id ids] (check (:fused (runs id)) id ": the Model and the evidence dump of the replay"))
+  (def born (filter #(= "pdf" (l/variant-of %)) ids))
+  (defn images? [id] (boolean (some #{:table-in-image :image-rules} (:class (get l/fixtures id)))))   ; the fixtures that draw in an image
+  (def plain (remove images? born))           ; born-digital documents whose pages hold no image placement
+  (def scans (remove #(= "pdf" (l/variant-of %)) ids))
+
+  ;; 2: the graphics contract -----------------------------------------------------------------------------------------------------------------------------------------
+  (letfn [(strip [n] (cond (map? n) (into {} (for [[k v] n :when (not (#{"id" "src" "conf"} k))] [k (strip v)]))
+                           (sequential? n) (mapv strip n)
+                           :else n))
+          (tables [n] (cond (map? n) (concat (when (= "table" (get n "kind")) [(strip n)]) (mapcat tables (vals n)))
+                            (sequential? n) (mapcat tables n)))]
+    (doseq [id plain]
+      (let [tp (tables (get-in (runs id) [:vector :model]))
+            tf (tables (get-in (runs id) [:fused :model]))]
+        (when (seq tp)
+          (if (contains? contract-exempt id)
+            (ok id ": graphics contract: " (if (= tp tf) "the table is the vector source's too" "the table differs from the vector source's, as it must") " (" (contract-exempt id) ")")
+            (check (= tp tf) id ": graphics contract: the " (count tp) " table(s) of an image-free born-digital document are the vector source's, cell for cell, under fusion"))))))
+
+  ;; 3: rules and fills -----------------------------------------------------------------------------------------------------------------------------------------------
+  (letfn [(counts [src ids*]
+            (l/add-counts (or (seq (for [id ids* :let [d (case src
+                                                            :vector (get-in (runs id) [:vector :dump])
+                                                            :tracer (some-> (get-in (runs id) [:fused :dump]) l/tracer-dump)
+                                                            :fused (get-in (runs id) [:fused :dump])) c (when d (l/graphic-counts id d))] :when c] [id c]))
+                          [[nil {}]])))
+          (pr [c] [(l/prf c "gfx.rule") (l/prf c "gfx.fill")])]
+    (let [truth (fn [ids*] (filter #(:rules (accuracy.accuracy/doc-graphics (l/doc-of %))) ids*))
+          pl (truth plain)
+          [vr vf] (pr (counts :vector pl))
+          [fr ff] (pr (counts :fused pl))]
+      (ok (format "born-digital pages without images (%d documents): rules P %s R %s, fills P %s R %s fused; the vector source alone gives P %s R %s, P %s R %s"
+                  (count pl) (pct (:p fr)) (pct (:r fr)) (pct (:p ff)) (pct (:r ff)) (pct (:p vr)) (pct (:r vr)) (pct (:p vf)) (pct (:r vf))))
+      (check (and (>= (:p fr) 0.98) (>= (:r fr) 0.99) (>= (:p ff) 0.99) (>= (:r ff) 0.99))
+             "fused rules of the born-digital pages are P 0.98 and R 0.99 at least, and fills P and R 0.99, against the truth (the vector source alone is no better than 0.975 on table-simple-ruled)")
+      (check (and (>= (:p fr) (- (:p vr) 0.001)) (>= (:r fr) (- (:r vr) 0.001)) (>= (:p ff) (- (:p vf) 0.001)) (>= (:r ff) (- (:r vf) 0.001)))
+             "and never worse than the vector source's own")
+      (doseq [id pl]
+        (let [v (some-> (get-in (runs id) [:vector :dump]) (->> (l/graphic-counts id)) (l/prf "gfx.rule"))
+              f (some-> (get-in (runs id) [:fused :dump]) (->> (l/graphic-counts id)) (l/prf "gfx.rule"))]
+          (when (and v f)
+            (check (and (>= (:p f) (- (:p v) 0.001)) (>= (:r f) (- (:r v) 0.001)))
+                   id (format ": rules fused P %s R %s, vector P %s R %s: not worse" (pct (:p f)) (pct (:r f)) (pct (:p v)) (pct (:r v)))))))
+      (when (some #{"gfx-softmask-rule"} pl)
+        (let [v (l/prf (l/graphic-counts "gfx-softmask-rule" (get-in (runs "gfx-softmask-rule") [:vector :dump])) "gfx.rule")
+              f (l/prf (l/graphic-counts "gfx-softmask-rule" (get-in (runs "gfx-softmask-rule") [:fused :dump])) "gfx.rule")]
+          (check (> (:p f) (+ (:p v) 0.1))
+                 "gfx-softmask-rule: the rule under a soft mask that the render does not show is gone: rule precision " (pct (:p v)) " -> " (pct (:p f)))))
+      (let [fcs (truth (filter images? born))
+            [mv _] (pr (counts :vector fcs)) [mf _] (pr (counts :fused fcs)) [mt _] (pr (counts :tracer fcs))]
+        (ok (format "born-digital pages with images (%d documents, the tables drawn in an image have the generator's truth in pieces): rules fused P %s R %s; vector P %s R %s; tracer P %s R %s"
+                    (count fcs) (pct (:p mf)) (pct (:r mf)) (pct (:p mv)) (pct (:r mv)) (pct (:p mt)) (pct (:r mt)))))
+      (doseq [form ["scan" "scan-color"]
+              :let [ids* (truth (filter #(= form (l/variant-of %)) scans))]
+              :when (seq ids*)]
+        (let [[fr fq] (pr (counts :fused ids*)) [tr tq] (pr (counts :tracer ids*))]
+          (ok (format "%s (%d documents): rules fused P %s R %s, the tracer alone P %s R %s; fills fused P %s R %s, tracer P %s R %s"
+                      form (count ids*) (pct (:p fr)) (pct (:r fr)) (pct (:p tr)) (pct (:r tr)) (pct (:p fq)) (pct (:r fq)) (pct (:p tq)) (pct (:r tq))))
+          (check (or (zero? (:pred fr)) (>= (:p fr) (- (:p tr) 0.01)))
+                 form ": the rules fusion keeps are at least as precise as the tracer's")
+          ;; THE SHORTFALL, said aloud (D518): arbitration keeps a fraction of what the tracer saw on a scan, because the skew spread of a scanned region is counted over the
+          ;; strokes of its letters too (health.kin, `hh-region-measure`), so the region scores under 500 and row 530 drops its rules; the fix is measured in DEVLOG D518
+          (ok (format "KNOWN, P7.G Left: %s keeps %s of the tracer's rule length (recall %s against its %s)" form
+                      (pct (if (pos? (:r tr)) (/ (:r fr) (:r tr)) 0.0)) (pct (:r fr)) (pct (:r tr))))))))
+
+  ;; 4: image tables ---------------------------------------------------------------------------------------------------------------------------------------------------
+  (doseq [id (filter #(contains? (:class (get l/fixtures %)) :table-in-image) born)]
+    (let [r (:fused (runs id))
+          m (l/metrics-of (l/score-run id r))
+          regions (filter #(= "table-in-image" (get % "kind")) (get-in r [:dump "grg"]))
+          tables (filter #(= "table" (get % "kind")) (tree-seq map? (fn [n] (get n "children")) (get-in r [:model "body"])))]
+      (check (and (seq regions) (>= (get m "block-table-r" 0) 1.0))
+             id (format ": the table(s) drawn in an image are found: %d table-in-image region(s), block-table recall %s, TEDS-lite %s"
+                        (count regions) (pct (get m "block-table-r" 0)) (pct (get m "table-teds-lite" 0))))
+      (check (some #(some (fn [c] (some #{"ocr-only"} (get c "flags"))) (tree-seq map? (fn [n] (get n "children")) %)) tables)
+             id ": the OCR words of the image table are in its cells (not in a figure's labels)")))
+
+  ;; 5: tables ---------------------------------------------------------------------------------------------------------------------------------------------------------
+  (def teds (into {} (for [id ids :let [m (some->> (:fused (runs id)) (l/score-run id) l/metrics-of)]] [id m])))
+  (doseq [id plain :let [v (some->> (:vector (runs id)) (l/score-run id) l/metrics-of) f (get teds id)] :when (and v f (get v "table-teds-lite"))]
+    (check (and (>= (get f "table-teds-lite" 0) (- (get v "table-teds-lite") 1e-9)) (>= (get f "table-adj-f1" 0) (- (get v "table-adj-f1" 0) 1e-9)))
+           id (format ": TEDS-lite %s and adjacency F1 %s fused, not below the vector source's %s and %s" (pct (get f "table-teds-lite" 0)) (pct (get f "table-adj-f1" 0))
+                      (pct (get v "table-teds-lite")) (pct (get v "table-adj-f1" 0)))))
+  (let [gaps (for [id scans :let [pdf (l/doc-of id) p (get teds pdf) s (get teds id)] :when (and p s (get p "table-teds-lite") (get s "table-teds-lite"))]
+               [id (- (get p "table-teds-lite") (get s "table-teds-lite"))])
+        skewed (set (filter #(contains? (:class (get l/fixtures %)) :skewed) scans))
+        held (remove (fn [[id _]] (skewed id)) gaps)
+        med (let [v (vec (sort (map second held))) n (count v)] (when (pos? n) (if (odd? n) (v (quot n 2)) (/ (+ (v (dec (quot n 2))) (v (quot n 2))) 2.0))))]
+    (doseq [[id g] gaps] (ok "twin-gap " id ": " (pct g) (when (skewed id) " (a page turned by 2.4 degrees: its words' boxes are turned too and stage 3 reads them upright; recorded, not held)")))
+    (when med
+      (check (<= med twin-gap-ceiling) (format "the median twin-gap over the %d documents turned by under a degree is %s (held to %s)" (count held) (pct med) (pct twin-gap-ceiling)))))
+
+  ;; 6: rule ghosts ----------------------------------------------------------------------------------------------------------------------------------------------------
+  (let [g (for [id ids :let [r (:fused (runs id))] :when r] [id (l/ghosts (:model r) (l/gold-of id))])
+        on-scans (reduce + (for [[id x] g :when (not= "pdf" (l/variant-of id))] (max 0 (- (:body x) (:gold x)))))]
+    (doseq [[id x] g :when (or (pos? (:body x)) (pos? (:ledger x)))]
+      (ok "rule ghosts " id ": " (:body x) " rule-mark word(s) in the body (the gold has " (:gold x) "), " (:ledger x) " in the ledger as `rule-ghost`"))
+    (check (<= on-scans ghost-ceiling) "rule ghosts: " on-scans " body word(s) on the scanned fixtures beyond the gold's (ceiling " ghost-ceiling ")")
+    (check (zero? (reduce + (for [[id x] g :when (= "pdf" (l/variant-of id))] (max 0 (- (:body x) (:gold x))))))
+           "and none on the born-digital ones"))
+
+  ;; 7: the cost -------------------------------------------------------------------------------------------------------------------------------------------------------
+  (let [worst (atom 0.0)]
+    (doseq [id born]
+      (let [one (fn [] (let [r (sh {:err :string :out :string} rdrv "--stats" "--ocr=never" "--out=json" (l/input-of id))
+                             m (re-find #"finish-us=(\d+)" (:err r))]
+                         (when m (parse-long (second m)))))
+            us (apply min (keep identity (repeatedly 3 one)))
+            pages (max 1 (count (get-in (runs id) [:vector :model "pages"])))
+            ms (/ us 1000.0 pages)]
+        (swap! worst max ms)))
+    (check (<= @worst budget-ms)
+           (format "the document unit (graphics fusion included) takes %.3f ms a page at worst over %d born-digital fixtures (Rust, best of three, RunStats), ceiling %.1f" @worst (count born) budget-ms)))
+
+  ;; 8: the ratchet ----------------------------------------------------------------------------------------------------------------------------------------------------
+  (let [docs (str/join "," (for [id ids] (str (l/variant-of id) "/" (l/doc-of id))))
+        r @(process {:out :string :err :string} "bb" "tools/accuracy/accuracy.clj" "--predictor" "emon-gfuse" "--docs" docs)]
+    (check (and (zero? (:exit r)) (str/includes? (:out r) "ok   accuracy[emon-gfuse]") (not (str/includes? (:out r) "FAIL")))
+           "accuracy[emon-gfuse]: the graphics fixtures, replayed, hold their scoreboard entry"
+           (when-let [line (some #(when (str/includes? % "accuracy[emon-gfuse]") (str/trim %)) (str/split-lines (:out r)))]
+             (str " (" (str/replace line #"^ok +accuracy\[emon-gfuse\]: " "") ")")))
+    (when-not (zero? (:exit r)) (println (:out r) (:err r))))
+
+  (when (zero? @fails)
+    (ok "graphics fusion: the vector source's rules and fills witnessed, the tracer's and OCR's added where the vector is silent: one bundle on Rust"
+        (when (seq extras) (str " and on " (xh/names extras))))))
+
+(when (empty? ids) (println "  SKIP no graphics transcripts committed (bb gfuse-record)"))
+(when (pos? @fails) (System/exit 1))

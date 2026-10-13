@@ -762,9 +762,27 @@ public static class Gfuse {
         }
         return 0;
     }
+    internal static int GfLineAt(emon.Port.Cells gc, int c, int t) {
+        // Where a rule's centre line lies across its axis at position `t` along it (a line that is a little slanted is followed, past its ends too).
+        int x0 = Gcat(gc, c, CEx0);
+        int y0 = Gcat(gc, c, CEy0);
+        int x1 = Gcat(gc, c, CEx1);
+        int y1 = Gcat(gc, c, CEy1);
+        if (Gcat(gc, c, CCls) == Glayer.GoH()) {
+            if (x1 == x0) {
+                return y0;
+            }
+            return y0 + ((int) (unchecked(((long) (y1 - y0)) * ((long) (t - x0))) / ((long) (x1 - x0))));
+        }
+        if (y1 == y0) {
+            return x0;
+        }
+        return x0 + ((int) (unchecked(((long) (x1 - x0)) * ((long) (t - y0))) / ((long) (y1 - y0))));
+    }
     internal static int GfRunUnit(emon.Port.Cells gc, emon.Port.Cells aux, emon.Port.Cells un, int n, int s, int e, int gid, int cls, int vecexact, int q0, int q1) {
         // One run of elementary intervals `q0..q1` that only the tracer covers, as a unit: the tracer members it overlaps give its position (their mean), its
         // thickness (the greatest), and the colour, style and confidence of the longest overlap; when ONE member is the whole run its centre line is copied.
+        // A run of several pieces of a scanned rule follows their slant (D513): its centre line runs through where the pieces lie at its two ends, not flat at their mean.
         int epb = n * AEp;
         int bitb = n * ABits;
         int ordb = n * AOrd;
@@ -781,6 +799,8 @@ public static class Gfuse {
         int thick = 0;
         int q = q0;
         int oc = 0;
+        int plo = 0;
+        int phi = 0;
         int perp = 0;
         while (j < e) {
             c = emon.Port.CellsAt(aux, ordb + j);
@@ -789,6 +809,8 @@ public static class Gfuse {
                 if (ov > 0) {
                     cnt += 1;
                     psum += GfPerpOf(gc, c);
+                    plo += GfLineAt(gc, c, lo);
+                    phi += GfLineAt(gc, c, hi);
                     thick = GfMax(thick, Gcat(gc, c, CT));
                     if (ov > bestov) {
                         bestov = ov;
@@ -825,13 +847,13 @@ public static class Gfuse {
             Unput(un, u, 15, best);
         } else if (cls == Glayer.GoH()) {
             Unput(un, u, 11, lo);
-            Unput(un, u, 12, perp);
+            Unput(un, u, 12, plo / GfMax(cnt, 1));
             Unput(un, u, 13, hi);
-            Unput(un, u, 14, perp);
+            Unput(un, u, 14, phi / GfMax(cnt, 1));
         } else {
-            Unput(un, u, 11, perp);
+            Unput(un, u, 11, plo / GfMax(cnt, 1));
             Unput(un, u, 12, lo);
-            Unput(un, u, 13, perp);
+            Unput(un, u, 13, phi / GfMax(cnt, 1));
             Unput(un, u, 14, hi);
         }
         return u;
@@ -1299,17 +1321,17 @@ public static class Gfuse {
         return kept;
     }
     internal static int GfUnitBox(emon.Port.Cells un, int u, emon.Port.Cells gv) {
-        // A rule unit's box into gv[0..3]: its run along the axis, its thickness across it.
+        // A rule unit's box into gv[0..3]: its run along the axis, its thickness across it (the box holds a slanted centre line whole, D513).
         int half = (GfMax(Unat(un, u, 6), 1) + 1) / 2;
         if (Unat(un, u, 2) == Glayer.GoH()) {
             emon.Port.CellsSet(gv, 0, Unat(un, u, 3));
-            emon.Port.CellsSet(gv, 1, Unat(un, u, 5) - half);
+            emon.Port.CellsSet(gv, 1, GfMin(Unat(un, u, 12), Unat(un, u, 14)) - half);
             emon.Port.CellsSet(gv, 2, Unat(un, u, 4));
-            emon.Port.CellsSet(gv, 3, Unat(un, u, 5) + half);
+            emon.Port.CellsSet(gv, 3, GfMax(Unat(un, u, 12), Unat(un, u, 14)) + half);
         } else {
-            emon.Port.CellsSet(gv, 0, Unat(un, u, 5) - half);
+            emon.Port.CellsSet(gv, 0, GfMin(Unat(un, u, 11), Unat(un, u, 13)) - half);
             emon.Port.CellsSet(gv, 1, Unat(un, u, 3));
-            emon.Port.CellsSet(gv, 2, Unat(un, u, 5) + half);
+            emon.Port.CellsSet(gv, 2, GfMax(Unat(un, u, 11), Unat(un, u, 13)) + half);
             emon.Port.CellsSet(gv, 3, Unat(un, u, 4));
         }
         return 0;
