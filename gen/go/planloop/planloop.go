@@ -40,6 +40,9 @@ func PeStalled() int32 {
 func PeOcrRequests() int32 {
 	return 9
 }
+func PeStageMs() int32 {
+	return 10
+}
 func PeEmitName(t *strings.Builder, code int32) int32 {
 	if code == 0 {
 		port.TextAscii(t, "none")
@@ -79,6 +82,10 @@ func PeEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 9 {
 		port.TextAscii(t, "ocr-requests")
+		return 1
+	}
+	if code == 10 {
+		port.TextAscii(t, "stage-ms")
 		return 1
 	}
 	return 0
@@ -514,8 +521,26 @@ func plRequests(p *planctx.Plan) int32 {
 	return ActRequests()
 }
 
+func PlStageOver(limit int32, elapsed int32) int32 {
+	// WALL-CLOCK PER STAGE (SPEC 7.4, P10.4): 1 when a stage has used its `stage-ms`. 0 is OFF, whatever the clock says. The clock is the host's
+	// (D396): it supplies the milliseconds since the unit began, rounded UP, so that any time at all is one; whether that is too long is decided here.
+	if limit <= 0 {
+		return 0
+	}
+	if elapsed >= limit {
+		return 1
+	}
+	return 0
+}
+
 func PlAfter(p *planctx.Plan, status int32) int32 {
 	// The unit answered `status` (`us-*`): what the host does next (`act-*`).
+	// Before anything else, the stage's clock (`stage-ms`): the host put the milliseconds this unit has run into `elapsed`. This is the natural
+	// point between rounds, between fetches and between units: an attempt that is still running is not interrupted, and one that finished past
+	// the bound is refused (the bound is the conversion's, and a unit that took longer than it was allowed has not kept it).
+	if PlStageOver(port.LimitOf(15), p.Elapsed) == 1 {
+		return plLimit(p, PeStageMs(), port.LimitOf(15), p.Elapsed)
+	}
 	if status == plan.UsNeedBytes() {
 		p.FetchRound += 1
 		p.FetchRounds += 1

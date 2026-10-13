@@ -50,8 +50,8 @@ public final class Pdfium implements RenderPort.Renderer {
     // struct FPDF_FILEACCESS { unsigned long m_FileLen; int (*m_GetBlock)(void*, unsigned long, unsigned char*, unsigned long); void* m_Param; }
     private static final MemoryLayout ACCESS = MemoryLayout.structLayout(ULONG.withName("len"), PTR.withName("get"), PTR.withName("param"));
 
-    /** A render larger than this many pixels is refused (`failed`), before any memory is asked for. */
-    public long maxPixels = 1L << 28;
+    // A render larger than the `pixels` limit (kin's table, read through Port.limitOf(9) at each render, so a conversion's `limit.pixels` applies to
+    // rendering too) is refused (`failed`), before any memory is asked for (P10.4).
 
     private final MethodHandle initLibrary, getLastError, loadCustomDocument, closeDocument, getPageCount, loadPage, closePage,
         pageWidth, pageHeight, bitmapCreateEx, bitmapFillRect, bitmapDestroy, renderPageBitmap, pageCountObjects, pageGetObject,
@@ -314,6 +314,7 @@ public final class Pdfium implements RenderPort.Renderer {
         try {
             int w = RenderPort.pixelsOf((double) (float) pageWidth.invoke(page), req.dpi);
             int h = RenderPort.pixelsOf((double) (float) pageHeight.invoke(page), req.dpi);
+            long maxPixels = Port.limitOf(9);
             if ((long) w * (long) h > maxPixels) {
                 throw new RenderPort.RenderError(false, w + "x" + h + " pixels is over the limit of " + maxPixels);
             }

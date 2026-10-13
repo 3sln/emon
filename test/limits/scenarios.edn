@@ -42,6 +42,13 @@
   :flags ["--replay=test/retarget/replay/ovl-stamp-seal"]
   :set "--limit.ocr-requests=1" :default "--limit.ocr-requests=100000" :expect [:err "ocr-requests"]
   :why "the requests a unit asks over its rounds (a recorded scan: the first pass and the targeted ones)"}
+ {:id "stage-ms" :limit "stage-ms" :input "test/corpus/synth/scan-ovl/stamp-seal.pdf"
+  :flags ["--replay=test/retarget/replay/ovl-stamp-seal"]
+  :set "--limit.stage-ms=1" :default "--limit.stage-ms=0" :expect [:err "stage-ms"]
+  :why "wall-clock per stage (SPEC 7.4): the host supplies the milliseconds a unit has run, rounded up, kin judges them; 1 is any time at all, 0 is off (the default)"}
+ {:id "fonts-per-doc" :limit "fonts-per-doc" :input "test/corpus/synth/pdf/footnotes-page.pdf"
+  :set "--limit.fonts-per-doc=0" :default "--limit.fonts-per-doc=512" :expect :differs
+  :why "a budget: the fonts a document's text is attributed to; past it the text has no font id (the evidence's 'no font'), and the page is flagged"}
  {:id "note-bodies" :limit "note-bodies" :input "test/corpus/synth/pdf/footnotes-page.pdf"
   :set "--limit.note-bodies=0" :default "--limit.note-bodies=4096" :expect :differs
   :why "a budget: the note bodies a document keeps; past it they are dropped, so the footnotes are not matched"}

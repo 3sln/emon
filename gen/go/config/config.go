@@ -185,7 +185,7 @@ func cfLimitIs(t *port.Cells, from int32, to int32, kind int32) int32 {
 func CfLimitFind(t *port.Cells, from int32, to int32) int32 {
 	// The kind of the limit t[from, to) names, or -1.
 	var k int32 = 0
-	for k < 14 {
+	for k < 16 {
 		if cfLimitIs(t, from, to, k) == 1 {
 			return k
 		}

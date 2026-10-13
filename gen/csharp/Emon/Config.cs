@@ -151,7 +151,7 @@ public static class Config {
     public static int CfLimitFind(emon.Port.Cells t, int from, int to) {
         // The kind of the limit t[from, to) names, or -1.
         int k = 0;
-        while (k < 14) {
+        while (k < 16) {
             if (CfLimitIs(t, from, to, k) == 1) {
                 return k;
             }

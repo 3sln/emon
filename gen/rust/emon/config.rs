@@ -149,7 +149,7 @@ pub(crate) fn cf_limit_is(t: &mut crate::port::Cells, from: i32, to: i32, kind: 
 pub fn cf_limit_find(t: &mut crate::port::Cells, from: i32, to: i32) -> i32 {
     // The kind of the limit t[from, to) names, or -1.
     let mut k: i32 = 0;
-    while k < 14 {
+    while k < 16 {
         if cf_limit_is(t, from, to, k) == 1 {
             return k;
         }

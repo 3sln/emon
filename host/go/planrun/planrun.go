@@ -15,7 +15,9 @@ import (
 	"emon/planctx"
 	"emon/planloop"
 	"emon/port"
+	"math"
 	"strings"
+	"time"
 )
 
 // Unit is kin's unit closed over what it needs: handed the answers so far, an empty requests Cells, the BitmapSet of this attempt and the
@@ -41,6 +43,8 @@ type Machine struct {
 	all    port.PlanBitmaps
 	reqs   []port.PlanRequest
 	staged map[int32]*port.Bitmap
+	// when the current unit began, on the host's monotonic clock (D396: a clock is the host's; `stage-ms`, P10.4)
+	t0 time.Time
 }
 
 // New is a machine with the limits of cfg.
@@ -48,7 +52,24 @@ func New(cfg port.PlanConfig) *Machine {
 	p := planctx.NewPlan()
 	p.MaxRounds = cfg.MaxRounds
 	p.FetchLimit = cfg.FetchRounds
-	return &Machine{p: p, bitmap: port.PlanBitmaps{}, all: port.PlanBitmaps{}, staged: map[int32]*port.Bitmap{}}
+	return &Machine{p: p, bitmap: port.PlanBitmaps{}, all: port.PlanBitmaps{}, staged: map[int32]*port.Bitmap{}, t0: time.Now()}
+}
+
+// elapsedMs is the milliseconds the current unit has run, rounded up (any time at all is one), saturated at the largest int32: what kin judges
+// `stage-ms` against.
+func (m *Machine) elapsedMs() int32 {
+	ns := time.Since(m.t0).Nanoseconds()
+	if ns < 0 {
+		return 0
+	}
+	ms := ns / 1000000
+	if ns%1000000 != 0 {
+		ms++
+	}
+	if ms > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	return int32(ms)
 }
 
 // Stats is what the current unit has counted.
@@ -80,7 +101,7 @@ func vec(c *port.Cells, from, to int32) []int32 {
 func (m *Machine) err() *port.PlanError {
 	var name strings.Builder
 	planloop.PeEmitName(&name, m.p.Err)
-	limited := m.p.Err == planloop.PeMaxRounds() || m.p.Err == planloop.PeFetchRounds() || m.p.Err == planloop.PeOcrRequests()
+	limited := m.p.Err == planloop.PeMaxRounds() || m.p.Err == planloop.PeFetchRounds() || m.p.Err == planloop.PeOcrRequests() || m.p.Err == planloop.PeStageMs()
 	return &port.PlanError{Name: name.String(), Msg: m.p.Msg.String(), Limited: limited, Limit: m.p.ErrLimit, Actual: m.p.ErrActual}
 }
 
@@ -117,6 +138,7 @@ func (m *Machine) Attempt(unit Unit, misses port.PlanMisses) (Next, error) {
 	payload := port.NewBuf()
 	status := unit(m.p.Ans, m.p.Rq, bms, payload)
 	made := bms.Made
+	m.p.Elapsed = m.elapsedMs()
 	switch act := planloop.PlAfter(m.p, status); act {
 	case planloop.ActDone():
 		return Done, nil
@@ -235,6 +257,7 @@ func (m *Machine) Fulfil(f port.PlanFulfiller) ([]port.PlanEntry, error) {
 // EndUnit folds a finished unit's accounting into the totals and starts the next with no answers and no bitmaps.
 func (m *Machine) EndUnit() {
 	planloop.PlFold(m.p)
+	m.t0 = time.Now()
 	m.bitmap = port.PlanBitmaps{}
 	m.all = port.PlanBitmaps{}
 	m.reqs = nil

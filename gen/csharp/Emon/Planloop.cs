@@ -35,6 +35,9 @@ public static class Planloop {
     public static int PeOcrRequests() {
         return 9;
     }
+    public static int PeStageMs() {
+        return 10;
+    }
     public static int PeEmitName(System.Text.StringBuilder t, int code) {
         if (code == 0) {
             emon.Port.TextAscii(t, "none");
@@ -74,6 +77,10 @@ public static class Planloop {
         }
         if (code == 9) {
             emon.Port.TextAscii(t, "ocr-requests");
+            return 1;
+        }
+        if (code == 10) {
+            emon.Port.TextAscii(t, "stage-ms");
             return 1;
         }
         return 0;
@@ -488,8 +495,25 @@ public static class Planloop {
         p.Outk = 2;
         return ActRequests();
     }
+    public static int PlStageOver(int limit, int elapsed) {
+        // WALL-CLOCK PER STAGE (SPEC 7.4, P10.4): 1 when a stage has used its `stage-ms`. 0 is OFF, whatever the clock says. The clock is the host's
+        // (D396): it supplies the milliseconds since the unit began, rounded UP, so that any time at all is one; whether that is too long is decided here.
+        if (limit <= 0) {
+            return 0;
+        }
+        if (elapsed >= limit) {
+            return 1;
+        }
+        return 0;
+    }
     public static int PlAfter(emon.Planctx.Plan p, int status) {
         // The unit answered `status` (`us-*`): what the host does next (`act-*`).
+        // Before anything else, the stage's clock (`stage-ms`): the host put the milliseconds this unit has run into `elapsed`. This is the natural
+        // point between rounds, between fetches and between units: an attempt that is still running is not interrupted, and one that finished past
+        // the bound is refused (the bound is the conversion's, and a unit that took longer than it was allowed has not kept it).
+        if (PlStageOver(emon.Port.LimitOf(15), p.Elapsed) == 1) {
+            return PlLimit(p, PeStageMs(), emon.Port.LimitOf(15), p.Elapsed);
+        }
         if (status == Plan.UsNeedBytes()) {
             p.FetchRound += 1;
             p.FetchRounds += 1;

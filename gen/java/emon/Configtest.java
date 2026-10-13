@@ -79,7 +79,7 @@ public final class Configtest {
         return 0;
     }
     public static void testTheLimitsHaveTheirNamesInKin() {
-        emon.Testport.assertEq(Limits.lmCount(), 14, "fourteen limits");
+        emon.Testport.assertEq(Limits.lmCount(), 16, "sixteen limits");
         tLimitName(0, 0, "input-bytes");
         tLimitName(0, 1, "stream-bytes");
         tLimitName(0, 2, "total-bytes");
@@ -94,6 +94,8 @@ public final class Configtest {
         tLimitName(0, 11, "note-bodies");
         tLimitName(0, 12, "note-refs");
         tLimitName(0, 13, "asset-placements");
+        tLimitName(0, 14, "fonts-per-doc");
+        tLimitName(0, 15, "stage-ms");
     }
     public static void testTheLimitsHaveTheirDefaultsAndRangesInKin() {
         emon.Testport.assertEq(Limits.lmDefault(0), 1073741824, "input-bytes");
@@ -110,6 +112,9 @@ public final class Configtest {
         emon.Testport.assertEq(Limits.lmDefault(11), 4096, "note-bodies");
         emon.Testport.assertEq(Limits.lmDefault(12), 8192, "note-refs");
         emon.Testport.assertEq(Limits.lmDefault(13), 4096, "asset-placements");
+        emon.Testport.assertEq(Limits.lmDefault(14), 512, "fonts-per-doc is the slab");
+        emon.Testport.assertEq(Limits.lmHi(14), 512, "and cannot be raised past it");
+        emon.Testport.assertEq(Limits.lmDefault(15), 0, "stage-ms is off");
         emon.Testport.assertEq(Limits.lmLo(3), 0, "a limit is not negative");
         emon.Testport.assertEq(Limits.lmHi(3), 2147483647, "a limit fits 31 bits");
         emon.Testport.assertEq(Limits.lmHi(6), 32, "form-depth is the stack of the forms being run");
@@ -154,14 +159,16 @@ public final class Configtest {
         emon.Testport.assertEq(Limits.lmOnHit(11), 1, "note-bodies is a budget");
         emon.Testport.assertEq(Limits.lmOnHit(12), 1, "note-refs is a budget");
         emon.Testport.assertEq(Limits.lmOnHit(13), 1, "asset-placements is a budget");
-        emon.Testport.assertEq(Limits.lmOnHit(14), 0, "past the table");
+        emon.Testport.assertEq(Limits.lmOnHit(14), 1, "fonts-per-doc is a budget");
+        emon.Testport.assertEq(Limits.lmOnHit(15), 0, "stage-ms breaches");
+        emon.Testport.assertEq(Limits.lmOnHit(16), 0, "past the table");
         emon.Testport.assertEq(Limits.lmOnHit(-1), 0, "before the table");
     }
     public static void testAKindOutsideTheTableHasNoNameAndADefaultOfNothing() {
-        emon.Testport.assertEq(Limits.lmDefault(14), 0, "past the table");
+        emon.Testport.assertEq(Limits.lmDefault(16), 0, "past the table");
         emon.Testport.assertEq(Limits.lmDefault(-1), 0, "before the table");
-        emon.Testport.assertEq(Limits.lmNameLen(14), 0, "no name");
-        emon.Testport.assertEq(Limits.lmNameCh(14, 0), -1, "no character");
+        emon.Testport.assertEq(Limits.lmNameLen(16), 0, "no name");
+        emon.Testport.assertEq(Limits.lmNameCh(16, 0), -1, "no character");
         emon.Testport.assertEq(Limits.lmNameCh(0, 11), -1, "past the name's end");
         emon.Testport.assertEq(Limits.lmNameCh(0, -1), -1, "before the name");
         emon.Testport.assertEq(Limits.sgDefault(2), 0, "no setting");
@@ -389,5 +396,14 @@ public final class Configtest {
         emon.Port.cellsDrop(t, 0);
         tCps(t, emon.Testport.textBlob("note-refs"));
         emon.Testport.assertEq(Config.cfLimitFind(t, 0, 9), 12, "note-refs");
+        emon.Port.cellsDrop(t, 0);
+        tCps(t, emon.Testport.textBlob("fonts-per-doc"));
+        emon.Testport.assertEq(Config.cfLimitFind(t, 0, 13), 14, "fonts-per-doc");
+        emon.Port.cellsDrop(t, 0);
+        tCps(t, emon.Testport.textBlob("stage-ms"));
+        emon.Testport.assertEq(Config.cfLimitFind(t, 0, 8), 15, "stage-ms");
+    }
+    public static void testFontsPerDocCannotBeRaisedPastItsSlab() {
+        tRefused(0, emon.Testport.textBlob("limit.fonts-per-doc=513"), "limit.fonts-per-doc is out of range 0..512");
     }
 }

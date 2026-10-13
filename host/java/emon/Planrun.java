@@ -288,10 +288,22 @@ public final class Planrun {
         private Map<Integer, Port.Bitmap> all = new HashMap<>();
         private List<Request> reqs = new ArrayList<>();
         private Map<Integer, Port.Bitmap> staged = new HashMap<>();
+        // when the current unit began, on the host's monotonic clock (D396: a clock is the host's; `stage-ms`, P10.4)
+        private long t0 = System.nanoTime();
 
         public Machine(Config cfg) {
             p.maxRounds = cfg.maxRounds;
             p.fetchLimit = cfg.fetchRounds;
+        }
+
+        // the milliseconds the current unit has run, rounded up (any time at all is one), saturated at the largest int: what kin judges `stage-ms` against
+        private int elapsedMs() {
+            long ns = System.nanoTime() - t0;
+            if (ns < 0) {
+                return 0;
+            }
+            long ms = ns / 1_000_000L + (ns % 1_000_000L != 0 ? 1 : 0);
+            return ms > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) ms;
         }
 
         /** What the current unit has counted. */
@@ -323,7 +335,7 @@ public final class Planrun {
 
         // the error kin holds, as the loop reports it: the name is kin's and so is the sentence
         private PlanError err() {
-            boolean limited = p.err == Planloop.peMaxRounds() || p.err == Planloop.peFetchRounds() || p.err == Planloop.peOcrRequests();
+            boolean limited = p.err == Planloop.peMaxRounds() || p.err == Planloop.peFetchRounds() || p.err == Planloop.peOcrRequests() || p.err == Planloop.peStageMs();
             return new PlanError(peName(p.err), p.msg.toString(), limited, p.errLimit, p.errActual);
         }
 
@@ -349,6 +361,7 @@ public final class Planrun {
             Port.Buf payload = Port.newBuf();
             int status = unit.run(p.ans, p.rq, bms, payload);
             Map<Integer, Port.Bitmap> made = bms.made;
+            p.elapsed = elapsedMs();
             int act = Planloop.plAfter(p, status);
             if (act == Planloop.actDone()) {
                 return Next.DONE;
@@ -454,6 +467,7 @@ public final class Planrun {
         /** Folds a finished unit's accounting into the totals and starts the next with no answers and no bitmaps. */
         public void endUnit() {
             Planloop.plFold(p);
+            t0 = System.nanoTime();
             bitmap = new HashMap<>();
             all = new HashMap<>();
             reqs = new ArrayList<>();

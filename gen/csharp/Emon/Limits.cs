@@ -13,7 +13,9 @@ public static class Limits {
         116, 104, 112, 97, 103, 101, 115, 112, 105, 120, 101, 108, 115, 111, 99, 114,
         45, 114, 101, 113, 117, 101, 115, 116, 115, 110, 111, 116, 101, 45, 98, 111,
         100, 105, 101, 115, 110, 111, 116, 101, 45, 114, 101, 102, 115, 97, 115, 115,
-        101, 116, 45, 112, 108, 97, 99, 101, 109, 101, 110, 116, 115
+        101, 116, 45, 112, 108, 97, 99, 101, 109, 101, 110, 116, 115, 102, 111, 110,
+        116, 115, 45, 112, 101, 114, 45, 100, 111, 99, 115, 116, 97, 103, 101, 45,
+        109, 115
     };
     public static readonly int[] LmRows = new int[] {
         1073741824, 0, 2147483647, 0, 11, 0,
@@ -29,7 +31,9 @@ public static class Limits {
         100000, 0, 2147483647, 93, 12, 0,
         4096, 0, 2147483647, 105, 11, 1,
         8192, 0, 2147483647, 116, 9, 1,
-        4096, 0, 2147483647, 125, 16, 1
+        4096, 0, 2147483647, 125, 16, 1,
+        512, 0, 512, 141, 13, 1,
+        0, 0, 2147483647, 154, 8, 0
     };
     public static readonly int[] SgChars = new int[] {111, 99, 114, 45, 109, 111, 100, 101, 116, 97, 115, 107, 115};
     public static readonly int[] SgRows = new int[] {
@@ -37,23 +41,23 @@ public static class Limits {
         0, 0, 1, 8, 5
     };
     public static int LmCount() {
-        return 14;
+        return 16;
     }
     public static int LmDefault(int kind) {
         // The limit's default; 0 for a kind not in the table.
-        if ((kind < 0) || (kind >= 14)) {
+        if ((kind < 0) || (kind >= 16)) {
             return 0;
         }
         return LmRows[kind * 6 + 0];
     }
     public static int LmLo(int kind) {
-        if ((kind < 0) || (kind >= 14)) {
+        if ((kind < 0) || (kind >= 16)) {
             return 0;
         }
         return LmRows[kind * 6 + 1];
     }
     public static int LmHi(int kind) {
-        if ((kind < 0) || (kind >= 14)) {
+        if ((kind < 0) || (kind >= 16)) {
             return 0;
         }
         return LmRows[kind * 6 + 2];
@@ -61,21 +65,21 @@ public static class Limits {
     public static int LmOnHit(int kind) {
         // What happens at the bound: 0 a breach (an error), 1 a budget (the work stops there, the conversion goes on), 2 reserved (nothing reads it yet).
         // 0 for a kind not in the table.
-        if ((kind < 0) || (kind >= 14)) {
+        if ((kind < 0) || (kind >= 16)) {
             return 0;
         }
         return LmRows[kind * 6 + 5];
     }
     public static int LmNameLen(int kind) {
         // The length of the limit's name, 0 for a kind not in the table.
-        if ((kind < 0) || (kind >= 14)) {
+        if ((kind < 0) || (kind >= 16)) {
             return 0;
         }
         return LmRows[kind * 6 + 4];
     }
     public static int LmNameCh(int kind, int i) {
         // The i-th code point of the limit's name; -1 past its end or for a kind not in the table.
-        if ((kind < 0) || (kind >= 14)) {
+        if ((kind < 0) || (kind >= 16)) {
             return -1;
         }
         if ((i < 0) || (i >= LmRows[kind * 6 + 4])) {

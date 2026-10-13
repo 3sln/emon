@@ -116,6 +116,7 @@ pub(crate) const C_FLIM: i32 = 597;
 pub(crate) const C_INTEXT: i32 = 598;
 pub(crate) const C_GSBASE: i32 = 599;
 pub(crate) const C_SSTAT: i32 = 633;
+pub(crate) const C_FIDLIM: i32 = 634;
 pub(crate) const C_TOK: i32 = 632;
 pub(crate) const C_FSTACK: i32 = 600;
 pub(crate) const MAX_FORMS: i32 = 32;
@@ -203,6 +204,7 @@ pub(crate) const W_WIDTH: i32 = 128;
 pub(crate) const W_TEXT: i32 = 256;
 pub(crate) const W_PROPS: i32 = 512;
 pub(crate) const W_PATHS: i32 = 1024;
+pub(crate) const W_FONTS: i32 = 2048;
 pub(crate) fn pc_ws(c: i32) -> i32 {
     if (c == 32) || ((c == 10) || ((c == 13) || ((c == 9) || ((c == 12) || (c == 0))))) {
         return 1;
@@ -684,6 +686,7 @@ pub fn pc_init(mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells)
     }
     crate::port::cells_set(cx, C_OPLIM, crate::port::limit_of(5));
     crate::port::cells_set(cx, C_FLIM, crate::port::limit_of(6));
+    crate::port::cells_set(cx, C_FIDLIM, crate::port::limit_of(14));
     crate::port::cells_set(cx, C_MCTOP, -1);
     return 0;
 }
@@ -1155,7 +1158,9 @@ pub(crate) fn pc_font_row(src: &crate::port::Src, mut ar: &mut crate::port::Cell
 }
 pub(crate) fn pc_font_id(mut cx: &mut crate::port::Cells, key: i32) -> i32 {
     // The evidence id of a font dictionary: its index in the order the
-    // document first showed it (-1 past 512 fonts).
+    // document first showed it. THE BUDGET `fonts-per-doc` (kind 14, at most MAX_FIDS = 512): the font past it has no id, -1, which is the
+    // evidence's 'no font' (its glyphs carry -1 and it has no `fonts` row); the text is still read in the font's own encoding, and the page
+    // that shows it is flagged (W_FONTS). The same on every host, since the decision is made here.
     let n: i32 = crate::port::cells_at(cx, C_NFONT);
     let mut i: i32 = 0;
     while i < n {
@@ -1164,7 +1169,7 @@ pub(crate) fn pc_font_id(mut cx: &mut crate::port::Cells, key: i32) -> i32 {
         }
         i += 1;
     }
-    if n >= MAX_FIDS {
+    if n >= crate::port::cells_at(cx, C_FIDLIM) {
         return -1;
     }
     crate::port::cells_set(cx, C_FIDS + n, key);
@@ -1352,6 +1357,9 @@ pub(crate) fn pc_glyph(mut cx: &mut crate::port::Cells, mut gl: &mut crate::port
     if slot >= 0 {
         sat = C_SLOTS + (slot * SLOT_STRIDE);
         fid = crate::port::cells_at(cx, sat + S_ID);
+        if fid < 0 {
+            pc_warn_set(cx, W_FONTS);
+        }
         if crate::port::cells_at(cx, sat + S_STATUS) == 0 {
             cnt = pc_f_map(f0, f1, f2, f3, slot, code);
             how = pc_f_how(f0, f1, f2, f3, slot);

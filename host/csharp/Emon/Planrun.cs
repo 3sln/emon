@@ -279,10 +279,22 @@ public static class Planrun {
         private Dictionary<int, Port.Bitmap> all = new Dictionary<int, Port.Bitmap>();
         private List<Request> reqs = new List<Request>();
         private Dictionary<int, Port.Bitmap> staged = new Dictionary<int, Port.Bitmap>();
+        // when the current unit began, on the host's monotonic clock (D396: a clock is the host's; `stage-ms`, P10.4)
+        private long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
 
         public Machine(Config cfg) {
             p.MaxRounds = cfg.MaxRounds;
             p.FetchLimit = cfg.FetchRounds;
+        }
+
+        // The milliseconds the current unit has run, rounded up (any time at all is one), saturated at the largest int: what kin judges `stage-ms` against.
+        private int ElapsedMs() {
+            long ticks = System.Diagnostics.Stopwatch.GetElapsedTime(t0).Ticks; // 100 ns each
+            if (ticks < 0) {
+                return 0;
+            }
+            long ms = (ticks + 9999) / 10000;
+            return ms > int.MaxValue ? int.MaxValue : (int)ms;
         }
 
         /// <summary>What the current unit has counted.</summary>
@@ -314,7 +326,7 @@ public static class Planrun {
 
         // the error kin holds, as the loop reports it: the name is kin's and so is the sentence
         private PlanError Err() {
-            bool limited = p.Err == Planloop.PeMaxRounds() || p.Err == Planloop.PeFetchRounds() || p.Err == Planloop.PeOcrRequests();
+            bool limited = p.Err == Planloop.PeMaxRounds() || p.Err == Planloop.PeFetchRounds() || p.Err == Planloop.PeOcrRequests() || p.Err == Planloop.PeStageMs();
             return new PlanError(PeName(p.Err), p.Msg.ToString(), limited, p.ErrLimit, p.ErrActual);
         }
 
@@ -342,6 +354,7 @@ public static class Planrun {
             Port.Buf payload = Port.NewBuf();
             int status = unit(p.Ans, p.Rq, bms, payload);
             Dictionary<int, Port.Bitmap> made = bms.Made;
+            p.Elapsed = ElapsedMs();
             int act = Planloop.PlAfter(p, status);
             if (act == Planloop.ActDone()) {
                 return Next.Done;
@@ -449,7 +462,8 @@ public static class Planrun {
         /// <summary>Folds a finished unit's accounting into the totals and starts the next with no answers and no bitmaps.</summary>
         public void EndUnit() {
             Planloop.PlFold(p);
-            bitmap = new Dictionary<int, Port.Bitmap>();
+            t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+            bitmap =new Dictionary<int, Port.Bitmap>();
             all = new Dictionary<int, Port.Bitmap>();
             reqs = new List<Request>();
             staged = new Dictionary<int, Port.Bitmap>();

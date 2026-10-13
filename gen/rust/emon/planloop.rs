@@ -33,6 +33,9 @@ pub fn pe_stalled() -> i32 {
 pub fn pe_ocr_requests() -> i32 {
     return 9;
 }
+pub fn pe_stage_ms() -> i32 {
+    return 10;
+}
 pub fn pe_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 0 {
         crate::port::text_ascii(t, "none");
@@ -72,6 +75,10 @@ pub fn pe_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 9 {
         crate::port::text_ascii(t, "ocr-requests");
+        return 1;
+    }
+    if code == 10 {
+        crate::port::text_ascii(t, "stage-ms");
         return 1;
     }
     return 0;
@@ -486,8 +493,25 @@ pub(crate) fn pl_requests(p: &mut crate::emon::planctx::Plan) -> i32 {
     p.outk = 2;
     return act_requests();
 }
+pub fn pl_stage_over(limit: i32, elapsed: i32) -> i32 {
+    // WALL-CLOCK PER STAGE (SPEC 7.4, P10.4): 1 when a stage has used its `stage-ms`. 0 is OFF, whatever the clock says. The clock is the host's
+    // (D396): it supplies the milliseconds since the unit began, rounded UP, so that any time at all is one; whether that is too long is decided here.
+    if limit <= 0 {
+        return 0;
+    }
+    if elapsed >= limit {
+        return 1;
+    }
+    return 0;
+}
 pub fn pl_after(p: &mut crate::emon::planctx::Plan, status: i32) -> i32 {
     // The unit answered `status` (`us-*`): what the host does next (`act-*`).
+    // Before anything else, the stage's clock (`stage-ms`): the host put the milliseconds this unit has run into `elapsed`. This is the natural
+    // point between rounds, between fetches and between units: an attempt that is still running is not interrupted, and one that finished past
+    // the bound is refused (the bound is the conversion's, and a unit that took longer than it was allowed has not kept it).
+    if pl_stage_over(crate::port::limit_of(15), p.elapsed) == 1 {
+        return pl_limit(p, pe_stage_ms(), crate::port::limit_of(15), p.elapsed);
+    }
     if status == us_need_bytes() {
         p.fetch_round += 1;
         p.fetch_rounds += 1;

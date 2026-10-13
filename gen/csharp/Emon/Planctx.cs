@@ -31,6 +31,7 @@ public static class Planctx {
         public int ErrActual = 0;
         public int Phase = 0;
         public int Page = 0;
+        public int Elapsed = 0;
         public int TAttempts = 0;
         public int TFetchRounds = 0;
         public int TBytesRequests = 0;
@@ -65,6 +66,7 @@ public static class Planctx {
             c.ErrActual = this.ErrActual;
             c.Phase = this.Phase;
             c.Page = this.Page;
+            c.Elapsed = this.Elapsed;
             c.TAttempts = this.TAttempts;
             c.TFetchRounds = this.TFetchRounds;
             c.TBytesRequests = this.TBytesRequests;

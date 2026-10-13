@@ -80,7 +80,7 @@ public static class Configtest {
     }
     [Xunit.Fact]
     public static void TestTheLimitsHaveTheirNamesInKin() {
-        emon.Testport.AssertEq(Limits.LmCount(), 14, "fourteen limits");
+        emon.Testport.AssertEq(Limits.LmCount(), 16, "sixteen limits");
         TLimitName(0, 0, "input-bytes");
         TLimitName(0, 1, "stream-bytes");
         TLimitName(0, 2, "total-bytes");
@@ -95,6 +95,8 @@ public static class Configtest {
         TLimitName(0, 11, "note-bodies");
         TLimitName(0, 12, "note-refs");
         TLimitName(0, 13, "asset-placements");
+        TLimitName(0, 14, "fonts-per-doc");
+        TLimitName(0, 15, "stage-ms");
     }
     [Xunit.Fact]
     public static void TestTheLimitsHaveTheirDefaultsAndRangesInKin() {
@@ -112,6 +114,9 @@ public static class Configtest {
         emon.Testport.AssertEq(Limits.LmDefault(11), 4096, "note-bodies");
         emon.Testport.AssertEq(Limits.LmDefault(12), 8192, "note-refs");
         emon.Testport.AssertEq(Limits.LmDefault(13), 4096, "asset-placements");
+        emon.Testport.AssertEq(Limits.LmDefault(14), 512, "fonts-per-doc is the slab");
+        emon.Testport.AssertEq(Limits.LmHi(14), 512, "and cannot be raised past it");
+        emon.Testport.AssertEq(Limits.LmDefault(15), 0, "stage-ms is off");
         emon.Testport.AssertEq(Limits.LmLo(3), 0, "a limit is not negative");
         emon.Testport.AssertEq(Limits.LmHi(3), 2147483647, "a limit fits 31 bits");
         emon.Testport.AssertEq(Limits.LmHi(6), 32, "form-depth is the stack of the forms being run");
@@ -158,15 +163,17 @@ public static class Configtest {
         emon.Testport.AssertEq(Limits.LmOnHit(11), 1, "note-bodies is a budget");
         emon.Testport.AssertEq(Limits.LmOnHit(12), 1, "note-refs is a budget");
         emon.Testport.AssertEq(Limits.LmOnHit(13), 1, "asset-placements is a budget");
-        emon.Testport.AssertEq(Limits.LmOnHit(14), 0, "past the table");
+        emon.Testport.AssertEq(Limits.LmOnHit(14), 1, "fonts-per-doc is a budget");
+        emon.Testport.AssertEq(Limits.LmOnHit(15), 0, "stage-ms breaches");
+        emon.Testport.AssertEq(Limits.LmOnHit(16), 0, "past the table");
         emon.Testport.AssertEq(Limits.LmOnHit(-1), 0, "before the table");
     }
     [Xunit.Fact]
     public static void TestAKindOutsideTheTableHasNoNameAndADefaultOfNothing() {
-        emon.Testport.AssertEq(Limits.LmDefault(14), 0, "past the table");
+        emon.Testport.AssertEq(Limits.LmDefault(16), 0, "past the table");
         emon.Testport.AssertEq(Limits.LmDefault(-1), 0, "before the table");
-        emon.Testport.AssertEq(Limits.LmNameLen(14), 0, "no name");
-        emon.Testport.AssertEq(Limits.LmNameCh(14, 0), -1, "no character");
+        emon.Testport.AssertEq(Limits.LmNameLen(16), 0, "no name");
+        emon.Testport.AssertEq(Limits.LmNameCh(16, 0), -1, "no character");
         emon.Testport.AssertEq(Limits.LmNameCh(0, 11), -1, "past the name's end");
         emon.Testport.AssertEq(Limits.LmNameCh(0, -1), -1, "before the name");
         emon.Testport.AssertEq(Limits.SgDefault(2), 0, "no setting");
@@ -409,5 +416,15 @@ public static class Configtest {
         emon.Port.CellsDrop(t, 0);
         TCps(t, emon.Testport.TextBlob("note-refs"));
         emon.Testport.AssertEq(Config.CfLimitFind(t, 0, 9), 12, "note-refs");
+        emon.Port.CellsDrop(t, 0);
+        TCps(t, emon.Testport.TextBlob("fonts-per-doc"));
+        emon.Testport.AssertEq(Config.CfLimitFind(t, 0, 13), 14, "fonts-per-doc");
+        emon.Port.CellsDrop(t, 0);
+        TCps(t, emon.Testport.TextBlob("stage-ms"));
+        emon.Testport.AssertEq(Config.CfLimitFind(t, 0, 8), 15, "stage-ms");
+    }
+    [Xunit.Fact]
+    public static void TestFontsPerDocCannotBeRaisedPastItsSlab() {
+        TRefused(0, emon.Testport.TextBlob("limit.fonts-per-doc=513"), "limit.fonts-per-doc is out of range 0..512");
     }
 }

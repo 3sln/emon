@@ -61,6 +61,7 @@
 (def loop-sites
   "limits the plan loop reads by the loop's own error (not a `limit-of` of the name's kind)."
   {"ocr-requests" (grep-sites ["kin/planloop.kin"] #"\(pe-ocr-requests\)")
+   "stage-ms" (grep-sites ["kin/planloop.kin"] #"\(pe-stage-ms\)")
    "max-rounds" (grep-sites ["kin/planloop.kin"] #"\(pe-max-rounds\)")
    "fetch-rounds" (grep-sites ["kin/planloop.kin"] #"\(pe-fetch-rounds\)")})
 
@@ -83,6 +84,9 @@
    ["stream-bytes" "tools/fuzz/seeds.clj" "bomb-flate-100m"]
    ["stream-bytes" "tools/fuzz/engine.clj" "EMON_LIMIT_STREAM_BYTES"]
    ["ocr-requests" "kin/planlooptest.kin" "test-ocr-requests-is-a-named-limit-of-the-loop"]
+   ["stage-ms" "kin/planlooptest.kin" "test-a-stages-wall-clock-is-kins-to-judge-and-0-is-off"]
+   ["stage-ms" "kin/planlooptest.kin" "test-with-stage-ms-off-the-loop-ignores-the-clock"]
+   ["fonts-per-doc" "kin/configtest.kin" "test-fonts-per-doc-cannot-be-raised-past-its-slab"]
    ["chunk" "kin/scripts/identity" "--chunk=512"]
    ["asset-dpi" "kin/scripts/asset-golden" "asset-dpi"]
    ["max-rounds" "kin/planlooptest.kin" "test-max-rounds-is-a-named-limit"]
@@ -167,8 +171,9 @@
     (line "")
     (line "INVENTORY (tools/limits/inventory.edn; the table and the options are (a), read from their sources)")
     (line (format "  (a) already named: %d  = %d limits of kin/limits.kin + %d numeric options of kin/config.kin" a (count limits) (count options)))
-    (line (format "  (b) became a limit or began to be read: %d  (%d new rows, %d read for the first time, %d range corrected)"
-                  (count b) (count (remove #(or (:wired %) (= (:limit %) "form-depth")) b)) (count wired) (count (filter #(= (:limit %) "form-depth") b))))
+    (line (format "  (b) became a limit or began to be read: %d  (%d new rows, %d read for the first time, %d range corrected, %d copies of a default now read from the table)"
+                  (count b) (count (remove #(or (:wired %) (:copy %) (= (:limit %) "form-depth")) b)) (count wired) (count (filter #(= (:limit %) "form-depth") b))
+                  (count (filter :copy b))))
     (line (format "  (b-open) should be one and is not yet: %d" (count (by :b-open))))
     (line (format "  (c) stays fixed: %d   %s" (count (by :c))
                   (str/join ", " (for [[k v] (sort-by (comp str key) (group-by :why (by :c)))] (str (name k) " " (count v))))))

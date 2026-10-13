@@ -236,6 +236,28 @@ fn test_one_request_past_ocr_requests_is_the_named_error() {
     t_err(0, p, pe_ocr_requests(), "ocr-requests", "the limit is 100000 and this run reached 100001");
 }
 #[test]
+fn test_a_stages_wall_clock_is_kins_to_judge_and_0_is_off() {
+    // `stage-ms` (kind 15, P10.4): the host supplies the milliseconds, kin says whether they are too many. 0 is off, whatever the clock says; a stage
+    // that has used the bound has reached it (the host rounds up, so any time is a millisecond).
+    crate::testport::assert_eq(pl_stage_over(0, 2147483647), 0, "off is off");
+    crate::testport::assert_eq(pl_stage_over(0, 0), 0, "off, and no time");
+    crate::testport::assert_eq(pl_stage_over(1, 0), 0, "no time has passed");
+    crate::testport::assert_eq(pl_stage_over(1, 1), 1, "a millisecond is the bound");
+    crate::testport::assert_eq(pl_stage_over(100, 99), 0, "one under");
+    crate::testport::assert_eq(pl_stage_over(100, 100), 1, "reached");
+    crate::testport::assert_eq(pl_stage_over(100, 5000), 1, "past");
+}
+#[test]
+fn test_with_stage_ms_off_the_loop_ignores_the_clock() {
+    let p: &mut crate::emon::planctx::Plan = &mut crate::emon::planctx::Plan::new();
+    t_init(p, 5, 24);
+    pl_attempt(p);
+    p.elapsed = 2147483647;
+    t_render(p, 1);
+    crate::testport::assert_eq(pl_after(p, us_requests()), act_requests(), "an hour of wall-clock is nothing when the limit is off");
+    crate::testport::assert_eq(p.err, 0, "no error");
+}
+#[test]
 fn test_a_miss_is_not_a_round_and_fetch_rounds_is_a_named_limit() {
     let p: &mut crate::emon::planctx::Plan = &mut crate::emon::planctx::Plan::new();
     t_init(p, 5, 2);
@@ -820,6 +842,11 @@ fn test_the_stalled_error_and_the_phases_are_named() {
 fn test_the_ocr_requests_limit_is_named_as_the_table_names_it() {
     let a: &mut String = &mut crate::port::new_text();
     t_name(0, "ocr-requests", pe_emit_name(a, pe_ocr_requests()), a);
+}
+#[test]
+fn test_the_stage_ms_limit_is_named_as_the_table_names_it() {
+    let a: &mut String = &mut crate::port::new_text();
+    t_name(0, "stage-ms", pe_emit_name(a, pe_stage_ms()), a);
 }
 #[test]
 fn test_a_documents_status_is_named_and_has_a_class() {

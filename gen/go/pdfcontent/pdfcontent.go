@@ -221,6 +221,8 @@ const cGsbase int32 = 599
 
 const cSstat int32 = 633
 
+const cFidlim int32 = 634
+
 const cTok int32 = 632
 
 const cFstack int32 = 600
@@ -394,6 +396,8 @@ const wText int32 = 256
 const wProps int32 = 512
 
 const wPaths int32 = 1024
+
+const wFonts int32 = 2048
 
 func pcWs(c int32) int32 {
 	if (c == 32) || ((c == 10) || ((c == 13) || ((c == 9) || ((c == 12) || (c == 0))))) {
@@ -906,6 +910,7 @@ func PcInit(cx *port.Cells, ox *port.Cells) int32 {
 	}
 	port.CellsSet(cx, cOplim, port.LimitOf(5))
 	port.CellsSet(cx, cFlim, port.LimitOf(6))
+	port.CellsSet(cx, cFidlim, port.LimitOf(14))
 	port.CellsSet(cx, cMctop, -1)
 	return 0
 }
@@ -1401,7 +1406,9 @@ func pcFontRow(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *
 
 func pcFontId(cx *port.Cells, key int32) int32 {
 	// The evidence id of a font dictionary: its index in the order the
-	// document first showed it (-1 past 512 fonts).
+	// document first showed it. THE BUDGET `fonts-per-doc` (kind 14, at most MAX_FIDS = 512): the font past it has no id, -1, which is the
+	// evidence's 'no font' (its glyphs carry -1 and it has no `fonts` row); the text is still read in the font's own encoding, and the page
+	// that shows it is flagged (W_FONTS). The same on every host, since the decision is made here.
 	var n int32 = port.CellsAt(cx, cNfont)
 	var i int32 = 0
 	for i < n {
@@ -1410,7 +1417,7 @@ func pcFontId(cx *port.Cells, key int32) int32 {
 		}
 		i += 1
 	}
-	if n >= maxFids {
+	if n >= port.CellsAt(cx, cFidlim) {
 		return -1
 	}
 	port.CellsSet(cx, cFids+n, key)
@@ -1604,6 +1611,9 @@ func pcGlyph(cx *port.Cells, gl *port.Cells, et *port.Cells, f0 *port.Cells, f1 
 	if slot >= 0 {
 		sat = cSlots + (slot * slotStride)
 		fid = port.CellsAt(cx, sat+sId)
+		if fid < 0 {
+			pcWarnSet(cx, wFonts)
+		}
 		if port.CellsAt(cx, sat+sStatus) == 0 {
 			cnt = pcFMap(f0, f1, f2, f3, slot, code)
 			how = pcFHow(f0, f1, f2, f3, slot)

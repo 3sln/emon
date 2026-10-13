@@ -10,7 +10,7 @@
                                rq-render rq-crop rq-decode rq-ocr rq-ocr-end rq-bytes rq-arg rq-decode-img an-render an-decode an-fail an-bytes an-status
                                rec-count rec-find]]
             [emon.planloop :refer [pe-none pe-max-rounds pe-fetch-rounds pe-transcript-miss pe-transcript-bad pe-fulfil-failed pe-unit-failed
-                                   pe-bad-record pe-stalled pe-ocr-requests pe-emit-name
+                                   pe-bad-record pe-stalled pe-ocr-requests pe-stage-ms pe-emit-name pl-stage-over
                                    ph-doc ph-asset ph-pages ph-finish ph-figures ph-done ph-emit-name
                                    ds-class ds-known ds-emit-name ds-unsupported-format ds-no-startxref ds-bad-xref ds-no-root ds-no-pages ds-encrypted
                                    ds-password-required ds-password-incorrect ds-encryption-unsupported ds-undecodable ds-unsupported-image
@@ -239,6 +239,26 @@
     (assert-eq (fd p err-actual) 100001 "what it reached")
     (assert-eq (fd p rounds) 1 "the round was counted first")
     (t-err (test-t) p (pe-ocr-requests) "ocr-requests" "the limit is 100000 and this run reached 100001")))
+
+(deftest test-a-stages-wall-clock-is-kins-to-judge-and-0-is-off
+  (comment "`stage-ms` (kind 15, P10.4): the host supplies the milliseconds, kin says whether they are too many. 0 is off, whatever the clock says; a stage")
+  (comment "that has used the bound has reached it (the host rounds up, so any time is a millisecond).")
+  (assert-eq (pl-stage-over 0 2147483647) 0 "off is off")
+  (assert-eq (pl-stage-over 0 0) 0 "off, and no time")
+  (assert-eq (pl-stage-over 1 0) 0 "no time has passed")
+  (assert-eq (pl-stage-over 1 1) 1 "a millisecond is the bound")
+  (assert-eq (pl-stage-over 100 99) 0 "one under")
+  (assert-eq (pl-stage-over 100 100) 1 "reached")
+  (assert-eq (pl-stage-over 100 5000) 1 "past"))
+
+(deftest test-with-stage-ms-off-the-loop-ignores-the-clock
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (pl-attempt p)
+    (set (fd p elapsed) 2147483647)
+    (t-render p 1)
+    (assert-eq (pl-after p (us-requests)) (act-requests) "an hour of wall-clock is nothing when the limit is off")
+    (assert-eq (fd p err) 0 "no error")))
 
 (deftest test-a-miss-is-not-a-round-and-fetch-rounds-is-a-named-limit
   (let [^Plan p (new-ctx Plan)]
@@ -783,6 +803,10 @@
 (deftest test-the-ocr-requests-limit-is-named-as-the-table-names-it
   (let [^Text a (new-text)]
     (t-name (test-t) "ocr-requests" (pe-emit-name a (pe-ocr-requests)) a)))
+
+(deftest test-the-stage-ms-limit-is-named-as-the-table-names-it
+  (let [^Text a (new-text)]
+    (t-name (test-t) "stage-ms" (pe-emit-name a (pe-stage-ms)) a)))
 
 (deftest test-a-documents-status-is-named-and-has-a-class
   (let [^Text a (new-text) ^Text b (new-text) ^Text c (new-text) ^Text d (new-text) ^Text e (new-text) ^Text f (new-text)]

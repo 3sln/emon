@@ -79,7 +79,7 @@ pub(crate) fn t_is_key(emon_t: i32, b: &[u8], want: i32, name: &str) -> i32 {
 }
 #[test]
 fn test_the_limits_have_their_names_in_kin() {
-    crate::testport::assert_eq(lm_count(), 14, "fourteen limits");
+    crate::testport::assert_eq(lm_count(), 16, "sixteen limits");
     t_limit_name(0, 0, "input-bytes");
     t_limit_name(0, 1, "stream-bytes");
     t_limit_name(0, 2, "total-bytes");
@@ -94,6 +94,8 @@ fn test_the_limits_have_their_names_in_kin() {
     t_limit_name(0, 11, "note-bodies");
     t_limit_name(0, 12, "note-refs");
     t_limit_name(0, 13, "asset-placements");
+    t_limit_name(0, 14, "fonts-per-doc");
+    t_limit_name(0, 15, "stage-ms");
 }
 #[test]
 fn test_the_limits_have_their_defaults_and_ranges_in_kin() {
@@ -111,6 +113,9 @@ fn test_the_limits_have_their_defaults_and_ranges_in_kin() {
     crate::testport::assert_eq(lm_default(11), 4096, "note-bodies");
     crate::testport::assert_eq(lm_default(12), 8192, "note-refs");
     crate::testport::assert_eq(lm_default(13), 4096, "asset-placements");
+    crate::testport::assert_eq(lm_default(14), 512, "fonts-per-doc is the slab");
+    crate::testport::assert_eq(lm_hi(14), 512, "and cannot be raised past it");
+    crate::testport::assert_eq(lm_default(15), 0, "stage-ms is off");
     crate::testport::assert_eq(lm_lo(3), 0, "a limit is not negative");
     crate::testport::assert_eq(lm_hi(3), 2147483647, "a limit fits 31 bits");
     crate::testport::assert_eq(lm_hi(6), 32, "form-depth is the stack of the forms being run");
@@ -157,15 +162,17 @@ fn test_every_limit_says_what_happens_at_its_bound() {
     crate::testport::assert_eq(lm_on_hit(11), 1, "note-bodies is a budget");
     crate::testport::assert_eq(lm_on_hit(12), 1, "note-refs is a budget");
     crate::testport::assert_eq(lm_on_hit(13), 1, "asset-placements is a budget");
-    crate::testport::assert_eq(lm_on_hit(14), 0, "past the table");
+    crate::testport::assert_eq(lm_on_hit(14), 1, "fonts-per-doc is a budget");
+    crate::testport::assert_eq(lm_on_hit(15), 0, "stage-ms breaches");
+    crate::testport::assert_eq(lm_on_hit(16), 0, "past the table");
     crate::testport::assert_eq(lm_on_hit(-1), 0, "before the table");
 }
 #[test]
 fn test_a_kind_outside_the_table_has_no_name_and_a_default_of_nothing() {
-    crate::testport::assert_eq(lm_default(14), 0, "past the table");
+    crate::testport::assert_eq(lm_default(16), 0, "past the table");
     crate::testport::assert_eq(lm_default(-1), 0, "before the table");
-    crate::testport::assert_eq(lm_name_len(14), 0, "no name");
-    crate::testport::assert_eq(lm_name_ch(14, 0), -1, "no character");
+    crate::testport::assert_eq(lm_name_len(16), 0, "no name");
+    crate::testport::assert_eq(lm_name_ch(16, 0), -1, "no character");
     crate::testport::assert_eq(lm_name_ch(0, 11), -1, "past the name's end");
     crate::testport::assert_eq(lm_name_ch(0, -1), -1, "before the name");
     crate::testport::assert_eq(sg_default(2), 0, "no setting");
@@ -408,4 +415,14 @@ fn test_the_limits_of_p10_4_are_found_by_their_names() {
     crate::port::cells_drop(t, 0);
     t_cps(t, &crate::testport::text_blob("note-refs")[..]);
     crate::testport::assert_eq(cf_limit_find(t, 0, 9), 12, "note-refs");
+    crate::port::cells_drop(t, 0);
+    t_cps(t, &crate::testport::text_blob("fonts-per-doc")[..]);
+    crate::testport::assert_eq(cf_limit_find(t, 0, 13), 14, "fonts-per-doc");
+    crate::port::cells_drop(t, 0);
+    t_cps(t, &crate::testport::text_blob("stage-ms")[..]);
+    crate::testport::assert_eq(cf_limit_find(t, 0, 8), 15, "stage-ms");
+}
+#[test]
+fn test_fonts_per_doc_cannot_be_raised_past_its_slab() {
+    t_refused(0, &crate::testport::text_blob("limit.fonts-per-doc=513")[..], "limit.fonts-per-doc is out of range 0..512");
 }

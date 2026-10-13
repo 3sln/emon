@@ -83,7 +83,7 @@
 ;; ------------------------------------------------------------------ the tables of limits and settings
 
 (deftest test-the-limits-have-their-names-in-kin
-  (assert-eq (lm-count) 14 "fourteen limits")
+  (assert-eq (lm-count) 16 "sixteen limits")
   (t-limit-name (test-t) 0 "input-bytes")
   (t-limit-name (test-t) 1 "stream-bytes")
   (t-limit-name (test-t) 2 "total-bytes")
@@ -97,7 +97,9 @@
   (t-limit-name (test-t) 10 "ocr-requests")
   (t-limit-name (test-t) 11 "note-bodies")
   (t-limit-name (test-t) 12 "note-refs")
-  (t-limit-name (test-t) 13 "asset-placements"))
+  (t-limit-name (test-t) 13 "asset-placements")
+  (t-limit-name (test-t) 14 "fonts-per-doc")
+  (t-limit-name (test-t) 15 "stage-ms"))
 
 (deftest test-the-limits-have-their-defaults-and-ranges-in-kin
   (assert-eq (lm-default 0) 1073741824 "input-bytes")
@@ -114,6 +116,9 @@
   (assert-eq (lm-default 11) 4096 "note-bodies")
   (assert-eq (lm-default 12) 8192 "note-refs")
   (assert-eq (lm-default 13) 4096 "asset-placements")
+  (assert-eq (lm-default 14) 512 "fonts-per-doc is the slab")
+  (assert-eq (lm-hi 14) 512 "and cannot be raised past it")
+  (assert-eq (lm-default 15) 0 "stage-ms is off")
   (assert-eq (lm-lo 3) 0 "a limit is not negative")
   (assert-eq (lm-hi 3) 2147483647 "a limit fits 31 bits")
   (assert-eq (lm-hi 6) 32 "form-depth is the stack of the forms being run"))
@@ -152,14 +157,16 @@
   (assert-eq (lm-on-hit 11) 1 "note-bodies is a budget")
   (assert-eq (lm-on-hit 12) 1 "note-refs is a budget")
   (assert-eq (lm-on-hit 13) 1 "asset-placements is a budget")
-  (assert-eq (lm-on-hit 14) 0 "past the table")
+  (assert-eq (lm-on-hit 14) 1 "fonts-per-doc is a budget")
+  (assert-eq (lm-on-hit 15) 0 "stage-ms breaches")
+  (assert-eq (lm-on-hit 16) 0 "past the table")
   (assert-eq (lm-on-hit -1) 0 "before the table"))
 
 (deftest test-a-kind-outside-the-table-has-no-name-and-a-default-of-nothing
-  (assert-eq (lm-default 14) 0 "past the table")
+  (assert-eq (lm-default 16) 0 "past the table")
   (assert-eq (lm-default -1) 0 "before the table")
-  (assert-eq (lm-name-len 14) 0 "no name")
-  (assert-eq (lm-name-ch 14 0) -1 "no character")
+  (assert-eq (lm-name-len 16) 0 "no name")
+  (assert-eq (lm-name-ch 16 0) -1 "no character")
   (assert-eq (lm-name-ch 0 11) -1 "past the name's end")
   (assert-eq (lm-name-ch 0 -1) -1 "before the name")
   (assert-eq (sg-default 2) 0 "no setting")
@@ -392,4 +399,13 @@
     (assert-eq (cf-limit-find t 0 12) 10 "ocr-requests")
     (cells-drop t 0)
     (t-cps t (text-blob "note-refs"))
-    (assert-eq (cf-limit-find t 0 9) 12 "note-refs")))
+    (assert-eq (cf-limit-find t 0 9) 12 "note-refs")
+    (cells-drop t 0)
+    (t-cps t (text-blob "fonts-per-doc"))
+    (assert-eq (cf-limit-find t 0 13) 14 "fonts-per-doc")
+    (cells-drop t 0)
+    (t-cps t (text-blob "stage-ms"))
+    (assert-eq (cf-limit-find t 0 8) 15 "stage-ms")))
+
+(deftest test-fonts-per-doc-cannot-be-raised-past-its-slab
+  (t-refused (test-t) (text-blob "limit.fonts-per-doc=513") "limit.fonts-per-doc is out of range 0..512"))

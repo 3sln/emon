@@ -88,17 +88,15 @@ static INIT: Once = Once::new();
 // pdfium is not thread-safe.
 static LOCK: Mutex<()> = Mutex::new(());
 
-// The default Renderer.
+// The default Renderer. A render larger than the `pixels` limit (kin's table: the override, `EMON_LIMIT_PIXELS`, or the default; `port::limit_of(9)`, read
+// at each render, so a conversion's `limit.pixels` applies to rendering too) is refused (`failed`), before any memory is asked for (P10.4).
 #[derive(Debug)]
-pub struct Pdfium {
-    // A render larger than this many pixels is refused (`failed`), before any memory is asked for.
-    pub max_pixels: u64,
-}
+pub struct Pdfium;
 
 impl Pdfium {
     pub fn new() -> Pdfium {
         INIT.call_once(|| unsafe { FPDF_InitLibrary() });
-        Pdfium { max_pixels: 1 << 28 }
+        Pdfium
     }
 }
 
@@ -250,8 +248,9 @@ impl Pdfium {
     unsafe fn render_page(&self, page: Page, req: &RenderRequest) -> Result<Bitmap, RenderError> {
         let (wpt, hpt) = (FPDF_GetPageWidthF(page) as f64, FPDF_GetPageHeightF(page) as f64);
         let (w, h) = (pixels_of(wpt, req.dpi), pixels_of(hpt, req.dpi));
-        if w as u64 * h as u64 > self.max_pixels {
-            return Err(RenderError::Failed(format!("{}x{} pixels is over the limit of {}", w, h, self.max_pixels)));
+        let max_pixels = crate::port::limit_of(9) as u64;
+        if w as u64 * h as u64 > max_pixels {
+            return Err(RenderError::Failed(format!("{}x{} pixels is over the limit of {}", w, h, max_pixels)));
         }
         let mut flags = FPDF_REVERSE_BYTE_ORDER;
         match req.layer {

@@ -35,6 +35,7 @@ type Plan struct {
 	ErrActual      int32
 	Phase          int32
 	Page           int32
+	Elapsed        int32
 	TAttempts      int32
 	TFetchRounds   int32
 	TBytesRequests int32
@@ -69,6 +70,7 @@ func NewPlan() *Plan {
 		ErrActual:      0,
 		Phase:          0,
 		Page:           0,
+		Elapsed:        0,
 		TAttempts:      0,
 		TFetchRounds:   0,
 		TBytesRequests: 0,
@@ -103,6 +105,7 @@ func (d *Plan) Clone() *Plan {
 	c.ErrActual = d.ErrActual
 	c.Phase = d.Phase
 	c.Page = d.Page
+	c.Elapsed = d.Elapsed
 	c.TAttempts = d.TAttempts
 	c.TFetchRounds = d.TFetchRounds
 	c.TBytesRequests = d.TBytesRequests
