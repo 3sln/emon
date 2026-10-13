@@ -2665,6 +2665,21 @@ pub(crate) fn tb_band_member(bd: &mut crate::port::Cells, used: &mut crate::port
     }
     return -1;
 }
+pub(crate) fn tb_band_header(wd: &mut crate::port::Cells, w0: i32, w1: i32, sx0: i32, sx1: i32, y0: i32, gap: i32, mut wl: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut sg: &mut crate::port::Cells) -> i32 {
+    // The top of a stack of zebra bands that begins at y0 and whose bands are `gap` apart, with the row above it: a header
+    // is unshaded (the zebra's first stripe is the plain one), so it is no band, and the stack's own extent would leave it out
+    // of the table. The row is the one baseline row, cut in two chunks or more, whose words are within a gap and a quarter
+    // above y0; answers its top when there is one, y0 when there is not (D503).
+    if gap <= 0 {
+        return y0;
+    }
+    let hy0: i32 = y0 - (gap + (gap / 4));
+    let nh: i32 = tb_rows(wd, w0, w1, sx0, hy0, sx1, y0 - 1, wl, rw, sg);
+    if (nh == 1) && (crate::port::cells_at(rw, 9) >= 2) {
+        return hy0;
+    }
+    return y0;
+}
 pub(crate) fn tb_shaded_page(fl: &mut crate::port::Cells, page: i32, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w0: i32, w1: i32, mut bd: &mut crate::port::Cells, mut used: &mut crate::port::Cells, mut wl: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut ch: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut en: &mut crate::port::Cells, mut rmap: &mut crate::port::Cells, mut gm: &mut crate::port::Cells, mut gs: &mut crate::port::Cells, mut ry: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut so: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tx: &mut crate::port::Cells) -> i32 {
     // Stacks of three or more bands of one extent, each starting where the one before ended or one row
     // later, with two colours or a gap (zebra), are shaded candidates: a band is a row (several baselines may
@@ -2676,6 +2691,7 @@ pub(crate) fn tb_shaded_page(fl: &mut crate::port::Cells, page: i32, wd: &mut cr
     let mut last: i32 = 0;
     let mut ncol: i32 = 0;
     let mut gapseen: i32 = 0;
+    let mut gap1: i32 = 0;
     crate::port::cells_drop(used, 0);
     while i < nb {
         crate::port::cells_push(used, 0);
@@ -2691,6 +2707,7 @@ pub(crate) fn tb_shaded_page(fl: &mut crate::port::Cells, page: i32, wd: &mut cr
             last = i;
             ncol = 1;
             gapseen = 0;
+            gap1 = 0;
             crate::port::cells_set(used, i, 2);
             j = i + 1;
             while (j < nb) && ((crate::port::cells_at(bd, j * 6) - crate::port::cells_at(bd, (last * 6) + 1)) <= 3000) {
@@ -2703,6 +2720,9 @@ pub(crate) fn tb_shaded_page(fl: &mut crate::port::Cells, page: i32, wd: &mut cr
                         if g > 150 {
                             gapseen = 1;
                         }
+                        if (g > 150) && (gap1 == 0) {
+                            gap1 = g;
+                        }
                         if crate::port::cells_at(bd, (j * 6) + 4) != colour0 {
                             ncol = 2;
                         }
@@ -2712,7 +2732,7 @@ pub(crate) fn tb_shaded_page(fl: &mut crate::port::Cells, page: i32, wd: &mut cr
                 j += 1;
             }
             if (cnt >= 3) && ((ncol == 2) || (gapseen == 1)) {
-                let y0: i32 = crate::port::cells_at(bd, i * 6);
+                let y0: i32 = tb_band_header(wd, w0, w1, sx0, sx1, crate::port::cells_at(bd, i * 6), gap1, wl, rw, sg);
                 let y1: i32 = crate::port::cells_at(bd, (last * 6) + 1);
                 let nr: i32 = tb_rows(wd, w0, w1, sx0, y0, sx1, y1, wl, rw, sg);
                 let nt: i32 = tb_rows_of(tb, TBS);

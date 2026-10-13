@@ -2786,6 +2786,22 @@ func tbBandMember(bd *port.Cells, used *port.Cells, b0 int32, b1 int32, y int32)
 	return -1
 }
 
+func tbBandHeader(wd *port.Cells, w0 int32, w1 int32, sx0 int32, sx1 int32, y0 int32, gap int32, wl *port.Cells, rw *port.Cells, sg *port.Cells) int32 {
+	// The top of a stack of zebra bands that begins at y0 and whose bands are `gap` apart, with the row above it: a header
+	// is unshaded (the zebra's first stripe is the plain one), so it is no band, and the stack's own extent would leave it out
+	// of the table. The row is the one baseline row, cut in two chunks or more, whose words are within a gap and a quarter
+	// above y0; answers its top when there is one, y0 when there is not (D503).
+	if gap <= 0 {
+		return y0
+	}
+	var hy0 int32 = y0 - (gap + (gap / 4))
+	var nh int32 = tbRows(wd, w0, w1, sx0, hy0, sx1, y0-1, wl, rw, sg)
+	if (nh == 1) && (port.CellsAt(rw, 9) >= 2) {
+		return hy0
+	}
+	return y0
+}
+
 func tbShadedPage(fl *port.Cells, page int32, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, bd *port.Cells, used *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells) int32 {
 	// Stacks of three or more bands of one extent, each starting where the one before ended or one row
 	// later, with two colours or a gap (zebra), are shaded candidates: a band is a row (several baselines may
@@ -2797,6 +2813,7 @@ func tbShadedPage(fl *port.Cells, page int32, wd *port.Cells, et *port.Cells, w0
 	var last int32 = 0
 	var ncol int32 = 0
 	var gapseen int32 = 0
+	var gap1 int32 = 0
 	port.CellsDrop(used, 0)
 	for i < nb {
 		port.CellsPush(used, 0)
@@ -2812,6 +2829,7 @@ func tbShadedPage(fl *port.Cells, page int32, wd *port.Cells, et *port.Cells, w0
 			last = i
 			ncol = 1
 			gapseen = 0
+			gap1 = 0
 			port.CellsSet(used, i, 2)
 			j = i + 1
 			for (j < nb) && ((port.CellsAt(bd, j*6) - port.CellsAt(bd, (last*6)+1)) <= 3000) {
@@ -2824,6 +2842,9 @@ func tbShadedPage(fl *port.Cells, page int32, wd *port.Cells, et *port.Cells, w0
 						if g > 150 {
 							gapseen = 1
 						}
+						if (g > 150) && (gap1 == 0) {
+							gap1 = g
+						}
 						if port.CellsAt(bd, (j*6)+4) != colour0 {
 							ncol = 2
 						}
@@ -2833,7 +2854,7 @@ func tbShadedPage(fl *port.Cells, page int32, wd *port.Cells, et *port.Cells, w0
 				j += 1
 			}
 			if (cnt >= 3) && ((ncol == 2) || (gapseen == 1)) {
-				var y0 int32 = port.CellsAt(bd, i*6)
+				var y0 int32 = tbBandHeader(wd, w0, w1, sx0, sx1, port.CellsAt(bd, i*6), gap1, wl, rw, sg)
 				var y1 int32 = port.CellsAt(bd, (last*6)+1)
 				var nr int32 = tbRows(wd, w0, w1, sx0, y0, sx1, y1, wl, rw, sg)
 				var nt int32 = tbRowsOf(tb, tbs)

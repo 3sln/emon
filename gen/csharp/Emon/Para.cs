@@ -1445,21 +1445,53 @@ public static class Para {
         }
         return k;
     }
+    internal static int PaHeld(emon.Port.Cells ln, emon.Port.Cells lo, int first, int cnt) {
+        // How many lines of the fragment lo[first, first+cnt) a table holds, wherever they stand in it (D504).
+        int k = 0;
+        int n = 0;
+        while (k < cnt) {
+            if (Table.TbClaimed(ln, emon.Port.CellsAt(lo, first + k)) != 0) {
+                n += 1;
+            }
+            k += 1;
+        }
+        return n;
+    }
+    internal static int PaFreeWords(emon.Port.Cells ln, emon.Port.Cells lo, int first, int cnt) {
+        // How many words the lines of the fragment lo[first, first+cnt) that no table holds have between them (D504).
+        int k = 0;
+        int n = 0;
+        while (k < cnt) {
+            int l = emon.Port.CellsAt(lo, first + k);
+            if (Table.TbClaimed(ln, l) == 0) {
+                n += Evidence.LnGet(ln, l, Evidence.LhCount());
+            }
+            k += 1;
+        }
+        return n;
+    }
     internal static int PaNote(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells al, emon.Port.Cells ii, emon.Port.Cells cf, emon.Port.Cells lo, int r, int med, emon.Port.Cells hc) {
         // The side fragment (row r of `cf`) as a `note` block of its role, in the open section (D167; the root when none), its lines made
-        // paragraphs as any fragment's (D113).
+        // paragraphs as any fragment's (D113). A fragment a table holds in part whose lines left over are fewer than
+        // three words is no note: its lines are paragraphs of the open section (parent 0), so that no word is lost (D504).
         int @base = r * CfStride;
         int first = emon.Port.CellsAt(cf, @base + CfFirst);
         int cnt = emon.Port.CellsAt(cf, @base + CfCount);
         int page = emon.Port.CellsAt(cf, @base + CfPage);
-        int note = Model.NodeNew(nodes, Model.NkNote(), Heading.HdCur(hc));
+        int held = PaHeld(ln, lo, first, cnt);
+        int free = PaFreeWords(ln, lo, first, cnt);
+        int note = 0;
         int mg = PaFmargin(ln, lo, first, cnt);
-        int i = 1;
-        int prev = emon.Port.CellsAt(lo, first);
-        Model.NodeSetSub(nodes, note, emon.Port.CellsAt(cf, @base + CfRole));
-        Model.NodeSetConf(nodes, note, 500);
-        Model.NodeAddSrc(nodes, note, Model.SrInfer());
-        Model.NodeAddRegion(nodes, regions, note, page, emon.Port.CellsAt(cf, @base + CfX0), emon.Port.CellsAt(cf, @base + CfY0), emon.Port.CellsAt(cf, @base + CfX1), emon.Port.CellsAt(cf, @base + CfY1));
+        int lead = PaLive(ln, lo, first, cnt);
+        int i = lead + 1;
+        int prev = emon.Port.CellsAt(lo, first + lead);
+        if ((held == 0) || (free >= 3)) {
+            note = Model.NodeNew(nodes, Model.NkNote(), Heading.HdCur(hc));
+            Model.NodeSetSub(nodes, note, emon.Port.CellsAt(cf, @base + CfRole));
+            Model.NodeSetConf(nodes, note, 500);
+            Model.NodeAddSrc(nodes, note, Model.SrInfer());
+            Model.NodeAddRegion(nodes, regions, note, page, emon.Port.CellsAt(cf, @base + CfX0), emon.Port.CellsAt(cf, @base + CfY0), emon.Port.CellsAt(cf, @base + CfX1), emon.Port.CellsAt(cf, @base + CfY1));
+        }
         emon.Port.CellsDrop(raw, 0);
         emon.Port.CellsDrop(fr, 0);
         PaFragOpen(fr, ln, page, prev, 0);
@@ -1468,17 +1500,20 @@ public static class Para {
         PaAlAdd(wd, ln, al, prev, emon.Port.CellsAt(cf, @base + CfX0), emon.Port.CellsAt(cf, @base + CfX1));
         while (i < cnt) {
             int b = emon.Port.CellsAt(lo, first + i);
-            if ((Initial.InRow(ln, b) >= 0) || PaNewPar(wd, ln, prev, b, med, mg, hc)) {
-                PaFlush(nodes, attrs, regions, text, raw, tmp, fr, al, hc, note);
-                PaFragOpen(fr, ln, page, b, 0);
-                PaIniStart(wd, ln, et, raw, fr, ii, b);
-            } else {
-                PaJoin(wd, ln, et, raw, b);
-                PaFragExtend(fr, ln, b);
+            // a line a table holds stays the table's cell (D504)
+            if (Table.TbClaimed(ln, b) == 0) {
+                if ((Initial.InRow(ln, b) >= 0) || PaNewPar(wd, ln, prev, b, med, mg, hc)) {
+                    PaFlush(nodes, attrs, regions, text, raw, tmp, fr, al, hc, note);
+                    PaFragOpen(fr, ln, page, b, 0);
+                    PaIniStart(wd, ln, et, raw, fr, ii, b);
+                } else {
+                    PaJoin(wd, ln, et, raw, b);
+                    PaFragExtend(fr, ln, b);
+                }
+                PaAddLine(wd, ln, et, raw, b, hc, fr);
+                PaAlAdd(wd, ln, al, b, emon.Port.CellsAt(cf, @base + CfX0), emon.Port.CellsAt(cf, @base + CfX1));
+                prev = b;
             }
-            PaAddLine(wd, ln, et, raw, b, hc, fr);
-            PaAlAdd(wd, ln, al, b, emon.Port.CellsAt(cf, @base + CfX0), emon.Port.CellsAt(cf, @base + CfX1));
-            prev = b;
             i += 1;
         }
         PaFlush(nodes, attrs, regions, text, raw, tmp, fr, al, hc, note);
@@ -1498,8 +1533,10 @@ public static class Para {
                 if ((emon.Port.CellsAt(cf, @base + CfAssoc) < cur) || ((emon.Port.CellsAt(cf, @base + CfAssoc) == cur) && (emon.Port.CellsAt(cf, @base + CfY0) <= ty))) {
                     emon.Port.CellsSet(cf, @base + CfDone, 1);
                     // a side fragment every line of which a table holds is the table's cells, not a note (a narrow last column;
-                    // D459 for a scan, D469 for a text layer too).
-                    if (PaLive(ln, lo, emon.Port.CellsAt(cf, @base + CfFirst), emon.Port.CellsAt(cf, @base + CfCount)) < emon.Port.CellsAt(cf, @base + CfCount)) {
+                    // D459 for a scan, D469 for a text layer too); one that a table holds in part is a note of the lines it does
+                    // not; when those are fewer than three words they are body text, a paragraph of their own, and
+                    // not a note, so that no word is lost (D504).
+                    if (PaHeld(ln, lo, emon.Port.CellsAt(cf, @base + CfFirst), emon.Port.CellsAt(cf, @base + CfCount)) < emon.Port.CellsAt(cf, @base + CfCount)) {
                         PaNote(wd, ln, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, r, med, hc);
                     }
                 } else if (pend > r) {

@@ -493,6 +493,55 @@ public static class Tabletest {
         emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "shaded: well formed");
         emon.Testport.AssertText(t, "T3s;Gh;R;Ch[Task];Ch[Owner];Ch[Due];Gb;R;C[Build];C[Ana];C[May];R;C[Test];C[Ben];C[June];R;C[Ship];C[Chen];C[July];", "four bands of fill of one extent, two colours: rows from the bands");
     }
+    internal static int TtZebra(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa) {
+        // Three stripes of one colour with a plain row between them and the body rows in them (a zebra, 1600 a row), and no
+        // stripe under the header row: the stack of fills begins at y 11600 and the header row is above it (D503).
+        TtFill(pa, 7200, 11600, 37200, 13200, 15000000);
+        TtFill(pa, 7200, 14800, 37200, 16400, 15000000);
+        TtFill(pa, 7200, 18000, 37200, 19600, 15000000);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Build"), 7600, 12000, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Ana"), 20000, 12000, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("May"), 30000, 12000, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Test"), 7600, 13600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Ben"), 20000, 13600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("June"), 30000, 13600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Ship"), 7600, 15200, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Chen"), 20000, 15200, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("July"), 30000, 15200, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Pack"), 7600, 16800, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Dee"), 20000, 16800, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Aug"), 30000, 16800, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Done"), 7600, 18400, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Eli"), 20000, 18400, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Sept"), 30000, 18400, 0, 0);
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestThePlainRowAboveAZebraIsItsHeader() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        TtZebra(wd, ln, et, pa);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Task"), 7600, 10000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Owner"), 20000, 10000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Due"), 30000, 10000, 1, 0);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "zebra header: well formed");
+        emon.Testport.AssertText(t, "T3s;Gh;R;Ch[Task];Ch[Owner];Ch[Due];Gb;R;C[Build];C[Ana];C[May];R;C[Test];C[Ben];C[June];R;C[Ship];C[Chen];C[July];R;C[Pack];C[Dee];C[Aug];R;C[Done];C[Eli];C[Sept];", "the row of cells above the first stripe, one gap from it, is the table's header row, not paragraphs (D503)");
+    }
+    [Xunit.Fact]
+    public static void TestALineOfProseAboveAZebraIsNotItsHeader() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        TtZebra(wd, ln, et, pa);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Orders ship free of charge"), 7600, 10000, 0, 0);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "zebra prose: well formed");
+        emon.Testport.AssertText(t, "P[Orders ship free of charge];T3s;Gb;R;C[Build];C[Ana];C[May];R;C[Test];C[Ben];C[June];R;C[Ship];C[Chen];C[July];R;C[Pack];C[Dee];C[Aug];R;C[Done];C[Eli];C[Sept];", "one chunk of prose above the stripes is a paragraph, and the stripes are the table (D503)");
+    }
     [Xunit.Fact]
     public static void TestACaptionAndABoldLastRow() {
         emon.Port.Cells wd = emon.Port.NewCells();
@@ -571,6 +620,55 @@ public static class Tabletest {
         TtSmall(wd, ln, et, emon.Testport.TextBlob("see note"), 1500, 12600, 700);
         emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "note: well formed");
         emon.Testport.AssertText(t, "P[The table below was extracted from the ledger and the figures are totals for the quarter of the year as the office has recorded them and as the auditors have since confirmed.];N;P[see note];T3r;Gb;R;C[Item];C[Qty];Cs[Note];R;C[Bolt];C[10];Cs[up];R;C[Nut];C[12];Cs[flat];", "a note beside the table, outside it, is a note of its own, and the cells are still the table's");
+    }
+    internal static int TtHeadlessPage(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa) {
+        // The ledger page whose table lacks its first row: the rules begin under the header, so the header's small word `Note`
+        // in the last column is not held while the values under it are (the side fragment is held in part).
+        TtWord(wd, ln, et, emon.Testport.TextBlob("The table below was extracted from the ledger"), 7200, 4000, 26000, 4800, 0);
+        TtWord(wd, ln, et, emon.Testport.TextBlob("and the figures are totals for the quarter"), 7200, 5200, 26000, 6000, 0);
+        TtWord(wd, ln, et, emon.Testport.TextBlob("of the year as the office has recorded them"), 7200, 6400, 26000, 7200, 0);
+        TtWord(wd, ln, et, emon.Testport.TextBlob("and as the auditors have since confirmed."), 7200, 7600, 26000, 8400, 0);
+        TtRule(pa, 7200, 11950, 37200, 12050);
+        TtRule(pa, 7200, 13950, 37200, 14050);
+        TtRule(pa, 7200, 15950, 37200, 16050);
+        TtRule(pa, 7150, 12000, 7250, 16000);
+        TtRule(pa, 17150, 12000, 17250, 16000);
+        TtRule(pa, 27150, 12000, 27250, 16000);
+        TtRule(pa, 37150, 12000, 37250, 16000);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Item"), 7600, 10600, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Qty"), 17600, 10600, 1, 0);
+        TtSmall(wd, ln, et, emon.Testport.TextBlob("Note"), 27600, 10600, 900);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Bolt"), 7600, 12600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("10"), 17600, 12600, 0, 0);
+        TtSmall(wd, ln, et, emon.Testport.TextBlob("up"), 27600, 12600, 900);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Nut"), 7600, 14600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("12"), 17600, 14600, 0, 0);
+        TtSmall(wd, ln, et, emon.Testport.TextBlob("flat"), 27600, 14600, 900);
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestASideFragmentHeldInPartWithOneWordLeftIsNoNote() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        TtHeadlessPage(wd, ln, et, pa);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "held in part: well formed");
+        emon.Testport.AssertText(t, "P[The table below was extracted from the ledger and the figures are totals for the quarter of the year as the office has recorded them and as the auditors have since confirmed.];P[Note];P[Item];P[Qty];T3r;Gb;R;C[Bolt];C[10];Cs[up];R;C[Nut];C[12];Cs[flat];", "the header's `Note` is the one word the table does not hold, too little for a note, so it is body text and not lost, and `up` and `flat` are not written twice (D504)");
+    }
+    [Xunit.Fact]
+    public static void TestASideFragmentHeldInPartIsANoteOfTheLinesLeft() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        TtHeadlessPage(wd, ln, et, pa);
+        TtSmall(wd, ln, et, emon.Testport.TextBlob("see"), 27600, 9000, 900);
+        TtSmall(wd, ln, et, emon.Testport.TextBlob("the"), 27600, 9800, 900);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "held in part, words left: well formed");
+        emon.Testport.AssertText(t, "P[The table below was extracted from the ledger and the figures are totals for the quarter of the year as the office has recorded them and as the auditors have since confirmed.];N;P[see the Note];P[Item];P[Qty];T3r;Gb;R;C[Bolt];C[10];Cs[up];R;C[Nut];C[12];Cs[flat];", "the lines the table does not hold are a note and the ones it holds stay in the table (D504)");
     }
     internal static int TtGolden(byte[] pdf, System.Text.StringBuilder t, System.Text.StringBuilder tvt) {
         // PDF -> content -> tables -> paragraphs -> Model -> pretty JSON; answer 0 when every step answered 0, else a

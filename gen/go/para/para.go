@@ -1557,21 +1557,55 @@ func paLive(ln *port.Cells, lo *port.Cells, first int32, cnt int32) int32 {
 	return k
 }
 
+func paHeld(ln *port.Cells, lo *port.Cells, first int32, cnt int32) int32 {
+	// How many lines of the fragment lo[first, first+cnt) a table holds, wherever they stand in it (D504).
+	var k int32 = 0
+	var n int32 = 0
+	for k < cnt {
+		if table.TbClaimed(ln, port.CellsAt(lo, first+k)) != 0 {
+			n += 1
+		}
+		k += 1
+	}
+	return n
+}
+
+func paFreeWords(ln *port.Cells, lo *port.Cells, first int32, cnt int32) int32 {
+	// How many words the lines of the fragment lo[first, first+cnt) that no table holds have between them (D504).
+	var k int32 = 0
+	var n int32 = 0
+	for k < cnt {
+		var l int32 = port.CellsAt(lo, first+k)
+		if table.TbClaimed(ln, l) == 0 {
+			n += evidence.LnGet(ln, l, evidence.LhCount())
+		}
+		k += 1
+	}
+	return n
+}
+
 func paNote(wd *port.Cells, ln *port.Cells, et *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, al *port.Cells, ii *port.Cells, cf *port.Cells, lo *port.Cells, r int32, med int32, hc *port.Cells) int32 {
 	// The side fragment (row r of `cf`) as a `note` block of its role, in the open section (D167; the root when none), its lines made
-	// paragraphs as any fragment's (D113).
+	// paragraphs as any fragment's (D113). A fragment a table holds in part whose lines left over are fewer than
+	// three words is no note: its lines are paragraphs of the open section (parent 0), so that no word is lost (D504).
 	var base int32 = r * cfStride
 	var first int32 = port.CellsAt(cf, base+cfFirst)
 	var cnt int32 = port.CellsAt(cf, base+cfCount)
 	var page int32 = port.CellsAt(cf, base+cfPage)
-	var note int32 = model.NodeNew(nodes, model.NkNote(), heading.HdCur(hc))
+	var held int32 = paHeld(ln, lo, first, cnt)
+	var free int32 = paFreeWords(ln, lo, first, cnt)
+	var note int32 = 0
 	var mg int32 = paFmargin(ln, lo, first, cnt)
-	var i int32 = 1
-	var prev int32 = port.CellsAt(lo, first)
-	model.NodeSetSub(nodes, note, port.CellsAt(cf, base+cfRole))
-	model.NodeSetConf(nodes, note, 500)
-	model.NodeAddSrc(nodes, note, model.SrInfer())
-	model.NodeAddRegion(nodes, regions, note, page, port.CellsAt(cf, base+cfX0), port.CellsAt(cf, base+cfY0), port.CellsAt(cf, base+cfX1), port.CellsAt(cf, base+cfY1))
+	var lead int32 = paLive(ln, lo, first, cnt)
+	var i int32 = lead + 1
+	var prev int32 = port.CellsAt(lo, first+lead)
+	if (held == 0) || (free >= 3) {
+		note = model.NodeNew(nodes, model.NkNote(), heading.HdCur(hc))
+		model.NodeSetSub(nodes, note, port.CellsAt(cf, base+cfRole))
+		model.NodeSetConf(nodes, note, 500)
+		model.NodeAddSrc(nodes, note, model.SrInfer())
+		model.NodeAddRegion(nodes, regions, note, page, port.CellsAt(cf, base+cfX0), port.CellsAt(cf, base+cfY0), port.CellsAt(cf, base+cfX1), port.CellsAt(cf, base+cfY1))
+	}
 	port.CellsDrop(raw, 0)
 	port.CellsDrop(fr, 0)
 	paFragOpen(fr, ln, page, prev, 0)
@@ -1580,17 +1614,20 @@ func paNote(wd *port.Cells, ln *port.Cells, et *port.Cells, nodes *port.Cells, a
 	paAlAdd(wd, ln, al, prev, port.CellsAt(cf, base+cfX0), port.CellsAt(cf, base+cfX1))
 	for i < cnt {
 		var b int32 = port.CellsAt(lo, first+i)
-		if (initial.InRow(ln, b) >= 0) || paNewPar(wd, ln, prev, b, med, mg, hc) {
-			paFlush(nodes, attrs, regions, text, raw, tmp, fr, al, hc, note)
-			paFragOpen(fr, ln, page, b, 0)
-			paIniStart(wd, ln, et, raw, fr, ii, b)
-		} else {
-			paJoin(wd, ln, et, raw, b)
-			paFragExtend(fr, ln, b)
+		// a line a table holds stays the table's cell (D504)
+		if table.TbClaimed(ln, b) == 0 {
+			if (initial.InRow(ln, b) >= 0) || paNewPar(wd, ln, prev, b, med, mg, hc) {
+				paFlush(nodes, attrs, regions, text, raw, tmp, fr, al, hc, note)
+				paFragOpen(fr, ln, page, b, 0)
+				paIniStart(wd, ln, et, raw, fr, ii, b)
+			} else {
+				paJoin(wd, ln, et, raw, b)
+				paFragExtend(fr, ln, b)
+			}
+			paAddLine(wd, ln, et, raw, b, hc, fr)
+			paAlAdd(wd, ln, al, b, port.CellsAt(cf, base+cfX0), port.CellsAt(cf, base+cfX1))
+			prev = b
 		}
-		paAddLine(wd, ln, et, raw, b, hc, fr)
-		paAlAdd(wd, ln, al, b, port.CellsAt(cf, base+cfX0), port.CellsAt(cf, base+cfX1))
-		prev = b
 		i += 1
 	}
 	paFlush(nodes, attrs, regions, text, raw, tmp, fr, al, hc, note)
@@ -1611,8 +1648,10 @@ func paNotes(wd *port.Cells, ln *port.Cells, et *port.Cells, nodes *port.Cells, 
 			if (port.CellsAt(cf, base+cfAssoc) < cur) || ((port.CellsAt(cf, base+cfAssoc) == cur) && (port.CellsAt(cf, base+cfY0) <= ty)) {
 				port.CellsSet(cf, base+cfDone, 1)
 				// a side fragment every line of which a table holds is the table's cells, not a note (a narrow last column;
-				// D459 for a scan, D469 for a text layer too).
-				if paLive(ln, lo, port.CellsAt(cf, base+cfFirst), port.CellsAt(cf, base+cfCount)) < port.CellsAt(cf, base+cfCount) {
+				// D459 for a scan, D469 for a text layer too); one that a table holds in part is a note of the lines it does
+				// not; when those are fewer than three words they are body text, a paragraph of their own, and
+				// not a note, so that no word is lost (D504).
+				if paHeld(ln, lo, port.CellsAt(cf, base+cfFirst), port.CellsAt(cf, base+cfCount)) < port.CellsAt(cf, base+cfCount) {
 					paNote(wd, ln, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, r, med, hc)
 				}
 			} else if pend > r {

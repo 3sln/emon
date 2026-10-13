@@ -1,5 +1,5 @@
 ;; The SHA-256 of each replayed bundle (JSON, HTML, evidence) of test/artifacts/replay/ID, as `bb fusion-record` made it (P7.3, D285-D290; P7.5, D307).
 {"wm-recur-image"
- "ea0e111908ddc7abff2372e3f42934a03d90ab98bcdf825d3e35dcc5c17b8bfb",
+ "bc8cef5a33ff2cd21b27364d55d26295b9cb5c671d444356d1c0956f40b28c21",
  "wm-recur-partial"
- "bdbb9041c93ebf5e162dfdadbef07fa91679e0c8ab6b1983ebf74e19eeca544c"}
+ "0829a735f6459a6ca08e72bd47fdaed06082cc4e6915f8371969bd8b96de1970"}

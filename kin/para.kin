@@ -1198,25 +1198,50 @@
       (set k (+ k 1)))
     (return k)))
 
+(defn ^I32 pa-held [^Cells ln ^Cells lo ^I32 first ^I32 cnt]
+  (comment "How many lines of the fragment lo[first, first+cnt) a table holds, wherever they stand in it (D504).")
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 n 0]
+    (while (< k cnt)
+      (do (if (!= (tb-claimed ln (cells-at lo (+ first k))) 0) (set n (+ n 1)))
+          (set k (+ k 1))))
+    (return n)))
+
+(defn ^I32 pa-free-words [^Cells ln ^Cells lo ^I32 first ^I32 cnt]
+  (comment "How many words the lines of the fragment lo[first, first+cnt) that no table holds have between them (D504).")
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 n 0]
+    (while (< k cnt)
+      (do (let [^I32 l (cells-at lo (+ first k))]
+            (if (== (tb-claimed ln l) 0) (set n (+ n (ln-get ln l (lh-count))))))
+          (set k (+ k 1))))
+    (return n)))
+
 (defn ^I32 pa-note [^Cells wd ^Cells ln ^Cells et
                     ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
                     ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells al ^Cells ii
                     ^Cells cf ^Cells lo ^I32 r ^I32 med ^:mut ^Cells hc]
   (comment "The side fragment (row r of `cf`) as a `note` block of its role, in the open section (D167; the root when none), its lines made")
-  (comment "paragraphs as any fragment's (D113).")
+  (comment "paragraphs as any fragment's (D113). A fragment a table holds in part whose lines left over are fewer than")
+  (comment "three words is no note: its lines are paragraphs of the open section (parent 0), so that no word is lost (D504).")
   (let [^I32 base (* r CF_STRIDE)
         ^I32 first (cells-at cf (+ base CF_FIRST))
         ^I32 cnt (cells-at cf (+ base CF_COUNT))
         ^I32 page (cells-at cf (+ base CF_PAGE))
-        ^I32 note (node-new nodes (nk-note) (hd-cur hc))
+        ^I32 held (pa-held ln lo first cnt)
+        ^I32 free (pa-free-words ln lo first cnt)
+        ^:mut ^I32 note 0
         ^I32 mg (pa-fmargin ln lo first cnt)
-        ^:mut ^I32 i 1
-        ^:mut ^I32 prev (cells-at lo first)]
-    (node-set-sub nodes note (cells-at cf (+ base CF_ROLE)))
-    (node-set-conf nodes note 500)
-    (node-add-src nodes note (sr-infer))
-    (node-add-region nodes regions note page (cells-at cf (+ base CF_X0)) (cells-at cf (+ base CF_Y0))
-                     (cells-at cf (+ base CF_X1)) (cells-at cf (+ base CF_Y1)))
+        ^I32 lead (pa-live ln lo first cnt)
+        ^:mut ^I32 i (+ lead 1)
+        ^:mut ^I32 prev (cells-at lo (+ first lead))]
+    (if (or (== held 0) (>= free 3))
+      (do (set note (node-new nodes (nk-note) (hd-cur hc)))
+          (node-set-sub nodes note (cells-at cf (+ base CF_ROLE)))
+          (node-set-conf nodes note 500)
+          (node-add-src nodes note (sr-infer))
+          (node-add-region nodes regions note page (cells-at cf (+ base CF_X0)) (cells-at cf (+ base CF_Y0))
+                           (cells-at cf (+ base CF_X1)) (cells-at cf (+ base CF_Y1)))))
     (cells-drop raw 0)
     (cells-drop fr 0)
     (pa-frag-open fr ln page prev 0)
@@ -1225,15 +1250,17 @@
     (pa-al-add wd ln al prev (cells-at cf (+ base CF_X0)) (cells-at cf (+ base CF_X1)))
     (while (< i cnt)
       (do (let [^I32 b (cells-at lo (+ first i))]
-            (if (or (>= (in-row ln b) 0) (pa-new-par wd ln prev b med mg hc))
-              (do (pa-flush nodes attrs regions text raw tmp fr al hc note)
-                  (pa-frag-open fr ln page b 0)
-                  (pa-ini-start wd ln et raw fr ii b))
-              (do (pa-join wd ln et raw b)
-                  (pa-frag-extend fr ln b)))
-            (pa-add-line wd ln et raw b hc fr)
-            (pa-al-add wd ln al b (cells-at cf (+ base CF_X0)) (cells-at cf (+ base CF_X1)))
-            (set prev b))
+            (comment "a line a table holds stays the table's cell (D504)")
+            (if (== (tb-claimed ln b) 0)
+              (do (if (or (>= (in-row ln b) 0) (pa-new-par wd ln prev b med mg hc))
+                    (do (pa-flush nodes attrs regions text raw tmp fr al hc note)
+                        (pa-frag-open fr ln page b 0)
+                        (pa-ini-start wd ln et raw fr ii b))
+                    (do (pa-join wd ln et raw b)
+                        (pa-frag-extend fr ln b)))
+                  (pa-add-line wd ln et raw b hc fr)
+                  (pa-al-add wd ln al b (cells-at cf (+ base CF_X0)) (cells-at cf (+ base CF_X1)))
+                  (set prev b))))
           (set i (+ i 1))))
     (pa-flush nodes attrs regions text raw tmp fr al hc note)
     (return 0)))
@@ -1258,8 +1285,10 @@
                            (<= (cells-at cf (+ base CF_Y0)) ty)))
                 (do (cells-set cf (+ base CF_DONE) 1)
                     (comment "a side fragment every line of which a table holds is the table's cells, not a note (a narrow last column;")
-                    (comment "D459 for a scan, D469 for a text layer too).")
-                    (if (< (pa-live ln lo (cells-at cf (+ base CF_FIRST)) (cells-at cf (+ base CF_COUNT))) (cells-at cf (+ base CF_COUNT)))
+                    (comment "D459 for a scan, D469 for a text layer too); one that a table holds in part is a note of the lines it does")
+                    (comment "not; when those are fewer than three words they are body text, a paragraph of their own, and")
+                    (comment "not a note, so that no word is lost (D504).")
+                    (if (< (pa-held ln lo (cells-at cf (+ base CF_FIRST)) (cells-at cf (+ base CF_COUNT))) (cells-at cf (+ base CF_COUNT)))
                       (pa-note wd ln et nodes attrs regions text raw tmp fr al ii cf lo r med hc)))
                 (if (> pend r) (set pend r)))))
           (set r (+ r 1))))
