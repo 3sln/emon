@@ -238,6 +238,9 @@ func TestOcrRequestsIsANamedLimitOfTheLoop(emonT *testing.T) {
 	tRender(p, 2)
 	port.AssertEq(emonT, planloop.PlAfter(p, plan.UsRequests()), planloop.ActRequests(), "exactly the limit is not over it")
 	port.AssertEq(emonT, p.Requests, 100000, "counted")
+}
+
+func TestOneRequestPastOcrRequestsIsTheNamedError(emonT *testing.T) {
 	var p *planctx.Plan = planctx.NewPlan()
 	tInit(p, 5, 24)
 	planloop.PlAttempt(p)

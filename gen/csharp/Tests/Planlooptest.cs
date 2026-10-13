@@ -221,6 +221,9 @@ public static class Planlooptest {
         TRender(p, 2);
         emon.Testport.AssertEq(Planloop.PlAfter(p, Plan.UsRequests()), Planloop.ActRequests(), "exactly the limit is not over it");
         emon.Testport.AssertEq(p.Requests, 100000, "counted");
+    }
+    [Xunit.Fact]
+    public static void TestOneRequestPastOcrRequestsIsTheNamedError() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         TInit(p, 5, 24);
         Planloop.PlAttempt(p);

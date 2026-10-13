@@ -225,7 +225,9 @@
     (t-render p 1)
     (t-render p 2)
     (assert-eq (pl-after p (us-requests)) (act-requests) "exactly the limit is not over it")
-    (assert-eq (fd p requests) 100000 "counted"))
+    (assert-eq (fd p requests) 100000 "counted")))
+
+(deftest test-one-request-past-ocr-requests-is-the-named-error
   (let [^Plan p (new-ctx Plan)]
     (t-init p 5 24)
     (pl-attempt p)

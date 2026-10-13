@@ -220,6 +220,9 @@ fn test_ocr_requests_is_a_named_limit_of_the_loop() {
     t_render(p, 2);
     crate::testport::assert_eq(pl_after(p, us_requests()), act_requests(), "exactly the limit is not over it");
     crate::testport::assert_eq(p.requests, 100000, "counted");
+}
+#[test]
+fn test_one_request_past_ocr_requests_is_the_named_error() {
     let p: &mut crate::emon::planctx::Plan = &mut crate::emon::planctx::Plan::new();
     t_init(p, 5, 24);
     pl_attempt(p);

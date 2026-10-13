@@ -208,6 +208,8 @@ public final class Planlooptest {
         tRender(p, 2);
         emon.Testport.assertEq(Planloop.plAfter(p, Plan.usRequests()), Planloop.actRequests(), "exactly the limit is not over it");
         emon.Testport.assertEq(p.requests, 100000, "counted");
+    }
+    public static void testOneRequestPastOcrRequestsIsTheNamedError() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         tInit(p, 5, 24);
         Planloop.plAttempt(p);
