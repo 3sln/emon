@@ -1,0 +1,136 @@
+{:docs
+ {"columns-span-figure"
+  [{:dpi 150,
+    :height 1650,
+    :layer 0,
+    :page 0,
+    :sha256
+    "00d967aa23eb62532633f90b361cce6e3ee25ac06863131ce02b59458fd65790",
+    :width 1275}],
+  "fig-logo-pages"
+  [{:dpi 150,
+    :height 1650,
+    :layer 0,
+    :page 0,
+    :sha256
+    "e01a4cca8b1fde417d65e5fc87bff964720de80e09c98507fd38507ae00e3210",
+    :width 1275}
+   {:dpi 150,
+    :height 1650,
+    :layer 0,
+    :page 1,
+    :sha256
+    "e01a4cca8b1fde417d65e5fc87bff964720de80e09c98507fd38507ae00e3210",
+    :width 1275}
+   {:dpi 150,
+    :height 1650,
+    :layer 0,
+    :page 2,
+    :sha256
+    "e01a4cca8b1fde417d65e5fc87bff964720de80e09c98507fd38507ae00e3210",
+    :width 1275}],
+  "fig-over-image"
+  [{:dpi 150,
+    :height 1650,
+    :layer 0,
+    :page 0,
+    :sha256
+    "3e50c5d21e1515ab53ddb7501f9916eb3b674b3a74dd54dcbf0cd2aa3e144c4f",
+    :width 1275}],
+  "fig-vector-chart"
+  [{:dpi 150,
+    :height 1650,
+    :layer 0,
+    :page 0,
+    :sha256
+    "937d1f69455b572e1a27c4eadad8246bcd7b6e56c34e58d5722e31d8e18604c3",
+    :width 1275}],
+  "figures-charts"
+  [{:dpi 150,
+    :height 1650,
+    :layer 0,
+    :page 0,
+    :sha256
+    "b36ca5a1587f76ae63eb179cee9a37f5ea7241edaa45952c73fa601dc10c76b9",
+    :width 1275}
+   {:dpi 150,
+    :height 1650,
+    :layer 0,
+    :page 1,
+    :sha256
+    "dafd574ad508d45febcaafaf9238684b914eaaa10c2279fd63660c2e73c4ebf3",
+    :width 1275}],
+  "figures-logo-screenshot"
+  [{:dpi 150,
+    :height 1650,
+    :layer 0,
+    :page 0,
+    :sha256
+    "cbdc05e84bcfa0c3b0cf454cf4a94eb9dee530792d128c79308ef5277c49c4c0",
+    :width 1275}]},
+ :cases
+ [{:id 1,
+   :kind "render",
+   :sha256
+   "5d5a7a2f94cabad20da58124a085a9e72f65a8b1f0ac5d7ae6b69270821ec8a4",
+   :status "ok"}
+  {:id 2,
+   :kind "render",
+   :sha256
+   "89c8b3cc4cd87167f6ddd4e7c835b59eb0ecadaa830bfc7b090fca9614348204",
+   :status "ok"}
+  {:id 3,
+   :kind "render",
+   :sha256
+   "27484ced1c71206a73e1a211f6da7ba1a6ac066f616a2ece02a7ce793846697e",
+   :status "ok"}
+  {:id 4, :kind "render", :sha256 nil, :status "unsupported"}
+  {:id 5, :kind "render", :sha256 nil, :status "unsupported"}
+  {:id 6,
+   :kind "crop",
+   :sha256
+   "8179bcfebc99940f5d0e2f0d980bbe07a4c7d19bbdb10d561775c8760a83cb3d",
+   :status "ok"}
+  {:id 7,
+   :kind "crop",
+   :sha256
+   "b79c91ae889218ee6febef9da6424518168f79fa3a26d5d2cdc3d45a7ca684c4",
+   :status "ok"}
+  {:id 8,
+   :kind "crop",
+   :sha256
+   "27d610aae03fafe9d249e980dab9ce3969ba2f1b30c16beba9acdbed89395be8",
+   :status "ok"}
+  {:id 9,
+   :kind "render",
+   :sha256
+   "4b35bf5188cc7d48eaa0d44d4b83fa65da2fdc872dd111e1f4fed1beedf456ca",
+   :status "ok"}
+  {:id 10,
+   :kind "render",
+   :sha256
+   "86eb4bc961c811fd59c68bf9405c24ef4c79a98e9d9a083bd34fbbf27106514f",
+   :status "ok"}
+  {:id 11,
+   :kind "render",
+   :sha256
+   "91a03b9cddea0530123b196614fba481a466b98b6d92d3acb9500b3be5fe96aa",
+   :status "ok"}
+  {:id 12,
+   :kind "crop",
+   :sha256
+   "55c47cdab43d54d54e6361501255a2d32fc4f2f44aad92e20e2bc97051a755cb",
+   :status "ok"}
+  {:id 13,
+   :kind "render",
+   :sha256
+   "ef8175455082e2e0787410896b7227b6844e4c00b9e36bb65958b977681e5006",
+   :status "ok"}
+  {:id 14,
+   :kind "render",
+   :sha256
+   "ef8175455082e2e0787410896b7227b6844e4c00b9e36bb65958b977681e5006",
+   :status "ok"}
+  {:id 15, :kind "render", :sha256 nil, :status "failed"}
+  {:id 16, :kind "crop", :sha256 nil, :status "failed"}
+  {:id 17, :kind "render", :sha256 nil, :status "unsupported"}]}

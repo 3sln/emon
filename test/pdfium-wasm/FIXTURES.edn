@@ -1,0 +1,19 @@
+;; The documents of the pdfium-wasm gate (DEVLOG P11.4c, `bb pdfium-wasm`). Each is converted at `assets=figures`, `ocr=never` by the JS SDK with the live
+;; pdfium WebAssembly build as `ports.render`: the asset unit asks for the page and cuts its figures out of it (`crop` requests). What the browser's
+;; pdfium recorded is test/pdfium-wasm/replay/<id>/, a transcript the Rust and Go drivers REPLAY (arm A, always); the same documents were recorded
+;; natively in test/asset/figures/ (P8.5) and the render cases in test/render/render/ (P6.2): the live arm compares the two builds (arm B).
+;;
+;; :fonts says what the PIXELS are held to, because pdfium draws a base-14 font that is not embedded from the SYSTEM's fonts natively and from its own
+;; built-in set in the browser, so the text moves: a document whose fonts are `:embedded` is held to D248's bound (at most 3 of 255 per channel, on at most
+;; 6% of the pixels; the same build measured 0 on all of them), one with `:base14` is compared on everything but the text pixels (the requests, the
+;; answers, the sizes, the Model, the HTML, the asset names) and its largest pixel difference is printed, not held. A fixture of the gate embeds its
+;; fonts (D1444); the two `:base14` documents are the existing P8.5 / P6.2 fixtures, kept for what they ask of the renderer, not for their glyphs.
+{:docs {"columns-span-figure"       {:pdf "test/corpus/synth/pdf/columns-span-figure.pdf"       :native "test/asset/figures/columns-span-figure"       :fonts :embedded}
+        "fig-logo-pages"            {:pdf "test/assets/fig/fig-logo-pages.pdf"                  :native "test/asset/figures/fig-logo-pages"            :fonts :base14}
+        "fig-over-image"            {:pdf "test/assets/fig/fig-over-image.pdf"                  :native "test/asset/figures/fig-over-image"            :fonts :base14}
+        "fig-vector-chart"          {:pdf "test/assets/fig/fig-vector-chart.pdf"                :native "test/asset/figures/fig-vector-chart"          :fonts :base14}
+        "figures-charts"            {:pdf "test/corpus/synth/pdf/figures-charts.pdf"            :native "test/asset/figures/figures-charts"            :fonts :embedded}
+        "figures-logo-screenshot"   {:pdf "test/corpus/synth/pdf/figures-logo-screenshot.pdf"   :native "test/asset/figures/figures-logo-screenshot"   :fonts :embedded}}
+ ;; the render cases of test/render/cases.edn, by input index: layers.pdf is a base-14 font, the two bank statements embed theirs
+ :cases {:native "test/render/render"
+         :fonts {0 :base14 1 :embedded 2 :embedded}}}

@@ -176,7 +176,7 @@ jobs:
         include:
           - {name: static, gates: "hosts drift release-audit api-diff lang-test", corpus: false}
           - {name: check, gates: "check", corpus: false}
-          - {name: replay, gates: "plan ocr render embedders", corpus: false}
+          - {name: replay, gates: "plan ocr render embedders pdfium-wasm", corpus: false}
           - {name: fusion, gates: "align fusion gfuse artifacts seals sealpx sigs retarget", corpus: false}
           - {name: slice, gates: "slice", corpus: false}
           - {name: fuzz, gates: "fuzz", corpus: false}

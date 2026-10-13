@@ -74,6 +74,8 @@
     :cmd ["bb" "retarget-record" "--digests"] :writes ["test/retarget/replay/DIGESTS.edn"]}
    {:id "asset-figures" :why "the figures-level asset set's digests: JSON, HTML in three modes, asset files" :covers ["asset"]
     :cmd ["bb" "asset-fig-record" "--digests"] :writes ["test/asset/figures/DIGESTS.edn"]}
+   {:id "pdfium-wasm" :why "the browser's pdfium transcripts' digests: JSON, HTML in three modes, asset files (Rust and Go must agree; P11.4c)" :covers ["pdfium-wasm"]
+    :cmd ["bb" "pdfium-wasm-record" "--digests"] :writes ["test/pdfium-wasm/DIGESTS.edn"]}
    ;; the scoreboard's calibration rows of the entries the replay gates hold (D398)
    {:id "board-emon" :why "scoreboard `emon` conf rows (the `accuracy` gate's entry)"
     :cmd (fn [] (accuracy "emon")) :writes ["test/scoreboard.edn"]}
