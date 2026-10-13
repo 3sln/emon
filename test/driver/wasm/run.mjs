@@ -36,7 +36,17 @@ const open = () => (opening.chain = opening.chain.then(() => harnessPage(browser
 async function worker() {
   let page = await open();
   while (next < jobs.length) {
-    const job = jobs[next++];
+    const job0 = jobs[next++];
+    // A job names a file of the repository (`/repo/...`), or one OUTSIDE it (a fuzz case in a temporary directory, D1241): the server does not
+    // hand out files outside the repository (it answered 404, which made every `bb fuzz --wasm` case fail), so the runner stages that file as
+    // `/gen/job-ID.bin` for the life of the job.
+    let job = job0;
+    let staged = null;
+    if (path.isAbsolute(job0.path) && !path.resolve(job0.path).startsWith(repo + path.sep)) {
+      staged = `job-${job0.id}.bin`;
+      server.add(staged, fs.readFileSync(job0.path));
+      job = { ...job0, path: `gen/${staged}` };
+    }
     let r;
     try {
       r = await Promise.race([page.evaluate((j) => window.H.run(j), job), new Promise((_, no) => setTimeout(() => no(new Error('TIMEOUT')), 180000))]);
@@ -50,6 +60,7 @@ async function worker() {
       }
       page = await open();
     }
+    if (staged) server.remove(staged);
     fs.writeFileSync(path.join(out, `${job.id}.out`), r.out);
     fs.writeFileSync(path.join(out, `${job.id}.err`), r.err);
     fs.writeFileSync(path.join(out, `${job.id}.exit`), String(r.exit));

@@ -1,17 +1,20 @@
 #!/usr/bin/env bb
 ;; `bb fuzz`: mutate PDFs and images and run every mutant through the hosts. (DEVLOG P2.12, D106; P10.5, D384.)
 ;;
-;;     bb fuzz                          the gate (about 60-90 s of run time, D390): self-test, every 4th seed and fixture
+;;     bb fuzz                          the gate (about 60-90 s of run time, D390, D1241): self-test, every 4th seed and fixture
 ;;                                      unmutated (--base-every 4), 150 seeded mutants, the engine arm over 1 in 10 of them
 ;;                                      and a third of the image mutants, EVERY saved crasher (the regression corpus)
 ;;     bb fuzz-long [N] [--budget-s S] [--seed S]   the large run: N cases (default 20000) or S seconds, not a gate
 ;;     bb fuzz --seed S --cases N       any other size   (--base-every 1: every seed and fixture unmutated, as fuzz-long does)
 ;;     bb fuzz --seed S --only I --dump F     write case I of seed S to F (a reproducer)
 ;;     bb fuzz --replay FILE...         run named files through the hosts, no mutation
-;;     options: --hosts rust,go,java,csharp|all   --chunk 512   --timeout-ms 10000   --no-minimize   --crashers DIR
+;;     options: --hosts rust,go,java,csharp|all (the probe arm's hosts; default all four)   --chunk 512   --timeout-ms 10000   --no-minimize   --crashers DIR
 ;;              --budget-s S    stop starting batches after S seconds (the run then reports how many cases ran)
-;;              --engine-every K  every K-th PDF mutant also goes through the whole conversion (default 6; 0: none)
-;;              --wasm  also the browser arm (OFF by default: its harness answers HTTP 404 on every case here, D390)
+;;              --engine-every K  every K-th PDF mutant also goes through the whole conversion (default 10; 0: none)
+;;              --extra-every K   one engine file in K also goes to the SAMPLED HOSTS, the Java host, the C# host, the C binding and the pod, in memory
+;;                                (default 8; 1 in the long run; 0: none), so four more hosts share the time of about one (P9.5, D1241)
+;;              --no-wasm  leave out the browser arm (a normal arm since D1241, left out LOUDLY when its toolchain is missing; the 404 of D390 was the
+;;                         harness, which now stages a file outside the repository: test/driver/wasm/run.mjs); --wasm is accepted and does nothing
 ;;              --no-engine --no-probe --workers 2 --wall-ms 20000 --rss-mb 1024 --limits fuzz|default
 ;;
 ;; TWO ARMS. THE PROBE (`emon.fuzzprobe`, kin/fuzzprobe.kin; the same kin unit on every host, in a per-host driver under
@@ -51,9 +54,9 @@
 ;; ---------------------------------------------------------------- options
 
 (defn parse-args [args]
-  (loop [a args o {:seed 1 :cases 150 :base-every 4 :hosts "rust,go" :chunk 512 :timeout-ms 10000
+  (loop [a args o {:seed 1 :cases 150 :base-every 4 :hosts "rust,go,java,csharp" :chunk 512 :timeout-ms 10000
                    :minimize true :crashers "test/fuzz/crashers"
-                   :engine-every 10 :workers 2 :wall-ms 20000 :rss-mb 1024 :limits "fuzz"
+                   :engine-every 10 :extra-every 8 :workers 2 :wall-ms 20000 :rss-mb 1024 :limits "fuzz"
                    :replay []}]
     (if (empty? a)
       o
@@ -78,7 +81,8 @@
           "--no-engine" (recur more (assoc o :engine-every 0 :no-engine true))
           "--no-probe" (recur more (assoc o :no-probe true))
           "--no-wasm" (recur more (assoc o :no-wasm true))
-          "--wasm" (recur more (assoc o :wasm true))
+          "--wasm" (recur more o)   ; (the browser arm is on by default since D1241; kept so that an old command line still runs)
+          "--extra-every" (recur (rest more) (assoc o :extra-every (parse-long (first more)) :extra-set true))
           "--no-base" (recur more (assoc o :no-base true))
           "--base-every" (recur (rest more) (assoc o :base-every (parse-long (first more)) :base-every-set true))
           "--min" (recur more (assoc o :min true))
@@ -152,6 +156,11 @@
           [(str jdk "/bin/java") "-XX:+UseSerialGC" "-XX:TieredStopAtLevel=1" "-Xss8m" "-cp" d "Main"]
           (do (println "  FAIL java driver did not build:\n" (:err r)) nil))))))
 
+(defn dotnet-major
+  "The major version of the SDK's own framework (the C# host targets the SDK it is built with: D454), not a hard-coded one."
+  []
+  (or (some->> (:out (sh "." "dotnet" "--version")) (re-find #"^(\d+)\.") second) "8"))
+
 (defn build-csharp []
   (when (fs/which "dotnet")
     (let [d (str work "/cs")]
@@ -161,7 +170,7 @@
       (fs/copy "test/fuzz/cs/Program.cs" (str d "/Program.cs"))
       (spit (str d "/cs.csproj")
             (str "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n"
-                 "    <OutputType>Exe</OutputType>\n    <TargetFramework>net10.0</TargetFramework>\n"
+                 "    <OutputType>Exe</OutputType>\n    <TargetFramework>net" (dotnet-major) ".0</TargetFramework>\n"
                  "    <Nullable>disable</Nullable>\n    <Optimize>true</Optimize>\n"
                  "    <InvariantGlobalization>true</InvariantGlobalization>\n"
                  "  </PropertyGroup>\n</Project>\n"))
@@ -288,8 +297,8 @@
 
 (defn limits-env [o] (when (= "fuzz" (:limits o)) en/fuzz-limits))
 
-(defn engine-ctx [o drivers & {:keys [arms]}]
-  {:drivers drivers :arms (or arms en/default-arms) :wall-ms (:wall-ms o) :workers (:workers o) :env (limits-env o)})
+(defn engine-ctx [o drivers & {:keys [arms host-arms]}]
+  {:drivers drivers :arms (or arms en/default-arms) :host-arms host-arms :wall-ms (:wall-ms o) :workers (:workers o) :env (limits-env o)})
 
 (defn rss-bytes [o] (* (:rss-mb o) 1048576))
 
@@ -332,7 +341,7 @@
                          :let [p (format "%s/%05d.%s" dir k (ext-of bs (if (:image? ctx) :image :pdf)))]]
                      (do (fs/write-bytes p bs) p)))]
     (if engine?
-      (let [res (en/run-many (:engine ctx) paths)]
+      (let [res (en/run-many (or (:engine-x ctx) (:engine ctx)) paths)]
         (mapv #(signature (engine-fails (:o ctx) (get res %) %)) paths))
       (let [results (run-hosts (:hosts ctx) paths (:chunk ctx) (:timeout-ms ctx) (:env ctx))]
         (mapv #(signature (analyze results %)) paths)))))
@@ -437,15 +446,20 @@
           (swap! bad inc)
           (println (str "  FAIL selftest: the minimiser left " (pr-str (String. ^bytes mn "UTF-8")) ", wanted \"X\""))))
       ;; the engine arm: a fake driver that does what the file says
-      (let [fake {"A" ["bb" "tools/fuzz/fakedriver.clj" "A"] "B" ["bb" "tools/fuzz/fakedriver.clj" "B"]}
+      ;; (a third host that runs the in-memory arm only, as the sampled hosts of D1241 do: it is judged against the others and has no async run to be judged by)
+      (let [fake {"A" ["bb" "tools/fuzz/fakedriver.clj" "A"] "B" ["bb" "tools/fuzz/fakedriver.clj" "B"] "C" ["bb" "tools/fuzz/fakedriver.clj" "C"]}
             wantE {"ok" #{} "hang" #{:engine-hang} "crash" #{:engine-crash} "panic" #{:engine-panic} "named" #{} "limit" #{}
                    "rss" #{:engine-rss} "status" #{:engine-status-mismatch} "name" #{:engine-status-mismatch}
                    "output" #{:engine-output-mismatch} "async" #{:engine-async}}
-            ctx {:drivers fake :arms [["bytes" ["--out=bundle"]] ["async" ["--out=bundle" "--chunk=512" "--async"]]] :wall-ms 2500 :workers 2 :env nil}
+            ctx {:drivers fake :arms [["bytes" ["--out=bundle"]] ["async" ["--out=bundle" "--chunk=512" "--async"]]] :host-arms {"C" en/extra-arms}
+                 :wall-ms 2500 :workers 2 :env nil}
             files (vec (for [k (sort (keys wantE))] (let [p (str dir "/e-" k ".txt")] (spit p k) p)))
             ;; hang, crash and panic need no async arm: one run each
             res (en/run-many ctx files)]
         (doseq [p files]
+          (when (some #(= ["C" "async"] %) (keys (get res p)))
+            (swap! bad inc)
+            (println "  FAIL selftest: a host with in-memory arm only ran an async arm"))
           (let [k (str/replace (fs/file-name p) #"^e-|\.txt$" "")
                 got (set (map first (en/failures (get res p) (* 200 1048576))))]
             (when (not= got (wantE k))
@@ -460,6 +474,8 @@
 
 (defn -main [args]
   (let [o (parse-args args)
+        ;; the long run is not a gate: every engine file and every crasher goes to the sampled hosts too (D1241) unless `--extra-every` says otherwise
+        o (if (and (:long o) (not (:extra-set o))) (assoc o :extra-every 1) o)
         _ (when (or (:selftest o) (not (or (:long o) (:only o) (:replay-mode o) (:no-selftest o))))
             (selftest)
             (when (:selftest o) (System/exit 0)))
@@ -470,7 +486,11 @@
         probe? (not (:no-probe o))
         hosts (when probe? (build-hosts host-names))
         edrivers (when engine? (en/build-drivers (filter #{"rust" "go"} host-names)))
-        wasm (when (and engine? (:wasm o) (not (:no-wasm o))) (en/wasm-module))
+        ;; the SAMPLED HOSTS of the engine arm (P9.5, D1241): Java, C#, the C binding and the pod take 1 case in `--extra-every` (the in-memory arm only), so the
+        ;; four of them share the time of one more host instead of adding four times it; each LEFT OUT LOUDLY without its toolchain
+        xdrivers (when (and engine? (pos? (:extra-every o))) (en/build-extra-drivers))
+        ;; the browser is a normal arm again (D1241): `emon-wasm-run --check` SKIPS loudly without its toolchain, `--no-wasm` leaves it out
+        wasm (when (and engine? (not (:no-wasm o))) (en/wasm-module))
         penv (limits-env o)
         fails-total (atom 0)]
     (when (and probe? (empty? hosts))
@@ -483,16 +503,20 @@
           _ (fs/create-dirs case-dir)
           crashers (crasher-files (:crashers o))
           corpus (g/load-corpus)
+          xarms (into {} (for [h (keys xdrivers)] [h en/extra-arms]))
           ctx {:hosts hosts :chunk (:chunk o) :timeout-ms (:timeout-ms o) :env penv :o o
-               :engine (engine-ctx o edrivers)}
-          ctx-base (assoc ctx :engine (engine-ctx o edrivers :arms [["bytes" ["--out=bundle"]]]))
+               :engine (engine-ctx o edrivers)
+               :engine-x (engine-ctx o (merge edrivers xdrivers) :host-arms xarms)}
+          ctx-base (assoc ctx
+                          :engine (engine-ctx o edrivers :arms en/extra-arms)
+                          :engine-x (engine-ctx o (merge edrivers xdrivers) :arms en/extra-arms))
           item-name #(str (:name %))]
 
       ;; ---- replay mode: named files, no mutation --------------------------
       (if (:replay-mode o)
         (let [pdfs (filterv #(str/ends-with? % ".pdf") (:replay o))
               pres (when (and probe? (seq pdfs)) (run-hosts hosts pdfs (:chunk o) (:timeout-ms o) penv))
-              eres (when (and engine? (seq (:replay o))) (en/run-many (:engine ctx) (:replay o)))]
+              eres (when (and engine? (seq (:replay o))) (en/run-many (:engine-x ctx) (:replay o)))]
           (doseq [p (:replay o)]
             (let [f (concat (when (and pres (some #{p} pdfs)) (analyze pres p)) (when eres (engine-fails o (get eres p) p)))]
               (println (if (seq f) "  FAIL" "  ok  ") p)
@@ -540,13 +564,18 @@
                                    ec (filterv :engine? named)
                                    pres (when (seq pc) (run-hosts hosts (mapv :path pc) (:chunk o) (:timeout-ms o) penv))
                                    ;; unmutated items run the in-memory arm only; mutants run both
+                                   ;; one engine file in `extra-every` (counted among the engine files, not the cases) also goes to the sampled hosts
+                                   xset (if (seq xdrivers) (set (keep-indexed (fn [j c] (when (zero? (mod j (:extra-every o))) (:path c))) ec)) #{})
+                                   pick (fn [base? x?] (mapv :path (filter #(and (= base? (boolean (:base? %))) (= x? (contains? xset (:path %)))) ec)))
                                    eres (when (seq ec)
-                                          (merge (en/run-many (:engine ctx-base) (mapv :path (filter :base? ec)))
-                                                 (en/run-many (:engine ctx) (mapv :path (remove :base? ec)))))
+                                          (merge (en/run-many (:engine ctx-base) (pick true false))
+                                                 (en/run-many (:engine-x ctx-base) (pick true true))
+                                                 (en/run-many (:engine ctx) (pick false false))
+                                                 (en/run-many (:engine-x ctx) (pick false true))))
                                    wres (when (and wasm (seq ec))
                                           (let [fs* (mapv :path (take (if (:long o) 100000 24) ec))]
                                             (swap! wasm-files + (count fs*))
-                                            (en/run-wasm wasm fs* work)))
+                                            (en/run-wasm wasm fs* work penv)))
                                    eres (if wres (wasm-merge eres wres) eres)]
                                (swap! probe-files + (count pc))
                                (swap! engine-files + (count ec))
@@ -583,7 +612,11 @@
           ;; ---- the regression corpus: every saved crasher, on both arms ---------
           (let [pdfc (filterv #(str/ends-with? % ".pdf") crashers)
                 cp (when (and probe? (seq pdfc)) (run-hosts hosts pdfc (:chunk o) (:timeout-ms o) penv))
-                ce (when (and engine? (seq crashers)) (en/run-many (:engine ctx) (vec crashers)))]
+                ;; the regression corpus: Rust, Go and the browser on every crasher, both arms; the sampled hosts on 1 in `extra-every` (all of them in the long run)
+                xcr (if (seq xdrivers) (vec (keep-indexed (fn [j p] (when (zero? (mod j (:extra-every o))) p)) crashers)) [])
+                ce (when (and engine? (seq crashers))
+                     (merge (en/run-many (:engine ctx) (vec (remove (set xcr) crashers)))
+                            (en/run-many (:engine-x ctx) xcr)))]
             (doseq [p crashers]
               (let [f (concat (when (and cp (some #{p} pdfc)) (analyze cp p)) (when ce (engine-fails o (get ce p) p)))
                     st (crasher-status p)]
@@ -632,7 +665,9 @@
                             (str/join ", " (for [[s n] (sort-by (comp - val) @statuses)] (str s " " n))))))
             (when engine?
               (println (str "  engine arm: " @engine-files " files, " @engine-runs " conversions ("
-                            (str/join "," (keys edrivers)) (when wasm ",wasm") ", in memory and through a 512-byte async source)"
+                            (str/join "," (keys edrivers)) (when wasm ",wasm") ", in memory and through a 512-byte async source"
+                            (when (seq xdrivers) (str "; " (str/join "," (keys xdrivers)) " on 1 file in " (:extra-every o) ", in memory"))
+                            ")"
                             (when wasm (str ", wasm on " @wasm-files " files"))
                             "; limits " (:limits o) "; peak RSS "
                             (str/join ", " (for [[h b] (sort @peak)] (str h " " (quot b 1048576) " MiB"))) " (bound " (:rss-mb o) " MiB); slowest "

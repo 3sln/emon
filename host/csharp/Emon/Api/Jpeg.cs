@@ -323,7 +323,9 @@ public static partial class ImgDec {
                         throw Failedf("short SOF in a JPEG");
                     }
                     if (d[bo] != 8) {
-                        throw Unsupportedf("a JPEG that is not 8-bit");
+                        // `undecodable`, as the other hosts' decoders say (D1242): the one JPEG the port calls `unsupported-image` is a frame with other than one or
+                        // three components (CMYK: P6.1a), decided before a decoder is asked; a decoder's refusal of a coding is a damaged image to every host
+                        throw Failedf("a JPEG that is not 8-bit");
                     }
                     progressive = mk == 0xC2;
                     img.H = U16(d, bo + 1);
@@ -361,7 +363,7 @@ public static partial class ImgDec {
                     break;
                 }
                 case 0xC3: case 0xC5: case 0xC6: case 0xC7: case 0xC9: case 0xCA: case 0xCB: case 0xCD: case 0xCE: case 0xCF:
-                    throw Unsupportedf("this JPEG coding process (lossless, hierarchical or arithmetic)");
+                    throw Failedf("this JPEG coding process (lossless, hierarchical or arithmetic)");   // `undecodable` on every host (D1242)
                 case 0xDA: { // SOS
                     if (!haveFrame) {
                         throw Failedf("a JPEG scan before its frame header");

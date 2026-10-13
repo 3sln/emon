@@ -110,6 +110,10 @@ export function startServer({ wasm }) {
         add(name, bytes, { etag = `"${name}-${bytes.length}-${Date.now()}"`, type, noRange = false } = {}) {
           generated.set(name, { bytes, etag, type, noRange });
         },
+        /** forget a document registered with `add` (a runner that stages one file per job frees it when the job is done) */
+        remove(name) {
+          generated.delete(name);
+        },
         stats(p) {
           return sent.get(p) || { requests: 0, bytes: 0 };
         },
