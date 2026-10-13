@@ -733,4 +733,4 @@
           (do (tt-corpus-row (test-t) (test-file-span names at e) row)
               (set row (+ row 1))))
         (set at (+ e 1))))
-    (assert-eq row 117 "the transcripts under test/")))
+    (assert-eq row 123 "the transcripts under test/")))
