@@ -659,9 +659,22 @@
   (if (and (!= (bit-and bits 8) 0) (== (bit-and bits 3) 0)) (return 1))
   (return 0))
 
+(defn ^I32 gf-line-at [^Cells gc ^I32 c ^I32 t]
+  (comment "Where a rule's centre line lies across its axis at position `t` along it (a line that is a little slanted is followed, past its ends too).")
+  (let [^I32 x0 (gcat gc c C_EX0)
+        ^I32 y0 (gcat gc c C_EY0)
+        ^I32 x1 (gcat gc c C_EX1)
+        ^I32 y1 (gcat gc c C_EY1)]
+    (if (== (gcat gc c C_CLS) (go-h))
+      (do (if (== x1 x0) (return y0))
+          (return (+ y0 (i32 (quot (mul64 (i64 (- y1 y0)) (i64 (- t x0))) (i64 (- x1 x0))))))))
+    (if (== y1 y0) (return x0))
+    (return (+ x0 (i32 (quot (mul64 (i64 (- x1 x0)) (i64 (- t y0))) (i64 (- y1 y0))))))))
+
 (defn ^I32 gf-run-unit [^:mut ^Cells gc ^:mut ^Cells aux ^:mut ^Cells un ^I32 n ^I32 s ^I32 e ^I32 gid ^I32 cls ^I32 vecexact ^I32 q0 ^I32 q1]
   (comment "One run of elementary intervals `q0..q1` that only the tracer covers, as a unit: the tracer members it overlaps give its position (their mean), its")
   (comment "thickness (the greatest), and the colour, style and confidence of the longest overlap; when ONE member is the whole run its centre line is copied.")
+  (comment "A run of several pieces of a scanned rule follows their slant (D1321): its centre line runs through where the pieces lie at its two ends, not flat at their mean.")
   (let [^I32 epb (* n A_EP)
         ^I32 bitb (* n A_BITS)
         ^I32 ordb (* n A_ORD)
@@ -678,6 +691,8 @@
         ^:mut ^I32 thick 0
         ^:mut ^I32 q q0
         ^:mut ^I32 oc 0
+        ^:mut ^I32 plo 0
+        ^:mut ^I32 phi 0
         ^:mut ^I32 perp 0]
     (while (< j e)
       (do (set c (cells-at aux (+ ordb j)))
@@ -686,6 +701,8 @@
                 (if (> ov 0)
                   (do (set cnt (+ cnt 1))
                       (set psum (+ psum (gf-perp-of gc c)))
+                      (set plo (+ plo (gf-line-at gc c lo)))
+                      (set phi (+ phi (gf-line-at gc c hi)))
                       (set thick (gf-max thick (gcat gc c C_T)))
                       (if (> ov bestov)
                         (do (set bestov ov)
@@ -715,12 +732,12 @@
           (unput un u 15 best))
       (if (== cls (go-h))
         (do (unput un u 11 lo)
-            (unput un u 12 perp)
+            (unput un u 12 (quot plo (gf-max cnt 1)))
             (unput un u 13 hi)
-            (unput un u 14 perp))
-        (do (unput un u 11 perp)
+            (unput un u 14 (quot phi (gf-max cnt 1))))
+        (do (unput un u 11 (quot plo (gf-max cnt 1)))
             (unput un u 12 lo)
-            (unput un u 13 perp)
+            (unput un u 13 (quot phi (gf-max cnt 1)))
             (unput un u 14 hi))))
     (return u)))
 
@@ -1084,16 +1101,16 @@
     (return kept)))
 
 (defn ^I32 gf-unit-box [^Cells un ^I32 u ^:mut ^Cells gv]
-  (comment "A rule unit's box into gv[0..3]: its run along the axis, its thickness across it.")
+  (comment "A rule unit's box into gv[0..3]: its run along the axis, its thickness across it (the box holds a slanted centre line whole, D1321).")
   (let [^I32 half (quot (+ (gf-max (unat un u 6) 1) 1) 2)]
     (if (== (unat un u 2) (go-h))
       (do (cells-set gv 0 (unat un u 3))
-          (cells-set gv 1 (- (unat un u 5) half))
+          (cells-set gv 1 (- (gf-min (unat un u 12) (unat un u 14)) half))
           (cells-set gv 2 (unat un u 4))
-          (cells-set gv 3 (+ (unat un u 5) half)))
-      (do (cells-set gv 0 (- (unat un u 5) half))
+          (cells-set gv 3 (+ (gf-max (unat un u 12) (unat un u 14)) half)))
+      (do (cells-set gv 0 (- (gf-min (unat un u 11) (unat un u 13)) half))
           (cells-set gv 1 (unat un u 3))
-          (cells-set gv 2 (+ (unat un u 5) half))
+          (cells-set gv 2 (+ (gf-max (unat un u 11) (unat un u 13)) half))
           (cells-set gv 3 (unat un u 4))))
     (return 0)))
 

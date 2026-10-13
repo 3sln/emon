@@ -17,7 +17,7 @@
                                    pg-filled pg-stroked pg-pattern pa-rect pa-other vc-blend
                                    pt-add po-move po-line
                                    rl-new rl-set rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1 rlf-thick rlf-color rlf-style rlf-conf
-                                   pm-new pm-set pm-rect pmf-flags pmf-color pmf-conf ik-new im-new wd-new ow-new fe-new fe-get
+                                   pm-new pm-set pm-rect pmf-flags pmf-color pmf-conf ik-new im-new wd-new ow-new fe-new fe-get ob-new ob-set ob-block obf-btype
                                    xo-in-table-image xo-rule-like ea-owords]]
             [emon.glayer :refer [grl-count grl-get gfl-count gfl-get gl-check go-h go-v go-slant gqf-pattern ggp-count ggp-get grg-count grg-get rk-table-in-image]]
             [emon.gvec :refer [gv-legacy gv-segments]]
@@ -332,6 +332,37 @@
     (assert-eq (fe-get feats 0 (xo-rule-like)) -1 "and is not rule-like")
     (assert-that (>= (fe-get feats 1 (xo-in-table-image)) 0) "the `|` has a share too")
     (assert-eq (fe-get feats 1 (xo-rule-like)) 1000 "and it lies wholly on a rule: rule-likeness 1000")
+    (assert-eq (gl-check grl gfl ggp grg refs) 0 "sound")))
+
+(deftest test-a-scanned-rule-in-pieces-keeps-its-slant-when-the-pieces-are-one-run
+  (comment "D1321: a rule of a scan, turned by 0.6 degrees and found in three pieces, is one run of the tracer alone; its centre line follows the pieces, it is not flat.")
+  (let [^Cells pa (new-cells) ^Cells im (new-cells)
+        ^Cells grl (new-cells) ^Cells gfl (new-cells) ^Cells ggp (new-cells) ^Cells grg (new-cells) ^Cells refs (new-cells)
+        ^Cells hl (new-cells) ^Cells fx (new-cells) ^Cells gfa (new-cells)
+        ^Cells inks (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells oblocks (new-cells) ^Cells owords (new-cells)
+        ^Cells words (new-cells) ^Cells etext (new-cells) ^Cells feats (new-cells)
+        ^I32 m (im-new im 1 10000 10000 40000 40000 7 600 600)]
+    (assert-eq m 0 "the image placement")
+    (comment "the engine's line separator (a `bt-line` block) under the pieces joins them to one group: two tracer pieces are never joined to each other")
+    (let [^I32 b (ob-new oblocks 1 12000 15100 38000 15170 (ob-block) -1 0)]
+      (ob-set oblocks b (obf-btype) 3))
+    (gu-trace rules 12000 15000 20000 15083 900)
+    (gu-trace rules 20000 15083 30000 15187 900)
+    (gu-trace rules 30000 15187 38000 15270 900)
+    (assert-eq (gu-fuse 1 inks rules prims oblocks owords words etext pa im feats grl gfl ggp grg refs hl fx gfa) 1 "fused")
+    (assert-eq (ggp-count ggp) 1 "one group: the three pieces and the line the engine saw under them")
+    (assert-eq (ggp-get ggp 0 5) 3 "three tracer members")
+    (assert-eq (ggp-get ggp 0 7) 1 "and one OCR member")
+    (assert-eq (grl-count grl) 1 "one rule: the run")
+    (assert-eq (grl-get grl 0 16) 530 "by row 530")
+    (assert-eq (grl-get grl 0 10) (go-h) "horizontal")
+    (assert-eq (grl-get grl 0 5) 12000 "from the left end of the first piece")
+    (assert-eq (grl-get grl 0 7) 38000 "to the right end of the last")
+    (assert-that (and (>= (grl-get grl 0 6) 14998) (<= (grl-get grl 0 6) 15002)) "at the height of the first piece there")
+    (assert-that (and (>= (grl-get grl 0 8) 15268) (<= (grl-get grl 0 8) 15272)) "and at the height of the last piece at the other end: the line is not flat")
+    (assert-that (and (> (grl-get grl 0 11) 17900) (< (grl-get grl 0 11) 17980)) "its angle is 0.6 degrees (page space has y down: 179.4)")
+    (assert-that (<= (grl-get grl 0 2) 14950) "its box holds the line whole: the top")
+    (assert-that (>= (grl-get grl 0 4) 15300) "and the bottom")
     (assert-eq (gl-check grl gfl ggp grg refs) 0 "sound")))
 
 (deftest test-a-tint-over-a-pattern-gives-its-colour-and-a-tint-in-a-good-image-region-is-a-fill

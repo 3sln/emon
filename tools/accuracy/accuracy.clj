@@ -22,6 +22,8 @@
     bb accuracy --predictor emon-fusion  the Rust Engine converting BORN-DIGITAL documents with its default settings (the born-digital pages are OCR'd
                                        under `always`, P7.S), REPLAYING the committed transcripts of test/fusion/replay/ID/ (a gate's: `bb fusion`)
     bb accuracy --predictor emon-fusion-live  the same LIVE (pdfium and Tesseract). NOT a gate (needs both; takes minutes)
+    bb accuracy --predictor emon-gfuse  the Rust Engine REPLAYING the committed transcripts of test/fusion/graphics/KEY (the graphics set, recorded WITH the bitmaps the tracer reads; P7.G, D1320):
+                                       rule and fill P/R by length and area, table-adj F1, TEDS-lite and the rule ghosts, with the evidence dump of each (`bb gfuse` runs it with `--docs`)
     bb accuracy --predictor baseline-pdfplumber|-pymupdf4llm|-docling|-tesseract   a REFERENCE (P2.10, D339): a pinned third-party
                                        extractor's adapted output (`bb baselines` makes it), scored by this scorer on a fixed subset of
                                        the input forms and recorded under `:references` by --update; never a gate, never the ratchet
@@ -83,6 +85,7 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
    "emon-replay-px" ["sh" (str (fs/path HERE "predict-emon-replay.sh")) "px"]
    "emon-fusion" ["sh" (str (fs/path HERE "predict-emon-fusion.sh"))]
    "emon-fusion-live" ["sh" (str (fs/path HERE "predict-emon-fusion-live.sh"))]
+   "emon-gfuse" ["sh" (str (fs/path HERE "predict-emon-gfuse.sh"))]
    "emon-figures" ["sh" (str (fs/path HERE "predict-emon.sh"))]
    "baseline-pdfplumber" ["sh" (str (fs/path HERE "predict-baseline.sh")) "pdfplumber"]
    "baseline-pymupdf4llm" ["sh" (str (fs/path HERE "predict-baseline.sh")) "pymupdf4llm"]
@@ -283,7 +286,7 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
   [cmd doc-id variant inp gold-path {:keys [rules facts]}]
   (cond
     (= cmd (PREDICTORS "oracle")) (G/oracle-dump rules facts variant)
-    (and (= cmd (PREDICTORS "emon")) (or rules (get facts "tag-verdict")))
+    (and (contains? #{(PREDICTORS "emon") (PREDICTORS "emon-gfuse")} cmd) (or rules (get facts "tag-verdict")))
     (let [r (apply proc/sh (concat ["env" "EMON_OUT=evidence"] cmd [doc-id variant inp gold-path]))]
       (if (zero? (:exit r)) (json/parse-string (:out r)) :none))
     :else :none))

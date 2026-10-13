@@ -1,0 +1,31 @@
+;; The SHA-256 of each replayed bundle (JSON, HTML, evidence) of test/fusion/graphics/ID, as `bb gfuse-record` made it (P7.G, D1320).
+{"gfx-hidden-rules"
+ "7af90236b063b427d2e39208aacc8799c81f25a6931514bdd5bbc8f7b58b08d7",
+ "gfx-image-rules"
+ "0c567b193d0115ec047fcc8a501ff5b7608dd451841e5788018512ee6dd5b733",
+ "gfx-shading-bands"
+ "135e044306d0a5c5759b8c553457e628f107a6b3a7c6355114606007ee07f27c",
+ "gfx-softmask-rule"
+ "ad1f961a0717ccb980e409be38d4257b337b2b9e8b182f60fa17c0f9a947165c",
+ "mixed-table-image"
+ "c60a8444b7293a0810d20745b82997d0f497de227817d32f133c1f06a227af7a",
+ "mixed-two-tables"
+ "335859e6124243d1eaac254d24a3d09a1488290ad585cc77ceebe88f739c04a6",
+ "scan--table-simple-ruled"
+ "4d3567adc3390cc91d45a04954025cea14fde0111eccd0860094dcffe80502a0",
+ "scan--table-spans-partial"
+ "9ee4c363564ada51111fe9c6fee2a972d0f5f49cf9cc96dce2db0adfd7811ff8",
+ "scan--table-whitespace"
+ "67f2aa59ac65355b95b2eda74b223070c4ac27d4c64a6e96695127d700395423",
+ "scan-color--invoice"
+ "4e028af974256b9130f3d6c5375e28f6ba081cfc9b4ddc88126ef306c060443c",
+ "scan-color--table-simple-ruled"
+ "c8ed95ebb6629fc6c7516da92b28aeb4f0f881df040f8d51ccd591aeaca9671a",
+ "scan-color--table-zebra"
+ "d3a6fe0808a51f59a88771cbd91fb37892a1ee775d3539d4c260f9950d1b5feb",
+ "table-simple-ruled"
+ "c27802ea417aba21d2a71b78ff6853e742022b5f78ee8c70f46b6ec77a274716",
+ "table-spans-partial"
+ "72a9c6d1d1aaf4cb0d25049d9fe44dda0c4eb7e0954967bd49422def970ecbf9",
+ "table-whitespace"
+ "9e6499a4004523e2e8ac35809366a2ebf93b8fbae4523a1ac8956516e95413ac"}

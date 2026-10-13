@@ -10,7 +10,7 @@ every document of the GRAPHICS set in every variant it has, and a damaged dump i
             [accuracy.predict-oracle :as O]
             [clojure.string :as str]
             [accuracy.score :as S]
-            [clojure.test :refer [deftest is run-tests]]
+            [clojure.test :refer [deftest is run-tests testing]]
             [pyjson]))
 
 (defn- almost= [a b] (< (Math/abs (- (double a) (double b))) 1e-9))
@@ -126,6 +126,28 @@ every document of the GRAPHICS set in every variant it has, and a damaged dump i
     (let [[x0 y0] (first (get-in (G/truth-for t {"skew-scan" [0.7]} "scan") [1 :rules]))]
       (is (< (Math/abs (- x0 59.99925)) 1e-4)) (is (< (Math/abs (- y0 50.12217)) 1e-4)))))
 
+(deftest a-twin-is-shifted-by-imagemagicks-crop
+  (comment "D1322: `-rotate A -gravity center -crop WxH+0+0` lands the page at (-s, -t) pixels besides the turn. The pixel shifts here were measured by drawing a mark on a 1275 x 1650 (and a 1105 x 1430) page and rotating it.")
+  (let [px (fn [deg w h dpi] (mapv #(Math/round (/ (* % dpi) 72.0)) (G/crop-shift deg w h dpi)))]
+    (is (= [-9 -7] (px 0.524 612 792 150)))
+    (is (= [-9 -7] (px -0.524 612 792 150)))
+    (is (= [-35 -27] (px 2.369 612 792 150)))
+    (is (= [-18 -14] (px 1.2 612 792 150)))
+    (is (= [-2 -2] (px 0.1 612 792 150)))
+    (is (= [-15 -12] (px -1.0 612 792 150)))
+    (is (= [-43 -33] (px 3.0 612 792 150)))
+    (is (= [-30 -23] (px 2.369 612 792 130)))
+    (is (= [-26 -20] (px -2.0 612 792 130)))
+    (testing "no angle, no shift; no dpi, no shift (the oracle's laws have none)"
+      (is (= [0.0 0.0] (G/crop-shift 0.0 612 792 150)))
+      (is (= [0.0 0.0] (G/crop-shift 1.0 612 792 nil))))
+    (testing "the truth of a scan moves by it: a point at the page's centre is moved by the shift alone"
+      (let [t {"pages" [{"n" 1 "w" 61200 "h" 79200 "rules" [[30600 39600 30600 39700 100]] "fills" []}]}
+            facts {"skew-scan" [0.524] "dpi" {"scan" 150}}
+            [x0 y0] (first (get-in (G/truth-for t facts "scan") [1 :rules]))]
+        (is (< (Math/abs (- x0 (- 306.0 (* 9 0.48)))) 1e-6))
+        (is (< (Math/abs (- y0 (- 396.0 (* 7 0.48)))) 1e-6))))))
+
 ;; ------------------------------------------------------------------ table adjacency
 
 (defn cell [t & {:as a}] (merge {"kind" "cell" "text" t} (update-keys a name)))
@@ -186,6 +208,31 @@ every document of the GRAPHICS set in every variant it has, and a damaged dump i
   (is (almost= 1.0 ((verdicts [["contradicted" [{"score" 1} {"verdict" "contradicted"} {"verdict" "confirmed"}]]]) "tag-verdict-acc")))
   ;; a document with no declared verdict is not counted at all
   (is (nil? ((verdicts []) "tag-verdict-acc"))))
+
+;; ------------------------------------------------------------------ rule ghosts
+
+(defn ghosts [gold-texts pred-texts]
+  (let [para (fn [t] {"kind" "paragraph" "text" t})
+        g {"annotated" {"structure" []} "model" {"body" (apply body (map para gold-texts))}}
+        c (get (S/score {"body" (apply body (map para pred-texts))} g {:variant "scan" :rules {"pages" []} :facts {}}) "counts")]
+    [(S/metrics c) c]))
+
+(deftest rule-ghosts-are-rule-marks-in-the-body-beyond-the-golds
+  ;; gold: "a b c" (no mark); prediction "a | b | c": five words, two of them marks: 2 / 5, lower is better
+  (let [[m c] (ghosts ["a b c"] ["a | b | c"])]
+    (is (= [5 2] [(c "gfx.ghost.words") (c "gfx.ghost.n")]))
+    (is (almost= 0.4 (m "rule-ghost")))
+    (is (contains? S/LOWER-IS-BETTER "rule-ghost")))
+  ;; a mark the gold has is not a ghost: gold "a | b", prediction "a | b" -> 0; a missing one is not a negative ghost
+  (is (almost= 0.0 ((first (ghosts ["a | b"] ["a | b"])) "rule-ghost")))
+  (is (almost= 0.0 ((first (ghosts ["a | b"] ["a b"])) "rule-ghost")))
+  ;; underscores, em dashes and runs of three are marks; a word with a letter in it is not
+  (let [[_ c] (ghosts ["x"] ["x _ — || a|b"])]
+    (is (= 3 (c "gfx.ghost.n"))))
+  ;; a document whose rules are not measured counts none (the pooled metric is absent there)
+  (let [g {"annotated" {"structure" []} "model" {"body" (body {"kind" "paragraph" "text" "a"})}}
+        c (get (S/score {"body" (body {"kind" "paragraph" "text" "a | b"})} g {:variant "pdf"}) "counts")]
+    (is (nil? (get c "gfx.ghost.n")))))
 
 ;; ------------------------------------------------------------------ the committed corpus
 

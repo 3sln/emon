@@ -1,0 +1,23 @@
+;; The documents of the graphics-fusion gate (`kin/scripts/gfuse`, P7.G, D1320-D1327). Recorded LIVE by `bb gfuse-record` (pdfium for a born-digital page,
+;; Tesseract for every page), WITH the pixels the page units read (the tracer reads the no-text render; the targeted rounds hash what they cut), and cut down to the bitmaps a replay reads
+;; (`tools/fusion/record-graphics.clj`). The input is the corpus's own file:  test/corpus/synth/VARIANT/DOC.pdf ; the id is DOC for the `pdf` variant and VARIANT--DOC otherwise.
+;;   :variant  pdf (born-digital: vector rules and fills, rendered and traced) | scan | scan-color (a scanned page: the tracer's rules and fills are all there is)
+;;   :doc      the corpus document (its gold: gold/DOC.gold.json; its rule and fill truth gold/DOC.rules.json for the graphics set)
+;;   :class    what the fixture stands for (the gate says it and counts per class)
+;;             ruled unruled zebra partial (open edges) tint (shading / pattern bands) soft-masked hidden image-rules (rules painted in an image) curve
+;;             table-in-image strokes (letter strokes the tracer can take for rules: the scan of unruled text) skewed (a scan turned by more than the rules' axis tolerance)
+{"table-simple-ruled"        {:variant "pdf" :doc "table-simple-ruled" :class #{:ruled}}
+ "table-whitespace"          {:variant "pdf" :doc "table-whitespace" :class #{:unruled}}
+ "table-spans-partial"       {:variant "pdf" :doc "table-spans-partial" :class #{:ruled :partial}}
+ "gfx-hidden-rules"          {:variant "pdf" :doc "gfx-hidden-rules" :class #{:hidden}}
+ "gfx-softmask-rule"         {:variant "pdf" :doc "gfx-softmask-rule" :class #{:soft-masked}}
+ "gfx-shading-bands"         {:variant "pdf" :doc "gfx-shading-bands" :class #{:tint}}
+ "gfx-image-rules"           {:variant "pdf" :doc "gfx-image-rules" :class #{:image-rules}}
+ "mixed-table-image"         {:variant "pdf" :doc "mixed-table-image" :class #{:table-in-image}}
+ "mixed-two-tables"          {:variant "pdf" :doc "mixed-two-tables" :class #{:table-in-image :ruled}}
+ "scan--table-simple-ruled"  {:variant "scan" :doc "table-simple-ruled" :class #{:ruled}}
+ "scan--table-whitespace"    {:variant "scan" :doc "table-whitespace" :class #{:unruled :strokes}}
+ "scan--table-spans-partial" {:variant "scan" :doc "table-spans-partial" :class #{:ruled :partial}}
+ "scan-color--table-simple-ruled" {:variant "scan-color" :doc "table-simple-ruled" :class #{:ruled :skewed}}
+ "scan-color--invoice"       {:variant "scan-color" :doc "invoice" :class #{:ruled :strokes}}
+ "scan-color--table-zebra"   {:variant "scan-color" :doc "table-zebra" :class #{:zebra :strokes}}}

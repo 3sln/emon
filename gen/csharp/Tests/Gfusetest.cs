@@ -422,6 +422,51 @@ public static class Gfusetest {
         emon.Testport.AssertEq(Glayer.GlCheck(grl, gfl, ggp, grg, refs), 0, "sound");
     }
     [Xunit.Fact]
+    public static void TestAScannedRuleInPiecesKeepsItsSlantWhenThePiecesAreOneRun() {
+        // D1321: a rule of a scan, turned by 0.6 degrees and found in three pieces, is one run of the tracer alone; its centre line follows the pieces, it is not flat.
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells im = emon.Port.NewCells();
+        emon.Port.Cells grl = emon.Port.NewCells();
+        emon.Port.Cells gfl = emon.Port.NewCells();
+        emon.Port.Cells ggp = emon.Port.NewCells();
+        emon.Port.Cells grg = emon.Port.NewCells();
+        emon.Port.Cells refs = emon.Port.NewCells();
+        emon.Port.Cells hl = emon.Port.NewCells();
+        emon.Port.Cells fx = emon.Port.NewCells();
+        emon.Port.Cells gfa = emon.Port.NewCells();
+        emon.Port.Cells inks = emon.Port.NewCells();
+        emon.Port.Cells rules = emon.Port.NewCells();
+        emon.Port.Cells prims = emon.Port.NewCells();
+        emon.Port.Cells oblocks = emon.Port.NewCells();
+        emon.Port.Cells owords = emon.Port.NewCells();
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells etext = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
+        int m = Evidence.ImNew(im, 1, 10000, 10000, 40000, 40000, 7, 600, 600);
+        emon.Testport.AssertEq(m, 0, "the image placement");
+        // the engine's line separator (a `bt-line` block) under the pieces joins them to one group: two tracer pieces are never joined to each other
+        int b = Evidence.ObNew(oblocks, 1, 12000, 15100, 38000, 15170, Evidence.ObBlock(), -1, 0);
+        Evidence.ObSet(oblocks, b, Evidence.ObfBtype(), 3);
+        GuTrace(rules, 12000, 15000, 20000, 15083, 900);
+        GuTrace(rules, 20000, 15083, 30000, 15187, 900);
+        GuTrace(rules, 30000, 15187, 38000, 15270, 900);
+        emon.Testport.AssertEq(GuFuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa), 1, "fused");
+        emon.Testport.AssertEq(Glayer.GgpCount(ggp), 1, "one group: the three pieces and the line the engine saw under them");
+        emon.Testport.AssertEq(Glayer.GgpGet(ggp, 0, 5), 3, "three tracer members");
+        emon.Testport.AssertEq(Glayer.GgpGet(ggp, 0, 7), 1, "and one OCR member");
+        emon.Testport.AssertEq(Glayer.GrlCount(grl), 1, "one rule: the run");
+        emon.Testport.AssertEq(Glayer.GrlGet(grl, 0, 16), 530, "by row 530");
+        emon.Testport.AssertEq(Glayer.GrlGet(grl, 0, 10), Glayer.GoH(), "horizontal");
+        emon.Testport.AssertEq(Glayer.GrlGet(grl, 0, 5), 12000, "from the left end of the first piece");
+        emon.Testport.AssertEq(Glayer.GrlGet(grl, 0, 7), 38000, "to the right end of the last");
+        emon.Testport.AssertThat((Glayer.GrlGet(grl, 0, 6) >= 14998) && (Glayer.GrlGet(grl, 0, 6) <= 15002), "at the height of the first piece there");
+        emon.Testport.AssertThat((Glayer.GrlGet(grl, 0, 8) >= 15268) && (Glayer.GrlGet(grl, 0, 8) <= 15272), "and at the height of the last piece at the other end: the line is not flat");
+        emon.Testport.AssertThat((Glayer.GrlGet(grl, 0, 11) > 17900) && (Glayer.GrlGet(grl, 0, 11) < 17980), "its angle is 0.6 degrees (page space has y down: 179.4)");
+        emon.Testport.AssertThat(Glayer.GrlGet(grl, 0, 2) <= 14950, "its box holds the line whole: the top");
+        emon.Testport.AssertThat(Glayer.GrlGet(grl, 0, 4) >= 15300, "and the bottom");
+        emon.Testport.AssertEq(Glayer.GlCheck(grl, gfl, ggp, grg, refs), 0, "sound");
+    }
+    [Xunit.Fact]
     public static void TestATintOverAPatternGivesItsColourAndATintInAGoodImageRegionIsAFill() {
         emon.Port.Cells pa = emon.Port.NewCells();
         emon.Port.Cells pts = emon.Port.NewCells();
