@@ -234,6 +234,7 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
 (def ^:dynamic *variants* nil)   ; a set of variant names, or nil for every one
 (def ^:dynamic *ids* nil)        ; a set of document ids, or nil for every one
 (def ^:dynamic *docs* nil)       ; a set of "VARIANT/ID" pairs, or nil: only these documents (D459: a variant's documents of a few ids)
+(def ^:dynamic *rebaseline-conf* false) ; --rebaseline-conf: replace the calibration rows that read worse than the entry (D398, D1200); nothing else
 (def ^:dynamic *fixture-set* nil) ; a directory of FIXTURE-SETS, or nil for the synthetic corpus
 (def VARIANTS ["pdf" "scan" "pdf-tagged" "scan-color" "scan-ovl"])
 
@@ -401,6 +402,29 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
             [0 board])
           [0 board]))
 
+      (and *rebaseline-conf* (get-in board [":predictors" name]))
+      ;; D398 / D1200: a refit changes what a confidence means, so the calibration rows (`conf-ece-*`, `conf-brier-*`) that now
+      ;; read worse than the entry beyond :tolerance are REPLACED by the measured value. Nothing else moves: not an
+      ;; improvement, not a conf row inside the tolerance, not another metric (a regression of one of those still fails).
+      (let [tol (get board ":tolerance" TOLERANCE)
+            old (get-in board [":predictors" name])
+            [reg _ gone] (compare-boards old entry tol)
+            conf? (fn [[_ m]] (CAL/lower-better? m))
+            conf-reg (filter conf? reg)
+            other-reg (remove conf? reg)
+            fails (if (or (seq other-reg) (seq gone)) 1 0)]
+        (show "regressions that are not calibration rows" other-reg)
+        (show "vanished" gone)
+        (show "calibration rows re-baselined" conf-reg 1000)
+        (if (pos? fails)
+          (do (println (format "  FAIL accuracy[%s]: %d regression(s) that are not calibration rows, %d vanished; nothing written"
+                               name (count other-reg) (count gone)))
+              [fails board])
+          (let [board (reduce (fn [b [key m _ nv]] (assoc-in b [":predictors" name key m] nv)) board conf-reg)]
+            (when (seq conf-reg) (save-board board))
+            (println (format "  ok   accuracy[%s]: %d calibration row(s) re-baselined" name (count conf-reg)))
+            [0 board])))
+
       :else
       (let [tol (get board ":tolerance" TOLERANCE)
             old (get-in board [":predictors" name])
@@ -448,13 +472,15 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
           "--predictor" (recur (nnext a) (second a) update only)
           "--update" (recur (next a) pred true only)
           "--only" (recur (nnext a) pred update (second a))
+          "--rebaseline-conf" (do (alter-var-root #'*rebaseline-conf* (constantly true))
+                                  (recur (next a) pred update only))
           "--variants" (do (alter-var-root #'*variants* (constantly (set (str/split (second a) #","))))
                            (recur (nnext a) pred update only))
           "--ids" (do (alter-var-root #'*ids* (constantly (set (str/split (second a) #","))))
                       (recur (nnext a) pred update only))
           "--docs" (do (alter-var-root #'*docs* (constantly (set (str/split (second a) #","))))
                        (recur (nnext a) pred update only))
-          (do (println "usage: accuracy.clj [--predictor emon|emon-live|emon-replay|oracle|degraded|fixtures|CMD] [--update] [--only ID] [--variants V,V] [--ids ID,ID] [--docs V/ID,V/ID]")
+          (do (println "usage: accuracy.clj [--predictor emon|emon-live|emon-replay|oracle|degraded|fixtures|CMD] [--update | --rebaseline-conf] [--only ID] [--variants V,V] [--ids ID,ID] [--docs V/ID,V/ID]")
               (System/exit 2))))
       (let [board (load-board)
             ;; a reference is scored on its fixed subset of the input forms unless --variants says otherwise

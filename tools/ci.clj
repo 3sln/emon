@@ -1,9 +1,10 @@
 #!/usr/bin/env bb
 ;; CI helpers for the manually triggered gates workflow (D266). NOT a gate.
-;;   bb ci coverage                       every gate of kin/scripts/gates is in a workflow job, and bb.edn has every task the workflow calls
+;;   bb ci coverage                       every gate of kin/scripts/gates is in a workflow job, and bb.edn has every task the workflow calls; and every replay gate has a re-derivation (`bb rederive --check`, D1200)
 ;;   bb ci laws-record ARM LOG DIR        write DIR/laws-ARM.txt: the law count `bb unit ARM` printed in LOG
 ;;   bb ci laws-compare DIR               every arm's count in DIR/**/laws-*.txt is the same, and all four arms are there
 (require '[babashka.fs :as fs]
+         '[babashka.process :refer [shell]]
          '[clj-yaml.core :as yaml]
          '[clojure.string :as str])
 
@@ -36,7 +37,10 @@
     (when (seq missing) (die "gates in no workflow job: " (str/join " " missing)))
     (when (seq extra) (die "workflow runs non-gates as gates: " (str/join " " extra)))
     (when (seq unknown) (die "workflow calls bb tasks that do not exist: " (str/join " " unknown)))
-    (println "  ok   every gate is in a gates.yml job (" (count covered) "covered) and every bb task it calls exists")))
+    (println "  ok   every gate is in a gates.yml job (" (count covered) "covered) and every bb task it calls exists")
+    ;; D1200: and every replay gate has a re-derivation in `bb rederive`
+    (let [r (shell {:continue true} "bb" "tools/rederive.clj" "--check")]
+      (when-not (zero? (:exit r)) (System/exit 1)))))
 
 (defn laws-record [arm log dir]
   (let [line (->> (str/split-lines (slurp log)) (filter #(re-find #"^  ok +\S+ +\d+ laws" %)) first)

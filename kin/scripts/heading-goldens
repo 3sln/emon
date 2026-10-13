@@ -32,7 +32,11 @@
 (run "sh" "tools/accuracy/predict-emon.sh" "x" "pdf" "test/corpus/synth/pdf/h-plain.pdf" "x")
 
 (.mkdirs (io/file root "test" "heading"))
-(doseq [d docs]
+;; THE TWO THIS CANNOT WRITE (D470's open item, D1200): the driver runs the lists stage, and `headingtest` reads a Model without it. For a document with
+;; a list the driver's Model is not the golden's, so these two are left as they are. After a refit their `"conf"` literals are changed by hand (D470).
+(def not-written #{"initial-letter-headings" "lists-basic"})
+
+(doseq [d docs :when (or (not (not-written d)) (do (println "  SKIP test/heading/" (str d ".json") "-- the driver's Model has the lists stage (D470); a refit changes its conf by hand") false))]
   (let [out (run ".cache/emon-rs/target/release/emon-rs" "--pretty" (str "test/corpus/synth/pdf/" d ".pdf"))]
     (spit (io/file root "test" "heading" (str d ".json")) (str out "\n") :encoding "UTF-8")
     (println "  wrote test/heading/" (str d ".json") (count out) "bytes")))
