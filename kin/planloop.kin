@@ -24,7 +24,7 @@
 (ns emon.planloop
   (:require [emon.lang :refer [I32 Cells Text defenum fd emit-ascii shl32]]
             [emon.planctx :refer [Plan]]
-            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop text-i32 text-cp]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop text-i32 text-cp limit-of]]
             [emon.plan :refer [us-done us-requests us-need-bytes pk-render pk-decode pk-ocr pk-bytes pk-crop pk-decode-img ps-ok ps-unsupported
                                rec-find rec-count rec-kind rec-id rq-arg rq-bytes an-fail an-status dq-where dq-offset dq-length dq-gwhere
                                dq-goffset dq-glength]]
@@ -43,7 +43,8 @@
    [pe-fulfil-failed 5 "fulfil-failed"]
    [pe-unit-failed 6 "unit-failed"]
    [pe-bad-record 7 "bad-record"]
-   [pe-stalled 8 "need-bytes-stalled"]])
+   [pe-stalled 8 "need-bytes-stalled"]
+   [pe-ocr-requests 9 "ocr-requests"]])
 
 ;; The units of a conversion, in the order the schedule runs them.
 (defenum ^:pub ph
@@ -247,6 +248,9 @@
     (if (> (fd p rounds) (fd p max-rounds))
       (return (pl-limit p (pe-max-rounds) (fd p max-rounds) (fd p rounds))))
     (set (fd p requests) (+ (fd p requests) n))
+    (comment "The `ocr-requests` limit (SPEC 7.4, P10.4): the requests a unit asks in all, over its rounds. A named limit of the loop, as `max-rounds` is.")
+    (if (> (fd p requests) (limit-of 10))
+      (return (pl-limit p (pe-ocr-requests) (limit-of 10) (fd p requests))))
     (set (fd p round) (- (fd p rounds) 1))
     (set (fd p outk) 2)
     (return (act-requests))))

@@ -9,8 +9,14 @@
 ;; it on every host. A name is the spelling `limit.NAME` takes in an options text and the host's error reports (`input-bytes`); the environment
 ;; variable is `EMON_LIMIT_` and the name in capitals with `_` for `-`. A kind not in the table has default 0 and no name (a host reports `unknown`).
 ;;
-;; A row of `lm-rows` is [default lo hi name-offset name-length]; `lm-chars` is every name back to back, as code points. The names and the rows
+;; A row of `lm-rows` is [default lo hi name-offset name-length on-hit]; `lm-chars` is every name back to back, as code points. The names and the rows
 ;; were written by a script and `kin/configtest.kin` holds each one to its literal.
+;;
+;; WHAT HAPPENS AT THE BOUND (`on-hit`, P10.4, D1100): 0 a BREACH (`limit-breach`: a typed payload on every host, the conversion's named error); 1 a
+;; BUDGET (the work stops there and the conversion goes on: a value that cannot be followed reads as absent, a form that is too deep is skipped with a
+;; warning, a candidate past the cap is dropped; never an error: failing a long book for its 4097th footnote would be worse than dropping it); 2 RESERVED
+;; (named and ranged so that `limit.NAME` and the environment already mean it, but nothing reads it yet: SPEC 7.4 names it ahead of the feature).
+;; `bb limits` reports the column, where each bound is read and which law or fixture exercises it.
 (ns emon.limits
   (:require [emon.lang :refer [I32]]
             [kin.lang :refer [defn defdata return if or < >= + comment]]))
@@ -23,23 +29,28 @@
          116 104 111 112 101 114 97 116 111 114 115 102 111 114 109 45
          100 101 112 116 104 112 97 116 116 101 114 110 45 100 101 112
          116 104 112 97 103 101 115 112 105 120 101 108 115 111 99 114
-         45 114 101 113 117 101 115 116 115]
+         45 114 101 113 117 101 115 116 115 110 111 116 101 45 98 111
+         100 105 101 115 110 111 116 101 45 114 101 102 115 97 115 115
+         101 116 45 112 108 97 99 101 109 101 110 116 115]
   :accessors {^I32 lm-char-at [^I32 ignored ^I32 i]})
 
 (defdata ^:pub lm-rows
   :emitter kin.lang/flat-array
-  :stride 5
-  :data [1073741824 0 2147483647 0 11     ;; 0  input-bytes
-         268435456 0 2147483647 11 12     ;; 1  stream-bytes
-         1073741824 0 2147483647 23 11    ;; 2  total-bytes
-         10000000 0 2147483647 34 7       ;; 3  objects
-         64 0 2147483647 41 9             ;; 4  ref-depth
-         50000000 0 2147483647 50 9       ;; 5  operators
-         32 0 2147483647 59 10            ;; 6  form-depth
-         8 0 2147483647 69 13             ;; 7  pattern-depth
-         100000 0 2147483647 82 5         ;; 8  pages
-         268435456 0 2147483647 87 6      ;; 9  pixels
-         100000 0 2147483647 93 12]       ;; 10 ocr-requests
+  :stride 6
+  :data [1073741824 0 2147483647 0 11 0     ;; 0  input-bytes
+         268435456 0 2147483647 11 12 0     ;; 1  stream-bytes
+         1073741824 0 2147483647 23 11 0    ;; 2  total-bytes
+         10000000 0 2147483647 34 7 0       ;; 3  objects
+         64 0 2147483647 41 9 1             ;; 4  ref-depth
+         50000000 0 2147483647 50 9 0       ;; 5  operators
+         32 0 32 59 10 1                    ;; 6  form-depth (the stack of the forms being run is 32 cells: `MAX_FORMS` of `emon.pdfcontent`)
+         8 0 2147483647 69 13 2             ;; 7  pattern-depth
+         100000 0 2147483647 82 5 0         ;; 8  pages
+         268435456 0 2147483647 87 6 0      ;; 9  pixels
+         100000 0 2147483647 93 12 0        ;; 10 ocr-requests
+         4096 0 2147483647 105 11 1         ;; 11 note-bodies
+         8192 0 2147483647 116 9 1          ;; 12 note-refs
+         4096 0 2147483647 125 16 1]        ;; 13 asset-placements
   :accessors {^I32 lm-row-count [^I32 ignored]
               ^I32 lm-row-at [^I32 ignored ^I32 row ^I32 field]})
 
@@ -73,6 +84,12 @@
 (defn ^:pub ^I32 lm-hi [^I32 kind]
   (if (or (< kind 0) (>= kind (lm-row-count 0))) (return 0))
   (return (lm-row-at 0 kind 2)))
+
+(defn ^:pub ^I32 lm-on-hit [^I32 kind]
+  (comment "What happens at the bound: 0 a breach (an error), 1 a budget (the work stops there, the conversion goes on), 2 reserved (nothing reads it yet).")
+  (comment "0 for a kind not in the table.")
+  (if (or (< kind 0) (>= kind (lm-row-count 0))) (return 0))
+  (return (lm-row-at 0 kind 5)))
 
 (defn ^:pub ^I32 lm-name-len [^I32 kind]
   (comment "The length of the limit's name, 0 for a kind not in the table.")

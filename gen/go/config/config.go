@@ -167,8 +167,8 @@ func CfKeyFind(t *port.Cells, from int32, to int32) int32 {
 
 func cfLimitIs(t *port.Cells, from int32, to int32, kind int32) int32 {
 	// 1 when t[from, to) is the name of limit `kind`.
-	var nl int32 = limits.LmRows[kind*5+4]
-	var off int32 = limits.LmRows[kind*5+3]
+	var nl int32 = limits.LmRows[kind*6+4]
+	var off int32 = limits.LmRows[kind*6+3]
 	var i int32 = 0
 	if (to - from) != nl {
 		return 0
@@ -185,7 +185,7 @@ func cfLimitIs(t *port.Cells, from int32, to int32, kind int32) int32 {
 func CfLimitFind(t *port.Cells, from int32, to int32) int32 {
 	// The kind of the limit t[from, to) names, or -1.
 	var k int32 = 0
-	for k < 11 {
+	for k < 14 {
 		if cfLimitIs(t, from, to, k) == 1 {
 			return k
 		}
@@ -455,8 +455,8 @@ func cfApply(t *port.Cells, k int32, kf int32, ke int32, vf int32, vt int32, c *
 			cfFailNum(t, kf, ke, vf, vt, c)
 			return 0
 		}
-		if (c.Num < limits.LmRows[kind*5+1]) || (c.Num > limits.LmRows[kind*5+2]) {
-			cfFailRange(t, kf, ke, limits.LmRows[kind*5+1], limits.LmRows[kind*5+2], c)
+		if (c.Num < limits.LmRows[kind*6+1]) || (c.Num > limits.LmRows[kind*6+2]) {
+			cfFailRange(t, kf, ke, limits.LmRows[kind*6+1], limits.LmRows[kind*6+2], c)
 			return 0
 		}
 		port.CellsPush(c.Lims, kind)

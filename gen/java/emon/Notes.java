@@ -7,8 +7,6 @@ package emon;
 public final class Notes {
     public static final int NT_RF = 8;
     public static final int NT_NB = 10;
-    public static final int NT_MAXRF = 8192;
-    public static final int NT_MAXNB = 4096;
     public static final int[] NT_KW = {
         116, 97, 98, 108, 101, 102, 105, 103, 117, 114, 101, 102, 105, 103, 46, 102,
         105, 103, 99, 104, 97, 114, 116, 101, 120, 104, 105, 98, 105, 116, 100, 105,
@@ -556,11 +554,11 @@ public final class Notes {
                 }
                 if ((pa >= 0) && (pb >= 0)) {
                     if ((i == 0) && (first == 1)) {
-                        if ((emon.Port.cellsLen(nb) / NT_NB) < NT_MAXNB) {
+                        if ((emon.Port.cellsLen(nb) / NT_NB) < emon.Port.limitOf(11)) {
                             ntPushNb(nb, l, page, w, 1, pb, ms, emon.Port.cellsLen(mk) - ms, szok, band);
                         }
                     } else {
-                        if (((emon.Port.cellsLen(rf) / NT_RF) < NT_MAXRF) && (ntRefContext(gl, et, g0, gn, i, j, pwc) == 1)) {
+                        if (((emon.Port.cellsLen(rf) / NT_RF) < emon.Port.limitOf(12)) && (ntRefContext(gl, et, g0, gn, i, j, pwc) == 1)) {
                             ntPushRf(rf, w, pa, pb, l, page, ms, emon.Port.cellsLen(mk) - ms);
                         }
                     }
@@ -680,7 +678,7 @@ public final class Notes {
                     if ((fw >= 0) && (Lists.lsSecondWord(wd, ln, l) >= 0)) {
                         ms = emon.Port.cellsLen(mk);
                         ml = ntPlainMarker(wd, et, fw, mk);
-                        if ((ml > 0) && ((emon.Port.cellsLen(nb) / NT_NB) < NT_MAXNB)) {
+                        if ((ml > 0) && ((emon.Port.cellsLen(nb) / NT_NB) < emon.Port.limitOf(11))) {
                             ntPushNb(nb, l, Evidence.lnGet(ln, l, Evidence.lhPage()), fw, 2, 0, ms, ml, szok, band);
                         }
                     }

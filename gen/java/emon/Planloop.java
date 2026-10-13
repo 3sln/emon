@@ -32,6 +32,9 @@ public final class Planloop {
     public static int peStalled() {
         return 8;
     }
+    public static int peOcrRequests() {
+        return 9;
+    }
     public static int peEmitName(StringBuilder t, int code) {
         if (code == 0) {
             emon.Port.textAscii(t, "none");
@@ -67,6 +70,10 @@ public final class Planloop {
         }
         if (code == 8) {
             emon.Port.textAscii(t, "need-bytes-stalled");
+            return 1;
+        }
+        if (code == 9) {
+            emon.Port.textAscii(t, "ocr-requests");
             return 1;
         }
         return 0;
@@ -473,6 +480,10 @@ public final class Planloop {
             return plLimit(p, peMaxRounds(), p.maxRounds, p.rounds);
         }
         p.requests += n;
+        // The `ocr-requests` limit (SPEC 7.4, P10.4): the requests a unit asks in all, over its rounds. A named limit of the loop, as `max-rounds` is.
+        if (p.requests > emon.Port.limitOf(10)) {
+            return plLimit(p, peOcrRequests(), emon.Port.limitOf(10), p.requests);
+        }
         p.round = p.rounds - 1;
         p.outk = 2;
         return actRequests();

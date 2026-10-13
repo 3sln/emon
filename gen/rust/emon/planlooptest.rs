@@ -209,6 +209,30 @@ fn test_max_rounds_is_a_named_limit() {
     t_err(0, p, pe_max_rounds(), "max-rounds", "the limit is 1 and this run reached 2");
 }
 #[test]
+fn test_ocr_requests_is_a_named_limit_of_the_loop() {
+    // The unit's requests over its rounds are counted against `ocr-requests` (kind 10, 100000 by default; P10.4): the count is set as a unit that had
+    // asked nearly that many would have left it, so that the law does not need 100000 records.
+    let p: &mut crate::emon::planctx::Plan = &mut crate::emon::planctx::Plan::new();
+    t_init(p, 5, 24);
+    pl_attempt(p);
+    p.requests = 99998;
+    t_render(p, 1);
+    t_render(p, 2);
+    crate::testport::assert_eq(pl_after(p, us_requests()), act_requests(), "exactly the limit is not over it");
+    crate::testport::assert_eq(p.requests, 100000, "counted");
+    let p: &mut crate::emon::planctx::Plan = &mut crate::emon::planctx::Plan::new();
+    t_init(p, 5, 24);
+    pl_attempt(p);
+    p.requests = 99999;
+    t_render(p, 1);
+    t_render(p, 2);
+    crate::testport::assert_eq(pl_after(p, us_requests()), act_error(), "one past it is");
+    crate::testport::assert_eq(p.err_limit, 100000, "the limit");
+    crate::testport::assert_eq(p.err_actual, 100001, "what it reached");
+    crate::testport::assert_eq(p.rounds, 1, "the round was counted first");
+    t_err(0, p, pe_ocr_requests(), "ocr-requests", "the limit is 100000 and this run reached 100001");
+}
+#[test]
 fn test_a_miss_is_not_a_round_and_fetch_rounds_is_a_named_limit() {
     let p: &mut crate::emon::planctx::Plan = &mut crate::emon::planctx::Plan::new();
     t_init(p, 5, 2);
@@ -788,6 +812,11 @@ fn test_the_stalled_error_and_the_phases_are_named() {
     t_name(0, "finish", ph_emit_name(e, ph_finish()), e);
     t_name(0, "figures", ph_emit_name(f, ph_figures()), f);
     t_name(0, "finished", ph_emit_name(g, ph_done()), g);
+}
+#[test]
+fn test_the_ocr_requests_limit_is_named_as_the_table_names_it() {
+    let a: &mut String = &mut crate::port::new_text();
+    t_name(0, "ocr-requests", pe_emit_name(a, pe_ocr_requests()), a);
 }
 #[test]
 fn test_a_documents_status_is_named_and_has_a_class() {

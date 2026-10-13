@@ -1,0 +1,74 @@
+;; THE SCENARIOS OF `bb limits --run` (P10.4, D1100): one bound set low on one input, run through every host's real driver (`emon-rs`, `emon-go`,
+;; `emon-java`, `emon-cs`; a host whose toolchain is not here is left out, loudly) and held to four claims, nome's (`kin/scripts/limits`):
+;;
+;;   1. WIRED          the bound set low changes the answer: a named error (`:err "NAME"`), or, for a bound that is not an error, a different bundle (`:differs`);
+;;   2. CONFIGURABLE   it is `--limit.NAME=N` (or the option's own flag) that moved it, which also holds kin's kind number to the host's name for it;
+;;   3. ALIKE          every host gives the same answer, and the name an error carries is the table's (`kin/limits.kin`);
+;;   4. NOT VACUOUS    the input with no override is `ok` and the input with the bound at its DEFAULT, said explicitly, is byte-identical to it.
+;;
+;; :input   a file under the repository, or `seed:NAME.pdf` (a document `tools/fuzz/seeds.clj` builds, byte for byte the same on every run)
+;; :flags   the driver's flags before the input (the `--limit.NAME=` that is set low is the one in :set; :default is the same flag at the default)
+;; :expect  [:err "name"] or :differs; :why says what the bound is about
+;;
+;; The reserved limit (`pattern-depth`) has no scenario: nothing reads it. Every other limit of `kin/limits.kin` must have one, or `bb limits` says so.
+[{:id "input-bytes" :limit "input-bytes" :input "test/corpus/synth/pdf/footnotes-page.pdf"
+  :set "--limit.input-bytes=100" :default "--limit.input-bytes=1073741824" :expect [:err "input-bytes"]
+  :why "the length of the input, before a byte is read"}
+ {:id "stream-bytes" :limit "stream-bytes" :input "test/corpus/synth/pdf/footnotes-page.pdf"
+  :set "--limit.stream-bytes=1" :default "--limit.stream-bytes=268435456" :expect [:err "stream-bytes"]
+  :why "one stream's decoded bytes (Flate, LZW, the rest of the chain)"}
+ {:id "total-bytes" :limit "total-bytes" :input "test/corpus/synth/pdf/footnotes-page.pdf"
+  :set "--limit.total-bytes=1" :default "--limit.total-bytes=1073741824" :expect [:err "total-bytes"]
+  :why "every stream a unit decodes, summed (each is far under stream-bytes)"}
+ {:id "objects" :limit "objects" :input "test/corpus/synth/pdf/footnotes-page.pdf"
+  :set "--limit.objects=3" :default "--limit.objects=10000000" :expect [:err "objects"]
+  :why "the objects the lexer makes"}
+ {:id "ref-depth" :limit "ref-depth" :input "test/corpus/synth/pdf/footnotes-page.pdf"
+  :set "--limit.ref-depth=0" :default "--limit.ref-depth=64" :expect [:err "no-root"]
+  :why "a budget: a reference past it reads as absent, so the catalog is not found (it is not an error of its own)"}
+ {:id "operators" :limit "operators" :input "test/corpus/synth/pdf/footnotes-page.pdf"
+  :set "--limit.operators=1" :default "--limit.operators=50000000" :expect [:err "operators"]
+  :why "the operators of a page's content streams"}
+ {:id "form-depth" :limit "form-depth" :input "seed:form-xobject.pdf"
+  :set "--limit.form-depth=0" :default "--limit.form-depth=32" :expect :differs
+  :why "a budget: a form past it is skipped with a warning, so the text inside the form is gone"}
+ {:id "pages" :limit "pages" :input "seed:text-multipage.pdf"
+  :set "--limit.pages=3" :default "--limit.pages=100000" :expect [:err "pages"]
+  :why "the pages of a document (six here)"}
+ {:id "pixels" :limit "pixels" :input "test/image/png-rgb8.png"
+  :set "--limit.pixels=10" :default "--limit.pixels=268435456" :expect [:err "pixels"]
+  :why "the pixels of a raster, from its header"}
+ {:id "ocr-requests" :limit "ocr-requests" :input "test/corpus/synth/scan-ovl/stamp-seal.pdf"
+  :flags ["--replay=test/retarget/replay/ovl-stamp-seal"]
+  :set "--limit.ocr-requests=1" :default "--limit.ocr-requests=100000" :expect [:err "ocr-requests"]
+  :why "the requests a unit asks over its rounds (a recorded scan: the first pass and the targeted ones)"}
+ {:id "note-bodies" :limit "note-bodies" :input "test/corpus/synth/pdf/footnotes-page.pdf"
+  :set "--limit.note-bodies=0" :default "--limit.note-bodies=4096" :expect :differs
+  :why "a budget: the note bodies a document keeps; past it they are dropped, so the footnotes are not matched"}
+ {:id "note-refs" :limit "note-refs" :input "test/corpus/synth/pdf/footnotes-page.pdf"
+  :set "--limit.note-refs=0" :default "--limit.note-refs=8192" :expect :differs
+  :why "a budget: the note references a document keeps"}
+ {:id "asset-placements" :limit "asset-placements" :input "test/assets/a85-flate-rgb8.pdf"
+  :flags ["--assets=images"]
+  :set "--limit.asset-placements=0" :default "--limit.asset-placements=4096" :expect :differs
+  :why "a budget: the placements that make pixels; the rest are `budget` assets"}
+ {:id "asset-pixels" :limit "asset-pixels" :input "test/assets/a85-flate-rgb8.pdf"
+  :flags ["--assets=images"]
+  :set "--asset-pixels=1" :default "--asset-pixels=4194304" :expect :differs
+  :why "an option, not a limit: the pixels of one asset; past it the asset degrades to a `noasset` reason and the page does not fail (SPEC 10.11)"}
+ {:id "asset-bytes" :limit "asset-bytes" :input "test/assets/a85-flate-rgb8.pdf"
+  :flags ["--assets=images"]
+  :set "--asset-bytes=1" :default "--asset-bytes=4194304" :expect :differs
+  :why "an option: the bytes of one asset; degrades as asset-pixels does"}
+ {:id "assets-bytes" :limit "assets-bytes" :input "test/assets/a85-flate-rgb8.pdf"
+  :flags ["--assets=images"]
+  :set "--assets-bytes=1" :default "--assets-bytes=33554432" :expect :differs
+  :why "an option: the bytes of all the assets of a document; degrades as asset-pixels does"}
+ {:id "max-rounds" :limit "max-rounds" :input "test/corpus/synth/scan-ovl/stamp-seal.pdf"
+  :flags ["--replay=test/retarget/replay/ovl-stamp-seal"]
+  :set "--max-rounds=1" :default "--max-rounds=5" :expect [:err "max-rounds"]
+  :why "the loop's rounds of requests for a unit (SPEC 13.1)"}
+ {:id "fetch-rounds" :limit "fetch-rounds" :input "test/corpus/synth/pdf/footnotes-page.pdf"
+  :flags ["--chunk=512" "--async"]
+  :set "--fetch-rounds=0" :default "--fetch-rounds=24" :expect [:err "fetch-rounds"]
+  :why "the loop's rounds of byte fetches for a unit when the source misses (SPEC 13.1)"}]

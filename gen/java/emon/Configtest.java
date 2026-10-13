@@ -79,7 +79,7 @@ public final class Configtest {
         return 0;
     }
     public static void testTheLimitsHaveTheirNamesInKin() {
-        emon.Testport.assertEq(Limits.lmCount(), 11, "eleven limits");
+        emon.Testport.assertEq(Limits.lmCount(), 14, "fourteen limits");
         tLimitName(0, 0, "input-bytes");
         tLimitName(0, 1, "stream-bytes");
         tLimitName(0, 2, "total-bytes");
@@ -91,6 +91,9 @@ public final class Configtest {
         tLimitName(0, 8, "pages");
         tLimitName(0, 9, "pixels");
         tLimitName(0, 10, "ocr-requests");
+        tLimitName(0, 11, "note-bodies");
+        tLimitName(0, 12, "note-refs");
+        tLimitName(0, 13, "asset-placements");
     }
     public static void testTheLimitsHaveTheirDefaultsAndRangesInKin() {
         emon.Testport.assertEq(Limits.lmDefault(0), 1073741824, "input-bytes");
@@ -104,14 +107,36 @@ public final class Configtest {
         emon.Testport.assertEq(Limits.lmDefault(8), 100000, "pages");
         emon.Testport.assertEq(Limits.lmDefault(9), 268435456, "pixels");
         emon.Testport.assertEq(Limits.lmDefault(10), 100000, "ocr-requests");
+        emon.Testport.assertEq(Limits.lmDefault(11), 4096, "note-bodies");
+        emon.Testport.assertEq(Limits.lmDefault(12), 8192, "note-refs");
+        emon.Testport.assertEq(Limits.lmDefault(13), 4096, "asset-placements");
         emon.Testport.assertEq(Limits.lmLo(3), 0, "a limit is not negative");
         emon.Testport.assertEq(Limits.lmHi(3), 2147483647, "a limit fits 31 bits");
+        emon.Testport.assertEq(Limits.lmHi(6), 32, "form-depth is the stack of the forms being run");
+    }
+    public static void testEveryLimitSaysWhatHappensAtItsBound() {
+        emon.Testport.assertEq(Limits.lmOnHit(0), 0, "input-bytes breaches");
+        emon.Testport.assertEq(Limits.lmOnHit(1), 0, "stream-bytes breaches");
+        emon.Testport.assertEq(Limits.lmOnHit(2), 0, "total-bytes breaches");
+        emon.Testport.assertEq(Limits.lmOnHit(3), 0, "objects breaches");
+        emon.Testport.assertEq(Limits.lmOnHit(4), 1, "ref-depth reads as absent");
+        emon.Testport.assertEq(Limits.lmOnHit(5), 0, "operators breaches");
+        emon.Testport.assertEq(Limits.lmOnHit(6), 1, "form-depth skips the form");
+        emon.Testport.assertEq(Limits.lmOnHit(7), 2, "pattern-depth is reserved");
+        emon.Testport.assertEq(Limits.lmOnHit(8), 0, "pages breaches");
+        emon.Testport.assertEq(Limits.lmOnHit(9), 0, "pixels breaches");
+        emon.Testport.assertEq(Limits.lmOnHit(10), 0, "ocr-requests breaches");
+        emon.Testport.assertEq(Limits.lmOnHit(11), 1, "note-bodies is a budget");
+        emon.Testport.assertEq(Limits.lmOnHit(12), 1, "note-refs is a budget");
+        emon.Testport.assertEq(Limits.lmOnHit(13), 1, "asset-placements is a budget");
+        emon.Testport.assertEq(Limits.lmOnHit(14), 0, "past the table");
+        emon.Testport.assertEq(Limits.lmOnHit(-1), 0, "before the table");
     }
     public static void testAKindOutsideTheTableHasNoNameAndADefaultOfNothing() {
-        emon.Testport.assertEq(Limits.lmDefault(11), 0, "past the table");
+        emon.Testport.assertEq(Limits.lmDefault(14), 0, "past the table");
         emon.Testport.assertEq(Limits.lmDefault(-1), 0, "before the table");
-        emon.Testport.assertEq(Limits.lmNameLen(11), 0, "no name");
-        emon.Testport.assertEq(Limits.lmNameCh(11, 0), -1, "no character");
+        emon.Testport.assertEq(Limits.lmNameLen(14), 0, "no name");
+        emon.Testport.assertEq(Limits.lmNameCh(14, 0), -1, "no character");
         emon.Testport.assertEq(Limits.lmNameCh(0, 11), -1, "past the name's end");
         emon.Testport.assertEq(Limits.lmNameCh(0, -1), -1, "before the name");
         emon.Testport.assertEq(Limits.sgDefault(2), 0, "no setting");
@@ -311,6 +336,7 @@ public final class Configtest {
         tRefused(0, emon.Testport.textBlob("limit.pages=lots"), "limit.pages wants a number, not \"lots\"");
         tRefused(0, emon.Testport.textBlob("chunk=0"), "chunk is out of range 1..2147483647");
         tRefused(0, emon.Testport.textBlob("limit.pages=-1"), "limit.pages is out of range 0..2147483647");
+        tRefused(0, emon.Testport.textBlob("limit.form-depth=33"), "limit.form-depth is out of range 0..32");
     }
     public static void testAnUnknownKeyOrALineWithoutAValueIsRefusedByName() {
         tRefused(0, emon.Testport.textBlob("bogus=1"), "unknown option bogus");
@@ -327,5 +353,16 @@ public final class Configtest {
         emon.Testport.assertEq(Config.cfLimitFind(t, 0, 8), -1, "a prefix of it");
         emon.Testport.assertEq(Config.cfLimitFind(t, 4, 9), -1, "its tail");
         emon.Testport.assertEq(Config.cfKeyFind(t, 0, 9), -1, "not a key");
+    }
+    public static void testTheLimitsOfP104AreFoundByTheirNames() {
+        emon.Port.Cells t = emon.Port.newCells();
+        tCps(t, emon.Testport.textBlob("asset-placements"));
+        emon.Testport.assertEq(Config.cfLimitFind(t, 0, 16), 13, "asset-placements");
+        emon.Port.cellsDrop(t, 0);
+        tCps(t, emon.Testport.textBlob("ocr-requests"));
+        emon.Testport.assertEq(Config.cfLimitFind(t, 0, 12), 10, "ocr-requests");
+        emon.Port.cellsDrop(t, 0);
+        tCps(t, emon.Testport.textBlob("note-refs"));
+        emon.Testport.assertEq(Config.cfLimitFind(t, 0, 9), 12, "note-refs");
     }
 }

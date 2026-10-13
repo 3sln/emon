@@ -79,7 +79,7 @@ pub(crate) fn t_is_key(emon_t: i32, b: &[u8], want: i32, name: &str) -> i32 {
 }
 #[test]
 fn test_the_limits_have_their_names_in_kin() {
-    crate::testport::assert_eq(lm_count(), 11, "eleven limits");
+    crate::testport::assert_eq(lm_count(), 14, "fourteen limits");
     t_limit_name(0, 0, "input-bytes");
     t_limit_name(0, 1, "stream-bytes");
     t_limit_name(0, 2, "total-bytes");
@@ -91,6 +91,9 @@ fn test_the_limits_have_their_names_in_kin() {
     t_limit_name(0, 8, "pages");
     t_limit_name(0, 9, "pixels");
     t_limit_name(0, 10, "ocr-requests");
+    t_limit_name(0, 11, "note-bodies");
+    t_limit_name(0, 12, "note-refs");
+    t_limit_name(0, 13, "asset-placements");
 }
 #[test]
 fn test_the_limits_have_their_defaults_and_ranges_in_kin() {
@@ -105,15 +108,38 @@ fn test_the_limits_have_their_defaults_and_ranges_in_kin() {
     crate::testport::assert_eq(lm_default(8), 100000, "pages");
     crate::testport::assert_eq(lm_default(9), 268435456, "pixels");
     crate::testport::assert_eq(lm_default(10), 100000, "ocr-requests");
+    crate::testport::assert_eq(lm_default(11), 4096, "note-bodies");
+    crate::testport::assert_eq(lm_default(12), 8192, "note-refs");
+    crate::testport::assert_eq(lm_default(13), 4096, "asset-placements");
     crate::testport::assert_eq(lm_lo(3), 0, "a limit is not negative");
     crate::testport::assert_eq(lm_hi(3), 2147483647, "a limit fits 31 bits");
+    crate::testport::assert_eq(lm_hi(6), 32, "form-depth is the stack of the forms being run");
+}
+#[test]
+fn test_every_limit_says_what_happens_at_its_bound() {
+    crate::testport::assert_eq(lm_on_hit(0), 0, "input-bytes breaches");
+    crate::testport::assert_eq(lm_on_hit(1), 0, "stream-bytes breaches");
+    crate::testport::assert_eq(lm_on_hit(2), 0, "total-bytes breaches");
+    crate::testport::assert_eq(lm_on_hit(3), 0, "objects breaches");
+    crate::testport::assert_eq(lm_on_hit(4), 1, "ref-depth reads as absent");
+    crate::testport::assert_eq(lm_on_hit(5), 0, "operators breaches");
+    crate::testport::assert_eq(lm_on_hit(6), 1, "form-depth skips the form");
+    crate::testport::assert_eq(lm_on_hit(7), 2, "pattern-depth is reserved");
+    crate::testport::assert_eq(lm_on_hit(8), 0, "pages breaches");
+    crate::testport::assert_eq(lm_on_hit(9), 0, "pixels breaches");
+    crate::testport::assert_eq(lm_on_hit(10), 0, "ocr-requests breaches");
+    crate::testport::assert_eq(lm_on_hit(11), 1, "note-bodies is a budget");
+    crate::testport::assert_eq(lm_on_hit(12), 1, "note-refs is a budget");
+    crate::testport::assert_eq(lm_on_hit(13), 1, "asset-placements is a budget");
+    crate::testport::assert_eq(lm_on_hit(14), 0, "past the table");
+    crate::testport::assert_eq(lm_on_hit(-1), 0, "before the table");
 }
 #[test]
 fn test_a_kind_outside_the_table_has_no_name_and_a_default_of_nothing() {
-    crate::testport::assert_eq(lm_default(11), 0, "past the table");
+    crate::testport::assert_eq(lm_default(14), 0, "past the table");
     crate::testport::assert_eq(lm_default(-1), 0, "before the table");
-    crate::testport::assert_eq(lm_name_len(11), 0, "no name");
-    crate::testport::assert_eq(lm_name_ch(11, 0), -1, "no character");
+    crate::testport::assert_eq(lm_name_len(14), 0, "no name");
+    crate::testport::assert_eq(lm_name_ch(14, 0), -1, "no character");
     crate::testport::assert_eq(lm_name_ch(0, 11), -1, "past the name's end");
     crate::testport::assert_eq(lm_name_ch(0, -1), -1, "before the name");
     crate::testport::assert_eq(sg_default(2), 0, "no setting");
@@ -325,6 +351,7 @@ fn test_a_wrong_number_is_refused_by_name() {
     t_refused(0, &crate::testport::text_blob("limit.pages=lots")[..], "limit.pages wants a number, not \"lots\"");
     t_refused(0, &crate::testport::text_blob("chunk=0")[..], "chunk is out of range 1..2147483647");
     t_refused(0, &crate::testport::text_blob("limit.pages=-1")[..], "limit.pages is out of range 0..2147483647");
+    t_refused(0, &crate::testport::text_blob("limit.form-depth=33")[..], "limit.form-depth is out of range 0..32");
 }
 #[test]
 fn test_an_unknown_key_or_a_line_without_a_value_is_refused_by_name() {
@@ -343,4 +370,16 @@ fn test_a_limit_is_found_by_its_name() {
     crate::testport::assert_eq(cf_limit_find(t, 0, 8), -1, "a prefix of it");
     crate::testport::assert_eq(cf_limit_find(t, 4, 9), -1, "its tail");
     crate::testport::assert_eq(cf_key_find(t, 0, 9), -1, "not a key");
+}
+#[test]
+fn test_the_limits_of_p10_4_are_found_by_their_names() {
+    let t: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    t_cps(t, &crate::testport::text_blob("asset-placements")[..]);
+    crate::testport::assert_eq(cf_limit_find(t, 0, 16), 13, "asset-placements");
+    crate::port::cells_drop(t, 0);
+    t_cps(t, &crate::testport::text_blob("ocr-requests")[..]);
+    crate::testport::assert_eq(cf_limit_find(t, 0, 12), 10, "ocr-requests");
+    crate::port::cells_drop(t, 0);
+    t_cps(t, &crate::testport::text_blob("note-refs")[..]);
+    crate::testport::assert_eq(cf_limit_find(t, 0, 9), 12, "note-refs");
 }

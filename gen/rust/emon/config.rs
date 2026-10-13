@@ -132,8 +132,8 @@ pub fn cf_key_find(t: &mut crate::port::Cells, from: i32, to: i32) -> i32 {
 }
 pub(crate) fn cf_limit_is(t: &mut crate::port::Cells, from: i32, to: i32, kind: i32) -> i32 {
     // 1 when t[from, to) is the name of limit `kind`.
-    let nl: i32 = LM_ROWS[(kind * 5 + 4) as usize];
-    let off: i32 = LM_ROWS[(kind * 5 + 3) as usize];
+    let nl: i32 = LM_ROWS[(kind * 6 + 4) as usize];
+    let off: i32 = LM_ROWS[(kind * 6 + 3) as usize];
     let mut i: i32 = 0;
     if (to - from) != nl {
         return 0;
@@ -149,7 +149,7 @@ pub(crate) fn cf_limit_is(t: &mut crate::port::Cells, from: i32, to: i32, kind: 
 pub fn cf_limit_find(t: &mut crate::port::Cells, from: i32, to: i32) -> i32 {
     // The kind of the limit t[from, to) names, or -1.
     let mut k: i32 = 0;
-    while k < 11 {
+    while k < 14 {
         if cf_limit_is(t, from, to, k) == 1 {
             return k;
         }
@@ -406,8 +406,8 @@ pub(crate) fn cf_apply(t: &mut crate::port::Cells, k: i32, kf: i32, ke: i32, vf:
             cf_fail_num(t, kf, ke, vf, vt, c);
             return 0;
         }
-        if (c.num < LM_ROWS[(kind * 5 + 1) as usize]) || (c.num > LM_ROWS[(kind * 5 + 2) as usize]) {
-            cf_fail_range(t, kf, ke, LM_ROWS[(kind * 5 + 1) as usize], LM_ROWS[(kind * 5 + 2) as usize], c);
+        if (c.num < LM_ROWS[(kind * 6 + 1) as usize]) || (c.num > LM_ROWS[(kind * 6 + 2) as usize]) {
+            cf_fail_range(t, kf, ke, LM_ROWS[(kind * 6 + 1) as usize], LM_ROWS[(kind * 6 + 2) as usize], c);
             return 0;
         }
         crate::port::cells_push(&mut c.lims, kind);

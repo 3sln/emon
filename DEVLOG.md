@@ -3760,8 +3760,27 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   `image-huge-dims.pdf` unmutated, in code this item does not touch (P8.4's `figclass`): not fixed here, not committed as a crasher.
   A differential run of the old and new decoders (not in the repo) over 30000 valid and damaged streams, overflow checks on,
   agreed on status, output prefix, consumed (finished streams) and limit breaches.
-- [ ] P10.4 — Limits: every bound wired, configurable, named alike in four
-  hosts (nome's `bb limits`).
+- [x] P10.4 — Limits: every bound wired, configurable, named alike in four
+  hosts (nome's `bb limits`) (D1100-D1102). *Done*: `bb limits` (a REPORT, not a gate; `--inventory`, `--run`) reads
+  `kin/limits.kin` and prints every limit with its name, environment variable, default, range, what happens at the bound
+  (`on-hit`: breach / budget / reserved), where kin and the hosts read it, which scenario or test exercises it, and flags what
+  nothing reads and what nothing tests (it found `total-bytes` and `ocr-requests` named and read by nothing since P10.10, and
+  `form-depth` ranged to 2^31 over a stack of 32). `bb limits --run` puts the 18 scenarios of `test/limits/scenarios.edn` through
+  the Rust, Go, Java and C# drivers: the bound set low gives the named error (or a different bundle for a budget), the same on
+  all four, and the bound at its default said aloud is the unset run. `bb embedders` holds the names to kin's table (each host's
+  `Port` spells them from `emon.limits`; no host library types one; the default copies in the pdfium ports and the JS SDK are the
+  table's number; the wasm binding parses with kin; the C binding and the pod are held to `cf_parse` when P9.4 puts them in
+  the tree). **Inventory** (`tools/limits/inventory.edn`, `bb limits --inventory`): (a) 21 already named (the 11 limits of
+  P10.10 and the 7 numeric options: asset-dpi/pixels/bytes, assets-bytes, max-rounds, fetch-rounds, chunk; the table is 14 rows
+  now); (b) 6: `total-bytes` and `ocr-requests` wired (the former counts every stream a unit decodes through `pd-stream-data`
+  against `dc`'s new `D_TOTB`; the latter is a plan-loop error beside `max-rounds`, `pe-ocr-requests`, four one-line host edits),
+  `note-bodies` (4096), `note-refs` (8192) and `asset-placements` (4096) new rows that are BUDGETS (a candidate past it is dropped; not an error),
+  `form-depth`'s range corrected to 0..32; (b-open) 4: the 512 fonts of `pdfcontent` (a slab of `cx`; the 513th font's text gets
+  id -1), the pdfium ports' copy of the pixels default (four host edits, held back while a merge is running), the JS SDK's copy of
+  `input-bytes`, and SPEC 7.4's wall-clock (no host enforces any); (c) 30 stay fixed, by reason: stack 7, slab 5, format 6, work 7,
+  detector 2, unread 2 (`pdfmeta`'s outline and name-tree caps: no stage consumes them; `pattern-depth`: emon interprets no
+  pattern or Type3 procedure, so it is RESERVED), default 1. Output byte-identical; `bb check`, `drift`, `hosts`, `embedders`,
+  `identity`, `slice`, `fuzz`, `unit rust` and `unit go` as D1102 records.
 - [x] P10.5 — Fuzz at scale, cross-host error agreement (D384-D390). *Done*: `bb fuzz` (gate) and `bb fuzz-long` (not a gate) over
   fixtures, 101 generated hostile seeds (`tools/fuzz/seeds.clj`) and the 89 images; object-level PDF mutators (`pdfobj.clj`,
   `pdfmut.clj`), PNG/JPEG/TIFF mutators (`imgmut.clj`), a second arm that runs the whole conversion as each host's driver

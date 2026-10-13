@@ -94,7 +94,7 @@ func tIsKey(emonT *testing.T, b []byte, want int32, name string) int32 {
 }
 
 func TestTheLimitsHaveTheirNamesInKin(emonT *testing.T) {
-	port.AssertEq(emonT, limits.LmCount(), 11, "eleven limits")
+	port.AssertEq(emonT, limits.LmCount(), 14, "fourteen limits")
 	tLimitName(emonT, 0, "input-bytes")
 	tLimitName(emonT, 1, "stream-bytes")
 	tLimitName(emonT, 2, "total-bytes")
@@ -106,6 +106,9 @@ func TestTheLimitsHaveTheirNamesInKin(emonT *testing.T) {
 	tLimitName(emonT, 8, "pages")
 	tLimitName(emonT, 9, "pixels")
 	tLimitName(emonT, 10, "ocr-requests")
+	tLimitName(emonT, 11, "note-bodies")
+	tLimitName(emonT, 12, "note-refs")
+	tLimitName(emonT, 13, "asset-placements")
 }
 
 func TestTheLimitsHaveTheirDefaultsAndRangesInKin(emonT *testing.T) {
@@ -120,15 +123,38 @@ func TestTheLimitsHaveTheirDefaultsAndRangesInKin(emonT *testing.T) {
 	port.AssertEq(emonT, limits.LmDefault(8), 100000, "pages")
 	port.AssertEq(emonT, limits.LmDefault(9), 268435456, "pixels")
 	port.AssertEq(emonT, limits.LmDefault(10), 100000, "ocr-requests")
+	port.AssertEq(emonT, limits.LmDefault(11), 4096, "note-bodies")
+	port.AssertEq(emonT, limits.LmDefault(12), 8192, "note-refs")
+	port.AssertEq(emonT, limits.LmDefault(13), 4096, "asset-placements")
 	port.AssertEq(emonT, limits.LmLo(3), 0, "a limit is not negative")
 	port.AssertEq(emonT, limits.LmHi(3), 2147483647, "a limit fits 31 bits")
+	port.AssertEq(emonT, limits.LmHi(6), 32, "form-depth is the stack of the forms being run")
+}
+
+func TestEveryLimitSaysWhatHappensAtItsBound(emonT *testing.T) {
+	port.AssertEq(emonT, limits.LmOnHit(0), 0, "input-bytes breaches")
+	port.AssertEq(emonT, limits.LmOnHit(1), 0, "stream-bytes breaches")
+	port.AssertEq(emonT, limits.LmOnHit(2), 0, "total-bytes breaches")
+	port.AssertEq(emonT, limits.LmOnHit(3), 0, "objects breaches")
+	port.AssertEq(emonT, limits.LmOnHit(4), 1, "ref-depth reads as absent")
+	port.AssertEq(emonT, limits.LmOnHit(5), 0, "operators breaches")
+	port.AssertEq(emonT, limits.LmOnHit(6), 1, "form-depth skips the form")
+	port.AssertEq(emonT, limits.LmOnHit(7), 2, "pattern-depth is reserved")
+	port.AssertEq(emonT, limits.LmOnHit(8), 0, "pages breaches")
+	port.AssertEq(emonT, limits.LmOnHit(9), 0, "pixels breaches")
+	port.AssertEq(emonT, limits.LmOnHit(10), 0, "ocr-requests breaches")
+	port.AssertEq(emonT, limits.LmOnHit(11), 1, "note-bodies is a budget")
+	port.AssertEq(emonT, limits.LmOnHit(12), 1, "note-refs is a budget")
+	port.AssertEq(emonT, limits.LmOnHit(13), 1, "asset-placements is a budget")
+	port.AssertEq(emonT, limits.LmOnHit(14), 0, "past the table")
+	port.AssertEq(emonT, limits.LmOnHit(-1), 0, "before the table")
 }
 
 func TestAKindOutsideTheTableHasNoNameAndADefaultOfNothing(emonT *testing.T) {
-	port.AssertEq(emonT, limits.LmDefault(11), 0, "past the table")
+	port.AssertEq(emonT, limits.LmDefault(14), 0, "past the table")
 	port.AssertEq(emonT, limits.LmDefault(-1), 0, "before the table")
-	port.AssertEq(emonT, limits.LmNameLen(11), 0, "no name")
-	port.AssertEq(emonT, limits.LmNameCh(11, 0), -1, "no character")
+	port.AssertEq(emonT, limits.LmNameLen(14), 0, "no name")
+	port.AssertEq(emonT, limits.LmNameCh(14, 0), -1, "no character")
 	port.AssertEq(emonT, limits.LmNameCh(0, 11), -1, "past the name's end")
 	port.AssertEq(emonT, limits.LmNameCh(0, -1), -1, "before the name")
 	port.AssertEq(emonT, limits.SgDefault(2), 0, "no setting")
@@ -340,6 +366,7 @@ func TestAWrongNumberIsRefusedByName(emonT *testing.T) {
 	tRefused(emonT, port.TextBlob("limit.pages=lots"), "limit.pages wants a number, not \"lots\"")
 	tRefused(emonT, port.TextBlob("chunk=0"), "chunk is out of range 1..2147483647")
 	tRefused(emonT, port.TextBlob("limit.pages=-1"), "limit.pages is out of range 0..2147483647")
+	tRefused(emonT, port.TextBlob("limit.form-depth=33"), "limit.form-depth is out of range 0..32")
 }
 
 func TestAnUnknownKeyOrALineWithoutAValueIsRefusedByName(emonT *testing.T) {
@@ -358,4 +385,16 @@ func TestALimitIsFoundByItsName(emonT *testing.T) {
 	port.AssertEq(emonT, config.CfLimitFind(t, 0, 8), -1, "a prefix of it")
 	port.AssertEq(emonT, config.CfLimitFind(t, 4, 9), -1, "its tail")
 	port.AssertEq(emonT, config.CfKeyFind(t, 0, 9), -1, "not a key")
+}
+
+func TestTheLimitsOfP104AreFoundByTheirNames(emonT *testing.T) {
+	var t *port.Cells = port.NewCells()
+	tCps(t, port.TextBlob("asset-placements"))
+	port.AssertEq(emonT, config.CfLimitFind(t, 0, 16), 13, "asset-placements")
+	port.CellsDrop(t, 0)
+	tCps(t, port.TextBlob("ocr-requests"))
+	port.AssertEq(emonT, config.CfLimitFind(t, 0, 12), 10, "ocr-requests")
+	port.CellsDrop(t, 0)
+	tCps(t, port.TextBlob("note-refs"))
+	port.AssertEq(emonT, config.CfLimitFind(t, 0, 9), 12, "note-refs")
 }

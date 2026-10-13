@@ -32,6 +32,9 @@ public static class Planloop {
     public static int PeStalled() {
         return 8;
     }
+    public static int PeOcrRequests() {
+        return 9;
+    }
     public static int PeEmitName(System.Text.StringBuilder t, int code) {
         if (code == 0) {
             emon.Port.TextAscii(t, "none");
@@ -67,6 +70,10 @@ public static class Planloop {
         }
         if (code == 8) {
             emon.Port.TextAscii(t, "need-bytes-stalled");
+            return 1;
+        }
+        if (code == 9) {
+            emon.Port.TextAscii(t, "ocr-requests");
             return 1;
         }
         return 0;
@@ -473,6 +480,10 @@ public static class Planloop {
             return PlLimit(p, PeMaxRounds(), p.MaxRounds, p.Rounds);
         }
         p.Requests += n;
+        // The `ocr-requests` limit (SPEC 7.4, P10.4): the requests a unit asks in all, over its rounds. A named limit of the loop, as `max-rounds` is.
+        if (p.Requests > emon.Port.LimitOf(10)) {
+            return PlLimit(p, PeOcrRequests(), emon.Port.LimitOf(10), p.Requests);
+        }
         p.Round = p.Rounds - 1;
         p.Outk = 2;
         return ActRequests();

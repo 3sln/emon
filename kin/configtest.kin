@@ -3,10 +3,10 @@
 (ns emon.configtest
   (:require [emon.lang :refer [I32 Cells Text Blob fd]]
             [emon.enctx :refer [Cfg]]
-            [emon.limits :refer [lm-count lm-default lm-lo lm-hi lm-name-len lm-name-ch sg-count sg-default sg-lo sg-hi sg-name-len sg-name-ch]]
+            [emon.limits :refer [lm-count lm-default lm-lo lm-hi lm-on-hit lm-name-len lm-name-ch sg-count sg-default sg-lo sg-hi sg-name-len sg-name-ch]]
             [emon.config :refer [cf-parse cf-is-key cf-key-find cf-limit-find ck-row-count ck-row-at ck-char-at cv-row-count cv-row-at cv-char-at]]
             [emon.test :refer [deftest assert-eq assert-text new-cells new-text new-ctx test-t TestT Str text-blob]]
-            [emon.port :refer [cells-len cells-at cells-push text-cp blob-len blob-u8]]
+            [emon.port :refer [cells-len cells-at cells-push cells-drop text-cp blob-len blob-u8]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or]]))
 
@@ -83,7 +83,7 @@
 ;; ------------------------------------------------------------------ the tables of limits and settings
 
 (deftest test-the-limits-have-their-names-in-kin
-  (assert-eq (lm-count) 11 "eleven limits")
+  (assert-eq (lm-count) 14 "fourteen limits")
   (t-limit-name (test-t) 0 "input-bytes")
   (t-limit-name (test-t) 1 "stream-bytes")
   (t-limit-name (test-t) 2 "total-bytes")
@@ -94,7 +94,10 @@
   (t-limit-name (test-t) 7 "pattern-depth")
   (t-limit-name (test-t) 8 "pages")
   (t-limit-name (test-t) 9 "pixels")
-  (t-limit-name (test-t) 10 "ocr-requests"))
+  (t-limit-name (test-t) 10 "ocr-requests")
+  (t-limit-name (test-t) 11 "note-bodies")
+  (t-limit-name (test-t) 12 "note-refs")
+  (t-limit-name (test-t) 13 "asset-placements"))
 
 (deftest test-the-limits-have-their-defaults-and-ranges-in-kin
   (assert-eq (lm-default 0) 1073741824 "input-bytes")
@@ -108,14 +111,36 @@
   (assert-eq (lm-default 8) 100000 "pages")
   (assert-eq (lm-default 9) 268435456 "pixels")
   (assert-eq (lm-default 10) 100000 "ocr-requests")
+  (assert-eq (lm-default 11) 4096 "note-bodies")
+  (assert-eq (lm-default 12) 8192 "note-refs")
+  (assert-eq (lm-default 13) 4096 "asset-placements")
   (assert-eq (lm-lo 3) 0 "a limit is not negative")
-  (assert-eq (lm-hi 3) 2147483647 "a limit fits 31 bits"))
+  (assert-eq (lm-hi 3) 2147483647 "a limit fits 31 bits")
+  (assert-eq (lm-hi 6) 32 "form-depth is the stack of the forms being run"))
+
+(deftest test-every-limit-says-what-happens-at-its-bound
+  (assert-eq (lm-on-hit 0) 0 "input-bytes breaches")
+  (assert-eq (lm-on-hit 1) 0 "stream-bytes breaches")
+  (assert-eq (lm-on-hit 2) 0 "total-bytes breaches")
+  (assert-eq (lm-on-hit 3) 0 "objects breaches")
+  (assert-eq (lm-on-hit 4) 1 "ref-depth reads as absent")
+  (assert-eq (lm-on-hit 5) 0 "operators breaches")
+  (assert-eq (lm-on-hit 6) 1 "form-depth skips the form")
+  (assert-eq (lm-on-hit 7) 2 "pattern-depth is reserved")
+  (assert-eq (lm-on-hit 8) 0 "pages breaches")
+  (assert-eq (lm-on-hit 9) 0 "pixels breaches")
+  (assert-eq (lm-on-hit 10) 0 "ocr-requests breaches")
+  (assert-eq (lm-on-hit 11) 1 "note-bodies is a budget")
+  (assert-eq (lm-on-hit 12) 1 "note-refs is a budget")
+  (assert-eq (lm-on-hit 13) 1 "asset-placements is a budget")
+  (assert-eq (lm-on-hit 14) 0 "past the table")
+  (assert-eq (lm-on-hit -1) 0 "before the table"))
 
 (deftest test-a-kind-outside-the-table-has-no-name-and-a-default-of-nothing
-  (assert-eq (lm-default 11) 0 "past the table")
+  (assert-eq (lm-default 14) 0 "past the table")
   (assert-eq (lm-default -1) 0 "before the table")
-  (assert-eq (lm-name-len 11) 0 "no name")
-  (assert-eq (lm-name-ch 11 0) -1 "no character")
+  (assert-eq (lm-name-len 14) 0 "no name")
+  (assert-eq (lm-name-ch 14 0) -1 "no character")
   (assert-eq (lm-name-ch 0 11) -1 "past the name's end")
   (assert-eq (lm-name-ch 0 -1) -1 "before the name")
   (assert-eq (sg-default 2) 0 "no setting")
@@ -320,7 +345,8 @@
   (t-refused (test-t) (text-blob "max-rounds=99999999999") "max-rounds wants a number, not \"99999999999\"")
   (t-refused (test-t) (text-blob "limit.pages=lots") "limit.pages wants a number, not \"lots\"")
   (t-refused (test-t) (text-blob "chunk=0") "chunk is out of range 1..2147483647")
-  (t-refused (test-t) (text-blob "limit.pages=-1") "limit.pages is out of range 0..2147483647"))
+  (t-refused (test-t) (text-blob "limit.pages=-1") "limit.pages is out of range 0..2147483647")
+  (t-refused (test-t) (text-blob "limit.form-depth=33") "limit.form-depth is out of range 0..32"))
 
 (deftest test-an-unknown-key-or-a-line-without-a-value-is-refused-by-name
   (t-refused (test-t) (text-blob "bogus=1") "unknown option bogus")
@@ -337,3 +363,14 @@
     (assert-eq (cf-limit-find t 0 8) -1 "a prefix of it")
     (assert-eq (cf-limit-find t 4 9) -1 "its tail")
     (assert-eq (cf-key-find t 0 9) -1 "not a key")))
+
+(deftest test-the-limits-of-p10-4-are-found-by-their-names
+  (let [^Cells t (new-cells)]
+    (t-cps t (text-blob "asset-placements"))
+    (assert-eq (cf-limit-find t 0 16) 13 "asset-placements")
+    (cells-drop t 0)
+    (t-cps t (text-blob "ocr-requests"))
+    (assert-eq (cf-limit-find t 0 12) 10 "ocr-requests")
+    (cells-drop t 0)
+    (t-cps t (text-blob "note-refs"))
+    (assert-eq (cf-limit-find t 0 9) 12 "note-refs")))

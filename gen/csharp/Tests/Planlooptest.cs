@@ -210,6 +210,30 @@ public static class Planlooptest {
         TErr(0, p, Planloop.PeMaxRounds(), "max-rounds", "the limit is 1 and this run reached 2");
     }
     [Xunit.Fact]
+    public static void TestOcrRequestsIsANamedLimitOfTheLoop() {
+        // The unit's requests over its rounds are counted against `ocr-requests` (kind 10, 100000 by default; P10.4): the count is set as a unit that had
+        // asked nearly that many would have left it, so that the law does not need 100000 records.
+        emon.Planctx.Plan p = new emon.Planctx.Plan();
+        TInit(p, 5, 24);
+        Planloop.PlAttempt(p);
+        p.Requests = 99998;
+        TRender(p, 1);
+        TRender(p, 2);
+        emon.Testport.AssertEq(Planloop.PlAfter(p, Plan.UsRequests()), Planloop.ActRequests(), "exactly the limit is not over it");
+        emon.Testport.AssertEq(p.Requests, 100000, "counted");
+        emon.Planctx.Plan p = new emon.Planctx.Plan();
+        TInit(p, 5, 24);
+        Planloop.PlAttempt(p);
+        p.Requests = 99999;
+        TRender(p, 1);
+        TRender(p, 2);
+        emon.Testport.AssertEq(Planloop.PlAfter(p, Plan.UsRequests()), Planloop.ActError(), "one past it is");
+        emon.Testport.AssertEq(p.ErrLimit, 100000, "the limit");
+        emon.Testport.AssertEq(p.ErrActual, 100001, "what it reached");
+        emon.Testport.AssertEq(p.Rounds, 1, "the round was counted first");
+        TErr(0, p, Planloop.PeOcrRequests(), "ocr-requests", "the limit is 100000 and this run reached 100001");
+    }
+    [Xunit.Fact]
     public static void TestAMissIsNotARoundAndFetchRoundsIsANamedLimit() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         TInit(p, 5, 2);
@@ -789,6 +813,11 @@ public static class Planlooptest {
         TName(0, "finish", Planloop.PhEmitName(e, Planloop.PhFinish()), e);
         TName(0, "figures", Planloop.PhEmitName(f, Planloop.PhFigures()), f);
         TName(0, "finished", Planloop.PhEmitName(g, Planloop.PhDone()), g);
+    }
+    [Xunit.Fact]
+    public static void TestTheOcrRequestsLimitIsNamedAsTheTableNamesIt() {
+        System.Text.StringBuilder a = emon.Testport.NewText();
+        TName(0, "ocr-requests", Planloop.PeEmitName(a, Planloop.PeOcrRequests()), a);
     }
     [Xunit.Fact]
     public static void TestADocumentsStatusIsNamedAndHasAClass() {

@@ -134,8 +134,8 @@ public static class Config {
     }
     internal static int CfLimitIs(emon.Port.Cells t, int from, int to, int kind) {
         // 1 when t[from, to) is the name of limit `kind`.
-        int nl = Limits.LmRows[kind * 5 + 4];
-        int off = Limits.LmRows[kind * 5 + 3];
+        int nl = Limits.LmRows[kind * 6 + 4];
+        int off = Limits.LmRows[kind * 6 + 3];
         int i = 0;
         if ((to - from) != nl) {
             return 0;
@@ -151,7 +151,7 @@ public static class Config {
     public static int CfLimitFind(emon.Port.Cells t, int from, int to) {
         // The kind of the limit t[from, to) names, or -1.
         int k = 0;
-        while (k < 11) {
+        while (k < 14) {
             if (CfLimitIs(t, from, to, k) == 1) {
                 return k;
             }
@@ -408,8 +408,8 @@ public static class Config {
                 CfFailNum(t, kf, ke, vf, vt, c);
                 return 0;
             }
-            if ((c.Num < Limits.LmRows[kind * 5 + 1]) || (c.Num > Limits.LmRows[kind * 5 + 2])) {
-                CfFailRange(t, kf, ke, Limits.LmRows[kind * 5 + 1], Limits.LmRows[kind * 5 + 2], c);
+            if ((c.Num < Limits.LmRows[kind * 6 + 1]) || (c.Num > Limits.LmRows[kind * 6 + 2])) {
+                CfFailRange(t, kf, ke, Limits.LmRows[kind * 6 + 1], Limits.LmRows[kind * 6 + 2], c);
                 return 0;
             }
             emon.Port.CellsPush(c.Lims, kind);

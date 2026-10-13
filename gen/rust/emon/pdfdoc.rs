@@ -179,7 +179,8 @@ pub(crate) const D_SLIST: i32 = 15;
 pub(crate) const D_TRAIL: i32 = 16;
 pub(crate) const D_SEEN: i32 = 32;
 pub(crate) const D_CR: i32 = 96;
-pub(crate) const D_FIRST: i32 = 448;
+pub(crate) const D_TOTB: i32 = 448;
+pub(crate) const D_FIRST: i32 = 449;
 pub(crate) const PAGE_STRIDE: i32 = 16;
 pub fn pd_init(mut dc: &mut crate::port::Cells) -> i32 {
     // An empty document: a zeroed header and no entries.
@@ -1039,12 +1040,28 @@ pub fn pd_run_plan(src: &crate::port::Src, mut ar: &mut crate::port::Cells, plan
     }
     return status;
 }
+pub(crate) fn pd_total_add(mut dc: &mut crate::port::Cells, n: i32) -> i32 {
+    // The `total-bytes` limit (SPEC 7.4, the zip-bomb bound): the decoded bytes of every stream this unit has read through `pd-stream-data`,
+    // summed. A sum past the limit is a breach (never returns); the count is saturated at 2^31 - 1 so that the sum itself cannot overflow.
+    let have: i32 = crate::port::cells_at(dc, D_TOTB);
+    let lim: i32 = crate::port::limit_of(2);
+    if n > (2147483647 - have) {
+        crate::port::limit_breach(2, 2147483647);
+    }
+    if (have + n) > lim {
+        crate::port::limit_breach(2, have + n);
+    }
+    crate::port::cells_set(dc, D_TOTB, have + n);
+    return 0;
+}
 pub fn pd_stream_data(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, sh: i32, mut out: &mut crate::port::Cells) -> i32 {
     // The DECODED bytes of stream `sh` into `out` (cleared first), by
     // planning the chain and running it. `out` must not be `a`, `b` or
     // `st` (they are overwritten); answers a `pf-status`, the first error.
     let plan: i32 = pd_stream_plan(src, ar, dc, a, b, st, sh);
-    return pd_run_plan(src, ar, plan, sh, b, st, out);
+    let status: i32 = pd_run_plan(src, ar, plan, sh, b, st, out);
+    pd_total_add(dc, crate::port::cells_len(out));
+    return status;
 }
 pub(crate) fn pd_add_trailer(mut dc: &mut crate::port::Cells, dict: i32) -> i32 {
     let n: i32 = crate::port::cells_at(dc, D_NTRAIL);

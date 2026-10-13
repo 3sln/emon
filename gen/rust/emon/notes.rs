@@ -9,8 +9,6 @@ use crate::emon::style::*;
 
 pub(crate) const NT_RF: i32 = 8;
 pub(crate) const NT_NB: i32 = 10;
-pub(crate) const NT_MAXRF: i32 = 8192;
-pub(crate) const NT_MAXNB: i32 = 4096;
 pub static NT_KW: [i32; 361] = [
     116, 97, 98, 108, 101, 102, 105, 103, 117, 114, 101, 102, 105, 103, 46, 102,
     105, 103, 99, 104, 97, 114, 116, 101, 120, 104, 105, 98, 105, 116, 100, 105,
@@ -558,11 +556,11 @@ pub(crate) fn nt_scan_word(wd: &mut crate::port::Cells, ln: &mut crate::port::Ce
             }
             if (pa >= 0) && (pb >= 0) {
                 if (i == 0) && (first == 1) {
-                    if (crate::port::cells_len(nb) / NT_NB) < NT_MAXNB {
+                    if (crate::port::cells_len(nb) / NT_NB) < crate::port::limit_of(11) {
                         nt_push_nb(nb, l, page, w, 1, pb, ms, crate::port::cells_len(mk) - ms, szok, band);
                     }
                 } else {
-                    if ((crate::port::cells_len(rf) / NT_RF) < NT_MAXRF) && (nt_ref_context(gl, et, g0, gn, i, j, pwc) == 1) {
+                    if ((crate::port::cells_len(rf) / NT_RF) < crate::port::limit_of(12)) && (nt_ref_context(gl, et, g0, gn, i, j, pwc) == 1) {
                         nt_push_rf(rf, w, pa, pb, l, page, ms, crate::port::cells_len(mk) - ms);
                     }
                 }
@@ -682,7 +680,7 @@ pub(crate) fn nt_scan(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, 
                 if (fw >= 0) && (ls_second_word(wd, ln, l) >= 0) {
                     ms = crate::port::cells_len(mk);
                     ml = nt_plain_marker(wd, et, fw, mk);
-                    if (ml > 0) && ((crate::port::cells_len(nb) / NT_NB) < NT_MAXNB) {
+                    if (ml > 0) && ((crate::port::cells_len(nb) / NT_NB) < crate::port::limit_of(11)) {
                         nt_push_nb(nb, l, ln_get(ln, l, lh_page()), fw, 2, 0, ms, ml, szok, band);
                     }
                 }

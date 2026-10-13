@@ -323,7 +323,7 @@ public final class Planrun {
 
         // the error kin holds, as the loop reports it: the name is kin's and so is the sentence
         private PlanError err() {
-            boolean limited = p.err == Planloop.peMaxRounds() || p.err == Planloop.peFetchRounds();
+            boolean limited = p.err == Planloop.peMaxRounds() || p.err == Planloop.peFetchRounds() || p.err == Planloop.peOcrRequests();
             return new PlanError(peName(p.err), p.msg.toString(), limited, p.errLimit, p.errActual);
         }
 

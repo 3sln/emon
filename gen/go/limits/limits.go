@@ -3,28 +3,33 @@
 
 package limits
 
-var LmChars [105]int32 = [105]int32{
+var LmChars [141]int32 = [141]int32{
 	105, 110, 112, 117, 116, 45, 98, 121, 116, 101, 115, 115, 116, 114, 101, 97,
 	109, 45, 98, 121, 116, 101, 115, 116, 111, 116, 97, 108, 45, 98, 121, 116,
 	101, 115, 111, 98, 106, 101, 99, 116, 115, 114, 101, 102, 45, 100, 101, 112,
 	116, 104, 111, 112, 101, 114, 97, 116, 111, 114, 115, 102, 111, 114, 109, 45,
 	100, 101, 112, 116, 104, 112, 97, 116, 116, 101, 114, 110, 45, 100, 101, 112,
 	116, 104, 112, 97, 103, 101, 115, 112, 105, 120, 101, 108, 115, 111, 99, 114,
-	45, 114, 101, 113, 117, 101, 115, 116, 115,
+	45, 114, 101, 113, 117, 101, 115, 116, 115, 110, 111, 116, 101, 45, 98, 111,
+	100, 105, 101, 115, 110, 111, 116, 101, 45, 114, 101, 102, 115, 97, 115, 115,
+	101, 116, 45, 112, 108, 97, 99, 101, 109, 101, 110, 116, 115,
 }
 
-var LmRows [55]int32 = [55]int32{
-	1073741824, 0, 2147483647, 0, 11,
-	268435456, 0, 2147483647, 11, 12,
-	1073741824, 0, 2147483647, 23, 11,
-	10000000, 0, 2147483647, 34, 7,
-	64, 0, 2147483647, 41, 9,
-	50000000, 0, 2147483647, 50, 9,
-	32, 0, 2147483647, 59, 10,
-	8, 0, 2147483647, 69, 13,
-	100000, 0, 2147483647, 82, 5,
-	268435456, 0, 2147483647, 87, 6,
-	100000, 0, 2147483647, 93, 12,
+var LmRows [84]int32 = [84]int32{
+	1073741824, 0, 2147483647, 0, 11, 0,
+	268435456, 0, 2147483647, 11, 12, 0,
+	1073741824, 0, 2147483647, 23, 11, 0,
+	10000000, 0, 2147483647, 34, 7, 0,
+	64, 0, 2147483647, 41, 9, 1,
+	50000000, 0, 2147483647, 50, 9, 0,
+	32, 0, 32, 59, 10, 1,
+	8, 0, 2147483647, 69, 13, 2,
+	100000, 0, 2147483647, 82, 5, 0,
+	268435456, 0, 2147483647, 87, 6, 0,
+	100000, 0, 2147483647, 93, 12, 0,
+	4096, 0, 2147483647, 105, 11, 1,
+	8192, 0, 2147483647, 116, 9, 1,
+	4096, 0, 2147483647, 125, 16, 1,
 }
 
 var SgChars [13]int32 = [13]int32{111, 99, 114, 45, 109, 111, 100, 101, 116, 97, 115, 107, 115}
@@ -35,48 +40,57 @@ var SgRows [10]int32 = [10]int32{
 }
 
 func LmCount() int32 {
-	return 11
+	return 14
 }
 
 func LmDefault(kind int32) int32 {
 	// The limit's default; 0 for a kind not in the table.
-	if (kind < 0) || (kind >= 11) {
+	if (kind < 0) || (kind >= 14) {
 		return 0
 	}
-	return LmRows[kind*5+0]
+	return LmRows[kind*6+0]
 }
 
 func LmLo(kind int32) int32 {
-	if (kind < 0) || (kind >= 11) {
+	if (kind < 0) || (kind >= 14) {
 		return 0
 	}
-	return LmRows[kind*5+1]
+	return LmRows[kind*6+1]
 }
 
 func LmHi(kind int32) int32 {
-	if (kind < 0) || (kind >= 11) {
+	if (kind < 0) || (kind >= 14) {
 		return 0
 	}
-	return LmRows[kind*5+2]
+	return LmRows[kind*6+2]
+}
+
+func LmOnHit(kind int32) int32 {
+	// What happens at the bound: 0 a breach (an error), 1 a budget (the work stops there, the conversion goes on), 2 reserved (nothing reads it yet).
+	// 0 for a kind not in the table.
+	if (kind < 0) || (kind >= 14) {
+		return 0
+	}
+	return LmRows[kind*6+5]
 }
 
 func LmNameLen(kind int32) int32 {
 	// The length of the limit's name, 0 for a kind not in the table.
-	if (kind < 0) || (kind >= 11) {
+	if (kind < 0) || (kind >= 14) {
 		return 0
 	}
-	return LmRows[kind*5+4]
+	return LmRows[kind*6+4]
 }
 
 func LmNameCh(kind int32, i int32) int32 {
 	// The i-th code point of the limit's name; -1 past its end or for a kind not in the table.
-	if (kind < 0) || (kind >= 11) {
+	if (kind < 0) || (kind >= 14) {
 		return -1
 	}
-	if (i < 0) || (i >= LmRows[kind*5+4]) {
+	if (i < 0) || (i >= LmRows[kind*6+4]) {
 		return -1
 	}
-	return LmChars[LmRows[kind*5+3]+i]
+	return LmChars[LmRows[kind*6+3]+i]
 }
 
 func SgCount() int32 {

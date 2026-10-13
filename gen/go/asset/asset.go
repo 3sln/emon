@@ -37,8 +37,6 @@ func asHcap(maxpix int32) int32 {
 	return maxpix * asHostfactor
 }
 
-const asMaxprod int32 = 4096
-
 const asStride int32 = 32
 
 const asOverlayWork int32 = 100000000
@@ -1028,13 +1026,14 @@ func AsGrgRegions(grg *port.Cells, cand *port.Cells, pg *port.Cells) int32 {
 func AsCollect(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, im *port.Cells, pa *port.Cells, gl *port.Cells, pg *port.Cells, maxpix int32, totbytes int32, level int32, grg *port.Cells, cand *port.Cells, cbytes *port.Buf, out *port.Cells, rec *port.Cells, mrec *port.Cells, smp *port.Cells, msmp *port.Cells, data *port.Cells, rows *port.Cells, tmp *port.Cells, ws *port.Cells, z *port.Buf, input int32, ans *port.Cells, rq *port.Cells, payload *port.Buf, bms *port.BitmapSet, glob *port.Cells, words *port.Cells, hs *port.Cells) int32 {
 	// The asset unit (a document-level plan/fulfil unit, P6.1a):  a candidate row for every image placement that passed P3.6's checks (`images` rows `im`), with
 	// its pixels made when a browser or a PNG can show them. `maxpix` is `asset-pixels`; `cbytes` holds at most twice
-	// `totbytes` (`assets-bytes`) before a placement is `budget`, and at most `AS_MAXPROD` placements make pixels.
+	// `totbytes` (`assets-bytes`) before a placement is `budget`, and at most `asset-placements` (`limit-of` 13) placements make pixels.
 	// `out rec mrec smp msmp data rows tmp ws z glob words hs` are scratch. A codec image's pixels are the HOST's: the
 	// first attempt writes a `decode-img` request for each (`rq`, with its bytes in `payload` when they are not the input's
 	// own; `input` is the input's index) and answers 1; the host fulfils them and runs the unit again with `ans` and the
 	// bitmaps `bms`, and the same call makes the candidates. Answers 0 (done), 1 (requests written: fulfil and run again) or
 	// 12 when the source missed (stop, re-run).
 	var n int32 = evidence.ImCount(im)
+	var maxprod int32 = port.LimitOf(13)
 	var r int32 = 0
 	var row int32 = 0
 	var prod int32 = 0
@@ -1130,7 +1129,7 @@ func AsCollect(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *
 					asSet(cand, row, acStatus, model.NzPart())
 				} else if obj <= 0 {
 					asSet(cand, row, acStatus, model.NzCodec())
-				} else if (prod >= asMaxprod) || ((port.BufLen(cbytes) / 2) > totbytes) {
+				} else if (prod >= maxprod) || ((port.BufLen(cbytes) / 2) > totbytes) {
 					asSet(cand, row, acStatus, model.NzBudget())
 				} else {
 					prod += 1

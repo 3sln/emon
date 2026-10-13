@@ -7,8 +7,6 @@ namespace emon;
 public static class Notes {
     internal const int NtRf = 8;
     internal const int NtNb = 10;
-    internal const int NtMaxrf = 8192;
-    internal const int NtMaxnb = 4096;
     public static readonly int[] NtKw = new int[] {
         116, 97, 98, 108, 101, 102, 105, 103, 117, 114, 101, 102, 105, 103, 46, 102,
         105, 103, 99, 104, 97, 114, 116, 101, 120, 104, 105, 98, 105, 116, 100, 105,
@@ -556,11 +554,11 @@ public static class Notes {
                 }
                 if ((pa >= 0) && (pb >= 0)) {
                     if ((i == 0) && (first == 1)) {
-                        if ((emon.Port.CellsLen(nb) / NtNb) < NtMaxnb) {
+                        if ((emon.Port.CellsLen(nb) / NtNb) < emon.Port.LimitOf(11)) {
                             NtPushNb(nb, l, page, w, 1, pb, ms, emon.Port.CellsLen(mk) - ms, szok, band);
                         }
                     } else {
-                        if (((emon.Port.CellsLen(rf) / NtRf) < NtMaxrf) && (NtRefContext(gl, et, g0, gn, i, j, pwc) == 1)) {
+                        if (((emon.Port.CellsLen(rf) / NtRf) < emon.Port.LimitOf(12)) && (NtRefContext(gl, et, g0, gn, i, j, pwc) == 1)) {
                             NtPushRf(rf, w, pa, pb, l, page, ms, emon.Port.CellsLen(mk) - ms);
                         }
                     }
@@ -680,7 +678,7 @@ public static class Notes {
                     if ((fw >= 0) && (Lists.LsSecondWord(wd, ln, l) >= 0)) {
                         ms = emon.Port.CellsLen(mk);
                         ml = NtPlainMarker(wd, et, fw, mk);
-                        if ((ml > 0) && ((emon.Port.CellsLen(nb) / NtNb) < NtMaxnb)) {
+                        if ((ml > 0) && ((emon.Port.CellsLen(nb) / NtNb) < emon.Port.LimitOf(11))) {
                             NtPushNb(nb, l, Evidence.LnGet(ln, l, Evidence.LhPage()), fw, 2, 0, ms, ml, szok, band);
                         }
                     }

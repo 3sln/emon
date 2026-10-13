@@ -177,7 +177,8 @@ public static class Pdfdoc {
     internal const int DTrail = 16;
     internal const int DSeen = 32;
     internal const int DCr = 96;
-    internal const int DFirst = 448;
+    internal const int DTotb = 448;
+    internal const int DFirst = 449;
     internal const int PageStride = 16;
     public static int PdInit(emon.Port.Cells dc) {
         // An empty document: a zeroed header and no entries.
@@ -1037,12 +1038,28 @@ public static class Pdfdoc {
         }
         return status;
     }
+    internal static int PdTotalAdd(emon.Port.Cells dc, int n) {
+        // The `total-bytes` limit (SPEC 7.4, the zip-bomb bound): the decoded bytes of every stream this unit has read through `pd-stream-data`,
+        // summed. A sum past the limit is a breach (never returns); the count is saturated at 2^31 - 1 so that the sum itself cannot overflow.
+        int have = emon.Port.CellsAt(dc, DTotb);
+        int lim = emon.Port.LimitOf(2);
+        if (n > (2147483647 - have)) {
+            emon.Port.LimitBreach(2, 2147483647);
+        }
+        if ((have + n) > lim) {
+            emon.Port.LimitBreach(2, have + n);
+        }
+        emon.Port.CellsSet(dc, DTotb, have + n);
+        return 0;
+    }
     public static int PdStreamData(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int sh, emon.Port.Cells @out) {
         // The DECODED bytes of stream `sh` into `out` (cleared first), by
         // planning the chain and running it. `out` must not be `a`, `b` or
         // `st` (they are overwritten); answers a `pf-status`, the first error.
         int plan = PdStreamPlan(src, ar, dc, a, b, st, sh);
-        return PdRunPlan(src, ar, plan, sh, b, st, @out);
+        int status = PdRunPlan(src, ar, plan, sh, b, st, @out);
+        PdTotalAdd(dc, emon.Port.CellsLen(@out));
+        return status;
     }
     internal static int PdAddTrailer(emon.Port.Cells dc, int dict) {
         int n = emon.Port.CellsAt(dc, DNtrail);

@@ -197,6 +197,29 @@ public final class Planlooptest {
         emon.Testport.assertEq(p.errActual, 2, "what it reached");
         tErr(0, p, Planloop.peMaxRounds(), "max-rounds", "the limit is 1 and this run reached 2");
     }
+    public static void testOcrRequestsIsANamedLimitOfTheLoop() {
+        // The unit's requests over its rounds are counted against `ocr-requests` (kind 10, 100000 by default; P10.4): the count is set as a unit that had
+        // asked nearly that many would have left it, so that the law does not need 100000 records.
+        emon.Planctx.Plan p = new emon.Planctx.Plan();
+        tInit(p, 5, 24);
+        Planloop.plAttempt(p);
+        p.requests = 99998;
+        tRender(p, 1);
+        tRender(p, 2);
+        emon.Testport.assertEq(Planloop.plAfter(p, Plan.usRequests()), Planloop.actRequests(), "exactly the limit is not over it");
+        emon.Testport.assertEq(p.requests, 100000, "counted");
+        emon.Planctx.Plan p = new emon.Planctx.Plan();
+        tInit(p, 5, 24);
+        Planloop.plAttempt(p);
+        p.requests = 99999;
+        tRender(p, 1);
+        tRender(p, 2);
+        emon.Testport.assertEq(Planloop.plAfter(p, Plan.usRequests()), Planloop.actError(), "one past it is");
+        emon.Testport.assertEq(p.errLimit, 100000, "the limit");
+        emon.Testport.assertEq(p.errActual, 100001, "what it reached");
+        emon.Testport.assertEq(p.rounds, 1, "the round was counted first");
+        tErr(0, p, Planloop.peOcrRequests(), "ocr-requests", "the limit is 100000 and this run reached 100001");
+    }
     public static void testAMissIsNotARoundAndFetchRoundsIsANamedLimit() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         tInit(p, 5, 2);
@@ -739,6 +762,10 @@ public final class Planlooptest {
         tName(0, "finish", Planloop.phEmitName(e, Planloop.phFinish()), e);
         tName(0, "figures", Planloop.phEmitName(f, Planloop.phFigures()), f);
         tName(0, "finished", Planloop.phEmitName(g, Planloop.phDone()), g);
+    }
+    public static void testTheOcrRequestsLimitIsNamedAsTheTableNamesIt() {
+        StringBuilder a = emon.Testport.newText();
+        tName(0, "ocr-requests", Planloop.peEmitName(a, Planloop.peOcrRequests()), a);
     }
     public static void testADocumentsStatusIsNamedAndHasAClass() {
         StringBuilder a = emon.Testport.newText();

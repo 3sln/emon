@@ -163,7 +163,8 @@
 (defconst ^I32 D_TRAIL 16)   ;; 16 trailer dictionaries, newest first
 (defconst ^I32 D_SEEN 32)    ;; 64 section offsets already read
 (defconst ^I32 D_CR 96)      ;; the security handler's region, `(cr-size)` cells (emon.pdfcrypt)
-(defconst ^I32 D_FIRST 448)  ;; the first entry (96 + 352)
+(defconst ^I32 D_TOTB 448)   ;; the bytes `pd-stream-data` has decoded so far, against TOTAL_BYTES (P10.4, D1100)
+(defconst ^I32 D_FIRST 449)  ;; the first entry (96 + 352, and D_TOTB)
 
 (defconst ^I32 PAGE_STRIDE 16)        ;; cells a page record takes
 
@@ -850,14 +851,28 @@
     (if (ps-missed src) (return 12))
     (return status)))
 
+(defn ^I32 pd-total-add [^:mut ^Cells dc ^I32 n]
+  (comment "The `total-bytes` limit (SPEC 7.4, the zip-bomb bound): the decoded bytes of every stream this unit has read through `pd-stream-data`,")
+  (comment "summed. A sum past the limit is a breach (never returns); the count is saturated at 2^31 - 1 so that the sum itself cannot overflow.")
+  (let [^I32 have (cells-at dc D_TOTB)
+        ^I32 lim (limit-of 2)]
+    (if (> n (- 2147483647 have))
+      (limit-breach 2 2147483647))
+    (if (> (+ have n) lim)
+      (limit-breach 2 (+ have n)))
+    (cells-set dc D_TOTB (+ have n))
+    (return 0)))
+
 (defn ^:pub ^I32 pd-stream-data [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
                                  ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
                                  ^I32 sh ^:mut ^Cells out]
   (comment "The DECODED bytes of stream `sh` into `out` (cleared first), by")
   (comment "planning the chain and running it. `out` must not be `a`, `b` or")
   (comment "`st` (they are overwritten); answers a `pf-status`, the first error.")
-  (let [^I32 plan (pd-stream-plan src ar dc a b st sh)]
-    (return (pd-run-plan src ar plan sh b st out))))
+  (let [^I32 plan (pd-stream-plan src ar dc a b st sh)
+        ^I32 status (pd-run-plan src ar plan sh b st out)]
+    (pd-total-add dc (cells-len out))
+    (return status)))
 
 ;; ------------------------------------------------ cross-reference sections
 

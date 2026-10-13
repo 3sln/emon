@@ -177,7 +177,8 @@ public final class Pdfdoc {
     public static final int D_TRAIL = 16;
     public static final int D_SEEN = 32;
     public static final int D_CR = 96;
-    public static final int D_FIRST = 448;
+    public static final int D_TOTB = 448;
+    public static final int D_FIRST = 449;
     public static final int PAGE_STRIDE = 16;
     public static int pdInit(emon.Port.Cells dc) {
         // An empty document: a zeroed header and no entries.
@@ -1037,12 +1038,28 @@ public final class Pdfdoc {
         }
         return status;
     }
+    public static int pdTotalAdd(emon.Port.Cells dc, int n) {
+        // The `total-bytes` limit (SPEC 7.4, the zip-bomb bound): the decoded bytes of every stream this unit has read through `pd-stream-data`,
+        // summed. A sum past the limit is a breach (never returns); the count is saturated at 2^31 - 1 so that the sum itself cannot overflow.
+        int have = emon.Port.cellsAt(dc, D_TOTB);
+        int lim = emon.Port.limitOf(2);
+        if (n > (2147483647 - have)) {
+            emon.Port.limitBreach(2, 2147483647);
+        }
+        if ((have + n) > lim) {
+            emon.Port.limitBreach(2, have + n);
+        }
+        emon.Port.cellsSet(dc, D_TOTB, have + n);
+        return 0;
+    }
     public static int pdStreamData(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int sh, emon.Port.Cells out) {
         // The DECODED bytes of stream `sh` into `out` (cleared first), by
         // planning the chain and running it. `out` must not be `a`, `b` or
         // `st` (they are overwritten); answers a `pf-status`, the first error.
         int plan = pdStreamPlan(src, ar, dc, a, b, st, sh);
-        return pdRunPlan(src, ar, plan, sh, b, st, out);
+        int status = pdRunPlan(src, ar, plan, sh, b, st, out);
+        pdTotalAdd(dc, emon.Port.cellsLen(out));
+        return status;
     }
     public static int pdAddTrailer(emon.Port.Cells dc, int dict) {
         int n = emon.Port.cellsAt(dc, D_NTRAIL);

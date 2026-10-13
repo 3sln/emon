@@ -37,6 +37,9 @@ func PeBadRecord() int32 {
 func PeStalled() int32 {
 	return 8
 }
+func PeOcrRequests() int32 {
+	return 9
+}
 func PeEmitName(t *strings.Builder, code int32) int32 {
 	if code == 0 {
 		port.TextAscii(t, "none")
@@ -72,6 +75,10 @@ func PeEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 8 {
 		port.TextAscii(t, "need-bytes-stalled")
+		return 1
+	}
+	if code == 9 {
+		port.TextAscii(t, "ocr-requests")
 		return 1
 	}
 	return 0
@@ -498,6 +505,10 @@ func plRequests(p *planctx.Plan) int32 {
 		return plLimit(p, PeMaxRounds(), p.MaxRounds, p.Rounds)
 	}
 	p.Requests += n
+	// The `ocr-requests` limit (SPEC 7.4, P10.4): the requests a unit asks in all, over its rounds. A named limit of the loop, as `max-rounds` is.
+	if p.Requests > port.LimitOf(10) {
+		return plLimit(p, PeOcrRequests(), port.LimitOf(10), p.Requests)
+	}
 	p.Round = p.Rounds - 1
 	p.Outk = 2
 	return ActRequests()

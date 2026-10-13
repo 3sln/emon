@@ -10,7 +10,7 @@
                                rq-render rq-crop rq-decode rq-ocr rq-ocr-end rq-bytes rq-arg rq-decode-img an-render an-decode an-fail an-bytes an-status
                                rec-count rec-find]]
             [emon.planloop :refer [pe-none pe-max-rounds pe-fetch-rounds pe-transcript-miss pe-transcript-bad pe-fulfil-failed pe-unit-failed
-                                   pe-bad-record pe-stalled pe-emit-name
+                                   pe-bad-record pe-stalled pe-ocr-requests pe-emit-name
                                    ph-doc ph-asset ph-pages ph-finish ph-figures ph-done ph-emit-name
                                    ds-class ds-known ds-emit-name ds-unsupported-format ds-no-startxref ds-bad-xref ds-no-root ds-no-pages ds-encrypted
                                    ds-password-required ds-password-incorrect ds-encryption-unsupported ds-undecodable ds-unsupported-image
@@ -214,6 +214,29 @@
     (assert-eq (fd p err-limit) 1 "the limit")
     (assert-eq (fd p err-actual) 2 "what it reached")
     (t-err (test-t) p (pe-max-rounds) "max-rounds" "the limit is 1 and this run reached 2")))
+
+(deftest test-ocr-requests-is-a-named-limit-of-the-loop
+  (comment "The unit's requests over its rounds are counted against `ocr-requests` (kind 10, 100000 by default; P10.4): the count is set as a unit that had")
+  (comment "asked nearly that many would have left it, so that the law does not need 100000 records.")
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (pl-attempt p)
+    (set (fd p requests) 99998)
+    (t-render p 1)
+    (t-render p 2)
+    (assert-eq (pl-after p (us-requests)) (act-requests) "exactly the limit is not over it")
+    (assert-eq (fd p requests) 100000 "counted"))
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (pl-attempt p)
+    (set (fd p requests) 99999)
+    (t-render p 1)
+    (t-render p 2)
+    (assert-eq (pl-after p (us-requests)) (act-error) "one past it is")
+    (assert-eq (fd p err-limit) 100000 "the limit")
+    (assert-eq (fd p err-actual) 100001 "what it reached")
+    (assert-eq (fd p rounds) 1 "the round was counted first")
+    (t-err (test-t) p (pe-ocr-requests) "ocr-requests" "the limit is 100000 and this run reached 100001")))
 
 (deftest test-a-miss-is-not-a-round-and-fetch-rounds-is-a-named-limit
   (let [^Plan p (new-ctx Plan)]
@@ -754,6 +777,10 @@
     (t-name (test-t) "finish" (ph-emit-name e (ph-finish)) e)
     (t-name (test-t) "figures" (ph-emit-name f (ph-figures)) f)
     (t-name (test-t) "finished" (ph-emit-name g (ph-done)) g)))
+
+(deftest test-the-ocr-requests-limit-is-named-as-the-table-names-it
+  (let [^Text a (new-text)]
+    (t-name (test-t) "ocr-requests" (pe-emit-name a (pe-ocr-requests)) a)))
 
 (deftest test-a-documents-status-is-named-and-has-a-class
   (let [^Text a (new-text) ^Text b (new-text) ^Text c (new-text) ^Text d (new-text) ^Text e (new-text) ^Text f (new-text)]
