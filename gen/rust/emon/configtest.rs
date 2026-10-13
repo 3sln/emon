@@ -127,7 +127,7 @@ pub(crate) fn t_negative_rows() -> i32 {
     let mut n: i32 = 0;
     let mut i: i32 = 0;
     let mut k: i32 = 0;
-    while i < 19 {
+    while i < 20 {
         if (CK_ROWS[(i * 5 + 0) as usize] == 1) && (CK_ROWS[(i * 5 + 1) as usize] < 0) {
             n += 1;
         }
@@ -196,7 +196,7 @@ fn test_the_settings_have_their_names_defaults_and_ranges_in_kin() {
 }
 #[test]
 fn test_the_keys_have_their_names_in_kin() {
-    crate::testport::assert_eq(19, 19, "nineteen keys");
+    crate::testport::assert_eq(20, 20, "twenty keys");
     t_key_name(0, 0, "locale");
     t_key_name(0, 1, "ocr");
     t_key_name(0, 2, "furniture");
@@ -216,6 +216,7 @@ fn test_the_keys_have_their_names_in_kin() {
     t_key_name(0, 16, "limit.");
     t_key_name(0, 17, "producer.");
     t_key_name(0, 18, "parallel");
+    t_key_name(0, 19, "js-render");
 }
 #[test]
 fn test_the_words_have_their_names_and_codes_in_kin() {
@@ -242,6 +243,8 @@ fn test_a_key_is_found_by_its_whole_name_or_its_prefix() {
     t_is_key(0, &crate::testport::text_blob("producer.name")[..], 1, "a producer");
     t_is_key(0, &crate::testport::text_blob("record")[..], 1, "record");
     t_is_key(0, &crate::testport::text_blob("parallel")[..], 1, "parallel");
+    t_is_key(0, &crate::testport::text_blob("js-render")[..], 1, "js-render");
+    t_is_key(0, &crate::testport::text_blob("js-rendering")[..], 0, "js-render and more");
     t_is_key(0, &crate::testport::text_blob("parallelx")[..], 0, "parallel and more");
     t_is_key(0, &crate::testport::text_blob("oc")[..], 0, "a prefix of a plain key");
     t_is_key(0, &crate::testport::text_blob("ocrx")[..], 0, "a plain key and more");
@@ -270,6 +273,7 @@ fn test_the_empty_text_is_the_defaults() {
     crate::testport::assert_eq(c.fetchr, 24, "fetch rounds");
     crate::testport::assert_eq(c.rec, 0, "not recording");
     crate::testport::assert_eq(c.jsocr, 0, "no js ocr");
+    crate::testport::assert_eq(c.jsrender, 0, "no js render");
     crate::testport::assert_eq(c.par, 1, "serial");
     crate::testport::assert_eq(c.dry, 0, "not a dry attempt");
     crate::testport::assert_eq(crate::port::cells_len(&mut c.lims), 0, "no limits");
@@ -278,7 +282,7 @@ fn test_the_empty_text_is_the_defaults() {
 #[test]
 fn test_every_key_sets_its_field() {
     let c: &mut crate::emon::enctx::Cfg = &mut crate::emon::enctx::Cfg::new();
-    crate::testport::assert_eq(t_parse(c, &crate::testport::text_blob("locale=de-AT\nocr=never\nfurniture=drop\nassets=figures\nasset-dpi=300\nasset-pixels=1000\nasset-bytes=2000\nassets-bytes=3000\nasset-signatures=on\nkeep-evidence=1\nocr-scope=witness\nmax-rounds=7\nfetch-rounds=9\nrecord=1\njs-ocr=1\nchunk=512\nparallel=4\n")[..]), 0, "parses");
+    crate::testport::assert_eq(t_parse(c, &crate::testport::text_blob("locale=de-AT\nocr=never\nfurniture=drop\nassets=figures\nasset-dpi=300\nasset-pixels=1000\nasset-bytes=2000\nassets-bytes=3000\nasset-signatures=on\nkeep-evidence=1\nocr-scope=witness\nmax-rounds=7\nfetch-rounds=9\nrecord=1\njs-ocr=1\njs-render=1\nchunk=512\nparallel=4\n")[..]), 0, "parses");
     crate::testport::assert_eq(c.haveloc, 1, "a locale");
     crate::testport::assert_eq(crate::port::cells_len(&mut c.lcl), 5, "its length");
     crate::testport::assert_eq(crate::port::cells_at(&mut c.lcl, 0), 100, "d");
@@ -297,6 +301,7 @@ fn test_every_key_sets_its_field() {
     crate::testport::assert_eq(c.fetchr, 9, "fetch rounds");
     crate::testport::assert_eq(c.rec, 1, "recording");
     crate::testport::assert_eq(c.jsocr, 1, "js ocr");
+    crate::testport::assert_eq(c.jsrender, 1, "js render");
     crate::testport::assert_eq(c.chunk, 512, "chunk");
     crate::testport::assert_eq(c.par, 4, "four workers");
 }
@@ -316,10 +321,11 @@ fn test_the_words_of_every_enum_key_are_read() {
     crate::testport::assert_eq(b.ocr, 1, "auto");
     crate::testport::assert_eq(b.furn, 1, "keep");
     crate::testport::assert_eq(b.level, 1, "images");
-    t_parse(d, &crate::testport::text_blob("keep-evidence=0\nrecord=yes\njs-ocr=11")[..]);
+    t_parse(d, &crate::testport::text_blob("keep-evidence=0\nrecord=yes\njs-ocr=11\njs-render=true")[..]);
     crate::testport::assert_eq(d.keep, 0, "a flag is 1 or nothing");
     crate::testport::assert_eq(d.rec, 0, "yes is not 1");
     crate::testport::assert_eq(d.jsocr, 0, "11 is not 1");
+    crate::testport::assert_eq(d.jsrender, 0, "true is not 1");
     t_parse(e, &crate::testport::text_blob("keep-evidence=1")[..]);
     crate::testport::assert_eq(e.keep, 1, "one");
 }

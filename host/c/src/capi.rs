@@ -526,8 +526,8 @@ unsafe fn make_input(inp: *const emon_input) -> Result<Input, Fail> {
 // The text parsed by kin, and the Engine's configuration with the native ports when asked. The step API's own switches (`record`,
 // `js-ocr`) belong to a session: a one-shot refuses them rather than ignoring them.
 fn one_shot_setup(p: &Parsed, flags: u32) -> Result<(Engine, Options), Fail> {
-    if p.record || p.js_ocr {
-        return Err(Fail::Usage("record=1 and js-ocr=1 are options of a session (emon_open): a one-shot conversion has no caller to fulfil or keep a transcript".to_string()));
+    if p.record || p.js_ocr || p.js_render {
+        return Err(Fail::Usage("record=1, js-ocr=1 and js-render=1 are options of a session (emon_open): a one-shot conversion has no caller to fulfil or keep a transcript".to_string()));
     }
     let mut cfg = p.config.clone();
     if flags & EMON_NATIVE != 0 {

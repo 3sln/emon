@@ -16,7 +16,8 @@ public static class Config {
         117, 110, 100, 115, 102, 101, 116, 99, 104, 45, 114, 111, 117, 110, 100, 115,
         114, 101, 99, 111, 114, 100, 106, 115, 45, 111, 99, 114, 99, 104, 117, 110,
         107, 108, 105, 109, 105, 116, 46, 112, 114, 111, 100, 117, 99, 101, 114, 46,
-        112, 97, 114, 97, 108, 108, 101, 108
+        112, 97, 114, 97, 108, 108, 101, 108, 106, 115, 45, 114, 101, 110, 100, 101,
+        114
     };
     public static readonly int[] CkRows = new int[] {
         0, 0, 0, 0, 6,
@@ -37,7 +38,8 @@ public static class Config {
         1, 1, 2147483647, 140, 5,
         4, 0, 0, 145, 6,
         5, 0, 0, 151, 9,
-        1, 1, 2147483647, 160, 8
+        1, 1, 2147483647, 160, 8,
+        3, 0, 0, 168, 9
     };
     public static readonly int[] CvChars = new int[] {
         97, 108, 119, 97, 121, 115, 97, 117, 116, 111, 110, 101, 118, 101, 114, 112,
@@ -77,6 +79,7 @@ public static class Config {
     internal const int KJsocr = 14;
     internal const int KChunk = 15;
     internal const int KPar = 18;
+    internal const int KJsrender = 19;
     internal const int ShStr = 0;
     internal const int ShNum = 1;
     internal const int ShEnum = 2;
@@ -102,6 +105,7 @@ public static class Config {
         c.Fetchr = 24;
         c.Rec = 0;
         c.Jsocr = 0;
+        c.Jsrender = 0;
         c.Par = 1;
         c.Dry = 0;
         return 0;
@@ -129,7 +133,7 @@ public static class Config {
     public static int CfKeyFind(emon.Port.Cells t, int from, int to) {
         // The key t[from, to) names, or -1.
         int k = 0;
-        while (k < 19) {
+        while (k < 20) {
             if (CfKeyIs(t, from, to, k) == 1) {
                 return k;
             }
@@ -354,6 +358,9 @@ public static class Config {
         }
         if (k == KJsocr) {
             c.Jsocr = v;
+        }
+        if (k == KJsrender) {
+            c.Jsrender = v;
         }
         return 0;
     }

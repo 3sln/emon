@@ -131,7 +131,7 @@ int emon_test_panic(emon_error *err);
 typedef struct emon_model emon_model;
 void emon_free_model(emon_model *m);
 
-/* Convert one input to a Model.  `options`: kin's text (NULL: the defaults); record=1 and js-ocr=1 are options of a session and are refused. */
+/* Convert one input to a Model.  `options`: kin's text (NULL: the defaults); record=1, js-ocr=1 and js-render=1 are options of a session and are refused. */
 int emon_convert(const emon_input *input, const char *options, unsigned flags, emon_model **out, emon_error *err);
 /* The common case in one call: the canonical JSON (compact, or indented when `pretty`) / the HTML (`html_options` as for emon_model_html). */
 int emon_convert_json(const emon_input *input, const char *options, unsigned flags, int pretty, emon_buf *out, emon_error *err);

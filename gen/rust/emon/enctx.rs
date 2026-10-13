@@ -111,6 +111,7 @@ pub struct Cfg {
     pub nort: i32,
     pub par: i32,
     pub dry: i32,
+    pub jsrender: i32,
 }
 impl Cfg {
     pub fn new() -> Cfg {
@@ -139,6 +140,7 @@ impl Cfg {
             nort: 0,
             par: 0,
             dry: 0,
+            jsrender: 0,
         }
     }
 }

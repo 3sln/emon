@@ -7,7 +7,8 @@
 ;;   THE KEYS.   `ck-rows` is the table: a key's SHAPE (a string, a number in a range, one of a list of words, a flag, or a prefix that takes a name), its
 ;;               range, and its name. `cv-rows` is every word an enum key takes, with its code (the codes `Cfg` holds, which `cfg_of` and the document unit read).
 ;;                 locale  ocr  furniture  assets  asset-dpi  asset-pixels  asset-bytes  assets-bytes  asset-signatures  keep-evidence  ocr-scope
-;;                 max-rounds  fetch-rounds  record  js-ocr  chunk  limit.NAME  producer.NAME  parallel
+;;                 max-rounds  fetch-rounds  record  js-ocr  chunk  limit.NAME  producer.NAME  parallel  js-render
+;;               `js-ocr=1` and `js-render=1` (P11.4c) are the browser binding's: the host owes the `ocr` requests, or the `render` and `crop` ones.
 ;;               `parallel=N` (P10.2, SPEC 12.1) is how many workers a conversion may spread its fulfilment over: 1, the default, is serial; the limit `workers`
 ;;               caps it (`pl-workers`); it changes how the work is spread and nothing in the Model.
 ;;   THE DEFAULTS are `cf-defaults`: SPEC 13's, and the hosts' `Options::default()` is a parse of the empty text. A flag is 1 when its value is `1`, else 0.
@@ -38,7 +39,8 @@
          117 110 100 115 102 101 116 99 104 45 114 111 117 110 100 115
          114 101 99 111 114 100 106 115 45 111 99 114 99 104 117 110
          107 108 105 109 105 116 46 112 114 111 100 117 99 101 114 46
-         112 97 114 97 108 108 101 108]
+         112 97 114 97 108 108 101 108 106 115 45 114 101 110 100 101
+         114]
   :accessors {^I32 ck-char-at [^I32 ignored ^I32 i]})
 
 ;; a key is a row's index: [shape lo hi name-offset name-length]. Shapes: 0 a string, 1 a number in lo..hi, 2 a word of `cv-rows`, 3 a flag,
@@ -64,7 +66,8 @@
          1 1 2147483647 140 5                       ;; 15 chunk
          4 0 0 145 6                                ;; 16 limit.
          5 0 0 151 9                                ;; 17 producer.
-         1 1 2147483647 160 8]                      ;; 18 parallel (P10.2: the workers a conversion may use; 1 is serial, the default; `limit.workers` caps it)
+         1 1 2147483647 160 8                       ;; 18 parallel (P10.2: the workers a conversion may use; 1 is serial, the default; `limit.workers` caps it)
+         3 0 0 168 9]                               ;; 19 js-render (P11.4c: the host owes the `render` and `crop` requests, as js-ocr owes `ocr`)
   :accessors {^I32 ck-row-count [^I32 ignored]
               ^I32 ck-row-at [^I32 ignored ^I32 row ^I32 field]})
 
@@ -113,6 +116,7 @@
 (defconst ^I32 K_JSOCR 14)
 (defconst ^I32 K_CHUNK 15)
 (defconst ^I32 K_PAR 18)
+(defconst ^I32 K_JSRENDER 19)
 
 (defconst ^I32 SH_STR 0)
 (defconst ^I32 SH_NUM 1)
@@ -142,6 +146,7 @@
   (set (fd c fetchr) 24)
   (set (fd c rec) 0)
   (set (fd c jsocr) 0)
+  (set (fd c jsrender) 0)
   (set (fd c par) 1)
   (set (fd c dry) 0)
   (return 0))
@@ -319,6 +324,7 @@
   (if (== k K_KEEP) (set (fd c keep) v))
   (if (== k K_REC) (set (fd c rec) v))
   (if (== k K_JSOCR) (set (fd c jsocr) v))
+  (if (== k K_JSRENDER) (set (fd c jsrender) v))
   (return 0))
 
 (defn ^I32 cf-one [^Cells t ^I32 vf ^I32 vt]

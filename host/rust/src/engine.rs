@@ -361,6 +361,8 @@ pub struct Parsed {
     pub record: bool,
     // `js-ocr=1`: the host owes the `ocr` requests
     pub js_ocr: bool,
+    // `js-render=1`: the host owes the `render` and `crop` requests (P11.4c)
+    pub js_render: bool,
     // `producer.NAME=VALUE`, in order: what the transcript says produced it
     pub producer: Vec<(String, String)>,
 }
@@ -419,7 +421,7 @@ pub fn parse_options(text: &str) -> Result<Parsed, String> {
         producer.push((string_of_cells(&c.prod, at + 2, kl), string_of_cells(&c.prod, at + 2 + kl, vl)));
         at += 2 + kl + vl;
     }
-    Ok(Parsed { options: options_of(&c), config: config_of(&c), record: c.rec != 0, js_ocr: c.jsocr != 0, producer })
+    Ok(Parsed { options: options_of(&c), config: config_of(&c), record: c.rec != 0, js_ocr: c.jsocr != 0, js_render: c.jsrender != 0, producer })
 }
 
 // Whether `name` (a driver's `--name=`) is a key of the grammar, which kin owns.

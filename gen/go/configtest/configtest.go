@@ -143,7 +143,7 @@ func tNegativeRows() int32 {
 	var n int32 = 0
 	var i int32 = 0
 	var k int32 = 0
-	for i < 19 {
+	for i < 20 {
 		if (config.CkRows[i*5+0] == 1) && (config.CkRows[i*5+1] < 0) {
 			n += 1
 		}
@@ -212,7 +212,7 @@ func TestTheSettingsHaveTheirNamesDefaultsAndRangesInKin(emonT *testing.T) {
 }
 
 func TestTheKeysHaveTheirNamesInKin(emonT *testing.T) {
-	port.AssertEq(emonT, 19, 19, "nineteen keys")
+	port.AssertEq(emonT, 20, 20, "twenty keys")
 	tKeyName(emonT, 0, "locale")
 	tKeyName(emonT, 1, "ocr")
 	tKeyName(emonT, 2, "furniture")
@@ -232,6 +232,7 @@ func TestTheKeysHaveTheirNamesInKin(emonT *testing.T) {
 	tKeyName(emonT, 16, "limit.")
 	tKeyName(emonT, 17, "producer.")
 	tKeyName(emonT, 18, "parallel")
+	tKeyName(emonT, 19, "js-render")
 }
 
 func TestTheWordsHaveTheirNamesAndCodesInKin(emonT *testing.T) {
@@ -258,6 +259,8 @@ func TestAKeyIsFoundByItsWholeNameOrItsPrefix(emonT *testing.T) {
 	tIsKey(emonT, port.TextBlob("producer.name"), 1, "a producer")
 	tIsKey(emonT, port.TextBlob("record"), 1, "record")
 	tIsKey(emonT, port.TextBlob("parallel"), 1, "parallel")
+	tIsKey(emonT, port.TextBlob("js-render"), 1, "js-render")
+	tIsKey(emonT, port.TextBlob("js-rendering"), 0, "js-render and more")
 	tIsKey(emonT, port.TextBlob("parallelx"), 0, "parallel and more")
 	tIsKey(emonT, port.TextBlob("oc"), 0, "a prefix of a plain key")
 	tIsKey(emonT, port.TextBlob("ocrx"), 0, "a plain key and more")
@@ -286,6 +289,7 @@ func TestTheEmptyTextIsTheDefaults(emonT *testing.T) {
 	port.AssertEq(emonT, c.Fetchr, 24, "fetch rounds")
 	port.AssertEq(emonT, c.Rec, 0, "not recording")
 	port.AssertEq(emonT, c.Jsocr, 0, "no js ocr")
+	port.AssertEq(emonT, c.Jsrender, 0, "no js render")
 	port.AssertEq(emonT, c.Par, 1, "serial")
 	port.AssertEq(emonT, c.Dry, 0, "not a dry attempt")
 	port.AssertEq(emonT, port.CellsLen(c.Lims), 0, "no limits")
@@ -294,7 +298,7 @@ func TestTheEmptyTextIsTheDefaults(emonT *testing.T) {
 
 func TestEveryKeySetsItsField(emonT *testing.T) {
 	var c *enctx.Cfg = enctx.NewCfg()
-	port.AssertEq(emonT, tParse(c, port.TextBlob("locale=de-AT\nocr=never\nfurniture=drop\nassets=figures\nasset-dpi=300\nasset-pixels=1000\nasset-bytes=2000\nassets-bytes=3000\nasset-signatures=on\nkeep-evidence=1\nocr-scope=witness\nmax-rounds=7\nfetch-rounds=9\nrecord=1\njs-ocr=1\nchunk=512\nparallel=4\n")), 0, "parses")
+	port.AssertEq(emonT, tParse(c, port.TextBlob("locale=de-AT\nocr=never\nfurniture=drop\nassets=figures\nasset-dpi=300\nasset-pixels=1000\nasset-bytes=2000\nassets-bytes=3000\nasset-signatures=on\nkeep-evidence=1\nocr-scope=witness\nmax-rounds=7\nfetch-rounds=9\nrecord=1\njs-ocr=1\njs-render=1\nchunk=512\nparallel=4\n")), 0, "parses")
 	port.AssertEq(emonT, c.Haveloc, 1, "a locale")
 	port.AssertEq(emonT, port.CellsLen(c.Lcl), 5, "its length")
 	port.AssertEq(emonT, port.CellsAt(c.Lcl, 0), 100, "d")
@@ -313,6 +317,7 @@ func TestEveryKeySetsItsField(emonT *testing.T) {
 	port.AssertEq(emonT, c.Fetchr, 9, "fetch rounds")
 	port.AssertEq(emonT, c.Rec, 1, "recording")
 	port.AssertEq(emonT, c.Jsocr, 1, "js ocr")
+	port.AssertEq(emonT, c.Jsrender, 1, "js render")
 	port.AssertEq(emonT, c.Chunk, 512, "chunk")
 	port.AssertEq(emonT, c.Par, 4, "four workers")
 }
@@ -332,10 +337,11 @@ func TestTheWordsOfEveryEnumKeyAreRead(emonT *testing.T) {
 	port.AssertEq(emonT, b.Ocr, 1, "auto")
 	port.AssertEq(emonT, b.Furn, 1, "keep")
 	port.AssertEq(emonT, b.Level, 1, "images")
-	tParse(d, port.TextBlob("keep-evidence=0\nrecord=yes\njs-ocr=11"))
+	tParse(d, port.TextBlob("keep-evidence=0\nrecord=yes\njs-ocr=11\njs-render=true"))
 	port.AssertEq(emonT, d.Keep, 0, "a flag is 1 or nothing")
 	port.AssertEq(emonT, d.Rec, 0, "yes is not 1")
 	port.AssertEq(emonT, d.Jsocr, 0, "11 is not 1")
+	port.AssertEq(emonT, d.Jsrender, 0, "true is not 1")
 	tParse(e, port.TextBlob("keep-evidence=1"))
 	port.AssertEq(emonT, e.Keep, 1, "one")
 }

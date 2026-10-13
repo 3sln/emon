@@ -190,7 +190,7 @@
 ;; ------------------------------------------------------------------ the grammar's tables
 
 (deftest test-the-keys-have-their-names-in-kin
-  (assert-eq (ck-row-count 0) 19 "nineteen keys")
+  (assert-eq (ck-row-count 0) 20 "twenty keys")
   (t-key-name (test-t) 0 "locale")
   (t-key-name (test-t) 1 "ocr")
   (t-key-name (test-t) 2 "furniture")
@@ -209,7 +209,8 @@
   (t-key-name (test-t) 15 "chunk")
   (t-key-name (test-t) 16 "limit.")
   (t-key-name (test-t) 17 "producer.")
-  (t-key-name (test-t) 18 "parallel"))
+  (t-key-name (test-t) 18 "parallel")
+  (t-key-name (test-t) 19 "js-render"))
 
 (deftest test-the-words-have-their-names-and-codes-in-kin
   (assert-eq (cv-row-count 0) 13 "thirteen words")
@@ -234,6 +235,8 @@
   (t-is-key (test-t) (text-blob "producer.name") 1 "a producer")
   (t-is-key (test-t) (text-blob "record") 1 "record")
   (t-is-key (test-t) (text-blob "parallel") 1 "parallel")
+  (t-is-key (test-t) (text-blob "js-render") 1 "js-render")
+  (t-is-key (test-t) (text-blob "js-rendering") 0 "js-render and more")
   (t-is-key (test-t) (text-blob "parallelx") 0 "parallel and more")
   (t-is-key (test-t) (text-blob "oc") 0 "a prefix of a plain key")
   (t-is-key (test-t) (text-blob "ocrx") 0 "a plain key and more")
@@ -263,6 +266,7 @@
     (assert-eq (fd c fetchr) 24 "fetch rounds")
     (assert-eq (fd c rec) 0 "not recording")
     (assert-eq (fd c jsocr) 0 "no js ocr")
+    (assert-eq (fd c jsrender) 0 "no js render")
     (assert-eq (fd c par) 1 "serial")
     (assert-eq (fd c dry) 0 "not a dry attempt")
     (assert-eq (cells-len (fd c lims)) 0 "no limits")
@@ -270,7 +274,7 @@
 
 (deftest test-every-key-sets-its-field
   (let [^Cfg c (new-ctx Cfg)]
-    (assert-eq (t-parse c (text-blob "locale=de-AT\nocr=never\nfurniture=drop\nassets=figures\nasset-dpi=300\nasset-pixels=1000\nasset-bytes=2000\nassets-bytes=3000\nasset-signatures=on\nkeep-evidence=1\nocr-scope=witness\nmax-rounds=7\nfetch-rounds=9\nrecord=1\njs-ocr=1\nchunk=512\nparallel=4\n")) 0 "parses")
+    (assert-eq (t-parse c (text-blob "locale=de-AT\nocr=never\nfurniture=drop\nassets=figures\nasset-dpi=300\nasset-pixels=1000\nasset-bytes=2000\nassets-bytes=3000\nasset-signatures=on\nkeep-evidence=1\nocr-scope=witness\nmax-rounds=7\nfetch-rounds=9\nrecord=1\njs-ocr=1\njs-render=1\nchunk=512\nparallel=4\n")) 0 "parses")
     (assert-eq (fd c haveloc) 1 "a locale")
     (assert-eq (cells-len (fd c lcl)) 5 "its length")
     (assert-eq (cells-at (fd c lcl) 0) 100 "d")
@@ -289,6 +293,7 @@
     (assert-eq (fd c fetchr) 9 "fetch rounds")
     (assert-eq (fd c rec) 1 "recording")
     (assert-eq (fd c jsocr) 1 "js ocr")
+    (assert-eq (fd c jsrender) 1 "js render")
     (assert-eq (fd c chunk) 512 "chunk")
     (assert-eq (fd c par) 4 "four workers")))
 
@@ -307,10 +312,11 @@
     (assert-eq (fd b ocr) 1 "auto")
     (assert-eq (fd b furn) 1 "keep")
     (assert-eq (fd b level) 1 "images")
-    (t-parse d (text-blob "keep-evidence=0\nrecord=yes\njs-ocr=11"))
+    (t-parse d (text-blob "keep-evidence=0\nrecord=yes\njs-ocr=11\njs-render=true"))
     (assert-eq (fd d keep) 0 "a flag is 1 or nothing")
     (assert-eq (fd d rec) 0 "yes is not 1")
     (assert-eq (fd d jsocr) 0 "11 is not 1")
+    (assert-eq (fd d jsrender) 0 "true is not 1")
     (t-parse e (text-blob "keep-evidence=1"))
     (assert-eq (fd e keep) 1 "one")))
 

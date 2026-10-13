@@ -103,6 +103,7 @@ public final class Enctx {
         public int nort = 0;
         public int par = 0;
         public int dry = 0;
+        public int jsrender = 0;
         public Cfg() {
         }
         @Override
@@ -132,6 +133,7 @@ public final class Enctx {
             c.nort = this.nort;
             c.par = this.par;
             c.dry = this.dry;
+            c.jsrender = this.jsrender;
             return c;
         }
     }
