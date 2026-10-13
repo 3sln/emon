@@ -373,18 +373,30 @@ public final class Pngcheck {
             emon.Port.cellsSet(r, R_LIMIT, Imgcheck.icClamp(rawl));
             return Imgcheck.icLimit();
         }
-        emon.Port.cellsDrop(out, 0);
-        s = Inflate.izZlib(emon.Port.bufBlob(idat), 0, emon.Port.bufLen(idat), out, st);
-        if (s != 0) {
-            return Imgcheck.icFailed();
-        }
-        if (((long) emon.Port.cellsLen(out)) != rawl) {
-            return Imgcheck.icFailed();
+        if (deep == 2) {
+            // deep 2 inflates into `clean`, a byte a byte, and keeps it for the caller (`emon.pngread`, D1220)
+            emon.Port.bufTruncate(clean, 0);
+            s = Inflate.izZlibBuf(emon.Port.bufBlob(idat), 0, emon.Port.bufLen(idat), clean, st);
+            if (s != 0) {
+                return Imgcheck.icFailed();
+            }
+            if (((long) emon.Port.bufLen(clean)) != rawl) {
+                return Imgcheck.icFailed();
+            }
+        } else {
+            emon.Port.cellsDrop(out, 0);
+            s = Inflate.izZlib(emon.Port.bufBlob(idat), 0, emon.Port.bufLen(idat), out, st);
+            if (s != 0) {
+                return Imgcheck.icFailed();
+            }
+            if (((long) emon.Port.cellsLen(out)) != rawl) {
+                return Imgcheck.icFailed();
+            }
         }
         if (Inflate.izConsumed(st) != emon.Port.bufLen(idat)) {
             return Imgcheck.icFailed();
         }
-        // deep 2 keeps the inflated bytes in `out` for the caller (`emon.pngread`); deep 1 lets them go
+        // deep 1 lets the inflated bytes go
         if (deep == 1) {
             emon.Port.cellsFree(out);
         }

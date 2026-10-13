@@ -12,27 +12,165 @@ import (
 	"strings"
 )
 
-func PgOpen(p []byte, r *port.Cells, st *port.Cells, out *port.Cells, idat *port.Buf, clean *port.Buf) int32 {
-	// Validate `p` and inflate its image data into `out` (one cell a byte, the filter bytes in). Answers an `ic-status`: ok, or
-	// failed, unsupported (not 8-bit gray or RGB, or interlaced) or limit (the report's `pr-limit` is the count).
-	var s int32 = pngcheck.PcCheck(p, 2, r, st, out, idat, clean)
+func PgOpen(p []byte, r *port.Cells, st *port.Cells, out *port.Cells, idat *port.Buf, raw *port.Buf) int32 {
+	// Validate `p` and inflate its image data into `raw` (a byte a byte, the filter bytes in). Answers an `ic-status`: ok, or
+	// failed, unsupported (not 8-bit gray or RGB, or interlaced) or limit (the report's `pr-limit` is the count). `out` is
+	// the validator's Cells, which deep 2 does not touch.
+	var s int32 = pngcheck.PcCheck(p, 2, r, st, out, idat, raw)
 	if s != imgcheck.IcOk() {
 		return s
 	}
 	if (port.CellsAt(r, pngcheck.PrCtype()) != 0) && (port.CellsAt(r, pngcheck.PrCtype()) != 2) {
-		port.CellsFree(out)
 		return imgcheck.IcUnsupported()
 	}
 	if (port.CellsAt(r, pngcheck.PrDepth()) != 8) || (port.CellsAt(r, pngcheck.PrInterlace()) != 0) {
-		port.CellsFree(out)
 		return imgcheck.IcUnsupported()
 	}
 	return imgcheck.IcOk()
 }
 
-func PgFill(r *port.Cells, out *port.Cells, px *port.Cells, dst *port.Bitmap) int32 {
-	// Undo the predictor over `out` into `px`, then write the pixels to `dst`, which must be (pr-w) by (pr-h) by (pr-ch). Gives
-	// both scratch arenas back. A damaged filter byte or a Bitmap of another size is failed.
+func pgRow(raw *port.Buf, pos int32, px *port.Cells, co int32, po int32, n int32, bpp int32, t int32) int32 {
+	// One row of the predictor: filter `t`, its `n` filtered bytes at raw[pos..], the row above at px[po..], the row made at
+	// px[co..]. `pf-png` and `pf-png-slow` over a Buf: the first `bpp` bytes have no pixel to the left (a and c are 0), the rest
+	// are a loop for the filter, and a gray row (one byte a pixel) keeps the pixel to the left in `a`, not read back.
+	var i int32 = 0
+	var x int32 = 0
+	var a int32 = 0
+	var b int32 = 0
+	var c int32 = 0
+	var v int32 = 0
+	for i < bpp {
+		x = port.BufAt(raw, pos+i)
+		b = port.CellsAt(px, po+i)
+		v = x
+		if t == 2 {
+			v = x + b
+		}
+		if t == 3 {
+			v = x + (b / 2)
+		}
+		if t == 4 {
+			v = x + pdffilter.PfPaeth(0, b, 0)
+		}
+		port.CellsSet(px, co+i, v&255)
+		i += 1
+	}
+	if t == 0 {
+		for i < n {
+			port.CellsSet(px, co+i, port.BufAt(raw, pos+i))
+			i += 1
+		}
+	}
+	if t == 2 {
+		for i < n {
+			x = port.BufAt(raw, pos+i)
+			b = port.CellsAt(px, po+i)
+			port.CellsSet(px, co+i, (x+b)&255)
+			i += 1
+		}
+	}
+	if (bpp == 1) && (i < n) {
+		a = port.CellsAt(px, (co+i)-1)
+		if t == 1 {
+			for i < n {
+				a = (port.BufAt(raw, pos+i) + a) & 255
+				port.CellsSet(px, co+i, a)
+				i += 1
+			}
+		}
+		if t == 3 {
+			for i < n {
+				b = port.CellsAt(px, po+i)
+				a = (port.BufAt(raw, pos+i) + ((a + b) / 2)) & 255
+				port.CellsSet(px, co+i, a)
+				i += 1
+			}
+		}
+		if t == 4 {
+			c = port.CellsAt(px, (po+i)-1)
+			for i < n {
+				b = port.CellsAt(px, po+i)
+				a = (port.BufAt(raw, pos+i) + pdffilter.PfPaeth(a, b, c)) & 255
+				port.CellsSet(px, co+i, a)
+				c = b
+				i += 1
+			}
+		}
+	}
+	if (bpp != 1) && (t == 1) {
+		for i < n {
+			x = port.BufAt(raw, pos+i)
+			a = port.CellsAt(px, (co+i)-bpp)
+			port.CellsSet(px, co+i, (x+a)&255)
+			i += 1
+		}
+	}
+	if (bpp != 1) && (t == 3) {
+		for i < n {
+			x = port.BufAt(raw, pos+i)
+			a = port.CellsAt(px, (co+i)-bpp)
+			b = port.CellsAt(px, po+i)
+			port.CellsSet(px, co+i, (x+((a+b)/2))&255)
+			i += 1
+		}
+	}
+	if (bpp != 1) && (t == 4) {
+		for i < n {
+			x = port.BufAt(raw, pos+i)
+			a = port.CellsAt(px, (co+i)-bpp)
+			b = port.CellsAt(px, po+i)
+			c = port.CellsAt(px, (po+i)-bpp)
+			port.CellsSet(px, co+i, (x+pdffilter.PfPaeth(a, b, c))&255)
+			i += 1
+		}
+	}
+	return 0
+}
+
+func PgFill(r *port.Cells, raw *port.Buf, rows *port.Cells, dst *port.Bitmap) int32 {
+	// Undo the predictor over `raw` a row at a time into `dst`, which must be (pr-w) by (pr-h) by (pr-ch), and `raw` the
+	// (pr-h) rows of a filter byte and (pr-w) * (pr-ch) bytes. `rows` is scratch (two rows of cells, made here). A damaged
+	// filter byte, a `raw` of another length or a Bitmap of another size is failed.
+	var w int32 = port.CellsAt(r, pngcheck.PrW())
+	var h int32 = port.CellsAt(r, pngcheck.PrH())
+	var ch int32 = port.CellsAt(r, pngcheck.PrCh())
+	var n int32 = w * ch
+	var y int32 = 0
+	var pos int32 = 0
+	var t int32 = 0
+	var co int32 = n
+	var po int32 = 0
+	var tmp int32 = 0
+	if (port.BitmapW(dst) != w) || ((port.BitmapH(dst) != h) || (port.BitmapChannels(dst) != ch)) {
+		return imgcheck.IcFailed()
+	}
+	if port.BufLen(raw) != (h * (n + 1)) {
+		return imgcheck.IcFailed()
+	}
+	port.CellsDrop(rows, 0)
+	port.CellsGrow(rows, 2*n, 0)
+	for y < h {
+		t = port.BufAt(raw, pos)
+		if t > 4 {
+			port.CellsFree(rows)
+			return imgcheck.IcFailed()
+		}
+		pgRow(raw, pos+1, rows, co, po, n, ch, t)
+		port.BitmapPutSpan(dst, y, 0, rows, co, n)
+		tmp = co
+		co = po
+		po = tmp
+		pos += n + 1
+		y += 1
+	}
+	port.CellsFree(rows)
+	return imgcheck.IcOk()
+}
+
+func PgRefFill(r *port.Cells, out *port.Cells, px *port.Cells, dst *port.Bitmap) int32 {
+	// THE ORACLE of `pg-fill` (D092, D396): the filtered bytes as a Cells (a cell a byte, what the first version inflated into),
+	// `pf-predict` (the PNG predictor of the whole page) into `px`, then every sample by `bitmap-set-u8`. A law holds `pg-fill`
+	// to it on the writer's images and on rows of every filter.
 	var w int32 = port.CellsAt(r, pngcheck.PrW())
 	var h int32 = port.CellsAt(r, pngcheck.PrH())
 	var ch int32 = port.CellsAt(r, pngcheck.PrCh())
@@ -40,21 +178,15 @@ func PgFill(r *port.Cells, out *port.Cells, px *port.Cells, dst *port.Bitmap) in
 	var y int32 = 0
 	var i int32 = 0
 	if (port.BitmapW(dst) != w) || ((port.BitmapH(dst) != h) || (port.BitmapChannels(dst) != ch)) {
-		port.CellsFree(out)
 		return imgcheck.IcFailed()
 	}
 	port.CellsDrop(px, 0)
 	if pdffilter.PfPredict(out, 0, port.CellsLen(out), px, 15, ch, 8, w) != 0 {
-		port.CellsFree(out)
-		port.CellsFree(px)
 		return imgcheck.IcFailed()
 	}
-	port.CellsFree(out)
 	if port.CellsLen(px) != (h * n) {
-		port.CellsFree(px)
 		return imgcheck.IcFailed()
 	}
-	// A row is `n` bytes from x 0: the port checks the byte index, not each coordinate (port.rs), so channel `i` of x 0 is byte i.
 	for y < h {
 		i = 0
 		for i < n {
@@ -63,7 +195,6 @@ func PgFill(r *port.Cells, out *port.Cells, px *port.Cells, dst *port.Bitmap) in
 		}
 		y += 1
 	}
-	port.CellsFree(px)
 	return imgcheck.IcOk()
 }
 

@@ -211,6 +211,35 @@ pub fn buf_append_blob(b: &mut Buf, blob: &[u8], start: i32, end: i32) {
     b.0.extend_from_slice(&blob[start as usize..end as usize]);
 }
 
+// @kin:link:form:buf-grow: {:template "crate::port::buf_grow({0}, {1}, {2})" :arity 3}
+//
+// `(buf-grow b n v)` (D1220): appends `n` copies of the low eight bits of `v` (what a loop of `buf-push` does, as `cells-grow` is for Cells).
+pub fn buf_grow(b: &mut Buf, n: i32, v: i32) {
+    let len = b.0.len() + n as usize;
+    b.0.resize(len, v as u8);
+}
+
+// @kin:link:form:buf-copy-back: {:template "crate::port::buf_copy_back({0}, {1}, {2})" :arity 3}
+//
+// `(buf-copy-back b dist n)` (D1220): appends `n` bytes, byte k being the byte `dist` before it, so a `dist` less than `n` repeats
+// (the LZ77 match of a deflate stream). `dist` must be 1 to the length, else a panic or throw.
+pub fn buf_copy_back(b: &mut Buf, dist: i32, n: i32) {
+    let (dist, n) = (dist as usize, n as usize);
+    let len = b.0.len();
+    if dist == 0 || dist > len {
+        panic!("buf_copy_back out of range");
+    }
+    if dist >= n {
+        b.0.extend_from_within(len - dist..len - dist + n);
+    } else {
+        b.0.reserve(n);
+        for k in 0..n {
+            let x = b.0[len - dist + k];
+            b.0.push(x);
+        }
+    }
+}
+
 // @kin:link:form:buf-copy-into: {:template "crate::port::buf_copy_into({0}, {1})" :arity 2}
 //
 // `(buf-copy-into dst src)`: `dst` becomes a copy of `src` (see `cells-copy-into`).
@@ -308,6 +337,22 @@ pub fn bitmap_u8(b: &Bitmap, x: i32, y: i32, c: i32) -> i32 {
 #[inline]
 pub fn bitmap_set_u8(b: &Bitmap, x: i32, y: i32, c: i32, v: i32) {
     b.d[(y * b.stride + x * b.ch + c) as usize].set(v as u8);
+}
+
+// @kin:link:form:bitmap-put-span: {:template "crate::port::bitmap_put_span({0}, {1}, {2}, {3}, {4}, {5})" :arity 6}
+//
+// `(bitmap-put-span b y off src from n)` (D1220): the bytes `y*stride + off + k`, k in 0..n, := the LOW EIGHT BITS of `src[from + k]`. A
+// whole row, or the part of one, in a call; what `n` calls of `bitmap-set-u8` do, with the same check on the BYTE INDEX (a span
+// past the buffer, or cells past the end of `src`, panics or throws). Answers 0. The transcript reader puts a finished row of the
+// predictor's here (`emon.pngread`); `emon.pngread`'s `pg-ref-fill` is the per-sample oracle.
+#[inline]
+pub fn bitmap_put_span(b: &Bitmap, y: i32, off: i32, src: &Cells, from: i32, n: i32) -> i32 {
+    let at = (y * b.stride + off) as usize;
+    let (from, n) = (from as usize, n as usize);
+    for (o, &v) in b.d[at..at + n].iter().zip(&src.v[from..from + n]) {
+        o.set(v as u8);
+    }
+    0
 }
 
 // ---- bulk forms (P2.7): the per-pixel loops the spike priced, done in the host.

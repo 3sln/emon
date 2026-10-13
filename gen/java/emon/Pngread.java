@@ -5,26 +5,162 @@ package emon;
 
 
 public final class Pngread {
-    public static int pgOpen(byte[] p, emon.Port.Cells r, emon.Port.Cells st, emon.Port.Cells out, emon.Port.Buf idat, emon.Port.Buf clean) {
-        // Validate `p` and inflate its image data into `out` (one cell a byte, the filter bytes in). Answers an `ic-status`: ok, or
-        // failed, unsupported (not 8-bit gray or RGB, or interlaced) or limit (the report's `pr-limit` is the count).
-        int s = Pngcheck.pcCheck(p, 2, r, st, out, idat, clean);
+    public static int pgOpen(byte[] p, emon.Port.Cells r, emon.Port.Cells st, emon.Port.Cells out, emon.Port.Buf idat, emon.Port.Buf raw) {
+        // Validate `p` and inflate its image data into `raw` (a byte a byte, the filter bytes in). Answers an `ic-status`: ok, or
+        // failed, unsupported (not 8-bit gray or RGB, or interlaced) or limit (the report's `pr-limit` is the count). `out` is
+        // the validator's Cells, which deep 2 does not touch.
+        int s = Pngcheck.pcCheck(p, 2, r, st, out, idat, raw);
         if (s != Imgcheck.icOk()) {
             return s;
         }
         if ((emon.Port.cellsAt(r, Pngcheck.prCtype()) != 0) && (emon.Port.cellsAt(r, Pngcheck.prCtype()) != 2)) {
-            emon.Port.cellsFree(out);
             return Imgcheck.icUnsupported();
         }
         if ((emon.Port.cellsAt(r, Pngcheck.prDepth()) != 8) || (emon.Port.cellsAt(r, Pngcheck.prInterlace()) != 0)) {
-            emon.Port.cellsFree(out);
             return Imgcheck.icUnsupported();
         }
         return Imgcheck.icOk();
     }
-    public static int pgFill(emon.Port.Cells r, emon.Port.Cells out, emon.Port.Cells px, emon.Port.Bitmap dst) {
-        // Undo the predictor over `out` into `px`, then write the pixels to `dst`, which must be (pr-w) by (pr-h) by (pr-ch). Gives
-        // both scratch arenas back. A damaged filter byte or a Bitmap of another size is failed.
+    public static int pgRow(emon.Port.Buf raw, int pos, emon.Port.Cells px, int co, int po, int n, int bpp, int t) {
+        // One row of the predictor: filter `t`, its `n` filtered bytes at raw[pos..], the row above at px[po..], the row made at
+        // px[co..]. `pf-png` and `pf-png-slow` over a Buf: the first `bpp` bytes have no pixel to the left (a and c are 0), the rest
+        // are a loop for the filter, and a gray row (one byte a pixel) keeps the pixel to the left in `a`, not read back.
+        int i = 0;
+        int x = 0;
+        int a = 0;
+        int b = 0;
+        int c = 0;
+        int v = 0;
+        while (i < bpp) {
+            x = emon.Port.bufAt(raw, pos + i);
+            b = emon.Port.cellsAt(px, po + i);
+            v = x;
+            if (t == 2) {
+                v = x + b;
+            }
+            if (t == 3) {
+                v = x + (b / 2);
+            }
+            if (t == 4) {
+                v = x + Pdffilter.pfPaeth(0, b, 0);
+            }
+            emon.Port.cellsSet(px, co + i, v & 255);
+            i += 1;
+        }
+        if (t == 0) {
+            while (i < n) {
+                emon.Port.cellsSet(px, co + i, emon.Port.bufAt(raw, pos + i));
+                i += 1;
+            }
+        }
+        if (t == 2) {
+            while (i < n) {
+                x = emon.Port.bufAt(raw, pos + i);
+                b = emon.Port.cellsAt(px, po + i);
+                emon.Port.cellsSet(px, co + i, (x + b) & 255);
+                i += 1;
+            }
+        }
+        if ((bpp == 1) && (i < n)) {
+            a = emon.Port.cellsAt(px, (co + i) - 1);
+            if (t == 1) {
+                while (i < n) {
+                    a = (emon.Port.bufAt(raw, pos + i) + a) & 255;
+                    emon.Port.cellsSet(px, co + i, a);
+                    i += 1;
+                }
+            }
+            if (t == 3) {
+                while (i < n) {
+                    b = emon.Port.cellsAt(px, po + i);
+                    a = (emon.Port.bufAt(raw, pos + i) + ((a + b) / 2)) & 255;
+                    emon.Port.cellsSet(px, co + i, a);
+                    i += 1;
+                }
+            }
+            if (t == 4) {
+                c = emon.Port.cellsAt(px, (po + i) - 1);
+                while (i < n) {
+                    b = emon.Port.cellsAt(px, po + i);
+                    a = (emon.Port.bufAt(raw, pos + i) + Pdffilter.pfPaeth(a, b, c)) & 255;
+                    emon.Port.cellsSet(px, co + i, a);
+                    c = b;
+                    i += 1;
+                }
+            }
+        }
+        if ((bpp != 1) && (t == 1)) {
+            while (i < n) {
+                x = emon.Port.bufAt(raw, pos + i);
+                a = emon.Port.cellsAt(px, (co + i) - bpp);
+                emon.Port.cellsSet(px, co + i, (x + a) & 255);
+                i += 1;
+            }
+        }
+        if ((bpp != 1) && (t == 3)) {
+            while (i < n) {
+                x = emon.Port.bufAt(raw, pos + i);
+                a = emon.Port.cellsAt(px, (co + i) - bpp);
+                b = emon.Port.cellsAt(px, po + i);
+                emon.Port.cellsSet(px, co + i, (x + ((a + b) / 2)) & 255);
+                i += 1;
+            }
+        }
+        if ((bpp != 1) && (t == 4)) {
+            while (i < n) {
+                x = emon.Port.bufAt(raw, pos + i);
+                a = emon.Port.cellsAt(px, (co + i) - bpp);
+                b = emon.Port.cellsAt(px, po + i);
+                c = emon.Port.cellsAt(px, (po + i) - bpp);
+                emon.Port.cellsSet(px, co + i, (x + Pdffilter.pfPaeth(a, b, c)) & 255);
+                i += 1;
+            }
+        }
+        return 0;
+    }
+    public static int pgFill(emon.Port.Cells r, emon.Port.Buf raw, emon.Port.Cells rows, emon.Port.Bitmap dst) {
+        // Undo the predictor over `raw` a row at a time into `dst`, which must be (pr-w) by (pr-h) by (pr-ch), and `raw` the
+        // (pr-h) rows of a filter byte and (pr-w) * (pr-ch) bytes. `rows` is scratch (two rows of cells, made here). A damaged
+        // filter byte, a `raw` of another length or a Bitmap of another size is failed.
+        int w = emon.Port.cellsAt(r, Pngcheck.prW());
+        int h = emon.Port.cellsAt(r, Pngcheck.prH());
+        int ch = emon.Port.cellsAt(r, Pngcheck.prCh());
+        int n = w * ch;
+        int y = 0;
+        int pos = 0;
+        int t = 0;
+        int co = n;
+        int po = 0;
+        int tmp = 0;
+        if ((emon.Port.bitmapW(dst) != w) || ((emon.Port.bitmapH(dst) != h) || (emon.Port.bitmapChannels(dst) != ch))) {
+            return Imgcheck.icFailed();
+        }
+        if (emon.Port.bufLen(raw) != (h * (n + 1))) {
+            return Imgcheck.icFailed();
+        }
+        emon.Port.cellsDrop(rows, 0);
+        emon.Port.cellsGrow(rows, 2 * n, 0);
+        while (y < h) {
+            t = emon.Port.bufAt(raw, pos);
+            if (t > 4) {
+                emon.Port.cellsFree(rows);
+                return Imgcheck.icFailed();
+            }
+            pgRow(raw, pos + 1, rows, co, po, n, ch, t);
+            emon.Port.bitmapPutSpan(dst, y, 0, rows, co, n);
+            tmp = co;
+            co = po;
+            po = tmp;
+            pos += n + 1;
+            y += 1;
+        }
+        emon.Port.cellsFree(rows);
+        return Imgcheck.icOk();
+    }
+    public static int pgRefFill(emon.Port.Cells r, emon.Port.Cells out, emon.Port.Cells px, emon.Port.Bitmap dst) {
+        // THE ORACLE of `pg-fill` (D092, D396): the filtered bytes as a Cells (a cell a byte, what the first version inflated into),
+        // `pf-predict` (the PNG predictor of the whole page) into `px`, then every sample by `bitmap-set-u8`. A law holds `pg-fill`
+        // to it on the writer's images and on rows of every filter.
         int w = emon.Port.cellsAt(r, Pngcheck.prW());
         int h = emon.Port.cellsAt(r, Pngcheck.prH());
         int ch = emon.Port.cellsAt(r, Pngcheck.prCh());
@@ -32,21 +168,15 @@ public final class Pngread {
         int y = 0;
         int i = 0;
         if ((emon.Port.bitmapW(dst) != w) || ((emon.Port.bitmapH(dst) != h) || (emon.Port.bitmapChannels(dst) != ch))) {
-            emon.Port.cellsFree(out);
             return Imgcheck.icFailed();
         }
         emon.Port.cellsDrop(px, 0);
         if (Pdffilter.pfPredict(out, 0, emon.Port.cellsLen(out), px, 15, ch, 8, w) != 0) {
-            emon.Port.cellsFree(out);
-            emon.Port.cellsFree(px);
             return Imgcheck.icFailed();
         }
-        emon.Port.cellsFree(out);
         if (emon.Port.cellsLen(px) != (h * n)) {
-            emon.Port.cellsFree(px);
             return Imgcheck.icFailed();
         }
-        // A row is `n` bytes from x 0: the port checks the byte index, not each coordinate (port.rs), so channel `i` of x 0 is byte i.
         while (y < h) {
             i = 0;
             while (i < n) {
@@ -55,7 +185,6 @@ public final class Pngread {
             }
             y += 1;
         }
-        emon.Port.cellsFree(px);
         return Imgcheck.icOk();
     }
     public static int pgMsg(int s, StringBuilder out) {

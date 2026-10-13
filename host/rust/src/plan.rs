@@ -865,17 +865,18 @@ pub fn png_encode(b: &Bitmap) -> Vec<u8> {
 
 pub fn png_decode(p: &[u8]) -> Result<Bitmap, String> {
     use crate::emon::{pngcheck, pngread};
-    let (mut r, mut st, mut inflated, mut px) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    let (mut idat, mut clean) = (Buf::new(), Buf::new());
-    let s = pngread::pg_open(p, &mut r, &mut st, &mut inflated, &mut idat, &mut clean);
-    drop((st, idat, clean));
+    let (mut r, mut st, mut out, mut rows) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    let (mut idat, mut raw) = (Buf::new(), Buf::new());
+    let s = pngread::pg_open(p, &mut r, &mut st, &mut out, &mut idat, &mut raw);
+    drop((st, out, idat));
     if s != 0 {
         let mut msg = String::new();
         pngread::pg_msg(s, &mut msg);
         return Err(msg);
     }
     let bm = Bitmap::new(cells_at(&r, pngcheck::pr_w()), cells_at(&r, pngcheck::pr_h()), cells_at(&r, pngcheck::pr_ch()));
-    let s = pngread::pg_fill(&mut r, &mut inflated, &mut px, &bm);
+    let s = pngread::pg_fill(&mut r, &mut raw, &mut rows, &bm);
+    drop(raw);
     if s != 0 {
         let mut msg = String::new();
         pngread::pg_msg(s, &mut msg);

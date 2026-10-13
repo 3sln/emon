@@ -373,18 +373,30 @@ public static class Pngcheck {
             emon.Port.CellsSet(r, RLimit, Imgcheck.IcClamp(rawl));
             return Imgcheck.IcLimit();
         }
-        emon.Port.CellsDrop(@out, 0);
-        s = Inflate.IzZlib(emon.Port.BufBlob(idat), 0, emon.Port.BufLen(idat), @out, st);
-        if (s != 0) {
-            return Imgcheck.IcFailed();
-        }
-        if (((long) emon.Port.CellsLen(@out)) != rawl) {
-            return Imgcheck.IcFailed();
+        if (deep == 2) {
+            // deep 2 inflates into `clean`, a byte a byte, and keeps it for the caller (`emon.pngread`, D1220)
+            emon.Port.BufTruncate(clean, 0);
+            s = Inflate.IzZlibBuf(emon.Port.BufBlob(idat), 0, emon.Port.BufLen(idat), clean, st);
+            if (s != 0) {
+                return Imgcheck.IcFailed();
+            }
+            if (((long) emon.Port.BufLen(clean)) != rawl) {
+                return Imgcheck.IcFailed();
+            }
+        } else {
+            emon.Port.CellsDrop(@out, 0);
+            s = Inflate.IzZlib(emon.Port.BufBlob(idat), 0, emon.Port.BufLen(idat), @out, st);
+            if (s != 0) {
+                return Imgcheck.IcFailed();
+            }
+            if (((long) emon.Port.CellsLen(@out)) != rawl) {
+                return Imgcheck.IcFailed();
+            }
         }
         if (Inflate.IzConsumed(st) != emon.Port.BufLen(idat)) {
             return Imgcheck.IcFailed();
         }
-        // deep 2 keeps the inflated bytes in `out` for the caller (`emon.pngread`); deep 1 lets them go
+        // deep 1 lets the inflated bytes go
         if (deep == 1) {
             emon.Port.CellsFree(@out);
         }

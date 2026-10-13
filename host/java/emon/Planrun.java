@@ -684,12 +684,12 @@ public final class Planrun {
 
     /** Reads a transcript's bitmap: a PNG emon wrote (kin's `emon.pngread`, P10.11, D1180). @throws IllegalArgumentException with kin's sentence on a bad one */
     public static Port.Bitmap pngDecode(byte[] p) {
-        Port.Cells r = Port.newCells(), st = Port.newCells(), inflated = Port.newCells(), px = Port.newCells();
-        Port.Buf idat = Port.newBuf(), clean = Port.newBuf();
-        int s = Pngread.pgOpen(p, r, st, inflated, idat, clean);
+        Port.Cells r = Port.newCells(), st = Port.newCells(), out = Port.newCells(), rows = Port.newCells();
+        Port.Buf idat = Port.newBuf(), raw = Port.newBuf();
+        int s = Pngread.pgOpen(p, r, st, out, idat, raw);
         if (s == 0) {
             Port.Bitmap bm = Port.bitmapNew(Port.cellsAt(r, Pngcheck.prW()), Port.cellsAt(r, Pngcheck.prH()), Port.cellsAt(r, Pngcheck.prCh()));
-            s = Pngread.pgFill(r, inflated, px, bm);
+            s = Pngread.pgFill(r, raw, rows, bm);
             if (s == 0) {
                 return bm;
             }

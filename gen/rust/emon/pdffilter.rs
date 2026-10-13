@@ -489,7 +489,7 @@ pub fn pf_flate(src: &[u8], s: i32, e: i32, mut out: &mut crate::port::Cells, mu
     }
     return 8;
 }
-pub(crate) fn pf_paeth(a: i32, b: i32, c: i32) -> i32 {
+pub fn pf_paeth(a: i32, b: i32, c: i32) -> i32 {
     // PNG's Paeth predictor: whichever of left, above, upper-left is
     // closest to left + above - upper-left, ties to left then above.
     let p: i32 = (a + b) - c;

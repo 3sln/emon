@@ -83,7 +83,11 @@ fn test_every_row_of_the_zlib_corpus() {
     let src: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let bout: &mut crate::port::Buf = &mut crate::port::Buf::new();
     let n: i32 = crate::port::blob_len(f);
+    let mut k: i32 = 0;
+    let mut gotb: i32 = 0;
     let mut pos: i32 = 0;
     let mut line: i32 = 0;
     let mut rows: i32 = 0;
@@ -128,6 +132,23 @@ fn test_every_row_of_the_zlib_corpus() {
                 exact = 1;
             }
             crate::testport::assert_eq_at(it_compare(out, f, s4 + 1, e, exact), -1, "output", line);
+            // The Buf form (D1220) is held to the Cells one on the same row: status, consumed, every byte.
+            crate::port::buf_truncate(bout, 0);
+            if (kind == 122) || (kind == 90) {
+                gotb = iz_zlib_buf(&crate::testport::cells_blob(src)[..], 0, slen, bout, st2);
+            } else {
+                gotb = iz_raw_buf(&crate::testport::cells_blob(src)[..], 0, slen, bout, st2);
+            }
+            crate::testport::assert_eq_at(gotb, got, "buf status", line);
+            crate::testport::assert_eq_at(iz_consumed(st), iz_consumed(st2), "buf consumed", line);
+            crate::testport::assert_eq_at(crate::port::buf_len(bout), crate::port::cells_len(out), "buf length", line);
+            k = 0;
+            while k < crate::port::cells_len(out) {
+                if crate::port::buf_at(bout, k) != crate::port::cells_at(out, k) {
+                    crate::testport::assert_eq_at(crate::port::buf_at(bout, k), crate::port::cells_at(out, k), "buf byte", line);
+                }
+                k += 1;
+            }
         }
         pos = e + 1;
     }
@@ -297,4 +318,67 @@ fn test_a_code_that_is_not_in_the_table_keeps_its_error() {
     // stream ending sooner it is truncated, as it always was.
     it_check_raw(0, &crate::testport::hex_blob("0de00182244992244902128b9a4756cffeffbb77a0fdff030000")[..], iz_bad_code(), 25, "000102");
     it_check_raw(0, &crate::testport::hex_blob("0de00182244992244902128b9a4756cffeffbb77a0fdff03")[..], iz_truncated(), 24, "000102");
+}
+pub(crate) fn it_ref_grow(mut b: &mut crate::port::Buf, n: i32, v: i32) -> i32 {
+    // `buf-grow`'s oracle: n pushes.
+    let mut k: i32 = 0;
+    while k < n {
+        crate::port::buf_push(b, v);
+        k += 1;
+    }
+    return 0;
+}
+pub(crate) fn it_ref_copy_back(mut b: &mut crate::port::Buf, dist: i32, n: i32) -> i32 {
+    // `buf-copy-back`'s oracle: n pushes of the byte `dist` before the end, which a distance under n makes repeat.
+    let mut k: i32 = 0;
+    while k < n {
+        crate::port::buf_push(b, crate::port::buf_at(b, crate::port::buf_len(b) - dist));
+        k += 1;
+    }
+    return 0;
+}
+pub(crate) fn it_same_buf(emon_t: i32, a: &mut crate::port::Buf, b: &mut crate::port::Buf, msg: &str) -> i32 {
+    let mut i: i32 = 0;
+    crate::testport::assert_eq(crate::port::buf_len(a), crate::port::buf_len(b), msg);
+    while i < crate::port::buf_len(a) {
+        if crate::port::buf_at(a, i) != crate::port::buf_at(b, i) {
+            crate::testport::assert_eq(crate::port::buf_at(a, i), crate::port::buf_at(b, i), msg);
+        }
+        i += 1;
+    }
+    return 0;
+}
+#[test]
+fn test_buf_grow_and_copy_back_are_the_pushes() {
+    // Distance 1, a distance under the length (the pattern repeats), equal to it, past it, the whole buffer back, a length of 0, and a
+    // value past 255 for the fill (its low eight bits). The per-byte forms are the oracle.
+    let a: &mut crate::port::Buf = &mut crate::port::Buf::new();
+    let b: &mut crate::port::Buf = &mut crate::port::Buf::new();
+    let mut i: i32 = 0;
+    while i < 9 {
+        crate::port::buf_push(a, 200 + i);
+        crate::port::buf_push(b, 200 + i);
+        i += 1;
+    }
+    crate::port::buf_grow(a, 5, 511);
+    it_ref_grow(b, 5, 511);
+    it_same_buf(0, a, b, "grow");
+    crate::port::buf_copy_back(a, 1, 7);
+    it_ref_copy_back(b, 1, 7);
+    it_same_buf(0, a, b, "distance 1");
+    crate::port::buf_copy_back(a, 3, 10);
+    it_ref_copy_back(b, 3, 10);
+    it_same_buf(0, a, b, "distance 3, length 10");
+    crate::port::buf_copy_back(a, 4, 4);
+    it_ref_copy_back(b, 4, 4);
+    it_same_buf(0, a, b, "distance = length");
+    crate::port::buf_copy_back(a, 20, 5);
+    it_ref_copy_back(b, 20, 5);
+    it_same_buf(0, a, b, "distance past the length");
+    crate::port::buf_copy_back(a, crate::port::buf_len(a), 2);
+    it_ref_copy_back(b, crate::port::buf_len(b), 2);
+    it_same_buf(0, a, b, "the whole buffer back");
+    crate::port::buf_copy_back(a, 2, 0);
+    crate::port::buf_grow(a, 0, 7);
+    it_same_buf(0, a, b, "nothing");
 }

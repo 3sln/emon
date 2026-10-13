@@ -22,18 +22,18 @@ public static class Pngreadtest {
         // Image k, as built into `out`, read by the codec: the status is `want`, and when it reads, every sample is the writer's.
         emon.Port.Cells r = emon.Port.NewCells();
         emon.Port.Cells st = emon.Port.NewCells();
-        emon.Port.Cells inf = emon.Port.NewCells();
-        emon.Port.Cells px = emon.Port.NewCells();
+        emon.Port.Cells scratch = emon.Port.NewCells();
+        emon.Port.Cells rows = emon.Port.NewCells();
         emon.Port.Buf idat = emon.Port.NewBuf();
-        emon.Port.Buf clean = emon.Port.NewBuf();
-        int s = Pngread.PgOpen(emon.Port.BufBlob(@out), r, st, inf, idat, clean);
+        emon.Port.Buf inflated = emon.Port.NewBuf();
+        int s = Pngread.PgOpen(emon.Port.BufBlob(@out), r, st, scratch, idat, inflated);
         emon.Testport.AssertEq(s, want, msg);
         if (s == 0) {
             emon.Port.Bitmap b = emon.Port.BitmapNew(emon.Port.CellsAt(r, Pngcheck.PrW()), emon.Port.CellsAt(r, Pngcheck.PrH()), emon.Port.CellsAt(r, Pngcheck.PrCh()));
             emon.Testport.AssertEq(emon.Port.CellsAt(r, Pngcheck.PrW()), Pngprobe.PpSpec(k, 0), msg);
             emon.Testport.AssertEq(emon.Port.CellsAt(r, Pngcheck.PrH()), Pngprobe.PpSpec(k, 1), msg);
             emon.Testport.AssertEq(emon.Port.CellsAt(r, Pngcheck.PrCh()), Pngprobe.PpChannels(Pngprobe.PpSpec(k, 2)), msg);
-            emon.Testport.AssertEq(Pngread.PgFill(r, inf, px, b), 0, msg);
+            emon.Testport.AssertEq(Pngread.PgFill(r, inflated, rows, b), 0, msg);
             emon.Testport.AssertEq((emon.Port.BitmapW(b) * emon.Port.BitmapH(b)) * emon.Port.BitmapChannels(b), emon.Port.BufLen(raw), msg);
             emon.Testport.AssertEq(PgtFirstDifference(b, raw), -1, msg);
         }
@@ -100,10 +100,10 @@ public static class Pngreadtest {
         emon.Port.Buf raw = emon.Port.NewBuf();
         emon.Port.Cells r = emon.Port.NewCells();
         emon.Port.Cells st2 = emon.Port.NewCells();
-        emon.Port.Cells inf = emon.Port.NewCells();
-        emon.Port.Cells px = emon.Port.NewCells();
+        emon.Port.Cells scratch = emon.Port.NewCells();
+        emon.Port.Cells rows = emon.Port.NewCells();
         emon.Port.Buf idat = emon.Port.NewBuf();
-        emon.Port.Buf clean = emon.Port.NewBuf();
+        emon.Port.Buf inflated = emon.Port.NewBuf();
         emon.Port.Cells ws2 = emon.Port.NewCells();
         emon.Port.Cells pal2 = emon.Port.NewCells();
         emon.Port.Cells row2 = emon.Port.NewCells();
@@ -111,9 +111,9 @@ public static class Pngreadtest {
         emon.Port.Buf z2 = emon.Port.NewBuf();
         int i = 0;
         Pngprobe.PpBuild(k, ws, @out, z, raw, row, st, pal);
-        emon.Testport.AssertEq(Pngread.PgOpen(emon.Port.BufBlob(@out), r, st2, inf, idat, clean), 0, msg);
+        emon.Testport.AssertEq(Pngread.PgOpen(emon.Port.BufBlob(@out), r, st2, scratch, idat, inflated), 0, msg);
         emon.Port.Bitmap b = emon.Port.BitmapNew(emon.Port.CellsAt(r, Pngcheck.PrW()), emon.Port.CellsAt(r, Pngcheck.PrH()), emon.Port.CellsAt(r, Pngcheck.PrCh()));
-        emon.Testport.AssertEq(Pngread.PgFill(r, inf, px, b), 0, msg);
+        emon.Testport.AssertEq(Pngread.PgFill(r, inflated, rows, b), 0, msg);
         Pngread.PgEncode(b, ws2, out2, z2, pal2, row2);
         emon.Testport.AssertEq(emon.Port.BufLen(out2), emon.Port.BufLen(@out), msg);
         while (i < emon.Port.BufLen(@out)) {
@@ -128,5 +128,127 @@ public static class Pngreadtest {
         PgtRewrite(0, 0, "gray 1x1");
         PgtRewrite(0, 6, "RGB 3000x1");
         PgtRewrite(0, 7, "gray 1x3000");
+    }
+    internal static int PgtSameBytes(int emonT, emon.Port.Bitmap a, emon.Port.Bitmap b, string msg) {
+        // Every sample of `a` is the one of `b` (the two have the one size).
+        int rowb = emon.Port.BitmapW(a) * emon.Port.BitmapChannels(a);
+        int n = emon.Port.BitmapH(a) * rowb;
+        int i = 0;
+        emon.Testport.AssertEq(emon.Port.BitmapW(a), emon.Port.BitmapW(b), msg);
+        emon.Testport.AssertEq(emon.Port.BitmapH(a), emon.Port.BitmapH(b), msg);
+        emon.Testport.AssertEq(emon.Port.BitmapChannels(a), emon.Port.BitmapChannels(b), msg);
+        while (i < n) {
+            if (emon.Port.BitmapU8(a, 0, i / rowb, i % rowb) != emon.Port.BitmapU8(b, 0, i / rowb, i % rowb)) {
+                emon.Testport.AssertEq(emon.Port.BitmapU8(a, 0, i / rowb, i % rowb), emon.Port.BitmapU8(b, 0, i / rowb, i % rowb), msg);
+            }
+            i += 1;
+        }
+        return 0;
+    }
+    internal static int PgtSpan(int emonT, emon.Port.Bitmap a, emon.Port.Bitmap b, emon.Port.Cells src, int y, int off, int from, int n, string msg) {
+        // `bitmap-put-span` into `a`, the same bytes by `bitmap-set-u8` into `b`: the two bitmaps agree.
+        int k = 0;
+        emon.Testport.AssertEq(emon.Port.BitmapPutSpan(a, y, off, src, from, n), 0, msg);
+        while (k < n) {
+            emon.Port.BitmapSetU8(b, 0, y, off + k, emon.Port.CellsAt(src, from + k));
+            k += 1;
+        }
+        PgtSameBytes(emonT, a, b, msg);
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestASpanPutInOneCallIsTheSamplesPutOneByOne() {
+        // The cells are whole 32-bit values (negative, past 255): the LOW EIGHT BITS go in, as `bitmap-set-u8` keeps them. A whole row,
+        // a part of one, spans that cross into the next row, the first byte and the last of the buffer, and an empty span.
+        emon.Port.Cells src = emon.Port.NewCells();
+        emon.Port.Bitmap a = emon.Port.BitmapNew(7, 5, 3);
+        emon.Port.Bitmap b = emon.Port.BitmapNew(7, 5, 3);
+        int i = 0;
+        while (i < 100) {
+            emon.Port.CellsPush(src, Splitmix.SmLo(Splitmix.SmAt(4711, i)));
+            i += 1;
+        }
+        PgtSpan(0, a, b, src, 0, 0, 0, 21, "row 0");
+        PgtSpan(0, a, b, src, 2, 0, 21, 21, "row 2, from cell 21");
+        PgtSpan(0, a, b, src, 1, 5, 40, 9, "inside a row");
+        PgtSpan(0, a, b, src, 3, 18, 70, 3, "to the end of a row");
+        PgtSpan(0, a, b, src, 1, 15, 7, 30, "across two rows");
+        PgtSpan(0, a, b, src, 4, 20, 99, 1, "the last byte");
+        PgtSpan(0, a, b, src, 0, 0, 0, 0, "empty");
+        PgtSpan(0, a, b, src, 4, 21, 0, 0, "empty at the end");
+    }
+    internal static int PgtSweep(int emonT, int w, int h, int ch, int rot, string msg) {
+        // `w` by `h` by `ch` filtered rows of random bytes, the filter of row y being (y + rot) mod 5 (so every filter is the first row's
+        // and a later one's over the rotations), as a Buf for `pg-fill` and as a Cells for the oracle: the two Bitmaps agree.
+        int n = w * ch;
+        emon.Port.Buf raw = emon.Port.NewBuf();
+        emon.Port.Cells @out = emon.Port.NewCells();
+        emon.Port.Cells r = emon.Port.NewCells();
+        emon.Port.Cells rows = emon.Port.NewCells();
+        emon.Port.Cells px = emon.Port.NewCells();
+        emon.Port.Bitmap a = emon.Port.BitmapNew(w, h, ch);
+        emon.Port.Bitmap b = emon.Port.BitmapNew(w, h, ch);
+        int y = 0;
+        int i = 0;
+        int v = 0;
+        emon.Port.CellsGrow(r, 32, 0);
+        emon.Port.CellsSet(r, Pngcheck.PrW(), w);
+        emon.Port.CellsSet(r, Pngcheck.PrH(), h);
+        emon.Port.CellsSet(r, Pngcheck.PrCh(), ch);
+        while (y < h) {
+            v = (y + rot) % 5;
+            emon.Port.BufPush(raw, v);
+            emon.Port.CellsPush(@out, v);
+            i = 0;
+            while (i < n) {
+                v = Splitmix.SmLo(Splitmix.SmAt(9001, (y * n) + (i + (rot * 100003)))) & 255;
+                emon.Port.BufPush(raw, v);
+                emon.Port.CellsPush(@out, v);
+                i += 1;
+            }
+            y += 1;
+        }
+        emon.Testport.AssertEq(Pngread.PgFill(r, raw, rows, a), 0, msg);
+        emon.Testport.AssertEq(Pngread.PgRefFill(r, @out, px, b), 0, msg);
+        PgtSameBytes(emonT, a, b, msg);
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestThePredictorByRowsIsThePredictorOfThePage() {
+        // Gray and RGB, a pixel, a row, a column, a small page, five rotations of the filters over the rows: every byte.
+        int rot = 0;
+        while (rot < 5) {
+            PgtSweep(0, 1, 1, 1, rot, "gray 1x1");
+            PgtSweep(0, 1, 1, 3, rot, "RGB 1x1");
+            PgtSweep(0, 40, 1, 1, rot, "gray, one row");
+            PgtSweep(0, 1, 12, 1, rot, "gray, one column");
+            PgtSweep(0, 1, 12, 3, rot, "RGB, one column");
+            PgtSweep(0, 29, 11, 1, rot, "gray 29x11");
+            PgtSweep(0, 29, 11, 3, rot, "RGB 29x11");
+            PgtSweep(0, 2, 7, 3, rot, "RGB 2x7");
+            rot += 1;
+        }
+    }
+    [Xunit.Fact]
+    public static void TestAFilterBytePastFourIsRefused() {
+        // Row 1 carries filter 5: failed (1), and the Bitmap is not read past it.
+        emon.Port.Buf raw = emon.Port.NewBuf();
+        emon.Port.Cells r = emon.Port.NewCells();
+        emon.Port.Cells rows = emon.Port.NewCells();
+        emon.Port.Bitmap a = emon.Port.BitmapNew(2, 2, 1);
+        int i = 0;
+        emon.Port.CellsGrow(r, 32, 0);
+        emon.Port.CellsSet(r, Pngcheck.PrW(), 2);
+        emon.Port.CellsSet(r, Pngcheck.PrH(), 2);
+        emon.Port.CellsSet(r, Pngcheck.PrCh(), 1);
+        while (i < 6) {
+            emon.Port.BufPush(raw, 0);
+            i += 1;
+        }
+        emon.Testport.AssertEq(Pngread.PgFill(r, raw, rows, a), 0, "filters 0 and 0");
+        emon.Port.BufSet(raw, 3, 5);
+        emon.Testport.AssertEq(Pngread.PgFill(r, raw, rows, a), 1, "filter 5");
+        emon.Port.BufTruncate(raw, 5);
+        emon.Testport.AssertEq(Pngread.PgFill(r, raw, rows, a), 1, "a short last row");
     }
 }

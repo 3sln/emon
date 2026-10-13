@@ -491,7 +491,7 @@ public static class Pdffilter {
         }
         return 8;
     }
-    internal static int PfPaeth(int a, int b, int c) {
+    public static int PfPaeth(int a, int b, int c) {
         // PNG's Paeth predictor: whichever of left, above, upper-left is
         // closest to left + above - upper-left, ties to left then above.
         int p = (a + b) - c;

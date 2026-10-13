@@ -696,6 +696,10 @@ Mirroring nome's `kin/src/nome/{lang,test,targets,project}.cljc`:
    measurement (§12.3). P2.7 measured and adopted four (D092):
    `bitmap-histogram`, `bitmap-threshold-into`, `bitmap-integral`,
    `bitmap-next-nonzero`, with `cells-grow` on the `Cells` side. Host-linked.
+   `bitmap-put-span` (D1220) copies a row, or part of one, from a `Cells` into a
+   `Bitmap` in one call; the transcript reader (`emon.pngread`) puts each
+   unfiltered row there, and its per-sample `bitmap-set-u8` version stays as the
+   oracle of a law.
 4. **`defenum`** (candidate, P0 decides): a kind table — name, integer
    code, JSON spelling — generating the `nk-*` constants *and* the
    code→spelling emitter from one declaration, so a kind cannot be added to

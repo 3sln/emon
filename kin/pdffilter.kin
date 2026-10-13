@@ -323,7 +323,7 @@
 
 ;; ----------------------------------------------------------- predictors
 
-(defn ^I32 pf-paeth [^I32 a ^I32 b ^I32 c]
+(defn ^:pub ^I32 pf-paeth [^I32 a ^I32 b ^I32 c]
   (comment "PNG's Paeth predictor: whichever of left, above, upper-left is")
   (comment "closest to left + above - upper-left, ties to left then above.")
   (let [^I32 p (- (+ a b) c)

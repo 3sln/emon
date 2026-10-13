@@ -682,12 +682,12 @@ public static class Planrun {
 
     /// <summary>Reads a transcript's bitmap: a PNG emon wrote (kin's `emon.pngread`, P10.11, D1180). Throws an ArgumentException with kin's sentence on a bad one.</summary>
     public static Port.Bitmap PngDecode(byte[] p) {
-        Port.Cells r = Port.NewCells(), st = Port.NewCells(), inflated = Port.NewCells(), px = Port.NewCells();
-        Port.Buf idat = Port.NewBuf(), clean = Port.NewBuf();
-        int s = Pngread.PgOpen(p, r, st, inflated, idat, clean);
+        Port.Cells r = Port.NewCells(), st = Port.NewCells(), o = Port.NewCells(), rows = Port.NewCells();
+        Port.Buf idat = Port.NewBuf(), raw = Port.NewBuf();
+        int s = Pngread.PgOpen(p, r, st, o, idat, raw);
         if (s == 0) {
             Port.Bitmap bm = Port.BitmapNew(Port.CellsAt(r, Pngcheck.PrW()), Port.CellsAt(r, Pngcheck.PrH()), Port.CellsAt(r, Pngcheck.PrCh()));
-            s = Pngread.PgFill(r, inflated, px, bm);
+            s = Pngread.PgFill(r, raw, rows, bm);
             if (s == 0) {
                 return bm;
             }

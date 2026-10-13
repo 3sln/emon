@@ -181,6 +181,40 @@ public static class Port {
         return b.N;
     }
 
+    // @kin:link:form:buf-grow: {:template "emon.Port.BufGrow({0}, {1}, {2})" :arity 3}
+    // See the Rust half: appends n copies of the low eight bits of v.
+    public static void BufGrow(Buf b, int n, int v) {
+        if (n < 0) {
+            throw new System.IndexOutOfRangeException();
+        }
+        if (b.N + n > b.V.Length) {
+            System.Array.Resize(ref b.V, System.Math.Max(b.N + n, b.V.Length * 2));
+        }
+        System.Array.Fill(b.V, unchecked((byte) v), b.N, n);
+        b.N += n;
+    }
+
+    // @kin:link:form:buf-copy-back: {:template "emon.Port.BufCopyBack({0}, {1}, {2})" :arity 3}
+    // See the Rust half: appends n bytes, byte k the one dist before it (an overlapping match repeats).
+    public static void BufCopyBack(Buf b, int dist, int n) {
+        if (dist <= 0 || dist > b.N || n < 0) {
+            throw new System.IndexOutOfRangeException();
+        }
+        if (b.N + n > b.V.Length) {
+            System.Array.Resize(ref b.V, System.Math.Max(b.N + n, b.V.Length * 2));
+        }
+        byte[] v = b.V;
+        int at = b.N;
+        if (dist >= n) {
+            System.Buffer.BlockCopy(v, at - dist, v, at, n);
+        } else {
+            for (int k = 0; k < n; k++) {
+                v[at + k] = v[at - dist + k];
+            }
+        }
+        b.N = at + n;
+    }
+
     // @kin:link:form:buf-set: {:template "emon.Port.BufSet({0}, {1}, {2})" :arity 3}
     public static void BufSet(Buf b, int i, int v) {
         if (i < 0 || i >= b.N) {
@@ -776,6 +810,21 @@ public static class Port {
     }
 
     // ;; P6.3 bulk forms (D197): see the Rust half for the contracts.
+
+    // @kin:link:form:bitmap-put-span: {:template "emon.Port.BitmapPutSpan({0}, {1}, {2}, {3}, {4}, {5})" :arity 6}
+    // See the Rust half: the bytes y*Stride+off+k := the low eight bits of src[from+k], k in 0..n. Answers 0.
+    public static int BitmapPutSpan(Bitmap b, int y, int off, Cells src, int from, int n) {
+        int at = y * b.Stride + off;
+        if (n < 0 || at < 0 || at + n > b.D.Length || from < 0 || from + n > src.N) {
+            throw new System.IndexOutOfRangeException("bitmap-put-span");
+        }
+        var d = b.D;
+        var s = src.V;
+        for (int k = 0; k < n; k++) {
+            d[at + k] = (byte)s[from + k];
+        }
+        return 0;
+    }
 
     // @kin:link:form:bitmap-gray-into: {:template "emon.Port.BitmapGrayInto({0}, {1})" :arity 2}
     public static int BitmapGrayInto(Bitmap src, Bitmap dst) {

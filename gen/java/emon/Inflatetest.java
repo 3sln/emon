@@ -84,7 +84,11 @@ public final class Inflatetest {
         emon.Port.Cells src = emon.Port.newCells();
         emon.Port.Cells out = emon.Port.newCells();
         emon.Port.Cells st = emon.Port.newCells();
+        emon.Port.Cells st2 = emon.Port.newCells();
+        emon.Port.Buf bout = emon.Port.newBuf();
         int n = emon.Port.blobLen(f);
+        int k = 0;
+        int gotb = 0;
         int pos = 0;
         int line = 0;
         int rows = 0;
@@ -129,6 +133,23 @@ public final class Inflatetest {
                     exact = 1;
                 }
                 emon.Testport.assertEqAt(itCompare(out, f, s4 + 1, e, exact), -1, "output", line);
+                // The Buf form (D1220) is held to the Cells one on the same row: status, consumed, every byte.
+                emon.Port.bufTruncate(bout, 0);
+                if ((kind == 122) || (kind == 90)) {
+                    gotb = Inflate.izZlibBuf(emon.Testport.cellsBlob(src), 0, slen, bout, st2);
+                } else {
+                    gotb = Inflate.izRawBuf(emon.Testport.cellsBlob(src), 0, slen, bout, st2);
+                }
+                emon.Testport.assertEqAt(gotb, got, "buf status", line);
+                emon.Testport.assertEqAt(Inflate.izConsumed(st), Inflate.izConsumed(st2), "buf consumed", line);
+                emon.Testport.assertEqAt(emon.Port.bufLen(bout), emon.Port.cellsLen(out), "buf length", line);
+                k = 0;
+                while (k < emon.Port.cellsLen(out)) {
+                    if (emon.Port.bufAt(bout, k) != emon.Port.cellsAt(out, k)) {
+                        emon.Testport.assertEqAt(emon.Port.bufAt(bout, k), emon.Port.cellsAt(out, k), "buf byte", line);
+                    }
+                    k += 1;
+                }
             }
             pos = e + 1;
         }
@@ -286,5 +307,67 @@ public final class Inflatetest {
         // stream ending sooner it is truncated, as it always was.
         itCheckRaw(0, emon.Testport.hexBlob("0de00182244992244902128b9a4756cffeffbb77a0fdff030000"), Inflate.izBadCode(), 25, "000102");
         itCheckRaw(0, emon.Testport.hexBlob("0de00182244992244902128b9a4756cffeffbb77a0fdff03"), Inflate.izTruncated(), 24, "000102");
+    }
+    public static int itRefGrow(emon.Port.Buf b, int n, int v) {
+        // `buf-grow`'s oracle: n pushes.
+        int k = 0;
+        while (k < n) {
+            emon.Port.bufPush(b, v);
+            k += 1;
+        }
+        return 0;
+    }
+    public static int itRefCopyBack(emon.Port.Buf b, int dist, int n) {
+        // `buf-copy-back`'s oracle: n pushes of the byte `dist` before the end, which a distance under n makes repeat.
+        int k = 0;
+        while (k < n) {
+            emon.Port.bufPush(b, emon.Port.bufAt(b, emon.Port.bufLen(b) - dist));
+            k += 1;
+        }
+        return 0;
+    }
+    public static int itSameBuf(int emonT, emon.Port.Buf a, emon.Port.Buf b, String msg) {
+        int i = 0;
+        emon.Testport.assertEq(emon.Port.bufLen(a), emon.Port.bufLen(b), msg);
+        while (i < emon.Port.bufLen(a)) {
+            if (emon.Port.bufAt(a, i) != emon.Port.bufAt(b, i)) {
+                emon.Testport.assertEq(emon.Port.bufAt(a, i), emon.Port.bufAt(b, i), msg);
+            }
+            i += 1;
+        }
+        return 0;
+    }
+    public static void testBufGrowAndCopyBackAreThePushes() {
+        // Distance 1, a distance under the length (the pattern repeats), equal to it, past it, the whole buffer back, a length of 0, and a
+        // value past 255 for the fill (its low eight bits). The per-byte forms are the oracle.
+        emon.Port.Buf a = emon.Port.newBuf();
+        emon.Port.Buf b = emon.Port.newBuf();
+        int i = 0;
+        while (i < 9) {
+            emon.Port.bufPush(a, 200 + i);
+            emon.Port.bufPush(b, 200 + i);
+            i += 1;
+        }
+        emon.Port.bufGrow(a, 5, 511);
+        itRefGrow(b, 5, 511);
+        itSameBuf(0, a, b, "grow");
+        emon.Port.bufCopyBack(a, 1, 7);
+        itRefCopyBack(b, 1, 7);
+        itSameBuf(0, a, b, "distance 1");
+        emon.Port.bufCopyBack(a, 3, 10);
+        itRefCopyBack(b, 3, 10);
+        itSameBuf(0, a, b, "distance 3, length 10");
+        emon.Port.bufCopyBack(a, 4, 4);
+        itRefCopyBack(b, 4, 4);
+        itSameBuf(0, a, b, "distance = length");
+        emon.Port.bufCopyBack(a, 20, 5);
+        itRefCopyBack(b, 20, 5);
+        itSameBuf(0, a, b, "distance past the length");
+        emon.Port.bufCopyBack(a, emon.Port.bufLen(a), 2);
+        itRefCopyBack(b, emon.Port.bufLen(b), 2);
+        itSameBuf(0, a, b, "the whole buffer back");
+        emon.Port.bufCopyBack(a, 2, 0);
+        emon.Port.bufGrow(a, 0, 7);
+        itSameBuf(0, a, b, "nothing");
     }
 }

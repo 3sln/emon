@@ -12,13 +12,13 @@
 ;; four targets also agree about the row parser. A failure names the LINE of
 ;; the file (1-based) and the field that differed.
 (ns emon.inflatetest
-  (:require [emon.lang :refer [I32 Blob Cells Text emit-ascii]]
+  (:require [emon.lang :refer [I32 Blob Cells Buf Text emit-ascii]]
             [emon.test :refer [deftest assert-eq assert-eq-at assert-that
-                               assert-cells-hex assert-text hex-blob new-cells
+                               assert-cells-hex assert-text hex-blob new-cells new-buf
                                new-text test-file cells-blob Str TestT test-t]]
             [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-push
-                               cells-drop text-i32]]
-            [emon.inflate :refer [iz-zlib iz-raw iz-consumed iz-status-emit-name
+                               cells-drop text-i32 buf-len buf-at buf-truncate buf-push buf-grow buf-copy-back]]
+            [emon.inflate :refer [iz-zlib iz-raw iz-zlib-buf iz-raw-buf iz-consumed iz-status-emit-name
                                   iz-ok iz-truncated iz-bad-header iz-bad-checksum
                                   iz-bad-distance iz-bad-block-type iz-bad-code]]
             [kin.lang :refer [defn return let set while if comment do
@@ -92,7 +92,11 @@
         ^Cells src (new-cells)
         ^Cells out (new-cells)
         ^Cells st (new-cells)
+        ^Cells st2 (new-cells)
+        ^Buf bout (new-buf)
         ^I32 n (blob-len f)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 gotb 0
         ^:mut ^I32 pos 0
         ^:mut ^I32 line 0
         ^:mut ^I32 rows 0
@@ -132,7 +136,20 @@
                 (set exact 0)
                 (if (or (== kind 90) (== kind 82)) (set exact 1))
                 (assert-eq-at (it-compare out f (+ s4 1) e exact)
-                              -1 "output" line)))
+                              -1 "output" line)
+                (comment "The Buf form (D1220) is held to the Cells one on the same row: status, consumed, every byte.")
+                (buf-truncate bout 0)
+                (if (or (== kind 122) (== kind 90))
+                  (set gotb (iz-zlib-buf (cells-blob src) 0 slen bout st2))
+                  (set gotb (iz-raw-buf (cells-blob src) 0 slen bout st2)))
+                (assert-eq-at gotb got "buf status" line)
+                (assert-eq-at (iz-consumed st) (iz-consumed st2) "buf consumed" line)
+                (assert-eq-at (buf-len bout) (cells-len out) "buf length" line)
+                (set k 0)
+                (while (< k (cells-len out))
+                  (do (if (!= (buf-at bout k) (cells-at out k))
+                        (assert-eq-at (buf-at bout k) (cells-at out k) "buf byte" line))
+                      (set k (+ k 1))))))
           (set pos (+ e 1))))
     (assert-eq rows 346 "the corpus has this many rows")))
 
@@ -313,3 +330,62 @@
   (it-check-raw (test-t)
                 (hex-blob "0de00182244992244902128b9a4756cffeffbb77a0fdff03")
                 (iz-truncated) 24 "000102"))
+
+;; ------------------------------------------- the bulk forms of the Buf (D1220)
+
+(defn ^I32 it-ref-grow [^:mut ^Buf b ^I32 n ^I32 v]
+  (comment "`buf-grow`'s oracle: n pushes.")
+  (let [^:mut ^I32 k 0]
+    (while (< k n)
+      (do (buf-push b v)
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^I32 it-ref-copy-back [^:mut ^Buf b ^I32 dist ^I32 n]
+  (comment "`buf-copy-back`'s oracle: n pushes of the byte `dist` before the end, which a distance under n makes repeat.")
+  (let [^:mut ^I32 k 0]
+    (while (< k n)
+      (do (buf-push b (buf-at b (- (buf-len b) dist)))
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^I32 it-same-buf [^TestT emon-t ^Buf a ^Buf b ^Str msg]
+  (let [^:mut ^I32 i 0]
+    (assert-eq (buf-len a) (buf-len b) msg)
+    (while (< i (buf-len a))
+      (do (if (!= (buf-at a i) (buf-at b i))
+            (assert-eq (buf-at a i) (buf-at b i) msg))
+          (set i (+ i 1))))
+    (return 0)))
+
+(deftest test-buf-grow-and-copy-back-are-the-pushes
+  (comment "Distance 1, a distance under the length (the pattern repeats), equal to it, past it, the whole buffer back, a length of 0, and a")
+  (comment "value past 255 for the fill (its low eight bits). The per-byte forms are the oracle.")
+  (let [^Buf a (new-buf)
+        ^Buf b (new-buf)
+        ^:mut ^I32 i 0]
+    (while (< i 9)
+      (do (buf-push a (+ 200 i))
+          (buf-push b (+ 200 i))
+          (set i (+ i 1))))
+    (buf-grow a 5 511)
+    (it-ref-grow b 5 511)
+    (it-same-buf (test-t) a b "grow")
+    (buf-copy-back a 1 7)
+    (it-ref-copy-back b 1 7)
+    (it-same-buf (test-t) a b "distance 1")
+    (buf-copy-back a 3 10)
+    (it-ref-copy-back b 3 10)
+    (it-same-buf (test-t) a b "distance 3, length 10")
+    (buf-copy-back a 4 4)
+    (it-ref-copy-back b 4 4)
+    (it-same-buf (test-t) a b "distance = length")
+    (buf-copy-back a 20 5)
+    (it-ref-copy-back b 20 5)
+    (it-same-buf (test-t) a b "distance past the length")
+    (buf-copy-back a (buf-len a) 2)
+    (it-ref-copy-back b (buf-len b) 2)
+    (it-same-buf (test-t) a b "the whole buffer back")
+    (buf-copy-back a 2 0)
+    (buf-grow a 0 7)
+    (it-same-buf (test-t) a b "nothing")))

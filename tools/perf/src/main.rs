@@ -229,16 +229,29 @@ fn bet_png_read(cfg: &Cfg, set: &Inputs) {
 /// What `host/rust/src/plan.rs`'s `png_decode` does since P10.11: kin's `emon.pngread` (the validator, the inflate, the predictor, the pixels into
 /// a Bitmap), with the buffers made as the host makes them.
 fn kin_transcript_decode(p: &[u8]) -> Bitmap {
-    let (mut r, mut st, mut inflated, mut px) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    let (mut idat, mut clean) = (Buf::new(), Buf::new());
-    assert_eq!(emon::pngread::pg_open(p, &mut r, &mut st, &mut inflated, &mut idat, &mut clean), 0);
+    let (mut r, mut st, mut out, mut rows) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    let (mut idat, mut raw) = (Buf::new(), Buf::new());
+    assert_eq!(emon::pngread::pg_open(p, &mut r, &mut st, &mut out, &mut idat, &mut raw), 0);
     let bm = Bitmap::new(port::cells_at(&r, emon::pngcheck::pr_w()), port::cells_at(&r, emon::pngcheck::pr_h()), port::cells_at(&r, emon::pngcheck::pr_ch()));
-    assert_eq!(emon::pngread::pg_fill(&mut r, &mut inflated, &mut px, &bm), 0);
+    assert_eq!(emon::pngread::pg_fill(&mut r, &mut raw, &mut rows, &bm), 0);
     bm
 }
 
+/// The bench page as RGB (a faint blue tint on the paper): 2481x3508x3, 26 MB of pixels, the size of a 300-dpi letter page (D1220).
+fn letter_rgb(set: &Inputs) -> Vec<u8> {
+    let mut v = Vec::with_capacity(set.page.len() * 3);
+    for &g in &set.page {
+        v.extend_from_slice(&[g, g.saturating_sub(2), g.saturating_add(4).min(255)]);
+    }
+    v
+}
+
 fn bet_png_transcript(cfg: &Cfg, set: &Inputs) {
-    let imgs: Vec<(&str, &Vec<u8>, usize, usize, usize)> = vec![("page-gray", &set.page, set.pw, set.ph, 1), ("photo-rgb-1200x800", &set.photo, set.photo_w, set.photo_h, 3)];
+    let letter = if cfg.quick { Vec::new() } else { letter_rgb(set) };
+    let mut imgs: Vec<(&str, &Vec<u8>, usize, usize, usize)> = vec![("page-gray", &set.page, set.pw, set.ph, 1), ("photo-rgb-1200x800", &set.photo, set.photo_w, set.photo_h, 3)];
+    if !cfg.quick {
+        imgs.push(("letter-rgb-26mb", &letter, set.pw, set.ph, 3));
+    }
     for (name, px, w, h, ch) in imgs {
         let (mut ws, mut out, mut z, mut row, mut pal) = (Cells::new(), Buf::new(), Buf::new(), Cells::new(), Cells::new());
         emon::pngprobe::pp_page(&mut ws, &mut out, &mut z, px, w as i32, h as i32, ch as i32, 0, &mut row, &mut pal);
@@ -444,7 +457,7 @@ fn main() {
     let a: Vec<String> = std::env::args().collect();
     let mut cfg = Cfg { reps: 7, only: None, page: None, quick: false };
     let mut i = 1;
-    while i < a.len() {
+    while i < a.len() && !a[1].starts_with("--png-m") {
         match a[i].as_str() {
             "--reps" => { cfg.reps = a[i + 1].parse().unwrap(); i += 1; }
             "--only" => { cfg.only = Some(a[i + 1].split(',').map(|s| s.to_string()).collect()); i += 1; }
@@ -453,6 +466,22 @@ fn main() {
             x => { eprintln!("unknown argument {}", x); std::process::exit(2); }
         }
         i += 1;
+    }
+    // `--png-mk OUT`: write the bet's 26 MB letter page (RGB) as a canonical PNG; `--png-mem kin|legacy FILE`: decode FILE once and print
+    // its size. Both are for measuring a decode's peak memory from outside (`/usr/bin/time -l`), which a timing loop cannot (D1220).
+    if a.len() > 2 && a[1] == "--png-mk" {
+        let set = Inputs::build(&None, false);
+        let rgb = letter_rgb(&set);
+        let (mut ws, mut out, mut z, mut row, mut pal) = (Cells::new(), Buf::new(), Buf::new(), Cells::new(), Cells::new());
+        emon::pngprobe::pp_page(&mut ws, &mut out, &mut z, &rgb, set.pw as i32, set.ph as i32, 3, 0, &mut row, &mut pal);
+        std::fs::write(&a[2], &out.0).unwrap();
+        return;
+    }
+    if a.len() > 3 && a[1] == "--png-mem" {
+        let file = std::fs::read(&a[3]).unwrap();
+        let bm = if a[2] == "kin" { kin_transcript_decode(&file) } else { refs::legacy::png_decode(&file).unwrap() };
+        println!("{}", bm.width() as usize * bm.height() as usize * bm.channels() as usize);
+        return;
     }
     let set = Inputs::build(&cfg.page, cfg.quick);
     println!("{{\"inputs\":{{\"page\":\"{}\",\"page_w\":{},\"page_h\":{},\"page_fnv\":\"{:016x}\",\"content_fnv\":\"{:016x}\",\"binary_fnv\":\"{:016x}\",\"photo_fnv\":\"{:016x}\"}}}}",

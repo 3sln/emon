@@ -21,14 +21,14 @@ func Encode(b *port.Bitmap) []byte {
 
 // Decode reads a transcript's bitmap: a PNG emon wrote (8-bit gray or RGB).
 func Decode(p []byte) (*port.Bitmap, error) {
-	r, st, inflated, px := port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()
-	idat, clean := port.NewBuf(), port.NewBuf()
-	s := pngread.PgOpen(p, r, st, inflated, idat, clean)
+	r, st, out, rows := port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()
+	idat, raw := port.NewBuf(), port.NewBuf()
+	s := pngread.PgOpen(p, r, st, out, idat, raw)
 	if s != 0 {
 		return nil, errors.New(msg(s))
 	}
 	bm := port.BitmapNew(port.CellsAt(r, pngcheck.PrW()), port.CellsAt(r, pngcheck.PrH()), port.CellsAt(r, pngcheck.PrCh()))
-	if s = pngread.PgFill(r, inflated, px, bm); s != 0 {
+	if s = pngread.PgFill(r, raw, rows, bm); s != 0 {
 		return nil, errors.New(msg(s))
 	}
 	return bm, nil

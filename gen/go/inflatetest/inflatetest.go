@@ -95,7 +95,11 @@ func TestEveryRowOfTheZlibCorpus(emonT *testing.T) {
 	var src *port.Cells = port.NewCells()
 	var out *port.Cells = port.NewCells()
 	var st *port.Cells = port.NewCells()
+	var st2 *port.Cells = port.NewCells()
+	var bout *port.Buf = port.NewBuf()
 	var n int32 = port.BlobLen(f)
+	var k int32 = 0
+	var gotb int32 = 0
 	var pos int32 = 0
 	var line int32 = 0
 	var rows int32 = 0
@@ -140,6 +144,23 @@ func TestEveryRowOfTheZlibCorpus(emonT *testing.T) {
 				exact = 1
 			}
 			port.AssertEqAt(emonT, itCompare(out, f, s4+1, e, exact), -1, "output", line)
+			// The Buf form (D1220) is held to the Cells one on the same row: status, consumed, every byte.
+			port.BufTruncate(bout, 0)
+			if (kind == 122) || (kind == 90) {
+				gotb = inflate.IzZlibBuf(port.CellsBlob(src), 0, slen, bout, st2)
+			} else {
+				gotb = inflate.IzRawBuf(port.CellsBlob(src), 0, slen, bout, st2)
+			}
+			port.AssertEqAt(emonT, gotb, got, "buf status", line)
+			port.AssertEqAt(emonT, inflate.IzConsumed(st), inflate.IzConsumed(st2), "buf consumed", line)
+			port.AssertEqAt(emonT, port.BufLen(bout), port.CellsLen(out), "buf length", line)
+			k = 0
+			for k < port.CellsLen(out) {
+				if port.BufAt(bout, k) != port.CellsAt(out, k) {
+					port.AssertEqAt(emonT, port.BufAt(bout, k), port.CellsAt(out, k), "buf byte", line)
+				}
+				k += 1
+			}
 		}
 		pos = e + 1
 	}
@@ -312,4 +333,70 @@ func TestACodeThatIsNotInTheTableKeepsItsError(emonT *testing.T) {
 	// stream ending sooner it is truncated, as it always was.
 	itCheckRaw(emonT, port.HexBlob("0de00182244992244902128b9a4756cffeffbb77a0fdff030000"), inflate.IzBadCode(), 25, "000102")
 	itCheckRaw(emonT, port.HexBlob("0de00182244992244902128b9a4756cffeffbb77a0fdff03"), inflate.IzTruncated(), 24, "000102")
+}
+
+func itRefGrow(b *port.Buf, n int32, v int32) int32 {
+	// `buf-grow`'s oracle: n pushes.
+	var k int32 = 0
+	for k < n {
+		port.BufPush(b, v)
+		k += 1
+	}
+	return 0
+}
+
+func itRefCopyBack(b *port.Buf, dist int32, n int32) int32 {
+	// `buf-copy-back`'s oracle: n pushes of the byte `dist` before the end, which a distance under n makes repeat.
+	var k int32 = 0
+	for k < n {
+		port.BufPush(b, port.BufAt(b, port.BufLen(b)-dist))
+		k += 1
+	}
+	return 0
+}
+
+func itSameBuf(emonT *testing.T, a *port.Buf, b *port.Buf, msg string) int32 {
+	var i int32 = 0
+	port.AssertEq(emonT, port.BufLen(a), port.BufLen(b), msg)
+	for i < port.BufLen(a) {
+		if port.BufAt(a, i) != port.BufAt(b, i) {
+			port.AssertEq(emonT, port.BufAt(a, i), port.BufAt(b, i), msg)
+		}
+		i += 1
+	}
+	return 0
+}
+
+func TestBufGrowAndCopyBackAreThePushes(emonT *testing.T) {
+	// Distance 1, a distance under the length (the pattern repeats), equal to it, past it, the whole buffer back, a length of 0, and a
+	// value past 255 for the fill (its low eight bits). The per-byte forms are the oracle.
+	var a *port.Buf = port.NewBuf()
+	var b *port.Buf = port.NewBuf()
+	var i int32 = 0
+	for i < 9 {
+		port.BufPush(a, 200+i)
+		port.BufPush(b, 200+i)
+		i += 1
+	}
+	port.BufGrow(a, 5, 511)
+	itRefGrow(b, 5, 511)
+	itSameBuf(emonT, a, b, "grow")
+	port.BufCopyBack(a, 1, 7)
+	itRefCopyBack(b, 1, 7)
+	itSameBuf(emonT, a, b, "distance 1")
+	port.BufCopyBack(a, 3, 10)
+	itRefCopyBack(b, 3, 10)
+	itSameBuf(emonT, a, b, "distance 3, length 10")
+	port.BufCopyBack(a, 4, 4)
+	itRefCopyBack(b, 4, 4)
+	itSameBuf(emonT, a, b, "distance = length")
+	port.BufCopyBack(a, 20, 5)
+	itRefCopyBack(b, 20, 5)
+	itSameBuf(emonT, a, b, "distance past the length")
+	port.BufCopyBack(a, port.BufLen(a), 2)
+	itRefCopyBack(b, port.BufLen(b), 2)
+	itSameBuf(emonT, a, b, "the whole buffer back")
+	port.BufCopyBack(a, 2, 0)
+	port.BufGrow(a, 0, 7)
+	itSameBuf(emonT, a, b, "nothing")
 }

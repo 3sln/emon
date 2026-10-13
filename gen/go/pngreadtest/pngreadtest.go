@@ -8,6 +8,7 @@ import (
 	"emon/pngprobe"
 	"emon/pngread"
 	"emon/port"
+	"emon/splitmix"
 	"testing"
 )
 
@@ -29,18 +30,18 @@ func pgtRead(emonT *testing.T, k int32, out *port.Buf, raw *port.Buf, want int32
 	// Image k, as built into `out`, read by the codec: the status is `want`, and when it reads, every sample is the writer's.
 	var r *port.Cells = port.NewCells()
 	var st *port.Cells = port.NewCells()
-	var inf *port.Cells = port.NewCells()
-	var px *port.Cells = port.NewCells()
+	var scratch *port.Cells = port.NewCells()
+	var rows *port.Cells = port.NewCells()
 	var idat *port.Buf = port.NewBuf()
-	var clean *port.Buf = port.NewBuf()
-	var s int32 = pngread.PgOpen(port.BufBlob(out), r, st, inf, idat, clean)
+	var inflated *port.Buf = port.NewBuf()
+	var s int32 = pngread.PgOpen(port.BufBlob(out), r, st, scratch, idat, inflated)
 	port.AssertEq(emonT, s, want, msg)
 	if s == 0 {
 		var b *port.Bitmap = port.BitmapNew(port.CellsAt(r, pngcheck.PrW()), port.CellsAt(r, pngcheck.PrH()), port.CellsAt(r, pngcheck.PrCh()))
 		port.AssertEq(emonT, port.CellsAt(r, pngcheck.PrW()), pngprobe.PpSpec(k, 0), msg)
 		port.AssertEq(emonT, port.CellsAt(r, pngcheck.PrH()), pngprobe.PpSpec(k, 1), msg)
 		port.AssertEq(emonT, port.CellsAt(r, pngcheck.PrCh()), pngprobe.PpChannels(pngprobe.PpSpec(k, 2)), msg)
-		port.AssertEq(emonT, pngread.PgFill(r, inf, px, b), 0, msg)
+		port.AssertEq(emonT, pngread.PgFill(r, inflated, rows, b), 0, msg)
 		port.AssertEq(emonT, (port.BitmapW(b)*port.BitmapH(b))*port.BitmapChannels(b), port.BufLen(raw), msg)
 		port.AssertEq(emonT, pgtFirstDifference(b, raw), -1, msg)
 	}
@@ -109,10 +110,10 @@ func pgtRewrite(emonT *testing.T, k int32, msg string) int32 {
 	var raw *port.Buf = port.NewBuf()
 	var r *port.Cells = port.NewCells()
 	var st2 *port.Cells = port.NewCells()
-	var inf *port.Cells = port.NewCells()
-	var px *port.Cells = port.NewCells()
+	var scratch *port.Cells = port.NewCells()
+	var rows *port.Cells = port.NewCells()
 	var idat *port.Buf = port.NewBuf()
-	var clean *port.Buf = port.NewBuf()
+	var inflated *port.Buf = port.NewBuf()
 	var ws2 *port.Cells = port.NewCells()
 	var pal2 *port.Cells = port.NewCells()
 	var row2 *port.Cells = port.NewCells()
@@ -120,9 +121,9 @@ func pgtRewrite(emonT *testing.T, k int32, msg string) int32 {
 	var z2 *port.Buf = port.NewBuf()
 	var i int32 = 0
 	pngprobe.PpBuild(k, ws, out, z, raw, row, st, pal)
-	port.AssertEq(emonT, pngread.PgOpen(port.BufBlob(out), r, st2, inf, idat, clean), 0, msg)
+	port.AssertEq(emonT, pngread.PgOpen(port.BufBlob(out), r, st2, scratch, idat, inflated), 0, msg)
 	var b *port.Bitmap = port.BitmapNew(port.CellsAt(r, pngcheck.PrW()), port.CellsAt(r, pngcheck.PrH()), port.CellsAt(r, pngcheck.PrCh()))
-	port.AssertEq(emonT, pngread.PgFill(r, inf, px, b), 0, msg)
+	port.AssertEq(emonT, pngread.PgFill(r, inflated, rows, b), 0, msg)
 	pngread.PgEncode(b, ws2, out2, z2, pal2, row2)
 	port.AssertEq(emonT, port.BufLen(out2), port.BufLen(out), msg)
 	for i < port.BufLen(out) {
@@ -137,4 +138,129 @@ func TestWhatTheCodecReadsItWritesAgain(emonT *testing.T) {
 	pgtRewrite(emonT, 0, "gray 1x1")
 	pgtRewrite(emonT, 6, "RGB 3000x1")
 	pgtRewrite(emonT, 7, "gray 1x3000")
+}
+
+func pgtSameBytes(emonT *testing.T, a *port.Bitmap, b *port.Bitmap, msg string) int32 {
+	// Every sample of `a` is the one of `b` (the two have the one size).
+	var rowb int32 = port.BitmapW(a) * port.BitmapChannels(a)
+	var n int32 = port.BitmapH(a) * rowb
+	var i int32 = 0
+	port.AssertEq(emonT, port.BitmapW(a), port.BitmapW(b), msg)
+	port.AssertEq(emonT, port.BitmapH(a), port.BitmapH(b), msg)
+	port.AssertEq(emonT, port.BitmapChannels(a), port.BitmapChannels(b), msg)
+	for i < n {
+		if port.BitmapU8(a, 0, i/rowb, i%rowb) != port.BitmapU8(b, 0, i/rowb, i%rowb) {
+			port.AssertEq(emonT, port.BitmapU8(a, 0, i/rowb, i%rowb), port.BitmapU8(b, 0, i/rowb, i%rowb), msg)
+		}
+		i += 1
+	}
+	return 0
+}
+
+func pgtSpan(emonT *testing.T, a *port.Bitmap, b *port.Bitmap, src *port.Cells, y int32, off int32, from int32, n int32, msg string) int32 {
+	// `bitmap-put-span` into `a`, the same bytes by `bitmap-set-u8` into `b`: the two bitmaps agree.
+	var k int32 = 0
+	port.AssertEq(emonT, port.BitmapPutSpan(a, y, off, src, from, n), 0, msg)
+	for k < n {
+		port.BitmapSetU8(b, 0, y, off+k, port.CellsAt(src, from+k))
+		k += 1
+	}
+	pgtSameBytes(emonT, a, b, msg)
+	return 0
+}
+
+func TestASpanPutInOneCallIsTheSamplesPutOneByOne(emonT *testing.T) {
+	// The cells are whole 32-bit values (negative, past 255): the LOW EIGHT BITS go in, as `bitmap-set-u8` keeps them. A whole row,
+	// a part of one, spans that cross into the next row, the first byte and the last of the buffer, and an empty span.
+	var src *port.Cells = port.NewCells()
+	var a *port.Bitmap = port.BitmapNew(7, 5, 3)
+	var b *port.Bitmap = port.BitmapNew(7, 5, 3)
+	var i int32 = 0
+	for i < 100 {
+		port.CellsPush(src, splitmix.SmLo(splitmix.SmAt(4711, i)))
+		i += 1
+	}
+	pgtSpan(emonT, a, b, src, 0, 0, 0, 21, "row 0")
+	pgtSpan(emonT, a, b, src, 2, 0, 21, 21, "row 2, from cell 21")
+	pgtSpan(emonT, a, b, src, 1, 5, 40, 9, "inside a row")
+	pgtSpan(emonT, a, b, src, 3, 18, 70, 3, "to the end of a row")
+	pgtSpan(emonT, a, b, src, 1, 15, 7, 30, "across two rows")
+	pgtSpan(emonT, a, b, src, 4, 20, 99, 1, "the last byte")
+	pgtSpan(emonT, a, b, src, 0, 0, 0, 0, "empty")
+	pgtSpan(emonT, a, b, src, 4, 21, 0, 0, "empty at the end")
+}
+
+func pgtSweep(emonT *testing.T, w int32, h int32, ch int32, rot int32, msg string) int32 {
+	// `w` by `h` by `ch` filtered rows of random bytes, the filter of row y being (y + rot) mod 5 (so every filter is the first row's
+	// and a later one's over the rotations), as a Buf for `pg-fill` and as a Cells for the oracle: the two Bitmaps agree.
+	var n int32 = w * ch
+	var raw *port.Buf = port.NewBuf()
+	var out *port.Cells = port.NewCells()
+	var r *port.Cells = port.NewCells()
+	var rows *port.Cells = port.NewCells()
+	var px *port.Cells = port.NewCells()
+	var a *port.Bitmap = port.BitmapNew(w, h, ch)
+	var b *port.Bitmap = port.BitmapNew(w, h, ch)
+	var y int32 = 0
+	var i int32 = 0
+	var v int32 = 0
+	port.CellsGrow(r, 32, 0)
+	port.CellsSet(r, pngcheck.PrW(), w)
+	port.CellsSet(r, pngcheck.PrH(), h)
+	port.CellsSet(r, pngcheck.PrCh(), ch)
+	for y < h {
+		v = (y + rot) % 5
+		port.BufPush(raw, v)
+		port.CellsPush(out, v)
+		i = 0
+		for i < n {
+			v = splitmix.SmLo(splitmix.SmAt(9001, (y*n)+(i+(rot*100003)))) & 255
+			port.BufPush(raw, v)
+			port.CellsPush(out, v)
+			i += 1
+		}
+		y += 1
+	}
+	port.AssertEq(emonT, pngread.PgFill(r, raw, rows, a), 0, msg)
+	port.AssertEq(emonT, pngread.PgRefFill(r, out, px, b), 0, msg)
+	pgtSameBytes(emonT, a, b, msg)
+	return 0
+}
+
+func TestThePredictorByRowsIsThePredictorOfThePage(emonT *testing.T) {
+	// Gray and RGB, a pixel, a row, a column, a small page, five rotations of the filters over the rows: every byte.
+	var rot int32 = 0
+	for rot < 5 {
+		pgtSweep(emonT, 1, 1, 1, rot, "gray 1x1")
+		pgtSweep(emonT, 1, 1, 3, rot, "RGB 1x1")
+		pgtSweep(emonT, 40, 1, 1, rot, "gray, one row")
+		pgtSweep(emonT, 1, 12, 1, rot, "gray, one column")
+		pgtSweep(emonT, 1, 12, 3, rot, "RGB, one column")
+		pgtSweep(emonT, 29, 11, 1, rot, "gray 29x11")
+		pgtSweep(emonT, 29, 11, 3, rot, "RGB 29x11")
+		pgtSweep(emonT, 2, 7, 3, rot, "RGB 2x7")
+		rot += 1
+	}
+}
+
+func TestAFilterBytePastFourIsRefused(emonT *testing.T) {
+	// Row 1 carries filter 5: failed (1), and the Bitmap is not read past it.
+	var raw *port.Buf = port.NewBuf()
+	var r *port.Cells = port.NewCells()
+	var rows *port.Cells = port.NewCells()
+	var a *port.Bitmap = port.BitmapNew(2, 2, 1)
+	var i int32 = 0
+	port.CellsGrow(r, 32, 0)
+	port.CellsSet(r, pngcheck.PrW(), 2)
+	port.CellsSet(r, pngcheck.PrH(), 2)
+	port.CellsSet(r, pngcheck.PrCh(), 1)
+	for i < 6 {
+		port.BufPush(raw, 0)
+		i += 1
+	}
+	port.AssertEq(emonT, pngread.PgFill(r, raw, rows, a), 0, "filters 0 and 0")
+	port.BufSet(raw, 3, 5)
+	port.AssertEq(emonT, pngread.PgFill(r, raw, rows, a), 1, "filter 5")
+	port.BufTruncate(raw, 5)
+	port.AssertEq(emonT, pngread.PgFill(r, raw, rows, a), 1, "a short last row")
 }

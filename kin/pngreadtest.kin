@@ -1,15 +1,17 @@
 ;; Laws for `emon.pngread` (P10.11, the transcript bitmap codec). The images are `emon.pngprobe`'s (the writer's own, whose pixels the probe
-;; also hands back as `raw`): what the codec reads is what the writer wrote, sample for sample, and writes again the same bytes.
+;; also hands back as `raw`): what the codec reads is what the writer wrote, sample for sample, and writes again the same bytes. The bulk
+;; port form `bitmap-put-span` and the row-by-row predictor are held to their per-sample oracles (D092, D396, D1220).
 (ns emon.pngreadtest
   (:require [emon.lang :refer [I32 Cells Buf Bitmap]]
             [emon.test :refer [deftest assert-eq new-cells new-buf test-t TestT Str]]
-            [emon.port :refer [cells-at buf-len buf-at buf-set buf-blob buf-truncate bitmap-new bitmap-w bitmap-h bitmap-channels
-                               bitmap-u8]]
+            [emon.port :refer [cells-at cells-set cells-push cells-grow buf-len buf-at buf-set buf-push buf-blob buf-truncate
+                               bitmap-new bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8 bitmap-put-span]]
             [emon.pngprobe :refer [pp-build pp-spec pp-channels]]
             [emon.pngcheck :refer [pr-w pr-h pr-ch]]
-            [emon.pngread :refer [pg-open pg-fill pg-encode]]
+            [emon.pngread :refer [pg-open pg-fill pg-ref-fill pg-encode]]
+            [emon.splitmix :refer [sm-at sm-lo]]
             [kin.lang :refer [defn return let set while if do comment
-                              + - * < > <= >= == != and or bit-xor quot rem]]))
+                              + - * < > <= >= == != and or bit-xor bit-and quot rem]]))
 
 (defn ^I32 pgt-first-difference [^Bitmap b ^Buf raw]
   (comment "The index of the first sample of `b` that is not the byte `raw` holds, or -1.")
@@ -26,18 +28,18 @@
   (comment "Image k, as built into `out`, read by the codec: the status is `want`, and when it reads, every sample is the writer's.")
   (let [^Cells r (new-cells)
         ^Cells st (new-cells)
-        ^Cells inf (new-cells)
-        ^Cells px (new-cells)
+        ^Cells scratch (new-cells)
+        ^Cells rows (new-cells)
         ^Buf idat (new-buf)
-        ^Buf clean (new-buf)
-        ^I32 s (pg-open (buf-blob out) r st inf idat clean)]
+        ^Buf inflated (new-buf)
+        ^I32 s (pg-open (buf-blob out) r st scratch idat inflated)]
     (assert-eq s want msg)
     (if (== s 0)
       (let [^Bitmap b (bitmap-new (cells-at r (pr-w)) (cells-at r (pr-h)) (cells-at r (pr-ch)))]
         (assert-eq (cells-at r (pr-w)) (pp-spec k 0) msg)
         (assert-eq (cells-at r (pr-h)) (pp-spec k 1) msg)
         (assert-eq (cells-at r (pr-ch)) (pp-channels (pp-spec k 2)) msg)
-        (assert-eq (pg-fill r inf px b) 0 msg)
+        (assert-eq (pg-fill r inflated rows b) 0 msg)
         (assert-eq (* (* (bitmap-w b) (bitmap-h b)) (bitmap-channels b)) (buf-len raw) msg)
         (assert-eq (pgt-first-difference b raw) -1 msg)))
     (return 0)))
@@ -100,10 +102,10 @@
         ^Buf raw (new-buf)
         ^Cells r (new-cells)
         ^Cells st2 (new-cells)
-        ^Cells inf (new-cells)
-        ^Cells px (new-cells)
+        ^Cells scratch (new-cells)
+        ^Cells rows (new-cells)
         ^Buf idat (new-buf)
-        ^Buf clean (new-buf)
+        ^Buf inflated (new-buf)
         ^Cells ws2 (new-cells)
         ^Cells pal2 (new-cells)
         ^Cells row2 (new-cells)
@@ -111,9 +113,9 @@
         ^Buf z2 (new-buf)
         ^:mut ^I32 i 0]
     (pp-build k ws out z raw row st pal)
-    (assert-eq (pg-open (buf-blob out) r st2 inf idat clean) 0 msg)
+    (assert-eq (pg-open (buf-blob out) r st2 scratch idat inflated) 0 msg)
     (let [^Bitmap b (bitmap-new (cells-at r (pr-w)) (cells-at r (pr-h)) (cells-at r (pr-ch)))]
-      (assert-eq (pg-fill r inf px b) 0 msg)
+      (assert-eq (pg-fill r inflated rows b) 0 msg)
       (pg-encode b ws2 out2 z2 pal2 row2))
     (assert-eq (buf-len out2) (buf-len out) msg)
     (while (< i (buf-len out))
@@ -126,3 +128,116 @@
   (pgt-rewrite (test-t) 0 "gray 1x1")
   (pgt-rewrite (test-t) 6 "RGB 3000x1")
   (pgt-rewrite (test-t) 7 "gray 1x3000"))
+
+;; ----------------------------------------------------- the bulk form and the row-by-row predictor (D1220)
+
+(defn ^I32 pgt-same-bytes [^TestT emon-t ^Bitmap a ^Bitmap b ^Str msg]
+  (comment "Every sample of `a` is the one of `b` (the two have the one size).")
+  (let [^I32 rowb (* (bitmap-w a) (bitmap-channels a))
+        ^I32 n (* (bitmap-h a) rowb)
+        ^:mut ^I32 i 0]
+    (assert-eq (bitmap-w a) (bitmap-w b) msg)
+    (assert-eq (bitmap-h a) (bitmap-h b) msg)
+    (assert-eq (bitmap-channels a) (bitmap-channels b) msg)
+    (while (< i n)
+      (do (if (!= (bitmap-u8 a 0 (quot i rowb) (rem i rowb)) (bitmap-u8 b 0 (quot i rowb) (rem i rowb)))
+            (assert-eq (bitmap-u8 a 0 (quot i rowb) (rem i rowb)) (bitmap-u8 b 0 (quot i rowb) (rem i rowb)) msg))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 pgt-span [^TestT emon-t ^Bitmap a ^Bitmap b ^Cells src ^I32 y ^I32 off ^I32 from ^I32 n ^Str msg]
+  (comment "`bitmap-put-span` into `a`, the same bytes by `bitmap-set-u8` into `b`: the two bitmaps agree.")
+  (let [^:mut ^I32 k 0]
+    (assert-eq (bitmap-put-span a y off src from n) 0 msg)
+    (while (< k n)
+      (do (bitmap-set-u8 b 0 y (+ off k) (cells-at src (+ from k)))
+          (set k (+ k 1))))
+    (pgt-same-bytes emon-t a b msg)
+    (return 0)))
+
+(deftest test-a-span-put-in-one-call-is-the-samples-put-one-by-one
+  (comment "The cells are whole 32-bit values (negative, past 255): the LOW EIGHT BITS go in, as `bitmap-set-u8` keeps them. A whole row,")
+  (comment "a part of one, spans that cross into the next row, the first byte and the last of the buffer, and an empty span.")
+  (let [^Cells src (new-cells)
+        ^Bitmap a (bitmap-new 7 5 3)
+        ^Bitmap b (bitmap-new 7 5 3)
+        ^:mut ^I32 i 0]
+    (while (< i 100)
+      (do (cells-push src (sm-lo (sm-at 4711 i)))
+          (set i (+ i 1))))
+    (pgt-span (test-t) a b src 0 0 0 21 "row 0")
+    (pgt-span (test-t) a b src 2 0 21 21 "row 2, from cell 21")
+    (pgt-span (test-t) a b src 1 5 40 9 "inside a row")
+    (pgt-span (test-t) a b src 3 18 70 3 "to the end of a row")
+    (pgt-span (test-t) a b src 1 15 7 30 "across two rows")
+    (pgt-span (test-t) a b src 4 20 99 1 "the last byte")
+    (pgt-span (test-t) a b src 0 0 0 0 "empty")
+    (pgt-span (test-t) a b src 4 21 0 0 "empty at the end")))
+
+(defn ^I32 pgt-sweep [^TestT emon-t ^I32 w ^I32 h ^I32 ch ^I32 rot ^Str msg]
+  (comment "`w` by `h` by `ch` filtered rows of random bytes, the filter of row y being (y + rot) mod 5 (so every filter is the first row's")
+  (comment "and a later one's over the rotations), as a Buf for `pg-fill` and as a Cells for the oracle: the two Bitmaps agree.")
+  (let [^I32 n (* w ch)
+        ^Buf raw (new-buf)
+        ^Cells out (new-cells)
+        ^Cells r (new-cells)
+        ^Cells rows (new-cells)
+        ^Cells px (new-cells)
+        ^Bitmap a (bitmap-new w h ch)
+        ^Bitmap b (bitmap-new w h ch)
+        ^:mut ^I32 y 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 v 0]
+    (cells-grow r 32 0)
+    (cells-set r (pr-w) w)
+    (cells-set r (pr-h) h)
+    (cells-set r (pr-ch) ch)
+    (while (< y h)
+      (do (set v (rem (+ y rot) 5))
+          (buf-push raw v)
+          (cells-push out v)
+          (set i 0)
+          (while (< i n)
+            (do (set v (bit-and (sm-lo (sm-at 9001 (+ (* y n) (+ i (* rot 100003))))) 255))
+                (buf-push raw v)
+                (cells-push out v)
+                (set i (+ i 1))))
+          (set y (+ y 1))))
+    (assert-eq (pg-fill r raw rows a) 0 msg)
+    (assert-eq (pg-ref-fill r out px b) 0 msg)
+    (pgt-same-bytes emon-t a b msg)
+    (return 0)))
+
+(deftest test-the-predictor-by-rows-is-the-predictor-of-the-page
+  (comment "Gray and RGB, a pixel, a row, a column, a small page, five rotations of the filters over the rows: every byte.")
+  (let [^:mut ^I32 rot 0]
+    (while (< rot 5)
+      (do (pgt-sweep (test-t) 1 1 1 rot "gray 1x1")
+          (pgt-sweep (test-t) 1 1 3 rot "RGB 1x1")
+          (pgt-sweep (test-t) 40 1 1 rot "gray, one row")
+          (pgt-sweep (test-t) 1 12 1 rot "gray, one column")
+          (pgt-sweep (test-t) 1 12 3 rot "RGB, one column")
+          (pgt-sweep (test-t) 29 11 1 rot "gray 29x11")
+          (pgt-sweep (test-t) 29 11 3 rot "RGB 29x11")
+          (pgt-sweep (test-t) 2 7 3 rot "RGB 2x7")
+          (set rot (+ rot 1))))))
+
+(deftest test-a-filter-byte-past-four-is-refused
+  (comment "Row 1 carries filter 5: failed (1), and the Bitmap is not read past it.")
+  (let [^Buf raw (new-buf)
+        ^Cells r (new-cells)
+        ^Cells rows (new-cells)
+        ^Bitmap a (bitmap-new 2 2 1)
+        ^:mut ^I32 i 0]
+    (cells-grow r 32 0)
+    (cells-set r (pr-w) 2)
+    (cells-set r (pr-h) 2)
+    (cells-set r (pr-ch) 1)
+    (while (< i 6)
+      (do (buf-push raw 0)
+          (set i (+ i 1))))
+    (assert-eq (pg-fill r raw rows a) 0 "filters 0 and 0")
+    (buf-set raw 3 5)
+    (assert-eq (pg-fill r raw rows a) 1 "filter 5")
+    (buf-truncate raw 5)
+    (assert-eq (pg-fill r raw rows a) 1 "a short last row")))

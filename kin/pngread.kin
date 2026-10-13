@@ -3,43 +3,156 @@
 ;; and they were decoded and encoded once on each host (Rust's hand-written inflater, Go's compress/zlib, Java's Inflater, .NET's
 ;; ZLibStream). This is the one codec; a host keeps no PNG code for its transcripts.
 ;;
-;;   READ    (pg-open p r st out idat clean)  ->  status, the report `r` (`emon.pngcheck`'s: `pr-w`, `pr-h`, `pr-ch`), the inflated
-;;                                                  bytes in `out`
-;;           (pg-fill r out px dst)            ->  status; `dst` is a Bitmap the host made of (w, h, ch)
+;;   READ    (pg-open p r st out idat raw)     ->  status, the report `r` (`emon.pngcheck`'s: `pr-w`, `pr-h`, `pr-ch`), the inflated
+;;                                                  bytes in `raw` (a Buf: a byte a byte; `out` is not used)
+;;           (pg-fill r raw rows dst)          ->  status; `dst` is a Bitmap the host made of (w, h, ch)
 ;;           (pg-msg status text)                 the sentence of a refusal
 ;;   WRITE   (pg-encode b ws out z pal row)    ->  the file in `out`, the canonical writer's, byte for byte
 ;;
 ;; READING IS `pc-check` (deep 2: the validator of D444, every chunk and checksum, the stream and its size, the pixels and stream
-;; limits), then the kin inflate (the one `pc-check` ran; its bytes are kept, not made twice), then `pf-predict` (the PNG predictor)
-;; into `px`, then the pixels into the Bitmap. Only what the writer makes is read: colour type 0 or 2, depth 8, no interlace
-;; (`ic-unsupported` otherwise); the validator forgives nothing else (an animation chunk, a palette, a bit depth the writer never
-;; wrote were accepted by the hosts' own readers and by no transcript). The host makes the Bitmap because kin cannot return one:
-;; it reads the size from the report, `pg-fill` checks it.
+;; limits), which inflates the image data ONCE, into a Buf (D1220: a byte a byte, a quarter of the Cells the validator's own
+;; (deep 1) pass takes), then `pg-fill`: the PNG predictor undone ROW BY ROW, each row from the filtered bytes of `raw` and the row
+;; before it, in a Cells of two rows (the whole page is never a second array), and each finished row put into the Bitmap by one
+;; call (`bitmap-put-span`, D1220; the per-sample `bitmap-set-u8` was the cost on Java and C#). The predictor of the rows is
+;; `pf-png`'s, statement for statement over a Buf (the first row's missing row above is a row of zeros, which the formulas of every
+;; filter treat as no row at all); `pg-ref-fill`, the old two-pass path, is kept as the law's oracle. Only what the writer makes is
+;; read: colour type 0 or 2, depth 8, no interlace (`ic-unsupported` otherwise); the validator forgives nothing else (an animation
+;; chunk, a palette, a bit depth the writer never wrote were accepted by the hosts' own readers and by no transcript). The host
+;; makes the Bitmap because kin cannot return one: it reads the size from the report, `pg-fill` checks it.
 (ns emon.pngread
   (:require [emon.lang :refer [I32 Cells Buf Blob Text Bitmap emit-ascii]]
-            [emon.port :refer [cells-len cells-at cells-drop cells-free cells-push
-                               bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8]]
+            [emon.port :refer [cells-len cells-at cells-set cells-drop cells-free cells-push cells-grow
+                               buf-len buf-at
+                               bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8 bitmap-put-span]]
             [emon.imgcheck :refer [ic-ok ic-failed ic-unsupported ic-limit]]
             [emon.pngcheck :refer [pc-check pr-w pr-h pr-ch pr-ctype pr-depth pr-interlace]]
-            [emon.pdffilter :refer [pf-predict]]
+            [emon.pdffilter :refer [pf-predict pf-paeth]]
             [emon.png :refer [png-begin png-row png-end]]
             [kin.lang :refer [defn return let set while if do comment
-                              + - * < > <= >= == != and or]]))
+                              + - * < > <= >= == != and or bit-and quot]]))
 
-(defn ^:pub ^I32 pg-open [^Blob p ^:mut ^Cells r ^:mut ^Cells st ^:mut ^Cells out ^:mut ^Buf idat ^:mut ^Buf clean]
-  (comment "Validate `p` and inflate its image data into `out` (one cell a byte, the filter bytes in). Answers an `ic-status`: ok, or")
-  (comment "failed, unsupported (not 8-bit gray or RGB, or interlaced) or limit (the report's `pr-limit` is the count).")
-  (let [^I32 s (pc-check p 2 r st out idat clean)]
+(defn ^:pub ^I32 pg-open [^Blob p ^:mut ^Cells r ^:mut ^Cells st ^:mut ^Cells out ^:mut ^Buf idat ^:mut ^Buf raw]
+  (comment "Validate `p` and inflate its image data into `raw` (a byte a byte, the filter bytes in). Answers an `ic-status`: ok, or")
+  (comment "failed, unsupported (not 8-bit gray or RGB, or interlaced) or limit (the report's `pr-limit` is the count). `out` is")
+  (comment "the validator's Cells, which deep 2 does not touch.")
+  (let [^I32 s (pc-check p 2 r st out idat raw)]
     (if (!= s (ic-ok)) (return s))
     (if (and (!= (cells-at r (pr-ctype)) 0) (!= (cells-at r (pr-ctype)) 2))
-      (do (cells-free out) (return (ic-unsupported))))
+      (return (ic-unsupported)))
     (if (or (!= (cells-at r (pr-depth)) 8) (!= (cells-at r (pr-interlace)) 0))
-      (do (cells-free out) (return (ic-unsupported))))
+      (return (ic-unsupported)))
     (return (ic-ok))))
 
-(defn ^:pub ^I32 pg-fill [^Cells r ^:mut ^Cells out ^:mut ^Cells px ^Bitmap dst]
-  (comment "Undo the predictor over `out` into `px`, then write the pixels to `dst`, which must be (pr-w) by (pr-h) by (pr-ch). Gives")
-  (comment "both scratch arenas back. A damaged filter byte or a Bitmap of another size is failed.")
+(defn ^I32 pg-row [^Buf raw ^I32 pos ^:mut ^Cells px ^I32 co ^I32 po ^I32 n ^I32 bpp ^I32 t]
+  (comment "One row of the predictor: filter `t`, its `n` filtered bytes at raw[pos..], the row above at px[po..], the row made at")
+  (comment "px[co..]. `pf-png` and `pf-png-slow` over a Buf: the first `bpp` bytes have no pixel to the left (a and c are 0), the rest")
+  (comment "are a loop for the filter, and a gray row (one byte a pixel) keeps the pixel to the left in `a`, not read back.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 v 0]
+    (while (< i bpp)
+      (do (set x (buf-at raw (+ pos i)))
+          (set b (cells-at px (+ po i)))
+          (set v x)
+          (if (== t 2) (set v (+ x b)))
+          (if (== t 3) (set v (+ x (quot b 2))))
+          (if (== t 4) (set v (+ x (pf-paeth 0 b 0))))
+          (cells-set px (+ co i) (bit-and v 255))
+          (set i (+ i 1))))
+    (if (== t 0)
+      (while (< i n)
+        (do (cells-set px (+ co i) (buf-at raw (+ pos i)))
+            (set i (+ i 1)))))
+    (if (== t 2)
+      (while (< i n)
+        (do (set x (buf-at raw (+ pos i)))
+            (set b (cells-at px (+ po i)))
+            (cells-set px (+ co i) (bit-and (+ x b) 255))
+            (set i (+ i 1)))))
+    (if (and (== bpp 1) (< i n))
+      (do (set a (cells-at px (- (+ co i) 1)))
+          (if (== t 1)
+            (while (< i n)
+              (do (set a (bit-and (+ (buf-at raw (+ pos i)) a) 255))
+                  (cells-set px (+ co i) a)
+                  (set i (+ i 1)))))
+          (if (== t 3)
+            (while (< i n)
+              (do (set b (cells-at px (+ po i)))
+                  (set a (bit-and (+ (buf-at raw (+ pos i)) (quot (+ a b) 2)) 255))
+                  (cells-set px (+ co i) a)
+                  (set i (+ i 1)))))
+          (if (== t 4)
+            (do (set c (cells-at px (- (+ po i) 1)))
+                (while (< i n)
+                  (do (set b (cells-at px (+ po i)))
+                      (set a (bit-and (+ (buf-at raw (+ pos i)) (pf-paeth a b c)) 255))
+                      (cells-set px (+ co i) a)
+                      (set c b)
+                      (set i (+ i 1))))))))
+    (if (and (!= bpp 1) (== t 1))
+      (while (< i n)
+        (do (set x (buf-at raw (+ pos i)))
+            (set a (cells-at px (- (+ co i) bpp)))
+            (cells-set px (+ co i) (bit-and (+ x a) 255))
+            (set i (+ i 1)))))
+    (if (and (!= bpp 1) (== t 3))
+      (while (< i n)
+        (do (set x (buf-at raw (+ pos i)))
+            (set a (cells-at px (- (+ co i) bpp)))
+            (set b (cells-at px (+ po i)))
+            (cells-set px (+ co i) (bit-and (+ x (quot (+ a b) 2)) 255))
+            (set i (+ i 1)))))
+    (if (and (!= bpp 1) (== t 4))
+      (while (< i n)
+        (do (set x (buf-at raw (+ pos i)))
+            (set a (cells-at px (- (+ co i) bpp)))
+            (set b (cells-at px (+ po i)))
+            (set c (cells-at px (- (+ po i) bpp)))
+            (cells-set px (+ co i) (bit-and (+ x (pf-paeth a b c)) 255))
+            (set i (+ i 1)))))
+    (return 0)))
+
+(defn ^:pub ^I32 pg-fill [^Cells r ^Buf raw ^:mut ^Cells rows ^Bitmap dst]
+  (comment "Undo the predictor over `raw` a row at a time into `dst`, which must be (pr-w) by (pr-h) by (pr-ch), and `raw` the")
+  (comment "(pr-h) rows of a filter byte and (pr-w) * (pr-ch) bytes. `rows` is scratch (two rows of cells, made here). A damaged")
+  (comment "filter byte, a `raw` of another length or a Bitmap of another size is failed.")
+  (let [^I32 w (cells-at r (pr-w))
+        ^I32 h (cells-at r (pr-h))
+        ^I32 ch (cells-at r (pr-ch))
+        ^I32 n (* w ch)
+        ^:mut ^I32 y 0
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 t 0
+        ^:mut ^I32 co n
+        ^:mut ^I32 po 0
+        ^:mut ^I32 tmp 0]
+    (if (or (!= (bitmap-w dst) w) (or (!= (bitmap-h dst) h) (!= (bitmap-channels dst) ch)))
+      (return (ic-failed)))
+    (if (!= (buf-len raw) (* h (+ n 1))) (return (ic-failed)))
+    (cells-drop rows 0)
+    (cells-grow rows (* 2 n) 0)
+    (while (< y h)
+      (do (set t (buf-at raw pos))
+          (if (> t 4)
+            (do (cells-free rows) (return (ic-failed))))
+          (pg-row raw (+ pos 1) rows co po n ch t)
+          (bitmap-put-span dst y 0 rows co n)
+          (set tmp co)
+          (set co po)
+          (set po tmp)
+          (set pos (+ pos (+ n 1)))
+          (set y (+ y 1))))
+    (cells-free rows)
+    (return (ic-ok))))
+
+(defn ^:pub ^I32 pg-ref-fill [^Cells r ^:mut ^Cells out ^:mut ^Cells px ^Bitmap dst]
+  (comment "THE ORACLE of `pg-fill` (D092, D396): the filtered bytes as a Cells (a cell a byte, what the first version inflated into),")
+  (comment "`pf-predict` (the PNG predictor of the whole page) into `px`, then every sample by `bitmap-set-u8`. A law holds `pg-fill`")
+  (comment "to it on the writer's images and on rows of every filter.")
   (let [^I32 w (cells-at r (pr-w))
         ^I32 h (cells-at r (pr-h))
         ^I32 ch (cells-at r (pr-ch))
@@ -47,21 +160,18 @@
         ^:mut ^I32 y 0
         ^:mut ^I32 i 0]
     (if (or (!= (bitmap-w dst) w) (or (!= (bitmap-h dst) h) (!= (bitmap-channels dst) ch)))
-      (do (cells-free out) (return (ic-failed))))
+      (return (ic-failed)))
     (cells-drop px 0)
     (if (!= (pf-predict out 0 (cells-len out) px 15 ch 8 w) 0)
-      (do (cells-free out) (cells-free px) (return (ic-failed))))
-    (cells-free out)
+      (return (ic-failed)))
     (if (!= (cells-len px) (* h n))
-      (do (cells-free px) (return (ic-failed))))
-    (comment "A row is `n` bytes from x 0: the port checks the byte index, not each coordinate (port.rs), so channel `i` of x 0 is byte i.")
+      (return (ic-failed)))
     (while (< y h)
       (do (set i 0)
           (while (< i n)
             (do (bitmap-set-u8 dst 0 y i (cells-at px (+ (* y n) i)))
                 (set i (+ i 1))))
           (set y (+ y 1))))
-    (cells-free px)
     (return (ic-ok))))
 
 (defn ^:pub ^I32 pg-msg [^I32 s ^:mut ^Text out]
