@@ -794,6 +794,208 @@ public class EngineTest {
         check(er.calls > 0, "under always a born-digital page is rendered");
     }
 
+    // ---------------------------------------------------------------------------- parallel execution (P10.2, D1300-D1303)
+    //
+    // `parallel` = N: N workers fulfil a round's requests at once, and the page units AHEAD of the loop's are looked at (dry attempts) so that what they will
+    // ask is being answered meanwhile. None of it may show in the result: the Model, the transcript (every entry) and the number of times a port is called are
+    // the serial run's, at every N; the limit overrides of the conversion are in force on the workers, and a conversion's workers have ended when it has.
+
+    /** An OCR engine that takes its time and counts the readings going at once and in all. */
+    static final class SlowOcr implements Ocr {
+        final java.util.concurrent.atomic.AtomicInteger now = new java.util.concurrent.atomic.AtomicInteger(), peak = new java.util.concurrent.atomic.AtomicInteger(),
+            calls = new java.util.concurrent.atomic.AtomicInteger();
+        final FakeOcr inner = new FakeOcr();
+
+        public Planrun.Answer fulfil(Planrun.Request req, Map<Integer, Port.Bitmap> bm, boolean keep) {
+            int n = now.incrementAndGet();
+            peak.accumulateAndGet(n, Math::max);
+            calls.incrementAndGet();
+            try {
+                Thread.sleep(60);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            Planrun.Answer a = inner.fulfil(req, bm, keep);
+            now.decrementAndGet();
+            return a;
+        }
+
+        public List<String[]> producer() {
+            return inner.producer();
+        }
+    }
+
+    /** A renderer that answers every page, counts its calls, and may panic on one page. */
+    static final class CountingRenderer implements RenderPort.Renderer {
+        final java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
+        final int panicPage;
+
+        CountingRenderer(int panicPage) {
+            this.panicPage = panicPage;
+        }
+
+        public Port.Bitmap render(RenderPort.Source input, byte[] password, RenderPort.Request req) throws RenderPort.RenderError {
+            calls.incrementAndGet();
+            if (req.page == panicPage) {
+                throw new IllegalStateException("the renderer broke on page " + req.page);
+            }
+            byte[] px = new byte[20 * 30 * 3];
+            for (int i = 0; i < px.length; i++) {
+                px[i] = (byte) (i * 7 + req.layer * 50);
+            }
+            Port.Bitmap whole = new Port.Bitmap(20, 30, 3, px);
+            return req.clip == null ? whole : RenderPort.cut(whole, req.clip);
+        }
+
+        public int layers() {
+            return 1;
+        }
+
+        public boolean exactCrop() {
+            return false;
+        }
+    }
+
+    static Engine parEngine(Ocr ocr, RenderPort.Renderer r, int n) {
+        Options.Config c = Options.Config.defaults();
+        c.ocr = ocr;
+        c.renderer = r;
+        c.parallel = n;
+        return new Engine(c);
+    }
+
+    /** The transcript's entries, comparably. */
+    static List<String> entriesOf(Planrun.Transcript tr) {
+        List<String> out = new ArrayList<>();
+        for (Planrun.Entry e : tr.entries) {
+            out.add(e.round + " " + Arrays.toString(e.req) + " " + Arrays.toString(e.ans));
+        }
+        return out;
+    }
+
+    static void parallelModel() throws Exception {
+        byte[] tiff = read("test/image/tiff-multi3-rgb-lzw.tif");
+        Options o = Options.defaults();
+        SlowOcr one0 = new SlowOcr();
+        Engine.Converted c0 = parEngine(one0, null, 1).record(one(Input.bytes(tiff)), o);
+        String j0 = js(c0.model);
+        check(one0.peak.get() == 1 && one0.calls.get() == 3, "a serial run reads one page at a time: peak " + one0.peak.get() + " calls " + one0.calls.get());
+        for (int n : new int[] {2, 3, 4, 8}) {
+            SlowOcr slow = new SlowOcr();
+            Engine.Converted c = parEngine(slow, null, n).record(one(Input.bytes(tiff)), o);
+            check(js(c.model).equals(j0), "parallel=" + n + ": the Model differs from the serial one");
+            check(entriesOf(c.transcript).equals(entriesOf(c0.transcript)), "parallel=" + n + ": the transcript differs from the serial one");
+            check(slow.calls.get() == 3, "parallel=" + n + ": every page is read once (a look ahead's answer is used, not asked again): " + slow.calls.get());
+            check(slow.peak.get() >= 2 && slow.peak.get() <= n, "parallel=" + n + ": the pages ahead are read while the loop is on one, at most N at once: peak " + slow.peak.get());
+        }
+        // limit.workers is the most the option is served with: 1 is serial whatever is asked
+        SlowOcr capped = new SlowOcr();
+        Options.Config cfg = Options.Config.defaults();
+        cfg.ocr = capped;
+        cfg.parallel = 8;
+        cfg.limits = new int[][] {{16, 1}};
+        check(js(new Engine(cfg).convert(one(Input.bytes(tiff)), o)).equals(j0) && capped.peak.get() == 1, "limit.workers=1 is serial: peak " + capped.peak.get());
+    }
+
+    static void parallelPorts() throws Exception {
+        // under `always` a born-digital page asks its two renders, then the OCR of the page: the dry attempts ask them ahead; the renderer and the OCR engine
+        // are called as many times as in a serial run
+        Options o = Options.defaults();
+        Map<String, byte[]> docs = new java.util.LinkedHashMap<>();
+        for (String n : SLICE) {
+            docs.put(n, synth(n));
+        }
+        docs.put("h-keyword scan", read("test/corpus/synth/scan/h-keyword.pdf"));
+        docs.put("multi-frame tiff", read("test/image/tiff-multi3-rgb-lzw.tif"));
+        for (Map.Entry<String, byte[]> d : docs.entrySet()) {
+            CountingRenderer fake0 = new CountingRenderer(-1);
+            SlowOcr ocr0 = new SlowOcr();
+            Engine.Converted c0 = parEngine(ocr0, fake0, 1).record(one(Input.bytes(d.getValue())), o);
+            for (int n : new int[] {2, 4, 8}) {
+                CountingRenderer fake = new CountingRenderer(-1);
+                SlowOcr ocr = new SlowOcr();
+                Engine.Converted c = parEngine(ocr, fake, n).record(one(Input.bytes(d.getValue())), o);
+                String what = d.getKey() + " at parallel=" + n;
+                check(js(c.model).equals(js(c0.model)), what + ": the Model differs");
+                check(entriesOf(c.transcript).equals(entriesOf(c0.transcript)), what + ": the transcript differs");
+                check(fake.calls.get() == fake0.calls.get() && ocr.calls.get() == ocr0.calls.get(),
+                    what + ": the ports are called " + fake.calls.get() + "/" + ocr.calls.get() + " times, not " + fake0.calls.get() + "/" + ocr0.calls.get());
+            }
+        }
+    }
+
+    /** A codec that says which pixel bound it was given: the one the workers see. */
+    static final class BoundCodecs implements Options.PdfCodecs {
+        final List<Long> seen = java.util.Collections.synchronizedList(new ArrayList<>());
+
+        public ImgDec.PdfPix jpx(byte[] data, long max) throws ImgDec.Fail {
+            seen.add(max);
+            throw new ImgDec.Fail(ImgDec.UNSUPPORTED, "no");
+        }
+
+        public ImgDec.PdfPix jbig2(byte[] data, byte[] globals, long max) throws ImgDec.Fail {
+            seen.add(max);
+            throw new ImgDec.Fail(ImgDec.UNSUPPORTED, "no");
+        }
+    }
+
+    static void parallelLimits() throws Exception {
+        // `limit.pixels` is read where a port decodes (kind 9): on a worker thread. The table is process-wide here (D436) and a conversion with overrides holds
+        // it exclusively, so a worker, which runs inside that scope, sees it; no other conversion runs while it is held, so none sees it.
+        Options o = Options.defaults();
+        o.assets = Options.Assets.IMAGES;
+        byte[] doc = read("test/assets/jbig2-globals.pdf");
+        for (int n : new int[] {1, 4}) {
+            BoundCodecs codecs = new BoundCodecs();
+            Options.Config c = Options.Config.defaults();
+            c.pdfCodecs = codecs;
+            c.limits = new int[][] {{9, 12345}};
+            c.parallel = n;
+            new Engine(c).convert(one(Input.bytes(doc)), o);
+            check(codecs.seen.equals(List.of(12345L)), "parallel=" + n + ": the codec was given " + codecs.seen + ", not the conversion's bound");
+        }
+        // two engines side by side, one bounded, one not, each converting from several threads
+        BoundCodecs tight = new BoundCodecs(), free = new BoundCodecs();
+        Options.Config ct = Options.Config.defaults(), cf = Options.Config.defaults();
+        ct.pdfCodecs = tight;
+        ct.limits = new int[][] {{9, 777}};
+        ct.parallel = 4;
+        cf.pdfCodecs = free;
+        cf.parallel = 4;
+        Engine et = new Engine(ct), ef = new Engine(cf);
+        Thread[] ts = new Thread[8];
+        for (int i = 0; i < ts.length; i++) {
+            final Engine e = i % 2 == 0 ? et : ef;
+            ts[i] = new Thread(null, () -> {
+                try {
+                    e.convert(one(Input.bytes(doc)), o);
+                } catch (EmonError x) {
+                    check(false, "a conversion failed: " + x);
+                }
+            }, "conv-" + i, 1L << 29);
+            ts[i].start();
+        }
+        for (Thread t : ts) {
+            t.join();
+        }
+        check(tight.seen.equals(List.of(777L, 777L, 777L, 777L)), "the bounded engine's workers saw " + tight.seen + ": its bound, every time");
+        check(free.seen.equals(List.of(268435456L, 268435456L, 268435456L, 268435456L)), "the other's saw " + free.seen + ": the default, never the first's");
+    }
+
+    static void parallelPanic() throws Exception {
+        byte[] doc = synth("furn-informative");
+        for (int n : new int[] {1, 4}) {
+            boolean reached = false;
+            try {
+                parEngine(null, new CountingRenderer(0), n).convert(one(Input.bytes(doc)), Options.defaults());
+            } catch (EmonError e) {
+                // the Engine's own named error for a panic of a port (internal), the same at every N
+                reached = e.name().equals("internal");
+            }
+            check(reached, "parallel=" + n + ": a port that panics is the conversion's `internal` error");
+        }
+    }
+
     static void run(String name, T t) {
         int before = failures;
         try {
@@ -825,6 +1027,10 @@ public class EngineTest {
             run("assets", EngineTest::assets);
             run("decode-img: the host's codecs, the embedder's, and the payload", EngineTest::decodeImg);
             run("the Renderer port's fulfiller", EngineTest::renderPort);
+            run("parallel: the serial Model and transcript, and the OCR of a multi-page scan overlapped", EngineTest::parallelModel);
+            run("parallel: a renderer and an OCR port are called as often as in a serial run", EngineTest::parallelPorts);
+            run("parallel: the limit overrides are in force on the workers and only there", EngineTest::parallelLimits);
+            run("parallel: a port that panics is the conversion's error as in a serial run", EngineTest::parallelPanic);
         }, "engine-test", 1L << 30);
         t.start();
         t.join();

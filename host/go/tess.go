@@ -159,7 +159,7 @@ type tessBlock struct {
 	orient, wdir, tlo, desk int32
 }
 
-// tess is the engine: initialised instances per language string, one thread at a time (TessOcr's mutex).
+// tess is the engine: initialised instances per language string, one goroutine at a time (TessOcr gives each reading an engine of its own).
 type tess struct {
 	tessdata string
 	apis     map[string]C.H
@@ -537,11 +537,15 @@ func (t *tess) fulfil(req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool
 	return ans, nil
 }
 
-// TessOcr is the `Ocr` port over Tesseract: an embedder gives `Config.Ocr = ocr`. One engine behind a mutex: Tesseract's API
-// objects are not thread safe, and conversions that run at once take turns at the engine.
+// TessOcr is the `Ocr` port over Tesseract: an embedder gives `Config.Ocr = ocr`. A POOL OF ENGINES (P10.2, D1304): Tesseract's API objects are not
+// thread safe, so each reading takes an engine of its own from the pool (or makes one, which is a full model load) and gives it back; the pool holds as
+// many as were ever wanted at once, which is as many as the conversions and the workers of a `Parallel` conversion that read at the same moment. A serial
+// run has one. A reading is a function of the request and the model alone (the LSTM engine learns nothing between pages), so which engine reads a page
+// does not show in the answer.
 type TessOcr struct {
 	mu       sync.Mutex
-	t        *tess
+	dir      string
+	idle     []*tess
 	producer [][2]string
 }
 
@@ -565,14 +569,26 @@ func NewTessOcr(tessdata string) (Ocr, error) {
 		}
 	}
 	t := &tess{tessdata: dir, apis: map[string]C.H{}}
-	return &TessOcr{t: t, producer: t.producer()}, nil
+	return &TessOcr{dir: dir, idle: []*tess{t}, producer: t.producer()}, nil
 }
 
 // Fulfil implements Ocr.
 func (o *TessOcr) Fulfil(req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool) (port.PlanAnswer, error) {
 	o.mu.Lock()
-	defer o.mu.Unlock()
-	return o.t.fulfil(req, bm, keepBinary)
+	var t *tess
+	if n := len(o.idle); n > 0 {
+		t, o.idle = o.idle[n-1], o.idle[:n-1]
+	}
+	o.mu.Unlock()
+	if t == nil {
+		t = &tess{tessdata: o.dir, apis: map[string]C.H{}}
+	}
+	// an engine that panicked is not given back: its state is not known
+	a, err := t.fulfil(req, bm, keepBinary)
+	o.mu.Lock()
+	o.idle = append(o.idle, t)
+	o.mu.Unlock()
+	return a, err
 }
 
 // Producer implements Ocr.

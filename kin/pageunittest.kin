@@ -6,7 +6,7 @@
             [emon.test :refer [deftest assert-eq assert-that new-cells new-bitmap-set]]
             [emon.port :refer [cells-len cells-at cells-set cells-push bms-get bms-has bms-put bitmap-w bitmap-h bitmap-channels
                                bitmap-u8 bitmap-set-u8]]
-            [emon.plan :refer [rec-id rec-kind rec-count rq-arg pk-decode pk-render pk-ocr an-fail an-render ps-unsupported lay-full lay-no-text us-requests us-done pu-id pu-view-id view-base
+            [emon.plan :refer [rec-id rec-kind rec-count rq-arg pk-decode pk-render pk-ocr an-fail an-render an-decode ps-unsupported lay-full lay-no-text us-requests us-done pu-id pu-view-id view-base
                                pi-render-text pi-render-no-text pi-decode pi-ocr flt-dct]]
             [emon.pageunit :refer [pu-w pu-kind pu-dpi pk-scan pk-born pk-none pu-run-pdf pu-ask-rasters]]
             [emon.rasterplan :refer [rp-ask-none rp-ask-full rp-ask-witness rp-f-ask rp-f-wat rp-f-wn rp-f-scripts]]
@@ -58,6 +58,22 @@
 
 (defn ^I32 run-page [^I32 i ^I32 policy ^Cells pl ^Cells ans ^Cells rq]
   (return (run-page-fused i policy 0 pl ans rq)))
+
+(defn ^I32 run-page-watched [^I32 i ^I32 policy ^I32 fuse ^Cells pl ^Cells ans ^Cells rq
+                             ^Cells mask ^Cells epages ^Cells views ^Cells olines ^Cells owords ^Cells words ^Cells lines]
+  (comment "A page unit whose written arenas are the caller's, to see whether an attempt wrote them.")
+  (return (pu-run-pdf i 3 policy pl ans rq (new-cells) (new-bitmap-set) mask (new-cells)
+                      epages views (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) olines
+                      owords (new-cells) (new-cells) words lines
+                      fuse (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                      (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                      (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                      (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                      (new-cells) (new-cells) (new-cells) (new-cells))))
+
+(defn ^I32 watched-len [^Cells mask ^Cells epages ^Cells views ^Cells olines ^Cells owords ^Cells words ^Cells lines]
+  (comment "How many cells the page unit's written arenas hold in all (the mask is sized by the caller, so its length is not counted).")
+  (return (+ (+ (+ (cells-len epages) (cells-len views)) (+ (cells-len olines) (cells-len owords))) (+ (cells-len words) (cells-len lines)))))
 
 (defn ^I32 nth-rec [^Cells rq ^I32 n]
   (comment "The cell where record `n` (0-based) of the requests starts.")
@@ -199,6 +215,60 @@
       (assert-eq (rq-arg rq r1 5) 1206 "width")
       (assert-eq (rq-arg rq r1 6) 56 "height")
       (assert-eq (rec-id rq r2) 353 "witness line 1"))))
+
+(deftest test-a-dry-attempt-asks-what-the-real-one-asks-before-its-first-write-and-then-stops
+  (comment "P10.2: a scanned page. With no answer a dry attempt asks the decode, as the real one; with the decode answered it asks the OCR, as the real one;")
+  (comment "with the OCR answered too the real attempt goes on to write the page, and the dry one stops where the write would begin, having written nothing.")
+  (let [^Cells pl (new-cells)
+        ^Cells ans (new-cells)
+        ^Cells rq1 (new-cells)
+        ^Cells rq2 (new-cells)
+        ^Cells rq3 (new-cells)
+        ^Cells rq4 (new-cells)
+        ^Cells mask (new-cells)
+        ^Cells epages (new-cells)
+        ^Cells views (new-cells)
+        ^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells words (new-cells)
+        ^Cells lines (new-cells)]
+    (plan-of pl 1 (pk-scan))
+    (assert-eq (run-page-watched 0 2 4 pl ans rq1 mask epages views olines owords words lines) (us-requests) "dry: it asks the decode")
+    (run-page-watched 0 2 0 pl (new-cells) rq2 mask epages views olines owords words lines)
+    (assert-eq (cells-len rq1) (cells-len rq2) "the same request as the real attempt's")
+    (assert-eq (cells-at rq1 2) (cells-at rq2 2) "under the same id")
+    (an-decode ans 260 2550 3300 1 30000 0 1)
+    (assert-eq (run-page-watched 0 2 4 pl ans rq3 mask epages views olines owords words lines) (us-requests) "dry: with the decode answered it asks the OCR")
+    (assert-eq (rec-kind rq3 0) (pk-ocr) "an OCR")
+    (assert-eq (rec-id rq3 0) 272 "of the page's first pass")
+    (an-render ans 272 2550 3300 1 300)
+    (assert-eq (run-page-watched 0 2 4 pl ans rq4 mask epages views olines owords words lines) (us-done) "dry: with the OCR answered it stops")
+    (assert-eq (cells-len rq4) 0 "asking nothing")
+    (assert-eq (watched-len mask epages views olines owords words lines) 0 "and having written nothing")))
+
+(deftest test-a-dry-attempt-of-a-born-digital-page-stops-before-its-first-write
+  (let [^Cells pl (new-cells)
+        ^Cells ans (new-cells)
+        ^Cells rq1 (new-cells)
+        ^Cells rq2 (new-cells)
+        ^Cells rq3 (new-cells)
+        ^Cells mask (new-cells)
+        ^Cells epages (new-cells)
+        ^Cells views (new-cells)
+        ^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells words (new-cells)
+        ^Cells lines (new-cells)]
+    (born-plan pl 1 (rp-ask-full) 0)
+    (assert-eq (run-page-watched 0 2 4 pl ans rq1 mask epages views olines owords words lines) (us-requests) "dry: the two renders")
+    (assert-eq (cells-len rq1) 14 "of seven cells each, as the real attempt's")
+    (answer-renders ans 0)
+    (assert-eq (run-page-watched 0 2 4 pl ans rq2 mask epages views olines owords words lines) (us-requests) "dry: the renders answered, the OCR")
+    (assert-eq (rec-kind rq2 0) (pk-ocr) "an OCR")
+    (an-render ans 272 2550 3300 3 300)
+    (assert-eq (run-page-watched 0 2 4 pl ans rq3 mask epages views olines owords words lines) (us-done) "dry: the OCR answered, it stops")
+    (assert-eq (cells-len rq3) 0 "asking nothing")
+    (assert-eq (watched-len mask epages views olines owords words lines) 0 "and having written nothing")))
 
 (deftest test-the-bitmap-set-keeps-what-kin-makes
   (let [^BitmapSet s (new-bitmap-set)]

@@ -46,6 +46,14 @@ public final class Pageunittest {
     public static int runPage(int i, int policy, emon.Port.Cells pl, emon.Port.Cells ans, emon.Port.Cells rq) {
         return runPageFused(i, policy, 0, pl, ans, rq);
     }
+    public static int runPageWatched(int i, int policy, int fuse, emon.Port.Cells pl, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells mask, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells words, emon.Port.Cells lines) {
+        // A page unit whose written arenas are the caller's, to see whether an attempt wrote them.
+        return Pageunit.puRunPdf(i, 3, policy, pl, ans, rq, emon.Port.newCells(), emon.Port.newBitmapSet(), mask, emon.Port.newCells(), epages, views, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), olines, owords, emon.Port.newCells(), emon.Port.newCells(), words, lines, fuse, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells());
+    }
+    public static int watchedLen(emon.Port.Cells mask, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells words, emon.Port.Cells lines) {
+        // How many cells the page unit's written arenas hold in all (the mask is sized by the caller, so its length is not counted).
+        return ((emon.Port.cellsLen(epages) + emon.Port.cellsLen(views)) + (emon.Port.cellsLen(olines) + emon.Port.cellsLen(owords))) + (emon.Port.cellsLen(words) + emon.Port.cellsLen(lines));
+    }
     public static int nthRec(emon.Port.Cells rq, int n) {
         // The cell where record `n` (0-based) of the requests starts.
         int at = 0;
@@ -201,6 +209,60 @@ public final class Pageunittest {
         emon.Testport.assertEq(Plan.rqArg(rq, r1, 5), 1206, "width");
         emon.Testport.assertEq(Plan.rqArg(rq, r1, 6), 56, "height");
         emon.Testport.assertEq(Plan.recId(rq, r2), 353, "witness line 1");
+    }
+    public static void testADryAttemptAsksWhatTheRealOneAsksBeforeItsFirstWriteAndThenStops() {
+        // P10.2: a scanned page. With no answer a dry attempt asks the decode, as the real one; with the decode answered it asks the OCR, as the real one;
+        // with the OCR answered too the real attempt goes on to write the page, and the dry one stops where the write would begin, having written nothing.
+        emon.Port.Cells pl = emon.Port.newCells();
+        emon.Port.Cells ans = emon.Port.newCells();
+        emon.Port.Cells rq1 = emon.Port.newCells();
+        emon.Port.Cells rq2 = emon.Port.newCells();
+        emon.Port.Cells rq3 = emon.Port.newCells();
+        emon.Port.Cells rq4 = emon.Port.newCells();
+        emon.Port.Cells mask = emon.Port.newCells();
+        emon.Port.Cells epages = emon.Port.newCells();
+        emon.Port.Cells views = emon.Port.newCells();
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        planOf(pl, 1, Pageunit.pkScan());
+        emon.Testport.assertEq(runPageWatched(0, 2, 4, pl, ans, rq1, mask, epages, views, olines, owords, words, lines), Plan.usRequests(), "dry: it asks the decode");
+        runPageWatched(0, 2, 0, pl, emon.Port.newCells(), rq2, mask, epages, views, olines, owords, words, lines);
+        emon.Testport.assertEq(emon.Port.cellsLen(rq1), emon.Port.cellsLen(rq2), "the same request as the real attempt's");
+        emon.Testport.assertEq(emon.Port.cellsAt(rq1, 2), emon.Port.cellsAt(rq2, 2), "under the same id");
+        Plan.anDecode(ans, 260, 2550, 3300, 1, 30000, 0, 1);
+        emon.Testport.assertEq(runPageWatched(0, 2, 4, pl, ans, rq3, mask, epages, views, olines, owords, words, lines), Plan.usRequests(), "dry: with the decode answered it asks the OCR");
+        emon.Testport.assertEq(Plan.recKind(rq3, 0), Plan.pkOcr(), "an OCR");
+        emon.Testport.assertEq(Plan.recId(rq3, 0), 272, "of the page's first pass");
+        Plan.anRender(ans, 272, 2550, 3300, 1, 300);
+        emon.Testport.assertEq(runPageWatched(0, 2, 4, pl, ans, rq4, mask, epages, views, olines, owords, words, lines), Plan.usDone(), "dry: with the OCR answered it stops");
+        emon.Testport.assertEq(emon.Port.cellsLen(rq4), 0, "asking nothing");
+        emon.Testport.assertEq(watchedLen(mask, epages, views, olines, owords, words, lines), 0, "and having written nothing");
+    }
+    public static void testADryAttemptOfABornDigitalPageStopsBeforeItsFirstWrite() {
+        emon.Port.Cells pl = emon.Port.newCells();
+        emon.Port.Cells ans = emon.Port.newCells();
+        emon.Port.Cells rq1 = emon.Port.newCells();
+        emon.Port.Cells rq2 = emon.Port.newCells();
+        emon.Port.Cells rq3 = emon.Port.newCells();
+        emon.Port.Cells mask = emon.Port.newCells();
+        emon.Port.Cells epages = emon.Port.newCells();
+        emon.Port.Cells views = emon.Port.newCells();
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        bornPlan(pl, 1, Rasterplan.rpAskFull(), 0);
+        emon.Testport.assertEq(runPageWatched(0, 2, 4, pl, ans, rq1, mask, epages, views, olines, owords, words, lines), Plan.usRequests(), "dry: the two renders");
+        emon.Testport.assertEq(emon.Port.cellsLen(rq1), 14, "of seven cells each, as the real attempt's");
+        answerRenders(ans, 0);
+        emon.Testport.assertEq(runPageWatched(0, 2, 4, pl, ans, rq2, mask, epages, views, olines, owords, words, lines), Plan.usRequests(), "dry: the renders answered, the OCR");
+        emon.Testport.assertEq(Plan.recKind(rq2, 0), Plan.pkOcr(), "an OCR");
+        Plan.anRender(ans, 272, 2550, 3300, 3, 300);
+        emon.Testport.assertEq(runPageWatched(0, 2, 4, pl, ans, rq3, mask, epages, views, olines, owords, words, lines), Plan.usDone(), "dry: the OCR answered, it stops");
+        emon.Testport.assertEq(emon.Port.cellsLen(rq3), 0, "asking nothing");
+        emon.Testport.assertEq(watchedLen(mask, epages, views, olines, owords, words, lines), 0, "and having written nothing");
     }
     public static void testTheBitmapSetKeepsWhatKinMakes() {
         emon.Port.BitmapSet s = emon.Port.newBitmapSet();

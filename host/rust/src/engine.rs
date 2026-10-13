@@ -323,6 +323,10 @@ pub struct Config {
     pub simulate_async: bool,
     pub max_rounds: i32,
     pub fetch_rounds: i32,
+    // The `parallel` option (P10.2, SPEC 12.1, D1300): how many workers a conversion may spread its fulfilment over. 1, the default, is serial and starts no
+    // thread; the limit `workers` caps it (kin's `pl-workers` is the clamp). It changes how the work is spread and nothing in the Model, the transcript or the
+    // accounting.
+    pub parallel: i32,
     // The `Ocr` port, if the embedder has one (D211). None: no live OCR; a replay needs none.
     pub ocr: Option<OcrPort>,
     // The `Renderer` port (D007, D127): what fulfils `render` and `crop` requests when the Engine converts
@@ -401,7 +405,7 @@ fn options_of(c: &Cfg) -> Options {
 
 fn config_of(c: &Cfg) -> Config {
     let limits = (0..cells_len(&c.lims) / 2).map(|i| (cells_at(&c.lims, 2 * i), cells_at(&c.lims, 2 * i + 1))).collect();
-    Config { limits, chunk_size: c.chunk as usize, simulate_async: false, max_rounds: c.maxr, fetch_rounds: c.fetchr, ocr: None, renderer: None, pdf_codecs: None }
+    Config { limits, chunk_size: c.chunk as usize, simulate_async: false, max_rounds: c.maxr, fetch_rounds: c.fetchr, parallel: c.par, ocr: None, renderer: None, pdf_codecs: None }
 }
 
 // `key=value` lines, parsed by kin: the settings of SPEC 13 by their names, `limit.NAME=N` for the limits, the loop's bounds, and the ports the
@@ -896,7 +900,7 @@ pub static OCR_US: [AtomicU64; 2] = [AtomicU64::new(0), AtomicU64::new(0)];
 // Renderer is configured (P6.2). `keep` holds the pixels in a decode answer (a recording wants them, as canonical
 // PNG, and so does a live OCR engine; a plain conversion needs only the numbers); `recording` also keeps the OCR
 // engine's thresholded image, which only a transcript wants (D211).
-pub fn port_fulfiller(source: Arc<dyn ByteSource>, idx: usize, keep: bool, recording: bool, ocr: Option<OcrPort>, codecs: Option<Arc<dyn PdfCodecs>>) -> impl FnMut(&Request, &plan::Bitmaps) -> Result<Answer, PlanError> {
+pub fn port_fulfiller(source: Arc<dyn ByteSource>, idx: usize, keep: bool, recording: bool, ocr: Option<OcrPort>, codecs: Option<Arc<dyn PdfCodecs>>) -> impl Fn(&Request, &plan::Bitmaps) -> Result<Answer, PlanError> + Send + Sync {
     use crate::emon::plan as kp;
     move |req: &Request, bm: &plan::Bitmaps| -> Result<Answer, PlanError> {
         // WHICH PORT a request goes to, or that none is configured, is kin's (`pl-route`); this host has no renderer
@@ -1067,8 +1071,11 @@ fn intake_of(doc: &Doc, len: u64) -> Intake {
 
 // One page's (a raster input's frame's) unit (P7.U, D195): its own requests and answers and its `BitmapSet`; it writes nothing until its answers are in,
 // and never reads the input. One call of kin's.
-fn unit_page(d: &mut UnitDoc, i: usize, idx: usize, len: u64, opts: &Options, answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet) -> i32 {
-    en_page(&mut cfg_of(opts), &mut d.doc, &mut d.ev, i as i32, idx as i32, len as i32, answers, rq, bms)
+// `dry` makes it a DRY attempt (P10.2, `pu-dry`): the part before the first write, which a parallel host runs for the pages ahead to learn what they will ask.
+fn unit_page(d: &mut UnitDoc, i: usize, idx: usize, len: u64, opts: &Options, dry: bool, answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet) -> i32 {
+    let mut c = cfg_of(opts);
+    c.dry = dry as i32;
+    en_page(&mut c, &mut d.doc, &mut d.ev, i as i32, idx as i32, len as i32, answers, rq, bms)
 }
 
 // The document unit (stage 3) over the text layer and whatever the page units added to it: fusion, the evidence, furniture, tables, headings,
@@ -1455,9 +1462,28 @@ impl Engine {
                 replayer = Some(Replayer::new(t));
             }
         }
+        let replaying = replayer.is_some();
         let inner: &mut dyn Fulfiller = match replayer.as_mut() {
             Some(r) => r,
             None => &mut live,
+        };
+        // PARALLEL (P10.2, SPEC 12.1): `parallel` workers fulfil a round's requests at once and the pages ahead of the loop's are looked at meanwhile (`par.rs`).
+        // A replay answers from the transcript and has nothing to run: it stays serial. The browser has no threads.
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut par: Option<crate::par::Par> = {
+            use crate::emon::planloop as lp;
+            let workers = lp::pl_workers(self.cfg.parallel, port::limit_of(16)).max(1) as usize;
+            if workers > 1 && !replaying {
+                let exec = crate::par::Exec {
+                    render: self.cfg.renderer.as_ref().map(|r| RenderFulfiller::for_input(r.clone(), idx, RenderInput { source: input.source.clone(), password: input.password.clone() })),
+                    local: Box::new(port_fulfiller(input.source.clone(), idx, is_recording || self.cfg.ocr.is_some(), is_recording, self.cfg.ocr.clone(), self.cfg.pdf_codecs.clone())),
+                    ocr: self.cfg.ocr.is_some(),
+                };
+                let pcfg = plan::Config { max_rounds: self.cfg.max_rounds, fetch_rounds: self.cfg.fetch_rounds };
+                Some(crate::par::Par::new(exec, workers, lp::pl_ahead(workers as i32).max(0) as usize, self.cfg.limits.clone(), pcfg))
+            } else {
+                None
+            }
         };
         // THE LOOP: the document pass (everything that reads the input; its misses fetch and re-run it), the asset unit, one unit
         // per page, then the document unit: `Run::step` walks them, and what it needs of this host is bytes and answers. The
@@ -1477,6 +1503,12 @@ impl Engine {
                     }
                 }
                 plan::Next::Requests(..) => {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    let entries = match par.as_mut() {
+                        Some(p) => run.fulfil_par(p)?,
+                        None => run.fulfil(&mut ports)?,
+                    };
+                    #[cfg(target_arch = "wasm32")]
                     let entries = run.fulfil(&mut ports)?;
                     if let Some(t) = recording.as_deref_mut() {
                         t.entries.extend(entries);
@@ -1670,6 +1702,48 @@ impl Run {
         r.map_err(|e| self.error_of(e))
     }
 
+    // The same on a pool of workers (P10.2, `par.rs`): every request of the round runs at once, the answers are taken in the order they were started, and while
+    // the loop is on a page unit the pages ahead of it are looked at (dry attempts, run here, on this thread) so that their requests are being answered meanwhile.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn fulfil_par(&mut self, par: &mut crate::par::Par) -> Result<Vec<plan::Entry>, Error> {
+        use crate::emon::planloop as lp;
+        struct Ahead<'a> {
+            doc: &'a mut Option<Box<UnitDoc>>,
+            opts: &'a Options,
+            idx: usize,
+            len: u64,
+            cur: Option<usize>,
+            pages: usize,
+        }
+        impl<'a> crate::par::Look for Ahead<'a> {
+            fn page(&self) -> Option<usize> {
+                self.cur
+            }
+            fn pages(&self) -> usize {
+                self.pages
+            }
+            // A dry attempt writes nothing (`pu-dry`); a panic in one ends the chain and is dropped, the real unit meets what caused it in its own turn.
+            fn dry(&mut self, page: usize, answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet, _payload: &mut Buf) -> i32 {
+                let (idx, len, opts) = (self.idx, self.len, self.opts);
+                match self.doc.as_mut() {
+                    Some(d) => match catch_unwind(AssertUnwindSafe(|| unit_page(d, page, idx, len, opts, true, answers, rq, bms))) {
+                        Ok(1) => plan::UNIT_REQUESTS,
+                        _ => plan::UNIT_DONE,
+                    },
+                    None => plan::UNIT_DONE,
+                }
+            }
+        }
+        let (kind, pages) = self.doc_kind();
+        let cur = if self.machine.phase() == lp::ph_pages() && kind != 0 { Some(self.machine.page()) } else { None };
+        let r = {
+            let mut look = Ahead { doc: &mut self.docslot, opts: &self.opts, idx: self.idx, len: self.len, cur, pages };
+            let mut rf = crate::par::RoundFulfiller::new(par, &mut look);
+            self.machine.fulfil(&mut rf)
+        };
+        r.map_err(|e| self.error_of(e))
+    }
+
     // One answer to the round, whenever it arrives (a host that awaits offers each as it comes), and `commit` when every request has one.
     pub fn offer(&mut self, a: Answer) -> Result<(), Error> {
         let r = self.machine.offer(a);
@@ -1795,7 +1869,7 @@ impl Run {
                 let (idx, len) = (self.idx, self.len);
                 let mut unit_p = |answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet, _payload: &mut Buf| -> i32 {
                     let r = catch_unwind(AssertUnwindSafe(|| match &mut self.docslot {
-                        Some(doc) => unit_page(doc, i, idx, len, &self.opts, answers, rq, bms),
+                        Some(doc) => unit_page(doc, i, idx, len, &self.opts, false, answers, rq, bms),
                         None => 99,
                     }));
                     match r {

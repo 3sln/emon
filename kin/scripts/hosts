@@ -44,6 +44,8 @@
          [:port    "host/rust/src/render.rs"            "plan"]
          [:port    "host/rust/src/tess.rs"              "ocr ocrport plan"]
          [:test    "host/rust/tests/engine.rs"          "ocr plan"]
+         [:test    "test/driver/rust/main.rs"           "ocr plan"]      ; `--fake-ports` (P10.2): the answers of a stand-in Ocr, built with the forms a real engine's adapter uses
+         [:test    "test/driver/go/main.go"             "ocr plan"]
          [:driver  "host/go/engine.go"                  "config enctx engine html model plan planloop"]
          [:machine "host/go/planrun/planrun.go"         "plan planctx planloop"]
          [:machine "host/go/planrun/transcript.go"      "planloop transcript transcriptctx"]
@@ -68,6 +70,7 @@
          [:api     "host/java/emon/api/Node.java"       "enctx model"]
          [:api     "host/java/emon/api/Options.java"    "config enctx html"]
          [:test    "test/driver/java/EngineTest.java"   "ocr plan"]
+         [:test    "test/driver/java/Main.java"         "ocr plan"]
          [:driver  "host/csharp/Emon/Api/Engine.cs"     "enctx model plan planloop"]
          [:driver  "host/csharp/Emon/Api/Units.cs"      "enctx engine planloop"]
          [:machine "host/csharp/Emon/Planrun.cs"        "plan planctx planloop pngcheck pngread transcript transcriptctx"]
@@ -82,7 +85,8 @@
          [:api     "host/csharp/Emon/Api/Model.cs"      "enctx html json model"]
          [:api     "host/csharp/Emon/Api/Node.cs"       "enctx model"]
          [:api     "host/csharp/Emon/Api/Options.cs"    "config enctx html"]
-         [:test    "test/driver/csharp/EngineTest.cs"   "ocr plan"]]))
+         [:test    "test/driver/csharp/EngineTest.cs"   "ocr plan"]
+         [:test    "test/driver/csharp/Main.cs"         "ocr plan"]]))
 
 (defn gen-modules
   "Every module kin generates: `plan`, `pdfdoc`, `engine`, ... (the Rust file names of gen/rust/emon)."

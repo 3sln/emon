@@ -3,14 +3,20 @@
 ;;
 ;; SPEC 12.2: same input + same transcript + same settings -> byte-identical Model JSON and HTML, every run. For
 ;; each document and each host (Rust and Go; and, when their toolchains are there, Java, C#, the C binding and the pod: P9.5, D494, each left out
-;; LOUDLY without one, and C and the pod without 2, which needs threads on one Engine), over the BUNDLE `--out=bundle` (compact and pretty JSON, default and
-;; full HTML, the evidence dump, the intake line):
+;; LOUDLY without one), over the BUNDLE `--out=bundle` (compact and pretty JSON, default and full HTML, the evidence dump, the intake line):
 ;;
 ;;   1. RUN VS RUN: two separate processes give the same bundle, and the same exit code and stderr when the
 ;;      document is refused (nothing in a run, an address or a hash order, may reach the output);
-;;   2. SERIAL VS PARALLEL (SPEC 12.1): `--parallel=8` converts the document eight times at once on ONE Engine,
-;;      on eight threads (Rust) or goroutines (Go), and the driver itself fails if any differs from the first;
-;;      that answer must also be the serial run's. The Model is read from every thread that made it;
+;;   2. SERIAL VS PARALLEL (SPEC 12.1), three ways:
+;;      a. `--concurrent=8` converts the document eight times at once on ONE Engine, on eight threads (Rust, Java, C#) or goroutines (Go), and the driver
+;;         itself fails if any differs from the first; that answer must also be the serial run's. The Model is read from every thread that made it
+;;         (this was `--parallel=8` until P10.2; not on C and the pod, which have no threads of their own to convert eight at once from);
+;;      b. `--parallel=N` for N = 2, 4 and 8 (P10.2, D1300-D1303): ONE conversion fulfilled by N workers must give the serial run's bytes. On every host that
+;;         has threads: Rust, Go, Java, C#, and the C binding and the pod (the Rust library behind them reads `parallel=N` in the options text it is given).
+;;         Nothing is fulfilled with no engine installed (a render, a decode or an OCR is answered `unsupported`), so:
+;;      c. the same N with `--fake-ports` (Rust, Go, Java, C# drivers: a deterministic Renderer and Ocr stand in for pdfium and Tesseract) against the
+;;         serial run WITH them: the fulfilment path, the pages looked at ahead and a round's requests at once, run on every document of the corpus.
+;;      THE BROWSER HAS NO ARM and says so: the wasm module runs on one thread (`parallel` is read by the options parser and does nothing there).
 ;;   3. REVERSED: the document with its objects laid out in REVERSE file order (`tools/lib/pdfreverse.clj`: each
 ;;      object's bytes untouched, a fresh cross-reference table, the same trailer) must give the same Model.
 ;;      The Engine reads a whole document as one unit today, so there is no page submission to reverse inside it
@@ -51,14 +57,16 @@
         (do (println "  FAIL the" what "driver did not build:\n" (:err r)) (System/exit 1)))))
 (def drivers {:rust (build "kin/scripts/emon-rs-build" "Rust") :go (build "kin/scripts/emon-go-build" "Go")})
 ;; THE OTHER HOSTS (P9.5, D494): the Java host, the C# host, the C binding and the pod are arms too, each left out LOUDLY without its toolchain. Eight at
-;; once (2) is the driver's `--parallel`, which the Java and C# drivers have (threads on one Engine) and the C driver and the pod do not (a C caller
-;; owns its threads; the pod converts in one call): those two are held to 1 and 3, and the Rust library behind them is held to 2 by Rust.
+;; once (2a) is the driver's `--concurrent`, which the Java and C# drivers have (threads on one Engine) and the C driver and the pod do not (a C caller
+;; owns its threads; the pod converts in one call): those two are held to 1, 2b and 3, and the Rust library behind them is held to 2a by Rust.
 (cp/add-classpath "tools/lib")
 (require '[extra-hosts :as xh])
 (def extras (xh/engines {:hosts [:java :csharp :c :pod] :on-fail (fn [& m] (println "  FAIL" (apply str m)) (System/exit 1))}))
 (def drivers* (merge drivers (into {} (for [{:keys [host drv]} extras] [host drv]))))
 (def hosts (into [:rust :go] (map :host extras)))
-(def parallel-hosts #{:rust :go :java :csharp})
+(def concurrent-hosts #{:rust :go :java :csharp})
+(def fake-port-hosts #{:rust :go :java :csharp})
+(def workers [2 4 8])
 
 (def work (str (fs/create-temp-dir {:dir (fs/create-dirs ".cache/repeat") :prefix "run."})))
 (.addShutdownHook (Runtime/getRuntime) (Thread. (fn [] (fs/delete-tree work))))
@@ -108,6 +116,14 @@
 
 (def rewritable (atom 0))
 (def not-rewritable (atom 0))
+;; how many (document, host) pairs converted with the fake ports (the fulfilment path ran) and were held to the same bytes at 2, 4 and 8 workers
+(def fulfilled (atom 0))
+
+;; THE DOCUMENTS ARE CONVERTED A FEW AT A TIME (the machine is shared): each one runs a dozen drivers, several of them on threads of their own
+(defn bounded-pmap [n f xs]
+  (let [sem (java.util.concurrent.Semaphore. n)
+        fs (doall (map (fn [x] (.acquire sem) (future (try (f x) (finally (.release sem))))) xs))]
+    (mapv deref fs)))
 
 (defn one [i item]
   (let [probs (atom []) note (fn [& xs] (swap! probs conj (apply str xs)))
@@ -120,10 +136,22 @@
         (dotimes [_ (if full? 2 1)]
           (let [b (drive host [] item)]
             (when-not (same? a b) (note h ": run vs run: " (first-diff a b)))))
-        ;; 2. serial vs parallel (the driver also checks its eight against each other)
-        (when (parallel-hosts host)
-          (let [p (drive host ["--parallel=8"] item)]
-            (when-not (same? a p) (note h ": --parallel=8 vs serial: " (first-diff a p)))))
+        ;; 2a. eight conversions at once on one Engine (the driver also checks its eight against each other)
+        (when (concurrent-hosts host)
+          (let [p (drive host ["--concurrent=8"] item)]
+            (when-not (same? a p) (note h ": --concurrent=8 vs serial: " (first-diff a p)))))
+        ;; 2b. one conversion on N workers (P10.2): the serial run's bytes at every N
+        (doseq [n workers]
+          (let [p (drive host [(str "--parallel=" n)] item)]
+            (when-not (same? a p) (note h ": --parallel=" n " vs serial: " (first-diff a p)))))
+        ;; 2c. the same with a deterministic Renderer and Ocr, against the serial run with them
+        (when (fake-port-hosts host)
+          (let [f (drive host ["--fake-ports"] item)]
+            (when (= -1 (:exit f)) (note h ": --fake-ports timed out"))
+            (when (zero? (:exit f)) (swap! fulfilled inc))
+            (doseq [n workers]
+              (let [p (drive host ["--fake-ports" (str "--parallel=" n)] item)]
+                (when-not (same? f p) (note h ": --fake-ports --parallel=" n " vs serial: " (first-diff f p)))))))
         ;; 3. reversed object order, over documents that convert
         (when (zero? (:exit a))
           (when (= host :rust) (swap! converted inc))
@@ -146,17 +174,21 @@
     {:probs @probs :converted @converted :reversed @reversed}))
 
 (def host-names (str/join ", " (map #(case % :rust "Rust" :go "Go" :java "Java" :csharp "C#" :c "C" :pod "pod") hosts)))
-(println (str "  repeat: " (count corpus) " documents x " (count hosts) " hosts (" host-names "): run vs run, serial vs parallel(8), reversed object order"
+(println (str "  repeat: " (count corpus) " documents x " (count hosts) " hosts (" host-names "): run vs run, eight conversions at once, one conversion on 2/4/8 workers"
+              " (and with fake ports on Rust, Go, Java and C#), reversed object order"
               (when full? " (--full)") (when corpus? " (--corpus: the public corpus)")))
+(println "  SKIP browser: no serial-vs-parallel arm -- the wasm module runs on one thread (a browser has no threads here); `parallel=N` is read by its options parser and does nothing there (P10.2, D1301)")
 (def t0 (System/currentTimeMillis))
-(def results (doall (pmap (fn [[i item]] [item (one i item)]) (map-indexed vector corpus))))
+(def results (bounded-pmap 4 (fn [[i item]] [item (one i item)]) (map-indexed vector corpus)))
 (doseq [[item {:keys [probs]}] results :when (seq probs)]
   (bad (:file item) ": " (str/join "; " probs)))
 
 (when (zero? @fails)
   (let [conv (reduce + (map (comp :converted second) results))
         revd (reduce + (map (comp :reversed second) results))]
-    (ok "REPEAT: " (count results) " documents on " host-names ": run vs run, serial vs eight at once (not on C and the pod: they have no threads of their own), identical bundles and refusals; "
+    (ok "REPEAT: " (count results) " documents on " host-names ": run vs run, serial vs eight conversions at once (not on C and the pod: they have no threads of their own to do it from), "
+        "serial vs 2, 4 and 8 workers inside one conversion on every host (the browser has no threads: skipped), and with fake ports against the serial run with them on Rust, Go, Java and C# ("
+        @fulfilled " of the " (* (count results) (count (filter fake-port-hosts hosts))) " document x host conversions ran the fulfilment path to a Model), identical bundles and refusals; "
         revd " of the " conv " that convert were rewritten with their objects in reverse file order (" (- conv revd)
         " are not a single classic table) and gave the same JSON, HTML and evidence on every host ("
         (quot (- (System/currentTimeMillis) t0) 1000) " s)")))

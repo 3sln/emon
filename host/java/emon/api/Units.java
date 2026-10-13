@@ -264,10 +264,13 @@ final class Units {
 
     /**
      * One page's (a raster input's frame's) unit (P7.U, D195): its own requests, answers and BitmapSet; a scanned page is read, any other is left as the text
-     * layer made it. It writes nothing until its answers are in, and never reads the input. One call of kin's.
+     * layer made it. It writes nothing until its answers are in, and never reads the input. One call of kin's. {@code dry} makes it a DRY attempt (P10.2,
+     * `pu-dry`): the part before the first write, which a parallel host runs for the pages ahead to learn what they will ask.
      */
-    static int unitPage(UnitDoc d, int i, int idx, long n, Options opts, Port.Cells answers, Port.Cells rq, Port.BitmapSet bms) {
-        return Engine.enPage(cfgOf(opts), d.doc, d.ev, i, idx, (int) n, answers, rq, bms);
+    static int unitPage(UnitDoc d, int i, int idx, long n, Options opts, boolean dry, Port.Cells answers, Port.Cells rq, Port.BitmapSet bms) {
+        Enctx.Cfg c = cfgOf(opts);
+        c.dry = boolInt(dry);
+        return Engine.enPage(c, d.doc, d.ev, i, idx, (int) n, answers, rq, bms);
     }
 
     /**

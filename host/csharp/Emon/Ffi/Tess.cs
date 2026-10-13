@@ -85,7 +85,18 @@ public sealed unsafe class Tess : emon.Api.IOcr {
 
 
     private readonly string tessdata;
-    private readonly Dictionary<string, nint> apis = new Dictionary<string, nint>();
+
+    // One ENGINE: initialised instances per language string, used by one thread at a time. A POOL OF ENGINES (P10.2, D1304): Tesseract's API objects are not
+    // thread safe, so each reading takes an engine of its own from the pool (or makes one, which is a full model load) and gives it back; the pool holds as
+    // many as were ever wanted at once, which is as many as the conversions and the workers of a `Parallel` conversion that read at the same moment. A serial
+    // run has one. A reading is a function of the request and the model alone (the LSTM engine learns nothing between pages), so which engine reads a page
+    // does not show in the answer.
+    private sealed class Eng {
+        internal readonly Dictionary<string, nint> Apis = new Dictionary<string, nint>();
+        internal readonly List<string> Notes = new List<string>();
+    }
+
+    private readonly Stack<Eng> idle = new Stack<Eng>();
     // the resolution given to the engine when a request names none (the request's own flags win); 0: none, as Go and the Engine
     private volatile int dpi = 0;
 
@@ -95,7 +106,6 @@ public sealed unsafe class Tess : emon.Api.IOcr {
         return this;
     }
 
-    private readonly List<string> notes = new List<string>();
     private readonly List<string[]> producer;
 
     private Tess(string tessdata) {
@@ -325,8 +335,8 @@ public sealed unsafe class Tess : emon.Api.IOcr {
 
     // ------------------------------------------------------------------ the engine
 
-    private nint Api(string langs) {
-        if (apis.TryGetValue(langs, out nint a)) {
+    private nint Api(Eng eng, string langs) {
+        if (eng.Apis.TryGetValue(langs, out nint a)) {
             return a;
         }
         nint h = create();
@@ -339,7 +349,7 @@ public sealed unsafe class Tess : emon.Api.IOcr {
             // 0 is never "wrong" (D130).
             setVariable(h, ar.Str("lstm_choice_mode"), ar.Str("2"));
         }
-        apis[langs] = h;
+        eng.Apis[langs] = h;
         return h;
     }
 
@@ -389,7 +399,7 @@ public sealed unsafe class Tess : emon.Api.IOcr {
         }
     }
 
-    private Planrun.Answer FulfilNative(Planrun.Request req, Dictionary<int, Port.Bitmap> bm, bool keepBinary) {
+    private Planrun.Answer FulfilNative(Eng eng, Planrun.Request req, Dictionary<int, Port.Bitmap> bm, bool keepBinary) {
         int id = req.Id();
         if (!bm.TryGetValue(req.Field(emon.Plan.OcBitmap()), out Port.Bitmap b)) {
             return Failed(id, Planrun.StatusFailed);
@@ -421,7 +431,7 @@ public sealed unsafe class Tess : emon.Api.IOcr {
         for (int i = 0; i < Port.CellsLen(gone); i++) {
             int cp = Port.CellsAt(gone, i);
             if (cp == 0) {
-                notes.Add("no model for " + dropped + ": dropped");
+                eng.Notes.Add("no model for " + dropped + ": dropped");
                 dropped.Clear();
             } else {
                 dropped.Append(char.ConvertFromUtf32(cp));
@@ -435,7 +445,7 @@ public sealed unsafe class Tess : emon.Api.IOcr {
         if (lang.Length == 0) {
             return Failed(id, 2);
         }
-        nint h = Api(lang);
+        nint h = Api(eng, lang);
         if (h == 0) {
             return Failed(id, Planrun.StatusFailed);
         }
@@ -465,7 +475,7 @@ public sealed unsafe class Tess : emon.Api.IOcr {
             System.Runtime.InteropServices.Marshal.Copy(px, 0, cpx, px.Length);
             if ((flags & 2) != 0) {
                 // OSD has its own model (`osd`) and its own engine instance
-                nint ho = Api("osd");
+                nint ho = Api(eng, "osd");
                 if (ho == 0) {
                     ho = h;
                 }
@@ -478,7 +488,7 @@ public sealed unsafe class Tess : emon.Api.IOcr {
                     sconf = X10(*(float*) sc);
                     script = emon.Ocrport.OpOsdScript(CellsOf(Cps(CStr(*(nint*) sn))));
                 } else {
-                    notes.Add("osd failed");
+                    eng.Notes.Add("osd failed");
                 }
                 clear(ho);
             }
@@ -699,15 +709,24 @@ public sealed unsafe class Tess : emon.Api.IOcr {
             || c == 0x2028 || c == 0x2029 || c == 0x202f || c == 0x205f || c == 0x3000;
     }
 
-    /// One engine behind a lock: Tesseract's API objects are not thread safe, and conversions that run at once take turns at the engine.
+    /// A reading on an engine of its own from the pool (see `Eng`); readings that run at once run on different engines.
     public Planrun.Answer Fulfil(Planrun.Request req, Dictionary<int, Port.Bitmap> bitmaps, bool keepBinary) {
-        lock (this) {
-            try {
-                return FulfilNative(req, bitmaps, keepBinary);
-            } catch (System.Exception) {
-                // an engine that fails on a page is a failed OCR of it, not a crashed process
-                return Failed(req.Id(), Planrun.StatusFailed);
+        Eng eng = null;
+        lock (idle) {
+            if (idle.Count > 0) {
+                eng = idle.Pop();
             }
+        }
+        eng ??= new Eng();
+        try {
+            Planrun.Answer a = FulfilNative(eng, req, bitmaps, keepBinary);
+            lock (idle) {
+                idle.Push(eng);
+            }
+            return a;
+        } catch (System.Exception) {
+            // an engine that fails on a page is a failed OCR of it, not a crashed process; one that failed is not given back (its state is not known)
+            return Failed(req.Id(), Planrun.StatusFailed);
         }
     }
 

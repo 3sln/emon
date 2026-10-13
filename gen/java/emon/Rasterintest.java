@@ -27,7 +27,7 @@ public final class Rasterintest {
         return Rasterin.rsDoc(emon.Port.srcOfBlob(emon.Testport.hexBlob("49492a0008000000")), 7, Rasterin.rsTiff(), ans, rq, nodes, attrs, text, pages, mask);
     }
     public static int pagePol(int f, emon.Port.Cells ans, emon.Port.Cells rq, int policy, emon.Port.Cells loc, emon.Port.Cells mask, emon.Port.Cells et, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells oruns, emon.Port.Cells olines, emon.Port.Cells owords) {
-        return Rasterin.rsPage(f, 7, 8, policy, ans, rq, loc, emon.Port.newBitmapSet(), mask, emon.Port.newCells(), emon.Port.newCells(), et, emon.Port.newCells(), emon.Port.newCells(), oruns, emon.Port.newCells(), olines, owords, emon.Port.newCells(), emon.Port.newCells(), wd, ln, emon.Port.newCells());
+        return Rasterin.rsPage(f, 7, 8, policy, ans, rq, loc, emon.Port.newBitmapSet(), mask, emon.Port.newCells(), emon.Port.newCells(), et, emon.Port.newCells(), emon.Port.newCells(), oruns, emon.Port.newCells(), olines, owords, emon.Port.newCells(), emon.Port.newCells(), wd, ln, emon.Port.newCells(), 0);
     }
     public static void testTheDocumentPassAsksForFrameZerosHeaderAndNothingMore() {
         emon.Port.Cells ans = emon.Port.newCells();

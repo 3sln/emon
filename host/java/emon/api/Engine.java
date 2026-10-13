@@ -110,11 +110,17 @@ public final class Engine {
     /** The loop over one input: limits first, a `Src` over its source, the units run as kin schedules them, and the stats. */
     private Run runInput(int idx, Input in, Options opts, boolean intakeOnly, Planrun.Transcript rec, Planrun.Transcript replay) throws EmonError {
         Object[] box = new Object[1];
+        Par[] poolBox = new Par[1];
         Port.withLimits(cfg.limits, () -> {
             try {
-                box[0] = runInputBounded(idx, in, opts, intakeOnly, rec, replay);
+                box[0] = runInputBounded(idx, in, opts, intakeOnly, rec, replay, poolBox);
             } catch (EmonError e) {
                 box[0] = e;
+            } finally {
+                // the pool ends before the limit scope does, whatever ended the run
+                if (poolBox[0] != null) {
+                    poolBox[0].close();
+                }
             }
         });
         if (box[0] instanceof EmonError) {
@@ -131,7 +137,7 @@ public final class Engine {
         return EmonError.panic(e);
     }
 
-    private Run runInputBounded(int idx, Input in, Options opts, boolean intakeOnly, Planrun.Transcript rec, Planrun.Transcript replay) throws EmonError {
+    private Run runInputBounded(int idx, Input in, Options opts, boolean intakeOnly, Planrun.Transcript rec, Planrun.Transcript replay, Par[] poolBox) throws EmonError {
         // the input-bytes bound is checked against the SIZE, before any byte is read (SPEC 13.1)
         final long size = in.source.size();
         long limit = Math.min((long) Port.limitOf(0), Integer.MAX_VALUE);
@@ -186,7 +192,7 @@ public final class Engine {
         // the live port set (D127, D211): `render` and `crop` go to the configured Renderer, reading the same input through the same byte source; with none
         // they, like the other kinds, fall to the host's own fulfiller, which answers them `unsupported` (D199). Which port a request goes to is kin's
         // (`pl-route`). Pixels are kept in the answers when a transcript is being recorded or an OCR engine will read them.
-        Planrun.Fulfiller renderF = null;
+        RenderPort.Fulfiller renderF = null;
         if (cfg.renderer != null) {
             byte[] rpw = in.password.length > 0 ? in.password : null;
             renderF = RenderPort.Fulfiller.forInput(cfg.renderer, idx, new RenderPort.Input(in.source, rpw));
@@ -209,6 +215,19 @@ public final class Engine {
             replayer = new Planrun.Replayer(replay);
             ports = replayer;
         }
+        // PARALLEL (P10.2, SPEC 12.1): `parallel` workers fulfil a round's requests at once and the pages ahead of the loop's are looked at meanwhile
+        // (`Par`). A replay answers from the transcript and has nothing to run: it stays serial. The pool ends before the limit scope does (`runInput`).
+        Par pool = null;
+        if (replay == null) {
+            int workers = Planloop.plWorkers(cfg.parallel, Port.limitOf(16));
+            if (workers > 1) {
+                Par.Exec x = new Par.Exec(renderF, Ports.portFn(in.source, idx, rec != null || cfg.ocr != null, rec != null, cfg.ocr, cfg.pdfCodecs), cfg.ocr != null);
+                pool = new Par(x, workers, Planloop.plAhead(workers), pcfg);
+                poolBox[0] = pool;
+                ports = new Par.Round(pool);
+            }
+        }
+        final Par poolF = pool;
         Ports.Timed timed = new Ports.Timed(ports);
         ports = timed;
         // THE SCHEDULE IS KIN'S (`en-next`): which unit runs next is the machine's phase, and this function is the driver of each unit. The unit that just
@@ -220,6 +239,10 @@ public final class Engine {
         phases:
         for (;;) {
             int phase = m.phase();
+            if (poolF != null) {
+                // outside the page units there is no page to look ahead of
+                poolF.cur = -1;
+            }
             if (phase == Planloop.phDoc()) {
                 // THE DOCUMENT PASS: everything that reads the input, in its own loop (misses fetch and re-run it).
                 long t0 = System.nanoTime();
@@ -283,9 +306,21 @@ public final class Engine {
                 final int page = m.page();
                 final EmonError[] failed = {null};
                 final Units.UnitDoc du = docU[0];
+                if (poolF != null) {
+                    poolF.cur = page;
+                    poolF.pages = du.info.pages;
+                    // a dry attempt writes nothing (`pu-dry`); a failure in one ends the chain and is dropped, the real unit meets what caused it in its own turn
+                    poolF.dry = (pg, answers, rq, bms, payload) -> {
+                        try {
+                            return Units.unitPage(du, pg, idx, size, opts, true, answers, rq, bms) == 1 ? Planrun.UNIT_REQUESTS : Planrun.UNIT_DONE;
+                        } catch (RuntimeException | StackOverflowError | OutOfMemoryError p) {
+                            return Planrun.UNIT_DONE;
+                        }
+                    };
+                }
                 Planrun.Unit unitP = (answers, rq, bms, payload) -> {
                     try {
-                        int s = Units.unitPage(du, page, idx, size, opts, answers, rq, bms);
+                        int s = Units.unitPage(du, page, idx, size, opts, false, answers, rq, bms);
                         if (s == 0) {
                             return Planrun.UNIT_DONE;
                         }

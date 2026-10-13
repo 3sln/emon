@@ -101,6 +101,8 @@ public final class Enctx {
         public emon.Port.Cells prod = emon.Port.newCells();
         public StringBuilder msg = new StringBuilder();
         public int nort = 0;
+        public int par = 0;
+        public int dry = 0;
         public Cfg() {
         }
         @Override
@@ -128,6 +130,8 @@ public final class Enctx {
             emon.Port.cellsCopyInto(c.prod, this.prod);
             c.msg.append(this.msg.toString());
             c.nort = this.nort;
+            c.par = this.par;
+            c.dry = this.dry;
             return c;
         }
     }

@@ -94,7 +94,7 @@ func tIsKey(emonT *testing.T, b []byte, want int32, name string) int32 {
 }
 
 func TestTheLimitsHaveTheirNamesInKin(emonT *testing.T) {
-	port.AssertEq(emonT, limits.LmCount(), 16, "sixteen limits")
+	port.AssertEq(emonT, limits.LmCount(), 17, "seventeen limits")
 	tLimitName(emonT, 0, "input-bytes")
 	tLimitName(emonT, 1, "stream-bytes")
 	tLimitName(emonT, 2, "total-bytes")
@@ -111,6 +111,7 @@ func TestTheLimitsHaveTheirNamesInKin(emonT *testing.T) {
 	tLimitName(emonT, 13, "asset-placements")
 	tLimitName(emonT, 14, "fonts-per-doc")
 	tLimitName(emonT, 15, "stage-ms")
+	tLimitName(emonT, 16, "workers")
 }
 
 func TestTheLimitsHaveTheirDefaultsAndRangesInKin(emonT *testing.T) {
@@ -131,6 +132,7 @@ func TestTheLimitsHaveTheirDefaultsAndRangesInKin(emonT *testing.T) {
 	port.AssertEq(emonT, limits.LmDefault(14), 512, "fonts-per-doc is the slab")
 	port.AssertEq(emonT, limits.LmHi(14), 512, "and cannot be raised past it")
 	port.AssertEq(emonT, limits.LmDefault(15), 0, "stage-ms is off")
+	port.AssertEq(emonT, limits.LmDefault(16), 16, "workers is the most `parallel` is given")
 	port.AssertEq(emonT, limits.LmLo(3), 0, "a limit is not negative")
 	port.AssertEq(emonT, limits.LmHi(3), 2147483647, "a limit fits 31 bits")
 	port.AssertEq(emonT, limits.LmHi(6), 32, "form-depth is the stack of the forms being run")
@@ -141,7 +143,7 @@ func tNegativeRows() int32 {
 	var n int32 = 0
 	var i int32 = 0
 	var k int32 = 0
-	for i < 18 {
+	for i < 19 {
 		if (config.CkRows[i*5+0] == 1) && (config.CkRows[i*5+1] < 0) {
 			n += 1
 		}
@@ -180,15 +182,16 @@ func TestEveryLimitSaysWhatHappensAtItsBound(emonT *testing.T) {
 	port.AssertEq(emonT, limits.LmOnHit(13), 1, "asset-placements is a budget")
 	port.AssertEq(emonT, limits.LmOnHit(14), 1, "fonts-per-doc is a budget")
 	port.AssertEq(emonT, limits.LmOnHit(15), 0, "stage-ms breaches")
-	port.AssertEq(emonT, limits.LmOnHit(16), 0, "past the table")
+	port.AssertEq(emonT, limits.LmOnHit(16), 1, "workers is a budget: more is served with this many")
+	port.AssertEq(emonT, limits.LmOnHit(17), 0, "past the table")
 	port.AssertEq(emonT, limits.LmOnHit(-1), 0, "before the table")
 }
 
 func TestAKindOutsideTheTableHasNoNameAndADefaultOfNothing(emonT *testing.T) {
-	port.AssertEq(emonT, limits.LmDefault(16), 0, "past the table")
+	port.AssertEq(emonT, limits.LmDefault(17), 0, "past the table")
 	port.AssertEq(emonT, limits.LmDefault(-1), 0, "before the table")
-	port.AssertEq(emonT, limits.LmNameLen(16), 0, "no name")
-	port.AssertEq(emonT, limits.LmNameCh(16, 0), -1, "no character")
+	port.AssertEq(emonT, limits.LmNameLen(17), 0, "no name")
+	port.AssertEq(emonT, limits.LmNameCh(17, 0), -1, "no character")
 	port.AssertEq(emonT, limits.LmNameCh(0, 11), -1, "past the name's end")
 	port.AssertEq(emonT, limits.LmNameCh(0, -1), -1, "before the name")
 	port.AssertEq(emonT, limits.SgDefault(2), 0, "no setting")
@@ -209,7 +212,7 @@ func TestTheSettingsHaveTheirNamesDefaultsAndRangesInKin(emonT *testing.T) {
 }
 
 func TestTheKeysHaveTheirNamesInKin(emonT *testing.T) {
-	port.AssertEq(emonT, 18, 18, "eighteen keys")
+	port.AssertEq(emonT, 19, 19, "nineteen keys")
 	tKeyName(emonT, 0, "locale")
 	tKeyName(emonT, 1, "ocr")
 	tKeyName(emonT, 2, "furniture")
@@ -228,6 +231,7 @@ func TestTheKeysHaveTheirNamesInKin(emonT *testing.T) {
 	tKeyName(emonT, 15, "chunk")
 	tKeyName(emonT, 16, "limit.")
 	tKeyName(emonT, 17, "producer.")
+	tKeyName(emonT, 18, "parallel")
 }
 
 func TestTheWordsHaveTheirNamesAndCodesInKin(emonT *testing.T) {
@@ -253,6 +257,8 @@ func TestAKeyIsFoundByItsWholeNameOrItsPrefix(emonT *testing.T) {
 	tIsKey(emonT, port.TextBlob("limit.pages"), 1, "a limit")
 	tIsKey(emonT, port.TextBlob("producer.name"), 1, "a producer")
 	tIsKey(emonT, port.TextBlob("record"), 1, "record")
+	tIsKey(emonT, port.TextBlob("parallel"), 1, "parallel")
+	tIsKey(emonT, port.TextBlob("parallelx"), 0, "parallel and more")
 	tIsKey(emonT, port.TextBlob("oc"), 0, "a prefix of a plain key")
 	tIsKey(emonT, port.TextBlob("ocrx"), 0, "a plain key and more")
 	tIsKey(emonT, port.TextBlob("out"), 0, "a driver's own flag")
@@ -280,13 +286,15 @@ func TestTheEmptyTextIsTheDefaults(emonT *testing.T) {
 	port.AssertEq(emonT, c.Fetchr, 24, "fetch rounds")
 	port.AssertEq(emonT, c.Rec, 0, "not recording")
 	port.AssertEq(emonT, c.Jsocr, 0, "no js ocr")
+	port.AssertEq(emonT, c.Par, 1, "serial")
+	port.AssertEq(emonT, c.Dry, 0, "not a dry attempt")
 	port.AssertEq(emonT, port.CellsLen(c.Lims), 0, "no limits")
 	port.AssertEq(emonT, port.CellsLen(c.Prod), 0, "no producer")
 }
 
 func TestEveryKeySetsItsField(emonT *testing.T) {
 	var c *enctx.Cfg = enctx.NewCfg()
-	port.AssertEq(emonT, tParse(c, port.TextBlob("locale=de-AT\nocr=never\nfurniture=drop\nassets=figures\nasset-dpi=300\nasset-pixels=1000\nasset-bytes=2000\nassets-bytes=3000\nasset-signatures=on\nkeep-evidence=1\nocr-scope=witness\nmax-rounds=7\nfetch-rounds=9\nrecord=1\njs-ocr=1\nchunk=512\n")), 0, "parses")
+	port.AssertEq(emonT, tParse(c, port.TextBlob("locale=de-AT\nocr=never\nfurniture=drop\nassets=figures\nasset-dpi=300\nasset-pixels=1000\nasset-bytes=2000\nassets-bytes=3000\nasset-signatures=on\nkeep-evidence=1\nocr-scope=witness\nmax-rounds=7\nfetch-rounds=9\nrecord=1\njs-ocr=1\nchunk=512\nparallel=4\n")), 0, "parses")
 	port.AssertEq(emonT, c.Haveloc, 1, "a locale")
 	port.AssertEq(emonT, port.CellsLen(c.Lcl), 5, "its length")
 	port.AssertEq(emonT, port.CellsAt(c.Lcl, 0), 100, "d")
@@ -306,6 +314,7 @@ func TestEveryKeySetsItsField(emonT *testing.T) {
 	port.AssertEq(emonT, c.Rec, 1, "recording")
 	port.AssertEq(emonT, c.Jsocr, 1, "js ocr")
 	port.AssertEq(emonT, c.Chunk, 512, "chunk")
+	port.AssertEq(emonT, c.Par, 4, "four workers")
 }
 
 func TestTheWordsOfEveryEnumKeyAreRead(emonT *testing.T) {
@@ -399,6 +408,8 @@ func TestAWrongNumberIsRefusedByName(emonT *testing.T) {
 	tRefused(emonT, port.TextBlob("max-rounds=99999999999"), "max-rounds wants a number, not \"99999999999\"")
 	tRefused(emonT, port.TextBlob("limit.pages=lots"), "limit.pages wants a number, not \"lots\"")
 	tRefused(emonT, port.TextBlob("chunk=0"), "chunk is out of range 1..2147483647")
+	tRefused(emonT, port.TextBlob("parallel=0"), "parallel is out of range 1..2147483647")
+	tRefused(emonT, port.TextBlob("parallel=many"), "parallel wants a number, not \"many\"")
 	tRefused(emonT, port.TextBlob("limit.pages=-1"), "limit.pages is out of range 0..2147483647")
 	tRefused(emonT, port.TextBlob("limit.form-depth=33"), "limit.form-depth is out of range 0..32")
 }
@@ -437,6 +448,9 @@ func TestTheLimitsOfP104AreFoundByTheirNames(emonT *testing.T) {
 	port.CellsDrop(t, 0)
 	tCps(t, port.TextBlob("stage-ms"))
 	port.AssertEq(emonT, config.CfLimitFind(t, 0, 8), 15, "stage-ms")
+	port.CellsDrop(t, 0)
+	tCps(t, port.TextBlob("workers"))
+	port.AssertEq(emonT, config.CfLimitFind(t, 0, 7), 16, "workers")
 }
 
 func TestFontsPerDocCannotBeRaisedPastItsSlab(emonT *testing.T) {

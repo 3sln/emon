@@ -393,6 +393,11 @@ public static class Planrun {
             return reqs;
         }
 
+        /// <summary>Every bitmap the round's fulfillers may name: answered so far, and the unit's own views. (The machine adds to it as answers commit: copy it to hand it to another thread.)</summary>
+        public Dictionary<int, Port.Bitmap> Bitmaps() {
+            return all;
+        }
+
         /// <summary>An answer to the round, in whatever order it arrives: refused (`bad-record`) when it answers nothing the round asked.</summary>
         public void Offer(Answer a) {
             Port.CellsDrop(p.Cur, 0);
@@ -535,6 +540,14 @@ public static class Planrun {
             ports += Planloop.PpRender();
         }
         return Planloop.PlRoute(kind, ports);
+    }
+
+    /// <summary>
+    /// Whether a request of kind goes to the Renderer when the host has one (kin's `pl-route`, with a renderer): the live port set and the parallel host's
+    /// workers (P10.2) send it there, everything else to the host's own fulfiller.
+    /// </summary>
+    public static bool RoutesToRenderer(int kind, bool ocr) {
+        return Route(kind, ocr, true) == Planloop.RtRender();
     }
 
     /// <summary>The answer of a request no port is configured for.</summary>

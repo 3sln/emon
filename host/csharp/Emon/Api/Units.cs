@@ -266,10 +266,13 @@ internal static class Units {
 
     /// <summary>
     /// One page's (a raster input's frame's) unit (P7.U, D195): its own requests, answers and BitmapSet; a scanned page is read, any other is left as the text
-    /// layer made it. It writes nothing until its answers are in, and never reads the input. One call of kin's.
+    /// layer made it. It writes nothing until its answers are in, and never reads the input. One call of kin's. `dry` makes it a DRY attempt (P10.2,
+    /// `pu-dry`): the part before the first write, which a parallel host runs for the pages ahead to learn what they will ask.
     /// </summary>
-    internal static int UnitPage(UnitDoc d, int i, int idx, long n, Options opts, emon.Port.Cells answers, emon.Port.Cells rq, emon.Port.BitmapSet bms) {
-        return emon.Engine.EnPage(CfgOf(opts), d.Doc, d.Ev, i, idx, (int) n, answers, rq, bms);
+    internal static int UnitPage(UnitDoc d, int i, int idx, long n, Options opts, bool dry, emon.Port.Cells answers, emon.Port.Cells rq, emon.Port.BitmapSet bms) {
+        emon.Enctx.Cfg c = CfgOf(opts);
+        c.Dry = BoolInt(dry);
+        return emon.Engine.EnPage(c, d.Doc, d.Ev, i, idx, (int) n, answers, rq, bms);
     }
 
     /// <summary>

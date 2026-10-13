@@ -5,7 +5,7 @@
 //     emon-rs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG]
 //             [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--pdfium] [--ocr-scope=full|witness] [--assets=none|images|figures] [--password=TEXT] [--source=bytes|seek|spool]
 //             [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D]
-//             [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE
+//             [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--concurrent=N] [--parallel=N] FILE
 //
 //   --furniture=     running headers, footers and page numbers (SPEC 10.2, D017): `policy` (the default), `keep`, `drop`
 //   --out=json       the canonical JSON (compact; --pretty indents)           (default)
@@ -38,10 +38,14 @@
 //   --tesseract[=D]  give the Engine the Tesseract `Ocr` port (D211), reading models from D (default: $TESSDATA_PREFIX and the usual
 //                    places). LIVE: only a build with the `tesseract` feature has it (`EMON_RS_LIVE=1 kin/scripts/emon-rs-build`); no gate
 //                    uses it. Without the flag an `ocr` request is answered `unsupported` and a page that needed OCR has no text.
+//   --fake-ports     TEST ONLY (P10.2): a deterministic Renderer and Ocr stand in for pdfium and Tesseract, so the fulfilment path runs on every document with no
+//                    engine installed (`bb repeat` holds serial and parallel runs of it to the same bytes). The twins of the other drivers answer alike per host.
 //   --stats          print the loop's attempts, fetch rounds and bytes fetched on stderr
 //   --record=DIR     also write the plan/fulfil transcript to DIR (transcript.edn and PNGs)
 //   --replay=DIR     convert from the transcript in DIR (no port is called)
-//   --parallel=N     run N conversions at once on one Engine; all N must give the same answer (`bb repeat`)
+//   --concurrent=N   run N conversions at once on one Engine; all N must give the same answer (`bb repeat`). (It was `--parallel=N` until P10.2: that
+//                    is now kin's option, `parallel=N`, N workers inside ONE conversion; `bb repeat` runs both.)
+//   --parallel=N     kin's option (SPEC 13, P10.2): spread one conversion's fulfilment over N workers; the output is the serial run's at any N
 //
 // `test/driver/go/main.go` is its twin: the same flags (it adds `--source=readerat`), stdout and exit codes (`bb identity`).
 //
@@ -62,8 +66,50 @@ fn kin_flag(a: &str) -> Option<String> {
 
 fn usage(msg: &str) -> ! {
     eprintln!("emon-rs: {}", msg);
-    eprintln!("usage: emon-rs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--pdfium] [--codecs] [--ocr-scope=full|witness] [--assets=none|images|figures] [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D] [--html-assets=inline|external|omit] [--asset-prefix=P] [--password=TEXT] [--source=bytes|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE");
+    eprintln!("usage: emon-rs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--pdfium] [--codecs] [--ocr-scope=full|witness] [--assets=none|images|figures] [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D] [--html-assets=inline|external|omit] [--asset-prefix=P] [--password=TEXT] [--source=bytes|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--concurrent=N] [--parallel=N] FILE");
     std::process::exit(2);
+}
+
+// `--fake-ports` (P10.2): a deterministic Renderer and Ocr, so that the fulfilment path (a page unit's renders, decodes and OCR, the pages ahead looked
+// at, a round fulfilled by several workers) runs on every document of a gate with no engine installed. The Renderer answers a 20 x 30 RGB page whose
+// pixels are a function of the page, the layer, the resolution and the position; the Ocr answers every request with the word `Hello` in one line, through
+// the kin builders a real engine's adapter uses. Both are pure functions of the request, as the real engines are (the property `bb repeat` holds them to).
+#[derive(Debug)]
+struct FakeRenderer;
+impl emon::Renderer for FakeRenderer {
+    fn render(&self, _input: &dyn emon::ByteSource, _pw: Option<&[u8]>, req: &emon::RenderRequest) -> Result<emon::port::Bitmap, emon::RenderError> {
+        let mut px = Vec::new();
+        for y in 0..30i32 {
+            for x in 0..20i32 {
+                let v = (x * 7 + y * 3 + req.layer * 50 + req.page * 11 + req.dpi) as u8;
+                px.extend_from_slice(&[v, v ^ 0x55, 255 - v]);
+            }
+        }
+        Ok(emon::port::Bitmap::from_bytes(20, 30, 3, &px))
+    }
+}
+
+struct FakeOcr;
+impl emon::Ocr for FakeOcr {
+    fn fulfil(&self, req: &emon::plan::Request, _bm: &emon::plan::Bitmaps, _keep: bool) -> Result<emon::plan::Answer, emon::plan::PlanError> {
+        use emon::emon::{ocr, plan};
+        let mut c = emon::port::Cells::new();
+        let at = plan::an_ocr(&mut c, req.id());
+        let w = plan::an_ocr_word(&mut c, at, 10, 10, 100, 30, 900, 0, 0);
+        for ch in "Hello".chars() {
+            plan::an_ocr_cp(&mut c, w, ch as i32);
+        }
+        ocr::ox_begin(&mut c, 0, 0, 0, 0, -1, 0, -1, -1, 1, 1, 0, 0, 0);
+        ocr::ox_line(&mut c, 10, 10, 100, 30, 10, 35, 110, 35, 0, 0, 0, 20, 14, 6);
+        ocr::ox_block(&mut c, 10, 10, 100, 30, 0, 0, 0);
+        let _ = ocr::ox_word(&mut c, 0, 0, -1, 0);
+        plan::an_ocr_end(&mut c, at);
+        let rec = (0..emon::port::cells_len(&c)).map(|i| emon::port::cells_at(&c, i)).collect();
+        Ok(emon::plan::Answer { rec, bitmap: None })
+    }
+    fn producer(&self) -> Vec<(String, String)> {
+        vec![("engine".to_string(), "fake".to_string())]
+    }
 }
 
 fn html_options(list: &str) -> HtmlOptions {
@@ -175,12 +221,13 @@ fn main() {
     let mut file: Option<String> = None;
     let mut record: Option<String> = None;
     let mut replay: Option<String> = None;
-    let mut parallel: usize = 1;
+    let mut concurrent: usize = 1;
     let mut dump: Option<String> = None;
     let mut asset_dir: Option<String> = None;
     let mut tess: Option<Option<String>> = None;
     let mut use_pdfium = false;
     let mut use_codecs = false;
+    let mut fake_ports = false;
     for a in std::env::args().skip(1) {
         if let Some(v) = a.strip_prefix("--out=") {
             out = v.to_string();
@@ -211,6 +258,8 @@ fn main() {
             use_pdfium = true;
         } else if a == "--codecs" {
             use_codecs = true;
+        } else if a == "--fake-ports" {
+            fake_ports = true;
         } else if a == "--tesseract" {
             tess = Some(None);
         } else if let Some(v) = a.strip_prefix("--tesseract=") {
@@ -223,8 +272,8 @@ fn main() {
             replay = Some(v.to_string());
         } else if let Some(v) = a.strip_prefix("--dump=") {
             dump = Some(v.to_string());
-        } else if let Some(v) = a.strip_prefix("--parallel=") {
-            parallel = v.parse().ok().filter(|n| *n >= 1).unwrap_or_else(|| usage("--parallel=N wants a positive number"));
+        } else if let Some(v) = a.strip_prefix("--concurrent=") {
+            concurrent = v.parse().ok().filter(|n| *n >= 1).unwrap_or_else(|| usage("--concurrent=N wants a positive number"));
         } else if let Some(line) = kin_flag(&a) {
             // a key of kin's options grammar (`emon.config`): --ocr=never, --asset-dpi=300, --limit.pages=5, --chunk=512, ...
             kin_text.push_str(&line);
@@ -241,7 +290,7 @@ fn main() {
     if record.is_some() && replay.is_some() {
         usage("--record and --replay are two ways");
     }
-    if (record.is_some() || replay.is_some()) && parallel > 1 {
+    if (record.is_some() || replay.is_some()) && concurrent > 1 {
         usage("--record and --replay are one conversion");
     }
     // THE OPTIONS AND THE ENGINE'S BOUNDS ARE KIN'S GRAMMAR: the flags it knows were collected as `key=value` lines and are parsed once.
@@ -302,6 +351,13 @@ fn main() {
         }
         #[cfg(not(pdfium))]
         usage("--pdfium needs a build with --cfg pdfium (EMON_RS_PDFIUM=DIR kin/scripts/emon-rs-build)");
+    }
+    if fake_ports {
+        if tess.is_some() || use_pdfium {
+            usage("--fake-ports is the stand-in for --tesseract and --pdfium: not with them");
+        }
+        cfg.ocr = Some(emon::OcrPort(std::sync::Arc::new(FakeOcr)));
+        cfg.renderer = Some(std::sync::Arc::new(FakeRenderer));
     }
     if use_codecs {
         #[cfg(codecs)]
@@ -370,18 +426,18 @@ fn main() {
         let text = render(&engine, &input, &model, &out, pretty, html.clone());
         Ok((text, rs))
     };
-    // the parallel arm owns no transcript (a Transcript is not Send)
+    // the concurrent arm owns no transcript (a Transcript is not Send)
     let plain = || -> Answer {
         let (model, rs) = engine.convert_stats(input.clone(), &opts)?;
         let text = render(&engine, &input, &model, &out, pretty, html.clone());
         Ok((text, rs))
     };
     let mut results: Vec<Answer> = Vec::new();
-    if parallel == 1 {
+    if concurrent == 1 {
         results.push(one());
     } else {
         std::thread::scope(|s| {
-            let hs: Vec<_> = (0..parallel).map(|_| s.spawn(|| plain())).collect();
+            let hs: Vec<_> = (0..concurrent).map(|_| s.spawn(|| plain())).collect();
             for h in hs {
                 results.push(h.join().unwrap());
             }
@@ -395,7 +451,7 @@ fn main() {
         };
         if !same {
             eprintln!("error: nondeterministic");
-            eprintln!("conversion {} of {} differs from conversion 0", i, parallel);
+            eprintln!("conversion {} of {} differs from conversion 0", i, concurrent);
             std::process::exit(1);
         }
     }

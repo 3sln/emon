@@ -285,6 +285,10 @@ type Config struct {
 	SimulateAsync bool
 	MaxRounds     int32
 	FetchRounds   int32
+	// Parallel is the `parallel` option (P10.2, SPEC 12.1, D1300): how many workers a conversion may spread its fulfilment over. 1, the default, is
+	// serial and starts no goroutine; the limit `workers` caps it (kin's `pl-workers` is the clamp). It changes how the work is spread and nothing in
+	// the Model, the transcript or the accounting. A conversion's workers run inside its limit scope (`port.WithLimits`) and end before it does.
+	Parallel int32
 	// Ocr is the `Ocr` port, if the embedder has one (D211). nil: no live OCR; a replay needs none.
 	Ocr Ocr
 	// Renderer is the `Renderer` port (D007, D127): what fulfils `render` and `crop` requests when the Engine
@@ -382,7 +386,7 @@ func optionsOf(c *enctx.Cfg) Options {
 }
 
 func configOf(c *enctx.Cfg) Config {
-	cfg := Config{ChunkSize: int(c.Chunk), MaxRounds: c.Maxr, FetchRounds: c.Fetchr}
+	cfg := Config{ChunkSize: int(c.Chunk), MaxRounds: c.Maxr, FetchRounds: c.Fetchr, Parallel: c.Par}
 	for i := int32(0); i < port.CellsLen(c.Lims)/2; i++ {
 		cfg.Limits = append(cfg.Limits, [2]int32{port.CellsAt(c.Lims, 2*i), port.CellsAt(c.Lims, 2*i+1)})
 	}
@@ -994,8 +998,11 @@ func intakeOf(doc *enctx.Doc, n uint64) Intake {
 
 // unitPage is one page's (a raster input's frame's) unit (P7.U, D195): its own requests, answers and BitmapSet; it writes nothing until its
 // answers are in, and never reads the input. One call of kin's.
-func unitPage(d *unitDoc, i, idx int, n uint64, opts Options, answers, rq *port.Cells, bms *port.BitmapSet) int32 {
-	return engine.EnPage(cfgOf(opts), d.doc, d.ev, int32(i), int32(idx), int32(n), answers, rq, bms)
+// dry makes it a DRY attempt (P10.2, `pu-dry`): the part before the first write, which a parallel host runs for the pages ahead to learn what they will ask.
+func unitPage(d *unitDoc, i, idx int, n uint64, opts Options, dry bool, answers, rq *port.Cells, bms *port.BitmapSet) int32 {
+	c := cfgOf(opts)
+	c.Dry = boolInt(dry)
+	return engine.EnPage(c, d.doc, d.ev, int32(i), int32(idx), int32(n), answers, rq, bms)
 }
 
 // finishDoc is the document unit (stage 3) over the text layer and whatever the page units added to it: fusion, the evidence, furniture,
@@ -1442,6 +1449,20 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 		replayer = planrun.NewReplayer(replay)
 		ports = replayer
 	}
+	// PARALLEL (P10.2, SPEC 12.1): `Parallel` workers fulfil a round's requests at once and the pages ahead of the loop's are looked at meanwhile (`par.go`).
+	// A replay answers from the transcript and has nothing to run: it stays serial. The pool ends before this function does, so before the limit scope.
+	var pool *parPool
+	if replay == nil {
+		if workers := int(planloop.PlWorkers(e.cfg.Parallel, port.LimitOf(16))); workers > 1 {
+			x := &parExec{local: portFulfiller(in.Source, idx, rec != nil || e.cfg.Ocr != nil, rec != nil, e.cfg.Ocr, e.cfg.PdfCodecs).F, ocr: e.cfg.Ocr != nil}
+			if e.cfg.Renderer != nil {
+				x.render = port.NewRenderFulfillerFor(e.cfg.Renderer, idx, port.RenderInput{Source: in.Source, Password: in.Password})
+			}
+			pool = newParPool(x, workers, int(planloop.PlAhead(int32(workers))), pcfg)
+			defer pool.close()
+			ports = &parPorts{pool: pool}
+		}
+	}
 	timed := &timedPorts{inner: ports}
 	ports = timed
 	// a source that failed is the answer, whatever the loop made of the miss it caused
@@ -1471,6 +1492,10 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 	var tPages time.Time
 phases:
 	for {
+		if pool != nil {
+			// outside the page units there is no page to look ahead of
+			pool.cur = -1
+		}
 		switch m.Phase() {
 		case planloop.PhDoc():
 			// THE DOCUMENT PASS: everything that reads the input, in its own loop (misses fetch and re-run it).
@@ -1529,6 +1554,21 @@ phases:
 			// the unit ends, so a conversion holds one page's bitmaps and not the document's. A page unit never reads the input.
 			i := m.Page()
 			var failed *Error
+			if pool != nil {
+				pool.cur, pool.pages = i, docU.info.Pages
+				// a dry attempt writes nothing (`pu-dry`); a panic in one ends the chain and is dropped, the real unit meets what caused it in its own turn
+				pool.dry = func(page int, answers, rq *port.Cells, bms *port.BitmapSet, _ *port.Buf) (st int32) {
+					defer func() {
+						if p := recover(); p != nil {
+							st = port.PlanUnitDone
+						}
+					}()
+					if unitPage(docU, page, idx, uint64(size), opts, true, answers, rq, bms) == 1 {
+						return port.PlanUnitRequests
+					}
+					return port.PlanUnitDone
+				}
+			}
 			unitP := func(answers, rq *port.Cells, bms *port.BitmapSet, _ *port.Buf) (st int32) {
 				defer func() {
 					if p := recover(); p != nil {
@@ -1536,7 +1576,7 @@ phases:
 						st = port.PlanUnitDone
 					}
 				}()
-				switch s := unitPage(docU, i, idx, uint64(size), opts, answers, rq, bms); s {
+				switch s := unitPage(docU, i, idx, uint64(size), opts, false, answers, rq, bms); s {
 				case 0:
 					return port.PlanUnitDone
 				case 1:

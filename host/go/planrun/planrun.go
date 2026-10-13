@@ -346,6 +346,12 @@ func Route(kind int32, ocr, render bool) int32 {
 	return planloop.PlRoute(kind, ports)
 }
 
+// RoutesToRenderer is whether a request of kind goes to the Renderer when the host has one (kin's `pl-route`, with a renderer): the live port set and the
+// parallel host's workers (P10.2) send it there, everything else to the host's own fulfiller.
+func RoutesToRenderer(kind int32, ocr bool) bool {
+	return Route(kind, ocr, true) == planloop.RtRender()
+}
+
 // UnsupportedAnswer is the answer of a request no port is configured for.
 func UnsupportedAnswer(req port.PlanRequest) port.PlanAnswer {
 	c := port.NewCells()

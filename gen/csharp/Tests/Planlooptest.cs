@@ -249,6 +249,25 @@ public static class Planlooptest {
         emon.Testport.AssertEq(Planloop.PlStageOver(100, 5000), 1, "past");
     }
     [Xunit.Fact]
+    public static void TestTheWorkersAreTheOptionServedWithinTheLimitAndAtLeastOne() {
+        // `parallel` (P10.2): the option is served as asked up to the limit `workers`, which is a budget (more is clamped, never refused); never fewer than one.
+        emon.Testport.AssertEq(Planloop.PlWorkers(1, 64), 1, "serial is the default");
+        emon.Testport.AssertEq(Planloop.PlWorkers(4, 64), 4, "as asked");
+        emon.Testport.AssertEq(Planloop.PlWorkers(64, 64), 64, "at the limit");
+        emon.Testport.AssertEq(Planloop.PlWorkers(65, 64), 64, "past it, the limit");
+        emon.Testport.AssertEq(Planloop.PlWorkers(2147483647, 64), 64, "far past it");
+        emon.Testport.AssertEq(Planloop.PlWorkers(8, 1), 1, "a limit of one is serial whatever is asked");
+        emon.Testport.AssertEq(Planloop.PlWorkers(8, 0), 1, "a limit of nothing is not nothing");
+        emon.Testport.AssertEq(Planloop.PlWorkers(0, 64), 1, "and neither is an option of nothing");
+    }
+    [Xunit.Fact]
+    public static void TestAHostLooksOnePageFewerAheadThanItHasWorkers() {
+        emon.Testport.AssertEq(Planloop.PlAhead(1), 0, "serial looks at nothing");
+        emon.Testport.AssertEq(Planloop.PlAhead(0), 0, "no workers, no looking");
+        emon.Testport.AssertEq(Planloop.PlAhead(2), 1, "two workers: the page the loop is on, and one ahead");
+        emon.Testport.AssertEq(Planloop.PlAhead(8), 7, "eight: seven ahead");
+    }
+    [Xunit.Fact]
     public static void TestWithStageMsOffTheLoopIgnoresTheClock() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         TInit(p, 5, 24);

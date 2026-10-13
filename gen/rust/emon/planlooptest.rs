@@ -248,6 +248,25 @@ fn test_a_stages_wall_clock_is_kins_to_judge_and_0_is_off() {
     crate::testport::assert_eq(pl_stage_over(100, 5000), 1, "past");
 }
 #[test]
+fn test_the_workers_are_the_option_served_within_the_limit_and_at_least_one() {
+    // `parallel` (P10.2): the option is served as asked up to the limit `workers`, which is a budget (more is clamped, never refused); never fewer than one.
+    crate::testport::assert_eq(pl_workers(1, 64), 1, "serial is the default");
+    crate::testport::assert_eq(pl_workers(4, 64), 4, "as asked");
+    crate::testport::assert_eq(pl_workers(64, 64), 64, "at the limit");
+    crate::testport::assert_eq(pl_workers(65, 64), 64, "past it, the limit");
+    crate::testport::assert_eq(pl_workers(2147483647, 64), 64, "far past it");
+    crate::testport::assert_eq(pl_workers(8, 1), 1, "a limit of one is serial whatever is asked");
+    crate::testport::assert_eq(pl_workers(8, 0), 1, "a limit of nothing is not nothing");
+    crate::testport::assert_eq(pl_workers(0, 64), 1, "and neither is an option of nothing");
+}
+#[test]
+fn test_a_host_looks_one_page_fewer_ahead_than_it_has_workers() {
+    crate::testport::assert_eq(pl_ahead(1), 0, "serial looks at nothing");
+    crate::testport::assert_eq(pl_ahead(0), 0, "no workers, no looking");
+    crate::testport::assert_eq(pl_ahead(2), 1, "two workers: the page the loop is on, and one ahead");
+    crate::testport::assert_eq(pl_ahead(8), 7, "eight: seven ahead");
+}
+#[test]
 fn test_with_stage_ms_off_the_loop_ignores_the_clock() {
     let p: &mut crate::emon::planctx::Plan = &mut crate::emon::planctx::Plan::new();
     t_init(p, 5, 24);

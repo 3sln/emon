@@ -31,7 +31,12 @@ final class Ports {
      * keeps the OCR engine's thresholded image, which only a transcript wants (D211).
      */
     static Planrun.Sync portFulfiller(ByteSource source, int idx, boolean keep, boolean recording, Ocr ocr, Options.PdfCodecs codecs) {
-        return new Planrun.Sync((req, bm) -> {
+        return new Planrun.Sync(portFn(source, idx, keep, recording, ocr, codecs));
+    }
+
+    /** The same as a function from a request to its answer, callable from any thread (P10.2: what a worker runs). */
+    static Planrun.Fn portFn(ByteSource source, int idx, boolean keep, boolean recording, Ocr ocr, Options.PdfCodecs codecs) {
+        return (req, bm) -> {
             // WHICH PORT a request goes to, or that none is configured, is kin's (`pl-route`); this host has no renderer here (D199: `LivePorts` sends a
             // render to one when it has one)
             int route = Planrun.route(req.kind(), ocr != null, false);
@@ -68,7 +73,7 @@ final class Ports {
             Planrun.Answer a = new Planrun.Answer(Port.cellsVec(c),
                 keep && (filter != Plan.fltDct() || ocr != null) && d.pixels != null ? new Port.Bitmap(d.w, d.h, d.ch, d.pixels) : null);
             return a;
-        });
+        };
     }
 
     // a refused or damaged image as the answer its request gets: `unsupported`, `limit` (with the pixels the frame has) or `failed`

@@ -80,7 +80,7 @@ public static class Configtest {
     }
     [Xunit.Fact]
     public static void TestTheLimitsHaveTheirNamesInKin() {
-        emon.Testport.AssertEq(Limits.LmCount(), 16, "sixteen limits");
+        emon.Testport.AssertEq(Limits.LmCount(), 17, "seventeen limits");
         TLimitName(0, 0, "input-bytes");
         TLimitName(0, 1, "stream-bytes");
         TLimitName(0, 2, "total-bytes");
@@ -97,6 +97,7 @@ public static class Configtest {
         TLimitName(0, 13, "asset-placements");
         TLimitName(0, 14, "fonts-per-doc");
         TLimitName(0, 15, "stage-ms");
+        TLimitName(0, 16, "workers");
     }
     [Xunit.Fact]
     public static void TestTheLimitsHaveTheirDefaultsAndRangesInKin() {
@@ -117,6 +118,7 @@ public static class Configtest {
         emon.Testport.AssertEq(Limits.LmDefault(14), 512, "fonts-per-doc is the slab");
         emon.Testport.AssertEq(Limits.LmHi(14), 512, "and cannot be raised past it");
         emon.Testport.AssertEq(Limits.LmDefault(15), 0, "stage-ms is off");
+        emon.Testport.AssertEq(Limits.LmDefault(16), 16, "workers is the most `parallel` is given");
         emon.Testport.AssertEq(Limits.LmLo(3), 0, "a limit is not negative");
         emon.Testport.AssertEq(Limits.LmHi(3), 2147483647, "a limit fits 31 bits");
         emon.Testport.AssertEq(Limits.LmHi(6), 32, "form-depth is the stack of the forms being run");
@@ -126,7 +128,7 @@ public static class Configtest {
         int n = 0;
         int i = 0;
         int k = 0;
-        while (i < 18) {
+        while (i < 19) {
             if ((Config.CkRows[i * 5 + 0] == 1) && (Config.CkRows[i * 5 + 1] < 0)) {
                 n += 1;
             }
@@ -165,15 +167,16 @@ public static class Configtest {
         emon.Testport.AssertEq(Limits.LmOnHit(13), 1, "asset-placements is a budget");
         emon.Testport.AssertEq(Limits.LmOnHit(14), 1, "fonts-per-doc is a budget");
         emon.Testport.AssertEq(Limits.LmOnHit(15), 0, "stage-ms breaches");
-        emon.Testport.AssertEq(Limits.LmOnHit(16), 0, "past the table");
+        emon.Testport.AssertEq(Limits.LmOnHit(16), 1, "workers is a budget: more is served with this many");
+        emon.Testport.AssertEq(Limits.LmOnHit(17), 0, "past the table");
         emon.Testport.AssertEq(Limits.LmOnHit(-1), 0, "before the table");
     }
     [Xunit.Fact]
     public static void TestAKindOutsideTheTableHasNoNameAndADefaultOfNothing() {
-        emon.Testport.AssertEq(Limits.LmDefault(16), 0, "past the table");
+        emon.Testport.AssertEq(Limits.LmDefault(17), 0, "past the table");
         emon.Testport.AssertEq(Limits.LmDefault(-1), 0, "before the table");
-        emon.Testport.AssertEq(Limits.LmNameLen(16), 0, "no name");
-        emon.Testport.AssertEq(Limits.LmNameCh(16, 0), -1, "no character");
+        emon.Testport.AssertEq(Limits.LmNameLen(17), 0, "no name");
+        emon.Testport.AssertEq(Limits.LmNameCh(17, 0), -1, "no character");
         emon.Testport.AssertEq(Limits.LmNameCh(0, 11), -1, "past the name's end");
         emon.Testport.AssertEq(Limits.LmNameCh(0, -1), -1, "before the name");
         emon.Testport.AssertEq(Limits.SgDefault(2), 0, "no setting");
@@ -194,7 +197,7 @@ public static class Configtest {
     }
     [Xunit.Fact]
     public static void TestTheKeysHaveTheirNamesInKin() {
-        emon.Testport.AssertEq(18, 18, "eighteen keys");
+        emon.Testport.AssertEq(19, 19, "nineteen keys");
         TKeyName(0, 0, "locale");
         TKeyName(0, 1, "ocr");
         TKeyName(0, 2, "furniture");
@@ -213,6 +216,7 @@ public static class Configtest {
         TKeyName(0, 15, "chunk");
         TKeyName(0, 16, "limit.");
         TKeyName(0, 17, "producer.");
+        TKeyName(0, 18, "parallel");
     }
     [Xunit.Fact]
     public static void TestTheWordsHaveTheirNamesAndCodesInKin() {
@@ -238,6 +242,8 @@ public static class Configtest {
         TIsKey(0, emon.Testport.TextBlob("limit.pages"), 1, "a limit");
         TIsKey(0, emon.Testport.TextBlob("producer.name"), 1, "a producer");
         TIsKey(0, emon.Testport.TextBlob("record"), 1, "record");
+        TIsKey(0, emon.Testport.TextBlob("parallel"), 1, "parallel");
+        TIsKey(0, emon.Testport.TextBlob("parallelx"), 0, "parallel and more");
         TIsKey(0, emon.Testport.TextBlob("oc"), 0, "a prefix of a plain key");
         TIsKey(0, emon.Testport.TextBlob("ocrx"), 0, "a plain key and more");
         TIsKey(0, emon.Testport.TextBlob("out"), 0, "a driver's own flag");
@@ -265,13 +271,15 @@ public static class Configtest {
         emon.Testport.AssertEq(c.Fetchr, 24, "fetch rounds");
         emon.Testport.AssertEq(c.Rec, 0, "not recording");
         emon.Testport.AssertEq(c.Jsocr, 0, "no js ocr");
+        emon.Testport.AssertEq(c.Par, 1, "serial");
+        emon.Testport.AssertEq(c.Dry, 0, "not a dry attempt");
         emon.Testport.AssertEq(emon.Port.CellsLen(c.Lims), 0, "no limits");
         emon.Testport.AssertEq(emon.Port.CellsLen(c.Prod), 0, "no producer");
     }
     [Xunit.Fact]
     public static void TestEveryKeySetsItsField() {
         emon.Enctx.Cfg c = new emon.Enctx.Cfg();
-        emon.Testport.AssertEq(TParse(c, emon.Testport.TextBlob("locale=de-AT\nocr=never\nfurniture=drop\nassets=figures\nasset-dpi=300\nasset-pixels=1000\nasset-bytes=2000\nassets-bytes=3000\nasset-signatures=on\nkeep-evidence=1\nocr-scope=witness\nmax-rounds=7\nfetch-rounds=9\nrecord=1\njs-ocr=1\nchunk=512\n")), 0, "parses");
+        emon.Testport.AssertEq(TParse(c, emon.Testport.TextBlob("locale=de-AT\nocr=never\nfurniture=drop\nassets=figures\nasset-dpi=300\nasset-pixels=1000\nasset-bytes=2000\nassets-bytes=3000\nasset-signatures=on\nkeep-evidence=1\nocr-scope=witness\nmax-rounds=7\nfetch-rounds=9\nrecord=1\njs-ocr=1\nchunk=512\nparallel=4\n")), 0, "parses");
         emon.Testport.AssertEq(c.Haveloc, 1, "a locale");
         emon.Testport.AssertEq(emon.Port.CellsLen(c.Lcl), 5, "its length");
         emon.Testport.AssertEq(emon.Port.CellsAt(c.Lcl, 0), 100, "d");
@@ -291,6 +299,7 @@ public static class Configtest {
         emon.Testport.AssertEq(c.Rec, 1, "recording");
         emon.Testport.AssertEq(c.Jsocr, 1, "js ocr");
         emon.Testport.AssertEq(c.Chunk, 512, "chunk");
+        emon.Testport.AssertEq(c.Par, 4, "four workers");
     }
     [Xunit.Fact]
     public static void TestTheWordsOfEveryEnumKeyAreRead() {
@@ -384,6 +393,8 @@ public static class Configtest {
         TRefused(0, emon.Testport.TextBlob("max-rounds=99999999999"), "max-rounds wants a number, not \"99999999999\"");
         TRefused(0, emon.Testport.TextBlob("limit.pages=lots"), "limit.pages wants a number, not \"lots\"");
         TRefused(0, emon.Testport.TextBlob("chunk=0"), "chunk is out of range 1..2147483647");
+        TRefused(0, emon.Testport.TextBlob("parallel=0"), "parallel is out of range 1..2147483647");
+        TRefused(0, emon.Testport.TextBlob("parallel=many"), "parallel wants a number, not \"many\"");
         TRefused(0, emon.Testport.TextBlob("limit.pages=-1"), "limit.pages is out of range 0..2147483647");
         TRefused(0, emon.Testport.TextBlob("limit.form-depth=33"), "limit.form-depth is out of range 0..32");
     }
@@ -422,6 +433,9 @@ public static class Configtest {
         emon.Port.CellsDrop(t, 0);
         TCps(t, emon.Testport.TextBlob("stage-ms"));
         emon.Testport.AssertEq(Config.CfLimitFind(t, 0, 8), 15, "stage-ms");
+        emon.Port.CellsDrop(t, 0);
+        TCps(t, emon.Testport.TextBlob("workers"));
+        emon.Testport.AssertEq(Config.CfLimitFind(t, 0, 7), 16, "workers");
     }
     [Xunit.Fact]
     public static void TestFontsPerDocCannotBeRaisedPastItsSlab() {

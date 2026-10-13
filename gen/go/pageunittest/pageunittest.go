@@ -56,6 +56,16 @@ func runPage(i int32, policy int32, pl *port.Cells, ans *port.Cells, rq *port.Ce
 	return runPageFused(i, policy, 0, pl, ans, rq)
 }
 
+func runPageWatched(i int32, policy int32, fuse int32, pl *port.Cells, ans *port.Cells, rq *port.Cells, mask *port.Cells, epages *port.Cells, views *port.Cells, olines *port.Cells, owords *port.Cells, words *port.Cells, lines *port.Cells) int32 {
+	// A page unit whose written arenas are the caller's, to see whether an attempt wrote them.
+	return pageunit.PuRunPdf(i, 3, policy, pl, ans, rq, port.NewCells(), port.NewBitmapSet(), mask, port.NewCells(), epages, views, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), olines, owords, port.NewCells(), port.NewCells(), words, lines, fuse, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
+}
+
+func watchedLen(mask *port.Cells, epages *port.Cells, views *port.Cells, olines *port.Cells, owords *port.Cells, words *port.Cells, lines *port.Cells) int32 {
+	// How many cells the page unit's written arenas hold in all (the mask is sized by the caller, so its length is not counted).
+	return ((port.CellsLen(epages) + port.CellsLen(views)) + (port.CellsLen(olines) + port.CellsLen(owords))) + (port.CellsLen(words) + port.CellsLen(lines))
+}
+
 func nthRec(rq *port.Cells, n int32) int32 {
 	// The cell where record `n` (0-based) of the requests starts.
 	var at int32 = 0
@@ -218,6 +228,62 @@ func TestUnderWitnessTheRenderWithoutItsTextAndTheWitnessLinesAreReadInRoundTwo(
 	port.AssertEq(emonT, plan.RqArg(rq, r1, 5), 1206, "width")
 	port.AssertEq(emonT, plan.RqArg(rq, r1, 6), 56, "height")
 	port.AssertEq(emonT, plan.RecId(rq, r2), 353, "witness line 1")
+}
+
+func TestADryAttemptAsksWhatTheRealOneAsksBeforeItsFirstWriteAndThenStops(emonT *testing.T) {
+	// P10.2: a scanned page. With no answer a dry attempt asks the decode, as the real one; with the decode answered it asks the OCR, as the real one;
+	// with the OCR answered too the real attempt goes on to write the page, and the dry one stops where the write would begin, having written nothing.
+	var pl *port.Cells = port.NewCells()
+	var ans *port.Cells = port.NewCells()
+	var rq1 *port.Cells = port.NewCells()
+	var rq2 *port.Cells = port.NewCells()
+	var rq3 *port.Cells = port.NewCells()
+	var rq4 *port.Cells = port.NewCells()
+	var mask *port.Cells = port.NewCells()
+	var epages *port.Cells = port.NewCells()
+	var views *port.Cells = port.NewCells()
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	planOf(pl, 1, pageunit.PkScan())
+	port.AssertEq(emonT, runPageWatched(0, 2, 4, pl, ans, rq1, mask, epages, views, olines, owords, words, lines), plan.UsRequests(), "dry: it asks the decode")
+	runPageWatched(0, 2, 0, pl, port.NewCells(), rq2, mask, epages, views, olines, owords, words, lines)
+	port.AssertEq(emonT, port.CellsLen(rq1), port.CellsLen(rq2), "the same request as the real attempt's")
+	port.AssertEq(emonT, port.CellsAt(rq1, 2), port.CellsAt(rq2, 2), "under the same id")
+	plan.AnDecode(ans, 260, 2550, 3300, 1, 30000, 0, 1)
+	port.AssertEq(emonT, runPageWatched(0, 2, 4, pl, ans, rq3, mask, epages, views, olines, owords, words, lines), plan.UsRequests(), "dry: with the decode answered it asks the OCR")
+	port.AssertEq(emonT, plan.RecKind(rq3, 0), plan.PkOcr(), "an OCR")
+	port.AssertEq(emonT, plan.RecId(rq3, 0), 272, "of the page's first pass")
+	plan.AnRender(ans, 272, 2550, 3300, 1, 300)
+	port.AssertEq(emonT, runPageWatched(0, 2, 4, pl, ans, rq4, mask, epages, views, olines, owords, words, lines), plan.UsDone(), "dry: with the OCR answered it stops")
+	port.AssertEq(emonT, port.CellsLen(rq4), 0, "asking nothing")
+	port.AssertEq(emonT, watchedLen(mask, epages, views, olines, owords, words, lines), 0, "and having written nothing")
+}
+
+func TestADryAttemptOfABornDigitalPageStopsBeforeItsFirstWrite(emonT *testing.T) {
+	var pl *port.Cells = port.NewCells()
+	var ans *port.Cells = port.NewCells()
+	var rq1 *port.Cells = port.NewCells()
+	var rq2 *port.Cells = port.NewCells()
+	var rq3 *port.Cells = port.NewCells()
+	var mask *port.Cells = port.NewCells()
+	var epages *port.Cells = port.NewCells()
+	var views *port.Cells = port.NewCells()
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	bornPlan(pl, 1, rasterplan.RpAskFull(), 0)
+	port.AssertEq(emonT, runPageWatched(0, 2, 4, pl, ans, rq1, mask, epages, views, olines, owords, words, lines), plan.UsRequests(), "dry: the two renders")
+	port.AssertEq(emonT, port.CellsLen(rq1), 14, "of seven cells each, as the real attempt's")
+	answerRenders(ans, 0)
+	port.AssertEq(emonT, runPageWatched(0, 2, 4, pl, ans, rq2, mask, epages, views, olines, owords, words, lines), plan.UsRequests(), "dry: the renders answered, the OCR")
+	port.AssertEq(emonT, plan.RecKind(rq2, 0), plan.PkOcr(), "an OCR")
+	plan.AnRender(ans, 272, 2550, 3300, 3, 300)
+	port.AssertEq(emonT, runPageWatched(0, 2, 4, pl, ans, rq3, mask, epages, views, olines, owords, words, lines), plan.UsDone(), "dry: the OCR answered, it stops")
+	port.AssertEq(emonT, port.CellsLen(rq3), 0, "asking nothing")
+	port.AssertEq(emonT, watchedLen(mask, epages, views, olines, owords, words, lines), 0, "and having written nothing")
 }
 
 func TestTheBitmapSetKeepsWhatKinMakes(emonT *testing.T) {

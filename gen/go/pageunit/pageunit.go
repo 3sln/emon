@@ -185,6 +185,14 @@ func puWbox(pl *port.Cells, at int32, w int32, h int32, k int32) int32 {
 	return by1 - by0
 }
 
+func PuDry(fuse int32) int32 {
+	// 1 when the page unit is asked for a DRY attempt (`fuse` bit 4; P10.2, SPEC 12.1): the part of an attempt that precedes its first write. A host that fulfils
+	// in parallel runs it for the pages AHEAD of the one the loop is on, to learn what they will ask (a render, a decode, the OCR of the page) and have it answered
+	// meanwhile; it asks exactly what the real attempt asks in those rounds, then answers `us-done` having changed nothing, whether or not the real attempt
+	// would go on to ask more. Its result is never used but as the requests it wrote: the real unit runs afterwards, as it always did.
+	return (fuse & 4) / 4
+}
+
 func puPx(bms *port.BitmapSet, id int32, fuse int32) int32 {
 	// 1 when the page unit may read the pixels of the bitmap under `id`: it has them, and the hidden setting `no-retarget` (`fuse` bit 2) does
 	// not say to leave them (the Engine then does what it did before P7.4: no ink layers, no targeted pass; a measurement's baseline).
@@ -285,6 +293,10 @@ func puRunBorn(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells
 		return plan.UsDone()
 	}
 	if plan.AnOk(ans, ao) != 1 {
+		return plan.UsDone()
+	}
+	// A DRY ATTEMPT (P10.2, `pu-dry`) is a prefix of an attempt: it stops here, before the first write, having asked what the rounds up to here ask
+	if PuDry(fuse) == 1 {
 		return plan.UsDone()
 	}
 	pageink.PnMark(snap, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, inks, comps, rules, prims, tpts, tlines, refs, images, words, lines)
@@ -443,6 +455,9 @@ func puRunScan(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells
 		return plan.UsRequests()
 	}
 	if plan.AnOk(ans, ao) != 1 {
+		return plan.UsDone()
+	}
+	if PuDry(fuse) == 1 {
 		return plan.UsDone()
 	}
 	scan.ScPrep(scr)

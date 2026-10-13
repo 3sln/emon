@@ -50,7 +50,7 @@ for m in $keep; do echo "pub mod $m;"; done > "$crate/src/emon.rs.new"
 put "$crate/src/emon.rs.new" "$crate/src/emon.rs"
 rm -f "$crate/src/emon.rs.new"
 
-for f in port plan source engine imgdec tess render pdfium pdfimg pdfcodecs session; do put "host/rust/src/$f.rs" "$crate/src/$f.rs"; done
+for f in port plan source engine imgdec tess render pdfium pdfimg pdfcodecs session par; do put "host/rust/src/$f.rs" "$crate/src/$f.rs"; done
 # the host's lib.rs, and the one line that adds the C ABI (host/rust is not changed: the native crate has no C ABI)
 { cat host/rust/src/lib.rs; echo; echo "// the C binding (P9.4): assembled in by kin/scripts/emon-bind-build from host/c/src/capi.rs"; echo "pub mod capi;"; } > "$crate/src/lib.rs.new"
 put "$crate/src/lib.rs.new" "$crate/src/lib.rs"

@@ -160,6 +160,13 @@ public static class Pageunit {
         }
         return by1 - by0;
     }
+    public static int PuDry(int fuse) {
+        // 1 when the page unit is asked for a DRY attempt (`fuse` bit 4; P10.2, SPEC 12.1): the part of an attempt that precedes its first write. A host that fulfils
+        // in parallel runs it for the pages AHEAD of the one the loop is on, to learn what they will ask (a render, a decode, the OCR of the page) and have it answered
+        // meanwhile; it asks exactly what the real attempt asks in those rounds, then answers `us-done` having changed nothing, whether or not the real attempt
+        // would go on to ask more. Its result is never used but as the requests it wrote: the real unit runs afterwards, as it always did.
+        return (fuse & 4) / 4;
+    }
     internal static int PuPx(emon.Port.BitmapSet bms, int id, int fuse) {
         // 1 when the page unit may read the pixels of the bitmap under `id`: it has them, and the hidden setting `no-retarget` (`fuse` bit 2) does
         // not say to leave them (the Engine then does what it did before P7.4: no ink layers, no targeted pass; a measurement's baseline).
@@ -259,6 +266,10 @@ public static class Pageunit {
             return Plan.UsDone();
         }
         if (Plan.AnOk(ans, ao) != 1) {
+            return Plan.UsDone();
+        }
+        // A DRY ATTEMPT (P10.2, `pu-dry`) is a prefix of an attempt: it stops here, before the first write, having asked what the rounds up to here ask
+        if (PuDry(fuse) == 1) {
             return Plan.UsDone();
         }
         Pageink.PnMark(snap, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, inks, comps, rules, prims, tpts, tlines, refs, images, words, lines);
@@ -416,6 +427,9 @@ public static class Pageunit {
             return Plan.UsRequests();
         }
         if (Plan.AnOk(ans, ao) != 1) {
+            return Plan.UsDone();
+        }
+        if (PuDry(fuse) == 1) {
             return Plan.UsDone();
         }
         Scan.ScPrep(scr);

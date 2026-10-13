@@ -275,6 +275,15 @@ pub struct Bitmap {
     d: Vec<std::cell::Cell<u8>>,
 }
 
+// A BITMAP IS SHARED BETWEEN THREADS READ-ONLY (P10.2, D1306). The bytes are `Cell`s so that one bitmap can be handed to two parameters of a kin
+// call; `Cell` makes a type `!Sync`, and a host that runs its ports on worker threads (`par.rs`) hands the same `Arc<Bitmap>` to a worker (the pixels of a
+// render or a decode, a round's views) and takes the answer's back. That is sound under the discipline the plan loop already keeps and `par.rs` relies on:
+// a bitmap is WRITTEN only by the unit that made it (`bms-put`, `bitmap-new`), on the thread that runs the unit, and only while that unit runs; a
+// bitmap a port made, and every bitmap a round's requests may name, is READ ONLY from the moment it is handed over, until the round's answers are in (kin runs
+// between rounds, and a dry attempt writes no bitmap). A caller that writes a bitmap through `bitmap_set_u8` while another thread reads it is outside the
+// contract, exactly as it is for the unit that made it.
+unsafe impl Sync for Bitmap {}
+
 impl Bitmap {
     pub fn new(w: i32, h: i32, ch: i32) -> Bitmap {
         let n = (w as usize) * (h as usize) * (ch as usize);

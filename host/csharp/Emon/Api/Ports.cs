@@ -23,7 +23,12 @@ internal static class Ports {
     /// keeps the OCR engine's thresholded image, which only a transcript wants (D211).
     /// </summary>
     internal static emon.Planrun.Sync PortFulfiller(IByteSource source, int idx, bool keep, bool recording, IOcr ocr, Options.IPdfCodecs codecs) {
-        return new emon.Planrun.Sync((req, bm) => {
+        return new emon.Planrun.Sync(PortFn(source, idx, keep, recording, ocr, codecs));
+    }
+
+    /// <summary>The same as a function from a request to its answer, callable from any thread (P10.2: what a worker runs).</summary>
+    internal static emon.Planrun.Fn PortFn(IByteSource source, int idx, bool keep, bool recording, IOcr ocr, Options.IPdfCodecs codecs) {
+        return (req, bm) => {
             // WHICH PORT a request goes to, or that none is configured, is kin's (`pl-route`); this host has no renderer here (D199: `Live` sends a
             // render to one when it has one)
             int route = emon.Planrun.Route(req.Kind(), ocr != null, false);
@@ -59,7 +64,7 @@ internal static class Ports {
             emon.Plan.AnDecode(c, req.Id(), d.W, d.H, d.Ch, d.Dpi100, d.Bilevel ? 1 : 0, d.Frames);
             return new emon.Planrun.Answer(emon.Port.CellsVec(c),
                 keep && (filter != emon.Plan.FltDct() || ocr != null) && d.Pixels != null ? new emon.Port.Bitmap(d.W, d.H, d.Ch, d.Pixels) : null);
-        });
+        };
     }
 
     // a refused or damaged image as the answer its request gets: `unsupported`, `limit` (with the pixels the frame has) or `failed`

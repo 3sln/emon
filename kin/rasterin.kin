@@ -180,7 +180,8 @@
                           ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells etext ^:mut ^Cells feats
                           ^:mut ^Cells images ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
                           ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
-                          ^:mut ^Cells words ^:mut ^Cells lines ^:mut ^Cells scr]
+                          ^:mut ^Cells words ^:mut ^Cells lines ^:mut ^Cells scr ^I32 dry]
+  (comment "`dry` is 1 for a DRY attempt (P10.2, `pu-dry`): it stops before the write, having asked what the rounds up to there ask.")
   (comment "The unit of frame `f` (0-based) of a raster input: its pixels (`decode` id `pi-decode`, a whole image file, whose")
   (comment "failure is the conversion's: an image that cannot be read is refused by name, whatever the policy), then, unless")
   (comment "`policy` is 0 (never), OCR of the bitmap (id `pi-ocr`); where the answers are in, the frame's evidence and lines are")
@@ -199,6 +200,7 @@
     (if (< ao 0)
       (do (sc-request rq oid did (quot (+ (rs-eff-dpi100 (an-arg ans ad 3)) 50) 100) loc)
           (return (us-requests))))
+    (if (== dry 1) (return 0))
     (if (== (an-ok ans ao) 1)
       (do (rs-read-page ans ao ad (+ f 1) oid loc
                         epages views etext feats images oruns oblocks olines owords osyms oalts words lines scr)

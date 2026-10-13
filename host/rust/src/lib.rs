@@ -20,6 +20,9 @@ pub mod pdfcodecs;
 pub mod pdfimg;
 #[cfg(pdfium)]
 pub mod pdfium;
+// parallel execution (P10.2, D1300): a pool of threads that fulfils a round's requests at once and the pages ahead of the loop's; the browser has none
+#[cfg(not(target_arch = "wasm32"))]
+pub mod par;
 pub mod plan;
 pub mod port;
 pub mod render;

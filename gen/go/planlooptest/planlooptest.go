@@ -266,6 +266,25 @@ func TestAStagesWallClockIsKinsToJudgeAnd0IsOff(emonT *testing.T) {
 	port.AssertEq(emonT, planloop.PlStageOver(100, 5000), 1, "past")
 }
 
+func TestTheWorkersAreTheOptionServedWithinTheLimitAndAtLeastOne(emonT *testing.T) {
+	// `parallel` (P10.2): the option is served as asked up to the limit `workers`, which is a budget (more is clamped, never refused); never fewer than one.
+	port.AssertEq(emonT, planloop.PlWorkers(1, 64), 1, "serial is the default")
+	port.AssertEq(emonT, planloop.PlWorkers(4, 64), 4, "as asked")
+	port.AssertEq(emonT, planloop.PlWorkers(64, 64), 64, "at the limit")
+	port.AssertEq(emonT, planloop.PlWorkers(65, 64), 64, "past it, the limit")
+	port.AssertEq(emonT, planloop.PlWorkers(2147483647, 64), 64, "far past it")
+	port.AssertEq(emonT, planloop.PlWorkers(8, 1), 1, "a limit of one is serial whatever is asked")
+	port.AssertEq(emonT, planloop.PlWorkers(8, 0), 1, "a limit of nothing is not nothing")
+	port.AssertEq(emonT, planloop.PlWorkers(0, 64), 1, "and neither is an option of nothing")
+}
+
+func TestAHostLooksOnePageFewerAheadThanItHasWorkers(emonT *testing.T) {
+	port.AssertEq(emonT, planloop.PlAhead(1), 0, "serial looks at nothing")
+	port.AssertEq(emonT, planloop.PlAhead(0), 0, "no workers, no looking")
+	port.AssertEq(emonT, planloop.PlAhead(2), 1, "two workers: the page the loop is on, and one ahead")
+	port.AssertEq(emonT, planloop.PlAhead(8), 7, "eight: seven ahead")
+}
+
 func TestWithStageMsOffTheLoopIgnoresTheClock(emonT *testing.T) {
 	var p *planctx.Plan = planctx.NewPlan()
 	tInit(p, 5, 24)

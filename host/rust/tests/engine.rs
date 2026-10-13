@@ -896,3 +896,152 @@ fn a_pushed_cache_says_what_it_misses_and_keeps_only_what_covers_a_whole_chunk()
     c.provide(768, &[9u8; 232]);
     assert_eq!(c.missing(0, 0, 1000).iter().map(|r| (r.offset, r.length)).collect::<Vec<_>>(), vec![(512, 256)]);
 }
+
+// ---------------------------------------------------------------------------- parallel execution (P10.2, D1300-D1303)
+//
+// `parallel=N`: N workers fulfil a round's requests at once, and the page units AHEAD of the loop's are looked at (dry attempts) so that what they will
+// ask is being answered meanwhile. None of it may show in the result: the Model, the transcript (every entry) and the number of times a port is
+// called are the serial run's, at every N. A request the look-ahead asked is used by the unit that asks it; a request nobody looked ahead for is answered
+// as in a serial run; the limit overrides of the conversion are in force on the workers.
+
+// the transcript's entries, comparably
+fn entries_of(t: &emon::Transcript) -> Vec<(i32, Vec<i32>, Vec<i32>)> {
+    t.entries.iter().map(|x| (x.round, x.req.clone(), x.ans.clone())).collect()
+}
+
+// An OCR engine that takes its time and counts the readings going at once and in all.
+#[derive(Default)]
+struct SlowOcr {
+    now: AtomicUsize,
+    peak: AtomicUsize,
+    calls: AtomicUsize,
+}
+impl Ocr for SlowOcr {
+    fn fulfil(&self, req: &emon::plan::Request, bm: &emon::plan::Bitmaps, keep: bool) -> Result<emon::plan::Answer, emon::plan::PlanError> {
+        let n = self.now.fetch_add(1, Ordering::SeqCst) + 1;
+        self.peak.fetch_max(n, Ordering::SeqCst);
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        std::thread::sleep(std::time::Duration::from_millis(60));
+        let r = FakeOcr.fulfil(req, bm, keep);
+        self.now.fetch_sub(1, Ordering::SeqCst);
+        r
+    }
+    fn producer(&self) -> Vec<(String, String)> {
+        vec![("engine".to_string(), "fake".to_string())]
+    }
+}
+
+#[test]
+fn parallel_workers_give_the_serial_model_and_transcript_and_overlap_the_ocr_of_a_multi_page_scan() {
+    let tiff = image("tiff-multi3-rgb-lzw.tif");
+    let o = Options::default();
+    let one = Arc::new(SlowOcr::default());
+    let serial = Engine::new(Config { ocr: Some(OcrPort(one.clone())), ..Config::default() });
+    let (m0, t0) = serial.record(Input::bytes(tiff.clone()), &o).unwrap();
+    assert_eq!(one.peak.load(Ordering::SeqCst), 1, "a serial run reads one page at a time");
+    assert_eq!(one.calls.load(Ordering::SeqCst), 3);
+    for n in [2, 3, 4, 8] {
+        let slow = Arc::new(SlowOcr::default());
+        let e = Engine::new(Config { ocr: Some(OcrPort(slow.clone())), parallel: n, ..Config::default() });
+        let (m, t) = e.record(Input::bytes(tiff.clone()), &o).unwrap();
+        assert_eq!(json(&m), json(&m0), "parallel={}", n);
+        assert_eq!(entries_of(&t), entries_of(&t0), "parallel={}", n);
+        assert_eq!(slow.calls.load(Ordering::SeqCst), 3, "parallel={}: every page is read once: a look ahead's answer is used, not asked again", n);
+        assert!(slow.peak.load(Ordering::SeqCst) >= 2, "parallel={}: the pages ahead are read while the loop is on one (peak {})", n, slow.peak.load(Ordering::SeqCst));
+        assert!(slow.peak.load(Ordering::SeqCst) <= n as usize, "parallel={}: at most N at once (peak {})", n, slow.peak.load(Ordering::SeqCst));
+    }
+    // limit.workers is the most the option is served with: 1 is serial whatever is asked
+    let capped = Arc::new(SlowOcr::default());
+    let e = Engine::new(Config { ocr: Some(OcrPort(capped.clone())), parallel: 8, limits: vec![(16, 1)], ..Config::default() });
+    assert_eq!(json(&e.convert(Input::bytes(tiff), &o).unwrap()), json(&m0));
+    assert_eq!(capped.peak.load(Ordering::SeqCst), 1, "limit.workers=1 is serial");
+}
+
+#[test]
+fn parallel_workers_with_a_renderer_and_an_ocr_port_are_the_serial_run_over_born_digital_pages_and_a_scan() {
+    // under `always` a born-digital page asks its two renders, then the OCR of the page: the dry attempts ask them ahead; the renderer and the OCR
+    // engine are called as many times as in a serial run
+    let o = Options::default();
+    let mut docs: Vec<(String, Vec<u8>)> = SLICE.iter().map(|n| (n.to_string(), synth(n))).collect();
+    docs.push(("h-keyword scan".to_string(), read("test/corpus/synth/scan/h-keyword.pdf")));
+    docs.push(("multi-frame tiff".to_string(), image("tiff-multi3-rgb-lzw.tif")));
+    for (name, bytes) in docs {
+        let fake0 = Arc::new(Fake::default());
+        let ocr0 = Arc::new(SlowOcr::default());
+        let serial = Engine::new(Config { renderer: Some(fake0.clone()), ocr: Some(OcrPort(ocr0.clone())), ..Config::default() });
+        let (m0, t0) = serial.record(Input::bytes(bytes.clone()), &o).unwrap();
+        for n in [2, 4, 8] {
+            let fake = Arc::new(Fake::default());
+            let ocr = Arc::new(SlowOcr::default());
+            let e = Engine::new(Config { renderer: Some(fake.clone()), ocr: Some(OcrPort(ocr.clone())), parallel: n, ..Config::default() });
+            let (m, t) = e.record(Input::bytes(bytes.clone()), &o).unwrap();
+            assert_eq!(json(&m), json(&m0), "{} at parallel={}", name, n);
+            assert_eq!(entries_of(&t), entries_of(&t0), "{} at parallel={}", name, n);
+            assert_eq!(fake.calls.load(Ordering::SeqCst), fake0.calls.load(Ordering::SeqCst), "{} at parallel={}: the renderer is called as often", name, n);
+            assert_eq!(ocr.calls.load(Ordering::SeqCst), ocr0.calls.load(Ordering::SeqCst), "{} at parallel={}: and the OCR engine", name, n);
+        }
+    }
+}
+
+// A codec that says which pixel bound it was given: the one the workers see.
+#[derive(Debug, Default)]
+struct BoundCodecs(std::sync::Mutex<Vec<u64>>);
+impl emon::PdfCodecs for BoundCodecs {
+    fn jpx(&self, _data: &[u8], max: u64) -> Result<emon::Pix, emon::CodecFail> {
+        self.0.lock().unwrap().push(max);
+        Err(emon::CodecFail::Unsupported("no".to_string()))
+    }
+    fn jbig2(&self, _data: &[u8], _globals: &[u8], max: u64) -> Result<emon::Pix, emon::CodecFail> {
+        self.0.lock().unwrap().push(max);
+        Err(emon::CodecFail::Unsupported("no".to_string()))
+    }
+}
+
+#[test]
+fn the_limit_overrides_of_a_conversion_are_in_force_on_its_workers_and_only_there() {
+    // `limit.pixels` is read where a port decodes (kind 9): on a worker thread, under the table the conversion was given. Thread-local overrides (D436)
+    // do not follow a task by themselves, so the pool installs the conversion's table on every job.
+    let o = Options { assets: Assets::Images, ..Options::default() };
+    let doc = read("test/assets/jbig2-globals.pdf");
+    for n in [1, 4] {
+        let codecs = Arc::new(BoundCodecs::default());
+        let e = Engine::new(Config { pdf_codecs: Some(codecs.clone()), limits: vec![(9, 12345)], parallel: n, ..Config::default() });
+        e.convert(Input::bytes(doc.clone()), &o).unwrap();
+        assert_eq!(codecs.0.lock().unwrap().clone(), vec![12345], "parallel={}: the codec was given the conversion's bound", n);
+    }
+    // a conversion with no override on the same threads' next job sees none: two engines side by side, one bounded, one not
+    let tight = Arc::new(BoundCodecs::default());
+    let free = Arc::new(BoundCodecs::default());
+    let et = Engine::new(Config { pdf_codecs: Some(tight.clone()), limits: vec![(9, 777)], parallel: 4, ..Config::default() });
+    let ef = Engine::new(Config { pdf_codecs: Some(free.clone()), parallel: 4, ..Config::default() });
+    std::thread::scope(|s| {
+        let a = s.spawn(|| (0..4).for_each(|_| drop(et.convert(Input::bytes(doc.clone()), &o).unwrap())));
+        let b = s.spawn(|| (0..4).for_each(|_| drop(ef.convert(Input::bytes(doc.clone()), &o).unwrap())));
+        a.join().unwrap();
+        b.join().unwrap();
+    });
+    assert_eq!(tight.0.lock().unwrap().clone(), vec![777; 4], "the bounded engine's workers saw its bound, every time");
+    assert_eq!(free.0.lock().unwrap().clone(), vec![268435456; 4], "the other's saw the default, never the first's");
+}
+
+// A renderer that panics on one page, as a port may.
+#[derive(Debug)]
+struct PanicOnPage(i32);
+impl Renderer for PanicOnPage {
+    fn render(&self, _input: &dyn ByteSource, _pw: Option<&[u8]>, req: &RenderRequest) -> Result<emon::port::Bitmap, RenderError> {
+        if req.page == self.0 {
+            panic!("the renderer broke on page {}", req.page);
+        }
+        Ok(emon::port::Bitmap::from_bytes(2, 2, 3, &[7u8; 12]))
+    }
+}
+
+#[test]
+fn a_port_that_panics_panics_the_conversion_in_a_parallel_run_as_in_a_serial_one() {
+    let bytes = synth("furn-informative");
+    for n in [1, 4] {
+        let e = Engine::new(Config { renderer: Some(Arc::new(PanicOnPage(0))), parallel: n, ..Config::default() });
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| e.convert(Input::bytes(bytes.clone()), &Options::default())));
+        assert!(r.is_err(), "parallel={}: the panic reaches the caller", n);
+    }
+}
