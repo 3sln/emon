@@ -160,6 +160,7 @@ pub fn pd_warning_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     return 0;
 }
+pub(crate) const D_HINT_MAX: i32 = 65536;
 pub(crate) const D_BASE: i32 = 0;
 pub(crate) const D_SHIFT: i32 = 1;
 pub(crate) const D_VMAJ: i32 = 2;
@@ -1402,7 +1403,8 @@ pub(crate) fn pd_hint_extents(src: &crate::port::Src, dc: &mut crate::port::Cell
     // Once the cross-reference is read, every object's EXTENT is known: from
     // its offset to the next larger offset (or the end of the source). Tell
     // the source, so a miss on an object can fetch the whole object, not a
-    // guess (D058). `b` is scratch. Answers the number of hints.
+    // guess (D058). An object longer than `D_HINT_MAX` (a picture, a font program) is not told: a miss in its dictionary would fetch all of it
+    // (D1141), and a stream the unit really reads is missed chunk by chunk anyway. `b` is scratch. Answers the number of hints.
     let n: i32 = ps_len(src);
     let nent: i32 = crate::port::cells_at(dc, D_NENT);
     let shift: i32 = crate::port::cells_at(dc, D_SHIFT);
@@ -1432,7 +1434,7 @@ pub(crate) fn pd_hint_extents(src: &crate::port::Src, dc: &mut crate::port::Cell
         if (i + 1) < cnt {
             nx = crate::port::cells_at(b, i + 1);
         }
-        if nx > o {
+        if (nx > o) && ((nx - o) <= D_HINT_MAX) {
             ps_hint(src, o, nx);
             hints += 1;
         }

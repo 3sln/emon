@@ -158,6 +158,7 @@ public final class Pdfdoc {
         }
         return 0;
     }
+    public static final int D_HINT_MAX = 65536;
     public static final int D_BASE = 0;
     public static final int D_SHIFT = 1;
     public static final int D_VMAJ = 2;
@@ -1400,7 +1401,8 @@ public final class Pdfdoc {
         // Once the cross-reference is read, every object's EXTENT is known: from
         // its offset to the next larger offset (or the end of the source). Tell
         // the source, so a miss on an object can fetch the whole object, not a
-        // guess (D058). `b` is scratch. Answers the number of hints.
+        // guess (D058). An object longer than `D_HINT_MAX` (a picture, a font program) is not told: a miss in its dictionary would fetch all of it
+        // (D1141), and a stream the unit really reads is missed chunk by chunk anyway. `b` is scratch. Answers the number of hints.
         int n = Pdfsrc.psLen(src);
         int nent = emon.Port.cellsAt(dc, D_NENT);
         int shift = emon.Port.cellsAt(dc, D_SHIFT);
@@ -1430,7 +1432,7 @@ public final class Pdfdoc {
             if ((i + 1) < cnt) {
                 nx = emon.Port.cellsAt(b, i + 1);
             }
-            if (nx > o) {
+            if ((nx > o) && ((nx - o) <= D_HINT_MAX)) {
                 Pdfsrc.psHint(src, o, nx);
                 hints += 1;
             }

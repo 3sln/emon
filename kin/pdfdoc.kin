@@ -144,6 +144,7 @@
 
 ;; ---------------------------------------------------------- the document
 
+(defconst ^I32 D_HINT_MAX 65536) ;; the largest object extent `pd-hint-extents` tells the source of (D1141): a picture is not fetched for a miss in its dictionary
 (defconst ^I32 D_BASE 0)     ;; where %PDF- is
 (defconst ^I32 D_SHIFT 1)    ;; added to every file offset
 (defconst ^I32 D_VMAJ 2)
@@ -1128,7 +1129,8 @@
   (comment "Once the cross-reference is read, every object's EXTENT is known: from")
   (comment "its offset to the next larger offset (or the end of the source). Tell")
   (comment "the source, so a miss on an object can fetch the whole object, not a")
-  (comment "guess (D058). `b` is scratch. Answers the number of hints.")
+  (comment "guess (D058). An object longer than `D_HINT_MAX` (a picture, a font program) is not told: a miss in its dictionary would fetch all of it")
+  (comment "(D1141), and a stream the unit really reads is missed chunk by chunk anyway. `b` is scratch. Answers the number of hints.")
   (let [^I32 n (ps-len src)
         ^I32 nent (cells-at dc D_NENT)
         ^I32 shift (cells-at dc D_SHIFT)
@@ -1153,7 +1155,7 @@
       (do (set o (cells-at b i))
           (set nx n)
           (if (< (+ i 1) cnt) (set nx (cells-at b (+ i 1))))
-          (if (> nx o)
+          (if (and (> nx o) (<= (- nx o) D_HINT_MAX))
             (do (ps-hint src o nx)
                 (set hints (+ hints 1))))
           (set i (+ i 1))))
