@@ -565,11 +565,14 @@ fn to_vec(c: &Cells) -> Vec<i32> {
 }
 
 // THE `Ocr` PORT over Tesseract: an embedder gives `Config::ocr = Some(OcrPort(Arc::new(TessOcr::new(None)?)))`.
-// One engine behind a Mutex: Tesseract's API objects are not thread safe, and conversions that run at once take turns at
-// the engine (the rest of a conversion runs in parallel).
+// A POOL OF ENGINES (P10.2, D509): Tesseract's API objects are not thread safe, so each reading takes an engine of its own from the pool (or makes
+// one, which is a full model load) and gives it back; the pool holds as many as were ever wanted at once, which is as many as the conversions and the
+// workers of a `parallel` conversion that read at the same moment. A serial run has one. A reading is a function of the request and the model alone
+// (the LSTM engine learns nothing between pages), so which engine reads a page does not show in the answer.
 #[cfg(feature = "tesseract")]
 pub struct TessOcr {
-    inner: Mutex<Tess>,
+    tessdata: String,
+    idle: Mutex<Vec<Tess>>,
     producer: Vec<(String, String)>,
 }
 
@@ -596,15 +599,19 @@ impl TessOcr {
         };
         let t = Tess::new(&dir, 0);
         let producer = t.producer();
-        Ok(TessOcr { inner: Mutex::new(t), producer })
+        Ok(TessOcr { tessdata: dir, idle: Mutex::new(vec![t]), producer })
     }
 }
 
 #[cfg(feature = "tesseract")]
 impl crate::engine::Ocr for TessOcr {
     fn fulfil(&self, req: &Request, bitmaps: &Bitmaps, keep_binary: bool) -> Result<Answer, PlanError> {
-        let mut t = self.inner.lock().unwrap_or_else(|e| e.into_inner());
-        t.fulfil(req, bitmaps, keep_binary)
+        let taken = self.idle.lock().unwrap_or_else(|e| e.into_inner()).pop();
+        let mut t = taken.unwrap_or_else(|| Tess::new(&self.tessdata, 0));
+        // an engine that panicked is not given back: its state is not known
+        let r = t.fulfil(req, bitmaps, keep_binary);
+        self.idle.lock().unwrap_or_else(|e| e.into_inner()).push(t);
+        r
     }
     fn producer(&self) -> Vec<(String, String)> {
         self.producer.clone()

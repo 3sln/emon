@@ -99,6 +99,8 @@ public static class Enctx {
         public emon.Port.Cells Prod = emon.Port.NewCells();
         public System.Text.StringBuilder Msg = new System.Text.StringBuilder();
         public int Nort = 0;
+        public int Par = 0;
+        public int Dry = 0;
         public Cfg() {
         }
         public Cfg Clone() {
@@ -125,6 +127,8 @@ public static class Enctx {
             emon.Port.CellsCopyInto(c.Prod, this.Prod);
             c.Msg.Append(this.Msg.ToString());
             c.Nort = this.Nort;
+            c.Par = this.Par;
+            c.Dry = this.Dry;
             return c;
         }
     }

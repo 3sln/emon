@@ -137,8 +137,14 @@ public sealed class Engine {
     /// <summary>The loop over one input: limits first, a `Src` over its source, the units run as kin schedules them, and the stats.</summary>
     private Run RunInput(int idx, Input input, Options opts, bool intakeOnly, emon.Planrun.Transcript rec, emon.Planrun.Transcript replay) {
         Run r = null;
+        var poolBox = new Par[1];
         emon.Port.WithLimits(cfg.Limits, () => {
-            r = RunInputBounded(idx, input, opts, intakeOnly, rec, replay);
+            try {
+                r = RunInputBounded(idx, input, opts, intakeOnly, rec, replay, poolBox);
+            } finally {
+                // the pool ends before the limit scope does, whatever ended the run
+                poolBox[0]?.Close();
+            }
         });
         return r;
     }
@@ -155,7 +161,7 @@ public sealed class Engine {
         return (System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000000 / System.Diagnostics.Stopwatch.Frequency;
     }
 
-    private Run RunInputBounded(int idx, Input input, Options opts, bool intakeOnly, emon.Planrun.Transcript rec, emon.Planrun.Transcript replay) {
+    private Run RunInputBounded(int idx, Input input, Options opts, bool intakeOnly, emon.Planrun.Transcript rec, emon.Planrun.Transcript replay, Par[] poolBox) {
         // the input-bytes bound is checked against the SIZE, before any byte is read (SPEC 13.1)
         long size = input.Source.Size();
         long limit = System.Math.Min((long) emon.Port.LimitOf(0), int.MaxValue);
@@ -210,7 +216,7 @@ public sealed class Engine {
         // the live port set (D127, D211): `render` and `crop` go to the configured Renderer, reading the same input through the same byte source; with none
         // they, like the other kinds, fall to the host's own fulfiller, which answers them `unsupported` (D199). Which port a request goes to is kin's
         // (`pl-route`). Pixels are kept in the answers when a transcript is being recorded or an OCR engine will read them.
-        emon.Planrun.IFulfiller renderF = null;
+        emon.RenderPort.Fulfiller renderF = null;
         if (cfg.Renderer != null) {
             byte[] rpw = input.Password.Length > 0 ? input.Password : null;
             renderF = emon.RenderPort.Fulfiller.ForInput(cfg.Renderer, idx, new emon.RenderPort.Input(input.Source, rpw));
@@ -233,6 +239,18 @@ public sealed class Engine {
             replayer = new emon.Planrun.Replayer(replay);
             ports = replayer;
         }
+        // PARALLEL (P10.2, SPEC 12.1): `Parallel` workers fulfil a round's requests at once and the pages ahead of the loop's are looked at meanwhile
+        // (`Par`). A replay answers from the transcript and has nothing to run: it stays serial. The pool ends before the limit scope does (`RunInput`).
+        Par pool = null;
+        if (replay == null) {
+            int workers = emon.Planloop.PlWorkers(cfg.Parallel, emon.Port.LimitOf(16));
+            if (workers > 1) {
+                var x = new Par.Exec(renderF, Ports.PortFn(input.Source, idx, rec != null || cfg.Ocr != null, rec != null, cfg.Ocr, cfg.PdfCodecs), cfg.Ocr != null);
+                pool = new Par(x, workers, emon.Planloop.PlAhead(workers), pcfg);
+                poolBox[0] = pool;
+                ports = new Par.Round(pool);
+            }
+        }
         var timed = new Ports.Timed(ports);
         ports = timed;
         // THE SCHEDULE IS KIN'S (`en-next`): which unit runs next is the machine's phase, and this function is the driver of each unit. The unit that just
@@ -243,6 +261,10 @@ public sealed class Engine {
         long tPages = 0;
         for (;;) {
             int phase = m.Phase();
+            if (pool != null) {
+                // outside the page units there is no page to look ahead of
+                pool.Cur = -1;
+            }
             if (phase == emon.Planloop.PhDoc()) {
                 // THE DOCUMENT PASS: everything that reads the input, in its own loop (misses fetch and re-run it).
                 long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -306,9 +328,21 @@ public sealed class Engine {
                 int page = m.Page();
                 EmonError failed = null;
                 Units.UnitDoc du = docU;
+                if (pool != null) {
+                    pool.Cur = page;
+                    pool.Pages = du.Info.Pages;
+                    // a dry attempt writes nothing (`pu-dry`); a failure in one ends the chain and is dropped, the real unit meets what caused it in its own turn
+                    pool.DryAttempt = (pg, answers, rq, bms, payload) => {
+                        try {
+                            return Units.UnitPage(du, pg, idx, size, opts, true, answers, rq, bms) == 1 ? emon.Planrun.UnitRequests : emon.Planrun.UnitDone;
+                        } catch (System.Exception) {
+                            return emon.Planrun.UnitDone;
+                        }
+                    };
+                }
                 emon.Planrun.Unit unitP = (answers, rq, bms, payload) => {
                     try {
-                        int s = Units.UnitPage(du, page, idx, size, opts, answers, rq, bms);
+                        int s = Units.UnitPage(du, page, idx, size, opts, false, answers, rq, bms);
                         if (s == 0) {
                             return emon.Planrun.UnitDone;
                         }

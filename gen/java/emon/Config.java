@@ -15,7 +15,8 @@ public final class Config {
         101, 111, 99, 114, 45, 115, 99, 111, 112, 101, 109, 97, 120, 45, 114, 111,
         117, 110, 100, 115, 102, 101, 116, 99, 104, 45, 114, 111, 117, 110, 100, 115,
         114, 101, 99, 111, 114, 100, 106, 115, 45, 111, 99, 114, 99, 104, 117, 110,
-        107, 108, 105, 109, 105, 116, 46, 112, 114, 111, 100, 117, 99, 101, 114, 46
+        107, 108, 105, 109, 105, 116, 46, 112, 114, 111, 100, 117, 99, 101, 114, 46,
+        112, 97, 114, 97, 108, 108, 101, 108
     };
     public static final int[] CK_ROWS = {
         0, 0, 0, 0, 6,
@@ -35,7 +36,8 @@ public final class Config {
         3, 0, 0, 134, 6,
         1, 1, 2147483647, 140, 5,
         4, 0, 0, 145, 6,
-        5, 0, 0, 151, 9
+        5, 0, 0, 151, 9,
+        1, 1, 2147483647, 160, 8
     };
     public static final int[] CV_CHARS = {
         97, 108, 119, 97, 121, 115, 97, 117, 116, 111, 110, 101, 118, 101, 114, 112,
@@ -74,6 +76,7 @@ public final class Config {
     public static final int K_REC = 13;
     public static final int K_JSOCR = 14;
     public static final int K_CHUNK = 15;
+    public static final int K_PAR = 18;
     public static final int SH_STR = 0;
     public static final int SH_NUM = 1;
     public static final int SH_ENUM = 2;
@@ -99,6 +102,8 @@ public final class Config {
         c.fetchr = 24;
         c.rec = 0;
         c.jsocr = 0;
+        c.par = 1;
+        c.dry = 0;
         return 0;
     }
     public static int cfKeyIs(emon.Port.Cells t, int from, int to, int k) {
@@ -124,7 +129,7 @@ public final class Config {
     public static int cfKeyFind(emon.Port.Cells t, int from, int to) {
         // The key t[from, to) names, or -1.
         int k = 0;
-        while (k < 18) {
+        while (k < 19) {
             if (cfKeyIs(t, from, to, k) == 1) {
                 return k;
             }
@@ -151,7 +156,7 @@ public final class Config {
     public static int cfLimitFind(emon.Port.Cells t, int from, int to) {
         // The kind of the limit t[from, to) names, or -1.
         int k = 0;
-        while (k < 16) {
+        while (k < 17) {
             if (cfLimitIs(t, from, to, k) == 1) {
                 return k;
             }
@@ -316,6 +321,9 @@ public final class Config {
         }
         if (k == K_CHUNK) {
             c.chunk = v;
+        }
+        if (k == K_PAR) {
+            c.par = v;
         }
         return 0;
     }

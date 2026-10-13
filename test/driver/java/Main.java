@@ -9,7 +9,7 @@
 //             [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D]
 //             [--html-assets=inline|external|omit] [--asset-prefix=P]
 //             [--source=bytes|readerat|seek|spool] [--chunk=N --async] [--stats]
-//             [--record=DIR | --replay=DIR] [--parallel=N] FILE
+//             [--record=DIR | --replay=DIR] [--concurrent=N] [--parallel=N] FILE
 //
 //   --source=        which adapter reads FILE: `bytes` (in memory), `seek` and `readerat` (a FileChannel as a
 //                    SeekableByteChannel: Java's random-access form, SPEC 13.1), `spool` (an InputStream, spooled)
@@ -20,9 +20,13 @@
 //                    installs (or the directory D / $EMON_PDFIUM_LIB). LIVE: needs the library; no gate uses it.
 //   --tesseract[=D]  give the Engine the Tesseract `Ocr` port (D211) over the Java FFM API, reading models from D (default:
 //                    $TESSDATA_PREFIX and the usual places). LIVE: needs the library; no gate uses it.
+//   --fake-ports     TEST ONLY (P10.2): a deterministic Renderer and Ocr stand in for pdfium and Tesseract, so the fulfilment path runs on every document with no
+//                    engine installed (`bb repeat` holds serial and parallel runs of it to the same bytes)
 //   --record=DIR     also write the plan/fulfil transcript to DIR (transcript.edn and PNGs)
 //   --replay=DIR     convert from the transcript in DIR (no port is called)
-//   --parallel=N     run N conversions at once on one Engine; all N must give the same answer (`bb repeat`)
+//   --concurrent=N   run N conversions at once on one Engine; all N must give the same answer (`bb repeat`). (It was `--parallel=N` until P10.2: that
+//                    is now kin's option, `parallel=N`, N workers inside ONE conversion; `bb repeat` runs both.)
+//   --parallel=N     kin's option (SPEC 13, P10.2): spread one conversion's fulfilment over N workers; the output is the serial run's at any N
 //
 // Exit: 0 ok; 2 usage; 4 a named emon error (`error: NAME` on stderr, nothing on stdout); 1 anything else.
 
@@ -51,6 +55,59 @@ import java.util.List;
 import java.util.Map;
 
 public class Main {
+    // `--fake-ports` (P10.2): a deterministic Renderer and Ocr, so that the fulfilment path (a page unit's renders, decodes and OCR, the pages ahead looked at,
+    // a round fulfilled by several workers) runs on every document of a gate with no engine installed. The Renderer answers a 20 x 30 RGB page whose pixels are
+    // a function of the page, the layer, the resolution and the position; the Ocr answers every request with the word `Hello` in one line, through the kin
+    // builders a real engine's adapter uses. Both are pure functions of the request, as the real engines are (the property `bb repeat` holds them to).
+    static final class FakeRenderer implements emon.RenderPort.Renderer {
+        public emon.Port.Bitmap render(emon.RenderPort.Source input, byte[] password, emon.RenderPort.Request req) {
+            byte[] px = new byte[20 * 30 * 3];
+            for (int y = 0; y < 30; y++) {
+                for (int x = 0; x < 20; x++) {
+                    byte v = (byte) (x * 7 + y * 3 + req.layer * 50 + req.page * 11 + req.dpi);
+                    px[(y * 20 + x) * 3] = v;
+                    px[(y * 20 + x) * 3 + 1] = (byte) (v ^ 0x55);
+                    px[(y * 20 + x) * 3 + 2] = (byte) (255 - v);
+                }
+            }
+            emon.Port.Bitmap whole = new emon.Port.Bitmap(20, 30, 3, px);
+            try {
+                return req.clip == null ? whole : emon.RenderPort.cut(whole, req.clip);
+            } catch (emon.RenderPort.RenderError e) {
+                throw new IllegalStateException(e);
+            }
+        }
+
+        public int layers() {
+            return 1;
+        }
+
+        public boolean exactCrop() {
+            return false;
+        }
+    }
+
+    static final class FakeOcr implements emon.api.Ocr {
+        public Planrun.Answer fulfil(Planrun.Request req, java.util.Map<Integer, emon.Port.Bitmap> bm, boolean keep) {
+            emon.Port.Cells c = emon.Port.newCells();
+            int at = emon.Plan.anOcr(c, req.id());
+            int w = emon.Plan.anOcrWord(c, at, 10, 10, 100, 30, 900, 0, 0);
+            "Hello".codePoints().forEach(cp -> emon.Plan.anOcrCp(c, w, cp));
+            emon.Ocr.oxBegin(c, 0, 0, 0, 0, -1, 0, -1, -1, 1, 1, 0, 0, 0);
+            emon.Ocr.oxLine(c, 10, 10, 100, 30, 10, 35, 110, 35, 0, 0, 0, 20, 14, 6);
+            emon.Ocr.oxBlock(c, 10, 10, 100, 30, 0, 0, 0);
+            emon.Ocr.oxWord(c, 0, 0, -1, 0);
+            emon.Plan.anOcrEnd(c, at);
+            return new Planrun.Answer(emon.Port.cellsVec(c));
+        }
+
+        public List<String[]> producer() {
+            List<String[]> p = new ArrayList<>();
+            p.add(new String[] {"engine", "fake"});
+            return p;
+        }
+    }
+
     static final class Exit extends RuntimeException {
         private static final long serialVersionUID = 1L;
         final int code;
@@ -65,7 +122,7 @@ public class Main {
 
     static void usage(String msg) {
         err.println("emon-java: " + msg);
-        err.println("usage: emon-java [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--pdfium[=LIBDIR]] [--assets=none|images|figures] [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D] [--html-assets=inline|external|omit] [--asset-prefix=P] [--password=TEXT] [--source=bytes|readerat|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE");
+        err.println("usage: emon-java [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--pdfium[=LIBDIR]] [--assets=none|images|figures] [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D] [--html-assets=inline|external|omit] [--asset-prefix=P] [--password=TEXT] [--source=bytes|readerat|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--concurrent=N] [--parallel=N] FILE");
         throw new Exit(2);
     }
 
@@ -186,9 +243,9 @@ public class Main {
         String source = "bytes";
         boolean stats = false;
         String file = "", record = "", replay = "", dump = "", assetDir = "";
-        boolean tess = false, pdfium = false;
+        boolean tess = false, pdfium = false, fakePorts = false;
         String tessdata = "", pdfiumLib = "";
-        int parallel = 1;
+        int concurrent = 1;
         for (String a : args) {
             if (a.startsWith("--out=")) {
                 out = a.substring("--out=".length());
@@ -216,6 +273,8 @@ public class Main {
                 simulateAsync = true;
             } else if (a.equals("--no-retarget")) {
                 noRetarget = true;
+            } else if (a.equals("--fake-ports")) {
+                fakePorts = true;
             } else if (a.equals("--tesseract")) {
                 tess = true;
             } else if (a.startsWith("--tesseract=")) {
@@ -234,17 +293,17 @@ public class Main {
                 record = a.substring("--record=".length());
             } else if (a.startsWith("--replay=")) {
                 replay = a.substring("--replay=".length());
-            } else if (a.startsWith("--parallel=")) {
+            } else if (a.startsWith("--concurrent=")) {
                 int n = -1;
                 try {
-                    n = Integer.parseInt(a.substring("--parallel=".length()));
+                    n = Integer.parseInt(a.substring("--concurrent=".length()));
                 } catch (NumberFormatException e) {
                     // falls to the usage below
                 }
                 if (n < 1) {
-                    usage("--parallel=N wants a positive number");
+                    usage("--concurrent=N wants a positive number");
                 }
-                parallel = n;
+                concurrent = n;
             } else if (kinFlag(a) != null) {
                 // a key of kin's options grammar (`emon.config`): --ocr=never, --asset-dpi=300, --limit.pages=5, --chunk=512, ...
                 kinText.append(kinFlag(a)).append('\n');
@@ -332,6 +391,13 @@ public class Main {
                 usage(e.getMessage());
             }
         }
+        if (fakePorts) {
+            if (tess || pdfium) {
+                usage("--fake-ports is the stand-in for --tesseract and --pdfium: not with them");
+            }
+            cfg.ocr = new FakeOcr();
+            cfg.renderer = new FakeRenderer();
+        }
         final Engine engine = new Engine(cfg);
 
         if (out.equals("intake")) {
@@ -374,7 +440,7 @@ public class Main {
         final boolean fPretty = pretty;
         final Options.Html fHtml = html;
         final Planrun.Transcript fTin = tin;
-        final int fParallel = parallel;
+        final int fConcurrent = concurrent;
         final Options fOpts = opts;
         java.util.function.Supplier<Result> one = () -> {
             Result r = new Result();
@@ -397,7 +463,7 @@ public class Main {
                     r.stats = new RunStatsBox();
                     r.stats.s = c.stats;
                 }
-                if (!fAssetDir.isEmpty() && fParallel == 1) {
+                if (!fAssetDir.isEmpty() && fConcurrent == 1) {
                     Files.createDirectories(Path.of(fAssetDir));
                     for (Model.AssetFile f : m.assetFiles()) {
                         Files.write(Path.of(fAssetDir, f.name), f.bytes);
@@ -413,12 +479,12 @@ public class Main {
             return r;
         };
 
-        Result[] results = new Result[parallel];
-        if (parallel == 1) {
+        Result[] results = new Result[concurrent];
+        if (concurrent == 1) {
             results[0] = one.get();
         } else {
-            Thread[] ts = new Thread[parallel];
-            for (int i = 0; i < parallel; i++) {
+            Thread[] ts = new Thread[concurrent];
+            for (int i = 0; i < concurrent; i++) {
                 final int k = i;
                 ts[i] = new Thread(null, () -> results[k] = one.get(), "conv-" + i, 1L << 29);
                 ts[i].start();
@@ -430,7 +496,7 @@ public class Main {
         for (int i = 1; i < results.length; i++) {
             Result a = results[0], b = results[i];
             if (!same(a, b)) {
-                err.print("error: nondeterministic\nconversion " + i + " of " + parallel + " differs from conversion 0\n");
+                err.print("error: nondeterministic\nconversion " + i + " of " + concurrent + " differs from conversion 0\n");
                 err.flush();
                 throw new Exit(1);
             }

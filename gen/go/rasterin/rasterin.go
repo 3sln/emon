@@ -223,7 +223,8 @@ func RsDoc(src *port.Src, input int32, fmt int32, ans *port.Cells, rq *port.Cell
 	return 0
 }
 
-func RsPage(f int32, input int32, nbytes int32, policy int32, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, mask *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, scr *port.Cells) int32 {
+func RsPage(f int32, input int32, nbytes int32, policy int32, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, mask *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, scr *port.Cells, dry int32) int32 {
+	// `dry` is 1 for a DRY attempt (P10.2, `pu-dry`): it stops before the write, having asked what the rounds up to there ask.
 	// The unit of frame `f` (0-based) of a raster input: its pixels (`decode` id `pi-decode`, a whole image file, whose
 	// failure is the conversion's: an image that cannot be read is refused by name, whatever the policy), then, unless
 	// `policy` is 0 (never), OCR of the bitmap (id `pi-ocr`); where the answers are in, the frame's evidence and lines are
@@ -247,6 +248,9 @@ func RsPage(f int32, input int32, nbytes int32, policy int32, ans *port.Cells, r
 	if ao < 0 {
 		scan.ScRequest(rq, oid, did, (rsEffDpi100(plan.AnArg(ans, ad, 3))+50)/100, loc)
 		return plan.UsRequests()
+	}
+	if dry == 1 {
+		return 0
 	}
 	if plan.AnOk(ans, ao) == 1 {
 		rsReadPage(ans, ao, ad, f+1, oid, loc, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr)

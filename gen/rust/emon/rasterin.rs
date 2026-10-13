@@ -201,7 +201,8 @@ pub fn rs_doc(src: &crate::port::Src, input: i32, fmt: i32, ans: &mut crate::por
     }
     return 0;
 }
-pub fn rs_page(f: i32, input: i32, nbytes: i32, policy: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, loc: &mut crate::port::Cells, bms: &crate::port::BitmapSet, mut mask: &mut crate::port::Cells, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut scr: &mut crate::port::Cells) -> i32 {
+pub fn rs_page(f: i32, input: i32, nbytes: i32, policy: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, loc: &mut crate::port::Cells, bms: &crate::port::BitmapSet, mut mask: &mut crate::port::Cells, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, dry: i32) -> i32 {
+    // `dry` is 1 for a DRY attempt (P10.2, `pu-dry`): it stops before the write, having asked what the rounds up to there ask.
     // The unit of frame `f` (0-based) of a raster input: its pixels (`decode` id `pi-decode`, a whole image file, whose
     // failure is the conversion's: an image that cannot be read is refused by name, whatever the policy), then, unless
     // `policy` is 0 (never), OCR of the bitmap (id `pi-ocr`); where the answers are in, the frame's evidence and lines are
@@ -225,6 +226,9 @@ pub fn rs_page(f: i32, input: i32, nbytes: i32, policy: i32, ans: &mut crate::po
     if ao < 0 {
         sc_request(rq, oid, did, (rs_eff_dpi100(an_arg(ans, ad, 3)) + 50) / 100, loc);
         return us_requests();
+    }
+    if dry == 1 {
+        return 0;
     }
     if an_ok(ans, ao) == 1 {
         rs_read_page(ans, ao, ad, f + 1, oid, loc, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr);

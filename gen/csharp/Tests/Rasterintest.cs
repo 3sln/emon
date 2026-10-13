@@ -28,7 +28,7 @@ public static class Rasterintest {
         return Rasterin.RsDoc(emon.Port.SrcOfBlob(emon.Testport.HexBlob("49492a0008000000")), 7, Rasterin.RsTiff(), ans, rq, nodes, attrs, text, pages, mask);
     }
     internal static int PagePol(int f, emon.Port.Cells ans, emon.Port.Cells rq, int policy, emon.Port.Cells loc, emon.Port.Cells mask, emon.Port.Cells et, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells oruns, emon.Port.Cells olines, emon.Port.Cells owords) {
-        return Rasterin.RsPage(f, 7, 8, policy, ans, rq, loc, emon.Port.NewBitmapSet(), mask, emon.Port.NewCells(), emon.Port.NewCells(), et, emon.Port.NewCells(), emon.Port.NewCells(), oruns, emon.Port.NewCells(), olines, owords, emon.Port.NewCells(), emon.Port.NewCells(), wd, ln, emon.Port.NewCells());
+        return Rasterin.RsPage(f, 7, 8, policy, ans, rq, loc, emon.Port.NewBitmapSet(), mask, emon.Port.NewCells(), emon.Port.NewCells(), et, emon.Port.NewCells(), emon.Port.NewCells(), oruns, emon.Port.NewCells(), olines, owords, emon.Port.NewCells(), emon.Port.NewCells(), wd, ln, emon.Port.NewCells(), 0);
     }
     [Xunit.Fact]
     public static void TestTheDocumentPassAsksForFrameZerosHeaderAndNothingMore() {

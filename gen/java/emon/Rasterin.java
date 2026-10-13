@@ -200,7 +200,8 @@ public final class Rasterin {
         }
         return 0;
     }
-    public static int rsPage(int f, int input, int nbytes, int policy, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells loc, emon.Port.BitmapSet bms, emon.Port.Cells mask, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells scr) {
+    public static int rsPage(int f, int input, int nbytes, int policy, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells loc, emon.Port.BitmapSet bms, emon.Port.Cells mask, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells scr, int dry) {
+        // `dry` is 1 for a DRY attempt (P10.2, `pu-dry`): it stops before the write, having asked what the rounds up to there ask.
         // The unit of frame `f` (0-based) of a raster input: its pixels (`decode` id `pi-decode`, a whole image file, whose
         // failure is the conversion's: an image that cannot be read is refused by name, whatever the policy), then, unless
         // `policy` is 0 (never), OCR of the bitmap (id `pi-ocr`); where the answers are in, the frame's evidence and lines are
@@ -224,6 +225,9 @@ public final class Rasterin {
         if (ao < 0) {
             Scan.scRequest(rq, oid, did, (rsEffDpi100(Plan.anArg(ans, ad, 3)) + 50) / 100, loc);
             return Plan.usRequests();
+        }
+        if (dry == 1) {
+            return 0;
         }
         if (Plan.anOk(ans, ao) == 1) {
             rsReadPage(ans, ao, ad, f + 1, oid, loc, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr);

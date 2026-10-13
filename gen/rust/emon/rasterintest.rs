@@ -30,7 +30,7 @@ pub(crate) fn doc_of(ans: &mut crate::port::Cells, rq: &mut crate::port::Cells, 
     return rs_doc(&crate::port::src_of_blob(&crate::testport::hex_blob("49492a0008000000")[..]), 7, rs_tiff(), ans, rq, nodes, attrs, text, pages, mask);
 }
 pub(crate) fn page_pol(f: i32, ans: &mut crate::port::Cells, rq: &mut crate::port::Cells, policy: i32, loc: &mut crate::port::Cells, mask: &mut crate::port::Cells, et: &mut crate::port::Cells, wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, oruns: &mut crate::port::Cells, olines: &mut crate::port::Cells, owords: &mut crate::port::Cells) -> i32 {
-    return rs_page(f, 7, 8, policy, ans, rq, loc, &crate::port::BitmapSet::new(), mask, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), oruns, &mut crate::port::Cells::new(), olines, owords, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), wd, ln, &mut crate::port::Cells::new());
+    return rs_page(f, 7, 8, policy, ans, rq, loc, &crate::port::BitmapSet::new(), mask, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), oruns, &mut crate::port::Cells::new(), olines, owords, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), wd, ln, &mut crate::port::Cells::new(), 0);
 }
 #[test]
 fn test_the_document_pass_asks_for_frame_zeros_header_and_nothing_more() {

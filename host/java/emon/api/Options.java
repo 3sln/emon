@@ -198,6 +198,12 @@ public final class Options {
         /** Makes the cache behave like an ASYNC source (a browser Blob): a miss stops the unit with `need-bytes`, and the loop fetches and re-runs it. The output is identical. */
         public boolean simulateAsync;
         public int maxRounds, fetchRounds;
+        /**
+         * The `parallel` option (P10.2, SPEC 12.1, D505): how many workers a conversion may spread its fulfilment over. 1, the default, is serial and starts no
+         * thread; the limit `workers` caps it (kin's `pl-workers` is the clamp). It changes how the work is spread and nothing in the Model, the transcript or
+         * the accounting. A conversion's workers run inside its limit scope (`Port.withLimits`) and end before it does.
+         */
+        public int parallel = 1;
         /** The `Ocr` port, if the embedder has one (D211). null: no live OCR; a replay needs none. */
         public Ocr ocr;
         /** The `Renderer` port (D007, D127): what fulfils `render` and `crop` requests when the Engine converts or records. null: none, and a request is answered `unsupported` (D199). */
@@ -265,7 +271,8 @@ public final class Options {
         cfg.chunkSize = c.chunk;
         cfg.maxRounds = c.maxr;
         cfg.fetchRounds = c.fetchr;
-        cfg.limits = new int[Port.cellsLen(c.lims) / 2][];
+        cfg.parallel = c.par;
+        cfg.limits =new int[Port.cellsLen(c.lims) / 2][];
         for (int i = 0; i < cfg.limits.length; i++) {
             cfg.limits[i] = new int[] {Port.cellsAt(c.lims, 2 * i), Port.cellsAt(c.lims, 2 * i + 1)};
         }

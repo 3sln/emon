@@ -139,6 +139,8 @@ type Cfg struct {
 	Prod    *port.Cells
 	Msg     *strings.Builder
 	Nort    int32
+	Par     int32
+	Dry     int32
 }
 
 func NewCfg() *Cfg {
@@ -165,6 +167,8 @@ func NewCfg() *Cfg {
 		Prod:    port.NewCells(),
 		Msg:     &strings.Builder{},
 		Nort:    0,
+		Par:     0,
+		Dry:     0,
 	}
 }
 func (d *Cfg) Clone() *Cfg {
@@ -191,6 +195,8 @@ func (d *Cfg) Clone() *Cfg {
 	port.CellsCopyInto(c.Prod, d.Prod)
 	c.Msg.WriteString(d.Msg.String())
 	c.Nort = d.Nort
+	c.Par = d.Par
+	c.Dry = d.Dry
 	return c
 }
 

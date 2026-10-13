@@ -79,7 +79,7 @@ pub(crate) fn t_is_key(emon_t: i32, b: &[u8], want: i32, name: &str) -> i32 {
 }
 #[test]
 fn test_the_limits_have_their_names_in_kin() {
-    crate::testport::assert_eq(lm_count(), 16, "sixteen limits");
+    crate::testport::assert_eq(lm_count(), 17, "seventeen limits");
     t_limit_name(0, 0, "input-bytes");
     t_limit_name(0, 1, "stream-bytes");
     t_limit_name(0, 2, "total-bytes");
@@ -96,6 +96,7 @@ fn test_the_limits_have_their_names_in_kin() {
     t_limit_name(0, 13, "asset-placements");
     t_limit_name(0, 14, "fonts-per-doc");
     t_limit_name(0, 15, "stage-ms");
+    t_limit_name(0, 16, "workers");
 }
 #[test]
 fn test_the_limits_have_their_defaults_and_ranges_in_kin() {
@@ -116,6 +117,7 @@ fn test_the_limits_have_their_defaults_and_ranges_in_kin() {
     crate::testport::assert_eq(lm_default(14), 512, "fonts-per-doc is the slab");
     crate::testport::assert_eq(lm_hi(14), 512, "and cannot be raised past it");
     crate::testport::assert_eq(lm_default(15), 0, "stage-ms is off");
+    crate::testport::assert_eq(lm_default(16), 16, "workers is the most `parallel` is given");
     crate::testport::assert_eq(lm_lo(3), 0, "a limit is not negative");
     crate::testport::assert_eq(lm_hi(3), 2147483647, "a limit fits 31 bits");
     crate::testport::assert_eq(lm_hi(6), 32, "form-depth is the stack of the forms being run");
@@ -125,7 +127,7 @@ pub(crate) fn t_negative_rows() -> i32 {
     let mut n: i32 = 0;
     let mut i: i32 = 0;
     let mut k: i32 = 0;
-    while i < 18 {
+    while i < 19 {
         if (CK_ROWS[(i * 5 + 0) as usize] == 1) && (CK_ROWS[(i * 5 + 1) as usize] < 0) {
             n += 1;
         }
@@ -164,15 +166,16 @@ fn test_every_limit_says_what_happens_at_its_bound() {
     crate::testport::assert_eq(lm_on_hit(13), 1, "asset-placements is a budget");
     crate::testport::assert_eq(lm_on_hit(14), 1, "fonts-per-doc is a budget");
     crate::testport::assert_eq(lm_on_hit(15), 0, "stage-ms breaches");
-    crate::testport::assert_eq(lm_on_hit(16), 0, "past the table");
+    crate::testport::assert_eq(lm_on_hit(16), 1, "workers is a budget: more is served with this many");
+    crate::testport::assert_eq(lm_on_hit(17), 0, "past the table");
     crate::testport::assert_eq(lm_on_hit(-1), 0, "before the table");
 }
 #[test]
 fn test_a_kind_outside_the_table_has_no_name_and_a_default_of_nothing() {
-    crate::testport::assert_eq(lm_default(16), 0, "past the table");
+    crate::testport::assert_eq(lm_default(17), 0, "past the table");
     crate::testport::assert_eq(lm_default(-1), 0, "before the table");
-    crate::testport::assert_eq(lm_name_len(16), 0, "no name");
-    crate::testport::assert_eq(lm_name_ch(16, 0), -1, "no character");
+    crate::testport::assert_eq(lm_name_len(17), 0, "no name");
+    crate::testport::assert_eq(lm_name_ch(17, 0), -1, "no character");
     crate::testport::assert_eq(lm_name_ch(0, 11), -1, "past the name's end");
     crate::testport::assert_eq(lm_name_ch(0, -1), -1, "before the name");
     crate::testport::assert_eq(sg_default(2), 0, "no setting");
@@ -193,7 +196,7 @@ fn test_the_settings_have_their_names_defaults_and_ranges_in_kin() {
 }
 #[test]
 fn test_the_keys_have_their_names_in_kin() {
-    crate::testport::assert_eq(18, 18, "eighteen keys");
+    crate::testport::assert_eq(19, 19, "nineteen keys");
     t_key_name(0, 0, "locale");
     t_key_name(0, 1, "ocr");
     t_key_name(0, 2, "furniture");
@@ -212,6 +215,7 @@ fn test_the_keys_have_their_names_in_kin() {
     t_key_name(0, 15, "chunk");
     t_key_name(0, 16, "limit.");
     t_key_name(0, 17, "producer.");
+    t_key_name(0, 18, "parallel");
 }
 #[test]
 fn test_the_words_have_their_names_and_codes_in_kin() {
@@ -237,6 +241,8 @@ fn test_a_key_is_found_by_its_whole_name_or_its_prefix() {
     t_is_key(0, &crate::testport::text_blob("limit.pages")[..], 1, "a limit");
     t_is_key(0, &crate::testport::text_blob("producer.name")[..], 1, "a producer");
     t_is_key(0, &crate::testport::text_blob("record")[..], 1, "record");
+    t_is_key(0, &crate::testport::text_blob("parallel")[..], 1, "parallel");
+    t_is_key(0, &crate::testport::text_blob("parallelx")[..], 0, "parallel and more");
     t_is_key(0, &crate::testport::text_blob("oc")[..], 0, "a prefix of a plain key");
     t_is_key(0, &crate::testport::text_blob("ocrx")[..], 0, "a plain key and more");
     t_is_key(0, &crate::testport::text_blob("out")[..], 0, "a driver's own flag");
@@ -264,13 +270,15 @@ fn test_the_empty_text_is_the_defaults() {
     crate::testport::assert_eq(c.fetchr, 24, "fetch rounds");
     crate::testport::assert_eq(c.rec, 0, "not recording");
     crate::testport::assert_eq(c.jsocr, 0, "no js ocr");
+    crate::testport::assert_eq(c.par, 1, "serial");
+    crate::testport::assert_eq(c.dry, 0, "not a dry attempt");
     crate::testport::assert_eq(crate::port::cells_len(&mut c.lims), 0, "no limits");
     crate::testport::assert_eq(crate::port::cells_len(&mut c.prod), 0, "no producer");
 }
 #[test]
 fn test_every_key_sets_its_field() {
     let c: &mut crate::emon::enctx::Cfg = &mut crate::emon::enctx::Cfg::new();
-    crate::testport::assert_eq(t_parse(c, &crate::testport::text_blob("locale=de-AT\nocr=never\nfurniture=drop\nassets=figures\nasset-dpi=300\nasset-pixels=1000\nasset-bytes=2000\nassets-bytes=3000\nasset-signatures=on\nkeep-evidence=1\nocr-scope=witness\nmax-rounds=7\nfetch-rounds=9\nrecord=1\njs-ocr=1\nchunk=512\n")[..]), 0, "parses");
+    crate::testport::assert_eq(t_parse(c, &crate::testport::text_blob("locale=de-AT\nocr=never\nfurniture=drop\nassets=figures\nasset-dpi=300\nasset-pixels=1000\nasset-bytes=2000\nassets-bytes=3000\nasset-signatures=on\nkeep-evidence=1\nocr-scope=witness\nmax-rounds=7\nfetch-rounds=9\nrecord=1\njs-ocr=1\nchunk=512\nparallel=4\n")[..]), 0, "parses");
     crate::testport::assert_eq(c.haveloc, 1, "a locale");
     crate::testport::assert_eq(crate::port::cells_len(&mut c.lcl), 5, "its length");
     crate::testport::assert_eq(crate::port::cells_at(&mut c.lcl, 0), 100, "d");
@@ -290,6 +298,7 @@ fn test_every_key_sets_its_field() {
     crate::testport::assert_eq(c.rec, 1, "recording");
     crate::testport::assert_eq(c.jsocr, 1, "js ocr");
     crate::testport::assert_eq(c.chunk, 512, "chunk");
+    crate::testport::assert_eq(c.par, 4, "four workers");
 }
 #[test]
 fn test_the_words_of_every_enum_key_are_read() {
@@ -383,6 +392,8 @@ fn test_a_wrong_number_is_refused_by_name() {
     t_refused(0, &crate::testport::text_blob("max-rounds=99999999999")[..], "max-rounds wants a number, not \"99999999999\"");
     t_refused(0, &crate::testport::text_blob("limit.pages=lots")[..], "limit.pages wants a number, not \"lots\"");
     t_refused(0, &crate::testport::text_blob("chunk=0")[..], "chunk is out of range 1..2147483647");
+    t_refused(0, &crate::testport::text_blob("parallel=0")[..], "parallel is out of range 1..2147483647");
+    t_refused(0, &crate::testport::text_blob("parallel=many")[..], "parallel wants a number, not \"many\"");
     t_refused(0, &crate::testport::text_blob("limit.pages=-1")[..], "limit.pages is out of range 0..2147483647");
     t_refused(0, &crate::testport::text_blob("limit.form-depth=33")[..], "limit.form-depth is out of range 0..32");
 }
@@ -421,6 +432,9 @@ fn test_the_limits_of_p10_4_are_found_by_their_names() {
     crate::port::cells_drop(t, 0);
     t_cps(t, &crate::testport::text_blob("stage-ms")[..]);
     crate::testport::assert_eq(cf_limit_find(t, 0, 8), 15, "stage-ms");
+    crate::port::cells_drop(t, 0);
+    t_cps(t, &crate::testport::text_blob("workers")[..]);
+    crate::testport::assert_eq(cf_limit_find(t, 0, 7), 16, "workers");
 }
 #[test]
 fn test_fonts_per_doc_cannot_be_raised_past_its_slab() {

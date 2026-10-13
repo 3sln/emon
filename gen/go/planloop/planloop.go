@@ -533,6 +533,29 @@ func PlStageOver(limit int32, elapsed int32) int32 {
 	return 0
 }
 
+func PlWorkers(par int32, limit int32) int32 {
+	// PARALLEL EXECUTION (P10.2, SPEC 12.1): the workers a conversion uses, from the `parallel` option (`par`) and the limit `workers` (a budget: more is
+	// served with `limit`, and the conversion goes on). At least 1; 1 is serial, the default, and a host starts no thread for it. Only how the work is spread
+	// depends on it: the bytes of the Model, the transcript and the accounting are the serial run's at any number.
+	var n int32 = par
+	if n > limit {
+		n = limit
+	}
+	if n < 1 {
+		n = 1
+	}
+	return n
+}
+
+func PlAhead(workers int32) int32 {
+	// How many page units AHEAD of the one the loop is on a host looks at (dry attempts, `pu-dry`) to have their renders, decodes and OCR answered meanwhile: one
+	// less than the workers, since the page the loop is on is waiting on one of them. 0 for a serial run.
+	if workers < 2 {
+		return 0
+	}
+	return workers - 1
+}
+
 func PlAfter(p *planctx.Plan, status int32) int32 {
 	// The unit answered `status` (`us-*`): what the host does next (`act-*`).
 	// Before anything else, the stage's clock (`stage-ms`): the host put the milliseconds this unit has run into `elapsed`. This is the natural

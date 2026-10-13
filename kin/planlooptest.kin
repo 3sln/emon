@@ -10,7 +10,7 @@
                                rq-render rq-crop rq-decode rq-ocr rq-ocr-end rq-bytes rq-arg rq-decode-img an-render an-decode an-fail an-bytes an-status
                                rec-count rec-find]]
             [emon.planloop :refer [pe-none pe-max-rounds pe-fetch-rounds pe-transcript-miss pe-transcript-bad pe-fulfil-failed pe-unit-failed
-                                   pe-bad-record pe-stalled pe-ocr-requests pe-stage-ms pe-emit-name pl-stage-over
+                                   pe-bad-record pe-stalled pe-ocr-requests pe-stage-ms pe-emit-name pl-stage-over pl-workers pl-ahead
                                    ph-doc ph-asset ph-pages ph-finish ph-figures ph-done ph-emit-name
                                    ds-class ds-known ds-emit-name ds-unsupported-format ds-no-startxref ds-bad-xref ds-no-root ds-no-pages ds-encrypted
                                    ds-password-required ds-password-incorrect ds-encryption-unsupported ds-undecodable ds-unsupported-image
@@ -250,6 +250,23 @@
   (assert-eq (pl-stage-over 100 99) 0 "one under")
   (assert-eq (pl-stage-over 100 100) 1 "reached")
   (assert-eq (pl-stage-over 100 5000) 1 "past"))
+
+(deftest test-the-workers-are-the-option-served-within-the-limit-and-at-least-one
+  (comment "`parallel` (P10.2): the option is served as asked up to the limit `workers`, which is a budget (more is clamped, never refused); never fewer than one.")
+  (assert-eq (pl-workers 1 64) 1 "serial is the default")
+  (assert-eq (pl-workers 4 64) 4 "as asked")
+  (assert-eq (pl-workers 64 64) 64 "at the limit")
+  (assert-eq (pl-workers 65 64) 64 "past it, the limit")
+  (assert-eq (pl-workers 2147483647 64) 64 "far past it")
+  (assert-eq (pl-workers 8 1) 1 "a limit of one is serial whatever is asked")
+  (assert-eq (pl-workers 8 0) 1 "a limit of nothing is not nothing")
+  (assert-eq (pl-workers 0 64) 1 "and neither is an option of nothing"))
+
+(deftest test-a-host-looks-one-page-fewer-ahead-than-it-has-workers
+  (assert-eq (pl-ahead 1) 0 "serial looks at nothing")
+  (assert-eq (pl-ahead 0) 0 "no workers, no looking")
+  (assert-eq (pl-ahead 2) 1 "two workers: the page the loop is on, and one ahead")
+  (assert-eq (pl-ahead 8) 7 "eight: seven ahead"))
 
 (deftest test-with-stage-ms-off-the-loop-ignores-the-clock
   (let [^Plan p (new-ctx Plan)]

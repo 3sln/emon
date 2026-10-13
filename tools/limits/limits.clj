@@ -87,6 +87,12 @@
    ["stage-ms" "kin/planlooptest.kin" "test-a-stages-wall-clock-is-kins-to-judge-and-0-is-off"]
    ["stage-ms" "kin/planlooptest.kin" "test-with-stage-ms-off-the-loop-ignores-the-clock"]
    ["fonts-per-doc" "kin/configtest.kin" "test-fonts-per-doc-cannot-be-raised-past-its-slab"]
+   ;; `workers` (P10.2) is a budget on how the work is spread: kin's clamp, and each host holding that 1 is serial whatever `parallel` says
+   ["workers" "kin/planlooptest.kin" "test-the-workers-are-the-option-served-within-the-limit-and-at-least-one"]
+   ["workers" "host/rust/tests/engine.rs" "limits: vec!\\[\\(16, 1\\)\\]"]
+   ["workers" "host/go/par_test.go" "\\{\\{16, 1\\}\\}"]
+   ["workers" "test/driver/java/EngineTest.java" "\\{\\{16, 1\\}\\}"]
+   ["workers" "test/driver/csharp/EngineTest.cs" "new\\[\\] \\{ 16, 1 \\}"]
    ["chunk" "kin/scripts/identity" "--chunk=512"]
    ["asset-dpi" "kin/scripts/asset-golden" "asset-dpi"]
    ["max-rounds" "kin/planlooptest.kin" "test-max-rounds-is-a-named-limit"]
@@ -242,6 +248,9 @@
                        (conj (str (:set s) " gave " (pr-str (first (vals low))) ", wanted " (pr-str (:expect s))))
                        (and (= :differs (:expect s)) (or (= (first (vals low)) (first (vals base))) (not= :ok (first (first (vals low))))))
                        (conj (str (:set s) " did not change the bundle: " (pr-str (first (vals low)))))
+                       ;; a bound on HOW the work is spread (`workers`): the answer must be the same with it set low; that it is read is held by the host tests
+                       (and (= :same (:expect s)) (not= (first (vals low)) (first (vals base))))
+                       (conj (str (:set s) " changed the bundle, which a bound on how the work is spread must not: " (pr-str (first (vals low)))))
                        (and (vector? (:expect s)) (= :err (first (:expect s)))
                             (not (or (table (second (:expect s))) (#{"max-rounds" "fetch-rounds" "no-root"} (second (:expect s))))))
                        (conj (str "the error name " (second (:expect s)) " is not a name in kin/limits.kin")))]

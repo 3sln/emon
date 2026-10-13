@@ -789,6 +789,217 @@ public static class EngineTest {
         }
     }
 
+    // ---------------------------------------------------------------------------- parallel execution (P10.2, D505-D508)
+    //
+    // `Parallel` = N: N workers fulfil a round's requests at once, and the page units AHEAD of the loop's are looked at (dry attempts) so that what they will
+    // ask is being answered meanwhile. None of it may show in the result: the Model, the transcript (every entry) and the number of times a port is called are
+    // the serial run's, at every N; the limit overrides of the conversion are in force on the workers, and a conversion's workers have ended when it has.
+
+    /// <summary>An OCR engine that takes its time and counts the readings going at once and in all.</summary>
+    sealed class SlowOcr : IOcr {
+        int now, peak, calls;
+        readonly FakeOcr inner = new FakeOcr();
+
+        public int Peak => Volatile.Read(ref peak);
+        public int Calls => Volatile.Read(ref calls);
+
+        public emon.Planrun.Answer Fulfil(emon.Planrun.Request req, Dictionary<int, emon.Port.Bitmap> bm, bool keep) {
+            int n = Interlocked.Increment(ref now);
+            int p;
+            while (n > (p = Volatile.Read(ref peak)) && Interlocked.CompareExchange(ref peak, n, p) != p) {
+            }
+            Interlocked.Increment(ref calls);
+            Thread.Sleep(60);
+            emon.Planrun.Answer a = inner.Fulfil(req, bm, keep);
+            Interlocked.Decrement(ref now);
+            return a;
+        }
+
+        public List<string[]> Producer() {
+            return inner.Producer();
+        }
+    }
+
+    /// <summary>A renderer that answers every page, counts its calls, and may panic on one page.</summary>
+    sealed class CountingRenderer : emon.RenderPort.IRenderer {
+        int calls;
+        readonly int panicPage;
+
+        public CountingRenderer(int panicPage) {
+            this.panicPage = panicPage;
+        }
+
+        public int Calls => Volatile.Read(ref calls);
+
+        public emon.Port.Bitmap Render(emon.RenderPort.ISource input, byte[] password, emon.RenderPort.Request req) {
+            Interlocked.Increment(ref calls);
+            if (req.Page == panicPage) {
+                throw new InvalidOperationException("the renderer broke on page " + req.Page);
+            }
+            var px = new byte[20 * 30 * 3];
+            for (int i = 0; i < px.Length; i++) {
+                px[i] = unchecked((byte)(i * 7 + req.Layer * 50));
+            }
+            var whole = new emon.Port.Bitmap(20, 30, 3, px);
+            return req.Clip == null ? whole : emon.RenderPort.Cut(whole, req.Clip);
+        }
+
+        public int Layers() {
+            return 1;
+        }
+
+        public bool ExactCrop() {
+            return false;
+        }
+    }
+
+    static Engine ParEngine(IOcr ocr, emon.RenderPort.IRenderer r, int n) {
+        var c = Options.Config.Defaults();
+        c.Ocr = ocr;
+        c.Renderer = r;
+        c.Parallel = n;
+        return new Engine(c);
+    }
+
+    /// <summary>The transcript's entries, comparably.</summary>
+    static List<string> EntriesOf(emon.Planrun.Transcript tr) {
+        var o = new List<string>();
+        foreach (emon.Planrun.Entry e in tr.Entries) {
+            o.Add(e.Round + " " + string.Join(",", e.Req) + " " + string.Join(",", e.Ans));
+        }
+        return o;
+    }
+
+    static void ParallelModel() {
+        byte[] tiff = Read("test/image/tiff-multi3-rgb-lzw.tif");
+        Options o = Options.Defaults();
+        var one0 = new SlowOcr();
+        Engine.Converted c0 = ParEngine(one0, null, 1).Record(One(Input.Bytes(tiff)), o);
+        string j0 = Js(c0.Model);
+        Check(one0.Peak == 1 && one0.Calls == 3, "a serial run reads one page at a time: peak " + one0.Peak + " calls " + one0.Calls);
+        foreach (int n in new[] { 2, 3, 4, 8 }) {
+            var slow = new SlowOcr();
+            Engine.Converted c = ParEngine(slow, null, n).Record(One(Input.Bytes(tiff)), o);
+            Check(Js(c.Model) == j0, "parallel=" + n + ": the Model differs from the serial one");
+            Check(EntriesOf(c.Transcript).SequenceEqual(EntriesOf(c0.Transcript)), "parallel=" + n + ": the transcript differs from the serial one");
+            Check(slow.Calls == 3, "parallel=" + n + ": every page is read once (a look ahead's answer is used, not asked again): " + slow.Calls);
+            Check(slow.Peak >= 2 && slow.Peak <= n, "parallel=" + n + ": the pages ahead are read while the loop is on one, at most N at once: peak " + slow.Peak);
+        }
+        // limit.workers is the most the option is served with: 1 is serial whatever is asked
+        var capped = new SlowOcr();
+        var cfg = Options.Config.Defaults();
+        cfg.Ocr = capped;
+        cfg.Parallel = 8;
+        cfg.Limits = new[] { new[] { 16, 1 } };
+        Check(Js(new Engine(cfg).Convert(One(Input.Bytes(tiff)), o)) == j0 && capped.Peak == 1, "limit.workers=1 is serial: peak " + capped.Peak);
+    }
+
+    static void ParallelPorts() {
+        // under `always` a born-digital page asks its two renders, then the OCR of the page: the dry attempts ask them ahead; the renderer and the OCR engine
+        // are called as many times as in a serial run
+        Options o = Options.Defaults();
+        var docs = new List<KeyValuePair<string, byte[]>>();
+        foreach (string n in Slice) {
+            docs.Add(new KeyValuePair<string, byte[]>(n, Synth(n)));
+        }
+        docs.Add(new KeyValuePair<string, byte[]>("h-keyword scan", Read("test/corpus/synth/scan/h-keyword.pdf")));
+        docs.Add(new KeyValuePair<string, byte[]>("multi-frame tiff", Read("test/image/tiff-multi3-rgb-lzw.tif")));
+        foreach (KeyValuePair<string, byte[]> d in docs) {
+            var fake0 = new CountingRenderer(-1);
+            var ocr0 = new SlowOcr();
+            Engine.Converted c0 = ParEngine(ocr0, fake0, 1).Record(One(Input.Bytes(d.Value)), o);
+            foreach (int n in new[] { 2, 4, 8 }) {
+                var fake = new CountingRenderer(-1);
+                var ocr = new SlowOcr();
+                Engine.Converted c = ParEngine(ocr, fake, n).Record(One(Input.Bytes(d.Value)), o);
+                string what = d.Key + " at parallel=" + n;
+                Check(Js(c.Model) == Js(c0.Model), what + ": the Model differs");
+                Check(EntriesOf(c.Transcript).SequenceEqual(EntriesOf(c0.Transcript)), what + ": the transcript differs");
+                Check(fake.Calls == fake0.Calls && ocr.Calls == ocr0.Calls,
+                    what + ": the ports are called " + fake.Calls + "/" + ocr.Calls + " times, not " + fake0.Calls + "/" + ocr0.Calls);
+            }
+        }
+    }
+
+    /// <summary>A codec that says which pixel bound it was given: the one the workers see.</summary>
+    sealed class BoundCodecs : Options.IPdfCodecs {
+        public readonly List<long> Seen = new List<long>();
+
+        public ImgDec.PdfPix Jpx(byte[] data, long max) {
+            lock (Seen) {
+                Seen.Add(max);
+            }
+            throw new ImgDec.Fail(ImgDec.Unsupported, "no");
+        }
+
+        public ImgDec.PdfPix Jbig2(byte[] data, byte[] globals, long max) {
+            lock (Seen) {
+                Seen.Add(max);
+            }
+            throw new ImgDec.Fail(ImgDec.Unsupported, "no");
+        }
+    }
+
+    static void ParallelLimits() {
+        // `limit.pixels` is read where a port decodes (kind 9): on a worker thread. The table is process-wide here (D436) and a conversion with overrides holds
+        // it exclusively, so a worker, which runs inside that scope, sees it; no other conversion runs while it is held, so none sees it.
+        Options o = Options.Defaults();
+        o.Assets = Options.AssetsLevel.Images;
+        byte[] doc = Read("test/assets/jbig2-globals.pdf");
+        foreach (int n in new[] { 1, 4 }) {
+            var codecs = new BoundCodecs();
+            var c = Options.Config.Defaults();
+            c.PdfCodecs = codecs;
+            c.Limits = new[] { new[] { 9, 12345 } };
+            c.Parallel = n;
+            new Engine(c).Convert(One(Input.Bytes(doc)), o);
+            Check(codecs.Seen.SequenceEqual(new long[] { 12345 }), "parallel=" + n + ": the codec was given [" + string.Join(",", codecs.Seen) + "], not the conversion's bound");
+        }
+        // two engines side by side, one bounded, one not, each converting from several threads
+        var tight = new BoundCodecs();
+        var free = new BoundCodecs();
+        var ct = Options.Config.Defaults();
+        var cf = Options.Config.Defaults();
+        ct.PdfCodecs = tight;
+        ct.Limits = new[] { new[] { 9, 777 } };
+        ct.Parallel = 4;
+        cf.PdfCodecs = free;
+        cf.Parallel = 4;
+        var et = new Engine(ct);
+        var ef = new Engine(cf);
+        var ts = new Thread[8];
+        for (int i = 0; i < ts.Length; i++) {
+            Engine e = i % 2 == 0 ? et : ef;
+            ts[i] = new Thread(() => {
+                try {
+                    e.Convert(One(Input.Bytes(doc)), o);
+                } catch (EmonError x) {
+                    Check(false, "a conversion failed: " + x.Message);
+                }
+            }, 1 << 29);
+            ts[i].Start();
+        }
+        foreach (Thread t in ts) {
+            t.Join();
+        }
+        Check(tight.Seen.SequenceEqual(new long[] { 777, 777, 777, 777 }), "the bounded engine's workers saw [" + string.Join(",", tight.Seen) + "]: its bound, every time");
+        Check(free.Seen.SequenceEqual(new long[] { 268435456, 268435456, 268435456, 268435456 }), "the other's saw [" + string.Join(",", free.Seen) + "]: the default, never the first's");
+    }
+
+    static void ParallelPanic() {
+        byte[] doc = Synth("furn-informative");
+        foreach (int n in new[] { 1, 4 }) {
+            bool reached = false;
+            try {
+                ParEngine(null, new CountingRenderer(0), n).Convert(One(Input.Bytes(doc)), Options.Defaults());
+            } catch (EmonError e) {
+                // the Engine's own named error for a panic of a port (internal), the same at every N
+                reached = e.Name() == "internal";
+            }
+            Check(reached, "parallel=" + n + ": a port that panics is the conversion's `internal` error");
+        }
+    }
+
     public static int Run() {
         var t = new Thread(() => {
             RunOne("the adapters give identical JSON and HTML", Adapters);
@@ -808,6 +1019,10 @@ public static class EngineTest {
             RunOne("assets", AssetsTest);
             RunOne("the Renderer port's fulfiller", RenderPortTest);
             RunOne("decode-img: the host's codecs, the embedder's, and the payload", DecodeImg);
+            RunOne("parallel: the serial Model and transcript, and the OCR of a multi-page scan overlapped", ParallelModel);
+            RunOne("parallel: a renderer and an OCR port are called as often as in a serial run", ParallelPorts);
+            RunOne("parallel: the limit overrides are in force on the workers and only there", ParallelLimits);
+            RunOne("parallel: a port that panics is the conversion's error as in a serial run", ParallelPanic);
         }, 1 << 30);
         t.Start();
         t.Join();

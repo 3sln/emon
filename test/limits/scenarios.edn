@@ -8,7 +8,8 @@
 ;;
 ;; :input   a file under the repository, or `seed:NAME.pdf` (a document `tools/fuzz/seeds.clj` builds, byte for byte the same on every run)
 ;; :flags   the driver's flags before the input (the `--limit.NAME=` that is set low is the one in :set; :default is the same flag at the default)
-;; :expect  [:err "name"] or :differs; :why says what the bound is about
+;; :expect  [:err "name"] or :differs, or :same (a bound on HOW the work is spread, `workers`: the bundle with it set low is the unset run's); :why says what the
+;;          bound is about
 ;;
 ;; The reserved limit (`pattern-depth`) has no scenario: nothing reads it. Every other limit of `kin/limits.kin` must have one, or `bb limits` says so.
 [{:id "input-bytes" :limit "input-bytes" :input "test/corpus/synth/pdf/footnotes-page.pdf"
@@ -49,6 +50,10 @@
  {:id "fonts-per-doc" :limit "fonts-per-doc" :input "test/corpus/synth/pdf/footnotes-page.pdf"
   :set "--limit.fonts-per-doc=0" :default "--limit.fonts-per-doc=512" :expect :differs
   :why "a budget: the fonts a document's text is attributed to; past it the text has no font id (the evidence's 'no font'), and the page is flagged"}
+ {:id "workers" :limit "workers" :input "test/corpus/synth/pdf/footnotes-page.pdf"
+  :flags ["--fake-ports" "--parallel=4"]
+  :set "--limit.workers=1" :default "--limit.workers=16" :expect :same
+  :why "a budget on how the work is spread, not on the answer: `parallel=4` served with one worker (serial) or with four gives the same bundle on every host; that the bound is read (1 is serial whatever N says) is held by the host tests"}
  {:id "note-bodies" :limit "note-bodies" :input "test/corpus/synth/pdf/footnotes-page.pdf"
   :set "--limit.note-bodies=0" :default "--limit.note-bodies=4096" :expect :differs
   :why "a budget: the note bodies a document keeps; past it they are dropped, so the footnotes are not matched"}

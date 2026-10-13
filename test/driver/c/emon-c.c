@@ -16,7 +16,8 @@
  *
  * The same flags, stdout and exit codes as the Rust driver (0 ok; 2 usage; 4 a named emon error, `error: NAME` and the sentence on stderr;
  * 1 anything else) -- see the Rust driver for what each --out is.  The flags that need a port (--tesseract, --pdfium, --codecs) or other
- * threads (--parallel) are not here. */
+ * threads (--concurrent) are not here.  (`--parallel=N` IS here: it is a key of kin's options grammar, so it goes to the library in the options
+ * text, which fulfils one conversion on N workers; P10.2.) */
 #define _POSIX_C_SOURCE 200809L
 #include "emon.h"
 

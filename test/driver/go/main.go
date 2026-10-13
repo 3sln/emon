@@ -8,7 +8,7 @@
 //	        [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--assets=none|images|figures] [--password=TEXT]
 //	        [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D]
 //	        [--source=bytes|readerat|seek|spool] [--chunk=N --async] [--stats]
-//	        [--record=DIR | --replay=DIR] [--parallel=N] FILE
+//	        [--record=DIR | --replay=DIR] [--concurrent=N] [--parallel=N] FILE
 //
 //	--source=        which adapter reads FILE: `bytes` (in memory), `readerat` (*os.File + size: Go's native
 //	                 form, SPEC 13.1), `seek` (io.ReadSeeker), `spool` (io.Reader, spooled)
@@ -20,9 +20,13 @@
 //	--tesseract[=D]  give the Engine the Tesseract `Ocr` port (D211), reading models from D (default: $TESSDATA_PREFIX and the usual
 //	                 places). LIVE: only a build with the `tesseract` tag has it (`EMON_GO_LIVE=1 kin/scripts/emon-go-build`, cgo); no gate
 //	                 uses it. Without the flag an `ocr` request is answered `unsupported` and a page that needed OCR has no text.
+//	--fake-ports     TEST ONLY (P10.2): a deterministic Renderer and Ocr stand in for pdfium and Tesseract, so the fulfilment path runs on every document with no
+//	                 engine installed (`bb repeat` holds serial and parallel runs of it to the same bytes)
 //	--record=DIR     also write the plan/fulfil transcript to DIR (transcript.edn and PNGs)
 //	--replay=DIR     convert from the transcript in DIR (no port is called)
-//	--parallel=N     run N conversions at once on one Engine; all N must give the same answer (`bb repeat`)
+//	--concurrent=N   run N conversions at once on one Engine; all N must give the same answer (`bb repeat`). (It was `--parallel=N` until P10.2: that
+//	                 is now kin's option, `parallel=N`, N workers inside ONE conversion; `bb repeat` runs both.)
+//	--parallel=N     kin's option (SPEC 13, P10.2): spread one conversion's fulfilment over N workers; the output is the serial run's at any N
 //
 // Exit: 0 ok; 2 usage; 4 a named emon error (`error: NAME` on stderr, nothing on stdout); 1 anything else.
 package main
@@ -37,13 +41,53 @@ import (
 	"sync"
 
 	"emon"
+	"emon/ocr"
+	"emon/plan"
 	"emon/planrun"
 	"emon/port"
 )
 
+// `--fake-ports` (P10.2): a deterministic Renderer and Ocr, so that the fulfilment path (a page unit's renders, decodes and OCR, the pages ahead looked at, a
+// round fulfilled by several workers) runs on every document of a gate with no engine installed. The Renderer answers a 20 x 30 RGB page whose pixels are a
+// function of the page, the layer, the resolution and the position; the Ocr answers every request with the word `Hello` in one line, through the kin
+// builders a real engine's adapter uses. Both are pure functions of the request, as the real engines are (the property `bb repeat` holds them to).
+type fakeRenderer struct{}
+
+func (fakeRenderer) Layers() uint32  { return 1 }
+func (fakeRenderer) ExactCrop() bool { return false }
+func (fakeRenderer) Render(_ port.RenderSource, _ []byte, req port.RenderRequest) (*port.Bitmap, error) {
+	var px []byte
+	for y := int32(0); y < 30; y++ {
+		for x := int32(0); x < 20; x++ {
+			v := byte(x*7 + y*3 + req.Layer*50 + req.Page*11 + req.Dpi)
+			px = append(px, v, v^0x55, 255-v)
+		}
+	}
+	return port.BitmapFromBytes(20, 30, 3, px), nil
+}
+
+type fakeOcr struct{}
+
+func (fakeOcr) Fulfil(req port.PlanRequest, _ port.PlanBitmaps, _ bool) (port.PlanAnswer, error) {
+	c := port.NewCells()
+	at := plan.AnOcr(c, req.ID())
+	w := plan.AnOcrWord(c, at, 10, 10, 100, 30, 900, 0, 0)
+	for _, ch := range "Hello" {
+		plan.AnOcrCp(c, w, int32(ch))
+	}
+	ocr.OxBegin(c, 0, 0, 0, 0, -1, 0, -1, -1, 1, 1, 0, 0, 0)
+	ocr.OxLine(c, 10, 10, 100, 30, 10, 35, 110, 35, 0, 0, 0, 20, 14, 6)
+	ocr.OxBlock(c, 10, 10, 100, 30, 0, 0, 0)
+	ocr.OxWord(c, 0, 0, -1, 0)
+	plan.AnOcrEnd(c, at)
+	return port.PlanAnswer{Rec: append([]int32(nil), c.V...)}, nil
+}
+
+func (fakeOcr) Producer() [][2]string { return [][2]string{{"engine", "fake"}} }
+
 func usage(msg string) {
 	fmt.Fprintf(os.Stderr, "emon-go: %s\n", msg)
-	fmt.Fprintln(os.Stderr, "usage: emon-go [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--ocr-scope=full|witness] [--assets=none|images|figures] [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D] [--html-assets=inline|external|omit] [--asset-prefix=P] [--password=TEXT] [--source=bytes|readerat|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE")
+	fmt.Fprintln(os.Stderr, "usage: emon-go [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--ocr-scope=full|witness] [--assets=none|images|figures] [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D] [--html-assets=inline|external|omit] [--asset-prefix=P] [--password=TEXT] [--source=bytes|readerat|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--concurrent=N] [--parallel=N] FILE")
 	os.Exit(2)
 }
 
@@ -141,7 +185,8 @@ func main() {
 	stats := false
 	var file, record, replay, dump, assetDir string
 	tess, tessdata := false, ""
-	parallel := 1
+	fakePorts := false
+	concurrent := 1
 	for _, a := range os.Args[1:] {
 		switch {
 		case strings.HasPrefix(a, "--out="):
@@ -174,6 +219,8 @@ func main() {
 			simulateAsync = true
 		case a == "--no-retarget":
 			noRetarget = true
+		case a == "--fake-ports":
+			fakePorts = true
 		case a == "--tesseract":
 			tess = true
 		case strings.HasPrefix(a, "--tesseract="):
@@ -186,12 +233,12 @@ func main() {
 			record = strings.TrimPrefix(a, "--record=")
 		case strings.HasPrefix(a, "--replay="):
 			replay = strings.TrimPrefix(a, "--replay=")
-		case strings.HasPrefix(a, "--parallel="):
-			n, err := strconv.Atoi(strings.TrimPrefix(a, "--parallel="))
+		case strings.HasPrefix(a, "--concurrent="):
+			n, err := strconv.Atoi(strings.TrimPrefix(a, "--concurrent="))
 			if err != nil || n < 1 {
-				usage("--parallel=N wants a positive number")
+				usage("--concurrent=N wants a positive number")
 			}
-			parallel = n
+			concurrent = n
 		case kinFlag(a) != "":
 			// a key of kin's options grammar (`emon.config`): --ocr=never, --asset-dpi=300, --limit.pages=5, --chunk=512, ...
 			kinText.WriteString(kinFlag(a) + "\n")
@@ -283,6 +330,12 @@ func main() {
 		}
 		cfg.Ocr = o
 	}
+	if fakePorts {
+		if tess {
+			usage("--fake-ports is the stand-in for --tesseract: not with it")
+		}
+		cfg.Ocr, cfg.Renderer = fakeOcr{}, fakeRenderer{}
+	}
 	engine := emon.NewEngine(cfg)
 
 	errExit := func(err error) {
@@ -350,7 +403,7 @@ func main() {
 			r.err = err
 			return r
 		}
-		if assetDir != "" && parallel == 1 {
+		if assetDir != "" && concurrent == 1 {
 			if err := os.MkdirAll(assetDir, 0o755); err != nil {
 				fail(assetDir, err)
 			}
@@ -364,8 +417,8 @@ func main() {
 		return r
 	}
 
-	results := make([]result, parallel)
-	if parallel == 1 {
+	results := make([]result, concurrent)
+	if concurrent == 1 {
 		results[0] = one()
 	} else {
 		var wg sync.WaitGroup
@@ -381,7 +434,7 @@ func main() {
 	for i, r := range results[1:] {
 		a, b := results[0], r
 		if a.text != b.text || (a.err == nil) != (b.err == nil) || (a.err != nil && a.err.Error() != b.err.Error()) {
-			fmt.Fprintf(os.Stderr, "error: nondeterministic\nconversion %d of %d differs from conversion 0\n", i+1, parallel)
+			fmt.Fprintf(os.Stderr, "error: nondeterministic\nconversion %d of %d differs from conversion 0\n", i+1, concurrent)
 			os.Exit(1)
 		}
 	}

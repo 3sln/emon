@@ -170,6 +170,13 @@ pub(crate) fn pu_wbox(pl: &mut crate::port::Cells, at: i32, w: i32, h: i32, k: i
     }
     return by1 - by0;
 }
+pub fn pu_dry(fuse: i32) -> i32 {
+    // 1 when the page unit is asked for a DRY attempt (`fuse` bit 4; P10.2, SPEC 12.1): the part of an attempt that precedes its first write. A host that fulfils
+    // in parallel runs it for the pages AHEAD of the one the loop is on, to learn what they will ask (a render, a decode, the OCR of the page) and have it answered
+    // meanwhile; it asks exactly what the real attempt asks in those rounds, then answers `us-done` having changed nothing, whether or not the real attempt
+    // would go on to ask more. Its result is never used but as the requests it wrote: the real unit runs afterwards, as it always did.
+    return (fuse & 4) / 4;
+}
 pub(crate) fn pu_px(bms: &crate::port::BitmapSet, id: i32, fuse: i32) -> i32 {
     // 1 when the page unit may read the pixels of the bitmap under `id`: it has them, and the hidden setting `no-retarget` (`fuse` bit 2) does
     // not say to leave them (the Engine then does what it did before P7.4: no ink layers, no targeted pass; a measurement's baseline).
@@ -269,6 +276,10 @@ pub(crate) fn pu_run_born(i: i32, input: i32, fuse: i32, pl: &mut crate::port::C
         return us_done();
     }
     if an_ok(ans, ao) != 1 {
+        return us_done();
+    }
+    // A DRY ATTEMPT (P10.2, `pu-dry`) is a prefix of an attempt: it stops here, before the first write, having asked what the rounds up to here ask
+    if pu_dry(fuse) == 1 {
         return us_done();
     }
     pn_mark(snap, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, inks, comps, rules, prims, tpts, tlines, refs, images, words, lines);
@@ -426,6 +437,9 @@ pub(crate) fn pu_run_scan(i: i32, input: i32, fuse: i32, pl: &mut crate::port::C
         return us_requests();
     }
     if an_ok(ans, ao) != 1 {
+        return us_done();
+    }
+    if pu_dry(fuse) == 1 {
         return us_done();
     }
     sc_prep(scr);

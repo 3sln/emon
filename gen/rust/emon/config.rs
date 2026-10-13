@@ -3,7 +3,7 @@
 
 use crate::emon::limits::*;
 
-pub static CK_CHARS: [i32; 160] = [
+pub static CK_CHARS: [i32; 168] = [
     108, 111, 99, 97, 108, 101, 111, 99, 114, 102, 117, 114, 110, 105, 116, 117,
     114, 101, 97, 115, 115, 101, 116, 115, 97, 115, 115, 101, 116, 45, 100, 112,
     105, 97, 115, 115, 101, 116, 45, 112, 105, 120, 101, 108, 115, 97, 115, 115,
@@ -13,9 +13,10 @@ pub static CK_CHARS: [i32; 160] = [
     101, 111, 99, 114, 45, 115, 99, 111, 112, 101, 109, 97, 120, 45, 114, 111,
     117, 110, 100, 115, 102, 101, 116, 99, 104, 45, 114, 111, 117, 110, 100, 115,
     114, 101, 99, 111, 114, 100, 106, 115, 45, 111, 99, 114, 99, 104, 117, 110,
-    107, 108, 105, 109, 105, 116, 46, 112, 114, 111, 100, 117, 99, 101, 114, 46
+    107, 108, 105, 109, 105, 116, 46, 112, 114, 111, 100, 117, 99, 101, 114, 46,
+    112, 97, 114, 97, 108, 108, 101, 108
 ];
-pub static CK_ROWS: [i32; 90] = [
+pub static CK_ROWS: [i32; 95] = [
     0, 0, 0, 0, 6,
     2, 0, 0, 6, 3,
     2, 0, 0, 9, 9,
@@ -33,7 +34,8 @@ pub static CK_ROWS: [i32; 90] = [
     3, 0, 0, 134, 6,
     1, 1, 2147483647, 140, 5,
     4, 0, 0, 145, 6,
-    5, 0, 0, 151, 9
+    5, 0, 0, 151, 9,
+    1, 1, 2147483647, 160, 8
 ];
 pub static CV_CHARS: [i32; 62] = [
     97, 108, 119, 97, 121, 115, 97, 117, 116, 111, 110, 101, 118, 101, 114, 112,
@@ -72,6 +74,7 @@ pub(crate) const K_FETCHR: i32 = 12;
 pub(crate) const K_REC: i32 = 13;
 pub(crate) const K_JSOCR: i32 = 14;
 pub(crate) const K_CHUNK: i32 = 15;
+pub(crate) const K_PAR: i32 = 18;
 pub(crate) const SH_STR: i32 = 0;
 pub(crate) const SH_NUM: i32 = 1;
 pub(crate) const SH_ENUM: i32 = 2;
@@ -97,6 +100,8 @@ pub fn cf_defaults(c: &mut crate::emon::enctx::Cfg) -> i32 {
     c.fetchr = 24;
     c.rec = 0;
     c.jsocr = 0;
+    c.par = 1;
+    c.dry = 0;
     return 0;
 }
 pub(crate) fn cf_key_is(t: &mut crate::port::Cells, from: i32, to: i32, k: i32) -> i32 {
@@ -122,7 +127,7 @@ pub(crate) fn cf_key_is(t: &mut crate::port::Cells, from: i32, to: i32, k: i32) 
 pub fn cf_key_find(t: &mut crate::port::Cells, from: i32, to: i32) -> i32 {
     // The key t[from, to) names, or -1.
     let mut k: i32 = 0;
-    while k < 18 {
+    while k < 19 {
         if cf_key_is(t, from, to, k) == 1 {
             return k;
         }
@@ -149,7 +154,7 @@ pub(crate) fn cf_limit_is(t: &mut crate::port::Cells, from: i32, to: i32, kind: 
 pub fn cf_limit_find(t: &mut crate::port::Cells, from: i32, to: i32) -> i32 {
     // The kind of the limit t[from, to) names, or -1.
     let mut k: i32 = 0;
-    while k < 16 {
+    while k < 17 {
         if cf_limit_is(t, from, to, k) == 1 {
             return k;
         }
@@ -314,6 +319,9 @@ pub(crate) fn cf_set_num(c: &mut crate::emon::enctx::Cfg, k: i32, v: i32) -> i32
     }
     if k == K_CHUNK {
         c.chunk = v;
+    }
+    if k == K_PAR {
+        c.par = v;
     }
     return 0;
 }

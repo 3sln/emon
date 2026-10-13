@@ -46,6 +46,14 @@ pub(crate) fn run_page_fused(i: i32, policy: i32, fuse: i32, pl: &mut crate::por
 pub(crate) fn run_page(i: i32, policy: i32, pl: &mut crate::port::Cells, ans: &mut crate::port::Cells, rq: &mut crate::port::Cells) -> i32 {
     return run_page_fused(i, policy, 0, pl, ans, rq);
 }
+pub(crate) fn run_page_watched(i: i32, policy: i32, fuse: i32, pl: &mut crate::port::Cells, ans: &mut crate::port::Cells, rq: &mut crate::port::Cells, mask: &mut crate::port::Cells, epages: &mut crate::port::Cells, views: &mut crate::port::Cells, olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, words: &mut crate::port::Cells, lines: &mut crate::port::Cells) -> i32 {
+    // A page unit whose written arenas are the caller's, to see whether an attempt wrote them.
+    return pu_run_pdf(i, 3, policy, pl, ans, rq, &mut crate::port::Cells::new(), &crate::port::BitmapSet::new(), mask, &mut crate::port::Cells::new(), epages, views, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), olines, owords, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), words, lines, fuse, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+}
+pub(crate) fn watched_len(mask: &mut crate::port::Cells, epages: &mut crate::port::Cells, views: &mut crate::port::Cells, olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, words: &mut crate::port::Cells, lines: &mut crate::port::Cells) -> i32 {
+    // How many cells the page unit's written arenas hold in all (the mask is sized by the caller, so its length is not counted).
+    return ((crate::port::cells_len(epages) + crate::port::cells_len(views)) + (crate::port::cells_len(olines) + crate::port::cells_len(owords))) + (crate::port::cells_len(words) + crate::port::cells_len(lines));
+}
 pub(crate) fn nth_rec(rq: &mut crate::port::Cells, n: i32) -> i32 {
     // The cell where record `n` (0-based) of the requests starts.
     let mut at: i32 = 0;
@@ -207,6 +215,62 @@ fn test_under_witness_the_render_without_its_text_and_the_witness_lines_are_read
     crate::testport::assert_eq(rq_arg(rq, r1, 5), 1206, "width");
     crate::testport::assert_eq(rq_arg(rq, r1, 6), 56, "height");
     crate::testport::assert_eq(rec_id(rq, r2), 353, "witness line 1");
+}
+#[test]
+fn test_a_dry_attempt_asks_what_the_real_one_asks_before_its_first_write_and_then_stops() {
+    // P10.2: a scanned page. With no answer a dry attempt asks the decode, as the real one; with the decode answered it asks the OCR, as the real one;
+    // with the OCR answered too the real attempt goes on to write the page, and the dry one stops where the write would begin, having written nothing.
+    let pl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq4: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mask: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let epages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let views: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    plan_of(pl, 1, pk_scan());
+    crate::testport::assert_eq(run_page_watched(0, 2, 4, pl, ans, rq1, mask, epages, views, olines, owords, words, lines), us_requests(), "dry: it asks the decode");
+    run_page_watched(0, 2, 0, pl, &mut crate::port::Cells::new(), rq2, mask, epages, views, olines, owords, words, lines);
+    crate::testport::assert_eq(crate::port::cells_len(rq1), crate::port::cells_len(rq2), "the same request as the real attempt's");
+    crate::testport::assert_eq(crate::port::cells_at(rq1, 2), crate::port::cells_at(rq2, 2), "under the same id");
+    an_decode(ans, 260, 2550, 3300, 1, 30000, 0, 1);
+    crate::testport::assert_eq(run_page_watched(0, 2, 4, pl, ans, rq3, mask, epages, views, olines, owords, words, lines), us_requests(), "dry: with the decode answered it asks the OCR");
+    crate::testport::assert_eq(rec_kind(rq3, 0), pk_ocr(), "an OCR");
+    crate::testport::assert_eq(rec_id(rq3, 0), 272, "of the page's first pass");
+    an_render(ans, 272, 2550, 3300, 1, 300);
+    crate::testport::assert_eq(run_page_watched(0, 2, 4, pl, ans, rq4, mask, epages, views, olines, owords, words, lines), us_done(), "dry: with the OCR answered it stops");
+    crate::testport::assert_eq(crate::port::cells_len(rq4), 0, "asking nothing");
+    crate::testport::assert_eq(watched_len(mask, epages, views, olines, owords, words, lines), 0, "and having written nothing");
+}
+#[test]
+fn test_a_dry_attempt_of_a_born_digital_page_stops_before_its_first_write() {
+    let pl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mask: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let epages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let views: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    born_plan(pl, 1, rp_ask_full(), 0);
+    crate::testport::assert_eq(run_page_watched(0, 2, 4, pl, ans, rq1, mask, epages, views, olines, owords, words, lines), us_requests(), "dry: the two renders");
+    crate::testport::assert_eq(crate::port::cells_len(rq1), 14, "of seven cells each, as the real attempt's");
+    answer_renders(ans, 0);
+    crate::testport::assert_eq(run_page_watched(0, 2, 4, pl, ans, rq2, mask, epages, views, olines, owords, words, lines), us_requests(), "dry: the renders answered, the OCR");
+    crate::testport::assert_eq(rec_kind(rq2, 0), pk_ocr(), "an OCR");
+    an_render(ans, 272, 2550, 3300, 3, 300);
+    crate::testport::assert_eq(run_page_watched(0, 2, 4, pl, ans, rq3, mask, epages, views, olines, owords, words, lines), us_done(), "dry: the OCR answered, it stops");
+    crate::testport::assert_eq(crate::port::cells_len(rq3), 0, "asking nothing");
+    crate::testport::assert_eq(watched_len(mask, epages, views, olines, owords, words, lines), 0, "and having written nothing");
 }
 #[test]
 fn test_the_bitmap_set_keeps_what_kin_makes() {

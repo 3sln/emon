@@ -24,8 +24,11 @@
  *
  * OPTIONS are one text, kin's grammar (emon.config): `key=value` lines separated by LF (spaces are not trimmed), the last line wins:
  *     locale ocr furniture assets asset-dpi asset-pixels asset-bytes assets-bytes asset-signatures keep-evidence ocr-scope
- *     max-rounds fetch-rounds record js-ocr chunk limit.NAME producer.NAME
+ *     max-rounds fetch-rounds record js-ocr chunk limit.NAME producer.NAME parallel
  *     e.g. "ocr=never\nassets=images\nlimit.pages=50\n".
+ * `parallel=N` (P10.2, SPEC 12.1) spreads the fulfilment of ONE conversion over N worker threads that emon starts and ends inside the call (limit.workers caps
+ * it; 1, the default, starts none): the one-shot calls use it, with the ports built in (EMON_NATIVE); the step API (emon_open / emon_step) leaves the
+ * fulfilment to its caller and ignores it.  What it produces is the serial run's bytes at any N.
  * emon_check_options parses a text and says what is wrong; emon_is_option_key asks whether a name is a key.  A password is not an option
  * (it travels with its input: D040) and is never written to a Model, a dump or a transcript.
  *

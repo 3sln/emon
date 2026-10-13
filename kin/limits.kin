@@ -19,6 +19,11 @@
 ;; TWO ROWS ARE NOT COUNTS OF A DOCUMENT'S THINGS (P10.4 close): 14 `fonts-per-doc` is a budget ranged 0..512, the slab of font handles in `emon.pdfcontent`
 ;; (the font past it has evidence id -1 and its page is flagged); 15 `stage-ms` is a time, the milliseconds a unit of the plan loop may run, where 0 is OFF
 ;; (the default): the host's clock supplies the elapsed time and `pl-stage-over` of `emon.planloop` decides (D498, D501).
+;; ROW 16 `workers` IS NOT A BOUND ON THE INPUT EITHER (P10.2, SPEC 12.1): it is the most workers the `parallel=N` option may be given. It is a budget (a larger N
+;; is served with this many, the conversion goes on, and its bytes are the serial run's at any N); an embedder who must never run more than K threads sets
+;; `limit.workers=K`, and `limit.workers=1` is serial whatever N says. The host reads it where it sizes its pool (`pl-workers` of `emon.planloop` is the clamp).
+;; Its default is 16, not a machine's core count: each page a host looks ahead of the loop (N - 1 of them) holds its decoded bitmaps until the loop reaches it,
+;; so the memory a run takes grows with N (D510), and a host with more cores to give raises it.
 ;; `bb limits` reports the column, where each bound is read and which law or fixture exercises it.
 (ns emon.limits
   (:require [emon.lang :refer [I32]]
@@ -36,7 +41,8 @@
          100 105 101 115 110 111 116 101 45 114 101 102 115 97 115 115
          101 116 45 112 108 97 99 101 109 101 110 116 115
          102 111 110 116 115 45 112 101 114 45 100 111 99
-         115 116 97 103 101 45 109 115]
+         115 116 97 103 101 45 109 115
+         119 111 114 107 101 114 115]
   :accessors {^I32 lm-char-at [^I32 ignored ^I32 i]})
 
 (defdata ^:pub lm-rows
@@ -57,7 +63,8 @@
          8192 0 2147483647 116 9 1          ;; 12 note-refs
          4096 0 2147483647 125 16 1         ;; 13 asset-placements
          512 0 512 141 13 1                 ;; 14 fonts-per-doc (the slab of font handles in `emon.pdfcontent` is 512 cells: `MAX_FIDS`)
-         0 0 2147483647 154 8 0]            ;; 15 stage-ms (0 is OFF; the host supplies the elapsed milliseconds, kin decides: `pl-stage-over`)
+         0 0 2147483647 154 8 0             ;; 15 stage-ms (0 is OFF; the host supplies the elapsed milliseconds, kin decides: `pl-stage-over`)
+         16 0 2147483647 162 7 1]           ;; 16 workers (a BUDGET: the most workers `parallel=N` is given, P10.2; more is clamped to it, 0 means 1: `pl-workers`)
   :accessors {^I32 lm-row-count [^I32 ignored]
               ^I32 lm-row-at [^I32 ignored ^I32 row ^I32 field]})
 

@@ -41,7 +41,7 @@
 (defn ^I32 page-pol [^I32 f ^Cells ans ^Cells rq ^I32 policy ^Cells loc ^Cells mask ^Cells et ^Cells wd ^Cells ln
                      ^Cells oruns ^Cells olines ^Cells owords]
   (return (rs-page f 7 8 policy ans rq loc (new-bitmap-set) mask (new-cells) (new-cells) et (new-cells) (new-cells)
-                   oruns (new-cells) olines owords (new-cells) (new-cells) wd ln (new-cells))))
+                   oruns (new-cells) olines owords (new-cells) (new-cells) wd ln (new-cells) 0)))
 
 (deftest test-the-document-pass-asks-for-frame-zeros-header-and-nothing-more
   (let [^Cells ans (new-cells)

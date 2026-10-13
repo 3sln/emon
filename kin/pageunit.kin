@@ -169,6 +169,13 @@
     (if (== k 2) (return (- bx1 bx0)))
     (return (- by1 by0))))
 
+(defn ^:pub ^I32 pu-dry [^I32 fuse]
+  (comment "1 when the page unit is asked for a DRY attempt (`fuse` bit 4; P10.2, SPEC 12.1): the part of an attempt that precedes its first write. A host that fulfils")
+  (comment "in parallel runs it for the pages AHEAD of the one the loop is on, to learn what they will ask (a render, a decode, the OCR of the page) and have it answered")
+  (comment "meanwhile; it asks exactly what the real attempt asks in those rounds, then answers `us-done` having changed nothing, whether or not the real attempt")
+  (comment "would go on to ask more. Its result is never used but as the requests it wrote: the real unit runs afterwards, as it always did.")
+  (return (quot (bit-and fuse 4) 4)))
+
 (defn ^I32 pu-px [^BitmapSet bms ^I32 id ^I32 fuse]
   (comment "1 when the page unit may read the pixels of the bitmap under `id`: it has them, and the hidden setting `no-retarget` (`fuse` bit 2) does")
   (comment "not say to leave them (the Engine then does what it did before P7.4: no ink layers, no targeted pass; a measurement's baseline).")
@@ -258,6 +265,8 @@
     (set ao (an-find ans oid))
     (if (< ao 0) (return (us-done)))
     (if (!= (an-ok ans ao) 1) (return (us-done)))
+    (comment "A DRY ATTEMPT (P10.2, `pu-dry`) is a prefix of an attempt: it stops here, before the first write, having asked what the rounds up to here ask")
+    (if (== (pu-dry fuse) 1) (return (us-done)))
     (pn-mark snap epages views etext feats oruns oblocks olines owords osyms oalts inks comps rules prims tpts tlines refs images words lines)
     (set view (vw-new views (+ i 1) (vk-render) rid -1 w h (* dpi 100) (lay-full) -1 0 0 0 0 0))
     (set w0 (ow-count owords))
@@ -391,6 +400,7 @@
       (do (sc-request rq oid did (quot (+ dpi100 50) 100) loc)
           (return (us-requests))))
     (if (!= (an-ok ans ao) 1) (return (us-done)))
+    (if (== (pu-dry fuse) 1) (return (us-done)))
     (sc-prep scr)
     (if (== (pu-px bms did fuse) 0)
       (do (sc-page ans ao (+ i 1) oid did (pu-field pl i 8) (pu-field pl i 9) pxw pxh dpi100

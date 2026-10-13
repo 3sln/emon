@@ -20,8 +20,9 @@
 
 ;; Cfg is also what `emon.config` parses an options text into (P10.10, D434): `chunk`, `maxr` and `fetchr` are the Engine's own, `rec` and `jsocr` the browser
 ;; binding's, `lims` the `limit.NAME=N` pairs (kind, value) and `prod` the `producer.NAME=V` records, `num` the parser's scratch and `msg` its refusal.
+;; `par` is the `parallel` option (P10.2) and `dry` a HIDDEN setting like `nort` (not a key): a host sets it on the `Cfg` of a DRY page attempt (`pu-dry`).
 (defctx ^:pub Cfg [^I32 ocr ^I32 scope ^I32 furn ^I32 level ^I32 dpi ^I32 pixels ^I32 abyte ^I32 tbyte ^I32 sigs ^I32 keep ^I32 haveloc ^Cells lcl
-      ^I32 chunk ^I32 maxr ^I32 fetchr ^I32 rec ^I32 jsocr ^I32 num ^Cells lims ^Cells prod ^Text msg ^I32 nort])
+      ^I32 chunk ^I32 maxr ^I32 fetchr ^I32 rec ^I32 jsocr ^I32 num ^Cells lims ^Cells prod ^Text msg ^I32 nort ^I32 par ^I32 dry])
 
 ;; the document pass's arenas, the page units' scratch (`xs`: the alignment's, `ys`: the ink stage's and the targeted passes') and the unit's answer
 (defctx ^:pub Doc [^Cells et ^Cells gl ^Cells mk ^Cells fnt ^Cells wd ^Cells ln ^Cells fw ^Cells fl

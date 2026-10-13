@@ -79,7 +79,7 @@ public final class Configtest {
         return 0;
     }
     public static void testTheLimitsHaveTheirNamesInKin() {
-        emon.Testport.assertEq(Limits.lmCount(), 16, "sixteen limits");
+        emon.Testport.assertEq(Limits.lmCount(), 17, "seventeen limits");
         tLimitName(0, 0, "input-bytes");
         tLimitName(0, 1, "stream-bytes");
         tLimitName(0, 2, "total-bytes");
@@ -96,6 +96,7 @@ public final class Configtest {
         tLimitName(0, 13, "asset-placements");
         tLimitName(0, 14, "fonts-per-doc");
         tLimitName(0, 15, "stage-ms");
+        tLimitName(0, 16, "workers");
     }
     public static void testTheLimitsHaveTheirDefaultsAndRangesInKin() {
         emon.Testport.assertEq(Limits.lmDefault(0), 1073741824, "input-bytes");
@@ -115,6 +116,7 @@ public final class Configtest {
         emon.Testport.assertEq(Limits.lmDefault(14), 512, "fonts-per-doc is the slab");
         emon.Testport.assertEq(Limits.lmHi(14), 512, "and cannot be raised past it");
         emon.Testport.assertEq(Limits.lmDefault(15), 0, "stage-ms is off");
+        emon.Testport.assertEq(Limits.lmDefault(16), 16, "workers is the most `parallel` is given");
         emon.Testport.assertEq(Limits.lmLo(3), 0, "a limit is not negative");
         emon.Testport.assertEq(Limits.lmHi(3), 2147483647, "a limit fits 31 bits");
         emon.Testport.assertEq(Limits.lmHi(6), 32, "form-depth is the stack of the forms being run");
@@ -124,7 +126,7 @@ public final class Configtest {
         int n = 0;
         int i = 0;
         int k = 0;
-        while (i < 18) {
+        while (i < 19) {
             if ((Config.CK_ROWS[i * 5 + 0] == 1) && (Config.CK_ROWS[i * 5 + 1] < 0)) {
                 n += 1;
             }
@@ -161,14 +163,15 @@ public final class Configtest {
         emon.Testport.assertEq(Limits.lmOnHit(13), 1, "asset-placements is a budget");
         emon.Testport.assertEq(Limits.lmOnHit(14), 1, "fonts-per-doc is a budget");
         emon.Testport.assertEq(Limits.lmOnHit(15), 0, "stage-ms breaches");
-        emon.Testport.assertEq(Limits.lmOnHit(16), 0, "past the table");
+        emon.Testport.assertEq(Limits.lmOnHit(16), 1, "workers is a budget: more is served with this many");
+        emon.Testport.assertEq(Limits.lmOnHit(17), 0, "past the table");
         emon.Testport.assertEq(Limits.lmOnHit(-1), 0, "before the table");
     }
     public static void testAKindOutsideTheTableHasNoNameAndADefaultOfNothing() {
-        emon.Testport.assertEq(Limits.lmDefault(16), 0, "past the table");
+        emon.Testport.assertEq(Limits.lmDefault(17), 0, "past the table");
         emon.Testport.assertEq(Limits.lmDefault(-1), 0, "before the table");
-        emon.Testport.assertEq(Limits.lmNameLen(16), 0, "no name");
-        emon.Testport.assertEq(Limits.lmNameCh(16, 0), -1, "no character");
+        emon.Testport.assertEq(Limits.lmNameLen(17), 0, "no name");
+        emon.Testport.assertEq(Limits.lmNameCh(17, 0), -1, "no character");
         emon.Testport.assertEq(Limits.lmNameCh(0, 11), -1, "past the name's end");
         emon.Testport.assertEq(Limits.lmNameCh(0, -1), -1, "before the name");
         emon.Testport.assertEq(Limits.sgDefault(2), 0, "no setting");
@@ -187,7 +190,7 @@ public final class Configtest {
         emon.Testport.assertEq(Limits.sgHi(1), 1, "tasks to");
     }
     public static void testTheKeysHaveTheirNamesInKin() {
-        emon.Testport.assertEq(18, 18, "eighteen keys");
+        emon.Testport.assertEq(19, 19, "nineteen keys");
         tKeyName(0, 0, "locale");
         tKeyName(0, 1, "ocr");
         tKeyName(0, 2, "furniture");
@@ -206,6 +209,7 @@ public final class Configtest {
         tKeyName(0, 15, "chunk");
         tKeyName(0, 16, "limit.");
         tKeyName(0, 17, "producer.");
+        tKeyName(0, 18, "parallel");
     }
     public static void testTheWordsHaveTheirNamesAndCodesInKin() {
         emon.Testport.assertEq(13, 13, "thirteen words");
@@ -229,6 +233,8 @@ public final class Configtest {
         tIsKey(0, emon.Testport.textBlob("limit.pages"), 1, "a limit");
         tIsKey(0, emon.Testport.textBlob("producer.name"), 1, "a producer");
         tIsKey(0, emon.Testport.textBlob("record"), 1, "record");
+        tIsKey(0, emon.Testport.textBlob("parallel"), 1, "parallel");
+        tIsKey(0, emon.Testport.textBlob("parallelx"), 0, "parallel and more");
         tIsKey(0, emon.Testport.textBlob("oc"), 0, "a prefix of a plain key");
         tIsKey(0, emon.Testport.textBlob("ocrx"), 0, "a plain key and more");
         tIsKey(0, emon.Testport.textBlob("out"), 0, "a driver's own flag");
@@ -255,12 +261,14 @@ public final class Configtest {
         emon.Testport.assertEq(c.fetchr, 24, "fetch rounds");
         emon.Testport.assertEq(c.rec, 0, "not recording");
         emon.Testport.assertEq(c.jsocr, 0, "no js ocr");
+        emon.Testport.assertEq(c.par, 1, "serial");
+        emon.Testport.assertEq(c.dry, 0, "not a dry attempt");
         emon.Testport.assertEq(emon.Port.cellsLen(c.lims), 0, "no limits");
         emon.Testport.assertEq(emon.Port.cellsLen(c.prod), 0, "no producer");
     }
     public static void testEveryKeySetsItsField() {
         emon.Enctx.Cfg c = new emon.Enctx.Cfg();
-        emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("locale=de-AT\nocr=never\nfurniture=drop\nassets=figures\nasset-dpi=300\nasset-pixels=1000\nasset-bytes=2000\nassets-bytes=3000\nasset-signatures=on\nkeep-evidence=1\nocr-scope=witness\nmax-rounds=7\nfetch-rounds=9\nrecord=1\njs-ocr=1\nchunk=512\n")), 0, "parses");
+        emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("locale=de-AT\nocr=never\nfurniture=drop\nassets=figures\nasset-dpi=300\nasset-pixels=1000\nasset-bytes=2000\nassets-bytes=3000\nasset-signatures=on\nkeep-evidence=1\nocr-scope=witness\nmax-rounds=7\nfetch-rounds=9\nrecord=1\njs-ocr=1\nchunk=512\nparallel=4\n")), 0, "parses");
         emon.Testport.assertEq(c.haveloc, 1, "a locale");
         emon.Testport.assertEq(emon.Port.cellsLen(c.lcl), 5, "its length");
         emon.Testport.assertEq(emon.Port.cellsAt(c.lcl, 0), 100, "d");
@@ -280,6 +288,7 @@ public final class Configtest {
         emon.Testport.assertEq(c.rec, 1, "recording");
         emon.Testport.assertEq(c.jsocr, 1, "js ocr");
         emon.Testport.assertEq(c.chunk, 512, "chunk");
+        emon.Testport.assertEq(c.par, 4, "four workers");
     }
     public static void testTheWordsOfEveryEnumKeyAreRead() {
         emon.Enctx.Cfg a = new emon.Enctx.Cfg();
@@ -367,6 +376,8 @@ public final class Configtest {
         tRefused(0, emon.Testport.textBlob("max-rounds=99999999999"), "max-rounds wants a number, not \"99999999999\"");
         tRefused(0, emon.Testport.textBlob("limit.pages=lots"), "limit.pages wants a number, not \"lots\"");
         tRefused(0, emon.Testport.textBlob("chunk=0"), "chunk is out of range 1..2147483647");
+        tRefused(0, emon.Testport.textBlob("parallel=0"), "parallel is out of range 1..2147483647");
+        tRefused(0, emon.Testport.textBlob("parallel=many"), "parallel wants a number, not \"many\"");
         tRefused(0, emon.Testport.textBlob("limit.pages=-1"), "limit.pages is out of range 0..2147483647");
         tRefused(0, emon.Testport.textBlob("limit.form-depth=33"), "limit.form-depth is out of range 0..32");
     }
@@ -402,6 +413,9 @@ public final class Configtest {
         emon.Port.cellsDrop(t, 0);
         tCps(t, emon.Testport.textBlob("stage-ms"));
         emon.Testport.assertEq(Config.cfLimitFind(t, 0, 8), 15, "stage-ms");
+        emon.Port.cellsDrop(t, 0);
+        tCps(t, emon.Testport.textBlob("workers"));
+        emon.Testport.assertEq(Config.cfLimitFind(t, 0, 7), 16, "workers");
     }
     public static void testFontsPerDocCannotBeRaisedPastItsSlab() {
         tRefused(0, emon.Testport.textBlob("limit.fonts-per-doc=513"), "limit.fonts-per-doc is out of range 0..512");

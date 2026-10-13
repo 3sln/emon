@@ -971,6 +971,7 @@ stage that has used its bound is the named error `stage-ms`; 0, the default, is 
 a call into a unit is not interrupted, so a hang inside one attempt is the
 embedder's own timer's to cut); fonts per document (`fonts-per-doc`, D498: a
 budget, not an error: the font past it has no evidence id and its page is flagged);
+workers (`workers`, D505, a budget on how the work is spread, not on the document: `parallel=N` is served with at most this many, §12.1);
 and, when assets are on, pixels and bytes per asset and bytes per document
 (§10.11) — which, unlike the others, degrade to a `noasset` reason and never
 fail a page.
@@ -3001,6 +3002,54 @@ host's, through the `Task` port and the plan/fulfil loop (§7.3):
   no task reads another's data; **results merge in submission order**.
 * The gate: serial and parallel runs produce byte-identical JSON.
 
+**What the hosts do with it (P10.2, D505-D510).** `parallel=N` (§13; one `key=value`
+line like every setting, `limit.workers` caps it; **1, serial, is the default**) lets a
+host spread one conversion's **fulfilment** over a bounded pool of N workers. Kin never
+runs on a worker and its schedule is untouched: the document pass, every page unit
+and the document unit run on the calling thread in the order they always did, and the
+Model, the transcript and the accounting (`RunStats`) are the serial run's, byte for
+byte, at every N. Two things use the pool:
+
+* *A round.* The requests of one round are independent (the machine starts every one,
+  then takes every completion, and appends the answers in id order, §7.3): they run at
+  once, at most N at a time. This is the asset unit's `decode-img` round, the figures
+  unit's crops, a born-digital page's two renders and a scanned page's targeted passes.
+* *A look ahead.* A page unit writes into arenas the pages share, so its kin cannot run
+  beside another's; but **what a page asks is known before it writes anything**. A
+  *dry attempt* (`pu-dry`, kin) is the part of an attempt that precedes its first write: it
+  asks exactly what the real attempt will in those rounds (a scan's `decode`, then the
+  OCR of the page; a born-digital page's two renders, then its OCR) and changes nothing
+  (the page-unit tests hold it). While the loop is on page p the host runs a dry chain
+  for the `pl-ahead` (N − 1) pages after it, has what they ask answered by the pool, and
+  keeps each answer **by the request's record**. When the loop reaches page q it runs
+  its own units as always and asks as always; a request a dry chain already asked is
+  answered by that job instead of a new one, and any other is answered at once, as in a
+  serial run. So nothing a dry chain computes is used but the answer to the very request
+  the real unit asked, and the ports are functions of their requests (the property
+  `bb repeat` run-vs-run already holds them to): a wrong guess costs a job and changes
+  nothing. A dry chain's panic or error ends it and is dropped; the real unit meets the
+  same condition at its own turn, in its own place (a limit breach, a refused round).
+
+The document pass (it reads the input, and misses and fetches), the document unit and
+every unit's kin remain serial, so the gain is bounded by the share of a document's time
+that is a port's (Amdahl): a born-digital page that asks nothing gains nothing and pays N
+idle threads; a scan whose OCR is most of its time gains most (D510 has the
+measurement and the default). A replay (§13.1) has nothing to fulfil and stays serial;
+the browser has no threads and ignores the setting. A worker that **panics** is not
+lost: the loop's thread runs the request again itself, in its own place, as a serial
+run does, and the panic is that run's.
+
+**Limit overrides and threads (D436, D508).** An override of `limit.NAME` is scoped by
+the platform. Rust: a thread-local table, and every job on the pool installs the
+conversion's table for itself, so a worker sees the bounds the calling thread was given
+and conversions with different bounds run side by side. Go, Java and C#: a process-wide
+table behind a read-write lock that a conversion with overrides holds exclusively (it
+runs alone) and one without holds shared; a conversion's workers run inside that scope,
+read the table without taking the lock (a worker that took it would wait on the
+conversion that holds it) and have all ended before the conversion returns, so
+no conversion's bounds are seen by another. Tesseract's engines are not thread safe: the
+OCR adapters keep a pool of engines (one a concurrent reading, a full model load each).
+
 ### 12.2 Determinism
 
 **Same input + same transcript + same settings → byte-identical Model JSON
@@ -3227,6 +3276,7 @@ Settings (all named, all with defaults, all in the Model header):
 | `figure-text` | `omit` / `labels` | `labels` |
 | `ledger` | on / off in outputs | on in JSON, off in HTML |
 | `max-rounds` | plan/fulfil rounds (per page unit, D207) | 5 |
+| `parallel` | workers a conversion spreads its fulfilment over (§12.1, D505); capped by `limit.workers` (16); changes nothing in the Model | **1** (serial) |
 | `assets` | `none` / `images` / `figures` (§10.11, D117) | `none` |
 | `asset-dpi` | render-crop resolution | 150 |
 | `asset-pixels` | pixels per asset | 4,194,304 |
@@ -3267,7 +3317,13 @@ Two different questions, kept apart: **is emon the same everywhere**
    requires byte-identical asset files and HTML in each of the `inline`,
    `external` and `omit` modes, and checks each `sha256` independently.
 6. **repeat** — serial vs parallel, run vs run, forwards vs reversed page
-   submission: byte-identical.
+   submission: byte-identical. Parallel is two things (D507): eight conversions at
+   once on one Engine, and one conversion on 2, 4 and 8 workers (`parallel=N`, §12.1) —
+   the latter on every host that has threads (the C binding and the pod too: the Rust
+   library behind them reads the option), with deterministic fake ports standing in
+   for the engines on the four hosts that have a driver for them, so that the
+   fulfilment path runs on every document of the corpus. The browser has no threads and
+   says so.
 7. **schema** — every JSON output validates against `schema/emon-N.json`.
 8. **fuzz** — mutated and truncated PDFs and images: no panic, no hang,
    bounded memory, a named error or a partial Model. Cross-host agreement on

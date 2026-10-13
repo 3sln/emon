@@ -109,6 +109,8 @@ pub struct Cfg {
     pub prod: crate::port::Cells,
     pub msg: String,
     pub nort: i32,
+    pub par: i32,
+    pub dry: i32,
 }
 impl Cfg {
     pub fn new() -> Cfg {
@@ -135,6 +137,8 @@ impl Cfg {
             prod: crate::port::Cells::new(),
             msg: String::new(),
             nort: 0,
+            par: 0,
+            dry: 0,
         }
     }
 }

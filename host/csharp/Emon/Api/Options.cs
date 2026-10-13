@@ -171,6 +171,12 @@ public sealed class Options {
         /// <summary>Makes the cache behave like an ASYNC source (a browser Blob): a miss stops the unit with `need-bytes`, and the loop fetches and re-runs it. The output is identical.</summary>
         public bool SimulateAsync;
         public int MaxRounds, FetchRounds;
+        /// <summary>
+        /// The `parallel` option (P10.2, SPEC 12.1, D505): how many workers a conversion may spread its fulfilment over. 1, the default, is serial and starts
+        /// no thread; the limit `workers` caps it (kin's `pl-workers` is the clamp). It changes how the work is spread and nothing in the Model, the
+        /// transcript or the accounting. A conversion's workers run inside its limit scope (`Port.WithLimits`) and end before it does.
+        /// </summary>
+        public int Parallel = 1;
         /// <summary>The `Ocr` port, if the embedder has one (D211). null: no live OCR; a replay needs none.</summary>
         public IOcr Ocr;
         /// <summary>The `Renderer` port (D007, D127): what fulfils `render` and `crop` requests when the Engine converts or records. null: none, and a request is answered `unsupported` (D199).</summary>
@@ -246,7 +252,8 @@ public sealed class Options {
         cfg.ChunkSize = c.Chunk;
         cfg.MaxRounds = c.Maxr;
         cfg.FetchRounds = c.Fetchr;
-        cfg.Limits = new int[emon.Port.CellsLen(c.Lims) / 2][];
+        cfg.Parallel = c.Par;
+        cfg.Limits =new int[emon.Port.CellsLen(c.Lims) / 2][];
         for (int i = 0; i < cfg.Limits.Length; i++) {
             cfg.Limits[i] = new int[] {emon.Port.CellsAt(c.Lims, 2 * i), emon.Port.CellsAt(c.Lims, 2 * i + 1)};
         }

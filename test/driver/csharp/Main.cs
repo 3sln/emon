@@ -9,7 +9,13 @@
 //           [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D]
 //           [--html-assets=inline|external|omit] [--asset-prefix=P]
 //           [--source=bytes|readerat|seek|spool] [--chunk=N --async] [--stats]
-//           [--record=DIR | --replay=DIR] [--parallel=N] FILE
+//           [--record=DIR | --replay=DIR] [--concurrent=N] [--parallel=N] FILE
+//
+//   --concurrent=N   run N conversions at once on one Engine; all N must give the same answer (`bb repeat`). (It was `--parallel=N` until P10.2: that
+//                    is now kin's option, `parallel=N`, N workers inside ONE conversion; `bb repeat` runs both.)
+//   --parallel=N     kin's option (SPEC 13, P10.2): spread one conversion's fulfilment over N workers; the output is the serial run's at any N
+//   --fake-ports     TEST ONLY (P10.2): a deterministic Renderer and Ocr stand in for pdfium and Tesseract, so the fulfilment path runs on every document with no
+//                    engine installed (`bb repeat` holds serial and parallel runs of it to the same bytes)
 //
 //   emon-cs --engine-tests    runs the Engine API's native tests instead (EngineTest.cs)
 //
@@ -27,6 +33,55 @@ using System.Threading;
 using emon.Api;
 
 public static class Program {
+    // `--fake-ports` (P10.2): a deterministic Renderer and Ocr, so that the fulfilment path (a page unit's renders, decodes and OCR, the pages ahead looked at,
+    // a round fulfilled by several workers) runs on every document of a gate with no engine installed. The Renderer answers a 20 x 30 RGB page whose pixels are
+    // a function of the page, the layer, the resolution and the position; the Ocr answers every request with the word `Hello` in one line, through the kin
+    // builders a real engine's adapter uses. Both are pure functions of the request, as the real engines are (the property `bb repeat` holds them to).
+    sealed class FakeRenderer : emon.RenderPort.IRenderer {
+        public emon.Port.Bitmap Render(emon.RenderPort.ISource input, byte[] password, emon.RenderPort.Request req) {
+            var px = new byte[20 * 30 * 3];
+            for (int y = 0; y < 30; y++) {
+                for (int x = 0; x < 20; x++) {
+                    byte v = unchecked((byte)(x * 7 + y * 3 + req.Layer * 50 + req.Page * 11 + req.Dpi));
+                    px[(y * 20 + x) * 3] = v;
+                    px[(y * 20 + x) * 3 + 1] = (byte)(v ^ 0x55);
+                    px[(y * 20 + x) * 3 + 2] = (byte)(255 - v);
+                }
+            }
+            var whole = new emon.Port.Bitmap(20, 30, 3, px);
+            return req.Clip == null ? whole : emon.RenderPort.Cut(whole, req.Clip);
+        }
+
+        public int Layers() {
+            return 1;
+        }
+
+        public bool ExactCrop() {
+            return false;
+        }
+    }
+
+    sealed class FakeOcr : IOcr {
+        public emon.Planrun.Answer Fulfil(emon.Planrun.Request req, Dictionary<int, emon.Port.Bitmap> bm, bool keep) {
+            emon.Port.Cells c = emon.Port.NewCells();
+            int at = emon.Plan.AnOcr(c, req.Id());
+            int w = emon.Plan.AnOcrWord(c, at, 10, 10, 100, 30, 900, 0, 0);
+            foreach (Rune cp in "Hello".EnumerateRunes()) {
+                emon.Plan.AnOcrCp(c, w, cp.Value);
+            }
+            emon.Ocr.OxBegin(c, 0, 0, 0, 0, -1, 0, -1, -1, 1, 1, 0, 0, 0);
+            emon.Ocr.OxLine(c, 10, 10, 100, 30, 10, 35, 110, 35, 0, 0, 0, 20, 14, 6);
+            emon.Ocr.OxBlock(c, 10, 10, 100, 30, 0, 0, 0);
+            emon.Ocr.OxWord(c, 0, 0, -1, 0);
+            emon.Plan.AnOcrEnd(c, at);
+            return new emon.Planrun.Answer(emon.Port.CellsVec(c));
+        }
+
+        public List<string[]> Producer() {
+            return new List<string[]> { new[] { "engine", "fake" } };
+        }
+    }
+
     sealed class ExitException : Exception {
         public readonly int Code;
 
@@ -46,7 +101,7 @@ public static class Program {
 
     static void Usage(string msg) {
         Err("emon-cs: " + msg + "\n");
-        Err("usage: emon-cs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--pdfium[=LIBDIR]] [--assets=none|images|figures] [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D] [--html-assets=inline|external|omit] [--asset-prefix=P] [--password=TEXT] [--source=bytes|readerat|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE\n");
+        Err("usage: emon-cs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--pdfium[=LIBDIR]] [--assets=none|images|figures] [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D] [--html-assets=inline|external|omit] [--asset-prefix=P] [--password=TEXT] [--source=bytes|readerat|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--concurrent=N] [--parallel=N] FILE\n");
         throw new ExitException(2);
     }
 
@@ -200,9 +255,9 @@ public static class Program {
         string source = "bytes";
         bool stats = false;
         string file = "", record = "", replay = "", dump = "", assetDir = "";
-        bool tess = false, pdfium = false;
+        bool tess = false, pdfium = false, fakePorts = false;
         string tessdata = "", pdfiumLib = "";
-        int parallel = 1;
+        int concurrent = 1;
         foreach (string a in args) {
             if (a.StartsWith("--out=", StringComparison.Ordinal)) {
                 outName = a.Substring("--out=".Length);
@@ -235,6 +290,8 @@ public static class Program {
             } else if (a.StartsWith("--tesseract=", StringComparison.Ordinal)) {
                 tess = true;
                 tessdata = a.Substring("--tesseract=".Length);
+            } else if (a == "--fake-ports") {
+                fakePorts = true;
             } else if (a == "--pdfium") {
                 pdfium = true;
             } else if (a.StartsWith("--pdfium=", StringComparison.Ordinal)) {
@@ -248,14 +305,14 @@ public static class Program {
                 record = a.Substring("--record=".Length);
             } else if (a.StartsWith("--replay=", StringComparison.Ordinal)) {
                 replay = a.Substring("--replay=".Length);
-            } else if (a.StartsWith("--parallel=", StringComparison.Ordinal)) {
-                if (!ParseInt(a.Substring("--parallel=".Length), out int n)) {
+            } else if (a.StartsWith("--concurrent=", StringComparison.Ordinal)) {
+                if (!ParseInt(a.Substring("--concurrent=".Length), out int n)) {
                     n = -1;
                 }
                 if (n < 1) {
-                    Usage("--parallel=N wants a positive number");
+                    Usage("--concurrent=N wants a positive number");
                 }
-                parallel = n;
+                concurrent = n;
             } else if (KinFlag(a) != null) {
                 // a key of kin's options grammar (`emon.config`): --ocr=never, --asset-dpi=300, --limit.pages=5, --chunk=512, ...
                 kinText.Append(KinFlag(a)).Append('\n');
@@ -334,6 +391,13 @@ public static class Program {
                 Usage(e.Message);
             }
         }
+        if (fakePorts) {
+            if (tess || pdfium) {
+                Usage("--fake-ports is the stand-in for --tesseract and --pdfium: not with them");
+            }
+            cfg.Ocr = new FakeOcr();
+            cfg.Renderer = new FakeRenderer();
+        }
         var engine = new Engine(cfg);
 
         if (outName == "intake") {
@@ -380,7 +444,7 @@ public static class Program {
         bool fPretty = pretty;
         Options.Html fHtml = html;
         emon.Planrun.Transcript fTin = tin;
-        int fParallel = parallel;
+        int fConcurrent = concurrent;
         Options fOpts = opts;
         Func<Result> one = () => {
             var r = new Result();
@@ -402,7 +466,7 @@ public static class Program {
                     m = c.Model;
                     r.Stats = c.Stats;
                 }
-                if (fAssetDir.Length != 0 && fParallel == 1) {
+                if (fAssetDir.Length != 0 && fConcurrent == 1) {
                     Directory.CreateDirectory(fAssetDir);
                     foreach (Model.AssetFile f in m.AssetFiles()) {
                         File.WriteAllBytes(Path.Combine(fAssetDir, f.Name), f.Bytes);
@@ -418,12 +482,12 @@ public static class Program {
             return r;
         };
 
-        var results = new Result[parallel];
-        if (parallel == 1) {
+        var results = new Result[concurrent];
+        if (concurrent == 1) {
             results[0] = one();
         } else {
-            var ts = new Thread[parallel];
-            for (int i = 0; i < parallel; i++) {
+            var ts = new Thread[concurrent];
+            for (int i = 0; i < concurrent; i++) {
                 int k = i;
                 ts[i] = new Thread(() => {
                     try {
@@ -440,7 +504,7 @@ public static class Program {
         }
         for (int i = 1; i < results.Length; i++) {
             if (!Same(results[0], results[i])) {
-                Err("error: nondeterministic\nconversion " + i + " of " + parallel + " differs from conversion 0\n");
+                Err("error: nondeterministic\nconversion " + i + " of " + concurrent + " differs from conversion 0\n");
                 throw new ExitException(1);
             }
         }

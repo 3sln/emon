@@ -51,7 +51,20 @@ public final class Tess implements Ocr {
         pixW, pixH, pixDepth, pixPixel, pixDestroy, leptVersion, leptFree;
 
     private final String tessdata;
-    private final Map<String, MemorySegment> apis = new HashMap<>();
+
+    /**
+     * One ENGINE: initialised instances per language string, used by one thread at a time. A POOL OF ENGINES (P10.2, D509): Tesseract's API objects are not
+     * thread safe, so each reading takes an engine of its own from the pool (or makes one, which is a full model load) and gives it back; the pool holds as
+     * many as were ever wanted at once, which is as many as the conversions and the workers of a `parallel` conversion that read at the same moment. A serial
+     * run has one. A reading is a function of the request and the model alone (the LSTM engine learns nothing between pages), so which engine reads a page
+     * does not show in the answer.
+     */
+    private static final class Engine {
+        final Map<String, MemorySegment> apis = new HashMap<>();
+        final List<String> notes = new ArrayList<>();
+    }
+
+    private final java.util.ArrayDeque<Engine> idle = new java.util.ArrayDeque<>();
     // the resolution given to the engine when a request names none (the request's own flags win); 0: none, as Go and the Engine
     private volatile int dpi = 0;
 
@@ -60,7 +73,6 @@ public final class Tess implements Ocr {
         this.dpi = dpi;
         return this;
     }
-    private final List<String> notes = new ArrayList<>();
     private final List<String[]> producer;
 
     private Tess(SymbolLookup t, SymbolLookup l, String tessdata) {
@@ -324,8 +336,8 @@ public final class Tess implements Ocr {
 
     // ------------------------------------------------------------------ the engine
 
-    private MemorySegment api(String langs) throws Throwable {
-        MemorySegment a = apis.get(langs);
+    private MemorySegment api(Engine eng, String langs) throws Throwable {
+        MemorySegment a = eng.apis.get(langs);
         if (a != null) {
             return a;
         }
@@ -339,7 +351,7 @@ public final class Tess implements Ocr {
             // 0 is never "wrong" (D130).
             setVariable.invoke(h, ar.allocateFrom("lstm_choice_mode"), ar.allocateFrom("2"));
         }
-        apis.put(langs, h);
+        eng.apis.put(langs, h);
         return h;
     }
 
@@ -379,7 +391,7 @@ public final class Tess implements Ocr {
         return new Planrun.Answer(Port.cellsVec(c));
     }
 
-    private Planrun.Answer fulfilNative(Planrun.Request req, Map<Integer, Port.Bitmap> bm, boolean keepBinary) throws Throwable {
+    private Planrun.Answer fulfilNative(Engine eng, Planrun.Request req, Map<Integer, Port.Bitmap> bm, boolean keepBinary) throws Throwable {
         int id = req.id();
         Port.Bitmap b = bm.get(req.field(Plan.ocBitmap()));
         if (b == null) {
@@ -410,7 +422,7 @@ public final class Tess implements Ocr {
         for (int i = 0; i < Port.cellsLen(gone); i++) {
             int cp = Port.cellsAt(gone, i);
             if (cp == 0) {
-                notes.add("no model for " + dropped + ": dropped");
+                eng.notes.add("no model for " + dropped + ": dropped");
                 dropped.setLength(0);
             } else {
                 dropped.appendCodePoint(cp);
@@ -424,7 +436,7 @@ public final class Tess implements Ocr {
         if (lang.isEmpty()) {
             return failed(id, 2);
         }
-        MemorySegment h = api(lang);
+        MemorySegment h = api(eng, lang);
         if (h == null) {
             return failed(id, Planrun.STATUS_FAILED);
         }
@@ -467,7 +479,7 @@ public final class Tess implements Ocr {
             };
             if ((flags & 2) != 0) {
                 // OSD has its own model (`osd`) and its own engine instance
-                MemorySegment ho = api("osd");
+                MemorySegment ho = api(eng, "osd");
                 if (ho == null) {
                     ho = h;
                 }
@@ -480,7 +492,7 @@ public final class Tess implements Ocr {
                     sconf = x10(sc.get(FLT, 0));
                     script = Ocrport.opOsdScript(cellsOf(cps(cstr(sn.get(PTR, 0)))));
                 } else {
-                    notes.add("osd failed");
+                    eng.notes.add("osd failed");
                 }
                 clear.invoke(ho);
             }
@@ -688,12 +700,23 @@ public final class Tess implements Ocr {
             || c == 0x2028 || c == 0x2029 || c == 0x202f || c == 0x205f || c == 0x3000;
     }
 
-    /** One engine behind a lock: Tesseract's API objects are not thread safe, and conversions that run at once take turns at the engine. */
-    public synchronized Planrun.Answer fulfil(Planrun.Request req, Map<Integer, Port.Bitmap> bitmaps, boolean keepBinary) {
+    /** A reading on an engine of its own from the pool (see {@link Engine}); readings that run at once run on different engines. */
+    public Planrun.Answer fulfil(Planrun.Request req, Map<Integer, Port.Bitmap> bitmaps, boolean keepBinary) {
+        Engine eng;
+        synchronized (idle) {
+            eng = idle.poll();
+        }
+        if (eng == null) {
+            eng = new Engine();
+        }
         try {
-            return fulfilNative(req, bitmaps, keepBinary);
+            Planrun.Answer a = fulfilNative(eng, req, bitmaps, keepBinary);
+            synchronized (idle) {
+                idle.add(eng);
+            }
+            return a;
         } catch (Throwable t) {
-            // an engine that fails on a page is a failed OCR of it, not a crashed process
+            // an engine that fails on a page is a failed OCR of it, not a crashed process; one that failed is not given back (its state is not known)
             return failed(req.id(), Planrun.STATUS_FAILED);
         }
     }
