@@ -75,6 +75,24 @@
   {:ratio 0.792, :min_ratio 0.744, :kin_ms 1.789, :ref_ms 2.259},
   :full
   {:ratio 0.604, :min_ratio 0.941, :kin_ms 30.496, :ref_ms 50.511}},
+ "png-transcript|page-gray|legacy plan.rs png_decode (hand-written inflater)"
+ {:full
+  {:ratio 0.536, :min_ratio 0.516, :kin_ms 49.187, :ref_ms 91.848},
+  :quick
+  {:ratio 0.512, :min_ratio 0.505, :kin_ms 15.679, :ref_ms 30.633}},
+ "png-transcript|page-gray|png crate (whole decode)"
+ {:full {:ratio 6.639, :min_ratio 6.5, :kin_ms 49.187, :ref_ms 7.408},
+  :quick
+  {:ratio 3.035, :min_ratio 2.991, :kin_ms 15.679, :ref_ms 5.165}},
+ "png-transcript|photo-rgb-1200x800|legacy plan.rs png_decode (hand-written inflater)"
+ {:full
+  {:ratio 0.631, :min_ratio 0.625, :kin_ms 35.002, :ref_ms 55.464},
+  :quick
+  {:ratio 0.594, :min_ratio 0.574, :kin_ms 34.182, :ref_ms 57.568}},
+ "png-transcript|photo-rgb-1200x800|png crate (whole decode)"
+ {:full {:ratio 4.788, :min_ratio 4.728, :kin_ms 35.002, :ref_ms 7.31},
+  :quick
+  {:ratio 4.534, :min_ratio 4.42, :kin_ms 34.182, :ref_ms 7.539}},
  "png-unfilter|page-gray|png(decode)"
  {:quick
   {:ratio 2.367, :min_ratio 5.165, :kin_ms 95.241, :ref_ms 40.24},

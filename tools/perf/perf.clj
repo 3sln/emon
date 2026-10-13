@@ -11,7 +11,7 @@
 ;; of a loaded machine are loaded numbers; the ratio of interleaved runs is what survives that).
 ;;
 ;; BETS (tools/perf/src/main.rs): inflate, deflate (the deterministic writer), png-write (filter choice + deflate),
-;; png-unfilter (inflate + the PNG predictor), lzw, ccitt (Group 4 against the fax crate, D447), raster (Otsu, Sauvola, two-pass union-find labelling; bulk = what
+;; png-unfilter (inflate + the PNG predictor), png-transcript (the transcript bitmap reader, P10.11: kin against the Rust host's retired reader and the png crate), lzw, ccitt (Group 4 against the fax crate, D447), raster (Otsu, Sauvola, two-pass union-find labelling; bulk = what
 ;; ships, port = per-pixel through bitmap-u8, D092), tracer (runs + union-find over runs + component table), and
 ;; content (the content interpreter and text layer, whole conversion of 8 synthetic PDFs through the Rust driver against
 ;; `pdftotext -bbox-layout`, indicative only: a process-level reference doing less than the Engine). Crypto is not a bet:
@@ -75,7 +75,7 @@
 
 ;; ------------------------------------------------------------------ the Rust bets
 
-(def rust-bets ["inflate" "deflate" "png-write" "png-unfilter" "lzw" "ccitt" "raster" "tracer"])
+(def rust-bets ["inflate" "deflate" "png-write" "png-unfilter" "png-transcript" "lzw" "ccitt" "raster" "tracer"])
 
 (defn run-bet! [bet page]
   (let [l0 (loadavg)
@@ -134,6 +134,7 @@
     "deflate" (= ref "flate2(miniz_oxide,6)")
     "png-write" (= ref "png(balanced,adaptive)")
     "png-unfilter" true
+    "png-transcript" (str/starts-with? ref "legacy")
     "lzw" true
     "ccitt" (str/starts-with? input "text-page")
     ("raster-binarise" "raster-label" "raster-sauvola") (str/ends-with? input "/bulk")
@@ -145,7 +146,7 @@
 
 (defn implication [r]
   (case (:bet r)
-    ("inflate" "deflate" "png-write" "png-unfilter" "lzw" "ccitt")
+    ("inflate" "deflate" "png-write" "png-unfilter" "png-transcript" "lzw" "ccitt")
     "a bit-stream codec with state, not a pure whole-buffer map/reduce: D092 gives it no port form; optimise in kin (or amend D092 to admit a codec port, a decision, not a measurement)"
     ("raster-binarise" "raster-label" "raster-sauvola" "tracer-core") "inside D092: keep, or a bulk form only if it is a pure map/reduce over 2x"
     "content" "keep, measure the text layer alone before acting (the reference does less)"

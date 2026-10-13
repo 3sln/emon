@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"emon/pngenc"
 	"emon/port"
 )
 
@@ -74,7 +75,7 @@ func TestAtFiguresAVectorFigureIsACropOfThePageAndReplaysWithoutARenderer(t *tes
 				want = append(want, p[0], p[1], p[2])
 			}
 		}
-		got, err := port.PngDecode(x.Bytes())
+		got, err := pngenc.Decode(x.Bytes())
 		if err != nil {
 			t.Fatal(err)
 		}

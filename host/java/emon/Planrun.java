@@ -5,7 +5,7 @@
 // its kind table, `producerInOrder`, its replay map and its unused count) is here the unit call (the caller's, under the caller's own panic catch),
 // the await, and the fulfilment of the ports. One attempt's accounting, the two named limits, the requests a unit wrote (checked, and sorted by id),
 // the answered set, the order the answers are appended in, the transcript's entries, the schedule (`en-next`), the fetch planner and every name
-// are kin's. What stays is what is not observable: the bitmaps (a PNG each, `PngRead`), the in-memory `Transcript` the embedder holds, the
+// are kin's. What stays is what is not observable: the bitmaps (a PNG each, kin's `emon.pngread`, P10.11), the in-memory `Transcript` the embedder holds, the
 // `Replayer` that answers the loop from kin's map and the fulfilment.
 //
 // It is named `Planrun`, not `PlanLoop`: the generated `emon.Planloop` is kin's and a case-insensitive file system would hold only one of them.
@@ -664,7 +664,7 @@ public final class Planrun {
                     throw bad(name + " " + tbName(emon.Transcript.tbBitmapMissing()));
                 }
                 try {
-                    bm = PngRead.pngDecode(png);
+                    bm = pngDecode(png);
                 } catch (IllegalArgumentException x) {
                     throw bad(x.getMessage());
                 }
@@ -678,18 +678,25 @@ public final class Planrun {
     public static byte[] pngEncode(Port.Bitmap b) {
         Port.Cells ws = Port.newCells(), pal = Port.newCells(), row = Port.newCells();
         Port.Buf out = Port.newBuf(), z = Port.newBuf();
-        int ct = b.ch == 3 ? 2 : 0;
-        Png.pngBegin(ws, out, z, b.w, b.h, ct, 8, 0, pal, 0, 0);
-        int n = b.w * b.ch;
-        for (int y = 0; y < b.h; y++) {
-            Port.cellsDrop(row, 0);
-            for (int k = 0; k < n; k++) {
-                Port.cellsPush(row, b.d[y * b.stride + k] & 0xFF);
-            }
-            Png.pngRow(ws, out, z, row, 0);
-        }
-        Png.pngEnd(ws, out, z);
+        Pngread.pgEncode(b, ws, out, z, pal, row);
         return Port.bufBlob(out);
+    }
+
+    /** Reads a transcript's bitmap: a PNG emon wrote (kin's `emon.pngread`, P10.11, D1180). @throws IllegalArgumentException with kin's sentence on a bad one */
+    public static Port.Bitmap pngDecode(byte[] p) {
+        Port.Cells r = Port.newCells(), st = Port.newCells(), inflated = Port.newCells(), px = Port.newCells();
+        Port.Buf idat = Port.newBuf(), clean = Port.newBuf();
+        int s = Pngread.pgOpen(p, r, st, inflated, idat, clean);
+        if (s == 0) {
+            Port.Bitmap bm = Port.bitmapNew(Port.cellsAt(r, Pngcheck.prW()), Port.cellsAt(r, Pngcheck.prH()), Port.cellsAt(r, Pngcheck.prCh()));
+            s = Pngread.pgFill(r, inflated, px, bm);
+            if (s == 0) {
+                return bm;
+            }
+        }
+        StringBuilder sb = new StringBuilder();
+        Pngread.pgMsg(s, sb);
+        throw new IllegalArgumentException(sb.toString());
     }
 
     /**

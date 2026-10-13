@@ -19,7 +19,6 @@ import (
 	"emon/plan"
 	"emon/planprobe"
 	"emon/planrun"
-	_ "emon/pngenc"
 	"emon/port"
 )
 
