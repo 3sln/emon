@@ -606,10 +606,12 @@
           (bad dir " does not route options through kin's parse (cf_parse / parse_options): a `limit.NAME` would be its own spelling")))
       (bad dir " is missing: the " what " (P9.4) is held to kin's `cf_parse`")))
   ;; the browser binding takes `limit.NAME` through kin's parse too
-  (let [wasm (slurp "host/wasm/src/wasm.rs")]
-    (if (re-find #"parse_options" wasm)
-      (ok "LIMIT NAMES, wasm: host/wasm/src/wasm.rs parses its options text with kin (parse_options): `limit.NAME` is the table's, refused by name when it is not")
-      (bad "host/wasm/src/wasm.rs does not parse options with kin (parse_options)"))))
+  ;; (the parse is in the shared step session, `Session::open`, which wasm.rs calls: D481)
+  (let [wasm (slurp "host/wasm/src/wasm.rs")
+        session (slurp "host/rust/src/session.rs")]
+    (if (and (re-find #"parse_options" session) (re-find #"Session::open" wasm))
+      (ok "LIMIT NAMES, wasm: host/wasm/src/wasm.rs opens the shared session (host/rust/src/session.rs), which parses its options text with kin (parse_options): `limit.NAME` is the table's, refused by name when it is not")
+      (bad "host/wasm/src/wasm.rs does not parse options with kin (Session::open -> parse_options)"))))
 
 (if (zero? @fails)
   (System/exit 0)
