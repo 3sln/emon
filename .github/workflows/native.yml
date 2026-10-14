@@ -88,7 +88,13 @@ jobs:
         if: matrix.triple == 'x86_64-pc-windows-msvc'
         shell: pwsh
         run: |
-          choco install nasm -y --no-progress
+          # the chocolatey feed answers 504 now and then, and a failed native command does not fail this step: retry, then check the file is there
+          foreach ($i in 1..4) {
+            if (Test-Path "C:\Program Files\NASM\nasm.exe") { break }
+            choco install nasm -y --no-progress
+            Start-Sleep -Seconds (5 * $i)
+          }
+          if (-not (Test-Path "C:\Program Files\NASM\nasm.exe")) { throw "nasm is not installed" }
           "C:\Program Files\NASM" | Out-File -FilePath $env:GITHUB_PATH -Append
       - name: MSVC environment (Windows)
         if: matrix.triple == 'x86_64-pc-windows-msvc'
