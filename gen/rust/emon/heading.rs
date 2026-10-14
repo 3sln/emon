@@ -18,6 +18,7 @@ pub(crate) const W_PROM: i32 = 1;
 pub(crate) const KICKER_RATIO: i32 = 110;
 pub(crate) const HD_KMAX: i32 = 16;
 pub(crate) const HD_EXHAUSTIVE: i32 = 6;
+pub(crate) const HD_MAXLEVEL: i32 = 6;
 pub(crate) const HC_HDR: i32 = 48;
 pub(crate) const HC_STRIDE: i32 = 6;
 pub(crate) const HC_STACK: i32 = 8;
@@ -1722,6 +1723,61 @@ pub(crate) fn hd_search(mut ws: &mut crate::port::Cells, nk: i32) -> i32 {
     }
     return best;
 }
+pub(crate) fn hd_densify(mut ws: &mut crate::port::Cells, nk: i32) -> i32 {
+    // The ladder the document makes (P11.x2, D1491): the levels the search chose, renumbered 1, 2, 3, ... in order
+    // with no level skipped (a sparse search can leave gaps), and none past HD_MAXLEVEL, the six an h1-h6 has: the
+    // classes below the sixth share it. Order is kept, ties are kept; field 10 of every class. A document with a dotted
+    // number or an outline prior keeps the levels they give (a lone `1.1` is level 2, D167) and is only capped.
+    let mut c: i32 = 0;
+    let mut d: i32 = 0;
+    let mut e: i32 = 0;
+    let mut rank: i32 = 0;
+    let mut dup: i32 = 0;
+    let mut pinned: i32 = 0;
+    while c < nk {
+        if (hd_hk(ws, c, 8) > 0) || (hd_hk(ws, c, 11) > 0) {
+            pinned = 1;
+        }
+        c += 1;
+    }
+    c = 0;
+    while c < nk {
+        rank = 1;
+        d = 0;
+        // a level a dotted number or an outline says is the document's own, gaps and all (`1.1` alone is level 2): only
+        // the cap applies then
+        if pinned == 1 {
+            rank = hd_hk(ws, c, 10);
+        }
+        while (d < nk) && (pinned == 0) {
+            if hd_hk(ws, d, 10) < hd_hk(ws, c, 10) {
+                dup = 0;
+                e = 0;
+                while e < d {
+                    if hd_hk(ws, e, 10) == hd_hk(ws, d, 10) {
+                        dup = 1;
+                    }
+                    e += 1;
+                }
+                if dup == 0 {
+                    rank += 1;
+                }
+            }
+            d += 1;
+        }
+        if rank > HD_MAXLEVEL {
+            rank = HD_MAXLEVEL;
+        }
+        crate::port::cells_set(ws, WS_BEST + c, rank);
+        c += 1;
+    }
+    c = 0;
+    while c < nk {
+        hd_hk_set(ws, c, 10, crate::port::cells_at(ws, WS_BEST + c));
+        c += 1;
+    }
+    return 0;
+}
 pub(crate) fn hd_emit(ln: &mut crate::port::Cells, mut hc: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, sf: &mut crate::port::Cells, n: i32) -> i32 {
     // One row of `hc` for every line of every kept unit: the level of its class and, on the unit's first
     // line, where the number is, how much to skip, the scheme, and the start flag.
@@ -1800,6 +1856,7 @@ pub fn hd_analyze(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: 
     base = hd_order(ws);
     hd_matrices(ws, base, nk);
     hd_search(ws, nk);
+    hd_densify(ws, nk);
     hd_emit(ln, hc, ws, sf, n);
     return nu;
 }

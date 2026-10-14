@@ -503,9 +503,40 @@ pub(crate) fn pa_first_cp(wd: &mut crate::port::Cells, ln: &mut crate::port::Cel
     }
     return -1;
 }
+pub(crate) fn pa_unspaced(cp: i32) -> bool {
+    // A code point of a script set without spaces between words (P11.x2): Han (and the Kangxi radicals, which are folded
+    // to Han only after the join), kana, the CJK symbols and punctuation,
+    // the full-width and half-width forms. Hangul is not (it has spaces) and is left out.
+    if (cp >= 11904) && (cp <= 12255) {
+        return 1 == 1;
+    }
+    if (cp >= 12288) && (cp <= 12543) {
+        return 1 == 1;
+    }
+    if (cp >= 13312) && (cp <= 19903) {
+        return 1 == 1;
+    }
+    if (cp >= 19968) && (cp <= 40959) {
+        return 1 == 1;
+    }
+    if (cp >= 63744) && (cp <= 64255) {
+        return 1 == 1;
+    }
+    if (cp >= 65280) && (cp < 65440) {
+        return 1 == 1;
+    }
+    if (cp > 65500) && (cp <= 65519) {
+        return 1 == 1;
+    }
+    if (cp >= 131072) && (cp <= 205743) {
+        return 1 == 1;
+    }
+    return 0 == 1;
+}
 pub(crate) fn pa_join(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, l: i32) -> i32 {
     // What goes between the text so far and the line l: nothing after a soft hyphen (which goes), nothing
-    // after a hyphen when the line starts in lowercase (the hyphen stays), else one space.
+    // after a hyphen when the line starts in lowercase (the hyphen stays), nothing between two characters of a script
+    // set without spaces (`pa-unspaced`, D1490), else one space.
     let n: i32 = crate::port::cells_len(raw);
     if n == 0 {
         return 0;
@@ -518,6 +549,12 @@ pub(crate) fn pa_join(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, 
     if last == 45 {
         let f: i32 = pa_first_cp(wd, ln, et, l);
         if pa_lower(f) {
+            return 0;
+        }
+    }
+    if pa_unspaced(last) {
+        let f: i32 = pa_first_cp(wd, ln, et, l);
+        if pa_unspaced(f) {
             return 0;
         }
     }

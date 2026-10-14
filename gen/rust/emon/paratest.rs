@@ -388,6 +388,50 @@ fn test_line_ends_join_per_spec_3_6() {
     crate::testport::assert_text(t2, "P1:office étst 一;", "normalization (radical U+2F00 folds, D142)");
 }
 #[test]
+fn test_a_line_break_between_cjk_characters_adds_no_space() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ord: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let raw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t1: &mut String = &mut crate::port::new_text();
+    let t2: &mut String = &mut crate::port::new_text();
+    let t3: &mut String = &mut crate::port::new_text();
+    // P11.x2: Chinese and Japanese are set without spaces, so a line that wraps between two ideographs, kana or
+    // full-width marks joins with none (a space there is a stray one in the scraped text).
+    pt_line(wd, ln, et, &crate::testport::text_blob("成为本地区最大的机构之")[..], 1, 7200, 10000, 50000, 11200, 0, 0, 1000);
+    pt_line(wd, ln, et, &crate::testport::text_blob("一。")[..], 1, 7200, 11500, 50000, 12700, 0, 0, 1000);
+    crate::testport::assert_eq(pt_run(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "han: well formed");
+    pt_brief(t1, nodes, regions, text);
+    crate::testport::assert_text(t1, "P1:成为本地区最大的机构之一。;", "a Han break");
+    // Kana and Han across the break alike.
+    pt_clear(wd, ln, et);
+    pt_line(wd, ln, et, &crate::testport::text_blob("地域最大級の組織の")[..], 1, 7200, 10000, 50000, 11200, 0, 0, 1000);
+    // (the second line starts with the Kangxi radical U+2F00, which is folded to Han only after the join, as PDFs write it)
+    pt_line(wd, ln, et, &crate::testport::text_blob("⼀つとなりました")[..], 1, 7200, 11500, 50000, 12700, 0, 0, 1000);
+    crate::testport::assert_eq(pt_run(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "kana: well formed");
+    pt_brief(t2, nodes, regions, text);
+    crate::testport::assert_text(t2, "P1:地域最大級の組織の一つとなりました;", "a Han and kana break");
+    // Latin words and Hangul are spaced languages: their breaks keep the space.
+    pt_clear(wd, ln, et);
+    pt_line(wd, ln, et, &crate::testport::text_blob("the report 안녕하세요")[..], 1, 7200, 10000, 50000, 11200, 0, 0, 1000);
+    pt_line(wd, ln, et, &crate::testport::text_blob("세계 end")[..], 1, 7200, 11500, 50000, 12700, 0, 0, 1000);
+    crate::testport::assert_eq(pt_run(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "hangul: well formed");
+    pt_brief(t3, nodes, regions, text);
+    crate::testport::assert_text(t3, "P1:the report 안녕하세요 세계 end;", "Hangul and Latin keep the space");
+}
+#[test]
 fn test_a_page_end_is_a_milestone_between_blocks_or_inside_a_paragraph() {
     let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();

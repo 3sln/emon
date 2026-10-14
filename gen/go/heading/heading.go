@@ -36,6 +36,8 @@ const hdKmax int32 = 16
 
 const hdExhaustive int32 = 6
 
+const hdMaxlevel int32 = 6
+
 const hcHdr int32 = 48
 
 const hcStride int32 = 6
@@ -1829,6 +1831,62 @@ func hdSearch(ws *port.Cells, nk int32) int32 {
 	return best
 }
 
+func hdDensify(ws *port.Cells, nk int32) int32 {
+	// The ladder the document makes (P11.x2, D1491): the levels the search chose, renumbered 1, 2, 3, ... in order
+	// with no level skipped (a sparse search can leave gaps), and none past HD_MAXLEVEL, the six an h1-h6 has: the
+	// classes below the sixth share it. Order is kept, ties are kept; field 10 of every class. A document with a dotted
+	// number or an outline prior keeps the levels they give (a lone `1.1` is level 2, D167) and is only capped.
+	var c int32 = 0
+	var d int32 = 0
+	var e int32 = 0
+	var rank int32 = 0
+	var dup int32 = 0
+	var pinned int32 = 0
+	for c < nk {
+		if (hdHk(ws, c, 8) > 0) || (hdHk(ws, c, 11) > 0) {
+			pinned = 1
+		}
+		c += 1
+	}
+	c = 0
+	for c < nk {
+		rank = 1
+		d = 0
+		// a level a dotted number or an outline says is the document's own, gaps and all (`1.1` alone is level 2): only
+		// the cap applies then
+		if pinned == 1 {
+			rank = hdHk(ws, c, 10)
+		}
+		for (d < nk) && (pinned == 0) {
+			if hdHk(ws, d, 10) < hdHk(ws, c, 10) {
+				dup = 0
+				e = 0
+				for e < d {
+					if hdHk(ws, e, 10) == hdHk(ws, d, 10) {
+						dup = 1
+					}
+					e += 1
+				}
+				if dup == 0 {
+					rank += 1
+				}
+			}
+			d += 1
+		}
+		if rank > hdMaxlevel {
+			rank = hdMaxlevel
+		}
+		port.CellsSet(ws, wsBest+c, rank)
+		c += 1
+	}
+	c = 0
+	for c < nk {
+		hdHkSet(ws, c, 10, port.CellsAt(ws, wsBest+c))
+		c += 1
+	}
+	return 0
+}
+
 func hdEmit(ln *port.Cells, hc *port.Cells, ws *port.Cells, sf *port.Cells, n int32) int32 {
 	// One row of `hc` for every line of every kept unit: the level of its class and, on the unit's first
 	// line, where the number is, how much to skip, the scheme, and the start flag.
@@ -1908,6 +1966,7 @@ func HdAnalyze(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, s
 	base = hdOrder(ws)
 	hdMatrices(ws, base, nk)
 	hdSearch(ws, nk)
+	hdDensify(ws, nk)
 	hdEmit(ln, hc, ws, sf, n)
 	return nu
 }

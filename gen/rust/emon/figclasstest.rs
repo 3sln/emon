@@ -114,6 +114,39 @@ fn test_axes_with_ticks_and_bars_are_a_chart() {
     crate::testport::assert_that((pk % 1024) >= 700, "and a sure one: axes, ticks and bars");
 }
 #[test]
+fn test_a_page_header_with_rules_and_numbers_is_not_a_chart() {
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut pk: i32 = 0;
+    // P11.x2 (the W-9's banner): a rule across the foot of a band and one rule up from it meet (axes), two numbers (a form
+    // number and a year) lie in it, and so does a sentence: no ticks, bars or series. A chart's text is its labels; a
+    // line of five words or more makes it a banner.
+    ft_path(pa, 1, 1, 10000, 15000, 50000, 15080, -1, 0, 16);
+    ft_path(pa, 1, 1, 22000, 10000, 22080, 15000, -1, 0, 16);
+    ft_word(fw, et, 1, 11000, 10500, 13000, 11500, 50, 48);
+    ft_word(fw, et, 1, 14000, 10500, 16000, 11500, 50, 52);
+    ft_line(fl, 1, 23000, 12000, 49000, 13000, 9);
+    pk = ft_kind(pa, fw, fl, et, ws, 9800, 9800, 50200, 15200, 79200);
+    crate::testport::assert_eq(crate::port::cells_at(ws, 3), 1, "the two long rules meet: axes");
+    crate::testport::assert_eq(crate::port::cells_at(ws, 19), 1, "a sentence in it");
+    crate::testport::assert_that((pk / 1024) != fg_chart(), "a banner is not a chart");
+    // the same rules and numbers with no sentence are the minimal chart they always were
+    crate::port::cells_drop(fl, 0);
+    crate::port::cells_drop(ws, 0);
+    pk = ft_kind(pa, fw, fl, et, ws, 9800, 9800, 50200, 15200, 79200);
+    crate::testport::assert_eq(pk / 1024, fg_chart(), "axes and numbers alone are a chart");
+    // and two rules and a sentence, no numbers (a signature box): not a chart either
+    crate::port::cells_drop(fw, 0);
+    crate::port::cells_drop(et, 0);
+    ft_line(fl, 1, 23000, 12000, 49000, 13000, 9);
+    crate::port::cells_drop(ws, 0);
+    pk = ft_kind(pa, fw, fl, et, ws, 9800, 9800, 50200, 15200, 79200);
+    crate::testport::assert_that((pk / 1024) != fg_chart(), "a framed sentence is not a chart");
+}
+#[test]
 fn test_boxes_with_words_and_an_arrow_are_a_diagram_and_with_no_axes() {
     let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();

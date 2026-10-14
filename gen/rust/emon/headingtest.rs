@@ -321,6 +321,88 @@ fn test_dotted_numbers_beat_size() {
     crate::testport::assert_eq(hd_level(hc, 9), 1, "`2` is level 1 again");
 }
 #[test]
+fn test_a_dotted_depth_is_kept_and_only_capped() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ptxt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut y: i32 = 5000;
+    // P11.x2: a dotted number's depth is the document's own word (D167): `1`, `1.1.1.1`, `2` stay 1, 4, 1; the densifying
+    // of a ladder applies to the levels a search chose, not to these.
+    ht_heading(wd, ln, et, &crate::testport::text_blob("1 Introduction")[..], y, 1400, 1);
+    y += 2300;
+    y = ht_body(wd, ln, et, 1, y, 2);
+    y += 900;
+    ht_heading(wd, ln, et, &crate::testport::text_blob("1.1.1.1 Deep part")[..], y, 1200, 1);
+    y += 2300;
+    y = ht_body(wd, ln, et, 1, y, 2);
+    y += 900;
+    ht_heading(wd, ln, et, &crate::testport::text_blob("2 Next steps")[..], y, 1400, 1);
+    y += 2300;
+    y = ht_body(wd, ln, et, 1, y, 2);
+    crate::testport::assert_eq(ht_run(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 3, "three headings");
+    crate::testport::assert_eq(hd_level(hc, 0), 1, "`1` is level 1");
+    crate::testport::assert_eq(hd_level(hc, 3), 4, "`1.1.1.1` is level 4: its depth, not a rank");
+    crate::testport::assert_eq(hd_level(hc, 6), 1, "`2` is level 1");
+}
+#[test]
+fn test_a_ladder_of_eight_sizes_stops_at_level_six() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ptxt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut y: i32 = 5000;
+    // P11.x2: eight headings of eight sizes, each bigger than the next: a ladder of eight classes, held to the six an
+    // h1-h6 has (a level past it is a choice of the emitter, never of the analysis).
+    ht_heading(wd, ln, et, &crate::testport::text_blob("Alpha one")[..], y, 3000, 1);
+    y += 4000;
+    y = ht_body(wd, ln, et, 1, y, 2);
+    y += 900;
+    ht_heading(wd, ln, et, &crate::testport::text_blob("Bravo two")[..], y, 2800, 1);
+    y += 3800;
+    y = ht_body(wd, ln, et, 1, y, 2);
+    y += 900;
+    ht_heading(wd, ln, et, &crate::testport::text_blob("Charlie three")[..], y, 2600, 1);
+    y += 3600;
+    y = ht_body(wd, ln, et, 1, y, 2);
+    y += 900;
+    ht_heading(wd, ln, et, &crate::testport::text_blob("Delta four")[..], y, 2400, 1);
+    y += 3400;
+    y = ht_body(wd, ln, et, 1, y, 2);
+    y += 900;
+    ht_heading(wd, ln, et, &crate::testport::text_blob("Echo five")[..], y, 2200, 1);
+    y += 3200;
+    y = ht_body(wd, ln, et, 1, y, 2);
+    y += 900;
+    ht_heading(wd, ln, et, &crate::testport::text_blob("Foxtrot six")[..], y, 2000, 1);
+    y += 3000;
+    y = ht_body(wd, ln, et, 1, y, 2);
+    y += 900;
+    ht_heading(wd, ln, et, &crate::testport::text_blob("Golf seven")[..], y, 1800, 1);
+    y += 2800;
+    y = ht_body(wd, ln, et, 1, y, 2);
+    y += 900;
+    ht_heading(wd, ln, et, &crate::testport::text_blob("Hotel eight")[..], y, 1600, 1);
+    y += 2600;
+    y = ht_body(wd, ln, et, 1, y, 2);
+    crate::testport::assert_eq(ht_run(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 8, "eight headings");
+    crate::testport::assert_eq(hd_level(hc, 0), 1, "the first is level 1");
+    crate::testport::assert_eq(hd_level(hc, 21), 6, "the eighth is level 6, not 8");
+    crate::testport::assert_eq(hd_level(hc, 18), 6, "the seventh is level 6, not 7");
+}
+#[test]
 fn test_a_numbered_list_is_not_a_run_of_headings() {
     let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();

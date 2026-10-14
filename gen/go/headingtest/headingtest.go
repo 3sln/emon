@@ -337,6 +337,88 @@ func TestDottedNumbersBeatSize(emonT *testing.T) {
 	port.AssertEq(emonT, heading.HdLevel(hc, 9), 1, "`2` is level 1 again")
 }
 
+func TestADottedDepthIsKeptAndOnlyCapped(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var sf *port.Cells = port.NewCells()
+	var sc *port.Cells = port.NewCells()
+	var hc *port.Cells = port.NewCells()
+	var ws *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var pr *port.Cells = port.NewCells()
+	var ptxt *port.Cells = port.NewCells()
+	var y int32 = 5000
+	// P11.x2: a dotted number's depth is the document's own word (D167): `1`, `1.1.1.1`, `2` stay 1, 4, 1; the densifying
+	// of a ladder applies to the levels a search chose, not to these.
+	htHeading(wd, ln, et, port.TextBlob("1 Introduction"), y, 1400, 1)
+	y += 2300
+	y = htBody(wd, ln, et, 1, y, 2)
+	y += 900
+	htHeading(wd, ln, et, port.TextBlob("1.1.1.1 Deep part"), y, 1200, 1)
+	y += 2300
+	y = htBody(wd, ln, et, 1, y, 2)
+	y += 900
+	htHeading(wd, ln, et, port.TextBlob("2 Next steps"), y, 1400, 1)
+	y += 2300
+	y = htBody(wd, ln, et, 1, y, 2)
+	port.AssertEq(emonT, htRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 3, "three headings")
+	port.AssertEq(emonT, heading.HdLevel(hc, 0), 1, "`1` is level 1")
+	port.AssertEq(emonT, heading.HdLevel(hc, 3), 4, "`1.1.1.1` is level 4: its depth, not a rank")
+	port.AssertEq(emonT, heading.HdLevel(hc, 6), 1, "`2` is level 1")
+}
+
+func TestALadderOfEightSizesStopsAtLevelSix(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var sf *port.Cells = port.NewCells()
+	var sc *port.Cells = port.NewCells()
+	var hc *port.Cells = port.NewCells()
+	var ws *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var pr *port.Cells = port.NewCells()
+	var ptxt *port.Cells = port.NewCells()
+	var y int32 = 5000
+	// P11.x2: eight headings of eight sizes, each bigger than the next: a ladder of eight classes, held to the six an
+	// h1-h6 has (a level past it is a choice of the emitter, never of the analysis).
+	htHeading(wd, ln, et, port.TextBlob("Alpha one"), y, 3000, 1)
+	y += 4000
+	y = htBody(wd, ln, et, 1, y, 2)
+	y += 900
+	htHeading(wd, ln, et, port.TextBlob("Bravo two"), y, 2800, 1)
+	y += 3800
+	y = htBody(wd, ln, et, 1, y, 2)
+	y += 900
+	htHeading(wd, ln, et, port.TextBlob("Charlie three"), y, 2600, 1)
+	y += 3600
+	y = htBody(wd, ln, et, 1, y, 2)
+	y += 900
+	htHeading(wd, ln, et, port.TextBlob("Delta four"), y, 2400, 1)
+	y += 3400
+	y = htBody(wd, ln, et, 1, y, 2)
+	y += 900
+	htHeading(wd, ln, et, port.TextBlob("Echo five"), y, 2200, 1)
+	y += 3200
+	y = htBody(wd, ln, et, 1, y, 2)
+	y += 900
+	htHeading(wd, ln, et, port.TextBlob("Foxtrot six"), y, 2000, 1)
+	y += 3000
+	y = htBody(wd, ln, et, 1, y, 2)
+	y += 900
+	htHeading(wd, ln, et, port.TextBlob("Golf seven"), y, 1800, 1)
+	y += 2800
+	y = htBody(wd, ln, et, 1, y, 2)
+	y += 900
+	htHeading(wd, ln, et, port.TextBlob("Hotel eight"), y, 1600, 1)
+	y += 2600
+	y = htBody(wd, ln, et, 1, y, 2)
+	port.AssertEq(emonT, htRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 8, "eight headings")
+	port.AssertEq(emonT, heading.HdLevel(hc, 0), 1, "the first is level 1")
+	port.AssertEq(emonT, heading.HdLevel(hc, 21), 6, "the eighth is level 6, not 8")
+	port.AssertEq(emonT, heading.HdLevel(hc, 18), 6, "the seventh is level 6, not 7")
+}
+
 func TestANumberedListIsNotARunOfHeadings(emonT *testing.T) {
 	var wd *port.Cells = port.NewCells()
 	var ln *port.Cells = port.NewCells()

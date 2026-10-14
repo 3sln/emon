@@ -18,6 +18,7 @@ public final class Heading {
     public static final int KICKER_RATIO = 110;
     public static final int HD_KMAX = 16;
     public static final int HD_EXHAUSTIVE = 6;
+    public static final int HD_MAXLEVEL = 6;
     public static final int HC_HDR = 48;
     public static final int HC_STRIDE = 6;
     public static final int HC_STACK = 8;
@@ -1722,6 +1723,61 @@ public final class Heading {
         }
         return best;
     }
+    public static int hdDensify(emon.Port.Cells ws, int nk) {
+        // The ladder the document makes (P11.x2, D1491): the levels the search chose, renumbered 1, 2, 3, ... in order
+        // with no level skipped (a sparse search can leave gaps), and none past HD_MAXLEVEL, the six an h1-h6 has: the
+        // classes below the sixth share it. Order is kept, ties are kept; field 10 of every class. A document with a dotted
+        // number or an outline prior keeps the levels they give (a lone `1.1` is level 2, D167) and is only capped.
+        int c = 0;
+        int d = 0;
+        int e = 0;
+        int rank = 0;
+        int dup = 0;
+        int pinned = 0;
+        while (c < nk) {
+            if ((hdHk(ws, c, 8) > 0) || (hdHk(ws, c, 11) > 0)) {
+                pinned = 1;
+            }
+            c += 1;
+        }
+        c = 0;
+        while (c < nk) {
+            rank = 1;
+            d = 0;
+            // a level a dotted number or an outline says is the document's own, gaps and all (`1.1` alone is level 2): only
+            // the cap applies then
+            if (pinned == 1) {
+                rank = hdHk(ws, c, 10);
+            }
+            while ((d < nk) && (pinned == 0)) {
+                if (hdHk(ws, d, 10) < hdHk(ws, c, 10)) {
+                    dup = 0;
+                    e = 0;
+                    while (e < d) {
+                        if (hdHk(ws, e, 10) == hdHk(ws, d, 10)) {
+                            dup = 1;
+                        }
+                        e += 1;
+                    }
+                    if (dup == 0) {
+                        rank += 1;
+                    }
+                }
+                d += 1;
+            }
+            if (rank > HD_MAXLEVEL) {
+                rank = HD_MAXLEVEL;
+            }
+            emon.Port.cellsSet(ws, WS_BEST + c, rank);
+            c += 1;
+        }
+        c = 0;
+        while (c < nk) {
+            hdHkSet(ws, c, 10, emon.Port.cellsAt(ws, WS_BEST + c));
+            c += 1;
+        }
+        return 0;
+    }
     public static int hdEmit(emon.Port.Cells ln, emon.Port.Cells hc, emon.Port.Cells ws, emon.Port.Cells sf, int n) {
         // One row of `hc` for every line of every kept unit: the level of its class and, on the unit's first
         // line, where the number is, how much to skip, the scheme, and the start flag.
@@ -1800,6 +1856,7 @@ public final class Heading {
         base = hdOrder(ws);
         hdMatrices(ws, base, nk);
         hdSearch(ws, nk);
+        hdDensify(ws, nk);
         hdEmit(ln, hc, ws, sf, n);
         return nu;
     }
