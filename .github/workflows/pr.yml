@@ -1,0 +1,120 @@
+# The pull request workflow (P11.8, D1430; D524): the FAST CORE on every pull request, plus the gates the change calls for.
+#   `bb ci plan` maps `git diff --name-only BASE...HEAD` through ci/gate-map.edn to the gates (and fails on a path the map does not know);
+#   a gate that has a `--fast` variant runs it (a subset, labelled FAST in its output); a gate without one runs in full.
+# NOT here: the full gates. They run on release, on workflow_dispatch and weekly (gates.yml). The corpus is not pulled: a pull request from a fork has no secrets,
+# and the corpus gates (png-check, image) run on what is committed (png-check says loudly what it skips).
+# All scripting is babashka. The workflow was written without a run (D524: no Actions credits yet); `bb ci plan --base HEAD~3` shows what it would schedule.
+name: pr
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+    working-directory: emon
+
+env:
+  CI: "true"
+
+jobs:
+  # ---- what this change calls for ---------------------------------------------------------------------------------------------------------------------
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      plan: ${{ steps.plan.outputs.plan }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: emon
+          fetch-depth: 0
+      - uses: DeLaGuardo/setup-clojure@13.4
+        with:
+          bb: 1.3.190
+      - name: Plan (fails on a changed path that ci/gate-map.edn does not map)
+        id: plan
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          plan=$(bb ci plan --base "origin/$BASE_REF" --head HEAD --format json)
+          echo "$plan"
+          echo "plan=$plan" >> "$GITHUB_OUTPUT"
+
+  # ---- the fast core: every pull request, whatever the change -------------------------------------------------------------------------------------------
+  core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: emon
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: 3sln/kin
+          path: kin
+      - uses: ./emon/.github/actions/setup
+      - name: bb ci core (check, drift, hosts, api-diff, release-audit, version --check, ci coverage)
+        run: bb ci core
+
+  # ---- the planned gates, one job per shard that holds one -----------------------------------------------------------------------------------------------
+  gates:
+    needs: [plan]
+    if: fromJSON(needs.plan.outputs.plan).has_gates
+    name: gates (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.plan).matrix }}
+    env:
+      # the host arms the change touches (java csharp c pod wasm): a --fast run leaves the others out; Rust and Go always run
+      EMON_FAST_HOSTS: ${{ join(fromJSON(needs.plan.outputs.plan).hosts, ',') }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: emon
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: 3sln/kin
+          path: kin
+      - uses: ./emon/.github/actions/setup
+      - name: FAST variants (a labelled subset)
+        if: matrix.fast != ''
+        env:
+          GATES: ${{ matrix.fast }}
+        run: bb gates --fast $GATES
+      - name: In full (no --fast variant)
+        if: matrix.full != ''
+        env:
+          GATES: ${{ matrix.full }}
+        run: bb gates $GATES
+
+  # ---- one verdict: the check to require -----------------------------------------------------------------------------------------------------------------
+  verdict:
+    if: always()
+    needs: [plan, core, gates]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Verdict
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "plan=${{ needs.plan.result }} core=${{ needs.core.result }} gates=${{ needs.gates.result }}"
+          for r in $RESULTS; do
+            case "$r" in success|skipped) ;; *) echo "::error::a job ended $r"; exit 1 ;; esac
+          done
+          echo "  ok   the plan, the fast core and every planned gate passed (FAST variants where they exist; the full gates run on release, weekly and on demand)"

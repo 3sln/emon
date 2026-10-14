@@ -175,9 +175,12 @@
 
 ;; THE JAVA ENGINE (P9.1, D449) replays the same transcripts: optional, left out LOUDLY without a JDK 22+ (`emon-java-build` exits 3);
 ;; EMON_SKIP_JAVA=1 leaves it out on purpose
+(cp/add-classpath "tools/lib")
+(require '[extra-hosts :as xh])
+(xh/fast-note "ocr" "the Rust and Go Engines over every committed scan and the spike's page; the Java, C# and C arms are left out")
 (defn java-driver []
-  (if (System/getenv "EMON_SKIP_JAVA")
-    (do (println "  SKIP java engine -- EMON_SKIP_JAVA is set") nil)
+  (if (or (System/getenv "EMON_SKIP_JAVA") (xh/fast-skip? :java))
+    (do (println "  SKIP java engine -- EMON_SKIP_JAVA is set, or --fast") nil)
     (let [r @(process {:out :string :err :string} "kin/scripts/emon-java-build")]
       (case (:exit r)
         0 (str/trim (:out r))
@@ -187,8 +190,8 @@
 ;; THE C# ENGINE (P9.2, D457) replays the same transcripts: optional, left out LOUDLY without a .NET 8+ SDK (`emon-cs-build` exits 3);
 ;; EMON_SKIP_CSHARP=1 leaves it out on purpose
 (defn cs-driver []
-  (if (System/getenv "EMON_SKIP_CSHARP")
-    (do (println "  SKIP csharp engine -- EMON_SKIP_CSHARP is set") nil)
+  (if (or (System/getenv "EMON_SKIP_CSHARP") (xh/fast-skip? :csharp))
+    (do (println "  SKIP csharp engine -- EMON_SKIP_CSHARP is set, or --fast") nil)
     (let [r @(process {:out :string :err :string} "kin/scripts/emon-cs-build")]
       (case (:exit r)
         0 (str/trim (:out r))

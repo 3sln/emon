@@ -61,6 +61,7 @@
 ;; owns its threads; the pod converts in one call): those two are held to 1, 2b and 3, and the Rust library behind them is held to 2a by Rust.
 (cp/add-classpath "tools/lib")
 (require '[extra-hosts :as xh])
+(xh/fast-note "repeat" "the Rust and Go hosts over every 4th document (sorted) of the committed corpus; the Java, C#, C and pod arms are left out")
 (def extras (xh/engines {:hosts [:java :csharp :c :pod] :on-fail (fn [& m] (println "  FAIL" (apply str m)) (System/exit 1))}))
 (def drivers* (merge drivers (into {} (for [{:keys [host drv]} extras] [host drv]))))
 (def hosts (into [:rust :go] (map :host extras)))
@@ -87,7 +88,7 @@
                       all (if sample (take-nth (max 1 (quot (count all) sample)) all) all)]
                   (cond->> all limit (take limit)))
                 (globs "test" "**/*.pdf"))]
-    (->> files (filter #(or (nil? only) (str/includes? % only))) (mapv (fn [f] {:file f :pw (get p3-passwords f)})))))
+    (->> files (filter #(or (nil? only) (str/includes? % only))) (#(if (and xh/fast? (not corpus?)) (take-nth 4 %) %)) (mapv (fn [f] {:file f :pw (get p3-passwords f)})))))
 
 ;; ------------------------------------------------------------------ driving
 

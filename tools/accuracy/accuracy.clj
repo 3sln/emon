@@ -507,6 +507,8 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
         (case x
           "--predictor" (recur (nnext a) (second a) update only)
           "--update" (recur (next a) pred true only)
+          ;; P11.7, D1430: the ratchet is the whole scoreboard entry (a subset of documents would move its means), so --fast changes only the cross-host check: Go, not Java/C#/C/pod
+          "--fast" (recur (next a) pred update only)
           "--only" (recur (nnext a) pred update (second a))
           "--rebaseline-conf" (do (alter-var-root #'*rebaseline-conf* (constantly true))
                                   (recur (next a) pred update only))
@@ -518,7 +520,8 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
                        (recur (nnext a) pred update only))
           (do (println "usage: accuracy.clj [--predictor emon|emon-live|emon-replay|oracle|degraded|fixtures|CMD] [--update | --rebaseline-conf] [--only ID] [--variants V,V] [--ids ID,ID] [--docs V/ID,V/ID]")
               (System/exit 2))))
-      (let [board (load-board)
+      (let [_ (xh/fast-note "accuracy" "the Rust predictor's whole ratchet (every document); the cross-host check runs the Go host only, not Java, C#, C or the pod")
+            board (load-board)
             ;; a reference is scored on its fixed subset of the input forms unless --variants says otherwise
             _ (when (contains? FIXTURE-SETS pred)
                 (alter-var-root #'*fixture-set* (constantly (FIXTURE-SETS pred))))

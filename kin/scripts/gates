@@ -25,13 +25,27 @@ cd "$(dirname "$0")/../.."
 gates="hosts drift release-audit api-diff lang-test check unit plan ocr render align fusion gfuse artifacts seals sealpx sigs retarget fuzz png-check asset slice embedders identity image repeat accuracy"
 not_gates="gen emit gates import corpus-push corpus-pull corpus-test png-bench ocr-live fusion-report fusion-live align-record align-report fusion-record ghost-health render-record pdfium-fetch ink trace corpus-index-sha ci retarget-record sigs-record fusion-bench wasm asset-record baselines limits asset-fig-record rederive c pod fuzz-long perf calibration stamp-ghost sealpx-record parbench gfuse-record gfuse-measure gfuse-icdar samples version"
 
+# THE GATES THAT TAKE `--fast` (P11.7, D1430): a deterministic SUBSET for pull requests (Rust and Go only, a fixed sample of documents; each
+# prints a `FAST <gate>` line saying what it left out). `bb gates --fast GATE...` runs `bb GATE --fast` for each and refuses a gate not listed here.
+# ci/gate-map.edn's `:fast` holds the same set (`bb ci map-coverage` fails if they differ). The pull request workflow runs these; the full
+# gates run on release, weekly and on demand.
+fast_gates="unit identity repeat accuracy slice ocr fusion gfuse retarget artifacts seals sealpx sigs align render image"
+
 # `bb gates GATE...` runs only the named gates (the CI shards of .github/workflows/gates.yml, D266); the
-# completeness checks below always run. No arguments: every gate.
+# completeness checks below always run. No arguments: every gate. `bb gates --fast GATE...`: their --fast variants.
+fast=""
+if [ "${1:-}" = "--fast" ]; then
+  fast="--fast"; shift
+  [ "$#" -gt 0 ] || { echo "  FAIL bb gates --fast needs the gates to run (a fast run of every gate is not a gate)"; exit 2; }
+fi
 run="$gates"
 if [ "$#" -gt 0 ]; then
   run="$*"
   for g in $run; do
     case " $gates " in *" $g "*) ;; *) echo "  FAIL \`$g\` is not a gate (kin/scripts/gates)"; exit 2 ;; esac
+    if [ -n "$fast" ]; then
+      case " $fast_gates " in *" $g "*) ;; *) echo "  FAIL gate \`$g\` has no --fast variant (kin/scripts/gates fast_gates): run it in full"; exit 2 ;; esac
+    fi
   done
 fi
 
@@ -58,24 +72,28 @@ log=$(mktemp "${TMPDIR:-/tmp}/emon-gates.XXXXXX")
 trap 'rm -f "$log"' EXIT
 for g in $run; do
   rc=0
-  bb "$g" > "$log" 2>&1 || rc=$?
+  # shellcheck disable=SC2086
+  bb "$g" $fast > "$log" 2>&1 || rc=$?
   scores=$(grep -c '^  ok ' "$log" || true)
   failed=$(grep -c 'FAIL' "$log" || true)
+  # a --fast line is the gate's own label ("  FAST gate: a deterministic SUBSET ..."): not a failure, and shown so a green run is never taken for the full gate
+  fastlines=$(grep '^  FAST ' "$log" || true)
   if [ "$rc" -ne 0 ] || [ "$failed" -ne 0 ]; then
-    echo "  FAIL gate $g: exit $rc, $failed FAIL line(s)"
+    echo "  FAIL gate $g${fast:+ (--fast)}: exit $rc, $failed FAIL line(s)"
     tail -15 "$log" | sed 's/^/    /'
     fails=$((fails+1))
   elif [ "$scores" -eq 0 ]; then
-    echo "  FAIL gate $g exited 0 and printed no score (no \`  ok \` line): it checked nothing it could say"
+    echo "  FAIL gate $g${fast:+ (--fast)} exited 0 and printed no score (no \`  ok \` line): it checked nothing it could say"
     fails=$((fails+1))
   else
-    echo "  ok   gate $g: $scores score line(s)"
+    echo "  ok   gate $g${fast:+ (FAST subset)}: $scores score line(s)"
+    [ -z "$fastlines" ] || printf '%s\n' "$fastlines" | sed 's/^/       /'
   fi
 done
 
 [ "$fails" -eq 0 ] || exit 1
 if [ "$#" -gt 0 ]; then
-  echo "  ok   the named gates ran and printed a score: $run"
+  echo "  ok   the named gates ran and printed a score${fast:+ (FAST variants: subsets, not the full gates)}: $run"
 else
   echo "  ok   every gate ran and printed a score"
 fi

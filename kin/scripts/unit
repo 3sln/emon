@@ -36,6 +36,13 @@ cd "$(dirname "$0")/../.."
 repo=$(pwd)
 emon_cap="$repo/kin/scripts/cap"
 
+# `--fast` (P11.7, D1430), for pull requests: a deterministic SUBSET of the gate. The Rust arm only (the arms are the same laws in four languages, so the
+# Rust arm is the one-language answer); EMON_FAST_HOSTS (go java csharp, comma list) adds arms when corpus/ is there. WITHOUT corpus/ (a pull request has no
+# secrets) the six laws that read real files from it are skipped by name, loudly. Everything before the laws (the table and golden checks) runs as in the gate.
+#     kin/scripts/unit --fast
+fast=0
+if [ "${1:-}" = "--fast" ]; then fast=1; shift; fi
+
 mode=normal
 arms=all
 case "${1:-all}" in
@@ -50,6 +57,30 @@ case "${1:-all}" in
   *) echo "unit: unknown arm $1 (go rust java csharp red)"; exit 2 ;;
 esac
 [ "$arms" = all ] && arms="go rust java csharp"
+rust_skip=""
+if [ "$fast" = 1 ]; then
+  if [ "$mode" = red ]; then echo "unit: --fast is not for the negative check (unit red)"; exit 2; fi
+  if [ "${1:-all}" = all ]; then
+    arms=rust
+    if [ -d "$repo/corpus" ]; then
+      for h in $(printf '%s' "${EMON_FAST_HOSTS:-}" | tr ',' ' '); do
+        case "$h" in go|java|csharp) arms="$arms $h" ;; esac
+      done
+    fi
+  fi
+  if [ ! -d "$repo/corpus" ]; then
+    # the laws that read real files from corpus/ (they panic on a missing file): named, so a skip is never silent
+    for t in pdfcatalogtest::test_real_files_say_what_qpdf_and_poppler_say \
+             pdfcontenttest::test_real_files_make_the_glyph_streams_pdfminer_agreed_with \
+             pdfcontenttest::test_the_three_fixtures_and_the_real_files_are_the_same_through_an_async_source_of_512_byte_chunks \
+             pdfdoctest::test_every_real_file_is_the_same_through_an_async_source_of_512_byte_chunks \
+             pdfdoctest::test_every_real_file_opens_with_the_page_count_pdfinfo_reports \
+             pdffonttest::test_every_real_font_answers_as_the_reference_said; do
+      rust_skip="$rust_skip --skip $t"
+    done
+  fi
+  echo "  FAST unit: a deterministic SUBSET, not the gate -- the arms: $arms$( [ -d "$repo/corpus" ] || echo '; corpus/ is absent, so 6 laws that read real files from it are skipped (named in kin/scripts/unit)' ); the full gate runs go rust java csharp over the whole corpus"
+fi
 
 work=$(mktemp -d "${TMPDIR:-/tmp}/emon-unit.XXXXXX")
 trap 'rm -rf "$work"' EXIT
@@ -280,7 +311,7 @@ TOML
     # WARNINGS OFF so a failure is the first thing in the excerpt: a generator
     # that emits one shape for four languages leaves unused imports and
     # needless `mut`s, and forty lines of them in front of a panic hide it.
-    rc=0; out=$(cd "$work/rust" && RUSTFLAGS="-A warnings" cargo test --offline -q -- --test-threads=1 2>&1) || rc=$?
+    rc=0; out=$(cd "$work/rust" && RUSTFLAGS="-A warnings" cargo test --offline -q -- --test-threads=1 $rust_skip 2>&1) || rc=$?
     n=$(printf '%s\n' "$out" | sed -n 's/^test result: [a-zA-Z]*\. \([0-9]*\) passed; \([0-9]*\) failed.*/\1 \2/p' | awk '{n+=$1+$2} END {print n+0}')
     finish rust "$rc" "$n" "$out"
   else

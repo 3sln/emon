@@ -61,11 +61,15 @@
 (def gdrv (when (fs/which "go") (build-driver "kin/scripts/emon-go-build" {} "Go")))
 (when-not rdrv (println "  SKIP rust engine -- cargo not on PATH"))
 (when-not gdrv (println "  SKIP go engine   -- go not on PATH"))
+;; `--fast` (P11.7, D1430): Rust and Go only, every document (a replay is already a fixed set); the other arms are the full gate's.
+(cp/add-classpath "tools/lib")
+(require '[extra-hosts :as xh])
+(xh/fast-note "fusion" "the Rust and Go Engines over every transcript; the Java, C# and C arms are left out")
 ;; THE JAVA ENGINE (P9.1, D449) replays the same transcripts: optional, left out LOUDLY without a JDK 22+ (`emon-java-build` exits 3);
 ;; EMON_SKIP_JAVA=1 leaves it out on purpose
 (def jdrv
-  (if (System/getenv "EMON_SKIP_JAVA")
-    (do (println "  SKIP java engine -- EMON_SKIP_JAVA is set") nil)
+  (if (or (System/getenv "EMON_SKIP_JAVA") (xh/fast-skip? :java))
+    (do (println "  SKIP java engine -- EMON_SKIP_JAVA is set, or --fast" ) nil)
     (let [r @(process {:out :string :err :string} "kin/scripts/emon-java-build")]
       (case (:exit r)
         0 (str/trim (:out r))
@@ -74,8 +78,8 @@
 ;; THE C# ENGINE (P9.2, D457) replays the same transcripts: optional, left out LOUDLY without a .NET 8+ SDK (`emon-cs-build` exits 3);
 ;; EMON_SKIP_CSHARP=1 leaves it out on purpose
 (def cdrv
-  (if (System/getenv "EMON_SKIP_CSHARP")
-    (do (println "  SKIP csharp engine -- EMON_SKIP_CSHARP is set") nil)
+  (if (or (System/getenv "EMON_SKIP_CSHARP") (xh/fast-skip? :csharp))
+    (do (println "  SKIP csharp engine -- EMON_SKIP_CSHARP is set, or --fast") nil)
     (let [r @(process {:out :string :err :string} "kin/scripts/emon-cs-build")]
       (case (:exit r)
         0 (str/trim (:out r))
