@@ -1,7 +1,7 @@
 # The pull request workflow (P11.8, D528; D524): the FAST CORE on every pull request, plus the gates the change calls for.
 #   `bb ci plan` maps `git diff --name-only BASE...HEAD` through ci/gate-map.edn to the gates (and fails on a path the map does not know);
 #   a gate that has a `--fast` variant runs it (a subset, labelled FAST in its output); a gate without one runs in full.
-# NOT here: the full gates. They run on release, on workflow_dispatch and weekly (gates.yml). The corpus is not pulled: a pull request from a fork has no secrets,
+# NOT here: the full gates. After a merge, verify.yml runs the gates the change since the last verified commit calls for, IN FULL, on main (D1530); weekly and on demand it runs all of them. The corpus is not pulled: a pull request from a fork has no secrets,
 # and the corpus gates (png-check, image) run on what is committed (png-check says loudly what it skips).
 # All scripting is babashka. The workflow was written without a run (D524: no Actions credits yet); `bb ci plan --base HEAD~3` shows what it would schedule.
 name: pr
@@ -117,4 +117,4 @@ jobs:
           for r in $RESULTS; do
             case "$r" in success|skipped) ;; *) echo "::error::a job ended $r"; exit 1 ;; esac
           done
-          echo "  ok   the plan, the fast core and every planned gate passed (FAST variants where they exist; the full gates run on release, weekly and on demand)"
+          echo "  ok   the plan, the fast core and every planned gate passed (FAST variants where they exist; verify.yml runs them in full on main after the merge)"

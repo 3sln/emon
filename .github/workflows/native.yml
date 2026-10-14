@@ -2,12 +2,13 @@
 # pdfium, for each of the five CLI targets, one runner each. Native builds work on the host only (nothing is cross-compiled), so this matrix IS how
 # the other four targets get built. The pins are tools/native/native.edn (source tarballs, each with a sha256) and tools/pdfium/pdfium.edn.
 #   - on demand:  gh workflow run native.yml [-f ref=main]
-#   - called from the release workflows (P11.4b/P11.9): `uses: ./.github/workflows/native.yml` with `ref` set to the tag; the artifacts
-#     native-<triple> carry .cache/native/<triple> (include/, lib/*.a, share/tessdata, manifest.edn, link.rustflags) and the pdfium archive.
+#   - called from verify.yml (P11.4b, D1530) when the plan says the release archives are affected: `uses: ./.github/workflows/native.yml` with `ref` set to the commit; the
+#     artifacts native-<triple> carry .cache/native/<triple> (include/, lib/*.a, share/tessdata, manifest.edn, link.rustflags) and the pdfium archive. They and the
+#     emon-cli-<triple> artifacts are intermediate (7 days): verify.yml collects the CLI archives into `release-archives`, which is kept 90 days.
 # A prefix is cached by the hash of the pins (the file contents of native.edn, giflib.CMakeLists.txt, tesseract-prefind.cmake and native.clj): an unchanged pin is not rebuilt.
 # `bb native --audit` runs on every run, cached or built: static libraries only, no jbig2dec, JBIG-KIT, OpenJPEG or GPL symbol, library or link line.
 # P11.4b (D541): after the libraries, each job builds the `emon` CLI over them (`bb cli --check`) and uploads emon-cli-<triple> (the archive and its .sha256).
-#   The release workflow of P11.9 calls this file with `ref` set to the tag and attaches those artifacts to the GitHub release.
+#   verify.yml (D1530) calls this file with `ref` set to the verified commit; publish.yml attaches the collected archives to the GitHub release.
 # Not triggered by a push or a pull request. The table below is native.edn's :triples (`bb native --check` fails if they differ).
 name: native
 
@@ -130,6 +131,7 @@ jobs:
             emon/.cache/native/${{ matrix.triple }}
             emon/.cache/pdfium/chromium-8076/${{ matrix.pdfium }}
           if-no-files-found: error
+          retention-days: 7
       # THE CLI (P11.4b, D541): the same prefix and pdfium, the `emon` binary built over them, packed as emon-<version>-<triple>.tar.gz (.zip on
       # Windows) with its .sha256, then unpacked into a temporary directory and run (`bb cli --check`: `emon version`, only system libraries dynamic,
       # a born-digital and a scanned sample against the committed HTML, the refusals). `cli: false` stops after the native libraries.
@@ -156,3 +158,4 @@ jobs:
             emon/.cache/cli/emon-*.zip
             emon/.cache/cli/emon-*.sha256
           if-no-files-found: error
+          retention-days: 7

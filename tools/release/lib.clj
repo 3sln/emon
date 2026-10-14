@@ -6,12 +6,25 @@
             [clojure.string :as str]))
 
 (def default-repo "3sln/emon")
-(def status-context "emon/full-gates")
+;; D1530: verify.yml posts these two on a commit of main. `emon/verified` says the gates passed (a description starting `verified:`, the target the run);
+;; `emon/archives` says which run holds the release archives that are valid for the commit (`archives X.Y.Z: run ID (built at SHA)`).
+(def status-context "emon/verified")
+(def archives-context "emon/archives")
+(def archives-max-age-days
+  "Workflow artifacts are kept 90 days; archives older than this are not inherited (a margin for the time between a verification and a publish)."
+  80)
 
-(defn status-description
-  "What prepare-release writes into the `emon/full-gates` status and release-verify requires (<= 140 characters, the API's limit)."
-  [sha tag]
-  (str "gated " sha " as " tag))
+(defn short-sha [sha] (when sha (subs sha 0 (min 7 (count sha)))))
+
+(defn archives-description
+  "<= 140 characters, the API's limit."
+  [version run-id built-sha]
+  (str "archives " version ": run " run-id " (built at " (short-sha built-sha) ")"))
+
+(defn parse-archives-description
+  "`archives 0.1.0: run 123 (built at abc1234)` -> {:version \"0.1.0\" :run \"123\"}, or nil."
+  [d]
+  (when-let [[_ v run] (re-matches #"archives (\S+): run (\d+)(?: .*)?" (str d))] {:version v :run run}))
 
 (defn repo [](or (not-empty (System/getenv "GITHUB_REPOSITORY")) default-repo))
 
@@ -45,6 +58,70 @@
       {::error (str/trim (str (:err r) (:out r)))})))
 
 (defn error? [x] (and (map? x) (contains? x ::error)))
+
+;; ---------------------------------------------------------------------------------------------------- commit statuses (D1530)
+(defn statuses-of
+  "The commit statuses of a sha, newest first (the API's order), or {::error text}."
+  [repo sha]
+  (gh-json (str "repos/" repo "/commits/" sha "/statuses?per_page=100")))
+
+(defn newest
+  "The newest status of `statuses` (newest first) whose context is `ctx`, or nil."
+  [ctx statuses]
+  (when (sequential? statuses) (first (filter #(= ctx (:context %)) statuses))))
+
+(defn run-url? [url] (boolean (re-find #"/actions/runs/\d+" (str url))))
+
+(defn verified-ok?
+  "Is this `emon/verified` status a green one that verify.yml wrote: success, a description that starts `verified:` and the URL of a workflow run?
+   (A status made by hand with `gh api` would have to copy all three; the point is not to be unforgeable but not to be satisfied by accident.)"
+  [st]
+  (boolean (and st (= "success" (:state st)) (str/starts-with? (str (:description st)) "verified:") (run-url? (:target_url st)))))
+
+(defn- instant-ms [s] (try (.toEpochMilli (java.time.Instant/parse (str s))) (catch Exception _ nil)))
+
+(defn valid-archives
+  "The archives an `emon/archives` status vouches for, {:version :run}, if it is a success for exactly this version, names a run and is younger than the artifacts' retention
+   (archives-max-age-days). Otherwise nil."
+  [st version now-ms]
+  (when (and st (= "success" (:state st)))
+    (let [{v :version :as a} (parse-archives-description (:description st))
+          made (instant-ms (:created_at st))]
+      (when (and a (= v version)
+                 (or (nil? made) (< (- now-ms made) (* archives-max-age-days 24 3600 1000))))
+        a))))
+
+(defn find-verified
+  "The first of `shas` (newest first) whose newest `emon/verified` status is green, asking `lookup` (sha -> statuses). {:sha s :walked n}, {:walked n} when none,
+   or {:error text :walked n} when GitHub could not be asked (the caller then verifies everything: never less)."
+  [shas lookup]
+  (loop [[sha & more] shas n 0]
+    (if-not sha
+      {:walked n}
+      (let [sts (lookup sha)]
+        (cond
+          (error? sts) {:error (::error sts) :walked (inc n)}
+          (verified-ok? (newest status-context sts)) {:sha sha :walked (inc n)}
+          :else (recur more (inc n)))))))
+
+(defn find-archives
+  "The first of `shas` (newest first) that is verified AND has valid archives for `version`: {:sha :run :version :walked}, {:walked n} when none, {:error ..} as above."
+  [shas lookup version now-ms]
+  (loop [[sha & more] shas n 0]
+    (if-not sha
+      {:walked n}
+      (let [sts (lookup sha)]
+        (cond
+          (error? sts) {:error (::error sts) :walked (inc n)}
+          (and (verified-ok? (newest status-context sts)) (valid-archives (newest archives-context sts) version now-ms))
+          (assoc (valid-archives (newest archives-context sts) version now-ms) :sha sha :walked (inc n))
+          :else (recur more (inc n)))))))
+
+(defn first-parent-shas
+  "`git rev-list --first-parent -n N REF`, newest first (REF itself is first)."
+  [ref n]
+  (let [r (git "rev-list" "--first-parent" "-n" (str n) ref)]
+    (if (zero? (:exit r)) (vec (remove str/blank? (str/split-lines (:out r)))) [])))
 
 ;; ---------------------------------------------------------------------------------------------------- versions and tags
 (def semver-re #"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?")

@@ -2,8 +2,12 @@
 ;; CI helpers: the gate map, the PR plan, the fast core, and the checks that hold them (D266; P11.7, D528). NOT a gate.
 ;;   bb ci coverage                       every gate is in a shard of ci/gate-map.edn and a workflow job runs the shards, every bb task a workflow calls exists, the gate map covers the tree (map-coverage), and every replay gate has a re-derivation (`bb rederive --check`, D488)
 ;;   bb ci map-coverage [--self-test]     ci/gate-map.edn: every tracked file (git ls-files) matches an entry, every gate it names exists, no entry is dead; --self-test plants each failure
-;;   bb ci plan --base REF [--head REF] [--format edn|json] [--files A,B]   the gates a change calls for (git diff --name-only BASE...HEAD, mapped); fails on a path no entry maps
-;;   bb ci shards [--format edn|json]     the shards of the full run (every gate), as the matrix gates.yml consumes
+;;   bb ci plan --base REF [--head REF] [--format edn|json] [--files A,B] [--all]   the gates a change calls for (git diff --name-only BASE...HEAD, mapped); fails on a path no entry maps.
+;;                                        A diff that only changes version strings (version.edn and the manifests of `bb version`, D1530) plans nothing. --all: every gate the fast core does not run
+;;   bb ci shards [--format edn|json]     the shards of the full run (every gate), as the matrix shape verify.yml consumes
+;;   bb ci verify-plan --head SHA [--mode scoped|full] [--limit N] [--repo R] [--format edn|json]
+;;                                        what verify.yml runs on main (D1530): finds the base (the newest first-parent ancestor with a green `emon/verified` status, via gh api; none -> everything),
+;;                                        plans the diff since it, and says whether the release archives must be rebuilt or the base's are inherited
 ;;   bb ci core                           the fast core, one command after another, each timed; fails if any failed
 ;;   bb ci laws-record ARM LOG DIR        write DIR/laws-ARM.txt: the law count `bb unit ARM` printed in LOG
 ;;   bb ci laws-compare DIR               every arm's count in DIR/**/laws-*.txt is the same, and all four arms are there
@@ -13,11 +17,12 @@
          '[clj-yaml.core :as yaml]
          '[clojure.edn :as edn]
          '[clojure.set :as set]
-         '[clojure.string :as str])
+         '[clojure.string :as str]
+         '[release.lib :as rl])
 
 (def map-file "ci/gate-map.edn")
 (def wf-dir (str ".git" "hub/workflows"))
-(def wf (str wf-dir "/gates.yml"))
+(def wf (str wf-dir "/verify.yml"))
 (def arms #{"go" "rust" "java" "csharp"})
 
 (defn die [& m] (println "  FAIL" (apply str m)) (System/exit 1))
@@ -67,7 +72,7 @@
 ;; ------------------------------------------------------------------------------------------------------------------ the map's own checks
 (defn map-problems
   "-> a vector of strings. Pure: the map (as read), the tracked files, the gates, the fast gates and the bb tasks are arguments."
-  [{:keys [m files gates fast-gates tasks]}]
+  [{:keys [m files gates fast-gates tasks version-files] :as args}]
   (let [groups (:groups m)
         entries (:map m)
         compiled (compile-map m)
@@ -95,6 +100,12 @@
             :when (and (= "bb" (first (:cmd c))) (not (str/includes? (str t) "/")) (not (contains? tasks t)))]
         (str "core step `" (:id c) "` runs bb " t ", which is not a bb.edn task"))
       (for [c (:core m) :when (and (:gate c) (not (contains? gates (:gate c))))] (str "core step `" (:id c) "` claims gate `" (:gate c) "`, which does not exist"))
+      ;; D1530: the globs of the files the release archives are built from (a change to one rebuilds them), and the manifests whose version-only diff plans nothing
+      (for [g (:archives m) :when (not-any? #(re-matches (glob->regex g) %) files)] (str ":archives glob " (pr-str g) " matches no tracked file (dead: remove it, or fix the glob)"))
+      (when (contains? args :version-files)
+        (let [declared (set (:version-files m))]
+          (concat (for [f (sort (set/difference version-files declared))] (str "tools/version.clj rewrites " f "; " map-file " :version-files does not list it"))
+                  (for [f (sort (set/difference declared version-files))] (str map-file " :version-files lists " f ", which tools/version.clj does not rewrite")))))
       (for [f (sort files) :when (empty? (matches compiled f))] (str "no entry maps " f))
       (for [e compiled :when (and (string? (:glob e)) (not-any? #(re-matches (:rx e) %) files))]
         (str "entry " (pr-str (:glob e)) " matches no tracked file (dead: remove it, or fix the glob)"))))))
@@ -105,10 +116,45 @@
 
 (defn read-map [] (edn/read-string (slurp map-file)))
 
+;; ------------------------------------------------------------------------------------------------------------------ version-only diffs (D1530)
+(defn version-targets
+  "The manifests `bb version` rewrites, [{:file :re ..}], read from tools/version.clj itself (loaded into a namespace of its own: its `-main` does not run), plus version.edn."
+  []
+  (let [ns (create-ns 'emon.versiontool)]
+    (binding [*ns* ns] (refer-clojure) (load-file "tools/version.clj"))
+    (into [{:file "version.edn" :re #"(\{:version \")([^\"]+)(\"\})"}] @(ns-resolve ns 'targets))))
+
+(defn mask-version
+  "The text with the version (group 2 of the target's pattern) replaced by V everywhere the pattern matches."
+  [{:keys [re]} text]
+  (str/replace text re (fn [[_ a _ c]] (str a "V" c))))
+
+(defn version-only?
+  "Do `before` and `after` of one manifest differ ONLY in the version strings the target's pattern finds (its own context: `name = \"emon\"` then `version = `, not any
+   dependency's version)? A file that is new or gone is not."
+  [target before after]
+  (boolean (and target (string? before) (string? after) (not= before after)
+                (= (mask-version target before) (mask-version target after)))))
+
+(defn version-only-paths
+  "Pure: the changed paths whose diff is a version-only change. blobs: path -> [before after] (nil for a missing side)."
+  [m targets paths blobs]
+  (let [by-file (into {} (map (juxt :file identity)) targets)
+        listed (set (:version-files m))]
+    (set (for [p paths :when (and (listed p) (by-file p)) :let [[b a] (blobs p)] :when (version-only? (by-file p) b a)] p))))
+
+(defn git-blobs
+  "A blobs function over git: the file at the merge base of `base` and `head`, and at `head`."
+  [base head]
+  (let [mb (let [r (shell {:out :string :err :string :continue true} "git" "merge-base" base head)] (if (zero? (:exit r)) (str/trim (:out r)) base))
+        show (fn [ref p] (let [r (shell {:out :string :err :string :continue true} "git" "show" (str ref ":" p))] (when (zero? (:exit r)) (:out r))))]
+    (fn [p] [(show mb p) (show head p)])))
+
 (defn map-coverage []
   (let [m (read-map)
         files (tracked-files)
-        ps (map-problems {:m m :files files :gates (script-gates) :fast-gates (script-fast-gates) :tasks (bb-tasks)})]
+        ps (map-problems {:m m :files files :gates (script-gates) :fast-gates (script-fast-gates) :tasks (bb-tasks)
+                          :version-files (set (map :file (version-targets)))})]
     (doseq [p (take 40 ps)] (println "  FAIL" p))
     (when (> (count ps) 40) (println "  FAIL ... and" (- (count ps) 40) "more"))
     (when (seq ps) (System/exit 1))
@@ -117,30 +163,55 @@
              (count (:fast m)) "with a --fast variant")))
 
 ;; ------------------------------------------------------------------------------------------------------------------ the plan
-(defn plan-of
-  "Pure: the map, the changed paths -> {:files :unmapped [paths] :gates [..] :hosts [..] :matrix {:include [..]} ...}."
+(defn shard-include
+  "The shards of the full run that hold a gate `pred` accepts, in the shape verify.yml consumes: [{:name :gates \"a b\" :corpus bool}]. The own-job shard (unit) is not part of it."
+  [m pred]
+  (vec (for [s (:shards m) :when (not (:own-job s)) :let [gs (filter pred (:gates s))] :when (seq gs)]
+         {:name (:name s) :gates (str/join " " gs) :corpus (boolean (:corpus s))})))
+
+(defn archives-hit?
+  "Does any changed path match a glob of :archives (the files the release archives are built from)?"
   [m paths]
-  (let [compiled (compile-map m)
-        groups (:groups m)
-        per (for [p paths] [p (matches compiled p)])
-        unmapped (vec (for [[p es] per :when (empty? es)] p))
-        core-gates (set (keep :gate (:core m)))
-        wanted (->> per (mapcat second) (mapcat #(expand-gates groups (:gates %))) distinct (remove core-gates) set)
-        hosts (->> per (mapcat second) (mapcat :hosts) distinct sort vec)
-        fast? (set (keys (:fast m)))
-        include (vec (for [s (:shards m)
-                           :let [gs (filter wanted (:gates s))]
-                           :when (seq gs)]
-                       {:name (:name s)
-                        :fast (str/join " " (filter fast? gs))
-                        :full (str/join " " (remove fast? gs))}))]
-    {:files (count paths)
-     :unmapped unmapped
-     :gates (vec (filter wanted (mapcat :gates (:shards m))))
-     :hosts hosts
-     :docs-only (boolean (and (seq paths) (empty? wanted)))
-     :has-gates (boolean (seq include))
-     :matrix {:include include}}))
+  (let [rxs (map glob->regex (:archives m))]
+    (boolean (some (fn [p] (some #(re-matches % p) rxs)) paths))))
+
+(defn plan-of
+  "Pure: the map, the changed paths -> {:files :unmapped [paths] :gates [..] :hosts [..] :matrix {:include [..]} ...}.
+   opts: :version-only (paths whose diff is a version-only change: they plan nothing, D1530), :all? (every gate the fast core does not run, whatever changed)."
+  ([m paths] (plan-of m paths {}))
+  ([m paths {:keys [version-only all?]}]
+   (let [version-only (set version-only)
+         real (vec (remove version-only paths))
+         compiled (compile-map m)
+         groups (:groups m)
+         per (for [p real] [p (matches compiled p)])
+         unmapped (vec (for [[p es] per :when (empty? es)] p))
+         core-gates (set (keep :gate (:core m)))
+         wanted (if all?
+                  (->> (:shards m) (mapcat :gates) (remove core-gates) set)
+                  (->> per (mapcat second) (mapcat #(expand-gates groups (:gates %))) distinct (remove core-gates) set))
+         hosts (->> per (mapcat second) (mapcat :hosts) distinct sort vec)
+         fast? (set (keys (:fast m)))
+         include (vec (for [s (:shards m)
+                            :let [gs (filter wanted (:gates s))]
+                            :when (seq gs)]
+                        {:name (:name s)
+                         :fast (str/join " " (filter fast? gs))
+                         :full (str/join " " (remove fast? gs))}))
+         shards (shard-include m wanted)]
+     {:files (count paths)
+      :unmapped unmapped
+      :gates (vec (filter wanted (mapcat :gates (:shards m))))
+      :hosts hosts
+      :docs-only (boolean (and (seq paths) (empty? wanted)))
+      :has-gates (boolean (seq include))
+      :matrix {:include include}
+      ;; D1530, for verify.yml on main: the planned shards in the shape `bb ci shards` has, whether `unit` (its own jobs) is planned, whether any shard reads the corpus
+      :shards {:include shards}
+      :unit (contains? wanted "unit")
+      :corpus (boolean (some :corpus shards))
+      :version-only (vec (sort version-only))
+      :archives (boolean (or all? (archives-hit? m real)))})))
 
 (defn opt [args k] (some->> (map-indexed vector args) (some (fn [[i a]] (when (= a k) (get (vec args) (inc i)))))))
 
@@ -149,20 +220,26 @@
     (println (json/generate-string (update-keys x #(str/replace (name %) "-" "_"))))
     (prn x)))
 
+(defn diff-paths [base head]
+  (let [r (shell {:out :string :err :string :continue true} "git" "diff" "--name-only" "--no-renames" (str base "..." head))]
+    (when-not (zero? (:exit r)) (die "git diff " base "..." head " failed: " (str/trim (:err r))))
+    (vec (remove str/blank? (str/split-lines (:out r))))))
+
 (defn plan [args]
   (let [base (opt args "--base")
         head (or (opt args "--head") "HEAD")
         fmt (or (opt args "--format") "edn")
-        files (opt args "--files")]
-    (when-not (or base files) (die "usage: bb ci plan --base REF [--head REF] [--format edn|json]"))
+        files (opt args "--files")
+        all? (boolean (some #{"--all"} args))]
+    (when-not (or base files all?) (die "usage: bb ci plan --base REF [--head REF] [--format edn|json] | --files A,B | --all"))
     (when-not (#{"edn" "json"} fmt) (die "--format is edn or json"))
-    (let [paths (if files
-                  (vec (remove str/blank? (str/split files #",")))
-                  (let [r (shell {:out :string :err :string :continue true} "git" "diff" "--name-only" "--no-renames" (str base "..." head))]
-                    (when-not (zero? (:exit r)) (die "git diff " base "..." head " failed: " (str/trim (:err r))))
-                    (vec (remove str/blank? (str/split-lines (:out r))))))
+    (let [paths (cond
+                  files (vec (remove str/blank? (str/split files #",")))
+                  base (diff-paths base head)
+                  :else [])
           m (read-map)
-          p (plan-of m paths)]
+          vonly (if (and base (not files)) (version-only-paths m (version-targets) paths (git-blobs base head)) #{})
+          p (plan-of m paths {:version-only vonly :all? all?})]
       (when (seq (:unmapped p))
         (binding [*out* *err*]
           (doseq [u (:unmapped p)] (println "  FAIL no entry of" map-file "maps" u))
@@ -173,9 +250,78 @@
 (defn shards [args]
   (let [m (read-map)
         fmt (or (opt args "--format") "json")
-        include (vec (for [s (:shards m) :when (not (:own-job s))]
-                       {:name (:name s) :gates (str/join " " (:gates s)) :corpus (boolean (:corpus s))}))]
+        include (shard-include m (constantly true))]
     (out-plan {:matrix {:include include}} fmt)))
+
+;; ------------------------------------------------------------------------------------------------------------------ what verify.yml runs on main (D1530)
+(defn verify-plan-of
+  "Pure. What a run of verify.yml on `head` does.
+   in: {:m map, :mode :scoped|:full, :paths changed paths since the base, :version-only set, :base sha|nil, :reason why not scoped (when it is not),
+        :head sha, :version head's version, :inherited the base's valid archives status as {:version :run :sha} or nil}.
+   The archives are rebuilt when the run is full, when no valid archives come with the base, when the version is not the one they were built for (the archives carry
+   it, in their names and in the binaries), and when a changed path is one the archives are built from. Otherwise the base's stay valid and are recorded again."
+  [{:keys [m mode paths version-only base reason head version inherited]}]
+  (let [full? (or (= mode :full) (nil? base))
+        p (plan-of m (if full? [] paths) {:version-only version-only :all? full?})
+        inherit? (and (not full?) inherited (= version (:version inherited)))
+        build? (or full? (not inherit?) (:archives p))
+        n (count (:gates p))
+        short (fn [s] (when s (subs s 0 (min 7 (count s)))))]
+    {:mode (if full? "full" "scoped")
+     :reason (or reason (when full? "a full run was asked for") "")
+     :sha head
+     :short (short head)
+     :base (or base "")
+     :base_short (or (short base) "")
+     :version version
+     :files (:files p)
+     :version_only (count (:version-only p))
+     :gates (:gates p)
+     :n_gates n
+     :unit (:unit p)
+     :shards (:shards p)
+     :has_shards (boolean (seq (get-in p [:shards :include])))
+     :corpus (:corpus p)
+     :unmapped (:unmapped p)
+     :build_archives (boolean build?)
+     :archives_run (if (and (not build?) inherit?) (str (:run inherited)) "")
+     :archives_from (if (and (not build?) inherit?) (or (:sha inherited) "") "")
+     :archives_desc (if (and (not build?) inherit?) (or (:description inherited) "") "")
+     :description (if full?
+                    (str "verified: all " n " gates, full run")
+                    (str "verified: " n " gates since " (short base)))}))
+
+(defn verify-plan [args]
+  (let [head (or (opt args "--head") (str/trim (:out (shell {:out :string} "git" "rev-parse" "HEAD"))))
+        head (str/trim (:out (shell {:out :string} "git" "rev-parse" head)))
+        mode (keyword (or (opt args "--mode") "scoped"))
+        limit (parse-long (or (opt args "--limit") "60"))
+        repo (or (opt args "--repo") (rl/repo))
+        fmt (or (opt args "--format") "json")
+        m (read-map)
+        version (:version (edn/read-string (:out (shell {:out :string} "git" "show" (str head ":version.edn")))))
+        ancestors (vec (rest (str/split-lines (:out (shell {:out :string} "git" "rev-list" "--first-parent" "-n" (str (inc limit)) head)))))
+        lookup (memoize (fn [sha] (rl/statuses-of repo sha)))
+        found (when (= mode :scoped) (rl/find-verified ancestors lookup))
+        base (:sha found)
+        reason (cond (= mode :full) nil
+                     (:error found) (str "cannot read the commit statuses (" (:error found) "): everything runs")
+                     (nil? base) (str "no ancestor within " limit " commits carries a green " rl/status-context ": everything runs")
+                     :else nil)
+        inherited (when base
+                    (let [st (rl/newest rl/archives-context (lookup base))]
+                      (when-let [a (rl/valid-archives st version (System/currentTimeMillis))]
+                        (assoc a :sha base :description (:description st)))))
+        paths (when base (diff-paths base head))
+        vonly (when base (version-only-paths m (version-targets) paths (git-blobs base head)))
+        out (verify-plan-of {:m m :mode mode :paths paths :version-only vonly :base base :reason reason :head head :version version :inherited inherited})]
+    (when (seq (:unmapped out))
+      (binding [*out* *err*]
+        (doseq [u (:unmapped out)] (println "  FAIL no entry of" map-file "maps" u))
+        (println "  FAIL a changed path maps to no gate: add an entry to" map-file))
+      (System/exit 1))
+    (when (seq (:reason out)) (binding [*out* *err*] (println "  note" (:reason out))))
+    (if (= fmt "json") (println (json/generate-string out)) (prn out))))
 
 ;; ------------------------------------------------------------------------------------------------------------------ the fast core
 (defn core []
@@ -212,11 +358,11 @@
     (when (seq missing) (die "gates in no shard of " map-file ": " (str/join " " missing)))
     (when (seq extra) (die "shards run non-gates as gates: " (str/join " " extra)))
     (when-not (contains? shard-gates "unit") (die "the `unit` gate is in no shard"))
-    (when-not (= arms unit-arms) (die "gates.yml runs the unit arms " (pr-str (sort unit-arms)) ", want " (pr-str (sort arms))))
-    (when-not (str/includes? text "bb ci shards") (die "gates.yml does not take its matrix from `bb ci shards`: the shards of " map-file " would not run"))
+    (when-not (= arms unit-arms) (die "verify.yml runs the unit arms " (pr-str (sort unit-arms)) ", want " (pr-str (sort arms))))
+    (when-not (str/includes? text "bb ci verify-plan") (die "verify.yml does not take its plan from `bb ci verify-plan`: the shards of " map-file " would not run"))
     (when-not (str/includes? (slurp (str wf-dir "/pr.yml")) "bb ci plan") (die "pr.yml does not call `bb ci plan`"))
     (when (seq unknown) (die "workflows call bb tasks that do not exist: " (str/join " " unknown)))
-    (println "  ok   every gate is in a shard of" map-file "(" (count shard-gates) "gates), gates.yml runs the shards and the" (count unit-arms)
+    (println "  ok   every gate is in a shard of" map-file "(" (count shard-gates) "gates), verify.yml runs the planned shards and the" (count unit-arms)
              "unit arms, and every bb task the" (count wf-files) "workflows call exists")
     (map-coverage)
     ;; D488: and every replay gate has a re-derivation in `bb rederive`
@@ -277,6 +423,66 @@
            (= [{:name "unit" :fast "unit" :full ""} {:name "replay" :fast "slice" :full "retarget gfuse"}] (get-in (p "kin/retarget.kin" "kin/gfuse.kin") [:matrix :include])))
       (ok! "plan: a gate the core runs is not planned again" (let [m (assoc-in base [:map 2 :gates] ["hosts"]) x (plan-of m ["docs/a.md"])] (empty? (:gates x))))
       (ok! "plan: an unmapped changed path is reported" (= ["zzz/new"] (:unmapped (p "docs/a.md" "zzz/new")))))
+    ;; D1530: a version-only diff plans nothing; --all plans everything the core does not run; the archives rule
+    (let [vbase (assoc base :version-files ["manifest.toml"] :archives ["host/**"])
+          pv (fn [opts & paths] (plan-of vbase (vec paths) opts))]
+      (ok! "plan: a path that is only a version change plans nothing (and is not 'unmapped')"
+           (let [x (pv {:version-only #{"kin/retarget.kin"}} "kin/retarget.kin")] (and (empty? (:gates x)) (empty? (:unmapped x)) (:docs-only x) (= ["kin/retarget.kin"] (:version-only x)))))
+      (ok! "plan: a version-only path next to a real change plans only the real change"
+           (= ["unit" "slice" "retarget" "gfuse"] (:gates (pv {:version-only #{"kin/retarget.kin"}} "kin/retarget.kin" "kin/gfuse.kin" "kin/retargettest.kin" "kin/gvec.kin"))))
+      (ok! "plan: --all is every gate the core does not run, whatever changed"
+           (let [x (pv {:all? true})] (and (= ["unit" "slice" "retarget" "gfuse"] (:gates x)) (:unit x) (:archives x))))
+      (ok! "plan: the shards of the plan are the planned gates in the shape of `bb ci shards`, without the unit shard"
+           (= [{:name "replay" :gates "slice retarget gfuse" :corpus false}] (get-in (pv {} "kin/gfuse.kin" "kin/retarget.kin") [:shards :include])))
+      (ok! "plan: with --all the shards are all of them, less the gates the core runs" (= (shard-include vbase #(not= % "hosts")) (get-in (pv {:all? true}) [:shards :include])))
+      (ok! "plan: a change under :archives marks the archives, a document does not"
+           (and (:archives (pv {} "host/b.rs")) (not (:archives (pv {} "docs/a.md"))) (not (:archives (pv {:version-only #{"host/b.rs"}} "host/b.rs"))))))
+    ;; the version-only rule on the REAL manifests: every one of them, bumped by `bb version`'s own patterns, is version-only; a second change (a dependency, a new line) is not
+    (let [targets (version-targets)
+          bump (fn [t s] (str/replace s (:re t) (fn [[_ a _ c]] (str a "9.9.9" c))))
+          m (read-map)]
+      (ok! "version-only: the manifests of the gate map are the manifests of bb version" (= (set (:version-files m)) (set (map :file targets))))
+      (doseq [t targets :let [before (slurp (:file t)) after (bump t before)]]
+        (ok! (str "version-only: " (:file t) " with only its version changed") (version-only? t before after))
+        (ok! (str "version-only: " (:file t) " with one more line is not") (not (version-only? t before (str after "# one more line\n"))))
+        (ok! (str "version-only: " (:file t) " unchanged is not a change") (not (version-only? t before before))))
+      (ok! "version-only: another crate's version in the same file is not the package's"
+           (let [t (some #(when (= "host/cli/Cargo.toml" (:file %)) %) targets)
+                 before "[package]\nname = \"emon\"\nversion = \"0.1.0\"\n[dependencies]\nfoo = \"1.2.3\"\n"]
+             (and (version-only? t before "[package]\nname = \"emon\"\nversion = \"0.1.1\"\n[dependencies]\nfoo = \"1.2.3\"\n")
+                  (not (version-only? t before "[package]\nname = \"emon\"\nversion = \"0.1.1\"\n[dependencies]\nfoo = \"1.2.4\"\n")))))
+      (ok! "version-only: the set is every listed manifest that is version-only, nothing else"
+           (let [blobs {"version.edn" ["{:version \"0.1.0\"}\n" "{:version \"0.1.1\"}\n"]
+                        "host/c/src/capi.rs" ["static VERSION: &[u8] = b\"0.1.0\\0\";\n" "static VERSION: &[u8] = b\"0.1.1\\0\";\nfn x() {}\n"]
+                        "host/rust/src/lib.rs" ["a" "b"]}]
+             (= #{"version.edn"} (version-only-paths m targets (keys blobs) blobs))))
+      ;; THE case: a real bump (every manifest `bb version set` writes) plans no gate, and does not ask for a single gate in any shard
+      (let [paths (map :file targets)
+            blobs (into {} (for [t targets] [(:file t) [(slurp (:file t)) (bump t (slurp (:file t)))]]))
+            vonly (version-only-paths m targets paths blobs)
+            x (plan-of m (vec paths) {:version-only vonly})]
+        (ok! "plan: the version bump itself (version.edn and every manifest) plans no gate" (and (= (set paths) vonly) (empty? (:gates x)) (empty? (:unmapped x)) (not (:has-gates x)) (not (:unit x))))
+        (ok! "plan: the same paths without the rule would plan gates (host/**, release/pkg/**)" (seq (:gates (plan-of m (vec paths)))))))
+    ;; what verify.yml runs
+    (let [m (read-map)
+          sha1 "1111111111111111111111111111111111111111" sha2 "2222222222222222222222222222222222222222"
+          inh {:version "0.1.0" :run "42" :sha sha1}
+          vp (fn [o] (verify-plan-of (merge {:m m :mode :scoped :paths ["DEVLOG.md"] :version-only #{} :base sha1 :head sha2 :version "0.1.0" :inherited inh} o)))]
+      (ok! "verify-plan: a document change: no gate, the base's archives are inherited"
+           (let [x (vp {})] (and (= 0 (:n_gates x)) (not (:build_archives x)) (= "42" (:archives_run x)) (= "verified: 0 gates since 1111111" (:description x)) (= "scoped" (:mode x)))))
+      (ok! "verify-plan: a change the archives are built from rebuilds them" (let [x (vp {:paths ["host/cli/src/main.rs"]})] (and (:build_archives x) (= "" (:archives_run x)))))
+      (ok! "verify-plan: a kin change plans gates and rebuilds the archives" (let [x (vp {:paths ["kin/retarget.kin"]})] (and (pos? (:n_gates x)) (:unit x) (:build_archives x) (:has_shards x))))
+      (ok! "verify-plan: the bump commit plans no gate but rebuilds the archives (they carry the version)"
+           (let [x (vp {:paths ["version.edn" "host/cli/Cargo.toml"] :version-only #{"version.edn" "host/cli/Cargo.toml"} :version "0.1.1"})]
+             (and (= 0 (:n_gates x)) (empty? (get-in x [:shards :include])) (:build_archives x) (= 2 (:version_only x)))))
+      (ok! "verify-plan: no archives came with the base: they are built" (:build_archives (vp {:inherited nil})))
+      (ok! "verify-plan: no verified base: everything runs, archives built"
+           (let [x (vp {:base nil :reason "none"})] (and (= "full" (:mode x)) (:unit x) (:build_archives x) (= "none" (:reason x)) (pos? (:n_gates x)) (re-find #"full run" (:description x)))))
+      (ok! "verify-plan: a full run asked for is full, even with a base" (let [x (vp {:mode :full})] (and (= "full" (:mode x)) (:build_archives x) (:unit x))))
+      (ok! "verify-plan: the full run runs the shards of `bb ci shards` minus what the core runs"
+           (let [all (set (str/split (str/join " " (map :gates (get-in (vp {:mode :full}) [:shards :include]))) #" "))
+                 core (set (keep :gate (:core m)))]
+             (= all (set/difference (set (mapcat :gates (remove :own-job (:shards m)))) core)))))
     (if (zero? @fails)
       (println "  ok   ci map-coverage self-test: the glob rules, every planted map failure named, and the plan")
       (die @fails " self-test case(s) failed"))))
@@ -305,7 +511,8 @@
     "map-coverage" (if (some #{"--self-test"} args) (self-test) (map-coverage))
     "plan" (plan args)
     "shards" (shards args)
+    "verify-plan" (verify-plan args)
     "core" (core)
     "laws-record" (apply laws-record args)
     "laws-compare" (apply laws-compare args)
-    (die "usage: bb ci coverage | map-coverage [--self-test] | plan --base REF [--head REF] [--format edn|json] | shards | core | laws-record ARM LOG DIR | laws-compare DIR")))
+    (die "usage: bb ci coverage | map-coverage [--self-test] | plan --base REF [--head REF] [--format edn|json] [--all] | shards | verify-plan --head SHA [--mode scoped|full] | core | laws-record ARM LOG DIR | laws-compare DIR")))

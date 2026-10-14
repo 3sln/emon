@@ -1,10 +1,15 @@
-;; THE GATE MAP (P11.7, D528; D524). Read by `bb ci plan`, `bb ci core`, `bb ci shards`, `bb ci map-coverage` (tools/ci.clj) and, through them, by the two workflows.
+;; THE GATE MAP (P11.7, D528; D524, D1530). Read by `bb ci plan`, `bb ci core`, `bb ci shards`, `bb ci verify-plan`, `bb ci map-coverage` (tools/ci.clj) and, through them, by
+;; the workflows: pr.yml (a pull request) and verify.yml (a push to main, weekly, on demand).
 ;;
-;;   :core    the FAST CORE: runs on every pull request, whatever the change, one command after another (`bb ci core`). :secs is measured on the maintainer's machine
-;;            (D528); :gate names the gate it is, so the plan does not schedule it a second time.
+;;   :core    the FAST CORE: runs on every pull request and every push to main, whatever the change, one command after another (`bb ci core`). :secs is measured on the
+;;            maintainer's machine (D528); :gate names the gate it is, so the plan does not schedule it a second time.
 ;;   :groups  names for sets of gates, used as `@name` in an entry.
-;;   :shards  EVERY gate, once, in the shard it runs in on the full run (gates.yml reads this through `bb ci shards`; the pull request plan runs the shards that
-;;            hold a planned gate). :own-job: the shard is not part of the matrix (the `unit` gate has a job of its own, one per arm).
+;;   :shards  EVERY gate, once, in the shard it runs in on the full run (verify.yml reads this through `bb ci verify-plan`, whose planned shards have the shape of `bb ci shards`;
+;;            the pull request plan runs the shards that hold a planned gate). :own-job: the shard is not part of the matrix (the `unit` gate has a job of its own, one per arm).
+;;   :version-files  the files `bb version set` rewrites (tools/version.clj holds the list; `bb ci map-coverage` fails when the two differ). A diff of one of these that changes
+;;            nothing but the version strings those patterns find is a VERSION-ONLY change: the plan drops the path, so the release bump plans no gate (D1530).
+;;   :archives  globs of the files the release archives (the CLI, C library and pod, D541, D542) are built from: a change to one rebuilds them on main. A version change rebuilds
+;;            them too (the archives carry the version), whatever the paths. A glob that matches no tracked file is dead and fails.
 ;;   :fast    the gates that take `--fast` (`bb gates --fast G...` runs `bb G --fast`): what the variant leaves out, and the measured seconds, full and fast. kin/scripts/gates
 ;;            lists the same set in `fast_gates`; `bb ci map-coverage` fails if the two differ.
 ;;   :map     path glob -> the gates a change to it calls for, ADDED UP over every entry that matches. EVERY tracked path must match at least one entry; an entry that matches
@@ -25,9 +30,18 @@
   {:id "version"       :cmd ["bb" "version" "--check" "@version"]                       :secs 1   :why "every manifest equals version.edn (D525)"}
   {:id "release-notes-selftest"  :cmd ["bb" "release-notes" "--self-test"]                    :secs 1   :why "the release notes tool's parsing and rendering (D547)"}
   {:id "release-verify-selftest" :cmd ["bb" "release-verify" "--self-test"]                   :secs 1   :why "the publish job's three checks decide correctly on synthetic facts (D547)"}
-  {:id "release-ops-selftest"    :cmd ["bb" "release-ops" "--self-test"]                      :secs 1   :why "propose, tag, draft, attach, status and summary decide correctly (D547)"}
+  {:id "release-ops-selftest"    :cmd ["bb" "release-ops" "--self-test"]                      :secs 1   :why "next, draft, archive, verdict, fetch-archives, attach and summary decide correctly (D547, D1530)"}
   {:id "publish-selftest"        :cmd ["bb" "publish" "--self-test"]                          :secs 1   :why "the registry publishers' idempotence checks and parsers (D547)"}
+  {:id "ci-selftest"   :cmd ["bb" "ci" "map-coverage" "--self-test"]                  :secs 32  :why "the planner: globs, planted map failures, the plan, the version-only rule (the release bump plans no gate) and what verify.yml runs (D528, D1530)"}
   {:id "ci-coverage"   :cmd ["bb" "ci" "coverage"]                                    :secs 1   :why "the gate map covers the tree, every gate is in a shard, every workflow task exists, every replay gate re-derives (includes rederive --check)"}]
+
+ :version-files
+ ["version.edn" "host/js/package.json" "host/js/package-lock.json" "kin/scripts/emon-rs-build" "host/cli/Cargo.toml" "kin/scripts/emon-bind-build" "kin/scripts/emon-wasm-build"
+  "kin/scripts/unit" "host/rust/Cargo.lock" "host/c/src/capi.rs" "host/pod/src/main.rs" "release/pkg/rust/Cargo.toml" "release/pkg/java/pom.xml" "release/pkg/csharp/Emon.csproj"]
+
+ :archives
+ ["kin/**" "gen/**" "host/**" "release/**" "THIRD_PARTY_NOTICES.md" "LICENSE" "docs/cli.md" "version.edn" "bb.edn"
+  "tools/native/**" "tools/pdfium/**" "tools/lib/**" "tools/cli.clj" "tools/package.clj" ".github/workflows/native.yml" ".github/workflows/verify.yml"]
 
  :groups
  {"replay"  ["plan" "ocr" "render" "pdfium-wasm" "align" "fusion" "gfuse" "artifacts" "seals" "sealpx" "sigs" "retarget" "asset"]
@@ -152,7 +166,7 @@
 
   ;; ---- the tools --------------------------------------------------------------------------------------------------------------------------------------
   {:glob "tools/{api_diff,release_audit,version,rederive,ci}.clj" :gates [] :why "release and CI tooling: the fast core runs each (api-diff, release-audit, version --check, ci coverage)"}
-  {:glob "tools/release/**" :gates [] :why "the release tools (P11.9, P11.10, D547): `bb release-notes`, `release-verify`, `release-ops` and `publish`, run by prepare-release.yml and publish.yml; not gates. The fast core runs each one's --self-test (pure logic over synthetic data; nothing is published or pushed)"}
+  {:glob "tools/release/**" :gates [] :why "the release tools (P11.9, P11.10, D547, D1530): `bb release-notes`, `release-verify`, `release-ops` and `publish`, run by bump.yml, verify.yml, draft.yml and publish.yml; not gates. The fast core runs each one's --self-test (pure logic over synthetic data; nothing is published or pushed)"}
   {:glob "tools/cli.clj" :gates [] :why "`bb cli` (P11.4b, D541): builds and packs the `emon` command and `--check`s the archive (needs bb native, pdfium and cargo; prints SKIP without them); not a gate yet, it joins `bb package` (P11.4)"}
   {:glob "tools/{corpus,corpus_test,corpus_roundtrip,samples,pdfinfo}.clj" :gates [] :why "corpus transport and live tools: not gates (corpus-test is its own non-gate)"}
   {:glob "tools/{transcript_manifest,crypto-constants,pdfsnames,pdfxnames}.clj" :gates ["unit"] :why "tables and manifests `bb unit` checks"}
