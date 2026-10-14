@@ -32,5 +32,8 @@ jobs:
         run: bb pdfium-fetch --platform wasm
       - name: tesseract.js and its model (package-check)
         run: npm ci --prefix host/js
-      - name: bb gates package-check
-        run: bb gates package-check
+      - name: bb package-check (full log, FAIL context)
+        run: |
+          bb package-check > "$RUNNER_TEMP/pc.log" 2>&1 || echo "exit $?"
+          grep -n -B6 -A6 FAIL "$RUNNER_TEMP/pc.log" | cut -c1-400 || true
+          wc -l "$RUNNER_TEMP/pc.log"
