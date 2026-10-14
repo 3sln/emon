@@ -160,7 +160,8 @@
 (defn static-libs [prefix]
   (sort (map fs/file-name (fs/glob (str prefix "/lib") "*.{a,lib}"))))
 
-(defn link-name [file] (-> file (str/replace #"\.(a|lib)$" "") (str/replace #"^lib(?=.)" "")))
+;; the name after `-l static=`: the linker adds `lib` and `.a` itself on Unix, and `.lib` only on MSVC (libwebp.lib stays `libwebp`)
+(defn link-name [file win?] (cond-> (str/replace file #"\.(a|lib)$" "") (not win?) (str/replace #"^lib(?=.)" "")))
 
 (defn write-manifest! [t prefix secs]
   (let [cfg (triple-cfg t)
@@ -169,7 +170,7 @@
         order (:link-order pins)
         missing (remove by-stem order)]
     (when (seq missing) (die "no static library for " (str/join ", " missing) " in " prefix "/lib"))
-    (let [names (mapv #(link-name (by-stem %)) order)
+    (let [names (mapv #(link-name (by-stem %) (= :windows (:os cfg))) order)
           flags (str/join " " (concat [(str "-L native=" prefix "/lib")]
                                       (map #(str "-l static=" %) names)
                                       (map #(str "-l " %) (:cxx-runtime cfg))))]

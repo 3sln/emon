@@ -95,6 +95,14 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
+      # the bash steps see Git's usr/bin first, whose `link` is the coreutils one: rustc must be told which link.exe is the linker
+      - name: MSVC link.exe for rustc (Windows)
+        if: matrix.triple == 'x86_64-pc-windows-msvc'
+        shell: pwsh
+        run: |
+          $link = (Get-Command link.exe -All | Where-Object { $_.Source -like '*MSVC*' } | Select-Object -First 1).Source
+          Write-Output "linker: $link"
+          "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=$link" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: The pins are well formed and name this matrix
         run: bb native --check
       - name: Cache key (the pins)
