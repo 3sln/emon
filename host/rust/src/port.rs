@@ -759,8 +759,13 @@ impl std::fmt::Display for LimitBreach {
 //
 // A BREACH NEVER RETURNS, which is what lets kin write
 // `(if (> n (limit-of K)) (limit-breach K n))` and carry on afterwards. It unwinds with a `LimitBreach`, not a string.
+//
+// IT UNWINDS WITHOUT THE PANIC HOOK (D554): a breach is an answer, not a bug, and the engine catches it by its type and names it (`panic_error`).
+// `panic_any` would run the hook, which prints "thread '...' panicked at ..." on stderr for every named limit an embedder hits (the pod, the C
+// library, the CLI), and an embedder's own hook would be told of a panic that is not one. `resume_unwind` is the same unwind, the same payload,
+// the same `catch_unwind`, with no hook: a REAL panic (an overflow, an index, an `unwrap`) still goes through the hook as it always did.
 pub fn limit_breach(kind: i32, actual: i32) -> i32 {
-    std::panic::panic_any(LimitBreach { kind, limit: limit_of(kind), actual })
+    std::panic::resume_unwind(Box::new(LimitBreach { kind, limit: limit_of(kind), actual }))
 }
 
 // A SETTING IS A CHOICE AND NOT A BOUND: a second pair of forms, not a

@@ -5,9 +5,18 @@ over stdin and stdout, and the namespace `emon` appears in your script. Get the 
 from the [GitHub releases](https://github.com/3sln/emon/releases) and put `emon-pod` on your `PATH` (or give
 `pods/load-pod` its path). Arguments and results are EDN.
 
-**The released pod has no pdfium, no Tesseract and no JPEG 2000 / JBIG2 decoder** (`(emon/capabilities)` says `false` for all
-three). It converts born-digital PDFs on its own; for scans use the command-line tool ([docs/cli.md](../cli.md)), which bundles
-both engines, or a language host with an adapter.
+The archive holds the whole pipeline, laid out so that the pod finds it where it is:
+
+    emon-pod                           the pod (Tesseract 5.5.3 and Leptonica are linked into it)
+    lib/libpdfium.dylib | .so          pdfium (chromium/8076), loaded at run time
+    share/emon/tessdata/               the English and orientation models (eng, osd)
+
+`(emon/capabilities)` says `:pdfium true, :tesseract true` when it finds them; there is no JPEG 2000 or JBIG2 decoder
+(`:codecs false`). They are used when a call asks for `:native true` (below). Where they are looked for, in order (a place you
+*name* that is wrong is an error, never replaced by the next): the call's `:pdfium` and `:tessdata`; `$EMON_PDFIUM_LIB` and
+`$EMON_TESSDATA`; `lib/libpdfium.*` and `share/emon/tessdata` beside the pod (or one directory above it); for the models, last,
+`$TESSDATA_PREFIX` and the system's usual places. Keep the archive's directories together and nothing needs to be set. On macOS a
+downloaded pod is quarantined until you run `xattr -dr com.apple.quarantine <dir>` (the files are not signed).
 
 ## First conversion
 
@@ -44,7 +53,8 @@ or `nil`.
 | `:html` | `true` (clean HTML), or a string of the [HTML words](../options.md#html-words): `"ids,geometry"` |
 | `:evidence` | `true`, the text layer's evidence dump (needs the option `keep-evidence=1`) |
 | `:assets` | `:bytes` (with each asset's bytes as base64) or `:info` (without) |
-| `:native` | `true`, use the pod's own pdfium and Tesseract (the released pod has none) |
+| `:native` | `true`, use the pod's own pdfium and Tesseract: pages that need drawing are drawn and scans are read |
+| `:pdfium`, `:tessdata` | where pdfium (a file or its directory) and the models (a directory) are, when they are not beside the pod |
 
 The result map has `:model`, `:html`, `:evidence`, `:assets` (each `{:id :name :media-type :origin :sha256 :width :height :size :bytes}`),
 `:intake` and `:stats`.
@@ -57,7 +67,7 @@ The result map has `:model`, `:html`, `:evidence`, `:assets` (each `{:id :name :
 
 (pods/load-pod "emon-pod") ; found on the PATH; or give the path to the binary
 
-(prn (emon/capabilities)) ; {:version "X.Y.Z", :pdfium false, :tesseract false, :codecs false}
+(prn (emon/capabilities)) ; {:version "X.Y.Z", :pdfium true, :tesseract true, :codecs false} from the release archive
 
 ;; Stage 0 alone is cheap: format, version, pages, encryption.
 (prn (emon/intake "report.pdf")) ; {:format "pdf", :version "1.4", :pages 1, :encrypted false, :bytes 39570} for one sample
@@ -76,8 +86,27 @@ The result map has `:model`, `:html`, `:evidence`, `:assets` (each `{:id :name :
 
 A failure is an exception whose message is the engine's sentence and whose `ex-data` has `:name` (the stable name to route on),
 `:code` (the category, the same numbers as the C library's `EMON_ERR_*`) and `:category`. The names and categories are in
-[docs/options.md](../options.md#errors). A named limit that is reached (`limit.pages=0` above) also makes the pod print a Rust panic
-notice on its standard error; the conversion's error is the exception, and the notice is only noise.
+[docs/options.md](../options.md#errors). A named limit that is reached (`limit.pages=0` above) is an answer and prints nothing on
+the pod's standard error; `bb package --check` holds the tour to that.
+
+## Scans and figures
+
+<!-- snippet: docs/snippets/pod/native.clj -->
+```clojure
+(require '[babashka.pods :as pods])
+
+(pods/load-pod "emon-pod") ; found on the PATH; or give the path to the binary
+
+;; pdfium and the English and orientation models travel in the archive (lib/ and share/emon/tessdata beside the pod).
+(prn (emon/capabilities)) ; {:version "X.Y.Z", :pdfium true, :tesseract true, :codecs false}
+
+;; :native true brings them in: pdfium draws the pages, Tesseract reads them.
+(spit "scan.html" (:html (emon/convert "scan.pdf" nil {:html true :native true})))
+```
+
+`bb package --check` loads the built pod archive by babashka with no `EMON_*` variable and runs this on `samples/scan-plain.pdf`,
+requiring the heading the OCR reads. It runs where `bb native` and `bb pdfium-fetch` have been run, and prints a NOTE and skips on a
+machine that has neither.
 
 ## Notes
 
@@ -86,7 +115,7 @@ notice on its standard error; the conversion's error is the exception, and the n
 - Limits can also be set for the process with `EMON_LIMIT_*` in the pod's environment ([docs/options.md](../options.md#limits)).
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the pod host: 48 entries (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the pod host: 50 entries (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
@@ -126,6 +155,8 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon/convert spec :html` | `key` |
 | `emon/convert spec :model` | `key` |
 | `emon/convert spec :native` | `key` |
+| `emon/convert spec :pdfium` | `key` |
+| `emon/convert spec :tessdata` | `key` |
 | `emon/convert value :edn` | `word` |
 | `emon/convert value :json` | `word` |
 | `emon/convert value :json-pretty` | `word` |

@@ -223,6 +223,21 @@
         (let [j (json/parse-string s true)]
           (when (:private j) (fail! "host/js/package.json is \"private\": true: npm would refuse to publish it"))
           (when-not (get-in j [:exports (keyword "./pdfium")]) (fail! "host/js/package.json does not export ./pdfium"))))
+      ;; @3sln/pdfium-wasm (D553): published, its licence is the expression of what the package carries (every atom allowed), and @3sln/emon's peer on it is optional
+      (if-let [s (rd root "release/pkg/pdfium-wasm/package.json")]
+        (let [j (json/parse-string s true)
+              tree (try (parse-expr (str (:license j))) (catch Exception e (fail! "release/pkg/pdfium-wasm/package.json: the licence is not an SPDX expression (" (ex-message e) ")") nil))]
+          (when (:private j) (fail! "release/pkg/pdfium-wasm/package.json is \"private\": true: npm would refuse to publish it"))
+          (when-not (= "@3sln/pdfium-wasm" (:name j)) (fail! "release/pkg/pdfium-wasm/package.json is not @3sln/pdfium-wasm"))
+          (when (and tree (not (satisfied? tree #(or (allowed-atom? %) (pending-atom? %)))))
+            (fail! "release/pkg/pdfium-wasm/package.json: licence \"" (:license j) "\" is outside the allowlist")))
+        (fail! "release/pkg/pdfium-wasm/package.json: the published manifest is missing"))
+      (when-let [s (rd root "host/js/package.json")]
+        (let [j (json/parse-string s true)]
+          (when-not (get-in j [:peerDependenciesMeta (keyword "@3sln/pdfium-wasm") :optional])
+            (fail! "host/js/package.json: @3sln/pdfium-wasm is not an OPTIONAL peer dependency (the main package stays dependency-free)"))
+          (when (or (seq (:dependencies j)) (get-in j [:dependencies (keyword "@3sln/pdfium-wasm")]))
+            (fail! "host/js/package.json has \"dependencies\": the published package must have none"))))
       (when-let [s (rd root "release/pkg/go/go.mod")]
         (when-not (re-find #"(?m)^module github\.com/3sln/emon/go$" s) (fail! "release/pkg/go/go.mod is not `module github.com/3sln/emon/go`")))
       (when (= b (n-before)) (ok! "the manifests that exist (package.json, three Cargo.toml heredocs, the published Cargo.toml, POM and csproj) say MIT")))
@@ -409,7 +424,7 @@
 
 (def sections
   [[:crate "Rust crates" "Compiled into the Rust, C, pod and WASM artifacts (host/rust/Cargo.lock)."]
-   [:native "Native libraries" "Not carried by the library packages (the Go, Java and C# hosts and the C library and pod load pdfium and Tesseract from the user's system at run time); carried by the per-platform CLI and the browser demo."]
+   [:native "Native libraries" "Not carried by the Rust, Go, Java and C# library packages (they load pdfium and Tesseract from the user's system at run time); carried by the per-platform CLI, the C library and pod archives (D552), the npm package @3sln/pdfium-wasm (pdfium's WebAssembly build, D553) and the browser demo."]
    [:data "Data the generated code embeds" "Tables built into every artifact by kin's generators from these sources."]
    [:npm "npm packages" "Development dependencies of host/js (the browser test harness and the Tesseract.js adapter); `files` is `src` only, so none is in the npm package. The browser demo ships tesseract.js, tesseract.js-core, the English model's package and what tesseract.js bundles (`bb demo` copies their dist files)."]])
 
@@ -554,7 +569,9 @@
       (case! "the csproj without the licence" #"Emon.csproj: no <PackageLicenseExpression>" #(edit! "release/pkg/csharp/Emon.csproj" (fn [s] (str/replace s "<PackageLicenseExpression>MIT</PackageLicenseExpression>" ""))))
       (case! "package.json still private" #"is \"private\": true" #(edit! "host/js/package.json" (fn [s] (str/replace s "\"license\": \"MIT\"," "\"license\": \"MIT\",\n  \"private\": true,"))))
       (case! "package.json without the ./pdfium export" #"does not export \./pdfium" #(edit! "host/js/package.json" (fn [s] (str/replace s "\"./pdfium\": \"./src/pdfium.js\"," ""))))
-      (case! "the Go module under another path" #"is not `module github.com/3sln/emon/go`" #(edit! "release/pkg/go/go.mod" (fn [s] (str/replace s "emon/go" "emon"))))
+      (case! "@3sln/pdfium-wasm with a licence outside the allowlist" #"pdfium-wasm/package.json: licence" #(edit! "release/pkg/pdfium-wasm/package.json" (fn [s] (str/replace s "\"MIT AND " "\"GPL-3.0-only AND "))))
+      (case! "@3sln/pdfium-wasm no longer an optional peer" #"is not an OPTIONAL peer" #(edit! "host/js/package.json" (fn [s] (str/replace s "{ \"optional\": true }" "{ \"optional\": false }"))))
+      (case! "the Go module under another path"#"is not `module github.com/3sln/emon/go`" #(edit! "release/pkg/go/go.mod" (fn [s] (str/replace s "emon/go" "emon"))))
       (case! "a dependency of the published Cargo.toml missing from the inventory" #"crate `serde` \(Cargo.toml heredoc of kin/scripts/Cargo.toml\)"
              #(edit! "release/pkg/rust/Cargo.toml" (fn [s] (str/replace s "[dependencies]\n" "[dependencies]\nserde = \"1\"\n"))))
       ;; 2. coverage

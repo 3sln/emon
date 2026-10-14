@@ -921,6 +921,27 @@
             (when (seq wasm-exports)
               [(entry :js :internal "emon.wasm exports" (str/join "," wasm-exports))]))))
 
+;; @3sln/pdfium-wasm (D553): pdfium's WebAssembly build as a package of its own. Its manifest's name, main and exports, and what its index.js exports
+;; (the default factory and the .wasm's URL); and @3sln/emon's OPTIONAL peer on it (the range is a version, so it is not in the entry).
+(defn- pdfium-wasm-all [root]
+  (let [f "release/pkg/pdfium-wasm/package.json"]
+    (when (exists? root f)
+      (let [pj (json/parse-string (rd root f))
+            pkg (get pj "name")
+            js (clean (rd root "release/pkg/pdfium-wasm/index.js") :js)
+            fns (->> (re-seq #"export default (async )?function (\w+)\(([^)]*)\)" js)
+                     (map (fn [[_ a _ params]] (entry :js :public (str pkg "::default") (str (when a "async ") "function(" (str/trim params) ")")))))
+            named (->> (re-seq #"export (async )?function (\w+)\(([^)]*)\)" js)
+                       (map (fn [[_ a n params]] (entry :js :public (str pkg "::" n) (str (when a "async ") "function(" (str/trim params) ")")))))
+            values (->> (re-seq #"export const (\w+)" js) (map (fn [[_ n]] (entry :js :public (str pkg "::" n) "value"))))
+            peer (get-in (json/parse-string (rd root "host/js/package.json")) ["peerDependenciesMeta" pkg "optional"])]
+        (concat [(entry :js :public (str pkg " package.json#name") pkg)
+                 (entry :js :public (str pkg " package.json#main") (str (get pj "main")))]
+                (for [[k v] (sort-by key (get pj "exports"))]
+                  (entry :js :public (str pkg " package.json#exports[" k "]") (if (map? v) (str/join "," (map (fn [[a b]] (str a "=" b)) (sort-by key v))) (str v))))
+                fns named values
+                (when peer [(entry :js :public "package.json#peerDependencies[@3sln/pdfium-wasm]" "optional")]))))))
+
 ;; ------------------------------------------------------------------------------------------------ C
 
 (defn- c-header-entries [root]
@@ -1147,7 +1168,7 @@
   "{:entries [...] :problems [...]} -- the whole surface read from the source under root."
   [root]
   (let [c (c-header-entries root)
-        ents (concat (rust-entries root) (go-all root) (java-all root) (cs-all root) (js-all root)
+        ents (concat (rust-entries root) (go-all root) (java-all root) (cs-all root) (js-all root) (pdfium-wasm-all root)
                      (:entries c) (pod-entries root) (options-entries root))
         ents (map apply-tier ents)
         dup (->> ents (group-by (juxt :host :id)) (filter #(> (count (val %)) 1)) (map key))
@@ -1256,7 +1277,7 @@
 (def ^:private copy-dirs
   ["host/rust/src" "host/go" "host/java" "host/csharp" "host/js/src" "host/c" "host/pod/src" "host/wasm/src" "api"])
 (def ^:private copy-files
-  ["host/js/package.json" "kin/config.kin" "kin/limits.kin" "schema/emon-1.json" "test/driver/rust/main.rs" "host/cli/src/main.rs"])
+  ["host/js/package.json" "release/pkg/pdfium-wasm/package.json" "release/pkg/pdfium-wasm/index.js" "kin/config.kin" "kin/limits.kin" "schema/emon-1.json" "test/driver/rust/main.rs" "host/cli/src/main.rs"])
 
 (defn- list-gen [root]
   (concat (map #(str "gen/rust/emon/" (fs/file-name %)) (fs/glob (path root "gen/rust/emon") "*.rs"))

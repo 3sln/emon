@@ -329,7 +329,33 @@ jobs:
           bb: 1.3.190
       - name: Rust 1.92.0 (the version of every gate)
         run: rustup toolchain install 1.92.0 --profile minimal && rustup default 1.92.0
-      - name: bb package (the C library and the babashka pod for this triple)
+      # D551: the C library and the pod carry static Tesseract, the models and (at run time) pdfium. The same prefix cache and pins as native.yml (D540).
+      - name: Cache key (the pins)
+        id: pins
+        run: echo "hash=$(bb native --pin-hash)" >> "$GITHUB_OUTPUT"
+      - name: Source tarballs (by pin hash)
+        uses: actions/cache@v4
+        with:
+          path: emon/.cache/native/dl
+          key: native-dl-${{ hashFiles('emon/tools/native/native.edn') }}
+      - name: Static Tesseract and Leptonica (by pin hash)
+        uses: actions/cache@v4
+        with:
+          path: emon/.cache/native/${{ matrix.triple }}
+          key: native-prefix-${{ matrix.triple }}-${{ matrix.runner }}-${{ steps.pins.outputs.hash }}
+      - name: NASM (x86_64 macOS)
+        if: matrix.triple == 'x86_64-apple-darwin'
+        run: brew install nasm
+      - name: NASM (x86_64 Linux)
+        if: matrix.triple == 'x86_64-unknown-linux-gnu'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq nasm
+      - name: bb native (a cache hit is only audited)
+        run: bb native --triple ${{ matrix.triple }} --jobs 4
+      - name: The pinned pdfium for this platform
+        run: bb pdfium-fetch
+      - name: bb package (the C library and the babashka pod for this triple; a missing native cache fails, it does not make plain archives)
+        env:
+          EMON_PACKAGE_REQUIRE_NATIVE: "1"
         run: bb package --host c --host pod
       - name: The archives
         run: ls -l dist/c dist/pod

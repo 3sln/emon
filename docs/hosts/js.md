@@ -107,24 +107,31 @@ from the ports you give it in `ports`; with none, the request is answered `unsup
 born-digital PDF needs neither. Two adapters ship in the package, and you hand them the engines (neither engine is a dependency
 of `@3sln/emon`, so the code you do not use is never downloaded):
 
-- `@3sln/emon/pdfium`: `pdfiumRenderer({ module, wasm, maxPixels })`. `module` is pdfium's factory (a function, a promise, or
-  `() => import('./pdfium.mjs')`, called once, on the first render); `wasm` is `pdfium.wasm` as bytes, a URL or a `Response`;
+- `@3sln/emon/pdfium`: `pdfiumRenderer({ module, wasm, maxPixels })`. **With no `module`, it uses the npm package
+  [`@3sln/pdfium-wasm`](https://www.npmjs.com/package/@3sln/pdfium-wasm)** (`npm install @3sln/pdfium-wasm`): pdfium's
+  WebAssembly build, `pdfium.mjs` and `pdfium.wasm`, with pdfium's licences. It is an *optional peer dependency*: `@3sln/emon`
+  itself has no dependency, and imports the package only on the first render, so a document that asks for no raster never loads
+  it (5 MiB of WebAssembly). Its version is emon's. In Node and in a bundler (which must resolve the `new URL('./pdfium.wasm',
+  import.meta.url)` inside the package) `pdfiumRenderer()` is all there is to it; a browser page that does not bundle serves
+  the two files itself and passes them, as below. Or pass your own build: `module` is pdfium's factory (a function, a promise, or
+  `() => import('./pdfium.mjs')`, called once, on the first render); `wasm` is `pdfium.wasm` as bytes, a URL or a `Response`.
   `maxPixels` bounds a page (default 64 Mpx, lower than the native 268 Mpx). The build is pdfium's WebAssembly build from
   [bblanchon/pdfium-binaries](https://github.com/bblanchon/pdfium-binaries/releases) (`chromium/8076`, the archive
   `pdfium-wasm.tgz`), whose `pdfium.js` is a classic script: emon's adapter wants it wrapped as an ES module,
-  `export default function pdfium(Module, node) { ... }` around the same text. In a clone of this repository, `bb pdfium-fetch
-  --platform wasm` downloads the archive, checks its hash and writes `.cache/pdfium/chromium-8076/wasm/lib/pdfium.mjs`
-  and `pdfium.wasm`. Reading the file whole once, on the first render, is the one place the SDK does not read by range.
-  `render.terminate()` frees it.
+  `export default function pdfium(Module, node) { ... }` around the same text, which is what the package holds. In a clone of
+  this repository, `bb pdfium-fetch --platform wasm` downloads the archive, checks its hash and writes
+  `.cache/pdfium/chromium-8076/wasm/lib/pdfium.mjs` and `pdfium.wasm` (and `bb package` makes the npm package from them).
+  Reading the file whole once, on the first render, is the one place the SDK does not read by range. `render.terminate()`
+  frees it.
 - `@3sln/emon/tesseract`: `tesseractPort({ createWorker, languages, oem, workerOptions, workers })`. `createWorker` is
   [tesseract.js](https://github.com/naptha/tesseract.js)'s (`npm install tesseract.js`); `languages` the models (default `['eng']`);
   `workerOptions` is tesseract.js's (`langPath`, `corePath`, `workerPath`, `gzip`, `cacheMethod`), which is where the models and
   the engine's WebAssembly are found. `ocr.terminate()` frees the workers.
 
-In Node, with pdfium's wrapped build under `vendor/pdfium/` and the English model from the npm package `@tesseract.js-data/eng`
-(a `langPath` of its own works as well), this converts a scan. `bb package --check` runs it on a machine that has pdfium's WebAssembly
-build (`bb pdfium-fetch --platform wasm`) and the `npm ci` of `host/js` done, and prints a NOTE and skips it on one that does not,
-as a CI runner does:
+In Node, after `npm install @3sln/pdfium-wasm tesseract.js @tesseract.js-data/eng` (the English model; a `langPath` of your own
+works as well), this converts a scan. `bb package --check` runs it against the built packages on a machine that has pdfium's
+WebAssembly build (`bb pdfium-fetch --platform wasm`) and the `npm ci` of `host/js` done, and prints a NOTE and skips it on one that
+does not, as a CI runner does:
 
 <!-- snippet: docs/snippets/js/native.mjs -->
 ```js
@@ -136,11 +143,8 @@ import { tesseractPort } from '@3sln/emon/tesseract';
 
 const emon = await Emon.load(await readFile(new URL(import.meta.resolve('@3sln/emon/emon.wasm'))));
 
-// pdfium's WebAssembly build: pdfium.mjs (the archive's pdfium.js wrapped as an ES module) and pdfium.wasm
-const render = pdfiumRenderer({
-  module: () => import('./vendor/pdfium/pdfium.mjs'),
-  wasm: await readFile('./vendor/pdfium/pdfium.wasm'),
-});
+// pdfium's WebAssembly build: with no arguments, the adapter imports the package @3sln/pdfium-wasm (npm install @3sln/pdfium-wasm) on the first render
+const render = pdfiumRenderer();
 
 // tesseract.js, with the English model from the npm package @tesseract.js-data/eng
 const ocr = tesseractPort({
@@ -156,7 +160,8 @@ await render.terminate();
 await ocr.terminate();
 ```
 
-In a browser the same two calls take URLs: `module: () => import('/vendor/pdfium/pdfium.mjs')`, `wasm: '/vendor/pdfium/pdfium.wasm'`,
+In a browser that does not bundle, serve the package's two files (`node_modules/@3sln/pdfium-wasm/pdfium.mjs` and `pdfium.wasm`) and
+the same two calls take URLs: `module: () => import('/vendor/pdfium/pdfium.mjs')`, `wasm: '/vendor/pdfium/pdfium.wasm'`,
 and `workerOptions: { workerPath, corePath, langPath, gzip: true, workerBlobURL: false }` pointing at tesseract.js's files you
 host. `demo/worker.js` is the worked example, including the fall-back to OCR on the page's thread where a Worker cannot start
 Workers of its own. To bring your own engine, a renderer is `{ open(doc, { pixels }) -> { render({ page, dpi, layer }) -> { width,
@@ -171,7 +176,7 @@ height, rgb }, close() } }` and an OCR port is `async (request) => result`; see 
 - The WebAssembly instance, a Model's handle and the constructors of `Emon`, `Model` and `Asset` are not public API.
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the js host: 45 entries (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the js host: 55 entries (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
@@ -215,6 +220,15 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `@3sln/emon::streamSource` | `async function(stream, { max = 2 ** 31 - 1 } = {})` |
 | `@3sln/emon::toSource` | `async function(x, opts = {})` |
 | `@3sln/emon::urlSource` | `async function(url, { fetch: f = globalThis.fetch.bind(globalThis), headers = {}, signal, fetchOptions = {} } = {})` |
+| `@3sln/pdfium-wasm package.json#exports[./package.json]` | `./package.json` |
+| `@3sln/pdfium-wasm package.json#exports[./pdfium.mjs]` | `./pdfium.mjs` |
+| `@3sln/pdfium-wasm package.json#exports[./pdfium.wasm]` | `./pdfium.wasm` |
+| `@3sln/pdfium-wasm package.json#exports[.]` | `default=./index.js,types=./index.d.ts` |
+| `@3sln/pdfium-wasm package.json#main` | `index.js` |
+| `@3sln/pdfium-wasm package.json#name` | `@3sln/pdfium-wasm` |
+| `@3sln/pdfium-wasm::default` | `async function(Module, node)` |
+| `@3sln/pdfium-wasm::wasmBinary` | `async function()` |
+| `@3sln/pdfium-wasm::wasmUrl` | `value` |
 | `package.json#exports[./emon.wasm]` | `./emon.wasm` |
 | `package.json#exports[./package.json]` | `./package.json` |
 | `package.json#exports[./pdfium]` | `./src/pdfium.js` |
@@ -222,6 +236,7 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `package.json#exports[.]` | `./src/index.js` |
 | `package.json#main` | `src/index.js` |
 | `package.json#name` | `@3sln/emon` |
+| `package.json#peerDependencies[@3sln/pdfium-wasm]` | `optional` |
 
 </details>
 <!-- bb docs:end api-index -->

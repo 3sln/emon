@@ -39,7 +39,7 @@
 
  :version-files
  ["version.edn" "host/js/package.json" "host/js/package-lock.json" "kin/scripts/emon-rs-build" "host/cli/Cargo.toml" "kin/scripts/emon-bind-build" "kin/scripts/emon-wasm-build"
-  "kin/scripts/unit" "host/rust/Cargo.lock" "host/c/src/capi.rs" "host/pod/src/main.rs" "release/pkg/rust/Cargo.toml" "release/pkg/java/pom.xml" "release/pkg/csharp/Emon.csproj"]
+  "kin/scripts/unit" "host/rust/Cargo.lock" "host/c/src/capi.rs" "host/pod/src/main.rs" "release/pkg/rust/Cargo.toml" "release/pkg/java/pom.xml" "release/pkg/csharp/Emon.csproj" "release/pkg/pdfium-wasm/package.json"]
 
  :archives
  ["kin/**" "gen/**" "host/**" "release/**" "THIRD_PARTY_NOTICES.md" "LICENSE" "docs/cli.md" "version.edn" "bb.edn"

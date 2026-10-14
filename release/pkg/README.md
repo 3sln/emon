@@ -14,15 +14,15 @@ This package is one of them. The project, the documentation and the other hosts 
 | Go | Go modules | `go get github.com/3sln/emon/go` |
 | Java | Maven Central | `com.3sln:emon` |
 | C# | NuGet | `dotnet add package Emon` |
-| JavaScript | npm | `npm install @3sln/emon` |
-| C | GitHub Releases | `libemon` plus `emon.h` |
-| babashka | GitHub Releases | the `emon-pod` archive |
+| JavaScript | npm | `npm install @3sln/emon` (and `@3sln/pdfium-wasm` for scans and figures) |
+| C | GitHub Releases | `libemon` plus `emon.h`, with pdfium and Tesseract |
+| babashka | GitHub Releases | the `emon-pod` archive, with pdfium and Tesseract |
 | command line | GitHub Releases | `emon`, with pdfium and Tesseract bundled |
 
 Born-digital PDFs (those with a real text layer) convert with nothing but the package. Drawing pages for scans, figures and OCR
-needs pdfium, and reading scans needs Tesseract; neither is part of these packages. The Rust, Go, Java, C# and JavaScript hosts
-take them as ports you configure (an adapter for each is described in the host's page); the C library and the babashka pod of
-the releases have neither built in, and the command-line tool bundles both. See
+needs pdfium, and reading scans needs Tesseract; neither is part of the Rust, Go, Java, C# and JavaScript packages, which take
+them as ports you configure (an adapter for each is described in the host's page; for JavaScript pdfium is the npm package
+`@3sln/pdfium-wasm`). The C library, the babashka pod and the command-line tool of the releases bundle both. See
 <https://github.com/3sln/emon#what-each-host-needs-at-run-time>.
 
 ## Rust

@@ -2,7 +2,7 @@
 
 (pods/load-pod "emon-pod") ; found on the PATH; or give the path to the binary
 
-(prn (emon/capabilities)) ; {:version "X.Y.Z", :pdfium false, :tesseract false, :codecs false}
+(prn (emon/capabilities)) ; {:version "X.Y.Z", :pdfium true, :tesseract true, :codecs false} from the release archive
 
 ;; Stage 0 alone is cheap: format, version, pages, encryption.
 (prn (emon/intake "report.pdf")) ; {:format "pdf", :version "1.4", :pages 1, :encrypted false, :bytes 39570} for one sample
