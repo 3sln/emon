@@ -57,8 +57,8 @@ run of each will find something. Treat the dry runs, and then the first release,
 |---|------|------|-------|
 | 1 | **now** (it takes days) | Verify the Maven namespace `com.3sln` | section 3 |
 | 2 | now | Reserve the names `emon` (crates.io), `@3sln/emon` (npm), `Emon` (NuGet) | section 3 |
-| 3 | before the first publish | The environment `release` with @raystubbs as required reviewer; the secrets in it | section 4 |
-| 4 | before the first publish | `NUGET_API_KEY` (still to come) | section 4 |
+| 3 | before the first publish | The environment `release` with @raystubbs as required reviewer | section 4 |
+| 4 | before the first publish | NuGet Trusted Publishing: the policy on nuget.org and the organization variable `NUGET_USER` | section 4 |
 | 5 | before the first publish | Pages source, tag rules, the bypass note for `main` | section 4 |
 | 6 | dry runs | `bb` dry runs, then the workflow dry runs | section 5 |
 | 7 | the release | The first release | section 6 |
@@ -79,18 +79,28 @@ repository is public by the time of publishing (npm provenance, GitHub Pages on 
 ## 4. Settings: environment, secrets, Pages, rules
 
 **Secrets.** These exist already, as repository secrets: `CARGO_REGISTRY_TOKEN`, `NPM_TOKEN`, `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`, `MAVEN_GPG_PRIVATE_KEY`. They work
-where they are (a job in an environment can read repository secrets). **Recommended:** create the environment first and move them into it (Settings > Environments >
-`release` > *Environment secrets*), so only a publish job that you approved can read them. Still to come: `NUGET_API_KEY`. Optional: `MAVEN_GPG_PASSPHRASE` (leave it unset for a
-key without a passphrase). The corpus secrets of SPEC 15.3 (`EMON_S3_*`) stay repository secrets: `verify.yml` needs them without any approval.
+where they are: a job in the `release` environment inherits repository secrets, so **leaving them at repository level is a supported setup and no release step.**
+**OPTIONAL hardening:** move them into the environment (Settings > Environments > `release` > *Environment secrets*), so only a publish job that you approved can read them.
+Optional: `MAVEN_GPG_PASSPHRASE` (leave it unset for a key without a passphrase). There is **no NuGet secret** (below). The corpus secrets of SPEC 15.3 (`EMON_S3_*`) stay
+repository secrets: `verify.yml` needs them without any approval.
 
 | Secret | How to get it |
 |---|---|
 | `CARGO_REGISTRY_TOKEN` | crates.io > Account Settings > API Tokens > New Token. Scopes `publish-new` and `publish-update`. (For the first publish the token cannot be restricted to a crate that does not exist yet; replace it with a crate-scoped one afterwards.) |
 | `NPM_TOKEN` | npmjs.com > Access Tokens > Generate New Token > *Granular access token*: permission *Read and write*, scope: packages under `@3sln`, "bypass two-factor" ON (it is for automation). |
-| `NUGET_API_KEY` | nuget.org > API Keys > Create: *Push new packages and package versions*, glob pattern `Emon`, expiry as you like. |
 | `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD` | central.sonatype.com > your account menu > *View Account* > *Generate User Token*. It shows a **username/password pair**; use those two, not your login. |
 | `MAVEN_GPG_PRIVATE_KEY` | `gpg --armor --export-secret-keys KEYID` (the whole `-----BEGIN PGP PRIVATE KEY BLOCK-----` text; a base64 of it is accepted too). **Publish the public half** so Central can verify: `gpg --keyserver keyserver.ubuntu.com --send-keys KEYID` and upload to <https://keys.openpgp.org> (and confirm the email). |
 | `MAVEN_GPG_PASSPHRASE` | optional: the key's passphrase. |
+
+**NuGet: Trusted Publishing, no stored key.** `publish.yml`'s `nuget` job (in the `release` environment, with `id-token: write`) runs `NuGet/login`, which exchanges the
+job's OIDC token for a short-lived API key (about an hour) and hands it to `bb publish nuget` as `NUGET_API_KEY`. Nothing long-lived exists. Set up once:
+
+1. nuget.org > your profile > *Trusted Publishing* > create a policy: repository owner `3sln`, repository `emon`, workflow file `publish.yml`, environment `release`.
+2. An **organization** Actions variable `NUGET_USER` (Organization settings > Secrets and variables > Actions > Variables) holding your nuget.org **profile name** (not your
+   email). **An organization variable must grant repository access to `emon`** (*Repository access*: all repositories, or selected, with `emon` in the list); otherwise
+   `vars.NUGET_USER` is empty in the job and the login fails.
+
+The login runs only for a real publish (the `release` event). A manual dry run mints no key and `bb publish nuget --dry-run` needs none.
 
 Nothing else is needed: the Go module, the draft, the statuses and the assets use the workflow's own token, and Pages uses GitHub's OIDC.
 
@@ -132,7 +142,7 @@ bb package                          # builds every artifact into dist/ (the pack
    (Commits > the commit > the check mark > Details; or `gh api repos/3sln/emon/commits/$(git rev-parse origin/main)/statuses`).
 3. Set `EMON_VERIFY_ON_PUSH` to `true` (section 1), then push something small (a documentation change) to `main`: the run should find that commit as its base, plan nothing, and post `verified: 0 gates since ...`, with the
    archives inherited (the log of `plan` says so).
-4. Create the secrets of section 4, then `gh workflow run publish.yml -f tag=v0.1.0 -f ref=main` : **a manual run is always a dry run.** It runs the version check, reports that
+4. Have the secrets and the NuGet setup of section 4 in place, then `gh workflow run publish.yml -f tag=v0.1.0 -f ref=main` : **a manual run is always a dry run.** It runs the version check, reports that
    the tag, release or status does not exist yet (SKIP), finds the archives of `main`'s tip and checks the artifact is still there, then in each registry job prints which
    credentials are set, asks the registry whether the version is already there, and runs `cargo publish --dry-run` / `npm publish --dry-run`. It attaches nothing and deploys no
    demo. Read its summary.

@@ -13,7 +13,7 @@
 ;;   crates  CARGO_REGISTRY_TOKEN             cargo publish --locked, from dist/stage/rust (the tree `cargo package` verified)
 ;;   npm     NPM_TOKEN                        npm publish dist/js/3sln-pdfium-wasm-V.tgz and dist/js/3sln-emon-V.tgz (both, the peer first; each skipped when npm has it)
 ;;                                            --access public [--provenance in Actions]; prerelease versions get --tag next
-;;   nuget   NUGET_API_KEY                    dotnet nuget push dist/csharp/Emon.V.nupkg (and .snupkg) --skip-duplicate
+;;   nuget   NUGET_API_KEY (short-lived, from NuGet/login via Trusted Publishing; real publish only, a dry run needs none)   dotnet nuget push dist/csharp/Emon.V.nupkg (and .snupkg) --skip-duplicate
 ;;   maven   MAVEN_CENTRAL_USERNAME, MAVEN_CENTRAL_PASSWORD, MAVEN_GPG_PRIVATE_KEY, MAVEN_GPG_PASSPHRASE
 ;;           sign the four files of dist/java/maven/com/3sln/emon/V with the key, re-zip the bundle, upload it to the Central Portal
 ;;           (https://central.sonatype.com/api/v1/publisher, publishingType AUTOMATIC) and wait for PUBLISHED or FAILED
@@ -36,6 +36,7 @@
 (def needs
   {"crates" ["CARGO_REGISTRY_TOKEN"]
    "npm" ["NPM_TOKEN"]
+   ;; NUGET_API_KEY is a short-lived key (about an hour) that NuGet/login mints from nuget.org Trusted Publishing (OIDC) in the publish job; it is not a stored secret.
    "nuget" ["NUGET_API_KEY"]
    ;; MAVEN_GPG_PASSPHRASE is optional: the maintainer's signing key has no passphrase (2026-10-14).
    "maven" ["MAVEN_CENTRAL_USERNAME" "MAVEN_CENTRAL_PASSWORD" "MAVEN_GPG_PRIVATE_KEY"]
@@ -107,8 +108,10 @@
 
 ;; ---------------------------------------------------------------------------------------------------- helpers
 (defn- check-env! [registry dry?]
-  (let [miss (missing-env (needs registry) (System/getenv))]
-    (doseq [n (needs registry)] (say "  " (if (some #{n} miss) "MISSING" "set    ") " " n))
+  ;; nuget's key is minted by NuGet/login only in a real publish; a dry run has none and needs none
+  (let [names (if (and dry? (= registry "nuget")) [] (needs registry))
+        miss (missing-env names (System/getenv))]
+    (doseq [n names] (say "  " (if (some #{n} miss) "MISSING" "set    ") " " n))
     (when (seq miss)
       (rl/die 1 (str "bb publish " registry ": " (str/join ", " miss) " is not set. Create it as a secret of the `release` environment (docs/releasing.md)"
                      (when dry? " -- the dry run fails on it so you find out before a release does"))))))

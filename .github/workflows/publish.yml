@@ -13,8 +13,10 @@
 #   pages   the demo, by calling pages.yml with the verified commit (after the same approval).
 #   summary one report of what happened, and the failing exit code if any registry did not succeed: a partial publish is named, not silent.
 #
-# Needs (docs/releasing.md has the order): the environment `release` with @raystubbs as required reviewer and these secrets in it: CARGO_REGISTRY_TOKEN, NPM_TOKEN,
-# NUGET_API_KEY, MAVEN_CENTRAL_USERNAME, MAVEN_CENTRAL_PASSWORD, MAVEN_GPG_PRIVATE_KEY, and optionally MAVEN_GPG_PASSPHRASE; Settings > Pages > Source = GitHub Actions.
+# Needs (docs/releasing.md has the order): the environment `release` with @raystubbs as required reviewer; these secrets (repository level is fine, a job in the environment
+# inherits them): CARGO_REGISTRY_TOKEN, NPM_TOKEN, MAVEN_CENTRAL_USERNAME, MAVEN_CENTRAL_PASSWORD, MAVEN_GPG_PRIVATE_KEY, and optionally MAVEN_GPG_PASSPHRASE; for NuGet no secret:
+# a Trusted Publishing policy on nuget.org (owner 3sln, repo emon, workflow publish.yml, environment release) and the organization variable NUGET_USER (NuGet/login mints a
+# short-lived key per publish); Settings > Pages > Source = GitHub Actions.
 # Never run: needs the credentials, a draft release and Actions credits (D524).
 name: publish
 
@@ -198,10 +200,11 @@ jobs:
     environment: release
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write # nuget.org Trusted Publishing (NuGet/login exchanges the OIDC token for a short-lived API key)
     outputs:
       outcome: ${{ steps.publish.outputs.outcome }}
-    env:
-      NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -216,8 +219,17 @@ jobs:
           dotnet-version: 10.0.x
       - name: bb package --host csharp (dotnet pack)
         run: bb package --host csharp
+      # real publishes only: a dry run (workflow_dispatch) mints no key and `bb publish nuget --dry-run` needs none
+      - id: nuget-login
+        name: NuGet Trusted Publishing (a short-lived API key)
+        if: github.event_name == 'release'
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
+        with:
+          user: ${{ vars.NUGET_USER }}
       - id: publish
         name: bb publish nuget
+        env:
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
         run: bb publish nuget ${DRY_FLAG}
 
   maven:
