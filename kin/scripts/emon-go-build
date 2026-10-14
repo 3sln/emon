@@ -10,6 +10,7 @@
 #                                     transcript writer needs it, the Engine does not)
 #     .cache/emon-go/planrun/         host/go/planrun/ (the driver of kin's plan machine and the transcript: not in `port`, whose package the generated
 #                                     `planloop` imports)
+#     .cache/emon-go/pdfium/          host/go/pdfium/ (the pdfium Renderer, loaded at run time; the driver names it only under the `pdfium` tag)
 #     .cache/emon-go/*.go             host/go/*.go: the root package `emon` (source, model, engine, imgdec)
 #     .cache/emon-go/cmd/emon-go/     test/driver/go/main.go, the `emon-go` binary
 #
@@ -17,12 +18,13 @@
 # `bb emit` is NOT run here: callers that must be current run it first.
 set -e
 cd "$(dirname "$0")/../.."
-# LIVE (D211): EMON_GO_LIVE=1 builds the same module with the `tesseract` build tag (the cgo adapter of the Ocr port, linked to
-# libtesseract and libleptonica) into .cache/emon-go-live; it is NOT a gate's (a gate replays a transcript). EMON_TESS_LIB is the
-# directory of the libraries (default /opt/homebrew/lib).
+# LIVE (D211, D1450): EMON_GO_LIVE=1 builds the same module with the `tesseract` build tag (the cgo adapter of the Ocr port, linked to
+# libtesseract and libleptonica) and the `pdfium` tag (the driver's `--pdfium`: host/go/pdfium, cgo for dlopen only, nothing of pdfium is
+# linked; the library is found at run time, EMON_PDFIUM_LIB) into .cache/emon-go-live; it is NOT a gate's (a gate replays a transcript).
+# EMON_TESS_LIB is the directory of the Tesseract libraries (default /opt/homebrew/lib).
 mod=.cache/emon-go
 tags=""
-if [ "${EMON_GO_LIVE:-}" = 1 ]; then mod=.cache/emon-go-live; tags="-tags tesseract"; fi
+if [ "${EMON_GO_LIVE:-}" = 1 ]; then mod=.cache/emon-go-live; tags="-tags tesseract,pdfium"; fi
 mkdir -p "$mod/port" "$mod/pngenc" "$mod/planrun" "$mod/cmd/emon-go"
 
 put() { cmp -s "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
@@ -37,7 +39,7 @@ for d in gen/go/*/; do
 done
 for d in "$mod"/*/; do
   m=$(basename "$d")
-  case "$m" in port|pngenc|planrun|cmd) continue ;; esac
+  case "$m" in port|pngenc|planrun|pdfium|cmd) continue ;; esac
   case " $keep " in *" $m "*) ;; *) rm -rf "$d" ;; esac
 done
 for f in host/go/port/*.go; do
@@ -47,7 +49,9 @@ done
 put host/go/pngenc/pngenc.go "$mod/pngenc/pngenc.go"
 for f in host/go/planrun/*.go; do put "$f" "$mod/planrun/$(basename "$f")"; done
 for f in host/go/*.go; do put "$f" "$mod/$(basename "$f")"; done
-put test/driver/go/main.go "$mod/cmd/emon-go/main.go"
+mkdir -p "$mod/pdfium"
+for f in host/go/pdfium/*.go; do put "$f" "$mod/pdfium/$(basename "$f")"; done
+for f in test/driver/go/*.go; do put "$f" "$mod/cmd/emon-go/$(basename "$f")"; done
 printf 'module emon\n\ngo 1.21\n' > "$mod/go.mod.new"
 put "$mod/go.mod.new" "$mod/go.mod"
 rm -f "$mod/go.mod.new" "$mod/go.sum"

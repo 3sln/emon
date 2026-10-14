@@ -293,7 +293,7 @@ type Config struct {
 	Ocr Ocr
 	// Renderer is the `Renderer` port (D007, D127): what fulfils `render` and `crop` requests when the Engine
 	// converts or records. nil (the default): none is configured, and a request for one is answered
-	// `unsupported` (D199). A replay never calls it (D008). `pdfium.New()` (build tag `pdfium`) is the default
+	// `unsupported` (D199). A replay never calls it (D008). `pdfium.Open("")` (package `emon/pdfium`, loaded at run time with cgo's dlopen: D1450) is the default
 	// engine.
 	Renderer port.Renderer
 	// PdfCodecs is the JPX and JBIG2 decoder of the `decode-img` request (P6.1a, D117, D336): what an embedder brings for the two PDF
