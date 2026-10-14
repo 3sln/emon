@@ -23,7 +23,11 @@
   {:id "api-diff"      :cmd ["bb" "api-diff"]                     :gate "api-diff"      :secs 2   :why "the public API is the frozen one (D527)"}
   {:id "release-audit" :cmd ["bb" "release-audit"]                :gate "release-audit" :secs 1   :why "licences, inventory and notices (D526)"}
   {:id "version"       :cmd ["bb" "version" "--check" "@version"]                       :secs 1   :why "every manifest equals version.edn (D525)"}
-  {:id "ci-coverage"   :cmd ["bb" "ci" "coverage"]                                      :secs 1   :why "the gate map covers the tree, every gate is in a shard, every workflow task exists, every replay gate re-derives (includes rederive --check)"}]
+  {:id "release-notes-selftest"  :cmd ["bb" "release-notes" "--self-test"]                    :secs 1   :why "the release notes tool's parsing and rendering (D1500)"}
+  {:id "release-verify-selftest" :cmd ["bb" "release-verify" "--self-test"]                   :secs 1   :why "the publish job's three checks decide correctly on synthetic facts (D1500)"}
+  {:id "release-ops-selftest"    :cmd ["bb" "release-ops" "--self-test"]                      :secs 1   :why "propose, tag, draft, attach, status and summary decide correctly (D1500)"}
+  {:id "publish-selftest"        :cmd ["bb" "publish" "--self-test"]                          :secs 1   :why "the registry publishers' idempotence checks and parsers (D1500)"}
+  {:id "ci-coverage"   :cmd ["bb" "ci" "coverage"]                                    :secs 1   :why "the gate map covers the tree, every gate is in a shard, every workflow task exists, every replay gate re-derives (includes rederive --check)"}]
 
  :groups
  {"replay"  ["plan" "ocr" "render" "pdfium-wasm" "align" "fusion" "gfuse" "artifacts" "seals" "sealpx" "sigs" "retarget" "asset"]
@@ -148,6 +152,7 @@
 
   ;; ---- the tools --------------------------------------------------------------------------------------------------------------------------------------
   {:glob "tools/{api_diff,release_audit,version,rederive,ci}.clj" :gates [] :why "release and CI tooling: the fast core runs each (api-diff, release-audit, version --check, ci coverage)"}
+  {:glob "tools/release/**" :gates [] :why "the release tools (P11.9, P11.10, D1500): `bb release-notes`, `release-verify`, `release-ops` and `publish`, run by prepare-release.yml and publish.yml; not gates. The fast core runs each one's --self-test (pure logic over synthetic data; nothing is published or pushed)"}
   {:glob "tools/cli.clj" :gates [] :why "`bb cli` (P11.4b, D541): builds and packs the `emon` command and `--check`s the archive (needs bb native, pdfium and cargo; prints SKIP without them); not a gate yet, it joins `bb package` (P11.4)"}
   {:glob "tools/{corpus,corpus_test,corpus_roundtrip,samples,pdfinfo}.clj" :gates [] :why "corpus transport and live tools: not gates (corpus-test is its own non-gate)"}
   {:glob "tools/{transcript_manifest,crypto-constants,pdfsnames,pdfxnames}.clj" :gates ["unit"] :why "tables and manifests `bb unit` checks"}

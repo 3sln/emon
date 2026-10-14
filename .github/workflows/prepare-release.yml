@@ -1,0 +1,300 @@
+# PREPARE A RELEASE (P11.9, D524, D1500). Nothing is published here: the end of this workflow is a DRAFT GitHub release with its archives attached and the commit
+# status `emon/full-gates` on the tagged commit. The maintainer reads the draft and flips it to published, which starts publish.yml (P11.10).
+#
+# Two halves, so a human merges the version bump in between (the robust shape: the merge is a normal reviewed PR, and either half can be re-run alone):
+#
+#   1. PROPOSE   gh workflow run prepare-release.yml -f bump=minor        (or -f version=0.2.0; add -f dry_run=true to only validate)
+#                `bb release-ops propose`: validates the version, `bb version set`, pushes release/vX.Y.Z, opens the PR. The PR is checked by pr.yml like any other.
+#   2. FINALIZE  starts BY ITSELF when that PR is merged (pull_request closed, merged, head release/v*), or by hand:
+#                gh workflow run prepare-release.yml -f finalize=true [-f sha=COMMIT]   (the tip of main, or COMMIT: re-run it after a failure, it is idempotent)
+#                tag      annotated vX.Y.Z on the merge commit (the Go module's go/vX.Y.Z is made by publish.yml: it needs the assembled module tree, D542)
+#                draft    the DRAFT release with notes from `bb release-notes` (an existing draft is kept, so edited notes survive a re-run)
+#                gates    gates.yml (all of it, reused through workflow_call) on the tag
+#                native   native.yml (static Tesseract/Leptonica + the emon CLI for the five targets) on the tag
+#                package  `bb package --host c --host pod` on four runners (the C library and pod archives per triple)
+#                attach   the CLI, C and pod archives and SHA256SUMS onto the draft
+#                status   `emon/full-gates` on the tagged commit: success only if draft, gates, native, package and attach all succeeded
+#
+# CREDENTIALS. A push or PR made with GITHUB_TOKEN does not start other workflows, so the release PR (and the tag) use a GitHub App or a PAT:
+#   secret RELEASE_TOKEN                          a fine-grained personal access token (Contents and Pull requests: read and write on this repository), OR
+#   variable RELEASE_APP_ID + secret RELEASE_APP_KEY   a GitHub App installed on this repository (Contents, Pull requests: read and write); wins when both exist.
+# docs/releasing.md has the click path. Never run: needs the credential and Actions credits (D524).
+name: prepare-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "PROPOSE: which part to bump (none when you give a version)"
+        type: choice
+        options: [none, patch, minor, major]
+        default: none
+      version:
+        description: "PROPOSE: an explicit X.Y.Z instead of a bump"
+        type: string
+        default: ""
+      dry_run:
+        description: "PROPOSE: only validate the version, push nothing"
+        type: boolean
+        default: false
+      finalize:
+        description: "FINALIZE: tag, draft, gates, archives and status for the version now on main (the PR merge does this by itself)"
+        type: boolean
+        default: false
+      sha:
+        description: "FINALIZE: the commit to tag (default: the tip of main)"
+        type: string
+        default: ""
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+# one preparation at a time; a running one is finished, not cancelled (it may be halfway through creating a tag)
+concurrency:
+  group: prepare-release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+    working-directory: emon
+
+env:
+  CI: "true"
+
+jobs:
+  # ---- 1. propose: the version bump as a pull request -------------------------------------------------------------
+  propose:
+    if: github.event_name == 'workflow_dispatch' && !inputs.finalize
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: 3sln/emon
+          ref: main
+          path: emon
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
+        with:
+          bb: 1.3.190
+      - id: token
+        uses: ./emon/.github/actions/release-token
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_KEY }}
+          pat: ${{ secrets.RELEASE_TOKEN }}
+      - name: Push credentials
+        env:
+          TOKEN: ${{ steps.token.outputs.token }}
+        run: git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+      - name: Propose the release
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          BUMP: ${{ inputs.bump }}
+          VERSION: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          args=()
+          if [ -n "$BUMP" ] && [ "$BUMP" != none ]; then args+=(--bump "$BUMP"); fi
+          if [ -n "$VERSION" ]; then args+=(--version "$VERSION"); fi
+          if [ "$DRY_RUN" = true ]; then args+=(--dry-run); fi
+          bb release-ops propose "${args[@]}"
+
+  # ---- 2. finalize: tag the merged bump --------------------------------------------------------------------------------
+  tag:
+    if: >-
+      (github.event_name == 'pull_request'
+        && github.event.pull_request.merged == true
+        && github.event.pull_request.head.repo.full_name == github.repository
+        && startsWith(github.event.pull_request.head.ref, 'release/v'))
+      || (github.event_name == 'workflow_dispatch' && inputs.finalize && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      version: ${{ steps.tag.outputs.version }}
+      sha: ${{ steps.tag.outputs.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: 3sln/emon
+          # the merge commit of the release PR, or the given commit, or the tip of main
+          ref: ${{ github.event.pull_request.merge_commit_sha || inputs.sha || github.sha }}
+          path: emon
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
+        with:
+          bb: 1.3.190
+      - id: token
+        uses: ./emon/.github/actions/release-token
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_KEY }}
+          pat: ${{ secrets.RELEASE_TOKEN }}
+      - name: Push credentials
+        env:
+          TOKEN: ${{ steps.token.outputs.token }}
+        run: git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+      - id: tag
+        name: Tag the commit (bb version --check first; a tag is never moved)
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          version="$(bb version)"
+          tag="v$version"
+          if [ -n "$HEAD_REF" ] && [ "$HEAD_REF" != "release/$tag" ]; then
+            echo "::error::the merged branch is $HEAD_REF but version.edn says $tag"; exit 1
+          fi
+          bb release-ops tag --tag "$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  # ---- 3. the DRAFT release with notes ----------------------------------------------------------------------------------
+  draft:
+    needs: tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ needs.tag.outputs.sha }}
+          path: emon
+          fetch-depth: 0
+      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
+        with:
+          bb: 1.3.190
+      - name: Notes from DEVLOG.md and the commits since the previous tag
+        env:
+          TAG: ${{ needs.tag.outputs.tag }}
+          VERSION: ${{ needs.tag.outputs.version }}
+        run: bb release-notes --until "$TAG" --version "$VERSION" --out "$RUNNER_TEMP/notes.md"
+      - name: Create the draft release (an existing draft is kept)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.tag.outputs.tag }}
+        run: bb release-ops draft --tag "$TAG" --notes "$RUNNER_TEMP/notes.md"
+
+  # ---- 4. the full gates, the native builds and the archives, ON THE TAG ---------------------------------------------
+  # (a draft release fires no `release` event, so nothing else would run them before the maintainer publishes)
+  gates:
+    needs: [tag, draft]
+    uses: ./.github/workflows/gates.yml
+    with:
+      ref: ${{ needs.tag.outputs.tag }}
+      groups: all
+    secrets: inherit
+    permissions:
+      contents: read
+
+  native:
+    needs: [tag, draft]
+    uses: ./.github/workflows/native.yml
+    with:
+      ref: ${{ needs.tag.outputs.tag }}
+      cli: true
+    permissions:
+      contents: read
+
+  package:
+    needs: [tag, draft]
+    name: package (${{ matrix.triple }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { triple: aarch64-apple-darwin,      runner: macos-14 }
+          - { triple: x86_64-apple-darwin,       runner: macos-13 }
+          - { triple: x86_64-unknown-linux-gnu,  runner: ubuntu-24.04 }
+          - { triple: aarch64-unknown-linux-gnu, runner: ubuntu-24.04-arm }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ needs.tag.outputs.sha }}
+          path: emon
+      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
+        with:
+          bb: 1.3.190
+      - name: Rust 1.92.0 (the version of every gate)
+        run: rustup toolchain install 1.92.0 --profile minimal && rustup default 1.92.0
+      - name: bb package (the C library and the babashka pod for this triple)
+        run: bb package --host c --host pod
+      - name: The archives
+        run: ls -l dist/c dist/pod
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: package-${{ matrix.triple }}
+          path: |
+            emon/dist/c/emon-c-*.tar.gz
+            emon/dist/pod/emon-pod-*.tar.gz
+          if-no-files-found: error
+
+  # ---- 5. the archives onto the draft --------------------------------------------------------------------------------------
+  attach:
+    needs: [tag, draft, native, package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ needs.tag.outputs.sha }}
+          path: emon
+      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
+        with:
+          bb: 1.3.190
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: emon-cli-*
+          path: ${{ runner.temp }}/assets
+          merge-multiple: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: package-*
+          path: ${{ runner.temp }}/assets
+          merge-multiple: true
+      - name: Attach to the draft (all 18 files must be there)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.tag.outputs.tag }}
+        run: bb release-ops attach --tag "$TAG" --dir "$RUNNER_TEMP/assets"
+
+  # ---- 6. the verdict: emon/full-gates on the tagged commit ----------------------------------------------------------------
+  status:
+    if: always() && needs.tag.result == 'success'
+    needs: [tag, draft, gates, native, package, attach]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      statuses: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ needs.tag.outputs.sha }}
+          path: emon
+      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
+        with:
+          bb: 1.3.190
+      - name: Post emon/full-gates (success only if every part succeeded)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.tag.outputs.tag }}
+          SHA: ${{ needs.tag.outputs.sha }}
+          RESULTS: draft=${{ needs.draft.result }},gates=${{ needs.gates.result }},native=${{ needs.native.result }},package=${{ needs.package.result }},attach=${{ needs.attach.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bb release-ops status --sha "$SHA" --tag "$TAG" --results "$RESULTS" --target-url "$RUN_URL"
