@@ -101,7 +101,7 @@ emon-rs --pdfium --tesseract --assets=figures --out=html figures-charts.pdf > fi
 - **JBIG2 and JPX images are `unsupported`** in a plain run (their decoders are the optional `--codecs` live build, which
   these samples do not use); a scan stored as JBIG2 or JPX would have no pixels to read. None of the samples uses them.
 - **Forms**: AcroForm fields are `field` inlines of the block that holds their label (D1510); a form drawn without an AcroForm (boxes
-  drawn as vectors or scanned) has none yet, and on the 1040 the 44 fields with no label (the dependents' check boxes, the boxes of
-  lines 1 to 11 of page 2 that stand in a column of figures) are in a paragraph of their own.
+  drawn as vectors or scanned) has none yet, and on the 1040 the 44 fields with no label near them (mostly check boxes of the dependents
+  table and of page 2) are in paragraphs of their own.
 - **Figures**: chart labels are kept as `span data-emon="label"` runs, not as data; the chart itself is a picture.
 - The Model JSON for the bigger documents is large (IRS Pub 15, 190 KB); the HTML is the readable output.
