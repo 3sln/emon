@@ -3479,8 +3479,9 @@ Follows nome's conventions; shares nothing with it (D026, D039):
 
 ### 15.1 Running the gates (nothing else is needed)
 
-There is no README: this file and `DEVLOG.md` are the documentation, and a
-newcomer needs only what is listed here to run every gate.
+`README.md` is the front door for users and `CONTRIBUTING.md` the guide for
+contributors (P11.6); this file and `DEVLOG.md` are the specification and the
+log, and a newcomer needs only what is listed here to run every gate.
 
     bb check     generate, compile and run all four targets; one answer
     bb unit      the laws, as native tests on all four targets
@@ -3529,7 +3530,7 @@ Pure babashka (own SigV4); no aws/rclone/mc. Implementation: `tools/corpus.clj`.
 
 Jobs: `corpus` (not for `unit-only`), `unit` and `unit red` (one job per arm: go, rust, java, csharp), `shards` and `gates` (the shards of `ci/gate-map.edn`, each `bb gates G...`: static = hosts drift release-audit api-diff lang-test; check; replay = plan ocr render embedders; fusion = align fusion gfuse artifacts seals sealpx sigs retarget; slice; fuzz; identity; repeat; accuracy; png-check; asset; image), and `summary` (every selected job passed; every arm ran the same number of laws). `bb ci coverage` fails if a gate of `kin/scripts/gates` is in no shard, or if a tracked file is matched by no entry of the gate map. Tesseract and pdfium are not installed: `ocr` and `render` replay committed transcripts.
 
-The pull request workflow: `bb ci plan --base origin/main` maps `git diff --name-only` through `ci/gate-map.edn` (path glob to gates; every tracked path must match an entry, `[]` for a document) and fails on a changed path the map does not know; `bb ci core` runs the fast core (check, drift, hosts, api-diff, release-audit, `version --check`, `ci coverage`); the planned gates run as `bb gates --fast G...` where the gate has a `--fast` variant (a labelled, deterministic subset: Rust and Go only, a fixed sample of documents; `EMON_FAST_HOSTS` adds the host arms a change touches) and in full where it has none.
+The pull request workflow: `bb ci plan --base origin/main` maps `git diff --name-only` through `ci/gate-map.edn` (path glob to gates; every tracked path must match an entry, `[]` for a document) and fails on a changed path the map does not know; `bb ci core` runs the fast core (check, drift, hosts, api-diff, release-audit, `version --check`, `docs --check`, `ci coverage`); the planned gates run as `bb gates --fast G...` where the gate has a `--fast` variant (a labelled, deterministic subset: Rust and Go only, a fixed sample of documents; `EMON_FAST_HOSTS` adds the host arms a change touches) and in full where it has none.
 
 Repository secrets (Settings, Secrets and variables, Actions): `EMON_S3_ENDPOINT`, `EMON_S3_REGION`, `EMON_S3_BUCKET`, `EMON_S3_ACCESS_KEY_ID`, `EMON_S3_SECRET_ACCESS_KEY`, and optionally `EMON_S3_PREFIX`, `EMON_S3_PATH_STYLE`. The workflow writes them to `.env`, pulls only the `formats` and `financial` categories (the ones `png-check` and `image` read), and caches `corpus/` keyed by `bb corpus-index-sha` (the SHA-256 of the remote `index.json`), so an unchanged corpus is not pulled again. Without the secrets the run fails with a message naming them; `groups=unit-only` needs none. The workflow's `3sln/kin` checkout is the sibling `../kin`.
 
