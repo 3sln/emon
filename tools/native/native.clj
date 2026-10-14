@@ -130,6 +130,14 @@
   ;; zlib's Windows import library for its DLL is zlib.lib; the static one is zlibstatic.lib
   (when (fs/exists? (str prefix "/lib/zlib.lib")) (fs/delete (str prefix "/lib/zlib.lib"))))
 
+;; MSVC: the Rust crate names its libraries by `#[link(name = "tesseract")]` and `"leptonica"` (host/rust/src/tess.rs), and rustc then asks for tesseract.lib
+;; and leptonica.lib whatever `-l static=` says; the CMake builds install tesseract55.lib and leptonica-1.87.0.lib. Renamed once everything is built
+;; (the installed CMake packages of the earlier components name the old files, and are not used after the last build).
+(defn rename-windows-libs! [prefix]
+  (doseq [[from to] [["tesseract55.lib" "tesseract.lib"] ["leptonica-1.87.0.lib" "leptonica.lib"]]
+          :let [f (str prefix "/lib/" from)] :when (fs/exists? f)]
+    (fs/move f (str prefix "/lib/" to) {:replace-existing true})))
+
 (defn build-one! [t s jobs]
   (let [prefix (prefix-of t) bdir (str (build-root t) "/" (:id s)) log (str (build-root t) "/" (:id s) ".log")
         src (extract! s) env (build-env t prefix)]
@@ -434,6 +442,7 @@
         (fs/create-dirs prefix)
         (doseq [s (:sources pins)] (build-one! t s jobs))
         (let [secs (/ (- (System/currentTimeMillis) t0) 1000.0)]
+          (when (= :windows (:os cfg)) (rename-windows-libs! prefix))
           (write-manifest! t prefix secs)
           (println (format "built in %.0f s; auditing" secs))
           (when-not (report! (audit t prefix (build-root t)))
