@@ -226,7 +226,9 @@
 (defn- find-jdk []
   (let [cands (remove str/blank?
                       [(System/getenv "EMON_JDK") "/opt/homebrew/opt/openjdk"
-                       (let [r (run {:ok? false} "/usr/libexec/java_home")] (when (zero? (:exit r)) (str/trim (:out r))))])]
+                       ;; macOS only: on Linux the program is not there, and starting it throws rather than answering with an exit code
+                       (when (fs/exists? "/usr/libexec/java_home")
+                         (let [r (run {:ok? false} "/usr/libexec/java_home")] (when (zero? (:exit r)) (str/trim (:out r)))))])]
     (or (first (for [j cands
                      :when (fs/exists? (str j "/bin/javac"))
                      :let [r (run {:ok? false} (str j "/bin/javac") "-version")]
