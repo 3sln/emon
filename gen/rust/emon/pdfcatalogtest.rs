@@ -169,7 +169,7 @@ pub(crate) fn cg_line(f: &[u8], which: i32, mut t: &mut String) -> i32 {
     // loop, then `#` and the tree's depth), 3 every field (`name=value:agreement:widgets:on`),
     // 4 every link (`action:target@page`, then `#` and two rectangles), 5 every signature,
     // 6 the Info dictionary, the XMP identification and /Lang, 8 the real-file facts (tab separated: bookmarks, their digest, the labels' digest, links, URI links, their digest, PDF/UA part, /Lang digest), 7 the Stamp, Watermark and FreeText
-    // annotations (`subtype:name:contents:appearance:ca:flags`). Answers 0, or 1 when the file
+    // annotations (`subtype:name:contents:appearance:ca:flags`), 10 the form field rows (`kind;checked;name;value;export;x0,y0,x1,y1`, D548). Answers 0, or 1 when the file
     // could not be read.
     let pdf: &crate::port::Src = &crate::port::src_of_blob(f);
     let ar: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -372,6 +372,36 @@ pub(crate) fn cg_line(f: &[u8], which: i32, mut t: &mut String) -> i32 {
             i += 1;
         }
     }
+    if which == 10 {
+        n = crate::port::cells_len(an) / 38;
+        while i < n {
+            at = i * 38;
+            if crate::port::cells_at(an, at + 1) == 28 {
+                if first == 0 {
+                    crate::port::text_ascii(t, "|");
+                }
+                first = 0;
+                crate::port::text_i32(t, crate::port::cells_at(an, at + 8));
+                crate::port::text_ascii(t, ";");
+                crate::port::text_i32(t, crate::port::cells_at(an, at + 9));
+                crate::port::text_ascii(t, ";");
+                cg_put(t, txt, crate::port::cells_at(an, at + 12), crate::port::cells_at(an, at + 13));
+                crate::port::text_ascii(t, ";");
+                cg_put(t, txt, crate::port::cells_at(an, at + 14), crate::port::cells_at(an, at + 15));
+                crate::port::text_ascii(t, ";");
+                cg_put(t, txt, crate::port::cells_at(an, at + 16), crate::port::cells_at(an, at + 17));
+                crate::port::text_ascii(t, ";");
+                crate::port::text_i32(t, crate::port::cells_at(an, at + 4));
+                crate::port::text_ascii(t, ",");
+                crate::port::text_i32(t, crate::port::cells_at(an, at + 5));
+                crate::port::text_ascii(t, ",");
+                crate::port::text_i32(t, crate::port::cells_at(an, at + 6));
+                crate::port::text_ascii(t, ",");
+                crate::port::text_i32(t, crate::port::cells_at(an, at + 7));
+            }
+            i += 1;
+        }
+    }
     if which == 6 {
         cg_put(t, txt, crate::port::cells_at(md, 2), crate::port::cells_at(md, 3));
         crate::port::text_ascii(t, "|");
@@ -558,6 +588,17 @@ fn test_fields_inherit_their_type_value_and_flags() {
     let t: &mut String = &mut crate::port::new_text();
     crate::testport::assert_eq(cg_line(&crate::testport::test_file("pdf/catalog/forms.pdf")[..], 3, t), 0, "read");
     crate::testport::assert_text(t, "person.name=Alice:equal:1:-1|person.nick=Bob:differ:1:-1|pick=b:equal:2:1|agree=Yes:equal:1:1|color=red{10}blue:value-only:1:-1|grp=inherited:value-only:2:-1|sig0=:none:1:-1|go=:none:1:-1", "fields");
+}
+#[test]
+fn test_widgets_ride_in_an_as_synthetic_field_rows() {
+    // P11.x3 (D548): after the annotations and the signature rows, `pa-run` appends to `an` one synthetic row a widget of a check box, radio, text, combo or list field that is on a
+    // page, shown and has an area, for the document unit (it is handed `an` and not `fd`); `pa-dump` leaves them out. `forms.pdf`: the two text widgets of `person` (`Alice`, `Bob`:
+    // /V is the field's, the box is the widget's), the two radio buttons of `pick` (the first off with its state `a`, the second on in the state /V names, `b`), the check box `agree`
+    // on in `Yes`, the combo box `color` (its two selected values on two lines) and the two widgets of `grp` that inherit /V. The signature `sig0` and the push button `go` have no row.
+    // Kind (`fd-kind`: 2 check box, 3 radio, 4 text, 5 combo), whether it is on, the name, the text shown, the export value, the box in centipoints in page space (y down).
+    let t: &mut String = &mut crate::port::new_text();
+    crate::testport::assert_eq(cg_line(&crate::testport::test_file("pdf/catalog/forms.pdf")[..], 10, t), 0, "read");
+    crate::testport::assert_text(t, "4;-1;person.name;Alice;;7200,7200,27200,9200|4;-1;person.nick;Bob;;7200,11200,27200,13200|3;0;pick;;a;7200,17200,9200,19200|3;1;pick;;b;10200,17200,12200,19200|2;1;agree;;Yes;7200,21200,9200,23200|5;-1;color;red{10}blue;;7200,25200,17200,27200|4;-1;grp;inherited;;7200,29200,17200,31200|4;-1;grp;inherited;;18200,29200,28200,31200", "eight widgets, six fields");
 }
 #[test]
 fn test_a_link_of_every_kind_of_action() {

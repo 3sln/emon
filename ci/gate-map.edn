@@ -104,7 +104,7 @@
    :why "the PDF reader and the codecs: every born-digital conversion; fusion holds born-digital pages against OCR; fuzz mutates exactly these; image and asset decode with them"}
   {:glob "kin/{agl,encodings,enctx,fontextra,fontprog,cmapcns,cmapgb,cmapjp,cmapkr,cjk,radicals,bidi*,norm*,normalize*,nftable,contentrows,trig}.kin"
    :gates ["unit" "slice" "identity" "repeat" "accuracy" "fusion"] :why "text decoding, encodings, normalization and bidi: the text of every document; fusion's born-digital contract is a CER"}
-  {:glob "kin/{para*,heading*,table*,columns,lists,listtest,links,notes,inline*,initial*,hidden*,furniture*,restruct,tagtable*,health*,tlhealth*,calib*}.kin"
+  {:glob "kin/{para*,heading*,table*,columns,lists,listtest,links,notes,inline*,initial*,hidden*,furniture*,restruct,fields*,tagtable*,health*,tlhealth*,calib*}.kin"
    :gates ["unit" "slice" "identity" "repeat" "accuracy" "ocr" "fusion" "gfuse" "artifacts" "seals" "sealpx" "sigs" "retarget" "asset"]
    :why "layout, structure and confidences: the nodes and `conf` of every Model, so every replay gate's digest and the scoreboard's rows"}
   {:glob "kin/{retarget,retargettest}.kin" :gates ["unit" "retarget" "ocr"] :why "targeted re-OCR rounds (SPEC 8.3): the retarget gate's digests and the committed scans through the whole Engine"}

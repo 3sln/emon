@@ -1,0 +1,642 @@
+;; Form fields in the Model: AcroForm widgets placed in the block that holds their label (P11.x3; SPEC 3.2, 5.1; D546, D548). emon's own module (D039).
+;;
+;;   (fl-run on oa orr text nodes attrs regions nm an txt fc fh bt)    copy the Model body into new arenas, with the form fields put in
+;;
+;; WHAT IT READS. The widgets `emon.pdfannot` made into `an-field` rows of `an` (check boxes, radio buttons, text, combo and list fields that are on a page,
+;; shown, and have an area; each row says the field's full name, its kind, whether a button is on, its export value and the text it shows) and the finished
+;; Model body (`on`, `oa`, `orr`: nodes, attributes, regions of the old arenas), after the restructuring, the furniture and the seals: the blocks are where
+;; they will stay. A document with no such row is not touched (`fl-run` answers 0 and writes nothing), so only a form's Model moves.
+;;
+;; WHY A COPY, as `emon.restruct`'s head says: a node's id is its index, ids are in document order, and a field is a child that must come in the middle of
+;; its block's children. The body is copied (`rs-node`) with the fields put in, and the caller swaps the arenas.
+;;
+;; WHERE A FIELD GOES: INTO THE BLOCK THAT HOLDS ITS LABEL, as an inline (`nk-field`), by geometry alone (every box in centipoints, page space). The blocks that
+;; can hold one are the paragraphs, headings, items, cells and captions with a text of their own; a block with more than one region is one row a region. A block
+;; whose text has a letter or a digit can be a LABEL; the others (dot leaders, a dash between the boxes of a number, a rule's remains) never are, but a leader
+;; between a label and a field is what joins them, however far apart. THE RULE, in the order it is tried, `same line` meaning that the vertical extents overlap
+;; by at least half of the shorter:
+;;   1. A CHECK BOX OR RADIO BUTTON: the label to its RIGHT, on its line, whose left edge is no further than 12 pt (or 1.5 times the box's height) from the box's
+;;      right edge, the nearest. The box comes BEFORE the block's text (`[ ] Individual`).
+;;   2. A LABEL TO ITS LEFT, on its line, whose right edge is no further than 24 pt from the box's left edge, or has a leader between it and the box, the nearest.
+;;      The field comes AFTER the block's text (`Name: [text]`). A text, combo or list field takes this one first; see 3.
+;;   3. A TEXT, COMBO OR LIST FIELD: a label ABOVE it, that ends no further than 18 pt over the box's top and starts left of the box's right edge, the nearest
+;;      by that gap plus the distance sideways to the box (none when they overlap); no further than 40 pt sideways. The field comes AFTER the block's text.
+;;      The left label wins unless the one above is nearer by more than 8 pt (a label that stands over a row of boxes, `Social security number`, is not the
+;;      instruction line that happens to end at the first box).
+;;   4. NO LABEL, BUT IN A CELL: a table cell with nothing in it that holds the centre of the box (the smallest one) holds the field (the cell is no longer `empty`).
+;;   5. NO LABEL AND NO CELL: the field gets a paragraph of its own (its fields on one page together), put after the last paragraph, heading or caption of the
+;;      document or a section on its page that starts above it, else before the first one of the page, else at the end of the document.
+;; Fields in one block are in reading order (page, top, left). The field node's `at` is the widget's rectangle, its `src` is `annot`, and its `conf` is how well
+;; /V and the appearance agree (`fa` in `emon.pdfannot`). A block that was plain text becomes a `text` inline with the fields beside it; the block's `text`
+;; is unchanged (a field has no text of its own: a text field's value is its `value`).
+(ns emon.fields
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.model :refer [node-count node-kind node-parent node-first-child node-next node-text-start node-text-len node-has-text
+                                node-region-head node-region-count node-is-inline
+                                node-new node-set-text node-set-aux node-set-src node-set-conf node-add-src node-add-region
+                                node-set-attr-text node-set-attr-bool text-append-cp
+                                region-page region-x0 region-y0 region-x1 region-y1 region-next
+                                nk-document nk-section nk-heading nk-paragraph nk-item nk-cell nk-caption nk-text nk-field
+                                fk-name fk-type fk-value fk-checked sr-text sr-annot sr-infer]]
+            [emon.pdfannot :refer [an-field]]
+            [emon.restruct :refer [rs-node rs-remap]]
+            [kin.lang :refer [defn defconst declarefn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem]]))
+
+(declarefn fl-tree)
+(declarefn fl-has-words)
+(declarefn fl-has-content)
+
+(defconst ^I32 AN_STRIDE 38)        ;; an annotation row (`AN_STRIDE` of `emon.pdfannot`)
+(defconst ^I32 FL_W 16)              ;; a field row of `fc`: 0 `an` row, 1 page (1 based), 2-5 box, 6 target node, 7 slot, 8 next in its chain, 9 kind
+(defconst ^I32 FL_B 8)               ;; a block row of `bt`: 0 node, 1 page, 2-5 box, 6 flags (1 can be a label, 2 can be the anchor of a field of its own)
+(defconst ^I32 FL_MAXF 4000)         ;; fields placed
+(defconst ^I32 FL_MAXB 400000)       ;; block rows
+(defconst ^I32 FL_TOL 200)           ;; 2 pt: how far a box may lie over a neighbour's edge
+(defconst ^I32 FL_NEAR_R 1200)       ;; a button's label starts this far (12 pt) right of the box
+(defconst ^I32 FL_NEAR_L 2400)       ;; a label ends this far (24 pt) left of the box
+(defconst ^I32 FL_NEAR_A 1800)       ;; a label ends this far (18 pt) over the box
+(defconst ^I32 FL_HDIST 4000)        ;; and lies no further than this (40 pt) sideways from it
+(defconst ^I32 FL_BIAS 800)          ;; the left label is kept unless the one above is nearer by more than this (8 pt)
+
+(defn ^I32 fl-min [^I32 a ^I32 b]
+  (if (< a b) (return a))
+  (return b))
+
+(defn ^I32 fl-max [^I32 a ^I32 b]
+  (if (> a b) (return a))
+  (return b))
+
+;; ---------------------------------------------------------------- the blocks that can hold a field
+
+(defn ^I32 fl-alnum [^I32 c]
+  (comment "1 for a code point that is part of a word: an ASCII letter or digit, or anything from U+00C0 on that is not a symbol or punctuation block.")
+  (if (and (>= c 48) (<= c 57)) (return 1))
+  (if (and (>= c 65) (<= c 90)) (return 1))
+  (if (and (>= c 97) (<= c 122)) (return 1))
+  (if (< c 192) (return 0))
+  (if (or (== c 215) (== c 247)) (return 0))
+  (if (and (>= c 8192) (<= c 11263)) (return 0))
+  (if (and (>= c 12288) (<= c 12351)) (return 0))
+  (return 1))
+
+(defn ^I32 fl-label-like [^Cells text ^I32 s ^I32 n]
+  (comment "1 when the run text[s, s + n) has a letter or a digit in it.")
+  (let [^:mut ^I32 i 0]
+    (while (< i n)
+      (do (if (== (fl-alnum (cells-at text (+ s i))) 1) (return 1))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 fl-has-words [^Cells on ^Cells text ^I32 n]
+  (comment "Node n's words, own or its inline children's (a block with a span or a link in it has no run of its own, its words are its children's), as a count of")
+  (comment "code points that are a letter or a digit: 1 when there is at least one, 0 when none.")
+  (let [^:mut ^I32 c 0]
+    (if (and (== (node-has-text on n) 1) (> (node-text-len on n) 0))
+      (if (== (fl-label-like text (node-text-start on n) (node-text-len on n)) 1) (return 1)))
+    (set c (node-first-child on n))
+    (while (>= c 0)
+      (do (if (== (node-is-inline on c) 1)
+            (if (== (fl-has-words on text c) 1) (return 1)))
+          (set c (node-next on c))))
+    (return 0)))
+
+(defn ^I32 fl-has-content [^Cells on ^I32 n]
+  (comment "1 when node n has words to be a label of, or ones that are not words (a dot leader): a text run of its own that is not empty, or an inline child with one.")
+  (let [^:mut ^I32 c 0]
+    (if (and (== (node-has-text on n) 1) (> (node-text-len on n) 0)) (return 1))
+    (set c (node-first-child on n))
+    (while (>= c 0)
+      (do (if (== (node-is-inline on c) 1)
+            (if (== (fl-has-content on c) 1) (return 1)))
+          (set c (node-next on c))))
+    (return 0)))
+
+(defn ^I32 fl-holds [^I32 kind]
+  (comment "1 for the kinds of block that hold a field among their inlines.")
+  (if (== kind (nk-paragraph)) (return 1))
+  (if (== kind (nk-heading)) (return 1))
+  (if (== kind (nk-item)) (return 1))
+  (if (== kind (nk-cell)) (return 1))
+  (if (== kind (nk-caption)) (return 1))
+  (return 0))
+
+(defn ^I32 fl-doc-end [^Cells on]
+  (comment "The first node after the document's own tree (the next root; the furniture is a tree of its own): the node count when there is none.")
+  (let [^I32 n (node-count on)
+        ^:mut ^I32 i 1]
+    (while (< i n)
+      (do (if (< (node-parent on i) 0) (return i))
+          (set i (+ i 1))))
+    (return n)))
+
+(defn ^I32 fl-blocks [^Cells on ^Cells orr ^Cells text ^I32 ndoc ^:mut ^Cells bt]
+  (comment "The block rows `bt` (see FL_B): a row a region of every block that holds a field, has words of its own (text, or inline children's) and a place on a page; and of")
+  (comment "every table cell that has nothing in it (flags 4: a box can stand in it).")
+  (cells-drop bt 0)
+  (let [^:mut ^I32 n 0
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 flags 0
+        ^:mut ^I32 pk 0]
+    (while (< n ndoc)
+      (do (set kind (node-kind on n))
+          (set flags -1)
+          (if (and (== (fl-holds kind) 1) (> (node-region-count on n) 0))
+            (if (== (fl-has-content on n) 1)
+              (do (set flags 0)
+                  (if (== (fl-has-words on text n) 1) (set flags 1))
+                  (set pk (node-parent on n))
+                  (set pk (node-kind on pk))
+                  (if (and (!= kind (nk-item)) (!= kind (nk-cell)) (or (== pk (nk-document)) (== pk (nk-section))))
+                    (set flags (+ flags 2))))
+              (if (== kind (nk-cell)) (set flags 4))))
+          (if (>= flags 0)
+            (do (set r (node-region-head on n))
+                (while (and (>= r 0) (< (quot (cells-len bt) FL_B) FL_MAXB))
+                  (do (cells-push bt n)
+                      (cells-push bt (region-page orr r))
+                      (cells-push bt (region-x0 orr r))
+                      (cells-push bt (region-y0 orr r))
+                      (cells-push bt (region-x1 orr r))
+                      (cells-push bt (region-y1 orr r))
+                      (cells-push bt flags)
+                      (cells-push bt 0)
+                      (set r (region-next orr r))))))
+          (set n (+ n 1))))
+    (return (quot (cells-len bt) FL_B))))
+
+;; ---------------------------------------------------------------- the rule
+
+(defn ^I32 fl-same-line [^Cells bt ^I32 b ^I32 y0 ^I32 y1]
+  (comment "1 when block row b lies on the line of the box [y0, y1]: the vertical extents overlap by at least half of the shorter.")
+  (let [^I32 o (* b FL_B)
+        ^I32 by0 (cells-at bt (+ o 3))
+        ^I32 by1 (cells-at bt (+ o 5))
+        ^I32 ov (- (fl-min y1 by1) (fl-max y0 by0))
+        ^I32 sm (fl-min (- y1 y0) (- by1 by0))]
+    (if (<= ov 0) (return 0))
+    (if (>= (* ov 2) sm) (return 1))
+    (return 0)))
+
+(defn ^I32 fl-bridged [^Cells bt ^I32 nb ^I32 page ^I32 y0 ^I32 y1 ^I32 left ^I32 xr]
+  (comment "1 when something that is not a label (dot leaders) lies on the line between block row `left`'s right edge and the box's left edge `xr`.")
+  (let [^I32 lx1 (cells-at bt (+ (* left FL_B) 4))
+        ^:mut ^I32 b 0
+        ^:mut ^I32 o 0]
+    (while (< b nb)
+      (do (set o (* b FL_B))
+          (if (and (== (cells-at bt (+ o 1)) page) (== (rem (cells-at bt (+ o 6)) 2) 0) (< (cells-at bt (+ o 6)) 4) (== (fl-same-line bt b y0 y1) 1))
+            (if (and (>= (cells-at bt (+ o 2)) (- lx1 FL_TOL)) (<= (cells-at bt (+ o 4)) (+ xr FL_TOL)))
+              (return 1)))
+          (set b (+ b 1))))
+    (return 0)))
+
+(defn ^I32 fl-left [^Cells bt ^I32 nb ^I32 page ^I32 x0 ^I32 y0 ^I32 y1 ^:mut ^Cells out ^I32 at]
+  (comment "The label to the left on the box's line (rule 2): its block row, and the gap, into out[at], out[at + 1]; -1 when there is none that is near enough or joined by a leader.")
+  (let [^:mut ^I32 best -1
+        ^:mut ^I32 bestgap 2000000000
+        ^:mut ^I32 b 0
+        ^:mut ^I32 o 0
+        ^:mut ^I32 gap 0]
+    (while (< b nb)
+      (do (set o (* b FL_B))
+          (if (and (== (cells-at bt (+ o 1)) page) (== (rem (cells-at bt (+ o 6)) 2) 1))
+            (do (set gap (- x0 (cells-at bt (+ o 4))))
+                (if (and (>= gap (- 0 FL_TOL)) (< gap bestgap) (== (fl-same-line bt b y0 y1) 1))
+                  (do (set best b)
+                      (set bestgap gap)))))
+          (set b (+ b 1))))
+    (if (>= best 0)
+      (if (> bestgap FL_NEAR_L)
+        (if (== (fl-bridged bt nb page y0 y1 best x0) 0)
+          (set best -1))))
+    (cells-set out at best)
+    (cells-set out (+ at 1) bestgap)
+    (return best)))
+
+(defn ^I32 fl-right [^Cells bt ^I32 nb ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "The label to the right of a button on its line (rule 1): its block row, -1 when there is none that starts near enough.")
+  (let [^I32 reach (fl-max FL_NEAR_R(quot (* (- y1 y0) 3) 2))
+        ^:mut ^I32 best -1
+        ^:mut ^I32 bestgap 2000000000
+        ^:mut ^I32 b 0
+        ^:mut ^I32 o 0
+        ^:mut ^I32 gap 0]
+    (while (< b nb)
+      (do (set o (* b FL_B))
+          (if (and (== (cells-at bt (+ o 1)) page) (== (rem (cells-at bt (+ o 6)) 2) 1) (>= (cells-at bt (+ o 2)) x0))
+            (do (set gap (- (cells-at bt (+ o 2)) x1))
+                (if (and (>= gap (- 0 FL_TOL)) (<= gap reach) (< gap bestgap) (== (fl-same-line bt b y0 y1) 1))
+                  (do (set best b)
+                      (set bestgap gap)))))
+          (set b (+ b 1))))
+    (return best)))
+
+(defn ^I32 fl-above [^Cells bt ^I32 nb ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^:mut ^Cells out ^I32 at]
+  (comment "The label over a text field (rule 3): its block row, and its cost (the gap plus the distance sideways), into out[at], out[at + 1]; -1 when there is none.")
+  (let [^:mut ^I32 best -1
+        ^:mut ^I32 bestcost 2000000000
+        ^:mut ^I32 b 0
+        ^:mut ^I32 o 0
+        ^:mut ^I32 gv 0
+        ^:mut ^I32 hd 0]
+    (while (< b nb)
+      (do (set o (* b FL_B))
+          (if (and (== (cells-at bt (+ o 1)) page) (== (rem (cells-at bt (+ o 6)) 2) 1))
+            (do (set gv (- y0 (cells-at bt (+ o 5))))
+                (set hd 0)
+                (if (< (cells-at bt (+ o 4)) x0) (set hd (- x0 (cells-at bt (+ o 4)))))
+                (if (and (>= gv (- 0 FL_TOL)) (<= gv FL_NEAR_A) (<= (cells-at bt (+ o 2)) x1) (<= hd FL_HDIST)
+                         (< (+ (fl-max gv 0) hd) bestcost))
+                  (do (set best b)
+                      (set bestcost (+ (fl-max gv 0) hd))))))
+          (set b (+ b 1))))
+    (cells-set out at best)
+    (cells-set out (+ at 1) bestcost)
+    (return best)))
+
+(defn ^I32 fl-cell [^Cells bt ^I32 nb ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "The empty table cell a box stands in (rule 4): the block row of the smallest one that holds the centre of the box, -1 when there is none.")
+  (let [^I32 cx (quot (+ x0 x1) 2)
+        ^I32 cy (quot (+ y0 y1) 2)
+        ^:mut ^I32 best -1
+        ^:mut ^I32 bestarea 2000000000
+        ^:mut ^I32 b 0
+        ^:mut ^I32 o 0
+        ^:mut ^I32 area 0]
+    (while (< b nb)
+      (do (set o (* b FL_B))
+          (if (and (== (cells-at bt (+ o 1)) page) (== (cells-at bt (+ o 6)) 4)
+                   (<= (cells-at bt (+ o 2)) cx) (>= (cells-at bt (+ o 4)) cx)
+                   (<= (cells-at bt (+ o 3)) cy) (>= (cells-at bt (+ o 5)) cy))
+            (do (set area (* (quot (- (cells-at bt (+ o 4)) (cells-at bt (+ o 2))) 100) (quot (- (cells-at bt (+ o 5)) (cells-at bt (+ o 3))) 100)))
+                (if (< area bestarea)
+                  (do (set best b)
+                      (set bestarea area)))))
+          (set b (+ b 1))))
+    (return best)))
+
+(defn ^I32 fl-anchor [^Cells bt ^I32 nb ^I32 page ^I32 y0 ^:mut ^Cells out]
+  (comment "The block a field with no label and no cell goes next to (rule 5), into out: out[0] its node (0: the end of the document) and out[1] the slot, 2 after it or 3 before it.")
+  (let [^:mut ^I32 after -1
+        ^:mut ^I32 afterY -2000000000
+        ^:mut ^I32 first -1
+        ^:mut ^I32 firstY 2000000000
+        ^:mut ^I32 b 0
+        ^:mut ^I32 o 0]
+    (while (< b nb)
+      (do (set o (* b FL_B))
+          (if (and (== (cells-at bt (+ o 1)) page) (== (rem (quot (cells-at bt (+ o 6)) 2) 2) 1))
+            (do (if (and (<= (cells-at bt (+ o 3)) (+ y0 FL_TOL)) (>= (cells-at bt (+ o 3)) afterY))
+                  (do (set after b)
+                      (set afterY (cells-at bt (+ o 3)))))
+                (if (< (cells-at bt (+ o 3)) firstY)
+                  (do (set first b)
+                      (set firstY (cells-at bt (+ o 3)))))))
+          (set b (+ b 1))))
+    (if (>= after 0)
+      (do (cells-set out 0 (cells-at bt (* after FL_B)))
+          (cells-set out 1 2)
+          (return 0)))
+    (if (>= first 0)
+      (do (cells-set out 0 (cells-at bt (* first FL_B)))
+          (cells-set out 1 3)
+          (return 0)))
+    (cells-set out 0 0)
+    (cells-set out 1 2)
+    (return 0)))
+
+(defn ^I32 fl-place [^Cells bt ^I32 nb ^I32 kind ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^:mut ^Cells out]
+  (comment "Where the field with this box goes: out[0] the target node and out[1] the slot (0 before a block's text, 1 after it, 2 a paragraph after the block, 3 before it).")
+  (comment "`out` has four cells; the last two are scratch.")
+  (let [^:mut ^I32 b -1
+        ^:mut ^I32 l -1
+        ^:mut ^I32 a -1
+        ^:mut ^I32 c -1
+        ^:mut ^I32 costl 0
+        ^:mut ^I32 costa 0]
+    (if (or (== kind 2) (== kind 3))
+      (do (set b (fl-right bt nb page x0 y0 x1 y1))
+          (if (>= b 0)
+            (do (cells-set out 0 (cells-at bt (* b FL_B)))
+                (cells-set out 1 0)
+                (return 0)))))
+    (set l (fl-left bt nb page x0 y0 y1 out 2))
+    (set costl (cells-at out 3))
+    (if (>= kind 4)
+      (do (set a (fl-above bt nb page x0 y0 x1 out 2))
+          (set costa (cells-at out 3))))
+    (if (and (>= l 0) (or (< a 0) (<= costl (+ costa FL_BIAS))))
+      (do (cells-set out 0 (cells-at bt (* l FL_B)))
+          (cells-set out 1 1)
+          (return 0)))
+    (if (>= a 0)
+      (do (cells-set out 0 (cells-at bt (* a FL_B)))
+          (cells-set out 1 1)
+          (return 0)))
+    (if (>= l 0)
+      (do (cells-set out 0 (cells-at bt (* l FL_B)))
+          (cells-set out 1 1)
+          (return 0)))
+    (set c (fl-cell bt nb page x0 y0 x1 y1))
+    (if (>= c 0)
+      (do (cells-set out 0 (cells-at bt (* c FL_B)))
+          (cells-set out 1 1)
+          (return 0)))
+    (fl-anchor bt nb page y0 out)
+    (return 0)))
+
+;; ---------------------------------------------------------------- the fields
+
+(defn ^I32 fl-count [^Cells an]
+  (comment "How many `an-field` rows `an` has.")
+  (let [^I32 n (quot (cells-len an) AN_STRIDE)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 k 0]
+    (while (< i n)
+      (do (if (== (cells-at an (+ (* i AN_STRIDE) 1)) (an-field)) (set k (+ k 1)))
+          (set i (+ i 1))))
+    (return k)))
+
+(defn ^I32 fl-row-before [^Cells fc ^I32 a ^I32 b]
+  (comment "1 when field row a is before field row b in reading order: page, then top, then left.")
+  (let [^I32 x (* a FL_W)
+        ^I32 y (* b FL_W)]
+    (if (< (cells-at fc (+ x 1)) (cells-at fc (+ y 1))) (return 1))
+    (if (> (cells-at fc (+ x 1)) (cells-at fc (+ y 1))) (return 0))
+    (if (< (cells-at fc (+ x 3)) (cells-at fc (+ y 3))) (return 1))
+    (if (> (cells-at fc (+ x 3)) (cells-at fc (+ y 3))) (return 0))
+    (if (< (cells-at fc (+ x 2)) (cells-at fc (+ y 2))) (return 1))
+    (return 0)))
+
+(defn ^I32 fl-swap-rows [^:mut ^Cells fc ^I32 a ^I32 b]
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 t 0]
+    (while (< k FL_W)
+      (do (set t (cells-at fc (+ (* a FL_W) k)))
+          (cells-set fc (+ (* a FL_W) k) (cells-at fc (+ (* b FL_W) k)))
+          (cells-set fc (+ (* b FL_W) k) t)
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^I32 fl-sort [^:mut ^Cells fc ^I32 nf]
+  (comment "Insertion sort of the field rows into reading order (stable).")
+  (let [^:mut ^I32 i 1
+        ^:mut ^I32 j 0]
+    (while (< i nf)
+      (do (set j i)
+          (while (and (> j 0) (== (fl-row-before fc j (- j 1)) 1))
+            (do (fl-swap-rows fc j (- j 1))
+                (set j (- j 1))))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 fl-collect [^Cells an ^Cells bt ^I32 nb ^:mut ^Cells fc ^:mut ^Cells sc]
+  (comment "The field rows `fc` (see FL_W), each placed (target node and slot), in reading order. `sc` is four cells of scratch. Answers how many.")
+  (cells-drop fc 0)
+  (cells-drop sc 0)
+  (cells-push sc 0)
+  (cells-push sc 0)
+  (cells-push sc 0)
+  (cells-push sc 0)
+  (let [^I32 n (quot (cells-len an) AN_STRIDE)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 nf 0]
+    (while (and (< i n) (< nf FL_MAXF))
+      (do (set at (* i AN_STRIDE))
+          (if (== (cells-at an (+ at 1)) (an-field))
+            (do (cells-push fc i)
+                (cells-push fc (+ (cells-at an at) 1))
+                (cells-push fc (cells-at an (+ at 4)))
+                (cells-push fc (cells-at an (+ at 5)))
+                (cells-push fc (cells-at an (+ at 6)))
+                (cells-push fc (cells-at an (+ at 7)))
+                (set k 6)
+                (while (< k FL_W)
+                  (do (cells-push fc 0)
+                      (set k (+ k 1))))
+                (cells-set fc (+ (* nf FL_W) 8) -1)
+                (cells-set fc (+ (* nf FL_W) 9) (cells-at an (+ at 8)))
+                (set nf (+ nf 1))))
+          (set i (+ i 1))))
+    (fl-sort fc nf)
+    (set i 0)
+    (while (< i nf)
+      (do (set at (* i FL_W))
+          (fl-place bt nb (cells-at fc (+ at 9)) (cells-at fc (+ at 1)) (cells-at fc (+ at 2)) (cells-at fc (+ at 3)) (cells-at fc (+ at 4)) (cells-at fc (+ at 5)) sc)
+          (cells-set fc (+ at 6) (cells-at sc 0))
+          (cells-set fc (+ at 7) (cells-at sc 1))
+          (set i (+ i 1))))
+    (return nf)))
+
+;; ---------------------------------------------------------------- the nodes
+
+(defn ^I32 fl-type-text [^:mut ^Cells text ^I32 kind]
+  (comment "Append the `type` of a field of this `fd-kind` to the text arena: checkbox, radio, text, combo or list.")
+  (if (== kind 2)
+    (do (text-append-cp text 99) (text-append-cp text 104) (text-append-cp text 101) (text-append-cp text 99)
+        (text-append-cp text 107) (text-append-cp text 98) (text-append-cp text 111) (text-append-cp text 120)
+        (return 0)))
+  (if (== kind 3)
+    (do (text-append-cp text 114) (text-append-cp text 97) (text-append-cp text 100) (text-append-cp text 105)
+        (text-append-cp text 111)
+        (return 0)))
+  (if (== kind 4)
+    (do (text-append-cp text 116) (text-append-cp text 101) (text-append-cp text 120) (text-append-cp text 116)
+        (return 0)))
+  (if (== kind 5)
+    (do (text-append-cp text 99) (text-append-cp text 111) (text-append-cp text 109) (text-append-cp text 98)
+        (text-append-cp text 111)
+        (return 0)))
+  (text-append-cp text 108)
+  (text-append-cp text 105)
+  (text-append-cp text 115)
+  (text-append-cp text 116)
+  (return 0))
+
+(defn ^I32 fl-copy-run [^:mut ^Cells text ^Cells txt ^I32 s ^I32 n]
+  (comment "The run txt[s, s + n) appended to the Model's text arena; answers where it starts there.")
+  (let [^I32 at (cells-len text)
+        ^:mut ^I32 i 0]
+    (while (< i n)
+      (do (text-append-cp text (cells-at txt (+ s i)))
+          (set i (+ i 1))))
+    (return at)))
+
+(defn ^I32 fl-conf [^I32 fa]
+  (comment "How far a field is trusted, from how /V and the appearance agree (`fa` of `emon.pdfannot`): they agree 950, differ 600, /V alone 850, the appearance")
+  (comment "alone 700, neither to compare (a field left blank) 900.")
+  (if (== fa 1) (return 950))
+  (if (== fa 2) (return 600))
+  (if (== fa 3) (return 850))
+  (if (== fa 4) (return 700))
+  (return 900))
+
+(defn ^I32 fl-field [^Cells an ^Cells txt ^Cells fc ^I32 row ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text ^I32 par]
+  (comment "The `field` inline of field row `row` of `fc`, the last child of `par`: its name, type, value (a button's export value) and, of a button, whether it is on.")
+  (let [^I32 o (* row FL_W)
+        ^I32 at (* (cells-at fc o) AN_STRIDE)
+        ^I32 kind (cells-at an (+ at 8))
+        ^I32 f (node-new nodes (nk-field) par)
+        ^:mut ^I32 s 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 vs -1
+        ^:mut ^I32 vn 0]
+    (if (< f 0) (return -1))
+    (node-set-src nodes f (sr-annot))
+    (node-set-conf nodes f (fl-conf (cells-at an (+ at 11))))
+    (set n (cells-at an (+ at 13)))
+    (if (and (>= (cells-at an (+ at 12)) 0) (> n 0))
+      (do (set s (fl-copy-run text txt (cells-at an (+ at 12)) n))
+          (node-set-attr-text nodes attrs f (fk-name) s n)))
+    (set s (cells-len text))
+    (fl-type-text text kind)
+    (node-set-attr-text nodes attrs f (fk-type) s (- (cells-len text) s))
+    (if (>= kind 4)
+      (do (set vs (cells-at an (+ at 14)))
+          (set vn (cells-at an (+ at 15))))
+      (do (set vs (cells-at an (+ at 16)))
+          (set vn (cells-at an (+ at 17)))))
+    (if (and (>= vs 0) (> vn 0))
+      (do (set s (fl-copy-run text txt vs vn))
+          (node-set-attr-text nodes attrs f (fk-value) s vn)))
+    (if (< kind 4)
+      (node-set-attr-bool nodes attrs f (fk-checked) (cells-at an (+ at 9))))
+    (node-add-region nodes regions f (cells-at fc (+ o 1)) (cells-at fc (+ o 2)) (cells-at fc (+ o 3)) (cells-at fc (+ o 4)) (cells-at fc (+ o 5)))
+    (return f)))
+
+(defn ^I32 fl-chain [^Cells an ^Cells txt ^Cells fc ^I32 row0 ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text ^I32 par]
+  (comment "Every field of the chain that starts at field row `row0`, in order, as the last children of `par`.")
+  (let [^:mut ^I32 r row0]
+    (while (>= r 0)
+      (do (fl-field an txt fc r nodes attrs regions text par)
+          (set r (cells-at fc (+ (* r FL_W) 8)))))
+    (return 0)))
+
+(defn ^I32 fl-orphans [^Cells an ^Cells txt ^Cells fc ^I32 row0 ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text ^I32 par]
+  (comment "The fields of the chain that starts at `row0`, which have no label (rule 4): a paragraph of their own under `par` for each page, with the box that holds them.")
+  (let [^:mut ^I32 r row0
+        ^:mut ^I32 p -1
+        ^:mut ^I32 pg 0
+        ^:mut ^I32 ux0 0
+        ^:mut ^I32 uy0 0
+        ^:mut ^I32 ux1 0
+        ^:mut ^I32 uy1 0
+        ^:mut ^I32 o 0]
+    (while (>= r 0)
+      (do (set o (* r FL_W))
+          (set pg (cells-at fc (+ o 1)))
+          (set p (node-new nodes (nk-paragraph) par))
+          (if (< p 0)
+            (set r -1)
+            (do (node-set-text nodes p (cells-len text) 0)
+                (node-set-src nodes p (sr-annot))
+                (node-add-src nodes p (sr-infer))
+                (node-set-conf nodes p 500)
+                (set ux0 (cells-at fc (+ o 2)))
+                (set uy0 (cells-at fc (+ o 3)))
+                (set ux1 (cells-at fc (+ o 4)))
+                (set uy1 (cells-at fc (+ o 5)))
+                (while (and (>= r 0) (== (cells-at fc (+ (* r FL_W) 1)) pg))
+                  (do (set o (* r FL_W))
+                      (fl-field an txt fc r nodes attrs regions text p)
+                      (set ux0 (fl-min ux0 (cells-at fc (+ o 2))))
+                      (set uy0 (fl-min uy0 (cells-at fc (+ o 3))))
+                      (set ux1 (fl-max ux1 (cells-at fc (+ o 4))))
+                      (set uy1 (fl-max uy1 (cells-at fc (+ o 5))))
+                      (set r (cells-at fc (+ o 8)))))
+                (node-add-region nodes regions p pg ux0 uy0 ux1 uy1)))))
+    (return 0)))
+
+(defn ^I32 fl-has-inline [^Cells on ^I32 n]
+  (comment "1 when node n has an inline child.")
+  (let [^:mut ^I32 c (node-first-child on n)]
+    (while (>= c 0)
+      (do (if (== (node-is-inline on c) 1) (return 1))
+          (set c (node-next on c))))
+    (return 0)))
+
+(defn ^I32 fl-tree [^Cells on ^Cells oa ^Cells orr ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
+                    ^:mut ^Cells nm ^Cells an ^Cells txt ^Cells fc ^Cells fh ^I32 n ^I32 np]
+  (comment "Copy old node n and its subtree as the last child of new node np (-1: a new root), with the fields that go in it: those before its text first, then its")
+  (comment "children (a block that was plain text gets a `text` inline for its words), the fields after its text before its first block child, and the paragraph of the")
+  (comment "fields that have no label after it (before it, for those placed before) as its siblings; the document's own at its end.")
+  (let [^I32 hb (cells-at fh (* n 4))
+        ^I32 ha (cells-at fh (+ (* n 4) 1))
+        ^I32 ho (cells-at fh (+ (* n 4) 2))
+        ^I32 hp (cells-at fh (+ (* n 4) 3))
+        ^:mut ^I32 nn -1
+        ^:mut ^I32 c 0
+        ^:mut ^I32 flushed 0
+        ^:mut ^I32 t 0]
+    (if (and (>= hp 0) (>= np 0))
+      (fl-orphans an txt fc hp nodes attrs regions text np))
+    (set nn (rs-node on oa orr nodes attrs regions nm n np))
+    (if (< nn 0) (return -1))
+    (if (and (== (node-kind on n) (nk-cell)) (or (>= hb 0) (>= ha 0)))
+      (node-set-aux nodes nn 0))
+    (if (or (>= hb 0) (>= ha 0))
+      (do (fl-chain an txt fc hb nodes attrs regions text nn)
+          (if (and (== (fl-has-inline on n) 0) (== (node-has-text on n) 1))
+            (do (set t (node-new nodes (nk-text) nn))
+                (if (>= t 0)
+                  (do (node-set-text nodes t (node-text-start on n) (node-text-len on n))
+                      (node-set-conf nodes t 1000)
+                      (node-add-src nodes t (sr-text))))))))
+    (set c (node-first-child on n))
+    (while (>= c 0)
+      (do (if (and (== flushed 0) (== (node-is-inline on c) 0))
+            (do (fl-chain an txt fc ha nodes attrs regions text nn)
+                (set flushed 1)))
+          (fl-tree on oa orr nodes attrs regions text nm an txt fc fh c nn)
+          (set c (node-next on c))))
+    (if (== flushed 0)
+      (fl-chain an txt fc ha nodes attrs regions text nn))
+    (if (>= ho 0)
+      (if (>= np 0)
+        (fl-orphans an txt fc ho nodes attrs regions text np)
+        (fl-orphans an txt fc ho nodes attrs regions text nn)))
+    (return nn)))
+
+(defn ^:pub ^I32 fl-run [^Cells on ^Cells oa ^Cells orr ^:mut ^Cells text ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions
+                         ^:mut ^Cells nm ^Cells an ^Cells txt ^:mut ^Cells fc ^:mut ^Cells fh ^:mut ^Cells bt ^:mut ^Cells sc]
+  (comment "Copy the old Model's trees into the empty arenas `nodes`, `attrs`, `regions` (the text is shared) with the form fields of `an` put in (see the head).")
+  (comment "`nm` (old node to new), `fc`, `fh`, `bt` and `sc` are scratch. Answers the new node count, or 0, having written nothing, when `an` has no field.")
+  (if (== (fl-count an) 0) (return 0))
+  (let [^I32 n (node-count on)
+        ^I32 ndoc (fl-doc-end on)
+        ^I32 nb (fl-blocks on orr text ndoc bt)
+        ^I32 nf (fl-collect an bt nb fc sc)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 t 0
+        ^:mut ^I32 slot 0
+        ^:mut ^I32 r 0]
+    (cells-drop fh 0)
+    (while (< i (* n 4))
+      (do (cells-push fh -1)
+          (set i (+ i 1))))
+    (set i (- nf 1))
+    (while (>= i 0)
+      (do (set t (cells-at fc (+ (* i FL_W) 6)))
+          (set slot (cells-at fc (+ (* i FL_W) 7)))
+          (cells-set fc (+ (* i FL_W) 8) (cells-at fh (+ (* t 4) slot)))
+          (cells-set fh (+ (* t 4) slot) i)
+          (set i (- i 1))))
+    (cells-drop nodes 0)
+    (cells-drop attrs 0)
+    (cells-drop regions 0)
+    (cells-drop nm 0)
+    (set i 0)
+    (while (< i n)
+      (do (cells-push nm -1)
+          (set i (+ i 1))))
+    (while (< r n)
+      (do (if (< (node-parent on r) 0)
+            (fl-tree on oa orr nodes attrs regions text nm an txt fc fh r -1))
+          (set r (+ r 1))))
+    (rs-remap attrs nm)
+    (return (node-count nodes))))

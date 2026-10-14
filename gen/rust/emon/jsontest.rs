@@ -63,6 +63,26 @@ fn test_golden_kinds() {
     crate::testport::assert_text_span(pretty, &crate::testport::test_file("json/kinds.pretty.json")[..], 0, jt_end(&crate::testport::test_file("json/kinds.pretty.json")[..]), "pretty", 0);
 }
 #[test]
+fn test_golden_fields() {
+    // P11.x3 (D548): a form field is an inline of the paragraph that holds its label (no id, in `inlines`, before or after the words) and still a block among blocks.
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let compact: &mut String = &mut crate::port::new_text();
+    let pretty: &mut String = &mut crate::port::new_text();
+    crate::testport::assert_eq(jt_build(&crate::testport::test_file("json/fields.model")[..], nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the script builds");
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the Model is well formed");
+    js_emit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout, &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+    js_emit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout, &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+    crate::testport::assert_text_span(compact, &crate::testport::test_file("json/fields.json")[..], 0, jt_end(&crate::testport::test_file("json/fields.json")[..]), "compact", 0);
+    crate::testport::assert_text_span(pretty, &crate::testport::test_file("json/fields.pretty.json")[..], 0, jt_end(&crate::testport::test_file("json/fields.pretty.json")[..]), "pretty", 0);
+}
+#[test]
 fn test_golden_corners() {
     let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();

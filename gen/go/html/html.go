@@ -474,8 +474,83 @@ func hMilestone(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cell
 	return 0
 }
 
+func hButton(text *port.Cells, attrs *port.Cells, a int32) int32 {
+	// What a field's `type` (the text attribute a) says it is: 1 a check box, 2 a radio button, else 0. `checkbox` is the only type of eight
+	// letters and `radio` of five that begin with a c and an r.
+	var s int32 = model.AttrValue(attrs, a)
+	var ln int32 = model.AttrLen(attrs, a)
+	if (ln == 8) && (port.CellsAt(text, s) == 99) {
+		return 1
+	}
+	if (ln == 5) && (port.CellsAt(text, s) == 114) {
+		return 2
+	}
+	return 0
+}
+
+func hField(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, pages *port.Cells, layout *port.Cells, text *port.Cells, n int32) int32 {
+	// A form field (SPEC 5.1): a span, never a live <input>. A check box or radio button says what it is to assistive technology (`role`, `aria-checked`) and
+	// keeps its export value in `data-emon-value`, its element empty; any other field shows its value as the element's content. In a paragraph (an inline) or
+	// among blocks, the same.
+	var a int32 = -1
+	var b int32 = 0
+	port.TextAscii(t, "<span data-emon=\"field\"")
+	a = hTattr(nodes, attrs, n, model.FkName())
+	if a >= 0 {
+		port.TextAscii(t, " data-emon-name=\"")
+		hRun(t, text, model.AttrValue(attrs, a), model.AttrLen(attrs, a))
+		port.TextAscii(t, "\"")
+	}
+	a = hTattr(nodes, attrs, n, model.FkType())
+	if a >= 0 {
+		port.TextAscii(t, " data-emon-type=\"")
+		hRun(t, text, model.AttrValue(attrs, a), model.AttrLen(attrs, a))
+		port.TextAscii(t, "\"")
+		b = hButton(text, attrs, a)
+		if b == 1 {
+			port.TextAscii(t, " role=\"checkbox\"")
+		}
+		if b == 2 {
+			port.TextAscii(t, " role=\"radio\"")
+		}
+	}
+	a = hIattr(nodes, attrs, n, model.FkChecked())
+	if a >= 0 {
+		if model.AttrValue(attrs, a) != 0 {
+			port.TextAscii(t, " data-emon-checked=\"true\"")
+		}
+		if model.AttrValue(attrs, a) == 0 {
+			port.TextAscii(t, " data-emon-checked=\"false\"")
+		}
+		if b > 0 {
+			if model.AttrValue(attrs, a) != 0 {
+				port.TextAscii(t, " aria-checked=\"true\"")
+			}
+			if model.AttrValue(attrs, a) == 0 {
+				port.TextAscii(t, " aria-checked=\"false\"")
+			}
+		}
+	}
+	a = hTattr(nodes, attrs, n, model.FkValue())
+	if (a >= 0) && (b > 0) {
+		port.TextAscii(t, " data-emon-value=\"")
+		hRun(t, text, model.AttrValue(attrs, a), model.AttrLen(attrs, a))
+		port.TextAscii(t, "\"")
+	}
+	hCommon(t, o, nodes, regions, pages, layout, n)
+	port.TextAscii(t, ">")
+	if (a >= 0) && (b == 0) {
+		hRun(t, text, model.AttrValue(attrs, a), model.AttrLen(attrs, a))
+	}
+	if a < 0 {
+		hInner(t, o, nodes, attrs, regions, pages, layout, text, n)
+	}
+	port.TextAscii(t, "</span>")
+	return 0
+}
+
 func hInline(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, pages *port.Cells, layout *port.Cells, text *port.Cells, n int32) int32 {
-	// One inline node: text, span, link, ref or linebreak (SPEC 5.1).
+	// One inline node: text, span, link, ref, linebreak, initial, field or a milestone (SPEC 5.1).
 	var kind int32 = model.NodeKind(nodes, n)
 	var sub int32 = model.NodeSub(nodes, n)
 	var a int32 = -1
@@ -596,6 +671,10 @@ func hInline(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, 
 		if a < 0 {
 			port.TextAscii(t, "</span>")
 		}
+		return 0
+	}
+	if kind == model.NkField() {
+		hField(t, o, nodes, attrs, regions, pages, layout, text, n)
 		return 0
 	}
 	return 0
@@ -1335,38 +1414,7 @@ func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 		return 1
 	}
 	if kind == model.NkField() {
-		port.TextAscii(t, "<span data-emon=\"field\"")
-		a = hTattr(nodes, attrs, n, model.FkName())
-		if a >= 0 {
-			port.TextAscii(t, " data-emon-name=\"")
-			hRun(t, text, model.AttrValue(attrs, a), model.AttrLen(attrs, a))
-			port.TextAscii(t, "\"")
-		}
-		a = hTattr(nodes, attrs, n, model.FkType())
-		if a >= 0 {
-			port.TextAscii(t, " data-emon-type=\"")
-			hRun(t, text, model.AttrValue(attrs, a), model.AttrLen(attrs, a))
-			port.TextAscii(t, "\"")
-		}
-		a = hIattr(nodes, attrs, n, model.FkChecked())
-		if a >= 0 {
-			if model.AttrValue(attrs, a) != 0 {
-				port.TextAscii(t, " data-emon-checked=\"true\"")
-			}
-			if model.AttrValue(attrs, a) == 0 {
-				port.TextAscii(t, " data-emon-checked=\"false\"")
-			}
-		}
-		hCommon(t, o, nodes, regions, pages, layout, n)
-		port.TextAscii(t, ">")
-		a = hTattr(nodes, attrs, n, model.FkValue())
-		if a >= 0 {
-			hRun(t, text, model.AttrValue(attrs, a), model.AttrLen(attrs, a))
-		}
-		if a < 0 {
-			hInner(t, o, nodes, attrs, regions, pages, layout, text, n)
-		}
-		port.TextAscii(t, "</span>")
+		hField(t, o, nodes, attrs, regions, pages, layout, text, n)
 		return 1
 	}
 	if kind == model.NkFurniture() {

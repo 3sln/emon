@@ -48,6 +48,17 @@
 ;; The Engines hand the document unit `an` and `txt` and not `sg`/`fd`, and the hosts are not
 ;; edited by P8.3, so the rows ride in `an`: `pa-dump` and the return value leave them out.
 ;;
+;; THE FORM FIELD ROWS (P11.x3, D548). After the digital signature rows, `pa-run` appends to `an` one SYNTHETIC row (subtype `an-field`, 28) for every WIDGET of a
+;; terminal field of kind check box, radio button, text, combo box or list box that is on a page, is not hidden or no-view (/F bits 2 and 32) and has a rectangle
+;; with an area, in widget order (so that `emon.fields` has what it places without the `fd` arena, which the Engines do not hand over either). Cells: 0 page, 1 subtype
+;; 28, 2 the field's object number, 3 the widget's /F, 4-7 the widget's rectangle in page space, 8 the field's kind (`fd-kind`), 9 `checked` (a button: 1 when
+;; THIS widget is on, 0 off; -1 for any other kind), 10 /Ff, 11 how /V and the appearance agree (`fa`; 0 when not compared), 12-13 the full field name, 14-15 the
+;; text shown (a text, combo or list field: /V as text, else the widget's appearance text; a button: absent), 16-17 a button's export value (the name of the
+;; state in which it is on: /AS when it is, else the first state of /AP /N that is not /Off), 18-19 /TU, 20 the widget's own `an` row, 21 the field's `fd` row. Every run is
+;; absent as -1 0. A button is ON when its /AS names a state other than /Off (no /AS: when the field's /V does). The rows are made by a second reading of the pages' /Annots
+;; (`pa-field-rows`), which is the only thing that has a widget's dictionary and the field it belongs to at once, and the widget rows themselves, and with them `pa-dump`'s
+;; golden, are what they were.
+;;
 ;; THE APPEARANCE is decoded and its text shown (`BT` .. `ET`, strings and their line
 ;; moves) is read as Latin-1: enough for a form filled with a base-14 or WinAnsi font; text
 ;; in a composite font is unreadable here and left empty. A Form XObject the appearance
@@ -128,7 +139,8 @@
    [an-watermark 24 "Watermark"]
    [an-redact 25 "Redact"]
    [an-rich-media 26 "RichMedia"]
-   [an-digsig 27 "DigitalSignature"]])
+   [an-digsig 27 "DigitalSignature"]
+   [an-field 28 "FormField"]])
 
 (defenum ^:pub an-act
   [[ac-none 0 "none"]
@@ -1033,6 +1045,49 @@
     (cells-set fd (+ at 23) r)
     (return r)))
 
+(defn ^I32 pa-widget-state [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                            ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells txt ^I32 dict
+                            ^Cells fd ^I32 fat ^:mut ^Cells an ^I32 at]
+  (comment "A check box or radio button widget (`dict`, resolved) of the field at fd[fat]: is it on, and in which state? Into the synthetic `an-field` row at an[at]: cell 9")
+  (comment "is 1 when its /AS names a state other than /Off (with no /AS: when the field's /V does), else 0; the export value is the run at cells 16-17: the state the widget")
+  (comment "is in when it is on (/AS, else the field's /V), else, off, the first state of /AP /N that is not /Off. Evidence, not truth (D034): what the file states, so a")
+  (comment "widget whose /AS and /V disagree is on by its /AS, the appearance that is painted.")
+  (let [^I32 as (px-dget src ar dc a b st dict (px-as))
+        ^I32 vh (cells-at fd (+ fat 31))
+        ^I32 ap (px-dget src ar dc a b st dict (px-ap))
+        ^:mut ^I32 on 0
+        ^:mut ^I32 got 0
+        ^:mut ^I32 nr 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 v 0]
+    (if (and (!= as 0) (== (pl-kind-of ar as) 4))
+      (if (== (px-is ar as (px-off)) 0) (set on 1))
+      (if (and (!= vh 0) (== (pl-kind-of ar vh) 4))
+        (if (== (px-is ar vh (px-off)) 0) (set on 1))))
+    (cells-set an (+ at 9) on)
+    (if (and (== on 1) (!= as 0) (== (pl-kind-of ar as) 4))
+      (do (pa-text-to txt ar as an (+ at 16))
+          (set got 1)))
+    (if (and (== got 0) (== on 1) (!= vh 0) (== (pl-kind-of ar vh) 4))
+      (do (pa-text-to txt ar vh an (+ at 16))
+          (set got 1)))
+    (if (and (== got 0) (!= ap 0) (== (pl-kind-of ar ap) 7))
+      (do (set nr (pl-dict-get ar ap (pn-n)))
+          (if (!= nr 0)
+            (do (set n (pd-resolve src ar dc a b st nr))
+                (if (and (!= n 0) (== (pl-kind-of ar n) 7))
+                  (do (set k (pl-first ar n))
+                      (while (and (!= k 0) (== got 0))
+                        (do (set v (pl-next ar k))
+                            (if (== (px-is ar k (px-off)) 0)
+                              (do (pa-text-to txt ar k an (+ at 16))
+                                  (set got 1)))
+                            (if (== v 0)
+                              (set k 0)
+                              (set k (pl-next ar v)))))))))))
+    (return got)))
+
 (defn ^I32 pa-annot [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
                      ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells idx ^Cells pg
                      ^:mut ^Cells txt ^:mut ^Cells w ^:mut ^Cells an ^:mut ^Cells aq
@@ -1239,6 +1294,92 @@
           (set i (+ i 1))))
     (return n)))
 
+;; ------------------------------------------------------------------------ the form field rows
+
+(defn ^I32 pa-field-row-of [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                            ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells txt ^Cells fd ^:mut ^Cells an
+                            ^I32 wrow ^I32 frow ^I32 dict]
+  (comment "Append the synthetic `an-field` row (see the head of this file) of widget row `wrow` (its dictionary `dict`, resolved) of field row `frow`. Answers 1 when a row")
+  (comment "was written, 0 when the widget is not one the document unit places: a hidden or no-view widget, one without an area, a field of another kind than check box,")
+  (comment "radio, text, combo or list.")
+  (let [^I32 w (* wrow AN_STRIDE)
+        ^I32 f (* frow FD_STRIDE)
+        ^I32 kind (cells-at fd (+ f 6))
+        ^I32 flags (cells-at an (+ w 3))
+        ^I32 pi (cells-at an w)
+        ^:mut ^I32 at 0
+        ^:mut ^I32 k 0]
+    (if (or (< kind 2) (> kind 6)) (return 0))
+    (if (!= (bit-and flags 34) 0) (return 0))
+    (if (or (<= (cells-at an (+ w 6)) (cells-at an (+ w 4))) (<= (cells-at an (+ w 7)) (cells-at an (+ w 5)))) (return 0))
+    (pa-an-new an pi)
+    (set at (- (cells-len an) AN_STRIDE))
+    (cells-set an (+ at 1) (an-field))
+    (cells-set an (+ at 2) (cells-at fd f))
+    (cells-set an (+ at 3) flags)
+    (set k 0)
+    (while (< k 4)
+      (do (cells-set an (+ (+ at 4) k) (cells-at an (+ (+ w 4) k)))
+          (set k (+ k 1))))
+    (set k 8)
+    (while (< k 23)
+      (do (cells-set an (+ at k) 0)
+          (set k (+ k 1))))
+    (cells-set an (+ at 8) kind)
+    (cells-set an (+ at 9) -1)
+    (cells-set an (+ at 10) (cells-at fd (+ f 5)))
+    (cells-set an (+ at 11) (cells-at fd (+ f 23)))
+    (cells-set an (+ at 12) (cells-at fd (+ f 2)))
+    (cells-set an (+ at 13) (cells-at fd (+ f 3)))
+    (cells-set an (+ at 14) -1)
+    (cells-set an (+ at 16) -1)
+    (cells-set an (+ at 18) (cells-at fd (+ f 13)))
+    (cells-set an (+ at 19) (cells-at fd (+ f 14)))
+    (cells-set an (+ at 20) wrow)
+    (cells-set an (+ at 21) frow)
+    (if (or (== kind 2) (== kind 3))
+      (pa-widget-state src ar dc a b st txt dict fd f an at))
+    (if (>= kind 4)
+      (do (if (and (!= (cells-at fd (+ f 7)) 0) (>= (cells-at fd (+ f 8)) 0))
+            (do (cells-set an (+ at 14) (cells-at fd (+ f 8)))
+                (cells-set an (+ at 15) (cells-at fd (+ f 9))))
+            (if (and (>= (cells-at an (+ w 32)) 0) (> (cells-at an (+ w 33)) 0))
+              (do (cells-set an (+ at 14) (cells-at an (+ w 32)))
+                  (cells-set an (+ at 15) (cells-at an (+ w 33))))))))
+    (return 1)))
+
+(defn ^I32 pa-field-rows [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                          ^:mut ^Cells b ^:mut ^Cells st ^Cells pg ^:mut ^Cells txt
+                          ^Cells fd ^:mut ^Cells an]
+  (comment "The synthetic rows of every widget of a placeable field (`pa-field-row-of`), in widget order: the pages' /Annots read once more, in the order `pa-run` read them")
+  (comment "(an entry that is a dictionary was the next row of `an`, so the count of those is the row of a widget), for what a row of `an` does not keep, a button's state.")
+  (comment "Answers the rows written. Call it after the rows of the annotations are all there.")
+  (let [^I32 np (pd-pg-count pg)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 an-arr 0
+        ^:mut ^I32 dict 0
+        ^:mut ^I32 frow 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 wrote 0]
+    (while (< i np)
+      (do (set an-arr (px-dget src ar dc a b st (pd-pg-node pg i) (px-annots)))
+          (if (and (!= an-arr 0) (== (pl-kind-of ar an-arr) 6))
+            (do (set e (pl-first ar an-arr))
+                (while (!= e 0)
+                  (do (if (< r PA_ANNOTS)
+                        (do (set dict (pd-resolve src ar dc a b st e))
+                            (if (and (!= dict 0) (== (pl-kind-of ar dict) 7))
+                              (do (set w (* r AN_STRIDE))
+                                  (set frow (cells-at an (+ w 29)))
+                                  (if (and (== (cells-at an (+ w 1)) (an-widget)) (>= frow 0))
+                                    (set wrote (+ wrote (pa-field-row-of src ar dc a b st txt fd an r frow dict))))
+                                  (set r (+ r 1))))))
+                      (set e (pl-next ar e))))))
+          (set i (+ i 1))))
+    (return wrote)))
+
 ;; ------------------------------------------------------------------------ run
 
 (defn ^:pub ^I32 pa-run[^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
@@ -1309,6 +1450,7 @@
     (if (ps-missed src) (return -1))
     (set i (quot (cells-len an) AN_STRIDE))
     (pa-digsigs an fd sg)
+    (pa-field-rows src ar dc a b st pg txt fd an)
     (return i)))
 
 ;; ------------------------------------------------------------------------ dump
@@ -1497,7 +1639,7 @@
         ^:mut ^I32 i 0]
     (emit-ascii t "{\"annots\":[")
     (while (< i na)
-      (do (if (!= (cells-at an (+ (* i AN_STRIDE) 1)) (an-digsig))
+      (do (if (and (!= (cells-at an (+ (* i AN_STRIDE) 1)) (an-digsig)) (!= (cells-at an (+ (* i AN_STRIDE) 1)) (an-field)))
             (do (if (> i 0) (emit-ascii t ","))
                 (pa-dump-annot t txt an aq i)))
           (set i (+ i 1))))

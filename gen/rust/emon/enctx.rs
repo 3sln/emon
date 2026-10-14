@@ -583,6 +583,10 @@ pub struct Scratch {
     pub fab: crate::port::Cells,
     pub fws: crate::port::Cells,
     pub sgc: crate::port::Cells,
+    pub flc: crate::port::Cells,
+    pub flh: crate::port::Cells,
+    pub flb: crate::port::Cells,
+    pub fls: crate::port::Cells,
 }
 impl Scratch {
     pub fn new() -> Scratch {
@@ -717,6 +721,10 @@ impl Scratch {
             fab: crate::port::Cells::new(),
             fws: crate::port::Cells::new(),
             sgc: crate::port::Cells::new(),
+            flc: crate::port::Cells::new(),
+            flh: crate::port::Cells::new(),
+            flb: crate::port::Cells::new(),
+            fls: crate::port::Cells::new(),
         }
     }
 }

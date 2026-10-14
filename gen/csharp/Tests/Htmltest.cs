@@ -55,6 +55,15 @@ public static class Htmltest {
         HtGolden(0, "json/kinds.model", "html/kinds.plain.html", 386, 0);
     }
     [Xunit.Fact]
+    public static void TestGoldenFields() {
+        // P11.x3 (D548): a field in a paragraph and among blocks; a check box or radio button is an empty span that says what it is and whether it is on, a text field shows its value.
+        HtGolden(0, "json/fields.model", "html/fields.html", 0, 0);
+        HtGolden(0, "json/fields.model", "html/fields.pretty.html", 16, 0);
+        HtGolden(0, "json/fields.model", "html/fields.full.html", 15, 950);
+        HtGolden(0, "json/fields.model", "html/fields.bare.html", 96, 0);
+        HtGolden(0, "json/fields.model", "html/fields.plain.html", 386, 0);
+    }
+    [Xunit.Fact]
     public static void TestGoldenCorners() {
         HtGolden(0, "json/corners.model", "html/corners.html", 0, 0);
         HtGolden(0, "json/corners.model", "html/corners.pretty.html", 16, 0);

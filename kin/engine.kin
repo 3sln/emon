@@ -51,6 +51,7 @@
             [emon.lists :refer [ls-analyze]]
             [emon.inline :refer [il-analyze il-fonts]]
             [emon.restruct :refer [rs-run]]
+            [emon.fields :refer [fl-run]]
             [emon.figclass :refer [fc-stage fc-images]]
             [emon.scan :refer [sc-tag]]
             [emon.rasterplan :refer [rp-settings]]
@@ -312,6 +313,17 @@
   (cells-swap (fd m regions) (fd s fregions))
   (return 0))
 
+(defn ^I32 en-fields [^Arenas m ^Scratch s ^Doc d]
+  (comment "P11.x3 (SPEC 3.2, D548): the AcroForm fields the annotation reader made rows of (`an-field`) put into the blocks that hold their labels, by geometry (`emon.fields`).")
+  (comment "A copy of the finished body (the arenas the figures stage left in `fnodes`, `fattrs`, `fregions` are its scratch) swapped in; a document with no field row is not touched.")
+  (let [^I32 r (fl-run (fd m nodes) (fd m attrs) (fd m regions) (fd m text) (fd s fnodes) (fd s fattrs) (fd s fregions) (fd s fnm)
+                       (fd d an) (fd d txt) (fd s flc) (fd s flh) (fd s flb) (fd s fls))]
+    (if (> r 0)
+      (do (cells-swap (fd m nodes) (fd s fnodes))
+          (cells-swap (fd m attrs) (fd s fattrs))
+          (cells-swap (fd m regions) (fd s fregions))))
+    (return 0)))
+
 (defn ^I32 en-asset-stage [^Cfg c ^Arenas m ^Scratch s ^Cells cand ^:mut ^Buf cbytes]
   (comment "P3.13: the settings on the root, then each figure's and seal's pixels or reason, in node-id order. `cand` and `cbytes` were made by the document pass.")
   (as-settings (fd m nodes) (fd m attrs) (fd m text) (fd c level) (fd c dpi) (fd c pixels) (fd c abyte) (fd c tbyte) (fd c sigs))
@@ -392,6 +404,9 @@
           (do (cells-swap (fd m nodes) (fd s sn))
               (cells-swap (fd m attrs) (fd s sa))
               (cells-swap (fd m regions) (fd s sr))))))
+    ;; the form fields (P11.x3, D548): in the block that holds each one's label, once the body is as it will stay (a PDF's; an image has no widgets)
+    (if (== kind 0)
+      (en-fields m s d))
     (if (!= (fd c haveloc) 0)
       (do (set w (cells-len (fd m text)))
           (let [^:mut ^I32 i 0]

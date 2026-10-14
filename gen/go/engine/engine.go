@@ -9,6 +9,7 @@ import (
 	"emon/columns"
 	"emon/enctx"
 	"emon/evidence"
+	"emon/fields"
 	"emon/figclass"
 	"emon/furniture"
 	"emon/gfuse"
@@ -340,6 +341,18 @@ func enFigures(m *enctx.Arenas, s *enctx.Scratch, d *enctx.Doc, level int32) int
 	return 0
 }
 
+func enFields(m *enctx.Arenas, s *enctx.Scratch, d *enctx.Doc) int32 {
+	// P11.x3 (SPEC 3.2, D548): the AcroForm fields the annotation reader made rows of (`an-field`) put into the blocks that hold their labels, by geometry (`emon.fields`).
+	// A copy of the finished body (the arenas the figures stage left in `fnodes`, `fattrs`, `fregions` are its scratch) swapped in; a document with no field row is not touched.
+	var r int32 = fields.FlRun(m.Nodes, m.Attrs, m.Regions, m.Text, s.Fnodes, s.Fattrs, s.Fregions, s.Fnm, d.An, d.Txt, s.Flc, s.Flh, s.Flb, s.Fls)
+	if r > 0 {
+		port.CellsSwap(m.Nodes, s.Fnodes)
+		port.CellsSwap(m.Attrs, s.Fattrs)
+		port.CellsSwap(m.Regions, s.Fregions)
+	}
+	return 0
+}
+
 func enAssetStage(c *enctx.Cfg, m *enctx.Arenas, s *enctx.Scratch, cand *port.Cells, cbytes *port.Buf) int32 {
 	// P3.13: the settings on the root, then each figure's and seal's pixels or reason, in node-id order. `cand` and `cbytes` were made by the document pass.
 	asset.AsSettings(m.Nodes, m.Attrs, m.Text, c.Level, c.Dpi, c.Pixels, c.Abyte, c.Tbyte, c.Sigs)
@@ -401,6 +414,9 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 			port.CellsSwap(m.Attrs, s.Sa)
 			port.CellsSwap(m.Regions, s.Sr)
 		}
+	}
+	if kind == 0 {
+		enFields(m, s, d)
 	}
 	if c.Haveloc != 0 {
 		w = port.CellsLen(m.Text)

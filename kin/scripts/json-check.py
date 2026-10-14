@@ -404,6 +404,14 @@ def is_inline(nodes, c):
         sib = nodes[nodes[c].parent].children
         i = sib.index(c)
         return any(0 <= j < len(sib) and KINDS[nodes[sib[j]].kind] in INLINE for j in (i - 1, i + 1))
+    if k == "field" and nodes[c].parent is not None and nodes[c].parent >= 0:
+        # a form field is an inline beside an inline and in a paragraph, heading or caption (P11.x3, D548); among blocks it is a block
+        par = nodes[nodes[c].parent]
+        sib = par.children
+        i = sib.index(c)
+        if any(0 <= j < len(sib) and KINDS[nodes[sib[j]].kind] in INLINE for j in (i - 1, i + 1)):
+            return True
+        return KINDS[par.kind] in ("paragraph", "heading", "caption")
     return False
 
 

@@ -100,6 +100,9 @@ pub fn an_rich_media() -> i32 {
 pub fn an_digsig() -> i32 {
     return 27;
 }
+pub fn an_field() -> i32 {
+    return 28;
+}
 pub fn an_sub_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 0 {
         crate::port::text_ascii(t, "other");
@@ -211,6 +214,10 @@ pub fn an_sub_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 27 {
         crate::port::text_ascii(t, "DigitalSignature");
+        return 1;
+    }
+    if code == 28 {
+        crate::port::text_ascii(t, "FormField");
         return 1;
     }
     return 0;
@@ -1703,6 +1710,61 @@ pub(crate) fn pa_compare(mut fd: &mut crate::port::Cells, txt: &mut crate::port:
     crate::port::cells_set(fd, at + 23, r);
     return r;
 }
+pub(crate) fn pa_widget_state(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut txt: &mut crate::port::Cells, dict: i32, fd: &mut crate::port::Cells, fat: i32, mut an: &mut crate::port::Cells, at: i32) -> i32 {
+    // A check box or radio button widget (`dict`, resolved) of the field at fd[fat]: is it on, and in which state? Into the synthetic `an-field` row at an[at]: cell 9
+    // is 1 when its /AS names a state other than /Off (with no /AS: when the field's /V does), else 0; the export value is the run at cells 16-17: the state the widget
+    // is in when it is on (/AS, else the field's /V), else, off, the first state of /AP /N that is not /Off. Evidence, not truth (D034): what the file states, so a
+    // widget whose /AS and /V disagree is on by its /AS, the appearance that is painted.
+    let r#as: i32 = px_dget(src, ar, dc, a, b, st, dict, px_as());
+    let vh: i32 = crate::port::cells_at(fd, fat + 31);
+    let ap: i32 = px_dget(src, ar, dc, a, b, st, dict, px_ap());
+    let mut on: i32 = 0;
+    let mut got: i32 = 0;
+    let mut nr: i32 = 0;
+    let mut n: i32 = 0;
+    let mut k: i32 = 0;
+    let mut v: i32 = 0;
+    if (r#as != 0) && (pl_kind_of(ar, r#as) == 4) {
+        if px_is(ar, r#as, px_off()) == 0 {
+            on = 1;
+        }
+    } else if (vh != 0) && (pl_kind_of(ar, vh) == 4) {
+        if px_is(ar, vh, px_off()) == 0 {
+            on = 1;
+        }
+    }
+    crate::port::cells_set(an, at + 9, on);
+    if (on == 1) && (r#as != 0) && (pl_kind_of(ar, r#as) == 4) {
+        pa_text_to(txt, ar, r#as, an, at + 16);
+        got = 1;
+    }
+    if (got == 0) && (on == 1) && (vh != 0) && (pl_kind_of(ar, vh) == 4) {
+        pa_text_to(txt, ar, vh, an, at + 16);
+        got = 1;
+    }
+    if (got == 0) && (ap != 0) && (pl_kind_of(ar, ap) == 7) {
+        nr = pl_dict_get(ar, ap, pn_n());
+        if nr != 0 {
+            n = pd_resolve(src, ar, dc, a, b, st, nr);
+            if (n != 0) && (pl_kind_of(ar, n) == 7) {
+                k = pl_first(ar, n);
+                while (k != 0) && (got == 0) {
+                    v = pl_next(ar, k);
+                    if px_is(ar, k, px_off()) == 0 {
+                        pa_text_to(txt, ar, k, an, at + 16);
+                        got = 1;
+                    }
+                    if v == 0 {
+                        k = 0;
+                    } else {
+                        k = pl_next(ar, v);
+                    }
+                }
+            }
+        }
+    }
+    return got;
+}
 pub(crate) fn pa_annot(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut idx: &mut crate::port::Cells, pg: &mut crate::port::Cells, mut txt: &mut crate::port::Cells, mut w: &mut crate::port::Cells, mut an: &mut crate::port::Cells, mut aq: &mut crate::port::Cells, mut fm: &mut crate::port::Cells, mut fd: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, pi: i32, h0: i32) -> i32 {
     // One entry of a page's /Annots: a row in `an`, and, for a widget, its field's
     // row updated. Answers the annotation row, or -1 when the entry is no dictionary.
@@ -1957,6 +2019,103 @@ pub(crate) fn pa_digsigs(mut an: &mut crate::port::Cells, fd: &mut crate::port::
     }
     return n;
 }
+pub(crate) fn pa_field_row_of(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut txt: &mut crate::port::Cells, fd: &mut crate::port::Cells, mut an: &mut crate::port::Cells, wrow: i32, frow: i32, dict: i32) -> i32 {
+    // Append the synthetic `an-field` row (see the head of this file) of widget row `wrow` (its dictionary `dict`, resolved) of field row `frow`. Answers 1 when a row
+    // was written, 0 when the widget is not one the document unit places: a hidden or no-view widget, one without an area, a field of another kind than check box,
+    // radio, text, combo or list.
+    let w: i32 = wrow * AN_STRIDE;
+    let f: i32 = frow * FD_STRIDE;
+    let kind: i32 = crate::port::cells_at(fd, f + 6);
+    let flags: i32 = crate::port::cells_at(an, w + 3);
+    let pi: i32 = crate::port::cells_at(an, w);
+    let mut at: i32 = 0;
+    let mut k: i32 = 0;
+    if (kind < 2) || (kind > 6) {
+        return 0;
+    }
+    if (flags & 34) != 0 {
+        return 0;
+    }
+    if (crate::port::cells_at(an, w + 6) <= crate::port::cells_at(an, w + 4)) || (crate::port::cells_at(an, w + 7) <= crate::port::cells_at(an, w + 5)) {
+        return 0;
+    }
+    pa_an_new(an, pi);
+    at = crate::port::cells_len(an) - AN_STRIDE;
+    crate::port::cells_set(an, at + 1, an_field());
+    crate::port::cells_set(an, at + 2, crate::port::cells_at(fd, f));
+    crate::port::cells_set(an, at + 3, flags);
+    k = 0;
+    while k < 4 {
+        crate::port::cells_set(an, (at + 4) + k, crate::port::cells_at(an, (w + 4) + k));
+        k += 1;
+    }
+    k = 8;
+    while k < 23 {
+        crate::port::cells_set(an, at + k, 0);
+        k += 1;
+    }
+    crate::port::cells_set(an, at + 8, kind);
+    crate::port::cells_set(an, at + 9, -1);
+    crate::port::cells_set(an, at + 10, crate::port::cells_at(fd, f + 5));
+    crate::port::cells_set(an, at + 11, crate::port::cells_at(fd, f + 23));
+    crate::port::cells_set(an, at + 12, crate::port::cells_at(fd, f + 2));
+    crate::port::cells_set(an, at + 13, crate::port::cells_at(fd, f + 3));
+    crate::port::cells_set(an, at + 14, -1);
+    crate::port::cells_set(an, at + 16, -1);
+    crate::port::cells_set(an, at + 18, crate::port::cells_at(fd, f + 13));
+    crate::port::cells_set(an, at + 19, crate::port::cells_at(fd, f + 14));
+    crate::port::cells_set(an, at + 20, wrow);
+    crate::port::cells_set(an, at + 21, frow);
+    if (kind == 2) || (kind == 3) {
+        pa_widget_state(src, ar, dc, a, b, st, txt, dict, fd, f, an, at);
+    }
+    if kind >= 4 {
+        if (crate::port::cells_at(fd, f + 7) != 0) && (crate::port::cells_at(fd, f + 8) >= 0) {
+            crate::port::cells_set(an, at + 14, crate::port::cells_at(fd, f + 8));
+            crate::port::cells_set(an, at + 15, crate::port::cells_at(fd, f + 9));
+        } else if (crate::port::cells_at(an, w + 32) >= 0) && (crate::port::cells_at(an, w + 33) > 0) {
+            crate::port::cells_set(an, at + 14, crate::port::cells_at(an, w + 32));
+            crate::port::cells_set(an, at + 15, crate::port::cells_at(an, w + 33));
+        }
+    }
+    return 1;
+}
+pub(crate) fn pa_field_rows(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, pg: &mut crate::port::Cells, mut txt: &mut crate::port::Cells, fd: &mut crate::port::Cells, mut an: &mut crate::port::Cells) -> i32 {
+    // The synthetic rows of every widget of a placeable field (`pa-field-row-of`), in widget order: the pages' /Annots read once more, in the order `pa-run` read them
+    // (an entry that is a dictionary was the next row of `an`, so the count of those is the row of a widget), for what a row of `an` does not keep, a button's state.
+    // Answers the rows written. Call it after the rows of the annotations are all there.
+    let np: i32 = pd_pg_count(pg);
+    let mut i: i32 = 0;
+    let mut r: i32 = 0;
+    let mut e: i32 = 0;
+    let mut an_arr: i32 = 0;
+    let mut dict: i32 = 0;
+    let mut frow: i32 = 0;
+    let mut w: i32 = 0;
+    let mut wrote: i32 = 0;
+    while i < np {
+        an_arr = px_dget(src, ar, dc, a, b, st, pd_pg_node(pg, i), px_annots());
+        if (an_arr != 0) && (pl_kind_of(ar, an_arr) == 6) {
+            e = pl_first(ar, an_arr);
+            while e != 0 {
+                if r < PA_ANNOTS {
+                    dict = pd_resolve(src, ar, dc, a, b, st, e);
+                    if (dict != 0) && (pl_kind_of(ar, dict) == 7) {
+                        w = r * AN_STRIDE;
+                        frow = crate::port::cells_at(an, w + 29);
+                        if (crate::port::cells_at(an, w + 1) == an_widget()) && (frow >= 0) {
+                            wrote += pa_field_row_of(src, ar, dc, a, b, st, txt, fd, an, r, frow, dict);
+                        }
+                        r += 1;
+                    }
+                }
+                e = pl_next(ar, e);
+            }
+        }
+        i += 1;
+    }
+    return wrote;
+}
 pub fn pa_run(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut pg: &mut crate::port::Cells, mut idx: &mut crate::port::Cells, mut txt: &mut crate::port::Cells, mut w: &mut crate::port::Cells, mut fs: &mut crate::port::Cells, mut seen: &mut crate::port::Cells, mut fm: &mut crate::port::Cells, mut an: &mut crate::port::Cells, mut aq: &mut crate::port::Cells, mut fd: &mut crate::port::Cells, mut sg: &mut crate::port::Cells) -> i32 {
     // Everything P3.8 reads, after `pd-open`, `pd-pages` and `px-index-build`: fields
     // first (so a widget finds its field), then every page's /Annots, then the
@@ -2039,6 +2198,7 @@ pub fn pa_run(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &
     }
     i = crate::port::cells_len(an) / AN_STRIDE;
     pa_digsigs(an, fd, sg);
+    pa_field_rows(src, ar, dc, a, b, st, pg, txt, fd, an);
     return i;
 }
 pub(crate) fn pa_dump_annot(mut t: &mut String, txt: &mut crate::port::Cells, an: &mut crate::port::Cells, aq: &mut crate::port::Cells, row: i32) -> i32 {
@@ -2262,7 +2422,7 @@ pub fn pa_dump(mut t: &mut String, txt: &mut crate::port::Cells, an: &mut crate:
     let mut i: i32 = 0;
     crate::port::text_ascii(t, "{\"annots\":[");
     while i < na {
-        if crate::port::cells_at(an, (i * AN_STRIDE) + 1) != an_digsig() {
+        if (crate::port::cells_at(an, (i * AN_STRIDE) + 1) != an_digsig()) && (crate::port::cells_at(an, (i * AN_STRIDE) + 1) != an_field()) {
             if i > 0 {
                 crate::port::text_ascii(t, ",");
             }

@@ -280,6 +280,17 @@ public static class Engine {
         emon.Port.CellsSwap(m.Regions, s.Fregions);
         return 0;
     }
+    internal static int EnFields(emon.Enctx.Arenas m, emon.Enctx.Scratch s, emon.Enctx.Doc d) {
+        // P11.x3 (SPEC 3.2, D548): the AcroForm fields the annotation reader made rows of (`an-field`) put into the blocks that hold their labels, by geometry (`emon.fields`).
+        // A copy of the finished body (the arenas the figures stage left in `fnodes`, `fattrs`, `fregions` are its scratch) swapped in; a document with no field row is not touched.
+        int r = Fields.FlRun(m.Nodes, m.Attrs, m.Regions, m.Text, s.Fnodes, s.Fattrs, s.Fregions, s.Fnm, d.An, d.Txt, s.Flc, s.Flh, s.Flb, s.Fls);
+        if (r > 0) {
+            emon.Port.CellsSwap(m.Nodes, s.Fnodes);
+            emon.Port.CellsSwap(m.Attrs, s.Fattrs);
+            emon.Port.CellsSwap(m.Regions, s.Fregions);
+        }
+        return 0;
+    }
     internal static int EnAssetStage(emon.Enctx.Cfg c, emon.Enctx.Arenas m, emon.Enctx.Scratch s, emon.Port.Cells cand, emon.Port.Buf cbytes) {
         // P3.13: the settings on the root, then each figure's and seal's pixels or reason, in node-id order. `cand` and `cbytes` were made by the document pass.
         Asset.AsSettings(m.Nodes, m.Attrs, m.Text, c.Level, c.Dpi, c.Pixels, c.Abyte, c.Tbyte, c.Sigs);
@@ -340,6 +351,9 @@ public static class Engine {
                 emon.Port.CellsSwap(m.Attrs, s.Sa);
                 emon.Port.CellsSwap(m.Regions, s.Sr);
             }
+        }
+        if (kind == 0) {
+            EnFields(m, s, d);
         }
         if (c.Haveloc != 0) {
             w = emon.Port.CellsLen(m.Text);

@@ -55,6 +55,15 @@ fn test_golden_kinds() {
     ht_golden(0, "json/kinds.model", "html/kinds.plain.html", 386, 0);
 }
 #[test]
+fn test_golden_fields() {
+    // P11.x3 (D548): a field in a paragraph and among blocks; a check box or radio button is an empty span that says what it is and whether it is on, a text field shows its value.
+    ht_golden(0, "json/fields.model", "html/fields.html", 0, 0);
+    ht_golden(0, "json/fields.model", "html/fields.pretty.html", 16, 0);
+    ht_golden(0, "json/fields.model", "html/fields.full.html", 15, 950);
+    ht_golden(0, "json/fields.model", "html/fields.bare.html", 96, 0);
+    ht_golden(0, "json/fields.model", "html/fields.plain.html", 386, 0);
+}
+#[test]
 fn test_golden_corners() {
     ht_golden(0, "json/corners.model", "html/corners.html", 0, 0);
     ht_golden(0, "json/corners.model", "html/corners.pretty.html", 16, 0);

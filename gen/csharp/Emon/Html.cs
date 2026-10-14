@@ -436,8 +436,81 @@ public static class Html {
         emon.Port.TextAscii(t, "></span>");
         return 0;
     }
+    internal static int HButton(emon.Port.Cells text, emon.Port.Cells attrs, int a) {
+        // What a field's `type` (the text attribute a) says it is: 1 a check box, 2 a radio button, else 0. `checkbox` is the only type of eight
+        // letters and `radio` of five that begin with a c and an r.
+        int s = Model.AttrValue(attrs, a);
+        int ln = Model.AttrLen(attrs, a);
+        if ((ln == 8) && (emon.Port.CellsAt(text, s) == 99)) {
+            return 1;
+        }
+        if ((ln == 5) && (emon.Port.CellsAt(text, s) == 114)) {
+            return 2;
+        }
+        return 0;
+    }
+    internal static int HField(System.Text.StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells text, int n) {
+        // A form field (SPEC 5.1): a span, never a live <input>. A check box or radio button says what it is to assistive technology (`role`, `aria-checked`) and
+        // keeps its export value in `data-emon-value`, its element empty; any other field shows its value as the element's content. In a paragraph (an inline) or
+        // among blocks, the same.
+        int a = -1;
+        int b = 0;
+        emon.Port.TextAscii(t, "<span data-emon=\"field\"");
+        a = HTattr(nodes, attrs, n, Model.FkName());
+        if (a >= 0) {
+            emon.Port.TextAscii(t, " data-emon-name=\"");
+            HRun(t, text, Model.AttrValue(attrs, a), Model.AttrLen(attrs, a));
+            emon.Port.TextAscii(t, "\"");
+        }
+        a = HTattr(nodes, attrs, n, Model.FkType());
+        if (a >= 0) {
+            emon.Port.TextAscii(t, " data-emon-type=\"");
+            HRun(t, text, Model.AttrValue(attrs, a), Model.AttrLen(attrs, a));
+            emon.Port.TextAscii(t, "\"");
+            b = HButton(text, attrs, a);
+            if (b == 1) {
+                emon.Port.TextAscii(t, " role=\"checkbox\"");
+            }
+            if (b == 2) {
+                emon.Port.TextAscii(t, " role=\"radio\"");
+            }
+        }
+        a = HIattr(nodes, attrs, n, Model.FkChecked());
+        if (a >= 0) {
+            if (Model.AttrValue(attrs, a) != 0) {
+                emon.Port.TextAscii(t, " data-emon-checked=\"true\"");
+            }
+            if (Model.AttrValue(attrs, a) == 0) {
+                emon.Port.TextAscii(t, " data-emon-checked=\"false\"");
+            }
+            if (b > 0) {
+                if (Model.AttrValue(attrs, a) != 0) {
+                    emon.Port.TextAscii(t, " aria-checked=\"true\"");
+                }
+                if (Model.AttrValue(attrs, a) == 0) {
+                    emon.Port.TextAscii(t, " aria-checked=\"false\"");
+                }
+            }
+        }
+        a = HTattr(nodes, attrs, n, Model.FkValue());
+        if ((a >= 0) && (b > 0)) {
+            emon.Port.TextAscii(t, " data-emon-value=\"");
+            HRun(t, text, Model.AttrValue(attrs, a), Model.AttrLen(attrs, a));
+            emon.Port.TextAscii(t, "\"");
+        }
+        HCommon(t, o, nodes, regions, pages, layout, n);
+        emon.Port.TextAscii(t, ">");
+        if ((a >= 0) && (b == 0)) {
+            HRun(t, text, Model.AttrValue(attrs, a), Model.AttrLen(attrs, a));
+        }
+        if (a < 0) {
+            HInner(t, o, nodes, attrs, regions, pages, layout, text, n);
+        }
+        emon.Port.TextAscii(t, "</span>");
+        return 0;
+    }
     internal static int HInline(System.Text.StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells text, int n) {
-        // One inline node: text, span, link, ref or linebreak (SPEC 5.1).
+        // One inline node: text, span, link, ref, linebreak, initial, field or a milestone (SPEC 5.1).
         int kind = Model.NodeKind(nodes, n);
         int sub = Model.NodeSub(nodes, n);
         int a = -1;
@@ -558,6 +631,10 @@ public static class Html {
             if (a < 0) {
                 emon.Port.TextAscii(t, "</span>");
             }
+            return 0;
+        }
+        if (kind == Model.NkField()) {
+            HField(t, o, nodes, attrs, regions, pages, layout, text, n);
             return 0;
         }
         return 0;
@@ -1283,38 +1360,7 @@ public static class Html {
             return 1;
         }
         if (kind == Model.NkField()) {
-            emon.Port.TextAscii(t, "<span data-emon=\"field\"");
-            a = HTattr(nodes, attrs, n, Model.FkName());
-            if (a >= 0) {
-                emon.Port.TextAscii(t, " data-emon-name=\"");
-                HRun(t, text, Model.AttrValue(attrs, a), Model.AttrLen(attrs, a));
-                emon.Port.TextAscii(t, "\"");
-            }
-            a = HTattr(nodes, attrs, n, Model.FkType());
-            if (a >= 0) {
-                emon.Port.TextAscii(t, " data-emon-type=\"");
-                HRun(t, text, Model.AttrValue(attrs, a), Model.AttrLen(attrs, a));
-                emon.Port.TextAscii(t, "\"");
-            }
-            a = HIattr(nodes, attrs, n, Model.FkChecked());
-            if (a >= 0) {
-                if (Model.AttrValue(attrs, a) != 0) {
-                    emon.Port.TextAscii(t, " data-emon-checked=\"true\"");
-                }
-                if (Model.AttrValue(attrs, a) == 0) {
-                    emon.Port.TextAscii(t, " data-emon-checked=\"false\"");
-                }
-            }
-            HCommon(t, o, nodes, regions, pages, layout, n);
-            emon.Port.TextAscii(t, ">");
-            a = HTattr(nodes, attrs, n, Model.FkValue());
-            if (a >= 0) {
-                HRun(t, text, Model.AttrValue(attrs, a), Model.AttrLen(attrs, a));
-            }
-            if (a < 0) {
-                HInner(t, o, nodes, attrs, regions, pages, layout, text, n);
-            }
-            emon.Port.TextAscii(t, "</span>");
+            HField(t, o, nodes, attrs, regions, pages, layout, text, n);
             return 1;
         }
         if (kind == Model.NkFurniture()) {

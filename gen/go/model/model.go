@@ -1992,7 +1992,7 @@ func NodeHasText(nodes *port.Cells, n int32) int32 {
 func NkIsInline(kind int32) int32 {
 	// 1 for the kinds that live inside a block's text: text, span, link,
 	// ref, linebreak, initial (SPEC 3.2). A `break` is a milestone, not an
-	// inline.
+	// inline. A `field` is either; see `node-is-inline`.
 	if kind == NkText() {
 		return 1
 	}
@@ -2017,12 +2017,36 @@ func NkIsInline(kind int32) int32 {
 func NodeIsInline(nodes *port.Cells, n int32) int32 {
 	// 1 when node n is an inline: an inline KIND, or a `break` with an inline neighbour (D134). A page
 	// milestone INSIDE a paragraph (text, break, text) is an inline -- written in `inlines`, in order,
-	// with no `id` -- and BETWEEN two blocks it is a block, as `nk-is-inline` of its kind says.
+	// with no `id` -- and BETWEEN two blocks it is a block, as `nk-is-inline` of its kind says. A `field`
+	// is the same: an inline when it has an inline neighbour or its parent is a paragraph, heading or
+	// caption (a form field sits in the block that holds its label, P11.x3, D548); a block among blocks
+	// otherwise (SPEC 3.2, as it always was).
 	var kind int32 = nget(nodes, n, 0)
 	var pv int32 = nget(nodes, n, 5)
 	var nx int32 = nget(nodes, n, 4)
+	var par int32 = nget(nodes, n, 1)
 	if NkIsInline(kind) == 1 {
 		return 1
+	}
+	if kind == NkField() {
+		if pv >= 0 {
+			var pkind int32 = nget(nodes, pv, 0)
+			if NkIsInline(pkind) == 1 {
+				return 1
+			}
+		}
+		if nx >= 0 {
+			var nkind int32 = nget(nodes, nx, 0)
+			if NkIsInline(nkind) == 1 {
+				return 1
+			}
+		}
+		if par >= 0 {
+			var qkind int32 = nget(nodes, par, 0)
+			if (qkind == NkParagraph()) || (qkind == NkHeading()) || (qkind == NkCaption()) {
+				return 1
+			}
+		}
 	}
 	if kind == NkBreak() {
 		if pv >= 0 {

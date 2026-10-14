@@ -69,6 +69,26 @@ func TestGoldenKinds(emonT *testing.T) {
 	port.AssertTextSpan(emonT, pretty, port.TestFile("json/kinds.pretty.json"), 0, mscript.JtEnd(port.TestFile("json/kinds.pretty.json")), "pretty", 0)
 }
 
+func TestGoldenFields(emonT *testing.T) {
+	// P11.x3 (D548): a form field is an inline of the paragraph that holds its label (no id, in `inlines`, before or after the words) and still a block among blocks.
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	var compact *strings.Builder = port.NewText()
+	var pretty *strings.Builder = port.NewText()
+	port.AssertEq(emonT, mscript.JtBuild(port.TestFile("json/fields.model"), nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the script builds")
+	port.AssertEq(emonT, model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the Model is well formed")
+	json.JsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells())
+	json.JsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells())
+	port.AssertTextSpan(emonT, compact, port.TestFile("json/fields.json"), 0, mscript.JtEnd(port.TestFile("json/fields.json")), "compact", 0)
+	port.AssertTextSpan(emonT, pretty, port.TestFile("json/fields.pretty.json"), 0, mscript.JtEnd(port.TestFile("json/fields.pretty.json")), "pretty", 0)
+}
+
 func TestGoldenCorners(emonT *testing.T) {
 	var nodes *port.Cells = port.NewCells()
 	var attrs *port.Cells = port.NewCells()

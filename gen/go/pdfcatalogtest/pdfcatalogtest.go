@@ -183,7 +183,7 @@ func cgLine(f []byte, which int32, t *strings.Builder) int32 {
 	// loop, then `#` and the tree's depth), 3 every field (`name=value:agreement:widgets:on`),
 	// 4 every link (`action:target@page`, then `#` and two rectangles), 5 every signature,
 	// 6 the Info dictionary, the XMP identification and /Lang, 8 the real-file facts (tab separated: bookmarks, their digest, the labels' digest, links, URI links, their digest, PDF/UA part, /Lang digest), 7 the Stamp, Watermark and FreeText
-	// annotations (`subtype:name:contents:appearance:ca:flags`). Answers 0, or 1 when the file
+	// annotations (`subtype:name:contents:appearance:ca:flags`), 10 the form field rows (`kind;checked;name;value;export;x0,y0,x1,y1`, D548). Answers 0, or 1 when the file
 	// could not be read.
 	var pdf *port.Src = port.SrcOfBlob(f)
 	var ar *port.Cells = port.NewCells()
@@ -386,6 +386,36 @@ func cgLine(f []byte, which int32, t *strings.Builder) int32 {
 			i += 1
 		}
 	}
+	if which == 10 {
+		n = port.CellsLen(an) / 38
+		for i < n {
+			at = i * 38
+			if port.CellsAt(an, at+1) == 28 {
+				if first == 0 {
+					port.TextAscii(t, "|")
+				}
+				first = 0
+				port.TextI32(t, port.CellsAt(an, at+8))
+				port.TextAscii(t, ";")
+				port.TextI32(t, port.CellsAt(an, at+9))
+				port.TextAscii(t, ";")
+				cgPut(t, txt, port.CellsAt(an, at+12), port.CellsAt(an, at+13))
+				port.TextAscii(t, ";")
+				cgPut(t, txt, port.CellsAt(an, at+14), port.CellsAt(an, at+15))
+				port.TextAscii(t, ";")
+				cgPut(t, txt, port.CellsAt(an, at+16), port.CellsAt(an, at+17))
+				port.TextAscii(t, ";")
+				port.TextI32(t, port.CellsAt(an, at+4))
+				port.TextAscii(t, ",")
+				port.TextI32(t, port.CellsAt(an, at+5))
+				port.TextAscii(t, ",")
+				port.TextI32(t, port.CellsAt(an, at+6))
+				port.TextAscii(t, ",")
+				port.TextI32(t, port.CellsAt(an, at+7))
+			}
+			i += 1
+		}
+	}
 	if which == 6 {
 		cgPut(t, txt, port.CellsAt(md, 2), port.CellsAt(md, 3))
 		port.TextAscii(t, "|")
@@ -572,6 +602,17 @@ func TestFieldsInheritTheirTypeValueAndFlags(emonT *testing.T) {
 	var t *strings.Builder = port.NewText()
 	port.AssertEq(emonT, cgLine(port.TestFile("pdf/catalog/forms.pdf"), 3, t), 0, "read")
 	port.AssertText(emonT, t, "person.name=Alice:equal:1:-1|person.nick=Bob:differ:1:-1|pick=b:equal:2:1|agree=Yes:equal:1:1|color=red{10}blue:value-only:1:-1|grp=inherited:value-only:2:-1|sig0=:none:1:-1|go=:none:1:-1", "fields")
+}
+
+func TestWidgetsRideInAnAsSyntheticFieldRows(emonT *testing.T) {
+	// P11.x3 (D548): after the annotations and the signature rows, `pa-run` appends to `an` one synthetic row a widget of a check box, radio, text, combo or list field that is on a
+	// page, shown and has an area, for the document unit (it is handed `an` and not `fd`); `pa-dump` leaves them out. `forms.pdf`: the two text widgets of `person` (`Alice`, `Bob`:
+	// /V is the field's, the box is the widget's), the two radio buttons of `pick` (the first off with its state `a`, the second on in the state /V names, `b`), the check box `agree`
+	// on in `Yes`, the combo box `color` (its two selected values on two lines) and the two widgets of `grp` that inherit /V. The signature `sig0` and the push button `go` have no row.
+	// Kind (`fd-kind`: 2 check box, 3 radio, 4 text, 5 combo), whether it is on, the name, the text shown, the export value, the box in centipoints in page space (y down).
+	var t *strings.Builder = port.NewText()
+	port.AssertEq(emonT, cgLine(port.TestFile("pdf/catalog/forms.pdf"), 10, t), 0, "read")
+	port.AssertText(emonT, t, "4;-1;person.name;Alice;;7200,7200,27200,9200|4;-1;person.nick;Bob;;7200,11200,27200,13200|3;0;pick;;a;7200,17200,9200,19200|3;1;pick;;b;10200,17200,12200,19200|2;1;agree;;Yes;7200,21200,9200,23200|5;-1;color;red{10}blue;;7200,25200,17200,27200|4;-1;grp;inherited;;7200,29200,17200,31200|4;-1;grp;inherited;;18200,29200,28200,31200", "eight widgets, six fields")
 }
 
 func TestALinkOfEveryKindOfAction(emonT *testing.T) {

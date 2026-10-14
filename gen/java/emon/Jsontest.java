@@ -59,6 +59,25 @@ public final class Jsontest {
         emon.Testport.assertTextSpan(compact, emon.Testport.testFile("json/kinds.json"), 0, Mscript.jtEnd(emon.Testport.testFile("json/kinds.json")), "compact", 0);
         emon.Testport.assertTextSpan(pretty, emon.Testport.testFile("json/kinds.pretty.json"), 0, Mscript.jtEnd(emon.Testport.testFile("json/kinds.pretty.json")), "pretty", 0);
     }
+    public static void testGoldenFields() {
+        // P11.x3 (D548): a form field is an inline of the paragraph that holds its label (no id, in `inlines`, before or after the words) and still a block among blocks.
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        StringBuilder compact = emon.Testport.newText();
+        StringBuilder pretty = emon.Testport.newText();
+        emon.Testport.assertEq(Mscript.jtBuild(emon.Testport.testFile("json/fields.model"), nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the script builds");
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the Model is well formed");
+        Json.jsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells(), emon.Port.newCells());
+        Json.jsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells(), emon.Port.newCells());
+        emon.Testport.assertTextSpan(compact, emon.Testport.testFile("json/fields.json"), 0, Mscript.jtEnd(emon.Testport.testFile("json/fields.json")), "compact", 0);
+        emon.Testport.assertTextSpan(pretty, emon.Testport.testFile("json/fields.pretty.json"), 0, Mscript.jtEnd(emon.Testport.testFile("json/fields.pretty.json")), "pretty", 0);
+    }
     public static void testGoldenCorners() {
         emon.Port.Cells nodes = emon.Port.newCells();
         emon.Port.Cells attrs = emon.Port.newCells();
