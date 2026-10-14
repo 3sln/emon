@@ -4,7 +4,10 @@
 platform holds everything it needs: the binary, pdfium (renders pages), Tesseract and Leptonica (read
 scans; linked into the binary) and the English and orientation models. Nothing else has to be installed.
 
-Platforms: macOS arm64 and x64, Linux x64 and arm64 (glibc 2.39 or newer), Windows x64.
+Platforms: macOS arm64 and x64, Linux x64 and arm64 (glibc 2.39 or newer), Windows x64 (Windows 10 or newer).
+
+The Windows build needs no redistributable: the C and C++ runtime is linked into `emon.exe` (the Visual C++ runtime is not
+needed, and the "Visual C++ Redistributable" does not have to be installed). It uses only the DLLs that ship with Windows 10 and newer.
 
 ## Install
 

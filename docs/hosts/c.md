@@ -14,6 +14,9 @@ named `@rpath/libemon.dylib` on macOS and has the soname `libemon.so` on Linux).
 Leptonica, so it needs the C++ runtime and the system's own libraries too: `-lstdc++ -lpthread -ldl -lm` on Linux, `-framework
 Security -framework CoreFoundation -liconv -lm -lc++` on macOS. C11; the header is C++ safe.
 
+On Windows (x64, Windows 10 or newer) the library is built with the static C runtime (`/MT`) and needs no Visual C++
+redistributable. A program that links the static library should be built with `/MT` too, so that the runtimes agree.
+
 **The released library has the whole pipeline.** Tesseract 5.5.3 and Leptonica are linked into it statically, and pdfium
 (`chromium/8076`) is loaded at run time from the file beside it, so a page that needs drawing and reading just works:
 `emon_capabilities()` has `EMON_CAP_PDFIUM` and `EMON_CAP_TESSERACT` set when both are found. There is still no JPEG 2000 or

@@ -103,7 +103,6 @@
            (str "-DCMAKE_PREFIX_PATH=" prefix)]
           (when (seq (:ignore-prefix cfg)) [(str "-DCMAKE_IGNORE_PREFIX_PATH=" (str/join ";" (:ignore-prefix cfg)))])
           (when mac? [(str "-DCMAKE_OSX_DEPLOYMENT_TARGET=" (:osx-deployment cfg)) (str "-DCMAKE_OSX_ARCHITECTURES=" (:arch cfg))])
-          (when (= :windows (:os cfg)) ["-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL"])
           ;; the assembler is a program, found on the PATH before the prefix filters above
           (when (and (= "libjpeg-turbo" (:id s)) (fs/which "nasm")) [(str "-DCMAKE_ASM_NASM_COMPILER=" (fs/which "nasm"))])
           (when-let [pi (:project-include s)] [(str "-DCMAKE_PROJECT_INCLUDE=" (abs pi))])

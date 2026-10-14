@@ -27,6 +27,9 @@
                               :ignore-prefix ["/usr/local"] :cxx-runtime ["stdc++" "m" "pthread"] :cmake ["-DCMath_LIBRARY:STRING=m" "-DCMath_HAVE_LIBM_POW=1"]}
   "x86_64-pc-windows-msvc"   {:runner "windows-2022"    :os :windows :arch "x86_64" :generator "Ninja" :pdfium "win-x64"
                               :ignore-prefix [] :cxx-runtime []
+                              ;; the STATIC C runtime (/MT, D1580): the CLI and the C library do not need the VC++ redistributable. CMP0091 NEW makes
+                              ;; CMAKE_MSVC_RUNTIME_LIBRARY count in every project, whatever cmake_minimum_required it states (giflib's and zlib's are old)
+                              :cmake ["-DCMAKE_POLICY_DEFAULT_CMP0091=NEW" "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded"]
                               ;; Tesseract 5.5.3's ccstruct/image.h uses uint32_t without <cstdint>, which MSVC 14.44's headers no longer bring in
                               :env {"CXXFLAGS" "/FIcstdint"}}}
 

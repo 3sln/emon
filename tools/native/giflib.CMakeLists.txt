@@ -4,6 +4,10 @@
 # sources named in giflib's own Makefile (SOURCES) and installs gif_lib.h and a STATIC libgif. No utility is built.
 # giflib is MIT (SPDX-License-Identifier in every file); its COPYING is vendored from the tarball.
 cmake_minimum_required(VERSION 3.10)
+# CMP0091 NEW: CMAKE_MSVC_RUNTIME_LIBRARY (the static C runtime, /MT, D1580) is honoured; under 3.10 it would be ignored and the library built /MD
+if(POLICY CMP0091)
+  cmake_policy(SET CMP0091 NEW)
+endif()
 project(giflib C)
 
 set(GIF_SOURCES
