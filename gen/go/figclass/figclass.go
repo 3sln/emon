@@ -1386,7 +1386,14 @@ func FcVectorKind(ws *port.Cells, rx0 int32, ry0 int32, rx1 int32, ry1 int32, pa
 	var slant int32 = port.CellsAt(ws, ftSlant)
 	var num int32 = port.CellsAt(ws, ftNum)
 	var conf int32 = 0
-	if (axes == 1) && ((bars >= 2) || ((series >= 1) || ((slant >= 2) || ((ticks >= 2) || (num >= 2))))) {
+	var banner int32 = 0
+	// P11.x2 (D545): rules that meet and a few numbers are a chart only while what is in the region is a chart's text; with a
+	// line of five words or more in it, and no mark of data (ticks, bars, a series), they are a banner or a framed box (a form's
+	// title band, a signature box), which is no figure.
+	if (port.CellsAt(ws, ftProse) >= 1) && ((bars < 2) && ((series < 1) && ((slant < 2) && (ticks < 2)))) {
+		banner = 1
+	}
+	if (banner == 0) && ((axes == 1) && ((bars >= 2) || ((series >= 1) || ((slant >= 2) || ((ticks >= 2) || (num >= 2)))))) {
 		conf = 640
 		if ticks >= 3 {
 			conf += 40
@@ -1415,7 +1422,7 @@ func FcVectorKind(ws *port.Cells, rx0 int32, ry0 int32, rx1 int32, ry1 int32, pa
 	if (bars >= 3) && (port.CellsAt(ws, ftBarvar) == 1) {
 		return fcPack(model.FgChart(), 560)
 	}
-	if (axes == 1) && ((port.CellsAt(ws, ftNhl) + port.CellsAt(ws, ftNvl)) >= 2) {
+	if (banner == 0) && ((axes == 1) && ((port.CellsAt(ws, ftNhl) + port.CellsAt(ws, ftNvl)) >= 2)) {
 		return fcPack(model.FgChart(), 520)
 	}
 	if (axes == 0) && ((port.CellsAt(ws, ftBoxw) >= 2) && (port.CellsAt(ws, ftConn) >= 1)) {

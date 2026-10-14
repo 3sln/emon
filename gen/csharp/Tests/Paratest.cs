@@ -380,6 +380,50 @@ public static class Paratest {
         emon.Testport.AssertText(t2, "P1:office étst 一;", "normalization (radical U+2F00 folds, D142)");
     }
     [Xunit.Fact]
+    public static void TestALineBreakBetweenCjkCharactersAddsNoSpace() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells ord = emon.Port.NewCells();
+        emon.Port.Cells raw = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells fr = emon.Port.NewCells();
+        emon.Port.Cells gp = emon.Port.NewCells();
+        emon.Port.Cells st = emon.Port.NewCells();
+        System.Text.StringBuilder t1 = emon.Testport.NewText();
+        System.Text.StringBuilder t2 = emon.Testport.NewText();
+        System.Text.StringBuilder t3 = emon.Testport.NewText();
+        // P11.x2: Chinese and Japanese are set without spaces, so a line that wraps between two ideographs, kana or
+        // full-width marks joins with none (a space there is a stray one in the scraped text).
+        PtLine(wd, ln, et, emon.Testport.TextBlob("成为本地区最大的机构之"), 1, 7200, 10000, 50000, 11200, 0, 0, 1000);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("一。"), 1, 7200, 11500, 50000, 12700, 0, 0, 1000);
+        emon.Testport.AssertEq(PtRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "han: well formed");
+        PtBrief(t1, nodes, regions, text);
+        emon.Testport.AssertText(t1, "P1:成为本地区最大的机构之一。;", "a Han break");
+        // Kana and Han across the break alike.
+        PtClear(wd, ln, et);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("地域最大級の組織の"), 1, 7200, 10000, 50000, 11200, 0, 0, 1000);
+        // (the second line starts with the Kangxi radical U+2F00, which is folded to Han only after the join, as PDFs write it)
+        PtLine(wd, ln, et, emon.Testport.TextBlob("⼀つとなりました"), 1, 7200, 11500, 50000, 12700, 0, 0, 1000);
+        emon.Testport.AssertEq(PtRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "kana: well formed");
+        PtBrief(t2, nodes, regions, text);
+        emon.Testport.AssertText(t2, "P1:地域最大級の組織の一つとなりました;", "a Han and kana break");
+        // Latin words and Hangul are spaced languages: their breaks keep the space.
+        PtClear(wd, ln, et);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("the report 안녕하세요"), 1, 7200, 10000, 50000, 11200, 0, 0, 1000);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("세계 end"), 1, 7200, 11500, 50000, 12700, 0, 0, 1000);
+        emon.Testport.AssertEq(PtRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "hangul: well formed");
+        PtBrief(t3, nodes, regions, text);
+        emon.Testport.AssertText(t3, "P1:the report 안녕하세요 세계 end;", "Hangul and Latin keep the space");
+    }
+    [Xunit.Fact]
     public static void TestAPageEndIsAMilestoneBetweenBlocksOrInsideAParagraph() {
         emon.Port.Cells wd = emon.Port.NewCells();
         emon.Port.Cells ln = emon.Port.NewCells();

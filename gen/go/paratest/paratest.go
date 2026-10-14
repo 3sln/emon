@@ -405,6 +405,50 @@ func TestLineEndsJoinPerSpec36(emonT *testing.T) {
 	port.AssertText(emonT, t2, "P1:office étst 一;", "normalization (radical U+2F00 folds, D142)")
 }
 
+func TestALineBreakBetweenCjkCharactersAddsNoSpace(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var ord *port.Cells = port.NewCells()
+	var raw *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var fr *port.Cells = port.NewCells()
+	var gp *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	var t1 *strings.Builder = port.NewText()
+	var t2 *strings.Builder = port.NewText()
+	var t3 *strings.Builder = port.NewText()
+	// P11.x2: Chinese and Japanese are set without spaces, so a line that wraps between two ideographs, kana or
+	// full-width marks joins with none (a space there is a stray one in the scraped text).
+	ptLine(wd, ln, et, port.TextBlob("成为本地区最大的机构之"), 1, 7200, 10000, 50000, 11200, 0, 0, 1000)
+	ptLine(wd, ln, et, port.TextBlob("一。"), 1, 7200, 11500, 50000, 12700, 0, 0, 1000)
+	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "han: well formed")
+	ptBrief(t1, nodes, regions, text)
+	port.AssertText(emonT, t1, "P1:成为本地区最大的机构之一。;", "a Han break")
+	// Kana and Han across the break alike.
+	ptClear(wd, ln, et)
+	ptLine(wd, ln, et, port.TextBlob("地域最大級の組織の"), 1, 7200, 10000, 50000, 11200, 0, 0, 1000)
+	// (the second line starts with the Kangxi radical U+2F00, which is folded to Han only after the join, as PDFs write it)
+	ptLine(wd, ln, et, port.TextBlob("⼀つとなりました"), 1, 7200, 11500, 50000, 12700, 0, 0, 1000)
+	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "kana: well formed")
+	ptBrief(t2, nodes, regions, text)
+	port.AssertText(emonT, t2, "P1:地域最大級の組織の一つとなりました;", "a Han and kana break")
+	// Latin words and Hangul are spaced languages: their breaks keep the space.
+	ptClear(wd, ln, et)
+	ptLine(wd, ln, et, port.TextBlob("the report 안녕하세요"), 1, 7200, 10000, 50000, 11200, 0, 0, 1000)
+	ptLine(wd, ln, et, port.TextBlob("세계 end"), 1, 7200, 11500, 50000, 12700, 0, 0, 1000)
+	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "hangul: well formed")
+	ptBrief(t3, nodes, regions, text)
+	port.AssertText(emonT, t3, "P1:the report 안녕하세요 세계 end;", "Hangul and Latin keep the space")
+}
+
 func TestAPageEndIsAMilestoneBetweenBlocksOrInsideAParagraph(emonT *testing.T) {
 	var wd *port.Cells = port.NewCells()
 	var ln *port.Cells = port.NewCells()

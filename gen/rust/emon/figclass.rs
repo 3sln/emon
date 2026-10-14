@@ -1255,7 +1255,14 @@ pub fn fc_vector_kind(ws: &mut crate::port::Cells, rx0: i32, ry0: i32, rx1: i32,
     let slant: i32 = crate::port::cells_at(ws, FT_SLANT);
     let num: i32 = crate::port::cells_at(ws, FT_NUM);
     let mut conf: i32 = 0;
-    if (axes == 1) && ((bars >= 2) || ((series >= 1) || ((slant >= 2) || ((ticks >= 2) || (num >= 2))))) {
+    let mut banner: i32 = 0;
+    // P11.x2 (D545): rules that meet and a few numbers are a chart only while what is in the region is a chart's text; with a
+    // line of five words or more in it, and no mark of data (ticks, bars, a series), they are a banner or a framed box (a form's
+    // title band, a signature box), which is no figure.
+    if (crate::port::cells_at(ws, FT_PROSE) >= 1) && ((bars < 2) && ((series < 1) && ((slant < 2) && (ticks < 2)))) {
+        banner = 1;
+    }
+    if (banner == 0) && ((axes == 1) && ((bars >= 2) || ((series >= 1) || ((slant >= 2) || ((ticks >= 2) || (num >= 2)))))) {
         conf = 640;
         if ticks >= 3 {
             conf += 40;
@@ -1284,7 +1291,7 @@ pub fn fc_vector_kind(ws: &mut crate::port::Cells, rx0: i32, ry0: i32, rx1: i32,
     if (bars >= 3) && (crate::port::cells_at(ws, FT_BARVAR) == 1) {
         return fc_pack(fg_chart(), 560);
     }
-    if (axes == 1) && ((crate::port::cells_at(ws, FT_NHL) + crate::port::cells_at(ws, FT_NVL)) >= 2) {
+    if (banner == 0) && ((axes == 1) && ((crate::port::cells_at(ws, FT_NHL) + crate::port::cells_at(ws, FT_NVL)) >= 2)) {
         return fc_pack(fg_chart(), 520);
     }
     if (axes == 0) && ((crate::port::cells_at(ws, FT_BOXW) >= 2) && (crate::port::cells_at(ws, FT_CONN) >= 1)) {

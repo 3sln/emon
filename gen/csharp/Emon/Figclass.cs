@@ -1250,7 +1250,14 @@ public static class Figclass {
         int slant = emon.Port.CellsAt(ws, FtSlant);
         int num = emon.Port.CellsAt(ws, FtNum);
         int conf = 0;
-        if ((axes == 1) && ((bars >= 2) || ((series >= 1) || ((slant >= 2) || ((ticks >= 2) || (num >= 2)))))) {
+        int banner = 0;
+        // P11.x2 (D545): rules that meet and a few numbers are a chart only while what is in the region is a chart's text; with a
+        // line of five words or more in it, and no mark of data (ticks, bars, a series), they are a banner or a framed box (a form's
+        // title band, a signature box), which is no figure.
+        if ((emon.Port.CellsAt(ws, FtProse) >= 1) && ((bars < 2) && ((series < 1) && ((slant < 2) && (ticks < 2))))) {
+            banner = 1;
+        }
+        if ((banner == 0) && ((axes == 1) && ((bars >= 2) || ((series >= 1) || ((slant >= 2) || ((ticks >= 2) || (num >= 2))))))) {
             conf = 640;
             if (ticks >= 3) {
                 conf += 40;
@@ -1279,7 +1286,7 @@ public static class Figclass {
         if ((bars >= 3) && (emon.Port.CellsAt(ws, FtBarvar) == 1)) {
             return FcPack(Model.FgChart(), 560);
         }
-        if ((axes == 1) && ((emon.Port.CellsAt(ws, FtNhl) + emon.Port.CellsAt(ws, FtNvl)) >= 2)) {
+        if ((banner == 0) && ((axes == 1) && ((emon.Port.CellsAt(ws, FtNhl) + emon.Port.CellsAt(ws, FtNvl)) >= 2))) {
             return FcPack(Model.FgChart(), 520);
         }
         if ((axes == 0) && ((emon.Port.CellsAt(ws, FtBoxw) >= 2) && (emon.Port.CellsAt(ws, FtConn) >= 1))) {

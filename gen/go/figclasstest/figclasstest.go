@@ -124,6 +124,39 @@ func TestAxesWithTicksAndBarsAreAChart(emonT *testing.T) {
 	port.AssertThat(emonT, (pk%1024) >= 700, "and a sure one: axes, ticks and bars")
 }
 
+func TestAPageHeaderWithRulesAndNumbersIsNotAChart(emonT *testing.T) {
+	var pa *port.Cells = port.NewCells()
+	var fw *port.Cells = port.NewCells()
+	var fl *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var ws *port.Cells = port.NewCells()
+	var pk int32 = 0
+	// P11.x2 (the W-9's banner): a rule across the foot of a band and one rule up from it meet (axes), two numbers (a form
+	// number and a year) lie in it, and so does a sentence: no ticks, bars or series. A chart's text is its labels; a
+	// line of five words or more makes it a banner.
+	ftPath(pa, 1, 1, 10000, 15000, 50000, 15080, -1, 0, 16)
+	ftPath(pa, 1, 1, 22000, 10000, 22080, 15000, -1, 0, 16)
+	ftWord(fw, et, 1, 11000, 10500, 13000, 11500, 50, 48)
+	ftWord(fw, et, 1, 14000, 10500, 16000, 11500, 50, 52)
+	ftLine(fl, 1, 23000, 12000, 49000, 13000, 9)
+	pk = ftKind(pa, fw, fl, et, ws, 9800, 9800, 50200, 15200, 79200)
+	port.AssertEq(emonT, port.CellsAt(ws, 3), 1, "the two long rules meet: axes")
+	port.AssertEq(emonT, port.CellsAt(ws, 19), 1, "a sentence in it")
+	port.AssertThat(emonT, (pk/1024) != model.FgChart(), "a banner is not a chart")
+	// the same rules and numbers with no sentence are the minimal chart they always were
+	port.CellsDrop(fl, 0)
+	port.CellsDrop(ws, 0)
+	pk = ftKind(pa, fw, fl, et, ws, 9800, 9800, 50200, 15200, 79200)
+	port.AssertEq(emonT, pk/1024, model.FgChart(), "axes and numbers alone are a chart")
+	// and two rules and a sentence, no numbers (a signature box): not a chart either
+	port.CellsDrop(fw, 0)
+	port.CellsDrop(et, 0)
+	ftLine(fl, 1, 23000, 12000, 49000, 13000, 9)
+	port.CellsDrop(ws, 0)
+	pk = ftKind(pa, fw, fl, et, ws, 9800, 9800, 50200, 15200, 79200)
+	port.AssertThat(emonT, (pk/1024) != model.FgChart(), "a framed sentence is not a chart")
+}
+
 func TestBoxesWithWordsAndAnArrowAreADiagramAndWithNoAxes(emonT *testing.T) {
 	var pa *port.Cells = port.NewCells()
 	var fw *port.Cells = port.NewCells()

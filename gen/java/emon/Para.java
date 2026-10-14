@@ -495,9 +495,40 @@ public final class Para {
         }
         return -1;
     }
+    public static boolean paUnspaced(int cp) {
+        // A code point of a script set without spaces between words (P11.x2): Han (and the Kangxi radicals, which are folded
+        // to Han only after the join), kana, the CJK symbols and punctuation,
+        // the full-width and half-width forms. Hangul is not (it has spaces) and is left out.
+        if ((cp >= 11904) && (cp <= 12255)) {
+            return 1 == 1;
+        }
+        if ((cp >= 12288) && (cp <= 12543)) {
+            return 1 == 1;
+        }
+        if ((cp >= 13312) && (cp <= 19903)) {
+            return 1 == 1;
+        }
+        if ((cp >= 19968) && (cp <= 40959)) {
+            return 1 == 1;
+        }
+        if ((cp >= 63744) && (cp <= 64255)) {
+            return 1 == 1;
+        }
+        if ((cp >= 65280) && (cp < 65440)) {
+            return 1 == 1;
+        }
+        if ((cp > 65500) && (cp <= 65519)) {
+            return 1 == 1;
+        }
+        if ((cp >= 131072) && (cp <= 205743)) {
+            return 1 == 1;
+        }
+        return 0 == 1;
+    }
     public static int paJoin(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells raw, int l) {
         // What goes between the text so far and the line l: nothing after a soft hyphen (which goes), nothing
-        // after a hyphen when the line starts in lowercase (the hyphen stays), else one space.
+        // after a hyphen when the line starts in lowercase (the hyphen stays), nothing between two characters of a script
+        // set without spaces (`pa-unspaced`, D543), else one space.
         int n = emon.Port.cellsLen(raw);
         if (n == 0) {
             return 0;
@@ -510,6 +541,12 @@ public final class Para {
         if (last == 45) {
             int f = paFirstCp(wd, ln, et, l);
             if (paLower(f)) {
+                return 0;
+            }
+        }
+        if (paUnspaced(last)) {
+            int f = paFirstCp(wd, ln, et, l);
+            if (paUnspaced(f)) {
                 return 0;
             }
         }

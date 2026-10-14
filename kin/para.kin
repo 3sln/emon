@@ -485,9 +485,24 @@
           (set k (+ k 1))))
     (return -1)))
 
+(defn ^Bool pa-unspaced [^I32 cp]
+  (comment "A code point of a script set without spaces between words (P11.x2): Han (and the Kangxi radicals, which are folded")
+  (comment "to Han only after the join), kana, the CJK symbols and punctuation,")
+  (comment "the full-width and half-width forms. Hangul is not (it has spaces) and is left out.")
+  (if (and (>= cp 11904) (<= cp 12255)) (return (== 1 1)))
+  (if (and (>= cp 12288) (<= cp 12543)) (return (== 1 1)))
+  (if (and (>= cp 13312) (<= cp 19903)) (return (== 1 1)))
+  (if (and (>= cp 19968) (<= cp 40959)) (return (== 1 1)))
+  (if (and (>= cp 63744) (<= cp 64255)) (return (== 1 1)))
+  (if (and (>= cp 65280) (< cp 65440)) (return (== 1 1)))
+  (if (and (> cp 65500) (<= cp 65519)) (return (== 1 1)))
+  (if (and (>= cp 131072) (<= cp 205743)) (return (== 1 1)))
+  (return (== 0 1)))
+
 (defn ^I32 pa-join [^Cells wd ^Cells ln ^Cells et ^:mut ^Cells raw ^I32 l]
   (comment "What goes between the text so far and the line l: nothing after a soft hyphen (which goes), nothing")
-  (comment "after a hyphen when the line starts in lowercase (the hyphen stays), else one space.")
+  (comment "after a hyphen when the line starts in lowercase (the hyphen stays), nothing between two characters of a script")
+  (comment "set without spaces (`pa-unspaced`, D543), else one space.")
   (let [^I32 n (cells-len raw)]
     (if (== n 0) (return 0))
     (let [^I32 last (cells-at raw (- n 1))]
@@ -496,6 +511,9 @@
       (if (== last 45)
         (do (let [^I32 f (pa-first-cp wd ln et l)]
               (if (pa-lower f) (return 0)))))
+      (if (pa-unspaced last)
+        (do (let [^I32 f (pa-first-cp wd ln et l)]
+              (if (pa-unspaced f) (return 0)))))
       (cells-push raw 32)
       (return 0))))
 
