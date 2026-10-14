@@ -1,0 +1,263 @@
+# PUBLISH A RELEASE (P11.10, D524, D542, D1500). Starts ONLY when the maintainer flips the DRAFT release to published (`release: published`), after
+# prepare-release.yml has tagged, gated and drafted it. A manual run (workflow_dispatch) is ALWAYS a dry run: it verifies and checks every credential and every
+# registry's "already published?" answer, and publishes nothing (no job below passes anything but --dry-run on that path; pages is skipped).
+#
+#   verify  bb release-verify: `bb version --check TAG` on the tagged tree, the tag still points at the commit that is checked out, and the commit status
+#           `emon/full-gates` there is green and names that commit and tag. Nothing is published unless this passes. It outputs the verified COMMIT, and every
+#           job below checks out THAT commit, not the tag name, so a tag moved afterwards changes nothing.
+#   crates npm nuget maven go   one job each, independent (one failing does not stop or undo the others), each in the `release` environment (required reviewer; the
+#           registry secrets live there), each = `bb package --host H` then `bb publish H`: it SKIPS a version the registry already has, so a re-run publishes only
+#           what is missing.
+#   pages   the demo, by calling pages.yml with the verified commit (after the same approval).
+#   summary one report of what happened, and the failing exit code if any registry did not succeed: a partial publish is named, not silent.
+#
+# Needs (docs/releasing.md has the order): the environment `release` with @raystubbs as required reviewer and these secrets in it: CARGO_REGISTRY_TOKEN, NPM_TOKEN,
+# NUGET_API_KEY, MAVEN_CENTRAL_USERNAME, MAVEN_CENTRAL_PASSWORD, MAVEN_GPG_PRIVATE_KEY, MAVEN_GPG_PASSPHRASE; Settings > Pages > Source = GitHub Actions.
+# Never run: needs the credentials, a draft release and Actions credits (D524).
+name: publish
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "DRY RUN of this tag (vX.Y.Z); publishes nothing"
+        type: string
+        required: true
+      ref:
+        description: "DRY RUN: the commit to check out (default main); a tag that does not exist yet is reported, not failed"
+        type: string
+        default: main
+
+permissions:
+  contents: read
+
+# one publication per tag; a running one is finished, never cancelled (a registry may be mid-upload)
+concurrency:
+  group: publish-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+    working-directory: emon
+
+env:
+  CI: "true"
+  TAG: ${{ github.event.release.tag_name || inputs.tag }}
+  # a release event publishes; anything else (workflow_dispatch) is a dry run
+  DRY_FLAG: ${{ github.event_name == 'release' && ' ' || '--dry-run' }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      statuses: read
+    outputs:
+      sha: ${{ steps.verify.outputs.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ github.event_name == 'release' && format('refs/tags/{0}', github.event.release.tag_name) || inputs.ref }}
+          path: emon
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
+        with:
+          bb: 1.3.190
+      - id: verify
+        name: bb release-verify (version, tag, emon/full-gates)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bb release-verify --tag "$TAG" ${DRY_FLAG}
+
+  crates:
+    needs: verify
+    environment: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      outcome: ${{ steps.publish.outputs.outcome }}
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ needs.verify.outputs.sha || github.sha }}
+          path: emon
+      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
+        with:
+          bb: 1.3.190
+      - name: Rust 1.92.0 (the version of every gate)
+        run: rustup toolchain install 1.92.0 --profile minimal && rustup default 1.92.0
+      - name: bb package --host rust (cargo package --locked, verified build included)
+        run: bb package --host rust
+      - id: publish
+        name: bb publish crates
+        run: bb publish crates ${DRY_FLAG}
+
+  npm:
+    needs: verify
+    environment: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write # npm provenance (an attestation that this workflow built the tarball)
+    outputs:
+      outcome: ${{ steps.publish.outputs.outcome }}
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ needs.verify.outputs.sha || github.sha }}
+          path: emon
+      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
+        with:
+          bb: 1.3.190
+      - name: Rust 1.92.0 and the pinned nightly for emon.wasm (the unwinding std)
+        run: |
+          rustup toolchain install 1.92.0 --profile minimal && rustup default 1.92.0
+          rustup toolchain install nightly-2026-09-16 -c rust-src -t wasm32-unknown-unknown
+      - name: bb package --host js (emon.wasm and npm pack)
+        run: bb package --host js
+      - id: publish
+        name: bb publish npm
+        run: bb publish npm ${DRY_FLAG}
+
+  nuget:
+    needs: verify
+    environment: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      outcome: ${{ steps.publish.outputs.outcome }}
+    env:
+      NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ needs.verify.outputs.sha || github.sha }}
+          path: emon
+      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
+        with:
+          bb: 1.3.190
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: 10.0.x
+      - name: bb package --host csharp (dotnet pack)
+        run: bb package --host csharp
+      - id: publish
+        name: bb publish nuget
+        run: bb publish nuget ${DRY_FLAG}
+
+  maven:
+    needs: verify
+    environment: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 90 # the Central Portal validates a bundle for up to ~40 minutes
+    outputs:
+      outcome: ${{ steps.publish.outputs.outcome }}
+    env:
+      MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+      MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+      MAVEN_GPG_PRIVATE_KEY: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+      MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ needs.verify.outputs.sha || github.sha }}
+          path: emon
+      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
+        with:
+          bb: 1.3.190
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: "25"
+      - name: bb package --host java (jar, sources, javadoc, pom, unsigned bundle)
+        run: |
+          export EMON_JDK="$JAVA_HOME"
+          bb package --host java
+      - id: publish
+        name: bb publish maven (signs with MAVEN_GPG_PRIVATE_KEY, uploads to the Central Portal, waits)
+        run: bb publish maven ${DRY_FLAG}
+
+  go:
+    needs: verify
+    environment: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write # pushes the tag go/vX.Y.Z (a tag only: no branch is touched)
+    outputs:
+      outcome: ${{ steps.publish.outputs.outcome }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ needs.verify.outputs.sha || github.sha }}
+          path: emon
+          fetch-depth: 0
+      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
+        with:
+          bb: 1.3.190
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: 1.21.13
+          cache: false
+      - name: bb package --host go (the assembled module tree, go build and go vet)
+        run: bb package --host go
+      - id: publish
+        name: bb publish go (a tag-only commit holding go/, and the tag go/vX.Y.Z)
+        run: bb publish go ${DRY_FLAG}
+
+  # the demo waits for the same approval as the registries (the reusable workflow cannot name an environment itself)
+  approve:
+    if: github.event_name == 'release'
+    needs: verify
+    environment: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo "approved in the release environment"
+        working-directory: .
+
+  pages:
+    needs: [verify, approve]
+    uses: ./.github/workflows/pages.yml
+    with:
+      ref: ${{ needs.verify.outputs.sha }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+  summary:
+    if: always()
+    needs: [verify, crates, npm, nuget, maven, go, pages]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ needs.verify.outputs.sha || github.sha }}
+          path: emon
+      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
+        with:
+          bb: 1.3.190
+      - name: The report (fails if any registry did not succeed)
+        env:
+          RESULTS: >-
+            verify=${{ needs.verify.result }},crates=${{ needs.crates.result }}:${{ needs.crates.outputs.outcome }},npm=${{ needs.npm.result }}:${{ needs.npm.outputs.outcome }},nuget=${{ needs.nuget.result }}:${{ needs.nuget.outputs.outcome }},maven=${{ needs.maven.result }}:${{ needs.maven.outputs.outcome }},go=${{ needs.go.result }}:${{ needs.go.outputs.outcome }},pages=${{ needs.pages.result }}
+        run: bb release-ops summary --tag "$TAG" --results "$RESULTS" ${DRY_FLAG}

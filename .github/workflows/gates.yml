@@ -5,12 +5,23 @@
 #   - weekly (Monday), on main.
 # The shards come from ci/gate-map.edn through `bb ci shards` (one source for the PR plan and this run); the `unit` gate keeps a job per arm.
 # Needs the repository secrets listed in SPEC 15.3 (the corpus bucket). All scripting is babashka.
-# NOT here (P11.9, P11.10): the `emon/full-gates` commit status that the publish job reads.
+# The `emon/full-gates` commit status that the publish job reads is posted by prepare-release.yml (P11.9), which CALLS this file (`workflow_call`, `ref` = the tag)
+# on the tagged commit of a DRAFT release (a draft fires no release event); this workflow posts nothing itself.
 name: gates
 
 on:
   release:
     types: [published, prereleased]
+  workflow_call:
+    inputs:
+      groups:
+        description: Which groups to run
+        type: string
+        default: all
+      ref:
+        description: emon ref to test (branch, tag or sha)
+        type: string
+        default: main
   schedule:
     - cron: "17 4 * * 1"
   workflow_dispatch:
