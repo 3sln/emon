@@ -18,6 +18,8 @@
 //                  :evidence true                             the text layer's evidence dump (needs keep-evidence=1)
 //                  :assets  :bytes | :info                    the Model's assets, with their bytes (BASE64) or without
 //                  :native  true                              use the build's own pdfium / Tesseract / codecs (`emon/capabilities`)
+//                  :pdfium  "PATH"   :tessdata "DIR"          where they are (a file or a directory; else $EMON_PDFIUM_LIB / $EMON_TESSDATA, else
+//                                                             lib/libpdfium.* and share/emon/tessdata next to the pod: the archive's layout)
 //       RETURNS  {:model .. :html .. :evidence .. :assets [{:id :name :media-type :origin :sha256 :width :height :size :bytes}] :intake {..} :stats {..}}
 //     emon/intake   INPUT [OPTIONS]          stage 0 alone: {:format "pdf" :version "1.4" :pages 3 :encrypted false :bytes 1234}
 //     emon/check-options OPTIONS             true, or an error naming kin's sentence
@@ -29,7 +31,7 @@
 //
 // NO CRATE IS ADDED: bencode, EDN, JSON-to-EDN and base64 are written here (small, and the pod's wire is what a test reads). The conversion runs
 // on a thread with a 32 MiB stack. NOTHING but protocol goes to stdout; diagnostics go to stderr.
-use emon::capi::{category_code, category_name, html_options, native_config};
+use emon::capi::{capabilities, category_code, category_name, html_options, native_config_at};
 use emon::{parse_options, Engine, Error, Input, Model};
 use std::collections::BTreeMap;
 use std::io::{BufRead, Write};
@@ -597,14 +599,14 @@ fn option_text(v: Option<&Edn>) -> Result<String, PodError> {
 }
 
 // The engine and the Options for an option text; `native` brings the build's own ports.
-fn setup(text: &str, native: bool) -> Result<(Engine, emon::Options), PodError> {
+fn setup(text: &str, native: bool, places: (Option<&str>, Option<&str>)) -> Result<(Engine, emon::Options), PodError> {
     let p = parse_options(text).map_err(PodError::usage)?;
     if p.record || p.js_ocr || p.js_render {
         return Err(PodError::usage("record=1, js-ocr=1 and js-render=1 are options of a session (the C binding's emon_open): the pod converts in one call"));
     }
     let mut cfg = p.config.clone();
     if native {
-        native_config(&mut cfg).map_err(PodError::usage)?;
+        native_config_at(&mut cfg, places.0, places.1).map_err(PodError::usage)?;
     }
     Ok((Engine::new(cfg), p.options))
 }
@@ -670,7 +672,16 @@ fn convert(args: &[Edn]) -> Result<Edn, PodError> {
     if want_evidence && !text.lines().any(|l| l.starts_with("keep-evidence=")) {
         text.push_str("\nkeep-evidence=1\n");
     }
-    let (engine, opts) = setup(&text, native)?;
+    // where pdfium and the models are, when the caller says (otherwise $EMON_PDFIUM_LIB, $EMON_TESSDATA, then next to the pod: see `emon/capabilities`)
+    let place = |v: Option<&Edn>, k: &str| -> Result<Option<String>, PodError> {
+        match v {
+            None | Some(Edn::Nil) => Ok(None),
+            Some(Edn::Str(p)) => Ok(Some(p.clone())),
+            Some(_) => Err(PodError::usage(format!(":{} is a path string", k))),
+        }
+    };
+    let (pdfium, tessdata) = (place(get(&spec, "pdfium"), "pdfium")?, place(get(&spec, "tessdata"), "tessdata")?);
+    let (engine, opts) = setup(&text, native, (pdfium.as_deref(), tessdata.as_deref()))?;
     let (model, stats) = engine.convert_stats(input, &opts)?;
     let mut out: Vec<(&str, Edn)> = Vec::new();
     if let Some(m) = get(&spec, "model") {
@@ -729,7 +740,7 @@ fn convert(args: &[Edn]) -> Result<Edn, PodError> {
 
 fn intake(args: &[Edn]) -> Result<Edn, PodError> {
     let input = input_of(args.first().ok_or_else(|| PodError::usage("emon/intake wants an input"))?)?;
-    let (engine, _) = setup(&option_text(args.get(1))?, false)?;
+    let (engine, _) = setup(&option_text(args.get(1))?, false, (None, None))?;
     let v = engine.intake(input)?;
     Ok(v.first().map(intake_edn).unwrap_or(Edn::Nil))
 }
@@ -748,9 +759,9 @@ fn invoke(var: &str, args: &[Edn]) -> Result<Edn, PodError> {
         },
         "capabilities" => Ok(map(vec![
             ("version", s("0.1.0")),
-            ("pdfium", Edn::Bool(cfg!(pdfium))),
-            ("tesseract", Edn::Bool(cfg!(feature = "tesseract"))),
-            ("codecs", Edn::Bool(cfg!(codecs))),
+            ("pdfium", Edn::Bool(capabilities() & 1 != 0)),
+            ("tesseract", Edn::Bool(capabilities() & 2 != 0)),
+            ("codecs", Edn::Bool(capabilities() & 4 != 0)),
         ])),
         other => Err(PodError::usage(format!("emon has no var {}", other))),
     }

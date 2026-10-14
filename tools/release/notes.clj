@@ -61,7 +61,7 @@
     (line "| Where | Package |")
     (line "|---|---|")
     (line "| crates.io | `emon` " version " |")
-    (line "| npm | `@3sln/emon@" version "` |")
+    (line "| npm | `@3sln/emon@" version "` (and `@3sln/pdfium-wasm@" version "`, pdfium for the browser and Node) |")
     (line "| NuGet | `Emon` " version " |")
     (line "| Maven Central | `com.3sln:emon:" version "` |")
     (line "| Go | `go get github.com/3sln/emon/go@v" version "` (tag `go/v" version "`) |")

@@ -1,0 +1,24 @@
+{
+  "name": "@3sln/pdfium-wasm",
+  "version": "0.1.0",
+  "license": "MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND FTL AND IJG AND LicenseRef-AGG-2.3 AND Unicode-3.0 AND Zlib AND libpng-2.0",
+  "description": "pdfium's WebAssembly build (bblanchon/pdfium-binaries chromium/8076) as an ES module and a .wasm file: the renderer @3sln/emon/pdfium uses by default. Not emon's code; pdfium and the libraries inside it carry their own licences (LICENSE, licenses/).",
+  "keywords": ["pdfium", "pdf", "wasm", "webassembly", "render", "emon"],
+  "author": "raystubbs (https://github.com/raystubbs)",
+  "homepage": "https://github.com/3sln/emon#readme",
+  "repository": { "type": "git", "url": "git+https://github.com/3sln/emon.git", "directory": "release/pkg/pdfium-wasm" },
+  "bugs": { "url": "https://github.com/3sln/emon/issues" },
+  "type": "module",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "exports": {
+    ".": { "types": "./index.d.ts", "default": "./index.js" },
+    "./pdfium.mjs": "./pdfium.mjs",
+    "./pdfium.wasm": "./pdfium.wasm",
+    "./package.json": "./package.json"
+  },
+  "files": ["index.js", "index.d.ts", "pdfium.mjs", "pdfium.wasm", "LICENSE", "licenses", "VERSION", "README.md"],
+  "sideEffects": false,
+  "publishConfig": { "access": "public" },
+  "engines": { "node": ">=18" }
+}

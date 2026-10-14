@@ -10,6 +10,9 @@
 //     const model = await emon.convert(scan, { ports: { render } });
 //     await render.terminate();
 //
+// WITHOUT `module`, `pdfiumRenderer()` imports the package `@3sln/pdfium-wasm` (npm install @3sln/pdfium-wasm; an optional peer dependency, imported on the
+// first render): that package IS this build, `pdfium.mjs` and `pdfium.wasm`, pinned to the version `tools/pdfium/pdfium.edn` names (D1542).
+//
 // THE BUILD. The archive's `lib/pdfium.js` is a classic script (no export; it fills a global `Module` and starts itself). `bb pdfium-fetch` wraps it,
 // text unchanged, as `lib/pdfium.mjs`: `export default function pdfium(Module, node)`. `module` is that factory (or a function that returns it, as
 // `() => import(...)` does, or a promise of either); it is called once, with `{ wasmBinary, print, printErr }`, and gives the instantiated
@@ -97,10 +100,10 @@ const unsupported = (reason) => ({ status: 'unsupported', reason });
 
 /**
  * @param {object} [o]
- * @param {Function|Promise} o.module pdfium's factory (`lib/pdfium.mjs`'s default export), a function that returns it (`() => import('./pdfium.mjs')`), or a
- *   promise of either: called once, on the first render
- * @param {ArrayBuffer|Uint8Array|string|URL|Response|Promise} [o.wasm] `pdfium.wasm`: its bytes, its URL, or a `Response` (without it the factory looks for the file
- *   beside ITS OWN script, which in a Worker is the Worker's: pass it)
+ * @param {Function|Promise} [o.module] pdfium's factory (`lib/pdfium.mjs`'s default export), a function that returns it (`() => import('./pdfium.mjs')`), or a
+ *   promise of either: called once, on the first render. Without it: the package `@3sln/pdfium-wasm` (an optional peer dependency), whose .wasm is the default `wasm`
+ * @param {ArrayBuffer|Uint8Array|string|URL|Response|Promise} [o.wasm] `pdfium.wasm`: its bytes, its URL, or a `Response` (with your own `module`, without it the
+ *   factory looks for the file beside ITS OWN script, which in a Worker is the Worker's: pass it)
  * @param {number} [o.maxPixels] the largest page, in pixels, this renderer will make (default 64 Mpx); the conversion's `pixels` limit applies too
  * @returns {{ layers: number, producer: object, open(doc: object, limits: object): Promise<object>, terminate(): Promise<void> }} a Renderer (`render.js`)
  */
@@ -108,10 +111,24 @@ export function pdfiumRenderer({ module, wasm, maxPixels = 64 * 2 ** 20 } = {}) 
   let ready = null; // Promise<module> of the instantiated library; null before the first use and after an abort
 
   const instantiate = async () => {
-    if (!module) throw new Error('pdfiumRenderer needs `module`: the pdfium factory (lib/pdfium.mjs)');
+    let factory = module;
+    let wasmSrc = wasm;
+    if (!factory) {
+      // THE DEFAULT (D1542): the package @3sln/pdfium-wasm, an OPTIONAL peer dependency, imported only now, on the first render, so that this package stays
+      // dependency-free and a document that asks for no raster never loads it. Its default export is the factory and `wasmBinary()` the bytes of the .wasm
+      // (the package reads them, so this SDK names no file and no Node module, D058).
+      let pkg;
+      try {
+        pkg = await import('@3sln/pdfium-wasm');
+      } catch (e) {
+        throw new Error(`pdfiumRenderer() without \`module\` uses the package @3sln/pdfium-wasm, which cannot be imported (npm install @3sln/pdfium-wasm; or pass \`module\` and \`wasm\`): ${e && e.message}`);
+      }
+      factory = pkg;
+      if (wasmSrc === undefined) wasmSrc = pkg.wasmBinary();
+    }
     const arg = { print() {}, printErr() {} };
-    if (wasm !== undefined) {
-      let src = await wasm;
+    if (wasmSrc !== undefined) {
+      let src = await wasmSrc;
       if (typeof src === 'string' || src instanceof URL) src = await fetch(src);
       if (typeof Response !== 'undefined' && src instanceof Response) {
         if (!src.ok) throw new Error(`pdfium.wasm: HTTP ${src.status}`);
@@ -119,7 +136,7 @@ export function pdfiumRenderer({ module, wasm, maxPixels = 64 * 2 ** 20 } = {}) 
       }
       arg.wasmBinary = src instanceof Uint8Array ? src : new Uint8Array(src);
     }
-    let m = await module;
+    let m = await factory;
     // `() => import(...)`, a factory, or the namespace itself: the factory is the function that takes the module's arguments and gives the module
     if (typeof m === 'function') {
       const r = await m(arg);

@@ -6,11 +6,8 @@ import { tesseractPort } from '@3sln/emon/tesseract';
 
 const emon = await Emon.load(await readFile(new URL(import.meta.resolve('@3sln/emon/emon.wasm'))));
 
-// pdfium's WebAssembly build: pdfium.mjs (the archive's pdfium.js wrapped as an ES module) and pdfium.wasm
-const render = pdfiumRenderer({
-  module: () => import('./vendor/pdfium/pdfium.mjs'),
-  wasm: await readFile('./vendor/pdfium/pdfium.wasm'),
-});
+// pdfium's WebAssembly build: with no arguments, the adapter imports the package @3sln/pdfium-wasm (npm install @3sln/pdfium-wasm) on the first render
+const render = pdfiumRenderer();
 
 // tesseract.js, with the English model from the npm package @tesseract.js-data/eng
 const ocr = tesseractPort({

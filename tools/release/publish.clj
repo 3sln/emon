@@ -11,7 +11,8 @@
 ;; Each prints the outcome as `outcome=...` and appends it to $GITHUB_OUTPUT. Credentials come from the environment only and are never printed.
 ;;
 ;;   crates  CARGO_REGISTRY_TOKEN             cargo publish --locked, from dist/stage/rust (the tree `cargo package` verified)
-;;   npm     NPM_TOKEN                        npm publish dist/js/3sln-emon-V.tgz --access public [--provenance in Actions]; prerelease versions get --tag next
+;;   npm     NPM_TOKEN                        npm publish dist/js/3sln-pdfium-wasm-V.tgz and dist/js/3sln-emon-V.tgz (both, the peer first; each skipped when npm has it)
+;;                                            --access public [--provenance in Actions]; prerelease versions get --tag next
 ;;   nuget   NUGET_API_KEY                    dotnet nuget push dist/csharp/Emon.V.nupkg (and .snupkg) --skip-duplicate
 ;;   maven   MAVEN_CENTRAL_USERNAME, MAVEN_CENTRAL_PASSWORD, MAVEN_GPG_PRIVATE_KEY, MAVEN_GPG_PASSPHRASE
 ;;           sign the four files of dist/java/maven/com/3sln/emon/V with the key, re-zip the bundle, upload it to the Central Portal
@@ -140,22 +141,36 @@
                       :else (rl/die 1 "cargo publish failed")))))))
 
 ;; ---------------------------------------------------------------------------------------------------- npm
+;; TWO PACKAGES (D1542): @3sln/emon and its optional peer @3sln/pdfium-wasm (pdfium's WebAssembly build), both at version.edn's version, each built by
+;; `bb package --host js` into dist/js/. The peer goes first, so that @3sln/emon never names a version that is not there; each is skipped when its version
+;; is already on npm, so a rerun publishes what is missing.
+(defn npm-packages "[[package-name tarball] ...] for version v, in publishing order." [v]
+  [["@3sln/pdfium-wasm" (str "dist/js/3sln-pdfium-wasm-" v ".tgz")] ["@3sln/emon" (str "dist/js/3sln-emon-" v ".tgz")]])
+
+(defn npm-outcome "One outcome for the packages' (published / already-published / dry-run): published if any was." [outcomes]
+  (cond (some #{"published"} outcomes) "published"
+        (some #{"dry-run"} outcomes) "dry-run"
+        :else "already-published"))
+
+(defn- npm-one "Publish one package's tarball unless npm has its version; returns the outcome string." [pkg tgz v dry?]
+  (let [view (rl/run "npm" "view" (str pkg "@" v) "version" "--registry" "https://registry.npmjs.org")]
+    (if (npm-has? (:out view) v)
+      (do (say pkg "@" v " is already on npm: skipped") "already-published")
+      (let [rc (str (fs/path (fs/create-temp-dir {:prefix "emon-npm-"}) "npmrc"))
+            _ (spit rc "//registry.npmjs.org/:_authToken=${NPM_TOKEN}\nregistry=https://registry.npmjs.org/\n")
+            prov? (and (= "true" (System/getenv "GITHUB_ACTIONS")) (not (str/blank? (System/getenv "ACTIONS_ID_TOKEN_REQUEST_URL"))))
+            args (cond-> (npm-args tgz v prov? rc) dry? (conj "--dry-run"))]
+        (say "npm " (str/join " " (remove #{rc} args)) (when-not prov? "   (no OIDC token: published WITHOUT provenance)"))
+        (let [r (apply run-live! {} "npm" args)]
+          (cond (zero? (:exit r)) (do (say (if dry? "npm dry run ok" (str "published " pkg "@" v))) (if dry? "dry-run" "published"))
+                (re-find #"cannot publish over|previously published" (str (:err r) (:out r))) (do (say "npm says it has it: skipped") "already-published")
+                :else (rl/die 1 (str "npm publish of " pkg " failed"))))))))
+
 (defn npm [dry?]
-  (let [v (version) tgz (str "dist/js/3sln-emon-" v ".tgz")]
+  (let [v (version) pkgs (npm-packages v)]
     (check-env! "npm" dry?)
-    (must-exist tgz "the npm tarball")
-    (let [view (rl/run "npm" "view" (str "@3sln/emon@" v) "version" "--registry" "https://registry.npmjs.org")]
-      (if (npm-has? (:out view) v)
-        (do (say "@3sln/emon@" v " is already on npm: skipped") (outcome! "already-published"))
-        (let [rc (str (fs/path (fs/create-temp-dir {:prefix "emon-npm-"}) "npmrc"))
-              _ (spit rc "//registry.npmjs.org/:_authToken=${NPM_TOKEN}\nregistry=https://registry.npmjs.org/\n")
-              prov? (and (= "true" (System/getenv "GITHUB_ACTIONS")) (not (str/blank? (System/getenv "ACTIONS_ID_TOKEN_REQUEST_URL"))))
-              args (cond-> (npm-args tgz v prov? rc) dry? (conj "--dry-run"))]
-          (say "npm " (str/join " " (remove #{rc} args)) (when-not prov? "   (no OIDC token: published WITHOUT provenance)"))
-          (let [r (apply run-live! {} "npm" args)]
-            (cond (zero? (:exit r)) (do (say (if dry? "npm dry run ok" (str "published @3sln/emon@" v))) (outcome! (if dry? "dry-run" "published")))
-                  (re-find #"cannot publish over|previously published" (str (:err r) (:out r))) (do (say "npm says it has it: skipped") (outcome! "already-published"))
-                  :else (rl/die 1 "npm publish failed"))))))))
+    (doseq [[_ tgz] pkgs] (must-exist tgz "the npm tarball"))
+    (outcome! (npm-outcome (doall (for [[pkg tgz] pkgs] (npm-one pkg tgz v dry?)))))))
 
 ;; ---------------------------------------------------------------------------------------------------- NuGet
 (defn nuget [dry?]
@@ -296,7 +311,11 @@
     (t! "npm view: another version is not this one" (not (npm-has? "0.1.1" "0.1.0")))
     (t! "npm args: public access, a private userconfig, no provenance outside Actions"
         (= ["publish" "a.tgz" "--access" "public" "--userconfig" "rc"] (npm-args "a.tgz" "0.1.0" false "rc")))
-    (t! "npm args: provenance when asked" (some #{"--provenance"} (npm-args "a.tgz" "0.1.0" true "rc")))
+    (t! "npm packages: pdfium-wasm first, both tarballs named by version" (= [["@3sln/pdfium-wasm" "dist/js/3sln-pdfium-wasm-0.1.0.tgz"] ["@3sln/emon" "dist/js/3sln-emon-0.1.0.tgz"]] (npm-packages "0.1.0")))
+    (t! "npm outcome: published when any package was, dry-run, else already-published"
+        (and (= "published" (npm-outcome ["already-published" "published"])) (= "dry-run" (npm-outcome ["dry-run" "already-published"]))
+             (= "already-published" (npm-outcome ["already-published" "already-published"]))))
+    (t! "npm args: provenance when asked"(some #{"--provenance"} (npm-args "a.tgz" "0.1.0" true "rc")))
     (t! "npm args: a prerelease goes to the next tag" (= ["--tag" "next"] (take-last 2 (npm-args "a.tgz" "0.2.0-rc.1" false "rc"))))
     (t! "central auth is bearer base64(user:pass)" (= "Bearer dTpw" (central-auth "u" "p")))
     (t! "central state: PUBLISHED" (= :published (:state (central-state "{\"deploymentState\":\"PUBLISHED\"}"))))

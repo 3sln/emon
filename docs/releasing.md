@@ -47,7 +47,7 @@ run of each will find something. Do the dry runs in the order below, and treat t
    a day or more. Nothing else on the Maven side works before this shows *Verified*.
 2. **crates.io**: sign in with GitHub; the name `emon` is claimed by the first publish (there is no reservation without publishing). Check it is free:
    `cargo search emon --limit 3`. If it is taken, stop and tell the coordinator: the crate name is in `release/pkg/rust/Cargo.toml` and the version tool.
-3. **npm**: create the organization `3sln` (<https://www.npmjs.com/org/create>) so `@3sln` exists and is yours; the package is claimed by its first publish.
+3. **npm**: create the organization `3sln` (<https://www.npmjs.com/org/create>) so `@3sln` exists and is yours; the packages are claimed by their first publish. There are two: `@3sln/emon` and `@3sln/pdfium-wasm` (pdfium's WebAssembly build, D1542); `bb publish npm` publishes both, the second first, with the same token.
 4. **NuGet**: sign in at nuget.org; optionally reserve the ID prefix `Emon` (*Account > Reserve ID prefix*, free for open-source). The package `Emon` is claimed by its first push.
 
 ## 3. The release credential (`RELEASE_TOKEN`, or a GitHub App)
@@ -161,7 +161,7 @@ registry did not succeed. Every registry step first asks whether the version is 
    *Publish release* again; that starts a fresh run, whose checks and skips are the same. publish.yml cannot be started by hand for real, only as a dry run.)
 4. By registry:
    - **crates.io**: a version can be *yanked* (`cargo yank --version X emon`), never deleted or replaced.
-   - **npm**: `npm deprecate @3sln/emon@X "reason"`; `npm unpublish` works only within 72 hours and only if nothing depends on it. A version is never reusable.
+   - **npm**: `npm deprecate @3sln/emon@X "reason"` (and `@3sln/pdfium-wasm@X`); `npm unpublish` works only within 72 hours and only if nothing depends on it. A version is never reusable.
    - **NuGet**: *unlist* the version on nuget.org; the ID and version cannot be reused.
    - **Maven Central**: nothing can be deleted or changed once `PUBLISHED`. A deployment that is `FAILED` or still `VALIDATED` can be dropped in the Portal
      (*Publishing > Deployments*); a `PUBLISHED` one is permanent. If the job timed out while the Portal was still validating, look at the deployment in the Portal

@@ -11,6 +11,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 static int fails = 0, oks = 0;
 
@@ -128,7 +130,13 @@ int main(void) {
     /* the library */
     check(emon_version() && strlen(emon_version()) > 0, "emon_version is a string");
     check(emon_capabilities() <= 7, "emon_capabilities is a set of the three native ports");
-    check(emon_const(0) != emon_const(2) && emon_const(2) != emon_const(5) && emon_const(10) != emon_const(12) && emon_const(99) == -1, "emon_const: kin's numbers of the plan/fulfil protocol");
+    /* a place you NAME that is wrong is a usage error that changes nothing; NULL and "" name nothing (D1541) */
+    check(emon_set_native_paths("/no/such/pdfium", NULL, &err) == -EMON_ERR_USAGE && err_is(&err, EMON_ERR_USAGE, "usage") && strstr(err.message, "/no/such/pdfium"), "emon_set_native_paths: a pdfium that is not there is a usage error");
+    emon_free_error(&err);
+    check(emon_set_native_paths(NULL, "/no/such/models", &err) == -EMON_ERR_USAGE && strstr(err.message, "traineddata"), "emon_set_native_paths: a models directory without models is a usage error");
+    emon_free_error(&err);
+    check(emon_set_native_paths(NULL, "", &err) == 0 && emon_set_native_paths(NULL, NULL, &err) == 0 && emon_capabilities() <= 7, "emon_set_native_paths: NULL and \"\" name nothing");
+    check(emon_const(0) != emon_const(2) &&emon_const(2) != emon_const(5) && emon_const(10) != emon_const(12) && emon_const(99) == -1, "emon_const: kin's numbers of the plan/fulfil protocol");
     check(strcmp(emon_error_category(EMON_ERR_LIMIT), "limit") == 0 && emon_error_category(-EMON_ERR_IO) != NULL && emon_error_category(99) == NULL, "emon_error_category names the categories");
 
     /* the options grammar is kin's */
@@ -224,8 +232,26 @@ int main(void) {
     emon_free_error(&err);
     emon_input empty = {0};
     check(emon_convert_json(&empty, NULL, 0, 0, &b, NULL) < 0, "an empty input is an error (and a NULL emon_error is allowed)");
+    /* stderr is captured around the next two calls (D1543): a named limit reached INSIDE kin is an answer and prints nothing; a real panic still prints */
+    fflush(stderr);
+    int saved_stderr = dup(2);
+    FILE *captured = tmpfile();
+    dup2(fileno(captured), 2);
+    int pages_rc = emon_convert_json(&in, "limit.pages=0\n", 0, 0, &b, &err);
+    int lim_named = pages_rc == -EMON_ERR_LIMIT && err_is(&err, EMON_ERR_LIMIT, "pages");
+    emon_free_error(&err);
+    fflush(stderr);
+    off_t printed_for_limit = lseek(fileno(captured), 0, SEEK_END);
     check(emon_test_panic(&err) == -EMON_ERR_INTERNAL && err_is(&err, EMON_ERR_INTERNAL, "internal") && strstr(err.message, "on purpose"), "a panic is caught at the boundary: internal, with its message");
     emon_free_error(&err);
+    fflush(stderr);
+    off_t printed_in_all = lseek(fileno(captured), 0, SEEK_END);
+    dup2(saved_stderr, 2);
+    close(saved_stderr);
+    fclose(captured);
+    check(lim_named, "limit.pages=0: a typed breach inside kin, named by kin");
+    check(printed_for_limit == 0, "a named limit prints nothing on stderr (it printed a Rust panic notice)");
+    check(printed_in_all > printed_for_limit, "a real panic still goes through the panic hook (nothing is hidden)");
 
     /* the inverted API: the same Model, over a chunk that misses */
     size_t steps = 0;

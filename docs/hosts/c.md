@@ -6,15 +6,33 @@
     include/emon.h
     lib/libemon.dylib | .so            the shared library
     lib/libemon.a                      the static library
+    lib/libpdfium.dylib | .so          pdfium, loaded at run time
+    share/emon/tessdata/               the English and orientation models (eng, osd)
 
-Link the shared library with `-I include -L lib -lemon` (and `-Wl,-rpath,<lib dir>` to run it from where it is). The static
-library needs the system's own libraries too: `-lpthread -ldl -lm` on Linux, `-framework Security -framework CoreFoundation
--liconv -lm` on macOS. C11; the header is C++ safe.
+Link the shared library with `-I include -L lib -lemon` (and `-Wl,-rpath,<lib dir>` to run it from where it is: the library is
+named `@rpath/libemon.dylib` on macOS and has the soname `libemon.so` on Linux). The static library holds Tesseract and
+Leptonica, so it needs the C++ runtime and the system's own libraries too: `-lstdc++ -lpthread -ldl -lm` on Linux, `-framework
+Security -framework CoreFoundation -liconv -lm -lc++` on macOS. C11; the header is C++ safe.
 
-**The released library has no pdfium, no Tesseract and no JPEG 2000 / JBIG2 decoder built in** (`emon_capabilities()` is 0).
-It converts born-digital PDFs on its own; for scans and figures you answer the engine's requests yourself, with the step API
-below. The `EMON_NATIVE` flag uses the ports a build has, and a build made with them (from source, with `--cfg pdfium` and the
-`tesseract` feature) sets the bits of `emon_capabilities()`.
+**The released library has the whole pipeline.** Tesseract 5.5.3 and Leptonica are linked into it statically, and pdfium
+(`chromium/8076`) is loaded at run time from the file beside it, so a page that needs drawing and reading just works:
+`emon_capabilities()` has `EMON_CAP_PDFIUM` and `EMON_CAP_TESSERACT` set when both are found. There is still no JPEG 2000 or
+JBIG2 decoder (`EMON_CAP_CODECS` is 0). The ports are used when you pass the `EMON_NATIVE` flag to a one-shot call; without
+it, or with the step API, a request for a port is answered `unsupported` (or you answer it yourself, see below).
+
+Where each is looked for, in order. A place you *name* that is wrong is an error, never replaced by the next one; nothing
+found at all is no capability bit and no error.
+
+| | pdfium | the Tesseract models |
+|---|---|---|
+| 1 | `emon_set_native_paths(pdfium, tessdata, &err)`: a file or the directory holding it / a directory with `*.traineddata` | the same call |
+| 2 | `$EMON_PDFIUM_LIB` | `$EMON_TESSDATA` |
+| 3 | next to the library (`lib/libpdfium.*` beside `lib/libemon.*`); a static link looks next to the executable | `share/emon/tessdata` one directory above `lib/` (the archive's), or beside the executable |
+| 4 | | `$TESSDATA_PREFIX` and the system's usual places |
+
+The same layout is the CLI's ([docs/cli.md](../cli.md)) and the pod's ([docs/hosts/pod.md](pod.md)); put the archive's
+directories anywhere together and they work. On macOS a downloaded library is quarantined until you run
+`xattr -dr com.apple.quarantine <dir>` (the files are not signed).
 
 ## First conversion
 
@@ -98,6 +116,43 @@ if (emon_model_json(model, 0, &json, &err) == 0) {
 emon_free_model(model);
 ```
 
+## Scans and figures: pdfium and Tesseract
+
+<!-- snippet: docs/snippets/c/native.c -->
+```c
+/* pdf, len: a scanned document's bytes */
+emon_error err = {0};
+/* Optional: where pdfium and the models are. Without it: $EMON_PDFIUM_LIB and $EMON_TESSDATA, then lib/ and share/emon/tessdata of the archive. */
+if (emon_set_native_paths(NULL, NULL, &err) < 0) {
+    fprintf(stderr, "%s: %s\n", err.name, err.message);
+    emon_free_error(&err);
+    return 1;
+}
+if (!(emon_capabilities() & EMON_CAP_PDFIUM) || !(emon_capabilities() & EMON_CAP_TESSERACT)) {
+    fprintf(stderr, "pdfium or the Tesseract models were not found next to the library\n");
+    return 1;
+}
+
+emon_input in = {0};
+in.data = pdf;
+in.len = len;
+emon_buf html = {0};
+if (emon_convert_html(&in, NULL, EMON_NATIVE, NULL, &html, &err) < 0) { /* EMON_NATIVE: pdfium draws, Tesseract reads */
+    fprintf(stderr, "%s: %s\n", err.name, err.message);
+    emon_free_error(&err);
+    return 1;
+}
+FILE *out = fopen("scan.html", "wb");
+fwrite(html.data, 1, html.len, out);
+fclose(out);
+emon_free_buf(&html);
+```
+
+`bb package --check` compiles this against the built archive and runs it on `samples/scan-plain.pdf`, linked both ways, with no
+`EMON_*` variable in the environment (the shared library finds `lib/libpdfium.*` and `share/emon/tessdata` by itself; the static
+link is given them through the environment, since the executable is not beside them), and requires the heading the OCR reads. It
+runs where `bb native` and `bb pdfium-fetch` have been run, and prints a NOTE and skips on a machine that has neither.
+
 ## The step API: when the engine owns nothing and you own everything
 
 `emon_open` / `emon_step` / `emon_finish` is the inverted loop of the browser binding, for a caller that owns the byte source
@@ -152,8 +207,9 @@ you owe only if the options say so: `js-render=1` makes the `render` and `crop` 
 the whole page as RGB at the request's dpi and layer; a crop is cut from it by emon), `js-ocr=1` makes the `ocr` requests yours
 (`emon_bitmap_png` gives the image to read, and `emon_answer_ocr` takes your engine's reading in the flat integer form of
 `emon.ocrport`, whose policy functions `emon_ocr_models`, `emon_ocr_lang_first`, `emon_ocr_block_type` and `emon_ocr_word_lang`
-are kin's, so every host reads a scan the same way). A request you have no port for is answered `unsupported` by the session. If
-you only need scans read, `emon convert` ([docs/cli.md](../cli.md)) bundles both engines.
+are kin's, so every host reads a scan the same way). A request you have no port for is answered `unsupported` by the session. The
+session does not use the library's own pdfium and Tesseract (the engine never calls out); if you only need scans read, the
+one-shot call above with `EMON_NATIVE` does it.
 
 The session also records and replays (`record=1`, `emon_transcript`, `emon_replay_file`): a transcript recorded by any host
 replays on any other to the same bytes. The programs above need no port, and `bb package --check` compiles and runs each; the
@@ -168,7 +224,7 @@ request-answering functions are described by the header and have no example here
   the step API.
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the c host: 123 entries (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the c host: 124 entries (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
@@ -275,6 +331,7 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon_request.kind` | `@0 int32_t` |
 | `emon_request.ncells` | `@3 size_t` |
 | `emon_session` | `opaque struct` |
+| `emon_set_native_paths` | `int (const char *pdfium, const char *tessdata, emon_error *err)` |
 | `emon_source` | `struct` |
 | `emon_source.ctx` | `@2 void *` |
 | `emon_source.length` | `@0 uint64_t` |

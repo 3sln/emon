@@ -56,6 +56,7 @@ for f in port plan source engine imgdec tess render pdfium pdfimg pdfcodecs sess
 put "$crate/src/lib.rs.new" "$crate/src/lib.rs"
 rm -f "$crate/src/lib.rs.new"
 put host/c/src/capi.rs "$crate/src/capi.rs"
+put host/c/src/native.rs "$crate/src/native.rs" # where pdfium and the models are (D1541): `#[path = "native.rs"] mod native;` in capi.rs
 put host/pod/src/main.rs "$crate/src/pod.rs"
 cat > "$crate/Cargo.toml.new" <<'TOML'
 [package]

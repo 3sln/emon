@@ -24,6 +24,16 @@
    {:file "host/js/package-lock.json"
     :what "npm lock: the root package, twice"
     :re #"(\"name\": \"@3sln/emon\",\s*\"version\": \")([^\"]+)(\")" :n 2}
+   ;; @3sln/pdfium-wasm (D1542) tracks emon's version; @3sln/emon's optional peer range names it (^X.Y.Z), in the manifest and in its lock
+   {:file "release/pkg/pdfium-wasm/package.json"
+    :what "npm @3sln/pdfium-wasm (pdfium's WebAssembly build)"
+    :re #"(?m)(^  \"name\": \"@3sln/pdfium-wasm\",\n  \"version\": \")([^\"]+)(\")" :n 1}
+   {:file "host/js/package.json"
+    :what "npm @3sln/emon: the optional peer range of @3sln/pdfium-wasm (^X.Y.Z)"
+    :re #"(\"@3sln/pdfium-wasm\": \"\^)([^\"]+)(\")" :n 1}
+   {:file "host/js/package-lock.json"
+    :what "npm lock: the same peer range"
+    :re #"(\"@3sln/pdfium-wasm\": \"\^)([^\"]+)(\")" :n 1}
    {:file "kin/scripts/emon-rs-build"
     :what "Rust crate `emon` (Cargo.toml assembled here)"
     :re #"(?m)(^name = \"emon\"\nversion = \")([^\"]+)(\")" :n 1}
@@ -58,6 +68,9 @@
    {:file "release/pkg/csharp/Emon.csproj"
     :what "NuGet Emon (the project's <Version>)"
     :re #"(<Version>)([^<]+)(</Version>)" :n 1}])
+
+;; how many DISTINCT files the targets and version.edn make (a file may hold two targets: host/js/package.json has its version and the peer range)
+(def n-files (inc (count (distinct (map :file targets)))))
 
 (defn- die [code & msg]
   (binding [*out* *err*] (println (str/join " " msg)))
@@ -123,7 +136,7 @@
       (die 2 "bb version --check wants a tag like v1.2.3 or 1.2.3, got" (pr-str tag)))
     (let [bad (mismatches root want)]
       (if (empty? bad)
-        (println (str "ok: every manifest is " want " (" (inc (count targets)) " files)"))
+        (println (str "ok: every manifest is " want " (" n-files " files)"))
         (do (println (str "version mismatch, want " want ":"))
             (doseq [[f what found] bad] (println (str "  " f " (" what "): " found)))
             (System/exit 1))))))
@@ -143,7 +156,7 @@
 (defn self-test []
   (let [real (str (fs/absolutize "."))
         tmp (str (fs/create-temp-dir {:prefix "emon-version-"}))
-        files (cons "version.edn" (map :file targets))
+        files (distinct (cons "version.edn" (map :file targets)))
         snap #(into {} (map (fn [f] [f (slurp (path % f))]) files))
         fails (atom [])
         t! (fn [label ok] (when-not ok (swap! fails conj label)) (println (if ok "  ok  " "  FAIL") label))]
@@ -156,7 +169,7 @@
           (set-version! tmp "9.8.7")
           (t! "set 9.8.7: check 9.8.7 passes" (empty? (mismatches tmp "9.8.7")))
           (t! "set 9.8.7: check v9.8.7 passes" (empty? (mismatches tmp (str/replace "v9.8.7" #"^v" ""))))
-          (t! "set 9.8.7: check 0.1.0 reports every file" (= (inc (count targets)) (count (distinct (map first (mismatches tmp "0.1.0"))))))
+          (t! "set 9.8.7: check 0.1.0 reports every file" (= n-files (count (distinct (map first (mismatches tmp "0.1.0"))))))
           (t! "set changes only version bytes" (every? (fn [f] (same-but-version? (orig f) (slurp (path tmp f)))) files))
           (t! "bump patch" (= "9.8.8" (bump "9.8.7" "patch")))
           (t! "bump minor" (= "9.9.0" (bump "9.8.7" "minor")))
@@ -184,7 +197,7 @@
     (try
       (cond
         (empty? args) (println (current root))
-        (and (= a "set") b (empty? more)) (do (set-version! root b) (println (str "set " b " in " (inc (count targets)) " files")))
+        (and (= a "set") b (empty? more)) (do (set-version! root b) (println (str "set " b " in " n-files " files")))
         (and (= a "bump") (#{"major" "minor" "patch"} b) (empty? more))
         (let [v (bump (current root) b)] (set-version! root v) (println (str "bumped to " v)))
         (and (= a "--check") b (empty? more)) (check root b)

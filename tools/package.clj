@@ -370,6 +370,44 @@
       (when-let [extra (seq (remove (into js ts-only) dts))]
         (bad! m ".d.ts declares " (str/join ", " (sort extra)) ", which " m ".js does not export")))))
 
+;; @3sln/pdfium-wasm (D1542): pdfium's WebAssembly build, the one `bb pdfium-fetch --platform wasm` installs (pinned in tools/pdfium/pdfium.edn), as a package
+;; of its own: `pdfium.mjs` (the ES-module wrapper `bb pdfium-fetch` makes), `pdfium.wasm`, pdfium-binaries' LICENSE and licenses/, a tiny index.js
+;; (the factory, `wasmUrl` and `wasmBinary()`) and its types. A sub-artifact of the js host: `bb package --host js` builds both tarballs, `bb publish npm` publishes both.
+(defn- build-pdfium-wasm!
+  "dist/js/3sln-pdfium-wasm-V.tgz, or nil (with a loud NOTE) when the wasm build has not been fetched and the full pipeline is not required."
+  []
+  (let [pin (edn/read-string (slurp (str root "/tools/pdfium/pdfium.edn")))
+        base (str ".cache/pdfium/" (str/replace (:version pin) "/" "-") "/wasm")
+        need [(str base "/lib/pdfium.mjs") (str base "/lib/pdfium.wasm") (str base "/LICENSE") (str base "/licenses/pdfium.txt")]
+        gone (remove #(fs/exists? (str root "/" %)) need)]
+    (if (seq gone)
+      (if (= "1" (System/getenv "EMON_PACKAGE_REQUIRE_NATIVE"))
+        (bad! "EMON_PACKAGE_REQUIRE_NATIVE=1 and @3sln/pdfium-wasm cannot be built: no " (first gone) " (run `bb pdfium-fetch --platform wasm`)")
+        (do (say "  NOTE js: @3sln/pdfium-wasm NOT built (no " (first gone) "; run `bb pdfium-fetch --platform wasm`): a release is built with it") nil))
+      (let [src "release/pkg/pdfium-wasm"
+            js-index (slurp (str root "/" src "/index.js"))
+            dts (slurp (str root "/" src "/index.d.ts"))
+            _ (doseq [n ["default" "wasmUrl" "wasmBinary"]]
+                (when-not (str/includes? js-index n) (bad! "release/pkg/pdfium-wasm/index.js does not export " n))
+                (when-not (str/includes? dts n) (bad! "release/pkg/pdfium-wasm/index.d.ts does not declare " n)))
+            dir (stage-dir :js-pdfium)
+            files (merge {"package.json" (str src "/package.json") "index.js" (str src "/index.js") "index.d.ts" (str src "/index.d.ts") "README.md" (str src "/README.md")
+                          "pdfium.mjs" (str base "/lib/pdfium.mjs") "pdfium.wasm" (str base "/lib/pdfium.wasm")
+                          "LICENSE" (str base "/LICENSE") "VERSION" (str base "/VERSION")}
+                         (into {} (for [f (fs/list-dir (str root "/" base "/licenses")) :when (fs/regular-file? f)]
+                                    [(str "licenses/" (fs/file-name f)) (str base "/licenses/" (fs/file-name f))])))
+            out (out-dir :js)]
+        (stage! dir files ["licenses"])
+        (fs/create-dirs out)
+        (let [r (run {:dir dir :env {"npm_config_audit" "false" "npm_config_fund" "false" "npm_config_update_notifier" "false"}}
+                     "npm" "pack" "--ignore-scripts" "--pack-destination" out)
+              tgz (str out "/3sln-pdfium-wasm-" version ".tgz")]
+          (when-not (fs/exists? tgz) (bad! "npm pack made no " tgz "\n" (:out r)))
+          (let [names (tar-list tgz)]
+            (doseq [n ["package/package.json" "package/index.js" "package/index.d.ts" "package/pdfium.mjs" "package/pdfium.wasm" "package/LICENSE" "package/licenses/pdfium.txt" "package/README.md"]]
+              (when-not (some #{n} names) (bad! "the pdfium-wasm tarball has no " n))))
+          tgz)))))
+
 (defn build-js! []
   (when-not (have? "npm") (skip! "no npm"))
   (check-types!)
@@ -394,7 +432,9 @@
           (doseq [need ["package/package.json" "package/emon.wasm" "package/src/index.js" "package/src/index.d.ts" "package/src/pdfium.js" "package/src/pdfium.d.ts"
                         "package/src/tesseract.js" "package/src/tesseract.d.ts" "package/LICENSE" "package/README.md"]]
             (when-not (some #{need} names) (bad! "the tarball has no " need))))
-        [tgz]))))
+        ;; the optional peer's range names the version that is being published with it
+        (when-not (str/includes? (slurp (str root "/host/js/package.json")) (str "\"@3sln/pdfium-wasm\": \"^" version "\"")) (bad! "host/js/package.json's peer range of @3sln/pdfium-wasm is not ^" version))
+        (vec (remove nil? [tgz (build-pdfium-wasm!)]))))))
 
 ;; ------------------------------------------------------------------------------------------------------ the native library and the pod
 
@@ -405,6 +445,32 @@
           :else (skip! (str "the C library and the pod are packaged on macOS and Linux (this is " os ")")))))
 
 (defonce native-built (atom nil))
+(defonce native-pod-dir (atom nil)) ; the release directory holding emon-pod
+(defonce native-full (atom nil)) ; native-inputs' map when the build in native-built has the full pipeline
+
+;; THE FULL PIPELINE (D1541; D541's recipe for the CLI): libemon and emon-pod are built with Tesseract and Leptonica linked STATICALLY from `bb native`
+;; (EMON_NATIVE, .cache/native/<triple>/link.rustflags), the crate's `tesseract` feature, and pdfium LOADED AT RUN TIME (`--cfg pdfium --cfg pdfium_dl`,
+;; `pdfium::load`). The archives carry the pinned pdfium (lib/) and the eng and osd models (share/emon/tessdata/), where the library and the pod look
+;; for them. Without .cache/native or the pinned pdfium the build is the plain one (no ports; `emon_capabilities()` is 0) and says so loudly;
+;; EMON_PACKAGE_REQUIRE_NATIVE=1 (the release workflow's) makes that a failure.
+(def native-pins (edn/read-string (slurp (str root "/tools/native/native.edn"))))
+(def pdfium-pin (edn/read-string (slurp (str root "/tools/pdfium/pdfium.edn"))))
+
+(defn- native-inputs
+  "{:prefix dir, :pdfium file, :data [{:file name :src path}]} when bb native's prefix and the pinned pdfium are here, else {:why s}."
+  []
+  (let [triple (host-triple)
+        tcfg (get-in native-pins [:triples triple])
+        prefix (str root "/.cache/native/" triple)
+        pdfium (some->> tcfg :pdfium (str root "/.cache/pdfium/" (str/replace (:version pdfium-pin) "/" "-") "/"))
+        pdfium (some-> pdfium (str "/" (get-in pdfium-pin [:platforms (:pdfium tcfg) :lib])))]
+    (cond
+      (nil? tcfg) {:why (str "no native pins for " triple)}
+      (not (fs/exists? (str prefix "/link.rustflags"))) {:why (str "no .cache/native/" triple " (run `bb native`)")}
+      (not (fs/exists? (str prefix "/share/tessdata/eng.traineddata"))) {:why (str ".cache/native/" triple " has no tessdata (run `bb native`)")}
+      (not (and pdfium (fs/exists? pdfium))) {:why (str "no pinned pdfium (run `bb pdfium-fetch`): " pdfium)}
+      :else {:prefix prefix :pdfium pdfium
+             :data (vec (for [d (:data native-pins)] {:file (:file d) :src (str prefix "/share/tessdata/" (:file d))}))})))
 
 (defn- build-native!
   "Build libemon (cdylib + staticlib) and emon-pod from ONE assembled crate, WITHOUT the test hooks. Returns the release directory."
@@ -413,6 +479,12 @@
       (do
         (when-not (have? "cargo") (skip! "no cargo"))
         (let [dir (stage-dir :native)
+              inputs (native-inputs)
+              _ (if (:why inputs)
+                  (if (= "1" (System/getenv "EMON_PACKAGE_REQUIRE_NATIVE"))
+                    (bad! "EMON_PACKAGE_REQUIRE_NATIVE=1 and the full pipeline cannot be built: " (:why inputs))
+                    (say "  NOTE c/pod: built WITHOUT pdfium and Tesseract (" (:why inputs) "): emon_capabilities() is 0 in this build; a release is built with them"))
+                  (say "  c/pod: the full pipeline: static Tesseract and Leptonica from " (fs/relativize root (:prefix inputs)) ", pdfium loaded at run time"))
               cargo (slurp (str root "/release/pkg/rust/Cargo.toml"))
               lib "[lib]\nname = \"emon\"\npath = \"src/lib.rs\"\n"
               _ (when-not (str/includes? cargo lib) (bad! "release/pkg/rust/Cargo.toml has no [lib] table of the expected form"))
@@ -423,14 +495,43 @@
                         (assoc "src/lib.rs" {:text (str (slurp (str root "/host/rust/src/lib.rs"))
                                                         "\n// the C binding (P9.4), assembled in by tools/package.clj from host/c/src/capi.rs\npub mod capi;\n")}
                                "src/capi.rs" "host/c/src/capi.rs"
+                               "src/native.rs" "host/c/src/native.rs"
                                "src/pod.rs" "host/pod/src/main.rs"
                                "Cargo.toml" {:text cargo}
                                "Cargo.lock" "host/rust/Cargo.lock"))]
           (stage! dir files ["src"])
-          (let [pk (fn [& flags] (apply run {:dir dir :ok? false} "cargo" "build" "--release" "--locked" flags))
-                r (let [r (pk "--offline")] (if (zero? (:exit r)) r (pk)))]
-            (when-not (zero? (:exit r)) (bad! "cargo build of the C library failed\n" (tail (str (:out r) "\n" (:err r)) 40))))
+          ;; THE LIBRARY gets the flags ALONE (`cargo rustc --lib -- FLAGS`, not RUSTFLAGS): RUSTFLAGS reach every dependency, and each of the 18 crates of the
+          ;; graph would then bundle its own copy of Tesseract and Leptonica into libemon.a (242 MiB instead of about 34). THE POD is a binary, which links
+          ;; each static library once whatever the dependencies say, so it is built the way the CLI is (RUSTFLAGS, D541) into a target directory of its own.
+          (let [full? (not (:why inputs))
+                env (when full? {"MACOSX_DEPLOYMENT_TARGET" (or (System/getenv "MACOSX_DEPLOYMENT_TARGET") "12.0")})
+                flags (when full? (concat ["--cfg" "pdfium" "--cfg" "pdfium_dl"] (str/split (str/trim (slurp (str (:prefix inputs) "/link.rustflags"))) #"\s+")))
+                ;; cargo's own flags, then (after `--`) rustc's; offline first, the registry only when a crate is not cached
+                attempt (fn [env pre post]
+                          (let [go (fn [offline] (apply run {:dir dir :ok? false :env env} (concat ["cargo"] pre ["--locked"] offline (when (seq post) (cons "--" post)))))
+                                r (go ["--offline"])]
+                            (if (zero? (:exit r)) r (go []))))
+                ;; the shared library's own name is where it is found by: rustc's default is the ABSOLUTE path it was linked at (.../deps/libemon.dylib), which
+                ;; works where it was built and nowhere else; @rpath/ (macOS) and a soname (Linux) make `-Wl,-rpath,DIR` the way it is found
+                ident (if (str/includes? (str/lower-case (System/getProperty "os.name")) "mac")
+                        ["-C" "link-arg=-Wl,-install_name,@rpath/libemon.dylib"]
+                        ["-C" "link-arg=-Wl,-soname,libemon.so"])
+                lib (attempt env (concat ["rustc" "--release" "--lib"] (when full? ["--features" "tesseract"])) (concat ident flags))
+                pod (when (zero? (:exit lib))
+                      (attempt (cond-> (assoc env "CARGO_TARGET_DIR" (str dir "/target-pod")) full? (assoc "RUSTFLAGS" (str/join " " flags)))
+                               (concat ["build" "--release" "--bin" "emon-pod"] (when full? ["--features" "tesseract"])) []))
+                r (if (zero? (:exit lib)) pod lib)]
+            (when-not (zero? (:exit r)) (bad! "cargo build of the C library failed\n" (tail (str (:out r) "\n" (:err r)) 40)))
+            (reset! native-pod-dir (str dir "/target-pod/release"))
+            (reset! native-full (when full? inputs)))
           (reset! native-built (str dir "/target/release"))))))
+
+(defn- native-extras
+  "The archive entries the full pipeline adds under a prefix `lib-dir` (where libemon or the pod looks): pdfium in lib/, the models in share/emon/tessdata/."
+  []
+  (when-let [{:keys [pdfium data]} @native-full]
+    (merge {(str "lib/" (fs/file-name pdfium)) pdfium}
+           (into {} (for [{:keys [file src]} data] [(str "share/emon/tessdata/" file) src])))))
 
 (defn- archive!
   "tar.gz of a directory NAME made of `files` ({entry path in archive -> source path}), into out/<host>/NAME.tar.gz."
@@ -452,28 +553,43 @@
         rel (build-native!)
         triple (host-triple)
         name (str "emon-c-" version "-" triple)
-        tgz (archive! :c name {"include/emon.h" (str root "/host/c/include/emon.h")
-                               (str "lib/" dyn) (str rel "/" dyn)
-                               (str "lib/" static) (str rel "/" static)
-                               "LICENSE" (str root "/LICENSE")
-                               "THIRD_PARTY_NOTICES.md" (str root "/THIRD_PARTY_NOTICES.md")
-                               "README.md" (str root "/release/pkg/README.md")})
+        tgz (archive! :c name (merge {"include/emon.h" (str root "/host/c/include/emon.h")
+                                      (str "lib/" dyn) (str rel "/" dyn)
+                                      (str "lib/" static) (str rel "/" static)
+                                      "LICENSE" (str root "/LICENSE")
+                                      "THIRD_PARTY_NOTICES.md" (str root "/THIRD_PARTY_NOTICES.md")
+                                      "README.md" (str root "/release/pkg/README.md")}
+                                     (native-extras)))
         names (tar-list tgz)]
     (when (some #(re-find #"test_hooks|emon_test" %) names) (bad! "the C archive carries a test header"))
     (when (str/includes? (slurp (str root "/host/c/include/emon.h")) "emon_test_panic") (bad! "emon.h declares emon_test_panic"))
     (let [nm (run {:ok? false} "nm" "-g" (str rel "/" dyn))]
       (when (str/includes? (:out nm) "emon_test_panic") (bad! "libemon exports emon_test_panic")))
+    ;; the library is found by @rpath/ (macOS) or its soname (Linux), never by the absolute path it was linked at (this was the case before D1541)
+    (let [mac? (= "libemon.dylib" dyn)
+          r (if mac? (run {:ok? false} "otool" "-D" (str rel "/" dyn)) (run {:ok? false} "sh" "-c" (str "objdump -p " rel "/" dyn " | grep SONAME")))]
+      (when (and (zero? (:exit r)) (not (str/includes? (:out r) (if mac? "@rpath/libemon.dylib" "libemon.so"))))
+        (bad! dyn " is named by an absolute path, not @rpath/ or its soname:\n" (:out r)))
+      (when (and (zero? (:exit r)) (re-find #"/deps/" (:out r))) (bad! dyn " carries its build path in its name")))
+    ;; bb native --audit's rule, held to the product (D540): no jbig2dec, JBIG-KIT or OpenJPEG symbol in either library, and no pdfium linked
+    (when @native-full
+      (doseq [f [dyn static]]
+        (let [nm (run {:ok? false} "nm" (str rel "/" f))]
+          (when (re-find #"(?m)\b_?(jbig2_[a-z_]+|jbg_[a-z_]+|opj_[a-z_]+|jbig2dec_[a-z_]+)\b" (:out nm)) (bad! f " has a jbig2dec, JBIG-KIT or OpenJPEG symbol"))
+          (when (re-find #"(?m)^\S*\s+[Uu]\s+_?FPDF_InitLibrary" (:out nm)) (bad! f " links pdfium (it must be loaded at run time)")))))
     [tgz]))
 
 (defn build-pod! []
   (let [{:keys [pod]} (native-lib-names)
-        rel (build-native!)
+        _ (build-native!)
+        rel @native-pod-dir
         triple (host-triple)
         name (str "emon-pod-" version "-" triple)]
-    [(archive! :pod name {pod (str rel "/" pod)
-                          "LICENSE" (str root "/LICENSE")
-                          "THIRD_PARTY_NOTICES.md" (str root "/THIRD_PARTY_NOTICES.md")
-                          "README.md" (str root "/release/pkg/README.md")})]))
+    [(archive! :pod name (merge {pod (str rel "/" pod)
+                                 "LICENSE" (str root "/LICENSE")
+                                 "THIRD_PARTY_NOTICES.md" (str root "/THIRD_PARTY_NOTICES.md")
+                                 "README.md" (str root "/release/pkg/README.md")}
+                                (native-extras)))]))
 
 ;; ------------------------------------------------------------------------------------------------------ build all
 
@@ -707,14 +823,22 @@
       html)))
 
 (defn- consume-js [{:keys [files]} tmp]
-  (let [tgz (first files)
+  (let [tgz (first (filter #(str/includes? (str (fs/file-name %)) "3sln-emon-") files))
+        pdfium-tgz (first (filter #(str/includes? (str (fs/file-name %)) "3sln-pdfium-wasm-") files)) ; nil when it was not built (no `bb pdfium-fetch --platform wasm`)
         app (str tmp "/app")
         major (parse-long (str/trim (:out (run {} "node" "-p" "process.versions.node.split('.')[0]"))))]
     (fs/create-dirs app)
     (spit (str app "/package.json") "{\"name\":\"consumer\",\"version\":\"0.0.0\",\"private\":true,\"type\":\"module\"}\n")
+    ;; @3sln/emon alone first: its optional peer is not installed (nor fetched), the main package is dependency-free
     (run {:dir app :env {"npm_config_audit" "false" "npm_config_fund" "false" "npm_config_update_notifier" "false"}} "npm" "install" "--offline" "--ignore-scripts" tgz)
     (let [pkg (str app "/node_modules/@3sln/emon")]
-      (when-not (fs/exists? (str pkg "/emon.wasm")) (bad! "the installed package has no emon.wasm")))
+      (when-not (fs/exists? (str pkg "/emon.wasm")) (bad! "the installed package has no emon.wasm"))
+      (when (fs/exists? (str app "/node_modules/@3sln/pdfium-wasm")) (bad! "installing @3sln/emon alone installed its optional peer @3sln/pdfium-wasm")))
+    (when pdfium-tgz
+      (run {:dir app :env {"npm_config_audit" "false" "npm_config_fund" "false" "npm_config_update_notifier" "false"}} "npm" "install" "--offline" "--ignore-scripts" pdfium-tgz)
+      (let [d (str app "/node_modules/@3sln/pdfium-wasm")]
+        (doseq [f ["pdfium.mjs" "pdfium.wasm" "LICENSE" "licenses/pdfium.txt"]]
+          (when-not (fs/exists? (str d "/" f)) (bad! "the installed @3sln/pdfium-wasm has no " f)))))
     (put-sample! app)
     (spit (str app "/quickstart.mjs") (slurp (snippet-file "js/quickstart.mjs")))
     (spit (str app "/tour.mjs") (slurp (snippet-file "js/tour.mjs")))
@@ -733,21 +857,35 @@
       (run {:dir app} "node" flag "exports.mjs")
       (run {:dir app} "node" flag "quickstart.mjs")
       (run {:dir app} "node" flag "tour.mjs")
-      ;; pdfium's WebAssembly build and tesseract.js wired in (docs/hosts/js.md): run where `bb pdfium-fetch --platform wasm` and `npm ci` in host/js were done
-      (let [nm (or (System/getenv "EMON_JS_NODE_MODULES") (str root "/host/js/node_modules"))
-            wasm-dir (or (System/getenv "EMON_PDFIUM_WASM")
-                         (some-> (first (fs/glob (str root "/.cache/pdfium") "*/wasm/lib")) str))]
-        (if (and wasm-dir (fs/exists? (str wasm-dir "/pdfium.mjs")) (fs/exists? (str nm "/tesseract.js")) (fs/exists? (str nm "/@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz")))
-          (do (fs/create-dirs (str app "/vendor/pdfium"))
-              (fs/copy (str wasm-dir "/pdfium.mjs") (str app "/vendor/pdfium/pdfium.mjs") {:replace-existing true})
-              (fs/copy (str wasm-dir "/pdfium.wasm") (str app "/vendor/pdfium/pdfium.wasm") {:replace-existing true})
-              (doseq [d (fs/list-dir nm) :let [n (str (fs/file-name d))] :when (not (fs/exists? (str app "/node_modules/" n)))]
+      ;; @3sln/pdfium-wasm is the default renderer (D1542): `pdfiumRenderer()` with no arguments imports the INSTALLED package, and draws the figures of a
+      ;; document (assets=figures crops are rendered by pdfium) with no other engine; the package's own exports are the factory and the .wasm's URL
+      (if pdfium-tgz
+        (do (fs/copy (str root "/test/assets/fig/fig-vector-chart.pdf") (str app "/figures.pdf") {:replace-existing true})
+            (spit (str app "/default-renderer.mjs")
+                  (str "import { readFile } from 'node:fs/promises';\n"
+                       "import { Emon } from '@3sln/emon';\n"
+                       "import { pdfiumRenderer } from '@3sln/emon/pdfium';\n"
+                       "import pdfium, { wasmUrl, wasmBinary } from '@3sln/pdfium-wasm';\n"
+                       "if (typeof pdfium !== 'function' || !(wasmUrl instanceof URL) || !((await wasmBinary()).length > 1000000)) throw new Error('the package exports a factory, wasmUrl and wasmBinary');\n"
+                       "const emon = await Emon.load(await readFile(new URL(import.meta.resolve('@3sln/emon/emon.wasm'))));\n"
+                       "const render = pdfiumRenderer();\n"
+                       "const model = await emon.convert(await readFile('figures.pdf'), { ocr: 'never', assets: 'figures', ports: { render } });\n"
+                       "if (model.assets.length === 0) throw new Error('no figure was drawn by the default renderer');\n"
+                       "for (const a of model.assets) { const b = await a.bytes(); if (!(b.length > 100)) throw new Error('an empty figure'); }\n"
+                       "console.log(model.assets.length + ' figure(s) drawn by @3sln/pdfium-wasm');\n"
+                       "model.dispose();\nawait render.terminate();\n"))
+            (run {:dir app} "node" flag "default-renderer.mjs"))
+        (say "  NOTE js: @3sln/pdfium-wasm was not built here (no `bb pdfium-fetch --platform wasm`), so the default renderer was not run"))
+      ;; pdfium's WebAssembly build and tesseract.js wired in (docs/hosts/js.md): run where the package above is and `npm ci` in host/js was done
+      (let [nm (or (System/getenv "EMON_JS_NODE_MODULES") (str root "/host/js/node_modules"))]
+        (if (and pdfium-tgz (fs/exists? (str nm "/tesseract.js")) (fs/exists? (str nm "/@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz")))
+          (do (doseq [d (fs/list-dir nm) :let [n (str (fs/file-name d))] :when (not (fs/exists? (str app "/node_modules/" n)))]
                 (fs/create-sym-link (str app "/node_modules/" n) d))
               (fs/copy scan-pdf (str app "/scan.pdf") {:replace-existing true})
               (spit (str app "/native.mjs") (slurp (snippet-file "js/native.mjs")))
               (run {:dir app} "node" flag "native.mjs")
               (scan-html-ok! "js" app))
-          (say "  NOTE js: pdfium's wasm build or tesseract.js is not installed here, so the native snippet was not run"))))
+          (say "  NOTE js: @3sln/pdfium-wasm or tesseract.js is not installed here, so the native snippet was not run"))))
     (report-html app)))
 
 (defn- unpack [tgz tmp] (run {} "tar" "-xzf" tgz "-C" tmp) (let [d (first (fs/list-dir tmp))] (str d)))
@@ -757,7 +895,7 @@
         app (str tmp "/app")
         {:keys [dyn]} (native-lib-names)
         cc (or (first (filter have? ["cc" "clang" "gcc"])) (skip! "no C compiler"))
-        sys (if (= "Darwin" (str/trim (:out (run {} "uname" "-s")))) ["-framework" "Security" "-framework" "CoreFoundation" "-liconv" "-lm"] ["-lpthread" "-ldl" "-lm"])]
+        sys (if (= "Darwin" (str/trim (:out (run {} "uname" "-s")))) ["-framework" "Security" "-framework" "CoreFoundation" "-liconv" "-lm" "-lc++"] ["-lpthread" "-ldl" "-lm" "-lstdc++"])] ; the C++ runtime: libemon.a holds Tesseract (D1541)
     (put-sample! app)
     (spit (str app "/main.c") (slurp (snippet-file "c/quickstart.c")))
     (spit (str app "/tour.c") (slurp (snippet-file "c/tour.c")))
@@ -783,6 +921,23 @@
             b (do (fs/delete (str app "/report.html")) (run {:dir app} (str app "/c-static")) (report-html app))]
         (when-not (= a b) (bad! "c: the shared and the static library gave different bytes"))
         (when-not (fs/exists? (str dir "/lib/" dyn)) (bad! "the archive has no lib/" dyn))
+        ;; the full pipeline (D1541): a scan is drawn by the archive's pdfium and read by its static Tesseract, with NO EMON_* in the environment
+        ;; (the shared library finds lib/libpdfium.* and ../share/emon/tessdata next to itself); the static link finds them through the environment
+        ;; (the executable is not beside them). A plain archive (built without .cache/native) says so and skips this.
+        (if (fs/exists? (str dir "/share/emon/tessdata/eng.traineddata"))
+          (let [napp (str tmp "/app-native")
+                clean {"EMON_PDFIUM_LIB" "" "EMON_TESSDATA" "" "TESSDATA_PREFIX" ""}]
+            (fs/create-dirs napp)
+            (fs/copy scan-pdf (str napp "/scan.pdf") {:replace-existing true})
+            (spit (str napp "/native.c") (slurp (snippet-file "c/native.c")))
+            (apply run {:dir napp} (concat [cc] flags ["-o" (str napp "/c-native") (str napp "/native.c") (str "-L" dir "/lib") "-lemon" (str "-Wl,-rpath," dir "/lib")]))
+            (run {:dir napp :env clean} (str napp "/c-native"))
+            (scan-html-ok! "c (shared)" napp)
+            (fs/delete (str napp "/scan.html"))
+            (apply run {:dir napp} (concat [cc] flags ["-o" (str napp "/c-native-static") (str napp "/native.c") (str dir "/lib/libemon.a")] sys))
+            (run {:dir napp :env (assoc clean "EMON_PDFIUM_LIB" (str dir "/lib") "EMON_TESSDATA" (str dir "/share/emon/tessdata"))} (str napp "/c-native-static"))
+            (scan-html-ok! "c (static)" napp))
+          (say "  NOTE c: the archive was built without pdfium and Tesseract, so the native snippet was not run"))
         a))))
 
 (defn- consume-pod [{:keys [files]} tmp]
@@ -804,7 +959,19 @@
     (let [by-bytes (:out (run {} "bb" script sample-pdf))]
       (run {:dir app :env env} "bb" "quickstart.clj")
       (let [t (run {:dir app :env env} "bb" "tour.clj")]
-        (when-not (str/includes? (:out t) ":name \"pages\"") (bad! "pod: the tour's limit error did not carry its name\n" (:out t))))
+        (when-not (str/includes? (:out t) ":name \"pages\"") (bad! "pod: the tour's limit error did not carry its name\n" (:out t)))
+        ;; a named limit is an answer, not a bug (D1543): the tour breaches `limit.pages` and the pod's stderr stays clean (it printed a Rust panic notice)
+        (when (re-find #"panicked|RUST_BACKTRACE|Box<dyn Any>" (:err t)) (bad! "pod: the tour's limit breach printed a panic notice on stderr\n" (:err t))))
+      ;; the full pipeline (D1541): pdfium from lib/ and the models from share/emon/tessdata/ beside the pod, none named, none in the environment
+      (if (fs/exists? (str dir "/share/emon/tessdata/eng.traineddata"))
+        (let [clean {"EMON_PDFIUM_LIB" "" "EMON_TESSDATA" "" "TESSDATA_PREFIX" ""}
+              caps (:out (run {:dir app :env (merge env clean)} "bb" "-e" "(require '[babashka.pods :as pods]) (pods/load-pod \"emon-pod\") (prn (emon/capabilities))"))]
+          (when-not (and (str/includes? caps ":pdfium true") (str/includes? caps ":tesseract true")) (bad! "pod: the archive's capabilities are not pdfium and Tesseract: " caps))
+          (fs/copy scan-pdf (str app "/scan.pdf") {:replace-existing true})
+          (spit (str app "/native.clj") (slurp (snippet-file "pod/native.clj")))
+          (run {:dir app :env (merge env clean)} "bb" "native.clj")
+          (scan-html-ok! "pod" app))
+        (say "  NOTE pod: the archive was built without pdfium and Tesseract, so the native snippet was not run"))
       (let [html (report-html app)]
         (when-not (= html by-bytes) (bad! "pod: a path and the bytes gave different HTML"))
         html))))

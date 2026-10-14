@@ -359,20 +359,48 @@ pub extern "C" fn emon_version() -> *const c_char {
     VERSION.as_ptr() as *const c_char
 }
 
-// The native ports this build has, as a bit set: 1 pdfium (render, crop), 2 Tesseract (ocr), 4 OpenJPEG and jbig2dec (decode-img).
+// The native ports THIS PROCESS CAN USE, as a bit set: 1 pdfium (render, crop: built in, and the library is found and loads), 2 Tesseract (ocr:
+// built in, and a models directory is found), 4 OpenJPEG and jbig2dec (decode-img). See `native` below for where each is looked for.
 #[no_mangle]
 pub extern "C" fn emon_capabilities() -> u32 {
+    capabilities()
+}
+
+pub fn capabilities() -> u32 {
     let mut c = 0;
-    if cfg!(pdfium) {
+    if matches!(native::pdfium_ready(None), Ok(true)) {
         c |= 1;
     }
-    if cfg!(feature = "tesseract") {
+    if native::tesseract_ready() {
         c |= 2;
     }
     if cfg!(codecs) {
         c |= 4;
     }
     c
+}
+
+// Where the native ports are looked for: host/c/src/native.rs (a binding, like tess.rs: D058 keeps paths out of the Engine layers).
+#[path = "native.rs"]
+mod native;
+
+// Name the places the native ports are looked for, before the first conversion with EMON_NATIVE (process-wide). NULL or "" for either leaves it
+// to the environment and the library's own place (see `native`). A place that is wrong is -EMON_ERR_USAGE and changes nothing.
+#[no_mangle]
+pub unsafe extern "C" fn emon_set_native_paths(pdfium: *const c_char, tessdata: *const c_char, err: *mut emon_error) -> c_int {
+    guarded(err, || {
+        let opt = |p: *const c_char| -> Result<Option<String>, Fail> { if p.is_null() { Ok(None) } else { text(p).map(|t| if t.is_empty() { None } else { Some(t) }) } };
+        let (pd, td) = (opt(pdfium)?, opt(tessdata)?);
+        if let Some(p) = &pd {
+            native::find_pdfium(Some(p)).map_err(Fail::Usage)?;
+            native::pdfium_ready(Some(p)).map_err(Fail::Usage)?;
+        }
+        if let Some(d) = &td {
+            native::find_tessdata(Some(d)).map_err(Fail::Usage)?;
+        }
+        *native::SET.lock().unwrap_or_else(|e| e.into_inner()) = (pd, td);
+        Ok(0)
+    })
 }
 
 // The numbers of the plan/fulfil protocol, kin's (the same table as the browser's `emon_const`):
@@ -452,26 +480,34 @@ pub fn html_options(list: &str) -> Result<HtmlOptions, String> {
 }
 
 pub fn native_config(cfg: &mut Config) -> Result<(), String> {
-    native_ports(cfg).map_err(|f| match f {
+    native_config_at(cfg, None, None)
+}
+
+// The same with places named for this call (the pod's `:pdfium` and `:tessdata`).
+pub fn native_config_at(cfg: &mut Config, pdfium: Option<&str>, tessdata: Option<&str>) -> Result<(), String> {
+    native_ports(cfg, pdfium, tessdata).map_err(|f| match f {
         Fail::Usage(m) => m,
         Fail::Engine(e) => e.to_string(),
     })
 }
 
-// The Rust host's own ports, for the ones this build has (D127, D211, D336). A build without them has none, and a request for one is
-// answered `unsupported` (D199): `emon_capabilities` says which are here.
+// The Rust host's own ports, for the ones this build has and finds (D127, D211, D336; `native` above). A build without them, or a process that does
+// not find them, has none, and a request for one is answered `unsupported` (D199): `emon_capabilities` says which are here.
 #[allow(unused_variables)]
-fn native_ports(cfg: &mut Config) -> Result<(), Fail> {
+fn native_ports(cfg: &mut Config, pdfium: Option<&str>, tessdata: Option<&str>) -> Result<(), Fail> {
     #[cfg(feature = "tesseract")]
     {
         if cfg.ocr.is_none() {
-            let t = crate::tess::TessOcr::new(None).map_err(|e| Fail::Usage(format!("tesseract: {}", e)))?;
-            cfg.ocr = Some(crate::engine::OcrPort(std::sync::Arc::new(t)));
+            if let Some(t) = native::tesseract(tessdata).map_err(|e| Fail::Usage(format!("tesseract: {}", e)))? {
+                cfg.ocr = Some(crate::engine::OcrPort(std::sync::Arc::new(t)));
+            }
         }
     }
     #[cfg(pdfium)]
     {
-        cfg.renderer = Some(std::sync::Arc::new(crate::pdfium::Pdfium::new()));
+        if native::pdfium_ready(pdfium).map_err(Fail::Usage)? {
+            cfg.renderer = Some(std::sync::Arc::new(crate::pdfium::Pdfium::new()));
+        }
     }
     #[cfg(codecs)]
     {
@@ -533,7 +569,7 @@ fn one_shot_setup(p: &Parsed, flags: u32) -> Result<(Engine, Options), Fail> {
     }
     let mut cfg = p.config.clone();
     if flags & EMON_NATIVE != 0 {
-        native_ports(&mut cfg)?;
+        native_ports(&mut cfg, None, None)?;
     }
     Ok((Engine::new(cfg), p.options.clone()))
 }

@@ -116,7 +116,19 @@ const char *emon_version(void);                         /* static */
 #define EMON_CAP_PDFIUM    1   /* render and crop */
 #define EMON_CAP_TESSERACT 2   /* ocr */
 #define EMON_CAP_CODECS    4   /* OpenJPEG and jbig2dec: the JPX and JBIG2 images of a PDF */
+/* The ports THIS PROCESS can use (a bit set): a bit is set when the library was built with the port AND finds it -- pdfium loads (it is loaded at run
+ * time, never linked), a Tesseract models directory is found.  Where each is looked for, in order:
+ *   pdfium   emon_set_native_paths, then $EMON_PDFIUM_LIB (a file or a directory), then next to the library (the directory libemon was loaded from;
+ *            for a static link, the executable's), then next to the executable: lib/libpdfium.{dylib,so} beside lib/libemon.* as the archive lays out;
+ *   models   emon_set_native_paths, then $EMON_TESSDATA, then share/emon/tessdata one directory above lib/ (the archive's), then $TESSDATA_PREFIX
+ *            and the system's places.
+ * A place you NAME (the function, the variable) that is wrong is an error and never falls through to the next; nothing found is no bit, and a request
+ * for that port is answered `unsupported`. */
 unsigned emon_capabilities(void);
+/* Name the pdfium library (a file, or the directory holding it) and the models directory for the process, before the first EMON_NATIVE conversion.
+ * NULL or "" leaves that one to the environment and the library's own place.  A place that is wrong (no such library, not pdfium, no *.traineddata)
+ * is -EMON_ERR_USAGE with the sentence and changes nothing. */
+int emon_set_native_paths(const char *pdfium, const char *tessdata, emon_error *err);
 /* kin's numbers of the plan/fulfil protocol: 0 kind render, 1 decode, 2 ocr, 3 bytes, 4 crop, 5 decode-img; 10 status ok, 11 failed,
  * 12 unsupported, 13 limit; 14 and 15 the ocr word flags.  -1 for any other. */
 int emon_const(unsigned i);

@@ -90,7 +90,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### Go
 
-`go get github.com/3sln/emon/go` ([docs/hosts/go.md](docs/hosts/go.md))
+`go get github.com/3sln/emon/go` ([docs/hosts/go.md](docs/hosts/go.md)). On macOS, a program built with `-tags tesseract` is killed
+at launch unless it is built with `-ldflags=-w` (or signed again with `codesign -s - -f`); the Go page says why.
 
 <!-- snippet: docs/snippets/go/quickstart.go -->
 ```go
@@ -165,13 +166,15 @@ await writeFile('report.html', model.html());
 model.dispose();
 ```
 
-Scans and figures need the pdfium and Tesseract adapters, `@3sln/emon/pdfium` and `@3sln/emon/tesseract`, which
-you hand the engines: see [docs/hosts/js.md](docs/hosts/js.md).
+Scans and figures need the pdfium and Tesseract adapters, `@3sln/emon/pdfium` and `@3sln/emon/tesseract`. pdfium is a package of
+its own, `npm install @3sln/pdfium-wasm` (an optional peer dependency: `@3sln/emon` itself has none, and imports it only when a
+page has to be drawn); Tesseract is `tesseract.js`. See [docs/hosts/js.md](docs/hosts/js.md).
 
 ### C
 
 The `emon-c-<version>-<triple>.tar.gz` archive of the [releases](https://github.com/3sln/emon/releases) holds
-`include/emon.h`, `lib/libemon.{so,dylib,a}`. Link with `-lemon` ([docs/hosts/c.md](docs/hosts/c.md)).
+`include/emon.h`, `lib/libemon.{so,dylib,a}`, and pdfium and the English and orientation models beside them (`lib/libpdfium.*`,
+`share/emon/tessdata/`), so a scan converts with the `EMON_NATIVE` flag. Link with `-lemon` ([docs/hosts/c.md](docs/hosts/c.md)).
 
 <!-- snippet: docs/snippets/c/quickstart.c -->
 ```c
@@ -195,7 +198,8 @@ emon_free_buf(&html);
 ### babashka pod
 
 The `emon-pod-<version>-<triple>.tar.gz` archive of the [releases](https://github.com/3sln/emon/releases) holds the
-`emon-pod` binary ([docs/hosts/pod.md](docs/hosts/pod.md)).
+`emon-pod` binary, with `lib/libpdfium.*` and `share/emon/tessdata/` beside it, so a scan converts with `{:native true}`
+([docs/hosts/pod.md](docs/hosts/pod.md)).
 
 <!-- snippet: docs/snippets/pod/quickstart.clj -->
 ```clojure
@@ -219,13 +223,14 @@ engine*. The engine asks for them through two ports and links neither, so a host
 | Go | `github.com/3sln/emon/go/pdfium`, loaded at run time (needs cgo) | `-tags tesseract` (cgo, links Tesseract and Leptonica) | the same |
 | Java | `emon.ffi.Pdfium.open`, loaded at run time (`--enable-native-access=ALL-UNNAMED`) | `emon.ffi.Tess.open` | the same |
 | C# | `emon.Ffi.Pdfium.Open`, loaded at run time | `emon.Ffi.Tess.Open` | the same |
-| JavaScript | `@3sln/emon/pdfium` over pdfium's WebAssembly build | `@3sln/emon/tesseract` over [tesseract.js](https://github.com/naptha/tesseract.js) | the pdfium-wasm build, and `npm install tesseract.js` |
-| C | none built in; answer the engine's requests yourself (the step API) | none built in | your own |
-| pod | none | none | born-digital PDFs only |
+| JavaScript | `@3sln/emon/pdfium` over pdfium's WebAssembly build, `npm install @3sln/pdfium-wasm` | `@3sln/emon/tesseract` over [tesseract.js](https://github.com/naptha/tesseract.js) | `npm install @3sln/pdfium-wasm tesseract.js` |
+| C | bundled (`lib/libpdfium.*`, loaded at run time), with the `EMON_NATIVE` flag | bundled (linked statically; English and orientation models) | nothing to install |
+| pod | bundled (`lib/libpdfium.*`), with `:native true` | bundled (English and orientation models) | nothing to install |
 
 The pdfium that emon is tested with is `chromium/8076` of
 [bblanchon/pdfium-binaries](https://github.com/bblanchon/pdfium-binaries). Tesseract models are the
-`.traineddata` files of [tessdata_fast](https://github.com/tesseract-ocr/tessdata_fast); the CLI bundles `eng` and `osd`.
+`.traineddata` files of [tessdata_fast](https://github.com/tesseract-ocr/tessdata_fast); the CLI, the C library and the pod
+bundle `eng` and `osd`.
 Never in any build: JBIG2 and JPEG 2000 decoders (see below).
 
 ## Options, the Model, the API
