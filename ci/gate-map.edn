@@ -27,7 +27,9 @@
   {:id "release-verify-selftest" :cmd ["bb" "release-verify" "--self-test"]                   :secs 1   :why "the publish job's three checks decide correctly on synthetic facts (D547)"}
   {:id "release-ops-selftest"    :cmd ["bb" "release-ops" "--self-test"]                      :secs 1   :why "propose, tag, draft, attach, status and summary decide correctly (D547)"}
   {:id "publish-selftest"        :cmd ["bb" "publish" "--self-test"]                          :secs 1   :why "the registry publishers' idempotence checks and parsers (D547)"}
-  {:id "ci-coverage"   :cmd ["bb" "ci" "coverage"]                                    :secs 1   :why "the gate map covers the tree, every gate is in a shard, every workflow task exists, every replay gate re-derives (includes rederive --check)"}]
+  {:id "docs"          :cmd ["bb" "docs" "--check"]                                    :secs 1   :why "the documentation is what `bb docs` generates: the option, limit and Model tables, the host API indexes, the snippets; every code block is a compiled snippet or marked unverified (D1520)"}
+  {:id "docs-selftest" :cmd ["bb" "docs" "--self-test"]                                :secs 1   :why "the documentation checks catch a stale table, a stale snippet, an unmarked code block, a dead link and a stale version (D1520)"}
+  {:id "ci-coverage"   :cmd ["bb" "ci" "coverage"]                                   :secs 1   :why "the gate map covers the tree, every gate is in a shard, every workflow task exists, every replay gate re-derives (includes rederive --check)"}]
 
  :groups
  {"replay"  ["plan" "ocr" "render" "pdfium-wasm" "align" "fusion" "gfuse" "artifacts" "seals" "sealpx" "sigs" "retarget" "asset"]
@@ -189,7 +191,10 @@
   ;; ---- the hosts and the generated tree ---------------------------------------------------------------------------------------------------------------
   {:glob "host/rust/**" :gates ["@host"] :why "the Rust host: the reference every other host is held to"}
   {:glob "host/cli/**" :gates [] :why "the `emon` command (P11.4b): its main.rs and manifest are compiled only by `bb cli` (over the Rust host); the engine and the host files it wraps are mapped under host/rust and kin"}
-  {:glob "docs/**" :gates [] :why "user documentation (docs/cli.md is also the CLI archive's README); no gate reads it"}
+  {:glob "docs/**" :gates [] :why "user documentation (docs/cli.md is also the CLI archive's README): the fast core's `docs --check` holds it to the surface, the schema and the snippets (D1520)"}
+  {:glob "docs/snippets/**" :gates ["package-check"] :why "the quickstarts README.md and docs/hosts/ print: `bb package --check` compiles each against the built artifact and runs it on a sample (D1520)"}
+  {:glob "{README,CONTRIBUTING}.md" :gates [] :why "the front door and the contributor guide: the fast core's `docs --check` holds their generated parts, snippets, links and versions (D1520)"}
+  {:glob "tools/docs/**" :gates [] :why "`bb docs` (P11.6, D1520): the fast core runs it with --check and --self-test"}
   {:glob "host/go/**" :gates ["@host"] :hosts ["go"] :why "the Go host (the unit gate's Go arm is added to a --fast run)"}
   {:glob "host/go/pdfium/**" :gates ["render" "pdfium-wasm" "identity" "slice"] :hosts ["go"] :why "the Go host's pdfium Renderer, loaded at run time (P11.x1): the render gate's Go replay builds the package, and the Go arm of every conversion gate compiles it into the driver"}
   {:glob "host/java/**" :gates ["@host"] :hosts ["java"] :why "the Java host"}

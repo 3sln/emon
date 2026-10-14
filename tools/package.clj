@@ -504,6 +504,40 @@
 
 (defn- tmp-dir [label] (str (fs/create-temp-dir {:prefix (str "emon-pkg-" label "-")})))
 
+;; THE QUICKSTARTS ARE THE CONSUMERS (P11.6, D1520). Each host's consumer below is the file `docs/snippets/<host>/quickstart.*` byte for byte,
+;; the very program README.md and docs/hosts/<host>.md print (`bb docs --check` holds the printed text to the file). It reads `report.pdf`
+;; and writes `report.html` in its working directory, so the consumer's directory gets a copy of the sample as `report.pdf`, the program
+;; runs there, and `report.html` is what is compared with samples/align-justify.html. A docs snippet that no longer compiles against the built
+;; artifact, or no longer gives the sample's bytes, is a red package gate.
+(defn- snippet-file [rel] (str root "/docs/snippets/" rel))
+
+;; THE NATIVE SNIPPETS (docs/hosts/{go,java,csharp}.md: pdfium and Tesseract wired into the Config) always compile against the built artifact.
+;; They run where this machine has both engines (a developer's, after `bb pdfium-fetch`; not a CI runner): they convert a scan and the
+;; heading OCR reads must be in the HTML. Elsewhere the check says so and does not pretend.
+(def scan-pdf (str root "/samples/scan-plain.pdf"))
+(def scan-word "Adaptive Sampling") ; the sample's heading; the OCR reads it right
+(defn- first-dir [cands pred] (first (filter #(and % (fs/directory? %) (pred %)) cands)))
+(defn- has-lib? [dir stem] (boolean (seq (filter #(re-find (re-pattern (str "^" stem "\\.(dylib|so|dll)|^" stem "\\.so\\.")) (str (fs/file-name %))) (fs/list-dir dir)))))
+(defn- live-ports
+  "{env vars, :tess-lib dir} where pdfium, Tesseract and an English model are all here, else nil."
+  []
+  (let [env* #(System/getenv %)
+        pdfium (first-dir [(env* "EMON_PDFIUM_LIB") (str root "/.cache/pdfium/current/lib")] #(or (has-lib? % "libpdfium") (fs/exists? (str % "/pdfium.dll"))))
+        tlib (first-dir [(env* "EMON_TESS_LIB") "/opt/homebrew/lib" "/usr/local/lib" "/usr/lib/x86_64-linux-gnu" "/usr/lib/aarch64-linux-gnu" "/usr/lib"] #(has-lib? % "libtesseract"))
+        tdata (first-dir [(env* "TESSDATA_PREFIX") (some-> (env* "TESSDATA_PREFIX") (str "/tessdata")) "/opt/homebrew/share/tessdata" "/usr/local/share/tessdata"
+                          "/usr/share/tesseract-ocr/5/tessdata" "/usr/share/tessdata"] #(fs/exists? (str % "/eng.traineddata")))]
+    (when (and pdfium tlib tdata)
+      {:env {"EMON_PDFIUM_LIB" pdfium "EMON_TESS_LIB" tlib "TESSDATA_PREFIX" tdata} :tess-lib tlib})))
+(defn- scan-html-ok! [host app]
+  (let [f (str app "/scan.html")]
+    (when-not (fs/exists? f) (bad! host ": the native snippet wrote no scan.html"))
+    (when-not (str/includes? (slurp f) scan-word) (bad! host ": the native snippet's HTML does not hold " (pr-str scan-word) ": pdfium and Tesseract did not read the scan"))))
+(defn- put-sample! [app] (fs/create-dirs app) (fs/copy sample-pdf (str app "/report.pdf") {:replace-existing true}))
+(defn- report-html [app]
+  (let [f (str app "/report.html")]
+    (when-not (fs/exists? f) (bad! "the quickstart wrote no report.html in " app))
+    (slurp f)))
+
 (defn- consume-rust [{:keys [files]} tmp]
   (let [crate (first files)
         _ (run {} "tar" "-xzf" crate "-C" tmp)
@@ -512,17 +546,10 @@
     (fs/create-dirs (str app "/src"))
     (spit (str app "/Cargo.toml")
           (str "[package]\nname = \"consumer\"\nversion = \"0.0.0\"\nedition = \"2021\"\n\n[dependencies]\nemon = { path = \"" src "\" }\n\n[workspace]\n"))
-    (spit (str app "/src/main.rs")
-          (str "use emon::{Config, Engine, HtmlOptions, Input, Options, Output};\n"
-               "use std::io::Write;\n"
-               "fn main() {\n"
-               "    let path = std::env::args().nth(1).expect(\"a file\");\n"
-               "    let bytes = std::fs::read(path).expect(\"read\");\n"
-               "    let engine = Engine::new(Config::default());\n"
-               "    let model = engine.convert(Input::bytes(bytes), &Options::default()).expect(\"convert\");\n"
-               "    let html = model.serialize(&Output::Html(HtmlOptions::default()));\n"
-               "    std::io::stdout().write_all(html.as_bytes()).unwrap();\n"
-               "}\n"))
+    (put-sample! app)
+    (spit (str app "/src/main.rs") (slurp (snippet-file "rust/quickstart.rs")))
+    (fs/create-dirs (str app "/src/bin"))
+    (spit (str app "/src/bin/tour.rs") (slurp (snippet-file "rust/tour.rs")))
     ;; the hidden test setting must not exist on the published Options
     (spit (str app "/src/neg.rs") "fn _neg() { let mut o = emon::Options::default(); o.no_retarget = true; }\n")
     (let [env {"CARGO_TARGET_DIR" (str tmp "/target")}
@@ -534,7 +561,25 @@
       (when-not (re-find #"no field `no_retarget`" (str (:out neg) (:err neg))) (bad! "rust: the negative build failed for another reason\n" (tail (str (:out neg) (:err neg)) 10)))
       (spit (str app "/src/main.rs") (str/replace (slurp (str app "/src/main.rs")) "mod neg;\n" ""))
       (run {:dir app :env env} "cargo" "build" "--release" "--offline" "-q")
-      (:out (run {:dir app :env env} (str tmp "/target/release/consumer") sample-pdf)))))
+      (run {:dir app :env env} (str tmp "/target/release/consumer"))
+      (run {:dir app :env env} (str tmp "/target/release/tour"))
+      ;; pdfium and Tesseract wired in (docs/hosts/rust.md): a project of its own, built with the crate's `tesseract` feature and --cfg pdfium, where the engines are
+      (if-let [live (live-ports)]
+        (let [napp (str tmp "/app-native")
+              pd (get (:env live) "EMON_PDFIUM_LIB")
+              nenv {"CARGO_TARGET_DIR" (str tmp "/target-native")
+                    "RUSTFLAGS" (str "--cfg pdfium -L native=" pd " -L native=" (:tess-lib live) " -C link-arg=-Wl,-rpath," pd)}]
+          (fs/create-dirs (str napp "/src"))
+          (spit (str napp "/Cargo.toml")
+                (str "[package]\nname = \"native\"\nversion = \"0.0.0\"\nedition = \"2021\"\n\n[dependencies]\nemon = { path = \"" src "\", features = [\"tesseract\"] }\n\n[workspace]\n"))
+          (spit (str napp "/src/main.rs") (slurp (snippet-file "rust/native.rs")))
+          (fs/copy scan-pdf (str napp "/scan.pdf") {:replace-existing true})
+          (let [r (run {:dir napp :env nenv :ok? false} "cargo" "build" "--release" "--offline" "-q")]
+            (when-not (zero? (:exit r)) (run {:dir napp :env nenv} "cargo" "build" "--release" "-q")))
+          (run {:dir napp :env (merge nenv (:env live))} (str tmp "/target-native/release/native"))
+          (scan-html-ok! "rust" napp))
+        (say "  NOTE rust: pdfium or Tesseract is not installed here, so the native snippet was not built"))
+      (report-html app))))
 
 (defn- consume-go [{:keys [files]} tmp]
   (let [proxy (str tmp "/proxy")
@@ -544,13 +589,27 @@
     (go-proxy! (first files) proxy)
     (fs/create-dirs app)
     (spit (str app "/go.mod") (str "module consumer\n\ngo 1.21\n\nrequire " go-module " v" version "\n"))
-    (spit (str app "/main.go")
-          (str "package main\n\nimport (\n\t\"os\"\n\n\temon \"" go-module "\"\n)\n\n"
-               "func main() {\n\tb, err := os.ReadFile(os.Args[1])\n\tif err != nil {\n\t\tpanic(err)\n\t}\n"
-               "\tengine := emon.NewEngine(emon.DefaultConfig())\n"
-               "\tm, err := engine.Convert([]emon.Input{emon.BytesInput(b)}, emon.DefaultOptions())\n\tif err != nil {\n\t\tpanic(err)\n\t}\n"
-               "\tos.Stdout.WriteString(m.ToHTML(emon.DefaultHTMLOptions()))\n}\n"))
+    (put-sample! app)
+    (let [src (slurp (snippet-file "go/quickstart.go"))]
+      (when-not (str/includes? src (str "emon \"" go-module "\"")) (bad! "docs/snippets/go/quickstart.go does not import " go-module))
+      (spit (str app "/main.go") src))
     (run {:dir app :env env} "go" "build" "-o" "consumer" ".")
+    (fs/create-dirs (str app "/tour"))
+    (spit (str app "/tour/main.go") (slurp (snippet-file "go/tour.go")))
+    (run {:dir app :env env} "go" "build" "-o" "tourbin" "./tour")
+    ;; pdfium and Tesseract wired in: it compiles in the module's plain build (NewTessOcr then answers an error); with the engines here it is built with -tags tesseract and run
+    (fs/create-dirs (str app "/native"))
+    (spit (str app "/native/main.go") (slurp (snippet-file "go/native.go")))
+    (run {:dir app :env env} "go" "build" "-o" "nativebin" "./native")
+    (if-let [live (live-ports)]
+      (let [env2 (merge env (:env live) {"CGO_LDFLAGS" (str "-L" (:tess-lib live))})]
+        (fs/copy scan-pdf (str app "/scan.pdf") {:replace-existing true})
+        (run {:dir app :env env2} "go" "build" "-tags" "tesseract" "-o" "nativebin" "./native")
+        ;; macOS kills a cgo binary linked to Homebrew's Tesseract at launch until it is signed again, ad hoc (kin/scripts/emon-go-build does the same)
+        (when (= "Darwin" (str/trim (:out (run {} "uname" "-s")))) (run {:ok? false} "codesign" "-s" "-" "-f" (str app "/nativebin")))
+        (run {:dir app :env env2} (str app "/nativebin"))
+        (scan-html-ok! "go" app))
+      (say "  NOTE go: pdfium or Tesseract is not installed here, so the native snippet was compiled but not run"))
     ;; the generated packages are internal/: an importer outside the module is refused by the go tool
     (fs/create-dirs (str app "/neg"))
     (spit (str app "/neg/neg.go") (str "package neg\n\nimport _ \"" go-module "/internal/model\"\n"))
@@ -558,7 +617,16 @@
       (when (zero? (:exit neg)) (bad! "go: the generated package internal/model is importable from outside the module"))
       (when-not (re-find #"internal" (str (:out neg) (:err neg))) (bad! "go: the negative import failed for another reason\n" (tail (str (:out neg) (:err neg)) 8))))
     (run {:dir app :env env} "go" "mod" "verify")
-    (:out (run {:dir app :env env} (str app "/consumer") sample-pdf))))
+    (run {:dir app :env env} (str app "/consumer"))
+    (run {:dir app :env env} (str app "/tourbin"))
+    (report-html app)))
+
+(defn- java-native! [jdk cp app]
+  (if-let [live (live-ports)]
+    (do (fs/copy scan-pdf (str app "/scan.pdf") {:replace-existing true})
+        (run {:dir app :env (:env live)} (str jdk "/bin/java") "--enable-native-access=ALL-UNNAMED" "-cp" cp "Native")
+        (scan-html-ok! "java" app))
+    (say "  NOTE java: pdfium or Tesseract is not installed here, so the native snippet was compiled but not run")))
 
 (defn- consume-java [{:keys [files]} tmp]
   (let [jdk (find-jdk)
@@ -569,14 +637,10 @@
     (run {} "unzip" "-q" bundle "-d" repo)
     (let [jar (str repo "/com/3sln/emon/" version "/emon-" version ".jar")]
       (when-not (fs/exists? jar) (bad! "the bundle has no com/3sln/emon/" version "/emon-" version ".jar"))
-      (fs/create-dirs app)
-      (spit (str app "/Main.java")
-            (str "import emon.api.*;\nimport java.nio.file.*;\nimport java.util.List;\n\npublic class Main {\n"
-                 "  public static void main(String[] a) throws Exception {\n"
-                 "    byte[] b = Files.readAllBytes(Path.of(a[0]));\n"
-                 "    Engine engine = new Engine(Options.Config.defaults());\n"
-                 "    Model m = engine.convert(List.of(Input.bytes(b)), Options.defaults());\n"
-                 "    System.out.write(m.toHtml(new Options.Html()).getBytes(java.nio.charset.StandardCharsets.UTF_8));\n    System.out.flush();\n  }\n}\n"))
+      (put-sample! app)
+      (spit (str app "/Quickstart.java") (slurp (snippet-file "java/Quickstart.java")))
+      (spit (str app "/Tour.java") (slurp (snippet-file "java/Tour.java")))
+      (spit (str app "/Native.java") (slurp (snippet-file "java/Native.java")))
       (spit (str app "/Neg.java") "import emon.api.*;\npublic class Neg { boolean f() { return Options.defaults().noRetarget; } }\n")
       (if (have? "mvn")
         ;; Maven resolves the artifact from the unpacked repository layout as a local repository
@@ -586,18 +650,24 @@
                        "<dependencies><dependency><groupId>com.3sln</groupId><artifactId>emon</artifactId><version>" version "</version></dependency></dependencies></project>"))
             (run {:dir app :env {"JAVA_HOME" jdk}} "mvn" "-q" "-B" (str "-Dmaven.repo.local=" repo) "dependency:build-classpath" (str "-Dmdep.outputFile=" app "/cp.txt"))
             (let [cp (str (slurp (str app "/cp.txt")))]
-              (run {:dir app} (str jdk "/bin/javac") "--release" "22" "-cp" cp "-d" app "Main.java")
+              (run {:dir app} (str jdk "/bin/javac") "--release" "22" "-cp" cp "-d" app "Quickstart.java" "Tour.java" "Native.java")
               (let [neg (run {:dir app :ok? false} (str jdk "/bin/javac") "--release" "22" "-cp" cp "-d" app "Neg.java")]
                 (when (zero? (:exit neg)) (bad! "java: Options.noRetarget is accessible in the published jar"))
                 (when-not (re-find #"noRetarget" (str (:out neg) (:err neg))) (bad! "java: the negative compile failed for another reason\n" (tail (str (:out neg) (:err neg)) 8))))
-              (:out (run {:dir app} (str jdk "/bin/java") "--enable-native-access=ALL-UNNAMED" "-cp" (str cp ":" app) "Main" sample-pdf))))
+              (run {:dir app} (str jdk "/bin/java") "--enable-native-access=ALL-UNNAMED" "-cp" (str cp ":" app) "Quickstart")
+              (run {:dir app} (str jdk "/bin/java") "--enable-native-access=ALL-UNNAMED" "-cp" (str cp ":" app) "Tour")
+              (java-native! jdk (str cp ":" app) app)
+              (report-html app)))
         ;; no Maven here: the same repository layout, read by javac and java directly
         (do (say "  NOTE java: no mvn on the PATH, so the bundle's repository layout was unpacked and read by javac and java directly (Maven's own resolution was not exercised)")
-            (run {:dir app} (str jdk "/bin/javac") "--release" "22" "-cp" jar "-d" app "Main.java")
+            (run {:dir app} (str jdk "/bin/javac") "--release" "22" "-cp" jar "-d" app "Quickstart.java" "Tour.java" "Native.java")
             (let [neg (run {:dir app :ok? false} (str jdk "/bin/javac") "--release" "22" "-cp" jar "-d" app "Neg.java")]
               (when (zero? (:exit neg)) (bad! "java: Options.noRetarget is accessible in the published jar"))
               (when-not (re-find #"noRetarget" (str (:out neg) (:err neg))) (bad! "java: the negative compile failed for another reason\n" (tail (str (:out neg) (:err neg)) 8))))
-            (:out (run {:dir app} (str jdk "/bin/java") "--enable-native-access=ALL-UNNAMED" "-cp" (str jar ":" app) "Main" sample-pdf)))))))
+            (run {:dir app} (str jdk "/bin/java") "--enable-native-access=ALL-UNNAMED" "-cp" (str jar ":" app) "Quickstart")
+            (run {:dir app} (str jdk "/bin/java") "--enable-native-access=ALL-UNNAMED" "-cp" (str jar ":" app) "Tour")
+            (java-native! jdk (str jar ":" app) app)
+            (report-html app))))))
 
 (defn- consume-csharp [{:keys [files]} tmp]
   (let [{:keys [path major]} (dotnet)
@@ -611,14 +681,8 @@
           (str "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net" major ".0</TargetFramework>"
                "<ImplicitUsings>disable</ImplicitUsings><Nullable>disable</Nullable><UseAppHost>false</UseAppHost><InvariantGlobalization>true</InvariantGlobalization></PropertyGroup>"
                "<ItemGroup><PackageReference Include=\"Emon\" Version=\"" version "\" /></ItemGroup></Project>\n"))
-    (spit (str app "/Program.cs")
-          (str "using System;\nusing System.Collections.Generic;\nusing System.IO;\nusing System.Text;\n\nclass Program {\n"
-               "  static void Main(string[] a) {\n"
-               "    byte[] b = File.ReadAllBytes(a[0]);\n"
-               "    var engine = new emon.Api.Engine(emon.Api.Options.Config.Defaults());\n"
-               "    var m = engine.Convert(new List<emon.Api.Input> { emon.Api.Input.Bytes(b) }, emon.Api.Options.Defaults());\n"
-               "    byte[] o = new UTF8Encoding(false).GetBytes(m.ToHtml(new emon.Api.Options.Html()));\n"
-               "    using (var s = Console.OpenStandardOutput()) { s.Write(o, 0, o.Length); }\n  }\n}\n"))
+    (put-sample! app)
+    (spit (str app "/Program.cs") (slurp (snippet-file "csharp/Quickstart.cs")))
     (run {:dir app :env env} path "build" "-c" "Release" "--nologo" "-v" "q" "-clp:NoSummary" "-o" "out")
     ;; the hidden test setting is internal to the assembly
     (spit (str app "/Neg.cs") "class Neg { bool F() { return emon.Api.Options.Defaults().NoRetarget; } }\n")
@@ -626,7 +690,21 @@
       (when (zero? (:exit neg)) (bad! "csharp: Options.NoRetarget is accessible in the published package"))
       (when-not (re-find #"NoRetarget" (str (:out neg) (:err neg))) (bad! "csharp: the negative build failed for another reason\n" (tail (str (:out neg) (:err neg)) 8))))
     (fs/delete (str app "/Neg.cs"))
-    (:out (run {:dir app :env env} path "out/consumer.dll" sample-pdf))))
+    (run {:dir app :env env} path "out/consumer.dll")
+    ;; the tour is a program of its own (one file of top-level statements to a project): the same project, built again
+    (let [html (report-html app)]
+      (spit (str app "/Program.cs") (slurp (snippet-file "csharp/Tour.cs")))
+      (run {:dir app :env env} path "build" "-c" "Release" "--nologo" "-v" "q" "-clp:NoSummary" "-o" "out3")
+      (run {:dir app :env env} path "out3/consumer.dll")
+      ;; pdfium and Tesseract wired in: built always, run where the engines are
+      (spit (str app "/Program.cs") (slurp (snippet-file "csharp/Native.cs")))
+      (run {:dir app :env env} path "build" "-c" "Release" "--nologo" "-v" "q" "-clp:NoSummary" "-o" "out4")
+      (if-let [live (live-ports)]
+        (do (fs/copy scan-pdf (str app "/scan.pdf") {:replace-existing true})
+            (run {:dir app :env (merge env (:env live))} path "out4/consumer.dll")
+            (scan-html-ok! "csharp" app))
+        (say "  NOTE csharp: pdfium or Tesseract is not installed here, so the native snippet was compiled but not run"))
+      html)))
 
 (defn- consume-js [{:keys [files]} tmp]
   (let [tgz (first files)
@@ -637,19 +715,40 @@
     (run {:dir app :env {"npm_config_audit" "false" "npm_config_fund" "false" "npm_config_update_notifier" "false"}} "npm" "install" "--offline" "--ignore-scripts" tgz)
     (let [pkg (str app "/node_modules/@3sln/emon")]
       (when-not (fs/exists? (str pkg "/emon.wasm")) (bad! "the installed package has no emon.wasm")))
-    (spit (str app "/convert.mjs")
+    (put-sample! app)
+    (spit (str app "/quickstart.mjs") (slurp (snippet-file "js/quickstart.mjs")))
+    (spit (str app "/tour.mjs") (slurp (snippet-file "js/tour.mjs")))
+    ;; what the quickstart does not touch: the two adapters' subpath exports, and that a Model's handles are not enumerable
+    (spit (str app "/exports.mjs")
           (str "import { readFile } from 'node:fs/promises';\n"
                "import { Emon } from '@3sln/emon';\n"
                "import { pdfiumRenderer } from '@3sln/emon/pdfium';\n"
                "import { tesseractPort } from '@3sln/emon/tesseract';\n"
                "if (typeof pdfiumRenderer !== 'function' || typeof tesseractPort !== 'function') throw new Error('subpath exports');\n"
-               "const wasm = await readFile(new URL(import.meta.resolve('@3sln/emon/emon.wasm')));\n"
-               "const emon = await Emon.load(wasm);\n"
-               "const model = await emon.convert(await readFile(process.argv[2]));\n"
+               "const emon = await Emon.load(await readFile(new URL(import.meta.resolve('@3sln/emon/emon.wasm'))));\n"
+               "const model = await emon.convert(await readFile('report.pdf'));\n"
                "if (Object.keys(model).some((k) => k === 'w' || k === 'h')) throw new Error('the handles are enumerable');\n"
-               "process.stdout.write(model.html());\n"
                "model.dispose();\n"))
-    (:out (run {:dir app} "node" (if (< major 25) "--experimental-wasm-exnref" "--no-warnings") "convert.mjs" sample-pdf))))
+    (let [flag (if (< major 25) "--experimental-wasm-exnref" "--no-warnings")]
+      (run {:dir app} "node" flag "exports.mjs")
+      (run {:dir app} "node" flag "quickstart.mjs")
+      (run {:dir app} "node" flag "tour.mjs")
+      ;; pdfium's WebAssembly build and tesseract.js wired in (docs/hosts/js.md): run where `bb pdfium-fetch --platform wasm` and `npm ci` in host/js were done
+      (let [nm (or (System/getenv "EMON_JS_NODE_MODULES") (str root "/host/js/node_modules"))
+            wasm-dir (or (System/getenv "EMON_PDFIUM_WASM")
+                         (some-> (first (fs/glob (str root "/.cache/pdfium") "*/wasm/lib")) str))]
+        (if (and wasm-dir (fs/exists? (str wasm-dir "/pdfium.mjs")) (fs/exists? (str nm "/tesseract.js")) (fs/exists? (str nm "/@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz")))
+          (do (fs/create-dirs (str app "/vendor/pdfium"))
+              (fs/copy (str wasm-dir "/pdfium.mjs") (str app "/vendor/pdfium/pdfium.mjs") {:replace-existing true})
+              (fs/copy (str wasm-dir "/pdfium.wasm") (str app "/vendor/pdfium/pdfium.wasm") {:replace-existing true})
+              (doseq [d (fs/list-dir nm) :let [n (str (fs/file-name d))] :when (not (fs/exists? (str app "/node_modules/" n)))]
+                (fs/create-sym-link (str app "/node_modules/" n) d))
+              (fs/copy scan-pdf (str app "/scan.pdf") {:replace-existing true})
+              (spit (str app "/native.mjs") (slurp (snippet-file "js/native.mjs")))
+              (run {:dir app} "node" flag "native.mjs")
+              (scan-html-ok! "js" app))
+          (say "  NOTE js: pdfium's wasm build or tesseract.js is not installed here, so the native snippet was not run"))))
+    (report-html app)))
 
 (defn- unpack [tgz tmp] (run {} "tar" "-xzf" tgz "-C" tmp) (let [d (first (fs/list-dir tmp))] (str d)))
 
@@ -659,17 +758,9 @@
         {:keys [dyn]} (native-lib-names)
         cc (or (first (filter have? ["cc" "clang" "gcc"])) (skip! "no C compiler"))
         sys (if (= "Darwin" (str/trim (:out (run {} "uname" "-s")))) ["-framework" "Security" "-framework" "CoreFoundation" "-liconv" "-lm"] ["-lpthread" "-ldl" "-lm"])]
-    (fs/create-dirs app)
-    (spit (str app "/main.c")
-          (str "#include \"emon.h\"\n#include <stdio.h>\n#include <stdlib.h>\n\n"
-               "int main(int argc, char **argv) {\n"
-               "    if (argc < 2) return 2;\n"
-               "    FILE *f = fopen(argv[1], \"rb\");\n    if (!f) return 3;\n    fseek(f, 0, SEEK_END);\n    long n = ftell(f);\n    fseek(f, 0, SEEK_SET);\n"
-               "    unsigned char *buf = malloc((size_t)n);\n    if (fread(buf, 1, (size_t)n, f) != (size_t)n) return 3;\n    fclose(f);\n"
-               "    emon_input in = {0};\n    in.data = buf;\n    in.len = (size_t)n;\n"
-               "    emon_buf out = {0};\n    emon_error err = {0};\n"
-               "    if (emon_convert_html(&in, NULL, 0, NULL, &out, &err) < 0) { fprintf(stderr, \"%s: %s\\n\", err.name, err.message); return 4; }\n"
-               "    fwrite(out.data, 1, out.len, stdout);\n    emon_free_buf(&out);\n    free(buf);\n    return 0;\n}\n"))
+    (put-sample! app)
+    (spit (str app "/main.c") (slurp (snippet-file "c/quickstart.c")))
+    (spit (str app "/tour.c") (slurp (snippet-file "c/tour.c")))
     (spit (str app "/neg.c") "#include \"emon.h\"\nint f(emon_error *e) { return emon_test_panic(e); }\n")
     (let [flags ["-std=c11" "-Wall" "-Werror" (str "-I" dir "/include")]
           dynamic (concat [cc] flags ["-o" (str app "/c-dyn") (str app "/main.c") (str "-L" dir "/lib") "-lemon" (str "-Wl,-rpath," dir "/lib")])
@@ -677,25 +768,46 @@
           neg (concat [cc] flags ["-c" "-o" (str app "/neg.o") (str app "/neg.c")])]
       (apply run {:dir app} dynamic)
       (apply run {:dir app} static)
+      (apply run {:dir app} (concat [cc] flags ["-o" (str app "/c-tour") (str app "/tour.c") (str "-L" dir "/lib") "-lemon" (str "-Wl,-rpath," dir "/lib")]))
+      (run {:dir app} (str app "/c-tour"))
+      ;; the step API (the session): the engine says what it needs, the caller reads the bytes; its HTML is the one-shot call's
+      (spit (str app "/session.c") (slurp (snippet-file "c/session.c")))
+      (apply run {:dir app} (concat [cc] flags ["-o" (str app "/c-session") (str app "/session.c") (str "-L" dir "/lib") "-lemon" (str "-Wl,-rpath," dir "/lib")]))
+      (let [expected (do (run {:dir app} (str app "/c-dyn")) (report-html app))
+            via-session (:out (run {:dir app} (str app "/c-session")))]
+        (when-not (= expected via-session) (bad! "c: the step API gave other bytes than the one-shot call")))
       (let [n (apply run {:dir app :ok? false} neg)]
         (when (zero? (:exit n)) (bad! "c: emon_test_panic is declared in the installed emon.h"))
         (when-not (re-find #"emon_test_panic" (str (:out n) (:err n))) (bad! "c: the negative compile failed for another reason\n" (tail (str (:out n) (:err n)) 8))))
-      (let [a (:out (run {:dir app} (str app "/c-dyn") sample-pdf))
-            b (:out (run {:dir app} (str app "/c-static") sample-pdf))]
+      (let [a (do (run {:dir app} (str app "/c-dyn")) (report-html app))
+            b (do (fs/delete (str app "/report.html")) (run {:dir app} (str app "/c-static")) (report-html app))]
         (when-not (= a b) (bad! "c: the shared and the static library gave different bytes"))
         (when-not (fs/exists? (str dir "/lib/" dyn)) (bad! "the archive has no lib/" dyn))
         a))))
 
 (defn- consume-pod [{:keys [files]} tmp]
   (let [dir (unpack (first files) tmp)
-        script (str tmp "/convert.clj")]
+        app (str tmp "/app")
+        script (str tmp "/bytes.clj")
+        ;; the quickstart finds the pod on the PATH, as a user who put it there would have it
+        env {"PATH" (str dir ":" (System/getenv "PATH"))}]
+    (put-sample! app)
+    (spit (str app "/quickstart.clj") (slurp (snippet-file "pod/quickstart.clj")))
+    (spit (str app "/tour.clj") (slurp (snippet-file "pod/tour.clj")))
+    ;; the other way in, which the quickstart does not use: the bytes, base64 in an EDN map
     (spit script
           (str "(require '[babashka.pods :as pods] '[babashka.fs :as fs])\n"
                "(import '(java.util Base64))\n"
                "(pods/load-pod [\"" dir "/emon-pod\"])\n"
                "(let [r (emon/convert {:bytes (.encodeToString (Base64/getEncoder) (fs/read-all-bytes (first *command-line-args*)))} \"\" {:html \"\"})]\n"
                "  (.write System/out (.getBytes ^String (:html r) \"UTF-8\"))\n  (.flush System/out))\n"))
-    (:out (run {} "bb" script sample-pdf))))
+    (let [by-bytes (:out (run {} "bb" script sample-pdf))]
+      (run {:dir app :env env} "bb" "quickstart.clj")
+      (let [t (run {:dir app :env env} "bb" "tour.clj")]
+        (when-not (str/includes? (:out t) ":name \"pages\"") (bad! "pod: the tour's limit error did not carry its name\n" (:out t))))
+      (let [html (report-html app)]
+        (when-not (= html by-bytes) (bad! "pod: a path and the bytes gave different HTML"))
+        html))))
 
 (def consumers {:rust consume-rust :go consume-go :java consume-java :csharp consume-csharp :js consume-js :c consume-c :pod consume-pod})
 
