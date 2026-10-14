@@ -2,6 +2,7 @@
 // source: emon.figclasstest
 
 use crate::emon::figclass::*;
+use crate::emon::glayer::*;
 use crate::emon::model::*;
 use crate::emon::restruct::*;
 
@@ -360,6 +361,74 @@ fn test_a_figure_goes_in_before_its_caption_whatever_its_top_edge_says() {
     crate::testport::assert_eq(node_count(nn), 5, "the document, three blocks and the figure");
     crate::testport::assert_eq(node_kind(nn, 3), nk_figure(), "the figure is just before its caption, after the paragraph that is lower on the page");
     crate::testport::assert_eq(node_kind(nn, 4), nk_caption(), "and the caption follows it");
+}
+pub(crate) fn ft_held_line(mut fl: &mut crate::port::Cells, y0: i32, held: i32) -> i32 {
+    // A line of the text layer at x 12000..20000, 600 tall from y0, on page 1; `held` 1 when a table has claimed it (cell 15 is TB_HELD + 0).
+    let r: i32 = crate::port::cells_len(fl) / 16;
+    ft_line(fl, 1, 12000, y0, 20000, y0 + 600, 1);
+    if held == 1 {
+        crate::port::cells_set(fl, (r * 16) + 15, 1073741824);
+    }
+    return 0;
+}
+pub(crate) fn ft_figures(held: i32, free: i32) -> i32 {
+    // The figures stage over a page that has a region the graphics layer calls a figure (10000 10000 30000 30000, no paths, no images) with a
+    // caption just under it and `held` lines of the text layer in it that a table has claimed and `free` that it has not. Answers how many figures.
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fnodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fattrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fregions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fnm: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fi: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fcand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ab: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut c: i32 = 0;
+    let mut i: i32 = 0;
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    page_new(pages, 1, 61200, 79200, 0, pk_vector());
+    grg_new(grg, 1, 10000, 10000, 30000, 30000, rk_figure());
+    c = ft_para(nodes, regions, text, nk_caption(), 20, 10000, 30500, 30000, 31500);
+    node_set_aux(nodes, c, 1);
+    while i < held {
+        ft_held_line(fl, 11000 + (1500 * i), 1);
+        i += 1;
+    }
+    i = 0;
+    while i < free {
+        ft_held_line(fl, 21000 + (1500 * i), 0);
+        i += 1;
+    }
+    return fc_stage(nodes, attrs, regions, text, pages, fnodes, fattrs, fregions, fnm, pa, im, fi, grg, grl, fw, fl, et, pg, sl, cand, 0, fcand, cl, fg, fd, ab, ws);
+}
+#[test]
+fn test_a_region_whose_text_a_table_has_claimed_is_no_figure() {
+    // A region the graphics layer calls a figure, with a caption just under it, is a figure; so is one with a few lines of text that no table holds.
+    crate::testport::assert_eq(ft_figures(0, 0), 1, "with no text in it the region is a figure");
+    crate::testport::assert_eq(ft_figures(0, 3), 1, "with three lines no table holds it is a figure");
+    // The shaded header cell with its words and the rule under it (D1560): the table the lines went to, the drawing is its own.
+    crate::testport::assert_eq(ft_figures(3, 1), 0, "three lines of four are a table's: no figure");
+    crate::testport::assert_eq(ft_figures(2, 2), 0, "half of them are a table's: no figure");
+    crate::testport::assert_eq(ft_figures(1, 3), 1, "one of four is a table's: the region is still a figure");
 }
 pub(crate) fn ft_fi_add(mut fi: &mut crate::port::Cells, w: i32, h: i32, d1: i32, d2: i32) -> i32 {
     // A row of `fi` for a flat raster of w x h pixels whose stream has the digest d1 d2 (stride 12).

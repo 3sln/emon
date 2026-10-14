@@ -22,7 +22,9 @@
 
 (def docs ["table-simple-ruled" "table-shaded" "table-spans-partial" "table-whitespace" "align-table-numeric" "table-multipage-thead"
            ;; the tagged tables of P5.5 (P6.8's ttab fixtures): the verdicts of each are asserted beside its golden (`tabletest`)
-           "ttab-good" "ttab-good-ws" "ttab-good-ws-untagged" "ttab-th-as-td" "ttab-bad-spans" "ttab-bad-rows" "ttab-layout" "ttab-missing-row" "ttab-allp"])
+           "ttab-good" "ttab-good-ws" "ttab-good-ws-untagged" "ttab-th-as-td" "ttab-bad-spans" "ttab-bad-rows" "ttab-layout" "ttab-missing-row" "ttab-allp"
+           ;; D1570: a correctly tagged table in a tree that tags nothing else (tools/synth/tagged_tables.clj writes the PDF beside the golden)
+           "table/ttab-low-trust"])
 
 (defn run [& args]
   (let [r (apply sh/sh (concat args [:dir root]))]
@@ -34,6 +36,8 @@
 
 (.mkdirs (io/file root "test" "table"))
 (doseq [d docs]
-  (let [out (run ".cache/emon-rs/target/release/emon-rs" "--pretty" "--furniture=keep" (str "test/corpus/synth/pdf/" d ".pdf"))]
-    (spit (io/file root "test" "table" (str d ".json")) (str out "\n") :encoding "UTF-8")
-    (println "  wrote test/table/" (str d ".json") (count out) "bytes")))
+  (let [pdf (if (str/starts-with? d "table/") (str "test/" d ".pdf") (str "test/corpus/synth/pdf/" d ".pdf"))
+        name (last (str/split d #"/"))
+        out (run ".cache/emon-rs/target/release/emon-rs" "--pretty" "--furniture=keep" pdf)]
+    (spit (io/file root "test" "table" (str name ".json")) (str out "\n") :encoding "UTF-8")
+    (println "  wrote test/table/" (str name ".json") (count out) "bytes")))

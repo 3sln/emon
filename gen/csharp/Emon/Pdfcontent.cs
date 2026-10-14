@@ -4221,6 +4221,190 @@ public static class Pdfcontent {
         }
         return 0;
     }
+    internal const int Nojoin = 2000000;
+    internal const int MergeMax = 256;
+    internal static int PcSameBase(emon.Port.Cells gl, emon.Port.Cells wd, int p, int j) {
+        // 1 when word j is on word p's baseline: the same rotation, and the offset across the writing axis, from p's last glyph to j's
+        // first, within `OFFSET_PM` of the larger size.
+        int gfp = Evidence.WdGet(wd, p, Evidence.WfGfirst());
+        int gf0 = Evidence.WdGet(wd, j, Evidence.WfGfirst());
+        int axis = PcAxis(Evidence.GlGet(gl, gfp, Evidence.GfRot()));
+        int sz = Evidence.GlGet(gl, gf0, Evidence.GfSize());
+        int glast = (gfp + Evidence.WdGet(wd, p, Evidence.WfGcount())) - 1;
+        if (PcRotSame(Evidence.GlGet(gl, gfp, Evidence.GfRot()), Evidence.GlGet(gl, gf0, Evidence.GfRot())) == 0) {
+            return 0;
+        }
+        if (Evidence.GlGet(gl, gfp, Evidence.GfSize()) > sz) {
+            sz = Evidence.GlGet(gl, gfp, Evidence.GfSize());
+        }
+        if (sz > 200000) {
+            sz = 200000;
+        }
+        if (sz < (0 - 200000)) {
+            sz = 0 - 200000;
+        }
+        if ((PcCl(PcPairOff(gl, glast, gf0, axis)) * 1000) <= (sz * OffsetPm)) {
+            return 1;
+        }
+        return 0;
+    }
+    internal static int PcJoinGap(emon.Port.Cells gl, emon.Port.Cells wd, int p, int j) {
+        // The rule that puts word j on word p's line: the same rotation and baseline (`pc-same-base`), and a gap from p's LAST glyph to j's
+        // first that is at most `LINE_GAP_PM` of the larger size and at most `LINE_BACK_PM` back. Answers the gap, or `NOJOIN`.
+        int gfp = Evidence.WdGet(wd, p, Evidence.WfGfirst());
+        int gf0 = Evidence.WdGet(wd, j, Evidence.WfGfirst());
+        int axis = PcAxis(Evidence.GlGet(gl, gfp, Evidence.GfRot()));
+        int sz = Evidence.GlGet(gl, gf0, Evidence.GfSize());
+        int gap = 0;
+        int glast = (gfp + Evidence.WdGet(wd, p, Evidence.WfGcount())) - 1;
+        if (PcSameBase(gl, wd, p, j) == 0) {
+            return Nojoin;
+        }
+        if (Evidence.GlGet(gl, gfp, Evidence.GfSize()) > sz) {
+            sz = Evidence.GlGet(gl, gfp, Evidence.GfSize());
+        }
+        if (sz > 200000) {
+            sz = 200000;
+        }
+        if (sz < (0 - 200000)) {
+            sz = 0 - 200000;
+        }
+        // The gap is between the previous word's LAST glyph and this word's first.
+        gap = PcCl(PcPairGap(gl, glast, gf0, axis, sz));
+        if ((gap * 1000) < (0 - (sz * LineBackPm))) {
+            return Nojoin;
+        }
+        if ((gap * 1000) > (sz * LineGapPm)) {
+            return Nojoin;
+        }
+        return gap;
+    }
+    internal static int PcMergeSpan(emon.Port.Cells gl, emon.Port.Cells wd, int s, int t) {
+        // Words [s, t] are runs of the stream on one baseline that are not in order along it. When every one is horizontal, of one visibility
+        // and has no right-to-left letter, and each word, taken in order of x, joins the one after it by `pc-join-gap`, they are put in that
+        // order (a stable insertion sort of the word rows; the glyphs are pointed at their word again) and are one line to the loop that
+        // follows. Otherwise nothing moves. Answers 1 when the words were put in order.
+        int g0 = Evidence.WdGet(wd, s, Evidence.WfGfirst());
+        int i = s;
+        int j = 0;
+        int k = 0;
+        int best = 0;
+        int asc = 1;
+        int gi = 0;
+        i = s + 1;
+        while (i <= t) {
+            if (Evidence.WdGet(wd, i, Evidence.HdX0()) < Evidence.WdGet(wd, i - 1, Evidence.HdX0())) {
+                asc = 0;
+            }
+            i += 1;
+        }
+        if (asc == 1) {
+            return 0;
+        }
+        i = s;
+        while (i <= t) {
+            gi = Evidence.WdGet(wd, i, Evidence.WfGfirst());
+            if (PcAxis(Evidence.GlGet(gl, gi, Evidence.GfRot())) != 0) {
+                return 0;
+            }
+            if (Evidence.GlGet(gl, gi, Evidence.GfVis()) != Evidence.GlGet(gl, g0, Evidence.GfVis())) {
+                return 0;
+            }
+            if (PcHiddenMode(Evidence.GlGet(gl, gi, Evidence.GfMode())) != PcHiddenMode(Evidence.GlGet(gl, g0, Evidence.GfMode()))) {
+                return 0;
+            }
+            if (Evidence.WdGet(wd, i, Evidence.HdDir()) == Evidence.LdRtl()) {
+                return 0;
+            }
+            if (PcWcls(gl, wd, i) == 1) {
+                return 0;
+            }
+            i += 1;
+        }
+        // Each word's successor in order of x (ties by place in the stream): it must continue the word.
+        i = s;
+        while (i <= t) {
+            best = -1;
+            j = s;
+            while (j <= t) {
+                if ((Evidence.WdGet(wd, j, Evidence.HdX0()) > Evidence.WdGet(wd, i, Evidence.HdX0())) || ((Evidence.WdGet(wd, j, Evidence.HdX0()) == Evidence.WdGet(wd, i, Evidence.HdX0())) && (j > i))) {
+                    if (best < 0) {
+                        best = j;
+                    } else if (Evidence.WdGet(wd, j, Evidence.HdX0()) < Evidence.WdGet(wd, best, Evidence.HdX0())) {
+                        best = j;
+                    }
+                }
+                j += 1;
+            }
+            if (best >= 0) {
+                if (PcJoinGap(gl, wd, i, best) >= Nojoin) {
+                    return 0;
+                }
+            }
+            i += 1;
+        }
+        i = s + 1;
+        while (i <= t) {
+            j = i;
+            while ((j > s) && (Evidence.WdGet(wd, j - 1, Evidence.HdX0()) > Evidence.WdGet(wd, j, Evidence.HdX0()))) {
+                PcSwapRows(wd, j - 1, j);
+                j -= 1;
+            }
+            i += 1;
+        }
+        i = s;
+        while (i <= t) {
+            gi = Evidence.WdGet(wd, i, Evidence.WfGfirst());
+            k = 0;
+            while (k < Evidence.WdGet(wd, i, Evidence.WfGcount())) {
+                Evidence.GlSet(gl, gi + k, Evidence.ChWord(), i);
+                k += 1;
+            }
+            if ((i < t) && (Evidence.WdGet(wd, i, Evidence.WfWbreak()) == Evidence.WbLineEnd())) {
+                Evidence.WdSet(wd, i, Evidence.WfWbreak(), Evidence.WbGap());
+            }
+            i += 1;
+        }
+        return 1;
+    }
+    internal static int PcMergeLines(emon.Port.Cells gl, emon.Port.Cells wd, int w0) {
+        // The words from w0 on, before they are cut into lines: where consecutive runs of the stream (each a stretch of words that
+        // `pc-join-gap` joins) are on one baseline, they are one candidate (at most `MERGE_MAX` words) and `pc-merge-span` puts them in
+        // order along it if they make one line. A run that is already in order along the baseline is left alone (a wide gap in it ends the line, as
+        // ever: a column gutter or a table cell). Answers the spans put in order.
+        int nw = Evidence.WdCount(wd);
+        int s = w0;
+        int t = 0;
+        int u = 0;
+        int nseg = 0;
+        int more = 0;
+        int done = 0;
+        while (s < nw) {
+            t = s;
+            while (((t + 1) < nw) && (PcJoinGap(gl, wd, t, t + 1) < Nojoin)) {
+                t += 1;
+            }
+            nseg = 1;
+            more = 1;
+            while ((more == 1) && (((t + 1) < nw) && ((t - s) < MergeMax))) {
+                if (PcSameBase(gl, wd, t, t + 1) == 1) {
+                    u = t + 1;
+                    while (((u + 1) < nw) && (PcJoinGap(gl, wd, u, u + 1) < Nojoin)) {
+                        u += 1;
+                    }
+                    t = u;
+                    nseg += 1;
+                } else {
+                    more = 0;
+                }
+            }
+            if ((nseg > 1) && ((t - s) <= MergeMax)) {
+                done += PcMergeSpan(gl, wd, s, t);
+            }
+            s = t + 1;
+        }
+        return done;
+    }
     public static int PcGroup(emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells fnt, int page, int g0, int w0) {
         // Group the glyphs from g0 on into words, and the words from w0 on into lines.
         int g1 = Evidence.GlCount(gl);
@@ -4259,43 +4443,17 @@ public static class Pdfcontent {
         int y0 = 0;
         int x1 = 0;
         int y1 = 0;
-        int gf0 = 0;
         int gfp = 0;
-        int glast = 0;
-        int axis = 0;
         int joins = 0;
         int gap = 0;
-        int sz = 0;
         int ord = 0;
-        int off = 0;
+        PcMergeLines(gl, wd, w0);
         while (j <= nw) {
             joins = 0;
             if ((j < nw) && (prev >= 0)) {
-                gf0 = Evidence.WdGet(wd, j, Evidence.WfGfirst());
-                gfp = Evidence.WdGet(wd, prev, Evidence.WfGfirst());
-                axis = PcAxis(Evidence.GlGet(gl, gfp, Evidence.GfRot()));
-                if (PcRotSame(Evidence.GlGet(gl, gfp, Evidence.GfRot()), Evidence.GlGet(gl, gf0, Evidence.GfRot())) == 1) {
-                    sz = Evidence.GlGet(gl, gf0, Evidence.GfSize());
-                    if (Evidence.GlGet(gl, gfp, Evidence.GfSize()) > sz) {
-                        sz = Evidence.GlGet(gl, gfp, Evidence.GfSize());
-                    }
-                    if (sz > 200000) {
-                        sz = 200000;
-                    }
-                    if (sz < (0 - 200000)) {
-                        sz = 0 - 200000;
-                    }
-                    glast = (Evidence.WdGet(wd, prev, Evidence.WfGfirst()) + Evidence.WdGet(wd, prev, Evidence.WfGcount())) - 1;
-                    off = PcCl(PcPairOff(gl, glast, gf0, axis));
-                    // The gap is between the previous word's LAST glyph and this word's first.
-                    gap = PcCl(PcPairGap(gl, glast, gf0, axis, sz));
-                    if ((off * 1000) <= (sz * OffsetPm)) {
-                        if ((gap * 1000) >= (0 - (sz * LineBackPm))) {
-                            if ((gap * 1000) <= (sz * LineGapPm)) {
-                                joins = 1;
-                            }
-                        }
-                    }
+                gap = PcJoinGap(gl, wd, prev, j);
+                if (gap < Nojoin) {
+                    joins = 1;
                 }
             }
             if (joins == 1) {
@@ -4325,7 +4483,6 @@ public static class Pdfcontent {
                         lnx += 1;
                     }
                     gfp = Evidence.WdGet(wd, lfirst, Evidence.WfGfirst());
-                    axis = PcAxis(Evidence.GlGet(gl, gfp, Evidence.GfRot()));
                     ord = Evidence.WdGet(wd, lfirst, Evidence.WfGfirst());
                     lnx = lfirst;
                     while (lnx <= prev) {

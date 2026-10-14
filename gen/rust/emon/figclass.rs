@@ -18,6 +18,7 @@ pub(crate) const FC_PHOTO_BPP: i32 = 130;
 pub(crate) const FC_SMALL: i32 = 15000;
 pub(crate) const FC_BAND: i32 = 200;
 pub(crate) const FC_EMIT: i32 = 500;
+pub(crate) const FC_HELD: i32 = 1073741824;
 pub(crate) const FC_CAPGAP: i32 = 4000;
 pub(crate) const FI_STRIDE: i32 = 12;
 pub(crate) const FC_DIGEST_N: i32 = 4096;
@@ -1456,6 +1457,34 @@ pub(crate) fn fc_signature_over(sl: &mut crate::port::Cells, page: i32, x0: i32,
     }
     return 0;
 }
+pub fn fc_claimed(fl: &mut crate::port::Cells, page: i32, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
+    // 1 when a table has claimed the text of the region (D1570): of the lines on the page whose centre is in it, at least one and at least
+    // half are a table's (cell 15 of a line a table holds is `FC_HELD` and up, `emon.table`'s TB_HELD). A shaded header cell with its words and
+    // a rule under it, or a table's fills and rules, look like a diagram's boxes and a connector; the words are the table's, and so is the drawing.
+    let n: i32 = ln_count(fl);
+    let mut l: i32 = 0;
+    let mut total: i32 = 0;
+    let mut held: i32 = 0;
+    let mut cx: i32 = 0;
+    let mut cy: i32 = 0;
+    while l < n {
+        if ln_get(fl, l, lh_page()) == page {
+            cx = (ln_get(fl, l, lh_x0()) + ln_get(fl, l, lh_x1())) / 2;
+            cy = (ln_get(fl, l, lh_y0()) + ln_get(fl, l, lh_y1())) / 2;
+            if (cx >= x0) && ((cx <= x1) && ((cy >= y0) && (cy <= y1))) {
+                total += 1;
+                if ln_get(fl, l, 15) >= FC_HELD {
+                    held += 1;
+                }
+            }
+        }
+        l += 1;
+    }
+    if (held > 0) && ((held * 2) >= total) {
+        return 1;
+    }
+    return 0;
+}
 pub fn fc_stage(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, pages: &mut crate::port::Cells, mut fnodes: &mut crate::port::Cells, mut fattrs: &mut crate::port::Cells, mut fregions: &mut crate::port::Cells, mut fnm: &mut crate::port::Cells, pa: &mut crate::port::Cells, im: &mut crate::port::Cells, fi: &mut crate::port::Cells, grg: &mut crate::port::Cells, grl: &mut crate::port::Cells, fw: &mut crate::port::Cells, fl: &mut crate::port::Cells, et: &mut crate::port::Cells, pg: &mut crate::port::Cells, sl: &mut crate::port::Cells, mut cand: &mut crate::port::Cells, level: i32, mut fcand: &mut crate::port::Cells, mut cl: &mut crate::port::Cells, mut fg: &mut crate::port::Cells, mut fd: &mut crate::port::Cells, mut ab: &mut crate::port::Cells, mut ws: &mut crate::port::Cells) -> i32 {
     // THE FIGURES (SPEC 10.6): the candidate regions (the image placements, the vector clusters of `emon.asset`, the shaded fills, P7.G's
     // `figure` regions), each measured and judged, the ones that are figures placed among the blocks with their kind, confidence
@@ -1530,6 +1559,11 @@ pub fn fc_stage(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, 
         }
         if fc_signature_over(sl, page, x0, y0, x1, y1) == 1 {
             rej = 1;
+        }
+        if crate::port::cells_at(fcand, b + CR_KORI) == -2 {
+            if fc_claimed(fl, page, x0, y0, x1, y1) == 1 {
+                rej = 1;
+            }
         }
         if crate::port::cells_at(fcand, b + CR_KORI) == -1 {
             pk = fc_image_kind(fi, crate::port::cells_at(fcand, b + CR_ROW), x1 - x0, y1 - y0, y0, y1, pageh, recur);

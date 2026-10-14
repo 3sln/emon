@@ -5,6 +5,7 @@ package figclasstest
 
 import (
 	"emon/figclass"
+	"emon/glayer"
 	"emon/model"
 	"emon/port"
 	"emon/restruct"
@@ -374,6 +375,76 @@ func TestAFigureGoesInBeforeItsCaptionWhateverItsTopEdgeSays(emonT *testing.T) {
 	port.AssertEq(emonT, model.NodeCount(nn), 5, "the document, three blocks and the figure")
 	port.AssertEq(emonT, model.NodeKind(nn, 3), model.NkFigure(), "the figure is just before its caption, after the paragraph that is lower on the page")
 	port.AssertEq(emonT, model.NodeKind(nn, 4), model.NkCaption(), "and the caption follows it")
+}
+
+func ftHeldLine(fl *port.Cells, y0 int32, held int32) int32 {
+	// A line of the text layer at x 12000..20000, 600 tall from y0, on page 1; `held` 1 when a table has claimed it (cell 15 is TB_HELD + 0).
+	var r int32 = port.CellsLen(fl) / 16
+	ftLine(fl, 1, 12000, y0, 20000, y0+600, 1)
+	if held == 1 {
+		port.CellsSet(fl, (r*16)+15, 1073741824)
+	}
+	return 0
+}
+
+func ftFigures(held int32, free int32) int32 {
+	// The figures stage over a page that has a region the graphics layer calls a figure (10000 10000 30000 30000, no paths, no images) with a
+	// caption just under it and `held` lines of the text layer in it that a table has claimed and `free` that it has not. Answers how many figures.
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var grg *port.Cells = port.NewCells()
+	var fnodes *port.Cells = port.NewCells()
+	var fattrs *port.Cells = port.NewCells()
+	var fregions *port.Cells = port.NewCells()
+	var fnm *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var fi *port.Cells = port.NewCells()
+	var grl *port.Cells = port.NewCells()
+	var fw *port.Cells = port.NewCells()
+	var fl *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pg *port.Cells = port.NewCells()
+	var sl *port.Cells = port.NewCells()
+	var cand *port.Cells = port.NewCells()
+	var fcand *port.Cells = port.NewCells()
+	var cl *port.Cells = port.NewCells()
+	var fg *port.Cells = port.NewCells()
+	var fd *port.Cells = port.NewCells()
+	var ab *port.Cells = port.NewCells()
+	var ws *port.Cells = port.NewCells()
+	var c int32 = 0
+	var i int32 = 0
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	model.PageNew(pages, 1, 61200, 79200, 0, model.PkVector())
+	glayer.GrgNew(grg, 1, 10000, 10000, 30000, 30000, glayer.RkFigure())
+	c = ftPara(nodes, regions, text, model.NkCaption(), 20, 10000, 30500, 30000, 31500)
+	model.NodeSetAux(nodes, c, 1)
+	for i < held {
+		ftHeldLine(fl, 11000+(1500*i), 1)
+		i += 1
+	}
+	i = 0
+	for i < free {
+		ftHeldLine(fl, 21000+(1500*i), 0)
+		i += 1
+	}
+	return figclass.FcStage(nodes, attrs, regions, text, pages, fnodes, fattrs, fregions, fnm, pa, im, fi, grg, grl, fw, fl, et, pg, sl, cand, 0, fcand, cl, fg, fd, ab, ws)
+}
+
+func TestARegionWhoseTextATableHasClaimedIsNoFigure(emonT *testing.T) {
+	// A region the graphics layer calls a figure, with a caption just under it, is a figure; so is one with a few lines of text that no table holds.
+	port.AssertEq(emonT, ftFigures(0, 0), 1, "with no text in it the region is a figure")
+	port.AssertEq(emonT, ftFigures(0, 3), 1, "with three lines no table holds it is a figure")
+	// The shaded header cell with its words and the rule under it (D1560): the table the lines went to, the drawing is its own.
+	port.AssertEq(emonT, ftFigures(3, 1), 0, "three lines of four are a table's: no figure")
+	port.AssertEq(emonT, ftFigures(2, 2), 0, "half of them are a table's: no figure")
+	port.AssertEq(emonT, ftFigures(1, 3), 1, "one of four is a table's: the region is still a figure")
 }
 
 func ftFiAdd(fi *port.Cells, w int32, h int32, d1 int32, d2 int32) int32 {

@@ -2690,6 +2690,7 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :rule-ghost 0.0
         :rule-p 0.975451
         :rule-r 1.0
         :span-bold-f1 1.0
@@ -2889,6 +2890,7 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :rule-ghost 0.0
         :rule-p 0.975451
         :rule-r 1.0
         :src-ocr-share 0.0
@@ -2995,6 +2997,7 @@
         :para-boundary-f1 0.894737
         :para-boundary-p 0.809524
         :para-boundary-r 1.0
+        :rule-ghost 0.0
         :rule-p 0.995897
         :rule-r 1.0
         :src-ocr-share 0.0
@@ -3045,10 +3048,10 @@
         :block-table-f1 0.957265
         :block-table-p 1.0
         :block-table-r 0.918033
-        :bow-f1 0.959319
-        :bow-p 0.969867
-        :bow-r 0.948998
-        :cer 0.040753
+        :bow-f1 0.959849
+        :bow-p 0.970747
+        :bow-r 0.949193
+        :cer 0.040632
         :conf-brier-all 0.030454
         :conf-brier-caption 0.003844
         :conf-brier-caption-text 0.003844
@@ -3141,7 +3144,7 @@
         :figure-subkind-acc 1.0
         :fill-p 1.0
         :fill-r 0.942613
-        :first-word-acc 0.652174
+        :first-word-acc 0.782609
         :frag-col-acc 0.723404
         :furniture-f1 0.969697
         :furniture-p 1.0
@@ -3167,9 +3170,10 @@
         :link-r 1.0
         :order-tau 1.0
         :page-label-acc 1.0
-        :para-boundary-f1 0.877898
-        :para-boundary-p 0.818444
-        :para-boundary-r 0.946667
+        :para-boundary-f1 0.882535
+        :para-boundary-p 0.822767
+        :para-boundary-r 0.951667
+        :rule-ghost 0.0
         :rule-p 0.973599
         :rule-r 0.996656
         :seal-date-acc 0.0
@@ -3198,7 +3202,7 @@
         :tag-verdict-acc 1.0
         :tl-override 0.0
         :watermark-leak 0.0
-        :wer 0.056031}
+        :wer 0.055149}
       "pdf/columns" {
         :block-caption-f1 1.0
         :block-caption-p 1.0
@@ -3522,6 +3526,7 @@
         :para-boundary-f1 0.434783
         :para-boundary-p 0.277778
         :para-boundary-r 1.0
+        :rule-ghost 0.0
         :rule-p 0.997778
         :rule-r 1.0
         :span-bold-f1 0.0
@@ -3594,6 +3599,7 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :rule-ghost 0.0
         :rule-p 1.0
         :rule-r 1.0
         :span-bold-f1 1.0
@@ -3669,6 +3675,7 @@
         :para-boundary-f1 0.90625
         :para-boundary-p 0.935484
         :para-boundary-r 0.878788
+        :rule-ghost 0.0
         :rule-p 0.962902
         :rule-r 0.956835
         :src-ocr-share 0.0
@@ -3756,10 +3763,10 @@
         :block-paragraph-f1 1.0
         :block-paragraph-p 1.0
         :block-paragraph-r 1.0
-        :bow-f1 0.993819
-        :bow-p 0.991096
-        :bow-r 0.996556
-        :cer 0.001383
+        :bow-f1 0.997933
+        :bow-p 0.998277
+        :bow-r 0.99759
+        :cer 0.000301
         :conf-brier-all 0.099245
         :conf-brier-heading 0.002704
         :conf-brier-heading-text 0.002704
@@ -3786,7 +3793,7 @@
         :conf-ece-span-text 0.1
         :conf-ece-text 0.117633
         :conf-ece-text-text 0.117633
-        :first-word-acc 0.652174
+        :first-word-acc 0.782609
         :frag-col-acc 1.0
         :furniture-f1 1.0
         :furniture-p 1.0
@@ -3808,9 +3815,9 @@
         :join-r 1.0
         :order-tau 1.0
         :page-label-acc 1.0
-        :para-boundary-f1 0.9375
-        :para-boundary-p 0.9375
-        :para-boundary-r 0.9375
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
         :span-bold-f1 1.0
         :span-bold-p 1.0
         :span-bold-r 1.0
@@ -3819,7 +3826,7 @@
         :table-adj-p 1.0
         :table-adj-r 1.0
         :tl-override 0.0
-        :wer 0.009642}
+        :wer 0.00241}
       "pdf/lists" {
         :block-heading-f1 1.0
         :block-heading-p 1.0
@@ -3924,10 +3931,10 @@
         :block-table-f1 1.0
         :block-table-p 1.0
         :block-table-r 1.0
-        :bow-f1 0.788785
-        :bow-p 0.775735
-        :bow-r 0.802281
-        :cer 0.089751
+        :bow-f1 0.804511
+        :bow-p 0.795539
+        :bow-r 0.813688
+        :cer 0.087932
         :conf-brier-all 0.189349
         :conf-brier-cell 0.121229
         :conf-brier-cell-text 0.121229
@@ -3978,9 +3985,9 @@
         :heading-r 0.933333
         :order-tau 1.0
         :page-label-acc 1.0
-        :para-boundary-f1 0.8
-        :para-boundary-p 0.8
-        :para-boundary-r 0.8
+        :para-boundary-f1 0.85
+        :para-boundary-p 0.85
+        :para-boundary-r 0.85
         :src-ocr-share 0.0
         :table-adj-f1 0.7
         :table-adj-p 0.7
@@ -3989,7 +3996,7 @@
         :table-teds-lite 0.674074
         :table-teds-struct-lite 1.0
         :tl-override 0.0
-        :wer 0.262357}
+        :wer 0.239544}
       "pdf/seals" {
         :block-heading-f1 0.956522
         :block-heading-p 0.916667
@@ -4151,6 +4158,7 @@
         :para-boundary-f1 0.909091
         :para-boundary-p 0.833333
         :para-boundary-r 1.0
+        :rule-ghost 0.0
         :rule-p 0.967696
         :rule-r 1.0
         :src-ocr-share 0.0

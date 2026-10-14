@@ -4042,6 +4042,11 @@ Open, owned, not blocking the release by themselves:
   `<span data-emon="field">` (a button an empty span with `role`, `aria-checked`, `data-emon-checked`, `data-emon-value`); the W-9's 8
   boxes and 15 text fields and the 1040's 199 fields are in the samples. NOT done (follow-ups in D548): drawn boxes (vector or scanned,
   no AcroForm), XFA-only forms, signature fields as `field`, labels inside a table by cell.
+- [x] P11.x4 — bank-statement defects: the real statement of D1560 had mixed-style lines split into blocks, a styled header row missed, the
+  amount and balance columns dropped from every transaction table, and orphaned labels as figures. DONE (D1570): out-of-order runs of one
+  baseline are one line; a tagged table that confirms itself is read whatever the tree's trust; a partial table reaches over the unruled
+  columns and takes an aligned header row; a region whose text a table claimed is no figure. NOT done (D1570): vertical rules as column cuts,
+  the last row that has no rule under it, two tables chained by rules far apart.
 
 ---
 

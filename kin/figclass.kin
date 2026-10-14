@@ -55,7 +55,8 @@
 (defconst ^I32 FC_SMALL 15000)      ;; a logo's longest side at most (150 pt)
 (defconst ^I32 FC_BAND 200)         ;; the header or footer band, per mille of the page's height
 (defconst ^I32 FC_EMIT 500)         ;; the confidence from which a figure with no caption is one
-(defconst ^I32 FC_CAPGAP 4000)      ;; a caption this close above or below a region (40 pt) is its caption
+(defconst ^I32 FC_HELD 1073741824)  ;; cell 15 of a line a table holds is this and up (`emon.table`'s TB_HELD, as `emon.initial`'s IN_HELD)
+(defconst ^I32 FC_CAPGAP 4000)     ;; a caption this close above or below a region (40 pt) is its caption
 
 ;; the stride of `fi` (the image placements' rows, made by `fc-images`)
 (defconst ^I32 FI_STRIDE 12)        ;; 0 valid  1 codec  2 class  3 ncomp  4 bpc  5 w  6 h  7 bits a pixel x100  8 hival  9 mask kind  10 11 the stream's digest (P8.4)
@@ -1218,6 +1219,27 @@
           (set j (+ j 1))))
     (return 0)))
 
+(defn ^:pub ^I32 fc-claimed [^Cells fl ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "1 when a table has claimed the text of the region (D1570): of the lines on the page whose centre is in it, at least one and at least")
+  (comment "half are a table's (cell 15 of a line a table holds is `FC_HELD` and up, `emon.table`'s TB_HELD). A shaded header cell with its words and")
+  (comment "a rule under it, or a table's fills and rules, look like a diagram's boxes and a connector; the words are the table's, and so is the drawing.")
+  (let [^I32 n (ln-count fl)
+        ^:mut ^I32 l 0
+        ^:mut ^I32 total 0
+        ^:mut ^I32 held 0
+        ^:mut ^I32 cx 0
+        ^:mut ^I32 cy 0]
+    (while (< l n)
+      (do (if (== (ln-get fl l (lh-page)) page)
+            (do (set cx (quot (+ (ln-get fl l (lh-x0)) (ln-get fl l (lh-x1))) 2))
+                (set cy (quot (+ (ln-get fl l (lh-y0)) (ln-get fl l (lh-y1))) 2))
+                (if (and (>= cx x0) (and (<= cx x1) (and (>= cy y0) (<= cy y1))))
+                  (do (set total (+ total 1))
+                      (if (>= (ln-get fl l 15) FC_HELD) (set held (+ held 1)))))))
+          (set l (+ l 1))))
+    (if (and (> held 0) (>= (* held 2) total)) (return 1))
+    (return 0)))
+
 (defn ^:pub ^I32 fc-stage [^Cells nodes ^Cells attrs ^Cells regions ^Cells text ^Cells pages
                            ^:mut ^Cells fnodes ^:mut ^Cells fattrs ^:mut ^Cells fregions ^:mut ^Cells fnm
                            ^Cells pa ^Cells im ^Cells fi ^Cells grg ^Cells grl ^Cells fw ^Cells fl ^Cells et ^Cells pg ^Cells sl
@@ -1290,6 +1312,8 @@
                 (if (== (fc-measure pa grl fw fl et page x0 y0 x1 y1 ws) 0)
                   (set rej (fc-reject ws)))))
           (if (== (fc-signature-over sl page x0 y0 x1 y1) 1) (set rej 1))
+          (if (== (cells-at fcand (+ b CR_KORI)) -2)
+            (if (== (fc-claimed fl page x0 y0 x1 y1) 1) (set rej 1)))
           (if (== (cells-at fcand (+ b CR_KORI)) -1)
             (set pk (fc-image-kind fi (cells-at fcand (+ b CR_ROW)) (- x1 x0) (- y1 y0) y0 y1 pageh recur))
             (set pk (fc-vector-kind ws x0 y0 x1 y1 pageh recur)))

@@ -683,6 +683,127 @@ fn test_a_side_fragment_held_in_part_is_a_note_of_the_lines_left() {
     crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "held in part, words left: well formed");
     crate::testport::assert_text(t, "P[The table below was extracted from the ledger and the figures are totals for the quarter of the year as the office has recorded them and as the auditors have since confirmed.];N;P[see the Note];P[Item];P[Qty];T3r;Gb;R;C[Bolt];C[10];Cs[up];R;C[Nut];C[12];Cs[flat];", "the lines the table does not hold are a note and the ones it holds stay in the table (D504)");
 }
+pub(crate) fn tt_bank_rules(mut pa: &mut crate::port::Cells, rows: i32) -> i32 {
+    // The row borders of a statement, drawn as the HTML-to-PDF producers do: under the first three cells of each row only (the date, the
+    // description and the category: three abutting segments from x 5910 to 38670), the first at y 21345 and one every 2025 below it, and
+    // two vertical rules in the header's band only (x 38707 and 46342), the amount cell's borders. Nothing is ruled under the last two.
+    let mut r: i32 = 0;
+    let mut y: i32 = 21345;
+    while r <= rows {
+        tt_rule(pa, 5910, y - 38, 9150, y + 38);
+        tt_rule(pa, 9150, y - 38, 32910, y + 38);
+        tt_rule(pa, 32910, y - 38, 38670, y + 38);
+        y += 2025;
+        r += 1;
+    }
+    tt_rule(pa, 38669, 19455, 38745, 21308);
+    tt_rule(pa, 46304, 19455, 46380, 21308);
+    return 0;
+}
+pub(crate) fn tt_sized(mut wd: &mut crate::port::Cells, size: i32) -> i32 {
+    // Give the word just added the type size `size`.
+    let last: i32 = wd_count(wd) - 1;
+    wd_set(wd, last, wf_size(), size);
+    return 0;
+}
+pub(crate) fn tt_bank_row(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, y: i32, bold: i32, size: i32, d: &[u8], desc: &[u8], cat: &[u8], amt: &[u8], bal: &[u8]) -> i32 {
+    // One row of the statement at y, in type of `size`: date and description at the left (bold when `bold`), the category left of x 38000,
+    // the amount right-aligned to 45221 and the balance to 55379; a blank blob leaves the cell out.
+    if crate::port::blob_len(d) > 0 {
+        tt_at(wd, ln, et, d, 5910, y, bold, 0);
+        tt_sized(wd, size);
+    }
+    if crate::port::blob_len(desc) > 0 {
+        tt_at(wd, ln, et, desc, 10230, y, bold, 0);
+        tt_sized(wd, size);
+    }
+    if crate::port::blob_len(cat) > 0 {
+        tt_at(wd, ln, et, cat, 35689, y, 0, 0);
+        tt_sized(wd, size);
+    }
+    if crate::port::blob_len(amt) > 0 {
+        tt_at(wd, ln, et, amt, 45221, y, 0, 1);
+        tt_sized(wd, size);
+    }
+    if crate::port::blob_len(bal) > 0 {
+        tt_at(wd, ln, et, bal, 55379, y, bold, 1);
+        tt_sized(wd, size);
+    }
+    return 0;
+}
+pub(crate) fn tt_bank_page(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut pa: &mut crate::port::Cells, header: i32) -> i32 {
+    // A statement: a small header row (not bold, 700 against the body's 800, a pitch of more than 2.4 sizes above the first row) above the
+    // first rule when `header` is 1, a bold opening row, three transactions and a closing row, ruled as `tt-bank-rules` says.
+    tt_bank_rules(pa, 5);
+    if header == 1 {
+        tt_bank_row(wd, ln, et, 19700, 0, 700, &crate::testport::text_blob("DATE")[..], &crate::testport::text_blob("DESCRIPTION")[..], &crate::testport::text_blob("CATEGORY")[..], &crate::testport::text_blob("AMOUNT")[..], &crate::testport::text_blob("BALANCE")[..]);
+    }
+    tt_bank_row(wd, ln, et, 21745, 1, 800, &crate::testport::text_blob("Sep 1")[..], &crate::testport::text_blob("Opening Balance")[..], &crate::testport::text_blob("")[..], &crate::testport::text_blob("")[..], &crate::testport::text_blob("$10,989.78")[..]);
+    tt_bank_row(wd, ln, et, 23770, 0, 800, &crate::testport::text_blob("Sep 2")[..], &crate::testport::text_blob("Withdrawal CAPITAL ONE")[..], &crate::testport::text_blob("Debit")[..], &crate::testport::text_blob("- $803.85")[..], &crate::testport::text_blob("$10,185.93")[..]);
+    tt_bank_row(wd, ln, et, 25795, 0, 800, &crate::testport::text_blob("Sep 4")[..], &crate::testport::text_blob("Zelle sent CAMERON")[..], &crate::testport::text_blob("Debit")[..], &crate::testport::text_blob("- $1,500.00")[..], &crate::testport::text_blob("$8,685.93")[..]);
+    tt_bank_row(wd, ln, et, 27820, 0, 800, &crate::testport::text_blob("Sep 14")[..], &crate::testport::text_blob("Deposit from KESTRAL")[..], &crate::testport::text_blob("Credit")[..], &crate::testport::text_blob("+ $3,982.04")[..], &crate::testport::text_blob("$12,667.97")[..]);
+    tt_bank_row(wd, ln, et, 29845, 0, 800, &crate::testport::text_blob("Sep 30")[..], &crate::testport::text_blob("Closing Balance")[..], &crate::testport::text_blob("")[..], &crate::testport::text_blob("")[..], &crate::testport::text_blob("$12,667.97")[..]);
+    return 0;
+}
+#[test]
+fn test_a_ruled_in_part_statement_keeps_its_amount_and_balance_columns_and_its_styled_header() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    tt_bank_page(wd, ln, et, pa, 1);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "statement: well formed");
+    crate::testport::assert_text(t, "T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Che[AMOUNT];Che[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];", "the amount and balance columns are the table's (the rows are ruled under three cells only), the header is the small row above the first rule, and the bold opening row is a body row");
+}
+#[test]
+fn test_a_column_past_a_gutter_or_a_rule_or_another_tables_rules_is_not_the_tables() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    let t2: &mut String = &mut crate::port::new_text();
+    let t3: &mut String = &mut crate::port::new_text();
+    // A memo in the margin, further right of the balance than the widest gap inside the table (9500 against 14600): not a column.
+    tt_bank_page(wd, ln, et, pa, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("memo")[..], 70000, 23770, 0, 0);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "gutter: well formed");
+    crate::testport::assert_text(t, "T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Che[AMOUNT];Che[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];P[memo];", "a word beyond a gutter is left out");
+    // A vertical rule down every row between the amount and the balance: the amounts are the table's, the balances are not.
+    crate::port::cells_drop(wd, 0);
+    crate::port::cells_drop(ln, 0);
+    crate::port::cells_drop(et, 0);
+    crate::port::cells_drop(pa, 0);
+    tt_bank_page(wd, ln, et, pa, 1);
+    tt_rule(pa, 47950, 19455, 48050, 31000);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t2), 0, "rule: well formed");
+    crate::testport::assert_text(t2, "T4p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Che[AMOUNT];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];P[BALANCE];P[$10,989.78];P[$10,185.93 $8,685.93 $12,667.97 $12,667.97];", "a rule that spans the rows ends the reach: the amounts are inside it, the balances beyond it are not");
+    // Another table's rules on the same rows, to the right: its words are its own.
+    crate::port::cells_drop(wd, 0);
+    crate::port::cells_drop(ln, 0);
+    crate::port::cells_drop(et, 0);
+    crate::port::cells_drop(pa, 0);
+    tt_bank_page(wd, ln, et, pa, 1);
+    tt_rule(pa, 41000, 23332, 60000, 23408);
+    tt_rule(pa, 41000, 25357, 60000, 25433);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t3), 0, "neighbour: well formed");
+    crate::testport::assert_text(t3, "T4p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Ch[];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];C[];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];C[];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];C[];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];C[];R;Cs[Sep 30];Cs[Closing Balance];Cs[];C[];P[AMOUNT];P[BALANCE];P[$10,989.78];P[- $803.85];P[$10,185.93];P[- $1,500.00];P[$8,685.93];P[+ $3,982.04];P[$12,667.97 $12,667.97];", "another table's rules on the same rows, to the right, keep the table from reaching over: its words are not this table's (the table is what it was)");
+}
+#[test]
+fn test_a_line_above_a_partial_table_that_does_not_line_up_with_it_is_not_its_header() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    // Two chunks above the first rule, a little further than a line of text but nowhere near the columns' edges: paragraphs.
+    tt_bank_page(wd, ln, et, pa, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Statement")[..], 7000, 19700, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Page 2")[..], 41000, 19700, 0, 0);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "stray line: well formed");
+    crate::testport::assert_text(t, "P[Statement];P[Page 2];T5p;Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];", "a line that does not line up with the columns is not a header; the bold opening row is a row of amounts, not a header");
+}
 pub(crate) fn tt_golden(pdf: &[u8], mut t: &mut String, mut tvt: &mut String) -> i32 {
     // PDF -> content -> tables -> paragraphs -> Model -> pretty JSON; answer 0 when every step answered 0, else a
     // code naming the step (1 open, 2 content, 3 the Model's check). The JSON is `t`. The tagged tree is read and joined (P5.5), and the
@@ -880,6 +1001,16 @@ fn test_tagged_tables_are_verified_against_the_page() {
     crate::testport::assert_text(v7, "[]", "ttab-allp: cells tagged P: the tree has no Table, so no verdict");
     crate::testport::assert_eq(tt_tagged(0, &crate::testport::test_file("corpus/synth/pdf/ttab-good-ws-untagged.pdf")[..], &crate::testport::test_file("table/ttab-good-ws-untagged.json")[..], t8, v8), 0, "ttab-good-ws-untagged runs");
     crate::testport::assert_text(v8, "[]", "the same table with no tree: no verdict");
+}
+#[test]
+fn test_a_table_that_confirms_itself_is_read_in_a_tree_that_is_not_trusted() {
+    let t0: &mut String = &mut crate::port::new_text();
+    let v0: &mut String = &mut crate::port::new_text();
+    // A ruled table correctly tagged (every check 1000) in a tree that tags nothing else: the text around it is set with no tag, the tree covers
+    // a small part of the glyphs and its trust is 63, far under 300 (D150). The table confirms itself (D1570): the verdict is confirmed, and `struct`
+    // is among the Model's sources for it (before, it was `partial` and the tags were used for nothing).
+    crate::testport::assert_eq(tt_tagged(0, &crate::testport::test_file("table/ttab-low-trust.pdf")[..], &crate::testport::test_file("table/ttab-low-trust.json")[..], t0, v0), 0, "ttab-low-trust runs");
+    crate::testport::assert_text(v0, "[{\"page\":1,\"se\":2,\"rows\":4,\"cols\":4,\"verdict\":\"confirmed\",\"score\":1000,\"checks\":[1000,1000,1000,1000,1000,1000],\"trust\":63}]", "ttab-low-trust: a table whose own checks all hold is confirmed whatever the tree's trust");
 }
 #[test]
 fn test_real_documents_make_the_golden_models() {

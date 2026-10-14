@@ -28,9 +28,10 @@
                                cells-drop text-cp text-i32 src-of-blob src-of-cells]]
             [emon.pdfsrc :refer [ps-missed]]
             [emon.pdfdoc :refer [pd-open]]
-            [emon.pdfcontent :refer [pc-document pc-warn pc-fonts]]
+            [emon.pdfcontent :refer [pc-document pc-warn pc-fonts pc-group]]
             [emon.contentrows :refer [cr-page-text cr-page-lines cr-all-text cr-word cr-span cr-digest]]
-            [emon.evidence :refer [gl-count gl-get wd-count mk-count
+            [emon.evidence :refer [gl-count gl-get gl-new gl-set wd-get hd-x0 hd-line wf-wbreak wb-gap wb-line-end
+                                   ln-count ln-get lh-first lh-count ch-word wd-count mk-count
                                    ch-cp ch-x0 ch-y0 ch-x1 ch-y1 gf-by0 gf-size gf-rot
                                    gf-mode ch-page ev-emit ev-init ev-check]]
             [emon.splitmix :refer [sm-seed sm-below]]
@@ -684,3 +685,82 @@
   (assert-that (> (ct-fuzz-file (test-t) (test-file "vis/ocg.pdf") 300 59) 300) "ocg.pdf")
   (assert-that (> (ct-fuzz-file (test-t) (test-file "vis/occluded.pdf") 300 67) 300) "occluded.pdf")
   (assert-that (> (ct-fuzz-file (test-t) (test-file "vis/clip.pdf") 300 47) 300) "clip.pdf"))
+
+;; ------------------------------------------------- D1570: one visual line drawn as several runs, out of order
+
+(defn ^I32 ct-gw [^:mut ^Cells gl ^I32 x ^I32 y ^I32 cp]
+  (comment "One glyph of the scene: 500 wide and 800 tall, size 1000, its baseline at y + 800 (centipoints, page 1).")
+  (let [^I32 g (gl-new gl 1 x y (+ x 500) (+ y 800) cp -1 0 -1)]
+    (gl-set gl g (gf-size) 1000)
+    (return g)))
+
+(defn ^I32 ct-run2g [^:mut ^Cells gl ^I32 x ^I32 y ^I32 c1 ^I32 c2]
+  (comment "A word of two glyphs, shown together, starting at x.")
+  (ct-gw gl x y c1)
+  (ct-gw gl (+ x 500) y c2)
+  (return 0))
+
+(defn ^I32 ct-group [^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells wd ^:mut ^Cells ln]
+  (let [^Cells fnt (new-cells)]
+    (return (pc-group gl et wd ln fnt 1 0 0))))
+
+(deftest test-runs-of-one-baseline-drawn-out-of-order-are-one-line-in-order-along-it
+  (comment "'ab' at 1000, then 'ef' at 4500 (a gap wider than two sizes: a line of its own), then the 'cd' between them at 2500, which the")
+  (comment "producer drew LAST (a bold run, say). In the stream that is three lines; along the baseline it is one, 'ab cd ef'.")
+  (let [^Cells gl (new-cells) ^Cells et (new-cells) ^Cells wd (new-cells) ^Cells ln (new-cells)]
+    (ct-run2g gl 1000 0 97 98)
+    (ct-run2g gl 4500 0 101 102)
+    (ct-run2g gl 2500 0 99 100)
+    (ct-group gl et wd ln)
+    (assert-eq (wd-count wd) 3 "three words")
+    (assert-eq (ln-count ln) 1 "one line: the runs share a baseline and, in order of x, each continues the one before it")
+    (assert-eq (ln-get ln 0 (lh-first)) 0 "it starts at the first word")
+    (assert-eq (ln-get ln 0 (lh-count)) 3 "and holds the three")
+    (assert-eq (wd-get wd 0 (hd-x0)) 1000 "the first word is the leftmost")
+    (assert-eq (wd-get wd 1 (hd-x0)) 2500 "the second is the one drawn last")
+    (assert-eq (wd-get wd 2 (hd-x0)) 4500 "the third is the rightmost")
+    (assert-eq (gl-get gl 4 (ch-word)) 1 "the glyphs of the word that moved point at it")
+    (assert-eq (gl-get gl 2 (ch-word)) 2 "and those of the word it passed")
+    (assert-eq (wd-get wd 0 (hd-line)) 0 "every word is in the line")
+    (assert-eq (wd-get wd 2 (hd-line)) 0 "the last too")
+    (assert-eq (wd-get wd 1 (wf-wbreak)) (wb-gap) "a word that ended a run of its own has not ended the line")
+    (assert-eq (wd-get wd 2 (wf-wbreak)) (wb-line-end) "the last word ends it")))
+
+(deftest test-runs-in-order-or-too-far-apart-or-overprinted-stay-the-lines-they-were
+  (let [^Cells gl (new-cells) ^Cells et (new-cells) ^Cells wd (new-cells) ^Cells ln (new-cells)]
+    (comment "In order along the baseline, with a wide gap between: two lines, as ever (a gutter, a table cell).")
+    (ct-run2g gl 1000 0 97 98)
+    (ct-run2g gl 4500 0 101 102)
+    (ct-group gl et wd ln)
+    (assert-eq (ln-count ln) 2 "in order and apart: two lines")
+    (assert-eq (wd-get wd 1 (hd-x0)) 4500 "nothing moved")
+    (comment "Out of order, but the word drawn last does not bridge the gap: still apart, nothing moves.")
+    (cells-drop gl 0)
+    (cells-drop et 0)
+    (cells-drop wd 0)
+    (cells-drop ln 0)
+    (ct-run2g gl 1000 0 97 98)
+    (ct-run2g gl 9000 0 101 102)
+    (ct-run2g gl 2500 0 99 100)
+    (ct-group gl et wd ln)
+    (assert-eq (ln-count ln) 3 "a chain that does not close: three lines")
+    (assert-eq (wd-get wd 1 (hd-x0)) 9000 "and the stream order is kept")
+    (comment "The same word drawn twice, a little to the right (a faked bold): the copies overlap, so they are not one line.")
+    (cells-drop gl 0)
+    (cells-drop et 0)
+    (cells-drop wd 0)
+    (cells-drop ln 0)
+    (ct-run2g gl 1000 0 97 98)
+    (ct-run2g gl 1100 0 97 98)
+    (ct-group gl et wd ln)
+    (assert-eq (ln-count ln) 2 "an overprint is two lines, as before")
+    (comment "Runs of different baselines are never merged.")
+    (cells-drop gl 0)
+    (cells-drop et 0)
+    (cells-drop wd 0)
+    (cells-drop ln 0)
+    (ct-run2g gl 1000 0 97 98)
+    (ct-run2g gl 4500 0 101 102)
+    (ct-run2g gl 2500 1000 99 100)
+    (ct-group gl et wd ln)
+    (assert-eq (ln-count ln) 3 "the word on the next line stays on it")))

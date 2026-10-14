@@ -31,6 +31,8 @@ const fcBand int32 = 200
 
 const fcEmit int32 = 500
 
+const fcHeld int32 = 1073741824
+
 const fcCapgap int32 = 4000
 
 const fiStride int32 = 12
@@ -1594,6 +1596,35 @@ func fcSignatureOver(sl *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y
 	return 0
 }
 
+func FcClaimed(fl *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32) int32 {
+	// 1 when a table has claimed the text of the region (D1570): of the lines on the page whose centre is in it, at least one and at least
+	// half are a table's (cell 15 of a line a table holds is `FC_HELD` and up, `emon.table`'s TB_HELD). A shaded header cell with its words and
+	// a rule under it, or a table's fills and rules, look like a diagram's boxes and a connector; the words are the table's, and so is the drawing.
+	var n int32 = evidence.LnCount(fl)
+	var l int32 = 0
+	var total int32 = 0
+	var held int32 = 0
+	var cx int32 = 0
+	var cy int32 = 0
+	for l < n {
+		if evidence.LnGet(fl, l, evidence.LhPage()) == page {
+			cx = (evidence.LnGet(fl, l, evidence.LhX0()) + evidence.LnGet(fl, l, evidence.LhX1())) / 2
+			cy = (evidence.LnGet(fl, l, evidence.LhY0()) + evidence.LnGet(fl, l, evidence.LhY1())) / 2
+			if (cx >= x0) && ((cx <= x1) && ((cy >= y0) && (cy <= y1))) {
+				total += 1
+				if evidence.LnGet(fl, l, 15) >= fcHeld {
+					held += 1
+				}
+			}
+		}
+		l += 1
+	}
+	if (held > 0) && ((held * 2) >= total) {
+		return 1
+	}
+	return 0
+}
+
 func FcStage(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, fnodes *port.Cells, fattrs *port.Cells, fregions *port.Cells, fnm *port.Cells, pa *port.Cells, im *port.Cells, fi *port.Cells, grg *port.Cells, grl *port.Cells, fw *port.Cells, fl *port.Cells, et *port.Cells, pg *port.Cells, sl *port.Cells, cand *port.Cells, level int32, fcand *port.Cells, cl *port.Cells, fg *port.Cells, fd *port.Cells, ab *port.Cells, ws *port.Cells) int32 {
 	// THE FIGURES (SPEC 10.6): the candidate regions (the image placements, the vector clusters of `emon.asset`, the shaded fills, P7.G's
 	// `figure` regions), each measured and judged, the ones that are figures placed among the blocks with their kind, confidence
@@ -1668,6 +1699,11 @@ func FcStage(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 		}
 		if fcSignatureOver(sl, page, x0, y0, x1, y1) == 1 {
 			rej = 1
+		}
+		if port.CellsAt(fcand, b+crKori) == -2 {
+			if FcClaimed(fl, page, x0, y0, x1, y1) == 1 {
+				rej = 1
+			}
 		}
 		if port.CellsAt(fcand, b+crKori) == -1 {
 			pk = FcImageKind(fi, port.CellsAt(fcand, b+crRow), x1-x0, y1-y0, y0, y1, pageh, recur)

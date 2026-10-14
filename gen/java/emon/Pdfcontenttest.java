@@ -682,4 +682,87 @@ public final class Pdfcontenttest {
         emon.Testport.assertThat(ctFuzzFile(0, emon.Testport.testFile("vis/occluded.pdf"), 300, 67) > 300, "occluded.pdf");
         emon.Testport.assertThat(ctFuzzFile(0, emon.Testport.testFile("vis/clip.pdf"), 300, 47) > 300, "clip.pdf");
     }
+    public static int ctGw(emon.Port.Cells gl, int x, int y, int cp) {
+        // One glyph of the scene: 500 wide and 800 tall, size 1000, its baseline at y + 800 (centipoints, page 1).
+        int g = Evidence.glNew(gl, 1, x, y, x + 500, y + 800, cp, -1, 0, -1);
+        Evidence.glSet(gl, g, Evidence.gfSize(), 1000);
+        return g;
+    }
+    public static int ctRun2g(emon.Port.Cells gl, int x, int y, int c1, int c2) {
+        // A word of two glyphs, shown together, starting at x.
+        ctGw(gl, x, y, c1);
+        ctGw(gl, x + 500, y, c2);
+        return 0;
+    }
+    public static int ctGroup(emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells wd, emon.Port.Cells ln) {
+        emon.Port.Cells fnt = emon.Port.newCells();
+        return Pdfcontent.pcGroup(gl, et, wd, ln, fnt, 1, 0, 0);
+    }
+    public static void testRunsOfOneBaselineDrawnOutOfOrderAreOneLineInOrderAlongIt() {
+        // 'ab' at 1000, then 'ef' at 4500 (a gap wider than two sizes: a line of its own), then the 'cd' between them at 2500, which the
+        // producer drew LAST (a bold run, say). In the stream that is three lines; along the baseline it is one, 'ab cd ef'.
+        emon.Port.Cells gl = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        ctRun2g(gl, 1000, 0, 97, 98);
+        ctRun2g(gl, 4500, 0, 101, 102);
+        ctRun2g(gl, 2500, 0, 99, 100);
+        ctGroup(gl, et, wd, ln);
+        emon.Testport.assertEq(Evidence.wdCount(wd), 3, "three words");
+        emon.Testport.assertEq(Evidence.lnCount(ln), 1, "one line: the runs share a baseline and, in order of x, each continues the one before it");
+        emon.Testport.assertEq(Evidence.lnGet(ln, 0, Evidence.lhFirst()), 0, "it starts at the first word");
+        emon.Testport.assertEq(Evidence.lnGet(ln, 0, Evidence.lhCount()), 3, "and holds the three");
+        emon.Testport.assertEq(Evidence.wdGet(wd, 0, Evidence.hdX0()), 1000, "the first word is the leftmost");
+        emon.Testport.assertEq(Evidence.wdGet(wd, 1, Evidence.hdX0()), 2500, "the second is the one drawn last");
+        emon.Testport.assertEq(Evidence.wdGet(wd, 2, Evidence.hdX0()), 4500, "the third is the rightmost");
+        emon.Testport.assertEq(Evidence.glGet(gl, 4, Evidence.chWord()), 1, "the glyphs of the word that moved point at it");
+        emon.Testport.assertEq(Evidence.glGet(gl, 2, Evidence.chWord()), 2, "and those of the word it passed");
+        emon.Testport.assertEq(Evidence.wdGet(wd, 0, Evidence.hdLine()), 0, "every word is in the line");
+        emon.Testport.assertEq(Evidence.wdGet(wd, 2, Evidence.hdLine()), 0, "the last too");
+        emon.Testport.assertEq(Evidence.wdGet(wd, 1, Evidence.wfWbreak()), Evidence.wbGap(), "a word that ended a run of its own has not ended the line");
+        emon.Testport.assertEq(Evidence.wdGet(wd, 2, Evidence.wfWbreak()), Evidence.wbLineEnd(), "the last word ends it");
+    }
+    public static void testRunsInOrderOrTooFarApartOrOverprintedStayTheLinesTheyWere() {
+        emon.Port.Cells gl = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        // In order along the baseline, with a wide gap between: two lines, as ever (a gutter, a table cell).
+        ctRun2g(gl, 1000, 0, 97, 98);
+        ctRun2g(gl, 4500, 0, 101, 102);
+        ctGroup(gl, et, wd, ln);
+        emon.Testport.assertEq(Evidence.lnCount(ln), 2, "in order and apart: two lines");
+        emon.Testport.assertEq(Evidence.wdGet(wd, 1, Evidence.hdX0()), 4500, "nothing moved");
+        // Out of order, but the word drawn last does not bridge the gap: still apart, nothing moves.
+        emon.Port.cellsDrop(gl, 0);
+        emon.Port.cellsDrop(et, 0);
+        emon.Port.cellsDrop(wd, 0);
+        emon.Port.cellsDrop(ln, 0);
+        ctRun2g(gl, 1000, 0, 97, 98);
+        ctRun2g(gl, 9000, 0, 101, 102);
+        ctRun2g(gl, 2500, 0, 99, 100);
+        ctGroup(gl, et, wd, ln);
+        emon.Testport.assertEq(Evidence.lnCount(ln), 3, "a chain that does not close: three lines");
+        emon.Testport.assertEq(Evidence.wdGet(wd, 1, Evidence.hdX0()), 9000, "and the stream order is kept");
+        // The same word drawn twice, a little to the right (a faked bold): the copies overlap, so they are not one line.
+        emon.Port.cellsDrop(gl, 0);
+        emon.Port.cellsDrop(et, 0);
+        emon.Port.cellsDrop(wd, 0);
+        emon.Port.cellsDrop(ln, 0);
+        ctRun2g(gl, 1000, 0, 97, 98);
+        ctRun2g(gl, 1100, 0, 97, 98);
+        ctGroup(gl, et, wd, ln);
+        emon.Testport.assertEq(Evidence.lnCount(ln), 2, "an overprint is two lines, as before");
+        // Runs of different baselines are never merged.
+        emon.Port.cellsDrop(gl, 0);
+        emon.Port.cellsDrop(et, 0);
+        emon.Port.cellsDrop(wd, 0);
+        emon.Port.cellsDrop(ln, 0);
+        ctRun2g(gl, 1000, 0, 97, 98);
+        ctRun2g(gl, 4500, 0, 101, 102);
+        ctRun2g(gl, 2500, 1000, 99, 100);
+        ctGroup(gl, et, wd, ln);
+        emon.Testport.assertEq(Evidence.lnCount(ln), 3, "the word on the next line stays on it");
+    }
 }

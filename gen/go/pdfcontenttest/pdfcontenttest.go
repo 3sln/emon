@@ -725,3 +725,91 @@ func TestCorruptedAndCutVisibilityFixturesNeverFault(emonT *testing.T) {
 	port.AssertThat(emonT, ctFuzzFile(emonT, port.TestFile("vis/occluded.pdf"), 300, 67) > 300, "occluded.pdf")
 	port.AssertThat(emonT, ctFuzzFile(emonT, port.TestFile("vis/clip.pdf"), 300, 47) > 300, "clip.pdf")
 }
+
+func ctGw(gl *port.Cells, x int32, y int32, cp int32) int32 {
+	// One glyph of the scene: 500 wide and 800 tall, size 1000, its baseline at y + 800 (centipoints, page 1).
+	var g int32 = evidence.GlNew(gl, 1, x, y, x+500, y+800, cp, -1, 0, -1)
+	evidence.GlSet(gl, g, evidence.GfSize(), 1000)
+	return g
+}
+
+func ctRun2g(gl *port.Cells, x int32, y int32, c1 int32, c2 int32) int32 {
+	// A word of two glyphs, shown together, starting at x.
+	ctGw(gl, x, y, c1)
+	ctGw(gl, x+500, y, c2)
+	return 0
+}
+
+func ctGroup(gl *port.Cells, et *port.Cells, wd *port.Cells, ln *port.Cells) int32 {
+	var fnt *port.Cells = port.NewCells()
+	return pdfcontent.PcGroup(gl, et, wd, ln, fnt, 1, 0, 0)
+}
+
+func TestRunsOfOneBaselineDrawnOutOfOrderAreOneLineInOrderAlongIt(emonT *testing.T) {
+	// 'ab' at 1000, then 'ef' at 4500 (a gap wider than two sizes: a line of its own), then the 'cd' between them at 2500, which the
+	// producer drew LAST (a bold run, say). In the stream that is three lines; along the baseline it is one, 'ab cd ef'.
+	var gl *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	ctRun2g(gl, 1000, 0, 97, 98)
+	ctRun2g(gl, 4500, 0, 101, 102)
+	ctRun2g(gl, 2500, 0, 99, 100)
+	ctGroup(gl, et, wd, ln)
+	port.AssertEq(emonT, evidence.WdCount(wd), 3, "three words")
+	port.AssertEq(emonT, evidence.LnCount(ln), 1, "one line: the runs share a baseline and, in order of x, each continues the one before it")
+	port.AssertEq(emonT, evidence.LnGet(ln, 0, evidence.LhFirst()), 0, "it starts at the first word")
+	port.AssertEq(emonT, evidence.LnGet(ln, 0, evidence.LhCount()), 3, "and holds the three")
+	port.AssertEq(emonT, evidence.WdGet(wd, 0, evidence.HdX0()), 1000, "the first word is the leftmost")
+	port.AssertEq(emonT, evidence.WdGet(wd, 1, evidence.HdX0()), 2500, "the second is the one drawn last")
+	port.AssertEq(emonT, evidence.WdGet(wd, 2, evidence.HdX0()), 4500, "the third is the rightmost")
+	port.AssertEq(emonT, evidence.GlGet(gl, 4, evidence.ChWord()), 1, "the glyphs of the word that moved point at it")
+	port.AssertEq(emonT, evidence.GlGet(gl, 2, evidence.ChWord()), 2, "and those of the word it passed")
+	port.AssertEq(emonT, evidence.WdGet(wd, 0, evidence.HdLine()), 0, "every word is in the line")
+	port.AssertEq(emonT, evidence.WdGet(wd, 2, evidence.HdLine()), 0, "the last too")
+	port.AssertEq(emonT, evidence.WdGet(wd, 1, evidence.WfWbreak()), evidence.WbGap(), "a word that ended a run of its own has not ended the line")
+	port.AssertEq(emonT, evidence.WdGet(wd, 2, evidence.WfWbreak()), evidence.WbLineEnd(), "the last word ends it")
+}
+
+func TestRunsInOrderOrTooFarApartOrOverprintedStayTheLinesTheyWere(emonT *testing.T) {
+	var gl *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	// In order along the baseline, with a wide gap between: two lines, as ever (a gutter, a table cell).
+	ctRun2g(gl, 1000, 0, 97, 98)
+	ctRun2g(gl, 4500, 0, 101, 102)
+	ctGroup(gl, et, wd, ln)
+	port.AssertEq(emonT, evidence.LnCount(ln), 2, "in order and apart: two lines")
+	port.AssertEq(emonT, evidence.WdGet(wd, 1, evidence.HdX0()), 4500, "nothing moved")
+	// Out of order, but the word drawn last does not bridge the gap: still apart, nothing moves.
+	port.CellsDrop(gl, 0)
+	port.CellsDrop(et, 0)
+	port.CellsDrop(wd, 0)
+	port.CellsDrop(ln, 0)
+	ctRun2g(gl, 1000, 0, 97, 98)
+	ctRun2g(gl, 9000, 0, 101, 102)
+	ctRun2g(gl, 2500, 0, 99, 100)
+	ctGroup(gl, et, wd, ln)
+	port.AssertEq(emonT, evidence.LnCount(ln), 3, "a chain that does not close: three lines")
+	port.AssertEq(emonT, evidence.WdGet(wd, 1, evidence.HdX0()), 9000, "and the stream order is kept")
+	// The same word drawn twice, a little to the right (a faked bold): the copies overlap, so they are not one line.
+	port.CellsDrop(gl, 0)
+	port.CellsDrop(et, 0)
+	port.CellsDrop(wd, 0)
+	port.CellsDrop(ln, 0)
+	ctRun2g(gl, 1000, 0, 97, 98)
+	ctRun2g(gl, 1100, 0, 97, 98)
+	ctGroup(gl, et, wd, ln)
+	port.AssertEq(emonT, evidence.LnCount(ln), 2, "an overprint is two lines, as before")
+	// Runs of different baselines are never merged.
+	port.CellsDrop(gl, 0)
+	port.CellsDrop(et, 0)
+	port.CellsDrop(wd, 0)
+	port.CellsDrop(ln, 0)
+	ctRun2g(gl, 1000, 0, 97, 98)
+	ctRun2g(gl, 4500, 0, 101, 102)
+	ctRun2g(gl, 2500, 1000, 99, 100)
+	ctGroup(gl, et, wd, ln)
+	port.AssertEq(emonT, evidence.LnCount(ln), 3, "the word on the next line stays on it")
+}

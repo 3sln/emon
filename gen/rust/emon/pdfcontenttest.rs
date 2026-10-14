@@ -698,3 +698,88 @@ fn test_corrupted_and_cut_visibility_fixtures_never_fault() {
     crate::testport::assert_that(ct_fuzz_file(0, &crate::testport::test_file("vis/occluded.pdf")[..], 300, 67) > 300, "occluded.pdf");
     crate::testport::assert_that(ct_fuzz_file(0, &crate::testport::test_file("vis/clip.pdf")[..], 300, 47) > 300, "clip.pdf");
 }
+pub(crate) fn ct_gw(mut gl: &mut crate::port::Cells, x: i32, y: i32, cp: i32) -> i32 {
+    // One glyph of the scene: 500 wide and 800 tall, size 1000, its baseline at y + 800 (centipoints, page 1).
+    let g: i32 = gl_new(gl, 1, x, y, x + 500, y + 800, cp, -1, 0, -1);
+    gl_set(gl, g, gf_size(), 1000);
+    return g;
+}
+pub(crate) fn ct_run2g(mut gl: &mut crate::port::Cells, x: i32, y: i32, c1: i32, c2: i32) -> i32 {
+    // A word of two glyphs, shown together, starting at x.
+    ct_gw(gl, x, y, c1);
+    ct_gw(gl, x + 500, y, c2);
+    return 0;
+}
+pub(crate) fn ct_group(mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells) -> i32 {
+    let fnt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    return pc_group(gl, et, wd, ln, fnt, 1, 0, 0);
+}
+#[test]
+fn test_runs_of_one_baseline_drawn_out_of_order_are_one_line_in_order_along_it() {
+    // 'ab' at 1000, then 'ef' at 4500 (a gap wider than two sizes: a line of its own), then the 'cd' between them at 2500, which the
+    // producer drew LAST (a bold run, say). In the stream that is three lines; along the baseline it is one, 'ab cd ef'.
+    let gl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    ct_run2g(gl, 1000, 0, 97, 98);
+    ct_run2g(gl, 4500, 0, 101, 102);
+    ct_run2g(gl, 2500, 0, 99, 100);
+    ct_group(gl, et, wd, ln);
+    crate::testport::assert_eq(wd_count(wd), 3, "three words");
+    crate::testport::assert_eq(ln_count(ln), 1, "one line: the runs share a baseline and, in order of x, each continues the one before it");
+    crate::testport::assert_eq(ln_get(ln, 0, lh_first()), 0, "it starts at the first word");
+    crate::testport::assert_eq(ln_get(ln, 0, lh_count()), 3, "and holds the three");
+    crate::testport::assert_eq(wd_get(wd, 0, hd_x0()), 1000, "the first word is the leftmost");
+    crate::testport::assert_eq(wd_get(wd, 1, hd_x0()), 2500, "the second is the one drawn last");
+    crate::testport::assert_eq(wd_get(wd, 2, hd_x0()), 4500, "the third is the rightmost");
+    crate::testport::assert_eq(gl_get(gl, 4, ch_word()), 1, "the glyphs of the word that moved point at it");
+    crate::testport::assert_eq(gl_get(gl, 2, ch_word()), 2, "and those of the word it passed");
+    crate::testport::assert_eq(wd_get(wd, 0, hd_line()), 0, "every word is in the line");
+    crate::testport::assert_eq(wd_get(wd, 2, hd_line()), 0, "the last too");
+    crate::testport::assert_eq(wd_get(wd, 1, wf_wbreak()), wb_gap(), "a word that ended a run of its own has not ended the line");
+    crate::testport::assert_eq(wd_get(wd, 2, wf_wbreak()), wb_line_end(), "the last word ends it");
+}
+#[test]
+fn test_runs_in_order_or_too_far_apart_or_overprinted_stay_the_lines_they_were() {
+    let gl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    // In order along the baseline, with a wide gap between: two lines, as ever (a gutter, a table cell).
+    ct_run2g(gl, 1000, 0, 97, 98);
+    ct_run2g(gl, 4500, 0, 101, 102);
+    ct_group(gl, et, wd, ln);
+    crate::testport::assert_eq(ln_count(ln), 2, "in order and apart: two lines");
+    crate::testport::assert_eq(wd_get(wd, 1, hd_x0()), 4500, "nothing moved");
+    // Out of order, but the word drawn last does not bridge the gap: still apart, nothing moves.
+    crate::port::cells_drop(gl, 0);
+    crate::port::cells_drop(et, 0);
+    crate::port::cells_drop(wd, 0);
+    crate::port::cells_drop(ln, 0);
+    ct_run2g(gl, 1000, 0, 97, 98);
+    ct_run2g(gl, 9000, 0, 101, 102);
+    ct_run2g(gl, 2500, 0, 99, 100);
+    ct_group(gl, et, wd, ln);
+    crate::testport::assert_eq(ln_count(ln), 3, "a chain that does not close: three lines");
+    crate::testport::assert_eq(wd_get(wd, 1, hd_x0()), 9000, "and the stream order is kept");
+    // The same word drawn twice, a little to the right (a faked bold): the copies overlap, so they are not one line.
+    crate::port::cells_drop(gl, 0);
+    crate::port::cells_drop(et, 0);
+    crate::port::cells_drop(wd, 0);
+    crate::port::cells_drop(ln, 0);
+    ct_run2g(gl, 1000, 0, 97, 98);
+    ct_run2g(gl, 1100, 0, 97, 98);
+    ct_group(gl, et, wd, ln);
+    crate::testport::assert_eq(ln_count(ln), 2, "an overprint is two lines, as before");
+    // Runs of different baselines are never merged.
+    crate::port::cells_drop(gl, 0);
+    crate::port::cells_drop(et, 0);
+    crate::port::cells_drop(wd, 0);
+    crate::port::cells_drop(ln, 0);
+    ct_run2g(gl, 1000, 0, 97, 98);
+    ct_run2g(gl, 4500, 0, 101, 102);
+    ct_run2g(gl, 2500, 1000, 99, 100);
+    ct_group(gl, et, wd, ln);
+    crate::testport::assert_eq(ln_count(ln), 3, "the word on the next line stays on it");
+}
