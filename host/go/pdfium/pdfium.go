@@ -1,43 +1,30 @@
-//go:build pdfium
-
-// The Go host's binding to pdfium's C API (DEVLOG P6.2, D127; SPEC 7.2, D007). The default Renderer; the twin
-// of `host/rust/src/pdfium.rs`, whose header says how a document is read (pdfium's custom file-access loader
-// over the run's byte source: no path, no copy, no whole-file buffer), how a layer is made (page objects
-// removed in memory, never saved) and why the watermark and background layers are `unsupported` (pdfium's
-// mark API cannot read the NAME values `/Artifact /Subtype /Watermark` is made of).
+// The Go host's pdfium Renderer (DEVLOG P6.2, D127; P11.x1, D539; SPEC 7.2, D007). The default `port.Renderer`; the twin of
+// `host/rust/src/pdfium.rs`, `host/java/emon/ffi/Pdfium.java` and `host/csharp/Emon/Ffi/Pdfium.cs`, whose headers say how a
+// document is read (pdfium's custom file-access loader over the run's byte source: no path, no copy, no whole-file buffer), how a
+// layer is made (page objects removed in memory, never saved) and why the watermark and background layers are `unsupported`
+// (pdfium's mark API cannot read the NAME values `/Artifact /Subtype /Watermark` is made of).
 //
-// COMPILED ONLY WITH `-tags pdfium`, and then cgo against the pinned bblanchon/pdfium-binaries build that
-// `bb pdfium-fetch` installs (tools/pdfium/pdfium.edn):
+// PDFIUM IS LOADED AT RUN TIME, as Java (FFM) and C# (P/Invoke) load it (D539): nothing links it, no pdfium header or `-lpdfium`
+// is needed to build, and the root package `emon` does not import this one, so a program that never renders pays nothing. The
+// binding (native_cgo.go) is cgo used only for `dlopen` and `dlsym` and for calling the function pointers they answer: it needs a C
+// compiler (cgo, which is the default where one is installed) and no pdfium. Built with CGO_ENABLED=0 the package still compiles:
+// `Open` then answers an `*Unavailable` and a Renderer made by `New` cannot be had.
 //
-//	CGO_CFLAGS=-I<pdfium>/include CGO_LDFLAGS='-L<pdfium>/lib -lpdfium -Wl,-rpath,<pdfium>/lib' \
-//	    go build -tags pdfium ...
+// Where the library is looked for, in order: the `libDirOrFile` argument of `Open`, `$EMON_PDFIUM_LIB` (a directory or a file), then
+// `.cache/pdfium/current/lib` (relative to the working directory: the repository root) and the system's own search. It is the pinned
+// build that `bb pdfium-fetch` installs (tools/pdfium/pdfium.edn). A missing library, or one without a symbol the binding needs, is an
+// `*Unavailable` from `Open`, said then and not as a failed render later.
 //
-// (On macOS the linked binary must be ad-hoc signed again, `codesign -f -s - prog`: Go's linker rewrites the
-// image after cgo's signature and the kernel kills it otherwise.) Nothing in `bb gates` builds this package:
-// a gate replays a committed transcript (`bb render`).
+// The rules a render follows are the Rust host's, line for line: the layer and dpi (1..4800) checks, the size `port.PixelsOf`, the
+// `pixels` limit read from kin's table at each render, the layer pruning, the flags, BGRX to RGB, the error texts. A crop is not done
+// here: `ExactCrop` is false and `port.RenderFulfiller` cuts the whole page by the shared rule.
 package pdfium
-
-/*
-#include <stdlib.h>
-#include "fpdfview.h"
-#include "fpdf_edit.h"
-
-extern int goGetBlock(void*, unsigned long, unsigned char*, unsigned long);
-
-static void access_setup(FPDF_FILEACCESS* a, unsigned long len, void* param) {
-	a->m_FileLen = len;
-	a->m_GetBlock = goGetBlock;
-	a->m_Param = param;
-}
-static void init_once(void) { FPDF_InitLibrary(); }
-*/
-import "C"
 
 import (
 	"fmt"
-	"runtime/cgo"
+	"os"
+	"strings"
 	"sync"
-	"unsafe"
 
 	"emon/port"
 )
@@ -50,20 +37,67 @@ const (
 	objForm     = 5
 )
 
-var (
-	initOnce sync.Once
-	// pdfium is not thread-safe.
-	lock sync.Mutex
-)
+// pdfium is not thread-safe: one process-wide lock, so any number of Pdfium values and goroutines may be used and the renders
+// happen one at a time.
+var lock sync.Mutex
+
+// Unavailable says pdfium could not be had: the library was not found or could not be loaded, lacks a symbol, or this build has no
+// cgo to load it with.
+type Unavailable struct{ Msg string }
+
+func (e *Unavailable) Error() string { return e.Msg }
 
 // Pdfium is the default Renderer. A render larger than the `pixels` limit (kin's table, read through `port.LimitOf(9)` at each render, so a
 // conversion's `limit.pixels` applies to rendering too) is refused (`failed`), before any memory is asked for (P10.4).
 type Pdfium struct{}
 
-// New initialises the library (once per process) and answers a Renderer.
+// Open loads pdfium and initialises it (once per process; the library found first stays). `libDirOrFile` is a directory holding the
+// library or the library itself; "" searches (see the package comment). The error is an *Unavailable.
+func Open(libDirOrFile string) (*Pdfium, error) {
+	var names []string
+	if libDirOrFile != "" {
+		names = addCandidates(names, libDirOrFile)
+	}
+	if env := os.Getenv("EMON_PDFIUM_LIB"); env != "" {
+		names = addCandidates(names, env)
+	}
+	names = addCandidates(names, ".cache/pdfium/current/lib")
+	names = append(names, "libpdfium.dylib", "libpdfium.so")
+	if err := bind(names); err != nil {
+		return nil, err
+	}
+	return &Pdfium{}, nil
+}
+
+// New is Open("") for a program that has the library: it panics where Open would answer an error.
 func New() *Pdfium {
-	initOnce.Do(func() { C.init_once() })
-	return &Pdfium{}
+	p, err := Open("")
+	if err != nil {
+		panic(err)
+	}
+	return p
+}
+
+func addCandidates(out []string, p string) []string {
+	lower := strings.ToLower(p)
+	if strings.HasSuffix(lower, ".dylib") || strings.HasSuffix(lower, ".so") || strings.HasSuffix(lower, ".dll") {
+		return append(out, p)
+	}
+	d := p
+	if !strings.HasSuffix(d, "/") {
+		d += "/"
+	}
+	return append(out, d+"libpdfium.dylib", d+"libpdfium.so", d+"pdfium.dll")
+}
+
+// notFound is the error of a search that found nothing; cause is the loader's last word.
+func notFound(names []string, cause string) error {
+	msg := "pdfium was not found (looked for " + strings.Join(names, ", ") + "). Run `bb pdfium-fetch` and set EMON_PDFIUM_LIB to its lib directory" +
+		" (.cache/pdfium/current/lib), or pass the directory."
+	if cause != "" {
+		msg += " (" + cause + ")"
+	}
+	return &Unavailable{Msg: msg}
 }
 
 // Layers: full, no text, text only.
@@ -74,8 +108,8 @@ func (p *Pdfium) Layers() uint32 { return 0b00111 }
 // whole page, D127), so the fulfiller renders the whole page, keeps it, and cuts.
 func (p *Pdfium) ExactCrop() bool { return false }
 
-func lastError() string {
-	switch e := uint64(C.FPDF_GetLastError()); e {
+func errText(e uint64) string {
+	switch e {
 	case 0:
 		return "no error"
 	case 2:
@@ -97,9 +131,8 @@ func failed(format string, a ...any) error {
 	return &port.RenderError{Msg: fmt.Sprintf(format, a...)}
 }
 
-// keep: should o stay in this layer? 1 keep, 0 drop, -1 a form to walk into (its contents decide).
-func keep(layer int32, o C.FPDF_PAGEOBJECT) int {
-	ty := int(C.FPDFPageObj_GetType(o))
+// keepIn: should an object of type ty stay in this layer? 1 keep, 0 drop, -1 a form to walk into (its contents decide).
+func keepIn(layer int32, ty int) int {
 	if ty == objForm {
 		return -1
 	}
@@ -116,38 +149,23 @@ func keep(layer int32, o C.FPDF_PAGEOBJECT) int {
 	return 1
 }
 
-func pruneForm(layer int32, form C.FPDF_PAGEOBJECT) {
-	for i := int(C.FPDFFormObj_CountObjects(form)) - 1; i >= 0; i-- {
-		o := C.FPDFFormObj_GetObject(form, C.ulong(i))
-		if o == nil {
-			continue
-		}
-		switch keep(layer, o) {
-		case 0:
-			if C.FPDFFormObj_RemoveObject(form, o) != 0 {
-				C.FPDFPageObj_Destroy(o)
-			}
-		case -1:
-			pruneForm(layer, o)
-		}
+// flagsOf: the flags of a layer's render (the pruning of its objects is the binding's).
+func flagsOf(layer int32) int {
+	flags := flagReverse
+	switch layer {
+	case port.LayerFull, port.LayerNoText:
+		flags |= flagAnnot
 	}
+	return flags
 }
 
-func prunePage(layer int32, page C.FPDF_PAGE) {
-	for i := int(C.FPDFPage_CountObjects(page)) - 1; i >= 0; i-- {
-		o := C.FPDFPage_GetObject(page, C.int(i))
-		if o == nil {
-			continue
-		}
-		switch keep(layer, o) {
-		case 0:
-			if C.FPDFPage_RemoveObject(page, o) != 0 {
-				C.FPDFPageObj_Destroy(o)
-			}
-		case -1:
-			pruneForm(layer, o)
-		}
+// checkPixels refuses a render over the `pixels` limit, before any memory is asked for.
+func checkPixels(w, h int32) error {
+	maxPixels := int64(port.LimitOf(9))
+	if int64(w)*int64(h) > maxPixels {
+		return failed("%dx%d pixels is over the limit of %d", w, h, maxPixels)
 	}
+	return nil
 }
 
 // Render implements port.Renderer.
@@ -161,68 +179,12 @@ func (p *Pdfium) Render(input port.RenderSource, password []byte, req port.Rende
 	if req.Dpi < 1 || req.Dpi > 4800 {
 		return nil, failed("dpi %d", req.Dpi)
 	}
+	for _, b := range password {
+		if b == 0 {
+			return nil, failed("a password with a NUL")
+		}
+	}
 	lock.Lock()
 	defer lock.Unlock()
-
-	h := cgo.NewHandle(&readCtx{src: input})
-	defer h.Delete()
-	access := (*C.FPDF_FILEACCESS)(C.calloc(1, C.size_t(unsafe.Sizeof(C.FPDF_FILEACCESS{}))))
-	defer C.free(unsafe.Pointer(access))
-	C.access_setup(access, C.ulong(input.Size()), unsafe.Pointer(uintptr(h)))
-	var pw *C.char
-	if password != nil {
-		pw = C.CString(string(password))
-		defer C.free(unsafe.Pointer(pw))
-	}
-	doc := C.FPDF_LoadCustomDocument(access, pw)
-	if doc == nil {
-		return nil, failed("%s", lastError())
-	}
-	defer C.FPDF_CloseDocument(doc)
-
-	n := int32(C.FPDF_GetPageCount(doc))
-	if req.Page < 0 || req.Page >= n {
-		return nil, failed("page %d of %d", req.Page, n)
-	}
-	page := C.FPDF_LoadPage(doc, C.int(req.Page))
-	if page == nil {
-		return nil, failed("%s", lastError())
-	}
-	defer C.FPDF_ClosePage(page)
-
-	w := port.PixelsOf(float64(C.FPDF_GetPageWidthF(page)), req.Dpi)
-	hh := port.PixelsOf(float64(C.FPDF_GetPageHeightF(page)), req.Dpi)
-	maxPixels := int64(port.LimitOf(9))
-	if int64(w)*int64(hh) > maxPixels {
-		return nil, failed("%dx%d pixels is over the limit of %d", w, hh, maxPixels)
-	}
-
-	flags := C.int(flagReverse)
-	switch req.Layer {
-	case port.LayerFull:
-		flags |= flagAnnot
-	case port.LayerNoText:
-		prunePage(req.Layer, page)
-		flags |= flagAnnot
-	default:
-		prunePage(req.Layer, page)
-	}
-
-	cw, ch := int(w), int(hh)
-	// the pixels live in C memory: pdfium keeps the pointer across calls, which Go memory may not be asked to bear
-	cbuf := C.malloc(C.size_t(cw * ch * 4))
-	defer C.free(cbuf)
-	buf := unsafe.Slice((*byte)(cbuf), cw*ch*4)
-	bm := C.FPDFBitmap_CreateEx(C.int(w), C.int(hh), bitmapBGRx, cbuf, C.int(cw*4))
-	if bm == nil {
-		return nil, failed("the bitmap could not be created")
-	}
-	C.FPDFBitmap_FillRect(bm, 0, 0, C.int(w), C.int(hh), 0xFFFFFFFF)
-	C.FPDF_RenderPageBitmap(bm, page, 0, 0, C.int(w), C.int(hh), 0, flags)
-	C.FPDFBitmap_Destroy(bm)
-	rgb := make([]byte, 0, cw*ch*3)
-	for i := 0; i < len(buf); i += 4 {
-		rgb = append(rgb, buf[i], buf[i+1], buf[i+2])
-	}
-	return port.BitmapFromBytes(w, hh, 3, rgb), nil
+	return renderNative(input, password, req)
 }

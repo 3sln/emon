@@ -181,6 +181,7 @@
   ;; ---- the hosts and the generated tree ---------------------------------------------------------------------------------------------------------------
   {:glob "host/rust/**" :gates ["@host"] :why "the Rust host: the reference every other host is held to"}
   {:glob "host/go/**" :gates ["@host"] :hosts ["go"] :why "the Go host (the unit gate's Go arm is added to a --fast run)"}
+  {:glob "host/go/pdfium/**" :gates ["render" "pdfium-wasm" "identity" "slice"] :hosts ["go"] :why "the Go host's pdfium Renderer, loaded at run time (P11.x1): the render gate's Go replay builds the package, and the Go arm of every conversion gate compiles it into the driver"}
   {:glob "host/java/**" :gates ["@host"] :hosts ["java"] :why "the Java host"}
   {:glob "host/csharp/**" :gates ["@host"] :hosts ["csharp"] :why "the C# host"}
   {:glob "host/c/**" :gates ["@host"] :hosts ["c"] :why "the C library and its header"}
@@ -204,7 +205,8 @@
   {:glob "test/corpus/DATASETS.md" :gates [] :why "documentation of the public datasets"}
   {:glob "test/corpus/synth/**" :gates ["unit" "slice" "identity" "repeat" "accuracy" "ocr" "fusion"] :why "the synthetic corpus: the scoreboard's documents and the conversions every gate holds"}
   {:glob "test/driver/**" :gates ["slice" "identity"] :why "the browser driver and the host driver stubs"}
-  {:glob "test/driver/java/**" :gates ["slice" "identity"] :hosts ["java"] :why "the Java driver"}
+  {:glob "test/driver/go/live_*.go" :gates ["slice" "identity" "render"] :hosts ["go"] :why "the Go driver's live `--pdfium` flag (live_pdfium.go, tag pdfium) and its no-op stub (live_none.go), which every gate build compiles"}
+  {:glob "test/driver/java/**":gates ["slice" "identity"] :hosts ["java"] :why "the Java driver"}
   {:glob "test/driver/csharp/**" :gates ["slice" "identity"] :hosts ["csharp"] :why "the C# driver"}
   {:glob "test/driver/c/**" :gates ["slice" "identity"] :hosts ["c"] :why "the C driver"}
   {:glob "test/driver/pod/**" :gates ["slice" "identity"] :hosts ["pod"] :why "the pod driver"}

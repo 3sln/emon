@@ -40,7 +40,7 @@
 
 (defn build-go
   "Build test/render/go/main.go in `work`; with `pdfium-dir` (the unpacked archive) it is built with the
-  `pdfium` tag and cgo against it."
+  `pdfium` tag (the binding loads the library at run time: P11.x1, D539)."
   [work pdfium-dir]
   (let [d (str work "/go" (when pdfium-dir (str "-live-" (Math/abs (hash pdfium-dir)))))]
     (fs/copy-tree "gen/go" d {:replace-existing true})
@@ -54,13 +54,11 @@
     (doseq [f (fs/glob "host/go/pdfium" "*.go")] (fs/copy f (str d "/pdfium/" (fs/file-name f)) {:replace-existing true}))
     (spit (str d "/go.mod") "module emon\n\ngo 1.21\n")
     (doseq [f (fs/glob "test/render/go" "*.go")] (fs/copy f (str d "/" (fs/file-name f)) {:replace-existing true}))
+    ;; P11.x1, D539: pdfium is LOADED at run time (host/go/pdfium: cgo for dlopen only), so nothing is linked and no header is read;
+    ;; the program finds the library as the other hosts do (EMON_PDFIUM_LIB, else .cache/pdfium/current/lib from the repository root).
     (let [r (if pdfium-dir
-              (let [inc (str pdfium-dir "/include") lib (str pdfium-dir "/lib")]
-                @(process {:dir d :out :string :err :string
-                           :extra-env {"CGO_ENABLED" "1"
-                                       "CGO_CFLAGS" (str "-I" inc)
-                                       "CGO_LDFLAGS" (str "-L" lib " -lpdfium -Wl,-rpath," lib)}}
-                          "go" "build" "-tags" "pdfium" "-o" "prog" "."))
+              @(process {:dir d :out :string :err :string :extra-env {"CGO_ENABLED" "1"}}
+                        "go" "build" "-tags" "pdfium" "-o" "prog" ".")
               (exec d "go" "build" "-o" "prog" "."))]
       ;; Go's linker rewrites the image after cgo's ad-hoc signature on macOS, and the kernel then kills the
       ;; binary (exit 137): sign it again.

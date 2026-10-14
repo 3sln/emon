@@ -4,7 +4,7 @@
 //
 // This file is the PORT: the interface an engine implements, the request it is given, and the fulfiller that
 // turns `render` and `crop` plan requests (D089, D117) into calls and answers. It names no engine and no
-// filesystem. `host/go/pdfium` (build tag `pdfium`, cgo) is the default engine (D007).
+// filesystem. `host/go/pdfium` (cgo, only to `dlopen` the library at run time: D539) is the default engine (D007).
 //
 // The input is the host's byte source, named in the request by input INDEX (D089, D058): never a path and
 // never a copy kin made. The geometry is `PixelsOf`: the page as displayed is wpt x hpt points, the whole-page

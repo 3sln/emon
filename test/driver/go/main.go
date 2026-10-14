@@ -5,7 +5,7 @@
 // or a spooled `io.Reader` (D058).
 //
 //	emon-go [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG]
-//	        [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--assets=none|images|figures] [--password=TEXT]
+//	        [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--pdfium[=LIBDIR]] [--assets=none|images|figures] [--password=TEXT]
 //	        [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D]
 //	        [--source=bytes|readerat|seek|spool] [--chunk=N --async] [--stats]
 //	        [--record=DIR | --replay=DIR] [--concurrent=N] [--parallel=N] FILE
@@ -20,6 +20,9 @@
 //	--tesseract[=D]  give the Engine the Tesseract `Ocr` port (D211), reading models from D (default: $TESSDATA_PREFIX and the usual
 //	                 places). LIVE: only a build with the `tesseract` tag has it (`EMON_GO_LIVE=1 kin/scripts/emon-go-build`, cgo); no gate
 //	                 uses it. Without the flag an `ocr` request is answered `unsupported` and a page that needed OCR has no text.
+//	--pdfium[=D]     give the Engine the pdfium `Renderer` (D127, D539), loaded at run time from the pinned build `bb pdfium-fetch` installs (or the
+//	                 directory D / $EMON_PDFIUM_LIB). LIVE: only a build with the `pdfium` tag has it (`EMON_GO_LIVE=1 kin/scripts/emon-go-build`, cgo for
+//	                 dlopen only: no pdfium is linked); no gate uses it. Without the flag a `render` or `crop` is answered `unsupported` (D199).
 //	--fake-ports     TEST ONLY (P10.2): a deterministic Renderer and Ocr stand in for pdfium and Tesseract, so the fulfilment path runs on every document with no
 //	                 engine installed (`bb repeat` holds serial and parallel runs of it to the same bytes)
 //	--record=DIR     also write the plan/fulfil transcript to DIR (transcript.edn and PNGs)
@@ -87,7 +90,7 @@ func (fakeOcr) Producer() [][2]string { return [][2]string{{"engine", "fake"}} }
 
 func usage(msg string) {
 	fmt.Fprintf(os.Stderr, "emon-go: %s\n", msg)
-	fmt.Fprintln(os.Stderr, "usage: emon-go [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--ocr-scope=full|witness] [--assets=none|images|figures] [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D] [--html-assets=inline|external|omit] [--asset-prefix=P] [--password=TEXT] [--source=bytes|readerat|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--concurrent=N] [--parallel=N] FILE")
+	fmt.Fprintln(os.Stderr, "usage: emon-go [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--ocr-scope=full|witness] [--tesseract[=TESSDATA]] [--pdfium[=LIBDIR]] [--assets=none|images|figures] [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D] [--html-assets=inline|external|omit] [--asset-prefix=P] [--password=TEXT] [--source=bytes|readerat|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--concurrent=N] [--parallel=N] FILE")
 	os.Exit(2)
 }
 
@@ -185,6 +188,7 @@ func main() {
 	stats := false
 	var file, record, replay, dump, assetDir string
 	tess, tessdata := false, ""
+	pdfiumOn, pdfiumLib := false, ""
 	fakePorts := false
 	concurrent := 1
 	for _, a := range os.Args[1:] {
@@ -225,6 +229,10 @@ func main() {
 			tess = true
 		case strings.HasPrefix(a, "--tesseract="):
 			tess, tessdata = true, strings.TrimPrefix(a, "--tesseract=")
+		case a == "--pdfium":
+			pdfiumOn = true
+		case strings.HasPrefix(a, "--pdfium="):
+			pdfiumOn, pdfiumLib = true, strings.TrimPrefix(a, "--pdfium=")
 		case a == "--stats":
 			stats = true
 		case strings.HasPrefix(a, "--dump="):
@@ -330,9 +338,16 @@ func main() {
 		}
 		cfg.Ocr = o
 	}
+	if pdfiumOn {
+		r, err := livePdfium(pdfiumLib)
+		if err != nil {
+			usage(err.Error())
+		}
+		cfg.Renderer = r
+	}
 	if fakePorts {
-		if tess {
-			usage("--fake-ports is the stand-in for --tesseract: not with it")
+		if tess || pdfiumOn {
+			usage("--fake-ports is the stand-in for --tesseract and --pdfium: not with them")
 		}
 		cfg.Ocr, cfg.Renderer = fakeOcr{}, fakeRenderer{}
 	}
