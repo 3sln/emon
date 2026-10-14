@@ -321,7 +321,7 @@ fn test_dotted_numbers_beat_size() {
     crate::testport::assert_eq(hd_level(hc, 9), 1, "`2` is level 1 again");
 }
 #[test]
-fn test_levels_are_a_dense_ladder_of_at_most_six() {
+fn test_a_dotted_depth_is_kept_and_only_capped() {
     let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -333,7 +333,8 @@ fn test_levels_are_a_dense_ladder_of_at_most_six() {
     let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ptxt: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let mut y: i32 = 5000;
-    // P11.x2: `1` and `1.1.1.1` with nothing between are levels 1 and 2, not 1 and 4: the ladder has no gap.
+    // P11.x2: a dotted number's depth is the document's own word (D167): `1`, `1.1.1.1`, `2` stay 1, 4, 1; the densifying
+    // of a ladder applies to the levels a search chose, not to these.
     ht_heading(wd, ln, et, &crate::testport::text_blob("1 Introduction")[..], y, 1400, 1);
     y += 2300;
     y = ht_body(wd, ln, et, 1, y, 2);
@@ -347,7 +348,7 @@ fn test_levels_are_a_dense_ladder_of_at_most_six() {
     y = ht_body(wd, ln, et, 1, y, 2);
     crate::testport::assert_eq(ht_run(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 3, "three headings");
     crate::testport::assert_eq(hd_level(hc, 0), 1, "`1` is level 1");
-    crate::testport::assert_eq(hd_level(hc, 3), 2, "`1.1.1.1` is level 2: the levels between were never used");
+    crate::testport::assert_eq(hd_level(hc, 3), 4, "`1.1.1.1` is level 4: its depth, not a rank");
     crate::testport::assert_eq(hd_level(hc, 6), 1, "`2` is level 1");
 }
 #[test]

@@ -337,7 +337,7 @@ func TestDottedNumbersBeatSize(emonT *testing.T) {
 	port.AssertEq(emonT, heading.HdLevel(hc, 9), 1, "`2` is level 1 again")
 }
 
-func TestLevelsAreADenseLadderOfAtMostSix(emonT *testing.T) {
+func TestADottedDepthIsKeptAndOnlyCapped(emonT *testing.T) {
 	var wd *port.Cells = port.NewCells()
 	var ln *port.Cells = port.NewCells()
 	var et *port.Cells = port.NewCells()
@@ -349,7 +349,8 @@ func TestLevelsAreADenseLadderOfAtMostSix(emonT *testing.T) {
 	var pr *port.Cells = port.NewCells()
 	var ptxt *port.Cells = port.NewCells()
 	var y int32 = 5000
-	// P11.x2: `1` and `1.1.1.1` with nothing between are levels 1 and 2, not 1 and 4: the ladder has no gap.
+	// P11.x2: a dotted number's depth is the document's own word (D167): `1`, `1.1.1.1`, `2` stay 1, 4, 1; the densifying
+	// of a ladder applies to the levels a search chose, not to these.
 	htHeading(wd, ln, et, port.TextBlob("1 Introduction"), y, 1400, 1)
 	y += 2300
 	y = htBody(wd, ln, et, 1, y, 2)
@@ -363,7 +364,7 @@ func TestLevelsAreADenseLadderOfAtMostSix(emonT *testing.T) {
 	y = htBody(wd, ln, et, 1, y, 2)
 	port.AssertEq(emonT, htRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 3, "three headings")
 	port.AssertEq(emonT, heading.HdLevel(hc, 0), 1, "`1` is level 1")
-	port.AssertEq(emonT, heading.HdLevel(hc, 3), 2, "`1.1.1.1` is level 2: the levels between were never used")
+	port.AssertEq(emonT, heading.HdLevel(hc, 3), 4, "`1.1.1.1` is level 4: its depth, not a rank")
 	port.AssertEq(emonT, heading.HdLevel(hc, 6), 1, "`2` is level 1")
 }
 

@@ -307,7 +307,7 @@ public final class Headingtest {
         emon.Testport.assertEq(Heading.hdLevel(hc, 6), 2, "`1.2` too");
         emon.Testport.assertEq(Heading.hdLevel(hc, 9), 1, "`2` is level 1 again");
     }
-    public static void testLevelsAreADenseLadderOfAtMostSix() {
+    public static void testADottedDepthIsKeptAndOnlyCapped() {
         emon.Port.Cells wd = emon.Port.newCells();
         emon.Port.Cells ln = emon.Port.newCells();
         emon.Port.Cells et = emon.Port.newCells();
@@ -319,7 +319,8 @@ public final class Headingtest {
         emon.Port.Cells pr = emon.Port.newCells();
         emon.Port.Cells ptxt = emon.Port.newCells();
         int y = 5000;
-        // P11.x2: `1` and `1.1.1.1` with nothing between are levels 1 and 2, not 1 and 4: the ladder has no gap.
+        // P11.x2: a dotted number's depth is the document's own word (D167): `1`, `1.1.1.1`, `2` stay 1, 4, 1; the densifying
+        // of a ladder applies to the levels a search chose, not to these.
         htHeading(wd, ln, et, emon.Testport.textBlob("1 Introduction"), y, 1400, 1);
         y += 2300;
         y = htBody(wd, ln, et, 1, y, 2);
@@ -333,7 +334,7 @@ public final class Headingtest {
         y = htBody(wd, ln, et, 1, y, 2);
         emon.Testport.assertEq(htRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 3, "three headings");
         emon.Testport.assertEq(Heading.hdLevel(hc, 0), 1, "`1` is level 1");
-        emon.Testport.assertEq(Heading.hdLevel(hc, 3), 2, "`1.1.1.1` is level 2: the levels between were never used");
+        emon.Testport.assertEq(Heading.hdLevel(hc, 3), 4, "`1.1.1.1` is level 4: its depth, not a rank");
         emon.Testport.assertEq(Heading.hdLevel(hc, 6), 1, "`2` is level 1");
     }
     public static void testALadderOfEightSizesStopsAtLevelSix() {

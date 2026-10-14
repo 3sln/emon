@@ -1725,18 +1725,31 @@ public final class Heading {
     }
     public static int hdDensify(emon.Port.Cells ws, int nk) {
         // The ladder the document makes (P11.x2, D1491): the levels the search chose, renumbered 1, 2, 3, ... in order
-        // with no level skipped (a dotted number's depth or a sparse search can leave gaps: `1` and `1.1.1.1` are 1 and 2
-        // when nothing is between them), and none past HD_MAXLEVEL, the six an h1-h6 has: the classes below the sixth
-        // share it. Order is kept, ties are kept; field 10 of every class.
+        // with no level skipped (a sparse search can leave gaps), and none past HD_MAXLEVEL, the six an h1-h6 has: the
+        // classes below the sixth share it. Order is kept, ties are kept; field 10 of every class. A document with a dotted
+        // number or an outline prior keeps the levels they give (a lone `1.1` is level 2, D167) and is only capped.
         int c = 0;
         int d = 0;
         int e = 0;
         int rank = 0;
         int dup = 0;
+        int pinned = 0;
+        while (c < nk) {
+            if ((hdHk(ws, c, 8) > 0) || (hdHk(ws, c, 11) > 0)) {
+                pinned = 1;
+            }
+            c += 1;
+        }
+        c = 0;
         while (c < nk) {
             rank = 1;
             d = 0;
-            while (d < nk) {
+            // a level a dotted number or an outline says is the document's own, gaps and all (`1.1` alone is level 2): only
+            // the cap applies then
+            if (pinned == 1) {
+                rank = hdHk(ws, c, 10);
+            }
+            while ((d < nk) && (pinned == 0)) {
                 if (hdHk(ws, d, 10) < hdHk(ws, c, 10)) {
                     dup = 0;
                     e = 0;

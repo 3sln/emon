@@ -1833,18 +1833,31 @@ func hdSearch(ws *port.Cells, nk int32) int32 {
 
 func hdDensify(ws *port.Cells, nk int32) int32 {
 	// The ladder the document makes (P11.x2, D1491): the levels the search chose, renumbered 1, 2, 3, ... in order
-	// with no level skipped (a dotted number's depth or a sparse search can leave gaps: `1` and `1.1.1.1` are 1 and 2
-	// when nothing is between them), and none past HD_MAXLEVEL, the six an h1-h6 has: the classes below the sixth
-	// share it. Order is kept, ties are kept; field 10 of every class.
+	// with no level skipped (a sparse search can leave gaps), and none past HD_MAXLEVEL, the six an h1-h6 has: the
+	// classes below the sixth share it. Order is kept, ties are kept; field 10 of every class. A document with a dotted
+	// number or an outline prior keeps the levels they give (a lone `1.1` is level 2, D167) and is only capped.
 	var c int32 = 0
 	var d int32 = 0
 	var e int32 = 0
 	var rank int32 = 0
 	var dup int32 = 0
+	var pinned int32 = 0
+	for c < nk {
+		if (hdHk(ws, c, 8) > 0) || (hdHk(ws, c, 11) > 0) {
+			pinned = 1
+		}
+		c += 1
+	}
+	c = 0
 	for c < nk {
 		rank = 1
 		d = 0
-		for d < nk {
+		// a level a dotted number or an outline says is the document's own, gaps and all (`1.1` alone is level 2): only
+		// the cap applies then
+		if pinned == 1 {
+			rank = hdHk(ws, c, 10)
+		}
+		for (d < nk) && (pinned == 0) {
 			if hdHk(ws, d, 10) < hdHk(ws, c, 10) {
 				dup = 0
 				e = 0

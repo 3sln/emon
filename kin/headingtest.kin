@@ -298,12 +298,13 @@
     (assert-eq (hd-level hc 6) 2 "`1.2` too")
     (assert-eq (hd-level hc 9) 1 "`2` is level 1 again")))
 
-(deftest test-levels-are-a-dense-ladder-of-at-most-six
+(deftest test-a-dotted-depth-is-kept-and-only-capped
   (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
         ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells hc (new-cells) ^Cells ws (new-cells) ^Cells tmp (new-cells)
         ^Cells pr (new-cells) ^Cells ptxt (new-cells)
         ^:mut ^I32 y 5000]
-    (comment "P11.x2: `1` and `1.1.1.1` with nothing between are levels 1 and 2, not 1 and 4: the ladder has no gap.")
+    (comment "P11.x2: a dotted number's depth is the document's own word (D167): `1`, `1.1.1.1`, `2` stay 1, 4, 1; the densifying")
+    (comment "of a ladder applies to the levels a search chose, not to these.")
     (ht-heading wd ln et (text-blob "1 Introduction") y 1400 1)
     (set y (+ y 2300))
     (set y (ht-body wd ln et 1 y 2))
@@ -317,7 +318,7 @@
     (set y (ht-body wd ln et 1 y 2))
     (assert-eq (ht-run wd ln et sf sc hc ws tmp pr ptxt) 3 "three headings")
     (assert-eq (hd-level hc 0) 1 "`1` is level 1")
-    (assert-eq (hd-level hc 3) 2 "`1.1.1.1` is level 2: the levels between were never used")
+    (assert-eq (hd-level hc 3) 4 "`1.1.1.1` is level 4: its depth, not a rank")
     (assert-eq (hd-level hc 6) 1 "`2` is level 1")))
 
 (deftest test-a-ladder-of-eight-sizes-stops-at-level-six
