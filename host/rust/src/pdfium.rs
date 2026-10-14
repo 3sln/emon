@@ -51,6 +51,7 @@ struct FileAccess {
     param: *mut c_void,
 }
 
+#[cfg(not(pdfium_dl))]
 #[link(name = "pdfium")]
 extern "C" {
     fn FPDF_InitLibrary();
@@ -75,6 +76,120 @@ extern "C" {
     fn FPDFFormObj_CountObjects(o: Obj) -> c_int;
     fn FPDFFormObj_GetObject(o: Obj, i: c_ulong) -> Obj;
     fn FPDFFormObj_RemoveObject(form: Obj, o: Obj) -> c_int;
+}
+
+// RUN-TIME LOADING (`--cfg pdfium_dl`, P11.4b, D541): the per-platform CLI does not link libpdfium; it `dlopen`s (`LoadLibrary` on Windows) the
+// library it is told to (a flag, an environment variable, or the `lib/` beside its own executable), so a missing library is a sentence the
+// CLI prints and not the loader's abort before `main`. The same 21 functions, resolved by name once by `load`; every call below is unchanged.
+#[cfg(pdfium_dl)]
+pub use dl::load;
+#[cfg(pdfium_dl)]
+use dl::*;
+
+#[cfg(pdfium_dl)]
+#[allow(non_snake_case)]
+mod dl {
+    use super::{Bm, Doc, FileAccess, Obj, Page};
+    use std::ffi::{c_char, c_int, c_ulong, c_void};
+    use std::sync::OnceLock;
+
+    #[cfg(unix)]
+    mod os {
+        use std::ffi::{c_char, c_int, c_void, CStr, CString};
+        extern "C" {
+            fn dlopen(path: *const c_char, flags: c_int) -> *mut c_void;
+            fn dlsym(h: *mut c_void, name: *const c_char) -> *mut c_void;
+            fn dlerror() -> *const c_char;
+        }
+        pub fn open(path: &str) -> Result<*mut c_void, String> {
+            let c = CString::new(path).map_err(|_| "a NUL in the path".to_string())?;
+            // RTLD_NOW (2 on Linux and macOS): a missing symbol is found now, not at the first call
+            let h = unsafe { dlopen(c.as_ptr(), 2) };
+            if h.is_null() {
+                let e = unsafe { dlerror() };
+                return Err(if e.is_null() { "dlopen failed".to_string() } else { unsafe { CStr::from_ptr(e) }.to_string_lossy().to_string() });
+            }
+            Ok(h)
+        }
+        pub fn sym(h: *mut c_void, name: &str) -> *mut c_void {
+            unsafe { dlsym(h, name.as_ptr() as *const c_char) }
+        }
+    }
+
+    #[cfg(windows)]
+    mod os {
+        use std::ffi::{c_char, c_void, CString};
+        extern "system" {
+            fn LoadLibraryA(path: *const c_char) -> *mut c_void;
+            fn GetProcAddress(h: *mut c_void, name: *const c_char) -> *mut c_void;
+            fn GetLastError() -> u32;
+        }
+        pub fn open(path: &str) -> Result<*mut c_void, String> {
+            let c = CString::new(path).map_err(|_| "a NUL in the path".to_string())?;
+            let h = unsafe { LoadLibraryA(c.as_ptr()) };
+            if h.is_null() {
+                return Err(format!("LoadLibrary failed (Windows error {})", unsafe { GetLastError() }));
+            }
+            Ok(h)
+        }
+        pub fn sym(h: *mut c_void, name: &str) -> *mut c_void {
+            unsafe { GetProcAddress(h, name.as_ptr() as *const c_char) }
+        }
+    }
+
+    macro_rules! symbols {
+        ($(fn $name:ident($($arg:ident: $ty:ty),*) $(-> $ret:ty)?;)*) => {
+            struct Table { $($name: unsafe extern "C" fn($($ty),*) $(-> $ret)?,)* }
+            static TABLE: OnceLock<Table> = OnceLock::new();
+            fn fill(h: *mut c_void) -> Result<Table, String> {
+                Ok(Table { $($name: {
+                    let p = os::sym(h, concat!(stringify!($name), "\0"));
+                    if p.is_null() {
+                        return Err(format!("the library has no symbol {}: it is not a pdfium build", stringify!($name)));
+                    }
+                    unsafe { std::mem::transmute::<*mut c_void, unsafe extern "C" fn($($ty),*) $(-> $ret)?>(p) }
+                },)* })
+            }
+            $(pub unsafe fn $name($($arg: $ty),*) $(-> $ret)? {
+                (TABLE.get().expect("pdfium: load() was not called"). $name)($($arg),*)
+            })*
+        };
+    }
+
+    symbols! {
+        fn FPDF_InitLibrary();
+        fn FPDF_GetLastError() -> c_ulong;
+        fn FPDF_LoadCustomDocument(access: *mut FileAccess, password: *const c_char) -> Doc;
+        fn FPDF_CloseDocument(d: Doc);
+        fn FPDF_GetPageCount(d: Doc) -> c_int;
+        fn FPDF_LoadPage(d: Doc, index: c_int) -> Page;
+        fn FPDF_ClosePage(p: Page);
+        fn FPDF_GetPageWidthF(p: Page) -> f32;
+        fn FPDF_GetPageHeightF(p: Page) -> f32;
+        fn FPDFBitmap_CreateEx(w: c_int, h: c_int, format: c_int, first_scan: *mut c_void, stride: c_int) -> Bm;
+        fn FPDFBitmap_FillRect(b: Bm, left: c_int, top: c_int, w: c_int, h: c_int, color: c_ulong) -> c_int;
+        fn FPDFBitmap_Destroy(b: Bm);
+        fn FPDF_RenderPageBitmap(b: Bm, p: Page, x: c_int, y: c_int, sx: c_int, sy: c_int, rotate: c_int, flags: c_int);
+        fn FPDFPage_CountObjects(p: Page) -> c_int;
+        fn FPDFPage_GetObject(p: Page, i: c_int) -> Obj;
+        fn FPDFPage_RemoveObject(p: Page, o: Obj) -> c_int;
+        fn FPDFPageObj_Destroy(o: Obj);
+        fn FPDFPageObj_GetType(o: Obj) -> c_int;
+        fn FPDFFormObj_CountObjects(o: Obj) -> c_int;
+        fn FPDFFormObj_GetObject(o: Obj, i: c_ulong) -> Obj;
+        fn FPDFFormObj_RemoveObject(form: Obj, o: Obj) -> c_int;
+    }
+
+    /// Load the pdfium library at `path` (the file itself, `libpdfium.dylib`, `libpdfium.so` or `pdfium.dll`). Once; a second call is Ok.
+    pub fn load(path: &str) -> Result<(), String> {
+        if TABLE.get().is_some() {
+            return Ok(());
+        }
+        let h = os::open(path)?;
+        let t = fill(h)?;
+        let _ = TABLE.set(t);
+        Ok(())
+    }
 }
 
 const FPDF_ANNOT: c_int = 0x01;

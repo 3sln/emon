@@ -351,6 +351,29 @@
               (fail! "tools/demo/build.clj vendors `" lit "` and no :demo-files prefix of " inventory-path " covers it"))
             (when (and build (seq df) (empty? lits)) (fail! "tools/demo/build.clj names no /vendor/ file: this check reads nothing"))
             (when (= b (n-before)) (ok! (str "every file the demo vendors (" (count lits) " paths in tools/demo/build.clj) maps to components the browser demo carries (" (count df) " prefixes)"))))
+          ;; the native pins (P11.5, D540): tools/native/native.edn is what `bb native` builds; the inventory must say the same, and the build must keep
+          ;; JPEG 2000 and JBIG off
+          (when-let [ns (rd root "tools/native/native.edn")]
+            (let [b (n-before)
+                  pins (try (edn/read-string ns) (catch Exception e (fail! "tools/native/native.edn: unreadable (" (ex-message e) ")") nil))
+                  used (set (mapcat text-files comps))]
+              (when pins
+                (doseq [s (:sources pins)]
+                  (let [c (by-id (:inventory s))]
+                    (cond (nil? c) (fail! "tools/native/native.edn: " (:id s) " names the inventory entry " (:inventory s) ", which is not in " inventory-path)
+                          (not= (:version s) (:version c)) (fail! "tools/native/native.edn pins " (:id s) " " (:version s) " but " (:id c) " says " (:version c))
+                          (= :dev-only (:status c)) (fail! (:id c) ": built by tools/native/native.edn and :dev-only"))
+                    (when (re-find deny-re (str (:id s) " " (:name s) " " (:url s)))
+                      (fail! "tools/native/native.edn: source " (:id s) " is an excluded library"))))
+                (let [cmake (fn [id] (set (:cmake (first (filter #(= id (:id %)) (:sources pins))))))]
+                  (when-not (contains? (cmake "leptonica") "-DENABLE_OPENJPEG=OFF") (fail! "tools/native/native.edn: Leptonica is not built with -DENABLE_OPENJPEG=OFF (JPX stays unsupported, D524)"))
+                  (when-not (contains? (cmake "libtiff") "-Djbig=OFF") (fail! "tools/native/native.edn: libtiff is not built with -Djbig=OFF (JBIG-KIT is GPL)"))
+                  (when-not (contains? (cmake "leptonica") "-DSTRICT_CONF=ON") (fail! "tools/native/native.edn: Leptonica is not built with -DSTRICT_CONF=ON (a missing codec must fail, not be left out)")))
+                (doseq [{:keys [out]} (concat (:licence-texts pins) (:texts (:pdfium-licences pins)))]
+                  (when-not (used out) (fail! "release/licenses/" out " is vendored by tools/native/native.edn and no inventory entry's :text names it")))
+                (doseq [{:keys [inventory]} (:data pins)]
+                  (when-not (by-id inventory) (fail! "tools/native/native.edn: data entry names " inventory ", which is not in " inventory-path))))
+              (when (= b (n-before)) (ok! "tools/native/native.edn agrees with the inventory (versions, licence texts) and builds Leptonica without OpenJPEG and libtiff without JBIG"))))
           nil)))
     @out))
 
@@ -473,7 +496,7 @@
 
 ;; ------------------------------------------------------------------------------------------------ the self-test
 
-(def copy-roots ["LICENSE" "THIRD_PARTY_NOTICES.md" "release" "host" "kin/scripts" "tools/demo"])
+(def copy-roots ["LICENSE" "THIRD_PARTY_NOTICES.md" "release" "host" "kin/scripts" "tools/demo" "tools/native"])
 
 (defn- copy-tree! [from to]
   (doseq [r copy-roots
@@ -581,6 +604,17 @@
              #(fs/delete (path tmp notices-path)))
       (case! "a licence text missing" #"licence text release/licenses/cargo-adler2-2.0.1.txt is missing"
              #(fs/delete (path tmp (str texts-dir "/cargo-adler2-2.0.1.txt"))))
+      ;; 7. the native pins (P11.5)
+      (case! "a native pin whose version the inventory does not say" #"pins zlib 1\.3\.1 but native/leptonica-zlib says"
+             #(edit! inventory-path (fn [s] (str/replace-first s ":name \"zlib (Leptonica's Flate codec)\" :version \"1.3.1\"" ":name \"zlib (Leptonica's Flate codec)\" :version \"1.3.0\""))))
+      (case! "Leptonica built with OpenJPEG" #"Leptonica is not built with -DENABLE_OPENJPEG=OFF"
+             #(edit! "tools/native/native.edn" (fn [s] (str/replace-first s "-DENABLE_OPENJPEG=OFF" "-DENABLE_OPENJPEG=ON"))))
+      (case! "libtiff built with JBIG" #"libtiff is not built with -Djbig=OFF"
+             #(edit! "tools/native/native.edn" (fn [s] (str/replace-first s "\"-Djbig=OFF\"" "\"-Djbig=ON\""))))
+      (case! "a jbig2dec source in the native pins" #"source jbig2dec is an excluded library"
+             #(edit! "tools/native/native.edn" (fn [s] (str/replace-first s "{:id \"giflib\" :name \"giflib\"" "{:id \"jbig2dec\" :name \"giflib\""))))
+      (case! "a native licence text no inventory entry names" #"native-zlib-1\.3\.1\.txt is vendored by tools/native/native.edn and no inventory"
+             #(edit! inventory-path (fn [s] (str/replace-first s "\"native-zlib-1.3.1.txt\"" "\"generic-apache-2.0.txt\""))))
       (fresh!)
       (t! "regenerating after an inventory edit makes it pass again"
           (do (edit! inventory-path (fn [s] (str/replace-first s "\"https://crates.io/crates/simd-adler32\"" "\"https://example.invalid/simd-adler32\"")))

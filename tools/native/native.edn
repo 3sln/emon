@@ -1,0 +1,195 @@
+;; The native dependency pins of a release build (P11.5, D540; D524, D526). Read by `bb native` (tools/native/native.clj).
+;;
+;; WHAT IT BUILDS: static Tesseract and Leptonica and the codecs Leptonica reads (zlib, libpng, libjpeg-turbo, libtiff, giflib, libwebp)
+;; from the source tarballs below, with CMake, into .cache/native/<triple>/ (gitignored). OpenJPEG is OFF (JPX stays `unsupported`, D524)
+;; and jbig2dec is never built or linked. Nothing is taken from the machine: every optional dependency of every component is switched
+;; off by name, the find paths are cut down to the install prefix, and `bb native --audit` checks the result (D540).
+;; pdfium is NOT built here: the pinned pdfium-binaries archives of tools/pdfium/pdfium.edn (every platform and wasm) are bundled as they
+;; are (`bb pdfium-fetch --platform P`); this file maps each triple to its archive.
+;;
+;; To move a pin: change :version, :url and :sha256 together (the sha256 of the DOWNLOAD, computed by `shasum -a 256`), re-run
+;; `bb native --force`, `bb native --licenses`, `bb release-audit --write`, and fix the version in release/third-party.edn.
+;;
+;; :cmake of a source is added to :common-cmake. :libs are the static libraries it installs (stems: `lib` prefix, `-static`/`_static`
+;; suffix and trailing version digits removed); `bb native --audit` fails on any other library in the prefix. Build order is the order here.
+{:schema 1
+
+ ;; one entry per target triple; :runner is the GitHub runner that builds it (.github/workflows/native.yml holds the same table, `bb native --check`)
+ :triples
+ {"aarch64-apple-darwin"     {:runner "macos-14"        :os :mac     :arch "arm64" :generator "Unix Makefiles" :osx-deployment "12.0" :pdfium "mac-arm64"
+                              :ignore-prefix ["/opt/homebrew" "/usr/local"] :cxx-runtime ["c++"]}
+  "x86_64-apple-darwin"      {:runner "macos-13"        :os :mac     :arch "x86_64" :generator "Unix Makefiles" :osx-deployment "12.0" :pdfium "mac-x64"
+                              :ignore-prefix ["/usr/local" "/opt/homebrew"] :cxx-runtime ["c++"]}
+  "x86_64-unknown-linux-gnu" {:runner "ubuntu-24.04"    :os :linux   :arch "x86_64" :generator "Unix Makefiles" :pdfium "linux-x64"
+                              :ignore-prefix ["/usr/local"] :cxx-runtime ["stdc++" "m" "pthread"]}
+  "aarch64-unknown-linux-gnu" {:runner "ubuntu-24.04-arm" :os :linux  :arch "arm64" :generator "Unix Makefiles" :pdfium "linux-arm64"
+                              :ignore-prefix ["/usr/local"] :cxx-runtime ["stdc++" "m" "pthread"]}
+  "x86_64-pc-windows-msvc"   {:runner "windows-2022"    :os :windows :arch "x86_64" :generator "Ninja" :pdfium "win-x64"
+                              :ignore-prefix [] :cxx-runtime []}}
+
+ :common-cmake
+ ["-DCMAKE_BUILD_TYPE=Release"
+  "-DBUILD_SHARED_LIBS=OFF"
+  "-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
+  "-DCMAKE_INSTALL_LIBDIR=lib"
+  "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+  "-DZLIB_USE_STATIC_LIBS=ON"
+  ;; the find paths for libraries, headers and packages: the install prefix and nothing else (find root path = the prefix, mode ONLY; no registry,
+  ;; no CMAKE_PREFIX_PATH environment variable, no frameworks, no Homebrew). Programs (compilers, make, nasm) are found as usual.
+  "-DCMAKE_FIND_ROOT_PATH=@PREFIX@"
+  "-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY"
+  "-DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY"
+  "-DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY"
+  "-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER"
+  "-DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=OFF"
+  "-DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF"
+  "-DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=OFF"
+  "-DCMAKE_FIND_FRAMEWORK=NEVER"
+  "-DCMAKE_FIND_APPBUNDLE=NEVER"
+  ;; and every optional dependency of the components below, off by name even where the component has no switch for it
+  "-DCMAKE_DISABLE_FIND_PACKAGE_JBIG=ON"
+  "-DCMAKE_DISABLE_FIND_PACKAGE_OpenJPEG=ON"
+  "-DCMAKE_DISABLE_FIND_PACKAGE_LERC=ON"
+  "-DCMAKE_DISABLE_FIND_PACKAGE_ZSTD=ON"
+  "-DCMAKE_DISABLE_FIND_PACKAGE_liblzma=ON"
+  "-DCMAKE_DISABLE_FIND_PACKAGE_LibLZMA=ON"
+  "-DCMAKE_DISABLE_FIND_PACKAGE_Deflate=ON"
+  "-DCMAKE_DISABLE_FIND_PACKAGE_LibArchive=ON"
+  "-DCMAKE_DISABLE_FIND_PACKAGE_CURL=ON"
+  "-DCMAKE_DISABLE_FIND_PACKAGE_ICU=ON"
+  "-DCMAKE_DISABLE_FIND_PACKAGE_OpenGL=ON"
+  "-DCMAKE_DISABLE_FIND_PACKAGE_GLUT=ON"
+  "-DCMAKE_DISABLE_FIND_PACKAGE_SDL2=ON"
+  "-DCMAKE_DISABLE_FIND_PACKAGE_Doxygen=ON"
+  "-DCMAKE_DISABLE_FIND_PACKAGE_OpenMP=ON"
+  "-DCMAKE_DISABLE_FIND_PACKAGE_Python3=ON"]
+
+ :sources
+ [{:id "zlib" :name "zlib" :version "1.3.1"
+   :archive "zlib-1.3.1.tar.gz" :dir "zlib-1.3.1"
+   :url "https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.gz"
+   :sha256 "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23"
+   :inventory "native/leptonica-zlib" :libs ["z"]
+   :cmake ["-DZLIB_BUILD_EXAMPLES=OFF"]}
+
+  {:id "libpng" :name "libpng" :version "1.6.58"
+   :archive "libpng-1.6.58.tar.xz" :dir "libpng-1.6.58"
+   :url "https://download.sourceforge.net/libpng/libpng-1.6.58.tar.xz"
+   :sha256 "28eb403f51f0f7405249132cecfe82ea5c0ef97f1b32c5a65828814ae0d34775"
+   :inventory "native/leptonica-libpng" :libs ["png"]
+   :cmake ["-DPNG_SHARED=OFF" "-DPNG_STATIC=ON" "-DPNG_TESTS=OFF" "-DPNG_TOOLS=OFF" "-DPNG_EXECUTABLES=OFF" "-DPNG_FRAMEWORK=OFF" "-DPNG_DEBUG=OFF"]}
+
+  {:id "libjpeg-turbo" :name "libjpeg-turbo" :version "3.2.0"
+   :archive "libjpeg-turbo-3.2.0.tar.gz" :dir "libjpeg-turbo-3.2.0"
+   :url "https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.2.0/libjpeg-turbo-3.2.0.tar.gz"
+   :sha256 "6f30092cef9fb839779646608f4ee14ae3cbac989c47fa05e841b0841f09878e"
+   :inventory "native/leptonica-libjpeg-turbo" :libs ["jpeg"]
+   ;; REQUIRE_SIMD: the build fails rather than silently dropping SIMD when the assembler (nasm, x86) is missing
+   :cmake ["-DENABLE_SHARED=OFF" "-DENABLE_STATIC=ON" "-DWITH_TURBOJPEG=OFF" "-DWITH_JAVA=OFF" "-DWITH_TOOLS=OFF" "-DWITH_TESTS=OFF" "-DWITH_FUZZ=OFF"
+           "-DREQUIRE_SIMD=ON"]}
+
+  {:id "libtiff" :name "libtiff" :version "4.7.2"
+   :archive "tiff-4.7.2.tar.gz" :dir "tiff-4.7.2"
+   :url "https://download.osgeo.org/libtiff/tiff-4.7.2.tar.gz"
+   :sha256 "672bd7d10aee4606171afb864f3570b83340f6a33e2c186dc0512f7145ffdf6a"
+   :inventory "native/leptonica-libtiff" :libs ["tiff"]
+   ;; jbig OFF is the one that matters (libtiff's JBIG codec is JBIG-KIT, GPL); lerc, lzma, zstd, webp, libdeflate and OpenGL are off so
+   ;; nothing is auto-detected; zlib and jpeg are the two pinned above
+   :cmake ["-Dtiff-static=ON" "-Dtiff-tools=OFF" "-Dtiff-tests=OFF" "-Dtiff-contrib=OFF" "-Dtiff-docs=OFF" "-Dtiff-install=ON" "-Dtiff-cxx=OFF" "-Dtiff-opengl=OFF"
+           "-Dtiff-framework=OFF" "-Dsphinx=OFF"
+           "-Dzlib=ON" "-Dpixarlog=ON" "-Djpeg=ON" "-Djpeg12=OFF" "-Dold-jpeg=ON"
+           "-Djbig=OFF" "-Dlerc=OFF" "-Dlzma=OFF" "-Dzstd=OFF" "-Dwebp=OFF" "-Dlibdeflate=OFF"]}
+
+  {:id "libwebp" :name "libwebp" :version "1.6.0"
+   :archive "libwebp-1.6.0.tar.gz" :dir "libwebp-1.6.0"
+   :url "https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-1.6.0.tar.gz"
+   :sha256 "e4ab7009bf0629fd11982d4c2aa83964cf244cffba7347ecd39019a9e38c4564"
+   :inventory "native/leptonica-libwebp" :libs ["webp" "webpmux" "webpdecoder" "webpdemux" "sharpyuv"]
+   ;; Leptonica wants libwebp and libwebpmux (animation); no tool is built, so no GIF, PNG, JPEG or TIFF is looked for by gif2webp or cwebp
+   :cmake ["-DWEBP_LINK_STATIC=ON" "-DWEBP_BUILD_ANIM_UTILS=OFF" "-DWEBP_BUILD_CWEBP=OFF" "-DWEBP_BUILD_DWEBP=OFF" "-DWEBP_BUILD_GIF2WEBP=OFF"
+           "-DWEBP_BUILD_IMG2WEBP=OFF" "-DWEBP_BUILD_VWEBP=OFF" "-DWEBP_BUILD_WEBPINFO=OFF" "-DWEBP_BUILD_WEBPMUX=OFF" "-DWEBP_BUILD_EXTRAS=OFF"
+           "-DWEBP_BUILD_LIBWEBPMUX=ON" "-DWEBP_BUILD_WEBP_JS=OFF" "-DWEBP_BUILD_FUZZTEST=OFF"]}
+
+  ;; giflib has no CMake build: tools/native/giflib.CMakeLists.txt is copied into the extracted tree and builds the library alone
+  {:id "giflib" :name "giflib" :version "6.1.3"
+   :archive "giflib-6.1.3.tar.gz" :dir "giflib-6.1.3"
+   :url "https://download.sourceforge.net/giflib/giflib-6.1.3.tar.gz"
+   :sha256 "b65b66b99f0424b93525f987386f22fc5efb9da2bfc92ad4a532249aaffbab0e"
+   :inventory "native/leptonica-giflib" :libs ["gif"]
+   :cmakelists "tools/native/giflib.CMakeLists.txt"
+   :cmake []}
+
+  {:id "leptonica" :name "Leptonica" :version "1.87.0"
+   :archive "leptonica-1.87.0.tar.gz" :dir "leptonica-1.87.0"
+   :url "https://github.com/DanBloomberg/leptonica/releases/download/1.87.0/leptonica-1.87.0.tar.gz"
+   :sha256 "c73363397f96eb1295602bf44d708a994ad42046c791bf03ea0505d829bdb6a7"
+   :inventory "native/leptonica@1.87.0" :libs ["leptonica"]
+   ;; STRICT_CONF: a codec that is switched on and not found in the prefix fails the configure instead of being left out; OpenJPEG off
+   :cmake ["-DSW_BUILD=OFF" "-DBUILD_PROG=OFF" "-DSTRICT_CONF=ON"
+           "-DENABLE_ZLIB=ON" "-DENABLE_PNG=ON" "-DENABLE_JPEG=ON" "-DENABLE_TIFF=ON" "-DENABLE_GIF=ON" "-DENABLE_WEBP=ON" "-DENABLE_OPENJPEG=OFF"]}
+
+  {:id "tesseract" :name "Tesseract" :version "5.5.3"
+   :archive "tesseract-5.5.3.tar.gz" :dir "tesseract-5.5.3"
+   :url "https://github.com/tesseract-ocr/tesseract/archive/refs/tags/5.5.3.tar.gz"
+   :sha256 "9218e62793116d42a9f6d14cd9348518b27f382096eea3d0f2d1a24616bb5884"
+   :inventory "native/tesseract@5.5.3" :libs ["tesseract"]
+   :project-include "tools/native/tesseract-prefind.cmake"
+   ;; no libarchive, no libcurl, no libtiff of its own (Leptonica reads TIFF), no OpenMP, no ScrollView, no training tools, no ICU, no host-CPU tuning
+   :cmake ["-DSW_BUILD=OFF" "-DBUILD_TRAINING_TOOLS=OFF" "-DBUILD_TESTS=OFF" "-DGRAPHICS_DISABLED=ON" "-DOPENMP_BUILD=OFF"
+           "-DDISABLE_TIFF=ON" "-DDISABLE_ARCHIVE=ON" "-DDISABLE_CURL=ON" "-DUSE_SYSTEM_ICU=OFF" "-DENABLE_NATIVE=OFF" "-DENABLE_LTO=OFF"
+           "-DENABLE_CCACHE=OFF" "-DENABLE_PRECOMPILED_HEADERS=OFF" "-DENABLE_NINJA_POOL=OFF" "-DINSTALL_CONFIGS=OFF"
+           "-DLeptonica_DIR=@PREFIX@/lib/cmake/leptonica"]}]
+
+ ;; the link order of a consumer (static archives, dependents first); `bb native` writes it to <prefix>/link.rustflags and manifest.edn
+ :link-order ["tesseract" "leptonica" "tiff" "webpmux" "webp" "sharpyuv" "jpeg" "png" "gif" "z"]
+
+ ;; data the CLI bundles (P11.4b), fetched and sha256-checked into .cache/native/dl/ and copied to <prefix>/share/tessdata/
+ :data
+ [{:id "tessdata-eng" :file "eng.traineddata" :bytes 4113088 :inventory "native/tessdata-eng"
+   :url "https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/eng.traineddata"
+   :sha256 "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"}
+  {:id "tessdata-osd" :file "osd.traineddata" :inventory "native/tessdata-osd"
+   :url "https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/osd.traineddata"
+   :sha256 "9cf5d576fcc47564f11265841e5ca839001e7e6f38ff7f7aacf46d15a96b00ff"}]
+
+ ;; what must never be in the result (checked by `bb native --audit` over library names, nm output, pkg-config files, CMake caches and link lines).
+ ;; jbig2dec is AGPL, JBIG-KIT GPL, readline and GMP GPL/LGPL, Ghostscript AGPL; the rest are the optional codecs and I/O libraries this build leaves out
+ :deny
+ {:libs "(?i)jbig2dec|jbig2|jbigkit|libjbig|(^|[^a-z])jbig([^a-z]|$)|readline|ghostscript|libgs\\b|gmp|openjp2|openjpeg|lerc|zstd|lzma|libdeflate|libarchive|libcurl|gnutls|fftw|libmagic"
+  :symbols "(?<![A-Za-z0-9])_?(jbig2_[a-z0-9_]+|jbg(85)?_[a-z0-9_]+|jbig2dec[A-Za-z0-9_]*|opj_[a-z0-9_]+|lzma_[a-z0-9_]+|ZSTD_[A-Za-z0-9_]+|libdeflate_[a-z0-9_]+|archive_[a-z0-9_]+|curl_[a-z0-9_]+|lerc_[a-z0-9_]+|Lerc[A-Z][A-Za-z0-9_]*|readline|__gmpz_[a-z0-9_]+)"
+  ;; a path in a CMake cache or link line that names the machine's own libraries
+  :paths "/opt/homebrew|/usr/local/(lib|include|opt|Cellar)|/usr/lib/(x86_64|aarch64)-linux-gnu/lib(png|jpeg|tiff|webp|gif|z|lept|tesseract)|/usr/lib/lib(png|jpeg|tiff|webp|gif|lept|tesseract)"}
+
+ ;; the licence texts, from the tarballs above (and, for pdfium, from the pinned pdfium-binaries archive of :pdfium-licences), into release/licenses/.
+ ;; :out is the file name there; third-party.edn names it in :text.
+ :licence-texts
+ [{:out "native-zlib-1.3.1.txt" :source "zlib" :file "LICENSE"}
+  {:out "native-libpng-1.6.58.txt" :source "libpng" :file "LICENSE"}
+  {:out "native-libjpeg-turbo-3.2.0.md" :source "libjpeg-turbo" :file "LICENSE.md"}
+  {:out "native-libjpeg-turbo-3.2.0-ijg.txt" :source "libjpeg-turbo" :file "README.ijg"}
+  {:out "native-libtiff-4.7.2.md" :source "libtiff" :file "LICENSE.md"}
+  {:out "native-libwebp-1.6.0.txt" :source "libwebp" :file "COPYING"}
+  {:out "native-libwebp-1.6.0-patents.txt" :source "libwebp" :file "PATENTS"}
+  {:out "native-giflib-6.1.3.txt" :source "giflib" :file "COPYING"}
+  {:out "native-leptonica-1.87.0.txt" :source "leptonica" :file "leptonica-license.txt"}
+  {:out "native-tesseract-5.5.3.txt" :source "tesseract" :file "LICENSE"}]
+
+ ;; pdfium-binaries chromium/8076: LICENSE (its own, MIT) and licenses/*. The text of the six archives agrees (the Windows ones with CRLF line ends,
+ ;; wasm without llvm-libc, the macOS pdfium.txt with a `// ` comment prefix); the Linux x64 archive is the source of the vendored copy.
+ :pdfium-licences
+ {:platform "linux-x64"
+  :texts [{:out "native-pdfium-binaries-chromium-8076.txt" :file "LICENSE"}
+          {:out "native-pdfium-chromium-8076.txt" :file "licenses/pdfium.txt"}
+          {:out "native-pdfium-abseil-chromium-8076.txt" :file "licenses/abseil.txt"}
+          {:out "native-pdfium-agg23-chromium-8076.txt" :file "licenses/agg23.txt"}
+          {:out "native-pdfium-fast_float-chromium-8076.txt" :file "licenses/fast_float.txt"}
+          {:out "native-pdfium-freetype-chromium-8076.txt" :file "licenses/freetype.txt"}
+          {:out "native-pdfium-icu-chromium-8076.txt" :file "licenses/icu.txt"}
+          {:out "native-pdfium-lcms-chromium-8076.txt" :file "licenses/lcms.txt"}
+          {:out "native-pdfium-libjpeg_turbo-chromium-8076.md" :file "licenses/libjpeg_turbo.md"}
+          {:out "native-pdfium-libjpeg_turbo-chromium-8076-ijg.txt" :file "licenses/libjpeg_turbo.ijg"}
+          {:out "native-pdfium-libopenjpeg-chromium-8076.txt" :file "licenses/libopenjpeg.txt"}
+          {:out "native-pdfium-libpng-chromium-8076.txt" :file "licenses/libpng.txt"}
+          {:out "native-pdfium-llvm-libc-chromium-8076.txt" :file "licenses/llvm-libc.txt"}
+          {:out "native-pdfium-simdutf-chromium-8076.txt" :file "licenses/simdutf.txt"}
+          {:out "native-pdfium-zlib-chromium-8076.txt" :file "licenses/zlib.txt"}]}}

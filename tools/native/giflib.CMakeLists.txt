@@ -1,0 +1,20 @@
+# A CMake build of giflib's LIBRARY ONLY (P11.5, D540). giflib ships a Makefile and no CMakeLists.txt, and Leptonica's
+# `find_package(GIF 5)` needs an installed libgif and gif_lib.h. `bb native` copies this file to the top of the extracted,
+# sha256-checked giflib tarball as CMakeLists.txt and builds it like every other component. It compiles the library
+# sources named in giflib's own Makefile (SOURCES) and installs gif_lib.h and a STATIC libgif. No utility is built.
+# giflib is MIT (SPDX-License-Identifier in every file); its COPYING is vendored from the tarball.
+cmake_minimum_required(VERSION 3.10)
+project(giflib C)
+
+set(GIF_SOURCES
+  dgif_lib.c egif_lib.c gifalloc.c gif_err.c gif_font.c gif_hash.c openbsd-reallocarray.c quantize.c)
+
+add_library(gif STATIC ${GIF_SOURCES})
+set_target_properties(gif PROPERTIES POSITION_INDEPENDENT_CODE ON C_STANDARD 99 C_EXTENSIONS ON)
+if(MSVC)
+  target_compile_definitions(gif PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif()
+
+include(GNUInstallDirs)
+install(TARGETS gif ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(FILES gif_lib.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
