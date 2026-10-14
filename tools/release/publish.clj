@@ -1,5 +1,5 @@
 #!/usr/bin/env bb
-;; Publish ONE registry, idempotently (P11.10, D524, D542, D1500). The publish workflow calls this once per registry, each in its own job, after
+;; Publish ONE registry, idempotently (P11.10, D524, D542, D547). The publish workflow calls this once per registry, each in its own job, after
 ;; `bb release-verify` passed and `bb package --host H` built the artifact of that registry into dist/ from the verified commit.
 ;;
 ;;   bb publish crates|npm|nuget|maven|go [--dry-run]

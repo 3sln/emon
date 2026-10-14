@@ -133,7 +133,7 @@ jobs:
       # THE CLI (P11.4b, D541): the same prefix and pdfium, the `emon` binary built over them, packed as emon-<version>-<triple>.tar.gz (.zip on
       # Windows) with its .sha256, then unpacked into a temporary directory and run (`bb cli --check`: `emon version`, only system libraries dynamic,
       # a born-digital and a scanned sample against the committed HTML, the refusals). `cli: false` stops after the native libraries.
-      # TODO (D541, D1500): macOS code signing and notarisation of bin/emon and lib/libpdfium.dylib. DISABLED: there is no Apple developer identity yet, so the macOS
+      # TODO (D541, D547): macOS code signing and notarisation of bin/emon and lib/libpdfium.dylib. DISABLED: there is no Apple developer identity yet, so the macOS
       # archives ship unsigned (docs/cli.md tells users to clear the quarantine flag). When one exists: import the certificate (secrets APPLE_CERT_P12 and
       # APPLE_CERT_PASSWORD) into a temporary keychain, `codesign --options runtime --timestamp` the binary and the dylib, and `xcrun notarytool submit --wait`
       # (secrets APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD) the zipped result. The signing has to happen where `bb cli` packs the binary, i.e. a hook in tools/cli.clj

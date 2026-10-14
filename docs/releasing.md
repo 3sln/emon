@@ -1,6 +1,6 @@
 # Releasing emon
 
-The maintainer's runbook (DEVLOG D524, D1500). Two workflows do the work and a person decides:
+The maintainer's runbook (DEVLOG D524, D547). Two workflows do the work and a person decides:
 
 ```
  prepare-release.yml                                   you                       publish.yml

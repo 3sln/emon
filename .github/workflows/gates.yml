@@ -1,6 +1,7 @@
 # EVERY gate, in full, in parallel (SPEC 15.3, D266; P11.8, D528). The pull request workflow (pr.yml) runs the fast core and the gates a change calls for, as
 # `--fast` variants; this one runs the lot:
-#   - on a release being published or prereleased (the tag is the ref; D528),
+#   - called by prepare-release.yml (`workflow_call`) on the tagged commit of a release (D547); there is no `release` trigger, a second full run on publish
+#     would repeat it,
 #   - on demand:  gh workflow run gates.yml -f groups=all [-f ref=main],
 #   - weekly (Monday), on main.
 # The shards come from ci/gate-map.edn through `bb ci shards` (one source for the PR plan and this run); the `unit` gate keeps a job per arm.
@@ -10,8 +11,6 @@
 name: gates
 
 on:
-  release:
-    types: [published, prereleased]
   workflow_call:
     inputs:
       groups:

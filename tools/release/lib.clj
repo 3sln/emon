@@ -1,4 +1,4 @@
-;; Shared helpers of the release tools (P11.9, P11.10, D1500): tools/release/{notes,verify,ops,publish}.clj. Process running, `gh api`, versions and tags.
+;; Shared helpers of the release tools (P11.9, P11.10, D547): tools/release/{notes,verify,ops,publish}.clj. Process running, `gh api`, versions and tags.
 ;; Nothing here talks to a network by itself; every caller passes what it needs, and the pure parts are what the self-tests exercise.
 (ns release.lib
   (:require [babashka.process :as p]

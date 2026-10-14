@@ -1,4 +1,4 @@
-# PREPARE A RELEASE (P11.9, D524, D1500). Nothing is published here: the end of this workflow is a DRAFT GitHub release with its archives attached and the commit
+# PREPARE A RELEASE (P11.9, D524, D547). Nothing is published here: the end of this workflow is a DRAFT GitHub release with its archives attached and the commit
 # status `emon/full-gates` on the tagged commit. The maintainer reads the draft and flips it to published, which starts publish.yml (P11.10).
 #
 # Two halves, so a human merges the version bump in between (the robust shape: the merge is a normal reviewed PR, and either half can be re-run alone):

@@ -1,4 +1,4 @@
-# PUBLISH A RELEASE (P11.10, D524, D542, D1500). Starts ONLY when the maintainer flips the DRAFT release to published (`release: published`), after
+# PUBLISH A RELEASE (P11.10, D524, D542, D547). Starts ONLY when the maintainer flips the DRAFT release to published (`release: published`), after
 # prepare-release.yml has tagged, gated and drafted it. A manual run (workflow_dispatch) is ALWAYS a dry run: it verifies and checks every credential and every
 # registry's "already published?" answer, and publishes nothing (no job below passes anything but --dry-run on that path; pages is skipped).
 #

@@ -3522,7 +3522,7 @@ Pure babashka (own SigV4); no aws/rclone/mc. Implementation: `tools/corpus.clj`.
 
 ### 15.3 Running the gates on GitHub (D266)
 
-`.github/workflows/gates.yml` runs every gate, in full, on `ubuntu-latest`, in parallel jobs, on a release being published or prereleased, on demand (`workflow_dispatch`) and weekly (Monday, `main`); `.github/workflows/pr.yml` runs the fast core and the gates a change calls for, as `--fast` variants, on every pull request (P11.7, P11.8, D528):
+`.github/workflows/gates.yml` runs every gate, in full, on `ubuntu-latest`, in parallel jobs, when prepare-release.yml calls it (`workflow_call`) on the tagged commit of a release (D547), on demand (`workflow_dispatch`) and weekly (Monday, `main`); `.github/workflows/pr.yml` runs the fast core and the gates a change calls for, as `--fast` variants, on every pull request (P11.7, P11.8, D528):
 
     gh workflow run gates.yml -f groups=all            # all | unit-only | fast-only
     gh workflow run gates.yml -f groups=unit-only -f ref=my-branch

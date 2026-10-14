@@ -5,7 +5,7 @@
 # size budget is over. Settings > Pages > Source must be "GitHub Actions".
 name: pages
 
-#   publish.yml (P11.10, D1500) CALLS this file (`workflow_call`, `ref` = the verified commit) after it has re-verified the release; it no longer starts on a
+#   publish.yml (P11.10, D547) CALLS this file (`workflow_call`, `ref` = the verified commit) after it has re-verified the release; it no longer starts on a
 #   `release` event of its own, which would deploy before the verification.
 on:
   workflow_call:

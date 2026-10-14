@@ -1,5 +1,5 @@
 #!/usr/bin/env bb
-;; The small steps of the prepare-release workflow and the publish summary (P11.9, P11.10, D524, D1500). The workflows only call these; the logic is here so
+;; The small steps of the prepare-release workflow and the publish summary (P11.9, P11.10, D524, D547). The workflows only call these; the logic is here so
 ;; it can be tried on a laptop (every step that changes something outside the working tree takes --dry-run, which says what it would do and does nothing).
 ;;
 ;;   bb release-ops propose (--bump major|minor|patch | --version X.Y.Z) [--base main] [--dry-run]

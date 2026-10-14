@@ -1,5 +1,5 @@
 #!/usr/bin/env bb
-;; The publish job's re-verification (P11.10, D524, D1500): nothing is published unless all three hold.
+;; The publish job's re-verification (P11.10, D524, D547): nothing is published unless all three hold.
 ;;
 ;;   bb release-verify --tag vX.Y.Z [--repo OWNER/REPO] [--dry-run]
 ;;   bb release-verify --self-test

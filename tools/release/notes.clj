@@ -1,5 +1,5 @@
 #!/usr/bin/env bb
-;; Release notes (P11.9, D1500): the DEVLOG decisions and the commits since the previous tag, as the Markdown body of the DRAFT GitHub release.
+;; Release notes (P11.9, D547): the DEVLOG decisions and the commits since the previous tag, as the Markdown body of the DRAFT GitHub release.
 ;;
 ;;   bb release-notes [--since TAG|SHA] [--until REF] [--version X.Y.Z] [--out FILE] [--max-decisions N] [--max-commits N]
 ;;   bb release-notes --self-test

@@ -1,6 +1,6 @@
 name: release token
 description: >-
-  The credential that opens the release PR and pushes the release tag (P11.9, D1500). Pushes and pull requests made with the workflow's own GITHUB_TOKEN do NOT start other
+  The credential that opens the release PR and pushes the release tag (P11.9, D547). Pushes and pull requests made with the workflow's own GITHUB_TOKEN do NOT start other
   workflows, so the release PR would never get its `pr / verdict` check. Two ways to provide one (docs/releasing.md has the setup of each):
   (1) a GitHub App: pass `app-id` (the repository variable RELEASE_APP_ID) and `private-key` (the secret RELEASE_APP_KEY); a short-lived installation token is made;
   (2) a fine-grained personal access token: pass `pat` (the secret RELEASE_TOKEN). The App wins when both are set.
