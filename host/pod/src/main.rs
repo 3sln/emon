@@ -599,8 +599,8 @@ fn option_text(v: Option<&Edn>) -> Result<String, PodError> {
 // The engine and the Options for an option text; `native` brings the build's own ports.
 fn setup(text: &str, native: bool) -> Result<(Engine, emon::Options), PodError> {
     let p = parse_options(text).map_err(PodError::usage)?;
-    if p.record || p.js_ocr {
-        return Err(PodError::usage("record=1 and js-ocr=1 are options of a session (the C binding's emon_open): the pod converts in one call"));
+    if p.record || p.js_ocr || p.js_render {
+        return Err(PodError::usage("record=1, js-ocr=1 and js-render=1 are options of a session (the C binding's emon_open): the pod converts in one call"));
     }
     let mut cfg = p.config.clone();
     if native {

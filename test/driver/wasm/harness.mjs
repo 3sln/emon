@@ -3,6 +3,7 @@
 // and its answer is what the driver prints (the `--out=bundle` sections, or the error and its exit code), so `bb identity` and
 // `bb slice` can hold the browser to the Rust host byte for byte.
 import { Emon, bytesSource, blobSource, urlSource, streamSource, EmonError } from '/sdk/index.js';
+import { pdfiumRenderer } from '/sdk/pdfium.js';
 
 let emon = null;
 
@@ -232,6 +233,6 @@ window.H = {
   ADAPTERS,
   load: async () => (emon ||= await Emon.load('/emon.wasm')),
   imports: async () => WebAssembly.Module.imports(await WebAssembly.compile(await (await fetch('/emon.wasm')).arrayBuffer())),
-  sdk: { Emon, bytesSource, blobSource, urlSource, streamSource, EmonError },
+  sdk: { Emon, bytesSource, blobSource, urlSource, streamSource, EmonError, pdfiumRenderer },
 };
 window.__ready = true;

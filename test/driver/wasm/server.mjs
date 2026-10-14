@@ -17,6 +17,18 @@ export const repo = path.resolve(here, '..', '..', '..');
 
 const TYPES = { '.html': 'text/html', '.mjs': 'text/javascript', '.js': 'text/javascript', '.wasm': 'application/wasm', '.json': 'application/json', '.gz': 'application/gzip' };
 
+/** A file of the pdfium wasm build in `.cache/pdfium/<version>/wasm/` (the unpacked archive, and `lib/pdfium.mjs` its loader), or null. */
+export function pdfiumFile(rel) {
+  const base = path.join(repo, '.cache', 'pdfium');
+  if (!fs.existsSync(base)) return null;
+  for (const v of fs.readdirSync(base)) {
+    const d = path.join(base, v, 'wasm');
+    const f = path.resolve(d, rel);
+    if (f.startsWith(d + path.sep) && fs.existsSync(path.join(d, 'lib', 'pdfium.mjs')) && fs.existsSync(f)) return f;
+  }
+  return null;
+}
+
 export function startServer({ wasm }) {
   const generated = new Map(); // name -> { bytes, etag }
   const sent = new Map(); // path -> { requests, bytes }
@@ -93,6 +105,15 @@ export function startServer({ wasm }) {
       if (p.startsWith('/tess/core/')) return file(path.join(repo, 'host/js/node_modules/tesseract.js-core', p.slice(11)));
       if (p.startsWith('/tess/lang/')) return file(path.join(repo, 'host/js/node_modules/@tesseract.js-data/eng/4.0.0_best_int', p.slice(11)));
       if (p === '/tess/tesseract.esm.min.js') return file(path.join(repo, 'host/js/node_modules/tesseract.js/dist/tesseract.esm.min.js'));
+      // pdfium's WebAssembly build (`bb pdfium-fetch --platform wasm`, P11.4c): /pdfium/lib/pdfium.mjs and /pdfium/lib/pdfium.wasm, when it is in the cache
+      if (p.startsWith('/pdfium/')) {
+        const f = pdfiumFile(p.slice(8));
+        if (!f) {
+          res.writeHead(404);
+          return res.end();
+        }
+        return file(f);
+      }
       res.writeHead(404);
       res.end();
     } catch (e) {

@@ -101,6 +101,7 @@ public static class Enctx {
         public int Nort = 0;
         public int Par = 0;
         public int Dry = 0;
+        public int Jsrender = 0;
         public Cfg() {
         }
         public Cfg Clone() {
@@ -129,6 +130,7 @@ public static class Enctx {
             c.Nort = this.Nort;
             c.Par = this.Par;
             c.Dry = this.Dry;
+            c.Jsrender = this.Jsrender;
             return c;
         }
     }

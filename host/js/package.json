@@ -8,7 +8,8 @@
   "main": "src/index.js",
   "exports": {
     ".": "./src/index.js",
-    "./tesseract": "./src/tesseract.js"
+    "./tesseract": "./src/tesseract.js",
+    "./pdfium": "./src/pdfium.js"
   },
   "files": ["src"],
   "engines": { "node": ">=22" },

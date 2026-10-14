@@ -9,7 +9,7 @@ import (
 	"emon/port"
 )
 
-var CkChars [168]int32 = [168]int32{
+var CkChars [177]int32 = [177]int32{
 	108, 111, 99, 97, 108, 101, 111, 99, 114, 102, 117, 114, 110, 105, 116, 117,
 	114, 101, 97, 115, 115, 101, 116, 115, 97, 115, 115, 101, 116, 45, 100, 112,
 	105, 97, 115, 115, 101, 116, 45, 112, 105, 120, 101, 108, 115, 97, 115, 115,
@@ -20,10 +20,11 @@ var CkChars [168]int32 = [168]int32{
 	117, 110, 100, 115, 102, 101, 116, 99, 104, 45, 114, 111, 117, 110, 100, 115,
 	114, 101, 99, 111, 114, 100, 106, 115, 45, 111, 99, 114, 99, 104, 117, 110,
 	107, 108, 105, 109, 105, 116, 46, 112, 114, 111, 100, 117, 99, 101, 114, 46,
-	112, 97, 114, 97, 108, 108, 101, 108,
+	112, 97, 114, 97, 108, 108, 101, 108, 106, 115, 45, 114, 101, 110, 100, 101,
+	114,
 }
 
-var CkRows [95]int32 = [95]int32{
+var CkRows [100]int32 = [100]int32{
 	0, 0, 0, 0, 6,
 	2, 0, 0, 6, 3,
 	2, 0, 0, 9, 9,
@@ -43,6 +44,7 @@ var CkRows [95]int32 = [95]int32{
 	4, 0, 0, 145, 6,
 	5, 0, 0, 151, 9,
 	1, 1, 2147483647, 160, 8,
+	3, 0, 0, 168, 9,
 }
 
 var CvChars [62]int32 = [62]int32{
@@ -102,6 +104,8 @@ const kChunk int32 = 15
 
 const kPar int32 = 18
 
+const kJsrender int32 = 19
+
 const shStr int32 = 0
 
 const shNum int32 = 1
@@ -133,6 +137,7 @@ func CfDefaults(c *enctx.Cfg) int32 {
 	c.Fetchr = 24
 	c.Rec = 0
 	c.Jsocr = 0
+	c.Jsrender = 0
 	c.Par = 1
 	c.Dry = 0
 	return 0
@@ -162,7 +167,7 @@ func cfKeyIs(t *port.Cells, from int32, to int32, k int32) int32 {
 func CfKeyFind(t *port.Cells, from int32, to int32) int32 {
 	// The key t[from, to) names, or -1.
 	var k int32 = 0
-	for k < 19 {
+	for k < 20 {
 		if cfKeyIs(t, from, to, k) == 1 {
 			return k
 		}
@@ -400,6 +405,9 @@ func cfSetFlag(c *enctx.Cfg, k int32, v int32) int32 {
 	}
 	if k == kJsocr {
 		c.Jsocr = v
+	}
+	if k == kJsrender {
+		c.Jsrender = v
 	}
 	return 0
 }

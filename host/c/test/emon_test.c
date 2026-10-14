@@ -217,6 +217,8 @@ int main(void) {
     emon_free_error(&err);
     check(emon_convert_json(&in, "record=1\n", 0, 0, &b, &err) == -EMON_ERR_USAGE, "record=1 is a session's option: a one-shot refuses it");
     emon_free_error(&err);
+    check(emon_convert_json(&in, "js-render=1\n", 0, 0, &b, &err) == -EMON_ERR_USAGE, "js-render=1 is a session's option: a one-shot refuses it");
+    emon_free_error(&err);
     check(emon_convert_json(NULL, NULL, 0, 0, &b, &err) == -EMON_ERR_USAGE && emon_convert_json(&in, NULL, 0, 0, NULL, &err) == -EMON_ERR_USAGE, "NULL arguments are usage errors, not crashes");
     emon_free_error(&err);
     emon_input empty = {0};
@@ -246,6 +248,20 @@ int main(void) {
     emon_step_out so = {0};
     check(emon_answer(s, NULL, 0, &err) == -EMON_ERR_USAGE, "an answer when none is owed is a usage error");
     emon_free_error(&err);
+    /* P11.4c: a renderer's answer when none is owed is a usage error, and the pixels bound is kin's (default and an override) */
+    uint8_t px[3] = {255, 255, 255};
+    check(emon_answer_render(s, 1, 1, 1, px, 3, &err) == -EMON_ERR_USAGE, "an emon_answer_render when no request is owed is a usage error");
+    emon_free_error(&err);
+    int64_t lim = 0;
+    check(emon_limit(s, 9, &lim, &err) == 0 && lim == emon_const(109) && lim > 0, "emon_limit: pixels (kind 9) is kin's default, as emon_const(100 + 9) says");
+    check(emon_limit(s, 9, NULL, &err) == -EMON_ERR_USAGE, "emon_limit: a NULL output is a usage error");
+    emon_free_error(&err);
+    emon_close(s);
+    s = NULL;
+    check(emon_open(n, 0, 0, NULL, 0, "js-render=1\nlimit.pixels=1000\n", &s, &err) == 0 && s != NULL && emon_limit(s, 9, &lim, &err) == 0 && lim == 1000, "emon_open: js-render=1 and limit.pixels=1000 -- emon_limit says 1000");
+    emon_close(s);
+    s = NULL;
+    check(emon_open(n, 0, 0, NULL, 0, NULL, &s, &err) == 0 && s != NULL, "emon_open (again)");
     int first = emon_step(s, &so, &err);
     check(first == EMON_NEED_BYTES && so.nranges > 0 && so.ranges[0].length > 0, "the first step needs bytes, and says which");
     emon_free_step(&so);

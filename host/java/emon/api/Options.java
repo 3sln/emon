@@ -226,6 +226,8 @@ public final class Options {
         public Config config;
         /** `record=1`: keep a transcript of the conversion. `js-ocr=1`: the host owes the `ocr` requests. */
         public boolean record, jsOcr;
+        /** `js-render=1`: the host owes the `render` and `crop` requests (P11.4c). */
+        public boolean jsRender;
         /** `producer.NAME=VALUE`, in order: what the transcript says produced it. */
         public final List<String[]> producer = new ArrayList<>();
     }
@@ -281,6 +283,7 @@ public final class Options {
         p.config = cfg;
         p.record = c.rec != 0;
         p.jsOcr = c.jsocr != 0;
+        p.jsRender = c.jsrender != 0;
         for (int at = 0; at < Port.cellsLen(c.prod);) {
             int kl = Port.cellsAt(c.prod, at), vl = Port.cellsAt(c.prod, at + 1);
             p.producer.add(new String[] {stringOf(c.prod, at + 2, kl), stringOf(c.prod, at + 2 + kl, vl)});

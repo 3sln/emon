@@ -203,6 +203,8 @@ public sealed class Options {
         public Config Config;
         /// <summary>`record=1`: keep a transcript of the conversion. `js-ocr=1`: the host owes the `ocr` requests.</summary>
         public bool Record, JsOcr;
+        /// <summary>`js-render=1`: the host owes the `render` and `crop` requests (P11.4c).</summary>
+        public bool JsRender;
         /// <summary>`producer.NAME=VALUE`, in order: what the transcript says produced it.</summary>
         public readonly List<string[]> Producer = new List<string[]>();
     }
@@ -262,6 +264,7 @@ public sealed class Options {
         p.Config = cfg;
         p.Record = c.Rec != 0;
         p.JsOcr = c.Jsocr != 0;
+        p.JsRender = c.Jsrender != 0;
         for (int at = 0; at < emon.Port.CellsLen(c.Prod);) {
             int kl = emon.Port.CellsAt(c.Prod, at), vl = emon.Port.CellsAt(c.Prod, at + 1);
             p.Producer.Add(new string[] {StringOf(c.Prod, at + 2, kl), StringOf(c.Prod, at + 2 + kl, vl)});

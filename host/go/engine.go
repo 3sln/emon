@@ -319,6 +319,8 @@ type Parsed struct {
 	Config  Config
 	// Record is `record=1`: keep a transcript of the conversion. JsOcr is `js-ocr=1`: the host owes the `ocr` requests.
 	Record, JsOcr bool
+	// JsRender is `js-render=1`: the host owes the `render` and `crop` requests (P11.4c).
+	JsRender bool
 	// Producer is `producer.NAME=VALUE`, in order: what the transcript says produced it.
 	Producer [][2]string
 }
@@ -400,7 +402,7 @@ func ParseOptions(text string) (*Parsed, error) {
 	if err != nil {
 		return nil, err
 	}
-	p := &Parsed{Options: optionsOf(c), Config: configOf(c), Record: c.Rec != 0, JsOcr: c.Jsocr != 0}
+	p := &Parsed{Options: optionsOf(c), Config: configOf(c), Record: c.Rec != 0, JsOcr: c.Jsocr != 0, JsRender: c.Jsrender != 0}
 	for at := int32(0); at < port.CellsLen(c.Prod); {
 		kl, vl := port.CellsAt(c.Prod, at), port.CellsAt(c.Prod, at+1)
 		p.Producer = append(p.Producer, [2]string{stringOfCells(c.Prod, at+2, kl), stringOfCells(c.Prod, at+2+kl, vl)})

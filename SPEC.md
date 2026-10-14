@@ -901,24 +901,47 @@ the byte source, hands the bytes in and steps again; the unit that missed is
 re-run from scratch inside the step), or requests for the host. `decode` and
 `decode-img` are the module's own (PNG, JPEG, TIFF, CCITT and DCT in Rust),
 read from the bytes the host provided; `ocr` is the JS host's, fulfilled by
-`ports.ocr` (tesseract.js: `host/js/src/tesseract.js`, D359). A request no
-port is configured for (`render` and `crop`; `ocr` from a host with no
-engine) is answered `unsupported`, which is an answer (D199, D358). A
+`ports.ocr` (tesseract.js: `host/js/src/tesseract.js`, D359), and `render` and
+`crop` by `ports.render` (pdfium's WebAssembly build: `host/js/src/pdfium.js`,
+D529-D538; the option `js-render=1`, which the SDK sets when it has the
+port, makes them the host's, as `js-ocr=1` does `ocr`). A request no port is
+configured for (`render` and `crop` without `ports.render`; `ocr` from a host
+with no engine) is answered `unsupported`, which is an answer (D199, D358). A
 transcript recorded natively replays in the browser and the reverse, to the
 same Model (`bb identity`'s browser arm holds it).
-pdfium has a WebAssembly build (bblanchon/pdfium-binaries ships
-`pdfium-wasm.tgz`, pinned beside the native ones in `tools/pdfium/pdfium.edn`;
-PDFium's own `FPDF_*` C API, exported through Emscripten): the JS host would
-fulfil `render` and `crop` as it fulfils OCR, serving pdfium's custom
-file-access callback from the async byte source (`FPDF_LoadCustomDocument`
-with `m_GetBlock` reading a resident span, or the request awaited first as a
-`bytes` round, D058), building the same page edits for the layers and
-answering with RGB pixels that the core writes into a `Bitmap`. Nothing in
-kin or in the transcript would change. **That part is not built** (D358): a
-born-digital PDF needs no render for its text, and a scanned page is read
-through `decode`; what only a render could give (a page's pixels for
-fusion, a seal's or figure's crop) degrades to the engine's no-Renderer
-answer.
+
+**As built (P11.4c): the browser's pdfium.** pdfium has a WebAssembly build
+(bblanchon/pdfium-binaries ships `pdfium-wasm.tgz`, pinned beside the native
+ones in `tools/pdfium/pdfium.edn`; PDFium's own `FPDF_*` C API, exported
+through Emscripten). `host/js/src/pdfium.js` is a port of the native
+`host/rust/src/pdfium.rs` call for call, behind a `Renderer` interface
+(`host/js/src/render.js`) that the embedder may implement otherwise: `open`
+(called by the first `render` or `crop` request of a conversion, and never for
+a document that asks for none) and a document that renders a page at a dpi in
+a layer to RGB, or says `failed` or `unsupported`, which are answers. The
+renderer is asked for WHOLE PAGES only: the SDK keeps the last one in the
+module's memory and `emon_answer_render` cuts a crop out of it (`render::cut`,
+§7.2: the same pixels, cut out, never a re-fit), so a page and its figures
+are one render and the pixels are the same however a crop is asked. The size
+(`floor(pt * dpi / 72 + 1/2)`), the bitmap (BGRX, white, annotations, three
+bytes kept a pixel) and the layers (page objects removed, recursively through
+forms; the watermark layers `unsupported`) are the native binding's, and the
+document is reopened for each render. Three things are the browser's own:
+(1) **the document is read whole**, once, on the first render
+(`RenderDoc.read(0, size)`, an exception to §13.1's "no whole-file read": the
+adapter loads it into pdfium's heap with `FPDF_LoadMemDocument64`; a source
+that fails or changes under that read ends the conversion with `io` or
+`source-changed`, not a failed page; FPDFAvail hint loading is a follow-up);
+(2) **`maxPixels`** (default 64 Mpx) bounds a page tighter than the `pixels`
+limit (kin's 268 Mpx, which `emon_limit` hands the adapter); the smaller
+applies, and the divergence from the native default is accepted; (3) pdfium
+draws a base-14 font that is not embedded from its own built-in set, where a
+native build uses the system's, so the text of such a page moves (embedded
+fonts render to the native pixels: measured 0 of 255 on 2.2 Mpx, `bb
+pdfium-wasm`). A transcript the browser records has `:producer` `pdfium-wasm`
+and replays on every host (`test/pdfium-wasm/`, which the gate replays on Rust
+and Go; the live build agrees with the native pdfium on requests, answers and
+sizes, and on pixels within D248's bound where fonts are embedded, D534).
 
 Cheap, deterministic ports (`Blob`, `Cells`, `Text`, `Bitmap` pixel access,
 `Crypto`, limits) are called synchronously as in nome.
@@ -3204,7 +3227,14 @@ dependence on a concrete filesystem**. So:
 * **In the browser** (D356, D357) the loop is the JS SDK's: the WASM module
   answers `need-bytes` with the ranges its `Src` missed, the SDK awaits
   `read(offset, length)` of the source for them (several at once), hands the
-  bytes in and steps again; there is no whole-file read. An in-memory source
+  bytes in and steps again; there is no whole-file read **but one**: the
+  renderer's. `ports.render` (pdfium's WebAssembly build, §7.3 "As built,
+  P11.4c", D531) is opened by the first `render` or `crop` request, with the
+  whole file read once from the source (`read(0, size)`; an in-memory source
+  hands over what it holds), because pdfium's in-memory loader wants the file
+  in its heap; a document that asks for no raster never does it, and a fault
+  of the source under that read ends the conversion with its typed error. An
+  in-memory source
   (`ArrayBuffer`, `Uint8Array`) is *resident* and the SDK gives the engine its
   bytes at once (reading what the page already holds is not a read; `lazy`
   reads it by range like the rest); a `Blob` or `File`, a URL and any

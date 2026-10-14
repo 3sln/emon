@@ -16,9 +16,9 @@
 // The unit that missed is re-run from scratch inside `emon_step` (D058: the attempt that did not miss is the in-memory run),
 // so the bytes a conversion fetched are the bytes it touched. `decode`, `decode-img` and (with no port) `ocr` and `render`
 // requests are answered here, in Rust, from the bytes the host provided; `ocr` goes to the host when it said it has an engine
-// (`js-ocr`), as SPEC 7.3 says: the JS host owns it. `render` and `crop` would be the JS host's too, through pdfium's
-// WebAssembly build (SPEC 7.3: not built); they, and `ocr` from a host with no engine, are answered `unsupported`, which is an
-// answer (D199): the page then has no text from it.
+// (`js-ocr`), as SPEC 7.3 says: the JS host owns it. `render` and `crop` are the JS host's too, through pdfium's WebAssembly
+// build (P11.4c, `js-render`; `emon_answer_render`); they, and `ocr` from a host with no engine, are answered `unsupported`, which
+// is an answer (D199): the page then has no text from it.
 //
 // MEMORY. Everything crosses as integers and byte ranges of linear memory; the host allocates with `emon_alloc` and frees with
 // `emon_free`. Results are written to ONE shared output buffer (`emon_out_ptr`, `emon_out_len`) that the next call overwrites.
@@ -299,6 +299,24 @@ pub unsafe extern "C" fn emon_answer_ocr(h: i32, id: i32, ptr: u32, ncells: u32)
         let flat = ints_from(ptr, ncells);
         answered(session(h, |s| s.answer_ocr(id, &flat)))
     })
+}
+
+// A `render` or `crop` answer (P11.4c, `js-render`): the WHOLE page the JS adapter's pdfium made, `width` x `height` pixels of RGB, `len`
+// bytes at `ptr` (a crop is the cut of it, in Rust, `render::cut`: the pixels are the same however a crop is asked, SPEC 7.2). The
+// answer record is kin's; a bitmap that is not `width * height * 3` bytes or is over the `pixels` limit is `usage`.
+#[no_mangle]
+pub unsafe extern "C" fn emon_answer_render(h: i32, id: i32, width: i32, height: i32, ptr: u32, len: u32) -> i32 {
+    guard(|| {
+        let rgb = bytes(ptr, len);
+        answered(session(h, |s| s.answer_render(id, width, height, rgb)))
+    })
+}
+
+// The value of limit `kind` in force for the session (kin's table, the conversion's `limit.NAME=N` over it): what bound the JS adapter's
+// renderer must keep (`pixels` is kind 9), asked of the module so the SDK types no default. -1 for a handle that is not open.
+#[no_mangle]
+pub extern "C" fn emon_limit(h: i32, kind: i32) -> i32 {
+    guard(|| session(h, |s| s.limit(kind)).unwrap_or(-1))
 }
 
 // The `ncells` little-endian i32s at `ptr` in the module's memory.

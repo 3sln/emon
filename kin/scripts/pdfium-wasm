@@ -1,0 +1,180 @@
+#!/usr/bin/env bb
+;; THE BROWSER'S PDFIUM: transcripts of pdfium's WebAssembly build, replayed everywhere, reproduced live.   kin/scripts/pdfium-wasm   (bb pdfium-wasm)
+;;                                                                                                       (DEVLOG P11.4c, D529-D538; SPEC 7.2, 7.3, 13.1)
+;;
+;; The browser fulfils `render` and `crop` itself (`host/js/src/pdfium.js`: pdfium's WebAssembly build behind the JS SDK's `ports.render`). Its pixels are the
+;; build's, not the host's (D008, D095), so this is how they are held, in two arms:
+;;
+;;   ARM A, always. test/pdfium-wasm/replay/ID is what the live build answered when the JS SDK converted each document of test/pdfium-wasm/FIXTURES.edn at
+;;     `assets=figures` (`bb pdfium-wasm-record`), in the file format of every host. This arm only REPLAYS them, through the whole Engine on Rust and on
+;;     Go, with no pdfium and no browser, and holds:
+;;       1. IDENTITY: both Engines give the identical JSON, HTML in three modes and asset files, and they are test/pdfium-wasm/DIGESTS.edn's (SHA-256), the
+;;          digests of the recording; the transcript says what produced it (`:producer`) and holds renders of the figures and nothing else;
+;;       2. NOTHING IS GUESSED: a replay of a transcript whose crop request has one other pixel in it is `transcript-miss` on both.
+;;   ARM B, where it can run (Node 22+, the emon-wasm-build toolchain, `bb pdfium-fetch --platform wasm`; else `SKIP pdfium-wasm -- why`, and arm A is the
+;;     gate). The LIVE build, in Node (the JS SDK and the adapter need no DOM), converts the same documents, and:
+;;       B1, EXACT. It reproduces the committed transcript byte for byte, its Model and HTML are the digests', and every page it rendered has the SHA-256
+;;          test/pdfium-wasm/RENDERS.edn names, as do the render cases of test/render/cases.edn (layers, crops, failures) it answers.
+;;       B2, AGAINST THE NATIVE PDFIUM. The same build's native binary recorded the same documents (test/asset/figures/, P8.5) and the render cases
+;;          (test/render/render/, P6.2). The requests, the answers (statuses, sizes) and the asset names are identical, the Model is identical with the assets'
+;;          hashes and sizes masked, the HTML with the assets omitted is identical, and the pixels are within D248's bound (at most 3 of 255 per channel on at
+;;          most 6% of the pixels) where the document embeds its fonts, which is all that moves (a base-14 font that is not embedded is drawn from the system's
+;;          fonts natively and pdfium's own in the browser: those documents' largest difference is printed, not held, D533). The largest difference and the
+;;          share of pixels that differ at all are printed. THIS IS A LIVE RENDER IN A GATE, an exception to D248's rule that no gate runs a live engine
+;;          (D534): the build is pinned (tools/pdfium/pdfium.edn), WebAssembly is deterministic, and B1 holds it to its own recording.
+(require '[babashka.fs :as fs]
+         '[babashka.classpath :as cp]
+         '[babashka.process :refer [process shell]]
+         '[cheshire.core :as json]
+         '[clojure.edn :as edn]
+         '[clojure.string :as str])
+(cp/add-classpath "tools/lib")
+(require '[pdfium-wasm :as pw])
+
+(def fails (atom 0))
+(defn ok [& xs] (println (str "  ok   " (apply str xs))))
+(defn bad [& xs] (swap! fails inc) (println (str "  FAIL " (apply str xs))))
+(defn check [pass? & msg] (if pass? (apply ok msg) (apply bad msg)))
+
+(def work (str (fs/create-temp-dir {:prefix "pdfium-wasm-gate."})))
+(.addShutdownHook (Runtime/getRuntime) (Thread. #(fs/delete-tree work)))
+
+(shell {:out :string :err :string} "kin/scripts/emit")
+
+(def digests (let [f (str pw/root "/DIGESTS.edn")] (if (fs/exists? f) (edn/read-string (slurp f)) {})))
+(def renders (let [f (str pw/root "/RENDERS.edn")] (if (fs/exists? f) (edn/read-string (slurp f)) {})))
+
+;; ============================================================================================================================== ARM A
+(def rust (when (fs/which "cargo") (pw/build-driver "kin/scripts/emon-rs-build" "Rust" bad)))
+(def go (when (fs/which "go") (pw/build-driver "kin/scripts/emon-go-build" "Go" bad)))
+(when-not rust (println "  SKIP rust engine -- cargo not on PATH"))
+(when-not go (println "  SKIP go engine   -- go not on PATH"))
+
+(check (every? #(fs/exists? (str pw/root "/replay/" % "/transcript.edn")) pw/stems)
+       "every one of the " (count pw/stems) " documents of FIXTURES.edn has a committed transcript (test/pdfium-wasm/replay/)")
+(check (= (set pw/stems) (set (keys digests))) "DIGESTS.edn names exactly those documents")
+
+(defn drive [exe & a]
+  (let [r @(apply process {:out :string :err :string} exe (map str a))]
+    {:exit (:exit r) :out (:out r) :err (:err r)}))
+
+(defn crops-and-renders-only? [dir]
+  (let [t (slurp (str dir "/transcript.edn"))
+        kinds (map second (re-seq #":kind :([\w-]+)" t))]
+    (and (seq kinds) (every? #{"crop" "render"} kinds) (str/includes? t ":renderer \"pdfium-wasm\""))))
+
+(when (and rust go)
+  (doseq [stem pw/stems
+          :let [pdf (:pdf (pw/docs stem)) t (str pw/root "/replay/" stem)
+                r (pw/replay-entry rust pdf t)
+                g (pw/replay-entry go pdf t)]]
+    (check (and (not (:error r)) (= r g))
+           stem ": the Rust Engine and the Go Engine replay the browser's pdfium transcript to the IDENTICAL JSON, HTML (inline, external, omit) and "
+           (count (:assets r)) " asset file(s)" (when (:error r) (str ": " (:error r))))
+    (check (and (= r (get digests stem)) (some? r))
+           stem ": and they are the digests of the recording (JSON " (some-> r :json (subs 0 12)) ", assets " (str/join " " (map #(subs % 0 8) (vals (:assets r)))) ")")
+    (check (crops-and-renders-only? t) stem ": the transcript is the browser's (producer pdfium-wasm) and holds renders and crops only"))
+  ;; nothing is guessed: one other pixel of a crop request (its dpi) is transcript-miss
+  (let [stem (first pw/stems) t (str pw/root "/replay/" stem) tam (str work "/tamper")
+        text (slurp (str t "/transcript.edn"))
+        changed (str/replace-first text #"(\{:round \d+ :kind :crop :req \[\d+ \d+ \d+ \d+ \d+ )(\d+)" (fn [[_ a dpi]] (str a (inc (parse-long dpi)))))]
+    (fs/create-dirs tam)
+    (doseq [f (fs/list-dir t)] (fs/copy f (str tam "/" (fs/file-name f))))
+    (spit (str tam "/transcript.edn") changed)
+    (let [args ["--ocr=never" "--assets=figures" (str "--replay=" tam) (:pdf (pw/docs stem))]
+          a (apply drive rust args) b (apply drive go args)]
+      (check (and (not= text changed) (not= 0 (:exit a)) (not= 0 (:exit b))
+                  (str/includes? (:err a) "transcript-miss") (str/includes? (:err b) "transcript-miss"))
+             stem ": a replay of a changed request (150 -> 151 dpi) is transcript-miss on both Engines, nothing guessed"))))
+
+;; ============================================================================================================================== ARM B
+(def env (pw/live-env))
+(defn bound? [{mx :max differing :differing total :total}] (and (<= mx 3) (<= (* 100.0 (/ differing (double (max 1 total)))) 6.0)))
+(defn pct [d t] (format "%.2f%%" (* 100.0 (/ d (double (max 1 t))))))
+
+(cond
+  (:fail env) (bad (:fail env))
+  (:skip env) (println (str "  SKIP pdfium-wasm -- " (:skip env) " (arm B, the live build, is left out; arm A is the gate)"))
+  (not (and rust go)) (println "  SKIP pdfium-wasm -- arm B needs the Rust driver to replay the native transcripts")
+  :else
+  (let [all-max (atom 0) all-diff (atom 0) all-total (atom 0) held-max (atom 0) held-diff (atom 0) held-total (atom 0)
+        unheld (atom [])]
+    (doseq [stem pw/stems
+            :let [{:keys [pdf native fonts]} (pw/docs stem)
+                  out (str work "/live-" stem)
+                  ;; the native pdfium's run of the same document, replayed here: its Model, its HTML without assets, its asset files
+                  nd (str work "/native-" stem)
+                  nrep (fn [& more] (apply drive rust "--ocr=never" "--assets=figures" (str "--replay=" native) (concat more [pdf])))
+                  _ (fs/create-dirs nd)
+                  nj (nrep (str "--asset-dir=" nd "/assets") "--out=json")
+                  no (nrep "--out=html" "--html=assets=omit")
+                  _ (spit (str nd "/model.json") (:out nj))
+                  _ (spit (str nd "/omit.html") (:out no))
+                  r (pw/live-convert env stem out "--native" native "--native-json" (str nd "/model.json") "--native-omit" (str nd "/omit.html")
+                                     "--native-assets" (str nd "/assets"))
+                  c (:compare r)
+                  want (get-in renders [:docs stem])
+                  got (when (fs/exists? (str out "/renders.json")) (mapv #(select-keys % [:page :dpi :layer :width :height :sha256]) (json/parse-string (slurp (str out "/renders.json")) true)))
+                  same-files? (let [a (str pw/root "/replay/" stem) b (str out "/transcript")]
+                                (and (fs/exists? b)
+                                     (= (sort (map fs/file-name (fs/list-dir a))) (sort (map fs/file-name (fs/list-dir b))))
+                                     (every? #(= (vec (fs/read-all-bytes (str a "/" (fs/file-name %)))) (vec (fs/read-all-bytes %))) (fs/list-dir b))))]]
+      (if (:error r)
+        (bad stem ": the live build did not convert: " (:error r))
+        (do
+          ;; B1 -------------------------------------------------------------------------------------------------------------------------
+          (check same-files? stem ": B1 the live build's transcript is the committed one, byte for byte (" (count (fs/list-dir (str out "/transcript"))) " files)")
+          (check (and want (= got (mapv #(select-keys % [:page :dpi :layer :width :height :sha256]) want)))
+                 stem ": B1 the " (count got) " page(s) it rendered have the SHA-256 of RENDERS.edn")
+          (let [live (fn [f] (pw/sha256 (fs/read-all-bytes (str out "/" f))))
+                d (get digests stem)]
+            (check (and d (= (:json d) (live "model.json")) (= (:html-inline d) (live "html-inline.html")) (= (:html-external d) (live "html-external.html"))
+                        (= (:html-omit d) (live "html-omit.html"))
+                        (= (:assets d) (into (sorted-map) (for [f (fs/list-dir (str out "/assets"))] [(fs/file-name f) (pw/sha256 (fs/read-all-bytes f))]))))
+                   stem ": B1 its Model, its HTML in three modes and its asset files are the recording's digests"))
+          ;; B2 -------------------------------------------------------------------------------------------------------------------------
+          (check (empty? (:problems c))
+                 stem ": B2 against the native pdfium: " (:entries c) " requests and answers identical, the Model (assets' hashes masked) and the HTML without assets identical"
+                 ", asset names and sizes identical" (when (seq (:problems c)) (str ": " (str/join "; " (:problems c)))))
+          (let [a (:assets c)
+                m {:max (max (:max c) (:max a 0)) :differing (+ (:differing c) (:differing a 0)) :total (+ (:total c) (:total a 0))}]
+            (swap! all-max max (:max m)) (swap! all-diff + (:differing m)) (swap! all-total + (:total m))
+            (if (= fonts :embedded)
+              (do (swap! held-max max (:max m)) (swap! held-diff + (:differing m)) (swap! held-total + (:total m))
+                  (check (bound? m) stem ": B2 the fonts are embedded: " (:bitmaps c) " crops and " (:files a) " asset(s) differ from the native pixels by at most "
+                         (:max m) " of 255 per channel, on " (:differing m) " of " (:total m) " pixels (" (pct (:differing m) (:total m)) "; bound 3 and 6%)"))
+              (do (swap! unheld conj [stem (:max m) (:differing m) (:total m)])
+                  (println (format "  note %s: fonts not embedded (base-14): pixels measured, not held: largest difference %d of 255, %d of %d pixels (%s)"
+                                   stem (:max m) (:differing m) (:total m) (pct (:differing m) (:total m))))))))))
+    ;; the render cases ---------------------------------------------------------------------------------------------------------------
+    (let [cases-edn (edn/read-string (slurp "test/render/cases.edn"))
+          native (get-in pw/fixtures [:cases :native])
+          r (apply pw/node env "cases" "--pdfium" pw/pdfium-dir "--native" native (mapcat (fn [p] ["--pdf" p]) (:pdfs cases-edn)))]
+      (if (:error r)
+        (bad "the render cases: " (:error r))
+        (let [c (:compare r) hs (:hashes r)
+              want (:cases renders)]
+          (check (empty? (:problems c))
+                 "cases: B2 the " (:entries c) " requests of the native render transcript (layers, crops, failures) get the same answers (status, size) from the live build"
+                 (when (seq (:problems c)) (str ": " (str/join "; " (:problems c)))))
+          (check (= (mapv #(select-keys % [:id :kind :status :sha256]) hs) (mapv #(select-keys % [:id :kind :status :sha256]) want))
+                 "cases: B1 the " (count hs) " answers have the SHA-256 of RENDERS.edn (the pixels of every layer and crop)")
+          (doseq [[k g] (sort-by key (:groups r))
+                  :let [fonts (get-in pw/fixtures [:cases :fonts (parse-long (name k))])]]
+            (swap! all-max max (:max g)) (swap! all-diff + (:differing g)) (swap! all-total + (:total g))
+            (if (= fonts :embedded)
+              (do (swap! held-max max (:max g)) (swap! held-diff + (:differing g)) (swap! held-total + (:total g))
+                  (check (bound? g) "cases: B2 input " (name k) " (fonts embedded): " (:bitmaps g) " bitmaps differ from the native pixels by at most " (:max g)
+                         " of 255 per channel, on " (:differing g) " of " (:total g) " pixels (" (pct (:differing g) (:total g)) ")"))
+              (do (swap! unheld conj [(str "cases input " (name k)) (:max g) (:differing g) (:total g)])
+                  (println (format "  note cases input %s: fonts not embedded (base-14): pixels measured, not held: largest difference %d of 255, %d of %d pixels (%s)"
+                                   (name k) (:max g) (:differing g) (:total g) (pct (:differing g) (:total g))))))))))
+    (when (zero? @fails)
+      (ok "MEASURED, live pdfium-wasm against the native pdfium: over the documents that embed their fonts the largest per-channel difference is " @held-max
+          " of 255 and " @held-diff " of " @held-total " pixels differ (" (pct @held-diff @held-total) ") -- the bound is 3 of 255 on 6%"
+          "; with the base-14 documents counted, " @all-max " of 255 and " @all-diff " of " @all-total " (" (pct @all-diff @all-total) ")"))))
+
+(when (pos? @fails) (System/exit 1))
+(when (and rust go (zero? @fails))
+  (ok "the browser's pdfium: transcripts of the WebAssembly build replay on Rust and Go to one set of digests"
+      (when-not (or (:skip env) (:fail env)) ", and the live build reproduces them and agrees with the native pdfium (arm B)")))

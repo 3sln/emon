@@ -13,12 +13,15 @@
 // runs until it needs something, says what, and this loop awaits it and runs it again. What the engine needs is (1) BYTES of the
 // document its `Src` missed (the engine re-runs the unit that missed from scratch, so the bytes it ends up with are the bytes it
 // touched), read from the byte source a chunk at a time with doubling read-ahead; (2) answers to `ocr` requests, from
-// `ports.ocr` (tesseract.js: `@3sln/emon/tesseract`). `decode` and `decode-img` are the engine's own (PNG, JPEG, TIFF, CCITT,
-// DCT in Rust/WASM); `render` and `crop` are answered `unsupported` (pdfium's WebAssembly build is SPEC 7.3's, not built), which
-// is an answer: a page that needed a render then has no text from it, and nothing is guessed (D038, D199).
+// `ports.ocr` (tesseract.js: `@3sln/emon/tesseract`); (3) answers to `render` and `crop` requests, from `ports.render` (pdfium's
+// WebAssembly build: `@3sln/emon/pdfium`, the form in `render.js`). `decode` and `decode-img` are the engine's own (PNG, JPEG, TIFF,
+// CCITT, DCT in Rust/WASM). A request no port is given for is answered `unsupported`, which is an answer: a page that needed a
+// render then has no text from it, and nothing is guessed (D038, D199).
 //
 // There is no whole-file read: a Blob or a URL is read by range. (An ArrayBuffer is already in memory, so its source says so and
-// the engine is handed it at once; `{ lazy: true }` reads it by range like the others.)
+// the engine is handed it at once; `{ lazy: true }` reads it by range like the others.) THE ONE EXCEPTION is the renderer
+// (SPEC 13.1, P11.4c): pdfium wants the file, so the first `render` or `crop` request reads the whole of it, once, for `ports.render`
+// (a born-digital document that asks for no raster never does).
 
 import { Wasm } from './wasm.js';
 import { toSource, bytesSource, blobSource, urlSource, streamSource, SourceChangedError, EmonError } from './sources.js';
@@ -48,7 +51,10 @@ const optionLines = (o, chunk, record) => {
   for (const [k, v] of Object.entries(o.limits || {})) put(`limit.${k}`, v);
   if (record) put('record', 1);
   for (const [k, v] of Object.entries(o.producer || {})) put(`producer.${k}`, v);
+  // what the renderer says produced its pixels (`pdfium.js`'s `producer`), after the embedder's own
+  for (const [k, v] of Object.entries((o.ports && o.ports.render && o.ports.render.producer) || {})) put(`producer.${k}`, v);
   if (o.ports && o.ports.ocr) put('js-ocr', 1);
+  if (o.ports && o.ports.render) put('js-render', 1);
   return L.join('\n');
 };
 
@@ -308,15 +314,136 @@ export class Emon {
           if (rc < 0) throw this._error(rc);
           return;
         }
+        if ((kind === k.render || kind === k.crop) && ports && ports.render) {
+          await this._render(h, rec, ports.render, ctx);
+          return;
+        }
         // nothing in this host fulfils it (the engine does not route a request here it has no port for)
         failed(w.status.unsupported);
       }),
     );
   }
 
-  async _run(h, source, chunk, options, mode) {
+  // `render` and `crop` from `ports.render` (a Renderer, `render.js`). The renderer is asked for WHOLE PAGES only and its calls are serialised on
+  // `ctx.render.chain` (pdfium is single-threaded): the page is kept in the module's memory between requests (`last`), so a page and its crops are
+  // rendered once, and `emon_answer_render` cuts a crop out of it. The renderer is opened by the first request, with the whole file (SPEC 13.1).
+  _render(h, rec, port, ctx) {
+    const rc = (ctx.render ||= { chain: Promise.resolve(), doc: null, dead: false, readError: null, last: null });
+    const run = rc.chain.then(() => this._renderOne(h, rec, port, ctx, rc));
+    rc.chain = run.catch(() => {});
+    return run;
+  }
+
+  async _renderOne(h, rec, port, ctx, rc) {
     const w = this.w;
-    const ctx = { reads: 0, bytesRead: 0, notes: [] };
+    const [kind, id] = [rec[1], rec[2]];
+    const answer = (status) => w.withBytes(new Uint8Array(Int32Array.of(4, kind, id, status).buffer), (p) => w.x.emon_answer(h, p, 4));
+    const req = { page: rec[3 + w.rd.page], dpi: rec[3 + w.rd.dpi], layer: rec[3 + w.rd.layer] };
+    // a layer the renderer says it cannot separate is `unsupported` without asking it (`layers` is a bit set over kin's `lay-*`)
+    if (req.layer < 0 || req.layer > 30 || !(((port.layers ?? 1) >> req.layer) & 1)) return answer(w.status.unsupported);
+    if (!rc.doc && !rc.dead) {
+      const src = ctx.source;
+      // the whole file, once: what the renderer reads through is the conversion's own byte source, and its faults are the conversion's (`io`, `source-changed`)
+      const read = async (offset, length) => {
+        let data;
+        try {
+          data = await src.read(offset, length);
+          if (!(data instanceof Uint8Array)) data = ArrayBuffer.isView(data) ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength) : new Uint8Array(data);
+        } catch (e) {
+          rc.readError = { short: !!(e && (e.code === 'source-changed' || e.name === 'SourceChangedError')), message: String((e && e.message) || e) };
+          throw e;
+        }
+        ctx.reads++;
+        ctx.bytesRead += data.length;
+        if (data.length !== length) {
+          rc.readError = { short: true, message: `the source gave ${data.length} bytes at offset ${offset} and its length said ${length}` };
+          throw new SourceChangedError(rc.readError.message);
+        }
+        return data;
+      };
+      try {
+        rc.doc = await port.open({ size: src.size, bytes: src.bytes, read, password: ctx.password }, { pixels: w.x.emon_limit(h, w.pixelsKind) });
+      } catch (e) {
+        rc.dead = true;
+        if (rc.readError) {
+          // the source failed under the renderer's read: the conversion ends with the source's error, as it does for any read
+          const re = rc.readError;
+          w.withText(re.message, (p, n) => w.x.emon_fail(h, re.short ? 1 : 0, p, n));
+        } else {
+          ctx.notes.push(`render: the renderer did not open: ${(e && e.message) || e}`);
+        }
+      }
+    }
+    if (!rc.doc) return answer(w.status.failed);
+    const key = `${req.page}/${req.dpi}/${req.layer}`;
+    if (!rc.last || rc.last.key !== key) {
+      this._renderFree(rc);
+      let alloc = null;
+      const sink = (n) => {
+        alloc = { ptr: w.x.emon_alloc(n), len: n };
+        return new Uint8Array(w.x.memory.buffer, alloc.ptr, n);
+      };
+      const drop = () => alloc && w.x.emon_free(alloc.ptr, alloc.len);
+      // a page that could not be made is remembered as it is (a figure document asks for several crops of it): the renderer is asked once
+      const refused = (status, why) => {
+        drop();
+        rc.last = { key, status, why };
+      };
+      let r;
+      try {
+        r = await rc.doc.render(req, sink);
+      } catch (e) {
+        refused(w.status.failed, (e && e.message) || String(e));
+      }
+      if (!rc.last || rc.last.key !== key) {
+        if (r && r.status) refused(r.status === 'unsupported' ? w.status.unsupported : w.status.failed, r.reason || r.status);
+        else if (!(r && Number.isInteger(r.width) && Number.isInteger(r.height) && r.width > 0 && r.height > 0 && r.rgb && r.rgb.length === r.width * r.height * 3)) {
+          refused(w.status.failed, "the renderer's bitmap is not width x height x 3 bytes");
+        } else {
+          const n = r.width * r.height * 3;
+          if (!alloc || alloc.len !== n) {
+            drop();
+            alloc = { ptr: w.x.emon_alloc(n), len: n };
+          }
+          const at = new Uint8Array(w.x.memory.buffer, alloc.ptr, n);
+          if (r.rgb.buffer !== at.buffer || r.rgb.byteOffset !== at.byteOffset) at.set(r.rgb);
+          rc.last = { key, width: r.width, height: r.height, ptr: alloc.ptr, len: n };
+        }
+      }
+    }
+    const l = rc.last;
+    if (l.status !== undefined) {
+      if (l.status === w.status.failed) ctx.notes.push(`render ${id} failed: ${l.why}`);
+      return answer(l.status);
+    }
+    const rcode = w.x.emon_answer_render(h, id, l.width, l.height, l.ptr, l.len);
+    if (rcode < 0) throw this._error(rcode);
+  }
+
+  _renderFree(rc) {
+    if (rc.last) {
+      if (rc.last.ptr) this.w.x.emon_free(rc.last.ptr, rc.last.len);
+      rc.last = null;
+    }
+  }
+
+  // the conversion is over: the renderer's document is closed and the page it kept is freed
+  async _renderEnd(ctx) {
+    const rc = ctx.render;
+    if (!rc) return;
+    await rc.chain;
+    try {
+      if (rc.doc) rc.doc.close();
+    } catch (_) {
+      /* a renderer that fails to close has nothing more to say */
+    }
+    rc.doc = null;
+    this._renderFree(rc);
+  }
+
+  async _run(h, source, chunk, options, mode, password) {
+    const w = this.w;
+    const ctx = { reads: 0, bytesRead: 0, notes: [], source, password: typeof password === 'string' ? new TextEncoder().encode(password) : password || undefined, render: null };
     try {
       if (options.transcript) {
         for (const [name, data] of entriesOf(options.transcript)) {
@@ -365,6 +492,8 @@ export class Emon {
     } catch (e) {
       w.x.emon_close(h);
       throw e;
+    } finally {
+      await this._renderEnd(ctx);
     }
   }
 
@@ -377,14 +506,15 @@ export class Emon {
    * Convert one input (SPEC 13: stages 0-3) to a Model. An input is anything `toSource` takes, or `{ source, password }`.
    * Options are SPEC 13's settings by their names (`locale`, `ocr`, `furniture`, `assets`, `assetDpi`, `assetPixels`,
    * `assetBytes`, `assetsBytes`, `assetSignatures`), `limits` (`{ 'input-bytes': n, ... }`), `maxRounds`, `fetchRounds`, `chunk`,
-   * `keepEvidence`, `lazy` (read even an in-memory input by range), `ports: { ocr }`, `transcript` (replay: a Map of file name
-   * to bytes: no port is called) and `record` (the Model then has `transcript()`).
+   * `keepEvidence`, `lazy` (read even an in-memory input by range), `ports: { ocr, render }` (`ocr`: `ocr.js`'s form, `@3sln/emon/tesseract`;
+   * `render`: `render.js`'s form, `@3sln/emon/pdfium`), `transcript` (replay: a Map of file name to bytes: no port is called) and
+   * `record` (the Model then has `transcript()`).
    */
   async convert(input, options = {}) {
     const { src, password } = this._input(input);
     const source = await toSource(src, { lazy: options.lazy, max: options.limits?.['input-bytes'] ?? this.w.inputBytes });
     const { h, chunk } = this._open(source, password, 0, options);
-    const ctx = await this._run(h, source, chunk, options, 0);
+    const ctx = await this._run(h, source, chunk, options, 0, password);
     const w = this.w;
     let transcript = null;
     if (options.record) {

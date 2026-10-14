@@ -16,7 +16,8 @@ public final class Config {
         117, 110, 100, 115, 102, 101, 116, 99, 104, 45, 114, 111, 117, 110, 100, 115,
         114, 101, 99, 111, 114, 100, 106, 115, 45, 111, 99, 114, 99, 104, 117, 110,
         107, 108, 105, 109, 105, 116, 46, 112, 114, 111, 100, 117, 99, 101, 114, 46,
-        112, 97, 114, 97, 108, 108, 101, 108
+        112, 97, 114, 97, 108, 108, 101, 108, 106, 115, 45, 114, 101, 110, 100, 101,
+        114
     };
     public static final int[] CK_ROWS = {
         0, 0, 0, 0, 6,
@@ -37,7 +38,8 @@ public final class Config {
         1, 1, 2147483647, 140, 5,
         4, 0, 0, 145, 6,
         5, 0, 0, 151, 9,
-        1, 1, 2147483647, 160, 8
+        1, 1, 2147483647, 160, 8,
+        3, 0, 0, 168, 9
     };
     public static final int[] CV_CHARS = {
         97, 108, 119, 97, 121, 115, 97, 117, 116, 111, 110, 101, 118, 101, 114, 112,
@@ -77,6 +79,7 @@ public final class Config {
     public static final int K_JSOCR = 14;
     public static final int K_CHUNK = 15;
     public static final int K_PAR = 18;
+    public static final int K_JSRENDER = 19;
     public static final int SH_STR = 0;
     public static final int SH_NUM = 1;
     public static final int SH_ENUM = 2;
@@ -102,6 +105,7 @@ public final class Config {
         c.fetchr = 24;
         c.rec = 0;
         c.jsocr = 0;
+        c.jsrender = 0;
         c.par = 1;
         c.dry = 0;
         return 0;
@@ -129,7 +133,7 @@ public final class Config {
     public static int cfKeyFind(emon.Port.Cells t, int from, int to) {
         // The key t[from, to) names, or -1.
         int k = 0;
-        while (k < 19) {
+        while (k < 20) {
             if (cfKeyIs(t, from, to, k) == 1) {
                 return k;
             }
@@ -354,6 +358,9 @@ public final class Config {
         }
         if (k == K_JSOCR) {
             c.jsocr = v;
+        }
+        if (k == K_JSRENDER) {
+            c.jsrender = v;
         }
         return 0;
     }

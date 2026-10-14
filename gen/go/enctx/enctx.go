@@ -117,58 +117,60 @@ func (d *EvArenas) Clone() *EvArenas {
 }
 
 type Cfg struct {
-	Ocr     int32
-	Scope   int32
-	Furn    int32
-	Level   int32
-	Dpi     int32
-	Pixels  int32
-	Abyte   int32
-	Tbyte   int32
-	Sigs    int32
-	Keep    int32
-	Haveloc int32
-	Lcl     *port.Cells
-	Chunk   int32
-	Maxr    int32
-	Fetchr  int32
-	Rec     int32
-	Jsocr   int32
-	Num     int32
-	Lims    *port.Cells
-	Prod    *port.Cells
-	Msg     *strings.Builder
-	Nort    int32
-	Par     int32
-	Dry     int32
+	Ocr      int32
+	Scope    int32
+	Furn     int32
+	Level    int32
+	Dpi      int32
+	Pixels   int32
+	Abyte    int32
+	Tbyte    int32
+	Sigs     int32
+	Keep     int32
+	Haveloc  int32
+	Lcl      *port.Cells
+	Chunk    int32
+	Maxr     int32
+	Fetchr   int32
+	Rec      int32
+	Jsocr    int32
+	Num      int32
+	Lims     *port.Cells
+	Prod     *port.Cells
+	Msg      *strings.Builder
+	Nort     int32
+	Par      int32
+	Dry      int32
+	Jsrender int32
 }
 
 func NewCfg() *Cfg {
 	return &Cfg{
-		Ocr:     0,
-		Scope:   0,
-		Furn:    0,
-		Level:   0,
-		Dpi:     0,
-		Pixels:  0,
-		Abyte:   0,
-		Tbyte:   0,
-		Sigs:    0,
-		Keep:    0,
-		Haveloc: 0,
-		Lcl:     port.NewCells(),
-		Chunk:   0,
-		Maxr:    0,
-		Fetchr:  0,
-		Rec:     0,
-		Jsocr:   0,
-		Num:     0,
-		Lims:    port.NewCells(),
-		Prod:    port.NewCells(),
-		Msg:     &strings.Builder{},
-		Nort:    0,
-		Par:     0,
-		Dry:     0,
+		Ocr:      0,
+		Scope:    0,
+		Furn:     0,
+		Level:    0,
+		Dpi:      0,
+		Pixels:   0,
+		Abyte:    0,
+		Tbyte:    0,
+		Sigs:     0,
+		Keep:     0,
+		Haveloc:  0,
+		Lcl:      port.NewCells(),
+		Chunk:    0,
+		Maxr:     0,
+		Fetchr:   0,
+		Rec:      0,
+		Jsocr:    0,
+		Num:      0,
+		Lims:     port.NewCells(),
+		Prod:     port.NewCells(),
+		Msg:      &strings.Builder{},
+		Nort:     0,
+		Par:      0,
+		Dry:      0,
+		Jsrender: 0,
 	}
 }
 func (d *Cfg) Clone() *Cfg {
@@ -197,6 +199,7 @@ func (d *Cfg) Clone() *Cfg {
 	c.Nort = d.Nort
 	c.Par = d.Par
 	c.Dry = d.Dry
+	c.Jsrender = d.Jsrender
 	return c
 }
 

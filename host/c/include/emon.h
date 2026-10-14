@@ -15,16 +15,17 @@
  *                  status = emon_step(session, &out, &err)
  *                    EMON_DONE (0)           emon_finish
  *                    EMON_NEED_BYTES (1)     out.ranges: read each [offset, offset+length) and emon_provide it, step again
- *                    EMON_NEED_REQUESTS (2)  out.requests: fulfil each (ocr), emon_answer / emon_answer_ocr, step again
+ *                    EMON_NEED_REQUESTS (2)  out.requests: fulfil each (ocr; render and crop with js-render=1), emon_answer / emon_answer_ocr / emon_answer_render, step again
  *                    < 0                     -code, err filled; only emon_close is valid afterwards
  *              A unit that missed is re-run from scratch inside emon_step (D058), so the bytes a conversion read are the bytes it
  *              touched.  Round 0 of an intake wants the first and the last chunk: emon_prefetch says which.
- *              Like the browser binding (host/wasm/src/wasm.rs) the caller fulfils `ocr` only (with the option js-ocr=1); `render` and
- *              `crop` are answered `unsupported` by the session, and `decode`/`decode-img` are answered by emon from the bytes you provided.
+ *              Like the browser binding (host/wasm/src/wasm.rs) the caller fulfils `ocr` (with the option js-ocr=1) and `render` and `crop`
+ *              (with js-render=1, P11.4c); a request the caller has no port for is answered `unsupported` by the session, and
+ *              `decode`/`decode-img` are answered by emon from the bytes you provided.
  *
  * OPTIONS are one text, kin's grammar (emon.config): `key=value` lines separated by LF (spaces are not trimmed), the last line wins:
  *     locale ocr furniture assets asset-dpi asset-pixels asset-bytes assets-bytes asset-signatures keep-evidence ocr-scope
- *     max-rounds fetch-rounds record js-ocr chunk limit.NAME producer.NAME parallel
+ *     max-rounds fetch-rounds record js-ocr chunk limit.NAME producer.NAME parallel js-render
  *     e.g. "ocr=never\nassets=images\nlimit.pages=50\n".
  * `parallel=N` (P10.2, SPEC 12.1) spreads the fulfilment of ONE conversion over N worker threads that emon starts and ends inside the call (limit.workers caps
  * it; 1, the default, starts none): the one-shot calls use it, with the ports built in (EMON_NATIVE); the step API (emon_open / emon_step) leaves the
@@ -131,7 +132,7 @@ int emon_test_panic(emon_error *err);
 typedef struct emon_model emon_model;
 void emon_free_model(emon_model *m);
 
-/* Convert one input to a Model.  `options`: kin's text (NULL: the defaults); record=1 and js-ocr=1 are options of a session and are refused. */
+/* Convert one input to a Model.  `options`: kin's text (NULL: the defaults); record=1, js-ocr=1 and js-render=1 are options of a session and are refused. */
 int emon_convert(const emon_input *input, const char *options, unsigned flags, emon_model **out, emon_error *err);
 /* The common case in one call: the canonical JSON (compact, or indented when `pretty`) / the HTML (`html_options` as for emon_model_html). */
 int emon_convert_json(const emon_input *input, const char *options, unsigned flags, int pretty, emon_buf *out, emon_error *err);
@@ -223,6 +224,13 @@ int emon_step(emon_session *s, emon_step_out *out, emon_error *err);
  * `ocr` request from the flat integer form of your engine's reading (kin's `ox-flat`, emon.ocrport: the layout is written once, in kin). */
 int emon_answer(emon_session *s, const int32_t *cells, size_t ncells, emon_error *err);
 int emon_answer_ocr(emon_session *s, int32_t id, const int32_t *cells, size_t ncells, emon_error *err);
+/* A `render` or `crop` request (with js-render=1) from your renderer's WHOLE page: `width` x `height` pixels of RGB (3 channels, row-major,
+ * `len` = width*height*3 bytes) at the request's dpi and layer.  A crop is the cut of it, made here (SPEC 7.2: the same pixels, cut out, never
+ * a re-fit).  A bitmap of another size or over the `pixels` limit is a usage error. */
+int emon_answer_render(emon_session *s, int32_t id, int32_t width, int32_t height, const uint8_t *rgb, size_t len, emon_error *err);
+/* The value of limit `kind` (kin's table: emon_const(100 + kind) is its default) in force for the session: the bound a renderer must
+ * keep.  `pixels` is kind 9. */
+int emon_limit(emon_session *s, int32_t kind, int64_t *out, emon_error *err);
 /* The bitmap a request names, as a canonical PNG: what your recogniser reads.  Valid while the round's requests are owed. */
 int emon_bitmap_png(emon_session *s, int32_t id, emon_buf *out, emon_error *err);
 /* The policy of an `ocr` request is kin's (emon.ocrport); a caller asks it here. */

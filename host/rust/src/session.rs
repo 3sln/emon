@@ -37,7 +37,7 @@ pub enum Step {
     Done,
     // bytes the engine has not been given: (offset, length) ranges to read and `provide`
     Bytes(Vec<(u64, u64)>),
-    // requests the caller owes (`ocr`, with `js-ocr=1`): each a record `[len kind id arg...]`
+    // requests the caller owes (`ocr`, with `js-ocr=1`; `render` and `crop`, with `js-render=1`): each a record `[len kind id arg...]`
     Requests(Vec<Vec<i32>>),
 }
 
@@ -56,6 +56,10 @@ pub struct Session {
     run: Option<Run>,
     idx: usize,
     js_ocr: bool,
+    // `js-render=1` (P11.4c): the `render` and `crop` requests are the caller's too
+    js_render: bool,
+    // the conversion's `limit.NAME=N` overrides: the caller asks a bound it must keep (`limit`, the pixels of a bitmap it answers with)
+    limits: Vec<(i32, i32)>,
     // replay: the files being collected, then the replayer; record: the transcript made
     files: BTreeMap<String, Vec<u8>>,
     replay: bool,
@@ -100,7 +104,7 @@ impl Session {
             t.producer = p.producer.clone();
             recording = Some(t);
         }
-        Ok(Session { cache, run: Some(run), idx, js_ocr: p.js_ocr, files: BTreeMap::new(), replay: false, replayer: None, recording, local, in_round: false, external: BTreeSet::new(), done: false })
+        Ok(Session { cache, run: Some(run), idx, js_ocr: p.js_ocr, js_render: p.js_render, limits: p.config.limits.clone(), files: BTreeMap::new(), replay: false, replayer: None, recording, local, in_round: false, external: BTreeSet::new(), done: false })
     }
 
     // SPEC 13.1: intake round 0 reads the first and the last chunk. The ranges to read and `provide` first.
@@ -138,10 +142,16 @@ impl Session {
         Ok(())
     }
 
-    // The requests the caller fulfils: `ocr`, when it has an engine (kin's `pl-route`). (`render` and `crop` would be pdfium's, which a
-    // session's caller does not have: they are answered `unsupported` here like any request no port is configured for.)
+    // The requests the caller fulfils (kin's `pl-route`): `ocr`, when it has an engine (`js-ocr=1`), and `render` and `crop`, when it has a
+    // renderer (`js-render=1`, P11.4c). Without a renderer they are answered `unsupported` here like any request no port is configured for.
     fn is_external(&self, kind: i32) -> bool {
-        plan::route(kind, self.js_ocr, false) == plan::Route::Ocr
+        matches!(plan::route(kind, self.js_ocr, self.js_render), plan::Route::Ocr | plan::Route::Render)
+    }
+
+    // The value of limit `kind` in force for this conversion (the override, else kin's default): the caller reads the bound it must
+    // keep, so the host never types a default (`limit.pixels` bounds a bitmap a renderer answers with, kind 9).
+    pub fn limit(&self, kind: i32) -> i32 {
+        crate::port::with_limits(&self.limits, || crate::port::limit_of(kind))
     }
 
     // Walk the session on until it needs something of the caller. After `Done` or an error nothing else is valid but `finish`.
@@ -278,6 +288,53 @@ impl Session {
         self.answer(cells_vec(&out))
     }
 
+    // A `render` or `crop` answer (P11.4c, `js-render=1`): the caller's renderer made `rgb`, `width` x `height` pixels of 3 channels (the
+    // WHOLE page at the request's dpi and layer, even for a `crop`: a crop is the cut of a whole-page render, `render::cut`, so the
+    // caller keeps the one page it rendered and the pixels are the same however the crop was asked, SPEC 7.2). The answer record is
+    // kin's (`an-render`), laid out for the request's kind; a crop outside the page is an `an-fail` answer, as natively. The caller's
+    // bitmap must be the size it says and within the `pixels` limit (`limit(9)`): a caller that breaks that has a bug, and says `usage`.
+    pub fn answer_render(&mut self, id: i32, width: i32, height: i32, rgb: &[u8]) -> Result<(), Fault> {
+        if !self.in_round {
+            return Err(Fault::Usage("no requests are owed".to_string()));
+        }
+        let limit = self.limit(9) as i64;
+        let run = self.run.as_mut().ok_or_else(|| Fault::Usage("no requests are owed".to_string()))?;
+        if !self.external.contains(&id) || run.has_answer(id) {
+            return Err(Fault::Usage(format!("request {} is not owed an answer", id)));
+        }
+        let req = run.requests().iter().find(|r| r.id() == id).cloned().ok_or_else(|| Fault::Usage(format!("request {} is not owed an answer", id)))?;
+        if req.kind() != plan::KIND_RENDER && req.kind() != plan::KIND_CROP {
+            return Err(Fault::Usage(format!("request {} is not a render or a crop", id)));
+        }
+        let (_, rr) = crate::render::parse_request(&req).map_err(Fault::Usage)?;
+        if width < 1 || height < 1 || (rgb.len() as i64) != width as i64 * height as i64 * 3 {
+            return Err(Fault::Usage(format!("a {}x{} bitmap of 3 channels is not {} bytes", width, height, rgb.len())));
+        }
+        if width as i64 * height as i64 > limit {
+            return Err(Fault::Usage(format!("a {}x{} bitmap is over the pixels limit of {}", width, height, limit)));
+        }
+        let whole = crate::port::Bitmap::from_bytes(width, height, 3, rgb);
+        let got = match rr.clip {
+            Some(c) => crate::render::cut(&whole, c),
+            None => Ok(whole),
+        };
+        let mut c = Cells::new();
+        let answer = match got {
+            Ok(bm) => {
+                emon::plan::an_render(&mut c, id, bm.width(), bm.height(), bm.channels(), rr.dpi);
+                let mut rec = cells_vec(&c);
+                // a crop is answered with a record of ITS kind, laid out as a render's (as `RenderFulfiller` does)
+                rec[1] = req.kind();
+                Answer { rec, bitmap: Some(Arc::new(bm)) }
+            }
+            Err(_) => {
+                emon::plan::an_fail(&mut c, req.kind(), id, plan::STATUS_FAILED);
+                Answer { rec: cells_vec(&c), bitmap: None }
+            }
+        };
+        run.offer(answer).map_err(|e| Fault::Usage(e.to_string()))
+    }
+
     // The bitmap a request names (an `ocr` request's `bitmap` argument, or the answer of any request already answered), as a canonical
     // PNG: what the caller's recogniser reads. Valid while the requests of the round are owed.
     pub fn bitmap_png(&self, id: i32) -> Option<Vec<u8>> {
@@ -315,7 +372,8 @@ pub fn intake_line(i: &Intake) -> String {
 }
 
 // The numbers of the plan/fulfil protocol, kin's, so a binding's caller never restates them (`emon.plan`'s, a kin law holds them):
-// 0 kind render, 1 decode, 2 ocr, 3 bytes, 4 crop, 5 decode-img; 10 status ok, 11 failed, 12 unsupported, 13 limit; 14, 15 the ocr word flags.
+// 0 kind render, 1 decode, 2 ocr, 3 bytes, 4 crop, 5 decode-img; 10 status ok, 11 failed, 12 unsupported, 13 limit; 14, 15 the ocr word flags;
+// 16..23 the fields of a render / crop request (below).
 pub fn constant(i: u32) -> i32 {
     match i {
         0 => plan::KIND_RENDER,
@@ -330,6 +388,16 @@ pub fn constant(i: u32) -> i32 {
         13 => emon::plan::ps_limit(),
         14 => emon::ocr::ocw_dict(),
         15 => emon::ocr::ocw_numeric(),
+        // 16..23: the argument indices of a `render` / `crop` request, kin's (`rd-*`, `render::parse_request` reads by them), so the SDK
+        // reads a request by these and never by a literal offset: input, page, dpi, layer; the crop's x, y, w, h
+        16 => emon::plan::rd_input(),
+        17 => emon::plan::rd_page(),
+        18 => emon::plan::rd_dpi(),
+        19 => emon::plan::rd_layer(),
+        20 => emon::plan::rd_x(),
+        21 => emon::plan::rd_y(),
+        22 => emon::plan::rd_w(),
+        23 => emon::plan::rd_h(),
         // 100 + K: the default of kin's limit K (`emon.limits`), so a binding that must say a default (the JS SDK's `input-bytes`) reads kin's
         k if k >= 100 => crate::port::limit_default((k - 100) as i32).unwrap_or(-1),
         _ => -1,

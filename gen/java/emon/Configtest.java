@@ -126,7 +126,7 @@ public final class Configtest {
         int n = 0;
         int i = 0;
         int k = 0;
-        while (i < 19) {
+        while (i < 20) {
             if ((Config.CK_ROWS[i * 5 + 0] == 1) && (Config.CK_ROWS[i * 5 + 1] < 0)) {
                 n += 1;
             }
@@ -190,7 +190,7 @@ public final class Configtest {
         emon.Testport.assertEq(Limits.sgHi(1), 1, "tasks to");
     }
     public static void testTheKeysHaveTheirNamesInKin() {
-        emon.Testport.assertEq(19, 19, "nineteen keys");
+        emon.Testport.assertEq(20, 20, "twenty keys");
         tKeyName(0, 0, "locale");
         tKeyName(0, 1, "ocr");
         tKeyName(0, 2, "furniture");
@@ -210,6 +210,7 @@ public final class Configtest {
         tKeyName(0, 16, "limit.");
         tKeyName(0, 17, "producer.");
         tKeyName(0, 18, "parallel");
+        tKeyName(0, 19, "js-render");
     }
     public static void testTheWordsHaveTheirNamesAndCodesInKin() {
         emon.Testport.assertEq(13, 13, "thirteen words");
@@ -234,6 +235,8 @@ public final class Configtest {
         tIsKey(0, emon.Testport.textBlob("producer.name"), 1, "a producer");
         tIsKey(0, emon.Testport.textBlob("record"), 1, "record");
         tIsKey(0, emon.Testport.textBlob("parallel"), 1, "parallel");
+        tIsKey(0, emon.Testport.textBlob("js-render"), 1, "js-render");
+        tIsKey(0, emon.Testport.textBlob("js-rendering"), 0, "js-render and more");
         tIsKey(0, emon.Testport.textBlob("parallelx"), 0, "parallel and more");
         tIsKey(0, emon.Testport.textBlob("oc"), 0, "a prefix of a plain key");
         tIsKey(0, emon.Testport.textBlob("ocrx"), 0, "a plain key and more");
@@ -261,6 +264,7 @@ public final class Configtest {
         emon.Testport.assertEq(c.fetchr, 24, "fetch rounds");
         emon.Testport.assertEq(c.rec, 0, "not recording");
         emon.Testport.assertEq(c.jsocr, 0, "no js ocr");
+        emon.Testport.assertEq(c.jsrender, 0, "no js render");
         emon.Testport.assertEq(c.par, 1, "serial");
         emon.Testport.assertEq(c.dry, 0, "not a dry attempt");
         emon.Testport.assertEq(emon.Port.cellsLen(c.lims), 0, "no limits");
@@ -268,7 +272,7 @@ public final class Configtest {
     }
     public static void testEveryKeySetsItsField() {
         emon.Enctx.Cfg c = new emon.Enctx.Cfg();
-        emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("locale=de-AT\nocr=never\nfurniture=drop\nassets=figures\nasset-dpi=300\nasset-pixels=1000\nasset-bytes=2000\nassets-bytes=3000\nasset-signatures=on\nkeep-evidence=1\nocr-scope=witness\nmax-rounds=7\nfetch-rounds=9\nrecord=1\njs-ocr=1\nchunk=512\nparallel=4\n")), 0, "parses");
+        emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("locale=de-AT\nocr=never\nfurniture=drop\nassets=figures\nasset-dpi=300\nasset-pixels=1000\nasset-bytes=2000\nassets-bytes=3000\nasset-signatures=on\nkeep-evidence=1\nocr-scope=witness\nmax-rounds=7\nfetch-rounds=9\nrecord=1\njs-ocr=1\njs-render=1\nchunk=512\nparallel=4\n")), 0, "parses");
         emon.Testport.assertEq(c.haveloc, 1, "a locale");
         emon.Testport.assertEq(emon.Port.cellsLen(c.lcl), 5, "its length");
         emon.Testport.assertEq(emon.Port.cellsAt(c.lcl, 0), 100, "d");
@@ -287,6 +291,7 @@ public final class Configtest {
         emon.Testport.assertEq(c.fetchr, 9, "fetch rounds");
         emon.Testport.assertEq(c.rec, 1, "recording");
         emon.Testport.assertEq(c.jsocr, 1, "js ocr");
+        emon.Testport.assertEq(c.jsrender, 1, "js render");
         emon.Testport.assertEq(c.chunk, 512, "chunk");
         emon.Testport.assertEq(c.par, 4, "four workers");
     }
@@ -305,10 +310,11 @@ public final class Configtest {
         emon.Testport.assertEq(b.ocr, 1, "auto");
         emon.Testport.assertEq(b.furn, 1, "keep");
         emon.Testport.assertEq(b.level, 1, "images");
-        tParse(d, emon.Testport.textBlob("keep-evidence=0\nrecord=yes\njs-ocr=11"));
+        tParse(d, emon.Testport.textBlob("keep-evidence=0\nrecord=yes\njs-ocr=11\njs-render=true"));
         emon.Testport.assertEq(d.keep, 0, "a flag is 1 or nothing");
         emon.Testport.assertEq(d.rec, 0, "yes is not 1");
         emon.Testport.assertEq(d.jsocr, 0, "11 is not 1");
+        emon.Testport.assertEq(d.jsrender, 0, "true is not 1");
         tParse(e, emon.Testport.textBlob("keep-evidence=1"));
         emon.Testport.assertEq(e.keep, 1, "one");
     }

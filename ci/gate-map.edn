@@ -26,16 +26,16 @@
   {:id "ci-coverage"   :cmd ["bb" "ci" "coverage"]                                      :secs 1   :why "the gate map covers the tree, every gate is in a shard, every workflow task exists, every replay gate re-derives (includes rederive --check)"}]
 
  :groups
- {"replay"  ["plan" "ocr" "render" "align" "fusion" "gfuse" "artifacts" "seals" "sealpx" "sigs" "retarget" "asset"]
+ {"replay"  ["plan" "ocr" "render" "pdfium-wasm" "align" "fusion" "gfuse" "artifacts" "seals" "sealpx" "sigs" "retarget" "asset"]
   "convert" ["slice" "identity" "repeat" "accuracy"]
-  "engine"  ["unit" "slice" "identity" "repeat" "accuracy" "plan" "ocr" "render" "align" "fusion" "gfuse" "artifacts" "seals" "sealpx" "sigs" "retarget" "asset" "embedders"]
-  "host"    ["unit" "slice" "identity" "repeat" "accuracy" "plan" "ocr" "render" "align" "fusion" "gfuse" "artifacts" "seals" "sealpx" "sigs" "retarget" "asset" "embedders" "fuzz" "image" "png-check"]}
+  "engine"  ["unit" "slice" "identity" "repeat" "accuracy" "plan" "ocr" "render" "pdfium-wasm" "align" "fusion" "gfuse" "artifacts" "seals" "sealpx" "sigs" "retarget" "asset" "embedders"]
+  "host"    ["unit" "slice" "identity" "repeat" "accuracy" "plan" "ocr" "render" "pdfium-wasm" "align" "fusion" "gfuse" "artifacts" "seals" "sealpx" "sigs" "retarget" "asset" "embedders" "fuzz" "image" "png-check"]}
 
  :shards
  [{:name "unit"      :gates ["unit"] :own-job true}
   {:name "static"    :gates ["hosts" "drift" "release-audit" "api-diff" "lang-test"]}
   {:name "check"     :gates ["check"]}
-  {:name "replay"    :gates ["plan" "ocr" "render" "embedders"]}
+  {:name "replay"    :gates ["plan" "ocr" "render" "pdfium-wasm" "embedders"]}
   {:name "fusion"    :gates ["align" "fusion" "gfuse" "artifacts" "seals" "sealpx" "sigs" "retarget"]}
   {:name "slice"     :gates ["slice"]}
   {:name "fuzz"      :gates ["fuzz"]}
@@ -120,6 +120,7 @@
   {:glob "kin/scripts/image" :gates ["image"] :why "the gate's own script"}
   {:glob "kin/scripts/lang-test" :gates ["lang-test"] :why "the gate's own script"}
   {:glob "kin/scripts/ocr" :gates ["ocr"] :why "the gate's own script"}
+  {:glob "kin/scripts/pdfium-wasm" :gates ["pdfium-wasm"] :why "the gate's own script"}
   {:glob "kin/scripts/plan" :gates ["plan"] :why "the gate's own script"}
   {:glob "kin/scripts/png-check" :gates ["png-check"] :why "the gate's own script"}
   {:glob "kin/scripts/render" :gates ["render"] :why "the gate's own script"}
@@ -165,7 +166,9 @@
   {:glob "tools/oracle/**" :gates [] :why "python oracles for baselines (run by `bb baselines`); not gates"}
   {:glob "tools/parbench/**" :gates [] :why "a benchmark"}
   {:glob "tools/perf/**" :gates [] :why "the perf comparators (`bb perf`): a report, not a gate"}
-  {:glob "tools/pdfium/**" :gates ["render"] :why "the pinned pdfium and its fetcher: the render transcripts are recorded with it"}
+  {:glob "tools/pdfium/**" :gates ["render" "pdfium-wasm"] :why "the pinned pdfium and its fetcher (native and the wasm build): the render and pdfium-wasm transcripts are recorded with it"}
+  {:glob "tools/pdfium_wasm/**" :gates ["pdfium-wasm"] :why "the pdfium-wasm recorder (live, through the JS SDK in Node) and its digests"}
+  {:glob "tools/demo/**" :gates [] :why "`bb demo` builds and checks the browser demo (Chrome, downloads): not a gate; the fast core's release-audit holds what it vendors against the inventory"}
   {:glob "tools/render/**" :gates ["render"] :why "the render recorder and fixtures"}
   {:glob "tools/asset/**" :gates ["asset"] :why "the asset recorder"}
   {:glob "tools/retarget/**" :gates ["retarget"] :why "the targeted-rounds recorder"}
@@ -183,6 +186,8 @@
   {:glob "host/c/**" :gates ["@host"] :hosts ["c"] :why "the C library and its header"}
   {:glob "host/pod/**" :gates ["@host"] :hosts ["pod"] :why "the babashka pod"}
   {:glob "host/{wasm,js}/**" :gates ["@host"] :hosts ["wasm"] :why "the WASM binding and the JS SDK"}
+  {:glob "host/js/src/{pdfium,render}.js" :gates ["pdfium-wasm"] :hosts ["wasm"] :why "the browser's pdfium adapter and the render port's form: the pdfium-wasm gate drives them live in Node"}
+  {:glob "demo/**" :gates [] :why "the browser demo's page and Worker: `bb demo --check` (headless Chrome) is its check, not a gate"}
   {:glob "gen/rust/**" :gates ["@engine" "fuzz"] :why "the generated tree: drift (core) says it is what kin says; these say what it does"}
   {:glob "gen/go/**" :gates ["@engine" "fuzz"] :hosts ["go"] :why "the generated Go"}
   {:glob "gen/java/**" :gates ["@engine" "fuzz"] :hosts ["java"] :why "the generated Java"}
@@ -203,7 +208,7 @@
   {:glob "test/driver/csharp/**" :gates ["slice" "identity"] :hosts ["csharp"] :why "the C# driver"}
   {:glob "test/driver/c/**" :gates ["slice" "identity"] :hosts ["c"] :why "the C driver"}
   {:glob "test/driver/pod/**" :gates ["slice" "identity"] :hosts ["pod"] :why "the pod driver"}
-  {:glob "test/driver/wasm/**" :gates ["slice" "identity"] :hosts ["wasm"] :why "the browser driver"}
+  {:glob "test/driver/wasm/**" :gates ["slice" "identity" "pdfium-wasm"] :hosts ["wasm"] :why "the browser driver (and node.mjs, the Node driver of the pdfium-wasm gate's live arm)"}
   {:glob "test/fonts/**" :gates ["unit" "slice"] :why "font tables, AFMs and font fixtures"}
   {:glob "test/fusion/**" :gates ["fusion"] :why "fusion's replay set and its siblings"}
   {:glob "test/fusion/align/**" :gates ["align"] :why "alignment fixtures"}
@@ -217,6 +222,7 @@
   {:glob "test/ocr/**" :gates ["ocr" "accuracy"] :why "the committed OCR transcripts and the replay ratchet"}
   {:glob "test/pdf/**" :gates ["unit" "slice" "identity" "repeat" "fuzz"] :why "PDF-layer fixtures: unit laws, conversions, mutation seeds"}
   {:glob "test/plan/**" :gates ["plan"] :why "plan/fulfil transcripts"}
+  {:glob "test/pdfium-wasm/**" :gates ["pdfium-wasm"] :why "the browser pdfium's recorded transcripts, render hashes and digests"}
   {:glob "test/png/**" :gates ["png-check"] :why "PNG digests"}
   {:glob "test/render/**" :gates ["render"] :why "render transcripts"}
   {:glob "test/retarget/**" :gates ["retarget"] :why "targeted-rounds transcripts"}

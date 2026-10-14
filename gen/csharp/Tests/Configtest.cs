@@ -128,7 +128,7 @@ public static class Configtest {
         int n = 0;
         int i = 0;
         int k = 0;
-        while (i < 19) {
+        while (i < 20) {
             if ((Config.CkRows[i * 5 + 0] == 1) && (Config.CkRows[i * 5 + 1] < 0)) {
                 n += 1;
             }
@@ -197,7 +197,7 @@ public static class Configtest {
     }
     [Xunit.Fact]
     public static void TestTheKeysHaveTheirNamesInKin() {
-        emon.Testport.AssertEq(19, 19, "nineteen keys");
+        emon.Testport.AssertEq(20, 20, "twenty keys");
         TKeyName(0, 0, "locale");
         TKeyName(0, 1, "ocr");
         TKeyName(0, 2, "furniture");
@@ -217,6 +217,7 @@ public static class Configtest {
         TKeyName(0, 16, "limit.");
         TKeyName(0, 17, "producer.");
         TKeyName(0, 18, "parallel");
+        TKeyName(0, 19, "js-render");
     }
     [Xunit.Fact]
     public static void TestTheWordsHaveTheirNamesAndCodesInKin() {
@@ -243,6 +244,8 @@ public static class Configtest {
         TIsKey(0, emon.Testport.TextBlob("producer.name"), 1, "a producer");
         TIsKey(0, emon.Testport.TextBlob("record"), 1, "record");
         TIsKey(0, emon.Testport.TextBlob("parallel"), 1, "parallel");
+        TIsKey(0, emon.Testport.TextBlob("js-render"), 1, "js-render");
+        TIsKey(0, emon.Testport.TextBlob("js-rendering"), 0, "js-render and more");
         TIsKey(0, emon.Testport.TextBlob("parallelx"), 0, "parallel and more");
         TIsKey(0, emon.Testport.TextBlob("oc"), 0, "a prefix of a plain key");
         TIsKey(0, emon.Testport.TextBlob("ocrx"), 0, "a plain key and more");
@@ -271,6 +274,7 @@ public static class Configtest {
         emon.Testport.AssertEq(c.Fetchr, 24, "fetch rounds");
         emon.Testport.AssertEq(c.Rec, 0, "not recording");
         emon.Testport.AssertEq(c.Jsocr, 0, "no js ocr");
+        emon.Testport.AssertEq(c.Jsrender, 0, "no js render");
         emon.Testport.AssertEq(c.Par, 1, "serial");
         emon.Testport.AssertEq(c.Dry, 0, "not a dry attempt");
         emon.Testport.AssertEq(emon.Port.CellsLen(c.Lims), 0, "no limits");
@@ -279,7 +283,7 @@ public static class Configtest {
     [Xunit.Fact]
     public static void TestEveryKeySetsItsField() {
         emon.Enctx.Cfg c = new emon.Enctx.Cfg();
-        emon.Testport.AssertEq(TParse(c, emon.Testport.TextBlob("locale=de-AT\nocr=never\nfurniture=drop\nassets=figures\nasset-dpi=300\nasset-pixels=1000\nasset-bytes=2000\nassets-bytes=3000\nasset-signatures=on\nkeep-evidence=1\nocr-scope=witness\nmax-rounds=7\nfetch-rounds=9\nrecord=1\njs-ocr=1\nchunk=512\nparallel=4\n")), 0, "parses");
+        emon.Testport.AssertEq(TParse(c, emon.Testport.TextBlob("locale=de-AT\nocr=never\nfurniture=drop\nassets=figures\nasset-dpi=300\nasset-pixels=1000\nasset-bytes=2000\nassets-bytes=3000\nasset-signatures=on\nkeep-evidence=1\nocr-scope=witness\nmax-rounds=7\nfetch-rounds=9\nrecord=1\njs-ocr=1\njs-render=1\nchunk=512\nparallel=4\n")), 0, "parses");
         emon.Testport.AssertEq(c.Haveloc, 1, "a locale");
         emon.Testport.AssertEq(emon.Port.CellsLen(c.Lcl), 5, "its length");
         emon.Testport.AssertEq(emon.Port.CellsAt(c.Lcl, 0), 100, "d");
@@ -298,6 +302,7 @@ public static class Configtest {
         emon.Testport.AssertEq(c.Fetchr, 9, "fetch rounds");
         emon.Testport.AssertEq(c.Rec, 1, "recording");
         emon.Testport.AssertEq(c.Jsocr, 1, "js ocr");
+        emon.Testport.AssertEq(c.Jsrender, 1, "js render");
         emon.Testport.AssertEq(c.Chunk, 512, "chunk");
         emon.Testport.AssertEq(c.Par, 4, "four workers");
     }
@@ -317,10 +322,11 @@ public static class Configtest {
         emon.Testport.AssertEq(b.Ocr, 1, "auto");
         emon.Testport.AssertEq(b.Furn, 1, "keep");
         emon.Testport.AssertEq(b.Level, 1, "images");
-        TParse(d, emon.Testport.TextBlob("keep-evidence=0\nrecord=yes\njs-ocr=11"));
+        TParse(d, emon.Testport.TextBlob("keep-evidence=0\nrecord=yes\njs-ocr=11\njs-render=true"));
         emon.Testport.AssertEq(d.Keep, 0, "a flag is 1 or nothing");
         emon.Testport.AssertEq(d.Rec, 0, "yes is not 1");
         emon.Testport.AssertEq(d.Jsocr, 0, "11 is not 1");
+        emon.Testport.AssertEq(d.Jsrender, 0, "true is not 1");
         TParse(e, emon.Testport.TextBlob("keep-evidence=1"));
         emon.Testport.AssertEq(e.Keep, 1, "one");
     }

@@ -9,8 +9,13 @@ export class Wasm {
     this.kind = { render: this.x.emon_const(0), decode: this.x.emon_const(1), ocr: this.x.emon_const(2), bytes: this.x.emon_const(3), crop: this.x.emon_const(4), decodeImg: this.x.emon_const(5) };
     this.status = { ok: this.x.emon_const(10), failed: this.x.emon_const(11), unsupported: this.x.emon_const(12), limit: this.x.emon_const(13) };
     this.ocrWord = { dict: this.x.emon_const(14), numeric: this.x.emon_const(15) };
+    // the argument indices of a `render` / `crop` request (kin's `rd-*`; the record is `[len kind id arg...]`): read a request by these, never by a literal offset
+    this.rd = { input: this.x.emon_const(16), page: this.x.emon_const(17), dpi: this.x.emon_const(18), layer: this.x.emon_const(19), x: this.x.emon_const(20), y: this.x.emon_const(21), w: this.x.emon_const(22), h: this.x.emon_const(23) };
     // kin's table of limits, by its kind: `emon_const(100 + K)` is the default of limit K (`input-bytes` is 0), so no default is typed here
     this.inputBytes = this.x.emon_const(100);
+    // the kind (the row of kin's table of limits, `kin/limits.kin`) of `pixels`, the bound a renderer's bitmap keeps: `emon_limit(h, pixelsKind)` is the
+    // conversion's own (the default or its `limit.pixels`). A kind is a row index, not a default; `bb embedders` holds this to the table.
+    this.pixelsKind = 9;
   }
 
   /**

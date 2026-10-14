@@ -1,0 +1,6 @@
+{:emon-transcript 1
+ :producer {:renderer "pdfium-wasm" :pdfium-version "chromium/8076" :render-host "host/js/src/pdfium.js"}
+ :inputs [{:index 0 :length 1368}]
+ :entries [
+  {:round 0 :kind :crop :req [11 5 8388612 0 0 150 0 203 290 427 428] :ans [8 5 8388612 0 427 428 3 150] :bitmap "bitmap-0000.png"}
+  {:round 0 :kind :crop :req [11 5 8388614 0 0 150 0 203 936 698 94] :ans [8 5 8388614 0 698 94 3 150] :bitmap "bitmap-0001.png"}]}

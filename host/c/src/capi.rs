@@ -526,8 +526,8 @@ unsafe fn make_input(inp: *const emon_input) -> Result<Input, Fail> {
 // The text parsed by kin, and the Engine's configuration with the native ports when asked. The step API's own switches (`record`,
 // `js-ocr`) belong to a session: a one-shot refuses them rather than ignoring them.
 fn one_shot_setup(p: &Parsed, flags: u32) -> Result<(Engine, Options), Fail> {
-    if p.record || p.js_ocr {
-        return Err(Fail::Usage("record=1 and js-ocr=1 are options of a session (emon_open): a one-shot conversion has no caller to fulfil or keep a transcript".to_string()));
+    if p.record || p.js_ocr || p.js_render {
+        return Err(Fail::Usage("record=1, js-ocr=1 and js-render=1 are options of a session (emon_open): a one-shot conversion has no caller to fulfil or keep a transcript".to_string()));
     }
     let mut cfg = p.config.clone();
     if flags & EMON_NATIVE != 0 {
@@ -864,6 +864,30 @@ pub unsafe extern "C" fn emon_answer(s: *mut emon_session, cells: *const i32, nc
 pub unsafe extern "C" fn emon_answer_ocr(s: *mut emon_session, id: i32, cells: *const i32, ncells: usize, err: *mut emon_error) -> c_int {
     guarded(err, || {
         session(s)?.answer_ocr(id, ints(cells, ncells))?;
+        Ok(0)
+    })
+}
+
+// A `render` or `crop` answer (`js-render=1`, P11.4c): the caller's renderer made the WHOLE page, `width` x `height` pixels of RGB (3 channels,
+// row-major, `len` bytes); a crop is the cut of it, made here (`render::cut`), so the pixels are the same however a crop is asked (SPEC 7.2). A
+// bitmap that is not `width * height * 3` bytes or is over the `pixels` limit (`emon_limit`) is `usage`.
+#[no_mangle]
+pub unsafe extern "C" fn emon_answer_render(s: *mut emon_session, id: i32, width: i32, height: i32, rgb: *const u8, len: usize, err: *mut emon_error) -> c_int {
+    guarded(err, || {
+        session(s)?.answer_render(id, width, height, bytes(rgb, len))?;
+        Ok(0)
+    })
+}
+
+// The value of limit `kind` in force for the session (kin's table, the options' `limit.NAME=N` over it): the bound a renderer must keep
+// (`pixels` is kind 9; `emon_const(100 + kind)` is the default).
+#[no_mangle]
+pub unsafe extern "C" fn emon_limit(s: *mut emon_session, kind: i32, out: *mut i64, err: *mut emon_error) -> c_int {
+    guarded(err, || {
+        if out.is_null() {
+            return Err(Fail::Usage("an output pointer is NULL".to_string()));
+        }
+        *out = session(s)?.limit(kind) as i64;
         Ok(0)
     })
 }
