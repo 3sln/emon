@@ -298,6 +298,7 @@ fn main() {
     let mut opts: Options = parsed.options;
     let mut cfg: Config = parsed.config;
     cfg.simulate_async = simulate_async;
+    // `no_retarget` is not public API: the field is the crate's `__test_hooks` feature (emon-rs-build turns it on)
     opts.no_retarget = no_retarget;
     opts.keep_evidence = out == "evidence" || out == "bundle";
     if let Some(a) = html_assets {

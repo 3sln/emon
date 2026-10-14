@@ -69,10 +69,13 @@ for sub in api ffi; do
   for f in "$mod"/src/emon/$sub/*.java; do
     [ -e "$f" ] || continue
     m=$(basename "$f" .java)
+    [ "$m" = TestHooks ] && continue
     case " $keep " in *" $m "*) ;; *) rm -f "$f" ;; esac
   done
 done
 put test/driver/java/Main.java "$mod/src/Main.java"
+# the test hooks (P11.4, D542): the package-private `Options.noRetarget`, reached from the driver by a class of the same package that the published jar does not have
+put test/driver/java/emon/api/TestHooks.java "$mod/src/emon/api/TestHooks.java"
 put test/driver/java/EngineTest.java "$mod/src/EngineTest.java"
 
 # javac is skipped when no source is newer than the stamp

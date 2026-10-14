@@ -122,8 +122,6 @@ unsigned emon_capabilities(void);
 int emon_const(unsigned i);
 int emon_is_option_key(const char *name);                       /* 1 or 0 */
 int emon_check_options(const char *options, emon_error *err);  /* 0, or -EMON_ERR_USAGE with kin's sentence */
-/* Test hook: panics on purpose, to show the boundary holds: answers -EMON_ERR_INTERNAL and the message. */
-int emon_test_panic(emon_error *err);
 
 /* ----------------------------------------------------------------------------------------------- one-shot */
 

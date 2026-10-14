@@ -271,7 +271,7 @@ func main() {
 	}
 	opts, cfg := parsed.Options, parsed.Config
 	cfg.SimulateAsync = simulateAsync
-	opts.NoRetarget = noRetarget
+	emon.SetNoRetarget(&opts, noRetarget) // a test hook: built with the tag `emontest` (kin/scripts/emon-go-build)
 	opts.KeepEvidence = out == "evidence" || out == "bundle"
 	if htmlAssets >= 0 {
 		html.Assets = emon.HTMLAssets(htmlAssets)

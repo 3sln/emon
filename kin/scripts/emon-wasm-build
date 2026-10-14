@@ -82,6 +82,7 @@ crate-type = ["cdylib"]
 
 [features]
 tesseract = []
+__test_hooks = []
 
 [dependencies]
 image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg"] }

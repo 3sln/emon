@@ -78,7 +78,8 @@
    [:static Type f arity] [:default Type]. Members are the pub fields, the enum variants and the pub methods of an
   inherent impl (or the methods of a trait); a fn without self is a static."
   [file]
-  (let [lines (vec (code-lines (slurp file)))
+  ;; (P11.4, D542) a field under the `__test_hooks` feature (`Options::no_retarget`) is not part of the crate a consumer gets
+  (let [lines (vec (code-lines (str/replace (slurp file) #"#\[cfg\(feature = \"__test_hooks\"\)\]\s*pub \w+: [^,\n]+,[ \t]*\n?" "")))
         n (count lines)]
     (loop [i 0 depth 0 ctx nil acc []]
       (if (>= i n)
@@ -437,7 +438,8 @@
 
 (let [header (slurp "host/c/include/emon.h")
       hcode (str/replace header #"(?s)/\*.*?\*/" "")
-      impl (slurp "host/c/src/capi.rs")
+      ;; (P11.4, D542) `emon_test_panic` exists only under the `__test_hooks` feature and is declared in host/c/test/emon_test_hooks.h, not in emon.h
+      impl (str/replace (slurp "host/c/src/capi.rs") #"#\[cfg\(feature = \"__test_hooks\"\)\]\s*#\[no_mangle\]" "")
       declared (set (map second (re-seq #"\b(emon_[a-z0-9_]+)\s*\(" hcode)))
       declared (disj declared "emon_read_fn")
       defined (set (map second (re-seq #"(?s)#\[no_mangle\]\s*pub (?:unsafe )?extern \"C\" fn (emon_[a-z0-9_]+)" impl)))

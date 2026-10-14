@@ -5,6 +5,7 @@
  * Prints `ok   WHAT` per check (`FAIL WHAT` otherwise) and exits 1 on any failure. `bb slice` and `bb c` run it. */
 #define _POSIX_C_SOURCE 200809L
 #include "emon.h"
+#include "emon_test_hooks.h"
 
 #include <pthread.h>
 #include <stdio.h>

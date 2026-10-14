@@ -29,6 +29,12 @@ import { ocrRequest, encodeOcr } from './ocr.js';
 
 export { bytesSource, blobSource, urlSource, streamSource, toSource, SourceChangedError, EmonError };
 
+// The WASM instance (`w`), a Model's handle (`h`) and an Asset's Model (`model`) are NOT public API (P11.4, D542): they are defined
+// non-enumerable, so they are not in `Object.keys`, a spread, `JSON.stringify` or a `for...in`, and `index.d.ts` does not declare them.
+// (The SDK's own classes reach each other's through them; a test may read `emon.w`.) The constructors of `Emon`, `Model` and `Asset` are the
+// SDK's own: an embedder gets an `Emon` from `Emon.load`, a `Model` from `convert` and an `Asset` from `model.assets`.
+const hide = (o, k, value) => Object.defineProperty(o, k, { value, writable: true, enumerable: false, configurable: true });
+
 const STAGE = 4 * 1024 * 1024; // bytes handed to the module per call: a read of a big range is staged, never doubled in memory
 const READS = 8; // reads of the source in flight at once
 
@@ -68,7 +74,7 @@ const entriesOf = (t) => (t instanceof Map ? [...t.entries()] : Array.isArray(t)
 
 export class Asset {
   constructor(model, i, name, type, size) {
-    this.model = model;
+    hide(this, 'model', model);
     this.index = i;
     /** the file name, `a<id>.jpg` or `a<id>.png` (what `external` HTML refers to) */
     this.name = name;
@@ -103,8 +109,8 @@ const registry = typeof FinalizationRegistry !== 'undefined' ? new FinalizationR
 
 export class Model {
   constructor(w, h, stats, evidenceKept, transcript) {
-    this.w = w;
-    this.h = h;
+    hide(this, 'w', w);
+    hide(this, 'h', h);
     this.stats = stats;
     this._evidence = evidenceKept;
     this._transcript = transcript;
@@ -217,7 +223,7 @@ export class Emon {
   }
 
   constructor(w, defaults = {}) {
-    this.w = w;
+    hide(this, 'w', w);
     this.defaults = defaults;
   }
 

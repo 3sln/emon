@@ -89,6 +89,8 @@ path = "src/driver.rs"
 
 [features]
 tesseract = []
+# the test hooks (P11.4, D542): `Options::no_retarget`. The driver needs it; a published crate (`bb package`) never has the feature.
+__test_hooks = []
 
 [dependencies]
 # the ImageDecode port's codecs (D189): PNG and JPEG pixels, CCITT, and the TIFF Deflate stream. Pinned; the
@@ -113,14 +115,18 @@ rm -f "$crate/Cargo.toml.new"
 
 flags="-A warnings"
 [ "${EMON_RS_WARN:-}" = 1 ] && flags=""
-cargo_features=""
+hooks=",__test_hooks"
+# the CLI is a shipped binary: it never has the test hooks (host/cli/Cargo.toml has no such feature, D542)
+[ -n "$cli_mode" ] && hooks=""
+cargo_features="--features __test_hooks"
+[ -n "$cli_mode" ] && cargo_features=""
 if [ "$live" = 1 ]; then
   if [ -n "$native_dir" ]; then
     flags="$flags $(cat "$native_dir/link.rustflags")"
   else
     flags="$flags -L native=${EMON_TESS_LIB:-/opt/homebrew/lib}"
   fi
-  cargo_features="--features tesseract"
+  cargo_features="--features tesseract$hooks"
 fi
 if [ -n "$cli_mode" ]; then
   # pdfium is loaded by path at run time, not linked; the deployment target is the one `bb native` built the libraries for

@@ -1,0 +1,43 @@
+# The manifest of the crate `emon` as published to crates.io (P11.4, D542). COMMITTED, not templated: the file a reviewer reads is the file `cargo
+# package` uses, and `bb version` (tools/version.clj) rewrites its version like every other manifest. `bb package --host rust` assembles the rest
+# next to it, in dist/stage/rust/: src/ is gen/rust/emon/*.rs (every module that is not a law or a probe), the host files of host/rust/src/ (but not
+# pdfcodecs.rs, which links jbig2dec and is compiled only under a developer's `--cfg codecs`), README.md, LICENSE and THIRD_PARTY_NOTICES.md.
+# Unlike the gates' crate (kin/scripts/emon-rs-build) it has no driver binary and no `__test_hooks` feature.
+[package]
+name = "emon"
+version = "0.1.0"
+edition = "2021"
+description = "PDFs and images to semantic HTML and a JSON model, for scraping and indexing: reading order, tables, lists, footnotes, figures, OCR. One specification, generated; byte-identical to the Go, Java, C#, WASM and C builds."
+license = "MIT"
+repository = "https://github.com/3sln/emon"
+homepage = "https://github.com/3sln/emon"
+documentation = "https://docs.rs/emon"
+readme = "README.md"
+authors = ["raystubbs (https://github.com/raystubbs)"]
+keywords = ["pdf", "html", "ocr", "scraping", "document"]
+categories = ["parser-implementations", "text-processing"]
+include = ["src/**/*.rs", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md"]
+
+[lib]
+name = "emon"
+path = "src/lib.rs"
+
+[features]
+# the Tesseract adapter of the `Ocr` port (it links libtesseract and libleptonica, which the embedder installs)
+tesseract = []
+
+[dependencies]
+# the ImageDecode port's codecs: PNG and JPEG pixels, CCITT, and the TIFF Deflate stream. Pinned.
+image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg"] }
+miniz_oxide = "=0.8.9"
+# the `decode-img` request's DCT decoder: the very library `image` already uses for JPEG, used directly for the Adobe CMYK and YCCK samples
+zune-jpeg = "=0.5.15"
+zune-core = "=0.5.3"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(pdfium)", "cfg(codecs)", 'cfg(feature, values("__test_hooks"))'] }
+
+[profile.release]
+opt-level = 3
+overflow-checks = true
+debug = false
