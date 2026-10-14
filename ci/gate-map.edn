@@ -147,6 +147,7 @@
 
   ;; ---- the tools --------------------------------------------------------------------------------------------------------------------------------------
   {:glob "tools/{api_diff,release_audit,version,rederive,ci}.clj" :gates [] :why "release and CI tooling: the fast core runs each (api-diff, release-audit, version --check, ci coverage)"}
+  {:glob "tools/cli.clj" :gates [] :why "`bb cli` (P11.4b, D1470): builds and packs the `emon` command and `--check`s the archive (needs bb native, pdfium and cargo; prints SKIP without them); not a gate yet, it joins `bb package` (P11.4)"}
   {:glob "tools/{corpus,corpus_test,corpus_roundtrip,samples,pdfinfo}.clj" :gates [] :why "corpus transport and live tools: not gates (corpus-test is its own non-gate)"}
   {:glob "tools/{transcript_manifest,crypto-constants,pdfsnames,pdfxnames}.clj" :gates ["unit"] :why "tables and manifests `bb unit` checks"}
   {:glob "tools/image-fixtures.clj" :gates ["unit" "image"] :why "the image fixtures' generator"}
@@ -181,6 +182,8 @@
 
   ;; ---- the hosts and the generated tree ---------------------------------------------------------------------------------------------------------------
   {:glob "host/rust/**" :gates ["@host"] :why "the Rust host: the reference every other host is held to"}
+  {:glob "host/cli/**" :gates [] :why "the `emon` command (P11.4b): its main.rs and manifest are compiled only by `bb cli` (over the Rust host); the engine and the host files it wraps are mapped under host/rust and kin"}
+  {:glob "docs/**" :gates [] :why "user documentation (docs/cli.md is also the CLI archive's README); no gate reads it"}
   {:glob "host/go/**" :gates ["@host"] :hosts ["go"] :why "the Go host (the unit gate's Go arm is added to a --fast run)"}
   {:glob "host/java/**" :gates ["@host"] :hosts ["java"] :why "the Java host"}
   {:glob "host/csharp/**" :gates ["@host"] :hosts ["csharp"] :why "the C# host"}

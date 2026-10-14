@@ -27,6 +27,9 @@
    {:file "kin/scripts/emon-rs-build"
     :what "Rust crate `emon` (Cargo.toml assembled here)"
     :re #"(?m)(^name = \"emon\"\nversion = \")([^\"]+)(\")" :n 1}
+   {:file "host/cli/Cargo.toml"
+    :what "Rust package `emon`, the command-line tool (P11.4b)"
+    :re #"(?m)(^name = \"emon\"\nversion = \")([^\"]+)(\")" :n 1}
    {:file "kin/scripts/emon-bind-build"
     :what "Rust crate `emon` as C library and pod (Cargo.toml assembled here)"
     :re #"(?m)(^name = \"emon\"\nversion = \")([^\"]+)(\")" :n 1}

@@ -108,7 +108,7 @@ pub fn version() -> String {
     unsafe { CStr::from_ptr(TessVersion()).to_string_lossy().to_string() }
 }
 
-fn leptonica_version() -> String {
+pub fn leptonica_version() -> String {
     unsafe {
         let p = getLeptonicaVersion();
         if p.is_null() {
@@ -201,6 +201,8 @@ pub struct Tess {
     pub dpi: i32,
     // Oddities worth reporting (stderr of the driver).
     pub notes: Vec<String>,
+    // The models this engine may read with (the CLI's `--lang`, P11.4b): None is every model in the directory.
+    pub only: Option<Vec<String>>,
 }
 
 // The engine instances are raw pointers; `TessOcr` (the `tesseract` feature) holds the whole thing behind a Mutex, so one thread
@@ -209,7 +211,7 @@ unsafe impl Send for Tess {}
 
 impl Tess {
     pub fn new(tessdata: &str, dpi: i32) -> Tess {
-        Tess { tessdata: tessdata.to_string(), apis: HashMap::new(), dpi, notes: Vec::new() }
+        Tess { tessdata: tessdata.to_string(), apis: HashMap::new(), dpi, notes: Vec::new(), only: None }
     }
 
     fn installed(&self) -> Vec<String> {
@@ -218,6 +220,7 @@ impl Tess {
                 d.filter_map(|e| e.ok())
                     .filter_map(|e| e.file_name().to_string_lossy().strip_suffix(".traineddata").map(|s| s.to_string()))
                     .filter(|l| l != "osd" && l != "snum")
+                    .filter(|l| self.only.as_ref().map(|o| o.contains(l)).unwrap_or(true))
                     .collect()
             })
             .unwrap_or_default();
@@ -574,10 +577,24 @@ pub struct TessOcr {
     tessdata: String,
     idle: Mutex<Vec<Tess>>,
     producer: Vec<(String, String)>,
+    only: Option<Vec<String>>,
 }
 
 #[cfg(feature = "tesseract")]
 impl TessOcr {
+    // `tessdata` is the directory of the `.traineddata` files and `langs` the models (`eng`, `deu`) the engine may read with: the ones
+    // not in the directory are an Err naming them. (The CLI's `--lang`, P11.4b.)
+    pub fn with_languages(tessdata: &str, langs: &[String]) -> Result<TessOcr, String> {
+        let missing: Vec<&str> = langs.iter().filter(|l| !std::path::Path::new(tessdata).join(format!("{}.traineddata", l)).exists()).map(|l| l.as_str()).collect();
+        if !missing.is_empty() {
+            return Err(format!("no {} in {}", missing.iter().map(|l| format!("{}.traineddata", l)).collect::<Vec<_>>().join(", "), tessdata));
+        }
+        let mut t = Tess::new(tessdata, 0);
+        t.only = Some(langs.to_vec());
+        let producer = t.producer();
+        Ok(TessOcr { tessdata: tessdata.to_string(), idle: Mutex::new(vec![t]), producer, only: Some(langs.to_vec()) })
+    }
+
     // `tessdata`: the directory of the `.traineddata` files; None looks in $TESSDATA_PREFIX and the usual places.
     pub fn new(tessdata: Option<&str>) -> Result<TessOcr, String> {
         let dir = match tessdata {
@@ -599,7 +616,7 @@ impl TessOcr {
         };
         let t = Tess::new(&dir, 0);
         let producer = t.producer();
-        Ok(TessOcr { tessdata: dir, idle: Mutex::new(vec![t]), producer })
+        Ok(TessOcr { tessdata: dir, idle: Mutex::new(vec![t]), producer, only: None })
     }
 }
 
@@ -607,7 +624,11 @@ impl TessOcr {
 impl crate::engine::Ocr for TessOcr {
     fn fulfil(&self, req: &Request, bitmaps: &Bitmaps, keep_binary: bool) -> Result<Answer, PlanError> {
         let taken = self.idle.lock().unwrap_or_else(|e| e.into_inner()).pop();
-        let mut t = taken.unwrap_or_else(|| Tess::new(&self.tessdata, 0));
+        let mut t = taken.unwrap_or_else(|| {
+            let mut t = Tess::new(&self.tessdata, 0);
+            t.only = self.only.clone();
+            t
+        });
         // an engine that panicked is not given back: its state is not known
         let r = t.fulfil(req, bitmaps, keep_binary);
         self.idle.lock().unwrap_or_else(|e| e.into_inner()).push(t);

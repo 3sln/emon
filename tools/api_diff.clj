@@ -1021,6 +1021,22 @@
 
 (defn- code-name [chars off len] (apply str (map char (subvec chars off (+ off len)))))
 
+;; THE `emon` COMMAND (P11.4b, D1470): its commands and the flags of `emon convert`, read from the USAGE text of host/cli/src/main.rs. These are the
+;; user-facing interface of the release archive, so they are :public (the test driver's flags above are :provisional).
+(defn- cli-entries [root]
+  (when (exists? root "host/cli/src/main.rs")
+    (let [usage (second (re-find #"(?s)const USAGE: &str = \"(.*?)\";" (rd root "host/cli/src/main.rs")))
+          convert (second (re-find #"(?s)(emon convert .*?)\n\s*emon version" (or usage "")))
+          flags (re-seq #"\[(-o|--[a-z][a-z-]*)(?: ([^\]\[]+))?\]" (or convert ""))]
+      (concat
+        (for [[_ c] (re-seq #"(?m)^  emon ([a-z]+)" (or usage ""))]
+          (entry :options :public (str "emon " c) "command"))
+        (for [[_ f v] flags]
+          (entry :options :public (str "emon convert " f) (or v "flag")))
+        ;; an enumerated value is an entry of its own: a new word is an addition, a lost one a removal
+        (for [[_ f v] flags :when (and v (str/includes? v "|")), w (str/split v #"\|")]
+          (entry :options :public (str "emon convert " f "=" w) "value"))))))
+
 (defn- options-entries [root]
   (let [cfg (rd root "kin/config.kin")
         lim (rd root "kin/limits.kin")
@@ -1077,7 +1093,7 @@
         dprops (mapcat (fn [[dn d]] (prop-ents (str "model.json $defs/" dn) (get d "required") (get d "properties"))) defs)
         meta* [(entry :options :public "model.json $id" (get schema "$id"))
                (entry :options :public "model.json versions" (str/join "," (get-in schema ["properties" "emon" "enum"])))]]
-    (concat keys* limits html-opts outs flags top dprops meta*)))
+    (concat keys* limits html-opts outs flags (cli-entries root) top dprops meta*)))
 
 ;; ------------------------------------------------------------------------------------------------ tiers
 

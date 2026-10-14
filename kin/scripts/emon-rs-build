@@ -37,6 +37,13 @@ if [ -n "$codecs_lib" ] && [ -z "$pdfium_lib" ]; then crate=.cache/emon-rs-codec
 # .cache/emon-rs-native with Tesseract and Leptonica (and their codecs) linked STATICALLY from DIR/link.rustflags instead of -L EMON_TESS_LIB.
 native_dir="${EMON_NATIVE:-}"
 if [ -n "$native_dir" ]; then crate=.cache/emon-rs-native; live=1; fi
+# THE CLI (P11.4b, D1470): EMON_CLI=1 (with EMON_NATIVE) assembles host/cli (the `emon` command: host/cli/Cargo.toml, host/cli/src/main.rs and
+# THIRD_PARTY_NOTICES.md) over the same library into .cache/emon-cli, pdfium loaded at run time (`--cfg pdfium_dl`), and prints the `emon` binary's path.
+cli_mode="${EMON_CLI:-}"
+if [ -n "$cli_mode" ]; then
+  [ -n "$native_dir" ] || { echo "emon-rs-build: EMON_CLI=1 needs EMON_NATIVE=<prefix> (bb native builds it)" >&2; exit 1; }
+  crate=.cache/emon-cli
+fi
 mkdir -p "$crate/src/emon"
 
 put() { cmp -s "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
@@ -58,9 +65,14 @@ put "$crate/src/emon.rs.new" "$crate/src/emon.rs"
 rm -f "$crate/src/emon.rs.new"
 
 for f in lib port plan source engine imgdec tess render pdfium pdfimg pdfcodecs session par; do put "host/rust/src/$f.rs" "$crate/src/$f.rs"; done
-put test/driver/rust/main.rs "$crate/src/driver.rs"
-mkdir -p "$crate/tests"
-put host/rust/tests/engine.rs "$crate/tests/engine.rs"
+if [ -n "$cli_mode" ]; then
+  put host/cli/src/main.rs "$crate/src/main.rs"
+  put THIRD_PARTY_NOTICES.md "$crate/src/THIRD_PARTY_NOTICES.md"
+else
+  put test/driver/rust/main.rs "$crate/src/driver.rs"
+  mkdir -p "$crate/tests"
+  put host/rust/tests/engine.rs "$crate/tests/engine.rs"
+fi
 cat > "$crate/Cargo.toml.new" <<'TOML'
 [package]
 name = "emon"
@@ -96,7 +108,7 @@ opt-level = 3
 overflow-checks = true
 debug = false
 TOML
-put "$crate/Cargo.toml.new" "$crate/Cargo.toml"
+if [ -n "$cli_mode" ]; then put host/cli/Cargo.toml "$crate/Cargo.toml"; else put "$crate/Cargo.toml.new" "$crate/Cargo.toml"; fi
 rm -f "$crate/Cargo.toml.new"
 
 flags="-A warnings"
@@ -110,6 +122,11 @@ if [ "$live" = 1 ]; then
   fi
   cargo_features="--features tesseract"
 fi
+if [ -n "$cli_mode" ]; then
+  # pdfium is loaded by path at run time, not linked; the deployment target is the one `bb native` built the libraries for
+  flags="$flags --cfg pdfium --cfg pdfium_dl"
+  export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-12.0}"
+fi
 if [ -n "$pdfium_lib" ]; then
   flags="$flags --cfg pdfium -L native=$pdfium_lib -C link-arg=-Wl,-rpath,$pdfium_lib"
 fi
@@ -120,4 +137,8 @@ fi
 put host/rust/Cargo.lock "$crate/Cargo.lock"
 out=$(cd "$crate" && { RUSTFLAGS="$flags" cargo build --release --offline -q $cargo_features 2>&1 || RUSTFLAGS="$flags" cargo build --release -q $cargo_features 2>&1; }) || { echo "$out" | head -80 >&2; echo "emon-rs: build failed" >&2; exit 1; }
 [ -z "$out" ] || echo "$out" >&2
-echo "$crate/target/release/emon-rs"
+if [ -n "$cli_mode" ]; then
+  case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) echo "$crate/target/release/emon.exe" ;; *) echo "$crate/target/release/emon" ;; esac
+else
+  echo "$crate/target/release/emon-rs"
+fi

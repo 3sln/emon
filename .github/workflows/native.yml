@@ -6,6 +6,8 @@
 #     native-<triple> carry .cache/native/<triple> (include/, lib/*.a, share/tessdata, manifest.edn, link.rustflags) and the pdfium archive.
 # A prefix is cached by the hash of the pins (the file contents of native.edn, giflib.CMakeLists.txt, tesseract-prefind.cmake and native.clj): an unchanged pin is not rebuilt.
 # `bb native --audit` runs on every run, cached or built: static libraries only, no jbig2dec, JBIG-KIT, OpenJPEG or GPL symbol, library or link line.
+# P11.4b (D1470): after the libraries, each job builds the `emon` CLI over them (`bb cli --check`) and uploads emon-cli-<triple> (the archive and its .sha256).
+#   The release workflow of P11.9 calls this file with `ref` set to the tag and attaches those artifacts to the GitHub release.
 # Not triggered by a push or a pull request. The table below is native.edn's :triples (`bb native --check` fails if they differ).
 name: native
 
@@ -16,12 +18,20 @@ on:
         description: emon ref to build (branch, tag or sha)
         type: string
         default: main
+      cli:
+        description: also build, check and upload the emon CLI archive (bb cli)
+        type: boolean
+        default: true
   workflow_call:
     inputs:
       ref:
         description: emon ref to build (branch, tag or sha)
         type: string
         default: main
+      cli:
+        description: also build, check and upload the emon CLI archive (bb cli)
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -61,6 +71,11 @@ jobs:
       - uses: DeLaGuardo/setup-clojure@13.4
         with:
           bb: 1.3.190
+      # for the CLI steps at the end (P11.4b); the version is the one every gate uses
+      - uses: dtolnay/rust-toolchain@master
+        if: inputs.cli != false
+        with:
+          toolchain: 1.92.0
       # NASM: libjpeg-turbo is built with REQUIRE_SIMD=ON, which fails without the assembler on x86_64 (arm64 uses intrinsics)
       - name: NASM (x86_64 macOS)
         if: matrix.triple == 'x86_64-apple-darwin'
@@ -114,4 +129,22 @@ jobs:
           path: |
             emon/.cache/native/${{ matrix.triple }}
             emon/.cache/pdfium/chromium-8076/${{ matrix.pdfium }}
+          if-no-files-found: error
+      # THE CLI (P11.4b, D1470): the same prefix and pdfium, the `emon` binary built over them, packed as emon-<version>-<triple>.tar.gz (.zip on
+      # Windows) with its .sha256, then unpacked into a temporary directory and run (`bb cli --check`: `emon version`, only system libraries dynamic,
+      # a born-digital and a scanned sample against the committed HTML, the refusals). `cli: false` stops after the native libraries.
+      - name: bb cli --check (build the archive, unpack it and run it)
+        if: inputs.cli != false
+        run: bb cli --check --target ${{ matrix.triple }}
+      - name: The archive
+        if: inputs.cli != false
+        run: ls -l .cache/cli/*.tar.gz .cache/cli/*.zip .cache/cli/*.sha256 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: inputs.cli != false
+        with:
+          name: emon-cli-${{ matrix.triple }}
+          path: |
+            emon/.cache/cli/emon-*.tar.gz
+            emon/.cache/cli/emon-*.zip
+            emon/.cache/cli/emon-*.sha256
           if-no-files-found: error
