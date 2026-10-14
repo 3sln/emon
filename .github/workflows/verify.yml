@@ -288,6 +288,17 @@ jobs:
           path: emon/corpus
           key: emon-corpus-${{ needs.corpus.outputs.index }}
           fail-on-cache-miss: true
+      # package-check (bb package --check) builds the npm tarball with emon.wasm (the pinned nightly, for the unwinding std) and @3sln/pdfium-wasm, and runs the JS
+      # consumer; without the wasm target the js host SKIPs, and a SKIP fails the gate. The same three steps as pages.yml.
+      - name: The pinned nightly for the WebAssembly module (package-check)
+        if: contains(matrix.gates, 'package-check')
+        run: rustup toolchain install nightly-2026-09-16 -c rust-src -t wasm32-unknown-unknown
+      - name: pdfium's WebAssembly build (package-check)
+        if: contains(matrix.gates, 'package-check')
+        run: bb pdfium-fetch --platform wasm
+      - name: tesseract.js and its model (package-check)
+        if: contains(matrix.gates, 'package-check')
+        run: npm ci --prefix host/js
       - name: bb gates ${{ matrix.gates }}
         run: bb gates ${{ matrix.gates }}
 
