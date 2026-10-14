@@ -119,9 +119,9 @@
       (die what " failed (" (str/join " " (take 3 cmd)) "...); log " log))
     (/ (- (System/currentTimeMillis) t0) 1000.0)))
 
-(defn build-env [prefix]
-  ;; pkg-config sees the prefix and nothing else; Apple's libtool writes no timestamps into archives
-  {"PKG_CONFIG_LIBDIR" (str prefix "/lib/pkgconfig") "PKG_CONFIG_PATH" "" "ZERO_AR_DATE" "1"})
+(defn build-env [t prefix]
+  ;; pkg-config sees the prefix and nothing else; Apple's libtool writes no timestamps into archives; :env of a triple is added (CMake puts $CXXFLAGS before its own defaults)
+  (merge {"PKG_CONFIG_LIBDIR" (str prefix "/lib/pkgconfig") "PKG_CONFIG_PATH" "" "ZERO_AR_DATE" "1"} (:env (triple-cfg t))))
 
 (defn remove-shared! [prefix]
   (doseq [f (concat (fs/glob (str prefix "/lib") "*.{dylib,so,so.*,dll}")
@@ -132,7 +132,7 @@
 
 (defn build-one! [t s jobs]
   (let [prefix (prefix-of t) bdir (str (build-root t) "/" (:id s)) log (str (build-root t) "/" (:id s) ".log")
-        src (extract! s) env (build-env prefix)]
+        src (extract! s) env (build-env t prefix)]
     (fs/create-dirs (build-root t))
     (fs/delete-tree bdir)
     (when-let [cl (:cmakelists s)] (fs/copy cl (str src "/CMakeLists.txt") {:replace-existing true}))

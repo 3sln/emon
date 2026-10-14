@@ -26,7 +26,9 @@
   "aarch64-unknown-linux-gnu" {:runner "ubuntu-24.04-arm" :os :linux  :arch "arm64" :generator "Unix Makefiles" :pdfium "linux-arm64"
                               :ignore-prefix ["/usr/local"] :cxx-runtime ["stdc++" "m" "pthread"] :cmake ["-DCMath_LIBRARY:STRING=m" "-DCMath_HAVE_LIBM_POW=1"]}
   "x86_64-pc-windows-msvc"   {:runner "windows-2022"    :os :windows :arch "x86_64" :generator "Ninja" :pdfium "win-x64"
-                              :ignore-prefix [] :cxx-runtime []}}
+                              :ignore-prefix [] :cxx-runtime []
+                              ;; Tesseract 5.5.3's ccstruct/image.h uses uint32_t without <cstdint>, which MSVC 14.44's headers no longer bring in
+                              :env {"CXXFLAGS" "/FIcstdint"}}}
 
  :common-cmake
  ["-DCMAKE_BUILD_TYPE=Release"
