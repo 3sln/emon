@@ -42,6 +42,8 @@
     :note "Header block, bill-to, line-item table with right-aligned amounts, totals, a footer."}
    {:id "bank-statement" :src "bank-statement.pdf" :group "Business documents" :title "Bank statement (3 pages)"
     :note "A transaction table over three pages with its header repeated on each: one table, one thead."}
+   {:id "bank-statement-real" :src "bank-statement-real.pdf" :group "Business documents" :title "Real bank statement (4 pages)"
+    :note "A real retail bank statement, PII replaced: account summary, three transaction tables with styled header rows, right-aligned amount and balance columns, running header and footer."}
    {:id "irs-form-w9" :src "irs-form-w9.pdf" :group "Business documents" :title "IRS Form W-9 (pages 1-2)"
     :note "A real US tax form: fields, checkboxes, numbered lines, boxed parts. Public domain."}
    {:id "irs-form-1040" :src "irs-form-1040.pdf" :group "Business documents" :title "IRS Form 1040 (2 pages)"
