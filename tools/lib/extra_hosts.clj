@@ -20,6 +20,22 @@
    :c {:label "C" :env "EMON_SKIP_C" :script "kin/scripts/emon-c-build" :arm "the C arm"}
    :pod {:label "pod" :env "EMON_SKIP_POD" :script "kin/scripts/emon-pod-build" :arm "the pod arm"}})
 
+;; THE FAST VARIANT (P11.7, D528): `--fast` (or EMON_FAST=1) runs a gate's DETERMINISTIC SUBSET, and for every gate that takes the other hosts as arms that
+;; subset is Rust and Go only. The Java, C# and C hosts and the pod are left out LOUDLY unless EMON_FAST_HOSTS names them (a comma list: the pull request plan
+;; sets it to the hosts the change touches). The full gate (no flag) runs every arm the toolchain allows, as always.
+(def fast? (boolean (or (System/getenv "EMON_FAST") (some #{"--fast"} *command-line-args*))))
+(defn fast-hosts [] (set (remove str/blank? (str/split (str (System/getenv "EMON_FAST_HOSTS")) #","))))
+(defn fast-skip?
+  "Is host `h` (a keyword, or its name) left out of this run because it is a --fast one that does not name it? Rust and Go are never left out."
+  [h]
+  (and fast? (not (contains? #{:rust :go} (keyword h))) (not (contains? (fast-hosts) (name h)))))
+(defn fast-note
+  "The label a --fast gate prints first, so its `ok` lines are never taken for the full gate's."
+  [gate what]
+  (when fast?
+    (println (str "  FAST " gate ": a deterministic SUBSET, not the full gate -- " what
+                  (when (seq (fast-hosts)) (str "; also the arms of " (str/join ", " (sort (fast-hosts)))))))))
+
 (defn engines
   "Build the drivers of `:hosts` (a vector of :java :csharp :c :pod), one after another (a build is the machine's whole share of CPU). Answers
   [{:host :label :drv}] for the ones that built; prints a loud SKIP line for each that did not and calls `:on-fail` for a real failure."
@@ -28,6 +44,8 @@
    (for [h hosts
          :let [{:keys [label env script arm which]} (specs h)
                out (cond
+                     (fast-skip? h)
+                     (do (println (str "  SKIP " (name h) " -- --fast runs Rust and Go only (" arm " is left out; EMON_FAST_HOSTS=" (name h) " adds it)")) nil)
                      (System/getenv env)
                      (do (println (str "  SKIP " (name h) " -- " env " is set (" arm " is left out)")) nil)
                      (and which (not (fs/which which)))
@@ -49,8 +67,8 @@
   (vec
    (for [h hosts
          :let [{:keys [label env arm]} (specs h)
-               out (if (System/getenv env)
-                     (do (println (str "  SKIP " (name h) " -- " env " is set (" arm " is left out)")) nil)
+               out (if (or (System/getenv env) (fast-skip? h))
+                     (do (println (str "  SKIP " (name h) " -- " (if (System/getenv env) (str env " is set") "--fast runs Rust and Go only") " (" arm " is left out)")) nil)
                      (let [r @(process {:out :string :err :string} "kin/scripts/emon-plandrv-build" (name h) (name tool))]
                        (case (:exit r)
                          0 {:host h :label label :drv (str (fs/absolutize (str/trim (:out r))))}

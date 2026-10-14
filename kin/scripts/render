@@ -53,6 +53,7 @@
 ;; Rust's: they read pixels, which no other host's driver prints.
 (cp/add-classpath "tools/lib")
 (require '[extra-hosts :as xh])
+(xh/fast-note "render" "the Rust and Go replays; the Java and C# plan drivers are left out")
 (def plans (xh/plan-drivers {:tool :render :on-fail bad}))
 
 (def dargs (l/driver-args l/cases))

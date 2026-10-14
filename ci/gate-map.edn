@@ -1,0 +1,228 @@
+;; THE GATE MAP (P11.7, D528; D524). Read by `bb ci plan`, `bb ci core`, `bb ci shards`, `bb ci map-coverage` (tools/ci.clj) and, through them, by the two workflows.
+;;
+;;   :core    the FAST CORE: runs on every pull request, whatever the change, one command after another (`bb ci core`). :secs is measured on the maintainer's machine
+;;            (D528); :gate names the gate it is, so the plan does not schedule it a second time.
+;;   :groups  names for sets of gates, used as `@name` in an entry.
+;;   :shards  EVERY gate, once, in the shard it runs in on the full run (gates.yml reads this through `bb ci shards`; the pull request plan runs the shards that
+;;            hold a planned gate). :own-job: the shard is not part of the matrix (the `unit` gate has a job of its own, one per arm).
+;;   :fast    the gates that take `--fast` (`bb gates --fast G...` runs `bb G --fast`): what the variant leaves out, and the measured seconds, full and fast. kin/scripts/gates
+;;            lists the same set in `fast_gates`; `bb ci map-coverage` fails if the two differ.
+;;   :map     path glob -> the gates a change to it calls for, ADDED UP over every entry that matches. EVERY tracked path must match at least one entry; an entry that matches
+;;            none is dead and fails too. `[]` is an answer: the path needs no gate beyond the fast core (a document, a recorder, a report). :hosts names the host
+;;            arms (java csharp c pod wasm; go for the unit gate's Go arm) the change touches: a --fast run leaves those arms out unless the plan names them (EMON_FAST_HOSTS), Rust and Go always run
+;;            in every gate but unit.
+;;            Globs: `**/` any directories, `**` anything, `*` within a name, `?` one character, `{a,b}`.
+;;
+;; A map is a CLAIM about dependence, not a proof. A path mapped narrowly misses a gate that the weekly and release runs (every gate, in full) still catch; a PR that touches
+;; the generated logic of a family names the replay gates whose digests hold its outputs, and the rest is the weekly run's. D528 says which way each family leans.
+{:core
+ [{:id "check"         :cmd ["bb" "check"]                        :gate "check"         :secs 19  :why "one source, four languages, one answer: the whole generate-compile-run path"}
+  {:id "drift"         :cmd ["bb" "drift"]                        :gate "drift"         :secs 61  :why "the committed generated tree is what the sources say"}
+  {:id "hosts"         :cmd ["bb" "hosts"]                        :gate "hosts"         :secs 3   :why "the four host trees agree"}
+  {:id "lang-test"     :cmd ["bb" "lang-test"]                    :gate "lang-test"     :secs 1   :why "the generator's own refusals (emit-ascii, defenum, defctx, fd): under a second"}
+  {:id "api-diff"      :cmd ["bb" "api-diff"]                     :gate "api-diff"      :secs 2   :why "the public API is the frozen one (D527)"}
+  {:id "release-audit" :cmd ["bb" "release-audit"]                :gate "release-audit" :secs 1   :why "licences, inventory and notices (D526)"}
+  {:id "version"       :cmd ["bb" "version" "--check" "@version"]                       :secs 1   :why "every manifest equals version.edn (D525)"}
+  {:id "ci-coverage"   :cmd ["bb" "ci" "coverage"]                                      :secs 1   :why "the gate map covers the tree, every gate is in a shard, every workflow task exists, every replay gate re-derives (includes rederive --check)"}]
+
+ :groups
+ {"replay"  ["plan" "ocr" "render" "align" "fusion" "gfuse" "artifacts" "seals" "sealpx" "sigs" "retarget" "asset"]
+  "convert" ["slice" "identity" "repeat" "accuracy"]
+  "engine"  ["unit" "slice" "identity" "repeat" "accuracy" "plan" "ocr" "render" "align" "fusion" "gfuse" "artifacts" "seals" "sealpx" "sigs" "retarget" "asset" "embedders"]
+  "host"    ["unit" "slice" "identity" "repeat" "accuracy" "plan" "ocr" "render" "align" "fusion" "gfuse" "artifacts" "seals" "sealpx" "sigs" "retarget" "asset" "embedders" "fuzz" "image" "png-check"]}
+
+ :shards
+ [{:name "unit"      :gates ["unit"] :own-job true}
+  {:name "static"    :gates ["hosts" "drift" "release-audit" "api-diff" "lang-test"]}
+  {:name "check"     :gates ["check"]}
+  {:name "replay"    :gates ["plan" "ocr" "render" "embedders"]}
+  {:name "fusion"    :gates ["align" "fusion" "gfuse" "artifacts" "seals" "sealpx" "sigs" "retarget"]}
+  {:name "slice"     :gates ["slice"]}
+  {:name "fuzz"      :gates ["fuzz"]}
+  {:name "identity"  :gates ["identity"]}
+  {:name "repeat"    :gates ["repeat"]}
+  {:name "accuracy"  :gates ["accuracy"]}
+  {:name "png-check" :gates ["png-check"] :corpus true}
+  {:name "asset"     :gates ["asset"]}
+  {:name "image"     :gates ["image"] :corpus true}]
+
+ ;; :full and :fast are wall seconds on the maintainer's machine, warm caches, one gate at a time, `corpus/` absent (as on a pull request), while the machine was shared (load average
+ ;; 15 to 110): read them as orders of magnitude, not as runner times. A cold GitHub runner adds the toolchain builds (Java, .NET, C, the pod), which the --fast variants mostly skip.
+ ;; Gates NOT here have no --fast variant and run in full on a pull request, each under three minutes: plan 7, embedders 9, asset 37, png-check 3, fuzz 170 (already a fixed-seed small budget).
+ :fast
+ {"unit"      {:full 730  :fast 1264 :how "the Rust arm only (the arms are the same laws in four languages); without corpus/ the six laws that read real files from it are skipped by name, loudly; EMON_FAST_HOSTS adds go/java/csharp when corpus/ is there. The preamble (table and golden checks) runs as in the gate. FULL is the Rust arm alone: all four arms are longer"}
+  "identity"  {:full 571  :fast 14   :how "Rust and Go only; every 8th input of the sorted corpus (74 of 590) and every 3rd of the assets and figures passes; no Java, C#, C, pod or browser arm unless EMON_FAST_HOSTS names it"}
+  "repeat"    {:full 2867 :fast 76   :how "Rust and Go only; every 4th document (113 of 450) of the committed corpus; no Java, C#, C or pod arm unless named"}
+  "accuracy"  {:full 320  :fast 117  :how "the Rust predictor's WHOLE ratchet (a subset would move the means); the cross-host check runs Go only"}
+  "slice"     {:full 190  :fast 23   :how "Rust and Go only, every fixture; no Java, C#, C, pod or browser arm unless named"}
+  "ocr"       {:full 116  :fast 48   :how "Rust and Go only over every transcript; no Java, C# or C arm unless named"}
+  "fusion"    {:full 179  :fast 68   :how "Rust and Go only over every transcript; no Java, C# or C arm unless named"}
+  "gfuse"     {:full 88   :fast 57   :how "Rust and Go only over every transcript; no Java, C# or C arm unless named"}
+  "retarget"  {:full 83   :fast 46   :how "Rust and Go only over every transcript; no Java, C# or C arm unless named"}
+  "artifacts" {:full 36   :fast 3    :how "Rust and Go only; no Java, C# or C arm unless named"}
+  "seals"     {:full 8    :fast 4    :how "Rust and Go only; no Java, C# or C arm unless named"}
+  "sealpx"    {:full 108  :fast 58   :how "Rust and Go only; no Java, C# or C arm unless named"}
+  "sigs"      {:full 36   :fast 24   :how "Rust and Go only; no Java, C# or C arm unless named"}
+  "align"     {:full 19   :fast 14   :how "the Rust and Go replays; no Java or C# plan driver unless named"}
+  "render"    {:full 23   :fast 10   :how "the Rust and Go replays; no Java or C# plan driver unless named"}
+  "image"     {:full 94   :fast 10   :how "the Rust and Go decoders over every fixture; no Java, C# or C arm unless named"}}
+
+ :map
+ [;; ---- documents, records and tools that no gate reads ------------------------------------------------------------------------------------------------
+  {:glob "DEVLOG.md" :gates [] :why "the log; SPEC and DEVLOG are read by no gate"}
+  {:glob "SPEC.md" :gates [] :why "the specification; no gate reads it (embedders and hosts hold the names it lists in their own sources)"}
+  {:glob "LICENSE" :gates [] :why "the fast core's release-audit holds it"}
+  {:glob "THIRD_PARTY_NOTICES.md" :gates [] :why "generated from release/third-party.edn; the fast core's release-audit holds it"}
+  {:glob "release/**" :gates [] :why "the inventory and licence texts; the fast core's release-audit holds them"}
+  {:glob "api/**" :gates [] :why "the frozen surface; the fast core's api-diff holds it"}
+  {:glob "version.edn" :gates [] :why "the fast core's `version --check` holds every manifest to it"}
+  {:glob ".gitignore" :gates [] :why "no gate reads it"}
+  {:glob ".env.example" :gates [] :why "a template of the corpus credentials; nothing reads it"}
+  {:glob ".github/**" :gates [] :why "workflows and the setup action: the fast core's `ci coverage` reads every workflow (tasks exist, shards run, the plan is called)"}
+  {:glob "ci/**" :gates [] :why "this map: the fast core's `ci coverage` runs map-coverage over it"}
+  {:glob "samples/**" :gates [] :why "comparison samples regenerated LIVE by `bb samples` (needs pdfium and Tesseract); not read by a gate"}
+  {:glob "bench/**" :gates [] :why "benchmark mains and scripts, run by hand (nome's bench); not a gate"}
+  {:glob "bb.edn" :gates [] :why "the task table: `ci coverage` and `kin/scripts/gates` hold it to the gate list; what a gate does lives in its script, which is mapped"}
+  {:glob "deps.edn" :gates [] :why "the Clojure-consumer form of bb.edn's paths"}
+  {:glob "schema/**" :gates ["unit" "slice"] :why "the JSON schemas: json-check.py (unit) validates every golden, slice converts to them"}
+
+  ;; ---- kin: the language library ----------------------------------------------------------------------------------------------------------------------
+  {:glob "kin/src/**" :gates ["lang-test" "unit" "slice" "identity" "embedders"] :why "the generator's own source: every language's output; the fast core's drift and check show it, these show what it does to the laws and the drivers"}
+
+  ;; ---- kin: the modules, by family (EVERY kin/*.kin must be in one; a new module with no family fails map-coverage) -----------------------------------
+  {:glob "kin/{hello,hellotest,ctxprobe,ctxtest,docprobe,enumprobe,modelprobe,planprobe,pngprobe,porttest,alignprobe,ocrprobe,fuzzprobe,buftest,bytestest,splitmixtest,srctest,cryptotest,configtest}.kin"
+   :gates ["unit"] :why "probes (the fast core's check runs them in four languages) and laws of the base types (unit); nothing else reads them"}
+  {:glob "kin/{engine,model,modeltest,mscript,config,limits,json,jsontest,html,htmltest,style,evidence,evidencetest,transcript,transcriptctx,transcripttest,bytes,splitmix,buf,fx,fxtest,plan,planctx,planloop,planlooptest,plantest,player,playertest,pageunit,pageunittest,pageink,ocrport,ocrporttest}.kin"
+   :gates ["@engine"] :why "the Engine's spine (model, JSON/HTML writers, the plan machine, the page unit, fixed point): every conversion and every replay moves with it"}
+  {:glob "kin/{limits,engine}.kin" :gates ["fuzz"] :why "the bounds and the Engine's loop: the fuzz gate holds them against hostile input"}
+  {:glob "kin/{pdf*,inflate*,deflate*,ccitt*,imgcheck,pngread*,tiffcheck*}.kin" :gates ["unit" "slice" "identity" "repeat" "accuracy" "fuzz" "asset" "fusion" "image"]
+   :why "the PDF reader and the codecs: every born-digital conversion; fusion holds born-digital pages against OCR; fuzz mutates exactly these; image and asset decode with them"}
+  {:glob "kin/{agl,encodings,enctx,fontextra,fontprog,cmapcns,cmapgb,cmapjp,cmapkr,cjk,radicals,bidi*,norm*,normalize*,nftable,contentrows,trig}.kin"
+   :gates ["unit" "slice" "identity" "repeat" "accuracy" "fusion"] :why "text decoding, encodings, normalization and bidi: the text of every document; fusion's born-digital contract is a CER"}
+  {:glob "kin/{para*,heading*,table*,columns,lists,listtest,links,notes,inline*,initial*,hidden*,furniture*,restruct,tagtable*,health*,tlhealth*,calib*}.kin"
+   :gates ["unit" "slice" "identity" "repeat" "accuracy" "ocr" "fusion" "gfuse" "artifacts" "seals" "sealpx" "sigs" "retarget" "asset"]
+   :why "layout, structure and confidences: the nodes and `conf` of every Model, so every replay gate's digest and the scoreboard's rows"}
+  {:glob "kin/{retarget,retargettest}.kin" :gates ["unit" "retarget" "ocr"] :why "targeted re-OCR rounds (SPEC 8.3): the retarget gate's digests and the committed scans through the whole Engine"}
+  {:glob "kin/{gfuse*,gvec*,glayer*,trace*,pdfgfx}.kin" :gates ["unit" "gfuse" "sealpx"] :why "graphics fusion and the tracer: the gfuse digests; the seals-from-pixels set reads the tracer's ink"}
+  {:glob "kin/{sealfield*,sealmark*,sealpx*,sigmark*,sigpx*}.kin" :gates ["unit" "seals" "sealpx" "sigs"] :why "seals, stamps and signatures: their three replay gates"}
+  {:glob "kin/{artifact,align*,xalign*,arbiter*,fuserules}.kin" :gates ["unit" "align" "fusion" "artifacts" "seals"] :why "alignment, arbitration and the fusion rules (and the watermark defence): their replay gates"}
+  {:glob "kin/{ocr,ocrtest,scan,scantest,raster*,rasterin*,rasterplan*}.kin" :gates ["unit" "ocr" "retarget" "sealpx" "sigs"] :why "OCR intake, scans and the raster stage: the committed OCR transcripts, and the pixel replays that read the same views"}
+  {:glob "kin/{asset*,figclass*,png,pngtest,pngcheck,pngchecktest}.kin" :gates ["unit" "asset" "identity" "png-check" "image"] :why "assets, figures and the PNG writer/validator: the asset gate, the writers' identity, the PNG digests"}
+
+  ;; ---- kin/scripts: the gate scripts, the builders, the generators ----------------------------------------------------------------------------------
+  {:glob "kin/scripts/align" :gates ["align"] :why "the gate's own script"}
+  {:glob "kin/scripts/artifacts" :gates ["artifacts"] :why "the gate's own script"}
+  {:glob "kin/scripts/asset-check" :gates ["asset"] :why "the gate's own script"}
+  {:glob "kin/scripts/embedders" :gates ["embedders"] :why "the gate's own script"}
+  {:glob "kin/scripts/fusion" :gates ["fusion"] :why "the gate's own script"}
+  {:glob "kin/scripts/gfuse" :gates ["gfuse"] :why "the gate's own script"}
+  {:glob "kin/scripts/identity" :gates ["identity"] :why "the gate's own script"}
+  {:glob "kin/scripts/image" :gates ["image"] :why "the gate's own script"}
+  {:glob "kin/scripts/lang-test" :gates ["lang-test"] :why "the gate's own script"}
+  {:glob "kin/scripts/ocr" :gates ["ocr"] :why "the gate's own script"}
+  {:glob "kin/scripts/plan" :gates ["plan"] :why "the gate's own script"}
+  {:glob "kin/scripts/png-check" :gates ["png-check"] :why "the gate's own script"}
+  {:glob "kin/scripts/render" :gates ["render"] :why "the gate's own script"}
+  {:glob "kin/scripts/repeat" :gates ["repeat"] :why "the gate's own script"}
+  {:glob "kin/scripts/retarget" :gates ["retarget"] :why "the gate's own script"}
+  {:glob "kin/scripts/sealpx" :gates ["sealpx"] :why "the gate's own script"}
+  {:glob "kin/scripts/seals" :gates ["seals"] :why "the gate's own script"}
+  {:glob "kin/scripts/sigs" :gates ["sigs"] :why "the gate's own script"}
+  {:glob "kin/scripts/slice" :gates ["slice"] :why "the gate's own script"}
+  {:glob "kin/scripts/unit" :gates ["unit"] :why "the gate's own script"}
+  {:glob "kin/scripts/{check,drift,hosts,gates,emit,gen,dotnet-sdk,cap,destinations}" :gates [] :why "gate drivers and helpers the fast core runs (check, drift, hosts), or the gate list itself, held by ci coverage"}
+  {:glob "kin/scripts/{c,pod,wasm}" :gates ["slice" "identity"] :why "the C-binding, pod and browser checks: slice and identity carry their arms"}
+  {:glob "kin/scripts/emon-{rs,go}-build" :gates ["unit" "slice" "identity" "repeat" "accuracy" "fuzz" "@replay"] :why "builds the Rust and Go drivers every gate drives"}
+  {:glob "kin/scripts/emon-java-build" :gates ["slice" "identity" "repeat" "fuzz" "@replay"] :hosts ["java"] :why "builds the Java driver"}
+  {:glob "kin/scripts/emon-cs-build" :gates ["slice" "identity" "repeat" "fuzz" "@replay"] :hosts ["csharp"] :why "builds the C# driver"}
+  {:glob "kin/scripts/emon-{c,bind}-build" :gates ["slice" "identity" "repeat" "fuzz" "@replay"] :hosts ["c"] :why "builds the C library and its driver"}
+  {:glob "kin/scripts/emon-pod-build" :gates ["slice" "identity" "repeat" "fuzz" "@replay"] :hosts ["pod"] :why "builds the babashka pod"}
+  {:glob "kin/scripts/emon-wasm-{build,run}" :gates ["slice" "identity" "repeat"] :hosts ["wasm"] :why "builds and drives the browser module"}
+  {:glob "kin/scripts/emon-plandrv-build" :gates ["render" "align"] :hosts ["java" "csharp"] :why "builds the Java and C# plan-gate drivers (render, align)"}
+  {:glob "kin/scripts/{asset-fixtures,asset-fig-fixtures,asset-golden,asset-record}" :gates ["unit" "asset"] :why "asset fixtures, goldens and the figures recorder"}
+  {:glob "kin/scripts/{content-*,pdf-*,pdfnames.py,struct-*,vis-*,heading-*,para-*,table-*,json-check.py,html-check.py,gold-check.py,inflate-*,lzw-vectors,png-predictor-vectors,font-*,fontdata.py,fontextra.clj,bididata.clj,bidi-samples.clj,cjkdata.clj,cjkfetch.clj,radicals.clj,ucd.py,trigdata,synth-extras.edn,evidence-goldens}"
+   :gates ["unit" "slice"] :why "generators and second-opinion checkers that `bb unit` runs first (and `bb slice` for the golden writers)"}
+  {:glob "kin/scripts/{ink,trace,png-bench}" :gates [] :why "reports and live recorders (bb ink, bb trace, bb png-bench): not gates"}
+
+  ;; ---- the tools --------------------------------------------------------------------------------------------------------------------------------------
+  {:glob "tools/{api_diff,release_audit,version,rederive,ci}.clj" :gates [] :why "release and CI tooling: the fast core runs each (api-diff, release-audit, version --check, ci coverage)"}
+  {:glob "tools/{corpus,corpus_test,corpus_roundtrip,samples,pdfinfo}.clj" :gates [] :why "corpus transport and live tools: not gates (corpus-test is its own non-gate)"}
+  {:glob "tools/{transcript_manifest,crypto-constants,pdfsnames,pdfxnames}.clj" :gates ["unit"] :why "tables and manifests `bb unit` checks"}
+  {:glob "tools/image-fixtures.clj" :gates ["unit" "image"] :why "the image fixtures' generator"}
+  {:glob "tools/accuracy/**" :gates ["unit" "accuracy" "ocr" "fusion" "gfuse" "sealpx" "sigs" "asset"] :why "the scorer and the predictors: the accuracy gate and every replay gate's ratchet run through it"}
+  {:glob "tools/calibration/**" :gates ["accuracy"] :why "calibration reports and the fit (writes kin/calibdata.kin, which is mapped on its own)"}
+  {:glob "tools/evidence/**" :gates ["unit"] :why "evidence-dump v0 reader the laws use"}
+  {:glob "tools/fusion/{align_lib,align_report,record-align}.clj" :gates ["align"] :why "the alignment library and recorder"}
+  {:glob "tools/fusion/{gfuse_lib,gfuse_measure,icdar_live,record-graphics}.clj" :gates ["gfuse"] :why "the graphics-fusion library, measures and recorder"}
+  {:glob "tools/fusion/{record-replay,record_health,fusion_live,explain,compare,bench,ghost_health}.clj" :gates ["fusion"] :why "the fusion recorder and its reports"}
+  {:glob "tools/fusion/explain.py" :gates [] :why "a report helper"}
+  {:glob "tools/fusion/live-sets.edn" :gates [] :why "the live sets' list (never committed data)"}
+  {:glob "tools/fuzz/**" :gates ["fuzz"] :why "the fuzzer"}
+  {:glob "tools/import/**" :gates [] :why "public-dataset importers: the corpus is not in git, nothing here is a gate"}
+  {:glob "tools/lib/**" :gates ["repeat" "fuzz" "accuracy" "@replay"] :why "libraries: extra_hosts (every replay gate's other hosts), pdfreverse (repeat), nfc and the python formatters (the synthetic corpus)"}
+  {:glob "tools/limits/**" :gates [] :why "`bb limits` is a report, not a gate"}
+  {:glob "tools/ocr/**" :gates ["ocr"] :why "the OCR recorders, CER and gold sampler"}
+  {:glob "tools/oracle/**" :gates [] :why "python oracles for baselines (run by `bb baselines`); not gates"}
+  {:glob "tools/parbench/**" :gates [] :why "a benchmark"}
+  {:glob "tools/perf/**" :gates [] :why "the perf comparators (`bb perf`): a report, not a gate"}
+  {:glob "tools/pdfium/**" :gates ["render"] :why "the pinned pdfium and its fetcher: the render transcripts are recorded with it"}
+  {:glob "tools/render/**" :gates ["render"] :why "the render recorder and fixtures"}
+  {:glob "tools/asset/**" :gates ["asset"] :why "the asset recorder"}
+  {:glob "tools/retarget/**" :gates ["retarget"] :why "the targeted-rounds recorder"}
+  {:glob "tools/sealpx/**" :gates ["sealpx"] :why "the seals-from-pixels recorder"}
+  {:glob "tools/seals/**" :gates [] :why "`bb stamp-ghost`, a live measure; not a gate"}
+  {:glob "tools/sigs/**" :gates ["sigs"] :why "the signatures recorder"}
+  {:glob "tools/synth/**" :gates ["unit" "accuracy"] :why "the synthetic corpus' generators: gold-check (unit) holds the gold to them, the scoreboard is scored on their output"}
+  {:glob "tools/vis/**" :gates [] :why "a visual corpus report"}
+
+  ;; ---- the hosts and the generated tree ---------------------------------------------------------------------------------------------------------------
+  {:glob "host/rust/**" :gates ["@host"] :why "the Rust host: the reference every other host is held to"}
+  {:glob "host/go/**" :gates ["@host"] :hosts ["go"] :why "the Go host (the unit gate's Go arm is added to a --fast run)"}
+  {:glob "host/java/**" :gates ["@host"] :hosts ["java"] :why "the Java host"}
+  {:glob "host/csharp/**" :gates ["@host"] :hosts ["csharp"] :why "the C# host"}
+  {:glob "host/c/**" :gates ["@host"] :hosts ["c"] :why "the C library and its header"}
+  {:glob "host/pod/**" :gates ["@host"] :hosts ["pod"] :why "the babashka pod"}
+  {:glob "host/{wasm,js}/**" :gates ["@host"] :hosts ["wasm"] :why "the WASM binding and the JS SDK"}
+  {:glob "gen/rust/**" :gates ["@engine" "fuzz"] :why "the generated tree: drift (core) says it is what kin says; these say what it does"}
+  {:glob "gen/go/**" :gates ["@engine" "fuzz"] :hosts ["go"] :why "the generated Go"}
+  {:glob "gen/java/**" :gates ["@engine" "fuzz"] :hosts ["java"] :why "the generated Java"}
+  {:glob "gen/csharp/**" :gates ["@engine" "fuzz"] :hosts ["csharp"] :why "the generated C#"}
+
+  ;; ---- test data, by gate -----------------------------------------------------------------------------------------------------------------------------
+  {:glob "test/**/*.pdf" :gates ["identity" "repeat"] :why "identity and repeat convert every committed PDF under test/"}
+  {:glob "test/artifacts/**" :gates ["artifacts"] :why "watermark fixtures and their replays"}
+  {:glob "test/asset/**" :gates ["asset"] :why "the figures-level asset set and its digests"}
+  {:glob "test/assets/**" :gates ["unit" "asset" "slice" "identity"] :why "asset fixtures, transcripts and goldens: unit laws, the asset gate, slice and identity's assets passes"}
+  {:glob "test/{bidi,inflate,normalize,evidence,transcript}/**" :gates ["unit"] :why "data the laws read"}
+  {:glob "test/calibration/**" :gates ["accuracy" "unit"] :why "the calibration data and fit"}
+  {:glob "test/content/**" :gates ["unit" "slice"] :why "content-interpreter fixtures and their goldens"}
+  {:glob "test/corpus/DATASETS.md" :gates [] :why "documentation of the public datasets"}
+  {:glob "test/corpus/synth/**" :gates ["unit" "slice" "identity" "repeat" "accuracy" "ocr" "fusion"] :why "the synthetic corpus: the scoreboard's documents and the conversions every gate holds"}
+  {:glob "test/driver/**" :gates ["slice" "identity"] :why "the browser driver and the host driver stubs"}
+  {:glob "test/driver/java/**" :gates ["slice" "identity"] :hosts ["java"] :why "the Java driver"}
+  {:glob "test/driver/csharp/**" :gates ["slice" "identity"] :hosts ["csharp"] :why "the C# driver"}
+  {:glob "test/driver/c/**" :gates ["slice" "identity"] :hosts ["c"] :why "the C driver"}
+  {:glob "test/driver/pod/**" :gates ["slice" "identity"] :hosts ["pod"] :why "the pod driver"}
+  {:glob "test/driver/wasm/**" :gates ["slice" "identity"] :hosts ["wasm"] :why "the browser driver"}
+  {:glob "test/fonts/**" :gates ["unit" "slice"] :why "font tables, AFMs and font fixtures"}
+  {:glob "test/fusion/**" :gates ["fusion"] :why "fusion's replay set and its siblings"}
+  {:glob "test/fusion/align/**" :gates ["align"] :why "alignment fixtures"}
+  {:glob "test/fusion/graphics/**" :gates ["gfuse" "accuracy"] :why "graphics-fusion fixtures (the emon-gfuse ratchet)"}
+  {:glob "test/fusion/{health,hidden}/**" :gates ["unit" "fusion"] :why "health and hidden-text fixtures the laws and fusion read"}
+  {:glob "test/fuzz/**" :gates ["fuzz"] :why "regression fixtures the fuzz gate replays"}
+  {:glob "test/{heading,para,table}/**" :gates ["unit" "slice" "accuracy"] :why "structure goldens"}
+  {:glob "test/{html,json}/**" :gates ["unit" "slice"] :why "serializer goldens (json-check.py and html-check.py in unit)"}
+  {:glob "test/image/**" :gates ["image" "identity" "unit"] :why "image fixtures"}
+  {:glob "test/limits/**" :gates [] :why "scenarios for `bb limits --run`, a report"}
+  {:glob "test/ocr/**" :gates ["ocr" "accuracy"] :why "the committed OCR transcripts and the replay ratchet"}
+  {:glob "test/pdf/**" :gates ["unit" "slice" "identity" "repeat" "fuzz"] :why "PDF-layer fixtures: unit laws, conversions, mutation seeds"}
+  {:glob "test/plan/**" :gates ["plan"] :why "plan/fulfil transcripts"}
+  {:glob "test/png/**" :gates ["png-check"] :why "PNG digests"}
+  {:glob "test/render/**" :gates ["render"] :why "render transcripts"}
+  {:glob "test/retarget/**" :gates ["retarget"] :why "targeted-rounds transcripts"}
+  {:glob "test/scoreboard.edn" :gates ["accuracy" "@replay"] :why "the ratchet: every replay gate holds its entry"}
+  {:glob "test/sealpx/**" :gates ["sealpx"] :why "seals-from-pixels transcripts"}
+  {:glob "test/seals/**" :gates ["seals"] :why "seals transcripts"}
+  {:glob "test/signatures/**" :gates ["sigs"] :why "signature fixtures"}
+  {:glob "test/slice/**" :gates ["slice"] :why "slice's HTML goldens"}
+  {:glob "test/vis/**" :gates ["unit"] :why "visibility fixtures (the PDFs are also converted by identity and repeat, above)"}]}

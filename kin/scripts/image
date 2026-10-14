@@ -34,6 +34,7 @@
          '[clojure.string :as str])
 (cp/add-classpath "tools/lib")
 (require '[extra-hosts :as xh])
+(xh/fast-note "image" "the Rust and Go decoders over every fixture; the Java, C# and C arms are left out")
 
 (def fails (atom 0))
 (defn ok [& xs] (println (str "  ok   " (apply str xs))))

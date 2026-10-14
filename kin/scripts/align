@@ -53,6 +53,7 @@
 ;; timing (5) are Rust's, by design.
 (cp/add-classpath "tools/lib")
 (require '[extra-hosts :as xh])
+(xh/fast-note "align" "the Rust and Go replays; the Java and C# plan drivers are left out")
 (def plans (xh/plan-drivers {:tool :align :on-fail bad}))
 
 (defn pct* [a b] (if (pos? b) (/ (double a) b) 0.0))

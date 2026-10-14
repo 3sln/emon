@@ -3492,12 +3492,14 @@ Pure babashka (own SigV4); no aws/rclone/mc. Implementation: `tools/corpus.clj`.
 
 ### 15.3 Running the gates on GitHub (D266)
 
-`.github/workflows/gates.yml` runs every gate on `ubuntu-latest`, in parallel jobs, on demand only (`workflow_dispatch`; no push or pull-request trigger):
+`.github/workflows/gates.yml` runs every gate, in full, on `ubuntu-latest`, in parallel jobs, on a release being published or prereleased, on demand (`workflow_dispatch`) and weekly (Monday, `main`); `.github/workflows/pr.yml` runs the fast core and the gates a change calls for, as `--fast` variants, on every pull request (P11.7, P11.8, D528):
 
     gh workflow run gates.yml -f groups=all            # all | unit-only | fast-only
     gh workflow run gates.yml -f groups=unit-only -f ref=my-branch
 
-Jobs: `corpus` (not for `unit-only`), `unit` and `unit red` (one job per arm: go, rust, java, csharp), `gates` (shards of `bb gates G...`: static = hosts drift lang-test; check; replay = plan ocr render embedders; slice; fuzz; identity; repeat; accuracy; png-check; image), and `summary` (every selected job passed; every arm ran the same number of laws). `bb ci coverage` fails if a gate of `kin/scripts/gates` is in no shard. Tesseract and pdfium are not installed: `ocr` and `render` replay committed transcripts.
+Jobs: `corpus` (not for `unit-only`), `unit` and `unit red` (one job per arm: go, rust, java, csharp), `shards` and `gates` (the shards of `ci/gate-map.edn`, each `bb gates G...`: static = hosts drift release-audit api-diff lang-test; check; replay = plan ocr render embedders; fusion = align fusion gfuse artifacts seals sealpx sigs retarget; slice; fuzz; identity; repeat; accuracy; png-check; asset; image), and `summary` (every selected job passed; every arm ran the same number of laws). `bb ci coverage` fails if a gate of `kin/scripts/gates` is in no shard, or if a tracked file is matched by no entry of the gate map. Tesseract and pdfium are not installed: `ocr` and `render` replay committed transcripts.
+
+The pull request workflow: `bb ci plan --base origin/main` maps `git diff --name-only` through `ci/gate-map.edn` (path glob to gates; every tracked path must match an entry, `[]` for a document) and fails on a changed path the map does not know; `bb ci core` runs the fast core (check, drift, hosts, api-diff, release-audit, `version --check`, `ci coverage`); the planned gates run as `bb gates --fast G...` where the gate has a `--fast` variant (a labelled, deterministic subset: Rust and Go only, a fixed sample of documents; `EMON_FAST_HOSTS` adds the host arms a change touches) and in full where it has none.
 
 Repository secrets (Settings, Secrets and variables, Actions): `EMON_S3_ENDPOINT`, `EMON_S3_REGION`, `EMON_S3_BUCKET`, `EMON_S3_ACCESS_KEY_ID`, `EMON_S3_SECRET_ACCESS_KEY`, and optionally `EMON_S3_PREFIX`, `EMON_S3_PATH_STYLE`. The workflow writes them to `.env`, pulls only the `formats` and `financial` categories (the ones `png-check` and `image` read), and caches `corpus/` keyed by `bb corpus-index-sha` (the SHA-256 of the remote `index.json`), so an unchanged corpus is not pulled again. Without the secrets the run fails with a message naming them; `groups=unit-only` needs none. The workflow's `3sln/kin` checkout is the sibling `../kin`.
 

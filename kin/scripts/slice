@@ -51,6 +51,14 @@
 (defn check [pass? & msg] (if pass? (apply ok msg) (apply bad msg)))
 
 (def update? (some #{"--update"} *command-line-args*))
+;; `--fast` (P11.7, D528): the Rust and Go hosts only, over the same fixtures; the Java, C#, C, pod and browser arms are the full gate's unless
+;; EMON_FAST_HOSTS names them (java csharp c pod wasm).
+(def fast? (boolean (or (System/getenv "EMON_FAST") (some #{"--fast"} *command-line-args*))))
+(def fast-hosts (set (remove str/blank? (str/split (str (System/getenv "EMON_FAST_HOSTS")) #","))))
+(defn fast-skip? [h] (and fast? (not (contains? fast-hosts h))))
+(when fast?
+  (println (str "  FAST slice: a deterministic SUBSET, not the gate -- the Rust and Go hosts" (when (seq fast-hosts) (str " and " (str/join ", " (sort fast-hosts))))
+                "; the other arms are the full gate's")))
 (def docs ["h-plain" "h-keyword" "h-inverted-numbered" "h-numbered" "initial-image" "initial-vector" "furn-informative"])
 
 (shell {:out :string :err :string} "kin/scripts/emit")
@@ -64,8 +72,8 @@
 ;; THE JAVA ARM (P9.1, D449): `emon-java-build` exits 3 with `SKIP java -- why` on stderr when there is no JDK 22+ (EMON_JDK,
 ;; /opt/homebrew/opt/openjdk, java_home); the arm is then left out, LOUDLY, and nothing fails. EMON_SKIP_JAVA=1 leaves it out on purpose.
 (def java-exe
-  (if (System/getenv "EMON_SKIP_JAVA")
-    (do (println "  SKIP java arm -- EMON_SKIP_JAVA is set") nil)
+  (if (or (System/getenv "EMON_SKIP_JAVA") (fast-skip? "java"))
+    (do (println "  SKIP java arm -- EMON_SKIP_JAVA is set, or --fast") nil)
     (let [r @(process {:out :string :err :string} "kin/scripts/emon-java-build")]
       (case (:exit r)
         0 (str/trim (:out r))
@@ -74,8 +82,8 @@
 ;; THE C# ARM (P9.2, D457): `emon-cs-build` exits 3 with `SKIP csharp -- why` on stderr when there is no .NET 8+ SDK (EMON_DOTNET, dotnet on the
 ;; PATH, /opt/homebrew/bin, ~/.dotnet); the arm is then left out, LOUDLY, and nothing fails. EMON_SKIP_CSHARP=1 leaves it out on purpose.
 (def cs-exe
-  (if (System/getenv "EMON_SKIP_CSHARP")
-    (do (println "  SKIP csharp arm -- EMON_SKIP_CSHARP is set") nil)
+  (if (or (System/getenv "EMON_SKIP_CSHARP") (fast-skip? "csharp"))
+    (do (println "  SKIP csharp arm -- EMON_SKIP_CSHARP is set, or --fast") nil)
     (let [r @(process {:out :string :err :string} "kin/scripts/emon-cs-build")]
       (case (:exit r)
         0 (str/trim (:out r))
@@ -84,17 +92,21 @@
 ;; THE C ARM (P9.4, D473): `emon-c-build` exits 3 with `SKIP c -- why` on stderr when there is no C compiler; the arm is then left out, LOUDLY, and
 ;; nothing fails. EMON_SKIP_C=1 leaves it out on purpose. THE POD ARM (P9.4, D475): `emon-pod-build` likewise (EMON_SKIP_POD=1).
 (def c-exe
-  (let [r @(process {:out :string :err :string} "kin/scripts/emon-c-build")]
-    (case (:exit r)
-      0 (str/trim (:out r))
-      3 (do (println (str "  " (str/trim (:err r)) " (the C arm is left out)")) nil)
-      (do (println "  FAIL the C driver did not build:\n" (:err r)) (System/exit 1)))))
+  (if (fast-skip? "c")
+    (do (println "  SKIP c arm -- --fast") nil)
+    (let [r @(process {:out :string :err :string} "kin/scripts/emon-c-build")]
+      (case (:exit r)
+        0 (str/trim (:out r))
+        3 (do (println (str "  " (str/trim (:err r)) " (the C arm is left out)")) nil)
+        (do (println "  FAIL the C driver did not build:\n" (:err r)) (System/exit 1))))))
 (def pod-exe
-  (let [r @(process {:out :string :err :string} "kin/scripts/emon-pod-build")]
-    (case (:exit r)
-      0 (str/trim (:out r))
-      3 (do (println (str "  " (str/trim (:err r)) " (the pod arm is left out)")) nil)
-      (do (println "  FAIL the pod did not build:\n" (:err r)) (System/exit 1)))))
+  (if (fast-skip? "pod")
+    (do (println "  SKIP pod arm -- --fast") nil)
+    (let [r @(process {:out :string :err :string} "kin/scripts/emon-pod-build")]
+      (case (:exit r)
+        0 (str/trim (:out r))
+        3 (do (println (str "  " (str/trim (:err r)) " (the pod arm is left out)")) nil)
+        (do (println "  FAIL the pod did not build:\n" (:err r)) (System/exit 1))))))
 (def hosts (cond-> [["rust" (build-driver "kin/scripts/emon-rs-build" "Rust")]
                     ["go" (build-driver "kin/scripts/emon-go-build" "Go")]]
              java-exe (conj ["java" java-exe])
@@ -358,11 +370,13 @@
 ;; JSON and HTML, byte for byte; the named errors and the images through it. Without the toolchain
 ;; (`kin/scripts/emon-wasm-run` exits 3: a nightly with rust-src, Node 22, Chrome, the JS devDependencies) the arm is left out, loudly.
 (def wasm
-  (let [r @(process {:out :string :err :string} "kin/scripts/emon-wasm-run" "--check")]
-    (case (:exit r)
-      0 (str/trim (:out r))
-      3 (do (println (str "  " (str/trim (:err r)) " (the wasm arm is left out)")) nil)
-      (do (println "  FAIL the wasm module did not build:\n" (:err r)) (System/exit 1)))))
+  (if (fast-skip? "wasm")
+    (do (println "  SKIP wasm arm -- --fast") nil)
+    (let [r @(process {:out :string :err :string} "kin/scripts/emon-wasm-run" "--check")]
+      (case (:exit r)
+        0 (str/trim (:out r))
+        3 (do (println (str "  " (str/trim (:err r)) " (the wasm arm is left out)")) nil)
+        (do (println "  FAIL the wasm module did not build:\n" (:err r)) (System/exit 1))))))
 
 (defn sections
   "A bundle's sections by name (`== json` ... `== intake`)."

@@ -88,6 +88,15 @@
 (def extra (atom []))   ; flags every arm is given (the assets pass sets one)
 (def limit (some-> (opt "--limit") parse-long))
 (def sample (some-> (opt "--sample") parse-long))
+;; `--fast` (P11.7, D528): a deterministic SUBSET for pull requests: Rust and Go only (the Java, C#, C, pod and browser arms are the full gate's, unless
+;; EMON_FAST_HOSTS names them: java csharp c pod wasm), every 8th input of the sorted corpus and every 3rd of the two assets passes.
+(def fast? (boolean (or (System/getenv "EMON_FAST") (some #{"--fast"} args))))
+(def fast-hosts (set (remove str/blank? (str/split (str (System/getenv "EMON_FAST_HOSTS")) #","))))
+(defn fast-skip? [h] (and fast? (not (contains? fast-hosts h))))
+(defn fast-sample [n xs] (if (and fast? (not corpus?)) (vec (take-nth n xs)) (vec xs)))
+(when fast?
+  (println (str "  FAST identity: a deterministic SUBSET, not the gate -- Rust and Go" (when (seq fast-hosts) (str " and " (str/join ", " (sort fast-hosts))))
+                "; every 8th input of the sorted corpus (every 3rd of the assets passes); the other arms are the full gate's")))
 
 (shell {:out :string :err :string} "kin/scripts/emit")
 (defn build [script what]
@@ -100,8 +109,8 @@
 ;; THE JAVA ARM (P9.1, D449) is optional: `emon-java-build` exits 3 with `SKIP java -- why` on stderr when there is no JDK 22+
 ;; (`EMON_JDK`, /opt/homebrew/opt/openjdk, `java_home`), and the arm is then left out, LOUDLY, and nothing fails. `EMON_SKIP_JAVA=1` leaves it out on purpose.
 (def java
-  (if (System/getenv "EMON_SKIP_JAVA")
-    (do (println "  SKIP java arm -- EMON_SKIP_JAVA is set") nil)
+  (if (or (System/getenv "EMON_SKIP_JAVA") (fast-skip? "java"))
+    (do (println "  SKIP java arm -- EMON_SKIP_JAVA is set, or --fast") nil)
     (let [r @(process {:out :string :err :string} "kin/scripts/emon-java-build")]
       (case (:exit r)
         0 (str/trim (:out r))
@@ -110,8 +119,8 @@
 ;; THE C# ARM (P9.2, D457) is optional: `emon-cs-build` exits 3 with `SKIP csharp -- why` on stderr when there is no .NET 8+ SDK (`EMON_DOTNET`, dotnet on
 ;; the PATH, /opt/homebrew/bin, ~/.dotnet), and the arm is then left out, LOUDLY, and nothing fails. `EMON_SKIP_CSHARP=1` leaves it out on purpose.
 (def csharp
-  (if (System/getenv "EMON_SKIP_CSHARP")
-    (do (println "  SKIP csharp arm -- EMON_SKIP_CSHARP is set") nil)
+  (if (or (System/getenv "EMON_SKIP_CSHARP") (fast-skip? "csharp"))
+    (do (println "  SKIP csharp arm -- EMON_SKIP_CSHARP is set, or --fast") nil)
     (let [r @(process {:out :string :err :string} "kin/scripts/emon-cs-build")]
       (case (:exit r)
         0 (str/trim (:out r))
@@ -120,26 +129,32 @@
 ;; THE C ARM (P9.4, D473) is optional: `emon-c-build` exits 3 with `SKIP c -- why` on stderr when there is no C compiler, and the arm is then left out,
 ;; LOUDLY, and nothing fails. `EMON_SKIP_C=1` leaves it out on purpose.
 (def cbind
-  (let [r @(process {:out :string :err :string} "kin/scripts/emon-c-build")]
-    (case (:exit r)
-      0 (str/trim (:out r))
-      3 (do (println (str "  " (str/trim (:err r)) " (the C arm is left out)")) nil)
-      (do (println "  FAIL the C driver did not build:\n" (:err r)) (System/exit 1)))))
+  (if (fast-skip? "c")
+    (do (println "  SKIP c arm -- --fast") nil)
+    (let [r @(process {:out :string :err :string} "kin/scripts/emon-c-build")]
+      (case (:exit r)
+        0 (str/trim (:out r))
+        3 (do (println (str "  " (str/trim (:err r)) " (the C arm is left out)")) nil)
+        (do (println "  FAIL the C driver did not build:\n" (:err r)) (System/exit 1))))))
 ;; THE POD ARM (P9.4, D475) is optional the same way (`emon-pod-build` exits 3 with `SKIP pod -- why`).
 (def pod
-  (let [r @(process {:out :string :err :string} "kin/scripts/emon-pod-build")]
-    (case (:exit r)
-      0 (str/trim (:out r))
-      3 (do (println (str "  " (str/trim (:err r)) " (the pod arm is left out)")) nil)
-      (do (println "  FAIL the pod did not build:\n" (:err r)) (System/exit 1)))))
+  (if (fast-skip? "pod")
+    (do (println "  SKIP pod arm -- --fast") nil)
+    (let [r @(process {:out :string :err :string} "kin/scripts/emon-pod-build")]
+      (case (:exit r)
+        0 (str/trim (:out r))
+        3 (do (println (str "  " (str/trim (:err r)) " (the pod arm is left out)")) nil)
+        (do (println "  FAIL the pod did not build:\n" (:err r)) (System/exit 1))))))
 ;; THE BROWSER ARM (P9.3, D356) is optional: `emon-wasm-run --check` exits 3 with `SKIP wasm -- why` on stderr when the toolchain is
 ;; missing, and the arm is then left out, LOUDLY, and nothing fails.
 (def wasm
-  (let [r @(process {:out :string :err :string} "kin/scripts/emon-wasm-run" "--check")]
-    (case (:exit r)
-      0 (str/trim (:out r))
-      3 (do (println (str "  " (str/trim (:err r)) " (the wasm arm is left out)")) nil)
-      (do (println "  FAIL the wasm module did not build:\n" (:err r)) (System/exit 1)))))
+  (if (fast-skip? "wasm")
+    (do (println "  SKIP wasm arm -- --fast") nil)
+    (let [r @(process {:out :string :err :string} "kin/scripts/emon-wasm-run" "--check")]
+      (case (:exit r)
+        0 (str/trim (:out r))
+        3 (do (println (str "  " (str/trim (:err r)) " (the wasm arm is left out)")) nil)
+        (do (println "  FAIL the wasm module did not build:\n" (:err r)) (System/exit 1))))))
 
 ;; ---------------------------------------------------------------- the corpus
 
@@ -166,7 +181,7 @@
                    (plain (globs "test/image" "*.{png,jpg,tif}"))
                    (plain ["test/ocr/h-keyword/bitmap-0000.png" "test/corpus/synth/html/img/initial-W.png"]))))))
 
-(def corpus* (if only (filterv #(str/includes? (:file %) only) corpus) corpus))
+(def corpus* (fast-sample 8 (if only (filterv #(str/includes? (:file %) only) corpus) corpus)))
 
 ;; ------------------------------------------------------------------ the arms
 
@@ -473,7 +488,7 @@
 ;; ---------------------------------------------------------------- the assets pass (P3.13)
 
 (def asset-corpus
-  (vec (for [f (concat (globs "test/assets" "*.pdf")
+  (fast-sample 3 (for [f (concat (globs "test/assets" "*.pdf")
                        (map #(str "test/corpus/synth/pdf/" % ".pdf")
                             ["figures-charts" "figures-logo-screenshot" "initial-image" "gfx-image-rules"
                              "mixed-table-image-shaded" "mixed-table-image" "columns-span-figure"]))
@@ -504,7 +519,7 @@
 ;; same figures with the same reasons (`render`), the same vector regions found, and the same TRANSCRIPT written, entries for the requests and
 ;; all (each host replays the other's). The live pixels of the crops are `bb asset`'s (the committed pdfium transcripts).
 (def figures-corpus
-  (vec (for [f (concat (globs "test/assets/fig" "*.pdf")
+  (fast-sample 3 (for [f (concat (globs "test/assets/fig" "*.pdf")
                        (map #(str "test/assets/" % ".pdf") ["dct-rgb" "flate-rgb8" "place-twice" "place-skew" "place-clip-circle" "place-rot90" "smask" "dct-smask" "jpx"])
                        (map #(str "test/corpus/synth/pdf/" % ".pdf")
                             ["figures-charts" "figures-logo-screenshot" "columns-span-figure" "mixed-table-image" "table-simple-ruled" "bank-statement"]))
