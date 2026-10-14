@@ -1256,7 +1256,7 @@
 (def ^:private copy-dirs
   ["host/rust/src" "host/go" "host/java" "host/csharp" "host/js/src" "host/c" "host/pod/src" "host/wasm/src" "api"])
 (def ^:private copy-files
-  ["host/js/package.json" "kin/config.kin" "kin/limits.kin" "schema/emon-1.json" "test/driver/rust/main.rs"])
+  ["host/js/package.json" "kin/config.kin" "kin/limits.kin" "schema/emon-1.json" "test/driver/rust/main.rs" "host/cli/src/main.rs"])
 
 (defn- list-gen [root]
   (concat (map #(str "gen/rust/emon/" (fs/file-name %)) (fs/glob (path root "gen/rust/emon") "*.rs"))
