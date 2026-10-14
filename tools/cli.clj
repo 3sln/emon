@@ -18,8 +18,20 @@
 (require '[babashka.fs :as fs]
          '[babashka.process :refer [shell]]
          '[clojure.edn :as edn]
+         '[clojure.java.io :as io]
          '[clojure.string :as str])
-(import '[java.security MessageDigest])
+(import '[java.security MessageDigest] '[java.util.zip ZipEntry ZipOutputStream])
+
+(defn zip-dir!
+  "Write `archive` holding every file under `stage`, named relative to `root` with `/` separators (babashka.fs/zip named them with the platform's
+  separator on Windows, which the unzip then took for absolute paths)."
+  [archive stage root]
+  (let [root (fs/absolutize root)]
+    (with-open [zos (ZipOutputStream. (io/output-stream (str archive)))]
+      (doseq [f (sort (map str (filter fs/regular-file? (fs/glob stage "**"))))]
+        (.putNextEntry zos (ZipEntry. (str/replace (str (fs/relativize root (fs/absolutize f))) "\\" "/")))
+        (io/copy (io/file f) zos)
+        (.closeEntry zos)))))
 
 (def args (vec *command-line-args*))
 (defn flag? [f] (some #{f} args))
@@ -106,7 +118,7 @@
     (fs/copy "THIRD_PARTY_NOTICES.md" (str stage "/THIRD_PARTY_NOTICES.md"))
     (fs/copy "docs/cli.md" (str stage "/README.md"))
     (if windows?
-      (fs/zip archive [stage] {:root out-dir})
+      (zip-dir! archive stage out-dir)
       (shell {:dir out-dir :extra-env {"COPYFILE_DISABLE" "1"}} "tar" "-czf" archive dirname))
     (let [h (sha256-file archive)]
       (spit (str archive ".sha256") (str h "  " archive-name "\n"))
