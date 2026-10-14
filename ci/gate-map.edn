@@ -48,7 +48,7 @@
 
  ;; :full and :fast are wall seconds on the maintainer's machine, warm caches, one gate at a time, `corpus/` absent (as on a pull request), while the machine was shared (load average
  ;; 15 to 110): read them as orders of magnitude, not as runner times. A cold GitHub runner adds the toolchain builds (Java, .NET, C, the pod), which the --fast variants mostly skip.
- ;; Gates NOT here have no --fast variant and run in full on a pull request, each under three minutes: plan 7, embedders 9, asset 37, png-check 3, fuzz 170 (already a fixed-seed small budget).
+ ;; Gates NOT here have no --fast variant and run in full on a pull request, each under three minutes: plan 7, embedders 9, asset 37, png-check 3, fuzz 170 (already a fixed-seed small budget), pdfium-wasm (arm A, the Rust and Go replays of six small transcripts, is the whole gate wherever pdfium's wasm build is not fetched: a runner does not fetch it, so no variant is needed; arm B, the live build in Node, runs only where `bb pdfium-fetch --platform wasm` was run).
  :fast
  {"unit"      {:full 730  :fast 1264 :how "the Rust arm only (the arms are the same laws in four languages); without corpus/ the six laws that read real files from it are skipped by name, loudly; EMON_FAST_HOSTS adds go/java/csharp when corpus/ is there. The preamble (table and golden checks) runs as in the gate. FULL is the Rust arm alone: all four arms are longer"}
   "identity"  {:full 571  :fast 14   :how "Rust and Go only; every 8th input of the sorted corpus (74 of 590) and every 3rd of the assets and figures passes; no Java, C#, C, pod or browser arm unless EMON_FAST_HOSTS names it"}
