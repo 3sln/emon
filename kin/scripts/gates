@@ -23,7 +23,7 @@ set -e
 cd "$(dirname "$0")/../.."
 
 gates="hosts drift release-audit api-diff lang-test check unit plan ocr render pdfium-wasm align fusion gfuse artifacts seals sealpx sigs retarget fuzz png-check asset slice embedders identity image repeat accuracy package-check"
-not_gates="gen emit gates import corpus-push corpus-pull corpus-test png-bench ocr-live fusion-report fusion-live align-record align-report fusion-record ghost-health render-record pdfium-fetch ink trace corpus-index-sha ci retarget-record sigs-record fusion-bench wasm asset-record baselines limits asset-fig-record rederive c pod fuzz-long perf calibration stamp-ghost sealpx-record parbench gfuse-record gfuse-measure gfuse-icdar samples version pdfium-wasm-record demo native cli package release-notes release-verify release-ops publish"
+not_gates="gen emit gates import corpus-push corpus-pull corpus-test png-bench ocr-live fusion-report fusion-live align-record align-report fusion-record ghost-health render-record pdfium-fetch ink trace corpus-index-sha ci retarget-record sigs-record fusion-bench wasm asset-record baselines limits asset-fig-record rederive c pod fuzz-long perf calibration stamp-ghost sealpx-record parbench gfuse-record gfuse-measure gfuse-icdar samples version docs pdfium-wasm-record demo native cli package release-notes release-verify release-ops publish"
 
 # THE GATES THAT TAKE `--fast` (P11.7, D528): a deterministic SUBSET for pull requests (Rust and Go only, a fixed sample of documents; each
 # prints a `FAST <gate>` line saying what it left out). `bb gates --fast GATE...` runs `bb GATE --fast` for each and refuses a gate not listed here.

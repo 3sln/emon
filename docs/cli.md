@@ -11,13 +11,14 @@ Platforms: macOS arm64 and x64, Linux x64 and arm64 (glibc 2.39 or newer), Windo
 Download `emon-<version>-<platform>.tar.gz` (`.zip` on Windows) and its `.sha256` from the GitHub release,
 check it, and unpack it anywhere:
 
-    shasum -a 256 -c emon-0.1.0-aarch64-apple-darwin.tar.gz.sha256
-    tar -xzf emon-0.1.0-aarch64-apple-darwin.tar.gz
-    emon-0.1.0-aarch64-apple-darwin/bin/emon version
+    shasum -a 256 -c emon-<version>-<platform>.tar.gz.sha256
+    tar -xzf emon-<version>-<platform>.tar.gz
+    emon-<version>-<platform>/bin/emon version
 
+(`<platform>` is the Rust target triple, such as `aarch64-apple-darwin`; `<version>` the release's.)
 The directory is the install: keep `bin/`, `lib/` and `share/` together (the binary finds the others
 relative to itself, through symlinks too). On macOS a downloaded binary is quarantined until you run
-`xattr -dr com.apple.quarantine emon-0.1.0-aarch64-apple-darwin` (the release is not notarised).
+`xattr -dr com.apple.quarantine emon-<version>-<platform>` (the release is not notarised).
 
     bin/emon                         (bin/emon.exe and bin/pdfium.dll on Windows)
     lib/libpdfium.dylib | .so        pdfium, the pinned build
@@ -53,6 +54,11 @@ the licence of every component in the archive.
 
 Exit status: 0 done; 2 usage; 3 a bundled file is missing (pdfium, the models, a `--lang` model); 4 a
 named emon error (`error: NAME` on standard error); 1 anything else.
+
+Every `key=value` option, limit and error name is listed in
+[docs/options.md](https://github.com/3sln/emon/blob/main/docs/options.md), and the JSON the `json` format writes in
+[docs/model.md](https://github.com/3sln/emon/blob/main/docs/model.md) (the links are absolute because this file is also the README of the archive).
+The project's front page is <https://github.com/3sln/emon>; there is a browser demo at <https://emon.3sln.com/>.
 
 ## Where it looks
 
