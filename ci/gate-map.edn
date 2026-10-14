@@ -161,6 +161,7 @@
   {:glob "tools/import/**" :gates [] :why "public-dataset importers: the corpus is not in git, nothing here is a gate"}
   {:glob "tools/lib/**" :gates ["repeat" "fuzz" "accuracy" "@replay"] :why "libraries: extra_hosts (every replay gate's other hosts), pdfreverse (repeat), nfc and the python formatters (the synthetic corpus)"}
   {:glob "tools/limits/**" :gates [] :why "`bb limits` is a report, not a gate"}
+  {:glob "tools/native/**" :gates [] :why "`bb native` (P11.5, D1460): the pinned source tarballs and the CMake builds of static Tesseract and Leptonica for the release CLI, run by .github/workflows/native.yml and by hand; not a gate. The fast core's release-audit holds the inventory and licence texts it feeds; `bb native --check` holds its pins"}
   {:glob "tools/ocr/**" :gates ["ocr"] :why "the OCR recorders, CER and gold sampler"}
   {:glob "tools/oracle/**" :gates [] :why "python oracles for baselines (run by `bb baselines`); not gates"}
   {:glob "tools/parbench/**" :gates [] :why "a benchmark"}

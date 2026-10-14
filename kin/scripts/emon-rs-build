@@ -33,6 +33,10 @@ if [ -n "$pdfium_lib" ]; then crate=.cache/emon-rs-fusion; live=1; fi
 # replays the transcript `bb asset-record` made with it). Combined with EMON_RS_PDFIUM the fusion crate has both.
 codecs_lib="${EMON_RS_CODECS:-}"
 if [ -n "$codecs_lib" ] && [ -z "$pdfium_lib" ]; then crate=.cache/emon-rs-codecs; fi
+# STATIC TESSERACT (P11.5, D1460): EMON_NATIVE=DIR (the prefix `bb native` built, .cache/native/<triple>) builds the same live crate into
+# .cache/emon-rs-native with Tesseract and Leptonica (and their codecs) linked STATICALLY from DIR/link.rustflags instead of -L EMON_TESS_LIB.
+native_dir="${EMON_NATIVE:-}"
+if [ -n "$native_dir" ]; then crate=.cache/emon-rs-native; live=1; fi
 mkdir -p "$crate/src/emon"
 
 put() { cmp -s "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
@@ -99,7 +103,11 @@ flags="-A warnings"
 [ "${EMON_RS_WARN:-}" = 1 ] && flags=""
 cargo_features=""
 if [ "$live" = 1 ]; then
-  flags="$flags -L native=${EMON_TESS_LIB:-/opt/homebrew/lib}"
+  if [ -n "$native_dir" ]; then
+    flags="$flags $(cat "$native_dir/link.rustflags")"
+  else
+    flags="$flags -L native=${EMON_TESS_LIB:-/opt/homebrew/lib}"
+  fi
   cargo_features="--features tesseract"
 fi
 if [ -n "$pdfium_lib" ]; then
