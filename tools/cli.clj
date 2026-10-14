@@ -143,7 +143,7 @@
   (case (:os tcfg)
     :mac #"^(/usr/lib/|/System/Library/)"
     :linux #"(linux-vdso|ld-linux|/ld\.so|^lib(c|m|dl|rt|pthread|gcc_s|stdc\+\+|resolv)\.so)"
-    :windows #"(?i)^(kernel32|user32|advapi32|ws2_32|ntdll|bcrypt|userenv|msvcp140|vcruntime140|vcruntime140_1|ucrtbase|ole32|shell32|gdi32|oleaut32|crypt32|secur32|shlwapi|mswsock|version|imm32|api-ms-win-.*)\.dll$"))
+    :windows #"(?i)^(kernel32|user32|advapi32|ws2_32|ntdll|bcrypt|bcryptprimitives|userenv|msvcp140|vcruntime140|vcruntime140_1|ucrtbase|ole32|shell32|gdi32|oleaut32|crypt32|secur32|shlwapi|mswsock|version|imm32|api-ms-win-.*)\.dll$"))
 
 (defn dependencies [exe]
   (case (:os tcfg)
