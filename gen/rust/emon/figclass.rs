@@ -1458,7 +1458,7 @@ pub(crate) fn fc_signature_over(sl: &mut crate::port::Cells, page: i32, x0: i32,
     return 0;
 }
 pub fn fc_claimed(fl: &mut crate::port::Cells, page: i32, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
-    // 1 when a table has claimed the text of the region (D1570): of the lines on the page whose centre is in it, at least one and at least
+    // 1 when a table has claimed the text of the region (D557): of the lines on the page whose centre is in it, at least one and at least
     // half are a table's (cell 15 of a line a table holds is `FC_HELD` and up, `emon.table`'s TB_HELD). A shaded header cell with its words and
     // a rule under it, or a table's fills and rules, look like a diagram's boxes and a connector; the words are the table's, and so is the drawing.
     let n: i32 = ln_count(fl);

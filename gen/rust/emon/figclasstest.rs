@@ -425,7 +425,7 @@ fn test_a_region_whose_text_a_table_has_claimed_is_no_figure() {
     // A region the graphics layer calls a figure, with a caption just under it, is a figure; so is one with a few lines of text that no table holds.
     crate::testport::assert_eq(ft_figures(0, 0), 1, "with no text in it the region is a figure");
     crate::testport::assert_eq(ft_figures(0, 3), 1, "with three lines no table holds it is a figure");
-    // The shaded header cell with its words and the rule under it (D1560): the table the lines went to, the drawing is its own.
+    // The shaded header cell with its words and the rule under it (D556): the table the lines went to, the drawing is its own.
     crate::testport::assert_eq(ft_figures(3, 1), 0, "three lines of four are a table's: no figure");
     crate::testport::assert_eq(ft_figures(2, 2), 0, "half of them are a table's: no figure");
     crate::testport::assert_eq(ft_figures(1, 3), 1, "one of four is a table's: the region is still a figure");

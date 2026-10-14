@@ -1007,7 +1007,7 @@ fn test_a_table_that_confirms_itself_is_read_in_a_tree_that_is_not_trusted() {
     let t0: &mut String = &mut crate::port::new_text();
     let v0: &mut String = &mut crate::port::new_text();
     // A ruled table correctly tagged (every check 1000) in a tree that tags nothing else: the text around it is set with no tag, the tree covers
-    // a small part of the glyphs and its trust is 63, far under 300 (D150). The table confirms itself (D1570): the verdict is confirmed, and `struct`
+    // a small part of the glyphs and its trust is 63, far under 300 (D150). The table confirms itself (D557): the verdict is confirmed, and `struct`
     // is among the Model's sources for it (before, it was `partial` and the tags were used for nothing).
     crate::testport::assert_eq(tt_tagged(0, &crate::testport::test_file("table/ttab-low-trust.pdf")[..], &crate::testport::test_file("table/ttab-low-trust.json")[..], t0, v0), 0, "ttab-low-trust runs");
     crate::testport::assert_text(v0, "[{\"page\":1,\"se\":2,\"rows\":4,\"cols\":4,\"verdict\":\"confirmed\",\"score\":1000,\"checks\":[1000,1000,1000,1000,1000,1000],\"trust\":63}]", "ttab-low-trust: a table whose own checks all hold is confirmed whatever the tree's trust");

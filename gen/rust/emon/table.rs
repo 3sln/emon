@@ -1973,7 +1973,7 @@ pub(crate) fn tb_cell_sig(wd: &mut crate::port::Cells, et: &mut crate::port::Cel
     return sig;
 }
 pub(crate) fn tb_row_amounts(tc: &mut crate::port::Cells, cfirst: i32, cend: i32, r: i32, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, tw: &mut crate::port::Cells) -> i32 {
-    // Is row r a row of amounts (D1570): one of its cells is a formatted number (a currency sign or a decimal point, `tb-cell-sig`) and the
+    // Is row r a row of amounts (D557): one of its cells is a formatted number (a currency sign or a decimal point, `tb-cell-sig`) and the
     // cell below it in the same column is one of the same shape. A bold 'Opening Balance' row over a column of balances is one, a row
     // of years over a column of counts is not; the first is a row of the table and the second its header.
     let mut c: i32 = cfirst;
@@ -2078,7 +2078,7 @@ pub(crate) fn tb_num_cols(tb: &mut crate::port::Cells, k: i32, r0: i32, wd: &mut
     return total;
 }
 pub(crate) fn tb_head_rows(tb: &mut crate::port::Cells, k: i32, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, tc: &mut crate::port::Cells, tw: &mut crate::port::Cells) -> i32 {
-    // How many leading rows are the header: the rows above the top rule that line up with the body's columns (D1570: field 22,
+    // How many leading rows are the header: the rows above the top rule that line up with the body's columns (D557: field 22,
     // written when the candidate was built), a header the producer set in another type is a header whatever the first body row is;
     // else the bold ones (a table of bold rows has none, and a header is
     // at most half of the rows); else, when the first row has no number and a column below it is numeric,
@@ -2599,7 +2599,7 @@ pub(crate) fn tb_back_near(rw: &mut crate::port::Cells, r: i32, below: i32) -> i
     return 0;
 }
 pub(crate) fn tb_aligned(rw: &mut crate::port::Cells, sg: &mut crate::port::Cells, r: i32, rb: i32, nr: i32) -> i32 {
-    // 1 when the chunks of row r line up with the body's (D1570): at least two of them, and three in five, have a left or a right edge
+    // 1 when the chunks of row r line up with the body's (D557): at least two of them, and three in five, have a left or a right edge
     // within `TB_HEAD_TOL` of an edge of a chunk of the body rows rb.. (twelve of them at most).
     let nch: i32 = crate::port::cells_at(rw, (r * RWS) + 9);
     let sf: i32 = crate::port::cells_at(rw, (r * RWS) + 8);
@@ -2641,7 +2641,7 @@ pub(crate) fn tb_aligned(rw: &mut crate::port::Cells, sg: &mut crate::port::Cell
 pub(crate) fn tb_back_aligned(rw: &mut crate::port::Cells, sg: &mut crate::port::Cells, r: i32, below: i32, rb: i32, nr: i32) -> i32 {
     // 1 when row r, directly above row `below`, is a tabular row at most `TB_HEAD_PITCH` tenths of a size of `below` above it whose
     // chunks line up with the body's columns (`tb-aligned`): a header in a smaller or another type, set further from the rule than
-    // a line of text is (D1570).
+    // a line of text is (D557).
     if crate::port::cells_at(rw, (r * RWS) + 9) < 2 {
         return 0;
     }
@@ -2665,7 +2665,7 @@ pub(crate) fn tb_first_row(rw: &mut crate::port::Cells, sg: &mut crate::port::Ce
     return ra;
 }
 pub(crate) fn tb_first_forced(rw: &mut crate::port::Cells, nr: i32, y0: i32, ra: i32) -> i32 {
-    // 1 when a row of ra.. above the top rule y0 was taken for the header by alignment alone, not by being close (D1570).
+    // 1 when a row of ra.. above the top rule y0 was taken for the header by alignment alone, not by being close (D557).
     let rb: i32 = tb_body_row(rw, nr, y0);
     let mut r: i32 = ra;
     while r < rb {
@@ -2677,7 +2677,7 @@ pub(crate) fn tb_first_forced(rw: &mut crate::port::Cells, nr: i32, y0: i32, ra:
     return 0;
 }
 pub(crate) fn tb_extend(wd: &mut crate::port::Cells, w0: i32, w1: i32, rw: &mut crate::port::Cells, sg: &mut crate::port::Cells, ra: i32, nr: i32, edge: i32, dir: i32, rm: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut ry: &mut crate::port::Cells) -> i32 {
-    // D1570: how far the rows ra..nr of a partial candidate go on the side `dir` (1 right, -1 left) of x `edge` (the candidate's edge there,
+    // D557: how far the rows ra..nr of a partial candidate go on the side `dir` (1 right, -1 left) of x `edge` (the candidate's edge there,
     // which the rules gave): over the words on the rows' own baselines that continue them. A column of cells the producer left unruled (the amounts
     // of a statement whose row borders stop at the description) is the table's. The words are followed while each starts within the table's own widest
     // gap (not under two sizes, not over twelve) of the reach so far: a wider one is a gutter. A vertical rule that spans three in five of the rows
@@ -2862,7 +2862,7 @@ pub(crate) fn tb_partial_build(wd: &mut crate::port::Cells, et: &mut crate::port
 }
 pub(crate) fn tb_partial_try(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w0: i32, w1: i32, page: i32, ex0: i32, ex1: i32, ya: i32, yb: i32, ychain: i32, rm: &mut crate::port::Cells, mut wl: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut ch: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut en: &mut crate::port::Cells, mut rmap: &mut crate::port::Cells, mut gm: &mut crate::port::Cells, mut gs: &mut crate::port::Cells, mut ry: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut so: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tx: &mut crate::port::Cells) -> i32 {
     // One partial candidate: the words between the rules at ya and yb (and the tabular rows directly above ya),
-    // columns from their channels; kept when it scores. D1570: when the rows go on past the ends of the rules (`tb-extend`), the
+    // columns from their channels; kept when it scores. D557: when the rows go on past the ends of the rules (`tb-extend`), the
     // candidate is built again over the wider extent, and kept if it scores; if not the narrower one stands. `ychain` is the top rule of the
     // whole chain: only when ya is it can a header be sought by alignment (above any other rule lie the table's own rows).
     let nt: i32 = tb_rows_of(tb, TBS);
@@ -3728,7 +3728,7 @@ pub(crate) fn tb_struct_cand(wd: &mut crate::port::Cells, et: &mut crate::port::
     return t;
 }
 pub(crate) fn tb_self_sure(tg: &mut crate::port::Cells, k: i32) -> i32 {
-    // D1570: 1 when tagged table k confirms itself: its verdict is `confirmed` (a score at least `emon.tagtable`'s `TB_STRUCT_OK`, 800), at
+    // D557: 1 when tagged table k confirms itself: its verdict is `confirmed` (a score at least `emon.tagtable`'s `TB_STRUCT_OK`, 800), at
     // least `TB_OWN_CHECKS` of the five checks of the grid and the page (fields 16-20) could be made, and none of those made is under
     // `TB_OWN_FLOOR`. The tree's trust (D150) is the tree's, an average over every element of it (`Div`, `Span`, ...), and says little of a
     // `Table` in it that the page bears out.

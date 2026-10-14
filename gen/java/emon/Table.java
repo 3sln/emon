@@ -1970,7 +1970,7 @@ public final class Table {
         return sig;
     }
     public static int tbRowAmounts(emon.Port.Cells tc, int cfirst, int cend, int r, emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells tw) {
-        // Is row r a row of amounts (D1570): one of its cells is a formatted number (a currency sign or a decimal point, `tb-cell-sig`) and the
+        // Is row r a row of amounts (D557): one of its cells is a formatted number (a currency sign or a decimal point, `tb-cell-sig`) and the
         // cell below it in the same column is one of the same shape. A bold 'Opening Balance' row over a column of balances is one, a row
         // of years over a column of counts is not; the first is a row of the table and the second its header.
         int c = cfirst;
@@ -2075,7 +2075,7 @@ public final class Table {
         return total;
     }
     public static int tbHeadRows(emon.Port.Cells tb, int k, emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells tc, emon.Port.Cells tw) {
-        // How many leading rows are the header: the rows above the top rule that line up with the body's columns (D1570: field 22,
+        // How many leading rows are the header: the rows above the top rule that line up with the body's columns (D557: field 22,
         // written when the candidate was built), a header the producer set in another type is a header whatever the first body row is;
         // else the bold ones (a table of bold rows has none, and a header is
         // at most half of the rows); else, when the first row has no number and a column below it is numeric,
@@ -2596,7 +2596,7 @@ public final class Table {
         return 0;
     }
     public static int tbAligned(emon.Port.Cells rw, emon.Port.Cells sg, int r, int rb, int nr) {
-        // 1 when the chunks of row r line up with the body's (D1570): at least two of them, and three in five, have a left or a right edge
+        // 1 when the chunks of row r line up with the body's (D557): at least two of them, and three in five, have a left or a right edge
         // within `TB_HEAD_TOL` of an edge of a chunk of the body rows rb.. (twelve of them at most).
         int nch = emon.Port.cellsAt(rw, (r * RWS) + 9);
         int sf = emon.Port.cellsAt(rw, (r * RWS) + 8);
@@ -2638,7 +2638,7 @@ public final class Table {
     public static int tbBackAligned(emon.Port.Cells rw, emon.Port.Cells sg, int r, int below, int rb, int nr) {
         // 1 when row r, directly above row `below`, is a tabular row at most `TB_HEAD_PITCH` tenths of a size of `below` above it whose
         // chunks line up with the body's columns (`tb-aligned`): a header in a smaller or another type, set further from the rule than
-        // a line of text is (D1570).
+        // a line of text is (D557).
         if (emon.Port.cellsAt(rw, (r * RWS) + 9) < 2) {
             return 0;
         }
@@ -2662,7 +2662,7 @@ public final class Table {
         return ra;
     }
     public static int tbFirstForced(emon.Port.Cells rw, int nr, int y0, int ra) {
-        // 1 when a row of ra.. above the top rule y0 was taken for the header by alignment alone, not by being close (D1570).
+        // 1 when a row of ra.. above the top rule y0 was taken for the header by alignment alone, not by being close (D557).
         int rb = tbBodyRow(rw, nr, y0);
         int r = ra;
         while (r < rb) {
@@ -2674,7 +2674,7 @@ public final class Table {
         return 0;
     }
     public static int tbExtend(emon.Port.Cells wd, int w0, int w1, emon.Port.Cells rw, emon.Port.Cells sg, int ra, int nr, int edge, int dir, emon.Port.Cells rm, emon.Port.Cells pr, emon.Port.Cells ry) {
-        // D1570: how far the rows ra..nr of a partial candidate go on the side `dir` (1 right, -1 left) of x `edge` (the candidate's edge there,
+        // D557: how far the rows ra..nr of a partial candidate go on the side `dir` (1 right, -1 left) of x `edge` (the candidate's edge there,
         // which the rules gave): over the words on the rows' own baselines that continue them. A column of cells the producer left unruled (the amounts
         // of a statement whose row borders stop at the description) is the table's. The words are followed while each starts within the table's own widest
         // gap (not under two sizes, not over twelve) of the reach so far: a wider one is a gutter. A vertical rule that spans three in five of the rows
@@ -2859,7 +2859,7 @@ public final class Table {
     }
     public static int tbPartialTry(emon.Port.Cells wd, emon.Port.Cells et, int w0, int w1, int page, int ex0, int ex1, int ya, int yb, int ychain, emon.Port.Cells rm, emon.Port.Cells wl, emon.Port.Cells rw, emon.Port.Cells sg, emon.Port.Cells ch, emon.Port.Cells st, emon.Port.Cells en, emon.Port.Cells rmap, emon.Port.Cells gm, emon.Port.Cells gs, emon.Port.Cells ry, emon.Port.Cells pr, emon.Port.Cells so, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tx) {
         // One partial candidate: the words between the rules at ya and yb (and the tabular rows directly above ya),
-        // columns from their channels; kept when it scores. D1570: when the rows go on past the ends of the rules (`tb-extend`), the
+        // columns from their channels; kept when it scores. D557: when the rows go on past the ends of the rules (`tb-extend`), the
         // candidate is built again over the wider extent, and kept if it scores; if not the narrower one stands. `ychain` is the top rule of the
         // whole chain: only when ya is it can a header be sought by alignment (above any other rule lie the table's own rows).
         int nt = tbRowsOf(tb, TBS);
@@ -3725,7 +3725,7 @@ public final class Table {
         return t;
     }
     public static int tbSelfSure(emon.Port.Cells tg, int k) {
-        // D1570: 1 when tagged table k confirms itself: its verdict is `confirmed` (a score at least `emon.tagtable`'s `TB_STRUCT_OK`, 800), at
+        // D557: 1 when tagged table k confirms itself: its verdict is `confirmed` (a score at least `emon.tagtable`'s `TB_STRUCT_OK`, 800), at
         // least `TB_OWN_CHECKS` of the five checks of the grid and the page (fields 16-20) could be made, and none of those made is under
         // `TB_OWN_FLOOR`. The tree's trust (D150) is the tree's, an average over every element of it (`Div`, `Span`, ...), and says little of a
         // `Table` in it that the page bears out.

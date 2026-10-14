@@ -1597,7 +1597,7 @@ func fcSignatureOver(sl *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y
 }
 
 func FcClaimed(fl *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32) int32 {
-	// 1 when a table has claimed the text of the region (D1570): of the lines on the page whose centre is in it, at least one and at least
+	// 1 when a table has claimed the text of the region (D557): of the lines on the page whose centre is in it, at least one and at least
 	// half are a table's (cell 15 of a line a table holds is `FC_HELD` and up, `emon.table`'s TB_HELD). A shaded header cell with its words and
 	// a rule under it, or a table's fills and rules, look like a diagram's boxes and a connector; the words are the table's, and so is the drawing.
 	var n int32 = evidence.LnCount(fl)

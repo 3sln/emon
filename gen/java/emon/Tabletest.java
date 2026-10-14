@@ -975,7 +975,7 @@ public final class Tabletest {
         StringBuilder t0 = emon.Testport.newText();
         StringBuilder v0 = emon.Testport.newText();
         // A ruled table correctly tagged (every check 1000) in a tree that tags nothing else: the text around it is set with no tag, the tree covers
-        // a small part of the glyphs and its trust is 63, far under 300 (D150). The table confirms itself (D1570): the verdict is confirmed, and `struct`
+        // a small part of the glyphs and its trust is 63, far under 300 (D150). The table confirms itself (D557): the verdict is confirmed, and `struct`
         // is among the Model's sources for it (before, it was `partial` and the tags were used for nothing).
         emon.Testport.assertEq(ttTagged(0, emon.Testport.testFile("table/ttab-low-trust.pdf"), emon.Testport.testFile("table/ttab-low-trust.json"), t0, v0), 0, "ttab-low-trust runs");
         emon.Testport.assertText(v0, "[{\"page\":1,\"se\":2,\"rows\":4,\"cols\":4,\"verdict\":\"confirmed\",\"score\":1000,\"checks\":[1000,1000,1000,1000,1000,1000],\"trust\":63}]", "ttab-low-trust: a table whose own checks all hold is confirmed whatever the tree's trust");

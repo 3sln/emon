@@ -441,7 +441,7 @@ func TestARegionWhoseTextATableHasClaimedIsNoFigure(emonT *testing.T) {
 	// A region the graphics layer calls a figure, with a caption just under it, is a figure; so is one with a few lines of text that no table holds.
 	port.AssertEq(emonT, ftFigures(0, 0), 1, "with no text in it the region is a figure")
 	port.AssertEq(emonT, ftFigures(0, 3), 1, "with three lines no table holds it is a figure")
-	// The shaded header cell with its words and the rule under it (D1560): the table the lines went to, the drawing is its own.
+	// The shaded header cell with its words and the rule under it (D556): the table the lines went to, the drawing is its own.
 	port.AssertEq(emonT, ftFigures(3, 1), 0, "three lines of four are a table's: no figure")
 	port.AssertEq(emonT, ftFigures(2, 2), 0, "half of them are a table's: no figure")
 	port.AssertEq(emonT, ftFigures(1, 3), 1, "one of four is a table's: the region is still a figure")

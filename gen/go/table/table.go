@@ -2077,7 +2077,7 @@ func tbCellSig(wd *port.Cells, et *port.Cells, tw *port.Cells, tc *port.Cells, c
 }
 
 func tbRowAmounts(tc *port.Cells, cfirst int32, cend int32, r int32, wd *port.Cells, et *port.Cells, tw *port.Cells) int32 {
-	// Is row r a row of amounts (D1570): one of its cells is a formatted number (a currency sign or a decimal point, `tb-cell-sig`) and the
+	// Is row r a row of amounts (D557): one of its cells is a formatted number (a currency sign or a decimal point, `tb-cell-sig`) and the
 	// cell below it in the same column is one of the same shape. A bold 'Opening Balance' row over a column of balances is one, a row
 	// of years over a column of counts is not; the first is a row of the table and the second its header.
 	var c int32 = cfirst
@@ -2187,7 +2187,7 @@ func tbNumCols(tb *port.Cells, k int32, r0 int32, wd *port.Cells, et *port.Cells
 }
 
 func tbHeadRows(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc *port.Cells, tw *port.Cells) int32 {
-	// How many leading rows are the header: the rows above the top rule that line up with the body's columns (D1570: field 22,
+	// How many leading rows are the header: the rows above the top rule that line up with the body's columns (D557: field 22,
 	// written when the candidate was built), a header the producer set in another type is a header whatever the first body row is;
 	// else the bold ones (a table of bold rows has none, and a header is
 	// at most half of the rows); else, when the first row has no number and a column below it is numeric,
@@ -2724,7 +2724,7 @@ func tbBackNear(rw *port.Cells, r int32, below int32) int32 {
 }
 
 func tbAligned(rw *port.Cells, sg *port.Cells, r int32, rb int32, nr int32) int32 {
-	// 1 when the chunks of row r line up with the body's (D1570): at least two of them, and three in five, have a left or a right edge
+	// 1 when the chunks of row r line up with the body's (D557): at least two of them, and three in five, have a left or a right edge
 	// within `TB_HEAD_TOL` of an edge of a chunk of the body rows rb.. (twelve of them at most).
 	var nch int32 = port.CellsAt(rw, (r*rws)+9)
 	var sf int32 = port.CellsAt(rw, (r*rws)+8)
@@ -2767,7 +2767,7 @@ func tbAligned(rw *port.Cells, sg *port.Cells, r int32, rb int32, nr int32) int3
 func tbBackAligned(rw *port.Cells, sg *port.Cells, r int32, below int32, rb int32, nr int32) int32 {
 	// 1 when row r, directly above row `below`, is a tabular row at most `TB_HEAD_PITCH` tenths of a size of `below` above it whose
 	// chunks line up with the body's columns (`tb-aligned`): a header in a smaller or another type, set further from the rule than
-	// a line of text is (D1570).
+	// a line of text is (D557).
 	if port.CellsAt(rw, (r*rws)+9) < 2 {
 		return 0
 	}
@@ -2793,7 +2793,7 @@ func tbFirstRow(rw *port.Cells, sg *port.Cells, nr int32, y0 int32, align int32)
 }
 
 func tbFirstForced(rw *port.Cells, nr int32, y0 int32, ra int32) int32 {
-	// 1 when a row of ra.. above the top rule y0 was taken for the header by alignment alone, not by being close (D1570).
+	// 1 when a row of ra.. above the top rule y0 was taken for the header by alignment alone, not by being close (D557).
 	var rb int32 = tbBodyRow(rw, nr, y0)
 	var r int32 = ra
 	for r < rb {
@@ -2806,7 +2806,7 @@ func tbFirstForced(rw *port.Cells, nr int32, y0 int32, ra int32) int32 {
 }
 
 func tbExtend(wd *port.Cells, w0 int32, w1 int32, rw *port.Cells, sg *port.Cells, ra int32, nr int32, edge int32, dir int32, rm *port.Cells, pr *port.Cells, ry *port.Cells) int32 {
-	// D1570: how far the rows ra..nr of a partial candidate go on the side `dir` (1 right, -1 left) of x `edge` (the candidate's edge there,
+	// D557: how far the rows ra..nr of a partial candidate go on the side `dir` (1 right, -1 left) of x `edge` (the candidate's edge there,
 	// which the rules gave): over the words on the rows' own baselines that continue them. A column of cells the producer left unruled (the amounts
 	// of a statement whose row borders stop at the description) is the table's. The words are followed while each starts within the table's own widest
 	// gap (not under two sizes, not over twelve) of the reach so far: a wider one is a gutter. A vertical rule that spans three in five of the rows
@@ -2993,7 +2993,7 @@ func tbPartialBuild(wd *port.Cells, et *port.Cells, w0 int32, w1 int32, page int
 
 func tbPartialTry(wd *port.Cells, et *port.Cells, w0 int32, w1 int32, page int32, ex0 int32, ex1 int32, ya int32, yb int32, ychain int32, rm *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells) int32 {
 	// One partial candidate: the words between the rules at ya and yb (and the tabular rows directly above ya),
-	// columns from their channels; kept when it scores. D1570: when the rows go on past the ends of the rules (`tb-extend`), the
+	// columns from their channels; kept when it scores. D557: when the rows go on past the ends of the rules (`tb-extend`), the
 	// candidate is built again over the wider extent, and kept if it scores; if not the narrower one stands. `ychain` is the top rule of the
 	// whole chain: only when ya is it can a header be sought by alignment (above any other rule lie the table's own rows).
 	var nt int32 = tbRowsOf(tb, tbs)
@@ -3882,7 +3882,7 @@ func tbStructCand(wd *port.Cells, et *port.Cells, p int32, w0 int32, w1 int32, t
 }
 
 func tbSelfSure(tg *port.Cells, k int32) int32 {
-	// D1570: 1 when tagged table k confirms itself: its verdict is `confirmed` (a score at least `emon.tagtable`'s `TB_STRUCT_OK`, 800), at
+	// D557: 1 when tagged table k confirms itself: its verdict is `confirmed` (a score at least `emon.tagtable`'s `TB_STRUCT_OK`, 800), at
 	// least `TB_OWN_CHECKS` of the five checks of the grid and the page (fields 16-20) could be made, and none of those made is under
 	// `TB_OWN_FLOOR`. The tree's trust (D150) is the tree's, an average over every element of it (`Div`, `Span`, ...), and says little of a
 	// `Table` in it that the page bears out.
