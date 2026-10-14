@@ -1,0 +1,36 @@
+# TEMPORARY: runs the package shard of verify.yml on its own (verify-main is held by a run stuck on a retired runner). Deleted right after.
+name: tmp-package-check
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+    working-directory: emon
+env:
+  CI: "true"
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 3sln/emon
+          ref: main
+          path: emon
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: 3sln/kin
+          path: kin
+      - uses: ./emon/.github/actions/setup
+      - name: The pinned nightly for the WebAssembly module (package-check)
+        run: rustup toolchain install nightly-2026-09-16 -c rust-src -t wasm32-unknown-unknown
+      - name: pdfium's WebAssembly build (package-check)
+        run: bb pdfium-fetch --platform wasm
+      - name: tesseract.js and its model (package-check)
+        run: npm ci --prefix host/js
+      - name: bb gates package-check
+        run: bb gates package-check
