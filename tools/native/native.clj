@@ -77,7 +77,8 @@
     (when-not (and (fs/exists? mark) (= (:sha256 s) (str/trim (slurp mark))))
       (fs/delete-tree dir)
       (fs/create-dirs (str cache "/src"))
-      (p/shell "tar" "-xf" tgz "-C" (abs (str cache "/src")))
+      ;; GNU tar (Git for Windows) reads `D:\...` as host:file; --force-local says it is a file
+      (apply p/shell "tar" (concat (when (= :windows (:os (triple-cfg (host-triple)))) ["--force-local"]) ["-xf" tgz "-C" (abs (str cache "/src"))]))
       (when-not (fs/exists? dir) (die (:archive s) " did not extract to " (:dir s)))
       (spit mark (str (:sha256 s) "\n")))
     dir))
@@ -105,6 +106,7 @@
           (when (and (= "libjpeg-turbo" (:id s)) (fs/which "nasm")) [(str "-DCMAKE_ASM_NASM_COMPILER=" (fs/which "nasm"))])
           (when-let [pi (:project-include s)] [(str "-DCMAKE_PROJECT_INCLUDE=" (abs pi))])
           (map sub (:common-cmake pins))
+          (map sub (:cmake cfg))
           (map sub (:cmake s))))))
 
 (defn run-logged! [t what log env & cmd]

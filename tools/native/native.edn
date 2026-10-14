@@ -10,7 +10,8 @@
 ;; To move a pin: change :version, :url and :sha256 together (the sha256 of the DOWNLOAD, computed by `shasum -a 256`), re-run
 ;; `bb native --force`, `bb native --licenses`, `bb release-audit --write`, and fix the version in release/third-party.edn.
 ;;
-;; :cmake of a source is added to :common-cmake. :libs are the static libraries it installs (stems: `lib` prefix, `-static`/`_static`
+;; :cmake of a triple names the system libraries the find-path restriction would hide (libm: the glibc libm is the C runtime, not a codec; given by name,
+;; it is linked as -lm and never searched for). :cmake of a source is added to :common-cmake. :libs are the static libraries it installs (stems: `lib` prefix, `-static`/`_static`
 ;; suffix and trailing version digits removed); `bb native --audit` fails on any other library in the prefix. Build order is the order here.
 {:schema 1
 
@@ -21,9 +22,9 @@
   "x86_64-apple-darwin"      {:runner "macos-13"        :os :mac     :arch "x86_64" :generator "Unix Makefiles" :osx-deployment "12.0" :pdfium "mac-x64"
                               :ignore-prefix ["/usr/local" "/opt/homebrew"] :cxx-runtime ["c++"]}
   "x86_64-unknown-linux-gnu" {:runner "ubuntu-24.04"    :os :linux   :arch "x86_64" :generator "Unix Makefiles" :pdfium "linux-x64"
-                              :ignore-prefix ["/usr/local"] :cxx-runtime ["stdc++" "m" "pthread"]}
+                              :ignore-prefix ["/usr/local"] :cxx-runtime ["stdc++" "m" "pthread"] :cmake ["-DCMath_LIBRARY=m"]}
   "aarch64-unknown-linux-gnu" {:runner "ubuntu-24.04-arm" :os :linux  :arch "arm64" :generator "Unix Makefiles" :pdfium "linux-arm64"
-                              :ignore-prefix ["/usr/local"] :cxx-runtime ["stdc++" "m" "pthread"]}
+                              :ignore-prefix ["/usr/local"] :cxx-runtime ["stdc++" "m" "pthread"] :cmake ["-DCMath_LIBRARY=m"]}
   "x86_64-pc-windows-msvc"   {:runner "windows-2022"    :os :windows :arch "x86_64" :generator "Ninja" :pdfium "win-x64"
                               :ignore-prefix [] :cxx-runtime []}}
 
