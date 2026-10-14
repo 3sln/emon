@@ -45,7 +45,15 @@
 ;; ------------------------------------------------------------------------------------------------ small helpers
 
 (defn- path [root f] (str (fs/path root f)))
-(defn- rd [root f] (slurp (path root f)))
+;; The test hooks (P11.4, D1480) exist only under the crate's `__test_hooks` feature, which a published crate never has: they are not read
+;; as part of the surface (a field `Options::no_retarget`, the C symbol `emon_test_panic`).
+(defn- strip-test-hooks [s]
+  (-> s
+      (str/replace #"#\[cfg\(feature = \"__test_hooks\"\)\]\s*pub \w+: [^,\n]+,[ \t]*\n?" "")
+      (str/replace #"#\[cfg\(feature = \"__test_hooks\"\)\]\s*#\[no_mangle\]" "")))
+(defn- rd [root f]
+  (let [s (slurp (path root f))]
+    (if (str/ends-with? f ".rs") (strip-test-hooks s) s)))
 (defn- exists? [root f] (fs/exists? (path root f)))
 (defn- norm-ws [s] (str/trim (str/replace (or s "") #"\s+" " ")))
 (defn- die [code & msg]
@@ -607,7 +615,7 @@
 
 (defn- go-all [root]
   (let [src (fn [dir] (->> (list-files root dir ".go")
-                           (remove #(or (str/ends-with? % "_test.go") (str/ends-with? % "/testport.go")))))
+                           (remove #(or (str/ends-with? % "_test.go") (str/ends-with? % "/testport.go") (str/ends-with? % "/testhooks.go")))))
         root-files (src "host/go")
         stub (filter #(str/ends-with? % "/tess_stub.go") root-files)
         tagged (filter #(str/ends-with? % "/tess.go") root-files)
@@ -1084,13 +1092,9 @@
 ;; [host id-regex tier]: the first rule that matches an entry's id decides its tier, over what the extractor said. This is the
 ;; list of what is public on purpose (nothing here is a guess: each rule says why).
 (def tier-rules
-  [;; HIDDEN TEST SETTINGS and binding hooks that are public by accident: the same switch in every host
-   [:rust #"^emon::Options::no_retarget$" :accidental]
+  [;; binding hooks that are public by accident. (The hidden test setting `no_retarget`/`NoRetarget`/`noRetarget` and the C symbol `emon_test_panic` were closed
+   ;; in P11.4, D1480: a feature, a build tag, package-private, internal, and a test header; they are not in the surface at all.)
    [:rust #"^emon::Engine::start_pushed$" :accidental]
-   [:go #"^emon\.Options\.NoRetarget$" :accidental]
-   [:java #"^emon\.api\.Options\.noRetarget$" :accidental]
-   [:csharp #"^emon\.Api\.Options\.NoRetarget$" :accidental]
-   [:c #"^emon_test_panic$" :accidental]
    ;; Rust: the lib.rs re-exports are the API (and the types their signatures name: see rust-entries). Tiered by the extractor.
    ;; Go: the root package is the library. `port` mixes the plan/render types an embedder names (a Renderer, an Ocr's
    ;; request and answer) with the kin plumbing the generated code calls; `planrun.Transcript` is what emon.Transcript aliases.
@@ -1111,11 +1115,8 @@
    [:csharp #"^emon\.Planrun\.(Transcript|Request|Answer|PlanError|Entry|File|Fulfiller)(\.|#|$)" :public]
    [:csharp #"^emon\.Port\.Bitmap([.#]|$)" :public]
    [:csharp #"^emon\.(Port|Planrun)" :accidental]
-   ;; JS: the handles of the WASM instance and of a Model, and the constructors only `Emon.load` and `convert` call
-   [:js #"^@3sln/emon::(Model|Emon)#(w|h)$" :accidental]
-   [:js #"^@3sln/emon::(Model|Asset|Emon)#constructor$" :accidental]
-   [:js #"^@3sln/emon::Asset#model$" :accidental]
-   [:js #"^@3sln/emon/tesseract::resultOf$" :accidental]])
+   ;; JS: the constructors only `Emon.load` and `convert` call. (The handles `w`, `h`, `Asset.model` are non-enumerable since P11.4 and `tesseract.resultOf` is not exported.)
+   [:js #"^@3sln/emon::(Model|Asset|Emon)#constructor$" :accidental]])
 
 (defn- apply-tier [{:keys [host id] :as e}]
   (if (= :internal (:tier e))

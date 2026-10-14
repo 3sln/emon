@@ -274,6 +274,9 @@ pub struct Options {
     pub ocr_scope: OcrScope,
     // A HIDDEN TEST SETTING (P7.4): leave every pixel unread by the page units, as the Engine was before the ink layers and the targeted passes (a measurement's
     // baseline; an embedder never needs it). The output of a run with no Renderer and no OCR engine is the same either way.
+    // NOT PUBLIC API (P11.4, D1480): the field exists only under the crate's `__test_hooks` feature, which the gates' builds turn on and a
+    // published crate never does, so a release's `Options` has no such field.
+    #[cfg(feature = "__test_hooks")]
     pub no_retarget: bool,
 }
 
@@ -401,6 +404,7 @@ fn options_of(c: &Cfg) -> Options {
         furniture: Furniture::from_mode(c.furn),
         keep_evidence: c.keep != 0,
         ocr_scope: OcrScope::from_code(c.scope),
+        #[cfg(feature = "__test_hooks")]
         no_retarget: false,
     }
 }
@@ -1117,7 +1121,10 @@ fn cfg_of(opts: &Options) -> Cfg {
     c.tbyte = opts.assets_bytes;
     c.sigs = if opts.asset_signatures { 1 } else { 0 };
     c.keep = opts.keep_evidence as i32;
-    c.nort = opts.no_retarget as i32;
+    #[cfg(feature = "__test_hooks")]
+    {
+        c.nort = opts.no_retarget as i32;
+    }
     if opts.locale.is_some() {
         c.haveloc = 1;
         c.lcl = locale_cells(opts);

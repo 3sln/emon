@@ -73,6 +73,8 @@ path = "src/driver.rs"
 
 [features]
 tesseract = []
+# the test hooks (P11.4, D1480): `Options::no_retarget`. The driver needs it; a published crate (`bb package`) never has the feature.
+__test_hooks = []
 
 [dependencies]
 # the ImageDecode port's codecs (D189): PNG and JPEG pixels, CCITT, and the TIFF Deflate stream. Pinned; the
@@ -97,10 +99,10 @@ rm -f "$crate/Cargo.toml.new"
 
 flags="-A warnings"
 [ "${EMON_RS_WARN:-}" = 1 ] && flags=""
-cargo_features=""
+cargo_features="--features __test_hooks"
 if [ "$live" = 1 ]; then
   flags="$flags -L native=${EMON_TESS_LIB:-/opt/homebrew/lib}"
-  cargo_features="--features tesseract"
+  cargo_features="--features tesseract,__test_hooks"
 fi
 if [ -n "$pdfium_lib" ]; then
   flags="$flags --cfg pdfium -L native=$pdfium_lib -C link-arg=-Wl,-rpath,$pdfium_lib"

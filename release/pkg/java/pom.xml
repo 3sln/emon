@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The POM of com.3sln:emon as published to Maven Central (P11.4, D1480). COMMITTED, not templated: `bb version` (tools/version.clj) rewrites the
+  <version> below like every other manifest. `bb package` (the java host) assembles the sources next to it (src/main/java = gen/java/emon/*.java without
+  laws and probes, host/java/emon/** without Testport) and builds the four files Central requires without Maven: emon-VERSION.jar, -sources.jar,
+  -javadoc.jar and this POM, each with .md5/.sha1 (and .asc when MAVEN_GPG_* is set). With Maven installed, `mvn -f pom.xml verify` builds the same.
+  Central's checks: name, description, url, licenses, developers, scm, sources and javadoc jars, signatures (profile `release`, GPG key from the
+  MAVEN_GPG_PRIVATE_KEY and MAVEN_GPG_PASSPHRASE secrets of the publish job, D524).
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.3sln</groupId>
+  <artifactId>emon</artifactId>
+  <version>0.1.0</version>
+  <packaging>jar</packaging>
+
+  <name>emon</name>
+  <description>PDFs and images to semantic HTML and a JSON model, for scraping and indexing: reading order, tables, lists, footnotes, figures, OCR. One specification, generated; byte-identical to the Rust, Go, C#, WASM and C builds. Java 22 or newer (the native bindings use java.lang.foreign).</description>
+  <url>https://github.com/3sln/emon</url>
+  <inceptionYear>2026</inceptionYear>
+  <organization>
+    <name>3sln</name>
+    <url>https://github.com/3sln</url>
+  </organization>
+
+  <licenses>
+    <license>
+      <name>MIT License</name>
+      <url>https://opensource.org/licenses/MIT</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <developers>
+    <developer>
+      <id>raystubbs</id>
+      <name>raystubbs</name>
+      <url>https://github.com/raystubbs</url>
+      <organization>3sln</organization>
+      <organizationUrl>https://github.com/3sln</organizationUrl>
+    </developer>
+  </developers>
+
+  <scm>
+    <connection>scm:git:https://github.com/3sln/emon.git</connection>
+    <developerConnection>scm:git:ssh://git@github.com/3sln/emon.git</developerConnection>
+    <url>https://github.com/3sln/emon</url>
+    <tag>HEAD</tag>
+  </scm>
+
+  <issueManagement>
+    <system>GitHub</system>
+    <url>https://github.com/3sln/emon/issues</url>
+  </issueManagement>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.release>22</maven.compiler.release>
+  </properties>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+        <configuration>
+          <release>22</release>
+          <compilerArgs>
+            <arg>-nowarn</arg>
+          </compilerArgs>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.4.2</version>
+        <configuration>
+          <archive>
+            <manifest>
+              <addDefaultEntries>false</addDefaultEntries>
+            </manifest>
+            <manifestEntries>
+              <Automatic-Module-Name>emon</Automatic-Module-Name>
+              <Enable-Native-Access>ALL-UNNAMED</Enable-Native-Access>
+            </manifestEntries>
+          </archive>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-source-plugin</artifactId>
+        <version>3.3.1</version>
+        <executions>
+          <execution>
+            <id>attach-sources</id>
+            <goals>
+              <goal>jar-no-fork</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <version>3.10.1</version>
+        <configuration>
+          <!-- the documented API is emon.api (and emon.ffi, the live bindings); the 104 generated classes of package `emon` are not API (D1480) -->
+          <sourcepath>${project.basedir}/src/main/java</sourcepath>
+          <subpackages>emon.api:emon.ffi</subpackages>
+          <doclint>none</doclint>
+          <quiet>true</quiet>
+        </configuration>
+        <executions>
+          <execution>
+            <id>attach-javadocs</id>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+  <profiles>
+    <!-- mvn -Prelease deploy: signs every artifact (MAVEN_GPG_PASSPHRASE) and publishes through the Central Portal (MAVEN_CENTRAL_USERNAME/PASSWORD
+         in the server `central` of settings.xml). The publish job (P11.10) is the only caller. -->
+    <profile>
+      <id>release</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>3.2.7</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+                <configuration>
+                  <gpgArguments>
+                    <arg>--pinentry-mode</arg>
+                    <arg>loopback</arg>
+                  </gpgArguments>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <version>0.6.0</version>
+            <extensions>true</extensions>
+            <configuration>
+              <publishingServerId>central</publishingServerId>
+              <autoPublish>false</autoPublish>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+</project>

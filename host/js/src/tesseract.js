@@ -22,8 +22,8 @@
 const box = (b) => [b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0];
 const x10 = (c) => Math.round((c ?? 0) * 10);
 
-/** tesseract.js's `blocks` of one recognition as the `ocr.js` result (exported for its test). */
-export function resultOf(blocks, { wantSymbols, lang, blockType }) {
+/** tesseract.js's `blocks` of one recognition as the `ocr.js` result (not exported since P11.4, D1480: it was a helper for a test, and no test used it). */
+function resultOf(blocks, { wantSymbols, lang, blockType }) {
   const out = { orientation: { orient: 0, writingDirection: 0, textlineOrder: 2, deskew: 0 }, blocks: [], lines: [], words: [] };
   let par = -1;
   (blocks || []).forEach((b, bi) => {

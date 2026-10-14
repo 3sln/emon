@@ -24,7 +24,9 @@ cd "$(dirname "$0")/../.."
 # EMON_TESS_LIB is the directory of the Tesseract libraries (default /opt/homebrew/lib).
 mod=.cache/emon-go
 tags=""
-if [ "${EMON_GO_LIVE:-}" = 1 ]; then mod=.cache/emon-go-live; tags="-tags tesseract,pdfium"; fi
+# `emontest` (P11.4, D1480): the driver's test hooks (host/go/testhooks.go: SetNoRetarget); never a consumer's, and not in the published module
+build_tags="-tags emontest"
+if [ "${EMON_GO_LIVE:-}" = 1 ]; then mod=.cache/emon-go-live; tags="-tags tesseract,pdfium"; build_tags="-tags tesseract,pdfium,emontest"; fi
 mkdir -p "$mod/port" "$mod/pngenc" "$mod/planrun" "$mod/cmd/emon-go"
 
 put() { cmp -s "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
@@ -57,7 +59,7 @@ put "$mod/go.mod.new" "$mod/go.mod"
 rm -f "$mod/go.mod.new" "$mod/go.sum"
 
 if [ -n "$tags" ]; then export CGO_ENABLED=1 CGO_LDFLAGS="-L${EMON_TESS_LIB:-/opt/homebrew/lib} ${CGO_LDFLAGS:-}"; fi
-out=$(cd "$mod" && go build $tags -o emon-go ./cmd/emon-go 2>&1) || { echo "$out" | head -80 >&2; echo "emon-go: build failed" >&2; exit 1; }
+out=$(cd "$mod" && go build $build_tags -o emon-go ./cmd/emon-go 2>&1) || { echo "$out" | head -80 >&2; echo "emon-go: build failed" >&2; exit 1; }
 [ -z "$out" ] || echo "$out" >&2
 # a cgo binary the external linker signed on macOS can fail its own signature check (SIGKILL at launch): sign it again
 if [ -n "$tags" ] && [ "$(uname)" = Darwin ]; then codesign -s - -f "$mod/emon-go" > /dev/null 2>&1 || true; fi

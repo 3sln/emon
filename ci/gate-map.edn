@@ -44,7 +44,8 @@
   {:name "accuracy"  :gates ["accuracy"]}
   {:name "png-check" :gates ["png-check"] :corpus true}
   {:name "asset"     :gates ["asset"]}
-  {:name "image"     :gates ["image"] :corpus true}]
+  {:name "image"     :gates ["image"] :corpus true}
+  {:name "package"   :gates ["package-check"]}]
 
  ;; :full and :fast are wall seconds on the maintainer's machine, warm caches, one gate at a time, `corpus/` absent (as on a pull request), while the machine was shared (load average
  ;; 15 to 110): read them as orders of magnitude, not as runner times. A cold GitHub runner adds the toolchain builds (Java, .NET, C, the pod), which the --fast variants mostly skip.
@@ -233,4 +234,9 @@
   {:glob "test/seals/**" :gates ["seals"] :why "seals transcripts"}
   {:glob "test/signatures/**" :gates ["sigs"] :why "signature fixtures"}
   {:glob "test/slice/**" :gates ["slice"] :why "slice's HTML goldens"}
-  {:glob "test/vis/**" :gates ["unit"] :why "visibility fixtures (the PDFs are also converted by identity and repeat, above)"}]}
+  {:glob "test/vis/**" :gates ["unit"] :why "visibility fixtures (the PDFs are also converted by identity and repeat, above)"}
+
+  ;; ---- packaging (P11.4, D1480) ---------------------------------------------------------------------------------------------------------------------
+  {:glob "release/pkg/**" :gates ["package-check"] :why "the published manifests (Cargo.toml, go.mod, pom.xml, Emon.csproj) and the shared README: the package gate builds and installs every artifact from them"}
+  {:glob "tools/package.clj" :gates ["package-check"] :why "`bb package` and the package gate"}
+  {:glob "host/**" :gates ["package-check"] :why "the host trees are what every registry artifact is assembled from (the Go module's import rewrite, the crate's file list, the jar, the nupkg, the npm package): the package gate installs each"}]}

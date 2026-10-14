@@ -432,6 +432,8 @@ pub unsafe extern "C" fn emon_check_options(options: *const c_char, err: *mut em
 }
 
 // A test of the guard: a function that panics, so a C program can see the boundary hold (the error `internal`, with the message).
+// NOT PUBLIC API (P11.4, D1480): only under the `__test_hooks` feature, declared in `host/c/test/emon_test_hooks.h`, not in the installed header.
+#[cfg(feature = "__test_hooks")]
 #[no_mangle]
 pub unsafe extern "C" fn emon_test_panic(err: *mut emon_error) -> c_int {
     guarded(err, || -> Result<c_int, Fail> { panic!("emon_test_panic: a panic on purpose") })

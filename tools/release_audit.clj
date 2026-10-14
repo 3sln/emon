@@ -143,7 +143,9 @@
 (defn- heredoc-deps
   "Names under a [dependencies] table in the Cargo.toml heredocs of the build scripts."
   [root]
-  (for [f (sort (map str (fs/glob (path root "kin/scripts") "*")))
+  (for [f (concat (sort (map str (fs/glob (path root "kin/scripts") "*")))
+                  ;; the published crate's manifest (P11.4, D1480) is a Cargo.toml like them
+                  [(path root "release/pkg/rust/Cargo.toml")])
         :when (fs/regular-file? f)
         :let [s (slurp f)]
         :when (str/includes? s "[dependencies]")
@@ -210,7 +212,20 @@
         (when-let [s (rd root f)]
           (when-not (re-find #"(?m)^name = \"emon\"\nversion = \"[^\"]+\"\nlicense = \"MIT\"$" s)
             (fail! f ": the [package] table of its Cargo.toml has no `license = \"MIT\"` after the version"))))
-      (when (= b (n-before)) (ok! "the manifests that exist (package.json, three Cargo.toml heredocs) say MIT")))
+      ;; the published manifests of `bb package` (P11.4, D1480): every one says MIT in its registry's own field
+      (doseq [[f re what] [["release/pkg/rust/Cargo.toml" #"(?m)^license = \"MIT\"$" "`license = \"MIT\"`"]
+                           ["release/pkg/java/pom.xml" #"<licenses>\s*<license>\s*<name>MIT License</name>" "a <license> named MIT License"]
+                           ["release/pkg/csharp/Emon.csproj" #"<PackageLicenseExpression>MIT</PackageLicenseExpression>" "<PackageLicenseExpression>MIT"]]]
+        (if-let [s (rd root f)]
+          (when-not (re-find re s) (fail! f ": no " what))
+          (fail! f ": the published manifest is missing")))
+      (when-let [s (rd root "host/js/package.json")]
+        (let [j (json/parse-string s true)]
+          (when (:private j) (fail! "host/js/package.json is \"private\": true: npm would refuse to publish it"))
+          (when-not (get-in j [:exports (keyword "./pdfium")]) (fail! "host/js/package.json does not export ./pdfium"))))
+      (when-let [s (rd root "release/pkg/go/go.mod")]
+        (when-not (re-find #"(?m)^module github\.com/3sln/emon/go$" s) (fail! "release/pkg/go/go.mod is not `module github.com/3sln/emon/go`")))
+      (when (= b (n-before)) (ok! "the manifests that exist (package.json, three Cargo.toml heredocs, the published Cargo.toml, POM and csproj) say MIT")))
     ;; the inventory
     (let [inv (try (read-inventory root) (catch Exception e (fail! inventory-path ": unreadable (" (ex-message e) ")") nil))
           comps (:components inv)]
@@ -511,6 +526,14 @@
       (case! "LICENSE with another holder" #"LICENSE is not the MIT" #(edit! "LICENSE" (fn [s] (str/replace s "3sln" "someone else"))))
       (case! "package.json without the licence field" #"package.json has no" #(edit! "host/js/package.json" (fn [s] (str/replace s "\"license\": \"MIT\"," ""))))
       (case! "a Cargo.toml heredoc without the licence field" #"emon-wasm-build: the \[package\]" #(edit! "kin/scripts/emon-wasm-build" (fn [s] (str/replace s "license = \"MIT\"\n" ""))))
+      (case! "the published Cargo.toml without the licence field" #"release/pkg/rust/Cargo.toml: no `license" #(edit! "release/pkg/rust/Cargo.toml" (fn [s] (str/replace s "license = \"MIT\"\n" ""))))
+      (case! "the POM without the licence" #"release/pkg/java/pom.xml: no a <license>" #(edit! "release/pkg/java/pom.xml" (fn [s] (str/replace s "<name>MIT License</name>" "<name>Other</name>"))))
+      (case! "the csproj without the licence" #"Emon.csproj: no <PackageLicenseExpression>" #(edit! "release/pkg/csharp/Emon.csproj" (fn [s] (str/replace s "<PackageLicenseExpression>MIT</PackageLicenseExpression>" ""))))
+      (case! "package.json still private" #"is \"private\": true" #(edit! "host/js/package.json" (fn [s] (str/replace s "\"license\": \"MIT\"," "\"license\": \"MIT\",\n  \"private\": true,"))))
+      (case! "package.json without the ./pdfium export" #"does not export \./pdfium" #(edit! "host/js/package.json" (fn [s] (str/replace s "\"./pdfium\": \"./src/pdfium.js\"," ""))))
+      (case! "the Go module under another path" #"is not `module github.com/3sln/emon/go`" #(edit! "release/pkg/go/go.mod" (fn [s] (str/replace s "emon/go" "emon"))))
+      (case! "a dependency of the published Cargo.toml missing from the inventory" #"crate `serde` \(Cargo.toml heredoc of kin/scripts/Cargo.toml\)"
+             #(edit! "release/pkg/rust/Cargo.toml" (fn [s] (str/replace s "[dependencies]\n" "[dependencies]\nserde = \"1\"\n"))))
       ;; 2. coverage
       (case! "a Cargo.lock crate missing from the inventory" #"cargo/zlib-rs@0.6.8 is in host/rust/Cargo.lock and not in"
              #(edit! inventory-path (fn [s] (str/replace s #"(?m)^\s*\{:id \"cargo/zlib-rs@0\.6\.8\".*\n" ""))))

@@ -331,7 +331,7 @@ public class Main {
         Options opts = parsed.options;
         Options.Config cfg = parsed.config;
         cfg.simulateAsync = simulateAsync;
-        opts.noRetarget = noRetarget;
+        emon.api.TestHooks.setNoRetarget(opts, noRetarget);
         opts.keepEvidence = out.equals("evidence") || out.equals("bundle");
         if (htmlAssets >= 0) {
             html.assets = Options.HtmlAssets.values()[htmlAssets];

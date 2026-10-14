@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The project of the NuGet package `Emon` (P11.4, D1480). COMMITTED, not templated: `bb version` (tools/version.clj) rewrites <Version>. `bb package
+    for the csharp host` assembles the sources next to it in dist/stage/csharp/src/ (gen/csharp/Emon/*.cs without laws and probes, host/csharp/Emon/**
+    without Testport) with README.md, LICENSE and THIRD_PARTY_NOTICES.md, and runs `dotnet pack`. Unlike the gates' project (kin/scripts/emon-cs-build)
+    it is a library, not the driver.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>Emon</AssemblyName>
+    <RootNamespace>emon</RootNamespace>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TieredPGO>false</TieredPGO>
+    <NoWarn>$(NoWarn);CS1591;CS1572;CS1573;CS1574;CS1584;CS1587;CS1570;CS1571;CS1658;CS1717;CS0164;CS0162;CS0219</NoWarn>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+
+    <PackageId>Emon</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>raystubbs</Authors>
+    <Company>3sln</Company>
+    <Product>emon</Product>
+    <Description>PDFs and images to semantic HTML and a JSON model, for scraping and indexing: reading order, tables, lists, footnotes, figures, OCR. One specification, generated; byte-identical to the Rust, Go, Java, WASM and C builds. Needs .NET 8 or newer.</Description>
+    <PackageTags>pdf;html;ocr;scraping;document;semantic-html;tables</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/3sln/emon</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/3sln/emon</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <Copyright>Copyright (c) 2026 3sln</Copyright>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="src/**/*.cs" />
+    <None Include="README.md" Pack="true" PackagePath="/" />
+    <None Include="LICENSE" Pack="true" PackagePath="/" />
+    <None Include="THIRD_PARTY_NOTICES.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>

@@ -43,8 +43,9 @@ public sealed class Options {
     /// <summary>Keeps the text layer's evidence dump (`Model.Evidence()`): a test and debugging aid.</summary>
     public bool KeepEvidence;
     public OcrScopes OcrScope = OcrScopes.Full;
-    /// <summary>A HIDDEN TEST SETTING (P7.4): leave every pixel unread by the page units.</summary>
-    public bool NoRetarget;
+    /// <summary>A HIDDEN TEST SETTING (P7.4): leave every pixel unread by the page units. NOT PUBLIC API (P11.4, D1480): internal; the gates'
+    /// driver is compiled into the same assembly, the published package's is not.</summary>
+    internal bool NoRetarget;
 
     private Options() {
     }

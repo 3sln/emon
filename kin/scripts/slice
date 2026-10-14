@@ -122,14 +122,14 @@
 ;; ------------------------------------------------------ 1. the native tests
 
 (let [r @(process {:dir ".cache/emon-rs" :out :string :err :string :extra-env {"RUSTFLAGS" "-A warnings"}}
-                  "cargo" "test" "--release" "--offline" "-q" "--test" "engine")
+                  "cargo" "test" "--release" "--offline" "-q" "--features" "__test_hooks" "--test" "engine")
       n (some->> (re-find #"test result: ok\. (\d+) passed; 0 failed" (:out r)) second)]
   (if (and (zero? (:exit r)) n)
     (ok "the Engine API's native tests: " n " passed (adapters identical; async 512 = memory over every PDF fixture; D040; limits; record/replay; the Model walks; no filesystem in the library)")
     (bad "the Engine API's native tests failed:\n" (str/join "\n" (take 40 (str/split-lines (str (:out r) (:err r))))))))
 
 ;; The Go host files are held clean: `go vet` over the Engine, the ports and the driver.
-(let [r @(process {:dir ".cache/emon-go" :out :string :err :string} "go" "vet" "." "./port" "./cmd/emon-go")]
+(let [r @(process {:dir ".cache/emon-go" :out :string :err :string} "go" "vet" "-tags" "emontest" "." "./port" "./cmd/emon-go")]
   (if (zero? (:exit r))
     (ok "[go] go vet is clean over host/go and the driver")
     (bad "[go] go vet:\n" (str (:out r) (:err r)))))

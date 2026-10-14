@@ -44,7 +44,17 @@
     :re #"(static VERSION: &\[u8\] = b\")([^\"\\]+)(\\0\")" :n 1}
    {:file "host/pod/src/main.rs"
     :what "babashka pod: emon/capabilities :version"
-    :re #"(\(\"version\", s\(\")([^\"]+)(\"\)\))" :n 1}])
+    :re #"(\(\"version\", s\(\")([^\"]+)(\"\)\))" :n 1}
+   ;; the published manifests of `bb package` (P11.4, D1480), committed under release/pkg/. Go has none: its module version IS the tag
+   {:file "release/pkg/rust/Cargo.toml"
+    :what "crates.io crate `emon` (the published manifest)"
+    :re #"(?m)(^name = \"emon\"\nversion = \")([^\"]+)(\")" :n 1}
+   {:file "release/pkg/java/pom.xml"
+    :what "Maven com.3sln:emon (the POM)"
+    :re #"(<artifactId>emon</artifactId>\s*<version>)([^<]+)(</version>)" :n 1}
+   {:file "release/pkg/csharp/Emon.csproj"
+    :what "NuGet Emon (the project's <Version>)"
+    :re #"(<Version>)([^<]+)(</Version>)" :n 1}])
 
 (defn- die [code & msg]
   (binding [*out* *err*] (println (str/join " " msg)))

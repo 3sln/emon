@@ -26,3 +26,4 @@ __pycache__/
 
 # bb perf --checked builds a second copy of the comparators (P10.3).
 tools/perf/target-checked/
+/dist/

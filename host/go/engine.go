@@ -262,9 +262,10 @@ type Options struct {
 	// default) or as the render without its text plus witness lines of its text layer's fonts (OcrScopeWitness, a fraction of the OCR time).
 	// Written to the Model's `settings` when not full.
 	OcrScope OcrScope
-	// NoRetarget is a HIDDEN TEST SETTING (P7.4): leave every pixel unread by the page units, as the Engine was before the ink layers and the targeted
-	// passes (a measurement's baseline; an embedder never needs it).
-	NoRetarget bool
+	// noRetarget is a HIDDEN TEST SETTING (P7.4): leave every pixel unread by the page units, as the Engine was before the ink layers and the targeted
+	// passes (a measurement's baseline; an embedder never needs it). NOT PUBLIC API (P11.4, D1480): unexported, set only by `SetNoRetarget`, which
+	// exists under the build tag `emontest` (testhooks.go; the gates' builds pass it, a consumer's never does).
+	noRetarget bool
 }
 
 // DefaultOptions is SPEC 13's defaults: kin's (`emon.config`'s `cf-defaults`), the parse of the empty text.
@@ -1051,7 +1052,7 @@ func cfgOf(opts Options) *enctx.Cfg {
 	c.Tbyte = opts.AssetsBytes
 	c.Sigs = boolInt(opts.AssetSignatures)
 	c.Keep = boolInt(opts.KeepEvidence)
-	c.Nort = boolInt(opts.NoRetarget)
+	c.Nort = boolInt(opts.noRetarget)
 	if opts.Locale != "" {
 		c.Haveloc = 1
 		c.Lcl = localeCells(opts)

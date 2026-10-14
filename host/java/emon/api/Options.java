@@ -70,8 +70,9 @@ public final class Options {
     /** Keeps the text layer's evidence dump (`Model.evidence()`): a test and debugging aid. */
     public boolean keepEvidence;
     public OcrScope ocrScope = OcrScope.FULL;
-    /** A HIDDEN TEST SETTING (P7.4): leave every pixel unread by the page units. */
-    public boolean noRetarget;
+    /** A HIDDEN TEST SETTING (P7.4): leave every pixel unread by the page units. NOT PUBLIC API (P11.4, D1480): package-private; the gates' driver
+     *  reaches it through `emon.api.TestHooks` (test/driver/java/emon/api/TestHooks.java), which is not part of the published jar. */
+    boolean noRetarget;
 
     private Options() {
     }

@@ -74,6 +74,8 @@ path = "src/pod.rs"
 
 [features]
 tesseract = []
+# the test hooks (P11.4, D1480): `Options::no_retarget` and the C symbol `emon_test_panic`. A published library (`bb package`) is built without it.
+__test_hooks = []
 
 [dependencies]
 # exactly the Rust host's (host/rust/Cargo.lock): the binding adds no crate (D474)
@@ -95,10 +97,10 @@ rm -f "$crate/Cargo.toml.new"
 
 flags="-A warnings"
 [ "${EMON_RS_WARN:-}" = 1 ] && flags=""
-cargo_features=""
+cargo_features="--features __test_hooks"
 if [ "${EMON_RS_LIVE:-}" = 1 ] || [ -n "$pdfium_lib" ]; then
   flags="$flags -L native=${EMON_TESS_LIB:-/opt/homebrew/lib}"
-  cargo_features="--features tesseract"
+  cargo_features="--features tesseract,__test_hooks"
 fi
 if [ -n "$pdfium_lib" ]; then
   flags="$flags --cfg pdfium -L native=$pdfium_lib -C link-arg=-Wl,-rpath,$pdfium_lib"

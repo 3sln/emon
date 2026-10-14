@@ -2,16 +2,25 @@
   "name": "@3sln/emon",
   "version": "0.1.0",
   "license": "MIT",
-  "private": true,
   "description": "emon's JavaScript SDK: PDFs and images to semantic HTML in the browser, over the WASM binding (DEVLOG P9.3). The library has no dependencies; the devDependencies are the browser test harness and the tesseract.js engine the OCR adapter drives.",
+  "keywords": ["pdf", "html", "semantic-html", "ocr", "document-conversion", "scraping", "wasm", "webassembly", "tables"],
+  "author": "raystubbs (https://github.com/raystubbs)",
+  "homepage": "https://github.com/3sln/emon#readme",
+  "repository": { "type": "git", "url": "git+https://github.com/3sln/emon.git", "directory": "host/js" },
+  "bugs": { "url": "https://github.com/3sln/emon/issues" },
   "type": "module",
   "main": "src/index.js",
+  "types": "src/index.d.ts",
   "exports": {
     ".": "./src/index.js",
     "./tesseract": "./src/tesseract.js",
-    "./pdfium": "./src/pdfium.js"
+    "./pdfium": "./src/pdfium.js",
+    "./emon.wasm": "./emon.wasm",
+    "./package.json": "./package.json"
   },
-  "files": ["src"],
+  "files": ["src", "emon.wasm", "LICENSE", "THIRD_PARTY_NOTICES.md", "README.md"],
+  "sideEffects": false,
+  "publishConfig": { "access": "public" },
   "engines": { "node": ">=22" },
   "devDependencies": {
     "puppeteer-core": "25.12.0",

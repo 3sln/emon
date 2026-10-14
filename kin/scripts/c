@@ -44,10 +44,13 @@
       declared (into #{} (remove #{"emon_read_fn"}) declared)
       lib (first (filter fs/exists? [".cache/emon-bind/target/release/libemon.dylib" ".cache/emon-bind/target/release/libemon.so"]))
       nm (if lib (:out @(process {:out :string :err :string} "nm" "-g" lib)) "")
-      exported (set (map second (re-seq #"(?m)\sT _?(emon_[a-z0-9_]+)$" nm)))]
+      exported (set (map second (re-seq #"(?m)\sT _?(emon_[a-z0-9_]+)$" nm)))
+      ;; (P11.4, D1480) this library is the gates' build, WITH the test hooks (`emon_test_panic`, declared in host/c/test/emon_test_hooks.h, not in emon.h);
+      ;; the shipped library has none of them: `bb package-check` proves that on the archive
+      hooks (set (map second (re-seq #"\b(emon_[a-z0-9_]+)\s*\(" (str/replace (slurp "host/c/test/emon_test_hooks.h") #"(?s)/\*.*?\*/" ""))))]
   (if (and (seq declared) (seq exported))
     (let [undefined (remove exported declared)
-          undeclared (remove declared exported)]
+          undeclared (remove (into declared hooks) exported)]
       (if (and (empty? undefined) (empty? undeclared))
         (ok "emon.h declares " (count declared) " functions and libemon exports exactly those")
         (bad "emon.h and libemon disagree: declared but not exported " (vec undefined) "; exported but not declared " (vec undeclared))))
