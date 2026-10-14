@@ -60,6 +60,9 @@
 ;; the size and the step back at most 40: a space glyph (U+0020, U+00A0, the tab, ...) always ends a word.
 ;; Words join into a line while the next starts within 2 sizes of the last one's end (60 per cent of a size
 ;; back) on the same baseline: a wider gap is a column gutter or a table cell, the next stage's to decide.
+;; A producer that draws a bold run AFTER the regular runs either side of it (D557) leaves one visual line as several
+;; runs of the stream on one baseline, interleaved: where the words of such runs, put in order along the line, join by that
+;; same rule, they are one line (`pc-merge-lines`).
 ;; Text at an angle off the four axes is measured along its own direction from the glyph centres. A
 ;; RIGHT-TO-LEFT word written in visual order has its text put in logical order, and the words of a
 ;; right-to-left line likewise (D104); the glyphs stay as they were shown.
@@ -3380,6 +3383,135 @@
           (set w (+ w 1))))
     (return 0)))
 
+(defconst ^I32 NOJOIN 2000000)    ;; `pc-join-gap`'s answer for "does not continue the line" (a real gap is clamped to +-1,000,000)
+(defconst ^I32 MERGE_MAX 256)     ;; the most words `pc-merge-lines` puts in order at once
+
+(defn ^I32 pc-same-base [^Cells gl ^Cells wd ^I32 p ^I32 j]
+  (comment "1 when word j is on word p's baseline: the same rotation, and the offset across the writing axis, from p's last glyph to j's")
+  (comment "first, within `OFFSET_PM` of the larger size.")
+  (let [^I32 gfp (wd-get wd p (wf-gfirst))
+        ^I32 gf0 (wd-get wd j (wf-gfirst))
+        ^I32 axis (pc-axis (gl-get gl gfp (gf-rot)))
+        ^:mut ^I32 sz (gl-get gl gf0 (gf-size))
+        ^I32 glast (- (+ gfp (wd-get wd p (wf-gcount))) 1)]
+    (if (== (pc-rot-same (gl-get gl gfp (gf-rot)) (gl-get gl gf0 (gf-rot))) 0) (return 0))
+    (if (> (gl-get gl gfp (gf-size)) sz) (set sz (gl-get gl gfp (gf-size))))
+    (if (> sz 200000) (set sz 200000))
+    (if (< sz (- 0 200000)) (set sz (- 0 200000)))
+    (if (<= (* (pc-cl (pc-pair-off gl glast gf0 axis)) 1000) (* sz OFFSET_PM)) (return 1))
+    (return 0)))
+
+(defn ^I32 pc-join-gap [^Cells gl ^Cells wd ^I32 p ^I32 j]
+  (comment "The rule that puts word j on word p's line: the same rotation and baseline (`pc-same-base`), and a gap from p's LAST glyph to j's")
+  (comment "first that is at most `LINE_GAP_PM` of the larger size and at most `LINE_BACK_PM` back. Answers the gap, or `NOJOIN`.")
+  (let [^I32 gfp (wd-get wd p (wf-gfirst))
+        ^I32 gf0 (wd-get wd j (wf-gfirst))
+        ^I32 axis (pc-axis (gl-get gl gfp (gf-rot)))
+        ^:mut ^I32 sz (gl-get gl gf0 (gf-size))
+        ^:mut ^I32 gap 0
+        ^I32 glast (- (+ gfp (wd-get wd p (wf-gcount))) 1)]
+    (if (== (pc-same-base gl wd p j) 0) (return NOJOIN))
+    (if (> (gl-get gl gfp (gf-size)) sz) (set sz (gl-get gl gfp (gf-size))))
+    (if (> sz 200000) (set sz 200000))
+    (if (< sz (- 0 200000)) (set sz (- 0 200000)))
+    (comment "The gap is between the previous word's LAST glyph and this word's first.")
+    (set gap (pc-cl (pc-pair-gap gl glast gf0 axis sz)))
+    (if (< (* gap 1000) (- 0 (* sz LINE_BACK_PM))) (return NOJOIN))
+    (if (> (* gap 1000) (* sz LINE_GAP_PM)) (return NOJOIN))
+    (return gap)))
+
+(defn ^I32 pc-merge-span [^:mut ^Cells gl ^:mut ^Cells wd ^I32 s ^I32 t]
+  (comment "Words [s, t] are runs of the stream on one baseline that are not in order along it. When every one is horizontal, of one visibility")
+  (comment "and has no right-to-left letter, and each word, taken in order of x, joins the one after it by `pc-join-gap`, they are put in that")
+  (comment "order (a stable insertion sort of the word rows; the glyphs are pointed at their word again) and are one line to the loop that")
+  (comment "follows. Otherwise nothing moves. Answers 1 when the words were put in order.")
+  (let [^I32 g0 (wd-get wd s (wf-gfirst))
+        ^:mut ^I32 i s
+        ^:mut ^I32 j 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 best 0
+        ^:mut ^I32 asc 1
+        ^:mut ^I32 gi 0]
+    (set i (+ s 1))
+    (while (<= i t)
+      (do (if (< (wd-get wd i (hd-x0)) (wd-get wd (- i 1) (hd-x0))) (set asc 0))
+          (set i (+ i 1))))
+    (if (== asc 1) (return 0))
+    (set i s)
+    (while (<= i t)
+      (do (set gi (wd-get wd i (wf-gfirst)))
+          (if (!= (pc-axis (gl-get gl gi (gf-rot))) 0) (return 0))
+          (if (!= (gl-get gl gi (gf-vis)) (gl-get gl g0 (gf-vis))) (return 0))
+          (if (!= (pc-hidden-mode (gl-get gl gi (gf-mode))) (pc-hidden-mode (gl-get gl g0 (gf-mode)))) (return 0))
+          (if (== (wd-get wd i (hd-dir)) (ld-rtl)) (return 0))
+          (if (== (pc-wcls gl wd i) 1) (return 0))
+          (set i (+ i 1))))
+    (comment "Each word's successor in order of x (ties by place in the stream): it must continue the word.")
+    (set i s)
+    (while (<= i t)
+      (do (set best -1)
+          (set j s)
+          (while (<= j t)
+            (do (if (or (> (wd-get wd j (hd-x0)) (wd-get wd i (hd-x0)))
+                        (and (== (wd-get wd j (hd-x0)) (wd-get wd i (hd-x0))) (> j i)))
+                  (if (< best 0)
+                    (set best j)
+                    (if (< (wd-get wd j (hd-x0)) (wd-get wd best (hd-x0)))
+                      (set best j))))
+                (set j (+ j 1))))
+          (if (>= best 0)
+            (if (>= (pc-join-gap gl wd i best) NOJOIN) (return 0)))
+          (set i (+ i 1))))
+    (set i (+ s 1))
+    (while (<= i t)
+      (do (set j i)
+          (while (and (> j s) (> (wd-get wd (- j 1) (hd-x0)) (wd-get wd j (hd-x0))))
+            (do (pc-swap-rows wd (- j 1) j)
+                (set j (- j 1))))
+          (set i (+ i 1))))
+    (set i s)
+    (while (<= i t)
+      (do (set gi (wd-get wd i (wf-gfirst)))
+          (set k 0)
+          (while (< k (wd-get wd i (wf-gcount)))
+            (do (gl-set gl (+ gi k) (ch-word) i)
+                (set k (+ k 1))))
+          (if (and (< i t) (== (wd-get wd i (wf-wbreak)) (wb-line-end)))
+            (wd-set wd i (wf-wbreak) (wb-gap)))
+          (set i (+ i 1))))
+    (return 1)))
+
+(defn ^I32 pc-merge-lines [^:mut ^Cells gl ^:mut ^Cells wd ^I32 w0]
+  (comment "The words from w0 on, before they are cut into lines: where consecutive runs of the stream (each a stretch of words that")
+  (comment "`pc-join-gap` joins) are on one baseline, they are one candidate (at most `MERGE_MAX` words) and `pc-merge-span` puts them in")
+  (comment "order along it if they make one line. A run that is already in order along the baseline is left alone (a wide gap in it ends the line, as")
+  (comment "ever: a column gutter or a table cell). Answers the spans put in order.")
+  (let [^I32 nw (wd-count wd)
+        ^:mut ^I32 s w0
+        ^:mut ^I32 t 0
+        ^:mut ^I32 u 0
+        ^:mut ^I32 nseg 0
+        ^:mut ^I32 more 0
+        ^:mut ^I32 done 0]
+    (while (< s nw)
+      (do (set t s)
+          (while (and (< (+ t 1) nw) (< (pc-join-gap gl wd t (+ t 1)) NOJOIN))
+            (set t (+ t 1)))
+          (set nseg 1)
+          (set more 1)
+          (while (and (== more 1) (and (< (+ t 1) nw) (< (- t s) MERGE_MAX)))
+            (if (== (pc-same-base gl wd t (+ t 1)) 1)
+              (do (set u (+ t 1))
+                  (while (and (< (+ u 1) nw) (< (pc-join-gap gl wd u (+ u 1)) NOJOIN))
+                    (set u (+ u 1)))
+                  (set t u)
+                  (set nseg (+ nseg 1)))
+              (set more 0)))
+          (if (and (> nseg 1) (<= (- t s) MERGE_MAX))
+            (set done (+ done (pc-merge-span gl wd s t))))
+          (set s (+ t 1))))
+    (return done)))
+
 (defn ^:pub ^I32 pc-group [^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells wd ^:mut ^Cells ln
                            ^:mut ^Cells fnt ^I32 page ^I32 g0 ^I32 w0]
   (comment "Group the glyphs from g0 on into words, and the words from w0 on into lines.")
@@ -3410,34 +3542,16 @@
           ^:mut ^I32 y0 0
           ^:mut ^I32 x1 0
           ^:mut ^I32 y1 0
-          ^:mut ^I32 gf0 0
           ^:mut ^I32 gfp 0
-          ^:mut ^I32 glast 0
-          ^:mut ^I32 axis 0
           ^:mut ^I32 joins 0
           ^:mut ^I32 gap 0
-          ^:mut ^I32 sz 0
-          ^:mut ^I32 ord 0
-          ^:mut ^I32 off 0]
+          ^:mut ^I32 ord 0]
+      (pc-merge-lines gl wd w0)
       (while (<= j nw)
         (do (set joins 0)
             (if (and (< j nw) (>= prev 0))
-              (do (set gf0 (wd-get wd j (wf-gfirst)))
-                  (set gfp (wd-get wd prev (wf-gfirst)))
-                  (set axis (pc-axis (gl-get gl gfp (gf-rot))))
-                  (if (== (pc-rot-same (gl-get gl gfp (gf-rot)) (gl-get gl gf0 (gf-rot))) 1)
-                    (do (set sz (gl-get gl gf0 (gf-size)))
-                        (if (> (gl-get gl gfp (gf-size)) sz) (set sz (gl-get gl gfp (gf-size))))
-                        (if (> sz 200000) (set sz 200000))
-                        (if (< sz (- 0 200000)) (set sz (- 0 200000)))
-                        (set glast (- (+ (wd-get wd prev (wf-gfirst)) (wd-get wd prev (wf-gcount))) 1))
-                        (set off (pc-cl (pc-pair-off gl glast gf0 axis)))
-                        (comment "The gap is between the previous word's LAST glyph and this word's first.")
-                        (set gap (pc-cl (pc-pair-gap gl glast gf0 axis sz)))
-                        (if (<= (* off 1000) (* sz OFFSET_PM))
-                          (if (>= (* gap 1000) (- 0 (* sz LINE_BACK_PM)))
-                            (if (<= (* gap 1000) (* sz LINE_GAP_PM))
-                              (set joins 1))))))))
+              (do (set gap (pc-join-gap gl wd prev j))
+                  (if (< gap NOJOIN) (set joins 1))))
             (if (== joins 1)
               (do (wd-set wd prev (wf-gap) gap)
                   (set prev j))
@@ -3455,7 +3569,6 @@
                               (if (> (wd-get wd lnx (hd-y1)) y1) (set y1 (wd-get wd lnx (hd-y1))))
                               (set lnx (+ lnx 1))))
                         (set gfp (wd-get wd lfirst (wf-gfirst)))
-                        (set axis (pc-axis (gl-get gl gfp (gf-rot))))
                         (set ord (wd-get wd lfirst (wf-gfirst)))
                         (set lnx lfirst)
                         (while (<= lnx prev)

@@ -695,4 +695,89 @@ public static class Pdfcontenttest {
         emon.Testport.AssertThat(CtFuzzFile(0, emon.Testport.TestFile("vis/occluded.pdf"), 300, 67) > 300, "occluded.pdf");
         emon.Testport.AssertThat(CtFuzzFile(0, emon.Testport.TestFile("vis/clip.pdf"), 300, 47) > 300, "clip.pdf");
     }
+    internal static int CtGw(emon.Port.Cells gl, int x, int y, int cp) {
+        // One glyph of the scene: 500 wide and 800 tall, size 1000, its baseline at y + 800 (centipoints, page 1).
+        int g = Evidence.GlNew(gl, 1, x, y, x + 500, y + 800, cp, -1, 0, -1);
+        Evidence.GlSet(gl, g, Evidence.GfSize(), 1000);
+        return g;
+    }
+    internal static int CtRun2g(emon.Port.Cells gl, int x, int y, int c1, int c2) {
+        // A word of two glyphs, shown together, starting at x.
+        CtGw(gl, x, y, c1);
+        CtGw(gl, x + 500, y, c2);
+        return 0;
+    }
+    internal static int CtGroup(emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells wd, emon.Port.Cells ln) {
+        emon.Port.Cells fnt = emon.Port.NewCells();
+        return Pdfcontent.PcGroup(gl, et, wd, ln, fnt, 1, 0, 0);
+    }
+    [Xunit.Fact]
+    public static void TestRunsOfOneBaselineDrawnOutOfOrderAreOneLineInOrderAlongIt() {
+        // 'ab' at 1000, then 'ef' at 4500 (a gap wider than two sizes: a line of its own), then the 'cd' between them at 2500, which the
+        // producer drew LAST (a bold run, say). In the stream that is three lines; along the baseline it is one, 'ab cd ef'.
+        emon.Port.Cells gl = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        CtRun2g(gl, 1000, 0, 97, 98);
+        CtRun2g(gl, 4500, 0, 101, 102);
+        CtRun2g(gl, 2500, 0, 99, 100);
+        CtGroup(gl, et, wd, ln);
+        emon.Testport.AssertEq(Evidence.WdCount(wd), 3, "three words");
+        emon.Testport.AssertEq(Evidence.LnCount(ln), 1, "one line: the runs share a baseline and, in order of x, each continues the one before it");
+        emon.Testport.AssertEq(Evidence.LnGet(ln, 0, Evidence.LhFirst()), 0, "it starts at the first word");
+        emon.Testport.AssertEq(Evidence.LnGet(ln, 0, Evidence.LhCount()), 3, "and holds the three");
+        emon.Testport.AssertEq(Evidence.WdGet(wd, 0, Evidence.HdX0()), 1000, "the first word is the leftmost");
+        emon.Testport.AssertEq(Evidence.WdGet(wd, 1, Evidence.HdX0()), 2500, "the second is the one drawn last");
+        emon.Testport.AssertEq(Evidence.WdGet(wd, 2, Evidence.HdX0()), 4500, "the third is the rightmost");
+        emon.Testport.AssertEq(Evidence.GlGet(gl, 4, Evidence.ChWord()), 1, "the glyphs of the word that moved point at it");
+        emon.Testport.AssertEq(Evidence.GlGet(gl, 2, Evidence.ChWord()), 2, "and those of the word it passed");
+        emon.Testport.AssertEq(Evidence.WdGet(wd, 0, Evidence.HdLine()), 0, "every word is in the line");
+        emon.Testport.AssertEq(Evidence.WdGet(wd, 2, Evidence.HdLine()), 0, "the last too");
+        emon.Testport.AssertEq(Evidence.WdGet(wd, 1, Evidence.WfWbreak()), Evidence.WbGap(), "a word that ended a run of its own has not ended the line");
+        emon.Testport.AssertEq(Evidence.WdGet(wd, 2, Evidence.WfWbreak()), Evidence.WbLineEnd(), "the last word ends it");
+    }
+    [Xunit.Fact]
+    public static void TestRunsInOrderOrTooFarApartOrOverprintedStayTheLinesTheyWere() {
+        emon.Port.Cells gl = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        // In order along the baseline, with a wide gap between: two lines, as ever (a gutter, a table cell).
+        CtRun2g(gl, 1000, 0, 97, 98);
+        CtRun2g(gl, 4500, 0, 101, 102);
+        CtGroup(gl, et, wd, ln);
+        emon.Testport.AssertEq(Evidence.LnCount(ln), 2, "in order and apart: two lines");
+        emon.Testport.AssertEq(Evidence.WdGet(wd, 1, Evidence.HdX0()), 4500, "nothing moved");
+        // Out of order, but the word drawn last does not bridge the gap: still apart, nothing moves.
+        emon.Port.CellsDrop(gl, 0);
+        emon.Port.CellsDrop(et, 0);
+        emon.Port.CellsDrop(wd, 0);
+        emon.Port.CellsDrop(ln, 0);
+        CtRun2g(gl, 1000, 0, 97, 98);
+        CtRun2g(gl, 9000, 0, 101, 102);
+        CtRun2g(gl, 2500, 0, 99, 100);
+        CtGroup(gl, et, wd, ln);
+        emon.Testport.AssertEq(Evidence.LnCount(ln), 3, "a chain that does not close: three lines");
+        emon.Testport.AssertEq(Evidence.WdGet(wd, 1, Evidence.HdX0()), 9000, "and the stream order is kept");
+        // The same word drawn twice, a little to the right (a faked bold): the copies overlap, so they are not one line.
+        emon.Port.CellsDrop(gl, 0);
+        emon.Port.CellsDrop(et, 0);
+        emon.Port.CellsDrop(wd, 0);
+        emon.Port.CellsDrop(ln, 0);
+        CtRun2g(gl, 1000, 0, 97, 98);
+        CtRun2g(gl, 1100, 0, 97, 98);
+        CtGroup(gl, et, wd, ln);
+        emon.Testport.AssertEq(Evidence.LnCount(ln), 2, "an overprint is two lines, as before");
+        // Runs of different baselines are never merged.
+        emon.Port.CellsDrop(gl, 0);
+        emon.Port.CellsDrop(et, 0);
+        emon.Port.CellsDrop(wd, 0);
+        emon.Port.CellsDrop(ln, 0);
+        CtRun2g(gl, 1000, 0, 97, 98);
+        CtRun2g(gl, 4500, 0, 101, 102);
+        CtRun2g(gl, 2500, 1000, 99, 100);
+        CtGroup(gl, et, wd, ln);
+        emon.Testport.AssertEq(Evidence.LnCount(ln), 3, "the word on the next line stays on it");
+    }
 }

@@ -14,7 +14,8 @@
                                 node-sub node-conf page-new pk-vector text-append-cp
                                 nk-figure nk-paragraph nk-caption nk-document fg-chart fg-diagram fg-photo fg-logo fg-screenshot fg-qr
                                 fg-barcode fg-illustration fg-unknown fk-labels fk-image]]
-            [emon.figclass :refer [fc-measure fc-vector-kind fc-image-kind fc-reject fc-sign-rows fc-recur]]
+            [emon.figclass :refer [fc-measure fc-vector-kind fc-image-kind fc-reject fc-sign-rows fc-recur fc-stage]]
+            [emon.glayer :refer [grg-new rk-figure]]
             [emon.restruct :refer [rs-figures]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem]]))
@@ -364,6 +365,50 @@
     (assert-eq (node-count nn) 5 "the document, three blocks and the figure")
     (assert-eq (node-kind nn 3) (nk-figure) "the figure is just before its caption, after the paragraph that is lower on the page")
     (assert-eq (node-kind nn 4) (nk-caption) "and the caption follows it")))
+
+;; ------------------------------------------------------------------------------------------------ the tables' (D557)
+
+(defn ^I32 ft-held-line [^:mut ^Cells fl ^I32 y0 ^I32 held]
+  (comment "A line of the text layer at x 12000..20000, 600 tall from y0, on page 1; `held` 1 when a table has claimed it (cell 15 is TB_HELD + 0).")
+  (let [^I32 r (quot (cells-len fl) 16)]
+    (ft-line fl 1 12000 y0 20000 (+ y0 600) 1)
+    (if (== held 1) (cells-set fl (+ (* r 16) 15) 1073741824))
+    (return 0)))
+
+(defn ^I32 ft-figures [^I32 held ^I32 free]
+  (comment "The figures stage over a page that has a region the graphics layer calls a figure (10000 10000 30000 30000, no paths, no images) with a")
+  (comment "caption just under it and `held` lines of the text layer in it that a table has claimed and `free` that it has not. Answers how many figures.")
+  (let [^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells) ^Cells pages (new-cells)
+        ^Cells ledger (new-cells) ^Cells layout (new-cells) ^Cells grg (new-cells)
+        ^Cells fnodes (new-cells) ^Cells fattrs (new-cells) ^Cells fregions (new-cells) ^Cells fnm (new-cells)
+        ^Cells pa (new-cells) ^Cells im (new-cells) ^Cells fi (new-cells) ^Cells grl (new-cells)
+        ^Cells fw (new-cells) ^Cells fl (new-cells) ^Cells et (new-cells) ^Cells pg (new-cells) ^Cells sl (new-cells)
+        ^Cells cand (new-cells) ^Cells fcand (new-cells) ^Cells cl (new-cells) ^Cells fg (new-cells) ^Cells fd (new-cells)
+        ^Cells ab (new-cells) ^Cells ws (new-cells)
+        ^:mut ^I32 c 0
+        ^:mut ^I32 i 0]
+    (model-init nodes attrs regions text pages ledger layout)
+    (page-new pages 1 61200 79200 0 (pk-vector))
+    (grg-new grg 1 10000 10000 30000 30000 (rk-figure))
+    (set c (ft-para nodes regions text (nk-caption) 20 10000 30500 30000 31500))
+    (node-set-aux nodes c 1)
+    (while (< i held)
+      (do (ft-held-line fl (+ 11000 (* 1500 i)) 1)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i free)
+      (do (ft-held-line fl (+ 21000 (* 1500 i)) 0)
+          (set i (+ i 1))))
+    (return (fc-stage nodes attrs regions text pages fnodes fattrs fregions fnm pa im fi grg grl fw fl et pg sl cand 0 fcand cl fg fd ab ws))))
+
+(deftest test-a-region-whose-text-a-table-has-claimed-is-no-figure
+  (comment "A region the graphics layer calls a figure, with a caption just under it, is a figure; so is one with a few lines of text that no table holds.")
+  (assert-eq (ft-figures 0 0) 1 "with no text in it the region is a figure")
+  (assert-eq (ft-figures 0 3) 1 "with three lines no table holds it is a figure")
+  (comment "The shaded header cell with its words and the rule under it (D556): the table the lines went to, the drawing is its own.")
+  (assert-eq (ft-figures 3 1) 0 "three lines of four are a table's: no figure")
+  (assert-eq (ft-figures 2 2) 0 "half of them are a table's: no figure")
+  (assert-eq (ft-figures 1 3) 1 "one of four is a table's: the region is still a figure"))
 
 ;; ------------------------------------------------------------------------------------------------ recurrence (P8.4)
 

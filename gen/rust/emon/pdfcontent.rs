@@ -4232,6 +4232,190 @@ pub(crate) fn pc_line_bidi(mut gl: &mut crate::port::Cells, mut et: &mut crate::
     }
     return 0;
 }
+pub(crate) const NOJOIN: i32 = 2000000;
+pub(crate) const MERGE_MAX: i32 = 256;
+pub(crate) fn pc_same_base(gl: &mut crate::port::Cells, wd: &mut crate::port::Cells, p: i32, j: i32) -> i32 {
+    // 1 when word j is on word p's baseline: the same rotation, and the offset across the writing axis, from p's last glyph to j's
+    // first, within `OFFSET_PM` of the larger size.
+    let gfp: i32 = wd_get(wd, p, wf_gfirst());
+    let gf0: i32 = wd_get(wd, j, wf_gfirst());
+    let axis: i32 = pc_axis(gl_get(gl, gfp, gf_rot()));
+    let mut sz: i32 = gl_get(gl, gf0, gf_size());
+    let glast: i32 = (gfp + wd_get(wd, p, wf_gcount())) - 1;
+    if pc_rot_same(gl_get(gl, gfp, gf_rot()), gl_get(gl, gf0, gf_rot())) == 0 {
+        return 0;
+    }
+    if gl_get(gl, gfp, gf_size()) > sz {
+        sz = gl_get(gl, gfp, gf_size());
+    }
+    if sz > 200000 {
+        sz = 200000;
+    }
+    if sz < (0 - 200000) {
+        sz = 0 - 200000;
+    }
+    if (pc_cl(pc_pair_off(gl, glast, gf0, axis)) * 1000) <= (sz * OFFSET_PM) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn pc_join_gap(gl: &mut crate::port::Cells, wd: &mut crate::port::Cells, p: i32, j: i32) -> i32 {
+    // The rule that puts word j on word p's line: the same rotation and baseline (`pc-same-base`), and a gap from p's LAST glyph to j's
+    // first that is at most `LINE_GAP_PM` of the larger size and at most `LINE_BACK_PM` back. Answers the gap, or `NOJOIN`.
+    let gfp: i32 = wd_get(wd, p, wf_gfirst());
+    let gf0: i32 = wd_get(wd, j, wf_gfirst());
+    let axis: i32 = pc_axis(gl_get(gl, gfp, gf_rot()));
+    let mut sz: i32 = gl_get(gl, gf0, gf_size());
+    let mut gap: i32 = 0;
+    let glast: i32 = (gfp + wd_get(wd, p, wf_gcount())) - 1;
+    if pc_same_base(gl, wd, p, j) == 0 {
+        return NOJOIN;
+    }
+    if gl_get(gl, gfp, gf_size()) > sz {
+        sz = gl_get(gl, gfp, gf_size());
+    }
+    if sz > 200000 {
+        sz = 200000;
+    }
+    if sz < (0 - 200000) {
+        sz = 0 - 200000;
+    }
+    // The gap is between the previous word's LAST glyph and this word's first.
+    gap = pc_cl(pc_pair_gap(gl, glast, gf0, axis, sz));
+    if (gap * 1000) < (0 - (sz * LINE_BACK_PM)) {
+        return NOJOIN;
+    }
+    if (gap * 1000) > (sz * LINE_GAP_PM) {
+        return NOJOIN;
+    }
+    return gap;
+}
+pub(crate) fn pc_merge_span(mut gl: &mut crate::port::Cells, mut wd: &mut crate::port::Cells, s: i32, t: i32) -> i32 {
+    // Words [s, t] are runs of the stream on one baseline that are not in order along it. When every one is horizontal, of one visibility
+    // and has no right-to-left letter, and each word, taken in order of x, joins the one after it by `pc-join-gap`, they are put in that
+    // order (a stable insertion sort of the word rows; the glyphs are pointed at their word again) and are one line to the loop that
+    // follows. Otherwise nothing moves. Answers 1 when the words were put in order.
+    let g0: i32 = wd_get(wd, s, wf_gfirst());
+    let mut i: i32 = s;
+    let mut j: i32 = 0;
+    let mut k: i32 = 0;
+    let mut best: i32 = 0;
+    let mut asc: i32 = 1;
+    let mut gi: i32 = 0;
+    i = s + 1;
+    while i <= t {
+        if wd_get(wd, i, hd_x0()) < wd_get(wd, i - 1, hd_x0()) {
+            asc = 0;
+        }
+        i += 1;
+    }
+    if asc == 1 {
+        return 0;
+    }
+    i = s;
+    while i <= t {
+        gi = wd_get(wd, i, wf_gfirst());
+        if pc_axis(gl_get(gl, gi, gf_rot())) != 0 {
+            return 0;
+        }
+        if gl_get(gl, gi, gf_vis()) != gl_get(gl, g0, gf_vis()) {
+            return 0;
+        }
+        if pc_hidden_mode(gl_get(gl, gi, gf_mode())) != pc_hidden_mode(gl_get(gl, g0, gf_mode())) {
+            return 0;
+        }
+        if wd_get(wd, i, hd_dir()) == ld_rtl() {
+            return 0;
+        }
+        if pc_wcls(gl, wd, i) == 1 {
+            return 0;
+        }
+        i += 1;
+    }
+    // Each word's successor in order of x (ties by place in the stream): it must continue the word.
+    i = s;
+    while i <= t {
+        best = -1;
+        j = s;
+        while j <= t {
+            if (wd_get(wd, j, hd_x0()) > wd_get(wd, i, hd_x0())) || ((wd_get(wd, j, hd_x0()) == wd_get(wd, i, hd_x0())) && (j > i)) {
+                if best < 0 {
+                    best = j;
+                } else if wd_get(wd, j, hd_x0()) < wd_get(wd, best, hd_x0()) {
+                    best = j;
+                }
+            }
+            j += 1;
+        }
+        if best >= 0 {
+            if pc_join_gap(gl, wd, i, best) >= NOJOIN {
+                return 0;
+            }
+        }
+        i += 1;
+    }
+    i = s + 1;
+    while i <= t {
+        j = i;
+        while (j > s) && (wd_get(wd, j - 1, hd_x0()) > wd_get(wd, j, hd_x0())) {
+            pc_swap_rows(wd, j - 1, j);
+            j -= 1;
+        }
+        i += 1;
+    }
+    i = s;
+    while i <= t {
+        gi = wd_get(wd, i, wf_gfirst());
+        k = 0;
+        while k < wd_get(wd, i, wf_gcount()) {
+            gl_set(gl, gi + k, ch_word(), i);
+            k += 1;
+        }
+        if (i < t) && (wd_get(wd, i, wf_wbreak()) == wb_line_end()) {
+            wd_set(wd, i, wf_wbreak(), wb_gap());
+        }
+        i += 1;
+    }
+    return 1;
+}
+pub(crate) fn pc_merge_lines(mut gl: &mut crate::port::Cells, mut wd: &mut crate::port::Cells, w0: i32) -> i32 {
+    // The words from w0 on, before they are cut into lines: where consecutive runs of the stream (each a stretch of words that
+    // `pc-join-gap` joins) are on one baseline, they are one candidate (at most `MERGE_MAX` words) and `pc-merge-span` puts them in
+    // order along it if they make one line. A run that is already in order along the baseline is left alone (a wide gap in it ends the line, as
+    // ever: a column gutter or a table cell). Answers the spans put in order.
+    let nw: i32 = wd_count(wd);
+    let mut s: i32 = w0;
+    let mut t: i32 = 0;
+    let mut u: i32 = 0;
+    let mut nseg: i32 = 0;
+    let mut more: i32 = 0;
+    let mut done: i32 = 0;
+    while s < nw {
+        t = s;
+        while ((t + 1) < nw) && (pc_join_gap(gl, wd, t, t + 1) < NOJOIN) {
+            t += 1;
+        }
+        nseg = 1;
+        more = 1;
+        while (more == 1) && (((t + 1) < nw) && ((t - s) < MERGE_MAX)) {
+            if pc_same_base(gl, wd, t, t + 1) == 1 {
+                u = t + 1;
+                while ((u + 1) < nw) && (pc_join_gap(gl, wd, u, u + 1) < NOJOIN) {
+                    u += 1;
+                }
+                t = u;
+                nseg += 1;
+            } else {
+                more = 0;
+            }
+        }
+        if (nseg > 1) && ((t - s) <= MERGE_MAX) {
+            done += pc_merge_span(gl, wd, s, t);
+        }
+        s = t + 1;
+    }
+    return done;
+}
 pub fn pc_group(mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, page: i32, g0: i32, w0: i32) -> i32 {
     // Group the glyphs from g0 on into words, and the words from w0 on into lines.
     let g1: i32 = gl_count(gl);
@@ -4270,43 +4454,17 @@ pub fn pc_group(mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells
     let mut y0: i32 = 0;
     let mut x1: i32 = 0;
     let mut y1: i32 = 0;
-    let mut gf0: i32 = 0;
     let mut gfp: i32 = 0;
-    let mut glast: i32 = 0;
-    let mut axis: i32 = 0;
     let mut joins: i32 = 0;
     let mut gap: i32 = 0;
-    let mut sz: i32 = 0;
     let mut ord: i32 = 0;
-    let mut off: i32 = 0;
+    pc_merge_lines(gl, wd, w0);
     while j <= nw {
         joins = 0;
         if (j < nw) && (prev >= 0) {
-            gf0 = wd_get(wd, j, wf_gfirst());
-            gfp = wd_get(wd, prev, wf_gfirst());
-            axis = pc_axis(gl_get(gl, gfp, gf_rot()));
-            if pc_rot_same(gl_get(gl, gfp, gf_rot()), gl_get(gl, gf0, gf_rot())) == 1 {
-                sz = gl_get(gl, gf0, gf_size());
-                if gl_get(gl, gfp, gf_size()) > sz {
-                    sz = gl_get(gl, gfp, gf_size());
-                }
-                if sz > 200000 {
-                    sz = 200000;
-                }
-                if sz < (0 - 200000) {
-                    sz = 0 - 200000;
-                }
-                glast = (wd_get(wd, prev, wf_gfirst()) + wd_get(wd, prev, wf_gcount())) - 1;
-                off = pc_cl(pc_pair_off(gl, glast, gf0, axis));
-                // The gap is between the previous word's LAST glyph and this word's first.
-                gap = pc_cl(pc_pair_gap(gl, glast, gf0, axis, sz));
-                if (off * 1000) <= (sz * OFFSET_PM) {
-                    if (gap * 1000) >= (0 - (sz * LINE_BACK_PM)) {
-                        if (gap * 1000) <= (sz * LINE_GAP_PM) {
-                            joins = 1;
-                        }
-                    }
-                }
+            gap = pc_join_gap(gl, wd, prev, j);
+            if gap < NOJOIN {
+                joins = 1;
             }
         }
         if joins == 1 {
@@ -4336,7 +4494,6 @@ pub fn pc_group(mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells
                     lnx += 1;
                 }
                 gfp = wd_get(wd, lfirst, wf_gfirst());
-                axis = pc_axis(gl_get(gl, gfp, gf_rot()));
                 ord = wd_get(wd, lfirst, wf_gfirst());
                 lnx = lfirst;
                 while lnx <= prev {

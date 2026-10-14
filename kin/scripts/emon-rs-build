@@ -132,7 +132,7 @@ if [ -n "$cli_mode" ]; then
   # pdfium is loaded by path at run time, not linked; the deployment target is the one `bb native` built the libraries for
   flags="$flags --cfg pdfium --cfg pdfium_dl"
   export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-12.0}"
-  # Windows (D1580): the C runtime is linked statically (/MT), as `bb native` builds the C and C++ libraries, so emon.exe needs no VC++ redistributable
+  # Windows (D558): the C runtime is linked statically (/MT), as `bb native` builds the C and C++ libraries, so emon.exe needs no VC++ redistributable
   case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) flags="$flags -C target-feature=+crt-static" ;; esac
 fi
 if [ -n "$pdfium_lib" ]; then

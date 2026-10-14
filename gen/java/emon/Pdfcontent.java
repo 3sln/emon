@@ -4221,6 +4221,190 @@ public final class Pdfcontent {
         }
         return 0;
     }
+    public static final int NOJOIN = 2000000;
+    public static final int MERGE_MAX = 256;
+    public static int pcSameBase(emon.Port.Cells gl, emon.Port.Cells wd, int p, int j) {
+        // 1 when word j is on word p's baseline: the same rotation, and the offset across the writing axis, from p's last glyph to j's
+        // first, within `OFFSET_PM` of the larger size.
+        int gfp = Evidence.wdGet(wd, p, Evidence.wfGfirst());
+        int gf0 = Evidence.wdGet(wd, j, Evidence.wfGfirst());
+        int axis = pcAxis(Evidence.glGet(gl, gfp, Evidence.gfRot()));
+        int sz = Evidence.glGet(gl, gf0, Evidence.gfSize());
+        int glast = (gfp + Evidence.wdGet(wd, p, Evidence.wfGcount())) - 1;
+        if (pcRotSame(Evidence.glGet(gl, gfp, Evidence.gfRot()), Evidence.glGet(gl, gf0, Evidence.gfRot())) == 0) {
+            return 0;
+        }
+        if (Evidence.glGet(gl, gfp, Evidence.gfSize()) > sz) {
+            sz = Evidence.glGet(gl, gfp, Evidence.gfSize());
+        }
+        if (sz > 200000) {
+            sz = 200000;
+        }
+        if (sz < (0 - 200000)) {
+            sz = 0 - 200000;
+        }
+        if ((pcCl(pcPairOff(gl, glast, gf0, axis)) * 1000) <= (sz * OFFSET_PM)) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int pcJoinGap(emon.Port.Cells gl, emon.Port.Cells wd, int p, int j) {
+        // The rule that puts word j on word p's line: the same rotation and baseline (`pc-same-base`), and a gap from p's LAST glyph to j's
+        // first that is at most `LINE_GAP_PM` of the larger size and at most `LINE_BACK_PM` back. Answers the gap, or `NOJOIN`.
+        int gfp = Evidence.wdGet(wd, p, Evidence.wfGfirst());
+        int gf0 = Evidence.wdGet(wd, j, Evidence.wfGfirst());
+        int axis = pcAxis(Evidence.glGet(gl, gfp, Evidence.gfRot()));
+        int sz = Evidence.glGet(gl, gf0, Evidence.gfSize());
+        int gap = 0;
+        int glast = (gfp + Evidence.wdGet(wd, p, Evidence.wfGcount())) - 1;
+        if (pcSameBase(gl, wd, p, j) == 0) {
+            return NOJOIN;
+        }
+        if (Evidence.glGet(gl, gfp, Evidence.gfSize()) > sz) {
+            sz = Evidence.glGet(gl, gfp, Evidence.gfSize());
+        }
+        if (sz > 200000) {
+            sz = 200000;
+        }
+        if (sz < (0 - 200000)) {
+            sz = 0 - 200000;
+        }
+        // The gap is between the previous word's LAST glyph and this word's first.
+        gap = pcCl(pcPairGap(gl, glast, gf0, axis, sz));
+        if ((gap * 1000) < (0 - (sz * LINE_BACK_PM))) {
+            return NOJOIN;
+        }
+        if ((gap * 1000) > (sz * LINE_GAP_PM)) {
+            return NOJOIN;
+        }
+        return gap;
+    }
+    public static int pcMergeSpan(emon.Port.Cells gl, emon.Port.Cells wd, int s, int t) {
+        // Words [s, t] are runs of the stream on one baseline that are not in order along it. When every one is horizontal, of one visibility
+        // and has no right-to-left letter, and each word, taken in order of x, joins the one after it by `pc-join-gap`, they are put in that
+        // order (a stable insertion sort of the word rows; the glyphs are pointed at their word again) and are one line to the loop that
+        // follows. Otherwise nothing moves. Answers 1 when the words were put in order.
+        int g0 = Evidence.wdGet(wd, s, Evidence.wfGfirst());
+        int i = s;
+        int j = 0;
+        int k = 0;
+        int best = 0;
+        int asc = 1;
+        int gi = 0;
+        i = s + 1;
+        while (i <= t) {
+            if (Evidence.wdGet(wd, i, Evidence.hdX0()) < Evidence.wdGet(wd, i - 1, Evidence.hdX0())) {
+                asc = 0;
+            }
+            i += 1;
+        }
+        if (asc == 1) {
+            return 0;
+        }
+        i = s;
+        while (i <= t) {
+            gi = Evidence.wdGet(wd, i, Evidence.wfGfirst());
+            if (pcAxis(Evidence.glGet(gl, gi, Evidence.gfRot())) != 0) {
+                return 0;
+            }
+            if (Evidence.glGet(gl, gi, Evidence.gfVis()) != Evidence.glGet(gl, g0, Evidence.gfVis())) {
+                return 0;
+            }
+            if (pcHiddenMode(Evidence.glGet(gl, gi, Evidence.gfMode())) != pcHiddenMode(Evidence.glGet(gl, g0, Evidence.gfMode()))) {
+                return 0;
+            }
+            if (Evidence.wdGet(wd, i, Evidence.hdDir()) == Evidence.ldRtl()) {
+                return 0;
+            }
+            if (pcWcls(gl, wd, i) == 1) {
+                return 0;
+            }
+            i += 1;
+        }
+        // Each word's successor in order of x (ties by place in the stream): it must continue the word.
+        i = s;
+        while (i <= t) {
+            best = -1;
+            j = s;
+            while (j <= t) {
+                if ((Evidence.wdGet(wd, j, Evidence.hdX0()) > Evidence.wdGet(wd, i, Evidence.hdX0())) || ((Evidence.wdGet(wd, j, Evidence.hdX0()) == Evidence.wdGet(wd, i, Evidence.hdX0())) && (j > i))) {
+                    if (best < 0) {
+                        best = j;
+                    } else if (Evidence.wdGet(wd, j, Evidence.hdX0()) < Evidence.wdGet(wd, best, Evidence.hdX0())) {
+                        best = j;
+                    }
+                }
+                j += 1;
+            }
+            if (best >= 0) {
+                if (pcJoinGap(gl, wd, i, best) >= NOJOIN) {
+                    return 0;
+                }
+            }
+            i += 1;
+        }
+        i = s + 1;
+        while (i <= t) {
+            j = i;
+            while ((j > s) && (Evidence.wdGet(wd, j - 1, Evidence.hdX0()) > Evidence.wdGet(wd, j, Evidence.hdX0()))) {
+                pcSwapRows(wd, j - 1, j);
+                j -= 1;
+            }
+            i += 1;
+        }
+        i = s;
+        while (i <= t) {
+            gi = Evidence.wdGet(wd, i, Evidence.wfGfirst());
+            k = 0;
+            while (k < Evidence.wdGet(wd, i, Evidence.wfGcount())) {
+                Evidence.glSet(gl, gi + k, Evidence.chWord(), i);
+                k += 1;
+            }
+            if ((i < t) && (Evidence.wdGet(wd, i, Evidence.wfWbreak()) == Evidence.wbLineEnd())) {
+                Evidence.wdSet(wd, i, Evidence.wfWbreak(), Evidence.wbGap());
+            }
+            i += 1;
+        }
+        return 1;
+    }
+    public static int pcMergeLines(emon.Port.Cells gl, emon.Port.Cells wd, int w0) {
+        // The words from w0 on, before they are cut into lines: where consecutive runs of the stream (each a stretch of words that
+        // `pc-join-gap` joins) are on one baseline, they are one candidate (at most `MERGE_MAX` words) and `pc-merge-span` puts them in
+        // order along it if they make one line. A run that is already in order along the baseline is left alone (a wide gap in it ends the line, as
+        // ever: a column gutter or a table cell). Answers the spans put in order.
+        int nw = Evidence.wdCount(wd);
+        int s = w0;
+        int t = 0;
+        int u = 0;
+        int nseg = 0;
+        int more = 0;
+        int done = 0;
+        while (s < nw) {
+            t = s;
+            while (((t + 1) < nw) && (pcJoinGap(gl, wd, t, t + 1) < NOJOIN)) {
+                t += 1;
+            }
+            nseg = 1;
+            more = 1;
+            while ((more == 1) && (((t + 1) < nw) && ((t - s) < MERGE_MAX))) {
+                if (pcSameBase(gl, wd, t, t + 1) == 1) {
+                    u = t + 1;
+                    while (((u + 1) < nw) && (pcJoinGap(gl, wd, u, u + 1) < NOJOIN)) {
+                        u += 1;
+                    }
+                    t = u;
+                    nseg += 1;
+                } else {
+                    more = 0;
+                }
+            }
+            if ((nseg > 1) && ((t - s) <= MERGE_MAX)) {
+                done += pcMergeSpan(gl, wd, s, t);
+            }
+            s = t + 1;
+        }
+        return done;
+    }
     public static int pcGroup(emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells fnt, int page, int g0, int w0) {
         // Group the glyphs from g0 on into words, and the words from w0 on into lines.
         int g1 = Evidence.glCount(gl);
@@ -4259,43 +4443,17 @@ public final class Pdfcontent {
         int y0 = 0;
         int x1 = 0;
         int y1 = 0;
-        int gf0 = 0;
         int gfp = 0;
-        int glast = 0;
-        int axis = 0;
         int joins = 0;
         int gap = 0;
-        int sz = 0;
         int ord = 0;
-        int off = 0;
+        pcMergeLines(gl, wd, w0);
         while (j <= nw) {
             joins = 0;
             if ((j < nw) && (prev >= 0)) {
-                gf0 = Evidence.wdGet(wd, j, Evidence.wfGfirst());
-                gfp = Evidence.wdGet(wd, prev, Evidence.wfGfirst());
-                axis = pcAxis(Evidence.glGet(gl, gfp, Evidence.gfRot()));
-                if (pcRotSame(Evidence.glGet(gl, gfp, Evidence.gfRot()), Evidence.glGet(gl, gf0, Evidence.gfRot())) == 1) {
-                    sz = Evidence.glGet(gl, gf0, Evidence.gfSize());
-                    if (Evidence.glGet(gl, gfp, Evidence.gfSize()) > sz) {
-                        sz = Evidence.glGet(gl, gfp, Evidence.gfSize());
-                    }
-                    if (sz > 200000) {
-                        sz = 200000;
-                    }
-                    if (sz < (0 - 200000)) {
-                        sz = 0 - 200000;
-                    }
-                    glast = (Evidence.wdGet(wd, prev, Evidence.wfGfirst()) + Evidence.wdGet(wd, prev, Evidence.wfGcount())) - 1;
-                    off = pcCl(pcPairOff(gl, glast, gf0, axis));
-                    // The gap is between the previous word's LAST glyph and this word's first.
-                    gap = pcCl(pcPairGap(gl, glast, gf0, axis, sz));
-                    if ((off * 1000) <= (sz * OFFSET_PM)) {
-                        if ((gap * 1000) >= (0 - (sz * LINE_BACK_PM))) {
-                            if ((gap * 1000) <= (sz * LINE_GAP_PM)) {
-                                joins = 1;
-                            }
-                        }
-                    }
+                gap = pcJoinGap(gl, wd, prev, j);
+                if (gap < NOJOIN) {
+                    joins = 1;
                 }
             }
             if (joins == 1) {
@@ -4325,7 +4483,6 @@ public final class Pdfcontent {
                         lnx += 1;
                     }
                     gfp = Evidence.wdGet(wd, lfirst, Evidence.wfGfirst());
-                    axis = pcAxis(Evidence.glGet(gl, gfp, Evidence.gfRot()));
                     ord = Evidence.wdGet(wd, lfirst, Evidence.wfGfirst());
                     lnx = lfirst;
                     while (lnx <= prev) {

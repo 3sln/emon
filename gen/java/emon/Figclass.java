@@ -13,6 +13,7 @@ public final class Figclass {
     public static final int FC_SMALL = 15000;
     public static final int FC_BAND = 200;
     public static final int FC_EMIT = 500;
+    public static final int FC_HELD = 1073741824;
     public static final int FC_CAPGAP = 4000;
     public static final int FI_STRIDE = 12;
     public static final int FC_DIGEST_N = 4096;
@@ -1451,6 +1452,34 @@ public final class Figclass {
         }
         return 0;
     }
+    public static int fcClaimed(emon.Port.Cells fl, int page, int x0, int y0, int x1, int y1) {
+        // 1 when a table has claimed the text of the region (D1570): of the lines on the page whose centre is in it, at least one and at least
+        // half are a table's (cell 15 of a line a table holds is `FC_HELD` and up, `emon.table`'s TB_HELD). A shaded header cell with its words and
+        // a rule under it, or a table's fills and rules, look like a diagram's boxes and a connector; the words are the table's, and so is the drawing.
+        int n = Evidence.lnCount(fl);
+        int l = 0;
+        int total = 0;
+        int held = 0;
+        int cx = 0;
+        int cy = 0;
+        while (l < n) {
+            if (Evidence.lnGet(fl, l, Evidence.lhPage()) == page) {
+                cx = (Evidence.lnGet(fl, l, Evidence.lhX0()) + Evidence.lnGet(fl, l, Evidence.lhX1())) / 2;
+                cy = (Evidence.lnGet(fl, l, Evidence.lhY0()) + Evidence.lnGet(fl, l, Evidence.lhY1())) / 2;
+                if ((cx >= x0) && ((cx <= x1) && ((cy >= y0) && (cy <= y1)))) {
+                    total += 1;
+                    if (Evidence.lnGet(fl, l, 15) >= FC_HELD) {
+                        held += 1;
+                    }
+                }
+            }
+            l += 1;
+        }
+        if ((held > 0) && ((held * 2) >= total)) {
+            return 1;
+        }
+        return 0;
+    }
     public static int fcStage(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells fnodes, emon.Port.Cells fattrs, emon.Port.Cells fregions, emon.Port.Cells fnm, emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells fi, emon.Port.Cells grg, emon.Port.Cells grl, emon.Port.Cells fw, emon.Port.Cells fl, emon.Port.Cells et, emon.Port.Cells pg, emon.Port.Cells sl, emon.Port.Cells cand, int level, emon.Port.Cells fcand, emon.Port.Cells cl, emon.Port.Cells fg, emon.Port.Cells fd, emon.Port.Cells ab, emon.Port.Cells ws) {
         // THE FIGURES (SPEC 10.6): the candidate regions (the image placements, the vector clusters of `emon.asset`, the shaded fills, P7.G's
         // `figure` regions), each measured and judged, the ones that are figures placed among the blocks with their kind, confidence
@@ -1525,6 +1554,11 @@ public final class Figclass {
             }
             if (fcSignatureOver(sl, page, x0, y0, x1, y1) == 1) {
                 rej = 1;
+            }
+            if (emon.Port.cellsAt(fcand, b + CR_KORI) == -2) {
+                if (fcClaimed(fl, page, x0, y0, x1, y1) == 1) {
+                    rej = 1;
+                }
             }
             if (emon.Port.cellsAt(fcand, b + CR_KORI) == -1) {
                 pk = fcImageKind(fi, emon.Port.cellsAt(fcand, b + CR_ROW), x1 - x0, y1 - y0, y0, y1, pageh, recur);

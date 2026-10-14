@@ -352,6 +352,73 @@ public final class Figclasstest {
         emon.Testport.assertEq(Model.nodeKind(nn, 3), Model.nkFigure(), "the figure is just before its caption, after the paragraph that is lower on the page");
         emon.Testport.assertEq(Model.nodeKind(nn, 4), Model.nkCaption(), "and the caption follows it");
     }
+    public static int ftHeldLine(emon.Port.Cells fl, int y0, int held) {
+        // A line of the text layer at x 12000..20000, 600 tall from y0, on page 1; `held` 1 when a table has claimed it (cell 15 is TB_HELD + 0).
+        int r = emon.Port.cellsLen(fl) / 16;
+        ftLine(fl, 1, 12000, y0, 20000, y0 + 600, 1);
+        if (held == 1) {
+            emon.Port.cellsSet(fl, (r * 16) + 15, 1073741824);
+        }
+        return 0;
+    }
+    public static int ftFigures(int held, int free) {
+        // The figures stage over a page that has a region the graphics layer calls a figure (10000 10000 30000 30000, no paths, no images) with a
+        // caption just under it and `held` lines of the text layer in it that a table has claimed and `free` that it has not. Answers how many figures.
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells grg = emon.Port.newCells();
+        emon.Port.Cells fnodes = emon.Port.newCells();
+        emon.Port.Cells fattrs = emon.Port.newCells();
+        emon.Port.Cells fregions = emon.Port.newCells();
+        emon.Port.Cells fnm = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells im = emon.Port.newCells();
+        emon.Port.Cells fi = emon.Port.newCells();
+        emon.Port.Cells grl = emon.Port.newCells();
+        emon.Port.Cells fw = emon.Port.newCells();
+        emon.Port.Cells fl = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pg = emon.Port.newCells();
+        emon.Port.Cells sl = emon.Port.newCells();
+        emon.Port.Cells cand = emon.Port.newCells();
+        emon.Port.Cells fcand = emon.Port.newCells();
+        emon.Port.Cells cl = emon.Port.newCells();
+        emon.Port.Cells fg = emon.Port.newCells();
+        emon.Port.Cells fd = emon.Port.newCells();
+        emon.Port.Cells ab = emon.Port.newCells();
+        emon.Port.Cells ws = emon.Port.newCells();
+        int c = 0;
+        int i = 0;
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Model.pageNew(pages, 1, 61200, 79200, 0, Model.pkVector());
+        Glayer.grgNew(grg, 1, 10000, 10000, 30000, 30000, Glayer.rkFigure());
+        c = ftPara(nodes, regions, text, Model.nkCaption(), 20, 10000, 30500, 30000, 31500);
+        Model.nodeSetAux(nodes, c, 1);
+        while (i < held) {
+            ftHeldLine(fl, 11000 + (1500 * i), 1);
+            i += 1;
+        }
+        i = 0;
+        while (i < free) {
+            ftHeldLine(fl, 21000 + (1500 * i), 0);
+            i += 1;
+        }
+        return Figclass.fcStage(nodes, attrs, regions, text, pages, fnodes, fattrs, fregions, fnm, pa, im, fi, grg, grl, fw, fl, et, pg, sl, cand, 0, fcand, cl, fg, fd, ab, ws);
+    }
+    public static void testARegionWhoseTextATableHasClaimedIsNoFigure() {
+        // A region the graphics layer calls a figure, with a caption just under it, is a figure; so is one with a few lines of text that no table holds.
+        emon.Testport.assertEq(ftFigures(0, 0), 1, "with no text in it the region is a figure");
+        emon.Testport.assertEq(ftFigures(0, 3), 1, "with three lines no table holds it is a figure");
+        // The shaded header cell with its words and the rule under it (D1560): the table the lines went to, the drawing is its own.
+        emon.Testport.assertEq(ftFigures(3, 1), 0, "three lines of four are a table's: no figure");
+        emon.Testport.assertEq(ftFigures(2, 2), 0, "half of them are a table's: no figure");
+        emon.Testport.assertEq(ftFigures(1, 3), 1, "one of four is a table's: the region is still a figure");
+    }
     public static int ftFiAdd(emon.Port.Cells fi, int w, int h, int d1, int d2) {
         // A row of `fi` for a flat raster of w x h pixels whose stream has the digest d1 d2 (stride 12).
         emon.Port.cellsPush(fi, 1);

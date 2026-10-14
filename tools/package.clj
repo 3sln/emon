@@ -507,7 +507,7 @@
           ;; each static library once whatever the dependencies say, so it is built the way the CLI is (RUSTFLAGS, D541) into a target directory of its own.
           (let [full? (not (:why inputs))
                 env (when full? {"MACOSX_DEPLOYMENT_TARGET" (or (System/getenv "MACOSX_DEPLOYMENT_TARGET") "12.0")})
-                ;; Windows (D1580): the C runtime is linked statically (/MT), as `bb native` builds the C and C++ libraries: no VC++ redistributable
+                ;; Windows (D558): the C runtime is linked statically (/MT), as `bb native` builds the C and C++ libraries: no VC++ redistributable
                 crt (when (str/includes? (host-triple) "windows-msvc") ["-C" "target-feature=+crt-static"])
                 flags (when full? (concat ["--cfg" "pdfium" "--cfg" "pdfium_dl"] crt (str/split (str/trim (slurp (str (:prefix inputs) "/link.rustflags"))) #"\s+")))
                 ;; cargo's own flags, then (after `--`) rustc's; offline first, the registry only when a crate is not cached

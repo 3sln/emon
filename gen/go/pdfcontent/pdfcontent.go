@@ -4569,6 +4569,196 @@ func pcLineBidi(gl *port.Cells, et *port.Cells, wd *port.Cells, ln *port.Cells, 
 	return 0
 }
 
+const nojoin int32 = 2000000
+
+const mergeMax int32 = 256
+
+func pcSameBase(gl *port.Cells, wd *port.Cells, p int32, j int32) int32 {
+	// 1 when word j is on word p's baseline: the same rotation, and the offset across the writing axis, from p's last glyph to j's
+	// first, within `OFFSET_PM` of the larger size.
+	var gfp int32 = evidence.WdGet(wd, p, evidence.WfGfirst())
+	var gf0 int32 = evidence.WdGet(wd, j, evidence.WfGfirst())
+	var axis int32 = pcAxis(evidence.GlGet(gl, gfp, evidence.GfRot()))
+	var sz int32 = evidence.GlGet(gl, gf0, evidence.GfSize())
+	var glast int32 = (gfp + evidence.WdGet(wd, p, evidence.WfGcount())) - 1
+	if pcRotSame(evidence.GlGet(gl, gfp, evidence.GfRot()), evidence.GlGet(gl, gf0, evidence.GfRot())) == 0 {
+		return 0
+	}
+	if evidence.GlGet(gl, gfp, evidence.GfSize()) > sz {
+		sz = evidence.GlGet(gl, gfp, evidence.GfSize())
+	}
+	if sz > 200000 {
+		sz = 200000
+	}
+	if sz < (0 - 200000) {
+		sz = 0 - 200000
+	}
+	if (pcCl(pcPairOff(gl, glast, gf0, axis)) * 1000) <= (sz * offsetPm) {
+		return 1
+	}
+	return 0
+}
+
+func pcJoinGap(gl *port.Cells, wd *port.Cells, p int32, j int32) int32 {
+	// The rule that puts word j on word p's line: the same rotation and baseline (`pc-same-base`), and a gap from p's LAST glyph to j's
+	// first that is at most `LINE_GAP_PM` of the larger size and at most `LINE_BACK_PM` back. Answers the gap, or `NOJOIN`.
+	var gfp int32 = evidence.WdGet(wd, p, evidence.WfGfirst())
+	var gf0 int32 = evidence.WdGet(wd, j, evidence.WfGfirst())
+	var axis int32 = pcAxis(evidence.GlGet(gl, gfp, evidence.GfRot()))
+	var sz int32 = evidence.GlGet(gl, gf0, evidence.GfSize())
+	var gap int32 = 0
+	var glast int32 = (gfp + evidence.WdGet(wd, p, evidence.WfGcount())) - 1
+	if pcSameBase(gl, wd, p, j) == 0 {
+		return nojoin
+	}
+	if evidence.GlGet(gl, gfp, evidence.GfSize()) > sz {
+		sz = evidence.GlGet(gl, gfp, evidence.GfSize())
+	}
+	if sz > 200000 {
+		sz = 200000
+	}
+	if sz < (0 - 200000) {
+		sz = 0 - 200000
+	}
+	// The gap is between the previous word's LAST glyph and this word's first.
+	gap = pcCl(pcPairGap(gl, glast, gf0, axis, sz))
+	if (gap * 1000) < (0 - (sz * lineBackPm)) {
+		return nojoin
+	}
+	if (gap * 1000) > (sz * lineGapPm) {
+		return nojoin
+	}
+	return gap
+}
+
+func pcMergeSpan(gl *port.Cells, wd *port.Cells, s int32, t int32) int32 {
+	// Words [s, t] are runs of the stream on one baseline that are not in order along it. When every one is horizontal, of one visibility
+	// and has no right-to-left letter, and each word, taken in order of x, joins the one after it by `pc-join-gap`, they are put in that
+	// order (a stable insertion sort of the word rows; the glyphs are pointed at their word again) and are one line to the loop that
+	// follows. Otherwise nothing moves. Answers 1 when the words were put in order.
+	var g0 int32 = evidence.WdGet(wd, s, evidence.WfGfirst())
+	var i int32 = s
+	var j int32 = 0
+	var k int32 = 0
+	var best int32 = 0
+	var asc int32 = 1
+	var gi int32 = 0
+	i = s + 1
+	for i <= t {
+		if evidence.WdGet(wd, i, evidence.HdX0()) < evidence.WdGet(wd, i-1, evidence.HdX0()) {
+			asc = 0
+		}
+		i += 1
+	}
+	if asc == 1 {
+		return 0
+	}
+	i = s
+	for i <= t {
+		gi = evidence.WdGet(wd, i, evidence.WfGfirst())
+		if pcAxis(evidence.GlGet(gl, gi, evidence.GfRot())) != 0 {
+			return 0
+		}
+		if evidence.GlGet(gl, gi, evidence.GfVis()) != evidence.GlGet(gl, g0, evidence.GfVis()) {
+			return 0
+		}
+		if pcHiddenMode(evidence.GlGet(gl, gi, evidence.GfMode())) != pcHiddenMode(evidence.GlGet(gl, g0, evidence.GfMode())) {
+			return 0
+		}
+		if evidence.WdGet(wd, i, evidence.HdDir()) == evidence.LdRtl() {
+			return 0
+		}
+		if pcWcls(gl, wd, i) == 1 {
+			return 0
+		}
+		i += 1
+	}
+	// Each word's successor in order of x (ties by place in the stream): it must continue the word.
+	i = s
+	for i <= t {
+		best = -1
+		j = s
+		for j <= t {
+			if (evidence.WdGet(wd, j, evidence.HdX0()) > evidence.WdGet(wd, i, evidence.HdX0())) || ((evidence.WdGet(wd, j, evidence.HdX0()) == evidence.WdGet(wd, i, evidence.HdX0())) && (j > i)) {
+				if best < 0 {
+					best = j
+				} else if evidence.WdGet(wd, j, evidence.HdX0()) < evidence.WdGet(wd, best, evidence.HdX0()) {
+					best = j
+				}
+			}
+			j += 1
+		}
+		if best >= 0 {
+			if pcJoinGap(gl, wd, i, best) >= nojoin {
+				return 0
+			}
+		}
+		i += 1
+	}
+	i = s + 1
+	for i <= t {
+		j = i
+		for (j > s) && (evidence.WdGet(wd, j-1, evidence.HdX0()) > evidence.WdGet(wd, j, evidence.HdX0())) {
+			pcSwapRows(wd, j-1, j)
+			j -= 1
+		}
+		i += 1
+	}
+	i = s
+	for i <= t {
+		gi = evidence.WdGet(wd, i, evidence.WfGfirst())
+		k = 0
+		for k < evidence.WdGet(wd, i, evidence.WfGcount()) {
+			evidence.GlSet(gl, gi+k, evidence.ChWord(), i)
+			k += 1
+		}
+		if (i < t) && (evidence.WdGet(wd, i, evidence.WfWbreak()) == evidence.WbLineEnd()) {
+			evidence.WdSet(wd, i, evidence.WfWbreak(), evidence.WbGap())
+		}
+		i += 1
+	}
+	return 1
+}
+
+func pcMergeLines(gl *port.Cells, wd *port.Cells, w0 int32) int32 {
+	// The words from w0 on, before they are cut into lines: where consecutive runs of the stream (each a stretch of words that
+	// `pc-join-gap` joins) are on one baseline, they are one candidate (at most `MERGE_MAX` words) and `pc-merge-span` puts them in
+	// order along it if they make one line. A run that is already in order along the baseline is left alone (a wide gap in it ends the line, as
+	// ever: a column gutter or a table cell). Answers the spans put in order.
+	var nw int32 = evidence.WdCount(wd)
+	var s int32 = w0
+	var t int32 = 0
+	var u int32 = 0
+	var nseg int32 = 0
+	var more int32 = 0
+	var done int32 = 0
+	for s < nw {
+		t = s
+		for ((t + 1) < nw) && (pcJoinGap(gl, wd, t, t+1) < nojoin) {
+			t += 1
+		}
+		nseg = 1
+		more = 1
+		for (more == 1) && (((t + 1) < nw) && ((t - s) < mergeMax)) {
+			if pcSameBase(gl, wd, t, t+1) == 1 {
+				u = t + 1
+				for ((u + 1) < nw) && (pcJoinGap(gl, wd, u, u+1) < nojoin) {
+					u += 1
+				}
+				t = u
+				nseg += 1
+			} else {
+				more = 0
+			}
+		}
+		if (nseg > 1) && ((t - s) <= mergeMax) {
+			done += pcMergeSpan(gl, wd, s, t)
+		}
+		s = t + 1
+	}
+	return done
+}
+
 func PcGroup(gl *port.Cells, et *port.Cells, wd *port.Cells, ln *port.Cells, fnt *port.Cells, page int32, g0 int32, w0 int32) int32 {
 	// Group the glyphs from g0 on into words, and the words from w0 on into lines.
 	var g1 int32 = evidence.GlCount(gl)
@@ -4607,43 +4797,17 @@ func PcGroup(gl *port.Cells, et *port.Cells, wd *port.Cells, ln *port.Cells, fnt
 	var y0 int32 = 0
 	var x1 int32 = 0
 	var y1 int32 = 0
-	var gf0 int32 = 0
 	var gfp int32 = 0
-	var glast int32 = 0
-	var axis int32 = 0
 	var joins int32 = 0
 	var gap int32 = 0
-	var sz int32 = 0
 	var ord int32 = 0
-	var off int32 = 0
+	pcMergeLines(gl, wd, w0)
 	for j <= nw {
 		joins = 0
 		if (j < nw) && (prev >= 0) {
-			gf0 = evidence.WdGet(wd, j, evidence.WfGfirst())
-			gfp = evidence.WdGet(wd, prev, evidence.WfGfirst())
-			axis = pcAxis(evidence.GlGet(gl, gfp, evidence.GfRot()))
-			if pcRotSame(evidence.GlGet(gl, gfp, evidence.GfRot()), evidence.GlGet(gl, gf0, evidence.GfRot())) == 1 {
-				sz = evidence.GlGet(gl, gf0, evidence.GfSize())
-				if evidence.GlGet(gl, gfp, evidence.GfSize()) > sz {
-					sz = evidence.GlGet(gl, gfp, evidence.GfSize())
-				}
-				if sz > 200000 {
-					sz = 200000
-				}
-				if sz < (0 - 200000) {
-					sz = 0 - 200000
-				}
-				glast = (evidence.WdGet(wd, prev, evidence.WfGfirst()) + evidence.WdGet(wd, prev, evidence.WfGcount())) - 1
-				off = pcCl(pcPairOff(gl, glast, gf0, axis))
-				// The gap is between the previous word's LAST glyph and this word's first.
-				gap = pcCl(pcPairGap(gl, glast, gf0, axis, sz))
-				if (off * 1000) <= (sz * offsetPm) {
-					if (gap * 1000) >= (0 - (sz * lineBackPm)) {
-						if (gap * 1000) <= (sz * lineGapPm) {
-							joins = 1
-						}
-					}
-				}
+			gap = pcJoinGap(gl, wd, prev, j)
+			if gap < nojoin {
+				joins = 1
 			}
 		}
 		if joins == 1 {
@@ -4673,7 +4837,6 @@ func PcGroup(gl *port.Cells, et *port.Cells, wd *port.Cells, ln *port.Cells, fnt
 					lnx += 1
 				}
 				gfp = evidence.WdGet(wd, lfirst, evidence.WfGfirst())
-				axis = pcAxis(evidence.GlGet(gl, gfp, evidence.GfRot()))
 				ord = evidence.WdGet(wd, lfirst, evidence.WfGfirst())
 				lnx = lfirst
 				for lnx <= prev {

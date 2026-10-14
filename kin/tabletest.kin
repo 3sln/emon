@@ -582,6 +582,103 @@
     (assert-text t "P[The table below was extracted from the ledger and the figures are totals for the quarter of the year as the office has recorded them and as the auditors have since confirmed.];N;P[see the Note];P[Item];P[Qty];T3r;Gb;R;C[Bolt];C[10];Cs[up];R;C[Nut];C[12];Cs[flat];"
                  "the lines the table does not hold are a note and the ones it holds stay in the table (D504)")))
 
+;; ------------------------- a statement whose rows are ruled in part, with styled headers (D557)
+
+(defn ^I32 tt-bank-rules [^:mut ^Cells pa ^I32 rows]
+  (comment "The row borders of a statement, drawn as the HTML-to-PDF producers do: under the first three cells of each row only (the date, the")
+  (comment "description and the category: three abutting segments from x 5910 to 38670), the first at y 21345 and one every 2025 below it, and")
+  (comment "two vertical rules in the header's band only (x 38707 and 46342), the amount cell's borders. Nothing is ruled under the last two.")
+  (let [^:mut ^I32 r 0
+        ^:mut ^I32 y 21345]
+    (while (<= r rows)
+      (do (tt-rule pa 5910 (- y 38) 9150 (+ y 38))
+          (tt-rule pa 9150 (- y 38) 32910 (+ y 38))
+          (tt-rule pa 32910 (- y 38) 38670 (+ y 38))
+          (set y (+ y 2025))
+          (set r (+ r 1))))
+    (tt-rule pa 38669 19455 38745 21308)
+    (tt-rule pa 46304 19455 46380 21308)
+    (return 0)))
+
+(defn ^I32 tt-sized [^:mut ^Cells wd ^I32 size]
+  (comment "Give the word just added the type size `size`.")
+  (let [^I32 last (- (wd-count wd) 1)]
+    (wd-set wd last (wf-size) size)
+    (return 0)))
+
+(defn ^I32 tt-bank-row [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^I32 y ^I32 bold ^I32 size ^Blob d ^Blob desc ^Blob cat ^Blob amt ^Blob bal]
+  (comment "One row of the statement at y, in type of `size`: date and description at the left (bold when `bold`), the category left of x 38000,")
+  (comment "the amount right-aligned to 45221 and the balance to 55379; a blank blob leaves the cell out.")
+  (if (> (blob-len d) 0) (do (tt-at wd ln et d 5910 y bold 0) (tt-sized wd size)))
+  (if (> (blob-len desc) 0) (do (tt-at wd ln et desc 10230 y bold 0) (tt-sized wd size)))
+  (if (> (blob-len cat) 0) (do (tt-at wd ln et cat 35689 y 0 0) (tt-sized wd size)))
+  (if (> (blob-len amt) 0) (do (tt-at wd ln et amt 45221 y 0 1) (tt-sized wd size)))
+  (if (> (blob-len bal) 0) (do (tt-at wd ln et bal 55379 y bold 1) (tt-sized wd size)))
+  (return 0))
+
+(defn ^I32 tt-bank-page [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^:mut ^Cells pa ^I32 header]
+  (comment "A statement: a small header row (not bold, 700 against the body's 800, a pitch of more than 2.4 sizes above the first row) above the")
+  (comment "first rule when `header` is 1, a bold opening row, three transactions and a closing row, ruled as `tt-bank-rules` says.")
+  (tt-bank-rules pa 5)
+  (if (== header 1)
+    (tt-bank-row wd ln et 19700 0 700 (text-blob "DATE") (text-blob "DESCRIPTION") (text-blob "CATEGORY") (text-blob "AMOUNT") (text-blob "BALANCE")))
+  (tt-bank-row wd ln et 21745 1 800 (text-blob "Sep 1") (text-blob "Opening Balance") (text-blob "") (text-blob "") (text-blob "$10,989.78"))
+  (tt-bank-row wd ln et 23770 0 800 (text-blob "Sep 2") (text-blob "Withdrawal CAPITAL ONE") (text-blob "Debit") (text-blob "- $803.85") (text-blob "$10,185.93"))
+  (tt-bank-row wd ln et 25795 0 800 (text-blob "Sep 4") (text-blob "Zelle sent CAMERON") (text-blob "Debit") (text-blob "- $1,500.00") (text-blob "$8,685.93"))
+  (tt-bank-row wd ln et 27820 0 800 (text-blob "Sep 14") (text-blob "Deposit from KESTRAL") (text-blob "Credit") (text-blob "+ $3,982.04") (text-blob "$12,667.97"))
+  (tt-bank-row wd ln et 29845 0 800 (text-blob "Sep 30") (text-blob "Closing Balance") (text-blob "") (text-blob "") (text-blob "$12,667.97"))
+  (return 0))
+
+(deftest test-a-ruled-in-part-statement-keeps-its-amount-and-balance-columns-and-its-styled-header
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (tt-bank-page wd ln et pa 1)
+    (assert-eq (tt-run wd ln et pa t) 0 "statement: well formed")
+    (assert-text t "T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Che[AMOUNT];Che[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];"
+                 "the amount and balance columns are the table's (the rows are ruled under three cells only), the header is the small row above the first rule, and the bold opening row is a body row")))
+
+(deftest test-a-column-past-a-gutter-or-a-rule-or-another-tables-rules-is-not-the-tables
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text) ^Text t2 (new-text) ^Text t3 (new-text)]
+    (comment "A memo in the margin, further right of the balance than the widest gap inside the table (9500 against 14600): not a column.")
+    (tt-bank-page wd ln et pa 1)
+    (tt-at wd ln et (text-blob "memo") 70000 23770 0 0)
+    (assert-eq (tt-run wd ln et pa t) 0 "gutter: well formed")
+    (assert-text t "T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Che[AMOUNT];Che[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];P[memo];"
+                 "a word beyond a gutter is left out")
+    (comment "A vertical rule down every row between the amount and the balance: the amounts are the table's, the balances are not.")
+    (cells-drop wd 0)
+    (cells-drop ln 0)
+    (cells-drop et 0)
+    (cells-drop pa 0)
+    (tt-bank-page wd ln et pa 1)
+    (tt-rule pa 47950 19455 48050 31000)
+    (assert-eq (tt-run wd ln et pa t2) 0 "rule: well formed")
+    (assert-text t2 "T4p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Che[AMOUNT];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];P[BALANCE];P[$10,989.78];P[$10,185.93 $8,685.93 $12,667.97 $12,667.97];"
+                 "a rule that spans the rows ends the reach: the amounts are inside it, the balances beyond it are not")
+    (comment "Another table's rules on the same rows, to the right: its words are its own.")
+    (cells-drop wd 0)
+    (cells-drop ln 0)
+    (cells-drop et 0)
+    (cells-drop pa 0)
+    (tt-bank-page wd ln et pa 1)
+    (tt-rule pa 41000 23332 60000 23408)
+    (tt-rule pa 41000 25357 60000 25433)
+    (assert-eq (tt-run wd ln et pa t3) 0 "neighbour: well formed")
+    (assert-text t3 "T4p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Ch[];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];C[];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];C[];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];C[];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];C[];R;Cs[Sep 30];Cs[Closing Balance];Cs[];C[];P[AMOUNT];P[BALANCE];P[$10,989.78];P[- $803.85];P[$10,185.93];P[- $1,500.00];P[$8,685.93];P[+ $3,982.04];P[$12,667.97 $12,667.97];"
+                 "another table's rules on the same rows, to the right, keep the table from reaching over: its words are not this table's (the table is what it was)")))
+
+(deftest test-a-line-above-a-partial-table-that-does-not-line-up-with-it-is-not-its-header
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (comment "Two chunks above the first rule, a little further than a line of text but nowhere near the columns' edges: paragraphs.")
+    (tt-bank-page wd ln et pa 0)
+    (tt-at wd ln et (text-blob "Statement") 7000 19700 0 0)
+    (tt-at wd ln et (text-blob "Page 2") 41000 19700 0 0)
+    (assert-eq (tt-run wd ln et pa t) 0 "stray line: well formed")
+    (assert-text t "P[Statement];P[Page 2];T5p;Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];"
+                 "a line that does not line up with the columns is not a header; the bold opening row is a row of amounts, not a header")))
+
 ;; --------------------------------------------------------------- real documents
 
 (defn ^I32 tt-golden[^Blob pdf ^:mut ^Text t ^:mut ^Text tvt]
@@ -673,6 +770,15 @@
     (assert-eq (tt-tagged (test-t) (test-file "corpus/synth/pdf/ttab-good-ws-untagged.pdf") (test-file "table/ttab-good-ws-untagged.json") t8 v8) 0 "ttab-good-ws-untagged runs")
     (assert-text v8 "[]"
                  "the same table with no tree: no verdict")))
+
+(deftest test-a-table-that-confirms-itself-is-read-in-a-tree-that-is-not-trusted
+  (let [^Text t0 (new-text) ^Text v0 (new-text)]
+    (comment "A ruled table correctly tagged (every check 1000) in a tree that tags nothing else: the text around it is set with no tag, the tree covers")
+    (comment "a small part of the glyphs and its trust is 63, far under 300 (D150). The table confirms itself (D557): the verdict is confirmed, and `struct`")
+    (comment "is among the Model's sources for it (before, it was `partial` and the tags were used for nothing).")
+    (assert-eq (tt-tagged (test-t) (test-file "table/ttab-low-trust.pdf") (test-file "table/ttab-low-trust.json") t0 v0) 0 "ttab-low-trust runs")
+    (assert-text v0 "[{\"page\":1,\"se\":2,\"rows\":4,\"cols\":4,\"verdict\":\"confirmed\",\"score\":1000,\"checks\":[1000,1000,1000,1000,1000,1000],\"trust\":63}]"
+                 "ttab-low-trust: a table whose own checks all hold is confirmed whatever the tree's trust")))
 
 (deftest test-real-documents-make-the-golden-models
   (let [^Text t1 (new-text) ^Text t2 (new-text) ^Text t3 (new-text) ^Text t4 (new-text) ^Text t5 (new-text) ^Text t6 (new-text) ^Text t7 (new-text)]

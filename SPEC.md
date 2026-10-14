@@ -1063,7 +1063,10 @@ drawn as one path of many `m l` pairs is many rules, not one box).
 
 Words are formed from glyphs by gap analysis against the font's space width
 and the `TJ` adjustments; lines by baseline and direction; the content-stream
-order is kept as one weak reading-order signal.
+order is kept as one weak reading-order signal. A producer may show the runs of one visual line out of order (a bold run after the regular
+runs either side of it): consecutive runs of the stream on one baseline whose words, taken in order along it, each continue the one before by
+the line rule (no wider a gap than two sizes, none overlapping by more than 6/10 of a size) are one line, their words in that order (D557);
+runs that are in order already, that do not close up, that overprint one another or that read right to left are lines as before.
 
 **Tagged PDF.** When the structure tree is present and its roles are
 meaningful (`H1`–`H6`, `P`, `L`/`LI`, `Table`/`TR`/`TH`/`TD`, `Figure`,
@@ -2334,6 +2337,16 @@ when it is not 1 and an item that skips has an explicit `value`.
 | `form` | key/value grids (label cells + value cells), often ruled |
 | `struct` | tagged-PDF `Table` roles, verified against geometry (D225, below) |
 
+**Partial tables (D557).** Producers rule what they like: a statement's row borders may stop under the third of five cells. Three things
+make a `partial` candidate the table the page shows. (1) *Reach*: the rows' own baselines go on past the ends of the rules (and before their
+starts), and the words there are followed while each starts within the table's own widest inner gap (not under 2 sizes, not over 12) of the
+reach so far, as far as a vertical rule spanning three in five of the rows, and never past another table's horizontal rule on those rows;
+at least three in five of the rows must have such a word, and the candidate is built again over the wider extent and kept if it scores
+(prose in columns still refuses it). (2) *Header*: a tabular row above the chain's top rule, at most 4 sizes above the first row, whose
+chunks line up (a left or a right edge within 4 pt) with the body's columns is the header, whatever its size, type and colour, and the rows
+so taken are the header rows (`thead`) before any bold body row is. (3) *Not a header*: a bold leading row holding a formatted amount (a
+currency sign or a decimal point) that the cell below in its column matches ('Opening Balance' over a column of balances) is a row of the table.
+
 **What the profiles read (D218).** Rules and fills are the fused `grl` and
 `gfl` of §9.9, never `paths`: a rule is a `grl` row of orientation `h` or `v`
 (slanted rules are figure material), a fill a `gfl` row; a rule flagged
@@ -2364,7 +2377,11 @@ a table that needed that gives its candidate no head rows, spans or row headers 
 `col-band` are adjacent ones (a non-empty cell and the next non-empty cell of its row, or of its column), and the box that `cover`
 counts the words inside is the table's own, grown by the candidate's when there is one (a tagged table that leaves out a row
 the page shows covers fewer of the words inside it). A tree under `tb-tag-trust` (300) is still read and its tables checked, for
-the evidence dump's sake, but it can confirm nothing: its tables are at best `partial` and no case below applies. The **score** is D150's shape
+the evidence dump's sake, but it can confirm nothing, but for a table that confirms itself (below): its tables are at best `partial` and no case below applies. **A table that
+confirms itself** (D557) is a `confirmed` one with at least `tb-own-checks` (4) of the five checks of the grid and the page made and none of them under
+`tb-own-floor` (900); it is read as a tree of trust `tb-tag-own` (700, at least the tree's own) would read it, whatever the tree's: `tg-trust` is an average over every element
+of the tree and every glyph of the page (`Div`s and `Span`s, text outside the tree), and says little of a `Table` in it that the page bears out check by
+check. The **score** is D150's shape
 (weights 2, 2, 1, 2, 2, 3); the **verdict** is `confirmed` at ≥
 `tb-struct-ok` (800), `contradicted` under `tb-struct-bad` (500), else
 `partial`. Then, in `tb-select`:
@@ -2449,7 +2466,8 @@ them; an embedder who does has the region and can crop, or turns on
 **As built (P8.1; D376-D380).** Every output has the placeholders, at every level of `assets` (which decides only whether they
 get pixels, §10.11). The candidate regions are the image placements that passed P3.6's checks, the vector clusters of
 P8.5 (paths within 2 pt of one another), lone shaded or patterned fills, and P7.G's `figure` regions, each under 800 per
-mille of its page and with both sides of its visible box at least 18 pt (a region that is mostly a `table`'s is not one).
+mille of its page and with both sides of its visible box at least 18 pt (a region that is mostly a `table`'s is not one, nor is a
+vector region at least half of whose lines of text a table has claimed, D557).
 Each is measured and given a `kind` and a confidence (`conf`, per mille), or is no figure: a region with two or more lines
 of prose in it (a text box, a sidebar, a background), rings drawn one in another (a seal) and a lattice of rules with no axes
 are not. A region with no caption is a figure only when its confidence is at least 500; a captioned region is one always (kind

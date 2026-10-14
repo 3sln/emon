@@ -78,30 +78,33 @@
 (defn build
   "spec: {:title :cells :head #{rows} :profile :ruled? :tag :verdict :cell-tag (fn [cell head?] role) :tr (fn [cell] tr-index)
           :artifact-row r :layout? bool}. -> {:pdf bytes-fn :html}"
-  [{:keys [title cells head profile ruled? cell-role tr-of artifact-row layout? prose bad-spans?]}]
+  [{:keys [title cells head profile ruled? cell-role tr-of artifact-row layout? prose bad-spans? plain-text? after]}]
   (let [prose (or prose PROSE)
+        after (or after AFTER)
         mcid (atom -1)
         next! #(swap! mcid inc)
-        title-id (next!)
-        p1-id (next!)
+        title-id (when-not plain-text? (next!))
+        p1-id (when-not plain-text? (next!))
         ;; cells in reading order, one MCID each (an artifact row has none)
         cell-marks (vec (for [cell cells]
                           (let [[r c rs cs s] cell]
                             {:cell cell :art? (= r artifact-row) :mcid (when-not (= r artifact-row) (next!))})))
-        p2-id (next!)
+        p2-id (when-not plain-text? (next!))
         text-of (fn [[r c rs cs s]]
                   (let [size 10 x (+ (XS c) 6) base (- (y-of r) (/ (* ROWH rs) 2) (* size 0.35))]
                     (t (if (head r) :F2 :F1) size x base s)))
         tagged (fn [role id ops] (str "/" role " <</MCID " id ">> BDC\n" ops "\nEMC"))
-        ops-pre (str (tagged "H1" title-id (t :F2 18 72 720 title)) "\n"
-                     (tagged "P" p1-id (str/join "\n" (map-indexed (fn [i l] (t :F1 11 72 (- 690 (* 14 i)) l)) prose))))
+        ;; the text around the table: tagged, or (plain-text?, D557) set in the page with no tag at all, so that the tree covers little of it
+        wrap (fn [role id ops] (if plain-text? ops (tagged role id ops)))
+        ops-pre (str (wrap "H1" title-id (t :F2 18 72 720 title)) "\n"
+                     (wrap "P" p1-id (str/join "\n" (map-indexed (fn [i l] (t :F1 11 72 (- 690 (* 14 i)) l)) prose))))
         bottom (y-of (inc (apply max (map first cells))))
         ops-cells (str/join "\n" (for [{:keys [cell art? mcid]} cell-marks]
                                    (if art?
                                      (str "/Artifact <</Type /Layout>> BDC\n" (text-of cell) "\nEMC")
                                      (tagged (cell-role cell) mcid (text-of cell)))))
         ops-rules (when ruled? (str "/Artifact <</Type /Layout>> BDC\n" (rules-ops cells) "\nEMC"))
-        ops-post (tagged "P" p2-id (str/join "\n" (map-indexed (fn [i l] (t :F1 11 72 (- bottom 28 (* 14 i)) l)) AFTER)))
+        ops-post (wrap "P" p2-id (str/join "\n" (map-indexed (fn [i l] (t :F1 11 72 (- bottom 28 (* 14 i)) l)) after)))
         content (str/join "\n" (remove nil? [ops-pre ops-rules ops-cells ops-post]))
         ;; ---- the tree: Document 20; H1 21; P 22; Table 23; TRs 24..; cells; last P
         tr-ids (sort (distinct (map #(tr-of (:cell %)) (remove :art? cell-marks))))
@@ -118,15 +121,17 @@
                               (> rs 1) (conj (str "/RowSpan " rs)))]
                   (when (seq parts) (str " /A << /O /Table " (str/join " " parts) " >>"))))
         flat? (= layout? :flat)
-        doc-kids (if flat?
-                   (concat [21 22] (map :obj cell-objs) [last-p])
-                   (concat [21 22 table-obj] [last-p]))
+        doc-kids (cond
+                   plain-text? (if flat? (map :obj cell-objs) [table-obj])
+                   flat? (concat [21 22] (map :obj cell-objs) [last-p])
+                   :else (concat [21 22 table-obj] [last-p]))
         objs-tree
         (merge
-         {20 (str "<< /Type /StructElem /S /Document /P 3 0 R /K [" (str/join " " (map ref doc-kids)) "] >>")
-          21 (str "<< /Type /StructElem /S /H1 /P 20 0 R /Pg 4 0 R /K " title-id " >>")
-          22 (str "<< /Type /StructElem /S /P /P 20 0 R /Pg 4 0 R /K " p1-id " >>")
-          last-p (str "<< /Type /StructElem /S /P /P 20 0 R /Pg 4 0 R /K " p2-id " >>")}
+         {20 (str "<< /Type /StructElem /S /Document /P 3 0 R /K [" (str/join " " (map ref doc-kids)) "] >>")}
+         (when-not plain-text?
+           {21 (str "<< /Type /StructElem /S /H1 /P 20 0 R /Pg 4 0 R /K " title-id " >>")
+            22 (str "<< /Type /StructElem /S /P /P 20 0 R /Pg 4 0 R /K " p1-id " >>")
+            last-p (str "<< /Type /StructElem /S /P /P 20 0 R /Pg 4 0 R /K " p2-id " >>")})
          (when-not flat?
            (merge
             {table-obj (str "<< /Type /StructElem /S /Table /P 20 0 R /K [" (str/join " " (map #(ref (tr-obj %)) tr-ids)) "] >>")}
@@ -137,7 +142,7 @@
                     (let [role (cell-role cell)
                           parent (if flat? 20 (tr-obj (tr-of cell)))]
                       [obj (str "<< /Type /StructElem /S /" role " /P " parent " 0 R /Pg 4 0 R /K " mcid (tattr cell role) " >>")]))))
-        owner (into {title-id 21 p1-id 22 p2-id last-p} (for [{:keys [obj mcid]} cell-objs] [mcid obj]))
+        owner (into (if plain-text? {} {title-id 21 p1-id 22 p2-id last-p}) (for [{:keys [obj mcid]} cell-objs] [mcid obj]))
         parent-tree (str "<< /Nums [0 [" (str/join " " (map #(ref (owner %)) (range (inc @mcid)))) "]] >>")
         page "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 5 0 R /Resources << /Font << /F1 8 0 R /F2 9 0 R >> >> /StructParents 0 >>"
         base {2 "<< /Type /Pages /Kids [4 0 R] /Count 1 >>" 4 page 5 [:stream "" content]}]
@@ -169,6 +174,17 @@
     {:cells PLAIN-CELLS :head #{0} :profile "ruled" :ruled? true :cell-role (fn [_] "TD") :tr-of first}]
    ["ttab-missing-row" "Supplies Ledger" "partial"
     {:cells FIVE-CELLS :head #{0} :profile "ruled" :ruled? true :cell-role (th-role #{0}) :tr-of first :artifact-row 4}]])
+
+;; D557: a correctly tagged table in a tree that tags nothing else. The title and the text around it are set in the page with no tag, and
+;; there is a good deal of it, so the tree covers a small part of the glyphs: its trust (D150) is under 300 and the document trust says
+;; nothing against this table. Not a corpus document (no HTML, no gold, no untagged twin): `kin/tabletest.kin` reads test/table/ttab-low-trust.pdf.
+(def LOW-TRUST-AFTER
+  (vec (for [s ["Orders are packed on the day they are placed and" "leave the warehouse by the first van of the morning." "Pens are sold in boxes of twelve and paper by the ream," "tape and glue by the single roll or the single tube."
+                "A box that arrives damaged is replaced without charge" "if the carrier is told within three working days." "Prices include delivery to any address in the country" "and are held until the end of the quarter."
+                "Stock levels are counted on the first of the month" "and the figures above are those of the last count." "Questions about a figure go to the purchasing office" "and questions about a delivery go to the warehouse."
+                "The office is open from eight until five on weekdays" "and from nine until noon on the first Saturday." "A recorded message gives the numbers to ring at night" "and on the days when the office is closed."
+                "Nothing in this note changes the terms of an order" "that has been agreed in writing before today."]]
+         s)))
 
 (def LAYOUT-TEXT
   ["The committee met on Tuesday" "to review the plan for the new" "building. Members agreed that" "the schedule is tight but that" "the budget leaves room for the" "changes requested in March."])
@@ -224,7 +240,10 @@
                         [(str CORPUS "/html/" stem ".html") (.getBytes ^String (h) "UTF-8")]
                         [(str CORPUS "/html/" stem "-untagged.html") (.getBytes ^String (h) "UTF-8")]]))
                    docs)
-           [[(str CORPUS "/FACTS-ttab.json")
+           [["test/table/ttab-low-trust.pdf"
+             (:tagged (build {:title "Supplies Ledger" :cells PLAIN-CELLS :head #{0} :profile "ruled" :ruled? true :cell-role (th-role #{0}) :tr-of first
+                              :plain-text? true :after LOW-TRUST-AFTER}))]
+            [(str CORPUS "/FACTS-ttab.json")
              (.getBytes (str (pj/dumps (apply om (mapcat (fn [[stem v]] [stem (om "tag-verdict" v)])
                                                          (sort-by first (concat (for [[s v] (map (juxt first #(nth % 1)) docs)] [s v])
                                                                                 (for [[s _] (map (juxt first #(nth % 1)) docs)] [(str s "-untagged") "none"])))))

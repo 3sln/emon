@@ -656,6 +656,124 @@ public final class Tabletest {
         emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "held in part, words left: well formed");
         emon.Testport.assertText(t, "P[The table below was extracted from the ledger and the figures are totals for the quarter of the year as the office has recorded them and as the auditors have since confirmed.];N;P[see the Note];P[Item];P[Qty];T3r;Gb;R;C[Bolt];C[10];Cs[up];R;C[Nut];C[12];Cs[flat];", "the lines the table does not hold are a note and the ones it holds stay in the table (D504)");
     }
+    public static int ttBankRules(emon.Port.Cells pa, int rows) {
+        // The row borders of a statement, drawn as the HTML-to-PDF producers do: under the first three cells of each row only (the date, the
+        // description and the category: three abutting segments from x 5910 to 38670), the first at y 21345 and one every 2025 below it, and
+        // two vertical rules in the header's band only (x 38707 and 46342), the amount cell's borders. Nothing is ruled under the last two.
+        int r = 0;
+        int y = 21345;
+        while (r <= rows) {
+            ttRule(pa, 5910, y - 38, 9150, y + 38);
+            ttRule(pa, 9150, y - 38, 32910, y + 38);
+            ttRule(pa, 32910, y - 38, 38670, y + 38);
+            y += 2025;
+            r += 1;
+        }
+        ttRule(pa, 38669, 19455, 38745, 21308);
+        ttRule(pa, 46304, 19455, 46380, 21308);
+        return 0;
+    }
+    public static int ttSized(emon.Port.Cells wd, int size) {
+        // Give the word just added the type size `size`.
+        int last = Evidence.wdCount(wd) - 1;
+        Evidence.wdSet(wd, last, Evidence.wfSize(), size);
+        return 0;
+    }
+    public static int ttBankRow(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int y, int bold, int size, byte[] d, byte[] desc, byte[] cat, byte[] amt, byte[] bal) {
+        // One row of the statement at y, in type of `size`: date and description at the left (bold when `bold`), the category left of x 38000,
+        // the amount right-aligned to 45221 and the balance to 55379; a blank blob leaves the cell out.
+        if (emon.Port.blobLen(d) > 0) {
+            ttAt(wd, ln, et, d, 5910, y, bold, 0);
+            ttSized(wd, size);
+        }
+        if (emon.Port.blobLen(desc) > 0) {
+            ttAt(wd, ln, et, desc, 10230, y, bold, 0);
+            ttSized(wd, size);
+        }
+        if (emon.Port.blobLen(cat) > 0) {
+            ttAt(wd, ln, et, cat, 35689, y, 0, 0);
+            ttSized(wd, size);
+        }
+        if (emon.Port.blobLen(amt) > 0) {
+            ttAt(wd, ln, et, amt, 45221, y, 0, 1);
+            ttSized(wd, size);
+        }
+        if (emon.Port.blobLen(bal) > 0) {
+            ttAt(wd, ln, et, bal, 55379, y, bold, 1);
+            ttSized(wd, size);
+        }
+        return 0;
+    }
+    public static int ttBankPage(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa, int header) {
+        // A statement: a small header row (not bold, 700 against the body's 800, a pitch of more than 2.4 sizes above the first row) above the
+        // first rule when `header` is 1, a bold opening row, three transactions and a closing row, ruled as `tt-bank-rules` says.
+        ttBankRules(pa, 5);
+        if (header == 1) {
+            ttBankRow(wd, ln, et, 19700, 0, 700, emon.Testport.textBlob("DATE"), emon.Testport.textBlob("DESCRIPTION"), emon.Testport.textBlob("CATEGORY"), emon.Testport.textBlob("AMOUNT"), emon.Testport.textBlob("BALANCE"));
+        }
+        ttBankRow(wd, ln, et, 21745, 1, 800, emon.Testport.textBlob("Sep 1"), emon.Testport.textBlob("Opening Balance"), emon.Testport.textBlob(""), emon.Testport.textBlob(""), emon.Testport.textBlob("$10,989.78"));
+        ttBankRow(wd, ln, et, 23770, 0, 800, emon.Testport.textBlob("Sep 2"), emon.Testport.textBlob("Withdrawal CAPITAL ONE"), emon.Testport.textBlob("Debit"), emon.Testport.textBlob("- $803.85"), emon.Testport.textBlob("$10,185.93"));
+        ttBankRow(wd, ln, et, 25795, 0, 800, emon.Testport.textBlob("Sep 4"), emon.Testport.textBlob("Zelle sent CAMERON"), emon.Testport.textBlob("Debit"), emon.Testport.textBlob("- $1,500.00"), emon.Testport.textBlob("$8,685.93"));
+        ttBankRow(wd, ln, et, 27820, 0, 800, emon.Testport.textBlob("Sep 14"), emon.Testport.textBlob("Deposit from KESTRAL"), emon.Testport.textBlob("Credit"), emon.Testport.textBlob("+ $3,982.04"), emon.Testport.textBlob("$12,667.97"));
+        ttBankRow(wd, ln, et, 29845, 0, 800, emon.Testport.textBlob("Sep 30"), emon.Testport.textBlob("Closing Balance"), emon.Testport.textBlob(""), emon.Testport.textBlob(""), emon.Testport.textBlob("$12,667.97"));
+        return 0;
+    }
+    public static void testARuledInPartStatementKeepsItsAmountAndBalanceColumnsAndItsStyledHeader() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        ttBankPage(wd, ln, et, pa, 1);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "statement: well formed");
+        emon.Testport.assertText(t, "T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Che[AMOUNT];Che[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];", "the amount and balance columns are the table's (the rows are ruled under three cells only), the header is the small row above the first rule, and the bold opening row is a body row");
+    }
+    public static void testAColumnPastAGutterOrARuleOrAnotherTablesRulesIsNotTheTables() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        StringBuilder t2 = emon.Testport.newText();
+        StringBuilder t3 = emon.Testport.newText();
+        // A memo in the margin, further right of the balance than the widest gap inside the table (9500 against 14600): not a column.
+        ttBankPage(wd, ln, et, pa, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("memo"), 70000, 23770, 0, 0);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "gutter: well formed");
+        emon.Testport.assertText(t, "T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Che[AMOUNT];Che[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];P[memo];", "a word beyond a gutter is left out");
+        // A vertical rule down every row between the amount and the balance: the amounts are the table's, the balances are not.
+        emon.Port.cellsDrop(wd, 0);
+        emon.Port.cellsDrop(ln, 0);
+        emon.Port.cellsDrop(et, 0);
+        emon.Port.cellsDrop(pa, 0);
+        ttBankPage(wd, ln, et, pa, 1);
+        ttRule(pa, 47950, 19455, 48050, 31000);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t2), 0, "rule: well formed");
+        emon.Testport.assertText(t2, "T4p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Che[AMOUNT];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];P[BALANCE];P[$10,989.78];P[$10,185.93 $8,685.93 $12,667.97 $12,667.97];", "a rule that spans the rows ends the reach: the amounts are inside it, the balances beyond it are not");
+        // Another table's rules on the same rows, to the right: its words are its own.
+        emon.Port.cellsDrop(wd, 0);
+        emon.Port.cellsDrop(ln, 0);
+        emon.Port.cellsDrop(et, 0);
+        emon.Port.cellsDrop(pa, 0);
+        ttBankPage(wd, ln, et, pa, 1);
+        ttRule(pa, 41000, 23332, 60000, 23408);
+        ttRule(pa, 41000, 25357, 60000, 25433);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t3), 0, "neighbour: well formed");
+        emon.Testport.assertText(t3, "T4p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Ch[];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];C[];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];C[];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];C[];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];C[];R;Cs[Sep 30];Cs[Closing Balance];Cs[];C[];P[AMOUNT];P[BALANCE];P[$10,989.78];P[- $803.85];P[$10,185.93];P[- $1,500.00];P[$8,685.93];P[+ $3,982.04];P[$12,667.97 $12,667.97];", "another table's rules on the same rows, to the right, keep the table from reaching over: its words are not this table's (the table is what it was)");
+    }
+    public static void testALineAboveAPartialTableThatDoesNotLineUpWithItIsNotItsHeader() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        // Two chunks above the first rule, a little further than a line of text but nowhere near the columns' edges: paragraphs.
+        ttBankPage(wd, ln, et, pa, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Statement"), 7000, 19700, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Page 2"), 41000, 19700, 0, 0);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "stray line: well formed");
+        emon.Testport.assertText(t, "P[Statement];P[Page 2];T5p;Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];", "a line that does not line up with the columns is not a header; the bold opening row is a row of amounts, not a header");
+    }
     public static int ttGolden(byte[] pdf, StringBuilder t, StringBuilder tvt) {
         // PDF -> content -> tables -> paragraphs -> Model -> pretty JSON; answer 0 when every step answered 0, else a
         // code naming the step (1 open, 2 content, 3 the Model's check). The JSON is `t`. The tagged tree is read and joined (P5.5), and the
@@ -852,6 +970,15 @@ public final class Tabletest {
         emon.Testport.assertText(v7, "[]", "ttab-allp: cells tagged P: the tree has no Table, so no verdict");
         emon.Testport.assertEq(ttTagged(0, emon.Testport.testFile("corpus/synth/pdf/ttab-good-ws-untagged.pdf"), emon.Testport.testFile("table/ttab-good-ws-untagged.json"), t8, v8), 0, "ttab-good-ws-untagged runs");
         emon.Testport.assertText(v8, "[]", "the same table with no tree: no verdict");
+    }
+    public static void testATableThatConfirmsItselfIsReadInATreeThatIsNotTrusted() {
+        StringBuilder t0 = emon.Testport.newText();
+        StringBuilder v0 = emon.Testport.newText();
+        // A ruled table correctly tagged (every check 1000) in a tree that tags nothing else: the text around it is set with no tag, the tree covers
+        // a small part of the glyphs and its trust is 63, far under 300 (D150). The table confirms itself (D1570): the verdict is confirmed, and `struct`
+        // is among the Model's sources for it (before, it was `partial` and the tags were used for nothing).
+        emon.Testport.assertEq(ttTagged(0, emon.Testport.testFile("table/ttab-low-trust.pdf"), emon.Testport.testFile("table/ttab-low-trust.json"), t0, v0), 0, "ttab-low-trust runs");
+        emon.Testport.assertText(v0, "[{\"page\":1,\"se\":2,\"rows\":4,\"cols\":4,\"verdict\":\"confirmed\",\"score\":1000,\"checks\":[1000,1000,1000,1000,1000,1000],\"trust\":63}]", "ttab-low-trust: a table whose own checks all hold is confirmed whatever the tree's trust");
     }
     public static void testRealDocumentsMakeTheGoldenModels() {
         StringBuilder t1 = emon.Testport.newText();

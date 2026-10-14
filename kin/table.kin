@@ -74,6 +74,11 @@
 ;; THE TAGGED TABLES' SETTINGS (P5.5, D225; first values, P10.1 calibrates them). `tb-struct-ok` and `tb-struct-bad` are the verdicts' in
 ;; `emon.tagtable`.
 (defconst ^I32 TB_TAG_TRUST 300)      ;; the tree is read for tables at all at this trust (D150)
+(defconst ^I32 TB_HEAD_TOL 400)       ;; a header's chunk lines up with a body column when an edge is this near (D557)
+(defconst ^I32 TB_HEAD_PITCH 40)      ;; ... and the header is at most this many tenths of a size above the body's first row
+(defconst ^I32 TB_TAG_OWN 700)        ;; a table that confirms itself (`tb-self-sure`) is read at this trust whatever the tree's (D557)
+(defconst ^I32 TB_OWN_CHECKS 4)       ;; ... when at least this many of its five grid checks could be made ...
+(defconst ^I32 TB_OWN_FLOOR 900)      ;; ... and none of them is under this (a verdict is `confirmed` from 800; a table read against the tree's word wants more)
 (defconst ^I32 TB_TAG_WIN 700)        ;; a confirmed table that no geometry found is emitted on the tags alone at this trust
 (defconst ^I32 TB_TAG_VETO_TRUST 800) ;; a tree this trusted that says "not a table" lowers a whitespace candidate ...
 (defconst ^I32 TB_TAG_VETO 150)       ;; ... by this much
@@ -1635,6 +1640,49 @@
     (if (> digits 0) (return 1))
     (return 0)))
 
+(defn ^I32 tb-cell-sig [^Cells wd ^Cells et ^Cells tw ^Cells tc ^I32 c]
+  (comment "The shape of a number cell (`tb-cell-numeric`), 0 for anything else: 1 + a currency sign, 2 + a decimal point (a dot before a digit).")
+  (comment "A count or a year has none (0 is 'plain'); an amount of money has both.")
+  (let [^I32 cb (* c TCS)
+        ^I32 n (cells-at tc (+ cb 9))
+        ^I32 from (cells-at tc (+ cb 8))
+        ^:mut ^I32 sig 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 j 0]
+    (if (== (tb-cell-numeric wd et tw tc c) 0) (return 0))
+    (while (< k n)
+      (do (let [^I32 w (cells-at tw (+ from k))
+                ^I32 ts (wd-get wd w (hd-tstart))
+                ^I32 tl (wd-get wd w (hd-tlen))]
+            (set j 0)
+            (while (< j tl)
+              (do (let [^I32 cp (cells-at et (+ ts j))]
+                    (if (or (== cp 36) (or (== cp 8364) (or (== cp 163) (== cp 165)))) (set sig (bit-or sig 1)))
+                    (if (and (== cp 46) (< (+ j 1) tl))
+                      (if (and (>= (cells-at et (+ (+ ts j) 1)) 48) (<= (cells-at et (+ (+ ts j) 1)) 57)) (set sig (bit-or sig 2)))))
+                  (set j (+ j 1)))))
+          (set k (+ k 1))))
+    (return sig)))
+
+(defn ^I32 tb-row-amounts [^Cells tc ^I32 cfirst ^I32 cend ^I32 r ^Cells wd ^Cells et ^Cells tw]
+  (comment "Is row r a row of amounts (D557): one of its cells is a formatted number (a currency sign or a decimal point, `tb-cell-sig`) and the")
+  (comment "cell below it in the same column is one of the same shape. A bold 'Opening Balance' row over a column of balances is one, a row")
+  (comment "of years over a column of counts is not; the first is a row of the table and the second its header.")
+  (let [^:mut ^I32 c cfirst
+        ^:mut ^I32 d 0
+        ^:mut ^I32 sig 0]
+    (while (< c cend)
+      (do (if (== (cells-at tc (* c TCS)) r)
+            (do (set sig (tb-cell-sig wd et tw tc c))
+                (if (!= sig 0)
+                  (do (set d cfirst)
+                      (while (< d cend)
+                        (do (if (and (== (cells-at tc (* d TCS)) (+ r 1)) (== (cells-at tc (+ (* d TCS) 1)) (cells-at tc (+ (* c TCS) 1))))
+                              (if (== (tb-cell-sig wd et tw tc d) sig) (return 1)))
+                            (set d (+ d 1))))))))
+          (set c (+ c 1))))
+    (return 0)))
+
 (defn ^I32 tb-cell-bold [^Cells wd ^Cells tw ^Cells tc ^I32 c]
   (comment "1 when every word of the cell is bold, 0 when one is not, -1 for an empty cell.")
   (let [^I32 cb (* c TCS)
@@ -1692,7 +1740,9 @@
     (return total)))
 
 (defn ^I32 tb-head-rows [^Cells tb ^I32 k ^Cells wd ^Cells et ^Cells tc ^Cells tw]
-  (comment "How many leading rows are the header: the bold ones (a table of bold rows has none, and a header is")
+  (comment "How many leading rows are the header: the rows above the top rule that line up with the body's columns (D557: field 22,")
+  (comment "written when the candidate was built), a header the producer set in another type is a header whatever the first body row is;")
+  (comment "else the bold ones (a table of bold rows has none, and a header is")
   (comment "at most half of the rows); else, when the first row has no number and a column below it is numeric,")
   (comment "that one row.")
   (let [^I32 b (* k TBS)
@@ -1700,7 +1750,8 @@
         ^I32 cfirst (cells-at tb (+ b 9))
         ^I32 cend (+ cfirst (cells-at tb (+ b 10)))
         ^:mut ^I32 h 0]
-    (while (and (< h (- nrows 1)) (tb-row-bold tc cfirst cend h wd et tw))
+    (if (and (> (cells-at tb (+ b 22)) 0) (< (cells-at tb (+ b 22)) (- nrows 1))) (return (cells-at tb (+ b 22))))
+    (while (and (< h (- nrows 1)) (and (tb-row-bold tc cfirst cend h wd et tw) (== (tb-row-amounts tc cfirst cend h wd et tw) 0)))
       (set h (+ h 1)))
     (if (and (> h 0) (<= (* h 2) (+ nrows 1))) (return h))
     (if (and (>= nrows 3) (== (tb-row-stat tc cfirst cend 0 wd et tw 2) 0))
@@ -2049,29 +2100,202 @@
     (if (== prof PF_PARTIAL) (return (+ 800 (quot (* 90 (tb-tabular-rows tb k tc)) (tb-max 1 nrows)))))
     (return (+ 750 (quot (* 40 (tb-tabular-rows tb k tc)) (tb-max 1 nrows))))))
 
-(defn ^I32 tb-first-row [^Cells rw ^I32 nr ^I32 y0]
-  (comment "The first row of a partial candidate: the first row whose centre is below the top rule y0, and the")
-  (comment "tabular rows (at most three) directly above it, which are the header when the rule is the one under it.")
-  (let [^:mut ^I32 ra 0
-        ^:mut ^I32 n 0]
+(defn ^I32 tb-body-row [^Cells rw ^I32 nr ^I32 y0]
+  (comment "The first row whose centre is below the top rule y0 (nr when none).")
+  (let [^:mut ^I32 ra 0]
     (while (and (< ra nr) (< (quot (+ (cells-at rw (+ (* ra RWS) 6)) (cells-at rw (+ (* ra RWS) 7))) 2) y0))
       (set ra (+ ra 1)))
-    (while (and (> ra 0) (and (< ra nr) (and (< n 3) (and (>= (cells-at rw (+ (* (- ra 1) RWS) 9)) 2)
-                                           (<= (* 10 (- (cells-at rw (+ (* ra RWS) 2)) (cells-at rw (+ (* (- ra 1) RWS) 2))))
-                                               (* 24 (cells-at rw (+ (* ra RWS) 3))))))))
+    (return ra)))
+
+(defn ^I32 tb-back-near [^Cells rw ^I32 r ^I32 below]
+  (comment "1 when row r, directly above row `below`, is a tabular row (two chunks or more) a pitch of at most 2.4 sizes of `below` above it:")
+  (comment "the rule of the first versions for a header the top rule leaves out.")
+  (if (< (cells-at rw (+ (* r RWS) 9)) 2) (return 0))
+  (if (<= (* 10 (- (cells-at rw (+ (* below RWS) 2)) (cells-at rw (+ (* r RWS) 2)))) (* 24 (cells-at rw (+ (* below RWS) 3))))
+    (return 1))
+  (return 0))
+
+(defn ^I32 tb-aligned [^Cells rw ^Cells sg ^I32 r ^I32 rb ^I32 nr]
+  (comment "1 when the chunks of row r line up with the body's (D557): at least two of them, and three in five, have a left or a right edge")
+  (comment "within `TB_HEAD_TOL` of an edge of a chunk of the body rows rb.. (twelve of them at most).")
+  (let [^I32 nch (cells-at rw (+ (* r RWS) 9))
+        ^I32 sf (cells-at rw (+ (* r RWS) 8))
+        ^I32 bend (tb-min nr (+ rb 12))
+        ^:mut ^I32 s 0
+        ^:mut ^I32 hit 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 found 0]
+    (while (< s nch)
+      (do (set found 0)
+          (set b rb)
+          (while (and (< b bend) (== found 0))
+            (do (set q 0)
+                (while (and (< q (cells-at rw (+ (* b RWS) 9))) (== found 0))
+                  (do (let [^I32 hs (+ sf s)
+                            ^I32 bs (+ (cells-at rw (+ (* b RWS) 8)) q)]
+                        (if (<= (tb-abs (- (cells-at sg (+ (* hs SGS) 1)) (cells-at sg (+ (* bs SGS) 1)))) TB_HEAD_TOL) (set found 1))
+                        (if (<= (tb-abs (- (cells-at sg (+ (* hs SGS) 2)) (cells-at sg (+ (* bs SGS) 2)))) TB_HEAD_TOL) (set found 1)))
+                      (set q (+ q 1))))
+                (set b (+ b 1))))
+          (set hit (+ hit found))
+          (set s (+ s 1))))
+    (if (< hit 2) (return 0))
+    (if (>= (* hit 5) (* nch 3)) (return 1))
+    (return 0)))
+
+(defn ^I32 tb-back-aligned [^Cells rw ^Cells sg ^I32 r ^I32 below ^I32 rb ^I32 nr]
+  (comment "1 when row r, directly above row `below`, is a tabular row at most `TB_HEAD_PITCH` tenths of a size of `below` above it whose")
+  (comment "chunks line up with the body's columns (`tb-aligned`): a header in a smaller or another type, set further from the rule than")
+  (comment "a line of text is (D557).")
+  (if (< (cells-at rw (+ (* r RWS) 9)) 2) (return 0))
+  (if (> (* 10 (- (cells-at rw (+ (* below RWS) 2)) (cells-at rw (+ (* r RWS) 2)))) (* TB_HEAD_PITCH (cells-at rw (+ (* below RWS) 3))))
+    (return 0))
+  (return (tb-aligned rw sg r rb nr)))
+
+(defn ^I32 tb-first-row [^Cells rw ^Cells sg ^I32 nr ^I32 y0 ^I32 align]
+  (comment "The first row of a partial candidate: the first row whose centre is below the top rule y0, and the")
+  (comment "tabular rows (at most three) directly above it, which are the header when the rule is the one under it: a row close above (at")
+  (comment "most 2.4 sizes, `tb-back-near`) or, when `align` is 1 (y0 is the top rule of its whole chain: above it is nothing of the table's")
+  (comment "own), one that lines up with the body's columns whatever its size and pitch (`tb-back-aligned`).")
+  (let [^I32 rb (tb-body-row rw nr y0)
+        ^:mut ^I32 ra rb
+        ^:mut ^I32 n 0]
+    (while (and (> ra 0) (and (< ra nr) (and (< n 3) (or (== (tb-back-near rw (- ra 1) ra) 1)
+                                                           (and (== align 1) (== (tb-back-aligned rw sg (- ra 1) ra rb nr) 1))))))
       (do (set ra (- ra 1))
           (set n (+ n 1))))
     (return ra)))
 
-(defn ^I32 tb-partial-try [^Cells wd ^Cells et ^I32 w0 ^I32 w1 ^I32 page ^I32 ex0 ^I32 ex1 ^I32 ya ^I32 yb
-                            ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg
-                            ^:mut ^Cells ch ^:mut ^Cells st ^:mut ^Cells en ^:mut ^Cells rmap
-                            ^:mut ^Cells gm ^:mut ^Cells gs ^:mut ^Cells ry ^:mut ^Cells pr ^:mut ^Cells so
-                            ^:mut ^Cells tb ^:mut ^Cells tc ^:mut ^Cells tw ^:mut ^Cells tx]
-  (comment "One partial candidate: the words between the rules at ya and yb (and the tabular rows directly above ya),")
-  (comment "columns from their channels; kept when it scores.")
+(defn ^I32 tb-first-forced [^Cells rw ^I32 nr ^I32 y0 ^I32 ra]
+  (comment "1 when a row of ra.. above the top rule y0 was taken for the header by alignment alone, not by being close (D557).")
+  (let [^I32 rb (tb-body-row rw nr y0)
+        ^:mut ^I32 r ra]
+    (while (< r rb)
+      (do (if (== (tb-back-near rw r (+ r 1)) 0) (return 1))
+          (set r (+ r 1))))
+    (return 0)))
+
+(defn ^I32 tb-extend [^Cells wd ^I32 w0 ^I32 w1 ^Cells rw ^Cells sg ^I32 ra ^I32 nr ^I32 edge ^I32 dir ^Cells rm
+                      ^:mut ^Cells pr ^:mut ^Cells ry]
+  (comment "D557: how far the rows ra..nr of a partial candidate go on the side `dir` (1 right, -1 left) of x `edge` (the candidate's edge there,")
+  (comment "which the rules gave): over the words on the rows' own baselines that continue them. A column of cells the producer left unruled (the amounts")
+  (comment "of a statement whose row borders stop at the description) is the table's. The words are followed while each starts within the table's own widest")
+  (comment "gap (not under two sizes, not over twelve) of the reach so far: a wider one is a gutter. A vertical rule that spans three in five of the rows")
+  (comment "stops them, and so does a horizontal one that goes on past the edge on the rows' height (another table's); at least three in five of the")
+  (comment "rows must have such a word. Answers the new edge, or `edge`.")
+  (let [^I32 n (- nr ra)
+        ^I32 size (cells-at rw (+ (* ra RWS) 3))
+        ^I32 nrl (tb-rows-of rm RLS)
+        ^I32 e (* dir edge)
+        ^:mut ^I32 widest 0
+        ^:mut ^I32 gapmax 0
+        ^:mut ^I32 ytop 2000000000
+        ^:mut ^I32 ybot -2000000000
+        ^:mut ^I32 limit 2000000000
+        ^:mut ^I32 reach e
+        ^:mut ^I32 changed 1
+        ^:mut ^I32 r 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 hit 0
+        ^:mut ^I32 lo 0
+        ^:mut ^I32 hi 0
+        ^:mut ^I32 p 0
+        ^:mut ^I32 far 0
+        ^:mut ^I32 cx 0
+        ^:mut ^I32 cy 0
+        ^:mut ^I32 ov 0]
+    (if (< n 3) (return edge))
+    (set r ra)
+    (while (< r nr)
+      (do (set s 0)
+          (while (< s (- (cells-at rw (+ (* r RWS) 9)) 1))
+            (do (let [^I32 a (+ (cells-at rw (+ (* r RWS) 8)) s)]
+                  (if (> (- (cells-at sg (+ (* (+ a 1) SGS) 1)) (cells-at sg (+ (* a SGS) 2))) widest)
+                    (set widest (- (cells-at sg (+ (* (+ a 1) SGS) 1)) (cells-at sg (+ (* a SGS) 2))))))
+                (set s (+ s 1))))
+          (if (< (cells-at rw (+ (* r RWS) 6)) ytop) (set ytop (cells-at rw (+ (* r RWS) 6))))
+          (if (> (cells-at rw (+ (* r RWS) 7)) ybot) (set ybot (cells-at rw (+ (* r RWS) 7))))
+          (set r (+ r 1))))
+    (set gapmax widest)
+    (if (< gapmax (* 2 size)) (set gapmax (* 2 size)))
+    (if (> gapmax (* 12 size)) (set gapmax (* 12 size)))
+    (comment "What stops them: a vertical rule spanning the rows, another table's horizontal rule going on past the edge.")
+    (set i 0)
+    (while (< i nrl)
+      (do (set p (cells-at rm (+ (* i RLS) 1)))
+          (set lo (cells-at rm (+ (* i RLS) 2)))
+          (set hi (cells-at rm (+ (* i RLS) 3)))
+          (if (== (cells-at rm (* i RLS)) 1)
+            (do (set ov (- (tb-min hi ybot) (tb-max lo ytop)))
+                (if (and (> (* dir p) e) (>= (* ov 5) (* (- ybot ytop) 3)))
+                  (if (< (* dir p) limit) (set limit (* dir p)))))
+            (if (and (>= p ytop) (<= p ybot))
+              (do (if (> dir 0) (set far hi) (set far lo))
+                  (if (> (* dir far) (+ e POS_TOL))
+                    (return edge)))))
+          (set i (+ i 1))))
+    (comment "The words of the rows' baselines on that side, as (word, row) pairs in `pr`.")
+    (cells-drop pr 0)
+    (set w w0)
+    (while (< w w1)
+      (do (if (and (> (wd-get wd w (hd-tlen)) 0) (tb-upright wd w))
+            (do (set cx (* dir (quot (+ (wd-get wd w (hd-x0)) (wd-get wd w (hd-x1))) 2)))
+                (set cy (quot (+ (wd-get wd w (hd-y0)) (wd-get wd w (hd-y1))) 2))
+                (if (and (> cx e) (< cx limit))
+                  (do (set r ra)
+                      (while (< r nr)
+                        (do (if (and (>= cy (cells-at rw (+ (* r RWS) 6))) (<= cy (cells-at rw (+ (* r RWS) 7))))
+                              (do (cells-push pr w)
+                                  (cells-push pr r)
+                                  (set r nr)))
+                            (set r (+ r 1))))))))
+          (set w (+ w 1))))
+    (while (== changed 1)
+      (do (set changed 0)
+          (set i 0)
+          (while (< i (quot (cells-len pr) 2))
+            (do (set w (cells-at pr (* i 2)))
+                (if (> dir 0)
+                  (do (set lo (wd-get wd w (hd-x0)))
+                      (set hi (wd-get wd w (hd-x1))))
+                  (do (set lo (- 0 (wd-get wd w (hd-x1))))
+                      (set hi (- 0 (wd-get wd w (hd-x0))))))
+                (if (and (<= lo (+ reach gapmax)) (> hi reach))
+                  (do (set reach hi)
+                      (set changed 1)))
+                (set i (+ i 1))))))
+    (if (<= reach e) (return edge))
+    (comment "Rows that have a word inside the reach: three in five of them.")
+    (cells-drop ry 0)
+    (set r 0)
+    (while (< r n)
+      (do (cells-push ry 0)
+          (set r (+ r 1))))
+    (set i 0)
+    (while (< i (quot (cells-len pr) 2))
+      (do (set w (cells-at pr (* i 2)))
+          (if (> dir 0) (set hi (wd-get wd w (hd-x1))) (set hi (- 0 (wd-get wd w (hd-x0)))))
+          (if (<= hi reach) (cells-set ry (- (cells-at pr (+ (* i 2) 1)) ra) 1))
+          (set i (+ i 1))))
+    (set r 0)
+    (while (< r n)
+      (do (set hit (+ hit (cells-at ry r)))
+          (set r (+ r 1))))
+    (if (< (* hit 5) (* n 3)) (return edge))
+    (return (* dir reach))))
+
+(defn ^I32 tb-partial-build [^Cells wd ^Cells et ^I32 w0 ^I32 w1 ^I32 page ^I32 ex0 ^I32 ex1 ^I32 ya ^I32 yb ^I32 align
+                             ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg
+                             ^:mut ^Cells ch ^:mut ^Cells st ^:mut ^Cells en ^:mut ^Cells rmap
+                             ^:mut ^Cells gm ^:mut ^Cells gs ^:mut ^Cells ry ^:mut ^Cells pr ^:mut ^Cells so
+                             ^:mut ^Cells tb ^:mut ^Cells tc ^:mut ^Cells tw ^:mut ^Cells tx]
+  (comment "One partial candidate over the extent ex0..ex1: the words between the rules at ya and yb (and the rows directly above ya, the header),")
+  (comment "columns from their channels; kept when it scores. The rows are left in `wl rw sg`. Answers the candidate, or -1 (nothing is left of it).")
   (let [^I32 nr (tb-rows wd w0 w1 (- ex0 POS_TOL) (- ya 9000) (+ ex1 POS_TOL) yb wl rw sg)
-        ^I32 ra (tb-first-row rw nr ya)
+        ^I32 ra (tb-first-row rw sg nr ya align)
         ^I32 nt (tb-rows-of tb TBS)
         ^I32 c0 (tb-rows-of tc TCS)
         ^I32 wl0 (cells-len tw)
@@ -2080,10 +2304,42 @@
       (do (let [^I32 t (tb-text-grid wd wl rw sg ch st en rmap gm gs ry pr so tb tc tw tx
                                      page ra nr PF_PARTIAL 850 0 ex0 ya ex1 yb)]
             (if (>= t 0)
-              (do (let [^I32 sc (tb-score tb t wd et tc tw)]
+              (do (let [^I32 sc (tb-score tb t wd et tc tw)
+                        ^I32 rb (tb-body-row rw nr ya)]
                     (if (== sc 0)
                       (tb-reject tb tc tw tx nt c0 wl0 xl0)
-                      (cells-set tb (+ (* t TBS) 6) sc))))))))
+                      (do (cells-set tb (+ (* t TBS) 6) sc)
+                          (comment "Rows taken for the header by alignment alone are the header (the table rows they make: a wrapped label is one).")
+                          (if (and (< ra rb) (== (tb-first-forced rw nr ya ra) 1))
+                            (cells-set tb (+ (* t TBS) 22) (+ (cells-at rmap (- (- rb 1) ra)) 1)))
+                          (return t)))))))))
+    (return -1)))
+
+(defn ^I32 tb-partial-try [^Cells wd ^Cells et ^I32 w0 ^I32 w1 ^I32 page ^I32 ex0 ^I32 ex1 ^I32 ya ^I32 yb ^I32 ychain ^Cells rm
+                            ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg
+                            ^:mut ^Cells ch ^:mut ^Cells st ^:mut ^Cells en ^:mut ^Cells rmap
+                            ^:mut ^Cells gm ^:mut ^Cells gs ^:mut ^Cells ry ^:mut ^Cells pr ^:mut ^Cells so
+                            ^:mut ^Cells tb ^:mut ^Cells tc ^:mut ^Cells tw ^:mut ^Cells tx]
+  (comment "One partial candidate: the words between the rules at ya and yb (and the tabular rows directly above ya),")
+  (comment "columns from their channels; kept when it scores. D557: when the rows go on past the ends of the rules (`tb-extend`), the")
+  (comment "candidate is built again over the wider extent, and kept if it scores; if not the narrower one stands. `ychain` is the top rule of the")
+  (comment "whole chain: only when ya is it can a header be sought by alignment (above any other rule lie the table's own rows).")
+  (let [^I32 nt (tb-rows-of tb TBS)
+        ^I32 c0 (tb-rows-of tc TCS)
+        ^I32 wl0 (cells-len tw)
+        ^I32 xl0 (cells-len tx)
+        ^:mut ^I32 align 0]
+    (if (<= ya (+ ychain POS_TOL)) (set align 1))
+    (let [^I32 t (tb-partial-build wd et w0 w1 page ex0 ex1 ya yb align wl rw sg ch st en rmap gm gs ry pr so tb tc tw tx)]
+      (if (>= t 0)
+        (do (let [^I32 nr (tb-rows-of rw RWS)
+                  ^I32 ra (tb-first-row rw sg nr ya align)
+                  ^I32 nx1 (tb-extend wd w0 w1 rw sg ra nr ex1 1 rm pr ry)
+                  ^I32 nx0 (tb-extend wd w0 w1 rw sg ra nr ex0 -1 rm pr ry)]
+              (if (or (> nx1 ex1) (< nx0 ex0))
+                (do (tb-reject tb tc tw tx nt c0 wl0 xl0)
+                    (if (< (tb-partial-build wd et w0 w1 page nx0 nx1 ya yb align wl rw sg ch st en rmap gm gs ry pr so tb tc tw tx) 0)
+                      (tb-partial-build wd et w0 w1 page ex0 ex1 ya yb align wl rw sg ch st en rmap gm gs ry pr so tb tc tw tx))))))))
     (return 0)))
 
 (defn ^I32 tb-partial-page [^Cells rm ^I32 page ^Cells wd ^Cells et ^I32 w0 ^I32 w1
@@ -2133,11 +2389,11 @@
                                     (cells-push used (cells-at rm (+ (* j RLS) 1))))))))
                       (set j (+ j 1))))
                 (if (>= cnt 2)
-                  (do (tb-partial-try wd et w0 w1 page ex0 ex1 (cells-at rm (+ (* i RLS) 1)) last wl rw sg ch st en rmap gm gs ry pr so tb tc tw tx)
+                  (do (tb-partial-try wd et w0 w1 page ex0 ex1 (cells-at rm (+ (* i RLS) 1)) last (cells-at rm (+ (* i RLS) 1)) rm wl rw sg ch st en rmap gm gs ry pr so tb tc tw tx)
                       (if (>= cnt 3)
                         (do (set m nh)
                             (while (< (+ m 1) (cells-len used))
-                              (do (tb-partial-try wd et w0 w1 page ex0 ex1 (cells-at used m) (cells-at used (+ m 1)) wl rw sg ch st en rmap gm gs ry pr so tb tc tw tx)
+                              (do (tb-partial-try wd et w0 w1 page ex0 ex1 (cells-at used m) (cells-at used (+ m 1)) (cells-at rm (+ (* i RLS) 1)) rm wl rw sg ch st en rmap gm gs ry pr so tb tc tw tx)
                                   (set m (+ m 1))))))))
                 (cells-drop used nh)))
           (set i (+ i 1))))
@@ -2799,6 +3055,22 @@
     (cells-set tb (+ (* t TBS) 27) (tt-get tg k 11))
     (return t)))
 
+(defn ^I32 tb-self-sure [^Cells tg ^I32 k]
+  (comment "D557: 1 when tagged table k confirms itself: its verdict is `confirmed` (a score at least `emon.tagtable`'s `TB_STRUCT_OK`, 800), at")
+  (comment "least `TB_OWN_CHECKS` of the five checks of the grid and the page (fields 16-20) could be made, and none of those made is under")
+  (comment "`TB_OWN_FLOOR`. The tree's trust (D150) is the tree's, an average over every element of it (`Div`, `Span`, ...), and says little of a")
+  (comment "`Table` in it that the page bears out.")
+  (let [^:mut ^I32 f 16
+        ^:mut ^I32 made 0]
+    (if (!= (tt-get tg k 10) 1) (return 0))
+    (while (< f 21)
+      (do (if (>= (tt-get tg k f) 0)
+            (do (set made (+ made 1))
+                (if (< (tt-get tg k f) TB_OWN_FLOOR) (return 0))))
+          (set f (+ f 1))))
+    (if (< made TB_OWN_CHECKS) (return 0))
+    (return 1)))
+
 (defn ^I32 tb-tags [^Cells wd ^Cells et ^I32 p ^I32 w0 ^I32 w1 ^Cells grl ^I32 q0 ^I32 q1
                     ^Cells se ^Cells sc ^Cells ss ^Cells gl ^Cells mk ^Cells mi
                     ^:mut ^Cells tg ^:mut ^Cells ta ^:mut ^Cells wo ^:mut ^Cells ws ^:mut ^Cells acc ^:mut ^Cells tv
@@ -2808,6 +3080,7 @@
   (comment "scored, recorded in `tv`, and, by its verdict, attached to the candidate it overlaps or made a candidate. Answers the tagged tables.")
   (let [^I32 trust (tg-trust ss)
         ^:mut ^I32 use 0
+        ^:mut ^I32 ttrust 0
         ^I32 nt0 (tb-rows-of tb TBS)
         ^:mut ^I32 nt 0
         ^:mut ^I32 k 0
@@ -2817,12 +3090,14 @@
         ^:mut ^I32 agree 0
         ^:mut ^I32 keep 0
         ^:mut ^I32 v 0]
-    (if (>= trust TB_TAG_TRUST) (set use 1))
     (set nt (tt-grids se ss p tg ta ws))
     (if (== nt 0) (return 0))
     (tt-words wd w0 w1 se sc gl mk mi tg ta wo)
     (while (< k nt)
-      (do (set owned (tt-get tg k 14))
+      (do (set use 0)
+          (set ttrust trust)
+          (if (>= trust TB_TAG_TRUST) (set use 1))
+          (set owned (tt-get tg k 14))
           (set g (tt-geo-tb tg k tb t0 nt0))
           ;; the table's box, for `cover`, is what the page shows of it too: where the geometry found one it is the candidate's as well
           (if (>= g 0)
@@ -2837,11 +3112,16 @@
           (tt-set tg k 21 geo)
           (tt-score tg k acc)
           (set v (tt-get tg k 10))
+          ;; a table that confirms itself is read though the tree as a whole is not trusted (D557): at `TB_TAG_OWN`
+          (if (and (== use 0) (== v 1))
+            (if (== (tb-self-sure tg k) 1)
+              (do (set use 1)
+                  (set ttrust (tb-max trust TB_TAG_OWN)))))
           ;; a layout table: confirmed, no geometry, and what the tags make of it is refused as prose (D180)
           (if (and (== v 1) (and (< g 0) (> owned 0)))
             (do (set keep 0)
-                (if (and (== use 1) (>= trust TB_TAG_WIN)) (set keep 1))
-                (set agree (tb-struct-cand wd et p w0 w1 tg k ta wo trust tb tc tw tx pr so ws keep))
+                (if (and (== use 1) (>= ttrust TB_TAG_WIN)) (set keep 1))
+                (set agree (tb-struct-cand wd et p w0 w1 tg k ta wo ttrust tb tc tw tx pr so ws keep))
                 (if (== agree -2)
                   (do (tt-set tg k 10 3)
                       (set v 3)))))

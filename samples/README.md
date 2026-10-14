@@ -43,6 +43,11 @@ emon-rs --pdfium --tesseract --assets=figures --out=html figures-charts.pdf > fi
 - Public domain US Government works (`test/corpus/DATASETS.md`): `uscourts-table` (US Courts), `irs-form-w9`, `irs-form-1040` and
   `irs-pub15-excerpt` (IRS), `gao-report` (GAO; GAO notes that third-party images in some products may be copyrighted,
   the excerpt's pages are text and the agency logo/photo).
+- `bank-statement-real.pdf`: a real retail bank statement given by the maintainer, PII replaced (D556). The holder's
+  name, postal address, account numbers, account nicknames, a person-to-person counterparty's name and e-mail, and the
+  employer and ACH reference numbers in two deposit descriptions were rewritten in the content streams to fake values of the
+  same length and character class (no black boxes; the text is gone from the file). The XMP packet and the creation date
+  were dropped and the file rewritten in full, so no earlier revision remains. The bank's name, layout, amounts and dates are as issued.
 - `image-invoice.jpg`: katanaml-invoices (synthetic; MIT on the card, upstream CC BY 4.0: attribution).
 - `image-statement.png`: bank-statement-benchmark preview (synthetic, MIT, (c) 2026 Bankstatemently).
 - Left out for licensing: the Berkshire Hathaway 10-K (copyright, no open licence; it is the only large annual report
@@ -63,6 +68,7 @@ emon-rs --pdfium --tesseract --assets=figures --out=html figures-charts.pdf > fi
 | figures-charts | `figure data-emon-kind=chart/diagram/photo` with captions; `.assets.html` has the image data |
 | invoice | header block, one table with a thead, right-aligned amounts, footer furniture |
 | bank-statement | one `table` with one `thead` over 3 pages; header and footer lines as furniture on pages 1 2 3 |
+| bank-statement-real | the account summary table, the three transaction tables (header row, AMOUNT and BALANCE columns), the mixed-style lines of page 1; see the weak spots below |
 | irs-form-w9 | a real form: numbered lines, bold line numbers, signature; its 8 AcroForm check boxes and 15 text fields as `<span data-emon="field">` beside their labels (`role="checkbox"`, `data-emon-checked`, `data-emon-value`) |
 | irs-form-1040 | the real 2025 Form 1040 (2 pages); it crashed on an `i32` overflow until D521; its 199 fields (73 buttons, 126 text) beside their line numbers and labels, the ones with no label in a paragraph of their own |
 | table-multipage | the repeated header row folded into one thead |
@@ -104,4 +110,23 @@ emon-rs --pdfium --tesseract --assets=figures --out=html figures-charts.pdf > fi
   drawn as vectors or scanned) has none yet, and on the 1040 the 44 fields with no label near them (mostly check boxes of the dependents
   table and of page 2) are in paragraphs of their own.
 - **Figures**: chart labels are kept as `span data-emon="label"` runs, not as data; the chart itself is a picture.
+- **`bank-statement-real` (a real, tagged, HTML-to-PDF statement) shows three table and text-flow defects** (D556):
+  - *The AMOUNT and BALANCE columns fall out of every transaction table.* The producer draws row borders only under DATE,
+    DESCRIPTION and CATEGORY (they stop at the vertical rule at x 387); the `partial` profile takes the table's x-extent from
+    those rules (`table.kin` `tb-partial-page`, `tb-rows`), so the region ends at CATEGORY, the amounts' centres fall outside
+    it (`tb-claim`) and they come out after the table as `<p>` pairs (balance before amount). Vertical rules outside a full
+    lattice are never used as column evidence.
+  - *The styled header row is left out and the first body row becomes the `thead`.* DATE … BALANCE (small coloured caps,
+    above the top rule) are not taken back by `tb-first-row` and come out as five `<p>` before the table; the bold, shaded
+    "Opening Balance" row then passes `tb-head-rows`' all-bold rule. The account summary on page 1 loses its header row the same way and its
+    bold "All Accounts" total row is pushed out below the table.
+  - *Mixed-style lines split into blocks.* "Here's your **September 2026** bank statement." becomes `h3` + `h4` + `p`, because
+    the bold run is drawn after the regular runs in the content stream and `pdfcontent.kin` `pc-group` builds lines in stream
+    order; `para.kin` `pa-new-par` then starts a block for a "line" on the same baseline, and the bold piece is a heading
+    candidate of its own (`heading.kin` `hd-headish`). The ® superscript is also a paragraph of its own.
+  - Also: the second (one-row) account table on page 2 is merged into the first one as `colspan` rows; on pages 2 and 3
+    the header labels and the closing-balance row become `figure data-emon-kind=diagram` labels (`figclass.kin` does not
+    look at the table regions); the holder's address lines are joined into one paragraph and the name is an `h1`.
+  - The PDF's structure tree has correct `Table`/`THead`/`TH`/`TD` for all eight tables (5 of the 6 `tagtable.kin` checks at
+    1000), but the tree's document-level trust is 120, under `TB_TAG_TRUST` 300, so it is never read.
 - The Model JSON for the bigger documents is large (IRS Pub 15, 190 KB); the HTML is the readable output.
