@@ -1,0 +1,96 @@
+# BUMP THE VERSION (P11.9, D550). `gh workflow run bump.yml -f part=minor`   (or `-f version=0.2.0`). Run it on main.
+#   bump     `bb release-ops next` checks the new version (newer than version.edn; no tag, no release of that name), `bb version set` rewrites version.edn and every manifest,
+#            and the commit `Release vX.Y.Z` is pushed DIRECTLY to main with the workflow's own GITHUB_TOKEN (no other credential exists).
+#   verify   a push made with GITHUB_TOKEN starts no workflow, so this one CALLS verify.yml for the new commit (workflow_call). The commit changes only version strings, so it plans no
+#            gate; it rebuilds the release archives, which carry the version, and posts `emon/verified` and `emon/archives`.
+#   draft    ... and draft.yml, for the same reason: the DRAFT release vX.Y.Z targeting the commit.
+# Nothing is published. The maintainer reads the draft once `emon/verified` is green and publishes it (docs/releasing.md).
+# If `main` gets a branch protection rule that requires pull requests or checks, the push is refused: add `github-actions` as a bypass actor (docs/releasing.md).
+name: bump
+
+on:
+  workflow_dispatch:
+    inputs:
+      part:
+        description: "which part to bump (none when you give a version)"
+        type: choice
+        options: [none, patch, minor, major]
+        default: none
+      version:
+        description: "an explicit X.Y.Z instead of a bump"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+# one bump at a time; a running one is finished, not cancelled (it may be halfway through a push)
+concurrency:
+  group: bump
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+    working-directory: emon
+
+jobs:
+  bump:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.push.outputs.sha }}
+      version: ${{ steps.next.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: 3sln/emon
+          ref: main
+          path: emon
+          fetch-depth: 0
+      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
+        with:
+          bb: 1.3.190
+      - id: next
+        name: The new version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PART: ${{ inputs.part }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          args=()
+          if [ -n "$PART" ] && [ "$PART" != none ]; then args+=(--bump "$PART"); fi
+          if [ -n "$VERSION" ]; then args+=(--version "$VERSION"); fi
+          bb release-ops next "${args[@]}"
+      - id: push
+        name: bb version set, commit "Release vX.Y.Z", push to main
+        env:
+          VERSION: ${{ steps.next.outputs.version }}
+        run: |
+          bb version set "$VERSION"
+          bb version --check "v$VERSION"
+          git add -u
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Release v$VERSION"
+          git push origin HEAD:main
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  verify:
+    needs: bump
+    uses: ./.github/workflows/verify.yml
+    with:
+      sha: ${{ needs.bump.outputs.sha }}
+    secrets: inherit
+    permissions:
+      contents: read
+      statuses: write
+
+  draft:
+    needs: bump
+    uses: ./.github/workflows/draft.yml
+    with:
+      sha: ${{ needs.bump.outputs.sha }}
+    permissions:
+      contents: write

@@ -31,7 +31,7 @@ not_gates="gen emit gates import corpus-push corpus-pull corpus-test png-bench o
 # gates run on release, weekly and on demand.
 fast_gates="unit identity repeat accuracy slice ocr fusion gfuse retarget artifacts seals sealpx sigs align render image"
 
-# `bb gates GATE...` runs only the named gates (the CI shards of .github/workflows/gates.yml, D266); the
+# `bb gates GATE...` runs only the named gates (the CI shards of .github/workflows/verify.yml, D266, D550); the
 # completeness checks below always run. No arguments: every gate. `bb gates --fast GATE...`: their --fast variants.
 fast=""
 if [ "${1:-}" = "--fast" ]; then

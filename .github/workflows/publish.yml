@@ -1,18 +1,20 @@
-# PUBLISH A RELEASE (P11.10, D524, D542, D547). Starts ONLY when the maintainer flips the DRAFT release to published (`release: published`), after
-# prepare-release.yml has tagged, gated and drafted it. A manual run (workflow_dispatch) is ALWAYS a dry run: it verifies and checks every credential and every
-# registry's "already published?" answer, and publishes nothing (no job below passes anything but --dry-run on that path; pages is skipped).
+# PUBLISH A RELEASE (P11.10, D524, D542, D547, D550). Starts ONLY when the maintainer publishes the DRAFT release (`release: published`; GitHub makes the tag vX.Y.Z at the
+# commit the draft targets, which draft.yml set to a full sha). A manual run (workflow_dispatch) is ALWAYS a dry run: it verifies and checks every credential and every
+# registry's "already published?" answer, and publishes nothing (no job below passes anything but --dry-run on that path; pages is skipped, nothing is attached).
 #
-#   verify  bb release-verify: `bb version --check TAG` on the tagged tree, the tag still points at the commit that is checked out, and the commit status
-#           `emon/full-gates` there is green and names that commit and tag. Nothing is published unless this passes. It outputs the verified COMMIT, and every
-#           job below checks out THAT commit, not the tag name, so a tag moved afterwards changes nothing.
+#   verify  bb release-verify: `bb version --check TAG` on the tagged tree, the tag still points at the commit that is checked out, the release still targets that commit (it
+#           was not retargeted after draft.yml), and the commit status `emon/verified` there is green (verify.yml's). Nothing is published unless this passes. It outputs the
+#           verified COMMIT, and every job below checks out THAT commit, not the tag name, so a tag moved afterwards changes nothing.
+#   assets  the release archives (CLI x5, C x4, pod x4, SHA256SUMS): downloaded from the verify.yml run that `emon/archives` records for that commit, or for its nearest
+#           verified ancestor whose archives are still valid (same version, inside the artifact retention), and attached to the release. Same approval as the registries.
 #   crates npm nuget maven go   one job each, independent (one failing does not stop or undo the others), each in the `release` environment (required reviewer; the
 #           registry secrets live there), each = `bb package --host H` then `bb publish H`: it SKIPS a version the registry already has, so a re-run publishes only
-#           what is missing.
+#           what is missing. All use GITHUB_TOKEN plus the registry's own secret; no other credential exists.
 #   pages   the demo, by calling pages.yml with the verified commit (after the same approval).
 #   summary one report of what happened, and the failing exit code if any registry did not succeed: a partial publish is named, not silent.
 #
 # Needs (docs/releasing.md has the order): the environment `release` with @raystubbs as required reviewer and these secrets in it: CARGO_REGISTRY_TOKEN, NPM_TOKEN,
-# NUGET_API_KEY, MAVEN_CENTRAL_USERNAME, MAVEN_CENTRAL_PASSWORD, MAVEN_GPG_PRIVATE_KEY, MAVEN_GPG_PASSPHRASE; Settings > Pages > Source = GitHub Actions.
+# NUGET_API_KEY, MAVEN_CENTRAL_USERNAME, MAVEN_CENTRAL_PASSWORD, MAVEN_GPG_PRIVATE_KEY, and optionally MAVEN_GPG_PASSPHRASE; Settings > Pages > Source = GitHub Actions.
 # Never run: needs the credentials, a draft release and Actions credits (D524).
 name: publish
 
@@ -70,10 +72,44 @@ jobs:
         with:
           bb: 1.3.190
       - id: verify
-        name: bb release-verify (version, tag, emon/full-gates)
+        name: bb release-verify (version, tag, the release's target, emon/verified)
         env:
           GH_TOKEN: ${{ github.token }}
         run: bb release-verify --tag "$TAG" ${DRY_FLAG}
+
+  assets:
+    needs: verify
+    environment: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write # uploads to the release
+      actions: read # downloads the artifact of the verify.yml run
+    outputs:
+      outcome: ${{ steps.attach.outputs.outcome }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ needs.verify.outputs.sha || github.sha }}
+          path: emon
+          fetch-depth: 0
+      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
+        with:
+          bb: 1.3.190
+      - name: Find the archives of this commit (or of its nearest verified ancestor with valid ones) and download them
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ needs.verify.outputs.sha || github.sha }}
+        run: bb release-ops fetch-archives --sha "$SHA" --version "${TAG#v}" --out "$RUNNER_TEMP/archives" ${DRY_FLAG}
+      - id: attach
+        name: Attach them, with SHA256SUMS, to the release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bb release-ops attach --tag "$TAG" --dir "$RUNNER_TEMP/archives"
+          echo "outcome=attached" >> "$GITHUB_OUTPUT"
 
   crates:
     needs: verify
@@ -244,7 +280,7 @@ jobs:
 
   summary:
     if: always()
-    needs: [verify, crates, npm, nuget, maven, go, pages]
+    needs: [verify, assets, crates, npm, nuget, maven, go, pages]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -259,5 +295,5 @@ jobs:
       - name: The report (fails if any registry did not succeed)
         env:
           RESULTS: >-
-            verify=${{ needs.verify.result }},crates=${{ needs.crates.result }}:${{ needs.crates.outputs.outcome }},npm=${{ needs.npm.result }}:${{ needs.npm.outputs.outcome }},nuget=${{ needs.nuget.result }}:${{ needs.nuget.outputs.outcome }},maven=${{ needs.maven.result }}:${{ needs.maven.outputs.outcome }},go=${{ needs.go.result }}:${{ needs.go.outputs.outcome }},pages=${{ needs.pages.result }}
+            verify=${{ needs.verify.result }},assets=${{ needs.assets.result }}:${{ needs.assets.outputs.outcome }},crates=${{ needs.crates.result }}:${{ needs.crates.outputs.outcome }},npm=${{ needs.npm.result }}:${{ needs.npm.outputs.outcome }},nuget=${{ needs.nuget.result }}:${{ needs.nuget.outputs.outcome }},maven=${{ needs.maven.result }}:${{ needs.maven.outputs.outcome }},go=${{ needs.go.result }}:${{ needs.go.outputs.outcome }},pages=${{ needs.pages.result }}
         run: bb release-ops summary --tag "$TAG" --results "$RESULTS" ${DRY_FLAG}

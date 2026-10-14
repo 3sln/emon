@@ -1,0 +1,416 @@
+# VERIFY MAIN (SPEC 15.3, D550; the gate map is D528). Every push to `main` is verified by the gates its change calls for, IN FULL (not the `--fast` variants of pr.yml),
+# and the result is the commit status `emon/verified` on that commit. The release flow reads that status and nothing else: publish.yml refuses a tag whose commit is not green.
+#
+#   1. DEBOUNCE   `concurrency: verify-main`, cancel-in-progress false: a running run finishes; of several pushes that arrive meanwhile only the NEWEST waits (GitHub drops the
+#                 older pending ones). The commits it skips are covered by the next run, whose base is the newest ancestor that IS verified.
+#   2. BASE       `bb ci verify-plan`: the newest first-parent ancestor of the commit (at most 60 back) whose newest `emon/verified` status is a green one; none, or GitHub not
+#                 answering, means everything runs. `bb ci plan` maps the diff since the base through ci/gate-map.edn, exactly as for a pull request. A diff that only changes
+#                 version strings (version.edn and the manifests of `bb version`) plans no gate: that is the release bump.
+#   3. RUN        the fast core (`bb ci core`) always, plus the planned shards as FULL gates; `unit` (a job per arm, and its red twin) when planned.
+#   4. ARCHIVES   the release archives (the CLI for five targets: native.yml; the C library and pod for four: `bb package`; SHA256SUMS) are built in this run only when the plan says
+#                 they are affected (a path they are built from changed, no valid archives came with the base, or the VERSION changed: the archives carry it). Otherwise the base's
+#                 stay valid. Either way `emon/archives` is posted on the commit, naming the run whose artifact `release-archives` (retention 90 days) holds them.
+#   5. VERDICT    `emon/verified` success only when the plan, the core and every job ran green; description `verified: N gates since <sha>`.
+# Also: weekly (Monday, all gates, archives rebuilt, status posted), `workflow_dispatch` (scoped or full, for the tip of main or a given commit of main), and `workflow_call`
+# (bump.yml calls it for the release commit it pushes: a push made with GITHUB_TOKEN starts no workflow). A commit that is not on main is refused.
+# Needs the repository secrets listed in SPEC 15.3 (the corpus bucket). All scripting is babashka. Never run (D524: no Actions credits yet).
+name: verify
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "scoped = the gates since the newest verified ancestor; full = every gate, archives rebuilt"
+        type: choice
+        options: [scoped, full]
+        default: scoped
+      sha:
+        description: "a commit of main (default: the tip of the branch this runs on)"
+        type: string
+        default: ""
+  workflow_call:
+    inputs:
+      sha:
+        description: "the commit of main to verify"
+        type: string
+        required: true
+      mode:
+        description: "scoped or full"
+        type: string
+        default: scoped
+
+permissions:
+  contents: read
+
+# the debounce: one run at a time, a running one is finished, the newest pending one waits
+concurrency:
+  group: verify-main
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+    working-directory: emon
+
+env:
+  CI: "true"
+  SHA: ${{ inputs.sha || github.sha }}
+  MODE: ${{ inputs.mode || (github.event_name == 'schedule' && 'full') || 'scoped' }}
+
+jobs:
+  # ---- what this commit calls for: the base, the plan, and whether the archives are rebuilt ---------------------------------------------------------
+  # A push runs only when the repository variable EMON_VERIFY_ON_PUSH is 'true' (the repository is private and billed; the maintainer sets it when there are credits or the
+  # repository is public). Skipped, every dependent is skipped with it (`needs: plan` / `plan.result == 'success'`) and `verdict` (on_main empty) posts no status at all.
+  # The schedule, workflow_dispatch and workflow_call are not affected.
+  plan:
+    if: github.event_name != 'push' || vars.EMON_VERIFY_ON_PUSH == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      statuses: read
+    outputs:
+      on_main: ${{ steps.guard.outputs.on_main }}
+      plan: ${{ steps.plan.outputs.plan }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ inputs.sha || github.sha }}
+          path: emon
+          fetch-depth: 0
+      - uses: DeLaGuardo/setup-clojure@13.4
+        with:
+          bb: 1.3.190
+      - name: Only a commit of main is verified
+        id: guard
+        run: |
+          if git merge-base --is-ancestor "$SHA" origin/main; then
+            echo "on_main=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::$SHA is not a commit of main: only main is verified (the status it would get is what publish.yml trusts)"
+            exit 1
+          fi
+      - name: Base, plan and archives (bb ci verify-plan; fails on a changed path the gate map does not know)
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          plan=$(bb ci verify-plan --head "$SHA" --mode "$MODE" --format json)
+          echo "$plan"
+          echo "plan=$plan" >> "$GITHUB_OUTPUT"
+
+  # ---- the fast core: every run, whatever the change -----------------------------------------------------------------------------------------------
+  core:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ inputs.sha || github.sha }}
+          path: emon
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: 3sln/kin
+          path: kin
+      - uses: ./emon/.github/actions/setup
+      - name: bb ci core (check, drift, hosts, api-diff, release-audit, version --check, the self-tests, ci coverage)
+        run: bb ci core
+
+  # ---- the corpus: pulled only when the remote index.json changes, and only when a planned shard reads it ----------------------------------------------
+  # png-check and image read corpus/ (the unit arms pull their own, larger share). Only the
+  # categories they read are pulled (formats, financial), which keeps the cache under GitHub's 10 GB limit.
+  corpus:
+    needs: plan
+    if: fromJSON(needs.plan.outputs.plan).corpus
+    runs-on: ubuntu-latest
+    outputs:
+      index: ${{ steps.sha.outputs.index }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ inputs.sha || github.sha }}
+          path: emon
+      - uses: actions/checkout@v4
+        with:
+          repository: 3sln/kin
+          path: kin
+      - uses: DeLaGuardo/setup-clojure@13.4
+        with:
+          bb: 1.3.190
+      - name: Corpus credentials (.env from repository secrets)
+        env:
+          EMON_S3_ENDPOINT: ${{ secrets.EMON_S3_ENDPOINT }}
+          EMON_S3_REGION: ${{ secrets.EMON_S3_REGION }}
+          EMON_S3_BUCKET: ${{ secrets.EMON_S3_BUCKET }}
+          EMON_S3_PREFIX: ${{ secrets.EMON_S3_PREFIX }}
+          EMON_S3_ACCESS_KEY_ID: ${{ secrets.EMON_S3_ACCESS_KEY_ID }}
+          EMON_S3_SECRET_ACCESS_KEY: ${{ secrets.EMON_S3_SECRET_ACCESS_KEY }}
+          EMON_S3_PATH_STYLE: ${{ secrets.EMON_S3_PATH_STYLE }}
+        run: |
+          missing=""
+          for k in EMON_S3_ENDPOINT EMON_S3_REGION EMON_S3_BUCKET EMON_S3_ACCESS_KEY_ID EMON_S3_SECRET_ACCESS_KEY; do
+            [ -n "${!k}" ] || missing="$missing $k"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::the corpus gates need these repository secrets, and they are not set:$missing (Settings > Secrets and variables > Actions; SPEC 15.3). "
+            exit 1
+          fi
+          for k in EMON_S3_ENDPOINT EMON_S3_REGION EMON_S3_BUCKET EMON_S3_PREFIX EMON_S3_ACCESS_KEY_ID EMON_S3_SECRET_ACCESS_KEY EMON_S3_PATH_STYLE; do
+            [ -z "${!k}" ] || printf '%s=%s\n' "$k" "${!k}"
+          done > .env
+      - name: Remote index sha
+        id: sha
+        run: echo "index=$(bb corpus-index-sha)" >> "$GITHUB_OUTPUT"
+      - id: cache
+        uses: actions/cache@v4
+        with:
+          path: emon/corpus
+          key: emon-corpus-${{ steps.sha.outputs.index }}
+      - name: Pull the corpus (cache miss only)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: bb corpus-pull formats financial
+      - name: Remove credentials
+        if: always()
+        run: rm -f .env
+
+  # ---- the laws, one arm per job (bb unit ARM), then the cross-arm count in the verdict ---------------------------------------------------------------
+  unit:
+    needs: plan
+    if: fromJSON(needs.plan.outputs.plan).unit
+    name: unit (${{ matrix.arm }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [go, rust, java, csharp]
+    steps:
+      - name: Free disk (the corpus categories below are about 9 GB)
+        working-directory: .
+        run: sudo rm -rf /usr/local/lib/android /opt/ghc /usr/share/swift /opt/hostedtoolcache/CodeQL; df -h / | tail -1
+      - uses: actions/checkout@v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ inputs.sha || github.sha }}
+          path: emon
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: 3sln/kin
+          path: kin
+      - uses: ./emon/.github/actions/setup
+      - name: Corpus for the real-file laws (formats financial forms layout multilingual tables; too big to cache)
+        env:
+          EMON_S3_ENDPOINT: ${{ secrets.EMON_S3_ENDPOINT }}
+          EMON_S3_REGION: ${{ secrets.EMON_S3_REGION }}
+          EMON_S3_BUCKET: ${{ secrets.EMON_S3_BUCKET }}
+          EMON_S3_PREFIX: ${{ secrets.EMON_S3_PREFIX }}
+          EMON_S3_ACCESS_KEY_ID: ${{ secrets.EMON_S3_ACCESS_KEY_ID }}
+          EMON_S3_SECRET_ACCESS_KEY: ${{ secrets.EMON_S3_SECRET_ACCESS_KEY }}
+          EMON_S3_PATH_STYLE: ${{ secrets.EMON_S3_PATH_STYLE }}
+        run: |
+          for k in EMON_S3_ENDPOINT EMON_S3_REGION EMON_S3_BUCKET EMON_S3_PREFIX EMON_S3_ACCESS_KEY_ID EMON_S3_SECRET_ACCESS_KEY EMON_S3_PATH_STYLE; do
+            [ -z "${!k}" ] || printf "%s=%s\n" "$k" "${!k}"
+          done > .env
+          bb corpus-pull formats financial forms layout multilingual tables; rm -f .env; df -h . | tail -1
+      - name: bb unit ${{ matrix.arm }}
+        run: |
+          set -o pipefail
+          bb unit ${{ matrix.arm }} 2>&1 | tee "$RUNNER_TEMP/unit.log"
+      - name: Record the law count
+        run: bb ci laws-record ${{ matrix.arm }} "$RUNNER_TEMP/unit.log" "$RUNNER_TEMP/laws"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: laws-${{ matrix.arm }}
+          path: ${{ runner.temp }}/laws/laws-${{ matrix.arm }}.txt
+
+  # ---- the negative check: every law inverted, the arm must fail ---------------------------------------------------------------------------------------
+  unit-red:
+    needs: plan
+    if: fromJSON(needs.plan.outputs.plan).unit
+    name: unit red (${{ matrix.arm }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [go, rust, java, csharp]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ inputs.sha || github.sha }}
+          path: emon
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: 3sln/kin
+          path: kin
+      - uses: ./emon/.github/actions/setup
+      - name: bb unit red ${{ matrix.arm }}
+        run: bb unit red ${{ matrix.arm }}
+
+  # ---- the other gates: the PLANNED shards (the shape of `bb ci shards`), each `bb gates G...`, IN FULL -------------------------------------------------
+  gates:
+    needs: [plan, corpus]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && (needs.corpus.result == 'success' || needs.corpus.result == 'skipped') && fromJSON(needs.plan.outputs.plan).has_shards }}
+    name: gates (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.plan).shards }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ inputs.sha || github.sha }}
+          path: emon
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: 3sln/kin
+          path: kin
+      - uses: ./emon/.github/actions/setup
+      - name: Corpus (png-check and image read real scans)
+        if: matrix.corpus
+        uses: actions/cache/restore@v4
+        with:
+          path: emon/corpus
+          key: emon-corpus-${{ needs.corpus.outputs.index }}
+          fail-on-cache-miss: true
+      - name: bb gates ${{ matrix.gates }}
+        run: bb gates ${{ matrix.gates }}
+
+  # ---- the release archives, only when the plan says they are affected (otherwise the base's stay valid) ---------------------------------------------------
+  # five CLI targets (static Tesseract and Leptonica, pdfium, the `emon` binary: native.yml) ...
+  native:
+    needs: plan
+    if: fromJSON(needs.plan.outputs.plan).build_archives
+    uses: ./.github/workflows/native.yml
+    with:
+      ref: ${{ inputs.sha || github.sha }}
+      cli: true
+    permissions:
+      contents: read
+
+  # ... and the C library and the babashka pod for four
+  package:
+    needs: plan
+    if: fromJSON(needs.plan.outputs.plan).build_archives
+    name: package (${{ matrix.triple }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { triple: aarch64-apple-darwin,      runner: macos-14 }
+          - { triple: x86_64-apple-darwin,       runner: macos-13 }
+          - { triple: x86_64-unknown-linux-gnu,  runner: ubuntu-24.04 }
+          - { triple: aarch64-unknown-linux-gnu, runner: ubuntu-24.04-arm }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ inputs.sha || github.sha }}
+          path: emon
+      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
+        with:
+          bb: 1.3.190
+      - name: Rust 1.92.0 (the version of every gate)
+        run: rustup toolchain install 1.92.0 --profile minimal && rustup default 1.92.0
+      - name: bb package (the C library and the babashka pod for this triple)
+        run: bb package --host c --host pod
+      - name: The archives
+        run: ls -l dist/c dist/pod
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: package-${{ matrix.triple }}
+          path: |
+            emon/dist/c/emon-c-*.tar.gz
+            emon/dist/pod/emon-pod-*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  # the 18 files and SHA256SUMS in one artifact, kept 90 days: publish.yml downloads exactly this
+  archives:
+    needs: [plan, native, package]
+    if: ${{ !cancelled() && needs.native.result == 'success' && needs.package.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ inputs.sha || github.sha }}
+          path: emon
+      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
+        with:
+          bb: 1.3.190
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: emon-cli-*
+          path: ${{ runner.temp }}/in
+          merge-multiple: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: package-*
+          path: ${{ runner.temp }}/in
+          merge-multiple: true
+      - name: Collect (all 18 files must be there) and write SHA256SUMS
+        run: bb release-ops archive --dir "$RUNNER_TEMP/in" --out "$RUNNER_TEMP/release-archives"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-archives
+          path: ${{ runner.temp }}/release-archives/*
+          if-no-files-found: error
+          retention-days: 90
+
+  # ---- one verdict: the commit status the release flow trusts ----------------------------------------------------------------------------------------------
+  verdict:
+    if: always() && needs.plan.outputs.on_main == 'true'
+    needs: [plan, core, corpus, unit, unit-red, gates, native, package, archives]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      statuses: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ inputs.sha || github.sha }}
+          path: emon
+      - uses: DeLaGuardo/setup-clojure@13.4
+        with:
+          bb: 1.3.190
+      - uses: actions/download-artifact@v4
+        if: needs.unit.result == 'success'
+        with:
+          pattern: laws-*
+          path: ${{ runner.temp }}/laws
+      - name: Every arm ran the same number of laws
+        id: laws
+        if: needs.unit.result == 'success'
+        continue-on-error: true
+        run: bb ci laws-compare "$RUNNER_TEMP/laws"
+      - name: emon/archives and emon/verified on the commit (verified only if every part is green)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESULTS: plan=${{ needs.plan.result }},core=${{ needs.core.result }},corpus=${{ needs.corpus.result }},unit=${{ needs.unit.result }},unit-red=${{ needs.unit-red.result }},gates=${{ needs.gates.result }},native=${{ needs.native.result }},package=${{ needs.package.result }},archives=${{ needs.archives.result }},laws=${{ steps.laws.outcome || 'skipped' }}
+          PLAN: ${{ needs.plan.outputs.plan || '{}' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          echo "event=${{ github.event_name }} mode=$MODE sha=$SHA"
+          echo "$RESULTS"
+          bb release-ops verdict --sha "$SHA" --results "$RESULTS" --run-url "$RUN_URL" --plan "$PLAN"

@@ -1,0 +1,79 @@
+# THE DRAFT RELEASE (P11.9, D550). Keeps one DRAFT GitHub release, `vX.Y.Z` for the version in version.edn, pointed at a commit of main. Nothing else: no tag, no gates, no assets.
+#   - push to main that touches version.edn  (a person merged a version bump), or
+#   - workflow_call from bump.yml with the sha of the bump commit it pushed (a push made with GITHUB_TOKEN starts no workflow), or
+#   - workflow_dispatch (`gh workflow run draft.yml [-f sha=COMMIT]`): the way to draft the version already in version.edn, e.g. 0.1.0.
+# `target_commitish` is the commit's full sha. A draft has no tag: GitHub creates `vX.Y.Z` at that commit when the maintainer PUBLISHES the draft, and that is what starts
+# publish.yml. If a draft already exists its target and notes are replaced (edit the notes AFTER the last run of this workflow); a published release for the version is an
+# error, stated plainly (the version was released; bump it); a tag that exists at another commit is an error too.
+# The notes are `bb release-notes` (DEVLOG decisions, ticked roadmap items and commits since the previous tag; the first release lists a capped sample).
+name: draft
+
+on:
+  push:
+    branches: [main]
+    paths: [version.edn]
+  workflow_call:
+    inputs:
+      sha:
+        description: "the commit of main to release"
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "a commit of main (default: the tip of the branch this runs on)"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+# one draft at a time; a running one is finished, not cancelled (it may be halfway through an API call)
+concurrency:
+  group: draft
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+    working-directory: emon
+
+env:
+  SHA: ${{ inputs.sha || github.sha }}
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ inputs.sha || github.sha }}
+          path: emon
+          fetch-depth: 0
+      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
+        with:
+          bb: 1.3.190
+      - name: Only a commit of main is drafted
+        run: |
+          if ! git merge-base --is-ancestor "$SHA" origin/main; then
+            echo "::error::$SHA is not a commit of main"; exit 1
+          fi
+      - id: version
+        name: The version (every manifest must say it)
+        run: |
+          version="$(bb version)"
+          bb version --check "v$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Notes from DEVLOG.md and the commits since the previous tag
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: bb release-notes --until "$SHA" --version "$VERSION" --out "$RUNNER_TEMP/notes.md"
+      - name: Create the draft, or update its target and notes (a published release is an error)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: bb release-ops draft --tag "v$VERSION" --sha "$SHA" --notes "$RUNNER_TEMP/notes.md"
