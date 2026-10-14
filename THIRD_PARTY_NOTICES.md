@@ -10,67 +10,67 @@ Compiled into the Rust, C, pod and WASM artifacts (host/rust/Cargo.lock).
 
 - **adler2** 2.0.1 - 0BSD OR MIT OR Apache-2.0 (used under MIT) - https://crates.io/crates/adler2
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h, the babashka pod, the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [26](#licence-text-26).
+  Licence text: [32](#licence-text-32).
 
 - **autocfg** 1.5.1 - Apache-2.0 OR MIT (used under MIT) - https://crates.io/crates/autocfg
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h, the babashka pod, the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [30](#licence-text-30).
+  Licence text: [37](#licence-text-37).
 
 - **bitflags** 2.13.2 - MIT OR Apache-2.0 (used under MIT) - https://crates.io/crates/bitflags
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h, the babashka pod, the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [17](#licence-text-17).
+  Licence text: [23](#licence-text-23).
 
 - **bytemuck** 1.25.2 - Zlib OR Apache-2.0 OR MIT (used under MIT) - https://crates.io/crates/bytemuck
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h, the babashka pod, the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [14](#licence-text-14).
+  Licence text: [20](#licence-text-20).
 
 - **byteorder-lite** 0.1.0 - Unlicense OR MIT (used under MIT) - https://crates.io/crates/byteorder-lite
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h, the babashka pod, the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [12](#licence-text-12).
+  Licence text: [17](#licence-text-17).
 
 - **cfg-if** 1.0.5 - MIT OR Apache-2.0 (used under MIT) - https://crates.io/crates/cfg-if
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h, the babashka pod, the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [31](#licence-text-31).
+  Licence text: [38](#licence-text-38).
 
 - **crc32fast** 1.5.2 - MIT OR Apache-2.0 (used under MIT) - https://crates.io/crates/crc32fast
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h, the babashka pod, the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [13](#licence-text-13).
+  Licence text: [19](#licence-text-19).
 
 - **fdeflate** 0.3.7 - MIT OR Apache-2.0 (used under MIT) - https://crates.io/crates/fdeflate
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h, the babashka pod, the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [27](#licence-text-27).
+  Licence text: [34](#licence-text-34).
 
 - **flate2** 1.1.10 - MIT OR Apache-2.0 (used under MIT) - https://crates.io/crates/flate2
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h, the babashka pod, the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [22](#licence-text-22).
+  Licence text: [28](#licence-text-28).
 
 - **image** 0.25.10 - MIT OR Apache-2.0 (used under MIT) - https://crates.io/crates/image
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h, the babashka pod, the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [27](#licence-text-27).
+  Licence text: [34](#licence-text-34).
 
 - **miniz_oxide** 0.8.9 - MIT OR Zlib OR Apache-2.0 (used under MIT) - https://crates.io/crates/miniz_oxide
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h, the babashka pod, the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [7](#licence-text-7).
+  Licence text: [10](#licence-text-10).
 
 - **miniz_oxide** 0.9.1 - MIT OR Zlib OR Apache-2.0 (used under MIT) - https://crates.io/crates/miniz_oxide
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h, the babashka pod, the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [7](#licence-text-7).
+  Licence text: [10](#licence-text-10).
 
 - **moxcms** 0.8.1 - BSD-3-Clause OR Apache-2.0 (used under BSD-3-Clause) - https://crates.io/crates/moxcms
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h, the babashka pod, the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [3](#licence-text-3).
+  Licence text: [4](#licence-text-4).
 
 - **num-traits** 0.2.19 - MIT OR Apache-2.0 (used under MIT) - https://crates.io/crates/num-traits
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h, the babashka pod, the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [17](#licence-text-17).
+  Licence text: [23](#licence-text-23).
 
 - **png** 0.18.1 - MIT OR Apache-2.0 (used under MIT) - https://crates.io/crates/png
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h, the babashka pod, the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [39](#licence-text-39).
+  Licence text: [47](#licence-text-47).
 
 - **pxfm** 0.1.30 - BSD-3-Clause OR Apache-2.0 (used under BSD-3-Clause) - https://crates.io/crates/pxfm
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h, the babashka pod, the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [3](#licence-text-3).
+  Licence text: [4](#licence-text-4).
 
 - **simd-adler32** 0.3.10 - MIT - https://crates.io/crates/simd-adler32
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h, the babashka pod, the per-platform CLI (P11.4b), the browser demo page (P11.4c).
@@ -78,15 +78,15 @@ Compiled into the Rust, C, pod and WASM artifacts (host/rust/Cargo.lock).
 
 - **zlib-rs** 0.6.8 - Zlib - https://crates.io/crates/zlib-rs
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h, the babashka pod, the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [8](#licence-text-8).
+  Licence text: [11](#licence-text-11).
 
 - **zune-core** 0.5.3 - MIT OR Apache-2.0 OR Zlib (used under MIT) - https://crates.io/crates/zune-core
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h, the babashka pod, the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [36](#licence-text-36).
+  Licence text: [44](#licence-text-44).
 
 - **zune-jpeg** 0.5.15 - MIT OR Apache-2.0 OR Zlib (used under MIT) - https://crates.io/crates/zune-jpeg
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h, the babashka pod, the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [36](#licence-text-36).
+  Licence text: [44](#licence-text-44).
 
 
 ## Native libraries
@@ -95,111 +95,107 @@ Not carried by the library packages (the Go, Java and C# hosts and the C library
 
 - **pdfium** chromium/8076 (156.0.8076.0) - Apache-2.0 - https://pdfium.googlesource.com/pdfium/
   carried by the per-platform CLI (P11.4b), the browser demo page (P11.4c); loaded at run time (not carried) by the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon, the C library and emon.h, the babashka pod. Pinned in tools/pdfium/pdfium.edn. The Go, Java and C# hosts, the C library and the pod load it from the user's system and do not carry it. The browser demo carries the pinned WebAssembly build (pdfium-wasm.tgz of the same release: vendor/pdfium/pdfium.wasm and the loader pdfium.mjs made of its pdfium.js); the text is the archive's licenses/pdfium.txt.
-  Licence text: [38](#licence-text-38).
+  Licence text: [46](#licence-text-46).
 
 - **pdfium-binaries (the build scripts and packaging)** chromium/8076 - MIT - https://github.com/bblanchon/pdfium-binaries
   carried by the per-platform CLI (P11.4b), the browser demo page (P11.4c). Copyright 2014-2025 Benoit Blanchon; its LICENSE ships in each archive, the wasm archive's (pdfium-wasm.tgz) included: the browser demo's loader is made from that archive's lib/pdfium.js, unchanged (tools/pdfium/fetch.clj).
-  Licence text: [34](#licence-text-34).
+  Licence text: [41](#licence-text-41).
 
 - **abseil-cpp (in pdfium)** bundled in pdfium chromium/8076 - Apache-2.0 - https://abseil.io/
-  carried by the per-platform CLI (P11.4b), the browser demo page (P11.4c). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); P11.5 re-verifies the list per platform.
-  Licence text: [18](#licence-text-18).
-
-- **Anti-Grain Geometry 2.3 (in pdfium)** bundled in pdfium chromium/8076 - LicenseRef-AGG-2.3 - https://github.com/google/pdfium/tree/main/third_party/agg23
-  carried by the per-platform CLI (P11.4b), the browser demo page (P11.4c). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); P11.5 re-verifies the list per platform. Permissive notice-retention terms of Maxim Shemanarev, not an SPDX-listed licence.
-  Licence text: [21](#licence-text-21).
-
-- **fast_float (in pdfium)** bundled in pdfium chromium/8076 - Apache-2.0 OR MIT (used under MIT) - https://github.com/fastfloat/fast_float
-  carried by the per-platform CLI (P11.4b), the browser demo page (P11.4c). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); P11.5 re-verifies the list per platform.
-  Licence text: [23](#licence-text-23).
-
-- **FreeType (in pdfium)** bundled in pdfium chromium/8076 - FTL - https://freetype.org/
-  carried by the per-platform CLI (P11.4b), the browser demo page (P11.4c). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); P11.5 re-verifies the list per platform. Used under the FreeType Project License; its credit clause is met by this notice.
-  Licence text: [25](#licence-text-25).
-
-- **ICU (in pdfium)** bundled in pdfium chromium/8076 - Unicode-3.0 - https://icu.unicode.org/
-  carried by the per-platform CLI (P11.4b), the browser demo page (P11.4c). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); P11.5 re-verifies the list per platform.
+  carried by the per-platform CLI (P11.4b), the browser demo page (P11.4c). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); Re-verified at P11.5 (D1460): the licenses/ directory of all six chromium/8076 archives (five platforms and wasm; wasm has no llvm-libc) lists it.
   Licence text: [24](#licence-text-24).
 
+- **Anti-Grain Geometry 2.3 (in pdfium)** bundled in pdfium chromium/8076 - LicenseRef-AGG-2.3 - https://github.com/google/pdfium/tree/main/third_party/agg23
+  carried by the per-platform CLI (P11.4b), the browser demo page (P11.4c). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); Re-verified at P11.5 (D1460): the licenses/ directory of all six chromium/8076 archives (five platforms and wasm; wasm has no llvm-libc) lists it. Permissive notice-retention terms of Maxim Shemanarev, not an SPDX-listed licence.
+  Licence text: [27](#licence-text-27).
+
+- **fast_float (in pdfium)** bundled in pdfium chromium/8076 - Apache-2.0 OR MIT (used under MIT) - https://github.com/fastfloat/fast_float
+  carried by the per-platform CLI (P11.4b), the browser demo page (P11.4c). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); Re-verified at P11.5 (D1460): the licenses/ directory of all six chromium/8076 archives (five platforms and wasm; wasm has no llvm-libc) lists it.
+  Licence text: [29](#licence-text-29).
+
+- **FreeType (in pdfium)** bundled in pdfium chromium/8076 - FTL - https://freetype.org/
+  carried by the per-platform CLI (P11.4b), the browser demo page (P11.4c). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); Re-verified at P11.5 (D1460): the licenses/ directory of all six chromium/8076 archives (five platforms and wasm; wasm has no llvm-libc) lists it. Used under the FreeType Project License; its credit clause is met by this notice.
+  Licence text: [31](#licence-text-31).
+
+- **ICU (in pdfium)** bundled in pdfium chromium/8076 - Unicode-3.0 - https://icu.unicode.org/
+  carried by the per-platform CLI (P11.4b), the browser demo page (P11.4c). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); Re-verified at P11.5 (D1460): the licenses/ directory of all six chromium/8076 archives (five platforms and wasm; wasm has no llvm-libc) lists it.
+  Licence text: [30](#licence-text-30).
+
 - **Little CMS 2 (in pdfium)** bundled in pdfium chromium/8076 - MIT - https://www.littlecms.com/
-  carried by the per-platform CLI (P11.4b), the browser demo page (P11.4c). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); P11.5 re-verifies the list per platform.
-  Licence text: [16](#licence-text-16).
+  carried by the per-platform CLI (P11.4b), the browser demo page (P11.4c). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); Re-verified at P11.5 (D1460): the licenses/ directory of all six chromium/8076 archives (five platforms and wasm; wasm has no llvm-libc) lists it.
+  Licence text: [22](#licence-text-22).
 
 - **libjpeg-turbo (in pdfium)** bundled in pdfium chromium/8076 - IJG AND BSD-3-Clause AND Zlib - https://libjpeg-turbo.org/
-  carried by the per-platform CLI (P11.4b), the browser demo page (P11.4c). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); P11.5 re-verifies the list per platform.
-  Licence text: [4](#licence-text-4), [1](#licence-text-1).
+  carried by the per-platform CLI (P11.4b), the browser demo page (P11.4c). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); Re-verified at P11.5 (D1460): the licenses/ directory of all six chromium/8076 archives (five platforms and wasm; wasm has no llvm-libc) lists it.
+  Licence text: [6](#licence-text-6), [1](#licence-text-1).
 
 - **OpenJPEG (in pdfium)** bundled in pdfium chromium/8076 - BSD-2-Clause - https://www.openjpeg.org/
-  carried by the per-platform CLI (P11.4b), the browser demo page (P11.4c). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); P11.5 re-verifies the list per platform.
-  Licence text: [28](#licence-text-28).
+  carried by the per-platform CLI (P11.4b), the browser demo page (P11.4c). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); Re-verified at P11.5 (D1460): the licenses/ directory of all six chromium/8076 archives (five platforms and wasm; wasm has no llvm-libc) lists it.
+  Licence text: [35](#licence-text-35).
 
 - **libpng (in pdfium)** bundled in pdfium chromium/8076 - libpng-2.0 - http://www.libpng.org/pub/png/libpng.html
-  carried by the per-platform CLI (P11.4b), the browser demo page (P11.4c). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); P11.5 re-verifies the list per platform.
-  Licence text: [6](#licence-text-6).
+  carried by the per-platform CLI (P11.4b), the browser demo page (P11.4c). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); Re-verified at P11.5 (D1460): the licenses/ directory of all six chromium/8076 archives (five platforms and wasm; wasm has no llvm-libc) lists it.
+  Licence text: [8](#licence-text-8).
 
 - **LLVM libc (in pdfium)** bundled in pdfium chromium/8076 - Apache-2.0 WITH LLVM-exception - https://libc.llvm.org/
   carried by the per-platform CLI (P11.4b). Bundled inside the pinned native pdfium builds; the wasm archive's licenses/ directory (the browser demo's) does not list it (P11.4c re-checked), so the demo does not carry it. P11.5 re-verifies the list per platform.
-  Licence text: TODO: vendored at P11.5.
+  Licence text: [43](#licence-text-43).
 
 - **simdutf (in pdfium)** bundled in pdfium chromium/8076 - Apache-2.0 OR MIT (used under MIT) - https://github.com/simdutf/simdutf
-  carried by the per-platform CLI (P11.4b), the browser demo page (P11.4c). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); P11.5 re-verifies the list per platform.
-  Licence text: [33](#licence-text-33).
+  carried by the per-platform CLI (P11.4b), the browser demo page (P11.4c). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); Re-verified at P11.5 (D1460): the licenses/ directory of all six chromium/8076 archives (five platforms and wasm; wasm has no llvm-libc) lists it.
+  Licence text: [40](#licence-text-40).
 
 - **zlib (in pdfium)** bundled in pdfium chromium/8076 - Zlib - https://zlib.net/
-  carried by the per-platform CLI (P11.4b), the browser demo page (P11.4c). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); P11.5 re-verifies the list per platform.
-  Licence text: [15](#licence-text-15).
+  carried by the per-platform CLI (P11.4b), the browser demo page (P11.4c). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); Re-verified at P11.5 (D1460): the licenses/ directory of all six chromium/8076 archives (five platforms and wasm; wasm has no llvm-libc) lists it.
+  Licence text: [21](#licence-text-21).
 
 - **Tesseract** 5.5.3 - Apache-2.0 - https://github.com/tesseract-ocr/tesseract
-  carried by the per-platform CLI (P11.4b); loaded at run time (not carried) by the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon, the C library and emon.h, the babashka pod. The version recorded by the committed transcripts (test/ocr/PRODUCER.json); P11.5 pins the release build. Built without libarchive and libcurl.
-  Licence text: TODO: vendored at P11.5.
+  carried by the per-platform CLI (P11.4b); loaded at run time (not carried) by the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon, the C library and emon.h, the babashka pod. The version recorded by the committed transcripts (test/ocr/PRODUCER.json); Built by `bb native` (tools/native/native.edn) as a static library without libarchive, libcurl, its own libtiff, OpenMP, ICU or ScrollView (D1460).
+  Licence text: [33](#licence-text-33).
 
 - **Leptonica** 1.87.0 - BSD-2-Clause - http://www.leptonica.org/
-  carried by the per-platform CLI (P11.4b); loaded at run time (not carried) by the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon, the C library and emon.h, the babashka pod. Leptonica's own licence is a two-clause BSD text. Static in the CLI.
-  Licence text: TODO: vendored at P11.5.
+  carried by the per-platform CLI (P11.4b); loaded at run time (not carried) by the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon, the C library and emon.h, the babashka pod. Leptonica's own licence is a two-clause BSD text. Static in the CLI; built with libpng, libjpeg-turbo, libtiff, zlib, giflib and libwebp, and without OpenJPEG (JPX stays unsupported, D524) or any JBIG codec (D1460).
+  Licence text: [16](#licence-text-16).
 
-- **libpng (Leptonica's PNG codec)** pinned at P11.5 - libpng-2.0 - http://www.libpng.org/pub/png/libpng.html
+- **libpng (Leptonica's PNG codec)** 1.6.58 - libpng-2.0 - http://www.libpng.org/pub/png/libpng.html
   carried by the per-platform CLI (P11.4b).
-  Licence text: TODO: vendored at P11.5.
+  Licence text: [8](#licence-text-8).
 
-- **libjpeg-turbo (Leptonica's JPEG codec)** pinned at P11.5 - IJG AND BSD-3-Clause AND Zlib - https://libjpeg-turbo.org/
+- **libjpeg-turbo (Leptonica's JPEG codec)** 3.2.0 - IJG AND BSD-3-Clause AND Zlib - https://libjpeg-turbo.org/
   carried by the per-platform CLI (P11.4b).
-  Licence text: TODO: vendored at P11.5.
+  Licence text: [13](#licence-text-13), [1](#licence-text-1).
 
-- **libtiff (Leptonica's TIFF codec)** pinned at P11.5 - libtiff - https://libtiff.gitlab.io/libtiff/
+- **libtiff (Leptonica's TIFF codec)** 4.7.2 - libtiff - https://libtiff.gitlab.io/libtiff/
   carried by the per-platform CLI (P11.4b). A permissive BSD-style notice, not in the SPEC allowlist; listed so a maintainer decides (D526).
-  Licence text: TODO: vendored at P11.5.
+  Licence text: [18](#licence-text-18).
 
-- **zlib (Leptonica's Flate codec)** pinned at P11.5 - Zlib - https://zlib.net/
+- **zlib (Leptonica's Flate codec)** 1.3.1 - Zlib - https://zlib.net/
   carried by the per-platform CLI (P11.4b).
-  Licence text: TODO: vendored at P11.5.
+  Licence text: [3](#licence-text-3).
 
-- **giflib (Leptonica's GIF codec)** pinned at P11.5 - MIT - https://giflib.sourceforge.net/
+- **giflib (Leptonica's GIF codec)** 6.1.3 - MIT - https://giflib.sourceforge.net/
   carried by the per-platform CLI (P11.4b).
-  Licence text: TODO: vendored at P11.5.
+  Licence text: [50](#licence-text-50).
 
-- **libwebp (Leptonica's WebP codec)** pinned at P11.5 - BSD-3-Clause - https://chromium.googlesource.com/webm/libwebp
+- **libwebp (Leptonica's WebP codec)** 1.6.0 - BSD-3-Clause - https://chromium.googlesource.com/webm/libwebp
   carried by the per-platform CLI (P11.4b).
-  Licence text: TODO: vendored at P11.5.
+  Licence text: [9](#licence-text-9), [5](#licence-text-5).
 
-- **OpenJPEG (Leptonica's JPEG 2000 codec, if linked)** pinned at P11.5 - BSD-2-Clause - https://www.openjpeg.org/
-  carried by the per-platform CLI (P11.4b). Present only if P11.5 builds Leptonica with it; JPX assets stay unsupported in releases (D524).
-  Licence text: TODO: vendored at P11.5.
-
-- **Tesseract eng.traineddata** tessdata_fast, 4113088 bytes, sha256 7d4322bd2a77... - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_fast
+- **Tesseract eng.traineddata** tessdata_fast 4.1.0, 4113088 bytes, sha256 7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2 - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_fast
   carried by the per-platform CLI (P11.4b).
-  Licence text: TODO: vendored at P11.5.
+  Licence text: [45](#licence-text-45).
 
-- **Tesseract osd.traineddata** tessdata_fast, sha256 9cf5d576fcc4... - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_fast
+- **Tesseract osd.traineddata** tessdata_fast 4.1.0, sha256 9cf5d576fcc47564f11265841e5ca839001e7e6f38ff7f7aacf46d15a96b00ff - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_fast
   carried by the per-platform CLI (P11.4b).
-  Licence text: TODO: vendored at P11.5.
+  Licence text: [45](#licence-text-45).
 
 - **Tesseract eng.traineddata (tessdata_best, integer model)** 4.0.0_best_int, 2952873 bytes gzipped (from @tesseract.js-data/eng 1.0.0) - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_best
   carried by the browser demo page (P11.4c). The browser demo's English model (vendor/tesseract/lang/eng.traineddata.gz). The CLI's model is the tessdata_fast one above.
-  Licence text: [37](#licence-text-37).
+  Licence text: [45](#licence-text-45).
 
 - **Tesseract (as built into tesseract.js-core 7.0.0)** the version string inside the build is 5.1.0-288-g2a9c1 - Apache-2.0 - https://github.com/tesseract-ocr/tesseract
   carried by the browser demo page (P11.4c). Inside the two SIMD LSTM cores the browser demo ships (vendor/tesseract/core/); tesseract.js-core's package states no more than that.
-  Licence text: [37](#licence-text-37).
+  Licence text: [45](#licence-text-45).
 
 - **Leptonica (as built into tesseract.js-core 7.0.0)** not stated by the package - BSD-2-Clause - http://www.leptonica.org/
   carried by the browser demo page (P11.4c). Inside the cores the browser demo ships (vendor/tesseract/core/). Leptonica's licence text is TODO: not shipped by tesseract.js-core.
@@ -207,11 +203,11 @@ Not carried by the library packages (the Go, Java and C# hosts and the C library
 
 - **libpng (Leptonica's PNG codec, inside tesseract.js-core)** not stated by the package - libpng-2.0 - http://www.libpng.org/pub/png/libpng.html
   carried by the browser demo page (P11.4c). Found in the core's strings (libpng error messages); the text quoted is libpng's, as pdfium bundles it.
-  Licence text: [6](#licence-text-6).
+  Licence text: [8](#licence-text-8).
 
 - **libjpeg or libjpeg-turbo (Leptonica's JPEG codec, inside tesseract.js-core)** not stated by the package - IJG AND BSD-3-Clause AND Zlib - https://libjpeg-turbo.org/
   carried by the browser demo page (P11.4c). Found in the core's strings (libjpeg messages); libjpeg-turbo's terms (which include the IJG licence) are quoted.
-  Licence text: [4](#licence-text-4), [1](#licence-text-1).
+  Licence text: [6](#licence-text-6), [1](#licence-text-1).
 
 - **libtiff (Leptonica's TIFF codec, inside tesseract.js-core)** not stated by the package - libtiff - https://libtiff.gitlab.io/libtiff/
   carried by the browser demo page (P11.4c). A permissive BSD-style notice, not in the SPEC allowlist; listed so a maintainer decides (D526). Found in the core's strings.
@@ -227,7 +223,7 @@ Not carried by the library packages (the Go, Java and C# hosts and the C library
 
 - **zlib (Leptonica's and libpng's Flate codec, inside tesseract.js-core)** not stated by the package - Zlib - https://zlib.net/
   carried by the browser demo page (P11.4c). Found in the core's strings (inflate messages); the text quoted is zlib's, as pdfium bundles it.
-  Licence text: [15](#licence-text-15).
+  Licence text: [21](#licence-text-21).
 
 - **buffer (the node.js Buffer for the browser, bundled in tesseract.js's worker.min.js)** named by the file's banner, no version - MIT - https://github.com/feross/buffer
   carried by the browser demo page (P11.4c). JavaScript bundled by tesseract.js's build, not an npm dependency of this repository; its banner is in vendor/tesseract/worker.min.js.LICENSE.txt, which the demo ships.
@@ -244,19 +240,19 @@ Tables built into every artifact by kin's generators from these sources.
 
 - **Unicode Character Database (UnicodeData, BidiBrackets, BidiMirroring, CJKRadicals, DerivedNormalizationProps)** 18.0.0 - Unicode-3.0 - https://www.unicode.org/license.txt
   carried by the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon, the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h, the babashka pod, the per-platform CLI (P11.4b), the browser demo page (P11.4c). In kin/bidiclass.kin, kin/nftable.kin, kin/radicals.kin (test/normalize/, test/bidi/).
-  Licence text: [19](#licence-text-19).
+  Licence text: [25](#licence-text-25).
 
 - **Adobe Glyph List, AGLFN and ZapfDingbats names** 2.0 (glyphlist.txt) - BSD-3-Clause - https://github.com/adobe-type-tools/agl-aglfn
   carried by the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon, the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h, the babashka pod, the per-platform CLI (P11.4b), the browser demo page (P11.4c). In kin/agl.kin (test/fonts/glyphlist.txt, aglfn.txt, zapfdingbats.txt).
-  Licence text: [41](#licence-text-41).
+  Licence text: [49](#licence-text-49).
 
 - **Adobe cmap-resources (the predefined CMaps and cid2code tables)** commit f5cf3bca7fdfeaceb77aa82847e974f2306c20b4 - BSD-3-Clause - https://github.com/adobe-type-tools/cmap-resources
   carried by the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon, the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h, the babashka pod, the per-platform CLI (P11.4b), the browser demo page (P11.4c). In kin/cmapjp.kin, cmapgb.kin, cmapcns.kin, cmapkr.kin, cjk.kin (fetched by kin/scripts/cjkfetch.clj).
-  Licence text: [35](#licence-text-35).
+  Licence text: [42](#licence-text-42).
 
 - **pdf.js font encoding and charset tables (encodings.js, charsets.js, cff_parser.js, fonts.js)** commit 81525fd446779f0a29003cf06e3ba33751954826 - Apache-2.0 - https://github.com/mozilla/pdf.js
   carried by the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon, the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h, the babashka pod, the per-platform CLI (P11.4b), the browser demo page (P11.4c). Copyright Mozilla Foundation. In kin/fontextra.kin (CFF standard strings and predefined charsets, MacExpertEncoding, the TrueType Macintosh glyph order).
-  Licence text: [37](#licence-text-37).
+  Licence text: [45](#licence-text-45).
 
 - **Adobe Core 14 font metrics (AFM)** 4.1 (1997) - LicenseRef-Adobe-Core14-AFM - https://www.adobe.com/devnet/font/pdfs/Core14_AFMs.zip
   carried by the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon, the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h, the babashka pod, the per-platform CLI (P11.4b), the browser demo page (P11.4c). Widths and encodings derived into kin/encodings.kin (test/fonts/*.afm). Adobe permits copying and distribution for any purpose provided its copyright notices stay; the exact text is TODO, a maintainer decides (D526).
@@ -273,15 +269,15 @@ Development dependencies of host/js (the browser test harness and the Tesseract.
 
 - **wasm-feature-detect** 1.9.0 - Apache-2.0 - https://www.npmjs.com/package/wasm-feature-detect
   carried by the browser demo page (P11.4c). Bundled into tesseract.js's dist files, which the browser demo ships (vendor/tesseract/).
-  Licence text: [29](#licence-text-29).
+  Licence text: [36](#licence-text-36).
 
 - **tesseract.js** 7.0.0 - Apache-2.0 - https://www.npmjs.com/package/tesseract.js
   carried by the browser demo page (P11.4c). The browser demo ships its dist/tesseract.esm.min.js and dist/worker.min.js (vendor/tesseract/); the npm package @3sln/emon does not (host/js/package.json `files` is src only, and tesseract.js is a devDependency the embedder installs).
-  Licence text: [5](#licence-text-5).
+  Licence text: [7](#licence-text-7).
 
 - **bmp-js** 0.1.0 - MIT - https://www.npmjs.com/package/bmp-js
   carried by the browser demo page (P11.4c). Bundled into tesseract.js's dist files, which the browser demo ships (vendor/tesseract/).
-  Licence text: [10](#licence-text-10).
+  Licence text: [14](#licence-text-14).
 
 - **strip-ansi** 7.2.0 - MIT - https://www.npmjs.com/package/strip-ansi
   carried by no release artifact.
@@ -313,7 +309,7 @@ Development dependencies of host/js (the browser test harness and the Tesseract.
 
 - **regenerator-runtime** 0.13.11 - MIT - https://www.npmjs.com/package/regenerator-runtime
   carried by the browser demo page (P11.4c). Bundled into tesseract.js's dist files (their banner names it), which the browser demo ships (vendor/tesseract/).
-  Licence text: [11](#licence-text-11).
+  Licence text: [15](#licence-text-15).
 
 - **whatwg-url** 5.0.0 - MIT - https://www.npmjs.com/package/whatwg-url
   carried by no release artifact.
@@ -353,11 +349,11 @@ Development dependencies of host/js (the browser test harness and the Tesseract.
 
 - **tesseract.js-core** 7.0.0 - Apache-2.0 - https://www.npmjs.com/package/tesseract.js-core
   carried by the browser demo page (P11.4c). The browser demo ships its tesseract-core-relaxedsimd-lstm.wasm.js and tesseract-core-simd-lstm.wasm.js (vendor/tesseract/core/): Tesseract with Leptonica and the image codecs listed under native/tjs-core-*, built to WebAssembly.
-  Licence text: [32](#licence-text-32).
+  Licence text: [39](#licence-text-39).
 
 - **is-url** 1.2.4 - MIT - https://www.npmjs.com/package/is-url
   carried by the browser demo page (P11.4c). Bundled into tesseract.js's dist files, which the browser demo ships (vendor/tesseract/).
-  Licence text: [9](#licence-text-9).
+  Licence text: [12](#licence-text-12).
 
 - **typed-query-selector** 2.12.3 - MIT - https://www.npmjs.com/package/typed-query-selector
   carried by no release artifact.
@@ -369,7 +365,7 @@ Development dependencies of host/js (the browser test harness and the Tesseract.
 
 - **idb-keyval** 6.3.0 - Apache-2.0 - https://www.npmjs.com/package/idb-keyval
   carried by the browser demo page (P11.4c). Bundled into tesseract.js's dist files, which the browser demo ships (vendor/tesseract/).
-  Licence text: [20](#licence-text-20).
+  Licence text: [26](#licence-text-26).
 
 - **node-fetch** 2.7.0 - MIT - https://www.npmjs.com/package/node-fetch
   carried by no release artifact.
@@ -389,7 +385,7 @@ Development dependencies of host/js (the browser test harness and the Tesseract.
 
 - **zlibjs** 0.3.1 - MIT - https://www.npmjs.com/package/zlibjs
   carried by the browser demo page (P11.4c). Bundled into tesseract.js's dist/worker.min.js (its banner names it), which the browser demo ships (vendor/tesseract/).
-  Licence text: [40](#licence-text-40).
+  Licence text: [48](#licence-text-48).
 
 - **wrap-ansi** 9.0.2 - MIT - https://www.npmjs.com/package/wrap-ansi
   carried by no release artifact.
@@ -423,7 +419,7 @@ Development dependencies of host/js (the browser test harness and the Tesseract.
 
 ### Licence text 1
 
-Used by: libjpeg-turbo (in pdfium) bundled in pdfium chromium/8076, libjpeg or libjpeg-turbo (Leptonica's JPEG codec, inside tesseract.js-core) not stated by the package.
+Used by: libjpeg-turbo (in pdfium) bundled in pdfium chromium/8076, libjpeg-turbo (Leptonica's JPEG codec) 3.2.0, libjpeg or libjpeg-turbo (Leptonica's JPEG codec, inside tesseract.js-core) not stated by the package.
 
 ````text
 libjpeg-turbo note:  This file has been modified by The libjpeg-turbo Project
@@ -718,6 +714,35 @@ SOFTWARE.
 
 ### Licence text 3
 
+Used by: zlib (Leptonica's Flate codec) 1.3.1.
+
+````text
+Copyright notice:
+
+ (C) 1995-2022 Jean-loup Gailly and Mark Adler
+
+  This software is provided 'as-is', without any express or implied
+  warranty.  In no event will the authors be held liable for any damages
+  arising from the use of this software.
+
+  Permission is granted to anyone to use this software for any purpose,
+  including commercial applications, and to alter it and redistribute it
+  freely, subject to the following restrictions:
+
+  1. The origin of this software must not be misrepresented; you must not
+     claim that you wrote the original software. If you use this software
+     in a product, an acknowledgment in the product documentation would be
+     appreciated but is not required.
+  2. Altered source versions must be plainly marked as such, and must not be
+     misrepresented as being the original software.
+  3. This notice may not be removed or altered from any source distribution.
+
+  Jean-loup Gailly        Mark Adler
+  jloup@gzip.org          madler@alumni.caltech.edu
+````
+
+### Licence text 4
+
 Used by: moxcms 0.8.1, pxfm 0.1.30.
 
 ````text
@@ -749,7 +774,37 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ````
 
-### Licence text 4
+### Licence text 5
+
+Used by: libwebp (Leptonica's WebP codec) 1.6.0.
+
+````text
+Additional IP Rights Grant (Patents)
+------------------------------------
+
+"These implementations" means the copyrightable works that implement the WebM
+codecs distributed by Google as part of the WebM Project.
+
+Google hereby grants to you a perpetual, worldwide, non-exclusive, no-charge,
+royalty-free, irrevocable (except as stated in this section) patent license to
+make, have made, use, offer to sell, sell, import, transfer, and otherwise
+run, modify and propagate the contents of these implementations of WebM, where
+such license applies only to those patent claims, both currently owned by
+Google and acquired in the future, licensable by Google that are necessarily
+infringed by these implementations of WebM. This grant does not include claims
+that would be infringed only as a consequence of further modification of these
+implementations. If you or your agent or exclusive licensee institute or order
+or agree to the institution of patent litigation or any other patent
+enforcement activity against any entity (including a cross-claim or
+counterclaim in a lawsuit) alleging that any of these implementations of WebM
+or any code incorporated within any of these implementations of WebM
+constitute direct or contributory patent infringement, or inducement of
+patent infringement, then any patent rights granted to you under this License
+for these implementations of WebM shall terminate as of the date such
+litigation is filed.
+````
+
+### Licence text 6
 
 Used by: libjpeg-turbo (in pdfium) bundled in pdfium chromium/8076, libjpeg or libjpeg-turbo (Leptonica's JPEG codec, inside tesseract.js-core) not stated by the package.
 
@@ -891,7 +946,7 @@ desirable to choose a license that granted us the same protections for new code
 that were granted to the IJG for code derived from their software.
 ````
 
-### Licence text 5
+### Licence text 7
 
 Used by: tesseract.js 7.0.0.
 
@@ -1099,9 +1154,9 @@ Used by: tesseract.js 7.0.0.
    limitations under the License.
 ````
 
-### Licence text 6
+### Licence text 8
 
-Used by: libpng (in pdfium) bundled in pdfium chromium/8076, libpng (Leptonica's PNG codec, inside tesseract.js-core) not stated by the package.
+Used by: libpng (in pdfium) bundled in pdfium chromium/8076, libpng (Leptonica's PNG codec) 1.6.58, libpng (Leptonica's PNG codec, inside tesseract.js-core) not stated by the package.
 
 ````text
 COPYRIGHT NOTICE, DISCLAIMER, and LICENSE
@@ -1240,7 +1295,43 @@ this source code in a product, acknowledgment is not required but would
 be appreciated.
 ````
 
-### Licence text 7
+### Licence text 9
+
+Used by: libwebp (Leptonica's WebP codec) 1.6.0.
+
+````text
+Copyright (c) 2010, Google Inc. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+  * Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+
+  * Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimer in
+    the documentation and/or other materials provided with the
+    distribution.
+
+  * Neither the name of Google nor the names of its contributors may
+    be used to endorse or promote products derived from this software
+    without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+````
+
+### Licence text 10
 
 Used by: miniz_oxide 0.8.9, miniz_oxide 0.9.1.
 
@@ -1271,7 +1362,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### Licence text 8
+### Licence text 11
 
 Used by: zlib-rs 0.6.8.
 
@@ -1297,7 +1388,7 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 ````
 
-### Licence text 9
+### Licence text 12
 
 Used by: is-url 1.2.4.
 
@@ -1323,7 +1414,161 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ````
 
-### Licence text 10
+### Licence text 13
+
+Used by: libjpeg-turbo (Leptonica's JPEG codec) 3.2.0.
+
+````text
+libjpeg-turbo Licenses
+======================
+
+libjpeg-turbo is covered by two compatible BSD-style open source licenses:
+
+- The IJG (Independent JPEG Group) License, which is listed in
+  [README.ijg](README.ijg)
+
+  This license applies to the libjpeg API library and associated programs,
+  including any code inherited from libjpeg and any modifications to that
+  code.
+
+- The Modified (3-clause) BSD License, which is listed below
+
+  This license applies to the TurboJPEG API library and associated programs,
+  [libspng](https://libspng.org) (which is used by cjpeg and djpeg), and the
+  build/test system.
+
+  * The TurboJPEG API library wraps the libjpeg API library, so in the context
+    of the overall TurboJPEG API library, both the terms of the IJG License and
+    the terms of the Modified (3-clause) BSD License apply.
+  * cjpeg and djpeg use libspng, so in the context of those programs, both the
+    terms of the IJG License and the terms of the Modified (3-clause) BSD
+    License apply.
+
+
+Component Licenses
+==================
+
+Some of libjpeg-turbo's modules and internal dependencies are covered by less
+restrictive licenses, but in the context of libjpeg-turbo as a whole, the terms
+of the less restrictive licenses are subsumed by either the IJG License or the
+Modified BSD License.  (In other words, the terms of the less restrictive
+licenses are satisfied if the terms of the IJG and Modified BSD Licenses are
+satisfied.)
+
+- The libjpeg-turbo SIMD source code and zlib are covered by the
+  [zlib License](https://spdx.org/licenses/Zlib.html), which is subsumed by the
+  IJG License in the context of the cjpeg and djpeg programs and the libjpeg
+  API library.
+
+- Some of the libspng source code is covered by the
+  [PNG Reference Library License v2](https://spdx.org/licenses/libpng-2.0.html),
+  which is subsumed by the IJG License in the context of the cjpeg and djpeg
+  programs and the TurboJPEG API library.
+
+- Most of the libspng source code is covered by the
+  [Simplified (2-clause) BSD License](https://spdx.org/licenses/BSD-2-Clause.html),
+  which is subsumed by the Modified BSD License in the context of the cjpeg and
+  djpeg programs and the TurboJPEG API library.
+
+
+Complying with the libjpeg-turbo Licenses
+=========================================
+
+This section provides a roll-up of the libjpeg-turbo licensing terms, to the
+best of our understanding.  This is not a license in and of itself.  It is
+intended solely for clarification.
+
+1.  If you are distributing a modified version of the libjpeg-turbo source,
+    then:
+
+    1.  You cannot alter or remove any existing copyright or license notices
+        from the source.
+
+        **Origin**
+        - Clause 1 of the IJG License
+        - Clause 1 of the Modified BSD License
+
+    2.  You must add your own copyright notice to the header of each source
+        file you modified, so others can tell that you modified that file.  (If
+        there is not an existing copyright header in that file, then you can
+        simply add a notice stating that you modified the file.)
+
+        **Origin**
+        - Clause 1 of the IJG License
+
+    3.  You must include the IJG README file, and you must not alter any of the
+        copyright or license text in that file.
+
+        **Origin**
+        - Clause 1 of the IJG License
+
+2.  If you are distributing only libjpeg-turbo binaries without the source, or
+    if you are distributing an application that statically links with
+    libjpeg-turbo, then:
+
+    1.  Your product documentation must include a message stating:
+
+        This software is based in part on the work of the Independent JPEG
+        Group.
+
+        **Origin**
+        - Clause 2 of the IJG license
+
+    2.  If your binary distribution includes or uses the TurboJPEG API or
+        associated programs, cjpeg, or djpeg, then your product documentation
+        must include the text of the Modified BSD License (see below.)
+
+        **Origin**
+        - Clause 2 of the Modified BSD License
+
+3.  You cannot use the name of the IJG or The libjpeg-turbo Project or the
+    contributors thereof in advertising, publicity, etc.
+
+    **Origin**
+    - IJG License
+    - Clause 3 of the Modified BSD License
+
+4.  The authors and distributors do not warrant libjpeg-turbo to be free of
+    defects, nor do we accept any liability for undesirable consequences
+    resulting from your use of the software.
+
+    **Origin**
+    - IJG License
+    - Modified BSD License
+
+
+The Modified (3-clause) BSD License
+===================================
+
+Copyright (C) 2009-2026 D. R. Commander<br>
+Copyright (C) 2018-2023 Randy <randy408@protonmail.com>
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+- Redistributions of source code must retain the above copyright notice,
+  this list of conditions and the following disclaimer.
+- Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+- Neither the name of the libjpeg-turbo Project nor the names of its
+  contributors may be used to endorse or promote products derived from this
+  software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS",
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+````
+
+### Licence text 14
 
 Used by: bmp-js 0.1.0.
 
@@ -1351,7 +1596,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### Licence text 11
+### Licence text 15
 
 Used by: regenerator-runtime 0.13.11.
 
@@ -1379,7 +1624,39 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### Licence text 12
+### Licence text 16
+
+Used by: Leptonica 1.87.0.
+
+````text
+/*====================================================================*
+ -  Copyright (C) 2001-2020 Leptonica.  All rights reserved.
+ -
+ -  Redistribution and use in source and binary forms, with or without
+ -  modification, are permitted provided that the following conditions
+ -  are met:
+ -  1. Redistributions of source code must retain the above copyright
+ -     notice, this list of conditions and the following disclaimer.
+ -  2. Redistributions in binary form must reproduce the above
+ -     copyright notice, this list of conditions and the following
+ -     disclaimer in the documentation and/or other materials
+ -     provided with the distribution.
+ -
+ -  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ -  ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ -  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ -  A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL ANY
+ -  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ -  EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ -  PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ -  PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ -  OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ -  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ -  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *====================================================================*/
+````
+
+### Licence text 17
 
 Used by: byteorder-lite 0.1.0.
 
@@ -1407,7 +1684,63 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ````
 
-### Licence text 13
+### Licence text 18
+
+Used by: libtiff (Leptonica's TIFF codec) 4.7.2.
+
+````text
+# LibTIFF license
+
+Copyright © 1988-1997 Sam Leffler\
+Copyright © 1991-1997 Silicon Graphics, Inc.
+
+Permission to use, copy, modify, distribute, and sell this software and 
+its documentation for any purpose is hereby granted without fee, provided
+that (i) the above copyright notices and this permission notice appear in
+all copies of the software and related documentation, and (ii) the names of
+Sam Leffler and Silicon Graphics may not be used in any advertising or
+publicity relating to the software without the specific, prior written
+permission of Sam Leffler and Silicon Graphics.
+
+THE SOFTWARE IS PROVIDED "AS-IS" AND WITHOUT WARRANTY OF ANY KIND, 
+EXPRESS, IMPLIED OR OTHERWISE, INCLUDING WITHOUT LIMITATION, ANY 
+WARRANTY OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.  
+
+IN NO EVENT SHALL SAM LEFFLER OR SILICON GRAPHICS BE LIABLE FOR
+ANY SPECIAL, INCIDENTAL, INDIRECT OR CONSEQUENTIAL DAMAGES OF ANY KIND,
+OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+WHETHER OR NOT ADVISED OF THE POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF 
+LIABILITY, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE 
+OF THIS SOFTWARE.
+
+# Lempel-Ziv & Welch Compression (tif_lzw.c) license
+The code of tif_lzw.c is derived from the compress program whose code is
+derived from software contributed to Berkeley by James A. Woods,
+derived from original work by Spencer Thomas and Joseph Orost.
+
+The original Berkeley copyright notice appears below in its entirety:
+
+Copyright (c) 1985, 1986 The Regents of the University of California.
+All rights reserved.
+
+This code is derived from software contributed to Berkeley by
+James A. Woods, derived from original work by Spencer Thomas
+and Joseph Orost.
+
+Redistribution and use in source and binary forms are permitted
+provided that the above copyright notice and this paragraph are
+duplicated in all such forms and that any documentation,
+advertising materials, and other materials related to such
+distribution and use acknowledge that the software was developed
+by the University of California, Berkeley.  The name of the
+University may not be used to endorse or promote products derived
+from this software without specific prior written permission.
+THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+````
+
+### Licence text 19
 
 Used by: crc32fast 1.5.2.
 
@@ -1435,7 +1768,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### Licence text 14
+### Licence text 20
 
 Used by: bytemuck 1.25.2.
 
@@ -1451,7 +1784,7 @@ The above copyright notice and this permission notice (including the next paragr
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ````
 
-### Licence text 15
+### Licence text 21
 
 Used by: zlib (in pdfium) bundled in pdfium chromium/8076, zlib (Leptonica's and libpng's Flate codec, inside tesseract.js-core) not stated by the package.
 
@@ -1487,7 +1820,7 @@ Used by: zlib (in pdfium) bundled in pdfium chromium/8076, zlib (Leptonica's and
 */
 ````
 
-### Licence text 16
+### Licence text 22
 
 Used by: Little CMS 2 (in pdfium) bundled in pdfium chromium/8076.
 
@@ -1521,7 +1854,7 @@ Used by: Little CMS 2 (in pdfium) bundled in pdfium chromium/8076.
 //
 ````
 
-### Licence text 17
+### Licence text 23
 
 Used by: bitflags 2.13.2, num-traits 0.2.19.
 
@@ -1553,7 +1886,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### Licence text 18
+### Licence text 24
 
 Used by: abseil-cpp (in pdfium) bundled in pdfium chromium/8076.
 
@@ -1762,7 +2095,7 @@ Used by: abseil-cpp (in pdfium) bundled in pdfium chromium/8076.
    limitations under the License.
 ````
 
-### Licence text 19
+### Licence text 25
 
 Used by: Unicode Character Database (UnicodeData, BidiBrackets, BidiMirroring, CJKRadicals, DerivedNormalizationProps) 18.0.0.
 
@@ -1810,7 +2143,7 @@ authorization of the copyright holder.
 SPDX-License-Identifier: Unicode-3.0
 ````
 
-### Licence text 20
+### Licence text 26
 
 Used by: idb-keyval 6.3.0.
 
@@ -1830,7 +2163,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ````
 
-### Licence text 21
+### Licence text 27
 
 Used by: Anti-Grain Geometry 2.3 (in pdfium) bundled in pdfium chromium/8076.
 
@@ -1851,7 +2184,7 @@ Used by: Anti-Grain Geometry 2.3 (in pdfium) bundled in pdfium chromium/8076.
 //----------------------------------------------------------------------------
 ````
 
-### Licence text 22
+### Licence text 28
 
 Used by: flate2 1.1.10.
 
@@ -1883,7 +2216,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### Licence text 23
+### Licence text 29
 
 Used by: fast_float (in pdfium) bundled in pdfium chromium/8076.
 
@@ -1917,7 +2250,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### Licence text 24
+### Licence text 30
 
 Used by: ICU (in pdfium) bundled in pdfium chromium/8076.
 
@@ -2492,7 +2825,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### Licence text 25
+### Licence text 31
 
 Used by: FreeType (in pdfium) bundled in pdfium chromium/8076.
 
@@ -2668,7 +3001,7 @@ Legal Terms
 --- end of FTL.TXT ---
 ````
 
-### Licence text 26
+### Licence text 32
 
 Used by: adler2 2.0.1.
 
@@ -2698,7 +3031,216 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### Licence text 27
+### Licence text 33
+
+Used by: Tesseract 5.5.3.
+
+````text
+
+                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
+
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+   1. Definitions.
+
+      "License" shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
+
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
+
+      "Legal Entity" shall mean the union of the acting entity and all
+      other entities that control, are controlled by, or are under common
+      control with that entity. For the purposes of this definition,
+      "control" means (i) the power, direct or indirect, to cause the
+      direction or management of such entity, whether by contract or
+      otherwise, or (ii) ownership of fifty percent (50%) or more of the
+      outstanding shares, or (iii) beneficial ownership of such entity.
+
+      "You" (or "Your") shall mean an individual or Legal Entity
+      exercising permissions granted by this License.
+
+      "Source" form shall mean the preferred form for making modifications,
+      including but not limited to software source code, documentation
+      source, and configuration files.
+
+      "Object" form shall mean any form resulting from mechanical
+      transformation or translation of a Source form, including but
+      not limited to compiled object code, generated documentation,
+      and conversions to other media types.
+
+      "Work" shall mean the work of authorship, whether in Source or
+      Object form, made available under the License, as indicated by a
+      copyright notice that is included in or attached to the work
+      (an example is provided in the Appendix below).
+
+      "Derivative Works" shall mean any work, whether in Source or Object
+      form, that is based on (or derived from) the Work and for which the
+      editorial revisions, annotations, elaborations, or other modifications
+      represent, as a whole, an original work of authorship. For the purposes
+      of this License, Derivative Works shall not include works that remain
+      separable from, or merely link (or bind by name) to the interfaces of,
+      the Work and Derivative Works thereof.
+
+      "Contribution" shall mean any work of authorship, including
+      the original version of the Work and any modifications or additions
+      to that Work or Derivative Works thereof, that is intentionally
+      submitted to Licensor for inclusion in the Work by the copyright owner
+      or by an individual or Legal Entity authorized to submit on behalf of
+      the copyright owner. For the purposes of this definition, "submitted"
+      means any form of electronic, verbal, or written communication sent
+      to the Licensor or its representatives, including but not limited to
+      communication on electronic mailing lists, source code control systems,
+      and issue tracking systems that are managed by, or on behalf of, the
+      Licensor for the purpose of discussing and improving the Work, but
+      excluding communication that is conspicuously marked or otherwise
+      designated in writing by the copyright owner as "Not a Contribution."
+
+      "Contributor" shall mean Licensor and any individual or Legal Entity
+      on behalf of whom a Contribution has been received by Licensor and
+      subsequently incorporated within the Work.
+
+   2. Grant of Copyright License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      copyright license to reproduce, prepare Derivative Works of,
+      publicly display, publicly perform, sublicense, and distribute the
+      Work and such Derivative Works in Source or Object form.
+
+   3. Grant of Patent License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      (except as stated in this section) patent license to make, have made,
+      use, offer to sell, sell, import, and otherwise transfer the Work,
+      where such license applies only to those patent claims licensable
+      by such Contributor that are necessarily infringed by their
+      Contribution(s) alone or by combination of their Contribution(s)
+      with the Work to which such Contribution(s) was submitted. If You
+      institute patent litigation against any entity (including a
+      cross-claim or counterclaim in a lawsuit) alleging that the Work
+      or a Contribution incorporated within the Work constitutes direct
+      or contributory patent infringement, then any patent licenses
+      granted to You under this License for that Work shall terminate
+      as of the date such litigation is filed.
+
+   4. Redistribution. You may reproduce and distribute copies of the
+      Work or Derivative Works thereof in any medium, with or without
+      modifications, and in Source or Object form, provided that You
+      meet the following conditions:
+
+      (a) You must give any other recipients of the Work or
+          Derivative Works a copy of this License; and
+
+      (b) You must cause any modified files to carry prominent notices
+          stating that You changed the files; and
+
+      (c) You must retain, in the Source form of any Derivative Works
+          that You distribute, all copyright, patent, trademark, and
+          attribution notices from the Source form of the Work,
+          excluding those notices that do not pertain to any part of
+          the Derivative Works; and
+
+      (d) If the Work includes a "NOTICE" text file as part of its
+          distribution, then any Derivative Works that You distribute must
+          include a readable copy of the attribution notices contained
+          within such NOTICE file, excluding those notices that do not
+          pertain to any part of the Derivative Works, in at least one
+          of the following places: within a NOTICE text file distributed
+          as part of the Derivative Works; within the Source form or
+          documentation, if provided along with the Derivative Works; or,
+          within a display generated by the Derivative Works, if and
+          wherever such third-party notices normally appear. The contents
+          of the NOTICE file are for informational purposes only and
+          do not modify the License. You may add Your own attribution
+          notices within Derivative Works that You distribute, alongside
+          or as an addendum to the NOTICE text from the Work, provided
+          that such additional attribution notices cannot be construed
+          as modifying the License.
+
+      You may add Your own copyright statement to Your modifications and
+      may provide additional or different license terms and conditions
+      for use, reproduction, or distribution of Your modifications, or
+      for any such Derivative Works as a whole, provided Your use,
+      reproduction, and distribution of the Work otherwise complies with
+      the conditions stated in this License.
+
+   5. Submission of Contributions. Unless You explicitly state otherwise,
+      any Contribution intentionally submitted for inclusion in the Work
+      by You to the Licensor shall be under the terms and conditions of
+      this License, without any additional terms or conditions.
+      Notwithstanding the above, nothing herein shall supersede or modify
+      the terms of any separate license agreement you may have executed
+      with Licensor regarding such Contributions.
+
+   6. Trademarks. This License does not grant permission to use the trade
+      names, trademarks, service marks, or product names of the Licensor,
+      except as required for reasonable and customary use in describing the
+      origin of the Work and reproducing the content of the NOTICE file.
+
+   7. Disclaimer of Warranty. Unless required by applicable law or
+      agreed to in writing, Licensor provides the Work (and each
+      Contributor provides its Contributions) on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+      implied, including, without limitation, any warranties or conditions
+      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+      PARTICULAR PURPOSE. You are solely responsible for determining the
+      appropriateness of using or redistributing the Work and assume any
+      risks associated with Your exercise of permissions under this License.
+
+   8. Limitation of Liability. In no event and under no legal theory,
+      whether in tort (including negligence), contract, or otherwise,
+      unless required by applicable law (such as deliberate and grossly
+      negligent acts) or agreed to in writing, shall any Contributor be
+      liable to You for damages, including any direct, indirect, special,
+      incidental, or consequential damages of any character arising as a
+      result of this License or out of the use or inability to use the
+      Work (including but not limited to damages for loss of goodwill,
+      work stoppage, computer failure or malfunction, or any and all
+      other commercial damages or losses), even if such Contributor
+      has been advised of the possibility of such damages.
+
+   9. Accepting Warranty or Additional Liability. While redistributing
+      the Work or Derivative Works thereof, You may choose to offer,
+      and charge a fee for, acceptance of support, warranty, indemnity,
+      or other liability obligations and/or rights consistent with this
+      License. However, in accepting such obligations, You may act only
+      on Your own behalf and on Your sole responsibility, not on behalf
+      of any other Contributor, and only if You agree to indemnify,
+      defend, and hold each Contributor harmless for any liability
+      incurred by, or claims asserted against, such Contributor by reason
+      of your accepting any such warranty or additional liability.
+
+   END OF TERMS AND CONDITIONS
+
+   APPENDIX: How to apply the Apache License to your work.
+
+      To apply the Apache License to your work, attach the following
+      boilerplate notice, with the fields enclosed by brackets "[]"
+      replaced with your own identifying information. (Don't include
+      the brackets!)  The text should be enclosed in the appropriate
+      comment syntax for the file format. We also recommend that a
+      file or class name and description of purpose be included on the
+      same "printed page" as the copyright notice for easier
+      identification within third-party archives.
+
+   Copyright [yyyy] [name of copyright owner]
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+````
+
+### Licence text 34
 
 Used by: fdeflate 0.3.7, image 0.25.10.
 
@@ -2730,7 +3272,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### Licence text 28
+### Licence text 35
 
 Used by: OpenJPEG (in pdfium) bundled in pdfium chromium/8076.
 
@@ -2769,7 +3311,7 @@ Used by: OpenJPEG (in pdfium) bundled in pdfium chromium/8076.
  */
 ````
 
-### Licence text 29
+### Licence text 36
 
 Used by: wasm-feature-detect 1.9.0.
 
@@ -2978,7 +3520,7 @@ Used by: wasm-feature-detect 1.9.0.
    limitations under the License.
 ````
 
-### Licence text 30
+### Licence text 37
 
 Used by: autocfg 1.5.1.
 
@@ -3010,7 +3552,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### Licence text 31
+### Licence text 38
 
 Used by: cfg-if 1.0.5.
 
@@ -3042,7 +3584,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### Licence text 32
+### Licence text 39
 
 Used by: tesseract.js-core 7.0.0.
 
@@ -3250,7 +3792,7 @@ Used by: tesseract.js-core 7.0.0.
    limitations under the License.
 ````
 
-### Licence text 33
+### Licence text 40
 
 Used by: simdutf (in pdfium) bundled in pdfium chromium/8076.
 
@@ -3275,7 +3817,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ````
 
-### Licence text 34
+### Licence text 41
 
 Used by: pdfium-binaries (the build scripts and packaging) chromium/8076.
 
@@ -3291,7 +3833,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 This package also includes third-party software. See the licenses/ directory for their respective licenses.
 ````
 
-### Licence text 35
+### Licence text 42
 
 Used by: Adobe cmap-resources (the predefined CMaps and cid2code tables) commit f5cf3bca7fdfeaceb77aa82847e974f2306c20b4.
 
@@ -3326,7 +3868,292 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ````
 
-### Licence text 36
+### Licence text 43
+
+Used by: LLVM libc (in pdfium) bundled in pdfium chromium/8076.
+
+````text
+==============================================================================
+The LLVM Project is under the Apache License v2.0 with LLVM Exceptions:
+==============================================================================
+
+                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
+
+    TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+    1. Definitions.
+
+      "License" shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
+
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
+
+      "Legal Entity" shall mean the union of the acting entity and all
+      other entities that control, are controlled by, or are under common
+      control with that entity. For the purposes of this definition,
+      "control" means (i) the power, direct or indirect, to cause the
+      direction or management of such entity, whether by contract or
+      otherwise, or (ii) ownership of fifty percent (50%) or more of the
+      outstanding shares, or (iii) beneficial ownership of such entity.
+
+      "You" (or "Your") shall mean an individual or Legal Entity
+      exercising permissions granted by this License.
+
+      "Source" form shall mean the preferred form for making modifications,
+      including but not limited to software source code, documentation
+      source, and configuration files.
+
+      "Object" form shall mean any form resulting from mechanical
+      transformation or translation of a Source form, including but
+      not limited to compiled object code, generated documentation,
+      and conversions to other media types.
+
+      "Work" shall mean the work of authorship, whether in Source or
+      Object form, made available under the License, as indicated by a
+      copyright notice that is included in or attached to the work
+      (an example is provided in the Appendix below).
+
+      "Derivative Works" shall mean any work, whether in Source or Object
+      form, that is based on (or derived from) the Work and for which the
+      editorial revisions, annotations, elaborations, or other modifications
+      represent, as a whole, an original work of authorship. For the purposes
+      of this License, Derivative Works shall not include works that remain
+      separable from, or merely link (or bind by name) to the interfaces of,
+      the Work and Derivative Works thereof.
+
+      "Contribution" shall mean any work of authorship, including
+      the original version of the Work and any modifications or additions
+      to that Work or Derivative Works thereof, that is intentionally
+      submitted to Licensor for inclusion in the Work by the copyright owner
+      or by an individual or Legal Entity authorized to submit on behalf of
+      the copyright owner. For the purposes of this definition, "submitted"
+      means any form of electronic, verbal, or written communication sent
+      to the Licensor or its representatives, including but not limited to
+      communication on electronic mailing lists, source code control systems,
+      and issue tracking systems that are managed by, or on behalf of, the
+      Licensor for the purpose of discussing and improving the Work, but
+      excluding communication that is conspicuously marked or otherwise
+      designated in writing by the copyright owner as "Not a Contribution."
+
+      "Contributor" shall mean Licensor and any individual or Legal Entity
+      on behalf of whom a Contribution has been received by Licensor and
+      subsequently incorporated within the Work.
+
+    2. Grant of Copyright License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      copyright license to reproduce, prepare Derivative Works of,
+      publicly display, publicly perform, sublicense, and distribute the
+      Work and such Derivative Works in Source or Object form.
+
+    3. Grant of Patent License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      (except as stated in this section) patent license to make, have made,
+      use, offer to sell, sell, import, and otherwise transfer the Work,
+      where such license applies only to those patent claims licensable
+      by such Contributor that are necessarily infringed by their
+      Contribution(s) alone or by combination of their Contribution(s)
+      with the Work to which such Contribution(s) was submitted. If You
+      institute patent litigation against any entity (including a
+      cross-claim or counterclaim in a lawsuit) alleging that the Work
+      or a Contribution incorporated within the Work constitutes direct
+      or contributory patent infringement, then any patent licenses
+      granted to You under this License for that Work shall terminate
+      as of the date such litigation is filed.
+
+    4. Redistribution. You may reproduce and distribute copies of the
+      Work or Derivative Works thereof in any medium, with or without
+      modifications, and in Source or Object form, provided that You
+      meet the following conditions:
+
+      (a) You must give any other recipients of the Work or
+          Derivative Works a copy of this License; and
+
+      (b) You must cause any modified files to carry prominent notices
+          stating that You changed the files; and
+
+      (c) You must retain, in the Source form of any Derivative Works
+          that You distribute, all copyright, patent, trademark, and
+          attribution notices from the Source form of the Work,
+          excluding those notices that do not pertain to any part of
+          the Derivative Works; and
+
+      (d) If the Work includes a "NOTICE" text file as part of its
+          distribution, then any Derivative Works that You distribute must
+          include a readable copy of the attribution notices contained
+          within such NOTICE file, excluding those notices that do not
+          pertain to any part of the Derivative Works, in at least one
+          of the following places: within a NOTICE text file distributed
+          as part of the Derivative Works; within the Source form or
+          documentation, if provided along with the Derivative Works; or,
+          within a display generated by the Derivative Works, if and
+          wherever such third-party notices normally appear. The contents
+          of the NOTICE file are for informational purposes only and
+          do not modify the License. You may add Your own attribution
+          notices within Derivative Works that You distribute, alongside
+          or as an addendum to the NOTICE text from the Work, provided
+          that such additional attribution notices cannot be construed
+          as modifying the License.
+
+      You may add Your own copyright statement to Your modifications and
+      may provide additional or different license terms and conditions
+      for use, reproduction, or distribution of Your modifications, or
+      for any such Derivative Works as a whole, provided Your use,
+      reproduction, and distribution of the Work otherwise complies with
+      the conditions stated in this License.
+
+    5. Submission of Contributions. Unless You explicitly state otherwise,
+      any Contribution intentionally submitted for inclusion in the Work
+      by You to the Licensor shall be under the terms and conditions of
+      this License, without any additional terms or conditions.
+      Notwithstanding the above, nothing herein shall supersede or modify
+      the terms of any separate license agreement you may have executed
+      with Licensor regarding such Contributions.
+
+    6. Trademarks. This License does not grant permission to use the trade
+      names, trademarks, service marks, or product names of the Licensor,
+      except as required for reasonable and customary use in describing the
+      origin of the Work and reproducing the content of the NOTICE file.
+
+    7. Disclaimer of Warranty. Unless required by applicable law or
+      agreed to in writing, Licensor provides the Work (and each
+      Contributor provides its Contributions) on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+      implied, including, without limitation, any warranties or conditions
+      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+      PARTICULAR PURPOSE. You are solely responsible for determining the
+      appropriateness of using or redistributing the Work and assume any
+      risks associated with Your exercise of permissions under this License.
+
+    8. Limitation of Liability. In no event and under no legal theory,
+      whether in tort (including negligence), contract, or otherwise,
+      unless required by applicable law (such as deliberate and grossly
+      negligent acts) or agreed to in writing, shall any Contributor be
+      liable to You for damages, including any direct, indirect, special,
+      incidental, or consequential damages of any character arising as a
+      result of this License or out of the use or inability to use the
+      Work (including but not limited to damages for loss of goodwill,
+      work stoppage, computer failure or malfunction, or any and all
+      other commercial damages or losses), even if such Contributor
+      has been advised of the possibility of such damages.
+
+    9. Accepting Warranty or Additional Liability. While redistributing
+      the Work or Derivative Works thereof, You may choose to offer,
+      and charge a fee for, acceptance of support, warranty, indemnity,
+      or other liability obligations and/or rights consistent with this
+      License. However, in accepting such obligations, You may act only
+      on Your own behalf and on Your sole responsibility, not on behalf
+      of any other Contributor, and only if You agree to indemnify,
+      defend, and hold each Contributor harmless for any liability
+      incurred by, or claims asserted against, such Contributor by reason
+      of your accepting any such warranty or additional liability.
+
+    END OF TERMS AND CONDITIONS
+
+    APPENDIX: How to apply the Apache License to your work.
+
+      To apply the Apache License to your work, attach the following
+      boilerplate notice, with the fields enclosed by brackets "[]"
+      replaced with your own identifying information. (Don't include
+      the brackets!)  The text should be enclosed in the appropriate
+      comment syntax for the file format. We also recommend that a
+      file or class name and description of purpose be included on the
+      same "printed page" as the copyright notice for easier
+      identification within third-party archives.
+
+    Copyright [yyyy] [name of copyright owner]
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+
+---- LLVM Exceptions to the Apache 2.0 License ----
+
+As an exception, if, as a result of your compiling your source code, portions
+of this Software are embedded into an Object form of such source code, you
+may redistribute such embedded portions in such Object form without complying
+with the conditions of Sections 4(a), 4(b) and 4(d) of the License.
+
+In addition, if you combine or link compiled forms of this Software with
+software that is licensed under the GPLv2 ("Combined Software") and if a
+court of competent jurisdiction determines that the patent provision (Section
+3), the indemnity provision (Section 9) or other Section of the License
+conflicts with the conditions of the GPLv2, you may retroactively and
+prospectively choose to deem waived or otherwise exclude such Section(s) of
+the License, but only in their entirety and only with respect to the Combined
+Software.
+
+==============================================================================
+Software from third parties included in the LLVM Project:
+==============================================================================
+The LLVM Project contains third party software which is under different license
+terms. All such code will be identified clearly using at least one of two
+mechanisms:
+1) It will be in a separate directory tree with its own `LICENSE.txt` or
+   `LICENSE` file at the top containing the specific license and restrictions
+   which apply to that software, or
+2) It will contain specific license and restriction terms at the top of every
+   file.
+
+==============================================================================
+Legacy LLVM License (https://llvm.org/docs/DeveloperPolicy.html#legacy):
+==============================================================================
+University of Illinois/NCSA
+Open Source License
+
+Copyright (c) 2007-2019 University of Illinois at Urbana-Champaign.
+All rights reserved.
+
+Developed by:
+
+    LLVM Team
+
+    University of Illinois at Urbana-Champaign
+
+    http://llvm.org
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal with
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimers.
+
+    * Redistributions in binary form must reproduce the above copyright notice,
+      this list of conditions and the following disclaimers in the
+      documentation and/or other materials provided with the distribution.
+
+    * Neither the names of the LLVM Team, University of Illinois at
+      Urbana-Champaign, nor the names of its contributors may be used to
+      endorse or promote products derived from this Software without specific
+      prior written permission.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+CONTRIBUTORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS WITH THE
+SOFTWARE.
+````
+
+### Licence text 44
 
 Used by: zune-core 0.5.3, zune-jpeg 0.5.15.
 
@@ -3354,9 +4181,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### Licence text 37
+### Licence text 45
 
-Used by: Tesseract eng.traineddata (tessdata_best, integer model) 4.0.0_best_int, 2952873 bytes gzipped (from @tesseract.js-data/eng 1.0.0), Tesseract (as built into tesseract.js-core 7.0.0) the version string inside the build is 5.1.0-288-g2a9c1, pdf.js font encoding and charset tables (encodings.js, charsets.js, cff_parser.js, fonts.js) commit 81525fd446779f0a29003cf06e3ba33751954826.
+Used by: Tesseract eng.traineddata tessdata_fast 4.1.0, 4113088 bytes, sha256 7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2, Tesseract osd.traineddata tessdata_fast 4.1.0, sha256 9cf5d576fcc47564f11265841e5ca839001e7e6f38ff7f7aacf46d15a96b00ff, Tesseract eng.traineddata (tessdata_best, integer model) 4.0.0_best_int, 2952873 bytes gzipped (from @tesseract.js-data/eng 1.0.0), Tesseract (as built into tesseract.js-core 7.0.0) the version string inside the build is 5.1.0-288-g2a9c1, pdf.js font encoding and charset tables (encodings.js, charsets.js, cff_parser.js, fonts.js) commit 81525fd446779f0a29003cf06e3ba33751954826.
 
 ````text
                               Apache License
@@ -3562,7 +4389,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ````
 
-### Licence text 38
+### Licence text 46
 
 Used by: pdfium chromium/8076 (156.0.8076.0).
 
@@ -3799,7 +4626,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    limitations under the License.
 ````
 
-### Licence text 39
+### Licence text 47
 
 Used by: png 0.18.1.
 
@@ -3831,7 +4658,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### Licence text 40
+### Licence text 48
 
 Used by: zlibjs 0.3.1.
 
@@ -3866,7 +4693,7 @@ Used by: zlibjs 0.3.1.
  */
 ````
 
-### Licence text 41
+### Licence text 49
 
 Used by: Adobe Glyph List, AGLFN and ZapfDingbats names 2.0 (glyphlist.txt).
 
@@ -3903,4 +4730,30 @@ HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
 CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+````
+
+### Licence text 50
+
+Used by: giflib (Leptonica's GIF codec) 6.1.3.
+
+````text
+= MIT LICENSE
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
 ````

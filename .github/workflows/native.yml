@@ -1,0 +1,117 @@
+# The native dependency builds of the release artifacts (P11.5, D1460; D524): static Tesseract and Leptonica with their codecs, and the pinned
+# pdfium, for each of the five CLI targets, one runner each. Native builds work on the host only (nothing is cross-compiled), so this matrix IS how
+# the other four targets get built. The pins are tools/native/native.edn (source tarballs, each with a sha256) and tools/pdfium/pdfium.edn.
+#   - on demand:  gh workflow run native.yml [-f ref=main]
+#   - called from the release workflows (P11.4b/P11.9): `uses: ./.github/workflows/native.yml` with `ref` set to the tag; the artifacts
+#     native-<triple> carry .cache/native/<triple> (include/, lib/*.a, share/tessdata, manifest.edn, link.rustflags) and the pdfium archive.
+# A prefix is cached by the hash of the pins (the file contents of native.edn, giflib.CMakeLists.txt, tesseract-prefind.cmake and native.clj): an unchanged pin is not rebuilt.
+# `bb native --audit` runs on every run, cached or built: static libraries only, no jbig2dec, JBIG-KIT, OpenJPEG or GPL symbol, library or link line.
+# Not triggered by a push or a pull request. The table below is native.edn's :triples (`bb native --check` fails if they differ).
+name: native
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: emon ref to build (branch, tag or sha)
+        type: string
+        default: main
+  workflow_call:
+    inputs:
+      ref:
+        description: emon ref to build (branch, tag or sha)
+        type: string
+        default: main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-${{ inputs.ref || 'main' }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+    working-directory: emon
+
+env:
+  CI: "true"
+
+jobs:
+  native:
+    name: native (${{ matrix.triple }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { triple: aarch64-apple-darwin,      runner: macos-14,         pdfium: mac-arm64 }
+          - { triple: x86_64-apple-darwin,       runner: macos-13,         pdfium: mac-x64 }
+          - { triple: x86_64-unknown-linux-gnu,  runner: ubuntu-24.04,     pdfium: linux-x64 }
+          - { triple: aarch64-unknown-linux-gnu, runner: ubuntu-24.04-arm, pdfium: linux-arm64 }
+          - { triple: x86_64-pc-windows-msvc,    runner: windows-2022,     pdfium: win-x64 }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ inputs.ref || 'main' }}
+          path: emon
+      - uses: DeLaGuardo/setup-clojure@13.4
+        with:
+          bb: 1.3.190
+      # NASM: libjpeg-turbo is built with REQUIRE_SIMD=ON, which fails without the assembler on x86_64 (arm64 uses intrinsics)
+      - name: NASM (x86_64 macOS)
+        if: matrix.triple == 'x86_64-apple-darwin'
+        run: brew install nasm
+      - name: NASM (x86_64 Linux)
+        if: matrix.triple == 'x86_64-unknown-linux-gnu'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq nasm
+      - name: NASM (Windows)
+        if: matrix.triple == 'x86_64-pc-windows-msvc'
+        shell: pwsh
+        run: |
+          choco install nasm -y --no-progress
+          "C:\Program Files\NASM" | Out-File -FilePath $env:GITHUB_PATH -Append
+      - name: MSVC environment (Windows)
+        if: matrix.triple == 'x86_64-pc-windows-msvc'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: The pins are well formed and name this matrix
+        run: bb native --check
+      - name: Cache key (the pins)
+        id: pins
+        run: echo "hash=$(bb native --pin-hash)" >> "$GITHUB_OUTPUT"
+      - name: Source tarballs (by pin hash)
+        uses: actions/cache@v4
+        with:
+          path: emon/.cache/native/dl
+          key: native-dl-${{ hashFiles('emon/tools/native/native.edn') }}
+      - name: Static Tesseract and Leptonica (by pin hash)
+        id: prefix
+        uses: actions/cache@v4
+        with:
+          path: emon/.cache/native/${{ matrix.triple }}
+          key: native-prefix-${{ matrix.triple }}-${{ matrix.runner }}-${{ steps.pins.outputs.hash }}
+      - name: bb native (a cache hit is only audited)
+        run: bb native --triple ${{ matrix.triple }} --jobs 4
+      - name: bb native --audit
+        run: bb native --triple ${{ matrix.triple }} --audit
+      - name: Link a program against the static libraries (unix)
+        if: runner.os != 'Windows'
+        run: bb native --triple ${{ matrix.triple }} --smoke
+      - name: The pinned pdfium for this platform
+        run: bb pdfium-fetch --platform ${{ matrix.pdfium }}
+      - name: Sizes
+        run: |
+          du -sh ".cache/native/${{ matrix.triple }}/lib" ".cache/pdfium/chromium-8076/${{ matrix.pdfium }}" || true
+          cat ".cache/native/${{ matrix.triple }}/manifest.edn"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.triple }}
+          path: |
+            emon/.cache/native/${{ matrix.triple }}
+            emon/.cache/pdfium/chromium-8076/${{ matrix.pdfium }}
+          if-no-files-found: error
