@@ -258,7 +258,7 @@
                          (not (re-find #"^[^:=]*(EXECUTABLE|PROGRAM|_COMPILER|_AR:|RANLIB|_NM:|_LINKER|_COMMAND|_TOOL|OBJDUMP|_STRIP)" line)))
                 (fail! (fs/relativize bdir f) ": a path of the machine's own libraries: " (str/trim line)))
               (let [v (second (str/split line #"=" 2))]
-                (when (and v (re-find #"\.(a|lib|dylib|so|tbd)$" v) (allowed (lib-stem (fs/file-name v))) (not (str/starts-with? v prefix)))
+                (when (and v (re-find #"\.(a|lib|dylib|so|tbd)$" v) (allowed (lib-stem (fs/file-name v))) (not (str/starts-with? (str/lower-case (str/replace v "\\" "/")) (str/lower-case (str/replace (str prefix) "\\" "/")))))
                   (fail! (fs/relativize bdir f) ": a pinned component found OUTSIDE the prefix: " (str/trim line)))
                 (when (and v (re-find deny-libs (fs/file-name (str/replace (str v) #"[;\"]" " "))) (re-find #"\.(a|lib|so|dylib)$" (str v)))
                   (fail! (fs/relativize bdir f) ": an excluded library in the cache: " (str/trim line)))))
