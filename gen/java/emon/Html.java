@@ -436,8 +436,81 @@ public final class Html {
         emon.Port.textAscii(t, "></span>");
         return 0;
     }
+    public static int hButton(emon.Port.Cells text, emon.Port.Cells attrs, int a) {
+        // What a field's `type` (the text attribute a) says it is: 1 a check box, 2 a radio button, else 0. `checkbox` is the only type of eight
+        // letters and `radio` of five that begin with a c and an r.
+        int s = Model.attrValue(attrs, a);
+        int ln = Model.attrLen(attrs, a);
+        if ((ln == 8) && (emon.Port.cellsAt(text, s) == 99)) {
+            return 1;
+        }
+        if ((ln == 5) && (emon.Port.cellsAt(text, s) == 114)) {
+            return 2;
+        }
+        return 0;
+    }
+    public static int hField(StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells text, int n) {
+        // A form field (SPEC 5.1): a span, never a live <input>. A check box or radio button says what it is to assistive technology (`role`, `aria-checked`) and
+        // keeps its export value in `data-emon-value`, its element empty; any other field shows its value as the element's content. In a paragraph (an inline) or
+        // among blocks, the same.
+        int a = -1;
+        int b = 0;
+        emon.Port.textAscii(t, "<span data-emon=\"field\"");
+        a = hTattr(nodes, attrs, n, Model.fkName());
+        if (a >= 0) {
+            emon.Port.textAscii(t, " data-emon-name=\"");
+            hRun(t, text, Model.attrValue(attrs, a), Model.attrLen(attrs, a));
+            emon.Port.textAscii(t, "\"");
+        }
+        a = hTattr(nodes, attrs, n, Model.fkType());
+        if (a >= 0) {
+            emon.Port.textAscii(t, " data-emon-type=\"");
+            hRun(t, text, Model.attrValue(attrs, a), Model.attrLen(attrs, a));
+            emon.Port.textAscii(t, "\"");
+            b = hButton(text, attrs, a);
+            if (b == 1) {
+                emon.Port.textAscii(t, " role=\"checkbox\"");
+            }
+            if (b == 2) {
+                emon.Port.textAscii(t, " role=\"radio\"");
+            }
+        }
+        a = hIattr(nodes, attrs, n, Model.fkChecked());
+        if (a >= 0) {
+            if (Model.attrValue(attrs, a) != 0) {
+                emon.Port.textAscii(t, " data-emon-checked=\"true\"");
+            }
+            if (Model.attrValue(attrs, a) == 0) {
+                emon.Port.textAscii(t, " data-emon-checked=\"false\"");
+            }
+            if (b > 0) {
+                if (Model.attrValue(attrs, a) != 0) {
+                    emon.Port.textAscii(t, " aria-checked=\"true\"");
+                }
+                if (Model.attrValue(attrs, a) == 0) {
+                    emon.Port.textAscii(t, " aria-checked=\"false\"");
+                }
+            }
+        }
+        a = hTattr(nodes, attrs, n, Model.fkValue());
+        if ((a >= 0) && (b > 0)) {
+            emon.Port.textAscii(t, " data-emon-value=\"");
+            hRun(t, text, Model.attrValue(attrs, a), Model.attrLen(attrs, a));
+            emon.Port.textAscii(t, "\"");
+        }
+        hCommon(t, o, nodes, regions, pages, layout, n);
+        emon.Port.textAscii(t, ">");
+        if ((a >= 0) && (b == 0)) {
+            hRun(t, text, Model.attrValue(attrs, a), Model.attrLen(attrs, a));
+        }
+        if (a < 0) {
+            hInner(t, o, nodes, attrs, regions, pages, layout, text, n);
+        }
+        emon.Port.textAscii(t, "</span>");
+        return 0;
+    }
     public static int hInline(StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells text, int n) {
-        // One inline node: text, span, link, ref or linebreak (SPEC 5.1).
+        // One inline node: text, span, link, ref, linebreak, initial, field or a milestone (SPEC 5.1).
         int kind = Model.nodeKind(nodes, n);
         int sub = Model.nodeSub(nodes, n);
         int a = -1;
@@ -558,6 +631,10 @@ public final class Html {
             if (a < 0) {
                 emon.Port.textAscii(t, "</span>");
             }
+            return 0;
+        }
+        if (kind == Model.nkField()) {
+            hField(t, o, nodes, attrs, regions, pages, layout, text, n);
             return 0;
         }
         return 0;
@@ -1283,38 +1360,7 @@ public final class Html {
             return 1;
         }
         if (kind == Model.nkField()) {
-            emon.Port.textAscii(t, "<span data-emon=\"field\"");
-            a = hTattr(nodes, attrs, n, Model.fkName());
-            if (a >= 0) {
-                emon.Port.textAscii(t, " data-emon-name=\"");
-                hRun(t, text, Model.attrValue(attrs, a), Model.attrLen(attrs, a));
-                emon.Port.textAscii(t, "\"");
-            }
-            a = hTattr(nodes, attrs, n, Model.fkType());
-            if (a >= 0) {
-                emon.Port.textAscii(t, " data-emon-type=\"");
-                hRun(t, text, Model.attrValue(attrs, a), Model.attrLen(attrs, a));
-                emon.Port.textAscii(t, "\"");
-            }
-            a = hIattr(nodes, attrs, n, Model.fkChecked());
-            if (a >= 0) {
-                if (Model.attrValue(attrs, a) != 0) {
-                    emon.Port.textAscii(t, " data-emon-checked=\"true\"");
-                }
-                if (Model.attrValue(attrs, a) == 0) {
-                    emon.Port.textAscii(t, " data-emon-checked=\"false\"");
-                }
-            }
-            hCommon(t, o, nodes, regions, pages, layout, n);
-            emon.Port.textAscii(t, ">");
-            a = hTattr(nodes, attrs, n, Model.fkValue());
-            if (a >= 0) {
-                hRun(t, text, Model.attrValue(attrs, a), Model.attrLen(attrs, a));
-            }
-            if (a < 0) {
-                hInner(t, o, nodes, attrs, regions, pages, layout, text, n);
-            }
-            emon.Port.textAscii(t, "</span>");
+            hField(t, o, nodes, attrs, regions, pages, layout, text, n);
             return 1;
         }
         if (kind == Model.nkFurniture()) {

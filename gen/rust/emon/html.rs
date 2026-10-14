@@ -436,8 +436,81 @@ pub(crate) fn h_milestone(mut t: &mut String, o: i32, nodes: &mut crate::port::C
     crate::port::text_ascii(t, "></span>");
     return 0;
 }
+pub(crate) fn h_button(text: &mut crate::port::Cells, attrs: &mut crate::port::Cells, a: i32) -> i32 {
+    // What a field's `type` (the text attribute a) says it is: 1 a check box, 2 a radio button, else 0. `checkbox` is the only type of eight
+    // letters and `radio` of five that begin with a c and an r.
+    let s: i32 = attr_value(attrs, a);
+    let ln: i32 = attr_len(attrs, a);
+    if (ln == 8) && (crate::port::cells_at(text, s) == 99) {
+        return 1;
+    }
+    if (ln == 5) && (crate::port::cells_at(text, s) == 114) {
+        return 2;
+    }
+    return 0;
+}
+pub(crate) fn h_field(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, pages: &mut crate::port::Cells, layout: &mut crate::port::Cells, text: &mut crate::port::Cells, n: i32) -> i32 {
+    // A form field (SPEC 5.1): a span, never a live <input>. A check box or radio button says what it is to assistive technology (`role`, `aria-checked`) and
+    // keeps its export value in `data-emon-value`, its element empty; any other field shows its value as the element's content. In a paragraph (an inline) or
+    // among blocks, the same.
+    let mut a: i32 = -1;
+    let mut b: i32 = 0;
+    crate::port::text_ascii(t, "<span data-emon=\"field\"");
+    a = h_tattr(nodes, attrs, n, fk_name());
+    if a >= 0 {
+        crate::port::text_ascii(t, " data-emon-name=\"");
+        h_run(t, text, attr_value(attrs, a), attr_len(attrs, a));
+        crate::port::text_ascii(t, "\"");
+    }
+    a = h_tattr(nodes, attrs, n, fk_type());
+    if a >= 0 {
+        crate::port::text_ascii(t, " data-emon-type=\"");
+        h_run(t, text, attr_value(attrs, a), attr_len(attrs, a));
+        crate::port::text_ascii(t, "\"");
+        b = h_button(text, attrs, a);
+        if b == 1 {
+            crate::port::text_ascii(t, " role=\"checkbox\"");
+        }
+        if b == 2 {
+            crate::port::text_ascii(t, " role=\"radio\"");
+        }
+    }
+    a = h_iattr(nodes, attrs, n, fk_checked());
+    if a >= 0 {
+        if attr_value(attrs, a) != 0 {
+            crate::port::text_ascii(t, " data-emon-checked=\"true\"");
+        }
+        if attr_value(attrs, a) == 0 {
+            crate::port::text_ascii(t, " data-emon-checked=\"false\"");
+        }
+        if b > 0 {
+            if attr_value(attrs, a) != 0 {
+                crate::port::text_ascii(t, " aria-checked=\"true\"");
+            }
+            if attr_value(attrs, a) == 0 {
+                crate::port::text_ascii(t, " aria-checked=\"false\"");
+            }
+        }
+    }
+    a = h_tattr(nodes, attrs, n, fk_value());
+    if (a >= 0) && (b > 0) {
+        crate::port::text_ascii(t, " data-emon-value=\"");
+        h_run(t, text, attr_value(attrs, a), attr_len(attrs, a));
+        crate::port::text_ascii(t, "\"");
+    }
+    h_common(t, o, nodes, regions, pages, layout, n);
+    crate::port::text_ascii(t, ">");
+    if (a >= 0) && (b == 0) {
+        h_run(t, text, attr_value(attrs, a), attr_len(attrs, a));
+    }
+    if a < 0 {
+        h_inner(t, o, nodes, attrs, regions, pages, layout, text, n);
+    }
+    crate::port::text_ascii(t, "</span>");
+    return 0;
+}
 pub(crate) fn h_inline(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, pages: &mut crate::port::Cells, layout: &mut crate::port::Cells, text: &mut crate::port::Cells, n: i32) -> i32 {
-    // One inline node: text, span, link, ref or linebreak (SPEC 5.1).
+    // One inline node: text, span, link, ref, linebreak, initial, field or a milestone (SPEC 5.1).
     let kind: i32 = node_kind(nodes, n);
     let sub: i32 = node_sub(nodes, n);
     let mut a: i32 = -1;
@@ -558,6 +631,10 @@ pub(crate) fn h_inline(mut t: &mut String, o: i32, nodes: &mut crate::port::Cell
         if a < 0 {
             crate::port::text_ascii(t, "</span>");
         }
+        return 0;
+    }
+    if kind == nk_field() {
+        h_field(t, o, nodes, attrs, regions, pages, layout, text, n);
         return 0;
     }
     return 0;
@@ -1283,38 +1360,7 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
         return 1;
     }
     if kind == nk_field() {
-        crate::port::text_ascii(t, "<span data-emon=\"field\"");
-        a = h_tattr(nodes, attrs, n, fk_name());
-        if a >= 0 {
-            crate::port::text_ascii(t, " data-emon-name=\"");
-            h_run(t, text, attr_value(attrs, a), attr_len(attrs, a));
-            crate::port::text_ascii(t, "\"");
-        }
-        a = h_tattr(nodes, attrs, n, fk_type());
-        if a >= 0 {
-            crate::port::text_ascii(t, " data-emon-type=\"");
-            h_run(t, text, attr_value(attrs, a), attr_len(attrs, a));
-            crate::port::text_ascii(t, "\"");
-        }
-        a = h_iattr(nodes, attrs, n, fk_checked());
-        if a >= 0 {
-            if attr_value(attrs, a) != 0 {
-                crate::port::text_ascii(t, " data-emon-checked=\"true\"");
-            }
-            if attr_value(attrs, a) == 0 {
-                crate::port::text_ascii(t, " data-emon-checked=\"false\"");
-            }
-        }
-        h_common(t, o, nodes, regions, pages, layout, n);
-        crate::port::text_ascii(t, ">");
-        a = h_tattr(nodes, attrs, n, fk_value());
-        if a >= 0 {
-            h_run(t, text, attr_value(attrs, a), attr_len(attrs, a));
-        }
-        if a < 0 {
-            h_inner(t, o, nodes, attrs, regions, pages, layout, text, n);
-        }
-        crate::port::text_ascii(t, "</span>");
+        h_field(t, o, nodes, attrs, regions, pages, layout, text, n);
         return 1;
     }
     if kind == nk_furniture() {

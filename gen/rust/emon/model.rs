@@ -1932,7 +1932,7 @@ pub fn node_has_text(nodes: &mut crate::port::Cells, n: i32) -> i32 {
 pub fn nk_is_inline(kind: i32) -> i32 {
     // 1 for the kinds that live inside a block's text: text, span, link,
     // ref, linebreak, initial (SPEC 3.2). A `break` is a milestone, not an
-    // inline.
+    // inline. A `field` is either; see `node-is-inline`.
     if kind == nk_text() {
         return 1;
     }
@@ -1956,12 +1956,36 @@ pub fn nk_is_inline(kind: i32) -> i32 {
 pub fn node_is_inline(nodes: &mut crate::port::Cells, n: i32) -> i32 {
     // 1 when node n is an inline: an inline KIND, or a `break` with an inline neighbour (D134). A page
     // milestone INSIDE a paragraph (text, break, text) is an inline -- written in `inlines`, in order,
-    // with no `id` -- and BETWEEN two blocks it is a block, as `nk-is-inline` of its kind says.
+    // with no `id` -- and BETWEEN two blocks it is a block, as `nk-is-inline` of its kind says. A `field`
+    // is the same: an inline when it has an inline neighbour or its parent is a paragraph, heading or
+    // caption (a form field sits in the block that holds its label, P11.x3, D1510); a block among blocks
+    // otherwise (SPEC 3.2, as it always was).
     let kind: i32 = nget(nodes, n, 0);
     let pv: i32 = nget(nodes, n, 5);
     let nx: i32 = nget(nodes, n, 4);
+    let par: i32 = nget(nodes, n, 1);
     if nk_is_inline(kind) == 1 {
         return 1;
+    }
+    if kind == nk_field() {
+        if pv >= 0 {
+            let pkind: i32 = nget(nodes, pv, 0);
+            if nk_is_inline(pkind) == 1 {
+                return 1;
+            }
+        }
+        if nx >= 0 {
+            let nkind: i32 = nget(nodes, nx, 0);
+            if nk_is_inline(nkind) == 1 {
+                return 1;
+            }
+        }
+        if par >= 0 {
+            let qkind: i32 = nget(nodes, par, 0);
+            if (qkind == nk_paragraph()) || (qkind == nk_heading()) || (qkind == nk_caption()) {
+                return 1;
+            }
+        }
     }
     if kind == nk_break() {
         if pv >= 0 {

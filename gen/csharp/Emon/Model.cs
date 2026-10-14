@@ -1935,7 +1935,7 @@ public static class Model {
     public static int NkIsInline(int kind) {
         // 1 for the kinds that live inside a block's text: text, span, link,
         // ref, linebreak, initial (SPEC 3.2). A `break` is a milestone, not an
-        // inline.
+        // inline. A `field` is either; see `node-is-inline`.
         if (kind == NkText()) {
             return 1;
         }
@@ -1959,12 +1959,36 @@ public static class Model {
     public static int NodeIsInline(emon.Port.Cells nodes, int n) {
         // 1 when node n is an inline: an inline KIND, or a `break` with an inline neighbour (D134). A page
         // milestone INSIDE a paragraph (text, break, text) is an inline -- written in `inlines`, in order,
-        // with no `id` -- and BETWEEN two blocks it is a block, as `nk-is-inline` of its kind says.
+        // with no `id` -- and BETWEEN two blocks it is a block, as `nk-is-inline` of its kind says. A `field`
+        // is the same: an inline when it has an inline neighbour or its parent is a paragraph, heading or
+        // caption (a form field sits in the block that holds its label, P11.x3, D1510); a block among blocks
+        // otherwise (SPEC 3.2, as it always was).
         int kind = Nget(nodes, n, 0);
         int pv = Nget(nodes, n, 5);
         int nx = Nget(nodes, n, 4);
+        int par = Nget(nodes, n, 1);
         if (NkIsInline(kind) == 1) {
             return 1;
+        }
+        if (kind == NkField()) {
+            if (pv >= 0) {
+                int pkind = Nget(nodes, pv, 0);
+                if (NkIsInline(pkind) == 1) {
+                    return 1;
+                }
+            }
+            if (nx >= 0) {
+                int nkind = Nget(nodes, nx, 0);
+                if (NkIsInline(nkind) == 1) {
+                    return 1;
+                }
+            }
+            if (par >= 0) {
+                int qkind = Nget(nodes, par, 0);
+                if ((qkind == NkParagraph()) || (qkind == NkHeading()) || (qkind == NkCaption())) {
+                    return 1;
+                }
+            }
         }
         if (kind == NkBreak()) {
             if (pv >= 0) {

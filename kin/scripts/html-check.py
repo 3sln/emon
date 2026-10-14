@@ -206,7 +206,32 @@ class R:
             else:
                 body = esc(n["marker"]) if "marker" in n else ""
             return open_ + self.common(n) + ">" + body + close
+        if k == "field":                # a form field inside a paragraph (P11.x3, D1510)
+            return self.field(n)
         raise ValueError(k)
+
+    def field(self, n):
+        """A form field (SPEC 5.1): a span, never an input. A check box or radio button says what it is
+        (role, aria-checked), keeps its export value in data-emon-value and has an empty element; any
+        other field shows its value as its content."""
+        button = n.get("type") in ("checkbox", "radio")
+        o = '<span data-emon="field"'
+        o += self.attr("data-emon-name", n, "name")
+        o += self.attr("data-emon-type", n, "type")
+        if button:
+            o += ' role="%s"' % n["type"]
+        if "checked" in n:
+            on = "true" if n["checked"] else "false"
+            o += ' data-emon-checked="%s"' % on
+            if button:
+                o += ' aria-checked="%s"' % on
+        if button:
+            o += self.attr("data-emon-value", n, "value")
+        if "value" in n:
+            body = "" if button else esc(n["value"])
+        else:
+            body = self.inner(n)
+        return o + self.common(n) + ">" + body + "</span>"
 
     # ---- blocks
     def blocks(self, n, d, skip=None):
@@ -345,13 +370,7 @@ class R:
             o += self.attr("data-emon-marker", n, "marker") + c + ">"
             return nl + self.wrap(o, "</aside>", n, d)
         if k == "field":
-            o = '<span data-emon="field"'
-            o += self.attr("data-emon-name", n, "name")
-            o += self.attr("data-emon-type", n, "type")
-            if "checked" in n:
-                o += ' data-emon-checked="%s"' % ("true" if n["checked"] else "false")
-            body = esc(n["value"]) if "value" in n else self.inner(n)
-            return nl + o + c + ">" + body + "</span>"
+            return nl + self.field(n)
         raise ValueError("kind " + k)
 
     def children_only(self, open_, close, n, d):

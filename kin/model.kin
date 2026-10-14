@@ -432,7 +432,7 @@
 (defn ^:pub ^I32 nk-is-inline [^I32 kind]
   (comment "1 for the kinds that live inside a block's text: text, span, link,")
   (comment "ref, linebreak, initial (SPEC 3.2). A `break` is a milestone, not an")
-  (comment "inline.")
+  (comment "inline. A `field` is either; see `node-is-inline`.")
   (if (== kind (nk-text)) (return 1))
   (if (== kind (nk-span)) (return 1))
   (if (== kind (nk-link)) (return 1))
@@ -444,11 +444,25 @@
 (defn ^:pub ^I32 node-is-inline [^Cells nodes ^I32 n]
   (comment "1 when node n is an inline: an inline KIND, or a `break` with an inline neighbour (D134). A page")
   (comment "milestone INSIDE a paragraph (text, break, text) is an inline -- written in `inlines`, in order,")
-  (comment "with no `id` -- and BETWEEN two blocks it is a block, as `nk-is-inline` of its kind says.")
+  (comment "with no `id` -- and BETWEEN two blocks it is a block, as `nk-is-inline` of its kind says. A `field`")
+  (comment "is the same: an inline when it has an inline neighbour or its parent is a paragraph, heading or")
+  (comment "caption (a form field sits in the block that holds its label, P11.x3, D1510); a block among blocks")
+  (comment "otherwise (SPEC 3.2, as it always was).")
   (let [^I32 kind (nget nodes n 0)
         ^I32 pv (nget nodes n 5)
-        ^I32 nx (nget nodes n 4)]
+        ^I32 nx (nget nodes n 4)
+        ^I32 par (nget nodes n 1)]
     (if (== (nk-is-inline kind) 1) (return 1))
+    (if (== kind (nk-field))
+      (do (if (>= pv 0)
+            (do (let [^I32 pkind (nget nodes pv 0)]
+                  (if (== (nk-is-inline pkind) 1) (return 1)))))
+          (if (>= nx 0)
+            (do (let [^I32 nkind (nget nodes nx 0)]
+                  (if (== (nk-is-inline nkind) 1) (return 1)))))
+          (if (>= par 0)
+            (do (let [^I32 qkind (nget nodes par 0)]
+                  (if (or (== qkind (nk-paragraph)) (== qkind (nk-heading)) (== qkind (nk-caption))) (return 1)))))))
     (if (== kind (nk-break))
       (do (if (>= pv 0)
             (do (let [^I32 pkind (nget nodes pv 0)]

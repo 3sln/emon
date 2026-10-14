@@ -97,6 +97,9 @@ public static class Pdfannot {
     public static int AnDigsig() {
         return 27;
     }
+    public static int AnField() {
+        return 28;
+    }
     public static int AnSubEmitName(System.Text.StringBuilder t, int code) {
         if (code == 0) {
             emon.Port.TextAscii(t, "other");
@@ -208,6 +211,10 @@ public static class Pdfannot {
         }
         if (code == 27) {
             emon.Port.TextAscii(t, "DigitalSignature");
+            return 1;
+        }
+        if (code == 28) {
+            emon.Port.TextAscii(t, "FormField");
             return 1;
         }
         return 0;
@@ -1700,6 +1707,61 @@ public static class Pdfannot {
         emon.Port.CellsSet(fd, at + 23, r);
         return r;
     }
+    internal static int PaWidgetState(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells txt, int dict, emon.Port.Cells fd, int fat, emon.Port.Cells an, int at) {
+        // A check box or radio button widget (`dict`, resolved) of the field at fd[fat]: is it on, and in which state? Into the synthetic `an-field` row at an[at]: cell 9
+        // is 1 when its /AS names a state other than /Off (with no /AS: when the field's /V does), else 0; the export value is the run at cells 16-17: the state the widget
+        // is in when it is on (/AS, else the field's /V), else, off, the first state of /AP /N that is not /Off. Evidence, not truth (D034): what the file states, so a
+        // widget whose /AS and /V disagree is on by its /AS, the appearance that is painted.
+        int @as = Pdfx.PxDget(src, ar, dc, a, b, st, dict, Pdfxnames.PxAs());
+        int vh = emon.Port.CellsAt(fd, fat + 31);
+        int ap = Pdfx.PxDget(src, ar, dc, a, b, st, dict, Pdfxnames.PxAp());
+        int on = 0;
+        int got = 0;
+        int nr = 0;
+        int n = 0;
+        int k = 0;
+        int v = 0;
+        if ((@as != 0) && (Pdflex.PlKindOf(ar, @as) == 4)) {
+            if (Pdfx.PxIs(ar, @as, Pdfxnames.PxOff()) == 0) {
+                on = 1;
+            }
+        } else if ((vh != 0) && (Pdflex.PlKindOf(ar, vh) == 4)) {
+            if (Pdfx.PxIs(ar, vh, Pdfxnames.PxOff()) == 0) {
+                on = 1;
+            }
+        }
+        emon.Port.CellsSet(an, at + 9, on);
+        if ((on == 1) && (@as != 0) && (Pdflex.PlKindOf(ar, @as) == 4)) {
+            PaTextTo(txt, ar, @as, an, at + 16);
+            got = 1;
+        }
+        if ((got == 0) && (on == 1) && (vh != 0) && (Pdflex.PlKindOf(ar, vh) == 4)) {
+            PaTextTo(txt, ar, vh, an, at + 16);
+            got = 1;
+        }
+        if ((got == 0) && (ap != 0) && (Pdflex.PlKindOf(ar, ap) == 7)) {
+            nr = Pdflex.PlDictGet(ar, ap, Pdfnames.PnN());
+            if (nr != 0) {
+                n = Pdfdoc.PdResolve(src, ar, dc, a, b, st, nr);
+                if ((n != 0) && (Pdflex.PlKindOf(ar, n) == 7)) {
+                    k = Pdflex.PlFirst(ar, n);
+                    while ((k != 0) && (got == 0)) {
+                        v = Pdflex.PlNext(ar, k);
+                        if (Pdfx.PxIs(ar, k, Pdfxnames.PxOff()) == 0) {
+                            PaTextTo(txt, ar, k, an, at + 16);
+                            got = 1;
+                        }
+                        if (v == 0) {
+                            k = 0;
+                        } else {
+                            k = Pdflex.PlNext(ar, v);
+                        }
+                    }
+                }
+            }
+        }
+        return got;
+    }
     internal static int PaAnnot(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells idx, emon.Port.Cells pg, emon.Port.Cells txt, emon.Port.Cells w, emon.Port.Cells an, emon.Port.Cells aq, emon.Port.Cells fm, emon.Port.Cells fd, emon.Port.Cells sg, int pi, int h0) {
         // One entry of a page's /Annots: a row in `an`, and, for a widget, its field's
         // row updated. Answers the annotation row, or -1 when the entry is no dictionary.
@@ -1954,6 +2016,103 @@ public static class Pdfannot {
         }
         return n;
     }
+    internal static int PaFieldRowOf(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells txt, emon.Port.Cells fd, emon.Port.Cells an, int wrow, int frow, int dict) {
+        // Append the synthetic `an-field` row (see the head of this file) of widget row `wrow` (its dictionary `dict`, resolved) of field row `frow`. Answers 1 when a row
+        // was written, 0 when the widget is not one the document unit places: a hidden or no-view widget, one without an area, a field of another kind than check box,
+        // radio, text, combo or list.
+        int w = wrow * AnStride;
+        int f = frow * FdStride;
+        int kind = emon.Port.CellsAt(fd, f + 6);
+        int flags = emon.Port.CellsAt(an, w + 3);
+        int pi = emon.Port.CellsAt(an, w);
+        int at = 0;
+        int k = 0;
+        if ((kind < 2) || (kind > 6)) {
+            return 0;
+        }
+        if ((flags & 34) != 0) {
+            return 0;
+        }
+        if ((emon.Port.CellsAt(an, w + 6) <= emon.Port.CellsAt(an, w + 4)) || (emon.Port.CellsAt(an, w + 7) <= emon.Port.CellsAt(an, w + 5))) {
+            return 0;
+        }
+        PaAnNew(an, pi);
+        at = emon.Port.CellsLen(an) - AnStride;
+        emon.Port.CellsSet(an, at + 1, AnField());
+        emon.Port.CellsSet(an, at + 2, emon.Port.CellsAt(fd, f));
+        emon.Port.CellsSet(an, at + 3, flags);
+        k = 0;
+        while (k < 4) {
+            emon.Port.CellsSet(an, (at + 4) + k, emon.Port.CellsAt(an, (w + 4) + k));
+            k += 1;
+        }
+        k = 8;
+        while (k < 23) {
+            emon.Port.CellsSet(an, at + k, 0);
+            k += 1;
+        }
+        emon.Port.CellsSet(an, at + 8, kind);
+        emon.Port.CellsSet(an, at + 9, -1);
+        emon.Port.CellsSet(an, at + 10, emon.Port.CellsAt(fd, f + 5));
+        emon.Port.CellsSet(an, at + 11, emon.Port.CellsAt(fd, f + 23));
+        emon.Port.CellsSet(an, at + 12, emon.Port.CellsAt(fd, f + 2));
+        emon.Port.CellsSet(an, at + 13, emon.Port.CellsAt(fd, f + 3));
+        emon.Port.CellsSet(an, at + 14, -1);
+        emon.Port.CellsSet(an, at + 16, -1);
+        emon.Port.CellsSet(an, at + 18, emon.Port.CellsAt(fd, f + 13));
+        emon.Port.CellsSet(an, at + 19, emon.Port.CellsAt(fd, f + 14));
+        emon.Port.CellsSet(an, at + 20, wrow);
+        emon.Port.CellsSet(an, at + 21, frow);
+        if ((kind == 2) || (kind == 3)) {
+            PaWidgetState(src, ar, dc, a, b, st, txt, dict, fd, f, an, at);
+        }
+        if (kind >= 4) {
+            if ((emon.Port.CellsAt(fd, f + 7) != 0) && (emon.Port.CellsAt(fd, f + 8) >= 0)) {
+                emon.Port.CellsSet(an, at + 14, emon.Port.CellsAt(fd, f + 8));
+                emon.Port.CellsSet(an, at + 15, emon.Port.CellsAt(fd, f + 9));
+            } else if ((emon.Port.CellsAt(an, w + 32) >= 0) && (emon.Port.CellsAt(an, w + 33) > 0)) {
+                emon.Port.CellsSet(an, at + 14, emon.Port.CellsAt(an, w + 32));
+                emon.Port.CellsSet(an, at + 15, emon.Port.CellsAt(an, w + 33));
+            }
+        }
+        return 1;
+    }
+    internal static int PaFieldRows(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells pg, emon.Port.Cells txt, emon.Port.Cells fd, emon.Port.Cells an) {
+        // The synthetic rows of every widget of a placeable field (`pa-field-row-of`), in widget order: the pages' /Annots read once more, in the order `pa-run` read them
+        // (an entry that is a dictionary was the next row of `an`, so the count of those is the row of a widget), for what a row of `an` does not keep, a button's state.
+        // Answers the rows written. Call it after the rows of the annotations are all there.
+        int np = Pdfdoc.PdPgCount(pg);
+        int i = 0;
+        int r = 0;
+        int e = 0;
+        int anArr = 0;
+        int dict = 0;
+        int frow = 0;
+        int w = 0;
+        int wrote = 0;
+        while (i < np) {
+            anArr = Pdfx.PxDget(src, ar, dc, a, b, st, Pdfdoc.PdPgNode(pg, i), Pdfxnames.PxAnnots());
+            if ((anArr != 0) && (Pdflex.PlKindOf(ar, anArr) == 6)) {
+                e = Pdflex.PlFirst(ar, anArr);
+                while (e != 0) {
+                    if (r < PaAnnots) {
+                        dict = Pdfdoc.PdResolve(src, ar, dc, a, b, st, e);
+                        if ((dict != 0) && (Pdflex.PlKindOf(ar, dict) == 7)) {
+                            w = r * AnStride;
+                            frow = emon.Port.CellsAt(an, w + 29);
+                            if ((emon.Port.CellsAt(an, w + 1) == AnWidget()) && (frow >= 0)) {
+                                wrote += PaFieldRowOf(src, ar, dc, a, b, st, txt, fd, an, r, frow, dict);
+                            }
+                            r += 1;
+                        }
+                    }
+                    e = Pdflex.PlNext(ar, e);
+                }
+            }
+            i += 1;
+        }
+        return wrote;
+    }
     public static int PaRun(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells pg, emon.Port.Cells idx, emon.Port.Cells txt, emon.Port.Cells w, emon.Port.Cells fs, emon.Port.Cells seen, emon.Port.Cells fm, emon.Port.Cells an, emon.Port.Cells aq, emon.Port.Cells fd, emon.Port.Cells sg) {
         // Everything P3.8 reads, after `pd-open`, `pd-pages` and `px-index-build`: fields
         // first (so a widget finds its field), then every page's /Annots, then the
@@ -2036,6 +2195,7 @@ public static class Pdfannot {
         }
         i = emon.Port.CellsLen(an) / AnStride;
         PaDigsigs(an, fd, sg);
+        PaFieldRows(src, ar, dc, a, b, st, pg, txt, fd, an);
         return i;
     }
     internal static int PaDumpAnnot(System.Text.StringBuilder t, emon.Port.Cells txt, emon.Port.Cells an, emon.Port.Cells aq, int row) {
@@ -2259,7 +2419,7 @@ public static class Pdfannot {
         int i = 0;
         emon.Port.TextAscii(t, "{\"annots\":[");
         while (i < na) {
-            if (emon.Port.CellsAt(an, (i * AnStride) + 1) != AnDigsig()) {
+            if ((emon.Port.CellsAt(an, (i * AnStride) + 1) != AnDigsig()) && (emon.Port.CellsAt(an, (i * AnStride) + 1) != AnField())) {
                 if (i > 0) {
                     emon.Port.TextAscii(t, ",");
                 }

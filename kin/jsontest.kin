@@ -69,6 +69,25 @@
     (assert-text-span compact (test-file "json/kinds.json") 0 (jt-end (test-file "json/kinds.json")) "compact" 0)
     (assert-text-span pretty (test-file "json/kinds.pretty.json") 0 (jt-end (test-file "json/kinds.pretty.json")) "pretty" 0)))
 
+(deftest test-golden-fields
+  (comment "P11.x3 (D1510): a form field is an inline of the paragraph that holds its label (no id, in `inlines`, before or after the words) and still a block among blocks.")
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells st (new-cells)
+        ^Text compact (new-text)
+        ^Text pretty (new-text)]
+    (assert-eq (jt-build (test-file "json/fields.model") nodes attrs regions text pages ledger layout st) 0 "the script builds")
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) 0 "the Model is well formed")
+    (js-emit compact 0 nodes attrs regions text pages ledger layout (new-cells) (new-cells))
+    (js-emit pretty 1 nodes attrs regions text pages ledger layout (new-cells) (new-cells))
+    (assert-text-span compact (test-file "json/fields.json") 0 (jt-end (test-file "json/fields.json")) "compact" 0)
+    (assert-text-span pretty (test-file "json/fields.pretty.json") 0 (jt-end (test-file "json/fields.pretty.json")) "pretty" 0)))
+
 (deftest test-golden-corners
   (let [^Cells nodes (new-cells)
         ^Cells attrs (new-cells)

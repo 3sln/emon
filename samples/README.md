@@ -63,8 +63,8 @@ emon-rs --pdfium --tesseract --assets=figures --out=html figures-charts.pdf > fi
 | figures-charts | `figure data-emon-kind=chart/diagram/photo` with captions; `.assets.html` has the image data |
 | invoice | header block, one table with a thead, right-aligned amounts, footer furniture |
 | bank-statement | one `table` with one `thead` over 3 pages; header and footer lines as furniture on pages 1 2 3 |
-| irs-form-w9 | a real form: numbered lines, bold line numbers, signature; weakest on checkbox/field structure |
-| irs-form-1040 | the real 2025 Form 1040 (2 pages); it crashed on an `i32` overflow until D521 |
+| irs-form-w9 | a real form: numbered lines, bold line numbers, signature; its 8 AcroForm check boxes and 15 text fields as `<span data-emon="field">` beside their labels (`role="checkbox"`, `data-emon-checked`, `data-emon-value`) |
+| irs-form-1040 | the real 2025 Form 1040 (2 pages); it crashed on an `i32` overflow until D521; its 199 fields (73 buttons, 126 text) beside their line numbers and labels, the ones with no label in a paragraph of their own |
 | table-multipage | the repeated header row folded into one thead |
 | table-zebra / table-unruled | tables found from shading only or from alignment only |
 | table-spans | `rowspan`/`colspan` in the header |
@@ -100,6 +100,8 @@ emon-rs --pdfium --tesseract --assets=figures --out=html figures-charts.pdf > fi
   the CJK sample shows its artefact: ideographic text with a stray space (`之 一`, `重 点`) that the fusion kept.
 - **JBIG2 and JPX images are `unsupported`** in a plain run (their decoders are the optional `--codecs` live build, which
   these samples do not use); a scan stored as JBIG2 or JPX would have no pixels to read. None of the samples uses them.
-- **Forms**: the W-9's boxed parts and checkboxes are flattened to paragraphs; the logo is reported as a `chart`.
+- **Forms**: AcroForm fields are `field` inlines of the block that holds their label (D1510); a form drawn without an AcroForm (boxes
+  drawn as vectors or scanned) has none yet, and on the 1040 the 44 fields with no label (the dependents' check boxes, the boxes of
+  lines 1 to 11 of page 2 that stand in a column of figures) are in a paragraph of their own.
 - **Figures**: chart labels are kept as `span data-emon="label"` runs, not as data; the chart itself is a picture.
 - The Model JSON for the bigger documents is large (IRS Pub 15, 190 KB); the HTML is the readable output.

@@ -114,6 +114,9 @@ func AnRichMedia() int32 {
 func AnDigsig() int32 {
 	return 27
 }
+func AnField() int32 {
+	return 28
+}
 func AnSubEmitName(t *strings.Builder, code int32) int32 {
 	if code == 0 {
 		port.TextAscii(t, "other")
@@ -225,6 +228,10 @@ func AnSubEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 27 {
 		port.TextAscii(t, "DigitalSignature")
+		return 1
+	}
+	if code == 28 {
+		port.TextAscii(t, "FormField")
 		return 1
 	}
 	return 0
@@ -1751,6 +1758,62 @@ func paCompare(fd *port.Cells, txt *port.Cells, frow int32, s int32, n int32) in
 	return r
 }
 
+func paWidgetState(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, txt *port.Cells, dict int32, fd *port.Cells, fat int32, an *port.Cells, at int32) int32 {
+	// A check box or radio button widget (`dict`, resolved) of the field at fd[fat]: is it on, and in which state? Into the synthetic `an-field` row at an[at]: cell 9
+	// is 1 when its /AS names a state other than /Off (with no /AS: when the field's /V does), else 0; the export value is the run at cells 16-17: the state the widget
+	// is in when it is on (/AS, else the field's /V), else, off, the first state of /AP /N that is not /Off. Evidence, not truth (D034): what the file states, so a
+	// widget whose /AS and /V disagree is on by its /AS, the appearance that is painted.
+	var as int32 = pdfx.PxDget(src, ar, dc, a, b, st, dict, pdfxnames.PxAs())
+	var vh int32 = port.CellsAt(fd, fat+31)
+	var ap int32 = pdfx.PxDget(src, ar, dc, a, b, st, dict, pdfxnames.PxAp())
+	var on int32 = 0
+	var got int32 = 0
+	var nr int32 = 0
+	var n int32 = 0
+	var k int32 = 0
+	var v int32 = 0
+	if (as != 0) && (pdflex.PlKindOf(ar, as) == 4) {
+		if pdfx.PxIs(ar, as, pdfxnames.PxOff()) == 0 {
+			on = 1
+		}
+	} else if (vh != 0) && (pdflex.PlKindOf(ar, vh) == 4) {
+		if pdfx.PxIs(ar, vh, pdfxnames.PxOff()) == 0 {
+			on = 1
+		}
+	}
+	port.CellsSet(an, at+9, on)
+	if (on == 1) && (as != 0) && (pdflex.PlKindOf(ar, as) == 4) {
+		PaTextTo(txt, ar, as, an, at+16)
+		got = 1
+	}
+	if (got == 0) && (on == 1) && (vh != 0) && (pdflex.PlKindOf(ar, vh) == 4) {
+		PaTextTo(txt, ar, vh, an, at+16)
+		got = 1
+	}
+	if (got == 0) && (ap != 0) && (pdflex.PlKindOf(ar, ap) == 7) {
+		nr = pdflex.PlDictGet(ar, ap, pdfnames.PnN())
+		if nr != 0 {
+			n = pdfdoc.PdResolve(src, ar, dc, a, b, st, nr)
+			if (n != 0) && (pdflex.PlKindOf(ar, n) == 7) {
+				k = pdflex.PlFirst(ar, n)
+				for (k != 0) && (got == 0) {
+					v = pdflex.PlNext(ar, k)
+					if pdfx.PxIs(ar, k, pdfxnames.PxOff()) == 0 {
+						PaTextTo(txt, ar, k, an, at+16)
+						got = 1
+					}
+					if v == 0 {
+						k = 0
+					} else {
+						k = pdflex.PlNext(ar, v)
+					}
+				}
+			}
+		}
+	}
+	return got
+}
+
 func paAnnot(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, idx *port.Cells, pg *port.Cells, txt *port.Cells, w *port.Cells, an *port.Cells, aq *port.Cells, fm *port.Cells, fd *port.Cells, sg *port.Cells, pi int32, h0 int32) int32 {
 	// One entry of a page's /Annots: a row in `an`, and, for a widget, its field's
 	// row updated. Answers the annotation row, or -1 when the entry is no dictionary.
@@ -2009,6 +2072,105 @@ func paDigsigs(an *port.Cells, fd *port.Cells, sg *port.Cells) int32 {
 	return n
 }
 
+func paFieldRowOf(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, txt *port.Cells, fd *port.Cells, an *port.Cells, wrow int32, frow int32, dict int32) int32 {
+	// Append the synthetic `an-field` row (see the head of this file) of widget row `wrow` (its dictionary `dict`, resolved) of field row `frow`. Answers 1 when a row
+	// was written, 0 when the widget is not one the document unit places: a hidden or no-view widget, one without an area, a field of another kind than check box,
+	// radio, text, combo or list.
+	var w int32 = wrow * anStride
+	var f int32 = frow * fdStride
+	var kind int32 = port.CellsAt(fd, f+6)
+	var flags int32 = port.CellsAt(an, w+3)
+	var pi int32 = port.CellsAt(an, w)
+	var at int32 = 0
+	var k int32 = 0
+	if (kind < 2) || (kind > 6) {
+		return 0
+	}
+	if (flags & 34) != 0 {
+		return 0
+	}
+	if (port.CellsAt(an, w+6) <= port.CellsAt(an, w+4)) || (port.CellsAt(an, w+7) <= port.CellsAt(an, w+5)) {
+		return 0
+	}
+	paAnNew(an, pi)
+	at = port.CellsLen(an) - anStride
+	port.CellsSet(an, at+1, AnField())
+	port.CellsSet(an, at+2, port.CellsAt(fd, f))
+	port.CellsSet(an, at+3, flags)
+	k = 0
+	for k < 4 {
+		port.CellsSet(an, (at+4)+k, port.CellsAt(an, (w+4)+k))
+		k += 1
+	}
+	k = 8
+	for k < 23 {
+		port.CellsSet(an, at+k, 0)
+		k += 1
+	}
+	port.CellsSet(an, at+8, kind)
+	port.CellsSet(an, at+9, -1)
+	port.CellsSet(an, at+10, port.CellsAt(fd, f+5))
+	port.CellsSet(an, at+11, port.CellsAt(fd, f+23))
+	port.CellsSet(an, at+12, port.CellsAt(fd, f+2))
+	port.CellsSet(an, at+13, port.CellsAt(fd, f+3))
+	port.CellsSet(an, at+14, -1)
+	port.CellsSet(an, at+16, -1)
+	port.CellsSet(an, at+18, port.CellsAt(fd, f+13))
+	port.CellsSet(an, at+19, port.CellsAt(fd, f+14))
+	port.CellsSet(an, at+20, wrow)
+	port.CellsSet(an, at+21, frow)
+	if (kind == 2) || (kind == 3) {
+		paWidgetState(src, ar, dc, a, b, st, txt, dict, fd, f, an, at)
+	}
+	if kind >= 4 {
+		if (port.CellsAt(fd, f+7) != 0) && (port.CellsAt(fd, f+8) >= 0) {
+			port.CellsSet(an, at+14, port.CellsAt(fd, f+8))
+			port.CellsSet(an, at+15, port.CellsAt(fd, f+9))
+		} else if (port.CellsAt(an, w+32) >= 0) && (port.CellsAt(an, w+33) > 0) {
+			port.CellsSet(an, at+14, port.CellsAt(an, w+32))
+			port.CellsSet(an, at+15, port.CellsAt(an, w+33))
+		}
+	}
+	return 1
+}
+
+func paFieldRows(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, pg *port.Cells, txt *port.Cells, fd *port.Cells, an *port.Cells) int32 {
+	// The synthetic rows of every widget of a placeable field (`pa-field-row-of`), in widget order: the pages' /Annots read once more, in the order `pa-run` read them
+	// (an entry that is a dictionary was the next row of `an`, so the count of those is the row of a widget), for what a row of `an` does not keep, a button's state.
+	// Answers the rows written. Call it after the rows of the annotations are all there.
+	var np int32 = pdfdoc.PdPgCount(pg)
+	var i int32 = 0
+	var r int32 = 0
+	var e int32 = 0
+	var anArr int32 = 0
+	var dict int32 = 0
+	var frow int32 = 0
+	var w int32 = 0
+	var wrote int32 = 0
+	for i < np {
+		anArr = pdfx.PxDget(src, ar, dc, a, b, st, pdfdoc.PdPgNode(pg, i), pdfxnames.PxAnnots())
+		if (anArr != 0) && (pdflex.PlKindOf(ar, anArr) == 6) {
+			e = pdflex.PlFirst(ar, anArr)
+			for e != 0 {
+				if r < paAnnots {
+					dict = pdfdoc.PdResolve(src, ar, dc, a, b, st, e)
+					if (dict != 0) && (pdflex.PlKindOf(ar, dict) == 7) {
+						w = r * anStride
+						frow = port.CellsAt(an, w+29)
+						if (port.CellsAt(an, w+1) == AnWidget()) && (frow >= 0) {
+							wrote += paFieldRowOf(src, ar, dc, a, b, st, txt, fd, an, r, frow, dict)
+						}
+						r += 1
+					}
+				}
+				e = pdflex.PlNext(ar, e)
+			}
+		}
+		i += 1
+	}
+	return wrote
+}
+
 func PaRun(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, pg *port.Cells, idx *port.Cells, txt *port.Cells, w *port.Cells, fs *port.Cells, seen *port.Cells, fm *port.Cells, an *port.Cells, aq *port.Cells, fd *port.Cells, sg *port.Cells) int32 {
 	// Everything P3.8 reads, after `pd-open`, `pd-pages` and `px-index-build`: fields
 	// first (so a widget finds its field), then every page's /Annots, then the
@@ -2091,6 +2253,7 @@ func PaRun(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port
 	}
 	i = port.CellsLen(an) / anStride
 	paDigsigs(an, fd, sg)
+	paFieldRows(src, ar, dc, a, b, st, pg, txt, fd, an)
 	return i
 }
 
@@ -2318,7 +2481,7 @@ func PaDump(t *strings.Builder, txt *port.Cells, an *port.Cells, aq *port.Cells,
 	var i int32 = 0
 	port.TextAscii(t, "{\"annots\":[")
 	for i < na {
-		if port.CellsAt(an, (i*anStride)+1) != AnDigsig() {
+		if (port.CellsAt(an, (i*anStride)+1) != AnDigsig()) && (port.CellsAt(an, (i*anStride)+1) != AnField()) {
 			if i > 0 {
 				port.TextAscii(t, ",")
 			}

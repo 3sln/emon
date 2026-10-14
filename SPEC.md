@@ -267,7 +267,7 @@ API expose.
 | `code` | inlines | — (monospace block with preserved whitespace) |
 | `quote` | blocks | — |
 | `note` | blocks | `role`: `footnote` / `endnote` / `margin` / `sidebar` (§10.1.1, D111); `marker` |
-| `field` | inlines | form field: `name`, `type`, `value`, `checked` |
+| `field` | inlines | form field (an AcroForm widget, §10.12): `name`, `type` (`checkbox`, `radio`, `text`, `combo`, `list`), `value`, `checked`. An inline of the block that holds its label; a block among blocks |
 | `furniture` | blocks | running header/footer kept by policy (§10.2): `role`, `pages` |
 | `break` | — | page milestone: `page`, `label` (the printed page label). Between two blocks it is a block (it has an `id`); with an inline sibling, INSIDE a paragraph, it is an inline, written in `inlines` in its place with no `id` (D134) |
 | `text` | — | a run of characters (inline) |
@@ -500,8 +500,8 @@ Rules:
   converted from centipoints by kin's own integer formatter.
 * Absent fields are **omitted**, never `null`, except where `null` is itself
   the answer (`"locale":null`).
-* **Inline nodes** (`text`, `span`, `link`, `ref`, `linebreak`) carry no `id`
-  (as in the example above); blocks do (D052). A node's own fields appear in
+* **Inline nodes** (`text`, `span`, `link`, `ref`, `linebreak`, and a `field` that
+  is among inlines, §10.12) carry no `id` (as in the example above); blocks do (D052). A node's own fields appear in
   the order `id`, `kind`, its kind's fields, `text`, `inlines`, `children`,
   `at`, `src`, `conf`, `flags`. `furniture` items have no `kind` (the array
   says what they are) and write `template` for their text. `settings` always
@@ -581,7 +581,7 @@ information and removes only what the options say.
 | `note` | `<aside role="doc-footnote" id="fn-…">`; `ref` → `<a role="doc-noteref" href="#fn-…">` |
 | `furniture` | `<aside data-emon="furniture" data-emon-role="header">` once, at the top of `<main>` |
 | `break` | `<span data-emon-page="3" data-emon-page-label="iii"></span>` — empty milestone, inline or between blocks |
-| `field` | `<span data-emon="field" data-emon-name="…">value</span>` (never a live `<input>`) |
+| `field` | `<span data-emon="field" data-emon-name="…" data-emon-type="text">value</span>` (never a live `<input>`); a check box or radio button is an empty `<span … data-emon-type="checkbox" role="checkbox" data-emon-checked="true" aria-checked="true" data-emon-value="1"></span>` (§10.12, D1510) |
 | `span` styles | `<b>`, `<i>`, `<u>`, `<s>`, `<sub>`, `<sup>`, `<code>`, `<span data-emon-style="smallcaps">` |
 | `link` | `<a href>`; internal targets become `#emon-ID` |
 | `linebreak` | `<br>` |
@@ -2989,6 +2989,54 @@ all three `assets` modes, and the same asset files, byte for byte, on every
 target; the identity gate compares all of them (§14.1). What the gate does
 *not* claim: two live hosts' `Renderer`s or codecs agree on pixels (they
 need not; that is the transcript's job, as for OCR).
+
+### 10.12 Form fields (P11.x3, D1510)
+
+**Source 1, the AcroForm** (§8.1): every widget of a terminal field that is a
+check box, a radio button, a text field, a combo box or a list box, that is on a
+page, is not hidden or no-view and has an area, becomes a `field` (§3.2) with
+`src` `annot`: `name` the field's full name (`topmostSubform[0].Page1[0].c1_1[0]`),
+`type` `checkbox`, `radio`, `text`, `combo` or `list`, and, of a button,
+`checked` (whether *this* widget is on: its `/AS` names a state other than `Off`)
+and `value` its export value (the state it is in when on); of the other kinds
+`value` is what the field shows (`/V`, else the appearance's text, several
+selected values on separate lines) and is absent for an empty field. Push buttons
+and signature fields (§10.7) are no `field`. `conf` is how well `/V` and the
+appearance agree (950 they do, 600 they differ, 850 `/V` alone, 700 the
+appearance alone, 900 a blank field). A document with no such widget is not
+touched.
+
+**Placement is geometric, into the block that holds the label.** A `field` is an
+inline of a paragraph, heading, list item, table cell or caption (a `field` in
+any other place is a block, as before), put by the widget's rectangle and the
+boxes of the blocks of its page; the block's `text` is unchanged, a block that
+was plain text gets a `text` inline for its words beside the field, and the
+field's `at` is the widget's rectangle. A block can be a label if its text has a
+letter or a digit; a dot leader, a dash between the boxes of a number is not one
+but joins a label to a box however far apart. The rule, in the order tried:
+(1) a *check box or radio button* takes the label to its right on its line whose
+left edge is within 12 pt (1.5 times the box's height if more) of the box, and
+comes before the block's words; (2) failing that, or for any other kind first,
+the label to its left on its line whose right edge is within 24 pt of the box
+(or joined by a leader), the field coming after the words; (3) a *text, combo or
+list field* may take instead the label above it, ending within 18 pt over its
+top and starting left of its right edge, nearest by the gap plus the distance
+sideways (none when they overlap, at most 40 pt), after the words; the label to
+the left wins unless the one above is nearer by more than 8 pt; (4) a field with
+no label gets a paragraph of its own (all its fields on one page), after the last
+paragraph, heading or caption of its page's document or section that starts above
+it, else before the first of the page, else at the document's end. Fields in one
+block are in reading order. "On its line" means the vertical extents overlap by at
+least half of the shorter.
+
+**HTML** (§5.1): a `<span data-emon="field">`, never an `<input>`: a check box or
+radio button is an empty span with `role` `checkbox` or `radio`, `aria-checked`,
+`data-emon-checked` and its export value in `data-emon-value`; any other field has
+its value as the span's content.
+
+**Source 2, drawn boxes** (a vector square or a scanned `[ ]` or `☐` before a
+label, with no AcroForm) would make the same node with `src` `infer`: **not built**
+(P11.x3's follow-up); a scanned form has no `field` yet.
 
 ---
 

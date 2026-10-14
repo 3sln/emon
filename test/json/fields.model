@@ -1,0 +1,55 @@
+# Form fields (P11.x3, D1510): INLINES of the block that holds their label, and still a block among blocks.
+# 1 paragraph: a check box (off, with its export value) before the words it labels
+# 4 paragraph: the words a text field (with a value) comes after
+# 7 paragraph with no words: a radio button (on) that had no label to go to
+# 9 a field among the blocks of the document, as a field always could be
+n 4 0
+t 1 Individual/sole proprietor
+r 1 1 8700 18000 16400 18800
+sr 1 257
+c 1 500
+n 18 1
+at 2 32 c1_1[0]
+at 2 73 checkbox
+at 2 18 1
+ab 2 74 0
+r 2 1 7300 18020 8100 18820
+sr 2 64
+c 2 950
+n 21 1
+t 3 Individual/sole proprietor
+sr 3 1
+c 3 1000
+n 4 0
+t 4 Name of entity
+r 4 1 6200 9700 27400 11400
+sr 4 257
+c 4 500
+n 21 4
+t 5 Name of entity
+sr 5 1
+c 5 1000
+n 18 4
+at 6 32 f1_01[0]
+at 6 73 text
+at 6 18 Ada "Ada" Lovelace
+r 6 1 5860 11800 57600 13200
+sr 6 64
+c 6 900
+n 4 0
+sr 7 320
+c 7 500
+n 18 7
+at 8 32 pick
+at 8 73 radio
+at 8 18 b
+ab 8 74 1
+r 8 1 10200 17200 12200 19200
+sr 8 64
+c 8 600
+n 18 0
+at 9 32 agree
+at 9 73 checkbox
+at 9 18 yes
+ab 9 74 1
+sr 9 64

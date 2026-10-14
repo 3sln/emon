@@ -63,6 +63,26 @@ public static class Jsontest {
         emon.Testport.AssertTextSpan(pretty, emon.Testport.TestFile("json/kinds.pretty.json"), 0, Mscript.JtEnd(emon.Testport.TestFile("json/kinds.pretty.json")), "pretty", 0);
     }
     [Xunit.Fact]
+    public static void TestGoldenFields() {
+        // P11.x3 (D1510): a form field is an inline of the paragraph that holds its label (no id, in `inlines`, before or after the words) and still a block among blocks.
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells st = emon.Port.NewCells();
+        System.Text.StringBuilder compact = emon.Testport.NewText();
+        System.Text.StringBuilder pretty = emon.Testport.NewText();
+        emon.Testport.AssertEq(Mscript.JtBuild(emon.Testport.TestFile("json/fields.model"), nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the script builds");
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the Model is well formed");
+        Json.JsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.NewCells(), emon.Port.NewCells());
+        Json.JsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.NewCells(), emon.Port.NewCells());
+        emon.Testport.AssertTextSpan(compact, emon.Testport.TestFile("json/fields.json"), 0, Mscript.JtEnd(emon.Testport.TestFile("json/fields.json")), "compact", 0);
+        emon.Testport.AssertTextSpan(pretty, emon.Testport.TestFile("json/fields.pretty.json"), 0, Mscript.JtEnd(emon.Testport.TestFile("json/fields.pretty.json")), "pretty", 0);
+    }
+    [Xunit.Fact]
     public static void TestGoldenCorners() {
         emon.Port.Cells nodes = emon.Port.NewCells();
         emon.Port.Cells attrs = emon.Port.NewCells();

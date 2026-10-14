@@ -5,6 +5,7 @@ use crate::emon::arbiter::*;
 use crate::emon::asset::*;
 use crate::emon::columns::*;
 use crate::emon::evidence::*;
+use crate::emon::fields::*;
 use crate::emon::figclass::*;
 use crate::emon::furniture::*;
 use crate::emon::gfuse::*;
@@ -310,6 +311,17 @@ pub(crate) fn en_figures(m: &mut crate::emon::enctx::Arenas, s: &mut crate::emon
     crate::port::cells_swap(&mut m.regions, &mut s.fregions);
     return 0;
 }
+pub(crate) fn en_fields(m: &mut crate::emon::enctx::Arenas, s: &mut crate::emon::enctx::Scratch, d: &mut crate::emon::enctx::Doc) -> i32 {
+    // P11.x3 (SPEC 3.2, D1510): the AcroForm fields the annotation reader made rows of (`an-field`) put into the blocks that hold their labels, by geometry (`emon.fields`).
+    // A copy of the finished body (the arenas the figures stage left in `fnodes`, `fattrs`, `fregions` are its scratch) swapped in; a document with no field row is not touched.
+    let r: i32 = fl_run(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut s.fnodes, &mut s.fattrs, &mut s.fregions, &mut s.fnm, &mut d.an, &mut d.txt, &mut s.flc, &mut s.flh, &mut s.flb, &mut s.fls);
+    if r > 0 {
+        crate::port::cells_swap(&mut m.nodes, &mut s.fnodes);
+        crate::port::cells_swap(&mut m.attrs, &mut s.fattrs);
+        crate::port::cells_swap(&mut m.regions, &mut s.fregions);
+    }
+    return 0;
+}
 pub(crate) fn en_asset_stage(c: &mut crate::emon::enctx::Cfg, m: &mut crate::emon::enctx::Arenas, s: &mut crate::emon::enctx::Scratch, cand: &mut crate::port::Cells, mut cbytes: &mut crate::port::Buf) -> i32 {
     // P3.13: the settings on the root, then each figure's and seal's pixels or reason, in node-id order. `cand` and `cbytes` were made by the document pass.
     as_settings(&mut m.nodes, &mut m.attrs, &mut m.text, c.level, c.dpi, c.pixels, c.abyte, c.tbyte, c.sigs);
@@ -370,6 +382,9 @@ pub(crate) fn en_stage3(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::en
             crate::port::cells_swap(&mut m.attrs, &mut s.sa);
             crate::port::cells_swap(&mut m.regions, &mut s.sr);
         }
+    }
+    if kind == 0 {
+        en_fields(m, s, d);
     }
     if c.haveloc != 0 {
         w = crate::port::cells_len(&mut m.text);
