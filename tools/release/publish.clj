@@ -36,8 +36,16 @@
   {"crates" ["CARGO_REGISTRY_TOKEN"]
    "npm" ["NPM_TOKEN"]
    "nuget" ["NUGET_API_KEY"]
-   "maven" ["MAVEN_CENTRAL_USERNAME" "MAVEN_CENTRAL_PASSWORD" "MAVEN_GPG_PRIVATE_KEY" "MAVEN_GPG_PASSPHRASE"]
+   ;; MAVEN_GPG_PASSPHRASE is optional: the maintainer's signing key has no passphrase (2026-10-14).
+   "maven" ["MAVEN_CENTRAL_USERNAME" "MAVEN_CENTRAL_PASSWORD" "MAVEN_GPG_PRIVATE_KEY"]
    "go" []})
+
+(defn gpg-sign-args
+  "The gpg arguments that detach-sign file f with key fpr; a passphrase is fed on fd 0 only when one is set."
+  [passphrase fpr f]
+  (into ["gpg" "--batch" "--yes" "--pinentry-mode" "loopback"]
+        (concat (when-not (str/blank? passphrase) ["--passphrase-fd" "0"])
+                ["-u" fpr "--armor" "--detach-sign" f])))
 
 (defn missing-env "The names in `names` that `env` (a map) does not set to something non-blank." [names env]
   (vec (remove #(not (str/blank? (get env %))) names)))
@@ -184,8 +192,9 @@
       (say "signing with key " (subs fpr 24))
       (doseq [f files]
         (fs/delete-if-exists (str f ".asc"))
-        (let [r (rl/run {:in (str (System/getenv "MAVEN_GPG_PASSPHRASE") "\n") :extra-env env}
-                        "gpg" "--batch" "--yes" "--pinentry-mode" "loopback" "--passphrase-fd" "0" "-u" fpr "--armor" "--detach-sign" f)]
+        (let [pass (System/getenv "MAVEN_GPG_PASSPHRASE")
+              r (apply rl/run {:in (if (str/blank? pass) "" (str pass "\n")) :extra-env env}
+                       (gpg-sign-args pass fpr f))]
           (when-not (zero? (:exit r)) (rl/die 1 "gpg could not sign" f ":" (str/trim (:err r))))
           (doseq [[alg ext] [["MD5" ".md5"] ["SHA-1" ".sha1"] ["SHA-256" ".sha256"]]]
             (spit (str f ".asc" ext) (digest-hex alg (io/file (str f ".asc"))))))))
@@ -270,8 +279,12 @@
   (let [[t! done!] (rl/selftest-runner)]
     (t! "missing-env names the blank and absent ones" (= ["B" "C"] (missing-env ["A" "B" "C"] {"A" "x" "B" "  "})))
     (t! "every registry has a credential list; go needs none" (and (= 5 (count needs)) (empty? (needs "go"))))
-    (t! "maven needs the four secrets D524 names"
-        (= #{"MAVEN_CENTRAL_USERNAME" "MAVEN_CENTRAL_PASSWORD" "MAVEN_GPG_PRIVATE_KEY" "MAVEN_GPG_PASSPHRASE"} (set (needs "maven"))))
+    (t! "maven needs three secrets; the passphrase is optional"
+        (= #{"MAVEN_CENTRAL_USERNAME" "MAVEN_CENTRAL_PASSWORD" "MAVEN_GPG_PRIVATE_KEY"} (set (needs "maven"))))
+    (t! "gpg reads a passphrase only when one is set"
+        (and (not (some #{"--passphrase-fd"} (gpg-sign-args "" "F" "a.jar")))
+             (not (some #{"--passphrase-fd"} (gpg-sign-args nil "F" "a.jar")))
+             (some #{"--passphrase-fd"} (gpg-sign-args "pw" "F" "a.jar"))))
     (t! "the crates url" (= "https://crates.io/api/v1/crates/emon/0.1.0" (crates-url "0.1.0")))
     (t! "the maven pom url" (= "https://repo1.maven.org/maven2/com/3sln/emon/0.1.0/emon-0.1.0.pom" (maven-pom-url "0.1.0")))
     (t! "nuget index: version present" (nuget-has? "{\"versions\":[\"0.0.9\",\"0.1.0\"]}" "0.1.0"))

@@ -94,7 +94,7 @@ Settings > Environments > `release` > *Environment secrets*. Create them just be
 | `NUGET_API_KEY` | nuget.org > API Keys > Create: *Push new packages and package versions*, glob pattern `Emon`, expiry as you like. |
 | `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD` | central.sonatype.com > your account menu > *View Account* > *Generate User Token*. It shows a **username/password pair**; use those two, not your login. |
 | `MAVEN_GPG_PRIVATE_KEY` | Make a signing key if you have none: `gpg --full-generate-key` (RSA 4096, no expiry or a long one). Export: `gpg --armor --export-secret-keys KEYID` and paste the whole `-----BEGIN PGP PRIVATE KEY BLOCK-----` text (a base64 of it is accepted too). **Publish the public half** so Central can verify: `gpg --keyserver keyserver.ubuntu.com --send-keys KEYID` and upload to <https://keys.openpgp.org> (and confirm the email). |
-| `MAVEN_GPG_PASSPHRASE` | the key's passphrase. |
+| `MAVEN_GPG_PASSPHRASE` | optional: the key's passphrase; leave it unset for a key without one. |
 
 Nothing else is needed: the Go module uses the workflow's own token (the tag push), and Pages uses GitHub's OIDC.
 
