@@ -324,6 +324,36 @@
     (pt-brief t2 nodes regions text)
     (assert-text t2 "P1:office étst 一;" "normalization (radical U+2F00 folds, D142)")))
 
+(deftest test-a-line-break-between-cjk-characters-adds-no-space
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp (new-cells) ^Cells fr (new-cells)
+        ^Cells gp (new-cells) ^Cells st (new-cells)
+        ^Text t1 (new-text) ^Text t2 (new-text) ^Text t3 (new-text)]
+    (comment "P11.x2: Chinese and Japanese are set without spaces, so a line that wraps between two ideographs, kana or")
+    (comment "full-width marks joins with none (a space there is a stray one in the scraped text).")
+    (pt-line wd ln et (text-blob "成为本地区最大的机构之") 1 7200 10000 50000 11200 0 0 1000)
+    (pt-line wd ln et (text-blob "一。") 1 7200 11500 50000 12700 0 0 1000)
+    (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "han: well formed")
+    (pt-brief t1 nodes regions text)
+    (assert-text t1 "P1:成为本地区最大的机构之一。;" "a Han break")
+    (comment "Kana and Han across the break alike.")
+    (pt-clear wd ln et)
+    (pt-line wd ln et (text-blob "地域最大級の組織の") 1 7200 10000 50000 11200 0 0 1000)
+    (comment "(the second line starts with the Kangxi radical U+2F00, which is folded to Han only after the join, as PDFs write it)")
+    (pt-line wd ln et (text-blob "⼀つとなりました") 1 7200 11500 50000 12700 0 0 1000)
+    (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "kana: well formed")
+    (pt-brief t2 nodes regions text)
+    (assert-text t2 "P1:地域最大級の組織の一つとなりました;" "a Han and kana break")
+    (comment "Latin words and Hangul are spaced languages: their breaks keep the space.")
+    (pt-clear wd ln et)
+    (pt-line wd ln et (text-blob "the report 안녕하세요") 1 7200 10000 50000 11200 0 0 1000)
+    (pt-line wd ln et (text-blob "세계 end") 1 7200 11500 50000 12700 0 0 1000)
+    (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "hangul: well formed")
+    (pt-brief t3 nodes regions text)
+    (assert-text t3 "P1:the report 안녕하세요 세계 end;" "Hangul and Latin keep the space")))
+
 ;; ------------------------------------------------------------- across a page's end
 
 (deftest test-a-page-end-is-a-milestone-between-blocks-or-inside-a-paragraph

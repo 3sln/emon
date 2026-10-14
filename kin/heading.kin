@@ -66,6 +66,7 @@
 (defconst ^I32 KICKER_RATIO 110)    ;; a unit directly above one this much larger (percent) is a masthead or kicker
 (defconst ^I32 HD_KMAX 16)          ;; heading classes considered
 (defconst ^I32 HD_EXHAUSTIVE 6)     ;; up to this many classes the search is exhaustive
+(defconst ^I32 HD_MAXLEVEL 6)       ;; the deepest level written: an h1-h6 has six (P11.x2)
 
 ;; the layout of `hc`
 (defconst ^I32 HC_HDR 48)
@@ -1334,6 +1335,37 @@
           (set i (+ i 1))))
     (return best)))
 
+(defn ^I32 hd-densify [^:mut ^Cells ws ^I32 nk]
+  (comment "The ladder the document makes (P11.x2, D1491): the levels the search chose, renumbered 1, 2, 3, ... in order")
+  (comment "with no level skipped (a dotted number's depth or a sparse search can leave gaps: `1` and `1.1.1.1` are 1 and 2")
+  (comment "when nothing is between them), and none past HD_MAXLEVEL, the six an h1-h6 has: the classes below the sixth")
+  (comment "share it. Order is kept, ties are kept; field 10 of every class.")
+  (let [^:mut ^I32 c 0
+        ^:mut ^I32 d 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 rank 0
+        ^:mut ^I32 dup 0]
+    (while (< c nk)
+      (do (set rank 1)
+          (set d 0)
+          (while (< d nk)
+            (do (if (< (hd-hk ws d 10) (hd-hk ws c 10))
+                  (do (set dup 0)
+                      (set e 0)
+                      (while (< e d)
+                        (do (if (== (hd-hk ws e 10) (hd-hk ws d 10)) (set dup 1))
+                            (set e (+ e 1))))
+                      (if (== dup 0) (set rank (+ rank 1)))))
+                (set d (+ d 1))))
+          (if (> rank HD_MAXLEVEL) (set rank HD_MAXLEVEL))
+          (cells-set ws (+ WS_BEST c) rank)
+          (set c (+ c 1))))
+    (set c 0)
+    (while (< c nk)
+      (do (hd-hk-set ws c 10 (cells-at ws (+ WS_BEST c)))
+          (set c (+ c 1))))
+    (return 0)))
+
 ;; ----------------------------------------------------------------------- writing hc
 
 (defn ^I32 hd-emit [^Cells ln ^:mut ^Cells hc ^:mut ^Cells ws ^Cells sf ^I32 n]
@@ -1401,5 +1433,6 @@
     (set base (hd-order ws))
     (hd-matrices ws base nk)
     (hd-search ws nk)
+    (hd-densify ws nk)
     (hd-emit ln hc ws sf n)
     (return nu)))

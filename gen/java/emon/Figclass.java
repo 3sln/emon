@@ -1250,7 +1250,14 @@ public final class Figclass {
         int slant = emon.Port.cellsAt(ws, FT_SLANT);
         int num = emon.Port.cellsAt(ws, FT_NUM);
         int conf = 0;
-        if ((axes == 1) && ((bars >= 2) || ((series >= 1) || ((slant >= 2) || ((ticks >= 2) || (num >= 2)))))) {
+        int banner = 0;
+        // P11.x2 (D1492): rules that meet and a few numbers are a chart only while what is in the region is a chart's text; with a
+        // line of five words or more in it, and no mark of data (ticks, bars, a series), they are a banner or a framed box (a form's
+        // title band, a signature box), which is no figure.
+        if ((emon.Port.cellsAt(ws, FT_PROSE) >= 1) && ((bars < 2) && ((series < 1) && ((slant < 2) && (ticks < 2))))) {
+            banner = 1;
+        }
+        if ((banner == 0) && ((axes == 1) && ((bars >= 2) || ((series >= 1) || ((slant >= 2) || ((ticks >= 2) || (num >= 2))))))) {
             conf = 640;
             if (ticks >= 3) {
                 conf += 40;
@@ -1279,7 +1286,7 @@ public final class Figclass {
         if ((bars >= 3) && (emon.Port.cellsAt(ws, FT_BARVAR) == 1)) {
             return fcPack(Model.fgChart(), 560);
         }
-        if ((axes == 1) && ((emon.Port.cellsAt(ws, FT_NHL) + emon.Port.cellsAt(ws, FT_NVL)) >= 2)) {
+        if ((banner == 0) && ((axes == 1) && ((emon.Port.cellsAt(ws, FT_NHL) + emon.Port.cellsAt(ws, FT_NVL)) >= 2))) {
             return fcPack(Model.fgChart(), 520);
         }
         if ((axes == 0) && ((emon.Port.cellsAt(ws, FT_BOXW) >= 2) && (emon.Port.cellsAt(ws, FT_CONN) >= 1))) {

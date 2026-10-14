@@ -307,6 +307,85 @@ public final class Headingtest {
         emon.Testport.assertEq(Heading.hdLevel(hc, 6), 2, "`1.2` too");
         emon.Testport.assertEq(Heading.hdLevel(hc, 9), 1, "`2` is level 1 again");
     }
+    public static void testLevelsAreADenseLadderOfAtMostSix() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells sf = emon.Port.newCells();
+        emon.Port.Cells sc = emon.Port.newCells();
+        emon.Port.Cells hc = emon.Port.newCells();
+        emon.Port.Cells ws = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        emon.Port.Cells pr = emon.Port.newCells();
+        emon.Port.Cells ptxt = emon.Port.newCells();
+        int y = 5000;
+        // P11.x2: `1` and `1.1.1.1` with nothing between are levels 1 and 2, not 1 and 4: the ladder has no gap.
+        htHeading(wd, ln, et, emon.Testport.textBlob("1 Introduction"), y, 1400, 1);
+        y += 2300;
+        y = htBody(wd, ln, et, 1, y, 2);
+        y += 900;
+        htHeading(wd, ln, et, emon.Testport.textBlob("1.1.1.1 Deep part"), y, 1200, 1);
+        y += 2300;
+        y = htBody(wd, ln, et, 1, y, 2);
+        y += 900;
+        htHeading(wd, ln, et, emon.Testport.textBlob("2 Next steps"), y, 1400, 1);
+        y += 2300;
+        y = htBody(wd, ln, et, 1, y, 2);
+        emon.Testport.assertEq(htRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 3, "three headings");
+        emon.Testport.assertEq(Heading.hdLevel(hc, 0), 1, "`1` is level 1");
+        emon.Testport.assertEq(Heading.hdLevel(hc, 3), 2, "`1.1.1.1` is level 2: the levels between were never used");
+        emon.Testport.assertEq(Heading.hdLevel(hc, 6), 1, "`2` is level 1");
+    }
+    public static void testALadderOfEightSizesStopsAtLevelSix() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells sf = emon.Port.newCells();
+        emon.Port.Cells sc = emon.Port.newCells();
+        emon.Port.Cells hc = emon.Port.newCells();
+        emon.Port.Cells ws = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        emon.Port.Cells pr = emon.Port.newCells();
+        emon.Port.Cells ptxt = emon.Port.newCells();
+        int y = 5000;
+        // P11.x2: eight headings of eight sizes, each bigger than the next: a ladder of eight classes, held to the six an
+        // h1-h6 has (a level past it is a choice of the emitter, never of the analysis).
+        htHeading(wd, ln, et, emon.Testport.textBlob("Alpha one"), y, 3000, 1);
+        y += 4000;
+        y = htBody(wd, ln, et, 1, y, 2);
+        y += 900;
+        htHeading(wd, ln, et, emon.Testport.textBlob("Bravo two"), y, 2800, 1);
+        y += 3800;
+        y = htBody(wd, ln, et, 1, y, 2);
+        y += 900;
+        htHeading(wd, ln, et, emon.Testport.textBlob("Charlie three"), y, 2600, 1);
+        y += 3600;
+        y = htBody(wd, ln, et, 1, y, 2);
+        y += 900;
+        htHeading(wd, ln, et, emon.Testport.textBlob("Delta four"), y, 2400, 1);
+        y += 3400;
+        y = htBody(wd, ln, et, 1, y, 2);
+        y += 900;
+        htHeading(wd, ln, et, emon.Testport.textBlob("Echo five"), y, 2200, 1);
+        y += 3200;
+        y = htBody(wd, ln, et, 1, y, 2);
+        y += 900;
+        htHeading(wd, ln, et, emon.Testport.textBlob("Foxtrot six"), y, 2000, 1);
+        y += 3000;
+        y = htBody(wd, ln, et, 1, y, 2);
+        y += 900;
+        htHeading(wd, ln, et, emon.Testport.textBlob("Golf seven"), y, 1800, 1);
+        y += 2800;
+        y = htBody(wd, ln, et, 1, y, 2);
+        y += 900;
+        htHeading(wd, ln, et, emon.Testport.textBlob("Hotel eight"), y, 1600, 1);
+        y += 2600;
+        y = htBody(wd, ln, et, 1, y, 2);
+        emon.Testport.assertEq(htRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 8, "eight headings");
+        emon.Testport.assertEq(Heading.hdLevel(hc, 0), 1, "the first is level 1");
+        emon.Testport.assertEq(Heading.hdLevel(hc, 21), 6, "the eighth is level 6, not 8");
+        emon.Testport.assertEq(Heading.hdLevel(hc, 18), 6, "the seventh is level 6, not 7");
+    }
     public static void testANumberedListIsNotARunOfHeadings() {
         emon.Port.Cells wd = emon.Port.newCells();
         emon.Port.Cells ln = emon.Port.newCells();

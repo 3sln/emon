@@ -1066,8 +1066,15 @@
         ^I32 series (cells-at ws FT_SERIES)
         ^I32 slant (cells-at ws FT_SLANT)
         ^I32 num (cells-at ws FT_NUM)
-        ^:mut ^I32 conf 0]
-    (if (and (== axes 1) (or (>= bars 2) (or (>= series 1) (or (>= slant 2) (or (>= ticks 2) (>= num 2))))))
+        ^:mut ^I32 conf 0
+        ^:mut ^I32 banner 0]
+    (comment "P11.x2 (D1492): rules that meet and a few numbers are a chart only while what is in the region is a chart's text; with a")
+    (comment "line of five words or more in it, and no mark of data (ticks, bars, a series), they are a banner or a framed box (a form's")
+    (comment "title band, a signature box), which is no figure.")
+    (if (and (>= (cells-at ws FT_PROSE) 1)
+             (and (< bars 2) (and (< series 1) (and (< slant 2) (< ticks 2)))))
+      (set banner 1))
+    (if (and (== banner 0) (and (== axes 1) (or (>= bars 2) (or (>= series 1) (or (>= slant 2) (or (>= ticks 2) (>= num 2)))))))
       (do (set conf 640)
           (if (>= ticks 3) (set conf (+ conf 40)))
           (if (or (>= bars 2) (or (>= series 1) (>= slant 2))) (set conf (+ conf 40)))
@@ -1083,7 +1090,7 @@
           (return (fc-pack (fg-chart) conf))))
     (if (and (>= bars 3) (== (cells-at ws FT_BARVAR) 1))
       (return (fc-pack (fg-chart) 560)))
-    (if (and (== axes 1) (>= (+ (cells-at ws FT_NHL) (cells-at ws FT_NVL)) 2))
+    (if (and (== banner 0) (and (== axes 1) (>= (+ (cells-at ws FT_NHL) (cells-at ws FT_NVL)) 2)))
       (return (fc-pack (fg-chart) 520)))
     (if (and (== axes 0) (and (>= (cells-at ws FT_BOXW) 2) (>= (cells-at ws FT_CONN) 1)))
       (do (set conf 600)

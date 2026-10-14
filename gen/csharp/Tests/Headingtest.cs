@@ -314,6 +314,87 @@ public static class Headingtest {
         emon.Testport.AssertEq(Heading.HdLevel(hc, 9), 1, "`2` is level 1 again");
     }
     [Xunit.Fact]
+    public static void TestLevelsAreADenseLadderOfAtMostSix() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells sf = emon.Port.NewCells();
+        emon.Port.Cells sc = emon.Port.NewCells();
+        emon.Port.Cells hc = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells pr = emon.Port.NewCells();
+        emon.Port.Cells ptxt = emon.Port.NewCells();
+        int y = 5000;
+        // P11.x2: `1` and `1.1.1.1` with nothing between are levels 1 and 2, not 1 and 4: the ladder has no gap.
+        HtHeading(wd, ln, et, emon.Testport.TextBlob("1 Introduction"), y, 1400, 1);
+        y += 2300;
+        y = HtBody(wd, ln, et, 1, y, 2);
+        y += 900;
+        HtHeading(wd, ln, et, emon.Testport.TextBlob("1.1.1.1 Deep part"), y, 1200, 1);
+        y += 2300;
+        y = HtBody(wd, ln, et, 1, y, 2);
+        y += 900;
+        HtHeading(wd, ln, et, emon.Testport.TextBlob("2 Next steps"), y, 1400, 1);
+        y += 2300;
+        y = HtBody(wd, ln, et, 1, y, 2);
+        emon.Testport.AssertEq(HtRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 3, "three headings");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 0), 1, "`1` is level 1");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 3), 2, "`1.1.1.1` is level 2: the levels between were never used");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 6), 1, "`2` is level 1");
+    }
+    [Xunit.Fact]
+    public static void TestALadderOfEightSizesStopsAtLevelSix() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells sf = emon.Port.NewCells();
+        emon.Port.Cells sc = emon.Port.NewCells();
+        emon.Port.Cells hc = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells pr = emon.Port.NewCells();
+        emon.Port.Cells ptxt = emon.Port.NewCells();
+        int y = 5000;
+        // P11.x2: eight headings of eight sizes, each bigger than the next: a ladder of eight classes, held to the six an
+        // h1-h6 has (a level past it is a choice of the emitter, never of the analysis).
+        HtHeading(wd, ln, et, emon.Testport.TextBlob("Alpha one"), y, 3000, 1);
+        y += 4000;
+        y = HtBody(wd, ln, et, 1, y, 2);
+        y += 900;
+        HtHeading(wd, ln, et, emon.Testport.TextBlob("Bravo two"), y, 2800, 1);
+        y += 3800;
+        y = HtBody(wd, ln, et, 1, y, 2);
+        y += 900;
+        HtHeading(wd, ln, et, emon.Testport.TextBlob("Charlie three"), y, 2600, 1);
+        y += 3600;
+        y = HtBody(wd, ln, et, 1, y, 2);
+        y += 900;
+        HtHeading(wd, ln, et, emon.Testport.TextBlob("Delta four"), y, 2400, 1);
+        y += 3400;
+        y = HtBody(wd, ln, et, 1, y, 2);
+        y += 900;
+        HtHeading(wd, ln, et, emon.Testport.TextBlob("Echo five"), y, 2200, 1);
+        y += 3200;
+        y = HtBody(wd, ln, et, 1, y, 2);
+        y += 900;
+        HtHeading(wd, ln, et, emon.Testport.TextBlob("Foxtrot six"), y, 2000, 1);
+        y += 3000;
+        y = HtBody(wd, ln, et, 1, y, 2);
+        y += 900;
+        HtHeading(wd, ln, et, emon.Testport.TextBlob("Golf seven"), y, 1800, 1);
+        y += 2800;
+        y = HtBody(wd, ln, et, 1, y, 2);
+        y += 900;
+        HtHeading(wd, ln, et, emon.Testport.TextBlob("Hotel eight"), y, 1600, 1);
+        y += 2600;
+        y = HtBody(wd, ln, et, 1, y, 2);
+        emon.Testport.AssertEq(HtRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 8, "eight headings");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 0), 1, "the first is level 1");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 21), 6, "the eighth is level 6, not 8");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 18), 6, "the seventh is level 6, not 7");
+    }
+    [Xunit.Fact]
     public static void TestANumberedListIsNotARunOfHeadings() {
         emon.Port.Cells wd = emon.Port.NewCells();
         emon.Port.Cells ln = emon.Port.NewCells();
