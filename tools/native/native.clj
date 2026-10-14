@@ -78,7 +78,9 @@
       (fs/delete-tree dir)
       (fs/create-dirs (str cache "/src"))
       ;; GNU tar (Git for Windows) reads `D:\...` as host:file; --force-local says it is a file
-      (apply p/shell "tar" (concat (when (= :windows (:os (triple-cfg (host-triple)))) ["--force-local"]) ["-xf" tgz "-C" (abs (str cache "/src"))]))
+      ;; and the backslashes of its paths are escapes to it: forward slashes only
+      (let [win? (= :windows (:os (triple-cfg (host-triple)))) fwd #(str/replace (str %) "\\" "/")]
+        (apply p/shell "tar" (concat (when win? ["--force-local"]) ["-xf" (fwd tgz) "-C" (fwd (abs (str cache "/src")))])))
       (when-not (fs/exists? dir) (die (:archive s) " did not extract to " (:dir s)))
       (spit mark (str (:sha256 s) "\n")))
     dir))
