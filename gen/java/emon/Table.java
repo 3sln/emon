@@ -2635,13 +2635,39 @@ public final class Table {
         }
         return (emon.Port.cellsAt(tc, (only * TCS) + 3) == 1) && (emon.Port.cellsAt(tc, (only * TCS) + 1) == mincol);
     }
+    public static boolean tbCellGrouped(emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells tw, emon.Port.Cells tc, int c) {
+        // P12.2: is the cell a number whose thousands are grouped (`35,595`: a comma between a digit and three digits): a count is not a year.
+        if (tbCellNumeric(wd, et, tw, tc, c) == 0) {
+            return 0 == 1;
+        }
+        int cb = c * TCS;
+        int from = emon.Port.cellsAt(tc, cb + 8);
+        int k = 0;
+        int j = 0;
+        while (k < emon.Port.cellsAt(tc, cb + 9)) {
+            int w = emon.Port.cellsAt(tw, from + k);
+            int ts = Evidence.wdGet(wd, w, Evidence.hdTstart());
+            int tl = Evidence.wdGet(wd, w, Evidence.hdTlen());
+            j = 1;
+            while ((j + 3) < tl) {
+                if ((emon.Port.cellsAt(et, ts + j) == 44) && ((emon.Port.cellsAt(et, (ts + j) + -1) >= 48) && (emon.Port.cellsAt(et, (ts + j) + -1) <= 57))) {
+                    if (((emon.Port.cellsAt(et, (ts + j) + 1) >= 48) && (emon.Port.cellsAt(et, (ts + j) + 1) <= 57)) && (((emon.Port.cellsAt(et, (ts + j) + 2) >= 48) && (emon.Port.cellsAt(et, (ts + j) + 2) <= 57)) && ((emon.Port.cellsAt(et, (ts + j) + 3) >= 48) && (emon.Port.cellsAt(et, (ts + j) + 3) <= 57)))) {
+                        return 1 == 1;
+                    }
+                }
+                j += 1;
+            }
+            k += 1;
+        }
+        return 0 == 1;
+    }
     public static int tbRowFormatted(emon.Port.Cells tc, int cfirst, int cend, int r, emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells tw) {
-        // P12.2: does row r have two cells or more that are formatted numbers (`tb-cell-sig`: a currency sign or a decimal point)?
+        // P12.2: does row r have two cells or more that are formatted numbers (`tb-cell-sig`: a currency sign or a decimal point; or grouped thousands)?
         int c = cfirst;
         int n = 0;
         while (c < cend) {
             if (emon.Port.cellsAt(tc, c * TCS) == r) {
-                if (tbCellSig(wd, et, tw, tc, c) != 0) {
+                if ((tbCellSig(wd, et, tw, tc, c) != 0) || tbCellGrouped(wd, et, tw, tc, c)) {
                     n += 1;
                 }
             }
@@ -2666,15 +2692,12 @@ public final class Table {
         if ((emon.Port.cellsAt(tb, b + 22) > 0) && (emon.Port.cellsAt(tb, b + 22) < (nrows - 1))) {
             return emon.Port.cellsAt(tb, b + 22);
         }
-        while ((h < (nrows - 1)) && (tbRowBold(tc, cfirst, cend, h, wd, et, tw) && ((tbRowAmounts(tc, cfirst, cend, h, wd, et, tw) == 0) && !tbLabelRow(tb, k, h, tc)))) {
+        while ((h < (nrows - 1)) && (tbRowBold(tc, cfirst, cend, h, wd, et, tw) && ((tbRowAmounts(tc, cfirst, cend, h, wd, et, tw) == 0) && !((h > 0) && tbLabelRow(tb, k, h, tc))))) {
             h += 1;
         }
-        if ((h > 0) && ((h * 2) <= (nrows + 1))) {
-            return h;
-        }
-        // P12.2 (smoke review, issue 3: the BLS and BEA tables): a header of cells that wrap, set in the type of the body, is every row above the first row
-        // of amounts (`tb-row-formatted`: two formatted numbers, with a decimal point or a currency sign) when there are two or more of them and
-        // they are not more than a third of the table.
+        // P12.2 (smoke review, issue 3: the BLS, BEA and US courts' tables): a header of cells that wrap, set in the type of the body or its first row alone in
+        // bold, is every row above the first row of amounts (`tb-row-formatted`: two formatted numbers, with a decimal point, a currency sign or grouped
+        // thousands) when there are two or more of them, more than the bold ones, and they are not more than a third of the table.
         int f = 0;
         while ((f < (nrows - 1)) && (tbRowFormatted(tc, cfirst, cend, f, wd, et, tw) == 0)) {
             f += 1;
@@ -2682,8 +2705,11 @@ public final class Table {
         while ((f > 0) && tbLabelRow(tb, k, f - 1, tc)) {
             f -= 1;
         }
-        if ((f >= 2) && ((f < (nrows - 1)) && ((f * 3) <= nrows))) {
+        if ((f >= 2) && ((f > h) && ((f < (nrows - 1)) && ((f * 3) <= nrows)))) {
             return f;
+        }
+        if ((h > 0) && ((h * 2) <= (nrows + 1))) {
+            return h;
         }
         if ((nrows >= 3) && (tbRowStat(tc, cfirst, cend, 0, wd, et, tw, 2) == 0)) {
             if ((tbRowStat(tc, cfirst, cend, 0, wd, et, tw, 0) >= 2) && (tbNumCols(tb, k, 1, wd, et, tc, tw) >= 1)) {

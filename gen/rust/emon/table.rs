@@ -2638,13 +2638,39 @@ pub(crate) fn tb_label_row(tb: &mut crate::port::Cells, k: i32, r: i32, tc: &mut
     }
     return (crate::port::cells_at(tc, (only * TCS) + 3) == 1) && (crate::port::cells_at(tc, (only * TCS) + 1) == mincol);
 }
+pub(crate) fn tb_cell_grouped(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, tw: &mut crate::port::Cells, tc: &mut crate::port::Cells, c: i32) -> bool {
+    // P12.2: is the cell a number whose thousands are grouped (`35,595`: a comma between a digit and three digits): a count is not a year.
+    if tb_cell_numeric(wd, et, tw, tc, c) == 0 {
+        return 0 == 1;
+    }
+    let cb: i32 = c * TCS;
+    let from: i32 = crate::port::cells_at(tc, cb + 8);
+    let mut k: i32 = 0;
+    let mut j: i32 = 0;
+    while k < crate::port::cells_at(tc, cb + 9) {
+        let w: i32 = crate::port::cells_at(tw, from + k);
+        let ts: i32 = wd_get(wd, w, hd_tstart());
+        let tl: i32 = wd_get(wd, w, hd_tlen());
+        j = 1;
+        while (j + 3) < tl {
+            if (crate::port::cells_at(et, ts + j) == 44) && ((crate::port::cells_at(et, (ts + j) + -1) >= 48) && (crate::port::cells_at(et, (ts + j) + -1) <= 57)) {
+                if ((crate::port::cells_at(et, (ts + j) + 1) >= 48) && (crate::port::cells_at(et, (ts + j) + 1) <= 57)) && (((crate::port::cells_at(et, (ts + j) + 2) >= 48) && (crate::port::cells_at(et, (ts + j) + 2) <= 57)) && ((crate::port::cells_at(et, (ts + j) + 3) >= 48) && (crate::port::cells_at(et, (ts + j) + 3) <= 57))) {
+                    return 1 == 1;
+                }
+            }
+            j += 1;
+        }
+        k += 1;
+    }
+    return 0 == 1;
+}
 pub(crate) fn tb_row_formatted(tc: &mut crate::port::Cells, cfirst: i32, cend: i32, r: i32, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, tw: &mut crate::port::Cells) -> i32 {
-    // P12.2: does row r have two cells or more that are formatted numbers (`tb-cell-sig`: a currency sign or a decimal point)?
+    // P12.2: does row r have two cells or more that are formatted numbers (`tb-cell-sig`: a currency sign or a decimal point; or grouped thousands)?
     let mut c: i32 = cfirst;
     let mut n: i32 = 0;
     while c < cend {
         if crate::port::cells_at(tc, c * TCS) == r {
-            if tb_cell_sig(wd, et, tw, tc, c) != 0 {
+            if (tb_cell_sig(wd, et, tw, tc, c) != 0) || tb_cell_grouped(wd, et, tw, tc, c) {
                 n += 1;
             }
         }
@@ -2669,15 +2695,12 @@ pub(crate) fn tb_head_rows(tb: &mut crate::port::Cells, k: i32, wd: &mut crate::
     if (crate::port::cells_at(tb, b + 22) > 0) && (crate::port::cells_at(tb, b + 22) < (nrows - 1)) {
         return crate::port::cells_at(tb, b + 22);
     }
-    while (h < (nrows - 1)) && (tb_row_bold(tc, cfirst, cend, h, wd, et, tw) && ((tb_row_amounts(tc, cfirst, cend, h, wd, et, tw) == 0) && !tb_label_row(tb, k, h, tc))) {
+    while (h < (nrows - 1)) && (tb_row_bold(tc, cfirst, cend, h, wd, et, tw) && ((tb_row_amounts(tc, cfirst, cend, h, wd, et, tw) == 0) && !((h > 0) && tb_label_row(tb, k, h, tc)))) {
         h += 1;
     }
-    if (h > 0) && ((h * 2) <= (nrows + 1)) {
-        return h;
-    }
-    // P12.2 (smoke review, issue 3: the BLS and BEA tables): a header of cells that wrap, set in the type of the body, is every row above the first row
-    // of amounts (`tb-row-formatted`: two formatted numbers, with a decimal point or a currency sign) when there are two or more of them and
-    // they are not more than a third of the table.
+    // P12.2 (smoke review, issue 3: the BLS, BEA and US courts' tables): a header of cells that wrap, set in the type of the body or its first row alone in
+    // bold, is every row above the first row of amounts (`tb-row-formatted`: two formatted numbers, with a decimal point, a currency sign or grouped
+    // thousands) when there are two or more of them, more than the bold ones, and they are not more than a third of the table.
     let mut f: i32 = 0;
     while (f < (nrows - 1)) && (tb_row_formatted(tc, cfirst, cend, f, wd, et, tw) == 0) {
         f += 1;
@@ -2685,8 +2708,11 @@ pub(crate) fn tb_head_rows(tb: &mut crate::port::Cells, k: i32, wd: &mut crate::
     while (f > 0) && tb_label_row(tb, k, f - 1, tc) {
         f -= 1;
     }
-    if (f >= 2) && ((f < (nrows - 1)) && ((f * 3) <= nrows)) {
+    if (f >= 2) && ((f > h) && ((f < (nrows - 1)) && ((f * 3) <= nrows))) {
         return f;
+    }
+    if (h > 0) && ((h * 2) <= (nrows + 1)) {
+        return h;
     }
     if (nrows >= 3) && (tb_row_stat(tc, cfirst, cend, 0, wd, et, tw, 2) == 0) {
         if (tb_row_stat(tc, cfirst, cend, 0, wd, et, tw, 0) >= 2) && (tb_num_cols(tb, k, 1, wd, et, tc, tw) >= 1) {

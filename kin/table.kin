@@ -2217,13 +2217,36 @@
     (if (!= cnt 1) (return (== 0 1)))
     (return (and (== (cells-at tc (+ (* only TCS) 3)) 1) (== (cells-at tc (+ (* only TCS) 1)) mincol)))))
 
+(defn ^Bool tb-cell-grouped [^Cells wd ^Cells et ^Cells tw ^Cells tc ^I32 c]
+  (comment "P12.2: is the cell a number whose thousands are grouped (`35,595`: a comma between a digit and three digits): a count is not a year.")
+  (if (== (tb-cell-numeric wd et tw tc c) 0) (return (== 0 1)))
+  (let [^I32 cb (* c TCS)
+        ^I32 from (cells-at tc (+ cb 8))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 j 0]
+    (while (< k (cells-at tc (+ cb 9)))
+      (do (let [^I32 w (cells-at tw (+ from k))
+                ^I32 ts (wd-get wd w (hd-tstart))
+                ^I32 tl (wd-get wd w (hd-tlen))]
+            (set j 1)
+            (while (< (+ j 3) tl)
+              (do (if (and (== (cells-at et (+ ts j)) 44)
+                           (and (>= (cells-at et (+ (+ ts j) -1)) 48) (<= (cells-at et (+ (+ ts j) -1)) 57)))
+                    (if (and (and (>= (cells-at et (+ (+ ts j) 1)) 48) (<= (cells-at et (+ (+ ts j) 1)) 57))
+                             (and (and (>= (cells-at et (+ (+ ts j) 2)) 48) (<= (cells-at et (+ (+ ts j) 2)) 57))
+                                  (and (>= (cells-at et (+ (+ ts j) 3)) 48) (<= (cells-at et (+ (+ ts j) 3)) 57))))
+                      (return (== 1 1))))
+                  (set j (+ j 1)))))
+          (set k (+ k 1))))
+    (return (== 0 1))))
+
 (defn ^I32 tb-row-formatted [^Cells tc ^I32 cfirst ^I32 cend ^I32 r ^Cells wd ^Cells et ^Cells tw]
-  (comment "P12.2: does row r have two cells or more that are formatted numbers (`tb-cell-sig`: a currency sign or a decimal point)?")
+  (comment "P12.2: does row r have two cells or more that are formatted numbers (`tb-cell-sig`: a currency sign or a decimal point; or grouped thousands)?")
   (let [^:mut ^I32 c cfirst
         ^:mut ^I32 n 0]
     (while (< c cend)
       (do (if (== (cells-at tc (* c TCS)) r)
-            (if (!= (tb-cell-sig wd et tw tc c) 0) (set n (+ n 1))))
+            (if (or (!= (tb-cell-sig wd et tw tc c) 0) (tb-cell-grouped wd et tw tc c)) (set n (+ n 1))))
           (set c (+ c 1))))
     (if (>= n 2) (return 1))
     (return 0)))
@@ -2241,18 +2264,18 @@
         ^:mut ^I32 h 0]
     (if (and (> (cells-at tb (+ b 22)) 0) (< (cells-at tb (+ b 22)) (- nrows 1))) (return (cells-at tb (+ b 22))))
     (while (and (< h (- nrows 1)) (and (tb-row-bold tc cfirst cend h wd et tw)
-                                       (and (== (tb-row-amounts tc cfirst cend h wd et tw) 0) (not (tb-label-row tb k h tc)))))
+                                       (and (== (tb-row-amounts tc cfirst cend h wd et tw) 0) (not (and (> h 0) (tb-label-row tb k h tc))))))
       (set h (+ h 1)))
-    (if (and (> h 0) (<= (* h 2) (+ nrows 1))) (return h))
-    (comment "P12.2 (smoke review, issue 3: the BLS and BEA tables): a header of cells that wrap, set in the type of the body, is every row above the first row")
-    (comment "of amounts (`tb-row-formatted`: two formatted numbers, with a decimal point or a currency sign) when there are two or more of them and")
-    (comment "they are not more than a third of the table.")
+    (comment "P12.2 (smoke review, issue 3: the BLS, BEA and US courts' tables): a header of cells that wrap, set in the type of the body or its first row alone in")
+    (comment "bold, is every row above the first row of amounts (`tb-row-formatted`: two formatted numbers, with a decimal point, a currency sign or grouped")
+    (comment "thousands) when there are two or more of them, more than the bold ones, and they are not more than a third of the table.")
     (let [^:mut ^I32 f 0]
       (while (and (< f (- nrows 1)) (== (tb-row-formatted tc cfirst cend f wd et tw) 0))
         (set f (+ f 1)))
       (while (and (> f 0) (tb-label-row tb k (- f 1) tc))
         (set f (- f 1)))
-      (if (and (>= f 2) (and (< f (- nrows 1)) (<= (* f 3) nrows))) (return f)))
+      (if (and (>= f 2) (and (> f h) (and (< f (- nrows 1)) (<= (* f 3) nrows)))) (return f)))
+    (if (and (> h 0) (<= (* h 2) (+ nrows 1))) (return h))
     (if (and (>= nrows 3) (== (tb-row-stat tc cfirst cend 0 wd et tw 2) 0))
       (if (and (>= (tb-row-stat tc cfirst cend 0 wd et tw 0) 2) (>= (tb-num-cols tb k 1 wd et tc tw) 1))
         (return 1)))
