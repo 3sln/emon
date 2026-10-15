@@ -58,6 +58,20 @@ public final class Tabletest {
         Evidence.paSet(pa, r, Evidence.pfFalpha(), 1000);
         return 0;
     }
+    public static int ttAtp(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, byte[] b, int x, int y, int style, int right, int page) {
+        // `tt-at` on page `page` (1 or 2): a word of 500 per character, its left edge at x (its right edge when `right` is 1), 800 tall from y.
+        int w = 500 * emon.Port.blobLen(b);
+        int x0 = x - (right * w);
+        int w0 = Evidence.wdCount(wd);
+        int ts = emon.Port.cellsLen(et);
+        Model.textAppendUtf8(et, b, 0, emon.Port.blobLen(b));
+        int r = Evidence.wdNew(wd, page, x0, y, x0 + w, y + 800, x0, (y + 800) - 200, x0 + w, (y + 800) - 200, 0, 0, ts, emon.Port.cellsLen(et) - ts, -1, -1, -1);
+        Evidence.wdSet(wd, r, Evidence.wfSize(), 1000);
+        Evidence.wdSet(wd, r, Evidence.wfFont(), 0);
+        Evidence.wdSet(wd, r, Evidence.wfStyle(), style);
+        Evidence.lnNew(ln, page, x0, y, x0 + w, y + 800, x0, (y + 800) - 200, x0 + w, (y + 800) - 200, 0, 0, w0, 1);
+        return 0;
+    }
     public static int ttGrid(emon.Port.Cells pa, int x0, int x1, int x2, int x3, int y0, int y1, int y2, int y3) {
         // The rules of a 3 x 3 lattice, the vertical at x2 missing between y2 and y3 (the last row's two cells are one).
         ttRule(pa, x0, y0 - 50, x3, y0 + 50);
@@ -178,8 +192,8 @@ public final class Tabletest {
         }
         return 0;
     }
-    public static int ttRun(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa, StringBuilder t) {
-        // Tables, then paragraphs, then the brief of the Model. Answers `model-check`'s verdict.
+    public static int ttRunN(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa, StringBuilder t, int np) {
+        // Tables, then paragraphs, then the brief of the Model, of a document of `np` pages (1 or 2). Answers `model-check`'s verdict.
         emon.Port.Cells nodes = emon.Port.newCells();
         emon.Port.Cells attrs = emon.Port.newCells();
         emon.Port.Cells regions = emon.Port.newCells();
@@ -254,12 +268,19 @@ public final class Tabletest {
         emon.Port.Cells t12e = emon.Port.newCells();
         Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         Model.pageNew(pages, 1, 61200, 79200, 0, Model.pkVector());
-        Gfuse.gfDoc(pa, gpts, gmk, gim, 1, Gfuse.gfxMode(), grl, gfl, cand, emon.Port.newCells());
-        Table.tbBuild(wd, ln, et, grl, gfl, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e);
+        if (np == 2) {
+            Model.pageNew(pages, 2, 61200, 79200, 0, Model.pkVector());
+        }
+        Gfuse.gfDoc(pa, gpts, gmk, gim, np, Gfuse.gfxMode(), grl, gfl, cand, emon.Port.newCells());
+        Table.tbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e);
         Columns.lcCopy(ln, lt);
-        Para.paBuild(wd, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
+        Para.paBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
         ttBrief(t, nodes, attrs, text);
         return Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st);
+    }
+    public static int ttRun(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa, StringBuilder t) {
+        // Tables, then paragraphs, then the brief of the Model. Answers `model-check`'s verdict.
+        return ttRunN(wd, ln, et, pa, t, 1);
     }
     public static void testALatticeIsATableAndAMissingRuleIsASpan() {
         emon.Port.Cells wd = emon.Port.newCells();
@@ -1213,6 +1234,200 @@ public final class Tabletest {
         ttStmtBody(wd, ln, et, 0);
         emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "head: well formed");
         emon.Testport.assertText(t, "T3w;Gh;R;Ch[];Cc2he[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cs[Cash and equivalents];C[33,672];C[32,260];R;Cs[Short-term investments];C[129,619];C[92,774];R;Cs[Fixed maturity securities];C[23,758];C[25,128];R;Cs[Equity securities];C[353,842];C[308,793];R;Cs[Other];C[19,568];C[19,657];", "the header is two rows, a spanning label over the year columns and the years (before: the label a paragraph over the table)");
+    }
+    public static int ttWrapped(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int y, byte[] date, byte[] a, byte[] b, byte[] c, byte[] d, byte[] amt) {
+        // A row whose Details cell has four lines (x 14000, a pitch of 1200) with the date at x 7600 and the amount, right-aligned at 36000, on the first line
+        // only: the next row begins 2400 under the fourth line (a gap of one line).
+        ttAt(wd, ln, et, date, 7600, y, 0, 0);
+        ttAt(wd, ln, et, a, 14000, y, 0, 0);
+        ttAt(wd, ln, et, amt, 36000, y, 0, 1);
+        ttAt(wd, ln, et, b, 14000, y + 1200, 0, 0);
+        ttAt(wd, ln, et, c, 14000, y + 2400, 0, 0);
+        ttAt(wd, ln, et, d, 14000, y + 3600, 0, 0);
+        return 0;
+    }
+    public static void testTheLinesOfAWrappedCellAreInOneRow() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        // Repro shape 5 (the Agami statements): no rules, four-line Details cells with the date and the amount on the first line, a gap of a line between
+        // the rows. The lines under the first have one chunk each (before: a header and no body, the last line a heading).
+        ttAt(wd, ln, et, emon.Testport.textBlob("Date"), 7600, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Details"), 14000, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Amount"), 36000, 10000, 1, 1);
+        ttWrapped(wd, ln, et, 11600, emon.Testport.textBlob("05 Jan"), emon.Testport.textBlob("Payment to Acme Supply"), emon.Testport.textBlob("Invoice 4471 settled"), emon.Testport.textBlob("Ref ABC 123"), emon.Testport.textBlob("Thank you"), emon.Testport.textBlob("120.50"));
+        ttWrapped(wd, ln, et, 17600, emon.Testport.textBlob("12 Jan"), emon.Testport.textBlob("Card purchase Bolt Co"), emon.Testport.textBlob("Order 5512 shipped"), emon.Testport.textBlob("Ref DEF 456"), emon.Testport.textBlob("Paid in full"), emon.Testport.textBlob("75.00"));
+        ttWrapped(wd, ln, et, 23600, emon.Testport.textBlob("19 Jan"), emon.Testport.textBlob("Transfer to savings"), emon.Testport.textBlob("Monthly plan"), emon.Testport.textBlob("Ref GHI 789"), emon.Testport.textBlob("Standing order"), emon.Testport.textBlob("300.00"));
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "wrapped: well formed");
+        emon.Testport.assertText(t, "T3w;Gh;R;Ch[Date];Chs[Details];Ch[Amount];Gb;R;C[05 Jan];Cs[Payment to Acme Supply Invoice 4471 settled Ref ABC 123 Thank you];C[120.50];R;C[12 Jan];Cs[Card purchase Bolt Co Order 5512 shipped Ref DEF 456 Paid in full];C[75.00];R;C[19 Jan];Cs[Transfer to savings Monthly plan Ref GHI 789 Standing order];C[300.00];", "three rows, each with its four lines in one cell (before: no table, a paragraph for each line, in the real statements a header and no body)");
+    }
+    public static void testARuledHeaderOverWrappedUnruledRowsIsTheHeadOfTheirTable() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        // The Agami statements: a title above the header, the header in two lines (a language each), a rule above the title and one under the header, the
+        // rows unruled below it, their Details cells wrapped. The chain of the two rules reads the title, the header and a row or two under the rule; the
+        // whitespace reads the header and every row: the head of the table beside the table (before: the table of the chain, its rows cut after the first).
+        ttRule(pa, 7200, 7950, 37200, 8050);
+        ttRule(pa, 7200, 11950, 37200, 12050);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Current Account"), 7600, 8600, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Date"), 7600, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Details"), 14000, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Amount"), 36000, 10000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Dt"), 7600, 11000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Dx"), 14000, 11000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Am"), 36000, 11000, 0, 1);
+        ttWrapped(wd, ln, et, 12600, emon.Testport.textBlob("05 Jan"), emon.Testport.textBlob("Payment to Acme Supply"), emon.Testport.textBlob("Invoice 4471 settled"), emon.Testport.textBlob("Ref ABC 123"), emon.Testport.textBlob("Thank you"), emon.Testport.textBlob("120.50"));
+        ttWrapped(wd, ln, et, 18600, emon.Testport.textBlob("12 Jan"), emon.Testport.textBlob("Card purchase Bolt Co"), emon.Testport.textBlob("Order 5512 shipped"), emon.Testport.textBlob("Ref DEF 456"), emon.Testport.textBlob("Paid in full"), emon.Testport.textBlob("75.00"));
+        ttWrapped(wd, ln, et, 24600, emon.Testport.textBlob("19 Jan"), emon.Testport.textBlob("Transfer to savings"), emon.Testport.textBlob("Monthly plan"), emon.Testport.textBlob("Ref GHI 789"), emon.Testport.textBlob("Standing order"), emon.Testport.textBlob("300.00"));
+        ttWrapped(wd, ln, et, 30600, emon.Testport.textBlob("26 Jan"), emon.Testport.textBlob("Interest paid"), emon.Testport.textBlob("Quarterly"), emon.Testport.textBlob("Ref JKL 012"), emon.Testport.textBlob("Credit"), emon.Testport.textBlob("4.20"));
+        ttWrapped(wd, ln, et, 36600, emon.Testport.textBlob("28 Jan"), emon.Testport.textBlob("Cash deposit"), emon.Testport.textBlob("Branch 14"), emon.Testport.textBlob("Ref MNO 345"), emon.Testport.textBlob("Counter"), emon.Testport.textBlob("50.00"));
+        ttWrapped(wd, ln, et, 42600, emon.Testport.textBlob("31 Jan"), emon.Testport.textBlob("Service charge"), emon.Testport.textBlob("Monthly fee"), emon.Testport.textBlob("Ref PQR 678"), emon.Testport.textBlob("Account"), emon.Testport.textBlob("8.00"));
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "head: well formed");
+        emon.Testport.assertText(t, "P[Current Account];T3w;Gh;R;Chs[Date];Chs[Details];Ch[Amount];Gb;R;Cs[Dt];Cs[Dx];Ce[Am];R;Cs[05 Jan];Cs[Payment to Acme Supply Invoice 4471 settled Ref ABC 123 Thank you];Ce[120.50];R;Cs[12 Jan];Cs[Card purchase Bolt Co Order 5512 shipped Ref DEF 456 Paid in full];Ce[75.00];R;Cs[19 Jan];Cs[Transfer to savings Monthly plan Ref GHI 789 Standing order];Ce[300.00];R;Cs[26 Jan];Cs[Interest paid Quarterly Ref JKL 012 Credit];Ce[4.20];R;Cs[28 Jan];Cs[Cash deposit Branch 14 Ref MNO 345 Counter];Ce[50.00];R;Cs[31 Jan];Cs[Service charge Monthly fee Ref PQR 678 Account];Ce[8.00];", "one table, the header and the six rows (before: the table of the rules, its header and one row, and the rest paragraphs)");
+    }
+    public static int ttCols5(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int page, int y, int style, byte[] date, byte[] what, byte[] debit, byte[] credit, byte[] bal) {
+        // A row of a ledger on page `page` at y: the date at x 7600, the details at 14000, the debit, the credit and the balance right-aligned at 26000,
+        // 36000 and 46000 (an empty blob is no word).
+        ttAtp(wd, ln, et, date, 7600, y, style, 0, page);
+        ttAtp(wd, ln, et, what, 14000, y, style, 0, page);
+        if (emon.Port.blobLen(debit) > 0) {
+            ttAtp(wd, ln, et, debit, 26000, y, style, 1, page);
+        }
+        if (emon.Port.blobLen(credit) > 0) {
+            ttAtp(wd, ln, et, credit, 36000, y, style, 1, page);
+        }
+        ttAtp(wd, ln, et, bal, 46000, y, style, 1, page);
+        return 0;
+    }
+    public static int ttFrench(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int y, int style, byte[] what, byte[] d1, byte[] d2, byte[] b1, byte[] b2) {
+        // A row of a French statement at y: the details at x 7600, a debit `1 895,80 $` (three words, the sign after the amount) at 24000 and a balance
+        // `11 732,54 $` at 38000, the signs set a gap from the amounts that is the width of a space (the amounts before the next column's).
+        ttAt(wd, ln, et, what, 7600, y, style, 0);
+        if (emon.Port.blobLen(d1) > 0) {
+            ttAt(wd, ln, et, d1, 24000, y, style, 0);
+            ttAt(wd, ln, et, d2, 24900, y, style, 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("$"), 28300, y, style, 0);
+        }
+        ttAt(wd, ln, et, b1, 38000, y, style, 0);
+        ttAt(wd, ln, et, b2, 39400, y, style, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("$"), 42800, y, style, 0);
+        return 0;
+    }
+    public static int ttLeader(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int y, byte[] label, byte[] line, byte[] amt) {
+        // An IRS-style row at y: the label at x 7600, six full stops of their own (every 1400 from x 22000, a gap each of 900), the line number at 33000 and the
+        // amount right-aligned at 43000.
+        ttAt(wd, ln, et, label, 7600, y, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("."), 22000, y, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("."), 23400, y, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("."), 24800, y, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("."), 26200, y, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("."), 27600, y, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("."), 29000, y, 0, 0);
+        ttAt(wd, ln, et, line, 33000, y, 0, 0);
+        ttAt(wd, ln, et, amt, 43000, y, 0, 1);
+        return 0;
+    }
+    public static void testTheDotsOfALeaderAreNoCells() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        // The 1120's lines (D17, D18, D20): a label, a leader of full stops a gap apart, the line number, the amount. Each full stop is a chunk of its own to the
+        // rows' words and the six of a row, in the same places in every row, are columns of the table (before: a table of nine columns, the dots cells).
+        ttAt(wd, ln, et, emon.Testport.textBlob("Item"), 7600, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Line"), 33000, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Amount"), 43000, 10000, 1, 1);
+        ttLeader(wd, ln, et, 11600, emon.Testport.textBlob("Gross receipts"), emon.Testport.textBlob("1a"), emon.Testport.textBlob("1,200"));
+        ttLeader(wd, ln, et, 13200, emon.Testport.textBlob("Returns"), emon.Testport.textBlob("1b"), emon.Testport.textBlob("30"));
+        ttLeader(wd, ln, et, 14800, emon.Testport.textBlob("Cost of goods sold"), emon.Testport.textBlob("2"), emon.Testport.textBlob("450"));
+        ttLeader(wd, ln, et, 16400, emon.Testport.textBlob("Gross profit"), emon.Testport.textBlob("3"), emon.Testport.textBlob("720"));
+        ttLeader(wd, ln, et, 18000, emon.Testport.textBlob("Dividends"), emon.Testport.textBlob("4"), emon.Testport.textBlob("15"));
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "leader: well formed");
+        emon.Testport.assertText(t, "T3w;Gh;R;Ch[Item];Ch[Line];Ch[Amount];Gb;R;C[Gross receipts . . . . . .];C[1a];Ce[1,200];R;C[Returns . . . . . .];C[1b];Ce[30];R;C[Cost of goods sold . . . . . .];C[2];Ce[450];R;C[Gross profit . . . . . .];C[3];Ce[720];R;C[Dividends . . . . . .];C[4];Ce[15];", "the leader is the end of the label's cell: three columns (before: nine, the six full stops the cells of six of them)");
+    }
+    public static void testARowSpanDoesNotCrossIntoTheFoot() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        // Repro shape 13 (the ICDAR table of savings): a label that spans three rows and the bold total that ends its group, a fourth row of the same span.
+        // The total is the last row, bold under rows that are not, and would be the foot: but the span goes down into it, and a row group does not cross
+        // from the body into the foot. The total stays in the body, the span whole (before: a foot of one row, the span four rows of it three).
+        ttRule(pa, 7200, 9950, 37200, 10050);
+        ttRule(pa, 7200, 11950, 37200, 12050);
+        ttRule(pa, 17200, 13550, 37200, 13650);
+        ttRule(pa, 17200, 15150, 37200, 15250);
+        ttRule(pa, 17200, 16750, 37200, 16850);
+        ttRule(pa, 7200, 18350, 37200, 18450);
+        ttRule(pa, 7150, 10000, 7250, 18400);
+        ttRule(pa, 17150, 10000, 17250, 18400);
+        ttRule(pa, 27150, 10000, 27250, 18400);
+        ttRule(pa, 37150, 10000, 37250, 18400);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Group"), 7600, 10600, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Level"), 17600, 10600, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Pct"), 27600, 10600, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Combined"), 7600, 12200, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Med-low"), 17600, 12200, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("1.5%"), 27600, 12200, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Med-high"), 17600, 13800, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("2.3%"), 27600, 13800, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Very high"), 17600, 15400, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("2.4%"), 27600, 15400, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Total"), 17600, 17000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("6%"), 27600, 17000, 1, 0);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "span: well formed");
+        emon.Testport.assertText(t, "T3r;Gh;R;Ch[Group];Ch[Level];Ch[Pct];Gb;R;Cr4[Combined];Cs[Med-low];Cs[1.5%];R;Cs[Med-high];Cs[2.3%];R;Cs[Very high];Cs[2.4%];R;Cs[Total];Cs[6%];", "the total is in the body with the rows its label spans (before: `Gf;R;Cws[Total];Cw[6%];` under a label of four rows that began in the body)");
+    }
+    public static void testACurrencySignAfterItsAmountStaysWithIt() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        // The Harbour statement writes `1 895,80 $` and `11 732,54 $`: the sign is the end of its amount and not the lead of the next one (a sign of a word
+        // of its own before a figure is the figure's only when the row's signs go before the figures).
+        ttAt(wd, ln, et, emon.Testport.textBlob("Details"), 7600, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Debit"), 24000, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Solde"), 38000, 10000, 1, 0);
+        ttFrench(wd, ln, et, 11600, 0, emon.Testport.textBlob("Uber"), emon.Testport.textBlob("1"), emon.Testport.textBlob("895,80"), emon.Testport.textBlob("11"), emon.Testport.textBlob("732,54"));
+        ttFrench(wd, ln, et, 13200, 0, emon.Testport.textBlob("La Baie"), emon.Testport.textBlob("88"), emon.Testport.textBlob("96"), emon.Testport.textBlob("11"), emon.Testport.textBlob("643,58"));
+        ttFrench(wd, ln, et, 14800, 0, emon.Testport.textBlob("Tim"), emon.Testport.textBlob("53"), emon.Testport.textBlob("50"), emon.Testport.textBlob("11"), emon.Testport.textBlob("590,08"));
+        ttFrench(wd, ln, et, 16400, 0, emon.Testport.textBlob("Apple"), emon.Testport.textBlob("17"), emon.Testport.textBlob("26"), emon.Testport.textBlob("11"), emon.Testport.textBlob("572,82"));
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "french: well formed");
+        emon.Testport.assertText(t, "T3w;Gh;R;Chs[Details];Ch[Debit];Ch[Solde];Gb;R;Cs[Uber];C[1 895,80 $];C[11 732,54 $];R;Cs[La Baie];C[88 96 $];C[11 643,58 $];R;Cs[Tim];C[53 50 $];C[11 590,08 $];R;Cs[Apple];C[17 26 $];C[11 572,82 $];", "each amount keeps its sign: three columns (a sign that went to the amount after it made the debit and the balance one cell)");
+    }
+    public static void testATableWhosePageHasAnEmptyColumnIsOneWithThePageBefore() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        // Repro shape 4 (the Harbour statement): five columns on the first page, the second page has only debits (its credit column is empty but for
+        // the header the table repeats): the columns of the second are a subset of the first's, aligned by x, so it is the same table; its rows have the empty
+        // cell (before: a table of four columns on the second page, the pages not linked).
+        ttCols5(wd, ln, et, 1, 10000, 1, emon.Testport.textBlob("Date"), emon.Testport.textBlob("Details"), emon.Testport.textBlob("Debit"), emon.Testport.textBlob("Credit"), emon.Testport.textBlob("Balance"));
+        ttCols5(wd, ln, et, 1, 11600, 0, emon.Testport.textBlob("02 Jan"), emon.Testport.textBlob("Skip Plats"), emon.Testport.textBlob("151.30"), emon.Testport.textBlob(""), emon.Testport.textBlob("10,598.70"));
+        ttCols5(wd, ln, et, 1, 13200, 0, emon.Testport.textBlob("02 Jan"), emon.Testport.textBlob("Salary"), emon.Testport.textBlob(""), emon.Testport.textBlob("10.33"), emon.Testport.textBlob("10,609.03"));
+        ttCols5(wd, ln, et, 1, 14800, 0, emon.Testport.textBlob("03 Jan"), emon.Testport.textBlob("Amazon"), emon.Testport.textBlob("1,200.45"), emon.Testport.textBlob(""), emon.Testport.textBlob("9,408.58"));
+        ttCols5(wd, ln, et, 1, 16400, 0, emon.Testport.textBlob("06 Jan"), emon.Testport.textBlob("Paie"), emon.Testport.textBlob(""), emon.Testport.textBlob("101.15"), emon.Testport.textBlob("9,509.73"));
+        ttCols5(wd, ln, et, 1, 18000, 0, emon.Testport.textBlob("06 Jan"), emon.Testport.textBlob("Petro"), emon.Testport.textBlob("29.69"), emon.Testport.textBlob(""), emon.Testport.textBlob("9,480.04"));
+        ttCols5(wd, ln, et, 1, 19600, 0, emon.Testport.textBlob("06 Jan"), emon.Testport.textBlob("Spotify"), emon.Testport.textBlob("541.27"), emon.Testport.textBlob(""), emon.Testport.textBlob("8,938.77"));
+        ttCols5(wd, ln, et, 2, 10000, 1, emon.Testport.textBlob("Date"), emon.Testport.textBlob("Details"), emon.Testport.textBlob("Debit"), emon.Testport.textBlob("Credit"), emon.Testport.textBlob("Balance"));
+        ttCols5(wd, ln, et, 2, 11600, 0, emon.Testport.textBlob("21 Jan"), emon.Testport.textBlob("Uber"), emon.Testport.textBlob("1,895.80"), emon.Testport.textBlob(""), emon.Testport.textBlob("11,732.54"));
+        ttCols5(wd, ln, et, 2, 13200, 0, emon.Testport.textBlob("23 Jan"), emon.Testport.textBlob("La Baie"), emon.Testport.textBlob("88.96"), emon.Testport.textBlob(""), emon.Testport.textBlob("11,643.58"));
+        ttCols5(wd, ln, et, 2, 14800, 0, emon.Testport.textBlob("24 Jan"), emon.Testport.textBlob("Tim"), emon.Testport.textBlob("53.50"), emon.Testport.textBlob(""), emon.Testport.textBlob("11,590.08"));
+        ttCols5(wd, ln, et, 2, 16400, 0, emon.Testport.textBlob("25 Jan"), emon.Testport.textBlob("Apple"), emon.Testport.textBlob("17.26"), emon.Testport.textBlob(""), emon.Testport.textBlob("11,572.82"));
+        ttCols5(wd, ln, et, 2, 18000, 0, emon.Testport.textBlob("26 Jan"), emon.Testport.textBlob("Gaz"), emon.Testport.textBlob("422.11"), emon.Testport.textBlob(""), emon.Testport.textBlob("11,150.71"));
+        ttCols5(wd, ln, et, 2, 19600, 0, emon.Testport.textBlob("26 Jan"), emon.Testport.textBlob("Netflix"), emon.Testport.textBlob("17.11"), emon.Testport.textBlob(""), emon.Testport.textBlob("11,133.60"));
+        emon.Testport.assertEq(ttRunN(wd, ln, et, pa, t, 2), 0, "ledger: well formed");
+        emon.Testport.assertText(t, "T5w;Gh;R;Ch[Date];Chs[Details];Che[Debit];Ch[Credit];Che[Balance];Gb;R;C[02 Jan];Cs[Skip Plats];Ce[151.30];C[];C[10,598.70];R;C[02 Jan];Cs[Salary];Ce[];C[10.33];C[10,609.03];R;C[03 Jan];Cs[Amazon];Ce[1,200.45];C[];C[9,408.58];R;C[06 Jan];Cs[Paie];Ce[];C[101.15];C[9,509.73];R;C[06 Jan];Cs[Petro];Ce[29.69];C[];C[9,480.04];R;C[06 Jan];Cs[Spotify];Ce[541.27];C[];C[8,938.77];R;C[21 Jan];Cs[Uber];Ce[1,895.80];C[];C[11,732.54];R;C[23 Jan];Cs[La Baie];Ce[88.96];C[];C[11,643.58];R;C[24 Jan];Cs[Tim];Ce[53.50];C[];C[11,590.08];R;C[25 Jan];Cs[Apple];Ce[17.26];C[];C[11,572.82];R;C[26 Jan];Cs[Gaz];Ce[422.11];C[];C[11,150.71];R;C[26 Jan];Cs[Netflix];Ce[17.11];C[];C[11,133.60];", "one table of five columns across the two pages, the second page's rows with their empty credit cells (before: two tables, four columns on the second)");
     }
     public static void testASectionsLabelInATableIsARowThatSpansIt() {
         emon.Port.Cells wd = emon.Port.newCells();
