@@ -420,7 +420,31 @@ pub(crate) fn sp_add(mut cand: &mut crate::port::Cells, kind: i32, row: i32, x0:
     crate::port::cells_push(cand, 0);
     return 1;
 }
-pub(crate) fn sp_judge(page1: i32, views: &mut crate::port::Cells, srcview: i32, owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, src: &crate::port::Bitmap, rules: &mut crate::port::Cells, row: i32, zx0: i32, zy0: i32, mask: &mut crate::port::Cells, n: i32, mut cand: &mut crate::port::Cells) -> i32 {
+pub(crate) fn sp_ruled_ink(mask: &mut crate::port::Cells, zw: i32, zh: i32, wpx: i32, ink: i32) -> i32 {
+    // D1630: 1 when at least 70 per cent of the zone's ink lies in rows that are each inked over 35 per cent of the ink's width: a straight line, dashed or not (a form's write-in
+    // lines, stacked, make as long a path as a pen's loops do), which no pen draws.
+    let mut y: i32 = 0;
+    let mut x: i32 = 0;
+    let mut row: i32 = 0;
+    let mut heavy: i32 = 0;
+    while y < zh {
+        row = 0;
+        x = 0;
+        while x < zw {
+            row += crate::port::cells_at(mask, (y * zw) + x);
+            x += 1;
+        }
+        if (row * 100) >= (wpx * 35) {
+            heavy += row;
+        }
+        y += 1;
+    }
+    if (heavy * 100) >= (ink * 70) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn sp_judge(page1: i32, views: &mut crate::port::Cells, srcview: i32, owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, src: &crate::port::Bitmap, rules: &mut crate::port::Cells, row: i32, zx0: i32, zy0: i32, mask: &mut crate::port::Cells, n: i32, zw: i32, zh: i32, mut cand: &mut crate::port::Cells) -> i32 {
     // Is the ink of a zone (statistics at mask[n...]) a pen's? Add a candidate when it is: the box, the stroke width, the loops of the path, the coverage, no legible word, then the size says
     // signature or initials. Answers 1 when added.
     let ink: i32 = crate::port::cells_at(mask, n + 132);
@@ -479,6 +503,9 @@ pub(crate) fn sp_judge(page1: i32, views: &mut crate::port::Cells, srcview: i32,
         return 0;
     }
     if (ink * 100) > ((wpx * hpx) * sp_cover()) {
+        return 0;
+    }
+    if sp_ruled_ink(mask, zw, zh, wpx, ink) == 1 {
         return 0;
     }
     ln = ink / sw;
@@ -560,7 +587,7 @@ pub(crate) fn sp_zone(page1: i32, views: &mut crate::port::Cells, srcview: i32, 
     if ink < sp_min_ink() {
         return 0;
     }
-    return sp_judge(page1, views, srcview, owords, etext, src, rules, r, zx0, zy0, mask, zw * zh, cand);
+    return sp_judge(page1, views, srcview, owords, etext, src, rules, r, zx0, zy0, mask, zw * zh, zw, zh, cand);
 }
 pub fn sp_find(page1: i32, views: &mut crate::port::Cells, srcview: i32, rules: &mut crate::port::Cells, owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, src: &crate::port::Bitmap, pw: i32, mut cand: &mut crate::port::Cells, mut mask: &mut crate::port::Cells) -> i32 {
     // The candidates of page `page1` (1-based) from the tracer's rules of the raster `srcview` (a `views` row; `src` its pixels): see the head of this file; written to `cand` (cleared

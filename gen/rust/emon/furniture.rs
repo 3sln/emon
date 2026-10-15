@@ -25,6 +25,12 @@ pub(crate) const FU_TAGW: i32 = 6;
 pub(crate) const FU_PAIRS: i32 = 75;
 pub(crate) const FU_MINNORM: i32 = 4;
 pub(crate) const FU_MAXSLOTS: i32 = 8;
+pub(crate) const FU_FLOOR: i32 = 3600;
+pub(crate) const FU_FCAP: i32 = 170;
+pub(crate) const FU_STAMP: i32 = 60;
+pub(crate) const FU_STAMPLEN: i32 = 8;
+pub(crate) const FU_CELLS: i32 = 4;
+pub(crate) const FU_CHAIN_GAP: i32 = 1300;
 pub(crate) const CD: i32 = 16;
 pub(crate) const SL: i32 = 10;
 pub(crate) const GR: i32 = 16;
@@ -707,6 +713,36 @@ pub(crate) fn fu_tag(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, g
     }
     return 0;
 }
+pub(crate) fn fu_zone_floor(h: i32) -> i32 {
+    // D1630 (smoke review B issue 11): twice the depth (centipoints) of the margin zones of a page `h` tall when 11 per cent of it is less than FU_FLOOR (36 pt) and 17 per cent of it more
+    // than 11 per cent: a page the size of a slide or a small card (210 pt tall) has a running header 18 pt from its top edge and a footer 28 pt from its foot, outside 11 per cent
+    // of it. 0 for a page where 11 per cent is deep enough (every page of a letter's size and over 327 pt tall).
+    let lim: i32 = fu_min(2 * FU_FLOOR, (h * FU_FCAP) / 500);
+    if lim > ((h * FU_TOP) / 500) {
+        return lim;
+    }
+    return 0;
+}
+pub(crate) fn fu_row_cells(ln: &mut crate::port::Cells, l: i32) -> i32 {
+    // D1630 (smoke review A issue 15): how many upright lines (this one included) of its page stand on line l's baseline (centres within half its height), among the 40 lines either side of it
+    // in the text layer's order. A row of FU_CELLS or more is a table's row, not a running header or footer (a left, a centre and a right part at the most): the first data row of a
+    // continuation page, directly under the repeated header, recurs by position and by the shape of its cells and passed as a header that varies.
+    let nl: i32 = ln_count(ln);
+    let c2: i32 = ln_get(ln, l, lh_y0()) + ln_get(ln, l, lh_y1());
+    let half: i32 = fu_max(1, ln_get(ln, l, lh_y1()) - ln_get(ln, l, lh_y0()));
+    let p: i32 = ln_get(ln, l, lh_page());
+    let mut q: i32 = fu_max(0, l - 40);
+    let mut n: i32 = 0;
+    let mut rot: i32 = 0;
+    while (q < nl) && (q <= (l + 40)) {
+        rot = ln_get(ln, q, lh_rot());
+        if (ln_get(ln, q, lh_page()) == p) && (((rot < 100) || (rot > 35900)) && (fu_abs((ln_get(ln, q, lh_y0()) + ln_get(ln, q, lh_y1())) - c2) <= half)) {
+            n += 1;
+        }
+        q += 1;
+    }
+    return n;
+}
 pub(crate) fn fu_scan(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, gl: &mut crate::port::Cells, mk: &mut crate::port::Cells, pages: &mut crate::port::Cells, npages: i32, mut cd: &mut crate::port::Cells, mut sl: &mut crate::port::Cells, mut tx: &mut crate::port::Cells) -> i32 {
     // Every candidate line of the document as a row of `cd`, in line order. Answers the number of rows, or -1 when the
     // lines are not in page order (nothing here is then safe to say).
@@ -739,16 +775,24 @@ pub(crate) fn fu_scan(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, 
             cy2 = ln_get(ln, l, lh_y0()) + ln_get(ln, l, lh_y1());
             cx2 = ln_get(ln, l, lh_x0()) + ln_get(ln, l, lh_x1());
             if (rot < 100) || (rot > 35900) {
-                if cy2 < ((h * FU_TOP) / 500) {
+                let fz: i32 = fu_zone_floor(h);
+                if cy2 < fu_max(fz, (h * FU_TOP) / 500) {
                     zone = 1;
                 }
-                if cy2 > ((h * FU_BOT) / 500) {
+                if fz > 0 {
+                    if cy2 > ((2 * h) - fz) {
+                        zone = 2;
+                    }
+                } else if cy2 > ((h * FU_BOT) / 500) {
                     zone = 2;
                 }
             } else if (fu_abs(rot - 9000) < 100) || (fu_abs(rot - 27000) < 100) {
                 if (cx2 < ((w * FU_SIDE) / 500)) || (cx2 > ((w * (1000 - FU_SIDE)) / 500)) {
                     zone = 3;
                 }
+            }
+            if (zone > 0) && (zone < 3) && (fu_row_cells(ln, l) >= FU_CELLS) {
+                zone = 0;
             }
             if zone > 0 {
                 ts = crate::port::cells_len(tx);
@@ -1246,6 +1290,94 @@ pub(crate) fn fu_qualify(ord: &mut crate::port::Cells, cd: &mut crate::port::Cel
         return 1;
     }
     return 0;
+}
+pub(crate) fn fu_chain_adjacent(ln: &mut crate::port::Cells, cd: &mut crate::port::Cells, ncd: i32, r: i32) -> i32 {
+    // 1 when candidate r has, on its page and in its zone, a candidate that qualified (cell 15 is 1) directly toward the page's edge from it: within FU_CHAIN_GAP per mille
+    // of its own height of it, and its left edge within two heights of r's (the first line of a two-line header, over the second). Not a cell of a table's row (FU_CELLS
+    // candidates on its baseline).
+    let lo: i32 = fu_max(0, r - 30);
+    let hi: i32 = fu_min(ncd, r + 31);
+    let h: i32 = fu_max(1, cd_get(cd, r, 4) - cd_get(cd, r, 3));
+    let c2: i32 = cd_get(cd, r, 3) + cd_get(cd, r, 4);
+    let mut q: i32 = lo;
+    let mut n: i32 = 0;
+    let mut gap: i32 = 0;
+    while q < hi {
+        if (cd_get(cd, q, 1) == cd_get(cd, r, 1)) && ((cd_get(cd, q, 2) == cd_get(cd, r, 2)) && (fu_abs((cd_get(cd, q, 3) + cd_get(cd, q, 4)) - c2) <= h)) {
+            n += 1;
+        }
+        q += 1;
+    }
+    if n >= FU_CELLS {
+        return 0;
+    }
+    q = lo;
+    while q < hi {
+        if (q != r) && ((cd_get(cd, q, 1) == cd_get(cd, r, 1)) && ((cd_get(cd, q, 2) == cd_get(cd, r, 2)) && ((cd_get(cd, q, 15) == 1) && (fu_abs(ln_get(ln, cd_get(cd, q, 0), lh_x0()) - ln_get(ln, cd_get(cd, r, 0), lh_x0())) <= (2 * h))))) {
+            if cd_get(cd, r, 2) == 1 {
+                gap = cd_get(cd, r, 3) - cd_get(cd, q, 4);
+                if (gap >= -200) && ((gap * 1000) <= (h * FU_CHAIN_GAP)) && (cd_get(cd, q, 3) < cd_get(cd, r, 3)) {
+                    return 1;
+                }
+            }
+            if cd_get(cd, r, 2) == 2 {
+                gap = cd_get(cd, q, 3) - cd_get(cd, r, 4);
+                if (gap >= -200) && ((gap * 1000) <= (h * FU_CHAIN_GAP)) && (cd_get(cd, q, 3) > cd_get(cd, r, 3)) {
+                    return 1;
+                }
+            }
+        }
+        q += 1;
+    }
+    return 0;
+}
+pub(crate) fn fu_chain(ln: &mut crate::port::Cells, ord: &mut crate::port::Cells, mut cd: &mut crate::port::Cells, sl: &mut crate::port::Cells, tx: &mut crate::port::Cells, mut gr: &mut crate::port::Cells, ng: i32, ncd: i32, npages: i32, trust: i32) -> i32 {
+    // D1630 (smoke review B issue 11): a template group that qualified in everything but its isolation, whose every member (at least 70 per cent) lies directly under or over a member of a group that
+    // qualified, on the same page and in the same zone, is the next line of that header or footer: a two-line running header has its second line against the body, and only
+    // the first is set apart (the lines that recur do not count). Qualified groups are marked (cell 15 is 1) so a third line goes with the second. Answers the groups added.
+    let mut pass: i32 = 0;
+    let mut changed: i32 = 1;
+    let mut added: i32 = 0;
+    let mut g: i32 = 0;
+    let mut i: i32 = 0;
+    let mut adj: i32 = 0;
+    let mut old: i32 = 0;
+    let mut f: i32 = 0;
+    let mut m: i32 = 0;
+    while (changed == 1) && (pass < 3) {
+        changed = 0;
+        g = 0;
+        while g < ng {
+            if (gr_get(gr, g, 4) == 0) && ((gr_get(gr, g, 2) >= 2) && ((gr_get(gr, g, 3) == 1) || (gr_get(gr, g, 3) == 2))) {
+                f = gr_get(gr, g, 0);
+                m = gr_get(gr, g, 1);
+                adj = 0;
+                i = 0;
+                while i < m {
+                    adj += fu_chain_adjacent(ln, cd, ncd, crate::port::cells_at(ord, f + i));
+                    i += 1;
+                }
+                if (adj * 100) >= (m * 70) {
+                    old = gr_get(gr, g, 9);
+                    gr_set(gr, g, 9, m);
+                    if fu_qualify(ord, cd, sl, tx, gr, g, npages, trust) == 1 {
+                        i = 0;
+                        while i < m {
+                            cd_set(cd, crate::port::cells_at(ord, f + i), 15, 1);
+                            i += 1;
+                        }
+                        added += 1;
+                        changed = 1;
+                    } else {
+                        gr_set(gr, g, 9, old);
+                    }
+                }
+            }
+            g += 1;
+        }
+        pass += 1;
+    }
+    return added;
 }
 pub(crate) fn fu_norm_cp(c: i32) -> i32 {
     // What a character is in a comparison of titles: a letter or a digit, lowercase; 0 for anything else.
@@ -2136,6 +2268,48 @@ pub(crate) fn fu_watermarks(wd: &mut crate::port::Cells, mut ln: &mut crate::por
     }
     return taken;
 }
+pub(crate) fn fu_stamps(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et: &mut crate::port::Cells, pages: &mut crate::port::Cells, npages: i32, cd: &mut crate::port::Cells, ncd: i32, mut fo: &mut crate::port::Cells, mut fp: &mut crate::port::Cells, mut ft: &mut crate::port::Cells) -> i32 {
+    // D1630 (smoke review B issue 9): a line set sideways (a quarter turn either way) in the outer FU_STAMP per mille of its page's width, at least FU_STAMPLEN characters, is a margin
+    // stamp (the arXiv identifier up the left edge of a paper's first page, a Bates number up a court filing's side): furniture of its own, kept once as a `margin` root whatever the
+    // number of pages it is on (those on several are template groups before this). Taken out of the flow. Answers the lines taken.
+    let nl: i32 = ln_count(ln);
+    let mut l: i32 = 0;
+    let mut p: i32 = 0;
+    let mut rot: i32 = 0;
+    let mut w: i32 = 0;
+    let mut cx2: i32 = 0;
+    let mut ts: i32 = 0;
+    let mut tl: i32 = 0;
+    let mut f0: i32 = 0;
+    let mut q: i32 = 0;
+    let mut taken: i32 = 0;
+    while l < nl {
+        p = ln_get(ln, l, lh_page());
+        q = fu_cd_find(cd, ncd, l);
+        if (p >= 1) && (p <= npages) && ((q < 0) || (cd_get(cd, q, 15) == 0)) {
+            rot = ln_get(ln, l, lh_rot());
+            if (fu_abs(rot - 9000) < 100) || (fu_abs(rot - 27000) < 100) {
+                w = page_w(pages, p - 1);
+                cx2 = ln_get(ln, l, lh_x0()) + ln_get(ln, l, lh_x1());
+                if ((cx2 * 500) < (w * FU_STAMP)) || ((cx2 * 500) > (w * (1000 - FU_STAMP))) {
+                    ts = crate::port::cells_len(ft);
+                    tl = fu_line_text(wd, ln, et, ft, l);
+                    if (tl >= FU_STAMPLEN) && (tl <= FU_MAXLEN) {
+                        f0 = crate::port::cells_len(fp) / 5;
+                        fu_fp_push(fp, p, ln_get(ln, l, lh_x0()), ln_get(ln, l, lh_y0()), ln_get(ln, l, lh_x1()), ln_get(ln, l, lh_y1()));
+                        fu_out_furniture(fo, rl_margin(), 600, sr_text() + sr_infer(), ts, tl, f0, 1);
+                        ln_set(ln, l, lh_page(), -7);
+                        taken += 1;
+                    } else {
+                        crate::port::cells_drop(ft, ts);
+                    }
+                }
+            }
+        }
+        l += 1;
+    }
+    return taken;
+}
 pub(crate) fn fu_fo_key(fo: &mut crate::port::Cells, fp: &mut crate::port::Cells, r: i32, k: i32) -> i32 {
     if k == 0 {
         return fo_get(fo, r, 9);
@@ -2371,6 +2545,7 @@ pub fn fu_find(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et:
             }
             g += 1;
         }
+        fu_chain(ln, ord, cd, sl, tx, gr, ng, n, npages, trust);
         fu_body_hashes(wd, ln, et, cd, n, txt, md, bh);
         r = 0;
         while r < n {
@@ -2392,6 +2567,9 @@ pub fn fu_find(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et:
         fu_style_pass(wd, ln, et, txt, md, cd, n, sl, gr, ord, tx, bh, fo, fp, ft, pl, pages, npages, trust, bsz, mode);
     }
     fu_watermarks(wd, ln, et, npages, bsz, fo, ft);
+    if mode == 0 {
+        fu_stamps(wd, ln, et, pages, npages, cd, n, fo, fp, ft);
+    }
     fu_merge_furniture(fo, fp, ft, ord);
     fu_compact(ln, cd, n);
     return before - ln_count(ln);

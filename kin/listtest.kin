@@ -18,14 +18,16 @@
                                 attr-value attr-len text-at text-append-utf8
                                 nk-section nk-item nk-list nk-paragraph nk-caption nk-table nk-figure nk-note nk-ref nk-link
                                 nk-text nk-break fk-box fk-marker fk-label fk-target fk-value fk-start fk-scheme fk-href]]
-            [emon.evidence :refer [wd-new wd-set wd-count wd-get ln-new ln-count ln-get wf-size wf-font wf-style hd-tstart hd-tlen]]
+            [emon.evidence :refer [wd-new wd-set wd-count wd-get ln-new ln-set ln-count ln-get wf-size wf-font wf-style hd-tstart hd-tlen hd-by0 lh-by0
+                                   wf-gfirst wf-gcount gl-new gl-set gf-size gf-by0
+                                   pa-new pa-set pf-flags pg-filled pa-curve pa-other]]
             [emon.style :refer [sfh-body]]
             [emon.heading :refer [hd-analyze]]
             [emon.para :refer [pa-pages pa-build]]
-            [emon.lists :refer [ls-parse ls-analyze ls-open ls-get ls-k-flags ls-f-item ls-s-item ls-start
+            [emon.lists :refer [ls-parse ls-analyze ls-open ls-get ls-k-flags ls-f-item ls-f-cont ls-f-cap ls-f-note ls-s-item ls-start
                                 ls-sc-bullet ls-sc-decimal ls-sc-lower-alpha ls-sc-upper-alpha ls-sc-lower-roman
                                 ls-sc-upper-roman]]
-            [emon.notes :refer [nt-keyword nt-number-body]]
+            [emon.notes :refer [nt-keyword nt-number-body nt-analyze]]
             [emon.links :refer [lk-find]]
             [emon.restruct :refer [rs-run]]
             [kin.lang :refer [defn return let set while if do comment
@@ -235,6 +237,185 @@
     (assert-eq (ls-start hc 4) 1 "an item must begin a paragraph")
     (assert-eq (ls-start hc 0) 0 "a body line need not")
     (assert-eq (cells-at et (wd-get wd (ln-get ln 3 11) (hd-tstart))) (ls-s-item) "the marker word begins with the item group")))
+
+(defn ^I32 lt-body3 [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et]
+  (comment "Three body lines, 0..2, as the head of a document of the laws below (y 5000 to 7800).")
+  (lt-line wd ln et (text-blob "") (text-blob "lorem ipsum dolor sit amet consectetur") 0 7200 5000)
+  (lt-line wd ln et (text-blob "") (text-blob "lorem ipsum dolor sit amet consectetur") 0 7200 6400)
+  (lt-line wd ln et (text-blob "") (text-blob "lorem ipsum dolor sit amet consectetur") 0 7200 7800)
+  (return 0))
+
+(deftest test-an-authors-initial-that-begins-a-references-second-line-is-no-item
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells hc (new-cells)]
+    (comment "D1630 (smoke review B issue 12): the lines 3.. are a bibliography whose entries hang at x 9000; the second line of [10] and of [11] begin with an initial (`Y.`, `S.`) that")
+    (comment "is a letter and a full stop and one of a sequence by value and indent, which made nested lists of them")
+    (lt-body3 wd ln et)
+    (lt-line wd ln et (text-blob "[9]") (text-blob "R. Girshick. Fast R-CNN. In ICCV, 2015.") 7200 9000 10000)
+    (lt-line wd ln et (text-blob "[10]") (text-blob "I. J. Goodfellow, D. Warde-Farley, and") 7200 9000 11400)
+    (lt-line wd ln et (text-blob "") (text-blob "Y. Bengio. Maxout networks. arXiv, 2013.") 0 9000 12800)
+    (lt-line wd ln et (text-blob "[11]") (text-blob "G. E. Hinton, N. Srivastava, and") 7200 9000 14200)
+    (lt-line wd ln et (text-blob "") (text-blob "S. Guadarrama. Caffe: Convolutional.") 0 9000 15600)
+    (lt-line wd ln et (text-blob "[12]") (text-blob "A. Krizhevsky. Learning multiple layers.") 7200 9000 17000)
+    (assert-eq (lt-run wd ln et sf sc hc) 4 "the four numbered entries are the items")
+    (assert-eq (ls-get hc 5 (ls-k-flags)) (ls-f-cont) "`Y. Bengio` goes on [10]")
+    (assert-eq (ls-get hc 7 (ls-k-flags)) (ls-f-cont) "`S. Guadarrama` goes on [11]")))
+
+(deftest test-an-en-dash-after-a-bullet-and-its-lead-in-is-no-marker
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells hc (new-cells)]
+    (comment "D1630 (smoke review A issue 13): a bullet and an underlined lead-in are a line, the text after an en dash is a line of its own on the same baseline (the text layer splits at the underline): the")
+    (comment "dash is no marker, and the two lines of a row are not three blocks")
+    (lt-body3 wd ln et)
+    (lt-line wd ln et (text-blob "•") (text-blob "Lead-in") 7200 9000 10000)
+    (lt-line wd ln et (text-blob "–") (text-blob "text goes on here") 12000 12800 10000)
+    (lt-line wd ln et (text-blob "•") (text-blob "Second") 7200 9000 11400)
+    (lt-line wd ln et (text-blob "–") (text-blob "more text goes on") 12000 12800 11400)
+    (lt-run wd ln et sf sc hc)
+    (assert-eq (ls-get hc 3 (ls-k-flags)) (ls-f-item) "the first bullet starts an item")
+    (assert-eq (ls-get hc 4 (ls-k-flags)) 0 "the dash after its lead-in does not")
+    (assert-eq (ls-get hc 5 (ls-k-flags)) (ls-f-item) "the second bullet starts an item")
+    (assert-eq (ls-get hc 6 (ls-k-flags)) 0 "its dash does not")))
+
+(defn ^I32 lt-run-pa [^Cells wd ^Cells ln ^Cells et ^:mut ^Cells sf ^:mut ^Cells sc ^:mut ^Cells hc ^Cells pa]
+  (comment "`lt-run` over the paths `pa`.")
+  (let [^Cells gl (new-cells) ^Cells ws (new-cells) ^Cells tmp (new-cells) ^Cells pr (new-cells) ^Cells ptxt (new-cells)
+        ^Cells cd (new-cells) ^Cells pi (new-cells) ^Cells lws (new-cells) ^Cells tw (new-cells)]
+    (hd-analyze wd ln et gl sf sc hc ws tmp pr ptxt)
+    (return (ls-analyze wd ln et sf pa hc cd pi lws tw))))
+
+(deftest test-arrow-heads-are-no-bullets-and-discs-are
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells hc (new-cells)
+        ^Cells pa (new-cells) ^Cells pb (new-cells)
+        ^:mut ^I32 r 0]
+    (comment "D1630 (smoke review B issue 12): two lines each preceded by a small filled shape on the x-height. A filled polygon (an arrow head of a figure) is no bullet; a filled disc is")
+    (lt-body3 wd ln et)
+    (lt-line wd ln et (text-blob "") (text-blob "first label text") 0 7200 10000)
+    (lt-line wd ln et (text-blob "") (text-blob "second label text") 0 7200 11400)
+    (set r (pa-new pa 1 (pa-other) 6400 10350 6900 10850))
+    (pa-set pa r (pf-flags) (pg-filled))
+    (set r (pa-new pa 1 (pa-other) 6400 11750 6900 12250))
+    (pa-set pa r (pf-flags) (pg-filled))
+    (assert-eq (lt-run-pa wd ln et sf sc hc pa) 0 "arrow heads before two lines: no list")
+    (set r (pa-new pb 1 (pa-curve) 6400 10350 6900 10850))
+    (pa-set pb r (pf-flags) (pg-filled))
+    (set r (pa-new pb 1 (pa-curve) 6400 11750 6900 12250))
+    (pa-set pb r (pf-flags) (pg-filled))
+    (cells-drop sf 0)
+    (cells-drop sc 0)
+    (cells-drop hc 0)
+    (assert-eq (lt-run-pa wd ln et sf sc hc pb) 2 "discs before them: a list of two")))
+
+(defn ^I32 lt-notes [^Cells wd ^Cells ln ^Cells et ^:mut ^Cells sf ^:mut ^Cells sc ^:mut ^Cells hc]
+  (comment "The heading analysis and then the notes stage (captions, note bodies) of the evidence. Answers the captions plus note bodies found.")
+  (let [^Cells gl (new-cells) ^Cells ws (new-cells) ^Cells tmp (new-cells) ^Cells pr (new-cells) ^Cells ptxt (new-cells)
+        ^Cells pages (new-cells) ^Cells rf (new-cells) ^Cells nb (new-cells) ^Cells mk (new-cells) ^Cells tw (new-cells)]
+    (hd-analyze wd ln et gl sf sc hc ws tmp pr ptxt)
+    (return (nt-analyze wd ln et gl sf sc pages hc rf nb mk tw))))
+
+(deftest test-a-line-of-running-text-that-begins-fig-4-is-no-caption
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells hc (new-cells)
+        ^Cells wd2 (new-cells) ^Cells ln2 (new-cells) ^Cells et2 (new-cells)
+        ^Cells sf2 (new-cells) ^Cells sc2 (new-cells) ^Cells hc2 (new-cells)]
+    (comment "D1630 (smoke review B issue 17): `Fig. 4. We find ...` begins line 4 of a paragraph of running text, a line gap from the lines around it: a sentence. The same line with a gap above and below")
+    (comment "(a caption against its figure) is a caption.")
+    (lt-body3 wd ln et)
+    (lt-line wd ln et (text-blob "") (text-blob "lorem ipsum dolor sit amet consectetur") 0 7200 9200)
+    (lt-line wd ln et (text-blob "") (text-blob "Fig. 4. We find that the results hold in all") 0 7200 10600)
+    (lt-line wd ln et (text-blob "") (text-blob "lorem ipsum dolor sit amet consectetur") 0 7200 12000)
+    (lt-line wd ln et (text-blob "") (text-blob "lorem ipsum dolor sit amet consectetur") 0 7200 13400)
+    (lt-notes wd ln et sf sc hc)
+    (assert-eq (ls-get hc 4 (ls-k-flags)) 0 "a line inside a paragraph is no caption")
+    (lt-body3 wd2 ln2 et2)
+    (lt-line wd2 ln2 et2 (text-blob "") (text-blob "lorem ipsum dolor sit amet consectetur") 0 7200 9200)
+    (lt-line wd2 ln2 et2 (text-blob "") (text-blob "Fig. 4. We find that the results hold in all") 0 7200 14000)
+    (lt-line wd2 ln2 et2 (text-blob "") (text-blob "lorem ipsum dolor sit amet consectetur") 0 7200 19000)
+    (lt-line wd2 ln2 et2 (text-blob "") (text-blob "lorem ipsum dolor sit amet consectetur") 0 7200 20400)
+    (lt-notes wd2 ln2 et2 sf2 sc2 hc2)
+    (assert-eq (ls-get hc2 4 (ls-k-flags)) (ls-f-cap) "set apart from the lines around it by gaps, it is a caption")))
+
+(defn ^I32 lt-small [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^Blob marker ^Blob rest ^I32 y ^I32 size]
+  (comment "A line like `lt-line` at x 7200 whose words are set in `size`. Answers its row.")
+  (let [^I32 l (lt-line wd ln et marker rest 7200 9000 y)
+        ^I32 w0 (ln-get ln l 11)
+        ^I32 wn (ln-get ln l 12)
+        ^:mut ^I32 k 0]
+    (while (< k wn)
+      (do (wd-set wd (+ w0 k) (wf-size) size)
+          (set k (+ k 1))))
+    (return l)))
+
+(defn ^I32 lt-notes-pages [^Cells wd ^Cells ln ^Cells et ^:mut ^Cells sf ^:mut ^Cells sc ^:mut ^Cells hc]
+  (comment "`lt-notes` with a page table (one Letter page), so that the lower half of the page is known.")
+  (let [^Cells gl (new-cells) ^Cells ws (new-cells) ^Cells tmp (new-cells) ^Cells pr (new-cells) ^Cells ptxt (new-cells)
+        ^Cells pages (new-cells) ^Cells rf (new-cells) ^Cells nb (new-cells) ^Cells mk (new-cells) ^Cells tw (new-cells)]
+    (page-new pages 1 61200 79200 0 (pk-vector))
+    (hd-analyze wd ln et gl sf sc hc ws tmp pr ptxt)
+    (return (nt-analyze wd ln et gl sf sc pages hc rf nb mk tw))))
+
+(defn ^I32 lt-notes-glyphs [^Cells wd ^Cells ln ^Cells et ^Cells gl ^:mut ^Cells sf ^:mut ^Cells sc ^:mut ^Cells hc]
+  (comment "`lt-notes-pages` over the glyphs `gl`.")
+  (let [^Cells ws (new-cells) ^Cells tmp (new-cells) ^Cells pr (new-cells) ^Cells ptxt (new-cells)
+        ^Cells pages (new-cells) ^Cells rf (new-cells) ^Cells nb (new-cells) ^Cells mk (new-cells) ^Cells tw (new-cells)]
+    (page-new pages 1 61200 79200 0 (pk-vector))
+    (hd-analyze wd ln et gl sf sc hc ws tmp pr ptxt)
+    (return (nt-analyze wd ln et gl sf sc pages hc rf nb mk tw))))
+
+(deftest test-a-footnotes-raised-marker-glued-to-its-word-is-a-marker
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells gl (new-cells)
+        ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells hc (new-cells)
+        ^:mut ^I32 l 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 g 0]
+    (comment "D1630 (smoke review B issue 9): the footnote's first word is `1Fine-tuning`: its first glyph a 5.5 pt digit raised 2.5 pt off the text's baseline. The text layer takes the word's, and the line's,")
+    (comment "baseline from that first glyph, so the digit was no longer raised off it; the baseline the glyphs are raised off is the lowest one of the word.")
+    (lt-body3 wd ln et)
+    (lt-line wd ln et (text-blob "") (text-blob "lorem ipsum dolor sit amet consectetur") 0 7200 9200)
+    (lt-line wd ln et (text-blob "") (text-blob "lorem ipsum dolor sit amet consectetur") 0 7200 10600)
+    (set l (lt-small wd ln et (text-blob "") (text-blob "1Fine-tuning code and pre-trained models are") 70000 800))
+    (lt-small wd ln et (text-blob "") (text-blob "available at the address of the project page") 71200 800)
+    (set w (ln-get ln l 11))
+    (wd-set wd w (wf-gfirst) 0)
+    (wd-set wd w (wf-gcount) 12)
+    (comment "the glyphs of `1Fine-tuning`: the digit first, then eleven in the text's size on the text's baseline (y 71000); the word's and the line's baseline are the digit's (y 70750)")
+    (set g (gl-new gl 1 7200 70300 7500 70750 49 -1 0 w))
+    (gl-set gl g (gf-size) 550)
+    (gl-set gl g (gf-by0) 70750)
+    (set k 0)
+    (while (< k 11)
+      (do (set g (gl-new gl 1 (+ 7500 (* k 300)) 70300 (+ 7800 (* k 300)) 71000 70 -1 0 w))
+          (gl-set gl g (gf-size) 800)
+          (gl-set gl g (gf-by0) 71000)
+          (set k (+ k 1))))
+    (wd-set wd w (hd-by0) 70750)
+    (ln-set ln l (lh-by0) 70750)
+    (lt-notes-glyphs wd ln et gl sf sc hc)
+    (assert-eq (ls-get hc l (ls-k-flags)) (ls-f-note) "the footnote is a note, its marker the raised digit")))
+
+(deftest test-a-small-numbered-block-at-the-foot-of-the-page-is-a-footnote-though-no-reference-shows
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells hc (new-cells)
+        ^Cells wd2 (new-cells) ^Cells ln2 (new-cells) ^Cells et2 (new-cells)
+        ^Cells sf2 (new-cells) ^Cells sc2 (new-cells) ^Cells hc2 (new-cells)]
+    (comment "D1630 (smoke review B issue 9): body lines, then at the foot of the page two lines in 8 pt that begin with the lone number 1: a footnote (the reference in the text was a superscript the glyphs")
+    (comment "did not show). The same marker on a line in the size of the body is no note, nor is it when body type follows it.")
+    (lt-body3 wd ln et)
+    (lt-line wd ln et (text-blob "") (text-blob "lorem ipsum dolor sit amet consectetur") 0 7200 9200)
+    (lt-line wd ln et (text-blob "") (text-blob "lorem ipsum dolor sit amet consectetur") 0 7200 10600)
+    (lt-small wd ln et (text-blob "1") (text-blob "Fine-tuning code and pre-trained models are") 70000 800)
+    (lt-small wd ln et (text-blob "") (text-blob "available at the address of the project page") 71200 800)
+    (lt-notes-pages wd ln et sf sc hc)
+    (assert-eq (ls-get hc 5 (ls-k-flags)) (ls-f-note) "the numbered small block at the foot is a note")
+    (lt-body3 wd2 ln2 et2)
+    (lt-line wd2 ln2 et2 (text-blob "") (text-blob "lorem ipsum dolor sit amet consectetur") 0 7200 9200)
+    (lt-line wd2 ln2 et2 (text-blob "") (text-blob "lorem ipsum dolor sit amet consectetur") 0 7200 10600)
+    (lt-small wd2 ln2 et2 (text-blob "1") (text-blob "Fine-tuning code and pre-trained models are") 70000 800)
+    (lt-line wd2 ln2 et2 (text-blob "") (text-blob "lorem ipsum dolor sit amet consectetur") 0 7200 73000)
+    (lt-notes-pages wd2 ln2 et2 sf2 sc2 hc2)
+    (assert-eq (ls-get hc2 5 (ls-k-flags)) 0 "body type under it: no note")))
 
 ;; ------------------------------------------------------------------- the restructuring stage
 

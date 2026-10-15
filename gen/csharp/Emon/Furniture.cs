@@ -24,6 +24,12 @@ public static class Furniture {
     internal const int FuPairs = 75;
     internal const int FuMinnorm = 4;
     internal const int FuMaxslots = 8;
+    internal const int FuFloor = 3600;
+    internal const int FuFcap = 170;
+    internal const int FuStamp = 60;
+    internal const int FuStamplen = 8;
+    internal const int FuCells = 4;
+    internal const int FuChainGap = 1300;
     internal const int Cd = 16;
     internal const int Sl = 10;
     internal const int Gr = 16;
@@ -706,6 +712,36 @@ public static class Furniture {
         }
         return 0;
     }
+    internal static int FuZoneFloor(int h) {
+        // D1630 (smoke review B issue 11): twice the depth (centipoints) of the margin zones of a page `h` tall when 11 per cent of it is less than FU_FLOOR (36 pt) and 17 per cent of it more
+        // than 11 per cent: a page the size of a slide or a small card (210 pt tall) has a running header 18 pt from its top edge and a footer 28 pt from its foot, outside 11 per cent
+        // of it. 0 for a page where 11 per cent is deep enough (every page of a letter's size and over 327 pt tall).
+        int lim = FuMin(2 * FuFloor, (h * FuFcap) / 500);
+        if (lim > ((h * FuTop) / 500)) {
+            return lim;
+        }
+        return 0;
+    }
+    internal static int FuRowCells(emon.Port.Cells ln, int l) {
+        // D1630 (smoke review A issue 15): how many upright lines (this one included) of its page stand on line l's baseline (centres within half its height), among the 40 lines either side of it
+        // in the text layer's order. A row of FU_CELLS or more is a table's row, not a running header or footer (a left, a centre and a right part at the most): the first data row of a
+        // continuation page, directly under the repeated header, recurs by position and by the shape of its cells and passed as a header that varies.
+        int nl = Evidence.LnCount(ln);
+        int c2 = Evidence.LnGet(ln, l, Evidence.LhY0()) + Evidence.LnGet(ln, l, Evidence.LhY1());
+        int half = FuMax(1, Evidence.LnGet(ln, l, Evidence.LhY1()) - Evidence.LnGet(ln, l, Evidence.LhY0()));
+        int p = Evidence.LnGet(ln, l, Evidence.LhPage());
+        int q = FuMax(0, l - 40);
+        int n = 0;
+        int rot = 0;
+        while ((q < nl) && (q <= (l + 40))) {
+            rot = Evidence.LnGet(ln, q, Evidence.LhRot());
+            if ((Evidence.LnGet(ln, q, Evidence.LhPage()) == p) && (((rot < 100) || (rot > 35900)) && (FuAbs((Evidence.LnGet(ln, q, Evidence.LhY0()) + Evidence.LnGet(ln, q, Evidence.LhY1())) - c2) <= half))) {
+                n += 1;
+            }
+            q += 1;
+        }
+        return n;
+    }
     internal static int FuScan(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells pages, int npages, emon.Port.Cells cd, emon.Port.Cells sl, emon.Port.Cells tx) {
         // Every candidate line of the document as a row of `cd`, in line order. Answers the number of rows, or -1 when the
         // lines are not in page order (nothing here is then safe to say).
@@ -738,16 +774,24 @@ public static class Furniture {
                 cy2 = Evidence.LnGet(ln, l, Evidence.LhY0()) + Evidence.LnGet(ln, l, Evidence.LhY1());
                 cx2 = Evidence.LnGet(ln, l, Evidence.LhX0()) + Evidence.LnGet(ln, l, Evidence.LhX1());
                 if ((rot < 100) || (rot > 35900)) {
-                    if (cy2 < ((h * FuTop) / 500)) {
+                    int fz = FuZoneFloor(h);
+                    if (cy2 < FuMax(fz, (h * FuTop) / 500)) {
                         zone = 1;
                     }
-                    if (cy2 > ((h * FuBot) / 500)) {
+                    if (fz > 0) {
+                        if (cy2 > ((2 * h) - fz)) {
+                            zone = 2;
+                        }
+                    } else if (cy2 > ((h * FuBot) / 500)) {
                         zone = 2;
                     }
                 } else if ((FuAbs(rot - 9000) < 100) || (FuAbs(rot - 27000) < 100)) {
                     if ((cx2 < ((w * FuSide) / 500)) || (cx2 > ((w * (1000 - FuSide)) / 500))) {
                         zone = 3;
                     }
+                }
+                if ((zone > 0) && (zone < 3) && (FuRowCells(ln, l) >= FuCells)) {
+                    zone = 0;
                 }
                 if (zone > 0) {
                     ts = emon.Port.CellsLen(tx);
@@ -1245,6 +1289,94 @@ public static class Furniture {
             return 1;
         }
         return 0;
+    }
+    internal static int FuChainAdjacent(emon.Port.Cells ln, emon.Port.Cells cd, int ncd, int r) {
+        // 1 when candidate r has, on its page and in its zone, a candidate that qualified (cell 15 is 1) directly toward the page's edge from it: within FU_CHAIN_GAP per mille
+        // of its own height of it, and its left edge within two heights of r's (the first line of a two-line header, over the second). Not a cell of a table's row (FU_CELLS
+        // candidates on its baseline).
+        int lo = FuMax(0, r - 30);
+        int hi = FuMin(ncd, r + 31);
+        int h = FuMax(1, CdGet(cd, r, 4) - CdGet(cd, r, 3));
+        int c2 = CdGet(cd, r, 3) + CdGet(cd, r, 4);
+        int q = lo;
+        int n = 0;
+        int gap = 0;
+        while (q < hi) {
+            if ((CdGet(cd, q, 1) == CdGet(cd, r, 1)) && ((CdGet(cd, q, 2) == CdGet(cd, r, 2)) && (FuAbs((CdGet(cd, q, 3) + CdGet(cd, q, 4)) - c2) <= h))) {
+                n += 1;
+            }
+            q += 1;
+        }
+        if (n >= FuCells) {
+            return 0;
+        }
+        q = lo;
+        while (q < hi) {
+            if ((q != r) && ((CdGet(cd, q, 1) == CdGet(cd, r, 1)) && ((CdGet(cd, q, 2) == CdGet(cd, r, 2)) && ((CdGet(cd, q, 15) == 1) && (FuAbs(Evidence.LnGet(ln, CdGet(cd, q, 0), Evidence.LhX0()) - Evidence.LnGet(ln, CdGet(cd, r, 0), Evidence.LhX0())) <= (2 * h)))))) {
+                if (CdGet(cd, r, 2) == 1) {
+                    gap = CdGet(cd, r, 3) - CdGet(cd, q, 4);
+                    if ((gap >= -200) && ((gap * 1000) <= (h * FuChainGap)) && (CdGet(cd, q, 3) < CdGet(cd, r, 3))) {
+                        return 1;
+                    }
+                }
+                if (CdGet(cd, r, 2) == 2) {
+                    gap = CdGet(cd, q, 3) - CdGet(cd, r, 4);
+                    if ((gap >= -200) && ((gap * 1000) <= (h * FuChainGap)) && (CdGet(cd, q, 3) > CdGet(cd, r, 3))) {
+                        return 1;
+                    }
+                }
+            }
+            q += 1;
+        }
+        return 0;
+    }
+    internal static int FuChain(emon.Port.Cells ln, emon.Port.Cells ord, emon.Port.Cells cd, emon.Port.Cells sl, emon.Port.Cells tx, emon.Port.Cells gr, int ng, int ncd, int npages, int trust) {
+        // D1630 (smoke review B issue 11): a template group that qualified in everything but its isolation, whose every member (at least 70 per cent) lies directly under or over a member of a group that
+        // qualified, on the same page and in the same zone, is the next line of that header or footer: a two-line running header has its second line against the body, and only
+        // the first is set apart (the lines that recur do not count). Qualified groups are marked (cell 15 is 1) so a third line goes with the second. Answers the groups added.
+        int pass = 0;
+        int changed = 1;
+        int added = 0;
+        int g = 0;
+        int i = 0;
+        int adj = 0;
+        int old = 0;
+        int f = 0;
+        int m = 0;
+        while ((changed == 1) && (pass < 3)) {
+            changed = 0;
+            g = 0;
+            while (g < ng) {
+                if ((GrGet(gr, g, 4) == 0) && ((GrGet(gr, g, 2) >= 2) && ((GrGet(gr, g, 3) == 1) || (GrGet(gr, g, 3) == 2)))) {
+                    f = GrGet(gr, g, 0);
+                    m = GrGet(gr, g, 1);
+                    adj = 0;
+                    i = 0;
+                    while (i < m) {
+                        adj += FuChainAdjacent(ln, cd, ncd, emon.Port.CellsAt(ord, f + i));
+                        i += 1;
+                    }
+                    if ((adj * 100) >= (m * 70)) {
+                        old = GrGet(gr, g, 9);
+                        GrSet(gr, g, 9, m);
+                        if (FuQualify(ord, cd, sl, tx, gr, g, npages, trust) == 1) {
+                            i = 0;
+                            while (i < m) {
+                                CdSet(cd, emon.Port.CellsAt(ord, f + i), 15, 1);
+                                i += 1;
+                            }
+                            added += 1;
+                            changed = 1;
+                        } else {
+                            GrSet(gr, g, 9, old);
+                        }
+                    }
+                }
+                g += 1;
+            }
+            pass += 1;
+        }
+        return added;
     }
     internal static int FuNormCp(int c) {
         // What a character is in a comparison of titles: a letter or a digit, lowercase; 0 for anything else.
@@ -2135,6 +2267,48 @@ public static class Furniture {
         }
         return taken;
     }
+    internal static int FuStamps(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pages, int npages, emon.Port.Cells cd, int ncd, emon.Port.Cells fo, emon.Port.Cells fp, emon.Port.Cells ft) {
+        // D1630 (smoke review B issue 9): a line set sideways (a quarter turn either way) in the outer FU_STAMP per mille of its page's width, at least FU_STAMPLEN characters, is a margin
+        // stamp (the arXiv identifier up the left edge of a paper's first page, a Bates number up a court filing's side): furniture of its own, kept once as a `margin` root whatever the
+        // number of pages it is on (those on several are template groups before this). Taken out of the flow. Answers the lines taken.
+        int nl = Evidence.LnCount(ln);
+        int l = 0;
+        int p = 0;
+        int rot = 0;
+        int w = 0;
+        int cx2 = 0;
+        int ts = 0;
+        int tl = 0;
+        int f0 = 0;
+        int q = 0;
+        int taken = 0;
+        while (l < nl) {
+            p = Evidence.LnGet(ln, l, Evidence.LhPage());
+            q = FuCdFind(cd, ncd, l);
+            if ((p >= 1) && (p <= npages) && ((q < 0) || (CdGet(cd, q, 15) == 0))) {
+                rot = Evidence.LnGet(ln, l, Evidence.LhRot());
+                if ((FuAbs(rot - 9000) < 100) || (FuAbs(rot - 27000) < 100)) {
+                    w = Model.PageW(pages, p - 1);
+                    cx2 = Evidence.LnGet(ln, l, Evidence.LhX0()) + Evidence.LnGet(ln, l, Evidence.LhX1());
+                    if (((cx2 * 500) < (w * FuStamp)) || ((cx2 * 500) > (w * (1000 - FuStamp)))) {
+                        ts = emon.Port.CellsLen(ft);
+                        tl = FuLineText(wd, ln, et, ft, l);
+                        if ((tl >= FuStamplen) && (tl <= FuMaxlen)) {
+                            f0 = emon.Port.CellsLen(fp) / 5;
+                            FuFpPush(fp, p, Evidence.LnGet(ln, l, Evidence.LhX0()), Evidence.LnGet(ln, l, Evidence.LhY0()), Evidence.LnGet(ln, l, Evidence.LhX1()), Evidence.LnGet(ln, l, Evidence.LhY1()));
+                            FuOutFurniture(fo, Model.RlMargin(), 600, Model.SrText() + Model.SrInfer(), ts, tl, f0, 1);
+                            Evidence.LnSet(ln, l, Evidence.LhPage(), -7);
+                            taken += 1;
+                        } else {
+                            emon.Port.CellsDrop(ft, ts);
+                        }
+                    }
+                }
+            }
+            l += 1;
+        }
+        return taken;
+    }
     internal static int FuFoKey(emon.Port.Cells fo, emon.Port.Cells fp, int r, int k) {
         if (k == 0) {
             return FoGet(fo, r, 9);
@@ -2370,6 +2544,7 @@ public static class Furniture {
                 }
                 g += 1;
             }
+            FuChain(ln, ord, cd, sl, tx, gr, ng, n, npages, trust);
             FuBodyHashes(wd, ln, et, cd, n, txt, md, bh);
             r = 0;
             while (r < n) {
@@ -2391,6 +2566,9 @@ public static class Furniture {
             FuStylePass(wd, ln, et, txt, md, cd, n, sl, gr, ord, tx, bh, fo, fp, ft, pl, pages, npages, trust, bsz, mode);
         }
         FuWatermarks(wd, ln, et, npages, bsz, fo, ft);
+        if (mode == 0) {
+            FuStamps(wd, ln, et, pages, npages, cd, n, fo, fp, ft);
+        }
         FuMergeFurniture(fo, fp, ft, ord);
         FuCompact(ln, cd, n);
         return before - Evidence.LnCount(ln);

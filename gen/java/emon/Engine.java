@@ -309,7 +309,7 @@ public final class Engine {
         int pending = 0;
         int w = 0;
         Furniture.fuFind(d.fw, d.fl, d.et, d.gl, d.mk, m.pages, np, d.txt, d.md, d.lb, trust, c.furn, s.cd, s.sl, s.gr, s.ford, s.tx, s.bh, s.fo, s.fp, s.ft, s.pl);
-        Table.tbBuild(d.fw, d.fl, d.et, d.grl, d.gfl, np, s.tb, s.tc, s.tw, s.tq, s.tbx, s.s0, s.s1, s.s2, s.s3, s.s4, s.s5, s.s6, s.s7, s.s8, s.s9, s.s10, s.s11, s.s12, s.s13, s.s14, s.s15, s.s16, s.s17, s.s18, m.pages, d.gl, d.mk, d.se, d.sc, d.ss, s.ta0, s.g0, s.g1, s.g2, s.g3, s.g4, s.g5, s.tv);
+        Table.tbBuild(d.fw, d.fl, d.et, d.grl, d.gfl, np, s.tb, s.tc, s.tw, s.tq, s.tbx, s.s0, s.s1, s.s2, s.s3, s.s4, s.s5, s.s6, s.s7, s.s8, s.s9, s.s10, s.s11, s.s12, s.s13, s.s14, s.s15, s.s16, s.s17, s.s18, m.pages, d.gl, d.mk, d.se, d.sc, d.ss, s.ta0, s.g0, s.g1, s.g2, s.g3, s.g4, s.g5, s.tv, d.an);
         if (c.keep != 0) {
             if ((kind == 0) && (emon.Port.cellsLen(s.tv) > 0)) {
                 emon.Port.textAscii(d.evidence, ",\"tb\":");

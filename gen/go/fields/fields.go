@@ -389,6 +389,7 @@ func flPlace(bt *port.Cells, nb int32, kind int32, page int32, x0 int32, y0 int3
 		if b >= 0 {
 			port.CellsSet(out, 0, port.CellsAt(bt, b*flB))
 			port.CellsSet(out, 1, 0)
+			port.CellsSet(out, 2, 1)
 			return 0
 		}
 	}
@@ -401,26 +402,58 @@ func flPlace(bt *port.Cells, nb int32, kind int32, page int32, x0 int32, y0 int3
 	if (l >= 0) && ((a < 0) || (costl <= (costa + flBias))) {
 		port.CellsSet(out, 0, port.CellsAt(bt, l*flB))
 		port.CellsSet(out, 1, 1)
+		port.CellsSet(out, 2, 2)
 		return 0
 	}
 	if a >= 0 {
 		port.CellsSet(out, 0, port.CellsAt(bt, a*flB))
 		port.CellsSet(out, 1, 1)
+		port.CellsSet(out, 2, 3)
 		return 0
 	}
 	if l >= 0 {
 		port.CellsSet(out, 0, port.CellsAt(bt, l*flB))
 		port.CellsSet(out, 1, 1)
+		port.CellsSet(out, 2, 2)
 		return 0
 	}
 	c = flCell(bt, nb, page, x0, y0, x1, y1)
 	if c >= 0 {
 		port.CellsSet(out, 0, port.CellsAt(bt, c*flB))
 		port.CellsSet(out, 1, 1)
+		port.CellsSet(out, 2, 4)
 		return 0
 	}
 	flAnchor(bt, nb, page, y0, out)
+	port.CellsSet(out, 2, 5)
 	return 0
+}
+
+func flSibling(fc *port.Cells, i int32) int32 {
+	// D1630 (smoke review A issue 10): the field row before field row i (a text, combo or list field too) that stands just to its left on its line, at most FL_NEAR_R (12 pt) away, and that
+	// a label to its left placed (cell 10 is 1 or 2); -1 when there is none. The cents box of a line of `dollars . cents` has no label near it, but the dollars box has: the line's.
+	var o int32 = i * flW
+	var j int32 = i - 1
+	var p int32 = 0
+	var ov int32 = 0
+	var sm int32 = 0
+	var gap int32 = 0
+	for (j >= 0) && (j >= (i - 8)) {
+		p = j * flW
+		if port.CellsAt(fc, p+1) != port.CellsAt(fc, o+1) {
+			return -1
+		}
+		if (port.CellsAt(fc, p+9) >= 4) && (port.CellsAt(fc, p+10) <= 2) && (port.CellsAt(fc, p+10) >= 1) {
+			gap = port.CellsAt(fc, o+2) - port.CellsAt(fc, p+4)
+			ov = flMin(port.CellsAt(fc, o+5), port.CellsAt(fc, p+5)) - flMax(port.CellsAt(fc, o+3), port.CellsAt(fc, p+3))
+			sm = flMin(port.CellsAt(fc, o+5)-port.CellsAt(fc, o+3), port.CellsAt(fc, p+5)-port.CellsAt(fc, p+3))
+			if (gap >= (0 - flTol)) && (gap <= flNearR) && (ov > 0) && ((ov * 2) >= sm) {
+				return j
+			}
+		}
+		j -= 1
+	}
+	return -1
 }
 
 func flCount(an *port.Cells) int32 {
@@ -498,6 +531,7 @@ func flCollect(an *port.Cells, bt *port.Cells, nb int32, fc *port.Cells, sc *por
 	var i int32 = 0
 	var at int32 = 0
 	var k int32 = 0
+	var j int32 = 0
 	var nf int32 = 0
 	for (i < n) && (nf < flMaxf) {
 		at = i * anStride
@@ -526,6 +560,17 @@ func flCollect(an *port.Cells, bt *port.Cells, nb int32, fc *port.Cells, sc *por
 		flPlace(bt, nb, port.CellsAt(fc, at+9), port.CellsAt(fc, at+1), port.CellsAt(fc, at+2), port.CellsAt(fc, at+3), port.CellsAt(fc, at+4), port.CellsAt(fc, at+5), sc)
 		port.CellsSet(fc, at+6, port.CellsAt(sc, 0))
 		port.CellsSet(fc, at+7, port.CellsAt(sc, 1))
+		port.CellsSet(fc, at+10, port.CellsAt(sc, 2))
+		// D1630: a text field whose label is only found above or nowhere, with a field just to its left on its line that a label to its left was found for, goes with that field (the cents
+		// box of a line `dollars . cents` took the line above's label, the nearest above it, and the line below lost it)
+		if (port.CellsAt(fc, at+9) >= 4) && (port.CellsAt(sc, 2) >= 3) {
+			j = flSibling(fc, i)
+			if j >= 0 {
+				port.CellsSet(fc, at+6, port.CellsAt(fc, (j*flW)+6))
+				port.CellsSet(fc, at+7, port.CellsAt(fc, (j*flW)+7))
+				port.CellsSet(fc, at+10, port.CellsAt(fc, (j*flW)+10))
+			}
+		}
 		i += 1
 	}
 	return nf

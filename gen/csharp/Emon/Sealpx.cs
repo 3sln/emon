@@ -703,6 +703,9 @@ public static class Sealpx {
                 if ((((4 * rx) / 100) * (ry / 100)) > (((pw / 100) * (ph / 100)) / 3)) {
                     return 0;
                 }
+                if ((20 * rx) > (6 * pw)) {
+                    return 0;
+                }
                 return SxAdd(cand, 2, r, cxp, cyp, SxAbs(rxp), SxAbs(ryp), Evidence.PmGet(prims, r, Evidence.PmfRot()), rgb, Evidence.PmGet(prims, r, Evidence.PmfX0()), Evidence.PmGet(prims, r, Evidence.PmfY0()), Evidence.PmGet(prims, r, Evidence.PmfX1()), Evidence.PmGet(prims, r, Evidence.PmfY1()), Evidence.PmGet(prims, r, Evidence.PmfConf()));
             }
             if ((rad * 25) > (10 * SxMin(pw, ph))) {
@@ -728,6 +731,10 @@ public static class Sealpx {
                 return 0;
             }
             if ((((4 * rx) / 100) * (ry / 100)) > (((pw / 100) * (ph / 100)) / 3)) {
+                return 0;
+            }
+            // D1630: a rectangle that is most of the page's width is a colour band (a heading's ground, a table's header band), not a stamp: a stamp is a mark that is a small part of the page
+            if ((20 * rx) > (6 * pw)) {
                 return 0;
             }
             return SxAdd(cand, 2, r, cxp, cyp, SxAbs(rxp), SxAbs(ryp), Evidence.PmGet(prims, r, Evidence.PmfRot()), rgb, Evidence.PmGet(prims, r, Evidence.PmfX0()), Evidence.PmGet(prims, r, Evidence.PmfY0()), Evidence.PmGet(prims, r, Evidence.PmfX1()), Evidence.PmGet(prims, r, Evidence.PmfY1()), Evidence.PmGet(prims, r, Evidence.PmfConf()));

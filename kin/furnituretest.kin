@@ -206,6 +206,29 @@
     (return (pa-build wd et npages pages layout nodes attrs regions text ord raw tmp fr gp
                       lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al))))
 
+(defn ^I32 fl-run-size [^Cells wd ^Cells ln0 ^Cells et ^I32 npages ^I32 pw ^I32 ph ^:mut ^Text t]
+  (comment "`fl-run` (no tree, the policy setting) over pages `pw` x `ph` centipoints: a small page for the margin zones' floor (D1630).")
+  (let [^Cells ln (new-cells)
+        ^Cells gl (new-cells) ^Cells mk (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp (new-cells) ^Cells fr (new-cells) ^Cells gp (new-cells)
+        ^Cells cd (new-cells) ^Cells sl (new-cells) ^Cells gr (new-cells) ^Cells ford (new-cells) ^Cells tx (new-cells)
+        ^Cells bh (new-cells) ^Cells fo (new-cells) ^Cells fp (new-cells) ^Cells ft (new-cells) ^Cells pl (new-cells)
+        ^Cells st (new-cells) ^Cells txt (new-cells) ^Cells md (new-cells) ^Cells lb (new-cells)
+        ^:mut ^I32 p 1]
+    (model-init nodes attrs regions text pages ledger layout)
+    (while (<= p npages)
+      (do (page-new pages p pw ph 0 (pk-vector))
+          (set p (+ p 1))))
+    (fl-copy ln0 ln)
+    (fl-order ln)
+    (fu-find wd ln et gl mk pages npages txt md lb 0 0 cd sl gr ford tx bh fo fp ft pl)
+    (fl-build wd ln et npages pages layout nodes attrs regions text ord raw tmp fr gp)
+    (fu-write fo fp ft pl npages nodes attrs regions text pages ledger tmp)
+    (fl-brief t nodes attrs text pages ledger 1)
+    (return (model-check nodes attrs regions text pages ledger layout st))))
+
 (defn ^I32 fl-run [^Cells wd ^Cells ln0 ^Cells et ^I32 npages ^I32 trust ^I32 mode ^Cells txt ^Cells md ^Cells lb
                    ^:mut ^Text t]
   (comment "Run the stage as the Engine does (find, paragraphs, write) over the evidence, and write the brief into `t`. Answers")
@@ -458,6 +481,122 @@
     (assert-eq (fl-run wd ln et 5 0 0 txt md lb t1) 0 "odd even: well formed")
     (assert-text t1 "L2=2;L3=3;L4=4;L5=5;Fh3,5:Employee Chapter;Dr@2:The Handbook;Dr@4:The Handbook;Dp@2:2;Dp@3:3;Dp@4:4;Dp@5:5;P:The Handbook;P:alpha beta. |alpha beta. |alpha beta. |alpha beta. |alpha beta.;"
                 "the first page has no label; the chapter is kept; the book's title is dropped")))
+
+(defn ^I32 fl-roots [^Cells nodes]
+  (comment "How many `furniture` roots the Model has.")
+  (let [^I32 nn (node-count nodes)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 n 0]
+    (while (< i nn)
+      (do (if (and (== (node-kind nodes i) (nk-furniture)) (== (node-parent nodes i) -1))
+            (set n (+ n 1)))
+          (set i (+ i 1))))
+    (return n)))
+
+(defn ^I32 fl-cells [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^I32 page ^I32 y ^Blob a ^Blob b ^Blob c ^Blob d ^Blob e]
+  (comment "A row of five cells (one line each) at y, 10 pt high, 10 pt text, in columns from x 7200, 12000, 24000, 34000 and 42000.")
+  (fl-line wd ln et a page 7200 y 9000 (+ y 1000) 0 1000)
+  (fl-line wd ln et b page 12000 y 20000 (+ y 1000) 0 1000)
+  (fl-line wd ln et c page 24000 y 32000 (+ y 1000) 0 1000)
+  (fl-line wd ln et d page 34000 y 38000 (+ y 1000) 0 1000)
+  (fl-line wd ln et e page 42000 y 50000 (+ y 1000) 0 1000)
+  (return 0))
+
+(defn ^I32 fl-statement-page [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^I32 page ^Blob r1 ^Blob r2 ^Blob r3]
+  (comment "A continuation page of a statement: the header row (the same on every page) at 60 pt and three rows of cells under it, 13 pt apart, whose first column is `r1`, `r2`, `r3`.")
+  (fl-cells wd ln et page 6000 (text-blob "No.") (text-blob "Txn ID") (text-blob "Posted") (text-blob "Cr/Dr") (text-blob "Amount"))
+  (fl-cells wd ln et page 7300 r1 (text-blob "S88406266") (text-blob "06/01/2024") (text-blob "DR") (text-blob "33593.01"))
+  (fl-cells wd ln et page 8600 r2 (text-blob "S82211394") (text-blob "06/01/2024") (text-blob "CR") (text-blob "38674.79"))
+  (fl-cells wd ln et page 9900 r3 (text-blob "S94067070") (text-blob "06/01/2024") (text-blob "CR") (text-blob "67477.43"))
+  (return 0))
+
+(defn ^I32 fl-roots-of [^Cells wd ^Cells ln0 ^Cells et ^I32 npages]
+  (comment "`fl-run` on Letter pages with no tree and the policy setting, answering how many `furniture` roots it made.")
+  (let [^Cells ln (new-cells)
+        ^Cells gl (new-cells) ^Cells mk (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp (new-cells) ^Cells fr (new-cells) ^Cells gp (new-cells)
+        ^Cells cd (new-cells) ^Cells sl (new-cells) ^Cells gr (new-cells) ^Cells ford (new-cells) ^Cells tx (new-cells)
+        ^Cells bh (new-cells) ^Cells fo (new-cells) ^Cells fp (new-cells) ^Cells ft (new-cells) ^Cells pl (new-cells)
+        ^Cells txt (new-cells) ^Cells md (new-cells) ^Cells lb (new-cells)
+        ^:mut ^I32 p 1]
+    (model-init nodes attrs regions text pages ledger layout)
+    (while (<= p npages)
+      (do (page-new pages p 61200 79200 0 (pk-vector))
+          (set p (+ p 1))))
+    (fl-copy ln0 ln)
+    (fl-order ln)
+    (fu-find wd ln et gl mk pages npages txt md lb 0 0 cd sl gr ford tx bh fo fp ft pl)
+    (fl-build wd ln et npages pages layout nodes attrs regions text ord raw tmp fr gp)
+    (fu-write fo fp ft pl npages nodes attrs regions text pages ledger tmp)
+    (return (fl-roots nodes))))
+
+(deftest test-the-first-row-under-a-repeated-table-header-is-no-furniture
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)]
+    (comment "D1630 (smoke review A issue 15): three pages of a statement, each the same header row and then rows whose cells (digits abstracted) are the same templates on every page. The")
+    (comment "first row is the same size at the same height on every page, and the rows under it, which recur by their templates, do not count against its isolation: it passed as a header that")
+    (comment "varies. It is a row of five cells on one baseline, which no running header is.")
+    (fl-statement-page wd ln et 1 (text-blob "17") (text-blob "18") (text-blob "19"))
+    (fl-statement-page wd ln et 2 (text-blob "52") (text-blob "53") (text-blob "54"))
+    (fl-statement-page wd ln et 3 (text-blob "87") (text-blob "88") (text-blob "89"))
+    (fl-body wd ln et (text-blob "Opening balance carried forward.") 1 8)
+    (fl-body wd ln et (text-blob "Closing balance carried forward.") 2 8)
+    (fl-body wd ln et (text-blob "Page total carried forward.") 3 8)
+    (assert-eq (fl-roots-of wd ln et 3) 0 "no row of the table is furniture")))
+
+(deftest test-a-two-line-running-header-is-furniture-whole
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)]
+    (comment "D1630 (smoke review B issue 11): a header of two lines, the second 8.6 pt over the first line of the body: only the first was set apart (the recurring second does not count")
+    (comment "against it), so the second stayed in the flow. The second goes with the first. A heading (larger than the body) under it varies from page to page and stays.")
+    (fl-pages wd ln et 4)
+    (fl-line wd ln et (text-blob "Where To Download") 1 4250 1800 17700 3100 0 1000)
+    (fl-line wd ln et (text-blob "Statistics Sixth Edition") 1 4250 3550 20000 4850 0 1000)
+    (fl-line wd ln et (text-blob "Erie hospitals seek answers") 1 4500 5700 30000 7100 0 1400)
+    (fl-line wd ln et (text-blob "Where To Download") 2 4250 1800 17700 3100 0 1000)
+    (fl-line wd ln et (text-blob "Statistics Sixth Edition") 2 4250 3550 20000 4850 0 1000)
+    (fl-line wd ln et (text-blob "Garland district fenced areas") 2 4500 5700 30000 7100 0 1400)
+    (fl-line wd ln et (text-blob "Where To Download") 3 4250 1800 17700 3100 0 1000)
+    (fl-line wd ln et (text-blob "Statistics Sixth Edition") 3 4250 3550 20000 4850 0 1000)
+    (fl-line wd ln et (text-blob "Women account for research") 3 4500 5700 30000 7100 0 1400)
+    (fl-line wd ln et (text-blob "Where To Download") 4 4250 1800 17700 3100 0 1000)
+    (fl-line wd ln et (text-blob "Statistics Sixth Edition") 4 4250 3550 20000 4850 0 1000)
+    (fl-line wd ln et (text-blob "Creativity comes from where") 4 4500 5700 30000 7100 0 1400)
+    (assert-eq (fl-roots-of wd ln et 4) 2 "both lines of the header are furniture")))
+
+(deftest test-a-sideways-stamp-in-the-margin-of-one-page-is-furniture
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells txt (new-cells) ^Cells md (new-cells) ^Cells lb (new-cells)
+        ^Text t1 (new-text) ^Text t2 (new-text)]
+    (comment "D1630 (smoke review B issue 9): the arXiv identifier set up the left edge of a paper's first page, a quarter turn, 20 to 36 pt from the edge: a margin stamp, kept as a `margin` root and")
+    (comment "out of the body. The same line in the body's own place (an inch in) is text.")
+    (fl-pages wd ln et 1)
+    (fl-line wd ln et (text-blob "arXiv:2010.11929v2 [cs.CV] 3 Jun 2021") 1 2000 20000 3600 55000 9000 900)
+    (assert-eq (fl-run wd ln et 1 0 0 txt md lb t1) 0 "stamp: well formed")
+    (assert-text t1 "Fm1:arXiv:2010.11929v2 [cs.CV] 3 Jun 2021;P:alpha beta.;" "the stamp is a margin root, the body is the body")
+    (fl-clear wd ln et)
+    (fl-pages wd ln et 1)
+    (fl-line wd ln et (text-blob "arXiv:2010.11929v2 [cs.CV] 3 Jun 2021") 1 7200 20000 8800 55000 9000 900)
+    (assert-eq (fl-run wd ln et 1 0 0 txt md lb t2) 0 "inside: well formed")
+    (assert-eq (fl-roots-of wd ln et 1) 0 "a sideways line inside the page is no stamp")))
+
+(deftest test-a-footer-on-a-small-page-is-furniture
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Text t1 (new-text)]
+    (comment "D1630 (smoke review B issue 11): pages 297 x 210 pt: `Page 1/25` stands 28 pt from the foot (centre at 87 per cent of the height, short of the 89 per cent of the footer zone), and the header")
+    (comment "18 pt from the top (11.7 per cent, past the 11 of the header zone). Both recur on every page, and the zones of a page that small are 36 pt deep.")
+    (fl-line wd ln et (text-blob "alpha beta.") 1 2000 10000 12000 11100 0 1100)
+    (fl-line wd ln et (text-blob "alpha beta.") 2 2000 10000 12000 11100 0 1100)
+    (fl-line wd ln et (text-blob "alpha beta.") 3 2000 10000 12000 11100 0 1100)
+    (fl-line wd ln et (text-blob "Where To Download") 1 4250 1800 17700 3100 0 1000)
+    (fl-line wd ln et (text-blob "Where To Download") 2 4250 1800 17700 3100 0 1000)
+    (fl-line wd ln et (text-blob "Where To Download") 3 4250 1800 17700 3100 0 1000)
+    (fl-line wd ln et (text-blob "Page 1/25") 1 11500 17800 15100 18600 0 800)
+    (fl-line wd ln et (text-blob "Page 2/25") 2 11500 17800 15100 18600 0 800)
+    (fl-line wd ln et (text-blob "Page 3/25") 3 11500 17800 15100 18600 0 800)
+    (assert-eq (fl-run-size wd ln et 3 29764 20976 t1) 0 "small pages: well formed")
+    (assert-text t1 "L1=1;L2=2;L3=3;Fh1,2,3:Where To Download;Dp@1:Page 1/25;Dp@2:Page 2/25;Dp@3:Page 3/25;P:alpha beta. |alpha beta. |alpha beta.;"
+                "the header is kept once, the page numbers are labels")))
 
 (deftest test-a-diagonal-word-much-larger-than-the-text-is-a-watermark
   (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)

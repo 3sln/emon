@@ -245,6 +245,36 @@ public static class Notes {
         }
         return 0;
     }
+    internal static int NtInProse(emon.Port.Cells ln, emon.Port.Cells sf, emon.Port.Cells sc, int l) {
+        // D1630 (smoke review B issue 17): 1 when caption candidate l is a line in the middle of a paragraph of the body: set as the body is (not apart from it), with a line of
+        // five words or more of its own size just above it and another just below it, both close (under 4/5 of its size). `Fig. 4. We find` that begins a line of running text is
+        // a sentence, not a caption; a caption stands against its figure or its text with a gap, or is set apart.
+        int a = Style.StGet(sf, l, Style.SfkAbove());
+        int b = Style.StGet(sf, l, Style.SfkBelow());
+        int sz = Lists.LsLineSize(sf, ln, l);
+        if (NtStyleApart(sf, sc, l) == 1) {
+            return 0;
+        }
+        if ((a < 0) || (b < 0)) {
+            return 0;
+        }
+        if (!Lists.LsUpright(ln, a) || !Lists.LsUpright(ln, b)) {
+            return 0;
+        }
+        if ((Evidence.LnGet(ln, a, Evidence.LhCount()) < 5) || (Evidence.LnGet(ln, b, Evidence.LhCount()) < 2)) {
+            return 0;
+        }
+        if ((Lists.LsCap(Style.StGet(sf, l, Style.SfkGapAbove())) * 10) > (sz * 8)) {
+            return 0;
+        }
+        if ((Lists.LsCap(Style.StGet(sf, l, Style.SfkGapBelow())) * 10) > (sz * 8)) {
+            return 0;
+        }
+        if ((Lists.LsAbs(Lists.LsLineSize(sf, ln, a) - sz) * 25) > sz) {
+            return 0;
+        }
+        return 1;
+    }
     internal static int NtAfter(emon.Port.Cells wd, emon.Port.Cells ln, int l, int w) {
         // The word with text that follows word w in line l; -1 when there is none.
         int w0 = Evidence.LnGet(ln, l, Evidence.LhFirst());
@@ -523,27 +553,38 @@ public static class Notes {
         int j = 0;
         int m = 0;
         int pa = 0;
+        int bs = 0;
         int pb = 0;
         if ((g0 < 0) || (gn <= 0) || (gn > 4000)) {
             return 0;
         }
+        // D1630 (smoke review B issue 9): the line's baseline is the first word's, which a word that STARTS with a superscript (a footnote's marker glued to its text) takes from the raised
+        // glyph: the baseline the glyphs are raised off is the lowest of the word's own.
+        bs = @base;
         while (i < gn) {
-            m = NtGlyphMark(gl, et, g0 + i, sz0, @base);
+            if (Lists.LsCap(Evidence.GlGet(gl, g0 + i, Evidence.GfBy0())) > bs) {
+                bs = Lists.LsCap(Evidence.GlGet(gl, g0 + i, Evidence.GfBy0()));
+            }
+            i += 1;
+        }
+        i = 0;
+        while (i < gn) {
+            m = NtGlyphMark(gl, et, g0 + i, sz0, bs);
             if (m < 0) {
                 i += 1;
             } else {
                 j = i;
                 int ms = emon.Port.CellsLen(mk);
-                while ((j < gn) && ((j - i) < 6) && (NtGlyphMark(gl, et, g0 + j, sz0, @base) >= 0)) {
-                    emon.Port.CellsPush(mk, NtGlyphMark(gl, et, g0 + j, sz0, @base));
+                while ((j < gn) && ((j - i) < 6) && (NtGlyphMark(gl, et, g0 + j, sz0, bs) >= 0)) {
+                    emon.Port.CellsPush(mk, NtGlyphMark(gl, et, g0 + j, sz0, bs));
                     j += 1;
                 }
                 // a comma between two markers belongs to them: `1,2`
-                if (((j + 1) < gn) && ((j - i) < 5) && (NtGchar(gl, et, g0 + j) == 44) && NtSupStyled(gl, g0 + j, sz0, @base) && (NtGlyphMark(gl, et, g0 + j + 1, sz0, @base) >= 0)) {
+                if (((j + 1) < gn) && ((j - i) < 5) && (NtGchar(gl, et, g0 + j) == 44) && NtSupStyled(gl, g0 + j, sz0, bs) && (NtGlyphMark(gl, et, g0 + j + 1, sz0, bs) >= 0)) {
                     emon.Port.CellsPush(mk, 44);
                     j += 1;
-                    while ((j < gn) && ((j - i) < 8) && (NtGlyphMark(gl, et, g0 + j, sz0, @base) >= 0)) {
-                        emon.Port.CellsPush(mk, NtGlyphMark(gl, et, g0 + j, sz0, @base));
+                    while ((j < gn) && ((j - i) < 8) && (NtGlyphMark(gl, et, g0 + j, sz0, bs) >= 0)) {
+                        emon.Port.CellsPush(mk, NtGlyphMark(gl, et, g0 + j, sz0, bs));
                         j += 1;
                     }
                 }
@@ -726,7 +767,29 @@ public static class Notes {
         }
         return -1;
     }
-    internal static int NtFoot(emon.Port.Cells rf, emon.Port.Cells nb, emon.Port.Cells mk, int i) {
+    internal static int NtSmallToEnd(emon.Port.Cells ln, emon.Port.Cells sf, int l, int bsz) {
+        // D1630 (smoke review B issue 9): 1 when no line on line l's page, upright and at or below its top, is set in the body's size (over 96 per cent of `bsz`): everything from l to
+        // the foot of the page is small type, the shape of a footnote block (the rule above it and the body above that are what the notes stage cannot see).
+        int n = Evidence.LnCount(ln);
+        int p = Evidence.LnGet(ln, l, Evidence.LhPage());
+        int y = Evidence.LnGet(ln, l, Evidence.LhY0());
+        int q = 0;
+        if (bsz <= 0) {
+            return 0;
+        }
+        while (q < n) {
+            if ((q != l) && (Evidence.LnGet(ln, q, Evidence.LhPage()) == p)) {
+                if (Lists.LsUpright(ln, q) && (Evidence.LnGet(ln, q, Evidence.LhY0()) >= (y - 100))) {
+                    if ((Lists.LsLineSize(sf, ln, q) * 100) > (bsz * 96)) {
+                        return 0;
+                    }
+                }
+            }
+            q += 1;
+        }
+        return 1;
+    }
+    internal static int NtFoot(emon.Port.Cells ln, emon.Port.Cells sf, emon.Port.Cells rf, emon.Port.Cells nb, emon.Port.Cells mk, int i) {
         // Is note body candidate i a footnote? In the lower half of the page (the band) and small or marked in superscript,
         // with a reference on its page; or small, with a reference on the page before (a note a column or a page break pushed
         // on); or marked in superscript, small and in the band, with no reference at all. Marks the candidate (state 1) and the
@@ -754,9 +817,18 @@ public static class Notes {
             emon.Port.CellsSet(nb, b + 7, 1);
             return 1;
         }
+        // D1630: a plain marker (a lone number or symbol) on a small line in the lower half of the page, with only small type from it to the page's foot, is a footnote's whatever the text
+        // says (a superscript the text layer did not mark, a reference no glyph run showed)
+        if ((kind == 2) && ((szok == 1) && (band == 1))) {
+            int bsz = Style.StHget(sf, Style.SfhSize());
+            if (NtSmallToEnd(ln, sf, emon.Port.CellsAt(nb, b), bsz) == 1) {
+                emon.Port.CellsSet(nb, b + 7, 1);
+                return 1;
+            }
+        }
         return 0;
     }
-    internal static int NtMatch(emon.Port.Cells rf, emon.Port.Cells nb, emon.Port.Cells mk, int nhl) {
+    internal static int NtMatch(emon.Port.Cells ln, emon.Port.Cells sf, emon.Port.Cells rf, emon.Port.Cells nb, emon.Port.Cells mk, int nhl) {
         // Decide which candidates are notes. State 1: a footnote (a body in the lower half of the page, set smaller than
         // the body text or marked in superscript, with a reference on its page; a superscript marker alone is enough when
         // the line is also smaller). State 2: an endnote (a reference earlier in the document: for a superscript marker
@@ -766,7 +838,7 @@ public static class Notes {
         int r = 0;
         int tent = 0;
         while (i < nn) {
-            NtFoot(rf, nb, mk, i);
+            NtFoot(ln, sf, rf, nb, mk, i);
             i += 1;
         }
         // endnotes: a superscript marker with an earlier reference at once, a plain number when there are two
@@ -1151,7 +1223,7 @@ public static class Notes {
         l = 0;
         while (l < n) {
             if (Lists.LsGet(hc, l, Lists.LsKFlags()) == Lists.LsFCap()) {
-                if ((NtInRun(sf, ln, hc, l) == 1) || (NtTocLike(wd, ln, et, sf, l) == 1)) {
+                if ((NtInRun(sf, ln, hc, l) == 1) || ((NtTocLike(wd, ln, et, sf, l) == 1) || (NtInProse(ln, sf, sc, l) == 1))) {
                     Lists.LsPut(hc, l, Lists.LsKFlags(), 64);
                 }
             }
@@ -1170,7 +1242,7 @@ public static class Notes {
         }
         NtScan(wd, ln, et, gl, sf, pages, hc, rf, nb, mk);
         nhl = NtFirstNotesHeading(wd, ln, et, hc, rf);
-        NtMatch(rf, nb, mk, nhl);
+        NtMatch(ln, sf, rf, nb, mk, nhl);
         NtMarkerless(wd, et, ln, sf, hc, rf, mk);
         l = 0;
         while (l < (emon.Port.CellsLen(nb) / NtNb)) {

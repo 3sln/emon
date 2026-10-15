@@ -139,6 +139,35 @@
             (set y (+ y 1)))))
     (assert-eq (spx-find rules ow et b cand) 0 "a block of ink is a picture, not a pen")))
 
+(defn ^I32 spx-dashes [^Bitmap b ^I32 x0 ^I32 x1 ^I32 y]
+  (comment "A dashed straight line: dashes of 6 pixels, 3 apart, two thick.")
+  (let [^:mut ^I32 x x0]
+    (while (< x x1)
+      (do (if (< (rem (- x x0) 9) 6)
+            (spx-dot b x y 2 120 120 120))
+          (set x (+ x 1))))
+    (return 0)))
+
+(deftest test-stacked-dashed-write-in-lines-are-no-signature
+  (let [^Bitmap b (bitmap-new 300 120 3)
+        ^Cells rules (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells et (new-cells)
+        ^Cells cand (new-cells)]
+    (comment "D1630 (smoke review A issue 16): three dashed lines over a rule (a form's write-in lines) make as long a path as a pen's loops do, in a box a pen's size; no pen draws a straight line")
+    (spx-paper b)
+    (spx-line b 20 280 100)
+    (spx-dashes b 40 250 60)
+    (spx-dashes b 40 250 74)
+    (spx-dashes b 40 250 88)
+    (spx-rule rules 20 280 100)
+    (assert-eq (spx-find rules ow et b cand) 0 "dashed lines are no signature")
+    (comment "the pen over the same rule still is one")
+    (spx-paper b)
+    (spx-line b 20 280 100)
+    (spx-zig b 40 98 150 24 36 20 40 120)
+    (assert-eq (spx-find rules ow et b cand) 1 "a pen is")))
+
 (deftest test-a-word-ocr-was-sure-of-is-paper
   (let [^Bitmap b (bitmap-new 300 120 3)
         ^Cells rules (new-cells)

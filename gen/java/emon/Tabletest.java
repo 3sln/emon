@@ -192,8 +192,8 @@ public final class Tabletest {
         }
         return 0;
     }
-    public static int ttRunN(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa, StringBuilder t, int np) {
-        // Tables, then paragraphs, then the brief of the Model, of a document of `np` pages (1 or 2). Answers `model-check`'s verdict.
+    public static int ttRunAn(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa, StringBuilder t, int np, emon.Port.Cells an) {
+        // `tt-run-n` over a document whose annotations (rows of `an`, `AN_STRIDE` cells) are `an`: the form fields' widgets (D1630).
         emon.Port.Cells nodes = emon.Port.newCells();
         emon.Port.Cells attrs = emon.Port.newCells();
         emon.Port.Cells regions = emon.Port.newCells();
@@ -272,11 +272,15 @@ public final class Tabletest {
             Model.pageNew(pages, 2, 61200, 79200, 0, Model.pkVector());
         }
         Gfuse.gfDoc(pa, gpts, gmk, gim, np, Gfuse.gfxMode(), grl, gfl, cand, emon.Port.newCells());
-        Table.tbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e);
+        Table.tbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
         Columns.lcCopy(ln, lt);
         Para.paBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
         ttBrief(t, nodes, attrs, text);
         return Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st);
+    }
+    public static int ttRunN(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa, StringBuilder t, int np) {
+        // Tables, then paragraphs, then the brief of the Model, of a document of `np` pages (1 or 2). Answers `model-check`'s verdict.
+        return ttRunAn(wd, ln, et, pa, t, np, emon.Port.newCells());
     }
     public static int ttRun(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa, StringBuilder t) {
         // Tables, then paragraphs, then the brief of the Model. Answers `model-check`'s verdict.
@@ -301,6 +305,69 @@ public final class Tabletest {
         ttWord(wd, ln, et, emon.Testport.textBlob("Outro"), 7200, 17200, 10200, 18000, 0);
         emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "lattice: well formed");
         emon.Testport.assertText(t, "P[Intro];T3r;Gh;R;Ch[Item];Ch[Qty];Ch[Price];Gb;R;C[Bolt];C[10];C[2.50];R;C[Total];Cc2[12.50];P[Outro];", "a 3 x 3 lattice with its last row's two cells joined: header, body, and the paragraphs around it");
+    }
+    public static int ttWidget(emon.Port.Cells an, int x0, int y0, int x1, int y1) {
+        // One text field's widget of page 1 as a row of `an` (38 cells: 0 the page, 0 based, 1 the subtype `an-field`, 4-7 the rectangle).
+        int k = 0;
+        while (k < 38) {
+            emon.Port.cellsPush(an, 0);
+            k += 1;
+        }
+        int r = (emon.Port.cellsLen(an) / 38) - 1;
+        emon.Port.cellsSet(an, (r * 38) + 1, Pdfannot.anField());
+        emon.Port.cellsSet(an, (r * 38) + 4, x0);
+        emon.Port.cellsSet(an, (r * 38) + 5, y0);
+        emon.Port.cellsSet(an, (r * 38) + 6, x1);
+        emon.Port.cellsSet(an, (r * 38) + 7, y1);
+        return 0;
+    }
+    public static int ttFormPage(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa) {
+        // A form's page: a header row and a footer row of text across the page, and between them six labels in one open cell (no rule between them) and a column of six boxes, ruled.
+        ttRule(pa, 7200, 9950, 37200, 10050);
+        ttRule(pa, 7200, 11950, 37200, 12050);
+        ttRule(pa, 27200, 13950, 37200, 14050);
+        ttRule(pa, 27200, 15950, 37200, 16050);
+        ttRule(pa, 27200, 17950, 37200, 18050);
+        ttRule(pa, 27200, 19950, 37200, 20050);
+        ttRule(pa, 27200, 21950, 37200, 22050);
+        ttRule(pa, 7200, 23950, 37200, 24050);
+        ttRule(pa, 7200, 25950, 37200, 26050);
+        ttRule(pa, 7150, 10000, 7250, 26000);
+        ttRule(pa, 27150, 10000, 27250, 26000);
+        ttRule(pa, 37150, 10000, 37250, 26000);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Item"), 7600, 10600, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Amount"), 27600, 10600, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Wages"), 7600, 12600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Interest"), 7600, 14600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Rents"), 7600, 16600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Royalties"), 7600, 18600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Dividends"), 7600, 20600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Other"), 7600, 22600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Total"), 7600, 24600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Sum"), 27600, 24600, 0, 0);
+        return 0;
+    }
+    public static void testTheBoxesOfAFormsFieldsAreNotATable() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells an = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        StringBuilder t2 = emon.Testport.newText();
+        // D1630 (smoke review A issue 10): the page of a form: its labels in one open cell and a column of boxes, which are the fields' widgets. Without fields it is a table; with a widget in
+        // each of its six empty cells (more than the cells with text) the rules are the fields' boxes and the labels are the page's lines, to which the fields go (`emon.fields`).
+        ttFormPage(wd, ln, et, pa);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "no fields: well formed");
+        emon.Testport.assertText(t, "T2r;Gh;R;Ch[Item];Ch[Amount];Gb;R;Cr6s[Wages Interest Rents Royalties Dividends Other];C[];R;C[];R;C[];R;C[];R;C[];R;C[];R;Cs[Total];C[Sum];", "a ruled grid: the label cell spans six rows");
+        ttWidget(an, 27800, 12300, 36600, 13700);
+        ttWidget(an, 27800, 14300, 36600, 15700);
+        ttWidget(an, 27800, 16300, 36600, 17700);
+        ttWidget(an, 27800, 18300, 36600, 19700);
+        ttWidget(an, 27800, 20300, 36600, 21700);
+        ttWidget(an, 27800, 22300, 36600, 23700);
+        emon.Testport.assertEq(ttRunAn(wd, ln, et, pa, t2, 1, an), 0, "fields: well formed");
+        emon.Testport.assertText(t2, "T2p;Gh;R;Chs[Item];Ch[Amount];Gb;R;Cs[Wages];C[];R;Cs[Interest];C[];R;Cs[Rents];C[];R;Cs[Royalties];C[];R;Cs[Dividends];C[];R;Cs[Other];C[];R;Cs[Total];C[Sum];", "the page's boxes are no lattice: each label has its own row and the field goes in it, not one cell that holds all the labels");
     }
     public static void testColumnsOfWhitespaceAreATableAndProseColumnsAreNot() {
         emon.Port.Cells wd = emon.Port.newCells();
@@ -1679,7 +1746,7 @@ public final class Tabletest {
         Para.paPages(pg, pages);
         int np = emon.Port.cellsLen(pages) / 16;
         Gfuse.gfDoc(pa, pts, mk, im, np, Gfuse.gfxMode(), grl, gfl, cand, emon.Port.newCells());
-        Table.tbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e);
+        Table.tbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, emon.Port.newCells());
         Tagtable.ttEmit(tvt, t12e);
         Columns.lcCopy(ln, lt);
         Initial.inDetect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii);

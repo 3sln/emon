@@ -340,7 +340,7 @@ pub(crate) fn en_stage3(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::en
     let mut pending: i32 = 0;
     let mut w: i32 = 0;
     fu_find(&mut d.fw, &mut d.fl, &mut d.et, &mut d.gl, &mut d.mk, &mut m.pages, np, &mut d.txt, &mut d.md, &mut d.lb, trust, c.furn, &mut s.cd, &mut s.sl, &mut s.gr, &mut s.ford, &mut s.tx, &mut s.bh, &mut s.fo, &mut s.fp, &mut s.ft, &mut s.pl);
-    tb_build(&mut d.fw, &mut d.fl, &mut d.et, &mut d.grl, &mut d.gfl, np, &mut s.tb, &mut s.tc, &mut s.tw, &mut s.tq, &mut s.tbx, &mut s.s0, &mut s.s1, &mut s.s2, &mut s.s3, &mut s.s4, &mut s.s5, &mut s.s6, &mut s.s7, &mut s.s8, &mut s.s9, &mut s.s10, &mut s.s11, &mut s.s12, &mut s.s13, &mut s.s14, &mut s.s15, &mut s.s16, &mut s.s17, &mut s.s18, &mut m.pages, &mut d.gl, &mut d.mk, &mut d.se, &mut d.sc, &mut d.ss, &mut s.ta0, &mut s.g0, &mut s.g1, &mut s.g2, &mut s.g3, &mut s.g4, &mut s.g5, &mut s.tv);
+    tb_build(&mut d.fw, &mut d.fl, &mut d.et, &mut d.grl, &mut d.gfl, np, &mut s.tb, &mut s.tc, &mut s.tw, &mut s.tq, &mut s.tbx, &mut s.s0, &mut s.s1, &mut s.s2, &mut s.s3, &mut s.s4, &mut s.s5, &mut s.s6, &mut s.s7, &mut s.s8, &mut s.s9, &mut s.s10, &mut s.s11, &mut s.s12, &mut s.s13, &mut s.s14, &mut s.s15, &mut s.s16, &mut s.s17, &mut s.s18, &mut m.pages, &mut d.gl, &mut d.mk, &mut d.se, &mut d.sc, &mut d.ss, &mut s.ta0, &mut s.g0, &mut s.g1, &mut s.g2, &mut s.g3, &mut s.g4, &mut s.g5, &mut s.tv, &mut d.an);
     if c.keep != 0 {
         if (kind == 0) && (crate::port::cells_len(&mut s.tv) > 0) {
             crate::port::text_ascii(&mut d.evidence, ",\"tb\":");

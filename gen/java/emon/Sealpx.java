@@ -703,6 +703,9 @@ public final class Sealpx {
                 if ((((4 * rx) / 100) * (ry / 100)) > (((pw / 100) * (ph / 100)) / 3)) {
                     return 0;
                 }
+                if ((20 * rx) > (6 * pw)) {
+                    return 0;
+                }
                 return sxAdd(cand, 2, r, cxp, cyp, sxAbs(rxp), sxAbs(ryp), Evidence.pmGet(prims, r, Evidence.pmfRot()), rgb, Evidence.pmGet(prims, r, Evidence.pmfX0()), Evidence.pmGet(prims, r, Evidence.pmfY0()), Evidence.pmGet(prims, r, Evidence.pmfX1()), Evidence.pmGet(prims, r, Evidence.pmfY1()), Evidence.pmGet(prims, r, Evidence.pmfConf()));
             }
             if ((rad * 25) > (10 * sxMin(pw, ph))) {
@@ -728,6 +731,10 @@ public final class Sealpx {
                 return 0;
             }
             if ((((4 * rx) / 100) * (ry / 100)) > (((pw / 100) * (ph / 100)) / 3)) {
+                return 0;
+            }
+            // D1630: a rectangle that is most of the page's width is a colour band (a heading's ground, a table's header band), not a stamp: a stamp is a mark that is a small part of the page
+            if ((20 * rx) > (6 * pw)) {
                 return 0;
             }
             return sxAdd(cand, 2, r, cxp, cyp, sxAbs(rxp), sxAbs(ryp), Evidence.pmGet(prims, r, Evidence.pmfRot()), rgb, Evidence.pmGet(prims, r, Evidence.pmfX0()), Evidence.pmGet(prims, r, Evidence.pmfY0()), Evidence.pmGet(prims, r, Evidence.pmfX1()), Evidence.pmGet(prims, r, Evidence.pmfY1()), Evidence.pmGet(prims, r, Evidence.pmfConf()));

@@ -8,12 +8,15 @@ import (
 	"emon/glayer"
 	"emon/model"
 	"emon/normalize"
+	"emon/pdfannot"
 	"emon/pdfstruct"
 	"emon/port"
 	"emon/tagtable"
 )
 
 const tbHeld int32 = 1073741824
+
+const anStride int32 = 38
 
 const tbs int32 = 28
 
@@ -720,7 +723,41 @@ func tbWideCells(tc *port.Cells, cfirst int32, cend int32, wd *port.Cells, tw *p
 	return n
 }
 
-func tbLattice(rm *port.Cells, root int32, xs *port.Cells, ys *port.Cells, page int32, gm *port.Cells, tb *port.Cells, tc *port.Cells, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, pr *port.Cells, so *port.Cells, tw *port.Cells, tx *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, rmap *port.Cells, bd *port.Cells) int32 {
+func tbFieldCells(tc *port.Cells, cfirst int32, cend int32, an *port.Cells, page int32) int32 {
+	// D1630 (smoke review A issue 10): how many cells of a candidate grid (rows cfirst..cend of `tc`) have no word in them and hold the centre of a form field's widget of the page
+	// (an `an-field` row of `an`: 0 page, 4-7 the rectangle): the boxes of a form, which a form's rules draw. 0 for a document with no field.
+	var na int32 = port.CellsLen(an) / anStride
+	var n int32 = 0
+	var c int32 = cfirst
+	var a int32 = 0
+	var hit int32 = 0
+	var cx int32 = 0
+	var cy int32 = 0
+	if na == 0 {
+		return 0
+	}
+	for c < cend {
+		if port.CellsAt(tc, (c*tcs)+9) == 0 {
+			hit = 0
+			a = 0
+			for (a < na) && (hit == 0) {
+				if (port.CellsAt(an, (a*anStride)+1) == pdfannot.AnField()) && ((port.CellsAt(an, a*anStride) + 1) == page) {
+					cx = (port.CellsAt(an, (a*anStride)+4) + port.CellsAt(an, (a*anStride)+6)) / 2
+					cy = (port.CellsAt(an, (a*anStride)+5) + port.CellsAt(an, (a*anStride)+7)) / 2
+					if (cx >= port.CellsAt(tc, (c*tcs)+4)) && (cx <= port.CellsAt(tc, (c*tcs)+6)) && (cy >= port.CellsAt(tc, (c*tcs)+5)) && (cy <= port.CellsAt(tc, (c*tcs)+7)) {
+						hit = 1
+					}
+				}
+				a += 1
+			}
+			n += hit
+		}
+		c += 1
+	}
+	return n
+}
+
+func tbLattice(rm *port.Cells, root int32, xs *port.Cells, ys *port.Cells, page int32, gm *port.Cells, tb *port.Cells, tc *port.Cells, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, pr *port.Cells, so *port.Cells, tw *port.Cells, tx *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, rmap *port.Cells, bd *port.Cells, an *port.Cells) int32 {
 	// The cells of one component's lattice, their words, and the candidate table. Answers its index, -1
 	// when it is not a table. P12.2: a band between two rules that holds the rows of a table with no rule between them is cut into
 	// those rows first (`tb-split-rows`, whose cuts are in `so` and whose bands are in `bd` while the cells are made: the edges no rule
@@ -838,6 +875,14 @@ func tbLattice(rm *port.Cells, root int32, xs *port.Cells, ys *port.Cells, page 
 		port.CellsDrop(tw, tw0)
 		return -1
 	}
+	// D1630 (smoke review A issue 10): the rules of a form's page are its fields' boxes: a grid with more empty cells that hold a form field's widget (and at least four) than cells with text is the
+	// page's boxes, not a table; the labels are the page's lines and the fields go to them (`emon.fields`)
+	var fcn int32 = tbFieldCells(tc, cfirst, cfirst+total, an, page)
+	if (fcn >= 4) && (fcn > filled) {
+		port.CellsDrop(tc, cfirst*tcs)
+		port.CellsDrop(tw, tw0)
+		return -1
+	}
 	var t int32 = tbAdd(tb, page, port.CellsAt(xs, 0), port.CellsAt(ys, 0), port.CellsAt(xs, nc), port.CellsAt(ys, nr), pfRuled, 900, nr, nc, cfirst, total)
 	var i int32 = 0
 	port.CellsSet(tb, (t*tbs)+16, port.CellsLen(tx))
@@ -849,7 +894,7 @@ func tbLattice(rm *port.Cells, root int32, xs *port.Cells, ys *port.Cells, page 
 	return t
 }
 
-func tbRuledPage(rm *port.Cells, page int32, xs *port.Cells, ys *port.Cells, gm *port.Cells, tb *port.Cells, tc *port.Cells, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, pr *port.Cells, so *port.Cells, tw *port.Cells, tx *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, rmap *port.Cells, bd *port.Cells) int32 {
+func tbRuledPage(rm *port.Cells, page int32, xs *port.Cells, ys *port.Cells, gm *port.Cells, tb *port.Cells, tc *port.Cells, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, pr *port.Cells, so *port.Cells, tw *port.Cells, tx *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, rmap *port.Cells, bd *port.Cells, an *port.Cells) int32 {
 	// Every component of the page's merged rules with two rules each way is a lattice candidate.
 	var n int32 = tbRowsOf(rm, rls)
 	var i int32 = 0
@@ -886,7 +931,7 @@ func tbRuledPage(rm *port.Cells, page int32, xs *port.Cells, ys *port.Cells, gm 
 			if (nh >= 2) && (nv >= 2) {
 				tbCluster(xs, 2*posTol)
 				tbCluster(ys, 2*posTol)
-				tbLattice(rm, i, xs, ys, page, gm, tb, tc, wd, et, w0, w1, pr, so, tw, tx, wl, rw, sg, ch, st, rmap, bd)
+				tbLattice(rm, i, xs, ys, page, gm, tb, tc, wd, et, w0, w1, pr, so, tw, tx, wl, rw, sg, ch, st, rmap, bd, an)
 			}
 		}
 		i += 1
@@ -5493,7 +5538,7 @@ func tbFinish(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc *port.
 	return 0
 }
 
-func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gfl *port.Cells, np int32, tb *port.Cells, tc *port.Cells, tw *port.Cells, tq *port.Cells, tx *port.Cells, s0 *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells, s7 *port.Cells, s8 *port.Cells, s9 *port.Cells, s10 *port.Cells, s11 *port.Cells, s12 *port.Cells, s13 *port.Cells, s14 *port.Cells, s15 *port.Cells, s16 *port.Cells, s17 *port.Cells, s18 *port.Cells, pages *port.Cells, gl *port.Cells, mk *port.Cells, se *port.Cells, sc *port.Cells, ss *port.Cells, grg *port.Cells, g0 *port.Cells, g1 *port.Cells, g2 *port.Cells, g3 *port.Cells, g4 *port.Cells, g5 *port.Cells, tv *port.Cells) int32 {
+func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gfl *port.Cells, np int32, tb *port.Cells, tc *port.Cells, tw *port.Cells, tq *port.Cells, tx *port.Cells, s0 *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells, s7 *port.Cells, s8 *port.Cells, s9 *port.Cells, s10 *port.Cells, s11 *port.Cells, s12 *port.Cells, s13 *port.Cells, s14 *port.Cells, s15 *port.Cells, s16 *port.Cells, s17 *port.Cells, s18 *port.Cells, pages *port.Cells, gl *port.Cells, mk *port.Cells, se *port.Cells, sc *port.Cells, ss *port.Cells, grg *port.Cells, g0 *port.Cells, g1 *port.Cells, g2 *port.Cells, g3 *port.Cells, g4 *port.Cells, g5 *port.Cells, tv *port.Cells, an *port.Cells) int32 {
 	// Find the tables of every page and claim their lines. `tb tc tw tq tx` are emptied first; s0..s18 are
 	// scratch: rules, merged rules, fills, a sort order, x and y boundaries, the grid, word pairs, a copy of tb
 	// rows, flags, the page's words, rows and chunks, channels, two coordinate lists, the row map, spans and
@@ -5561,7 +5606,7 @@ func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gf
 			tbCollect(grl, qi, qj, gfl, ui, uj, model.PageH(pages, p-1), s0, s2)
 			if tbRowsOf(s0, rls) <= maxRules {
 				tbMergeRules(s0, s1, s3, s9)
-				tbRuledPage(s1, p, s4, s5, s6, tb, tc, wd, et, wi, wj, s7, s3, tw, tx, s10, s11, s12, s13, s14, s16, s15)
+				tbRuledPage(s1, p, s4, s5, s6, tb, tc, wd, et, wi, wj, s7, s3, tw, tx, s10, s11, s12, s13, s14, s16, s15, an)
 				tbPartialPage(s1, p, wd, et, wi, wj, s9, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx)
 			} else {
 				port.CellsDrop(s1, 0)

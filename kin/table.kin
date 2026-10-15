@@ -48,6 +48,7 @@
                                 sr-text sr-infer sr-vector sr-struct fl-struct-disagree fl-tag-span-conflict node-add-flag fk-profile fk-columns fk-rowspan fk-colspan
                                 fk-label fk-continued rl-head rl-body rl-foot sy-bold fl-reconstructed]]
             [emon.normalize :refer [nz-nfc nz-flag-ligatures nz-flag-radicals]]
+            [emon.pdfannot :refer [an-field]]
             [kin.lang :refer [defn defconst defdata declarefn return let set while if do comment
                               + - * < > <= >= == != and or not quot rem
                               bit-and bit-or]]))
@@ -61,6 +62,7 @@
 ;; Cell 15 of a line the tables hold is TB_HELD + the table's index (D178; D186): a bit of its own, so that the initials' codes
 ;; (`emon.initial`, small, signed) never meet it. `emon.initial` and `emon.columns` know the value as 1073741824.
 (defconst ^I32 TB_HELD 1073741824)
+(defconst ^I32 AN_STRIDE 38)     ;; an annotation row (`AN_STRIDE` of `emon.pdfannot`), for the form fields' boxes (D1630)
 (defconst ^I32 TBS 28)
 (defconst ^I32 TCS 16)
 (defconst ^I32 RLS 8)
@@ -613,10 +615,37 @@
           (set c (+ c 1))))
     (return n)))
 
+(defn ^I32 tb-field-cells [^Cells tc ^I32 cfirst ^I32 cend ^Cells an ^I32 page]
+  (comment "D1630 (smoke review A issue 10): how many cells of a candidate grid (rows cfirst..cend of `tc`) have no word in them and hold the centre of a form field's widget of the page")
+  (comment "(an `an-field` row of `an`: 0 page, 4-7 the rectangle): the boxes of a form, which a form's rules draw. 0 for a document with no field.")
+  (let [^I32 na (quot (cells-len an) AN_STRIDE)
+        ^:mut ^I32 n 0
+        ^:mut ^I32 c cfirst
+        ^:mut ^I32 a 0
+        ^:mut ^I32 hit 0
+        ^:mut ^I32 cx 0
+        ^:mut ^I32 cy 0]
+    (if (== na 0) (return 0))
+    (while (< c cend)
+      (do (if (== (cells-at tc (+ (* c TCS) 9)) 0)
+            (do (set hit 0)
+                (set a 0)
+                (while (and (< a na) (== hit 0))
+                  (do (if (and (== (cells-at an (+ (* a AN_STRIDE) 1)) (an-field)) (== (+ (cells-at an (* a AN_STRIDE)) 1) page))
+                        (do (set cx (quot (+ (cells-at an (+ (* a AN_STRIDE) 4)) (cells-at an (+ (* a AN_STRIDE) 6))) 2))
+                            (set cy (quot (+ (cells-at an (+ (* a AN_STRIDE) 5)) (cells-at an (+ (* a AN_STRIDE) 7))) 2))
+                            (if (and (>= cx (cells-at tc (+ (* c TCS) 4))) (<= cx (cells-at tc (+ (* c TCS) 6)))
+                                     (>= cy (cells-at tc (+ (* c TCS) 5))) (<= cy (cells-at tc (+ (* c TCS) 7))))
+                              (set hit 1))))
+                      (set a (+ a 1))))
+                (set n (+ n hit))))
+          (set c (+ c 1))))
+    (return n)))
+
 (defn ^I32 tb-lattice [^Cells rm ^I32 root ^Cells xs ^:mut ^Cells ys ^I32 page ^:mut ^Cells gm
                        ^:mut ^Cells tb ^:mut ^Cells tc ^Cells wd ^Cells et ^I32 w0 ^I32 w1
                        ^:mut ^Cells pr ^:mut ^Cells so ^:mut ^Cells tw ^:mut ^Cells tx
-                       ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg ^:mut ^Cells ch ^:mut ^Cells st ^:mut ^Cells rmap ^:mut ^Cells bd]
+                       ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg ^:mut ^Cells ch ^:mut ^Cells st ^:mut ^Cells rmap ^:mut ^Cells bd ^Cells an]
   (comment "The cells of one component's lattice, their words, and the candidate table. Answers its index, -1")
   (comment "when it is not a table. P12.2: a band between two rules that holds the rows of a table with no rule between them is cut into")
   (comment "those rows first (`tb-split-rows`, whose cuts are in `so` and whose bands are in `bd` while the cells are made: the edges no rule")
@@ -709,6 +738,13 @@
         (do (cells-drop tc (* cfirst TCS))
             (cells-drop tw tw0)
             (return -1)))
+      (comment "D1630 (smoke review A issue 10): the rules of a form's page are its fields' boxes: a grid with more empty cells that hold a form field's widget (and at least four) than cells with text is the")
+      (comment "page's boxes, not a table; the labels are the page's lines and the fields go to them (`emon.fields`)")
+      (let [^I32 fcn (tb-field-cells tc cfirst (+ cfirst total) an page)]
+        (if (and (>= fcn 4) (> fcn filled))
+          (do (cells-drop tc (* cfirst TCS))
+              (cells-drop tw tw0)
+              (return -1))))
       (let [^I32 t (tb-add tb page (cells-at xs 0) (cells-at ys 0) (cells-at xs nc) (cells-at ys nr)
                            PF_RULED 900 nr nc cfirst total)
             ^:mut ^I32 i 0]
@@ -722,7 +758,7 @@
 (defn ^I32 tb-ruled-page [^:mut ^Cells rm ^I32 page ^:mut ^Cells xs ^:mut ^Cells ys ^:mut ^Cells gm
                           ^:mut ^Cells tb ^:mut ^Cells tc ^Cells wd ^Cells et ^I32 w0 ^I32 w1
                           ^:mut ^Cells pr ^:mut ^Cells so ^:mut ^Cells tw ^:mut ^Cells tx
-                          ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg ^:mut ^Cells ch ^:mut ^Cells st ^:mut ^Cells rmap ^:mut ^Cells bd]
+                          ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg ^:mut ^Cells ch ^:mut ^Cells st ^:mut ^Cells rmap ^:mut ^Cells bd ^Cells an]
   (comment "Every component of the page's merged rules with two rules each way is a lattice candidate.")
   (let [^I32 n (tb-rows-of rm RLS)
         ^:mut ^I32 i 0
@@ -755,7 +791,7 @@
                 (if (and (>= nh 2) (>= nv 2))
                   (do (tb-cluster xs (* 2 POS_TOL))
                       (tb-cluster ys (* 2 POS_TOL))
-                      (tb-lattice rm i xs ys page gm tb tc wd et w0 w1 pr so tw tx wl rw sg ch st rmap bd)))))
+                      (tb-lattice rm i xs ys page gm tb tc wd et w0 w1 pr so tw tx wl rw sg ch st rmap bd an)))))
           (set i (+ i 1))))
     (return 0)))
 
@@ -4289,7 +4325,7 @@
                            ^Cells pages
                            ^Cells gl ^Cells mk ^Cells se ^Cells sc ^Cells ss ^Cells grg
                            ^:mut ^Cells g0 ^:mut ^Cells g1 ^:mut ^Cells g2 ^:mut ^Cells g3 ^:mut ^Cells g4 ^:mut ^Cells g5
-                           ^:mut ^Cells tv]
+                           ^:mut ^Cells tv ^Cells an]
   (comment "Find the tables of every page and claim their lines. `tb tc tw tq tx` are emptied first; s0..s18 are")
   (comment "scratch: rules, merged rules, fills, a sort order, x and y boundaries, the grid, word pairs, a copy of tb")
   (comment "rows, flags, the page's words, rows and chunks, channels, two coordinate lists, the row map, spans and")
@@ -4347,7 +4383,7 @@
             (do (tb-collect grl qi qj gfl ui uj (page-h pages (- p 1)) s0 s2)
                 (if (<= (tb-rows-of s0 RLS) MAX_RULES)
                   (do (tb-merge-rules s0 s1 s3 s9)
-                      (tb-ruled-page s1 p s4 s5 s6 tb tc wd et wi wj s7 s3 tw tx s10 s11 s12 s13 s14 s16 s15)
+                      (tb-ruled-page s1 p s4 s5 s6 tb tc wd et wi wj s7 s3 tw tx s10 s11 s12 s13 s14 s16 s15 an)
                       (tb-partial-page s1 p wd et wi wj s9 s10 s11 s12 s13 s14 s15 s16 s6 s17 s18 s7 s3 tb tc tw tx))
                   (cells-drop s1 0))
                 (if (<= (tb-rows-of s2 6) MAX_RULES)

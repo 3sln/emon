@@ -357,6 +357,7 @@ public final class Fields {
             if (b >= 0) {
                 emon.Port.cellsSet(out, 0, emon.Port.cellsAt(bt, b * FL_B));
                 emon.Port.cellsSet(out, 1, 0);
+                emon.Port.cellsSet(out, 2, 1);
                 return 0;
             }
         }
@@ -369,26 +370,57 @@ public final class Fields {
         if ((l >= 0) && ((a < 0) || (costl <= (costa + FL_BIAS)))) {
             emon.Port.cellsSet(out, 0, emon.Port.cellsAt(bt, l * FL_B));
             emon.Port.cellsSet(out, 1, 1);
+            emon.Port.cellsSet(out, 2, 2);
             return 0;
         }
         if (a >= 0) {
             emon.Port.cellsSet(out, 0, emon.Port.cellsAt(bt, a * FL_B));
             emon.Port.cellsSet(out, 1, 1);
+            emon.Port.cellsSet(out, 2, 3);
             return 0;
         }
         if (l >= 0) {
             emon.Port.cellsSet(out, 0, emon.Port.cellsAt(bt, l * FL_B));
             emon.Port.cellsSet(out, 1, 1);
+            emon.Port.cellsSet(out, 2, 2);
             return 0;
         }
         c = flCell(bt, nb, page, x0, y0, x1, y1);
         if (c >= 0) {
             emon.Port.cellsSet(out, 0, emon.Port.cellsAt(bt, c * FL_B));
             emon.Port.cellsSet(out, 1, 1);
+            emon.Port.cellsSet(out, 2, 4);
             return 0;
         }
         flAnchor(bt, nb, page, y0, out);
+        emon.Port.cellsSet(out, 2, 5);
         return 0;
+    }
+    public static int flSibling(emon.Port.Cells fc, int i) {
+        // D1630 (smoke review A issue 10): the field row before field row i (a text, combo or list field too) that stands just to its left on its line, at most FL_NEAR_R (12 pt) away, and that
+        // a label to its left placed (cell 10 is 1 or 2); -1 when there is none. The cents box of a line of `dollars . cents` has no label near it, but the dollars box has: the line's.
+        int o = i * FL_W;
+        int j = i - 1;
+        int p = 0;
+        int ov = 0;
+        int sm = 0;
+        int gap = 0;
+        while ((j >= 0) && (j >= (i - 8))) {
+            p = j * FL_W;
+            if (emon.Port.cellsAt(fc, p + 1) != emon.Port.cellsAt(fc, o + 1)) {
+                return -1;
+            }
+            if ((emon.Port.cellsAt(fc, p + 9) >= 4) && (emon.Port.cellsAt(fc, p + 10) <= 2) && (emon.Port.cellsAt(fc, p + 10) >= 1)) {
+                gap = emon.Port.cellsAt(fc, o + 2) - emon.Port.cellsAt(fc, p + 4);
+                ov = flMin(emon.Port.cellsAt(fc, o + 5), emon.Port.cellsAt(fc, p + 5)) - flMax(emon.Port.cellsAt(fc, o + 3), emon.Port.cellsAt(fc, p + 3));
+                sm = flMin(emon.Port.cellsAt(fc, o + 5) - emon.Port.cellsAt(fc, o + 3), emon.Port.cellsAt(fc, p + 5) - emon.Port.cellsAt(fc, p + 3));
+                if ((gap >= (0 - FL_TOL)) && (gap <= FL_NEAR_R) && (ov > 0) && ((ov * 2) >= sm)) {
+                    return j;
+                }
+            }
+            j -= 1;
+        }
+        return -1;
     }
     public static int flCount(emon.Port.Cells an) {
         // How many `an-field` rows `an` has.
@@ -461,6 +493,7 @@ public final class Fields {
         int i = 0;
         int at = 0;
         int k = 0;
+        int j = 0;
         int nf = 0;
         while ((i < n) && (nf < FL_MAXF)) {
             at = i * AN_STRIDE;
@@ -489,6 +522,17 @@ public final class Fields {
             flPlace(bt, nb, emon.Port.cellsAt(fc, at + 9), emon.Port.cellsAt(fc, at + 1), emon.Port.cellsAt(fc, at + 2), emon.Port.cellsAt(fc, at + 3), emon.Port.cellsAt(fc, at + 4), emon.Port.cellsAt(fc, at + 5), sc);
             emon.Port.cellsSet(fc, at + 6, emon.Port.cellsAt(sc, 0));
             emon.Port.cellsSet(fc, at + 7, emon.Port.cellsAt(sc, 1));
+            emon.Port.cellsSet(fc, at + 10, emon.Port.cellsAt(sc, 2));
+            // D1630: a text field whose label is only found above or nowhere, with a field just to its left on its line that a label to its left was found for, goes with that field (the cents
+            // box of a line `dollars . cents` took the line above's label, the nearest above it, and the line below lost it)
+            if ((emon.Port.cellsAt(fc, at + 9) >= 4) && (emon.Port.cellsAt(sc, 2) >= 3)) {
+                j = flSibling(fc, i);
+                if (j >= 0) {
+                    emon.Port.cellsSet(fc, at + 6, emon.Port.cellsAt(fc, (j * FL_W) + 6));
+                    emon.Port.cellsSet(fc, at + 7, emon.Port.cellsAt(fc, (j * FL_W) + 7));
+                    emon.Port.cellsSet(fc, at + 10, emon.Port.cellsAt(fc, (j * FL_W) + 10));
+                }
+            }
             i += 1;
         }
         return nf;

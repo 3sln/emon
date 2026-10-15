@@ -127,6 +127,31 @@ fn test_a_text_field_goes_after_the_label_to_its_left_or_above_it() {
     crate::testport::assert_text(out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>1 Name of entity/individual<span data-emon=\"field\" data-emon-name=\"f1_01[0]\" data-emon-type=\"text\">Ada Lovelace</span></p><p>Trust/estate</p><p>LLC. Enter the tax classification<span data-emon=\"field\" data-emon-name=\"f1_03[0]\" data-emon-type=\"text\"></span></p></main></body></html>", "text fields after their labels");
 }
 #[test]
+fn test_the_cents_box_of_a_line_goes_with_the_dollars_box_beside_it_not_with_the_line_above() {
+    // D1630 (smoke review A issue 10; the geometry of lines 14 and 15a of the IRS Form 941): each line has a box of dollars and a box of cents 7 pt to its right. The dollars box has its label to its left
+    // on its line (3.6 pt). The cents box of line 15a is 76 pt from that label, with no leader between, and the label of line 14 ends 4.6 pt over its top: the nearest label above took it.
+    // A field just to the left on its line, which has a label, is the line's: the cents box goes with it.
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let an: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let txt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut String = &mut crate::port::new_text();
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    fdt_par(nodes, regions, text, &crate::testport::text_blob("14 Balance due. If line 12 is more than line 13, enter the difference")[..], 4095, 67928, 44393, 68942);
+    fdt_par(nodes, regions, text, &crate::testport::text_blob("15a Overpayment. If line 13 is more than line 12, enter the difference")[..], 4100, 69830, 29140, 70840);
+    fdt_field(an, txt, 4, -1, &crate::testport::text_blob("f1_53[0]")[..], &crate::testport::text_blob("")[..], &crate::testport::text_blob("")[..], 44640, 67500, 54720, 68900);
+    fdt_field(an, txt, 4, -1, &crate::testport::text_blob("f1_54[0]")[..], &crate::testport::text_blob("")[..], &crate::testport::text_blob("")[..], 55440, 67500, 57525, 68900);
+    fdt_field(an, txt, 4, -1, &crate::testport::text_blob("f1_55[0]")[..], &crate::testport::text_blob("")[..], &crate::testport::text_blob("")[..], 29500, 69400, 36000, 70800);
+    fdt_field(an, txt, 4, -1, &crate::testport::text_blob("f1_56[0]")[..], &crate::testport::text_blob("")[..], &crate::testport::text_blob("")[..], 36720, 69400, 38805, 70800);
+    fdt_html(0, nodes, attrs, regions, text, an, txt, out);
+    crate::testport::assert_text(out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>14 Balance due. If line 12 is more than line 13, enter the difference<span data-emon=\"field\" data-emon-name=\"f1_53[0]\" data-emon-type=\"text\"></span><span data-emon=\"field\" data-emon-name=\"f1_54[0]\" data-emon-type=\"text\"></span></p><p>15a Overpayment. If line 13 is more than line 12, enter the difference<span data-emon=\"field\" data-emon-name=\"f1_55[0]\" data-emon-type=\"text\"></span><span data-emon=\"field\" data-emon-name=\"f1_56[0]\" data-emon-type=\"text\"></span></p></main></body></html>", "the cents boxes go with their dollars boxes");
+}
+#[test]
 fn test_the_label_over_a_row_of_boxes_beats_the_instruction_that_ends_beside_the_first() {
     // Three boxes of a number under `Social security number`, the first 15.6 pt right of the end of an instruction line that is on its line: the label above is 3 pt over
     // the box, so the instruction line (nearer than 24 pt, but not by 8 pt) does not take it; the third box is past the end of the label (20 pt sideways) and still has

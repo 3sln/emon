@@ -49,6 +49,18 @@ const fuMinnorm int32 = 4
 
 const fuMaxslots int32 = 8
 
+const fuFloor int32 = 3600
+
+const fuFcap int32 = 170
+
+const fuStamp int32 = 60
+
+const fuStamplen int32 = 8
+
+const fuCells int32 = 4
+
+const fuChainGap int32 = 1300
+
 const cd int32 = 16
 
 const sl int32 = 10
@@ -772,6 +784,38 @@ func fuTag(wd *port.Cells, ln *port.Cells, gl *port.Cells, mk *port.Cells, l int
 	return 0
 }
 
+func fuZoneFloor(h int32) int32 {
+	// D1630 (smoke review B issue 11): twice the depth (centipoints) of the margin zones of a page `h` tall when 11 per cent of it is less than FU_FLOOR (36 pt) and 17 per cent of it more
+	// than 11 per cent: a page the size of a slide or a small card (210 pt tall) has a running header 18 pt from its top edge and a footer 28 pt from its foot, outside 11 per cent
+	// of it. 0 for a page where 11 per cent is deep enough (every page of a letter's size and over 327 pt tall).
+	var lim int32 = fuMin(2*fuFloor, (h*fuFcap)/500)
+	if lim > ((h * fuTop) / 500) {
+		return lim
+	}
+	return 0
+}
+
+func fuRowCells(ln *port.Cells, l int32) int32 {
+	// D1630 (smoke review A issue 15): how many upright lines (this one included) of its page stand on line l's baseline (centres within half its height), among the 40 lines either side of it
+	// in the text layer's order. A row of FU_CELLS or more is a table's row, not a running header or footer (a left, a centre and a right part at the most): the first data row of a
+	// continuation page, directly under the repeated header, recurs by position and by the shape of its cells and passed as a header that varies.
+	var nl int32 = evidence.LnCount(ln)
+	var c2 int32 = evidence.LnGet(ln, l, evidence.LhY0()) + evidence.LnGet(ln, l, evidence.LhY1())
+	var half int32 = fuMax(1, evidence.LnGet(ln, l, evidence.LhY1())-evidence.LnGet(ln, l, evidence.LhY0()))
+	var p int32 = evidence.LnGet(ln, l, evidence.LhPage())
+	var q int32 = fuMax(0, l-40)
+	var n int32 = 0
+	var rot int32 = 0
+	for (q < nl) && (q <= (l + 40)) {
+		rot = evidence.LnGet(ln, q, evidence.LhRot())
+		if (evidence.LnGet(ln, q, evidence.LhPage()) == p) && (((rot < 100) || (rot > 35900)) && (fuAbs((evidence.LnGet(ln, q, evidence.LhY0())+evidence.LnGet(ln, q, evidence.LhY1()))-c2) <= half)) {
+			n += 1
+		}
+		q += 1
+	}
+	return n
+}
+
 func fuScan(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, mk *port.Cells, pages *port.Cells, npages int32, cd *port.Cells, sl *port.Cells, tx *port.Cells) int32 {
 	// Every candidate line of the document as a row of `cd`, in line order. Answers the number of rows, or -1 when the
 	// lines are not in page order (nothing here is then safe to say).
@@ -804,16 +848,24 @@ func fuScan(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, mk *
 			cy2 = evidence.LnGet(ln, l, evidence.LhY0()) + evidence.LnGet(ln, l, evidence.LhY1())
 			cx2 = evidence.LnGet(ln, l, evidence.LhX0()) + evidence.LnGet(ln, l, evidence.LhX1())
 			if (rot < 100) || (rot > 35900) {
-				if cy2 < ((h * fuTop) / 500) {
+				var fz int32 = fuZoneFloor(h)
+				if cy2 < fuMax(fz, (h*fuTop)/500) {
 					zone = 1
 				}
-				if cy2 > ((h * fuBot) / 500) {
+				if fz > 0 {
+					if cy2 > ((2 * h) - fz) {
+						zone = 2
+					}
+				} else if cy2 > ((h * fuBot) / 500) {
 					zone = 2
 				}
 			} else if (fuAbs(rot-9000) < 100) || (fuAbs(rot-27000) < 100) {
 				if (cx2 < ((w * fuSide) / 500)) || (cx2 > ((w * (1000 - fuSide)) / 500)) {
 					zone = 3
 				}
+			}
+			if (zone > 0) && (zone < 3) && (fuRowCells(ln, l) >= fuCells) {
+				zone = 0
 			}
 			if zone > 0 {
 				ts = port.CellsLen(tx)
@@ -1323,6 +1375,96 @@ func fuQualify(ord *port.Cells, cd *port.Cells, sl *port.Cells, tx *port.Cells, 
 		return 1
 	}
 	return 0
+}
+
+func fuChainAdjacent(ln *port.Cells, cd *port.Cells, ncd int32, r int32) int32 {
+	// 1 when candidate r has, on its page and in its zone, a candidate that qualified (cell 15 is 1) directly toward the page's edge from it: within FU_CHAIN_GAP per mille
+	// of its own height of it, and its left edge within two heights of r's (the first line of a two-line header, over the second). Not a cell of a table's row (FU_CELLS
+	// candidates on its baseline).
+	var lo int32 = fuMax(0, r-30)
+	var hi int32 = fuMin(ncd, r+31)
+	var h int32 = fuMax(1, cdGet(cd, r, 4)-cdGet(cd, r, 3))
+	var c2 int32 = cdGet(cd, r, 3) + cdGet(cd, r, 4)
+	var q int32 = lo
+	var n int32 = 0
+	var gap int32 = 0
+	for q < hi {
+		if (cdGet(cd, q, 1) == cdGet(cd, r, 1)) && ((cdGet(cd, q, 2) == cdGet(cd, r, 2)) && (fuAbs((cdGet(cd, q, 3)+cdGet(cd, q, 4))-c2) <= h)) {
+			n += 1
+		}
+		q += 1
+	}
+	if n >= fuCells {
+		return 0
+	}
+	q = lo
+	for q < hi {
+		if (q != r) && ((cdGet(cd, q, 1) == cdGet(cd, r, 1)) && ((cdGet(cd, q, 2) == cdGet(cd, r, 2)) && ((cdGet(cd, q, 15) == 1) && (fuAbs(evidence.LnGet(ln, cdGet(cd, q, 0), evidence.LhX0())-evidence.LnGet(ln, cdGet(cd, r, 0), evidence.LhX0())) <= (2 * h))))) {
+			if cdGet(cd, r, 2) == 1 {
+				gap = cdGet(cd, r, 3) - cdGet(cd, q, 4)
+				if (gap >= -200) && ((gap * 1000) <= (h * fuChainGap)) && (cdGet(cd, q, 3) < cdGet(cd, r, 3)) {
+					return 1
+				}
+			}
+			if cdGet(cd, r, 2) == 2 {
+				gap = cdGet(cd, q, 3) - cdGet(cd, r, 4)
+				if (gap >= -200) && ((gap * 1000) <= (h * fuChainGap)) && (cdGet(cd, q, 3) > cdGet(cd, r, 3)) {
+					return 1
+				}
+			}
+		}
+		q += 1
+	}
+	return 0
+}
+
+func fuChain(ln *port.Cells, ord *port.Cells, cd *port.Cells, sl *port.Cells, tx *port.Cells, gr *port.Cells, ng int32, ncd int32, npages int32, trust int32) int32 {
+	// D1630 (smoke review B issue 11): a template group that qualified in everything but its isolation, whose every member (at least 70 per cent) lies directly under or over a member of a group that
+	// qualified, on the same page and in the same zone, is the next line of that header or footer: a two-line running header has its second line against the body, and only
+	// the first is set apart (the lines that recur do not count). Qualified groups are marked (cell 15 is 1) so a third line goes with the second. Answers the groups added.
+	var pass int32 = 0
+	var changed int32 = 1
+	var added int32 = 0
+	var g int32 = 0
+	var i int32 = 0
+	var adj int32 = 0
+	var old int32 = 0
+	var f int32 = 0
+	var m int32 = 0
+	for (changed == 1) && (pass < 3) {
+		changed = 0
+		g = 0
+		for g < ng {
+			if (grGet(gr, g, 4) == 0) && ((grGet(gr, g, 2) >= 2) && ((grGet(gr, g, 3) == 1) || (grGet(gr, g, 3) == 2))) {
+				f = grGet(gr, g, 0)
+				m = grGet(gr, g, 1)
+				adj = 0
+				i = 0
+				for i < m {
+					adj += fuChainAdjacent(ln, cd, ncd, port.CellsAt(ord, f+i))
+					i += 1
+				}
+				if (adj * 100) >= (m * 70) {
+					old = grGet(gr, g, 9)
+					grSet(gr, g, 9, m)
+					if fuQualify(ord, cd, sl, tx, gr, g, npages, trust) == 1 {
+						i = 0
+						for i < m {
+							cdSet(cd, port.CellsAt(ord, f+i), 15, 1)
+							i += 1
+						}
+						added += 1
+						changed = 1
+					} else {
+						grSet(gr, g, 9, old)
+					}
+				}
+			}
+			g += 1
+		}
+		pass += 1
+	}
+	return added
 }
 
 func fuNormCp(c int32) int32 {
@@ -2239,6 +2381,49 @@ func fuWatermarks(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, 
 	return taken
 }
 
+func fuStamps(wd *port.Cells, ln *port.Cells, et *port.Cells, pages *port.Cells, npages int32, cd *port.Cells, ncd int32, fo *port.Cells, fp *port.Cells, ft *port.Cells) int32 {
+	// D1630 (smoke review B issue 9): a line set sideways (a quarter turn either way) in the outer FU_STAMP per mille of its page's width, at least FU_STAMPLEN characters, is a margin
+	// stamp (the arXiv identifier up the left edge of a paper's first page, a Bates number up a court filing's side): furniture of its own, kept once as a `margin` root whatever the
+	// number of pages it is on (those on several are template groups before this). Taken out of the flow. Answers the lines taken.
+	var nl int32 = evidence.LnCount(ln)
+	var l int32 = 0
+	var p int32 = 0
+	var rot int32 = 0
+	var w int32 = 0
+	var cx2 int32 = 0
+	var ts int32 = 0
+	var tl int32 = 0
+	var f0 int32 = 0
+	var q int32 = 0
+	var taken int32 = 0
+	for l < nl {
+		p = evidence.LnGet(ln, l, evidence.LhPage())
+		q = fuCdFind(cd, ncd, l)
+		if (p >= 1) && (p <= npages) && ((q < 0) || (cdGet(cd, q, 15) == 0)) {
+			rot = evidence.LnGet(ln, l, evidence.LhRot())
+			if (fuAbs(rot-9000) < 100) || (fuAbs(rot-27000) < 100) {
+				w = model.PageW(pages, p-1)
+				cx2 = evidence.LnGet(ln, l, evidence.LhX0()) + evidence.LnGet(ln, l, evidence.LhX1())
+				if ((cx2 * 500) < (w * fuStamp)) || ((cx2 * 500) > (w * (1000 - fuStamp))) {
+					ts = port.CellsLen(ft)
+					tl = fuLineText(wd, ln, et, ft, l)
+					if (tl >= fuStamplen) && (tl <= fuMaxlen) {
+						f0 = port.CellsLen(fp) / 5
+						fuFpPush(fp, p, evidence.LnGet(ln, l, evidence.LhX0()), evidence.LnGet(ln, l, evidence.LhY0()), evidence.LnGet(ln, l, evidence.LhX1()), evidence.LnGet(ln, l, evidence.LhY1()))
+						fuOutFurniture(fo, model.RlMargin(), 600, model.SrText()+model.SrInfer(), ts, tl, f0, 1)
+						evidence.LnSet(ln, l, evidence.LhPage(), -7)
+						taken += 1
+					} else {
+						port.CellsDrop(ft, ts)
+					}
+				}
+			}
+		}
+		l += 1
+	}
+	return taken
+}
+
 func fuFoKey(fo *port.Cells, fp *port.Cells, r int32, k int32) int32 {
 	if k == 0 {
 		return foGet(fo, r, 9)
@@ -2478,6 +2663,7 @@ func FuFind(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, mk *
 			}
 			g += 1
 		}
+		fuChain(ln, ord, cd, sl, tx, gr, ng, n, npages, trust)
 		fuBodyHashes(wd, ln, et, cd, n, txt, md, bh)
 		r = 0
 		for r < n {
@@ -2499,6 +2685,9 @@ func FuFind(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, mk *
 		fuStylePass(wd, ln, et, txt, md, cd, n, sl, gr, ord, tx, bh, fo, fp, ft, pl, pages, npages, trust, bsz, mode)
 	}
 	fuWatermarks(wd, ln, et, npages, bsz, fo, ft)
+	if mode == 0 {
+		fuStamps(wd, ln, et, pages, npages, cd, n, fo, fp, ft)
+	}
 	fuMergeFurniture(fo, fp, ft, ord)
 	fuCompact(ln, cd, n)
 	return before - evidence.LnCount(ln)

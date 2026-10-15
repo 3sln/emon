@@ -451,7 +451,32 @@ func spAdd(cand *port.Cells, kind int32, row int32, x0 int32, y0 int32, x1 int32
 	return 1
 }
 
-func spJudge(page1 int32, views *port.Cells, srcview int32, owords *port.Cells, etext *port.Cells, src *port.Bitmap, rules *port.Cells, row int32, zx0 int32, zy0 int32, mask *port.Cells, n int32, cand *port.Cells) int32 {
+func spRuledInk(mask *port.Cells, zw int32, zh int32, wpx int32, ink int32) int32 {
+	// D1630: 1 when at least 70 per cent of the zone's ink lies in rows that are each inked over 35 per cent of the ink's width: a straight line, dashed or not (a form's write-in
+	// lines, stacked, make as long a path as a pen's loops do), which no pen draws.
+	var y int32 = 0
+	var x int32 = 0
+	var row int32 = 0
+	var heavy int32 = 0
+	for y < zh {
+		row = 0
+		x = 0
+		for x < zw {
+			row += port.CellsAt(mask, (y*zw)+x)
+			x += 1
+		}
+		if (row * 100) >= (wpx * 35) {
+			heavy += row
+		}
+		y += 1
+	}
+	if (heavy * 100) >= (ink * 70) {
+		return 1
+	}
+	return 0
+}
+
+func spJudge(page1 int32, views *port.Cells, srcview int32, owords *port.Cells, etext *port.Cells, src *port.Bitmap, rules *port.Cells, row int32, zx0 int32, zy0 int32, mask *port.Cells, n int32, zw int32, zh int32, cand *port.Cells) int32 {
 	// Is the ink of a zone (statistics at mask[n...]) a pen's? Add a candidate when it is: the box, the stroke width, the loops of the path, the coverage, no legible word, then the size says
 	// signature or initials. Answers 1 when added.
 	var ink int32 = port.CellsAt(mask, n+132)
@@ -510,6 +535,9 @@ func spJudge(page1 int32, views *port.Cells, srcview int32, owords *port.Cells, 
 		return 0
 	}
 	if (ink * 100) > ((wpx * hpx) * SpCover()) {
+		return 0
+	}
+	if spRuledInk(mask, zw, zh, wpx, ink) == 1 {
 		return 0
 	}
 	ln = ink / sw
@@ -592,7 +620,7 @@ func spZone(page1 int32, views *port.Cells, srcview int32, owords *port.Cells, e
 	if ink < SpMinInk() {
 		return 0
 	}
-	return spJudge(page1, views, srcview, owords, etext, src, rules, r, zx0, zy0, mask, zw*zh, cand)
+	return spJudge(page1, views, srcview, owords, etext, src, rules, r, zx0, zy0, mask, zw*zh, zw, zh, cand)
 }
 
 func SpFind(page1 int32, views *port.Cells, srcview int32, rules *port.Cells, owords *port.Cells, etext *port.Cells, src *port.Bitmap, pw int32, cand *port.Cells, mask *port.Cells) int32 {

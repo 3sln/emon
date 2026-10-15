@@ -161,6 +161,39 @@ func TestNoRuleAShortRuleAndTheWrongInkAreNoSignature(emonT *testing.T) {
 	port.AssertEq(emonT, spxFind(rules, ow, et, b, cand), 0, "a block of ink is a picture, not a pen")
 }
 
+func spxDashes(b *port.Bitmap, x0 int32, x1 int32, y int32) int32 {
+	// A dashed straight line: dashes of 6 pixels, 3 apart, two thick.
+	var x int32 = x0
+	for x < x1 {
+		if ((x - x0) % 9) < 6 {
+			spxDot(b, x, y, 2, 120, 120, 120)
+		}
+		x += 1
+	}
+	return 0
+}
+
+func TestStackedDashedWriteInLinesAreNoSignature(emonT *testing.T) {
+	var b *port.Bitmap = port.BitmapNew(300, 120, 3)
+	var rules *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var cand *port.Cells = port.NewCells()
+	// D1630 (smoke review A issue 16): three dashed lines over a rule (a form's write-in lines) make as long a path as a pen's loops do, in a box a pen's size; no pen draws a straight line
+	spxPaper(b)
+	spxLine(b, 20, 280, 100)
+	spxDashes(b, 40, 250, 60)
+	spxDashes(b, 40, 250, 74)
+	spxDashes(b, 40, 250, 88)
+	spxRule(rules, 20, 280, 100)
+	port.AssertEq(emonT, spxFind(rules, ow, et, b, cand), 0, "dashed lines are no signature")
+	// the pen over the same rule still is one
+	spxPaper(b)
+	spxLine(b, 20, 280, 100)
+	spxZig(b, 40, 98, 150, 24, 36, 20, 40, 120)
+	port.AssertEq(emonT, spxFind(rules, ow, et, b, cand), 1, "a pen is")
+}
+
 func TestAWordOcrWasSureOfIsPaper(emonT *testing.T) {
 	var b *port.Bitmap = port.BitmapNew(300, 120, 3)
 	var rules *port.Cells = port.NewCells()

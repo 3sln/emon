@@ -707,6 +707,9 @@ pub(crate) fn sx_consider(r: i32, views: &mut crate::port::Cells, srcview: i32, 
             if (((4 * rx) / 100) * (ry / 100)) > (((pw / 100) * (ph / 100)) / 3) {
                 return 0;
             }
+            if (20 * rx) > (6 * pw) {
+                return 0;
+            }
             return sx_add(cand, 2, r, cxp, cyp, sx_abs(rxp), sx_abs(ryp), pm_get(prims, r, pmf_rot()), rgb, pm_get(prims, r, pmf_x0()), pm_get(prims, r, pmf_y0()), pm_get(prims, r, pmf_x1()), pm_get(prims, r, pmf_y1()), pm_get(prims, r, pmf_conf()));
         }
         if (rad * 25) > (10 * sx_min(pw, ph)) {
@@ -732,6 +735,10 @@ pub(crate) fn sx_consider(r: i32, views: &mut crate::port::Cells, srcview: i32, 
             return 0;
         }
         if (((4 * rx) / 100) * (ry / 100)) > (((pw / 100) * (ph / 100)) / 3) {
+            return 0;
+        }
+        // D1630: a rectangle that is most of the page's width is a colour band (a heading's ground, a table's header band), not a stamp: a stamp is a mark that is a small part of the page
+        if (20 * rx) > (6 * pw) {
             return 0;
         }
         return sx_add(cand, 2, r, cxp, cyp, sx_abs(rxp), sx_abs(ryp), pm_get(prims, r, pmf_rot()), rgb, pm_get(prims, r, pmf_x0()), pm_get(prims, r, pmf_y0()), pm_get(prims, r, pmf_x1()), pm_get(prims, r, pmf_y1()), pm_get(prims, r, pmf_conf()));

@@ -247,6 +247,36 @@ pub(crate) fn nt_in_run(sf: &mut crate::port::Cells, ln: &mut crate::port::Cells
     }
     return 0;
 }
+pub(crate) fn nt_in_prose(ln: &mut crate::port::Cells, sf: &mut crate::port::Cells, sc: &mut crate::port::Cells, l: i32) -> i32 {
+    // D1630 (smoke review B issue 17): 1 when caption candidate l is a line in the middle of a paragraph of the body: set as the body is (not apart from it), with a line of
+    // five words or more of its own size just above it and another just below it, both close (under 4/5 of its size). `Fig. 4. We find` that begins a line of running text is
+    // a sentence, not a caption; a caption stands against its figure or its text with a gap, or is set apart.
+    let a: i32 = st_get(sf, l, sfk_above());
+    let b: i32 = st_get(sf, l, sfk_below());
+    let sz: i32 = ls_line_size(sf, ln, l);
+    if nt_style_apart(sf, sc, l) == 1 {
+        return 0;
+    }
+    if (a < 0) || (b < 0) {
+        return 0;
+    }
+    if !ls_upright(ln, a) || !ls_upright(ln, b) {
+        return 0;
+    }
+    if (ln_get(ln, a, lh_count()) < 5) || (ln_get(ln, b, lh_count()) < 2) {
+        return 0;
+    }
+    if (ls_cap(st_get(sf, l, sfk_gap_above())) * 10) > (sz * 8) {
+        return 0;
+    }
+    if (ls_cap(st_get(sf, l, sfk_gap_below())) * 10) > (sz * 8) {
+        return 0;
+    }
+    if (ls_abs(ls_line_size(sf, ln, a) - sz) * 25) > sz {
+        return 0;
+    }
+    return 1;
+}
 pub(crate) fn nt_after(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, l: i32, w: i32) -> i32 {
     // The word with text that follows word w in line l; -1 when there is none.
     let w0: i32 = ln_get(ln, l, lh_first());
@@ -525,27 +555,38 @@ pub(crate) fn nt_scan_word(wd: &mut crate::port::Cells, ln: &mut crate::port::Ce
     let mut j: i32 = 0;
     let mut m: i32 = 0;
     let mut pa: i32 = 0;
+    let mut bs: i32 = 0;
     let mut pb: i32 = 0;
     if (g0 < 0) || (gn <= 0) || (gn > 4000) {
         return 0;
     }
+    // D1630 (smoke review B issue 9): the line's baseline is the first word's, which a word that STARTS with a superscript (a footnote's marker glued to its text) takes from the raised
+    // glyph: the baseline the glyphs are raised off is the lowest of the word's own.
+    bs = base;
     while i < gn {
-        m = nt_glyph_mark(gl, et, g0 + i, sz0, base);
+        if ls_cap(gl_get(gl, g0 + i, gf_by0())) > bs {
+            bs = ls_cap(gl_get(gl, g0 + i, gf_by0()));
+        }
+        i += 1;
+    }
+    i = 0;
+    while i < gn {
+        m = nt_glyph_mark(gl, et, g0 + i, sz0, bs);
         if m < 0 {
             i += 1;
         } else {
             j = i;
             let ms: i32 = crate::port::cells_len(mk);
-            while (j < gn) && ((j - i) < 6) && (nt_glyph_mark(gl, et, g0 + j, sz0, base) >= 0) {
-                crate::port::cells_push(mk, nt_glyph_mark(gl, et, g0 + j, sz0, base));
+            while (j < gn) && ((j - i) < 6) && (nt_glyph_mark(gl, et, g0 + j, sz0, bs) >= 0) {
+                crate::port::cells_push(mk, nt_glyph_mark(gl, et, g0 + j, sz0, bs));
                 j += 1;
             }
             // a comma between two markers belongs to them: `1,2`
-            if ((j + 1) < gn) && ((j - i) < 5) && (nt_gchar(gl, et, g0 + j) == 44) && nt_sup_styled(gl, g0 + j, sz0, base) && (nt_glyph_mark(gl, et, g0 + j + 1, sz0, base) >= 0) {
+            if ((j + 1) < gn) && ((j - i) < 5) && (nt_gchar(gl, et, g0 + j) == 44) && nt_sup_styled(gl, g0 + j, sz0, bs) && (nt_glyph_mark(gl, et, g0 + j + 1, sz0, bs) >= 0) {
                 crate::port::cells_push(mk, 44);
                 j += 1;
-                while (j < gn) && ((j - i) < 8) && (nt_glyph_mark(gl, et, g0 + j, sz0, base) >= 0) {
-                    crate::port::cells_push(mk, nt_glyph_mark(gl, et, g0 + j, sz0, base));
+                while (j < gn) && ((j - i) < 8) && (nt_glyph_mark(gl, et, g0 + j, sz0, bs) >= 0) {
+                    crate::port::cells_push(mk, nt_glyph_mark(gl, et, g0 + j, sz0, bs));
                     j += 1;
                 }
             }
@@ -728,7 +769,29 @@ pub(crate) fn nt_find_ref(rf: &mut crate::port::Cells, nb: &mut crate::port::Cel
     }
     return -1;
 }
-pub(crate) fn nt_foot(mut rf: &mut crate::port::Cells, mut nb: &mut crate::port::Cells, mk: &mut crate::port::Cells, i: i32) -> i32 {
+pub(crate) fn nt_small_to_end(ln: &mut crate::port::Cells, sf: &mut crate::port::Cells, l: i32, bsz: i32) -> i32 {
+    // D1630 (smoke review B issue 9): 1 when no line on line l's page, upright and at or below its top, is set in the body's size (over 96 per cent of `bsz`): everything from l to
+    // the foot of the page is small type, the shape of a footnote block (the rule above it and the body above that are what the notes stage cannot see).
+    let n: i32 = ln_count(ln);
+    let p: i32 = ln_get(ln, l, lh_page());
+    let y: i32 = ln_get(ln, l, lh_y0());
+    let mut q: i32 = 0;
+    if bsz <= 0 {
+        return 0;
+    }
+    while q < n {
+        if (q != l) && (ln_get(ln, q, lh_page()) == p) {
+            if ls_upright(ln, q) && (ln_get(ln, q, lh_y0()) >= (y - 100)) {
+                if (ls_line_size(sf, ln, q) * 100) > (bsz * 96) {
+                    return 0;
+                }
+            }
+        }
+        q += 1;
+    }
+    return 1;
+}
+pub(crate) fn nt_foot(ln: &mut crate::port::Cells, sf: &mut crate::port::Cells, mut rf: &mut crate::port::Cells, mut nb: &mut crate::port::Cells, mk: &mut crate::port::Cells, i: i32) -> i32 {
     // Is note body candidate i a footnote? In the lower half of the page (the band) and small or marked in superscript,
     // with a reference on its page; or small, with a reference on the page before (a note a column or a page break pushed
     // on); or marked in superscript, small and in the band, with no reference at all. Marks the candidate (state 1) and the
@@ -756,9 +819,18 @@ pub(crate) fn nt_foot(mut rf: &mut crate::port::Cells, mut nb: &mut crate::port:
         crate::port::cells_set(nb, b + 7, 1);
         return 1;
     }
+    // D1630: a plain marker (a lone number or symbol) on a small line in the lower half of the page, with only small type from it to the page's foot, is a footnote's whatever the text
+    // says (a superscript the text layer did not mark, a reference no glyph run showed)
+    if (kind == 2) && ((szok == 1) && (band == 1)) {
+        let bsz: i32 = st_hget(sf, sfh_size());
+        if nt_small_to_end(ln, sf, crate::port::cells_at(nb, b), bsz) == 1 {
+            crate::port::cells_set(nb, b + 7, 1);
+            return 1;
+        }
+    }
     return 0;
 }
-pub(crate) fn nt_match(mut rf: &mut crate::port::Cells, mut nb: &mut crate::port::Cells, mk: &mut crate::port::Cells, nhl: i32) -> i32 {
+pub(crate) fn nt_match(ln: &mut crate::port::Cells, sf: &mut crate::port::Cells, mut rf: &mut crate::port::Cells, mut nb: &mut crate::port::Cells, mk: &mut crate::port::Cells, nhl: i32) -> i32 {
     // Decide which candidates are notes. State 1: a footnote (a body in the lower half of the page, set smaller than
     // the body text or marked in superscript, with a reference on its page; a superscript marker alone is enough when
     // the line is also smaller). State 2: an endnote (a reference earlier in the document: for a superscript marker
@@ -768,7 +840,7 @@ pub(crate) fn nt_match(mut rf: &mut crate::port::Cells, mut nb: &mut crate::port
     let mut r: i32 = 0;
     let mut tent: i32 = 0;
     while i < nn {
-        nt_foot(rf, nb, mk, i);
+        nt_foot(ln, sf, rf, nb, mk, i);
         i += 1;
     }
     // endnotes: a superscript marker with an earlier reference at once, a plain number when there are two
@@ -1153,7 +1225,7 @@ pub fn nt_analyze(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cel
     l = 0;
     while l < n {
         if ls_get(hc, l, ls_k_flags()) == ls_f_cap() {
-            if (nt_in_run(sf, ln, hc, l) == 1) || (nt_toc_like(wd, ln, et, sf, l) == 1) {
+            if (nt_in_run(sf, ln, hc, l) == 1) || ((nt_toc_like(wd, ln, et, sf, l) == 1) || (nt_in_prose(ln, sf, sc, l) == 1)) {
                 ls_put(hc, l, ls_k_flags(), 64);
             }
         }
@@ -1172,7 +1244,7 @@ pub fn nt_analyze(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cel
     }
     nt_scan(wd, ln, et, gl, sf, pages, hc, rf, nb, mk);
     nhl = nt_first_notes_heading(wd, ln, et, hc, rf);
-    nt_match(rf, nb, mk, nhl);
+    nt_match(ln, sf, rf, nb, mk, nhl);
     nt_markerless(wd, et, ln, sf, hc, rf, mk);
     l = 0;
     while l < (crate::port::cells_len(nb) / NT_NB) {

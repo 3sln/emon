@@ -901,7 +901,8 @@ func lsShapes(ln *port.Cells, sf *port.Cells, pa *port.Cells, pi *port.Cells, hc
 		var w int32 = x1 - x0
 		var h int32 = y1 - y0
 		var p int32 = evidence.PaGet(pa, r, evidence.PfPage())
-		if ((fl & 4) == 0) && ((fl & 24) != 0) && (w > 0) && (h > 0) && (w < 1500) && (h < 1500) && (p >= 1) && (((2 * p) + 1) < port.CellsLen(pi)) && ((4 * LsAbs(w-h)) <= LsMax(w, h)) {
+		// D1630: a bullet is a disc (a curve) or a square (a rectangle); a filled polygon (an arrow head, a triangle) is no bullet
+		if ((fl & 4) == 0) && ((evidence.PaGet(pa, r, evidence.PfKind()) == evidence.PaCurve()) || (evidence.PaGet(pa, r, evidence.PfKind()) == evidence.PaRect())) && ((fl & 24) != 0) && (w > 0) && (h > 0) && (w < 1500) && (h < 1500) && (p >= 1) && (((2 * p) + 1) < port.CellsLen(pi)) && ((4 * LsAbs(w-h)) <= LsMax(w, h)) {
 			seen += 1
 			l = port.CellsAt(pi, 2*p) - 1
 			for (l >= 0) && (l < port.CellsAt(pi, (2*p)+1)) {
@@ -1127,6 +1128,39 @@ func lsPartner(wd *port.Cells, ln *port.Cells, sf *port.Cells, hc *port.Cells, l
 	return -1
 }
 
+func lsBulletBefore(wd *port.Cells, ln *port.Cells, et *port.Cells, sf *port.Cells, hc *port.Cells, l int32, ws *port.Cells) int32 {
+	// D1630 (smoke review A issue 13): 1 when a bullet precedes line l on its own row: the line on the same baseline just to its left starts with a strong bullet (a
+	// word, or a shape the line has). A bullet, a lead-in and an en dash and the text, split at the lead-in's underline, is one item, whose dash is the text's own.
+	var t int32 = style.StGet(sf, l, style.SfkSibline())
+	if t < 0 {
+		return 0
+	}
+	if !LsUpright(ln, t) {
+		return 0
+	}
+	if evidence.LnGet(ln, t, evidence.LhPage()) != evidence.LnGet(ln, l, evidence.LhPage()) {
+		return 0
+	}
+	var sz int32 = LsLineSize(sf, ln, l)
+	if LsCap(evidence.LnGet(ln, t, evidence.LhX1())) > (LsCap(evidence.LnGet(ln, l, evidence.LhX0())) + (sz / 4)) {
+		return 0
+	}
+	if (LsAbs(LsCap(evidence.LnGet(ln, l, evidence.LhBy0()))-LsCap(evidence.LnGet(ln, t, evidence.LhBy0()))) * 3) > sz {
+		return 0
+	}
+	if LsGet(hc, t, LsKShape()) > 0 {
+		return 1
+	}
+	var w int32 = LsFirstWord(wd, ln, t)
+	if w < 0 {
+		return 0
+	}
+	if LsParse(wd, et, w, ws) == 1 {
+		return 1
+	}
+	return 0
+}
+
 func lsCollect(wd *port.Cells, ln *port.Cells, et *port.Cells, sf *port.Cells, hc *port.Cells, cd *port.Cells, ws *port.Cells) int32 {
 	// One candidate row per line that starts with a marker, or with a bullet shape, in line order. Lines that are
 	// headings, not upright, or already taken (a note, a caption) are left out; a line whose only word is the
@@ -1147,6 +1181,13 @@ func lsCollect(wd *port.Cells, ln *port.Cells, et *port.Cells, sf *port.Cells, h
 				cls = LsParse(wd, et, w, ws)
 				if (cls == 2) && (lsLetterAfter(wd, ln, et, l, w) == 0) {
 					cls = 0
+				}
+				if cls == 2 {
+					if lsBulletBefore(wd, ln, et, sf, hc, l, ws) == 1 {
+						cls = 0
+					} else {
+						LsParse(wd, et, w, ws)
+					}
 				}
 				if (cls > 0) && ((port.CellsAt(ws, 4) < LsWl(wd, w)) || (LsSecondWord(wd, ln, l) >= 0)) {
 					tx = lsTextx(wd, ln, et, hc, l, w, cls, ws)
@@ -1260,36 +1301,71 @@ func lsHangEvidence(ln *port.Cells, sf *port.Cells, hc *port.Cells, l int32, tex
 	return 0
 }
 
+func lsWalkFrom(ln *port.Cells, sf *port.Cells, hc *port.Cells, l int32) int32 {
+	// Mark the lines that GO ON the item line l: down the page while the next line is not a start, is upright, close below, and
+	// sits at the item's text x. The same x and slop as the item's.
+	var tx int32 = LsGet(hc, l, LsKTextx())
+	var tl int32 = LsGet(hc, l, LsKTol())
+	var cur int32 = l
+	var steps int32 = 0
+	var more int32 = 1
+	for (more == 1) && (steps < 200) {
+		var b int32 = style.StGet(sf, cur, style.SfkBelow())
+		more = 0
+		if (b >= 0) && LsUpright(ln, b) {
+			if (LsStart(hc, b) == 0) && ((LsGet(hc, b, LsKFlags()) & 2) == 0) && (style.StGet(sf, cur, style.SfkGapBelow()) <= (3 * tl)) && (evidence.LnGet(ln, b, evidence.LhX0()) >= (tx - tl)) && (evidence.LnGet(ln, b, evidence.LhX0()) <= (tx + tl)) {
+				LsPut(hc, b, LsKFlags(), LsFCont())
+				LsPut(hc, b, LsKTextx(), tx)
+				LsPut(hc, b, LsKTol(), tl)
+				cur = b
+				more = 1
+			}
+		}
+		steps += 1
+	}
+	return 0
+}
+
 func lsWalk(ln *port.Cells, sf *port.Cells, hc *port.Cells) int32 {
-	// Mark the lines that GO ON an item: from each item line down the page while the next line is not a start, is
-	// upright, close below, and sits at the item's text x. The same x and slop as the item's.
+	// Mark the lines that GO ON an item: from each item line (`ls-walk-from`).
 	var n int32 = evidence.LnCount(ln)
 	var l int32 = 0
 	for l < n {
 		if (LsGet(hc, l, LsKFlags()) & 1) == 1 {
-			var tx int32 = LsGet(hc, l, LsKTextx())
-			var tl int32 = LsGet(hc, l, LsKTol())
-			var cur int32 = l
-			var steps int32 = 0
-			var more int32 = 1
-			for (more == 1) && (steps < 200) {
-				var b int32 = style.StGet(sf, cur, style.SfkBelow())
-				more = 0
-				if (b >= 0) && LsUpright(ln, b) {
-					if (LsStart(hc, b) == 0) && ((LsGet(hc, b, LsKFlags()) & 2) == 0) && (style.StGet(sf, cur, style.SfkGapBelow()) <= (3 * tl)) && (evidence.LnGet(ln, b, evidence.LhX0()) >= (tx - tl)) && (evidence.LnGet(ln, b, evidence.LhX0()) <= (tx + tl)) {
-						LsPut(hc, b, LsKFlags(), LsFCont())
-						LsPut(hc, b, LsKTextx(), tx)
-						LsPut(hc, b, LsKTol(), tl)
-						cur = b
-						more = 1
-					}
-				}
-				steps += 1
-			}
+			lsWalkFrom(ln, sf, hc, l)
 		}
 		l += 1
 	}
 	return 0
+}
+
+func lsHangsUnder(ln *port.Cells, sf *port.Cells, hc *port.Cells, l int32) int32 {
+	// D1630 (smoke review B issue 12): 1 when line l sits where an item's text sits, under that item (an item line above it, or lines that go on it between, each at that x
+	// and close under the last): a reference whose second line begins with an author's initial (`Y. Bengio`) is the item's continuation, not a new item.
+	var cur int32 = l
+	var steps int32 = 0
+	var more int32 = 1
+	var r int32 = 0
+	for (more == 1) && (steps < 60) {
+		var a int32 = style.StGet(sf, cur, style.SfkAbove())
+		more = 0
+		if (a >= 0) && LsUpright(ln, a) && (LsCap(style.StGet(sf, cur, style.SfkGapAbove())) <= (3 * (LsLineSize(sf, ln, cur) / 2))) {
+			if (LsGet(hc, a, LsKFlags()) & 1) != 0 {
+				var tx int32 = LsGet(hc, a, LsKTextx())
+				var tl int32 = LsGet(hc, a, LsKTol())
+				if LsAbs(LsCap(evidence.LnGet(ln, l, evidence.LhX0()))-tx) <= tl {
+					r = 1
+				}
+			} else {
+				if (LsStart(hc, a) == 0) && (LsAbs(LsCap(evidence.LnGet(ln, a, evidence.LhX0()))-LsCap(evidence.LnGet(ln, l, evidence.LhX0()))) <= (LsLineSize(sf, ln, l) / 2)) {
+					cur = a
+					more = 1
+				}
+			}
+		}
+		steps += 1
+	}
+	return r
 }
 
 func lsInitialLike(cd *port.Cells, i int32) int32 {
@@ -1331,6 +1407,12 @@ func LsAnalyze(wd *port.Cells, ln *port.Cells, et *port.Cells, sf *port.Cells, p
 		if (conf == 0) && (textx > 0) && (cls != 2) && (lsInitialLike(cd, i) == 0) {
 			if lsHangEvidence(ln, sf, hc, l, textx) == 1 {
 				conf = 1
+			}
+		}
+		// an author's initial that begins the second line of a reference is the item's text (D1630)
+		if (conf > 0) && (lsInitialLike(cd, i) == 1) && (lsCget(cd, i, 3) >= 3) {
+			if lsHangsUnder(ln, sf, hc, l) == 1 {
+				conf = 0
 			}
 		}
 		if conf > 0 {

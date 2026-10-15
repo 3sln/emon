@@ -10,6 +10,7 @@ use crate::emon::json::*;
 use crate::emon::model::*;
 use crate::emon::mscript::*;
 use crate::emon::para::*;
+use crate::emon::pdfannot::*;
 use crate::emon::pdfcontent::*;
 use crate::emon::pdfdoc::*;
 use crate::emon::pdfmeta::*;
@@ -205,8 +206,8 @@ pub(crate) fn tt_brief(mut t: &mut String, nodes: &mut crate::port::Cells, attrs
     }
     return 0;
 }
-pub(crate) fn tt_run_n(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, pa: &mut crate::port::Cells, mut t: &mut String, np: i32) -> i32 {
-    // Tables, then paragraphs, then the brief of the Model, of a document of `np` pages (1 or 2). Answers `model-check`'s verdict.
+pub(crate) fn tt_run_an(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, pa: &mut crate::port::Cells, mut t: &mut String, np: i32, an: &mut crate::port::Cells) -> i32 {
+    // `tt-run-n` over a document whose annotations (rows of `an`, `AN_STRIDE` cells) are `an`: the form fields' widgets (D1630).
     let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -285,11 +286,15 @@ pub(crate) fn tt_run_n(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells,
         page_new(pages, 2, 61200, 79200, 0, pk_vector());
     }
     gf_doc(pa, gpts, gmk, gim, np, gfx_mode(), grl, gfl, cand, &mut crate::port::Cells::new());
-    tb_build(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e);
+    tb_build(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
     lc_copy(ln, lt);
     pa_build(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
     tt_brief(t, nodes, attrs, text);
     return model_check(nodes, attrs, regions, text, pages, ledger, layout, st);
+}
+pub(crate) fn tt_run_n(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, pa: &mut crate::port::Cells, mut t: &mut String, np: i32) -> i32 {
+    // Tables, then paragraphs, then the brief of the Model, of a document of `np` pages (1 or 2). Answers `model-check`'s verdict.
+    return tt_run_an(wd, ln, et, pa, t, np, &mut crate::port::Cells::new());
 }
 pub(crate) fn tt_run(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, pa: &mut crate::port::Cells, mut t: &mut String) -> i32 {
     // Tables, then paragraphs, then the brief of the Model. Answers `model-check`'s verdict.
@@ -315,6 +320,70 @@ fn test_a_lattice_is_a_table_and_a_missing_rule_is_a_span() {
     tt_word(wd, ln, et, &crate::testport::text_blob("Outro")[..], 7200, 17200, 10200, 18000, 0);
     crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "lattice: well formed");
     crate::testport::assert_text(t, "P[Intro];T3r;Gh;R;Ch[Item];Ch[Qty];Ch[Price];Gb;R;C[Bolt];C[10];C[2.50];R;C[Total];Cc2[12.50];P[Outro];", "a 3 x 3 lattice with its last row's two cells joined: header, body, and the paragraphs around it");
+}
+pub(crate) fn tt_widget(mut an: &mut crate::port::Cells, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
+    // One text field's widget of page 1 as a row of `an` (38 cells: 0 the page, 0 based, 1 the subtype `an-field`, 4-7 the rectangle).
+    let mut k: i32 = 0;
+    while k < 38 {
+        crate::port::cells_push(an, 0);
+        k += 1;
+    }
+    let r: i32 = (crate::port::cells_len(an) / 38) - 1;
+    crate::port::cells_set(an, (r * 38) + 1, an_field());
+    crate::port::cells_set(an, (r * 38) + 4, x0);
+    crate::port::cells_set(an, (r * 38) + 5, y0);
+    crate::port::cells_set(an, (r * 38) + 6, x1);
+    crate::port::cells_set(an, (r * 38) + 7, y1);
+    return 0;
+}
+pub(crate) fn tt_form_page(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut pa: &mut crate::port::Cells) -> i32 {
+    // A form's page: a header row and a footer row of text across the page, and between them six labels in one open cell (no rule between them) and a column of six boxes, ruled.
+    tt_rule(pa, 7200, 9950, 37200, 10050);
+    tt_rule(pa, 7200, 11950, 37200, 12050);
+    tt_rule(pa, 27200, 13950, 37200, 14050);
+    tt_rule(pa, 27200, 15950, 37200, 16050);
+    tt_rule(pa, 27200, 17950, 37200, 18050);
+    tt_rule(pa, 27200, 19950, 37200, 20050);
+    tt_rule(pa, 27200, 21950, 37200, 22050);
+    tt_rule(pa, 7200, 23950, 37200, 24050);
+    tt_rule(pa, 7200, 25950, 37200, 26050);
+    tt_rule(pa, 7150, 10000, 7250, 26000);
+    tt_rule(pa, 27150, 10000, 27250, 26000);
+    tt_rule(pa, 37150, 10000, 37250, 26000);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Item")[..], 7600, 10600, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Amount")[..], 27600, 10600, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Wages")[..], 7600, 12600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Interest")[..], 7600, 14600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Rents")[..], 7600, 16600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Royalties")[..], 7600, 18600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Dividends")[..], 7600, 20600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Other")[..], 7600, 22600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Total")[..], 7600, 24600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Sum")[..], 27600, 24600, 0, 0);
+    return 0;
+}
+#[test]
+fn test_the_boxes_of_a_forms_fields_are_not_a_table() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let an: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    let t2: &mut String = &mut crate::port::new_text();
+    // D1630 (smoke review A issue 10): the page of a form: its labels in one open cell and a column of boxes, which are the fields' widgets. Without fields it is a table; with a widget in
+    // each of its six empty cells (more than the cells with text) the rules are the fields' boxes and the labels are the page's lines, to which the fields go (`emon.fields`).
+    tt_form_page(wd, ln, et, pa);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "no fields: well formed");
+    crate::testport::assert_text(t, "T2r;Gh;R;Ch[Item];Ch[Amount];Gb;R;Cr6s[Wages Interest Rents Royalties Dividends Other];C[];R;C[];R;C[];R;C[];R;C[];R;C[];R;Cs[Total];C[Sum];", "a ruled grid: the label cell spans six rows");
+    tt_widget(an, 27800, 12300, 36600, 13700);
+    tt_widget(an, 27800, 14300, 36600, 15700);
+    tt_widget(an, 27800, 16300, 36600, 17700);
+    tt_widget(an, 27800, 18300, 36600, 19700);
+    tt_widget(an, 27800, 20300, 36600, 21700);
+    tt_widget(an, 27800, 22300, 36600, 23700);
+    crate::testport::assert_eq(tt_run_an(wd, ln, et, pa, t2, 1, an), 0, "fields: well formed");
+    crate::testport::assert_text(t2, "T2p;Gh;R;Chs[Item];Ch[Amount];Gb;R;Cs[Wages];C[];R;Cs[Interest];C[];R;Cs[Rents];C[];R;Cs[Royalties];C[];R;Cs[Dividends];C[];R;Cs[Other];C[];R;Cs[Total];C[Sum];", "the page's boxes are no lattice: each label has its own row and the field goes in it, not one cell that holds all the labels");
 }
 #[test]
 fn test_columns_of_whitespace_are_a_table_and_prose_columns_are_not() {
@@ -1730,7 +1799,7 @@ pub(crate) fn tt_golden(pdf: &[u8], mut t: &mut String, mut tvt: &mut String) ->
     pa_pages(pg, pages);
     let np: i32 = crate::port::cells_len(pages) / 16;
     gf_doc(pa, pts, mk, im, np, gfx_mode(), grl, gfl, cand, &mut crate::port::Cells::new());
-    tb_build(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e);
+    tb_build(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, &mut crate::port::Cells::new());
     tt_emit(tvt, t12e);
     lc_copy(ln, lt);
     in_detect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii);

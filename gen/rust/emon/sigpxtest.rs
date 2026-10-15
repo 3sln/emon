@@ -149,6 +149,38 @@ fn test_no_rule_a_short_rule_and_the_wrong_ink_are_no_signature() {
     }
     crate::testport::assert_eq(spx_find(rules, ow, et, b, cand), 0, "a block of ink is a picture, not a pen");
 }
+pub(crate) fn spx_dashes(b: &crate::port::Bitmap, x0: i32, x1: i32, y: i32) -> i32 {
+    // A dashed straight line: dashes of 6 pixels, 3 apart, two thick.
+    let mut x: i32 = x0;
+    while x < x1 {
+        if ((x - x0) % 9) < 6 {
+            spx_dot(b, x, y, 2, 120, 120, 120);
+        }
+        x += 1;
+    }
+    return 0;
+}
+#[test]
+fn test_stacked_dashed_write_in_lines_are_no_signature() {
+    let b: &crate::port::Bitmap = &crate::port::bitmap_new(300, 120, 3);
+    let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    // D1630 (smoke review A issue 16): three dashed lines over a rule (a form's write-in lines) make as long a path as a pen's loops do, in a box a pen's size; no pen draws a straight line
+    spx_paper(b);
+    spx_line(b, 20, 280, 100);
+    spx_dashes(b, 40, 250, 60);
+    spx_dashes(b, 40, 250, 74);
+    spx_dashes(b, 40, 250, 88);
+    spx_rule(rules, 20, 280, 100);
+    crate::testport::assert_eq(spx_find(rules, ow, et, b, cand), 0, "dashed lines are no signature");
+    // the pen over the same rule still is one
+    spx_paper(b);
+    spx_line(b, 20, 280, 100);
+    spx_zig(b, 40, 98, 150, 24, 36, 20, 40, 120);
+    crate::testport::assert_eq(spx_find(rules, ow, et, b, cand), 1, "a pen is");
+}
 #[test]
 fn test_a_word_ocr_was_sure_of_is_paper() {
     let b: &crate::port::Bitmap = &crate::port::bitmap_new(300, 120, 3);

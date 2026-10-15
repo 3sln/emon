@@ -13,6 +13,7 @@ import (
 	"emon/model"
 	"emon/mscript"
 	"emon/para"
+	"emon/pdfannot"
 	"emon/pdfcontent"
 	"emon/pdfdoc"
 	"emon/pdfmeta"
@@ -222,8 +223,8 @@ func ttBrief(t *strings.Builder, nodes *port.Cells, attrs *port.Cells, text *por
 	return 0
 }
 
-func ttRunN(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *strings.Builder, np int32) int32 {
-	// Tables, then paragraphs, then the brief of the Model, of a document of `np` pages (1 or 2). Answers `model-check`'s verdict.
+func ttRunAn(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *strings.Builder, np int32, an *port.Cells) int32 {
+	// `tt-run-n` over a document whose annotations (rows of `an`, `AN_STRIDE` cells) are `an`: the form fields' widgets (D1630).
 	var nodes *port.Cells = port.NewCells()
 	var attrs *port.Cells = port.NewCells()
 	var regions *port.Cells = port.NewCells()
@@ -302,11 +303,16 @@ func ttRunN(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *s
 		model.PageNew(pages, 2, 61200, 79200, 0, model.PkVector())
 	}
 	gfuse.GfDoc(pa, gpts, gmk, gim, np, gfuse.GfxMode(), grl, gfl, cand, port.NewCells())
-	table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e)
+	table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an)
 	columns.LcCopy(ln, lt)
 	para.PaBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al)
 	ttBrief(t, nodes, attrs, text)
 	return model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st)
+}
+
+func ttRunN(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *strings.Builder, np int32) int32 {
+	// Tables, then paragraphs, then the brief of the Model, of a document of `np` pages (1 or 2). Answers `model-check`'s verdict.
+	return ttRunAn(wd, ln, et, pa, t, np, port.NewCells())
 }
 
 func ttRun(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *strings.Builder) int32 {
@@ -333,6 +339,72 @@ func TestALatticeIsATableAndAMissingRuleIsASpan(emonT *testing.T) {
 	ttWord(wd, ln, et, port.TextBlob("Outro"), 7200, 17200, 10200, 18000, 0)
 	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "lattice: well formed")
 	port.AssertText(emonT, t, "P[Intro];T3r;Gh;R;Ch[Item];Ch[Qty];Ch[Price];Gb;R;C[Bolt];C[10];C[2.50];R;C[Total];Cc2[12.50];P[Outro];", "a 3 x 3 lattice with its last row's two cells joined: header, body, and the paragraphs around it")
+}
+
+func ttWidget(an *port.Cells, x0 int32, y0 int32, x1 int32, y1 int32) int32 {
+	// One text field's widget of page 1 as a row of `an` (38 cells: 0 the page, 0 based, 1 the subtype `an-field`, 4-7 the rectangle).
+	var k int32 = 0
+	for k < 38 {
+		port.CellsPush(an, 0)
+		k += 1
+	}
+	var r int32 = (port.CellsLen(an) / 38) - 1
+	port.CellsSet(an, (r*38)+1, pdfannot.AnField())
+	port.CellsSet(an, (r*38)+4, x0)
+	port.CellsSet(an, (r*38)+5, y0)
+	port.CellsSet(an, (r*38)+6, x1)
+	port.CellsSet(an, (r*38)+7, y1)
+	return 0
+}
+
+func ttFormPage(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells) int32 {
+	// A form's page: a header row and a footer row of text across the page, and between them six labels in one open cell (no rule between them) and a column of six boxes, ruled.
+	ttRule(pa, 7200, 9950, 37200, 10050)
+	ttRule(pa, 7200, 11950, 37200, 12050)
+	ttRule(pa, 27200, 13950, 37200, 14050)
+	ttRule(pa, 27200, 15950, 37200, 16050)
+	ttRule(pa, 27200, 17950, 37200, 18050)
+	ttRule(pa, 27200, 19950, 37200, 20050)
+	ttRule(pa, 27200, 21950, 37200, 22050)
+	ttRule(pa, 7200, 23950, 37200, 24050)
+	ttRule(pa, 7200, 25950, 37200, 26050)
+	ttRule(pa, 7150, 10000, 7250, 26000)
+	ttRule(pa, 27150, 10000, 27250, 26000)
+	ttRule(pa, 37150, 10000, 37250, 26000)
+	ttAt(wd, ln, et, port.TextBlob("Item"), 7600, 10600, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Amount"), 27600, 10600, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Wages"), 7600, 12600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Interest"), 7600, 14600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Rents"), 7600, 16600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Royalties"), 7600, 18600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Dividends"), 7600, 20600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Other"), 7600, 22600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Total"), 7600, 24600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Sum"), 27600, 24600, 0, 0)
+	return 0
+}
+
+func TestTheBoxesOfAFormsFieldsAreNotATable(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var an *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	var t2 *strings.Builder = port.NewText()
+	// D1630 (smoke review A issue 10): the page of a form: its labels in one open cell and a column of boxes, which are the fields' widgets. Without fields it is a table; with a widget in
+	// each of its six empty cells (more than the cells with text) the rules are the fields' boxes and the labels are the page's lines, to which the fields go (`emon.fields`).
+	ttFormPage(wd, ln, et, pa)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "no fields: well formed")
+	port.AssertText(emonT, t, "T2r;Gh;R;Ch[Item];Ch[Amount];Gb;R;Cr6s[Wages Interest Rents Royalties Dividends Other];C[];R;C[];R;C[];R;C[];R;C[];R;C[];R;Cs[Total];C[Sum];", "a ruled grid: the label cell spans six rows")
+	ttWidget(an, 27800, 12300, 36600, 13700)
+	ttWidget(an, 27800, 14300, 36600, 15700)
+	ttWidget(an, 27800, 16300, 36600, 17700)
+	ttWidget(an, 27800, 18300, 36600, 19700)
+	ttWidget(an, 27800, 20300, 36600, 21700)
+	ttWidget(an, 27800, 22300, 36600, 23700)
+	port.AssertEq(emonT, ttRunAn(wd, ln, et, pa, t2, 1, an), 0, "fields: well formed")
+	port.AssertText(emonT, t2, "T2p;Gh;R;Chs[Item];Ch[Amount];Gb;R;Cs[Wages];C[];R;Cs[Interest];C[];R;Cs[Rents];C[];R;Cs[Royalties];C[];R;Cs[Dividends];C[];R;Cs[Other];C[];R;Cs[Total];C[Sum];", "the page's boxes are no lattice: each label has its own row and the field goes in it, not one cell that holds all the labels")
 }
 
 func TestColumnsOfWhitespaceAreATableAndProseColumnsAreNot(emonT *testing.T) {
@@ -1775,7 +1847,7 @@ func ttGolden(pdf []byte, t *strings.Builder, tvt *strings.Builder) int32 {
 	para.PaPages(pg, pages)
 	var np int32 = port.CellsLen(pages) / 16
 	gfuse.GfDoc(pa, pts, mk, im, np, gfuse.GfxMode(), grl, gfl, cand, port.NewCells())
-	table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e)
+	table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, port.NewCells())
 	tagtable.TtEmit(tvt, t12e)
 	columns.LcCopy(ln, lt)
 	initial.InDetect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii)
