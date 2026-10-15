@@ -772,9 +772,11 @@ pub(crate) fn nt_find_ref(rf: &mut crate::port::Cells, nb: &mut crate::port::Cel
 pub(crate) fn nt_small_to_end(ln: &mut crate::port::Cells, sf: &mut crate::port::Cells, l: i32, bsz: i32) -> i32 {
     // D1630 (smoke review B issue 9): 1 when no line on line l's page, upright and at or below its top, is set in the body's size (over 96 per cent of `bsz`): everything from l to
     // the foot of the page is small type, the shape of a footnote block (the rule above it and the body above that are what the notes stage cannot see).
+    // And there is body type ABOVE it on the page (a page of nothing but small type is a list of references, not a page with a footnote at its foot).
     let n: i32 = ln_count(ln);
     let p: i32 = ln_get(ln, l, lh_page());
     let y: i32 = ln_get(ln, l, lh_y0());
+    let mut above: i32 = 0;
     let mut q: i32 = 0;
     if bsz <= 0 {
         return 0;
@@ -786,12 +788,32 @@ pub(crate) fn nt_small_to_end(ln: &mut crate::port::Cells, sf: &mut crate::port:
                     return 0;
                 }
             }
+            if ls_upright(ln, q) && (ln_get(ln, q, lh_y0()) < (y - 100)) {
+                if (ls_line_size(sf, ln, q) * 100) > (bsz * 96) {
+                    above = 1;
+                }
+            }
         }
         q += 1;
     }
-    return 1;
+    return above;
 }
-pub(crate) fn nt_foot(ln: &mut crate::port::Cells, sf: &mut crate::port::Cells, mut rf: &mut crate::port::Cells, mut nb: &mut crate::port::Cells, mk: &mut crate::port::Cells, i: i32) -> i32 {
+pub(crate) fn nt_plain_peers(nb: &mut crate::port::Cells, i: i32) -> i32 {
+    // D1630: how many note body candidates on candidate i's page are small lines in the lower half with a plain marker (the same test as `nt-foot`'s fallback): a list of references or of
+    // numbered items in small type has many, a footnote block a few.
+    let nn: i32 = crate::port::cells_len(nb) / NT_NB;
+    let pg: i32 = crate::port::cells_at(nb, (i * NT_NB) + 1);
+    let mut j: i32 = 0;
+    let mut n: i32 = 0;
+    while j < nn {
+        if (crate::port::cells_at(nb, (j * NT_NB) + 1) == pg) && ((crate::port::cells_at(nb, (j * NT_NB) + 3) == 2) && ((crate::port::cells_at(nb, (j * NT_NB) + 8) == 1) && (crate::port::cells_at(nb, (j * NT_NB) + 9) == 1))) {
+            n += 1;
+        }
+        j += 1;
+    }
+    return n;
+}
+pub(crate) fn nt_foot(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, ln: &mut crate::port::Cells, sf: &mut crate::port::Cells, mut rf: &mut crate::port::Cells, mut nb: &mut crate::port::Cells, mk: &mut crate::port::Cells, i: i32) -> i32 {
     // Is note body candidate i a footnote? In the lower half of the page (the band) and small or marked in superscript,
     // with a reference on its page; or small, with a reference on the page before (a note a column or a page break pushed
     // on); or marked in superscript, small and in the band, with no reference at all. Marks the candidate (state 1) and the
@@ -821,16 +843,20 @@ pub(crate) fn nt_foot(ln: &mut crate::port::Cells, sf: &mut crate::port::Cells, 
     }
     // D1630: a plain marker (a lone number or symbol) on a small line in the lower half of the page, with only small type from it to the page's foot, is a footnote's whatever the text
     // says (a superscript the text layer did not mark, a reference no glyph run showed)
+    // not a bracketed number (`[12]` is a reference list's), and not one of more than five on its page (a list)
     if (kind == 2) && ((szok == 1) && (band == 1)) {
         let bsz: i32 = st_hget(sf, sfh_size());
-        if nt_small_to_end(ln, sf, crate::port::cells_at(nb, b), bsz) == 1 {
-            crate::port::cells_set(nb, b + 7, 1);
-            return 1;
+        let w: i32 = crate::port::cells_at(nb, b + 2);
+        if (ls_wc(wd, et, w, 0) != 91) && (nt_plain_peers(nb, i) <= 5) {
+            if nt_small_to_end(ln, sf, crate::port::cells_at(nb, b), bsz) == 1 {
+                crate::port::cells_set(nb, b + 7, 1);
+                return 1;
+            }
         }
     }
     return 0;
 }
-pub(crate) fn nt_match(ln: &mut crate::port::Cells, sf: &mut crate::port::Cells, mut rf: &mut crate::port::Cells, mut nb: &mut crate::port::Cells, mk: &mut crate::port::Cells, nhl: i32) -> i32 {
+pub(crate) fn nt_match(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, ln: &mut crate::port::Cells, sf: &mut crate::port::Cells, mut rf: &mut crate::port::Cells, mut nb: &mut crate::port::Cells, mk: &mut crate::port::Cells, nhl: i32) -> i32 {
     // Decide which candidates are notes. State 1: a footnote (a body in the lower half of the page, set smaller than
     // the body text or marked in superscript, with a reference on its page; a superscript marker alone is enough when
     // the line is also smaller). State 2: an endnote (a reference earlier in the document: for a superscript marker
@@ -840,7 +866,7 @@ pub(crate) fn nt_match(ln: &mut crate::port::Cells, sf: &mut crate::port::Cells,
     let mut r: i32 = 0;
     let mut tent: i32 = 0;
     while i < nn {
-        nt_foot(ln, sf, rf, nb, mk, i);
+        nt_foot(wd, et, ln, sf, rf, nb, mk, i);
         i += 1;
     }
     // endnotes: a superscript marker with an earlier reference at once, a plain number when there are two
@@ -1244,7 +1270,7 @@ pub fn nt_analyze(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cel
     }
     nt_scan(wd, ln, et, gl, sf, pages, hc, rf, nb, mk);
     nhl = nt_first_notes_heading(wd, ln, et, hc, rf);
-    nt_match(ln, sf, rf, nb, mk, nhl);
+    nt_match(wd, et, ln, sf, rf, nb, mk, nhl);
     nt_markerless(wd, et, ln, sf, hc, rf, mk);
     l = 0;
     while l < (crate::port::cells_len(nb) / NT_NB) {

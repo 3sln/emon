@@ -591,19 +591,37 @@
 (defn ^I32 nt-small-to-end [^Cells ln ^Cells sf ^I32 l ^I32 bsz]
   (comment "D1630 (smoke review B issue 9): 1 when no line on line l's page, upright and at or below its top, is set in the body's size (over 96 per cent of `bsz`): everything from l to")
   (comment "the foot of the page is small type, the shape of a footnote block (the rule above it and the body above that are what the notes stage cannot see).")
+  (comment "And there is body type ABOVE it on the page (a page of nothing but small type is a list of references, not a page with a footnote at its foot).")
   (let [^I32 n (ln-count ln)
         ^I32 p (ln-get ln l (lh-page))
         ^I32 y (ln-get ln l (lh-y0))
+        ^:mut ^I32 above 0
         ^:mut ^I32 q 0]
     (if (<= bsz 0) (return 0))
     (while (< q n)
       (do (if (and (!= q l) (== (ln-get ln q (lh-page)) p))
             (do (if (and (ls-upright ln q) (>= (ln-get ln q (lh-y0)) (- y 100)))
-                  (do (if (> (* (ls-line-size sf ln q) 100) (* bsz 96)) (return 0))))))
+                  (do (if (> (* (ls-line-size sf ln q) 100) (* bsz 96)) (return 0))))
+                (if (and (ls-upright ln q) (< (ln-get ln q (lh-y0)) (- y 100)))
+                  (do (if (> (* (ls-line-size sf ln q) 100) (* bsz 96)) (set above 1))))))
           (set q (+ q 1))))
-    (return 1)))
+    (return above)))
 
-(defn ^I32 nt-foot [^Cells ln ^Cells sf ^:mut ^Cells rf ^:mut ^Cells nb ^Cells mk ^I32 i]
+(defn ^I32 nt-plain-peers [^Cells nb ^I32 i]
+  (comment "D1630: how many note body candidates on candidate i's page are small lines in the lower half with a plain marker (the same test as `nt-foot`'s fallback): a list of references or of")
+  (comment "numbered items in small type has many, a footnote block a few.")
+  (let [^I32 nn (quot (cells-len nb) NT_NB)
+        ^I32 pg (cells-at nb (+ (* i NT_NB) 1))
+        ^:mut ^I32 j 0
+        ^:mut ^I32 n 0]
+    (while (< j nn)
+      (do (if (and (== (cells-at nb (+ (* j NT_NB) 1)) pg) (and (== (cells-at nb (+ (* j NT_NB) 3)) 2)
+                   (and (== (cells-at nb (+ (* j NT_NB) 8)) 1) (== (cells-at nb (+ (* j NT_NB) 9)) 1))))
+            (set n (+ n 1)))
+          (set j (+ j 1))))
+    (return n)))
+
+(defn ^I32 nt-foot [^Cells wd ^Cells et ^Cells ln ^Cells sf ^:mut ^Cells rf ^:mut ^Cells nb ^Cells mk ^I32 i]
   (comment "Is note body candidate i a footnote? In the lower half of the page (the band) and small or marked in superscript,")
   (comment "with a reference on its page; or small, with a reference on the page before (a note a column or a page break pushed")
   (comment "on); or marked in superscript, small and in the band, with no reference at all. Marks the candidate (state 1) and the")
@@ -627,14 +645,17 @@
           (return 1)))
     (comment "D1630: a plain marker (a lone number or symbol) on a small line in the lower half of the page, with only small type from it to the page's foot, is a footnote's whatever the text")
     (comment "says (a superscript the text layer did not mark, a reference no glyph run showed)")
+    (comment "not a bracketed number (`[12]` is a reference list's), and not one of more than five on its page (a list)")
     (if (and (== kind 2) (and (== szok 1) (== band 1)))
-      (do (let [^I32 bsz (st-hget sf (sfh-size))]
-            (if (== (nt-small-to-end ln sf (cells-at nb b) bsz) 1)
-              (do (cells-set nb (+ b 7) 1)
-                  (return 1))))))
+      (do (let [^I32 bsz (st-hget sf (sfh-size))
+                ^I32 w (cells-at nb (+ b 2))]
+            (if (and (!= (ls-wc wd et w 0) 91) (<= (nt-plain-peers nb i) 5))
+              (do (if (== (nt-small-to-end ln sf (cells-at nb b) bsz) 1)
+                    (do (cells-set nb (+ b 7) 1)
+                        (return 1))))))))
     (return 0)))
 
-(defn ^I32 nt-match [^Cells ln ^Cells sf ^:mut ^Cells rf ^:mut ^Cells nb ^Cells mk ^I32 nhl]
+(defn ^I32 nt-match [^Cells wd ^Cells et ^Cells ln ^Cells sf ^:mut ^Cells rf ^:mut ^Cells nb ^Cells mk ^I32 nhl]
   (comment "Decide which candidates are notes. State 1: a footnote (a body in the lower half of the page, set smaller than")
   (comment "the body text or marked in superscript, with a reference on its page; a superscript marker alone is enough when")
   (comment "the line is also smaller). State 2: an endnote (a reference earlier in the document: for a superscript marker")
@@ -644,7 +665,7 @@
         ^:mut ^I32 r 0
         ^:mut ^I32 tent 0]
     (while (< i nn)
-      (do (nt-foot ln sf rf nb mk i)
+      (do (nt-foot wd et ln sf rf nb mk i)
           (set i (+ i 1))))
     (comment "endnotes: a superscript marker with an earlier reference at once, a plain number when there are two")
     (set i 0)
@@ -955,7 +976,7 @@
           (set l (+ l 1))))
     (nt-scan wd ln et gl sf pages hc rf nb mk)
     (set nhl (nt-first-notes-heading wd ln et hc rf))
-    (nt-match ln sf rf nb mk nhl)
+    (nt-match wd et ln sf rf nb mk nhl)
     (nt-markerless wd et ln sf hc rf mk)
     (set l 0)
     (while (< l (quot (cells-len nb) NT_NB))

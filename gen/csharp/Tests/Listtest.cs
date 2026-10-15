@@ -479,6 +479,37 @@ public static class Listtest {
         LtLine(wd2, ln2, et2, emon.Testport.TextBlob(""), emon.Testport.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 73000);
         LtNotesPages(wd2, ln2, et2, sf2, sc2, hc2);
         emon.Testport.AssertEq(Lists.LsGet(hc2, 5, Lists.LsKFlags()), 0, "body type under it: no note");
+        // a list of references in small type at the foot of a page of body text is no list of notes: a bracketed number is a reference's, and six numbers in a row are a list's
+        emon.Port.Cells wd3 = emon.Port.NewCells();
+        emon.Port.Cells ln3 = emon.Port.NewCells();
+        emon.Port.Cells et3 = emon.Port.NewCells();
+        emon.Port.Cells sf3 = emon.Port.NewCells();
+        emon.Port.Cells sc3 = emon.Port.NewCells();
+        emon.Port.Cells hc3 = emon.Port.NewCells();
+        emon.Port.Cells wd4 = emon.Port.NewCells();
+        emon.Port.Cells ln4 = emon.Port.NewCells();
+        emon.Port.Cells et4 = emon.Port.NewCells();
+        emon.Port.Cells sf4 = emon.Port.NewCells();
+        emon.Port.Cells sc4 = emon.Port.NewCells();
+        emon.Port.Cells hc4 = emon.Port.NewCells();
+        LtBody3(wd3, ln3, et3);
+        LtLine(wd3, ln3, et3, emon.Testport.TextBlob(""), emon.Testport.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 9200);
+        LtLine(wd3, ln3, et3, emon.Testport.TextBlob(""), emon.Testport.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 10600);
+        LtSmall(wd3, ln3, et3, emon.Testport.TextBlob("[1]"), emon.Testport.TextBlob("Fine-tuning code and pre-trained models are"), 70000, 800);
+        LtSmall(wd3, ln3, et3, emon.Testport.TextBlob("[2]"), emon.Testport.TextBlob("available at the address of the project page"), 71200, 800);
+        LtNotesPages(wd3, ln3, et3, sf3, sc3, hc3);
+        emon.Testport.AssertEq(Lists.LsGet(hc3, 5, Lists.LsKFlags()), 0, "a bracketed number is a reference's");
+        LtBody3(wd4, ln4, et4);
+        LtLine(wd4, ln4, et4, emon.Testport.TextBlob(""), emon.Testport.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 9200);
+        LtLine(wd4, ln4, et4, emon.Testport.TextBlob(""), emon.Testport.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 10600);
+        LtSmall(wd4, ln4, et4, emon.Testport.TextBlob("1"), emon.Testport.TextBlob("Fine-tuning code and pre-trained models are"), 70000, 800);
+        LtSmall(wd4, ln4, et4, emon.Testport.TextBlob("2"), emon.Testport.TextBlob("available at the address of the project page"), 71200, 800);
+        LtSmall(wd4, ln4, et4, emon.Testport.TextBlob("3"), emon.Testport.TextBlob("available at the address of the project page"), 72400, 800);
+        LtSmall(wd4, ln4, et4, emon.Testport.TextBlob("4"), emon.Testport.TextBlob("available at the address of the project page"), 73600, 800);
+        LtSmall(wd4, ln4, et4, emon.Testport.TextBlob("5"), emon.Testport.TextBlob("available at the address of the project page"), 74800, 800);
+        LtSmall(wd4, ln4, et4, emon.Testport.TextBlob("6"), emon.Testport.TextBlob("available at the address of the project page"), 76000, 800);
+        LtNotesPages(wd4, ln4, et4, sf4, sc4, hc4);
+        emon.Testport.AssertEq(Lists.LsGet(hc4, 5, Lists.LsKFlags()), 0, "six numbers in a row in small type are a list");
     }
     internal static int LtItem(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, int parent, byte[] marker, byte[] body, int scheme, int value, int x) {
         // An `item` of the old Model under parent: its marker, text, scheme (`sub`), value (`aux`), text x (`fk-box`).

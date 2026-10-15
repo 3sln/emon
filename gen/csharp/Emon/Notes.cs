@@ -770,9 +770,11 @@ public static class Notes {
     internal static int NtSmallToEnd(emon.Port.Cells ln, emon.Port.Cells sf, int l, int bsz) {
         // D1630 (smoke review B issue 9): 1 when no line on line l's page, upright and at or below its top, is set in the body's size (over 96 per cent of `bsz`): everything from l to
         // the foot of the page is small type, the shape of a footnote block (the rule above it and the body above that are what the notes stage cannot see).
+        // And there is body type ABOVE it on the page (a page of nothing but small type is a list of references, not a page with a footnote at its foot).
         int n = Evidence.LnCount(ln);
         int p = Evidence.LnGet(ln, l, Evidence.LhPage());
         int y = Evidence.LnGet(ln, l, Evidence.LhY0());
+        int above = 0;
         int q = 0;
         if (bsz <= 0) {
             return 0;
@@ -784,12 +786,32 @@ public static class Notes {
                         return 0;
                     }
                 }
+                if (Lists.LsUpright(ln, q) && (Evidence.LnGet(ln, q, Evidence.LhY0()) < (y - 100))) {
+                    if ((Lists.LsLineSize(sf, ln, q) * 100) > (bsz * 96)) {
+                        above = 1;
+                    }
+                }
             }
             q += 1;
         }
-        return 1;
+        return above;
     }
-    internal static int NtFoot(emon.Port.Cells ln, emon.Port.Cells sf, emon.Port.Cells rf, emon.Port.Cells nb, emon.Port.Cells mk, int i) {
+    internal static int NtPlainPeers(emon.Port.Cells nb, int i) {
+        // D1630: how many note body candidates on candidate i's page are small lines in the lower half with a plain marker (the same test as `nt-foot`'s fallback): a list of references or of
+        // numbered items in small type has many, a footnote block a few.
+        int nn = emon.Port.CellsLen(nb) / NtNb;
+        int pg = emon.Port.CellsAt(nb, (i * NtNb) + 1);
+        int j = 0;
+        int n = 0;
+        while (j < nn) {
+            if ((emon.Port.CellsAt(nb, (j * NtNb) + 1) == pg) && ((emon.Port.CellsAt(nb, (j * NtNb) + 3) == 2) && ((emon.Port.CellsAt(nb, (j * NtNb) + 8) == 1) && (emon.Port.CellsAt(nb, (j * NtNb) + 9) == 1)))) {
+                n += 1;
+            }
+            j += 1;
+        }
+        return n;
+    }
+    internal static int NtFoot(emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells ln, emon.Port.Cells sf, emon.Port.Cells rf, emon.Port.Cells nb, emon.Port.Cells mk, int i) {
         // Is note body candidate i a footnote? In the lower half of the page (the band) and small or marked in superscript,
         // with a reference on its page; or small, with a reference on the page before (a note a column or a page break pushed
         // on); or marked in superscript, small and in the band, with no reference at all. Marks the candidate (state 1) and the
@@ -819,16 +841,20 @@ public static class Notes {
         }
         // D1630: a plain marker (a lone number or symbol) on a small line in the lower half of the page, with only small type from it to the page's foot, is a footnote's whatever the text
         // says (a superscript the text layer did not mark, a reference no glyph run showed)
+        // not a bracketed number (`[12]` is a reference list's), and not one of more than five on its page (a list)
         if ((kind == 2) && ((szok == 1) && (band == 1))) {
             int bsz = Style.StHget(sf, Style.SfhSize());
-            if (NtSmallToEnd(ln, sf, emon.Port.CellsAt(nb, b), bsz) == 1) {
-                emon.Port.CellsSet(nb, b + 7, 1);
-                return 1;
+            int w = emon.Port.CellsAt(nb, b + 2);
+            if ((Lists.LsWc(wd, et, w, 0) != 91) && (NtPlainPeers(nb, i) <= 5)) {
+                if (NtSmallToEnd(ln, sf, emon.Port.CellsAt(nb, b), bsz) == 1) {
+                    emon.Port.CellsSet(nb, b + 7, 1);
+                    return 1;
+                }
             }
         }
         return 0;
     }
-    internal static int NtMatch(emon.Port.Cells ln, emon.Port.Cells sf, emon.Port.Cells rf, emon.Port.Cells nb, emon.Port.Cells mk, int nhl) {
+    internal static int NtMatch(emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells ln, emon.Port.Cells sf, emon.Port.Cells rf, emon.Port.Cells nb, emon.Port.Cells mk, int nhl) {
         // Decide which candidates are notes. State 1: a footnote (a body in the lower half of the page, set smaller than
         // the body text or marked in superscript, with a reference on its page; a superscript marker alone is enough when
         // the line is also smaller). State 2: an endnote (a reference earlier in the document: for a superscript marker
@@ -838,7 +864,7 @@ public static class Notes {
         int r = 0;
         int tent = 0;
         while (i < nn) {
-            NtFoot(ln, sf, rf, nb, mk, i);
+            NtFoot(wd, et, ln, sf, rf, nb, mk, i);
             i += 1;
         }
         // endnotes: a superscript marker with an earlier reference at once, a plain number when there are two
@@ -1242,7 +1268,7 @@ public static class Notes {
         }
         NtScan(wd, ln, et, gl, sf, pages, hc, rf, nb, mk);
         nhl = NtFirstNotesHeading(wd, ln, et, hc, rf);
-        NtMatch(ln, sf, rf, nb, mk, nhl);
+        NtMatch(wd, et, ln, sf, rf, nb, mk, nhl);
         NtMarkerless(wd, et, ln, sf, hc, rf, mk);
         l = 0;
         while (l < (emon.Port.CellsLen(nb) / NtNb)) {

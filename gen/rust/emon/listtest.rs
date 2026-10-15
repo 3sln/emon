@@ -483,6 +483,37 @@ fn test_a_small_numbered_block_at_the_foot_of_the_page_is_a_footnote_though_no_r
     lt_line(wd2, ln2, et2, &crate::testport::text_blob("")[..], &crate::testport::text_blob("lorem ipsum dolor sit amet consectetur")[..], 0, 7200, 73000);
     lt_notes_pages(wd2, ln2, et2, sf2, sc2, hc2);
     crate::testport::assert_eq(ls_get(hc2, 5, ls_k_flags()), 0, "body type under it: no note");
+    // a list of references in small type at the foot of a page of body text is no list of notes: a bracketed number is a reference's, and six numbers in a row are a list's
+    let wd3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let wd4: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln4: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et4: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf4: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc4: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc4: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    lt_body3(wd3, ln3, et3);
+    lt_line(wd3, ln3, et3, &crate::testport::text_blob("")[..], &crate::testport::text_blob("lorem ipsum dolor sit amet consectetur")[..], 0, 7200, 9200);
+    lt_line(wd3, ln3, et3, &crate::testport::text_blob("")[..], &crate::testport::text_blob("lorem ipsum dolor sit amet consectetur")[..], 0, 7200, 10600);
+    lt_small(wd3, ln3, et3, &crate::testport::text_blob("[1]")[..], &crate::testport::text_blob("Fine-tuning code and pre-trained models are")[..], 70000, 800);
+    lt_small(wd3, ln3, et3, &crate::testport::text_blob("[2]")[..], &crate::testport::text_blob("available at the address of the project page")[..], 71200, 800);
+    lt_notes_pages(wd3, ln3, et3, sf3, sc3, hc3);
+    crate::testport::assert_eq(ls_get(hc3, 5, ls_k_flags()), 0, "a bracketed number is a reference's");
+    lt_body3(wd4, ln4, et4);
+    lt_line(wd4, ln4, et4, &crate::testport::text_blob("")[..], &crate::testport::text_blob("lorem ipsum dolor sit amet consectetur")[..], 0, 7200, 9200);
+    lt_line(wd4, ln4, et4, &crate::testport::text_blob("")[..], &crate::testport::text_blob("lorem ipsum dolor sit amet consectetur")[..], 0, 7200, 10600);
+    lt_small(wd4, ln4, et4, &crate::testport::text_blob("1")[..], &crate::testport::text_blob("Fine-tuning code and pre-trained models are")[..], 70000, 800);
+    lt_small(wd4, ln4, et4, &crate::testport::text_blob("2")[..], &crate::testport::text_blob("available at the address of the project page")[..], 71200, 800);
+    lt_small(wd4, ln4, et4, &crate::testport::text_blob("3")[..], &crate::testport::text_blob("available at the address of the project page")[..], 72400, 800);
+    lt_small(wd4, ln4, et4, &crate::testport::text_blob("4")[..], &crate::testport::text_blob("available at the address of the project page")[..], 73600, 800);
+    lt_small(wd4, ln4, et4, &crate::testport::text_blob("5")[..], &crate::testport::text_blob("available at the address of the project page")[..], 74800, 800);
+    lt_small(wd4, ln4, et4, &crate::testport::text_blob("6")[..], &crate::testport::text_blob("available at the address of the project page")[..], 76000, 800);
+    lt_notes_pages(wd4, ln4, et4, sf4, sc4, hc4);
+    crate::testport::assert_eq(ls_get(hc4, 5, ls_k_flags()), 0, "six numbers in a row in small type are a list");
 }
 pub(crate) fn lt_item(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut text: &mut crate::port::Cells, parent: i32, marker: &[u8], body: &[u8], scheme: i32, value: i32, x: i32) -> i32 {
     // An `item` of the old Model under parent: its marker, text, scheme (`sub`), value (`aux`), text x (`fk-box`).
