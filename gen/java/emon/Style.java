@@ -83,6 +83,9 @@ public final class Style {
     public static int sfkSibgap() {
         return 29;
     }
+    public static int sfkPure() {
+        return 31;
+    }
     public static int sfkX0() {
         return 14;
     }
@@ -259,6 +262,35 @@ public final class Style {
         }
         return best;
     }
+    public static int stPure(emon.Port.Cells wd, emon.Port.Cells ln, int l, int d) {
+        // D1620: how much of the line is set in the dominant word's style: the per cent of the line's code points whose word
+        // has the same bold, italic and mono bits as word d. A line that is 70 per cent bold has the style of its bold words (the
+        // dominant word), but it is a line with a bold phrase in it, not a bold line; 100 when it has no words with text.
+        if (d < 0) {
+            return 100;
+        }
+        int w0 = stLn(ln, l, Evidence.lhFirst());
+        int wn = stLn(ln, l, Evidence.lhCount());
+        int want = Evidence.wdGet(wd, d, Evidence.wfStyle()) & 67;
+        int k = 0;
+        int all = 0;
+        int same = 0;
+        while (k < wn) {
+            int ts = Evidence.wdGet(wd, w0 + k, Evidence.hdTstart());
+            int tl = Evidence.wdGet(wd, w0 + k, Evidence.hdTlen());
+            if ((ts >= 0) && (tl > 0)) {
+                all += tl;
+                if ((Evidence.wdGet(wd, w0 + k, Evidence.wfStyle()) & 67) == want) {
+                    same += tl;
+                }
+            }
+            k += 1;
+        }
+        if (all <= 0) {
+            return 100;
+        }
+        return (same * 100) / all;
+    }
     public static int stLineFeatures(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells gl, emon.Port.Cells sf, int l) {
         // Everything about line l that needs only the line: the dominant word's size, bits and colour; the
         // text's length, ends and case.
@@ -295,6 +327,7 @@ public final class Style {
             }
         }
         stPut(sf, l, sfkColor(), col);
+        stPut(sf, l, sfkPure(), stPure(wd, ln, l, d));
         while (k < wn) {
             int ts = Evidence.wdGet(wd, w0 + k, Evidence.hdTstart());
             int tl = Evidence.wdGet(wd, w0 + k, Evidence.hdTlen());

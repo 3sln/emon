@@ -266,6 +266,34 @@ public static class Normalizetest {
         emon.Testport.AssertEq(NtSame(@out, want), 1, "flags compose with NFC: fi + e-acute");
     }
     [Xunit.Fact]
+    public static void TestArabicPresentationFormsFoldToTheLettersWithTheLigatureFlag() {
+        // D1627 (smoke B I-15): a PDF draws the shaped glyph of an Arabic letter, so the text layer holds the presentation form
+        // (U+FE8D, isolated alef) for the letter (U+0627). NFKC on U+FB50..FDFF and U+FE70..FEFF alone: the letter, the ligature
+        // as its letters, a mark without the space UAX #15 puts before it; the ornate parentheses and everything else stay.
+        emon.Port.Cells src = emon.Port.NewCells();
+        emon.Port.Cells want = emon.Port.NewCells();
+        emon.Port.Cells @out = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        NtLit(emon.Testport.TextBlob("FE8D FEFB 61 FE70 FB50 FD3E FEF5"), src);
+        NtLit(emon.Testport.TextBlob("627 644 627 61 64B 671 FD3E 644 622"), want);
+        emon.Port.CellsDrop(@out, 0);
+        Normalize.NzNfc(src, 0, emon.Port.CellsLen(src), @out, tmp, 1);
+        emon.Testport.AssertEq(NtSame(@out, want), 1, "the forms fold with the ligature flag (isolated alef, lam-alef, fathatan, alef wasla, lam-alef-madda)");
+        emon.Port.CellsDrop(@out, 0);
+        Normalize.NzNfc(src, 0, emon.Port.CellsLen(src), @out, tmp, 0);
+        emon.Testport.AssertEq(NtSame(@out, src), 1, "and stay as they are without it");
+        NtLit(emon.Testport.TextBlob("FDFA"), src);
+        NtLit(emon.Testport.TextBlob("635 644 649 20 627 644 644 647 20 639 644 64A 647 20 648 633 644 645"), want);
+        emon.Port.CellsDrop(@out, 0);
+        Normalize.NzNfc(src, 0, emon.Port.CellsLen(src), @out, tmp, 5);
+        emon.Testport.AssertEq(NtSame(@out, want), 1, "the longest, a phrase of eighteen letters");
+        NtLit(emon.Testport.TextBlob("FEE3 FEEA 61 FE8E"), src);
+        NtLit(emon.Testport.TextBlob("645 647 61 627"), want);
+        emon.Port.CellsDrop(@out, 0);
+        Normalize.NzNfc(src, 0, emon.Port.CellsLen(src), @out, tmp, 1);
+        emon.Testport.AssertEq(NtSame(@out, want), 1, "initial meem, final heh, a Latin letter, final alef");
+    }
+    [Xunit.Fact]
     public static void TestASpanIsNormalizedAndOutputIsAppended() {
         emon.Port.Cells src = emon.Port.NewCells();
         emon.Port.Cells want = emon.Port.NewCells();

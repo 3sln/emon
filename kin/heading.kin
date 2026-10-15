@@ -47,7 +47,7 @@
                                 sfk-above sfk-below sfk-gap-above sfk-gap-below sfk-sib sfk-upright
                                 sfk-letters sfk-centered sfk-indent sfk-page sfk-x0 sfk-height
                                 sfk-head sfk-unit sfk-points st-set sfk-sibline sfk-nsib sfk-sibgap sfk-bucket
-                                sfk-ncol sfk-words
+                                sfk-ncol sfk-words sfk-pure
                                 sck-bits sck-caps sck-color sck-bucket]]
             [kin.lang :refer [defn defconst defdata return let set while if do comment
                               + - * < > <= >= == != and or not quot rem bit-and]]))
@@ -56,6 +56,7 @@
 (defconst ^I32 HD_MIN 4)            ;; a unit's score must reach this to be a heading
 (defconst ^I32 HD_MAXLINES 4)       ;; a heading wraps over at most this many lines
 (defconst ^I32 HD_MAXCPS 160)       ;; ... and has at most this many code points
+(defconst ^I32 HD_PURE 85)          ;; a line's weight or slant is a heading's only when this per cent of it is set in it (D575)
 (defconst ^I32 W_DEPTH 20)          ;; numbering depth: per level of mismatch, per class
 (defconst ^I32 W_PRIOR 20)          ;; an external prior: per level, per class, times its weight/1000
 (defconst ^I32 W_SKIP 4)            ;; a level skipped going down: per skipped level, per occurrence
@@ -82,6 +83,7 @@
 
 ;; the layout of `ws`
 (defconst ^I32 WS_VAR 8)
+(defconst ^I32 WS_FORM 15)          ;; 1: the document is a page of short lines (a receipt, an invoice, a form), D577
 (defconst ^I32 WS_LINES 24)
 (defconst ^I32 WS_HK 64)
 (defconst ^I32 HK_STRIDE 12)
@@ -295,7 +297,10 @@
         (do (let [^I32 c (hd-wc wd et w i)]
               (if (and (>= c 48) (<= c 57)) (set dig (+ dig 1))))
             (set i (+ i 1))))
-      (if (== dig (- n 2)) (return 1))
+      (comment "a number in brackets of three digits or more is an area code (`(202) 691-5902`), not an item's")
+      (if (== dig (- n 2))
+        (do (if (<= dig 2) (return 1))
+            (return 0)))
       (return (hd-letters wd et w 1 (- n 2))))))
 
 (defn ^I32 hd-kword [^Cells wd ^Cells et ^I32 w]
@@ -317,6 +322,100 @@
     (if (or (== up 0) (== lo 0)) (return 1))
     (return 0)))
 
+(defn ^I32 hd-kcaps [^Cells wd ^Cells et ^I32 w]
+  (comment "1 when the word has no lower case letter (a keyword in capitals: `NET`, `CHAPTER`).")
+  (let [^I32 n (hd-wl wd w)
+        ^:mut ^I32 i 0]
+    (while (< i n)
+      (do (if (st-lower (hd-wc wd et w i)) (return 0))
+          (set i (+ i 1))))
+    (return 1)))
+
+(defn ^I32 hd-frac2 [^Cells wd ^Cells et ^I32 w]
+  (comment "1 when the word is a number of two dotted components whose second is exactly two digits: `79.36`, `100.00`, an")
+  (comment "amount in cents (an outline's `1.10` is one too, which is why the caller asks for capitals).")
+  (let [^I32 n (hd-wl wd w)]
+    (if (or (< n 4) (!= (rem (hd-dec wd et w) 64) 2)) (return 0))
+    (if (== (hd-dec wd et w) (+ 2 64)) (return 0))
+    (if (!= (hd-wc wd et w (- n 3)) 46) (return 0))
+    (if (and (>= (hd-wc wd et w (- n 1)) 48) (<= (hd-wc wd et w (- n 1)) 57))
+      (if (and (>= (hd-wc wd et w (- n 2)) 48) (<= (hd-wc wd et w (- n 2)) 57)) (return 1)))
+    (return 0)))
+
+(defn ^I32 hd-split-decimal [^Cells wd ^Cells et ^I32 w ^I32 w2]
+  (comment "1 when the word is a whole number with a point at its end and the next word is one to three digits: an amount whose cents")
+  (comment "the engine put in a word of their own (`79.` `36`).")
+  (if (< w2 0) (return 0))
+  (let [^I32 n (hd-wl wd w)
+        ^I32 n2 (hd-wl wd w2)]
+    (if (!= (hd-dec wd et w) (+ 1 64)) (return 0))
+    (if (!= (hd-wc wd et w (- n 1)) 46) (return 0))
+    (if (and (== (hd-dec wd et w2) 1) (<= n2 3)) (return 1))
+    (return 0)))
+
+(defn ^I32 hd-figure-word [^Cells wd ^Cells et ^I32 w]
+  (comment "1 when the word is a figure: two digits or more, and between or around them only the marks , . / : - $ % (a date, an")
+  (comment "amount, a telephone number, a postcode).")
+  (let [^I32 n (hd-wl wd w)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 digs 0
+        ^:mut ^I32 ok 1]
+    (while (and (< i n) (== ok 1))
+      (do (let [^I32 c (hd-wc wd et w i)]
+            (if (and (>= c 48) (<= c 57))
+              (set digs (+ digs 1))
+              (if (or (== c 44) (or (== c 46) (or (== c 47) (or (== c 58) (or (== c 45) (or (== c 36) (== c 37)))))))
+                (set ok 1)
+                (set ok 0))))
+          (set i (+ i 1))))
+    (if (and (== ok 1) (>= digs 2)) (return 1))
+    (return 0)))
+
+(defn ^I32 hd-address-like [^Cells wd ^Cells ln ^Cells et ^I32 l]
+  (comment "D576: 1 when a line that opens with a bare number (no point, bracket or colon after it) is a street number, a quantity or")
+  (comment "a price rather than a section's number: the number has three digits (`567 Ortiz Valley`), or a figure (`Suite 979`,")
+  (comment "`9,000`) follows it, or a word that is not the last ends in a comma (`88 ROAD WAN CHAI, HONG KONG`).")
+  (let [^I32 w0 (hd-nth-word wd ln l 0)
+        ^I32 first (ln-get ln l (lh-first))
+        ^I32 end (+ first (ln-get ln l (lh-count)))
+        ^:mut ^I32 w (+ w0 1)]
+    (if (< w0 0) (return 0))
+    (if (>= (hd-wl wd w0) 3) (return 1))
+    (while (< w end)
+      (do (let [^I32 n (hd-wl wd w)]
+            (if (> n 0)
+              (do (if (== (hd-figure-word wd et w) 1) (return 1))
+                  (if (and (== (hd-wc wd et w (- n 1)) 44) (< (+ w 1) end)) (return 1)))))
+          (set w (+ w 1))))
+    (return 0)))
+
+(defn ^I32 hd-figures-after [^Cells wd ^Cells ln ^Cells et ^I32 l ^I32 k]
+  (comment "How many words of line l from its k-th word on are figures (`hd-figure-word`).")
+  (let [^I32 first (ln-get ln l (lh-first))
+        ^I32 end (+ first (ln-get ln l (lh-count)))
+        ^:mut ^I32 w first
+        ^:mut ^I32 seen 0
+        ^:mut ^I32 n 0]
+    (while (< w end)
+      (do (if (> (hd-wl wd w) 0)
+            (do (if (>= seen k)
+                  (if (== (hd-figure-word wd et w) 1) (set n (+ n 1))))
+                (set seen (+ seen 1))))
+          (set w (+ w 1))))
+    (return n)))
+
+(defn ^I32 hd-pronoun [^Cells wd ^Cells et ^I32 w2]
+  (comment "1 when the word after a lone `I` says it is the English pronoun, not a Roman numeral: it starts in lower case or has an")
+  (comment "apostrophe in it (`Series I Don't Want`, `Series I think`). A line that stops at the `I` is a numeral.")
+  (if (< w2 0) (return 0))
+  (let [^I32 n (hd-wl wd w2)
+        ^:mut ^I32 i 0]
+    (if (st-lower (hd-wc wd et w2 0)) (return 1))
+    (while (< i n)
+      (do (if (or (== (hd-wc wd et w2 i) 39) (== (hd-wc wd et w2 i) 8217)) (return 1))
+          (set i (+ i 1))))
+    (return 0)))
+
 (defn ^:pub ^I32 hd-marker [^Cells wd ^Cells ln ^Cells et ^:mut ^Cells ws ^I32 l]
   (comment "Does line l start with a numbering pattern? The scheme (0 none), and in ws[0..4]: scheme, depth (the")
   (comment "dotted components of a decimal number, 0 for a letter or a roman), where the number is in the line's")
@@ -336,6 +435,10 @@
     (let [^I32 n0 (hd-wl wd w0)
           ^I32 d (hd-dec wd et w0)]
       (comment "decimal: 1  1.  1.2.3  2)")
+      (comment "a bare number that is a street number, a quantity or a price is no heading's (D576)")
+      (if (and (== d 1) (== (hd-address-like wd ln et l) 1)) (return 0))
+      (comment "and a numbered line that goes on with two figures or more (`2. $89158874 05/02/2024 ...`) is a row of a table")
+      (if (and (> d 0) (>= (hd-figures-after wd ln et l 1) 2)) (return 0))
       (if (> d 0)
         (do (cells-set ws 0 1)
             (cells-set ws 1 (rem d 64))
@@ -377,6 +480,12 @@
                   ^I32 d2 (hd-dec wd et w1)
                   ^I32 r (hd-letters wd et w1 0 n1)
                   ^I32 tot (+ (+ n0 1) n1)]
+              (comment "a label in capitals and an amount (`NET 79.36`, `TENDER 100.00`), or an amount split at its point (`79.` `36`), is")
+              (comment "no keyword and number (D576): the number would be written apart from the text and the point lost with it")
+              (if (and (== (hd-kcaps wd et w0) 1) (== (hd-frac2 wd et w1) 1)) (return 0))
+              (comment "a keyword and a number followed by two figures or more (`Period 01 Jan 2024 to 31 Mar 2024 ...`) is a row of data")
+              (if (>= (hd-figures-after wd ln et l 2) 2) (return 0))
+              (if (== (hd-split-decimal wd et w1 w2) 1) (return 0))
               (if (> d2 0)
                 (do (cells-set ws 0 6)
                     (cells-set ws 1 (rem d2 64))
@@ -385,6 +494,7 @@
                     (if (>= w2 0) (cells-set ws 4 (+ tot 1)))
                     (return 6)))
               (comment "a roman numeral, or a lone capital letter only when the line stops there (`Appendix A`)")
+              (if (and (== r 2) (and (== n1 1) (== (hd-pronoun wd et w2) 1))) (return 0))
               (if (or (== r 2) (and (== r 4) (< w2 0)))
                 (do (cells-set ws 0 6)
                     (cells-set ws 1 0)
@@ -417,18 +527,21 @@
         ^I32 bbits (sc-get sc body (sck-bits))
         ^I32 col (st-get sf l (sfk-color))
         ^I32 bcol (sc-get sc body (sck-color))
+        ^I32 pure (st-get sf l (sfk-pure))
         ^:mut ^I32 p 0
         ^:mut ^I32 weight 0]
     (if (and (!= (bit-and bits 64) 0) (== (bit-and bbits 64) 0)) (return -1))
     (if (>= (* sz 100) (* bsz 104)) (set p (+ p 3)))
     (if (>= (* sz 100) (* bsz 120)) (set p (+ p 1)))
-    (if (and (!= (bit-and bits 1) 0) (== (bit-and bbits 1) 0))
+    (comment "D575: a line that is only partly bold (or italic) has the style of its bold words, but it is a line with a bold phrase")
+    (comment "in it, not a bold line: the weight says nothing then (the phrase is an inline span of the paragraph it is in)")
+    (if (and (!= (bit-and bits 1) 0) (and (== (bit-and bbits 1) 0) (>= pure HD_PURE)))
       (do (set p (+ p 3))
           (set weight 1)))
     (if (and (== (st-get sf l (sfk-caps)) 1) (== (sc-get sc body (sck-caps)) 0))
       (do (set p (+ p 2))
           (set weight 1)))
-    (if (and (!= (bit-and bits 2) 0) (== (bit-and bbits 2) 0)) (set p (+ p 1)))
+    (if (and (!= (bit-and bits 2) 0) (and (== (bit-and bbits 2) 0) (>= pure HD_PURE))) (set p (+ p 1)))
     (if (and (>= col 0) (and (>= bcol 0) (!= col bcol))) (set p (+ p 1)))
     (if (and (<= (* sz 100) (* bsz 96)) (== weight 0)) (return -1))
     (return p)))
@@ -447,6 +560,30 @@
   (if (== (hd-marker wd ln et ws l) 0) (return 0))
   (return (cells-at ws 5)))
 
+(defn ^I32 hd-bare-number [^Cells wd ^Cells ln ^Cells et ^I32 l]
+  (comment "1 when the first word of line l is a whole number with no point, bracket or colon after it.")
+  (let [^I32 w (hd-nth-word wd ln l 0)]
+    (if (< w 0) (return 0))
+    (if (== (hd-dec wd et w) 1) (return 1))
+    (return 0)))
+
+(defn ^I32 hd-opens-figure [^Cells wd ^Cells ln ^Cells et ^I32 l]
+  (comment "1 when line l is the data of a row rather than a title: its first word is a figure (`hd-figure-word`), or it has two")
+  (comment "figures, or a word that is not its last ends in a comma (an address).")
+  (let [^I32 w (hd-nth-word wd ln l 0)
+        ^I32 first (ln-get ln l (lh-first))
+        ^I32 end (+ first (ln-get ln l (lh-count)))
+        ^:mut ^I32 j first
+        ^:mut ^I32 n 0]
+    (if (< w 0) (return 0))
+    (if (== (hd-figure-word wd et w) 1) (return 1))
+    (if (>= (hd-figures-after wd ln et l 0) 2) (return 1))
+    (while (< j end)
+      (do (set n (hd-wl wd j))
+          (if (and (> n 0) (and (< (+ j 1) end) (== (hd-wc wd et j (- n 1)) 44))) (return 1))
+          (set j (+ j 1))))
+    (return 0)))
+
 (defn ^I32 hd-partner [^Cells wd ^Cells ln ^Cells et ^:mut ^Cells ws ^Cells sf ^I32 l]
   (comment "The line that is the other half of line l's heading line, or -1: l and its one sibling on the row are")
   (comment "alone with each other, of one size, a number's width apart (ten ems at most), and one of them is a bare")
@@ -464,6 +601,10 @@
       (if (== lm 1)
         (if (>= (st-get sf l (sfk-x0)) (st-get sf q (sfk-x0))) (return -1))
         (if (>= (st-get sf q (sfk-x0)) (st-get sf l (sfk-x0))) (return -1)))
+      (comment "a title that opens with a figure (an amount, a date, a reference) is a row's data after its line number (D576)")
+      (if (== lm 1)
+        (if (== (hd-opens-figure wd ln et q) 1) (return -1))
+        (if (== (hd-opens-figure wd ln et l) 1) (return -1)))
       (return q))))
 
 (defn ^I32 hd-put-head [^:mut ^Cells sf ^I32 l ^I32 h ^I32 p]
@@ -596,6 +737,76 @@
       (return 1))
     (return 0)))
 
+(defn ^I32 hd-tail [^Cells wd ^Cells ln ^Cells et ^I32 l ^I32 back]
+  (comment "The code point `back` places from the end of line l's text (0 the last, 1 the one before it); -1 when there is none.")
+  (let [^I32 w0 (ln-get ln l (lh-first))
+        ^I32 wn (ln-get ln l (lh-count))
+        ^:mut ^I32 k (- wn 1)
+        ^:mut ^I32 left back]
+    (while (>= k 0)
+      (do (let [^I32 tl (hd-wl wd (+ w0 k))]
+            (if (> tl 0)
+              (do (if (< left tl) (return (hd-wc wd et (+ w0 k) (- (- tl 1) left))))
+                  (set left (- left tl)))))
+          (set k (- k 1))))
+    (return -1)))
+
+(defn ^I32 hd-stop [^I32 c]
+  (comment "A mark that ends a sentence or a statement: . ! ? : an ellipsis, the CJK full stops. Not a comma or a semicolon.")
+  (if (or (== c 46) (or (== c 33) (or (== c 63) (or (== c 58) (or (== c 8230) (or (== c 12290) (or (== c 65281) (or (== c 65311) (or (== c 65294) (== c 65306))))))))))
+    (return 1))
+  (return 0))
+
+(defn ^I32 hd-line-closed [^Cells wd ^Cells ln ^Cells et ^I32 l]
+  (comment "D575: 1 when line l ends a sentence or a statement (a stop, after any closing quote or bracket; or a figure: a")
+  (comment "label and its value), or has no text; 0 when its sentence goes on to the next line.")
+  (let [^:mut ^I32 c (hd-tail wd ln et l 0)]
+    (if (< c 0) (return 1))
+    (if (and (>= c 48) (<= c 57)) (return 1))
+    (if (or (== c 41) (or (== c 93) (or (== c 125) (or (== c 34) (or (== c 39) (or (== c 8221) (or (== c 8217) (or (== c 187) (== c 12301)))))))))
+      (do (set c (hd-tail wd ln et l 1))
+          (if (< c 0) (return 1))))
+    (return (hd-stop c))))
+
+(defn ^I32 hd-continues [^Cells wd ^Cells ln ^Cells et ^:mut ^Cells ws ^Cells sf ^I32 top ^I32 last]
+  (comment "D575: does the unit (line top to line last) go on a sentence, a list item or a paragraph that is not its own? A")
+  (comment "bold or underlined phrase, or a font change, in the middle of a paragraph is a line of the paragraph with a style change")
+  (comment "in it (an inline span), never a heading. Three ways to tell: (1) the unit is not well set apart from the line above it (a")
+  (comment "list item's space is less than a title's), and the line below it, close under it, starts in lower case (its sentence goes on there:")
+  (comment "`4 Should Section 230 of the Act, which prohibits` / `the application of ...`); (2) a line")
+  (comment "without a number or a bullet of its own, no more apart from the line above it than body lines are, and that line does")
+  (comment "not end a sentence; (3) a line without a marker of its own under the marker line of a list item and further in than it")
+  (comment "(the wrapped lines of the item, up to four lines). Clobbers ws[0..5] (the numbering of line top).")
+  (let [^I32 sp (hd-spacing sf top last)
+        ^I32 a (st-get sf top (sfk-above))
+        ^I32 b (st-get sf last (sfk-below))
+        ^I32 body (st-hget sf (sfh-body))
+        ^I32 own (hd-marker wd ln et ws top)
+        ^I32 f (st-get sf top (sfk-first))]
+    (if (and (>= b 0) (< sp 2))
+      (if (and (== (hd-tight sf last b) 1)
+               (st-lower (st-get sf b (sfk-first))))
+        (return 1)))
+    (if (and (== own 0) (and (>= a 0) (== (hd-bullet f) 0)))
+      (do (if (and (< sp 1)
+                   (and (== (st-get sf a (sfk-class)) body)
+                        (and (== (hd-tight sf a top) 1)
+                             (== (hd-line-closed wd ln et a) 0))))
+            (return 1))
+          (let [^:mut ^I32 cur a
+                ^:mut ^I32 child top
+                ^:mut ^I32 steps 0]
+            (while (and (>= cur 0) (< steps 4))
+              (do (if (== (hd-tight sf cur child) 1)
+                    (do (if (> (st-get sf top (sfk-x0)) (+ (st-get sf cur (sfk-x0)) (quot (st-get sf cur (sfk-size)) 2)))
+                          (if (or (== (hd-bullet (st-get sf cur (sfk-first))) 1) (!= (hd-marker wd ln et ws cur) 0))
+                            (return 1)))
+                        (set child cur)
+                        (set cur (st-get sf cur (sfk-above)))
+                        (set steps (+ steps 1)))
+                    (set steps 99)))))))
+    (return 0)))
+
 (defn ^I32 hd-sandwich [^Cells wd ^Cells ln ^Cells et ^:mut ^Cells ws ^Cells sf ^I32 top ^I32 last ^I32 cnt]
   (comment "Is a body-styled numbered line a title standing BETWEEN paragraphs (D395): one short line, no marker on")
   (comment "the line above or below it, and the line below it flush with it (a paragraph's first line, not the hanging")
@@ -633,6 +844,7 @@
         ^:mut ^I32 i 0
         ^:mut ^I32 s 0
         ^:mut ^I32 sand 0
+        ^:mut ^I32 k 0
         ^:mut ^I32 pts 0]
     (while (< i cnt)
       (do (set total (+ total (st-get sf (cells-at ws (+ WS_LINES i)) (sfk-cps))))
@@ -643,7 +855,23 @@
       (if (== (hd-list-run wd ln et ws sf top last) 1) (return -1)))
     (if (== ps 0)
       (set sand (hd-sandwich wd ln et ws sf top last cnt)))
+    (if (== (hd-continues wd ln et ws sf top last) 1) (return -1))
     (set s (hd-marker wd ln et ws top))
+    (comment "a bare number whose heading goes on, on the lines under it, as the data of a row (an address, figures) is the row's, not a")
+    (comment "section's (`88 HENNESSY ROAD` / `WAN CHAI, HONG KONG`): D576")
+    (if (and (== s 1) (> cnt 1))
+      (if (== (hd-bare-number wd ln et top) 1)
+        (do (set k 1)
+            (while (< k cnt)
+              (do (if (== (hd-opens-figure wd ln et (cells-at ws (+ WS_LINES k))) 1)
+                    (do (cells-set ws 0 0)
+                        (cells-set ws 1 0)
+                        (cells-set ws 2 0)
+                        (cells-set ws 3 0)
+                        (cells-set ws 4 0)
+                        (set s 0)
+                        (set k cnt)))
+                  (set k (+ k 1)))))))
     (set pts ps)
     (if (> s 0)
       (if (and (or (== s 1) (or (== s 6) (== s 7))) (>= (cells-at ws 1) 2))
@@ -655,6 +883,11 @@
           ^I32 b (st-get sf last (sfk-below))
           ^I32 gb (st-get sf last (sfk-gap-below))]
       (if (and (== ps 0) (< sp 1)) (return -1))
+      (comment "D577 (smoke A12): on a page of short lines (a receipt, an invoice, a form: no paragraph on it) a bold or capitalised")
+      (comment "line of the body's own size, no more apart from the line above it than the rest, is a label or a value, not a section")
+      (if (and (== (cells-at ws WS_FORM) 1)
+               (and (== s 0) (and (< sp 1) (< (* sz 100) (* (st-hget sf (sfh-size)) 104)))))
+        (return -1))
       (comment "a body-styled numbered line followed at the body's own line gap is a paragraph or a list item")
       (if (and (== ps 0) (and (== sand 0) (and (>= b 0) (< (* gb 2) (* lg 3))))) (return -1))
       (comment "smaller than the body, so it is the weight or the capitals alone that says heading: it must at least")
@@ -1470,6 +1703,21 @@
           (set l (+ l 1))))
     (return 0)))
 
+(defn ^I32 hd-formlike [^Cells sf ^I32 n]
+  (comment "D577: 1 when the document is a page of short lines: at least eight upright lines, and fewer than one in ten of them has")
+  (comment "six words (a sentence's worth). A receipt, an invoice and a form's labels are that; prose, a slide with its bullets and a")
+  (comment "newspaper column are not.")
+  (let [^:mut ^I32 l 0
+        ^:mut ^I32 total 0
+        ^:mut ^I32 prose 0]
+    (while (< l n)
+      (do (if (== (st-get sf l (sfk-upright)) 1)
+            (do (set total (+ total 1))
+                (if (>= (st-get sf l (sfk-words)) 6) (set prose (+ prose 1)))))
+          (set l (+ l 1))))
+    (if (and (>= total 8) (< (* prose 10) total)) (return 1))
+    (return 0)))
+
 (defn ^:pub ^I32 hd-analyze [^Cells wd ^Cells ln ^Cells et ^Cells gl
                              ^:mut ^Cells sf ^:mut ^Cells sc ^:mut ^Cells hc ^:mut ^Cells ws ^:mut ^Cells tmp
                              ^Cells pr ^Cells ptxt]
@@ -1497,6 +1745,7 @@
       (do (cells-push ws 0)
           (set l (+ l 1))))
     (if (< (st-hget sf (sfh-body)) 0) (return 0))
+    (cells-set ws WS_FORM (hd-formlike sf n))
     (set l 0)
     (while (< l n)
       (do (st-set sf l (sfk-unit) -1)

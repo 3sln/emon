@@ -43,7 +43,7 @@ pub(crate) fn ht_body(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port:
     let mut i: i32 = 0;
     let mut yy: i32 = y;
     while i < count {
-        ht_line(wd, ln, et, &crate::testport::text_blob("lorem ipsum dolor sit amet consectetur adipiscing elit sed do")[..], page, 7200, yy, 54000, yy + 1200, 1100, 0);
+        ht_line(wd, ln, et, &crate::testport::text_blob("Lorem ipsum dolor sit amet consectetur adipiscing elit sed do")[..], page, 7200, yy, 54000, yy + 1200, 1100, 0);
         yy += 1400;
         i += 1;
     }
@@ -265,6 +265,32 @@ fn test_what_is_not_a_numbering_pattern() {
     crate::testport::assert_eq(ht_marker(wd, ln, et, ws, &crate::testport::text_blob("AB. text")[..]), 0, "two letters that are not a numeral");
 }
 #[test]
+fn test_an_amount_an_address_and_a_phone_number_are_not_heading_numbers() {
+    // D1621 (smoke A11, B I-22): a keyword and a figure is a heading number (`Chapter 3`); a label and its amount (`NET 79.36`,
+    // `TENDER 100.00`, the amount's point left at the end of a word by the engine and its cents in the next), a street number
+    // (`567 Ortiz Valley Suite 979`, `88 HENNESSY ROAD WAN CHAI, HONG KONG`), an area code, a quantity and a pronoun are not.
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::testport::assert_eq(ht_marker(wd, ln, et, ws, &crate::testport::text_blob("NET 79.36")[..]), 0, "a label in capitals and an amount");
+    crate::testport::assert_eq(ht_marker(wd, ln, et, ws, &crate::testport::text_blob("TENDER 100.00")[..]), 0, "so is this one");
+    crate::testport::assert_eq(ht_marker(wd, ln, et, ws, &crate::testport::text_blob("NET 79. 36")[..]), 0, "an amount whose cents the engine put in the next word");
+    crate::testport::assert_eq(ht_marker(wd, ln, et, ws, &crate::testport::text_blob("567 Ortiz Valley Suite 979")[..]), 0, "a street number of three digits, and another figure after it");
+    crate::testport::assert_eq(ht_marker(wd, ln, et, ws, &crate::testport::text_blob("88 HENNESSY ROAD WAN CHAI, HONG KONG")[..]), 0, "an address: a comma in it");
+    crate::testport::assert_eq(ht_marker(wd, ln, et, ws, &crate::testport::text_blob("(202) 691-5902")[..]), 0, "a telephone number");
+    crate::testport::assert_eq(ht_marker(wd, ln, et, ws, &crate::testport::text_blob("202 691-5902")[..]), 0, "the same without the brackets");
+    crate::testport::assert_eq(ht_marker(wd, ln, et, ws, &crate::testport::text_blob("1 REDBEAN BRED 9,000")[..]), 0, "a quantity, a name and a price");
+    crate::testport::assert_eq(ht_marker(wd, ln, et, ws, &crate::testport::text_blob("Series I Don't Want To Be")[..]), 0, "a pronoun is not a Roman numeral");
+    crate::testport::assert_eq(ht_marker(wd, ln, et, ws, &crate::testport::text_blob("Series I think so")[..]), 0, "nor this one");
+    crate::testport::assert_eq(ht_marker(wd, ln, et, ws, &crate::testport::text_blob("Period 01 Jan 2024 to 31 Mar 2024 Opening Balance")[..]), 0, "a keyword, a number and a row of dates");
+    crate::testport::assert_eq(ht_marker(wd, ln, et, ws, &crate::testport::text_blob("Chapter 3 Formation in 1980")[..]), 6, "one figure after a keyword form is a title with a year");
+    crate::testport::assert_eq(ht_marker(wd, ln, et, ws, &crate::testport::text_blob("2 Methods")[..]), 1, "a section number stands");
+    crate::testport::assert_eq(ht_marker(wd, ln, et, ws, &crate::testport::text_blob("10 Conclusion")[..]), 1, "of two digits too");
+    crate::testport::assert_eq(ht_marker(wd, ln, et, ws, &crate::testport::text_blob("Part I Summary")[..]), 6, "Part I");
+    crate::testport::assert_eq(ht_marker(wd, ln, et, ws, &crate::testport::text_blob("Article 1.10 Fees")[..]), 6, "a title-case keyword and a dotted number are an outline's, even of two digits");
+}
+#[test]
 fn test_a_higher_heading_may_print_smaller() {
     let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -447,6 +473,242 @@ fn test_a_ladder_of_seven_classes_keeps_the_accounts_peers_and_near_the_top() {
     crate::testport::assert_eq(hd_level(hc, 24), 2, "the accounts are at level 2");
     crate::testport::assert_eq(hd_level(hc, 27), hd_level(hc, 33), "the product lines are peers");
     crate::testport::assert_eq(hd_level(hc, 27), 3, "and at level 3");
+}
+pub(crate) fn ht_style_words(mut wd: &mut crate::port::Cells, w0: i32, from: i32, to: i32, style: i32) -> i32 {
+    // Words from..to (counted from the word w0, a line's first) take the style bits `style`.
+    let mut k: i32 = from;
+    while k < to {
+        wd_set(wd, w0 + k, wf_style(), style);
+        k += 1;
+    }
+    return 0;
+}
+#[test]
+fn test_a_mostly_bold_line_in_a_paragraph_is_not_a_heading() {
+    // D1620 (smoke B I-2): five lines of a paragraph, the second of them 83 per cent bold (seven words of ten). `emon.style` gives
+    // the line the style of its dominant word, which is the bold one; a bold PHRASE is not a bold LINE.
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ptxt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut y: i32 = 5000;
+    let mut w0: i32 = 0;
+    y = ht_body(wd, ln, et, 1, y, 1);
+    w0 = wd_count(wd);
+    ht_line(wd, ln, et, &crate::testport::text_blob("Lorem ipsum dolor sit amet consectetur adipiscing elit sed do")[..], 1, 7200, y, 54000, y + 1200, 1100, 1);
+    ht_style_words(wd, w0, 7, 10, 0);
+    y += 1400;
+    y = ht_body(wd, ln, et, 1, y, 3);
+    crate::testport::assert_eq(ht_run(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 0, "no heading");
+    crate::testport::assert_eq(hd_level(hc, 1), 0, "the line with the bold phrase is a line of the paragraph");
+}
+#[test]
+fn test_a_bold_line_that_goes_on_the_sentence_above_is_not_a_heading() {
+    // D1620 (smoke B I-2, d05): a WHOLE bold line, as close under the line above as the lines of a paragraph are, whose sentence
+    // the line above has not ended, is the paragraph's own (a link, a name, a phrase set in bold type); set apart it is a heading.
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ptxt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut y: i32 = 5000;
+    y = ht_body(wd, ln, et, 1, y, 3);
+    ht_line(wd, ln, et, &crate::testport::text_blob("Statistics Sixth Edition Bluman")[..], 1, 7200, y, 54000, y + 1200, 1100, 1);
+    y += 1400;
+    y = ht_body(wd, ln, et, 1, y, 3);
+    crate::testport::assert_eq(ht_run(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 0, "no heading");
+    // the same line with the room above it a title has, after a line that ends no sentence either, is a heading
+    crate::port::cells_drop(wd, 0);
+    crate::port::cells_drop(ln, 0);
+    crate::port::cells_drop(et, 0);
+    y = ht_body(wd, ln, et, 1, 5000, 3);
+    y += 900;
+    ht_line(wd, ln, et, &crate::testport::text_blob("Statistics Sixth Edition Bluman")[..], 1, 7200, y, 54000, y + 1200, 1100, 1);
+    y += 1400;
+    y = ht_body(wd, ln, et, 1, y, 3);
+    crate::testport::assert_eq(ht_run(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 1, "one heading");
+    crate::testport::assert_eq(hd_level(hc, 3), 1, "set apart, the bold line is the heading");
+}
+#[test]
+fn test_a_numbered_item_that_changes_font_is_not_a_heading() {
+    // D1620 (smoke B I-2, d08): list item 4 opens with a bold number and goes on in a bold face of another family; the next line
+    // carries its sentence on (it starts in lower case). The items before it are in the body style.
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ptxt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut y: i32 = 5000;
+    y = ht_body(wd, ln, et, 1, y, 4);
+    y += 900;
+    ht_line(wd, ln, et, &crate::testport::text_blob("1. How should speech be restricted online?")[..], 1, 7200, y, 54000, y + 1200, 1100, 0);
+    y += 1400;
+    ht_line(wd, ln, et, &crate::testport::text_blob("2. What should be done to involve the government more?")[..], 1, 7200, y, 54000, y + 1200, 1100, 0);
+    y += 1400;
+    ht_line(wd, ln, et, &crate::testport::text_blob("3. How effective are oversight boards in practice?")[..], 1, 7200, y, 54000, y + 1200, 1100, 0);
+    y += 1400;
+    ht_line(wd, ln, et, &crate::testport::text_blob("4. Should Section 230 of the Communications Decency Act which prohibits")[..], 1, 7200, y, 54000, y + 1200, 1100, 1);
+    y += 1400;
+    ht_line(wd, ln, et, &crate::testport::text_blob("the application of intermediary laws that would hold companies responsible be repealed?")[..], 1, 7200, y, 54000, y + 1200, 1100, 0);
+    y += 1400;
+    ht_line(wd, ln, et, &crate::testport::text_blob("5. Who decides what counts as speech?")[..], 1, 7200, y, 54000, y + 1200, 1100, 0);
+    crate::testport::assert_eq(ht_run(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 0, "no heading");
+    crate::testport::assert_eq(hd_level(hc, 8), 0, "item 4 is an item");
+}
+#[test]
+fn test_a_bold_line_inside_a_list_item_is_not_a_heading() {
+    // D1620 (smoke A13): the wrapped line of a bullet, set in bold and further in than the bullet, belongs to the item.
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ptxt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut y: i32 = 5000;
+    y = ht_body(wd, ln, et, 1, y, 4);
+    y += 900;
+    ht_line(wd, ln, et, &crate::testport::text_blob("• The first sentence of the item.")[..], 1, 7200, y, 54000, y + 1200, 1100, 0);
+    y += 1400;
+    ht_line(wd, ln, et, &crate::testport::text_blob("Second sentence set in bold type")[..], 1, 8800, y, 54000, y + 1200, 1100, 1);
+    y += 1400;
+    ht_line(wd, ln, et, &crate::testport::text_blob("• The next item of the list.")[..], 1, 7200, y, 54000, y + 1200, 1100, 0);
+    crate::testport::assert_eq(ht_run(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 0, "no heading");
+    crate::testport::assert_eq(hd_level(hc, 5), 0, "the wrapped line is the item's");
+}
+#[test]
+fn test_a_bold_label_on_a_page_of_short_lines_is_not_a_heading() {
+    // D1622 (smoke A12): a receipt. Ten lines of two words, a bold name above them with room around it, and a bold line of the
+    // same size as the rest, as close under the line above as they are, in the middle: a label, not a section. The same line on a
+    // page with sentences on it, after a sentence that ended, is a heading.
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ptxt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut y: i32 = 5000;
+    let mut i: i32 = 0;
+    ht_heading(wd, ln, et, &crate::testport::text_blob("STORE NAME")[..], y, 1500, 1);
+    y += 2900;
+    while i < 10 {
+        if i == 5 {
+            ht_line(wd, ln, et, &crate::testport::text_blob("Cashier Anna")[..], 1, 7200, y, 30000, y + 1200, 1100, 1);
+        } else {
+            ht_line(wd, ln, et, &crate::testport::text_blob("bread loaf")[..], 1, 7200, y, 30000, y + 1200, 1100, 0);
+        }
+        y += 1400;
+        i += 1;
+    }
+    crate::testport::assert_eq(ht_run(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 1, "one heading: the name");
+    crate::testport::assert_eq(hd_level(hc, 0), 1, "the name is the heading");
+    crate::testport::assert_eq(hd_level(hc, 6), 0, "the bold label among the lines is not");
+    // prose: the same bold line after a line that ends a sentence
+    crate::port::cells_drop(wd, 0);
+    crate::port::cells_drop(ln, 0);
+    crate::port::cells_drop(et, 0);
+    y = ht_body(wd, ln, et, 1, 5000, 4);
+    ht_line(wd, ln, et, &crate::testport::text_blob("Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eius.")[..], 1, 7200, y, 54000, y + 1200, 1100, 0);
+    y += 1400;
+    ht_line(wd, ln, et, &crate::testport::text_blob("Cashier Anna")[..], 1, 7200, y, 30000, y + 1200, 1100, 1);
+    y += 1400;
+    y = ht_body(wd, ln, et, 1, y, 4);
+    crate::testport::assert_eq(ht_run(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 1, "one heading");
+    crate::testport::assert_eq(hd_level(hc, 5), 1, "on a page of sentences the bold line is a heading");
+}
+#[test]
+fn test_a_line_number_and_a_row_of_figures_are_not_one_heading_line() {
+    // D1621 (smoke A12): a statement's rows, in bold, with the line number in a column of its own: `2` and `$89158874 05/02/2024 rent`
+    // stand on one row, a number apart. A bare number beside a title is the number of a heading line (a heading whose layout
+    // put the number on a line of its own, `h-numbered`); beside a row of figures it is the row's number.
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ptxt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut y: i32 = 5000;
+    y = ht_body(wd, ln, et, 1, y, 4);
+    y += 900;
+    ht_line(wd, ln, et, &crate::testport::text_blob("2")[..], 1, 7200, y, 7800, y + 1200, 1200, 1);
+    ht_line(wd, ln, et, &crate::testport::text_blob("$89158874 05/02/2024 rent")[..], 1, 9000, y, 30000, y + 1200, 1200, 1);
+    y += 2300;
+    y = ht_body(wd, ln, et, 1, y, 4);
+    crate::testport::assert_eq(ht_run(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 0, "no heading");
+    // nor is a street number beside its street
+    crate::port::cells_drop(wd, 0);
+    crate::port::cells_drop(ln, 0);
+    crate::port::cells_drop(et, 0);
+    y = ht_body(wd, ln, et, 1, 5000, 4);
+    y += 900;
+    ht_line(wd, ln, et, &crate::testport::text_blob("88")[..], 1, 7200, y, 7800, y + 1200, 1200, 1);
+    ht_line(wd, ln, et, &crate::testport::text_blob("HENNESSY ROAD WAN CHAI, HONG KONG")[..], 1, 9000, y, 30000, y + 1200, 1200, 1);
+    y += 2300;
+    y = ht_body(wd, ln, et, 1, y, 4);
+    crate::testport::assert_eq(ht_run(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 0, "no heading");
+    // a street number that opens an address of two lines is not a number either; the address is still the bold block it is
+    crate::port::cells_drop(wd, 0);
+    crate::port::cells_drop(ln, 0);
+    crate::port::cells_drop(et, 0);
+    y = ht_body(wd, ln, et, 1, 5000, 4);
+    y += 900;
+    ht_line(wd, ln, et, &crate::testport::text_blob("88 HENNESSY ROAD")[..], 1, 7200, y, 30000, y + 1200, 1200, 1);
+    y += 1500;
+    ht_line(wd, ln, et, &crate::testport::text_blob("WAN CHAI, HONG KONG")[..], 1, 7200, y, 30000, y + 1200, 1200, 1);
+    y += 2300;
+    y = ht_body(wd, ln, et, 1, y, 4);
+    crate::testport::assert_eq(ht_run(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 1, "one heading");
+    crate::testport::assert_eq(hd_field(hc, 4, hck_scheme()), 0, "without a number");
+    // a numbered row of a table: the number has a point and two figures follow it
+    crate::port::cells_drop(wd, 0);
+    crate::port::cells_drop(ln, 0);
+    crate::port::cells_drop(et, 0);
+    y = ht_body(wd, ln, et, 1, 5000, 4);
+    y += 900;
+    ht_line(wd, ln, et, &crate::testport::text_blob("2. $89158874 05/02/2024 rent paid")[..], 1, 7200, y, 40000, y + 1200, 1200, 1);
+    y += 2300;
+    y = ht_body(wd, ln, et, 1, y, 4);
+    crate::testport::assert_eq(ht_run(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 1, "one heading");
+    crate::testport::assert_eq(hd_field(hc, 4, hck_scheme()), 0, "without a number");
+    // the same number beside a title is one heading line
+    crate::port::cells_drop(wd, 0);
+    crate::port::cells_drop(ln, 0);
+    crate::port::cells_drop(et, 0);
+    y = ht_body(wd, ln, et, 1, 5000, 4);
+    y += 900;
+    ht_line(wd, ln, et, &crate::testport::text_blob("2")[..], 1, 7200, y, 7800, y + 1200, 1200, 1);
+    ht_line(wd, ln, et, &crate::testport::text_blob("Methods and data")[..], 1, 9000, y, 30000, y + 1200, 1200, 1);
+    y += 2300;
+    y = ht_body(wd, ln, et, 1, y, 4);
+    crate::testport::assert_eq(ht_run(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 1, "one heading");
+    crate::testport::assert_eq(hd_level(hc, 4), 1, "the number is the heading's");
 }
 #[test]
 fn test_a_numbered_list_is_not_a_run_of_headings() {

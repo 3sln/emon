@@ -28,11 +28,11 @@
                                cells-drop text-cp text-i32 src-of-blob src-of-cells]]
             [emon.pdfsrc :refer [ps-missed]]
             [emon.pdfdoc :refer [pd-open]]
-            [emon.pdfcontent :refer [pc-document pc-warn pc-fonts pc-group]]
+            [emon.pdfcontent :refer [pc-document pc-warn pc-fonts pc-group pc-pua]]
             [emon.contentrows :refer [cr-page-text cr-page-lines cr-all-text cr-word cr-span cr-digest]]
             [emon.evidence :refer [gl-count gl-get gl-new gl-set wd-get hd-x0 hd-line wf-wbreak wb-gap wb-line-end
                                    ln-count ln-get lh-first lh-count ch-word wd-count mk-count
-                                   ch-cp ch-x0 ch-y0 ch-x1 ch-y1 gf-by0 gf-size gf-rot
+                                   ch-cp ch-x0 ch-y0 ch-x1 ch-y1 gf-by0 gf-size gf-rot gf-bx0 gf-bx1 hd-tstart hd-tlen
                                    gf-mode ch-page ev-emit ev-init ev-check]]
             [emon.splitmix :refer [sm-seed sm-below]]
             [kin.lang :refer [defn return let set while if do comment
@@ -764,3 +764,64 @@
     (ct-run2g gl 2500 1000 99 100)
     (ct-group gl et wd ln)
     (assert-eq (ln-count ln) 3 "the word on the next line stays on it")))
+
+;; ------------------------------------------------- D578, D580: leaning text, accents drawn over letters, Adobe's private use
+
+(defn ^I32 ct-gx [^:mut ^Cells gl ^I32 x0 ^I32 x1 ^I32 cp ^I32 bx0 ^I32 bx1]
+  (comment "One glyph of the scene: the box [x0, x1] by 800, the baseline segment [bx0, bx1] (0, 0 for none), size 1000.")
+  (let [^I32 g (gl-new gl 1 x0 0 x1 800 cp -1 0 -1)]
+    (gl-set gl g (gf-size) 1000)
+    (gl-set gl g (gf-bx0) bx0)
+    (gl-set gl g (gf-bx1) bx1)
+    (return g)))
+
+(deftest test-leaning-glyphs-of-a-synthetic-italic-make-one-word
+  (comment "Smoke B I-6: a Tm of `12 0 4.1041 12 x y` leans the cell, so the box of each glyph overhangs its baseline segment on both")
+  (comment "sides by the shear times the cell's height. Three glyphs of 500 whose boxes overhang by 300 on each side: the box of one")
+  (comment "ends 600 past where the next one's begins, further back than a word allows, but the baselines meet.")
+  (let [^Cells gl (new-cells) ^Cells et (new-cells) ^Cells wd (new-cells) ^Cells ln (new-cells)]
+    (ct-gx gl 700 1800 1055 1000 1500)
+    (ct-gx gl 1200 2300 1088 1500 2000)
+    (ct-gx gl 1700 2800 1080 2000 2500)
+    (ct-group gl et wd ln)
+    (assert-eq (wd-count wd) 1 "one word, not three letters")
+    (assert-eq (wd-get wd 0 (hd-tlen)) 3 "of three code points")))
+
+(deftest test-a-diacritic-drawn-over-a-letter-is-the-combining-mark-after-it
+  (comment "Smoke B I-21: TeX draws an umlaut as the dieresis glyph and then the u, backed up under it: `M` `dieresis` `u` `ller`. The")
+  (comment "word is Mu, U+0308, ller; the paragraph's normalisation composes it. A dieresis that is not over the letter after it is left.")
+  (let [^Cells gl (new-cells) ^Cells et (new-cells) ^Cells wd (new-cells) ^Cells ln (new-cells)]
+    (ct-gx gl 1000 1500 77 1000 1500)
+    (ct-gx gl 1650 1950 168 1650 1950)
+    (ct-gx gl 1500 2000 117 1500 2000)
+    (ct-gx gl 2000 2500 108 2000 2500)
+    (ct-gx gl 2500 3000 108 2500 3000)
+    (ct-gx gl 3000 3500 101 3000 3500)
+    (ct-gx gl 3500 4000 114 3500 4000)
+    (ct-group gl et wd ln)
+    (assert-eq (wd-count wd) 1 "one word")
+    (assert-eq (wd-get wd 0 (hd-tlen)) 7 "of seven code points: the dieresis is written after the u")
+    (assert-eq (cells-at et (+ (wd-get wd 0 (hd-tstart)) 1)) 117 "the letter first")
+    (assert-eq (cells-at et (+ (wd-get wd 0 (hd-tstart)) 2)) 776 "then U+0308")
+    (comment "a spacing acute standing apart, as an apostrophe (it's), over nothing: not a combining mark")
+    (cells-drop gl 0)
+    (cells-drop et 0)
+    (cells-drop wd 0)
+    (cells-drop ln 0)
+    (ct-gx gl 1000 1500 105 1000 1500)
+    (ct-gx gl 1500 1800 180 1500 1800)
+    (ct-gx gl 1800 2300 115 1800 2300)
+    (ct-group gl et wd ln)
+    (assert-eq (wd-get wd 0 (hd-tlen)) 3 "three code points, in the order they were shown")
+    (assert-eq (cells-at et (+ (wd-get wd 0 (hd-tstart)) 1)) 180 "the acute is itself")))
+
+(deftest test-adobes-symbol-private-use-is-the-delimiter-pieces-unicode-names
+  (assert-eq (pc-pua 63726) 9121 "U+F8EE, bracketlefttp, is U+23A1")
+  (assert-eq (pc-pua 63728) 9123 "U+F8F0, bracketleftbt, is U+23A3")
+  (assert-eq (pc-pua 63739) 9126 "U+F8FB, bracketrightbt, is U+23A6")
+  (assert-eq (pc-pua 63723) 9115 "U+F8EB, parenlefttp, is U+239B")
+  (assert-eq (pc-pua 63742) 9133 "U+F8FE, bracerightbt, is U+23AD")
+  (assert-eq (pc-pua 63733) 9134 "U+F8F5, integralex, is U+23AE")
+  (assert-eq (pc-pua 65) 65 "a letter is itself")
+  (assert-eq (pc-pua -1) -1 "no value stays none")
+  (assert-eq (pc-pua 57344) 57344 "a private-use code point of anyone else's is not touched"))

@@ -81,6 +81,9 @@ pub fn sfk_nsib() -> i32 {
 pub fn sfk_sibgap() -> i32 {
     return 29;
 }
+pub fn sfk_pure() -> i32 {
+    return 31;
+}
 pub fn sfk_x0() -> i32 {
     return 14;
 }
@@ -257,6 +260,35 @@ pub(crate) fn st_dom(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, l
     }
     return best;
 }
+pub(crate) fn st_pure(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, l: i32, d: i32) -> i32 {
+    // D1620: how much of the line is set in the dominant word's style: the per cent of the line's code points whose word
+    // has the same bold, italic and mono bits as word d. A line that is 70 per cent bold has the style of its bold words (the
+    // dominant word), but it is a line with a bold phrase in it, not a bold line; 100 when it has no words with text.
+    if d < 0 {
+        return 100;
+    }
+    let w0: i32 = st_ln(ln, l, lh_first());
+    let wn: i32 = st_ln(ln, l, lh_count());
+    let want: i32 = wd_get(wd, d, wf_style()) & 67;
+    let mut k: i32 = 0;
+    let mut all: i32 = 0;
+    let mut same: i32 = 0;
+    while k < wn {
+        let ts: i32 = wd_get(wd, w0 + k, hd_tstart());
+        let tl: i32 = wd_get(wd, w0 + k, hd_tlen());
+        if (ts >= 0) && (tl > 0) {
+            all += tl;
+            if (wd_get(wd, w0 + k, wf_style()) & 67) == want {
+                same += tl;
+            }
+        }
+        k += 1;
+    }
+    if all <= 0 {
+        return 100;
+    }
+    return (same * 100) / all;
+}
 pub(crate) fn st_line_features(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, gl: &mut crate::port::Cells, mut sf: &mut crate::port::Cells, l: i32) -> i32 {
     // Everything about line l that needs only the line: the dominant word's size, bits and colour; the
     // text's length, ends and case.
@@ -293,6 +325,7 @@ pub(crate) fn st_line_features(wd: &mut crate::port::Cells, ln: &mut crate::port
         }
     }
     st_put(sf, l, sfk_color(), col);
+    st_put(sf, l, sfk_pure(), st_pure(wd, ln, l, d));
     while k < wn {
         let ts: i32 = wd_get(wd, w0 + k, hd_tstart());
         let tl: i32 = wd_get(wd, w0 + k, hd_tlen());

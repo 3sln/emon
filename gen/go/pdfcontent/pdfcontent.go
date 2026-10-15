@@ -1579,6 +1579,55 @@ func pcDirAngle(a int64, b int64) int32 {
 	return evidence.EvAngle(int32(x), int32(y))
 }
 
+func PcPua(cp int32) int32 {
+	// D1625: the private-use code points of Adobe's Symbol font (U+F8E5..U+F8FE), which TeX's glyph-to-Unicode lists give the
+	// big brackets, braces and parentheses and the extension pieces of a tall delimiter (CMEX10), are the characters Unicode
+	// later gave them (U+239B..U+23AF, U+23D0, the serif signs). Every other code point is itself.
+	if (cp < 63717) || (cp > 63742) {
+		return cp
+	}
+	if cp == 63717 {
+		return 9135
+	}
+	if cp == 63718 {
+		return 9168
+	}
+	if cp == 63719 {
+		return 9135
+	}
+	if cp == 63720 {
+		return 174
+	}
+	if cp == 63721 {
+		return 169
+	}
+	if cp == 63722 {
+		return 8482
+	}
+	if cp <= 63725 {
+		return 9115 + (cp - 63723)
+	}
+	if cp <= 63728 {
+		return 9121 + (cp - 63726)
+	}
+	if cp <= 63731 {
+		return 9127 + (cp - 63729)
+	}
+	if cp == 63732 {
+		return 9130
+	}
+	if cp == 63733 {
+		return 9134
+	}
+	if cp <= 63736 {
+		return 9118 + (cp - 63734)
+	}
+	if cp <= 63739 {
+		return 9124 + (cp - 63737)
+	}
+	return 9131 + (cp - 63740)
+}
+
 func pcGlyph(cx *port.Cells, gl *port.Cells, et *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, code int32, ncode int32) int32 {
 	// One shown glyph: look the code up, put its cell in page space, record it,
 	// advance the text position by its width, the character and word spacing.
@@ -1625,7 +1674,7 @@ func pcGlyph(cx *port.Cells, gl *port.Cells, et *port.Cells, f0 *port.Cells, f1 
 		}
 	}
 	if cnt > 0 {
-		cp0 = pcFCp(f0, f1, f2, f3, slot, 0)
+		cp0 = PcPua(pcFCp(f0, f1, f2, f3, slot, 0))
 	}
 	// A composite font's ToUnicode may say U+0000 or U+FFFD for a glyph it has no value
 	// for (Skia does, for the parts of a Devanagari conjunct): that is no value.
@@ -1744,7 +1793,7 @@ func pcGlyph(cx *port.Cells, gl *port.Cells, et *port.Cells, f0 *port.Cells, f1 
 	if cnt > 1 {
 		i = 0
 		for i < cnt {
-			idx = evidence.EtxAppendCp(et, pcFCp(f0, f1, f2, f3, slot, i))
+			idx = evidence.EtxAppendCp(et, PcPua(pcFCp(f0, f1, f2, f3, slot, i)))
 			if i == 0 {
 				tstart = idx
 			}
@@ -4003,9 +4052,49 @@ func pcOffset(gl *port.Cells, j int32, axis int32) int32 {
 	return evidence.GlGet(gl, j, evidence.GfBy0())
 }
 
+func pcAbs(v int32) int32 {
+	if v < 0 {
+		return 0 - v
+	}
+	return v
+}
+
+func pcSheared(gl *port.Cells, j int32, axis int32) int32 {
+	// D1623: 1 when glyph j's box is longer along the writing axis than its baseline segment: the text matrix has a shear term
+	// (a synthetic italic: `12 0 4.1041 12 x y Tm`), which leans the cell and makes its axis-aligned box overhang by the shear
+	// times the cell's height, on both sides. 0 for the axes a box measures right (and for the others).
+	// A glyph with no baseline segment of length (a zero-width mark, or evidence made by hand) is never sheared.
+	var bx int32 = pcAbs(evidence.GlGet(gl, j, evidence.GfBx1()) - evidence.GlGet(gl, j, evidence.GfBx0()))
+	var by int32 = pcAbs(evidence.GlGet(gl, j, evidence.GfBy1()) - evidence.GlGet(gl, j, evidence.GfBy0()))
+	if (axis == 0) || (axis == 2) {
+		if (bx > 0) && (((evidence.GlGet(gl, j, evidence.ChX1()) - evidence.GlGet(gl, j, evidence.ChX0())) - bx) > 1) {
+			return 1
+		}
+	}
+	if (axis == 1) || (axis == 3) {
+		if (by > 0) && (((evidence.GlGet(gl, j, evidence.ChY1()) - evidence.GlGet(gl, j, evidence.ChY0())) - by) > 1) {
+			return 1
+		}
+	}
+	return 0
+}
+
 func pcGap(gl *port.Cells, p int32, g int32, axis int32) int32 {
 	// The space along the axis between glyph p and the glyph g after it
-	// (negative when they overlap or g is before p).
+	// (negative when they overlap or g is before p). Between leaning glyphs (a shear term in the text matrix) it is the space
+	// between the end of p's baseline segment and the origin of g's, which their boxes only measure when they are upright.
+	if (pcSheared(gl, p, axis) == 1) || (pcSheared(gl, g, axis) == 1) {
+		if axis == 0 {
+			return evidence.GlGet(gl, g, evidence.GfBx0()) - evidence.GlGet(gl, p, evidence.GfBx1())
+		}
+		if axis == 2 {
+			return evidence.GlGet(gl, p, evidence.GfBx1()) - evidence.GlGet(gl, g, evidence.GfBx0())
+		}
+		if axis == 1 {
+			return evidence.GlGet(gl, p, evidence.GfBy1()) - evidence.GlGet(gl, g, evidence.GfBy0())
+		}
+		return evidence.GlGet(gl, g, evidence.GfBy0()) - evidence.GlGet(gl, p, evidence.GfBy1())
+	}
 	if axis == 0 {
 		return evidence.GlGet(gl, g, evidence.ChX0()) - evidence.GlGet(gl, p, evidence.ChX1())
 	}
@@ -4110,6 +4199,96 @@ func pcHiddenMode(mode int32) int32 {
 	return 0
 }
 
+func pcAccent(cp int32) int32 {
+	// D1625: the combining mark a spacing diacritic stands for when it is drawn over a letter (TeX draws an umlaut as the glyph
+	// dieresis, then the u under it): the dieresis, acute, grave, macron, cedilla, circumflex, caron, breve, dot above, ring,
+	// ogonek, small tilde and double acute. 0 for anything else.
+	if cp == 168 {
+		return 776
+	}
+	if cp == 180 {
+		return 769
+	}
+	if cp == 96 {
+		return 768
+	}
+	if cp == 175 {
+		return 772
+	}
+	if cp == 184 {
+		return 807
+	}
+	if cp == 710 {
+		return 770
+	}
+	if cp == 711 {
+		return 780
+	}
+	if cp == 728 {
+		return 774
+	}
+	if cp == 729 {
+		return 775
+	}
+	if cp == 730 {
+		return 778
+	}
+	if cp == 731 {
+		return 808
+	}
+	if cp == 732 {
+		return 771
+	}
+	if cp == 733 {
+		return 779
+	}
+	return 0
+}
+
+func pcAccentOver(gl *port.Cells, p int32, g int32) int32 {
+	// D1625: the combining mark that glyph p is when it is a spacing diacritic standing over glyph g, a letter drawn right
+	// after it: both upright and of one rotation, no text of their own beyond the one code point, and the middle of the diacritic
+	// within the letter's width (Muller is M, the dieresis, then uller backed up under it). 0 when it is not.
+	var comb int32 = pcAccent(evidence.GlGet(gl, p, evidence.ChCp()))
+	var cx2 int32 = evidence.GlGet(gl, p, evidence.ChX0()) + evidence.GlGet(gl, p, evidence.ChX1())
+	if comb == 0 {
+		return 0
+	}
+	if evidence.GlGet(gl, p, evidence.ChTstart()) >= 0 {
+		return 0
+	}
+	if evidence.GlGet(gl, g, evidence.ChTstart()) >= 0 {
+		return 0
+	}
+	if bidi.BdStrong(evidence.GlGet(gl, g, evidence.ChCp())) != 2 {
+		return 0
+	}
+	if pcAxis(evidence.GlGet(gl, p, evidence.GfRot())) != 0 {
+		return 0
+	}
+	if pcRotSame(evidence.GlGet(gl, p, evidence.GfRot()), evidence.GlGet(gl, g, evidence.GfRot())) == 0 {
+		return 0
+	}
+	if evidence.GlGet(gl, p, evidence.GfVis()) != evidence.GlGet(gl, g, evidence.GfVis()) {
+		return 0
+	}
+	if cx2 < (2 * evidence.GlGet(gl, g, evidence.ChX0())) {
+		return 0
+	}
+	if cx2 > (2 * evidence.GlGet(gl, g, evidence.ChX1())) {
+		return 0
+	}
+	return comb
+}
+
+func pcAccentPair(gl *port.Cells, j int32, glst int32) int32 {
+	// The combining mark glyph j is when it is a spacing diacritic over glyph j+1, which is in the same word (j+1 <= glst); else 0.
+	if j >= glst {
+		return 0
+	}
+	return pcAccentOver(gl, j, j+1)
+}
+
 func pcContinues(gl *port.Cells, p int32, g int32) int32 {
 	// 1 when glyph g continues the word glyph p is in: the same rotation, on the
 	// same baseline (to 45 percent of the size: sub- and superscripts stay), and
@@ -4131,6 +4310,10 @@ func pcContinues(gl *port.Cells, p int32, g int32) int32 {
 	}
 	if pcHiddenMode(evidence.GlGet(gl, p, evidence.GfMode())) != pcHiddenMode(evidence.GlGet(gl, g, evidence.GfMode())) {
 		return 0
+	}
+	// A spacing diacritic over the letter drawn right after it is part of that letter's word (D1625).
+	if pcAccentOver(gl, p, g) > 0 {
+		return 1
 	}
 	if sizep > sz {
 		sz = sizep
@@ -4284,8 +4467,16 @@ func pcEmitWord(gl *port.Cells, et *port.Cells, wd *port.Cells, fnt *port.Cells,
 	if rtlw == 0 {
 		j = gfst
 		for j <= glst {
-			pcGlyphOut(et, gl, j, 2)
-			j += 1
+			// a spacing diacritic over the next letter of the word is written AFTER the letter, as the combining mark (D1625)
+			cl = pcAccentPair(gl, j, glst)
+			if cl > 0 {
+				pcGlyphOut(et, gl, j+1, 2)
+				evidence.EtxAppendCp(et, cl)
+				j += 2
+			} else {
+				pcGlyphOut(et, gl, j, 2)
+				j += 1
+			}
 		}
 	} else {
 		tstart = pcBidiText(et, gl, gfst, glst)

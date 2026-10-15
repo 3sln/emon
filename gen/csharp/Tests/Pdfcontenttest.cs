@@ -780,4 +780,72 @@ public static class Pdfcontenttest {
         CtGroup(gl, et, wd, ln);
         emon.Testport.AssertEq(Evidence.LnCount(ln), 3, "the word on the next line stays on it");
     }
+    internal static int CtGx(emon.Port.Cells gl, int x0, int x1, int cp, int bx0, int bx1) {
+        // One glyph of the scene: the box [x0, x1] by 800, the baseline segment [bx0, bx1] (0, 0 for none), size 1000.
+        int g = Evidence.GlNew(gl, 1, x0, 0, x1, 800, cp, -1, 0, -1);
+        Evidence.GlSet(gl, g, Evidence.GfSize(), 1000);
+        Evidence.GlSet(gl, g, Evidence.GfBx0(), bx0);
+        Evidence.GlSet(gl, g, Evidence.GfBx1(), bx1);
+        return g;
+    }
+    [Xunit.Fact]
+    public static void TestLeaningGlyphsOfASyntheticItalicMakeOneWord() {
+        // Smoke B I-6: a Tm of `12 0 4.1041 12 x y` leans the cell, so the box of each glyph overhangs its baseline segment on both
+        // sides by the shear times the cell's height. Three glyphs of 500 whose boxes overhang by 300 on each side: the box of one
+        // ends 600 past where the next one's begins, further back than a word allows, but the baselines meet.
+        emon.Port.Cells gl = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        CtGx(gl, 700, 1800, 1055, 1000, 1500);
+        CtGx(gl, 1200, 2300, 1088, 1500, 2000);
+        CtGx(gl, 1700, 2800, 1080, 2000, 2500);
+        CtGroup(gl, et, wd, ln);
+        emon.Testport.AssertEq(Evidence.WdCount(wd), 1, "one word, not three letters");
+        emon.Testport.AssertEq(Evidence.WdGet(wd, 0, Evidence.HdTlen()), 3, "of three code points");
+    }
+    [Xunit.Fact]
+    public static void TestADiacriticDrawnOverALetterIsTheCombiningMarkAfterIt() {
+        // Smoke B I-21: TeX draws an umlaut as the dieresis glyph and then the u, backed up under it: `M` `dieresis` `u` `ller`. The
+        // word is Mu, U+0308, ller; the paragraph's normalisation composes it. A dieresis that is not over the letter after it is left.
+        emon.Port.Cells gl = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        CtGx(gl, 1000, 1500, 77, 1000, 1500);
+        CtGx(gl, 1650, 1950, 168, 1650, 1950);
+        CtGx(gl, 1500, 2000, 117, 1500, 2000);
+        CtGx(gl, 2000, 2500, 108, 2000, 2500);
+        CtGx(gl, 2500, 3000, 108, 2500, 3000);
+        CtGx(gl, 3000, 3500, 101, 3000, 3500);
+        CtGx(gl, 3500, 4000, 114, 3500, 4000);
+        CtGroup(gl, et, wd, ln);
+        emon.Testport.AssertEq(Evidence.WdCount(wd), 1, "one word");
+        emon.Testport.AssertEq(Evidence.WdGet(wd, 0, Evidence.HdTlen()), 7, "of seven code points: the dieresis is written after the u");
+        emon.Testport.AssertEq(emon.Port.CellsAt(et, Evidence.WdGet(wd, 0, Evidence.HdTstart()) + 1), 117, "the letter first");
+        emon.Testport.AssertEq(emon.Port.CellsAt(et, Evidence.WdGet(wd, 0, Evidence.HdTstart()) + 2), 776, "then U+0308");
+        // a spacing acute standing apart, as an apostrophe (it's), over nothing: not a combining mark
+        emon.Port.CellsDrop(gl, 0);
+        emon.Port.CellsDrop(et, 0);
+        emon.Port.CellsDrop(wd, 0);
+        emon.Port.CellsDrop(ln, 0);
+        CtGx(gl, 1000, 1500, 105, 1000, 1500);
+        CtGx(gl, 1500, 1800, 180, 1500, 1800);
+        CtGx(gl, 1800, 2300, 115, 1800, 2300);
+        CtGroup(gl, et, wd, ln);
+        emon.Testport.AssertEq(Evidence.WdGet(wd, 0, Evidence.HdTlen()), 3, "three code points, in the order they were shown");
+        emon.Testport.AssertEq(emon.Port.CellsAt(et, Evidence.WdGet(wd, 0, Evidence.HdTstart()) + 1), 180, "the acute is itself");
+    }
+    [Xunit.Fact]
+    public static void TestAdobesSymbolPrivateUseIsTheDelimiterPiecesUnicodeNames() {
+        emon.Testport.AssertEq(Pdfcontent.PcPua(63726), 9121, "U+F8EE, bracketlefttp, is U+23A1");
+        emon.Testport.AssertEq(Pdfcontent.PcPua(63728), 9123, "U+F8F0, bracketleftbt, is U+23A3");
+        emon.Testport.AssertEq(Pdfcontent.PcPua(63739), 9126, "U+F8FB, bracketrightbt, is U+23A6");
+        emon.Testport.AssertEq(Pdfcontent.PcPua(63723), 9115, "U+F8EB, parenlefttp, is U+239B");
+        emon.Testport.AssertEq(Pdfcontent.PcPua(63742), 9133, "U+F8FE, bracerightbt, is U+23AD");
+        emon.Testport.AssertEq(Pdfcontent.PcPua(63733), 9134, "U+F8F5, integralex, is U+23AE");
+        emon.Testport.AssertEq(Pdfcontent.PcPua(65), 65, "a letter is itself");
+        emon.Testport.AssertEq(Pdfcontent.PcPua(-1), -1, "no value stays none");
+        emon.Testport.AssertEq(Pdfcontent.PcPua(57344), 57344, "a private-use code point of anyone else's is not touched");
+    }
 }

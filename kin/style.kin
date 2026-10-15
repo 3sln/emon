@@ -71,6 +71,7 @@
 (defn ^:pub ^I32 sfk-sibline [] (return 27))  ;; the nearest sibling on its row, -1
 (defn ^:pub ^I32 sfk-nsib [] (return 28))     ;; how many siblings on its row
 (defn ^:pub ^I32 sfk-sibgap [] (return 29))   ;; the whitespace to the nearest one
+(defn ^:pub ^I32 sfk-pure [] (return 31))     ;; per cent of the line's code points set in the dominant word's weight, slant and mono (D575)
 (defn ^:pub ^I32 sfk-x0 [] (return 14))
 (defn ^:pub ^I32 sfk-width [] (return 15))
 (defn ^:pub ^I32 sfk-upright [] (return 16))
@@ -183,6 +184,27 @@
           (set i (+ i 1))))
     (return best)))
 
+(defn ^I32 st-pure [^Cells wd ^Cells ln ^I32 l ^I32 d]
+  (comment "D575: how much of the line is set in the dominant word's style: the per cent of the line's code points whose word")
+  (comment "has the same bold, italic and mono bits as word d. A line that is 70 per cent bold has the style of its bold words (the")
+  (comment "dominant word), but it is a line with a bold phrase in it, not a bold line; 100 when it has no words with text.")
+  (if (< d 0) (return 100))
+  (let [^I32 w0 (st-ln ln l (lh-first))
+        ^I32 wn (st-ln ln l (lh-count))
+        ^I32 want (bit-and (wd-get wd d (wf-style)) 67)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 all 0
+        ^:mut ^I32 same 0]
+    (while (< k wn)
+      (do (let [^I32 ts (wd-get wd (+ w0 k) (hd-tstart))
+                ^I32 tl (wd-get wd (+ w0 k) (hd-tlen))]
+            (if (and (>= ts 0) (> tl 0))
+              (do (set all (+ all tl))
+                  (if (== (bit-and (wd-get wd (+ w0 k) (wf-style)) 67) want) (set same (+ same tl))))))
+          (set k (+ k 1))))
+    (if (<= all 0) (return 100))
+    (return (quot (* same 100) all))))
+
 (defn ^I32 st-line-features [^Cells wd ^Cells ln ^Cells et ^Cells gl ^:mut ^Cells sf ^I32 l]
   (comment "Everything about line l that needs only the line: the dominant word's size, bits and colour; the")
   (comment "text's length, ends and case.")
@@ -213,6 +235,7 @@
           (set g (wd-get wd d (wf-gfirst)))
           (if (>= g 0) (set col (gl-get gl g (gf-fill))))))
     (st-put sf l (sfk-color) col)
+    (st-put sf l (sfk-pure) (st-pure wd ln l d))
     (while (< k wn)
       (do (let [^I32 ts (wd-get wd (+ w0 k) (hd-tstart))
                 ^I32 tl (wd-get wd (+ w0 k) (hd-tlen))]
@@ -507,7 +530,6 @@
     (return 0)))
 
 (defn ^:pub ^I32 sfk-ncol [] (return 30))     ;; of its row siblings, how many are lines of a column of body text
-
 (defn ^I32 st-colsibs [^Cells ln ^:mut ^Cells sf ^I32 n ^I32 body]
   (comment "For every upright line with a sibling on its row: how many of its siblings are a column of body text,")
   (comment "that is body-class lines at least a quarter as wide as the widest body line of the page. A neighbouring")

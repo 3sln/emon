@@ -264,6 +264,34 @@ fn test_ligatures_and_soft_hyphens_are_flags() {
     crate::testport::assert_eq(nt_same(out, want), 1, "flags compose with NFC: fi + e-acute");
 }
 #[test]
+fn test_arabic_presentation_forms_fold_to_the_letters_with_the_ligature_flag() {
+    // D1627 (smoke B I-15): a PDF draws the shaped glyph of an Arabic letter, so the text layer holds the presentation form
+    // (U+FE8D, isolated alef) for the letter (U+0627). NFKC on U+FB50..FDFF and U+FE70..FEFF alone: the letter, the ligature
+    // as its letters, a mark without the space UAX #15 puts before it; the ornate parentheses and everything else stay.
+    let src: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let want: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    nt_lit(&crate::testport::text_blob("FE8D FEFB 61 FE70 FB50 FD3E FEF5")[..], src);
+    nt_lit(&crate::testport::text_blob("627 644 627 61 64B 671 FD3E 644 622")[..], want);
+    crate::port::cells_drop(out, 0);
+    nz_nfc(src, 0, crate::port::cells_len(src), out, tmp, 1);
+    crate::testport::assert_eq(nt_same(out, want), 1, "the forms fold with the ligature flag (isolated alef, lam-alef, fathatan, alef wasla, lam-alef-madda)");
+    crate::port::cells_drop(out, 0);
+    nz_nfc(src, 0, crate::port::cells_len(src), out, tmp, 0);
+    crate::testport::assert_eq(nt_same(out, src), 1, "and stay as they are without it");
+    nt_lit(&crate::testport::text_blob("FDFA")[..], src);
+    nt_lit(&crate::testport::text_blob("635 644 649 20 627 644 644 647 20 639 644 64A 647 20 648 633 644 645")[..], want);
+    crate::port::cells_drop(out, 0);
+    nz_nfc(src, 0, crate::port::cells_len(src), out, tmp, 5);
+    crate::testport::assert_eq(nt_same(out, want), 1, "the longest, a phrase of eighteen letters");
+    nt_lit(&crate::testport::text_blob("FEE3 FEEA 61 FE8E")[..], src);
+    nt_lit(&crate::testport::text_blob("645 647 61 627")[..], want);
+    crate::port::cells_drop(out, 0);
+    nz_nfc(src, 0, crate::port::cells_len(src), out, tmp, 1);
+    crate::testport::assert_eq(nt_same(out, want), 1, "initial meem, final heh, a Latin letter, final alef");
+}
+#[test]
 fn test_a_span_is_normalized_and_output_is_appended() {
     let src: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let want: &mut crate::port::Cells = &mut crate::port::Cells::new();

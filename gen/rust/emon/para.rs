@@ -226,6 +226,25 @@ pub(crate) fn pa_style(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells,
     }
     return wd_get(wd, d, wf_style());
 }
+pub(crate) fn pa_mixed(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, l: i32) -> i32 {
+    // D1620: 1 when the line has words of more than one combination of bold, italic and mono: it is a line with a styled
+    // phrase in it, and `pa-style` (the style of its dominant word) is the style of the phrase or of the rest by a margin of
+    // one word. 0 for a line of one style.
+    let d: i32 = pa_dom(wd, ln, l);
+    let w0: i32 = ln_get(ln, l, lh_first());
+    let wn: i32 = ln_get(ln, l, lh_count());
+    let mut k: i32 = 0;
+    if d < 0 {
+        return 0;
+    }
+    while k < wn {
+        if (wd_get(wd, w0 + k, hd_tlen()) > 0) && ((wd_get(wd, w0 + k, wf_style()) & 67) != (wd_get(wd, d, wf_style()) & 67)) {
+            return 1;
+        }
+        k += 1;
+    }
+    return 0;
+}
 pub(crate) fn pa_start(ln: &mut crate::port::Cells, l: i32) -> i32 {
     // Where the line starts, as a distance that grows INWARD: x0 for a line that reads left to right,
     // minus x1 for one that reads right to left.
@@ -426,7 +445,93 @@ pub(crate) fn pa_indents(wd: &mut crate::port::Cells, ln: &mut crate::port::Cell
     }
     return n;
 }
-pub(crate) fn pa_new_par(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, a: i32, b: i32, med: i32, margin: i32, hc: &mut crate::port::Cells) -> bool {
+pub(crate) fn pa_unspaced(cp: i32) -> bool {
+    // A code point of a script set without spaces between words (P11.x2): Han (and the Kangxi radicals, which are folded
+    // to Han only after the join), kana, the CJK symbols and punctuation,
+    // the full-width and half-width forms. Hangul is not (it has spaces) and is left out.
+    if (cp >= 11904) && (cp <= 12255) {
+        return 1 == 1;
+    }
+    if (cp >= 12288) && (cp <= 12543) {
+        return 1 == 1;
+    }
+    if (cp >= 13312) && (cp <= 19903) {
+        return 1 == 1;
+    }
+    if (cp >= 19968) && (cp <= 40959) {
+        return 1 == 1;
+    }
+    if (cp >= 63744) && (cp <= 64255) {
+        return 1 == 1;
+    }
+    if (cp >= 65280) && (cp < 65440) {
+        return 1 == 1;
+    }
+    if (cp > 65500) && (cp <= 65519) {
+        return 1 == 1;
+    }
+    if (cp >= 131072) && (cp <= 205743) {
+        return 1 == 1;
+    }
+    return 0 == 1;
+}
+pub(crate) fn pa_last_cp(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, l: i32, back: i32) -> i32 {
+    // The code point `back` places from the end of line l's text (0 the last); -1 when there is none.
+    let w0: i32 = ln_get(ln, l, lh_first());
+    let mut k: i32 = ln_get(ln, l, lh_count()) - 1;
+    let mut left: i32 = back;
+    while k >= 0 {
+        let ts: i32 = wd_get(wd, w0 + k, hd_tstart());
+        let tl: i32 = wd_get(wd, w0 + k, hd_tlen());
+        if (ts >= 0) && (tl > 0) {
+            if left < tl {
+                return crate::port::cells_at(et, ts + ((tl - 1) - left));
+            }
+            left -= tl;
+        }
+        k -= 1;
+    }
+    return -1;
+}
+pub(crate) fn pa_open_end(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, l: i32) -> bool {
+    // D1620: does line l end inside a sentence: it has text, its last character is not a figure (a label and its value is a
+    // statement) or a mark that closes a sentence, with or without a closing bracket or quotation mark after the mark.
+    let mut c: i32 = pa_last_cp(wd, ln, et, l, 0);
+    if c < 0 {
+        return 0 == 1;
+    }
+    if (c >= 48) && (c <= 57) {
+        return 0 == 1;
+    }
+    if (c == 12301) || ((c == 12303) || ((c == 65289) || ((c == 12305) || ((c == 12299) || ((c == 12297) || ((c == 41) || ((c == 93) || ((c == 34) || ((c == 39) || ((c == 8221) || ((c == 8217) || (c == 187)))))))))))) {
+        c = pa_last_cp(wd, ln, et, l, 1);
+        if c < 0 {
+            return 0 == 1;
+        }
+    }
+    return !pa_final_mark(c);
+}
+pub(crate) fn pa_unfinished(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, l: i32) -> bool {
+    // D1626 (smoke B I-18): does line l end inside a sentence of a script set without spaces (Han, kana): its last character
+    // is one of them and no mark that closes a sentence, with or without a closing bracket or quotation mark after the mark.
+    if !pa_unspaced(pa_last_cp(wd, ln, et, l, 0)) {
+        return 0 == 1;
+    }
+    return pa_open_end(wd, ln, et, l);
+}
+pub(crate) fn pa_style_differs(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, a: i32, b: i32, open: bool) -> bool {
+    // Do the dominant styles of lines a and b differ: a line with a bold phrase in it, when the sentence of line a goes on
+    // (`open`), is no different from the lines around it (D1620, smoke B I-2: it ended the paragraph, once above and once
+    // below). At the end of a sentence a bold label and its value that follow are a line of their own, as ever.
+    if pa_style(wd, ln, a) == pa_style(wd, ln, b) {
+        return 0 == 1;
+    }
+    if open && ((pa_mixed(wd, ln, a) == 1) || (pa_mixed(wd, ln, b) == 1)) {
+        return 0 == 1;
+    }
+    return 1 == 1;
+}
+pub(crate) fn pa_new_par(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, a: i32, b: i32, med: i32, margin: i32, hc: &mut crate::port::Cells) -> bool {
     // Does line b, the next one on the page, start a paragraph after line a (D135). The heading analysis
     // (P4.4) decides first where it has an opinion: a heading is a block of its own (D167).
     let op: i32 = hd_opinion(hc, a, b);
@@ -460,8 +565,13 @@ pub(crate) fn pa_new_par(wd: &mut crate::port::Cells, ln: &mut crate::port::Cell
     let sa: i32 = pa_size(wd, ln, a);
     let sb: i32 = pa_size(wd, ln, b);
     let ds: i32 = sa - sb;
+    // A line of a script set without spaces that stops inside a sentence and whose next line is within 1.75 of its size of it,
+    // baseline to baseline, goes on there whatever the boxes say: the boxes of lines in several fonts are of several heights,
+    // and the whitespace between them is not the leading (D1626, the Wikipedia pages in Japanese).
     if ((g * PA_GAP_DEN) > (med * PA_GAP_NUM)) && (((g - med) * PA_TINY_DIV) > hb) {
-        return 1 == 1;
+        if !(pa_unfinished(wd, ln, et, a) && (((pa_ymid2(ln, b) - pa_ymid2(ln, a)) * 2) <= (7 * sa))) {
+            return 1 == 1;
+        }
     }
     if (((pa_start(ln, b) - pa_start(ln, a)) * PA_INDENT_DIV) > sb) && (((pa_start(ln, a) - margin) * PA_INDENT_DIV) <= sb) && (ls_hang(hc, ln, a, b) == 0) {
         return 1 == 1;
@@ -469,7 +579,8 @@ pub(crate) fn pa_new_par(wd: &mut crate::port::Cells, ln: &mut crate::port::Cell
     if (pa_abs(ds) * PA_SIZE_DIV) > sa {
         return 1 == 1;
     }
-    if pa_style(wd, ln, a) != pa_style(wd, ln, b) {
+    let opened: bool = pa_open_end(wd, ln, et, a);
+    if pa_style_differs(wd, ln, a, b, opened) {
         return 1 == 1;
     }
     return 0 == 1;
@@ -502,36 +613,6 @@ pub(crate) fn pa_first_cp(wd: &mut crate::port::Cells, ln: &mut crate::port::Cel
         k += 1;
     }
     return -1;
-}
-pub(crate) fn pa_unspaced(cp: i32) -> bool {
-    // A code point of a script set without spaces between words (P11.x2): Han (and the Kangxi radicals, which are folded
-    // to Han only after the join), kana, the CJK symbols and punctuation,
-    // the full-width and half-width forms. Hangul is not (it has spaces) and is left out.
-    if (cp >= 11904) && (cp <= 12255) {
-        return 1 == 1;
-    }
-    if (cp >= 12288) && (cp <= 12543) {
-        return 1 == 1;
-    }
-    if (cp >= 13312) && (cp <= 19903) {
-        return 1 == 1;
-    }
-    if (cp >= 19968) && (cp <= 40959) {
-        return 1 == 1;
-    }
-    if (cp >= 63744) && (cp <= 64255) {
-        return 1 == 1;
-    }
-    if (cp >= 65280) && (cp < 65440) {
-        return 1 == 1;
-    }
-    if (cp > 65500) && (cp <= 65519) {
-        return 1 == 1;
-    }
-    if (cp >= 131072) && (cp <= 205743) {
-        return 1 == 1;
-    }
-    return 0 == 1;
 }
 pub(crate) fn pa_join(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, l: i32) -> i32 {
     // What goes between the text so far and the line l: nothing after a soft hyphen (which goes), nothing
@@ -1466,7 +1547,7 @@ pub(crate) fn pa_join_score(wd: &mut crate::port::Cells, ln: &mut crate::port::C
     if pa_marker(wd, ln, et, b) {
         pts += JS_MARKER;
     }
-    if ((pa_abs(sa - sb) * PA_SIZE_DIV) > sa) || (pa_style(wd, ln, a) != pa_style(wd, ln, b)) {
+    if ((pa_abs(sa - sb) * PA_SIZE_DIV) > sa) || pa_style_differs(wd, ln, a, b, !pa_ends_sentence(raw)) {
         pts += JS_STYLE;
     }
     if (ln_get(ln, a, lh_first()) + ln_get(ln, a, lh_count())) == ln_get(ln, b, lh_first()) {
@@ -1547,7 +1628,7 @@ pub(crate) fn pa_note(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, 
         let b: i32 = crate::port::cells_at(lo, first + i);
         // a line a table holds stays the table's cell (D504)
         if tb_claimed(ln, b) == 0 {
-            if (in_row(ln, b) >= 0) || pa_new_par(wd, ln, prev, b, med, mg, hc) {
+            if (in_row(ln, b) >= 0) || pa_new_par(wd, ln, et, prev, b, med, mg, hc) {
                 pa_flush(nodes, attrs, regions, text, raw, tmp, fr, al, hc, note);
                 pa_frag_open(fr, ln, page, b, 0);
                 pa_ini_start(wd, ln, et, raw, fr, ii, b);
@@ -1835,7 +1916,7 @@ pub fn pa_build(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, npages
                     while cont < cnt {
                         b = crate::port::cells_at(lo, first + cont);
                         if tb_claimed(lt, b) == 0 {
-                            if (in_row(lt, b) >= 0) || (pa_new_par(wd, lt, prev, b, med, mg, hc) || tb_due(tb, tcur, p, pa_ymid2(lt, b))) {
+                            if (in_row(lt, b) >= 0) || (pa_new_par(wd, lt, et, prev, b, med, mg, hc) || tb_due(tb, tcur, p, pa_ymid2(lt, b))) {
                                 ty = ln_get(lt, b, lh_y0());
                                 pend = pa_close(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, i, ty, hc);
                                 tcur = pa_tables(tb, tcur, p, pa_ymid2(lt, b), wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);

@@ -813,3 +813,72 @@ func TestRunsInOrderOrTooFarApartOrOverprintedStayTheLinesTheyWere(emonT *testin
 	ctGroup(gl, et, wd, ln)
 	port.AssertEq(emonT, evidence.LnCount(ln), 3, "the word on the next line stays on it")
 }
+
+func ctGx(gl *port.Cells, x0 int32, x1 int32, cp int32, bx0 int32, bx1 int32) int32 {
+	// One glyph of the scene: the box [x0, x1] by 800, the baseline segment [bx0, bx1] (0, 0 for none), size 1000.
+	var g int32 = evidence.GlNew(gl, 1, x0, 0, x1, 800, cp, -1, 0, -1)
+	evidence.GlSet(gl, g, evidence.GfSize(), 1000)
+	evidence.GlSet(gl, g, evidence.GfBx0(), bx0)
+	evidence.GlSet(gl, g, evidence.GfBx1(), bx1)
+	return g
+}
+
+func TestLeaningGlyphsOfASyntheticItalicMakeOneWord(emonT *testing.T) {
+	// Smoke B I-6: a Tm of `12 0 4.1041 12 x y` leans the cell, so the box of each glyph overhangs its baseline segment on both
+	// sides by the shear times the cell's height. Three glyphs of 500 whose boxes overhang by 300 on each side: the box of one
+	// ends 600 past where the next one's begins, further back than a word allows, but the baselines meet.
+	var gl *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	ctGx(gl, 700, 1800, 1055, 1000, 1500)
+	ctGx(gl, 1200, 2300, 1088, 1500, 2000)
+	ctGx(gl, 1700, 2800, 1080, 2000, 2500)
+	ctGroup(gl, et, wd, ln)
+	port.AssertEq(emonT, evidence.WdCount(wd), 1, "one word, not three letters")
+	port.AssertEq(emonT, evidence.WdGet(wd, 0, evidence.HdTlen()), 3, "of three code points")
+}
+
+func TestADiacriticDrawnOverALetterIsTheCombiningMarkAfterIt(emonT *testing.T) {
+	// Smoke B I-21: TeX draws an umlaut as the dieresis glyph and then the u, backed up under it: `M` `dieresis` `u` `ller`. The
+	// word is Mu, U+0308, ller; the paragraph's normalisation composes it. A dieresis that is not over the letter after it is left.
+	var gl *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	ctGx(gl, 1000, 1500, 77, 1000, 1500)
+	ctGx(gl, 1650, 1950, 168, 1650, 1950)
+	ctGx(gl, 1500, 2000, 117, 1500, 2000)
+	ctGx(gl, 2000, 2500, 108, 2000, 2500)
+	ctGx(gl, 2500, 3000, 108, 2500, 3000)
+	ctGx(gl, 3000, 3500, 101, 3000, 3500)
+	ctGx(gl, 3500, 4000, 114, 3500, 4000)
+	ctGroup(gl, et, wd, ln)
+	port.AssertEq(emonT, evidence.WdCount(wd), 1, "one word")
+	port.AssertEq(emonT, evidence.WdGet(wd, 0, evidence.HdTlen()), 7, "of seven code points: the dieresis is written after the u")
+	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(wd, 0, evidence.HdTstart())+1), 117, "the letter first")
+	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(wd, 0, evidence.HdTstart())+2), 776, "then U+0308")
+	// a spacing acute standing apart, as an apostrophe (it's), over nothing: not a combining mark
+	port.CellsDrop(gl, 0)
+	port.CellsDrop(et, 0)
+	port.CellsDrop(wd, 0)
+	port.CellsDrop(ln, 0)
+	ctGx(gl, 1000, 1500, 105, 1000, 1500)
+	ctGx(gl, 1500, 1800, 180, 1500, 1800)
+	ctGx(gl, 1800, 2300, 115, 1800, 2300)
+	ctGroup(gl, et, wd, ln)
+	port.AssertEq(emonT, evidence.WdGet(wd, 0, evidence.HdTlen()), 3, "three code points, in the order they were shown")
+	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(wd, 0, evidence.HdTstart())+1), 180, "the acute is itself")
+}
+
+func TestAdobesSymbolPrivateUseIsTheDelimiterPiecesUnicodeNames(emonT *testing.T) {
+	port.AssertEq(emonT, pdfcontent.PcPua(63726), 9121, "U+F8EE, bracketlefttp, is U+23A1")
+	port.AssertEq(emonT, pdfcontent.PcPua(63728), 9123, "U+F8F0, bracketleftbt, is U+23A3")
+	port.AssertEq(emonT, pdfcontent.PcPua(63739), 9126, "U+F8FB, bracketrightbt, is U+23A6")
+	port.AssertEq(emonT, pdfcontent.PcPua(63723), 9115, "U+F8EB, parenlefttp, is U+239B")
+	port.AssertEq(emonT, pdfcontent.PcPua(63742), 9133, "U+F8FE, bracerightbt, is U+23AD")
+	port.AssertEq(emonT, pdfcontent.PcPua(63733), 9134, "U+F8F5, integralex, is U+23AE")
+	port.AssertEq(emonT, pdfcontent.PcPua(65), 65, "a letter is itself")
+	port.AssertEq(emonT, pdfcontent.PcPua(-1), -1, "no value stays none")
+	port.AssertEq(emonT, pdfcontent.PcPua(57344), 57344, "a private-use code point of anyone else's is not touched")
+}
