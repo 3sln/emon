@@ -12,7 +12,7 @@
             [emon.norm :refer [nm-view nm-paper-gray]]
             [emon.scan :refer [sc-prep sc-sel-base sc-sel-max sc-aux-base sc-share-base sc-partner-base sc-xtra-base sc-emit-sel]]
             [emon.retarget :refer [rt-prep rt-decide rt-turns rt-erase-into rt-ask-view rt-adopt rt-line-state
-                                   rtp-q rtp-body rtp-erased rtp-nl rtp-nc rtp-cell0 rtp-line0 rtp-brun rtp-primary rtp-hash rt-lines rt-line-conf rt-max rt-cap rt-permille]]
+                                   rtp-q rtp-body rtp-erased rtp-nl rtp-nc rtp-cell0 rtp-line0 rtp-brun rtp-primary rtp-hash rt-lines rt-line-conf rt-max rt-cap rt-permille rt-empty-area]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
 
@@ -249,6 +249,67 @@
         (assert-eq (wd-get words 1 (wf-gap)) 100 "the gap of the second is to the column")
         (assert-eq (ln-get lines 0 (lh-x1)) 1700 "the line is as long as the column")
         (assert-eq (ln-get lines 0 (lh-count)) 3 "of three words")))))
+
+(defn ^I32 rtt-empty [^:mut ^Cells olines ^I32 y0]
+  (comment "A first-pass line with no word, 40 pt wide and 15 pt high from height y0 (centipoints): what the engine finds where text meets a rule and reads as nothing; answers its row.")
+  (let [^I32 l (ol-count olines)]
+    (ol-new olines 1 100 y0 4100 (+ y0 1500) 100 (+ y0 1500) 4100 (+ y0 1500) 0 0 0 0)
+    (ol-set olines l (olf-px) 100)
+    (ol-set olines l (olf-py) y0)
+    (ol-set olines l (olf-pw) 4000)
+    (ol-set olines l (olf-ph) 1500)
+    (return l)))
+
+(deftest test-a-line-the-engine-found-and-read-as-nothing-is-read-alone-and-its-words-are-the-pages-when-sure
+  (comment "P12.6, `RUNNING FOR (CHECK ONE):` before its blank: the page read as a page finds the line and no word in it; read as a line it is text")
+  (let [^Cells oruns (new-cells)
+        ^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells rtp (new-cells)
+        ^Cells scr (new-cells)]
+    (sc-prep scr)
+    (rtt-line olines owords feats 0 900)
+    (rtt-empty olines 300)
+    (rtt-line olines owords feats 2000 900)
+    (let [^I32 fr (rtt-run oruns olines owords 0 0)
+          ^I32 l1 (ol-count olines)
+          ^I32 w1 (ow-count owords)]
+      (rt-prep rtp)
+      (assert-eq (rt-empty-area olines 1) 600 "the empty line: 40 x 15 square points")
+      (assert-eq (rt-empty-area olines 0) 0 "a line with words is not one")
+      (assert-eq (rt-decide 0 0 0 oruns fr olines owords (new-cells) 1 130 rtp) 1 "the lines are sure, so the budget goes to the one line that has no word")
+      (assert-eq (cells-at rtp (rtp-line0)) 1 "that line")
+      (comment "its re-reading: a line of three words, sure")
+      (rtt-line3 olines owords feats 300 900 900 900)
+      (let [^I32 tr (rtt-run oruns olines owords l1 w1)]
+        (cells-set rtp (+ (rtp-line0) 1) tr)
+        (assert-eq (rt-line-state oruns olines owords rtp scr 1 1 -1 0 3) 5 "the re-reading is the page's")
+        (assert-eq (rt-line-state oruns olines owords rtp scr 0 0 -1 0 3) 0 "and the lines with words stay")
+        (assert-eq (rtt-adopt rtp oruns fr olines owords scr) 3 "three lines: the first, the re-reading of the empty one, the third")
+        (assert-eq (cells-at scr (sc-sel-base)) 0 "the first")
+        (assert-eq (cells-at scr (+ (sc-sel-base) 1)) l1 "then the line read in place of the empty one")
+        (assert-eq (cells-at scr (+ (sc-sel-base) 2)) 2 "then the third")))))
+
+(deftest test-a-line-read-as-nothing-and-re-read-as-unsure-words-stays-nothing
+  (let [^Cells oruns (new-cells)
+        ^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells rtp (new-cells)
+        ^Cells scr (new-cells)]
+    (sc-prep scr)
+    (rtt-line olines owords feats 0 900)
+    (rtt-empty olines 300)
+    (let [^I32 fr (rtt-run oruns olines owords 0 0)
+          ^I32 l1 (ol-count olines)
+          ^I32 w1 (ow-count owords)]
+      (rt-prep rtp)
+      (rt-decide 0 0 0 oruns fr olines owords (new-cells) 1 130 rtp)
+      (rtt-line3 olines owords feats 300 400 500 300)
+      (let [^I32 tr (rtt-run oruns olines owords l1 w1)]
+        (cells-set rtp (+ (rtp-line0) 1) tr)
+        (assert-eq (rt-line-state oruns olines owords rtp scr 1 1 -1 0 2) 0 "words of a mean confidence of 400 are not taken for a line nothing was read of: it has no first pass to be compared with")))))
 
 (deftest test-a-second-pass-word-that-is-unsure-or-lies-over-a-word-of-the-first-pass-is-not-added
   (let [^Cells oruns (new-cells)

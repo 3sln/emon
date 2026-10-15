@@ -24,7 +24,7 @@
             [emon.plan :refer [an-find an-ok pu-id pu-view-id]]
             [emon.evidence :refer [ev-sin ev-cos vw-px-to-cpt vw-cpt-to-px vw-new vw-get vw-set vk-polar vk-cropped vwf-flags vwf-layer vwf-a vwf-b vwf-c vwf-d vwf-e vwf-f
                                    pm-count pm-get pmf-page pmf-x0 pmf-y0 pmf-x1 pmf-y1 pmf-kind pmf-cx pmf-cy pmf-rx pmf-ry pmf-rot pmf-stroke pmf-color pmf-ink
-                                   pmf-conf pmf-flags pm-rect pm-ellipse pm-circle pm-curve pm-ring
+                                   pmf-conf pmf-flags pmf-fill pm-rect pm-ellipse pm-circle pm-curve pm-ring
                                    ik-get ikf-role ir-body ir-color
                                    ow-get ow-set hd-x0 hd-y0 hd-x1 hd-y1 hd-bx0 hd-by0 hd-bx1 hd-by1 hd-rot hd-line hd-tstart hd-tlen hd-conf owf-px owf-py owf-pw owf-ph
                                    ol-get ol-set lh-x0 lh-y0 lh-x1 lh-y1 lh-first lh-count
@@ -42,7 +42,8 @@
 
 (defn ^:pub ^I32 sx-strip-w [] (comment "The strip's width in pixels: the whole ring.") (return 1280))
 (defn ^:pub ^I32 sx-strip-h [] (comment "The strip's height in pixels: the annulus from `sx-r-out` to `sx-r-in` of the radius.") (return 112))
-(defn ^:pub ^I32 sx-r-out [] (comment "`seal-band-out`: the annulus' outer edge, per mille of the radius (the ring's own line is a little inside it).") (return 1020))
+(defn ^:pub ^I32 sx-solid [] (comment "P12.6: a rectangle, ellipse or curve whose ink fills this much of it (per mille) is a block of colour, not a stamp's outline.") (return 800))
+(defn ^:pub ^I32 sx-r-out [](comment "`seal-band-out`: the annulus' outer edge, per mille of the radius (the ring's own line is a little inside it).") (return 1020))
 (defn ^:pub ^I32 sx-r-in [] (comment "`seal-band-in`: the annulus' inner edge, per mille of the radius.") (return 550))
 (defn ^:pub ^I32 sx-disc-n [] (comment "The centre view's side in pixels.") (return 336))
 (defn ^:pub ^I32 sx-disc-r [] (comment "`seal-disc`: the centre view's radius, per mille of the ring's.") (return 620))
@@ -529,6 +530,7 @@
         ^I32 cx (pm-get prims r (pmf-cx))
         ^I32 cy (pm-get prims r (pmf-cy))
         ^I32 fl (pm-get prims r (pmf-flags))
+        ^I32 fill (pm-get prims r (pmf-fill))
         ^:mut ^I32 role 0
         ^:mut ^I32 rad 0
         ^:mut ^I32 mx 0
@@ -555,6 +557,8 @@
                 (comment "at most 8 times as long as wide; what it reads decides whether it is one")
                 (if (!= role (ir-color)) (return 0))
                 (if (and (!= kind (pm-curve)) (!= kind (pm-ellipse))) (return 0))
+                (comment "P12.6: a solid block of colour (its ink fills the primitive: a table's header band, a highlighted cell, the ground of a heading) is no stamp: a stamp is an outline, and the text on a band is the document's")
+                (if (>= fill (sx-solid)) (return 0))
                 (if (or (< (* 2 mn) 1000) (> mx (* 8 mn))) (return 0))
                 (if (> (* (quot (* 4 rx) 100) (quot ry 100)) (quot (* (quot pw 100) (quot ph 100)) 3)) (return 0))
                 (if (> (* 20 rx) (* 6 pw)) (return 0))
@@ -573,6 +577,8 @@
           (if (> (* (quot (* 4 rx) 100) (quot ry 100)) (quot (* (quot pw 100) (quot ph 100)) 3)) (return 0))
           (comment "D583: a rectangle that is most of the page's width is a colour band (a heading's ground, a table's header band), not a stamp: a stamp is a mark that is a small part of the page")
           (if (> (* 20 rx) (* 6 pw)) (return 0))
+          (comment "P12.6: and a solid one of any width is a block of colour (a header cell), not an outline")
+          (if (>= fill (sx-solid)) (return 0))
           (return (sx-add cand 2 r cxp cyp (sx-abs rxp) (sx-abs ryp) (pm-get prims r (pmf-rot)) rgb
                           (pm-get prims r (pmf-x0)) (pm-get prims r (pmf-y0)) (pm-get prims r (pmf-x1)) (pm-get prims r (pmf-y1)) (pm-get prims r (pmf-conf))))))
     (return 0)))

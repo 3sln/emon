@@ -1306,7 +1306,7 @@ func scDistinct(etext *port.Cells, ts int32, n int32) int32 {
 }
 
 func ScImplausible(etext *port.Cells, ts int32, n int32) int32 {
-	// 1 when a word's characters are not those of a word: a single glyph that is no letter or digit; two odd glyphs (`sc-cp-class`); letters, digits and an odd glyph together;
+	// 1 when a word's characters are not those of a word: a single glyph that is no letter or digit; two odd glyphs (`sc-cp-class`); letters, digits and an odd glyph together; an odd glyph among five characters or more;
 	// four or more characters and not one a letter or a digit; eight or more of which a quarter or fewer differ (`Petetetdedtededededet`). Else 0.
 	var nl int32 = scCountClass(etext, ts, n, 0)
 	var nd int32 = scCountClass(etext, ts, n, 1)
@@ -1321,6 +1321,9 @@ func ScImplausible(etext *port.Cells, ts int32, n int32) int32 {
 		return 1
 	}
 	if (no > 0) && ((nd > 0) && (nl > 0)) {
+		return 1
+	}
+	if (no > 0) && (n >= 5) {
 		return 1
 	}
 	if (n >= 4) && ((nl + nd) == 0) {
@@ -1898,7 +1901,7 @@ func scFlag(owords *port.Cells, w int32, bit int32) int32 {
 
 func scFates(owords *port.Cells, etext *port.Cells, osyms *port.Cells, rules *port.Cells, comps *port.Cells, inks *port.Cells, page int32, m int32, scr *port.Cells) int32 {
 	// What becomes of each of the `m` words of a line (listed at `sc-fate-base`): 0 it stays, 1 it is garbage (confidence at most `sc-lo-conf` and implausible characters (`sc-implausible`) on a line of
-	// two words or fewer or of a mean confidence of 450 or less; or a word of a line of three or more whose mean is at most `sc-lo-conf` and best at most 450: texture), 2 it is the ghost of a rule (a lone bar, `I`, `l` or `!`
+	// two words or fewer or of a mean confidence of 450 or less; or a word of a line of three or more whose mean is at most `sc-lo-conf`, best at most 450 and words of four characters or fewer on average: texture), 2 it is the ghost of a rule (a lone bar, `I`, `l` or `!`
 	// on a vertical rule), 3 it is a dot leader (`sc-leader`), 4 its text is corrected (the cells at +2 and +3 regions say how). The words with a fate of 1 to 3 are flagged in `owords` (`oe-garbage`, `oe-rule-ghost`, one corrected: `oe-corrected`)
 	// and taken out of the list; the corrected text is appended to `etext`. Answers how many words are left.
 	var fb int32 = ScFateBase()
@@ -1916,6 +1919,7 @@ func scFates(owords *port.Cells, etext *port.Cells, osyms *port.Cells, rules *po
 	var n2 int32 = 0
 	var conf int32 = 0
 	var sum int32 = 0
+	var tch int32 = 0
 	var mx int32 = 0
 	var lmean int32 = 0
 	var f int32 = 0
@@ -1932,6 +1936,7 @@ func scFates(owords *port.Cells, etext *port.Cells, osyms *port.Cells, rules *po
 		w = port.CellsAt(scr, fb+i)
 		conf = evidence.OwGet(owords, w, evidence.HdConf())
 		sum += conf
+		tch += evidence.OwGet(owords, w, evidence.HdTlen())
 		if conf > mx {
 			mx = conf
 		}
@@ -1953,7 +1958,7 @@ func scFates(owords *port.Cells, etext *port.Cells, osyms *port.Cells, rules *po
 		}
 		// texture: a line of three words or more, all of them unsure
 		if f == 0 {
-			if (m >= 3) && ((lmean <= scLoConf()) && (mx <= 450)) {
+			if (m >= 3) && ((lmean <= scLoConf()) && ((mx <= 450) && (tch <= (4 * m)))) {
 				f = 1
 			}
 		}
@@ -2582,6 +2587,55 @@ func ScTagUnread(nodes *port.Cells, regions *port.Cells, mask *port.Cells) int32
 	return held
 }
 
+func ScWriteBare(nodes *port.Cells, regions *port.Cells, pages *port.Cells, im *port.Cells, ledger *port.Cells) int32 {
+	// P12.6 (R1): a page of the Model with no node on it and an image of at least a tenth of its area (the biggest such image) gets a ledger row, `background`, for that image, so that a page
+	// that comes out empty never has nothing dropped: the image is what it held and was not read, not drawn as a figure and not kept. Answers the rows written.
+	var np int32 = model.PageCount(pages)
+	var nn int32 = model.NodeCount(nodes)
+	var ni int32 = evidence.ImCount(im)
+	var p int32 = 0
+	var j int32 = 0
+	var n int32 = 0
+	var best int32 = -1
+	var has int32 = 0
+	var rows int32 = 0
+	var area int64 = int64(0)
+	var bestarea int64 = int64(0)
+	for p < np {
+		best = -1
+		bestarea = int64(0)
+		j = 0
+		for j < ni {
+			if evidence.ImGet(im, j, evidence.MfPage()) == (p + 1) {
+				area = int64(evidence.ImGet(im, j, evidence.MfX1())-evidence.ImGet(im, j, evidence.MfX0())) * int64(evidence.ImGet(im, j, evidence.MfY1())-evidence.ImGet(im, j, evidence.MfY0()))
+				if (area * int64(10)) >= (int64(model.PageW(pages, p)) * int64(model.PageH(pages, p))) {
+					if area > bestarea {
+						best = j
+						bestarea = area
+					}
+				}
+			}
+			j += 1
+		}
+		if best >= 0 {
+			has = 0
+			n = 1
+			for (n < nn) && (has == 0) {
+				if scNodePage(nodes, regions, n) == (p + 1) {
+					has = 1
+				}
+				n += 1
+			}
+			if has == 0 {
+				model.LedgerAdd(ledger, model.DrBackground(), p+1, evidence.ImGet(im, best, evidence.MfX0()), evidence.ImGet(im, best, evidence.MfY0()), evidence.ImGet(im, best, evidence.MfX1()), evidence.ImGet(im, best, evidence.MfY1()), 600, model.SrVector())
+				rows += 1
+			}
+		}
+		p += 1
+	}
+	return rows
+}
+
 func ScTag(nodes *port.Cells, attrs *port.Cells, text *port.Cells, regions *port.Cells, pages *port.Cells, mask *port.Cells, policy int32) int32 {
 	// The provenance of OCR text, after the paragraphs are built. `mask` has one cell a page: 0 none, 1 an image page was
 	// OCR'd, 2 a PDF page was (its kind becomes `scanned`, SPEC 3.4), plus `sc-mask-unread` for a page in a script the engine cannot read (`sc-tag-unread`).
@@ -2699,9 +2753,15 @@ func ScDctSpan(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *
 	return 1
 }
 
+func ScCoverMin() int32 {
+	// P12.6 (R1): the share of a page's area (per mille) that the image of a page with no text at all must cover to be read as the page: a quarter. It was a half, and a 96 dpi book page on an A4 page covers 49.5 per cent of it: the page was dropped, body and ledger empty.
+	return 250
+}
+
 func ScEligible(im *port.Cells, j int32, pw int32, ph int32) int32 {
 	// Can image placement `j` be OCR'd as the page? Upright and not skewed, a real XObject (not inline, not a stencil
-	// mask), at least 16 pixels each way, and covering at least half the page (`pw` x `ph` centipoints) by area.
+	// mask), at least 16 pixels each way, and covering at least `sc-cover-min` of the page (`pw` x `ph` centipoints) by area. The caller has already seen that the page has no text at all, so the
+	// image is what the page holds (the biggest of them, when it has more).
 	if evidence.ImGet(im, j, evidence.MfObj()) <= 0 {
 		return 0
 	}
@@ -2722,7 +2782,7 @@ func ScEligible(im *port.Cells, j int32, pw int32, ph int32) int32 {
 	}
 	var area int64 = int64(evidence.ImGet(im, j, evidence.MfX1())-evidence.ImGet(im, j, evidence.MfX0())) * int64(evidence.ImGet(im, j, evidence.MfY1())-evidence.ImGet(im, j, evidence.MfY0()))
 	var whole int64 = int64(pw) * int64(ph)
-	if (area * int64(2)) < whole {
+	if (area * int64(1000)) < (whole * int64(ScCoverMin())) {
 		return 0
 	}
 	if whole <= int64(0) {

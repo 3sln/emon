@@ -848,12 +848,8 @@ func imgInflate(d []byte, expect int) ([]byte, error) {
 
 // imgCcitt: kin's one CCITT decoder (`emon.ccitt`, TIFF's and PDF's): `rows` rows of `cw` pixels, bits packed MSB first, 1 = black, a
 // row to a whole number of bytes. `ws` is the decoder's scratch, kept for every strip of an image.
-func imgCcitt(d []byte, g4 bool, cw, rows int, ws *port.Cells) ([]byte, error) {
+func imgCcitt(d []byte, k int32, cw, rows int, ws *port.Cells) ([]byte, error) {
 	out := &port.Buf{B: make([]byte, ((cw+7)/8)*rows)}
-	k := int32(0)
-	if g4 {
-		k = -1
-	}
 	if kccitt.CcDecode(d, 0, int32(len(d)), k, int32(cw), int32(rows), 0, out, ws) != kccitt.CcOk() {
 		return nil, imgFailedf("a short or damaged CCITT stream")
 	}
@@ -990,9 +986,14 @@ func imgTiffPixels(b []byte, rep *port.Cells) ([]byte, error) {
 				case 8, 32946:
 					raw, err = imgInflate(data, expect)
 				case 4:
-					raw, err = imgCcitt(data, true, cw, crows, ws)
+					raw, err = imgCcitt(data, -1, cw, crows, ws)
 				default:
-					raw, err = imgCcitt(data, false, cw, crows, ws)
+					// Group 3: k 4 when T4Options says two-dimensional (a row after each EOL and its tag bit), else 0 (P12.6)
+					k := int32(0)
+					if g(tiffcheck.TrT4())&1 != 0 {
+						k = 4
+					}
+					raw, err = imgCcitt(data, k, cw, crows, ws)
 				}
 				if err != nil {
 					return nil, err

@@ -47,6 +47,9 @@ public final class Tiffcheck {
     public static int trEy() {
         return 13;
     }
+    public static int trT4() {
+        return 14;
+    }
     public static int trSpp() {
         return 16;
     }
@@ -127,6 +130,7 @@ public final class Tiffcheck {
     public static final int R_EO = 11;
     public static final int R_EX = 12;
     public static final int R_EY = 13;
+    public static final int R_T4 = 14;
     public static final int R_SPP = 16;
     public static final int R_BPS = 17;
     public static final int R_COMP = 18;
@@ -602,9 +606,10 @@ public final class Tiffcheck {
             if (tcBad(r) != 0) {
                 return tcBad(r);
             }
-            if ((v & 7) != 0) {
+            if ((v & 2) != 0) {
                 return tcRet(r, Imgcheck.icUnsupported());
             }
+            emon.Port.cellsSet(r, R_T4, v & 5);
         }
         v = tcInt(t, r, 284, 1);
         if (tcBad(r) != 0) {

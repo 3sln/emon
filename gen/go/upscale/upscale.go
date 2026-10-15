@@ -15,6 +15,21 @@ func UpXhTrigger() int32 {
 	return 9
 }
 
+func UpXhWeak() int32 {
+	// `up-xh-weak` (R4): a page whose text has an x-height under this many pixels (13: a 150 dpi scan is 10) and was read badly is read again enlarged, whatever `up-xh-trigger` says.
+	return 14
+}
+
+func UpWeakConf() int32 {
+	// `up-weak-conf` (R4): ...read badly is a mean word confidence (per mille) under this.
+	return 650
+}
+
+func UpWeakWords() int32 {
+	// `up-weak-words` (R4): ...of a first pass of at least this many words (a mean of a few says nothing).
+	return 20
+}
+
 func UpXhTarget() int32 {
 	// `up-xh-target`: the x-height, in pixels, the enlargement aims at (ten point type at 300 dpi).
 	return 20
@@ -143,6 +158,23 @@ func UpScore(an *port.Cells, at int32) int32 {
 	return sum
 }
 
+func UpMeanConf(an *port.Cells, at int32) int32 {
+	// The mean confidence (per mille) of the words of the OCR answer at `at`; -1 for none.
+	var n int32 = plan.AnOcrCount(an, at)
+	var w int32 = plan.AnOcrFirst(an, at)
+	var i int32 = 0
+	var sum int32 = 0
+	if n <= 0 {
+		return -1
+	}
+	for i < n {
+		sum += plan.AwGet(an, w, plan.AwConf())
+		w = plan.AwNext(an, w)
+		i += 1
+	}
+	return sum / n
+}
+
 func UpHint(an *port.Cells, at int32, k int32, dpi100 int32, hist *port.Cells) int32 {
 	// The resolution, in dots per inch, the engine is told an enlargement by `k` has: the resolution the first pass's text says the raster has (`up-eff-dpi100`; `dpi100`,
 	// the resolution it was taken at, when no line was measured) times `k`: a hint of its size heuristics, at least 70 and at most 1200.
@@ -196,6 +228,19 @@ func UpFactor(an *port.Cells, at int32, pxw int32, pxh int32, hist *port.Cells) 
 			}
 			if k > UpMax() {
 				k = UpMax()
+			}
+		}
+		// P12.6 (R4): a page of type between that and `up-xh-weak` that the engine read badly (a mean confidence under `up-weak-conf`: a degraded typewriter scan, 100 to 130 dpi) is read enlarged too;
+		// one of that size it reads well is left alone, so the recorded transcripts of 150 dpi scans are not asked again
+		if (k == 1) && ((xh > 0) && (xh < UpXhWeak())) {
+			if (words >= UpWeakWords()) && (UpMeanConf(an, at) < UpWeakConf()) {
+				k = (UpXhTarget() + (xh - 1)) / xh
+				if k < 2 {
+					k = 2
+				}
+				if k > UpMax() {
+					k = UpMax()
+				}
 			}
 		}
 	}

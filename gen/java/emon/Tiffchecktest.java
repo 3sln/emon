@@ -97,8 +97,9 @@ public final class Tiffchecktest {
         tTiff(0, emon.Testport.hexBlob("49492a000e0000000a141e28323c090000010300010000000300000001010300010000000200000002010300010000000800000003010300010000000200000006010300010000000100000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000000000000"), 0, 1, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, "CCITT RLE");
         tTiff(0, emon.Testport.hexBlob("49492a000e0000000a141e28323c090000010300010000000300000001010300010000000200000002010300010000000800000003010300010000000400000006010300010000000100000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000000000000"), 0, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, "CCITT of 8 bits");
         tTiff(0, emon.Testport.hexBlob("49492a000e0000000a141e28323c090000010300010000000300000001010300010000000200000002010300010000000100000003010300010000000300000006010300010000000000000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000000000000"), 0, 1, 0, -1, -1, -1, -1, -1, -1, -1, -1, 1, Tiffcheck.trComp(), 3, Tiffcheck.trKind(), 0, -1, -1, "Group 3, plain");
-        tTiff(0, emon.Testport.hexBlob("49492a000e0000000a141e28323c0a0000010300010000000300000001010300010000000200000002010300010000000100000003010300010000000300000006010300010000000000000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000024010400010000000100000000000000"), 0, 1, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, "Group 3, two-dimensional");
-        tTiff(0, emon.Testport.hexBlob("49492a000e0000000a141e28323c0a0000010300010000000300000001010300010000000200000002010300010000000100000003010300010000000300000006010300010000000000000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000024010400010000000400000000000000"), 0, 1, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, "Group 3, fill bits");
+        tTiff(0, emon.Testport.hexBlob("49492a000e0000000a141e28323c0a0000010300010000000300000001010300010000000200000002010300010000000100000003010300010000000300000006010300010000000000000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000024010400010000000100000000000000"), 0, 1, 0, -1, -1, -1, -1, -1, -1, -1, -1, 1, Tiffcheck.trComp(), 3, Tiffcheck.trT4(), 1, -1, -1, "Group 3, two-dimensional");
+        tTiff(0, emon.Testport.hexBlob("49492a000e0000000a141e28323c0a0000010300010000000300000001010300010000000200000002010300010000000100000003010300010000000300000006010300010000000000000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000024010400010000000400000000000000"), 0, 1, 0, -1, -1, -1, -1, -1, -1, -1, -1, 1, Tiffcheck.trComp(), 3, Tiffcheck.trT4(), 4, -1, -1, "Group 3, fill bits");
+        tTiff(0, emon.Testport.hexBlob("49492a000e0000000a141e28323c0a0000010300010000000300000001010300010000000200000002010300010000000100000003010300010000000300000006010300010000000000000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000024010400010000000200000000000000"), 0, 1, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, "Group 3, uncompressed mode is still not read");
         tTiff(0, emon.Testport.hexBlob("49492a000e0000000a141e28323c080000010300010000000300000001010300010000000200000002010300010000000100000003010300010000000400000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000000000000"), 0, 1, 0, -1, -1, -1, -1, -1, -1, -1, -1, 1, Tiffcheck.trKind(), 0, -1, -1, -1, -1, "Group 4 with no photometric tag is min-is-white");
         tTiff(0, emon.Testport.hexBlob("49492a000e0000000a141e28323c0a000001030001000000030000000101030001000000020000000201030001000000080000000301030001000000010000000601030001000000010000001101040001000000080000001501030001000000010000001601030001000000020000001701040001000000060000003d010300010000000300000000000000"), 0, 1, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, "predictor 3");
         tTiff(0, emon.Testport.hexBlob("49492a000e0000000a141e28323c0a000001030001000000030000000101030001000000020000000201030001000000080000000301030001000000010000000601030001000000010000001101040001000000080000001501030001000000010000001601030001000000020000001701040001000000060000003d010300010000000200000000000000"), 0, 1, 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, Tiffcheck.trPredictor(), 2, -1, -1, -1, -1, "predictor 2 on bytes");
@@ -147,8 +148,8 @@ public final class Tiffchecktest {
     }
     public static void testTiffFixtures() {
         // Every TIFF fixture, every frame: the size after the orientation, channels, resolution, bilevel; or the refusal's name.
-        tTiff(0, emon.Testport.testFile("image/tiff-bilevel-g3-2d.tif"), 0, 1, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, "tiff-bilevel-g3-2d.tif");
-        tTiff(0, emon.Testport.testFile("image/tiff-bilevel-g3-fill.tif"), 0, 1, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, "tiff-bilevel-g3-fill.tif");
+        tTiff(0, emon.Testport.testFile("image/tiff-bilevel-g3-2d.tif"), 0, 1, 0, 1, -1, -1, 48, 36, 1, 0, -1, 1, -1, -1, -1, -1, -1, -1, "tiff-bilevel-g3-2d.tif frame 0");
+        tTiff(0, emon.Testport.testFile("image/tiff-bilevel-g3-fill.tif"), 0, 1, 0, 1, -1, -1, 48, 36, 1, 0, -1, 1, -1, -1, -1, -1, -1, -1, "tiff-bilevel-g3-fill.tif frame 0");
         tTiff(0, emon.Testport.testFile("image/tiff-bilevel-g3.tif"), 0, 1, 0, 1, -1, -1, 48, 36, 1, 0, -1, 1, -1, -1, -1, -1, -1, -1, "tiff-bilevel-g3.tif frame 0");
         tTiff(0, emon.Testport.testFile("image/tiff-bilevel-g4.tif"), 0, 1, 0, 1, -1, -1, 48, 36, 1, 0, -1, 1, -1, -1, -1, -1, -1, -1, "tiff-bilevel-g4.tif frame 0");
         tTiff(0, emon.Testport.testFile("image/tiff-bilevel-lzw.tif"), 0, 1, 0, 1, -1, -1, 48, 36, 1, 0, -1, 1, -1, -1, -1, -1, -1, -1, "tiff-bilevel-lzw.tif frame 0");
@@ -264,9 +265,22 @@ public final class Tiffchecktest {
         }
         return 0;
     }
-    public static void testCcittReadsWhatTheValidatorRefuses() {
+    public static void testCcittReadsTheStripsOfTheFaxFixtures() {
+        // (The validator refused these two until P12.6: D189. It reads them now, and says in `tr-t4` which options the host's `emon.ccitt` call is to be made with.)
         tRawStrip(0, emon.Testport.testFile("image/tiff-bilevel-g3-2d.tif"), 8, 1, emon.Testport.testFile("image/tiff-bilevel-none.tif"), "Group 3, two-dimensional");
         tRawStrip(0, emon.Testport.testFile("image/tiff-bilevel-g3-fill.tif"), 8, 0, emon.Testport.testFile("image/tiff-bilevel-none.tif"), "Group 3 with fill bits before the EOLs");
+    }
+    public static void testAFaxTiffOfGroup3TwoDimensionalIsReadAndItsOptionsReachTheReport() {
+        // P12.6 (R6): libtiff's fax2d.tif was refused (exit 4) for T4Options bit 0, though the decoder reads it; bit 0 is two-dimensional (k 4), bit 2 fill bits
+        emon.Port.Cells r = emon.Port.newCells();
+        emon.Testport.assertEq(Tiffcheck.tcCheck(emon.Testport.testFile("image/tiff-bilevel-g3-2d.tif"), 0, 1, r), 0, "the two-dimensional file is read");
+        emon.Testport.assertEq(emon.Port.cellsAt(r, Tiffcheck.trT4()), 1, "its option: two-dimensional");
+        emon.Testport.assertEq(Tiffcheck.tcCheck(emon.Testport.testFile("image/tiff-bilevel-g3-fill.tif"), 0, 1, r), 0, "the fill-bits file is read");
+        emon.Testport.assertEq(emon.Port.cellsAt(r, Tiffcheck.trT4()), 4, "its option: fill bits");
+        emon.Testport.assertEq(Tiffcheck.tcCheck(emon.Testport.testFile("image/tiff-bilevel-g3.tif"), 0, 1, r), 0, "the plain Group 3 file is read");
+        emon.Testport.assertEq(emon.Port.cellsAt(r, Tiffcheck.trT4()), 0, "with no option");
+        emon.Testport.assertEq(Tiffcheck.tcCheck(emon.Testport.testFile("image/tiff-bilevel-g4.tif"), 0, 1, r), 0, "Group 4 is read");
+        emon.Testport.assertEq(emon.Port.cellsAt(r, Tiffcheck.trT4()), 0, "and has none");
     }
     public static void testExifReader() {
         // The first directory of an EXIF blob: orientation 1..8 and the two resolutions; anything else says (1, 0, 0).

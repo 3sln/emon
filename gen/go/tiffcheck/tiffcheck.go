@@ -64,6 +64,10 @@ func TrEy() int32 {
 	return 13
 }
 
+func TrT4() int32 {
+	return 14
+}
+
 func TrSpp() int32 {
 	return 16
 }
@@ -179,6 +183,8 @@ const rEo int32 = 11
 const rEx int32 = 12
 
 const rEy int32 = 13
+
+const rT4 int32 = 14
 
 const rSpp int32 = 16
 
@@ -706,9 +712,10 @@ func tcFrame(t []byte, r *port.Cells, deep int32) int32 {
 		if tcBad(r) != 0 {
 			return tcBad(r)
 		}
-		if (v & 7) != 0 {
+		if (v & 2) != 0 {
 			return tcRet(r, imgcheck.IcUnsupported())
 		}
+		port.CellsSet(r, rT4, v&5)
 	}
 	v = tcInt(t, r, 284, 1)
 	if tcBad(r) != 0 {

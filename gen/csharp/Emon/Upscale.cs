@@ -9,6 +9,18 @@ public static class Upscale {
         // `up-xh-trigger`: a page whose text has a median x-height under this many pixels is read again enlarged (9 px is ten point type at 130 dpi: a 150 dpi scan, x-height 10, reads well and is left alone; a 100 dpi one does not).
         return 9;
     }
+    public static int UpXhWeak() {
+        // `up-xh-weak` (R4): a page whose text has an x-height under this many pixels (13: a 150 dpi scan is 10) and was read badly is read again enlarged, whatever `up-xh-trigger` says.
+        return 14;
+    }
+    public static int UpWeakConf() {
+        // `up-weak-conf` (R4): ...read badly is a mean word confidence (per mille) under this.
+        return 650;
+    }
+    public static int UpWeakWords() {
+        // `up-weak-words` (R4): ...of a first pass of at least this many words (a mean of a few says nothing).
+        return 20;
+    }
     public static int UpXhTarget() {
         // `up-xh-target`: the x-height, in pixels, the enlargement aims at (ten point type at 300 dpi).
         return 20;
@@ -122,6 +134,22 @@ public static class Upscale {
         }
         return sum;
     }
+    public static int UpMeanConf(emon.Port.Cells an, int at) {
+        // The mean confidence (per mille) of the words of the OCR answer at `at`; -1 for none.
+        int n = Plan.AnOcrCount(an, at);
+        int w = Plan.AnOcrFirst(an, at);
+        int i = 0;
+        int sum = 0;
+        if (n <= 0) {
+            return -1;
+        }
+        while (i < n) {
+            sum += Plan.AwGet(an, w, Plan.AwConf());
+            w = Plan.AwNext(an, w);
+            i += 1;
+        }
+        return sum / n;
+    }
     public static int UpHint(emon.Port.Cells an, int at, int k, int dpi100, emon.Port.Cells hist) {
         // The resolution, in dots per inch, the engine is told an enlargement by `k` has: the resolution the first pass's text says the raster has (`up-eff-dpi100`; `dpi100`,
         // the resolution it was taken at, when no line was measured) times `k`: a hint of its size heuristics, at least 70 and at most 1200.
@@ -174,6 +202,19 @@ public static class Upscale {
                 }
                 if (k > UpMax()) {
                     k = UpMax();
+                }
+            }
+            // P12.6 (R4): a page of type between that and `up-xh-weak` that the engine read badly (a mean confidence under `up-weak-conf`: a degraded typewriter scan, 100 to 130 dpi) is read enlarged too;
+            // one of that size it reads well is left alone, so the recorded transcripts of 150 dpi scans are not asked again
+            if ((k == 1) && ((xh > 0) && (xh < UpXhWeak()))) {
+                if ((words >= UpWeakWords()) && (UpMeanConf(an, at) < UpWeakConf())) {
+                    k = (UpXhTarget() + (xh - 1)) / xh;
+                    if (k < 2) {
+                        k = 2;
+                    }
+                    if (k > UpMax()) {
+                        k = UpMax();
+                    }
                 }
             }
         }

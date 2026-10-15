@@ -492,6 +492,7 @@ public static class Scantest {
         emon.Testport.AssertEq(TImpl(t, 97, 98, 126, 99, 49, 0, 0, 0, 0, 0), 1, "letters, digits and an odd glyph together");
         emon.Testport.AssertEq(TImpl(t, 101, 100, 101, 100, 101, 100, 101, 100, 101, 100), 1, "ten characters of two different ones (a texture read as `ededededed`)");
         emon.Testport.AssertEq(TImpl(t, 80, 101, 116, 101, 116, 101, 116, 100, 101, 100), 0, "ten of four different ones are just odd");
+        emon.Testport.AssertEq(TImpl(t, 45, 60, 101, 101, 114, 101, 119, 101, 46, 0), 1, "an odd glyph among nine characters (`-<eerewe.`)");
         emon.Testport.AssertEq(TImpl(t, 104, 101, 108, 108, 111, 0, 0, 0, 0, 0), 0, "a word");
         emon.Testport.AssertEq(TImpl(t, 49, 44, 48, 56, 57, 46, 53, 56, 0, 0), 0, "an amount");
         emon.Testport.AssertEq(TImpl(t, 45, 45, 45, 45, 0, 0, 0, 0, 0, 0), 1, "four marks and no letter or digit");
@@ -866,5 +867,46 @@ public static class Scantest {
         StLine(olines, 100, 2700, 0, 3);
         emon.Testport.AssertEq(StEmit(olines, owords, words, lines, et, emon.Port.NewCells(), 1), 1, "one line");
         emon.Testport.AssertEq(emon.Port.CellsAt(et, Evidence.WdGet(words, 0, Evidence.HdTstart())), 167, "`§333.430` stays: no amount on the page has a dollar sign");
+    }
+    [Xunit.Fact]
+    public static void TestAnImageThatHoldsAQuarterOfAPageWithNoTextIsThePageAndASmallOneIsNot() {
+        // P12.6 (R1): n11 of the prose sweep, a 96 dpi book page (386 x 643 pt) on an A4 page covers 49.6 per cent of it; it was read only above a half
+        emon.Port.Cells im = emon.Port.NewCells();
+        Evidence.ImNew(im, 1, 10000, 10000, 48600, 74300, 10, 515, 857);
+        emon.Testport.AssertEq(Scan.ScEligible(im, 0, 59520, 84168), 1, "49.6 per cent of the page: read");
+        Evidence.ImNew(im, 1, 0, 0, 20000, 20000, 11, 100, 100);
+        emon.Testport.AssertEq(Scan.ScEligible(im, 1, 59520, 84168), 0, "8 per cent (a logo): not");
+        Evidence.ImNew(im, 1, 0, 0, 30000, 40000, 12, 300, 400);
+        emon.Testport.AssertEq(Scan.ScEligible(im, 2, 59520, 84168), 0, "24 per cent: not");
+        Evidence.ImNew(im, 1, 0, 0, 31000, 41000, 13, 300, 400);
+        emon.Testport.AssertEq(Scan.ScEligible(im, 3, 59520, 84168), 1, "25.4 per cent: read");
+    }
+    [Xunit.Fact]
+    public static void TestAPageThatComesOutEmptyAndHeldABigImageHasItInTheLedger() {
+        // P12.6 (R1): a page that vanishes (no node on it) never has nothing dropped: the biggest image of a tenth of it or more is a `background` row
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells im = emon.Port.NewCells();
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Model.PageNew(pages, 1, 61200, 79200, 0, Model.PkVector());
+        Model.PageNew(pages, 2, 61200, 79200, 0, Model.PkVector());
+        Model.PageNew(pages, 3, 61200, 79200, 0, Model.PkVector());
+        int p1 = Model.NodeNew(nodes, Model.NkParagraph(), 0);
+        Model.NodeAddRegion(nodes, regions, p1, 1, 0, 0, 100, 100);
+        // page 1 has a node and an image; page 2 has an image and no node; page 3 has a small one and no node
+        Evidence.ImNew(im, 1, 0, 0, 40000, 40000, 10, 100, 100);
+        Evidence.ImNew(im, 2, 1000, 2000, 30000, 50000, 11, 100, 100);
+        Evidence.ImNew(im, 2, 0, 0, 5000, 5000, 12, 100, 100);
+        Evidence.ImNew(im, 3, 0, 0, 5000, 5000, 13, 100, 100);
+        emon.Testport.AssertEq(Scan.ScWriteBare(nodes, regions, pages, im, ledger), 1, "one row");
+        emon.Testport.AssertEq(Model.LedgerCount(ledger), 1, "in the ledger");
+        emon.Testport.AssertEq(Model.LedgerPage(ledger, 0), 2, "of page 2");
+        emon.Testport.AssertEq(Model.LedgerReason(ledger, 0), Model.DrBackground(), "as a background");
+        emon.Testport.AssertEq(Model.LedgerX1(ledger, 0), 30000, "the biggest image's");
     }
 }

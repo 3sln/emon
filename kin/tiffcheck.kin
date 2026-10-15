@@ -49,6 +49,7 @@
 (defn ^:pub ^I32 tr-eo [] (return 11))        ;; `tc-exif`: orientation 1..8, horizontal and vertical resolution
 (defn ^:pub ^I32 tr-ex [] (return 12))
 (defn ^:pub ^I32 tr-ey [] (return 13))
+(defn ^:pub ^I32 tr-t4 [] (return 14))        ;; Group 3's T4Options (tag 292) when comp is 3, else 0: bit 0 two-dimensional (the host's `emon.ccitt` call is `k` 4), bit 2 fill bits before each EOL (read as they come); P12.6 (R6)
 (defn ^:pub ^I32 tr-spp [] (return 16))       ;; samples a pixel
 (defn ^:pub ^I32 tr-bps [] (return 17))       ;; bits a sample
 (defn ^:pub ^I32 tr-comp [] (return 18))      ;; 1 none, 3 CCITT G3, 4 CCITT G4, 5 LZW, 8 or 32946 Deflate, 32773 PackBits
@@ -86,6 +87,7 @@
 (defconst ^I32 R_EO 11)
 (defconst ^I32 R_EX 12)
 (defconst ^I32 R_EY 13)
+(defconst ^I32 R_T4 14)
 (defconst ^I32 R_SPP 16)
 (defconst ^I32 R_BPS 17)
 (defconst ^I32 R_COMP 18)
@@ -416,12 +418,14 @@
     (if (and (or (== comp 3) (== comp 4)) (or (!= bps 1) (!= spp 1))) (return (tc-ret r (ic-failed))))
     (if (and (!= comp 1) (and (!= comp 3) (and (!= comp 4) (and (!= comp 5) (and (!= comp 8) (and (!= comp 32773) (!= comp 32946)))))))
       (return (tc-ret r (ic-unsupported))))
-    ;; T4Options: bit 0 two-dimensional, bit 1 uncompressed mode, bit 2 fill bits before each EOL. They are refused on every host
-    ;; (D189: the hosts' CCITT readers of the day read none of them) and the fixtures `tiff-bilevel-g3-2d` and `-g3-fill` say so
+    ;; T4Options: bit 0 two-dimensional, bit 1 uncompressed mode, bit 2 fill bits before each EOL. D189 refused all three, as the hosts' CCITT readers of the
+    ;; day read none of them; `emon.ccitt` (P10.11) reads the first and the third (a row after an EOL and its tag bit, zero fill before an EOL), so only the uncompressed mode
+    ;; (bit 1, a mode no encoder uses and no reader in the wild reads) is refused (P12.6, R6: a fax TIFF of Group 3 two-dimensional was refused, exit 4)
     (if (== comp 3)
       (do (set v (tc-int t r 292 0))
           (if (!= (tc-bad r) 0) (return (tc-bad r)))
-          (if (!= (bit-and v 7) 0) (return (tc-ret r (ic-unsupported))))))
+          (if (!= (bit-and v 2) 0) (return (tc-ret r (ic-unsupported))))
+          (cells-set r R_T4 (bit-and v 5))))
     (set v (tc-int t r 284 1))
     (if (!= (tc-bad r) 0) (return (tc-bad r)))
     (if (and (== v 2) (> spp 1)) (set planar 1))

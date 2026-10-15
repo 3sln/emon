@@ -7,7 +7,7 @@
             [emon.plan :refer [rec-kind rec-id rq-arg rq-nargs an-ocr an-ocr-word an-ocr-cp an-ocr-end pk-ocr]]
             [emon.ocr :refer [ox-begin ox-line ox-block ox-word ox-sym ox-sym-cp ocf-dpi]]
             [emon.evidence :refer [ol-new ow-new ow-set os-new rl-new rl-set rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1 rlf-thick owf-sfirst owf-scount
-                                   co-new co-set cf-conf cf-ink ik-new ik-set ikf-role ir-body
+                                   co-new co-set cf-conf cf-ink ik-new ik-set ikf-role ir-body im-new
                                    oe-garbage oe-rule-ghost oe-corrected
                                    wd-count wd-get ln-count ln-get ol-count ol-get ow-count ow-get or-count or-get
                                    ob-count ob-get vw-px-to-cpt
@@ -17,11 +17,12 @@
                                    orf-bview orf-lang orf-langlen orf-osd orf-script orf-view
                                    obf-orient obf-wdir obf-btype vwf-kind vk-engine-binary wb-space wb-line-end
                                    epf-page epf-flags eg-raster ep-count]]
-            [emon.scan :refer [sc-lang sc-request sc-page sc-tag sc-tag-unread sc-mask-unread sc-unread-conf
+            [emon.scan :refer [sc-lang sc-request sc-page sc-tag sc-tag-unread sc-mask-unread sc-unread-conf sc-eligible sc-write-bare
                                sc-emit-sel sc-prep sc-sel-base sc-implausible sc-leader sc-amount-like sc-groups-fix]]
             [emon.model :refer [model-init node-new node-add-src node-set-conf node-src node-conf node-flags
                                 node-add-region node-set-text node-attr attr-len page-new page-kind
                                 nk-paragraph nk-text nk-document sr-text sr-ocr sr-infer fl-ocr-only fl-low-conf fl-script-unread pk-vector pk-scanned
+                                ledger-count ledger-page ledger-reason ledger-x1 dr-background
                                 pk-image fk-ocr]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot bit-and]]))
@@ -475,6 +476,7 @@
     (assert-eq (t-impl t 97 98 126 99 49 0 0 0 0 0) 1 "letters, digits and an odd glyph together")
     (assert-eq (t-impl t 101 100 101 100 101 100 101 100 101 100) 1 "ten characters of two different ones (a texture read as `ededededed`)")
     (assert-eq (t-impl t 80 101 116 101 116 101 116 100 101 100) 0 "ten of four different ones are just odd")
+    (assert-eq (t-impl t 45 60 101 101 114 101 119 101 46 0) 1 "an odd glyph among nine characters (`-<eerewe.`)")
     (assert-eq (t-impl t 104 101 108 108 111 0 0 0 0 0) 0 "a word")
     (assert-eq (t-impl t 49 44 48 56 57 46 53 56 0 0) 0 "an amount")
     (assert-eq (t-impl t 45 45 45 45 0 0 0 0 0 0) 1 "four marks and no letter or digit")))
@@ -831,3 +833,44 @@
     (st-line olines 100 2700 0 3)
     (assert-eq (st-emit olines owords words lines et (new-cells) 1) 1 "one line")
     (assert-eq (cells-at et (wd-get words 0 (hd-tstart))) 167 "`§333.430` stays: no amount on the page has a dollar sign")))
+
+;; ------------------------------------------------------------------------- the page a scan is (R1)
+
+(deftest test-an-image-that-holds-a-quarter-of-a-page-with-no-text-is-the-page-and-a-small-one-is-not
+  (comment "P12.6 (R1): n11 of the prose sweep, a 96 dpi book page (386 x 643 pt) on an A4 page covers 49.6 per cent of it; it was read only above a half")
+  (let [^Cells im (new-cells)]
+    (im-new im 1 10000 10000 48600 74300 10 515 857)
+    (assert-eq (sc-eligible im 0 59520 84168) 1 "49.6 per cent of the page: read")
+    (im-new im 1 0 0 20000 20000 11 100 100)
+    (assert-eq (sc-eligible im 1 59520 84168) 0 "8 per cent (a logo): not")
+    (im-new im 1 0 0 30000 40000 12 300 400)
+    (assert-eq (sc-eligible im 2 59520 84168) 0 "24 per cent: not")
+    (im-new im 1 0 0 31000 41000 13 300 400)
+    (assert-eq (sc-eligible im 3 59520 84168) 1 "25.4 per cent: read")))
+
+(deftest test-a-page-that-comes-out-empty-and-held-a-big-image-has-it-in-the-ledger
+  (comment "P12.6 (R1): a page that vanishes (no node on it) never has nothing dropped: the biggest image of a tenth of it or more is a `background` row")
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells im (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (page-new pages 1 61200 79200 0 (pk-vector))
+    (page-new pages 2 61200 79200 0 (pk-vector))
+    (page-new pages 3 61200 79200 0 (pk-vector))
+    (let [^I32 p1 (node-new nodes (nk-paragraph) 0)]
+      (node-add-region nodes regions p1 1 0 0 100 100))
+    (comment "page 1 has a node and an image; page 2 has an image and no node; page 3 has a small one and no node")
+    (im-new im 1 0 0 40000 40000 10 100 100)
+    (im-new im 2 1000 2000 30000 50000 11 100 100)
+    (im-new im 2 0 0 5000 5000 12 100 100)
+    (im-new im 3 0 0 5000 5000 13 100 100)
+    (assert-eq (sc-write-bare nodes regions pages im ledger) 1 "one row")
+    (assert-eq (ledger-count ledger) 1 "in the ledger")
+    (assert-eq (ledger-page ledger 0) 2 "of page 2")
+    (assert-eq (ledger-reason ledger 0) (dr-background) "as a background")
+    (assert-eq (ledger-x1 ledger 0) 30000 "the biggest image's")))

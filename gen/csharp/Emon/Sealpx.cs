@@ -13,6 +13,10 @@ public static class Sealpx {
         // The strip's height in pixels: the annulus from `sx-r-out` to `sx-r-in` of the radius.
         return 112;
     }
+    public static int SxSolid() {
+        // P12.6: a rectangle, ellipse or curve whose ink fills this much of it (per mille) is a block of colour, not a stamp's outline.
+        return 800;
+    }
     public static int SxROut() {
         // `seal-band-out`: the annulus' outer edge, per mille of the radius (the ring's own line is a little inside it).
         return 1020;
@@ -661,6 +665,7 @@ public static class Sealpx {
         int cx = Evidence.PmGet(prims, r, Evidence.PmfCx());
         int cy = Evidence.PmGet(prims, r, Evidence.PmfCy());
         int fl = Evidence.PmGet(prims, r, Evidence.PmfFlags());
+        int fill = Evidence.PmGet(prims, r, Evidence.PmfFill());
         int role = 0;
         int rad = 0;
         int mx = 0;
@@ -695,6 +700,10 @@ public static class Sealpx {
                     return 0;
                 }
                 if ((kind != Evidence.PmCurve()) && (kind != Evidence.PmEllipse())) {
+                    return 0;
+                }
+                // P12.6: a solid block of colour (its ink fills the primitive: a table's header band, a highlighted cell, the ground of a heading) is no stamp: a stamp is an outline, and the text on a band is the document's
+                if (fill >= SxSolid()) {
                     return 0;
                 }
                 if (((2 * mn) < 1000) || (mx > (8 * mn))) {
@@ -735,6 +744,10 @@ public static class Sealpx {
             }
             // D583: a rectangle that is most of the page's width is a colour band (a heading's ground, a table's header band), not a stamp: a stamp is a mark that is a small part of the page
             if ((20 * rx) > (6 * pw)) {
+                return 0;
+            }
+            // P12.6: and a solid one of any width is a block of colour (a header cell), not an outline
+            if (fill >= SxSolid()) {
                 return 0;
             }
             return SxAdd(cand, 2, r, cxp, cyp, SxAbs(rxp), SxAbs(ryp), Evidence.PmGet(prims, r, Evidence.PmfRot()), rgb, Evidence.PmGet(prims, r, Evidence.PmfX0()), Evidence.PmGet(prims, r, Evidence.PmfY0()), Evidence.PmGet(prims, r, Evidence.PmfX1()), Evidence.PmGet(prims, r, Evidence.PmfY1()), Evidence.PmGet(prims, r, Evidence.PmfConf()));

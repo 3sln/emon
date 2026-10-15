@@ -78,6 +78,7 @@
             [emon.model :refer [sr-ocr sr-text node-count node-kind node-parent node-region-head node-region-count
                                 node-src node-conf node-set-src node-set-conf node-add-flag nk-is-inline
                                 region-page fl-ocr-only fl-low-conf fl-script-unread page-count page-set-kind pk-scanned
+                                ledger-add dr-background sr-vector page-w page-h
                                 node-set-attr-text text-append-cp fk-ocr]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem bit-and bit-or]]))
@@ -953,7 +954,7 @@
     (return d)))
 
 (defn ^:pub ^I32 sc-implausible [^Cells etext ^I32 ts ^I32 n]
-  (comment "1 when a word's characters are not those of a word: a single glyph that is no letter or digit; two odd glyphs (`sc-cp-class`); letters, digits and an odd glyph together;")
+  (comment "1 when a word's characters are not those of a word: a single glyph that is no letter or digit; two odd glyphs (`sc-cp-class`); letters, digits and an odd glyph together; an odd glyph among five characters or more;")
   (comment "four or more characters and not one a letter or a digit; eight or more of which a quarter or fewer differ (`Petetetdedtededededet`). Else 0.")
   (let [^I32 nl (sc-count-class etext ts n 0)
         ^I32 nd (sc-count-class etext ts n 1)
@@ -962,6 +963,7 @@
     (if (and (== n 1) (== (+ nl nd) 0)) (return 1))
     (if (>= no 2) (return 1))
     (if (and (> no 0) (and (> nd 0) (> nl 0))) (return 1))
+    (if (and (> no 0) (>= n 5)) (return 1))
     (if (and (>= n 4) (== (+ nl nd) 0)) (return 1))
     (if (and (>= n 8) (<= (* 4 (sc-distinct etext ts n)) n)) (return 1))
     (return 0)))
@@ -1341,7 +1343,7 @@
 
 (defn ^I32 sc-fates [^:mut ^Cells owords ^:mut ^Cells etext ^Cells osyms ^Cells rules ^Cells comps ^Cells inks ^I32 page ^I32 m ^:mut ^Cells scr]
   (comment "What becomes of each of the `m` words of a line (listed at `sc-fate-base`): 0 it stays, 1 it is garbage (confidence at most `sc-lo-conf` and implausible characters (`sc-implausible`) on a line of")
-  (comment "two words or fewer or of a mean confidence of 450 or less; or a word of a line of three or more whose mean is at most `sc-lo-conf` and best at most 450: texture), 2 it is the ghost of a rule (a lone bar, `I`, `l` or `!`")
+  (comment "two words or fewer or of a mean confidence of 450 or less; or a word of a line of three or more whose mean is at most `sc-lo-conf`, best at most 450 and words of four characters or fewer on average: texture), 2 it is the ghost of a rule (a lone bar, `I`, `l` or `!`")
   (comment "on a vertical rule), 3 it is a dot leader (`sc-leader`), 4 its text is corrected (the cells at +2 and +3 regions say how). The words with a fate of 1 to 3 are flagged in `owords` (`oe-garbage`, `oe-rule-ghost`, one corrected: `oe-corrected`)")
   (comment "and taken out of the list; the corrected text is appended to `etext`. Answers how many words are left.")
   (let [^I32 fb (sc-fate-base)
@@ -1359,6 +1361,7 @@
         ^:mut ^I32 n2 0
         ^:mut ^I32 conf 0
         ^:mut ^I32 sum 0
+        ^:mut ^I32 tch 0
         ^:mut ^I32 mx 0
         ^:mut ^I32 lmean 0
         ^:mut ^I32 f 0
@@ -1375,6 +1378,7 @@
       (do (set w (cells-at scr (+ fb i)))
           (set conf (ow-get owords w (hd-conf)))
           (set sum (+ sum conf))
+          (set tch (+ tch (ow-get owords w (hd-tlen))))
           (if (> conf mx) (set mx conf))
           (set i (+ i 1))))
     (set lmean (quot sum m))
@@ -1391,7 +1395,7 @@
           (if (== (sc-leader etext ts n) 1) (set f 3))
           (comment "texture: a line of three words or more, all of them unsure")
           (if (== f 0)
-            (if (and (>= m 3) (and (<= lmean (sc-lo-conf)) (<= mx 450))) (set f 1)))
+            (if (and (>= m 3) (and (<= lmean (sc-lo-conf)) (and (<= mx 450) (<= tch (* 4 m))))) (set f 1)))
           (comment "very unsure and no word, alone or among such words")
           (if (== f 0)
             (if (<= conf (sc-lo-conf))
@@ -1907,6 +1911,44 @@
           (set n (+ n 1))))
     (return held)))
 
+(defn ^:pub ^I32 sc-write-bare [^Cells nodes ^Cells regions ^Cells pages ^Cells im ^:mut ^Cells ledger]
+  (comment "P12.6 (R1): a page of the Model with no node on it and an image of at least a tenth of its area (the biggest such image) gets a ledger row, `background`, for that image, so that a page")
+  (comment "that comes out empty never has nothing dropped: the image is what it held and was not read, not drawn as a figure and not kept. Answers the rows written.")
+  (let [^I32 np (page-count pages)
+        ^I32 nn (node-count nodes)
+        ^I32 ni (im-count im)
+        ^:mut ^I32 p 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 best -1
+        ^:mut ^I32 has 0
+        ^:mut ^I32 rows 0
+        ^:mut ^I64 area (i64 0)
+        ^:mut ^I64 bestarea (i64 0)]
+    (while (< p np)
+      (do (set best -1)
+          (set bestarea (i64 0))
+          (set j 0)
+          (while (< j ni)
+            (do (if (== (im-get im j (mf-page)) (+ p 1))
+                  (do (set area (mul64 (i64 (- (im-get im j (mf-x1)) (im-get im j (mf-x0)))) (i64 (- (im-get im j (mf-y1)) (im-get im j (mf-y0))))))
+                      (if (>= (mul64 area (i64 10)) (mul64 (i64 (page-w pages p)) (i64 (page-h pages p))))
+                        (if (> area bestarea)
+                          (do (set best j)
+                              (set bestarea area))))))
+                (set j (+ j 1))))
+          (if (>= best 0)
+            (do (set has 0)
+                (set n 1)
+                (while (and (< n nn) (== has 0))
+                  (do (if (== (sc-node-page nodes regions n) (+ p 1)) (set has 1))
+                      (set n (+ n 1))))
+                (if (== has 0)
+                  (do (ledger-add ledger (dr-background) (+ p 1) (im-get im best (mf-x0)) (im-get im best (mf-y0)) (im-get im best (mf-x1)) (im-get im best (mf-y1)) 600 (sr-vector))
+                      (set rows (+ rows 1))))))
+          (set p (+ p 1))))
+    (return rows)))
+
 (defn ^:pub ^I32 sc-tag [^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells text ^Cells regions
                          ^:mut ^Cells pages ^Cells mask ^I32 policy]
   (comment "The provenance of OCR text, after the paragraphs are built. `mask` has one cell a page: 0 none, 1 an image page was")
@@ -1990,9 +2032,12 @@
     (cells-push sp (pl-stream-len ar h))
     (return 1)))
 
+(defn ^:pub ^I32 sc-cover-min [] (comment "P12.6 (R1): the share of a page's area (per mille) that the image of a page with no text at all must cover to be read as the page: a quarter. It was a half, and a 96 dpi book page on an A4 page covers 49.5 per cent of it: the page was dropped, body and ledger empty.") (return 250))
+
 (defn ^:pub ^I32 sc-eligible [^Cells im ^I32 j ^I32 pw ^I32 ph]
   (comment "Can image placement `j` be OCR'd as the page? Upright and not skewed, a real XObject (not inline, not a stencil")
-  (comment "mask), at least 16 pixels each way, and covering at least half the page (`pw` x `ph` centipoints) by area.")
+  (comment "mask), at least 16 pixels each way, and covering at least `sc-cover-min` of the page (`pw` x `ph` centipoints) by area. The caller has already seen that the page has no text at all, so the")
+  (comment "image is what the page holds (the biggest of them, when it has more).")
   (if (<= (im-get im j (mf-obj)) 0) (return 0))
   (if (!= (im-get im j (mf-rot)) 0) (return 0))
   (if (!= (im-get im j (mf-skewed)) 0) (return 0))
@@ -2002,6 +2047,6 @@
   (let [^I64 area (mul64 (i64 (- (im-get im j (mf-x1)) (im-get im j (mf-x0))))
                          (i64 (- (im-get im j (mf-y1)) (im-get im j (mf-y0)))))
         ^I64 whole (mul64 (i64 pw) (i64 ph))]
-    (if (< (mul64 area (i64 2)) whole) (return 0))
+    (if (< (mul64 area (i64 1000)) (mul64 whole (i64 (sc-cover-min)))) (return 0))
     (if (<= whole (i64 0)) (return 0))
     (return 1)))

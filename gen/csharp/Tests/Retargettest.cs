@@ -246,6 +246,69 @@ public static class Retargettest {
         emon.Testport.AssertEq(Evidence.LnGet(lines, 0, Evidence.LhX1()), 1700, "the line is as long as the column");
         emon.Testport.AssertEq(Evidence.LnGet(lines, 0, Evidence.LhCount()), 3, "of three words");
     }
+    internal static int RttEmpty(emon.Port.Cells olines, int y0) {
+        // A first-pass line with no word, 40 pt wide and 15 pt high from height y0 (centipoints): what the engine finds where text meets a rule and reads as nothing; answers its row.
+        int l = Evidence.OlCount(olines);
+        Evidence.OlNew(olines, 1, 100, y0, 4100, y0 + 1500, 100, y0 + 1500, 4100, y0 + 1500, 0, 0, 0, 0);
+        Evidence.OlSet(olines, l, Evidence.OlfPx(), 100);
+        Evidence.OlSet(olines, l, Evidence.OlfPy(), y0);
+        Evidence.OlSet(olines, l, Evidence.OlfPw(), 4000);
+        Evidence.OlSet(olines, l, Evidence.OlfPh(), 1500);
+        return l;
+    }
+    [Xunit.Fact]
+    public static void TestALineTheEngineFoundAndReadAsNothingIsReadAloneAndItsWordsAreThePagesWhenSure() {
+        // P12.6, `RUNNING FOR (CHECK ONE):` before its blank: the page read as a page finds the line and no word in it; read as a line it is text
+        emon.Port.Cells oruns = emon.Port.NewCells();
+        emon.Port.Cells olines = emon.Port.NewCells();
+        emon.Port.Cells owords = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells rtp = emon.Port.NewCells();
+        emon.Port.Cells scr = emon.Port.NewCells();
+        Scan.ScPrep(scr);
+        RttLine(olines, owords, feats, 0, 900);
+        RttEmpty(olines, 300);
+        RttLine(olines, owords, feats, 2000, 900);
+        int fr = RttRun(oruns, olines, owords, 0, 0);
+        int l1 = Evidence.OlCount(olines);
+        int w1 = Evidence.OwCount(owords);
+        Retarget.RtPrep(rtp);
+        emon.Testport.AssertEq(Retarget.RtEmptyArea(olines, 1), 600, "the empty line: 40 x 15 square points");
+        emon.Testport.AssertEq(Retarget.RtEmptyArea(olines, 0), 0, "a line with words is not one");
+        emon.Testport.AssertEq(Retarget.RtDecide(0, 0, 0, oruns, fr, olines, owords, emon.Port.NewCells(), 1, 130, rtp), 1, "the lines are sure, so the budget goes to the one line that has no word");
+        emon.Testport.AssertEq(emon.Port.CellsAt(rtp, Retarget.RtpLine0()), 1, "that line");
+        // its re-reading: a line of three words, sure
+        RttLine3(olines, owords, feats, 300, 900, 900, 900);
+        int tr = RttRun(oruns, olines, owords, l1, w1);
+        emon.Port.CellsSet(rtp, Retarget.RtpLine0() + 1, tr);
+        emon.Testport.AssertEq(Retarget.RtLineState(oruns, olines, owords, rtp, scr, 1, 1, -1, 0, 3), 5, "the re-reading is the page's");
+        emon.Testport.AssertEq(Retarget.RtLineState(oruns, olines, owords, rtp, scr, 0, 0, -1, 0, 3), 0, "and the lines with words stay");
+        emon.Testport.AssertEq(RttAdopt(rtp, oruns, fr, olines, owords, scr), 3, "three lines: the first, the re-reading of the empty one, the third");
+        emon.Testport.AssertEq(emon.Port.CellsAt(scr, Scan.ScSelBase()), 0, "the first");
+        emon.Testport.AssertEq(emon.Port.CellsAt(scr, Scan.ScSelBase() + 1), l1, "then the line read in place of the empty one");
+        emon.Testport.AssertEq(emon.Port.CellsAt(scr, Scan.ScSelBase() + 2), 2, "then the third");
+    }
+    [Xunit.Fact]
+    public static void TestALineReadAsNothingAndReReadAsUnsureWordsStaysNothing() {
+        emon.Port.Cells oruns = emon.Port.NewCells();
+        emon.Port.Cells olines = emon.Port.NewCells();
+        emon.Port.Cells owords = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells rtp = emon.Port.NewCells();
+        emon.Port.Cells scr = emon.Port.NewCells();
+        Scan.ScPrep(scr);
+        RttLine(olines, owords, feats, 0, 900);
+        RttEmpty(olines, 300);
+        int fr = RttRun(oruns, olines, owords, 0, 0);
+        int l1 = Evidence.OlCount(olines);
+        int w1 = Evidence.OwCount(owords);
+        Retarget.RtPrep(rtp);
+        Retarget.RtDecide(0, 0, 0, oruns, fr, olines, owords, emon.Port.NewCells(), 1, 130, rtp);
+        RttLine3(olines, owords, feats, 300, 400, 500, 300);
+        int tr = RttRun(oruns, olines, owords, l1, w1);
+        emon.Port.CellsSet(rtp, Retarget.RtpLine0() + 1, tr);
+        emon.Testport.AssertEq(Retarget.RtLineState(oruns, olines, owords, rtp, scr, 1, 1, -1, 0, 2), 0, "words of a mean confidence of 400 are not taken for a line nothing was read of: it has no first pass to be compared with");
+    }
     [Xunit.Fact]
     public static void TestASecondPassWordThatIsUnsureOrLiesOverAWordOfTheFirstPassIsNotAdded() {
         emon.Port.Cells oruns = emon.Port.NewCells();

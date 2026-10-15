@@ -9,6 +9,14 @@ public static class Scriptcheck {
         // `script-conf`: OSD's script confidence (x10) from which kin believes the script it names (a Latin page reads 10 to 20, the Hindi page of the smoke review 63).
         return 150;
     }
+    public static int SkWeakConf() {
+        // `script-weak-conf` (R2): from this OSD script confidence (x10) kin believes a script OSD names, when the engine's dictionary also knows few of the words (`sk-dict-share`): the gate of 15 missed Urdu, Han, Ethiopic.
+        return 50;
+    }
+    public static int SkDictShare() {
+        // `script-dict-share` (R2): ...few is under this share (per mille) of the words read from the engine's dictionary.
+        return 250;
+    }
     public static int SkMinWords() {
         // A page of fewer OCR words than this is not flagged: the engine read nothing of it that could be junk.
         return 3;
@@ -28,6 +36,20 @@ public static class Scriptcheck {
             d = d / 256;
         }
         return n;
+    }
+    internal static int SkDict(int nw, emon.Port.Cells an, int ext) {
+        // How many of the answer's `nw` words the engine read from its dictionary.
+        int w = Ocr.OxFirstWord(an, ext);
+        int i = 0;
+        int k = 0;
+        while (i < nw) {
+            if ((Ocr.OxWdflags(an, w) & Ocr.OcwDict()) != 0) {
+                k += 1;
+            }
+            w = Ocr.OxWordNext(an, w);
+            i += 1;
+        }
+        return k;
     }
     public static int SkUnread(emon.Port.Cells an, int at, emon.Port.Cells scr) {
         // 1 when the page the OCR answer at `at` read is in a script the engine had no model for (see the head of this file), else 0. `scr` is scratch.
@@ -51,11 +73,18 @@ public static class Scriptcheck {
         if (script == Ocrport.ScLatf()) {
             return 0;
         }
-        if (Ocr.OxSconf(an, ext) < SkMinConf()) {
+        if (Ocr.OxSconf(an, ext) < SkWeakConf()) {
             return 0;
         }
         if (nw < SkMinWords()) {
             return 0;
+        }
+        // P12.6 (R2): OSD names the script of an Urdu, a Han photo or an Ethiopic page in a legacy font at a confidence under `sk-min-conf`; its word is then believed only when the
+        // reading backs it: a page whose words the engine's dictionary knows (`sk-dict-share` or more of them) is Latin, whatever OSD says; a page it knows few words of is junk in a script it cannot read.
+        if (Ocr.OxSconf(an, ext) < SkMinConf()) {
+            if ((SkDict(nw, an, ext) * 1000) >= (nw * SkDictShare())) {
+                return 0;
+            }
         }
         w = Ocr.OxFirstWord(an, ext);
         while (i < nw) {

@@ -1257,7 +1257,7 @@ public static class Scan {
         return d;
     }
     public static int ScImplausible(emon.Port.Cells etext, int ts, int n) {
-        // 1 when a word's characters are not those of a word: a single glyph that is no letter or digit; two odd glyphs (`sc-cp-class`); letters, digits and an odd glyph together;
+        // 1 when a word's characters are not those of a word: a single glyph that is no letter or digit; two odd glyphs (`sc-cp-class`); letters, digits and an odd glyph together; an odd glyph among five characters or more;
         // four or more characters and not one a letter or a digit; eight or more of which a quarter or fewer differ (`Petetetdedtededededet`). Else 0.
         int nl = ScCountClass(etext, ts, n, 0);
         int nd = ScCountClass(etext, ts, n, 1);
@@ -1272,6 +1272,9 @@ public static class Scan {
             return 1;
         }
         if ((no > 0) && ((nd > 0) && (nl > 0))) {
+            return 1;
+        }
+        if ((no > 0) && (n >= 5)) {
             return 1;
         }
         if ((n >= 4) && ((nl + nd) == 0)) {
@@ -1827,7 +1830,7 @@ public static class Scan {
     }
     internal static int ScFates(emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Cells osyms, emon.Port.Cells rules, emon.Port.Cells comps, emon.Port.Cells inks, int page, int m, emon.Port.Cells scr) {
         // What becomes of each of the `m` words of a line (listed at `sc-fate-base`): 0 it stays, 1 it is garbage (confidence at most `sc-lo-conf` and implausible characters (`sc-implausible`) on a line of
-        // two words or fewer or of a mean confidence of 450 or less; or a word of a line of three or more whose mean is at most `sc-lo-conf` and best at most 450: texture), 2 it is the ghost of a rule (a lone bar, `I`, `l` or `!`
+        // two words or fewer or of a mean confidence of 450 or less; or a word of a line of three or more whose mean is at most `sc-lo-conf`, best at most 450 and words of four characters or fewer on average: texture), 2 it is the ghost of a rule (a lone bar, `I`, `l` or `!`
         // on a vertical rule), 3 it is a dot leader (`sc-leader`), 4 its text is corrected (the cells at +2 and +3 regions say how). The words with a fate of 1 to 3 are flagged in `owords` (`oe-garbage`, `oe-rule-ghost`, one corrected: `oe-corrected`)
         // and taken out of the list; the corrected text is appended to `etext`. Answers how many words are left.
         int fb = ScFateBase();
@@ -1845,6 +1848,7 @@ public static class Scan {
         int n2 = 0;
         int conf = 0;
         int sum = 0;
+        int tch = 0;
         int mx = 0;
         int lmean = 0;
         int f = 0;
@@ -1861,6 +1865,7 @@ public static class Scan {
             w = emon.Port.CellsAt(scr, fb + i);
             conf = Evidence.OwGet(owords, w, Evidence.HdConf());
             sum += conf;
+            tch += Evidence.OwGet(owords, w, Evidence.HdTlen());
             if (conf > mx) {
                 mx = conf;
             }
@@ -1882,7 +1887,7 @@ public static class Scan {
             }
             // texture: a line of three words or more, all of them unsure
             if (f == 0) {
-                if ((m >= 3) && ((lmean <= ScLoConf()) && (mx <= 450))) {
+                if ((m >= 3) && ((lmean <= ScLoConf()) && ((mx <= 450) && (tch <= (4 * m))))) {
                     f = 1;
                 }
             }
@@ -2498,6 +2503,54 @@ public static class Scan {
         }
         return held;
     }
+    public static int ScWriteBare(emon.Port.Cells nodes, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells im, emon.Port.Cells ledger) {
+        // P12.6 (R1): a page of the Model with no node on it and an image of at least a tenth of its area (the biggest such image) gets a ledger row, `background`, for that image, so that a page
+        // that comes out empty never has nothing dropped: the image is what it held and was not read, not drawn as a figure and not kept. Answers the rows written.
+        int np = Model.PageCount(pages);
+        int nn = Model.NodeCount(nodes);
+        int ni = Evidence.ImCount(im);
+        int p = 0;
+        int j = 0;
+        int n = 0;
+        int best = -1;
+        int has = 0;
+        int rows = 0;
+        long area = (long) 0;
+        long bestarea = (long) 0;
+        while (p < np) {
+            best = -1;
+            bestarea = (long) 0;
+            j = 0;
+            while (j < ni) {
+                if (Evidence.ImGet(im, j, Evidence.MfPage()) == (p + 1)) {
+                    area = unchecked(((long) (Evidence.ImGet(im, j, Evidence.MfX1()) - Evidence.ImGet(im, j, Evidence.MfX0()))) * ((long) (Evidence.ImGet(im, j, Evidence.MfY1()) - Evidence.ImGet(im, j, Evidence.MfY0()))));
+                    if (unchecked(area * ((long) 10)) >= unchecked(((long) Model.PageW(pages, p)) * ((long) Model.PageH(pages, p)))) {
+                        if (area > bestarea) {
+                            best = j;
+                            bestarea = area;
+                        }
+                    }
+                }
+                j += 1;
+            }
+            if (best >= 0) {
+                has = 0;
+                n = 1;
+                while ((n < nn) && (has == 0)) {
+                    if (ScNodePage(nodes, regions, n) == (p + 1)) {
+                        has = 1;
+                    }
+                    n += 1;
+                }
+                if (has == 0) {
+                    Model.LedgerAdd(ledger, Model.DrBackground(), p + 1, Evidence.ImGet(im, best, Evidence.MfX0()), Evidence.ImGet(im, best, Evidence.MfY0()), Evidence.ImGet(im, best, Evidence.MfX1()), Evidence.ImGet(im, best, Evidence.MfY1()), 600, Model.SrVector());
+                    rows += 1;
+                }
+            }
+            p += 1;
+        }
+        return rows;
+    }
     public static int ScTag(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells mask, int policy) {
         // The provenance of OCR text, after the paragraphs are built. `mask` has one cell a page: 0 none, 1 an image page was
         // OCR'd, 2 a PDF page was (its kind becomes `scanned`, SPEC 3.4), plus `sc-mask-unread` for a page in a script the engine cannot read (`sc-tag-unread`).
@@ -2613,9 +2666,14 @@ public static class Scan {
         emon.Port.CellsPush(sp, Pdflex.PlStreamLen(ar, h));
         return 1;
     }
+    public static int ScCoverMin() {
+        // P12.6 (R1): the share of a page's area (per mille) that the image of a page with no text at all must cover to be read as the page: a quarter. It was a half, and a 96 dpi book page on an A4 page covers 49.5 per cent of it: the page was dropped, body and ledger empty.
+        return 250;
+    }
     public static int ScEligible(emon.Port.Cells im, int j, int pw, int ph) {
         // Can image placement `j` be OCR'd as the page? Upright and not skewed, a real XObject (not inline, not a stencil
-        // mask), at least 16 pixels each way, and covering at least half the page (`pw` x `ph` centipoints) by area.
+        // mask), at least 16 pixels each way, and covering at least `sc-cover-min` of the page (`pw` x `ph` centipoints) by area. The caller has already seen that the page has no text at all, so the
+        // image is what the page holds (the biggest of them, when it has more).
         if (Evidence.ImGet(im, j, Evidence.MfObj()) <= 0) {
             return 0;
         }
@@ -2636,7 +2694,7 @@ public static class Scan {
         }
         long area = unchecked(((long) (Evidence.ImGet(im, j, Evidence.MfX1()) - Evidence.ImGet(im, j, Evidence.MfX0()))) * ((long) (Evidence.ImGet(im, j, Evidence.MfY1()) - Evidence.ImGet(im, j, Evidence.MfY0()))));
         long whole = unchecked(((long) pw) * ((long) ph));
-        if (unchecked(area * ((long) 2)) < whole) {
+        if (unchecked(area * ((long) 1000)) < unchecked(whole * ((long) ScCoverMin()))) {
             return 0;
         }
         if (whole <= ((long) 0)) {

@@ -374,6 +374,9 @@ pub(crate) fn en_stage3(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::en
     }
     sc_tag(&mut m.nodes, &mut m.attrs, &mut m.text, &mut m.regions, &mut m.pages, &mut d.mask, c.ocr);
     th_write_ocr(&mut ev.owords, &mut d.et, &mut m.ledger, &mut m.text, &mut s.tmp, &mut s.ttx);
+    if kind == 0 {
+        sc_write_bare(&mut m.nodes, &mut m.regions, &mut m.pages, &mut d.im, &mut m.ledger);
+    }
     rp_settings(&mut m.nodes, &mut m.attrs, &mut m.text, c.scope);
     if d.fused == 1 {
         ar_write(&mut s.afa, &mut ev.owords, &mut d.et, &mut m.ledger, &mut m.text, &mut s.tmp, &mut s.ttx);

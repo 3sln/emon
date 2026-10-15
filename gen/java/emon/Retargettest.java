@@ -241,6 +241,67 @@ public final class Retargettest {
         emon.Testport.assertEq(Evidence.lnGet(lines, 0, Evidence.lhX1()), 1700, "the line is as long as the column");
         emon.Testport.assertEq(Evidence.lnGet(lines, 0, Evidence.lhCount()), 3, "of three words");
     }
+    public static int rttEmpty(emon.Port.Cells olines, int y0) {
+        // A first-pass line with no word, 40 pt wide and 15 pt high from height y0 (centipoints): what the engine finds where text meets a rule and reads as nothing; answers its row.
+        int l = Evidence.olCount(olines);
+        Evidence.olNew(olines, 1, 100, y0, 4100, y0 + 1500, 100, y0 + 1500, 4100, y0 + 1500, 0, 0, 0, 0);
+        Evidence.olSet(olines, l, Evidence.olfPx(), 100);
+        Evidence.olSet(olines, l, Evidence.olfPy(), y0);
+        Evidence.olSet(olines, l, Evidence.olfPw(), 4000);
+        Evidence.olSet(olines, l, Evidence.olfPh(), 1500);
+        return l;
+    }
+    public static void testALineTheEngineFoundAndReadAsNothingIsReadAloneAndItsWordsAreThePagesWhenSure() {
+        // P12.6, `RUNNING FOR (CHECK ONE):` before its blank: the page read as a page finds the line and no word in it; read as a line it is text
+        emon.Port.Cells oruns = emon.Port.newCells();
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells rtp = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        Scan.scPrep(scr);
+        rttLine(olines, owords, feats, 0, 900);
+        rttEmpty(olines, 300);
+        rttLine(olines, owords, feats, 2000, 900);
+        int fr = rttRun(oruns, olines, owords, 0, 0);
+        int l1 = Evidence.olCount(olines);
+        int w1 = Evidence.owCount(owords);
+        Retarget.rtPrep(rtp);
+        emon.Testport.assertEq(Retarget.rtEmptyArea(olines, 1), 600, "the empty line: 40 x 15 square points");
+        emon.Testport.assertEq(Retarget.rtEmptyArea(olines, 0), 0, "a line with words is not one");
+        emon.Testport.assertEq(Retarget.rtDecide(0, 0, 0, oruns, fr, olines, owords, emon.Port.newCells(), 1, 130, rtp), 1, "the lines are sure, so the budget goes to the one line that has no word");
+        emon.Testport.assertEq(emon.Port.cellsAt(rtp, Retarget.rtpLine0()), 1, "that line");
+        // its re-reading: a line of three words, sure
+        rttLine3(olines, owords, feats, 300, 900, 900, 900);
+        int tr = rttRun(oruns, olines, owords, l1, w1);
+        emon.Port.cellsSet(rtp, Retarget.rtpLine0() + 1, tr);
+        emon.Testport.assertEq(Retarget.rtLineState(oruns, olines, owords, rtp, scr, 1, 1, -1, 0, 3), 5, "the re-reading is the page's");
+        emon.Testport.assertEq(Retarget.rtLineState(oruns, olines, owords, rtp, scr, 0, 0, -1, 0, 3), 0, "and the lines with words stay");
+        emon.Testport.assertEq(rttAdopt(rtp, oruns, fr, olines, owords, scr), 3, "three lines: the first, the re-reading of the empty one, the third");
+        emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scSelBase()), 0, "the first");
+        emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scSelBase() + 1), l1, "then the line read in place of the empty one");
+        emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scSelBase() + 2), 2, "then the third");
+    }
+    public static void testALineReadAsNothingAndReReadAsUnsureWordsStaysNothing() {
+        emon.Port.Cells oruns = emon.Port.newCells();
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells rtp = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        Scan.scPrep(scr);
+        rttLine(olines, owords, feats, 0, 900);
+        rttEmpty(olines, 300);
+        int fr = rttRun(oruns, olines, owords, 0, 0);
+        int l1 = Evidence.olCount(olines);
+        int w1 = Evidence.owCount(owords);
+        Retarget.rtPrep(rtp);
+        Retarget.rtDecide(0, 0, 0, oruns, fr, olines, owords, emon.Port.newCells(), 1, 130, rtp);
+        rttLine3(olines, owords, feats, 300, 400, 500, 300);
+        int tr = rttRun(oruns, olines, owords, l1, w1);
+        emon.Port.cellsSet(rtp, Retarget.rtpLine0() + 1, tr);
+        emon.Testport.assertEq(Retarget.rtLineState(oruns, olines, owords, rtp, scr, 1, 1, -1, 0, 2), 0, "words of a mean confidence of 400 are not taken for a line nothing was read of: it has no first pass to be compared with");
+    }
     public static void testASecondPassWordThatIsUnsureOrLiesOverAWordOfTheFirstPassIsNotAdded() {
         emon.Port.Cells oruns = emon.Port.newCells();
         emon.Port.Cells olines = emon.Port.newCells();

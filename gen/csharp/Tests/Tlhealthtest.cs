@@ -279,4 +279,62 @@ public static class Tlhealthtest {
         emon.Testport.AssertEq(TtHealth(emon.Testport.TestFile("corpus/synth/pdf/bank-statement.pdf"), 0), TtHealth(emon.Testport.TestFile("corpus/synth/pdf/bank-statement.pdf"), 1), "bank statement");
         emon.Testport.AssertEq(TtHealth(emon.Testport.TestFile("vis/visible.pdf"), 0), TtHealth(emon.Testport.TestFile("vis/visible.pdf"), 1), "visible");
     }
+    internal static int TtTrustOf(int how) {
+        // The `xt-trust` (share of glyphs mapped, per mille) of a word of two glyphs whose Unicode was obtained `how`.
+        emon.Port.Cells epages = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells gl = emon.Port.NewCells();
+        emon.Port.Cells fnt = emon.Port.NewCells();
+        emon.Port.Cells mk = emon.Port.NewCells();
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        Evidence.EpNew(epages, 1, 61200, 79200);
+        Evidence.GlNew(gl, 1, 1000, 1000, 1500, 2200, 72, -1, 0, 0);
+        Evidence.GlNew(gl, 1, 1500, 1000, 2000, 2200, 105, -1, 0, 0);
+        Evidence.GlSet(gl, 0, Evidence.GfHow(), how);
+        Evidence.GlSet(gl, 1, Evidence.GfHow(), how);
+        Evidence.GlSet(gl, 0, Evidence.GfFont(), -1);
+        Evidence.GlSet(gl, 1, Evidence.GfFont(), -1);
+        Evidence.WdNew(wd, 1, 1000, 1000, 2000, 2200, 1000, 2200, 2000, 2200, 0, 0, -1, 0, 0, -1, -1);
+        Evidence.WdSet(wd, 0, Evidence.WfGfirst(), 0);
+        Evidence.WdSet(wd, 0, Evidence.WfGcount(), 2);
+        Evidence.LnNew(ln, 1, 1000, 1000, 2000, 2200, 1000, 2200, 2000, 2200, 0, 0, 0, 1);
+        int row = Tlhealth.EvFeatText(feats, epages, et, gl, fnt, mk, wd, ln, 0, 0, 0, 1200);
+        return Evidence.FeGet(feats, row, Evidence.XtTrust());
+    }
+    [Xunit.Fact]
+    public static void TestGlyphsNamedByTheFontsDifferencesAreAsMappedAsThoseOfAnEncoding() {
+        // P12.6 (R5): a TeX Type 1 font (`t1xtt`) with no ToUnicode map names its glyphs in /Differences (`glyphname`): its text layer is consistently decoded, so its font must not score as an unmapped one
+        emon.Testport.AssertEq(TtTrustOf(Evidence.GhTounicode()), 1000, "ToUnicode");
+        emon.Testport.AssertEq(TtTrustOf(Evidence.GhEncoding()), 1000, "an encoding");
+        emon.Testport.AssertEq(TtTrustOf(Evidence.GhGlyphname()), 1000, "glyph names");
+        emon.Testport.AssertEq(TtTrustOf(Evidence.GhUnknown()), 0, "a guess is not a mapping");
+    }
+    [Xunit.Fact]
+    public static void TestOcrWordsKeptOutOfAScannedPagesWordsAreLedgerRows() {
+        // P12.6: garbage and a table's rule read as characters are `ocr-ghost` and `rule-ghost` rows, a run on one OCR line one row, with the engine's text and src ocr
+        emon.Port.Cells owords = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells tt = emon.Port.NewCells();
+        emon.Port.CellsPush(et, 126);
+        emon.Port.CellsPush(et, 124);
+        emon.Port.CellsPush(et, 71);
+        emon.Port.CellsPush(et, 124);
+        Evidence.OwNew(owords, 1, 100, 0, 200, 100, 100, 100, 200, 100, 0, 0, 0, 1, 5, 120, -1);
+        Evidence.OwNew(owords, 1, 300, 0, 400, 100, 300, 100, 400, 100, 0, 0, 1, 1, 5, 120, -1);
+        Evidence.OwNew(owords, 1, 500, 0, 600, 100, 500, 100, 600, 100, 0, 0, 2, 1, 5, 900, -1);
+        Evidence.OwNew(owords, 1, 700, 0, 710, 100, 700, 100, 710, 100, 0, 0, 3, 1, 6, 800, -1);
+        Evidence.OwSet(owords, 0, Evidence.OwfFlags(), Evidence.OeGarbage());
+        Evidence.OwSet(owords, 1, Evidence.OwfFlags(), Evidence.OeGarbage());
+        Evidence.OwSet(owords, 3, Evidence.OwfFlags(), Evidence.OeRuleGhost());
+        emon.Testport.AssertEq(Tlhealth.ThWriteOcr(owords, et, ledger, text, tmp, tt), 2, "two rows: the two garbage words of line 5 are one, the rule's ghost another, the kept word none");
+        emon.Testport.AssertEq(Model.LedgerCount(ledger), 2, "in the ledger");
+        emon.Testport.AssertEq(Model.LedgerReason(ledger, 0), Model.DrOcrGhost(), "ocr-ghost");
+        emon.Testport.AssertEq(Model.LedgerReason(ledger, 1), Model.DrRuleGhost(), "rule-ghost");
+        emon.Testport.AssertEq(Model.LedgerTextLen(ledger, 0), 3, "the two words joined by a space");
+    }
 }

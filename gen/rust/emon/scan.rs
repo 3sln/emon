@@ -1261,7 +1261,7 @@ pub(crate) fn sc_distinct(etext: &mut crate::port::Cells, ts: i32, n: i32) -> i3
     return d;
 }
 pub fn sc_implausible(etext: &mut crate::port::Cells, ts: i32, n: i32) -> i32 {
-    // 1 when a word's characters are not those of a word: a single glyph that is no letter or digit; two odd glyphs (`sc-cp-class`); letters, digits and an odd glyph together;
+    // 1 when a word's characters are not those of a word: a single glyph that is no letter or digit; two odd glyphs (`sc-cp-class`); letters, digits and an odd glyph together; an odd glyph among five characters or more;
     // four or more characters and not one a letter or a digit; eight or more of which a quarter or fewer differ (`Petetetdedtededededet`). Else 0.
     let nl: i32 = sc_count_class(etext, ts, n, 0);
     let nd: i32 = sc_count_class(etext, ts, n, 1);
@@ -1276,6 +1276,9 @@ pub fn sc_implausible(etext: &mut crate::port::Cells, ts: i32, n: i32) -> i32 {
         return 1;
     }
     if (no > 0) && ((nd > 0) && (nl > 0)) {
+        return 1;
+    }
+    if (no > 0) && (n >= 5) {
         return 1;
     }
     if (n >= 4) && ((nl + nd) == 0) {
@@ -1831,7 +1834,7 @@ pub(crate) fn sc_flag(mut owords: &mut crate::port::Cells, w: i32, bit: i32) -> 
 }
 pub(crate) fn sc_fates(mut owords: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, osyms: &mut crate::port::Cells, rules: &mut crate::port::Cells, comps: &mut crate::port::Cells, inks: &mut crate::port::Cells, page: i32, m: i32, mut scr: &mut crate::port::Cells) -> i32 {
     // What becomes of each of the `m` words of a line (listed at `sc-fate-base`): 0 it stays, 1 it is garbage (confidence at most `sc-lo-conf` and implausible characters (`sc-implausible`) on a line of
-    // two words or fewer or of a mean confidence of 450 or less; or a word of a line of three or more whose mean is at most `sc-lo-conf` and best at most 450: texture), 2 it is the ghost of a rule (a lone bar, `I`, `l` or `!`
+    // two words or fewer or of a mean confidence of 450 or less; or a word of a line of three or more whose mean is at most `sc-lo-conf`, best at most 450 and words of four characters or fewer on average: texture), 2 it is the ghost of a rule (a lone bar, `I`, `l` or `!`
     // on a vertical rule), 3 it is a dot leader (`sc-leader`), 4 its text is corrected (the cells at +2 and +3 regions say how). The words with a fate of 1 to 3 are flagged in `owords` (`oe-garbage`, `oe-rule-ghost`, one corrected: `oe-corrected`)
     // and taken out of the list; the corrected text is appended to `etext`. Answers how many words are left.
     let fb: i32 = sc_fate_base();
@@ -1849,6 +1852,7 @@ pub(crate) fn sc_fates(mut owords: &mut crate::port::Cells, mut etext: &mut crat
     let mut n2: i32 = 0;
     let mut conf: i32 = 0;
     let mut sum: i32 = 0;
+    let mut tch: i32 = 0;
     let mut mx: i32 = 0;
     let mut lmean: i32 = 0;
     let mut f: i32 = 0;
@@ -1865,6 +1869,7 @@ pub(crate) fn sc_fates(mut owords: &mut crate::port::Cells, mut etext: &mut crat
         w = crate::port::cells_at(scr, fb + i);
         conf = ow_get(owords, w, hd_conf());
         sum += conf;
+        tch += ow_get(owords, w, hd_tlen());
         if conf > mx {
             mx = conf;
         }
@@ -1886,7 +1891,7 @@ pub(crate) fn sc_fates(mut owords: &mut crate::port::Cells, mut etext: &mut crat
         }
         // texture: a line of three words or more, all of them unsure
         if f == 0 {
-            if (m >= 3) && ((lmean <= sc_lo_conf()) && (mx <= 450)) {
+            if (m >= 3) && ((lmean <= sc_lo_conf()) && ((mx <= 450) && (tch <= (4 * m)))) {
                 f = 1;
             }
         }
@@ -2502,6 +2507,54 @@ pub fn sc_tag_unread(mut nodes: &mut crate::port::Cells, regions: &mut crate::po
     }
     return held;
 }
+pub fn sc_write_bare(nodes: &mut crate::port::Cells, regions: &mut crate::port::Cells, pages: &mut crate::port::Cells, im: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells) -> i32 {
+    // P12.6 (R1): a page of the Model with no node on it and an image of at least a tenth of its area (the biggest such image) gets a ledger row, `background`, for that image, so that a page
+    // that comes out empty never has nothing dropped: the image is what it held and was not read, not drawn as a figure and not kept. Answers the rows written.
+    let np: i32 = page_count(pages);
+    let nn: i32 = node_count(nodes);
+    let ni: i32 = im_count(im);
+    let mut p: i32 = 0;
+    let mut j: i32 = 0;
+    let mut n: i32 = 0;
+    let mut best: i32 = -1;
+    let mut has: i32 = 0;
+    let mut rows: i32 = 0;
+    let mut area: i64 = 0 as i64;
+    let mut bestarea: i64 = 0 as i64;
+    while p < np {
+        best = -1;
+        bestarea = 0 as i64;
+        j = 0;
+        while j < ni {
+            if im_get(im, j, mf_page()) == (p + 1) {
+                area = ((im_get(im, j, mf_x1()) - im_get(im, j, mf_x0())) as i64).wrapping_mul((im_get(im, j, mf_y1()) - im_get(im, j, mf_y0())) as i64);
+                if (area).wrapping_mul(10 as i64) >= (page_w(pages, p) as i64).wrapping_mul(page_h(pages, p) as i64) {
+                    if area > bestarea {
+                        best = j;
+                        bestarea = area;
+                    }
+                }
+            }
+            j += 1;
+        }
+        if best >= 0 {
+            has = 0;
+            n = 1;
+            while (n < nn) && (has == 0) {
+                if sc_node_page(nodes, regions, n) == (p + 1) {
+                    has = 1;
+                }
+                n += 1;
+            }
+            if has == 0 {
+                ledger_add(ledger, dr_background(), p + 1, im_get(im, best, mf_x0()), im_get(im, best, mf_y0()), im_get(im, best, mf_x1()), im_get(im, best, mf_y1()), 600, sr_vector());
+                rows += 1;
+            }
+        }
+        p += 1;
+    }
+    return rows;
+}
 pub fn sc_tag(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut text: &mut crate::port::Cells, regions: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, mask: &mut crate::port::Cells, policy: i32) -> i32 {
     // The provenance of OCR text, after the paragraphs are built. `mask` has one cell a page: 0 none, 1 an image page was
     // OCR'd, 2 a PDF page was (its kind becomes `scanned`, SPEC 3.4), plus `sc-mask-unread` for a page in a script the engine cannot read (`sc-tag-unread`).
@@ -2617,9 +2670,14 @@ pub fn sc_dct_span(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut 
     crate::port::cells_push(sp, pl_stream_len(ar, h));
     return 1;
 }
+pub fn sc_cover_min() -> i32 {
+    // P12.6 (R1): the share of a page's area (per mille) that the image of a page with no text at all must cover to be read as the page: a quarter. It was a half, and a 96 dpi book page on an A4 page covers 49.5 per cent of it: the page was dropped, body and ledger empty.
+    return 250;
+}
 pub fn sc_eligible(im: &mut crate::port::Cells, j: i32, pw: i32, ph: i32) -> i32 {
     // Can image placement `j` be OCR'd as the page? Upright and not skewed, a real XObject (not inline, not a stencil
-    // mask), at least 16 pixels each way, and covering at least half the page (`pw` x `ph` centipoints) by area.
+    // mask), at least 16 pixels each way, and covering at least `sc-cover-min` of the page (`pw` x `ph` centipoints) by area. The caller has already seen that the page has no text at all, so the
+    // image is what the page holds (the biggest of them, when it has more).
     if im_get(im, j, mf_obj()) <= 0 {
         return 0;
     }
@@ -2640,7 +2698,7 @@ pub fn sc_eligible(im: &mut crate::port::Cells, j: i32, pw: i32, ph: i32) -> i32
     }
     let area: i64 = ((im_get(im, j, mf_x1()) - im_get(im, j, mf_x0())) as i64).wrapping_mul((im_get(im, j, mf_y1()) - im_get(im, j, mf_y0())) as i64);
     let whole: i64 = (pw as i64).wrapping_mul(ph as i64);
-    if (area).wrapping_mul(2 as i64) < whole {
+    if (area).wrapping_mul(1000 as i64) < (whole).wrapping_mul(sc_cover_min() as i64) {
         return 0;
     }
     if whole <= (0 as i64) {

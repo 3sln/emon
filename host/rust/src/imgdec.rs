@@ -560,9 +560,8 @@ fn inflate(d: &[u8], expect: usize) -> Result<Vec<u8>, Fail> {
 
 // CCITT through kin's one decoder (`emon.ccitt`, TIFF's and PDF's): `rows` rows of `cw` pixels, bits packed high first, 1 for a black
 // run (the libtiff reading, D188), rows byte-aligned. `ws` is the decoder's scratch, kept for every strip of an image.
-fn ccitt(d: &[u8], g4: bool, cw: usize, rows: usize, ws: &mut Cells) -> Result<Vec<u8>, Fail> {
+fn ccitt(d: &[u8], k: i32, cw: usize, rows: usize, ws: &mut Cells) -> Result<Vec<u8>, Fail> {
     let mut out = Buf(vec![0u8; ((cw + 7) / 8) * rows]);
-    let k = if g4 { -1 } else { 0 };
     if kccitt::cc_decode(d, 0, d.len() as i32, k, cw as i32, rows as i32, 0, &mut out, ws) != kccitt::cc_ok() {
         return failed("a short or damaged CCITT stream");
     }
@@ -665,8 +664,9 @@ fn tiff_pixels(bytes: &[u8], rep: &Cells) -> Result<Vec<u8>, Fail> {
                     32773 => packbits(&data, expect),
                     5 => lzw(&data, expect)?,
                     8 | 32946 => inflate(&data, expect)?,
-                    4 => ccitt(&data, true, cw, crows, &mut ws)?,
-                    _ => ccitt(&data, false, cw, crows, &mut ws)?,
+                    4 => ccitt(&data, -1, cw, crows, &mut ws)?,
+                    // Group 3: `k` 4 when T4Options says two-dimensional (a row after each EOL and its tag bit), else 0 (P12.6)
+                    _ => ccitt(&data, if g(tiffcheck::tr_t4()) & 1 != 0 { 4 } else { 0 }, cw, crows, &mut ws)?,
                 };
                 raw.resize(expect, 0);
                 if predictor == 2 {

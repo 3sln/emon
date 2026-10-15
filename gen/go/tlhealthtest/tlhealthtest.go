@@ -289,3 +289,62 @@ func TestHealthyDocumentsAreTrusted(emonT *testing.T) {
 	port.AssertEq(emonT, ttHealth(port.TestFile("corpus/synth/pdf/bank-statement.pdf"), 0), ttHealth(port.TestFile("corpus/synth/pdf/bank-statement.pdf"), 1), "bank statement")
 	port.AssertEq(emonT, ttHealth(port.TestFile("vis/visible.pdf"), 0), ttHealth(port.TestFile("vis/visible.pdf"), 1), "visible")
 }
+
+func ttTrustOf(how int32) int32 {
+	// The `xt-trust` (share of glyphs mapped, per mille) of a word of two glyphs whose Unicode was obtained `how`.
+	var epages *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var gl *port.Cells = port.NewCells()
+	var fnt *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	evidence.EpNew(epages, 1, 61200, 79200)
+	evidence.GlNew(gl, 1, 1000, 1000, 1500, 2200, 72, -1, 0, 0)
+	evidence.GlNew(gl, 1, 1500, 1000, 2000, 2200, 105, -1, 0, 0)
+	evidence.GlSet(gl, 0, evidence.GfHow(), how)
+	evidence.GlSet(gl, 1, evidence.GfHow(), how)
+	evidence.GlSet(gl, 0, evidence.GfFont(), -1)
+	evidence.GlSet(gl, 1, evidence.GfFont(), -1)
+	evidence.WdNew(wd, 1, 1000, 1000, 2000, 2200, 1000, 2200, 2000, 2200, 0, 0, -1, 0, 0, -1, -1)
+	evidence.WdSet(wd, 0, evidence.WfGfirst(), 0)
+	evidence.WdSet(wd, 0, evidence.WfGcount(), 2)
+	evidence.LnNew(ln, 1, 1000, 1000, 2000, 2200, 1000, 2200, 2000, 2200, 0, 0, 0, 1)
+	var row int32 = tlhealth.EvFeatText(feats, epages, et, gl, fnt, mk, wd, ln, 0, 0, 0, 1200)
+	return evidence.FeGet(feats, row, evidence.XtTrust())
+}
+
+func TestGlyphsNamedByTheFontsDifferencesAreAsMappedAsThoseOfAnEncoding(emonT *testing.T) {
+	// P12.6 (R5): a TeX Type 1 font (`t1xtt`) with no ToUnicode map names its glyphs in /Differences (`glyphname`): its text layer is consistently decoded, so its font must not score as an unmapped one
+	port.AssertEq(emonT, ttTrustOf(evidence.GhTounicode()), 1000, "ToUnicode")
+	port.AssertEq(emonT, ttTrustOf(evidence.GhEncoding()), 1000, "an encoding")
+	port.AssertEq(emonT, ttTrustOf(evidence.GhGlyphname()), 1000, "glyph names")
+	port.AssertEq(emonT, ttTrustOf(evidence.GhUnknown()), 0, "a guess is not a mapping")
+}
+
+func TestOcrWordsKeptOutOfAScannedPagesWordsAreLedgerRows(emonT *testing.T) {
+	// P12.6: garbage and a table's rule read as characters are `ocr-ghost` and `rule-ghost` rows, a run on one OCR line one row, with the engine's text and src ocr
+	var owords *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var tt *port.Cells = port.NewCells()
+	port.CellsPush(et, 126)
+	port.CellsPush(et, 124)
+	port.CellsPush(et, 71)
+	port.CellsPush(et, 124)
+	evidence.OwNew(owords, 1, 100, 0, 200, 100, 100, 100, 200, 100, 0, 0, 0, 1, 5, 120, -1)
+	evidence.OwNew(owords, 1, 300, 0, 400, 100, 300, 100, 400, 100, 0, 0, 1, 1, 5, 120, -1)
+	evidence.OwNew(owords, 1, 500, 0, 600, 100, 500, 100, 600, 100, 0, 0, 2, 1, 5, 900, -1)
+	evidence.OwNew(owords, 1, 700, 0, 710, 100, 700, 100, 710, 100, 0, 0, 3, 1, 6, 800, -1)
+	evidence.OwSet(owords, 0, evidence.OwfFlags(), evidence.OeGarbage())
+	evidence.OwSet(owords, 1, evidence.OwfFlags(), evidence.OeGarbage())
+	evidence.OwSet(owords, 3, evidence.OwfFlags(), evidence.OeRuleGhost())
+	port.AssertEq(emonT, tlhealth.ThWriteOcr(owords, et, ledger, text, tmp, tt), 2, "two rows: the two garbage words of line 5 are one, the rule's ghost another, the kept word none")
+	port.AssertEq(emonT, model.LedgerCount(ledger), 2, "in the ledger")
+	port.AssertEq(emonT, model.LedgerReason(ledger, 0), model.DrOcrGhost(), "ocr-ghost")
+	port.AssertEq(emonT, model.LedgerReason(ledger, 1), model.DrRuleGhost(), "rule-ghost")
+	port.AssertEq(emonT, model.LedgerTextLen(ledger, 0), 3, "the two words joined by a space")
+}

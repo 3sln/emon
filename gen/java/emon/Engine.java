@@ -343,6 +343,9 @@ public final class Engine {
         }
         Scan.scTag(m.nodes, m.attrs, m.text, m.regions, m.pages, d.mask, c.ocr);
         Tlhealth.thWriteOcr(ev.owords, d.et, m.ledger, m.text, s.tmp, s.ttx);
+        if (kind == 0) {
+            Scan.scWriteBare(m.nodes, m.regions, m.pages, d.im, m.ledger);
+        }
         Rasterplan.rpSettings(m.nodes, m.attrs, m.text, c.scope);
         if (d.fused == 1) {
             Arbiter.arWrite(s.afa, ev.owords, d.et, m.ledger, m.text, s.tmp, s.ttx);

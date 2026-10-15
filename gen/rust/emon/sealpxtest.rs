@@ -285,6 +285,30 @@ fn test_a_colour_band_across_the_page_is_no_stamp() {
     spt_prim(prims, pm_rect(), 30000, 40000, 5000, 2000, 2, 12591135, 1, 200);
     crate::testport::assert_eq(sx_find(1, views, 0, prims, inks, 61200, 79200, cand), 1, "a 100 pt rectangle is a stamp");
 }
+#[test]
+fn test_a_solid_block_of_colour_is_no_stamp_and_an_outline_of_the_same_size_is() {
+    let views: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let prims: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    // P12.6 (smoke A2, D13): the header band of a bank statement, a light blue block with its title's text in it, was a stamp named `Txn Date Value Date`; an outline 100 pt wide is one,
+    // a block of ink that fills it (coverage 1000) is a header cell, a highlighted cell or the ground of a heading: the text on it is the document's
+    vw_new(views, 1, vk_render(), -1, -1, 3000, 3000, 7200, 0, -1, 0, 0, 0, 0, 0);
+    spt_ink(inks, ir_body());
+    spt_ink(inks, ir_light());
+    spt_ink(inks, ir_color());
+    // an oblong curve on the colour layer, solid
+    let r: i32 = spt_prim(prims, pm_curve(), 40000, 60000, 3000, 4500, 2, 2047903, 0, 200);
+    pm_set(prims, r, pmf_fill(), 1000);
+    crate::testport::assert_eq(sx_find(1, views, 0, prims, inks, 61200, 79200, cand), 0, "a solid oblong curve is a block of colour: no candidate");
+    pm_set(prims, r, pmf_fill(), 150);
+    crate::testport::assert_eq(sx_find(1, views, 0, prims, inks, 61200, 79200, cand), 1, "the same curve, an outline (coverage 150): a stamp");
+    // a rectangle of the same size as a stamp, solid
+    spt_prim(prims, pm_rect(), 30000, 20000, 5000, 2000, 2, 12591135, 1, 200);
+    let r: i32 = spt_prim(prims, pm_rect(), 30000, 25000, 5000, 2000, 2, 12591135, 1, 200);
+    pm_set(prims, r, pmf_fill(), 950);
+    crate::testport::assert_eq(sx_find(1, views, 0, prims, inks, 61200, 79200, cand), 2, "a solid 100 pt rectangle is no stamp; the outlined one is, with the curve: two");
+}
 pub(crate) fn spt_oword(mut ow: &mut crate::port::Cells, x: i32, y: i32) -> i32 {
     return ow_new(ow, 1, x - 300, y - 200, x + 300, y + 200, x - 300, y + 200, x + 300, y + 200, 0, 0, 0, 1, 0, 800, -1);
 }

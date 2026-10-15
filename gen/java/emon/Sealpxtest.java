@@ -275,6 +275,29 @@ public final class Sealpxtest {
         sptPrim(prims, Evidence.pmRect(), 30000, 40000, 5000, 2000, 2, 12591135, 1, 200);
         emon.Testport.assertEq(Sealpx.sxFind(1, views, 0, prims, inks, 61200, 79200, cand), 1, "a 100 pt rectangle is a stamp");
     }
+    public static void testASolidBlockOfColourIsNoStampAndAnOutlineOfTheSameSizeIs() {
+        emon.Port.Cells views = emon.Port.newCells();
+        emon.Port.Cells prims = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
+        emon.Port.Cells cand = emon.Port.newCells();
+        // P12.6 (smoke A2, D13): the header band of a bank statement, a light blue block with its title's text in it, was a stamp named `Txn Date Value Date`; an outline 100 pt wide is one,
+        // a block of ink that fills it (coverage 1000) is a header cell, a highlighted cell or the ground of a heading: the text on it is the document's
+        Evidence.vwNew(views, 1, Evidence.vkRender(), -1, -1, 3000, 3000, 7200, 0, -1, 0, 0, 0, 0, 0);
+        sptInk(inks, Evidence.irBody());
+        sptInk(inks, Evidence.irLight());
+        sptInk(inks, Evidence.irColor());
+        // an oblong curve on the colour layer, solid
+        int r = sptPrim(prims, Evidence.pmCurve(), 40000, 60000, 3000, 4500, 2, 2047903, 0, 200);
+        Evidence.pmSet(prims, r, Evidence.pmfFill(), 1000);
+        emon.Testport.assertEq(Sealpx.sxFind(1, views, 0, prims, inks, 61200, 79200, cand), 0, "a solid oblong curve is a block of colour: no candidate");
+        Evidence.pmSet(prims, r, Evidence.pmfFill(), 150);
+        emon.Testport.assertEq(Sealpx.sxFind(1, views, 0, prims, inks, 61200, 79200, cand), 1, "the same curve, an outline (coverage 150): a stamp");
+        // a rectangle of the same size as a stamp, solid
+        sptPrim(prims, Evidence.pmRect(), 30000, 20000, 5000, 2000, 2, 12591135, 1, 200);
+        int r = sptPrim(prims, Evidence.pmRect(), 30000, 25000, 5000, 2000, 2, 12591135, 1, 200);
+        Evidence.pmSet(prims, r, Evidence.pmfFill(), 950);
+        emon.Testport.assertEq(Sealpx.sxFind(1, views, 0, prims, inks, 61200, 79200, cand), 2, "a solid 100 pt rectangle is no stamp; the outlined one is, with the curve: two");
+    }
     public static int sptOword(emon.Port.Cells ow, int x, int y) {
         return Evidence.owNew(ow, 1, x - 300, y - 200, x + 300, y + 200, x - 300, y + 200, x + 300, y + 200, 0, 0, 0, 1, 0, 800, -1);
     }

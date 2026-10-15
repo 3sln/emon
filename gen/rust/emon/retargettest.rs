@@ -248,6 +248,69 @@ fn test_a_second_pass_that_reads_a_column_the_first_missed_has_that_column_read_
     crate::testport::assert_eq(ln_get(lines, 0, lh_x1()), 1700, "the line is as long as the column");
     crate::testport::assert_eq(ln_get(lines, 0, lh_count()), 3, "of three words");
 }
+pub(crate) fn rtt_empty(mut olines: &mut crate::port::Cells, y0: i32) -> i32 {
+    // A first-pass line with no word, 40 pt wide and 15 pt high from height y0 (centipoints): what the engine finds where text meets a rule and reads as nothing; answers its row.
+    let l: i32 = ol_count(olines);
+    ol_new(olines, 1, 100, y0, 4100, y0 + 1500, 100, y0 + 1500, 4100, y0 + 1500, 0, 0, 0, 0);
+    ol_set(olines, l, olf_px(), 100);
+    ol_set(olines, l, olf_py(), y0);
+    ol_set(olines, l, olf_pw(), 4000);
+    ol_set(olines, l, olf_ph(), 1500);
+    return l;
+}
+#[test]
+fn test_a_line_the_engine_found_and_read_as_nothing_is_read_alone_and_its_words_are_the_pages_when_sure() {
+    // P12.6, `RUNNING FOR (CHECK ONE):` before its blank: the page read as a page finds the line and no word in it; read as a line it is text
+    let oruns: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rtp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    sc_prep(scr);
+    rtt_line(olines, owords, feats, 0, 900);
+    rtt_empty(olines, 300);
+    rtt_line(olines, owords, feats, 2000, 900);
+    let fr: i32 = rtt_run(oruns, olines, owords, 0, 0);
+    let l1: i32 = ol_count(olines);
+    let w1: i32 = ow_count(owords);
+    rt_prep(rtp);
+    crate::testport::assert_eq(rt_empty_area(olines, 1), 600, "the empty line: 40 x 15 square points");
+    crate::testport::assert_eq(rt_empty_area(olines, 0), 0, "a line with words is not one");
+    crate::testport::assert_eq(rt_decide(0, 0, 0, oruns, fr, olines, owords, &mut crate::port::Cells::new(), 1, 130, rtp), 1, "the lines are sure, so the budget goes to the one line that has no word");
+    crate::testport::assert_eq(crate::port::cells_at(rtp, rtp_line0()), 1, "that line");
+    // its re-reading: a line of three words, sure
+    rtt_line3(olines, owords, feats, 300, 900, 900, 900);
+    let tr: i32 = rtt_run(oruns, olines, owords, l1, w1);
+    crate::port::cells_set(rtp, rtp_line0() + 1, tr);
+    crate::testport::assert_eq(rt_line_state(oruns, olines, owords, rtp, scr, 1, 1, -1, 0, 3), 5, "the re-reading is the page's");
+    crate::testport::assert_eq(rt_line_state(oruns, olines, owords, rtp, scr, 0, 0, -1, 0, 3), 0, "and the lines with words stay");
+    crate::testport::assert_eq(rtt_adopt(rtp, oruns, fr, olines, owords, scr), 3, "three lines: the first, the re-reading of the empty one, the third");
+    crate::testport::assert_eq(crate::port::cells_at(scr, sc_sel_base()), 0, "the first");
+    crate::testport::assert_eq(crate::port::cells_at(scr, sc_sel_base() + 1), l1, "then the line read in place of the empty one");
+    crate::testport::assert_eq(crate::port::cells_at(scr, sc_sel_base() + 2), 2, "then the third");
+}
+#[test]
+fn test_a_line_read_as_nothing_and_re_read_as_unsure_words_stays_nothing() {
+    let oruns: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rtp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    sc_prep(scr);
+    rtt_line(olines, owords, feats, 0, 900);
+    rtt_empty(olines, 300);
+    let fr: i32 = rtt_run(oruns, olines, owords, 0, 0);
+    let l1: i32 = ol_count(olines);
+    let w1: i32 = ow_count(owords);
+    rt_prep(rtp);
+    rt_decide(0, 0, 0, oruns, fr, olines, owords, &mut crate::port::Cells::new(), 1, 130, rtp);
+    rtt_line3(olines, owords, feats, 300, 400, 500, 300);
+    let tr: i32 = rtt_run(oruns, olines, owords, l1, w1);
+    crate::port::cells_set(rtp, rtp_line0() + 1, tr);
+    crate::testport::assert_eq(rt_line_state(oruns, olines, owords, rtp, scr, 1, 1, -1, 0, 2), 0, "words of a mean confidence of 400 are not taken for a line nothing was read of: it has no first pass to be compared with");
+}
 #[test]
 fn test_a_second_pass_word_that_is_unsure_or_lies_over_a_word_of_the_first_pass_is_not_added() {
     let oruns: &mut crate::port::Cells = &mut crate::port::Cells::new();

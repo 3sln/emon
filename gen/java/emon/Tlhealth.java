@@ -210,7 +210,7 @@ public final class Tlhealth {
         // Stage 1 features of text-layer word w, of line l (SPEC 8.4.5): a new `feats` row (answered; the caller points the flow's copy of the
         // word at it: the interpreter's own `words` are the evidence and stay as they were, D242), columns
         // 2-9, 16, 17, 19-21, 28, 29 (18 is -1 until P4.2's size inventory; 10-15, 22-27 are later stages'; 13 is `th-health`'s).
-        // 2 glyphs mapped by ToUnicode or an encoding; 3 glyphs that are PUA, control, U+FFFD or have no code point; 4 the worst overlap
+        // 2 glyphs mapped by ToUnicode, an encoding or glyph names of /Differences; 3 glyphs that are PUA, control, U+FFFD or have no code point; 4 the worst overlap
         // of neighbouring glyph boxes (a combining mark is not a neighbour); 5 the worst gap between a glyph's advance and the next origin,
         // over the font's space width (capped, `th-gap-cap`); 6 the worst `vis`; 7 the render mode class of the first glyph; 8 the lowest
         // alpha of the ink the mode paints; 9 the lowest contrast of the fill against white paper (|255 - luminance| per mille; -1 when no
@@ -250,7 +250,8 @@ public final class Tlhealth {
             while (g < (g0 + gn)) {
                 cp0 = thGlyphCp(et, gl, g);
                 v = Evidence.glGet(gl, g, Evidence.gfHow());
-                if ((v == 1) || (v == 2)) {
+                // P12.6 (R5): a glyph named in the font's /Differences (`glyphname`: the AGL's name, a TeX Type 1 font's `parenleft`) is as decoded as one the base encoding names: the text layer's own decoding is consistent there
+                if ((v == 1) || ((v == 2) || (v == 3))) {
                     mapped += 1;
                 }
                 bad += thBadCp(cp0);

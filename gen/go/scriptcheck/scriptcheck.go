@@ -15,6 +15,16 @@ func SkMinConf() int32 {
 	return 150
 }
 
+func SkWeakConf() int32 {
+	// `script-weak-conf` (R2): from this OSD script confidence (x10) kin believes a script OSD names, when the engine's dictionary also knows few of the words (`sk-dict-share`): the gate of 15 missed Urdu, Han, Ethiopic.
+	return 50
+}
+
+func SkDictShare() int32 {
+	// `script-dict-share` (R2): ...few is under this share (per mille) of the words read from the engine's dictionary.
+	return 250
+}
+
 func SkMinWords() int32 {
 	// A page of fewer OCR words than this is not flagged: the engine read nothing of it that could be junk.
 	return 3
@@ -35,6 +45,21 @@ func SkUnpack(lang int32, out *port.Cells) int32 {
 		d = d / 256
 	}
 	return n
+}
+
+func skDict(nw int32, an *port.Cells, ext int32) int32 {
+	// How many of the answer's `nw` words the engine read from its dictionary.
+	var w int32 = ocr.OxFirstWord(an, ext)
+	var i int32 = 0
+	var k int32 = 0
+	for i < nw {
+		if (ocr.OxWdflags(an, w) & ocr.OcwDict()) != 0 {
+			k += 1
+		}
+		w = ocr.OxWordNext(an, w)
+		i += 1
+	}
+	return k
 }
 
 func SkUnread(an *port.Cells, at int32, scr *port.Cells) int32 {
@@ -59,11 +84,18 @@ func SkUnread(an *port.Cells, at int32, scr *port.Cells) int32 {
 	if script == ocrport.ScLatf() {
 		return 0
 	}
-	if ocr.OxSconf(an, ext) < SkMinConf() {
+	if ocr.OxSconf(an, ext) < SkWeakConf() {
 		return 0
 	}
 	if nw < SkMinWords() {
 		return 0
+	}
+	// P12.6 (R2): OSD names the script of an Urdu, a Han photo or an Ethiopic page in a legacy font at a confidence under `sk-min-conf`; its word is then believed only when the
+	// reading backs it: a page whose words the engine's dictionary knows (`sk-dict-share` or more of them) is Latin, whatever OSD says; a page it knows few words of is junk in a script it cannot read.
+	if ocr.OxSconf(an, ext) < SkMinConf() {
+		if (skDict(nw, an, ext) * 1000) >= (nw * SkDictShare()) {
+			return 0
+		}
 	}
 	w = ocr.OxFirstWord(an, ext)
 	for i < nw {

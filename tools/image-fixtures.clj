@@ -109,10 +109,10 @@
      ["tiff-bilevel-lzw.tif" (assoc bw :make [:bw "-compress" "LZW" "-depth" "1"])]
      ["tiff-bilevel-packbits.tif" (assoc bw :make [:bw "-compress" "RLE" "-depth" "1"])]
      ["tiff-bilevel-g4.tif" (assoc bw :make [:bw "-compress" "Group4" "-depth" "1"])]
-     ;; Group 3: one-dimensional is read; fill bits and two-dimensional are not (x/image/ccitt reads neither, D189)
+     ;; Group 3: one-dimensional, with fill bits and two-dimensional are all read (kin's `emon.ccitt`; D189 refused the last two when the hosts' libraries could not, P12.6)
      ["tiff-bilevel-g3.tif" (assoc bw :copy ["tiff-bilevel-none.tif" "-c" "g3:1d"])]
-     ["tiff-bilevel-g3-fill.tif" (assoc bw :refuse "unsupported-image" :copy ["tiff-bilevel-none.tif" "-c" "g3:1d:fill"])]
-     ["tiff-bilevel-g3-2d.tif" (assoc bw :refuse "unsupported-image" :copy ["tiff-bilevel-none.tif" "-c" "g3:2d"])]
+     ["tiff-bilevel-g3-fill.tif" (assoc bw :copy ["tiff-bilevel-none.tif" "-c" "g3:1d:fill"])]
+     ["tiff-bilevel-g3-2d.tif" (assoc bw :copy ["tiff-bilevel-none.tif" "-c" "g3:2d"])]
      ["tiff-strips5.tif" (assoc p :make [:pic "-compress" "LZW" "-define" "tiff:rows-per-strip=5" "-depth" "8"])]
      ["tiff-tiled16.tif" (assoc p :make [:pic "-compress" "LZW" "-define" "tiff:tile-geometry=16x16" "-depth" "8"])]
      ["tiff-tiled-none.tif" (assoc g :make [:gray "-compress" "None" "-define" "tiff:tile-geometry=32x32" "-depth" "8"])]

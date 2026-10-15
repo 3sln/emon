@@ -260,6 +260,70 @@ func TestASecondPassThatReadsAColumnTheFirstMissedHasThatColumnReadWithTheLine(e
 	port.AssertEq(emonT, evidence.LnGet(lines, 0, evidence.LhCount()), 3, "of three words")
 }
 
+func rttEmpty(olines *port.Cells, y0 int32) int32 {
+	// A first-pass line with no word, 40 pt wide and 15 pt high from height y0 (centipoints): what the engine finds where text meets a rule and reads as nothing; answers its row.
+	var l int32 = evidence.OlCount(olines)
+	evidence.OlNew(olines, 1, 100, y0, 4100, y0+1500, 100, y0+1500, 4100, y0+1500, 0, 0, 0, 0)
+	evidence.OlSet(olines, l, evidence.OlfPx(), 100)
+	evidence.OlSet(olines, l, evidence.OlfPy(), y0)
+	evidence.OlSet(olines, l, evidence.OlfPw(), 4000)
+	evidence.OlSet(olines, l, evidence.OlfPh(), 1500)
+	return l
+}
+
+func TestALineTheEngineFoundAndReadAsNothingIsReadAloneAndItsWordsAreThePagesWhenSure(emonT *testing.T) {
+	// P12.6, `RUNNING FOR (CHECK ONE):` before its blank: the page read as a page finds the line and no word in it; read as a line it is text
+	var oruns *port.Cells = port.NewCells()
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var rtp *port.Cells = port.NewCells()
+	var scr *port.Cells = port.NewCells()
+	scan.ScPrep(scr)
+	rttLine(olines, owords, feats, 0, 900)
+	rttEmpty(olines, 300)
+	rttLine(olines, owords, feats, 2000, 900)
+	var fr int32 = rttRun(oruns, olines, owords, 0, 0)
+	var l1 int32 = evidence.OlCount(olines)
+	var w1 int32 = evidence.OwCount(owords)
+	retarget.RtPrep(rtp)
+	port.AssertEq(emonT, retarget.RtEmptyArea(olines, 1), 600, "the empty line: 40 x 15 square points")
+	port.AssertEq(emonT, retarget.RtEmptyArea(olines, 0), 0, "a line with words is not one")
+	port.AssertEq(emonT, retarget.RtDecide(0, 0, 0, oruns, fr, olines, owords, port.NewCells(), 1, 130, rtp), 1, "the lines are sure, so the budget goes to the one line that has no word")
+	port.AssertEq(emonT, port.CellsAt(rtp, retarget.RtpLine0()), 1, "that line")
+	// its re-reading: a line of three words, sure
+	rttLine3(olines, owords, feats, 300, 900, 900, 900)
+	var tr int32 = rttRun(oruns, olines, owords, l1, w1)
+	port.CellsSet(rtp, retarget.RtpLine0()+1, tr)
+	port.AssertEq(emonT, retarget.RtLineState(oruns, olines, owords, rtp, scr, 1, 1, -1, 0, 3), 5, "the re-reading is the page's")
+	port.AssertEq(emonT, retarget.RtLineState(oruns, olines, owords, rtp, scr, 0, 0, -1, 0, 3), 0, "and the lines with words stay")
+	port.AssertEq(emonT, rttAdopt(rtp, oruns, fr, olines, owords, scr), 3, "three lines: the first, the re-reading of the empty one, the third")
+	port.AssertEq(emonT, port.CellsAt(scr, scan.ScSelBase()), 0, "the first")
+	port.AssertEq(emonT, port.CellsAt(scr, scan.ScSelBase()+1), l1, "then the line read in place of the empty one")
+	port.AssertEq(emonT, port.CellsAt(scr, scan.ScSelBase()+2), 2, "then the third")
+}
+
+func TestALineReadAsNothingAndReReadAsUnsureWordsStaysNothing(emonT *testing.T) {
+	var oruns *port.Cells = port.NewCells()
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var rtp *port.Cells = port.NewCells()
+	var scr *port.Cells = port.NewCells()
+	scan.ScPrep(scr)
+	rttLine(olines, owords, feats, 0, 900)
+	rttEmpty(olines, 300)
+	var fr int32 = rttRun(oruns, olines, owords, 0, 0)
+	var l1 int32 = evidence.OlCount(olines)
+	var w1 int32 = evidence.OwCount(owords)
+	retarget.RtPrep(rtp)
+	retarget.RtDecide(0, 0, 0, oruns, fr, olines, owords, port.NewCells(), 1, 130, rtp)
+	rttLine3(olines, owords, feats, 300, 400, 500, 300)
+	var tr int32 = rttRun(oruns, olines, owords, l1, w1)
+	port.CellsSet(rtp, retarget.RtpLine0()+1, tr)
+	port.AssertEq(emonT, retarget.RtLineState(oruns, olines, owords, rtp, scr, 1, 1, -1, 0, 2), 0, "words of a mean confidence of 400 are not taken for a line nothing was read of: it has no first pass to be compared with")
+}
+
 func TestASecondPassWordThatIsUnsureOrLiesOverAWordOfTheFirstPassIsNotAdded(emonT *testing.T) {
 	var oruns *port.Cells = port.NewCells()
 	var olines *port.Cells = port.NewCells()

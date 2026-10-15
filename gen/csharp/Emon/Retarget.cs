@@ -93,6 +93,30 @@ public static class Retarget {
         // The pixels added around a line's box when it is re-read alone.
         return 3;
     }
+    public static int RtEmptyH() {
+        // P12.6: a first-pass line with no word is re-read alone when its box is at least this high (centipoints: 6 pt)...
+        return 600;
+    }
+    public static int RtEmptyHMax() {
+        // ...and at most this high (60 pt)...
+        return 6000;
+    }
+    public static int RtEmptyW() {
+        // ...and at least this wide (25 pt)...
+        return 2500;
+    }
+    public static int RtEmptyAspect() {
+        // ...and no more than this many times as wide as high (a ruled line is 60 times, a line of text 10): the engine finds a line where there is text and reads nothing when the text meets a rule.
+        return 40;
+    }
+    public static int RtEmptyWords() {
+        // A re-reading takes the place of a line the first pass read as nothing when it has at least this many words...
+        return 2;
+    }
+    public static int RtEmptyConf() {
+        // ...of a mean confidence (per mille) of at least this: it has no first pass to be compared with, so it must be sure.
+        return 700;
+    }
     public static int RiBody() {
         return 17;
     }
@@ -474,6 +498,25 @@ public static class Retarget {
         }
         return q;
     }
+    public static int RtEmptyArea(emon.Port.Cells olines, int l) {
+        // P12.6: when first-pass line `l` is a line with no word and the size of a line of text (`rt-empty-h`..), its area in square points (0 otherwise): the engine saw a line of text there and
+        // read nothing of it, which is what happens to text that meets a rule (`RUNNING FOR (CHECK ONE):` before its blank).
+        int h = Evidence.OlGet(olines, l, Evidence.LhY1()) - Evidence.OlGet(olines, l, Evidence.LhY0());
+        int w = Evidence.OlGet(olines, l, Evidence.LhX1()) - Evidence.OlGet(olines, l, Evidence.LhX0());
+        if (Evidence.OlGet(olines, l, Evidence.LhCount()) > 0) {
+            return 0;
+        }
+        if ((h < RtEmptyH()) || (h > RtEmptyHMax())) {
+            return 0;
+        }
+        if (w < RtEmptyW()) {
+            return 0;
+        }
+        if (w > (h * RtEmptyAspect())) {
+            return 0;
+        }
+        return (w / 100) * (h / 100);
+    }
     public static int RtDecide(int born, int q, int touched, emon.Port.Cells oruns, int run, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells rules, int page1, int dpi, emon.Port.Cells rtp) {
         // What the first pass (run `run`) calls for, written to `rtp`: the quarter turns (`q`, from `rt-turns`), whether the body-ink pass is wanted (the
         // page is upright and `touched` first-pass lines have foreign ink under them, `rt-measure`), the table cells and the first-pass lines to re-read alone
@@ -525,6 +568,38 @@ public static class Retarget {
                                 best = l;
                                 bestc = c;
                             }
+                        }
+                    }
+                    l += 1;
+                }
+                if (best < 0) {
+                    it = room;
+                } else {
+                    emon.Port.CellsSet(rtp, RtpLine0() + (n * 2), best);
+                    n += 1;
+                }
+            }
+            // P12.6: what the budget leaves goes to the lines the engine found and read as nothing (text next to a rule is where it fails), the biggest first
+            it = n;
+            while (it < room) {
+                it += 1;
+                best = -1;
+                bestc = 0;
+                l = l0;
+                while (l < (l0 + ln)) {
+                    c = RtEmptyArea(olines, l);
+                    if (c > bestc) {
+                        dup = 0;
+                        j = 0;
+                        while (j < n) {
+                            if (emon.Port.CellsAt(rtp, RtpLine0() + (j * 2)) == l) {
+                                dup = 1;
+                            }
+                            j += 1;
+                        }
+                        if (dup == 0) {
+                            best = l;
+                            bestc = c;
                         }
                     }
                     l += 1;
@@ -1014,6 +1089,24 @@ public static class Retarget {
         int b = -1;
         int back = -1;
         if (c <= 0) {
+            // P12.6: a line the first pass found and read as nothing (`rt-empty-area`), re-read alone: its words are the page's when there are some and they are sure (`rt-empty-words`, `rt-empty-conf`)
+            j = 0;
+            while (j < nl) {
+                if (emon.Port.CellsAt(rtp, RtpLine0() + (j * 2)) == l) {
+                    t = j;
+                }
+                j += 1;
+            }
+            if (t >= 0) {
+                tr = emon.Port.CellsAt(rtp, RtpLine0() + ((t * 2) + 1));
+                if (tr >= 0) {
+                    if (Evidence.OrGet(oruns, tr, Evidence.OrfWcount()) >= RtEmptyWords()) {
+                        if (RtRunMean(oruns, owords, tr) >= RtEmptyConf()) {
+                            return 5;
+                        }
+                    }
+                }
+            }
             return 0;
         }
         // the line was cut into cells: read again cell by cell, when every cell was, no text is lost and they are surer
@@ -1245,7 +1338,7 @@ public static class Retarget {
             if (s == 1) {
                 n = RtSelAdd(scr, n, emon.Port.CellsAt(scr, Scan.ScPartnerBase() + k));
             }
-            if (s == 3) {
+            if ((s == 3) || (s == 5)) {
                 j = 0;
                 while (j < emon.Port.CellsAt(rtp, RtpNl())) {
                     if (emon.Port.CellsAt(rtp, RtpLine0() + (j * 2)) == l) {

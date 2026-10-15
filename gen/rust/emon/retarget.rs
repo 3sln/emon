@@ -95,6 +95,30 @@ pub fn rt_pad() -> i32 {
     // The pixels added around a line's box when it is re-read alone.
     return 3;
 }
+pub fn rt_empty_h() -> i32 {
+    // P12.6: a first-pass line with no word is re-read alone when its box is at least this high (centipoints: 6 pt)...
+    return 600;
+}
+pub fn rt_empty_h_max() -> i32 {
+    // ...and at most this high (60 pt)...
+    return 6000;
+}
+pub fn rt_empty_w() -> i32 {
+    // ...and at least this wide (25 pt)...
+    return 2500;
+}
+pub fn rt_empty_aspect() -> i32 {
+    // ...and no more than this many times as wide as high (a ruled line is 60 times, a line of text 10): the engine finds a line where there is text and reads nothing when the text meets a rule.
+    return 40;
+}
+pub fn rt_empty_words() -> i32 {
+    // A re-reading takes the place of a line the first pass read as nothing when it has at least this many words...
+    return 2;
+}
+pub fn rt_empty_conf() -> i32 {
+    // ...of a mean confidence (per mille) of at least this: it has no first pass to be compared with, so it must be sure.
+    return 700;
+}
 pub fn ri_body() -> i32 {
     return 17;
 }
@@ -476,6 +500,25 @@ pub fn rt_turns(born: i32, oruns: &mut crate::port::Cells, run: i32, tlines: &mu
     }
     return q;
 }
+pub fn rt_empty_area(olines: &mut crate::port::Cells, l: i32) -> i32 {
+    // P12.6: when first-pass line `l` is a line with no word and the size of a line of text (`rt-empty-h`..), its area in square points (0 otherwise): the engine saw a line of text there and
+    // read nothing of it, which is what happens to text that meets a rule (`RUNNING FOR (CHECK ONE):` before its blank).
+    let h: i32 = ol_get(olines, l, lh_y1()) - ol_get(olines, l, lh_y0());
+    let w: i32 = ol_get(olines, l, lh_x1()) - ol_get(olines, l, lh_x0());
+    if ol_get(olines, l, lh_count()) > 0 {
+        return 0;
+    }
+    if (h < rt_empty_h()) || (h > rt_empty_h_max()) {
+        return 0;
+    }
+    if w < rt_empty_w() {
+        return 0;
+    }
+    if w > (h * rt_empty_aspect()) {
+        return 0;
+    }
+    return (w / 100) * (h / 100);
+}
 pub fn rt_decide(born: i32, q: i32, touched: i32, oruns: &mut crate::port::Cells, run: i32, olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, rules: &mut crate::port::Cells, page1: i32, dpi: i32, mut rtp: &mut crate::port::Cells) -> i32 {
     // What the first pass (run `run`) calls for, written to `rtp`: the quarter turns (`q`, from `rt-turns`), whether the body-ink pass is wanted (the
     // page is upright and `touched` first-pass lines have foreign ink under them, `rt-measure`), the table cells and the first-pass lines to re-read alone
@@ -527,6 +570,38 @@ pub fn rt_decide(born: i32, q: i32, touched: i32, oruns: &mut crate::port::Cells
                             best = l;
                             bestc = c;
                         }
+                    }
+                }
+                l += 1;
+            }
+            if best < 0 {
+                it = room;
+            } else {
+                crate::port::cells_set(rtp, rtp_line0() + (n * 2), best);
+                n += 1;
+            }
+        }
+        // P12.6: what the budget leaves goes to the lines the engine found and read as nothing (text next to a rule is where it fails), the biggest first
+        it = n;
+        while it < room {
+            it += 1;
+            best = -1;
+            bestc = 0;
+            l = l0;
+            while l < (l0 + ln) {
+                c = rt_empty_area(olines, l);
+                if c > bestc {
+                    dup = 0;
+                    j = 0;
+                    while j < n {
+                        if crate::port::cells_at(rtp, rtp_line0() + (j * 2)) == l {
+                            dup = 1;
+                        }
+                        j += 1;
+                    }
+                    if dup == 0 {
+                        best = l;
+                        bestc = c;
                     }
                 }
                 l += 1;
@@ -1016,6 +1091,24 @@ pub fn rt_line_state(oruns: &mut crate::port::Cells, olines: &mut crate::port::C
     let mut b: i32 = -1;
     let mut back: i32 = -1;
     if c <= 0 {
+        // P12.6: a line the first pass found and read as nothing (`rt-empty-area`), re-read alone: its words are the page's when there are some and they are sure (`rt-empty-words`, `rt-empty-conf`)
+        j = 0;
+        while j < nl {
+            if crate::port::cells_at(rtp, rtp_line0() + (j * 2)) == l {
+                t = j;
+            }
+            j += 1;
+        }
+        if t >= 0 {
+            tr = crate::port::cells_at(rtp, rtp_line0() + ((t * 2) + 1));
+            if tr >= 0 {
+                if or_get(oruns, tr, orf_wcount()) >= rt_empty_words() {
+                    if rt_run_mean(oruns, owords, tr) >= rt_empty_conf() {
+                        return 5;
+                    }
+                }
+            }
+        }
         return 0;
     }
     // the line was cut into cells: read again cell by cell, when every cell was, no text is lost and they are surer
@@ -1247,7 +1340,7 @@ pub fn rt_adopt(mut rtp: &mut crate::port::Cells, oruns: &mut crate::port::Cells
         if s == 1 {
             n = rt_sel_add(scr, n, crate::port::cells_at(scr, sc_partner_base() + k));
         }
-        if s == 3 {
+        if (s == 3) || (s == 5) {
             j = 0;
             while j < crate::port::cells_at(rtp, rtp_nl()) {
                 if crate::port::cells_at(rtp, rtp_line0() + (j * 2)) == l {

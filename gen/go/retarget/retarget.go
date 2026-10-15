@@ -122,6 +122,36 @@ func RtPad() int32 {
 	return 3
 }
 
+func RtEmptyH() int32 {
+	// P12.6: a first-pass line with no word is re-read alone when its box is at least this high (centipoints: 6 pt)...
+	return 600
+}
+
+func RtEmptyHMax() int32 {
+	// ...and at most this high (60 pt)...
+	return 6000
+}
+
+func RtEmptyW() int32 {
+	// ...and at least this wide (25 pt)...
+	return 2500
+}
+
+func RtEmptyAspect() int32 {
+	// ...and no more than this many times as wide as high (a ruled line is 60 times, a line of text 10): the engine finds a line where there is text and reads nothing when the text meets a rule.
+	return 40
+}
+
+func RtEmptyWords() int32 {
+	// A re-reading takes the place of a line the first pass read as nothing when it has at least this many words...
+	return 2
+}
+
+func RtEmptyConf() int32 {
+	// ...of a mean confidence (per mille) of at least this: it has no first pass to be compared with, so it must be sure.
+	return 700
+}
+
 func RiBody() int32 {
 	return 17
 }
@@ -542,6 +572,26 @@ func RtTurns(born int32, oruns *port.Cells, run int32, tlines *port.Cells, page1
 	return q
 }
 
+func RtEmptyArea(olines *port.Cells, l int32) int32 {
+	// P12.6: when first-pass line `l` is a line with no word and the size of a line of text (`rt-empty-h`..), its area in square points (0 otherwise): the engine saw a line of text there and
+	// read nothing of it, which is what happens to text that meets a rule (`RUNNING FOR (CHECK ONE):` before its blank).
+	var h int32 = evidence.OlGet(olines, l, evidence.LhY1()) - evidence.OlGet(olines, l, evidence.LhY0())
+	var w int32 = evidence.OlGet(olines, l, evidence.LhX1()) - evidence.OlGet(olines, l, evidence.LhX0())
+	if evidence.OlGet(olines, l, evidence.LhCount()) > 0 {
+		return 0
+	}
+	if (h < RtEmptyH()) || (h > RtEmptyHMax()) {
+		return 0
+	}
+	if w < RtEmptyW() {
+		return 0
+	}
+	if w > (h * RtEmptyAspect()) {
+		return 0
+	}
+	return (w / 100) * (h / 100)
+}
+
 func RtDecide(born int32, q int32, touched int32, oruns *port.Cells, run int32, olines *port.Cells, owords *port.Cells, rules *port.Cells, page1 int32, dpi int32, rtp *port.Cells) int32 {
 	// What the first pass (run `run`) calls for, written to `rtp`: the quarter turns (`q`, from `rt-turns`), whether the body-ink pass is wanted (the
 	// page is upright and `touched` first-pass lines have foreign ink under them, `rt-measure`), the table cells and the first-pass lines to re-read alone
@@ -593,6 +643,38 @@ func RtDecide(born int32, q int32, touched int32, oruns *port.Cells, run int32, 
 							best = l
 							bestc = c
 						}
+					}
+				}
+				l += 1
+			}
+			if best < 0 {
+				it = room
+			} else {
+				port.CellsSet(rtp, RtpLine0()+(n*2), best)
+				n += 1
+			}
+		}
+		// P12.6: what the budget leaves goes to the lines the engine found and read as nothing (text next to a rule is where it fails), the biggest first
+		it = n
+		for it < room {
+			it += 1
+			best = -1
+			bestc = 0
+			l = l0
+			for l < (l0 + ln) {
+				c = RtEmptyArea(olines, l)
+				if c > bestc {
+					dup = 0
+					j = 0
+					for j < n {
+						if port.CellsAt(rtp, RtpLine0()+(j*2)) == l {
+							dup = 1
+						}
+						j += 1
+					}
+					if dup == 0 {
+						best = l
+						bestc = c
 					}
 				}
 				l += 1
@@ -1103,6 +1185,24 @@ func RtLineState(oruns *port.Cells, olines *port.Cells, owords *port.Cells, rtp 
 	var b int32 = -1
 	var back int32 = -1
 	if c <= 0 {
+		// P12.6: a line the first pass found and read as nothing (`rt-empty-area`), re-read alone: its words are the page's when there are some and they are sure (`rt-empty-words`, `rt-empty-conf`)
+		j = 0
+		for j < nl {
+			if port.CellsAt(rtp, RtpLine0()+(j*2)) == l {
+				t = j
+			}
+			j += 1
+		}
+		if t >= 0 {
+			tr = port.CellsAt(rtp, RtpLine0()+((t*2)+1))
+			if tr >= 0 {
+				if evidence.OrGet(oruns, tr, evidence.OrfWcount()) >= RtEmptyWords() {
+					if rtRunMean(oruns, owords, tr) >= RtEmptyConf() {
+						return 5
+					}
+				}
+			}
+		}
 		return 0
 	}
 	// the line was cut into cells: read again cell by cell, when every cell was, no text is lost and they are surer
@@ -1338,7 +1438,7 @@ func RtAdopt(rtp *port.Cells, oruns *port.Cells, fr int32, olines *port.Cells, o
 		if s == 1 {
 			n = rtSelAdd(scr, n, port.CellsAt(scr, scan.ScPartnerBase()+k))
 		}
-		if s == 3 {
+		if (s == 3) || (s == 5) {
 			j = 0
 			for j < port.CellsAt(rtp, RtpNl()) {
 				if port.CellsAt(rtp, RtpLine0()+(j*2)) == l {

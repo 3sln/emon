@@ -494,6 +494,7 @@ fn test_a_word_of_odd_glyphs_or_a_repeated_few_characters_is_implausible() {
     crate::testport::assert_eq(t_impl(t, 97, 98, 126, 99, 49, 0, 0, 0, 0, 0), 1, "letters, digits and an odd glyph together");
     crate::testport::assert_eq(t_impl(t, 101, 100, 101, 100, 101, 100, 101, 100, 101, 100), 1, "ten characters of two different ones (a texture read as `ededededed`)");
     crate::testport::assert_eq(t_impl(t, 80, 101, 116, 101, 116, 101, 116, 100, 101, 100), 0, "ten of four different ones are just odd");
+    crate::testport::assert_eq(t_impl(t, 45, 60, 101, 101, 114, 101, 119, 101, 46, 0), 1, "an odd glyph among nine characters (`-<eerewe.`)");
     crate::testport::assert_eq(t_impl(t, 104, 101, 108, 108, 111, 0, 0, 0, 0, 0), 0, "a word");
     crate::testport::assert_eq(t_impl(t, 49, 44, 48, 56, 57, 46, 53, 56, 0, 0), 0, "an amount");
     crate::testport::assert_eq(t_impl(t, 45, 45, 45, 45, 0, 0, 0, 0, 0, 0), 1, "four marks and no letter or digit");
@@ -868,4 +869,45 @@ fn test_a_section_sign_before_digits_stays_on_a_page_with_no_dollar_signs() {
     st_line(olines, 100, 2700, 0, 3);
     crate::testport::assert_eq(st_emit(olines, owords, words, lines, et, &mut crate::port::Cells::new(), 1), 1, "one line");
     crate::testport::assert_eq(crate::port::cells_at(et, wd_get(words, 0, hd_tstart())), 167, "`§333.430` stays: no amount on the page has a dollar sign");
+}
+#[test]
+fn test_an_image_that_holds_a_quarter_of_a_page_with_no_text_is_the_page_and_a_small_one_is_not() {
+    // P12.6 (R1): n11 of the prose sweep, a 96 dpi book page (386 x 643 pt) on an A4 page covers 49.6 per cent of it; it was read only above a half
+    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    im_new(im, 1, 10000, 10000, 48600, 74300, 10, 515, 857);
+    crate::testport::assert_eq(sc_eligible(im, 0, 59520, 84168), 1, "49.6 per cent of the page: read");
+    im_new(im, 1, 0, 0, 20000, 20000, 11, 100, 100);
+    crate::testport::assert_eq(sc_eligible(im, 1, 59520, 84168), 0, "8 per cent (a logo): not");
+    im_new(im, 1, 0, 0, 30000, 40000, 12, 300, 400);
+    crate::testport::assert_eq(sc_eligible(im, 2, 59520, 84168), 0, "24 per cent: not");
+    im_new(im, 1, 0, 0, 31000, 41000, 13, 300, 400);
+    crate::testport::assert_eq(sc_eligible(im, 3, 59520, 84168), 1, "25.4 per cent: read");
+}
+#[test]
+fn test_a_page_that_comes_out_empty_and_held_a_big_image_has_it_in_the_ledger() {
+    // P12.6 (R1): a page that vanishes (no node on it) never has nothing dropped: the biggest image of a tenth of it or more is a `background` row
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    page_new(pages, 1, 61200, 79200, 0, pk_vector());
+    page_new(pages, 2, 61200, 79200, 0, pk_vector());
+    page_new(pages, 3, 61200, 79200, 0, pk_vector());
+    let p1: i32 = node_new(nodes, nk_paragraph(), 0);
+    node_add_region(nodes, regions, p1, 1, 0, 0, 100, 100);
+    // page 1 has a node and an image; page 2 has an image and no node; page 3 has a small one and no node
+    im_new(im, 1, 0, 0, 40000, 40000, 10, 100, 100);
+    im_new(im, 2, 1000, 2000, 30000, 50000, 11, 100, 100);
+    im_new(im, 2, 0, 0, 5000, 5000, 12, 100, 100);
+    im_new(im, 3, 0, 0, 5000, 5000, 13, 100, 100);
+    crate::testport::assert_eq(sc_write_bare(nodes, regions, pages, im, ledger), 1, "one row");
+    crate::testport::assert_eq(ledger_count(ledger), 1, "in the ledger");
+    crate::testport::assert_eq(ledger_page(ledger, 0), 2, "of page 2");
+    crate::testport::assert_eq(ledger_reason(ledger, 0), dr_background(), "as a background");
+    crate::testport::assert_eq(ledger_x1(ledger, 0), 30000, "the biggest image's");
 }

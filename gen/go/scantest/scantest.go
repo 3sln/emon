@@ -511,6 +511,7 @@ func TestAWordOfOddGlyphsOrARepeatedFewCharactersIsImplausible(emonT *testing.T)
 	port.AssertEq(emonT, tImpl(t, 97, 98, 126, 99, 49, 0, 0, 0, 0, 0), 1, "letters, digits and an odd glyph together")
 	port.AssertEq(emonT, tImpl(t, 101, 100, 101, 100, 101, 100, 101, 100, 101, 100), 1, "ten characters of two different ones (a texture read as `ededededed`)")
 	port.AssertEq(emonT, tImpl(t, 80, 101, 116, 101, 116, 101, 116, 100, 101, 100), 0, "ten of four different ones are just odd")
+	port.AssertEq(emonT, tImpl(t, 45, 60, 101, 101, 114, 101, 119, 101, 46, 0), 1, "an odd glyph among nine characters (`-<eerewe.`)")
 	port.AssertEq(emonT, tImpl(t, 104, 101, 108, 108, 111, 0, 0, 0, 0, 0), 0, "a word")
 	port.AssertEq(emonT, tImpl(t, 49, 44, 48, 56, 57, 46, 53, 56, 0, 0), 0, "an amount")
 	port.AssertEq(emonT, tImpl(t, 45, 45, 45, 45, 0, 0, 0, 0, 0, 0), 1, "four marks and no letter or digit")
@@ -891,4 +892,45 @@ func TestASectionSignBeforeDigitsStaysOnAPageWithNoDollarSigns(emonT *testing.T)
 	stLine(olines, 100, 2700, 0, 3)
 	port.AssertEq(emonT, stEmit(olines, owords, words, lines, et, port.NewCells(), 1), 1, "one line")
 	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(words, 0, evidence.HdTstart())), 167, "`§333.430` stays: no amount on the page has a dollar sign")
+}
+
+func TestAnImageThatHoldsAQuarterOfAPageWithNoTextIsThePageAndASmallOneIsNot(emonT *testing.T) {
+	// P12.6 (R1): n11 of the prose sweep, a 96 dpi book page (386 x 643 pt) on an A4 page covers 49.6 per cent of it; it was read only above a half
+	var im *port.Cells = port.NewCells()
+	evidence.ImNew(im, 1, 10000, 10000, 48600, 74300, 10, 515, 857)
+	port.AssertEq(emonT, scan.ScEligible(im, 0, 59520, 84168), 1, "49.6 per cent of the page: read")
+	evidence.ImNew(im, 1, 0, 0, 20000, 20000, 11, 100, 100)
+	port.AssertEq(emonT, scan.ScEligible(im, 1, 59520, 84168), 0, "8 per cent (a logo): not")
+	evidence.ImNew(im, 1, 0, 0, 30000, 40000, 12, 300, 400)
+	port.AssertEq(emonT, scan.ScEligible(im, 2, 59520, 84168), 0, "24 per cent: not")
+	evidence.ImNew(im, 1, 0, 0, 31000, 41000, 13, 300, 400)
+	port.AssertEq(emonT, scan.ScEligible(im, 3, 59520, 84168), 1, "25.4 per cent: read")
+}
+
+func TestAPageThatComesOutEmptyAndHeldABigImageHasItInTheLedger(emonT *testing.T) {
+	// P12.6 (R1): a page that vanishes (no node on it) never has nothing dropped: the biggest image of a tenth of it or more is a `background` row
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	model.PageNew(pages, 1, 61200, 79200, 0, model.PkVector())
+	model.PageNew(pages, 2, 61200, 79200, 0, model.PkVector())
+	model.PageNew(pages, 3, 61200, 79200, 0, model.PkVector())
+	var p1 int32 = model.NodeNew(nodes, model.NkParagraph(), 0)
+	model.NodeAddRegion(nodes, regions, p1, 1, 0, 0, 100, 100)
+	// page 1 has a node and an image; page 2 has an image and no node; page 3 has a small one and no node
+	evidence.ImNew(im, 1, 0, 0, 40000, 40000, 10, 100, 100)
+	evidence.ImNew(im, 2, 1000, 2000, 30000, 50000, 11, 100, 100)
+	evidence.ImNew(im, 2, 0, 0, 5000, 5000, 12, 100, 100)
+	evidence.ImNew(im, 3, 0, 0, 5000, 5000, 13, 100, 100)
+	port.AssertEq(emonT, scan.ScWriteBare(nodes, regions, pages, im, ledger), 1, "one row")
+	port.AssertEq(emonT, model.LedgerCount(ledger), 1, "in the ledger")
+	port.AssertEq(emonT, model.LedgerPage(ledger, 0), 2, "of page 2")
+	port.AssertEq(emonT, model.LedgerReason(ledger, 0), model.DrBackground(), "as a background")
+	port.AssertEq(emonT, model.LedgerX1(ledger, 0), 30000, "the biggest image's")
 }

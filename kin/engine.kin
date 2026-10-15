@@ -53,7 +53,7 @@
             [emon.restruct :refer [rs-run]]
             [emon.fields :refer [fl-run]]
             [emon.figclass :refer [fc-stage fc-images]]
-            [emon.scan :refer [sc-tag sc-tag-unread]]
+            [emon.scan :refer [sc-tag sc-tag-unread sc-write-bare]]
             [emon.rasterplan :refer [rp-settings]]
             [emon.asset :refer [as-settings as-run as-page-cands as-collect as-run-figures]]
             [kin.lang :refer [defn return let set while if do comment + - * < > >= == != and or quot]]))
@@ -398,6 +398,9 @@
     (sc-tag (fd m nodes) (fd m attrs) (fd m text) (fd m regions) (fd m pages) (fd d mask) (fd c ocr))
     ;; the OCR words the scan stage kept out of a scanned page's words (garbage, leaders, a table's rules read as characters, P12.6): ledger rows, never silently dropped
     (th-write-ocr (fd ev owords) (fd d et) (fd m ledger) (fd m text) (fd s tmp) (fd s ttx))
+    ;; a page that comes out with no body and held an image is never dropped silently (R1, P12.6): its biggest image is a `background` row of the ledger
+    (if (== kind 0)
+      (sc-write-bare (fd m nodes) (fd m regions) (fd m pages) (fd d im) (fd m ledger)))
     (rp-settings (fd m nodes) (fd m attrs) (fd m text) (fd c scope))
     ;; fusion's own: the OCR groups dropped as ghosts become ledger rows, and the Model says where each block's words came from (P7.3)
     (if (== (fd d fused) 1)

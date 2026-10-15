@@ -12,7 +12,7 @@
             [emon.test :refer [deftest assert-eq assert-that new-cells new-bitmap-set]]
             [emon.port :refer [bitmap-new bitmap-w bitmap-h bitmap-u8 bitmap-set-u8 bms-get cells-len cells-at cells-set cells-push cells-drop]]
             [emon.scan :refer [sc-sel-base]]
-            [emon.evidence :refer [ow-new ol-new vw-new vk-render pm-new pm-set pm-ring pm-circle pm-rect pm-curve pmf-cx pmf-cy pmf-rx pmf-ry pmf-ink pmf-color pmf-conf pmf-flags pmf-stroke pmf-rot
+            [emon.evidence :refer [ow-new ol-new vw-new vk-render pm-new pm-set pm-ring pm-circle pm-rect pm-curve pmf-fill pmf-cx pmf-cy pmf-rx pmf-ry pmf-ink pmf-color pmf-conf pmf-flags pmf-stroke pmf-rot
                                    ik-new ik-set ikf-role ir-body ir-light ir-color]]
             [emon.sealpx :refer [sx-key sx-key-setup sx-sample sx-polar sx-disc sx-crop sx-erase-rows sx-erase-cols sx-gap sx-rotate sx-arc-point sx-arc-box sx-col-theta
                                  sx-find sx-plan sx-drop-lines sx-strip-w sx-strip-h sx-disc-n sx-stamp-dim sx-w ri-seal rv-seal]]
@@ -286,6 +286,29 @@
     (assert-eq (sx-find 1 views 0 prims inks 61200 79200 cand) 0 "a band 500 pt wide on a page 612 pt wide: no candidate")
     (spt-prim prims (pm-rect) 30000 40000 5000 2000 2 12591135 1 200)
     (assert-eq (sx-find 1 views 0 prims inks 61200 79200 cand) 1 "a 100 pt rectangle is a stamp")))
+
+(deftest test-a-solid-block-of-colour-is-no-stamp-and-an-outline-of-the-same-size-is
+  (let [^Cells views (new-cells)
+        ^Cells prims (new-cells)
+        ^Cells inks (new-cells)
+        ^Cells cand (new-cells)]
+    (comment "P12.6 (smoke A2, D13): the header band of a bank statement, a light blue block with its title's text in it, was a stamp named `Txn Date Value Date`; an outline 100 pt wide is one,")
+    (comment "a block of ink that fills it (coverage 1000) is a header cell, a highlighted cell or the ground of a heading: the text on it is the document's")
+    (vw-new views 1 (vk-render) -1 -1 3000 3000 7200 0 -1 0 0 0 0 0)
+    (spt-ink inks (ir-body))
+    (spt-ink inks (ir-light))
+    (spt-ink inks (ir-color))
+    (comment "an oblong curve on the colour layer, solid")
+    (let [^I32 r (spt-prim prims (pm-curve) 40000 60000 3000 4500 2 2047903 0 200)]
+      (pm-set prims r (pmf-fill) 1000)
+      (assert-eq (sx-find 1 views 0 prims inks 61200 79200 cand) 0 "a solid oblong curve is a block of colour: no candidate")
+      (pm-set prims r (pmf-fill) 150)
+      (assert-eq (sx-find 1 views 0 prims inks 61200 79200 cand) 1 "the same curve, an outline (coverage 150): a stamp"))
+    (comment "a rectangle of the same size as a stamp, solid")
+    (spt-prim prims (pm-rect) 30000 20000 5000 2000 2 12591135 1 200)
+    (let [^I32 r (spt-prim prims (pm-rect) 30000 25000 5000 2000 2 12591135 1 200)]
+      (pm-set prims r (pmf-fill) 950)
+      (assert-eq (sx-find 1 views 0 prims inks 61200 79200 cand) 2 "a solid 100 pt rectangle is no stamp; the outlined one is, with the curve: two"))))
 
 (defn ^I32 spt-oword [^:mut ^Cells ow ^I32 x ^I32 y]
   (return (ow-new ow 1 (- x 300) (- y 200) (+ x 300) (+ y 200) (- x 300) (+ y 200) (+ x 300) (+ y 200) 0 0 0 1 0 800 -1)))

@@ -17,6 +17,10 @@ pub fn sx_strip_h() -> i32 {
     // The strip's height in pixels: the annulus from `sx-r-out` to `sx-r-in` of the radius.
     return 112;
 }
+pub fn sx_solid() -> i32 {
+    // P12.6: a rectangle, ellipse or curve whose ink fills this much of it (per mille) is a block of colour, not a stamp's outline.
+    return 800;
+}
 pub fn sx_r_out() -> i32 {
     // `seal-band-out`: the annulus' outer edge, per mille of the radius (the ring's own line is a little inside it).
     return 1020;
@@ -665,6 +669,7 @@ pub(crate) fn sx_consider(r: i32, views: &mut crate::port::Cells, srcview: i32, 
     let cx: i32 = pm_get(prims, r, pmf_cx());
     let cy: i32 = pm_get(prims, r, pmf_cy());
     let fl: i32 = pm_get(prims, r, pmf_flags());
+    let fill: i32 = pm_get(prims, r, pmf_fill());
     let mut role: i32 = 0;
     let mut rad: i32 = 0;
     let mut mx: i32 = 0;
@@ -699,6 +704,10 @@ pub(crate) fn sx_consider(r: i32, views: &mut crate::port::Cells, srcview: i32, 
                 return 0;
             }
             if (kind != pm_curve()) && (kind != pm_ellipse()) {
+                return 0;
+            }
+            // P12.6: a solid block of colour (its ink fills the primitive: a table's header band, a highlighted cell, the ground of a heading) is no stamp: a stamp is an outline, and the text on a band is the document's
+            if fill >= sx_solid() {
                 return 0;
             }
             if ((2 * mn) < 1000) || (mx > (8 * mn)) {
@@ -739,6 +748,10 @@ pub(crate) fn sx_consider(r: i32, views: &mut crate::port::Cells, srcview: i32, 
         }
         // D583: a rectangle that is most of the page's width is a colour band (a heading's ground, a table's header band), not a stamp: a stamp is a mark that is a small part of the page
         if (20 * rx) > (6 * pw) {
+            return 0;
+        }
+        // P12.6: and a solid one of any width is a block of colour (a header cell), not an outline
+        if fill >= sx_solid() {
             return 0;
         }
         return sx_add(cand, 2, r, cxp, cyp, sx_abs(rxp), sx_abs(ryp), pm_get(prims, r, pmf_rot()), rgb, pm_get(prims, r, pmf_x0()), pm_get(prims, r, pmf_y0()), pm_get(prims, r, pmf_x1()), pm_get(prims, r, pmf_y1()), pm_get(prims, r, pmf_conf()));

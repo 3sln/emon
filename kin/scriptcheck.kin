@@ -14,13 +14,15 @@
   (:require [emon.lang :refer [I32 Cells]]
             [emon.port :refer [cells-drop cells-push]]
             [emon.plan :refer [an-ocr-count]]
-            [emon.ocr :refer [ox-find ox-script ox-sconf ox-first-word ox-word-next ox-wlang]]
+            [emon.ocr :refer [ox-find ox-script ox-sconf ox-first-word ox-word-next ox-wlang ox-wdflags ocw-dict]]
             [emon.ocrport :refer [op-model-script op-script-reads sc-latn sc-latf]]
             [kin.lang :refer [defn return let set while if do comment
-                              + - * < > <= >= == != and or quot rem]]))
+                              + - * < > <= >= == != and or quot rem bit-and]]))
 
 (defn ^:pub ^I32 sk-min-conf [] (comment "`script-conf`: OSD's script confidence (x10) from which kin believes the script it names (a Latin page reads 10 to 20, the Hindi page of the smoke review 63).") (return 150))
-(defn ^:pub ^I32 sk-min-words [] (comment "A page of fewer OCR words than this is not flagged: the engine read nothing of it that could be junk.") (return 3))
+(defn ^:pub ^I32 sk-weak-conf [] (comment "`script-weak-conf` (R2): from this OSD script confidence (x10) kin believes a script OSD names, when the engine's dictionary also knows few of the words (`sk-dict-share`): the gate of 15 missed Urdu, Han, Ethiopic.") (return 50))
+(defn ^:pub ^I32 sk-dict-share [] (comment "`script-dict-share` (R2): ...few is under this share (per mille) of the words read from the engine's dictionary.") (return 250))
+(defn ^:pub ^I32 sk-min-words [](comment "A page of fewer OCR words than this is not flagged: the engine read nothing of it that could be junk.") (return 3))
 
 (defn ^:pub ^I32 sk-unpack [^I32 lang ^:mut ^Cells out]
   (comment "The language cell `lang` (up to four ASCII chars, packed big-endian) as code points in `out` (emptied first). Answers how many.")
@@ -36,6 +38,17 @@
           (set d (quot d 256))))
     (return n)))
 
+(defn ^I32 sk-dict [^I32 nw ^Cells an ^I32 ext]
+  (comment "How many of the answer's `nw` words the engine read from its dictionary.")
+  (let [^:mut ^I32 w (ox-first-word an ext)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 k 0]
+    (while (< i nw)
+      (do (if (!= (bit-and (ox-wdflags an w) (ocw-dict)) 0) (set k (+ k 1)))
+          (set w (ox-word-next an w))
+          (set i (+ i 1))))
+    (return k)))
+
 (defn ^:pub ^I32 sk-unread [^Cells an ^I32 at ^:mut ^Cells scr]
   (comment "1 when the page the OCR answer at `at` read is in a script the engine had no model for (see the head of this file), else 0. `scr` is scratch.")
   (let [^I32 ext (ox-find an at)
@@ -50,8 +63,12 @@
     (if (<= script 0) (return 0))
     (if (== script (sc-latn)) (return 0))
     (if (== script (sc-latf)) (return 0))
-    (if (< (ox-sconf an ext) (sk-min-conf)) (return 0))
+    (if (< (ox-sconf an ext) (sk-weak-conf)) (return 0))
     (if (< nw (sk-min-words)) (return 0))
+    (comment "P12.6 (R2): OSD names the script of an Urdu, a Han photo or an Ethiopic page in a legacy font at a confidence under `sk-min-conf`; its word is then believed only when the")
+    (comment "reading backs it: a page whose words the engine's dictionary knows (`sk-dict-share` or more of them) is Latin, whatever OSD says; a page it knows few words of is junk in a script it cannot read.")
+    (if (< (ox-sconf an ext) (sk-min-conf))
+      (if (>= (* (sk-dict nw an ext) 1000) (* nw (sk-dict-share))) (return 0)))
     (set w (ox-first-word an ext))
     (while (< i nw)
       (do (set lang (ox-wlang an w))

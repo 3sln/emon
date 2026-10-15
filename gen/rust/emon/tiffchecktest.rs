@@ -97,8 +97,9 @@ fn test_tiff_rules() {
     t_tiff(0, &crate::testport::hex_blob("49492a000e0000000a141e28323c090000010300010000000300000001010300010000000200000002010300010000000800000003010300010000000200000006010300010000000100000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000000000000")[..], 0, 1, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, "CCITT RLE");
     t_tiff(0, &crate::testport::hex_blob("49492a000e0000000a141e28323c090000010300010000000300000001010300010000000200000002010300010000000800000003010300010000000400000006010300010000000100000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000000000000")[..], 0, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, "CCITT of 8 bits");
     t_tiff(0, &crate::testport::hex_blob("49492a000e0000000a141e28323c090000010300010000000300000001010300010000000200000002010300010000000100000003010300010000000300000006010300010000000000000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000000000000")[..], 0, 1, 0, -1, -1, -1, -1, -1, -1, -1, -1, 1, tr_comp(), 3, tr_kind(), 0, -1, -1, "Group 3, plain");
-    t_tiff(0, &crate::testport::hex_blob("49492a000e0000000a141e28323c0a0000010300010000000300000001010300010000000200000002010300010000000100000003010300010000000300000006010300010000000000000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000024010400010000000100000000000000")[..], 0, 1, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, "Group 3, two-dimensional");
-    t_tiff(0, &crate::testport::hex_blob("49492a000e0000000a141e28323c0a0000010300010000000300000001010300010000000200000002010300010000000100000003010300010000000300000006010300010000000000000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000024010400010000000400000000000000")[..], 0, 1, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, "Group 3, fill bits");
+    t_tiff(0, &crate::testport::hex_blob("49492a000e0000000a141e28323c0a0000010300010000000300000001010300010000000200000002010300010000000100000003010300010000000300000006010300010000000000000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000024010400010000000100000000000000")[..], 0, 1, 0, -1, -1, -1, -1, -1, -1, -1, -1, 1, tr_comp(), 3, tr_t4(), 1, -1, -1, "Group 3, two-dimensional");
+    t_tiff(0, &crate::testport::hex_blob("49492a000e0000000a141e28323c0a0000010300010000000300000001010300010000000200000002010300010000000100000003010300010000000300000006010300010000000000000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000024010400010000000400000000000000")[..], 0, 1, 0, -1, -1, -1, -1, -1, -1, -1, -1, 1, tr_comp(), 3, tr_t4(), 4, -1, -1, "Group 3, fill bits");
+    t_tiff(0, &crate::testport::hex_blob("49492a000e0000000a141e28323c0a0000010300010000000300000001010300010000000200000002010300010000000100000003010300010000000300000006010300010000000000000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000024010400010000000200000000000000")[..], 0, 1, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, "Group 3, uncompressed mode is still not read");
     t_tiff(0, &crate::testport::hex_blob("49492a000e0000000a141e28323c080000010300010000000300000001010300010000000200000002010300010000000100000003010300010000000400000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000000000000")[..], 0, 1, 0, -1, -1, -1, -1, -1, -1, -1, -1, 1, tr_kind(), 0, -1, -1, -1, -1, "Group 4 with no photometric tag is min-is-white");
     t_tiff(0, &crate::testport::hex_blob("49492a000e0000000a141e28323c0a000001030001000000030000000101030001000000020000000201030001000000080000000301030001000000010000000601030001000000010000001101040001000000080000001501030001000000010000001601030001000000020000001701040001000000060000003d010300010000000300000000000000")[..], 0, 1, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, "predictor 3");
     t_tiff(0, &crate::testport::hex_blob("49492a000e0000000a141e28323c0a000001030001000000030000000101030001000000020000000201030001000000080000000301030001000000010000000601030001000000010000001101040001000000080000001501030001000000010000001601030001000000020000001701040001000000060000003d010300010000000200000000000000")[..], 0, 1, 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, tr_predictor(), 2, -1, -1, -1, -1, "predictor 2 on bytes");
@@ -148,8 +149,8 @@ fn test_tiff_rules() {
 #[test]
 fn test_tiff_fixtures() {
     // Every TIFF fixture, every frame: the size after the orientation, channels, resolution, bilevel; or the refusal's name.
-    t_tiff(0, &crate::testport::test_file("image/tiff-bilevel-g3-2d.tif")[..], 0, 1, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, "tiff-bilevel-g3-2d.tif");
-    t_tiff(0, &crate::testport::test_file("image/tiff-bilevel-g3-fill.tif")[..], 0, 1, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, "tiff-bilevel-g3-fill.tif");
+    t_tiff(0, &crate::testport::test_file("image/tiff-bilevel-g3-2d.tif")[..], 0, 1, 0, 1, -1, -1, 48, 36, 1, 0, -1, 1, -1, -1, -1, -1, -1, -1, "tiff-bilevel-g3-2d.tif frame 0");
+    t_tiff(0, &crate::testport::test_file("image/tiff-bilevel-g3-fill.tif")[..], 0, 1, 0, 1, -1, -1, 48, 36, 1, 0, -1, 1, -1, -1, -1, -1, -1, -1, "tiff-bilevel-g3-fill.tif frame 0");
     t_tiff(0, &crate::testport::test_file("image/tiff-bilevel-g3.tif")[..], 0, 1, 0, 1, -1, -1, 48, 36, 1, 0, -1, 1, -1, -1, -1, -1, -1, -1, "tiff-bilevel-g3.tif frame 0");
     t_tiff(0, &crate::testport::test_file("image/tiff-bilevel-g4.tif")[..], 0, 1, 0, 1, -1, -1, 48, 36, 1, 0, -1, 1, -1, -1, -1, -1, -1, -1, "tiff-bilevel-g4.tif frame 0");
     t_tiff(0, &crate::testport::test_file("image/tiff-bilevel-lzw.tif")[..], 0, 1, 0, 1, -1, -1, 48, 36, 1, 0, -1, 1, -1, -1, -1, -1, -1, -1, "tiff-bilevel-lzw.tif frame 0");
@@ -267,9 +268,23 @@ pub(crate) fn t_raw_strip(emon_t: i32, t: &[u8], off: i32, k: i32, none: &[u8], 
     return 0;
 }
 #[test]
-fn test_ccitt_reads_what_the_validator_refuses() {
+fn test_ccitt_reads_the_strips_of_the_fax_fixtures() {
+    // (The validator refused these two until P12.6: D189. It reads them now, and says in `tr-t4` which options the host's `emon.ccitt` call is to be made with.)
     t_raw_strip(0, &crate::testport::test_file("image/tiff-bilevel-g3-2d.tif")[..], 8, 1, &crate::testport::test_file("image/tiff-bilevel-none.tif")[..], "Group 3, two-dimensional");
     t_raw_strip(0, &crate::testport::test_file("image/tiff-bilevel-g3-fill.tif")[..], 8, 0, &crate::testport::test_file("image/tiff-bilevel-none.tif")[..], "Group 3 with fill bits before the EOLs");
+}
+#[test]
+fn test_a_fax_tiff_of_group_3_two_dimensional_is_read_and_its_options_reach_the_report() {
+    // P12.6 (R6): libtiff's fax2d.tif was refused (exit 4) for T4Options bit 0, though the decoder reads it; bit 0 is two-dimensional (k 4), bit 2 fill bits
+    let r: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::testport::assert_eq(tc_check(&crate::testport::test_file("image/tiff-bilevel-g3-2d.tif")[..], 0, 1, r), 0, "the two-dimensional file is read");
+    crate::testport::assert_eq(crate::port::cells_at(r, tr_t4()), 1, "its option: two-dimensional");
+    crate::testport::assert_eq(tc_check(&crate::testport::test_file("image/tiff-bilevel-g3-fill.tif")[..], 0, 1, r), 0, "the fill-bits file is read");
+    crate::testport::assert_eq(crate::port::cells_at(r, tr_t4()), 4, "its option: fill bits");
+    crate::testport::assert_eq(tc_check(&crate::testport::test_file("image/tiff-bilevel-g3.tif")[..], 0, 1, r), 0, "the plain Group 3 file is read");
+    crate::testport::assert_eq(crate::port::cells_at(r, tr_t4()), 0, "with no option");
+    crate::testport::assert_eq(tc_check(&crate::testport::test_file("image/tiff-bilevel-g4.tif")[..], 0, 1, r), 0, "Group 4 is read");
+    crate::testport::assert_eq(crate::port::cells_at(r, tr_t4()), 0, "and has none");
 }
 #[test]
 fn test_exif_reader() {
