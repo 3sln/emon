@@ -86,6 +86,8 @@ const wsLv int32 = 768
 
 const wsBest int32 = 784
 
+const wsSave int32 = 800
+
 const wsU int32 = 1024
 
 const unStride int32 = 16
@@ -1722,6 +1724,102 @@ func hdEval(ws *port.Cells, nk int32) int32 {
 	return pen
 }
 
+func hdDescend(ws *port.Cells, nk int32, lmax int32, best0 int32) int32 {
+	// Coordinate descent on the levels in ws[WS_LV..], from the penalty best0 they have: each class in turn takes the level that
+	// lowers the penalty most (the first of equals), sweeps until none changes (thirty at most). Answers the penalty reached.
+	var best int32 = best0
+	var changed int32 = 1
+	var sweeps int32 = 0
+	var c int32 = 0
+	var keep int32 = 0
+	var lv int32 = 0
+	var pen int32 = 0
+	for (changed == 1) && (sweeps < 30) {
+		changed = 0
+		c = 0
+		for c < nk {
+			keep = port.CellsAt(ws, wsLv+c)
+			lv = 1
+			for lv <= lmax {
+				port.CellsSet(ws, wsLv+c, lv)
+				pen = hdEval(ws, nk)
+				if pen < best {
+					best = pen
+					keep = lv
+					changed = 1
+				}
+				lv += 1
+			}
+			port.CellsSet(ws, wsLv+c, keep)
+			c += 1
+		}
+		sweeps += 1
+	}
+	return best
+}
+
+func hdPolish(ws *port.Cells, nk int32, lmax int32) int32 {
+	// D563: the levels in ws[WS_LV..] improved as far as one class at a time and then a whole depth at a time can: after a descent,
+	// every class at level k or deeper moves one level up, or one level down, together (the ladder of a document slides as one when a
+	// class is added), and a move that lowers the penalty is kept and descended from. A descent alone stops where one class cannot
+	// move without the others (D544's seven-class statement). Answers the penalty reached.
+	var pen0 int32 = hdEval(ws, nk)
+	var best int32 = hdDescend(ws, nk, lmax, pen0)
+	var improved int32 = 1
+	var rounds int32 = 0
+	var k int32 = 0
+	var d int32 = 0
+	var c int32 = 0
+	var ok int32 = 0
+	var pen int32 = 0
+	for (improved == 1) && (rounds < 10) {
+		improved = 0
+		k = 1
+		for k <= lmax {
+			d = -1
+			for d <= 1 {
+				if d != 0 {
+					ok = 1
+					c = 0
+					for c < nk {
+						port.CellsSet(ws, wsSave+c, port.CellsAt(ws, wsLv+c))
+						if port.CellsAt(ws, wsLv+c) >= k {
+							if ((port.CellsAt(ws, wsLv+c) + d) < 1) || ((port.CellsAt(ws, wsLv+c) + d) > lmax) {
+								ok = 0
+							}
+						}
+						c += 1
+					}
+					if ok == 1 {
+						c = 0
+						for c < nk {
+							if port.CellsAt(ws, wsSave+c) >= k {
+								port.CellsSet(ws, wsLv+c, port.CellsAt(ws, wsSave+c)+d)
+							}
+							c += 1
+						}
+						pen = hdEval(ws, nk)
+						if pen < best {
+							best = hdDescend(ws, nk, lmax, pen)
+							improved = 1
+						} else {
+							c = 0
+							for c < nk {
+								port.CellsSet(ws, wsLv+c, port.CellsAt(ws, wsSave+c))
+								c += 1
+							}
+						}
+					}
+				}
+				d += 1
+			}
+			k += 1
+		}
+		rounds += 1
+	}
+	return best
+}
+
 func hdSearch(ws *port.Cells, nk int32) int32 {
 	// The levels that minimise `hd-eval`: every assignment up to HD_EXHAUSTIVE classes (the first found
 	// wins a tie), coordinate descent beyond. The result is each class's field 10.
@@ -1734,9 +1832,6 @@ func hdSearch(ws *port.Cells, nk int32) int32 {
 	var pen int32 = 0
 	var c int32 = 0
 	var lv int32 = 0
-	var keep int32 = 0
-	var sweeps int32 = 0
-	var changed int32 = 1
 	if mt > lmax {
 		lmax = mt
 	}
@@ -1795,32 +1890,33 @@ func hdSearch(ws *port.Cells, nk int32) int32 {
 			port.CellsSet(ws, wsLv+c, lv)
 			c += 1
 		}
-		best = hdEval(ws, nk)
-		for (changed == 1) && (sweeps < 30) {
-			changed = 0
-			c = 0
-			for c < nk {
-				keep = port.CellsAt(ws, wsLv+c)
-				lv = 1
-				for lv <= lmax {
-					port.CellsSet(ws, wsLv+c, lv)
-					pen = hdEval(ws, nk)
-					if pen < best {
-						best = pen
-						keep = lv
-						changed = 1
-					}
-					lv += 1
-				}
-				port.CellsSet(ws, wsLv+c, keep)
-				c += 1
-			}
-			sweeps += 1
-		}
+		best = hdPolish(ws, nk, lmax)
 		i = 0
 		for i < nk {
 			port.CellsSet(ws, wsBest+i, port.CellsAt(ws, wsLv+i))
 			i += 1
+		}
+		// D563: and from a second start, every class at the top (or at its numbering's level); the better of the two stands, the first of equals
+		c = 0
+		for c < nk {
+			lv = 1
+			if hdHk(ws, c, 8) > 0 {
+				lv = hdHk(ws, c, 8)
+			}
+			if lv > lmax {
+				lv = lmax
+			}
+			port.CellsSet(ws, wsLv+c, lv)
+			c += 1
+		}
+		pen = hdPolish(ws, nk, lmax)
+		if pen < best {
+			best = pen
+			i = 0
+			for i < nk {
+				port.CellsSet(ws, wsBest+i, port.CellsAt(ws, wsLv+i))
+				i += 1
+			}
 		}
 	}
 	i = 0

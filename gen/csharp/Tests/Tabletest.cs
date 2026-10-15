@@ -670,12 +670,11 @@ public static class Tabletest {
         emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "held in part, words left: well formed");
         emon.Testport.AssertText(t, "P[The table below was extracted from the ledger and the figures are totals for the quarter of the year as the office has recorded them and as the auditors have since confirmed.];N;P[see the Note];P[Item];P[Qty];T3r;Gb;R;C[Bolt];C[10];Cs[up];R;C[Nut];C[12];Cs[flat];", "the lines the table does not hold are a note and the ones it holds stay in the table (D504)");
     }
-    internal static int TtBankRules(emon.Port.Cells pa, int rows) {
-        // The row borders of a statement, drawn as the HTML-to-PDF producers do: under the first three cells of each row only (the date, the
-        // description and the category: three abutting segments from x 5910 to 38670), the first at y 21345 and one every 2025 below it, and
-        // two vertical rules in the header's band only (x 38707 and 46342), the amount cell's borders. Nothing is ruled under the last two.
+    internal static int TtBankRulesAt(emon.Port.Cells pa, int y0, int rows) {
+        // `rows` + 1 row borders of a statement, drawn as the HTML-to-PDF producers do: under the first three cells of each row only (the date, the
+        // description and the category: three abutting segments from x 5910 to 38670), the first at y0 and one every 2025 below it.
         int r = 0;
-        int y = 21345;
+        int y = y0;
         while (r <= rows) {
             TtRule(pa, 5910, y - 38, 9150, y + 38);
             TtRule(pa, 9150, y - 38, 32910, y + 38);
@@ -683,6 +682,12 @@ public static class Tabletest {
             y += 2025;
             r += 1;
         }
+        return 0;
+    }
+    internal static int TtBankRules(emon.Port.Cells pa, int rows) {
+        // The row borders of a statement (`tt-bank-rules-at`), the first at y 21345, and two vertical rules in the header's band only (x 38707
+        // and 46342), the amount cell's borders. Nothing is ruled under the last two cells.
+        TtBankRulesAt(pa, 21345, rows);
         TtRule(pa, 38669, 19455, 38745, 21308);
         TtRule(pa, 46304, 19455, 46380, 21308);
         return 0;
@@ -790,6 +795,282 @@ public static class Tabletest {
         TtAt(wd, ln, et, emon.Testport.TextBlob("Page 2"), 41000, 19700, 0, 0);
         emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "stray line: well formed");
         emon.Testport.AssertText(t, "P[Statement];P[Page 2];T5p;Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];", "a line that does not line up with the columns is not a header; the bold opening row is a row of amounts, not a header");
+    }
+    internal static int TtBankTable(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa, int y0, int rows, int header, int n) {
+        // A statement table whose first border is at y0 (the layout of `tt-bank-page`): `rows` + 1 borders, the small header row above the first
+        // when `header` is 1, the two vertical rules of its band, and the first `n` of its five rows at y0 + 400 and one every 2025 below it: the bold
+        // opening row, three transactions and the closing row (y0 + 8500). With 4 `rows` and 5 `n` the closing row stands under the last border
+        // (nothing is ruled under it), with 5 it is between two.
+        TtBankRulesAt(pa, y0, rows);
+        TtRule(pa, 38669, y0 - 1890, 38745, y0 - 37);
+        TtRule(pa, 46304, y0 - 1890, 46380, y0 - 37);
+        if (header == 1) {
+            TtBankRow(wd, ln, et, y0 - 1645, 0, 700, emon.Testport.TextBlob("DATE"), emon.Testport.TextBlob("DESCRIPTION"), emon.Testport.TextBlob("CATEGORY"), emon.Testport.TextBlob("AMOUNT"), emon.Testport.TextBlob("BALANCE"));
+        }
+        if (n >= 1) {
+            TtBankRow(wd, ln, et, y0 + 400, 1, 800, emon.Testport.TextBlob("Sep 1"), emon.Testport.TextBlob("Opening Balance"), emon.Testport.TextBlob(""), emon.Testport.TextBlob(""), emon.Testport.TextBlob("$10,989.78"));
+        }
+        if (n >= 2) {
+            TtBankRow(wd, ln, et, y0 + 2425, 0, 800, emon.Testport.TextBlob("Sep 2"), emon.Testport.TextBlob("Withdrawal CAPITAL ONE"), emon.Testport.TextBlob("Debit"), emon.Testport.TextBlob("- $803.85"), emon.Testport.TextBlob("$10,185.93"));
+        }
+        if (n >= 3) {
+            TtBankRow(wd, ln, et, y0 + 4450, 0, 800, emon.Testport.TextBlob("Sep 4"), emon.Testport.TextBlob("Zelle sent CAMERON"), emon.Testport.TextBlob("Debit"), emon.Testport.TextBlob("- $1,500.00"), emon.Testport.TextBlob("$8,685.93"));
+        }
+        if (n >= 4) {
+            TtBankRow(wd, ln, et, y0 + 6475, 0, 800, emon.Testport.TextBlob("Sep 14"), emon.Testport.TextBlob("Deposit from KESTRAL"), emon.Testport.TextBlob("Credit"), emon.Testport.TextBlob("+ $3,982.04"), emon.Testport.TextBlob("$12,667.97"));
+        }
+        if (n >= 5) {
+            TtBankRow(wd, ln, et, y0 + 8500, 0, 800, emon.Testport.TextBlob("Sep 30"), emon.Testport.TextBlob("Closing Balance"), emon.Testport.TextBlob(""), emon.Testport.TextBlob(""), emon.Testport.TextBlob("$12,667.97"));
+        }
+        return 0;
+    }
+    internal static int TtBankSmall(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa, int y0, int rows) {
+        // A second, small statement table with the same columns, its first border at y0: `rows` + 1 borders, its header, an opening row and a
+        // withdrawal, and the closing row at y0 + 4450 (under the last border when `rows` is 2, between two when it is 3).
+        TtBankRulesAt(pa, y0, rows);
+        TtRule(pa, 38669, y0 - 1890, 38745, y0 - 37);
+        TtRule(pa, 46304, y0 - 1890, 46380, y0 - 37);
+        TtBankRow(wd, ln, et, y0 - 1645, 0, 700, emon.Testport.TextBlob("DATE"), emon.Testport.TextBlob("DESCRIPTION"), emon.Testport.TextBlob("CATEGORY"), emon.Testport.TextBlob("AMOUNT"), emon.Testport.TextBlob("BALANCE"));
+        TtBankRow(wd, ln, et, y0 + 400, 1, 800, emon.Testport.TextBlob("Sep 1"), emon.Testport.TextBlob("Opening Balance"), emon.Testport.TextBlob(""), emon.Testport.TextBlob(""), emon.Testport.TextBlob("$0.10"));
+        TtBankRow(wd, ln, et, y0 + 2425, 0, 800, emon.Testport.TextBlob("Sep 9"), emon.Testport.TextBlob("Withdrawal rejected"), emon.Testport.TextBlob(""), emon.Testport.TextBlob(""), emon.Testport.TextBlob("$0.10"));
+        TtBankRow(wd, ln, et, y0 + 4450, 0, 800, emon.Testport.TextBlob("Sep 30"), emon.Testport.TextBlob("Closing Balance"), emon.Testport.TextBlob(""), emon.Testport.TextBlob(""), emon.Testport.TextBlob("$0.10"));
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestTheLastRowOfAPartialTableWithNoRuleUnderItStaysInTheTable() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        // The closing row stands under the last border, at the pitch of the rows, and lines up with the columns: a row of the table.
+        TtBankTable(wd, ln, et, pa, 21345, 4, 1, 5);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "closing row: well formed");
+        emon.Testport.AssertText(t, "T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Che[AMOUNT];Che[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];", "a row below the last rule that lines up with the table's columns, at its pitch, is the table's (before: a table of four columns, the row three paragraphs under it)");
+    }
+    [Xunit.Fact]
+    public static void TestALineBelowAPartialTableIsNoRowOfItUnlessItLinesUpAndKeepsThePitch() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        System.Text.StringBuilder t2 = emon.Testport.NewText();
+        System.Text.StringBuilder t3 = emon.Testport.NewText();
+        System.Text.StringBuilder t4 = emon.Testport.NewText();
+        // A line of one chunk under the last border: a paragraph.
+        TtBankTable(wd, ln, et, pa, 21345, 5, 1, 5);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Page 2 of 4"), 5910, 31870, 0, 0);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "one chunk: well formed");
+        emon.Testport.AssertText(t, "T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Che[AMOUNT];Che[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];P[Page 2 of 4];", "a line of one chunk under the table is not a row of it");
+        // Two chunks that do not line up with the columns: paragraphs.
+        emon.Port.CellsDrop(wd, 0);
+        emon.Port.CellsDrop(ln, 0);
+        emon.Port.CellsDrop(et, 0);
+        emon.Port.CellsDrop(pa, 0);
+        TtBankTable(wd, ln, et, pa, 21345, 5, 1, 5);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Statement"), 7000, 31870, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Page 2"), 41000, 31870, 0, 0);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t2), 0, "stray: well formed");
+        emon.Testport.AssertText(t2, "T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Che[AMOUNT];Che[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];P[Statement];P[Page 2];", "two chunks that do not line up with the columns are not a row");
+        // A row that lines up with the columns but stands twelve sizes under the last row: not the table's.
+        emon.Port.CellsDrop(wd, 0);
+        emon.Port.CellsDrop(ln, 0);
+        emon.Port.CellsDrop(et, 0);
+        emon.Port.CellsDrop(pa, 0);
+        TtBankTable(wd, ln, et, pa, 21345, 5, 1, 5);
+        TtBankRow(wd, ln, et, 40000, 0, 800, emon.Testport.TextBlob("Sep 30"), emon.Testport.TextBlob("Closing Balance"), emon.Testport.TextBlob(""), emon.Testport.TextBlob(""), emon.Testport.TextBlob("$12,667.97"));
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t3), 0, "far: well formed");
+        emon.Testport.AssertText(t3, "T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Che[AMOUNT];Che[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];P[Sep 30];P[Closing Balance];P[$12,667.97];", "a row far under the table is not its row");
+        // A summary block under the table, in its last columns (an invoice's totals): it lines up with the columns but does not begin in the first.
+        emon.Port.CellsDrop(wd, 0);
+        emon.Port.CellsDrop(ln, 0);
+        emon.Port.CellsDrop(et, 0);
+        emon.Port.CellsDrop(pa, 0);
+        TtBankTable(wd, ln, et, pa, 21345, 5, 1, 5);
+        TtBankRow(wd, ln, et, 31870, 0, 800, emon.Testport.TextBlob(""), emon.Testport.TextBlob(""), emon.Testport.TextBlob("Total due"), emon.Testport.TextBlob(""), emon.Testport.TextBlob("$12,667.97"));
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t4), 0, "totals: well formed");
+        emon.Testport.AssertText(t4, "T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Che[AMOUNT];Che[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];P[Total due];P[$12,667.97];", "a row of the last columns under the table is a block of its own, not a row of the table (an invoice's totals)");
+    }
+    [Xunit.Fact]
+    public static void TestTwoTablesOfAChainOfRulesAreTwoWhenAHeadingAGridOrAGapLiesBetween() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        System.Text.StringBuilder t2 = emon.Testport.NewText();
+        System.Text.StringBuilder t3 = emon.Testport.NewText();
+        System.Text.StringBuilder t4 = emon.Testport.NewText();
+        // A heading, in larger type, between two tables whose rules are 154 pt apart: two tables, the heading a paragraph.
+        TtBankTable(wd, ln, et, pa, 21345, 5, 1, 5);
+        TtBankRow(wd, ln, et, 38000, 1, 1200, emon.Testport.TextBlob("Second account"), emon.Testport.TextBlob(""), emon.Testport.TextBlob(""), emon.Testport.TextBlob(""), emon.Testport.TextBlob(""));
+        TtBankSmall(wd, ln, et, pa, 46870, 3);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "heading: well formed");
+        emon.Testport.AssertText(t, "T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Che[AMOUNT];Che[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];P[Second account];T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Ch[AMOUNT];Ch[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];C[];C[];C[$0.10];R;Cs[Sep 9];Cs[Withdrawal rejected];C[];C[];C[$0.10];R;Cs[Sep 30];Cs[Closing Balance];C[];C[];C[$0.10];", "a heading in larger type between two grids of one chain makes two tables (before: one, the second's rows colspan rows of the first)");
+        // A row of another grid (three chunks that do not line up with the columns, in the same type) between them.
+        emon.Port.CellsDrop(wd, 0);
+        emon.Port.CellsDrop(ln, 0);
+        emon.Port.CellsDrop(et, 0);
+        emon.Port.CellsDrop(pa, 0);
+        TtBankTable(wd, ln, et, pa, 21345, 5, 1, 5);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("0.10%"), 6700, 38000, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("$3.54"), 24000, 38000, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("30"), 41000, 38000, 0, 0);
+        TtBankSmall(wd, ln, et, pa, 46870, 3);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t2), 0, "grid: well formed");
+        emon.Testport.AssertText(t2, "T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Che[AMOUNT];Che[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];P[0.10%];P[$3.54];P[30];T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Ch[AMOUNT];Ch[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];C[];C[];C[$0.10];R;Cs[Sep 9];Cs[Withdrawal rejected];C[];C[];C[$0.10];R;Cs[Sep 30];Cs[Closing Balance];C[];C[];C[$0.10];", "a row between the grids that does not line up with the first one's columns makes them two");
+        // Nothing between them but a gap of white space many rows deep (the second table's header is the only row there).
+        emon.Port.CellsDrop(wd, 0);
+        emon.Port.CellsDrop(ln, 0);
+        emon.Port.CellsDrop(et, 0);
+        emon.Port.CellsDrop(pa, 0);
+        TtBankTable(wd, ln, et, pa, 21345, 5, 1, 5);
+        TtBankSmall(wd, ln, et, pa, 46870, 3);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t3), 0, "gap: well formed");
+        emon.Testport.AssertText(t3, "T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Che[AMOUNT];Che[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Ch[AMOUNT];Ch[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];C[];C[];C[$0.10];R;Cs[Sep 9];Cs[Withdrawal rejected];C[];C[];C[$0.10];R;Cs[Sep 30];Cs[Closing Balance];C[];C[];C[$0.10];", "a white gap of many rows between two grids makes them two");
+        // The statement: both closing rows under their last border, a heading between.
+        emon.Port.CellsDrop(wd, 0);
+        emon.Port.CellsDrop(ln, 0);
+        emon.Port.CellsDrop(et, 0);
+        emon.Port.CellsDrop(pa, 0);
+        TtBankTable(wd, ln, et, pa, 21345, 4, 1, 5);
+        TtBankRow(wd, ln, et, 38000, 1, 1200, emon.Testport.TextBlob("Second account"), emon.Testport.TextBlob(""), emon.Testport.TextBlob(""), emon.Testport.TextBlob(""), emon.Testport.TextBlob(""));
+        TtBankSmall(wd, ln, et, pa, 46870, 2);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t4), 0, "statement: well formed");
+        emon.Testport.AssertText(t4, "T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Che[AMOUNT];Che[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];P[Second account];T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Ch[AMOUNT];Ch[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];C[];C[];C[$0.10];R;Cs[Sep 9];Cs[Withdrawal rejected];C[];C[];C[$0.10];R;Cs[Sep 30];Cs[Closing Balance];C[];C[];C[$0.10];", "the two together: two tables, each with its closing row");
+    }
+    internal static int TtCutRow(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int y, byte[] a, byte[] b, byte[] c, int style) {
+        // A row of three cells at y: `a` at x 7600, `b` ending at 26800 and `c` beginning at 27200 (400 apart: one chunk of the row's text),
+        // all in `style` (0 plain, 1 bold).
+        TtAt(wd, ln, et, a, 7600, y, style, 0);
+        TtAt(wd, ln, et, b, 26800, y, style, 1);
+        TtAt(wd, ln, et, c, 27200, y, style, 0);
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestAVerticalRuleBetweenTwoWordsThatTouchIsAColumnCut() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        System.Text.StringBuilder t2 = emon.Testport.NewText();
+        System.Text.StringBuilder t3 = emon.Testport.NewText();
+        System.Text.StringBuilder t4 = emon.Testport.NewText();
+        // Partial: four borders and a rule down the rows between the two words that touch.
+        TtRule(pa, 7200, 9950, 37200, 10050);
+        TtRule(pa, 7200, 11950, 37200, 12050);
+        TtRule(pa, 7200, 13950, 37200, 14050);
+        TtRule(pa, 7200, 15950, 37200, 16050);
+        TtRule(pa, 27000, 10000, 27100, 16000);
+        TtCutRow(wd, ln, et, 10600, emon.Testport.TextBlob("Bolt"), emon.Testport.TextBlob("Debit"), emon.Testport.TextBlob("$803"), 0);
+        TtCutRow(wd, ln, et, 12600, emon.Testport.TextBlob("Nut"), emon.Testport.TextBlob("Debit"), emon.Testport.TextBlob("$91"), 0);
+        TtCutRow(wd, ln, et, 14600, emon.Testport.TextBlob("Gear"), emon.Testport.TextBlob("Paid"), emon.Testport.TextBlob("$1,200"), 0);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "rule: well formed");
+        emon.Testport.AssertText(t, "T3p;Gb;R;C[Bolt];C[Debit];Cs[$803];R;C[Nut];C[Debit];Cs[$91];R;C[Gear];C[Paid];Cs[$1,200];", "the rule runs the three rows: the cells on its two sides are two (before: one cell `Debit $803`, two columns)");
+        // Without the rule the words are one cell.
+        emon.Port.CellsDrop(wd, 0);
+        emon.Port.CellsDrop(ln, 0);
+        emon.Port.CellsDrop(et, 0);
+        emon.Port.CellsDrop(pa, 0);
+        TtRule(pa, 7200, 9950, 37200, 10050);
+        TtRule(pa, 7200, 11950, 37200, 12050);
+        TtRule(pa, 7200, 13950, 37200, 14050);
+        TtRule(pa, 7200, 15950, 37200, 16050);
+        TtCutRow(wd, ln, et, 10600, emon.Testport.TextBlob("Bolt"), emon.Testport.TextBlob("Debit"), emon.Testport.TextBlob("$803"), 0);
+        TtCutRow(wd, ln, et, 12600, emon.Testport.TextBlob("Nut"), emon.Testport.TextBlob("Debit"), emon.Testport.TextBlob("$91"), 0);
+        TtCutRow(wd, ln, et, 14600, emon.Testport.TextBlob("Gear"), emon.Testport.TextBlob("Paid"), emon.Testport.TextBlob("$1,200"), 0);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t2), 0, "no rule: well formed");
+        emon.Testport.AssertText(t2, "T2p;Gb;R;C[Bolt];C[Debit $803];R;C[Nut];C[Debit $91];R;C[Gear];C[Paid $1,200];", "no rule, no cut: the touching words are one cell");
+        // A rule beside one row only is no column cut (it spans one row of three).
+        emon.Port.CellsDrop(wd, 0);
+        emon.Port.CellsDrop(ln, 0);
+        emon.Port.CellsDrop(et, 0);
+        emon.Port.CellsDrop(pa, 0);
+        TtRule(pa, 7200, 9950, 37200, 10050);
+        TtRule(pa, 7200, 11950, 37200, 12050);
+        TtRule(pa, 7200, 13950, 37200, 14050);
+        TtRule(pa, 7200, 15950, 37200, 16050);
+        TtRule(pa, 27000, 10000, 27100, 12000);
+        TtCutRow(wd, ln, et, 10600, emon.Testport.TextBlob("Bolt"), emon.Testport.TextBlob("Debit"), emon.Testport.TextBlob("$803"), 0);
+        TtCutRow(wd, ln, et, 12600, emon.Testport.TextBlob("Nut"), emon.Testport.TextBlob("Debit"), emon.Testport.TextBlob("$91"), 0);
+        TtCutRow(wd, ln, et, 14600, emon.Testport.TextBlob("Gear"), emon.Testport.TextBlob("Paid"), emon.Testport.TextBlob("$1,200"), 0);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t3), 0, "short rule: well formed");
+        emon.Testport.AssertText(t3, "T2p;Gb;R;C[Bolt];C[Debit $803];R;C[Nut];C[Debit $91];R;C[Gear];C[Paid $1,200];", "a rule beside one row of three cuts nothing");
+        // A rule through the words is a strike or a frame, not the border between two cells.
+        emon.Port.CellsDrop(wd, 0);
+        emon.Port.CellsDrop(ln, 0);
+        emon.Port.CellsDrop(et, 0);
+        emon.Port.CellsDrop(pa, 0);
+        TtRule(pa, 7200, 9950, 37200, 10050);
+        TtRule(pa, 7200, 11950, 37200, 12050);
+        TtRule(pa, 7200, 13950, 37200, 14050);
+        TtRule(pa, 7200, 15950, 37200, 16050);
+        TtRule(pa, 25500, 10000, 25600, 16000);
+        TtCutRow(wd, ln, et, 10600, emon.Testport.TextBlob("Bolt"), emon.Testport.TextBlob("Debit"), emon.Testport.TextBlob("$803"), 0);
+        TtCutRow(wd, ln, et, 12600, emon.Testport.TextBlob("Nut"), emon.Testport.TextBlob("Debit"), emon.Testport.TextBlob("$91"), 0);
+        TtCutRow(wd, ln, et, 14600, emon.Testport.TextBlob("Gear"), emon.Testport.TextBlob("Paid"), emon.Testport.TextBlob("$1,200"), 0);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t4), 0, "through the words: well formed");
+        emon.Testport.AssertText(t4, "T2p;Gb;R;C[Bolt];C[Debit $803];R;C[Nut];C[Debit $91];R;C[Gear];C[Paid $1,200];", "a rule through the words cuts nothing");
+    }
+    [Xunit.Fact]
+    public static void TestARuleCutsOnlyTheRowsItRunsAlong() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        System.Text.StringBuilder t2 = emon.Testport.NewText();
+        // D563, the shape of the 1040's dependents block: a label of one phrase on the first row, `(b) And in the U.S.`, whose words the
+        // rule below would fall between (a check box's border, or a column's, runs down the rows under the label and not through it):
+        // the rule is a column boundary for the rows it runs along, and the label is one cell.
+        TtRule(pa, 7200, 9950, 37200, 10050);
+        TtRule(pa, 7200, 11950, 37200, 12050);
+        TtRule(pa, 7200, 13950, 37200, 14050);
+        TtRule(pa, 7200, 15950, 37200, 16050);
+        TtRule(pa, 27000, 12000, 27100, 16000);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Item"), 7600, 10600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("(b) And"), 26800, 10600, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("in the U.S."), 27200, 10600, 0, 0);
+        TtCutRow(wd, ln, et, 12600, emon.Testport.TextBlob("Nut"), emon.Testport.TextBlob("Debit"), emon.Testport.TextBlob("$91"), 0);
+        TtCutRow(wd, ln, et, 14600, emon.Testport.TextBlob("Gear"), emon.Testport.TextBlob("Paid"), emon.Testport.TextBlob("$1,200"), 0);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "label: well formed");
+        emon.Testport.AssertText(t, "T3p;Gb;R;C[Item];Cc2[(b) And in the U.S.];R;C[Nut];C[Debit];Cs[$91];R;C[Gear];C[Paid];Cs[$1,200];", "the label is one cell over the two columns the rule makes below it (before: two cells, the phrase cut in two)");
+        // A rule that runs along the label's row and the others cuts it, as before.
+        emon.Port.CellsDrop(wd, 0);
+        emon.Port.CellsDrop(ln, 0);
+        emon.Port.CellsDrop(et, 0);
+        emon.Port.CellsDrop(pa, 0);
+        TtRule(pa, 7200, 9950, 37200, 10050);
+        TtRule(pa, 7200, 11950, 37200, 12050);
+        TtRule(pa, 7200, 13950, 37200, 14050);
+        TtRule(pa, 7200, 15950, 37200, 16050);
+        TtRule(pa, 27000, 10000, 27100, 16000);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Item"), 7600, 10600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("(b) And"), 26800, 10600, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("in the U.S."), 27200, 10600, 0, 0);
+        TtCutRow(wd, ln, et, 12600, emon.Testport.TextBlob("Nut"), emon.Testport.TextBlob("Debit"), emon.Testport.TextBlob("$91"), 0);
+        TtCutRow(wd, ln, et, 14600, emon.Testport.TextBlob("Gear"), emon.Testport.TextBlob("Paid"), emon.Testport.TextBlob("$1,200"), 0);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t2), 0, "label cut: well formed");
+        emon.Testport.AssertText(t2, "T3p;Gb;R;C[Item];Ce[(b) And];Cs[in the U.S.];R;C[Nut];Ce[Debit];Cs[$91];R;C[Gear];Ce[Paid];Cs[$1,200];", "a rule along all three rows is between the label's two words too");
+    }
+    [Xunit.Fact]
+    public static void TestAVerticalRuleCutsTheColumnsOfATableWithoutHorizontalRules() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        // Whitespace: the same, with no horizontal rule at all (the rule is handed to the profile of the words alone).
+        TtCutRow(wd, ln, et, 10000, emon.Testport.TextBlob("Item"), emon.Testport.TextBlob("Kind"), emon.Testport.TextBlob("Price"), 1);
+        TtCutRow(wd, ln, et, 11600, emon.Testport.TextBlob("Bolt"), emon.Testport.TextBlob("Debit"), emon.Testport.TextBlob("$803"), 0);
+        TtCutRow(wd, ln, et, 13200, emon.Testport.TextBlob("Nut"), emon.Testport.TextBlob("Debit"), emon.Testport.TextBlob("$91"), 0);
+        TtCutRow(wd, ln, et, 14800, emon.Testport.TextBlob("Gear"), emon.Testport.TextBlob("Paid"), emon.Testport.TextBlob("$1,200"), 0);
+        TtCutRow(wd, ln, et, 16400, emon.Testport.TextBlob("Cog"), emon.Testport.TextBlob("Debit"), emon.Testport.TextBlob("$35"), 0);
+        TtRule(pa, 27000, 9800, 27100, 17400);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "whitespace: well formed");
+        emon.Testport.AssertText(t, "T3w;Gh;R;Ch[Item];Ch[Kind];Chs[Price];Gb;R;C[Bolt];C[Debit];Cs[$803];R;C[Nut];C[Debit];Cs[$91];R;C[Gear];C[Paid];Cs[$1,200];R;C[Cog];C[Debit];Cs[$35];", "a rule through the rows' height between two touching words is a column cut for the whitespace profile too");
     }
     internal static int TtGolden(byte[] pdf, System.Text.StringBuilder t, System.Text.StringBuilder tvt) {
         // PDF -> content -> tables -> paragraphs -> Model -> pretty JSON; answer 0 when every step answered 0, else a

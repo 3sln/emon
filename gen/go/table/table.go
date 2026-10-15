@@ -45,6 +45,16 @@ const tbHeadTol int32 = 400
 
 const tbHeadPitch int32 = 40
 
+const tbTailRows int32 = 3
+
+const tbTailReach int32 = 6000
+
+const tbTailPitch int32 = 16
+
+const tbGapSize int32 = 125
+
+const tbGapBand int32 = 35
+
 const tbTagOwn int32 = 700
 
 const tbOwnChecks int32 = 4
@@ -1811,11 +1821,115 @@ func tbCut(ch *port.Cells, k int32, lo int32, hi int32) int32 {
 	return (port.CellsAt(ch, (k-1)*2) + port.CellsAt(ch, ((k-1)*2)+1)) / 2
 }
 
-func tbTextGrid(wd *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, page int32, ra int32, rb int32, profile int32, score int32, ext int32, bx0 int32, by0 int32, bx1 int32, by1 int32) int32 {
+func tbCutList(wd *port.Cells, wl *port.Cells, rw *port.Cells, rm *port.Cells, ra int32, rb int32, minx int32, maxx int32, cl *port.Cells) int32 {
+	// D559: the x of every vertical rule of `rm` that is a column cut of the rows ra..rb, in `cl` (emptied first). A rule is one when it
+	// lies inside the rows' extent minx..maxx, runs along three in five of the rows at least (two or more) and passes through no word of those
+	// rows (a rule through a word is a strike or a frame, not the border between two cells). Answers how many.
+	var nrl int32 = tbRowsOf(rm, rls)
+	var n int32 = rb - ra
+	var i int32 = 0
+	var r int32 = 0
+	var k int32 = 0
+	var p int32 = 0
+	var spanned int32 = 0
+	var crossed int32 = 0
+	var cy int32 = 0
+	var w int32 = 0
+	port.CellsDrop(cl, 0)
+	if n < 2 {
+		return 0
+	}
+	for i < nrl {
+		if port.CellsAt(rm, i*rls) == 1 {
+			p = port.CellsAt(rm, (i*rls)+1)
+			if (p > minx) && (p < maxx) {
+				spanned = 0
+				crossed = 0
+				r = ra
+				for r < rb {
+					cy = (port.CellsAt(rw, (r*rws)+6) + port.CellsAt(rw, (r*rws)+7)) / 2
+					if (cy >= port.CellsAt(rm, (i*rls)+2)) && (cy <= port.CellsAt(rm, (i*rls)+3)) {
+						spanned += 1
+						k = 0
+						for k < port.CellsAt(rw, (r*rws)+1) {
+							w = port.CellsAt(wl, port.CellsAt(rw, r*rws)+k)
+							if (evidence.WdGet(wd, w, evidence.HdX0()) < p) && (evidence.WdGet(wd, w, evidence.HdX1()) > p) {
+								crossed = 1
+							}
+							k += 1
+						}
+					}
+					r += 1
+				}
+				if (crossed == 0) && ((spanned >= 2) && ((spanned * 5) >= (n * 3))) {
+					port.CellsPush(cl, p)
+					port.CellsPush(cl, port.CellsAt(rm, (i*rls)+2))
+					port.CellsPush(cl, port.CellsAt(rm, (i*rls)+3))
+				}
+			}
+		}
+		i += 1
+	}
+	return port.CellsLen(cl)
+}
+
+func tbChannelAdd(ch *port.Cells, p int32) int32 {
+	// D559: a channel of no width at x p, in its place among the channels `ch` (pairs of start and end, in order of x), so that a column
+	// boundary stands at p: nothing is added when p lies in a channel already (its midpoint is the boundary, with words either side).
+	// Answers 1 when one was added.
+	var n int32 = port.CellsLen(ch) / 2
+	var i int32 = 0
+	var at int32 = 0
+	var k int32 = 0
+	for i < n {
+		if (port.CellsAt(ch, i*2) <= p) && (p <= port.CellsAt(ch, (i*2)+1)) {
+			return 0
+		}
+		if port.CellsAt(ch, i*2) < p {
+			at += 1
+		}
+		i += 1
+	}
+	port.CellsPush(ch, 0)
+	port.CellsPush(ch, 0)
+	k = port.CellsLen(ch) - 1
+	for k >= ((at * 2) + 2) {
+		port.CellsSet(ch, k, port.CellsAt(ch, k-2))
+		k -= 1
+	}
+	port.CellsSet(ch, at*2, p)
+	port.CellsSet(ch, (at*2)+1, p)
+	return 1
+}
+
+func tbSubEnd(wd *port.Cells, wl *port.Cells, cl *port.Cells, k int32, kend int32, cy int32) int32 {
+	// D559: where the words k..kend of one chunk (indices into `wl`), on a row whose centre is at y `cy`, are cut by a column cut of `cl`
+	// (x, from, to: D563, a cut cuts the rows it runs along and no other, or a phrase in a row beside a check box's border is cut in two): the
+	// end (exclusive) of the stretch that begins at the word k and has no cut between its words (`kend` when there is none).
+	var e int32 = k + 1
+	var j int32 = 0
+	var split int32 = 0
+	for (e < kend) && (split == 0) {
+		j = 0
+		for j < port.CellsLen(cl) {
+			if (evidence.WdGet(wd, port.CellsAt(wl, e-1), evidence.HdX1()) <= port.CellsAt(cl, j)) && ((port.CellsAt(cl, j) <= evidence.WdGet(wd, port.CellsAt(wl, e), evidence.HdX0())) && ((cy >= port.CellsAt(cl, j+1)) && (cy <= port.CellsAt(cl, j+2)))) {
+				split = 1
+			}
+			j += 3
+		}
+		if split == 0 {
+			e += 1
+		}
+	}
+	return e
+}
+
+func tbTextGrid(wd *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, rm *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, page int32, ra int32, rb int32, profile int32, score int32, ext int32, bx0 int32, by0 int32, bx1 int32, by1 int32) int32 {
 	// The cells of the rows ra..rb (see the head of this section) as a candidate table of this profile:
 	// ext 1 means `rmap` already says which table row each baseline row is (shaded: the fills' bands). The box
 	// bx0..by1 widens the box of the words (the rules, the fills): 2000000000 2000000000 -2000000000 -2000000000
-	// for none. Answers the
+	// for none. `rm` are the page's merged rules (empty for none): a vertical one that runs along most of the rows between two words is
+	// a column cut, whatever the profile (D559). Answers the
 	// table's index, -1 when there are not two columns and two rows.
 	var ntab int32 = 0
 	var sumsz int64 = int64(0)
@@ -1829,6 +1943,9 @@ func tbTextGrid(wd *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, 
 	var a int32 = 0
 	var b int32 = 0
 	var tr int32 = 0
+	var ks int32 = 0
+	var ke int32 = 0
+	var kx int32 = 0
 	var minx int32 = 2000000000
 	var maxx int32 = -2000000000
 	var miny int32 = 2000000000
@@ -1856,6 +1973,15 @@ func tbTextGrid(wd *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, 
 		return -1
 	}
 	nch = tbChannels(wd, wl, rw, sg, ra, rb, ntab/6, int32(((sumsz/int64(rb-ra))*int64(segNum))/int64(segDen)), ch, st, en)
+	// D559: a vertical rule along most of the rows between two words is a boundary of its own (a channel of no width) where the whitespace has none.
+	if tbCutList(wd, wl, rw, rm, ra, rb, minx, maxx, st) > 0 {
+		c = 0
+		for c < port.CellsLen(st) {
+			tbChannelAdd(ch, port.CellsAt(st, c))
+			c += 3
+		}
+		nch = port.CellsLen(ch) / 2
+	}
 	if nch < 1 {
 		return -1
 	}
@@ -1878,6 +2004,8 @@ func tbTextGrid(wd *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, 
 	if nrows < 2 {
 		return -1
 	}
+	// The column cuts again, in `st` (scratch no longer): the words either side of one are cells of their own whatever the chunk.
+	tbCutList(wd, wl, rw, rm, ra, rb, minx, maxx, st)
 	port.CellsDrop(gm, 0)
 	port.CellsDrop(gs, 0)
 	port.CellsDrop(en, 0)
@@ -1908,26 +2036,32 @@ func tbTextGrid(wd *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, 
 			s = 0
 			for s < port.CellsAt(rw, (r*rws)+9) {
 				q = port.CellsAt(rw, (r*rws)+8) + s
-				a = tbChunkA(wd, wl, sg, ch, q)
-				b = tbChunkB(wd, wl, sg, ch, q)
-				if port.CellsAt(gm, (tr*ncols)+a) == -1 {
-					var free int32 = 1
-					var kf int32 = a
-					for kf <= b {
-						if port.CellsAt(gm, (tr*ncols)+kf) != -1 {
-							free = 0
+				ks = port.CellsAt(sg, (q*sgs)+3)
+				ke = ks + port.CellsAt(sg, (q*sgs)+4)
+				for ks < ke {
+					kx = tbSubEnd(wd, wl, st, ks, ke, (port.CellsAt(rw, (r*rws)+6)+port.CellsAt(rw, (r*rws)+7))/2)
+					a = tbColOf(ch, tbWordCx(wd, port.CellsAt(wl, ks)))
+					b = tbColOf(ch, tbWordCx(wd, port.CellsAt(wl, kx-1)))
+					if port.CellsAt(gm, (tr*ncols)+a) == -1 {
+						var free int32 = 1
+						var kf int32 = a
+						for kf <= b {
+							if port.CellsAt(gm, (tr*ncols)+kf) != -1 {
+								free = 0
+							}
+							kf += 1
 						}
-						kf += 1
+						if free == 0 {
+							b = a
+						}
+						kf = a
+						for kf <= b {
+							port.CellsSet(gm, (tr*ncols)+kf, a)
+							kf += 1
+						}
+						port.CellsSet(gs, (tr*ncols)+a, (b-a)+1)
 					}
-					if free == 0 {
-						b = a
-					}
-					kf = a
-					for kf <= b {
-						port.CellsSet(gm, (tr*ncols)+kf, a)
-						kf += 1
-					}
-					port.CellsSet(gs, (tr*ncols)+a, (b-a)+1)
+					ks = kx
 				}
 				s += 1
 			}
@@ -1964,12 +2098,18 @@ func tbTextGrid(wd *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, 
 			s = 0
 			for s < port.CellsAt(rw, (r*rws)+9) {
 				q = port.CellsAt(rw, (r*rws)+8) + s
-				a = tbChunkA(wd, wl, sg, ch, q)
-				var cell int32 = port.CellsAt(en, (tr*ncols)+a)
-				var kw int32 = port.CellsAt(sg, (q*sgs)+3)
-				for kw < (port.CellsAt(sg, (q*sgs)+3) + port.CellsAt(sg, (q*sgs)+4)) {
-					tbPairAdd(pr, wd, cell, port.CellsAt(wl, kw))
-					kw += 1
+				ks = port.CellsAt(sg, (q*sgs)+3)
+				ke = ks + port.CellsAt(sg, (q*sgs)+4)
+				for ks < ke {
+					kx = tbSubEnd(wd, wl, st, ks, ke, (port.CellsAt(rw, (r*rws)+6)+port.CellsAt(rw, (r*rws)+7))/2)
+					a = tbColOf(ch, tbWordCx(wd, port.CellsAt(wl, ks)))
+					var cell int32 = port.CellsAt(en, (tr*ncols)+a)
+					var kw int32 = ks
+					for kw < kx {
+						tbPairAdd(pr, wd, cell, port.CellsAt(wl, kw))
+						kw += 1
+					}
+					ks = kx
 				}
 				s += 1
 			}
@@ -2725,7 +2865,8 @@ func tbBackNear(rw *port.Cells, r int32, below int32) int32 {
 
 func tbAligned(rw *port.Cells, sg *port.Cells, r int32, rb int32, nr int32) int32 {
 	// 1 when the chunks of row r line up with the body's (D557): at least two of them, and three in five, have a left or a right edge
-	// within `TB_HEAD_TOL` of an edge of a chunk of the body rows rb.. (twelve of them at most).
+	// within `TB_HEAD_TOL` of an edge of a chunk of the body rows rb..nr (twelve of them at most; never row r itself, which D559's
+	// `tb-gap-foreign` and `tb-tail-end` ask about among the rows around it).
 	var nch int32 = port.CellsAt(rw, (r*rws)+9)
 	var sf int32 = port.CellsAt(rw, (r*rws)+8)
 	var bend int32 = tbMin(nr, rb+12)
@@ -2742,10 +2883,10 @@ func tbAligned(rw *port.Cells, sg *port.Cells, r int32, rb int32, nr int32) int3
 			for (q < port.CellsAt(rw, (b*rws)+9)) && (found == 0) {
 				var hs int32 = sf + s
 				var bs int32 = port.CellsAt(rw, (b*rws)+8) + q
-				if tbAbs(port.CellsAt(sg, (hs*sgs)+1)-port.CellsAt(sg, (bs*sgs)+1)) <= tbHeadTol {
+				if (b != r) && (tbAbs(port.CellsAt(sg, (hs*sgs)+1)-port.CellsAt(sg, (bs*sgs)+1)) <= tbHeadTol) {
 					found = 1
 				}
-				if tbAbs(port.CellsAt(sg, (hs*sgs)+2)-port.CellsAt(sg, (bs*sgs)+2)) <= tbHeadTol {
+				if (b != r) && (tbAbs(port.CellsAt(sg, (hs*sgs)+2)-port.CellsAt(sg, (bs*sgs)+2)) <= tbHeadTol) {
 					found = 1
 				}
 				q += 1
@@ -2962,7 +3103,7 @@ func tbExtend(wd *port.Cells, w0 int32, w1 int32, rw *port.Cells, sg *port.Cells
 	return dir * reach
 }
 
-func tbPartialBuild(wd *port.Cells, et *port.Cells, w0 int32, w1 int32, page int32, ex0 int32, ex1 int32, ya int32, yb int32, align int32, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells) int32 {
+func tbPartialBuild(wd *port.Cells, et *port.Cells, w0 int32, w1 int32, page int32, ex0 int32, ex1 int32, ya int32, yb int32, align int32, rm *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells) int32 {
 	// One partial candidate over the extent ex0..ex1: the words between the rules at ya and yb (and the rows directly above ya, the header),
 	// columns from their channels; kept when it scores. The rows are left in `wl rw sg`. Answers the candidate, or -1 (nothing is left of it).
 	var nr int32 = tbRows(wd, w0, w1, ex0-posTol, ya-9000, ex1+posTol, yb, wl, rw, sg)
@@ -2972,7 +3113,7 @@ func tbPartialBuild(wd *port.Cells, et *port.Cells, w0 int32, w1 int32, page int
 	var wl0 int32 = port.CellsLen(tw)
 	var xl0 int32 = port.CellsLen(tx)
 	if (nr - ra) >= 3 {
-		var t int32 = tbTextGrid(wd, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, page, ra, nr, pfPartial, 850, 0, ex0, ya, ex1, yb)
+		var t int32 = tbTextGrid(wd, wl, rw, sg, rm, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, page, ra, nr, pfPartial, 850, 0, ex0, ya, ex1, yb)
 		if t >= 0 {
 			var sc int32 = tbScore(tb, t, wd, et, tc, tw)
 			var rb int32 = tbBodyRow(rw, nr, ya)
@@ -3004,7 +3145,7 @@ func tbPartialTry(wd *port.Cells, et *port.Cells, w0 int32, w1 int32, page int32
 	if ya <= (ychain + posTol) {
 		align = 1
 	}
-	var t int32 = tbPartialBuild(wd, et, w0, w1, page, ex0, ex1, ya, yb, align, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx)
+	var t int32 = tbPartialBuild(wd, et, w0, w1, page, ex0, ex1, ya, yb, align, rm, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx)
 	if t >= 0 {
 		var nr int32 = tbRowsOf(rw, rws)
 		var ra int32 = tbFirstRow(rw, sg, nr, ya, align)
@@ -3012,21 +3153,118 @@ func tbPartialTry(wd *port.Cells, et *port.Cells, w0 int32, w1 int32, page int32
 		var nx0 int32 = tbExtend(wd, w0, w1, rw, sg, ra, nr, ex0, -1, rm, pr, ry)
 		if (nx1 > ex1) || (nx0 < ex0) {
 			tbReject(tb, tc, tw, tx, nt, c0, wl0, xl0)
-			if tbPartialBuild(wd, et, w0, w1, page, nx0, nx1, ya, yb, align, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx) < 0 {
-				tbPartialBuild(wd, et, w0, w1, page, ex0, ex1, ya, yb, align, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx)
+			if tbPartialBuild(wd, et, w0, w1, page, nx0, nx1, ya, yb, align, rm, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx) < 0 {
+				tbPartialBuild(wd, et, w0, w1, page, ex0, ex1, ya, yb, align, rm, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx)
 			}
 		}
 	}
 	return 0
 }
 
+func tbGapForeign(wd *port.Cells, w0 int32, w1 int32, ex0 int32, ex1 int32, ytop int32, last int32, yj int32, wl *port.Cells, rw *port.Cells, sg *port.Cells) int32 {
+	// D559: 1 when what lies between the rules at `last` and `yj`, in the extent ex0..ex1, is not the chain's own (the chain begins at the rule
+	// ytop and has its rows down to `last`): a heading or a label (a row in type `TB_GAP_SIZE` hundredths of the rows' or more), a row of
+	// two chunks or more that lines up with no other row's columns (another grid's; the first twelve rows are asked), or a band of white deeper than `TB_GAP_BAND`
+	// tenths of a size between a row and the one before it (the last of the chain's own included). A chain of rules is one table; two tables whose
+	// rules are near enough to chain are two.
+	var nr int32 = tbRows(wd, w0, w1, ex0-posTol, ytop, ex1+posTol, yj, wl, rw, sg)
+	var g int32 = 0
+	var r int32 = 0
+	var sum int64 = int64(0)
+	var size int32 = 0
+	for (g < nr) && (((port.CellsAt(rw, (g*rws)+6) + port.CellsAt(rw, (g*rws)+7)) / 2) < last) {
+		g += 1
+	}
+	if (g == 0) || (g >= nr) {
+		return 0
+	}
+	for r < g {
+		sum = sum + int64(port.CellsAt(rw, (r*rws)+3))
+		r += 1
+	}
+	size = int32(sum / int64(g))
+	r = g
+	for r < nr {
+		if (100 * port.CellsAt(rw, (r*rws)+3)) >= (tbGapSize * size) {
+			return 1
+		}
+		if (port.CellsAt(rw, (r*rws)+9) >= 2) && (tbAligned(rw, sg, r, 0, nr) == 0) {
+			return 1
+		}
+		if (10 * (port.CellsAt(rw, (r*rws)+6) - port.CellsAt(rw, ((r-1)*rws)+7))) > (tbGapBand * size) {
+			return 1
+		}
+		r += 1
+	}
+	return 0
+}
+
+func tbTailEnd(wd *port.Cells, w0 int32, w1 int32, ex0 int32, ex1 int32, ytop int32, ybot int32, wl *port.Cells, rw *port.Cells, sg *port.Cells) int32 {
+	// D559: the bottom of a chain of rules that begins at ytop and ends at ybot, with the rows below its last rule that are its own: a table
+	// whose last row has no border under it (a statement's closing balance, a summary's total). A row of two chunks or more that lines up with
+	// the rows' columns (`tb-aligned`), at most `TB_HEAD_PITCH` tenths of its size and `TB_TAIL_PITCH` tenths of the rows' mean pitch under
+	// the row before it, beginning in the rows' first column (within `TB_HEAD_TOL` of their left edge: a summary block in the last columns, an
+	// invoice's totals, is a table of its own), and at most `TB_TAIL_ROWS` of them; the chain needs two rows of its own to have a pitch and columns to line up
+	// with. Answers ybot, or the bottom of the last such row.
+	var nr int32 = tbRows(wd, w0, w1, ex0-posTol, ytop, ex1+posTol, ybot+tbTailReach, wl, rw, sg)
+	var g int32 = 0
+	var r int32 = 0
+	var taken int32 = 0
+	var res int32 = ybot
+	var left int32 = 0
+	var mean int32 = 0
+	var pitch int32 = 0
+	for (g < nr) && (((port.CellsAt(rw, (g*rws)+6) + port.CellsAt(rw, (g*rws)+7)) / 2) < ybot) {
+		g += 1
+	}
+	if (g < 2) || (g >= nr) {
+		return ybot
+	}
+	mean = (port.CellsAt(rw, ((g-1)*rws)+2) - port.CellsAt(rw, 2)) / (g - 1)
+	r = 0
+	left = 2000000000
+	for r < g {
+		if port.CellsAt(rw, (r*rws)+4) < left {
+			left = port.CellsAt(rw, (r*rws)+4)
+		}
+		r += 1
+	}
+	r = g
+	for (r < nr) && (taken < tbTailRows) {
+		pitch = port.CellsAt(rw, (r*rws)+2) - port.CellsAt(rw, ((r-1)*rws)+2)
+		if port.CellsAt(rw, (r*rws)+9) < 2 {
+			return res
+		}
+		// A row of the table begins in its first column; a summary block under it (an invoice's totals) stands in the last columns.
+		if tbAbs(port.CellsAt(rw, (r*rws)+4)-left) > tbHeadTol {
+			return res
+		}
+		if (10 * pitch) > (tbHeadPitch * port.CellsAt(rw, (r*rws)+3)) {
+			return res
+		}
+		if (mean > 0) && ((10 * pitch) > (tbTailPitch * mean)) {
+			return res
+		}
+		if tbAligned(rw, sg, r, 0, g) == 0 {
+			return res
+		}
+		res = port.CellsAt(rw, (r*rws)+7)
+		taken += 1
+		r += 1
+	}
+	return res
+}
+
 func tbPartialPage(rm *port.Cells, page int32, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, used *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells) int32 {
 	// Chains of horizontal rules of one extent (booktabs: top, mid, bottom) are partial candidates: the
-	// words between the first and the last rule, columns from the channels of their text.
+	// words between the first and the last rule, columns from the channels of their text. D559: a chain ends where a gap holds what is not
+	// the table's (`tb-gap-foreign`: a heading, another grid, a band of white), and takes the rows under its last rule that are (`tb-tail-end`).
 	var n int32 = tbRowsOf(rm, rls)
 	var nh int32 = 0
 	var i int32 = 0
 	var j int32 = 0
+	var pgap int32 = 0
+	var ytail int32 = 0
 	var cnt int32 = 0
 	var ex0 int32 = 0
 	var ex1 int32 = 0
@@ -3044,6 +3282,7 @@ func tbPartialPage(rm *port.Cells, page int32, wd *port.Cells, et *port.Cells, w
 	for i < nh {
 		if (port.CellsAt(used, i) == 0) && ((port.CellsAt(rm, (i*rls)+3) - port.CellsAt(rm, (i*rls)+2)) >= 3000) {
 			cnt = 1
+			pgap = 0
 			ex0 = port.CellsAt(rm, (i*rls)+2)
 			ex1 = port.CellsAt(rm, (i*rls)+3)
 			last = port.CellsAt(rm, (i*rls)+1)
@@ -3057,22 +3296,28 @@ func tbPartialPage(rm *port.Cells, page int32, wd *port.Cells, et *port.Cells, w
 					var ov int32 = tbMin(ex1, a1) - tbMax(ex0, a0)
 					var lj int32 = a1 - a0
 					if (lj >= 2000) && (((ov * 10) >= (lj * 6)) && ((ov * 10) >= ((ex1 - ex0) * 3))) {
-						cnt += 1
-						last = port.CellsAt(rm, (j*rls)+1)
-						if a0 < ex0 {
-							ex0 = a0
+						if (cnt >= 2) && (((2 * (port.CellsAt(rm, (j*rls)+1) - last)) > (3 * pgap)) && (tbGapForeign(wd, w0, w1, ex0, ex1, port.CellsAt(rm, (i*rls)+1), last, port.CellsAt(rm, (j*rls)+1), wl, rw, sg) == 1)) {
+							j = nh
+						} else {
+							pgap = port.CellsAt(rm, (j*rls)+1) - last
+							cnt += 1
+							last = port.CellsAt(rm, (j*rls)+1)
+							if a0 < ex0 {
+								ex0 = a0
+							}
+							if a1 > ex1 {
+								ex1 = a1
+							}
+							port.CellsSet(used, j, 1)
+							port.CellsPush(used, port.CellsAt(rm, (j*rls)+1))
 						}
-						if a1 > ex1 {
-							ex1 = a1
-						}
-						port.CellsSet(used, j, 1)
-						port.CellsPush(used, port.CellsAt(rm, (j*rls)+1))
 					}
 				}
 				j += 1
 			}
 			if cnt >= 2 {
-				tbPartialTry(wd, et, w0, w1, page, ex0, ex1, port.CellsAt(rm, (i*rls)+1), last, port.CellsAt(rm, (i*rls)+1), rm, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx)
+				ytail = tbTailEnd(wd, w0, w1, ex0, ex1, port.CellsAt(rm, (i*rls)+1), last, wl, rw, sg)
+				tbPartialTry(wd, et, w0, w1, page, ex0, ex1, port.CellsAt(rm, (i*rls)+1), ytail, port.CellsAt(rm, (i*rls)+1), rm, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx)
 				if cnt >= 3 {
 					m = nh
 					for (m + 1) < port.CellsLen(used) {
@@ -3158,7 +3403,7 @@ func tbBandHeader(wd *port.Cells, w0 int32, w1 int32, sx0 int32, sx1 int32, y0 i
 	return y0
 }
 
-func tbShadedPage(fl *port.Cells, page int32, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, bd *port.Cells, used *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells) int32 {
+func tbShadedPage(fl *port.Cells, page int32, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, rm *port.Cells, bd *port.Cells, used *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells) int32 {
 	// Stacks of three or more bands of one extent, each starting where the one before ended or one row
 	// later, with two colours or a gap (zebra), are shaded candidates: a band is a row (several baselines may
 	// be in one), a baseline row that is in no band is a row of its own, columns from the channels.
@@ -3235,7 +3480,7 @@ func tbShadedPage(fl *port.Cells, page int32, wd *port.Cells, et *port.Cells, w0
 						port.CellsPush(rmap, trow)
 						r += 1
 					}
-					var t int32 = tbTextGrid(wd, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, page, 0, nr, pfShaded, 800, 1, sx0, y0, sx1, y1)
+					var t int32 = tbTextGrid(wd, wl, rw, sg, rm, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, page, 0, nr, pfShaded, 800, 1, sx0, y0, sx1, y1)
 					if t >= 0 {
 						var sc int32 = tbScore(tb, t, wd, et, tc, tw)
 						if sc == 0 {
@@ -3342,7 +3587,7 @@ func tbProseEdge(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc *po
 	return res
 }
 
-func tbWhitespaceRun(page int32, wd *port.Cells, et *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, ra int32, rb int32) int32 {
+func tbWhitespaceRun(page int32, wd *port.Cells, et *port.Cells, rm *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, ra int32, rb int32) int32 {
 	// The rows ra..rb (inclusive) as a whitespace candidate: its rows of one chunk at either end are not in it, and a
 	// run that is refused as a whole is tried again without its last row (the lines that follow a table, set in two
 	// chunks like a label and its text, join the run once the rows are right; D459). Three rows cut in two chunks at least.
@@ -3364,7 +3609,7 @@ func tbWhitespaceRun(page int32, wd *port.Cells, et *port.Cells, wl *port.Cells,
 		var c0 int32 = tbRowsOf(tc, tcs)
 		var wl0 int32 = port.CellsLen(tw)
 		var xl0 int32 = port.CellsLen(tx)
-		var t int32 = tbTextGrid(wd, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, page, a, jj+1, pfWhitespace, 0, 0, 2000000000, 2000000000, -2000000000, -2000000000)
+		var t int32 = tbTextGrid(wd, wl, rw, sg, rm, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, page, a, jj+1, pfWhitespace, 0, 0, 2000000000, 2000000000, -2000000000, -2000000000)
 		if t >= 0 {
 			var sc int32 = tbScore(tb, t, wd, et, tc, tw)
 			var pe int32 = tbProseEdge(tb, t, wd, et, tc, tw)
@@ -3395,7 +3640,7 @@ func tbWhitespaceRun(page int32, wd *port.Cells, et *port.Cells, wl *port.Cells,
 	return 0
 }
 
-func tbWhitespacePage(page int32, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells) int32 {
+func tbWhitespacePage(page int32, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, rm *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells) int32 {
 	// The rows of the whole page, in runs of rows that are cut in two or more chunks (a row of one chunk
 	// goes in a run when a row of two follows it), each run of three such rows or more a whitespace candidate.
 	var nr int32 = tbRows(wd, w0, w1, -2000000000, -2000000000, 2000000000, 2000000000, wl, rw, sg)
@@ -3450,7 +3695,7 @@ func tbWhitespacePage(page int32, wd *port.Cells, et *port.Cells, w0 int32, w1 i
 						e -= 1
 					}
 				}
-				tbWhitespaceRun(page, wd, et, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, a, e)
+				tbWhitespaceRun(page, wd, et, rm, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, a, e)
 			}
 		} else {
 			j = i
@@ -4305,11 +4550,13 @@ func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gf
 				tbMergeRules(s0, s1, s3, s9)
 				tbRuledPage(s1, p, s4, s5, s6, tb, tc, wd, wi, wj, s7, s3, tw, tx)
 				tbPartialPage(s1, p, wd, et, wi, wj, s9, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx)
+			} else {
+				port.CellsDrop(s1, 0)
 			}
 			if tbRowsOf(s2, 6) <= maxRules {
-				tbShadedPage(s2, p, wd, et, wi, wj, s8, s9, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx)
+				tbShadedPage(s2, p, wd, et, wi, wj, s1, s8, s9, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx)
 			}
-			tbWhitespacePage(p, wd, et, wi, wj, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx)
+			tbWhitespacePage(p, wd, et, wi, wj, s1, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx)
 			if pdfstruct.TgTrust(ss) >= tbTagVetoTrust {
 				tbVeto(tb, t0, wd, tc, tw, se, sc, gl, mk, g0)
 			}

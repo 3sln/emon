@@ -22,9 +22,9 @@
             [emon.mscript :refer [jt-build jt-end]]
             [emon.model :refer [model-init node-new node-set-text node-set-sub
                                 node-set-conf node-add-region text-len
-                                text-append-utf8 model-check max-depth
+                                text-append-utf8 model-check max-depth node-add-attr-text
                                 nk-section nk-heading nk-paragraph nk-quote nk-break
-                                nk-furniture]]
+                                nk-furniture nk-figure fk-labels fg-chart]]
             [emon.html :refer [html-emit]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or]]))
@@ -185,6 +185,37 @@
     (html-emit bare 96 0 nodes attrs regions text pages ledger layout (new-cells) (new-cells) (new-buf) (new-cells))
     (assert-text kept "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><aside data-emon=\"furniture\" data-emon-role=\"header\"></aside><span data-emon-page=\"2\"></span></main></body></html>" "furniture once at the top, then the milestone")
     (assert-text bare "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main></main></body></html>" "both off")))
+
+(defn ^I32 ht-label [^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells text ^I32 n ^Blob b]
+  (comment "Add the UTF-8 bytes of b as one more `labels` value of node n.")
+  (let [^I32 start (text-len text)]
+    (text-append-utf8 text b 0 (blob-len b))
+    (node-add-attr-text nodes attrs n (fk-labels) start (- (text-len text) start))
+    (return 0)))
+
+(deftest test-the-labels-of-a-figure-are-separate-tokens-in-the-text
+  (comment "D559: a chart's axis title and its tick labels are `labels`, each its own span; spans with nothing between them read as one run")
+  (comment "(`(thousands)220165110550Q1Q2Q3Q4`), so a single space stands between two of them.")
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Text out (new-text)
+        ^:mut ^I32 f 0]
+    (model-init nodes attrs regions text pages ledger layout)
+    (set f (node-new nodes (nk-figure) 0))
+    (node-set-sub nodes f (fg-chart))
+    (ht-label nodes attrs text f (text-blob "Units (thousands)"))
+    (ht-label nodes attrs text f (text-blob "220"))
+    (ht-label nodes attrs text f (text-blob "0"))
+    (ht-label nodes attrs text f (text-blob "Q1"))
+    (ht-label nodes attrs text f (text-blob "Q2"))
+    (assert-eq (html-emit out 0 0 nodes attrs regions text pages ledger layout (new-cells) (new-cells) (new-buf) (new-cells)) 0 "it emits")
+    (assert-text out "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><figure data-emon-kind=\"chart\" role=\"img\"><span data-emon=\"label\">Units (thousands)</span> <span data-emon=\"label\">220</span> <span data-emon=\"label\">0</span> <span data-emon=\"label\">Q1</span> <span data-emon=\"label\">Q2</span></figure></main></body></html>"
+                 "five labels, a space between each two, none before the first or after the last")))
 
 (deftest test-the-deepest-tree-emits
   (let [^Cells nodes (new-cells)

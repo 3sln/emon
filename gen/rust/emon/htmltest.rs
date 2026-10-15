@@ -166,6 +166,37 @@ fn test_furniture_drops_and_milestones_switch_off() {
     crate::testport::assert_text(kept, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><aside data-emon=\"furniture\" data-emon-role=\"header\"></aside><span data-emon-page=\"2\"></span></main></body></html>", "furniture once at the top, then the milestone");
     crate::testport::assert_text(bare, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main></main></body></html>", "both off");
 }
+pub(crate) fn ht_label(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut text: &mut crate::port::Cells, n: i32, b: &[u8]) -> i32 {
+    // Add the UTF-8 bytes of b as one more `labels` value of node n.
+    let start: i32 = text_len(text);
+    text_append_utf8(text, b, 0, crate::port::blob_len(b));
+    node_add_attr_text(nodes, attrs, n, fk_labels(), start, text_len(text) - start);
+    return 0;
+}
+#[test]
+fn test_the_labels_of_a_figure_are_separate_tokens_in_the_text() {
+    // D559: a chart's axis title and its tick labels are `labels`, each its own span; spans with nothing between them read as one run
+    // (`(thousands)220165110550Q1Q2Q3Q4`), so a single space stands between two of them.
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut String = &mut crate::port::new_text();
+    let mut f: i32 = 0;
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    f = node_new(nodes, nk_figure(), 0);
+    node_set_sub(nodes, f, fg_chart());
+    ht_label(nodes, attrs, text, f, &crate::testport::text_blob("Units (thousands)")[..]);
+    ht_label(nodes, attrs, text, f, &crate::testport::text_blob("220")[..]);
+    ht_label(nodes, attrs, text, f, &crate::testport::text_blob("0")[..]);
+    ht_label(nodes, attrs, text, f, &crate::testport::text_blob("Q1")[..]);
+    ht_label(nodes, attrs, text, f, &crate::testport::text_blob("Q2")[..]);
+    crate::testport::assert_eq(html_emit(out, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Buf::new(), &mut crate::port::Cells::new()), 0, "it emits");
+    crate::testport::assert_text(out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><figure data-emon-kind=\"chart\" role=\"img\"><span data-emon=\"label\">Units (thousands)</span> <span data-emon=\"label\">220</span> <span data-emon=\"label\">0</span> <span data-emon=\"label\">Q1</span> <span data-emon=\"label\">Q2</span></figure></main></body></html>", "five labels, a space between each two, none before the first or after the last");
+}
 #[test]
 fn test_the_deepest_tree_emits() {
     let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();

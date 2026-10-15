@@ -402,6 +402,52 @@ fn test_a_ladder_of_eight_sizes_stops_at_level_six() {
     crate::testport::assert_eq(hd_level(hc, 21), 6, "the eighth is level 6, not 8");
     crate::testport::assert_eq(hd_level(hc, 18), 6, "the seventh is level 6, not 7");
 }
+pub(crate) fn ht_block(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, b: &[u8], size: i32, y: i32) -> i32 {
+    // A bold heading of `size` at y and two lines of body under it; answers the y after them (3 lines: the heading's is a multiple of 3).
+    let y1: i32 = y + (((size * 12) / 10) + 1000);
+    ht_heading(wd, ln, et, b, y, size, 1);
+    return ht_body(wd, ln, et, 1, y1, 2) + 900;
+}
+#[test]
+fn test_a_ladder_of_seven_classes_keeps_the_accounts_peers_and_near_the_top() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ptxt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut y: i32 = 5000;
+    // D563, the shape of a bank statement's headings: seven classes (a title, a greeting, two small asides, a block and its twin,
+    // two summaries, and three accounts each followed by its product line), the class order the first occurrences make. Seven
+    // classes are past the exhaustive search (six), and the descent from the first-occurrence ladder stopped with the accounts at
+    // level 6, three below where a second statement's headings had them. Whole-ladder moves and a second start find the accounts
+    // at level 2 beside the greeting, the asides above them and the product lines below.
+    y = ht_block(wd, ln, et, &crate::testport::text_blob("Statement title")[..], 2200, y);
+    y = ht_block(wd, ln, et, &crate::testport::text_blob("Welcome to your statement")[..], 2000, y);
+    y = ht_block(wd, ln, et, &crate::testport::text_blob("Period note")[..], 1700, y);
+    y = ht_block(wd, ln, et, &crate::testport::text_blob("Dates note")[..], 1600, y);
+    y = ht_block(wd, ln, et, &crate::testport::text_blob("Balance block")[..], 1500, y);
+    y = ht_block(wd, ln, et, &crate::testport::text_blob("Accounts block")[..], 1500, y);
+    y = ht_block(wd, ln, et, &crate::testport::text_blob("Summary one")[..], 2600, y);
+    y = ht_block(wd, ln, et, &crate::testport::text_blob("Summary two")[..], 2600, y);
+    y = ht_block(wd, ln, et, &crate::testport::text_blob("Account One")[..], 2000, y);
+    y = ht_block(wd, ln, et, &crate::testport::text_blob("Checking one")[..], 1400, y);
+    y = ht_block(wd, ln, et, &crate::testport::text_blob("Account Two")[..], 2000, y);
+    y = ht_block(wd, ln, et, &crate::testport::text_blob("Checking two")[..], 1400, y);
+    y = ht_block(wd, ln, et, &crate::testport::text_blob("Account Three")[..], 2000, y);
+    y = ht_block(wd, ln, et, &crate::testport::text_blob("Checking three")[..], 1400, y);
+    crate::testport::assert_eq(ht_run(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 14, "fourteen headings");
+    crate::testport::assert_eq(hd_level(hc, 24), hd_level(hc, 3), "the first account is the greeting's peer");
+    crate::testport::assert_eq(hd_level(hc, 30), hd_level(hc, 24), "the second account is the first's peer");
+    crate::testport::assert_eq(hd_level(hc, 36), hd_level(hc, 24), "the third account is the first's peer");
+    crate::testport::assert_eq(hd_level(hc, 24), 2, "the accounts are at level 2");
+    crate::testport::assert_eq(hd_level(hc, 27), hd_level(hc, 33), "the product lines are peers");
+    crate::testport::assert_eq(hd_level(hc, 27), 3, "and at level 3");
+}
 #[test]
 fn test_a_numbered_list_is_not_a_run_of_headings() {
     let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();

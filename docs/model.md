@@ -360,7 +360,7 @@ What each element means, besides the column in the table of kinds:
 | `<a>` | a `link`, or a `ref` to a note (`role="doc-noteref"`) |
 | `<b>`, `<i>`, `<u>`, `<s>`, `<sub>`, `<sup>`, `<code>`, `<br>` | `span` styles and `linebreak` |
 | `<pre>`, `<blockquote>` | `code` and `quote`, which the schema and the writer have and the pipeline does not produce yet (deferred until after the first release, like `formula`) |
-| `<span>` | an empty page milestone, a drop cap (`data-emon="initial"`), a chart label (`data-emon="label"`), a form field (`data-emon="field"`) |
+| `<span>` | an empty page milestone, a drop cap (`data-emon="initial"`), a chart label (`data-emon="label"`; one space between two, so a chart's text reads as tokens), a form field (`data-emon="field"`) |
 
 The `data-emon-*` attributes:
 

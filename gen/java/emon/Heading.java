@@ -49,6 +49,7 @@ public final class Heading {
     public static final int WS_O = 512;
     public static final int WS_LV = 768;
     public static final int WS_BEST = 784;
+    public static final int WS_SAVE = 800;
     public static final int WS_U = 1024;
     public static final int UN_STRIDE = 16;
     public static int hsDecimal() {
@@ -1615,6 +1616,100 @@ public final class Heading {
         }
         return pen;
     }
+    public static int hdDescend(emon.Port.Cells ws, int nk, int lmax, int best0) {
+        // Coordinate descent on the levels in ws[WS_LV..], from the penalty best0 they have: each class in turn takes the level that
+        // lowers the penalty most (the first of equals), sweeps until none changes (thirty at most). Answers the penalty reached.
+        int best = best0;
+        int changed = 1;
+        int sweeps = 0;
+        int c = 0;
+        int keep = 0;
+        int lv = 0;
+        int pen = 0;
+        while ((changed == 1) && (sweeps < 30)) {
+            changed = 0;
+            c = 0;
+            while (c < nk) {
+                keep = emon.Port.cellsAt(ws, WS_LV + c);
+                lv = 1;
+                while (lv <= lmax) {
+                    emon.Port.cellsSet(ws, WS_LV + c, lv);
+                    pen = hdEval(ws, nk);
+                    if (pen < best) {
+                        best = pen;
+                        keep = lv;
+                        changed = 1;
+                    }
+                    lv += 1;
+                }
+                emon.Port.cellsSet(ws, WS_LV + c, keep);
+                c += 1;
+            }
+            sweeps += 1;
+        }
+        return best;
+    }
+    public static int hdPolish(emon.Port.Cells ws, int nk, int lmax) {
+        // D563: the levels in ws[WS_LV..] improved as far as one class at a time and then a whole depth at a time can: after a descent,
+        // every class at level k or deeper moves one level up, or one level down, together (the ladder of a document slides as one when a
+        // class is added), and a move that lowers the penalty is kept and descended from. A descent alone stops where one class cannot
+        // move without the others (D544's seven-class statement). Answers the penalty reached.
+        int pen0 = hdEval(ws, nk);
+        int best = hdDescend(ws, nk, lmax, pen0);
+        int improved = 1;
+        int rounds = 0;
+        int k = 0;
+        int d = 0;
+        int c = 0;
+        int ok = 0;
+        int pen = 0;
+        while ((improved == 1) && (rounds < 10)) {
+            improved = 0;
+            k = 1;
+            while (k <= lmax) {
+                d = -1;
+                while (d <= 1) {
+                    if (d != 0) {
+                        ok = 1;
+                        c = 0;
+                        while (c < nk) {
+                            emon.Port.cellsSet(ws, WS_SAVE + c, emon.Port.cellsAt(ws, WS_LV + c));
+                            if (emon.Port.cellsAt(ws, WS_LV + c) >= k) {
+                                if (((emon.Port.cellsAt(ws, WS_LV + c) + d) < 1) || ((emon.Port.cellsAt(ws, WS_LV + c) + d) > lmax)) {
+                                    ok = 0;
+                                }
+                            }
+                            c += 1;
+                        }
+                        if (ok == 1) {
+                            c = 0;
+                            while (c < nk) {
+                                if (emon.Port.cellsAt(ws, WS_SAVE + c) >= k) {
+                                    emon.Port.cellsSet(ws, WS_LV + c, emon.Port.cellsAt(ws, WS_SAVE + c) + d);
+                                }
+                                c += 1;
+                            }
+                            pen = hdEval(ws, nk);
+                            if (pen < best) {
+                                best = hdDescend(ws, nk, lmax, pen);
+                                improved = 1;
+                            } else {
+                                c = 0;
+                                while (c < nk) {
+                                    emon.Port.cellsSet(ws, WS_LV + c, emon.Port.cellsAt(ws, WS_SAVE + c));
+                                    c += 1;
+                                }
+                            }
+                        }
+                    }
+                    d += 1;
+                }
+                k += 1;
+            }
+            rounds += 1;
+        }
+        return best;
+    }
     public static int hdSearch(emon.Port.Cells ws, int nk) {
         // The levels that minimise `hd-eval`: every assignment up to HD_EXHAUSTIVE classes (the first found
         // wins a tie), coordinate descent beyond. The result is each class's field 10.
@@ -1627,9 +1722,6 @@ public final class Heading {
         int pen = 0;
         int c = 0;
         int lv = 0;
-        int keep = 0;
-        int sweeps = 0;
-        int changed = 1;
         if (mt > lmax) {
             lmax = mt;
         }
@@ -1688,32 +1780,33 @@ public final class Heading {
                 emon.Port.cellsSet(ws, WS_LV + c, lv);
                 c += 1;
             }
-            best = hdEval(ws, nk);
-            while ((changed == 1) && (sweeps < 30)) {
-                changed = 0;
-                c = 0;
-                while (c < nk) {
-                    keep = emon.Port.cellsAt(ws, WS_LV + c);
-                    lv = 1;
-                    while (lv <= lmax) {
-                        emon.Port.cellsSet(ws, WS_LV + c, lv);
-                        pen = hdEval(ws, nk);
-                        if (pen < best) {
-                            best = pen;
-                            keep = lv;
-                            changed = 1;
-                        }
-                        lv += 1;
-                    }
-                    emon.Port.cellsSet(ws, WS_LV + c, keep);
-                    c += 1;
-                }
-                sweeps += 1;
-            }
+            best = hdPolish(ws, nk, lmax);
             i = 0;
             while (i < nk) {
                 emon.Port.cellsSet(ws, WS_BEST + i, emon.Port.cellsAt(ws, WS_LV + i));
                 i += 1;
+            }
+            // D563: and from a second start, every class at the top (or at its numbering's level); the better of the two stands, the first of equals
+            c = 0;
+            while (c < nk) {
+                lv = 1;
+                if (hdHk(ws, c, 8) > 0) {
+                    lv = hdHk(ws, c, 8);
+                }
+                if (lv > lmax) {
+                    lv = lmax;
+                }
+                emon.Port.cellsSet(ws, WS_LV + c, lv);
+                c += 1;
+            }
+            pen = hdPolish(ws, nk, lmax);
+            if (pen < best) {
+                best = pen;
+                i = 0;
+                while (i < nk) {
+                    emon.Port.cellsSet(ws, WS_BEST + i, emon.Port.cellsAt(ws, WS_LV + i));
+                    i += 1;
+                }
             }
         }
         i = 0;

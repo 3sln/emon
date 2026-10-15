@@ -11935,9 +11935,9 @@
         :bow-p 0.85076
         :bow-r 0.858925
         :cer 0.054164
-        :conf-brier-all 0.742095
-        :conf-brier-cell 0.719468
-        :conf-brier-cell-ocr 0.719468
+        :conf-brier-all 0.744253
+        :conf-brier-cell 0.721607
+        :conf-brier-cell-ocr 0.721607
         :conf-brier-dropped 0.726256
         :conf-brier-dropped-text 0.726256
         :conf-brier-furniture 0.291041
@@ -11956,9 +11956,9 @@
         :conf-brier-section-infer 0.545809
         :conf-brier-table 0.870489
         :conf-brier-table-ocr 0.870489
-        :conf-ece-all 0.7857
-        :conf-ece-cell 0.769725
-        :conf-ece-cell-ocr 0.769725
+        :conf-ece-all 0.788053
+        :conf-ece-cell 0.772276
+        :conf-ece-cell-ocr 0.772276
         :conf-ece-dropped 0.734
         :conf-ece-dropped-text 0.734
         :conf-ece-furniture 0.262333
@@ -12020,9 +12020,9 @@
         :bow-p 0.848303
         :bow-r 0.858586
         :cer 0.050223
-        :conf-brier-all 0.746127
-        :conf-brier-cell 0.719468
-        :conf-brier-cell-ocr 0.719468
+        :conf-brier-all 0.74824
+        :conf-brier-cell 0.721607
+        :conf-brier-cell-ocr 0.721607
         :conf-brier-dropped 0.726256
         :conf-brier-dropped-text 0.726256
         :conf-brier-furniture 0.291041
@@ -12039,9 +12039,9 @@
         :conf-brier-section-infer 0.681709
         :conf-brier-table 0.870489
         :conf-brier-table-ocr 0.870489
-        :conf-ece-all 0.790463
-        :conf-ece-cell 0.769725
-        :conf-ece-cell-ocr 0.769725
+        :conf-ece-all 0.792764
+        :conf-ece-cell 0.772276
+        :conf-ece-cell-ocr 0.772276
         :conf-ece-dropped 0.734
         :conf-ece-dropped-text 0.734
         :conf-ece-furniture 0.262333

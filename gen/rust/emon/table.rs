@@ -24,6 +24,11 @@ pub(crate) const PF_STRUCT: i32 = 5;
 pub(crate) const TB_TAG_TRUST: i32 = 300;
 pub(crate) const TB_HEAD_TOL: i32 = 400;
 pub(crate) const TB_HEAD_PITCH: i32 = 40;
+pub(crate) const TB_TAIL_ROWS: i32 = 3;
+pub(crate) const TB_TAIL_REACH: i32 = 6000;
+pub(crate) const TB_TAIL_PITCH: i32 = 16;
+pub(crate) const TB_GAP_SIZE: i32 = 125;
+pub(crate) const TB_GAP_BAND: i32 = 35;
 pub(crate) const TB_TAG_OWN: i32 = 700;
 pub(crate) const TB_OWN_CHECKS: i32 = 4;
 pub(crate) const TB_OWN_FLOOR: i32 = 900;
@@ -1711,11 +1716,112 @@ pub(crate) fn tb_cut(ch: &mut crate::port::Cells, k: i32, lo: i32, hi: i32) -> i
     }
     return (crate::port::cells_at(ch, (k - 1) * 2) + crate::port::cells_at(ch, ((k - 1) * 2) + 1)) / 2;
 }
-pub(crate) fn tb_text_grid(wd: &mut crate::port::Cells, wl: &mut crate::port::Cells, rw: &mut crate::port::Cells, sg: &mut crate::port::Cells, mut ch: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut en: &mut crate::port::Cells, mut rmap: &mut crate::port::Cells, mut gm: &mut crate::port::Cells, mut gs: &mut crate::port::Cells, mut ry: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut so: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tx: &mut crate::port::Cells, page: i32, ra: i32, rb: i32, profile: i32, score: i32, ext: i32, bx0: i32, by0: i32, bx1: i32, by1: i32) -> i32 {
+pub(crate) fn tb_cut_list(wd: &mut crate::port::Cells, wl: &mut crate::port::Cells, rw: &mut crate::port::Cells, rm: &mut crate::port::Cells, ra: i32, rb: i32, minx: i32, maxx: i32, mut cl: &mut crate::port::Cells) -> i32 {
+    // D559: the x of every vertical rule of `rm` that is a column cut of the rows ra..rb, in `cl` (emptied first). A rule is one when it
+    // lies inside the rows' extent minx..maxx, runs along three in five of the rows at least (two or more) and passes through no word of those
+    // rows (a rule through a word is a strike or a frame, not the border between two cells). Answers how many.
+    let nrl: i32 = tb_rows_of(rm, RLS);
+    let n: i32 = rb - ra;
+    let mut i: i32 = 0;
+    let mut r: i32 = 0;
+    let mut k: i32 = 0;
+    let mut p: i32 = 0;
+    let mut spanned: i32 = 0;
+    let mut crossed: i32 = 0;
+    let mut cy: i32 = 0;
+    let mut w: i32 = 0;
+    crate::port::cells_drop(cl, 0);
+    if n < 2 {
+        return 0;
+    }
+    while i < nrl {
+        if crate::port::cells_at(rm, i * RLS) == 1 {
+            p = crate::port::cells_at(rm, (i * RLS) + 1);
+            if (p > minx) && (p < maxx) {
+                spanned = 0;
+                crossed = 0;
+                r = ra;
+                while r < rb {
+                    cy = (crate::port::cells_at(rw, (r * RWS) + 6) + crate::port::cells_at(rw, (r * RWS) + 7)) / 2;
+                    if (cy >= crate::port::cells_at(rm, (i * RLS) + 2)) && (cy <= crate::port::cells_at(rm, (i * RLS) + 3)) {
+                        spanned += 1;
+                        k = 0;
+                        while k < crate::port::cells_at(rw, (r * RWS) + 1) {
+                            w = crate::port::cells_at(wl, crate::port::cells_at(rw, r * RWS) + k);
+                            if (wd_get(wd, w, hd_x0()) < p) && (wd_get(wd, w, hd_x1()) > p) {
+                                crossed = 1;
+                            }
+                            k += 1;
+                        }
+                    }
+                    r += 1;
+                }
+                if (crossed == 0) && ((spanned >= 2) && ((spanned * 5) >= (n * 3))) {
+                    crate::port::cells_push(cl, p);
+                    crate::port::cells_push(cl, crate::port::cells_at(rm, (i * RLS) + 2));
+                    crate::port::cells_push(cl, crate::port::cells_at(rm, (i * RLS) + 3));
+                }
+            }
+        }
+        i += 1;
+    }
+    return crate::port::cells_len(cl);
+}
+pub(crate) fn tb_channel_add(mut ch: &mut crate::port::Cells, p: i32) -> i32 {
+    // D559: a channel of no width at x p, in its place among the channels `ch` (pairs of start and end, in order of x), so that a column
+    // boundary stands at p: nothing is added when p lies in a channel already (its midpoint is the boundary, with words either side).
+    // Answers 1 when one was added.
+    let n: i32 = crate::port::cells_len(ch) / 2;
+    let mut i: i32 = 0;
+    let mut at: i32 = 0;
+    let mut k: i32 = 0;
+    while i < n {
+        if (crate::port::cells_at(ch, i * 2) <= p) && (p <= crate::port::cells_at(ch, (i * 2) + 1)) {
+            return 0;
+        }
+        if crate::port::cells_at(ch, i * 2) < p {
+            at += 1;
+        }
+        i += 1;
+    }
+    crate::port::cells_push(ch, 0);
+    crate::port::cells_push(ch, 0);
+    k = crate::port::cells_len(ch) - 1;
+    while k >= ((at * 2) + 2) {
+        crate::port::cells_set(ch, k, crate::port::cells_at(ch, k - 2));
+        k -= 1;
+    }
+    crate::port::cells_set(ch, at * 2, p);
+    crate::port::cells_set(ch, (at * 2) + 1, p);
+    return 1;
+}
+pub(crate) fn tb_sub_end(wd: &mut crate::port::Cells, wl: &mut crate::port::Cells, cl: &mut crate::port::Cells, k: i32, kend: i32, cy: i32) -> i32 {
+    // D559: where the words k..kend of one chunk (indices into `wl`), on a row whose centre is at y `cy`, are cut by a column cut of `cl`
+    // (x, from, to: D563, a cut cuts the rows it runs along and no other, or a phrase in a row beside a check box's border is cut in two): the
+    // end (exclusive) of the stretch that begins at the word k and has no cut between its words (`kend` when there is none).
+    let mut e: i32 = k + 1;
+    let mut j: i32 = 0;
+    let mut split: i32 = 0;
+    while (e < kend) && (split == 0) {
+        j = 0;
+        while j < crate::port::cells_len(cl) {
+            if (wd_get(wd, crate::port::cells_at(wl, e - 1), hd_x1()) <= crate::port::cells_at(cl, j)) && ((crate::port::cells_at(cl, j) <= wd_get(wd, crate::port::cells_at(wl, e), hd_x0())) && ((cy >= crate::port::cells_at(cl, j + 1)) && (cy <= crate::port::cells_at(cl, j + 2)))) {
+                split = 1;
+            }
+            j += 3;
+        }
+        if split == 0 {
+            e += 1;
+        }
+    }
+    return e;
+}
+pub(crate) fn tb_text_grid(wd: &mut crate::port::Cells, wl: &mut crate::port::Cells, rw: &mut crate::port::Cells, sg: &mut crate::port::Cells, rm: &mut crate::port::Cells, mut ch: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut en: &mut crate::port::Cells, mut rmap: &mut crate::port::Cells, mut gm: &mut crate::port::Cells, mut gs: &mut crate::port::Cells, mut ry: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut so: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tx: &mut crate::port::Cells, page: i32, ra: i32, rb: i32, profile: i32, score: i32, ext: i32, bx0: i32, by0: i32, bx1: i32, by1: i32) -> i32 {
     // The cells of the rows ra..rb (see the head of this section) as a candidate table of this profile:
     // ext 1 means `rmap` already says which table row each baseline row is (shaded: the fills' bands). The box
     // bx0..by1 widens the box of the words (the rules, the fills): 2000000000 2000000000 -2000000000 -2000000000
-    // for none. Answers the
+    // for none. `rm` are the page's merged rules (empty for none): a vertical one that runs along most of the rows between two words is
+    // a column cut, whatever the profile (D559). Answers the
     // table's index, -1 when there are not two columns and two rows.
     let mut ntab: i32 = 0;
     let mut sumsz: i64 = 0 as i64;
@@ -1729,6 +1835,9 @@ pub(crate) fn tb_text_grid(wd: &mut crate::port::Cells, wl: &mut crate::port::Ce
     let mut a: i32 = 0;
     let mut b: i32 = 0;
     let mut tr: i32 = 0;
+    let mut ks: i32 = 0;
+    let mut ke: i32 = 0;
+    let mut kx: i32 = 0;
     let mut minx: i32 = 2000000000;
     let mut maxx: i32 = -2000000000;
     let mut miny: i32 = 2000000000;
@@ -1756,6 +1865,15 @@ pub(crate) fn tb_text_grid(wd: &mut crate::port::Cells, wl: &mut crate::port::Ce
         return -1;
     }
     nch = tb_channels(wd, wl, rw, sg, ra, rb, ntab / 6, ((sumsz / ((rb - ra) as i64)).wrapping_mul(SEG_NUM as i64) / (SEG_DEN as i64)) as i32, ch, st, en);
+    // D559: a vertical rule along most of the rows between two words is a boundary of its own (a channel of no width) where the whitespace has none.
+    if tb_cut_list(wd, wl, rw, rm, ra, rb, minx, maxx, st) > 0 {
+        c = 0;
+        while c < crate::port::cells_len(st) {
+            tb_channel_add(ch, crate::port::cells_at(st, c));
+            c += 3;
+        }
+        nch = crate::port::cells_len(ch) / 2;
+    }
     if nch < 1 {
         return -1;
     }
@@ -1778,6 +1896,8 @@ pub(crate) fn tb_text_grid(wd: &mut crate::port::Cells, wl: &mut crate::port::Ce
     if nrows < 2 {
         return -1;
     }
+    // The column cuts again, in `st` (scratch no longer): the words either side of one are cells of their own whatever the chunk.
+    tb_cut_list(wd, wl, rw, rm, ra, rb, minx, maxx, st);
     crate::port::cells_drop(gm, 0);
     crate::port::cells_drop(gs, 0);
     crate::port::cells_drop(en, 0);
@@ -1808,26 +1928,32 @@ pub(crate) fn tb_text_grid(wd: &mut crate::port::Cells, wl: &mut crate::port::Ce
             s = 0;
             while s < crate::port::cells_at(rw, (r * RWS) + 9) {
                 q = crate::port::cells_at(rw, (r * RWS) + 8) + s;
-                a = tb_chunk_a(wd, wl, sg, ch, q);
-                b = tb_chunk_b(wd, wl, sg, ch, q);
-                if crate::port::cells_at(gm, (tr * ncols) + a) == -1 {
-                    let mut free: i32 = 1;
-                    let mut kf: i32 = a;
-                    while kf <= b {
-                        if crate::port::cells_at(gm, (tr * ncols) + kf) != -1 {
-                            free = 0;
+                ks = crate::port::cells_at(sg, (q * SGS) + 3);
+                ke = ks + crate::port::cells_at(sg, (q * SGS) + 4);
+                while ks < ke {
+                    kx = tb_sub_end(wd, wl, st, ks, ke, (crate::port::cells_at(rw, (r * RWS) + 6) + crate::port::cells_at(rw, (r * RWS) + 7)) / 2);
+                    a = tb_col_of(ch, tb_word_cx(wd, crate::port::cells_at(wl, ks)));
+                    b = tb_col_of(ch, tb_word_cx(wd, crate::port::cells_at(wl, kx - 1)));
+                    if crate::port::cells_at(gm, (tr * ncols) + a) == -1 {
+                        let mut free: i32 = 1;
+                        let mut kf: i32 = a;
+                        while kf <= b {
+                            if crate::port::cells_at(gm, (tr * ncols) + kf) != -1 {
+                                free = 0;
+                            }
+                            kf += 1;
                         }
-                        kf += 1;
+                        if free == 0 {
+                            b = a;
+                        }
+                        kf = a;
+                        while kf <= b {
+                            crate::port::cells_set(gm, (tr * ncols) + kf, a);
+                            kf += 1;
+                        }
+                        crate::port::cells_set(gs, (tr * ncols) + a, (b - a) + 1);
                     }
-                    if free == 0 {
-                        b = a;
-                    }
-                    kf = a;
-                    while kf <= b {
-                        crate::port::cells_set(gm, (tr * ncols) + kf, a);
-                        kf += 1;
-                    }
-                    crate::port::cells_set(gs, (tr * ncols) + a, (b - a) + 1);
+                    ks = kx;
                 }
                 s += 1;
             }
@@ -1864,12 +1990,18 @@ pub(crate) fn tb_text_grid(wd: &mut crate::port::Cells, wl: &mut crate::port::Ce
             s = 0;
             while s < crate::port::cells_at(rw, (r * RWS) + 9) {
                 q = crate::port::cells_at(rw, (r * RWS) + 8) + s;
-                a = tb_chunk_a(wd, wl, sg, ch, q);
-                let cell: i32 = crate::port::cells_at(en, (tr * ncols) + a);
-                let mut kw: i32 = crate::port::cells_at(sg, (q * SGS) + 3);
-                while kw < (crate::port::cells_at(sg, (q * SGS) + 3) + crate::port::cells_at(sg, (q * SGS) + 4)) {
-                    tb_pair_add(pr, wd, cell, crate::port::cells_at(wl, kw));
-                    kw += 1;
+                ks = crate::port::cells_at(sg, (q * SGS) + 3);
+                ke = ks + crate::port::cells_at(sg, (q * SGS) + 4);
+                while ks < ke {
+                    kx = tb_sub_end(wd, wl, st, ks, ke, (crate::port::cells_at(rw, (r * RWS) + 6) + crate::port::cells_at(rw, (r * RWS) + 7)) / 2);
+                    a = tb_col_of(ch, tb_word_cx(wd, crate::port::cells_at(wl, ks)));
+                    let cell: i32 = crate::port::cells_at(en, (tr * ncols) + a);
+                    let mut kw: i32 = ks;
+                    while kw < kx {
+                        tb_pair_add(pr, wd, cell, crate::port::cells_at(wl, kw));
+                        kw += 1;
+                    }
+                    ks = kx;
                 }
                 s += 1;
             }
@@ -2600,7 +2732,8 @@ pub(crate) fn tb_back_near(rw: &mut crate::port::Cells, r: i32, below: i32) -> i
 }
 pub(crate) fn tb_aligned(rw: &mut crate::port::Cells, sg: &mut crate::port::Cells, r: i32, rb: i32, nr: i32) -> i32 {
     // 1 when the chunks of row r line up with the body's (D557): at least two of them, and three in five, have a left or a right edge
-    // within `TB_HEAD_TOL` of an edge of a chunk of the body rows rb.. (twelve of them at most).
+    // within `TB_HEAD_TOL` of an edge of a chunk of the body rows rb..nr (twelve of them at most; never row r itself, which D559's
+    // `tb-gap-foreign` and `tb-tail-end` ask about among the rows around it).
     let nch: i32 = crate::port::cells_at(rw, (r * RWS) + 9);
     let sf: i32 = crate::port::cells_at(rw, (r * RWS) + 8);
     let bend: i32 = tb_min(nr, rb + 12);
@@ -2617,10 +2750,10 @@ pub(crate) fn tb_aligned(rw: &mut crate::port::Cells, sg: &mut crate::port::Cell
             while (q < crate::port::cells_at(rw, (b * RWS) + 9)) && (found == 0) {
                 let hs: i32 = sf + s;
                 let bs: i32 = crate::port::cells_at(rw, (b * RWS) + 8) + q;
-                if tb_abs(crate::port::cells_at(sg, (hs * SGS) + 1) - crate::port::cells_at(sg, (bs * SGS) + 1)) <= TB_HEAD_TOL {
+                if (b != r) && (tb_abs(crate::port::cells_at(sg, (hs * SGS) + 1) - crate::port::cells_at(sg, (bs * SGS) + 1)) <= TB_HEAD_TOL) {
                     found = 1;
                 }
-                if tb_abs(crate::port::cells_at(sg, (hs * SGS) + 2) - crate::port::cells_at(sg, (bs * SGS) + 2)) <= TB_HEAD_TOL {
+                if (b != r) && (tb_abs(crate::port::cells_at(sg, (hs * SGS) + 2) - crate::port::cells_at(sg, (bs * SGS) + 2)) <= TB_HEAD_TOL) {
                     found = 1;
                 }
                 q += 1;
@@ -2832,7 +2965,7 @@ pub(crate) fn tb_extend(wd: &mut crate::port::Cells, w0: i32, w1: i32, rw: &mut 
     }
     return dir * reach;
 }
-pub(crate) fn tb_partial_build(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w0: i32, w1: i32, page: i32, ex0: i32, ex1: i32, ya: i32, yb: i32, align: i32, mut wl: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut ch: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut en: &mut crate::port::Cells, mut rmap: &mut crate::port::Cells, mut gm: &mut crate::port::Cells, mut gs: &mut crate::port::Cells, mut ry: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut so: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tx: &mut crate::port::Cells) -> i32 {
+pub(crate) fn tb_partial_build(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w0: i32, w1: i32, page: i32, ex0: i32, ex1: i32, ya: i32, yb: i32, align: i32, rm: &mut crate::port::Cells, mut wl: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut ch: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut en: &mut crate::port::Cells, mut rmap: &mut crate::port::Cells, mut gm: &mut crate::port::Cells, mut gs: &mut crate::port::Cells, mut ry: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut so: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tx: &mut crate::port::Cells) -> i32 {
     // One partial candidate over the extent ex0..ex1: the words between the rules at ya and yb (and the rows directly above ya, the header),
     // columns from their channels; kept when it scores. The rows are left in `wl rw sg`. Answers the candidate, or -1 (nothing is left of it).
     let nr: i32 = tb_rows(wd, w0, w1, ex0 - POS_TOL, ya - 9000, ex1 + POS_TOL, yb, wl, rw, sg);
@@ -2842,7 +2975,7 @@ pub(crate) fn tb_partial_build(wd: &mut crate::port::Cells, et: &mut crate::port
     let wl0: i32 = crate::port::cells_len(tw);
     let xl0: i32 = crate::port::cells_len(tx);
     if (nr - ra) >= 3 {
-        let t: i32 = tb_text_grid(wd, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, page, ra, nr, PF_PARTIAL, 850, 0, ex0, ya, ex1, yb);
+        let t: i32 = tb_text_grid(wd, wl, rw, sg, rm, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, page, ra, nr, PF_PARTIAL, 850, 0, ex0, ya, ex1, yb);
         if t >= 0 {
             let sc: i32 = tb_score(tb, t, wd, et, tc, tw);
             let rb: i32 = tb_body_row(rw, nr, ya);
@@ -2873,7 +3006,7 @@ pub(crate) fn tb_partial_try(wd: &mut crate::port::Cells, et: &mut crate::port::
     if ya <= (ychain + POS_TOL) {
         align = 1;
     }
-    let t: i32 = tb_partial_build(wd, et, w0, w1, page, ex0, ex1, ya, yb, align, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx);
+    let t: i32 = tb_partial_build(wd, et, w0, w1, page, ex0, ex1, ya, yb, align, rm, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx);
     if t >= 0 {
         let nr: i32 = tb_rows_of(rw, RWS);
         let ra: i32 = tb_first_row(rw, sg, nr, ya, align);
@@ -2881,20 +3014,115 @@ pub(crate) fn tb_partial_try(wd: &mut crate::port::Cells, et: &mut crate::port::
         let nx0: i32 = tb_extend(wd, w0, w1, rw, sg, ra, nr, ex0, -1, rm, pr, ry);
         if (nx1 > ex1) || (nx0 < ex0) {
             tb_reject(tb, tc, tw, tx, nt, c0, wl0, xl0);
-            if tb_partial_build(wd, et, w0, w1, page, nx0, nx1, ya, yb, align, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx) < 0 {
-                tb_partial_build(wd, et, w0, w1, page, ex0, ex1, ya, yb, align, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx);
+            if tb_partial_build(wd, et, w0, w1, page, nx0, nx1, ya, yb, align, rm, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx) < 0 {
+                tb_partial_build(wd, et, w0, w1, page, ex0, ex1, ya, yb, align, rm, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx);
             }
         }
     }
     return 0;
 }
+pub(crate) fn tb_gap_foreign(wd: &mut crate::port::Cells, w0: i32, w1: i32, ex0: i32, ex1: i32, ytop: i32, last: i32, yj: i32, mut wl: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut sg: &mut crate::port::Cells) -> i32 {
+    // D559: 1 when what lies between the rules at `last` and `yj`, in the extent ex0..ex1, is not the chain's own (the chain begins at the rule
+    // ytop and has its rows down to `last`): a heading or a label (a row in type `TB_GAP_SIZE` hundredths of the rows' or more), a row of
+    // two chunks or more that lines up with no other row's columns (another grid's; the first twelve rows are asked), or a band of white deeper than `TB_GAP_BAND`
+    // tenths of a size between a row and the one before it (the last of the chain's own included). A chain of rules is one table; two tables whose
+    // rules are near enough to chain are two.
+    let nr: i32 = tb_rows(wd, w0, w1, ex0 - POS_TOL, ytop, ex1 + POS_TOL, yj, wl, rw, sg);
+    let mut g: i32 = 0;
+    let mut r: i32 = 0;
+    let mut sum: i64 = 0 as i64;
+    let mut size: i32 = 0;
+    while (g < nr) && (((crate::port::cells_at(rw, (g * RWS) + 6) + crate::port::cells_at(rw, (g * RWS) + 7)) / 2) < last) {
+        g += 1;
+    }
+    if (g == 0) || (g >= nr) {
+        return 0;
+    }
+    while r < g {
+        sum = (sum).wrapping_add(crate::port::cells_at(rw, (r * RWS) + 3) as i64);
+        r += 1;
+    }
+    size = (sum / (g as i64)) as i32;
+    r = g;
+    while r < nr {
+        if (100 * crate::port::cells_at(rw, (r * RWS) + 3)) >= (TB_GAP_SIZE * size) {
+            return 1;
+        }
+        if (crate::port::cells_at(rw, (r * RWS) + 9) >= 2) && (tb_aligned(rw, sg, r, 0, nr) == 0) {
+            return 1;
+        }
+        if (10 * (crate::port::cells_at(rw, (r * RWS) + 6) - crate::port::cells_at(rw, ((r - 1) * RWS) + 7))) > (TB_GAP_BAND * size) {
+            return 1;
+        }
+        r += 1;
+    }
+    return 0;
+}
+pub(crate) fn tb_tail_end(wd: &mut crate::port::Cells, w0: i32, w1: i32, ex0: i32, ex1: i32, ytop: i32, ybot: i32, mut wl: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut sg: &mut crate::port::Cells) -> i32 {
+    // D559: the bottom of a chain of rules that begins at ytop and ends at ybot, with the rows below its last rule that are its own: a table
+    // whose last row has no border under it (a statement's closing balance, a summary's total). A row of two chunks or more that lines up with
+    // the rows' columns (`tb-aligned`), at most `TB_HEAD_PITCH` tenths of its size and `TB_TAIL_PITCH` tenths of the rows' mean pitch under
+    // the row before it, beginning in the rows' first column (within `TB_HEAD_TOL` of their left edge: a summary block in the last columns, an
+    // invoice's totals, is a table of its own), and at most `TB_TAIL_ROWS` of them; the chain needs two rows of its own to have a pitch and columns to line up
+    // with. Answers ybot, or the bottom of the last such row.
+    let nr: i32 = tb_rows(wd, w0, w1, ex0 - POS_TOL, ytop, ex1 + POS_TOL, ybot + TB_TAIL_REACH, wl, rw, sg);
+    let mut g: i32 = 0;
+    let mut r: i32 = 0;
+    let mut taken: i32 = 0;
+    let mut res: i32 = ybot;
+    let mut left: i32 = 0;
+    let mut mean: i32 = 0;
+    let mut pitch: i32 = 0;
+    while (g < nr) && (((crate::port::cells_at(rw, (g * RWS) + 6) + crate::port::cells_at(rw, (g * RWS) + 7)) / 2) < ybot) {
+        g += 1;
+    }
+    if (g < 2) || (g >= nr) {
+        return ybot;
+    }
+    mean = (crate::port::cells_at(rw, ((g - 1) * RWS) + 2) - crate::port::cells_at(rw, 2)) / (g - 1);
+    r = 0;
+    left = 2000000000;
+    while r < g {
+        if crate::port::cells_at(rw, (r * RWS) + 4) < left {
+            left = crate::port::cells_at(rw, (r * RWS) + 4);
+        }
+        r += 1;
+    }
+    r = g;
+    while (r < nr) && (taken < TB_TAIL_ROWS) {
+        pitch = crate::port::cells_at(rw, (r * RWS) + 2) - crate::port::cells_at(rw, ((r - 1) * RWS) + 2);
+        if crate::port::cells_at(rw, (r * RWS) + 9) < 2 {
+            return res;
+        }
+        // A row of the table begins in its first column; a summary block under it (an invoice's totals) stands in the last columns.
+        if tb_abs(crate::port::cells_at(rw, (r * RWS) + 4) - left) > TB_HEAD_TOL {
+            return res;
+        }
+        if (10 * pitch) > (TB_HEAD_PITCH * crate::port::cells_at(rw, (r * RWS) + 3)) {
+            return res;
+        }
+        if (mean > 0) && ((10 * pitch) > (TB_TAIL_PITCH * mean)) {
+            return res;
+        }
+        if tb_aligned(rw, sg, r, 0, g) == 0 {
+            return res;
+        }
+        res = crate::port::cells_at(rw, (r * RWS) + 7);
+        taken += 1;
+        r += 1;
+    }
+    return res;
+}
 pub(crate) fn tb_partial_page(rm: &mut crate::port::Cells, page: i32, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w0: i32, w1: i32, mut used: &mut crate::port::Cells, mut wl: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut ch: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut en: &mut crate::port::Cells, mut rmap: &mut crate::port::Cells, mut gm: &mut crate::port::Cells, mut gs: &mut crate::port::Cells, mut ry: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut so: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tx: &mut crate::port::Cells) -> i32 {
     // Chains of horizontal rules of one extent (booktabs: top, mid, bottom) are partial candidates: the
-    // words between the first and the last rule, columns from the channels of their text.
+    // words between the first and the last rule, columns from the channels of their text. D559: a chain ends where a gap holds what is not
+    // the table's (`tb-gap-foreign`: a heading, another grid, a band of white), and takes the rows under its last rule that are (`tb-tail-end`).
     let n: i32 = tb_rows_of(rm, RLS);
     let mut nh: i32 = 0;
     let mut i: i32 = 0;
     let mut j: i32 = 0;
+    let mut pgap: i32 = 0;
+    let mut ytail: i32 = 0;
     let mut cnt: i32 = 0;
     let mut ex0: i32 = 0;
     let mut ex1: i32 = 0;
@@ -2912,6 +3140,7 @@ pub(crate) fn tb_partial_page(rm: &mut crate::port::Cells, page: i32, wd: &mut c
     while i < nh {
         if (crate::port::cells_at(used, i) == 0) && ((crate::port::cells_at(rm, (i * RLS) + 3) - crate::port::cells_at(rm, (i * RLS) + 2)) >= 3000) {
             cnt = 1;
+            pgap = 0;
             ex0 = crate::port::cells_at(rm, (i * RLS) + 2);
             ex1 = crate::port::cells_at(rm, (i * RLS) + 3);
             last = crate::port::cells_at(rm, (i * RLS) + 1);
@@ -2925,22 +3154,28 @@ pub(crate) fn tb_partial_page(rm: &mut crate::port::Cells, page: i32, wd: &mut c
                     let ov: i32 = tb_min(ex1, a1) - tb_max(ex0, a0);
                     let lj: i32 = a1 - a0;
                     if (lj >= 2000) && (((ov * 10) >= (lj * 6)) && ((ov * 10) >= ((ex1 - ex0) * 3))) {
-                        cnt += 1;
-                        last = crate::port::cells_at(rm, (j * RLS) + 1);
-                        if a0 < ex0 {
-                            ex0 = a0;
+                        if (cnt >= 2) && (((2 * (crate::port::cells_at(rm, (j * RLS) + 1) - last)) > (3 * pgap)) && (tb_gap_foreign(wd, w0, w1, ex0, ex1, crate::port::cells_at(rm, (i * RLS) + 1), last, crate::port::cells_at(rm, (j * RLS) + 1), wl, rw, sg) == 1)) {
+                            j = nh;
+                        } else {
+                            pgap = crate::port::cells_at(rm, (j * RLS) + 1) - last;
+                            cnt += 1;
+                            last = crate::port::cells_at(rm, (j * RLS) + 1);
+                            if a0 < ex0 {
+                                ex0 = a0;
+                            }
+                            if a1 > ex1 {
+                                ex1 = a1;
+                            }
+                            crate::port::cells_set(used, j, 1);
+                            crate::port::cells_push(used, crate::port::cells_at(rm, (j * RLS) + 1));
                         }
-                        if a1 > ex1 {
-                            ex1 = a1;
-                        }
-                        crate::port::cells_set(used, j, 1);
-                        crate::port::cells_push(used, crate::port::cells_at(rm, (j * RLS) + 1));
                     }
                 }
                 j += 1;
             }
             if cnt >= 2 {
-                tb_partial_try(wd, et, w0, w1, page, ex0, ex1, crate::port::cells_at(rm, (i * RLS) + 1), last, crate::port::cells_at(rm, (i * RLS) + 1), rm, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx);
+                ytail = tb_tail_end(wd, w0, w1, ex0, ex1, crate::port::cells_at(rm, (i * RLS) + 1), last, wl, rw, sg);
+                tb_partial_try(wd, et, w0, w1, page, ex0, ex1, crate::port::cells_at(rm, (i * RLS) + 1), ytail, crate::port::cells_at(rm, (i * RLS) + 1), rm, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx);
                 if cnt >= 3 {
                     m = nh;
                     while (m + 1) < crate::port::cells_len(used) {
@@ -3022,7 +3257,7 @@ pub(crate) fn tb_band_header(wd: &mut crate::port::Cells, w0: i32, w1: i32, sx0:
     }
     return y0;
 }
-pub(crate) fn tb_shaded_page(fl: &mut crate::port::Cells, page: i32, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w0: i32, w1: i32, mut bd: &mut crate::port::Cells, mut used: &mut crate::port::Cells, mut wl: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut ch: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut en: &mut crate::port::Cells, mut rmap: &mut crate::port::Cells, mut gm: &mut crate::port::Cells, mut gs: &mut crate::port::Cells, mut ry: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut so: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tx: &mut crate::port::Cells) -> i32 {
+pub(crate) fn tb_shaded_page(fl: &mut crate::port::Cells, page: i32, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w0: i32, w1: i32, rm: &mut crate::port::Cells, mut bd: &mut crate::port::Cells, mut used: &mut crate::port::Cells, mut wl: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut ch: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut en: &mut crate::port::Cells, mut rmap: &mut crate::port::Cells, mut gm: &mut crate::port::Cells, mut gs: &mut crate::port::Cells, mut ry: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut so: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tx: &mut crate::port::Cells) -> i32 {
     // Stacks of three or more bands of one extent, each starting where the one before ended or one row
     // later, with two colours or a gap (zebra), are shaded candidates: a band is a row (several baselines may
     // be in one), a baseline row that is in no band is a row of its own, columns from the channels.
@@ -3099,7 +3334,7 @@ pub(crate) fn tb_shaded_page(fl: &mut crate::port::Cells, page: i32, wd: &mut cr
                         crate::port::cells_push(rmap, trow);
                         r += 1;
                     }
-                    let t: i32 = tb_text_grid(wd, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, page, 0, nr, PF_SHADED, 800, 1, sx0, y0, sx1, y1);
+                    let t: i32 = tb_text_grid(wd, wl, rw, sg, rm, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, page, 0, nr, PF_SHADED, 800, 1, sx0, y0, sx1, y1);
                     if t >= 0 {
                         let sc: i32 = tb_score(tb, t, wd, et, tc, tw);
                         if sc == 0 {
@@ -3202,7 +3437,7 @@ pub(crate) fn tb_prose_edge(tb: &mut crate::port::Cells, k: i32, wd: &mut crate:
     }
     return res;
 }
-pub(crate) fn tb_whitespace_run(page: i32, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, mut wl: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut ch: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut en: &mut crate::port::Cells, mut rmap: &mut crate::port::Cells, mut gm: &mut crate::port::Cells, mut gs: &mut crate::port::Cells, mut ry: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut so: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tx: &mut crate::port::Cells, ra: i32, rb: i32) -> i32 {
+pub(crate) fn tb_whitespace_run(page: i32, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, rm: &mut crate::port::Cells, mut wl: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut ch: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut en: &mut crate::port::Cells, mut rmap: &mut crate::port::Cells, mut gm: &mut crate::port::Cells, mut gs: &mut crate::port::Cells, mut ry: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut so: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tx: &mut crate::port::Cells, ra: i32, rb: i32) -> i32 {
     // The rows ra..rb (inclusive) as a whitespace candidate: its rows of one chunk at either end are not in it, and a
     // run that is refused as a whole is tried again without its last row (the lines that follow a table, set in two
     // chunks like a label and its text, join the run once the rows are right; D459). Three rows cut in two chunks at least.
@@ -3224,7 +3459,7 @@ pub(crate) fn tb_whitespace_run(page: i32, wd: &mut crate::port::Cells, et: &mut
         let c0: i32 = tb_rows_of(tc, TCS);
         let wl0: i32 = crate::port::cells_len(tw);
         let xl0: i32 = crate::port::cells_len(tx);
-        let t: i32 = tb_text_grid(wd, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, page, a, jj + 1, PF_WHITESPACE, 0, 0, 2000000000, 2000000000, -2000000000, -2000000000);
+        let t: i32 = tb_text_grid(wd, wl, rw, sg, rm, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, page, a, jj + 1, PF_WHITESPACE, 0, 0, 2000000000, 2000000000, -2000000000, -2000000000);
         if t >= 0 {
             let sc: i32 = tb_score(tb, t, wd, et, tc, tw);
             let pe: i32 = tb_prose_edge(tb, t, wd, et, tc, tw);
@@ -3254,7 +3489,7 @@ pub(crate) fn tb_whitespace_run(page: i32, wd: &mut crate::port::Cells, et: &mut
     }
     return 0;
 }
-pub(crate) fn tb_whitespace_page(page: i32, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w0: i32, w1: i32, mut wl: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut ch: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut en: &mut crate::port::Cells, mut rmap: &mut crate::port::Cells, mut gm: &mut crate::port::Cells, mut gs: &mut crate::port::Cells, mut ry: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut so: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tx: &mut crate::port::Cells) -> i32 {
+pub(crate) fn tb_whitespace_page(page: i32, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w0: i32, w1: i32, rm: &mut crate::port::Cells, mut wl: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut ch: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut en: &mut crate::port::Cells, mut rmap: &mut crate::port::Cells, mut gm: &mut crate::port::Cells, mut gs: &mut crate::port::Cells, mut ry: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut so: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tx: &mut crate::port::Cells) -> i32 {
     // The rows of the whole page, in runs of rows that are cut in two or more chunks (a row of one chunk
     // goes in a run when a row of two follows it), each run of three such rows or more a whitespace candidate.
     let nr: i32 = tb_rows(wd, w0, w1, -2000000000, -2000000000, 2000000000, 2000000000, wl, rw, sg);
@@ -3309,7 +3544,7 @@ pub(crate) fn tb_whitespace_page(page: i32, wd: &mut crate::port::Cells, et: &mu
                         e -= 1;
                     }
                 }
-                tb_whitespace_run(page, wd, et, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, a, e);
+                tb_whitespace_run(page, wd, et, rm, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, a, e);
             }
         } else {
             j = i;
@@ -4144,11 +4379,13 @@ pub fn tb_build(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et
                 tb_merge_rules(s0, s1, s3, s9);
                 tb_ruled_page(s1, p, s4, s5, s6, tb, tc, wd, wi, wj, s7, s3, tw, tx);
                 tb_partial_page(s1, p, wd, et, wi, wj, s9, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx);
+            } else {
+                crate::port::cells_drop(s1, 0);
             }
             if tb_rows_of(s2, 6) <= MAX_RULES {
-                tb_shaded_page(s2, p, wd, et, wi, wj, s8, s9, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx);
+                tb_shaded_page(s2, p, wd, et, wi, wj, s1, s8, s9, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx);
             }
-            tb_whitespace_page(p, wd, et, wi, wj, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx);
+            tb_whitespace_page(p, wd, et, wi, wj, s1, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx);
             if tg_trust(ss) >= TB_TAG_VETO_TRUST {
                 tb_veto(tb, t0, wd, tc, tw, se, sc, gl, mk, g0);
             }

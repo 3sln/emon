@@ -708,12 +708,11 @@ func TestASideFragmentHeldInPartIsANoteOfTheLinesLeft(emonT *testing.T) {
 	port.AssertText(emonT, t, "P[The table below was extracted from the ledger and the figures are totals for the quarter of the year as the office has recorded them and as the auditors have since confirmed.];N;P[see the Note];P[Item];P[Qty];T3r;Gb;R;C[Bolt];C[10];Cs[up];R;C[Nut];C[12];Cs[flat];", "the lines the table does not hold are a note and the ones it holds stay in the table (D504)")
 }
 
-func ttBankRules(pa *port.Cells, rows int32) int32 {
-	// The row borders of a statement, drawn as the HTML-to-PDF producers do: under the first three cells of each row only (the date, the
-	// description and the category: three abutting segments from x 5910 to 38670), the first at y 21345 and one every 2025 below it, and
-	// two vertical rules in the header's band only (x 38707 and 46342), the amount cell's borders. Nothing is ruled under the last two.
+func ttBankRulesAt(pa *port.Cells, y0 int32, rows int32) int32 {
+	// `rows` + 1 row borders of a statement, drawn as the HTML-to-PDF producers do: under the first three cells of each row only (the date, the
+	// description and the category: three abutting segments from x 5910 to 38670), the first at y0 and one every 2025 below it.
 	var r int32 = 0
-	var y int32 = 21345
+	var y int32 = y0
 	for r <= rows {
 		ttRule(pa, 5910, y-38, 9150, y+38)
 		ttRule(pa, 9150, y-38, 32910, y+38)
@@ -721,6 +720,13 @@ func ttBankRules(pa *port.Cells, rows int32) int32 {
 		y += 2025
 		r += 1
 	}
+	return 0
+}
+
+func ttBankRules(pa *port.Cells, rows int32) int32 {
+	// The row borders of a statement (`tt-bank-rules-at`), the first at y 21345, and two vertical rules in the header's band only (x 38707
+	// and 46342), the amount cell's borders. Nothing is ruled under the last two cells.
+	ttBankRulesAt(pa, 21345, rows)
 	ttRule(pa, 38669, 19455, 38745, 21308)
 	ttRule(pa, 46304, 19455, 46380, 21308)
 	return 0
@@ -831,6 +837,285 @@ func TestALineAboveAPartialTableThatDoesNotLineUpWithItIsNotItsHeader(emonT *tes
 	ttAt(wd, ln, et, port.TextBlob("Page 2"), 41000, 19700, 0, 0)
 	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "stray line: well formed")
 	port.AssertText(emonT, t, "P[Statement];P[Page 2];T5p;Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];", "a line that does not line up with the columns is not a header; the bold opening row is a row of amounts, not a header")
+}
+
+func ttBankTable(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, y0 int32, rows int32, header int32, n int32) int32 {
+	// A statement table whose first border is at y0 (the layout of `tt-bank-page`): `rows` + 1 borders, the small header row above the first
+	// when `header` is 1, the two vertical rules of its band, and the first `n` of its five rows at y0 + 400 and one every 2025 below it: the bold
+	// opening row, three transactions and the closing row (y0 + 8500). With 4 `rows` and 5 `n` the closing row stands under the last border
+	// (nothing is ruled under it), with 5 it is between two.
+	ttBankRulesAt(pa, y0, rows)
+	ttRule(pa, 38669, y0-1890, 38745, y0-37)
+	ttRule(pa, 46304, y0-1890, 46380, y0-37)
+	if header == 1 {
+		ttBankRow(wd, ln, et, y0-1645, 0, 700, port.TextBlob("DATE"), port.TextBlob("DESCRIPTION"), port.TextBlob("CATEGORY"), port.TextBlob("AMOUNT"), port.TextBlob("BALANCE"))
+	}
+	if n >= 1 {
+		ttBankRow(wd, ln, et, y0+400, 1, 800, port.TextBlob("Sep 1"), port.TextBlob("Opening Balance"), port.TextBlob(""), port.TextBlob(""), port.TextBlob("$10,989.78"))
+	}
+	if n >= 2 {
+		ttBankRow(wd, ln, et, y0+2425, 0, 800, port.TextBlob("Sep 2"), port.TextBlob("Withdrawal CAPITAL ONE"), port.TextBlob("Debit"), port.TextBlob("- $803.85"), port.TextBlob("$10,185.93"))
+	}
+	if n >= 3 {
+		ttBankRow(wd, ln, et, y0+4450, 0, 800, port.TextBlob("Sep 4"), port.TextBlob("Zelle sent CAMERON"), port.TextBlob("Debit"), port.TextBlob("- $1,500.00"), port.TextBlob("$8,685.93"))
+	}
+	if n >= 4 {
+		ttBankRow(wd, ln, et, y0+6475, 0, 800, port.TextBlob("Sep 14"), port.TextBlob("Deposit from KESTRAL"), port.TextBlob("Credit"), port.TextBlob("+ $3,982.04"), port.TextBlob("$12,667.97"))
+	}
+	if n >= 5 {
+		ttBankRow(wd, ln, et, y0+8500, 0, 800, port.TextBlob("Sep 30"), port.TextBlob("Closing Balance"), port.TextBlob(""), port.TextBlob(""), port.TextBlob("$12,667.97"))
+	}
+	return 0
+}
+
+func ttBankSmall(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, y0 int32, rows int32) int32 {
+	// A second, small statement table with the same columns, its first border at y0: `rows` + 1 borders, its header, an opening row and a
+	// withdrawal, and the closing row at y0 + 4450 (under the last border when `rows` is 2, between two when it is 3).
+	ttBankRulesAt(pa, y0, rows)
+	ttRule(pa, 38669, y0-1890, 38745, y0-37)
+	ttRule(pa, 46304, y0-1890, 46380, y0-37)
+	ttBankRow(wd, ln, et, y0-1645, 0, 700, port.TextBlob("DATE"), port.TextBlob("DESCRIPTION"), port.TextBlob("CATEGORY"), port.TextBlob("AMOUNT"), port.TextBlob("BALANCE"))
+	ttBankRow(wd, ln, et, y0+400, 1, 800, port.TextBlob("Sep 1"), port.TextBlob("Opening Balance"), port.TextBlob(""), port.TextBlob(""), port.TextBlob("$0.10"))
+	ttBankRow(wd, ln, et, y0+2425, 0, 800, port.TextBlob("Sep 9"), port.TextBlob("Withdrawal rejected"), port.TextBlob(""), port.TextBlob(""), port.TextBlob("$0.10"))
+	ttBankRow(wd, ln, et, y0+4450, 0, 800, port.TextBlob("Sep 30"), port.TextBlob("Closing Balance"), port.TextBlob(""), port.TextBlob(""), port.TextBlob("$0.10"))
+	return 0
+}
+
+func TestTheLastRowOfAPartialTableWithNoRuleUnderItStaysInTheTable(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	// The closing row stands under the last border, at the pitch of the rows, and lines up with the columns: a row of the table.
+	ttBankTable(wd, ln, et, pa, 21345, 4, 1, 5)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "closing row: well formed")
+	port.AssertText(emonT, t, "T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Che[AMOUNT];Che[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];", "a row below the last rule that lines up with the table's columns, at its pitch, is the table's (before: a table of four columns, the row three paragraphs under it)")
+}
+
+func TestALineBelowAPartialTableIsNoRowOfItUnlessItLinesUpAndKeepsThePitch(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	var t2 *strings.Builder = port.NewText()
+	var t3 *strings.Builder = port.NewText()
+	var t4 *strings.Builder = port.NewText()
+	// A line of one chunk under the last border: a paragraph.
+	ttBankTable(wd, ln, et, pa, 21345, 5, 1, 5)
+	ttAt(wd, ln, et, port.TextBlob("Page 2 of 4"), 5910, 31870, 0, 0)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "one chunk: well formed")
+	port.AssertText(emonT, t, "T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Che[AMOUNT];Che[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];P[Page 2 of 4];", "a line of one chunk under the table is not a row of it")
+	// Two chunks that do not line up with the columns: paragraphs.
+	port.CellsDrop(wd, 0)
+	port.CellsDrop(ln, 0)
+	port.CellsDrop(et, 0)
+	port.CellsDrop(pa, 0)
+	ttBankTable(wd, ln, et, pa, 21345, 5, 1, 5)
+	ttAt(wd, ln, et, port.TextBlob("Statement"), 7000, 31870, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Page 2"), 41000, 31870, 0, 0)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t2), 0, "stray: well formed")
+	port.AssertText(emonT, t2, "T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Che[AMOUNT];Che[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];P[Statement];P[Page 2];", "two chunks that do not line up with the columns are not a row")
+	// A row that lines up with the columns but stands twelve sizes under the last row: not the table's.
+	port.CellsDrop(wd, 0)
+	port.CellsDrop(ln, 0)
+	port.CellsDrop(et, 0)
+	port.CellsDrop(pa, 0)
+	ttBankTable(wd, ln, et, pa, 21345, 5, 1, 5)
+	ttBankRow(wd, ln, et, 40000, 0, 800, port.TextBlob("Sep 30"), port.TextBlob("Closing Balance"), port.TextBlob(""), port.TextBlob(""), port.TextBlob("$12,667.97"))
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t3), 0, "far: well formed")
+	port.AssertText(emonT, t3, "T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Che[AMOUNT];Che[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];P[Sep 30];P[Closing Balance];P[$12,667.97];", "a row far under the table is not its row")
+	// A summary block under the table, in its last columns (an invoice's totals): it lines up with the columns but does not begin in the first.
+	port.CellsDrop(wd, 0)
+	port.CellsDrop(ln, 0)
+	port.CellsDrop(et, 0)
+	port.CellsDrop(pa, 0)
+	ttBankTable(wd, ln, et, pa, 21345, 5, 1, 5)
+	ttBankRow(wd, ln, et, 31870, 0, 800, port.TextBlob(""), port.TextBlob(""), port.TextBlob("Total due"), port.TextBlob(""), port.TextBlob("$12,667.97"))
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t4), 0, "totals: well formed")
+	port.AssertText(emonT, t4, "T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Che[AMOUNT];Che[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];P[Total due];P[$12,667.97];", "a row of the last columns under the table is a block of its own, not a row of the table (an invoice's totals)")
+}
+
+func TestTwoTablesOfAChainOfRulesAreTwoWhenAHeadingAGridOrAGapLiesBetween(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	var t2 *strings.Builder = port.NewText()
+	var t3 *strings.Builder = port.NewText()
+	var t4 *strings.Builder = port.NewText()
+	// A heading, in larger type, between two tables whose rules are 154 pt apart: two tables, the heading a paragraph.
+	ttBankTable(wd, ln, et, pa, 21345, 5, 1, 5)
+	ttBankRow(wd, ln, et, 38000, 1, 1200, port.TextBlob("Second account"), port.TextBlob(""), port.TextBlob(""), port.TextBlob(""), port.TextBlob(""))
+	ttBankSmall(wd, ln, et, pa, 46870, 3)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "heading: well formed")
+	port.AssertText(emonT, t, "T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Che[AMOUNT];Che[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];P[Second account];T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Ch[AMOUNT];Ch[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];C[];C[];C[$0.10];R;Cs[Sep 9];Cs[Withdrawal rejected];C[];C[];C[$0.10];R;Cs[Sep 30];Cs[Closing Balance];C[];C[];C[$0.10];", "a heading in larger type between two grids of one chain makes two tables (before: one, the second's rows colspan rows of the first)")
+	// A row of another grid (three chunks that do not line up with the columns, in the same type) between them.
+	port.CellsDrop(wd, 0)
+	port.CellsDrop(ln, 0)
+	port.CellsDrop(et, 0)
+	port.CellsDrop(pa, 0)
+	ttBankTable(wd, ln, et, pa, 21345, 5, 1, 5)
+	ttAt(wd, ln, et, port.TextBlob("0.10%"), 6700, 38000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("$3.54"), 24000, 38000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("30"), 41000, 38000, 0, 0)
+	ttBankSmall(wd, ln, et, pa, 46870, 3)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t2), 0, "grid: well formed")
+	port.AssertText(emonT, t2, "T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Che[AMOUNT];Che[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];P[0.10%];P[$3.54];P[30];T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Ch[AMOUNT];Ch[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];C[];C[];C[$0.10];R;Cs[Sep 9];Cs[Withdrawal rejected];C[];C[];C[$0.10];R;Cs[Sep 30];Cs[Closing Balance];C[];C[];C[$0.10];", "a row between the grids that does not line up with the first one's columns makes them two")
+	// Nothing between them but a gap of white space many rows deep (the second table's header is the only row there).
+	port.CellsDrop(wd, 0)
+	port.CellsDrop(ln, 0)
+	port.CellsDrop(et, 0)
+	port.CellsDrop(pa, 0)
+	ttBankTable(wd, ln, et, pa, 21345, 5, 1, 5)
+	ttBankSmall(wd, ln, et, pa, 46870, 3)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t3), 0, "gap: well formed")
+	port.AssertText(emonT, t3, "T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Che[AMOUNT];Che[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Ch[AMOUNT];Ch[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];C[];C[];C[$0.10];R;Cs[Sep 9];Cs[Withdrawal rejected];C[];C[];C[$0.10];R;Cs[Sep 30];Cs[Closing Balance];C[];C[];C[$0.10];", "a white gap of many rows between two grids makes them two")
+	// The statement: both closing rows under their last border, a heading between.
+	port.CellsDrop(wd, 0)
+	port.CellsDrop(ln, 0)
+	port.CellsDrop(et, 0)
+	port.CellsDrop(pa, 0)
+	ttBankTable(wd, ln, et, pa, 21345, 4, 1, 5)
+	ttBankRow(wd, ln, et, 38000, 1, 1200, port.TextBlob("Second account"), port.TextBlob(""), port.TextBlob(""), port.TextBlob(""), port.TextBlob(""))
+	ttBankSmall(wd, ln, et, pa, 46870, 2)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t4), 0, "statement: well formed")
+	port.AssertText(emonT, t4, "T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Che[AMOUNT];Che[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];Cs[];Ce[];Ce[$10,989.78];R;Cs[Sep 2];Cs[Withdrawal CAPITAL ONE];Cs[Debit];Ce[- $803.85];Ce[$10,185.93];R;Cs[Sep 4];Cs[Zelle sent CAMERON];Cs[Debit];Ce[- $1,500.00];Ce[$8,685.93];R;Cs[Sep 14];Cs[Deposit from KESTRAL];Cs[Credit];Ce[+ $3,982.04];Ce[$12,667.97];R;Cs[Sep 30];Cs[Closing Balance];Cs[];Ce[];Ce[$12,667.97];P[Second account];T5p;Gh;R;Chs[DATE];Chs[DESCRIPTION];Ch[CATEGORY];Ch[AMOUNT];Ch[BALANCE];Gb;R;Cs[Sep 1];Cs[Opening Balance];C[];C[];C[$0.10];R;Cs[Sep 9];Cs[Withdrawal rejected];C[];C[];C[$0.10];R;Cs[Sep 30];Cs[Closing Balance];C[];C[];C[$0.10];", "the two together: two tables, each with its closing row")
+}
+
+func ttCutRow(wd *port.Cells, ln *port.Cells, et *port.Cells, y int32, a []byte, b []byte, c []byte, style int32) int32 {
+	// A row of three cells at y: `a` at x 7600, `b` ending at 26800 and `c` beginning at 27200 (400 apart: one chunk of the row's text),
+	// all in `style` (0 plain, 1 bold).
+	ttAt(wd, ln, et, a, 7600, y, style, 0)
+	ttAt(wd, ln, et, b, 26800, y, style, 1)
+	ttAt(wd, ln, et, c, 27200, y, style, 0)
+	return 0
+}
+
+func TestAVerticalRuleBetweenTwoWordsThatTouchIsAColumnCut(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	var t2 *strings.Builder = port.NewText()
+	var t3 *strings.Builder = port.NewText()
+	var t4 *strings.Builder = port.NewText()
+	// Partial: four borders and a rule down the rows between the two words that touch.
+	ttRule(pa, 7200, 9950, 37200, 10050)
+	ttRule(pa, 7200, 11950, 37200, 12050)
+	ttRule(pa, 7200, 13950, 37200, 14050)
+	ttRule(pa, 7200, 15950, 37200, 16050)
+	ttRule(pa, 27000, 10000, 27100, 16000)
+	ttCutRow(wd, ln, et, 10600, port.TextBlob("Bolt"), port.TextBlob("Debit"), port.TextBlob("$803"), 0)
+	ttCutRow(wd, ln, et, 12600, port.TextBlob("Nut"), port.TextBlob("Debit"), port.TextBlob("$91"), 0)
+	ttCutRow(wd, ln, et, 14600, port.TextBlob("Gear"), port.TextBlob("Paid"), port.TextBlob("$1,200"), 0)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "rule: well formed")
+	port.AssertText(emonT, t, "T3p;Gb;R;C[Bolt];C[Debit];Cs[$803];R;C[Nut];C[Debit];Cs[$91];R;C[Gear];C[Paid];Cs[$1,200];", "the rule runs the three rows: the cells on its two sides are two (before: one cell `Debit $803`, two columns)")
+	// Without the rule the words are one cell.
+	port.CellsDrop(wd, 0)
+	port.CellsDrop(ln, 0)
+	port.CellsDrop(et, 0)
+	port.CellsDrop(pa, 0)
+	ttRule(pa, 7200, 9950, 37200, 10050)
+	ttRule(pa, 7200, 11950, 37200, 12050)
+	ttRule(pa, 7200, 13950, 37200, 14050)
+	ttRule(pa, 7200, 15950, 37200, 16050)
+	ttCutRow(wd, ln, et, 10600, port.TextBlob("Bolt"), port.TextBlob("Debit"), port.TextBlob("$803"), 0)
+	ttCutRow(wd, ln, et, 12600, port.TextBlob("Nut"), port.TextBlob("Debit"), port.TextBlob("$91"), 0)
+	ttCutRow(wd, ln, et, 14600, port.TextBlob("Gear"), port.TextBlob("Paid"), port.TextBlob("$1,200"), 0)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t2), 0, "no rule: well formed")
+	port.AssertText(emonT, t2, "T2p;Gb;R;C[Bolt];C[Debit $803];R;C[Nut];C[Debit $91];R;C[Gear];C[Paid $1,200];", "no rule, no cut: the touching words are one cell")
+	// A rule beside one row only is no column cut (it spans one row of three).
+	port.CellsDrop(wd, 0)
+	port.CellsDrop(ln, 0)
+	port.CellsDrop(et, 0)
+	port.CellsDrop(pa, 0)
+	ttRule(pa, 7200, 9950, 37200, 10050)
+	ttRule(pa, 7200, 11950, 37200, 12050)
+	ttRule(pa, 7200, 13950, 37200, 14050)
+	ttRule(pa, 7200, 15950, 37200, 16050)
+	ttRule(pa, 27000, 10000, 27100, 12000)
+	ttCutRow(wd, ln, et, 10600, port.TextBlob("Bolt"), port.TextBlob("Debit"), port.TextBlob("$803"), 0)
+	ttCutRow(wd, ln, et, 12600, port.TextBlob("Nut"), port.TextBlob("Debit"), port.TextBlob("$91"), 0)
+	ttCutRow(wd, ln, et, 14600, port.TextBlob("Gear"), port.TextBlob("Paid"), port.TextBlob("$1,200"), 0)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t3), 0, "short rule: well formed")
+	port.AssertText(emonT, t3, "T2p;Gb;R;C[Bolt];C[Debit $803];R;C[Nut];C[Debit $91];R;C[Gear];C[Paid $1,200];", "a rule beside one row of three cuts nothing")
+	// A rule through the words is a strike or a frame, not the border between two cells.
+	port.CellsDrop(wd, 0)
+	port.CellsDrop(ln, 0)
+	port.CellsDrop(et, 0)
+	port.CellsDrop(pa, 0)
+	ttRule(pa, 7200, 9950, 37200, 10050)
+	ttRule(pa, 7200, 11950, 37200, 12050)
+	ttRule(pa, 7200, 13950, 37200, 14050)
+	ttRule(pa, 7200, 15950, 37200, 16050)
+	ttRule(pa, 25500, 10000, 25600, 16000)
+	ttCutRow(wd, ln, et, 10600, port.TextBlob("Bolt"), port.TextBlob("Debit"), port.TextBlob("$803"), 0)
+	ttCutRow(wd, ln, et, 12600, port.TextBlob("Nut"), port.TextBlob("Debit"), port.TextBlob("$91"), 0)
+	ttCutRow(wd, ln, et, 14600, port.TextBlob("Gear"), port.TextBlob("Paid"), port.TextBlob("$1,200"), 0)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t4), 0, "through the words: well formed")
+	port.AssertText(emonT, t4, "T2p;Gb;R;C[Bolt];C[Debit $803];R;C[Nut];C[Debit $91];R;C[Gear];C[Paid $1,200];", "a rule through the words cuts nothing")
+}
+
+func TestARuleCutsOnlyTheRowsItRunsAlong(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	var t2 *strings.Builder = port.NewText()
+	// D563, the shape of the 1040's dependents block: a label of one phrase on the first row, `(b) And in the U.S.`, whose words the
+	// rule below would fall between (a check box's border, or a column's, runs down the rows under the label and not through it):
+	// the rule is a column boundary for the rows it runs along, and the label is one cell.
+	ttRule(pa, 7200, 9950, 37200, 10050)
+	ttRule(pa, 7200, 11950, 37200, 12050)
+	ttRule(pa, 7200, 13950, 37200, 14050)
+	ttRule(pa, 7200, 15950, 37200, 16050)
+	ttRule(pa, 27000, 12000, 27100, 16000)
+	ttAt(wd, ln, et, port.TextBlob("Item"), 7600, 10600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("(b) And"), 26800, 10600, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("in the U.S."), 27200, 10600, 0, 0)
+	ttCutRow(wd, ln, et, 12600, port.TextBlob("Nut"), port.TextBlob("Debit"), port.TextBlob("$91"), 0)
+	ttCutRow(wd, ln, et, 14600, port.TextBlob("Gear"), port.TextBlob("Paid"), port.TextBlob("$1,200"), 0)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "label: well formed")
+	port.AssertText(emonT, t, "T3p;Gb;R;C[Item];Cc2[(b) And in the U.S.];R;C[Nut];C[Debit];Cs[$91];R;C[Gear];C[Paid];Cs[$1,200];", "the label is one cell over the two columns the rule makes below it (before: two cells, the phrase cut in two)")
+	// A rule that runs along the label's row and the others cuts it, as before.
+	port.CellsDrop(wd, 0)
+	port.CellsDrop(ln, 0)
+	port.CellsDrop(et, 0)
+	port.CellsDrop(pa, 0)
+	ttRule(pa, 7200, 9950, 37200, 10050)
+	ttRule(pa, 7200, 11950, 37200, 12050)
+	ttRule(pa, 7200, 13950, 37200, 14050)
+	ttRule(pa, 7200, 15950, 37200, 16050)
+	ttRule(pa, 27000, 10000, 27100, 16000)
+	ttAt(wd, ln, et, port.TextBlob("Item"), 7600, 10600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("(b) And"), 26800, 10600, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("in the U.S."), 27200, 10600, 0, 0)
+	ttCutRow(wd, ln, et, 12600, port.TextBlob("Nut"), port.TextBlob("Debit"), port.TextBlob("$91"), 0)
+	ttCutRow(wd, ln, et, 14600, port.TextBlob("Gear"), port.TextBlob("Paid"), port.TextBlob("$1,200"), 0)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t2), 0, "label cut: well formed")
+	port.AssertText(emonT, t2, "T3p;Gb;R;C[Item];Ce[(b) And];Cs[in the U.S.];R;C[Nut];Ce[Debit];Cs[$91];R;C[Gear];Ce[Paid];Cs[$1,200];", "a rule along all three rows is between the label's two words too")
+}
+
+func TestAVerticalRuleCutsTheColumnsOfATableWithoutHorizontalRules(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	// Whitespace: the same, with no horizontal rule at all (the rule is handed to the profile of the words alone).
+	ttCutRow(wd, ln, et, 10000, port.TextBlob("Item"), port.TextBlob("Kind"), port.TextBlob("Price"), 1)
+	ttCutRow(wd, ln, et, 11600, port.TextBlob("Bolt"), port.TextBlob("Debit"), port.TextBlob("$803"), 0)
+	ttCutRow(wd, ln, et, 13200, port.TextBlob("Nut"), port.TextBlob("Debit"), port.TextBlob("$91"), 0)
+	ttCutRow(wd, ln, et, 14800, port.TextBlob("Gear"), port.TextBlob("Paid"), port.TextBlob("$1,200"), 0)
+	ttCutRow(wd, ln, et, 16400, port.TextBlob("Cog"), port.TextBlob("Debit"), port.TextBlob("$35"), 0)
+	ttRule(pa, 27000, 9800, 27100, 17400)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "whitespace: well formed")
+	port.AssertText(emonT, t, "T3w;Gh;R;Ch[Item];Ch[Kind];Chs[Price];Gb;R;C[Bolt];C[Debit];Cs[$803];R;C[Nut];C[Debit];Cs[$91];R;C[Gear];C[Paid];Cs[$1,200];R;C[Cog];C[Debit];Cs[$35];", "a rule through the rows' height between two touching words is a column cut for the whitespace profile too")
 }
 
 func ttGolden(pdf []byte, t *strings.Builder, tvt *strings.Builder) int32 {

@@ -156,6 +156,36 @@ public final class Htmltest {
         emon.Testport.assertText(kept, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><aside data-emon=\"furniture\" data-emon-role=\"header\"></aside><span data-emon-page=\"2\"></span></main></body></html>", "furniture once at the top, then the milestone");
         emon.Testport.assertText(bare, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main></main></body></html>", "both off");
     }
+    public static int htLabel(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, int n, byte[] b) {
+        // Add the UTF-8 bytes of b as one more `labels` value of node n.
+        int start = Model.textLen(text);
+        Model.textAppendUtf8(text, b, 0, emon.Port.blobLen(b));
+        Model.nodeAddAttrText(nodes, attrs, n, Model.fkLabels(), start, Model.textLen(text) - start);
+        return 0;
+    }
+    public static void testTheLabelsOfAFigureAreSeparateTokensInTheText() {
+        // D559: a chart's axis title and its tick labels are `labels`, each its own span; spans with nothing between them read as one run
+        // (`(thousands)220165110550Q1Q2Q3Q4`), so a single space stands between two of them.
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        StringBuilder out = emon.Testport.newText();
+        int f = 0;
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        f = Model.nodeNew(nodes, Model.nkFigure(), 0);
+        Model.nodeSetSub(nodes, f, Model.fgChart());
+        htLabel(nodes, attrs, text, f, emon.Testport.textBlob("Units (thousands)"));
+        htLabel(nodes, attrs, text, f, emon.Testport.textBlob("220"));
+        htLabel(nodes, attrs, text, f, emon.Testport.textBlob("0"));
+        htLabel(nodes, attrs, text, f, emon.Testport.textBlob("Q1"));
+        htLabel(nodes, attrs, text, f, emon.Testport.textBlob("Q2"));
+        emon.Testport.assertEq(Html.htmlEmit(out, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newBuf(), emon.Port.newCells()), 0, "it emits");
+        emon.Testport.assertText(out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><figure data-emon-kind=\"chart\" role=\"img\"><span data-emon=\"label\">Units (thousands)</span> <span data-emon=\"label\">220</span> <span data-emon=\"label\">0</span> <span data-emon=\"label\">Q1</span> <span data-emon=\"label\">Q2</span></figure></main></body></html>", "five labels, a space between each two, none before the first or after the last");
+    }
     public static void testTheDeepestTreeEmits() {
         emon.Port.Cells nodes = emon.Port.newCells();
         emon.Port.Cells attrs = emon.Port.newCells();

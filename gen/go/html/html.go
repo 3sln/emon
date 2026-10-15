@@ -1259,8 +1259,14 @@ func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 			hb = 1
 		}
 		hInner(t, o, nodes, attrs, regions, pages, layout, text, n)
+		// D559: the labels (an axis title, its ticks) are tokens: one space between two spans, or the text of the figure reads as one run.
 		a = model.NodeAttr(nodes, attrs, n, model.FkLabels())
+		b = 0
 		for a >= 0 {
+			if b == 1 {
+				port.TextCp(t, 32)
+			}
+			b = 1
 			port.TextAscii(t, "<span data-emon=\"label\">")
 			hRun(t, text, model.AttrValue(attrs, a), model.AttrLen(attrs, a))
 			port.TextAscii(t, "</span>")
