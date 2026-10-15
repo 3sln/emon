@@ -1028,6 +1028,47 @@ fn test_a_vertical_rule_between_two_words_that_touch_is_a_column_cut() {
     crate::testport::assert_text(t4, "T2p;Gb;R;C[Bolt];C[Debit $803];R;C[Nut];C[Debit $91];R;C[Gear];C[Paid $1,200];", "a rule through the words cuts nothing");
 }
 #[test]
+fn test_a_rule_cuts_only_the_rows_it_runs_along() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    let t2: &mut String = &mut crate::port::new_text();
+    // D1594, the shape of the 1040's dependents block: a label of one phrase on the first row, `(b) And in the U.S.`, whose words the
+    // rule below would fall between (a check box's border, or a column's, runs down the rows under the label and not through it):
+    // the rule is a column boundary for the rows it runs along, and the label is one cell.
+    tt_rule(pa, 7200, 9950, 37200, 10050);
+    tt_rule(pa, 7200, 11950, 37200, 12050);
+    tt_rule(pa, 7200, 13950, 37200, 14050);
+    tt_rule(pa, 7200, 15950, 37200, 16050);
+    tt_rule(pa, 27000, 12000, 27100, 16000);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Item")[..], 7600, 10600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("(b) And")[..], 26800, 10600, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("in the U.S.")[..], 27200, 10600, 0, 0);
+    tt_cut_row(wd, ln, et, 12600, &crate::testport::text_blob("Nut")[..], &crate::testport::text_blob("Debit")[..], &crate::testport::text_blob("$91")[..], 0);
+    tt_cut_row(wd, ln, et, 14600, &crate::testport::text_blob("Gear")[..], &crate::testport::text_blob("Paid")[..], &crate::testport::text_blob("$1,200")[..], 0);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "label: well formed");
+    crate::testport::assert_text(t, "T3p;Gb;R;C[Item];Cc2[(b) And in the U.S.];R;C[Nut];C[Debit];Cs[$91];R;C[Gear];C[Paid];Cs[$1,200];", "the label is one cell over the two columns the rule makes below it (before: two cells, the phrase cut in two)");
+    // A rule that runs along the label's row and the others cuts it, as before.
+    crate::port::cells_drop(wd, 0);
+    crate::port::cells_drop(ln, 0);
+    crate::port::cells_drop(et, 0);
+    crate::port::cells_drop(pa, 0);
+    tt_rule(pa, 7200, 9950, 37200, 10050);
+    tt_rule(pa, 7200, 11950, 37200, 12050);
+    tt_rule(pa, 7200, 13950, 37200, 14050);
+    tt_rule(pa, 7200, 15950, 37200, 16050);
+    tt_rule(pa, 27000, 10000, 27100, 16000);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Item")[..], 7600, 10600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("(b) And")[..], 26800, 10600, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("in the U.S.")[..], 27200, 10600, 0, 0);
+    tt_cut_row(wd, ln, et, 12600, &crate::testport::text_blob("Nut")[..], &crate::testport::text_blob("Debit")[..], &crate::testport::text_blob("$91")[..], 0);
+    tt_cut_row(wd, ln, et, 14600, &crate::testport::text_blob("Gear")[..], &crate::testport::text_blob("Paid")[..], &crate::testport::text_blob("$1,200")[..], 0);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t2), 0, "label cut: well formed");
+    crate::testport::assert_text(t2, "T3p;Gb;R;C[Item];Ce[(b) And];Cs[in the U.S.];R;C[Nut];Ce[Debit];Cs[$91];R;C[Gear];Ce[Paid];Cs[$1,200];", "a rule along all three rows is between the label's two words too");
+}
+#[test]
 fn test_a_vertical_rule_cuts_the_columns_of_a_table_without_horizontal_rules() {
     let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();

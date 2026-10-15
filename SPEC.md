@@ -2357,7 +2357,7 @@ line up with the columns of the rows above them (an edge within 4 pt), each at m
 it, are rows of the table (the chain needs two rows of its own to have a pitch and columns). (3) *Vertical rules are column cuts.* In every profile
 that finds its columns from text (`partial`, `shaded`, `whitespace`) a vertical rule inside the rows' extent that runs along three in five of the
 rows (two at least) and through none of their words is a column boundary of its own where the whitespace has none, and the words either side of it
-are cells of their own even when a chunk of the row joins them.
+are cells of their own even when a chunk of the row joins them, in the rows it runs along (D1594: a phrase in a row it does not run along stays one cell).
 
 **What the profiles read (D218).** Rules and fills are the fused `grl` and
 `gfl` of §9.9, never `paths`: a rule is a `grl` row of orientation `h` or `v`

@@ -387,6 +387,51 @@ public final class Headingtest {
         emon.Testport.assertEq(Heading.hdLevel(hc, 21), 6, "the eighth is level 6, not 8");
         emon.Testport.assertEq(Heading.hdLevel(hc, 18), 6, "the seventh is level 6, not 7");
     }
+    public static int htBlock(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, byte[] b, int size, int y) {
+        // A bold heading of `size` at y and two lines of body under it; answers the y after them (3 lines: the heading's is a multiple of 3).
+        int y1 = y + (((size * 12) / 10) + 1000);
+        htHeading(wd, ln, et, b, y, size, 1);
+        return htBody(wd, ln, et, 1, y1, 2) + 900;
+    }
+    public static void testALadderOfSevenClassesKeepsTheAccountsPeersAndNearTheTop() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells sf = emon.Port.newCells();
+        emon.Port.Cells sc = emon.Port.newCells();
+        emon.Port.Cells hc = emon.Port.newCells();
+        emon.Port.Cells ws = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        emon.Port.Cells pr = emon.Port.newCells();
+        emon.Port.Cells ptxt = emon.Port.newCells();
+        int y = 5000;
+        // D1594, the shape of a bank statement's headings: seven classes (a title, a greeting, two small asides, a block and its twin,
+        // two summaries, and three accounts each followed by its product line), the class order the first occurrences make. Seven
+        // classes are past the exhaustive search (six), and the descent from the first-occurrence ladder stopped with the accounts at
+        // level 6, three below where a second statement's headings had them. Whole-ladder moves and a second start find the accounts
+        // at level 2 beside the greeting, the asides above them and the product lines below.
+        y = htBlock(wd, ln, et, emon.Testport.textBlob("Statement title"), 2200, y);
+        y = htBlock(wd, ln, et, emon.Testport.textBlob("Welcome to your statement"), 2000, y);
+        y = htBlock(wd, ln, et, emon.Testport.textBlob("Period note"), 1700, y);
+        y = htBlock(wd, ln, et, emon.Testport.textBlob("Dates note"), 1600, y);
+        y = htBlock(wd, ln, et, emon.Testport.textBlob("Balance block"), 1500, y);
+        y = htBlock(wd, ln, et, emon.Testport.textBlob("Accounts block"), 1500, y);
+        y = htBlock(wd, ln, et, emon.Testport.textBlob("Summary one"), 2600, y);
+        y = htBlock(wd, ln, et, emon.Testport.textBlob("Summary two"), 2600, y);
+        y = htBlock(wd, ln, et, emon.Testport.textBlob("Account One"), 2000, y);
+        y = htBlock(wd, ln, et, emon.Testport.textBlob("Checking one"), 1400, y);
+        y = htBlock(wd, ln, et, emon.Testport.textBlob("Account Two"), 2000, y);
+        y = htBlock(wd, ln, et, emon.Testport.textBlob("Checking two"), 1400, y);
+        y = htBlock(wd, ln, et, emon.Testport.textBlob("Account Three"), 2000, y);
+        y = htBlock(wd, ln, et, emon.Testport.textBlob("Checking three"), 1400, y);
+        emon.Testport.assertEq(htRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 14, "fourteen headings");
+        emon.Testport.assertEq(Heading.hdLevel(hc, 24), Heading.hdLevel(hc, 3), "the first account is the greeting's peer");
+        emon.Testport.assertEq(Heading.hdLevel(hc, 30), Heading.hdLevel(hc, 24), "the second account is the first's peer");
+        emon.Testport.assertEq(Heading.hdLevel(hc, 36), Heading.hdLevel(hc, 24), "the third account is the first's peer");
+        emon.Testport.assertEq(Heading.hdLevel(hc, 24), 2, "the accounts are at level 2");
+        emon.Testport.assertEq(Heading.hdLevel(hc, 27), Heading.hdLevel(hc, 33), "the product lines are peers");
+        emon.Testport.assertEq(Heading.hdLevel(hc, 27), 3, "and at level 3");
+    }
     public static void testANumberedListIsNotARunOfHeadings() {
         emon.Port.Cells wd = emon.Port.newCells();
         emon.Port.Cells ln = emon.Port.newCells();

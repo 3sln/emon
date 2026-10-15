@@ -1755,6 +1755,8 @@ public final class Table {
                     }
                     if ((crossed == 0) && ((spanned >= 2) && ((spanned * 5) >= (n * 3)))) {
                         emon.Port.cellsPush(cl, p);
+                        emon.Port.cellsPush(cl, emon.Port.cellsAt(rm, (i * RLS) + 2));
+                        emon.Port.cellsPush(cl, emon.Port.cellsAt(rm, (i * RLS) + 3));
                     }
                 }
             }
@@ -1790,19 +1792,20 @@ public final class Table {
         emon.Port.cellsSet(ch, (at * 2) + 1, p);
         return 1;
     }
-    public static int tbSubEnd(emon.Port.Cells wd, emon.Port.Cells wl, emon.Port.Cells cl, int k, int kend) {
-        // D1590: where the words k..kend of one chunk (indices into `wl`) are cut by a column cut of `cl`: the end (exclusive) of the stretch that
-        // begins at the word k and has no cut between its words (`kend` when there is none).
+    public static int tbSubEnd(emon.Port.Cells wd, emon.Port.Cells wl, emon.Port.Cells cl, int k, int kend, int cy) {
+        // D1590: where the words k..kend of one chunk (indices into `wl`), on a row whose centre is at y `cy`, are cut by a column cut of `cl`
+        // (x, from, to: D1594, a cut cuts the rows it runs along and no other, or a phrase in a row beside a check box's border is cut in two): the
+        // end (exclusive) of the stretch that begins at the word k and has no cut between its words (`kend` when there is none).
         int e = k + 1;
         int j = 0;
         int split = 0;
         while ((e < kend) && (split == 0)) {
             j = 0;
             while (j < emon.Port.cellsLen(cl)) {
-                if ((Evidence.wdGet(wd, emon.Port.cellsAt(wl, e - 1), Evidence.hdX1()) <= emon.Port.cellsAt(cl, j)) && (emon.Port.cellsAt(cl, j) <= Evidence.wdGet(wd, emon.Port.cellsAt(wl, e), Evidence.hdX0()))) {
+                if ((Evidence.wdGet(wd, emon.Port.cellsAt(wl, e - 1), Evidence.hdX1()) <= emon.Port.cellsAt(cl, j)) && ((emon.Port.cellsAt(cl, j) <= Evidence.wdGet(wd, emon.Port.cellsAt(wl, e), Evidence.hdX0())) && ((cy >= emon.Port.cellsAt(cl, j + 1)) && (cy <= emon.Port.cellsAt(cl, j + 2))))) {
                     split = 1;
                 }
-                j += 1;
+                j += 3;
             }
             if (split == 0) {
                 e += 1;
@@ -1864,7 +1867,7 @@ public final class Table {
             c = 0;
             while (c < emon.Port.cellsLen(st)) {
                 tbChannelAdd(ch, emon.Port.cellsAt(st, c));
-                c += 1;
+                c += 3;
             }
             nch = emon.Port.cellsLen(ch) / 2;
         }
@@ -1925,7 +1928,7 @@ public final class Table {
                     ks = emon.Port.cellsAt(sg, (q * SGS) + 3);
                     ke = ks + emon.Port.cellsAt(sg, (q * SGS) + 4);
                     while (ks < ke) {
-                        kx = tbSubEnd(wd, wl, st, ks, ke);
+                        kx = tbSubEnd(wd, wl, st, ks, ke, (emon.Port.cellsAt(rw, (r * RWS) + 6) + emon.Port.cellsAt(rw, (r * RWS) + 7)) / 2);
                         a = tbColOf(ch, tbWordCx(wd, emon.Port.cellsAt(wl, ks)));
                         b = tbColOf(ch, tbWordCx(wd, emon.Port.cellsAt(wl, kx - 1)));
                         if (emon.Port.cellsAt(gm, (tr * ncols) + a) == -1) {
@@ -1987,7 +1990,7 @@ public final class Table {
                     ks = emon.Port.cellsAt(sg, (q * SGS) + 3);
                     ke = ks + emon.Port.cellsAt(sg, (q * SGS) + 4);
                     while (ks < ke) {
-                        kx = tbSubEnd(wd, wl, st, ks, ke);
+                        kx = tbSubEnd(wd, wl, st, ks, ke, (emon.Port.cellsAt(rw, (r * RWS) + 6) + emon.Port.cellsAt(rw, (r * RWS) + 7)) / 2);
                         a = tbColOf(ch, tbWordCx(wd, emon.Port.cellsAt(wl, ks)));
                         int cell = emon.Port.cellsAt(en, (tr * ncols) + a);
                         int kw = ks;

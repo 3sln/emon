@@ -364,6 +364,44 @@
     (assert-eq (hd-level hc 21) 6 "the eighth is level 6, not 8")
     (assert-eq (hd-level hc 18) 6 "the seventh is level 6, not 7")))
 
+(defn ^I32 ht-block [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^Blob b ^I32 size ^I32 y]
+  (comment "A bold heading of `size` at y and two lines of body under it; answers the y after them (3 lines: the heading's is a multiple of 3).")
+  (let [^I32 y1 (+ y (+ (quot (* size 12) 10) 1000))]
+    (ht-heading wd ln et b y size 1)
+    (return (+ (ht-body wd ln et 1 y1 2) 900))))
+
+(deftest test-a-ladder-of-seven-classes-keeps-the-accounts-peers-and-near-the-top
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells hc (new-cells) ^Cells ws (new-cells) ^Cells tmp (new-cells)
+        ^Cells pr (new-cells) ^Cells ptxt (new-cells)
+        ^:mut ^I32 y 5000]
+    (comment "D1594, the shape of a bank statement's headings: seven classes (a title, a greeting, two small asides, a block and its twin,")
+    (comment "two summaries, and three accounts each followed by its product line), the class order the first occurrences make. Seven")
+    (comment "classes are past the exhaustive search (six), and the descent from the first-occurrence ladder stopped with the accounts at")
+    (comment "level 6, three below where a second statement's headings had them. Whole-ladder moves and a second start find the accounts")
+    (comment "at level 2 beside the greeting, the asides above them and the product lines below.")
+    (set y (ht-block wd ln et (text-blob "Statement title") 2200 y))
+    (set y (ht-block wd ln et (text-blob "Welcome to your statement") 2000 y))
+    (set y (ht-block wd ln et (text-blob "Period note") 1700 y))
+    (set y (ht-block wd ln et (text-blob "Dates note") 1600 y))
+    (set y (ht-block wd ln et (text-blob "Balance block") 1500 y))
+    (set y (ht-block wd ln et (text-blob "Accounts block") 1500 y))
+    (set y (ht-block wd ln et (text-blob "Summary one") 2600 y))
+    (set y (ht-block wd ln et (text-blob "Summary two") 2600 y))
+    (set y (ht-block wd ln et (text-blob "Account One") 2000 y))
+    (set y (ht-block wd ln et (text-blob "Checking one") 1400 y))
+    (set y (ht-block wd ln et (text-blob "Account Two") 2000 y))
+    (set y (ht-block wd ln et (text-blob "Checking two") 1400 y))
+    (set y (ht-block wd ln et (text-blob "Account Three") 2000 y))
+    (set y (ht-block wd ln et (text-blob "Checking three") 1400 y))
+    (assert-eq (ht-run wd ln et sf sc hc ws tmp pr ptxt) 14 "fourteen headings")
+    (assert-eq (hd-level hc 24) (hd-level hc 3) "the first account is the greeting's peer")
+    (assert-eq (hd-level hc 30) (hd-level hc 24) "the second account is the first's peer")
+    (assert-eq (hd-level hc 36) (hd-level hc 24) "the third account is the first's peer")
+    (assert-eq (hd-level hc 24) 2 "the accounts are at level 2")
+    (assert-eq (hd-level hc 27) (hd-level hc 33) "the product lines are peers")
+    (assert-eq (hd-level hc 27) 3 "and at level 3")))
+
 (deftest test-a-numbered-list-is-not-a-run-of-headings
   (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
         ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells hc (new-cells) ^Cells ws (new-cells) ^Cells tmp (new-cells)

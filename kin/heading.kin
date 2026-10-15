@@ -89,6 +89,7 @@
 (defconst ^I32 WS_O 512)
 (defconst ^I32 WS_LV 768)
 (defconst ^I32 WS_BEST 784)
+(defconst ^I32 WS_SAVE 800)         ;; the levels before a shift (D1594), HD_KMAX of them
 (defconst ^I32 WS_U 1024)
 (defconst ^I32 UN_STRIDE 16)
 
@@ -1256,6 +1257,83 @@
       (if (> lf 1) (set pen (+ pen (* W_SKIP (- lf 1))))))
     (return pen)))
 
+(defn ^I32 hd-descend [^:mut ^Cells ws ^I32 nk ^I32 lmax ^I32 best0]
+  (comment "Coordinate descent on the levels in ws[WS_LV..], from the penalty best0 they have: each class in turn takes the level that")
+  (comment "lowers the penalty most (the first of equals), sweeps until none changes (thirty at most). Answers the penalty reached.")
+  (let [^:mut ^I32 best best0
+        ^:mut ^I32 changed 1
+        ^:mut ^I32 sweeps 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 keep 0
+        ^:mut ^I32 lv 0
+        ^:mut ^I32 pen 0]
+    (while (and (== changed 1) (< sweeps 30))
+      (do (set changed 0)
+          (set c 0)
+          (while (< c nk)
+            (do (set keep (cells-at ws (+ WS_LV c)))
+                (set lv 1)
+                (while (<= lv lmax)
+                  (do (cells-set ws (+ WS_LV c) lv)
+                      (set pen (hd-eval ws nk))
+                      (if (< pen best)
+                        (do (set best pen)
+                            (set keep lv)
+                            (set changed 1)))
+                      (set lv (+ lv 1))))
+                (cells-set ws (+ WS_LV c) keep)
+                (set c (+ c 1))))
+          (set sweeps (+ sweeps 1))))
+    (return best)))
+
+(defn ^I32 hd-polish [^:mut ^Cells ws ^I32 nk ^I32 lmax]
+  (comment "D1594: the levels in ws[WS_LV..] improved as far as one class at a time and then a whole depth at a time can: after a descent,")
+  (comment "every class at level k or deeper moves one level up, or one level down, together (the ladder of a document slides as one when a")
+  (comment "class is added), and a move that lowers the penalty is kept and descended from. A descent alone stops where one class cannot")
+  (comment "move without the others (D544's seven-class statement). Answers the penalty reached.")
+  (let [^I32 pen0 (hd-eval ws nk)
+        ^:mut ^I32 best (hd-descend ws nk lmax pen0)
+        ^:mut ^I32 improved 1
+        ^:mut ^I32 rounds 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 d 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 ok 0
+        ^:mut ^I32 pen 0]
+    (while (and (== improved 1) (< rounds 10))
+      (do (set improved 0)
+          (set k 1)
+          (while (<= k lmax)
+            (do (set d -1)
+                (while (<= d 1)
+                  (do (if (!= d 0)
+                        (do (set ok 1)
+                            (set c 0)
+                            (while (< c nk)
+                              (do (cells-set ws (+ WS_SAVE c) (cells-at ws (+ WS_LV c)))
+                                  (if (>= (cells-at ws (+ WS_LV c)) k)
+                                    (if (or (< (+ (cells-at ws (+ WS_LV c)) d) 1) (> (+ (cells-at ws (+ WS_LV c)) d) lmax))
+                                      (set ok 0)))
+                                  (set c (+ c 1))))
+                            (if (== ok 1)
+                              (do (set c 0)
+                                  (while (< c nk)
+                                    (do (if (>= (cells-at ws (+ WS_SAVE c)) k)
+                                          (cells-set ws (+ WS_LV c) (+ (cells-at ws (+ WS_SAVE c)) d)))
+                                        (set c (+ c 1))))
+                                  (set pen (hd-eval ws nk))
+                                  (if (< pen best)
+                                    (do (set best (hd-descend ws nk lmax pen))
+                                        (set improved 1))
+                                    (do (set c 0)
+                                        (while (< c nk)
+                                          (do (cells-set ws (+ WS_LV c) (cells-at ws (+ WS_SAVE c)))
+                                              (set c (+ c 1))))))))))
+                      (set d (+ d 1))))
+                (set k (+ k 1))))
+          (set rounds (+ rounds 1))))
+    (return best)))
+
 (defn ^I32 hd-search [^:mut ^Cells ws ^I32 nk]
   (comment "The levels that minimise `hd-eval`: every assignment up to HD_EXHAUSTIVE classes (the first found")
   (comment "wins a tie), coordinate descent beyond. The result is each class's field 10.")
@@ -1267,10 +1345,7 @@
         ^:mut ^I32 carry 0
         ^:mut ^I32 pen 0
         ^:mut ^I32 c 0
-        ^:mut ^I32 lv 0
-        ^:mut ^I32 keep 0
-        ^:mut ^I32 sweeps 0
-        ^:mut ^I32 changed 1]
+        ^:mut ^I32 lv 0]
     (if (> mt lmax) (set lmax mt))
     (if (> lmax 12) (set lmax 12))
     (if (<= nk HD_EXHAUSTIVE)
@@ -1307,28 +1382,26 @@
                 (if (> lv lmax) (set lv lmax))
                 (cells-set ws (+ WS_LV c) lv)
                 (set c (+ c 1))))
-          (set best (hd-eval ws nk))
-          (while (and (== changed 1) (< sweeps 30))
-            (do (set changed 0)
-                (set c 0)
-                (while (< c nk)
-                  (do (set keep (cells-at ws (+ WS_LV c)))
-                      (set lv 1)
-                      (while (<= lv lmax)
-                        (do (cells-set ws (+ WS_LV c) lv)
-                            (set pen (hd-eval ws nk))
-                            (if (< pen best)
-                              (do (set best pen)
-                                  (set keep lv)
-                                  (set changed 1)))
-                            (set lv (+ lv 1))))
-                      (cells-set ws (+ WS_LV c) keep)
-                      (set c (+ c 1))))
-                (set sweeps (+ sweeps 1))))
+          (set best (hd-polish ws nk lmax))
           (set i 0)
           (while (< i nk)
             (do (cells-set ws (+ WS_BEST i) (cells-at ws (+ WS_LV i)))
-                (set i (+ i 1))))))
+                (set i (+ i 1))))
+          (comment "D1594: and from a second start, every class at the top (or at its numbering's level); the better of the two stands, the first of equals")
+          (set c 0)
+          (while (< c nk)
+            (do (set lv 1)
+                (if (> (hd-hk ws c 8) 0) (set lv (hd-hk ws c 8)))
+                (if (> lv lmax) (set lv lmax))
+                (cells-set ws (+ WS_LV c) lv)
+                (set c (+ c 1))))
+          (set pen (hd-polish ws nk lmax))
+          (if (< pen best)
+            (do (set best pen)
+                (set i 0)
+                (while (< i nk)
+                  (do (cells-set ws (+ WS_BEST i) (cells-at ws (+ WS_LV i)))
+                      (set i (+ i 1))))))))
     (set i 0)
     (while (< i nk)
       (do (hd-hk-set ws i 10 (cells-at ws (+ WS_BEST i)))

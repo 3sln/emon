@@ -1502,7 +1502,9 @@
                                         (set k (+ k 1))))))
                             (set r (+ r 1))))
                       (if (and (== crossed 0) (and (>= spanned 2) (>= (* spanned 5) (* n 3))))
-                        (cells-push cl p))))))
+                        (do (cells-push cl p)
+                            (cells-push cl (cells-at rm (+ (* i RLS) 2)))
+                            (cells-push cl (cells-at rm (+ (* i RLS) 3)))))))))
           (set i (+ i 1))))
     (return (cells-len cl))))
 
@@ -1529,9 +1531,10 @@
     (cells-set ch (+ (* at 2) 1) p)
     (return 1)))
 
-(defn ^I32 tb-sub-end [^Cells wd ^Cells wl ^Cells cl ^I32 k ^I32 kend]
-  (comment "D1590: where the words k..kend of one chunk (indices into `wl`) are cut by a column cut of `cl`: the end (exclusive) of the stretch that")
-  (comment "begins at the word k and has no cut between its words (`kend` when there is none).")
+(defn ^I32 tb-sub-end [^Cells wd ^Cells wl ^Cells cl ^I32 k ^I32 kend ^I32 cy]
+  (comment "D1590: where the words k..kend of one chunk (indices into `wl`), on a row whose centre is at y `cy`, are cut by a column cut of `cl`")
+  (comment "(x, from, to: D1594, a cut cuts the rows it runs along and no other, or a phrase in a row beside a check box's border is cut in two): the")
+  (comment "end (exclusive) of the stretch that begins at the word k and has no cut between its words (`kend` when there is none).")
   (let [^:mut ^I32 e (+ k 1)
         ^:mut ^I32 j 0
         ^:mut ^I32 split 0]
@@ -1539,9 +1542,10 @@
       (do (set j 0)
           (while (< j (cells-len cl))
             (do (if (and (<= (wd-get wd (cells-at wl (- e 1)) (hd-x1)) (cells-at cl j))
-                         (<= (cells-at cl j) (wd-get wd (cells-at wl e) (hd-x0))))
+                         (and (<= (cells-at cl j) (wd-get wd (cells-at wl e) (hd-x0)))
+                              (and (>= cy (cells-at cl (+ j 1))) (<= cy (cells-at cl (+ j 2))))))
                   (set split 1))
-                (set j (+ j 1))))
+                (set j (+ j 3))))
           (if (== split 0) (set e (+ e 1)))))
     (return e)))
 
@@ -1591,7 +1595,7 @@
       (do (set c 0)
           (while (< c (cells-len st))
             (do (tb-channel-add ch (cells-at st c))
-                (set c (+ c 1))))
+                (set c (+ c 3))))
           (set nch (quot (cells-len ch) 2))))
     (if (< nch 1) (return -1))
     (set ncols (+ nch 1))
@@ -1636,7 +1640,7 @@
                       (set ks (cells-at sg (+ (* q SGS) 3)))
                       (set ke (+ ks (cells-at sg (+ (* q SGS) 4))))
                       (while (< ks ke)
-                        (do (set kx (tb-sub-end wd wl st ks ke))
+                        (do (set kx (tb-sub-end wd wl st ks ke (quot (+ (cells-at rw (+ (* r RWS) 6)) (cells-at rw (+ (* r RWS) 7))) 2)))
                             (set a (tb-col-of ch (tb-word-cx wd (cells-at wl ks))))
                             (set b (tb-col-of ch (tb-word-cx wd (cells-at wl (- kx 1)))))
                             (if (== (cells-at gm (+ (* tr ncols) a)) -1)
@@ -1685,7 +1689,7 @@
                         (set ks (cells-at sg (+ (* q SGS) 3)))
                         (set ke (+ ks (cells-at sg (+ (* q SGS) 4))))
                         (while (< ks ke)
-                          (do (set kx (tb-sub-end wd wl st ks ke))
+                          (do (set kx (tb-sub-end wd wl st ks ke (quot (+ (cells-at rw (+ (* r RWS) 6)) (cells-at rw (+ (* r RWS) 7))) 2)))
                               (set a (tb-col-of ch (tb-word-cx wd (cells-at wl ks))))
                               (let [^I32 cell (cells-at en (+ (* tr ncols) a))
                                     ^:mut ^I32 kw ks]

@@ -419,6 +419,53 @@ func TestALadderOfEightSizesStopsAtLevelSix(emonT *testing.T) {
 	port.AssertEq(emonT, heading.HdLevel(hc, 18), 6, "the seventh is level 6, not 7")
 }
 
+func htBlock(wd *port.Cells, ln *port.Cells, et *port.Cells, b []byte, size int32, y int32) int32 {
+	// A bold heading of `size` at y and two lines of body under it; answers the y after them (3 lines: the heading's is a multiple of 3).
+	var y1 int32 = y + (((size * 12) / 10) + 1000)
+	htHeading(wd, ln, et, b, y, size, 1)
+	return htBody(wd, ln, et, 1, y1, 2) + 900
+}
+
+func TestALadderOfSevenClassesKeepsTheAccountsPeersAndNearTheTop(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var sf *port.Cells = port.NewCells()
+	var sc *port.Cells = port.NewCells()
+	var hc *port.Cells = port.NewCells()
+	var ws *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var pr *port.Cells = port.NewCells()
+	var ptxt *port.Cells = port.NewCells()
+	var y int32 = 5000
+	// D1594, the shape of a bank statement's headings: seven classes (a title, a greeting, two small asides, a block and its twin,
+	// two summaries, and three accounts each followed by its product line), the class order the first occurrences make. Seven
+	// classes are past the exhaustive search (six), and the descent from the first-occurrence ladder stopped with the accounts at
+	// level 6, three below where a second statement's headings had them. Whole-ladder moves and a second start find the accounts
+	// at level 2 beside the greeting, the asides above them and the product lines below.
+	y = htBlock(wd, ln, et, port.TextBlob("Statement title"), 2200, y)
+	y = htBlock(wd, ln, et, port.TextBlob("Welcome to your statement"), 2000, y)
+	y = htBlock(wd, ln, et, port.TextBlob("Period note"), 1700, y)
+	y = htBlock(wd, ln, et, port.TextBlob("Dates note"), 1600, y)
+	y = htBlock(wd, ln, et, port.TextBlob("Balance block"), 1500, y)
+	y = htBlock(wd, ln, et, port.TextBlob("Accounts block"), 1500, y)
+	y = htBlock(wd, ln, et, port.TextBlob("Summary one"), 2600, y)
+	y = htBlock(wd, ln, et, port.TextBlob("Summary two"), 2600, y)
+	y = htBlock(wd, ln, et, port.TextBlob("Account One"), 2000, y)
+	y = htBlock(wd, ln, et, port.TextBlob("Checking one"), 1400, y)
+	y = htBlock(wd, ln, et, port.TextBlob("Account Two"), 2000, y)
+	y = htBlock(wd, ln, et, port.TextBlob("Checking two"), 1400, y)
+	y = htBlock(wd, ln, et, port.TextBlob("Account Three"), 2000, y)
+	y = htBlock(wd, ln, et, port.TextBlob("Checking three"), 1400, y)
+	port.AssertEq(emonT, htRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 14, "fourteen headings")
+	port.AssertEq(emonT, heading.HdLevel(hc, 24), heading.HdLevel(hc, 3), "the first account is the greeting's peer")
+	port.AssertEq(emonT, heading.HdLevel(hc, 30), heading.HdLevel(hc, 24), "the second account is the first's peer")
+	port.AssertEq(emonT, heading.HdLevel(hc, 36), heading.HdLevel(hc, 24), "the third account is the first's peer")
+	port.AssertEq(emonT, heading.HdLevel(hc, 24), 2, "the accounts are at level 2")
+	port.AssertEq(emonT, heading.HdLevel(hc, 27), heading.HdLevel(hc, 33), "the product lines are peers")
+	port.AssertEq(emonT, heading.HdLevel(hc, 27), 3, "and at level 3")
+}
+
 func TestANumberedListIsNotARunOfHeadings(emonT *testing.T) {
 	var wd *port.Cells = port.NewCells()
 	var ln *port.Cells = port.NewCells()

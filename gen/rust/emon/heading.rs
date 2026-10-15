@@ -49,6 +49,7 @@ pub(crate) const WS_T: i32 = 256;
 pub(crate) const WS_O: i32 = 512;
 pub(crate) const WS_LV: i32 = 768;
 pub(crate) const WS_BEST: i32 = 784;
+pub(crate) const WS_SAVE: i32 = 800;
 pub(crate) const WS_U: i32 = 1024;
 pub(crate) const UN_STRIDE: i32 = 16;
 pub fn hs_decimal() -> i32 {
@@ -1615,6 +1616,100 @@ pub(crate) fn hd_eval(ws: &mut crate::port::Cells, nk: i32) -> i32 {
     }
     return pen;
 }
+pub(crate) fn hd_descend(mut ws: &mut crate::port::Cells, nk: i32, lmax: i32, best0: i32) -> i32 {
+    // Coordinate descent on the levels in ws[WS_LV..], from the penalty best0 they have: each class in turn takes the level that
+    // lowers the penalty most (the first of equals), sweeps until none changes (thirty at most). Answers the penalty reached.
+    let mut best: i32 = best0;
+    let mut changed: i32 = 1;
+    let mut sweeps: i32 = 0;
+    let mut c: i32 = 0;
+    let mut keep: i32 = 0;
+    let mut lv: i32 = 0;
+    let mut pen: i32 = 0;
+    while (changed == 1) && (sweeps < 30) {
+        changed = 0;
+        c = 0;
+        while c < nk {
+            keep = crate::port::cells_at(ws, WS_LV + c);
+            lv = 1;
+            while lv <= lmax {
+                crate::port::cells_set(ws, WS_LV + c, lv);
+                pen = hd_eval(ws, nk);
+                if pen < best {
+                    best = pen;
+                    keep = lv;
+                    changed = 1;
+                }
+                lv += 1;
+            }
+            crate::port::cells_set(ws, WS_LV + c, keep);
+            c += 1;
+        }
+        sweeps += 1;
+    }
+    return best;
+}
+pub(crate) fn hd_polish(mut ws: &mut crate::port::Cells, nk: i32, lmax: i32) -> i32 {
+    // D1594: the levels in ws[WS_LV..] improved as far as one class at a time and then a whole depth at a time can: after a descent,
+    // every class at level k or deeper moves one level up, or one level down, together (the ladder of a document slides as one when a
+    // class is added), and a move that lowers the penalty is kept and descended from. A descent alone stops where one class cannot
+    // move without the others (D544's seven-class statement). Answers the penalty reached.
+    let pen0: i32 = hd_eval(ws, nk);
+    let mut best: i32 = hd_descend(ws, nk, lmax, pen0);
+    let mut improved: i32 = 1;
+    let mut rounds: i32 = 0;
+    let mut k: i32 = 0;
+    let mut d: i32 = 0;
+    let mut c: i32 = 0;
+    let mut ok: i32 = 0;
+    let mut pen: i32 = 0;
+    while (improved == 1) && (rounds < 10) {
+        improved = 0;
+        k = 1;
+        while k <= lmax {
+            d = -1;
+            while d <= 1 {
+                if d != 0 {
+                    ok = 1;
+                    c = 0;
+                    while c < nk {
+                        crate::port::cells_set(ws, WS_SAVE + c, crate::port::cells_at(ws, WS_LV + c));
+                        if crate::port::cells_at(ws, WS_LV + c) >= k {
+                            if ((crate::port::cells_at(ws, WS_LV + c) + d) < 1) || ((crate::port::cells_at(ws, WS_LV + c) + d) > lmax) {
+                                ok = 0;
+                            }
+                        }
+                        c += 1;
+                    }
+                    if ok == 1 {
+                        c = 0;
+                        while c < nk {
+                            if crate::port::cells_at(ws, WS_SAVE + c) >= k {
+                                crate::port::cells_set(ws, WS_LV + c, crate::port::cells_at(ws, WS_SAVE + c) + d);
+                            }
+                            c += 1;
+                        }
+                        pen = hd_eval(ws, nk);
+                        if pen < best {
+                            best = hd_descend(ws, nk, lmax, pen);
+                            improved = 1;
+                        } else {
+                            c = 0;
+                            while c < nk {
+                                crate::port::cells_set(ws, WS_LV + c, crate::port::cells_at(ws, WS_SAVE + c));
+                                c += 1;
+                            }
+                        }
+                    }
+                }
+                d += 1;
+            }
+            k += 1;
+        }
+        rounds += 1;
+    }
+    return best;
+}
 pub(crate) fn hd_search(mut ws: &mut crate::port::Cells, nk: i32) -> i32 {
     // The levels that minimise `hd-eval`: every assignment up to HD_EXHAUSTIVE classes (the first found
     // wins a tie), coordinate descent beyond. The result is each class's field 10.
@@ -1627,9 +1722,6 @@ pub(crate) fn hd_search(mut ws: &mut crate::port::Cells, nk: i32) -> i32 {
     let mut pen: i32 = 0;
     let mut c: i32 = 0;
     let mut lv: i32 = 0;
-    let mut keep: i32 = 0;
-    let mut sweeps: i32 = 0;
-    let mut changed: i32 = 1;
     if mt > lmax {
         lmax = mt;
     }
@@ -1688,32 +1780,33 @@ pub(crate) fn hd_search(mut ws: &mut crate::port::Cells, nk: i32) -> i32 {
             crate::port::cells_set(ws, WS_LV + c, lv);
             c += 1;
         }
-        best = hd_eval(ws, nk);
-        while (changed == 1) && (sweeps < 30) {
-            changed = 0;
-            c = 0;
-            while c < nk {
-                keep = crate::port::cells_at(ws, WS_LV + c);
-                lv = 1;
-                while lv <= lmax {
-                    crate::port::cells_set(ws, WS_LV + c, lv);
-                    pen = hd_eval(ws, nk);
-                    if pen < best {
-                        best = pen;
-                        keep = lv;
-                        changed = 1;
-                    }
-                    lv += 1;
-                }
-                crate::port::cells_set(ws, WS_LV + c, keep);
-                c += 1;
-            }
-            sweeps += 1;
-        }
+        best = hd_polish(ws, nk, lmax);
         i = 0;
         while i < nk {
             crate::port::cells_set(ws, WS_BEST + i, crate::port::cells_at(ws, WS_LV + i));
             i += 1;
+        }
+        // D1594: and from a second start, every class at the top (or at its numbering's level); the better of the two stands, the first of equals
+        c = 0;
+        while c < nk {
+            lv = 1;
+            if hd_hk(ws, c, 8) > 0 {
+                lv = hd_hk(ws, c, 8);
+            }
+            if lv > lmax {
+                lv = lmax;
+            }
+            crate::port::cells_set(ws, WS_LV + c, lv);
+            c += 1;
+        }
+        pen = hd_polish(ws, nk, lmax);
+        if pen < best {
+            best = pen;
+            i = 0;
+            while i < nk {
+                crate::port::cells_set(ws, WS_BEST + i, crate::port::cells_at(ws, WS_LV + i));
+                i += 1;
+            }
         }
     }
     i = 0;

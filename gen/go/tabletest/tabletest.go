@@ -1060,6 +1060,47 @@ func TestAVerticalRuleBetweenTwoWordsThatTouchIsAColumnCut(emonT *testing.T) {
 	port.AssertText(emonT, t4, "T2p;Gb;R;C[Bolt];C[Debit $803];R;C[Nut];C[Debit $91];R;C[Gear];C[Paid $1,200];", "a rule through the words cuts nothing")
 }
 
+func TestARuleCutsOnlyTheRowsItRunsAlong(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	var t2 *strings.Builder = port.NewText()
+	// D1594, the shape of the 1040's dependents block: a label of one phrase on the first row, `(b) And in the U.S.`, whose words the
+	// rule below would fall between (a check box's border, or a column's, runs down the rows under the label and not through it):
+	// the rule is a column boundary for the rows it runs along, and the label is one cell.
+	ttRule(pa, 7200, 9950, 37200, 10050)
+	ttRule(pa, 7200, 11950, 37200, 12050)
+	ttRule(pa, 7200, 13950, 37200, 14050)
+	ttRule(pa, 7200, 15950, 37200, 16050)
+	ttRule(pa, 27000, 12000, 27100, 16000)
+	ttAt(wd, ln, et, port.TextBlob("Item"), 7600, 10600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("(b) And"), 26800, 10600, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("in the U.S."), 27200, 10600, 0, 0)
+	ttCutRow(wd, ln, et, 12600, port.TextBlob("Nut"), port.TextBlob("Debit"), port.TextBlob("$91"), 0)
+	ttCutRow(wd, ln, et, 14600, port.TextBlob("Gear"), port.TextBlob("Paid"), port.TextBlob("$1,200"), 0)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "label: well formed")
+	port.AssertText(emonT, t, "T3p;Gb;R;C[Item];Cc2[(b) And in the U.S.];R;C[Nut];C[Debit];Cs[$91];R;C[Gear];C[Paid];Cs[$1,200];", "the label is one cell over the two columns the rule makes below it (before: two cells, the phrase cut in two)")
+	// A rule that runs along the label's row and the others cuts it, as before.
+	port.CellsDrop(wd, 0)
+	port.CellsDrop(ln, 0)
+	port.CellsDrop(et, 0)
+	port.CellsDrop(pa, 0)
+	ttRule(pa, 7200, 9950, 37200, 10050)
+	ttRule(pa, 7200, 11950, 37200, 12050)
+	ttRule(pa, 7200, 13950, 37200, 14050)
+	ttRule(pa, 7200, 15950, 37200, 16050)
+	ttRule(pa, 27000, 10000, 27100, 16000)
+	ttAt(wd, ln, et, port.TextBlob("Item"), 7600, 10600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("(b) And"), 26800, 10600, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("in the U.S."), 27200, 10600, 0, 0)
+	ttCutRow(wd, ln, et, 12600, port.TextBlob("Nut"), port.TextBlob("Debit"), port.TextBlob("$91"), 0)
+	ttCutRow(wd, ln, et, 14600, port.TextBlob("Gear"), port.TextBlob("Paid"), port.TextBlob("$1,200"), 0)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t2), 0, "label cut: well formed")
+	port.AssertText(emonT, t2, "T3p;Gb;R;C[Item];Ce[(b) And];Cs[in the U.S.];R;C[Nut];Ce[Debit];Cs[$91];R;C[Gear];Ce[Paid];Cs[$1,200];", "a rule along all three rows is between the label's two words too")
+}
+
 func TestAVerticalRuleCutsTheColumnsOfATableWithoutHorizontalRules(emonT *testing.T) {
 	var wd *port.Cells = port.NewCells()
 	var ln *port.Cells = port.NewCells()

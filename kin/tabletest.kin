@@ -888,6 +888,44 @@
     (assert-text t4 "T2p;Gb;R;C[Bolt];C[Debit $803];R;C[Nut];C[Debit $91];R;C[Gear];C[Paid $1,200];"
                  "a rule through the words cuts nothing")))
 
+(deftest test-a-rule-cuts-only-the-rows-it-runs-along
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text) ^Text t2 (new-text)]
+    (comment "D1594, the shape of the 1040's dependents block: a label of one phrase on the first row, `(b) And in the U.S.`, whose words the")
+    (comment "rule below would fall between (a check box's border, or a column's, runs down the rows under the label and not through it):")
+    (comment "the rule is a column boundary for the rows it runs along, and the label is one cell.")
+    (tt-rule pa 7200 9950 37200 10050)
+    (tt-rule pa 7200 11950 37200 12050)
+    (tt-rule pa 7200 13950 37200 14050)
+    (tt-rule pa 7200 15950 37200 16050)
+    (tt-rule pa 27000 12000 27100 16000)
+    (tt-at wd ln et (text-blob "Item") 7600 10600 0 0)
+    (tt-at wd ln et (text-blob "(b) And") 26800 10600 0 1)
+    (tt-at wd ln et (text-blob "in the U.S.") 27200 10600 0 0)
+    (tt-cut-row wd ln et 12600 (text-blob "Nut") (text-blob "Debit") (text-blob "$91") 0)
+    (tt-cut-row wd ln et 14600 (text-blob "Gear") (text-blob "Paid") (text-blob "$1,200") 0)
+    (assert-eq (tt-run wd ln et pa t) 0 "label: well formed")
+    (assert-text t "T3p;Gb;R;C[Item];Cc2[(b) And in the U.S.];R;C[Nut];C[Debit];Cs[$91];R;C[Gear];C[Paid];Cs[$1,200];"
+                 "the label is one cell over the two columns the rule makes below it (before: two cells, the phrase cut in two)")
+    (comment "A rule that runs along the label's row and the others cuts it, as before.")
+    (cells-drop wd 0)
+    (cells-drop ln 0)
+    (cells-drop et 0)
+    (cells-drop pa 0)
+    (tt-rule pa 7200 9950 37200 10050)
+    (tt-rule pa 7200 11950 37200 12050)
+    (tt-rule pa 7200 13950 37200 14050)
+    (tt-rule pa 7200 15950 37200 16050)
+    (tt-rule pa 27000 10000 27100 16000)
+    (tt-at wd ln et (text-blob "Item") 7600 10600 0 0)
+    (tt-at wd ln et (text-blob "(b) And") 26800 10600 0 1)
+    (tt-at wd ln et (text-blob "in the U.S.") 27200 10600 0 0)
+    (tt-cut-row wd ln et 12600 (text-blob "Nut") (text-blob "Debit") (text-blob "$91") 0)
+    (tt-cut-row wd ln et 14600 (text-blob "Gear") (text-blob "Paid") (text-blob "$1,200") 0)
+    (assert-eq (tt-run wd ln et pa t2) 0 "label cut: well formed")
+    (assert-text t2 "T3p;Gb;R;C[Item];Ce[(b) And];Cs[in the U.S.];R;C[Nut];Ce[Debit];Cs[$91];R;C[Gear];Ce[Paid];Cs[$1,200];"
+                  "a rule along all three rows is between the label's two words too")))
+
 (deftest test-a-vertical-rule-cuts-the-columns-of-a-table-without-horizontal-rules
   (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
         ^Text t (new-text)]

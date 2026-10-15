@@ -1863,6 +1863,8 @@ func tbCutList(wd *port.Cells, wl *port.Cells, rw *port.Cells, rm *port.Cells, r
 				}
 				if (crossed == 0) && ((spanned >= 2) && ((spanned * 5) >= (n * 3))) {
 					port.CellsPush(cl, p)
+					port.CellsPush(cl, port.CellsAt(rm, (i*rls)+2))
+					port.CellsPush(cl, port.CellsAt(rm, (i*rls)+3))
 				}
 			}
 		}
@@ -1900,19 +1902,20 @@ func tbChannelAdd(ch *port.Cells, p int32) int32 {
 	return 1
 }
 
-func tbSubEnd(wd *port.Cells, wl *port.Cells, cl *port.Cells, k int32, kend int32) int32 {
-	// D1590: where the words k..kend of one chunk (indices into `wl`) are cut by a column cut of `cl`: the end (exclusive) of the stretch that
-	// begins at the word k and has no cut between its words (`kend` when there is none).
+func tbSubEnd(wd *port.Cells, wl *port.Cells, cl *port.Cells, k int32, kend int32, cy int32) int32 {
+	// D1590: where the words k..kend of one chunk (indices into `wl`), on a row whose centre is at y `cy`, are cut by a column cut of `cl`
+	// (x, from, to: D1594, a cut cuts the rows it runs along and no other, or a phrase in a row beside a check box's border is cut in two): the
+	// end (exclusive) of the stretch that begins at the word k and has no cut between its words (`kend` when there is none).
 	var e int32 = k + 1
 	var j int32 = 0
 	var split int32 = 0
 	for (e < kend) && (split == 0) {
 		j = 0
 		for j < port.CellsLen(cl) {
-			if (evidence.WdGet(wd, port.CellsAt(wl, e-1), evidence.HdX1()) <= port.CellsAt(cl, j)) && (port.CellsAt(cl, j) <= evidence.WdGet(wd, port.CellsAt(wl, e), evidence.HdX0())) {
+			if (evidence.WdGet(wd, port.CellsAt(wl, e-1), evidence.HdX1()) <= port.CellsAt(cl, j)) && ((port.CellsAt(cl, j) <= evidence.WdGet(wd, port.CellsAt(wl, e), evidence.HdX0())) && ((cy >= port.CellsAt(cl, j+1)) && (cy <= port.CellsAt(cl, j+2)))) {
 				split = 1
 			}
-			j += 1
+			j += 3
 		}
 		if split == 0 {
 			e += 1
@@ -1975,7 +1978,7 @@ func tbTextGrid(wd *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, 
 		c = 0
 		for c < port.CellsLen(st) {
 			tbChannelAdd(ch, port.CellsAt(st, c))
-			c += 1
+			c += 3
 		}
 		nch = port.CellsLen(ch) / 2
 	}
@@ -2036,7 +2039,7 @@ func tbTextGrid(wd *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, 
 				ks = port.CellsAt(sg, (q*sgs)+3)
 				ke = ks + port.CellsAt(sg, (q*sgs)+4)
 				for ks < ke {
-					kx = tbSubEnd(wd, wl, st, ks, ke)
+					kx = tbSubEnd(wd, wl, st, ks, ke, (port.CellsAt(rw, (r*rws)+6)+port.CellsAt(rw, (r*rws)+7))/2)
 					a = tbColOf(ch, tbWordCx(wd, port.CellsAt(wl, ks)))
 					b = tbColOf(ch, tbWordCx(wd, port.CellsAt(wl, kx-1)))
 					if port.CellsAt(gm, (tr*ncols)+a) == -1 {
@@ -2098,7 +2101,7 @@ func tbTextGrid(wd *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, 
 				ks = port.CellsAt(sg, (q*sgs)+3)
 				ke = ks + port.CellsAt(sg, (q*sgs)+4)
 				for ks < ke {
-					kx = tbSubEnd(wd, wl, st, ks, ke)
+					kx = tbSubEnd(wd, wl, st, ks, ke, (port.CellsAt(rw, (r*rws)+6)+port.CellsAt(rw, (r*rws)+7))/2)
 					a = tbColOf(ch, tbWordCx(wd, port.CellsAt(wl, ks)))
 					var cell int32 = port.CellsAt(en, (tr*ncols)+a)
 					var kw int32 = ks

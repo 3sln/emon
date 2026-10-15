@@ -1758,6 +1758,8 @@ pub(crate) fn tb_cut_list(wd: &mut crate::port::Cells, wl: &mut crate::port::Cel
                 }
                 if (crossed == 0) && ((spanned >= 2) && ((spanned * 5) >= (n * 3))) {
                     crate::port::cells_push(cl, p);
+                    crate::port::cells_push(cl, crate::port::cells_at(rm, (i * RLS) + 2));
+                    crate::port::cells_push(cl, crate::port::cells_at(rm, (i * RLS) + 3));
                 }
             }
         }
@@ -1793,19 +1795,20 @@ pub(crate) fn tb_channel_add(mut ch: &mut crate::port::Cells, p: i32) -> i32 {
     crate::port::cells_set(ch, (at * 2) + 1, p);
     return 1;
 }
-pub(crate) fn tb_sub_end(wd: &mut crate::port::Cells, wl: &mut crate::port::Cells, cl: &mut crate::port::Cells, k: i32, kend: i32) -> i32 {
-    // D1590: where the words k..kend of one chunk (indices into `wl`) are cut by a column cut of `cl`: the end (exclusive) of the stretch that
-    // begins at the word k and has no cut between its words (`kend` when there is none).
+pub(crate) fn tb_sub_end(wd: &mut crate::port::Cells, wl: &mut crate::port::Cells, cl: &mut crate::port::Cells, k: i32, kend: i32, cy: i32) -> i32 {
+    // D1590: where the words k..kend of one chunk (indices into `wl`), on a row whose centre is at y `cy`, are cut by a column cut of `cl`
+    // (x, from, to: D1594, a cut cuts the rows it runs along and no other, or a phrase in a row beside a check box's border is cut in two): the
+    // end (exclusive) of the stretch that begins at the word k and has no cut between its words (`kend` when there is none).
     let mut e: i32 = k + 1;
     let mut j: i32 = 0;
     let mut split: i32 = 0;
     while (e < kend) && (split == 0) {
         j = 0;
         while j < crate::port::cells_len(cl) {
-            if (wd_get(wd, crate::port::cells_at(wl, e - 1), hd_x1()) <= crate::port::cells_at(cl, j)) && (crate::port::cells_at(cl, j) <= wd_get(wd, crate::port::cells_at(wl, e), hd_x0())) {
+            if (wd_get(wd, crate::port::cells_at(wl, e - 1), hd_x1()) <= crate::port::cells_at(cl, j)) && ((crate::port::cells_at(cl, j) <= wd_get(wd, crate::port::cells_at(wl, e), hd_x0())) && ((cy >= crate::port::cells_at(cl, j + 1)) && (cy <= crate::port::cells_at(cl, j + 2)))) {
                 split = 1;
             }
-            j += 1;
+            j += 3;
         }
         if split == 0 {
             e += 1;
@@ -1867,7 +1870,7 @@ pub(crate) fn tb_text_grid(wd: &mut crate::port::Cells, wl: &mut crate::port::Ce
         c = 0;
         while c < crate::port::cells_len(st) {
             tb_channel_add(ch, crate::port::cells_at(st, c));
-            c += 1;
+            c += 3;
         }
         nch = crate::port::cells_len(ch) / 2;
     }
@@ -1928,7 +1931,7 @@ pub(crate) fn tb_text_grid(wd: &mut crate::port::Cells, wl: &mut crate::port::Ce
                 ks = crate::port::cells_at(sg, (q * SGS) + 3);
                 ke = ks + crate::port::cells_at(sg, (q * SGS) + 4);
                 while ks < ke {
-                    kx = tb_sub_end(wd, wl, st, ks, ke);
+                    kx = tb_sub_end(wd, wl, st, ks, ke, (crate::port::cells_at(rw, (r * RWS) + 6) + crate::port::cells_at(rw, (r * RWS) + 7)) / 2);
                     a = tb_col_of(ch, tb_word_cx(wd, crate::port::cells_at(wl, ks)));
                     b = tb_col_of(ch, tb_word_cx(wd, crate::port::cells_at(wl, kx - 1)));
                     if crate::port::cells_at(gm, (tr * ncols) + a) == -1 {
@@ -1990,7 +1993,7 @@ pub(crate) fn tb_text_grid(wd: &mut crate::port::Cells, wl: &mut crate::port::Ce
                 ks = crate::port::cells_at(sg, (q * SGS) + 3);
                 ke = ks + crate::port::cells_at(sg, (q * SGS) + 4);
                 while ks < ke {
-                    kx = tb_sub_end(wd, wl, st, ks, ke);
+                    kx = tb_sub_end(wd, wl, st, ks, ke, (crate::port::cells_at(rw, (r * RWS) + 6) + crate::port::cells_at(rw, (r * RWS) + 7)) / 2);
                     a = tb_col_of(ch, tb_word_cx(wd, crate::port::cells_at(wl, ks)));
                     let cell: i32 = crate::port::cells_at(en, (tr * ncols) + a);
                     let mut kw: i32 = ks;

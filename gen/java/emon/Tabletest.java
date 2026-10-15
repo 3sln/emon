@@ -993,6 +993,46 @@ public final class Tabletest {
         emon.Testport.assertEq(ttRun(wd, ln, et, pa, t4), 0, "through the words: well formed");
         emon.Testport.assertText(t4, "T2p;Gb;R;C[Bolt];C[Debit $803];R;C[Nut];C[Debit $91];R;C[Gear];C[Paid $1,200];", "a rule through the words cuts nothing");
     }
+    public static void testARuleCutsOnlyTheRowsItRunsAlong() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        StringBuilder t2 = emon.Testport.newText();
+        // D1594, the shape of the 1040's dependents block: a label of one phrase on the first row, `(b) And in the U.S.`, whose words the
+        // rule below would fall between (a check box's border, or a column's, runs down the rows under the label and not through it):
+        // the rule is a column boundary for the rows it runs along, and the label is one cell.
+        ttRule(pa, 7200, 9950, 37200, 10050);
+        ttRule(pa, 7200, 11950, 37200, 12050);
+        ttRule(pa, 7200, 13950, 37200, 14050);
+        ttRule(pa, 7200, 15950, 37200, 16050);
+        ttRule(pa, 27000, 12000, 27100, 16000);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Item"), 7600, 10600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("(b) And"), 26800, 10600, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("in the U.S."), 27200, 10600, 0, 0);
+        ttCutRow(wd, ln, et, 12600, emon.Testport.textBlob("Nut"), emon.Testport.textBlob("Debit"), emon.Testport.textBlob("$91"), 0);
+        ttCutRow(wd, ln, et, 14600, emon.Testport.textBlob("Gear"), emon.Testport.textBlob("Paid"), emon.Testport.textBlob("$1,200"), 0);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "label: well formed");
+        emon.Testport.assertText(t, "T3p;Gb;R;C[Item];Cc2[(b) And in the U.S.];R;C[Nut];C[Debit];Cs[$91];R;C[Gear];C[Paid];Cs[$1,200];", "the label is one cell over the two columns the rule makes below it (before: two cells, the phrase cut in two)");
+        // A rule that runs along the label's row and the others cuts it, as before.
+        emon.Port.cellsDrop(wd, 0);
+        emon.Port.cellsDrop(ln, 0);
+        emon.Port.cellsDrop(et, 0);
+        emon.Port.cellsDrop(pa, 0);
+        ttRule(pa, 7200, 9950, 37200, 10050);
+        ttRule(pa, 7200, 11950, 37200, 12050);
+        ttRule(pa, 7200, 13950, 37200, 14050);
+        ttRule(pa, 7200, 15950, 37200, 16050);
+        ttRule(pa, 27000, 10000, 27100, 16000);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Item"), 7600, 10600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("(b) And"), 26800, 10600, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("in the U.S."), 27200, 10600, 0, 0);
+        ttCutRow(wd, ln, et, 12600, emon.Testport.textBlob("Nut"), emon.Testport.textBlob("Debit"), emon.Testport.textBlob("$91"), 0);
+        ttCutRow(wd, ln, et, 14600, emon.Testport.textBlob("Gear"), emon.Testport.textBlob("Paid"), emon.Testport.textBlob("$1,200"), 0);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t2), 0, "label cut: well formed");
+        emon.Testport.assertText(t2, "T3p;Gb;R;C[Item];Ce[(b) And];Cs[in the U.S.];R;C[Nut];Ce[Debit];Cs[$91];R;C[Gear];Ce[Paid];Cs[$1,200];", "a rule along all three rows is between the label's two words too");
+    }
     public static void testAVerticalRuleCutsTheColumnsOfATableWithoutHorizontalRules() {
         emon.Port.Cells wd = emon.Port.newCells();
         emon.Port.Cells ln = emon.Port.newCells();
