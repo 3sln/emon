@@ -6,6 +6,7 @@ package calib
 import (
 	"emon/calibdata"
 	"emon/model"
+	"emon/port"
 )
 
 func CalDropped() int32 {
@@ -79,4 +80,27 @@ func CalLookup(kind int32, cls int32, raw int32) int32 {
 func CalConf(kind int32, src int32, raw int32) int32 {
 	// The calibrated confidence (per mille) of a raw one for a node kind and source; -1 stays -1.
 	return CalLookup(kind, CalClass(src), raw)
+}
+
+func CalNodeConf(nodes *port.Cells, n int32) int32 {
+	// The calibrated confidence of node `n`, as the Model writes it (`cal-conf` of its kind, source and raw score), D1610: EXCEPT a node of a block flagged
+	// `script-unread` (the engine had no model for the page's script, `emon.scriptcheck`), which is written at its raw score when that is lower. The map is a
+	// step function clamped at its ends, and the lowest step of OCR text is a text the engine read: a raw 100 would be written as that, and the engine's guess
+	// at a script it cannot read would carry the confidence of what it can.
+	var raw int32 = model.NodeConf(nodes, n)
+	var cf int32 = CalConf(model.NodeKind(nodes, n), model.NodeSrc(nodes, n), raw)
+	var a int32 = n
+	if raw < 0 {
+		return cf
+	}
+	if cf <= raw {
+		return cf
+	}
+	for a >= 0 {
+		if (model.NodeFlags(nodes, a) & model.FlScriptUnread()) != 0 {
+			return raw
+		}
+		a = model.NodeParent(nodes, a)
+	}
+	return cf
 }

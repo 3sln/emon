@@ -2,8 +2,11 @@
 // source: emon.pageunittest
 
 use crate::emon::pageunit::*;
+use crate::emon::pdfcontent::*;
+use crate::emon::pdfdoc::*;
 use crate::emon::plan::*;
 use crate::emon::rasterplan::*;
+use crate::emon::tlhealth::*;
 
 pub(crate) fn plan_of(pl: &mut crate::port::Cells, pages: i32, kind: i32) -> i32 {
     // `pages` rows; every page of `kind`, with a stream at bytes 100 + 50 of the input, a box and a page size.
@@ -23,6 +26,8 @@ pub(crate) fn plan_of(pl: &mut crate::port::Cells, pages: i32, kind: i32) -> i32
         crate::port::cells_push(pl, 0);
         crate::port::cells_push(pl, 0);
         crate::port::cells_push(pl, 0);
+        crate::port::cells_push(pl, 0);
+        // the scan's mode (D1610): the host decodes the DCT stream in place
         crate::port::cells_push(pl, 0);
         i += 1;
     }
@@ -91,6 +96,87 @@ fn test_a_scanned_pages_unit_asks_for_its_stream_under_its_own_id() {
     crate::testport::assert_eq(rq_arg(rq, 0, 1), 100, "the stream's start");
     crate::testport::assert_eq(rq_arg(rq, 0, 2), 50, "and length");
     crate::testport::assert_eq(rq_arg(rq, 0, 3), flt_dct(), "a DCT stream");
+}
+pub(crate) fn plan_file(emon_t: i32, file: &[u8], mut pl: &mut crate::port::Cells) -> i32 {
+    // A document through the document pass as the Engine runs it (`pd-open`, `pc-document`, `th-run`) and `pu-plan` under `always`: `pl` has its page rows. Answers the pages.
+    let ar: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let dc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let a: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let b: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cx: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ox: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let f0: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let f1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let f2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let f3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fnt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gx: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let epages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let src: &crate::port::Src = &crate::port::src_of_blob(file);
+    let o: i32 = pd_open(src, ar, dc, a, b, st);
+    crate::testport::assert_eq_at(o, 0, "the file opened", 0);
+    crate::testport::assert_eq_at(pc_document(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx), 0, "the file ran", 0);
+    th_run(pg, gl, et, mk, fnt, wd, ln, im, epages, feats, fw, fl, fa, hl, sc);
+    pu_plan(src, ar, dc, a, b, st, pg, im, wd, 2, 0, fw, fl, et, hl, sp, pl, s1, s2);
+    return pd_pg_count(pg);
+}
+#[test]
+fn test_a_page_that_is_one_big_image_is_a_scan_whatever_the_codec() {
+    // D1610: a page with no text layer and one image over it was a scan only when that image was a lone DCT stream (the host reads those bytes in place). A Flate or RunLength
+    // image (and CCITT, JBIG2, JPX) was `vector`: no OCR, an empty body. It is a scan read from the host's RENDER of the page (any codec), the raster the whole page.
+    let pl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pl2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pl3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::testport::assert_eq(plan_file(0, &crate::testport::test_file("raster/flate-gray-72dpi.pdf")[..], pl), 1, "one page");
+    crate::testport::assert_eq(pu_kind(pl, 0), pk_scan(), "a FlateDecode image over the page: a scan");
+    crate::testport::assert_eq(pu_field(pl, 0, 14), pu_scan_render(), "read from a render");
+    crate::testport::assert_eq(pu_field(pl, 0, 4), 0, "of the whole page: its left");
+    crate::testport::assert_eq(pu_field(pl, 0, 6), 61200, "its right is the page's 612 pt");
+    crate::testport::assert_eq(pu_field(pl, 0, 7), 79200, "its bottom the page's 792 pt");
+    crate::testport::assert_eq(pu_field(pl, 0, 8), 61200, "the page's width");
+    crate::testport::assert_eq(pu_field(pl, 0, 9), 79200, "and height");
+    crate::testport::assert_eq(plan_file(0, &crate::testport::test_file("raster/runlength-gray-72dpi.pdf")[..], pl2), 1, "one page");
+    crate::testport::assert_eq(pu_kind(pl2, 0), pk_scan(), "a RunLengthDecode image: a scan too");
+    crate::testport::assert_eq(pu_field(pl2, 0, 14), pu_scan_render(), "read from a render");
+    crate::testport::assert_eq(plan_file(0, &crate::testport::test_file("corpus/synth/scan/h-plain.pdf")[..], pl3), 2, "two pages");
+    crate::testport::assert_eq(pu_kind(pl3, 0), pk_scan(), "a lone DCT stream is still a scan");
+    crate::testport::assert_eq(pu_field(pl3, 0, 14), pu_scan_dct(), "its bytes read in place");
+    crate::testport::assert_that(pu_field(pl3, 0, 3) > 0, "from its span");
+}
+#[test]
+fn test_a_render_scans_unit_asks_for_the_render_of_its_page() {
+    let pl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    plan_of(pl, 3, pk_scan());
+    crate::port::cells_set(pl, (1 * pu_w()) + 14, pu_scan_render());
+    crate::testport::assert_eq(run_page(1, 2, pl, &mut crate::port::Cells::new(), rq), us_requests(), "it asks");
+    crate::testport::assert_eq(rec_kind(rq, 0), pk_render(), "a render, not a decode");
+    crate::testport::assert_eq(rec_id(rq, 0), 516, "under the scan's own id: page 1, 2 * 256 + 4");
+    crate::testport::assert_eq(rq_arg(rq, 0, 0), 3, "of input 3");
+    crate::testport::assert_eq(rq_arg(rq, 0, 1), 1, "page 1, 0-based");
+    crate::testport::assert_eq(rq_arg(rq, 0, 2), 300, "at 300 dpi");
+    crate::testport::assert_eq(rq_arg(rq, 0, 3), lay_full(), "as the page is");
 }
 #[test]
 fn test_a_unit_with_no_answers_asks_the_same_every_time() {

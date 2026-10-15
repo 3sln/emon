@@ -10,23 +10,6 @@ import (
 	"emon/port"
 )
 
-func hxLatinCp(c int32) int32 {
-	// 1 for a Latin letter or a digit: ASCII, Latin-1 (without the multiplication and division signs), Latin Extended-A and -B.
-	if (c >= 48) && (c <= 57) {
-		return 1
-	}
-	if (c >= 65) && (c <= 90) {
-		return 1
-	}
-	if (c >= 97) && (c <= 122) {
-		return 1
-	}
-	if (c >= 192) && (c <= 591) && ((c != 215) && (c != 247)) {
-		return 1
-	}
-	return 0
-}
-
 func hxForeignCp(c int32) int32 {
 	// 1 for a letter of a script a Latin engine cannot read (as `emon.arbiter`'s `ar-foreign-cp`).
 	if (c >= 880) && (c < 7680) {
@@ -44,25 +27,31 @@ func hxForeignCp(c int32) int32 {
 	if (c >= 65136) && (c <= 65276) {
 		return 1
 	}
+	if (c >= 8448) && (c <= 8527) {
+		return 1
+	}
+	if (c >= 8592) && (c <= 8959) {
+		return 1
+	}
+	if (c >= 119808) && (c <= 120831) {
+		return 1
+	}
 	return 0
 }
 
 func hxWordLatin(ofw *port.Cells, etext *port.Cells, row int32) int32 {
-	// 1 when the engine can read the flow word `row` (as `ar-word-latin`): a Latin letter or digit, or no letter of another script.
+	// 1 when the engine can read the flow word `row` (as `ar-word-latin`, D1610): it holds no letter of a script the engine lacks, whatever Latin letter or
+	// digit is attached to it, and it holds a code point.
 	var ts int32 = port.CellsAt(ofw, (row*24)+11)
 	var tl int32 = port.CellsAt(ofw, (row*24)+12)
 	var j int32 = 0
-	var foreign int32 = 0
 	for j < tl {
-		if hxLatinCp(port.CellsAt(etext, ts+j)) == 1 {
-			return 1
-		}
 		if hxForeignCp(port.CellsAt(etext, ts+j)) == 1 {
-			foreign = 1
+			return 0
 		}
 		j += 1
 	}
-	if (foreign == 0) && (tl > 0) {
+	if tl > 0 {
 		return 1
 	}
 	return 0

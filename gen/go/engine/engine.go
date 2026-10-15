@@ -269,7 +269,7 @@ func EnPage(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, i int32, idx int32, 
 	if d.Kind == EnKindPdf() {
 		return pageunit.PuRunPdf(i, idx, c.Ocr, d.Plan, ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, (2*c.Nort)+(4*c.Dry), d.Fw, d.Fl, d.Hl, ev.Refs, d.Cg, ev.Tlines, d.Xs0, d.Xs1, d.Xs2, d.Xs3, d.Xs4, d.Xs5, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys1, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18)
 	}
-	return rasterin.RsPage(i, idx, nbytes, c.Ocr, ans, rq, d.Loc, bms, d.Mask, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, d.Pscr, c.Dry)
+	return rasterin.RsPage(i, idx, nbytes, c.Ocr, (2*c.Nort)+(4*c.Dry), ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, ev.Refs, ev.Tlines, d.Cg, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18)
 }
 
 func EnAssetUnit(view *port.Src, pw *port.Src, c *enctx.Cfg, d *enctx.Doc, p *enctx.Pass, idx int32, ans *port.Cells, rq *port.Cells, bms *port.BitmapSet, payload *port.Buf) int32 {
@@ -415,6 +415,7 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 			port.CellsSwap(m.Regions, s.Sr)
 		}
 	}
+	scan.ScTagUnread(m.Nodes, m.Regions, d.Mask)
 	if kind == 0 {
 		enFields(m, s, d)
 	}
@@ -457,6 +458,18 @@ func EnFinishRaster(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Are
 	// The raster document unit: stage 3 over the frames' OCR lines. `m` is the Model the document pass began (its pages and nodes); an image has no text layer, so
 	// the glyph arenas are empty and nothing is set aside.
 	var np int32 = model.PageCount(m.Pages)
+	var i int32 = 0
+	var row int32 = 0
+	// D1610: a frame fed sideways was read from its turned view (`rt-upright` swapped the evidence's page); the Model's page is as wide as the text it holds
+	for i < np {
+		row = evidence.EvPageRow(ev.Epages, i+1)
+		if row >= 0 {
+			if (evidence.EpGet(ev.Epages, row, evidence.EpfWidth()) != model.PageW(m.Pages, i)) || (evidence.EpGet(ev.Epages, row, evidence.EpfHeight()) != model.PageH(m.Pages, i)) {
+				model.PageSetSize(m.Pages, i, evidence.EpGet(ev.Epages, row, evidence.EpfWidth()), evidence.EpGet(ev.Epages, row, evidence.EpfHeight()))
+			}
+		}
+		i += 1
+	}
 	if c.Keep != 0 {
 		EnDump(d.Et, d.Gl, d.Wd, d.Ln, d.Mk, d.Fnt, d.Grl, d.Gfl, s.Ggp, s.Grg, ev, d.Evidence)
 	}

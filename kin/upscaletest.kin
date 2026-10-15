@@ -1,0 +1,142 @@
+;; Laws for `emon.upscale` (D1610; SPEC 3.4, 8.3; D211, D215): the effective resolution estimated from the text's x-height, the factor a raster is read
+;; again by (and when it is not: large enough text, a page turned, a raster too big), the weights of the cubic, and the enlarged raster itself.
+(ns emon.upscaletest
+  (:require [emon.lang :refer [I32 Cells Bitmap BitmapSet]]
+            [emon.test :refer [deftest assert-eq assert-that new-cells new-bitmap-set]]
+            [emon.port :refer [cells-len cells-at bms-put bms-get bms-has bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8]]
+            [emon.plan :refer [an-ocr an-ocr-word an-ocr-cp an-ocr-end]]
+            [emon.ocr :refer [ox-begin ox-line ox-block ox-word ox-find]]
+            [emon.upscale :refer [up-eff-dpi100 up-xheight up-score up-factor up-weights up-make up-max up-xh-trigger]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot]]))
+
+(defn ^I32 ut-answer [^:mut ^Cells ans ^I32 id ^I32 nlines ^I32 xh ^I32 w ^I32 osd ^I32 oconf]
+  (comment "An OCR answer of `nlines` lines, each of one word \"Hi\" 40 pixels high and `w` wide, whose row x-height is `xh` (0: the engine says none); OSD says `osd` degrees")
+  (comment "at the confidence `oconf` (x10; -1 for no OSD). Answers where it is.")
+  (let [^I32 at (an-ocr ans id)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 word 0]
+    (while (< k nlines)
+      (do (set word (an-ocr-word ans at 10 (+ 20 (* k 60)) w 40 900 k 0))
+          (an-ocr-cp ans word 72)
+          (an-ocr-cp ans word 105)
+          (set k (+ k 1))))
+    (ox-begin ans 0 0 0 0 osd 1281455214 100 oconf nlines 1 0 0 0)
+    (set k 0)
+    (while (< k nlines)
+      (do (ox-line ans 10 (+ 20 (* k 60)) w 40 10 (+ 55 (* k 60)) (+ 10 w) (+ 55 (* k 60)) 0 0 0 xh 14 6)
+          (set k (+ k 1))))
+    (ox-block ans 10 20 w (* nlines 60) 0 0 0)
+    (set k 0)
+    (while (< k nlines)
+      (do (ox-word ans 0 0 -1 0)
+          (set k (+ k 1))))
+    (an-ocr-end ans at)
+    (return at)))
+
+(defn ^I32 ut-factor [^I32 nlines ^I32 xh ^I32 pxw ^I32 pxh ^I32 osd ^I32 oconf]
+  (let [^Cells ans (new-cells)
+        ^I32 at (ut-answer ans 272 nlines xh 200 osd oconf)]
+    (return (up-factor ans at pxw pxh (new-cells)))))
+
+(deftest test-the-effective-resolution-is-what-ten-point-type-at-that-x-height-has
+  (assert-eq (up-eff-dpi100 21) 30240 "an x-height of 21 pixels is ten point type at 302 dpi")
+  (assert-eq (up-eff-dpi100 6) 8640 "6 pixels: 86 dpi, the 90 dpi page of the smoke review")
+  (assert-eq (up-eff-dpi100 0) 0 "none")
+  (assert-eq (up-eff-dpi100 -3) 0 "none"))
+
+(deftest test-the-typical-x-height-is-the-median-weighted-by-width
+  (let [^Cells ans (new-cells)
+        ^Cells hist (new-cells)
+        ^I32 at (ut-answer ans 272 5 6 300 -1 -1)
+        ^I32 ext (ox-find ans at)]
+    (assert-eq (up-xheight ans ext hist) 6 "five lines of 6 pixels")
+    (assert-eq (cells-len hist) 101 "the histogram is made")
+    (let [^Cells ans2 (new-cells)
+          ^I32 at2 (ut-answer ans2 272 3 0 300 -1 -1)
+          ^I32 ext2 (ox-find ans2 at2)]
+      (assert-eq (up-xheight ans2 ext2 hist) 18 "the engine says none: 45 per cent of the 40 pixel box"))))
+
+(deftest test-small-text-is-read-again-enlarged-to-an-x-height-of-twenty
+  (assert-eq (ut-factor 5 6 765 990 -1 -1) 4 "6 pixels: 20 / 6 is 4 (the most)")
+  (assert-eq (ut-factor 5 7 765 990 -1 -1) 3 "7 pixels: 3")
+  (assert-eq (ut-factor 5 10 765 990 -1 -1) 2 "10 pixels: 2")
+  (assert-eq (ut-factor 5 15 765 990 -1 -1) 2 "15 pixels: under 16, 2")
+  (assert-eq (ut-factor 5 16 765 990 -1 -1) 1 "16 pixels: the text reads well, not at all")
+  (assert-eq (ut-factor 5 21 765 990 -1 -1) 1 "300 dpi: not at all")
+  (assert-eq (ut-factor 5 3 765 990 -1 -1) 4 "never more than `up-max`"))
+
+(deftest test-a-first-pass-that-read-almost-nothing-of-a-small-raster-is-read-again-three-times-as-large
+  (comment "a 450 x 150 PNG of a table (smoke review A9): the engine found no line to measure")
+  (assert-eq (ut-factor 2 0 450 150 -1 -1) 3 "two words of a small raster: enlarged 3 times")
+  (assert-eq (ut-factor 0 0 450 150 -1 -1) 3 "no word")
+  (assert-eq (ut-factor 2 0 2550 3300 -1 -1) 1 "the same of a page-sized raster: it is blank, or no text")
+  (assert-eq (ut-factor 2 0 1400 900 -1 -1) 3 "at the limit of `up-rescue-side`")
+  (assert-eq (ut-factor 2 0 1401 900 -1 -1) 1 "over it"))
+
+(deftest test-a-page-the-engine-is-sure-is-turned-is-read-upright-first
+  (assert-eq (ut-factor 5 6 765 990 90 200) 1 "turned a quarter, OSD sure (confidence 20.0): its lines say nothing of the size")
+  (assert-eq (ut-factor 5 6 765 990 180 500) 1 "turned a half")
+  (assert-eq (ut-factor 5 6 765 990 0 500) 4 "upright and sure: measured")
+  (assert-eq (ut-factor 5 6 765 990 90 10) 4 "turned but OSD unsure (confidence 1.0): measured"))
+
+(deftest test-a-raster-whose-enlargement-would-pass-the-pixel-bound-is-enlarged-less
+  (assert-eq (ut-factor 5 6 2000 2000 -1 -1) 2 "4 million pixels: 2 times is 16 million, 3 times 36 million")
+  (assert-eq (ut-factor 5 6 3000 3000 -1 -1) 1 "9 million: not even twice (36 million)")
+  (assert-eq (up-max) 4 "the factor is at most 4")
+  (assert-eq (up-xh-trigger) 16 "and the trigger is 16 pixels"))
+
+(deftest test-a-reading-scores-what-it-read
+  (let [^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^I32 at (ut-answer a 272 2 6 100 -1 -1)
+        ^I32 bt (ut-answer b 272 4 6 100 -1 -1)]
+    (assert-eq (up-score a at) 224 "two words of two letters at 900: 2 * (900 * 2 / 16)")
+    (assert-eq (up-score b bt) 448 "four words")
+    (assert-that (> (up-score b bt) (up-score a at)) "reading more scores more")))
+
+(deftest test-the-cubics-weights-sum-to-one-in-every-phase
+  (let [^Cells wt (new-cells)
+        ^:mut ^I32 k 2]
+    (while (<= k 4)
+      (do (up-weights wt k)
+          (let [^:mut ^I32 r 0]
+            (while (< r (* 2 k))
+              (do (assert-eq (+ (+ (cells-at wt (* r 4)) (cells-at wt (+ (* r 4) 1))) (+ (cells-at wt (+ (* r 4) 2)) (cells-at wt (+ (* r 4) 3)))) 1024 "the four weights of a phase sum to 1024")
+                  (set r (+ r 1)))))
+          (set k (+ k 1))))
+    (up-weights wt 2)
+    (assert-eq (cells-at wt 0) 0 "phase 0 (the input pixel's centre): the pixel itself")
+    (assert-eq (cells-at wt 1) 1024 "all of it")))
+
+(deftest test-an-enlarged-raster-keeps-flat-ink-and-edges
+  (let [^BitmapSet s (new-bitmap-set)
+        ^Bitmap src (bms-put s 7 4 3 1)
+        ^Cells wt (new-cells)
+        ^:mut ^I32 y 0
+        ^:mut ^I32 x 0]
+    (comment "left half black (0), right half white (255); the third row all 120")
+    (while (< y 3)
+      (do (set x 0)
+          (while (< x 4)
+            (do (if (== y 2)
+                  (bitmap-set-u8 src x y 0 120)
+                  (if (>= x 2) (bitmap-set-u8 src x y 0 255) (bitmap-set-u8 src x y 0 0)))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (assert-eq (bms-has s 9) 0 "not made yet")
+    (up-make s 9 10 src 3 wt)
+    (assert-eq (bms-has s 9) 1 "made")
+    (let [^Bitmap big (bms-get s 9)]
+      (assert-eq (bitmap-w big) 12 "3 times as wide")
+      (assert-eq (bitmap-h big) 9 "and as high")
+      (assert-eq (bitmap-channels big) 1 "one channel")
+      (assert-eq (bitmap-u8 big 0 7 0) 120 "a flat row stays flat: its left")
+      (assert-eq (bitmap-u8 big 11 7 0) 120 "and its right")
+      (assert-eq (bitmap-u8 big 6 7 0) 120 "and its middle")
+      (set x 1)
+      (while (< x 12)
+        (do (assert-that (>= (bitmap-u8 big x 0 0) (bitmap-u8 big (- x 1) 0 0)) "an edge rises left to right: no ring below the black")
+            (set x (+ x 1))))
+      (assert-eq (bitmap-u8 big 0 0 0) 0 "black at the left")
+      (assert-eq (bitmap-u8 big 11 0 0) 255 "white at the right"))))

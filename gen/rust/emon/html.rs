@@ -214,7 +214,7 @@ pub(crate) fn h_common(mut t: &mut String, o: i32, nodes: &mut crate::port::Cell
     let mut r: i32 = 0;
     let mut i: i32 = 0;
     let kind: i32 = node_kind(nodes, n);
-    let cf: i32 = cal_conf(kind, node_src(nodes, n), node_conf(nodes, n));
+    let cf: i32 = cal_node_conf(nodes, n);
     if (h_on(o, 1) == 1) && (node_is_inline(nodes, n) == 0) && (kind != nk_note()) {
         crate::port::text_ascii(t, " id=\"emon-");
         crate::port::text_i32(t, n);

@@ -268,7 +268,8 @@ public static class Json {
         int k = 0;
         int bit = 0;
         emon.Port.TextAscii(t, "[");
-        while (b < 9) {
+        // the warning bits 1 to 1024 (D1610 added `script-unread`, 1024; `in-table-image`, 512, is the fused flow's, not a node's)
+        while (b < 11) {
             bit = (1) << (b);
             if ((bits & bit) != 0) {
                 JsFsep(t, pr, k);
@@ -712,7 +713,7 @@ public static class Json {
         // `at`, `src`, `conf`, `flags`: the provenance every node may carry.
         int s = started;
         int sr = Model.NodeSrc(nodes, n);
-        int cf = Calib.CalConf(Model.NodeKind(nodes, n), Model.NodeSrc(nodes, n), Model.NodeConf(nodes, n));
+        int cf = Calib.CalNodeConf(nodes, n);
         int fg = Model.NodeFlags(nodes, n);
         s = JsAt(t, pr, d, nodes, regions, n, s);
         if (sr != 0) {

@@ -221,6 +221,61 @@ public static class Scantest {
         emon.Testport.AssertEq(Model.AttrLen(attrs, a), 6, "`always`");
     }
     [Xunit.Fact]
+    public static void TestAPageInAScriptTheEngineCannotReadIsFlaggedAndHeldAtALowConfidence() {
+        // D1610 (P12.3 I-13): the page unit adds `sc-mask-unread` to the page's mask cell; the blocks of the page say the engine could not read it
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells mask = emon.Port.NewCells();
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Model.PageNew(pages, 1, 61200, 79200, 0, Model.PkVector());
+        Model.PageNew(pages, 2, 61200, 79200, 0, Model.PkVector());
+        Model.PageNew(pages, 3, 61200, 79200, 0, Model.PkVector());
+        int p1 = Model.NodeNew(nodes, Model.NkParagraph(), 0);
+        int t1 = Model.NodeNew(nodes, Model.NkText(), p1);
+        int p2 = Model.NodeNew(nodes, Model.NkParagraph(), 0);
+        int p3 = Model.NodeNew(nodes, Model.NkParagraph(), 0);
+        int p4 = Model.NodeNew(nodes, Model.NkParagraph(), 0);
+        Model.NodeAddRegion(nodes, regions, p1, 1, 0, 0, 100, 100);
+        Model.NodeAddRegion(nodes, regions, p2, 2, 0, 0, 100, 100);
+        Model.NodeAddRegion(nodes, regions, p3, 3, 0, 0, 100, 100);
+        Model.NodeAddRegion(nodes, regions, p4, 3, 200, 200, 300, 300);
+        Model.NodeAddSrc(nodes, p1, Model.SrText());
+        Model.NodeSetConf(nodes, p1, 900);
+        Model.NodeAddSrc(nodes, t1, Model.SrText());
+        Model.NodeSetConf(nodes, t1, 1000);
+        Model.NodeAddSrc(nodes, p2, Model.SrText());
+        Model.NodeSetConf(nodes, p2, 900);
+        // page 3 is born digital, OCR'd, and fusion gave a block to OCR (`ocr` and `text`) and left one to the text layer
+        Model.NodeAddSrc(nodes, p3, Model.SrText());
+        Model.NodeAddSrc(nodes, p3, Model.SrOcr());
+        Model.NodeSetConf(nodes, p3, 900);
+        Model.NodeAddSrc(nodes, p4, Model.SrText());
+        Model.NodeSetConf(nodes, p4, 900);
+        emon.Port.CellsPush(mask, 1 + Scan.ScMaskUnread());
+        emon.Port.CellsPush(mask, 1);
+        emon.Port.CellsPush(mask, Scan.ScMaskUnread());
+        emon.Testport.AssertEq(Scan.ScTag(nodes, attrs, text, regions, pages, mask, 2), 1, "something was tagged");
+        emon.Testport.AssertEq(Model.NodeFlags(nodes, p1), Model.FlOcrOnly(), "the scan tags what it always tagged");
+        emon.Testport.AssertEq(Scan.ScTagUnread(nodes, regions, mask), 3, "the block and the text of page 1, the block of page 3");
+        emon.Testport.AssertEq(Model.NodeFlags(nodes, p1), Model.FlOcrOnly() + (Model.FlLowConf() + Model.FlScriptUnread()), "the block: OCR only, low confidence, script unread");
+        emon.Testport.AssertEq(Model.NodeConf(nodes, p1), Scan.ScUnreadConf(), "its confidence is held at the unread ceiling");
+        emon.Testport.AssertEq(Model.NodeConf(nodes, t1), Scan.ScUnreadConf(), "so is its text's");
+        emon.Testport.AssertEq(Model.NodeFlags(nodes, t1), 0, "an inline is not flagged");
+        emon.Testport.AssertEq(Model.NodeSrc(nodes, p1), Model.SrOcr(), "its text is still OCR's: it is kept, not dropped");
+        emon.Testport.AssertEq(Model.NodeFlags(nodes, p2), Model.FlOcrOnly(), "the other page was read by a model that reads it: OCR only, nothing more");
+        emon.Testport.AssertEq(Model.NodeConf(nodes, p2), 900, "and its confidence is its own");
+        emon.Testport.AssertEq(Model.NodeFlags(nodes, p3), Model.FlLowConf() + Model.FlScriptUnread(), "a born-digital block OCR won on an unread page: flagged, not `ocr-only`");
+        emon.Testport.AssertEq(Model.NodeConf(nodes, p3), Scan.ScUnreadConf(), "and held low");
+        emon.Testport.AssertEq(Model.NodeFlags(nodes, p4), 0, "a block of the same page that stayed the text layer's is not touched");
+        emon.Testport.AssertEq(Model.NodeConf(nodes, p4), 900, "nor its confidence");
+        emon.Testport.AssertEq(Model.PageKind(pages, 0), Model.PkVector(), "an image page's kind is not changed by the flag");
+    }
+    [Xunit.Fact]
     public static void TestWithNoPageReadNothingIsTagged() {
         emon.Port.Cells nodes = emon.Port.NewCells();
         emon.Port.Cells attrs = emon.Port.NewCells();

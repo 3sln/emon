@@ -50,7 +50,7 @@ public final class Rasterplan {
     }
     public static int rpW() {
         // The cells of a page's plan row.
-        return 14;
+        return 15;
     }
     public static int rpFAsk() {
         return 10;
@@ -629,11 +629,19 @@ public final class Rasterplan {
                     }
                     q += 1;
                 }
+                // D1610: compared only when every letter of the line is one the engine reads: a Cyrillic line with its reference number is not Latin
                 latin = 0;
                 q = 0;
                 while (q < emon.Port.cellsLen(ta)) {
                     if (emon.Port.cellsAt(ta, q) < 592) {
                         latin = 1;
+                    }
+                    q += 1;
+                }
+                q = 0;
+                while (q < emon.Port.cellsLen(ta)) {
+                    if (emon.Port.cellsAt(ta, q) >= 880) {
+                        latin = 0;
                     }
                     q += 1;
                 }

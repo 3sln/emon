@@ -5,22 +5,6 @@ use crate::emon::evidence::*;
 use crate::emon::fuserules::*;
 use crate::emon::player::*;
 
-pub(crate) fn hx_latin_cp(c: i32) -> i32 {
-    // 1 for a Latin letter or a digit: ASCII, Latin-1 (without the multiplication and division signs), Latin Extended-A and -B.
-    if (c >= 48) && (c <= 57) {
-        return 1;
-    }
-    if (c >= 65) && (c <= 90) {
-        return 1;
-    }
-    if (c >= 97) && (c <= 122) {
-        return 1;
-    }
-    if (c >= 192) && (c <= 591) && ((c != 215) && (c != 247)) {
-        return 1;
-    }
-    return 0;
-}
 pub(crate) fn hx_foreign_cp(c: i32) -> i32 {
     // 1 for a letter of a script a Latin engine cannot read (as `emon.arbiter`'s `ar-foreign-cp`).
     if (c >= 880) && (c < 7680) {
@@ -38,24 +22,30 @@ pub(crate) fn hx_foreign_cp(c: i32) -> i32 {
     if (c >= 65136) && (c <= 65276) {
         return 1;
     }
+    if (c >= 8448) && (c <= 8527) {
+        return 1;
+    }
+    if (c >= 8592) && (c <= 8959) {
+        return 1;
+    }
+    if (c >= 119808) && (c <= 120831) {
+        return 1;
+    }
     return 0;
 }
 pub(crate) fn hx_word_latin(ofw: &mut crate::port::Cells, etext: &mut crate::port::Cells, row: i32) -> i32 {
-    // 1 when the engine can read the flow word `row` (as `ar-word-latin`): a Latin letter or digit, or no letter of another script.
+    // 1 when the engine can read the flow word `row` (as `ar-word-latin`, D1610): it holds no letter of a script the engine lacks, whatever Latin letter or
+    // digit is attached to it, and it holds a code point.
     let ts: i32 = crate::port::cells_at(ofw, (row * 24) + 11);
     let tl: i32 = crate::port::cells_at(ofw, (row * 24) + 12);
     let mut j: i32 = 0;
-    let mut foreign: i32 = 0;
     while j < tl {
-        if hx_latin_cp(crate::port::cells_at(etext, ts + j)) == 1 {
-            return 1;
-        }
         if hx_foreign_cp(crate::port::cells_at(etext, ts + j)) == 1 {
-            foreign = 1;
+            return 0;
         }
         j += 1;
     }
-    if (foreign == 0) && (tl > 0) {
+    if tl > 0 {
         return 1;
     }
     return 0;

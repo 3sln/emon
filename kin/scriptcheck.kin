@@ -1,0 +1,63 @@
+;; A SCAN IN A SCRIPT THE ENGINE HAS NO MODEL FOR (D1610, P12.3 I-13; SPEC 3.3, 8.3, 9.4; D038, D215). emon's own module (D039).
+;;
+;; Tesseract's orientation and script detection (`osd`) names the script of a page ("Devanagari") whether or not a model that reads it is installed, and the
+;; engine reads the page with the models there are. A Hindi scan read with `eng` alone is Latin junk at a confidence of 0.76: nothing in the output said the engine
+;; could not read the page, and the junk was presented as text. THE EVIDENCE TO SAY SO IS IN THE ANSWER: the page's script (`ox-script`) and how sure OSD is of it
+;; (`ox-sconf`), and the language each word was read in (`ox-wlang`: the model the engine used, `eng`).
+;;
+;;   `sk-unread` a first pass's page is UNREAD when OSD is sure (`sk-min-conf`) of a script that is not Latin and no word of the answer was read by a model that
+;;   reads that script (`emon.ocrport`'s tables: `rus` reads Cyrillic, `chi_sim` Han, a model with no row Latin). It needs a few words (`sk-min-words`): a page the
+;;   engine read nothing of has nothing to flag. The page unit marks the page in its `mask` cell (`emon.scan`'s `sc-mask-unread`), and `sc-tag` flags every OCR
+;;   block of it `script-unread` and `low-conf` and holds its confidence at `sc-unread-conf`: the text is the engine's guess at a script it cannot read, kept (a
+;;   reader may want it) and never presented as confident text.
+(ns emon.scriptcheck
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.port :refer [cells-drop cells-push]]
+            [emon.plan :refer [an-ocr-count]]
+            [emon.ocr :refer [ox-find ox-script ox-sconf ox-first-word ox-word-next ox-wlang]]
+            [emon.ocrport :refer [op-model-script op-script-reads sc-latn sc-latf]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem]]))
+
+(defn ^:pub ^I32 sk-min-conf [] (comment "`script-conf`: OSD's script confidence (x10) from which kin believes the script it names (a Latin page reads 10 to 20, the Hindi page of the smoke review 63).") (return 150))
+(defn ^:pub ^I32 sk-min-words [] (comment "A page of fewer OCR words than this is not flagged: the engine read nothing of it that could be junk.") (return 3))
+
+(defn ^:pub ^I32 sk-unpack [^I32 lang ^:mut ^Cells out]
+  (comment "The language cell `lang` (up to four ASCII chars, packed big-endian) as code points in `out` (emptied first). Answers how many.")
+  (let [^:mut ^I32 d 16777216
+        ^:mut ^I32 b 0
+        ^:mut ^I32 n 0]
+    (cells-drop out 0)
+    (while (> d 0)
+      (do (set b (rem (quot lang d) 256))
+          (if (!= b 0)
+            (do (cells-push out b)
+                (set n (+ n 1))))
+          (set d (quot d 256))))
+    (return n)))
+
+(defn ^:pub ^I32 sk-unread [^Cells an ^I32 at ^:mut ^Cells scr]
+  (comment "1 when the page the OCR answer at `at` read is in a script the engine had no model for (see the head of this file), else 0. `scr` is scratch.")
+  (let [^I32 ext (ox-find an at)
+        ^I32 nw (an-ocr-count an at)
+        ^:mut ^I32 w 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 lang 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 script 0]
+    (if (< ext 0) (return 0))
+    (set script (ox-script an ext))
+    (if (<= script 0) (return 0))
+    (if (== script (sc-latn)) (return 0))
+    (if (== script (sc-latf)) (return 0))
+    (if (< (ox-sconf an ext) (sk-min-conf)) (return 0))
+    (if (< nw (sk-min-words)) (return 0))
+    (set w (ox-first-word an ext))
+    (while (< i nw)
+      (do (set lang (ox-wlang an w))
+          (if (> lang 0)
+            (do (set n (sk-unpack lang scr))
+                (if (== (op-script-reads script (op-model-script scr 0 n)) 1) (return 0))))
+          (set w (ox-word-next an w))
+          (set i (+ i 1))))
+    (return 1)))

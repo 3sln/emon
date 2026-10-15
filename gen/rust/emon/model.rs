@@ -985,6 +985,9 @@ pub fn fl_tag_span_conflict() -> i32 {
 pub fn fl_in_table_image() -> i32 {
     return 512;
 }
+pub fn fl_script_unread() -> i32 {
+    return 1024;
+}
 pub fn fl_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "low-conf");
@@ -1024,6 +1027,10 @@ pub fn fl_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 512 {
         crate::port::text_ascii(t, "in-table-image");
+        return 1;
+    }
+    if code == 1024 {
+        crate::port::text_ascii(t, "script-unread");
         return 1;
     }
     return 0;
@@ -2430,6 +2437,11 @@ pub fn page_set_health(mut pages: &mut crate::port::Cells, p: i32, v: i32) -> i3
 pub fn page_set_kind(mut pages: &mut crate::port::Cells, p: i32, kind: i32) -> i32 {
     // A page's source kind (`pk`), after the page is made: `scanned` once the unit finds its text came from OCR (D212).
     return pset(pages, p, 6, kind);
+}
+pub fn page_set_size(mut pages: &mut crate::port::Cells, p: i32, w: i32, h: i32) -> i32 {
+    // A page's size in centipoints, after the page is made: an image read from its turned view (D1610) is as wide as it is high and the reverse, upright.
+    pset(pages, p, 3, w);
+    return pset(pages, p, 4, h);
 }
 pub fn page_set_resolution(mut pages: &mut crate::port::Cells, p: i32, dpi: i32, pxw: i32, pxh: i32) -> i32 {
     pset(pages, p, 8, dpi);

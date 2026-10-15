@@ -81,20 +81,26 @@
   (if (and (>= c 11904) (<= c 55215)) (return 1))
   (if (and (>= c 63744) (<= c 64975)) (return 1))
   (if (and (>= c 65136) (<= c 65276)) (return 1))
+  (comment "D1610: mathematics is a script the engine does not read either: the letterlike symbols, the arrows and the mathematical operators")
+  (comment "(U+2100-214F, U+2190-22FF) and the mathematical alphanumerics (U+1D400-1D7FF). A formula's text is the text layer's.")
+  (if (and (>= c 8448) (<= c 8527)) (return 1))
+  (if (and (>= c 8592) (<= c 8959)) (return 1))
+  (if (and (>= c 119808) (<= c 120831)) (return 1))
   (return 0))
 
 (defn ^I32 ar-word-latin [^Cells fw ^Cells etext ^I32 row]
-  (comment "1 when the engine can read the word: it holds a Latin letter or digit, or it holds no letter of any other script (a word of nothing")
-  (comment "but U+FFFD, private-use or control code points, which is what an unmapped font leaves, names no script the engine lacks).")
+  (comment "1 when the engine can read the word: it holds no letter of a script the engine lacks (Cyrillic, Greek, Hebrew, Arabic, CJK, mathematics, ...) and it")
+  (comment "holds a code point. D1610: ONE foreign letter makes the word foreign, whatever Latin letter or digit is attached to it (a Cyrillic word with")
+  (comment "its reference number [10], a year after a Japanese noun, a variable in a formula): the engine reads those as English junk, and the")
+  (comment "text layer's is right. A word of nothing but U+FFFD, private-use or control code points, which is what an unmapped font leaves, names")
+  (comment "no script the engine lacks.")
   (let [^I32 ts (cells-at fw (+ (* row 24) 11))
         ^I32 tl (cells-at fw (+ (* row 24) 12))
-        ^:mut ^I32 j 0
-        ^:mut ^I32 foreign 0]
+        ^:mut ^I32 j 0]
     (while (< j tl)
-      (do (if (== (ar-latin-cp (cells-at etext (+ ts j))) 1) (return 1))
-          (if (== (ar-foreign-cp (cells-at etext (+ ts j))) 1) (set foreign 1))
+      (do (if (== (ar-foreign-cp (cells-at etext (+ ts j))) 1) (return 0))
           (set j (+ j 1))))
-    (if (and (== foreign 0) (> tl 0)) (return 1))
+    (if (> tl 0) (return 1))
     (return 0)))
 
 (defn ^I32 ar-alnum [^Cells owords ^Cells etext ^I32 row]

@@ -1026,6 +1026,9 @@ pub fn op_text_only() -> i32 {
 pub fn op_re_rotated() -> i32 {
     return 8;
 }
+pub fn op_upscaled() -> i32 {
+    return 9;
+}
 pub fn op_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "first");
@@ -1057,6 +1060,10 @@ pub fn op_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 8 {
         crate::port::text_ascii(t, "re-rotated");
+        return 1;
+    }
+    if code == 9 {
+        crate::port::text_ascii(t, "upscaled");
         return 1;
     }
     return 0;

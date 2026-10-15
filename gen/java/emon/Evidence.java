@@ -1026,6 +1026,9 @@ public final class Evidence {
     public static int opReRotated() {
         return 8;
     }
+    public static int opUpscaled() {
+        return 9;
+    }
     public static int opEmitName(StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.textAscii(t, "first");
@@ -1057,6 +1060,10 @@ public final class Evidence {
         }
         if (code == 8) {
             emon.Port.textAscii(t, "re-rotated");
+            return 1;
+        }
+        if (code == 9) {
+            emon.Port.textAscii(t, "upscaled");
             return 1;
         }
         return 0;

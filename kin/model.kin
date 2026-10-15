@@ -217,7 +217,8 @@
    [fl-vertical 64 "vertical"]
    [fl-struct-disagree 128 "struct-disagree"]
    [fl-tag-span-conflict 256 "tag-span-conflict"]
-   [fl-in-table-image 512 "in-table-image"]])
+   [fl-in-table-image 512 "in-table-image"]
+   [fl-script-unread 1024 "script-unread"]])
 
 ;; A span's `style` bits, stored in its `sub`.
 (defenum ^:pub sy
@@ -813,6 +814,10 @@
 (defn ^:pub ^I32 page-set-kind [^:mut ^Cells pages ^I32 p ^I32 kind]
   (comment "A page's source kind (`pk`), after the page is made: `scanned` once the unit finds its text came from OCR (D212).")
   (return (pset pages p 6 kind)))
+(defn ^:pub ^I32 page-set-size [^:mut ^Cells pages ^I32 p ^I32 w ^I32 h]
+  (comment "A page's size in centipoints, after the page is made: an image read from its turned view (D1610) is as wide as it is high and the reverse, upright.")
+  (pset pages p 3 w)
+  (return (pset pages p 4 h)))
 (defn ^:pub ^I32 page-set-resolution [^:mut ^Cells pages ^I32 p ^I32 dpi ^I32 pxw ^I32 pxh]
   (pset pages p 8 dpi)
   (pset pages p 9 pxw)

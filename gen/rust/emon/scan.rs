@@ -1304,9 +1304,46 @@ pub(crate) fn sc_node_page(nodes: &mut crate::port::Cells, regions: &mut crate::
     }
     return -1;
 }
+pub fn sc_mask_unread() -> i32 {
+    // D1610: added to a page's `mask` cell when the engine had no model for the page's script (`emon.scriptcheck`).
+    return 4;
+}
+pub fn sc_unread_conf() -> i32 {
+    // D1610: the most confidence (per mille) a block of a page in a script the engine cannot read keeps.
+    return 100;
+}
+pub fn sc_tag_unread(mut nodes: &mut crate::port::Cells, regions: &mut crate::port::Cells, mask: &mut crate::port::Cells) -> i32 {
+    // D1610: every node whose text is OCR's (`ocr` in its source) on a page the unit marked `sc-mask-unread` (OSD sure of a script that no model the engine read it
+    // with reads, `emon.scriptcheck`): a block is flagged `script-unread` and `low-conf`, and every node's confidence is held at `sc-unread-conf`. The text is the
+    // engine's guess at a script it cannot read, kept and never presented as confident. After every other provenance stage (the scan's, fusion's). Answers the nodes held.
+    let nn: i32 = node_count(nodes);
+    let mut n: i32 = 1;
+    let mut pg: i32 = 0;
+    let mut held: i32 = 0;
+    while n < nn {
+        pg = sc_node_page(nodes, regions, n);
+        if (pg >= 1) && (pg <= crate::port::cells_len(mask)) {
+            if (crate::port::cells_at(mask, pg - 1) / 4) >= 1 {
+                if (node_src(nodes, n) & sr_ocr()) == sr_ocr() {
+                    if nk_is_inline(node_kind(nodes, n)) == 0 {
+                        node_add_flag(nodes, n, fl_script_unread());
+                        node_add_flag(nodes, n, fl_low_conf());
+                    }
+                    if node_conf(nodes, n) > sc_unread_conf() {
+                        node_set_conf(nodes, n, sc_unread_conf());
+                    }
+                    held += 1;
+                }
+            }
+        }
+        n += 1;
+    }
+    return held;
+}
 pub fn sc_tag(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut text: &mut crate::port::Cells, regions: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, mask: &mut crate::port::Cells, policy: i32) -> i32 {
     // The provenance of OCR text, after the paragraphs are built. `mask` has one cell a page: 0 none, 1 an image page was
-    // OCR'd, 2 a PDF page was (its kind becomes `scanned`, SPEC 3.4). Every node on a masked page: its `text` source becomes
+    // OCR'd, 2 a PDF page was (its kind becomes `scanned`, SPEC 3.4), plus `sc-mask-unread` for a page in a script the engine cannot read (`sc-tag-unread`).
+    // Every node on a masked page: its `text` source becomes
     // `ocr`, an inline text's confidence 1000 (a glyph's own) becomes 500 (an engine's word: uncalibrated, D130, Phase 10), and a
     // block that had `text` is flagged `ocr-only`. The root gets `settings.ocr` (`policy` 1 auto, 2 always) when any page was OCR'd.
     let np: i32 = page_count(pages);
@@ -1319,10 +1356,10 @@ pub fn sc_tag(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::C
     let mut s: i32 = 0;
     let mut start: i32 = 0;
     while i < np {
-        if (i < crate::port::cells_len(mask)) && (crate::port::cells_at(mask, i) >= 1) {
+        if (i < crate::port::cells_len(mask)) && ((crate::port::cells_at(mask, i) % 4) >= 1) {
             any = 1;
         }
-        if (i < crate::port::cells_len(mask)) && (crate::port::cells_at(mask, i) == 2) {
+        if (i < crate::port::cells_len(mask)) && ((crate::port::cells_at(mask, i) % 4) == 2) {
             page_set_kind(pages, i, pk_scanned());
         }
         i += 1;
@@ -1336,7 +1373,7 @@ pub fn sc_tag(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::C
         if (pg >= 1) && (pg <= crate::port::cells_len(mask)) {
             m = crate::port::cells_at(mask, pg - 1);
         }
-        if m >= 1 {
+        if (m % 4) >= 1 {
             s = node_src(nodes, n);
             if (s & sr_text()) == sr_text() {
                 node_set_src(nodes, n, (s - sr_text()) + sr_ocr());

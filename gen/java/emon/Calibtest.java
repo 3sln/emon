@@ -89,4 +89,35 @@ public final class Calibtest {
             i += 1;
         }
     }
+    public static void testABlockFlaggedScriptUnreadIsWrittenAtItsRawScore() {
+        // D1610: the map clamps at its first step, so a raw 100 on OCR text is written as the lowest confidence of text the engine READ; the engine's guess at a script it
+        // cannot read keeps its raw score, and so do the inlines under it
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        int p1 = Model.nodeNew(nodes, Model.nkParagraph(), 0);
+        int t1 = Model.nodeNew(nodes, Model.nkText(), p1);
+        int p2 = Model.nodeNew(nodes, Model.nkParagraph(), 0);
+        Model.nodeAddSrc(nodes, p1, Model.srOcr());
+        Model.nodeSetConf(nodes, p1, 100);
+        Model.nodeAddFlag(nodes, p1, Model.flScriptUnread());
+        Model.nodeAddSrc(nodes, t1, Model.srOcr());
+        Model.nodeSetConf(nodes, t1, 100);
+        Model.nodeAddSrc(nodes, p2, Model.srOcr());
+        Model.nodeSetConf(nodes, p2, 100);
+        int mapped = Calib.calConf(Model.nkParagraph(), Model.srOcr(), 100);
+        int want = 100;
+        if (mapped < 100) {
+            want = mapped;
+        }
+        emon.Testport.assertEq(Calib.calNodeConf(nodes, p1), want, "the flagged block: its raw score, when the map would give more");
+        emon.Testport.assertThat(Calib.calNodeConf(nodes, p1) <= 100, "never above it");
+        emon.Testport.assertThat(Calib.calNodeConf(nodes, t1) <= 100, "the text under it too");
+        emon.Testport.assertEq(Calib.calNodeConf(nodes, p2), mapped, "a block no one flagged is calibrated as it was");
+    }
 }

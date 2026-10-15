@@ -22,7 +22,7 @@
   (:require [emon.lang :refer [I32 Cells Buf Text Src BitmapSet fd emit-ascii]]
             [emon.enctx :refer [Cfg Doc EvArenas Arenas Scratch Pass]]
             [emon.port :refer [cells-len cells-at cells-push cells-drop cells-swap cells-copy-into cells-free buf-truncate src-missed]]
-            [emon.model :refer [model-init model-check model-check-assets page-count text-append-cp node-set-attr-text fk-locale afm-png afm-jpeg afm-tiff]]
+            [emon.model :refer [model-init model-check model-check-assets page-count page-w page-h page-set-size text-append-cp node-set-attr-text fk-locale afm-png afm-jpeg afm-tiff]]
             [emon.para :refer [pa-pages pa-build]]
             [emon.pdfdoc :refer [pd-pg-count pd-open-pw pd-pages pd-need-bytes pd-version-major pd-version-minor pd-encrypted]]
             [emon.pdfcontent :refer [pc-document]]
@@ -39,7 +39,7 @@
             [emon.sigmark :refer [sg-has-digital]]
             [emon.arbiter :refer [ar-doc ar-write ar-tag]]
             [emon.player :refer [pl-check pl-emit-open pl-emit-gfx-open]]
-            [emon.evidence :refer [ev-emit-open]]
+            [emon.evidence :refer [ev-emit-open ev-page-row ep-get epf-width epf-height]]
             [emon.tagtable :refer [tt-emit]]
             [emon.pdfstruct :refer [tg-trust tg-read tg-join]]
             [emon.furniture :refer [fu-find fu-write]]
@@ -53,10 +53,10 @@
             [emon.restruct :refer [rs-run]]
             [emon.fields :refer [fl-run]]
             [emon.figclass :refer [fc-stage fc-images]]
-            [emon.scan :refer [sc-tag]]
+            [emon.scan :refer [sc-tag sc-tag-unread]]
             [emon.rasterplan :refer [rp-settings]]
             [emon.asset :refer [as-settings as-run as-page-cands as-collect as-run-figures]]
-            [kin.lang :refer [defn return let set while if do comment + - * < > == != and or quot]]))
+            [kin.lang :refer [defn return let set while if do comment + - * < > >= == != and or quot]]))
 
 ;; ----------------------------------------------------------------------------------------------- the document pass (P10.6 S3, D485)
 
@@ -235,9 +235,12 @@
                         (fd ev inks) (fd ev comps) (fd ev rules) (fd ev prims) (fd ev pts)
                         (fd d ys0) (fd d ys1) (fd d ys2) (fd d ys3) (fd d ys4) (fd d ys5) (fd d ys6) (fd d ys7) (fd d ys8) (fd d ys9) (fd d ys10) (fd d ys11)
                         (fd d ys12) (fd d ys13) (fd d ys14) (fd d ys15) (fd d ys16) (fd d ys17) (fd d ys18))))
-  (return (rs-page i idx nbytes (fd c ocr) ans rq (fd d loc) bms (fd d mask)
+  (return (rs-page i idx nbytes (fd c ocr) (+ (* 2 (fd c nort)) (* 4 (fd c dry))) ans rq (fd d loc) bms (fd d mask) (fd d pscr)
                    (fd ev epages) (fd ev views) (fd d et) (fd ev feats) (fd ev images) (fd ev oruns) (fd ev oblocks) (fd ev olines) (fd ev owords) (fd ev osyms)
-                   (fd ev oalts) (fd d wd) (fd d ln) (fd d pscr) (fd c dry))))
+                   (fd ev oalts) (fd d wd) (fd d ln) (fd ev refs) (fd ev tlines) (fd d cg)
+                   (fd ev inks) (fd ev comps) (fd ev rules) (fd ev prims) (fd ev pts)
+                   (fd d ys0) (fd d ys2) (fd d ys3) (fd d ys4) (fd d ys5) (fd d ys6) (fd d ys7) (fd d ys8) (fd d ys9) (fd d ys10) (fd d ys11)
+                   (fd d ys12) (fd d ys13) (fd d ys14) (fd d ys15) (fd d ys16) (fd d ys17) (fd d ys18))))
 
 ;; ----------------------------------------------------------------------------------------------- the asset unit
 
@@ -404,6 +407,9 @@
           (do (cells-swap (fd m nodes) (fd s sn))
               (cells-swap (fd m attrs) (fd s sa))
               (cells-swap (fd m regions) (fd s sr))))))
+    ;; a page in a script the engine has no model for (D1610, `emon.scriptcheck`): what OCR won of it is flagged `script-unread` and held at a low confidence,
+    ;; after the provenance stages above (the scan's and fusion's) have said what is OCR's
+    (sc-tag-unread (fd m nodes) (fd m regions) (fd d mask))
     ;; the form fields (P11.x3, D548): in the block that holds each one's label, once the body is as it will stay (a PDF's; an image has no widgets)
     (if (== kind 0)
       (en-fields m s d))
@@ -438,7 +444,16 @@
 (defn ^:pub ^I32 en-finish-raster [^Cfg c ^Doc d ^EvArenas ev ^Arenas m ^Scratch s]
   (comment "The raster document unit: stage 3 over the frames' OCR lines. `m` is the Model the document pass began (its pages and nodes); an image has no text layer, so")
   (comment "the glyph arenas are empty and nothing is set aside.")
-  (let [^I32 np (page-count (fd m pages))]
+  (let [^I32 np (page-count (fd m pages))
+        ^:mut ^I32 i 0
+        ^:mut ^I32 row 0]
+    (comment "D1610: a frame fed sideways was read from its turned view (`rt-upright` swapped the evidence's page); the Model's page is as wide as the text it holds")
+    (while (< i np)
+      (do (set row (ev-page-row (fd ev epages) (+ i 1)))
+          (if (>= row 0)
+            (if (or (!= (ep-get (fd ev epages) row (epf-width)) (page-w (fd m pages) i)) (!= (ep-get (fd ev epages) row (epf-height)) (page-h (fd m pages) i)))
+              (page-set-size (fd m pages) i (ep-get (fd ev epages) row (epf-width)) (ep-get (fd ev epages) row (epf-height)))))
+          (set i (+ i 1))))
     (if (!= (fd c keep) 0)
       (en-dump (fd d et) (fd d gl) (fd d wd) (fd d ln) (fd d mk) (fd d fnt) (fd d grl) (fd d gfl) (fd s ggp) (fd s grg) ev (fd d evidence)))
     ;; the triage's flow (P7.0, D241): an image has no text layer, so nothing is set aside and the flow is the OCR lines as they are

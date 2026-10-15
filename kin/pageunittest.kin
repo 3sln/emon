@@ -2,13 +2,16 @@
 ;; requests every time, under its own ids; a page it has nothing to say about asks nothing; and the set holds an answer's
 ;; bitmap and the ones kin makes, apart.
 (ns emon.pageunittest
-  (:require [emon.lang :refer [I32 Cells Bitmap BitmapSet]]
-            [emon.test :refer [deftest assert-eq assert-that new-cells new-bitmap-set]]
+  (:require [emon.lang :refer [I32 Cells Bitmap BitmapSet Blob Src]]
+            [emon.test :refer [deftest assert-eq assert-eq-at assert-that new-cells new-bitmap-set test-file TestT test-t]]
             [emon.port :refer [cells-len cells-at cells-set cells-push bms-get bms-has bms-put bitmap-w bitmap-h bitmap-channels
-                               bitmap-u8 bitmap-set-u8]]
+                               bitmap-u8 bitmap-set-u8 src-of-blob]]
             [emon.plan :refer [rec-id rec-kind rec-count rq-arg pk-decode pk-render pk-ocr an-fail an-render an-decode ps-unsupported lay-full lay-no-text us-requests us-done pu-id pu-view-id view-base
                                pi-render-text pi-render-no-text pi-decode pi-ocr flt-dct]]
-            [emon.pageunit :refer [pu-w pu-kind pu-dpi pk-scan pk-born pk-none pu-run-pdf pu-ask-rasters]]
+            [emon.pdfdoc :refer [pd-open pd-pg-count]]
+            [emon.pdfcontent :refer [pc-document]]
+            [emon.tlhealth :refer [th-run]]
+            [emon.pageunit :refer [pu-w pu-kind pu-field pu-dpi pk-scan pk-born pk-none pu-run-pdf pu-ask-rasters pu-plan pu-scan-dct pu-scan-render]]
             [emon.rasterplan :refer [rp-ask-none rp-ask-full rp-ask-witness rp-f-ask rp-f-wat rp-f-wn rp-f-scripts]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
@@ -31,6 +34,8 @@
           (cells-push pl 0)
           (cells-push pl 0)
           (cells-push pl 0)
+          (cells-push pl 0)
+          (comment "the scan's mode (D1610): the host decodes the DCT stream in place")
           (cells-push pl 0)
           (set i (+ i 1))))
     (return 0)))
@@ -109,6 +114,85 @@
     (assert-eq (rq-arg rq 0 1) 100 "the stream's start")
     (assert-eq (rq-arg rq 0 2) 50 "and length")
     (assert-eq (rq-arg rq 0 3) (flt-dct) "a DCT stream")))
+
+(defn ^I32 plan-file [^TestT emon-t ^Blob file ^:mut ^Cells pl]
+  (comment "A document through the document pass as the Engine runs it (`pd-open`, `pc-document`, `th-run`) and `pu-plan` under `always`: `pl` has its page rows. Answers the pages.")
+  (let [^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^Cells cx (new-cells)
+        ^Cells ox (new-cells)
+        ^Cells cs (new-cells)
+        ^Cells out (new-cells)
+        ^Cells f0 (new-cells)
+        ^Cells f1 (new-cells)
+        ^Cells f2 (new-cells)
+        ^Cells f3 (new-cells)
+        ^Cells gl (new-cells)
+        ^Cells et (new-cells)
+        ^Cells mk (new-cells)
+        ^Cells fnt (new-cells)
+        ^Cells pg (new-cells)
+        ^Cells wd (new-cells)
+        ^Cells ln (new-cells)
+        ^Cells pa (new-cells)
+        ^Cells im (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells gx (new-cells)
+        ^Cells epages (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells fl (new-cells)
+        ^Cells fa (new-cells)
+        ^Cells hl (new-cells)
+        ^Cells sc (new-cells)
+        ^Cells sp (new-cells)
+        ^Cells s1 (new-cells)
+        ^Cells s2 (new-cells)
+        ^Src src (src-of-blob file)
+        ^I32 o (pd-open src ar dc a b st)]
+    (assert-eq-at o 0 "the file opened" 0)
+    (assert-eq-at (pc-document src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln pa im pts gx) 0 "the file ran" 0)
+    (th-run pg gl et mk fnt wd ln im epages feats fw fl fa hl sc)
+    (pu-plan src ar dc a b st pg im wd 2 0 fw fl et hl sp pl s1 s2)
+    (return (pd-pg-count pg))))
+
+(deftest test-a-page-that-is-one-big-image-is-a-scan-whatever-the-codec
+  (comment "D1610: a page with no text layer and one image over it was a scan only when that image was a lone DCT stream (the host reads those bytes in place). A Flate or RunLength")
+  (comment "image (and CCITT, JBIG2, JPX) was `vector`: no OCR, an empty body. It is a scan read from the host's RENDER of the page (any codec), the raster the whole page.")
+  (let [^Cells pl (new-cells)
+        ^Cells pl2 (new-cells)
+        ^Cells pl3 (new-cells)]
+    (assert-eq (plan-file (test-t) (test-file "raster/flate-gray-72dpi.pdf") pl) 1 "one page")
+    (assert-eq (pu-kind pl 0) (pk-scan) "a FlateDecode image over the page: a scan")
+    (assert-eq (pu-field pl 0 14) (pu-scan-render) "read from a render")
+    (assert-eq (pu-field pl 0 4) 0 "of the whole page: its left")
+    (assert-eq (pu-field pl 0 6) 61200 "its right is the page's 612 pt")
+    (assert-eq (pu-field pl 0 7) 79200 "its bottom the page's 792 pt")
+    (assert-eq (pu-field pl 0 8) 61200 "the page's width")
+    (assert-eq (pu-field pl 0 9) 79200 "and height")
+    (assert-eq (plan-file (test-t) (test-file "raster/runlength-gray-72dpi.pdf") pl2) 1 "one page")
+    (assert-eq (pu-kind pl2 0) (pk-scan) "a RunLengthDecode image: a scan too")
+    (assert-eq (pu-field pl2 0 14) (pu-scan-render) "read from a render")
+    (assert-eq (plan-file (test-t) (test-file "corpus/synth/scan/h-plain.pdf") pl3) 2 "two pages")
+    (assert-eq (pu-kind pl3 0) (pk-scan) "a lone DCT stream is still a scan")
+    (assert-eq (pu-field pl3 0 14) (pu-scan-dct) "its bytes read in place")
+    (assert-that (> (pu-field pl3 0 3) 0) "from its span")))
+
+(deftest test-a-render-scans-unit-asks-for-the-render-of-its-page
+  (let [^Cells pl (new-cells)
+        ^Cells rq (new-cells)]
+    (plan-of pl 3 (pk-scan))
+    (cells-set pl (+ (* 1 (pu-w)) 14) (pu-scan-render))
+    (assert-eq (run-page 1 2 pl (new-cells) rq) (us-requests) "it asks")
+    (assert-eq (rec-kind rq 0) (pk-render) "a render, not a decode")
+    (assert-eq (rec-id rq 0) 516 "under the scan's own id: page 1, 2 * 256 + 4")
+    (assert-eq (rq-arg rq 0 0) 3 "of input 3")
+    (assert-eq (rq-arg rq 0 1) 1 "page 1, 0-based")
+    (assert-eq (rq-arg rq 0 2) 300 "at 300 dpi")
+    (assert-eq (rq-arg rq 0 3) (lay-full) "as the page is")))
 
 (deftest test-a-unit-with-no-answers-asks-the-same-every-time
   (let [^Cells pl (new-cells)

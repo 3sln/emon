@@ -10,6 +10,8 @@ import (
 	"emon/plan"
 	"emon/port"
 	"emon/rasterin"
+	"emon/retarget"
+	"emon/upscale"
 	"testing"
 )
 
@@ -37,7 +39,8 @@ func docOf(ans *port.Cells, rq *port.Cells, nodes *port.Cells, attrs *port.Cells
 }
 
 func pagePol(f int32, ans *port.Cells, rq *port.Cells, policy int32, loc *port.Cells, mask *port.Cells, et *port.Cells, wd *port.Cells, ln *port.Cells, oruns *port.Cells, olines *port.Cells, owords *port.Cells) int32 {
-	return rasterin.RsPage(f, 7, 8, policy, ans, rq, loc, port.NewBitmapSet(), mask, port.NewCells(), port.NewCells(), et, port.NewCells(), port.NewCells(), oruns, port.NewCells(), olines, owords, port.NewCells(), port.NewCells(), wd, ln, port.NewCells(), 0)
+	// no pixel in the bitmap set: the unit is the slim one, the first pass's lines (D1610: with pixels it is `emon.pageunit`'s scan unit, whose laws are there)
+	return rasterin.RsPage(f, 7, 8, policy, 0, ans, rq, loc, port.NewBitmapSet(), mask, port.NewCells(), port.NewCells(), port.NewCells(), et, port.NewCells(), port.NewCells(), oruns, port.NewCells(), olines, owords, port.NewCells(), port.NewCells(), wd, ln, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
 }
 
 func TestTheDocumentPassAsksForFrameZerosHeaderAndNothingMore(emonT *testing.T) {
@@ -224,4 +227,150 @@ func TestAnOcrAnswerBecomesEvidenceAndThePipelinesLines(emonT *testing.T) {
 	port.AssertEq(emonT, evidence.LnGet(ln, 0, evidence.LhRot()), 0, "upright")
 	port.AssertEq(emonT, evidence.LnGet(ln, 0, evidence.LhY0()), (55*24)-(34*24), "the box's top is the baseline less x-height and ascenders")
 	port.AssertEq(emonT, evidence.LnGet(ln, 0, evidence.LhY1()), (55*24)+(6*24), "and its bottom the baseline plus descenders")
+}
+
+func fakeLines(ans *port.Cells, id int32, nlines int32, scale int32, xh int32, osd int32, oconf int32) int32 {
+	// An OCR answer of `nlines` lines, each of one word "Hi" (60 x 40 pixels at `scale`, x-height `xh` at `scale`, the line 60 pixels below the one before)
+	// that OSD says is turned `osd` degrees at the confidence `oconf` (x10; -1: no OSD).
+	var at int32 = plan.AnOcr(ans, id)
+	var k int32 = 0
+	var word int32 = 0
+	for k < nlines {
+		word = plan.AnOcrWord(ans, at, 10*scale, (20+(k*60))*scale, 60*scale, 40*scale, 900, k, 0)
+		plan.AnOcrCp(ans, word, 72)
+		plan.AnOcrCp(ans, word, 105)
+		k += 1
+	}
+	ocr.OxBegin(ans, 0, 0, 0, 0, osd, 1281455214, 100, oconf, nlines, 1, 0, 0, 0)
+	k = 0
+	for k < nlines {
+		ocr.OxLine(ans, 10*scale, (20+(k*60))*scale, 60*scale, 40*scale, 10*scale, (55+(k*60))*scale, 70*scale, (55+(k*60))*scale, 0, 0, 0, xh*scale, 14, 6)
+		k += 1
+	}
+	ocr.OxBlock(ans, 10*scale, 20*scale, 60*scale, (nlines*60)*scale, 0, 0, 0)
+	k = 0
+	for k < nlines {
+		ocr.OxWord(ans, 0, 0, -1, 0)
+		k += 1
+	}
+	plan.AnOcrEnd(ans, at)
+	return at
+}
+
+func whiteFrame(bms *port.BitmapSet, id int32, w int32, h int32) int32 {
+	// A decoded frame of paper (255) under the id of its decode request, as the host puts one in the set.
+	var b *port.Bitmap = port.BmsPut(bms, id, w, h, 1)
+	var y int32 = 0
+	var x int32 = 0
+	for y < h {
+		x = 0
+		for x < w {
+			port.BitmapSetU8(b, x, y, 0, 255)
+			x += 1
+		}
+		y += 1
+	}
+	return 0
+}
+
+func pagePx(ans *port.Cells, rq *port.Cells, bms *port.BitmapSet, fuse int32, mask *port.Cells, et *port.Cells, wd *port.Cells, ln *port.Cells, oruns *port.Cells, olines *port.Cells, owords *port.Cells) int32 {
+	// Frame 0 of an input of one frame under the policy `always`, with the pixels of its decode in `bms` and `fuse` the page unit's flags.
+	return rasterin.RsPage(0, 7, 8, 2, fuse, ans, rq, port.NewCells(), bms, mask, port.NewCells(), port.NewCells(), port.NewCells(), et, port.NewCells(), port.NewCells(), oruns, port.NewCells(), olines, owords, port.NewCells(), port.NewCells(), wd, ln, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
+}
+
+func TestAFrameFedSidewaysIsReadFromItsTurnedView(emonT *testing.T) {
+	// P12.3 I-5: an image page went through `rs-page`, which wrote the first pass's lines and never looked at what OSD said, so a PNG turned a quarter or a half was
+	// read as garbage and no second pass ran. It is the scan unit's now: OSD sure that the page is turned (`nm-orient`) has the unit ask for the turned view.
+	var ans *port.Cells = port.NewCells()
+	var rq1 *port.Cells = port.NewCells()
+	var rq2 *port.Cells = port.NewCells()
+	var mask *port.Cells = port.NewCells()
+	var oruns *port.Cells = port.NewCells()
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var bms *port.BitmapSet = port.NewBitmapSet()
+	var bms2 *port.BitmapSet = port.NewBitmapSet()
+	// a unit's attempt has a set of its own (what kin made in one is dropped with it): the frame's pixels are put in each
+	port.CellsPush(mask, 0)
+	whiteFrame(bms, 260, 100, 300)
+	whiteFrame(bms2, 260, 100, 300)
+	plan.AnDecode(ans, 260, 100, 300, 1, 0, 1, 1)
+	fakeLines(ans, 272, 5, 1, 6, 90, 100)
+	port.AssertEq(emonT, pagePx(ans, rq1, bms, 0, mask, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), plan.UsRequests(), "the first pass is in and the page is turned: it asks")
+	var at int32 = plan.RecFind(rq1, plan.PuId(0, retarget.RiRotated()))
+	port.AssertThat(emonT, at >= 0, "the OCR of the turned view")
+	port.AssertEq(emonT, plan.RecKind(rq1, at), plan.PkOcr(), "an OCR request")
+	port.AssertEq(emonT, plan.RqArg(rq1, at, 0), plan.PuViewId(0, retarget.RvRotated()), "of the kin-made view")
+	port.AssertEq(emonT, port.BitmapW(port.BmsGet(bms, plan.PuViewId(0, retarget.RvRotated()))), 300, "turned a quarter: as wide as the frame is high")
+	port.AssertEq(emonT, port.BitmapH(port.BmsGet(bms, plan.PuViewId(0, retarget.RvRotated()))), 100, "and as high as it is wide")
+	port.AssertEq(emonT, port.CellsAt(mask, 0), 0, "an attempt that asks writes nothing: the page is not yet read")
+	// the turned view read: the page is done, and the evidence says the turned view was read
+	fakeLines(ans, 274, 5, 1, 6, -1, -1)
+	port.AssertEq(emonT, pagePx(ans, rq2, bms2, 0, mask, port.NewCells(), port.NewCells(), port.NewCells(), oruns, olines, owords), plan.UsDone(), "done")
+	port.AssertEq(emonT, port.CellsAt(mask, 0), 1, "the page was OCR'd")
+	port.AssertEq(emonT, evidence.OrCount(oruns), 2, "the first pass and the turned view's reading")
+	port.AssertEq(emonT, evidence.OrGet(oruns, 1, evidence.OrfPass()), evidence.OpReRotated(), "the second run is the re-rotated pass")
+}
+
+func TestTheHiddenSettingNoRetargetLeavesATurnedFrameAsTheFirstPassReadIt(emonT *testing.T) {
+	var ans *port.Cells = port.NewCells()
+	var rq *port.Cells = port.NewCells()
+	var mask *port.Cells = port.NewCells()
+	var bms *port.BitmapSet = port.NewBitmapSet()
+	port.CellsPush(mask, 0)
+	whiteFrame(bms, 260, 100, 300)
+	plan.AnDecode(ans, 260, 100, 300, 1, 0, 1, 1)
+	fakeLines(ans, 272, 5, 1, 6, 90, 100)
+	port.AssertEq(emonT, pagePx(ans, rq, bms, 2, mask, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), plan.UsDone(), "`no-retarget`: done")
+	port.AssertEq(emonT, port.CellsLen(rq), 0, "no request")
+	port.AssertEq(emonT, port.CellsAt(mask, 0), 1, "the first pass's lines")
+}
+
+func TestAFrameOfSmallTextIsReadAgainEnlarged(emonT *testing.T) {
+	// P12.3 I-3: a 72 dpi page was read once, at the size it was; whole words and decimal points were lost and nothing said so. Its first pass shows the text is under 16 pixels
+	// high (x-height 6): the unit makes the frame 4 times as large as a view and asks for the OCR of THAT, and reads the enlargement when it reads as much.
+	var ans *port.Cells = port.NewCells()
+	var rq1 *port.Cells = port.NewCells()
+	var rq2 *port.Cells = port.NewCells()
+	var rq3 *port.Cells = port.NewCells()
+	var mask *port.Cells = port.NewCells()
+	var oruns *port.Cells = port.NewCells()
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var bms *port.BitmapSet = port.NewBitmapSet()
+	var bms2 *port.BitmapSet = port.NewBitmapSet()
+	var bms3 *port.BitmapSet = port.NewBitmapSet()
+	port.CellsPush(mask, 0)
+	whiteFrame(bms, 260, 100, 300)
+	whiteFrame(bms2, 260, 100, 300)
+	whiteFrame(bms3, 260, 100, 300)
+	plan.AnDecode(ans, 260, 100, 300, 1, 0, 1, 1)
+	fakeLines(ans, 272, 5, 1, 6, -1, -1)
+	port.AssertEq(emonT, pagePx(ans, rq1, bms, 0, mask, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), plan.UsRequests(), "the first pass is in and the text is small: it asks")
+	var at int32 = plan.RecFind(rq1, plan.PuId(0, upscale.RiUpscale()))
+	port.AssertThat(emonT, at >= 0, "the OCR of the enlarged view")
+	port.AssertEq(emonT, plan.RecKind(rq1, at), plan.PkOcr(), "an OCR request")
+	port.AssertEq(emonT, plan.RqArg(rq1, at, 0), plan.PuViewId(0, upscale.RvUpscaled()), "of the kin-made view")
+	port.AssertEq(emonT, plan.RqArg(rq1, at, 1), 3, "psm 3")
+	port.AssertEq(emonT, ocr.OcfDpi(plan.RqArg(rq1, at, 2)), 346, "told the resolution the text says it has, 4 times: ten point type at an x-height of 6 pixels is 86 dpi")
+	port.AssertEq(emonT, port.BitmapW(port.BmsGet(bms, plan.PuViewId(0, upscale.RvUpscaled()))), 400, "4 times as wide")
+	port.AssertEq(emonT, port.BitmapH(port.BmsGet(bms, plan.PuViewId(0, upscale.RvUpscaled()))), 1200, "and as high")
+	port.AssertEq(emonT, port.CellsAt(mask, 0), 0, "nothing is written yet")
+	// the enlargement read as much: it is the page's reading, and the dump says so
+	fakeLines(ans, 277, 5, 4, 6, -1, -1)
+	port.AssertEq(emonT, pagePx(ans, rq2, bms2, 0, mask, port.NewCells(), port.NewCells(), port.NewCells(), oruns, olines, owords), plan.UsDone(), "done")
+	port.AssertEq(emonT, port.CellsLen(rq2), 0, "nothing more asked")
+	port.AssertEq(emonT, port.CellsAt(mask, 0), 1, "the page was OCR'd")
+	port.AssertEq(emonT, evidence.OrCount(oruns), 1, "one run: the enlargement's replaces the first pass")
+	port.AssertEq(emonT, evidence.OrGet(oruns, 0, evidence.OrfPass()), evidence.OpUpscaled(), "the upscaled pass")
+	// a first pass that read nothing of what the enlargement read: the same
+	var ans2 *port.Cells = port.NewCells()
+	var oruns2 *port.Cells = port.NewCells()
+	var mask2 *port.Cells = port.NewCells()
+	port.CellsPush(mask2, 0)
+	plan.AnDecode(ans2, 260, 100, 300, 1, 0, 1, 1)
+	fakeLines(ans2, 272, 5, 1, 6, -1, -1)
+	fakeLines(ans2, 277, 1, 4, 6, -1, -1)
+	port.AssertEq(emonT, pagePx(ans2, rq3, bms3, 0, mask2, port.NewCells(), port.NewCells(), port.NewCells(), oruns2, port.NewCells(), port.NewCells()), plan.UsDone(), "done")
+	port.AssertEq(emonT, evidence.OrGet(oruns2, 0, evidence.OrfPass()), 1, "an enlargement that read less than the first pass is not adopted: the first pass stands")
 }

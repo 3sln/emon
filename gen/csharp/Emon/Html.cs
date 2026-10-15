@@ -214,7 +214,7 @@ public static class Html {
         int r = 0;
         int i = 0;
         int kind = Model.NodeKind(nodes, n);
-        int cf = Calib.CalConf(kind, Model.NodeSrc(nodes, n), Model.NodeConf(nodes, n));
+        int cf = Calib.CalNodeConf(nodes, n);
         if ((HOn(o, 1) == 1) && (Model.NodeIsInline(nodes, n) == 0) && (kind != Model.NkNote())) {
             emon.Port.TextAscii(t, " id=\"emon-");
             emon.Port.TextI32(t, n);

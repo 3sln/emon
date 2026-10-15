@@ -1300,9 +1300,46 @@ public static class Scan {
         }
         return -1;
     }
+    public static int ScMaskUnread() {
+        // D1610: added to a page's `mask` cell when the engine had no model for the page's script (`emon.scriptcheck`).
+        return 4;
+    }
+    public static int ScUnreadConf() {
+        // D1610: the most confidence (per mille) a block of a page in a script the engine cannot read keeps.
+        return 100;
+    }
+    public static int ScTagUnread(emon.Port.Cells nodes, emon.Port.Cells regions, emon.Port.Cells mask) {
+        // D1610: every node whose text is OCR's (`ocr` in its source) on a page the unit marked `sc-mask-unread` (OSD sure of a script that no model the engine read it
+        // with reads, `emon.scriptcheck`): a block is flagged `script-unread` and `low-conf`, and every node's confidence is held at `sc-unread-conf`. The text is the
+        // engine's guess at a script it cannot read, kept and never presented as confident. After every other provenance stage (the scan's, fusion's). Answers the nodes held.
+        int nn = Model.NodeCount(nodes);
+        int n = 1;
+        int pg = 0;
+        int held = 0;
+        while (n < nn) {
+            pg = ScNodePage(nodes, regions, n);
+            if ((pg >= 1) && (pg <= emon.Port.CellsLen(mask))) {
+                if ((emon.Port.CellsAt(mask, pg - 1) / 4) >= 1) {
+                    if ((Model.NodeSrc(nodes, n) & Model.SrOcr()) == Model.SrOcr()) {
+                        if (Model.NkIsInline(Model.NodeKind(nodes, n)) == 0) {
+                            Model.NodeAddFlag(nodes, n, Model.FlScriptUnread());
+                            Model.NodeAddFlag(nodes, n, Model.FlLowConf());
+                        }
+                        if (Model.NodeConf(nodes, n) > ScUnreadConf()) {
+                            Model.NodeSetConf(nodes, n, ScUnreadConf());
+                        }
+                        held += 1;
+                    }
+                }
+            }
+            n += 1;
+        }
+        return held;
+    }
     public static int ScTag(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells mask, int policy) {
         // The provenance of OCR text, after the paragraphs are built. `mask` has one cell a page: 0 none, 1 an image page was
-        // OCR'd, 2 a PDF page was (its kind becomes `scanned`, SPEC 3.4). Every node on a masked page: its `text` source becomes
+        // OCR'd, 2 a PDF page was (its kind becomes `scanned`, SPEC 3.4), plus `sc-mask-unread` for a page in a script the engine cannot read (`sc-tag-unread`).
+        // Every node on a masked page: its `text` source becomes
         // `ocr`, an inline text's confidence 1000 (a glyph's own) becomes 500 (an engine's word: uncalibrated, D130, Phase 10), and a
         // block that had `text` is flagged `ocr-only`. The root gets `settings.ocr` (`policy` 1 auto, 2 always) when any page was OCR'd.
         int np = Model.PageCount(pages);
@@ -1315,10 +1352,10 @@ public static class Scan {
         int s = 0;
         int start = 0;
         while (i < np) {
-            if ((i < emon.Port.CellsLen(mask)) && (emon.Port.CellsAt(mask, i) >= 1)) {
+            if ((i < emon.Port.CellsLen(mask)) && ((emon.Port.CellsAt(mask, i) % 4) >= 1)) {
                 any = 1;
             }
-            if ((i < emon.Port.CellsLen(mask)) && (emon.Port.CellsAt(mask, i) == 2)) {
+            if ((i < emon.Port.CellsLen(mask)) && ((emon.Port.CellsAt(mask, i) % 4) == 2)) {
                 Model.PageSetKind(pages, i, Model.PkScanned());
             }
             i += 1;
@@ -1332,7 +1369,7 @@ public static class Scan {
             if ((pg >= 1) && (pg <= emon.Port.CellsLen(mask))) {
                 m = emon.Port.CellsAt(mask, pg - 1);
             }
-            if (m >= 1) {
+            if ((m % 4) >= 1) {
                 s = Model.NodeSrc(nodes, n);
                 if ((s & Model.SrText()) == Model.SrText()) {
                     Model.NodeSetSrc(nodes, n, (s - Model.SrText()) + Model.SrOcr());

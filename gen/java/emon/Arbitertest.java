@@ -440,6 +440,47 @@ public final class Arbitertest {
         emon.Testport.assertEq(Player.fvGet(fv, 1, 2), 190, "a Hebrew word with one: the engine cannot read it, so the text layer stays (the default)");
         emon.Testport.assertEq(Player.fvGet(fv, 1, 1), 1, "the text layer's");
     }
+    public static void testAWordInAScriptTheEngineLacksKeepsItsTextWhateverDigitSitsOnIt() {
+        // D1610: `ar-word-latin` answered 1 for ANY Latin letter or digit, so a Cyrillic word with an attached reference number [10], a CJK word with a
+        // year, or a formula with a variable was 'readable' and rows 120 and 130 gave the group to an English engine that reads it as junk
+        emon.Port.Cells fw = emon.Port.newCells();
+        emon.Port.Cells fl = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells cg = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells im = emon.Port.newCells();
+        emon.Port.Cells ep = emon.Port.newCells();
+        emon.Port.Cells nfw = emon.Port.newCells();
+        emon.Port.Cells nfl = emon.Port.newCells();
+        emon.Port.Cells fv = emon.Port.newCells();
+        emon.Port.Cells fx = emon.Port.newCells();
+        emon.Port.Cells afa = emon.Port.newCells();
+        int w0 = atTword(fw, feats, et, 0, 0, 0, 1000, 500, 1055, 49);
+        int w1 = atTword(fw, feats, et, 1000, 0, 0, 1000, 500, 12354, 50);
+        int w2 = atTword(fw, feats, et, 2000, 0, 5, 60, 0, 1055, 51);
+        int w3 = atTword(fw, feats, et, 3000, 0, 5, 60, 0, 8721, 120);
+        int w4 = atTword(fw, feats, et, 4000, 0, 0, 1000, 500, 65, 49);
+        int o0 = atOword(ow, feats, et, 0, 900, 0, 104, 101, 0);
+        int o1 = atOword(ow, feats, et, 1000, 1900, 0, 104, 101, 0);
+        int o2 = atOword(ow, feats, et, 2000, 2900, 0, 104, 101, 0);
+        int o3 = atOword(ow, feats, et, 3000, 3900, 0, 104, 101, 0);
+        int o4 = atOword(ow, feats, et, 4000, 4900, 0, 104, 101, 0);
+        atLine3(fl, 0, 5);
+        atGroup(cg, refs, w0, 1, o0, 1, 0);
+        atGroup(cg, refs, w1, 1, o1, 1, 0);
+        atGroup(cg, refs, w2, 1, o2, 1, 0);
+        atGroup(cg, refs, w3, 1, o3, 1, 0);
+        atGroup(cg, refs, w4, 1, o4, 1, 0);
+        atRun(cg, refs, fw, fl, et, feats, ow, im, ep, nfw, nfl, fv, fx, afa);
+        emon.Testport.assertEq(Player.fvGet(fv, 0, 2), 190, "a Cyrillic letter and a digit, a bad glyph: the text layer stays");
+        emon.Testport.assertEq(Player.fvGet(fv, 0, 1), 1, "the text layer's");
+        emon.Testport.assertEq(Player.fvGet(fv, 1, 2), 190, "a hiragana letter and a digit, a bad glyph: the text layer stays");
+        emon.Testport.assertEq(Player.fvGet(fv, 2, 2), 190, "a Cyrillic letter and a digit in an unhealthy font: the text layer stays (row 130 needs a script the engine reads)");
+        emon.Testport.assertEq(Player.fvGet(fv, 3, 2), 190, "a summation sign and a variable in an unhealthy font: the text layer stays");
+        emon.Testport.assertEq(Player.fvGet(fv, 4, 2), 120, "a Latin letter and a digit with a bad glyph: still OCR's");
+    }
     public static void testOcrOnlyGroupsAreDroppedHeldOrNothing() {
         emon.Port.Cells fw = emon.Port.newCells();
         emon.Port.Cells fl = emon.Port.newCells();

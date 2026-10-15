@@ -252,6 +252,34 @@ fn test_witnesses_that_disagree_with_the_text_escalate_the_page() {
     crate::testport::assert_eq(rp_weak(2, 0, pl, fw, fl, et, ri_witness(), 0, 1, owords, oruns, scr, ta, tb, tt), 0, "one compared line: not enough");
 }
 #[test]
+fn test_a_cyrillic_line_with_its_reference_number_is_not_compared() {
+    // D1610: the line holds a digit, which the check took for Latin and compared with the engine's English junk; one letter of a script the engine lacks makes it the text layer's
+    let pl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oruns: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ta: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw0: i32 = rpt_word(et, 1055, 1088, 1080, 49, 49);
+    let tw1: i32 = rpt_word(et, 1074, 1077, 49, 50, 51);
+    let bw0: i32 = rpt_word(et, 120, 121, 122, 122, 121);
+    let bw1: i32 = rpt_word(et, 113, 119, 101, 114, 116);
+    wd_new(fw, 1, 100, 100, 600, 200, 100, 100, 600, 200, 0, 0, tw0, 5, 0, 900, -1);
+    wd_new(fw, 1, 700, 100, 1200, 200, 700, 100, 1200, 200, 0, 0, tw1, 5, 0, 900, -1);
+    wd_set(fw, 0, wf_font(), 7);
+    wd_set(fw, 1, wf_font(), 7);
+    ln_new(fl, 1, 100, 100, 1200, 200, 100, 100, 1200, 200, 0, 0, 0, 2);
+    rpt_witness_row(pl, 0, 7);
+    rpt_witness_row(pl, 0, 7);
+    rpt_reading(oruns, owords, ri_witness() + 0, bw0, bw1);
+    rpt_reading(oruns, owords, ri_witness() + 1, bw0, bw1);
+    crate::testport::assert_eq(rp_weak(2, 0, pl, fw, fl, et, ri_witness(), 0, 2, owords, oruns, scr, ta, tb, tt), 0, "a Cyrillic line the engine reads as junk: the font is not weak");
+}
+#[test]
 fn test_a_font_with_no_mapping_is_weak_where_the_engine_reads_letters() {
     // the text layer has code points of the private use area (what an unmapped font gives); two witness lines read letters over them
     let pl2: &mut crate::port::Cells = &mut crate::port::Cells::new();

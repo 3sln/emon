@@ -27,7 +27,8 @@ public final class Rasterintest {
         return Rasterin.rsDoc(emon.Port.srcOfBlob(emon.Testport.hexBlob("49492a0008000000")), 7, Rasterin.rsTiff(), ans, rq, nodes, attrs, text, pages, mask);
     }
     public static int pagePol(int f, emon.Port.Cells ans, emon.Port.Cells rq, int policy, emon.Port.Cells loc, emon.Port.Cells mask, emon.Port.Cells et, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells oruns, emon.Port.Cells olines, emon.Port.Cells owords) {
-        return Rasterin.rsPage(f, 7, 8, policy, ans, rq, loc, emon.Port.newBitmapSet(), mask, emon.Port.newCells(), emon.Port.newCells(), et, emon.Port.newCells(), emon.Port.newCells(), oruns, emon.Port.newCells(), olines, owords, emon.Port.newCells(), emon.Port.newCells(), wd, ln, emon.Port.newCells(), 0);
+        // no pixel in the bitmap set: the unit is the slim one, the first pass's lines (D1610: with pixels it is `emon.pageunit`'s scan unit, whose laws are there)
+        return Rasterin.rsPage(f, 7, 8, policy, 0, ans, rq, loc, emon.Port.newBitmapSet(), mask, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), et, emon.Port.newCells(), emon.Port.newCells(), oruns, emon.Port.newCells(), olines, owords, emon.Port.newCells(), emon.Port.newCells(), wd, ln, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells());
     }
     public static void testTheDocumentPassAsksForFrameZerosHeaderAndNothingMore() {
         emon.Port.Cells ans = emon.Port.newCells();
@@ -202,5 +203,145 @@ public final class Rasterintest {
         emon.Testport.assertEq(Evidence.lnGet(ln, 0, Evidence.lhRot()), 0, "upright");
         emon.Testport.assertEq(Evidence.lnGet(ln, 0, Evidence.lhY0()), (55 * 24) - (34 * 24), "the box's top is the baseline less x-height and ascenders");
         emon.Testport.assertEq(Evidence.lnGet(ln, 0, Evidence.lhY1()), (55 * 24) + (6 * 24), "and its bottom the baseline plus descenders");
+    }
+    public static int fakeLines(emon.Port.Cells ans, int id, int nlines, int scale, int xh, int osd, int oconf) {
+        // An OCR answer of `nlines` lines, each of one word "Hi" (60 x 40 pixels at `scale`, x-height `xh` at `scale`, the line 60 pixels below the one before)
+        // that OSD says is turned `osd` degrees at the confidence `oconf` (x10; -1: no OSD).
+        int at = Plan.anOcr(ans, id);
+        int k = 0;
+        int word = 0;
+        while (k < nlines) {
+            word = Plan.anOcrWord(ans, at, 10 * scale, (20 + (k * 60)) * scale, 60 * scale, 40 * scale, 900, k, 0);
+            Plan.anOcrCp(ans, word, 72);
+            Plan.anOcrCp(ans, word, 105);
+            k += 1;
+        }
+        Ocr.oxBegin(ans, 0, 0, 0, 0, osd, 1281455214, 100, oconf, nlines, 1, 0, 0, 0);
+        k = 0;
+        while (k < nlines) {
+            Ocr.oxLine(ans, 10 * scale, (20 + (k * 60)) * scale, 60 * scale, 40 * scale, 10 * scale, (55 + (k * 60)) * scale, 70 * scale, (55 + (k * 60)) * scale, 0, 0, 0, xh * scale, 14, 6);
+            k += 1;
+        }
+        Ocr.oxBlock(ans, 10 * scale, 20 * scale, 60 * scale, (nlines * 60) * scale, 0, 0, 0);
+        k = 0;
+        while (k < nlines) {
+            Ocr.oxWord(ans, 0, 0, -1, 0);
+            k += 1;
+        }
+        Plan.anOcrEnd(ans, at);
+        return at;
+    }
+    public static int whiteFrame(emon.Port.BitmapSet bms, int id, int w, int h) {
+        // A decoded frame of paper (255) under the id of its decode request, as the host puts one in the set.
+        emon.Port.Bitmap b = emon.Port.bmsPut(bms, id, w, h, 1);
+        int y = 0;
+        int x = 0;
+        while (y < h) {
+            x = 0;
+            while (x < w) {
+                emon.Port.bitmapSetU8(b, x, y, 0, 255);
+                x += 1;
+            }
+            y += 1;
+        }
+        return 0;
+    }
+    public static int pagePx(emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms, int fuse, emon.Port.Cells mask, emon.Port.Cells et, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells oruns, emon.Port.Cells olines, emon.Port.Cells owords) {
+        // Frame 0 of an input of one frame under the policy `always`, with the pixels of its decode in `bms` and `fuse` the page unit's flags.
+        return Rasterin.rsPage(0, 7, 8, 2, fuse, ans, rq, emon.Port.newCells(), bms, mask, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), et, emon.Port.newCells(), emon.Port.newCells(), oruns, emon.Port.newCells(), olines, owords, emon.Port.newCells(), emon.Port.newCells(), wd, ln, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells());
+    }
+    public static void testAFrameFedSidewaysIsReadFromItsTurnedView() {
+        // P12.3 I-5: an image page went through `rs-page`, which wrote the first pass's lines and never looked at what OSD said, so a PNG turned a quarter or a half was
+        // read as garbage and no second pass ran. It is the scan unit's now: OSD sure that the page is turned (`nm-orient`) has the unit ask for the turned view.
+        emon.Port.Cells ans = emon.Port.newCells();
+        emon.Port.Cells rq1 = emon.Port.newCells();
+        emon.Port.Cells rq2 = emon.Port.newCells();
+        emon.Port.Cells mask = emon.Port.newCells();
+        emon.Port.Cells oruns = emon.Port.newCells();
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.BitmapSet bms = emon.Port.newBitmapSet();
+        emon.Port.BitmapSet bms2 = emon.Port.newBitmapSet();
+        // a unit's attempt has a set of its own (what kin made in one is dropped with it): the frame's pixels are put in each
+        emon.Port.cellsPush(mask, 0);
+        whiteFrame(bms, 260, 100, 300);
+        whiteFrame(bms2, 260, 100, 300);
+        Plan.anDecode(ans, 260, 100, 300, 1, 0, 1, 1);
+        fakeLines(ans, 272, 5, 1, 6, 90, 100);
+        emon.Testport.assertEq(pagePx(ans, rq1, bms, 0, mask, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), Plan.usRequests(), "the first pass is in and the page is turned: it asks");
+        int at = Plan.recFind(rq1, Plan.puId(0, Retarget.riRotated()));
+        emon.Testport.assertThat(at >= 0, "the OCR of the turned view");
+        emon.Testport.assertEq(Plan.recKind(rq1, at), Plan.pkOcr(), "an OCR request");
+        emon.Testport.assertEq(Plan.rqArg(rq1, at, 0), Plan.puViewId(0, Retarget.rvRotated()), "of the kin-made view");
+        emon.Testport.assertEq(emon.Port.bitmapW(emon.Port.bmsGet(bms, Plan.puViewId(0, Retarget.rvRotated()))), 300, "turned a quarter: as wide as the frame is high");
+        emon.Testport.assertEq(emon.Port.bitmapH(emon.Port.bmsGet(bms, Plan.puViewId(0, Retarget.rvRotated()))), 100, "and as high as it is wide");
+        emon.Testport.assertEq(emon.Port.cellsAt(mask, 0), 0, "an attempt that asks writes nothing: the page is not yet read");
+        // the turned view read: the page is done, and the evidence says the turned view was read
+        fakeLines(ans, 274, 5, 1, 6, -1, -1);
+        emon.Testport.assertEq(pagePx(ans, rq2, bms2, 0, mask, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), oruns, olines, owords), Plan.usDone(), "done");
+        emon.Testport.assertEq(emon.Port.cellsAt(mask, 0), 1, "the page was OCR'd");
+        emon.Testport.assertEq(Evidence.orCount(oruns), 2, "the first pass and the turned view's reading");
+        emon.Testport.assertEq(Evidence.orGet(oruns, 1, Evidence.orfPass()), Evidence.opReRotated(), "the second run is the re-rotated pass");
+    }
+    public static void testTheHiddenSettingNoRetargetLeavesATurnedFrameAsTheFirstPassReadIt() {
+        emon.Port.Cells ans = emon.Port.newCells();
+        emon.Port.Cells rq = emon.Port.newCells();
+        emon.Port.Cells mask = emon.Port.newCells();
+        emon.Port.BitmapSet bms = emon.Port.newBitmapSet();
+        emon.Port.cellsPush(mask, 0);
+        whiteFrame(bms, 260, 100, 300);
+        Plan.anDecode(ans, 260, 100, 300, 1, 0, 1, 1);
+        fakeLines(ans, 272, 5, 1, 6, 90, 100);
+        emon.Testport.assertEq(pagePx(ans, rq, bms, 2, mask, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), Plan.usDone(), "`no-retarget`: done");
+        emon.Testport.assertEq(emon.Port.cellsLen(rq), 0, "no request");
+        emon.Testport.assertEq(emon.Port.cellsAt(mask, 0), 1, "the first pass's lines");
+    }
+    public static void testAFrameOfSmallTextIsReadAgainEnlarged() {
+        // P12.3 I-3: a 72 dpi page was read once, at the size it was; whole words and decimal points were lost and nothing said so. Its first pass shows the text is under 16 pixels
+        // high (x-height 6): the unit makes the frame 4 times as large as a view and asks for the OCR of THAT, and reads the enlargement when it reads as much.
+        emon.Port.Cells ans = emon.Port.newCells();
+        emon.Port.Cells rq1 = emon.Port.newCells();
+        emon.Port.Cells rq2 = emon.Port.newCells();
+        emon.Port.Cells rq3 = emon.Port.newCells();
+        emon.Port.Cells mask = emon.Port.newCells();
+        emon.Port.Cells oruns = emon.Port.newCells();
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.BitmapSet bms = emon.Port.newBitmapSet();
+        emon.Port.BitmapSet bms2 = emon.Port.newBitmapSet();
+        emon.Port.BitmapSet bms3 = emon.Port.newBitmapSet();
+        emon.Port.cellsPush(mask, 0);
+        whiteFrame(bms, 260, 100, 300);
+        whiteFrame(bms2, 260, 100, 300);
+        whiteFrame(bms3, 260, 100, 300);
+        Plan.anDecode(ans, 260, 100, 300, 1, 0, 1, 1);
+        fakeLines(ans, 272, 5, 1, 6, -1, -1);
+        emon.Testport.assertEq(pagePx(ans, rq1, bms, 0, mask, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), Plan.usRequests(), "the first pass is in and the text is small: it asks");
+        int at = Plan.recFind(rq1, Plan.puId(0, Upscale.riUpscale()));
+        emon.Testport.assertThat(at >= 0, "the OCR of the enlarged view");
+        emon.Testport.assertEq(Plan.recKind(rq1, at), Plan.pkOcr(), "an OCR request");
+        emon.Testport.assertEq(Plan.rqArg(rq1, at, 0), Plan.puViewId(0, Upscale.rvUpscaled()), "of the kin-made view");
+        emon.Testport.assertEq(Plan.rqArg(rq1, at, 1), 3, "psm 3");
+        emon.Testport.assertEq(Ocr.ocfDpi(Plan.rqArg(rq1, at, 2)), 346, "told the resolution the text says it has, 4 times: ten point type at an x-height of 6 pixels is 86 dpi");
+        emon.Testport.assertEq(emon.Port.bitmapW(emon.Port.bmsGet(bms, Plan.puViewId(0, Upscale.rvUpscaled()))), 400, "4 times as wide");
+        emon.Testport.assertEq(emon.Port.bitmapH(emon.Port.bmsGet(bms, Plan.puViewId(0, Upscale.rvUpscaled()))), 1200, "and as high");
+        emon.Testport.assertEq(emon.Port.cellsAt(mask, 0), 0, "nothing is written yet");
+        // the enlargement read as much: it is the page's reading, and the dump says so
+        fakeLines(ans, 277, 5, 4, 6, -1, -1);
+        emon.Testport.assertEq(pagePx(ans, rq2, bms2, 0, mask, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), oruns, olines, owords), Plan.usDone(), "done");
+        emon.Testport.assertEq(emon.Port.cellsLen(rq2), 0, "nothing more asked");
+        emon.Testport.assertEq(emon.Port.cellsAt(mask, 0), 1, "the page was OCR'd");
+        emon.Testport.assertEq(Evidence.orCount(oruns), 1, "one run: the enlargement's replaces the first pass");
+        emon.Testport.assertEq(Evidence.orGet(oruns, 0, Evidence.orfPass()), Evidence.opUpscaled(), "the upscaled pass");
+        // a first pass that read nothing of what the enlargement read: the same
+        emon.Port.Cells ans2 = emon.Port.newCells();
+        emon.Port.Cells oruns2 = emon.Port.newCells();
+        emon.Port.Cells mask2 = emon.Port.newCells();
+        emon.Port.cellsPush(mask2, 0);
+        Plan.anDecode(ans2, 260, 100, 300, 1, 0, 1, 1);
+        fakeLines(ans2, 272, 5, 1, 6, -1, -1);
+        fakeLines(ans2, 277, 1, 4, 6, -1, -1);
+        emon.Testport.assertEq(pagePx(ans2, rq3, bms3, 0, mask2, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), oruns2, emon.Port.newCells(), emon.Port.newCells()), Plan.usDone(), "done");
+        emon.Testport.assertEq(Evidence.orGet(oruns2, 0, Evidence.orfPass()), 1, "an enlargement that read less than the first pass is not adopted: the first pass stands");
     }
 }

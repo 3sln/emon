@@ -388,6 +388,10 @@ public static class Modeltest {
         emon.Testport.AssertEq(Model.PagePxW(pages, 1), 2480, "px w");
         emon.Testport.AssertEq(Model.PagePxH(pages, 1), 3508, "px h");
         emon.Testport.AssertEq(Model.PageHealth(pages, 0), -1, "the other page is untouched");
+        Model.PageSetSize(pages, 1, 61200, 79200);
+        emon.Testport.AssertEq(Model.PageW(pages, 1), 61200, "a page turned upright (D1610): w");
+        emon.Testport.AssertEq(Model.PageH(pages, 1), 79200, "h");
+        emon.Testport.AssertEq(Model.PageW(pages, 0), 61200, "the other page's w is untouched");
         emon.Testport.AssertEq(Model.LedgerAdd(ledger, Model.DrPageNumber(), 1, 29000, 76000, 32200, 77200, 998, Model.SrText()), 0, "first row");
         emon.Testport.AssertEq(Model.LedgerAdd(ledger, 1, 2, 0, 0, 1, 1, -1, 0), 1, "second row");
         emon.Testport.AssertEq(Model.LedgerCount(ledger), 2, "two rows");

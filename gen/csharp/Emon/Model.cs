@@ -988,6 +988,9 @@ public static class Model {
     public static int FlInTableImage() {
         return 512;
     }
+    public static int FlScriptUnread() {
+        return 1024;
+    }
     public static int FlEmitName(System.Text.StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.TextAscii(t, "low-conf");
@@ -1027,6 +1030,10 @@ public static class Model {
         }
         if (code == 512) {
             emon.Port.TextAscii(t, "in-table-image");
+            return 1;
+        }
+        if (code == 1024) {
+            emon.Port.TextAscii(t, "script-unread");
             return 1;
         }
         return 0;
@@ -2433,6 +2440,11 @@ public static class Model {
     public static int PageSetKind(emon.Port.Cells pages, int p, int kind) {
         // A page's source kind (`pk`), after the page is made: `scanned` once the unit finds its text came from OCR (D212).
         return Pset(pages, p, 6, kind);
+    }
+    public static int PageSetSize(emon.Port.Cells pages, int p, int w, int h) {
+        // A page's size in centipoints, after the page is made: an image read from its turned view (D1610) is as wide as it is high and the reverse, upright.
+        Pset(pages, p, 3, w);
+        return Pset(pages, p, 4, h);
     }
     public static int PageSetResolution(emon.Port.Cells pages, int p, int dpi, int pxw, int pxh) {
         Pset(pages, p, 8, dpi);

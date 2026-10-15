@@ -451,6 +451,48 @@ fn test_a_bad_glyph_in_a_healthy_font_goes_to_ocr_but_only_where_the_engine_read
     crate::testport::assert_eq(fv_get(fv, 1, 1), 1, "the text layer's");
 }
 #[test]
+fn test_a_word_in_a_script_the_engine_lacks_keeps_its_text_whatever_digit_sits_on_it() {
+    // D1610: `ar-word-latin` answered 1 for ANY Latin letter or digit, so a Cyrillic word with an attached reference number [10], a CJK word with a
+    // year, or a formula with a variable was 'readable' and rows 120 and 130 gave the group to an English engine that reads it as junk
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ep: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nfw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nfl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fv: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fx: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let afa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let w0: i32 = at_tword(fw, feats, et, 0, 0, 0, 1000, 500, 1055, 49);
+    let w1: i32 = at_tword(fw, feats, et, 1000, 0, 0, 1000, 500, 12354, 50);
+    let w2: i32 = at_tword(fw, feats, et, 2000, 0, 5, 60, 0, 1055, 51);
+    let w3: i32 = at_tword(fw, feats, et, 3000, 0, 5, 60, 0, 8721, 120);
+    let w4: i32 = at_tword(fw, feats, et, 4000, 0, 0, 1000, 500, 65, 49);
+    let o0: i32 = at_oword(ow, feats, et, 0, 900, 0, 104, 101, 0);
+    let o1: i32 = at_oword(ow, feats, et, 1000, 1900, 0, 104, 101, 0);
+    let o2: i32 = at_oword(ow, feats, et, 2000, 2900, 0, 104, 101, 0);
+    let o3: i32 = at_oword(ow, feats, et, 3000, 3900, 0, 104, 101, 0);
+    let o4: i32 = at_oword(ow, feats, et, 4000, 4900, 0, 104, 101, 0);
+    at_line3(fl, 0, 5);
+    at_group(cg, refs, w0, 1, o0, 1, 0);
+    at_group(cg, refs, w1, 1, o1, 1, 0);
+    at_group(cg, refs, w2, 1, o2, 1, 0);
+    at_group(cg, refs, w3, 1, o3, 1, 0);
+    at_group(cg, refs, w4, 1, o4, 1, 0);
+    at_run(cg, refs, fw, fl, et, feats, ow, im, ep, nfw, nfl, fv, fx, afa);
+    crate::testport::assert_eq(fv_get(fv, 0, 2), 190, "a Cyrillic letter and a digit, a bad glyph: the text layer stays");
+    crate::testport::assert_eq(fv_get(fv, 0, 1), 1, "the text layer's");
+    crate::testport::assert_eq(fv_get(fv, 1, 2), 190, "a hiragana letter and a digit, a bad glyph: the text layer stays");
+    crate::testport::assert_eq(fv_get(fv, 2, 2), 190, "a Cyrillic letter and a digit in an unhealthy font: the text layer stays (row 130 needs a script the engine reads)");
+    crate::testport::assert_eq(fv_get(fv, 3, 2), 190, "a summation sign and a variable in an unhealthy font: the text layer stays");
+    crate::testport::assert_eq(fv_get(fv, 4, 2), 120, "a Latin letter and a digit with a bad glyph: still OCR's");
+}
+#[test]
 fn test_ocr_only_groups_are_dropped_held_or_nothing() {
     let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();

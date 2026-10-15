@@ -52,6 +52,9 @@ public final class Healthtest {
         if (script == 0) {
             emon.Port.cellsPush(et, 97);
             emon.Port.cellsPush(et, 98);
+        } else if (script == 2) {
+            emon.Port.cellsPush(et, 1488);
+            emon.Port.cellsPush(et, 49);
         } else {
             emon.Port.cellsPush(et, 1488);
             emon.Port.cellsPush(et, 1489);
@@ -265,6 +268,26 @@ public final class Healthtest {
         Health.hlPage(1, cg, refs, fw, words, et, feats, ob, ol, ow, hl);
         emon.Testport.assertEq(htAgreementOf(hl, 1, 5), -1, "no group counted: no agreement");
         emon.Testport.assertEq(htScoreOf(hl, 1, 5), 1000, "and the score is P7.0's");
+        emon.Testport.assertEq(Health.hlDoc(feats, fw, hl), 0, "the document pass has nothing to say");
+    }
+    public static void testAForeignWordWithADigitAttachedIsNotCounted() {
+        // D1610: a Hebrew letter and a digit (a word with its reference number) held to `hh-latin` as Latin and its disagreement with the engine's junk made the font unhealthy
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells fw = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells cg = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells hl = emon.Port.newCells();
+        emon.Port.Cells ob = emon.Port.newCells();
+        emon.Port.Cells ol = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        int w = htWordIn(words, fw, feats, et, 1, 5, 2);
+        htFontRow(hl, 1, 5);
+        htGroups(cg, refs, 1, Player.plEaFw(), w, 10, 0);
+        Health.hlPage(1, cg, refs, fw, words, et, feats, ob, ol, ow, hl);
+        emon.Testport.assertEq(htAgreementOf(hl, 1, 5), -1, "no group counted: a letter of a script the engine lacks makes the word its text layer's");
+        emon.Testport.assertEq(htScoreOf(hl, 1, 5), 1000, "and the font keeps P7.0's score");
         emon.Testport.assertEq(Health.hlDoc(feats, fw, hl), 0, "the document pass has nothing to say");
     }
     public static void testTextLayerCandidatesNamedAsWordsRows() {

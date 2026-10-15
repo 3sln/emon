@@ -286,7 +286,7 @@ API expose.
 | `at` | Zero or more regions `[page, x0, y0, x1, y1]` in page space (§3.4). A node spanning pages or columns has one region per **fragment** (per page and column, in reading order; D112); the column of a region is the page's `layout` cell that contains it (§3.7). Inline `text` nodes have regions only at `detail: words` (§13). |
 | `src` | Provenance: the set of sources that contributed (§3.5). |
 | `conf` | Confidence, integer 0..1000 (§3.5). |
-| `flags` | Small closed set of warnings: `low-conf`, `ocr-only`, `text-layer-suspect`, `reconstructed` (e.g. a repaired table), `dpi-unknown`, `rotated`, `vertical`, `struct-disagree` (a table's tags disagree with its geometry, D225), `tag-span-conflict` (a tagged span crosses an edge the rules close), `in-table-image` (an OCR-only word admitted as the text of a table drawn in an image, §9.9, D224; carried by the fused flow's verdict rows, not by Model nodes). |
+| `flags` | Small closed set of warnings: `low-conf`, `ocr-only`, `text-layer-suspect`, `reconstructed` (e.g. a repaired table), `dpi-unknown`, `rotated`, `vertical`, `struct-disagree` (a table's tags disagree with its geometry, D225), `tag-span-conflict` (a tagged span crosses an edge the rules close), `in-table-image` (an OCR-only word admitted as the text of a table drawn in an image, §9.9, D224; carried by the fused flow's verdict rows, not by Model nodes), `script-unread` (a block of an OCR'd page whose script the engine has no model for: OSD names a script that no model the engine read it with reads, §8.3, D1610; the text is the engine's guess, the block is `low-conf` and its confidence is held at 100). |
 
 ### 3.4 Geometry and units (D009)
 

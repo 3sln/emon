@@ -74,7 +74,7 @@ func RpAskWitness() int32 {
 
 func RpW() int32 {
 	// The cells of a page's plan row.
-	return 14
+	return 15
 }
 
 func RpFAsk() int32 {
@@ -671,11 +671,19 @@ func RpWeak(n int32, at int32, pl *port.Cells, fw *port.Cells, fl *port.Cells, e
 				}
 				q += 1
 			}
+			// D1610: compared only when every letter of the line is one the engine reads: a Cyrillic line with its reference number is not Latin
 			latin = 0
 			q = 0
 			for q < port.CellsLen(ta) {
 				if port.CellsAt(ta, q) < 592 {
 					latin = 1
+				}
+				q += 1
+			}
+			q = 0
+			for q < port.CellsLen(ta) {
+				if port.CellsAt(ta, q) >= 880 {
+					latin = 0
 				}
 				q += 1
 			}

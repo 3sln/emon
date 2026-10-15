@@ -74,4 +74,26 @@ public final class Calib {
         // The calibrated confidence (per mille) of a raw one for a node kind and source; -1 stays -1.
         return calLookup(kind, calClass(src), raw);
     }
+    public static int calNodeConf(emon.Port.Cells nodes, int n) {
+        // The calibrated confidence of node `n`, as the Model writes it (`cal-conf` of its kind, source and raw score), D1610: EXCEPT a node of a block flagged
+        // `script-unread` (the engine had no model for the page's script, `emon.scriptcheck`), which is written at its raw score when that is lower. The map is a
+        // step function clamped at its ends, and the lowest step of OCR text is a text the engine read: a raw 100 would be written as that, and the engine's guess
+        // at a script it cannot read would carry the confidence of what it can.
+        int raw = Model.nodeConf(nodes, n);
+        int cf = calConf(Model.nodeKind(nodes, n), Model.nodeSrc(nodes, n), raw);
+        int a = n;
+        if (raw < 0) {
+            return cf;
+        }
+        if (cf <= raw) {
+            return cf;
+        }
+        while (a >= 0) {
+            if ((Model.nodeFlags(nodes, a) & Model.flScriptUnread()) != 0) {
+                return raw;
+            }
+            a = Model.nodeParent(nodes, a);
+        }
+        return cf;
+    }
 }

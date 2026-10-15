@@ -360,7 +360,7 @@
             "at": [[4, -21474836.48, 21474836.47, 1, -1]],
             "src": ["text", "hidden-text", "ocr", "trace", "vector", "struct", "annot", "outline", "infer"],
             "conf": 793,
-            "flags": ["low-conf", "ocr-only", "text-layer-suspect", "reconstructed", "dpi-unknown", "rotated", "vertical"]
+            "flags": ["low-conf", "ocr-only", "text-layer-suspect", "reconstructed", "dpi-unknown", "rotated", "vertical", "script-unread"]
           },
           {
             "id": 42,

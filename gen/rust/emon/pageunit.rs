@@ -11,8 +11,10 @@ use crate::emon::player::*;
 use crate::emon::rasterplan::*;
 use crate::emon::retarget::*;
 use crate::emon::scan::*;
+use crate::emon::scriptcheck::*;
 use crate::emon::sealpx::*;
 use crate::emon::sigpx::*;
+use crate::emon::upscale::*;
 use crate::emon::xalign::*;
 
 pub fn pu_dpi() -> i32 {
@@ -26,6 +28,12 @@ pub fn pu_kind(pl: &mut crate::port::Cells, i: i32) -> i32 {
 }
 pub fn pu_field(pl: &mut crate::port::Cells, i: i32, k: i32) -> i32 {
     return crate::port::cells_at(pl, (i * pu_w()) + k);
+}
+pub fn pu_scan_dct() -> i32 {
+    return 0;
+}
+pub fn pu_scan_render() -> i32 {
+    return 1;
 }
 pub fn pk_none() -> i32 {
     return 0;
@@ -103,8 +111,8 @@ pub fn pu_plan(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: 
                 jj += 1;
             }
             if best >= 0 {
+                k = i * pu_w();
                 if sc_dct_span(src, ar, dc, a, b, st, im_get(im, best, mf_obj()), sp) == 1 {
-                    k = i * pu_w();
                     crate::port::cells_set(pl, k, 1);
                     crate::port::cells_set(pl, k + 1, im_get(im, best, mf_obj()));
                     crate::port::cells_set(pl, k + 2, crate::port::cells_at(sp, 0));
@@ -115,6 +123,22 @@ pub fn pu_plan(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: 
                     crate::port::cells_set(pl, k + 7, im_get(im, best, mf_y1()));
                     crate::port::cells_set(pl, k + 8, px1 - px0);
                     crate::port::cells_set(pl, k + 9, py1 - py0);
+                    crate::port::cells_set(pl, k + 14, pu_scan_dct());
+                } else {
+                    // D1610: a page whose content is one big image is a scan WHATEVER the codec (Flate, RunLength, LZW, CCITT, JBIG2, JPX, a DCT with more
+                    // than one stage or in an encrypted file): kin cannot hand the host those bytes in place, so the host RENDERS the page (pdfium reads every codec,
+                    // colour space, /Decode and mask) and the render is read as the scan is. The raster is the whole page, not the image's box.
+                    crate::port::cells_set(pl, k, 1);
+                    crate::port::cells_set(pl, k + 1, im_get(im, best, mf_obj()));
+                    crate::port::cells_set(pl, k + 2, 0);
+                    crate::port::cells_set(pl, k + 3, 0);
+                    crate::port::cells_set(pl, k + 4, 0);
+                    crate::port::cells_set(pl, k + 5, 0);
+                    crate::port::cells_set(pl, k + 6, px1 - px0);
+                    crate::port::cells_set(pl, k + 7, py1 - py0);
+                    crate::port::cells_set(pl, k + 8, px1 - px0);
+                    crate::port::cells_set(pl, k + 9, py1 - py0);
+                    crate::port::cells_set(pl, k + 14, pu_scan_render());
                 }
             }
             if ps_missed(src) {
@@ -185,7 +209,7 @@ pub(crate) fn pu_px(bms: &crate::port::BitmapSet, id: i32, fuse: i32) -> i32 {
     }
     return pn_has(bms, id);
 }
-pub(crate) fn pu_run_born(i: i32, input: i32, fuse: i32, pl: &mut crate::port::Cells, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, loc: &mut crate::port::Cells, bms: &crate::port::BitmapSet, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, fw: &mut crate::port::Cells, fl: &mut crate::port::Cells, mut hl: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut cg: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells, mut xscr: &mut crate::port::Cells, mut xgp: &mut crate::port::Cells, mut xdp: &mut crate::port::Cells, mut xta: &mut crate::port::Cells, mut xtb: &mut crate::port::Cells, mut xtt: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut comps: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tpts: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, mut ws2: &mut crate::port::Cells, mut sv: &mut crate::port::Cells, mut aux: &mut crate::port::Cells, mut snap: &mut crate::port::Cells, mut rtp: &mut crate::port::Cells, mut rn: &mut crate::port::Cells, mut ri: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut vr: &mut crate::port::Cells, mut pc: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut mem: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells, mut s4: &mut crate::port::Cells, mut s5: &mut crate::port::Cells, mut s6: &mut crate::port::Cells) -> i32 {
+pub(crate) fn pu_run_born(i: i32, input: i32, fuse: i32, pl: &mut crate::port::Cells, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, loc: &mut crate::port::Cells, bms: &crate::port::BitmapSet, mut mask: &mut crate::port::Cells, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, fw: &mut crate::port::Cells, fl: &mut crate::port::Cells, mut hl: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut cg: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells, mut xscr: &mut crate::port::Cells, mut xgp: &mut crate::port::Cells, mut xdp: &mut crate::port::Cells, mut xta: &mut crate::port::Cells, mut xtb: &mut crate::port::Cells, mut xtt: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut comps: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tpts: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, mut ws2: &mut crate::port::Cells, mut sv: &mut crate::port::Cells, mut aux: &mut crate::port::Cells, mut snap: &mut crate::port::Cells, mut rtp: &mut crate::port::Cells, mut rn: &mut crate::port::Cells, mut ri: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut vr: &mut crate::port::Cells, mut pc: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut mem: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells, mut s4: &mut crate::port::Cells, mut s5: &mut crate::port::Cells, mut s6: &mut crate::port::Cells) -> i32 {
     let ask: i32 = pu_field(pl, i, rp_f_ask());
     let scripts: i32 = pu_field(pl, i, rp_f_scripts());
     let nwit: i32 = pu_field(pl, i, rp_f_wn());
@@ -397,20 +421,53 @@ pub(crate) fn pu_run_born(i: i32, input: i32, fuse: i32, pl: &mut crate::port::C
             }
         }
     }
+    // a page in a script the engine has no model for (D1610): the page's mask says so, and `sc-tag-unread` holds what OCR won of it at a low confidence
+    if sk_unread(ans, ao, s6) == 1 {
+        crate::port::cells_set(mask, i, sc_mask_unread());
+    }
     return us_done();
 }
-pub(crate) fn pu_run_scan(i: i32, input: i32, fuse: i32, pl: &mut crate::port::Cells, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, loc: &mut crate::port::Cells, bms: &crate::port::BitmapSet, mut mask: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells, mut cg: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut comps: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tpts: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, mut sv: &mut crate::port::Cells, mut aux: &mut crate::port::Cells, mut snap: &mut crate::port::Cells, mut rtp: &mut crate::port::Cells, mut rn: &mut crate::port::Cells, mut ri: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut vr: &mut crate::port::Cells, mut pc: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut mem: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells, mut s4: &mut crate::port::Cells, mut s5: &mut crate::port::Cells, mut s6: &mut crate::port::Cells) -> i32 {
-    // A SCANNED page: `decode` of its stream, the OCR of the bitmap, the ink layers of the bitmap and the targeted passes they and the
-    // first pass call for, then the lines the pipeline reads (`rt-adopt`). With no pixel in the decode answer (a transcript recorded slim) the
-    // page is what it always was: the first pass's lines.
-    let did: i32 = pu_id(i, pi_decode());
+pub(crate) fn pu_scan_pixels(i: i32, did: i32, oid: i32, ao: i32, pxw: i32, pxh: i32, dpi100: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, loc: &mut crate::port::Cells, bms: &crate::port::BitmapSet, fuse: i32, mut rtp: &mut crate::port::Cells, mut s6: &mut crate::port::Cells) -> i32 {
+    // D1610: 0 when the raster of the page unit is the bitmap under `did`; the factor `k` (2 to 4) when the first pass `ao` of it (the OCR request `oid`) shows
+    // that the raster is too small for the engine to read (`emon.upscale`) and the pixels are there to enlarge: the enlarged raster is then made as a kin-made view
+    // (`rv-upscaled`) and its OCR is asked for (`ri-upscale`, naming the view's pixel hash). Answers -1 when it has asked (the caller answers `us-requests`).
+    if pu_px(bms, did, fuse) == 0 {
+        return 0;
+    }
+    let k: i32 = up_factor(ans, ao, pxw, pxh, s6);
+    let uvid: i32 = pu_view_id(i, rv_upscaled());
+    let uid: i32 = pu_id(i, ri_upscale());
+    if k < 2 {
+        return 0;
+    }
+    if an_find(ans, uid) < 0 {
+        up_make(bms, uvid, pu_view_id(i, rv_upscale_tmp()), crate::port::bms_get(bms, did), k, s6);
+        crate::port::bitmap_hash(crate::port::bms_get(bms, uvid), rtp, rtp_hash());
+        sc_request_view(rq, uid, uvid, crate::port::cells_at(rtp, rtp_hash()), crate::port::cells_at(rtp, rtp_hash() + 1), up_hint(ans, ao, k, dpi100, s6), loc);
+        return -1;
+    }
+    return k;
+}
+pub fn pu_scan_core(i: i32, input: i32, fuse: i32, did: i32, ad: i32, dpi100: i32, obj: i32, bx0: i32, by0: i32, bx1: i32, by1: i32, pw: i32, ph: i32, maskv: i32, seals: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, loc: &mut crate::port::Cells, bms: &crate::port::BitmapSet, mut mask: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells, mut cg: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut comps: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tpts: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, mut sv: &mut crate::port::Cells, mut aux: &mut crate::port::Cells, mut snap: &mut crate::port::Cells, mut rtp: &mut crate::port::Cells, mut rn: &mut crate::port::Cells, mut ri: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut vr: &mut crate::port::Cells, mut pc: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut mem: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells, mut s4: &mut crate::port::Cells, mut s5: &mut crate::port::Cells, mut s6: &mut crate::port::Cells) -> i32 {
+    // A SCANNED page whose raster is in (the decode or the render under `did`, its answer at `ad`; `dpi100` its resolution, `obj` the image's object, the page
+    // region it shows is (`bx0` `by0`)-(`bx1` `by1`) of a page `pw` x `ph`, all centipoints): the OCR of the bitmap, the ink layers of the bitmap and the
+    // targeted passes they and the first pass call for, then the lines the pipeline reads (`rt-adopt`). With no pixel in the decode answer (a transcript recorded
+    // slim) the page is what it always was: the first pass's lines. `maskv` is what the page's `mask` cell becomes (1 an image page, 2 a PDF's scanned page);
+    // `seals` 1 looks for seals and signatures in the pixels (a PDF page: its document unit arbitrates them), 0 does not (an image: it has no such unit).
+    // D1610: a raster the first pass shows to be too small is read again enlarged (`pu-scan-pixels`) and that reading, when it reads as much, is the first pass.
     let oid: i32 = pu_id(i, pi_ocr());
-    let ad: i32 = an_find(ans, did);
-    let mut ao: i32 = -1;
+    let uid: i32 = pu_id(i, ri_upscale());
+    let uvid: i32 = pu_view_id(i, rv_upscaled());
+    let mut rid: i32 = did;
+    let mut roid: i32 = oid;
     let mut pxw: i32 = 0;
     let mut pxh: i32 = 0;
-    let mut wp: i32 = 0;
-    let mut dpi100: i32 = 0;
+    let mut rdpi: i32 = dpi100;
+    let mut hint: i32 = 0;
+    let mut mv: i32 = maskv;
+    let mut ao: i32 = -1;
+    let mut ua: i32 = -1;
+    let mut k: i32 = 0;
     let mut vdec: i32 = 0;
     let mut l0: i32 = 0;
     let mut w0: i32 = 0;
@@ -420,17 +477,8 @@ pub(crate) fn pu_run_scan(i: i32, input: i32, fuse: i32, pl: &mut crate::port::C
     let mut rotmed: i32 = 0;
     let mut asked: i32 = 0;
     let mut nsel: i32 = 0;
-    if ad < 0 {
-        rq_decode(rq, did, input, pu_field(pl, i, 2), pu_field(pl, i, 3), flt_dct(), 0);
-        return us_requests();
-    }
-    if an_ok(ans, ad) != 1 {
-        return us_done();
-    }
     pxw = an_arg(ans, ad, 0);
     pxh = an_arg(ans, ad, 1);
-    wp = pu_field(pl, i, 6) - pu_field(pl, i, 4);
-    dpi100 = (((pxw as i64).wrapping_mul(720000 as i64)).wrapping_add((wp / 2) as i64) / (wp as i64)) as i32;
     ao = an_find(ans, oid);
     if ao < 0 {
         sc_request(rq, oid, did, (dpi100 + 50) / 100, loc);
@@ -442,43 +490,103 @@ pub(crate) fn pu_run_scan(i: i32, input: i32, fuse: i32, pl: &mut crate::port::C
     if pu_dry(fuse) == 1 {
         return us_done();
     }
+    rt_prep(rtp);
+    // a page in a script the engine has no model for (D1610): the first pass is junk at a confidence it should not have; `sc-tag` says so
+    if sk_unread(ans, ao, s6) == 1 {
+        mv += sc_mask_unread();
+    }
+    hint = (dpi100 + 50) / 100;
+    // a raster is enlarged for an engine that can read it: not a page in a script it has no model for
+    if mv < sc_mask_unread() {
+        k = pu_scan_pixels(i, did, oid, ao, pxw, pxh, dpi100, ans, rq, loc, bms, fuse, rtp, s6);
+    }
+    if k < 0 {
+        return us_requests();
+    }
+    if k > 1 {
+        ua = an_find(ans, uid);
+        // the enlarged reading stands when it was made and reads as much as the first: the raster is then the view, at the resolution the text says it has
+        if ua >= 0 {
+            if an_ok(ans, ua) == 1 {
+                if up_score(ans, ua) >= up_score(ans, ao) {
+                    hint = up_hint(ans, ao, k, dpi100, s6);
+                    rid = uvid;
+                    roid = uid;
+                    ao = ua;
+                    pxw *= k;
+                    pxh *= k;
+                    rdpi = dpi100 * k;
+                    // a unit's attempt has a set of its own: the enlarged raster is made again, from the frame's pixels
+                    up_make(bms, uvid, pu_view_id(i, rv_upscale_tmp()), crate::port::bms_get(bms, did), k, s6);
+                }
+            }
+        }
+    }
     sc_prep(scr);
-    if pu_px(bms, did, fuse) == 0 {
-        sc_page(ans, ao, i + 1, oid, did, pu_field(pl, i, 8), pu_field(pl, i, 9), pxw, pxh, dpi100, pu_field(pl, i, 4), pu_field(pl, i, 5), pu_field(pl, i, 1), pu_field(pl, i, 4), pu_field(pl, i, 5), pu_field(pl, i, 6), pu_field(pl, i, 7), sc_lang(loc), epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr);
-        crate::port::cells_set(mask, i, 2);
+    if pu_px(bms, rid, fuse) == 0 {
+        sc_page(ans, ao, i + 1, roid, rid, pw, ph, pxw, pxh, rdpi, bx0, by0, obj, bx0, by0, bx1, by1, sc_lang(loc), epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr);
+        crate::port::cells_set(mask, i, mv);
         return us_done();
     }
     pn_mark(snap, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, inks, comps, rules, prims, tpts, tlines, refs, images, words, lines);
-    vdec = sc_page_view(epages, views, images, i + 1, did, pu_field(pl, i, 8), pu_field(pl, i, 9), pxw, pxh, dpi100, pu_field(pl, i, 4), pu_field(pl, i, 5), pu_field(pl, i, 1), pu_field(pl, i, 4), pu_field(pl, i, 5), pu_field(pl, i, 6), pu_field(pl, i, 7));
-    pn_ink(i + 1, vdec, bms, pn_k_text(), crate::port::bms_get(bms, did), dpi100, 1, views, inks, comps, rules, prims, tpts, tlines, refs, ws, sv, aux, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6);
+    vdec = sc_page_view(epages, views, images, i + 1, rid, pw, ph, pxw, pxh, rdpi, bx0, by0, obj, bx0, by0, bx1, by1);
+    pn_ink(i + 1, vdec, bms, pn_k_text(), crate::port::bms_get(bms, rid), rdpi, 1, views, inks, comps, rules, prims, tpts, tlines, refs, ws, sv, aux, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6);
     l0 = ol_count(olines);
     w0 = ow_count(owords);
-    run = sc_page_evidence(ans, ao, i + 1, oid, vdec, dpi100, sc_lang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+    run = sc_page_evidence(ans, ao, i + 1, roid, vdec, rdpi, sc_lang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+    if rid == uvid {
+        rt_run_meta(oruns, run, op_upscaled(), 3, 3, 0, 0, 0, 0);
+    }
     nw = ow_count(owords) - w0;
-    pn_features(i + 1, bms, pn_k_text(), crate::port::bms_get(bms, did), oid, w0, nw, ws, comps, owords, feats, scr);
+    pn_features(i + 1, bms, pn_k_text(), crate::port::bms_get(bms, rid), roid, w0, nw, ws, comps, owords, feats, scr);
     rt_prep(rtp);
-    asked = rt_plan(i, input, 0, 0, did, (dpi100 + 50) / 100, loc, ans, bms, pn_k_text(), crate::port::bms_get(bms, did), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr);
+    asked = rt_plan(i, input, 0, 0, rid, hint, loc, ans, bms, pn_k_text(), crate::port::bms_get(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr);
     // the seals and stamps in the page's pixels (P8.2): their strips and crops are asked in the same round as the targeted passes
-    sx_find(i + 1, views, vdec, prims, inks, pu_field(pl, i, 8), pu_field(pl, i, 9), s1);
-    asked += sx_plan(i, loc, ans, bms, crate::port::bms_get(bms, did), s1, s2, s3, rq);
+    if seals == 1 {
+        sx_find(i + 1, views, vdec, prims, inks, pw, ph, s1);
+        asked += sx_plan(i, loc, ans, bms, crate::port::bms_get(bms, rid), s1, s2, s3, rq);
+    }
     if asked > 0 {
         pn_undo(snap, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, inks, comps, rules, prims, tpts, tlines, refs, images, words, lines);
         return us_requests();
     }
-    rt_record(i, vdec, dpi100, loc, ans, rtp, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
-    sx_record(i, vdec, dpi100, loc, ans, s1, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats, refs, cg, s4);
-    // the pen strokes over a signature line of the scan (P8.3): the lines the first pass made of them are not the page's text
-    sp_find(i + 1, views, vdec, rules, owords, etext, crate::port::bms_get(bms, did), pu_field(pl, i, 8), s5, s6);
-    sp_record(i, s5, cg);
+    rt_record(i, vdec, rdpi, loc, ans, rtp, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+    if seals == 1 {
+        sx_record(i, vdec, rdpi, loc, ans, s1, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats, refs, cg, s4);
+        // the pen strokes over a signature line of the scan (P8.3): the lines the first pass made of them are not the page's text
+        sp_find(i + 1, views, vdec, rules, owords, etext, crate::port::bms_get(bms, rid), pw, s5, s6);
+        sp_record(i, s5, cg);
+    }
     nsel = rt_adopt(rtp, oruns, run, olines, owords, scr);
-    nsel = sx_drop_lines(scr, nsel, olines, owords, s1);
-    nsel = sp_drop_lines(scr, nsel, olines, owords, s5);
+    if seals == 1 {
+        nsel = sx_drop_lines(scr, nsel, olines, owords, s1);
+        nsel = sp_drop_lines(scr, nsel, olines, owords, s5);
+    }
     rt_upright(rtp, run, epages, i + 1);
     nl = or_get(oruns, run, orf_lcount());
     rotmed = ev_rot_median(olines, l0, nl);
     sc_emit_sel(olines, owords, osyms, nsel, i + 1, rotmed, scr, words, lines);
-    crate::port::cells_set(mask, i, 2);
+    crate::port::cells_set(mask, i, mv);
     return us_done();
+}
+pub(crate) fn pu_run_scan(i: i32, input: i32, fuse: i32, pl: &mut crate::port::Cells, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, loc: &mut crate::port::Cells, bms: &crate::port::BitmapSet, mut mask: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells, mut cg: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut comps: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tpts: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, mut sv: &mut crate::port::Cells, mut aux: &mut crate::port::Cells, mut snap: &mut crate::port::Cells, mut rtp: &mut crate::port::Cells, mut rn: &mut crate::port::Cells, mut ri: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut vr: &mut crate::port::Cells, mut pc: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut mem: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells, mut s4: &mut crate::port::Cells, mut s5: &mut crate::port::Cells, mut s6: &mut crate::port::Cells) -> i32 {
+    // A SCANNED page of a PDF: `decode` of its stream (the host reads the DCT bytes in place) or, in the plan's render mode (D1610: an image in any other codec),
+    // `render` of the page, then `pu-scan-core`: the OCR of the bitmap and what it calls for. A failed raster is `us-done`: the page is left as the text layer made it.
+    let did: i32 = pu_id(i, pi_decode());
+    let ad: i32 = an_find(ans, did);
+    let wp: i32 = pu_field(pl, i, 6) - pu_field(pl, i, 4);
+    if ad < 0 {
+        if pu_field(pl, i, 14) == pu_scan_render() {
+            rq_render(rq, did, input, i, pu_dpi(), lay_full());
+        } else {
+            rq_decode(rq, did, input, pu_field(pl, i, 2), pu_field(pl, i, 3), flt_dct(), 0);
+        }
+        return us_requests();
+    }
+    if an_ok(ans, ad) != 1 {
+        return us_done();
+    }
+    return pu_scan_core(i, input, fuse, did, ad, (((an_arg(ans, ad, 0) as i64).wrapping_mul(720000 as i64)).wrapping_add((wp / 2) as i64) / (wp as i64)) as i32, pu_field(pl, i, 1), pu_field(pl, i, 4), pu_field(pl, i, 5), pu_field(pl, i, 6), pu_field(pl, i, 7), pu_field(pl, i, 8), pu_field(pl, i, 9), 2, 1, ans, rq, loc, bms, mask, scr, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, refs, tlines, cg, inks, comps, rules, prims, tpts, ws, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6);
 }
 pub fn pu_run_pdf(i: i32, input: i32, policy: i32, pl: &mut crate::port::Cells, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, loc: &mut crate::port::Cells, bms: &crate::port::BitmapSet, mut mask: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, fuse: i32, fw: &mut crate::port::Cells, fl: &mut crate::port::Cells, mut hl: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut cg: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells, mut xscr: &mut crate::port::Cells, mut xgp: &mut crate::port::Cells, mut xdp: &mut crate::port::Cells, mut xta: &mut crate::port::Cells, mut xtb: &mut crate::port::Cells, mut xtt: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut comps: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tpts: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, mut ws2: &mut crate::port::Cells, mut sv: &mut crate::port::Cells, mut aux: &mut crate::port::Cells, mut snap: &mut crate::port::Cells, mut rtp: &mut crate::port::Cells, mut rn: &mut crate::port::Cells, mut ri: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut vr: &mut crate::port::Cells, mut pc: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut mem: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells, mut s4: &mut crate::port::Cells, mut s5: &mut crate::port::Cells, mut s6: &mut crate::port::Cells) -> i32 {
     // The unit of PDF page `i` (0-based). A `pk-scan` page asks `decode` of its stream's bytes (id `pi-decode`), then OCR
@@ -490,7 +598,7 @@ pub fn pu_run_pdf(i: i32, input: i32, policy: i32, pl: &mut crate::port::Cells, 
         return us_done();
     }
     if pu_kind(pl, i) == pk_born() {
-        return pu_run_born(i, input, fuse, pl, ans, rq, loc, bms, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, fw, fl, hl, refs, cg, tlines, xscr, xgp, xdp, xta, xtb, xtt, scr, images, words, lines, inks, comps, rules, prims, tpts, ws, ws2, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6);
+        return pu_run_born(i, input, fuse, pl, ans, rq, loc, bms, mask, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, fw, fl, hl, refs, cg, tlines, xscr, xgp, xdp, xta, xtb, xtt, scr, images, words, lines, inks, comps, rules, prims, tpts, ws, ws2, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6);
     }
     if pu_kind(pl, i) != pk_scan() {
         return us_done();

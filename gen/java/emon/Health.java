@@ -242,14 +242,45 @@ public final class Health {
         }
         return 0;
     }
+    public static int hhForeignCp(int c) {
+        // D1610: 1 for a letter of a script the engine (a Latin model) cannot read, as `emon.arbiter`'s `ar-foreign-cp`: Greek to the Georgian and beyond, Hebrew,
+        // Arabic, Devanagari, CJK, Hangul, the compatibility ideographs, the Arabic presentation forms, and mathematics.
+        if ((c >= 880) && (c < 7680)) {
+            return 1;
+        }
+        if ((c >= 7936) && (c <= 8191)) {
+            return 1;
+        }
+        if ((c >= 8448) && (c <= 8527)) {
+            return 1;
+        }
+        if ((c >= 8592) && (c <= 8959)) {
+            return 1;
+        }
+        if ((c >= 11904) && (c <= 55215)) {
+            return 1;
+        }
+        if ((c >= 63744) && (c <= 64975)) {
+            return 1;
+        }
+        if ((c >= 65136) && (c <= 65276)) {
+            return 1;
+        }
+        if ((c >= 119808) && (c <= 120831)) {
+            return 1;
+        }
+        return 0;
+    }
     public static int hhLatin(emon.Port.Cells refs, emon.Port.Cells fw, emon.Port.Cells wd, emon.Port.Cells etext, int first, int count) {
-        // 1 when one of the `count` text-layer candidates from `refs` row `first` holds a Latin letter or digit in its text.
+        // 1 when one of the `count` text-layer candidates from `refs` row `first` holds a Latin letter or digit in its text, and none of them a letter
+        // of a script the engine lacks (D1610: a Cyrillic word with its reference number is Cyrillic, and the engine's reading of it says nothing of the font).
         int k = 0;
         int ea = 0;
         int ix = 0;
         int ts = -1;
         int tl = 0;
         int j = 0;
+        int latin = 0;
         while (k < count) {
             ea = Evidence.rfGet(refs, first + k, 0);
             ix = Evidence.rfGet(refs, first + k, 1);
@@ -267,14 +298,17 @@ public final class Health {
             if (ts >= 0) {
                 while (j < tl) {
                     if (hhLatinCp(emon.Port.cellsAt(etext, ts + j)) == 1) {
-                        return 1;
+                        latin = 1;
+                    }
+                    if (hhForeignCp(emon.Port.cellsAt(etext, ts + j)) == 1) {
+                        return 0;
                     }
                     j += 1;
                 }
             }
             k += 1;
         }
-        return 0;
+        return latin;
     }
     public static int hhCountAgreement(int page, emon.Port.Cells cg, emon.Port.Cells refs, emon.Port.Cells fw, emon.Port.Cells wd, emon.Port.Cells etext, emon.Port.Cells hl) {
         // Per (font, page) row of this page: the groups with both candidates (cell 10) and the agreeing ones (cell 11), from
@@ -532,11 +566,13 @@ public final class Health {
         return -1;
     }
     public static int hhLatinF(emon.Port.Cells refs, emon.Port.Cells fw, emon.Port.Cells etext, int first, int count) {
+        // `hh-latin` over the flow words only (D1610: no candidate holds a letter of a script the engine lacks).
         int k = 0;
         int ix = 0;
         int ts = -1;
         int tl = 0;
         int j = 0;
+        int latin = 0;
         while (k < count) {
             ix = Evidence.rfGet(refs, first + k, 1);
             ts = -1;
@@ -549,14 +585,17 @@ public final class Health {
             if (ts >= 0) {
                 while (j < tl) {
                     if (hhLatinCp(emon.Port.cellsAt(etext, ts + j)) == 1) {
-                        return 1;
+                        latin = 1;
+                    }
+                    if (hhForeignCp(emon.Port.cellsAt(etext, ts + j)) == 1) {
+                        return 0;
                     }
                     j += 1;
                 }
             }
             k += 1;
         }
-        return 0;
+        return latin;
     }
     public static int hhCountAgreementF(int page, emon.Port.Cells cg, emon.Port.Cells refs, emon.Port.Cells fw, emon.Port.Cells etext, emon.Port.Cells hl) {
         int n = emon.Port.cellsLen(cg) / 16;

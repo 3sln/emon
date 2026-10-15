@@ -29,7 +29,7 @@
                                 node-set-attr-node node-set-attr-text
                                 node-add-attr-int node-add-attr-text
                                 page-new page-set-label page-set-health
-                                page-set-resolution page-count page-number
+                                page-set-resolution page-set-size page-count page-number
                                 page-label-start page-label-len page-w page-h
                                 page-rot page-kind page-health page-dpi
                                 page-px-w page-px-h
@@ -443,6 +443,10 @@
     (assert-eq (page-px-w pages 1) 2480 "px w")
     (assert-eq (page-px-h pages 1) 3508 "px h")
     (assert-eq (page-health pages 0) -1 "the other page is untouched")
+    (page-set-size pages 1 61200 79200)
+    (assert-eq (page-w pages 1) 61200 "a page turned upright (D1610): w")
+    (assert-eq (page-h pages 1) 79200 "h")
+    (assert-eq (page-w pages 0) 61200 "the other page's w is untouched")
     (assert-eq (ledger-add ledger (dr-page-number) 1 29000 76000 32200 77200 998 (sr-text)) 0 "first row")
     (assert-eq (ledger-add ledger 1 2 0 0 1 1 -1 0) 1 "second row")
     (assert-eq (ledger-count ledger) 2 "two rows")

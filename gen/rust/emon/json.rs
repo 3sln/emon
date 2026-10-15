@@ -267,7 +267,8 @@ pub fn js_bits_flags(mut t: &mut String, pr: i32, bits: i32) -> i32 {
     let mut k: i32 = 0;
     let mut bit: i32 = 0;
     crate::port::text_ascii(t, "[");
-    while b < 9 {
+    // the warning bits 1 to 1024 (D1610 added `script-unread`, 1024; `in-table-image`, 512, is the fused flow's, not a node's)
+    while b < 11 {
         bit = (1) << (b);
         if (bits & bit) != 0 {
             js_fsep(t, pr, k);
@@ -711,7 +712,7 @@ pub(crate) fn js_tail(mut t: &mut String, pr: i32, d: i32, nodes: &mut crate::po
     // `at`, `src`, `conf`, `flags`: the provenance every node may carry.
     let mut s: i32 = started;
     let sr: i32 = node_src(nodes, n);
-    let cf: i32 = cal_conf(node_kind(nodes, n), node_src(nodes, n), node_conf(nodes, n));
+    let cf: i32 = cal_node_conf(nodes, n);
     let fg: i32 = node_flags(nodes, n);
     s = js_at(t, pr, d, nodes, regions, n, s);
     if sr != 0 {

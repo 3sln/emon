@@ -14,10 +14,10 @@
                                    orf-bview orf-lang orf-langlen orf-osd orf-script orf-view
                                    obf-orient obf-wdir obf-btype vwf-kind vk-engine-binary wb-space wb-line-end
                                    epf-page epf-flags eg-raster ep-count]]
-            [emon.scan :refer [sc-lang sc-request sc-page sc-tag]]
+            [emon.scan :refer [sc-lang sc-request sc-page sc-tag sc-tag-unread sc-mask-unread sc-unread-conf]]
             [emon.model :refer [model-init node-new node-add-src node-set-conf node-src node-conf node-flags
                                 node-add-region node-set-text node-attr attr-len page-new page-kind
-                                nk-paragraph nk-text nk-document sr-text sr-ocr sr-infer fl-ocr-only pk-vector pk-scanned
+                                nk-paragraph nk-text nk-document sr-text sr-ocr sr-infer fl-ocr-only fl-low-conf fl-script-unread pk-vector pk-scanned
                                 pk-image fk-ocr]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
@@ -217,6 +217,60 @@
       (let [^I32 a (node-attr nodes attrs 0 (fk-ocr))]
         (assert-that (>= a 0) "settings.ocr is written")
         (assert-eq (attr-len attrs a) 6 "`always`")))))
+
+(deftest test-a-page-in-a-script-the-engine-cannot-read-is-flagged-and-held-at-a-low-confidence
+  (comment "D1610 (P12.3 I-13): the page unit adds `sc-mask-unread` to the page's mask cell; the blocks of the page say the engine could not read it")
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells mask (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (page-new pages 1 61200 79200 0 (pk-vector))
+    (page-new pages 2 61200 79200 0 (pk-vector))
+    (page-new pages 3 61200 79200 0 (pk-vector))
+    (let [^I32 p1 (node-new nodes (nk-paragraph) 0)
+          ^I32 t1 (node-new nodes (nk-text) p1)
+          ^I32 p2 (node-new nodes (nk-paragraph) 0)
+          ^I32 p3 (node-new nodes (nk-paragraph) 0)
+          ^I32 p4 (node-new nodes (nk-paragraph) 0)]
+      (node-add-region nodes regions p1 1 0 0 100 100)
+      (node-add-region nodes regions p2 2 0 0 100 100)
+      (node-add-region nodes regions p3 3 0 0 100 100)
+      (node-add-region nodes regions p4 3 200 200 300 300)
+      (node-add-src nodes p1 (sr-text))
+      (node-set-conf nodes p1 900)
+      (node-add-src nodes t1 (sr-text))
+      (node-set-conf nodes t1 1000)
+      (node-add-src nodes p2 (sr-text))
+      (node-set-conf nodes p2 900)
+      (comment "page 3 is born digital, OCR'd, and fusion gave a block to OCR (`ocr` and `text`) and left one to the text layer")
+      (node-add-src nodes p3 (sr-text))
+      (node-add-src nodes p3 (sr-ocr))
+      (node-set-conf nodes p3 900)
+      (node-add-src nodes p4 (sr-text))
+      (node-set-conf nodes p4 900)
+      (cells-push mask (+ 1 (sc-mask-unread)))
+      (cells-push mask 1)
+      (cells-push mask (sc-mask-unread))
+      (assert-eq (sc-tag nodes attrs text regions pages mask 2) 1 "something was tagged")
+      (assert-eq (node-flags nodes p1) (fl-ocr-only) "the scan tags what it always tagged")
+      (assert-eq (sc-tag-unread nodes regions mask) 3 "the block and the text of page 1, the block of page 3")
+      (assert-eq (node-flags nodes p1) (+ (fl-ocr-only) (+ (fl-low-conf) (fl-script-unread))) "the block: OCR only, low confidence, script unread")
+      (assert-eq (node-conf nodes p1) (sc-unread-conf) "its confidence is held at the unread ceiling")
+      (assert-eq (node-conf nodes t1) (sc-unread-conf) "so is its text's")
+      (assert-eq (node-flags nodes t1) 0 "an inline is not flagged")
+      (assert-eq (node-src nodes p1) (sr-ocr) "its text is still OCR's: it is kept, not dropped")
+      (assert-eq (node-flags nodes p2) (fl-ocr-only) "the other page was read by a model that reads it: OCR only, nothing more")
+      (assert-eq (node-conf nodes p2) 900 "and its confidence is its own")
+      (assert-eq (node-flags nodes p3) (+ (fl-low-conf) (fl-script-unread)) "a born-digital block OCR won on an unread page: flagged, not `ocr-only`")
+      (assert-eq (node-conf nodes p3) (sc-unread-conf) "and held low")
+      (assert-eq (node-flags nodes p4) 0 "a block of the same page that stayed the text layer's is not touched")
+      (assert-eq (node-conf nodes p4) 900 "nor its confidence")
+      (assert-eq (page-kind pages 0) (pk-vector) "an image page's kind is not changed by the flag"))))
 
 (deftest test-with-no-page-read-nothing-is-tagged
   (let [^Cells nodes (new-cells)

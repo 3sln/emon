@@ -289,14 +289,46 @@ func hhLatinCp(c int32) int32 {
 	return 0
 }
 
+func hhForeignCp(c int32) int32 {
+	// D1610: 1 for a letter of a script the engine (a Latin model) cannot read, as `emon.arbiter`'s `ar-foreign-cp`: Greek to the Georgian and beyond, Hebrew,
+	// Arabic, Devanagari, CJK, Hangul, the compatibility ideographs, the Arabic presentation forms, and mathematics.
+	if (c >= 880) && (c < 7680) {
+		return 1
+	}
+	if (c >= 7936) && (c <= 8191) {
+		return 1
+	}
+	if (c >= 8448) && (c <= 8527) {
+		return 1
+	}
+	if (c >= 8592) && (c <= 8959) {
+		return 1
+	}
+	if (c >= 11904) && (c <= 55215) {
+		return 1
+	}
+	if (c >= 63744) && (c <= 64975) {
+		return 1
+	}
+	if (c >= 65136) && (c <= 65276) {
+		return 1
+	}
+	if (c >= 119808) && (c <= 120831) {
+		return 1
+	}
+	return 0
+}
+
 func hhLatin(refs *port.Cells, fw *port.Cells, wd *port.Cells, etext *port.Cells, first int32, count int32) int32 {
-	// 1 when one of the `count` text-layer candidates from `refs` row `first` holds a Latin letter or digit in its text.
+	// 1 when one of the `count` text-layer candidates from `refs` row `first` holds a Latin letter or digit in its text, and none of them a letter
+	// of a script the engine lacks (D1610: a Cyrillic word with its reference number is Cyrillic, and the engine's reading of it says nothing of the font).
 	var k int32 = 0
 	var ea int32 = 0
 	var ix int32 = 0
 	var ts int32 = -1
 	var tl int32 = 0
 	var j int32 = 0
+	var latin int32 = 0
 	for k < count {
 		ea = evidence.RfGet(refs, first+k, 0)
 		ix = evidence.RfGet(refs, first+k, 1)
@@ -314,14 +346,17 @@ func hhLatin(refs *port.Cells, fw *port.Cells, wd *port.Cells, etext *port.Cells
 		if ts >= 0 {
 			for j < tl {
 				if hhLatinCp(port.CellsAt(etext, ts+j)) == 1 {
-					return 1
+					latin = 1
+				}
+				if hhForeignCp(port.CellsAt(etext, ts+j)) == 1 {
+					return 0
 				}
 				j += 1
 			}
 		}
 		k += 1
 	}
-	return 0
+	return latin
 }
 
 func hhCountAgreement(page int32, cg *port.Cells, refs *port.Cells, fw *port.Cells, wd *port.Cells, etext *port.Cells, hl *port.Cells) int32 {
@@ -588,11 +623,13 @@ func hhFontOfF(refs *port.Cells, fw *port.Cells, ref int32) int32 {
 }
 
 func hhLatinF(refs *port.Cells, fw *port.Cells, etext *port.Cells, first int32, count int32) int32 {
+	// `hh-latin` over the flow words only (D1610: no candidate holds a letter of a script the engine lacks).
 	var k int32 = 0
 	var ix int32 = 0
 	var ts int32 = -1
 	var tl int32 = 0
 	var j int32 = 0
+	var latin int32 = 0
 	for k < count {
 		ix = evidence.RfGet(refs, first+k, 1)
 		ts = -1
@@ -605,14 +642,17 @@ func hhLatinF(refs *port.Cells, fw *port.Cells, etext *port.Cells, first int32, 
 		if ts >= 0 {
 			for j < tl {
 				if hhLatinCp(port.CellsAt(etext, ts+j)) == 1 {
-					return 1
+					latin = 1
+				}
+				if hhForeignCp(port.CellsAt(etext, ts+j)) == 1 {
+					return 0
 				}
 				j += 1
 			}
 		}
 		k += 1
 	}
-	return 0
+	return latin
 }
 
 func hhCountAgreementF(page int32, cg *port.Cells, refs *port.Cells, fw *port.Cells, etext *port.Cells, hl *port.Cells) int32 {

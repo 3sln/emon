@@ -214,7 +214,7 @@ public final class Html {
         int r = 0;
         int i = 0;
         int kind = Model.nodeKind(nodes, n);
-        int cf = Calib.calConf(kind, Model.nodeSrc(nodes, n), Model.nodeConf(nodes, n));
+        int cf = Calib.calNodeConf(nodes, n);
         if ((hOn(o, 1) == 1) && (Model.nodeIsInline(nodes, n) == 0) && (kind != Model.nkNote())) {
             emon.Port.textAscii(t, " id=\"emon-");
             emon.Port.textI32(t, n);

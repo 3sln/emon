@@ -1026,6 +1026,9 @@ public static class Evidence {
     public static int OpReRotated() {
         return 8;
     }
+    public static int OpUpscaled() {
+        return 9;
+    }
     public static int OpEmitName(System.Text.StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.TextAscii(t, "first");
@@ -1057,6 +1060,10 @@ public static class Evidence {
         }
         if (code == 8) {
             emon.Port.TextAscii(t, "re-rotated");
+            return 1;
+        }
+        if (code == 9) {
+            emon.Port.TextAscii(t, "upscaled");
             return 1;
         }
         return 0;

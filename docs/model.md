@@ -150,7 +150,7 @@ All the fields a block can have (one flat definition: the "Meaning" column says 
 | `date` |  | string |  | `seal`: the date on it. |
 | `display` |  | one of | `block`, `inline` | `formula`: `block` or `inline`. |
 | `empty` |  | boolean |  | `cell`: the cell holds nothing. |
-| `flags` |  | list of flags |  | Warnings, from a closed set: `low-conf`, `ocr-only`, `text-layer-suspect`, `reconstructed`, `dpi-unknown`, `rotated`, `vertical`, `struct-disagree`, `tag-span-conflict`, `in-table-image`. |
+| `flags` |  | list of flags |  | Warnings, from a closed set: `low-conf`, `ocr-only`, `text-layer-suspect`, `reconstructed`, `dpi-unknown`, `rotated`, `vertical`, `struct-disagree`, `tag-span-conflict`, `in-table-image`, `script-unread`. |
 | `header` |  | one of | `col`, `row` | `cell`: `col` or `row` for a header cell. |
 | `inlines` |  | array of inline |  | The rich form of the text: runs, spans, links, note references, line breaks, drop caps, page milestones. Present only when it carries information (a style, a link, a note reference, a line break, a drop cap). |
 | `label` |  | string |  | `caption`, `figure`: the label (`Table 3`, `Figure 2`). |

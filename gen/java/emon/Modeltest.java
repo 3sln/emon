@@ -375,6 +375,10 @@ public final class Modeltest {
         emon.Testport.assertEq(Model.pagePxW(pages, 1), 2480, "px w");
         emon.Testport.assertEq(Model.pagePxH(pages, 1), 3508, "px h");
         emon.Testport.assertEq(Model.pageHealth(pages, 0), -1, "the other page is untouched");
+        Model.pageSetSize(pages, 1, 61200, 79200);
+        emon.Testport.assertEq(Model.pageW(pages, 1), 61200, "a page turned upright (D1610): w");
+        emon.Testport.assertEq(Model.pageH(pages, 1), 79200, "h");
+        emon.Testport.assertEq(Model.pageW(pages, 0), 61200, "the other page's w is untouched");
         emon.Testport.assertEq(Model.ledgerAdd(ledger, Model.drPageNumber(), 1, 29000, 76000, 32200, 77200, 998, Model.srText()), 0, "first row");
         emon.Testport.assertEq(Model.ledgerAdd(ledger, 1, 2, 0, 0, 1, 1, -1, 0), 1, "second row");
         emon.Testport.assertEq(Model.ledgerCount(ledger), 2, "two rows");

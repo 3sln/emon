@@ -73,3 +73,25 @@ pub fn cal_conf(kind: i32, src: i32, raw: i32) -> i32 {
     // The calibrated confidence (per mille) of a raw one for a node kind and source; -1 stays -1.
     return cal_lookup(kind, cal_class(src), raw);
 }
+pub fn cal_node_conf(nodes: &mut crate::port::Cells, n: i32) -> i32 {
+    // The calibrated confidence of node `n`, as the Model writes it (`cal-conf` of its kind, source and raw score), D1610: EXCEPT a node of a block flagged
+    // `script-unread` (the engine had no model for the page's script, `emon.scriptcheck`), which is written at its raw score when that is lower. The map is a
+    // step function clamped at its ends, and the lowest step of OCR text is a text the engine read: a raw 100 would be written as that, and the engine's guess
+    // at a script it cannot read would carry the confidence of what it can.
+    let raw: i32 = node_conf(nodes, n);
+    let cf: i32 = cal_conf(node_kind(nodes, n), node_src(nodes, n), raw);
+    let mut a: i32 = n;
+    if raw < 0 {
+        return cf;
+    }
+    if cf <= raw {
+        return cf;
+    }
+    while a >= 0 {
+        if (node_flags(nodes, a) & fl_script_unread()) != 0 {
+            return raw;
+        }
+        a = node_parent(nodes, a);
+    }
+    return cf;
+}
