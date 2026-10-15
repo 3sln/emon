@@ -1072,6 +1072,241 @@ public static class Tabletest {
         emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "whitespace: well formed");
         emon.Testport.AssertText(t, "T3w;Gh;R;Ch[Item];Ch[Kind];Chs[Price];Gb;R;C[Bolt];C[Debit];Cs[$803];R;C[Nut];C[Debit];Cs[$91];R;C[Gear];C[Paid];Cs[$1,200];R;C[Cog];C[Debit];Cs[$35];", "a rule through the rows' height between two touching words is a column cut for the whitespace profile too");
     }
+    internal static int TtRow4(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int y, int style, byte[] a, byte[] b, byte[] c, byte[] d) {
+        // A row of four words, left edges at 7600, 13600, 19600 and 25600 (the columns of a 6000-wide four-column grid from x 7200), 800 tall from y.
+        TtAt(wd, ln, et, a, 7600, y, style, 0);
+        TtAt(wd, ln, et, b, 13600, y, style, 0);
+        TtAt(wd, ln, et, c, 19600, y, style, 0);
+        TtAt(wd, ln, et, d, 25600, y, style, 0);
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestAGridWithNoRulesBetweenItsRowsHasTheRowsOfItsText() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        // Repro shape 1 (BLS, BEA, a 10-K): full-height vertical rules, horizontal rules at the top, under the header and at the bottom,
+        // and ten rows of four numbers between the last two, a pitch of 1600 apart with nothing ruled between them.
+        TtRule(pa, 7200, 9950, 31200, 10050);
+        TtRule(pa, 7200, 11950, 31200, 12050);
+        TtRule(pa, 7200, 28750, 31200, 28850);
+        TtRule(pa, 7150, 10000, 7250, 28800);
+        TtRule(pa, 13150, 10000, 13250, 28800);
+        TtRule(pa, 19150, 10000, 19250, 28800);
+        TtRule(pa, 25150, 10000, 25250, 28800);
+        TtRule(pa, 31150, 10000, 31250, 28800);
+        TtRow4(wd, ln, et, 10600, 1, emon.Testport.TextBlob("Q1"), emon.Testport.TextBlob("Q2"), emon.Testport.TextBlob("Q3"), emon.Testport.TextBlob("Q4"));
+        TtRow4(wd, ln, et, 12600, 0, emon.Testport.TextBlob("0.00"), emon.Testport.TextBlob("0.10"), emon.Testport.TextBlob("0.20"), emon.Testport.TextBlob("0.30"));
+        TtRow4(wd, ln, et, 14200, 0, emon.Testport.TextBlob("1.01"), emon.Testport.TextBlob("1.11"), emon.Testport.TextBlob("1.21"), emon.Testport.TextBlob("1.31"));
+        TtRow4(wd, ln, et, 15800, 0, emon.Testport.TextBlob("2.02"), emon.Testport.TextBlob("2.12"), emon.Testport.TextBlob("2.22"), emon.Testport.TextBlob("2.32"));
+        TtRow4(wd, ln, et, 17400, 0, emon.Testport.TextBlob("3.03"), emon.Testport.TextBlob("3.13"), emon.Testport.TextBlob("3.23"), emon.Testport.TextBlob("3.33"));
+        TtRow4(wd, ln, et, 19000, 0, emon.Testport.TextBlob("4.04"), emon.Testport.TextBlob("4.14"), emon.Testport.TextBlob("4.24"), emon.Testport.TextBlob("4.34"));
+        TtRow4(wd, ln, et, 20600, 0, emon.Testport.TextBlob("5.05"), emon.Testport.TextBlob("5.15"), emon.Testport.TextBlob("5.25"), emon.Testport.TextBlob("5.35"));
+        TtRow4(wd, ln, et, 22200, 0, emon.Testport.TextBlob("6.06"), emon.Testport.TextBlob("6.16"), emon.Testport.TextBlob("6.26"), emon.Testport.TextBlob("6.36"));
+        TtRow4(wd, ln, et, 23800, 0, emon.Testport.TextBlob("7.07"), emon.Testport.TextBlob("7.17"), emon.Testport.TextBlob("7.27"), emon.Testport.TextBlob("7.37"));
+        TtRow4(wd, ln, et, 25400, 0, emon.Testport.TextBlob("8.08"), emon.Testport.TextBlob("8.18"), emon.Testport.TextBlob("8.28"), emon.Testport.TextBlob("8.38"));
+        TtRow4(wd, ln, et, 27000, 0, emon.Testport.TextBlob("9.09"), emon.Testport.TextBlob("9.19"), emon.Testport.TextBlob("9.29"), emon.Testport.TextBlob("9.39"));
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "rows: well formed");
+        emon.Testport.AssertText(t, "T4r;Gh;R;Ch[Q1];Ch[Q2];Ch[Q3];Ch[Q4];Gb;R;C[0.00];C[0.10];C[0.20];C[0.30];R;C[1.01];C[1.11];C[1.21];C[1.31];R;C[2.02];C[2.12];C[2.22];C[2.32];R;C[3.03];C[3.13];C[3.23];C[3.33];R;C[4.04];C[4.14];C[4.24];C[4.34];R;C[5.05];C[5.15];C[5.25];C[5.35];R;C[6.06];C[6.16];C[6.26];C[6.36];R;C[7.07];C[7.17];C[7.27];C[7.37];R;C[8.08];C[8.18];C[8.28];C[8.38];R;C[9.09];C[9.19];C[9.29];C[9.39];", "the body is ten rows, one for each line of its text (before: one row of four cells of ten lines each)");
+    }
+    [Xunit.Fact]
+    public static void TestTheReadingThatYieldsTheRealRowCountIsTheTable() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        // The BLS and BEA shape: the header and two rows are ruled (a lattice of three rows), the eight rows under them are not, their columns
+        // those of the lattice. The ruled reading scores best and has three rows; the reading of the whitespace has the ten rows of the text.
+        TtRule(pa, 7200, 9950, 31200, 10050);
+        TtRule(pa, 7200, 11950, 31200, 12050);
+        TtRule(pa, 7200, 13550, 31200, 13650);
+        TtRule(pa, 7200, 15150, 31200, 15250);
+        TtRule(pa, 7150, 10000, 7250, 15200);
+        TtRule(pa, 13150, 10000, 13250, 15200);
+        TtRule(pa, 19150, 10000, 19250, 15200);
+        TtRule(pa, 25150, 10000, 25250, 15200);
+        TtRule(pa, 31150, 10000, 31250, 15200);
+        TtRow4(wd, ln, et, 10600, 1, emon.Testport.TextBlob("Q1"), emon.Testport.TextBlob("Q2"), emon.Testport.TextBlob("Q3"), emon.Testport.TextBlob("Q4"));
+        TtRow4(wd, ln, et, 12400, 0, emon.Testport.TextBlob("0.00"), emon.Testport.TextBlob("0.10"), emon.Testport.TextBlob("0.20"), emon.Testport.TextBlob("0.30"));
+        TtRow4(wd, ln, et, 14000, 0, emon.Testport.TextBlob("1.01"), emon.Testport.TextBlob("1.11"), emon.Testport.TextBlob("1.21"), emon.Testport.TextBlob("1.31"));
+        TtRow4(wd, ln, et, 15600, 0, emon.Testport.TextBlob("2.02"), emon.Testport.TextBlob("2.12"), emon.Testport.TextBlob("2.22"), emon.Testport.TextBlob("2.32"));
+        TtRow4(wd, ln, et, 17200, 0, emon.Testport.TextBlob("3.03"), emon.Testport.TextBlob("3.13"), emon.Testport.TextBlob("3.23"), emon.Testport.TextBlob("3.33"));
+        TtRow4(wd, ln, et, 18800, 0, emon.Testport.TextBlob("4.04"), emon.Testport.TextBlob("4.14"), emon.Testport.TextBlob("4.24"), emon.Testport.TextBlob("4.34"));
+        TtRow4(wd, ln, et, 20400, 0, emon.Testport.TextBlob("5.05"), emon.Testport.TextBlob("5.15"), emon.Testport.TextBlob("5.25"), emon.Testport.TextBlob("5.35"));
+        TtRow4(wd, ln, et, 22000, 0, emon.Testport.TextBlob("6.06"), emon.Testport.TextBlob("6.16"), emon.Testport.TextBlob("6.26"), emon.Testport.TextBlob("6.36"));
+        TtRow4(wd, ln, et, 23600, 0, emon.Testport.TextBlob("7.07"), emon.Testport.TextBlob("7.17"), emon.Testport.TextBlob("7.27"), emon.Testport.TextBlob("7.37"));
+        TtRow4(wd, ln, et, 25200, 0, emon.Testport.TextBlob("8.08"), emon.Testport.TextBlob("8.18"), emon.Testport.TextBlob("8.28"), emon.Testport.TextBlob("8.38"));
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "reading: well formed");
+        emon.Testport.AssertText(t, "T4w;Gh;R;Ch[Q1];Ch[Q2];Ch[Q3];Ch[Q4];Gb;R;C[0.00];C[0.10];C[0.20];C[0.30];R;C[1.01];C[1.11];C[1.21];C[1.31];R;C[2.02];C[2.12];C[2.22];C[2.32];R;C[3.03];C[3.13];C[3.23];C[3.33];R;C[4.04];C[4.14];C[4.24];C[4.34];R;C[5.05];C[5.15];C[5.25];C[5.35];R;C[6.06];C[6.16];C[6.26];C[6.36];R;C[7.07];C[7.17];C[7.27];C[7.37];R;C[8.08];C[8.18];C[8.28];C[8.38];", "one table of ten rows (before: the ruled three, and the seven rows under them left as paragraphs)");
+    }
+    internal static int TtRow3(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int y, byte[] a, byte[] b, byte[] c) {
+        // A row of three four-letter words at x 7600, 20000 and 30000, 800 tall from y (plain).
+        TtAt(wd, ln, et, a, 7600, y, 0, 0);
+        TtAt(wd, ln, et, b, 20000, y, 0, 0);
+        TtAt(wd, ln, et, c, 30000, y, 0, 0);
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestTheFragmentsOfAZebraAreTheTableWhoseRowsTheyArePartOf() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        // The 10-K's balance sheet: a zebra whose stripes stop (a stripe is missing, so the fills make two stacks of three) over fourteen rows of one
+        // pitch. Each stack alone is a reading of its rows; the whitespace reading has all fourteen, the rows between the stacks too.
+        TtFill(pa, 7200, 11600, 37200, 13200, 15000000);
+        TtFill(pa, 7200, 14800, 37200, 16400, 15000000);
+        TtFill(pa, 7200, 18000, 37200, 19600, 15000000);
+        TtFill(pa, 7200, 24400, 37200, 26000, 15000000);
+        TtFill(pa, 7200, 27600, 37200, 29200, 15000000);
+        TtFill(pa, 7200, 30800, 37200, 32400, 15000000);
+        TtRow3(wd, ln, et, 12000, emon.Testport.TextBlob("Bolt"), emon.Testport.TextBlob("10.5"), emon.Testport.TextBlob("2.25"));
+        TtRow3(wd, ln, et, 13600, emon.Testport.TextBlob("Nuts"), emon.Testport.TextBlob("11.5"), emon.Testport.TextBlob("3.25"));
+        TtRow3(wd, ln, et, 15200, emon.Testport.TextBlob("Cogs"), emon.Testport.TextBlob("12.5"), emon.Testport.TextBlob("4.25"));
+        TtRow3(wd, ln, et, 16800, emon.Testport.TextBlob("Gear"), emon.Testport.TextBlob("13.5"), emon.Testport.TextBlob("5.25"));
+        TtRow3(wd, ln, et, 18400, emon.Testport.TextBlob("Axle"), emon.Testport.TextBlob("14.5"), emon.Testport.TextBlob("6.25"));
+        TtRow3(wd, ln, et, 20000, emon.Testport.TextBlob("Cams"), emon.Testport.TextBlob("15.5"), emon.Testport.TextBlob("7.25"));
+        TtRow3(wd, ln, et, 21600, emon.Testport.TextBlob("Pins"), emon.Testport.TextBlob("16.5"), emon.Testport.TextBlob("8.25"));
+        TtRow3(wd, ln, et, 23200, emon.Testport.TextBlob("Rods"), emon.Testport.TextBlob("17.5"), emon.Testport.TextBlob("9.25"));
+        TtRow3(wd, ln, et, 24800, emon.Testport.TextBlob("Bars"), emon.Testport.TextBlob("18.5"), emon.Testport.TextBlob("1.35"));
+        TtRow3(wd, ln, et, 26400, emon.Testport.TextBlob("Tabs"), emon.Testport.TextBlob("19.5"), emon.Testport.TextBlob("2.35"));
+        TtRow3(wd, ln, et, 28000, emon.Testport.TextBlob("Pegs"), emon.Testport.TextBlob("20.5"), emon.Testport.TextBlob("3.35"));
+        TtRow3(wd, ln, et, 29600, emon.Testport.TextBlob("Hubs"), emon.Testport.TextBlob("21.5"), emon.Testport.TextBlob("4.35"));
+        TtRow3(wd, ln, et, 31200, emon.Testport.TextBlob("Rims"), emon.Testport.TextBlob("22.5"), emon.Testport.TextBlob("5.35"));
+        TtRow3(wd, ln, et, 32800, emon.Testport.TextBlob("Tyre"), emon.Testport.TextBlob("23.5"), emon.Testport.TextBlob("6.35"));
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "fragments: well formed");
+        emon.Testport.AssertText(t, "T3w;Gb;R;C[Bolt];C[10.5];C[2.25];R;C[Nuts];C[11.5];C[3.25];R;C[Cogs];C[12.5];C[4.25];R;C[Gear];C[13.5];C[5.25];R;C[Axle];C[14.5];C[6.25];R;C[Cams];C[15.5];C[7.25];R;C[Pins];C[16.5];C[8.25];R;C[Rods];C[17.5];C[9.25];R;C[Bars];C[18.5];C[1.35];R;C[Tabs];C[19.5];C[2.35];R;C[Pegs];C[20.5];C[3.35];R;C[Hubs];C[21.5];C[4.35];R;C[Rims];C[22.5];C[5.35];R;C[Tyre];C[23.5];C[6.35];", "one table of fourteen rows (before: two tables of the stripes, and the rows between them paragraphs)");
+    }
+    internal static int TtAmt(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int y, int style, byte[] label, byte[] a, byte[] b) {
+        // A statement row at y: the label at x 7600, the amounts right-aligned at 26000 and 36000 (a statement's two year columns).
+        TtAt(wd, ln, et, label, 7600, y, style, 0);
+        TtAt(wd, ln, et, a, 26000, y, style, 1);
+        TtAt(wd, ln, et, b, 36000, y, style, 1);
+        return 0;
+    }
+    internal static int TtStmtHead(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa) {
+        // The head of a financial statement (the 10-K's balance sheet): `December 31,` in bold over the two year columns, a short rule under it that
+        // spans both, the years `2023` and `2022` in bold, each with a short rule under it (y 12100), and the first body row at y 12800.
+        TtAt(wd, ln, et, emon.Testport.TextBlob("December 31,"), 23500, 10000, 1, 0);
+        TtRule(pa, 19600, 10850, 36200, 10950);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("2023"), 26000, 11200, 1, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("2022"), 36000, 11200, 1, 1);
+        TtRule(pa, 19600, 12050, 26000, 12150);
+        TtRule(pa, 29600, 12050, 36000, 12150);
+        return 0;
+    }
+    internal static int TtStmtBody(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int dollar) {
+        // Five rows of a statement from y 12800 a pitch of 1600 apart; when `dollar` is 1 a dollar sign on the first row's amounts, set apart from them
+        // (a statement sets it at the left of its column: at x 19800 and 29800).
+        TtAmt(wd, ln, et, 12800, 0, emon.Testport.TextBlob("Cash and equivalents"), emon.Testport.TextBlob("33,672"), emon.Testport.TextBlob("32,260"));
+        if (dollar == 1) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("$"), 19800, 12800, 0, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("$"), 29800, 12800, 0, 0);
+        }
+        TtAmt(wd, ln, et, 14400, 0, emon.Testport.TextBlob("Short-term investments"), emon.Testport.TextBlob("129,619"), emon.Testport.TextBlob("92,774"));
+        TtAmt(wd, ln, et, 16000, 0, emon.Testport.TextBlob("Fixed maturity securities"), emon.Testport.TextBlob("23,758"), emon.Testport.TextBlob("25,128"));
+        TtAmt(wd, ln, et, 17600, 0, emon.Testport.TextBlob("Equity securities"), emon.Testport.TextBlob("353,842"), emon.Testport.TextBlob("308,793"));
+        TtAmt(wd, ln, et, 19200, 0, emon.Testport.TextBlob("Other"), emon.Testport.TextBlob("19,568"), emon.Testport.TextBlob("19,657"));
+        return 0;
+    }
+    internal static int TtStmtTotal(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa, int dollar) {
+        // The total of the statement: a blank pitch under the last body row (y 19200), a double rule over each amount column (y 21650 and 21850, which
+        // cluster as one rule) and the total, in bold, at y 22400, a dollar sign on its amounts when `dollar` is 1.
+        TtRule(pa, 19600, 21600, 26000, 21700);
+        TtRule(pa, 19600, 21800, 26000, 21900);
+        TtRule(pa, 29600, 21600, 36000, 21700);
+        TtRule(pa, 29600, 21800, 36000, 21900);
+        TtAmt(wd, ln, et, 22400, 1, emon.Testport.TextBlob("Total assets"), emon.Testport.TextBlob("259,419"), emon.Testport.TextBlob("251,300"));
+        if (dollar == 1) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("$"), 19800, 22400, 1, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("$"), 29800, 22400, 1, 0);
+        }
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestAHeaderOverAShortRuleIsInTheHeader() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        // Repro shape 3 (the 10-K's statements): `December 31,` over a short rule that spans the two year columns, the years under it with a short
+        // rule each, then the rows: the label of the columns is a header row that spans them and the years are a header row.
+        TtStmtHead(wd, ln, et, pa);
+        TtStmtBody(wd, ln, et, 0);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "head: well formed");
+        emon.Testport.AssertText(t, "T3w;Gh;R;Ch[];Cc2he[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cs[Cash and equivalents];C[33,672];C[32,260];R;Cs[Short-term investments];C[129,619];C[92,774];R;Cs[Fixed maturity securities];C[23,758];C[25,128];R;Cs[Equity securities];C[353,842];C[308,793];R;Cs[Other];C[19,568];C[19,657];", "the header is two rows, a spanning label over the year columns and the years (before: the label a paragraph over the table)");
+    }
+    [Xunit.Fact]
+    public static void TestASectionsLabelInATableIsARowThatSpansIt() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        // The 10-K's labels: `ASSETS` before the first row and `Railroad, Utilities and Energy:` between two groups of rows, each in bold, one cell,
+        // no amount. They are rows of the table whose one cell spans the columns (before: a heading or a paragraph that split the table, or a cell of the
+        // first column and cells that are empty).
+        TtStmtHead(wd, ln, et, pa);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("ASSETS"), 7600, 12800, 1, 0);
+        TtAmt(wd, ln, et, 14400, 0, emon.Testport.TextBlob("Cash and equivalents"), emon.Testport.TextBlob("33,672"), emon.Testport.TextBlob("32,260"));
+        TtAmt(wd, ln, et, 16000, 0, emon.Testport.TextBlob("Short-term investments"), emon.Testport.TextBlob("129,619"), emon.Testport.TextBlob("92,774"));
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Railroad, Utilities and Energy:"), 7600, 17600, 1, 0);
+        TtAmt(wd, ln, et, 19200, 0, emon.Testport.TextBlob("Receivables"), emon.Testport.TextBlob("7,086"), emon.Testport.TextBlob("4,795"));
+        TtAmt(wd, ln, et, 20800, 0, emon.Testport.TextBlob("Goodwill"), emon.Testport.TextBlob("33,758"), emon.Testport.TextBlob("26,597"));
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "labels: well formed");
+        emon.Testport.AssertText(t, "T3w;Gh;R;Ch[];Cc2he[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cc3[ASSETS];R;Cs[Cash and equivalents];Ce[33,672];C[32,260];R;Cs[Short-term investments];Ce[129,619];C[92,774];R;Cc3[Railroad, Utilities and Energy:];R;Cs[Receivables];Ce[7,086];C[4,795];R;Cs[Goodwill];Ce[33,758];C[26,597];", "a label with no amount, in bold, is one cell that spans the row: the table is one table, `ASSETS` no header row");
+    }
+    [Xunit.Fact]
+    public static void TestACurrencySignSetApartFromItsAmountIsInItsCell() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        // A statement sets the dollar sign at the left of its column and the amount at the right of it (the first row's amounts here, 2700 apart): the
+        // sign is part of its amount's cell, no cell of its own (before: a column of its own, or the end of the cell before it).
+        TtStmtHead(wd, ln, et, pa);
+        TtStmtBody(wd, ln, et, 1);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "dollar: well formed");
+        emon.Testport.AssertText(t, "T3w;Gh;R;Ch[];Cc2he[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cs[Cash and equivalents];Ce[$ 33,672];Ce[$ 32,260];R;Cs[Short-term investments];Ce[129,619];Ce[92,774];R;Cs[Fixed maturity securities];Ce[23,758];Ce[25,128];R;Cs[Equity securities];Ce[353,842];Ce[308,793];R;Cs[Other];Ce[19,568];Ce[19,657];", "the signs are in the cells of the amounts after them: three columns");
+    }
+    [Xunit.Fact]
+    public static void TestTheTotalUnderADoubleRuleIsARowOfTheTable() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        System.Text.StringBuilder t2 = emon.Testport.NewText();
+        // Repro shape 3: the total stands a blank pitch under the body, under a double rule over the amount columns, its label in the first column:
+        // the last row of the table (before: five paragraphs under it).
+        TtStmtHead(wd, ln, et, pa);
+        TtStmtBody(wd, ln, et, 1);
+        TtStmtTotal(wd, ln, et, pa, 1);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "total: well formed");
+        emon.Testport.AssertText(t, "T3p;Gh;R;Ch[];Cc2h[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cs[Cash and equivalents];Ce[$ 33,672];Ce[$ 32,260];R;Cs[Short-term investments];Ce[129,619];Ce[92,774];R;Cs[Fixed maturity securities];Ce[23,758];Ce[25,128];R;Cs[Equity securities];Ce[353,842];Ce[308,793];R;Cs[Other];Ce[19,568];Ce[19,657];Gf;R;Cws[Total assets];Cwe[$ 259,419];Cwe[$ 251,300];", "the total is a row of the table, in its foot");
+        // A block of totals in the last columns under it (an invoice's: its label is not in the first column) is no row of the table (D559).
+        emon.Port.CellsDrop(wd, 0);
+        emon.Port.CellsDrop(ln, 0);
+        emon.Port.CellsDrop(et, 0);
+        emon.Port.CellsDrop(pa, 0);
+        TtStmtHead(wd, ln, et, pa);
+        TtStmtBody(wd, ln, et, 1);
+        TtRule(pa, 19600, 21600, 26000, 21700);
+        TtRule(pa, 19600, 21800, 26000, 21900);
+        TtRule(pa, 29600, 21600, 36000, 21700);
+        TtRule(pa, 29600, 21800, 36000, 21900);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Total due"), 14000, 22400, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("259,419"), 26000, 22400, 1, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("251,300"), 36000, 22400, 1, 1);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t2), 0, "block: well formed");
+        emon.Testport.AssertText(t2, "T3p;Gh;R;Ch[];Cc2he[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cs[Cash and equivalents];Ce[$ 33,672];Ce[$ 32,260];R;Cs[Short-term investments];Ce[129,619];Ce[92,774];R;Cs[Fixed maturity securities];Ce[23,758];Ce[25,128];R;Cs[Equity securities];Ce[353,842];Ce[308,793];R;Cs[Other];Ce[19,568];Ce[19,657];P[Total due];P[259,419];P[251,300];", "a block of totals that does not begin in the first column is not the table's, whatever its rule");
+    }
     internal static int TtGolden(byte[] pdf, System.Text.StringBuilder t, System.Text.StringBuilder tvt) {
         // PDF -> content -> tables -> paragraphs -> Model -> pretty JSON; answer 0 when every step answered 0, else a
         // code naming the step (1 open, 2 content, 3 the Model's check). The JSON is `t`. The tagged tree is read and joined (P5.5), and the
