@@ -1041,7 +1041,7 @@ const rfLabelCp int32 = 48
 
 const rfLabelWords int32 = 6
 
-const rfGrow int32 = 3
+const rfPasses int32 = 3
 
 const rfInsideH int32 = 4500
 
@@ -1142,7 +1142,7 @@ func rfGrows(fd *port.Cells, row int32) int32 {
 
 func rfGrow(on *port.Cells, orr *port.Cells, text *port.Cells, cand *port.Cells, fg *port.Cells, fd *port.Cells, ab *port.Cells, n int32) int32 {
 	// D1630 (smoke review B issue 7): the boxes the labels of each figure are looked for in, kept in `ab` after its `n` node entries (four cells a figure of `fg`, in its order): each is the
-	// figure's candidate box grown, in `RF_GROW` passes, over the label-like paragraphs (one line, a few words, `rf-label-text`) within `RF_ZONE` of it: a drawing's boxes are separate regions of
+	// figure's candidate box grown, in `RF_PASSES` passes, over the label-like paragraphs (one line, a few words, `rf-label-text`) within `RF_ZONE` of it: a drawing's boxes are separate regions of
 	// paths and words, and the words between and beside them are its labels too. Answers how many paragraphs it took in.
 	var i int32 = 1
 	var row int32 = 0
@@ -1161,7 +1161,7 @@ func rfGrow(on *port.Cells, orr *port.Cells, text *port.Cells, cand *port.Cells,
 		port.CellsPush(ab, asset.AsGet(cand, row, 8))
 		i += 1
 	}
-	for (pass < rfGrow) && (changed == 1) {
+	for (pass < rfPasses) && (changed == 1) {
 		changed = 0
 		c = 0
 		for c < n {

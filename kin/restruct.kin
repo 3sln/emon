@@ -832,7 +832,7 @@
 (defconst ^I32 RF_LABEL_H 1800)     ;; a label is a line at most this tall (18 pt: `0` and `Jan` on two baselines are one paragraph)
 (defconst ^I32 RF_LABEL_CP 48)      ;; and at most this many code points
 (defconst ^I32 RF_LABEL_WORDS 6)    ;; and this many words
-(defconst ^I32 RF_GROW 3)           ;; the passes a figure's box grows over the labels near it (D1630)
+(defconst ^I32 RF_PASSES 3)          ;; the passes a figure's box grows over the labels near it (D1630)
 (defconst ^I32 RF_INSIDE_H 4500)    ;; inside a figure, a paragraph of at most this height (45 pt: three lines) ...
 (defconst ^I32 RF_INSIDE_CP 120)    ;; ... and this many characters is a label, whatever its words
 (defconst ^I32 RF_INSIDE_BIG 50000) ;; unless the figure is taller than this (500 pt: a page's background, a scan)
@@ -909,7 +909,7 @@
 
 (defn ^I32 rf-grow [^Cells on ^Cells orr ^Cells text ^Cells cand ^Cells fg ^Cells fd ^:mut ^Cells ab ^I32 n]
   (comment "D1630 (smoke review B issue 7): the boxes the labels of each figure are looked for in, kept in `ab` after its `n` node entries (four cells a figure of `fg`, in its order): each is the")
-  (comment "figure's candidate box grown, in `RF_GROW` passes, over the label-like paragraphs (one line, a few words, `rf-label-text`) within `RF_ZONE` of it: a drawing's boxes are separate regions of")
+  (comment "figure's candidate box grown, in `RF_PASSES` passes, over the label-like paragraphs (one line, a few words, `rf-label-text`) within `RF_ZONE` of it: a drawing's boxes are separate regions of")
   (comment "paths and words, and the words between and beside them are its labels too. Answers how many paragraphs it took in.")
   (let [^:mut ^I32 i 1
         ^:mut ^I32 row 0
@@ -927,7 +927,7 @@
           (cells-push ab (as-get cand row 7))
           (cells-push ab (as-get cand row 8))
           (set i (+ i 1))))
-    (while (and (< pass RF_GROW) (== changed 1))
+    (while (and (< pass RF_PASSES) (== changed 1))
       (do (set changed 0)
           (set c 0)
           (while (< c n)

@@ -981,7 +981,7 @@ pub(crate) const RF_ZONE: i32 = 2400;
 pub(crate) const RF_LABEL_H: i32 = 1800;
 pub(crate) const RF_LABEL_CP: i32 = 48;
 pub(crate) const RF_LABEL_WORDS: i32 = 6;
-pub(crate) const RF_GROW: i32 = 3;
+pub(crate) const RF_PASSES: i32 = 3;
 pub(crate) const RF_INSIDE_H: i32 = 4500;
 pub(crate) const RF_INSIDE_CP: i32 = 120;
 pub(crate) const RF_INSIDE_BIG: i32 = 50000;
@@ -1073,7 +1073,7 @@ pub(crate) fn rf_grows(fd: &mut crate::port::Cells, row: i32) -> i32 {
 }
 pub(crate) fn rf_grow(on: &mut crate::port::Cells, orr: &mut crate::port::Cells, text: &mut crate::port::Cells, cand: &mut crate::port::Cells, fg: &mut crate::port::Cells, fd: &mut crate::port::Cells, mut ab: &mut crate::port::Cells, n: i32) -> i32 {
     // D1630 (smoke review B issue 7): the boxes the labels of each figure are looked for in, kept in `ab` after its `n` node entries (four cells a figure of `fg`, in its order): each is the
-    // figure's candidate box grown, in `RF_GROW` passes, over the label-like paragraphs (one line, a few words, `rf-label-text`) within `RF_ZONE` of it: a drawing's boxes are separate regions of
+    // figure's candidate box grown, in `RF_PASSES` passes, over the label-like paragraphs (one line, a few words, `rf-label-text`) within `RF_ZONE` of it: a drawing's boxes are separate regions of
     // paths and words, and the words between and beside them are its labels too. Answers how many paragraphs it took in.
     let mut i: i32 = 1;
     let mut row: i32 = 0;
@@ -1092,7 +1092,7 @@ pub(crate) fn rf_grow(on: &mut crate::port::Cells, orr: &mut crate::port::Cells,
         crate::port::cells_push(ab, as_get(cand, row, 8));
         i += 1;
     }
-    while (pass < RF_GROW) && (changed == 1) {
+    while (pass < RF_PASSES) && (changed == 1) {
         changed = 0;
         c = 0;
         while c < n {

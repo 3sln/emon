@@ -981,7 +981,7 @@ public final class Restruct {
     public static final int RF_LABEL_H = 1800;
     public static final int RF_LABEL_CP = 48;
     public static final int RF_LABEL_WORDS = 6;
-    public static final int RF_GROW = 3;
+    public static final int RF_PASSES = 3;
     public static final int RF_INSIDE_H = 4500;
     public static final int RF_INSIDE_CP = 120;
     public static final int RF_INSIDE_BIG = 50000;
@@ -1073,7 +1073,7 @@ public final class Restruct {
     }
     public static int rfGrow(emon.Port.Cells on, emon.Port.Cells orr, emon.Port.Cells text, emon.Port.Cells cand, emon.Port.Cells fg, emon.Port.Cells fd, emon.Port.Cells ab, int n) {
         // D1630 (smoke review B issue 7): the boxes the labels of each figure are looked for in, kept in `ab` after its `n` node entries (four cells a figure of `fg`, in its order): each is the
-        // figure's candidate box grown, in `RF_GROW` passes, over the label-like paragraphs (one line, a few words, `rf-label-text`) within `RF_ZONE` of it: a drawing's boxes are separate regions of
+        // figure's candidate box grown, in `RF_PASSES` passes, over the label-like paragraphs (one line, a few words, `rf-label-text`) within `RF_ZONE` of it: a drawing's boxes are separate regions of
         // paths and words, and the words between and beside them are its labels too. Answers how many paragraphs it took in.
         int i = 1;
         int row = 0;
@@ -1092,7 +1092,7 @@ public final class Restruct {
             emon.Port.cellsPush(ab, Asset.asGet(cand, row, 8));
             i += 1;
         }
-        while ((pass < RF_GROW) && (changed == 1)) {
+        while ((pass < RF_PASSES) && (changed == 1)) {
             changed = 0;
             c = 0;
             while (c < n) {
