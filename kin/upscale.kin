@@ -9,7 +9,7 @@
 ;;     (`up-xheight`; the engine's own row x-height, or `up-line-share` per cent of a line's box where it says none), and the resolution it implies for ten
 ;;     point type (`up-eff-dpi100`: the x-height of body type is `up-body-xh` hundredths of a point). SPEC 3.4's "estimated from the text size", which D215
 ;;     left unmade;
-;;   * when that x-height is under `up-xh-trigger` pixels (a resolution under about 230 dpi), the raster is read AGAIN, `up-factor` times as large (the smallest
+;;   * when that x-height is under `up-xh-trigger` pixels (a resolution under about 130 dpi: the first value, a 150 dpi scan reads well and the recorded transcripts of such scans are not asked again), the raster is read AGAIN, `up-factor` times as large (the smallest
 ;;     whole factor that brings the x-height to `up-xh-target`, at most `up-max`, within `up-max-pixels` of output);
 ;;   * when the first pass read almost nothing (under `up-rescue-words` words) off a SMALL raster (its longer side at most `up-rescue-side` pixels), it is read
 ;;     again `up-rescue-k` times as large: an image of a table or a chart saved at screen size, where no line is there to measure;
@@ -31,7 +31,7 @@
 
 ;; ------------------------------------------------------------- the settings (SPEC 9.4: named, first values, P10.1 calibrates)
 
-(defn ^:pub ^I32 up-xh-trigger [] (comment "`up-xh-trigger`: a page whose text has a median x-height under this many pixels is read again enlarged (16 px is ten point type at 230 dpi).") (return 16))
+(defn ^:pub ^I32 up-xh-trigger [] (comment "`up-xh-trigger`: a page whose text has a median x-height under this many pixels is read again enlarged (9 px is ten point type at 130 dpi: a 150 dpi scan, x-height 10, reads well and is left alone; a 100 dpi one does not).") (return 9))
 (defn ^:pub ^I32 up-xh-target [] (comment "`up-xh-target`: the x-height, in pixels, the enlargement aims at (ten point type at 300 dpi).") (return 20))
 (defn ^:pub ^I32 up-max [] (comment "`up-max`: the largest whole factor a raster is enlarged by.") (return 4))
 (defn ^:pub ^I32 up-max-pixels [] (comment "`up-max-pixels`: the most pixels an enlarged raster has (a smaller factor is used when the larger would pass it).") (return 25000000))

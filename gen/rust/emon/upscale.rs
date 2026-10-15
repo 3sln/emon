@@ -6,8 +6,8 @@ use crate::emon::ocr::*;
 use crate::emon::plan::*;
 
 pub fn up_xh_trigger() -> i32 {
-    // `up-xh-trigger`: a page whose text has a median x-height under this many pixels is read again enlarged (16 px is ten point type at 230 dpi).
-    return 16;
+    // `up-xh-trigger`: a page whose text has a median x-height under this many pixels is read again enlarged (9 px is ten point type at 130 dpi: a 150 dpi scan, x-height 10, reads well and is left alone; a 100 dpi one does not).
+    return 9;
 }
 pub fn up_xh_target() -> i32 {
     // `up-xh-target`: the x-height, in pixels, the enlargement aims at (ten point type at 300 dpi).

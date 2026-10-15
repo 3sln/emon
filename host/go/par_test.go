@@ -62,7 +62,7 @@ func TestParallelWorkersGiveTheSerialModelAndTranscriptAndOverlapTheOcrOfAMultiP
 	one0 := &slowOcr{}
 	m0, tr0, err := parEngine(one0, nil, 1).Record(one(BytesInput(tiff)), o)
 	j0 := js(must(t, m0, err))
-	if one0.peak.Load() != 1 || one0.calls.Load() != 3 {
+	if one0.peak.Load() != 1 || one0.calls.Load() != 9 {
 		t.Fatalf("a serial run reads one page at a time: peak %d calls %d", one0.peak.Load(), one0.calls.Load())
 	}
 	for _, n := range []int32{2, 3, 4, 8} {
@@ -74,7 +74,7 @@ func TestParallelWorkersGiveTheSerialModelAndTranscriptAndOverlapTheOcrOfAMultiP
 		if !reflect.DeepEqual(entriesOf(tr), entriesOf(tr0)) {
 			t.Errorf("parallel=%d: the transcript differs from the serial one", n)
 		}
-		if slow.calls.Load() != 3 {
+		if slow.calls.Load() != one0.calls.Load() {
 			t.Errorf("parallel=%d: every page is read once (a look ahead's answer is used, not asked again): %d readings", n, slow.calls.Load())
 		}
 		if slow.peak.Load() < 2 || slow.peak.Load() > n {

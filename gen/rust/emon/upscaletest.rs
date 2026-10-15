@@ -61,9 +61,9 @@ fn test_the_typical_x_height_is_the_median_weighted_by_width() {
 fn test_small_text_is_read_again_enlarged_to_an_x_height_of_twenty() {
     crate::testport::assert_eq(ut_factor(5, 6, 765, 990, -1, -1), 4, "6 pixels: 20 / 6 is 4 (the most)");
     crate::testport::assert_eq(ut_factor(5, 7, 765, 990, -1, -1), 3, "7 pixels: 3");
-    crate::testport::assert_eq(ut_factor(5, 10, 765, 990, -1, -1), 2, "10 pixels: 2");
-    crate::testport::assert_eq(ut_factor(5, 15, 765, 990, -1, -1), 2, "15 pixels: under 16, 2");
-    crate::testport::assert_eq(ut_factor(5, 16, 765, 990, -1, -1), 1, "16 pixels: the text reads well, not at all");
+    crate::testport::assert_eq(ut_factor(5, 8, 765, 990, -1, -1), 3, "8 pixels: 20 / 8 is 3");
+    crate::testport::assert_eq(ut_factor(5, 9, 765, 990, -1, -1), 1, "9 pixels: ten point type at 130 dpi, not at all");
+    crate::testport::assert_eq(ut_factor(5, 10, 765, 990, -1, -1), 1, "10 pixels: a 150 dpi scan reads well, not at all");
     crate::testport::assert_eq(ut_factor(5, 21, 765, 990, -1, -1), 1, "300 dpi: not at all");
     crate::testport::assert_eq(ut_factor(5, 3, 765, 990, -1, -1), 4, "never more than `up-max`");
 }
@@ -88,7 +88,7 @@ fn test_a_raster_whose_enlargement_would_pass_the_pixel_bound_is_enlarged_less()
     crate::testport::assert_eq(ut_factor(5, 6, 2000, 2000, -1, -1), 2, "4 million pixels: 2 times is 16 million, 3 times 36 million");
     crate::testport::assert_eq(ut_factor(5, 6, 3000, 3000, -1, -1), 1, "9 million: not even twice (36 million)");
     crate::testport::assert_eq(up_max(), 4, "the factor is at most 4");
-    crate::testport::assert_eq(up_xh_trigger(), 16, "and the trigger is 16 pixels");
+    crate::testport::assert_eq(up_xh_trigger(), 9, "and the trigger is 9 pixels");
 }
 #[test]
 fn test_a_reading_scores_what_it_read() {

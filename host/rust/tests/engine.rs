@@ -434,8 +434,9 @@ fn an_image_is_read_by_the_ocr_port_and_its_transcript_replays_without_it() {
     assert!(j.contains("\"ocr\": \"always\""), "settings.ocr is written when OCR gave the text: {}", j);
     assert!(j.contains("\"ocr\"") && j.contains("\"ocr-only\""), "{}", j);
     assert_eq!(m.pages()[0].kind, "image");
-    // the header, then the page unit's decode and ocr; the transcript says whose engine answered
-    assert_eq!(t.entries.iter().map(|x| x.req[1]).collect::<Vec<_>>(), vec![2, 2, 3]);
+    // the header, then the page unit's decode and ocr (D1610: the fake engine reads one word of a tiny raster, which the unit reads again enlarged, and
+    // the unsure line again alone: three readings); the transcript says whose engine answered
+    assert_eq!(t.entries.iter().map(|x| x.req[1]).collect::<Vec<_>>(), vec![2, 2, 3, 3, 3]);
     assert_eq!(t.producer, vec![("engine".to_string(), "fake".to_string())]);
     // a replay needs no port, and gives the same Model; the files of the transcript survive a round trip
     let files: std::collections::BTreeMap<String, Vec<u8>> = t.to_files().into_iter().collect();
@@ -939,14 +940,16 @@ fn parallel_workers_give_the_serial_model_and_transcript_and_overlap_the_ocr_of_
     let serial = Engine::new(Config { ocr: Some(OcrPort(one.clone())), ..Config::default() });
     let (m0, t0) = serial.record(Input::bytes(tiff.clone()), &o).unwrap();
     assert_eq!(one.peak.load(Ordering::SeqCst), 1, "a serial run reads one page at a time");
-    assert_eq!(one.calls.load(Ordering::SeqCst), 3);
+    // D1610: a frame is read, read again enlarged and its unsure line again: three readings a page
+    let serial_calls = one.calls.load(Ordering::SeqCst);
+    assert_eq!(serial_calls, 9);
     for n in [2, 3, 4, 8] {
         let slow = Arc::new(SlowOcr::default());
         let e = Engine::new(Config { ocr: Some(OcrPort(slow.clone())), parallel: n, ..Config::default() });
         let (m, t) = e.record(Input::bytes(tiff.clone()), &o).unwrap();
         assert_eq!(json(&m), json(&m0), "parallel={}", n);
         assert_eq!(entries_of(&t), entries_of(&t0), "parallel={}", n);
-        assert_eq!(slow.calls.load(Ordering::SeqCst), 3, "parallel={}: every page is read once: a look ahead's answer is used, not asked again", n);
+        assert_eq!(slow.calls.load(Ordering::SeqCst), serial_calls, "parallel={}: every page is read once: a look ahead's answer is used, not asked again", n);
         assert!(slow.peak.load(Ordering::SeqCst) >= 2, "parallel={}: the pages ahead are read while the loop is on one (peak {})", n, slow.peak.load(Ordering::SeqCst));
         assert!(slow.peak.load(Ordering::SeqCst) <= n as usize, "parallel={}: at most N at once (peak {})", n, slow.peak.load(Ordering::SeqCst));
     }

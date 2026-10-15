@@ -60,9 +60,9 @@
 (deftest test-small-text-is-read-again-enlarged-to-an-x-height-of-twenty
   (assert-eq (ut-factor 5 6 765 990 -1 -1) 4 "6 pixels: 20 / 6 is 4 (the most)")
   (assert-eq (ut-factor 5 7 765 990 -1 -1) 3 "7 pixels: 3")
-  (assert-eq (ut-factor 5 10 765 990 -1 -1) 2 "10 pixels: 2")
-  (assert-eq (ut-factor 5 15 765 990 -1 -1) 2 "15 pixels: under 16, 2")
-  (assert-eq (ut-factor 5 16 765 990 -1 -1) 1 "16 pixels: the text reads well, not at all")
+  (assert-eq (ut-factor 5 8 765 990 -1 -1) 3 "8 pixels: 20 / 8 is 3")
+  (assert-eq (ut-factor 5 9 765 990 -1 -1) 1 "9 pixels: ten point type at 130 dpi, not at all")
+  (assert-eq (ut-factor 5 10 765 990 -1 -1) 1 "10 pixels: a 150 dpi scan reads well, not at all")
   (assert-eq (ut-factor 5 21 765 990 -1 -1) 1 "300 dpi: not at all")
   (assert-eq (ut-factor 5 3 765 990 -1 -1) 4 "never more than `up-max`"))
 
@@ -79,12 +79,11 @@
   (assert-eq (ut-factor 5 6 765 990 180 500) 1 "turned a half")
   (assert-eq (ut-factor 5 6 765 990 0 500) 4 "upright and sure: measured")
   (assert-eq (ut-factor 5 6 765 990 90 10) 4 "turned but OSD unsure (confidence 1.0): measured"))
-
 (deftest test-a-raster-whose-enlargement-would-pass-the-pixel-bound-is-enlarged-less
   (assert-eq (ut-factor 5 6 2000 2000 -1 -1) 2 "4 million pixels: 2 times is 16 million, 3 times 36 million")
   (assert-eq (ut-factor 5 6 3000 3000 -1 -1) 1 "9 million: not even twice (36 million)")
   (assert-eq (up-max) 4 "the factor is at most 4")
-  (assert-eq (up-xh-trigger) 16 "and the trigger is 16 pixels"))
+  (assert-eq (up-xh-trigger) 9 "and the trigger is 9 pixels"))
 
 (deftest test-a-reading-scores-what-it-read
   (let [^Cells a (new-cells)

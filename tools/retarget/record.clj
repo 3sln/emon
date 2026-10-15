@@ -43,9 +43,9 @@
     (apply str (map #(format "%02x" (bit-and % 0xff)) (.digest md (.getBytes ^String s "UTF-8"))))))
 
 (defn untargeted?
-  "An entry whose bitmap kin reads: the page unit's render or decode (page-local ids 1-4) or the first OCR pass (16)."
+  "An entry whose bitmap kin reads: the page unit's render or decode (page-local ids 1-4), the first OCR pass (16) or the enlarged raster's (21, D1610: it stands in for the first pass)."
   [req-id]
-  (contains? #{1 2 3 4 16} (mod req-id 256)))
+  (contains? #{1 2 3 4 16 21} (mod req-id 256)))
 
 (defn strip-unread-bitmaps
   "Drop the `:bitmap` of every entry kin never reads (an OCR answer of a targeted pass), and its file."

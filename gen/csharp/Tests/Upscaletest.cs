@@ -61,9 +61,9 @@ public static class Upscaletest {
     public static void TestSmallTextIsReadAgainEnlargedToAnXHeightOfTwenty() {
         emon.Testport.AssertEq(UtFactor(5, 6, 765, 990, -1, -1), 4, "6 pixels: 20 / 6 is 4 (the most)");
         emon.Testport.AssertEq(UtFactor(5, 7, 765, 990, -1, -1), 3, "7 pixels: 3");
-        emon.Testport.AssertEq(UtFactor(5, 10, 765, 990, -1, -1), 2, "10 pixels: 2");
-        emon.Testport.AssertEq(UtFactor(5, 15, 765, 990, -1, -1), 2, "15 pixels: under 16, 2");
-        emon.Testport.AssertEq(UtFactor(5, 16, 765, 990, -1, -1), 1, "16 pixels: the text reads well, not at all");
+        emon.Testport.AssertEq(UtFactor(5, 8, 765, 990, -1, -1), 3, "8 pixels: 20 / 8 is 3");
+        emon.Testport.AssertEq(UtFactor(5, 9, 765, 990, -1, -1), 1, "9 pixels: ten point type at 130 dpi, not at all");
+        emon.Testport.AssertEq(UtFactor(5, 10, 765, 990, -1, -1), 1, "10 pixels: a 150 dpi scan reads well, not at all");
         emon.Testport.AssertEq(UtFactor(5, 21, 765, 990, -1, -1), 1, "300 dpi: not at all");
         emon.Testport.AssertEq(UtFactor(5, 3, 765, 990, -1, -1), 4, "never more than `up-max`");
     }
@@ -88,7 +88,7 @@ public static class Upscaletest {
         emon.Testport.AssertEq(UtFactor(5, 6, 2000, 2000, -1, -1), 2, "4 million pixels: 2 times is 16 million, 3 times 36 million");
         emon.Testport.AssertEq(UtFactor(5, 6, 3000, 3000, -1, -1), 1, "9 million: not even twice (36 million)");
         emon.Testport.AssertEq(Upscale.UpMax(), 4, "the factor is at most 4");
-        emon.Testport.AssertEq(Upscale.UpXhTrigger(), 16, "and the trigger is 16 pixels");
+        emon.Testport.AssertEq(Upscale.UpXhTrigger(), 9, "and the trigger is 9 pixels");
     }
     [Xunit.Fact]
     public static void TestAReadingScoresWhatItRead() {
