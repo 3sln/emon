@@ -19,7 +19,7 @@
 ;; (no `words` row: not even a hidden one) and carries an image that covers at least half of it and is upright (a real XObject, not
 ;; a stencil mask or an inline image). If that image is one plain XObject with exactly one filter, DCT, a JPEG stream is a JPEG file,
 ;; and the host's `ImageDecode` reads the span in place; in ANY OTHER CODEC (Flate, RunLength, LZW, CCITT, JBIG2, JPX, an encrypted
-;; DCT, D1610) the host RENDERS the page and the render is the raster (`emon.pageunit`'s scan mode). A page with a text layer is
+;; DCT, D564) the host RENDERS the page and the render is the raster (`emon.pageunit`'s scan mode). A page with a text layer is
 ;; born-digital whatever else it holds: fusion (P7) weighs a second reading against the text layer (D212). A page whose image is
 ;; rotated or tiled is left to the `Renderer` (P6.2) as a page of its own and has no OCR text.
 ;;
@@ -1054,11 +1054,11 @@
           (set t (node-parent nodes t))))
     (return -1)))
 
-(defn ^:pub ^I32 sc-mask-unread [] (comment "D1610: added to a page's `mask` cell when the engine had no model for the page's script (`emon.scriptcheck`).") (return 4))
-(defn ^:pub ^I32 sc-unread-conf [] (comment "D1610: the most confidence (per mille) a block of a page in a script the engine cannot read keeps.") (return 100))
+(defn ^:pub ^I32 sc-mask-unread [] (comment "D564: added to a page's `mask` cell when the engine had no model for the page's script (`emon.scriptcheck`).") (return 4))
+(defn ^:pub ^I32 sc-unread-conf [] (comment "D564: the most confidence (per mille) a block of a page in a script the engine cannot read keeps.") (return 100))
 
 (defn ^:pub ^I32 sc-tag-unread [^:mut ^Cells nodes ^Cells regions ^Cells mask]
-  (comment "D1610: every node whose text is OCR's (`ocr` in its source) on a page the unit marked `sc-mask-unread` (OSD sure of a script that no model the engine read it")
+  (comment "D564: every node whose text is OCR's (`ocr` in its source) on a page the unit marked `sc-mask-unread` (OSD sure of a script that no model the engine read it")
   (comment "with reads, `emon.scriptcheck`): a block is flagged `script-unread` and `low-conf`, and every node's confidence is held at `sc-unread-conf`. The text is the")
   (comment "engine's guess at a script it cannot read, kept and never presented as confident. After every other provenance stage (the scan's, fusion's). Answers the nodes held.")
   (let [^I32 nn (node-count nodes)

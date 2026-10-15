@@ -125,7 +125,7 @@ pub fn pu_plan(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: 
                     crate::port::cells_set(pl, k + 9, py1 - py0);
                     crate::port::cells_set(pl, k + 14, pu_scan_dct());
                 } else {
-                    // D1610: a page whose content is one big image is a scan WHATEVER the codec (Flate, RunLength, LZW, CCITT, JBIG2, JPX, a DCT with more
+                    // D564: a page whose content is one big image is a scan WHATEVER the codec (Flate, RunLength, LZW, CCITT, JBIG2, JPX, a DCT with more
                     // than one stage or in an encrypted file): kin cannot hand the host those bytes in place, so the host RENDERS the page (pdfium reads every codec,
                     // colour space, /Decode and mask) and the render is read as the scan is. The raster is the whole page, not the image's box.
                     crate::port::cells_set(pl, k, 1);
@@ -421,14 +421,14 @@ pub(crate) fn pu_run_born(i: i32, input: i32, fuse: i32, pl: &mut crate::port::C
             }
         }
     }
-    // a page in a script the engine has no model for (D1610): the page's mask says so, and `sc-tag-unread` holds what OCR won of it at a low confidence
+    // a page in a script the engine has no model for (D564): the page's mask says so, and `sc-tag-unread` holds what OCR won of it at a low confidence
     if sk_unread(ans, ao, s6) == 1 {
         crate::port::cells_set(mask, i, sc_mask_unread());
     }
     return us_done();
 }
 pub(crate) fn pu_scan_pixels(i: i32, did: i32, oid: i32, ao: i32, pxw: i32, pxh: i32, dpi100: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, loc: &mut crate::port::Cells, bms: &crate::port::BitmapSet, fuse: i32, mut rtp: &mut crate::port::Cells, mut s6: &mut crate::port::Cells) -> i32 {
-    // D1610: 0 when the raster of the page unit is the bitmap under `did`; the factor `k` (2 to 4) when the first pass `ao` of it (the OCR request `oid`) shows
+    // D564: 0 when the raster of the page unit is the bitmap under `did`; the factor `k` (2 to 4) when the first pass `ao` of it (the OCR request `oid`) shows
     // that the raster is too small for the engine to read (`emon.upscale`) and the pixels are there to enlarge: the enlarged raster is then made as a kin-made view
     // (`rv-upscaled`) and its OCR is asked for (`ri-upscale`, naming the view's pixel hash). Answers -1 when it has asked (the caller answers `us-requests`).
     if pu_px(bms, did, fuse) == 0 {
@@ -454,7 +454,7 @@ pub fn pu_scan_core(i: i32, input: i32, fuse: i32, did: i32, ad: i32, dpi100: i3
     // targeted passes they and the first pass call for, then the lines the pipeline reads (`rt-adopt`). With no pixel in the decode answer (a transcript recorded
     // slim) the page is what it always was: the first pass's lines. `maskv` is what the page's `mask` cell becomes (1 an image page, 2 a PDF's scanned page);
     // `seals` 1 looks for seals and signatures in the pixels (a PDF page: its document unit arbitrates them), 0 does not (an image: it has no such unit).
-    // D1610: a raster the first pass shows to be too small is read again enlarged (`pu-scan-pixels`) and that reading, when it reads as much, is the first pass.
+    // D564: a raster the first pass shows to be too small is read again enlarged (`pu-scan-pixels`) and that reading, when it reads as much, is the first pass.
     let oid: i32 = pu_id(i, pi_ocr());
     let uid: i32 = pu_id(i, ri_upscale());
     let uvid: i32 = pu_view_id(i, rv_upscaled());
@@ -491,7 +491,7 @@ pub fn pu_scan_core(i: i32, input: i32, fuse: i32, did: i32, ad: i32, dpi100: i3
         return us_done();
     }
     rt_prep(rtp);
-    // a page in a script the engine has no model for (D1610): the first pass is junk at a confidence it should not have; `sc-tag` says so
+    // a page in a script the engine has no model for (D564): the first pass is junk at a confidence it should not have; `sc-tag` says so
     if sk_unread(ans, ao, s6) == 1 {
         mv += sc_mask_unread();
     }
@@ -570,7 +570,7 @@ pub fn pu_scan_core(i: i32, input: i32, fuse: i32, did: i32, ad: i32, dpi100: i3
     return us_done();
 }
 pub(crate) fn pu_run_scan(i: i32, input: i32, fuse: i32, pl: &mut crate::port::Cells, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, loc: &mut crate::port::Cells, bms: &crate::port::BitmapSet, mut mask: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells, mut cg: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut comps: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tpts: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, mut sv: &mut crate::port::Cells, mut aux: &mut crate::port::Cells, mut snap: &mut crate::port::Cells, mut rtp: &mut crate::port::Cells, mut rn: &mut crate::port::Cells, mut ri: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut vr: &mut crate::port::Cells, mut pc: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut mem: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells, mut s4: &mut crate::port::Cells, mut s5: &mut crate::port::Cells, mut s6: &mut crate::port::Cells) -> i32 {
-    // A SCANNED page of a PDF: `decode` of its stream (the host reads the DCT bytes in place) or, in the plan's render mode (D1610: an image in any other codec),
+    // A SCANNED page of a PDF: `decode` of its stream (the host reads the DCT bytes in place) or, in the plan's render mode (D564: an image in any other codec),
     // `render` of the page, then `pu-scan-core`: the OCR of the bitmap and what it calls for. A failed raster is `us-done`: the page is left as the text layer made it.
     let did: i32 = pu_id(i, pi_decode());
     let ad: i32 = an_find(ans, did);

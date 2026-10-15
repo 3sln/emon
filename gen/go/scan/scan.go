@@ -1347,17 +1347,17 @@ func scNodePage(nodes *port.Cells, regions *port.Cells, n int32) int32 {
 }
 
 func ScMaskUnread() int32 {
-	// D1610: added to a page's `mask` cell when the engine had no model for the page's script (`emon.scriptcheck`).
+	// D564: added to a page's `mask` cell when the engine had no model for the page's script (`emon.scriptcheck`).
 	return 4
 }
 
 func ScUnreadConf() int32 {
-	// D1610: the most confidence (per mille) a block of a page in a script the engine cannot read keeps.
+	// D564: the most confidence (per mille) a block of a page in a script the engine cannot read keeps.
 	return 100
 }
 
 func ScTagUnread(nodes *port.Cells, regions *port.Cells, mask *port.Cells) int32 {
-	// D1610: every node whose text is OCR's (`ocr` in its source) on a page the unit marked `sc-mask-unread` (OSD sure of a script that no model the engine read it
+	// D564: every node whose text is OCR's (`ocr` in its source) on a page the unit marked `sc-mask-unread` (OSD sure of a script that no model the engine read it
 	// with reads, `emon.scriptcheck`): a block is flagged `script-unread` and `low-conf`, and every node's confidence is held at `sc-unread-conf`. The text is the
 	// engine's guess at a script it cannot read, kept and never presented as confident. After every other provenance stage (the scan's, fusion's). Answers the nodes held.
 	var nn int32 = model.NodeCount(nodes)

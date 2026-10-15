@@ -2439,7 +2439,7 @@ pub fn page_set_kind(mut pages: &mut crate::port::Cells, p: i32, kind: i32) -> i
     return pset(pages, p, 6, kind);
 }
 pub fn page_set_size(mut pages: &mut crate::port::Cells, p: i32, w: i32, h: i32) -> i32 {
-    // A page's size in centipoints, after the page is made: an image read from its turned view (D1610) is as wide as it is high and the reverse, upright.
+    // A page's size in centipoints, after the page is made: an image read from its turned view (D564) is as wide as it is high and the reverse, upright.
     pset(pages, p, 3, w);
     return pset(pages, p, 4, h);
 }

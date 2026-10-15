@@ -441,7 +441,7 @@ public final class Arbitertest {
         emon.Testport.assertEq(Player.fvGet(fv, 1, 1), 1, "the text layer's");
     }
     public static void testAWordInAScriptTheEngineLacksKeepsItsTextWhateverDigitSitsOnIt() {
-        // D1610: `ar-word-latin` answered 1 for ANY Latin letter or digit, so a Cyrillic word with an attached reference number [10], a CJK word with a
+        // D564: `ar-word-latin` answered 1 for ANY Latin letter or digit, so a Cyrillic word with an attached reference number [10], a CJK word with a
         // year, or a formula with a variable was 'readable' and rows 120 and 130 gave the group to an English engine that reads it as junk
         emon.Port.Cells fw = emon.Port.newCells();
         emon.Port.Cells fl = emon.Port.newCells();

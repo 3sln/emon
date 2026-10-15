@@ -2551,7 +2551,7 @@ func PageSetKind(pages *port.Cells, p int32, kind int32) int32 {
 }
 
 func PageSetSize(pages *port.Cells, p int32, w int32, h int32) int32 {
-	// A page's size in centipoints, after the page is made: an image read from its turned view (D1610) is as wide as it is high and the reverse, upright.
+	// A page's size in centipoints, after the page is made: an image read from its turned view (D564) is as wide as it is high and the reverse, upright.
 	pset(pages, p, 3, w)
 	return pset(pages, p, 4, h)
 }

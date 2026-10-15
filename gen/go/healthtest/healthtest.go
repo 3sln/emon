@@ -292,7 +292,7 @@ func TestAScriptTheEngineCannotReadIsNotCounted(emonT *testing.T) {
 }
 
 func TestAForeignWordWithADigitAttachedIsNotCounted(emonT *testing.T) {
-	// D1610: a Hebrew letter and a digit (a word with its reference number) held to `hh-latin` as Latin and its disagreement with the engine's junk made the font unhealthy
+	// D564: a Hebrew letter and a digit (a word with its reference number) held to `hh-latin` as Latin and its disagreement with the engine's junk made the font unhealthy
 	var words *port.Cells = port.NewCells()
 	var fw *port.Cells = port.NewCells()
 	var feats *port.Cells = port.NewCells()

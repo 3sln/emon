@@ -40,7 +40,7 @@ func hxForeignCp(c int32) int32 {
 }
 
 func hxWordLatin(ofw *port.Cells, etext *port.Cells, row int32) int32 {
-	// 1 when the engine can read the flow word `row` (as `ar-word-latin`, D1610): it holds no letter of a script the engine lacks, whatever Latin letter or
+	// 1 when the engine can read the flow word `row` (as `ar-word-latin`, D564): it holds no letter of a script the engine lacks, whatever Latin letter or
 	// digit is attached to it, and it holds a code point.
 	var ts int32 = port.CellsAt(ofw, (row*24)+11)
 	var tl int32 = port.CellsAt(ofw, (row*24)+12)

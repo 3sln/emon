@@ -1,4 +1,4 @@
-;; READING A SMALL RASTER LARGER (D1610, SPEC 3.4, 8.3; D211, D215). emon's own module (D039).
+;; READING A SMALL RASTER LARGER (D564, SPEC 3.4, 8.3; D211, D215). emon's own module (D039).
 ;;
 ;; An OCR engine reads text whose x-height is about twenty pixels (ten point type at 300 dpi). A scan or a screenshot that is far under that (a page saved
 ;; at 90 dpi, a table in a 450 x 150 PNG) is read with whole words missing, a decimal point lost, a line cut short, and NOTHING SAYS SO: the engine

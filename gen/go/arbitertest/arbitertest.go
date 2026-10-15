@@ -470,7 +470,7 @@ func TestABadGlyphInAHealthyFontGoesToOcrButOnlyWhereTheEngineReads(emonT *testi
 }
 
 func TestAWordInAScriptTheEngineLacksKeepsItsTextWhateverDigitSitsOnIt(emonT *testing.T) {
-	// D1610: `ar-word-latin` answered 1 for ANY Latin letter or digit, so a Cyrillic word with an attached reference number [10], a CJK word with a
+	// D564: `ar-word-latin` answered 1 for ANY Latin letter or digit, so a Cyrillic word with an attached reference number [10], a CJK word with a
 	// year, or a formula with a variable was 'readable' and rows 120 and 130 gave the group to an English engine that reads it as junk
 	var fw *port.Cells = port.NewCells()
 	var fl *port.Cells = port.NewCells()

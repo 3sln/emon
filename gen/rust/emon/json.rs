@@ -267,7 +267,7 @@ pub fn js_bits_flags(mut t: &mut String, pr: i32, bits: i32) -> i32 {
     let mut k: i32 = 0;
     let mut bit: i32 = 0;
     crate::port::text_ascii(t, "[");
-    // the warning bits 1 to 1024 (D1610 added `script-unread`, 1024; `in-table-image`, 512, is the fused flow's, not a node's)
+    // the warning bits 1 to 1024 (D564 added `script-unread`, 1024; `in-table-image`, 512, is the fused flow's, not a node's)
     while b < 11 {
         bit = (1) << (b);
         if (bits & bit) != 0 {

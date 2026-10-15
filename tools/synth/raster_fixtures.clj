@@ -1,5 +1,5 @@
 (ns synth.raster-fixtures
-  "The raster fixtures of P12.3 (DEVLOG D1610-D1620): small images and PDFs of ONE text page, for the raster and OCR pipeline's laws and replay fixtures.
+  "The raster fixtures of P12.3 (DEVLOG D564-D565): small images and PDFs of ONE text page, for the raster and OCR pipeline's laws and replay fixtures.
 
       bb -cp tools:tools/lib tools/synth/raster_fixtures.clj make     write test/raster/
       bb -cp tools:tools/lib tools/synth/raster_fixtures.clj check    the PDFs hold the pixels of the committed PNG (the PNGs themselves are authoritative: their bytes

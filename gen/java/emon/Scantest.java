@@ -214,7 +214,7 @@ public final class Scantest {
         emon.Testport.assertEq(Model.attrLen(attrs, a), 6, "`always`");
     }
     public static void testAPageInAScriptTheEngineCannotReadIsFlaggedAndHeldAtALowConfidence() {
-        // D1610 (P12.3 I-13): the page unit adds `sc-mask-unread` to the page's mask cell; the blocks of the page say the engine could not read it
+        // D564 (P12.3 I-13): the page unit adds `sc-mask-unread` to the page's mask cell; the blocks of the page say the engine could not read it
         emon.Port.Cells nodes = emon.Port.newCells();
         emon.Port.Cells attrs = emon.Port.newCells();
         emon.Port.Cells regions = emon.Port.newCells();

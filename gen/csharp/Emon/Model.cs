@@ -2442,7 +2442,7 @@ public static class Model {
         return Pset(pages, p, 6, kind);
     }
     public static int PageSetSize(emon.Port.Cells pages, int p, int w, int h) {
-        // A page's size in centipoints, after the page is made: an image read from its turned view (D1610) is as wide as it is high and the reverse, upright.
+        // A page's size in centipoints, after the page is made: an image read from its turned view (D564) is as wide as it is high and the reverse, upright.
         Pset(pages, p, 3, w);
         return Pset(pages, p, 4, h);
     }

@@ -1,4 +1,4 @@
-;; Laws for `emon.scriptcheck` (D1610, P12.3 I-13): a page whose script OSD is sure of and that no model the engine read it with reads is UNREAD; one read by a model that
+;; Laws for `emon.scriptcheck` (D564, P12.3 I-13): a page whose script OSD is sure of and that no model the engine read it with reads is UNREAD; one read by a model that
 ;; reads the script, a Latin page, a page OSD is unsure of, and a page of too few words are not.
 (ns emon.scriptchecktest
   (:require [emon.lang :refer [I32 Cells]]

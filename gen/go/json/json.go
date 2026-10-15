@@ -293,7 +293,7 @@ func JsBitsFlags(t *strings.Builder, pr int32, bits int32) int32 {
 	var k int32 = 0
 	var bit int32 = 0
 	port.TextAscii(t, "[")
-	// the warning bits 1 to 1024 (D1610 added `script-unread`, 1024; `in-table-image`, 512, is the fused flow's, not a node's)
+	// the warning bits 1 to 1024 (D564 added `script-unread`, 1024; `in-table-image`, 512, is the fused flow's, not a node's)
 	for b < 11 {
 		bit = (1) << uint(b)
 		if (bits & bit) != 0 {

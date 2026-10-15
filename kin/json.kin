@@ -314,7 +314,7 @@
         ^:mut ^I32 k 0
         ^:mut ^I32 bit 0]
     (emit-ascii t "[")
-    (comment "the warning bits 1 to 1024 (D1610 added `script-unread`, 1024; `in-table-image`, 512, is the fused flow's, not a node's)")
+    (comment "the warning bits 1 to 1024 (D564 added `script-unread`, 1024; `in-table-image`, 512, is the fused flow's, not a node's)")
     (while (< b 11)
       (do (set bit (shl32 1 b))
           (if (!= (bit-and bits bit) 0)

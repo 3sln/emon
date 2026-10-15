@@ -39,7 +39,7 @@ func docOf(ans *port.Cells, rq *port.Cells, nodes *port.Cells, attrs *port.Cells
 }
 
 func pagePol(f int32, ans *port.Cells, rq *port.Cells, policy int32, loc *port.Cells, mask *port.Cells, et *port.Cells, wd *port.Cells, ln *port.Cells, oruns *port.Cells, olines *port.Cells, owords *port.Cells) int32 {
-	// no pixel in the bitmap set: the unit is the slim one, the first pass's lines (D1610: with pixels it is `emon.pageunit`'s scan unit, whose laws are there)
+	// no pixel in the bitmap set: the unit is the slim one, the first pass's lines (D564: with pixels it is `emon.pageunit`'s scan unit, whose laws are there)
 	return rasterin.RsPage(f, 7, 8, policy, 0, ans, rq, loc, port.NewBitmapSet(), mask, port.NewCells(), port.NewCells(), port.NewCells(), et, port.NewCells(), port.NewCells(), oruns, port.NewCells(), olines, owords, port.NewCells(), port.NewCells(), wd, ln, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
 }
 

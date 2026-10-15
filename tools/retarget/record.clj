@@ -43,7 +43,7 @@
     (apply str (map #(format "%02x" (bit-and % 0xff)) (.digest md (.getBytes ^String s "UTF-8"))))))
 
 (defn untargeted?
-  "An entry whose bitmap kin reads: the page unit's render or decode (page-local ids 1-4), the first OCR pass (16) or the enlarged raster's (21, D1610: it stands in for the first pass)."
+  "An entry whose bitmap kin reads: the page unit's render or decode (page-local ids 1-4), the first OCR pass (16) or the enlarged raster's (21, D564: it stands in for the first pass)."
   [req-id]
   (contains? #{1 2 3 4 16 21} (mod req-id 256)))
 

@@ -182,7 +182,7 @@
       (when (:miss (get fixtures id))
         (let [tam (str work "/tamper-" id)
               [x y] (:miss (get fixtures id))
-              ;; the first bitmap of the transcript: the decode or render of the page (an image input's header-only decode of frame 0 has none, so it is bitmap-0001, D1610)
+              ;; the first bitmap of the transcript: the decode or render of the page (an image input's header-only decode of frame 0 has none, so it is bitmap-0001, D564)
               png (str tam "/" (first (sort (filter #(re-matches #"bitmap-\d+\.png" %) (map #(str (fs/file-name %)) (fs/list-dir rep))))))]
           (fs/create-dirs tam)
           (doseq [f (fs/list-dir rep)] (fs/copy f (str tam "/" (fs/file-name f)) {:replace-existing true}))

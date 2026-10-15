@@ -663,7 +663,7 @@ func TestAnImageIsReadByTheOcrPortAndItsTranscriptReplaysWithoutIt(t *testing.T)
 		}
 	}
 	// the header, then the page unit's decode and ocr; the transcript says whose engine answered
-	// (D1610: the fake engine reads one word of a tiny raster, which the unit reads again enlarged, and the unsure line again alone)
+	// (D564: the fake engine reads one word of a tiny raster, which the unit reads again enlarged, and the unsure line again alone)
 	if k := kinds(tr); len(k) != 5 || k[0] != 2 || k[1] != 2 || k[2] != 3 || k[3] != 3 || k[4] != 3 {
 		t.Errorf("kinds %v", k)
 	}

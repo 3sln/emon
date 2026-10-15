@@ -27,7 +27,7 @@ pub(crate) fn plan_of(pl: &mut crate::port::Cells, pages: i32, kind: i32) -> i32
         crate::port::cells_push(pl, 0);
         crate::port::cells_push(pl, 0);
         crate::port::cells_push(pl, 0);
-        // the scan's mode (D1610): the host decodes the DCT stream in place
+        // the scan's mode (D564): the host decodes the DCT stream in place
         crate::port::cells_push(pl, 0);
         i += 1;
     }
@@ -143,7 +143,7 @@ pub(crate) fn plan_file(emon_t: i32, file: &[u8], mut pl: &mut crate::port::Cell
 }
 #[test]
 fn test_a_page_that_is_one_big_image_is_a_scan_whatever_the_codec() {
-    // D1610: a page with no text layer and one image over it was a scan only when that image was a lone DCT stream (the host reads those bytes in place). A Flate or RunLength
+    // D564: a page with no text layer and one image over it was a scan only when that image was a lone DCT stream (the host reads those bytes in place). A Flate or RunLength
     // image (and CCITT, JBIG2, JPX) was `vector`: no OCR, an empty body. It is a scan read from the host's RENDER of the page (any codec), the raster the whole page.
     let pl: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pl2: &mut crate::port::Cells = &mut crate::port::Cells::new();

@@ -67,7 +67,7 @@
   (return (cal-lookup kind (cal-class src) raw)))
 
 (defn ^:pub ^I32 cal-node-conf [^Cells nodes ^I32 n]
-  (comment "The calibrated confidence of node `n`, as the Model writes it (`cal-conf` of its kind, source and raw score), D1610: EXCEPT a node of a block flagged")
+  (comment "The calibrated confidence of node `n`, as the Model writes it (`cal-conf` of its kind, source and raw score), D564: EXCEPT a node of a block flagged")
   (comment "`script-unread` (the engine had no model for the page's script, `emon.scriptcheck`), which is written at its raw score when that is lower. The map is a")
   (comment "step function clamped at its ends, and the lowest step of OCR text is a text the engine read: a raw 100 would be written as that, and the engine's guess")
   (comment "at a script it cannot read would carry the confidence of what it can.")

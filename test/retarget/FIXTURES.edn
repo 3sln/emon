@@ -12,7 +12,7 @@
                           :passes ["first" "body-ink" "re-rotated"] :leak ["copy"] :miss [100 100]}
  "ovl-table-simple-ruled" {:pdf "test/corpus/synth/scan-ovl/table-simple-ruled.pdf" :gold "table-simple-ruled" :kind :scan
                           :passes ["first" "re-rotated"] :leak ["copy"] :miss [100 100]}
- ;; P12.3 (D1610), made by tools/synth/raster_fixtures.clj: IMAGE inputs (they went through a unit of their own that never looked at OSD or the size of the text), and a
+ ;; P12.3 (D564), made by tools/synth/raster_fixtures.clj: IMAGE inputs (they went through a unit of their own that never looked at OSD or the size of the text), and a
  ;; Flate image over a PDF page (read as `vector`, no OCR). The gold is the source page's, which these hold the first page of.
  "raster-rot90"          {:pdf "test/raster/h-plain-rot90.png" :gold "h-plain" :kind :scan
                           :passes ["first" "re-rotated"] :miss [100 100]}

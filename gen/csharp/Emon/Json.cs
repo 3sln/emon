@@ -268,7 +268,7 @@ public static class Json {
         int k = 0;
         int bit = 0;
         emon.Port.TextAscii(t, "[");
-        // the warning bits 1 to 1024 (D1610 added `script-unread`, 1024; `in-table-image`, 512, is the fused flow's, not a node's)
+        // the warning bits 1 to 1024 (D564 added `script-unread`, 1024; `in-table-image`, 512, is the fused flow's, not a node's)
         while (b < 11) {
             bit = (1) << (b);
             if ((bits & bit) != 0) {

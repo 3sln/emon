@@ -1,4 +1,4 @@
-;; A SCAN IN A SCRIPT THE ENGINE HAS NO MODEL FOR (D1610, P12.3 I-13; SPEC 3.3, 8.3, 9.4; D038, D215). emon's own module (D039).
+;; A SCAN IN A SCRIPT THE ENGINE HAS NO MODEL FOR (D564, P12.3 I-13; SPEC 3.3, 8.3, 9.4; D038, D215). emon's own module (D039).
 ;;
 ;; Tesseract's orientation and script detection (`osd`) names the script of a page ("Devanagari") whether or not a model that reads it is installed, and the
 ;; engine reads the page with the models there are. A Hindi scan read with `eng` alone is Latin junk at a confidence of 0.76: nothing in the output said the engine

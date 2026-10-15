@@ -103,7 +103,7 @@ func TestTheLookupClampsAtBothEndsOfAStepFunction(emonT *testing.T) {
 }
 
 func TestABlockFlaggedScriptUnreadIsWrittenAtItsRawScore(emonT *testing.T) {
-	// D1610: the map clamps at its first step, so a raw 100 on OCR text is written as the lowest confidence of text the engine READ; the engine's guess at a script it
+	// D564: the map clamps at its first step, so a raw 100 on OCR text is written as the lowest confidence of text the engine READ; the engine's guess at a script it
 	// cannot read keeps its raw score, and so do the inlines under it
 	var nodes *port.Cells = port.NewCells()
 	var attrs *port.Cells = port.NewCells()

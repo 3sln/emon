@@ -98,7 +98,7 @@ public static class Calibtest {
     }
     [Xunit.Fact]
     public static void TestABlockFlaggedScriptUnreadIsWrittenAtItsRawScore() {
-        // D1610: the map clamps at its first step, so a raw 100 on OCR text is written as the lowest confidence of text the engine READ; the engine's guess at a script it
+        // D564: the map clamps at its first step, so a raw 100 on OCR text is written as the lowest confidence of text the engine READ; the engine's guess at a script it
         // cannot read keeps its raw score, and so do the inlines under it
         emon.Port.Cells nodes = emon.Port.NewCells();
         emon.Port.Cells attrs = emon.Port.NewCells();

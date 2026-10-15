@@ -98,7 +98,7 @@ fn test_the_lookup_clamps_at_both_ends_of_a_step_function() {
 }
 #[test]
 fn test_a_block_flagged_script_unread_is_written_at_its_raw_score() {
-    // D1610: the map clamps at its first step, so a raw 100 on OCR text is written as the lowest confidence of text the engine READ; the engine's guess at a script it
+    // D564: the map clamps at its first step, so a raw 100 on OCR text is written as the lowest confidence of text the engine READ; the engine's guess at a script it
     // cannot read keeps its raw score, and so do the inlines under it
     let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();

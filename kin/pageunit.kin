@@ -60,7 +60,7 @@
 (defn ^:pub ^I32 pu-kind [^Cells pl ^I32 i] (return (cells-at pl (* i (pu-w)))))
 (defn ^:pub ^I32 pu-field [^Cells pl ^I32 i ^I32 k] (return (cells-at pl (+ (* i (pu-w)) k))))
 ;; fields: 1 object, 2 span start, 3 span length, 4-7 the image's box, 8-9 the page's size (centipoints), 14 the scan's mode (`pu-scan-*`)
-;; The scan's MODE (D1610): how the page's raster is made. `pu-scan-dct`: the host decodes the image's DCT stream in place (a JPEG file: fields 2 and 3 are
+;; The scan's MODE (D564): how the page's raster is made. `pu-scan-dct`: the host decodes the image's DCT stream in place (a JPEG file: fields 2 and 3 are
 ;; its span, 4-7 the image's box). `pu-scan-render`: the host renders the whole page at `pu-dpi` (the image is in some other codec, or in a stream the host
 ;; cannot read in place; fields 4-7 are the page).
 (defn ^:pub ^I32 pu-scan-dct [] (return 0))
@@ -142,7 +142,7 @@
                             (cells-set pl (+ k 8) (- px1 px0))
                             (cells-set pl (+ k 9) (- py1 py0))
                             (cells-set pl (+ k 14) (pu-scan-dct)))
-                        (do (comment "D1610: a page whose content is one big image is a scan WHATEVER the codec (Flate, RunLength, LZW, CCITT, JBIG2, JPX, a DCT with more")
+                        (do (comment "D564: a page whose content is one big image is a scan WHATEVER the codec (Flate, RunLength, LZW, CCITT, JBIG2, JPX, a DCT with more")
                             (comment "than one stage or in an encrypted file): kin cannot hand the host those bytes in place, so the host RENDERS the page (pdfium reads every codec,")
                             (comment "colour space, /Decode and mask) and the render is read as the scan is. The raster is the whole page, not the image's box.")
                             (cells-set pl k 1)
@@ -378,13 +378,13 @@
                   (comment "the pen strokes over a signature line in the text-free render (P8.3): no request, no view; the groups are written with the seals'")
                   (sp-find (+ i 1) views nview rules owords etext (bms-get bms nid) pgw s5 s6)
                   (sp-record i s5 cg))))))
-    (comment "a page in a script the engine has no model for (D1610): the page's mask says so, and `sc-tag-unread` holds what OCR won of it at a low confidence")
+    (comment "a page in a script the engine has no model for (D564): the page's mask says so, and `sc-tag-unread` holds what OCR won of it at a low confidence")
     (if (== (sk-unread ans ao s6) 1) (cells-set mask i (sc-mask-unread)))
     (return (us-done))))
 
 (defn ^I32 pu-scan-pixels [^I32 i ^I32 did ^I32 oid ^I32 ao ^I32 pxw ^I32 pxh ^I32 dpi100 ^Cells ans ^:mut ^Cells rq ^Cells loc ^BitmapSet bms ^I32 fuse
                            ^:mut ^Cells rtp ^:mut ^Cells s6]
-  (comment "D1610: 0 when the raster of the page unit is the bitmap under `did`; the factor `k` (2 to 4) when the first pass `ao` of it (the OCR request `oid`) shows")
+  (comment "D564: 0 when the raster of the page unit is the bitmap under `did`; the factor `k` (2 to 4) when the first pass `ao` of it (the OCR request `oid`) shows")
   (comment "that the raster is too small for the engine to read (`emon.upscale`) and the pixels are there to enlarge: the enlarged raster is then made as a kin-made view")
   (comment "(`rv-upscaled`) and its OCR is asked for (`ri-upscale`, naming the view's pixel hash). Answers -1 when it has asked (the caller answers `us-requests`).")
   (if (== (pu-px bms did fuse) 0) (return 0))
@@ -414,7 +414,7 @@
   (comment "targeted passes they and the first pass call for, then the lines the pipeline reads (`rt-adopt`). With no pixel in the decode answer (a transcript recorded")
   (comment "slim) the page is what it always was: the first pass's lines. `maskv` is what the page's `mask` cell becomes (1 an image page, 2 a PDF's scanned page);")
   (comment "`seals` 1 looks for seals and signatures in the pixels (a PDF page: its document unit arbitrates them), 0 does not (an image: it has no such unit).")
-  (comment "D1610: a raster the first pass shows to be too small is read again enlarged (`pu-scan-pixels`) and that reading, when it reads as much, is the first pass.")
+  (comment "D564: a raster the first pass shows to be too small is read again enlarged (`pu-scan-pixels`) and that reading, when it reads as much, is the first pass.")
   (let [^I32 oid (pu-id i (pi-ocr))
         ^I32 uid (pu-id i (ri-upscale))
         ^I32 uvid (pu-view-id i (rv-upscaled))
@@ -446,7 +446,7 @@
     (if (!= (an-ok ans ao) 1) (return (us-done)))
     (if (== (pu-dry fuse) 1) (return (us-done)))
     (rt-prep rtp)
-    (comment "a page in a script the engine has no model for (D1610): the first pass is junk at a confidence it should not have; `sc-tag` says so")
+    (comment "a page in a script the engine has no model for (D564): the first pass is junk at a confidence it should not have; `sc-tag` says so")
     (if (== (sk-unread ans ao s6) 1) (set mv (+ mv (sc-mask-unread))))
     (set hint (quot (+ dpi100 50) 100))
     (comment "a raster is enlarged for an engine that can read it: not a page in a script it has no model for")
@@ -522,7 +522,7 @@
                         ^:mut ^Cells ws ^:mut ^Cells sv ^:mut ^Cells aux ^:mut ^Cells snap ^:mut ^Cells rtp
                         ^:mut ^Cells rn ^:mut ^Cells ri ^:mut ^Cells cs ^:mut ^Cells vr ^:mut ^Cells pc ^:mut ^Cells sg ^:mut ^Cells mem
                         ^:mut ^Cells s1 ^:mut ^Cells s2 ^:mut ^Cells s3 ^:mut ^Cells s4 ^:mut ^Cells s5 ^:mut ^Cells s6]
-  (comment "A SCANNED page of a PDF: `decode` of its stream (the host reads the DCT bytes in place) or, in the plan's render mode (D1610: an image in any other codec),")
+  (comment "A SCANNED page of a PDF: `decode` of its stream (the host reads the DCT bytes in place) or, in the plan's render mode (D564: an image in any other codec),")
   (comment "`render` of the page, then `pu-scan-core`: the OCR of the bitmap and what it calls for. A failed raster is `us-done`: the page is left as the text layer made it.")
   (let [^I32 did (pu-id i (pi-decode))
         ^I32 ad (an-find ans did)

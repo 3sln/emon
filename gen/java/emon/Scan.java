@@ -1301,15 +1301,15 @@ public final class Scan {
         return -1;
     }
     public static int scMaskUnread() {
-        // D1610: added to a page's `mask` cell when the engine had no model for the page's script (`emon.scriptcheck`).
+        // D564: added to a page's `mask` cell when the engine had no model for the page's script (`emon.scriptcheck`).
         return 4;
     }
     public static int scUnreadConf() {
-        // D1610: the most confidence (per mille) a block of a page in a script the engine cannot read keeps.
+        // D564: the most confidence (per mille) a block of a page in a script the engine cannot read keeps.
         return 100;
     }
     public static int scTagUnread(emon.Port.Cells nodes, emon.Port.Cells regions, emon.Port.Cells mask) {
-        // D1610: every node whose text is OCR's (`ocr` in its source) on a page the unit marked `sc-mask-unread` (OSD sure of a script that no model the engine read it
+        // D564: every node whose text is OCR's (`ocr` in its source) on a page the unit marked `sc-mask-unread` (OSD sure of a script that no model the engine read it
         // with reads, `emon.scriptcheck`): a block is flagged `script-unread` and `low-conf`, and every node's confidence is held at `sc-unread-conf`. The text is the
         // engine's guess at a script it cannot read, kept and never presented as confident. After every other provenance stage (the scan's, fusion's). Answers the nodes held.
         int nn = Model.nodeCount(nodes);

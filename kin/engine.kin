@@ -407,7 +407,7 @@
           (do (cells-swap (fd m nodes) (fd s sn))
               (cells-swap (fd m attrs) (fd s sa))
               (cells-swap (fd m regions) (fd s sr))))))
-    ;; a page in a script the engine has no model for (D1610, `emon.scriptcheck`): what OCR won of it is flagged `script-unread` and held at a low confidence,
+    ;; a page in a script the engine has no model for (D564, `emon.scriptcheck`): what OCR won of it is flagged `script-unread` and held at a low confidence,
     ;; after the provenance stages above (the scan's and fusion's) have said what is OCR's
     (sc-tag-unread (fd m nodes) (fd m regions) (fd d mask))
     ;; the form fields (P11.x3, D548): in the block that holds each one's label, once the body is as it will stay (a PDF's; an image has no widgets)
@@ -447,7 +447,7 @@
   (let [^I32 np (page-count (fd m pages))
         ^:mut ^I32 i 0
         ^:mut ^I32 row 0]
-    (comment "D1610: a frame fed sideways was read from its turned view (`rt-upright` swapped the evidence's page); the Model's page is as wide as the text it holds")
+    (comment "D564: a frame fed sideways was read from its turned view (`rt-upright` swapped the evidence's page); the Model's page is as wide as the text it holds")
     (while (< i np)
       (do (set row (ev-page-row (fd ev epages) (+ i 1)))
           (if (>= row 0)

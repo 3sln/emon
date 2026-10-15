@@ -290,7 +290,7 @@ func hhLatinCp(c int32) int32 {
 }
 
 func hhForeignCp(c int32) int32 {
-	// D1610: 1 for a letter of a script the engine (a Latin model) cannot read, as `emon.arbiter`'s `ar-foreign-cp`: Greek to the Georgian and beyond, Hebrew,
+	// D564: 1 for a letter of a script the engine (a Latin model) cannot read, as `emon.arbiter`'s `ar-foreign-cp`: Greek to the Georgian and beyond, Hebrew,
 	// Arabic, Devanagari, CJK, Hangul, the compatibility ideographs, the Arabic presentation forms, and mathematics.
 	if (c >= 880) && (c < 7680) {
 		return 1
@@ -321,7 +321,7 @@ func hhForeignCp(c int32) int32 {
 
 func hhLatin(refs *port.Cells, fw *port.Cells, wd *port.Cells, etext *port.Cells, first int32, count int32) int32 {
 	// 1 when one of the `count` text-layer candidates from `refs` row `first` holds a Latin letter or digit in its text, and none of them a letter
-	// of a script the engine lacks (D1610: a Cyrillic word with its reference number is Cyrillic, and the engine's reading of it says nothing of the font).
+	// of a script the engine lacks (D564: a Cyrillic word with its reference number is Cyrillic, and the engine's reading of it says nothing of the font).
 	var k int32 = 0
 	var ea int32 = 0
 	var ix int32 = 0
@@ -623,7 +623,7 @@ func hhFontOfF(refs *port.Cells, fw *port.Cells, ref int32) int32 {
 }
 
 func hhLatinF(refs *port.Cells, fw *port.Cells, etext *port.Cells, first int32, count int32) int32 {
-	// `hh-latin` over the flow words only (D1610: no candidate holds a letter of a script the engine lacks).
+	// `hh-latin` over the flow words only (D564: no candidate holds a letter of a script the engine lacks).
 	var k int32 = 0
 	var ix int32 = 0
 	var ts int32 = -1

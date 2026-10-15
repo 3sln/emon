@@ -444,7 +444,7 @@
     (assert-eq (page-px-h pages 1) 3508 "px h")
     (assert-eq (page-health pages 0) -1 "the other page is untouched")
     (page-set-size pages 1 61200 79200)
-    (assert-eq (page-w pages 1) 61200 "a page turned upright (D1610): w")
+    (assert-eq (page-w pages 1) 61200 "a page turned upright (D564): w")
     (assert-eq (page-h pages 1) 79200 "h")
     (assert-eq (page-w pages 0) 61200 "the other page's w is untouched")
     (assert-eq (ledger-add ledger (dr-page-number) 1 29000 76000 32200 77200 998 (sr-text)) 0 "first row")

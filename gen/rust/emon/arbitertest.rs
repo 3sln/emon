@@ -452,7 +452,7 @@ fn test_a_bad_glyph_in_a_healthy_font_goes_to_ocr_but_only_where_the_engine_read
 }
 #[test]
 fn test_a_word_in_a_script_the_engine_lacks_keeps_its_text_whatever_digit_sits_on_it() {
-    // D1610: `ar-word-latin` answered 1 for ANY Latin letter or digit, so a Cyrillic word with an attached reference number [10], a CJK word with a
+    // D564: `ar-word-latin` answered 1 for ANY Latin letter or digit, so a Cyrillic word with an attached reference number [10], a CJK word with a
     // year, or a formula with a variable was 'readable' and rows 120 and 130 gave the group to an English engine that reads it as junk
     let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();

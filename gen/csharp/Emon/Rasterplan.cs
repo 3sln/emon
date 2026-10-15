@@ -629,7 +629,7 @@ public static class Rasterplan {
                     }
                     q += 1;
                 }
-                // D1610: compared only when every letter of the line is one the engine reads: a Cyrillic line with its reference number is not Latin
+                // D564: compared only when every letter of the line is one the engine reads: a Cyrillic line with its reference number is not Latin
                 latin = 0;
                 q = 0;
                 while (q < emon.Port.CellsLen(ta)) {

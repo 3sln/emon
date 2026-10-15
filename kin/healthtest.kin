@@ -289,7 +289,7 @@
     (assert-eq (hl-doc feats fw hl) 0 "the document pass has nothing to say")))
 
 (deftest test-a-foreign-word-with-a-digit-attached-is-not-counted
-  (comment "D1610: a Hebrew letter and a digit (a word with its reference number) held to `hh-latin` as Latin and its disagreement with the engine's junk made the font unhealthy")
+  (comment "D564: a Hebrew letter and a digit (a word with its reference number) held to `hh-latin` as Latin and its disagreement with the engine's junk made the font unhealthy")
   (let [^Cells words (new-cells)
         ^Cells fw (new-cells)
         ^Cells feats (new-cells)

@@ -113,7 +113,7 @@ public final class Pageunit {
                         emon.Port.cellsSet(pl, k + 9, py1 - py0);
                         emon.Port.cellsSet(pl, k + 14, puScanDct());
                     } else {
-                        // D1610: a page whose content is one big image is a scan WHATEVER the codec (Flate, RunLength, LZW, CCITT, JBIG2, JPX, a DCT with more
+                        // D564: a page whose content is one big image is a scan WHATEVER the codec (Flate, RunLength, LZW, CCITT, JBIG2, JPX, a DCT with more
                         // than one stage or in an encrypted file): kin cannot hand the host those bytes in place, so the host RENDERS the page (pdfium reads every codec,
                         // colour space, /Decode and mask) and the render is read as the scan is. The raster is the whole page, not the image's box.
                         emon.Port.cellsSet(pl, k, 1);
@@ -409,14 +409,14 @@ public final class Pageunit {
                 }
             }
         }
-        // a page in a script the engine has no model for (D1610): the page's mask says so, and `sc-tag-unread` holds what OCR won of it at a low confidence
+        // a page in a script the engine has no model for (D564): the page's mask says so, and `sc-tag-unread` holds what OCR won of it at a low confidence
         if (Scriptcheck.skUnread(ans, ao, s6) == 1) {
             emon.Port.cellsSet(mask, i, Scan.scMaskUnread());
         }
         return Plan.usDone();
     }
     public static int puScanPixels(int i, int did, int oid, int ao, int pxw, int pxh, int dpi100, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells loc, emon.Port.BitmapSet bms, int fuse, emon.Port.Cells rtp, emon.Port.Cells s6) {
-        // D1610: 0 when the raster of the page unit is the bitmap under `did`; the factor `k` (2 to 4) when the first pass `ao` of it (the OCR request `oid`) shows
+        // D564: 0 when the raster of the page unit is the bitmap under `did`; the factor `k` (2 to 4) when the first pass `ao` of it (the OCR request `oid`) shows
         // that the raster is too small for the engine to read (`emon.upscale`) and the pixels are there to enlarge: the enlarged raster is then made as a kin-made view
         // (`rv-upscaled`) and its OCR is asked for (`ri-upscale`, naming the view's pixel hash). Answers -1 when it has asked (the caller answers `us-requests`).
         if (puPx(bms, did, fuse) == 0) {
@@ -442,7 +442,7 @@ public final class Pageunit {
         // targeted passes they and the first pass call for, then the lines the pipeline reads (`rt-adopt`). With no pixel in the decode answer (a transcript recorded
         // slim) the page is what it always was: the first pass's lines. `maskv` is what the page's `mask` cell becomes (1 an image page, 2 a PDF's scanned page);
         // `seals` 1 looks for seals and signatures in the pixels (a PDF page: its document unit arbitrates them), 0 does not (an image: it has no such unit).
-        // D1610: a raster the first pass shows to be too small is read again enlarged (`pu-scan-pixels`) and that reading, when it reads as much, is the first pass.
+        // D564: a raster the first pass shows to be too small is read again enlarged (`pu-scan-pixels`) and that reading, when it reads as much, is the first pass.
         int oid = Plan.puId(i, Plan.piOcr());
         int uid = Plan.puId(i, Upscale.riUpscale());
         int uvid = Plan.puViewId(i, Upscale.rvUpscaled());
@@ -479,7 +479,7 @@ public final class Pageunit {
             return Plan.usDone();
         }
         Retarget.rtPrep(rtp);
-        // a page in a script the engine has no model for (D1610): the first pass is junk at a confidence it should not have; `sc-tag` says so
+        // a page in a script the engine has no model for (D564): the first pass is junk at a confidence it should not have; `sc-tag` says so
         if (Scriptcheck.skUnread(ans, ao, s6) == 1) {
             mv += Scan.scMaskUnread();
         }
@@ -558,7 +558,7 @@ public final class Pageunit {
         return Plan.usDone();
     }
     public static int puRunScan(int i, int input, int fuse, emon.Port.Cells pl, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells loc, emon.Port.BitmapSet bms, emon.Port.Cells mask, emon.Port.Cells scr, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells refs, emon.Port.Cells tlines, emon.Port.Cells cg, emon.Port.Cells inks, emon.Port.Cells comps, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tpts, emon.Port.Cells ws, emon.Port.Cells sv, emon.Port.Cells aux, emon.Port.Cells snap, emon.Port.Cells rtp, emon.Port.Cells rn, emon.Port.Cells ri, emon.Port.Cells cs, emon.Port.Cells vr, emon.Port.Cells pc, emon.Port.Cells sg, emon.Port.Cells mem, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6) {
-        // A SCANNED page of a PDF: `decode` of its stream (the host reads the DCT bytes in place) or, in the plan's render mode (D1610: an image in any other codec),
+        // A SCANNED page of a PDF: `decode` of its stream (the host reads the DCT bytes in place) or, in the plan's render mode (D564: an image in any other codec),
         // `render` of the page, then `pu-scan-core`: the OCR of the bitmap and what it calls for. A failed raster is `us-done`: the page is left as the text layer made it.
         int did = Plan.puId(i, Plan.piDecode());
         int ad = Plan.anFind(ans, did);

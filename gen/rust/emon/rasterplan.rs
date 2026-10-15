@@ -636,7 +636,7 @@ pub fn rp_weak(n: i32, at: i32, pl: &mut crate::port::Cells, fw: &mut crate::por
                 }
                 q += 1;
             }
-            // D1610: compared only when every letter of the line is one the engine reads: a Cyrillic line with its reference number is not Latin
+            // D564: compared only when every letter of the line is one the engine reads: a Cyrillic line with its reference number is not Latin
             latin = 0;
             q = 0;
             while q < crate::port::cells_len(ta) {

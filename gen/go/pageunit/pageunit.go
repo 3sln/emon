@@ -139,7 +139,7 @@ func PuPlan(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *por
 					port.CellsSet(pl, k+9, py1-py0)
 					port.CellsSet(pl, k+14, PuScanDct())
 				} else {
-					// D1610: a page whose content is one big image is a scan WHATEVER the codec (Flate, RunLength, LZW, CCITT, JBIG2, JPX, a DCT with more
+					// D564: a page whose content is one big image is a scan WHATEVER the codec (Flate, RunLength, LZW, CCITT, JBIG2, JPX, a DCT with more
 					// than one stage or in an encrypted file): kin cannot hand the host those bytes in place, so the host RENDERS the page (pdfium reads every codec,
 					// colour space, /Decode and mask) and the render is read as the scan is. The raster is the whole page, not the image's box.
 					port.CellsSet(pl, k, 1)
@@ -440,7 +440,7 @@ func puRunBorn(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells
 			}
 		}
 	}
-	// a page in a script the engine has no model for (D1610): the page's mask says so, and `sc-tag-unread` holds what OCR won of it at a low confidence
+	// a page in a script the engine has no model for (D564): the page's mask says so, and `sc-tag-unread` holds what OCR won of it at a low confidence
 	if scriptcheck.SkUnread(ans, ao, s6) == 1 {
 		port.CellsSet(mask, i, scan.ScMaskUnread())
 	}
@@ -448,7 +448,7 @@ func puRunBorn(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells
 }
 
 func puScanPixels(i int32, did int32, oid int32, ao int32, pxw int32, pxh int32, dpi100 int32, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, fuse int32, rtp *port.Cells, s6 *port.Cells) int32 {
-	// D1610: 0 when the raster of the page unit is the bitmap under `did`; the factor `k` (2 to 4) when the first pass `ao` of it (the OCR request `oid`) shows
+	// D564: 0 when the raster of the page unit is the bitmap under `did`; the factor `k` (2 to 4) when the first pass `ao` of it (the OCR request `oid`) shows
 	// that the raster is too small for the engine to read (`emon.upscale`) and the pixels are there to enlarge: the enlarged raster is then made as a kin-made view
 	// (`rv-upscaled`) and its OCR is asked for (`ri-upscale`, naming the view's pixel hash). Answers -1 when it has asked (the caller answers `us-requests`).
 	if puPx(bms, did, fuse) == 0 {
@@ -475,7 +475,7 @@ func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 in
 	// targeted passes they and the first pass call for, then the lines the pipeline reads (`rt-adopt`). With no pixel in the decode answer (a transcript recorded
 	// slim) the page is what it always was: the first pass's lines. `maskv` is what the page's `mask` cell becomes (1 an image page, 2 a PDF's scanned page);
 	// `seals` 1 looks for seals and signatures in the pixels (a PDF page: its document unit arbitrates them), 0 does not (an image: it has no such unit).
-	// D1610: a raster the first pass shows to be too small is read again enlarged (`pu-scan-pixels`) and that reading, when it reads as much, is the first pass.
+	// D564: a raster the first pass shows to be too small is read again enlarged (`pu-scan-pixels`) and that reading, when it reads as much, is the first pass.
 	var oid int32 = plan.PuId(i, plan.PiOcr())
 	var uid int32 = plan.PuId(i, upscale.RiUpscale())
 	var uvid int32 = plan.PuViewId(i, upscale.RvUpscaled())
@@ -512,7 +512,7 @@ func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 in
 		return plan.UsDone()
 	}
 	retarget.RtPrep(rtp)
-	// a page in a script the engine has no model for (D1610): the first pass is junk at a confidence it should not have; `sc-tag` says so
+	// a page in a script the engine has no model for (D564): the first pass is junk at a confidence it should not have; `sc-tag` says so
 	if scriptcheck.SkUnread(ans, ao, s6) == 1 {
 		mv += scan.ScMaskUnread()
 	}
@@ -592,7 +592,7 @@ func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 in
 }
 
 func puRunScan(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, mask *port.Cells, scr *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, refs *port.Cells, tlines *port.Cells, cg *port.Cells, inks *port.Cells, comps *port.Cells, rules *port.Cells, prims *port.Cells, tpts *port.Cells, ws *port.Cells, sv *port.Cells, aux *port.Cells, snap *port.Cells, rtp *port.Cells, rn *port.Cells, ri *port.Cells, cs *port.Cells, vr *port.Cells, pc *port.Cells, sg *port.Cells, mem *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells) int32 {
-	// A SCANNED page of a PDF: `decode` of its stream (the host reads the DCT bytes in place) or, in the plan's render mode (D1610: an image in any other codec),
+	// A SCANNED page of a PDF: `decode` of its stream (the host reads the DCT bytes in place) or, in the plan's render mode (D564: an image in any other codec),
 	// `render` of the page, then `pu-scan-core`: the OCR of the bitmap and what it calls for. A failed raster is `us-done`: the page is left as the text layer made it.
 	var did int32 = plan.PuId(i, plan.PiDecode())
 	var ad int32 = plan.AnFind(ans, did)

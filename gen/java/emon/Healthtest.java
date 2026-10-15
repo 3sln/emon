@@ -271,7 +271,7 @@ public final class Healthtest {
         emon.Testport.assertEq(Health.hlDoc(feats, fw, hl), 0, "the document pass has nothing to say");
     }
     public static void testAForeignWordWithADigitAttachedIsNotCounted() {
-        // D1610: a Hebrew letter and a digit (a word with its reference number) held to `hh-latin` as Latin and its disagreement with the engine's junk made the font unhealthy
+        // D564: a Hebrew letter and a digit (a word with its reference number) held to `hh-latin` as Latin and its disagreement with the engine's junk made the font unhealthy
         emon.Port.Cells words = emon.Port.newCells();
         emon.Port.Cells fw = emon.Port.newCells();
         emon.Port.Cells feats = emon.Port.newCells();

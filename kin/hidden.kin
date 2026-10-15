@@ -42,7 +42,7 @@
   (return 0))
 
 (defn ^I32 hx-word-latin [^Cells ofw ^Cells etext ^I32 row]
-  (comment "1 when the engine can read the flow word `row` (as `ar-word-latin`, D1610): it holds no letter of a script the engine lacks, whatever Latin letter or")
+  (comment "1 when the engine can read the flow word `row` (as `ar-word-latin`, D564): it holds no letter of a script the engine lacks, whatever Latin letter or")
   (comment "digit is attached to it, and it holds a code point.")
   (let [^I32 ts (cells-at ofw (+ (* row 24) 11))
         ^I32 tl (cells-at ofw (+ (* row 24) 12))

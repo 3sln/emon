@@ -1,4 +1,4 @@
-;; Laws for `emon.upscale` (D1610; SPEC 3.4, 8.3; D211, D215): the effective resolution estimated from the text's x-height, the factor a raster is read
+;; Laws for `emon.upscale` (D564; SPEC 3.4, 8.3; D211, D215): the effective resolution estimated from the text's x-height, the factor a raster is read
 ;; again by (and when it is not: large enough text, a page turned, a raster too big), the weights of the cubic, and the enlarged raster itself.
 (ns emon.upscaletest
   (:require [emon.lang :refer [I32 Cells Bitmap BitmapSet]]

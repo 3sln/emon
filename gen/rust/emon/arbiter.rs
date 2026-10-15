@@ -49,7 +49,7 @@ pub(crate) fn ar_foreign_cp(c: i32) -> i32 {
     if (c >= 65136) && (c <= 65276) {
         return 1;
     }
-    // D1610: mathematics is a script the engine does not read either: the letterlike symbols, the arrows and the mathematical operators
+    // D564: mathematics is a script the engine does not read either: the letterlike symbols, the arrows and the mathematical operators
     // (U+2100-214F, U+2190-22FF) and the mathematical alphanumerics (U+1D400-1D7FF). A formula's text is the text layer's.
     if (c >= 8448) && (c <= 8527) {
         return 1;
@@ -64,7 +64,7 @@ pub(crate) fn ar_foreign_cp(c: i32) -> i32 {
 }
 pub(crate) fn ar_word_latin(fw: &mut crate::port::Cells, etext: &mut crate::port::Cells, row: i32) -> i32 {
     // 1 when the engine can read the word: it holds no letter of a script the engine lacks (Cyrillic, Greek, Hebrew, Arabic, CJK, mathematics, ...) and it
-    // holds a code point. D1610: ONE foreign letter makes the word foreign, whatever Latin letter or digit is attached to it (a Cyrillic word with
+    // holds a code point. D564: ONE foreign letter makes the word foreign, whatever Latin letter or digit is attached to it (a Cyrillic word with
     // its reference number [10], a year after a Japanese noun, a variable in a formula): the engine reads those as English junk, and the
     // text layer's is right. A word of nothing but U+FFFD, private-use or control code points, which is what an unmapped font leaves, names
     // no script the engine lacks.

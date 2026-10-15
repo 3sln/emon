@@ -671,7 +671,7 @@ func RpWeak(n int32, at int32, pl *port.Cells, fw *port.Cells, fl *port.Cells, e
 				}
 				q += 1
 			}
-			// D1610: compared only when every letter of the line is one the engine reads: a Cyrillic line with its reference number is not Latin
+			// D564: compared only when every letter of the line is one the engine reads: a Cyrillic line with its reference number is not Latin
 			latin = 0
 			q = 0
 			for q < port.CellsLen(ta) {

@@ -245,7 +245,7 @@ public final class Rasterplantest {
         emon.Testport.assertEq(Rasterplan.rpWeak(2, 0, pl, fw, fl, et, Rasterplan.riWitness(), 0, 1, owords, oruns, scr, ta, tb, tt), 0, "one compared line: not enough");
     }
     public static void testACyrillicLineWithItsReferenceNumberIsNotCompared() {
-        // D1610: the line holds a digit, which the check took for Latin and compared with the engine's English junk; one letter of a script the engine lacks makes it the text layer's
+        // D564: the line holds a digit, which the check took for Latin and compared with the engine's English junk; one letter of a script the engine lacks makes it the text layer's
         emon.Port.Cells pl = emon.Port.newCells();
         emon.Port.Cells fw = emon.Port.newCells();
         emon.Port.Cells fl = emon.Port.newCells();

@@ -34,7 +34,7 @@ pub(crate) fn hx_foreign_cp(c: i32) -> i32 {
     return 0;
 }
 pub(crate) fn hx_word_latin(ofw: &mut crate::port::Cells, etext: &mut crate::port::Cells, row: i32) -> i32 {
-    // 1 when the engine can read the flow word `row` (as `ar-word-latin`, D1610): it holds no letter of a script the engine lacks, whatever Latin letter or
+    // 1 when the engine can read the flow word `row` (as `ar-word-latin`, D564): it holds no letter of a script the engine lacks, whatever Latin letter or
     // digit is attached to it, and it holds a code point.
     let ts: i32 = crate::port::cells_at(ofw, (row * 24) + 11);
     let tl: i32 = crate::port::cells_at(ofw, (row * 24) + 12);

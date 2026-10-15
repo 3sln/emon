@@ -460,7 +460,7 @@
     (assert-eq (fv-get fv 1 1) 1 "the text layer's")))
 
 (deftest test-a-word-in-a-script-the-engine-lacks-keeps-its-text-whatever-digit-sits-on-it
-  (comment "D1610: `ar-word-latin` answered 1 for ANY Latin letter or digit, so a Cyrillic word with an attached reference number [10], a CJK word with a")
+  (comment "D564: `ar-word-latin` answered 1 for ANY Latin letter or digit, so a Cyrillic word with an attached reference number [10], a CJK word with a")
   (comment "year, or a formula with a variable was 'readable' and rows 120 and 130 gave the group to an English engine that reads it as junk")
   (let [^Cells fw (new-cells)
         ^Cells fl (new-cells)

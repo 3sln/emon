@@ -243,7 +243,7 @@ public static class Health {
         return 0;
     }
     internal static int HhForeignCp(int c) {
-        // D1610: 1 for a letter of a script the engine (a Latin model) cannot read, as `emon.arbiter`'s `ar-foreign-cp`: Greek to the Georgian and beyond, Hebrew,
+        // D564: 1 for a letter of a script the engine (a Latin model) cannot read, as `emon.arbiter`'s `ar-foreign-cp`: Greek to the Georgian and beyond, Hebrew,
         // Arabic, Devanagari, CJK, Hangul, the compatibility ideographs, the Arabic presentation forms, and mathematics.
         if ((c >= 880) && (c < 7680)) {
             return 1;
@@ -273,7 +273,7 @@ public static class Health {
     }
     internal static int HhLatin(emon.Port.Cells refs, emon.Port.Cells fw, emon.Port.Cells wd, emon.Port.Cells etext, int first, int count) {
         // 1 when one of the `count` text-layer candidates from `refs` row `first` holds a Latin letter or digit in its text, and none of them a letter
-        // of a script the engine lacks (D1610: a Cyrillic word with its reference number is Cyrillic, and the engine's reading of it says nothing of the font).
+        // of a script the engine lacks (D564: a Cyrillic word with its reference number is Cyrillic, and the engine's reading of it says nothing of the font).
         int k = 0;
         int ea = 0;
         int ix = 0;
@@ -566,7 +566,7 @@ public static class Health {
         return -1;
     }
     internal static int HhLatinF(emon.Port.Cells refs, emon.Port.Cells fw, emon.Port.Cells etext, int first, int count) {
-        // `hh-latin` over the flow words only (D1610: no candidate holds a letter of a script the engine lacks).
+        // `hh-latin` over the flow words only (D564: no candidate holds a letter of a script the engine lacks).
         int k = 0;
         int ix = 0;
         int ts = -1;

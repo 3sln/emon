@@ -224,7 +224,7 @@ fn test_ocr_text_is_tagged_as_ocr_on_the_pages_that_were_read() {
 }
 #[test]
 fn test_a_page_in_a_script_the_engine_cannot_read_is_flagged_and_held_at_a_low_confidence() {
-    // D1610 (P12.3 I-13): the page unit adds `sc-mask-unread` to the page's mask cell; the blocks of the page say the engine could not read it
+    // D564 (P12.3 I-13): the page unit adds `sc-mask-unread` to the page's mask cell; the blocks of the page say the engine could not read it
     let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();

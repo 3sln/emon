@@ -434,7 +434,7 @@ fn an_image_is_read_by_the_ocr_port_and_its_transcript_replays_without_it() {
     assert!(j.contains("\"ocr\": \"always\""), "settings.ocr is written when OCR gave the text: {}", j);
     assert!(j.contains("\"ocr\"") && j.contains("\"ocr-only\""), "{}", j);
     assert_eq!(m.pages()[0].kind, "image");
-    // the header, then the page unit's decode and ocr (D1610: the fake engine reads one word of a tiny raster, which the unit reads again enlarged, and
+    // the header, then the page unit's decode and ocr (D564: the fake engine reads one word of a tiny raster, which the unit reads again enlarged, and
     // the unsure line again alone: three readings); the transcript says whose engine answered
     assert_eq!(t.entries.iter().map(|x| x.req[1]).collect::<Vec<_>>(), vec![2, 2, 3, 3, 3]);
     assert_eq!(t.producer, vec![("engine".to_string(), "fake".to_string())]);
@@ -940,7 +940,7 @@ fn parallel_workers_give_the_serial_model_and_transcript_and_overlap_the_ocr_of_
     let serial = Engine::new(Config { ocr: Some(OcrPort(one.clone())), ..Config::default() });
     let (m0, t0) = serial.record(Input::bytes(tiff.clone()), &o).unwrap();
     assert_eq!(one.peak.load(Ordering::SeqCst), 1, "a serial run reads one page at a time");
-    // D1610: a frame is read, read again enlarged and its unsure line again: three readings a page
+    // D564: a frame is read, read again enlarged and its unsure line again: three readings a page
     let serial_calls = one.calls.load(Ordering::SeqCst);
     assert_eq!(serial_calls, 9);
     for n in [2, 3, 4, 8] {

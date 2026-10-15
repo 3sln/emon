@@ -265,7 +265,7 @@ func TestWitnessesThatDisagreeWithTheTextEscalateThePage(emonT *testing.T) {
 }
 
 func TestACyrillicLineWithItsReferenceNumberIsNotCompared(emonT *testing.T) {
-	// D1610: the line holds a digit, which the check took for Latin and compared with the engine's English junk; one letter of a script the engine lacks makes it the text layer's
+	// D564: the line holds a digit, which the check took for Latin and compared with the engine's English junk; one letter of a script the engine lacks makes it the text layer's
 	var pl *port.Cells = port.NewCells()
 	var fw *port.Cells = port.NewCells()
 	var fl *port.Cells = port.NewCells()

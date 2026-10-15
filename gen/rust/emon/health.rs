@@ -243,7 +243,7 @@ pub(crate) fn hh_latin_cp(c: i32) -> i32 {
     return 0;
 }
 pub(crate) fn hh_foreign_cp(c: i32) -> i32 {
-    // D1610: 1 for a letter of a script the engine (a Latin model) cannot read, as `emon.arbiter`'s `ar-foreign-cp`: Greek to the Georgian and beyond, Hebrew,
+    // D564: 1 for a letter of a script the engine (a Latin model) cannot read, as `emon.arbiter`'s `ar-foreign-cp`: Greek to the Georgian and beyond, Hebrew,
     // Arabic, Devanagari, CJK, Hangul, the compatibility ideographs, the Arabic presentation forms, and mathematics.
     if (c >= 880) && (c < 7680) {
         return 1;
@@ -273,7 +273,7 @@ pub(crate) fn hh_foreign_cp(c: i32) -> i32 {
 }
 pub(crate) fn hh_latin(refs: &mut crate::port::Cells, fw: &mut crate::port::Cells, wd: &mut crate::port::Cells, etext: &mut crate::port::Cells, first: i32, count: i32) -> i32 {
     // 1 when one of the `count` text-layer candidates from `refs` row `first` holds a Latin letter or digit in its text, and none of them a letter
-    // of a script the engine lacks (D1610: a Cyrillic word with its reference number is Cyrillic, and the engine's reading of it says nothing of the font).
+    // of a script the engine lacks (D564: a Cyrillic word with its reference number is Cyrillic, and the engine's reading of it says nothing of the font).
     let mut k: i32 = 0;
     let mut ea: i32 = 0;
     let mut ix: i32 = 0;
@@ -566,7 +566,7 @@ pub(crate) fn hh_font_of_f(refs: &mut crate::port::Cells, fw: &mut crate::port::
     return -1;
 }
 pub(crate) fn hh_latin_f(refs: &mut crate::port::Cells, fw: &mut crate::port::Cells, etext: &mut crate::port::Cells, first: i32, count: i32) -> i32 {
-    // `hh-latin` over the flow words only (D1610: no candidate holds a letter of a script the engine lacks).
+    // `hh-latin` over the flow words only (D564: no candidate holds a letter of a script the engine lacks).
     let mut k: i32 = 0;
     let mut ix: i32 = 0;
     let mut ts: i32 = -1;

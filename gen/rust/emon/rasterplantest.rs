@@ -253,7 +253,7 @@ fn test_witnesses_that_disagree_with_the_text_escalate_the_page() {
 }
 #[test]
 fn test_a_cyrillic_line_with_its_reference_number_is_not_compared() {
-    // D1610: the line holds a digit, which the check took for Latin and compared with the engine's English junk; one letter of a script the engine lacks makes it the text layer's
+    // D564: the line holds a digit, which the check took for Latin and compared with the engine's English junk; one letter of a script the engine lacks makes it the text layer's
     let pl: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();

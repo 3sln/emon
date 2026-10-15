@@ -58,7 +58,7 @@
 (defn ^:pub ^I32 rp-ask-full [] (return 1))
 (defn ^:pub ^I32 rp-ask-witness [] (return 2))
 
-;; the page plan's rows: `emon.pageunit` owns cells 0-9 and 14 (the scan's mode, D1610); these are the four between
+;; the page plan's rows: `emon.pageunit` owns cells 0-9 and 14 (the scan's mode, D564); these are the four between
 (defn ^:pub ^I32 rp-w [] (comment "The cells of a page's plan row.") (return 15))
 (defn ^:pub ^I32 rp-f-ask [] (return 10))
 (defn ^:pub ^I32 rp-f-wat [] (comment "the cell of `pl` where the page's witness rows start") (return 11))
@@ -464,7 +464,7 @@
                             (if (!= d 0) (cells-push tb d))
                             (set x (+ x 1))))
                       (set q (+ q 1))))
-                (comment "D1610: compared only when every letter of the line is one the engine reads: a Cyrillic line with its reference number is not Latin")
+                (comment "D564: compared only when every letter of the line is one the engine reads: a Cyrillic line with its reference number is not Latin")
                 (set latin 0)
                 (set q 0)
                 (while (< q (cells-len ta))

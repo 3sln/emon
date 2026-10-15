@@ -427,7 +427,7 @@ pub fn en_finish_raster(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::en
     let np: i32 = page_count(&mut m.pages);
     let mut i: i32 = 0;
     let mut row: i32 = 0;
-    // D1610: a frame fed sideways was read from its turned view (`rt-upright` swapped the evidence's page); the Model's page is as wide as the text it holds
+    // D564: a frame fed sideways was read from its turned view (`rt-upright` swapped the evidence's page); the Model's page is as wide as the text it holds
     while i < np {
         row = ev_page_row(&mut ev.epages, i + 1);
         if row >= 0 {

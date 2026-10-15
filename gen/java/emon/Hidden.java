@@ -34,7 +34,7 @@ public final class Hidden {
         return 0;
     }
     public static int hxWordLatin(emon.Port.Cells ofw, emon.Port.Cells etext, int row) {
-        // 1 when the engine can read the flow word `row` (as `ar-word-latin`, D1610): it holds no letter of a script the engine lacks, whatever Latin letter or
+        // 1 when the engine can read the flow word `row` (as `ar-word-latin`, D564): it holds no letter of a script the engine lacks, whatever Latin letter or
         // digit is attached to it, and it holds a code point.
         int ts = emon.Port.cellsAt(ofw, (row * 24) + 11);
         int tl = emon.Port.cellsAt(ofw, (row * 24) + 12);

@@ -280,7 +280,7 @@ fn test_a_script_the_engine_cannot_read_is_not_counted() {
 }
 #[test]
 fn test_a_foreign_word_with_a_digit_attached_is_not_counted() {
-    // D1610: a Hebrew letter and a digit (a word with its reference number) held to `hh-latin` as Latin and its disagreement with the engine's junk made the font unhealthy
+    // D564: a Hebrew letter and a digit (a word with its reference number) held to `hh-latin` as Latin and its disagreement with the engine's junk made the font unhealthy
     let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();

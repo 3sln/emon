@@ -201,7 +201,7 @@
   (return 0))
 
 (defn ^I32 hh-foreign-cp [^I32 c]
-  (comment "D1610: 1 for a letter of a script the engine (a Latin model) cannot read, as `emon.arbiter`'s `ar-foreign-cp`: Greek to the Georgian and beyond, Hebrew,")
+  (comment "D564: 1 for a letter of a script the engine (a Latin model) cannot read, as `emon.arbiter`'s `ar-foreign-cp`: Greek to the Georgian and beyond, Hebrew,")
   (comment "Arabic, Devanagari, CJK, Hangul, the compatibility ideographs, the Arabic presentation forms, and mathematics.")
   (if (and (>= c 880) (< c 7680)) (return 1))
   (if (and (>= c 7936) (<= c 8191)) (return 1))
@@ -215,7 +215,7 @@
 
 (defn ^I32 hh-latin [^Cells refs ^Cells fw ^Cells wd ^Cells etext ^I32 first ^I32 count]
   (comment "1 when one of the `count` text-layer candidates from `refs` row `first` holds a Latin letter or digit in its text, and none of them a letter")
-  (comment "of a script the engine lacks (D1610: a Cyrillic word with its reference number is Cyrillic, and the engine's reading of it says nothing of the font).")
+  (comment "of a script the engine lacks (D564: a Cyrillic word with its reference number is Cyrillic, and the engine's reading of it says nothing of the font).")
   (let [^:mut ^I32 k 0
         ^:mut ^I32 ea 0
         ^:mut ^I32 ix 0
@@ -445,7 +445,7 @@
     (return -1)))
 
 (defn ^I32 hh-latin-f [^Cells refs ^Cells fw ^Cells etext ^I32 first ^I32 count]
-  (comment "`hh-latin` over the flow words only (D1610: no candidate holds a letter of a script the engine lacks).")
+  (comment "`hh-latin` over the flow words only (D564: no candidate holds a letter of a script the engine lacks).")
   (let [^:mut ^I32 k 0
         ^:mut ^I32 ix 0
         ^:mut ^I32 ts -1

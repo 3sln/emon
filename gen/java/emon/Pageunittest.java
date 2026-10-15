@@ -24,7 +24,7 @@ public final class Pageunittest {
             emon.Port.cellsPush(pl, 0);
             emon.Port.cellsPush(pl, 0);
             emon.Port.cellsPush(pl, 0);
-            // the scan's mode (D1610): the host decodes the DCT stream in place
+            // the scan's mode (D564): the host decodes the DCT stream in place
             emon.Port.cellsPush(pl, 0);
             i += 1;
         }
@@ -137,7 +137,7 @@ public final class Pageunittest {
         return Pdfdoc.pdPgCount(pg);
     }
     public static void testAPageThatIsOneBigImageIsAScanWhateverTheCodec() {
-        // D1610: a page with no text layer and one image over it was a scan only when that image was a lone DCT stream (the host reads those bytes in place). A Flate or RunLength
+        // D564: a page with no text layer and one image over it was a scan only when that image was a lone DCT stream (the host reads those bytes in place). A Flate or RunLength
         // image (and CCITT, JBIG2, JPX) was `vector`: no OCR, an empty body. It is a scan read from the host's RENDER of the page (any codec), the raster the whole page.
         emon.Port.Cells pl = emon.Port.newCells();
         emon.Port.Cells pl2 = emon.Port.newCells();

@@ -35,7 +35,7 @@
           (cells-push pl 0)
           (cells-push pl 0)
           (cells-push pl 0)
-          (comment "the scan's mode (D1610): the host decodes the DCT stream in place")
+          (comment "the scan's mode (D564): the host decodes the DCT stream in place")
           (cells-push pl 0)
           (set i (+ i 1))))
     (return 0)))
@@ -160,7 +160,7 @@
     (return (pd-pg-count pg))))
 
 (deftest test-a-page-that-is-one-big-image-is-a-scan-whatever-the-codec
-  (comment "D1610: a page with no text layer and one image over it was a scan only when that image was a lone DCT stream (the host reads those bytes in place). A Flate or RunLength")
+  (comment "D564: a page with no text layer and one image over it was a scan only when that image was a lone DCT stream (the host reads those bytes in place). A Flate or RunLength")
   (comment "image (and CCITT, JBIG2, JPX) was `vector`: no OCR, an empty body. It is a scan read from the host's RENDER of the page (any codec), the raster the whole page.")
   (let [^Cells pl (new-cells)
         ^Cells pl2 (new-cells)

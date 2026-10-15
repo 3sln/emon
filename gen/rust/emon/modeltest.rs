@@ -387,7 +387,7 @@ fn test_pages_and_ledger_rows() {
     crate::testport::assert_eq(page_px_h(pages, 1), 3508, "px h");
     crate::testport::assert_eq(page_health(pages, 0), -1, "the other page is untouched");
     page_set_size(pages, 1, 61200, 79200);
-    crate::testport::assert_eq(page_w(pages, 1), 61200, "a page turned upright (D1610): w");
+    crate::testport::assert_eq(page_w(pages, 1), 61200, "a page turned upright (D564): w");
     crate::testport::assert_eq(page_h(pages, 1), 79200, "h");
     crate::testport::assert_eq(page_w(pages, 0), 61200, "the other page's w is untouched");
     crate::testport::assert_eq(ledger_add(ledger, dr_page_number(), 1, 29000, 76000, 32200, 77200, 998, sr_text()), 0, "first row");

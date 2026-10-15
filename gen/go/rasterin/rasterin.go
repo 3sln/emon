@@ -218,7 +218,7 @@ func RsPage(f int32, input int32, nbytes int32, policy int32, fuse int32, ans *p
 	// before the write, having asked what the rounds up to there ask).
 	// The unit of frame `f` (0-based) of a raster input: its pixels (`decode` id `pi-decode`, a whole image file, whose
 	// failure is the conversion's: an image that cannot be read is refused by name, whatever the policy), then, unless
-	// `policy` is 0 (never), the scan's page unit (`pu-scan-core`, D1610): OCR of the bitmap (id `pi-ocr`), the ink layers of the bitmap and the targeted
+	// `policy` is 0 (never), the scan's page unit (`pu-scan-core`, D564): OCR of the bitmap (id `pi-ocr`), the ink layers of the bitmap and the targeted
 	// passes the first pass calls for (a page fed sideways or upside down is read from its turned view, a small raster from an enlarged one); where the answers
 	// are in, the frame's evidence and lines are appended to `words` and `lines` and `mask[f]` is 1. An image has no seal or signature stage (its document
 	// unit does not arbitrate). Answers `us-requests`, a failure status, or 0. It writes nothing until every answer it asked for is in.

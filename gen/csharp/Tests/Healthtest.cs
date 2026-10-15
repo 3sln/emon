@@ -279,7 +279,7 @@ public static class Healthtest {
     }
     [Xunit.Fact]
     public static void TestAForeignWordWithADigitAttachedIsNotCounted() {
-        // D1610: a Hebrew letter and a digit (a word with its reference number) held to `hh-latin` as Latin and its disagreement with the engine's junk made the font unhealthy
+        // D564: a Hebrew letter and a digit (a word with its reference number) held to `hh-latin` as Latin and its disagreement with the engine's junk made the font unhealthy
         emon.Port.Cells words = emon.Port.NewCells();
         emon.Port.Cells fw = emon.Port.NewCells();
         emon.Port.Cells feats = emon.Port.NewCells();

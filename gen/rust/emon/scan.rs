@@ -1305,15 +1305,15 @@ pub(crate) fn sc_node_page(nodes: &mut crate::port::Cells, regions: &mut crate::
     return -1;
 }
 pub fn sc_mask_unread() -> i32 {
-    // D1610: added to a page's `mask` cell when the engine had no model for the page's script (`emon.scriptcheck`).
+    // D564: added to a page's `mask` cell when the engine had no model for the page's script (`emon.scriptcheck`).
     return 4;
 }
 pub fn sc_unread_conf() -> i32 {
-    // D1610: the most confidence (per mille) a block of a page in a script the engine cannot read keeps.
+    // D564: the most confidence (per mille) a block of a page in a script the engine cannot read keeps.
     return 100;
 }
 pub fn sc_tag_unread(mut nodes: &mut crate::port::Cells, regions: &mut crate::port::Cells, mask: &mut crate::port::Cells) -> i32 {
-    // D1610: every node whose text is OCR's (`ocr` in its source) on a page the unit marked `sc-mask-unread` (OSD sure of a script that no model the engine read it
+    // D564: every node whose text is OCR's (`ocr` in its source) on a page the unit marked `sc-mask-unread` (OSD sure of a script that no model the engine read it
     // with reads, `emon.scriptcheck`): a block is flagged `script-unread` and `low-conf`, and every node's confidence is held at `sc-unread-conf`. The text is the
     // engine's guess at a script it cannot read, kept and never presented as confident. After every other provenance stage (the scan's, fusion's). Answers the nodes held.
     let nn: i32 = node_count(nodes);

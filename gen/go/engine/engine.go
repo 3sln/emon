@@ -460,7 +460,7 @@ func EnFinishRaster(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Are
 	var np int32 = model.PageCount(m.Pages)
 	var i int32 = 0
 	var row int32 = 0
-	// D1610: a frame fed sideways was read from its turned view (`rt-upright` swapped the evidence's page); the Model's page is as wide as the text it holds
+	// D564: a frame fed sideways was read from its turned view (`rt-upright` swapped the evidence's page); the Model's page is as wide as the text it holds
 	for i < np {
 		row = evidence.EvPageRow(ev.Epages, i+1)
 		if row >= 0 {

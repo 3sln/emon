@@ -232,7 +232,7 @@ func TestOcrTextIsTaggedAsOcrOnThePagesThatWereRead(emonT *testing.T) {
 }
 
 func TestAPageInAScriptTheEngineCannotReadIsFlaggedAndHeldAtALowConfidence(emonT *testing.T) {
-	// D1610 (P12.3 I-13): the page unit adds `sc-mask-unread` to the page's mask cell; the blocks of the page say the engine could not read it
+	// D564 (P12.3 I-13): the page unit adds `sc-mask-unread` to the page's mask cell; the blocks of the page say the engine could not read it
 	var nodes *port.Cells = port.NewCells()
 	var attrs *port.Cells = port.NewCells()
 	var regions *port.Cells = port.NewCells()

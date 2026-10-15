@@ -395,7 +395,7 @@ func TestPagesAndLedgerRows(emonT *testing.T) {
 	port.AssertEq(emonT, model.PagePxH(pages, 1), 3508, "px h")
 	port.AssertEq(emonT, model.PageHealth(pages, 0), -1, "the other page is untouched")
 	model.PageSetSize(pages, 1, 61200, 79200)
-	port.AssertEq(emonT, model.PageW(pages, 1), 61200, "a page turned upright (D1610): w")
+	port.AssertEq(emonT, model.PageW(pages, 1), 61200, "a page turned upright (D564): w")
 	port.AssertEq(emonT, model.PageH(pages, 1), 79200, "h")
 	port.AssertEq(emonT, model.PageW(pages, 0), 61200, "the other page's w is untouched")
 	port.AssertEq(emonT, model.LedgerAdd(ledger, model.DrPageNumber(), 1, 29000, 76000, 32200, 77200, 998, model.SrText()), 0, "first row")

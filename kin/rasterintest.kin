@@ -42,7 +42,7 @@
 
 (defn ^I32 page-pol [^I32 f ^Cells ans ^Cells rq ^I32 policy ^Cells loc ^Cells mask ^Cells et ^Cells wd ^Cells ln
                      ^Cells oruns ^Cells olines ^Cells owords]
-  (comment "no pixel in the bitmap set: the unit is the slim one, the first pass's lines (D1610: with pixels it is `emon.pageunit`'s scan unit, whose laws are there)")
+  (comment "no pixel in the bitmap set: the unit is the slim one, the first pass's lines (D564: with pixels it is `emon.pageunit`'s scan unit, whose laws are there)")
   (return (rs-page f 7 8 policy 0 ans rq loc (new-bitmap-set) mask (new-cells) (new-cells) (new-cells) et (new-cells) (new-cells)
                    oruns (new-cells) olines owords (new-cells) (new-cells) wd ln
                    (new-cells) (new-cells) (new-cells)
@@ -228,7 +228,7 @@
     (assert-eq (ln-get ln 0 (lh-y0)) (- (* 55 24) (* 34 24)) "the box's top is the baseline less x-height and ascenders")
     (assert-eq (ln-get ln 0 (lh-y1)) (+ (* 55 24) (* 6 24)) "and its bottom the baseline plus descenders")))
 
-;; ------------------------------------------------------------------------------------------------ the scan unit's passes for an image (D1610)
+;; ------------------------------------------------------------------------------------------------ the scan unit's passes for an image (D564)
 
 (defn ^I32 fake-lines [^:mut ^Cells ans ^I32 id ^I32 nlines ^I32 scale ^I32 xh ^I32 osd ^I32 oconf]
   (comment "An OCR answer of `nlines` lines, each of one word \"Hi\" (60 x 40 pixels at `scale`, x-height `xh` at `scale`, the line 60 pixels below the one before)")
