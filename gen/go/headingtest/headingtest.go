@@ -691,6 +691,30 @@ func TestALineNumberAndARowOfFiguresAreNotOneHeadingLine(emonT *testing.T) {
 	y += 2300
 	y = htBody(wd, ln, et, 1, y, 4)
 	port.AssertEq(emonT, htRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 0, "no heading")
+	// a street number that opens an address of two lines is not a number either; the address is still the bold block it is
+	port.CellsDrop(wd, 0)
+	port.CellsDrop(ln, 0)
+	port.CellsDrop(et, 0)
+	y = htBody(wd, ln, et, 1, 5000, 4)
+	y += 900
+	htLine(wd, ln, et, port.TextBlob("88 HENNESSY ROAD"), 1, 7200, y, 30000, y+1200, 1200, 1)
+	y += 1500
+	htLine(wd, ln, et, port.TextBlob("WAN CHAI, HONG KONG"), 1, 7200, y, 30000, y+1200, 1200, 1)
+	y += 2300
+	y = htBody(wd, ln, et, 1, y, 4)
+	port.AssertEq(emonT, htRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 1, "one heading")
+	port.AssertEq(emonT, heading.HdField(hc, 4, heading.HckScheme()), 0, "without a number")
+	// a numbered row of a table: the number has a point and two figures follow it
+	port.CellsDrop(wd, 0)
+	port.CellsDrop(ln, 0)
+	port.CellsDrop(et, 0)
+	y = htBody(wd, ln, et, 1, 5000, 4)
+	y += 900
+	htLine(wd, ln, et, port.TextBlob("2. $89158874 05/02/2024 rent paid"), 1, 7200, y, 40000, y+1200, 1200, 1)
+	y += 2300
+	y = htBody(wd, ln, et, 1, y, 4)
+	port.AssertEq(emonT, htRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 1, "one heading")
+	port.AssertEq(emonT, heading.HdField(hc, 4, heading.HckScheme()), 0, "without a number")
 	// the same number beside a title is one heading line
 	port.CellsDrop(wd, 0)
 	port.CellsDrop(ln, 0)

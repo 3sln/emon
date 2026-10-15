@@ -673,6 +673,30 @@ fn test_a_line_number_and_a_row_of_figures_are_not_one_heading_line() {
     y += 2300;
     y = ht_body(wd, ln, et, 1, y, 4);
     crate::testport::assert_eq(ht_run(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 0, "no heading");
+    // a street number that opens an address of two lines is not a number either; the address is still the bold block it is
+    crate::port::cells_drop(wd, 0);
+    crate::port::cells_drop(ln, 0);
+    crate::port::cells_drop(et, 0);
+    y = ht_body(wd, ln, et, 1, 5000, 4);
+    y += 900;
+    ht_line(wd, ln, et, &crate::testport::text_blob("88 HENNESSY ROAD")[..], 1, 7200, y, 30000, y + 1200, 1200, 1);
+    y += 1500;
+    ht_line(wd, ln, et, &crate::testport::text_blob("WAN CHAI, HONG KONG")[..], 1, 7200, y, 30000, y + 1200, 1200, 1);
+    y += 2300;
+    y = ht_body(wd, ln, et, 1, y, 4);
+    crate::testport::assert_eq(ht_run(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 1, "one heading");
+    crate::testport::assert_eq(hd_field(hc, 4, hck_scheme()), 0, "without a number");
+    // a numbered row of a table: the number has a point and two figures follow it
+    crate::port::cells_drop(wd, 0);
+    crate::port::cells_drop(ln, 0);
+    crate::port::cells_drop(et, 0);
+    y = ht_body(wd, ln, et, 1, 5000, 4);
+    y += 900;
+    ht_line(wd, ln, et, &crate::testport::text_blob("2. $89158874 05/02/2024 rent paid")[..], 1, 7200, y, 40000, y + 1200, 1200, 1);
+    y += 2300;
+    y = ht_body(wd, ln, et, 1, y, 4);
+    crate::testport::assert_eq(ht_run(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 1, "one heading");
+    crate::testport::assert_eq(hd_field(hc, 4, hck_scheme()), 0, "without a number");
     // the same number beside a title is one heading line
     crate::port::cells_drop(wd, 0);
     crate::port::cells_drop(ln, 0);

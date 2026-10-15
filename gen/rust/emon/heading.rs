@@ -565,6 +565,10 @@ pub fn hd_marker(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &
     if (d == 1) && (hd_address_like(wd, ln, et, l) == 1) {
         return 0;
     }
+    // and a numbered line that goes on with two figures or more (`2. $89158874 05/02/2024 ...`) is a row of a table
+    if (d > 0) && (hd_figures_after(wd, ln, et, l, 1) >= 2) {
+        return 0;
+    }
     if d > 0 {
         crate::port::cells_set(ws, 0, 1);
         crate::port::cells_set(ws, 1, d % 64);
@@ -732,6 +736,17 @@ pub(crate) fn hd_marker_only(wd: &mut crate::port::Cells, ln: &mut crate::port::
         return 0;
     }
     return crate::port::cells_at(ws, 5);
+}
+pub(crate) fn hd_bare_number(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, l: i32) -> i32 {
+    // 1 when the first word of line l is a whole number with no point, bracket or colon after it.
+    let w: i32 = hd_nth_word(wd, ln, l, 0);
+    if w < 0 {
+        return 0;
+    }
+    if hd_dec(wd, et, w) == 1 {
+        return 1;
+    }
+    return 0;
 }
 pub(crate) fn hd_opens_figure(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, l: i32) -> i32 {
     // 1 when line l is the data of a row rather than a title: its first word is a figure (`hd-figure-word`), or it has two
@@ -1035,7 +1050,7 @@ pub(crate) fn hd_continues(wd: &mut crate::port::Cells, ln: &mut crate::port::Ce
     let own: i32 = hd_marker(wd, ln, et, ws, top);
     let f: i32 = st_get(sf, top, sfk_first());
     if (b >= 0) && (sp < 2) {
-        if (st_get(sf, b, sfk_class()) == body) && ((hd_tight(sf, last, b) == 1) && st_lower(st_get(sf, b, sfk_first()))) {
+        if (hd_tight(sf, last, b) == 1) && st_lower(st_get(sf, b, sfk_first())) {
             return 1;
         }
     }
@@ -1121,6 +1136,7 @@ pub(crate) fn hd_unit_score(wd: &mut crate::port::Cells, ln: &mut crate::port::C
     let mut i: i32 = 0;
     let mut s: i32 = 0;
     let mut sand: i32 = 0;
+    let mut k: i32 = 0;
     let mut pts: i32 = 0;
     while i < cnt {
         total += st_get(sf, crate::port::cells_at(ws, WS_LINES + i), sfk_cps());
@@ -1144,6 +1160,25 @@ pub(crate) fn hd_unit_score(wd: &mut crate::port::Cells, ln: &mut crate::port::C
         return -1;
     }
     s = hd_marker(wd, ln, et, ws, top);
+    // a bare number whose heading goes on, on the lines under it, as the data of a row (an address, figures) is the row's, not a
+    // section's (`88 HENNESSY ROAD` / `WAN CHAI, HONG KONG`): D1621
+    if (s == 1) && (cnt > 1) {
+        if hd_bare_number(wd, ln, et, top) == 1 {
+            k = 1;
+            while k < cnt {
+                if hd_opens_figure(wd, ln, et, crate::port::cells_at(ws, WS_LINES + k)) == 1 {
+                    crate::port::cells_set(ws, 0, 0);
+                    crate::port::cells_set(ws, 1, 0);
+                    crate::port::cells_set(ws, 2, 0);
+                    crate::port::cells_set(ws, 3, 0);
+                    crate::port::cells_set(ws, 4, 0);
+                    s = 0;
+                    k = cnt;
+                }
+                k += 1;
+            }
+        }
+    }
     pts = ps;
     if s > 0 {
         if ((s == 1) || ((s == 6) || (s == 7))) && (crate::port::cells_at(ws, 1) >= 2) {

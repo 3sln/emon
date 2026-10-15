@@ -642,6 +642,10 @@ func HdMarker(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells, l 
 	if (d == 1) && (hdAddressLike(wd, ln, et, l) == 1) {
 		return 0
 	}
+	// and a numbered line that goes on with two figures or more (`2. $89158874 05/02/2024 ...`) is a row of a table
+	if (d > 0) && (hdFiguresAfter(wd, ln, et, l, 1) >= 2) {
+		return 0
+	}
 	if d > 0 {
 		port.CellsSet(ws, 0, 1)
 		port.CellsSet(ws, 1, d%64)
@@ -812,6 +816,18 @@ func hdMarkerOnly(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells
 		return 0
 	}
 	return port.CellsAt(ws, 5)
+}
+
+func hdBareNumber(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32) int32 {
+	// 1 when the first word of line l is a whole number with no point, bracket or colon after it.
+	var w int32 = hdNthWord(wd, ln, l, 0)
+	if w < 0 {
+		return 0
+	}
+	if hdDec(wd, et, w) == 1 {
+		return 1
+	}
+	return 0
 }
 
 func hdOpensFigure(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32) int32 {
@@ -1132,7 +1148,7 @@ func hdContinues(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells,
 	var own int32 = HdMarker(wd, ln, et, ws, top)
 	var f int32 = style.StGet(sf, top, style.SfkFirst())
 	if (b >= 0) && (sp < 2) {
-		if (style.StGet(sf, b, style.SfkClass()) == body) && ((hdTight(sf, last, b) == 1) && style.StLower(style.StGet(sf, b, style.SfkFirst()))) {
+		if (hdTight(sf, last, b) == 1) && style.StLower(style.StGet(sf, b, style.SfkFirst())) {
 			return 1
 		}
 	}
@@ -1220,6 +1236,7 @@ func hdUnitScore(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells,
 	var i int32 = 0
 	var s int32 = 0
 	var sand int32 = 0
+	var k int32 = 0
 	var pts int32 = 0
 	for i < cnt {
 		total += style.StGet(sf, port.CellsAt(ws, wsLines+i), style.SfkCps())
@@ -1243,6 +1260,25 @@ func hdUnitScore(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells,
 		return -1
 	}
 	s = HdMarker(wd, ln, et, ws, top)
+	// a bare number whose heading goes on, on the lines under it, as the data of a row (an address, figures) is the row's, not a
+	// section's (`88 HENNESSY ROAD` / `WAN CHAI, HONG KONG`): D1621
+	if (s == 1) && (cnt > 1) {
+		if hdBareNumber(wd, ln, et, top) == 1 {
+			k = 1
+			for k < cnt {
+				if hdOpensFigure(wd, ln, et, port.CellsAt(ws, wsLines+k)) == 1 {
+					port.CellsSet(ws, 0, 0)
+					port.CellsSet(ws, 1, 0)
+					port.CellsSet(ws, 2, 0)
+					port.CellsSet(ws, 3, 0)
+					port.CellsSet(ws, 4, 0)
+					s = 0
+					k = cnt
+				}
+				k += 1
+			}
+		}
+	}
 	pts = ps
 	if s > 0 {
 		if ((s == 1) || ((s == 6) || (s == 7))) && (port.CellsAt(ws, 1) >= 2) {

@@ -650,6 +650,30 @@ public final class Headingtest {
         y += 2300;
         y = htBody(wd, ln, et, 1, y, 4);
         emon.Testport.assertEq(htRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 0, "no heading");
+        // a street number that opens an address of two lines is not a number either; the address is still the bold block it is
+        emon.Port.cellsDrop(wd, 0);
+        emon.Port.cellsDrop(ln, 0);
+        emon.Port.cellsDrop(et, 0);
+        y = htBody(wd, ln, et, 1, 5000, 4);
+        y += 900;
+        htLine(wd, ln, et, emon.Testport.textBlob("88 HENNESSY ROAD"), 1, 7200, y, 30000, y + 1200, 1200, 1);
+        y += 1500;
+        htLine(wd, ln, et, emon.Testport.textBlob("WAN CHAI, HONG KONG"), 1, 7200, y, 30000, y + 1200, 1200, 1);
+        y += 2300;
+        y = htBody(wd, ln, et, 1, y, 4);
+        emon.Testport.assertEq(htRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 1, "one heading");
+        emon.Testport.assertEq(Heading.hdField(hc, 4, Heading.hckScheme()), 0, "without a number");
+        // a numbered row of a table: the number has a point and two figures follow it
+        emon.Port.cellsDrop(wd, 0);
+        emon.Port.cellsDrop(ln, 0);
+        emon.Port.cellsDrop(et, 0);
+        y = htBody(wd, ln, et, 1, 5000, 4);
+        y += 900;
+        htLine(wd, ln, et, emon.Testport.textBlob("2. $89158874 05/02/2024 rent paid"), 1, 7200, y, 40000, y + 1200, 1200, 1);
+        y += 2300;
+        y = htBody(wd, ln, et, 1, y, 4);
+        emon.Testport.assertEq(htRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 1, "one heading");
+        emon.Testport.assertEq(Heading.hdField(hc, 4, Heading.hckScheme()), 0, "without a number");
         // the same number beside a title is one heading line
         emon.Port.cellsDrop(wd, 0);
         emon.Port.cellsDrop(ln, 0);

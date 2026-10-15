@@ -437,6 +437,8 @@
       (comment "decimal: 1  1.  1.2.3  2)")
       (comment "a bare number that is a street number, a quantity or a price is no heading's (D1621)")
       (if (and (== d 1) (== (hd-address-like wd ln et l) 1)) (return 0))
+      (comment "and a numbered line that goes on with two figures or more (`2. $89158874 05/02/2024 ...`) is a row of a table")
+      (if (and (> d 0) (>= (hd-figures-after wd ln et l 1) 2)) (return 0))
       (if (> d 0)
         (do (cells-set ws 0 1)
             (cells-set ws 1 (rem d 64))
@@ -557,6 +559,13 @@
   (comment "the layout put on a line of its own beside it (a wide gap after the number: `h-numbered`).")
   (if (== (hd-marker wd ln et ws l) 0) (return 0))
   (return (cells-at ws 5)))
+
+(defn ^I32 hd-bare-number [^Cells wd ^Cells ln ^Cells et ^I32 l]
+  (comment "1 when the first word of line l is a whole number with no point, bracket or colon after it.")
+  (let [^I32 w (hd-nth-word wd ln l 0)]
+    (if (< w 0) (return 0))
+    (if (== (hd-dec wd et w) 1) (return 1))
+    (return 0)))
 
 (defn ^I32 hd-opens-figure [^Cells wd ^Cells ln ^Cells et ^I32 l]
   (comment "1 when line l is the data of a row rather than a title: its first word is a figure (`hd-figure-word`), or it has two")
@@ -775,9 +784,8 @@
         ^I32 own (hd-marker wd ln et ws top)
         ^I32 f (st-get sf top (sfk-first))]
     (if (and (>= b 0) (< sp 2))
-      (if (and (== (st-get sf b (sfk-class)) body)
-               (and (== (hd-tight sf last b) 1)
-                    (st-lower (st-get sf b (sfk-first)))))
+      (if (and (== (hd-tight sf last b) 1)
+               (st-lower (st-get sf b (sfk-first))))
         (return 1)))
     (if (and (== own 0) (and (>= a 0) (== (hd-bullet f) 0)))
       (do (if (and (< sp 1)
@@ -836,6 +844,7 @@
         ^:mut ^I32 i 0
         ^:mut ^I32 s 0
         ^:mut ^I32 sand 0
+        ^:mut ^I32 k 0
         ^:mut ^I32 pts 0]
     (while (< i cnt)
       (do (set total (+ total (st-get sf (cells-at ws (+ WS_LINES i)) (sfk-cps))))
@@ -848,6 +857,21 @@
       (set sand (hd-sandwich wd ln et ws sf top last cnt)))
     (if (== (hd-continues wd ln et ws sf top last) 1) (return -1))
     (set s (hd-marker wd ln et ws top))
+    (comment "a bare number whose heading goes on, on the lines under it, as the data of a row (an address, figures) is the row's, not a")
+    (comment "section's (`88 HENNESSY ROAD` / `WAN CHAI, HONG KONG`): D1621")
+    (if (and (== s 1) (> cnt 1))
+      (if (== (hd-bare-number wd ln et top) 1)
+        (do (set k 1)
+            (while (< k cnt)
+              (do (if (== (hd-opens-figure wd ln et (cells-at ws (+ WS_LINES k))) 1)
+                    (do (cells-set ws 0 0)
+                        (cells-set ws 1 0)
+                        (cells-set ws 2 0)
+                        (cells-set ws 3 0)
+                        (cells-set ws 4 0)
+                        (set s 0)
+                        (set k cnt)))
+                  (set k (+ k 1)))))))
     (set pts ps)
     (if (> s 0)
       (if (and (or (== s 1) (or (== s 6) (== s 7))) (>= (cells-at ws 1) 2))

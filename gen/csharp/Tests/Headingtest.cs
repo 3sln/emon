@@ -666,6 +666,30 @@ public static class Headingtest {
         y += 2300;
         y = HtBody(wd, ln, et, 1, y, 4);
         emon.Testport.AssertEq(HtRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 0, "no heading");
+        // a street number that opens an address of two lines is not a number either; the address is still the bold block it is
+        emon.Port.CellsDrop(wd, 0);
+        emon.Port.CellsDrop(ln, 0);
+        emon.Port.CellsDrop(et, 0);
+        y = HtBody(wd, ln, et, 1, 5000, 4);
+        y += 900;
+        HtLine(wd, ln, et, emon.Testport.TextBlob("88 HENNESSY ROAD"), 1, 7200, y, 30000, y + 1200, 1200, 1);
+        y += 1500;
+        HtLine(wd, ln, et, emon.Testport.TextBlob("WAN CHAI, HONG KONG"), 1, 7200, y, 30000, y + 1200, 1200, 1);
+        y += 2300;
+        y = HtBody(wd, ln, et, 1, y, 4);
+        emon.Testport.AssertEq(HtRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 1, "one heading");
+        emon.Testport.AssertEq(Heading.HdField(hc, 4, Heading.HckScheme()), 0, "without a number");
+        // a numbered row of a table: the number has a point and two figures follow it
+        emon.Port.CellsDrop(wd, 0);
+        emon.Port.CellsDrop(ln, 0);
+        emon.Port.CellsDrop(et, 0);
+        y = HtBody(wd, ln, et, 1, 5000, 4);
+        y += 900;
+        HtLine(wd, ln, et, emon.Testport.TextBlob("2. $89158874 05/02/2024 rent paid"), 1, 7200, y, 40000, y + 1200, 1200, 1);
+        y += 2300;
+        y = HtBody(wd, ln, et, 1, y, 4);
+        emon.Testport.AssertEq(HtRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 1, "one heading");
+        emon.Testport.AssertEq(Heading.HdField(hc, 4, Heading.HckScheme()), 0, "without a number");
         // the same number beside a title is one heading line
         emon.Port.CellsDrop(wd, 0);
         emon.Port.CellsDrop(ln, 0);

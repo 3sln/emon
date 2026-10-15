@@ -565,6 +565,10 @@ public final class Heading {
         if ((d == 1) && (hdAddressLike(wd, ln, et, l) == 1)) {
             return 0;
         }
+        // and a numbered line that goes on with two figures or more (`2. $89158874 05/02/2024 ...`) is a row of a table
+        if ((d > 0) && (hdFiguresAfter(wd, ln, et, l, 1) >= 2)) {
+            return 0;
+        }
         if (d > 0) {
             emon.Port.cellsSet(ws, 0, 1);
             emon.Port.cellsSet(ws, 1, d % 64);
@@ -732,6 +736,17 @@ public final class Heading {
             return 0;
         }
         return emon.Port.cellsAt(ws, 5);
+    }
+    public static int hdBareNumber(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l) {
+        // 1 when the first word of line l is a whole number with no point, bracket or colon after it.
+        int w = hdNthWord(wd, ln, l, 0);
+        if (w < 0) {
+            return 0;
+        }
+        if (hdDec(wd, et, w) == 1) {
+            return 1;
+        }
+        return 0;
     }
     public static int hdOpensFigure(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l) {
         // 1 when line l is the data of a row rather than a title: its first word is a figure (`hd-figure-word`), or it has two
@@ -1035,7 +1050,7 @@ public final class Heading {
         int own = hdMarker(wd, ln, et, ws, top);
         int f = Style.stGet(sf, top, Style.sfkFirst());
         if ((b >= 0) && (sp < 2)) {
-            if ((Style.stGet(sf, b, Style.sfkClass()) == body) && ((hdTight(sf, last, b) == 1) && Style.stLower(Style.stGet(sf, b, Style.sfkFirst())))) {
+            if ((hdTight(sf, last, b) == 1) && Style.stLower(Style.stGet(sf, b, Style.sfkFirst()))) {
                 return 1;
             }
         }
@@ -1121,6 +1136,7 @@ public final class Heading {
         int i = 0;
         int s = 0;
         int sand = 0;
+        int k = 0;
         int pts = 0;
         while (i < cnt) {
             total += Style.stGet(sf, emon.Port.cellsAt(ws, WS_LINES + i), Style.sfkCps());
@@ -1144,6 +1160,25 @@ public final class Heading {
             return -1;
         }
         s = hdMarker(wd, ln, et, ws, top);
+        // a bare number whose heading goes on, on the lines under it, as the data of a row (an address, figures) is the row's, not a
+        // section's (`88 HENNESSY ROAD` / `WAN CHAI, HONG KONG`): D1621
+        if ((s == 1) && (cnt > 1)) {
+            if (hdBareNumber(wd, ln, et, top) == 1) {
+                k = 1;
+                while (k < cnt) {
+                    if (hdOpensFigure(wd, ln, et, emon.Port.cellsAt(ws, WS_LINES + k)) == 1) {
+                        emon.Port.cellsSet(ws, 0, 0);
+                        emon.Port.cellsSet(ws, 1, 0);
+                        emon.Port.cellsSet(ws, 2, 0);
+                        emon.Port.cellsSet(ws, 3, 0);
+                        emon.Port.cellsSet(ws, 4, 0);
+                        s = 0;
+                        k = cnt;
+                    }
+                    k += 1;
+                }
+            }
+        }
         pts = ps;
         if (s > 0) {
             if (((s == 1) || ((s == 6) || (s == 7))) && (emon.Port.cellsAt(ws, 1) >= 2)) {

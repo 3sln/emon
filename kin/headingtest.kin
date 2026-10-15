@@ -32,7 +32,7 @@
             [emon.columns :refer [lc-copy]]
             [emon.style :refer [st-build st-get st-hget sc-get sfh-body sfh-gap sfh-size
                                 sfk-class sfk-caps sck-chars sck-size]]
-            [emon.heading :refer [hd-analyze hd-level hd-marker hd-prior-add hd-prior-outline]]
+            [emon.heading :refer [hd-analyze hd-level hd-marker hd-prior-add hd-prior-outline hd-field hck-scheme]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem]]))
 
@@ -571,6 +571,30 @@
     (set y (+ y 2300))
     (set y (ht-body wd ln et 1 y 4))
     (assert-eq (ht-run wd ln et sf sc hc ws tmp pr ptxt) 0 "no heading")
+    (comment "a street number that opens an address of two lines is not a number either; the address is still the bold block it is")
+    (cells-drop wd 0)
+    (cells-drop ln 0)
+    (cells-drop et 0)
+    (set y (ht-body wd ln et 1 5000 4))
+    (set y (+ y 900))
+    (ht-line wd ln et (text-blob "88 HENNESSY ROAD") 1 7200 y 30000 (+ y 1200) 1200 1)
+    (set y (+ y 1500))
+    (ht-line wd ln et (text-blob "WAN CHAI, HONG KONG") 1 7200 y 30000 (+ y 1200) 1200 1)
+    (set y (+ y 2300))
+    (set y (ht-body wd ln et 1 y 4))
+    (assert-eq (ht-run wd ln et sf sc hc ws tmp pr ptxt) 1 "one heading")
+    (assert-eq (hd-field hc 4 (hck-scheme)) 0 "without a number")
+    (comment "a numbered row of a table: the number has a point and two figures follow it")
+    (cells-drop wd 0)
+    (cells-drop ln 0)
+    (cells-drop et 0)
+    (set y (ht-body wd ln et 1 5000 4))
+    (set y (+ y 900))
+    (ht-line wd ln et (text-blob "2. $89158874 05/02/2024 rent paid") 1 7200 y 40000 (+ y 1200) 1200 1)
+    (set y (+ y 2300))
+    (set y (ht-body wd ln et 1 y 4))
+    (assert-eq (ht-run wd ln et sf sc hc ws tmp pr ptxt) 1 "one heading")
+    (assert-eq (hd-field hc 4 (hck-scheme)) 0 "without a number")
     (comment "the same number beside a title is one heading line")
     (cells-drop wd 0)
     (cells-drop ln 0)
