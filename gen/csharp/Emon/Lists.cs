@@ -824,7 +824,8 @@ public static class Lists {
             int w = x1 - x0;
             int h = y1 - y0;
             int p = Evidence.PaGet(pa, r, Evidence.PfPage());
-            if (((fl & 4) == 0) && ((fl & 24) != 0) && (w > 0) && (h > 0) && (w < 1500) && (h < 1500) && (p >= 1) && (((2 * p) + 1) < emon.Port.CellsLen(pi)) && ((4 * LsAbs(w - h)) <= LsMax(w, h))) {
+            // D583: a bullet is a disc (a curve) or a square (a rectangle); a filled polygon (an arrow head, a triangle) is no bullet
+            if (((fl & 4) == 0) && ((Evidence.PaGet(pa, r, Evidence.PfKind()) == Evidence.PaCurve()) || (Evidence.PaGet(pa, r, Evidence.PfKind()) == Evidence.PaRect())) && ((fl & 24) != 0) && (w > 0) && (h > 0) && (w < 1500) && (h < 1500) && (p >= 1) && (((2 * p) + 1) < emon.Port.CellsLen(pi)) && ((4 * LsAbs(w - h)) <= LsMax(w, h))) {
                 seen += 1;
                 l = emon.Port.CellsAt(pi, 2 * p) - 1;
                 while ((l >= 0) && (l < emon.Port.CellsAt(pi, (2 * p) + 1))) {
@@ -1038,6 +1039,38 @@ public static class Lists {
         }
         return -1;
     }
+    internal static int LsBulletBefore(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells sf, emon.Port.Cells hc, int l, emon.Port.Cells ws) {
+        // D583 (smoke review A issue 13): 1 when a bullet precedes line l on its own row: the line on the same baseline just to its left starts with a strong bullet (a
+        // word, or a shape the line has). A bullet, a lead-in and an en dash and the text, split at the lead-in's underline, is one item, whose dash is the text's own.
+        int t = Style.StGet(sf, l, Style.SfkSibline());
+        if (t < 0) {
+            return 0;
+        }
+        if (!LsUpright(ln, t)) {
+            return 0;
+        }
+        if (Evidence.LnGet(ln, t, Evidence.LhPage()) != Evidence.LnGet(ln, l, Evidence.LhPage())) {
+            return 0;
+        }
+        int sz = LsLineSize(sf, ln, l);
+        if (LsCap(Evidence.LnGet(ln, t, Evidence.LhX1())) > (LsCap(Evidence.LnGet(ln, l, Evidence.LhX0())) + (sz / 4))) {
+            return 0;
+        }
+        if ((LsAbs(LsCap(Evidence.LnGet(ln, l, Evidence.LhBy0())) - LsCap(Evidence.LnGet(ln, t, Evidence.LhBy0()))) * 3) > sz) {
+            return 0;
+        }
+        if (LsGet(hc, t, LsKShape()) > 0) {
+            return 1;
+        }
+        int w = LsFirstWord(wd, ln, t);
+        if (w < 0) {
+            return 0;
+        }
+        if (LsParse(wd, et, w, ws) == 1) {
+            return 1;
+        }
+        return 0;
+    }
     internal static int LsCollect(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells sf, emon.Port.Cells hc, emon.Port.Cells cd, emon.Port.Cells ws) {
         // One candidate row per line that starts with a marker, or with a bullet shape, in line order. Lines that are
         // headings, not upright, or already taken (a note, a caption) are left out; a line whose only word is the
@@ -1058,6 +1091,13 @@ public static class Lists {
                     cls = LsParse(wd, et, w, ws);
                     if ((cls == 2) && (LsLetterAfter(wd, ln, et, l, w) == 0)) {
                         cls = 0;
+                    }
+                    if (cls == 2) {
+                        if (LsBulletBefore(wd, ln, et, sf, hc, l, ws) == 1) {
+                            cls = 0;
+                        } else {
+                            LsParse(wd, et, w, ws);
+                        }
                     }
                     if ((cls > 0) && ((emon.Port.CellsAt(ws, 4) < LsWl(wd, w)) || (LsSecondWord(wd, ln, l) >= 0))) {
                         tx = LsTextx(wd, ln, et, hc, l, w, cls, ws);
@@ -1166,36 +1206,69 @@ public static class Lists {
         }
         return 0;
     }
+    internal static int LsWalkFrom(emon.Port.Cells ln, emon.Port.Cells sf, emon.Port.Cells hc, int l) {
+        // Mark the lines that GO ON the item line l: down the page while the next line is not a start, is upright, close below, and
+        // sits at the item's text x. The same x and slop as the item's.
+        int tx = LsGet(hc, l, LsKTextx());
+        int tl = LsGet(hc, l, LsKTol());
+        int cur = l;
+        int steps = 0;
+        int more = 1;
+        while ((more == 1) && (steps < 200)) {
+            int b = Style.StGet(sf, cur, Style.SfkBelow());
+            more = 0;
+            if ((b >= 0) && LsUpright(ln, b)) {
+                if ((LsStart(hc, b) == 0) && ((LsGet(hc, b, LsKFlags()) & 2) == 0) && (Style.StGet(sf, cur, Style.SfkGapBelow()) <= (3 * tl)) && (Evidence.LnGet(ln, b, Evidence.LhX0()) >= (tx - tl)) && (Evidence.LnGet(ln, b, Evidence.LhX0()) <= (tx + tl))) {
+                    LsPut(hc, b, LsKFlags(), LsFCont());
+                    LsPut(hc, b, LsKTextx(), tx);
+                    LsPut(hc, b, LsKTol(), tl);
+                    cur = b;
+                    more = 1;
+                }
+            }
+            steps += 1;
+        }
+        return 0;
+    }
     internal static int LsWalk(emon.Port.Cells ln, emon.Port.Cells sf, emon.Port.Cells hc) {
-        // Mark the lines that GO ON an item: from each item line down the page while the next line is not a start, is
-        // upright, close below, and sits at the item's text x. The same x and slop as the item's.
+        // Mark the lines that GO ON an item: from each item line (`ls-walk-from`).
         int n = Evidence.LnCount(ln);
         int l = 0;
         while (l < n) {
             if ((LsGet(hc, l, LsKFlags()) & 1) == 1) {
-                int tx = LsGet(hc, l, LsKTextx());
-                int tl = LsGet(hc, l, LsKTol());
-                int cur = l;
-                int steps = 0;
-                int more = 1;
-                while ((more == 1) && (steps < 200)) {
-                    int b = Style.StGet(sf, cur, Style.SfkBelow());
-                    more = 0;
-                    if ((b >= 0) && LsUpright(ln, b)) {
-                        if ((LsStart(hc, b) == 0) && ((LsGet(hc, b, LsKFlags()) & 2) == 0) && (Style.StGet(sf, cur, Style.SfkGapBelow()) <= (3 * tl)) && (Evidence.LnGet(ln, b, Evidence.LhX0()) >= (tx - tl)) && (Evidence.LnGet(ln, b, Evidence.LhX0()) <= (tx + tl))) {
-                            LsPut(hc, b, LsKFlags(), LsFCont());
-                            LsPut(hc, b, LsKTextx(), tx);
-                            LsPut(hc, b, LsKTol(), tl);
-                            cur = b;
-                            more = 1;
-                        }
-                    }
-                    steps += 1;
-                }
+                LsWalkFrom(ln, sf, hc, l);
             }
             l += 1;
         }
         return 0;
+    }
+    internal static int LsHangsUnder(emon.Port.Cells ln, emon.Port.Cells sf, emon.Port.Cells hc, int l) {
+        // D583 (smoke review B issue 12): 1 when line l sits where an item's text sits, under that item (an item line above it, or lines that go on it between, each at that x
+        // and close under the last): a reference whose second line begins with an author's initial (`Y. Bengio`) is the item's continuation, not a new item.
+        int cur = l;
+        int steps = 0;
+        int more = 1;
+        int r = 0;
+        while ((more == 1) && (steps < 60)) {
+            int a = Style.StGet(sf, cur, Style.SfkAbove());
+            more = 0;
+            if ((a >= 0) && LsUpright(ln, a) && (LsCap(Style.StGet(sf, cur, Style.SfkGapAbove())) <= (3 * (LsLineSize(sf, ln, cur) / 2)))) {
+                if ((LsGet(hc, a, LsKFlags()) & 1) != 0) {
+                    int tx = LsGet(hc, a, LsKTextx());
+                    int tl = LsGet(hc, a, LsKTol());
+                    if (LsAbs(LsCap(Evidence.LnGet(ln, l, Evidence.LhX0())) - tx) <= tl) {
+                        r = 1;
+                    }
+                } else {
+                    if ((LsStart(hc, a) == 0) && (LsAbs(LsCap(Evidence.LnGet(ln, a, Evidence.LhX0())) - LsCap(Evidence.LnGet(ln, l, Evidence.LhX0()))) <= (LsLineSize(sf, ln, l) / 2))) {
+                        cur = a;
+                        more = 1;
+                    }
+                }
+            }
+            steps += 1;
+        }
+        return r;
     }
     internal static int LsInitialLike(emon.Port.Cells cd, int i) {
         // 1 when candidate i is a letter or a roman numeral and a full stop (`Z.`): it might be an author's initial, and a
@@ -1235,6 +1308,12 @@ public static class Lists {
             if ((conf == 0) && (textx > 0) && (cls != 2) && (LsInitialLike(cd, i) == 0)) {
                 if (LsHangEvidence(ln, sf, hc, l, textx) == 1) {
                     conf = 1;
+                }
+            }
+            // an author's initial that begins the second line of a reference is the item's text (D583)
+            if ((conf > 0) && (LsInitialLike(cd, i) == 1) && (LsCget(cd, i, 3) >= 3)) {
+                if (LsHangsUnder(ln, sf, hc, l) == 1) {
+                    conf = 0;
                 }
             }
             if (conf > 0) {

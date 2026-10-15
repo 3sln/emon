@@ -37,8 +37,8 @@
             [emon.evidence :refer [wd-get wd-set wd-count ln-get ln-set ln-count pa-get pa-count hd-line
                                    lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-by0 lh-rot lh-first lh-count
                                    hd-tstart hd-tlen hd-x0 hd-x1
-                                   pf-page pf-kind pf-x0 pf-y0 pf-x1 pf-y1 pf-flags pa-curve]]
-            [emon.style :refer [st-hget sfh-size st-get sfk-size sfk-below sfk-gap-below sfk-upright sfk-height sfk-sibline sfk-nsib]]
+                                   pf-page pf-kind pf-x0 pf-y0 pf-x1 pf-y1 pf-flags pa-curve pa-rect]]
+            [emon.style :refer [st-hget sfh-size st-get sfk-size sfk-below sfk-above sfk-gap-above sfk-gap-below sfk-upright sfk-height sfk-sibline sfk-nsib]]
             [emon.heading :refer [hd-level hd-rows-end]]
             [emon.table :refer [tb-claimed]]
             [kin.lang :refer [defn defconst return let set while if do comment
@@ -601,7 +601,9 @@
                 ^I32 w (- x1 x0)
                 ^I32 h (- y1 y0)
                 ^I32 p (pa-get pa r (pf-page))]
+            (comment "D583: a bullet is a disc (a curve) or a square (a rectangle); a filled polygon (an arrow head, a triangle) is no bullet")
             (if (and (== (bit-and fl 4) 0)
+                     (or (== (pa-get pa r (pf-kind)) (pa-curve)) (== (pa-get pa r (pf-kind)) (pa-rect)))
                      (!= (bit-and fl 24) 0)
                      (> w 0) (> h 0) (< w 1500) (< h 1500)
                      (>= p 1) (< (+ (* 2 p) 1) (cells-len pi))
@@ -760,6 +762,22 @@
       (if (and (<= (- tx1 (quot sz 4)) mx0) (<= (* (- mx0 tx1) 10) (* sz 100))) (return t))
       (return -1))))
 
+(defn ^I32 ls-bullet-before [^Cells wd ^Cells ln ^Cells et ^Cells sf ^Cells hc ^I32 l ^:mut ^Cells ws]
+  (comment "D583 (smoke review A issue 13): 1 when a bullet precedes line l on its own row: the line on the same baseline just to its left starts with a strong bullet (a")
+  (comment "word, or a shape the line has). A bullet, a lead-in and an en dash and the text, split at the lead-in's underline, is one item, whose dash is the text's own.")
+  (let [^I32 t (st-get sf l (sfk-sibline))]
+    (if (< t 0) (return 0))
+    (if (not (ls-upright ln t)) (return 0))
+    (if (!= (ln-get ln t (lh-page)) (ln-get ln l (lh-page))) (return 0))
+    (let [^I32 sz (ls-line-size sf ln l)]
+      (if (> (ls-cap (ln-get ln t (lh-x1))) (+ (ls-cap (ln-get ln l (lh-x0))) (quot sz 4))) (return 0))
+      (if (> (* (ls-abs (- (ls-cap (ln-get ln l (lh-by0))) (ls-cap (ln-get ln t (lh-by0))))) 3) sz) (return 0))
+      (if (> (ls-get hc t (ls-k-shape)) 0) (return 1))
+      (let [^I32 w (ls-first-word wd ln t)]
+        (if (< w 0) (return 0))
+        (if (== (ls-parse wd et w ws) 1) (return 1))
+        (return 0)))))
+
 (defn ^I32 ls-collect [^Cells wd ^Cells ln ^Cells et ^Cells sf ^Cells hc ^:mut ^Cells cd ^:mut ^Cells ws]
   (comment "One candidate row per line that starts with a marker, or with a bullet shape, in line order. Lines that are")
   (comment "headings, not upright, or already taken (a note, a caption) are left out; a line whose only word is the")
@@ -781,6 +799,10 @@
                 (if (and (>= w 0) (== (ls-small wd ln sf l) 0))
                   (do (set cls (ls-parse wd et w ws))
                       (if (and (== cls 2) (== (ls-letter-after wd ln et l w) 0)) (set cls 0))
+                      (if (== cls 2)
+                        (do (if (== (ls-bullet-before wd ln et sf hc l ws) 1)
+                              (set cls 0)
+                              (ls-parse wd et w ws))))
                       (if (and (> cls 0)
                                (or (< (cells-at ws 4) (ls-wl wd w)) (>= (ls-second-word wd ln l) 0)))
                         (do (set tx (ls-textx wd ln et hc l w cls ws))
@@ -862,35 +884,64 @@
         (return 1))
       (return 0))))
 
+(defn ^I32 ls-walk-from [^Cells ln ^Cells sf ^:mut ^Cells hc ^I32 l]
+  (comment "Mark the lines that GO ON the item line l: down the page while the next line is not a start, is upright, close below, and")
+  (comment "sits at the item's text x. The same x and slop as the item's.")
+  (let [^I32 tx (ls-get hc l (ls-k-textx))
+        ^I32 tl (ls-get hc l (ls-k-tol))
+        ^:mut ^I32 cur l
+        ^:mut ^I32 steps 0
+        ^:mut ^I32 more 1]
+    (while (and (== more 1) (< steps 200))
+      (do (let [^I32 b (st-get sf cur (sfk-below))]
+            (set more 0)
+            (if (and (>= b 0) (ls-upright ln b))
+              (do (if (and (== (ls-start hc b) 0)
+                           (== (bit-and (ls-get hc b (ls-k-flags)) 2) 0)
+                           (<= (st-get sf cur (sfk-gap-below)) (* 3 tl))
+                           (>= (ln-get ln b (lh-x0)) (- tx tl))
+                           (<= (ln-get ln b (lh-x0)) (+ tx tl)))
+                    (do (ls-put hc b (ls-k-flags) (ls-f-cont))
+                        (ls-put hc b (ls-k-textx) tx)
+                        (ls-put hc b (ls-k-tol) tl)
+                        (set cur b)
+                        (set more 1))))))
+          (set steps (+ steps 1))))
+    (return 0)))
+
 (defn ^I32 ls-walk [^Cells ln ^Cells sf ^:mut ^Cells hc]
-  (comment "Mark the lines that GO ON an item: from each item line down the page while the next line is not a start, is")
-  (comment "upright, close below, and sits at the item's text x. The same x and slop as the item's.")
+  (comment "Mark the lines that GO ON an item: from each item line (`ls-walk-from`).")
   (let [^I32 n (ln-count ln)
         ^:mut ^I32 l 0]
     (while (< l n)
       (do (if (== (bit-and (ls-get hc l (ls-k-flags)) 1) 1)
-            (do (let [^I32 tx (ls-get hc l (ls-k-textx))
-                      ^I32 tl (ls-get hc l (ls-k-tol))
-                      ^:mut ^I32 cur l
-                      ^:mut ^I32 steps 0
-                      ^:mut ^I32 more 1]
-                  (while (and (== more 1) (< steps 200))
-                    (do (let [^I32 b (st-get sf cur (sfk-below))]
-                          (set more 0)
-                          (if (and (>= b 0) (ls-upright ln b))
-                            (do (if (and (== (ls-start hc b) 0)
-                                         (== (bit-and (ls-get hc b (ls-k-flags)) 2) 0)
-                                         (<= (st-get sf cur (sfk-gap-below)) (* 3 tl))
-                                         (>= (ln-get ln b (lh-x0)) (- tx tl))
-                                         (<= (ln-get ln b (lh-x0)) (+ tx tl)))
-                                  (do (ls-put hc b (ls-k-flags) (ls-f-cont))
-                                      (ls-put hc b (ls-k-textx) tx)
-                                      (ls-put hc b (ls-k-tol) tl)
-                                      (set cur b)
-                                      (set more 1))))))
-                        (set steps (+ steps 1)))))))
+            (ls-walk-from ln sf hc l))
           (set l (+ l 1))))
     (return 0)))
+
+(defn ^I32 ls-hangs-under [^Cells ln ^Cells sf ^Cells hc ^I32 l]
+  (comment "D583 (smoke review B issue 12): 1 when line l sits where an item's text sits, under that item (an item line above it, or lines that go on it between, each at that x")
+  (comment "and close under the last): a reference whose second line begins with an author's initial (`Y. Bengio`) is the item's continuation, not a new item.")
+  (let [^:mut ^I32 cur l
+        ^:mut ^I32 steps 0
+        ^:mut ^I32 more 1
+        ^:mut ^I32 r 0]
+    (while (and (== more 1) (< steps 60))
+      (do (let [^I32 a (st-get sf cur (sfk-above))]
+            (set more 0)
+            (if (and (>= a 0) (ls-upright ln a)
+                     (<= (ls-cap (st-get sf cur (sfk-gap-above))) (* 3 (quot (ls-line-size sf ln cur) 2))))
+              (do (if (!= (bit-and (ls-get hc a (ls-k-flags)) 1) 0)
+                    (do (let [^I32 tx (ls-get hc a (ls-k-textx))
+                              ^I32 tl (ls-get hc a (ls-k-tol))]
+                          (if (<= (ls-abs (- (ls-cap (ln-get ln l (lh-x0))) tx)) tl)
+                            (set r 1))))
+                    (do (if (and (== (ls-start hc a) 0)
+                                 (<= (ls-abs (- (ls-cap (ln-get ln a (lh-x0))) (ls-cap (ln-get ln l (lh-x0))))) (quot (ls-line-size sf ln l) 2)))
+                          (do (set cur a)
+                              (set more 1))))))))
+          (set steps (+ steps 1))))
+    (return r)))
 
 (defn ^I32 ls-initial-like [^Cells cd ^I32 i]
   (comment "1 when candidate i is a letter or a roman numeral and a full stop (`Z.`): it might be an author's initial, and a")
@@ -925,6 +976,9 @@
               (if (and (== conf 0) (> textx 0) (!= cls 2) (== (ls-initial-like cd i) 0))
                 (do (if (== (ls-hang-evidence ln sf hc l textx) 1)
                       (set conf 1))))
+              (comment "an author's initial that begins the second line of a reference is the item's text (D583)")
+              (if (and (> conf 0) (== (ls-initial-like cd i) 1) (>= (ls-cget cd i 3) 3))
+                (do (if (== (ls-hangs-under ln sf hc l) 1) (set conf 0))))
               (if (> conf 0)
                 (do (let [^:mut ^I32 sch (ls-pick (ls-cget cd i 2) (ls-cget cd i 4) conf)
                           ^:mut ^I32 val -1

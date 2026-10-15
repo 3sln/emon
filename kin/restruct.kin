@@ -46,7 +46,7 @@
                                 nk-list nk-item nk-caption nk-figure nk-table nk-note nk-ref nk-link nk-text nk-break
                                 nk-paragraph nk-heading nk-quote nk-cell nk-section nk-document fk-image fk-labels fk-page
                                 fk-scheme fk-start fk-value fk-box fk-marker fk-label fk-target fk-href
-                                sr-text sr-infer fg-unknown]]
+                                sr-text sr-infer fg-unknown fg-logo fg-barcode fg-qr]]
             [emon.links :refer [lk-find]]
             [emon.asset :refer [as-get]]
             [kin.lang :refer [defn defconst defdata return let set while if do comment
@@ -832,6 +832,10 @@
 (defconst ^I32 RF_LABEL_H 1800)     ;; a label is a line at most this tall (18 pt: `0` and `Jan` on two baselines are one paragraph)
 (defconst ^I32 RF_LABEL_CP 48)      ;; and at most this many code points
 (defconst ^I32 RF_LABEL_WORDS 6)    ;; and this many words
+(defconst ^I32 RF_PASSES 3)          ;; the passes a figure's box grows over the labels near it (D583)
+(defconst ^I32 RF_INSIDE_H 4500)    ;; inside a figure, a paragraph of at most this height (45 pt: three lines) ...
+(defconst ^I32 RF_INSIDE_CP 120)    ;; ... and this many characters is a label, whatever its words
+(defconst ^I32 RF_INSIDE_BIG 50000) ;; unless the figure is taller than this (500 pt: a page's background, a scan)
 
 (defn ^I32 rf-fdv [^Cells fd ^I32 row ^I32 f ^I32 dflt]
   (if (< (cells-len fd) (* (+ row 1) RF_FD)) (return dflt))
@@ -850,40 +854,120 @@
           (set i (+ i 1))))
     (return (<= words RF_LABEL_WORDS))))
 
-(defn ^I32 rf-label-of [^Cells on ^Cells orr ^Cells text ^Cells cand ^Cells fg ^Cells fd ^I32 p]
-  (comment "The candidate row of the figure that paragraph p labels, or -1.")
+(defn ^I32 rf-eb [^Cells ab ^I32 n ^I32 k ^Cells cand ^I32 row ^I32 f]
+  (comment "Coordinate f (0 x0, 1 y0, 2 x1, 3 y1) of the box the labels of the figure number `k` of `fg` (1 based) are looked for in: its own, grown over the labels near it (`rf-grow`, kept in `ab` after")
+  (comment "the node entries, four cells a figure), else its candidate row's.")
+  (if (>= (cells-len ab) (+ n (* 4 k)))
+    (return (cells-at ab (+ n (+ (* 4 (- k 1)) f)))))
+  (return (as-get cand row (+ 5 f))))
+
+(defn ^I32 rf-label-of [^Cells on ^Cells orr ^Cells text ^Cells cand ^Cells fg ^Cells fd ^Cells ab ^I32 n ^I32 p]
+  (comment "The candidate row of the figure that paragraph p labels, or -1. A label is a short one-line paragraph on the figure or within `RF_ZONE` of its box, as grown over the labels around it")
+  (comment "(`rf-grow`); inside the figure's own box (a figure no taller than `RF_INSIDE_BIG`) any paragraph of at most three lines and `RF_INSIDE_CP` characters is: the text of a figure is its labels (D583).")
   (let [^I32 r (node-region-head on p)
         ^:mut ^I32 i 1
-        ^:mut ^I32 row 0]
+        ^:mut ^I32 row 0
+        ^:mut ^I32 cx 0
+        ^:mut ^I32 cy 0
+        ^:mut ^I32 hgt 0]
     (if (< r 0) (return -1))
     (if (!= (node-region-count on p) 1) (return -1))
     (if (== (node-has-text on p) 0) (return -1))
-    (if (> (- (region-y1 orr r) (region-y0 orr r)) RF_LABEL_H) (return -1))
-    (if (not (rf-label-text on text p)) (return -1))
+    (set hgt (- (region-y1 orr r) (region-y0 orr r)))
+    (set cx (quot (+ (region-x0 orr r) (region-x1 orr r)) 2))
+    (set cy (quot (+ (region-y0 orr r) (region-y1 orr r)) 2))
     (while (< i (cells-len fg))
       (do (set row (cells-at fg i))
           (if (and (== (as-get cand row 0) (region-page orr r))
-                   (and (> (region-x1 orr r) (- (as-get cand row 5) RF_ZONE))
-                        (and (< (region-x0 orr r) (+ (as-get cand row 7) RF_ZONE))
-                             (and (>= (quot (+ (region-y0 orr r) (region-y1 orr r)) 2) (- (as-get cand row 6) RF_ZONE))
-                                  (and (<= (quot (+ (region-y0 orr r) (region-y1 orr r)) 2) (+ (as-get cand row 8) RF_ZONE))
+                   (and (>= cx (as-get cand row 5)) (and (<= cx (as-get cand row 7))
+                        (and (>= cy (as-get cand row 6)) (and (<= cy (as-get cand row 8))
+                             (and (<= (- (as-get cand row 8) (as-get cand row 6)) RF_INSIDE_BIG)
+                                  (and (<= hgt RF_INSIDE_H) (<= (node-text-len on p) RF_INSIDE_CP))))))))
+            (return row))
+          (set i (+ i 1))))
+    (if (> hgt RF_LABEL_H) (return -1))
+    (if (not (rf-label-text on text p)) (return -1))
+    (set i 1)
+    (while (< i (cells-len fg))
+      (do (set row (cells-at fg i))
+          (if (and (== (as-get cand row 0) (region-page orr r))
+                   (and (> (region-x1 orr r) (- (rf-eb ab n i cand row 0) RF_ZONE))
+                        (and (< (region-x0 orr r) (+ (rf-eb ab n i cand row 2) RF_ZONE))
+                             (and (>= cy (- (rf-eb ab n i cand row 1) RF_ZONE))
+                                  (and (<= cy (+ (rf-eb ab n i cand row 3) RF_ZONE))
                                        (<= (- (region-x1 orr r) (region-x0 orr r))
-                                           (+ (* 2 (- (as-get cand row 7) (as-get cand row 5))) 2000)))))))
+                                           (+ (* 2 (- (rf-eb ab n i cand row 2) (rf-eb ab n i cand row 0))) 2000)))))))
             (return row))
           (set i (+ i 1))))
     (return -1)))
+
+(defn ^I32 rf-grows [^Cells fd ^I32 row]
+  (comment "1 when the figure of candidate row `row` may grow over its labels: a drawing, a chart, a picture; not a logo, a barcode or a code (a name, a number beside them is text).")
+  (let [^I32 k (rf-fdv fd row 0 (fg-unknown))]
+    (if (or (== k (fg-logo)) (or (== k (fg-barcode)) (== k (fg-qr)))) (return 0))
+    (return 1)))
+
+(defn ^I32 rf-grow [^Cells on ^Cells orr ^Cells text ^Cells cand ^Cells fg ^Cells fd ^:mut ^Cells ab ^I32 n]
+  (comment "D583 (smoke review B issue 7): the boxes the labels of each figure are looked for in, kept in `ab` after its `n` node entries (four cells a figure of `fg`, in its order): each is the")
+  (comment "figure's candidate box grown, in `RF_PASSES` passes, over the label-like paragraphs (one line, a few words, `rf-label-text`) within `RF_ZONE` of it: a drawing's boxes are separate regions of")
+  (comment "paths and words, and the words between and beside them are its labels too. Answers how many paragraphs it took in.")
+  (let [^:mut ^I32 i 1
+        ^:mut ^I32 row 0
+        ^:mut ^I32 pass 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 took 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 changed 1
+        ^:mut ^I32 cy 0]
+    (while (< i (cells-len fg))
+      (do (set row (cells-at fg i))
+          (cells-push ab (as-get cand row 5))
+          (cells-push ab (as-get cand row 6))
+          (cells-push ab (as-get cand row 7))
+          (cells-push ab (as-get cand row 8))
+          (set i (+ i 1))))
+    (while (and (< pass RF_PASSES) (== changed 1))
+      (do (set changed 0)
+          (set c 0)
+          (while (< c n)
+            (do (if (== (node-kind on c) (nk-paragraph))
+                  (do (set r (node-region-head on c))
+                      (if (and (>= r 0) (and (== (node-region-count on c) 1) (and (== (node-has-text on c) 1)
+                               (and (<= (- (region-y1 orr r) (region-y0 orr r)) RF_LABEL_H) (rf-label-text on text c)))))
+                        (do (set cy (quot (+ (region-y0 orr r) (region-y1 orr r)) 2))
+                            (set i 1)
+                            (while (< i (cells-len fg))
+                              (do (set row (cells-at fg i))
+                                  (set b (+ n (* 4 (- i 1))))
+                                  (if (and (== (rf-grows fd row) 1)
+                                           (and (== (as-get cand row 0) (region-page orr r))
+                                                (and (> (region-x1 orr r) (- (cells-at ab b) RF_ZONE))
+                                                     (and (< (region-x0 orr r) (+ (cells-at ab (+ b 2)) RF_ZONE))
+                                                          (and (>= cy (- (cells-at ab (+ b 1)) RF_ZONE))
+                                                               (<= cy (+ (cells-at ab (+ b 3)) RF_ZONE)))))))
+                                    (do (if (< (region-x0 orr r) (cells-at ab b)) (do (cells-set ab b (region-x0 orr r)) (set changed 1)))
+                                        (if (< (region-y0 orr r) (cells-at ab (+ b 1))) (do (cells-set ab (+ b 1) (region-y0 orr r)) (set changed 1)))
+                                        (if (> (region-x1 orr r) (cells-at ab (+ b 2))) (do (cells-set ab (+ b 2) (region-x1 orr r)) (set changed 1)))
+                                        (if (> (region-y1 orr r) (cells-at ab (+ b 3))) (do (cells-set ab (+ b 3) (region-y1 orr r)) (set changed 1)))
+                                        (set took (+ took 1))))
+                                  (set i (+ i 1))))))))
+                (set c (+ c 1))))
+          (set pass (+ pass 1))))
+    (return took)))
 
 (defn ^I32 rf-absorb-note [^Cells on ^Cells orr ^Cells text ^Cells cand ^Cells fg ^Cells fd ^:mut ^Cells ab ^I32 n]
   (comment "A note (the column stage made a margin note of a column of tick labels) every child of which is a label of one figure is")
   (comment "dropped with them: the note and its paragraphs are marked.")
   (let [^:mut ^I32 c (node-first-child on n)
+        ^I32 nall (node-count on)
         ^:mut ^I32 f -1
         ^:mut ^I32 g 0
         ^:mut ^I32 ok 1
         ^:mut ^I32 cnt 0]
     (while (>= c 0)
       (do (set g -1)
-          (if (== (node-kind on c) (nk-paragraph)) (set g (rf-label-of on orr text cand fg fd c)))
+          (if (== (node-kind on c) (nk-paragraph)) (set g (rf-label-of on orr text cand fg fd ab nall c)))
           (if (< g 0) (set ok 0))
           (if (and (>= g 0) (and (>= f 0) (!= g f))) (set ok 0))
           (if (>= g 0) (set f g))
@@ -900,6 +984,7 @@
 (defn ^I32 rf-absorb [^Cells on ^Cells orr ^Cells text ^Cells cand ^Cells fg ^Cells fd ^:mut ^Cells ab ^I32 p]
   (comment "Mark, among the blocks of p (the document or a section) and of the sections in it, the paragraphs that label a figure.")
   (let [^:mut ^I32 c (node-first-child on p)
+        ^I32 nall (node-count on)
         ^:mut ^I32 f -1]
     (while (>= c 0)
       (do (if (== (node-kind on c) (nk-section))
@@ -907,7 +992,7 @@
           (if (== (node-kind on c) (nk-note))
             (rf-absorb-note on orr text cand fg fd ab c))
           (if (== (node-kind on c) (nk-paragraph))
-            (do (set f (rf-label-of on orr text cand fg fd c))
+            (do (set f (rf-label-of on orr text cand fg fd ab nall c))
                 (if (>= f 0) (cells-set ab c f))))
           (set c (node-next on c))))
     (return 0)))
@@ -1068,7 +1153,8 @@
           (if (> (cells-len fd) 0) (cells-push ab -1))
           (set i (+ i 1))))
     (if (> (cells-len fd) 0)
-      (do (set r 0)
+      (do (rf-grow on orr text cand fg fd ab n)
+          (set r 0)
           (while (< r n)
             (do (if (and (< (node-parent on r) 0) (== (node-kind on r) (nk-document)))
                   (rf-absorb on orr text cand fg fd ab r))

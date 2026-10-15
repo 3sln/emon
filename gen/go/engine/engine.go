@@ -372,7 +372,7 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 	var pending int32 = 0
 	var w int32 = 0
 	furniture.FuFind(d.Fw, d.Fl, d.Et, d.Gl, d.Mk, m.Pages, np, d.Txt, d.Md, d.Lb, trust, c.Furn, s.Cd, s.Sl, s.Gr, s.Ford, s.Tx, s.Bh, s.Fo, s.Fp, s.Ft, s.Pl)
-	table.TbBuild(d.Fw, d.Fl, d.Et, d.Grl, d.Gfl, np, s.Tb, s.Tc, s.Tw, s.Tq, s.Tbx, s.S0, s.S1, s.S2, s.S3, s.S4, s.S5, s.S6, s.S7, s.S8, s.S9, s.S10, s.S11, s.S12, s.S13, s.S14, s.S15, s.S16, s.S17, s.S18, m.Pages, d.Gl, d.Mk, d.Se, d.Sc, d.Ss, s.Ta0, s.G0, s.G1, s.G2, s.G3, s.G4, s.G5, s.Tv)
+	table.TbBuild(d.Fw, d.Fl, d.Et, d.Grl, d.Gfl, np, s.Tb, s.Tc, s.Tw, s.Tq, s.Tbx, s.S0, s.S1, s.S2, s.S3, s.S4, s.S5, s.S6, s.S7, s.S8, s.S9, s.S10, s.S11, s.S12, s.S13, s.S14, s.S15, s.S16, s.S17, s.S18, m.Pages, d.Gl, d.Mk, d.Se, d.Sc, d.Ss, s.Ta0, s.G0, s.G1, s.G2, s.G3, s.G4, s.G5, s.Tv, d.An)
 	if c.Keep != 0 {
 		if (kind == 0) && (port.CellsLen(s.Tv) > 0) {
 			port.TextAscii(d.Evidence, ",\"tb\":")
@@ -382,6 +382,7 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 	}
 	port.CellsCopyInto(s.Iloc, c.Lcl)
 	columns.LcCopy(d.Fl, s.Lt)
+	columns.LcMarkAsides(s.Lt, d.Gfl, m.Pages, np)
 	initial.InDetect(d.Fw, d.Gl, d.Fnt, d.Et, np, s.Iloc, s.Lt, s.Ls, s.Lo, s.Tm, s.Ii)
 	heading.HdPriorOutline(d.Ol, d.Txt, s.Hpr, s.Hptxt)
 	heading.HdAnalyze(d.Fw, s.Lt, d.Et, d.Gl, s.Sf, s.Hsc, s.Hc, s.Ws, s.Htmp, s.Hpr, s.Hptxt)

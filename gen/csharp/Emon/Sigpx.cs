@@ -417,7 +417,31 @@ public static class Sigpx {
         emon.Port.CellsPush(cand, 0);
         return 1;
     }
-    internal static int SpJudge(int page1, emon.Port.Cells views, int srcview, emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Bitmap src, emon.Port.Cells rules, int row, int zx0, int zy0, emon.Port.Cells mask, int n, emon.Port.Cells cand) {
+    internal static int SpRuledInk(emon.Port.Cells mask, int zw, int zh, int wpx, int ink) {
+        // D583: 1 when at least 70 per cent of the zone's ink lies in rows that are each inked over 35 per cent of the ink's width: a straight line, dashed or not (a form's write-in
+        // lines, stacked, make as long a path as a pen's loops do), which no pen draws.
+        int y = 0;
+        int x = 0;
+        int row = 0;
+        int heavy = 0;
+        while (y < zh) {
+            row = 0;
+            x = 0;
+            while (x < zw) {
+                row += emon.Port.CellsAt(mask, (y * zw) + x);
+                x += 1;
+            }
+            if ((row * 100) >= (wpx * 35)) {
+                heavy += row;
+            }
+            y += 1;
+        }
+        if ((heavy * 100) >= (ink * 70)) {
+            return 1;
+        }
+        return 0;
+    }
+    internal static int SpJudge(int page1, emon.Port.Cells views, int srcview, emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Bitmap src, emon.Port.Cells rules, int row, int zx0, int zy0, emon.Port.Cells mask, int n, int zw, int zh, emon.Port.Cells cand) {
         // Is the ink of a zone (statistics at mask[n...]) a pen's? Add a candidate when it is: the box, the stroke width, the loops of the path, the coverage, no legible word, then the size says
         // signature or initials. Answers 1 when added.
         int ink = emon.Port.CellsAt(mask, n + 132);
@@ -476,6 +500,9 @@ public static class Sigpx {
             return 0;
         }
         if ((ink * 100) > ((wpx * hpx) * SpCover())) {
+            return 0;
+        }
+        if (SpRuledInk(mask, zw, zh, wpx, ink) == 1) {
             return 0;
         }
         ln = ink / sw;
@@ -557,7 +584,7 @@ public static class Sigpx {
         if (ink < SpMinInk()) {
             return 0;
         }
-        return SpJudge(page1, views, srcview, owords, etext, src, rules, r, zx0, zy0, mask, zw * zh, cand);
+        return SpJudge(page1, views, srcview, owords, etext, src, rules, r, zx0, zy0, mask, zw * zh, zw, zh, cand);
     }
     public static int SpFind(int page1, emon.Port.Cells views, int srcview, emon.Port.Cells rules, emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Bitmap src, int pw, emon.Port.Cells cand, emon.Port.Cells mask) {
         // The candidates of page `page1` (1-based) from the tracer's rules of the raster `srcview` (a `views` row; `src` its pixels): see the head of this file; written to `cand` (cleared

@@ -271,6 +271,22 @@
     (assert-eq (cells-at cand 52) 50 "half its width in pixels")
     (assert-eq (cells-at cand 53) 20 "half its height")))
 
+(deftest test-a-colour-band-across-the-page-is-no-stamp
+  (let [^Cells views (new-cells)
+        ^Cells prims (new-cells)
+        ^Cells inks (new-cells)
+        ^Cells cand (new-cells)]
+    (comment "D583 (smoke review A issue 16): an outlined colour rectangle most of the page's width (a heading's band holding its text) is not a stamp; the same size of rectangle")
+    (comment "100 pt wide is one")
+    (vw-new views 1 (vk-render) -1 -1 3000 3000 7200 0 -1 0 0 0 0 0)
+    (spt-ink inks (ir-body))
+    (spt-ink inks (ir-light))
+    (spt-ink inks (ir-color))
+    (spt-prim prims (pm-rect) 30600 70000 25000 1500 2 12591135 1 200)
+    (assert-eq (sx-find 1 views 0 prims inks 61200 79200 cand) 0 "a band 500 pt wide on a page 612 pt wide: no candidate")
+    (spt-prim prims (pm-rect) 30000 40000 5000 2000 2 12591135 1 200)
+    (assert-eq (sx-find 1 views 0 prims inks 61200 79200 cand) 1 "a 100 pt rectangle is a stamp")))
+
 (defn ^I32 spt-oword [^:mut ^Cells ow ^I32 x ^I32 y]
   (return (ow-new ow 1 (- x 300) (- y 200) (+ x 300) (+ y 200) (- x 300) (+ y 200) (+ x 300) (+ y 200) 0 0 0 1 0 800 -1)))
 

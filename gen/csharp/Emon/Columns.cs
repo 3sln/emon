@@ -23,6 +23,15 @@ public static class Columns {
     internal const int LcTableWords = 3;
     internal const int LcTightNum = 4;
     internal const int LcTightDen = 5;
+    internal const int LcWide = 6000;
+    internal const int LcWideRows = 4;
+    internal const int LcWideWords = 2;
+    internal const int LcAside = 2000000000;
+    internal const int LcAsideMin = 80;
+    internal const int LcAsideMax = 550;
+    internal const int LcAsideH = 3600;
+    internal const int LcAsideLines = 3;
+    internal const int LcHeld = 1073741824;
     internal const int PrDom = 0;
     internal const int PrBx0 = 1;
     internal const int PrBx1 = 2;
@@ -353,6 +362,148 @@ public static class Columns {
         }
         return 0 == 1;
     }
+    internal static int LcAsides(emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells sd) {
+        // D583 (smoke review B issue 14): the lines of `ls` that `lc-mark-asides` found in a box that is an aside (cell 14 over `LC_ASIDE`) move to `sd`, the side lines: a sidebar, an infobox, a photo
+        // block beside the body is a region of its own. `sd` is empty when this is called. Answers how many moved.
+        int n = emon.Port.CellsLen(ls);
+        int i = 0;
+        int kept = 0;
+        while (i < n) {
+            int l = emon.Port.CellsAt(ls, i);
+            if (emon.Port.CellsAt(lt, (l * 16) + 14) > LcAside) {
+                emon.Port.CellsPush(sd, l);
+            } else {
+                emon.Port.CellsSet(ls, kept, l);
+                kept += 1;
+            }
+            i += 1;
+        }
+        emon.Port.CellsDrop(ls, kept);
+        return emon.Port.CellsLen(sd);
+    }
+    internal static int LcInBox(emon.Port.Cells lt, int l, int x0, int y0, int x1, int y1) {
+        // 1 when the centre of line l of `lt` is in the box.
+        int cx = (Evidence.LnGet(lt, l, Evidence.LhX0()) + Evidence.LnGet(lt, l, Evidence.LhX1())) / 2;
+        int cy = (Evidence.LnGet(lt, l, Evidence.LhY0()) + Evidence.LnGet(lt, l, Evidence.LhY1())) / 2;
+        if ((cx >= x0) && ((cx <= x1) && ((cy >= y0) && (cy <= y1)))) {
+            return 1;
+        }
+        return 0;
+    }
+    internal static int LcMarkBox(emon.Port.Cells lt, int li, int lj, int fx0, int fy0, int fx1, int fy1) {
+        // The lines li..lj of `lt` in the box (upright, not a table's) and beside it, on its level, outside it, to its left or right: when the box has at least `LC_ASIDE_LINES` and so has the body on
+        // one side of it, the lines in the box are marked (cell 14: `LC_ASIDE` + 1 for a box left of the body beside it, + 2 for a box right of it). Answers 1 when it marked.
+        int l = li;
+        int nin = 0;
+        int nl = 0;
+        int nr = 0;
+        int rot = 0;
+        int ov = 0;
+        int h = 0;
+        while (l < lj) {
+            rot = Evidence.LnGet(lt, l, Evidence.LhRot());
+            if (((rot < 100) || (rot > 35900)) && (emon.Port.CellsAt(lt, (l * 16) + 15) < LcHeld)) {
+                if (LcInBox(lt, l, fx0, fy0, fx1, fy1) == 1) {
+                    nin += 1;
+                } else {
+                    h = Evidence.LnGet(lt, l, Evidence.LhY1()) - Evidence.LnGet(lt, l, Evidence.LhY0());
+                    ov = LcMin(fy1, Evidence.LnGet(lt, l, Evidence.LhY1())) - LcMax(fy0, Evidence.LnGet(lt, l, Evidence.LhY0()));
+                    if ((h > 0) && ((ov * 2) >= h)) {
+                        if (Evidence.LnGet(lt, l, Evidence.LhX1()) <= (fx0 + 300)) {
+                            nl += 1;
+                        }
+                        if (Evidence.LnGet(lt, l, Evidence.LhX0()) >= (fx1 - 300)) {
+                            nr += 1;
+                        }
+                    }
+                }
+            }
+            l += 1;
+        }
+        if ((nin >= LcAsideLines) && ((nl >= LcAsideLines) || (nr >= LcAsideLines))) {
+            l = li;
+            while (l < lj) {
+                rot = Evidence.LnGet(lt, l, Evidence.LhRot());
+                if (((rot < 100) || (rot > 35900)) && (emon.Port.CellsAt(lt, (l * 16) + 15) < LcHeld)) {
+                    if (LcInBox(lt, l, fx0, fy0, fx1, fy1) == 1) {
+                        if (nl >= nr) {
+                            emon.Port.CellsSet(lt, (l * 16) + 14, LcAside + 2);
+                        } else {
+                            emon.Port.CellsSet(lt, (l * 16) + 14, LcAside + 1);
+                        }
+                    }
+                }
+                l += 1;
+            }
+            return 1;
+        }
+        return 0;
+    }
+    public static int LcMarkAsides(emon.Port.Cells lt, emon.Port.Cells gfl, emon.Port.Cells pages, int np) {
+        // D583 (smoke review B issue 14, A issue 14): a SIDEBAR OR INFOBOX is a shaded box (a fused fill of the graphics layer, `gfl`) narrower than a body (between `LC_ASIDE_MIN` and `LC_ASIDE_MAX`
+        // per mille of the page's width), at least `LC_ASIDE_H` tall, with lines in it and the body's lines on its level beside it: the lines in it are marked (`lc-mark-box`), and the column stage
+        // takes them from the body as a region of their own, whatever its words (a text-only reading finds the gap, the rows of short words in it, and misses it where the rows have few words, or the body
+        // wraps around it). `lt` is the lines the stage reads, copied (`lc-copy`) with the tables' claims in cell 15; the marks go in cell 14 of every line, 0 where there is none. Answers the boxes taken.
+        int nl = Evidence.LnCount(lt);
+        int nu = Glayer.GflCount(gfl);
+        int p = 1;
+        int l = 0;
+        int li = 0;
+        int lj = 0;
+        int ui = 0;
+        int uj = 0;
+        int u = 0;
+        int pw = 0;
+        int fw = 0;
+        int took = 0;
+        int prev = 0;
+        l = 0;
+        while (l < nl) {
+            if (Evidence.LnGet(lt, l, Evidence.LhPage()) > 0) {
+                if (Evidence.LnGet(lt, l, Evidence.LhPage()) < prev) {
+                    return 0;
+                }
+                prev = Evidence.LnGet(lt, l, Evidence.LhPage());
+            }
+            l += 1;
+        }
+        l = 0;
+        while (l < nl) {
+            emon.Port.CellsSet(lt, (l * 16) + 14, 0);
+            l += 1;
+        }
+        if (nu == 0) {
+            return 0;
+        }
+        while (p <= np) {
+            while ((li < nl) && (Evidence.LnGet(lt, li, Evidence.LhPage()) < p)) {
+                li += 1;
+            }
+            lj = li;
+            while ((lj < nl) && (Evidence.LnGet(lt, lj, Evidence.LhPage()) == p)) {
+                lj += 1;
+            }
+            while ((ui < nu) && (Glayer.GflGet(gfl, ui, Glayer.GffPage()) < p)) {
+                ui += 1;
+            }
+            uj = ui;
+            while ((uj < nu) && (Glayer.GflGet(gfl, uj, Glayer.GffPage()) == p)) {
+                uj += 1;
+            }
+            pw = Model.PageW(pages, p - 1);
+            u = ui;
+            while (u < uj) {
+                fw = Glayer.GflGet(gfl, u, Glayer.GffX1()) - Glayer.GflGet(gfl, u, Glayer.GffX0());
+                if (((fw * 1000) >= (pw * LcAsideMin)) && (((fw * 1000) <= (pw * LcAsideMax)) && (((Glayer.GflGet(gfl, u, Glayer.GffY1()) - Glayer.GflGet(gfl, u, Glayer.GffY0())) >= LcAsideH) && (Glayer.GflGet(gfl, u, Glayer.GffColour()) != 16777215)))) {
+                    took += LcMarkBox(lt, li, lj, Glayer.GflGet(gfl, u, Glayer.GffX0()), Glayer.GflGet(gfl, u, Glayer.GffY0()), Glayer.GflGet(gfl, u, Glayer.GffX1()), Glayer.GflGet(gfl, u, Glayer.GffY1()));
+                }
+                u += 1;
+            }
+            li = lj;
+            p += 1;
+        }
+        return took;
+    }
     internal static int LcSide(emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells sd, emon.Port.Cells pr, int dom) {
         // Find the body block, and move the lines wholly outside it from `ls` to `sd`, when most of them are in
         // smaller type (margin notes, sidebars). Numeric lines among them (line numbers) are dropped. Sets the
@@ -366,7 +517,6 @@ public static class Columns {
         int nb = 0;
         int ns = 0;
         int kept = 0;
-        emon.Port.CellsDrop(sd, 0);
         while (i < n) {
             int l = emon.Port.CellsAt(ls, i);
             if (LcIsBody(LcSize(wd, lt, l), dom)) {
@@ -522,15 +672,25 @@ public static class Columns {
     }
     internal static int LcClose(emon.Port.Cells gu, emon.Port.Cells ac, int a) {
         // An active interval ends: a gutter when it persisted `gutter-rows` rows and held, on each side, words
-        // in `gutter-rows` rows, `gutter-words` of them on average.
+        // in `gutter-rows` rows, `gutter-words` of them on average. D583 (smoke review A issue 14): a gutter at least `LC_WIDE` wide (two blocks of an invoice, Seller and Client, a form's left
+        // and right boxes) with at least `LC_WIDE_ROWS` rows with words on each side, `LC_WIDE_WORDS` of them on average, is a gutter too (when both sides have words in three fifths of the rows it persisted in: a block that goes on alone under two that are side by side, an invoice's address under its title's two blocks, is not a column of its own): a block of short lines is not a column of prose, but a gap that wide
+        // between two blocks of lines is not a table's cell padding either (a row of key and value has one word, or a few, in its value).
         int @base = a * GuStride;
         int rows = emon.Port.CellsAt(ac, @base + GuRows);
         int lrows = emon.Port.CellsAt(ac, @base + GuLrows);
         int rrows = emon.Port.CellsAt(ac, @base + GuRrows);
         int lsum = emon.Port.CellsAt(ac, @base + GuLsum);
         int rsum = emon.Port.CellsAt(ac, @base + GuRsum);
+        int gw = emon.Port.CellsAt(ac, @base + 1) - emon.Port.CellsAt(ac, @base);
+        int ok = 0;
         int f = 0;
         if ((rows >= LcRows) && ((lrows >= LcRows) && (rrows >= LcRows)) && ((lsum >= (lrows * LcWords)) && (rsum >= (rrows * LcWords)))) {
+            ok = 1;
+        }
+        if ((gw >= LcWide) && ((lrows >= LcWideRows) && (rrows >= LcWideRows)) && ((lsum >= (lrows * LcWideWords)) && (rsum >= (rrows * LcWideWords))) && (((lrows * 10) >= (rows * 6)) && ((rrows * 10) >= (rows * 6)))) {
+            ok = 1;
+        }
+        if (ok == 1) {
             while (f < GuStride) {
                 emon.Port.CellsPush(gu, emon.Port.CellsAt(ac, @base + f));
                 f += 1;
@@ -1472,7 +1632,13 @@ public static class Columns {
         return 0;
     }
     internal static int LcSideOf(emon.Port.Cells lt, int l, int bx1) {
-        // 1 for a line right of the body block, 0 for one left of it.
+        // 1 for a line right of the body block, 0 for one left of it. A line in a box that is an aside (`lc-mark-asides`) is on the side the box was found on.
+        if (emon.Port.CellsAt(lt, (l * 16) + 14) == (LcAside + 2)) {
+            return 1;
+        }
+        if (emon.Port.CellsAt(lt, (l * 16) + 14) == (LcAside + 1)) {
+            return 0;
+        }
         if (Evidence.LnGet(lt, l, Evidence.LhX0()) >= bx1) {
             return 1;
         }
@@ -1710,6 +1876,8 @@ public static class Columns {
         if ((rtl * 2) > n) {
             emon.Port.CellsSet(pr, PrRtl, 1);
         }
+        emon.Port.CellsDrop(sd, 0);
+        LcAsides(lt, ls, sd);
         LcSide(wd, et, lt, ls, sd, pr, dom);
         LcSweep(wd, lt, ls, dom, it, io, rw, gu, ac, tm);
         LcMerge(gu, dom);

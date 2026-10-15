@@ -13,6 +13,7 @@ import (
 	"emon/model"
 	"emon/mscript"
 	"emon/para"
+	"emon/pdfannot"
 	"emon/pdfcontent"
 	"emon/pdfdoc"
 	"emon/pdfmeta"
@@ -222,8 +223,8 @@ func ttBrief(t *strings.Builder, nodes *port.Cells, attrs *port.Cells, text *por
 	return 0
 }
 
-func ttRunN(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *strings.Builder, np int32) int32 {
-	// Tables, then paragraphs, then the brief of the Model, of a document of `np` pages (1 or 2). Answers `model-check`'s verdict.
+func ttRunAn(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *strings.Builder, np int32, an *port.Cells) int32 {
+	// `tt-run-n` over a document whose annotations (rows of `an`, `AN_STRIDE` cells) are `an`: the form fields' widgets (D583).
 	var nodes *port.Cells = port.NewCells()
 	var attrs *port.Cells = port.NewCells()
 	var regions *port.Cells = port.NewCells()
@@ -302,11 +303,16 @@ func ttRunN(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *s
 		model.PageNew(pages, 2, 61200, 79200, 0, model.PkVector())
 	}
 	gfuse.GfDoc(pa, gpts, gmk, gim, np, gfuse.GfxMode(), grl, gfl, cand, port.NewCells())
-	table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e)
+	table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an)
 	columns.LcCopy(ln, lt)
 	para.PaBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al)
 	ttBrief(t, nodes, attrs, text)
 	return model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st)
+}
+
+func ttRunN(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *strings.Builder, np int32) int32 {
+	// Tables, then paragraphs, then the brief of the Model, of a document of `np` pages (1 or 2). Answers `model-check`'s verdict.
+	return ttRunAn(wd, ln, et, pa, t, np, port.NewCells())
 }
 
 func ttRun(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *strings.Builder) int32 {
@@ -333,6 +339,173 @@ func TestALatticeIsATableAndAMissingRuleIsASpan(emonT *testing.T) {
 	ttWord(wd, ln, et, port.TextBlob("Outro"), 7200, 17200, 10200, 18000, 0)
 	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "lattice: well formed")
 	port.AssertText(emonT, t, "P[Intro];T3r;Gh;R;Ch[Item];Ch[Qty];Ch[Price];Gb;R;C[Bolt];C[10];C[2.50];R;C[Total];Cc2[12.50];P[Outro];", "a 3 x 3 lattice with its last row's two cells joined: header, body, and the paragraphs around it")
+}
+
+func ttPhraseWord(wd *port.Cells, et *port.Cells, b []byte, x int32, y int32, line int32) int32 {
+	// A word of 500 a character, 800 tall from y at x, whose `line` field is `line` (the words of a line share it).
+	var r int32 = evidence.WdCount(wd)
+	ttW(wd, et, b, x, y, x+(500*port.BlobLen(b)), y+800, 0)
+	evidence.WdSet(wd, r, evidence.HdLine(), line)
+	return 0
+}
+
+func ttLattice6(pa *port.Cells) int32 {
+	// The rules of a lattice of two rows and six columns, 38 pt wide each (x 72 pt to 300 pt, y 100 to 140 pt).
+	var k int32 = 0
+	for k < 7 {
+		ttRule(pa, (7200+(3800*k))-50, 10000, (7200+(3800*k))+50, 14000)
+		k += 1
+	}
+	ttRule(pa, 7200, 9950, 30000, 10050)
+	ttRule(pa, 7200, 11950, 30000, 12050)
+	ttRule(pa, 7200, 13950, 30000, 14050)
+	return 0
+}
+
+func TestALineOfTextThatTheRulesCutIsADiagramsLabelAndNoTable(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var wd2 *port.Cells = port.NewCells()
+	var ln2 *port.Cells = port.NewCells()
+	var et2 *port.Cells = port.NewCells()
+	var pa2 *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	var t2 *strings.Builder = port.NewText()
+	// D583 (smoke review B issue 7): the boxes of a figure (the patches of the Vision Transformer's picture) make a lattice of rules, and `Linear Projection of Flattened Patches` is set across it,
+	// a word a box: the words are one line, each 300 from the next, which a table's cells do not do (a cell is padded). Six words of a row far from each other in the same lattice are a table.
+	ttLattice6(pa)
+	ttPhraseWord(wd, et, port.TextBlob("1"), 8500, 10600, 0)
+	ttPhraseWord(wd, et, port.TextBlob("2"), 12300, 10600, 0)
+	ttPhraseWord(wd, et, port.TextBlob("3"), 16100, 10600, 0)
+	ttPhraseWord(wd, et, port.TextBlob("4"), 19900, 10600, 0)
+	ttPhraseWord(wd, et, port.TextBlob("5"), 23700, 10600, 0)
+	ttPhraseWord(wd, et, port.TextBlob("6"), 27500, 10600, 0)
+	evidence.LnNew(ln, 1, 8500, 10600, 28000, 11400, 8500, 11200, 28000, 11200, 0, 0, 0, 6)
+	ttPhraseWord(wd, et, port.TextBlob("Project"), 7350, 12600, 1)
+	ttPhraseWord(wd, et, port.TextBlob("Flatten"), 11150, 12600, 1)
+	ttPhraseWord(wd, et, port.TextBlob("Patches"), 14950, 12600, 1)
+	ttPhraseWord(wd, et, port.TextBlob("Encoder"), 18750, 12600, 1)
+	ttPhraseWord(wd, et, port.TextBlob("Decoder"), 22550, 12600, 1)
+	ttPhraseWord(wd, et, port.TextBlob("Outputs"), 26350, 12600, 1)
+	evidence.LnNew(ln, 1, 7350, 12600, 29850, 13400, 7350, 13200, 29850, 13200, 0, 0, 6, 6)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "diagram: well formed")
+	port.AssertText(emonT, t, "P[1 2 3 4 5 6 Project Flatten Patches Encoder Decoder Outputs];", "no table: the words are the page's text")
+	// the same grid with the words of the second row each in the middle of its cell, far from each other (a line is a line of their own): a table
+	ttLattice6(pa2)
+	ttPhraseWord(wd2, et2, port.TextBlob("1"), 8500, 10600, 0)
+	ttPhraseWord(wd2, et2, port.TextBlob("2"), 12300, 10600, 1)
+	ttPhraseWord(wd2, et2, port.TextBlob("3"), 16100, 10600, 2)
+	ttPhraseWord(wd2, et2, port.TextBlob("4"), 19900, 10600, 3)
+	ttPhraseWord(wd2, et2, port.TextBlob("5"), 23700, 10600, 4)
+	ttPhraseWord(wd2, et2, port.TextBlob("6"), 27500, 10600, 5)
+	ttPhraseWord(wd2, et2, port.TextBlob("Ax"), 8300, 12600, 6)
+	ttPhraseWord(wd2, et2, port.TextBlob("Bx"), 12100, 12600, 7)
+	ttPhraseWord(wd2, et2, port.TextBlob("Cx"), 15900, 12600, 8)
+	ttPhraseWord(wd2, et2, port.TextBlob("Dx"), 19700, 12600, 9)
+	ttPhraseWord(wd2, et2, port.TextBlob("Ex"), 23500, 12600, 10)
+	ttPhraseWord(wd2, et2, port.TextBlob("Fx"), 27300, 12600, 11)
+	var k int32 = 0
+	for k < 12 {
+		evidence.LnNew(ln2, 1, 7200, 10600, 28000, 11400, 7200, 11200, 28000, 11200, 0, 0, k, 1)
+		k += 1
+	}
+	port.AssertEq(emonT, ttRun(wd2, ln2, et2, pa2, t2), 0, "table: well formed")
+	port.AssertText(emonT, t2, "T6r;Gb;R;C[1];C[2];C[3];C[4];C[5];C[6];R;C[Ax];C[Bx];C[Cx];C[Dx];C[Ex];C[Fx];", "a table")
+}
+
+func TestTheFrameOfAPageIsNoTable(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	// D583 (smoke review B issue 7): the sheet of an engineering drawing, a frame 83 per cent of the page's width and 87 of its height, a title block of four cells under it and the words of the
+	// drawing in the large cell above: the rules meet as a table's do and the words are in cells, but it is the page's frame, with a cell of 60 per cent of the page.
+	ttRule(pa, 5000, 4950, 56000, 5050)
+	ttRule(pa, 5000, 61950, 56000, 62050)
+	ttRule(pa, 5000, 69950, 56000, 70050)
+	ttRule(pa, 5000, 73950, 56000, 74050)
+	ttRule(pa, 4950, 5000, 5050, 74000)
+	ttRule(pa, 55950, 5000, 56050, 74000)
+	ttRule(pa, 29950, 62000, 30050, 74000)
+	ttAt(wd, ln, et, port.TextBlob("Detail"), 10000, 10000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Grate"), 30000, 20000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Weld"), 40000, 30000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Plan"), 12000, 50000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Title"), 7000, 64000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Scale"), 33000, 64000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Material"), 7000, 71000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Item"), 33000, 71000, 0, 0)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "frame: well formed")
+	port.AssertText(emonT, t, "P[Detail];P[Grate];P[Weld];P[Plan];P[Title];P[Scale];P[Material];P[Item];", "no table: the words are the page's text")
+}
+
+func ttWidget(an *port.Cells, x0 int32, y0 int32, x1 int32, y1 int32) int32 {
+	// One text field's widget of page 1 as a row of `an` (38 cells: 0 the page, 0 based, 1 the subtype `an-field`, 4-7 the rectangle).
+	var k int32 = 0
+	for k < 38 {
+		port.CellsPush(an, 0)
+		k += 1
+	}
+	var r int32 = (port.CellsLen(an) / 38) - 1
+	port.CellsSet(an, (r*38)+1, pdfannot.AnField())
+	port.CellsSet(an, (r*38)+4, x0)
+	port.CellsSet(an, (r*38)+5, y0)
+	port.CellsSet(an, (r*38)+6, x1)
+	port.CellsSet(an, (r*38)+7, y1)
+	return 0
+}
+
+func ttFormPage(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells) int32 {
+	// A form's page: a header row and a footer row of text across the page, and between them six labels in one open cell (no rule between them) and a column of six boxes, ruled.
+	ttRule(pa, 7200, 9950, 37200, 10050)
+	ttRule(pa, 7200, 11950, 37200, 12050)
+	ttRule(pa, 27200, 13950, 37200, 14050)
+	ttRule(pa, 27200, 15950, 37200, 16050)
+	ttRule(pa, 27200, 17950, 37200, 18050)
+	ttRule(pa, 27200, 19950, 37200, 20050)
+	ttRule(pa, 27200, 21950, 37200, 22050)
+	ttRule(pa, 7200, 23950, 37200, 24050)
+	ttRule(pa, 7200, 25950, 37200, 26050)
+	ttRule(pa, 7150, 10000, 7250, 26000)
+	ttRule(pa, 27150, 10000, 27250, 26000)
+	ttRule(pa, 37150, 10000, 37250, 26000)
+	ttAt(wd, ln, et, port.TextBlob("Item"), 7600, 10600, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Amount"), 27600, 10600, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Wages"), 7600, 12600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Interest"), 7600, 14600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Rents"), 7600, 16600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Royalties"), 7600, 18600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Dividends"), 7600, 20600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Other"), 7600, 22600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Total"), 7600, 24600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Sum"), 27600, 24600, 0, 0)
+	return 0
+}
+
+func TestTheBoxesOfAFormsFieldsAreNotATable(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var an *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	var t2 *strings.Builder = port.NewText()
+	// D583 (smoke review A issue 10): the page of a form: its labels in one open cell and a column of boxes, which are the fields' widgets. Without fields it is a table; with a widget in
+	// each of its six empty cells (more than the cells with text) the rules are the fields' boxes and the labels are the page's lines, to which the fields go (`emon.fields`).
+	ttFormPage(wd, ln, et, pa)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "no fields: well formed")
+	port.AssertText(emonT, t, "T2r;Gh;R;Ch[Item];Ch[Amount];Gb;R;Cr6s[Wages Interest Rents Royalties Dividends Other];C[];R;C[];R;C[];R;C[];R;C[];R;C[];R;Cs[Total];C[Sum];", "a ruled grid: the label cell spans six rows")
+	ttWidget(an, 27800, 12300, 36600, 13700)
+	ttWidget(an, 27800, 14300, 36600, 15700)
+	ttWidget(an, 27800, 16300, 36600, 17700)
+	ttWidget(an, 27800, 18300, 36600, 19700)
+	ttWidget(an, 27800, 20300, 36600, 21700)
+	ttWidget(an, 27800, 22300, 36600, 23700)
+	port.AssertEq(emonT, ttRunAn(wd, ln, et, pa, t2, 1, an), 0, "fields: well formed")
+	port.AssertText(emonT, t2, "T2p;Gh;R;Chs[Item];Ch[Amount];Gb;R;Cs[Wages];C[];R;Cs[Interest];C[];R;Cs[Rents];C[];R;Cs[Royalties];C[];R;Cs[Dividends];C[];R;Cs[Other];C[];R;Cs[Total];C[Sum];", "the page's boxes are no lattice: each label has its own row and the field goes in it, not one cell that holds all the labels")
 }
 
 func TestColumnsOfWhitespaceAreATableAndProseColumnsAreNot(emonT *testing.T) {
@@ -374,6 +547,35 @@ func TestColumnsOfWhitespaceAreATableAndProseColumnsAreNot(emonT *testing.T) {
 	ttAt(wd, ln, et, port.TextBlob("to him"), 30000, 13600, 0, 0)
 	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t2), 0, "prose: well formed")
 	port.AssertText(emonT, t2, "P[the old];P[was and];P[of the];P[that is];P[and then];P[went on];P[she said];P[to him];", "lowercase text with half the cells empty is not a table")
+}
+
+func TestTwoColumnsOfRussianProseAreNoTableEither(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	var t2 *strings.Builder = port.NewText()
+	// D583 (smoke review B issue 14): the same two columns of lowercase words, four words a line, in Cyrillic: the lowercase test knew ASCII letters only, so the lines of a Russian paragraph set
+	// beside an infobox were a table.
+	ttLine3(wd, ln, et, port.TextBlob("это"), port.TextBlob("был"), port.TextBlob("так"), 7200, 10000)
+	ttLine3(wd, ln, et, port.TextBlob("когда"), port.TextBlob("мы"), port.TextBlob("все"), 30000, 10000)
+	ttLine3(wd, ln, et, port.TextBlob("что"), port.TextBlob("она"), port.TextBlob("там"), 7200, 11200)
+	ttLine3(wd, ln, et, port.TextBlob("вот"), port.TextBlob("так"), port.TextBlob("уже"), 30000, 11200)
+	ttLine3(wd, ln, et, port.TextBlob("его"), port.TextBlob("все"), port.TextBlob("тут"), 7200, 12400)
+	ttLine3(wd, ln, et, port.TextBlob("как"), port.TextBlob("раз"), port.TextBlob("ему"), 30000, 12400)
+	ttLine3(wd, ln, et, port.TextBlob("или"), port.TextBlob("нет"), port.TextBlob("ещё"), 7200, 13600)
+	ttLine3(wd, ln, et, port.TextBlob("для"), port.TextBlob("тех"), port.TextBlob("кто"), 30000, 13600)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "prose: well formed")
+	port.AssertText(emonT, t, "P[это был так что она там его все тут или нет ещё когда мы все вот так уже как раз ему для тех кто];", "lowercase Cyrillic text in two columns is not a table")
+	// and the same lines between rules (a link's underlines, a page's rules): the candidate of the rules and the channels, which the lowercase test is there for
+	ttRule(pa, 7200, 9850, 45000, 9950)
+	ttRule(pa, 7200, 11050, 45000, 11150)
+	ttRule(pa, 7200, 12250, 45000, 12350)
+	ttRule(pa, 7200, 13450, 45000, 13550)
+	ttRule(pa, 7200, 14650, 45000, 14750)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t2), 0, "ruled prose: well formed")
+	port.AssertText(emonT, t2, "P[это был так что она там его все тут или нет ещё когда мы все вот так уже как раз ему для тех кто];", "no table")
 }
 
 func ttLine2(wd *port.Cells, ln *port.Cells, et *port.Cells, a []byte, b []byte, x int32, y int32) int32 {
@@ -1775,7 +1977,7 @@ func ttGolden(pdf []byte, t *strings.Builder, tvt *strings.Builder) int32 {
 	para.PaPages(pg, pages)
 	var np int32 = port.CellsLen(pages) / 16
 	gfuse.GfDoc(pa, pts, mk, im, np, gfuse.GfxMode(), grl, gfl, cand, port.NewCells())
-	table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e)
+	table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, port.NewCells())
 	tagtable.TtEmit(tvt, t12e)
 	columns.LcCopy(ln, lt)
 	initial.InDetect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii)

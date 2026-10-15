@@ -981,6 +981,10 @@ public final class Restruct {
     public static final int RF_LABEL_H = 1800;
     public static final int RF_LABEL_CP = 48;
     public static final int RF_LABEL_WORDS = 6;
+    public static final int RF_PASSES = 3;
+    public static final int RF_INSIDE_H = 4500;
+    public static final int RF_INSIDE_CP = 120;
+    public static final int RF_INSIDE_BIG = 50000;
     public static int rfFdv(emon.Port.Cells fd, int row, int f, int dflt) {
         if (emon.Port.cellsLen(fd) < ((row + 1) * RF_FD)) {
             return dflt;
@@ -1007,11 +1011,23 @@ public final class Restruct {
         }
         return words <= RF_LABEL_WORDS;
     }
-    public static int rfLabelOf(emon.Port.Cells on, emon.Port.Cells orr, emon.Port.Cells text, emon.Port.Cells cand, emon.Port.Cells fg, emon.Port.Cells fd, int p) {
-        // The candidate row of the figure that paragraph p labels, or -1.
+    public static int rfEb(emon.Port.Cells ab, int n, int k, emon.Port.Cells cand, int row, int f) {
+        // Coordinate f (0 x0, 1 y0, 2 x1, 3 y1) of the box the labels of the figure number `k` of `fg` (1 based) are looked for in: its own, grown over the labels near it (`rf-grow`, kept in `ab` after
+        // the node entries, four cells a figure), else its candidate row's.
+        if (emon.Port.cellsLen(ab) >= (n + (4 * k))) {
+            return emon.Port.cellsAt(ab, n + ((4 * (k - 1)) + f));
+        }
+        return Asset.asGet(cand, row, 5 + f);
+    }
+    public static int rfLabelOf(emon.Port.Cells on, emon.Port.Cells orr, emon.Port.Cells text, emon.Port.Cells cand, emon.Port.Cells fg, emon.Port.Cells fd, emon.Port.Cells ab, int n, int p) {
+        // The candidate row of the figure that paragraph p labels, or -1. A label is a short one-line paragraph on the figure or within `RF_ZONE` of its box, as grown over the labels around it
+        // (`rf-grow`); inside the figure's own box (a figure no taller than `RF_INSIDE_BIG`) any paragraph of at most three lines and `RF_INSIDE_CP` characters is: the text of a figure is its labels (D583).
         int r = Model.nodeRegionHead(on, p);
         int i = 1;
         int row = 0;
+        int cx = 0;
+        int cy = 0;
+        int hgt = 0;
         if (r < 0) {
             return -1;
         }
@@ -1021,25 +1037,107 @@ public final class Restruct {
         if (Model.nodeHasText(on, p) == 0) {
             return -1;
         }
-        if ((Model.regionY1(orr, r) - Model.regionY0(orr, r)) > RF_LABEL_H) {
+        hgt = Model.regionY1(orr, r) - Model.regionY0(orr, r);
+        cx = (Model.regionX0(orr, r) + Model.regionX1(orr, r)) / 2;
+        cy = (Model.regionY0(orr, r) + Model.regionY1(orr, r)) / 2;
+        while (i < emon.Port.cellsLen(fg)) {
+            row = emon.Port.cellsAt(fg, i);
+            if ((Asset.asGet(cand, row, 0) == Model.regionPage(orr, r)) && ((cx >= Asset.asGet(cand, row, 5)) && ((cx <= Asset.asGet(cand, row, 7)) && ((cy >= Asset.asGet(cand, row, 6)) && ((cy <= Asset.asGet(cand, row, 8)) && (((Asset.asGet(cand, row, 8) - Asset.asGet(cand, row, 6)) <= RF_INSIDE_BIG) && ((hgt <= RF_INSIDE_H) && (Model.nodeTextLen(on, p) <= RF_INSIDE_CP)))))))) {
+                return row;
+            }
+            i += 1;
+        }
+        if (hgt > RF_LABEL_H) {
             return -1;
         }
         if (!rfLabelText(on, text, p)) {
             return -1;
         }
+        i = 1;
         while (i < emon.Port.cellsLen(fg)) {
             row = emon.Port.cellsAt(fg, i);
-            if ((Asset.asGet(cand, row, 0) == Model.regionPage(orr, r)) && ((Model.regionX1(orr, r) > (Asset.asGet(cand, row, 5) - RF_ZONE)) && ((Model.regionX0(orr, r) < (Asset.asGet(cand, row, 7) + RF_ZONE)) && ((((Model.regionY0(orr, r) + Model.regionY1(orr, r)) / 2) >= (Asset.asGet(cand, row, 6) - RF_ZONE)) && ((((Model.regionY0(orr, r) + Model.regionY1(orr, r)) / 2) <= (Asset.asGet(cand, row, 8) + RF_ZONE)) && ((Model.regionX1(orr, r) - Model.regionX0(orr, r)) <= ((2 * (Asset.asGet(cand, row, 7) - Asset.asGet(cand, row, 5))) + 2000))))))) {
+            if ((Asset.asGet(cand, row, 0) == Model.regionPage(orr, r)) && ((Model.regionX1(orr, r) > (rfEb(ab, n, i, cand, row, 0) - RF_ZONE)) && ((Model.regionX0(orr, r) < (rfEb(ab, n, i, cand, row, 2) + RF_ZONE)) && ((cy >= (rfEb(ab, n, i, cand, row, 1) - RF_ZONE)) && ((cy <= (rfEb(ab, n, i, cand, row, 3) + RF_ZONE)) && ((Model.regionX1(orr, r) - Model.regionX0(orr, r)) <= ((2 * (rfEb(ab, n, i, cand, row, 2) - rfEb(ab, n, i, cand, row, 0))) + 2000))))))) {
                 return row;
             }
             i += 1;
         }
         return -1;
     }
+    public static int rfGrows(emon.Port.Cells fd, int row) {
+        // 1 when the figure of candidate row `row` may grow over its labels: a drawing, a chart, a picture; not a logo, a barcode or a code (a name, a number beside them is text).
+        int k = rfFdv(fd, row, 0, Model.fgUnknown());
+        if ((k == Model.fgLogo()) || ((k == Model.fgBarcode()) || (k == Model.fgQr()))) {
+            return 0;
+        }
+        return 1;
+    }
+    public static int rfGrow(emon.Port.Cells on, emon.Port.Cells orr, emon.Port.Cells text, emon.Port.Cells cand, emon.Port.Cells fg, emon.Port.Cells fd, emon.Port.Cells ab, int n) {
+        // D583 (smoke review B issue 7): the boxes the labels of each figure are looked for in, kept in `ab` after its `n` node entries (four cells a figure of `fg`, in its order): each is the
+        // figure's candidate box grown, in `RF_PASSES` passes, over the label-like paragraphs (one line, a few words, `rf-label-text`) within `RF_ZONE` of it: a drawing's boxes are separate regions of
+        // paths and words, and the words between and beside them are its labels too. Answers how many paragraphs it took in.
+        int i = 1;
+        int row = 0;
+        int pass = 0;
+        int c = 0;
+        int r = 0;
+        int took = 0;
+        int b = 0;
+        int changed = 1;
+        int cy = 0;
+        while (i < emon.Port.cellsLen(fg)) {
+            row = emon.Port.cellsAt(fg, i);
+            emon.Port.cellsPush(ab, Asset.asGet(cand, row, 5));
+            emon.Port.cellsPush(ab, Asset.asGet(cand, row, 6));
+            emon.Port.cellsPush(ab, Asset.asGet(cand, row, 7));
+            emon.Port.cellsPush(ab, Asset.asGet(cand, row, 8));
+            i += 1;
+        }
+        while ((pass < RF_PASSES) && (changed == 1)) {
+            changed = 0;
+            c = 0;
+            while (c < n) {
+                if (Model.nodeKind(on, c) == Model.nkParagraph()) {
+                    r = Model.nodeRegionHead(on, c);
+                    if ((r >= 0) && ((Model.nodeRegionCount(on, c) == 1) && ((Model.nodeHasText(on, c) == 1) && (((Model.regionY1(orr, r) - Model.regionY0(orr, r)) <= RF_LABEL_H) && rfLabelText(on, text, c))))) {
+                        cy = (Model.regionY0(orr, r) + Model.regionY1(orr, r)) / 2;
+                        i = 1;
+                        while (i < emon.Port.cellsLen(fg)) {
+                            row = emon.Port.cellsAt(fg, i);
+                            b = n + (4 * (i - 1));
+                            if ((rfGrows(fd, row) == 1) && ((Asset.asGet(cand, row, 0) == Model.regionPage(orr, r)) && ((Model.regionX1(orr, r) > (emon.Port.cellsAt(ab, b) - RF_ZONE)) && ((Model.regionX0(orr, r) < (emon.Port.cellsAt(ab, b + 2) + RF_ZONE)) && ((cy >= (emon.Port.cellsAt(ab, b + 1) - RF_ZONE)) && (cy <= (emon.Port.cellsAt(ab, b + 3) + RF_ZONE))))))) {
+                                if (Model.regionX0(orr, r) < emon.Port.cellsAt(ab, b)) {
+                                    emon.Port.cellsSet(ab, b, Model.regionX0(orr, r));
+                                    changed = 1;
+                                }
+                                if (Model.regionY0(orr, r) < emon.Port.cellsAt(ab, b + 1)) {
+                                    emon.Port.cellsSet(ab, b + 1, Model.regionY0(orr, r));
+                                    changed = 1;
+                                }
+                                if (Model.regionX1(orr, r) > emon.Port.cellsAt(ab, b + 2)) {
+                                    emon.Port.cellsSet(ab, b + 2, Model.regionX1(orr, r));
+                                    changed = 1;
+                                }
+                                if (Model.regionY1(orr, r) > emon.Port.cellsAt(ab, b + 3)) {
+                                    emon.Port.cellsSet(ab, b + 3, Model.regionY1(orr, r));
+                                    changed = 1;
+                                }
+                                took += 1;
+                            }
+                            i += 1;
+                        }
+                    }
+                }
+                c += 1;
+            }
+            pass += 1;
+        }
+        return took;
+    }
     public static int rfAbsorbNote(emon.Port.Cells on, emon.Port.Cells orr, emon.Port.Cells text, emon.Port.Cells cand, emon.Port.Cells fg, emon.Port.Cells fd, emon.Port.Cells ab, int n) {
         // A note (the column stage made a margin note of a column of tick labels) every child of which is a label of one figure is
         // dropped with them: the note and its paragraphs are marked.
         int c = Model.nodeFirstChild(on, n);
+        int nall = Model.nodeCount(on);
         int f = -1;
         int g = 0;
         int ok = 1;
@@ -1047,7 +1145,7 @@ public final class Restruct {
         while (c >= 0) {
             g = -1;
             if (Model.nodeKind(on, c) == Model.nkParagraph()) {
-                g = rfLabelOf(on, orr, text, cand, fg, fd, c);
+                g = rfLabelOf(on, orr, text, cand, fg, fd, ab, nall, c);
             }
             if (g < 0) {
                 ok = 0;
@@ -1074,6 +1172,7 @@ public final class Restruct {
     public static int rfAbsorb(emon.Port.Cells on, emon.Port.Cells orr, emon.Port.Cells text, emon.Port.Cells cand, emon.Port.Cells fg, emon.Port.Cells fd, emon.Port.Cells ab, int p) {
         // Mark, among the blocks of p (the document or a section) and of the sections in it, the paragraphs that label a figure.
         int c = Model.nodeFirstChild(on, p);
+        int nall = Model.nodeCount(on);
         int f = -1;
         while (c >= 0) {
             if (Model.nodeKind(on, c) == Model.nkSection()) {
@@ -1083,7 +1182,7 @@ public final class Restruct {
                 rfAbsorbNote(on, orr, text, cand, fg, fd, ab, c);
             }
             if (Model.nodeKind(on, c) == Model.nkParagraph()) {
-                f = rfLabelOf(on, orr, text, cand, fg, fd, c);
+                f = rfLabelOf(on, orr, text, cand, fg, fd, ab, nall, c);
                 if (f >= 0) {
                     emon.Port.cellsSet(ab, c, f);
                 }
@@ -1279,6 +1378,7 @@ public final class Restruct {
             i += 1;
         }
         if (emon.Port.cellsLen(fd) > 0) {
+            rfGrow(on, orr, text, cand, fg, fd, ab, n);
             r = 0;
             while (r < n) {
                 if ((Model.nodeParent(on, r) < 0) && (Model.nodeKind(on, r) == Model.nkDocument())) {

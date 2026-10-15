@@ -229,6 +229,288 @@ public static class Listtest {
         emon.Testport.AssertEq(Lists.LsStart(hc, 0), 0, "a body line need not");
         emon.Testport.AssertEq(emon.Port.CellsAt(et, Evidence.WdGet(wd, Evidence.LnGet(ln, 3, 11), Evidence.HdTstart())), Lists.LsSItem(), "the marker word begins with the item group");
     }
+    internal static int LtBody3(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et) {
+        // Three body lines, 0..2, as the head of a document of the laws below (y 5000 to 7800).
+        LtLine(wd, ln, et, emon.Testport.TextBlob(""), emon.Testport.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 5000);
+        LtLine(wd, ln, et, emon.Testport.TextBlob(""), emon.Testport.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 6400);
+        LtLine(wd, ln, et, emon.Testport.TextBlob(""), emon.Testport.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 7800);
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestAnAuthorsInitialThatBeginsAReferencesSecondLineIsNoItem() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells sf = emon.Port.NewCells();
+        emon.Port.Cells sc = emon.Port.NewCells();
+        emon.Port.Cells hc = emon.Port.NewCells();
+        // D583 (smoke review B issue 12): the lines 3.. are a bibliography whose entries hang at x 9000; the second line of [10] and of [11] begin with an initial (`Y.`, `S.`) that
+        // is a letter and a full stop and one of a sequence by value and indent, which made nested lists of them
+        LtBody3(wd, ln, et);
+        LtLine(wd, ln, et, emon.Testport.TextBlob("[9]"), emon.Testport.TextBlob("R. Girshick. Fast R-CNN. In ICCV, 2015."), 7200, 9000, 10000);
+        LtLine(wd, ln, et, emon.Testport.TextBlob("[10]"), emon.Testport.TextBlob("I. J. Goodfellow, D. Warde-Farley, and"), 7200, 9000, 11400);
+        LtLine(wd, ln, et, emon.Testport.TextBlob(""), emon.Testport.TextBlob("Y. Bengio. Maxout networks. arXiv, 2013."), 0, 9000, 12800);
+        LtLine(wd, ln, et, emon.Testport.TextBlob("[11]"), emon.Testport.TextBlob("G. E. Hinton, N. Srivastava, and"), 7200, 9000, 14200);
+        LtLine(wd, ln, et, emon.Testport.TextBlob(""), emon.Testport.TextBlob("S. Guadarrama. Caffe: Convolutional."), 0, 9000, 15600);
+        LtLine(wd, ln, et, emon.Testport.TextBlob("[12]"), emon.Testport.TextBlob("A. Krizhevsky. Learning multiple layers."), 7200, 9000, 17000);
+        emon.Testport.AssertEq(LtRun(wd, ln, et, sf, sc, hc), 4, "the four numbered entries are the items");
+        emon.Testport.AssertEq(Lists.LsGet(hc, 5, Lists.LsKFlags()), Lists.LsFCont(), "`Y. Bengio` goes on [10]");
+        emon.Testport.AssertEq(Lists.LsGet(hc, 7, Lists.LsKFlags()), Lists.LsFCont(), "`S. Guadarrama` goes on [11]");
+    }
+    [Xunit.Fact]
+    public static void TestAnEnDashAfterABulletAndItsLeadInIsNoMarker() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells sf = emon.Port.NewCells();
+        emon.Port.Cells sc = emon.Port.NewCells();
+        emon.Port.Cells hc = emon.Port.NewCells();
+        // D583 (smoke review A issue 13): a bullet and an underlined lead-in are a line, the text after an en dash is a line of its own on the same baseline (the text layer splits at the underline): the
+        // dash is no marker, and the two lines of a row are not three blocks
+        LtBody3(wd, ln, et);
+        LtLine(wd, ln, et, emon.Testport.TextBlob("•"), emon.Testport.TextBlob("Lead-in"), 7200, 9000, 10000);
+        LtLine(wd, ln, et, emon.Testport.TextBlob("–"), emon.Testport.TextBlob("text goes on here"), 12000, 12800, 10000);
+        LtLine(wd, ln, et, emon.Testport.TextBlob("•"), emon.Testport.TextBlob("Second"), 7200, 9000, 11400);
+        LtLine(wd, ln, et, emon.Testport.TextBlob("–"), emon.Testport.TextBlob("more text goes on"), 12000, 12800, 11400);
+        LtRun(wd, ln, et, sf, sc, hc);
+        emon.Testport.AssertEq(Lists.LsGet(hc, 3, Lists.LsKFlags()), Lists.LsFItem(), "the first bullet starts an item");
+        emon.Testport.AssertEq(Lists.LsGet(hc, 4, Lists.LsKFlags()), 0, "the dash after its lead-in does not");
+        emon.Testport.AssertEq(Lists.LsGet(hc, 5, Lists.LsKFlags()), Lists.LsFItem(), "the second bullet starts an item");
+        emon.Testport.AssertEq(Lists.LsGet(hc, 6, Lists.LsKFlags()), 0, "its dash does not");
+    }
+    internal static int LtRunPa(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells sf, emon.Port.Cells sc, emon.Port.Cells hc, emon.Port.Cells pa) {
+        // `lt-run` over the paths `pa`.
+        emon.Port.Cells gl = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells pr = emon.Port.NewCells();
+        emon.Port.Cells ptxt = emon.Port.NewCells();
+        emon.Port.Cells cd = emon.Port.NewCells();
+        emon.Port.Cells pi = emon.Port.NewCells();
+        emon.Port.Cells lws = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        Heading.HdAnalyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt);
+        return Lists.LsAnalyze(wd, ln, et, sf, pa, hc, cd, pi, lws, tw);
+    }
+    [Xunit.Fact]
+    public static void TestArrowHeadsAreNoBulletsAndDiscsAre() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells sf = emon.Port.NewCells();
+        emon.Port.Cells sc = emon.Port.NewCells();
+        emon.Port.Cells hc = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells pb = emon.Port.NewCells();
+        int r = 0;
+        // D583 (smoke review B issue 12): two lines each preceded by a small filled shape on the x-height. A filled polygon (an arrow head of a figure) is no bullet; a filled disc is
+        LtBody3(wd, ln, et);
+        LtLine(wd, ln, et, emon.Testport.TextBlob(""), emon.Testport.TextBlob("first label text"), 0, 7200, 10000);
+        LtLine(wd, ln, et, emon.Testport.TextBlob(""), emon.Testport.TextBlob("second label text"), 0, 7200, 11400);
+        r = Evidence.PaNew(pa, 1, Evidence.PaOther(), 6400, 10350, 6900, 10850);
+        Evidence.PaSet(pa, r, Evidence.PfFlags(), Evidence.PgFilled());
+        r = Evidence.PaNew(pa, 1, Evidence.PaOther(), 6400, 11750, 6900, 12250);
+        Evidence.PaSet(pa, r, Evidence.PfFlags(), Evidence.PgFilled());
+        emon.Testport.AssertEq(LtRunPa(wd, ln, et, sf, sc, hc, pa), 0, "arrow heads before two lines: no list");
+        r = Evidence.PaNew(pb, 1, Evidence.PaCurve(), 6400, 10350, 6900, 10850);
+        Evidence.PaSet(pb, r, Evidence.PfFlags(), Evidence.PgFilled());
+        r = Evidence.PaNew(pb, 1, Evidence.PaCurve(), 6400, 11750, 6900, 12250);
+        Evidence.PaSet(pb, r, Evidence.PfFlags(), Evidence.PgFilled());
+        emon.Port.CellsDrop(sf, 0);
+        emon.Port.CellsDrop(sc, 0);
+        emon.Port.CellsDrop(hc, 0);
+        emon.Testport.AssertEq(LtRunPa(wd, ln, et, sf, sc, hc, pb), 2, "discs before them: a list of two");
+    }
+    internal static int LtNotes(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells sf, emon.Port.Cells sc, emon.Port.Cells hc) {
+        // The heading analysis and then the notes stage (captions, note bodies) of the evidence. Answers the captions plus note bodies found.
+        emon.Port.Cells gl = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells pr = emon.Port.NewCells();
+        emon.Port.Cells ptxt = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells rf = emon.Port.NewCells();
+        emon.Port.Cells nb = emon.Port.NewCells();
+        emon.Port.Cells mk = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        Heading.HdAnalyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt);
+        return Notes.NtAnalyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw);
+    }
+    [Xunit.Fact]
+    public static void TestALineOfRunningTextThatBeginsFig4IsNoCaption() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells sf = emon.Port.NewCells();
+        emon.Port.Cells sc = emon.Port.NewCells();
+        emon.Port.Cells hc = emon.Port.NewCells();
+        emon.Port.Cells wd2 = emon.Port.NewCells();
+        emon.Port.Cells ln2 = emon.Port.NewCells();
+        emon.Port.Cells et2 = emon.Port.NewCells();
+        emon.Port.Cells sf2 = emon.Port.NewCells();
+        emon.Port.Cells sc2 = emon.Port.NewCells();
+        emon.Port.Cells hc2 = emon.Port.NewCells();
+        // D583 (smoke review B issue 17): `Fig. 4. We find ...` begins line 4 of a paragraph of running text, a line gap from the lines around it: a sentence. The same line with a gap above and below
+        // (a caption against its figure) is a caption.
+        LtBody3(wd, ln, et);
+        LtLine(wd, ln, et, emon.Testport.TextBlob(""), emon.Testport.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 9200);
+        LtLine(wd, ln, et, emon.Testport.TextBlob(""), emon.Testport.TextBlob("Fig. 4. We find that the results hold in all"), 0, 7200, 10600);
+        LtLine(wd, ln, et, emon.Testport.TextBlob(""), emon.Testport.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 12000);
+        LtLine(wd, ln, et, emon.Testport.TextBlob(""), emon.Testport.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 13400);
+        LtNotes(wd, ln, et, sf, sc, hc);
+        emon.Testport.AssertEq(Lists.LsGet(hc, 4, Lists.LsKFlags()), 0, "a line inside a paragraph is no caption");
+        LtBody3(wd2, ln2, et2);
+        LtLine(wd2, ln2, et2, emon.Testport.TextBlob(""), emon.Testport.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 9200);
+        LtLine(wd2, ln2, et2, emon.Testport.TextBlob(""), emon.Testport.TextBlob("Fig. 4. We find that the results hold in all"), 0, 7200, 14000);
+        LtLine(wd2, ln2, et2, emon.Testport.TextBlob(""), emon.Testport.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 19000);
+        LtLine(wd2, ln2, et2, emon.Testport.TextBlob(""), emon.Testport.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 20400);
+        LtNotes(wd2, ln2, et2, sf2, sc2, hc2);
+        emon.Testport.AssertEq(Lists.LsGet(hc2, 4, Lists.LsKFlags()), Lists.LsFCap(), "set apart from the lines around it by gaps, it is a caption");
+    }
+    internal static int LtSmall(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, byte[] marker, byte[] rest, int y, int size) {
+        // A line like `lt-line` at x 7200 whose words are set in `size`. Answers its row.
+        int l = LtLine(wd, ln, et, marker, rest, 7200, 9000, y);
+        int w0 = Evidence.LnGet(ln, l, 11);
+        int wn = Evidence.LnGet(ln, l, 12);
+        int k = 0;
+        while (k < wn) {
+            Evidence.WdSet(wd, w0 + k, Evidence.WfSize(), size);
+            k += 1;
+        }
+        return l;
+    }
+    internal static int LtNotesPages(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells sf, emon.Port.Cells sc, emon.Port.Cells hc) {
+        // `lt-notes` with a page table (one Letter page), so that the lower half of the page is known.
+        emon.Port.Cells gl = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells pr = emon.Port.NewCells();
+        emon.Port.Cells ptxt = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells rf = emon.Port.NewCells();
+        emon.Port.Cells nb = emon.Port.NewCells();
+        emon.Port.Cells mk = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        Model.PageNew(pages, 1, 61200, 79200, 0, Model.PkVector());
+        Heading.HdAnalyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt);
+        return Notes.NtAnalyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw);
+    }
+    internal static int LtNotesGlyphs(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells gl, emon.Port.Cells sf, emon.Port.Cells sc, emon.Port.Cells hc) {
+        // `lt-notes-pages` over the glyphs `gl`.
+        emon.Port.Cells ws = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells pr = emon.Port.NewCells();
+        emon.Port.Cells ptxt = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells rf = emon.Port.NewCells();
+        emon.Port.Cells nb = emon.Port.NewCells();
+        emon.Port.Cells mk = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        Model.PageNew(pages, 1, 61200, 79200, 0, Model.PkVector());
+        Heading.HdAnalyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt);
+        return Notes.NtAnalyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw);
+    }
+    [Xunit.Fact]
+    public static void TestAFootnotesRaisedMarkerGluedToItsWordIsAMarker() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells gl = emon.Port.NewCells();
+        emon.Port.Cells sf = emon.Port.NewCells();
+        emon.Port.Cells sc = emon.Port.NewCells();
+        emon.Port.Cells hc = emon.Port.NewCells();
+        int l = 0;
+        int w = 0;
+        int k = 0;
+        int g = 0;
+        // D583 (smoke review B issue 9): the footnote's first word is `1Fine-tuning`: its first glyph a 5.5 pt digit raised 2.5 pt off the text's baseline. The text layer takes the word's, and the line's,
+        // baseline from that first glyph, so the digit was no longer raised off it; the baseline the glyphs are raised off is the lowest one of the word.
+        LtBody3(wd, ln, et);
+        LtLine(wd, ln, et, emon.Testport.TextBlob(""), emon.Testport.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 9200);
+        LtLine(wd, ln, et, emon.Testport.TextBlob(""), emon.Testport.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 10600);
+        l = LtSmall(wd, ln, et, emon.Testport.TextBlob(""), emon.Testport.TextBlob("1Fine-tuning code and pre-trained models are"), 70000, 800);
+        LtSmall(wd, ln, et, emon.Testport.TextBlob(""), emon.Testport.TextBlob("available at the address of the project page"), 71200, 800);
+        w = Evidence.LnGet(ln, l, 11);
+        Evidence.WdSet(wd, w, Evidence.WfGfirst(), 0);
+        Evidence.WdSet(wd, w, Evidence.WfGcount(), 12);
+        // the glyphs of `1Fine-tuning`: the digit first, then eleven in the text's size on the text's baseline (y 71000); the word's and the line's baseline are the digit's (y 70750)
+        g = Evidence.GlNew(gl, 1, 7200, 70300, 7500, 70750, 49, -1, 0, w);
+        Evidence.GlSet(gl, g, Evidence.GfSize(), 550);
+        Evidence.GlSet(gl, g, Evidence.GfBy0(), 70750);
+        k = 0;
+        while (k < 11) {
+            g = Evidence.GlNew(gl, 1, 7500 + (k * 300), 70300, 7800 + (k * 300), 71000, 70, -1, 0, w);
+            Evidence.GlSet(gl, g, Evidence.GfSize(), 800);
+            Evidence.GlSet(gl, g, Evidence.GfBy0(), 71000);
+            k += 1;
+        }
+        Evidence.WdSet(wd, w, Evidence.HdBy0(), 70750);
+        Evidence.LnSet(ln, l, Evidence.LhBy0(), 70750);
+        LtNotesGlyphs(wd, ln, et, gl, sf, sc, hc);
+        emon.Testport.AssertEq(Lists.LsGet(hc, l, Lists.LsKFlags()), Lists.LsFNote(), "the footnote is a note, its marker the raised digit");
+    }
+    [Xunit.Fact]
+    public static void TestASmallNumberedBlockAtTheFootOfThePageIsAFootnoteThoughNoReferenceShows() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells sf = emon.Port.NewCells();
+        emon.Port.Cells sc = emon.Port.NewCells();
+        emon.Port.Cells hc = emon.Port.NewCells();
+        emon.Port.Cells wd2 = emon.Port.NewCells();
+        emon.Port.Cells ln2 = emon.Port.NewCells();
+        emon.Port.Cells et2 = emon.Port.NewCells();
+        emon.Port.Cells sf2 = emon.Port.NewCells();
+        emon.Port.Cells sc2 = emon.Port.NewCells();
+        emon.Port.Cells hc2 = emon.Port.NewCells();
+        // D583 (smoke review B issue 9): body lines, then at the foot of the page two lines in 8 pt that begin with the lone number 1: a footnote (the reference in the text was a superscript the glyphs
+        // did not show). The same marker on a line in the size of the body is no note, nor is it when body type follows it.
+        LtBody3(wd, ln, et);
+        LtLine(wd, ln, et, emon.Testport.TextBlob(""), emon.Testport.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 9200);
+        LtLine(wd, ln, et, emon.Testport.TextBlob(""), emon.Testport.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 10600);
+        LtSmall(wd, ln, et, emon.Testport.TextBlob("1"), emon.Testport.TextBlob("Fine-tuning code and pre-trained models are"), 70000, 800);
+        LtSmall(wd, ln, et, emon.Testport.TextBlob(""), emon.Testport.TextBlob("available at the address of the project page"), 71200, 800);
+        LtNotesPages(wd, ln, et, sf, sc, hc);
+        emon.Testport.AssertEq(Lists.LsGet(hc, 5, Lists.LsKFlags()), Lists.LsFNote(), "the numbered small block at the foot is a note");
+        LtBody3(wd2, ln2, et2);
+        LtLine(wd2, ln2, et2, emon.Testport.TextBlob(""), emon.Testport.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 9200);
+        LtLine(wd2, ln2, et2, emon.Testport.TextBlob(""), emon.Testport.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 10600);
+        LtSmall(wd2, ln2, et2, emon.Testport.TextBlob("1"), emon.Testport.TextBlob("Fine-tuning code and pre-trained models are"), 70000, 800);
+        LtLine(wd2, ln2, et2, emon.Testport.TextBlob(""), emon.Testport.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 73000);
+        LtNotesPages(wd2, ln2, et2, sf2, sc2, hc2);
+        emon.Testport.AssertEq(Lists.LsGet(hc2, 5, Lists.LsKFlags()), 0, "body type under it: no note");
+        // a list of references in small type at the foot of a page of body text is no list of notes: a bracketed number is a reference's, and six numbers in a row are a list's
+        emon.Port.Cells wd3 = emon.Port.NewCells();
+        emon.Port.Cells ln3 = emon.Port.NewCells();
+        emon.Port.Cells et3 = emon.Port.NewCells();
+        emon.Port.Cells sf3 = emon.Port.NewCells();
+        emon.Port.Cells sc3 = emon.Port.NewCells();
+        emon.Port.Cells hc3 = emon.Port.NewCells();
+        emon.Port.Cells wd4 = emon.Port.NewCells();
+        emon.Port.Cells ln4 = emon.Port.NewCells();
+        emon.Port.Cells et4 = emon.Port.NewCells();
+        emon.Port.Cells sf4 = emon.Port.NewCells();
+        emon.Port.Cells sc4 = emon.Port.NewCells();
+        emon.Port.Cells hc4 = emon.Port.NewCells();
+        LtBody3(wd3, ln3, et3);
+        LtLine(wd3, ln3, et3, emon.Testport.TextBlob(""), emon.Testport.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 9200);
+        LtLine(wd3, ln3, et3, emon.Testport.TextBlob(""), emon.Testport.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 10600);
+        LtSmall(wd3, ln3, et3, emon.Testport.TextBlob("[1]"), emon.Testport.TextBlob("Fine-tuning code and pre-trained models are"), 70000, 800);
+        LtSmall(wd3, ln3, et3, emon.Testport.TextBlob("[2]"), emon.Testport.TextBlob("available at the address of the project page"), 71200, 800);
+        LtNotesPages(wd3, ln3, et3, sf3, sc3, hc3);
+        emon.Testport.AssertEq(Lists.LsGet(hc3, 5, Lists.LsKFlags()), 0, "a bracketed number is a reference's");
+        LtBody3(wd4, ln4, et4);
+        LtLine(wd4, ln4, et4, emon.Testport.TextBlob(""), emon.Testport.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 9200);
+        LtLine(wd4, ln4, et4, emon.Testport.TextBlob(""), emon.Testport.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 10600);
+        LtSmall(wd4, ln4, et4, emon.Testport.TextBlob("1"), emon.Testport.TextBlob("Fine-tuning code and pre-trained models are"), 70000, 800);
+        LtSmall(wd4, ln4, et4, emon.Testport.TextBlob("2"), emon.Testport.TextBlob("available at the address of the project page"), 71200, 800);
+        LtSmall(wd4, ln4, et4, emon.Testport.TextBlob("3"), emon.Testport.TextBlob("available at the address of the project page"), 72400, 800);
+        LtSmall(wd4, ln4, et4, emon.Testport.TextBlob("4"), emon.Testport.TextBlob("available at the address of the project page"), 73600, 800);
+        LtSmall(wd4, ln4, et4, emon.Testport.TextBlob("5"), emon.Testport.TextBlob("available at the address of the project page"), 74800, 800);
+        LtSmall(wd4, ln4, et4, emon.Testport.TextBlob("6"), emon.Testport.TextBlob("available at the address of the project page"), 76000, 800);
+        LtNotesPages(wd4, ln4, et4, sf4, sc4, hc4);
+        emon.Testport.AssertEq(Lists.LsGet(hc4, 5, Lists.LsKFlags()), 0, "six numbers in a row in small type are a list");
+    }
     internal static int LtItem(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, int parent, byte[] marker, byte[] body, int scheme, int value, int x) {
         // An `item` of the old Model under parent: its marker, text, scheme (`sub`), value (`aux`), text x (`fk-box`).
         int it = Model.NodeNew(nodes, Model.NkItem(), parent);

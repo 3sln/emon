@@ -259,6 +259,22 @@ public final class Sealpxtest {
         emon.Testport.assertEq(emon.Port.cellsAt(cand, 52), 50, "half its width in pixels");
         emon.Testport.assertEq(emon.Port.cellsAt(cand, 53), 20, "half its height");
     }
+    public static void testAColourBandAcrossThePageIsNoStamp() {
+        emon.Port.Cells views = emon.Port.newCells();
+        emon.Port.Cells prims = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
+        emon.Port.Cells cand = emon.Port.newCells();
+        // D583 (smoke review A issue 16): an outlined colour rectangle most of the page's width (a heading's band holding its text) is not a stamp; the same size of rectangle
+        // 100 pt wide is one
+        Evidence.vwNew(views, 1, Evidence.vkRender(), -1, -1, 3000, 3000, 7200, 0, -1, 0, 0, 0, 0, 0);
+        sptInk(inks, Evidence.irBody());
+        sptInk(inks, Evidence.irLight());
+        sptInk(inks, Evidence.irColor());
+        sptPrim(prims, Evidence.pmRect(), 30600, 70000, 25000, 1500, 2, 12591135, 1, 200);
+        emon.Testport.assertEq(Sealpx.sxFind(1, views, 0, prims, inks, 61200, 79200, cand), 0, "a band 500 pt wide on a page 612 pt wide: no candidate");
+        sptPrim(prims, Evidence.pmRect(), 30000, 40000, 5000, 2000, 2, 12591135, 1, 200);
+        emon.Testport.assertEq(Sealpx.sxFind(1, views, 0, prims, inks, 61200, 79200, cand), 1, "a 100 pt rectangle is a stamp");
+    }
     public static int sptOword(emon.Port.Cells ow, int x, int y) {
         return Evidence.owNew(ow, 1, x - 300, y - 200, x + 300, y + 200, x - 300, y + 200, x + 300, y + 200, 0, 0, 0, 1, 0, 800, -1);
     }

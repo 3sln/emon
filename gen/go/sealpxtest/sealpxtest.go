@@ -281,6 +281,23 @@ func TestARingOrAStampOnTheRightLayerIsACandidate(emonT *testing.T) {
 	port.AssertEq(emonT, port.CellsAt(cand, 53), 20, "half its height")
 }
 
+func TestAColourBandAcrossThePageIsNoStamp(emonT *testing.T) {
+	var views *port.Cells = port.NewCells()
+	var prims *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	var cand *port.Cells = port.NewCells()
+	// D583 (smoke review A issue 16): an outlined colour rectangle most of the page's width (a heading's band holding its text) is not a stamp; the same size of rectangle
+	// 100 pt wide is one
+	evidence.VwNew(views, 1, evidence.VkRender(), -1, -1, 3000, 3000, 7200, 0, -1, 0, 0, 0, 0, 0)
+	sptInk(inks, evidence.IrBody())
+	sptInk(inks, evidence.IrLight())
+	sptInk(inks, evidence.IrColor())
+	sptPrim(prims, evidence.PmRect(), 30600, 70000, 25000, 1500, 2, 12591135, 1, 200)
+	port.AssertEq(emonT, sealpx.SxFind(1, views, 0, prims, inks, 61200, 79200, cand), 0, "a band 500 pt wide on a page 612 pt wide: no candidate")
+	sptPrim(prims, evidence.PmRect(), 30000, 40000, 5000, 2000, 2, 12591135, 1, 200)
+	port.AssertEq(emonT, sealpx.SxFind(1, views, 0, prims, inks, 61200, 79200, cand), 1, "a 100 pt rectangle is a stamp")
+}
+
 func sptOword(ow *port.Cells, x int32, y int32) int32 {
 	return evidence.OwNew(ow, 1, x-300, y-200, x+300, y+200, x-300, y+200, x+300, y+200, 0, 0, 0, 1, 0, 800, -1)
 }

@@ -233,6 +233,288 @@ fn test_a_run_of_numbers_is_a_list_and_a_lone_letter_is_not() {
     crate::testport::assert_eq(ls_start(hc, 0), 0, "a body line need not");
     crate::testport::assert_eq(crate::port::cells_at(et, wd_get(wd, ln_get(ln, 3, 11), hd_tstart())), ls_s_item(), "the marker word begins with the item group");
 }
+pub(crate) fn lt_body3(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells) -> i32 {
+    // Three body lines, 0..2, as the head of a document of the laws below (y 5000 to 7800).
+    lt_line(wd, ln, et, &crate::testport::text_blob("")[..], &crate::testport::text_blob("lorem ipsum dolor sit amet consectetur")[..], 0, 7200, 5000);
+    lt_line(wd, ln, et, &crate::testport::text_blob("")[..], &crate::testport::text_blob("lorem ipsum dolor sit amet consectetur")[..], 0, 7200, 6400);
+    lt_line(wd, ln, et, &crate::testport::text_blob("")[..], &crate::testport::text_blob("lorem ipsum dolor sit amet consectetur")[..], 0, 7200, 7800);
+    return 0;
+}
+#[test]
+fn test_an_authors_initial_that_begins_a_references_second_line_is_no_item() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    // D583 (smoke review B issue 12): the lines 3.. are a bibliography whose entries hang at x 9000; the second line of [10] and of [11] begin with an initial (`Y.`, `S.`) that
+    // is a letter and a full stop and one of a sequence by value and indent, which made nested lists of them
+    lt_body3(wd, ln, et);
+    lt_line(wd, ln, et, &crate::testport::text_blob("[9]")[..], &crate::testport::text_blob("R. Girshick. Fast R-CNN. In ICCV, 2015.")[..], 7200, 9000, 10000);
+    lt_line(wd, ln, et, &crate::testport::text_blob("[10]")[..], &crate::testport::text_blob("I. J. Goodfellow, D. Warde-Farley, and")[..], 7200, 9000, 11400);
+    lt_line(wd, ln, et, &crate::testport::text_blob("")[..], &crate::testport::text_blob("Y. Bengio. Maxout networks. arXiv, 2013.")[..], 0, 9000, 12800);
+    lt_line(wd, ln, et, &crate::testport::text_blob("[11]")[..], &crate::testport::text_blob("G. E. Hinton, N. Srivastava, and")[..], 7200, 9000, 14200);
+    lt_line(wd, ln, et, &crate::testport::text_blob("")[..], &crate::testport::text_blob("S. Guadarrama. Caffe: Convolutional.")[..], 0, 9000, 15600);
+    lt_line(wd, ln, et, &crate::testport::text_blob("[12]")[..], &crate::testport::text_blob("A. Krizhevsky. Learning multiple layers.")[..], 7200, 9000, 17000);
+    crate::testport::assert_eq(lt_run(wd, ln, et, sf, sc, hc), 4, "the four numbered entries are the items");
+    crate::testport::assert_eq(ls_get(hc, 5, ls_k_flags()), ls_f_cont(), "`Y. Bengio` goes on [10]");
+    crate::testport::assert_eq(ls_get(hc, 7, ls_k_flags()), ls_f_cont(), "`S. Guadarrama` goes on [11]");
+}
+#[test]
+fn test_an_en_dash_after_a_bullet_and_its_lead_in_is_no_marker() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    // D583 (smoke review A issue 13): a bullet and an underlined lead-in are a line, the text after an en dash is a line of its own on the same baseline (the text layer splits at the underline): the
+    // dash is no marker, and the two lines of a row are not three blocks
+    lt_body3(wd, ln, et);
+    lt_line(wd, ln, et, &crate::testport::text_blob("•")[..], &crate::testport::text_blob("Lead-in")[..], 7200, 9000, 10000);
+    lt_line(wd, ln, et, &crate::testport::text_blob("–")[..], &crate::testport::text_blob("text goes on here")[..], 12000, 12800, 10000);
+    lt_line(wd, ln, et, &crate::testport::text_blob("•")[..], &crate::testport::text_blob("Second")[..], 7200, 9000, 11400);
+    lt_line(wd, ln, et, &crate::testport::text_blob("–")[..], &crate::testport::text_blob("more text goes on")[..], 12000, 12800, 11400);
+    lt_run(wd, ln, et, sf, sc, hc);
+    crate::testport::assert_eq(ls_get(hc, 3, ls_k_flags()), ls_f_item(), "the first bullet starts an item");
+    crate::testport::assert_eq(ls_get(hc, 4, ls_k_flags()), 0, "the dash after its lead-in does not");
+    crate::testport::assert_eq(ls_get(hc, 5, ls_k_flags()), ls_f_item(), "the second bullet starts an item");
+    crate::testport::assert_eq(ls_get(hc, 6, ls_k_flags()), 0, "its dash does not");
+}
+pub(crate) fn lt_run_pa(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, mut sf: &mut crate::port::Cells, mut sc: &mut crate::port::Cells, mut hc: &mut crate::port::Cells, pa: &mut crate::port::Cells) -> i32 {
+    // `lt-run` over the paths `pa`.
+    let gl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ptxt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pi: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    hd_analyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt);
+    return ls_analyze(wd, ln, et, sf, pa, hc, cd, pi, lws, tw);
+}
+#[test]
+fn test_arrow_heads_are_no_bullets_and_discs_are() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut r: i32 = 0;
+    // D583 (smoke review B issue 12): two lines each preceded by a small filled shape on the x-height. A filled polygon (an arrow head of a figure) is no bullet; a filled disc is
+    lt_body3(wd, ln, et);
+    lt_line(wd, ln, et, &crate::testport::text_blob("")[..], &crate::testport::text_blob("first label text")[..], 0, 7200, 10000);
+    lt_line(wd, ln, et, &crate::testport::text_blob("")[..], &crate::testport::text_blob("second label text")[..], 0, 7200, 11400);
+    r = pa_new(pa, 1, pa_other(), 6400, 10350, 6900, 10850);
+    pa_set(pa, r, pf_flags(), pg_filled());
+    r = pa_new(pa, 1, pa_other(), 6400, 11750, 6900, 12250);
+    pa_set(pa, r, pf_flags(), pg_filled());
+    crate::testport::assert_eq(lt_run_pa(wd, ln, et, sf, sc, hc, pa), 0, "arrow heads before two lines: no list");
+    r = pa_new(pb, 1, pa_curve(), 6400, 10350, 6900, 10850);
+    pa_set(pb, r, pf_flags(), pg_filled());
+    r = pa_new(pb, 1, pa_curve(), 6400, 11750, 6900, 12250);
+    pa_set(pb, r, pf_flags(), pg_filled());
+    crate::port::cells_drop(sf, 0);
+    crate::port::cells_drop(sc, 0);
+    crate::port::cells_drop(hc, 0);
+    crate::testport::assert_eq(lt_run_pa(wd, ln, et, sf, sc, hc, pb), 2, "discs before them: a list of two");
+}
+pub(crate) fn lt_notes(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, mut sf: &mut crate::port::Cells, mut sc: &mut crate::port::Cells, mut hc: &mut crate::port::Cells) -> i32 {
+    // The heading analysis and then the notes stage (captions, note bodies) of the evidence. Answers the captions plus note bodies found.
+    let gl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ptxt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    hd_analyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt);
+    return nt_analyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw);
+}
+#[test]
+fn test_a_line_of_running_text_that_begins_fig_4_is_no_caption() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let wd2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    // D583 (smoke review B issue 17): `Fig. 4. We find ...` begins line 4 of a paragraph of running text, a line gap from the lines around it: a sentence. The same line with a gap above and below
+    // (a caption against its figure) is a caption.
+    lt_body3(wd, ln, et);
+    lt_line(wd, ln, et, &crate::testport::text_blob("")[..], &crate::testport::text_blob("lorem ipsum dolor sit amet consectetur")[..], 0, 7200, 9200);
+    lt_line(wd, ln, et, &crate::testport::text_blob("")[..], &crate::testport::text_blob("Fig. 4. We find that the results hold in all")[..], 0, 7200, 10600);
+    lt_line(wd, ln, et, &crate::testport::text_blob("")[..], &crate::testport::text_blob("lorem ipsum dolor sit amet consectetur")[..], 0, 7200, 12000);
+    lt_line(wd, ln, et, &crate::testport::text_blob("")[..], &crate::testport::text_blob("lorem ipsum dolor sit amet consectetur")[..], 0, 7200, 13400);
+    lt_notes(wd, ln, et, sf, sc, hc);
+    crate::testport::assert_eq(ls_get(hc, 4, ls_k_flags()), 0, "a line inside a paragraph is no caption");
+    lt_body3(wd2, ln2, et2);
+    lt_line(wd2, ln2, et2, &crate::testport::text_blob("")[..], &crate::testport::text_blob("lorem ipsum dolor sit amet consectetur")[..], 0, 7200, 9200);
+    lt_line(wd2, ln2, et2, &crate::testport::text_blob("")[..], &crate::testport::text_blob("Fig. 4. We find that the results hold in all")[..], 0, 7200, 14000);
+    lt_line(wd2, ln2, et2, &crate::testport::text_blob("")[..], &crate::testport::text_blob("lorem ipsum dolor sit amet consectetur")[..], 0, 7200, 19000);
+    lt_line(wd2, ln2, et2, &crate::testport::text_blob("")[..], &crate::testport::text_blob("lorem ipsum dolor sit amet consectetur")[..], 0, 7200, 20400);
+    lt_notes(wd2, ln2, et2, sf2, sc2, hc2);
+    crate::testport::assert_eq(ls_get(hc2, 4, ls_k_flags()), ls_f_cap(), "set apart from the lines around it by gaps, it is a caption");
+}
+pub(crate) fn lt_small(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, marker: &[u8], rest: &[u8], y: i32, size: i32) -> i32 {
+    // A line like `lt-line` at x 7200 whose words are set in `size`. Answers its row.
+    let l: i32 = lt_line(wd, ln, et, marker, rest, 7200, 9000, y);
+    let w0: i32 = ln_get(ln, l, 11);
+    let wn: i32 = ln_get(ln, l, 12);
+    let mut k: i32 = 0;
+    while k < wn {
+        wd_set(wd, w0 + k, wf_size(), size);
+        k += 1;
+    }
+    return l;
+}
+pub(crate) fn lt_notes_pages(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, mut sf: &mut crate::port::Cells, mut sc: &mut crate::port::Cells, mut hc: &mut crate::port::Cells) -> i32 {
+    // `lt-notes` with a page table (one Letter page), so that the lower half of the page is known.
+    let gl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ptxt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    page_new(pages, 1, 61200, 79200, 0, pk_vector());
+    hd_analyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt);
+    return nt_analyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw);
+}
+pub(crate) fn lt_notes_glyphs(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, gl: &mut crate::port::Cells, mut sf: &mut crate::port::Cells, mut sc: &mut crate::port::Cells, mut hc: &mut crate::port::Cells) -> i32 {
+    // `lt-notes-pages` over the glyphs `gl`.
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ptxt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    page_new(pages, 1, 61200, 79200, 0, pk_vector());
+    hd_analyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt);
+    return nt_analyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw);
+}
+#[test]
+fn test_a_footnotes_raised_marker_glued_to_its_word_is_a_marker() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut l: i32 = 0;
+    let mut w: i32 = 0;
+    let mut k: i32 = 0;
+    let mut g: i32 = 0;
+    // D583 (smoke review B issue 9): the footnote's first word is `1Fine-tuning`: its first glyph a 5.5 pt digit raised 2.5 pt off the text's baseline. The text layer takes the word's, and the line's,
+    // baseline from that first glyph, so the digit was no longer raised off it; the baseline the glyphs are raised off is the lowest one of the word.
+    lt_body3(wd, ln, et);
+    lt_line(wd, ln, et, &crate::testport::text_blob("")[..], &crate::testport::text_blob("lorem ipsum dolor sit amet consectetur")[..], 0, 7200, 9200);
+    lt_line(wd, ln, et, &crate::testport::text_blob("")[..], &crate::testport::text_blob("lorem ipsum dolor sit amet consectetur")[..], 0, 7200, 10600);
+    l = lt_small(wd, ln, et, &crate::testport::text_blob("")[..], &crate::testport::text_blob("1Fine-tuning code and pre-trained models are")[..], 70000, 800);
+    lt_small(wd, ln, et, &crate::testport::text_blob("")[..], &crate::testport::text_blob("available at the address of the project page")[..], 71200, 800);
+    w = ln_get(ln, l, 11);
+    wd_set(wd, w, wf_gfirst(), 0);
+    wd_set(wd, w, wf_gcount(), 12);
+    // the glyphs of `1Fine-tuning`: the digit first, then eleven in the text's size on the text's baseline (y 71000); the word's and the line's baseline are the digit's (y 70750)
+    g = gl_new(gl, 1, 7200, 70300, 7500, 70750, 49, -1, 0, w);
+    gl_set(gl, g, gf_size(), 550);
+    gl_set(gl, g, gf_by0(), 70750);
+    k = 0;
+    while k < 11 {
+        g = gl_new(gl, 1, 7500 + (k * 300), 70300, 7800 + (k * 300), 71000, 70, -1, 0, w);
+        gl_set(gl, g, gf_size(), 800);
+        gl_set(gl, g, gf_by0(), 71000);
+        k += 1;
+    }
+    wd_set(wd, w, hd_by0(), 70750);
+    ln_set(ln, l, lh_by0(), 70750);
+    lt_notes_glyphs(wd, ln, et, gl, sf, sc, hc);
+    crate::testport::assert_eq(ls_get(hc, l, ls_k_flags()), ls_f_note(), "the footnote is a note, its marker the raised digit");
+}
+#[test]
+fn test_a_small_numbered_block_at_the_foot_of_the_page_is_a_footnote_though_no_reference_shows() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let wd2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    // D583 (smoke review B issue 9): body lines, then at the foot of the page two lines in 8 pt that begin with the lone number 1: a footnote (the reference in the text was a superscript the glyphs
+    // did not show). The same marker on a line in the size of the body is no note, nor is it when body type follows it.
+    lt_body3(wd, ln, et);
+    lt_line(wd, ln, et, &crate::testport::text_blob("")[..], &crate::testport::text_blob("lorem ipsum dolor sit amet consectetur")[..], 0, 7200, 9200);
+    lt_line(wd, ln, et, &crate::testport::text_blob("")[..], &crate::testport::text_blob("lorem ipsum dolor sit amet consectetur")[..], 0, 7200, 10600);
+    lt_small(wd, ln, et, &crate::testport::text_blob("1")[..], &crate::testport::text_blob("Fine-tuning code and pre-trained models are")[..], 70000, 800);
+    lt_small(wd, ln, et, &crate::testport::text_blob("")[..], &crate::testport::text_blob("available at the address of the project page")[..], 71200, 800);
+    lt_notes_pages(wd, ln, et, sf, sc, hc);
+    crate::testport::assert_eq(ls_get(hc, 5, ls_k_flags()), ls_f_note(), "the numbered small block at the foot is a note");
+    lt_body3(wd2, ln2, et2);
+    lt_line(wd2, ln2, et2, &crate::testport::text_blob("")[..], &crate::testport::text_blob("lorem ipsum dolor sit amet consectetur")[..], 0, 7200, 9200);
+    lt_line(wd2, ln2, et2, &crate::testport::text_blob("")[..], &crate::testport::text_blob("lorem ipsum dolor sit amet consectetur")[..], 0, 7200, 10600);
+    lt_small(wd2, ln2, et2, &crate::testport::text_blob("1")[..], &crate::testport::text_blob("Fine-tuning code and pre-trained models are")[..], 70000, 800);
+    lt_line(wd2, ln2, et2, &crate::testport::text_blob("")[..], &crate::testport::text_blob("lorem ipsum dolor sit amet consectetur")[..], 0, 7200, 73000);
+    lt_notes_pages(wd2, ln2, et2, sf2, sc2, hc2);
+    crate::testport::assert_eq(ls_get(hc2, 5, ls_k_flags()), 0, "body type under it: no note");
+    // a list of references in small type at the foot of a page of body text is no list of notes: a bracketed number is a reference's, and six numbers in a row are a list's
+    let wd3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let wd4: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln4: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et4: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf4: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc4: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc4: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    lt_body3(wd3, ln3, et3);
+    lt_line(wd3, ln3, et3, &crate::testport::text_blob("")[..], &crate::testport::text_blob("lorem ipsum dolor sit amet consectetur")[..], 0, 7200, 9200);
+    lt_line(wd3, ln3, et3, &crate::testport::text_blob("")[..], &crate::testport::text_blob("lorem ipsum dolor sit amet consectetur")[..], 0, 7200, 10600);
+    lt_small(wd3, ln3, et3, &crate::testport::text_blob("[1]")[..], &crate::testport::text_blob("Fine-tuning code and pre-trained models are")[..], 70000, 800);
+    lt_small(wd3, ln3, et3, &crate::testport::text_blob("[2]")[..], &crate::testport::text_blob("available at the address of the project page")[..], 71200, 800);
+    lt_notes_pages(wd3, ln3, et3, sf3, sc3, hc3);
+    crate::testport::assert_eq(ls_get(hc3, 5, ls_k_flags()), 0, "a bracketed number is a reference's");
+    lt_body3(wd4, ln4, et4);
+    lt_line(wd4, ln4, et4, &crate::testport::text_blob("")[..], &crate::testport::text_blob("lorem ipsum dolor sit amet consectetur")[..], 0, 7200, 9200);
+    lt_line(wd4, ln4, et4, &crate::testport::text_blob("")[..], &crate::testport::text_blob("lorem ipsum dolor sit amet consectetur")[..], 0, 7200, 10600);
+    lt_small(wd4, ln4, et4, &crate::testport::text_blob("1")[..], &crate::testport::text_blob("Fine-tuning code and pre-trained models are")[..], 70000, 800);
+    lt_small(wd4, ln4, et4, &crate::testport::text_blob("2")[..], &crate::testport::text_blob("available at the address of the project page")[..], 71200, 800);
+    lt_small(wd4, ln4, et4, &crate::testport::text_blob("3")[..], &crate::testport::text_blob("available at the address of the project page")[..], 72400, 800);
+    lt_small(wd4, ln4, et4, &crate::testport::text_blob("4")[..], &crate::testport::text_blob("available at the address of the project page")[..], 73600, 800);
+    lt_small(wd4, ln4, et4, &crate::testport::text_blob("5")[..], &crate::testport::text_blob("available at the address of the project page")[..], 74800, 800);
+    lt_small(wd4, ln4, et4, &crate::testport::text_blob("6")[..], &crate::testport::text_blob("available at the address of the project page")[..], 76000, 800);
+    lt_notes_pages(wd4, ln4, et4, sf4, sc4, hc4);
+    crate::testport::assert_eq(ls_get(hc4, 5, ls_k_flags()), 0, "six numbers in a row in small type are a list");
+}
 pub(crate) fn lt_item(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut text: &mut crate::port::Cells, parent: i32, marker: &[u8], body: &[u8], scheme: i32, value: i32, x: i32) -> i32 {
     // An `item` of the old Model under parent: its marker, text, scheme (`sub`), value (`aux`), text x (`fk-box`).
     let it: i32 = node_new(nodes, nk_item(), parent);

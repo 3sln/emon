@@ -40,7 +40,8 @@
             [emon.evidence :refer [wd-get ln-get ln-count lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-bx0 lh-by0 lh-bx1
                                    lh-by1 lh-rot lh-dir lh-first lh-count hd-x0 hd-x1 hd-y0 hd-y1 hd-bx0 hd-by0
                                    hd-bx1 hd-by1 hd-tstart hd-tlen hd-line wf-size]]
-            [emon.model :refer [rl-body rl-margin rl-sidebar]]
+            [emon.model :refer [rl-body rl-margin rl-sidebar page-w]]
+            [emon.glayer :refer [gfl-count gfl-get gff-page gff-x0 gff-y0 gff-x1 gff-y1 gff-colour]]
             [kin.lang :refer [defn defconst return let set while if do comment
                               + - * < > <= >= == != and or not quot rem]]))
 
@@ -63,6 +64,15 @@
 (defconst ^I32 LC_TABLE_WORDS 3)
 (defconst ^I32 LC_TIGHT_NUM 4)     ;; a line is tight under another when the gap is under 4/5 of the size
 (defconst ^I32 LC_TIGHT_DEN 5)
+(defconst ^I32 LC_WIDE 6000)        ;; a gutter this wide (60 pt) between blocks of short lines is one ... (D583)
+(defconst ^I32 LC_WIDE_ROWS 4)      ;; ... when rows with words on each side are at least this many ...
+(defconst ^I32 LC_WIDE_WORDS 2)     ;; ... and they have this many words on average
+(defconst ^I32 LC_ASIDE 2000000000) ;; a line of `lt` whose cell 14 (the evidence's stream order, which this stage never reads) is more than this stands in a box that is an aside: +1 a box left of its body, +2 right (D583)
+(defconst ^I32 LC_ASIDE_MIN 80)     ;; a box that is an aside is at least this per mille of the page's width ...
+(defconst ^I32 LC_ASIDE_MAX 550)    ;; ... and at most this: narrower than a body
+(defconst ^I32 LC_ASIDE_H 3600)     ;; ... at least 36 pt tall ...
+(defconst ^I32 LC_ASIDE_LINES 3)    ;; ... holds at least this many lines and has at least this many of the body beside it
+(defconst ^I32 LC_HELD 1073741824)  ;; cell 15 of a line a table holds is this and up (`emon.table`'s TB_HELD)
 
 ;; page registers (`pr`)
 (defconst ^I32 PR_DOM 0)           ;; the dominant size
@@ -358,6 +368,116 @@
   (if (<= (ln-get lt l (lh-x1)) (- bx0 mg)) (return (== 1 1)))
   (return (== 0 1)))
 
+(defn ^I32 lc-asides [^Cells lt ^:mut ^Cells ls ^:mut ^Cells sd]
+  (comment "D583 (smoke review B issue 14): the lines of `ls` that `lc-mark-asides` found in a box that is an aside (cell 14 over `LC_ASIDE`) move to `sd`, the side lines: a sidebar, an infobox, a photo")
+  (comment "block beside the body is a region of its own. `sd` is empty when this is called. Answers how many moved.")
+  (let [^I32 n (cells-len ls)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 kept 0]
+    (while (< i n)
+      (do (let [^I32 l (cells-at ls i)]
+            (if (> (cells-at lt (+ (* l 16) 14)) LC_ASIDE)
+              (cells-push sd l)
+              (do (cells-set ls kept l)
+                  (set kept (+ kept 1)))))
+          (set i (+ i 1))))
+    (cells-drop ls kept)
+    (return (cells-len sd))))
+
+(defn ^I32 lc-in-box [^Cells lt ^I32 l ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "1 when the centre of line l of `lt` is in the box.")
+  (let [^I32 cx (quot (+ (ln-get lt l (lh-x0)) (ln-get lt l (lh-x1))) 2)
+        ^I32 cy (quot (+ (ln-get lt l (lh-y0)) (ln-get lt l (lh-y1))) 2)]
+    (if (and (>= cx x0) (and (<= cx x1) (and (>= cy y0) (<= cy y1)))) (return 1))
+    (return 0)))
+
+(defn ^I32 lc-mark-box [^:mut ^Cells lt ^I32 li ^I32 lj ^I32 fx0 ^I32 fy0 ^I32 fx1 ^I32 fy1]
+  (comment "The lines li..lj of `lt` in the box (upright, not a table's) and beside it, on its level, outside it, to its left or right: when the box has at least `LC_ASIDE_LINES` and so has the body on")
+  (comment "one side of it, the lines in the box are marked (cell 14: `LC_ASIDE` + 1 for a box left of the body beside it, + 2 for a box right of it). Answers 1 when it marked.")
+  (let [^:mut ^I32 l li
+        ^:mut ^I32 nin 0
+        ^:mut ^I32 nl 0
+        ^:mut ^I32 nr 0
+        ^:mut ^I32 rot 0
+        ^:mut ^I32 ov 0
+        ^:mut ^I32 h 0]
+    (while (< l lj)
+      (do (set rot (ln-get lt l (lh-rot)))
+          (if (and (or (< rot 100) (> rot 35900)) (< (cells-at lt (+ (* l 16) 15)) LC_HELD))
+            (do (if (== (lc-in-box lt l fx0 fy0 fx1 fy1) 1)
+                  (set nin (+ nin 1))
+                  (do (set h (- (ln-get lt l (lh-y1)) (ln-get lt l (lh-y0))))
+                      (set ov (- (lc-min fy1 (ln-get lt l (lh-y1))) (lc-max fy0 (ln-get lt l (lh-y0)))))
+                      (if (and (> h 0) (>= (* ov 2) h))
+                        (do (if (<= (ln-get lt l (lh-x1)) (+ fx0 300)) (set nl (+ nl 1)))
+                            (if (>= (ln-get lt l (lh-x0)) (- fx1 300)) (set nr (+ nr 1)))))))))
+          (set l (+ l 1))))
+    (if (and (>= nin LC_ASIDE_LINES) (or (>= nl LC_ASIDE_LINES) (>= nr LC_ASIDE_LINES)))
+      (do (set l li)
+          (while (< l lj)
+            (do (set rot (ln-get lt l (lh-rot)))
+                (if (and (or (< rot 100) (> rot 35900)) (< (cells-at lt (+ (* l 16) 15)) LC_HELD))
+                  (if (== (lc-in-box lt l fx0 fy0 fx1 fy1) 1)
+                    (do (if (>= nl nr)
+                          (cells-set lt (+ (* l 16) 14) (+ LC_ASIDE 2))
+                          (cells-set lt (+ (* l 16) 14) (+ LC_ASIDE 1))))))
+                (set l (+ l 1))))
+          (return 1)))
+    (return 0)))
+
+(defn ^:pub ^I32 lc-mark-asides [^:mut ^Cells lt ^Cells gfl ^Cells pages ^I32 np]
+  (comment "D583 (smoke review B issue 14, A issue 14): a SIDEBAR OR INFOBOX is a shaded box (a fused fill of the graphics layer, `gfl`) narrower than a body (between `LC_ASIDE_MIN` and `LC_ASIDE_MAX`")
+  (comment "per mille of the page's width), at least `LC_ASIDE_H` tall, with lines in it and the body's lines on its level beside it: the lines in it are marked (`lc-mark-box`), and the column stage")
+  (comment "takes them from the body as a region of their own, whatever its words (a text-only reading finds the gap, the rows of short words in it, and misses it where the rows have few words, or the body")
+  (comment "wraps around it). `lt` is the lines the stage reads, copied (`lc-copy`) with the tables' claims in cell 15; the marks go in cell 14 of every line, 0 where there is none. Answers the boxes taken.")
+  (let [^I32 nl (ln-count lt)
+        ^I32 nu (gfl-count gfl)
+        ^:mut ^I32 p 1
+        ^:mut ^I32 l 0
+        ^:mut ^I32 li 0
+        ^:mut ^I32 lj 0
+        ^:mut ^I32 ui 0
+        ^:mut ^I32 uj 0
+        ^:mut ^I32 u 0
+        ^:mut ^I32 pw 0
+        ^:mut ^I32 fw 0
+        ^:mut ^I32 took 0
+        ^:mut ^I32 prev 0]
+    (set l 0)
+    (while (< l nl)
+      (do (if (> (ln-get lt l (lh-page)) 0)
+            (do (if (< (ln-get lt l (lh-page)) prev) (return 0))
+                (set prev (ln-get lt l (lh-page)))))
+          (set l (+ l 1))))
+    (set l 0)
+    (while (< l nl)
+      (do (cells-set lt (+ (* l 16) 14) 0)
+          (set l (+ l 1))))
+    (if (== nu 0) (return 0))
+    (while (<= p np)
+      (do (while (and (< li nl) (< (ln-get lt li (lh-page)) p))
+            (set li (+ li 1)))
+          (set lj li)
+          (while (and (< lj nl) (== (ln-get lt lj (lh-page)) p))
+            (set lj (+ lj 1)))
+          (while (and (< ui nu) (< (gfl-get gfl ui (gff-page)) p))
+            (set ui (+ ui 1)))
+          (set uj ui)
+          (while (and (< uj nu) (== (gfl-get gfl uj (gff-page)) p))
+            (set uj (+ uj 1)))
+          (set pw (page-w pages (- p 1)))
+          (set u ui)
+          (while (< u uj)
+            (do (set fw (- (gfl-get gfl u (gff-x1)) (gfl-get gfl u (gff-x0))))
+                (if (and (>= (* fw 1000) (* pw LC_ASIDE_MIN)) (and (<= (* fw 1000) (* pw LC_ASIDE_MAX))
+                         (and (>= (- (gfl-get gfl u (gff-y1)) (gfl-get gfl u (gff-y0))) LC_ASIDE_H)
+                              (!= (gfl-get gfl u (gff-colour)) 16777215))))
+                  (set took (+ took (lc-mark-box lt li lj (gfl-get gfl u (gff-x0)) (gfl-get gfl u (gff-y0)) (gfl-get gfl u (gff-x1)) (gfl-get gfl u (gff-y1))))))
+                (set u (+ u 1))))
+          (set li lj)
+          (set p (+ p 1))))
+    (return took)))
+
 (defn ^I32 lc-side [^Cells wd ^Cells et ^Cells lt ^:mut ^Cells ls ^:mut ^Cells sd ^:mut ^Cells pr ^I32 dom]
   (comment "Find the body block, and move the lines wholly outside it from `ls` to `sd`, when most of them are in")
   (comment "smaller type (margin notes, sidebars). Numeric lines among them (line numbers) are dropped. Sets the")
@@ -371,7 +491,6 @@
         ^:mut ^I32 nb 0
         ^:mut ^I32 ns 0
         ^:mut ^I32 kept 0]
-    (cells-drop sd 0)
     (while (< i n)
       (do (let [^I32 l (cells-at ls i)]
             (if (lc-is-body (lc-size wd lt l) dom)
@@ -492,17 +611,27 @@
 
 (defn ^I32 lc-close [^:mut ^Cells gu ^Cells ac ^I32 a]
   (comment "An active interval ends: a gutter when it persisted `gutter-rows` rows and held, on each side, words")
-  (comment "in `gutter-rows` rows, `gutter-words` of them on average.")
+  (comment "in `gutter-rows` rows, `gutter-words` of them on average. D583 (smoke review A issue 14): a gutter at least `LC_WIDE` wide (two blocks of an invoice, Seller and Client, a form's left")
+  (comment "and right boxes) with at least `LC_WIDE_ROWS` rows with words on each side, `LC_WIDE_WORDS` of them on average, is a gutter too (when both sides have words in three fifths of the rows it persisted in: a block that goes on alone under two that are side by side, an invoice's address under its title's two blocks, is not a column of its own): a block of short lines is not a column of prose, but a gap that wide")
+  (comment "between two blocks of lines is not a table's cell padding either (a row of key and value has one word, or a few, in its value).")
   (let [^I32 base (* a GU_STRIDE)
         ^I32 rows (cells-at ac (+ base GU_ROWS))
         ^I32 lrows (cells-at ac (+ base GU_LROWS))
         ^I32 rrows (cells-at ac (+ base GU_RROWS))
         ^I32 lsum (cells-at ac (+ base GU_LSUM))
         ^I32 rsum (cells-at ac (+ base GU_RSUM))
+        ^I32 gw (- (cells-at ac (+ base 1)) (cells-at ac base))
+        ^:mut ^I32 ok 0
         ^:mut ^I32 f 0]
     (if (and (>= rows LC_ROWS)
              (and (>= lrows LC_ROWS) (>= rrows LC_ROWS))
              (and (>= lsum (* lrows LC_WORDS)) (>= rsum (* rrows LC_WORDS))))
+      (set ok 1))
+    (if (and (>= gw LC_WIDE) (and (>= lrows LC_WIDE_ROWS) (>= rrows LC_WIDE_ROWS))
+             (and (>= lsum (* lrows LC_WIDE_WORDS)) (>= rsum (* rrows LC_WIDE_WORDS)))
+             (and (>= (* lrows 10) (* rows 6)) (>= (* rrows 10) (* rows 6))))
+      (set ok 1))
+    (if (== ok 1)
       (do (while (< f GU_STRIDE)
             (do (cells-push gu (cells-at ac (+ base f)))
                 (set f (+ f 1))))))
@@ -1312,7 +1441,9 @@
 ;; --------------------------------------------------------------------- side runs
 
 (defn ^I32 lc-side-of [^Cells lt ^I32 l ^I32 bx1]
-  (comment "1 for a line right of the body block, 0 for one left of it.")
+  (comment "1 for a line right of the body block, 0 for one left of it. A line in a box that is an aside (`lc-mark-asides`) is on the side the box was found on.")
+  (if (== (cells-at lt (+ (* l 16) 14)) (+ LC_ASIDE 2)) (return 1))
+  (if (== (cells-at lt (+ (* l 16) 14)) (+ LC_ASIDE 1)) (return 0))
   (if (>= (ln-get lt l (lh-x0)) bx1) (return 1))
   (return 0))
 
@@ -1518,6 +1649,8 @@
       (do (if (== (ln-get lt (cells-at ls i) (lh-dir)) 1) (set rtl (+ rtl 1)))
           (set i (+ i 1))))
     (if (> (* rtl 2) n) (cells-set pr PR_RTL 1))
+    (cells-drop sd 0)
+    (lc-asides lt ls sd)
     (lc-side wd et lt ls sd pr dom)
     (lc-sweep wd lt ls dom it io rw gu ac tm)
     (lc-merge gu dom)

@@ -981,6 +981,10 @@ pub(crate) const RF_ZONE: i32 = 2400;
 pub(crate) const RF_LABEL_H: i32 = 1800;
 pub(crate) const RF_LABEL_CP: i32 = 48;
 pub(crate) const RF_LABEL_WORDS: i32 = 6;
+pub(crate) const RF_PASSES: i32 = 3;
+pub(crate) const RF_INSIDE_H: i32 = 4500;
+pub(crate) const RF_INSIDE_CP: i32 = 120;
+pub(crate) const RF_INSIDE_BIG: i32 = 50000;
 pub(crate) fn rf_fdv(fd: &mut crate::port::Cells, row: i32, f: i32, dflt: i32) -> i32 {
     if crate::port::cells_len(fd) < ((row + 1) * RF_FD) {
         return dflt;
@@ -1007,11 +1011,23 @@ pub(crate) fn rf_label_text(on: &mut crate::port::Cells, text: &mut crate::port:
     }
     return words <= RF_LABEL_WORDS;
 }
-pub(crate) fn rf_label_of(on: &mut crate::port::Cells, orr: &mut crate::port::Cells, text: &mut crate::port::Cells, cand: &mut crate::port::Cells, fg: &mut crate::port::Cells, fd: &mut crate::port::Cells, p: i32) -> i32 {
-    // The candidate row of the figure that paragraph p labels, or -1.
+pub(crate) fn rf_eb(ab: &mut crate::port::Cells, n: i32, k: i32, cand: &mut crate::port::Cells, row: i32, f: i32) -> i32 {
+    // Coordinate f (0 x0, 1 y0, 2 x1, 3 y1) of the box the labels of the figure number `k` of `fg` (1 based) are looked for in: its own, grown over the labels near it (`rf-grow`, kept in `ab` after
+    // the node entries, four cells a figure), else its candidate row's.
+    if crate::port::cells_len(ab) >= (n + (4 * k)) {
+        return crate::port::cells_at(ab, n + ((4 * (k - 1)) + f));
+    }
+    return as_get(cand, row, 5 + f);
+}
+pub(crate) fn rf_label_of(on: &mut crate::port::Cells, orr: &mut crate::port::Cells, text: &mut crate::port::Cells, cand: &mut crate::port::Cells, fg: &mut crate::port::Cells, fd: &mut crate::port::Cells, ab: &mut crate::port::Cells, n: i32, p: i32) -> i32 {
+    // The candidate row of the figure that paragraph p labels, or -1. A label is a short one-line paragraph on the figure or within `RF_ZONE` of its box, as grown over the labels around it
+    // (`rf-grow`); inside the figure's own box (a figure no taller than `RF_INSIDE_BIG`) any paragraph of at most three lines and `RF_INSIDE_CP` characters is: the text of a figure is its labels (D583).
     let r: i32 = node_region_head(on, p);
     let mut i: i32 = 1;
     let mut row: i32 = 0;
+    let mut cx: i32 = 0;
+    let mut cy: i32 = 0;
+    let mut hgt: i32 = 0;
     if r < 0 {
         return -1;
     }
@@ -1021,25 +1037,107 @@ pub(crate) fn rf_label_of(on: &mut crate::port::Cells, orr: &mut crate::port::Ce
     if node_has_text(on, p) == 0 {
         return -1;
     }
-    if (region_y1(orr, r) - region_y0(orr, r)) > RF_LABEL_H {
+    hgt = region_y1(orr, r) - region_y0(orr, r);
+    cx = (region_x0(orr, r) + region_x1(orr, r)) / 2;
+    cy = (region_y0(orr, r) + region_y1(orr, r)) / 2;
+    while i < crate::port::cells_len(fg) {
+        row = crate::port::cells_at(fg, i);
+        if (as_get(cand, row, 0) == region_page(orr, r)) && ((cx >= as_get(cand, row, 5)) && ((cx <= as_get(cand, row, 7)) && ((cy >= as_get(cand, row, 6)) && ((cy <= as_get(cand, row, 8)) && (((as_get(cand, row, 8) - as_get(cand, row, 6)) <= RF_INSIDE_BIG) && ((hgt <= RF_INSIDE_H) && (node_text_len(on, p) <= RF_INSIDE_CP))))))) {
+            return row;
+        }
+        i += 1;
+    }
+    if hgt > RF_LABEL_H {
         return -1;
     }
     if !rf_label_text(on, text, p) {
         return -1;
     }
+    i = 1;
     while i < crate::port::cells_len(fg) {
         row = crate::port::cells_at(fg, i);
-        if (as_get(cand, row, 0) == region_page(orr, r)) && ((region_x1(orr, r) > (as_get(cand, row, 5) - RF_ZONE)) && ((region_x0(orr, r) < (as_get(cand, row, 7) + RF_ZONE)) && ((((region_y0(orr, r) + region_y1(orr, r)) / 2) >= (as_get(cand, row, 6) - RF_ZONE)) && ((((region_y0(orr, r) + region_y1(orr, r)) / 2) <= (as_get(cand, row, 8) + RF_ZONE)) && ((region_x1(orr, r) - region_x0(orr, r)) <= ((2 * (as_get(cand, row, 7) - as_get(cand, row, 5))) + 2000)))))) {
+        if (as_get(cand, row, 0) == region_page(orr, r)) && ((region_x1(orr, r) > (rf_eb(ab, n, i, cand, row, 0) - RF_ZONE)) && ((region_x0(orr, r) < (rf_eb(ab, n, i, cand, row, 2) + RF_ZONE)) && ((cy >= (rf_eb(ab, n, i, cand, row, 1) - RF_ZONE)) && ((cy <= (rf_eb(ab, n, i, cand, row, 3) + RF_ZONE)) && ((region_x1(orr, r) - region_x0(orr, r)) <= ((2 * (rf_eb(ab, n, i, cand, row, 2) - rf_eb(ab, n, i, cand, row, 0))) + 2000)))))) {
             return row;
         }
         i += 1;
     }
     return -1;
 }
+pub(crate) fn rf_grows(fd: &mut crate::port::Cells, row: i32) -> i32 {
+    // 1 when the figure of candidate row `row` may grow over its labels: a drawing, a chart, a picture; not a logo, a barcode or a code (a name, a number beside them is text).
+    let k: i32 = rf_fdv(fd, row, 0, fg_unknown());
+    if (k == fg_logo()) || ((k == fg_barcode()) || (k == fg_qr())) {
+        return 0;
+    }
+    return 1;
+}
+pub(crate) fn rf_grow(on: &mut crate::port::Cells, orr: &mut crate::port::Cells, text: &mut crate::port::Cells, cand: &mut crate::port::Cells, fg: &mut crate::port::Cells, fd: &mut crate::port::Cells, mut ab: &mut crate::port::Cells, n: i32) -> i32 {
+    // D583 (smoke review B issue 7): the boxes the labels of each figure are looked for in, kept in `ab` after its `n` node entries (four cells a figure of `fg`, in its order): each is the
+    // figure's candidate box grown, in `RF_PASSES` passes, over the label-like paragraphs (one line, a few words, `rf-label-text`) within `RF_ZONE` of it: a drawing's boxes are separate regions of
+    // paths and words, and the words between and beside them are its labels too. Answers how many paragraphs it took in.
+    let mut i: i32 = 1;
+    let mut row: i32 = 0;
+    let mut pass: i32 = 0;
+    let mut c: i32 = 0;
+    let mut r: i32 = 0;
+    let mut took: i32 = 0;
+    let mut b: i32 = 0;
+    let mut changed: i32 = 1;
+    let mut cy: i32 = 0;
+    while i < crate::port::cells_len(fg) {
+        row = crate::port::cells_at(fg, i);
+        crate::port::cells_push(ab, as_get(cand, row, 5));
+        crate::port::cells_push(ab, as_get(cand, row, 6));
+        crate::port::cells_push(ab, as_get(cand, row, 7));
+        crate::port::cells_push(ab, as_get(cand, row, 8));
+        i += 1;
+    }
+    while (pass < RF_PASSES) && (changed == 1) {
+        changed = 0;
+        c = 0;
+        while c < n {
+            if node_kind(on, c) == nk_paragraph() {
+                r = node_region_head(on, c);
+                if (r >= 0) && ((node_region_count(on, c) == 1) && ((node_has_text(on, c) == 1) && (((region_y1(orr, r) - region_y0(orr, r)) <= RF_LABEL_H) && rf_label_text(on, text, c)))) {
+                    cy = (region_y0(orr, r) + region_y1(orr, r)) / 2;
+                    i = 1;
+                    while i < crate::port::cells_len(fg) {
+                        row = crate::port::cells_at(fg, i);
+                        b = n + (4 * (i - 1));
+                        if (rf_grows(fd, row) == 1) && ((as_get(cand, row, 0) == region_page(orr, r)) && ((region_x1(orr, r) > (crate::port::cells_at(ab, b) - RF_ZONE)) && ((region_x0(orr, r) < (crate::port::cells_at(ab, b + 2) + RF_ZONE)) && ((cy >= (crate::port::cells_at(ab, b + 1) - RF_ZONE)) && (cy <= (crate::port::cells_at(ab, b + 3) + RF_ZONE)))))) {
+                            if region_x0(orr, r) < crate::port::cells_at(ab, b) {
+                                crate::port::cells_set(ab, b, region_x0(orr, r));
+                                changed = 1;
+                            }
+                            if region_y0(orr, r) < crate::port::cells_at(ab, b + 1) {
+                                crate::port::cells_set(ab, b + 1, region_y0(orr, r));
+                                changed = 1;
+                            }
+                            if region_x1(orr, r) > crate::port::cells_at(ab, b + 2) {
+                                crate::port::cells_set(ab, b + 2, region_x1(orr, r));
+                                changed = 1;
+                            }
+                            if region_y1(orr, r) > crate::port::cells_at(ab, b + 3) {
+                                crate::port::cells_set(ab, b + 3, region_y1(orr, r));
+                                changed = 1;
+                            }
+                            took += 1;
+                        }
+                        i += 1;
+                    }
+                }
+            }
+            c += 1;
+        }
+        pass += 1;
+    }
+    return took;
+}
 pub(crate) fn rf_absorb_note(on: &mut crate::port::Cells, orr: &mut crate::port::Cells, text: &mut crate::port::Cells, cand: &mut crate::port::Cells, fg: &mut crate::port::Cells, fd: &mut crate::port::Cells, mut ab: &mut crate::port::Cells, n: i32) -> i32 {
     // A note (the column stage made a margin note of a column of tick labels) every child of which is a label of one figure is
     // dropped with them: the note and its paragraphs are marked.
     let mut c: i32 = node_first_child(on, n);
+    let nall: i32 = node_count(on);
     let mut f: i32 = -1;
     let mut g: i32 = 0;
     let mut ok: i32 = 1;
@@ -1047,7 +1145,7 @@ pub(crate) fn rf_absorb_note(on: &mut crate::port::Cells, orr: &mut crate::port:
     while c >= 0 {
         g = -1;
         if node_kind(on, c) == nk_paragraph() {
-            g = rf_label_of(on, orr, text, cand, fg, fd, c);
+            g = rf_label_of(on, orr, text, cand, fg, fd, ab, nall, c);
         }
         if g < 0 {
             ok = 0;
@@ -1074,6 +1172,7 @@ pub(crate) fn rf_absorb_note(on: &mut crate::port::Cells, orr: &mut crate::port:
 pub(crate) fn rf_absorb(on: &mut crate::port::Cells, orr: &mut crate::port::Cells, text: &mut crate::port::Cells, cand: &mut crate::port::Cells, fg: &mut crate::port::Cells, fd: &mut crate::port::Cells, mut ab: &mut crate::port::Cells, p: i32) -> i32 {
     // Mark, among the blocks of p (the document or a section) and of the sections in it, the paragraphs that label a figure.
     let mut c: i32 = node_first_child(on, p);
+    let nall: i32 = node_count(on);
     let mut f: i32 = -1;
     while c >= 0 {
         if node_kind(on, c) == nk_section() {
@@ -1083,7 +1182,7 @@ pub(crate) fn rf_absorb(on: &mut crate::port::Cells, orr: &mut crate::port::Cell
             rf_absorb_note(on, orr, text, cand, fg, fd, ab, c);
         }
         if node_kind(on, c) == nk_paragraph() {
-            f = rf_label_of(on, orr, text, cand, fg, fd, c);
+            f = rf_label_of(on, orr, text, cand, fg, fd, ab, nall, c);
             if f >= 0 {
                 crate::port::cells_set(ab, c, f);
             }
@@ -1279,6 +1378,7 @@ pub fn rs_figures(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, orr:
         i += 1;
     }
     if crate::port::cells_len(fd) > 0 {
+        rf_grow(on, orr, text, cand, fg, fd, ab, n);
         r = 0;
         while r < n {
             if (node_parent(on, r) < 0) && (node_kind(on, r) == nk_document()) {

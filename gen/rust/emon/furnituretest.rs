@@ -233,6 +233,51 @@ pub(crate) fn fl_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells,
     lc_copy(ln, lt);
     return pa_build(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
 }
+pub(crate) fn fl_run_size(wd: &mut crate::port::Cells, ln0: &mut crate::port::Cells, et: &mut crate::port::Cells, npages: i32, pw: i32, ph: i32, mut t: &mut String) -> i32 {
+    // `fl-run` (no tree, the policy setting) over pages `pw` x `ph` centipoints: a small page for the margin zones' floor (D583).
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ord: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let raw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ford: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tx: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let bh: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ft: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let txt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let md: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut p: i32 = 1;
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    while p <= npages {
+        page_new(pages, p, pw, ph, 0, pk_vector());
+        p += 1;
+    }
+    fl_copy(ln0, ln);
+    fl_order(ln);
+    fu_find(wd, ln, et, gl, mk, pages, npages, txt, md, lb, 0, 0, cd, sl, gr, ford, tx, bh, fo, fp, ft, pl);
+    fl_build(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp);
+    fu_write(fo, fp, ft, pl, npages, nodes, attrs, regions, text, pages, ledger, tmp);
+    fl_brief(t, nodes, attrs, text, pages, ledger, 1);
+    return model_check(nodes, attrs, regions, text, pages, ledger, layout, st);
+}
 pub(crate) fn fl_run(wd: &mut crate::port::Cells, ln0: &mut crate::port::Cells, et: &mut crate::port::Cells, npages: i32, trust: i32, mode: i32, txt: &mut crate::port::Cells, md: &mut crate::port::Cells, lb: &mut crate::port::Cells, mut t: &mut String) -> i32 {
     // Run the stage as the Engine does (find, paragraphs, write) over the evidence, and write the brief into `t`. Answers
     // `model-check`'s verdict.
@@ -537,6 +582,181 @@ fn test_odd_and_even_pages_have_their_own_headers() {
     fl_bottom(wd, ln, et, &crate::testport::text_blob("5")[..], 5, 30000, 31000);
     crate::testport::assert_eq(fl_run(wd, ln, et, 5, 0, 0, txt, md, lb, t1), 0, "odd even: well formed");
     crate::testport::assert_text(t1, "L2=2;L3=3;L4=4;L5=5;Fh3,5:Employee Chapter;Dr@2:The Handbook;Dr@4:The Handbook;Dp@2:2;Dp@3:3;Dp@4:4;Dp@5:5;P:The Handbook;P:alpha beta. |alpha beta. |alpha beta. |alpha beta. |alpha beta.;", "the first page has no label; the chapter is kept; the book's title is dropped");
+}
+pub(crate) fn fl_roots(nodes: &mut crate::port::Cells) -> i32 {
+    // How many `furniture` roots the Model has.
+    let nn: i32 = node_count(nodes);
+    let mut i: i32 = 0;
+    let mut n: i32 = 0;
+    while i < nn {
+        if (node_kind(nodes, i) == nk_furniture()) && (node_parent(nodes, i) == -1) {
+            n += 1;
+        }
+        i += 1;
+    }
+    return n;
+}
+pub(crate) fn fl_cells(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, page: i32, y: i32, a: &[u8], b: &[u8], c: &[u8], d: &[u8], e: &[u8]) -> i32 {
+    // A row of five cells (one line each) at y, 10 pt high, 10 pt text, in columns from x 7200, 12000, 24000, 34000 and 42000.
+    fl_line(wd, ln, et, a, page, 7200, y, 9000, y + 1000, 0, 1000);
+    fl_line(wd, ln, et, b, page, 12000, y, 20000, y + 1000, 0, 1000);
+    fl_line(wd, ln, et, c, page, 24000, y, 32000, y + 1000, 0, 1000);
+    fl_line(wd, ln, et, d, page, 34000, y, 38000, y + 1000, 0, 1000);
+    fl_line(wd, ln, et, e, page, 42000, y, 50000, y + 1000, 0, 1000);
+    return 0;
+}
+pub(crate) fn fl_statement_page(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, page: i32, r1: &[u8], r2: &[u8], r3: &[u8]) -> i32 {
+    // A continuation page of a statement: the header row (the same on every page) at 60 pt and three rows of cells under it, 13 pt apart, whose first column is `r1`, `r2`, `r3`.
+    fl_cells(wd, ln, et, page, 6000, &crate::testport::text_blob("No.")[..], &crate::testport::text_blob("Txn ID")[..], &crate::testport::text_blob("Posted")[..], &crate::testport::text_blob("Cr/Dr")[..], &crate::testport::text_blob("Amount")[..]);
+    fl_cells(wd, ln, et, page, 7300, r1, &crate::testport::text_blob("S88406266")[..], &crate::testport::text_blob("06/01/2024")[..], &crate::testport::text_blob("DR")[..], &crate::testport::text_blob("33593.01")[..]);
+    fl_cells(wd, ln, et, page, 8600, r2, &crate::testport::text_blob("S82211394")[..], &crate::testport::text_blob("06/01/2024")[..], &crate::testport::text_blob("CR")[..], &crate::testport::text_blob("38674.79")[..]);
+    fl_cells(wd, ln, et, page, 9900, r3, &crate::testport::text_blob("S94067070")[..], &crate::testport::text_blob("06/01/2024")[..], &crate::testport::text_blob("CR")[..], &crate::testport::text_blob("67477.43")[..]);
+    return 0;
+}
+pub(crate) fn fl_roots_of(wd: &mut crate::port::Cells, ln0: &mut crate::port::Cells, et: &mut crate::port::Cells, npages: i32) -> i32 {
+    // `fl-run` on Letter pages with no tree and the policy setting, answering how many `furniture` roots it made.
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ord: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let raw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ford: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tx: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let bh: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ft: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let txt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let md: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut p: i32 = 1;
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    while p <= npages {
+        page_new(pages, p, 61200, 79200, 0, pk_vector());
+        p += 1;
+    }
+    fl_copy(ln0, ln);
+    fl_order(ln);
+    fu_find(wd, ln, et, gl, mk, pages, npages, txt, md, lb, 0, 0, cd, sl, gr, ford, tx, bh, fo, fp, ft, pl);
+    fl_build(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp);
+    fu_write(fo, fp, ft, pl, npages, nodes, attrs, regions, text, pages, ledger, tmp);
+    return fl_roots(nodes);
+}
+#[test]
+fn test_the_first_row_under_a_repeated_table_header_is_no_furniture() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    // D583 (smoke review A issue 15): three pages of a statement, each the same header row and then rows whose cells (digits abstracted) are the same templates on every page. The
+    // first row is the same size at the same height on every page, and the rows under it, which recur by their templates, do not count against its isolation: it passed as a header that
+    // varies. It is a row of five cells on one baseline, which no running header is.
+    fl_statement_page(wd, ln, et, 1, &crate::testport::text_blob("17")[..], &crate::testport::text_blob("18")[..], &crate::testport::text_blob("19")[..]);
+    fl_statement_page(wd, ln, et, 2, &crate::testport::text_blob("52")[..], &crate::testport::text_blob("53")[..], &crate::testport::text_blob("54")[..]);
+    fl_statement_page(wd, ln, et, 3, &crate::testport::text_blob("87")[..], &crate::testport::text_blob("88")[..], &crate::testport::text_blob("89")[..]);
+    fl_body(wd, ln, et, &crate::testport::text_blob("Opening balance carried forward.")[..], 1, 8);
+    fl_body(wd, ln, et, &crate::testport::text_blob("Closing balance carried forward.")[..], 2, 8);
+    fl_body(wd, ln, et, &crate::testport::text_blob("Page total carried forward.")[..], 3, 8);
+    crate::testport::assert_eq(fl_roots_of(wd, ln, et, 3), 0, "no row of the table is furniture");
+}
+#[test]
+fn test_a_two_line_running_header_is_furniture_whole() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    // D583 (smoke review B issue 11): a header of two lines, the second 8.6 pt over the first line of the body: only the first was set apart (the recurring second does not count
+    // against it), so the second stayed in the flow. The second goes with the first. A heading (larger than the body) under it varies from page to page and stays.
+    fl_pages(wd, ln, et, 4);
+    fl_line(wd, ln, et, &crate::testport::text_blob("Where To Download")[..], 1, 4250, 1800, 17700, 3100, 0, 1000);
+    fl_line(wd, ln, et, &crate::testport::text_blob("Statistics Sixth Edition")[..], 1, 4250, 3550, 20000, 4850, 0, 1000);
+    fl_line(wd, ln, et, &crate::testport::text_blob("Erie hospitals seek answers")[..], 1, 4500, 5700, 30000, 7100, 0, 1400);
+    fl_line(wd, ln, et, &crate::testport::text_blob("Where To Download")[..], 2, 4250, 1800, 17700, 3100, 0, 1000);
+    fl_line(wd, ln, et, &crate::testport::text_blob("Statistics Sixth Edition")[..], 2, 4250, 3550, 20000, 4850, 0, 1000);
+    fl_line(wd, ln, et, &crate::testport::text_blob("Garland district fenced areas")[..], 2, 4500, 5700, 30000, 7100, 0, 1400);
+    fl_line(wd, ln, et, &crate::testport::text_blob("Where To Download")[..], 3, 4250, 1800, 17700, 3100, 0, 1000);
+    fl_line(wd, ln, et, &crate::testport::text_blob("Statistics Sixth Edition")[..], 3, 4250, 3550, 20000, 4850, 0, 1000);
+    fl_line(wd, ln, et, &crate::testport::text_blob("Women account for research")[..], 3, 4500, 5700, 30000, 7100, 0, 1400);
+    fl_line(wd, ln, et, &crate::testport::text_blob("Where To Download")[..], 4, 4250, 1800, 17700, 3100, 0, 1000);
+    fl_line(wd, ln, et, &crate::testport::text_blob("Statistics Sixth Edition")[..], 4, 4250, 3550, 20000, 4850, 0, 1000);
+    fl_line(wd, ln, et, &crate::testport::text_blob("Creativity comes from where")[..], 4, 4500, 5700, 30000, 7100, 0, 1400);
+    crate::testport::assert_eq(fl_roots_of(wd, ln, et, 4), 2, "both lines of the header are furniture");
+}
+#[test]
+fn test_a_footer_of_four_parts_on_one_baseline_is_still_a_footer() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    // D583: only a row in the TOP zone is a table's (the first data row under a repeated header): a footer of four parts on its baseline (the real statement's address, phone and notice) is furniture,
+    // kept once, four roots
+    fl_pages(wd, ln, et, 3);
+    fl_bottom(wd, ln, et, &crate::testport::text_blob("example.com")[..], 1, 7200, 14000);
+    fl_bottom(wd, ln, et, &crate::testport::text_blob("Call 555 0100")[..], 1, 18000, 26000);
+    fl_bottom(wd, ln, et, &crate::testport::text_blob("PO Box 85123")[..], 1, 30000, 38000);
+    fl_bottom(wd, ln, et, &crate::testport::text_blob("Member FDIC")[..], 1, 42000, 50000);
+    fl_bottom(wd, ln, et, &crate::testport::text_blob("example.com")[..], 2, 7200, 14000);
+    fl_bottom(wd, ln, et, &crate::testport::text_blob("Call 555 0100")[..], 2, 18000, 26000);
+    fl_bottom(wd, ln, et, &crate::testport::text_blob("PO Box 85123")[..], 2, 30000, 38000);
+    fl_bottom(wd, ln, et, &crate::testport::text_blob("Member FDIC")[..], 2, 42000, 50000);
+    fl_bottom(wd, ln, et, &crate::testport::text_blob("example.com")[..], 3, 7200, 14000);
+    fl_bottom(wd, ln, et, &crate::testport::text_blob("Call 555 0100")[..], 3, 18000, 26000);
+    fl_bottom(wd, ln, et, &crate::testport::text_blob("PO Box 85123")[..], 3, 30000, 38000);
+    fl_bottom(wd, ln, et, &crate::testport::text_blob("Member FDIC")[..], 3, 42000, 50000);
+    crate::testport::assert_eq(fl_roots_of(wd, ln, et, 3), 4, "four parts, four furniture roots");
+}
+#[test]
+fn test_a_sideways_stamp_in_the_margin_of_one_page_is_furniture() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let txt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let md: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t1: &mut String = &mut crate::port::new_text();
+    let t2: &mut String = &mut crate::port::new_text();
+    // D583 (smoke review B issue 9): the arXiv identifier set up the left edge of a paper's first page, a quarter turn, 20 to 36 pt from the edge: a margin stamp, kept as a `margin` root and
+    // out of the body. The same line in the body's own place (an inch in) is text.
+    fl_pages(wd, ln, et, 1);
+    fl_line(wd, ln, et, &crate::testport::text_blob("arXiv:2010.11929v2 [cs.CV] 3 Jun 2021")[..], 1, 2000, 20000, 3600, 55000, 9000, 900);
+    crate::testport::assert_eq(fl_run(wd, ln, et, 1, 0, 0, txt, md, lb, t1), 0, "stamp: well formed");
+    crate::testport::assert_text(t1, "Fm1:arXiv:2010.11929v2 [cs.CV] 3 Jun 2021;P:alpha beta.;", "the stamp is a margin root, the body is the body");
+    fl_clear(wd, ln, et);
+    fl_pages(wd, ln, et, 1);
+    fl_line(wd, ln, et, &crate::testport::text_blob("arXiv:2010.11929v2 [cs.CV] 3 Jun 2021")[..], 1, 7200, 20000, 8800, 55000, 9000, 900);
+    crate::testport::assert_eq(fl_run(wd, ln, et, 1, 0, 0, txt, md, lb, t2), 0, "inside: well formed");
+    crate::testport::assert_eq(fl_roots_of(wd, ln, et, 1), 0, "a sideways line inside the page is no stamp");
+}
+#[test]
+fn test_a_footer_on_a_small_page_is_furniture() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t1: &mut String = &mut crate::port::new_text();
+    // D583 (smoke review B issue 11): pages 297 x 210 pt: `Page 1/25` stands 28 pt from the foot (centre at 87 per cent of the height, short of the 89 per cent of the footer zone), and the header
+    // 18 pt from the top (11.7 per cent, past the 11 of the header zone). Both recur on every page, and the zones of a page that small are 36 pt deep.
+    fl_line(wd, ln, et, &crate::testport::text_blob("alpha beta.")[..], 1, 2000, 10000, 12000, 11100, 0, 1100);
+    fl_line(wd, ln, et, &crate::testport::text_blob("alpha beta.")[..], 2, 2000, 10000, 12000, 11100, 0, 1100);
+    fl_line(wd, ln, et, &crate::testport::text_blob("alpha beta.")[..], 3, 2000, 10000, 12000, 11100, 0, 1100);
+    fl_line(wd, ln, et, &crate::testport::text_blob("Where To Download")[..], 1, 4250, 1800, 17700, 3100, 0, 1000);
+    fl_line(wd, ln, et, &crate::testport::text_blob("Where To Download")[..], 2, 4250, 1800, 17700, 3100, 0, 1000);
+    fl_line(wd, ln, et, &crate::testport::text_blob("Where To Download")[..], 3, 4250, 1800, 17700, 3100, 0, 1000);
+    fl_line(wd, ln, et, &crate::testport::text_blob("Page 1/25")[..], 1, 11500, 17800, 15100, 18600, 0, 800);
+    fl_line(wd, ln, et, &crate::testport::text_blob("Page 2/25")[..], 2, 11500, 17800, 15100, 18600, 0, 800);
+    fl_line(wd, ln, et, &crate::testport::text_blob("Page 3/25")[..], 3, 11500, 17800, 15100, 18600, 0, 800);
+    crate::testport::assert_eq(fl_run_size(wd, ln, et, 3, 29764, 20976, t1), 0, "small pages: well formed");
+    crate::testport::assert_text(t1, "L1=1;L2=2;L3=3;Fh1,2,3:Where To Download;Dp@1:Page 1/25;Dp@2:Page 2/25;Dp@3:Page 3/25;P:alpha beta. |alpha beta. |alpha beta.;", "the header is kept once, the page numbers are labels");
 }
 #[test]
 fn test_a_diagonal_word_much_larger_than_the_text_is_a_watermark() {

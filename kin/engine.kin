@@ -44,7 +44,7 @@
             [emon.pdfstruct :refer [tg-trust tg-read tg-join]]
             [emon.furniture :refer [fu-find fu-write]]
             [emon.table :refer [tb-build]]
-            [emon.columns :refer [lc-copy]]
+            [emon.columns :refer [lc-copy lc-mark-asides]]
             [emon.initial :refer [in-detect]]
             [emon.heading :refer [hd-prior-outline hd-analyze]]
             [emon.notes :refer [nt-analyze]]
@@ -353,7 +353,7 @@
     (tb-build (fd d fw) (fd d fl) (fd d et) (fd d grl) (fd d gfl) np (fd s tb) (fd s tc) (fd s tw) (fd s tq) (fd s tbx) (fd s s0) (fd s s1) (fd s s2)
          (fd s s3) (fd s s4) (fd s s5) (fd s s6) (fd s s7) (fd s s8) (fd s s9) (fd s s10) (fd s s11) (fd s s12) (fd s s13) (fd s s14) (fd s s15)
          (fd s s16) (fd s s17) (fd s s18) (fd m pages) (fd d gl) (fd d mk) (fd d se) (fd d sc) (fd d ss) (fd s ta0) (fd s g0) (fd s g1) (fd s g2)
-         (fd s g3) (fd s g4) (fd s g5) (fd s tv))
+         (fd s g3) (fd s g4) (fd s g5) (fd s tv) (fd d an))
     ;; the tagged tables' verdicts join the evidence dump, as `tb` (P5.5), and the dump is closed
     (if (!= (fd c keep) 0)
       (do (if (and (== kind 0) (> (cells-len (fd s tv)) 0))
@@ -363,6 +363,7 @@
     ;; the initials (kin/initial.kin, P4.10) read the glyphs and fonts, and the locale tag as code points; found in the copy of the lines BEFORE the heading analysis reads it
     (cells-copy-into (fd s iloc) (fd c lcl))
     (lc-copy (fd d fl) (fd s lt))
+    (lc-mark-asides (fd s lt) (fd d gfl) (fd m pages) np)
     (in-detect (fd d fw) (fd d gl) (fd d fnt) (fd d et) np (fd s iloc) (fd s lt) (fd s ls) (fd s lo) (fd s tm) (fd s ii))
     ;; the heading analysis (kin/heading.kin, P4.4), its prior the outline (D172)
     (hd-prior-outline (fd d ol) (fd d txt) (fd s hpr) (fd s hptxt))

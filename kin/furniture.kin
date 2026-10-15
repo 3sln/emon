@@ -94,6 +94,12 @@
 (defconst ^I32 FU_PAIRS 75)         ;; per cent of consecutive pairs that must step with the page for a slot to be the page number
 (defconst ^I32 FU_MINNORM 4)        ;; characters (letters and digits) a title match needs
 (defconst ^I32 FU_MAXSLOTS 8)
+(defconst ^I32 FU_FLOOR 3600)       ;; a margin zone is at least this deep (centipoints: 36 pt) on a short page (D583) ...
+(defconst ^I32 FU_FCAP 170)         ;; ... and never deeper than this per mille of the page's height
+(defconst ^I32 FU_STAMP 60)         ;; a sideways line this near a side edge (per mille of the width, centre) is a margin stamp (D583) ...
+(defconst ^I32 FU_STAMPLEN 8)       ;; ... of at least this many characters
+(defconst ^I32 FU_CELLS 4)       ;; a row of this many candidates or more on one baseline is a table's row, not a running header (D583)
+(defconst ^I32 FU_CHAIN_GAP 1300)   ;; a line this close under (per mille of its height) a header line that qualified goes with it (D583)
 
 ;; the work arenas' strides (documented where each is made)
 (defconst ^I32 CD 16)
@@ -571,6 +577,34 @@
     (if (>= (* con 10) (* tot 6)) (return 2))
     (return 0)))
 
+(defn ^I32 fu-zone-floor [^I32 h]
+  (comment "D583 (smoke review B issue 11): twice the depth (centipoints) of the margin zones of a page `h` tall when 11 per cent of it is less than FU_FLOOR (36 pt) and 17 per cent of it more")
+  (comment "than 11 per cent: a page the size of a slide or a small card (210 pt tall) has a running header 18 pt from its top edge and a footer 28 pt from its foot, outside 11 per cent")
+  (comment "of it. 0 for a page where 11 per cent is deep enough (every page of a letter's size and over 327 pt tall).")
+  (let [^I32 lim (fu-min (* 2 FU_FLOOR) (quot (* h FU_FCAP) 500))]
+    (if (> lim (quot (* h FU_TOP) 500)) (return lim))
+    (return 0)))
+
+(defn ^I32 fu-row-cells [^Cells ln ^I32 l]
+  (comment "D583 (smoke review A issue 15): how many upright lines (this one included) of its page stand on line l's baseline (centres within half its height), among the 40 lines either side of it")
+  (comment "in the text layer's order. A row of FU_CELLS or more in the top zone is a table's row, not a running header (a left, a centre and a right part at the most; a footer of four parts or more is a footer: the real statement's): the first data row of a")
+  (comment "continuation page, directly under the repeated header, recurs by position and by the shape of its cells and passed as a header that varies.")
+  (let [^I32 nl (ln-count ln)
+        ^I32 c2 (+ (ln-get ln l (lh-y0)) (ln-get ln l (lh-y1)))
+        ^I32 half (fu-max 1 (- (ln-get ln l (lh-y1)) (ln-get ln l (lh-y0))))
+        ^I32 p (ln-get ln l (lh-page))
+        ^:mut ^I32 q (fu-max 0 (- l 40))
+        ^:mut ^I32 n 0
+        ^:mut ^I32 rot 0]
+    (while (and (< q nl) (<= q (+ l 40)))
+      (do (set rot (ln-get ln q (lh-rot)))
+          (if (and (== (ln-get ln q (lh-page)) p)
+                   (and (or (< rot 100) (> rot 35900))
+                        (<= (fu-abs (- (+ (ln-get ln q (lh-y0)) (ln-get ln q (lh-y1))) c2)) half)))
+            (set n (+ n 1)))
+          (set q (+ q 1))))
+    (return n)))
+
 (defn ^I32 fu-scan [^Cells wd ^Cells ln ^Cells et ^Cells gl ^Cells mk ^Cells pages ^I32 npages
                     ^:mut ^Cells cd ^:mut ^Cells sl ^:mut ^Cells tx]
   (comment "Every candidate line of the document as a row of `cd`, in line order. Answers the number of rows, or -1 when the")
@@ -600,11 +634,15 @@
                 (set cy2 (+ (ln-get ln l (lh-y0)) (ln-get ln l (lh-y1))))
                 (set cx2 (+ (ln-get ln l (lh-x0)) (ln-get ln l (lh-x1))))
                 (if (or (< rot 100) (> rot 35900))
-                  (do (if (< cy2 (quot (* h FU_TOP) 500)) (set zone 1))
-                      (if (> cy2 (quot (* h FU_BOT) 500)) (set zone 2)))
+                  (do (let [^I32 fz (fu-zone-floor h)]
+                        (if (< cy2 (fu-max fz (quot (* h FU_TOP) 500))) (set zone 1))
+                        (if (> fz 0)
+                          (if (> cy2 (- (* 2 h) fz)) (set zone 2))
+                          (if (> cy2 (quot (* h FU_BOT) 500)) (set zone 2)))))
                   (if (or (< (fu-abs (- rot 9000)) 100) (< (fu-abs (- rot 27000)) 100))
                     (if (or (< cx2 (quot (* w FU_SIDE) 500)) (> cx2 (quot (* w (- 1000 FU_SIDE)) 500)))
                       (set zone 3))))
+                (if (and (== zone 1) (>= (fu-row-cells ln l) FU_CELLS)) (set zone 0))
                 (if (> zone 0)
                   (do (set ts (cells-len tx))
                       (set tl (fu-line-text wd ln et tx l))
@@ -974,6 +1012,82 @@
       (do (gr-set gr g 4 1)
           (return 1)))
     (return 0)))
+
+(defn ^I32 fu-chain-adjacent [^Cells ln ^Cells cd ^I32 ncd ^I32 r]
+  (comment "1 when candidate r has, on its page and in its zone, a candidate that qualified (cell 15 is 1) directly toward the page's edge from it: within FU_CHAIN_GAP per mille")
+  (comment "of its own height of it, and its left edge within two heights of r's (the first line of a two-line header, over the second). Not a cell of a table's row (FU_CELLS")
+  (comment "candidates on its baseline).")
+  (let [^I32 lo (fu-max 0 (- r 30))
+        ^I32 hi (fu-min ncd (+ r 31))
+        ^I32 h (fu-max 1 (- (cd-get cd r 4) (cd-get cd r 3)))
+        ^I32 c2 (+ (cd-get cd r 3) (cd-get cd r 4))
+        ^:mut ^I32 q lo
+        ^:mut ^I32 n 0
+        ^:mut ^I32 gap 0]
+    (while (< q hi)
+      (do (if (and (== (cd-get cd q 1) (cd-get cd r 1))
+                   (and (== (cd-get cd q 2) (cd-get cd r 2))
+                        (<= (fu-abs (- (+ (cd-get cd q 3) (cd-get cd q 4)) c2)) h)))
+            (set n (+ n 1)))
+          (set q (+ q 1))))
+    (if (>= n FU_CELLS) (return 0))
+    (set q lo)
+    (while (< q hi)
+      (do (if (and (!= q r)
+                   (and (== (cd-get cd q 1) (cd-get cd r 1))
+                        (and (== (cd-get cd q 2) (cd-get cd r 2))
+                             (and (== (cd-get cd q 15) 1)
+                                  (<= (fu-abs (- (ln-get ln (cd-get cd q 0) (lh-x0)) (ln-get ln (cd-get cd r 0) (lh-x0)))) (* 2 h))))))
+            (do (if (== (cd-get cd r 2) 1)
+                  (do (set gap (- (cd-get cd r 3) (cd-get cd q 4)))
+                      (if (and (>= gap -200) (<= (* gap 1000) (* h FU_CHAIN_GAP)) (< (cd-get cd q 3) (cd-get cd r 3)))
+                        (return 1))))
+                (if (== (cd-get cd r 2) 2)
+                  (do (set gap (- (cd-get cd q 3) (cd-get cd r 4)))
+                      (if (and (>= gap -200) (<= (* gap 1000) (* h FU_CHAIN_GAP)) (> (cd-get cd q 3) (cd-get cd r 3)))
+                        (return 1))))))
+          (set q (+ q 1))))
+    (return 0)))
+
+(defn ^I32 fu-chain [^Cells ln ^Cells ord ^:mut ^Cells cd ^Cells sl ^Cells tx ^:mut ^Cells gr ^I32 ng ^I32 ncd ^I32 npages ^I32 trust]
+  (comment "D583 (smoke review B issue 11): a template group that qualified in everything but its isolation, whose every member (at least 70 per cent) lies directly under or over a member of a group that")
+  (comment "qualified, on the same page and in the same zone, is the next line of that header or footer: a two-line running header has its second line against the body, and only")
+  (comment "the first is set apart (the lines that recur do not count). Qualified groups are marked (cell 15 is 1) so a third line goes with the second. Answers the groups added.")
+  (let [^:mut ^I32 pass 0
+        ^:mut ^I32 changed 1
+        ^:mut ^I32 added 0
+        ^:mut ^I32 g 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 adj 0
+        ^:mut ^I32 old 0
+        ^:mut ^I32 f 0
+        ^:mut ^I32 m 0]
+    (while (and (== changed 1) (< pass 3))
+      (do (set changed 0)
+          (set g 0)
+          (while (< g ng)
+            (do (if (and (== (gr-get gr g 4) 0) (and (>= (gr-get gr g 2) 2) (or (== (gr-get gr g 3) 1) (== (gr-get gr g 3) 2))))
+                  (do (set f (gr-get gr g 0))
+                      (set m (gr-get gr g 1))
+                      (set adj 0)
+                      (set i 0)
+                      (while (< i m)
+                        (do (set adj (+ adj (fu-chain-adjacent ln cd ncd (cells-at ord (+ f i)))))
+                            (set i (+ i 1))))
+                      (if (>= (* adj 100) (* m 70))
+                        (do (set old (gr-get gr g 9))
+                            (gr-set gr g 9 m)
+                            (if (== (fu-qualify ord cd sl tx gr g npages trust) 1)
+                              (do (set i 0)
+                                  (while (< i m)
+                                    (do (cd-set cd (cells-at ord (+ f i)) 15 1)
+                                        (set i (+ i 1))))
+                                  (set added (+ added 1))
+                                  (set changed 1))
+                              (gr-set gr g 9 old))))))
+                (set g (+ g 1))))
+          (set pass (+ pass 1))))
+    (return added)))
 
 ;; ---------------------------------------------------------------- normalised text and hashes
 (defn ^I32 fu-norm-cp [^I32 c]
@@ -1658,6 +1772,42 @@
           (set l (+ l 1))))
     (return taken)))
 
+(defn ^I32 fu-stamps [^Cells wd ^:mut ^Cells ln ^Cells et ^Cells pages ^I32 npages ^Cells cd ^I32 ncd ^:mut ^Cells fo ^:mut ^Cells fp ^:mut ^Cells ft]
+  (comment "D583 (smoke review B issue 9): a line set sideways (a quarter turn either way) in the outer FU_STAMP per mille of its page's width, at least FU_STAMPLEN characters, is a margin")
+  (comment "stamp (the arXiv identifier up the left edge of a paper's first page, a Bates number up a court filing's side): furniture of its own, kept once as a `margin` root whatever the")
+  (comment "number of pages it is on (those on several are template groups before this). Taken out of the flow. Answers the lines taken.")
+  (let [^I32 nl (ln-count ln)
+        ^:mut ^I32 l 0
+        ^:mut ^I32 p 0
+        ^:mut ^I32 rot 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 cx2 0
+        ^:mut ^I32 ts 0
+        ^:mut ^I32 tl 0
+        ^:mut ^I32 f0 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 taken 0]
+    (while (< l nl)
+      (do (set p (ln-get ln l (lh-page)))
+          (set q (fu-cd-find cd ncd l))
+          (if (and (>= p 1) (<= p npages) (or (< q 0) (== (cd-get cd q 15) 0)))
+            (do (set rot (ln-get ln l (lh-rot)))
+                (if (or (< (fu-abs (- rot 9000)) 100) (< (fu-abs (- rot 27000)) 100))
+                  (do (set w (page-w pages (- p 1)))
+                      (set cx2 (+ (ln-get ln l (lh-x0)) (ln-get ln l (lh-x1))))
+                      (if (or (< (* cx2 500) (* w FU_STAMP)) (> (* cx2 500) (* w (- 1000 FU_STAMP))))
+                        (do (set ts (cells-len ft))
+                            (set tl (fu-line-text wd ln et ft l))
+                            (if (and (>= tl FU_STAMPLEN) (<= tl FU_MAXLEN))
+                              (do (set f0 (quot (cells-len fp) 5))
+                                  (fu-fp-push fp p (ln-get ln l (lh-x0)) (ln-get ln l (lh-y0)) (ln-get ln l (lh-x1)) (ln-get ln l (lh-y1)))
+                                  (fu-out-furniture fo (rl-margin) 600 (+ (sr-text) (sr-infer)) ts tl f0 1)
+                                  (ln-set ln l (lh-page) -7)
+                                  (set taken (+ taken 1)))
+                              (cells-drop ft ts))))))))
+          (set l (+ l 1))))
+    (return taken)))
+
 (defn ^I32 fu-fo-key [^Cells fo ^Cells fp ^I32 r ^I32 k]
   (if (== k 0) (return (fo-get fo r 9)))
   (if (== k 1) (return (fo-get fo r 8)))
@@ -1854,6 +2004,7 @@
                         (do (cd-set cd (cells-at ord (+ (gr-get gr g 0) r)) 15 1)
                             (set r (+ r 1))))))
                 (set g (+ g 1))))
+          (fu-chain ln ord cd sl tx gr ng n npages trust)
           (fu-body-hashes wd ln et cd n txt md bh)
           ;; the groups that qualified were marked 1 for the body hashes; the emission marks them for removal itself
           (set r 0)
@@ -1869,6 +2020,7 @@
     (if (>= n 1)
       (fu-style-pass wd ln et txt md cd n sl gr ord tx bh fo fp ft pl pages npages trust bsz mode))
     (fu-watermarks wd ln et npages bsz fo ft)
+    (if (== mode 0) (fu-stamps wd ln et pages npages cd n fo fp ft))
     (fu-merge-furniture fo fp ft ord)
     (fu-compact ln cd n)
     (return (- before (ln-count ln)))))

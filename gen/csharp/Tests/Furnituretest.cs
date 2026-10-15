@@ -226,6 +226,51 @@ public static class Furnituretest {
         Columns.LcCopy(ln, lt);
         return Para.PaBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
     }
+    internal static int FlRunSize(emon.Port.Cells wd, emon.Port.Cells ln0, emon.Port.Cells et, int npages, int pw, int ph, System.Text.StringBuilder t) {
+        // `fl-run` (no tree, the policy setting) over pages `pw` x `ph` centipoints: a small page for the margin zones' floor (D583).
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells gl = emon.Port.NewCells();
+        emon.Port.Cells mk = emon.Port.NewCells();
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells ord = emon.Port.NewCells();
+        emon.Port.Cells raw = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells fr = emon.Port.NewCells();
+        emon.Port.Cells gp = emon.Port.NewCells();
+        emon.Port.Cells cd = emon.Port.NewCells();
+        emon.Port.Cells sl = emon.Port.NewCells();
+        emon.Port.Cells gr = emon.Port.NewCells();
+        emon.Port.Cells ford = emon.Port.NewCells();
+        emon.Port.Cells tx = emon.Port.NewCells();
+        emon.Port.Cells bh = emon.Port.NewCells();
+        emon.Port.Cells fo = emon.Port.NewCells();
+        emon.Port.Cells fp = emon.Port.NewCells();
+        emon.Port.Cells ft = emon.Port.NewCells();
+        emon.Port.Cells pl = emon.Port.NewCells();
+        emon.Port.Cells st = emon.Port.NewCells();
+        emon.Port.Cells txt = emon.Port.NewCells();
+        emon.Port.Cells md = emon.Port.NewCells();
+        emon.Port.Cells lb = emon.Port.NewCells();
+        int p = 1;
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        while (p <= npages) {
+            Model.PageNew(pages, p, pw, ph, 0, Model.PkVector());
+            p += 1;
+        }
+        FlCopy(ln0, ln);
+        FlOrder(ln);
+        Furniture.FuFind(wd, ln, et, gl, mk, pages, npages, txt, md, lb, 0, 0, cd, sl, gr, ford, tx, bh, fo, fp, ft, pl);
+        FlBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp);
+        Furniture.FuWrite(fo, fp, ft, pl, npages, nodes, attrs, regions, text, pages, ledger, tmp);
+        FlBrief(t, nodes, attrs, text, pages, ledger, 1);
+        return Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st);
+    }
     internal static int FlRun(emon.Port.Cells wd, emon.Port.Cells ln0, emon.Port.Cells et, int npages, int trust, int mode, emon.Port.Cells txt, emon.Port.Cells md, emon.Port.Cells lb, System.Text.StringBuilder t) {
         // Run the stage as the Engine does (find, paragraphs, write) over the evidence, and write the brief into `t`. Answers
         // `model-check`'s verdict.
@@ -530,6 +575,181 @@ public static class Furnituretest {
         FlBottom(wd, ln, et, emon.Testport.TextBlob("5"), 5, 30000, 31000);
         emon.Testport.AssertEq(FlRun(wd, ln, et, 5, 0, 0, txt, md, lb, t1), 0, "odd even: well formed");
         emon.Testport.AssertText(t1, "L2=2;L3=3;L4=4;L5=5;Fh3,5:Employee Chapter;Dr@2:The Handbook;Dr@4:The Handbook;Dp@2:2;Dp@3:3;Dp@4:4;Dp@5:5;P:The Handbook;P:alpha beta. |alpha beta. |alpha beta. |alpha beta. |alpha beta.;", "the first page has no label; the chapter is kept; the book's title is dropped");
+    }
+    internal static int FlRoots(emon.Port.Cells nodes) {
+        // How many `furniture` roots the Model has.
+        int nn = Model.NodeCount(nodes);
+        int i = 0;
+        int n = 0;
+        while (i < nn) {
+            if ((Model.NodeKind(nodes, i) == Model.NkFurniture()) && (Model.NodeParent(nodes, i) == -1)) {
+                n += 1;
+            }
+            i += 1;
+        }
+        return n;
+    }
+    internal static int FlCells(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int page, int y, byte[] a, byte[] b, byte[] c, byte[] d, byte[] e) {
+        // A row of five cells (one line each) at y, 10 pt high, 10 pt text, in columns from x 7200, 12000, 24000, 34000 and 42000.
+        FlLine(wd, ln, et, a, page, 7200, y, 9000, y + 1000, 0, 1000);
+        FlLine(wd, ln, et, b, page, 12000, y, 20000, y + 1000, 0, 1000);
+        FlLine(wd, ln, et, c, page, 24000, y, 32000, y + 1000, 0, 1000);
+        FlLine(wd, ln, et, d, page, 34000, y, 38000, y + 1000, 0, 1000);
+        FlLine(wd, ln, et, e, page, 42000, y, 50000, y + 1000, 0, 1000);
+        return 0;
+    }
+    internal static int FlStatementPage(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int page, byte[] r1, byte[] r2, byte[] r3) {
+        // A continuation page of a statement: the header row (the same on every page) at 60 pt and three rows of cells under it, 13 pt apart, whose first column is `r1`, `r2`, `r3`.
+        FlCells(wd, ln, et, page, 6000, emon.Testport.TextBlob("No."), emon.Testport.TextBlob("Txn ID"), emon.Testport.TextBlob("Posted"), emon.Testport.TextBlob("Cr/Dr"), emon.Testport.TextBlob("Amount"));
+        FlCells(wd, ln, et, page, 7300, r1, emon.Testport.TextBlob("S88406266"), emon.Testport.TextBlob("06/01/2024"), emon.Testport.TextBlob("DR"), emon.Testport.TextBlob("33593.01"));
+        FlCells(wd, ln, et, page, 8600, r2, emon.Testport.TextBlob("S82211394"), emon.Testport.TextBlob("06/01/2024"), emon.Testport.TextBlob("CR"), emon.Testport.TextBlob("38674.79"));
+        FlCells(wd, ln, et, page, 9900, r3, emon.Testport.TextBlob("S94067070"), emon.Testport.TextBlob("06/01/2024"), emon.Testport.TextBlob("CR"), emon.Testport.TextBlob("67477.43"));
+        return 0;
+    }
+    internal static int FlRootsOf(emon.Port.Cells wd, emon.Port.Cells ln0, emon.Port.Cells et, int npages) {
+        // `fl-run` on Letter pages with no tree and the policy setting, answering how many `furniture` roots it made.
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells gl = emon.Port.NewCells();
+        emon.Port.Cells mk = emon.Port.NewCells();
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells ord = emon.Port.NewCells();
+        emon.Port.Cells raw = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells fr = emon.Port.NewCells();
+        emon.Port.Cells gp = emon.Port.NewCells();
+        emon.Port.Cells cd = emon.Port.NewCells();
+        emon.Port.Cells sl = emon.Port.NewCells();
+        emon.Port.Cells gr = emon.Port.NewCells();
+        emon.Port.Cells ford = emon.Port.NewCells();
+        emon.Port.Cells tx = emon.Port.NewCells();
+        emon.Port.Cells bh = emon.Port.NewCells();
+        emon.Port.Cells fo = emon.Port.NewCells();
+        emon.Port.Cells fp = emon.Port.NewCells();
+        emon.Port.Cells ft = emon.Port.NewCells();
+        emon.Port.Cells pl = emon.Port.NewCells();
+        emon.Port.Cells txt = emon.Port.NewCells();
+        emon.Port.Cells md = emon.Port.NewCells();
+        emon.Port.Cells lb = emon.Port.NewCells();
+        int p = 1;
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        while (p <= npages) {
+            Model.PageNew(pages, p, 61200, 79200, 0, Model.PkVector());
+            p += 1;
+        }
+        FlCopy(ln0, ln);
+        FlOrder(ln);
+        Furniture.FuFind(wd, ln, et, gl, mk, pages, npages, txt, md, lb, 0, 0, cd, sl, gr, ford, tx, bh, fo, fp, ft, pl);
+        FlBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp);
+        Furniture.FuWrite(fo, fp, ft, pl, npages, nodes, attrs, regions, text, pages, ledger, tmp);
+        return FlRoots(nodes);
+    }
+    [Xunit.Fact]
+    public static void TestTheFirstRowUnderARepeatedTableHeaderIsNoFurniture() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        // D583 (smoke review A issue 15): three pages of a statement, each the same header row and then rows whose cells (digits abstracted) are the same templates on every page. The
+        // first row is the same size at the same height on every page, and the rows under it, which recur by their templates, do not count against its isolation: it passed as a header that
+        // varies. It is a row of five cells on one baseline, which no running header is.
+        FlStatementPage(wd, ln, et, 1, emon.Testport.TextBlob("17"), emon.Testport.TextBlob("18"), emon.Testport.TextBlob("19"));
+        FlStatementPage(wd, ln, et, 2, emon.Testport.TextBlob("52"), emon.Testport.TextBlob("53"), emon.Testport.TextBlob("54"));
+        FlStatementPage(wd, ln, et, 3, emon.Testport.TextBlob("87"), emon.Testport.TextBlob("88"), emon.Testport.TextBlob("89"));
+        FlBody(wd, ln, et, emon.Testport.TextBlob("Opening balance carried forward."), 1, 8);
+        FlBody(wd, ln, et, emon.Testport.TextBlob("Closing balance carried forward."), 2, 8);
+        FlBody(wd, ln, et, emon.Testport.TextBlob("Page total carried forward."), 3, 8);
+        emon.Testport.AssertEq(FlRootsOf(wd, ln, et, 3), 0, "no row of the table is furniture");
+    }
+    [Xunit.Fact]
+    public static void TestATwoLineRunningHeaderIsFurnitureWhole() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        // D583 (smoke review B issue 11): a header of two lines, the second 8.6 pt over the first line of the body: only the first was set apart (the recurring second does not count
+        // against it), so the second stayed in the flow. The second goes with the first. A heading (larger than the body) under it varies from page to page and stays.
+        FlPages(wd, ln, et, 4);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("Where To Download"), 1, 4250, 1800, 17700, 3100, 0, 1000);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("Statistics Sixth Edition"), 1, 4250, 3550, 20000, 4850, 0, 1000);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("Erie hospitals seek answers"), 1, 4500, 5700, 30000, 7100, 0, 1400);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("Where To Download"), 2, 4250, 1800, 17700, 3100, 0, 1000);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("Statistics Sixth Edition"), 2, 4250, 3550, 20000, 4850, 0, 1000);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("Garland district fenced areas"), 2, 4500, 5700, 30000, 7100, 0, 1400);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("Where To Download"), 3, 4250, 1800, 17700, 3100, 0, 1000);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("Statistics Sixth Edition"), 3, 4250, 3550, 20000, 4850, 0, 1000);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("Women account for research"), 3, 4500, 5700, 30000, 7100, 0, 1400);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("Where To Download"), 4, 4250, 1800, 17700, 3100, 0, 1000);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("Statistics Sixth Edition"), 4, 4250, 3550, 20000, 4850, 0, 1000);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("Creativity comes from where"), 4, 4500, 5700, 30000, 7100, 0, 1400);
+        emon.Testport.AssertEq(FlRootsOf(wd, ln, et, 4), 2, "both lines of the header are furniture");
+    }
+    [Xunit.Fact]
+    public static void TestAFooterOfFourPartsOnOneBaselineIsStillAFooter() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        // D583: only a row in the TOP zone is a table's (the first data row under a repeated header): a footer of four parts on its baseline (the real statement's address, phone and notice) is furniture,
+        // kept once, four roots
+        FlPages(wd, ln, et, 3);
+        FlBottom(wd, ln, et, emon.Testport.TextBlob("example.com"), 1, 7200, 14000);
+        FlBottom(wd, ln, et, emon.Testport.TextBlob("Call 555 0100"), 1, 18000, 26000);
+        FlBottom(wd, ln, et, emon.Testport.TextBlob("PO Box 85123"), 1, 30000, 38000);
+        FlBottom(wd, ln, et, emon.Testport.TextBlob("Member FDIC"), 1, 42000, 50000);
+        FlBottom(wd, ln, et, emon.Testport.TextBlob("example.com"), 2, 7200, 14000);
+        FlBottom(wd, ln, et, emon.Testport.TextBlob("Call 555 0100"), 2, 18000, 26000);
+        FlBottom(wd, ln, et, emon.Testport.TextBlob("PO Box 85123"), 2, 30000, 38000);
+        FlBottom(wd, ln, et, emon.Testport.TextBlob("Member FDIC"), 2, 42000, 50000);
+        FlBottom(wd, ln, et, emon.Testport.TextBlob("example.com"), 3, 7200, 14000);
+        FlBottom(wd, ln, et, emon.Testport.TextBlob("Call 555 0100"), 3, 18000, 26000);
+        FlBottom(wd, ln, et, emon.Testport.TextBlob("PO Box 85123"), 3, 30000, 38000);
+        FlBottom(wd, ln, et, emon.Testport.TextBlob("Member FDIC"), 3, 42000, 50000);
+        emon.Testport.AssertEq(FlRootsOf(wd, ln, et, 3), 4, "four parts, four furniture roots");
+    }
+    [Xunit.Fact]
+    public static void TestASidewaysStampInTheMarginOfOnePageIsFurniture() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells txt = emon.Port.NewCells();
+        emon.Port.Cells md = emon.Port.NewCells();
+        emon.Port.Cells lb = emon.Port.NewCells();
+        System.Text.StringBuilder t1 = emon.Testport.NewText();
+        System.Text.StringBuilder t2 = emon.Testport.NewText();
+        // D583 (smoke review B issue 9): the arXiv identifier set up the left edge of a paper's first page, a quarter turn, 20 to 36 pt from the edge: a margin stamp, kept as a `margin` root and
+        // out of the body. The same line in the body's own place (an inch in) is text.
+        FlPages(wd, ln, et, 1);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("arXiv:2010.11929v2 [cs.CV] 3 Jun 2021"), 1, 2000, 20000, 3600, 55000, 9000, 900);
+        emon.Testport.AssertEq(FlRun(wd, ln, et, 1, 0, 0, txt, md, lb, t1), 0, "stamp: well formed");
+        emon.Testport.AssertText(t1, "Fm1:arXiv:2010.11929v2 [cs.CV] 3 Jun 2021;P:alpha beta.;", "the stamp is a margin root, the body is the body");
+        FlClear(wd, ln, et);
+        FlPages(wd, ln, et, 1);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("arXiv:2010.11929v2 [cs.CV] 3 Jun 2021"), 1, 7200, 20000, 8800, 55000, 9000, 900);
+        emon.Testport.AssertEq(FlRun(wd, ln, et, 1, 0, 0, txt, md, lb, t2), 0, "inside: well formed");
+        emon.Testport.AssertEq(FlRootsOf(wd, ln, et, 1), 0, "a sideways line inside the page is no stamp");
+    }
+    [Xunit.Fact]
+    public static void TestAFooterOnASmallPageIsFurniture() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        System.Text.StringBuilder t1 = emon.Testport.NewText();
+        // D583 (smoke review B issue 11): pages 297 x 210 pt: `Page 1/25` stands 28 pt from the foot (centre at 87 per cent of the height, short of the 89 per cent of the footer zone), and the header
+        // 18 pt from the top (11.7 per cent, past the 11 of the header zone). Both recur on every page, and the zones of a page that small are 36 pt deep.
+        FlLine(wd, ln, et, emon.Testport.TextBlob("alpha beta."), 1, 2000, 10000, 12000, 11100, 0, 1100);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("alpha beta."), 2, 2000, 10000, 12000, 11100, 0, 1100);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("alpha beta."), 3, 2000, 10000, 12000, 11100, 0, 1100);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("Where To Download"), 1, 4250, 1800, 17700, 3100, 0, 1000);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("Where To Download"), 2, 4250, 1800, 17700, 3100, 0, 1000);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("Where To Download"), 3, 4250, 1800, 17700, 3100, 0, 1000);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("Page 1/25"), 1, 11500, 17800, 15100, 18600, 0, 800);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("Page 2/25"), 2, 11500, 17800, 15100, 18600, 0, 800);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("Page 3/25"), 3, 11500, 17800, 15100, 18600, 0, 800);
+        emon.Testport.AssertEq(FlRunSize(wd, ln, et, 3, 29764, 20976, t1), 0, "small pages: well formed");
+        emon.Testport.AssertText(t1, "L1=1;L2=2;L3=3;Fh1,2,3:Where To Download;Dp@1:Page 1/25;Dp@2:Page 2/25;Dp@3:Page 3/25;P:alpha beta. |alpha beta. |alpha beta.;", "the header is kept once, the page numbers are labels");
     }
     [Xunit.Fact]
     public static void TestADiagonalWordMuchLargerThanTheTextIsAWatermark() {

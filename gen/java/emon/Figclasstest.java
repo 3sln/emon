@@ -286,6 +286,40 @@ public final class Figclasstest {
         Model.nodeAddRegion(nodes, regions, n, 1, x0, y0, x1, y1);
         return n;
     }
+    public static void testAFigureClaimsTheTextInsideItAndTheLabelsInAChainFromIt() {
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells nn = emon.Port.newCells();
+        emon.Port.Cells na = emon.Port.newCells();
+        emon.Port.Cells nr = emon.Port.newCells();
+        emon.Port.Cells nm = emon.Port.newCells();
+        emon.Port.Cells cand = emon.Port.newCells();
+        emon.Port.Cells fg = emon.Port.newCells();
+        emon.Port.Cells fd = emon.Port.newCells();
+        emon.Port.Cells ab = emon.Port.newCells();
+        // D583 (smoke review B issue 7): a drawing is boxes and arrows, and its words are between and beside them. The figure's own region is 10000..40000 by 10000..30000. A label 10 pt right
+        // of its edge is its (within 24 pt), and so is the one 15 pt right of THAT one, 35 pt from the figure, which the chain takes in; a paragraph of 100 characters and 30 pt tall INSIDE it is its text;
+        // a short one far from it stays.
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Model.pageNew(pages, 1, 61200, 79200, 0, Model.pkVector());
+        ftPara(nodes, regions, text, Model.nkParagraph(), 3, 41000, 18000, 42000, 18750);
+        ftPara(nodes, regions, text, Model.nkParagraph(), 3, 43500, 18000, 44500, 18750);
+        ftPara(nodes, regions, text, Model.nkParagraph(), 100, 12000, 15000, 30000, 18000);
+        ftPara(nodes, regions, text, Model.nkParagraph(), 3, 7200, 60000, 9000, 60750);
+        ftCand(cand, 1, 10000, 10000, 40000, 30000);
+        ftFd(fd, Model.fgDiagram(), 760);
+        emon.Port.cellsPush(fg, 0);
+        emon.Port.cellsPush(fg, 0);
+        Restruct.rsFigures(nodes, attrs, regions, text, nn, na, nr, nm, cand, fg, fd, ab);
+        emon.Testport.assertEq(Model.nodeCount(nn), 3, "the document, the figure and the far paragraph: the other three are the figure's labels");
+        emon.Testport.assertEq(Model.nodeKind(nn, 1), Model.nkFigure(), "the figure");
+        emon.Testport.assertEq(Model.nodeKind(nn, 2), Model.nkParagraph(), "and the paragraph that is not its");
+    }
     public static void testAShortParagraphOnAFigureIsItsLabelAndALongOneStays() {
         emon.Port.Cells nodes = emon.Port.newCells();
         emon.Port.Cells attrs = emon.Port.newCells();

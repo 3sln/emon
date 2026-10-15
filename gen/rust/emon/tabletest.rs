@@ -10,6 +10,7 @@ use crate::emon::json::*;
 use crate::emon::model::*;
 use crate::emon::mscript::*;
 use crate::emon::para::*;
+use crate::emon::pdfannot::*;
 use crate::emon::pdfcontent::*;
 use crate::emon::pdfdoc::*;
 use crate::emon::pdfmeta::*;
@@ -205,8 +206,8 @@ pub(crate) fn tt_brief(mut t: &mut String, nodes: &mut crate::port::Cells, attrs
     }
     return 0;
 }
-pub(crate) fn tt_run_n(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, pa: &mut crate::port::Cells, mut t: &mut String, np: i32) -> i32 {
-    // Tables, then paragraphs, then the brief of the Model, of a document of `np` pages (1 or 2). Answers `model-check`'s verdict.
+pub(crate) fn tt_run_an(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, pa: &mut crate::port::Cells, mut t: &mut String, np: i32, an: &mut crate::port::Cells) -> i32 {
+    // `tt-run-n` over a document whose annotations (rows of `an`, `AN_STRIDE` cells) are `an`: the form fields' widgets (D583).
     let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -285,11 +286,15 @@ pub(crate) fn tt_run_n(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells,
         page_new(pages, 2, 61200, 79200, 0, pk_vector());
     }
     gf_doc(pa, gpts, gmk, gim, np, gfx_mode(), grl, gfl, cand, &mut crate::port::Cells::new());
-    tb_build(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e);
+    tb_build(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
     lc_copy(ln, lt);
     pa_build(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
     tt_brief(t, nodes, attrs, text);
     return model_check(nodes, attrs, regions, text, pages, ledger, layout, st);
+}
+pub(crate) fn tt_run_n(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, pa: &mut crate::port::Cells, mut t: &mut String, np: i32) -> i32 {
+    // Tables, then paragraphs, then the brief of the Model, of a document of `np` pages (1 or 2). Answers `model-check`'s verdict.
+    return tt_run_an(wd, ln, et, pa, t, np, &mut crate::port::Cells::new());
 }
 pub(crate) fn tt_run(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, pa: &mut crate::port::Cells, mut t: &mut String) -> i32 {
     // Tables, then paragraphs, then the brief of the Model. Answers `model-check`'s verdict.
@@ -315,6 +320,169 @@ fn test_a_lattice_is_a_table_and_a_missing_rule_is_a_span() {
     tt_word(wd, ln, et, &crate::testport::text_blob("Outro")[..], 7200, 17200, 10200, 18000, 0);
     crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "lattice: well formed");
     crate::testport::assert_text(t, "P[Intro];T3r;Gh;R;Ch[Item];Ch[Qty];Ch[Price];Gb;R;C[Bolt];C[10];C[2.50];R;C[Total];Cc2[12.50];P[Outro];", "a 3 x 3 lattice with its last row's two cells joined: header, body, and the paragraphs around it");
+}
+pub(crate) fn tt_phrase_word(mut wd: &mut crate::port::Cells, mut et: &mut crate::port::Cells, b: &[u8], x: i32, y: i32, line: i32) -> i32 {
+    // A word of 500 a character, 800 tall from y at x, whose `line` field is `line` (the words of a line share it).
+    let r: i32 = wd_count(wd);
+    tt_w(wd, et, b, x, y, x + (500 * crate::port::blob_len(b)), y + 800, 0);
+    wd_set(wd, r, hd_line(), line);
+    return 0;
+}
+pub(crate) fn tt_lattice6(mut pa: &mut crate::port::Cells) -> i32 {
+    // The rules of a lattice of two rows and six columns, 38 pt wide each (x 72 pt to 300 pt, y 100 to 140 pt).
+    let mut k: i32 = 0;
+    while k < 7 {
+        tt_rule(pa, (7200 + (3800 * k)) - 50, 10000, (7200 + (3800 * k)) + 50, 14000);
+        k += 1;
+    }
+    tt_rule(pa, 7200, 9950, 30000, 10050);
+    tt_rule(pa, 7200, 11950, 30000, 12050);
+    tt_rule(pa, 7200, 13950, 30000, 14050);
+    return 0;
+}
+#[test]
+fn test_a_line_of_text_that_the_rules_cut_is_a_diagrams_label_and_no_table() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let wd2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    let t2: &mut String = &mut crate::port::new_text();
+    // D583 (smoke review B issue 7): the boxes of a figure (the patches of the Vision Transformer's picture) make a lattice of rules, and `Linear Projection of Flattened Patches` is set across it,
+    // a word a box: the words are one line, each 300 from the next, which a table's cells do not do (a cell is padded). Six words of a row far from each other in the same lattice are a table.
+    tt_lattice6(pa);
+    tt_phrase_word(wd, et, &crate::testport::text_blob("1")[..], 8500, 10600, 0);
+    tt_phrase_word(wd, et, &crate::testport::text_blob("2")[..], 12300, 10600, 0);
+    tt_phrase_word(wd, et, &crate::testport::text_blob("3")[..], 16100, 10600, 0);
+    tt_phrase_word(wd, et, &crate::testport::text_blob("4")[..], 19900, 10600, 0);
+    tt_phrase_word(wd, et, &crate::testport::text_blob("5")[..], 23700, 10600, 0);
+    tt_phrase_word(wd, et, &crate::testport::text_blob("6")[..], 27500, 10600, 0);
+    ln_new(ln, 1, 8500, 10600, 28000, 11400, 8500, 11200, 28000, 11200, 0, 0, 0, 6);
+    tt_phrase_word(wd, et, &crate::testport::text_blob("Project")[..], 7350, 12600, 1);
+    tt_phrase_word(wd, et, &crate::testport::text_blob("Flatten")[..], 11150, 12600, 1);
+    tt_phrase_word(wd, et, &crate::testport::text_blob("Patches")[..], 14950, 12600, 1);
+    tt_phrase_word(wd, et, &crate::testport::text_blob("Encoder")[..], 18750, 12600, 1);
+    tt_phrase_word(wd, et, &crate::testport::text_blob("Decoder")[..], 22550, 12600, 1);
+    tt_phrase_word(wd, et, &crate::testport::text_blob("Outputs")[..], 26350, 12600, 1);
+    ln_new(ln, 1, 7350, 12600, 29850, 13400, 7350, 13200, 29850, 13200, 0, 0, 6, 6);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "diagram: well formed");
+    crate::testport::assert_text(t, "P[1 2 3 4 5 6 Project Flatten Patches Encoder Decoder Outputs];", "no table: the words are the page's text");
+    // the same grid with the words of the second row each in the middle of its cell, far from each other (a line is a line of their own): a table
+    tt_lattice6(pa2);
+    tt_phrase_word(wd2, et2, &crate::testport::text_blob("1")[..], 8500, 10600, 0);
+    tt_phrase_word(wd2, et2, &crate::testport::text_blob("2")[..], 12300, 10600, 1);
+    tt_phrase_word(wd2, et2, &crate::testport::text_blob("3")[..], 16100, 10600, 2);
+    tt_phrase_word(wd2, et2, &crate::testport::text_blob("4")[..], 19900, 10600, 3);
+    tt_phrase_word(wd2, et2, &crate::testport::text_blob("5")[..], 23700, 10600, 4);
+    tt_phrase_word(wd2, et2, &crate::testport::text_blob("6")[..], 27500, 10600, 5);
+    tt_phrase_word(wd2, et2, &crate::testport::text_blob("Ax")[..], 8300, 12600, 6);
+    tt_phrase_word(wd2, et2, &crate::testport::text_blob("Bx")[..], 12100, 12600, 7);
+    tt_phrase_word(wd2, et2, &crate::testport::text_blob("Cx")[..], 15900, 12600, 8);
+    tt_phrase_word(wd2, et2, &crate::testport::text_blob("Dx")[..], 19700, 12600, 9);
+    tt_phrase_word(wd2, et2, &crate::testport::text_blob("Ex")[..], 23500, 12600, 10);
+    tt_phrase_word(wd2, et2, &crate::testport::text_blob("Fx")[..], 27300, 12600, 11);
+    let mut k: i32 = 0;
+    while k < 12 {
+        ln_new(ln2, 1, 7200, 10600, 28000, 11400, 7200, 11200, 28000, 11200, 0, 0, k, 1);
+        k += 1;
+    }
+    crate::testport::assert_eq(tt_run(wd2, ln2, et2, pa2, t2), 0, "table: well formed");
+    crate::testport::assert_text(t2, "T6r;Gb;R;C[1];C[2];C[3];C[4];C[5];C[6];R;C[Ax];C[Bx];C[Cx];C[Dx];C[Ex];C[Fx];", "a table");
+}
+#[test]
+fn test_the_frame_of_a_page_is_no_table() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    // D583 (smoke review B issue 7): the sheet of an engineering drawing, a frame 83 per cent of the page's width and 87 of its height, a title block of four cells under it and the words of the
+    // drawing in the large cell above: the rules meet as a table's do and the words are in cells, but it is the page's frame, with a cell of 60 per cent of the page.
+    tt_rule(pa, 5000, 4950, 56000, 5050);
+    tt_rule(pa, 5000, 61950, 56000, 62050);
+    tt_rule(pa, 5000, 69950, 56000, 70050);
+    tt_rule(pa, 5000, 73950, 56000, 74050);
+    tt_rule(pa, 4950, 5000, 5050, 74000);
+    tt_rule(pa, 55950, 5000, 56050, 74000);
+    tt_rule(pa, 29950, 62000, 30050, 74000);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Detail")[..], 10000, 10000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Grate")[..], 30000, 20000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Weld")[..], 40000, 30000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Plan")[..], 12000, 50000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Title")[..], 7000, 64000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Scale")[..], 33000, 64000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Material")[..], 7000, 71000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Item")[..], 33000, 71000, 0, 0);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "frame: well formed");
+    crate::testport::assert_text(t, "P[Detail];P[Grate];P[Weld];P[Plan];P[Title];P[Scale];P[Material];P[Item];", "no table: the words are the page's text");
+}
+pub(crate) fn tt_widget(mut an: &mut crate::port::Cells, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
+    // One text field's widget of page 1 as a row of `an` (38 cells: 0 the page, 0 based, 1 the subtype `an-field`, 4-7 the rectangle).
+    let mut k: i32 = 0;
+    while k < 38 {
+        crate::port::cells_push(an, 0);
+        k += 1;
+    }
+    let r: i32 = (crate::port::cells_len(an) / 38) - 1;
+    crate::port::cells_set(an, (r * 38) + 1, an_field());
+    crate::port::cells_set(an, (r * 38) + 4, x0);
+    crate::port::cells_set(an, (r * 38) + 5, y0);
+    crate::port::cells_set(an, (r * 38) + 6, x1);
+    crate::port::cells_set(an, (r * 38) + 7, y1);
+    return 0;
+}
+pub(crate) fn tt_form_page(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut pa: &mut crate::port::Cells) -> i32 {
+    // A form's page: a header row and a footer row of text across the page, and between them six labels in one open cell (no rule between them) and a column of six boxes, ruled.
+    tt_rule(pa, 7200, 9950, 37200, 10050);
+    tt_rule(pa, 7200, 11950, 37200, 12050);
+    tt_rule(pa, 27200, 13950, 37200, 14050);
+    tt_rule(pa, 27200, 15950, 37200, 16050);
+    tt_rule(pa, 27200, 17950, 37200, 18050);
+    tt_rule(pa, 27200, 19950, 37200, 20050);
+    tt_rule(pa, 27200, 21950, 37200, 22050);
+    tt_rule(pa, 7200, 23950, 37200, 24050);
+    tt_rule(pa, 7200, 25950, 37200, 26050);
+    tt_rule(pa, 7150, 10000, 7250, 26000);
+    tt_rule(pa, 27150, 10000, 27250, 26000);
+    tt_rule(pa, 37150, 10000, 37250, 26000);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Item")[..], 7600, 10600, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Amount")[..], 27600, 10600, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Wages")[..], 7600, 12600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Interest")[..], 7600, 14600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Rents")[..], 7600, 16600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Royalties")[..], 7600, 18600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Dividends")[..], 7600, 20600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Other")[..], 7600, 22600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Total")[..], 7600, 24600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Sum")[..], 27600, 24600, 0, 0);
+    return 0;
+}
+#[test]
+fn test_the_boxes_of_a_forms_fields_are_not_a_table() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let an: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    let t2: &mut String = &mut crate::port::new_text();
+    // D583 (smoke review A issue 10): the page of a form: its labels in one open cell and a column of boxes, which are the fields' widgets. Without fields it is a table; with a widget in
+    // each of its six empty cells (more than the cells with text) the rules are the fields' boxes and the labels are the page's lines, to which the fields go (`emon.fields`).
+    tt_form_page(wd, ln, et, pa);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "no fields: well formed");
+    crate::testport::assert_text(t, "T2r;Gh;R;Ch[Item];Ch[Amount];Gb;R;Cr6s[Wages Interest Rents Royalties Dividends Other];C[];R;C[];R;C[];R;C[];R;C[];R;C[];R;Cs[Total];C[Sum];", "a ruled grid: the label cell spans six rows");
+    tt_widget(an, 27800, 12300, 36600, 13700);
+    tt_widget(an, 27800, 14300, 36600, 15700);
+    tt_widget(an, 27800, 16300, 36600, 17700);
+    tt_widget(an, 27800, 18300, 36600, 19700);
+    tt_widget(an, 27800, 20300, 36600, 21700);
+    tt_widget(an, 27800, 22300, 36600, 23700);
+    crate::testport::assert_eq(tt_run_an(wd, ln, et, pa, t2, 1, an), 0, "fields: well formed");
+    crate::testport::assert_text(t2, "T2p;Gh;R;Chs[Item];Ch[Amount];Gb;R;Cs[Wages];C[];R;Cs[Interest];C[];R;Cs[Rents];C[];R;Cs[Royalties];C[];R;Cs[Dividends];C[];R;Cs[Other];C[];R;Cs[Total];C[Sum];", "the page's boxes are no lattice: each label has its own row and the field goes in it, not one cell that holds all the labels");
 }
 #[test]
 fn test_columns_of_whitespace_are_a_table_and_prose_columns_are_not() {
@@ -356,6 +524,35 @@ fn test_columns_of_whitespace_are_a_table_and_prose_columns_are_not() {
     tt_at(wd, ln, et, &crate::testport::text_blob("to him")[..], 30000, 13600, 0, 0);
     crate::testport::assert_eq(tt_run(wd, ln, et, pa, t2), 0, "prose: well formed");
     crate::testport::assert_text(t2, "P[the old];P[was and];P[of the];P[that is];P[and then];P[went on];P[she said];P[to him];", "lowercase text with half the cells empty is not a table");
+}
+#[test]
+fn test_two_columns_of_russian_prose_are_no_table_either() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    let t2: &mut String = &mut crate::port::new_text();
+    // D583 (smoke review B issue 14): the same two columns of lowercase words, four words a line, in Cyrillic: the lowercase test knew ASCII letters only, so the lines of a Russian paragraph set
+    // beside an infobox were a table.
+    tt_line3(wd, ln, et, &crate::testport::text_blob("это")[..], &crate::testport::text_blob("был")[..], &crate::testport::text_blob("так")[..], 7200, 10000);
+    tt_line3(wd, ln, et, &crate::testport::text_blob("когда")[..], &crate::testport::text_blob("мы")[..], &crate::testport::text_blob("все")[..], 30000, 10000);
+    tt_line3(wd, ln, et, &crate::testport::text_blob("что")[..], &crate::testport::text_blob("она")[..], &crate::testport::text_blob("там")[..], 7200, 11200);
+    tt_line3(wd, ln, et, &crate::testport::text_blob("вот")[..], &crate::testport::text_blob("так")[..], &crate::testport::text_blob("уже")[..], 30000, 11200);
+    tt_line3(wd, ln, et, &crate::testport::text_blob("его")[..], &crate::testport::text_blob("все")[..], &crate::testport::text_blob("тут")[..], 7200, 12400);
+    tt_line3(wd, ln, et, &crate::testport::text_blob("как")[..], &crate::testport::text_blob("раз")[..], &crate::testport::text_blob("ему")[..], 30000, 12400);
+    tt_line3(wd, ln, et, &crate::testport::text_blob("или")[..], &crate::testport::text_blob("нет")[..], &crate::testport::text_blob("ещё")[..], 7200, 13600);
+    tt_line3(wd, ln, et, &crate::testport::text_blob("для")[..], &crate::testport::text_blob("тех")[..], &crate::testport::text_blob("кто")[..], 30000, 13600);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "prose: well formed");
+    crate::testport::assert_text(t, "P[это был так что она там его все тут или нет ещё когда мы все вот так уже как раз ему для тех кто];", "lowercase Cyrillic text in two columns is not a table");
+    // and the same lines between rules (a link's underlines, a page's rules): the candidate of the rules and the channels, which the lowercase test is there for
+    tt_rule(pa, 7200, 9850, 45000, 9950);
+    tt_rule(pa, 7200, 11050, 45000, 11150);
+    tt_rule(pa, 7200, 12250, 45000, 12350);
+    tt_rule(pa, 7200, 13450, 45000, 13550);
+    tt_rule(pa, 7200, 14650, 45000, 14750);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t2), 0, "ruled prose: well formed");
+    crate::testport::assert_text(t2, "P[это был так что она там его все тут или нет ещё когда мы все вот так уже как раз ему для тех кто];", "no table");
 }
 pub(crate) fn tt_line2(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, a: &[u8], b: &[u8], x: i32, y: i32) -> i32 {
     // One line of two words, 500 per character and a 500 gap, 800 tall from y.
@@ -1730,7 +1927,7 @@ pub(crate) fn tt_golden(pdf: &[u8], mut t: &mut String, mut tvt: &mut String) ->
     pa_pages(pg, pages);
     let np: i32 = crate::port::cells_len(pages) / 16;
     gf_doc(pa, pts, mk, im, np, gfx_mode(), grl, gfl, cand, &mut crate::port::Cells::new());
-    tb_build(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e);
+    tb_build(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, &mut crate::port::Cells::new());
     tt_emit(tvt, t12e);
     lc_copy(ln, lt);
     in_detect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii);

@@ -248,6 +248,294 @@ func TestARunOfNumbersIsAListAndALoneLetterIsNot(emonT *testing.T) {
 	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(wd, evidence.LnGet(ln, 3, 11), evidence.HdTstart())), lists.LsSItem(), "the marker word begins with the item group")
 }
 
+func ltBody3(wd *port.Cells, ln *port.Cells, et *port.Cells) int32 {
+	// Three body lines, 0..2, as the head of a document of the laws below (y 5000 to 7800).
+	ltLine(wd, ln, et, port.TextBlob(""), port.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 5000)
+	ltLine(wd, ln, et, port.TextBlob(""), port.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 6400)
+	ltLine(wd, ln, et, port.TextBlob(""), port.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 7800)
+	return 0
+}
+
+func TestAnAuthorsInitialThatBeginsAReferencesSecondLineIsNoItem(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var sf *port.Cells = port.NewCells()
+	var sc *port.Cells = port.NewCells()
+	var hc *port.Cells = port.NewCells()
+	// D583 (smoke review B issue 12): the lines 3.. are a bibliography whose entries hang at x 9000; the second line of [10] and of [11] begin with an initial (`Y.`, `S.`) that
+	// is a letter and a full stop and one of a sequence by value and indent, which made nested lists of them
+	ltBody3(wd, ln, et)
+	ltLine(wd, ln, et, port.TextBlob("[9]"), port.TextBlob("R. Girshick. Fast R-CNN. In ICCV, 2015."), 7200, 9000, 10000)
+	ltLine(wd, ln, et, port.TextBlob("[10]"), port.TextBlob("I. J. Goodfellow, D. Warde-Farley, and"), 7200, 9000, 11400)
+	ltLine(wd, ln, et, port.TextBlob(""), port.TextBlob("Y. Bengio. Maxout networks. arXiv, 2013."), 0, 9000, 12800)
+	ltLine(wd, ln, et, port.TextBlob("[11]"), port.TextBlob("G. E. Hinton, N. Srivastava, and"), 7200, 9000, 14200)
+	ltLine(wd, ln, et, port.TextBlob(""), port.TextBlob("S. Guadarrama. Caffe: Convolutional."), 0, 9000, 15600)
+	ltLine(wd, ln, et, port.TextBlob("[12]"), port.TextBlob("A. Krizhevsky. Learning multiple layers."), 7200, 9000, 17000)
+	port.AssertEq(emonT, ltRun(wd, ln, et, sf, sc, hc), 4, "the four numbered entries are the items")
+	port.AssertEq(emonT, lists.LsGet(hc, 5, lists.LsKFlags()), lists.LsFCont(), "`Y. Bengio` goes on [10]")
+	port.AssertEq(emonT, lists.LsGet(hc, 7, lists.LsKFlags()), lists.LsFCont(), "`S. Guadarrama` goes on [11]")
+}
+
+func TestAnEnDashAfterABulletAndItsLeadInIsNoMarker(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var sf *port.Cells = port.NewCells()
+	var sc *port.Cells = port.NewCells()
+	var hc *port.Cells = port.NewCells()
+	// D583 (smoke review A issue 13): a bullet and an underlined lead-in are a line, the text after an en dash is a line of its own on the same baseline (the text layer splits at the underline): the
+	// dash is no marker, and the two lines of a row are not three blocks
+	ltBody3(wd, ln, et)
+	ltLine(wd, ln, et, port.TextBlob("•"), port.TextBlob("Lead-in"), 7200, 9000, 10000)
+	ltLine(wd, ln, et, port.TextBlob("–"), port.TextBlob("text goes on here"), 12000, 12800, 10000)
+	ltLine(wd, ln, et, port.TextBlob("•"), port.TextBlob("Second"), 7200, 9000, 11400)
+	ltLine(wd, ln, et, port.TextBlob("–"), port.TextBlob("more text goes on"), 12000, 12800, 11400)
+	ltRun(wd, ln, et, sf, sc, hc)
+	port.AssertEq(emonT, lists.LsGet(hc, 3, lists.LsKFlags()), lists.LsFItem(), "the first bullet starts an item")
+	port.AssertEq(emonT, lists.LsGet(hc, 4, lists.LsKFlags()), 0, "the dash after its lead-in does not")
+	port.AssertEq(emonT, lists.LsGet(hc, 5, lists.LsKFlags()), lists.LsFItem(), "the second bullet starts an item")
+	port.AssertEq(emonT, lists.LsGet(hc, 6, lists.LsKFlags()), 0, "its dash does not")
+}
+
+func ltRunPa(wd *port.Cells, ln *port.Cells, et *port.Cells, sf *port.Cells, sc *port.Cells, hc *port.Cells, pa *port.Cells) int32 {
+	// `lt-run` over the paths `pa`.
+	var gl *port.Cells = port.NewCells()
+	var ws *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var pr *port.Cells = port.NewCells()
+	var ptxt *port.Cells = port.NewCells()
+	var cd *port.Cells = port.NewCells()
+	var pi *port.Cells = port.NewCells()
+	var lws *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	heading.HdAnalyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt)
+	return lists.LsAnalyze(wd, ln, et, sf, pa, hc, cd, pi, lws, tw)
+}
+
+func TestArrowHeadsAreNoBulletsAndDiscsAre(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var sf *port.Cells = port.NewCells()
+	var sc *port.Cells = port.NewCells()
+	var hc *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var pb *port.Cells = port.NewCells()
+	var r int32 = 0
+	// D583 (smoke review B issue 12): two lines each preceded by a small filled shape on the x-height. A filled polygon (an arrow head of a figure) is no bullet; a filled disc is
+	ltBody3(wd, ln, et)
+	ltLine(wd, ln, et, port.TextBlob(""), port.TextBlob("first label text"), 0, 7200, 10000)
+	ltLine(wd, ln, et, port.TextBlob(""), port.TextBlob("second label text"), 0, 7200, 11400)
+	r = evidence.PaNew(pa, 1, evidence.PaOther(), 6400, 10350, 6900, 10850)
+	evidence.PaSet(pa, r, evidence.PfFlags(), evidence.PgFilled())
+	r = evidence.PaNew(pa, 1, evidence.PaOther(), 6400, 11750, 6900, 12250)
+	evidence.PaSet(pa, r, evidence.PfFlags(), evidence.PgFilled())
+	port.AssertEq(emonT, ltRunPa(wd, ln, et, sf, sc, hc, pa), 0, "arrow heads before two lines: no list")
+	r = evidence.PaNew(pb, 1, evidence.PaCurve(), 6400, 10350, 6900, 10850)
+	evidence.PaSet(pb, r, evidence.PfFlags(), evidence.PgFilled())
+	r = evidence.PaNew(pb, 1, evidence.PaCurve(), 6400, 11750, 6900, 12250)
+	evidence.PaSet(pb, r, evidence.PfFlags(), evidence.PgFilled())
+	port.CellsDrop(sf, 0)
+	port.CellsDrop(sc, 0)
+	port.CellsDrop(hc, 0)
+	port.AssertEq(emonT, ltRunPa(wd, ln, et, sf, sc, hc, pb), 2, "discs before them: a list of two")
+}
+
+func ltNotes(wd *port.Cells, ln *port.Cells, et *port.Cells, sf *port.Cells, sc *port.Cells, hc *port.Cells) int32 {
+	// The heading analysis and then the notes stage (captions, note bodies) of the evidence. Answers the captions plus note bodies found.
+	var gl *port.Cells = port.NewCells()
+	var ws *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var pr *port.Cells = port.NewCells()
+	var ptxt *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var rf *port.Cells = port.NewCells()
+	var nb *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	heading.HdAnalyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt)
+	return notes.NtAnalyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw)
+}
+
+func TestALineOfRunningTextThatBeginsFig4IsNoCaption(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var sf *port.Cells = port.NewCells()
+	var sc *port.Cells = port.NewCells()
+	var hc *port.Cells = port.NewCells()
+	var wd2 *port.Cells = port.NewCells()
+	var ln2 *port.Cells = port.NewCells()
+	var et2 *port.Cells = port.NewCells()
+	var sf2 *port.Cells = port.NewCells()
+	var sc2 *port.Cells = port.NewCells()
+	var hc2 *port.Cells = port.NewCells()
+	// D583 (smoke review B issue 17): `Fig. 4. We find ...` begins line 4 of a paragraph of running text, a line gap from the lines around it: a sentence. The same line with a gap above and below
+	// (a caption against its figure) is a caption.
+	ltBody3(wd, ln, et)
+	ltLine(wd, ln, et, port.TextBlob(""), port.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 9200)
+	ltLine(wd, ln, et, port.TextBlob(""), port.TextBlob("Fig. 4. We find that the results hold in all"), 0, 7200, 10600)
+	ltLine(wd, ln, et, port.TextBlob(""), port.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 12000)
+	ltLine(wd, ln, et, port.TextBlob(""), port.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 13400)
+	ltNotes(wd, ln, et, sf, sc, hc)
+	port.AssertEq(emonT, lists.LsGet(hc, 4, lists.LsKFlags()), 0, "a line inside a paragraph is no caption")
+	ltBody3(wd2, ln2, et2)
+	ltLine(wd2, ln2, et2, port.TextBlob(""), port.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 9200)
+	ltLine(wd2, ln2, et2, port.TextBlob(""), port.TextBlob("Fig. 4. We find that the results hold in all"), 0, 7200, 14000)
+	ltLine(wd2, ln2, et2, port.TextBlob(""), port.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 19000)
+	ltLine(wd2, ln2, et2, port.TextBlob(""), port.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 20400)
+	ltNotes(wd2, ln2, et2, sf2, sc2, hc2)
+	port.AssertEq(emonT, lists.LsGet(hc2, 4, lists.LsKFlags()), lists.LsFCap(), "set apart from the lines around it by gaps, it is a caption")
+}
+
+func ltSmall(wd *port.Cells, ln *port.Cells, et *port.Cells, marker []byte, rest []byte, y int32, size int32) int32 {
+	// A line like `lt-line` at x 7200 whose words are set in `size`. Answers its row.
+	var l int32 = ltLine(wd, ln, et, marker, rest, 7200, 9000, y)
+	var w0 int32 = evidence.LnGet(ln, l, 11)
+	var wn int32 = evidence.LnGet(ln, l, 12)
+	var k int32 = 0
+	for k < wn {
+		evidence.WdSet(wd, w0+k, evidence.WfSize(), size)
+		k += 1
+	}
+	return l
+}
+
+func ltNotesPages(wd *port.Cells, ln *port.Cells, et *port.Cells, sf *port.Cells, sc *port.Cells, hc *port.Cells) int32 {
+	// `lt-notes` with a page table (one Letter page), so that the lower half of the page is known.
+	var gl *port.Cells = port.NewCells()
+	var ws *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var pr *port.Cells = port.NewCells()
+	var ptxt *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var rf *port.Cells = port.NewCells()
+	var nb *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	model.PageNew(pages, 1, 61200, 79200, 0, model.PkVector())
+	heading.HdAnalyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt)
+	return notes.NtAnalyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw)
+}
+
+func ltNotesGlyphs(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, sf *port.Cells, sc *port.Cells, hc *port.Cells) int32 {
+	// `lt-notes-pages` over the glyphs `gl`.
+	var ws *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var pr *port.Cells = port.NewCells()
+	var ptxt *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var rf *port.Cells = port.NewCells()
+	var nb *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	model.PageNew(pages, 1, 61200, 79200, 0, model.PkVector())
+	heading.HdAnalyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt)
+	return notes.NtAnalyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw)
+}
+
+func TestAFootnotesRaisedMarkerGluedToItsWordIsAMarker(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var gl *port.Cells = port.NewCells()
+	var sf *port.Cells = port.NewCells()
+	var sc *port.Cells = port.NewCells()
+	var hc *port.Cells = port.NewCells()
+	var l int32 = 0
+	var w int32 = 0
+	var k int32 = 0
+	var g int32 = 0
+	// D583 (smoke review B issue 9): the footnote's first word is `1Fine-tuning`: its first glyph a 5.5 pt digit raised 2.5 pt off the text's baseline. The text layer takes the word's, and the line's,
+	// baseline from that first glyph, so the digit was no longer raised off it; the baseline the glyphs are raised off is the lowest one of the word.
+	ltBody3(wd, ln, et)
+	ltLine(wd, ln, et, port.TextBlob(""), port.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 9200)
+	ltLine(wd, ln, et, port.TextBlob(""), port.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 10600)
+	l = ltSmall(wd, ln, et, port.TextBlob(""), port.TextBlob("1Fine-tuning code and pre-trained models are"), 70000, 800)
+	ltSmall(wd, ln, et, port.TextBlob(""), port.TextBlob("available at the address of the project page"), 71200, 800)
+	w = evidence.LnGet(ln, l, 11)
+	evidence.WdSet(wd, w, evidence.WfGfirst(), 0)
+	evidence.WdSet(wd, w, evidence.WfGcount(), 12)
+	// the glyphs of `1Fine-tuning`: the digit first, then eleven in the text's size on the text's baseline (y 71000); the word's and the line's baseline are the digit's (y 70750)
+	g = evidence.GlNew(gl, 1, 7200, 70300, 7500, 70750, 49, -1, 0, w)
+	evidence.GlSet(gl, g, evidence.GfSize(), 550)
+	evidence.GlSet(gl, g, evidence.GfBy0(), 70750)
+	k = 0
+	for k < 11 {
+		g = evidence.GlNew(gl, 1, 7500+(k*300), 70300, 7800+(k*300), 71000, 70, -1, 0, w)
+		evidence.GlSet(gl, g, evidence.GfSize(), 800)
+		evidence.GlSet(gl, g, evidence.GfBy0(), 71000)
+		k += 1
+	}
+	evidence.WdSet(wd, w, evidence.HdBy0(), 70750)
+	evidence.LnSet(ln, l, evidence.LhBy0(), 70750)
+	ltNotesGlyphs(wd, ln, et, gl, sf, sc, hc)
+	port.AssertEq(emonT, lists.LsGet(hc, l, lists.LsKFlags()), lists.LsFNote(), "the footnote is a note, its marker the raised digit")
+}
+
+func TestASmallNumberedBlockAtTheFootOfThePageIsAFootnoteThoughNoReferenceShows(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var sf *port.Cells = port.NewCells()
+	var sc *port.Cells = port.NewCells()
+	var hc *port.Cells = port.NewCells()
+	var wd2 *port.Cells = port.NewCells()
+	var ln2 *port.Cells = port.NewCells()
+	var et2 *port.Cells = port.NewCells()
+	var sf2 *port.Cells = port.NewCells()
+	var sc2 *port.Cells = port.NewCells()
+	var hc2 *port.Cells = port.NewCells()
+	// D583 (smoke review B issue 9): body lines, then at the foot of the page two lines in 8 pt that begin with the lone number 1: a footnote (the reference in the text was a superscript the glyphs
+	// did not show). The same marker on a line in the size of the body is no note, nor is it when body type follows it.
+	ltBody3(wd, ln, et)
+	ltLine(wd, ln, et, port.TextBlob(""), port.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 9200)
+	ltLine(wd, ln, et, port.TextBlob(""), port.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 10600)
+	ltSmall(wd, ln, et, port.TextBlob("1"), port.TextBlob("Fine-tuning code and pre-trained models are"), 70000, 800)
+	ltSmall(wd, ln, et, port.TextBlob(""), port.TextBlob("available at the address of the project page"), 71200, 800)
+	ltNotesPages(wd, ln, et, sf, sc, hc)
+	port.AssertEq(emonT, lists.LsGet(hc, 5, lists.LsKFlags()), lists.LsFNote(), "the numbered small block at the foot is a note")
+	ltBody3(wd2, ln2, et2)
+	ltLine(wd2, ln2, et2, port.TextBlob(""), port.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 9200)
+	ltLine(wd2, ln2, et2, port.TextBlob(""), port.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 10600)
+	ltSmall(wd2, ln2, et2, port.TextBlob("1"), port.TextBlob("Fine-tuning code and pre-trained models are"), 70000, 800)
+	ltLine(wd2, ln2, et2, port.TextBlob(""), port.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 73000)
+	ltNotesPages(wd2, ln2, et2, sf2, sc2, hc2)
+	port.AssertEq(emonT, lists.LsGet(hc2, 5, lists.LsKFlags()), 0, "body type under it: no note")
+	// a list of references in small type at the foot of a page of body text is no list of notes: a bracketed number is a reference's, and six numbers in a row are a list's
+	var wd3 *port.Cells = port.NewCells()
+	var ln3 *port.Cells = port.NewCells()
+	var et3 *port.Cells = port.NewCells()
+	var sf3 *port.Cells = port.NewCells()
+	var sc3 *port.Cells = port.NewCells()
+	var hc3 *port.Cells = port.NewCells()
+	var wd4 *port.Cells = port.NewCells()
+	var ln4 *port.Cells = port.NewCells()
+	var et4 *port.Cells = port.NewCells()
+	var sf4 *port.Cells = port.NewCells()
+	var sc4 *port.Cells = port.NewCells()
+	var hc4 *port.Cells = port.NewCells()
+	ltBody3(wd3, ln3, et3)
+	ltLine(wd3, ln3, et3, port.TextBlob(""), port.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 9200)
+	ltLine(wd3, ln3, et3, port.TextBlob(""), port.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 10600)
+	ltSmall(wd3, ln3, et3, port.TextBlob("[1]"), port.TextBlob("Fine-tuning code and pre-trained models are"), 70000, 800)
+	ltSmall(wd3, ln3, et3, port.TextBlob("[2]"), port.TextBlob("available at the address of the project page"), 71200, 800)
+	ltNotesPages(wd3, ln3, et3, sf3, sc3, hc3)
+	port.AssertEq(emonT, lists.LsGet(hc3, 5, lists.LsKFlags()), 0, "a bracketed number is a reference's")
+	ltBody3(wd4, ln4, et4)
+	ltLine(wd4, ln4, et4, port.TextBlob(""), port.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 9200)
+	ltLine(wd4, ln4, et4, port.TextBlob(""), port.TextBlob("lorem ipsum dolor sit amet consectetur"), 0, 7200, 10600)
+	ltSmall(wd4, ln4, et4, port.TextBlob("1"), port.TextBlob("Fine-tuning code and pre-trained models are"), 70000, 800)
+	ltSmall(wd4, ln4, et4, port.TextBlob("2"), port.TextBlob("available at the address of the project page"), 71200, 800)
+	ltSmall(wd4, ln4, et4, port.TextBlob("3"), port.TextBlob("available at the address of the project page"), 72400, 800)
+	ltSmall(wd4, ln4, et4, port.TextBlob("4"), port.TextBlob("available at the address of the project page"), 73600, 800)
+	ltSmall(wd4, ln4, et4, port.TextBlob("5"), port.TextBlob("available at the address of the project page"), 74800, 800)
+	ltSmall(wd4, ln4, et4, port.TextBlob("6"), port.TextBlob("available at the address of the project page"), 76000, 800)
+	ltNotesPages(wd4, ln4, et4, sf4, sc4, hc4)
+	port.AssertEq(emonT, lists.LsGet(hc4, 5, lists.LsKFlags()), 0, "six numbers in a row in small type are a list")
+}
+
 func ltItem(nodes *port.Cells, attrs *port.Cells, text *port.Cells, parent int32, marker []byte, body []byte, scheme int32, value int32, x int32) int32 {
 	// An `item` of the old Model under parent: its marker, text, scheme (`sub`), value (`aux`), text x (`fk-box`).
 	var it int32 = model.NodeNew(nodes, model.NkItem(), parent)

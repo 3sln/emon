@@ -759,6 +759,9 @@ func sxConsider(r int32, views *port.Cells, srcview int32, prims *port.Cells, in
 			if (((4 * rx) / 100) * (ry / 100)) > (((pw / 100) * (ph / 100)) / 3) {
 				return 0
 			}
+			if (20 * rx) > (6 * pw) {
+				return 0
+			}
 			return sxAdd(cand, 2, r, cxp, cyp, sxAbs(rxp), sxAbs(ryp), evidence.PmGet(prims, r, evidence.PmfRot()), rgb, evidence.PmGet(prims, r, evidence.PmfX0()), evidence.PmGet(prims, r, evidence.PmfY0()), evidence.PmGet(prims, r, evidence.PmfX1()), evidence.PmGet(prims, r, evidence.PmfY1()), evidence.PmGet(prims, r, evidence.PmfConf()))
 		}
 		if (rad * 25) > (10 * sxMin(pw, ph)) {
@@ -784,6 +787,10 @@ func sxConsider(r int32, views *port.Cells, srcview int32, prims *port.Cells, in
 			return 0
 		}
 		if (((4 * rx) / 100) * (ry / 100)) > (((pw / 100) * (ph / 100)) / 3) {
+			return 0
+		}
+		// D583: a rectangle that is most of the page's width is a colour band (a heading's ground, a table's header band), not a stamp: a stamp is a mark that is a small part of the page
+		if (20 * rx) > (6 * pw) {
 			return 0
 		}
 		return sxAdd(cand, 2, r, cxp, cyp, sxAbs(rxp), sxAbs(ryp), evidence.PmGet(prims, r, evidence.PmfRot()), rgb, evidence.PmGet(prims, r, evidence.PmfX0()), evidence.PmGet(prims, r, evidence.PmfY0()), evidence.PmGet(prims, r, evidence.PmfX1()), evidence.PmGet(prims, r, evidence.PmfY1()), evidence.PmGet(prims, r, evidence.PmfConf()))

@@ -295,6 +295,41 @@ pub(crate) fn ft_para(mut nodes: &mut crate::port::Cells, mut regions: &mut crat
     return n;
 }
 #[test]
+fn test_a_figure_claims_the_text_inside_it_and_the_labels_in_a_chain_from_it() {
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nn: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let na: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nm: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ab: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    // D583 (smoke review B issue 7): a drawing is boxes and arrows, and its words are between and beside them. The figure's own region is 10000..40000 by 10000..30000. A label 10 pt right
+    // of its edge is its (within 24 pt), and so is the one 15 pt right of THAT one, 35 pt from the figure, which the chain takes in; a paragraph of 100 characters and 30 pt tall INSIDE it is its text;
+    // a short one far from it stays.
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    page_new(pages, 1, 61200, 79200, 0, pk_vector());
+    ft_para(nodes, regions, text, nk_paragraph(), 3, 41000, 18000, 42000, 18750);
+    ft_para(nodes, regions, text, nk_paragraph(), 3, 43500, 18000, 44500, 18750);
+    ft_para(nodes, regions, text, nk_paragraph(), 100, 12000, 15000, 30000, 18000);
+    ft_para(nodes, regions, text, nk_paragraph(), 3, 7200, 60000, 9000, 60750);
+    ft_cand(cand, 1, 10000, 10000, 40000, 30000);
+    ft_fd(fd, fg_diagram(), 760);
+    crate::port::cells_push(fg, 0);
+    crate::port::cells_push(fg, 0);
+    rs_figures(nodes, attrs, regions, text, nn, na, nr, nm, cand, fg, fd, ab);
+    crate::testport::assert_eq(node_count(nn), 3, "the document, the figure and the far paragraph: the other three are the figure's labels");
+    crate::testport::assert_eq(node_kind(nn, 1), nk_figure(), "the figure");
+    crate::testport::assert_eq(node_kind(nn, 2), nk_paragraph(), "and the paragraph that is not its");
+}
+#[test]
 fn test_a_short_paragraph_on_a_figure_is_its_label_and_a_long_one_stays() {
     let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();

@@ -357,6 +357,7 @@ pub(crate) fn fl_place(bt: &mut crate::port::Cells, nb: i32, kind: i32, page: i3
         if b >= 0 {
             crate::port::cells_set(out, 0, crate::port::cells_at(bt, b * FL_B));
             crate::port::cells_set(out, 1, 0);
+            crate::port::cells_set(out, 2, 1);
             return 0;
         }
     }
@@ -369,26 +370,57 @@ pub(crate) fn fl_place(bt: &mut crate::port::Cells, nb: i32, kind: i32, page: i3
     if (l >= 0) && ((a < 0) || (costl <= (costa + FL_BIAS))) {
         crate::port::cells_set(out, 0, crate::port::cells_at(bt, l * FL_B));
         crate::port::cells_set(out, 1, 1);
+        crate::port::cells_set(out, 2, 2);
         return 0;
     }
     if a >= 0 {
         crate::port::cells_set(out, 0, crate::port::cells_at(bt, a * FL_B));
         crate::port::cells_set(out, 1, 1);
+        crate::port::cells_set(out, 2, 3);
         return 0;
     }
     if l >= 0 {
         crate::port::cells_set(out, 0, crate::port::cells_at(bt, l * FL_B));
         crate::port::cells_set(out, 1, 1);
+        crate::port::cells_set(out, 2, 2);
         return 0;
     }
     c = fl_cell(bt, nb, page, x0, y0, x1, y1);
     if c >= 0 {
         crate::port::cells_set(out, 0, crate::port::cells_at(bt, c * FL_B));
         crate::port::cells_set(out, 1, 1);
+        crate::port::cells_set(out, 2, 4);
         return 0;
     }
     fl_anchor(bt, nb, page, y0, out);
+    crate::port::cells_set(out, 2, 5);
     return 0;
+}
+pub(crate) fn fl_sibling(fc: &mut crate::port::Cells, i: i32) -> i32 {
+    // D583 (smoke review A issue 10): the field row before field row i (a text, combo or list field too) that stands just to its left on its line, at most FL_NEAR_R (12 pt) away, and that
+    // a label to its left placed (cell 10 is 1 or 2); -1 when there is none. The cents box of a line of `dollars . cents` has no label near it, but the dollars box has: the line's.
+    let o: i32 = i * FL_W;
+    let mut j: i32 = i - 1;
+    let mut p: i32 = 0;
+    let mut ov: i32 = 0;
+    let mut sm: i32 = 0;
+    let mut gap: i32 = 0;
+    while (j >= 0) && (j >= (i - 8)) {
+        p = j * FL_W;
+        if crate::port::cells_at(fc, p + 1) != crate::port::cells_at(fc, o + 1) {
+            return -1;
+        }
+        if (crate::port::cells_at(fc, p + 9) >= 4) && (crate::port::cells_at(fc, p + 10) <= 2) && (crate::port::cells_at(fc, p + 10) >= 1) {
+            gap = crate::port::cells_at(fc, o + 2) - crate::port::cells_at(fc, p + 4);
+            ov = fl_min(crate::port::cells_at(fc, o + 5), crate::port::cells_at(fc, p + 5)) - fl_max(crate::port::cells_at(fc, o + 3), crate::port::cells_at(fc, p + 3));
+            sm = fl_min(crate::port::cells_at(fc, o + 5) - crate::port::cells_at(fc, o + 3), crate::port::cells_at(fc, p + 5) - crate::port::cells_at(fc, p + 3));
+            if (gap >= (0 - FL_TOL)) && (gap <= FL_NEAR_R) && (ov > 0) && ((ov * 2) >= sm) {
+                return j;
+            }
+        }
+        j -= 1;
+    }
+    return -1;
 }
 pub(crate) fn fl_count(an: &mut crate::port::Cells) -> i32 {
     // How many `an-field` rows `an` has.
@@ -461,6 +493,7 @@ pub(crate) fn fl_collect(an: &mut crate::port::Cells, bt: &mut crate::port::Cell
     let mut i: i32 = 0;
     let mut at: i32 = 0;
     let mut k: i32 = 0;
+    let mut j: i32 = 0;
     let mut nf: i32 = 0;
     while (i < n) && (nf < FL_MAXF) {
         at = i * AN_STRIDE;
@@ -489,6 +522,17 @@ pub(crate) fn fl_collect(an: &mut crate::port::Cells, bt: &mut crate::port::Cell
         fl_place(bt, nb, crate::port::cells_at(fc, at + 9), crate::port::cells_at(fc, at + 1), crate::port::cells_at(fc, at + 2), crate::port::cells_at(fc, at + 3), crate::port::cells_at(fc, at + 4), crate::port::cells_at(fc, at + 5), sc);
         crate::port::cells_set(fc, at + 6, crate::port::cells_at(sc, 0));
         crate::port::cells_set(fc, at + 7, crate::port::cells_at(sc, 1));
+        crate::port::cells_set(fc, at + 10, crate::port::cells_at(sc, 2));
+        // D583: a text field whose label is only found above or nowhere, with a field just to its left on its line that a label to its left was found for, goes with that field (the cents
+        // box of a line `dollars . cents` took the line above's label, the nearest above it, and the line below lost it)
+        if (crate::port::cells_at(fc, at + 9) >= 4) && (crate::port::cells_at(sc, 2) >= 3) {
+            j = fl_sibling(fc, i);
+            if j >= 0 {
+                crate::port::cells_set(fc, at + 6, crate::port::cells_at(fc, (j * FL_W) + 6));
+                crate::port::cells_set(fc, at + 7, crate::port::cells_at(fc, (j * FL_W) + 7));
+                crate::port::cells_set(fc, at + 10, crate::port::cells_at(fc, (j * FL_W) + 10));
+            }
+        }
         i += 1;
     }
     return nf;

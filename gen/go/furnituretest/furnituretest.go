@@ -249,6 +249,52 @@ func flBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages
 	return para.PaBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al)
 }
 
+func flRunSize(wd *port.Cells, ln0 *port.Cells, et *port.Cells, npages int32, pw int32, ph int32, t *strings.Builder) int32 {
+	// `fl-run` (no tree, the policy setting) over pages `pw` x `ph` centipoints: a small page for the margin zones' floor (D583).
+	var ln *port.Cells = port.NewCells()
+	var gl *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var ord *port.Cells = port.NewCells()
+	var raw *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var fr *port.Cells = port.NewCells()
+	var gp *port.Cells = port.NewCells()
+	var cd *port.Cells = port.NewCells()
+	var sl *port.Cells = port.NewCells()
+	var gr *port.Cells = port.NewCells()
+	var ford *port.Cells = port.NewCells()
+	var tx *port.Cells = port.NewCells()
+	var bh *port.Cells = port.NewCells()
+	var fo *port.Cells = port.NewCells()
+	var fp *port.Cells = port.NewCells()
+	var ft *port.Cells = port.NewCells()
+	var pl *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	var txt *port.Cells = port.NewCells()
+	var md *port.Cells = port.NewCells()
+	var lb *port.Cells = port.NewCells()
+	var p int32 = 1
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	for p <= npages {
+		model.PageNew(pages, p, pw, ph, 0, model.PkVector())
+		p += 1
+	}
+	flCopy(ln0, ln)
+	flOrder(ln)
+	furniture.FuFind(wd, ln, et, gl, mk, pages, npages, txt, md, lb, 0, 0, cd, sl, gr, ford, tx, bh, fo, fp, ft, pl)
+	flBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp)
+	furniture.FuWrite(fo, fp, ft, pl, npages, nodes, attrs, regions, text, pages, ledger, tmp)
+	flBrief(t, nodes, attrs, text, pages, ledger, 1)
+	return model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st)
+}
+
 func flRun(wd *port.Cells, ln0 *port.Cells, et *port.Cells, npages int32, trust int32, mode int32, txt *port.Cells, md *port.Cells, lb *port.Cells, t *strings.Builder) int32 {
 	// Run the stage as the Engine does (find, paragraphs, write) over the evidence, and write the brief into `t`. Answers
 	// `model-check`'s verdict.
@@ -554,6 +600,185 @@ func TestOddAndEvenPagesHaveTheirOwnHeaders(emonT *testing.T) {
 	flBottom(wd, ln, et, port.TextBlob("5"), 5, 30000, 31000)
 	port.AssertEq(emonT, flRun(wd, ln, et, 5, 0, 0, txt, md, lb, t1), 0, "odd even: well formed")
 	port.AssertText(emonT, t1, "L2=2;L3=3;L4=4;L5=5;Fh3,5:Employee Chapter;Dr@2:The Handbook;Dr@4:The Handbook;Dp@2:2;Dp@3:3;Dp@4:4;Dp@5:5;P:The Handbook;P:alpha beta. |alpha beta. |alpha beta. |alpha beta. |alpha beta.;", "the first page has no label; the chapter is kept; the book's title is dropped")
+}
+
+func flRoots(nodes *port.Cells) int32 {
+	// How many `furniture` roots the Model has.
+	var nn int32 = model.NodeCount(nodes)
+	var i int32 = 0
+	var n int32 = 0
+	for i < nn {
+		if (model.NodeKind(nodes, i) == model.NkFurniture()) && (model.NodeParent(nodes, i) == -1) {
+			n += 1
+		}
+		i += 1
+	}
+	return n
+}
+
+func flCells(wd *port.Cells, ln *port.Cells, et *port.Cells, page int32, y int32, a []byte, b []byte, c []byte, d []byte, e []byte) int32 {
+	// A row of five cells (one line each) at y, 10 pt high, 10 pt text, in columns from x 7200, 12000, 24000, 34000 and 42000.
+	flLine(wd, ln, et, a, page, 7200, y, 9000, y+1000, 0, 1000)
+	flLine(wd, ln, et, b, page, 12000, y, 20000, y+1000, 0, 1000)
+	flLine(wd, ln, et, c, page, 24000, y, 32000, y+1000, 0, 1000)
+	flLine(wd, ln, et, d, page, 34000, y, 38000, y+1000, 0, 1000)
+	flLine(wd, ln, et, e, page, 42000, y, 50000, y+1000, 0, 1000)
+	return 0
+}
+
+func flStatementPage(wd *port.Cells, ln *port.Cells, et *port.Cells, page int32, r1 []byte, r2 []byte, r3 []byte) int32 {
+	// A continuation page of a statement: the header row (the same on every page) at 60 pt and three rows of cells under it, 13 pt apart, whose first column is `r1`, `r2`, `r3`.
+	flCells(wd, ln, et, page, 6000, port.TextBlob("No."), port.TextBlob("Txn ID"), port.TextBlob("Posted"), port.TextBlob("Cr/Dr"), port.TextBlob("Amount"))
+	flCells(wd, ln, et, page, 7300, r1, port.TextBlob("S88406266"), port.TextBlob("06/01/2024"), port.TextBlob("DR"), port.TextBlob("33593.01"))
+	flCells(wd, ln, et, page, 8600, r2, port.TextBlob("S82211394"), port.TextBlob("06/01/2024"), port.TextBlob("CR"), port.TextBlob("38674.79"))
+	flCells(wd, ln, et, page, 9900, r3, port.TextBlob("S94067070"), port.TextBlob("06/01/2024"), port.TextBlob("CR"), port.TextBlob("67477.43"))
+	return 0
+}
+
+func flRootsOf(wd *port.Cells, ln0 *port.Cells, et *port.Cells, npages int32) int32 {
+	// `fl-run` on Letter pages with no tree and the policy setting, answering how many `furniture` roots it made.
+	var ln *port.Cells = port.NewCells()
+	var gl *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var ord *port.Cells = port.NewCells()
+	var raw *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var fr *port.Cells = port.NewCells()
+	var gp *port.Cells = port.NewCells()
+	var cd *port.Cells = port.NewCells()
+	var sl *port.Cells = port.NewCells()
+	var gr *port.Cells = port.NewCells()
+	var ford *port.Cells = port.NewCells()
+	var tx *port.Cells = port.NewCells()
+	var bh *port.Cells = port.NewCells()
+	var fo *port.Cells = port.NewCells()
+	var fp *port.Cells = port.NewCells()
+	var ft *port.Cells = port.NewCells()
+	var pl *port.Cells = port.NewCells()
+	var txt *port.Cells = port.NewCells()
+	var md *port.Cells = port.NewCells()
+	var lb *port.Cells = port.NewCells()
+	var p int32 = 1
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	for p <= npages {
+		model.PageNew(pages, p, 61200, 79200, 0, model.PkVector())
+		p += 1
+	}
+	flCopy(ln0, ln)
+	flOrder(ln)
+	furniture.FuFind(wd, ln, et, gl, mk, pages, npages, txt, md, lb, 0, 0, cd, sl, gr, ford, tx, bh, fo, fp, ft, pl)
+	flBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp)
+	furniture.FuWrite(fo, fp, ft, pl, npages, nodes, attrs, regions, text, pages, ledger, tmp)
+	return flRoots(nodes)
+}
+
+func TestTheFirstRowUnderARepeatedTableHeaderIsNoFurniture(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	// D583 (smoke review A issue 15): three pages of a statement, each the same header row and then rows whose cells (digits abstracted) are the same templates on every page. The
+	// first row is the same size at the same height on every page, and the rows under it, which recur by their templates, do not count against its isolation: it passed as a header that
+	// varies. It is a row of five cells on one baseline, which no running header is.
+	flStatementPage(wd, ln, et, 1, port.TextBlob("17"), port.TextBlob("18"), port.TextBlob("19"))
+	flStatementPage(wd, ln, et, 2, port.TextBlob("52"), port.TextBlob("53"), port.TextBlob("54"))
+	flStatementPage(wd, ln, et, 3, port.TextBlob("87"), port.TextBlob("88"), port.TextBlob("89"))
+	flBody(wd, ln, et, port.TextBlob("Opening balance carried forward."), 1, 8)
+	flBody(wd, ln, et, port.TextBlob("Closing balance carried forward."), 2, 8)
+	flBody(wd, ln, et, port.TextBlob("Page total carried forward."), 3, 8)
+	port.AssertEq(emonT, flRootsOf(wd, ln, et, 3), 0, "no row of the table is furniture")
+}
+
+func TestATwoLineRunningHeaderIsFurnitureWhole(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	// D583 (smoke review B issue 11): a header of two lines, the second 8.6 pt over the first line of the body: only the first was set apart (the recurring second does not count
+	// against it), so the second stayed in the flow. The second goes with the first. A heading (larger than the body) under it varies from page to page and stays.
+	flPages(wd, ln, et, 4)
+	flLine(wd, ln, et, port.TextBlob("Where To Download"), 1, 4250, 1800, 17700, 3100, 0, 1000)
+	flLine(wd, ln, et, port.TextBlob("Statistics Sixth Edition"), 1, 4250, 3550, 20000, 4850, 0, 1000)
+	flLine(wd, ln, et, port.TextBlob("Erie hospitals seek answers"), 1, 4500, 5700, 30000, 7100, 0, 1400)
+	flLine(wd, ln, et, port.TextBlob("Where To Download"), 2, 4250, 1800, 17700, 3100, 0, 1000)
+	flLine(wd, ln, et, port.TextBlob("Statistics Sixth Edition"), 2, 4250, 3550, 20000, 4850, 0, 1000)
+	flLine(wd, ln, et, port.TextBlob("Garland district fenced areas"), 2, 4500, 5700, 30000, 7100, 0, 1400)
+	flLine(wd, ln, et, port.TextBlob("Where To Download"), 3, 4250, 1800, 17700, 3100, 0, 1000)
+	flLine(wd, ln, et, port.TextBlob("Statistics Sixth Edition"), 3, 4250, 3550, 20000, 4850, 0, 1000)
+	flLine(wd, ln, et, port.TextBlob("Women account for research"), 3, 4500, 5700, 30000, 7100, 0, 1400)
+	flLine(wd, ln, et, port.TextBlob("Where To Download"), 4, 4250, 1800, 17700, 3100, 0, 1000)
+	flLine(wd, ln, et, port.TextBlob("Statistics Sixth Edition"), 4, 4250, 3550, 20000, 4850, 0, 1000)
+	flLine(wd, ln, et, port.TextBlob("Creativity comes from where"), 4, 4500, 5700, 30000, 7100, 0, 1400)
+	port.AssertEq(emonT, flRootsOf(wd, ln, et, 4), 2, "both lines of the header are furniture")
+}
+
+func TestAFooterOfFourPartsOnOneBaselineIsStillAFooter(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	// D583: only a row in the TOP zone is a table's (the first data row under a repeated header): a footer of four parts on its baseline (the real statement's address, phone and notice) is furniture,
+	// kept once, four roots
+	flPages(wd, ln, et, 3)
+	flBottom(wd, ln, et, port.TextBlob("example.com"), 1, 7200, 14000)
+	flBottom(wd, ln, et, port.TextBlob("Call 555 0100"), 1, 18000, 26000)
+	flBottom(wd, ln, et, port.TextBlob("PO Box 85123"), 1, 30000, 38000)
+	flBottom(wd, ln, et, port.TextBlob("Member FDIC"), 1, 42000, 50000)
+	flBottom(wd, ln, et, port.TextBlob("example.com"), 2, 7200, 14000)
+	flBottom(wd, ln, et, port.TextBlob("Call 555 0100"), 2, 18000, 26000)
+	flBottom(wd, ln, et, port.TextBlob("PO Box 85123"), 2, 30000, 38000)
+	flBottom(wd, ln, et, port.TextBlob("Member FDIC"), 2, 42000, 50000)
+	flBottom(wd, ln, et, port.TextBlob("example.com"), 3, 7200, 14000)
+	flBottom(wd, ln, et, port.TextBlob("Call 555 0100"), 3, 18000, 26000)
+	flBottom(wd, ln, et, port.TextBlob("PO Box 85123"), 3, 30000, 38000)
+	flBottom(wd, ln, et, port.TextBlob("Member FDIC"), 3, 42000, 50000)
+	port.AssertEq(emonT, flRootsOf(wd, ln, et, 3), 4, "four parts, four furniture roots")
+}
+
+func TestASidewaysStampInTheMarginOfOnePageIsFurniture(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var txt *port.Cells = port.NewCells()
+	var md *port.Cells = port.NewCells()
+	var lb *port.Cells = port.NewCells()
+	var t1 *strings.Builder = port.NewText()
+	var t2 *strings.Builder = port.NewText()
+	// D583 (smoke review B issue 9): the arXiv identifier set up the left edge of a paper's first page, a quarter turn, 20 to 36 pt from the edge: a margin stamp, kept as a `margin` root and
+	// out of the body. The same line in the body's own place (an inch in) is text.
+	flPages(wd, ln, et, 1)
+	flLine(wd, ln, et, port.TextBlob("arXiv:2010.11929v2 [cs.CV] 3 Jun 2021"), 1, 2000, 20000, 3600, 55000, 9000, 900)
+	port.AssertEq(emonT, flRun(wd, ln, et, 1, 0, 0, txt, md, lb, t1), 0, "stamp: well formed")
+	port.AssertText(emonT, t1, "Fm1:arXiv:2010.11929v2 [cs.CV] 3 Jun 2021;P:alpha beta.;", "the stamp is a margin root, the body is the body")
+	flClear(wd, ln, et)
+	flPages(wd, ln, et, 1)
+	flLine(wd, ln, et, port.TextBlob("arXiv:2010.11929v2 [cs.CV] 3 Jun 2021"), 1, 7200, 20000, 8800, 55000, 9000, 900)
+	port.AssertEq(emonT, flRun(wd, ln, et, 1, 0, 0, txt, md, lb, t2), 0, "inside: well formed")
+	port.AssertEq(emonT, flRootsOf(wd, ln, et, 1), 0, "a sideways line inside the page is no stamp")
+}
+
+func TestAFooterOnASmallPageIsFurniture(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var t1 *strings.Builder = port.NewText()
+	// D583 (smoke review B issue 11): pages 297 x 210 pt: `Page 1/25` stands 28 pt from the foot (centre at 87 per cent of the height, short of the 89 per cent of the footer zone), and the header
+	// 18 pt from the top (11.7 per cent, past the 11 of the header zone). Both recur on every page, and the zones of a page that small are 36 pt deep.
+	flLine(wd, ln, et, port.TextBlob("alpha beta."), 1, 2000, 10000, 12000, 11100, 0, 1100)
+	flLine(wd, ln, et, port.TextBlob("alpha beta."), 2, 2000, 10000, 12000, 11100, 0, 1100)
+	flLine(wd, ln, et, port.TextBlob("alpha beta."), 3, 2000, 10000, 12000, 11100, 0, 1100)
+	flLine(wd, ln, et, port.TextBlob("Where To Download"), 1, 4250, 1800, 17700, 3100, 0, 1000)
+	flLine(wd, ln, et, port.TextBlob("Where To Download"), 2, 4250, 1800, 17700, 3100, 0, 1000)
+	flLine(wd, ln, et, port.TextBlob("Where To Download"), 3, 4250, 1800, 17700, 3100, 0, 1000)
+	flLine(wd, ln, et, port.TextBlob("Page 1/25"), 1, 11500, 17800, 15100, 18600, 0, 800)
+	flLine(wd, ln, et, port.TextBlob("Page 2/25"), 2, 11500, 17800, 15100, 18600, 0, 800)
+	flLine(wd, ln, et, port.TextBlob("Page 3/25"), 3, 11500, 17800, 15100, 18600, 0, 800)
+	port.AssertEq(emonT, flRunSize(wd, ln, et, 3, 29764, 20976, t1), 0, "small pages: well formed")
+	port.AssertText(emonT, t1, "L1=1;L2=2;L3=3;Fh1,2,3:Where To Download;Dp@1:Page 1/25;Dp@2:Page 2/25;Dp@3:Page 3/25;P:alpha beta. |alpha beta. |alpha beta.;", "the header is kept once, the page numbers are labels")
 }
 
 func TestADiagonalWordMuchLargerThanTheTextIsAWatermark(emonT *testing.T) {

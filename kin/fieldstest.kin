@@ -134,6 +134,31 @@
     (fdt-html (test-t) nodes attrs regions text an txt out)
     (assert-text out "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>1 Name of entity/individual<span data-emon=\"field\" data-emon-name=\"f1_01[0]\" data-emon-type=\"text\">Ada Lovelace</span></p><p>Trust/estate</p><p>LLC. Enter the tax classification<span data-emon=\"field\" data-emon-name=\"f1_03[0]\" data-emon-type=\"text\"></span></p></main></body></html>" "text fields after their labels")))
 
+(deftest test-the-cents-box-of-a-line-goes-with-the-dollars-box-beside-it-not-with-the-line-above
+  (comment "D583 (smoke review A issue 10; the geometry of lines 14 and 15a of the IRS Form 941): each line has a box of dollars and a box of cents 7 pt to its right. The dollars box has its label to its left")
+  (comment "on its line (3.6 pt). The cents box of line 15a is 76 pt from that label, with no leader between, and the label of line 14 ends 4.6 pt over its top: the nearest label above took it.")
+  (comment "A field just to the left on its line, which has a label, is the line's: the cents box goes with it.")
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells an (new-cells)
+        ^Cells txt (new-cells)
+        ^Text out (new-text)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (fdt-par nodes regions text (text-blob "14 Balance due. If line 12 is more than line 13, enter the difference") 4095 67928 44393 68942)
+    (fdt-par nodes regions text (text-blob "15a Overpayment. If line 13 is more than line 12, enter the difference") 4100 69830 29140 70840)
+    (fdt-field an txt 4 -1 (text-blob "f1_53[0]") (text-blob "") (text-blob "") 44640 67500 54720 68900)
+    (fdt-field an txt 4 -1 (text-blob "f1_54[0]") (text-blob "") (text-blob "") 55440 67500 57525 68900)
+    (fdt-field an txt 4 -1 (text-blob "f1_55[0]") (text-blob "") (text-blob "") 29500 69400 36000 70800)
+    (fdt-field an txt 4 -1 (text-blob "f1_56[0]") (text-blob "") (text-blob "") 36720 69400 38805 70800)
+    (fdt-html (test-t) nodes attrs regions text an txt out)
+    (assert-text out "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>14 Balance due. If line 12 is more than line 13, enter the difference<span data-emon=\"field\" data-emon-name=\"f1_53[0]\" data-emon-type=\"text\"></span><span data-emon=\"field\" data-emon-name=\"f1_54[0]\" data-emon-type=\"text\"></span></p><p>15a Overpayment. If line 13 is more than line 12, enter the difference<span data-emon=\"field\" data-emon-name=\"f1_55[0]\" data-emon-type=\"text\"></span><span data-emon=\"field\" data-emon-name=\"f1_56[0]\" data-emon-type=\"text\"></span></p></main></body></html>"
+                 "the cents boxes go with their dollars boxes")))
+
 (deftest test-the-label-over-a-row-of-boxes-beats-the-instruction-that-ends-beside-the-first
   (comment "Three boxes of a number under `Social security number`, the first 15.6 pt right of the end of an instruction line that is on its line: the label above is 3 pt over")
   (comment "the box, so the instruction line (nearer than 24 pt, but not by 8 pt) does not take it; the third box is past the end of the label (20 pt sideways) and still has")

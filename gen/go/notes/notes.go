@@ -267,6 +267,37 @@ func ntInRun(sf *port.Cells, ln *port.Cells, hc *port.Cells, l int32) int32 {
 	return 0
 }
 
+func ntInProse(ln *port.Cells, sf *port.Cells, sc *port.Cells, l int32) int32 {
+	// D583 (smoke review B issue 17): 1 when caption candidate l is a line in the middle of a paragraph of the body: set as the body is (not apart from it), with a line of
+	// five words or more of its own size just above it and another just below it, both close (under 4/5 of its size). `Fig. 4. We find` that begins a line of running text is
+	// a sentence, not a caption; a caption stands against its figure or its text with a gap, or is set apart.
+	var a int32 = style.StGet(sf, l, style.SfkAbove())
+	var b int32 = style.StGet(sf, l, style.SfkBelow())
+	var sz int32 = lists.LsLineSize(sf, ln, l)
+	if ntStyleApart(sf, sc, l) == 1 {
+		return 0
+	}
+	if (a < 0) || (b < 0) {
+		return 0
+	}
+	if !lists.LsUpright(ln, a) || !lists.LsUpright(ln, b) {
+		return 0
+	}
+	if (evidence.LnGet(ln, a, evidence.LhCount()) < 5) || (evidence.LnGet(ln, b, evidence.LhCount()) < 2) {
+		return 0
+	}
+	if (lists.LsCap(style.StGet(sf, l, style.SfkGapAbove())) * 10) > (sz * 8) {
+		return 0
+	}
+	if (lists.LsCap(style.StGet(sf, l, style.SfkGapBelow())) * 10) > (sz * 8) {
+		return 0
+	}
+	if (lists.LsAbs(lists.LsLineSize(sf, ln, a)-sz) * 25) > sz {
+		return 0
+	}
+	return 1
+}
+
 func ntAfter(wd *port.Cells, ln *port.Cells, l int32, w int32) int32 {
 	// The word with text that follows word w in line l; -1 when there is none.
 	var w0 int32 = evidence.LnGet(ln, l, evidence.LhFirst())
@@ -560,27 +591,38 @@ func ntScanWord(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, 
 	var j int32 = 0
 	var m int32 = 0
 	var pa int32 = 0
+	var bs int32 = 0
 	var pb int32 = 0
 	if (g0 < 0) || (gn <= 0) || (gn > 4000) {
 		return 0
 	}
+	// D583 (smoke review B issue 9): the line's baseline is the first word's, which a word that STARTS with a superscript (a footnote's marker glued to its text) takes from the raised
+	// glyph: the baseline the glyphs are raised off is the lowest of the word's own.
+	bs = base
 	for i < gn {
-		m = ntGlyphMark(gl, et, g0+i, sz0, base)
+		if lists.LsCap(evidence.GlGet(gl, g0+i, evidence.GfBy0())) > bs {
+			bs = lists.LsCap(evidence.GlGet(gl, g0+i, evidence.GfBy0()))
+		}
+		i += 1
+	}
+	i = 0
+	for i < gn {
+		m = ntGlyphMark(gl, et, g0+i, sz0, bs)
 		if m < 0 {
 			i += 1
 		} else {
 			j = i
 			var ms int32 = port.CellsLen(mk)
-			for (j < gn) && ((j - i) < 6) && (ntGlyphMark(gl, et, g0+j, sz0, base) >= 0) {
-				port.CellsPush(mk, ntGlyphMark(gl, et, g0+j, sz0, base))
+			for (j < gn) && ((j - i) < 6) && (ntGlyphMark(gl, et, g0+j, sz0, bs) >= 0) {
+				port.CellsPush(mk, ntGlyphMark(gl, et, g0+j, sz0, bs))
 				j += 1
 			}
 			// a comma between two markers belongs to them: `1,2`
-			if ((j + 1) < gn) && ((j - i) < 5) && (ntGchar(gl, et, g0+j) == 44) && ntSupStyled(gl, g0+j, sz0, base) && (ntGlyphMark(gl, et, g0+j+1, sz0, base) >= 0) {
+			if ((j + 1) < gn) && ((j - i) < 5) && (ntGchar(gl, et, g0+j) == 44) && ntSupStyled(gl, g0+j, sz0, bs) && (ntGlyphMark(gl, et, g0+j+1, sz0, bs) >= 0) {
 				port.CellsPush(mk, 44)
 				j += 1
-				for (j < gn) && ((j - i) < 8) && (ntGlyphMark(gl, et, g0+j, sz0, base) >= 0) {
-					port.CellsPush(mk, ntGlyphMark(gl, et, g0+j, sz0, base))
+				for (j < gn) && ((j - i) < 8) && (ntGlyphMark(gl, et, g0+j, sz0, bs) >= 0) {
+					port.CellsPush(mk, ntGlyphMark(gl, et, g0+j, sz0, bs))
 					j += 1
 				}
 			}
@@ -768,7 +810,53 @@ func ntFindRef(rf *port.Cells, nb *port.Cells, mk *port.Cells, i int32, samePage
 	return -1
 }
 
-func ntFoot(rf *port.Cells, nb *port.Cells, mk *port.Cells, i int32) int32 {
+func ntSmallToEnd(ln *port.Cells, sf *port.Cells, l int32, bsz int32) int32 {
+	// D583 (smoke review B issue 9): 1 when no line on line l's page, upright and at or below its top, is set in the body's size (over 96 per cent of `bsz`): everything from l to
+	// the foot of the page is small type, the shape of a footnote block (the rule above it and the body above that are what the notes stage cannot see).
+	// And there is body type ABOVE it on the page (a page of nothing but small type is a list of references, not a page with a footnote at its foot).
+	var n int32 = evidence.LnCount(ln)
+	var p int32 = evidence.LnGet(ln, l, evidence.LhPage())
+	var y int32 = evidence.LnGet(ln, l, evidence.LhY0())
+	var above int32 = 0
+	var q int32 = 0
+	if bsz <= 0 {
+		return 0
+	}
+	for q < n {
+		if (q != l) && (evidence.LnGet(ln, q, evidence.LhPage()) == p) {
+			if lists.LsUpright(ln, q) && (evidence.LnGet(ln, q, evidence.LhY0()) >= (y - 100)) {
+				if (lists.LsLineSize(sf, ln, q) * 100) > (bsz * 96) {
+					return 0
+				}
+			}
+			if lists.LsUpright(ln, q) && (evidence.LnGet(ln, q, evidence.LhY0()) < (y - 100)) {
+				if (lists.LsLineSize(sf, ln, q) * 100) > (bsz * 96) {
+					above = 1
+				}
+			}
+		}
+		q += 1
+	}
+	return above
+}
+
+func ntPlainPeers(nb *port.Cells, i int32) int32 {
+	// D583: how many note body candidates on candidate i's page are small lines in the lower half with a plain marker (the same test as `nt-foot`'s fallback): a list of references or of
+	// numbered items in small type has many, a footnote block a few.
+	var nn int32 = port.CellsLen(nb) / ntNb
+	var pg int32 = port.CellsAt(nb, (i*ntNb)+1)
+	var j int32 = 0
+	var n int32 = 0
+	for j < nn {
+		if (port.CellsAt(nb, (j*ntNb)+1) == pg) && ((port.CellsAt(nb, (j*ntNb)+3) == 2) && ((port.CellsAt(nb, (j*ntNb)+8) == 1) && (port.CellsAt(nb, (j*ntNb)+9) == 1))) {
+			n += 1
+		}
+		j += 1
+	}
+	return n
+}
+
+func ntFoot(wd *port.Cells, et *port.Cells, ln *port.Cells, sf *port.Cells, rf *port.Cells, nb *port.Cells, mk *port.Cells, i int32) int32 {
 	// Is note body candidate i a footnote? In the lower half of the page (the band) and small or marked in superscript,
 	// with a reference on its page; or small, with a reference on the page before (a note a column or a page break pushed
 	// on); or marked in superscript, small and in the band, with no reference at all. Marks the candidate (state 1) and the
@@ -796,10 +884,23 @@ func ntFoot(rf *port.Cells, nb *port.Cells, mk *port.Cells, i int32) int32 {
 		port.CellsSet(nb, b+7, 1)
 		return 1
 	}
+	// D583: a plain marker (a lone number or symbol) on a small line in the lower half of the page, with only small type from it to the page's foot, is a footnote's whatever the text
+	// says (a superscript the text layer did not mark, a reference no glyph run showed)
+	// not a bracketed number (`[12]` is a reference list's), and not one of more than five on its page (a list)
+	if (kind == 2) && ((szok == 1) && (band == 1)) {
+		var bsz int32 = style.StHget(sf, style.SfhSize())
+		var w int32 = port.CellsAt(nb, b+2)
+		if (lists.LsWc(wd, et, w, 0) != 91) && (ntPlainPeers(nb, i) <= 5) {
+			if ntSmallToEnd(ln, sf, port.CellsAt(nb, b), bsz) == 1 {
+				port.CellsSet(nb, b+7, 1)
+				return 1
+			}
+		}
+	}
 	return 0
 }
 
-func ntMatch(rf *port.Cells, nb *port.Cells, mk *port.Cells, nhl int32) int32 {
+func ntMatch(wd *port.Cells, et *port.Cells, ln *port.Cells, sf *port.Cells, rf *port.Cells, nb *port.Cells, mk *port.Cells, nhl int32) int32 {
 	// Decide which candidates are notes. State 1: a footnote (a body in the lower half of the page, set smaller than
 	// the body text or marked in superscript, with a reference on its page; a superscript marker alone is enough when
 	// the line is also smaller). State 2: an endnote (a reference earlier in the document: for a superscript marker
@@ -809,7 +910,7 @@ func ntMatch(rf *port.Cells, nb *port.Cells, mk *port.Cells, nhl int32) int32 {
 	var r int32 = 0
 	var tent int32 = 0
 	for i < nn {
-		ntFoot(rf, nb, mk, i)
+		ntFoot(wd, et, ln, sf, rf, nb, mk, i)
 		i += 1
 	}
 	// endnotes: a superscript marker with an earlier reference at once, a plain number when there are two
@@ -1210,7 +1311,7 @@ func NtAnalyze(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, s
 	l = 0
 	for l < n {
 		if lists.LsGet(hc, l, lists.LsKFlags()) == lists.LsFCap() {
-			if (ntInRun(sf, ln, hc, l) == 1) || (ntTocLike(wd, ln, et, sf, l) == 1) {
+			if (ntInRun(sf, ln, hc, l) == 1) || ((ntTocLike(wd, ln, et, sf, l) == 1) || (ntInProse(ln, sf, sc, l) == 1)) {
 				lists.LsPut(hc, l, lists.LsKFlags(), 64)
 			}
 		}
@@ -1229,7 +1330,7 @@ func NtAnalyze(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, s
 	}
 	ntScan(wd, ln, et, gl, sf, pages, hc, rf, nb, mk)
 	nhl = ntFirstNotesHeading(wd, ln, et, hc, rf)
-	ntMatch(rf, nb, mk, nhl)
+	ntMatch(wd, et, ln, sf, rf, nb, mk, nhl)
 	ntMarkerless(wd, et, ln, sf, hc, rf, mk)
 	l = 0
 	for l < (port.CellsLen(nb) / ntNb) {

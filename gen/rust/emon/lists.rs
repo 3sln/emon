@@ -825,7 +825,8 @@ pub(crate) fn ls_shapes(ln: &mut crate::port::Cells, sf: &mut crate::port::Cells
         let w: i32 = x1 - x0;
         let h: i32 = y1 - y0;
         let p: i32 = pa_get(pa, r, pf_page());
-        if ((fl & 4) == 0) && ((fl & 24) != 0) && (w > 0) && (h > 0) && (w < 1500) && (h < 1500) && (p >= 1) && (((2 * p) + 1) < crate::port::cells_len(pi)) && ((4 * ls_abs(w - h)) <= ls_max(w, h)) {
+        // D583: a bullet is a disc (a curve) or a square (a rectangle); a filled polygon (an arrow head, a triangle) is no bullet
+        if ((fl & 4) == 0) && ((pa_get(pa, r, pf_kind()) == pa_curve()) || (pa_get(pa, r, pf_kind()) == pa_rect())) && ((fl & 24) != 0) && (w > 0) && (h > 0) && (w < 1500) && (h < 1500) && (p >= 1) && (((2 * p) + 1) < crate::port::cells_len(pi)) && ((4 * ls_abs(w - h)) <= ls_max(w, h)) {
             seen += 1;
             l = crate::port::cells_at(pi, 2 * p) - 1;
             while (l >= 0) && (l < crate::port::cells_at(pi, (2 * p) + 1)) {
@@ -1039,6 +1040,38 @@ pub(crate) fn ls_partner(wd: &mut crate::port::Cells, ln: &mut crate::port::Cell
     }
     return -1;
 }
+pub(crate) fn ls_bullet_before(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, sf: &mut crate::port::Cells, hc: &mut crate::port::Cells, l: i32, mut ws: &mut crate::port::Cells) -> i32 {
+    // D583 (smoke review A issue 13): 1 when a bullet precedes line l on its own row: the line on the same baseline just to its left starts with a strong bullet (a
+    // word, or a shape the line has). A bullet, a lead-in and an en dash and the text, split at the lead-in's underline, is one item, whose dash is the text's own.
+    let t: i32 = st_get(sf, l, sfk_sibline());
+    if t < 0 {
+        return 0;
+    }
+    if !ls_upright(ln, t) {
+        return 0;
+    }
+    if ln_get(ln, t, lh_page()) != ln_get(ln, l, lh_page()) {
+        return 0;
+    }
+    let sz: i32 = ls_line_size(sf, ln, l);
+    if ls_cap(ln_get(ln, t, lh_x1())) > (ls_cap(ln_get(ln, l, lh_x0())) + (sz / 4)) {
+        return 0;
+    }
+    if (ls_abs(ls_cap(ln_get(ln, l, lh_by0())) - ls_cap(ln_get(ln, t, lh_by0()))) * 3) > sz {
+        return 0;
+    }
+    if ls_get(hc, t, ls_k_shape()) > 0 {
+        return 1;
+    }
+    let w: i32 = ls_first_word(wd, ln, t);
+    if w < 0 {
+        return 0;
+    }
+    if ls_parse(wd, et, w, ws) == 1 {
+        return 1;
+    }
+    return 0;
+}
 pub(crate) fn ls_collect(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, sf: &mut crate::port::Cells, hc: &mut crate::port::Cells, mut cd: &mut crate::port::Cells, mut ws: &mut crate::port::Cells) -> i32 {
     // One candidate row per line that starts with a marker, or with a bullet shape, in line order. Lines that are
     // headings, not upright, or already taken (a note, a caption) are left out; a line whose only word is the
@@ -1059,6 +1092,13 @@ pub(crate) fn ls_collect(wd: &mut crate::port::Cells, ln: &mut crate::port::Cell
                 cls = ls_parse(wd, et, w, ws);
                 if (cls == 2) && (ls_letter_after(wd, ln, et, l, w) == 0) {
                     cls = 0;
+                }
+                if cls == 2 {
+                    if ls_bullet_before(wd, ln, et, sf, hc, l, ws) == 1 {
+                        cls = 0;
+                    } else {
+                        ls_parse(wd, et, w, ws);
+                    }
                 }
                 if (cls > 0) && ((crate::port::cells_at(ws, 4) < ls_wl(wd, w)) || (ls_second_word(wd, ln, l) >= 0)) {
                     tx = ls_textx(wd, ln, et, hc, l, w, cls, ws);
@@ -1167,36 +1207,69 @@ pub(crate) fn ls_hang_evidence(ln: &mut crate::port::Cells, sf: &mut crate::port
     }
     return 0;
 }
+pub(crate) fn ls_walk_from(ln: &mut crate::port::Cells, sf: &mut crate::port::Cells, mut hc: &mut crate::port::Cells, l: i32) -> i32 {
+    // Mark the lines that GO ON the item line l: down the page while the next line is not a start, is upright, close below, and
+    // sits at the item's text x. The same x and slop as the item's.
+    let tx: i32 = ls_get(hc, l, ls_k_textx());
+    let tl: i32 = ls_get(hc, l, ls_k_tol());
+    let mut cur: i32 = l;
+    let mut steps: i32 = 0;
+    let mut more: i32 = 1;
+    while (more == 1) && (steps < 200) {
+        let b: i32 = st_get(sf, cur, sfk_below());
+        more = 0;
+        if (b >= 0) && ls_upright(ln, b) {
+            if (ls_start(hc, b) == 0) && ((ls_get(hc, b, ls_k_flags()) & 2) == 0) && (st_get(sf, cur, sfk_gap_below()) <= (3 * tl)) && (ln_get(ln, b, lh_x0()) >= (tx - tl)) && (ln_get(ln, b, lh_x0()) <= (tx + tl)) {
+                ls_put(hc, b, ls_k_flags(), ls_f_cont());
+                ls_put(hc, b, ls_k_textx(), tx);
+                ls_put(hc, b, ls_k_tol(), tl);
+                cur = b;
+                more = 1;
+            }
+        }
+        steps += 1;
+    }
+    return 0;
+}
 pub(crate) fn ls_walk(ln: &mut crate::port::Cells, sf: &mut crate::port::Cells, mut hc: &mut crate::port::Cells) -> i32 {
-    // Mark the lines that GO ON an item: from each item line down the page while the next line is not a start, is
-    // upright, close below, and sits at the item's text x. The same x and slop as the item's.
+    // Mark the lines that GO ON an item: from each item line (`ls-walk-from`).
     let n: i32 = ln_count(ln);
     let mut l: i32 = 0;
     while l < n {
         if (ls_get(hc, l, ls_k_flags()) & 1) == 1 {
-            let tx: i32 = ls_get(hc, l, ls_k_textx());
-            let tl: i32 = ls_get(hc, l, ls_k_tol());
-            let mut cur: i32 = l;
-            let mut steps: i32 = 0;
-            let mut more: i32 = 1;
-            while (more == 1) && (steps < 200) {
-                let b: i32 = st_get(sf, cur, sfk_below());
-                more = 0;
-                if (b >= 0) && ls_upright(ln, b) {
-                    if (ls_start(hc, b) == 0) && ((ls_get(hc, b, ls_k_flags()) & 2) == 0) && (st_get(sf, cur, sfk_gap_below()) <= (3 * tl)) && (ln_get(ln, b, lh_x0()) >= (tx - tl)) && (ln_get(ln, b, lh_x0()) <= (tx + tl)) {
-                        ls_put(hc, b, ls_k_flags(), ls_f_cont());
-                        ls_put(hc, b, ls_k_textx(), tx);
-                        ls_put(hc, b, ls_k_tol(), tl);
-                        cur = b;
-                        more = 1;
-                    }
-                }
-                steps += 1;
-            }
+            ls_walk_from(ln, sf, hc, l);
         }
         l += 1;
     }
     return 0;
+}
+pub(crate) fn ls_hangs_under(ln: &mut crate::port::Cells, sf: &mut crate::port::Cells, hc: &mut crate::port::Cells, l: i32) -> i32 {
+    // D583 (smoke review B issue 12): 1 when line l sits where an item's text sits, under that item (an item line above it, or lines that go on it between, each at that x
+    // and close under the last): a reference whose second line begins with an author's initial (`Y. Bengio`) is the item's continuation, not a new item.
+    let mut cur: i32 = l;
+    let mut steps: i32 = 0;
+    let mut more: i32 = 1;
+    let mut r: i32 = 0;
+    while (more == 1) && (steps < 60) {
+        let a: i32 = st_get(sf, cur, sfk_above());
+        more = 0;
+        if (a >= 0) && ls_upright(ln, a) && (ls_cap(st_get(sf, cur, sfk_gap_above())) <= (3 * (ls_line_size(sf, ln, cur) / 2))) {
+            if (ls_get(hc, a, ls_k_flags()) & 1) != 0 {
+                let tx: i32 = ls_get(hc, a, ls_k_textx());
+                let tl: i32 = ls_get(hc, a, ls_k_tol());
+                if ls_abs(ls_cap(ln_get(ln, l, lh_x0())) - tx) <= tl {
+                    r = 1;
+                }
+            } else {
+                if (ls_start(hc, a) == 0) && (ls_abs(ls_cap(ln_get(ln, a, lh_x0())) - ls_cap(ln_get(ln, l, lh_x0()))) <= (ls_line_size(sf, ln, l) / 2)) {
+                    cur = a;
+                    more = 1;
+                }
+            }
+        }
+        steps += 1;
+    }
+    return r;
 }
 pub(crate) fn ls_initial_like(cd: &mut crate::port::Cells, i: i32) -> i32 {
     // 1 when candidate i is a letter or a roman numeral and a full stop (`Z.`): it might be an author's initial, and a
@@ -1236,6 +1309,12 @@ pub fn ls_analyze(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cel
         if (conf == 0) && (textx > 0) && (cls != 2) && (ls_initial_like(cd, i) == 0) {
             if ls_hang_evidence(ln, sf, hc, l, textx) == 1 {
                 conf = 1;
+            }
+        }
+        // an author's initial that begins the second line of a reference is the item's text (D583)
+        if (conf > 0) && (ls_initial_like(cd, i) == 1) && (ls_cget(cd, i, 3) >= 3) {
+            if ls_hangs_under(ln, sf, hc, l) == 1 {
+                conf = 0;
             }
         }
         if conf > 0 {

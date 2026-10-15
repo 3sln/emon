@@ -6,6 +6,7 @@ namespace emon;
 
 public static class Table {
     internal const int TbHeld = 1073741824;
+    internal const int AnStride = 38;
     internal const int Tbs = 28;
     internal const int Tcs = 16;
     internal const int Rls = 8;
@@ -641,7 +642,73 @@ public static class Table {
         }
         return n;
     }
-    internal static int TbLattice(emon.Port.Cells rm, int root, emon.Port.Cells xs, emon.Port.Cells ys, int page, emon.Port.Cells gm, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells wd, emon.Port.Cells et, int w0, int w1, emon.Port.Cells pr, emon.Port.Cells so, emon.Port.Cells tw, emon.Port.Cells tx, emon.Port.Cells wl, emon.Port.Cells rw, emon.Port.Cells sg, emon.Port.Cells ch, emon.Port.Cells st, emon.Port.Cells rmap, emon.Port.Cells bd) {
+    internal static int TbFieldCells(emon.Port.Cells tc, int cfirst, int cend, emon.Port.Cells an, int page) {
+        // D583 (smoke review A issue 10): how many cells of a candidate grid (rows cfirst..cend of `tc`) have no word in them and hold the centre of a form field's widget of the page
+        // (an `an-field` row of `an`: 0 page, 4-7 the rectangle): the boxes of a form, which a form's rules draw. 0 for a document with no field.
+        int na = emon.Port.CellsLen(an) / AnStride;
+        int n = 0;
+        int c = cfirst;
+        int a = 0;
+        int hit = 0;
+        int cx = 0;
+        int cy = 0;
+        if (na == 0) {
+            return 0;
+        }
+        while (c < cend) {
+            if (emon.Port.CellsAt(tc, (c * Tcs) + 9) == 0) {
+                hit = 0;
+                a = 0;
+                while ((a < na) && (hit == 0)) {
+                    if ((emon.Port.CellsAt(an, (a * AnStride) + 1) == Pdfannot.AnField()) && ((emon.Port.CellsAt(an, a * AnStride) + 1) == page)) {
+                        cx = (emon.Port.CellsAt(an, (a * AnStride) + 4) + emon.Port.CellsAt(an, (a * AnStride) + 6)) / 2;
+                        cy = (emon.Port.CellsAt(an, (a * AnStride) + 5) + emon.Port.CellsAt(an, (a * AnStride) + 7)) / 2;
+                        if ((cx >= emon.Port.CellsAt(tc, (c * Tcs) + 4)) && (cx <= emon.Port.CellsAt(tc, (c * Tcs) + 6)) && (cy >= emon.Port.CellsAt(tc, (c * Tcs) + 5)) && (cy <= emon.Port.CellsAt(tc, (c * Tcs) + 7))) {
+                            hit = 1;
+                        }
+                    }
+                    a += 1;
+                }
+                n += hit;
+            }
+            c += 1;
+        }
+        return n;
+    }
+    internal static int TbSingleCells(emon.Port.Cells tc, int cfirst, int cend) {
+        // How many cells of the grid (rows cfirst..cend of `tc`) are one row by one column.
+        int c = cfirst;
+        int n = 0;
+        while (c < cend) {
+            if ((emon.Port.CellsAt(tc, (c * Tcs) + 2) == 1) && (emon.Port.CellsAt(tc, (c * Tcs) + 3) == 1)) {
+                n += 1;
+            }
+            c += 1;
+        }
+        return n;
+    }
+    internal static int TbPageFrame(emon.Port.Cells tc, int cfirst, int cend, int gx0, int gy0, int gx1, int gy1, int pw, int ph) {
+        // 1 when the grid (box gx0..gx1, gy0..gy1) is the page's frame: at least 80 per cent of the page's width and of its height, with a cell of at least 30 per cent of the page's area in it
+        // (the drawing's sheet of an engineering drawing, its title block under it); 0 for a page of unknown size.
+        if ((pw <= 0) || (ph <= 0)) {
+            return 0;
+        }
+        if ((((gx1 - gx0) * 10) < (pw * 8)) || (((gy1 - gy0) * 10) < (ph * 8))) {
+            return 0;
+        }
+        int pa = (pw / 100) * (ph / 100);
+        int c = cfirst;
+        int a = 0;
+        while (c < cend) {
+            a = ((emon.Port.CellsAt(tc, (c * Tcs) + 6) - emon.Port.CellsAt(tc, (c * Tcs) + 4)) / 100) * ((emon.Port.CellsAt(tc, (c * Tcs) + 7) - emon.Port.CellsAt(tc, (c * Tcs) + 5)) / 100);
+            if ((a * 10) >= (pa * 3)) {
+                return 1;
+            }
+            c += 1;
+        }
+        return 0;
+    }
+    internal static int TbLattice(emon.Port.Cells rm, int root, emon.Port.Cells xs, emon.Port.Cells ys, int page, emon.Port.Cells gm, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells wd, emon.Port.Cells et, int w0, int w1, emon.Port.Cells pr, emon.Port.Cells so, emon.Port.Cells tw, emon.Port.Cells tx, emon.Port.Cells wl, emon.Port.Cells rw, emon.Port.Cells sg, emon.Port.Cells ch, emon.Port.Cells st, emon.Port.Cells rmap, emon.Port.Cells bd, emon.Port.Cells an, int pw, int ph) {
         // The cells of one component's lattice, their words, and the candidate table. Answers its index, -1
         // when it is not a table. P12.2: a band between two rules that holds the rows of a table with no rule between them is cut into
         // those rows first (`tb-split-rows`, whose cuts are in `so` and whose bands are in `bd` while the cells are made: the edges no rule
@@ -656,6 +723,9 @@ public static class Table {
         int rs = 1;
         int ok = 1;
         int cc = 0;
+        int cross = 0;
+        int prevc = -1;
+        int prevw = -1;
         if ((nc < 2) || (nr < 2)) {
             return -1;
         }
@@ -735,6 +805,12 @@ public static class Table {
             if ((ci >= 0) && (ri >= 0)) {
                 if (Evidence.WdGet(wd, w, Evidence.HdTlen()) > 0) {
                     TbPairAdd(pr, wd, emon.Port.CellsAt(gm, (ri * nc) + ci), w);
+                    // D583: a word that follows a word of its own line within half its size, in another cell: a line of text that the rules cut
+                    if ((prevw >= 0) && (prevc != emon.Port.CellsAt(gm, (ri * nc) + ci)) && (Evidence.WdGet(wd, w, Evidence.HdLine()) >= 0) && (Evidence.WdGet(wd, w, Evidence.HdLine()) == Evidence.WdGet(wd, prevw, Evidence.HdLine())) && (((Evidence.WdGet(wd, w, Evidence.HdX0()) - Evidence.WdGet(wd, prevw, Evidence.HdX1())) * 2) <= TbMax(1, Evidence.WdGet(wd, w, Evidence.WfSize())))) {
+                        cross += 1;
+                    }
+                    prevc = emon.Port.CellsAt(gm, (ri * nc) + ci);
+                    prevw = w;
                 }
             }
             w += 1;
@@ -759,6 +835,32 @@ public static class Table {
             emon.Port.CellsDrop(tw, tw0);
             return -1;
         }
+        // D583 (smoke review A issue 10): the rules of a form's page are its fields' boxes: a grid with more empty cells that hold a form field's widget (and at least four) than cells with text is the
+        // page's boxes, not a table; the labels are the page's lines and the fields go to them (`emon.fields`)
+        int fcn = TbFieldCells(tc, cfirst, cfirst + total, an, page);
+        if ((fcn >= 4) && (fcn > filled)) {
+            emon.Port.CellsDrop(tc, cfirst * Tcs);
+            emon.Port.CellsDrop(tw, tw0);
+            return -1;
+        }
+        // D583 (smoke review B issue 7): THE EVIDENCE OF A TEXT GRID. A diagram's boxes and connectors, or a page's frame, make rules that meet as a table's do, and the words in them are its labels.
+        // What they lack: (1) most cells are one row by one column (the boxes of a flowchart are spanned and empty cells); (2) a line of text runs from a cell into the next (a label that
+        // the box edges cut), which no table's cells do; (3) the grid is not the page's own frame, a page's width and height with a cell of a third of the page in it (a drawing's sheet).
+        if ((TbSingleCells(tc, cfirst, cfirst + total) * 2) < total) {
+            emon.Port.CellsDrop(tc, cfirst * Tcs);
+            emon.Port.CellsDrop(tw, tw0);
+            return -1;
+        }
+        if ((cross >= 3) && ((cross * 4) >= filled)) {
+            emon.Port.CellsDrop(tc, cfirst * Tcs);
+            emon.Port.CellsDrop(tw, tw0);
+            return -1;
+        }
+        if (TbPageFrame(tc, cfirst, cfirst + total, emon.Port.CellsAt(xs, 0), emon.Port.CellsAt(ys, 0), emon.Port.CellsAt(xs, nc), emon.Port.CellsAt(ys, nr), pw, ph) == 1) {
+            emon.Port.CellsDrop(tc, cfirst * Tcs);
+            emon.Port.CellsDrop(tw, tw0);
+            return -1;
+        }
         int t = TbAdd(tb, page, emon.Port.CellsAt(xs, 0), emon.Port.CellsAt(ys, 0), emon.Port.CellsAt(xs, nc), emon.Port.CellsAt(ys, nr), PfRuled, 900, nr, nc, cfirst, total);
         int i = 0;
         emon.Port.CellsSet(tb, (t * Tbs) + 16, emon.Port.CellsLen(tx));
@@ -769,7 +871,7 @@ public static class Table {
         }
         return t;
     }
-    internal static int TbRuledPage(emon.Port.Cells rm, int page, emon.Port.Cells xs, emon.Port.Cells ys, emon.Port.Cells gm, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells wd, emon.Port.Cells et, int w0, int w1, emon.Port.Cells pr, emon.Port.Cells so, emon.Port.Cells tw, emon.Port.Cells tx, emon.Port.Cells wl, emon.Port.Cells rw, emon.Port.Cells sg, emon.Port.Cells ch, emon.Port.Cells st, emon.Port.Cells rmap, emon.Port.Cells bd) {
+    internal static int TbRuledPage(emon.Port.Cells rm, int page, emon.Port.Cells xs, emon.Port.Cells ys, emon.Port.Cells gm, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells wd, emon.Port.Cells et, int w0, int w1, emon.Port.Cells pr, emon.Port.Cells so, emon.Port.Cells tw, emon.Port.Cells tx, emon.Port.Cells wl, emon.Port.Cells rw, emon.Port.Cells sg, emon.Port.Cells ch, emon.Port.Cells st, emon.Port.Cells rmap, emon.Port.Cells bd, emon.Port.Cells an, int pw, int ph) {
         // Every component of the page's merged rules with two rules each way is a lattice candidate.
         int n = TbRowsOf(rm, Rls);
         int i = 0;
@@ -806,7 +908,7 @@ public static class Table {
                 if ((nh >= 2) && (nv >= 2)) {
                     TbCluster(xs, 2 * PosTol);
                     TbCluster(ys, 2 * PosTol);
-                    TbLattice(rm, i, xs, ys, page, gm, tb, tc, wd, et, w0, w1, pr, so, tw, tx, wl, rw, sg, ch, st, rmap, bd);
+                    TbLattice(rm, i, xs, ys, page, gm, tb, tc, wd, et, w0, w1, pr, so, tw, tx, wl, rw, sg, ch, st, rmap, bd, an, pw, ph);
                 }
             }
             i += 1;
@@ -3133,6 +3235,23 @@ public static class Table {
         }
         return TbMin(lead, 2);
     }
+    internal static int TbLowc(int c) {
+        // D583 (smoke review B issue 14): 1 for a lower case letter of a cased script: Latin (ASCII and Latin-1), Greek, Cyrillic. A cell of two words or more that begins with one is text set in chunks,
+        // whatever the script (the ASCII letters alone made a Russian paragraph's lines a table).
+        if ((c >= 97) && (c <= 122)) {
+            return 1;
+        }
+        if ((c >= 223) && (c <= 255) && (c != 247)) {
+            return 1;
+        }
+        if ((c >= 945) && (c <= 969)) {
+            return 1;
+        }
+        if ((c >= 1072) && (c <= 1103)) {
+            return 1;
+        }
+        return 0;
+    }
     internal static int TbScore(emon.Port.Cells tb, int k, emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells tc, emon.Port.Cells tw) {
         // The score (0 to 1000, 0 = not a table) of text-based candidate k of its profile (SPEC 10.5): prose in
         // columns is not a table, so cells that are long, or that end like sentences, refuse it. The whitespace
@@ -3164,7 +3283,7 @@ public static class Table {
                     int c0 = emon.Port.CellsAt(et, Evidence.WdGet(wd, fw, Evidence.HdTstart()));
                     int ts2 = Evidence.WdGet(wd, lw2, Evidence.HdTstart());
                     int tl2 = Evidence.WdGet(wd, lw2, Evidence.HdTlen());
-                    if ((c0 >= 97) && (c0 <= 122)) {
+                    if (TbLowc(c0) == 1) {
                         nprose += 1;
                     }
                     if ((tl2 > 1) && (emon.Port.CellsAt(et, ts2 + (tl2 - 1)) == 45)) {
@@ -3939,7 +4058,7 @@ public static class Table {
                 int fw = emon.Port.CellsAt(tw, emon.Port.CellsAt(tc, cb + 8));
                 int c0 = emon.Port.CellsAt(et, Evidence.WdGet(wd, fw, Evidence.HdTstart()));
                 int low = 0;
-                if ((cn >= 2) && ((c0 >= 97) && (c0 <= 122))) {
+                if ((cn >= 2) && (TbLowc(c0) == 1)) {
                     low = 1;
                 }
                 if (emon.Port.CellsAt(tc, cb) == 0) {
@@ -5277,7 +5396,7 @@ public static class Table {
         TbCaption(tb, k, wd, et, ln, l0, l1, tq);
         return 0;
     }
-    public static int TbBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells grl, emon.Port.Cells gfl, int np, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells tx, emon.Port.Cells s0, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6, emon.Port.Cells s7, emon.Port.Cells s8, emon.Port.Cells s9, emon.Port.Cells s10, emon.Port.Cells s11, emon.Port.Cells s12, emon.Port.Cells s13, emon.Port.Cells s14, emon.Port.Cells s15, emon.Port.Cells s16, emon.Port.Cells s17, emon.Port.Cells s18, emon.Port.Cells pages, emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells se, emon.Port.Cells sc, emon.Port.Cells ss, emon.Port.Cells grg, emon.Port.Cells g0, emon.Port.Cells g1, emon.Port.Cells g2, emon.Port.Cells g3, emon.Port.Cells g4, emon.Port.Cells g5, emon.Port.Cells tv) {
+    public static int TbBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells grl, emon.Port.Cells gfl, int np, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells tx, emon.Port.Cells s0, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6, emon.Port.Cells s7, emon.Port.Cells s8, emon.Port.Cells s9, emon.Port.Cells s10, emon.Port.Cells s11, emon.Port.Cells s12, emon.Port.Cells s13, emon.Port.Cells s14, emon.Port.Cells s15, emon.Port.Cells s16, emon.Port.Cells s17, emon.Port.Cells s18, emon.Port.Cells pages, emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells se, emon.Port.Cells sc, emon.Port.Cells ss, emon.Port.Cells grg, emon.Port.Cells g0, emon.Port.Cells g1, emon.Port.Cells g2, emon.Port.Cells g3, emon.Port.Cells g4, emon.Port.Cells g5, emon.Port.Cells tv, emon.Port.Cells an) {
         // Find the tables of every page and claim their lines. `tb tc tw tq tx` are emptied first; s0..s18 are
         // scratch: rules, merged rules, fills, a sort order, x and y boundaries, the grid, word pairs, a copy of tb
         // rows, flags, the page's words, rows and chunks, channels, two coordinate lists, the row map, spans and
@@ -5345,7 +5464,7 @@ public static class Table {
                 TbCollect(grl, qi, qj, gfl, ui, uj, Model.PageH(pages, p - 1), s0, s2);
                 if (TbRowsOf(s0, Rls) <= MaxRules) {
                     TbMergeRules(s0, s1, s3, s9);
-                    TbRuledPage(s1, p, s4, s5, s6, tb, tc, wd, et, wi, wj, s7, s3, tw, tx, s10, s11, s12, s13, s14, s16, s15);
+                    TbRuledPage(s1, p, s4, s5, s6, tb, tc, wd, et, wi, wj, s7, s3, tw, tx, s10, s11, s12, s13, s14, s16, s15, an, Model.PageW(pages, p - 1), Model.PageH(pages, p - 1));
                     TbPartialPage(s1, p, wd, et, wi, wj, s9, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx);
                 } else {
                     emon.Port.CellsDrop(s1, 0);

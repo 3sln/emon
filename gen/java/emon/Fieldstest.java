@@ -122,6 +122,30 @@ public final class Fieldstest {
         fdtHtml(0, nodes, attrs, regions, text, an, txt, out);
         emon.Testport.assertText(out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>1 Name of entity/individual<span data-emon=\"field\" data-emon-name=\"f1_01[0]\" data-emon-type=\"text\">Ada Lovelace</span></p><p>Trust/estate</p><p>LLC. Enter the tax classification<span data-emon=\"field\" data-emon-name=\"f1_03[0]\" data-emon-type=\"text\"></span></p></main></body></html>", "text fields after their labels");
     }
+    public static void testTheCentsBoxOfALineGoesWithTheDollarsBoxBesideItNotWithTheLineAbove() {
+        // D583 (smoke review A issue 10; the geometry of lines 14 and 15a of the IRS Form 941): each line has a box of dollars and a box of cents 7 pt to its right. The dollars box has its label to its left
+        // on its line (3.6 pt). The cents box of line 15a is 76 pt from that label, with no leader between, and the label of line 14 ends 4.6 pt over its top: the nearest label above took it.
+        // A field just to the left on its line, which has a label, is the line's: the cents box goes with it.
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells an = emon.Port.newCells();
+        emon.Port.Cells txt = emon.Port.newCells();
+        StringBuilder out = emon.Testport.newText();
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        fdtPar(nodes, regions, text, emon.Testport.textBlob("14 Balance due. If line 12 is more than line 13, enter the difference"), 4095, 67928, 44393, 68942);
+        fdtPar(nodes, regions, text, emon.Testport.textBlob("15a Overpayment. If line 13 is more than line 12, enter the difference"), 4100, 69830, 29140, 70840);
+        fdtField(an, txt, 4, -1, emon.Testport.textBlob("f1_53[0]"), emon.Testport.textBlob(""), emon.Testport.textBlob(""), 44640, 67500, 54720, 68900);
+        fdtField(an, txt, 4, -1, emon.Testport.textBlob("f1_54[0]"), emon.Testport.textBlob(""), emon.Testport.textBlob(""), 55440, 67500, 57525, 68900);
+        fdtField(an, txt, 4, -1, emon.Testport.textBlob("f1_55[0]"), emon.Testport.textBlob(""), emon.Testport.textBlob(""), 29500, 69400, 36000, 70800);
+        fdtField(an, txt, 4, -1, emon.Testport.textBlob("f1_56[0]"), emon.Testport.textBlob(""), emon.Testport.textBlob(""), 36720, 69400, 38805, 70800);
+        fdtHtml(0, nodes, attrs, regions, text, an, txt, out);
+        emon.Testport.assertText(out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>14 Balance due. If line 12 is more than line 13, enter the difference<span data-emon=\"field\" data-emon-name=\"f1_53[0]\" data-emon-type=\"text\"></span><span data-emon=\"field\" data-emon-name=\"f1_54[0]\" data-emon-type=\"text\"></span></p><p>15a Overpayment. If line 13 is more than line 12, enter the difference<span data-emon=\"field\" data-emon-name=\"f1_55[0]\" data-emon-type=\"text\"></span><span data-emon=\"field\" data-emon-name=\"f1_56[0]\" data-emon-type=\"text\"></span></p></main></body></html>", "the cents boxes go with their dollars boxes");
+    }
     public static void testTheLabelOverARowOfBoxesBeatsTheInstructionThatEndsBesideTheFirst() {
         // Three boxes of a number under `Social security number`, the first 15.6 pt right of the end of an instruction line that is on its line: the label above is 3 pt over
         // the box, so the instruction line (nearer than 24 pt, but not by 8 pt) does not take it; the third box is past the end of the label (20 pt sideways) and still has

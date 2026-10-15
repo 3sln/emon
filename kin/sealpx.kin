@@ -557,6 +557,7 @@
                 (if (and (!= kind (pm-curve)) (!= kind (pm-ellipse))) (return 0))
                 (if (or (< (* 2 mn) 1000) (> mx (* 8 mn))) (return 0))
                 (if (> (* (quot (* 4 rx) 100) (quot ry 100)) (quot (* (quot pw 100) (quot ph 100)) 3)) (return 0))
+                (if (> (* 20 rx) (* 6 pw)) (return 0))
                 (return (sx-add cand 2 r cxp cyp (sx-abs rxp) (sx-abs ryp) (pm-get prims r (pmf-rot)) rgb
                                 (pm-get prims r (pmf-x0)) (pm-get prims r (pmf-y0)) (pm-get prims r (pmf-x1)) (pm-get prims r (pmf-y1)) (pm-get prims r (pmf-conf))))))
           (if (> (* rad 25) (* 10 (sx-min pw ph))) (return 0))
@@ -570,6 +571,8 @@
           (if (<= (pm-get prims r (pmf-stroke)) 0) (return 0))
           (if (or (< (* 2 rx) 1000) (< (* 2 ry) 1000)) (return 0))
           (if (> (* (quot (* 4 rx) 100) (quot ry 100)) (quot (* (quot pw 100) (quot ph 100)) 3)) (return 0))
+          (comment "D583: a rectangle that is most of the page's width is a colour band (a heading's ground, a table's header band), not a stamp: a stamp is a mark that is a small part of the page")
+          (if (> (* 20 rx) (* 6 pw)) (return 0))
           (return (sx-add cand 2 r cxp cyp (sx-abs rxp) (sx-abs ryp) (pm-get prims r (pmf-rot)) rgb
                           (pm-get prims r (pmf-x0)) (pm-get prims r (pmf-y0)) (pm-get prims r (pmf-x1)) (pm-get prims r (pmf-y1)) (pm-get prims r (pmf-conf))))))
     (return 0)))
