@@ -857,14 +857,16 @@
 (defn ^Bool tb-part [^Cells tb ^I32 j ^I32 i ^Cells tc]
   (comment "P12.2: is candidate j only a part of what candidate i reads: it lies in i's box or is its head (`tb-within`, `tb-head-of`) and is no more than three")
   (comment "in four of its height (a reading of the same rows beside it is no part), i has the columns (or two fewer: the rules of a header put a column between")
-  (comment "the years that the text does not have) and `TB_ROWS_MORE` rows more, and a score no more than `TB_ROWS_SLACK` under j's.")
+  (comment "the years that the text does not have; or any number when it has twice the rows: four rows of a long table are cut into more columns than the table")
+  (comment "has) and `TB_ROWS_MORE` rows more, and a score no more than `TB_ROWS_SLACK` under j's.")
   (let [^I32 a (* j TBS)
         ^I32 b (* i TBS)]
     (return (and (or (tb-within tb j i) (tb-head-of tb j i))
                  (and (not (tb-block-below tb i (cells-at tb (+ a 4)) tc))
                  (and (<= (* 4 (- (cells-at tb (+ a 4)) (cells-at tb (+ a 2)))) (* 3 (- (cells-at tb (+ b 4)) (cells-at tb (+ b 2)))))
                       (and (>= (cells-at tb (+ b 7)) (+ (cells-at tb (+ a 7)) TB_ROWS_MORE))
-                           (and (>= (+ (cells-at tb (+ b 8)) 2) (cells-at tb (+ a 8)))
+                           (and (or (>= (+ (cells-at tb (+ b 8)) 2) (cells-at tb (+ a 8)))
+                                    (>= (cells-at tb (+ b 7)) (* 2 (cells-at tb (+ a 7)))))
                                 (>= (+ (cells-at tb (+ b 6)) TB_ROWS_SLACK) (cells-at tb (+ a 6)))))))))))
 
 (defn ^Bool tb-takes [^Cells tb ^I32 i ^I32 t0 ^I32 n ^Cells tc]

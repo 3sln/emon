@@ -1010,10 +1010,11 @@ func tbBlockBelow(tb *port.Cells, i int32, ybot int32, tc *port.Cells) bool {
 func tbPart(tb *port.Cells, j int32, i int32, tc *port.Cells) bool {
 	// P12.2: is candidate j only a part of what candidate i reads: it lies in i's box or is its head (`tb-within`, `tb-head-of`) and is no more than three
 	// in four of its height (a reading of the same rows beside it is no part), i has the columns (or two fewer: the rules of a header put a column between
-	// the years that the text does not have) and `TB_ROWS_MORE` rows more, and a score no more than `TB_ROWS_SLACK` under j's.
+	// the years that the text does not have; or any number when it has twice the rows: four rows of a long table are cut into more columns than the table
+	// has) and `TB_ROWS_MORE` rows more, and a score no more than `TB_ROWS_SLACK` under j's.
 	var a int32 = j * tbs
 	var b int32 = i * tbs
-	return (tbWithin(tb, j, i) || tbHeadOf(tb, j, i)) && (!tbBlockBelow(tb, i, port.CellsAt(tb, a+4), tc) && (((4 * (port.CellsAt(tb, a+4) - port.CellsAt(tb, a+2))) <= (3 * (port.CellsAt(tb, b+4) - port.CellsAt(tb, b+2)))) && ((port.CellsAt(tb, b+7) >= (port.CellsAt(tb, a+7) + tbRowsMore)) && (((port.CellsAt(tb, b+8) + 2) >= port.CellsAt(tb, a+8)) && ((port.CellsAt(tb, b+6) + tbRowsSlack) >= port.CellsAt(tb, a+6))))))
+	return (tbWithin(tb, j, i) || tbHeadOf(tb, j, i)) && (!tbBlockBelow(tb, i, port.CellsAt(tb, a+4), tc) && (((4 * (port.CellsAt(tb, a+4) - port.CellsAt(tb, a+2))) <= (3 * (port.CellsAt(tb, b+4) - port.CellsAt(tb, b+2)))) && ((port.CellsAt(tb, b+7) >= (port.CellsAt(tb, a+7) + tbRowsMore)) && ((((port.CellsAt(tb, b+8) + 2) >= port.CellsAt(tb, a+8)) || (port.CellsAt(tb, b+7) >= (2 * port.CellsAt(tb, a+7)))) && ((port.CellsAt(tb, b+6) + tbRowsSlack) >= port.CellsAt(tb, a+6))))))
 }
 
 func tbTakes(tb *port.Cells, i int32, t0 int32, n int32, tc *port.Cells) bool {

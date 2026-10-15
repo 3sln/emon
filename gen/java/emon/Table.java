@@ -923,10 +923,11 @@ public final class Table {
     public static boolean tbPart(emon.Port.Cells tb, int j, int i, emon.Port.Cells tc) {
         // P12.2: is candidate j only a part of what candidate i reads: it lies in i's box or is its head (`tb-within`, `tb-head-of`) and is no more than three
         // in four of its height (a reading of the same rows beside it is no part), i has the columns (or two fewer: the rules of a header put a column between
-        // the years that the text does not have) and `TB_ROWS_MORE` rows more, and a score no more than `TB_ROWS_SLACK` under j's.
+        // the years that the text does not have; or any number when it has twice the rows: four rows of a long table are cut into more columns than the table
+        // has) and `TB_ROWS_MORE` rows more, and a score no more than `TB_ROWS_SLACK` under j's.
         int a = j * TBS;
         int b = i * TBS;
-        return (tbWithin(tb, j, i) || tbHeadOf(tb, j, i)) && (!tbBlockBelow(tb, i, emon.Port.cellsAt(tb, a + 4), tc) && (((4 * (emon.Port.cellsAt(tb, a + 4) - emon.Port.cellsAt(tb, a + 2))) <= (3 * (emon.Port.cellsAt(tb, b + 4) - emon.Port.cellsAt(tb, b + 2)))) && ((emon.Port.cellsAt(tb, b + 7) >= (emon.Port.cellsAt(tb, a + 7) + TB_ROWS_MORE)) && (((emon.Port.cellsAt(tb, b + 8) + 2) >= emon.Port.cellsAt(tb, a + 8)) && ((emon.Port.cellsAt(tb, b + 6) + TB_ROWS_SLACK) >= emon.Port.cellsAt(tb, a + 6))))));
+        return (tbWithin(tb, j, i) || tbHeadOf(tb, j, i)) && (!tbBlockBelow(tb, i, emon.Port.cellsAt(tb, a + 4), tc) && (((4 * (emon.Port.cellsAt(tb, a + 4) - emon.Port.cellsAt(tb, a + 2))) <= (3 * (emon.Port.cellsAt(tb, b + 4) - emon.Port.cellsAt(tb, b + 2)))) && ((emon.Port.cellsAt(tb, b + 7) >= (emon.Port.cellsAt(tb, a + 7) + TB_ROWS_MORE)) && ((((emon.Port.cellsAt(tb, b + 8) + 2) >= emon.Port.cellsAt(tb, a + 8)) || (emon.Port.cellsAt(tb, b + 7) >= (2 * emon.Port.cellsAt(tb, a + 7)))) && ((emon.Port.cellsAt(tb, b + 6) + TB_ROWS_SLACK) >= emon.Port.cellsAt(tb, a + 6))))));
     }
     public static boolean tbTakes(emon.Port.Cells tb, int i, int t0, int n, emon.Port.Cells tc) {
         // P12.2: does candidate i take in the candidates that overlap it and score as well: there is one, and each is only a part of what i reads.

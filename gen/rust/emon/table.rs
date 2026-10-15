@@ -926,10 +926,11 @@ pub(crate) fn tb_block_below(tb: &mut crate::port::Cells, i: i32, ybot: i32, tc:
 pub(crate) fn tb_part(tb: &mut crate::port::Cells, j: i32, i: i32, tc: &mut crate::port::Cells) -> bool {
     // P12.2: is candidate j only a part of what candidate i reads: it lies in i's box or is its head (`tb-within`, `tb-head-of`) and is no more than three
     // in four of its height (a reading of the same rows beside it is no part), i has the columns (or two fewer: the rules of a header put a column between
-    // the years that the text does not have) and `TB_ROWS_MORE` rows more, and a score no more than `TB_ROWS_SLACK` under j's.
+    // the years that the text does not have; or any number when it has twice the rows: four rows of a long table are cut into more columns than the table
+    // has) and `TB_ROWS_MORE` rows more, and a score no more than `TB_ROWS_SLACK` under j's.
     let a: i32 = j * TBS;
     let b: i32 = i * TBS;
-    return (tb_within(tb, j, i) || tb_head_of(tb, j, i)) && (!tb_block_below(tb, i, crate::port::cells_at(tb, a + 4), tc) && (((4 * (crate::port::cells_at(tb, a + 4) - crate::port::cells_at(tb, a + 2))) <= (3 * (crate::port::cells_at(tb, b + 4) - crate::port::cells_at(tb, b + 2)))) && ((crate::port::cells_at(tb, b + 7) >= (crate::port::cells_at(tb, a + 7) + TB_ROWS_MORE)) && (((crate::port::cells_at(tb, b + 8) + 2) >= crate::port::cells_at(tb, a + 8)) && ((crate::port::cells_at(tb, b + 6) + TB_ROWS_SLACK) >= crate::port::cells_at(tb, a + 6))))));
+    return (tb_within(tb, j, i) || tb_head_of(tb, j, i)) && (!tb_block_below(tb, i, crate::port::cells_at(tb, a + 4), tc) && (((4 * (crate::port::cells_at(tb, a + 4) - crate::port::cells_at(tb, a + 2))) <= (3 * (crate::port::cells_at(tb, b + 4) - crate::port::cells_at(tb, b + 2)))) && ((crate::port::cells_at(tb, b + 7) >= (crate::port::cells_at(tb, a + 7) + TB_ROWS_MORE)) && ((((crate::port::cells_at(tb, b + 8) + 2) >= crate::port::cells_at(tb, a + 8)) || (crate::port::cells_at(tb, b + 7) >= (2 * crate::port::cells_at(tb, a + 7)))) && ((crate::port::cells_at(tb, b + 6) + TB_ROWS_SLACK) >= crate::port::cells_at(tb, a + 6))))));
 }
 pub(crate) fn tb_takes(tb: &mut crate::port::Cells, i: i32, t0: i32, n: i32, tc: &mut crate::port::Cells) -> bool {
     // P12.2: does candidate i take in the candidates that overlap it and score as well: there is one, and each is only a part of what i reads.
