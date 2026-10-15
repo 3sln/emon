@@ -325,7 +325,7 @@ pub(crate) fn pt_bold_words(mut wd: &mut crate::port::Cells, w0: i32, from: i32,
 }
 #[test]
 fn test_a_line_with_a_bold_phrase_in_it_does_not_end_the_paragraph() {
-    // D1620 (smoke B I-2): the style of a line is the style of its dominant word, so a line of which most is bold differed from
+    // D575 (smoke B I-2): the style of a line is the style of its dominant word, so a line of which most is bold differed from
     // the regular lines above and below it and a paragraph ended at each. A line that holds both is a line of the paragraph;
     // a line that is bold all through still ends it.
     let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -494,7 +494,7 @@ fn test_a_line_break_between_cjk_characters_adds_no_space() {
 }
 #[test]
 fn test_lines_of_cjk_that_stop_inside_a_sentence_are_one_paragraph_whatever_the_boxes_say() {
-    // D1626 (smoke B I-18): the lines of a page set in several fonts have boxes of several heights (three of these are 24 pt tall
+    // D581 (smoke B I-18): the lines of a page set in several fonts have boxes of several heights (three of these are 24 pt tall
     // in a 12 pt line, as the Wikipedia pages in Japanese are), so the whitespace between two ordinary lines is more than
     // the document's lower quartile of it, which is negative, and a paragraph ended at every such line. The baselines are 16.5 pt
     // apart all the way; a line that stops in a sentence (no 。 ！ ？) is followed by the line that finishes it.

@@ -259,7 +259,7 @@ public final class Normalizetest {
         emon.Testport.assertEq(ntSame(out, want), 1, "flags compose with NFC: fi + e-acute");
     }
     public static void testArabicPresentationFormsFoldToTheLettersWithTheLigatureFlag() {
-        // D1627 (smoke B I-15): a PDF draws the shaped glyph of an Arabic letter, so the text layer holds the presentation form
+        // D582 (smoke B I-15): a PDF draws the shaped glyph of an Arabic letter, so the text layer holds the presentation form
         // (U+FE8D, isolated alef) for the letter (U+0627). NFKC on U+FB50..FDFF and U+FE70..FEFF alone: the letter, the ligature
         // as its letters, a mark without the space UAX #15 puts before it; the ornate parentheses and everything else stay.
         emon.Port.Cells src = emon.Port.newCells();

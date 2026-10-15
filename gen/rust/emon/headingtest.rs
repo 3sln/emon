@@ -266,7 +266,7 @@ fn test_what_is_not_a_numbering_pattern() {
 }
 #[test]
 fn test_an_amount_an_address_and_a_phone_number_are_not_heading_numbers() {
-    // D1621 (smoke A11, B I-22): a keyword and a figure is a heading number (`Chapter 3`); a label and its amount (`NET 79.36`,
+    // D576 (smoke A11, B I-22): a keyword and a figure is a heading number (`Chapter 3`); a label and its amount (`NET 79.36`,
     // `TENDER 100.00`, the amount's point left at the end of a word by the engine and its cents in the next), a street number
     // (`567 Ortiz Valley Suite 979`, `88 HENNESSY ROAD WAN CHAI, HONG KONG`), an area code, a quantity and a pronoun are not.
     let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -485,7 +485,7 @@ pub(crate) fn ht_style_words(mut wd: &mut crate::port::Cells, w0: i32, from: i32
 }
 #[test]
 fn test_a_mostly_bold_line_in_a_paragraph_is_not_a_heading() {
-    // D1620 (smoke B I-2): five lines of a paragraph, the second of them 83 per cent bold (seven words of ten). `emon.style` gives
+    // D575 (smoke B I-2): five lines of a paragraph, the second of them 83 per cent bold (seven words of ten). `emon.style` gives
     // the line the style of its dominant word, which is the bold one; a bold PHRASE is not a bold LINE.
     let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -510,7 +510,7 @@ fn test_a_mostly_bold_line_in_a_paragraph_is_not_a_heading() {
 }
 #[test]
 fn test_a_bold_line_that_goes_on_the_sentence_above_is_not_a_heading() {
-    // D1620 (smoke B I-2, d05): a WHOLE bold line, as close under the line above as the lines of a paragraph are, whose sentence
+    // D575 (smoke B I-2, d05): a WHOLE bold line, as close under the line above as the lines of a paragraph are, whose sentence
     // the line above has not ended, is the paragraph's own (a link, a name, a phrase set in bold type); set apart it is a heading.
     let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -542,7 +542,7 @@ fn test_a_bold_line_that_goes_on_the_sentence_above_is_not_a_heading() {
 }
 #[test]
 fn test_a_numbered_item_that_changes_font_is_not_a_heading() {
-    // D1620 (smoke B I-2, d08): list item 4 opens with a bold number and goes on in a bold face of another family; the next line
+    // D575 (smoke B I-2, d08): list item 4 opens with a bold number and goes on in a bold face of another family; the next line
     // carries its sentence on (it starts in lower case). The items before it are in the body style.
     let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -573,7 +573,7 @@ fn test_a_numbered_item_that_changes_font_is_not_a_heading() {
 }
 #[test]
 fn test_a_bold_line_inside_a_list_item_is_not_a_heading() {
-    // D1620 (smoke A13): the wrapped line of a bullet, set in bold and further in than the bullet, belongs to the item.
+    // D575 (smoke A13): the wrapped line of a bullet, set in bold and further in than the bullet, belongs to the item.
     let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -597,7 +597,7 @@ fn test_a_bold_line_inside_a_list_item_is_not_a_heading() {
 }
 #[test]
 fn test_a_bold_label_on_a_page_of_short_lines_is_not_a_heading() {
-    // D1622 (smoke A12): a receipt. Ten lines of two words, a bold name above them with room around it, and a bold line of the
+    // D577 (smoke A12): a receipt. Ten lines of two words, a bold name above them with room around it, and a bold line of the
     // same size as the rest, as close under the line above as they are, in the middle: a label, not a section. The same line on a
     // page with sentences on it, after a sentence that ended, is a heading.
     let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -641,7 +641,7 @@ fn test_a_bold_label_on_a_page_of_short_lines_is_not_a_heading() {
 }
 #[test]
 fn test_a_line_number_and_a_row_of_figures_are_not_one_heading_line() {
-    // D1621 (smoke A12): a statement's rows, in bold, with the line number in a column of its own: `2` and `$89158874 05/02/2024 rent`
+    // D576 (smoke A12): a statement's rows, in bold, with the line number in a column of its own: `2` and `$89158874 05/02/2024 rent`
     // stand on one row, a number apart. A bare number beside a title is the number of a heading line (a heading whose layout
     // put the number on a line of its own, `h-numbered`); beside a row of figures it is the row's number.
     let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();

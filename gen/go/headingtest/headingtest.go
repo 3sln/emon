@@ -282,7 +282,7 @@ func TestWhatIsNotANumberingPattern(emonT *testing.T) {
 }
 
 func TestAnAmountAnAddressAndAPhoneNumberAreNotHeadingNumbers(emonT *testing.T) {
-	// D1621 (smoke A11, B I-22): a keyword and a figure is a heading number (`Chapter 3`); a label and its amount (`NET 79.36`,
+	// D576 (smoke A11, B I-22): a keyword and a figure is a heading number (`Chapter 3`); a label and its amount (`NET 79.36`,
 	// `TENDER 100.00`, the amount's point left at the end of a word by the engine and its cents in the next), a street number
 	// (`567 Ortiz Valley Suite 979`, `88 HENNESSY ROAD WAN CHAI, HONG KONG`), an area code, a quantity and a pronoun are not.
 	var wd *port.Cells = port.NewCells()
@@ -503,7 +503,7 @@ func htStyleWords(wd *port.Cells, w0 int32, from int32, to int32, style int32) i
 }
 
 func TestAMostlyBoldLineInAParagraphIsNotAHeading(emonT *testing.T) {
-	// D1620 (smoke B I-2): five lines of a paragraph, the second of them 83 per cent bold (seven words of ten). `emon.style` gives
+	// D575 (smoke B I-2): five lines of a paragraph, the second of them 83 per cent bold (seven words of ten). `emon.style` gives
 	// the line the style of its dominant word, which is the bold one; a bold PHRASE is not a bold LINE.
 	var wd *port.Cells = port.NewCells()
 	var ln *port.Cells = port.NewCells()
@@ -528,7 +528,7 @@ func TestAMostlyBoldLineInAParagraphIsNotAHeading(emonT *testing.T) {
 }
 
 func TestABoldLineThatGoesOnTheSentenceAboveIsNotAHeading(emonT *testing.T) {
-	// D1620 (smoke B I-2, d05): a WHOLE bold line, as close under the line above as the lines of a paragraph are, whose sentence
+	// D575 (smoke B I-2, d05): a WHOLE bold line, as close under the line above as the lines of a paragraph are, whose sentence
 	// the line above has not ended, is the paragraph's own (a link, a name, a phrase set in bold type); set apart it is a heading.
 	var wd *port.Cells = port.NewCells()
 	var ln *port.Cells = port.NewCells()
@@ -560,7 +560,7 @@ func TestABoldLineThatGoesOnTheSentenceAboveIsNotAHeading(emonT *testing.T) {
 }
 
 func TestANumberedItemThatChangesFontIsNotAHeading(emonT *testing.T) {
-	// D1620 (smoke B I-2, d08): list item 4 opens with a bold number and goes on in a bold face of another family; the next line
+	// D575 (smoke B I-2, d08): list item 4 opens with a bold number and goes on in a bold face of another family; the next line
 	// carries its sentence on (it starts in lower case). The items before it are in the body style.
 	var wd *port.Cells = port.NewCells()
 	var ln *port.Cells = port.NewCells()
@@ -591,7 +591,7 @@ func TestANumberedItemThatChangesFontIsNotAHeading(emonT *testing.T) {
 }
 
 func TestABoldLineInsideAListItemIsNotAHeading(emonT *testing.T) {
-	// D1620 (smoke A13): the wrapped line of a bullet, set in bold and further in than the bullet, belongs to the item.
+	// D575 (smoke A13): the wrapped line of a bullet, set in bold and further in than the bullet, belongs to the item.
 	var wd *port.Cells = port.NewCells()
 	var ln *port.Cells = port.NewCells()
 	var et *port.Cells = port.NewCells()
@@ -615,7 +615,7 @@ func TestABoldLineInsideAListItemIsNotAHeading(emonT *testing.T) {
 }
 
 func TestABoldLabelOnAPageOfShortLinesIsNotAHeading(emonT *testing.T) {
-	// D1622 (smoke A12): a receipt. Ten lines of two words, a bold name above them with room around it, and a bold line of the
+	// D577 (smoke A12): a receipt. Ten lines of two words, a bold name above them with room around it, and a bold line of the
 	// same size as the rest, as close under the line above as they are, in the middle: a label, not a section. The same line on a
 	// page with sentences on it, after a sentence that ended, is a heading.
 	var wd *port.Cells = port.NewCells()
@@ -659,7 +659,7 @@ func TestABoldLabelOnAPageOfShortLinesIsNotAHeading(emonT *testing.T) {
 }
 
 func TestALineNumberAndARowOfFiguresAreNotOneHeadingLine(emonT *testing.T) {
-	// D1621 (smoke A12): a statement's rows, in bold, with the line number in a column of its own: `2` and `$89158874 05/02/2024 rent`
+	// D576 (smoke A12): a statement's rows, in bold, with the line number in a column of its own: `2` and `$89158874 05/02/2024 rent`
 	// stand on one row, a number apart. A bare number beside a title is the number of a heading line (a heading whose layout
 	// put the number on a line of its own, `h-numbered`); beside a row of figures it is the row's number.
 	var wd *port.Cells = port.NewCells()

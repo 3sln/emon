@@ -261,7 +261,7 @@ pub(crate) fn st_dom(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, l
     return best;
 }
 pub(crate) fn st_pure(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, l: i32, d: i32) -> i32 {
-    // D1620: how much of the line is set in the dominant word's style: the per cent of the line's code points whose word
+    // D575: how much of the line is set in the dominant word's style: the per cent of the line's code points whose word
     // has the same bold, italic and mono bits as word d. A line that is 70 per cent bold has the style of its bold words (the
     // dominant word), but it is a line with a bold phrase in it, not a bold line; 100 when it has no words with text.
     if d < 0 {

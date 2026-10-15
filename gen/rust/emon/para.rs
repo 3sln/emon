@@ -227,7 +227,7 @@ pub(crate) fn pa_style(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells,
     return wd_get(wd, d, wf_style());
 }
 pub(crate) fn pa_mixed(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, l: i32) -> i32 {
-    // D1620: 1 when the line has words of more than one combination of bold, italic and mono: it is a line with a styled
+    // D575: 1 when the line has words of more than one combination of bold, italic and mono: it is a line with a styled
     // phrase in it, and `pa-style` (the style of its dominant word) is the style of the phrase or of the rest by a margin of
     // one word. 0 for a line of one style.
     let d: i32 = pa_dom(wd, ln, l);
@@ -494,7 +494,7 @@ pub(crate) fn pa_last_cp(wd: &mut crate::port::Cells, ln: &mut crate::port::Cell
     return -1;
 }
 pub(crate) fn pa_open_end(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, l: i32) -> bool {
-    // D1620: does line l end inside a sentence: it has text, its last character is not a figure (a label and its value is a
+    // D575: does line l end inside a sentence: it has text, its last character is not a figure (a label and its value is a
     // statement) or a mark that closes a sentence, with or without a closing bracket or quotation mark after the mark.
     let mut c: i32 = pa_last_cp(wd, ln, et, l, 0);
     if c < 0 {
@@ -512,7 +512,7 @@ pub(crate) fn pa_open_end(wd: &mut crate::port::Cells, ln: &mut crate::port::Cel
     return !pa_final_mark(c);
 }
 pub(crate) fn pa_unfinished(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, l: i32) -> bool {
-    // D1626 (smoke B I-18): does line l end inside a sentence of a script set without spaces (Han, kana): its last character
+    // D581 (smoke B I-18): does line l end inside a sentence of a script set without spaces (Han, kana): its last character
     // is one of them and no mark that closes a sentence, with or without a closing bracket or quotation mark after the mark.
     if !pa_unspaced(pa_last_cp(wd, ln, et, l, 0)) {
         return 0 == 1;
@@ -521,7 +521,7 @@ pub(crate) fn pa_unfinished(wd: &mut crate::port::Cells, ln: &mut crate::port::C
 }
 pub(crate) fn pa_style_differs(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, a: i32, b: i32, open: bool) -> bool {
     // Do the dominant styles of lines a and b differ: a line with a bold phrase in it, when the sentence of line a goes on
-    // (`open`), is no different from the lines around it (D1620, smoke B I-2: it ended the paragraph, once above and once
+    // (`open`), is no different from the lines around it (D575, smoke B I-2: it ended the paragraph, once above and once
     // below). At the end of a sentence a bold label and its value that follow are a line of their own, as ever.
     if pa_style(wd, ln, a) == pa_style(wd, ln, b) {
         return 0 == 1;
@@ -567,7 +567,7 @@ pub(crate) fn pa_new_par(wd: &mut crate::port::Cells, ln: &mut crate::port::Cell
     let ds: i32 = sa - sb;
     // A line of a script set without spaces that stops inside a sentence and whose next line is within 1.75 of its size of it,
     // baseline to baseline, goes on there whatever the boxes say: the boxes of lines in several fonts are of several heights,
-    // and the whitespace between them is not the leading (D1626, the Wikipedia pages in Japanese).
+    // and the whitespace between them is not the leading (D581, the Wikipedia pages in Japanese).
     if ((g * PA_GAP_DEN) > (med * PA_GAP_NUM)) && (((g - med) * PA_TINY_DIV) > hb) {
         if !(pa_unfinished(wd, ln, et, a) && (((pa_ymid2(ln, b) - pa_ymid2(ln, a)) * 2) <= (7 * sa))) {
             return 1 == 1;

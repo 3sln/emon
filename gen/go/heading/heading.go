@@ -546,7 +546,7 @@ func hdFigureWord(wd *port.Cells, et *port.Cells, w int32) int32 {
 }
 
 func hdAddressLike(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32) int32 {
-	// D1621: 1 when a line that opens with a bare number (no point, bracket or colon after it) is a street number, a quantity or
+	// D576: 1 when a line that opens with a bare number (no point, bracket or colon after it) is a street number, a quantity or
 	// a price rather than a section's number: the number has three digits (`567 Ortiz Valley`), or a figure (`Suite 979`,
 	// `9,000`) follows it, or a word that is not the last ends in a comma (`88 ROAD WAN CHAI, HONG KONG`).
 	var w0 int32 = hdNthWord(wd, ln, l, 0)
@@ -638,7 +638,7 @@ func HdMarker(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells, l 
 	var n0 int32 = hdWl(wd, w0)
 	var d int32 = hdDec(wd, et, w0)
 	// decimal: 1  1.  1.2.3  2)
-	// a bare number that is a street number, a quantity or a price is no heading's (D1621)
+	// a bare number that is a street number, a quantity or a price is no heading's (D576)
 	if (d == 1) && (hdAddressLike(wd, ln, et, l) == 1) {
 		return 0
 	}
@@ -703,7 +703,7 @@ func HdMarker(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells, l 
 		var r int32 = hdLetters(wd, et, w1, 0, n1)
 		var tot int32 = (n0 + 1) + n1
 		// a label in capitals and an amount (`NET 79.36`, `TENDER 100.00`), or an amount split at its point (`79.` `36`), is
-		// no keyword and number (D1621): the number would be written apart from the text and the point lost with it
+		// no keyword and number (D576): the number would be written apart from the text and the point lost with it
 		if (hdKcaps(wd, et, w0) == 1) && (hdFrac2(wd, et, w1) == 1) {
 			return 0
 		}
@@ -776,7 +776,7 @@ func hdStylePoints(sf *port.Cells, sc *port.Cells, l int32) int32 {
 	if (sz * 100) >= (bsz * 120) {
 		p += 1
 	}
-	// D1620: a line that is only partly bold (or italic) has the style of its bold words, but it is a line with a bold phrase
+	// D575: a line that is only partly bold (or italic) has the style of its bold words, but it is a line with a bold phrase
 	// in it, not a bold line: the weight says nothing then (the phrase is an inline span of the paragraph it is in)
 	if ((bits & 1) != 0) && (((bbits & 1) == 0) && (pure >= hdPure)) {
 		p += 3
@@ -892,7 +892,7 @@ func hdPartner(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells, s
 	} else if style.StGet(sf, q, style.SfkX0()) >= style.StGet(sf, l, style.SfkX0()) {
 		return -1
 	}
-	// a title that opens with a figure (an amount, a date, a reference) is a row's data after its line number (D1621)
+	// a title that opens with a figure (an amount, a date, a reference) is a row's data after its line number (D576)
 	if lm == 1 {
 		if hdOpensFigure(wd, ln, et, q) == 1 {
 			return -1
@@ -1114,7 +1114,7 @@ func hdStop(c int32) int32 {
 }
 
 func hdLineClosed(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32) int32 {
-	// D1620: 1 when line l ends a sentence or a statement (a stop, after any closing quote or bracket; or a figure: a
+	// D575: 1 when line l ends a sentence or a statement (a stop, after any closing quote or bracket; or a figure: a
 	// label and its value), or has no text; 0 when its sentence goes on to the next line.
 	var c int32 = hdTail(wd, ln, et, l, 0)
 	if c < 0 {
@@ -1133,7 +1133,7 @@ func hdLineClosed(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32) int32
 }
 
 func hdContinues(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells, sf *port.Cells, top int32, last int32) int32 {
-	// D1620: does the unit (line top to line last) go on a sentence, a list item or a paragraph that is not its own? A
+	// D575: does the unit (line top to line last) go on a sentence, a list item or a paragraph that is not its own? A
 	// bold or underlined phrase, or a font change, in the middle of a paragraph is a line of the paragraph with a style change
 	// in it (an inline span), never a heading. Three ways to tell: (1) the unit is not well set apart from the line above it (a
 	// list item's space is less than a title's), and the line below it, close under it, starts in lower case (its sentence goes on there:
@@ -1261,7 +1261,7 @@ func hdUnitScore(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells,
 	}
 	s = HdMarker(wd, ln, et, ws, top)
 	// a bare number whose heading goes on, on the lines under it, as the data of a row (an address, figures) is the row's, not a
-	// section's (`88 HENNESSY ROAD` / `WAN CHAI, HONG KONG`): D1621
+	// section's (`88 HENNESSY ROAD` / `WAN CHAI, HONG KONG`): D576
 	if (s == 1) && (cnt > 1) {
 		if hdBareNumber(wd, ln, et, top) == 1 {
 			k = 1
@@ -1295,7 +1295,7 @@ func hdUnitScore(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells,
 	if (ps == 0) && (sp < 1) {
 		return -1
 	}
-	// D1622 (smoke A12): on a page of short lines (a receipt, an invoice, a form: no paragraph on it) a bold or capitalised
+	// D577 (smoke A12): on a page of short lines (a receipt, an invoice, a form: no paragraph on it) a bold or capitalised
 	// line of the body's own size, no more apart from the line above it than the rest, is a label or a value, not a section
 	if (port.CellsAt(ws, wsForm) == 1) && ((s == 0) && ((sp < 1) && ((sz * 100) < (style.StHget(sf, style.SfhSize()) * 104)))) {
 		return -1
@@ -2358,7 +2358,7 @@ func hdEmit(ln *port.Cells, hc *port.Cells, ws *port.Cells, sf *port.Cells, n in
 }
 
 func hdFormlike(sf *port.Cells, n int32) int32 {
-	// D1622: 1 when the document is a page of short lines: at least eight upright lines, and fewer than one in ten of them has
+	// D577: 1 when the document is a page of short lines: at least eight upright lines, and fewer than one in ten of them has
 	// six words (a sentence's worth). A receipt, an invoice and a form's labels are that; prose, a slide with its bullets and a
 	// newspaper column are not.
 	var l int32 = 0

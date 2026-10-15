@@ -166,7 +166,7 @@ pub(crate) fn nz_put_ligature(cp: i32, mut out: &mut crate::port::Cells) -> i32 
     return 1;
 }
 pub(crate) fn nz_put_arabic(cp: i32, mut out: &mut crate::port::Cells) -> i32 {
-    // D1627: append the letters an Arabic presentation form (U+FB50..FDFF, U+FE70..FEFF) is the shaped glyph of and answer 1,
+    // D582: append the letters an Arabic presentation form (U+FB50..FDFF, U+FE70..FEFF) is the shaped glyph of and answer 1,
     // or answer 0 and append nothing. NFKC on that range alone; each letter is then decomposed as any other code point is.
     if (cp < 64336) || ((cp > 65023) && (cp < 65136)) {
         return 0;

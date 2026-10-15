@@ -219,7 +219,7 @@ public final class Para {
         return Evidence.wdGet(wd, d, Evidence.wfStyle());
     }
     public static int paMixed(emon.Port.Cells wd, emon.Port.Cells ln, int l) {
-        // D1620: 1 when the line has words of more than one combination of bold, italic and mono: it is a line with a styled
+        // D575: 1 when the line has words of more than one combination of bold, italic and mono: it is a line with a styled
         // phrase in it, and `pa-style` (the style of its dominant word) is the style of the phrase or of the rest by a margin of
         // one word. 0 for a line of one style.
         int d = paDom(wd, ln, l);
@@ -486,7 +486,7 @@ public final class Para {
         return -1;
     }
     public static boolean paOpenEnd(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l) {
-        // D1620: does line l end inside a sentence: it has text, its last character is not a figure (a label and its value is a
+        // D575: does line l end inside a sentence: it has text, its last character is not a figure (a label and its value is a
         // statement) or a mark that closes a sentence, with or without a closing bracket or quotation mark after the mark.
         int c = paLastCp(wd, ln, et, l, 0);
         if (c < 0) {
@@ -504,7 +504,7 @@ public final class Para {
         return !paFinalMark(c);
     }
     public static boolean paUnfinished(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l) {
-        // D1626 (smoke B I-18): does line l end inside a sentence of a script set without spaces (Han, kana): its last character
+        // D581 (smoke B I-18): does line l end inside a sentence of a script set without spaces (Han, kana): its last character
         // is one of them and no mark that closes a sentence, with or without a closing bracket or quotation mark after the mark.
         if (!paUnspaced(paLastCp(wd, ln, et, l, 0))) {
             return 0 == 1;
@@ -513,7 +513,7 @@ public final class Para {
     }
     public static boolean paStyleDiffers(emon.Port.Cells wd, emon.Port.Cells ln, int a, int b, boolean open) {
         // Do the dominant styles of lines a and b differ: a line with a bold phrase in it, when the sentence of line a goes on
-        // (`open`), is no different from the lines around it (D1620, smoke B I-2: it ended the paragraph, once above and once
+        // (`open`), is no different from the lines around it (D575, smoke B I-2: it ended the paragraph, once above and once
         // below). At the end of a sentence a bold label and its value that follow are a line of their own, as ever.
         if (paStyle(wd, ln, a) == paStyle(wd, ln, b)) {
             return 0 == 1;
@@ -559,7 +559,7 @@ public final class Para {
         int ds = sa - sb;
         // A line of a script set without spaces that stops inside a sentence and whose next line is within 1.75 of its size of it,
         // baseline to baseline, goes on there whatever the boxes say: the boxes of lines in several fonts are of several heights,
-        // and the whitespace between them is not the leading (D1626, the Wikipedia pages in Japanese).
+        // and the whitespace between them is not the leading (D581, the Wikipedia pages in Japanese).
         if (((g * PA_GAP_DEN) > (med * PA_GAP_NUM)) && (((g - med) * PA_TINY_DIV) > hb)) {
             if (!(paUnfinished(wd, ln, et, a) && (((paYmid2(ln, b) - paYmid2(ln, a)) * 2) <= (7 * sa)))) {
                 return 1 == 1;
