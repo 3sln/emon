@@ -1041,6 +1041,14 @@ const rfLabelCp int32 = 48
 
 const rfLabelWords int32 = 6
 
+const rfGrow int32 = 3
+
+const rfInsideH int32 = 4500
+
+const rfInsideCp int32 = 120
+
+const rfInsideBig int32 = 50000
+
 func rfFdv(fd *port.Cells, row int32, f int32, dflt int32) int32 {
 	if port.CellsLen(fd) < ((row + 1) * rfFd) {
 		return dflt
@@ -1069,11 +1077,24 @@ func rfLabelText(on *port.Cells, text *port.Cells, p int32) bool {
 	return words <= rfLabelWords
 }
 
-func rfLabelOf(on *port.Cells, orr *port.Cells, text *port.Cells, cand *port.Cells, fg *port.Cells, fd *port.Cells, p int32) int32 {
-	// The candidate row of the figure that paragraph p labels, or -1.
+func rfEb(ab *port.Cells, n int32, k int32, cand *port.Cells, row int32, f int32) int32 {
+	// Coordinate f (0 x0, 1 y0, 2 x1, 3 y1) of the box the labels of the figure number `k` of `fg` (1 based) are looked for in: its own, grown over the labels near it (`rf-grow`, kept in `ab` after
+	// the node entries, four cells a figure), else its candidate row's.
+	if port.CellsLen(ab) >= (n + (4 * k)) {
+		return port.CellsAt(ab, n+((4*(k-1))+f))
+	}
+	return asset.AsGet(cand, row, 5+f)
+}
+
+func rfLabelOf(on *port.Cells, orr *port.Cells, text *port.Cells, cand *port.Cells, fg *port.Cells, fd *port.Cells, ab *port.Cells, n int32, p int32) int32 {
+	// The candidate row of the figure that paragraph p labels, or -1. A label is a short one-line paragraph on the figure or within `RF_ZONE` of its box, as grown over the labels around it
+	// (`rf-grow`); inside the figure's own box (a figure no taller than `RF_INSIDE_BIG`) any paragraph of at most three lines and `RF_INSIDE_CP` characters is: the text of a figure is its labels (D1630).
 	var r int32 = model.NodeRegionHead(on, p)
 	var i int32 = 1
 	var row int32 = 0
+	var cx int32 = 0
+	var cy int32 = 0
+	var hgt int32 = 0
 	if r < 0 {
 		return -1
 	}
@@ -1083,15 +1104,26 @@ func rfLabelOf(on *port.Cells, orr *port.Cells, text *port.Cells, cand *port.Cel
 	if model.NodeHasText(on, p) == 0 {
 		return -1
 	}
-	if (model.RegionY1(orr, r) - model.RegionY0(orr, r)) > rfLabelH {
+	hgt = model.RegionY1(orr, r) - model.RegionY0(orr, r)
+	cx = (model.RegionX0(orr, r) + model.RegionX1(orr, r)) / 2
+	cy = (model.RegionY0(orr, r) + model.RegionY1(orr, r)) / 2
+	for i < port.CellsLen(fg) {
+		row = port.CellsAt(fg, i)
+		if (asset.AsGet(cand, row, 0) == model.RegionPage(orr, r)) && ((cx >= asset.AsGet(cand, row, 5)) && ((cx <= asset.AsGet(cand, row, 7)) && ((cy >= asset.AsGet(cand, row, 6)) && ((cy <= asset.AsGet(cand, row, 8)) && (((asset.AsGet(cand, row, 8) - asset.AsGet(cand, row, 6)) <= rfInsideBig) && ((hgt <= rfInsideH) && (model.NodeTextLen(on, p) <= rfInsideCp))))))) {
+			return row
+		}
+		i += 1
+	}
+	if hgt > rfLabelH {
 		return -1
 	}
 	if !rfLabelText(on, text, p) {
 		return -1
 	}
+	i = 1
 	for i < port.CellsLen(fg) {
 		row = port.CellsAt(fg, i)
-		if (asset.AsGet(cand, row, 0) == model.RegionPage(orr, r)) && ((model.RegionX1(orr, r) > (asset.AsGet(cand, row, 5) - rfZone)) && ((model.RegionX0(orr, r) < (asset.AsGet(cand, row, 7) + rfZone)) && ((((model.RegionY0(orr, r) + model.RegionY1(orr, r)) / 2) >= (asset.AsGet(cand, row, 6) - rfZone)) && ((((model.RegionY0(orr, r) + model.RegionY1(orr, r)) / 2) <= (asset.AsGet(cand, row, 8) + rfZone)) && ((model.RegionX1(orr, r) - model.RegionX0(orr, r)) <= ((2 * (asset.AsGet(cand, row, 7) - asset.AsGet(cand, row, 5))) + 2000)))))) {
+		if (asset.AsGet(cand, row, 0) == model.RegionPage(orr, r)) && ((model.RegionX1(orr, r) > (rfEb(ab, n, i, cand, row, 0) - rfZone)) && ((model.RegionX0(orr, r) < (rfEb(ab, n, i, cand, row, 2) + rfZone)) && ((cy >= (rfEb(ab, n, i, cand, row, 1) - rfZone)) && ((cy <= (rfEb(ab, n, i, cand, row, 3) + rfZone)) && ((model.RegionX1(orr, r) - model.RegionX0(orr, r)) <= ((2 * (rfEb(ab, n, i, cand, row, 2) - rfEb(ab, n, i, cand, row, 0))) + 2000)))))) {
 			return row
 		}
 		i += 1
@@ -1099,10 +1131,83 @@ func rfLabelOf(on *port.Cells, orr *port.Cells, text *port.Cells, cand *port.Cel
 	return -1
 }
 
+func rfGrows(fd *port.Cells, row int32) int32 {
+	// 1 when the figure of candidate row `row` may grow over its labels: a drawing, a chart, a picture; not a logo, a barcode or a code (a name, a number beside them is text).
+	var k int32 = rfFdv(fd, row, 0, model.FgUnknown())
+	if (k == model.FgLogo()) || ((k == model.FgBarcode()) || (k == model.FgQr())) {
+		return 0
+	}
+	return 1
+}
+
+func rfGrow(on *port.Cells, orr *port.Cells, text *port.Cells, cand *port.Cells, fg *port.Cells, fd *port.Cells, ab *port.Cells, n int32) int32 {
+	// D1630 (smoke review B issue 7): the boxes the labels of each figure are looked for in, kept in `ab` after its `n` node entries (four cells a figure of `fg`, in its order): each is the
+	// figure's candidate box grown, in `RF_GROW` passes, over the label-like paragraphs (one line, a few words, `rf-label-text`) within `RF_ZONE` of it: a drawing's boxes are separate regions of
+	// paths and words, and the words between and beside them are its labels too. Answers how many paragraphs it took in.
+	var i int32 = 1
+	var row int32 = 0
+	var pass int32 = 0
+	var c int32 = 0
+	var r int32 = 0
+	var took int32 = 0
+	var b int32 = 0
+	var changed int32 = 1
+	var cy int32 = 0
+	for i < port.CellsLen(fg) {
+		row = port.CellsAt(fg, i)
+		port.CellsPush(ab, asset.AsGet(cand, row, 5))
+		port.CellsPush(ab, asset.AsGet(cand, row, 6))
+		port.CellsPush(ab, asset.AsGet(cand, row, 7))
+		port.CellsPush(ab, asset.AsGet(cand, row, 8))
+		i += 1
+	}
+	for (pass < rfGrow) && (changed == 1) {
+		changed = 0
+		c = 0
+		for c < n {
+			if model.NodeKind(on, c) == model.NkParagraph() {
+				r = model.NodeRegionHead(on, c)
+				if (r >= 0) && ((model.NodeRegionCount(on, c) == 1) && ((model.NodeHasText(on, c) == 1) && (((model.RegionY1(orr, r) - model.RegionY0(orr, r)) <= rfLabelH) && rfLabelText(on, text, c)))) {
+					cy = (model.RegionY0(orr, r) + model.RegionY1(orr, r)) / 2
+					i = 1
+					for i < port.CellsLen(fg) {
+						row = port.CellsAt(fg, i)
+						b = n + (4 * (i - 1))
+						if (rfGrows(fd, row) == 1) && ((asset.AsGet(cand, row, 0) == model.RegionPage(orr, r)) && ((model.RegionX1(orr, r) > (port.CellsAt(ab, b) - rfZone)) && ((model.RegionX0(orr, r) < (port.CellsAt(ab, b+2) + rfZone)) && ((cy >= (port.CellsAt(ab, b+1) - rfZone)) && (cy <= (port.CellsAt(ab, b+3) + rfZone)))))) {
+							if model.RegionX0(orr, r) < port.CellsAt(ab, b) {
+								port.CellsSet(ab, b, model.RegionX0(orr, r))
+								changed = 1
+							}
+							if model.RegionY0(orr, r) < port.CellsAt(ab, b+1) {
+								port.CellsSet(ab, b+1, model.RegionY0(orr, r))
+								changed = 1
+							}
+							if model.RegionX1(orr, r) > port.CellsAt(ab, b+2) {
+								port.CellsSet(ab, b+2, model.RegionX1(orr, r))
+								changed = 1
+							}
+							if model.RegionY1(orr, r) > port.CellsAt(ab, b+3) {
+								port.CellsSet(ab, b+3, model.RegionY1(orr, r))
+								changed = 1
+							}
+							took += 1
+						}
+						i += 1
+					}
+				}
+			}
+			c += 1
+		}
+		pass += 1
+	}
+	return took
+}
+
 func rfAbsorbNote(on *port.Cells, orr *port.Cells, text *port.Cells, cand *port.Cells, fg *port.Cells, fd *port.Cells, ab *port.Cells, n int32) int32 {
 	// A note (the column stage made a margin note of a column of tick labels) every child of which is a label of one figure is
 	// dropped with them: the note and its paragraphs are marked.
 	var c int32 = model.NodeFirstChild(on, n)
+	var nall int32 = model.NodeCount(on)
 	var f int32 = -1
 	var g int32 = 0
 	var ok int32 = 1
@@ -1110,7 +1215,7 @@ func rfAbsorbNote(on *port.Cells, orr *port.Cells, text *port.Cells, cand *port.
 	for c >= 0 {
 		g = -1
 		if model.NodeKind(on, c) == model.NkParagraph() {
-			g = rfLabelOf(on, orr, text, cand, fg, fd, c)
+			g = rfLabelOf(on, orr, text, cand, fg, fd, ab, nall, c)
 		}
 		if g < 0 {
 			ok = 0
@@ -1138,6 +1243,7 @@ func rfAbsorbNote(on *port.Cells, orr *port.Cells, text *port.Cells, cand *port.
 func rfAbsorb(on *port.Cells, orr *port.Cells, text *port.Cells, cand *port.Cells, fg *port.Cells, fd *port.Cells, ab *port.Cells, p int32) int32 {
 	// Mark, among the blocks of p (the document or a section) and of the sections in it, the paragraphs that label a figure.
 	var c int32 = model.NodeFirstChild(on, p)
+	var nall int32 = model.NodeCount(on)
 	var f int32 = -1
 	for c >= 0 {
 		if model.NodeKind(on, c) == model.NkSection() {
@@ -1147,7 +1253,7 @@ func rfAbsorb(on *port.Cells, orr *port.Cells, text *port.Cells, cand *port.Cell
 			rfAbsorbNote(on, orr, text, cand, fg, fd, ab, c)
 		}
 		if model.NodeKind(on, c) == model.NkParagraph() {
-			f = rfLabelOf(on, orr, text, cand, fg, fd, c)
+			f = rfLabelOf(on, orr, text, cand, fg, fd, ab, nall, c)
 			if f >= 0 {
 				port.CellsSet(ab, c, f)
 			}
@@ -1350,6 +1456,7 @@ func RsFigures(on *port.Cells, oa *port.Cells, orr *port.Cells, text *port.Cells
 		i += 1
 	}
 	if port.CellsLen(fd) > 0 {
+		rfGrow(on, orr, text, cand, fg, fd, ab, n)
 		r = 0
 		for r < n {
 			if (model.NodeParent(on, r) < 0) && (model.NodeKind(on, r) == model.NkDocument()) {

@@ -319,6 +319,7 @@ public static class Engine {
         }
         emon.Port.CellsCopyInto(s.Iloc, c.Lcl);
         Columns.LcCopy(d.Fl, s.Lt);
+        Columns.LcMarkAsides(s.Lt, d.Gfl, m.Pages, np);
         Initial.InDetect(d.Fw, d.Gl, d.Fnt, d.Et, np, s.Iloc, s.Lt, s.Ls, s.Lo, s.Tm, s.Ii);
         Heading.HdPriorOutline(d.Ol, d.Txt, s.Hpr, s.Hptxt);
         Heading.HdAnalyze(d.Fw, s.Lt, d.Et, d.Gl, s.Sf, s.Hsc, s.Hc, s.Ws, s.Htmp, s.Hpr, s.Hptxt);

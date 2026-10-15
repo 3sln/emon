@@ -679,7 +679,40 @@ pub(crate) fn tb_field_cells(tc: &mut crate::port::Cells, cfirst: i32, cend: i32
     }
     return n;
 }
-pub(crate) fn tb_lattice(rm: &mut crate::port::Cells, root: i32, xs: &mut crate::port::Cells, mut ys: &mut crate::port::Cells, page: i32, mut gm: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w0: i32, w1: i32, mut pr: &mut crate::port::Cells, mut so: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tx: &mut crate::port::Cells, mut wl: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut ch: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut rmap: &mut crate::port::Cells, mut bd: &mut crate::port::Cells, an: &mut crate::port::Cells) -> i32 {
+pub(crate) fn tb_single_cells(tc: &mut crate::port::Cells, cfirst: i32, cend: i32) -> i32 {
+    // How many cells of the grid (rows cfirst..cend of `tc`) are one row by one column.
+    let mut c: i32 = cfirst;
+    let mut n: i32 = 0;
+    while c < cend {
+        if (crate::port::cells_at(tc, (c * TCS) + 2) == 1) && (crate::port::cells_at(tc, (c * TCS) + 3) == 1) {
+            n += 1;
+        }
+        c += 1;
+    }
+    return n;
+}
+pub(crate) fn tb_page_frame(tc: &mut crate::port::Cells, cfirst: i32, cend: i32, gx0: i32, gy0: i32, gx1: i32, gy1: i32, pw: i32, ph: i32) -> i32 {
+    // 1 when the grid (box gx0..gx1, gy0..gy1) is the page's frame: at least 80 per cent of the page's width and of its height, with a cell of at least 30 per cent of the page's area in it
+    // (the drawing's sheet of an engineering drawing, its title block under it); 0 for a page of unknown size.
+    if (pw <= 0) || (ph <= 0) {
+        return 0;
+    }
+    if (((gx1 - gx0) * 10) < (pw * 8)) || (((gy1 - gy0) * 10) < (ph * 8)) {
+        return 0;
+    }
+    let pa: i32 = (pw / 100) * (ph / 100);
+    let mut c: i32 = cfirst;
+    let mut a: i32 = 0;
+    while c < cend {
+        a = ((crate::port::cells_at(tc, (c * TCS) + 6) - crate::port::cells_at(tc, (c * TCS) + 4)) / 100) * ((crate::port::cells_at(tc, (c * TCS) + 7) - crate::port::cells_at(tc, (c * TCS) + 5)) / 100);
+        if (a * 10) >= (pa * 3) {
+            return 1;
+        }
+        c += 1;
+    }
+    return 0;
+}
+pub(crate) fn tb_lattice(rm: &mut crate::port::Cells, root: i32, xs: &mut crate::port::Cells, mut ys: &mut crate::port::Cells, page: i32, mut gm: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w0: i32, w1: i32, mut pr: &mut crate::port::Cells, mut so: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tx: &mut crate::port::Cells, mut wl: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut ch: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut rmap: &mut crate::port::Cells, mut bd: &mut crate::port::Cells, an: &mut crate::port::Cells, pw: i32, ph: i32) -> i32 {
     // The cells of one component's lattice, their words, and the candidate table. Answers its index, -1
     // when it is not a table. P12.2: a band between two rules that holds the rows of a table with no rule between them is cut into
     // those rows first (`tb-split-rows`, whose cuts are in `so` and whose bands are in `bd` while the cells are made: the edges no rule
@@ -694,6 +727,9 @@ pub(crate) fn tb_lattice(rm: &mut crate::port::Cells, root: i32, xs: &mut crate:
     let mut rs: i32 = 1;
     let mut ok: i32 = 1;
     let mut cc: i32 = 0;
+    let mut cross: i32 = 0;
+    let mut prevc: i32 = -1;
+    let mut prevw: i32 = -1;
     if (nc < 2) || (nr < 2) {
         return -1;
     }
@@ -773,6 +809,12 @@ pub(crate) fn tb_lattice(rm: &mut crate::port::Cells, root: i32, xs: &mut crate:
         if (ci >= 0) && (ri >= 0) {
             if wd_get(wd, w, hd_tlen()) > 0 {
                 tb_pair_add(pr, wd, crate::port::cells_at(gm, (ri * nc) + ci), w);
+                // D1630: a word that follows a word of its own line within half its size, in another cell: a line of text that the rules cut
+                if (prevw >= 0) && (prevc != crate::port::cells_at(gm, (ri * nc) + ci)) && (wd_get(wd, w, hd_line()) >= 0) && (wd_get(wd, w, hd_line()) == wd_get(wd, prevw, hd_line())) && (((wd_get(wd, w, hd_x0()) - wd_get(wd, prevw, hd_x1())) * 2) <= tb_max(1, wd_get(wd, w, wf_size()))) {
+                    cross += 1;
+                }
+                prevc = crate::port::cells_at(gm, (ri * nc) + ci);
+                prevw = w;
             }
         }
         w += 1;
@@ -805,6 +847,24 @@ pub(crate) fn tb_lattice(rm: &mut crate::port::Cells, root: i32, xs: &mut crate:
         crate::port::cells_drop(tw, tw0);
         return -1;
     }
+    // D1630 (smoke review B issue 7): THE EVIDENCE OF A TEXT GRID. A diagram's boxes and connectors, or a page's frame, make rules that meet as a table's do, and the words in them are its labels.
+    // What they lack: (1) most cells are one row by one column (the boxes of a flowchart are spanned and empty cells); (2) a line of text runs from a cell into the next (a label that
+    // the box edges cut), which no table's cells do; (3) the grid is not the page's own frame, a page's width and height with a cell of a third of the page in it (a drawing's sheet).
+    if (tb_single_cells(tc, cfirst, cfirst + total) * 2) < total {
+        crate::port::cells_drop(tc, cfirst * TCS);
+        crate::port::cells_drop(tw, tw0);
+        return -1;
+    }
+    if (cross >= 3) && ((cross * 4) >= filled) {
+        crate::port::cells_drop(tc, cfirst * TCS);
+        crate::port::cells_drop(tw, tw0);
+        return -1;
+    }
+    if tb_page_frame(tc, cfirst, cfirst + total, crate::port::cells_at(xs, 0), crate::port::cells_at(ys, 0), crate::port::cells_at(xs, nc), crate::port::cells_at(ys, nr), pw, ph) == 1 {
+        crate::port::cells_drop(tc, cfirst * TCS);
+        crate::port::cells_drop(tw, tw0);
+        return -1;
+    }
     let t: i32 = tb_add(tb, page, crate::port::cells_at(xs, 0), crate::port::cells_at(ys, 0), crate::port::cells_at(xs, nc), crate::port::cells_at(ys, nr), PF_RULED, 900, nr, nc, cfirst, total);
     let mut i: i32 = 0;
     crate::port::cells_set(tb, (t * TBS) + 16, crate::port::cells_len(tx));
@@ -815,7 +875,7 @@ pub(crate) fn tb_lattice(rm: &mut crate::port::Cells, root: i32, xs: &mut crate:
     }
     return t;
 }
-pub(crate) fn tb_ruled_page(mut rm: &mut crate::port::Cells, page: i32, mut xs: &mut crate::port::Cells, mut ys: &mut crate::port::Cells, mut gm: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w0: i32, w1: i32, mut pr: &mut crate::port::Cells, mut so: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tx: &mut crate::port::Cells, mut wl: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut ch: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut rmap: &mut crate::port::Cells, mut bd: &mut crate::port::Cells, an: &mut crate::port::Cells) -> i32 {
+pub(crate) fn tb_ruled_page(mut rm: &mut crate::port::Cells, page: i32, mut xs: &mut crate::port::Cells, mut ys: &mut crate::port::Cells, mut gm: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w0: i32, w1: i32, mut pr: &mut crate::port::Cells, mut so: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tx: &mut crate::port::Cells, mut wl: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut ch: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut rmap: &mut crate::port::Cells, mut bd: &mut crate::port::Cells, an: &mut crate::port::Cells, pw: i32, ph: i32) -> i32 {
     // Every component of the page's merged rules with two rules each way is a lattice candidate.
     let n: i32 = tb_rows_of(rm, RLS);
     let mut i: i32 = 0;
@@ -852,7 +912,7 @@ pub(crate) fn tb_ruled_page(mut rm: &mut crate::port::Cells, page: i32, mut xs: 
             if (nh >= 2) && (nv >= 2) {
                 tb_cluster(xs, 2 * POS_TOL);
                 tb_cluster(ys, 2 * POS_TOL);
-                tb_lattice(rm, i, xs, ys, page, gm, tb, tc, wd, et, w0, w1, pr, so, tw, tx, wl, rw, sg, ch, st, rmap, bd, an);
+                tb_lattice(rm, i, xs, ys, page, gm, tb, tc, wd, et, w0, w1, pr, so, tw, tx, wl, rw, sg, ch, st, rmap, bd, an, pw, ph);
             }
         }
         i += 1;
@@ -3179,6 +3239,23 @@ pub(crate) fn tb_lead_single(tb: &mut crate::port::Cells, k: i32, tc: &mut crate
     }
     return tb_min(lead, 2);
 }
+pub(crate) fn tb_lowc(c: i32) -> i32 {
+    // D1630 (smoke review B issue 14): 1 for a lower case letter of a cased script: Latin (ASCII and Latin-1), Greek, Cyrillic. A cell of two words or more that begins with one is text set in chunks,
+    // whatever the script (the ASCII letters alone made a Russian paragraph's lines a table).
+    if (c >= 97) && (c <= 122) {
+        return 1;
+    }
+    if (c >= 223) && (c <= 255) && (c != 247) {
+        return 1;
+    }
+    if (c >= 945) && (c <= 969) {
+        return 1;
+    }
+    if (c >= 1072) && (c <= 1103) {
+        return 1;
+    }
+    return 0;
+}
 pub(crate) fn tb_score(tb: &mut crate::port::Cells, k: i32, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, tc: &mut crate::port::Cells, tw: &mut crate::port::Cells) -> i32 {
     // The score (0 to 1000, 0 = not a table) of text-based candidate k of its profile (SPEC 10.5): prose in
     // columns is not a table, so cells that are long, or that end like sentences, refuse it. The whitespace
@@ -3210,7 +3287,7 @@ pub(crate) fn tb_score(tb: &mut crate::port::Cells, k: i32, wd: &mut crate::port
                 let c0: i32 = crate::port::cells_at(et, wd_get(wd, fw, hd_tstart()));
                 let ts2: i32 = wd_get(wd, lw2, hd_tstart());
                 let tl2: i32 = wd_get(wd, lw2, hd_tlen());
-                if (c0 >= 97) && (c0 <= 122) {
+                if tb_lowc(c0) == 1 {
                     nprose += 1;
                 }
                 if (tl2 > 1) && (crate::port::cells_at(et, ts2 + (tl2 - 1)) == 45) {
@@ -3985,7 +4062,7 @@ pub(crate) fn tb_prose_edge(tb: &mut crate::port::Cells, k: i32, wd: &mut crate:
             let fw: i32 = crate::port::cells_at(tw, crate::port::cells_at(tc, cb + 8));
             let c0: i32 = crate::port::cells_at(et, wd_get(wd, fw, hd_tstart()));
             let mut low: i32 = 0;
-            if (cn >= 2) && ((c0 >= 97) && (c0 <= 122)) {
+            if (cn >= 2) && (tb_lowc(c0) == 1) {
                 low = 1;
             }
             if crate::port::cells_at(tc, cb) == 0 {
@@ -5391,7 +5468,7 @@ pub fn tb_build(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et
             tb_collect(grl, qi, qj, gfl, ui, uj, page_h(pages, p - 1), s0, s2);
             if tb_rows_of(s0, RLS) <= MAX_RULES {
                 tb_merge_rules(s0, s1, s3, s9);
-                tb_ruled_page(s1, p, s4, s5, s6, tb, tc, wd, et, wi, wj, s7, s3, tw, tx, s10, s11, s12, s13, s14, s16, s15, an);
+                tb_ruled_page(s1, p, s4, s5, s6, tb, tc, wd, et, wi, wj, s7, s3, tw, tx, s10, s11, s12, s13, s14, s16, s15, an, page_w(pages, p - 1), page_h(pages, p - 1));
                 tb_partial_page(s1, p, wd, et, wi, wj, s9, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx);
             } else {
                 crate::port::cells_drop(s1, 0);

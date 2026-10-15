@@ -294,6 +294,41 @@ public static class Figclasstest {
         return n;
     }
     [Xunit.Fact]
+    public static void TestAFigureClaimsTheTextInsideItAndTheLabelsInAChainFromIt() {
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells nn = emon.Port.NewCells();
+        emon.Port.Cells na = emon.Port.NewCells();
+        emon.Port.Cells nr = emon.Port.NewCells();
+        emon.Port.Cells nm = emon.Port.NewCells();
+        emon.Port.Cells cand = emon.Port.NewCells();
+        emon.Port.Cells fg = emon.Port.NewCells();
+        emon.Port.Cells fd = emon.Port.NewCells();
+        emon.Port.Cells ab = emon.Port.NewCells();
+        // D1630 (smoke review B issue 7): a drawing is boxes and arrows, and its words are between and beside them. The figure's own region is 10000..40000 by 10000..30000. A label 10 pt right
+        // of its edge is its (within 24 pt), and so is the one 15 pt right of THAT one, 35 pt from the figure, which the chain takes in; a paragraph of 100 characters and 30 pt tall INSIDE it is its text;
+        // a short one far from it stays.
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Model.PageNew(pages, 1, 61200, 79200, 0, Model.PkVector());
+        FtPara(nodes, regions, text, Model.NkParagraph(), 3, 41000, 18000, 42000, 18750);
+        FtPara(nodes, regions, text, Model.NkParagraph(), 3, 43500, 18000, 44500, 18750);
+        FtPara(nodes, regions, text, Model.NkParagraph(), 100, 12000, 15000, 30000, 18000);
+        FtPara(nodes, regions, text, Model.NkParagraph(), 3, 7200, 60000, 9000, 60750);
+        FtCand(cand, 1, 10000, 10000, 40000, 30000);
+        FtFd(fd, Model.FgDiagram(), 760);
+        emon.Port.CellsPush(fg, 0);
+        emon.Port.CellsPush(fg, 0);
+        Restruct.RsFigures(nodes, attrs, regions, text, nn, na, nr, nm, cand, fg, fd, ab);
+        emon.Testport.AssertEq(Model.NodeCount(nn), 3, "the document, the figure and the far paragraph: the other three are the figure's labels");
+        emon.Testport.AssertEq(Model.NodeKind(nn, 1), Model.NkFigure(), "the figure");
+        emon.Testport.AssertEq(Model.NodeKind(nn, 2), Model.NkParagraph(), "and the paragraph that is not its");
+    }
+    [Xunit.Fact]
     public static void TestAShortParagraphOnAFigureIsItsLabelAndALongOneStays() {
         emon.Port.Cells nodes = emon.Port.NewCells();
         emon.Port.Cells attrs = emon.Port.NewCells();

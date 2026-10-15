@@ -757,7 +757,42 @@ func tbFieldCells(tc *port.Cells, cfirst int32, cend int32, an *port.Cells, page
 	return n
 }
 
-func tbLattice(rm *port.Cells, root int32, xs *port.Cells, ys *port.Cells, page int32, gm *port.Cells, tb *port.Cells, tc *port.Cells, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, pr *port.Cells, so *port.Cells, tw *port.Cells, tx *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, rmap *port.Cells, bd *port.Cells, an *port.Cells) int32 {
+func tbSingleCells(tc *port.Cells, cfirst int32, cend int32) int32 {
+	// How many cells of the grid (rows cfirst..cend of `tc`) are one row by one column.
+	var c int32 = cfirst
+	var n int32 = 0
+	for c < cend {
+		if (port.CellsAt(tc, (c*tcs)+2) == 1) && (port.CellsAt(tc, (c*tcs)+3) == 1) {
+			n += 1
+		}
+		c += 1
+	}
+	return n
+}
+
+func tbPageFrame(tc *port.Cells, cfirst int32, cend int32, gx0 int32, gy0 int32, gx1 int32, gy1 int32, pw int32, ph int32) int32 {
+	// 1 when the grid (box gx0..gx1, gy0..gy1) is the page's frame: at least 80 per cent of the page's width and of its height, with a cell of at least 30 per cent of the page's area in it
+	// (the drawing's sheet of an engineering drawing, its title block under it); 0 for a page of unknown size.
+	if (pw <= 0) || (ph <= 0) {
+		return 0
+	}
+	if (((gx1 - gx0) * 10) < (pw * 8)) || (((gy1 - gy0) * 10) < (ph * 8)) {
+		return 0
+	}
+	var pa int32 = (pw / 100) * (ph / 100)
+	var c int32 = cfirst
+	var a int32 = 0
+	for c < cend {
+		a = ((port.CellsAt(tc, (c*tcs)+6) - port.CellsAt(tc, (c*tcs)+4)) / 100) * ((port.CellsAt(tc, (c*tcs)+7) - port.CellsAt(tc, (c*tcs)+5)) / 100)
+		if (a * 10) >= (pa * 3) {
+			return 1
+		}
+		c += 1
+	}
+	return 0
+}
+
+func tbLattice(rm *port.Cells, root int32, xs *port.Cells, ys *port.Cells, page int32, gm *port.Cells, tb *port.Cells, tc *port.Cells, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, pr *port.Cells, so *port.Cells, tw *port.Cells, tx *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, rmap *port.Cells, bd *port.Cells, an *port.Cells, pw int32, ph int32) int32 {
 	// The cells of one component's lattice, their words, and the candidate table. Answers its index, -1
 	// when it is not a table. P12.2: a band between two rules that holds the rows of a table with no rule between them is cut into
 	// those rows first (`tb-split-rows`, whose cuts are in `so` and whose bands are in `bd` while the cells are made: the edges no rule
@@ -772,6 +807,9 @@ func tbLattice(rm *port.Cells, root int32, xs *port.Cells, ys *port.Cells, page 
 	var rs int32 = 1
 	var ok int32 = 1
 	var cc int32 = 0
+	var cross int32 = 0
+	var prevc int32 = -1
+	var prevw int32 = -1
 	if (nc < 2) || (nr < 2) {
 		return -1
 	}
@@ -851,6 +889,12 @@ func tbLattice(rm *port.Cells, root int32, xs *port.Cells, ys *port.Cells, page 
 		if (ci >= 0) && (ri >= 0) {
 			if evidence.WdGet(wd, w, evidence.HdTlen()) > 0 {
 				tbPairAdd(pr, wd, port.CellsAt(gm, (ri*nc)+ci), w)
+				// D1630: a word that follows a word of its own line within half its size, in another cell: a line of text that the rules cut
+				if (prevw >= 0) && (prevc != port.CellsAt(gm, (ri*nc)+ci)) && (evidence.WdGet(wd, w, evidence.HdLine()) >= 0) && (evidence.WdGet(wd, w, evidence.HdLine()) == evidence.WdGet(wd, prevw, evidence.HdLine())) && (((evidence.WdGet(wd, w, evidence.HdX0()) - evidence.WdGet(wd, prevw, evidence.HdX1())) * 2) <= tbMax(1, evidence.WdGet(wd, w, evidence.WfSize()))) {
+					cross += 1
+				}
+				prevc = port.CellsAt(gm, (ri*nc)+ci)
+				prevw = w
 			}
 		}
 		w += 1
@@ -883,6 +927,24 @@ func tbLattice(rm *port.Cells, root int32, xs *port.Cells, ys *port.Cells, page 
 		port.CellsDrop(tw, tw0)
 		return -1
 	}
+	// D1630 (smoke review B issue 7): THE EVIDENCE OF A TEXT GRID. A diagram's boxes and connectors, or a page's frame, make rules that meet as a table's do, and the words in them are its labels.
+	// What they lack: (1) most cells are one row by one column (the boxes of a flowchart are spanned and empty cells); (2) a line of text runs from a cell into the next (a label that
+	// the box edges cut), which no table's cells do; (3) the grid is not the page's own frame, a page's width and height with a cell of a third of the page in it (a drawing's sheet).
+	if (tbSingleCells(tc, cfirst, cfirst+total) * 2) < total {
+		port.CellsDrop(tc, cfirst*tcs)
+		port.CellsDrop(tw, tw0)
+		return -1
+	}
+	if (cross >= 3) && ((cross * 4) >= filled) {
+		port.CellsDrop(tc, cfirst*tcs)
+		port.CellsDrop(tw, tw0)
+		return -1
+	}
+	if tbPageFrame(tc, cfirst, cfirst+total, port.CellsAt(xs, 0), port.CellsAt(ys, 0), port.CellsAt(xs, nc), port.CellsAt(ys, nr), pw, ph) == 1 {
+		port.CellsDrop(tc, cfirst*tcs)
+		port.CellsDrop(tw, tw0)
+		return -1
+	}
 	var t int32 = tbAdd(tb, page, port.CellsAt(xs, 0), port.CellsAt(ys, 0), port.CellsAt(xs, nc), port.CellsAt(ys, nr), pfRuled, 900, nr, nc, cfirst, total)
 	var i int32 = 0
 	port.CellsSet(tb, (t*tbs)+16, port.CellsLen(tx))
@@ -894,7 +956,7 @@ func tbLattice(rm *port.Cells, root int32, xs *port.Cells, ys *port.Cells, page 
 	return t
 }
 
-func tbRuledPage(rm *port.Cells, page int32, xs *port.Cells, ys *port.Cells, gm *port.Cells, tb *port.Cells, tc *port.Cells, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, pr *port.Cells, so *port.Cells, tw *port.Cells, tx *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, rmap *port.Cells, bd *port.Cells, an *port.Cells) int32 {
+func tbRuledPage(rm *port.Cells, page int32, xs *port.Cells, ys *port.Cells, gm *port.Cells, tb *port.Cells, tc *port.Cells, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, pr *port.Cells, so *port.Cells, tw *port.Cells, tx *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, rmap *port.Cells, bd *port.Cells, an *port.Cells, pw int32, ph int32) int32 {
 	// Every component of the page's merged rules with two rules each way is a lattice candidate.
 	var n int32 = tbRowsOf(rm, rls)
 	var i int32 = 0
@@ -931,7 +993,7 @@ func tbRuledPage(rm *port.Cells, page int32, xs *port.Cells, ys *port.Cells, gm 
 			if (nh >= 2) && (nv >= 2) {
 				tbCluster(xs, 2*posTol)
 				tbCluster(ys, 2*posTol)
-				tbLattice(rm, i, xs, ys, page, gm, tb, tc, wd, et, w0, w1, pr, so, tw, tx, wl, rw, sg, ch, st, rmap, bd, an)
+				tbLattice(rm, i, xs, ys, page, gm, tb, tc, wd, et, w0, w1, pr, so, tw, tx, wl, rw, sg, ch, st, rmap, bd, an, pw, ph)
 			}
 		}
 		i += 1
@@ -3338,6 +3400,24 @@ func tbLeadSingle(tb *port.Cells, k int32, tc *port.Cells) int32 {
 	return tbMin(lead, 2)
 }
 
+func tbLowc(c int32) int32 {
+	// D1630 (smoke review B issue 14): 1 for a lower case letter of a cased script: Latin (ASCII and Latin-1), Greek, Cyrillic. A cell of two words or more that begins with one is text set in chunks,
+	// whatever the script (the ASCII letters alone made a Russian paragraph's lines a table).
+	if (c >= 97) && (c <= 122) {
+		return 1
+	}
+	if (c >= 223) && (c <= 255) && (c != 247) {
+		return 1
+	}
+	if (c >= 945) && (c <= 969) {
+		return 1
+	}
+	if (c >= 1072) && (c <= 1103) {
+		return 1
+	}
+	return 0
+}
+
 func tbScore(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc *port.Cells, tw *port.Cells) int32 {
 	// The score (0 to 1000, 0 = not a table) of text-based candidate k of its profile (SPEC 10.5): prose in
 	// columns is not a table, so cells that are long, or that end like sentences, refuse it. The whitespace
@@ -3369,7 +3449,7 @@ func tbScore(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc *port.C
 				var c0 int32 = port.CellsAt(et, evidence.WdGet(wd, fw, evidence.HdTstart()))
 				var ts2 int32 = evidence.WdGet(wd, lw2, evidence.HdTstart())
 				var tl2 int32 = evidence.WdGet(wd, lw2, evidence.HdTlen())
-				if (c0 >= 97) && (c0 <= 122) {
+				if tbLowc(c0) == 1 {
 					nprose += 1
 				}
 				if (tl2 > 1) && (port.CellsAt(et, ts2+(tl2-1)) == 45) {
@@ -4163,7 +4243,7 @@ func tbProseEdge(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc *po
 			var fw int32 = port.CellsAt(tw, port.CellsAt(tc, cb+8))
 			var c0 int32 = port.CellsAt(et, evidence.WdGet(wd, fw, evidence.HdTstart()))
 			var low int32 = 0
-			if (cn >= 2) && ((c0 >= 97) && (c0 <= 122)) {
+			if (cn >= 2) && (tbLowc(c0) == 1) {
 				low = 1
 			}
 			if port.CellsAt(tc, cb) == 0 {
@@ -5606,7 +5686,7 @@ func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gf
 			tbCollect(grl, qi, qj, gfl, ui, uj, model.PageH(pages, p-1), s0, s2)
 			if tbRowsOf(s0, rls) <= maxRules {
 				tbMergeRules(s0, s1, s3, s9)
-				tbRuledPage(s1, p, s4, s5, s6, tb, tc, wd, et, wi, wj, s7, s3, tw, tx, s10, s11, s12, s13, s14, s16, s15, an)
+				tbRuledPage(s1, p, s4, s5, s6, tb, tc, wd, et, wi, wj, s7, s3, tw, tx, s10, s11, s12, s13, s14, s16, s15, an, model.PageW(pages, p-1), model.PageH(pages, p-1))
 				tbPartialPage(s1, p, wd, et, wi, wj, s9, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx)
 			} else {
 				port.CellsDrop(s1, 0)

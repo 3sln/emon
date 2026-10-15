@@ -382,6 +382,7 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 	}
 	port.CellsCopyInto(s.Iloc, c.Lcl)
 	columns.LcCopy(d.Fl, s.Lt)
+	columns.LcMarkAsides(s.Lt, d.Gfl, m.Pages, np)
 	initial.InDetect(d.Fw, d.Gl, d.Fnt, d.Et, np, s.Iloc, s.Lt, s.Ls, s.Lo, s.Tm, s.Ii)
 	heading.HdPriorOutline(d.Ol, d.Txt, s.Hpr, s.Hptxt)
 	heading.HdAnalyze(d.Fw, s.Lt, d.Et, d.Gl, s.Sf, s.Hsc, s.Hc, s.Ws, s.Htmp, s.Hpr, s.Hptxt)

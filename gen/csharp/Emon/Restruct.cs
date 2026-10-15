@@ -981,6 +981,10 @@ public static class Restruct {
     internal const int RfLabelH = 1800;
     internal const int RfLabelCp = 48;
     internal const int RfLabelWords = 6;
+    internal const int RfGrow = 3;
+    internal const int RfInsideH = 4500;
+    internal const int RfInsideCp = 120;
+    internal const int RfInsideBig = 50000;
     internal static int RfFdv(emon.Port.Cells fd, int row, int f, int dflt) {
         if (emon.Port.CellsLen(fd) < ((row + 1) * RfFd)) {
             return dflt;
@@ -1007,11 +1011,23 @@ public static class Restruct {
         }
         return words <= RfLabelWords;
     }
-    internal static int RfLabelOf(emon.Port.Cells on, emon.Port.Cells orr, emon.Port.Cells text, emon.Port.Cells cand, emon.Port.Cells fg, emon.Port.Cells fd, int p) {
-        // The candidate row of the figure that paragraph p labels, or -1.
+    internal static int RfEb(emon.Port.Cells ab, int n, int k, emon.Port.Cells cand, int row, int f) {
+        // Coordinate f (0 x0, 1 y0, 2 x1, 3 y1) of the box the labels of the figure number `k` of `fg` (1 based) are looked for in: its own, grown over the labels near it (`rf-grow`, kept in `ab` after
+        // the node entries, four cells a figure), else its candidate row's.
+        if (emon.Port.CellsLen(ab) >= (n + (4 * k))) {
+            return emon.Port.CellsAt(ab, n + ((4 * (k - 1)) + f));
+        }
+        return Asset.AsGet(cand, row, 5 + f);
+    }
+    internal static int RfLabelOf(emon.Port.Cells on, emon.Port.Cells orr, emon.Port.Cells text, emon.Port.Cells cand, emon.Port.Cells fg, emon.Port.Cells fd, emon.Port.Cells ab, int n, int p) {
+        // The candidate row of the figure that paragraph p labels, or -1. A label is a short one-line paragraph on the figure or within `RF_ZONE` of its box, as grown over the labels around it
+        // (`rf-grow`); inside the figure's own box (a figure no taller than `RF_INSIDE_BIG`) any paragraph of at most three lines and `RF_INSIDE_CP` characters is: the text of a figure is its labels (D1630).
         int r = Model.NodeRegionHead(on, p);
         int i = 1;
         int row = 0;
+        int cx = 0;
+        int cy = 0;
+        int hgt = 0;
         if (r < 0) {
             return -1;
         }
@@ -1021,25 +1037,107 @@ public static class Restruct {
         if (Model.NodeHasText(on, p) == 0) {
             return -1;
         }
-        if ((Model.RegionY1(orr, r) - Model.RegionY0(orr, r)) > RfLabelH) {
+        hgt = Model.RegionY1(orr, r) - Model.RegionY0(orr, r);
+        cx = (Model.RegionX0(orr, r) + Model.RegionX1(orr, r)) / 2;
+        cy = (Model.RegionY0(orr, r) + Model.RegionY1(orr, r)) / 2;
+        while (i < emon.Port.CellsLen(fg)) {
+            row = emon.Port.CellsAt(fg, i);
+            if ((Asset.AsGet(cand, row, 0) == Model.RegionPage(orr, r)) && ((cx >= Asset.AsGet(cand, row, 5)) && ((cx <= Asset.AsGet(cand, row, 7)) && ((cy >= Asset.AsGet(cand, row, 6)) && ((cy <= Asset.AsGet(cand, row, 8)) && (((Asset.AsGet(cand, row, 8) - Asset.AsGet(cand, row, 6)) <= RfInsideBig) && ((hgt <= RfInsideH) && (Model.NodeTextLen(on, p) <= RfInsideCp)))))))) {
+                return row;
+            }
+            i += 1;
+        }
+        if (hgt > RfLabelH) {
             return -1;
         }
         if (!RfLabelText(on, text, p)) {
             return -1;
         }
+        i = 1;
         while (i < emon.Port.CellsLen(fg)) {
             row = emon.Port.CellsAt(fg, i);
-            if ((Asset.AsGet(cand, row, 0) == Model.RegionPage(orr, r)) && ((Model.RegionX1(orr, r) > (Asset.AsGet(cand, row, 5) - RfZone)) && ((Model.RegionX0(orr, r) < (Asset.AsGet(cand, row, 7) + RfZone)) && ((((Model.RegionY0(orr, r) + Model.RegionY1(orr, r)) / 2) >= (Asset.AsGet(cand, row, 6) - RfZone)) && ((((Model.RegionY0(orr, r) + Model.RegionY1(orr, r)) / 2) <= (Asset.AsGet(cand, row, 8) + RfZone)) && ((Model.RegionX1(orr, r) - Model.RegionX0(orr, r)) <= ((2 * (Asset.AsGet(cand, row, 7) - Asset.AsGet(cand, row, 5))) + 2000))))))) {
+            if ((Asset.AsGet(cand, row, 0) == Model.RegionPage(orr, r)) && ((Model.RegionX1(orr, r) > (RfEb(ab, n, i, cand, row, 0) - RfZone)) && ((Model.RegionX0(orr, r) < (RfEb(ab, n, i, cand, row, 2) + RfZone)) && ((cy >= (RfEb(ab, n, i, cand, row, 1) - RfZone)) && ((cy <= (RfEb(ab, n, i, cand, row, 3) + RfZone)) && ((Model.RegionX1(orr, r) - Model.RegionX0(orr, r)) <= ((2 * (RfEb(ab, n, i, cand, row, 2) - RfEb(ab, n, i, cand, row, 0))) + 2000))))))) {
                 return row;
             }
             i += 1;
         }
         return -1;
     }
+    internal static int RfGrows(emon.Port.Cells fd, int row) {
+        // 1 when the figure of candidate row `row` may grow over its labels: a drawing, a chart, a picture; not a logo, a barcode or a code (a name, a number beside them is text).
+        int k = RfFdv(fd, row, 0, Model.FgUnknown());
+        if ((k == Model.FgLogo()) || ((k == Model.FgBarcode()) || (k == Model.FgQr()))) {
+            return 0;
+        }
+        return 1;
+    }
+    internal static int RfGrow(emon.Port.Cells on, emon.Port.Cells orr, emon.Port.Cells text, emon.Port.Cells cand, emon.Port.Cells fg, emon.Port.Cells fd, emon.Port.Cells ab, int n) {
+        // D1630 (smoke review B issue 7): the boxes the labels of each figure are looked for in, kept in `ab` after its `n` node entries (four cells a figure of `fg`, in its order): each is the
+        // figure's candidate box grown, in `RF_GROW` passes, over the label-like paragraphs (one line, a few words, `rf-label-text`) within `RF_ZONE` of it: a drawing's boxes are separate regions of
+        // paths and words, and the words between and beside them are its labels too. Answers how many paragraphs it took in.
+        int i = 1;
+        int row = 0;
+        int pass = 0;
+        int c = 0;
+        int r = 0;
+        int took = 0;
+        int b = 0;
+        int changed = 1;
+        int cy = 0;
+        while (i < emon.Port.CellsLen(fg)) {
+            row = emon.Port.CellsAt(fg, i);
+            emon.Port.CellsPush(ab, Asset.AsGet(cand, row, 5));
+            emon.Port.CellsPush(ab, Asset.AsGet(cand, row, 6));
+            emon.Port.CellsPush(ab, Asset.AsGet(cand, row, 7));
+            emon.Port.CellsPush(ab, Asset.AsGet(cand, row, 8));
+            i += 1;
+        }
+        while ((pass < RfGrow) && (changed == 1)) {
+            changed = 0;
+            c = 0;
+            while (c < n) {
+                if (Model.NodeKind(on, c) == Model.NkParagraph()) {
+                    r = Model.NodeRegionHead(on, c);
+                    if ((r >= 0) && ((Model.NodeRegionCount(on, c) == 1) && ((Model.NodeHasText(on, c) == 1) && (((Model.RegionY1(orr, r) - Model.RegionY0(orr, r)) <= RfLabelH) && RfLabelText(on, text, c))))) {
+                        cy = (Model.RegionY0(orr, r) + Model.RegionY1(orr, r)) / 2;
+                        i = 1;
+                        while (i < emon.Port.CellsLen(fg)) {
+                            row = emon.Port.CellsAt(fg, i);
+                            b = n + (4 * (i - 1));
+                            if ((RfGrows(fd, row) == 1) && ((Asset.AsGet(cand, row, 0) == Model.RegionPage(orr, r)) && ((Model.RegionX1(orr, r) > (emon.Port.CellsAt(ab, b) - RfZone)) && ((Model.RegionX0(orr, r) < (emon.Port.CellsAt(ab, b + 2) + RfZone)) && ((cy >= (emon.Port.CellsAt(ab, b + 1) - RfZone)) && (cy <= (emon.Port.CellsAt(ab, b + 3) + RfZone))))))) {
+                                if (Model.RegionX0(orr, r) < emon.Port.CellsAt(ab, b)) {
+                                    emon.Port.CellsSet(ab, b, Model.RegionX0(orr, r));
+                                    changed = 1;
+                                }
+                                if (Model.RegionY0(orr, r) < emon.Port.CellsAt(ab, b + 1)) {
+                                    emon.Port.CellsSet(ab, b + 1, Model.RegionY0(orr, r));
+                                    changed = 1;
+                                }
+                                if (Model.RegionX1(orr, r) > emon.Port.CellsAt(ab, b + 2)) {
+                                    emon.Port.CellsSet(ab, b + 2, Model.RegionX1(orr, r));
+                                    changed = 1;
+                                }
+                                if (Model.RegionY1(orr, r) > emon.Port.CellsAt(ab, b + 3)) {
+                                    emon.Port.CellsSet(ab, b + 3, Model.RegionY1(orr, r));
+                                    changed = 1;
+                                }
+                                took += 1;
+                            }
+                            i += 1;
+                        }
+                    }
+                }
+                c += 1;
+            }
+            pass += 1;
+        }
+        return took;
+    }
     internal static int RfAbsorbNote(emon.Port.Cells on, emon.Port.Cells orr, emon.Port.Cells text, emon.Port.Cells cand, emon.Port.Cells fg, emon.Port.Cells fd, emon.Port.Cells ab, int n) {
         // A note (the column stage made a margin note of a column of tick labels) every child of which is a label of one figure is
         // dropped with them: the note and its paragraphs are marked.
         int c = Model.NodeFirstChild(on, n);
+        int nall = Model.NodeCount(on);
         int f = -1;
         int g = 0;
         int ok = 1;
@@ -1047,7 +1145,7 @@ public static class Restruct {
         while (c >= 0) {
             g = -1;
             if (Model.NodeKind(on, c) == Model.NkParagraph()) {
-                g = RfLabelOf(on, orr, text, cand, fg, fd, c);
+                g = RfLabelOf(on, orr, text, cand, fg, fd, ab, nall, c);
             }
             if (g < 0) {
                 ok = 0;
@@ -1074,6 +1172,7 @@ public static class Restruct {
     internal static int RfAbsorb(emon.Port.Cells on, emon.Port.Cells orr, emon.Port.Cells text, emon.Port.Cells cand, emon.Port.Cells fg, emon.Port.Cells fd, emon.Port.Cells ab, int p) {
         // Mark, among the blocks of p (the document or a section) and of the sections in it, the paragraphs that label a figure.
         int c = Model.NodeFirstChild(on, p);
+        int nall = Model.NodeCount(on);
         int f = -1;
         while (c >= 0) {
             if (Model.NodeKind(on, c) == Model.NkSection()) {
@@ -1083,7 +1182,7 @@ public static class Restruct {
                 RfAbsorbNote(on, orr, text, cand, fg, fd, ab, c);
             }
             if (Model.NodeKind(on, c) == Model.NkParagraph()) {
-                f = RfLabelOf(on, orr, text, cand, fg, fd, c);
+                f = RfLabelOf(on, orr, text, cand, fg, fd, ab, nall, c);
                 if (f >= 0) {
                     emon.Port.CellsSet(ab, c, f);
                 }
@@ -1279,6 +1378,7 @@ public static class Restruct {
             i += 1;
         }
         if (emon.Port.CellsLen(fd) > 0) {
+            RfGrow(on, orr, text, cand, fg, fd, ab, n);
             r = 0;
             while (r < n) {
                 if ((Model.NodeParent(on, r) < 0) && (Model.NodeKind(on, r) == Model.NkDocument())) {

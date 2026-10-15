@@ -2,6 +2,7 @@
 // source: emon.columns
 
 use crate::emon::evidence::*;
+use crate::emon::glayer::*;
 use crate::emon::model::*;
 
 pub(crate) const LC_ROWS: i32 = 3;
@@ -22,6 +23,15 @@ pub(crate) const LC_TABLE_RUNS: i32 = 4;
 pub(crate) const LC_TABLE_WORDS: i32 = 3;
 pub(crate) const LC_TIGHT_NUM: i32 = 4;
 pub(crate) const LC_TIGHT_DEN: i32 = 5;
+pub(crate) const LC_WIDE: i32 = 6000;
+pub(crate) const LC_WIDE_ROWS: i32 = 4;
+pub(crate) const LC_WIDE_WORDS: i32 = 2;
+pub(crate) const LC_ASIDE: i32 = 2000000000;
+pub(crate) const LC_ASIDE_MIN: i32 = 80;
+pub(crate) const LC_ASIDE_MAX: i32 = 550;
+pub(crate) const LC_ASIDE_H: i32 = 3600;
+pub(crate) const LC_ASIDE_LINES: i32 = 3;
+pub(crate) const LC_HELD: i32 = 1073741824;
 pub(crate) const PR_DOM: i32 = 0;
 pub(crate) const PR_BX0: i32 = 1;
 pub(crate) const PR_BX1: i32 = 2;
@@ -352,6 +362,148 @@ pub(crate) fn lc_beyond(lt: &mut crate::port::Cells, l: i32, bx0: i32, bx1: i32,
     }
     return 0 == 1;
 }
+pub(crate) fn lc_asides(lt: &mut crate::port::Cells, mut ls: &mut crate::port::Cells, mut sd: &mut crate::port::Cells) -> i32 {
+    // D1630 (smoke review B issue 14): the lines of `ls` that `lc-mark-asides` found in a box that is an aside (cell 14 over `LC_ASIDE`) move to `sd`, the side lines: a sidebar, an infobox, a photo
+    // block beside the body is a region of its own. `sd` is empty when this is called. Answers how many moved.
+    let n: i32 = crate::port::cells_len(ls);
+    let mut i: i32 = 0;
+    let mut kept: i32 = 0;
+    while i < n {
+        let l: i32 = crate::port::cells_at(ls, i);
+        if crate::port::cells_at(lt, (l * 16) + 14) > LC_ASIDE {
+            crate::port::cells_push(sd, l);
+        } else {
+            crate::port::cells_set(ls, kept, l);
+            kept += 1;
+        }
+        i += 1;
+    }
+    crate::port::cells_drop(ls, kept);
+    return crate::port::cells_len(sd);
+}
+pub(crate) fn lc_in_box(lt: &mut crate::port::Cells, l: i32, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
+    // 1 when the centre of line l of `lt` is in the box.
+    let cx: i32 = (ln_get(lt, l, lh_x0()) + ln_get(lt, l, lh_x1())) / 2;
+    let cy: i32 = (ln_get(lt, l, lh_y0()) + ln_get(lt, l, lh_y1())) / 2;
+    if (cx >= x0) && ((cx <= x1) && ((cy >= y0) && (cy <= y1))) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn lc_mark_box(mut lt: &mut crate::port::Cells, li: i32, lj: i32, fx0: i32, fy0: i32, fx1: i32, fy1: i32) -> i32 {
+    // The lines li..lj of `lt` in the box (upright, not a table's) and beside it, on its level, outside it, to its left or right: when the box has at least `LC_ASIDE_LINES` and so has the body on
+    // one side of it, the lines in the box are marked (cell 14: `LC_ASIDE` + 1 for a box left of the body beside it, + 2 for a box right of it). Answers 1 when it marked.
+    let mut l: i32 = li;
+    let mut nin: i32 = 0;
+    let mut nl: i32 = 0;
+    let mut nr: i32 = 0;
+    let mut rot: i32 = 0;
+    let mut ov: i32 = 0;
+    let mut h: i32 = 0;
+    while l < lj {
+        rot = ln_get(lt, l, lh_rot());
+        if ((rot < 100) || (rot > 35900)) && (crate::port::cells_at(lt, (l * 16) + 15) < LC_HELD) {
+            if lc_in_box(lt, l, fx0, fy0, fx1, fy1) == 1 {
+                nin += 1;
+            } else {
+                h = ln_get(lt, l, lh_y1()) - ln_get(lt, l, lh_y0());
+                ov = lc_min(fy1, ln_get(lt, l, lh_y1())) - lc_max(fy0, ln_get(lt, l, lh_y0()));
+                if (h > 0) && ((ov * 2) >= h) {
+                    if ln_get(lt, l, lh_x1()) <= (fx0 + 300) {
+                        nl += 1;
+                    }
+                    if ln_get(lt, l, lh_x0()) >= (fx1 - 300) {
+                        nr += 1;
+                    }
+                }
+            }
+        }
+        l += 1;
+    }
+    if (nin >= LC_ASIDE_LINES) && ((nl >= LC_ASIDE_LINES) || (nr >= LC_ASIDE_LINES)) {
+        l = li;
+        while l < lj {
+            rot = ln_get(lt, l, lh_rot());
+            if ((rot < 100) || (rot > 35900)) && (crate::port::cells_at(lt, (l * 16) + 15) < LC_HELD) {
+                if lc_in_box(lt, l, fx0, fy0, fx1, fy1) == 1 {
+                    if nl >= nr {
+                        crate::port::cells_set(lt, (l * 16) + 14, LC_ASIDE + 2);
+                    } else {
+                        crate::port::cells_set(lt, (l * 16) + 14, LC_ASIDE + 1);
+                    }
+                }
+            }
+            l += 1;
+        }
+        return 1;
+    }
+    return 0;
+}
+pub fn lc_mark_asides(mut lt: &mut crate::port::Cells, gfl: &mut crate::port::Cells, pages: &mut crate::port::Cells, np: i32) -> i32 {
+    // D1630 (smoke review B issue 14, A issue 14): a SIDEBAR OR INFOBOX is a shaded box (a fused fill of the graphics layer, `gfl`) narrower than a body (between `LC_ASIDE_MIN` and `LC_ASIDE_MAX`
+    // per mille of the page's width), at least `LC_ASIDE_H` tall, with lines in it and the body's lines on its level beside it: the lines in it are marked (`lc-mark-box`), and the column stage
+    // takes them from the body as a region of their own, whatever its words (a text-only reading finds the gap, the rows of short words in it, and misses it where the rows have few words, or the body
+    // wraps around it). `lt` is the lines the stage reads, copied (`lc-copy`) with the tables' claims in cell 15; the marks go in cell 14 of every line, 0 where there is none. Answers the boxes taken.
+    let nl: i32 = ln_count(lt);
+    let nu: i32 = gfl_count(gfl);
+    let mut p: i32 = 1;
+    let mut l: i32 = 0;
+    let mut li: i32 = 0;
+    let mut lj: i32 = 0;
+    let mut ui: i32 = 0;
+    let mut uj: i32 = 0;
+    let mut u: i32 = 0;
+    let mut pw: i32 = 0;
+    let mut fw: i32 = 0;
+    let mut took: i32 = 0;
+    let mut prev: i32 = 0;
+    l = 0;
+    while l < nl {
+        if ln_get(lt, l, lh_page()) > 0 {
+            if ln_get(lt, l, lh_page()) < prev {
+                return 0;
+            }
+            prev = ln_get(lt, l, lh_page());
+        }
+        l += 1;
+    }
+    l = 0;
+    while l < nl {
+        crate::port::cells_set(lt, (l * 16) + 14, 0);
+        l += 1;
+    }
+    if nu == 0 {
+        return 0;
+    }
+    while p <= np {
+        while (li < nl) && (ln_get(lt, li, lh_page()) < p) {
+            li += 1;
+        }
+        lj = li;
+        while (lj < nl) && (ln_get(lt, lj, lh_page()) == p) {
+            lj += 1;
+        }
+        while (ui < nu) && (gfl_get(gfl, ui, gff_page()) < p) {
+            ui += 1;
+        }
+        uj = ui;
+        while (uj < nu) && (gfl_get(gfl, uj, gff_page()) == p) {
+            uj += 1;
+        }
+        pw = page_w(pages, p - 1);
+        u = ui;
+        while u < uj {
+            fw = gfl_get(gfl, u, gff_x1()) - gfl_get(gfl, u, gff_x0());
+            if ((fw * 1000) >= (pw * LC_ASIDE_MIN)) && (((fw * 1000) <= (pw * LC_ASIDE_MAX)) && (((gfl_get(gfl, u, gff_y1()) - gfl_get(gfl, u, gff_y0())) >= LC_ASIDE_H) && (gfl_get(gfl, u, gff_colour()) != 16777215))) {
+                took += lc_mark_box(lt, li, lj, gfl_get(gfl, u, gff_x0()), gfl_get(gfl, u, gff_y0()), gfl_get(gfl, u, gff_x1()), gfl_get(gfl, u, gff_y1()));
+            }
+            u += 1;
+        }
+        li = lj;
+        p += 1;
+    }
+    return took;
+}
 pub(crate) fn lc_side(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, lt: &mut crate::port::Cells, mut ls: &mut crate::port::Cells, mut sd: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, dom: i32) -> i32 {
     // Find the body block, and move the lines wholly outside it from `ls` to `sd`, when most of them are in
     // smaller type (margin notes, sidebars). Numeric lines among them (line numbers) are dropped. Sets the
@@ -365,7 +517,6 @@ pub(crate) fn lc_side(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, 
     let mut nb: i32 = 0;
     let mut ns: i32 = 0;
     let mut kept: i32 = 0;
-    crate::port::cells_drop(sd, 0);
     while i < n {
         let l: i32 = crate::port::cells_at(ls, i);
         if lc_is_body(lc_size(wd, lt, l), dom) {
@@ -521,15 +672,25 @@ pub(crate) fn lc_items(wd: &mut crate::port::Cells, lt: &mut crate::port::Cells,
 }
 pub(crate) fn lc_close(mut gu: &mut crate::port::Cells, ac: &mut crate::port::Cells, a: i32) -> i32 {
     // An active interval ends: a gutter when it persisted `gutter-rows` rows and held, on each side, words
-    // in `gutter-rows` rows, `gutter-words` of them on average.
+    // in `gutter-rows` rows, `gutter-words` of them on average. D1630 (smoke review A issue 14): a gutter at least `LC_WIDE` wide (two blocks of an invoice, Seller and Client, a form's left
+    // and right boxes) with at least `LC_WIDE_ROWS` rows with words on each side, `LC_WIDE_WORDS` of them on average, is a gutter too: a block of short lines is not a column of prose, but a gap that wide
+    // between two blocks of lines is not a table's cell padding either (a row of key and value has one word, or a few, in its value).
     let base: i32 = a * GU_STRIDE;
     let rows: i32 = crate::port::cells_at(ac, base + GU_ROWS);
     let lrows: i32 = crate::port::cells_at(ac, base + GU_LROWS);
     let rrows: i32 = crate::port::cells_at(ac, base + GU_RROWS);
     let lsum: i32 = crate::port::cells_at(ac, base + GU_LSUM);
     let rsum: i32 = crate::port::cells_at(ac, base + GU_RSUM);
+    let gw: i32 = crate::port::cells_at(ac, base + 1) - crate::port::cells_at(ac, base);
+    let mut ok: i32 = 0;
     let mut f: i32 = 0;
     if (rows >= LC_ROWS) && ((lrows >= LC_ROWS) && (rrows >= LC_ROWS)) && ((lsum >= (lrows * LC_WORDS)) && (rsum >= (rrows * LC_WORDS))) {
+        ok = 1;
+    }
+    if (gw >= LC_WIDE) && ((lrows >= LC_WIDE_ROWS) && (rrows >= LC_WIDE_ROWS)) && ((lsum >= (lrows * LC_WIDE_WORDS)) && (rsum >= (rrows * LC_WIDE_WORDS))) {
+        ok = 1;
+    }
+    if ok == 1 {
         while f < GU_STRIDE {
             crate::port::cells_push(gu, crate::port::cells_at(ac, base + f));
             f += 1;
@@ -1471,7 +1632,13 @@ pub(crate) fn lc_tree(lt: &mut crate::port::Cells, mut ls: &mut crate::port::Cel
     return 0;
 }
 pub(crate) fn lc_side_of(lt: &mut crate::port::Cells, l: i32, bx1: i32) -> i32 {
-    // 1 for a line right of the body block, 0 for one left of it.
+    // 1 for a line right of the body block, 0 for one left of it. A line in a box that is an aside (`lc-mark-asides`) is on the side the box was found on.
+    if crate::port::cells_at(lt, (l * 16) + 14) == (LC_ASIDE + 2) {
+        return 1;
+    }
+    if crate::port::cells_at(lt, (l * 16) + 14) == (LC_ASIDE + 1) {
+        return 0;
+    }
     if ln_get(lt, l, lh_x0()) >= bx1 {
         return 1;
     }
@@ -1709,6 +1876,8 @@ pub fn lc_page(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, mut lt:
     if (rtl * 2) > n {
         crate::port::cells_set(pr, PR_RTL, 1);
     }
+    crate::port::cells_drop(sd, 0);
+    lc_asides(lt, ls, sd);
     lc_side(wd, et, lt, ls, sd, pr, dom);
     lc_sweep(wd, lt, ls, dom, it, io, rw, gu, ac, tm);
     lc_merge(gu, dom);

@@ -319,6 +319,7 @@ public final class Engine {
         }
         emon.Port.cellsCopyInto(s.iloc, c.lcl);
         Columns.lcCopy(d.fl, s.lt);
+        Columns.lcMarkAsides(s.lt, d.gfl, m.pages, np);
         Initial.inDetect(d.fw, d.gl, d.fnt, d.et, np, s.iloc, s.lt, s.ls, s.lo, s.tm, s.ii);
         Heading.hdPriorOutline(d.ol, d.txt, s.hpr, s.hptxt);
         Heading.hdAnalyze(d.fw, s.lt, d.et, d.gl, s.sf, s.hsc, s.hc, s.ws, s.htmp, s.hpr, s.hptxt);

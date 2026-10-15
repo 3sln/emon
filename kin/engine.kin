@@ -44,7 +44,7 @@
             [emon.pdfstruct :refer [tg-trust tg-read tg-join]]
             [emon.furniture :refer [fu-find fu-write]]
             [emon.table :refer [tb-build]]
-            [emon.columns :refer [lc-copy]]
+            [emon.columns :refer [lc-copy lc-mark-asides]]
             [emon.initial :refer [in-detect]]
             [emon.heading :refer [hd-prior-outline hd-analyze]]
             [emon.notes :refer [nt-analyze]]
@@ -363,6 +363,7 @@
     ;; the initials (kin/initial.kin, P4.10) read the glyphs and fonts, and the locale tag as code points; found in the copy of the lines BEFORE the heading analysis reads it
     (cells-copy-into (fd s iloc) (fd c lcl))
     (lc-copy (fd d fl) (fd s lt))
+    (lc-mark-asides (fd s lt) (fd d gfl) (fd m pages) np)
     (in-detect (fd d fw) (fd d gl) (fd d fnt) (fd d et) np (fd s iloc) (fd s lt) (fd s ls) (fd s lo) (fd s tm) (fd s ii))
     ;; the heading analysis (kin/heading.kin, P4.4), its prior the outline (D172)
     (hd-prior-outline (fd d ol) (fd d txt) (fd s hpr) (fd s hptxt))

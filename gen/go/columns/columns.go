@@ -5,6 +5,7 @@ package columns
 
 import (
 	"emon/evidence"
+	"emon/glayer"
 	"emon/model"
 	"emon/port"
 )
@@ -44,6 +45,24 @@ const lcTableWords int32 = 3
 const lcTightNum int32 = 4
 
 const lcTightDen int32 = 5
+
+const lcWide int32 = 6000
+
+const lcWideRows int32 = 4
+
+const lcWideWords int32 = 2
+
+const lcAside int32 = 2000000000
+
+const lcAsideMin int32 = 80
+
+const lcAsideMax int32 = 550
+
+const lcAsideH int32 = 3600
+
+const lcAsideLines int32 = 3
+
+const lcHeld int32 = 1073741824
 
 const prDom int32 = 0
 
@@ -428,6 +447,152 @@ func lcBeyond(lt *port.Cells, l int32, bx0 int32, bx1 int32, mg int32) bool {
 	return 0 == 1
 }
 
+func lcAsides(lt *port.Cells, ls *port.Cells, sd *port.Cells) int32 {
+	// D1630 (smoke review B issue 14): the lines of `ls` that `lc-mark-asides` found in a box that is an aside (cell 14 over `LC_ASIDE`) move to `sd`, the side lines: a sidebar, an infobox, a photo
+	// block beside the body is a region of its own. `sd` is empty when this is called. Answers how many moved.
+	var n int32 = port.CellsLen(ls)
+	var i int32 = 0
+	var kept int32 = 0
+	for i < n {
+		var l int32 = port.CellsAt(ls, i)
+		if port.CellsAt(lt, (l*16)+14) > lcAside {
+			port.CellsPush(sd, l)
+		} else {
+			port.CellsSet(ls, kept, l)
+			kept += 1
+		}
+		i += 1
+	}
+	port.CellsDrop(ls, kept)
+	return port.CellsLen(sd)
+}
+
+func lcInBox(lt *port.Cells, l int32, x0 int32, y0 int32, x1 int32, y1 int32) int32 {
+	// 1 when the centre of line l of `lt` is in the box.
+	var cx int32 = (evidence.LnGet(lt, l, evidence.LhX0()) + evidence.LnGet(lt, l, evidence.LhX1())) / 2
+	var cy int32 = (evidence.LnGet(lt, l, evidence.LhY0()) + evidence.LnGet(lt, l, evidence.LhY1())) / 2
+	if (cx >= x0) && ((cx <= x1) && ((cy >= y0) && (cy <= y1))) {
+		return 1
+	}
+	return 0
+}
+
+func lcMarkBox(lt *port.Cells, li int32, lj int32, fx0 int32, fy0 int32, fx1 int32, fy1 int32) int32 {
+	// The lines li..lj of `lt` in the box (upright, not a table's) and beside it, on its level, outside it, to its left or right: when the box has at least `LC_ASIDE_LINES` and so has the body on
+	// one side of it, the lines in the box are marked (cell 14: `LC_ASIDE` + 1 for a box left of the body beside it, + 2 for a box right of it). Answers 1 when it marked.
+	var l int32 = li
+	var nin int32 = 0
+	var nl int32 = 0
+	var nr int32 = 0
+	var rot int32 = 0
+	var ov int32 = 0
+	var h int32 = 0
+	for l < lj {
+		rot = evidence.LnGet(lt, l, evidence.LhRot())
+		if ((rot < 100) || (rot > 35900)) && (port.CellsAt(lt, (l*16)+15) < lcHeld) {
+			if lcInBox(lt, l, fx0, fy0, fx1, fy1) == 1 {
+				nin += 1
+			} else {
+				h = evidence.LnGet(lt, l, evidence.LhY1()) - evidence.LnGet(lt, l, evidence.LhY0())
+				ov = lcMin(fy1, evidence.LnGet(lt, l, evidence.LhY1())) - lcMax(fy0, evidence.LnGet(lt, l, evidence.LhY0()))
+				if (h > 0) && ((ov * 2) >= h) {
+					if evidence.LnGet(lt, l, evidence.LhX1()) <= (fx0 + 300) {
+						nl += 1
+					}
+					if evidence.LnGet(lt, l, evidence.LhX0()) >= (fx1 - 300) {
+						nr += 1
+					}
+				}
+			}
+		}
+		l += 1
+	}
+	if (nin >= lcAsideLines) && ((nl >= lcAsideLines) || (nr >= lcAsideLines)) {
+		l = li
+		for l < lj {
+			rot = evidence.LnGet(lt, l, evidence.LhRot())
+			if ((rot < 100) || (rot > 35900)) && (port.CellsAt(lt, (l*16)+15) < lcHeld) {
+				if lcInBox(lt, l, fx0, fy0, fx1, fy1) == 1 {
+					if nl >= nr {
+						port.CellsSet(lt, (l*16)+14, lcAside+2)
+					} else {
+						port.CellsSet(lt, (l*16)+14, lcAside+1)
+					}
+				}
+			}
+			l += 1
+		}
+		return 1
+	}
+	return 0
+}
+
+func LcMarkAsides(lt *port.Cells, gfl *port.Cells, pages *port.Cells, np int32) int32 {
+	// D1630 (smoke review B issue 14, A issue 14): a SIDEBAR OR INFOBOX is a shaded box (a fused fill of the graphics layer, `gfl`) narrower than a body (between `LC_ASIDE_MIN` and `LC_ASIDE_MAX`
+	// per mille of the page's width), at least `LC_ASIDE_H` tall, with lines in it and the body's lines on its level beside it: the lines in it are marked (`lc-mark-box`), and the column stage
+	// takes them from the body as a region of their own, whatever its words (a text-only reading finds the gap, the rows of short words in it, and misses it where the rows have few words, or the body
+	// wraps around it). `lt` is the lines the stage reads, copied (`lc-copy`) with the tables' claims in cell 15; the marks go in cell 14 of every line, 0 where there is none. Answers the boxes taken.
+	var nl int32 = evidence.LnCount(lt)
+	var nu int32 = glayer.GflCount(gfl)
+	var p int32 = 1
+	var l int32 = 0
+	var li int32 = 0
+	var lj int32 = 0
+	var ui int32 = 0
+	var uj int32 = 0
+	var u int32 = 0
+	var pw int32 = 0
+	var fw int32 = 0
+	var took int32 = 0
+	var prev int32 = 0
+	l = 0
+	for l < nl {
+		if evidence.LnGet(lt, l, evidence.LhPage()) > 0 {
+			if evidence.LnGet(lt, l, evidence.LhPage()) < prev {
+				return 0
+			}
+			prev = evidence.LnGet(lt, l, evidence.LhPage())
+		}
+		l += 1
+	}
+	l = 0
+	for l < nl {
+		port.CellsSet(lt, (l*16)+14, 0)
+		l += 1
+	}
+	if nu == 0 {
+		return 0
+	}
+	for p <= np {
+		for (li < nl) && (evidence.LnGet(lt, li, evidence.LhPage()) < p) {
+			li += 1
+		}
+		lj = li
+		for (lj < nl) && (evidence.LnGet(lt, lj, evidence.LhPage()) == p) {
+			lj += 1
+		}
+		for (ui < nu) && (glayer.GflGet(gfl, ui, glayer.GffPage()) < p) {
+			ui += 1
+		}
+		uj = ui
+		for (uj < nu) && (glayer.GflGet(gfl, uj, glayer.GffPage()) == p) {
+			uj += 1
+		}
+		pw = model.PageW(pages, p-1)
+		u = ui
+		for u < uj {
+			fw = glayer.GflGet(gfl, u, glayer.GffX1()) - glayer.GflGet(gfl, u, glayer.GffX0())
+			if ((fw * 1000) >= (pw * lcAsideMin)) && (((fw * 1000) <= (pw * lcAsideMax)) && (((glayer.GflGet(gfl, u, glayer.GffY1()) - glayer.GflGet(gfl, u, glayer.GffY0())) >= lcAsideH) && (glayer.GflGet(gfl, u, glayer.GffColour()) != 16777215))) {
+				took += lcMarkBox(lt, li, lj, glayer.GflGet(gfl, u, glayer.GffX0()), glayer.GflGet(gfl, u, glayer.GffY0()), glayer.GflGet(gfl, u, glayer.GffX1()), glayer.GflGet(gfl, u, glayer.GffY1()))
+			}
+			u += 1
+		}
+		li = lj
+		p += 1
+	}
+	return took
+}
+
 func lcSide(wd *port.Cells, et *port.Cells, lt *port.Cells, ls *port.Cells, sd *port.Cells, pr *port.Cells, dom int32) int32 {
 	// Find the body block, and move the lines wholly outside it from `ls` to `sd`, when most of them are in
 	// smaller type (margin notes, sidebars). Numeric lines among them (line numbers) are dropped. Sets the
@@ -441,7 +606,6 @@ func lcSide(wd *port.Cells, et *port.Cells, lt *port.Cells, ls *port.Cells, sd *
 	var nb int32 = 0
 	var ns int32 = 0
 	var kept int32 = 0
-	port.CellsDrop(sd, 0)
 	for i < n {
 		var l int32 = port.CellsAt(ls, i)
 		if lcIsBody(lcSize(wd, lt, l), dom) {
@@ -601,15 +765,25 @@ func lcItems(wd *port.Cells, lt *port.Cells, ls *port.Cells, it *port.Cells, io 
 
 func lcClose(gu *port.Cells, ac *port.Cells, a int32) int32 {
 	// An active interval ends: a gutter when it persisted `gutter-rows` rows and held, on each side, words
-	// in `gutter-rows` rows, `gutter-words` of them on average.
+	// in `gutter-rows` rows, `gutter-words` of them on average. D1630 (smoke review A issue 14): a gutter at least `LC_WIDE` wide (two blocks of an invoice, Seller and Client, a form's left
+	// and right boxes) with at least `LC_WIDE_ROWS` rows with words on each side, `LC_WIDE_WORDS` of them on average, is a gutter too: a block of short lines is not a column of prose, but a gap that wide
+	// between two blocks of lines is not a table's cell padding either (a row of key and value has one word, or a few, in its value).
 	var base int32 = a * guStride
 	var rows int32 = port.CellsAt(ac, base+guRows)
 	var lrows int32 = port.CellsAt(ac, base+guLrows)
 	var rrows int32 = port.CellsAt(ac, base+guRrows)
 	var lsum int32 = port.CellsAt(ac, base+guLsum)
 	var rsum int32 = port.CellsAt(ac, base+guRsum)
+	var gw int32 = port.CellsAt(ac, base+1) - port.CellsAt(ac, base)
+	var ok int32 = 0
 	var f int32 = 0
 	if (rows >= lcRows) && ((lrows >= lcRows) && (rrows >= lcRows)) && ((lsum >= (lrows * lcWords)) && (rsum >= (rrows * lcWords))) {
+		ok = 1
+	}
+	if (gw >= lcWide) && ((lrows >= lcWideRows) && (rrows >= lcWideRows)) && ((lsum >= (lrows * lcWideWords)) && (rsum >= (rrows * lcWideWords))) {
+		ok = 1
+	}
+	if ok == 1 {
 		for f < guStride {
 			port.CellsPush(gu, port.CellsAt(ac, base+f))
 			f += 1
@@ -1589,7 +1763,13 @@ func lcTree(lt *port.Cells, ls *port.Cells, gu *port.Cells, ac *port.Cells, tm *
 }
 
 func lcSideOf(lt *port.Cells, l int32, bx1 int32) int32 {
-	// 1 for a line right of the body block, 0 for one left of it.
+	// 1 for a line right of the body block, 0 for one left of it. A line in a box that is an aside (`lc-mark-asides`) is on the side the box was found on.
+	if port.CellsAt(lt, (l*16)+14) == (lcAside + 2) {
+		return 1
+	}
+	if port.CellsAt(lt, (l*16)+14) == (lcAside + 1) {
+		return 0
+	}
 	if evidence.LnGet(lt, l, evidence.LhX0()) >= bx1 {
 		return 1
 	}
@@ -1834,6 +2014,8 @@ func LcPage(wd *port.Cells, et *port.Cells, lt *port.Cells, page int32, ls *port
 	if (rtl * 2) > n {
 		port.CellsSet(pr, prRtl, 1)
 	}
+	port.CellsDrop(sd, 0)
+	lcAsides(lt, ls, sd)
 	lcSide(wd, et, lt, ls, sd, pr, dom)
 	lcSweep(wd, lt, ls, dom, it, io, rw, gu, ac, tm)
 	lcMerge(gu, dom)

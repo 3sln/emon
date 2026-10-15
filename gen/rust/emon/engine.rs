@@ -350,6 +350,7 @@ pub(crate) fn en_stage3(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::en
     }
     crate::port::cells_copy_into(&mut s.iloc, &mut c.lcl);
     lc_copy(&mut d.fl, &mut s.lt);
+    lc_mark_asides(&mut s.lt, &mut d.gfl, &mut m.pages, np);
     in_detect(&mut d.fw, &mut d.gl, &mut d.fnt, &mut d.et, np, &mut s.iloc, &mut s.lt, &mut s.ls, &mut s.lo, &mut s.tm, &mut s.ii);
     hd_prior_outline(&mut d.ol, &mut d.txt, &mut s.hpr, &mut s.hptxt);
     hd_analyze(&mut d.fw, &mut s.lt, &mut d.et, &mut d.gl, &mut s.sf, &mut s.hsc, &mut s.hc, &mut s.ws, &mut s.htmp, &mut s.hpr, &mut s.hptxt);

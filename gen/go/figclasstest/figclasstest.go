@@ -309,6 +309,41 @@ func ftPara(nodes *port.Cells, regions *port.Cells, text *port.Cells, kind int32
 	return n
 }
 
+func TestAFigureClaimsTheTextInsideItAndTheLabelsInAChainFromIt(emonT *testing.T) {
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var nn *port.Cells = port.NewCells()
+	var na *port.Cells = port.NewCells()
+	var nr *port.Cells = port.NewCells()
+	var nm *port.Cells = port.NewCells()
+	var cand *port.Cells = port.NewCells()
+	var fg *port.Cells = port.NewCells()
+	var fd *port.Cells = port.NewCells()
+	var ab *port.Cells = port.NewCells()
+	// D1630 (smoke review B issue 7): a drawing is boxes and arrows, and its words are between and beside them. The figure's own region is 10000..40000 by 10000..30000. A label 10 pt right
+	// of its edge is its (within 24 pt), and so is the one 15 pt right of THAT one, 35 pt from the figure, which the chain takes in; a paragraph of 100 characters and 30 pt tall INSIDE it is its text;
+	// a short one far from it stays.
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	model.PageNew(pages, 1, 61200, 79200, 0, model.PkVector())
+	ftPara(nodes, regions, text, model.NkParagraph(), 3, 41000, 18000, 42000, 18750)
+	ftPara(nodes, regions, text, model.NkParagraph(), 3, 43500, 18000, 44500, 18750)
+	ftPara(nodes, regions, text, model.NkParagraph(), 100, 12000, 15000, 30000, 18000)
+	ftPara(nodes, regions, text, model.NkParagraph(), 3, 7200, 60000, 9000, 60750)
+	ftCand(cand, 1, 10000, 10000, 40000, 30000)
+	ftFd(fd, model.FgDiagram(), 760)
+	port.CellsPush(fg, 0)
+	port.CellsPush(fg, 0)
+	restruct.RsFigures(nodes, attrs, regions, text, nn, na, nr, nm, cand, fg, fd, ab)
+	port.AssertEq(emonT, model.NodeCount(nn), 3, "the document, the figure and the far paragraph: the other three are the figure's labels")
+	port.AssertEq(emonT, model.NodeKind(nn, 1), model.NkFigure(), "the figure")
+	port.AssertEq(emonT, model.NodeKind(nn, 2), model.NkParagraph(), "and the paragraph that is not its")
+}
+
 func TestAShortParagraphOnAFigureIsItsLabelAndALongOneStays(emonT *testing.T) {
 	var nodes *port.Cells = port.NewCells()
 	var attrs *port.Cells = port.NewCells()

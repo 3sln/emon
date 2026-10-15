@@ -306,6 +306,103 @@ public final class Tabletest {
         emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "lattice: well formed");
         emon.Testport.assertText(t, "P[Intro];T3r;Gh;R;Ch[Item];Ch[Qty];Ch[Price];Gb;R;C[Bolt];C[10];C[2.50];R;C[Total];Cc2[12.50];P[Outro];", "a 3 x 3 lattice with its last row's two cells joined: header, body, and the paragraphs around it");
     }
+    public static int ttPhraseWord(emon.Port.Cells wd, emon.Port.Cells et, byte[] b, int x, int y, int line) {
+        // A word of 500 a character, 800 tall from y at x, whose `line` field is `line` (the words of a line share it).
+        int r = Evidence.wdCount(wd);
+        ttW(wd, et, b, x, y, x + (500 * emon.Port.blobLen(b)), y + 800, 0);
+        Evidence.wdSet(wd, r, Evidence.hdLine(), line);
+        return 0;
+    }
+    public static int ttLattice6(emon.Port.Cells pa) {
+        // The rules of a lattice of two rows and six columns, 38 pt wide each (x 72 pt to 300 pt, y 100 to 140 pt).
+        int k = 0;
+        while (k < 7) {
+            ttRule(pa, (7200 + (3800 * k)) - 50, 10000, (7200 + (3800 * k)) + 50, 14000);
+            k += 1;
+        }
+        ttRule(pa, 7200, 9950, 30000, 10050);
+        ttRule(pa, 7200, 11950, 30000, 12050);
+        ttRule(pa, 7200, 13950, 30000, 14050);
+        return 0;
+    }
+    public static void testALineOfTextThatTheRulesCutIsADiagramsLabelAndNoTable() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells wd2 = emon.Port.newCells();
+        emon.Port.Cells ln2 = emon.Port.newCells();
+        emon.Port.Cells et2 = emon.Port.newCells();
+        emon.Port.Cells pa2 = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        StringBuilder t2 = emon.Testport.newText();
+        // D1630 (smoke review B issue 7): the boxes of a figure (the patches of the Vision Transformer's picture) make a lattice of rules, and `Linear Projection of Flattened Patches` is set across it,
+        // a word a box: the words are one line, each 300 from the next, which a table's cells do not do (a cell is padded). Six words of a row far from each other in the same lattice are a table.
+        ttLattice6(pa);
+        ttPhraseWord(wd, et, emon.Testport.textBlob("1"), 8500, 10600, 0);
+        ttPhraseWord(wd, et, emon.Testport.textBlob("2"), 12300, 10600, 0);
+        ttPhraseWord(wd, et, emon.Testport.textBlob("3"), 16100, 10600, 0);
+        ttPhraseWord(wd, et, emon.Testport.textBlob("4"), 19900, 10600, 0);
+        ttPhraseWord(wd, et, emon.Testport.textBlob("5"), 23700, 10600, 0);
+        ttPhraseWord(wd, et, emon.Testport.textBlob("6"), 27500, 10600, 0);
+        Evidence.lnNew(ln, 1, 8500, 10600, 28000, 11400, 8500, 11200, 28000, 11200, 0, 0, 0, 6);
+        ttPhraseWord(wd, et, emon.Testport.textBlob("Project"), 7350, 12600, 1);
+        ttPhraseWord(wd, et, emon.Testport.textBlob("Flatten"), 11150, 12600, 1);
+        ttPhraseWord(wd, et, emon.Testport.textBlob("Patches"), 14950, 12600, 1);
+        ttPhraseWord(wd, et, emon.Testport.textBlob("Encoder"), 18750, 12600, 1);
+        ttPhraseWord(wd, et, emon.Testport.textBlob("Decoder"), 22550, 12600, 1);
+        ttPhraseWord(wd, et, emon.Testport.textBlob("Outputs"), 26350, 12600, 1);
+        Evidence.lnNew(ln, 1, 7350, 12600, 29850, 13400, 7350, 13200, 29850, 13200, 0, 0, 6, 6);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "diagram: well formed");
+        emon.Testport.assertText(t, "P[1 2 3 4 5 6 Project Flatten Patches Encoder Decoder Outputs];", "no table: the words are the page's text");
+        // the same grid with the words of the second row each in the middle of its cell, far from each other (a line is a line of their own): a table
+        ttLattice6(pa2);
+        ttPhraseWord(wd2, et2, emon.Testport.textBlob("1"), 8500, 10600, 0);
+        ttPhraseWord(wd2, et2, emon.Testport.textBlob("2"), 12300, 10600, 1);
+        ttPhraseWord(wd2, et2, emon.Testport.textBlob("3"), 16100, 10600, 2);
+        ttPhraseWord(wd2, et2, emon.Testport.textBlob("4"), 19900, 10600, 3);
+        ttPhraseWord(wd2, et2, emon.Testport.textBlob("5"), 23700, 10600, 4);
+        ttPhraseWord(wd2, et2, emon.Testport.textBlob("6"), 27500, 10600, 5);
+        ttPhraseWord(wd2, et2, emon.Testport.textBlob("Ax"), 8300, 12600, 6);
+        ttPhraseWord(wd2, et2, emon.Testport.textBlob("Bx"), 12100, 12600, 7);
+        ttPhraseWord(wd2, et2, emon.Testport.textBlob("Cx"), 15900, 12600, 8);
+        ttPhraseWord(wd2, et2, emon.Testport.textBlob("Dx"), 19700, 12600, 9);
+        ttPhraseWord(wd2, et2, emon.Testport.textBlob("Ex"), 23500, 12600, 10);
+        ttPhraseWord(wd2, et2, emon.Testport.textBlob("Fx"), 27300, 12600, 11);
+        int k = 0;
+        while (k < 12) {
+            Evidence.lnNew(ln2, 1, 7200, 10600, 28000, 11400, 7200, 11200, 28000, 11200, 0, 0, k, 1);
+            k += 1;
+        }
+        emon.Testport.assertEq(ttRun(wd2, ln2, et2, pa2, t2), 0, "table: well formed");
+        emon.Testport.assertText(t2, "T6r;Gb;R;C[1];C[2];C[3];C[4];C[5];C[6];R;C[Ax];C[Bx];C[Cx];C[Dx];C[Ex];C[Fx];", "a table");
+    }
+    public static void testTheFrameOfAPageIsNoTable() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        // D1630 (smoke review B issue 7): the sheet of an engineering drawing, a frame 83 per cent of the page's width and 87 of its height, a title block of four cells under it and the words of the
+        // drawing in the large cell above: the rules meet as a table's do and the words are in cells, but it is the page's frame, with a cell of 60 per cent of the page.
+        ttRule(pa, 5000, 4950, 56000, 5050);
+        ttRule(pa, 5000, 61950, 56000, 62050);
+        ttRule(pa, 5000, 69950, 56000, 70050);
+        ttRule(pa, 5000, 73950, 56000, 74050);
+        ttRule(pa, 4950, 5000, 5050, 74000);
+        ttRule(pa, 55950, 5000, 56050, 74000);
+        ttRule(pa, 29950, 62000, 30050, 74000);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Detail"), 10000, 10000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Grate"), 30000, 20000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Weld"), 40000, 30000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Plan"), 12000, 50000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Title"), 7000, 64000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Scale"), 33000, 64000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Material"), 7000, 71000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Item"), 33000, 71000, 0, 0);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "frame: well formed");
+        emon.Testport.assertText(t, "P[Detail];P[Grate];P[Weld];P[Plan];P[Title];P[Scale];P[Material];P[Item];", "no table: the words are the page's text");
+    }
     public static int ttWidget(emon.Port.Cells an, int x0, int y0, int x1, int y1) {
         // One text field's widget of page 1 as a row of `an` (38 cells: 0 the page, 0 based, 1 the subtype `an-field`, 4-7 the rectangle).
         int k = 0;
@@ -408,6 +505,34 @@ public final class Tabletest {
         ttAt(wd, ln, et, emon.Testport.textBlob("to him"), 30000, 13600, 0, 0);
         emon.Testport.assertEq(ttRun(wd, ln, et, pa, t2), 0, "prose: well formed");
         emon.Testport.assertText(t2, "P[the old];P[was and];P[of the];P[that is];P[and then];P[went on];P[she said];P[to him];", "lowercase text with half the cells empty is not a table");
+    }
+    public static void testTwoColumnsOfRussianProseAreNoTableEither() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        StringBuilder t2 = emon.Testport.newText();
+        // D1630 (smoke review B issue 14): the same two columns of lowercase words, four words a line, in Cyrillic: the lowercase test knew ASCII letters only, so the lines of a Russian paragraph set
+        // beside an infobox were a table.
+        ttLine3(wd, ln, et, emon.Testport.textBlob("это"), emon.Testport.textBlob("был"), emon.Testport.textBlob("так"), 7200, 10000);
+        ttLine3(wd, ln, et, emon.Testport.textBlob("когда"), emon.Testport.textBlob("мы"), emon.Testport.textBlob("все"), 30000, 10000);
+        ttLine3(wd, ln, et, emon.Testport.textBlob("что"), emon.Testport.textBlob("она"), emon.Testport.textBlob("там"), 7200, 11200);
+        ttLine3(wd, ln, et, emon.Testport.textBlob("вот"), emon.Testport.textBlob("так"), emon.Testport.textBlob("уже"), 30000, 11200);
+        ttLine3(wd, ln, et, emon.Testport.textBlob("его"), emon.Testport.textBlob("все"), emon.Testport.textBlob("тут"), 7200, 12400);
+        ttLine3(wd, ln, et, emon.Testport.textBlob("как"), emon.Testport.textBlob("раз"), emon.Testport.textBlob("ему"), 30000, 12400);
+        ttLine3(wd, ln, et, emon.Testport.textBlob("или"), emon.Testport.textBlob("нет"), emon.Testport.textBlob("ещё"), 7200, 13600);
+        ttLine3(wd, ln, et, emon.Testport.textBlob("для"), emon.Testport.textBlob("тех"), emon.Testport.textBlob("кто"), 30000, 13600);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "prose: well formed");
+        emon.Testport.assertText(t, "P[это был так что она там его все тут или нет ещё когда мы все вот так уже как раз ему для тех кто];", "lowercase Cyrillic text in two columns is not a table");
+        // and the same lines between rules (a link's underlines, a page's rules): the candidate of the rules and the channels, which the lowercase test is there for
+        ttRule(pa, 7200, 9850, 45000, 9950);
+        ttRule(pa, 7200, 11050, 45000, 11150);
+        ttRule(pa, 7200, 12250, 45000, 12350);
+        ttRule(pa, 7200, 13450, 45000, 13550);
+        ttRule(pa, 7200, 14650, 45000, 14750);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t2), 0, "ruled prose: well formed");
+        emon.Testport.assertText(t2, "P[это был так что она там его все тут или нет ещё когда мы все вот так уже как раз ему для тех кто];", "no table");
     }
     public static int ttLine2(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, byte[] a, byte[] b, int x, int y) {
         // One line of two words, 500 per character and a 500 gap, 800 tall from y.
