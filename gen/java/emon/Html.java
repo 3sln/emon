@@ -1205,8 +1205,14 @@ public final class Html {
                 hb = 1;
             }
             hInner(t, o, nodes, attrs, regions, pages, layout, text, n);
+            // D1590: the labels (an axis title, its ticks) are tokens: one space between two spans, or the text of the figure reads as one run.
             a = Model.nodeAttr(nodes, attrs, n, Model.fkLabels());
+            b = 0;
             while (a >= 0) {
+                if (b == 1) {
+                    emon.Port.textCp(t, 32);
+                }
+                b = 1;
                 emon.Port.textAscii(t, "<span data-emon=\"label\">");
                 hRun(t, text, Model.attrValue(attrs, a), Model.attrLen(attrs, a));
                 emon.Port.textAscii(t, "</span>");

@@ -175,6 +175,38 @@ func TestFurnitureDropsAndMilestonesSwitchOff(emonT *testing.T) {
 	port.AssertText(emonT, bare, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main></main></body></html>", "both off")
 }
 
+func htLabel(nodes *port.Cells, attrs *port.Cells, text *port.Cells, n int32, b []byte) int32 {
+	// Add the UTF-8 bytes of b as one more `labels` value of node n.
+	var start int32 = model.TextLen(text)
+	model.TextAppendUtf8(text, b, 0, port.BlobLen(b))
+	model.NodeAddAttrText(nodes, attrs, n, model.FkLabels(), start, model.TextLen(text)-start)
+	return 0
+}
+
+func TestTheLabelsOfAFigureAreSeparateTokensInTheText(emonT *testing.T) {
+	// D1590: a chart's axis title and its tick labels are `labels`, each its own span; spans with nothing between them read as one run
+	// (`(thousands)220165110550Q1Q2Q3Q4`), so a single space stands between two of them.
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var out *strings.Builder = port.NewText()
+	var f int32 = 0
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	f = model.NodeNew(nodes, model.NkFigure(), 0)
+	model.NodeSetSub(nodes, f, model.FgChart())
+	htLabel(nodes, attrs, text, f, port.TextBlob("Units (thousands)"))
+	htLabel(nodes, attrs, text, f, port.TextBlob("220"))
+	htLabel(nodes, attrs, text, f, port.TextBlob("0"))
+	htLabel(nodes, attrs, text, f, port.TextBlob("Q1"))
+	htLabel(nodes, attrs, text, f, port.TextBlob("Q2"))
+	port.AssertEq(emonT, html.HtmlEmit(out, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells(), port.NewBuf(), port.NewCells()), 0, "it emits")
+	port.AssertText(emonT, out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><figure data-emon-kind=\"chart\" role=\"img\"><span data-emon=\"label\">Units (thousands)</span> <span data-emon=\"label\">220</span> <span data-emon=\"label\">0</span> <span data-emon=\"label\">Q1</span> <span data-emon=\"label\">Q2</span></figure></main></body></html>", "five labels, a space between each two, none before the first or after the last")
+}
+
 func TestTheDeepestTreeEmits(emonT *testing.T) {
 	var nodes *port.Cells = port.NewCells()
 	var attrs *port.Cells = port.NewCells()

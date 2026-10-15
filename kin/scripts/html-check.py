@@ -330,8 +330,8 @@ class R:
             o += self.attr("aria-label", n, "alt")
             o += self.attr("data-emon-label", n, "label") + c + ">"
             s = self.inner(n)
-            for lb in n.get("labels", []):
-                s += '<span data-emon="label">%s</span>' % esc(lb)
+            # D1590: a space between two label spans (an axis title and its ticks are tokens, not one run)
+            s += " ".join('<span data-emon="label">%s</span>' % esc(lb) for lb in n.get("labels", []))
             parts = [p for p in self.blocks(n, d + 1) if p]
             return nl + o + s + "".join(parts) + (self.nl(d) if parts else "") + "</figure>"
         if k == "seal":

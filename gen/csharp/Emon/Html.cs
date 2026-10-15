@@ -1205,8 +1205,14 @@ public static class Html {
                 hb = 1;
             }
             HInner(t, o, nodes, attrs, regions, pages, layout, text, n);
+            // D1590: the labels (an axis title, its ticks) are tokens: one space between two spans, or the text of the figure reads as one run.
             a = Model.NodeAttr(nodes, attrs, n, Model.FkLabels());
+            b = 0;
             while (a >= 0) {
+                if (b == 1) {
+                    emon.Port.TextCp(t, 32);
+                }
+                b = 1;
                 emon.Port.TextAscii(t, "<span data-emon=\"label\">");
                 HRun(t, text, Model.AttrValue(attrs, a), Model.AttrLen(attrs, a));
                 emon.Port.TextAscii(t, "</span>");

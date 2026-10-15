@@ -76,6 +76,11 @@
 (defconst ^I32 TB_TAG_TRUST 300)      ;; the tree is read for tables at all at this trust (D150)
 (defconst ^I32 TB_HEAD_TOL 400)       ;; a header's chunk lines up with a body column when an edge is this near (D557)
 (defconst ^I32 TB_HEAD_PITCH 40)      ;; ... and the header is at most this many tenths of a size above the body's first row
+(defconst ^I32 TB_TAIL_ROWS 3)        ;; rows below the last rule of a chain that are the table's, at most (D1590)
+(defconst ^I32 TB_TAIL_REACH 6000)    ;; ... searched this far under it (60 pt; the pitch test (TB_HEAD_PITCH) is the limit)
+(defconst ^I32 TB_TAIL_PITCH 16)      ;; ... and at most this many tenths of the body's own mean pitch under the row above
+(defconst ^I32 TB_GAP_SIZE 125)       ;; between two rules of a chain: a row this many hundredths of the body's size is a heading (D1590)
+(defconst ^I32 TB_GAP_BAND 35)        ;; ... and a band of white this many tenths of the body's size deep between two rows is a gap (D1590)
 (defconst ^I32 TB_TAG_OWN 700)        ;; a table that confirms itself (`tb-self-sure`) is read at this trust whatever the tree's (D557)
 (defconst ^I32 TB_OWN_CHECKS 4)       ;; ... when at least this many of its five grid checks could be made ...
 (defconst ^I32 TB_OWN_FLOOR 900)      ;; ... and none of them is under this (a verdict is `confirmed` from 800; a table read against the tree's word wants more)
@@ -1462,7 +1467,85 @@
     (if (> k n) (return hi))
     (return (quot (+ (cells-at ch (* (- k 1) 2)) (cells-at ch (+ (* (- k 1) 2) 1))) 2))))
 
-(defn ^I32 tb-text-grid [^Cells wd ^Cells wl ^Cells rw ^Cells sg
+(defn ^I32 tb-cut-list [^Cells wd ^Cells wl ^Cells rw ^Cells rm ^I32 ra ^I32 rb ^I32 minx ^I32 maxx ^:mut ^Cells cl]
+  (comment "D1590: the x of every vertical rule of `rm` that is a column cut of the rows ra..rb, in `cl` (emptied first). A rule is one when it")
+  (comment "lies inside the rows' extent minx..maxx, runs along three in five of the rows at least (two or more) and passes through no word of those")
+  (comment "rows (a rule through a word is a strike or a frame, not the border between two cells). Answers how many.")
+  (let [^I32 nrl (tb-rows-of rm RLS)
+        ^I32 n (- rb ra)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 p 0
+        ^:mut ^I32 spanned 0
+        ^:mut ^I32 crossed 0
+        ^:mut ^I32 cy 0
+        ^:mut ^I32 w 0]
+    (cells-drop cl 0)
+    (if (< n 2) (return 0))
+    (while (< i nrl)
+      (do (if (== (cells-at rm (* i RLS)) 1)
+            (do (set p (cells-at rm (+ (* i RLS) 1)))
+                (if (and (> p minx) (< p maxx))
+                  (do (set spanned 0)
+                      (set crossed 0)
+                      (set r ra)
+                      (while (< r rb)
+                        (do (set cy (quot (+ (cells-at rw (+ (* r RWS) 6)) (cells-at rw (+ (* r RWS) 7))) 2))
+                            (if (and (>= cy (cells-at rm (+ (* i RLS) 2))) (<= cy (cells-at rm (+ (* i RLS) 3))))
+                              (do (set spanned (+ spanned 1))
+                                  (set k 0)
+                                  (while (< k (cells-at rw (+ (* r RWS) 1)))
+                                    (do (set w (cells-at wl (+ (cells-at rw (* r RWS)) k)))
+                                        (if (and (< (wd-get wd w (hd-x0)) p) (> (wd-get wd w (hd-x1)) p))
+                                          (set crossed 1))
+                                        (set k (+ k 1))))))
+                            (set r (+ r 1))))
+                      (if (and (== crossed 0) (and (>= spanned 2) (>= (* spanned 5) (* n 3))))
+                        (cells-push cl p))))))
+          (set i (+ i 1))))
+    (return (cells-len cl))))
+
+(defn ^I32 tb-channel-add [^:mut ^Cells ch ^I32 p]
+  (comment "D1590: a channel of no width at x p, in its place among the channels `ch` (pairs of start and end, in order of x), so that a column")
+  (comment "boundary stands at p: nothing is added when p lies in a channel already (its midpoint is the boundary, with words either side).")
+  (comment "Answers 1 when one was added.")
+  (let [^I32 n (quot (cells-len ch) 2)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 k 0]
+    (while (< i n)
+      (do (if (and (<= (cells-at ch (* i 2)) p) (<= p (cells-at ch (+ (* i 2) 1))))
+            (return 0))
+          (if (< (cells-at ch (* i 2)) p) (set at (+ at 1)))
+          (set i (+ i 1))))
+    (cells-push ch 0)
+    (cells-push ch 0)
+    (set k (- (cells-len ch) 1))
+    (while (>= k (+ (* at 2) 2))
+      (do (cells-set ch k (cells-at ch (- k 2)))
+          (set k (- k 1))))
+    (cells-set ch (* at 2) p)
+    (cells-set ch (+ (* at 2) 1) p)
+    (return 1)))
+
+(defn ^I32 tb-sub-end [^Cells wd ^Cells wl ^Cells cl ^I32 k ^I32 kend]
+  (comment "D1590: where the words k..kend of one chunk (indices into `wl`) are cut by a column cut of `cl`: the end (exclusive) of the stretch that")
+  (comment "begins at the word k and has no cut between its words (`kend` when there is none).")
+  (let [^:mut ^I32 e (+ k 1)
+        ^:mut ^I32 j 0
+        ^:mut ^I32 split 0]
+    (while (and (< e kend) (== split 0))
+      (do (set j 0)
+          (while (< j (cells-len cl))
+            (do (if (and (<= (wd-get wd (cells-at wl (- e 1)) (hd-x1)) (cells-at cl j))
+                         (<= (cells-at cl j) (wd-get wd (cells-at wl e) (hd-x0))))
+                  (set split 1))
+                (set j (+ j 1))))
+          (if (== split 0) (set e (+ e 1)))))
+    (return e)))
+
+(defn ^I32 tb-text-grid [^Cells wd ^Cells wl ^Cells rw ^Cells sg ^Cells rm
                          ^:mut ^Cells ch ^:mut ^Cells st ^:mut ^Cells en ^:mut ^Cells rmap
                          ^:mut ^Cells gm ^:mut ^Cells gs ^:mut ^Cells ry ^:mut ^Cells pr ^:mut ^Cells so
                          ^:mut ^Cells tb ^:mut ^Cells tc ^:mut ^Cells tw ^:mut ^Cells tx
@@ -1471,7 +1554,8 @@
   (comment "The cells of the rows ra..rb (see the head of this section) as a candidate table of this profile:")
   (comment "ext 1 means `rmap` already says which table row each baseline row is (shaded: the fills' bands). The box")
   (comment "bx0..by1 widens the box of the words (the rules, the fills): 2000000000 2000000000 -2000000000 -2000000000")
-  (comment "for none. Answers the")
+  (comment "for none. `rm` are the page's merged rules (empty for none): a vertical one that runs along most of the rows between two words is")
+  (comment "a column cut, whatever the profile (D1590). Answers the")
   (comment "table's index, -1 when there are not two columns and two rows.")
   (let [^:mut ^I32 ntab 0
         ^:mut ^I64 sumsz (i64 0)
@@ -1485,6 +1569,9 @@
         ^:mut ^I32 a 0
         ^:mut ^I32 b 0
         ^:mut ^I32 tr 0
+        ^:mut ^I32 ks 0
+        ^:mut ^I32 ke 0
+        ^:mut ^I32 kx 0
         ^:mut ^I32 minx 2000000000
         ^:mut ^I32 maxx -2000000000
         ^:mut ^I32 miny 2000000000
@@ -1499,6 +1586,13 @@
           (set r (+ r 1))))
     (if (or (< ntab 2) (<= (- rb ra) 1)) (return -1))
     (set nch (tb-channels wd wl rw sg ra rb (quot ntab 6) (i32 (quot (mul64 (quot sumsz (i64 (- rb ra))) (i64 SEG_NUM)) (i64 SEG_DEN))) ch st en))
+    (comment "D1590: a vertical rule along most of the rows between two words is a boundary of its own (a channel of no width) where the whitespace has none.")
+    (if (> (tb-cut-list wd wl rw rm ra rb minx maxx st) 0)
+      (do (set c 0)
+          (while (< c (cells-len st))
+            (do (tb-channel-add ch (cells-at st c))
+                (set c (+ c 1))))
+          (set nch (quot (cells-len ch) 2))))
     (if (< nch 1) (return -1))
     (set ncols (+ nch 1))
     (if (> ncols 40) (return -1))
@@ -1510,6 +1604,8 @@
             (do (if (>= (cells-at rmap r) nrows) (set nrows (+ (cells-at rmap r) 1)))
                 (set r (+ r 1))))))
     (if (< nrows 2) (return -1))
+    (comment "The column cuts again, in `st` (scratch no longer): the words either side of one are cells of their own whatever the chunk.")
+    (tb-cut-list wd wl rw rm ra rb minx maxx st)
     ;; the cover maps, the table rows' y ranges
     (cells-drop gm 0)
     (cells-drop gs 0)
@@ -1537,20 +1633,25 @@
                 (set s 0)
                 (while (< s (cells-at rw (+ (* r RWS) 9)))
                   (do (set q (+ (cells-at rw (+ (* r RWS) 8)) s))
-                      (set a (tb-chunk-a wd wl sg ch q))
-                      (set b (tb-chunk-b wd wl sg ch q))
-                      (if (== (cells-at gm (+ (* tr ncols) a)) -1)
-                        (do (let [^:mut ^I32 free 1
-                                  ^:mut ^I32 kf a]
-                              (while (<= kf b)
-                                (do (if (!= (cells-at gm (+ (* tr ncols) kf)) -1) (set free 0))
-                                    (set kf (+ kf 1))))
-                              (if (== free 0) (set b a))
-                              (set kf a)
-                              (while (<= kf b)
-                                (do (cells-set gm (+ (* tr ncols) kf) a)
-                                    (set kf (+ kf 1))))
-                              (cells-set gs (+ (* tr ncols) a) (+ (- b a) 1)))))
+                      (set ks (cells-at sg (+ (* q SGS) 3)))
+                      (set ke (+ ks (cells-at sg (+ (* q SGS) 4))))
+                      (while (< ks ke)
+                        (do (set kx (tb-sub-end wd wl st ks ke))
+                            (set a (tb-col-of ch (tb-word-cx wd (cells-at wl ks))))
+                            (set b (tb-col-of ch (tb-word-cx wd (cells-at wl (- kx 1)))))
+                            (if (== (cells-at gm (+ (* tr ncols) a)) -1)
+                              (do (let [^:mut ^I32 free 1
+                                        ^:mut ^I32 kf a]
+                                    (while (<= kf b)
+                                      (do (if (!= (cells-at gm (+ (* tr ncols) kf)) -1) (set free 0))
+                                          (set kf (+ kf 1))))
+                                    (if (== free 0) (set b a))
+                                    (set kf a)
+                                    (while (<= kf b)
+                                      (do (cells-set gm (+ (* tr ncols) kf) a)
+                                          (set kf (+ kf 1))))
+                                    (cells-set gs (+ (* tr ncols) a) (+ (- b a) 1)))))
+                            (set ks kx)))
                       (set s (+ s 1))))))
           (set r (+ r 1))))
     ;; the cells, row-major
@@ -1581,12 +1682,17 @@
               (do (set s 0)
                   (while (< s (cells-at rw (+ (* r RWS) 9)))
                     (do (set q (+ (cells-at rw (+ (* r RWS) 8)) s))
-                        (set a (tb-chunk-a wd wl sg ch q))
-                        (let [^I32 cell (cells-at en (+ (* tr ncols) a))
-                              ^:mut ^I32 kw (cells-at sg (+ (* q SGS) 3))]
-                          (while (< kw (+ (cells-at sg (+ (* q SGS) 3)) (cells-at sg (+ (* q SGS) 4))))
-                            (do (tb-pair-add pr wd cell (cells-at wl kw))
-                                (set kw (+ kw 1)))))
+                        (set ks (cells-at sg (+ (* q SGS) 3)))
+                        (set ke (+ ks (cells-at sg (+ (* q SGS) 4))))
+                        (while (< ks ke)
+                          (do (set kx (tb-sub-end wd wl st ks ke))
+                              (set a (tb-col-of ch (tb-word-cx wd (cells-at wl ks))))
+                              (let [^I32 cell (cells-at en (+ (* tr ncols) a))
+                                    ^:mut ^I32 kw ks]
+                                (while (< kw kx)
+                                  (do (tb-pair-add pr wd cell (cells-at wl kw))
+                                      (set kw (+ kw 1)))))
+                              (set ks kx)))
                         (set s (+ s 1))))))
             (set r (+ r 1))))
       (tb-flush-pairs pr so wd tc tw)
@@ -2117,7 +2223,8 @@
 
 (defn ^I32 tb-aligned [^Cells rw ^Cells sg ^I32 r ^I32 rb ^I32 nr]
   (comment "1 when the chunks of row r line up with the body's (D557): at least two of them, and three in five, have a left or a right edge")
-  (comment "within `TB_HEAD_TOL` of an edge of a chunk of the body rows rb.. (twelve of them at most).")
+  (comment "within `TB_HEAD_TOL` of an edge of a chunk of the body rows rb..nr (twelve of them at most; never row r itself, which D1590's")
+  (comment "`tb-gap-foreign` and `tb-tail-end` ask about among the rows around it).")
   (let [^I32 nch (cells-at rw (+ (* r RWS) 9))
         ^I32 sf (cells-at rw (+ (* r RWS) 8))
         ^I32 bend (tb-min nr (+ rb 12))
@@ -2134,8 +2241,12 @@
                 (while (and (< q (cells-at rw (+ (* b RWS) 9))) (== found 0))
                   (do (let [^I32 hs (+ sf s)
                             ^I32 bs (+ (cells-at rw (+ (* b RWS) 8)) q)]
-                        (if (<= (tb-abs (- (cells-at sg (+ (* hs SGS) 1)) (cells-at sg (+ (* bs SGS) 1)))) TB_HEAD_TOL) (set found 1))
-                        (if (<= (tb-abs (- (cells-at sg (+ (* hs SGS) 2)) (cells-at sg (+ (* bs SGS) 2)))) TB_HEAD_TOL) (set found 1)))
+                        (if (and (!= b r)
+                                 (<= (tb-abs (- (cells-at sg (+ (* hs SGS) 1)) (cells-at sg (+ (* bs SGS) 1)))) TB_HEAD_TOL))
+                          (set found 1))
+                        (if (and (!= b r)
+                                 (<= (tb-abs (- (cells-at sg (+ (* hs SGS) 2)) (cells-at sg (+ (* bs SGS) 2)))) TB_HEAD_TOL))
+                          (set found 1)))
                       (set q (+ q 1))))
                 (set b (+ b 1))))
           (set hit (+ hit found))
@@ -2287,7 +2398,7 @@
     (if (< (* hit 5) (* n 3)) (return edge))
     (return (* dir reach))))
 
-(defn ^I32 tb-partial-build [^Cells wd ^Cells et ^I32 w0 ^I32 w1 ^I32 page ^I32 ex0 ^I32 ex1 ^I32 ya ^I32 yb ^I32 align
+(defn ^I32 tb-partial-build [^Cells wd ^Cells et ^I32 w0 ^I32 w1 ^I32 page ^I32 ex0 ^I32 ex1 ^I32 ya ^I32 yb ^I32 align ^Cells rm
                              ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg
                              ^:mut ^Cells ch ^:mut ^Cells st ^:mut ^Cells en ^:mut ^Cells rmap
                              ^:mut ^Cells gm ^:mut ^Cells gs ^:mut ^Cells ry ^:mut ^Cells pr ^:mut ^Cells so
@@ -2301,7 +2412,7 @@
         ^I32 wl0 (cells-len tw)
         ^I32 xl0 (cells-len tx)]
     (if (>= (- nr ra) 3)
-      (do (let [^I32 t (tb-text-grid wd wl rw sg ch st en rmap gm gs ry pr so tb tc tw tx
+      (do (let [^I32 t (tb-text-grid wd wl rw sg rm ch st en rmap gm gs ry pr so tb tc tw tx
                                      page ra nr PF_PARTIAL 850 0 ex0 ya ex1 yb)]
             (if (>= t 0)
               (do (let [^I32 sc (tb-score tb t wd et tc tw)
@@ -2330,7 +2441,7 @@
         ^I32 xl0 (cells-len tx)
         ^:mut ^I32 align 0]
     (if (<= ya (+ ychain POS_TOL)) (set align 1))
-    (let [^I32 t (tb-partial-build wd et w0 w1 page ex0 ex1 ya yb align wl rw sg ch st en rmap gm gs ry pr so tb tc tw tx)]
+    (let [^I32 t (tb-partial-build wd et w0 w1 page ex0 ex1 ya yb align rm wl rw sg ch st en rmap gm gs ry pr so tb tc tw tx)]
       (if (>= t 0)
         (do (let [^I32 nr (tb-rows-of rw RWS)
                   ^I32 ra (tb-first-row rw sg nr ya align)
@@ -2338,9 +2449,76 @@
                   ^I32 nx0 (tb-extend wd w0 w1 rw sg ra nr ex0 -1 rm pr ry)]
               (if (or (> nx1 ex1) (< nx0 ex0))
                 (do (tb-reject tb tc tw tx nt c0 wl0 xl0)
-                    (if (< (tb-partial-build wd et w0 w1 page nx0 nx1 ya yb align wl rw sg ch st en rmap gm gs ry pr so tb tc tw tx) 0)
-                      (tb-partial-build wd et w0 w1 page ex0 ex1 ya yb align wl rw sg ch st en rmap gm gs ry pr so tb tc tw tx))))))))
+                    (if (< (tb-partial-build wd et w0 w1 page nx0 nx1 ya yb align rm wl rw sg ch st en rmap gm gs ry pr so tb tc tw tx) 0)
+                      (tb-partial-build wd et w0 w1 page ex0 ex1 ya yb align rm wl rw sg ch st en rmap gm gs ry pr so tb tc tw tx))))))))
     (return 0)))
+
+(defn ^I32 tb-gap-foreign [^Cells wd ^I32 w0 ^I32 w1 ^I32 ex0 ^I32 ex1 ^I32 ytop ^I32 last ^I32 yj
+                           ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg]
+  (comment "D1590: 1 when what lies between the rules at `last` and `yj`, in the extent ex0..ex1, is not the chain's own (the chain begins at the rule")
+  (comment "ytop and has its rows down to `last`): a heading or a label (a row in type `TB_GAP_SIZE` hundredths of the rows' or more), a row of")
+  (comment "two chunks or more that lines up with no other row's columns (another grid's; the first twelve rows are asked), or a band of white deeper than `TB_GAP_BAND`")
+  (comment "tenths of a size between a row and the one before it (the last of the chain's own included). A chain of rules is one table; two tables whose")
+  (comment "rules are near enough to chain are two.")
+  (let [^I32 nr (tb-rows wd w0 w1 (- ex0 POS_TOL) ytop (+ ex1 POS_TOL) yj wl rw sg)
+        ^:mut ^I32 g 0
+        ^:mut ^I32 r 0
+        ^:mut ^I64 sum (i64 0)
+        ^:mut ^I32 size 0]
+    (while (and (< g nr) (< (quot (+ (cells-at rw (+ (* g RWS) 6)) (cells-at rw (+ (* g RWS) 7))) 2) last))
+      (set g (+ g 1)))
+    (if (or (== g 0) (>= g nr)) (return 0))
+    (while (< r g)
+      (do (set sum (add64 sum (i64 (cells-at rw (+ (* r RWS) 3)))))
+          (set r (+ r 1))))
+    (set size (i32 (quot sum (i64 g))))
+    (set r g)
+    (while (< r nr)
+      (do (if (>= (* 100 (cells-at rw (+ (* r RWS) 3))) (* TB_GAP_SIZE size)) (return 1))
+          (if (and (>= (cells-at rw (+ (* r RWS) 9)) 2) (== (tb-aligned rw sg r 0 nr) 0)) (return 1))
+          (if (> (* 10 (- (cells-at rw (+ (* r RWS) 6)) (cells-at rw (+ (* (- r 1) RWS) 7)))) (* TB_GAP_BAND size))
+            (return 1))
+          (set r (+ r 1))))
+    (return 0)))
+
+(defn ^I32 tb-tail-end [^Cells wd ^I32 w0 ^I32 w1 ^I32 ex0 ^I32 ex1 ^I32 ytop ^I32 ybot
+                        ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg]
+  (comment "D1590: the bottom of a chain of rules that begins at ytop and ends at ybot, with the rows below its last rule that are its own: a table")
+  (comment "whose last row has no border under it (a statement's closing balance, a summary's total). A row of two chunks or more that lines up with")
+  (comment "the rows' columns (`tb-aligned`), at most `TB_HEAD_PITCH` tenths of its size and `TB_TAIL_PITCH` tenths of the rows' mean pitch under")
+  (comment "the row before it, beginning in the rows' first column (within `TB_HEAD_TOL` of their left edge: a summary block in the last columns, an")
+  (comment "invoice's totals, is a table of its own), and at most `TB_TAIL_ROWS` of them; the chain needs two rows of its own to have a pitch and columns to line up")
+  (comment "with. Answers ybot, or the bottom of the last such row.")
+  (let [^I32 nr (tb-rows wd w0 w1 (- ex0 POS_TOL) ytop (+ ex1 POS_TOL) (+ ybot TB_TAIL_REACH) wl rw sg)
+        ^:mut ^I32 g 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 taken 0
+        ^:mut ^I32 res ybot
+        ^:mut ^I32 left 0
+        ^:mut ^I32 mean 0
+        ^:mut ^I32 pitch 0]
+    (while (and (< g nr) (< (quot (+ (cells-at rw (+ (* g RWS) 6)) (cells-at rw (+ (* g RWS) 7))) 2) ybot))
+      (set g (+ g 1)))
+    (if (or (< g 2) (>= g nr)) (return ybot))
+    (set mean (quot (- (cells-at rw (+ (* (- g 1) RWS) 2)) (cells-at rw 2)) (- g 1)))
+    (set r 0)
+    (set left 2000000000)
+    (while (< r g)
+      (do (if (< (cells-at rw (+ (* r RWS) 4)) left) (set left (cells-at rw (+ (* r RWS) 4))))
+          (set r (+ r 1))))
+    (set r g)
+    (while (and (< r nr) (< taken TB_TAIL_ROWS))
+      (do (set pitch (- (cells-at rw (+ (* r RWS) 2)) (cells-at rw (+ (* (- r 1) RWS) 2))))
+          (if (< (cells-at rw (+ (* r RWS) 9)) 2) (return res))
+          (comment "A row of the table begins in its first column; a summary block under it (an invoice's totals) stands in the last columns.")
+          (if (> (tb-abs (- (cells-at rw (+ (* r RWS) 4)) left)) TB_HEAD_TOL) (return res))
+          (if (> (* 10 pitch) (* TB_HEAD_PITCH (cells-at rw (+ (* r RWS) 3)))) (return res))
+          (if (and (> mean 0) (> (* 10 pitch) (* TB_TAIL_PITCH mean))) (return res))
+          (if (== (tb-aligned rw sg r 0 g) 0) (return res))
+          (set res (cells-at rw (+ (* r RWS) 7)))
+          (set taken (+ taken 1))
+          (set r (+ r 1))))
+    (return res)))
 
 (defn ^I32 tb-partial-page [^Cells rm ^I32 page ^Cells wd ^Cells et ^I32 w0 ^I32 w1
                             ^:mut ^Cells used ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg
@@ -2348,11 +2526,14 @@
                             ^:mut ^Cells gm ^:mut ^Cells gs ^:mut ^Cells ry ^:mut ^Cells pr ^:mut ^Cells so
                             ^:mut ^Cells tb ^:mut ^Cells tc ^:mut ^Cells tw ^:mut ^Cells tx]
   (comment "Chains of horizontal rules of one extent (booktabs: top, mid, bottom) are partial candidates: the")
-  (comment "words between the first and the last rule, columns from the channels of their text.")
+  (comment "words between the first and the last rule, columns from the channels of their text. D1590: a chain ends where a gap holds what is not")
+  (comment "the table's (`tb-gap-foreign`: a heading, another grid, a band of white), and takes the rows under its last rule that are (`tb-tail-end`).")
   (let [^I32 n (tb-rows-of rm RLS)
         ^:mut ^I32 nh 0
         ^:mut ^I32 i 0
         ^:mut ^I32 j 0
+        ^:mut ^I32 pgap 0
+        ^:mut ^I32 ytail 0
         ^:mut ^I32 cnt 0
         ^:mut ^I32 ex0 0
         ^:mut ^I32 ex1 0
@@ -2368,6 +2549,7 @@
     (while (< i nh)
       (do (if (and (== (cells-at used i) 0) (>= (- (cells-at rm (+ (* i RLS) 3)) (cells-at rm (+ (* i RLS) 2))) 3000))
             (do (set cnt 1)
+                (set pgap 0)
                 (set ex0 (cells-at rm (+ (* i RLS) 2)))
                 (set ex1 (cells-at rm (+ (* i RLS) 3)))
                 (set last (cells-at rm (+ (* i RLS) 1)))
@@ -2381,15 +2563,21 @@
                                   ^I32 ov (- (tb-min ex1 a1) (tb-max ex0 a0))
                                   ^I32 lj (- a1 a0)]
                               (if (and (>= lj 2000) (and (>= (* ov 10) (* lj 6)) (>= (* ov 10) (* (- ex1 ex0) 3))))
-                                (do (set cnt (+ cnt 1))
-                                    (set last (cells-at rm (+ (* j RLS) 1)))
-                                    (if (< a0 ex0) (set ex0 a0))
-                                    (if (> a1 ex1) (set ex1 a1))
-                                    (cells-set used j 1)
-                                    (cells-push used (cells-at rm (+ (* j RLS) 1))))))))
+                                (if (and (>= cnt 2)
+                                         (and (> (* 2 (- (cells-at rm (+ (* j RLS) 1)) last)) (* 3 pgap))
+                                              (== (tb-gap-foreign wd w0 w1 ex0 ex1 (cells-at rm (+ (* i RLS) 1)) last (cells-at rm (+ (* j RLS) 1)) wl rw sg) 1)))
+                                  (set j nh)
+                                  (do (set pgap (- (cells-at rm (+ (* j RLS) 1)) last))
+                                      (set cnt (+ cnt 1))
+                                      (set last (cells-at rm (+ (* j RLS) 1)))
+                                      (if (< a0 ex0) (set ex0 a0))
+                                      (if (> a1 ex1) (set ex1 a1))
+                                      (cells-set used j 1)
+                                      (cells-push used (cells-at rm (+ (* j RLS) 1)))))))))
                       (set j (+ j 1))))
                 (if (>= cnt 2)
-                  (do (tb-partial-try wd et w0 w1 page ex0 ex1 (cells-at rm (+ (* i RLS) 1)) last (cells-at rm (+ (* i RLS) 1)) rm wl rw sg ch st en rmap gm gs ry pr so tb tc tw tx)
+                  (do (set ytail (tb-tail-end wd w0 w1 ex0 ex1 (cells-at rm (+ (* i RLS) 1)) last wl rw sg))
+                      (tb-partial-try wd et w0 w1 page ex0 ex1 (cells-at rm (+ (* i RLS) 1)) ytail (cells-at rm (+ (* i RLS) 1)) rm wl rw sg ch st en rmap gm gs ry pr so tb tc tw tx)
                       (if (>= cnt 3)
                         (do (set m nh)
                             (while (< (+ m 1) (cells-len used))
@@ -2456,7 +2644,7 @@
     (if (and (== nh 1) (>= (cells-at rw 9) 2)) (return hy0))
     (return y0)))
 
-(defn ^I32 tb-shaded-page [^Cells fl ^I32 page ^Cells wd ^Cells et ^I32 w0 ^I32 w1
+(defn ^I32 tb-shaded-page [^Cells fl ^I32 page ^Cells wd ^Cells et ^I32 w0 ^I32 w1 ^Cells rm
                            ^:mut ^Cells bd ^:mut ^Cells used ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg
                            ^:mut ^Cells ch ^:mut ^Cells st ^:mut ^Cells en ^:mut ^Cells rmap
                            ^:mut ^Cells gm ^:mut ^Cells gs ^:mut ^Cells ry ^:mut ^Cells pr ^:mut ^Cells so
@@ -2526,7 +2714,7 @@
                                             (set prevkey key)))
                                       (cells-push rmap trow)
                                       (set r (+ r 1))))
-                                (let [^I32 t (tb-text-grid wd wl rw sg ch st en rmap gm gs ry pr so tb tc tw tx
+                                (let [^I32 t (tb-text-grid wd wl rw sg rm ch st en rmap gm gs ry pr so tb tc tw tx
                                                            page 0 nr PF_SHADED 800 1 sx0 y0 sx1 y1)]
                                   (if (>= t 0)
                                     (do (let [^I32 sc (tb-score tb t wd et tc tw)]
@@ -2598,7 +2786,7 @@
     (if (or (and (== filled1 1) (>= words1 9)) (and (>= filled1 2) (== low1 filled1))) (set res (+ res 2)))
     (return res)))
 
-(defn ^I32 tb-whitespace-run [^I32 page ^Cells wd ^Cells et
+(defn ^I32 tb-whitespace-run [^I32 page ^Cells wd ^Cells et ^Cells rm
                              ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg
                              ^:mut ^Cells ch ^:mut ^Cells st ^:mut ^Cells en ^:mut ^Cells rmap
                              ^:mut ^Cells gm ^:mut ^Cells gs ^:mut ^Cells ry ^:mut ^Cells pr ^:mut ^Cells so
@@ -2621,7 +2809,7 @@
                 ^I32 c0 (tb-rows-of tc TCS)
                 ^I32 wl0 (cells-len tw)
                 ^I32 xl0 (cells-len tx)
-                ^I32 t (tb-text-grid wd wl rw sg ch st en rmap gm gs ry pr so tb tc tw tx
+                ^I32 t (tb-text-grid wd wl rw sg rm ch st en rmap gm gs ry pr so tb tc tw tx
                                      page a (+ jj 1) PF_WHITESPACE 0 0
                                      2000000000 2000000000 -2000000000 -2000000000)]
             (if (>= t 0)
@@ -2643,7 +2831,7 @@
                         (cells-set tb (+ (* t TBS) 6) sc)))))))))
     (return 0)))
 
-(defn ^I32 tb-whitespace-page [^I32 page ^Cells wd ^Cells et ^I32 w0 ^I32 w1
+(defn ^I32 tb-whitespace-page [^I32 page ^Cells wd ^Cells et ^I32 w0 ^I32 w1 ^Cells rm
                                ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg
                                ^:mut ^Cells ch ^:mut ^Cells st ^:mut ^Cells en ^:mut ^Cells rmap
                                ^:mut ^Cells gm ^:mut ^Cells gs ^:mut ^Cells ry ^:mut ^Cells pr ^:mut ^Cells so
@@ -2691,7 +2879,7 @@
                                 (set a (+ a 1)))
                               (while (and (> e a) (> (* 10 (- (cells-at rw (+ (* e RWS) 2)) (cells-at rw (+ (* (- e 1) RWS) 2)))) (* 20 med)))
                                 (set e (- e 1)))))
-                        (tb-whitespace-run page wd et wl rw sg ch st en rmap gm gs ry pr so tb tc tw tx a e)))))
+                        (tb-whitespace-run page wd et rm wl rw sg ch st en rmap gm gs ry pr so tb tc tw tx a e)))))
             (set j i))
           (set i (+ j 1))))
     (return 0)))
@@ -3381,10 +3569,11 @@
                 (if (<= (tb-rows-of s0 RLS) MAX_RULES)
                   (do (tb-merge-rules s0 s1 s3 s9)
                       (tb-ruled-page s1 p s4 s5 s6 tb tc wd wi wj s7 s3 tw tx)
-                      (tb-partial-page s1 p wd et wi wj s9 s10 s11 s12 s13 s14 s15 s16 s6 s17 s18 s7 s3 tb tc tw tx)))
+                      (tb-partial-page s1 p wd et wi wj s9 s10 s11 s12 s13 s14 s15 s16 s6 s17 s18 s7 s3 tb tc tw tx))
+                  (cells-drop s1 0))
                 (if (<= (tb-rows-of s2 6) MAX_RULES)
-                  (tb-shaded-page s2 p wd et wi wj s8 s9 s10 s11 s12 s13 s14 s15 s16 s6 s17 s18 s7 s3 tb tc tw tx))
-                (tb-whitespace-page p wd et wi wj s10 s11 s12 s13 s14 s15 s16 s6 s17 s18 s7 s3 tb tc tw tx)
+                  (tb-shaded-page s2 p wd et wi wj s1 s8 s9 s10 s11 s12 s13 s14 s15 s16 s6 s17 s18 s7 s3 tb tc tw tx))
+                (tb-whitespace-page p wd et wi wj s1 s10 s11 s12 s13 s14 s15 s16 s6 s17 s18 s7 s3 tb tc tw tx)
                 (if (>= (tg-trust ss) TB_TAG_VETO_TRUST) (tb-veto tb t0 wd tc tw se sc gl mk g0))
                 (tb-select tb t0 s3 s9 s8 grg)
                 ;; the tags are checked against the candidates that were kept (a table of the tags alone joins them and is selected with them)

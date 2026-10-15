@@ -2347,6 +2347,18 @@ chunks line up (a left or a right edge within 4 pt) with the body's columns is t
 so taken are the header rows (`thead`) before any bold body row is. (3) *Not a header*: a bold leading row holding a formatted amount (a
 currency sign or a decimal point) that the cell below in its column matches ('Opening Balance' over a column of balances) is a row of the table.
 
+**Chains, tails and cuts (D1590).** (1) *A chain of rules ends where what lies between two of them is not its own.* Horizontal rules of one extent
+less than 300 pt apart chain into one candidate; the chain stops before a rule when the gap above it, wider than half as much again as the gap
+before, holds a row in type 1.25 times the chain's rows' or more (a heading, a label), a row of two chunks or more that lines up with no other
+row's columns (another grid's), or a band of white deeper than 3.5 sizes between a row and the one before it (the chain's last row included);
+the rule after the gap begins a chain of its own, so two tables whose rules are near enough to chain are two. (2) *Rows under the last rule.* A
+statement's closing balance and a summary's total have no border under them: up to three rows of two chunks or more under a chain's last rule that
+line up with the columns of the rows above them (an edge within 4 pt), each at most 4 sizes and 1.6 times the rows' mean pitch under the row before
+it, are rows of the table (the chain needs two rows of its own to have a pitch and columns). (3) *Vertical rules are column cuts.* In every profile
+that finds its columns from text (`partial`, `shaded`, `whitespace`) a vertical rule inside the rows' extent that runs along three in five of the
+rows (two at least) and through none of their words is a column boundary of its own where the whitespace has none, and the words either side of it
+are cells of their own even when a chunk of the row joins them.
+
 **What the profiles read (D218).** Rules and fills are the fused `grl` and
 `gfl` of §9.9, never `paths`: a rule is a `grl` row of orientation `h` or `v`
 (slanted rules are figure material), a fill a `gfl` row; a rule flagged
@@ -2502,7 +2514,9 @@ Captions are linked by label pattern (`Figure 3`, `Fig. 3`, `Chart`,
 diagram labels) is **not** body text; it may be kept as the figure's
 `labels` (setting `figure-text: omit|labels`, default `labels` — a chart's
 axis titles are often exactly what a scraper wanted). An image the PDF gives
-alt text for (`/Alt` in the structure tree) keeps it as `alt`.
+alt text for (`/Alt` in the structure tree) keeps it as `alt`. The labels stay in reading order (a chart's axis title, its
+tick labels), each its own value in JSON and its own `<span data-emon="label">` in HTML, with one space between two spans so that the figure's
+text reads as tokens (`Units (thousands) 220 165 110 55 0 Q1 Q2 Q3 Q4`) and not as one run (D1590).
 
 The candidate regions are fusion's `figure` regions (§9.9, D228): image
 placements, vector clusters, the tracer's large components, OCR's image

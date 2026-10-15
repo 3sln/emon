@@ -1205,8 +1205,14 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
             hb = 1;
         }
         h_inner(t, o, nodes, attrs, regions, pages, layout, text, n);
+        // D1590: the labels (an axis title, its ticks) are tokens: one space between two spans, or the text of the figure reads as one run.
         a = node_attr(nodes, attrs, n, fk_labels());
+        b = 0;
         while a >= 0 {
+            if b == 1 {
+                crate::port::text_cp(t, 32);
+            }
+            b = 1;
             crate::port::text_ascii(t, "<span data-emon=\"label\">");
             h_run(t, text, attr_value(attrs, a), attr_len(attrs, a));
             crate::port::text_ascii(t, "</span>");
