@@ -4071,7 +4071,10 @@ Work for the release after 0.1.0 (ids from D559; the coordinator renumbers at th
   pieces are the characters Unicode named them (D1625); CJK lines that stop inside a sentence are one paragraph (D1626); the Arabic presentation forms fold to the
   letters (D1627). Each has a law written first (it failed on the code before). Deferred, with the cause found: rotated side labels read backwards in a table cell
   (`table.kin`, not touched here: D1624), the order of the punctuation of a Latin run inside a right-to-left line and the two U+FFFD of a CID font with no ToUnicode
-  (D1627, D1625).
+  (D1627, D1625). Samples (`bb samples`): `bank-statement-real` keeps its 11 headings, 15 paragraphs and 7 tables and loses three false heading numbers; `gao-report`
+  h 16 to 14; `image-statement` h 11 to 7; `irs-pub15-excerpt` h 70 to 54, numbers 14 to 9; `irs-form-w9` one paragraph fewer. Gates: every one of the task's passes; 979 laws on
+  Rust and on Go. The scoreboard: nothing of `emon` regresses; the `emon-replay-px` ratchet's scan-ovl paragraph and boundary rows (one invoice address line, a false heading
+  once, a paragraph now) are lowered by hand and its 38 improvements (scan headings p 0.60 to 0.75) recorded.
 
 ---
 
