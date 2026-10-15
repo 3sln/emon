@@ -835,14 +835,14 @@
 
 (defn ^Bool tb-part [^Cells tb ^I32 j ^I32 i]
   (comment "P12.2: is candidate j only a part of what candidate i reads: it lies in i's box or is its head (`tb-within`, `tb-head-of`) and is no more than three")
-  (comment "in four of its height (a reading of the same rows beside it is no part), i has as many columns and `TB_ROWS_MORE` rows more, and a score no more")
-  (comment "than `TB_ROWS_SLACK` under j's.")
+  (comment "in four of its height (a reading of the same rows beside it is no part), i has the columns (or two fewer: the rules of a header put a column between")
+  (comment "the years that the text does not have) and `TB_ROWS_MORE` rows more, and a score no more than `TB_ROWS_SLACK` under j's.")
   (let [^I32 a (* j TBS)
         ^I32 b (* i TBS)]
     (return (and (or (tb-within tb j i) (tb-head-of tb j i))
                  (and (<= (* 4 (- (cells-at tb (+ a 4)) (cells-at tb (+ a 2)))) (* 3 (- (cells-at tb (+ b 4)) (cells-at tb (+ b 2)))))
                       (and (>= (cells-at tb (+ b 7)) (+ (cells-at tb (+ a 7)) TB_ROWS_MORE))
-                           (and (>= (cells-at tb (+ b 8)) (cells-at tb (+ a 8)))
+                           (and (>= (+ (cells-at tb (+ b 8)) 2) (cells-at tb (+ a 8)))
                                 (>= (+ (cells-at tb (+ b 6)) TB_ROWS_SLACK) (cells-at tb (+ a 6))))))))))
 
 (defn ^Bool tb-takes [^Cells tb ^I32 i ^I32 t0 ^I32 n]
@@ -2193,6 +2193,17 @@
     (if (!= cnt 1) (return (== 0 1)))
     (return (and (== (cells-at tc (+ (* only TCS) 3)) 1) (== (cells-at tc (+ (* only TCS) 1)) mincol)))))
 
+(defn ^I32 tb-row-formatted [^Cells tc ^I32 cfirst ^I32 cend ^I32 r ^Cells wd ^Cells et ^Cells tw]
+  (comment "P12.2: does row r have two cells or more that are formatted numbers (`tb-cell-sig`: a currency sign or a decimal point)?")
+  (let [^:mut ^I32 c cfirst
+        ^:mut ^I32 n 0]
+    (while (< c cend)
+      (do (if (== (cells-at tc (* c TCS)) r)
+            (if (!= (tb-cell-sig wd et tw tc c) 0) (set n (+ n 1))))
+          (set c (+ c 1))))
+    (if (>= n 2) (return 1))
+    (return 0)))
+
 (defn ^I32 tb-head-rows [^Cells tb ^I32 k ^Cells wd ^Cells et ^Cells tc ^Cells tw]
   (comment "How many leading rows are the header: the rows above the top rule that line up with the body's columns (D557: field 22,")
   (comment "written when the candidate was built), a header the producer set in another type is a header whatever the first body row is;")
@@ -2209,6 +2220,15 @@
                                        (and (== (tb-row-amounts tc cfirst cend h wd et tw) 0) (not (tb-label-row tb k h tc)))))
       (set h (+ h 1)))
     (if (and (> h 0) (<= (* h 2) (+ nrows 1))) (return h))
+    (comment "P12.2 (smoke review, issue 3: the BLS and BEA tables): a header of cells that wrap, set in the type of the body, is every row above the first row")
+    (comment "of amounts (`tb-row-formatted`: two formatted numbers, with a decimal point or a currency sign) when there are two or more of them and")
+    (comment "they are not more than a third of the table.")
+    (let [^:mut ^I32 f 0]
+      (while (and (< f (- nrows 1)) (== (tb-row-formatted tc cfirst cend f wd et tw) 0))
+        (set f (+ f 1)))
+      (while (and (> f 0) (tb-label-row tb k (- f 1) tc))
+        (set f (- f 1)))
+      (if (and (>= f 2) (and (< f (- nrows 1)) (<= (* f 3) nrows))) (return f)))
     (if (and (>= nrows 3) (== (tb-row-stat tc cfirst cend 0 wd et tw 2) 0))
       (if (and (>= (tb-row-stat tc cfirst cend 0 wd et tw 0) 2) (>= (tb-num-cols tb k 1 wd et tc tw) 1))
         (return 1)))
@@ -3230,7 +3250,7 @@
         ^:mut ^I32 again 0]
     (while (and (< a jj) (< (cells-at rw (+ (* a RWS) 9)) 2))
       (set a (+ a 1)))
-    (set jj (tb-trim-end rw a jj))
+    (set jj (tb-trim-end rw sg a jj))
     (if (>= (tb-tabular-baseline-rows rw a (+ jj 1)) 3) (set again 1))
     (while (== again 1)
       (do (set again 0)
@@ -3249,7 +3269,7 @@
                         (do (tb-reject tb tc tw tx nt c0 wl0 xl0)
                             (if (or (== sc 0) (>= pe 2)) (set jj (- jj 1)))
                             (if (or (== pe 1) (== pe 3)) (set a (+ a 1)))
-                            (set jj (tb-trim-end rw a jj))
+                            (set jj (tb-trim-end rw sg a jj))
                             (while (and (< a jj) (< (cells-at rw (+ (* a RWS) 9)) 2))
                               (set a (+ a 1)))
                             (comment "...until three rows are left, and no more rows are let go than are kept (a run of columns of text")
@@ -3260,23 +3280,43 @@
                         (cells-set tb (+ (* t TBS) 6) sc)))))))))
     (return 0)))
 
-(defn ^I32 tb-trim-end [^Cells rw ^I32 a ^I32 jj]
+(defn ^Bool tb-under [^Cells rw ^Cells sg ^I32 j ^I32 r]
+  (comment "P12.2: does the one chunk of row r stand under a chunk of row j: its left or its right edge within `TB_HEAD_TOL` of one of that row's chunks' edges")
+  (comment "(the lines of a cell that wraps keep to its column; a title centred under a table does not).")
+  (let [^I32 x0 (cells-at sg (+ (* (cells-at rw (+ (* r RWS) 8)) SGS) 1))
+        ^I32 x1 (cells-at sg (+ (* (cells-at rw (+ (* r RWS) 8)) SGS) 2))
+        ^:mut ^I32 q 0]
+    (while (< q (cells-at rw (+ (* j RWS) 9)))
+      (do (let [^I32 s (+ (cells-at rw (+ (* j RWS) 8)) q)]
+            (if (or (<= (tb-abs (- x0 (cells-at sg (+ (* s SGS) 1)))) TB_HEAD_TOL)
+                    (<= (tb-abs (- x1 (cells-at sg (+ (* s SGS) 2)))) TB_HEAD_TOL))
+              (return (== 1 1))))
+          (set q (+ q 1))))
+    (return (== 0 1))))
+
+(defn ^I32 tb-trim-end [^Cells rw ^Cells sg ^I32 a ^I32 jj]
   (comment "P12.2: the last row of the rows a..jj of a whitespace run, the rows of one chunk at its end let go: but not the continuation lines of the last row of")
-  (comment "two chunks or more, when there are up to six and each is tight under the one before (a cell that wraps in the last row: the Agami statements).")
+  (comment "two chunks or more, when there are up to six and each is tight under the one before and under a chunk of that row (a cell that wraps in the last")
+  (comment "row: the Agami statements).")
   (let [^:mut ^I32 t jj
         ^:mut ^I32 tight 1]
     (while (and (> t a) (< (cells-at rw (+ (* t RWS) 9)) 2))
       (do (if (> (* 20 (- (cells-at rw (+ (* t RWS) 2)) (cells-at rw (+ (* (- t 1) RWS) 2)))) (* 27 (cells-at rw (+ (* t RWS) 3))))
             (set tight 0))
           (set t (- t 1))))
-    (if (and (== tight 1) (<= (- jj t) 6)) (return jj))
+    (if (and (== tight 1) (<= (- jj t) 6))
+      (do (let [^:mut ^I32 r (+ t 1)]
+            (while (<= r jj)
+              (do (if (not (tb-under rw sg t r)) (return t))
+                  (set r (+ r 1)))))
+          (return jj)))
     (return t)))
 
-(defn ^I32 tb-run-tail [^Cells rw ^I32 nr ^I32 k]
+(defn ^I32 tb-run-tail [^Cells rw ^Cells sg ^I32 nr ^I32 k]
   (comment "P12.2 (smoke review, issue 6): the rows of one chunk from row k on that a whitespace run takes in, answered as the row of two chunks or more that")
   (comment "follows them, -1 when the run ends before them. They are the continuation lines of a cell that wraps when each is tight under the row before")
-  (comment "it (at most 1.35 sizes: up to six of them), the label of a section and its sub-label when they are not (up to two); and no row is more than three")
-  (comment "sizes from the one before it.")
+  (comment "it (at most 1.35 sizes: up to six of them) and stands under a chunk of the row k - 1 (`tb-under`), the label of a section and its sub-label when they")
+  (comment "are not (up to two); and no row is more than three sizes from the one before it.")
   (comment "When no row of two chunks follows them (the page ends, or a gap does) they are the run's last rows when they are the continuation lines.")
   (let [^:mut ^I32 m k
         ^:mut ^I32 tight 1
@@ -3286,7 +3326,7 @@
                 ^I32 size (cells-at rw (+ (* m RWS) 3))]
             (if (> (* pitch 10) (* size 30))
               (set stop 1)
-              (do (if (> (* pitch 20) (* size 27)) (set tight 0))
+              (do (if (or (> (* pitch 20) (* size 27)) (not (tb-under rw sg (- k 1) m))) (set tight 0))
                   (set m (+ m 1)))))))
     (if (and (== stop 0) (< m nr))
       (do (if (and (== tight 1) (<= (- m k) 6)) (return m))
@@ -3325,11 +3365,11 @@
                                 (if (>= (cells-at rw (+ (* k RWS) 9)) 2)
                                   (do (set j k)
                                       (set ntab (+ ntab 1)))
-                                  (let [^I32 m (tb-run-tail rw nr k)]
+                                  (let [^I32 m (tb-run-tail rw sg nr k)]
                                     (if (< m 0)
                                       (set more 0)
                                       (set j (- m 1)))))))))))
-                (set j (tb-trim-end rw i j))
+                (set j (tb-trim-end rw sg i j))
                 (if (>= ntab 3)
                   (do (let [^:mut ^I32 a i
                             ^:mut ^I32 e j

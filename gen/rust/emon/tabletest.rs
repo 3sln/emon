@@ -1375,6 +1375,31 @@ pub(crate) fn tt_leader(mut wd: &mut crate::port::Cells, mut ln: &mut crate::por
     return 0;
 }
 #[test]
+fn test_the_rows_above_the_first_row_of_amounts_are_the_header() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    // The BLS and BEA tables: a header of cells that wrap into lines (a group's name, `Aug.`, `2026`), in the type of the body and not bold, over rows of
+    // amounts with a decimal point: the header is every row above the first of them (before: the first row alone, or none).
+    tt_at(wd, ln, et, &crate::testport::text_blob("Raw")[..], 20000, 10000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Adj")[..], 30000, 10000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Aug.")[..], 20000, 11200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Jul.")[..], 30000, 11200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("2026")[..], 20000, 12400, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("2026")[..], 30000, 12400, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Category")[..], 7600, 12400, 0, 0);
+    tt_row3(wd, ln, et, 14400, &crate::testport::text_blob("Food")[..], &crate::testport::text_blob("13.5")[..], &crate::testport::text_blob("2.7")[..]);
+    tt_row3(wd, ln, et, 16000, &crate::testport::text_blob("Fuel")[..], &crate::testport::text_blob("11.5")[..], &crate::testport::text_blob("3.1")[..]);
+    tt_row3(wd, ln, et, 17600, &crate::testport::text_blob("Rent")[..], &crate::testport::text_blob("12.5")[..], &crate::testport::text_blob("4.4")[..]);
+    tt_row3(wd, ln, et, 19200, &crate::testport::text_blob("Cars")[..], &crate::testport::text_blob("14.5")[..], &crate::testport::text_blob("5.9")[..]);
+    tt_row3(wd, ln, et, 20800, &crate::testport::text_blob("Tolls")[..], &crate::testport::text_blob("15.5")[..], &crate::testport::text_blob("6.2")[..]);
+    tt_row3(wd, ln, et, 22400, &crate::testport::text_blob("Power")[..], &crate::testport::text_blob("16.5")[..], &crate::testport::text_blob("7.7")[..]);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "head: well formed");
+    crate::testport::assert_text(t, "T3w;Gh;R;Ch[];Ch[Raw];Ch[Adj];R;Ch[];Ch[Aug.];Ch[Jul.];R;Ch[Category];Ch[2026];Ch[2026];Gb;R;C[Food];C[13.5];C[2.7];R;C[Fuel];C[11.5];C[3.1];R;C[Rent];C[12.5];C[4.4];R;C[Cars];C[14.5];C[5.9];R;C[Tolls];C[15.5];C[6.2];R;C[Power];C[16.5];C[7.7];", "the three lines above the first row of amounts are the header (before: the first of them, the others rows of the body)");
+}
+#[test]
 fn test_the_dots_of_a_leader_are_no_cells() {
     let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();

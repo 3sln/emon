@@ -1204,6 +1204,28 @@
   (tt-at wd ln et amt 43000 y 0 1)
   (return 0))
 
+(deftest test-the-rows-above-the-first-row-of-amounts-are-the-header
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (comment "The BLS and BEA tables: a header of cells that wrap into lines (a group's name, `Aug.`, `2026`), in the type of the body and not bold, over rows of")
+    (comment "amounts with a decimal point: the header is every row above the first of them (before: the first row alone, or none).")
+    (tt-at wd ln et (text-blob "Raw") 20000 10000 0 0)
+    (tt-at wd ln et (text-blob "Adj") 30000 10000 0 0)
+    (tt-at wd ln et (text-blob "Aug.") 20000 11200 0 0)
+    (tt-at wd ln et (text-blob "Jul.") 30000 11200 0 0)
+    (tt-at wd ln et (text-blob "2026") 20000 12400 0 0)
+    (tt-at wd ln et (text-blob "2026") 30000 12400 0 0)
+    (tt-at wd ln et (text-blob "Category") 7600 12400 0 0)
+    (tt-row3 wd ln et 14400 (text-blob "Food") (text-blob "13.5") (text-blob "2.7"))
+    (tt-row3 wd ln et 16000 (text-blob "Fuel") (text-blob "11.5") (text-blob "3.1"))
+    (tt-row3 wd ln et 17600 (text-blob "Rent") (text-blob "12.5") (text-blob "4.4"))
+    (tt-row3 wd ln et 19200 (text-blob "Cars") (text-blob "14.5") (text-blob "5.9"))
+    (tt-row3 wd ln et 20800 (text-blob "Tolls") (text-blob "15.5") (text-blob "6.2"))
+    (tt-row3 wd ln et 22400 (text-blob "Power") (text-blob "16.5") (text-blob "7.7"))
+    (assert-eq (tt-run wd ln et pa t) 0 "head: well formed")
+    (assert-text t "T3w;Gh;R;Ch[];Ch[Raw];Ch[Adj];R;Ch[];Ch[Aug.];Ch[Jul.];R;Ch[Category];Ch[2026];Ch[2026];Gb;R;C[Food];C[13.5];C[2.7];R;C[Fuel];C[11.5];C[3.1];R;C[Rent];C[12.5];C[4.4];R;C[Cars];C[14.5];C[5.9];R;C[Tolls];C[15.5];C[6.2];R;C[Power];C[16.5];C[7.7];"
+                 "the three lines above the first row of amounts are the header (before: the first of them, the others rows of the body)")))
+
 (deftest test-the-dots-of-a-leader-are-no-cells
   (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
         ^Text t (new-text)]

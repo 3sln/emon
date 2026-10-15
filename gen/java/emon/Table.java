@@ -895,11 +895,11 @@ public final class Table {
     }
     public static boolean tbPart(emon.Port.Cells tb, int j, int i) {
         // P12.2: is candidate j only a part of what candidate i reads: it lies in i's box or is its head (`tb-within`, `tb-head-of`) and is no more than three
-        // in four of its height (a reading of the same rows beside it is no part), i has as many columns and `TB_ROWS_MORE` rows more, and a score no more
-        // than `TB_ROWS_SLACK` under j's.
+        // in four of its height (a reading of the same rows beside it is no part), i has the columns (or two fewer: the rules of a header put a column between
+        // the years that the text does not have) and `TB_ROWS_MORE` rows more, and a score no more than `TB_ROWS_SLACK` under j's.
         int a = j * TBS;
         int b = i * TBS;
-        return (tbWithin(tb, j, i) || tbHeadOf(tb, j, i)) && (((4 * (emon.Port.cellsAt(tb, a + 4) - emon.Port.cellsAt(tb, a + 2))) <= (3 * (emon.Port.cellsAt(tb, b + 4) - emon.Port.cellsAt(tb, b + 2)))) && ((emon.Port.cellsAt(tb, b + 7) >= (emon.Port.cellsAt(tb, a + 7) + TB_ROWS_MORE)) && ((emon.Port.cellsAt(tb, b + 8) >= emon.Port.cellsAt(tb, a + 8)) && ((emon.Port.cellsAt(tb, b + 6) + TB_ROWS_SLACK) >= emon.Port.cellsAt(tb, a + 6)))));
+        return (tbWithin(tb, j, i) || tbHeadOf(tb, j, i)) && (((4 * (emon.Port.cellsAt(tb, a + 4) - emon.Port.cellsAt(tb, a + 2))) <= (3 * (emon.Port.cellsAt(tb, b + 4) - emon.Port.cellsAt(tb, b + 2)))) && ((emon.Port.cellsAt(tb, b + 7) >= (emon.Port.cellsAt(tb, a + 7) + TB_ROWS_MORE)) && (((emon.Port.cellsAt(tb, b + 8) + 2) >= emon.Port.cellsAt(tb, a + 8)) && ((emon.Port.cellsAt(tb, b + 6) + TB_ROWS_SLACK) >= emon.Port.cellsAt(tb, a + 6)))));
     }
     public static boolean tbTakes(emon.Port.Cells tb, int i, int t0, int n) {
         // P12.2: does candidate i take in the candidates that overlap it and score as well: there is one, and each is only a part of what i reads.
@@ -2607,6 +2607,23 @@ public final class Table {
         }
         return (emon.Port.cellsAt(tc, (only * TCS) + 3) == 1) && (emon.Port.cellsAt(tc, (only * TCS) + 1) == mincol);
     }
+    public static int tbRowFormatted(emon.Port.Cells tc, int cfirst, int cend, int r, emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells tw) {
+        // P12.2: does row r have two cells or more that are formatted numbers (`tb-cell-sig`: a currency sign or a decimal point)?
+        int c = cfirst;
+        int n = 0;
+        while (c < cend) {
+            if (emon.Port.cellsAt(tc, c * TCS) == r) {
+                if (tbCellSig(wd, et, tw, tc, c) != 0) {
+                    n += 1;
+                }
+            }
+            c += 1;
+        }
+        if (n >= 2) {
+            return 1;
+        }
+        return 0;
+    }
     public static int tbHeadRows(emon.Port.Cells tb, int k, emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells tc, emon.Port.Cells tw) {
         // How many leading rows are the header: the rows above the top rule that line up with the body's columns (D557: field 22,
         // written when the candidate was built), a header the producer set in another type is a header whatever the first body row is;
@@ -2626,6 +2643,19 @@ public final class Table {
         }
         if ((h > 0) && ((h * 2) <= (nrows + 1))) {
             return h;
+        }
+        // P12.2 (smoke review, issue 3: the BLS and BEA tables): a header of cells that wrap, set in the type of the body, is every row above the first row
+        // of amounts (`tb-row-formatted`: two formatted numbers, with a decimal point or a currency sign) when there are two or more of them and
+        // they are not more than a third of the table.
+        int f = 0;
+        while ((f < (nrows - 1)) && (tbRowFormatted(tc, cfirst, cend, f, wd, et, tw) == 0)) {
+            f += 1;
+        }
+        while ((f > 0) && tbLabelRow(tb, k, f - 1, tc)) {
+            f -= 1;
+        }
+        if ((f >= 2) && ((f < (nrows - 1)) && ((f * 3) <= nrows))) {
+            return f;
         }
         if ((nrows >= 3) && (tbRowStat(tc, cfirst, cend, 0, wd, et, tw, 2) == 0)) {
             if ((tbRowStat(tc, cfirst, cend, 0, wd, et, tw, 0) >= 2) && (tbNumCols(tb, k, 1, wd, et, tc, tw) >= 1)) {
@@ -3955,7 +3985,7 @@ public final class Table {
         while ((a < jj) && (emon.Port.cellsAt(rw, (a * RWS) + 9) < 2)) {
             a += 1;
         }
-        jj = tbTrimEnd(rw, a, jj);
+        jj = tbTrimEnd(rw, sg, a, jj);
         if (tbTabularBaselineRows(rw, a, jj + 1) >= 3) {
             again = 1;
         }
@@ -3978,7 +4008,7 @@ public final class Table {
                     if ((pe == 1) || (pe == 3)) {
                         a += 1;
                     }
-                    jj = tbTrimEnd(rw, a, jj);
+                    jj = tbTrimEnd(rw, sg, a, jj);
                     while ((a < jj) && (emon.Port.cellsAt(rw, (a * RWS) + 9) < 2)) {
                         a += 1;
                     }
@@ -3994,9 +4024,25 @@ public final class Table {
         }
         return 0;
     }
-    public static int tbTrimEnd(emon.Port.Cells rw, int a, int jj) {
+    public static boolean tbUnder(emon.Port.Cells rw, emon.Port.Cells sg, int j, int r) {
+        // P12.2: does the one chunk of row r stand under a chunk of row j: its left or its right edge within `TB_HEAD_TOL` of one of that row's chunks' edges
+        // (the lines of a cell that wraps keep to its column; a title centred under a table does not).
+        int x0 = emon.Port.cellsAt(sg, (emon.Port.cellsAt(rw, (r * RWS) + 8) * SGS) + 1);
+        int x1 = emon.Port.cellsAt(sg, (emon.Port.cellsAt(rw, (r * RWS) + 8) * SGS) + 2);
+        int q = 0;
+        while (q < emon.Port.cellsAt(rw, (j * RWS) + 9)) {
+            int s = emon.Port.cellsAt(rw, (j * RWS) + 8) + q;
+            if ((tbAbs(x0 - emon.Port.cellsAt(sg, (s * SGS) + 1)) <= TB_HEAD_TOL) || (tbAbs(x1 - emon.Port.cellsAt(sg, (s * SGS) + 2)) <= TB_HEAD_TOL)) {
+                return 1 == 1;
+            }
+            q += 1;
+        }
+        return 0 == 1;
+    }
+    public static int tbTrimEnd(emon.Port.Cells rw, emon.Port.Cells sg, int a, int jj) {
         // P12.2: the last row of the rows a..jj of a whitespace run, the rows of one chunk at its end let go: but not the continuation lines of the last row of
-        // two chunks or more, when there are up to six and each is tight under the one before (a cell that wraps in the last row: the Agami statements).
+        // two chunks or more, when there are up to six and each is tight under the one before and under a chunk of that row (a cell that wraps in the last
+        // row: the Agami statements).
         int t = jj;
         int tight = 1;
         while ((t > a) && (emon.Port.cellsAt(rw, (t * RWS) + 9) < 2)) {
@@ -4006,15 +4052,22 @@ public final class Table {
             t -= 1;
         }
         if ((tight == 1) && ((jj - t) <= 6)) {
+            int r = t + 1;
+            while (r <= jj) {
+                if (!tbUnder(rw, sg, t, r)) {
+                    return t;
+                }
+                r += 1;
+            }
             return jj;
         }
         return t;
     }
-    public static int tbRunTail(emon.Port.Cells rw, int nr, int k) {
+    public static int tbRunTail(emon.Port.Cells rw, emon.Port.Cells sg, int nr, int k) {
         // P12.2 (smoke review, issue 6): the rows of one chunk from row k on that a whitespace run takes in, answered as the row of two chunks or more that
         // follows them, -1 when the run ends before them. They are the continuation lines of a cell that wraps when each is tight under the row before
-        // it (at most 1.35 sizes: up to six of them), the label of a section and its sub-label when they are not (up to two); and no row is more than three
-        // sizes from the one before it.
+        // it (at most 1.35 sizes: up to six of them) and stands under a chunk of the row k - 1 (`tb-under`), the label of a section and its sub-label when they
+        // are not (up to two); and no row is more than three sizes from the one before it.
         // When no row of two chunks follows them (the page ends, or a gap does) they are the run's last rows when they are the continuation lines.
         int m = k;
         int tight = 1;
@@ -4025,7 +4078,7 @@ public final class Table {
             if ((pitch * 10) > (size * 30)) {
                 stop = 1;
             } else {
-                if ((pitch * 20) > (size * 27)) {
+                if (((pitch * 20) > (size * 27)) || !tbUnder(rw, sg, k - 1, m)) {
                     tight = 0;
                 }
                 m += 1;
@@ -4073,7 +4126,7 @@ public final class Table {
                             j = k;
                             ntab += 1;
                         } else {
-                            int m = tbRunTail(rw, nr, k);
+                            int m = tbRunTail(rw, sg, nr, k);
                             if (m < 0) {
                                 more = 0;
                             } else {
@@ -4082,7 +4135,7 @@ public final class Table {
                         }
                     }
                 }
-                j = tbTrimEnd(rw, i, j);
+                j = tbTrimEnd(rw, sg, i, j);
                 if (ntab >= 3) {
                     int a = i;
                     int e = j;

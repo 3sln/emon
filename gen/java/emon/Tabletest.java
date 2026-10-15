@@ -1332,6 +1332,30 @@ public final class Tabletest {
         ttAt(wd, ln, et, amt, 43000, y, 0, 1);
         return 0;
     }
+    public static void testTheRowsAboveTheFirstRowOfAmountsAreTheHeader() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        // The BLS and BEA tables: a header of cells that wrap into lines (a group's name, `Aug.`, `2026`), in the type of the body and not bold, over rows of
+        // amounts with a decimal point: the header is every row above the first of them (before: the first row alone, or none).
+        ttAt(wd, ln, et, emon.Testport.textBlob("Raw"), 20000, 10000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Adj"), 30000, 10000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Aug."), 20000, 11200, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Jul."), 30000, 11200, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("2026"), 20000, 12400, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("2026"), 30000, 12400, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Category"), 7600, 12400, 0, 0);
+        ttRow3(wd, ln, et, 14400, emon.Testport.textBlob("Food"), emon.Testport.textBlob("13.5"), emon.Testport.textBlob("2.7"));
+        ttRow3(wd, ln, et, 16000, emon.Testport.textBlob("Fuel"), emon.Testport.textBlob("11.5"), emon.Testport.textBlob("3.1"));
+        ttRow3(wd, ln, et, 17600, emon.Testport.textBlob("Rent"), emon.Testport.textBlob("12.5"), emon.Testport.textBlob("4.4"));
+        ttRow3(wd, ln, et, 19200, emon.Testport.textBlob("Cars"), emon.Testport.textBlob("14.5"), emon.Testport.textBlob("5.9"));
+        ttRow3(wd, ln, et, 20800, emon.Testport.textBlob("Tolls"), emon.Testport.textBlob("15.5"), emon.Testport.textBlob("6.2"));
+        ttRow3(wd, ln, et, 22400, emon.Testport.textBlob("Power"), emon.Testport.textBlob("16.5"), emon.Testport.textBlob("7.7"));
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "head: well formed");
+        emon.Testport.assertText(t, "T3w;Gh;R;Ch[];Ch[Raw];Ch[Adj];R;Ch[];Ch[Aug.];Ch[Jul.];R;Ch[Category];Ch[2026];Ch[2026];Gb;R;C[Food];C[13.5];C[2.7];R;C[Fuel];C[11.5];C[3.1];R;C[Rent];C[12.5];C[4.4];R;C[Cars];C[14.5];C[5.9];R;C[Tolls];C[15.5];C[6.2];R;C[Power];C[16.5];C[7.7];", "the three lines above the first row of amounts are the header (before: the first of them, the others rows of the body)");
+    }
     public static void testTheDotsOfALeaderAreNoCells() {
         emon.Port.Cells wd = emon.Port.newCells();
         emon.Port.Cells ln = emon.Port.newCells();

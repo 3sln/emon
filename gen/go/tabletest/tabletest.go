@@ -1419,6 +1419,31 @@ func ttLeader(wd *port.Cells, ln *port.Cells, et *port.Cells, y int32, label []b
 	return 0
 }
 
+func TestTheRowsAboveTheFirstRowOfAmountsAreTheHeader(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	// The BLS and BEA tables: a header of cells that wrap into lines (a group's name, `Aug.`, `2026`), in the type of the body and not bold, over rows of
+	// amounts with a decimal point: the header is every row above the first of them (before: the first row alone, or none).
+	ttAt(wd, ln, et, port.TextBlob("Raw"), 20000, 10000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Adj"), 30000, 10000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Aug."), 20000, 11200, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Jul."), 30000, 11200, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("2026"), 20000, 12400, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("2026"), 30000, 12400, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Category"), 7600, 12400, 0, 0)
+	ttRow3(wd, ln, et, 14400, port.TextBlob("Food"), port.TextBlob("13.5"), port.TextBlob("2.7"))
+	ttRow3(wd, ln, et, 16000, port.TextBlob("Fuel"), port.TextBlob("11.5"), port.TextBlob("3.1"))
+	ttRow3(wd, ln, et, 17600, port.TextBlob("Rent"), port.TextBlob("12.5"), port.TextBlob("4.4"))
+	ttRow3(wd, ln, et, 19200, port.TextBlob("Cars"), port.TextBlob("14.5"), port.TextBlob("5.9"))
+	ttRow3(wd, ln, et, 20800, port.TextBlob("Tolls"), port.TextBlob("15.5"), port.TextBlob("6.2"))
+	ttRow3(wd, ln, et, 22400, port.TextBlob("Power"), port.TextBlob("16.5"), port.TextBlob("7.7"))
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "head: well formed")
+	port.AssertText(emonT, t, "T3w;Gh;R;Ch[];Ch[Raw];Ch[Adj];R;Ch[];Ch[Aug.];Ch[Jul.];R;Ch[Category];Ch[2026];Ch[2026];Gb;R;C[Food];C[13.5];C[2.7];R;C[Fuel];C[11.5];C[3.1];R;C[Rent];C[12.5];C[4.4];R;C[Cars];C[14.5];C[5.9];R;C[Tolls];C[15.5];C[6.2];R;C[Power];C[16.5];C[7.7];", "the three lines above the first row of amounts are the header (before: the first of them, the others rows of the body)")
+}
+
 func TestTheDotsOfALeaderAreNoCells(emonT *testing.T) {
 	var wd *port.Cells = port.NewCells()
 	var ln *port.Cells = port.NewCells()
