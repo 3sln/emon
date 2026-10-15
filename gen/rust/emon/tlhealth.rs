@@ -808,3 +808,80 @@ pub fn th_write(fa: &mut crate::port::Cells, wd: &mut crate::port::Cells, et: &m
     }
     return rows;
 }
+pub(crate) fn th_ocr_reason(owords: &mut crate::port::Cells, i: i32) -> i32 {
+    // The ledger reason of OCR word row `i` when the scan stage kept it out of the page's words (P12.6, `sc-fates`): a rule read as a character is a `rule-ghost`, garbage and a dot leader
+    // an `ocr-ghost`; 0 for a word that was kept.
+    let fl: i32 = ow_get(owords, i, owf_flags());
+    if (fl & oe_rule_ghost()) != 0 {
+        return dr_rule_ghost();
+    }
+    if (fl & oe_garbage()) != 0 {
+        return dr_ocr_ghost();
+    }
+    return 0;
+}
+pub fn th_write_ocr(owords: &mut crate::port::Cells, et: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut tt: &mut crate::port::Cells) -> i32 {
+    // The OCR words the scan stage kept out of a scanned page's words (`oe-garbage`, `oe-rule-ghost`: paper texture, handwriting, ruled lines read as characters, dot leaders, a table's rules)
+    // as ledger rows, so that nothing is dropped silently: a run of consecutive such words of one reason on one OCR line is ONE row, its box the union of theirs, its text the words
+    // joined by a space (NFC, ligatures folded, as every ledger text), confidence 700 (an engine's reading), src `ocr`. Answers the rows written.
+    let n: i32 = ow_count(owords);
+    let mut i: i32 = 0;
+    let mut j: i32 = 0;
+    let mut k: i32 = 0;
+    let mut s: i32 = 0;
+    let mut e: i32 = 0;
+    let mut x0: i32 = 0;
+    let mut y0: i32 = 0;
+    let mut x1: i32 = 0;
+    let mut y1: i32 = 0;
+    let mut reason: i32 = 0;
+    let mut lr: i32 = 0;
+    let mut t0: i32 = 0;
+    let mut rows: i32 = 0;
+    while i < n {
+        reason = th_ocr_reason(owords, i);
+        j = i + 1;
+        if reason > 0 {
+            while (j < n) && ((th_ocr_reason(owords, j) == reason) && ((ow_get(owords, j, hd_page()) == ow_get(owords, i, hd_page())) && (ow_get(owords, j, hd_line()) == ow_get(owords, i, hd_line())))) {
+                j += 1;
+            }
+            x0 = ow_get(owords, i, hd_x0());
+            y0 = ow_get(owords, i, hd_y0());
+            x1 = ow_get(owords, i, hd_x1());
+            y1 = ow_get(owords, i, hd_y1());
+            crate::port::cells_drop(tt, 0);
+            k = i;
+            while k < j {
+                if k > i {
+                    crate::port::cells_push(tt, 32);
+                }
+                if ow_get(owords, k, hd_x0()) < x0 {
+                    x0 = ow_get(owords, k, hd_x0());
+                }
+                if ow_get(owords, k, hd_y0()) < y0 {
+                    y0 = ow_get(owords, k, hd_y0());
+                }
+                if ow_get(owords, k, hd_x1()) > x1 {
+                    x1 = ow_get(owords, k, hd_x1());
+                }
+                if ow_get(owords, k, hd_y1()) > y1 {
+                    y1 = ow_get(owords, k, hd_y1());
+                }
+                s = ow_get(owords, k, hd_tstart());
+                e = s + ow_get(owords, k, hd_tlen());
+                while s < e {
+                    crate::port::cells_push(tt, crate::port::cells_at(et, s));
+                    s += 1;
+                }
+                k += 1;
+            }
+            lr = ledger_add(ledger, reason, ow_get(owords, i, hd_page()), x0, y0, x1, y1, 700, sr_ocr());
+            t0 = crate::port::cells_len(text);
+            nz_nfc(tt, 0, crate::port::cells_len(tt), text, tmp, nz_flag_ligatures() + nz_flag_radicals());
+            ledger_set_text(ledger, lr, t0, crate::port::cells_len(text) - t0);
+            rows += 1;
+        }
+        i = j;
+    }
+    return rows;
+}

@@ -24,8 +24,8 @@
 (ns emon.tlhealth
   (:require [emon.lang :refer [I32 I64 Cells i64 i32 add64 mul64]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
-            [emon.model :refer [ledger-add ledger-set-text text-append-cp sr-text sr-hidden-text
-                                dr-clipped dr-offpage dr-invisible dr-watermark]]
+            [emon.model :refer [ledger-add ledger-set-text text-append-cp sr-text sr-hidden-text sr-ocr
+                                dr-clipped dr-offpage dr-invisible dr-watermark dr-ocr-ghost dr-rule-ghost]]
             [emon.normalize :refer [nz-nfc nz-flag-ligatures nz-flag-radicals]]
             [emon.evidence :refer [wd-get wd-set wd-count ln-get ln-count gl-get gl-count im-get im-count mk-artifact-of mk-count
                                    fo-get ep-new ep-get ep-set ep-count ev-page-row ev-floordiv ev-overlap-small ev-baseline-at ev-sin ev-cos
@@ -36,6 +36,7 @@
                                    gf-bx0 gf-by0 gf-bx1 gf-by1 gf-how gf-font gf-size gf-mode gf-fill gf-falpha gf-salpha gf-vis gf-vby
                                    wf-gfirst wf-gcount wf-font wf-src wf-size
                                    mf-page mf-x0 mf-y0 mf-x1 mf-y1 mf-z
+                                   ow-get ow-count owf-flags oe-garbage oe-rule-ghost
                                    fnf-space epf-page epf-width epf-height eg-text-layer ea-words
                                    xt-trust xt-bad-cp xt-overlap xt-gap-anomaly xt-vis xt-mode-class xt-alpha xt-contrast xt-font-health
                                    xt-in-artifact xt-rel-height xt-angle xt-base-dev xt-spacing xt-length xt-edge
@@ -651,5 +652,66 @@
           (nz-nfc tt 0 (cells-len tt) text tmp (+ (nz-flag-ligatures) (nz-flag-radicals)))
           (ledger-set-text ledger lr t0 (- (cells-len text) t0))
           (set rows (+ rows 1))
+          (set i j)))
+    (return rows)))
+
+(defn ^I32 th-ocr-reason [^Cells owords ^I32 i]
+  (comment "The ledger reason of OCR word row `i` when the scan stage kept it out of the page's words (P12.6, `sc-fates`): a rule read as a character is a `rule-ghost`, garbage and a dot leader")
+  (comment "an `ocr-ghost`; 0 for a word that was kept.")
+  (let [^I32 fl (ow-get owords i (owf-flags))]
+    (if (!= (bit-and fl (oe-rule-ghost)) 0) (return (dr-rule-ghost)))
+    (if (!= (bit-and fl (oe-garbage)) 0) (return (dr-ocr-ghost)))
+    (return 0)))
+
+(defn ^:pub ^I32 th-write-ocr [^Cells owords ^Cells et ^:mut ^Cells ledger ^:mut ^Cells text ^:mut ^Cells tmp ^:mut ^Cells tt]
+  (comment "The OCR words the scan stage kept out of a scanned page's words (`oe-garbage`, `oe-rule-ghost`: paper texture, handwriting, ruled lines read as characters, dot leaders, a table's rules)")
+  (comment "as ledger rows, so that nothing is dropped silently: a run of consecutive such words of one reason on one OCR line is ONE row, its box the union of theirs, its text the words")
+  (comment "joined by a space (NFC, ligatures folded, as every ledger text), confidence 700 (an engine's reading), src `ocr`. Answers the rows written.")
+  (let [^I32 n (ow-count owords)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 reason 0
+        ^:mut ^I32 lr 0
+        ^:mut ^I32 t0 0
+        ^:mut ^I32 rows 0]
+    (while (< i n)
+      (do (set reason (th-ocr-reason owords i))
+          (set j (+ i 1))
+          (if (> reason 0)
+            (do (while (and (< j n)
+                            (and (== (th-ocr-reason owords j) reason)
+                                 (and (== (ow-get owords j (hd-page)) (ow-get owords i (hd-page)))
+                                      (== (ow-get owords j (hd-line)) (ow-get owords i (hd-line))))))
+                  (set j (+ j 1)))
+                (set x0 (ow-get owords i (hd-x0)))
+                (set y0 (ow-get owords i (hd-y0)))
+                (set x1 (ow-get owords i (hd-x1)))
+                (set y1 (ow-get owords i (hd-y1)))
+                (cells-drop tt 0)
+                (set k i)
+                (while (< k j)
+                  (do (if (> k i) (cells-push tt 32))
+                      (if (< (ow-get owords k (hd-x0)) x0) (set x0 (ow-get owords k (hd-x0))))
+                      (if (< (ow-get owords k (hd-y0)) y0) (set y0 (ow-get owords k (hd-y0))))
+                      (if (> (ow-get owords k (hd-x1)) x1) (set x1 (ow-get owords k (hd-x1))))
+                      (if (> (ow-get owords k (hd-y1)) y1) (set y1 (ow-get owords k (hd-y1))))
+                      (set s (ow-get owords k (hd-tstart)))
+                      (set e (+ s (ow-get owords k (hd-tlen))))
+                      (while (< s e)
+                        (do (cells-push tt (cells-at et s))
+                            (set s (+ s 1))))
+                      (set k (+ k 1))))
+                (set lr (ledger-add ledger reason (ow-get owords i (hd-page)) x0 y0 x1 y1 700 (sr-ocr)))
+                (set t0 (cells-len text))
+                (nz-nfc tt 0 (cells-len tt) text tmp (+ (nz-flag-ligatures) (nz-flag-radicals)))
+                (ledger-set-text ledger lr t0 (- (cells-len text) t0))
+                (set rows (+ rows 1))))
           (set i j)))
     (return rows)))

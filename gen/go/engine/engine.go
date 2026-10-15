@@ -405,6 +405,7 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 		gfuse.GfWrite(s.Gfa, m.Ledger)
 	}
 	scan.ScTag(m.Nodes, m.Attrs, m.Text, m.Regions, m.Pages, d.Mask, c.Ocr)
+	tlhealth.ThWriteOcr(ev.Owords, d.Et, m.Ledger, m.Text, s.Tmp, s.Ttx)
 	rasterplan.RpSettings(m.Nodes, m.Attrs, m.Text, c.Scope)
 	if d.Fused == 1 {
 		arbiter.ArWrite(s.Afa, ev.Owords, d.Et, m.Ledger, m.Text, s.Tmp, s.Ttx)

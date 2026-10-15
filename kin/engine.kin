@@ -32,7 +32,7 @@
             [emon.pdfannot :refer [pa-run]]
             [emon.rasterin :refer [rs-sniff rs-none rs-png rs-jpeg rs-doc rs-page]]
             [emon.planloop :refer [ds-undecodable ds-unsupported-image ds-no-pages ds-content-failed]]
-            [emon.tlhealth :refer [th-run th-append th-write]]
+            [emon.tlhealth :refer [th-run th-append th-write th-write-ocr]]
             [emon.gfuse :refer [gf-doc gfx-mode gf-fuse gf-write]]
             [emon.health :refer [hl-doc]]
             [emon.sealmark :refer [sm-find sm-write]]
@@ -396,6 +396,8 @@
         ;; the vector rules graphics fusion dropped (P7.G, row 513): ledger rows, with no text
         (gf-write (fd s gfa) (fd m ledger))))
     (sc-tag (fd m nodes) (fd m attrs) (fd m text) (fd m regions) (fd m pages) (fd d mask) (fd c ocr))
+    ;; the OCR words the scan stage kept out of a scanned page's words (garbage, leaders, a table's rules read as characters, P12.6): ledger rows, never silently dropped
+    (th-write-ocr (fd ev owords) (fd d et) (fd m ledger) (fd m text) (fd s tmp) (fd s ttx))
     (rp-settings (fd m nodes) (fd m attrs) (fd m text) (fd c scope))
     ;; fusion's own: the OCR groups dropped as ghosts become ledger rows, and the Model says where each block's words came from (P7.3)
     (if (== (fd d fused) 1)

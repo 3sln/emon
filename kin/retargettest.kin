@@ -8,9 +8,9 @@
             [emon.evidence :refer [vw-new vk-render
                                    or-new or-set or-get orf-lfirst orf-lcount orf-wfirst orf-wcount orf-osd orf-oconf
                                    ol-new ol-set ol-get ow-new ow-count ol-count olf-px olf-py olf-pw olf-ph lh-first lh-count
-                                   fe-new fe-set ea-owords xo-body-share]]
+                                   fe-new fe-set ea-owords xo-body-share wd-count wd-get ln-get hd-x0 wf-gap lh-x1]]
             [emon.norm :refer [nm-view nm-paper-gray]]
-            [emon.scan :refer [sc-prep sc-sel-base sc-sel-max sc-aux-base sc-share-base sc-partner-base]]
+            [emon.scan :refer [sc-prep sc-sel-base sc-sel-max sc-aux-base sc-share-base sc-partner-base sc-xtra-base sc-emit-sel]]
             [emon.retarget :refer [rt-prep rt-decide rt-turns rt-erase-into rt-ask-view rt-adopt rt-line-state
                                    rtp-q rtp-body rtp-erased rtp-nl rtp-nc rtp-cell0 rtp-line0 rtp-brun rtp-primary rtp-hash rt-lines rt-line-conf rt-max rt-cap rt-permille]]
             [kin.lang :refer [defn return let set while if do comment
@@ -47,6 +47,15 @@
     (ol-set olines l (olf-pw) 1100)
     (ol-set olines l (olf-ph) 100)
     (return l)))
+
+(defn ^I32 rtt-adopt [^:mut ^Cells rtp ^Cells oruns ^I32 fr ^Cells olines ^Cells owords ^:mut ^Cells scr]
+  (comment "`rt-adopt` with a text of four digits, which every word of `rtt-word` spells (it starts at 0 and is 4 long).")
+  (let [^Cells c (new-cells)]
+    (cells-push c 49)
+    (cells-push c 50)
+    (cells-push c 51)
+    (cells-push c 52)
+    (return (rt-adopt rtp oruns fr olines owords c scr))))
 
 (defn ^I32 rtt-run [^:mut ^Cells oruns ^Cells olines ^Cells owords ^I32 l0 ^I32 w0]
   (comment "A run over the lines [l0, now) and the words [w0, now).")
@@ -184,12 +193,82 @@
         (assert-eq (cells-at scr (+ (sc-partner-base) 1)) 4 "that line")
         (assert-eq (rt-line-state oruns olines owords rtp scr 2 2 br 0 4) 0 "a line with a little foreign ink under it stays")
         (assert-eq (rt-line-state oruns olines owords rtp scr 3 3 br 0 4) 2 "a line mostly foreign ink that the body-ink run did not read is a ghost")
-        (assert-eq (rt-adopt rtp oruns fr olines owords scr) 4 "four lines: the first, the second's reading, the third, and the line the first pass did not read; the ghost is dropped")
+        (assert-eq (rtt-adopt rtp oruns fr olines owords scr) 4 "four lines: the first, the second's reading, the third, and the line the first pass did not read; the ghost is dropped")
         (assert-eq (cells-at scr (sc-sel-base)) 0 "the first pass's first line")
         (assert-eq (cells-at scr (+ (sc-sel-base) 1)) 4 "then the body-ink run's line where the second was")
         (assert-eq (cells-at scr (+ (sc-sel-base) 2)) 2 "then the third, in the first pass's order")
         (assert-eq (cells-at scr (+ (sc-sel-base) 3)) 5 "and the body-ink run's line over nothing, below them where it lies")
         (assert-eq (cells-at rtp (rtp-primary)) fr "the first pass is the page's reading")))))
+
+(defn ^I32 rtt-line3 [^:mut ^Cells olines ^:mut ^Cells owords ^:mut ^Cells feats ^I32 y0 ^I32 c1 ^I32 c2 ^I32 c3]
+  (comment "A line of three words at height y0: 100-600, 700-1200 and 1300-1700 (a right-aligned column), with these confidences; answers its row.")
+  (let [^I32 first (ow-count owords)
+        ^I32 l (ol-count olines)]
+    (rtt-word owords feats 100 y0 600 (+ y0 100) c1 l)
+    (rtt-word owords feats 700 y0 1200 (+ y0 100) c2 l)
+    (rtt-word owords feats 1300 y0 1700 (+ y0 100) c3 l)
+    (ol-new olines 1 100 y0 1700 (+ y0 100) 100 (+ y0 100) 1700 (+ y0 100) 0 0 first 3)
+    (ol-set olines l (olf-px) 100)
+    (ol-set olines l (olf-py) y0)
+    (ol-set olines l (olf-pw) 1600)
+    (ol-set olines l (olf-ph) 100)
+    (return l)))
+
+(deftest test-a-second-pass-that-reads-a-column-the-first-missed-has-that-column-read-with-the-line
+  (comment "P12.6, the thermal receipt: the first pass stopped before the right-aligned amount column; the body-ink pass read the line as far as the amounts")
+  (let [^Cells oruns (new-cells)
+        ^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells rtp (new-cells)
+        ^Cells scr (new-cells)
+        ^Cells words (new-cells)
+        ^Cells lines (new-cells)
+        ^Cells etext (new-cells)]
+    (sc-prep scr)
+    (cells-push etext 49)
+    (cells-push etext 50)
+    (cells-push etext 51)
+    (cells-push etext 52)
+    (rtt-line olines owords feats 0 900)
+    (let [^I32 fr (rtt-run oruns olines owords 0 0)
+          ^I32 l1 (ol-count olines)
+          ^I32 w1 (ow-count owords)]
+      (rtt-line3 olines owords feats 0 900 900 800)
+      (let [^I32 br (rtt-run oruns olines owords l1 w1)]
+        (rt-prep rtp)
+        (cells-set rtp (rtp-brun) br)
+        (cells-set scr (sc-share-base) 0)
+        (assert-eq (rt-adopt rtp oruns fr olines owords etext scr) 1 "one line: the first pass's, which stays: no foreign ink under it")
+        (assert-eq (cells-at scr (+ (sc-xtra-base) 1)) (+ l1 1) "and the body-ink line over it, whose third word lies over none of its own, is read with it")
+        (assert-eq (sc-emit-sel olines owords (new-cells) 1 1 0 scr words lines etext (new-cells) (new-cells) (new-cells)) 1 "one line is emitted")
+        (assert-eq (wd-count words) 3 "of three words: the two the first pass read, and the column it did not")
+        (assert-eq (wd-get words 0 (hd-x0)) 100 "the first")
+        (assert-eq (wd-get words 1 (hd-x0)) 700 "the second")
+        (assert-eq (wd-get words 2 (hd-x0)) 1300 "and the column, after them")
+        (assert-eq (wd-get words 1 (wf-gap)) 100 "the gap of the second is to the column")
+        (assert-eq (ln-get lines 0 (lh-x1)) 1700 "the line is as long as the column")
+        (assert-eq (ln-get lines 0 (lh-count)) 3 "of three words")))))
+
+(deftest test-a-second-pass-word-that-is-unsure-or-lies-over-a-word-of-the-first-pass-is-not-added
+  (let [^Cells oruns (new-cells)
+        ^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells rtp (new-cells)
+        ^Cells scr (new-cells)]
+    (sc-prep scr)
+    (rtt-line olines owords feats 0 900)
+    (let [^I32 fr (rtt-run oruns olines owords 0 0)
+          ^I32 l1 (ol-count olines)
+          ^I32 w1 (ow-count owords)]
+      (rtt-line3 olines owords feats 0 900 900 300)
+      (let [^I32 br (rtt-run oruns olines owords l1 w1)]
+        (rt-prep rtp)
+        (cells-set rtp (rtp-brun) br)
+        (cells-set scr (sc-share-base) 0)
+        (assert-eq (rtt-adopt rtp oruns fr olines owords scr) 1 "the first pass's line")
+        (assert-eq (cells-at scr (+ (sc-xtra-base) 1)) 0 "the column read at a confidence of 300 is not added: the first two words lie over the first pass's own")))))
 
 (deftest test-a-line-is-read-again-by-its-cells-only-when-no-text-is-lost-and-they-are-surer
   (let [^Cells oruns (new-cells)
@@ -245,6 +324,6 @@
         (cells-set rtp (rtp-brun) br)
         (assert-eq (rt-cap 1600) (sc-sel-max) "a count over the region is the region's")
         (assert-eq (rt-cap 7) 7 "and one under it is its own")
-        (let [^I32 n (rt-adopt rtp oruns fr olines owords scr)]
+        (let [^I32 n (rtt-adopt rtp oruns fr olines owords scr)]
           (assert-that (<= n (sc-sel-max)) "the selection holds no more than the scratch has room for")
           (assert-that (> n 1400) "and the 1500 lines it counts are read, bar the few that lie over the first pass's line"))))))

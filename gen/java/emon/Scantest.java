@@ -411,4 +411,430 @@ public final class Scantest {
         emon.Testport.assertEq(Evidence.wdGet(wd, 4, Evidence.wfSize()), 1117, "and the last body line");
         emon.Testport.assertEq(Evidence.wdGet(wd, 3, Evidence.wfSize()), 1676, "the heading is its own size: its x-height (30 px) times the page's ratio of ascender line to x-height (1.7)");
     }
+    public static int pcps(emon.Port.Cells c, int a, int b, int d, int e, int f, int g, int h, int i, int j, int k) {
+        // Push these code points (a 0 ends them) onto `c`; answers how many.
+        int n = emon.Port.cellsLen(c);
+        if (a > 0) {
+            emon.Port.cellsPush(c, a);
+        }
+        if (b > 0) {
+            emon.Port.cellsPush(c, b);
+        }
+        if (d > 0) {
+            emon.Port.cellsPush(c, d);
+        }
+        if (e > 0) {
+            emon.Port.cellsPush(c, e);
+        }
+        if (f > 0) {
+            emon.Port.cellsPush(c, f);
+        }
+        if (g > 0) {
+            emon.Port.cellsPush(c, g);
+        }
+        if (h > 0) {
+            emon.Port.cellsPush(c, h);
+        }
+        if (i > 0) {
+            emon.Port.cellsPush(c, i);
+        }
+        if (j > 0) {
+            emon.Port.cellsPush(c, j);
+        }
+        if (k > 0) {
+            emon.Port.cellsPush(c, k);
+        }
+        return emon.Port.cellsLen(c) - n;
+    }
+    public static int txtOf(emon.Port.Cells c, int a, int b, int d, int e, int f, int g, int h, int i, int j, int k) {
+        // A fresh text of these code points; answers where it starts in `c`.
+        int s = emon.Port.cellsLen(c);
+        pcps(c, a, b, d, e, f, g, h, i, j, k);
+        return s;
+    }
+    public static int tImpl(emon.Port.Cells t, int a, int b, int d, int e, int f, int g, int h, int i, int j, int k) {
+        // `sc-implausible` of the text these code points spell (a 0 ends them).
+        int s = txtOf(t, a, b, d, e, f, g, h, i, j, k);
+        return Scan.scImplausible(t, s, emon.Port.cellsLen(t) - s);
+    }
+    public static int tLeader(emon.Port.Cells t, int a, int b, int d, int e, int f, int g, int h, int i, int j, int k) {
+        int s = txtOf(t, a, b, d, e, f, g, h, i, j, k);
+        return Scan.scLeader(t, s, emon.Port.cellsLen(t) - s);
+    }
+    public static int tAmount(emon.Port.Cells t, int a, int b, int d, int e, int f, int g, int h, int i, int j, int k) {
+        int s = txtOf(t, a, b, d, e, f, g, h, i, j, k);
+        return Scan.scAmountLike(t, s, emon.Port.cellsLen(t) - s);
+    }
+    public static int tGroups(emon.Port.Cells t, int a, int b, int d, int e, int f, int g, int h, int i, int j, int k) {
+        int s = txtOf(t, a, b, d, e, f, g, h, i, j, k);
+        return Scan.scGroupsFix(t, s, emon.Port.cellsLen(t) - s);
+    }
+    public static void testAWordOfOddGlyphsOrARepeatedFewCharactersIsImplausible() {
+        emon.Port.Cells t = emon.Port.newCells();
+        emon.Testport.assertEq(tImpl(t, 124, 0, 0, 0, 0, 0, 0, 0, 0, 0), 1, "a lone vertical bar is no word");
+        emon.Testport.assertEq(tImpl(t, 167, 0, 0, 0, 0, 0, 0, 0, 0, 0), 1, "a lone section sign is none");
+        emon.Testport.assertEq(tImpl(t, 97, 0, 0, 0, 0, 0, 0, 0, 0, 0), 0, "a lone letter is one");
+        emon.Testport.assertEq(tImpl(t, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0), 0, "and a lone digit");
+        emon.Testport.assertEq(tImpl(t, 120, 123, 121, 125, 0, 0, 0, 0, 0, 0), 1, "two odd glyphs");
+        emon.Testport.assertEq(tImpl(t, 97, 98, 126, 99, 49, 0, 0, 0, 0, 0), 1, "letters, digits and an odd glyph together");
+        emon.Testport.assertEq(tImpl(t, 101, 100, 101, 100, 101, 100, 101, 100, 101, 100), 1, "ten characters of two different ones (a texture read as `ededededed`)");
+        emon.Testport.assertEq(tImpl(t, 80, 101, 116, 101, 116, 101, 116, 100, 101, 100), 0, "ten of four different ones are just odd");
+        emon.Testport.assertEq(tImpl(t, 104, 101, 108, 108, 111, 0, 0, 0, 0, 0), 0, "a word");
+        emon.Testport.assertEq(tImpl(t, 49, 44, 48, 56, 57, 46, 53, 56, 0, 0), 0, "an amount");
+        emon.Testport.assertEq(tImpl(t, 45, 45, 45, 45, 0, 0, 0, 0, 0, 0), 1, "four marks and no letter or digit");
+    }
+    public static void testADotLeaderReadAsCharactersIsOne() {
+        emon.Port.Cells t = emon.Port.newCells();
+        emon.Testport.assertEq(tLeader(t, 46, 46, 46, 0, 0, 0, 0, 0, 0, 0), 1, "three dots");
+        emon.Testport.assertEq(tLeader(t, 46, 46, 0, 0, 0, 0, 0, 0, 0, 0), 0, "two are an ellipsis' remains");
+        emon.Testport.assertEq(tLeader(t, 50, 50, 46, 50, 50, 50, 50, 0, 0, 0), 1, "`22.2222`: a digit repeated, dots among it, and no cents");
+        emon.Testport.assertEq(tLeader(t, 50, 50, 46, 50, 50, 0, 0, 0, 0, 0), 0, "`22.22` is an amount");
+        emon.Testport.assertEq(tLeader(t, 50, 46, 56, 48, 0, 0, 0, 0, 0, 0), 0, "`2.80` is one");
+        emon.Testport.assertEq(tLeader(t, 49, 46, 50, 50, 50, 50, 50, 0, 0, 0), 0, "a digit that is not repeated is a number");
+    }
+    public static void testAnAmountIsDigitsWithSeparatorsAndMaybeAMinusOrParentheses() {
+        emon.Port.Cells t = emon.Port.newCells();
+        emon.Testport.assertEq(tAmount(t, 50, 53, 46, 49, 53, 0, 0, 0, 0, 0), 1, "25.15");
+        emon.Testport.assertEq(tAmount(t, 40, 51, 51, 49, 44, 50, 55, 57, 41, 0), 1, "(331,279)");
+        emon.Testport.assertEq(tAmount(t, 45, 52, 46, 53, 48, 0, 0, 0, 0, 0), 1, "-4.50");
+        emon.Testport.assertEq(tAmount(t, 97, 98, 99, 0, 0, 0, 0, 0, 0, 0), 0, "letters");
+        emon.Testport.assertEq(tAmount(t, 49, 50, 0, 0, 0, 0, 0, 0, 0, 0), 0, "two digits are no amount");
+        emon.Testport.assertEq(tAmount(t, 83, 50, 53, 46, 49, 53, 0, 0, 0, 0), 0, "an S before it is none");
+    }
+    public static void testThousandsReadWithPeriodsAreFoundAndAEuropeanWholeNumberIsNot() {
+        emon.Port.Cells t = emon.Port.newCells();
+        emon.Testport.assertEq(tGroups(t, 52, 46, 57, 56, 53, 46, 57, 0, 0, 0), 1, "4.985.9");
+        emon.Testport.assertEq(tGroups(t, 51, 51, 46, 52, 49, 52, 46, 49, 0, 0), 1, "33.414.1");
+        emon.Testport.assertEq(tGroups(t, 49, 46, 50, 51, 52, 46, 53, 54, 55, 0), 0, "1.234.567: the last group is of three: a whole number");
+        emon.Testport.assertEq(tGroups(t, 52, 44, 57, 56, 53, 46, 57, 0, 0, 0), 0, "4,985.9 is right as it is");
+        emon.Testport.assertEq(tGroups(t, 50, 46, 56, 48, 0, 0, 0, 0, 0, 0), 0, "2.80 has one period");
+        emon.Testport.assertEq(tGroups(t, 49, 50, 46, 51, 52, 53, 54, 46, 55, 0), 0, "a group of four is no group");
+    }
+    public static int stWord(emon.Port.Cells owords, emon.Port.Cells etext, int x0, int x1, int conf, int line, int a, int b, int c, int d, int e, int f, int g, int h) {
+        // An OCR word of page 1 from x0 to x1 (100 centipoints high) of OCR line `line`, with this text and confidence; answers its row.
+        int ts = emon.Port.cellsLen(etext);
+        int n = pcps(etext, a, b, c, d, e, f, g, h, 0, 0);
+        return Evidence.owNew(owords, 1, x0, 0, x1, 100, x0, 100, x1, 100, 0, 0, ts, n, line, conf, -1);
+    }
+    public static int stLine(emon.Port.Cells olines, int x0, int x1, int first, int count) {
+        return Evidence.olNew(olines, 1, x0, 0, x1, 100, x0, 100, x1, 100, 0, 0, first, count);
+    }
+    public static int stEmit(emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells etext, emon.Port.Cells rules, int nsel) {
+        // The lines 0 to nsel - 1 of `olines` through `sc-emit-sel`, as they are: nothing of a body-ink pass. Answers the lines made.
+        emon.Port.Cells scr = emon.Port.newCells();
+        Scan.scPrep(scr);
+        int k = 0;
+        while (k < nsel) {
+            emon.Port.cellsSet(scr, Scan.scSelBase() + k, k);
+            k += 1;
+        }
+        return Scan.scEmitSel(olines, owords, emon.Port.newCells(), nsel, 1, 0, scr, words, lines, etext, rules, emon.Port.newCells(), emon.Port.newCells());
+    }
+    public static void testAWordOfNoConfidenceAndOddGlyphsAloneIsKeptOutAndFlagged() {
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        stWord(owords, et, 100, 600, 900, 0, 84, 111, 116, 97, 108, 0, 0, 0);
+        stWord(owords, et, 700, 900, 120, 0, 126, 124, 0, 0, 0, 0, 0, 0);
+        stLine(olines, 100, 900, 0, 2);
+        stWord(owords, et, 100, 600, 100, 1, 126, 0, 0, 0, 0, 0, 0, 0);
+        stLine(olines, 100, 600, 2, 1);
+        emon.Testport.assertEq(stEmit(olines, owords, words, lines, et, emon.Port.newCells(), 2), 1, "the first line stays; the second held nothing but a tilde and is no line");
+        emon.Testport.assertEq(Evidence.wdCount(words), 1, "one word: the line's `Total`, since a word of confidence 120 and two odd glyphs in a line of two is garbage");
+        emon.Testport.assertEq(Evidence.owGet(owords, 1, Evidence.owfFlags()) & Evidence.oeGarbage(), Evidence.oeGarbage(), "the engine's row says it was kept out");
+        emon.Testport.assertEq(Evidence.owGet(owords, 2, Evidence.owfFlags()) & Evidence.oeGarbage(), Evidence.oeGarbage(), "and so does the lone tilde's");
+        emon.Testport.assertEq(Evidence.owGet(owords, 0, Evidence.owfFlags()) & Evidence.oeGarbage(), 0, "the good word's does not");
+    }
+    public static void testAnUnsureButPlausibleWordInAGoodLineStays() {
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        stWord(owords, et, 100, 600, 900, 0, 84, 111, 116, 97, 108, 0, 0, 0);
+        stWord(owords, et, 700, 900, 150, 0, 99, 111, 108, 97, 0, 0, 0, 0);
+        stWord(owords, et, 1000, 1400, 920, 0, 66, 111, 120, 0, 0, 0, 0, 0);
+        stLine(olines, 100, 1400, 0, 3);
+        emon.Testport.assertEq(stEmit(olines, owords, words, lines, et, emon.Port.newCells(), 1), 1, "one line");
+        emon.Testport.assertEq(Evidence.wdCount(words), 3, "all three words: a word the engine is unsure of is not garbage unless it also is implausible and alone or among such");
+    }
+    public static void testALineOfUnsureWordsIsTextureAndIsKeptOut() {
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        stWord(owords, et, 100, 300, 272, 0, 82, 97, 101, 0, 0, 0, 0, 0);
+        stWord(owords, et, 400, 600, 201, 0, 111, 101, 0, 0, 0, 0, 0, 0);
+        stWord(owords, et, 700, 900, 294, 0, 101, 101, 0, 0, 0, 0, 0, 0);
+        stLine(olines, 100, 900, 0, 3);
+        stWord(owords, et, 100, 600, 900, 1, 71, 111, 111, 100, 0, 0, 0, 0);
+        stLine(olines, 100, 600, 3, 1);
+        emon.Testport.assertEq(stEmit(olines, owords, words, lines, et, emon.Port.newCells(), 2), 1, "the first line, three words of a mean confidence of 250 and none over 450, is texture; the second stays");
+        emon.Testport.assertEq(Evidence.wdCount(words), 1, "one word");
+        emon.Testport.assertEq(Evidence.wdGet(words, 0, Evidence.hdTlen()), 4, "`Good`");
+    }
+    public static void testADotLeaderIsKeptOutWhateverItsConfidence() {
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        stWord(owords, et, 100, 600, 900, 0, 84, 111, 116, 97, 108, 0, 0, 0);
+        stWord(owords, et, 700, 1300, 950, 0, 50, 50, 46, 50, 50, 50, 50, 0);
+        stWord(owords, et, 1400, 1800, 930, 0, 49, 46, 56, 48, 0, 0, 0, 0);
+        stLine(olines, 100, 1800, 0, 3);
+        emon.Testport.assertEq(stEmit(olines, owords, words, lines, et, emon.Port.newCells(), 1), 1, "one line");
+        emon.Testport.assertEq(Evidence.wdCount(words), 2, "of two words: `22.2222` is a leader and `1.80` is an amount");
+        emon.Testport.assertEq(Evidence.owGet(owords, 1, Evidence.owfFlags()) & Evidence.oeGarbage(), Evidence.oeGarbage(), "the leader's row is flagged");
+    }
+    public static int stRule(emon.Port.Cells rules, int x, int y0, int y1) {
+        // A vertical rule of page 1 at x from y0 to y1, 10 centipoints thick; answers its row.
+        int r = Evidence.rlNew(rules, 1, x - 5, y0, x + 5, y1, 0);
+        Evidence.rlSet(rules, r, Evidence.rlfLx0(), x);
+        Evidence.rlSet(rules, r, Evidence.rlfLy0(), y0);
+        Evidence.rlSet(rules, r, Evidence.rlfLx1(), x);
+        Evidence.rlSet(rules, r, Evidence.rlfLy1(), y1);
+        Evidence.rlSet(rules, r, Evidence.rlfThick(), 10);
+        return r;
+    }
+    public static void testATableRuleReadAsACharacterIsKeptOutWhereItLiesOnARuleAndOnlyThere() {
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells rules = emon.Port.newCells();
+        stRule(rules, 1000, 0, 2000);
+        stWord(owords, et, 100, 600, 900, 0, 84, 111, 116, 97, 108, 0, 0, 0);
+        stWord(owords, et, 990, 1010, 800, 0, 124, 0, 0, 0, 0, 0, 0, 0);
+        stWord(owords, et, 1100, 1500, 900, 0, 49, 50, 46, 48, 48, 0, 0, 0);
+        stLine(olines, 100, 1500, 0, 3);
+        stWord(owords, et, 100, 600, 900, 1, 78, 97, 109, 101, 0, 0, 0, 0);
+        stWord(owords, et, 1400, 1420, 800, 1, 73, 0, 0, 0, 0, 0, 0, 0);
+        stLine(olines, 100, 1420, 3, 2);
+        emon.Testport.assertEq(stEmit(olines, owords, words, lines, et, rules, 2), 2, "two lines");
+        emon.Testport.assertEq(Evidence.wdCount(words), 4, "four words of the five: the bar on the rule at 1000 is out; the `I` at 1400 is on no rule and is a word");
+        emon.Testport.assertEq(Evidence.owGet(owords, 1, Evidence.owfFlags()) & Evidence.oeRuleGhost(), Evidence.oeRuleGhost(), "the bar's row is flagged as a rule's ghost");
+        emon.Testport.assertEq(Evidence.owGet(owords, 4, Evidence.owfFlags()) & Evidence.oeRuleGhost(), 0, "the lone `I` away from a rule is not");
+    }
+    public static void testABarGluedToTheEndOfAnAmountOnARuleIsCutOffAndTheEnginesTextStays() {
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells osyms = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells rules = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        stRule(rules, 1000, 0, 2000);
+        stWord(owords, et, 100, 1010, 900, 0, 49, 44, 50, 48, 46, 53, 48, 124);
+        stLine(olines, 100, 1010, 0, 1);
+        Evidence.osNew(osyms, 1, 100, 0, 400, 100, 49, 0, 1, 0);
+        Evidence.osNew(osyms, 1, 996, 0, 1004, 100, 124, 7, 1, 0);
+        Evidence.owSet(owords, 0, Evidence.owfSfirst(), 0);
+        Evidence.owSet(owords, 0, Evidence.owfScount(), 2);
+        Scan.scPrep(scr);
+        emon.Port.cellsSet(scr, Scan.scSelBase(), 0);
+        emon.Testport.assertEq(Scan.scEmitSel(olines, owords, osyms, 1, 1, 0, scr, words, lines, et, rules, emon.Port.newCells(), emon.Port.newCells()), 1, "one line");
+        emon.Testport.assertEq(Evidence.wdGet(words, 0, Evidence.hdTlen()), 7, "`1,20.50`: the bar is cut off");
+        emon.Testport.assertEq(Evidence.owGet(owords, 0, Evidence.hdTlen()), 8, "and the engine's row still says all eight characters");
+        emon.Testport.assertEq(Evidence.owGet(owords, 0, Evidence.owfFlags()) & Evidence.oeCorrected(), Evidence.oeCorrected(), "flagged as corrected");
+    }
+    public static void testThousandsReadWithPeriodsGetTheirCommasBackInThePagesWordsAndNotInTheEvidence() {
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        stWord(owords, et, 100, 700, 900, 0, 52, 46, 57, 56, 53, 46, 57, 0);
+        stLine(olines, 100, 700, 0, 1);
+        emon.Testport.assertEq(stEmit(olines, owords, words, lines, et, emon.Port.newCells(), 1), 1, "one line");
+        int ts = Evidence.wdGet(words, 0, Evidence.hdTstart());
+        emon.Testport.assertEq(Evidence.wdGet(words, 0, Evidence.hdTlen()), 7, "seven characters");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, ts), 52, "4");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, ts + 1), 44, "a comma where the first period was");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, ts + 5), 46, "and the last period, the decimal point, kept");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.owGet(owords, 0, Evidence.hdTstart())), 52, "the evidence keeps the engine's text");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.owGet(owords, 0, Evidence.hdTstart()) + 1), 46, "with its period");
+        emon.Testport.assertEq(Evidence.owGet(owords, 0, Evidence.owfFlags()) & Evidence.oeCorrected(), Evidence.oeCorrected(), "and says it was corrected");
+    }
+    public static void testAnSOrASectionSignAloneBeforeAnAmountOfItsHeightIsADollarAndOnlyThen() {
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        stWord(owords, et, 100, 300, 800, 0, 83, 0, 0, 0, 0, 0, 0, 0);
+        stWord(owords, et, 340, 900, 900, 0, 50, 53, 46, 49, 53, 0, 0, 0);
+        stLine(olines, 100, 900, 0, 2);
+        stWord(owords, et, 100, 300, 800, 1, 167, 0, 0, 0, 0, 0, 0, 0);
+        stWord(owords, et, 340, 900, 900, 1, 49, 44, 50, 48, 48, 0, 0, 0);
+        stLine(olines, 100, 900, 2, 2);
+        stWord(owords, et, 100, 300, 800, 2, 83, 0, 0, 0, 0, 0, 0, 0);
+        stWord(owords, et, 1600, 2100, 900, 2, 50, 53, 46, 49, 53, 0, 0, 0);
+        stLine(olines, 100, 2100, 4, 2);
+        stWord(owords, et, 100, 300, 800, 3, 83, 0, 0, 0, 0, 0, 0, 0);
+        stWord(owords, et, 340, 900, 900, 3, 50, 53, 0, 0, 0, 0, 0, 0);
+        stLine(olines, 100, 900, 6, 2);
+        emon.Testport.assertEq(stEmit(olines, owords, words, lines, et, emon.Port.newCells(), 4), 4, "four lines");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.wdGet(words, 0, Evidence.hdTstart())), 36, "`S 25.15`: a dollar");
+        emon.Testport.assertEq(Evidence.wdGet(words, 0, Evidence.hdTlen()), 1, "one character");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.wdGet(words, 2, Evidence.hdTstart())), 36, "`§ 1,200`: a dollar");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.wdGet(words, 4, Evidence.hdTstart())), 83, "an S far from the amount is an S");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.wdGet(words, 6, Evidence.hdTstart())), 83, "an S before a number with no cents or separator is an S");
+        emon.Testport.assertEq(Evidence.owGet(owords, 0, Evidence.owfFlags()) & Evidence.oeCorrected(), Evidence.oeCorrected(), "the first is flagged as corrected");
+        emon.Testport.assertEq(Evidence.owGet(owords, 4, Evidence.owfFlags()) & Evidence.oeCorrected(), 0, "and the S far from its amount is not");
+    }
+    public static int dotScene(int dot, int above, int firstw) {
+        // The word `480` of a thermal receipt (0.04 inch of it a dot the engine lost: its first symbol's box is wider than the others', it takes the dot in) emitted with a dot component
+        // of the body layer between the first two digits (`dot` 1), a stroke of body ink above that dot in its column (`above` 1: a broken digit, not a dot), and the first symbol's width
+        // (`firstw`: 504 is wider, 340 is as wide as the others). Answers how long the emitted word is (3 or 4); its text is left in the shared text, after the engine's.
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells osyms = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells comps = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
+        emon.Port.cellsPush(et, 52);
+        emon.Port.cellsPush(et, 56);
+        emon.Port.cellsPush(et, 48);
+        Evidence.owNew(owords, 1, 9480, 15912, 10752, 16464, 9480, 16464, 10752, 16464, 0, 0, 0, 3, 0, 900, -1);
+        Evidence.olNew(olines, 1, 9480, 15912, 10752, 16464, 9480, 16464, 10752, 16464, 0, 0, 0, 1);
+        Evidence.osNew(osyms, 1, 9480, 15912, 9480 + firstw, 16464, 52, 0, 1, 0);
+        Evidence.osNew(osyms, 1, 10032, 15912, 10368, 16440, 56, 1, 1, 0);
+        Evidence.osNew(osyms, 1, 10392, 15912, 10752, 16440, 48, 2, 1, 0);
+        Evidence.owSet(owords, 0, Evidence.owfSfirst(), 0);
+        Evidence.owSet(owords, 0, Evidence.owfScount(), 3);
+        Evidence.ikNew(inks, 1, 0);
+        Evidence.ikSet(inks, 0, Evidence.ikfRole(), Evidence.irBody());
+        if (dot == 1) {
+            int r = Evidence.coNew(comps, 1, 9912, 16344, 9984, 16440, 0);
+            Evidence.coSet(comps, r, Evidence.cfConf(), 700);
+            Evidence.coSet(comps, r, Evidence.cfInk(), 0);
+        }
+        if (above == 1) {
+            int r = Evidence.coNew(comps, 1, 9900, 15912, 10000, 16200, 0);
+            Evidence.coSet(comps, r, Evidence.cfConf(), 700);
+            Evidence.coSet(comps, r, Evidence.cfInk(), 0);
+        }
+        emon.Port.Cells scr = emon.Port.newCells();
+        Scan.scPrep(scr);
+        emon.Port.cellsSet(scr, Scan.scSelBase(), 0);
+        Scan.scEmitSel(olines, owords, osyms, 1, 1, 0, scr, words, lines, et, emon.Port.newCells(), comps, inks);
+        return Evidence.wdGet(words, 0, Evidence.hdTlen());
+    }
+    public static void testADecimalPointTheEngineLostAndThePageShowsIsPutBackAndOnlyWhereThePageShowsIt() {
+        emon.Testport.assertEq(dotScene(1, 0, 504), 4, "`480` with a dot between the 4 and the 8, and the 4's box wider than the 8's: `4.80`");
+        emon.Testport.assertEq(dotScene(0, 0, 504), 3, "no dot in the pixels: `480` stays, a wide box is not evidence enough");
+        emon.Testport.assertEq(dotScene(1, 0, 340), 3, "a dot in the pixels and no box that took it in: `480` stays (a speck between two digits is not a decimal point)");
+        emon.Testport.assertEq(dotScene(1, 1, 504), 3, "the speck has ink above it in its column, so it is a part of a broken digit: `480` stays");
+    }
+    public static void testThePointPutBackIsInThePagesWordsAndTheEnginesRowKeepsItsText() {
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells osyms = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells comps = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        emon.Port.cellsPush(et, 52);
+        emon.Port.cellsPush(et, 56);
+        emon.Port.cellsPush(et, 48);
+        Evidence.owNew(owords, 1, 9480, 15912, 10752, 16464, 9480, 16464, 10752, 16464, 0, 0, 0, 3, 0, 900, -1);
+        Evidence.olNew(olines, 1, 9480, 15912, 10752, 16464, 9480, 16464, 10752, 16464, 0, 0, 0, 1);
+        Evidence.osNew(osyms, 1, 9480, 15912, 9984, 16464, 52, 0, 1, 0);
+        Evidence.osNew(osyms, 1, 10032, 15912, 10368, 16440, 56, 1, 1, 0);
+        Evidence.osNew(osyms, 1, 10392, 15912, 10752, 16440, 48, 2, 1, 0);
+        Evidence.owSet(owords, 0, Evidence.owfSfirst(), 0);
+        Evidence.owSet(owords, 0, Evidence.owfScount(), 3);
+        Evidence.ikNew(inks, 1, 0);
+        Evidence.ikSet(inks, 0, Evidence.ikfRole(), Evidence.irBody());
+        int r = Evidence.coNew(comps, 1, 9912, 16344, 9984, 16440, 0);
+        Evidence.coSet(comps, r, Evidence.cfConf(), 700);
+        Evidence.coSet(comps, r, Evidence.cfInk(), 0);
+        Scan.scPrep(scr);
+        emon.Port.cellsSet(scr, Scan.scSelBase(), 0);
+        Scan.scEmitSel(olines, owords, osyms, 1, 1, 0, scr, words, lines, et, emon.Port.newCells(), comps, inks);
+        int ts = Evidence.wdGet(words, 0, Evidence.hdTstart());
+        emon.Testport.assertEq(emon.Port.cellsAt(et, ts), 52, "4");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, ts + 1), 46, "the point");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, ts + 2), 56, "8");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, ts + 3), 48, "0");
+        emon.Testport.assertEq(Evidence.owGet(owords, 0, Evidence.hdTlen()), 3, "the evidence's word is still three characters");
+        emon.Testport.assertEq(Evidence.owGet(owords, 0, Evidence.owfFlags()) & Evidence.oeCorrected(), Evidence.oeCorrected(), "and is flagged as corrected");
+    }
+    public static int stWordl(emon.Port.Cells owords, emon.Port.Cells etext, int x0, int x1, int conf, int line, int a, int b, int c, int d, int e, int f, int g, int h, int i, int j) {
+        // `st-word` for a word of up to ten characters.
+        int ts = emon.Port.cellsLen(etext);
+        int n = pcps(etext, a, b, c, d, e, f, g, h, i, j);
+        return Evidence.owNew(owords, 1, x0, 0, x1, 100, x0, 100, x1, 100, 0, 0, ts, n, line, conf, -1);
+    }
+    public static void testAThousandsCommaReadAsAPeriodIsPutBackOnAPageThatWritesThemWithCommasAndOnlyThere() {
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        stWordl(owords, et, 100, 700, 900, 0, 52, 53, 57, 44, 48, 56, 56, 0, 0, 0);
+        stWordl(owords, et, 800, 1400, 900, 0, 50, 51, 55, 44, 50, 51, 56, 0, 0, 0);
+        stWordl(owords, et, 1500, 2400, 900, 0, 40, 51, 51, 49, 46, 50, 55, 57, 41, 0);
+        stWordl(owords, et, 2500, 3500, 900, 0, 36, 40, 49, 51, 56, 46, 56, 54, 54, 41);
+        stLine(olines, 100, 3500, 0, 4);
+        emon.Testport.assertEq(stEmit(olines, owords, words, lines, et, emon.Port.newCells(), 1), 1, "one line");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.wdGet(words, 2, Evidence.hdTstart()) + 4), 44, "`(331.279)` is `(331,279)` on a page whose other amounts have commas");
+        emon.Testport.assertEq(Evidence.wdGet(words, 2, Evidence.hdTlen()), 9, "of the same length");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.wdGet(words, 3, Evidence.hdTstart()) + 5), 44, "and `$(138.866)` is `$(138,866)`");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.owGet(owords, 2, Evidence.hdTstart()) + 4), 46, "the evidence keeps the engine's period");
+    }
+    public static void testAPeriodBeforeThreeDigitsStaysOnAPageWithoutThousandsCommas() {
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        stWordl(owords, et, 100, 900, 900, 0, 40, 51, 51, 49, 46, 50, 55, 57, 41, 0);
+        stWordl(owords, et, 1000, 1400, 900, 0, 49, 46, 50, 51, 52, 0, 0, 0, 0, 0);
+        stLine(olines, 100, 1400, 0, 2);
+        emon.Testport.assertEq(stEmit(olines, owords, words, lines, et, emon.Port.newCells(), 1), 1, "one line");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.wdGet(words, 0, Evidence.hdTstart()) + 4), 46, "`(331.279)` stays: nothing on the page writes a thousands comma");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.wdGet(words, 1, Evidence.hdTstart()) + 1), 46, "and `1.234` stays");
+    }
+    public static void testADollarSignReadAsASectionSignIsPutBackOnAPageThatWritesItsAmountsWithDollarSignsAndOnlyThere() {
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        stWordl(owords, et, 100, 900, 900, 0, 36, 52, 53, 57, 44, 48, 56, 56, 0, 0);
+        stWordl(owords, et, 1000, 1800, 900, 0, 36, 50, 51, 55, 44, 50, 51, 56, 0, 0);
+        stWordl(owords, et, 1900, 2700, 900, 0, 167, 51, 51, 51, 46, 52, 51, 48, 0, 0);
+        stLine(olines, 100, 2700, 0, 3);
+        stWordl(owords, et, 100, 300, 800, 1, 115, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        stWordl(owords, et, 340, 1100, 900, 1, 50, 44, 53, 57, 49, 46, 51, 0, 0, 0);
+        stLine(olines, 100, 1100, 3, 2);
+        emon.Testport.assertEq(stEmit(olines, owords, words, lines, et, emon.Port.newCells(), 2), 2, "two lines");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.wdGet(words, 2, Evidence.hdTstart())), 36, "`§333.430` is `$333,430`: a dollar sign");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.wdGet(words, 2, Evidence.hdTstart()) + 4), 44, "and its period a comma");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.wdGet(words, 3, Evidence.hdTstart())), 36, "a lone `s` before an amount is a dollar sign on that page, even with no cents");
+    }
+    public static void testASectionSignBeforeDigitsStaysOnAPageWithNoDollarSigns() {
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        stWordl(owords, et, 100, 900, 900, 0, 167, 51, 51, 51, 46, 52, 51, 48, 0, 0);
+        stWordl(owords, et, 1000, 1800, 900, 0, 50, 51, 55, 44, 50, 51, 56, 0, 0, 0);
+        stWordl(owords, et, 1900, 2700, 900, 0, 52, 53, 57, 44, 48, 56, 56, 0, 0, 0);
+        stLine(olines, 100, 2700, 0, 3);
+        emon.Testport.assertEq(stEmit(olines, owords, words, lines, et, emon.Port.newCells(), 1), 1, "one line");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.wdGet(words, 0, Evidence.hdTstart())), 167, "`§333.430` stays: no amount on the page has a dollar sign");
+    }
 }

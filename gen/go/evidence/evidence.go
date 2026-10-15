@@ -516,6 +516,15 @@ func OeNumeric() int32 {
 func OeFallback() int32 {
 	return 4
 }
+func OeGarbage() int32 {
+	return 8
+}
+func OeRuleGhost() int32 {
+	return 16
+}
+func OeCorrected() int32 {
+	return 32
+}
 func OeEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "dictionary")
@@ -527,6 +536,18 @@ func OeEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 4 {
 		port.TextAscii(t, "fallback")
+		return 1
+	}
+	if code == 8 {
+		port.TextAscii(t, "garbage")
+		return 1
+	}
+	if code == 16 {
+		port.TextAscii(t, "rule-ghost")
+		return 1
+	}
+	if code == 32 {
+		port.TextAscii(t, "corrected")
 		return 1
 	}
 	return 0
@@ -4209,13 +4230,13 @@ var EvFd [1680]int32 = [1680]int32{
 	1, 2, 2, 74, 0, 0,
 	1, 3, 1, 75, 0, 0,
 	1, 4, 9, 28, 0, 7,
-	1, 5, 1, 76, 0, 0,
+	1, 5, 2, 76, 0, 0,
 	2, 0, 1, 9, -2147483648, 0,
 	2, 1, 8, 31, 0, 19,
 	2, 2, 1, 77, -1, 0,
 	2, 3, 1, 48, -1, 0,
 	2, 4, 12, 36, 0, 0,
-	2, 6, 1, 76, 0, 0,
+	2, 6, 2, 76, 0, 0,
 	2, 7, 1, 38, 0, 0,
 	2, 8, 1, 78, -1, 0,
 	2, 9, 1, 75, 0, 0,

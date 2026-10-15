@@ -1130,7 +1130,7 @@ pub(crate) fn rt_next_bonly(olines: &mut crate::port::Cells, scr: &mut crate::po
     }
     return best;
 }
-pub fn rt_adopt(mut rtp: &mut crate::port::Cells, oruns: &mut crate::port::Cells, fr: i32, olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, mut scr: &mut crate::port::Cells) -> i32 {
+pub fn rt_adopt(mut rtp: &mut crate::port::Cells, oruns: &mut crate::port::Cells, fr: i32, olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, mut scr: &mut crate::port::Cells) -> i32 {
     // The lines a SCANNED page's pipeline reads, in the order it reads them, written to the selection of `scr` (`sc-sel-set`); answers how
     // many. `fr` is the first pass's run. A page that was turned (`rtp-q`) is read from its turned view's run when that scores `rt-turn-gain`
     // per cent of the first pass's; an upright page is read from the first pass, each of its lines kept, replaced or dropped by `rt-line-state` (which wants
@@ -1167,6 +1167,13 @@ pub fn rt_adopt(mut rtp: &mut crate::port::Cells, oruns: &mut crate::port::Cells
         }
     }
     crate::port::cells_set(rtp, rtp_primary(), primary);
+    // P12.6: the words of a body-ink line that a first-pass line stays with (`sc-xtra-base`): none yet
+    crate::port::cells_set(scr, sc_xtra_base(), fl0);
+    while k < nk {
+        crate::port::cells_set(scr, sc_xtra_base() + (k + 1), 0);
+        k += 1;
+    }
+    k = 0;
     if primary != fr {
         pl0 = or_get(oruns, primary, orf_lfirst());
         pn = or_get(oruns, primary, orf_lcount());
@@ -1216,6 +1223,19 @@ pub fn rt_adopt(mut rtp: &mut crate::port::Cells, oruns: &mut crate::port::Cells
                     n = rt_sel_add(scr, n, bl0 + b);
                     crate::port::cells_set(scr, sc_bonly_base() + b, 2);
                     b = rt_next_bonly(olines, scr, bl0, bn, ly);
+                }
+            }
+        }
+        // P12.6: a line that stays, with a body-ink line that is its partner both ways and reads words that lie over none of its own (a column the first pass stopped before)
+        if (s == 0) && (brun >= 0) {
+            if ol_get(olines, l, lh_count()) > 0 {
+                b = rt_best_over(olines, l, bl0, or_get(oruns, brun, orf_lcount()));
+                if b >= 0 {
+                    if rt_best_over(olines, b, fl0, fnl) == l {
+                        if sc_xtra_count(olines, owords, etext, l, b) > 0 {
+                            crate::port::cells_set(scr, sc_xtra_base() + (k + 1), b + 1);
+                        }
+                    }
                 }
             }
         }

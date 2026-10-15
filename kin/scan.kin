@@ -57,6 +57,9 @@
                                    lh-first lh-count lh-x0 lh-y0 lh-x1 lh-y1 lh-bx0 lh-by0 lh-bx1 lh-by1
                                    lh-rot lh-dir
                                    epf-flags epf-dpi
+                                   rl-count rl-get rlf-page rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1 rlf-thick
+                                   co-count co-get cf-page cf-x0 cf-y0 cf-x1 cf-y1 cf-conf cf-ink ik-get ikf-role ir-body
+                                   oe-garbage oe-rule-ghost oe-corrected
                                    orf-request orf-round orf-pass orf-psm orf-orient orf-wdir orf-lorder orf-deskew
                                    orf-osd orf-script orf-sconf orf-oconf orf-flags orf-bfirst orf-bcount orf-bview
                                    orf-lfirst orf-lcount orf-wfirst orf-wcount orf-lang orf-langlen
@@ -77,7 +80,7 @@
                                 region-page fl-ocr-only fl-low-conf fl-script-unread page-count page-set-kind pk-scanned
                                 node-set-attr-text text-append-cp fk-ocr]]
             [kin.lang :refer [defn return let set while if do comment
-                              + - * < > <= >= == != and or quot rem bit-and]]))
+                              + - * < > <= >= == != and or quot rem bit-and bit-or]]))
 
 ;; ================================================================== languages
 
@@ -632,12 +635,15 @@
 (defn ^:pub ^I32 sc-share-base [] (comment "...and another: the share (per mille) of the line's ink that the body-ink view paints over (-1 none).") (return 5300))
 (defn ^:pub ^I32 sc-partner-base [] (comment "...and another: the line of the body-ink run that replaces it.") (return 6800))
 (defn ^:pub ^I32 sc-bonly-base [] (comment "...and another: one cell for each line of the body-ink run (1 a line no first-pass line covers, to be taken; 2 taken).") (return 8300))
+(defn ^:pub ^I32 sc-xtra-base [] (comment "...and another (P12.6): the first cell is the row of the first-pass run's first line, and the cell after it for line k of that run is 0, or 1 + the row of the body-ink line whose words that lie over none of the first-pass line's are read with it (`rt-adopt`, `sc-line-words`).") (return 9800))
+(defn ^:pub ^I32 sc-fate-base [] (comment "...and the last (P12.6): four regions of `sc-fate-max` cells for the words one line is emitted with: their `owords` rows, what becomes of each (`sc-fates`), and the start and length of the text of a corrected one.") (return 11301))
+(defn ^:pub ^I32 sc-fate-max [] (comment "The most words of a line `sc-line-words` lists; a line of more is emitted as it is.") (return 400))
 
 (defn ^:pub ^I32 sc-prep [^:mut ^Cells scr]
   (comment "The scratch of `sc-sample` and `sc-cluster`: 242 cells (two for the metrics and 240 samples), three for each of the first")
   (comment "`sc-cap` lines of a page (its ascender line, its descender depth, whether clustered), and `sc-cap` more for sorting a")
   (comment "cluster's members; made once.")
-  (while (< (cells-len scr) (+ (sc-bonly-base) (sc-sel-max)))
+  (while (< (cells-len scr) (+ (sc-fate-base) (+ (* 4 (sc-fate-max)) 2)))
     (cells-push scr 0))
   (return 0))
 
@@ -857,6 +863,643 @@
     (sc-cluster scr n)
     (return r)))
 
+;; ======================================================= what becomes of an OCR word (P12.6)
+;;
+;; The lines of a scanned page are the engine's, with three things done to them on the way to the pipeline's `words` (the engine's own rows,
+;; `owords`, are never changed but for a flag saying what was done, `oe-garbage` `oe-rule-ghost` `oe-corrected`):
+;;   * WORDS THAT LIE OVER NOTHING. A body-ink line over a first-pass line (`rt-adopt` pairs them) may read what the first pass did not: a
+;;     right-aligned column the first pass stopped before. Its words that lie over none of the first-pass line's (`sc-xtra-ok`) are
+;;     read with the line, in their place along it (`sc-line-words`).
+;;   * WORDS THAT ARE NO TEXT (`sc-fates`). A word of very low confidence and implausible characters that stands alone or among such words
+;;     (paper texture, a ruled line, a hand), a dot leader read as characters, a table rule read as a character: kept out of the page's words, and
+;;     written to the dropped ledger (`th-write-ocr`) as `ocr-ghost` or `rule-ghost`, never silently deleted.
+;;   * SAFE CORRECTIONS (`sc-fates`): only ones the page itself shows. A rule's stroke glued to the end of a word (`1,089,780.58|`) is cut
+;;     off; a `S` or `§` that stands alone just before an amount is the `$` it was; thousands read with periods (`4.985.9`) get their commas back,
+;;     as the last period is the decimal one. The engine's text stays in the evidence. NO DIGIT IS EVER GUESSED.
+
+(defn ^I32 sc-lo-conf [] (comment "`ocr-garbage-conf`: a word of at most this confidence (per mille) is a candidate for being no text.") (return 300))
+(defn ^I32 sc-xtra-conf [] (comment "A body-ink word that lies over none of the first-pass line's words is read with it only when its confidence (per mille) is at least this.") (return 400))
+(defn ^I32 sc-rule-slack [] (comment "A character is on a rule when its centre is within this many centipoints (and the rule's half thickness) of the rule's centre line.") (return 150))
+
+(defn ^I32 sc-mn [^I32 a ^I32 b]
+  (if (< a b) (return a))
+  (return b))
+
+(defn ^I32 sc-mx [^I32 a ^I32 b]
+  (if (> a b) (return a))
+  (return b))
+
+(defn ^I32 sc-cp-class [^I32 c]
+  (comment "What a code point is to a word's plausibility: 1 a digit, 0 a letter (ASCII, Latin-1 and Latin Extended, and every script above them up to the private use area), 2 an ODD glyph")
+  (comment "(one an engine invents over ink that is no text: the vertical bar, tilde, caret, grave, backslash, angle brackets, braces and square brackets, the section sign, copyright and registered")
+  (comment "signs and the like of Latin-1, daggers, arrows and shapes, the private use area, the replacement character), 3 any other punctuation, currency sign or mark.")
+  (if (and (>= c 48) (<= c 57)) (return 1))
+  (if (and (>= c 65) (<= c 90)) (return 0))
+  (if (and (>= c 97) (<= c 122)) (return 0))
+  (if (== c 124) (return 2))
+  (if (== c 126) (return 2))
+  (if (== c 94) (return 2))
+  (if (== c 96) (return 2))
+  (if (== c 92) (return 2))
+  (if (or (== c 60) (== c 62)) (return 2))
+  (if (or (== c 123) (== c 125)) (return 2))
+  (if (or (== c 91) (== c 93)) (return 2))
+  (if (< c 128) (return 3))
+  (if (< c 192)
+    (do (if (or (== c 170) (or (== c 181) (== c 186))) (return 0))
+        (if (or (== c 161) (or (== c 164) (or (== c 166) (or (== c 167) (or (== c 168) (or (== c 169) (== c 172))))))) (return 2))
+        (if (or (== c 174) (or (== c 175) (or (== c 180) (or (== c 182) (or (== c 184) (== c 191)))))) (return 2))
+        (return 3)))
+  (if (< c 880)
+    (do (if (or (== c 215) (== c 247)) (return 3))
+        (return 0)))
+  (if (< c 8192) (return 0))
+  (if (< c 8224) (return 3))
+  (if (< c 8352)
+    (do (if (or (== c 8226) (or (== c 8230) (== c 8240))) (return 3))
+        (return 2)))
+  (if (< c 8400) (return 3))
+  (if (< c 11264) (return 2))
+  (if (< c 57344) (return 0))
+  (if (< c 63744) (return 2))
+  (if (== c 65533) (return 2))
+  (return 0))
+
+(defn ^I32 sc-count-class [^Cells etext ^I32 ts ^I32 n ^I32 cls]
+  (comment "How many of the word's `n` code points (from `ts` in the shared text) are of the class `cls` (`sc-cp-class`).")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 k 0]
+    (while (< i n)
+      (do (if (== (sc-cp-class (cells-at etext (+ ts i))) cls) (set k (+ k 1)))
+          (set i (+ i 1))))
+    (return k)))
+
+(defn ^I32 sc-distinct [^Cells etext ^I32 ts ^I32 n]
+  (comment "How many different code points there are among the first 40 of the word's.")
+  (let [^:mut ^I32 m n
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 d 0
+        ^:mut ^I32 seen 0]
+    (if (> m 40) (set m 40))
+    (while (< i m)
+      (do (set seen 0)
+          (set j 0)
+          (while (< j i)
+            (do (if (== (cells-at etext (+ ts j)) (cells-at etext (+ ts i))) (set seen 1))
+                (set j (+ j 1))))
+          (if (== seen 0) (set d (+ d 1)))
+          (set i (+ i 1))))
+    (return d)))
+
+(defn ^:pub ^I32 sc-implausible [^Cells etext ^I32 ts ^I32 n]
+  (comment "1 when a word's characters are not those of a word: a single glyph that is no letter or digit; two odd glyphs (`sc-cp-class`); letters, digits and an odd glyph together;")
+  (comment "four or more characters and not one a letter or a digit; eight or more of which a quarter or fewer differ (`Petetetdedtededededet`). Else 0.")
+  (let [^I32 nl (sc-count-class etext ts n 0)
+        ^I32 nd (sc-count-class etext ts n 1)
+        ^I32 no (sc-count-class etext ts n 2)]
+    (if (<= n 0) (return 0))
+    (if (and (== n 1) (== (+ nl nd) 0)) (return 1))
+    (if (>= no 2) (return 1))
+    (if (and (> no 0) (and (> nd 0) (> nl 0))) (return 1))
+    (if (and (>= n 4) (== (+ nl nd) 0)) (return 1))
+    (if (and (>= n 8) (<= (* 4 (sc-distinct etext ts n)) n)) (return 1))
+    (return 0)))
+
+(defn ^:pub ^I32 sc-leader [^Cells etext ^I32 ts ^I32 n]
+  (comment "1 for a dot leader the engine read as characters: three or more dots and commas and nothing else, or dots and commas with one digit repeated four or more times (`22.2222`)")
+  (comment "that is no amount (an amount ends in a separator and two digits). Else 0.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 dots 0
+        ^:mut ^I32 digs 0
+        ^:mut ^I32 other 0
+        ^:mut ^I32 d0 -1
+        ^:mut ^I32 same 1
+        ^:mut ^I32 c 0]
+    (while (< i n)
+      (do (set c (cells-at etext (+ ts i)))
+          (if (or (== c 46) (== c 44))
+            (set dots (+ dots 1))
+            (if (and (>= c 48) (<= c 57))
+              (do (set digs (+ digs 1))
+                  (if (< d0 0) (set d0 c))
+                  (if (!= c d0) (set same 0)))
+              (set other (+ other 1))))
+          (set i (+ i 1))))
+    (if (> other 0) (return 0))
+    (if (and (== digs 0) (>= dots 3)) (return 1))
+    (if (and (>= digs 4) (and (== same 1) (>= dots 1)))
+      (do (if (>= n 4)
+            (if (and (or (== (cells-at etext (+ ts (- n 3))) 46) (== (cells-at etext (+ ts (- n 3))) 44))
+                     (and (>= (cells-at etext (+ ts (- n 2))) 48) (and (<= (cells-at etext (+ ts (- n 2))) 57)
+                                                                       (and (>= (cells-at etext (+ ts (- n 1))) 48) (<= (cells-at etext (+ ts (- n 1))) 57)))))
+              (return 0)))
+          (return 1)))
+    (return 0)))
+
+(defn ^I32 sc-cents [^Cells etext ^I32 ts ^I32 n]
+  (comment "1 when the word ends in a separator and two digits (the cents of an amount).")
+  (if (< n 4) (return 0))
+  (if (and (or (== (cells-at etext (+ ts (- n 3))) 46) (== (cells-at etext (+ ts (- n 3))) 44))
+           (and (>= (cells-at etext (+ ts (- n 2))) 48) (and (<= (cells-at etext (+ ts (- n 2))) 57)
+                                                             (and (>= (cells-at etext (+ ts (- n 1))) 48) (<= (cells-at etext (+ ts (- n 1))) 57)))))
+    (return 1))
+  (return 0))
+
+(defn ^:pub ^I32 sc-amount-like [^Cells etext ^I32 ts ^I32 n]
+  (comment "1 for a word that reads as an amount: digits with dots or commas among them, at least one of each, starting with a digit and ending in one, between an opening")
+  (comment "and a closing parenthesis or after a minus if it has them. Else 0.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 nd 0
+        ^:mut ^I32 ns 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 b n]
+    (if (< n 3) (return 0))
+    (if (or (== (cells-at etext ts) 40) (== (cells-at etext ts) 45)) (set a 1))
+    (if (== (cells-at etext (+ ts (- n 1))) 41) (set b (- n 1)))
+    (set i a)
+    (while (< i b)
+      (do (set c (cells-at etext (+ ts i)))
+          (if (and (>= c 48) (<= c 57))
+            (set nd (+ nd 1))
+            (if (or (== c 46) (== c 44))
+              (set ns (+ ns 1))
+              (return 0)))
+          (set i (+ i 1))))
+    (if (or (== nd 0) (== ns 0)) (return 0))
+    (set c (cells-at etext (+ ts (- b 1))))
+    (if (and (>= c 48) (<= c 57)) (return 1))
+    (return 0)))
+
+(defn ^:pub ^I32 sc-groups-fix [^Cells etext ^I32 ts ^I32 n]
+  (comment "1 when a word is an amount whose thousands were read with periods: digits and at least two periods, a first group of one to three digits, then groups of exactly three, and")
+  (comment "the last group of one or two (the decimals): `4.985.9` is `4,985.9`, and `1.234.567` (a last group of three) is a European whole number and left alone.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 dots 0
+        ^:mut ^I32 run 0
+        ^:mut ^I32 groups 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 ok 1]
+    (if (< n 5) (return 0))
+    (while (< i n)
+      (do (set c (cells-at etext (+ ts i)))
+          (if (and (>= c 48) (<= c 57))
+            (set run (+ run 1))
+            (if (== c 46)
+              (do (if (== run 0) (set ok 0))
+                  (if (and (== groups 0) (> run 3)) (set ok 0))
+                  (if (and (> groups 0) (!= run 3)) (set ok 0))
+                  (set groups (+ groups 1))
+                  (set dots (+ dots 1))
+                  (set run 0))
+              (set ok 0)))
+          (set i (+ i 1))))
+    (if (== ok 0) (return 0))
+    (if (< dots 2) (return 0))
+    (if (and (>= run 1) (<= run 2)) (return 1))
+    (return 0)))
+
+(defn ^:pub ^I32 sc-on-vrule [^Cells rules ^I32 page ^I32 cx ^I32 cy ^I32 slack]
+  (comment "1 when the point (`cx`, `cy`) centipoints of page `page` lies on one of the tracer's vertical rules: at least 8 pt long and eight times as long as wide, covering `cy`, with")
+  (comment "its centre line within `slack` and half its thickness of `cx`.")
+  (let [^I32 n (rl-count rules)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 xa 0
+        ^:mut ^I32 xb 0
+        ^:mut ^I32 ya 0
+        ^:mut ^I32 yb 0
+        ^:mut ^I32 dx 0
+        ^:mut ^I32 dy 0
+        ^:mut ^I32 d 0
+        ^:mut ^I32 t 0]
+    (while (< r n)
+      (do (if (== (rl-get rules r (rlf-page)) page)
+            (do (set xa (rl-get rules r (rlf-lx0)))
+                (set xb (rl-get rules r (rlf-lx1)))
+                (set ya (rl-get rules r (rlf-ly0)))
+                (set yb (rl-get rules r (rlf-ly1)))
+                (if (< yb ya) (do (set t ya) (set ya yb) (set yb t)))
+                (set dx (- xb xa))
+                (if (< dx 0) (set dx (- 0 dx)))
+                (set dy (- yb ya))
+                (if (and (>= dy 800) (<= (* dx 8) dy))
+                  (if (and (>= cy ya) (<= cy yb))
+                    (do (set d (- cx (quot (+ xa xb) 2)))
+                        (if (< d 0) (set d (- 0 d)))
+                        (if (<= d (+ slack (quot (rl-get rules r (rlf-thick)) 2))) (return 1)))))))
+          (set r (+ r 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 sc-xtra-ok [^Cells owords ^Cells etext ^I32 w0 ^I32 cnt ^I32 xw]
+  (comment "Does the body-ink word `xw` lie over none of the `cnt` first-pass words from `w0` (no more than a quarter of the narrower of two shares their extent along the line),")
+  (comment "is it sure enough (`sc-xtra-conf`) to be read with the line, and are its characters those of a word (`sc-implausible`: a lone `§` is not)? 1 or 0.")
+  (let [^I32 xa (ow-get owords xw (hd-x0))
+        ^I32 xb (ow-get owords xw (hd-x1))
+        ^:mut ^I32 j 0
+        ^:mut ^I32 pa 0
+        ^:mut ^I32 pb 0
+        ^:mut ^I32 ov 0
+        ^:mut ^I32 nar 0]
+    (if (< (ow-get owords xw (hd-conf)) (sc-xtra-conf)) (return 0))
+    (if (== (sc-implausible etext (ow-get owords xw (hd-tstart)) (ow-get owords xw (hd-tlen))) 1) (return 0))
+    (while (< j cnt)
+      (do (set pa (ow-get owords (+ w0 j) (hd-x0)))
+          (set pb (ow-get owords (+ w0 j) (hd-x1)))
+          (set ov (- (sc-mn xb pb) (sc-mx xa pa)))
+          (set nar (sc-mn (- xb xa) (- pb pa)))
+          (if (> ov 0)
+            (if (> (* ov 4) nar) (return 0)))
+          (set j (+ j 1))))
+    (return 1)))
+
+(defn ^:pub ^I32 sc-xtra-count [^Cells olines ^Cells owords ^Cells etext ^I32 l ^I32 xl]
+  (comment "How many words of the body-ink line `xl` are read with the first-pass line `l` (`sc-xtra-ok`).")
+  (let [^I32 w0 (ol-get olines l (lh-first))
+        ^I32 cnt (ol-get olines l (lh-count))
+        ^I32 x0 (ol-get olines xl (lh-first))
+        ^I32 xn (ol-get olines xl (lh-count))
+        ^:mut ^I32 j 0
+        ^:mut ^I32 k 0]
+    (while (< j xn)
+      (do (if (== (sc-xtra-ok owords etext w0 cnt (+ x0 j)) 1) (set k (+ k 1)))
+          (set j (+ j 1))))
+    (return k)))
+
+(defn ^I32 sc-line-words [^Cells olines ^Cells owords ^Cells etext ^I32 l ^I32 xl ^:mut ^Cells scr]
+  (comment "The words line `l` is emitted with, in the order along it, written to `scr` from `sc-fate-base`: its own, and with them those of the body-ink line `xl` (-1 none) that")
+  (comment "lie over none of its own (`sc-xtra-ok`). Answers how many; 0 when they are more than the scratch holds (the line is then emitted as it is, with nothing added).")
+  (let [^I32 fb (sc-fate-base)
+        ^I32 w0 (ol-get olines l (lh-first))
+        ^I32 cnt (ol-get olines l (lh-count))
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 xn 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 n 0]
+    (if (> cnt (sc-fate-max)) (return 0))
+    (if (>= xl 0)
+      (do (set x0 (ol-get olines xl (lh-first)))
+          (set xn (ol-get olines xl (lh-count)))))
+    (while (and (< j xn) (== (sc-xtra-ok owords etext w0 cnt (+ x0 j)) 0))
+      (set j (+ j 1)))
+    (while (or (< i cnt) (< j xn))
+      (do (if (>= n (sc-fate-max)) (return 0))
+          (if (and (< i cnt) (or (>= j xn) (<= (ow-get owords (+ w0 i) (hd-x0)) (ow-get owords (+ x0 j) (hd-x0)))))
+            (do (cells-set scr (+ fb n) (+ w0 i))
+                (set i (+ i 1)))
+            (do (cells-set scr (+ fb n) (+ x0 j))
+                (set j (+ j 1))
+                (while (and (< j xn) (== (sc-xtra-ok owords etext w0 cnt (+ x0 j)) 0))
+                  (set j (+ j 1)))))
+          (set n (+ n 1))))
+    (return n)))
+
+(defn ^I32 sc-tail-on-vrule [^Cells owords ^Cells osyms ^Cells rules ^I32 page ^I32 w]
+  (comment "1 when the last symbol of word `w` is a vertical bar that lies on one of the page's vertical rules.")
+  (let [^I32 sn (ow-get owords w (owf-scount))
+        ^I32 s (- (+ (ow-get owords w (owf-sfirst)) sn) 1)]
+    (if (< sn 2) (return 0))
+    (if (!= (os-get osyms s (ch-cp)) 124) (return 0))
+    (return (sc-on-vrule rules page
+                         (quot (+ (os-get osyms s (ch-x0)) (os-get osyms s (ch-x1))) 2)
+                         (quot (+ (os-get osyms s (ch-y0)) (os-get osyms s (ch-y1))) 2)
+                         (sc-rule-slack)))))
+
+(defn ^I32 sc-body-comp [^Cells comps ^Cells inks ^I32 r ^I32 page]
+  (comment "1 when component `r` is of page `page`, of the body layer (`ir-body`) and sure (confidence at least 500).")
+  (let [^I32 ink (co-get comps r (cf-ink))]
+    (if (!= (co-get comps r (cf-page)) page) (return 0))
+    (if (< (co-get comps r (cf-conf)) 500) (return 0))
+    (if (< ink 0) (return 0))
+    (if (!= (ik-get inks ink (ikf-role)) (ir-body)) (return 0))
+    (return 1)))
+
+(defn ^I32 sc-dot-like [^Cells comps ^Cells inks ^I32 page ^I32 r ^I32 wy0 ^I32 wy1 ^I32 hh]
+  (comment "1 when body component `r` looks like a dot of a word whose box is from `wy0` to `wy1` (`hh` high): sure, at most 0.45 and at least 0.08 of the height each way, its bottom")
+  (comment "in the lowest quarter of the box and not more than 0.15 of the height below it.")
+  (let [^I32 w (- (co-get comps r (cf-x1)) (co-get comps r (cf-x0)))
+        ^I32 h (- (co-get comps r (cf-y1)) (co-get comps r (cf-y0)))
+        ^I32 dy1 (co-get comps r (cf-y1))]
+    (if (== (sc-body-comp comps inks r page) 0) (return 0))
+    (if (or (> (* w 100) (* hh 45)) (> (* h 100) (* hh 45))) (return 0))
+    (if (or (< (* w 100) (* hh 8)) (< (* h 100) (* hh 8))) (return 0))
+    (if (< (* (- dy1 wy0) 100) (* hh 75)) (return 0))
+    (if (> (* (- dy1 wy1) 100) (* hh 15)) (return 0))
+    (return 1)))
+
+(defn ^I32 sc-dot-between [^Cells osyms ^I32 s0 ^I32 sn ^I32 cx]
+  (comment "The index i of the symbol such that the x `cx` lies between the centres of symbols i and i + 1 of the word that starts at symbol `s0`, or -1.")
+  (let [^:mut ^I32 i 0]
+    (while (< (+ i 1) sn)
+      (do (if (and (> (* 2 cx) (+ (os-get osyms (+ s0 i) (ch-x0)) (os-get osyms (+ s0 i) (ch-x1))))
+                   (< (* 2 cx) (+ (os-get osyms (+ s0 (+ i 1)) (ch-x0)) (os-get osyms (+ s0 (+ i 1)) (ch-x1)))))
+            (return i))
+          (set i (+ i 1))))
+    (return -1)))
+
+(defn ^I32 sc-dot-clear [^Cells comps ^Cells inks ^I32 page ^I32 r ^I32 wy0 ^I32 hh]
+  (comment "1 when no body ink lies above component `r` in its column, between the top of the word (`wy0`) and a fifth of the word's height above the component: a stroke of a broken digit would.")
+  (let [^I32 nc (co-count comps)
+        ^I32 dx0 (co-get comps r (cf-x0))
+        ^I32 dx1 (co-get comps r (cf-x1))
+        ^I32 dy0 (co-get comps r (cf-y0))
+        ^:mut ^I32 q 0]
+    (while (< q nc)
+      (do (if (!= q r)
+            (if (== (sc-body-comp comps inks q page) 1)
+              (if (and (< (co-get comps q (cf-x0)) dx1) (> (co-get comps q (cf-x1)) dx0))
+                (if (and (> (co-get comps q (cf-y1)) wy0) (< (co-get comps q (cf-y0)) (- dy0 (quot (* hh 20) 100))))
+                  (return 0)))))
+          (set q (+ q 1))))
+    (return 1)))
+
+(defn ^:pub ^I32 sc-dot-after [^Cells owords ^Cells osyms ^Cells comps ^Cells inks ^I32 page ^I32 w]
+  (comment "The decimal point the engine lost, when the page's pixels show it: the index of the symbol of word `w` after which a point goes, or -1. The word must be digits and nothing else")
+  (comment "(three to nine symbols, as many as its characters), one of them at least a quarter wider than the narrowest digit that is not a 1 (the engine's box for the digit before a")
+  (comment "point it did not read takes the point in), and there must be a dot between two digits: a component of the body layer that is sure, no more than 0.45 of the word's height")
+  (comment "each way, on its baseline, whose centre lies between the centres of two neighbouring symbols, with no body ink above it in its column (a stroke of a broken digit has some).")
+  (comment "One or two digits must follow the point and one at least precede it. NO DIGIT IS GUESSED: the point is a thing the page shows.")
+  (let [^I32 sn (ow-get owords w (owf-scount))
+        ^I32 s0 (ow-get owords w (owf-sfirst))
+        ^I32 wy0 (ow-get owords w (hd-y0))
+        ^I32 wy1 (ow-get owords w (hd-y1))
+        ^I32 hh (- wy1 wy0)
+        ^I32 nc (co-count comps)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 wd 0
+        ^:mut ^I32 ref -1
+        ^:mut ^I32 wide 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 cx 0
+        ^:mut ^I32 at -1]
+    (if (or (< sn 3) (> sn 9)) (return -1))
+    (if (!= (ow-get owords w (hd-tlen)) sn) (return -1))
+    (if (<= hh 0) (return -1))
+    (if (== nc 0) (return -1))
+    (while (< i sn)
+      (do (set c (os-get osyms (+ s0 i) (ch-cp)))
+          (if (or (< c 48) (> c 57)) (return -1))
+          (set wd (- (os-get osyms (+ s0 i) (ch-x1)) (os-get osyms (+ s0 i) (ch-x0))))
+          (if (!= c 49)
+            (if (or (< ref 0) (< wd ref)) (set ref wd)))
+          (set i (+ i 1))))
+    (if (<= ref 0) (return -1))
+    (set i 0)
+    (while (< i sn)
+      (do (set c (os-get osyms (+ s0 i) (ch-cp)))
+          (set wd (- (os-get osyms (+ s0 i) (ch-x1)) (os-get osyms (+ s0 i) (ch-x0))))
+          (if (!= c 49)
+            (if (>= (* wd 100) (* ref 125)) (set wide 1)))
+          (set i (+ i 1))))
+    (if (== wide 0) (return -1))
+    (comment "a dot: small, on the baseline, between the centres of two neighbouring symbols")
+    (set r 0)
+    (while (and (< r nc) (< at 0))
+      (do (if (== (sc-dot-like comps inks page r wy0 wy1 hh) 1)
+            (do (set cx (quot (+ (co-get comps r (cf-x0)) (co-get comps r (cf-x1))) 2))
+                (set at (sc-dot-between osyms s0 sn cx))
+                (if (>= at 0)
+                  (if (== (sc-dot-clear comps inks page r wy0 hh) 0) (set at -1)))))
+          (set r (+ r 1))))
+    (if (< at 0) (return -1))
+    (comment "the digits that follow: one or two")
+    (set wd (- sn (+ at 1)))
+    (if (or (< wd 1) (> wd 2)) (return -1))
+    (return at)))
+
+(defn ^I32 sc-isdig [^I32 c]
+  (if (and (>= c 48) (<= c 57)) (return 1))
+  (return 0))
+
+(defn ^I32 sc-digits-before [^Cells etext ^I32 ts ^I32 i]
+  (comment "How many digits end just before index `i` of the word that starts at `ts`.")
+  (let [^:mut ^I32 j (- i 1)
+        ^:mut ^I32 k 0]
+    (while (and (>= j 0) (== (sc-isdig (cells-at etext (+ ts j))) 1))
+      (do (set k (+ k 1))
+          (set j (- j 1))))
+    (return k)))
+
+(defn ^I32 sc-digits-after [^Cells etext ^I32 ts ^I32 n ^I32 i]
+  (comment "How many digits start just after index `i` of the word of `n` characters that starts at `ts`.")
+  (let [^:mut ^I32 j (+ i 1)
+        ^:mut ^I32 k 0]
+    (while (and (< j n) (== (sc-isdig (cells-at etext (+ ts j))) 1))
+      (do (set k (+ k 1))
+          (set j (+ j 1))))
+    (return k)))
+
+(defn ^:pub ^I32 sc-thousands-comma [^Cells etext ^I32 ts ^I32 n]
+  (comment "1 when the word has a thousands comma: one with one to three digits before it and exactly three after it (`459,088`). The page's own convention, when a page has some.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 b 0]
+    (while (< i n)
+      (do (if (== (cells-at etext (+ ts i)) 44)
+            (do (set b (sc-digits-before etext ts i))
+                (if (and (>= b 1) (<= b 3))
+                  (if (== (sc-digits-after etext ts n i) 3) (return 1)))))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 sc-dollar-word [^Cells etext ^I32 ts ^I32 n]
+  (comment "1 for a word that is a dollar sign, or one that starts with it (after an opening parenthesis or a minus) and goes on with a digit: the page's own way of writing an amount.")
+  (let [^:mut ^I32 a 0]
+    (if (<= n 0) (return 0))
+    (if (and (== n 1) (== (cells-at etext ts) 36)) (return 1))
+    (if (or (== (cells-at etext ts) 40) (== (cells-at etext ts) 45)) (set a 1))
+    (if (< (+ a 1) n)
+      (if (and (== (cells-at etext (+ ts a)) 36) (== (sc-isdig (cells-at etext (+ ts (+ a 1)))) 1)) (return 1)))
+    (return 0)))
+
+(defn ^:pub ^I32 sc-period-thousands [^Cells etext ^I32 ts ^I32 n ^I32 sign]
+  (comment "The index of the period of a word of the shape `(331.279)`: after any opening parenthesis, minus or dollar sign (and, when `sign` is 1, an S or a section sign read for one), one to three digits")
+  (comment "that do not start with 0, one period and exactly three digits, then at most a closing parenthesis. A thousands comma read as a period (the page's own, see `sc-fates`); else -1.")
+  (let [^:mut ^I32 a 0
+        ^:mut ^I32 b n
+        ^:mut ^I32 d 0]
+    (while (and (< a 3) (and (< a n) (or (== (cells-at etext (+ ts a)) 40) (or (== (cells-at etext (+ ts a)) 45) (== (cells-at etext (+ ts a)) 36)))))
+      (set a (+ a 1)))
+    (if (and (== sign 1) (< a n))
+      (if (or (== (cells-at etext (+ ts a)) 167) (== (cells-at etext (+ ts a)) 83)) (set a (+ a 1))))
+    (if (>= a n) (return -1))
+    (if (== (cells-at etext (+ ts (- n 1))) 41) (set b (- n 1)))
+    (set d (sc-digits-after etext ts b (- a 1)))
+    (if (or (< d 1) (> d 3)) (return -1))
+    (if (== (cells-at etext (+ ts a)) 48) (return -1))
+    (if (!= (cells-at etext (+ ts (+ a d))) 46) (return -1))
+    (if (!= (sc-digits-after etext ts b (+ a d)) 3) (return -1))
+    (if (!= (+ a (+ d 4)) b) (return -1))
+    (return (+ a d))))
+
+(defn ^I32 sc-flag [^:mut ^Cells owords ^I32 w ^I32 bit]
+  (comment "Set `bit` among the engine flags of word row `w`.")
+  (let [^I32 v (bit-or (ow-get owords w (owf-flags)) bit)]
+    (ow-set owords w (owf-flags) v)
+    (return 0)))
+
+(defn ^I32 sc-fates [^:mut ^Cells owords ^:mut ^Cells etext ^Cells osyms ^Cells rules ^Cells comps ^Cells inks ^I32 page ^I32 m ^:mut ^Cells scr]
+  (comment "What becomes of each of the `m` words of a line (listed at `sc-fate-base`): 0 it stays, 1 it is garbage (confidence at most `sc-lo-conf` and implausible characters (`sc-implausible`) on a line of")
+  (comment "two words or fewer or of a mean confidence of 450 or less; or a word of a line of three or more whose mean is at most `sc-lo-conf` and best at most 450: texture), 2 it is the ghost of a rule (a lone bar, `I`, `l` or `!`")
+  (comment "on a vertical rule), 3 it is a dot leader (`sc-leader`), 4 its text is corrected (the cells at +2 and +3 regions say how). The words with a fate of 1 to 3 are flagged in `owords` (`oe-garbage`, `oe-rule-ghost`, one corrected: `oe-corrected`)")
+  (comment "and taken out of the list; the corrected text is appended to `etext`. Answers how many words are left.")
+  (let [^I32 fb (sc-fate-base)
+        ^I32 fm (sc-fate-max)
+        ^I32 commas (cells-at scr (+ (sc-fate-base) (* 4 (sc-fate-max))))
+        ^I32 dollars (cells-at scr (+ (sc-fate-base) (+ (* 4 (sc-fate-max)) 1)))
+        ^:mut ^I32 gl 0
+        ^:mut ^I32 pd -1
+        ^:mut ^I32 i 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 w2 0
+        ^:mut ^I32 ts 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 ts2 0
+        ^:mut ^I32 n2 0
+        ^:mut ^I32 conf 0
+        ^:mut ^I32 sum 0
+        ^:mut ^I32 mx 0
+        ^:mut ^I32 lmean 0
+        ^:mut ^I32 f 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 hh 0
+        ^:mut ^I32 h2 0
+        ^:mut ^I32 gp 0
+        ^:mut ^I32 nt 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 last 0
+        ^:mut ^I32 kept 0
+        ^:mut ^I32 changed 0]
+    (while (< i m)
+      (do (set w (cells-at scr (+ fb i)))
+          (set conf (ow-get owords w (hd-conf)))
+          (set sum (+ sum conf))
+          (if (> conf mx) (set mx conf))
+          (set i (+ i 1))))
+    (set lmean (quot sum m))
+    (set i 0)
+    (while (< i m)
+      (do (set w (cells-at scr (+ fb i)))
+          (set ts (ow-get owords w (hd-tstart)))
+          (set n (ow-get owords w (hd-tlen)))
+          (set conf (ow-get owords w (hd-conf)))
+          (set f 0)
+          (cells-set scr (+ fb (+ (* 2 fm) i)) -1)
+          (cells-set scr (+ fb (+ (* 3 fm) i)) 0)
+          (comment "a dot leader")
+          (if (== (sc-leader etext ts n) 1) (set f 3))
+          (comment "texture: a line of three words or more, all of them unsure")
+          (if (== f 0)
+            (if (and (>= m 3) (and (<= lmean (sc-lo-conf)) (<= mx 450))) (set f 1)))
+          (comment "very unsure and no word, alone or among such words")
+          (if (== f 0)
+            (if (<= conf (sc-lo-conf))
+              (if (== (sc-implausible etext ts n) 1)
+                (if (or (<= m 2) (<= lmean 450)) (set f 1)))))
+          (comment "a rule read as a character")
+          (if (and (== f 0) (== n 1))
+            (do (set c (cells-at etext ts))
+                (if (or (== c 124) (or (== c 73) (or (== c 108) (== c 33))))
+                  (if (== (sc-on-vrule rules page
+                                       (quot (+ (ow-get owords w (hd-x0)) (ow-get owords w (hd-x1))) 2)
+                                       (quot (+ (ow-get owords w (hd-y0)) (ow-get owords w (hd-y1))) 2)
+                                       (sc-rule-slack)) 1)
+                    (set f 2)))))
+          (comment "a rule's stroke glued to the end of a word")
+          (if (and (== f 0) (>= n 2))
+            (if (== (cells-at etext (+ ts (- n 1))) 124)
+              (if (== (sc-tail-on-vrule owords osyms rules page w) 1)
+                (do (cells-set scr (+ fb (+ (* 2 fm) i)) ts)
+                    (cells-set scr (+ fb (+ (* 3 fm) i)) (- n 1))
+                    (set f 4)))))
+          (comment "thousands read with periods")
+          (if (and (== f 0) (== (sc-groups-fix etext ts n) 1))
+            (do (set nt (etx-len etext))
+                (set last (- n 1))
+                (while (and (> last 0) (!= (cells-at etext (+ ts last)) 46))
+                  (set last (- last 1)))
+                (set k 0)
+                (while (< k n)
+                  (do (set c (cells-at etext (+ ts k)))
+                      (if (and (== c 46) (!= k last)) (set c 44))
+                      (etx-append-cp etext c)
+                      (set k (+ k 1))))
+                (cells-set scr (+ fb (+ (* 2 fm) i)) nt)
+                (cells-set scr (+ fb (+ (* 3 fm) i)) n)
+                (set f 4)))
+          (comment "the page's own conventions: a thousands comma read as a period on a page that writes them with commas (two words at least), and a dollar sign glued to an amount and read as an S or a section sign on a page that writes its amounts with dollar signs (two words at least)")
+          (if (and (== f 0) (>= n 4))
+            (do (set gl 0)
+                (set c (cells-at etext ts))
+                (if (>= dollars 2)
+                  (if (or (== c 167) (== c 83))
+                    (if (== (sc-amount-like etext (+ ts 1) (- n 1)) 1) (set gl 1))))
+                (set pd -1)
+                (if (>= commas 2) (set pd (sc-period-thousands etext ts n gl)))
+                (if (or (== gl 1) (>= pd 0))
+                  (do (set nt (etx-len etext))
+                      (set k 0)
+                      (while (< k n)
+                        (do (set c (cells-at etext (+ ts k)))
+                            (if (and (== gl 1) (== k 0)) (set c 36))
+                            (if (== k pd) (set c 44))
+                            (etx-append-cp etext c)
+                            (set k (+ k 1))))
+                      (cells-set scr (+ fb (+ (* 2 fm) i)) nt)
+                      (cells-set scr (+ fb (+ (* 3 fm) i)) n)
+                      (set f 4)))))
+          (comment "a decimal point the engine lost and the page shows (`sc-dot-after`)")
+          (if (and (== f 0) (>= n 3))
+            (do (set k (sc-dot-after owords osyms comps inks page w))
+                (if (>= k 0)
+                  (do (set nt (etx-len etext))
+                      (set c 0)
+                      (while (< c n)
+                        (do (set last (cells-at etext (+ ts c)))
+                            (etx-append-cp etext last)
+                            (if (== c k) (etx-append-cp etext 46))
+                            (set c (+ c 1))))
+                      (cells-set scr (+ fb (+ (* 2 fm) i)) nt)
+                      (cells-set scr (+ fb (+ (* 3 fm) i)) (+ n 1))
+                      (set f 4)))))
+          (comment "a currency sign read as an S or a section sign, alone just before an amount of the same height")
+          (if (and (== f 0) (== n 1))
+            (do (set c (cells-at etext ts))
+                (if (and (< (+ i 1) m) (or (== c 83) (or (== c 167) (== c 115))))
+                  (do (set w2 (cells-at scr (+ fb (+ i 1))))
+                      (set ts2 (ow-get owords w2 (hd-tstart)))
+                      (set n2 (ow-get owords w2 (hd-tlen)))
+                      (set hh (- (ow-get owords w (hd-y1)) (ow-get owords w (hd-y0))))
+                      (set h2 (- (ow-get owords w2 (hd-y1)) (ow-get owords w2 (hd-y0))))
+                      (set gp (- (ow-get owords w2 (hd-x0)) (ow-get owords w (hd-x1))))
+                      (if (and (== (sc-amount-like etext ts2 n2) 1) (and (>= gp 0) (<= gp (* 2 hh))))
+                        (if (and (>= (* hh 100) (* 60 h2)) (<= (* hh 100) (* 160 h2)))
+                          (if (or (== c 167) (or (== (sc-cents etext ts2 n2) 1) (>= dollars 2)))
+                            (do (set nt (etx-len etext))
+                                (etx-append-cp etext 36)
+                                (cells-set scr (+ fb (+ (* 2 fm) i)) nt)
+                                (cells-set scr (+ fb (+ (* 3 fm) i)) 1)
+                                (set f 4)))))))))
+          (cells-set scr (+ fb (+ fm i)) f)
+          (if (or (== f 1) (== f 3)) (do (sc-flag owords w (oe-garbage)) (set changed 1)))
+          (if (== f 2) (do (sc-flag owords w (oe-rule-ghost)) (set changed 1)))
+          (if (== f 4) (do (sc-flag owords w (oe-corrected)) (set changed 1)))
+          (set i (+ i 1))))
+    (if (== changed 0) (return m))
+    (comment "the words that stay, packed to the front")
+    (set i 0)
+    (while (< i m)
+      (do (set f (cells-at scr (+ fb (+ fm i))))
+          (if (or (== f 0) (== f 4))
+            (do (cells-set scr (+ fb kept) (cells-at scr (+ fb i)))
+                (cells-set scr (+ fb (+ fm kept)) f)
+                (cells-set scr (+ fb (+ (* 2 fm) kept)) (cells-at scr (+ fb (+ (* 2 fm) i))))
+                (cells-set scr (+ fb (+ (* 3 fm) kept)) (cells-at scr (+ fb (+ (* 3 fm) i))))
+                (set kept (+ kept 1))))
+          (set i (+ i 1))))
+    (return kept)))
+
 (defn ^I32 sc-emit-core [^Cells olines ^Cells owords ^Cells osyms ^I32 l0 ^I32 nl ^I32 page ^I32 rotmed
                          ^:mut ^Cells scr ^:mut ^Cells words ^:mut ^Cells lines ^I32 usesel]
   (let [^:mut ^I32 k 0
@@ -973,6 +1616,190 @@
           (set k (+ k 1))))
     (return made)))
 
+(defn ^:pub ^I32 sc-emit-vetted [^Cells olines ^:mut ^Cells owords ^Cells osyms ^I32 nsel ^I32 page ^I32 rotmed
+                                ^:mut ^Cells scr ^:mut ^Cells words ^:mut ^Cells lines ^:mut ^Cells etext ^Cells rules ^Cells comps ^Cells inks]
+  (comment "`sc-emit-core` over the selection of `scr`, as `sc-emit-sel` does it, and with what becomes of the words of the lines (P12.6): the words a body-ink line adds to a")
+  (comment "first-pass line (`sc-xtra-base`, `sc-line-words`), the words that are no text kept out and flagged in `owords`, the safe corrections made (`sc-fates`). A line of which every")
+  (comment "word is kept out is not a line. The line's box and baseline are widened to the words that were added, and are otherwise the line's own, so that a page where nothing was added,")
+  (comment "dropped or corrected is emitted as it always was. Answers the lines made.")
+  (let [^I32 fb (sc-fate-base)
+        ^I32 fm (sc-fate-max)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 made 0
+        ^:mut ^I32 l 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 mc 0
+        ^:mut ^I32 mg 0
+        ^:mut ^I32 xl 0
+        ^:mut ^I32 kk 0
+        ^:mut ^I32 w0 0
+        ^:mut ^I32 wi 0
+        ^:mut ^I32 wn 0
+        ^:mut ^I32 ts 0
+        ^:mut ^I32 tl 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 lnx 0
+        ^:mut ^I32 lx0 0
+        ^:mut ^I32 ly0 0
+        ^:mut ^I32 lx1 0
+        ^:mut ^I32 ly1 0
+        ^:mut ^I32 bx0 0
+        ^:mut ^I32 by0 0
+        ^:mut ^I32 bx1 0
+        ^:mut ^I32 by1 0
+        ^:mut ^I32 ymid 0
+        ^:mut ^I32 asc 0
+        ^:mut ^I32 dsc 0
+        ^:mut ^I32 size 0
+        ^:mut ^I32 rot 0
+        ^:mut ^I32 dir 0
+        ^:mut ^I32 gap 0
+        ^:mut ^I32 first 0
+        ^:mut ^I32 ox 0
+        ^:mut ^I32 ox1 0
+        ^:mut ^I32 nx0 0
+        ^:mut ^I32 xm 0
+        ^:mut ^I32 commas 0
+        ^:mut ^I32 dollars 0
+        ^:mut ^I32 nx1 0]
+    (comment "Pass 1: every line's metrics, then their sizes clustered over the page.")
+    (while (< k nsel)
+      (do (if (< k (sc-cap))
+            (do (set l (cells-at scr (+ (sc-sel-base) k)))
+                (cells-set scr (+ 244 (* 4 k)) 0)
+                (cells-set scr (+ 242 (* 4 k)) -1)
+                (cells-set scr (+ 243 (* 4 k)) -1)
+                (cells-set scr (+ 245 (* 4 k)) -1)
+                (if (> (ol-get olines l (lh-count)) 0)
+                  (do (set xm (sc-metrics olines owords osyms l scr))
+                      (cells-set scr (+ 245 (* 4 k)) xm)
+                      (cells-set scr (+ 242 (* 4 k)) (cells-at scr 0))
+                      (cells-set scr (+ 243 (* 4 k)) (cells-at scr 1))))))
+          (set k (+ k 1))))
+    (if (< nsel (sc-cap))
+      (sc-fit scr nsel)
+      (sc-fit scr (sc-cap)))
+    (comment "the page's own conventions, counted over its words: how many write a thousands comma, how many a dollar sign")
+    (set commas 0)
+    (set dollars 0)
+    (set k 0)
+    (while (< k nsel)
+      (do (set l (cells-at scr (+ (sc-sel-base) k)))
+          (set cnt (ol-get olines l (lh-count)))
+          (set w0 (ol-get olines l (lh-first)))
+          (set j 0)
+          (while (< j cnt)
+            (do (set wi (+ w0 j))
+                (if (== (sc-thousands-comma etext (ow-get owords wi (hd-tstart)) (ow-get owords wi (hd-tlen))) 1)
+                  (set commas (+ commas 1)))
+                (if (== (sc-dollar-word etext (ow-get owords wi (hd-tstart)) (ow-get owords wi (hd-tlen))) 1)
+                  (set dollars (+ dollars 1)))
+                (set j (+ j 1))))
+          (set k (+ k 1))))
+    (cells-set scr (+ fb (* 4 fm)) commas)
+    (cells-set scr (+ fb (+ (* 4 fm) 1)) dollars)
+    (set k 0)
+    (while (< k nsel)
+      (do (set l (cells-at scr (+ (sc-sel-base) k)))
+          (set cnt (ol-get olines l (lh-count)))
+          (if (> cnt 0)
+            (do (set w0 (ol-get olines l (lh-first)))
+                (set lx0 (ol-get olines l (lh-x0)))
+                (set ly0 (ol-get olines l (lh-y0)))
+                (set lx1 (ol-get olines l (lh-x1)))
+                (set ly1 (ol-get olines l (lh-y1)))
+                (set bx0 (ol-get olines l (lh-bx0)))
+                (set by0 (ol-get olines l (lh-by0)))
+                (set bx1 (ol-get olines l (lh-bx1)))
+                (set by1 (ol-get olines l (lh-by1)))
+                (set dir (ol-get olines l (lh-dir)))
+                (if (< k (sc-cap))
+                  (do (set asc (cells-at scr (+ 242 (* 4 k))))
+                      (set dsc (cells-at scr (+ 243 (* 4 k)))))
+                  (do (sc-metrics olines owords osyms l scr)
+                      (set asc (cells-at scr 0))
+                      (set dsc (cells-at scr 1))
+                      (if (< dsc 0) (set dsc (quot (* asc 27) 100)))))
+                (comment "the words the line is emitted with: its own and the body-ink line's that lie over none of them, less the ones that are no text")
+                (set xl -1)
+                (set kk (- l (cells-at scr (sc-xtra-base))))
+                (if (and (>= kk 0) (< kk (sc-sel-max)))
+                  (set xl (- (cells-at scr (+ (sc-xtra-base) (+ kk 1))) 1)))
+                (if (!= dir 0) (set xl -1))
+                (set mg 0)
+                (set mc cnt)
+                (set j (sc-line-words olines owords etext l xl scr))
+                (if (> j 0)
+                  (do (set mg 1)
+                      (set mc (sc-fates owords etext osyms rules comps inks page j scr))))
+                (if (and (== mg 1) (> mc 0))
+                  (if (> j cnt)
+                    (do (set wi (cells-at scr fb))
+                        (set wn (cells-at scr (+ fb (- mc 1))))
+                        (set bx0 (ow-get owords wi (hd-bx0)))
+                        (set by0 (ow-get owords wi (hd-by0)))
+                        (set bx1 (ow-get owords wn (hd-bx1)))
+                        (set by1 (ow-get owords wn (hd-by1)))
+                        (set lx0 (sc-mn lx0 (ow-get owords wi (hd-x0))))
+                        (set lx1 (sc-mx lx1 (ow-get owords wn (hd-x1)))))))
+                (set ymid (quot (+ by0 by1) 2))
+                (if (> asc 0)
+                  (do (set size (quot (* asc 137) 100))
+                      (set ly0 (- ymid asc))
+                      (set ly1 (+ ymid dsc)))
+                  (set size (quot (* (- ly1 ly0) 108) 100)))
+                (if (< size 1) (set size 1))
+                (set rot (rem (+ (- (ev-angle (- bx1 bx0) (- by1 by0)) rotmed) 36000) 36000))
+                (set lnx (ln-count lines))
+                (set first (wd-count words))
+                (set j 0)
+                (while (< j mc)
+                  (do (set wi (+ w0 j))
+                      (set wn (+ w0 (+ j 1)))
+                      (set ts 0)
+                      (set tl 0)
+                      (if (== mg 1)
+                        (do (set wi (cells-at scr (+ fb j)))
+                            (set wn (cells-at scr (+ fb (+ j 1))))))
+                      (set ts (ow-get owords wi (hd-tstart)))
+                      (set tl (ow-get owords wi (hd-tlen)))
+                      (if (== mg 1)
+                        (if (>= (cells-at scr (+ fb (+ (* 2 fm) j))) 0)
+                          (do (set ts (cells-at scr (+ fb (+ (* 2 fm) j))))
+                              (set tl (cells-at scr (+ fb (+ (* 3 fm) j)))))))
+                      (set gap -1)
+                      (if (< (+ j 1) mc)
+                        (do (set ox (ow-get owords wi (hd-x0)))
+                            (set ox1 (ow-get owords wi (hd-x1)))
+                            (set nx0 (ow-get owords wn (hd-x0)))
+                            (set nx1 (ow-get owords wn (hd-x1)))
+                            (if (== dir 1)
+                              (set gap (- ox nx1))
+                              (set gap (- nx0 ox1)))))
+                      (set r (wd-new words page
+                                     (ow-get owords wi (hd-x0)) (ow-get owords wi (hd-y0))
+                                     (ow-get owords wi (hd-x1)) (ow-get owords wi (hd-y1))
+                                     (ow-get owords wi (hd-bx0)) (ow-get owords wi (hd-by0))
+                                     (ow-get owords wi (hd-bx1)) (ow-get owords wi (hd-by1))
+                                     rot dir ts tl
+                                     lnx (ow-get owords wi (hd-conf)) -1))
+                      (wd-set words r (wf-style) (ow-get owords wi (owf-style)))
+                      (wd-set words r (wf-size) size)
+                      (wd-set words r (wf-font) -1)
+                      (wd-set words r (wf-gap) gap)
+                      (wd-set words r (wf-wbreak) (wb-space))
+                      (if (== (+ j 1) mc) (wd-set words r (wf-wbreak) (wb-line-end)))
+                      (wd-set words r (wf-src) (sr-ocr))
+                      (set j (+ j 1))))
+                (if (> mc 0)
+                  (do (set r (ln-new lines page lx0 ly0 lx1 ly1 bx0 by0 bx1 by1 rot dir first mc))
+                      (ln-set lines r (lf-src) (sr-ocr))
+                      (ln-set lines r (lf-order) r)
+                      (set made (+ made 1))))))
+          (set k (+ k 1))))
+    (return made)))
+
 (defn ^:pub ^I32 sc-emit-lines [^Cells olines ^Cells owords ^Cells osyms ^I32 l0 ^I32 nl ^I32 page ^I32 rotmed
                           ^:mut ^Cells scr ^:mut ^Cells words ^:mut ^Cells lines]
   (comment "Every OCR line of the run [l0, l0 + nl) that has words as a `lines` row, and its words as `words` rows, in the arenas")
@@ -980,12 +1807,13 @@
   (comment "the shared `etext`'s: `hd-tstart` and `hd-tlen` of an OCR word are read as they are. Answers the lines made.")
   (return (sc-emit-core olines owords osyms l0 nl page rotmed scr words lines 0)))
 
-(defn ^:pub ^I32 sc-emit-sel [^Cells olines ^Cells owords ^Cells osyms ^I32 nsel ^I32 page ^I32 rotmed
-                              ^:mut ^Cells scr ^:mut ^Cells words ^:mut ^Cells lines]
+(defn ^:pub ^I32 sc-emit-sel [^Cells olines ^:mut ^Cells owords ^Cells osyms ^I32 nsel ^I32 page ^I32 rotmed
+                              ^:mut ^Cells scr ^:mut ^Cells words ^:mut ^Cells lines ^:mut ^Cells etext ^Cells rules ^Cells comps ^Cells inks]
   (comment "`sc-emit-lines` over the OCR lines the scratch names (P7.4): `nsel` `olines` rows, in the order to emit them, at `scr`")
   (comment "cells `sc-sel-base` and up (`sc-sel-set`; `sc-prep` makes room for `sc-sel-max` of them): the lines of several runs chosen")
-  (comment "line by line, their size clustered over the chosen lines. Answers the lines made.")
-  (return (sc-emit-core olines owords osyms 0 nsel page rotmed scr words lines 1)))
+  (comment "line by line, their size clustered over the chosen lines; and (P12.6, `sc-emit-vetted`) with the words a body-ink line adds, the words that")
+  (comment "are no text left out and the safe corrections made, `rules`, `comps` and `inks` being the tracer's rules, components and ink layers. Answers the lines made.")
+  (return (sc-emit-vetted olines owords osyms nsel page rotmed scr words lines etext rules comps inks)))
 
 (defn ^:pub ^I32 sc-sel-set [^:mut ^Cells scr ^I32 k ^I32 row]
   (cells-set scr (+ (sc-sel-base) k) row)

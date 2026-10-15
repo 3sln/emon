@@ -39,6 +39,15 @@ public static class Retargettest {
         Evidence.OlSet(olines, l, Evidence.OlfPh(), 100);
         return l;
     }
+    internal static int RttAdopt(emon.Port.Cells rtp, emon.Port.Cells oruns, int fr, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells scr) {
+        // `rt-adopt` with a text of four digits, which every word of `rtt-word` spells (it starts at 0 and is 4 long).
+        emon.Port.Cells c = emon.Port.NewCells();
+        emon.Port.CellsPush(c, 49);
+        emon.Port.CellsPush(c, 50);
+        emon.Port.CellsPush(c, 51);
+        emon.Port.CellsPush(c, 52);
+        return Retarget.RtAdopt(rtp, oruns, fr, olines, owords, c, scr);
+    }
     internal static int RttRun(emon.Port.Cells oruns, emon.Port.Cells olines, emon.Port.Cells owords, int l0, int w0) {
         // A run over the lines [l0, now) and the words [w0, now).
         int r = Evidence.OrNew(oruns, 1, 0);
@@ -179,12 +188,84 @@ public static class Retargettest {
         emon.Testport.AssertEq(emon.Port.CellsAt(scr, Scan.ScPartnerBase() + 1), 4, "that line");
         emon.Testport.AssertEq(Retarget.RtLineState(oruns, olines, owords, rtp, scr, 2, 2, br, 0, 4), 0, "a line with a little foreign ink under it stays");
         emon.Testport.AssertEq(Retarget.RtLineState(oruns, olines, owords, rtp, scr, 3, 3, br, 0, 4), 2, "a line mostly foreign ink that the body-ink run did not read is a ghost");
-        emon.Testport.AssertEq(Retarget.RtAdopt(rtp, oruns, fr, olines, owords, scr), 4, "four lines: the first, the second's reading, the third, and the line the first pass did not read; the ghost is dropped");
+        emon.Testport.AssertEq(RttAdopt(rtp, oruns, fr, olines, owords, scr), 4, "four lines: the first, the second's reading, the third, and the line the first pass did not read; the ghost is dropped");
         emon.Testport.AssertEq(emon.Port.CellsAt(scr, Scan.ScSelBase()), 0, "the first pass's first line");
         emon.Testport.AssertEq(emon.Port.CellsAt(scr, Scan.ScSelBase() + 1), 4, "then the body-ink run's line where the second was");
         emon.Testport.AssertEq(emon.Port.CellsAt(scr, Scan.ScSelBase() + 2), 2, "then the third, in the first pass's order");
         emon.Testport.AssertEq(emon.Port.CellsAt(scr, Scan.ScSelBase() + 3), 5, "and the body-ink run's line over nothing, below them where it lies");
         emon.Testport.AssertEq(emon.Port.CellsAt(rtp, Retarget.RtpPrimary()), fr, "the first pass is the page's reading");
+    }
+    internal static int RttLine3(emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells feats, int y0, int c1, int c2, int c3) {
+        // A line of three words at height y0: 100-600, 700-1200 and 1300-1700 (a right-aligned column), with these confidences; answers its row.
+        int first = Evidence.OwCount(owords);
+        int l = Evidence.OlCount(olines);
+        RttWord(owords, feats, 100, y0, 600, y0 + 100, c1, l);
+        RttWord(owords, feats, 700, y0, 1200, y0 + 100, c2, l);
+        RttWord(owords, feats, 1300, y0, 1700, y0 + 100, c3, l);
+        Evidence.OlNew(olines, 1, 100, y0, 1700, y0 + 100, 100, y0 + 100, 1700, y0 + 100, 0, 0, first, 3);
+        Evidence.OlSet(olines, l, Evidence.OlfPx(), 100);
+        Evidence.OlSet(olines, l, Evidence.OlfPy(), y0);
+        Evidence.OlSet(olines, l, Evidence.OlfPw(), 1600);
+        Evidence.OlSet(olines, l, Evidence.OlfPh(), 100);
+        return l;
+    }
+    [Xunit.Fact]
+    public static void TestASecondPassThatReadsAColumnTheFirstMissedHasThatColumnReadWithTheLine() {
+        // P12.6, the thermal receipt: the first pass stopped before the right-aligned amount column; the body-ink pass read the line as far as the amounts
+        emon.Port.Cells oruns = emon.Port.NewCells();
+        emon.Port.Cells olines = emon.Port.NewCells();
+        emon.Port.Cells owords = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells rtp = emon.Port.NewCells();
+        emon.Port.Cells scr = emon.Port.NewCells();
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells lines = emon.Port.NewCells();
+        emon.Port.Cells etext = emon.Port.NewCells();
+        Scan.ScPrep(scr);
+        emon.Port.CellsPush(etext, 49);
+        emon.Port.CellsPush(etext, 50);
+        emon.Port.CellsPush(etext, 51);
+        emon.Port.CellsPush(etext, 52);
+        RttLine(olines, owords, feats, 0, 900);
+        int fr = RttRun(oruns, olines, owords, 0, 0);
+        int l1 = Evidence.OlCount(olines);
+        int w1 = Evidence.OwCount(owords);
+        RttLine3(olines, owords, feats, 0, 900, 900, 800);
+        int br = RttRun(oruns, olines, owords, l1, w1);
+        Retarget.RtPrep(rtp);
+        emon.Port.CellsSet(rtp, Retarget.RtpBrun(), br);
+        emon.Port.CellsSet(scr, Scan.ScShareBase(), 0);
+        emon.Testport.AssertEq(Retarget.RtAdopt(rtp, oruns, fr, olines, owords, etext, scr), 1, "one line: the first pass's, which stays: no foreign ink under it");
+        emon.Testport.AssertEq(emon.Port.CellsAt(scr, Scan.ScXtraBase() + 1), l1 + 1, "and the body-ink line over it, whose third word lies over none of its own, is read with it");
+        emon.Testport.AssertEq(Scan.ScEmitSel(olines, owords, emon.Port.NewCells(), 1, 1, 0, scr, words, lines, etext, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), 1, "one line is emitted");
+        emon.Testport.AssertEq(Evidence.WdCount(words), 3, "of three words: the two the first pass read, and the column it did not");
+        emon.Testport.AssertEq(Evidence.WdGet(words, 0, Evidence.HdX0()), 100, "the first");
+        emon.Testport.AssertEq(Evidence.WdGet(words, 1, Evidence.HdX0()), 700, "the second");
+        emon.Testport.AssertEq(Evidence.WdGet(words, 2, Evidence.HdX0()), 1300, "and the column, after them");
+        emon.Testport.AssertEq(Evidence.WdGet(words, 1, Evidence.WfGap()), 100, "the gap of the second is to the column");
+        emon.Testport.AssertEq(Evidence.LnGet(lines, 0, Evidence.LhX1()), 1700, "the line is as long as the column");
+        emon.Testport.AssertEq(Evidence.LnGet(lines, 0, Evidence.LhCount()), 3, "of three words");
+    }
+    [Xunit.Fact]
+    public static void TestASecondPassWordThatIsUnsureOrLiesOverAWordOfTheFirstPassIsNotAdded() {
+        emon.Port.Cells oruns = emon.Port.NewCells();
+        emon.Port.Cells olines = emon.Port.NewCells();
+        emon.Port.Cells owords = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells rtp = emon.Port.NewCells();
+        emon.Port.Cells scr = emon.Port.NewCells();
+        Scan.ScPrep(scr);
+        RttLine(olines, owords, feats, 0, 900);
+        int fr = RttRun(oruns, olines, owords, 0, 0);
+        int l1 = Evidence.OlCount(olines);
+        int w1 = Evidence.OwCount(owords);
+        RttLine3(olines, owords, feats, 0, 900, 900, 300);
+        int br = RttRun(oruns, olines, owords, l1, w1);
+        Retarget.RtPrep(rtp);
+        emon.Port.CellsSet(rtp, Retarget.RtpBrun(), br);
+        emon.Port.CellsSet(scr, Scan.ScShareBase(), 0);
+        emon.Testport.AssertEq(RttAdopt(rtp, oruns, fr, olines, owords, scr), 1, "the first pass's line");
+        emon.Testport.AssertEq(emon.Port.CellsAt(scr, Scan.ScXtraBase() + 1), 0, "the column read at a confidence of 300 is not added: the first two words lie over the first pass's own");
     }
     [Xunit.Fact]
     public static void TestALineIsReadAgainByItsCellsOnlyWhenNoTextIsLostAndTheyAreSurer() {
@@ -244,7 +325,7 @@ public static class Retargettest {
         emon.Port.CellsSet(rtp, Retarget.RtpBrun(), br);
         emon.Testport.AssertEq(Retarget.RtCap(1600), Scan.ScSelMax(), "a count over the region is the region's");
         emon.Testport.AssertEq(Retarget.RtCap(7), 7, "and one under it is its own");
-        int n = Retarget.RtAdopt(rtp, oruns, fr, olines, owords, scr);
+        int n = RttAdopt(rtp, oruns, fr, olines, owords, scr);
         emon.Testport.AssertThat(n <= Scan.ScSelMax(), "the selection holds no more than the scratch has room for");
         emon.Testport.AssertThat(n > 1400, "and the 1500 lines it counts are read, bar the few that lie over the first pass's line");
     }

@@ -545,7 +545,7 @@ public static class Pageunit {
             Sigpx.SpFind(i + 1, views, vdec, rules, owords, etext, emon.Port.BmsGet(bms, rid), pw, s5, s6);
             Sigpx.SpRecord(i, s5, cg);
         }
-        nsel = Retarget.RtAdopt(rtp, oruns, run, olines, owords, scr);
+        nsel = Retarget.RtAdopt(rtp, oruns, run, olines, owords, etext, scr);
         if (seals == 1) {
             nsel = Sealpx.SxDropLines(scr, nsel, olines, owords, s1);
             nsel = Sigpx.SpDropLines(scr, nsel, olines, owords, s5);
@@ -553,7 +553,7 @@ public static class Pageunit {
         Retarget.RtUpright(rtp, run, epages, i + 1);
         nl = Evidence.OrGet(oruns, run, Evidence.OrfLcount());
         rotmed = Evidence.EvRotMedian(olines, l0, nl);
-        Scan.ScEmitSel(olines, owords, osyms, nsel, i + 1, rotmed, scr, words, lines);
+        Scan.ScEmitSel(olines, owords, osyms, nsel, i + 1, rotmed, scr, words, lines, etext, rules, comps, inks);
         emon.Port.CellsSet(mask, i, mv);
         return Plan.UsDone();
     }

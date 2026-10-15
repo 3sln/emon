@@ -3,10 +3,13 @@
 (ns emon.scantest
   (:require [emon.lang :refer [I32 Cells]]
             [emon.test :refer [deftest assert-eq assert-that new-cells]]
-            [emon.port :refer [cells-len cells-at cells-push]]
+            [emon.port :refer [cells-len cells-at cells-push cells-set]]
             [emon.plan :refer [rec-kind rec-id rq-arg rq-nargs an-ocr an-ocr-word an-ocr-cp an-ocr-end pk-ocr]]
             [emon.ocr :refer [ox-begin ox-line ox-block ox-word ox-sym ox-sym-cp ocf-dpi]]
-            [emon.evidence :refer [wd-count wd-get ln-count ln-get ol-count ol-get ow-count ow-get or-count or-get
+            [emon.evidence :refer [ol-new ow-new ow-set os-new rl-new rl-set rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1 rlf-thick owf-sfirst owf-scount
+                                   co-new co-set cf-conf cf-ink ik-new ik-set ikf-role ir-body
+                                   oe-garbage oe-rule-ghost oe-corrected
+                                   wd-count wd-get ln-count ln-get ol-count ol-get ow-count ow-get or-count or-get
                                    ob-count ob-get vw-px-to-cpt
                                    lh-first lh-count lh-rot lh-dir lh-x0 lh-x1 lh-y0 lh-y1 lh-by0 lh-by1
                                    wf-size wf-style wf-gap wf-wbreak wf-src wf-font lf-src lf-order hd-tstart hd-tlen hd-line
@@ -14,13 +17,14 @@
                                    orf-bview orf-lang orf-langlen orf-osd orf-script orf-view
                                    obf-orient obf-wdir obf-btype vwf-kind vk-engine-binary wb-space wb-line-end
                                    epf-page epf-flags eg-raster ep-count]]
-            [emon.scan :refer [sc-lang sc-request sc-page sc-tag sc-tag-unread sc-mask-unread sc-unread-conf]]
+            [emon.scan :refer [sc-lang sc-request sc-page sc-tag sc-tag-unread sc-mask-unread sc-unread-conf
+                               sc-emit-sel sc-prep sc-sel-base sc-implausible sc-leader sc-amount-like sc-groups-fix]]
             [emon.model :refer [model-init node-new node-add-src node-set-conf node-src node-conf node-flags
                                 node-add-region node-set-text node-attr attr-len page-new page-kind
                                 nk-paragraph nk-text nk-document sr-text sr-ocr sr-infer fl-ocr-only fl-low-conf fl-script-unread pk-vector pk-scanned
                                 pk-image fk-ocr]]
             [kin.lang :refer [defn return let set while if do comment
-                              + - * < > <= >= == != and or quot]]))
+                              + - * < > <= >= == != and or quot bit-and]]))
 
 ;; ------------------------------------------------------------------------------------------------- the language
 
@@ -420,3 +424,410 @@
     (assert-eq (wd-get wd 2 (wf-size)) 1117 "34 px again")
     (assert-eq (wd-get wd 4 (wf-size)) 1117 "and the last body line")
     (assert-eq (wd-get wd 3 (wf-size)) 1676 "the heading is its own size: its x-height (30 px) times the page's ratio of ascender line to x-height (1.7)")))
+
+;; ------------------------------------------------------------------------- what becomes of an OCR word (P12.6)
+
+(defn ^I32 pcps [^:mut ^Cells c ^I32 a ^I32 b ^I32 d ^I32 e ^I32 f ^I32 g ^I32 h ^I32 i ^I32 j ^I32 k]
+  (comment "Push these code points (a 0 ends them) onto `c`; answers how many.")
+  (let [^I32 n (cells-len c)]
+    (if (> a 0) (cells-push c a))
+    (if (> b 0) (cells-push c b))
+    (if (> d 0) (cells-push c d))
+    (if (> e 0) (cells-push c e))
+    (if (> f 0) (cells-push c f))
+    (if (> g 0) (cells-push c g))
+    (if (> h 0) (cells-push c h))
+    (if (> i 0) (cells-push c i))
+    (if (> j 0) (cells-push c j))
+    (if (> k 0) (cells-push c k))
+    (return (- (cells-len c) n))))
+
+(defn ^I32 txt-of [^:mut ^Cells c ^I32 a ^I32 b ^I32 d ^I32 e ^I32 f ^I32 g ^I32 h ^I32 i ^I32 j ^I32 k]
+  (comment "A fresh text of these code points; answers where it starts in `c`.")
+  (let [^I32 s (cells-len c)]
+    (pcps c a b d e f g h i j k)
+    (return s)))
+
+(defn ^I32 t-impl [^:mut ^Cells t ^I32 a ^I32 b ^I32 d ^I32 e ^I32 f ^I32 g ^I32 h ^I32 i ^I32 j ^I32 k]
+  (comment "`sc-implausible` of the text these code points spell (a 0 ends them).")
+  (let [^I32 s (txt-of t a b d e f g h i j k)]
+    (return (sc-implausible t s (- (cells-len t) s)))))
+
+(defn ^I32 t-leader [^:mut ^Cells t ^I32 a ^I32 b ^I32 d ^I32 e ^I32 f ^I32 g ^I32 h ^I32 i ^I32 j ^I32 k]
+  (let [^I32 s (txt-of t a b d e f g h i j k)]
+    (return (sc-leader t s (- (cells-len t) s)))))
+
+(defn ^I32 t-amount [^:mut ^Cells t ^I32 a ^I32 b ^I32 d ^I32 e ^I32 f ^I32 g ^I32 h ^I32 i ^I32 j ^I32 k]
+  (let [^I32 s (txt-of t a b d e f g h i j k)]
+    (return (sc-amount-like t s (- (cells-len t) s)))))
+
+(defn ^I32 t-groups [^:mut ^Cells t ^I32 a ^I32 b ^I32 d ^I32 e ^I32 f ^I32 g ^I32 h ^I32 i ^I32 j ^I32 k]
+  (let [^I32 s (txt-of t a b d e f g h i j k)]
+    (return (sc-groups-fix t s (- (cells-len t) s)))))
+
+(deftest test-a-word-of-odd-glyphs-or-a-repeated-few-characters-is-implausible
+  (let [^Cells t (new-cells)]
+    (assert-eq (t-impl t 124 0 0 0 0 0 0 0 0 0) 1 "a lone vertical bar is no word")
+    (assert-eq (t-impl t 167 0 0 0 0 0 0 0 0 0) 1 "a lone section sign is none")
+    (assert-eq (t-impl t 97 0 0 0 0 0 0 0 0 0) 0 "a lone letter is one")
+    (assert-eq (t-impl t 52 0 0 0 0 0 0 0 0 0) 0 "and a lone digit")
+    (assert-eq (t-impl t 120 123 121 125 0 0 0 0 0 0) 1 "two odd glyphs")
+    (assert-eq (t-impl t 97 98 126 99 49 0 0 0 0 0) 1 "letters, digits and an odd glyph together")
+    (assert-eq (t-impl t 101 100 101 100 101 100 101 100 101 100) 1 "ten characters of two different ones (a texture read as `ededededed`)")
+    (assert-eq (t-impl t 80 101 116 101 116 101 116 100 101 100) 0 "ten of four different ones are just odd")
+    (assert-eq (t-impl t 104 101 108 108 111 0 0 0 0 0) 0 "a word")
+    (assert-eq (t-impl t 49 44 48 56 57 46 53 56 0 0) 0 "an amount")
+    (assert-eq (t-impl t 45 45 45 45 0 0 0 0 0 0) 1 "four marks and no letter or digit")))
+
+(deftest test-a-dot-leader-read-as-characters-is-one
+  (let [^Cells t (new-cells)]
+    (assert-eq (t-leader t 46 46 46 0 0 0 0 0 0 0) 1 "three dots")
+    (assert-eq (t-leader t 46 46 0 0 0 0 0 0 0 0) 0 "two are an ellipsis' remains")
+    (assert-eq (t-leader t 50 50 46 50 50 50 50 0 0 0) 1 "`22.2222`: a digit repeated, dots among it, and no cents")
+    (assert-eq (t-leader t 50 50 46 50 50 0 0 0 0 0) 0 "`22.22` is an amount")
+    (assert-eq (t-leader t 50 46 56 48 0 0 0 0 0 0) 0 "`2.80` is one")
+    (assert-eq (t-leader t 49 46 50 50 50 50 50 0 0 0) 0 "a digit that is not repeated is a number")))
+
+(deftest test-an-amount-is-digits-with-separators-and-maybe-a-minus-or-parentheses
+  (let [^Cells t (new-cells)]
+    (assert-eq (t-amount t 50 53 46 49 53 0 0 0 0 0) 1 "25.15")
+    (assert-eq (t-amount t 40 51 51 49 44 50 55 57 41 0) 1 "(331,279)")
+    (assert-eq (t-amount t 45 52 46 53 48 0 0 0 0 0) 1 "-4.50")
+    (assert-eq (t-amount t 97 98 99 0 0 0 0 0 0 0) 0 "letters")
+    (assert-eq (t-amount t 49 50 0 0 0 0 0 0 0 0) 0 "two digits are no amount")
+    (assert-eq (t-amount t 83 50 53 46 49 53 0 0 0 0) 0 "an S before it is none")))
+
+(deftest test-thousands-read-with-periods-are-found-and-a-european-whole-number-is-not
+  (let [^Cells t (new-cells)]
+    (assert-eq (t-groups t 52 46 57 56 53 46 57 0 0 0) 1 "4.985.9")
+    (assert-eq (t-groups t 51 51 46 52 49 52 46 49 0 0) 1 "33.414.1")
+    (assert-eq (t-groups t 49 46 50 51 52 46 53 54 55 0) 0 "1.234.567: the last group is of three: a whole number")
+    (assert-eq (t-groups t 52 44 57 56 53 46 57 0 0 0) 0 "4,985.9 is right as it is")
+    (assert-eq (t-groups t 50 46 56 48 0 0 0 0 0 0) 0 "2.80 has one period")
+    (assert-eq (t-groups t 49 50 46 51 52 53 54 46 55 0) 0 "a group of four is no group")))
+
+(defn ^I32 st-word [^:mut ^Cells owords ^:mut ^Cells etext ^I32 x0 ^I32 x1 ^I32 conf ^I32 line
+                    ^I32 a ^I32 b ^I32 c ^I32 d ^I32 e ^I32 f ^I32 g ^I32 h]
+  (comment "An OCR word of page 1 from x0 to x1 (100 centipoints high) of OCR line `line`, with this text and confidence; answers its row.")
+  (let [^I32 ts (cells-len etext)
+        ^I32 n (pcps etext a b c d e f g h 0 0)]
+    (return (ow-new owords 1 x0 0 x1 100 x0 100 x1 100 0 0 ts n line conf -1))))
+
+(defn ^I32 st-line [^:mut ^Cells olines ^I32 x0 ^I32 x1 ^I32 first ^I32 count]
+  (return (ol-new olines 1 x0 0 x1 100 x0 100 x1 100 0 0 first count)))
+
+(defn ^I32 st-emit [^Cells olines ^:mut ^Cells owords ^:mut ^Cells words ^:mut ^Cells lines ^:mut ^Cells etext ^Cells rules ^I32 nsel]
+  (comment "The lines 0 to nsel - 1 of `olines` through `sc-emit-sel`, as they are: nothing of a body-ink pass. Answers the lines made.")
+  (let [^Cells scr (new-cells)]
+    (sc-prep scr)
+    (let [^:mut ^I32 k 0]
+      (while (< k nsel)
+        (do (cells-set scr (+ (sc-sel-base) k) k)
+            (set k (+ k 1)))))
+    (return (sc-emit-sel olines owords (new-cells) nsel 1 0 scr words lines etext rules (new-cells) (new-cells)))))
+
+(deftest test-a-word-of-no-confidence-and-odd-glyphs-alone-is-kept-out-and-flagged
+  (let [^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells words (new-cells)
+        ^Cells lines (new-cells)
+        ^Cells et (new-cells)]
+    (st-word owords et 100 600 900 0 84 111 116 97 108 0 0 0)
+    (st-word owords et 700 900 120 0 126 124 0 0 0 0 0 0)
+    (st-line olines 100 900 0 2)
+    (st-word owords et 100 600 100 1 126 0 0 0 0 0 0 0)
+    (st-line olines 100 600 2 1)
+    (assert-eq (st-emit olines owords words lines et (new-cells) 2) 1 "the first line stays; the second held nothing but a tilde and is no line")
+    (assert-eq (wd-count words) 1 "one word: the line's `Total`, since a word of confidence 120 and two odd glyphs in a line of two is garbage")
+    (assert-eq (bit-and (ow-get owords 1 (owf-flags)) (oe-garbage)) (oe-garbage) "the engine's row says it was kept out")
+    (assert-eq (bit-and (ow-get owords 2 (owf-flags)) (oe-garbage)) (oe-garbage) "and so does the lone tilde's")
+    (assert-eq (bit-and (ow-get owords 0 (owf-flags)) (oe-garbage)) 0 "the good word's does not")))
+
+(deftest test-an-unsure-but-plausible-word-in-a-good-line-stays
+  (let [^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells words (new-cells)
+        ^Cells lines (new-cells)
+        ^Cells et (new-cells)]
+    (st-word owords et 100 600 900 0 84 111 116 97 108 0 0 0)
+    (st-word owords et 700 900 150 0 99 111 108 97 0 0 0 0)
+    (st-word owords et 1000 1400 920 0 66 111 120 0 0 0 0 0)
+    (st-line olines 100 1400 0 3)
+    (assert-eq (st-emit olines owords words lines et (new-cells) 1) 1 "one line")
+    (assert-eq (wd-count words) 3 "all three words: a word the engine is unsure of is not garbage unless it also is implausible and alone or among such")))
+
+(deftest test-a-line-of-unsure-words-is-texture-and-is-kept-out
+  (let [^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells words (new-cells)
+        ^Cells lines (new-cells)
+        ^Cells et (new-cells)]
+    (st-word owords et 100 300 272 0 82 97 101 0 0 0 0 0)
+    (st-word owords et 400 600 201 0 111 101 0 0 0 0 0 0)
+    (st-word owords et 700 900 294 0 101 101 0 0 0 0 0 0)
+    (st-line olines 100 900 0 3)
+    (st-word owords et 100 600 900 1 71 111 111 100 0 0 0 0)
+    (st-line olines 100 600 3 1)
+    (assert-eq (st-emit olines owords words lines et (new-cells) 2) 1 "the first line, three words of a mean confidence of 250 and none over 450, is texture; the second stays")
+    (assert-eq (wd-count words) 1 "one word")
+    (assert-eq (wd-get words 0 (hd-tlen)) 4 "`Good`")))
+
+(deftest test-a-dot-leader-is-kept-out-whatever-its-confidence
+  (let [^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells words (new-cells)
+        ^Cells lines (new-cells)
+        ^Cells et (new-cells)]
+    (st-word owords et 100 600 900 0 84 111 116 97 108 0 0 0)
+    (st-word owords et 700 1300 950 0 50 50 46 50 50 50 50 0)
+    (st-word owords et 1400 1800 930 0 49 46 56 48 0 0 0 0)
+    (st-line olines 100 1800 0 3)
+    (assert-eq (st-emit olines owords words lines et (new-cells) 1) 1 "one line")
+    (assert-eq (wd-count words) 2 "of two words: `22.2222` is a leader and `1.80` is an amount")
+    (assert-eq (bit-and (ow-get owords 1 (owf-flags)) (oe-garbage)) (oe-garbage) "the leader's row is flagged")))
+
+(defn ^I32 st-rule [^:mut ^Cells rules ^I32 x ^I32 y0 ^I32 y1]
+  (comment "A vertical rule of page 1 at x from y0 to y1, 10 centipoints thick; answers its row.")
+  (let [^I32 r (rl-new rules 1 (- x 5) y0 (+ x 5) y1 0)]
+    (rl-set rules r (rlf-lx0) x)
+    (rl-set rules r (rlf-ly0) y0)
+    (rl-set rules r (rlf-lx1) x)
+    (rl-set rules r (rlf-ly1) y1)
+    (rl-set rules r (rlf-thick) 10)
+    (return r)))
+
+(deftest test-a-table-rule-read-as-a-character-is-kept-out-where-it-lies-on-a-rule-and-only-there
+  (let [^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells words (new-cells)
+        ^Cells lines (new-cells)
+        ^Cells et (new-cells)
+        ^Cells rules (new-cells)]
+    (st-rule rules 1000 0 2000)
+    (st-word owords et 100 600 900 0 84 111 116 97 108 0 0 0)
+    (st-word owords et 990 1010 800 0 124 0 0 0 0 0 0 0)
+    (st-word owords et 1100 1500 900 0 49 50 46 48 48 0 0 0)
+    (st-line olines 100 1500 0 3)
+    (st-word owords et 100 600 900 1 78 97 109 101 0 0 0 0)
+    (st-word owords et 1400 1420 800 1 73 0 0 0 0 0 0 0)
+    (st-line olines 100 1420 3 2)
+    (assert-eq (st-emit olines owords words lines et rules 2) 2 "two lines")
+    (assert-eq (wd-count words) 4 "four words of the five: the bar on the rule at 1000 is out; the `I` at 1400 is on no rule and is a word")
+    (assert-eq (bit-and (ow-get owords 1 (owf-flags)) (oe-rule-ghost)) (oe-rule-ghost) "the bar's row is flagged as a rule's ghost")
+    (assert-eq (bit-and (ow-get owords 4 (owf-flags)) (oe-rule-ghost)) 0 "the lone `I` away from a rule is not")))
+
+(deftest test-a-bar-glued-to-the-end-of-an-amount-on-a-rule-is-cut-off-and-the-engines-text-stays
+  (let [^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells osyms (new-cells)
+        ^Cells words (new-cells)
+        ^Cells lines (new-cells)
+        ^Cells et (new-cells)
+        ^Cells rules (new-cells)
+        ^Cells scr (new-cells)]
+    (st-rule rules 1000 0 2000)
+    (st-word owords et 100 1010 900 0 49 44 50 48 46 53 48 124)
+    (st-line olines 100 1010 0 1)
+    (os-new osyms 1 100 0 400 100 49 0 1 0)
+    (os-new osyms 1 996 0 1004 100 124 7 1 0)
+    (ow-set owords 0 (owf-sfirst) 0)
+    (ow-set owords 0 (owf-scount) 2)
+    (sc-prep scr)
+    (cells-set scr (sc-sel-base) 0)
+    (assert-eq (sc-emit-sel olines owords osyms 1 1 0 scr words lines et rules (new-cells) (new-cells)) 1 "one line")
+    (assert-eq (wd-get words 0 (hd-tlen)) 7 "`1,20.50`: the bar is cut off")
+    (assert-eq (ow-get owords 0 (hd-tlen)) 8 "and the engine's row still says all eight characters")
+    (assert-eq (bit-and (ow-get owords 0 (owf-flags)) (oe-corrected)) (oe-corrected) "flagged as corrected")))
+
+(deftest test-thousands-read-with-periods-get-their-commas-back-in-the-pages-words-and-not-in-the-evidence
+  (let [^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells words (new-cells)
+        ^Cells lines (new-cells)
+        ^Cells et (new-cells)]
+    (st-word owords et 100 700 900 0 52 46 57 56 53 46 57 0)
+    (st-line olines 100 700 0 1)
+    (assert-eq (st-emit olines owords words lines et (new-cells) 1) 1 "one line")
+    (let [^I32 ts (wd-get words 0 (hd-tstart))]
+      (assert-eq (wd-get words 0 (hd-tlen)) 7 "seven characters")
+      (assert-eq (cells-at et ts) 52 "4")
+      (assert-eq (cells-at et (+ ts 1)) 44 "a comma where the first period was")
+      (assert-eq (cells-at et (+ ts 5)) 46 "and the last period, the decimal point, kept"))
+    (assert-eq (cells-at et (ow-get owords 0 (hd-tstart))) 52 "the evidence keeps the engine's text")
+    (assert-eq (cells-at et (+ (ow-get owords 0 (hd-tstart)) 1)) 46 "with its period")
+    (assert-eq (bit-and (ow-get owords 0 (owf-flags)) (oe-corrected)) (oe-corrected) "and says it was corrected")))
+
+(deftest test-an-s-or-a-section-sign-alone-before-an-amount-of-its-height-is-a-dollar-and-only-then
+  (let [^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells words (new-cells)
+        ^Cells lines (new-cells)
+        ^Cells et (new-cells)]
+    (st-word owords et 100 300 800 0 83 0 0 0 0 0 0 0)
+    (st-word owords et 340 900 900 0 50 53 46 49 53 0 0 0)
+    (st-line olines 100 900 0 2)
+    (st-word owords et 100 300 800 1 167 0 0 0 0 0 0 0)
+    (st-word owords et 340 900 900 1 49 44 50 48 48 0 0 0)
+    (st-line olines 100 900 2 2)
+    (st-word owords et 100 300 800 2 83 0 0 0 0 0 0 0)
+    (st-word owords et 1600 2100 900 2 50 53 46 49 53 0 0 0)
+    (st-line olines 100 2100 4 2)
+    (st-word owords et 100 300 800 3 83 0 0 0 0 0 0 0)
+    (st-word owords et 340 900 900 3 50 53 0 0 0 0 0 0)
+    (st-line olines 100 900 6 2)
+    (assert-eq (st-emit olines owords words lines et (new-cells) 4) 4 "four lines")
+    (assert-eq (cells-at et (wd-get words 0 (hd-tstart))) 36 "`S 25.15`: a dollar")
+    (assert-eq (wd-get words 0 (hd-tlen)) 1 "one character")
+    (assert-eq (cells-at et (wd-get words 2 (hd-tstart))) 36 "`§ 1,200`: a dollar")
+    (assert-eq (cells-at et (wd-get words 4 (hd-tstart))) 83 "an S far from the amount is an S")
+    (assert-eq (cells-at et (wd-get words 6 (hd-tstart))) 83 "an S before a number with no cents or separator is an S")
+    (assert-eq (bit-and (ow-get owords 0 (owf-flags)) (oe-corrected)) (oe-corrected) "the first is flagged as corrected")
+    (assert-eq (bit-and (ow-get owords 4 (owf-flags)) (oe-corrected)) 0 "and the S far from its amount is not")))
+
+(defn ^I32 dot-scene [^I32 dot ^I32 above ^I32 firstw]
+  (comment "The word `480` of a thermal receipt (0.04 inch of it a dot the engine lost: its first symbol's box is wider than the others', it takes the dot in) emitted with a dot component")
+  (comment "of the body layer between the first two digits (`dot` 1), a stroke of body ink above that dot in its column (`above` 1: a broken digit, not a dot), and the first symbol's width")
+  (comment "(`firstw`: 504 is wider, 340 is as wide as the others). Answers how long the emitted word is (3 or 4); its text is left in the shared text, after the engine's.")
+  (let [^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells osyms (new-cells)
+        ^Cells words (new-cells)
+        ^Cells lines (new-cells)
+        ^Cells et (new-cells)
+        ^Cells comps (new-cells)
+        ^Cells inks (new-cells)]
+    (cells-push et 52)
+    (cells-push et 56)
+    (cells-push et 48)
+    (ow-new owords 1 9480 15912 10752 16464 9480 16464 10752 16464 0 0 0 3 0 900 -1)
+    (ol-new olines 1 9480 15912 10752 16464 9480 16464 10752 16464 0 0 0 1)
+    (os-new osyms 1 9480 15912 (+ 9480 firstw) 16464 52 0 1 0)
+    (os-new osyms 1 10032 15912 10368 16440 56 1 1 0)
+    (os-new osyms 1 10392 15912 10752 16440 48 2 1 0)
+    (ow-set owords 0 (owf-sfirst) 0)
+    (ow-set owords 0 (owf-scount) 3)
+    (ik-new inks 1 0)
+    (ik-set inks 0 (ikf-role) (ir-body))
+    (if (== dot 1)
+      (let [^I32 r (co-new comps 1 9912 16344 9984 16440 0)]
+        (co-set comps r (cf-conf) 700)
+        (co-set comps r (cf-ink) 0)))
+    (if (== above 1)
+      (let [^I32 r (co-new comps 1 9900 15912 10000 16200 0)]
+        (co-set comps r (cf-conf) 700)
+        (co-set comps r (cf-ink) 0)))
+    (let [^Cells scr (new-cells)]
+      (sc-prep scr)
+      (cells-set scr (sc-sel-base) 0)
+      (sc-emit-sel olines owords osyms 1 1 0 scr words lines et (new-cells) comps inks)
+      (return (wd-get words 0 (hd-tlen))))))
+
+(deftest test-a-decimal-point-the-engine-lost-and-the-page-shows-is-put-back-and-only-where-the-page-shows-it
+  (assert-eq (dot-scene 1 0 504) 4 "`480` with a dot between the 4 and the 8, and the 4's box wider than the 8's: `4.80`")
+  (assert-eq (dot-scene 0 0 504) 3 "no dot in the pixels: `480` stays, a wide box is not evidence enough")
+  (assert-eq (dot-scene 1 0 340) 3 "a dot in the pixels and no box that took it in: `480` stays (a speck between two digits is not a decimal point)")
+  (assert-eq (dot-scene 1 1 504) 3 "the speck has ink above it in its column, so it is a part of a broken digit: `480` stays"))
+
+(deftest test-the-point-put-back-is-in-the-pages-words-and-the-engines-row-keeps-its-text
+  (let [^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells osyms (new-cells)
+        ^Cells words (new-cells)
+        ^Cells lines (new-cells)
+        ^Cells et (new-cells)
+        ^Cells comps (new-cells)
+        ^Cells inks (new-cells)
+        ^Cells scr (new-cells)]
+    (cells-push et 52)
+    (cells-push et 56)
+    (cells-push et 48)
+    (ow-new owords 1 9480 15912 10752 16464 9480 16464 10752 16464 0 0 0 3 0 900 -1)
+    (ol-new olines 1 9480 15912 10752 16464 9480 16464 10752 16464 0 0 0 1)
+    (os-new osyms 1 9480 15912 9984 16464 52 0 1 0)
+    (os-new osyms 1 10032 15912 10368 16440 56 1 1 0)
+    (os-new osyms 1 10392 15912 10752 16440 48 2 1 0)
+    (ow-set owords 0 (owf-sfirst) 0)
+    (ow-set owords 0 (owf-scount) 3)
+    (ik-new inks 1 0)
+    (ik-set inks 0 (ikf-role) (ir-body))
+    (let [^I32 r (co-new comps 1 9912 16344 9984 16440 0)]
+      (co-set comps r (cf-conf) 700)
+      (co-set comps r (cf-ink) 0))
+    (sc-prep scr)
+    (cells-set scr (sc-sel-base) 0)
+    (sc-emit-sel olines owords osyms 1 1 0 scr words lines et (new-cells) comps inks)
+    (let [^I32 ts (wd-get words 0 (hd-tstart))]
+      (assert-eq (cells-at et ts) 52 "4")
+      (assert-eq (cells-at et (+ ts 1)) 46 "the point")
+      (assert-eq (cells-at et (+ ts 2)) 56 "8")
+      (assert-eq (cells-at et (+ ts 3)) 48 "0"))
+    (assert-eq (ow-get owords 0 (hd-tlen)) 3 "the evidence's word is still three characters")
+    (assert-eq (bit-and (ow-get owords 0 (owf-flags)) (oe-corrected)) (oe-corrected) "and is flagged as corrected")))
+
+(defn ^I32 st-wordl [^:mut ^Cells owords ^:mut ^Cells etext ^I32 x0 ^I32 x1 ^I32 conf ^I32 line
+                     ^I32 a ^I32 b ^I32 c ^I32 d ^I32 e ^I32 f ^I32 g ^I32 h ^I32 i ^I32 j]
+  (comment "`st-word` for a word of up to ten characters.")
+  (let [^I32 ts (cells-len etext)
+        ^I32 n (pcps etext a b c d e f g h i j)]
+    (return (ow-new owords 1 x0 0 x1 100 x0 100 x1 100 0 0 ts n line conf -1))))
+
+(deftest test-a-thousands-comma-read-as-a-period-is-put-back-on-a-page-that-writes-them-with-commas-and-only-there
+  (let [^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells words (new-cells)
+        ^Cells lines (new-cells)
+        ^Cells et (new-cells)]
+    (st-wordl owords et 100 700 900 0 52 53 57 44 48 56 56 0 0 0)
+    (st-wordl owords et 800 1400 900 0 50 51 55 44 50 51 56 0 0 0)
+    (st-wordl owords et 1500 2400 900 0 40 51 51 49 46 50 55 57 41 0)
+    (st-wordl owords et 2500 3500 900 0 36 40 49 51 56 46 56 54 54 41)
+    (st-line olines 100 3500 0 4)
+    (assert-eq (st-emit olines owords words lines et (new-cells) 1) 1 "one line")
+    (assert-eq (cells-at et (+ (wd-get words 2 (hd-tstart)) 4)) 44 "`(331.279)` is `(331,279)` on a page whose other amounts have commas")
+    (assert-eq (wd-get words 2 (hd-tlen)) 9 "of the same length")
+    (assert-eq (cells-at et (+ (wd-get words 3 (hd-tstart)) 5)) 44 "and `$(138.866)` is `$(138,866)`")
+    (assert-eq (cells-at et (+ (ow-get owords 2 (hd-tstart)) 4)) 46 "the evidence keeps the engine's period")))
+
+(deftest test-a-period-before-three-digits-stays-on-a-page-without-thousands-commas
+  (let [^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells words (new-cells)
+        ^Cells lines (new-cells)
+        ^Cells et (new-cells)]
+    (st-wordl owords et 100 900 900 0 40 51 51 49 46 50 55 57 41 0)
+    (st-wordl owords et 1000 1400 900 0 49 46 50 51 52 0 0 0 0 0)
+    (st-line olines 100 1400 0 2)
+    (assert-eq (st-emit olines owords words lines et (new-cells) 1) 1 "one line")
+    (assert-eq (cells-at et (+ (wd-get words 0 (hd-tstart)) 4)) 46 "`(331.279)` stays: nothing on the page writes a thousands comma")
+    (assert-eq (cells-at et (+ (wd-get words 1 (hd-tstart)) 1)) 46 "and `1.234` stays")))
+
+(deftest test-a-dollar-sign-read-as-a-section-sign-is-put-back-on-a-page-that-writes-its-amounts-with-dollar-signs-and-only-there
+  (let [^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells words (new-cells)
+        ^Cells lines (new-cells)
+        ^Cells et (new-cells)]
+    (st-wordl owords et 100 900 900 0 36 52 53 57 44 48 56 56 0 0)
+    (st-wordl owords et 1000 1800 900 0 36 50 51 55 44 50 51 56 0 0)
+    (st-wordl owords et 1900 2700 900 0 167 51 51 51 46 52 51 48 0 0)
+    (st-line olines 100 2700 0 3)
+    (st-wordl owords et 100 300 800 1 115 0 0 0 0 0 0 0 0 0)
+    (st-wordl owords et 340 1100 900 1 50 44 53 57 49 46 51 0 0 0)
+    (st-line olines 100 1100 3 2)
+    (assert-eq (st-emit olines owords words lines et (new-cells) 2) 2 "two lines")
+    (assert-eq (cells-at et (wd-get words 2 (hd-tstart))) 36 "`§333.430` is `$333,430`: a dollar sign")
+    (assert-eq (cells-at et (+ (wd-get words 2 (hd-tstart)) 4)) 44 "and its period a comma")
+    (assert-eq (cells-at et (wd-get words 3 (hd-tstart))) 36 "a lone `s` before an amount is a dollar sign on that page, even with no cents")))
+
+(deftest test-a-section-sign-before-digits-stays-on-a-page-with-no-dollar-signs
+  (let [^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells words (new-cells)
+        ^Cells lines (new-cells)
+        ^Cells et (new-cells)]
+    (st-wordl owords et 100 900 900 0 167 51 51 51 46 52 51 48 0 0)
+    (st-wordl owords et 1000 1800 900 0 50 51 55 44 50 51 56 0 0 0)
+    (st-wordl owords et 1900 2700 900 0 52 53 57 44 48 56 56 0 0 0)
+    (st-line olines 100 2700 0 3)
+    (assert-eq (st-emit olines owords words lines et (new-cells) 1) 1 "one line")
+    (assert-eq (cells-at et (wd-get words 0 (hd-tstart))) 167 "`§333.430` stays: no amount on the page has a dollar sign")))

@@ -1221,7 +1221,7 @@ func rtNextBonly(olines *port.Cells, scr *port.Cells, bl0 int32, bn int32, limit
 	return best
 }
 
-func RtAdopt(rtp *port.Cells, oruns *port.Cells, fr int32, olines *port.Cells, owords *port.Cells, scr *port.Cells) int32 {
+func RtAdopt(rtp *port.Cells, oruns *port.Cells, fr int32, olines *port.Cells, owords *port.Cells, etext *port.Cells, scr *port.Cells) int32 {
 	// The lines a SCANNED page's pipeline reads, in the order it reads them, written to the selection of `scr` (`sc-sel-set`); answers how
 	// many. `fr` is the first pass's run. A page that was turned (`rtp-q`) is read from its turned view's run when that scores `rt-turn-gain`
 	// per cent of the first pass's; an upright page is read from the first pass, each of its lines kept, replaced or dropped by `rt-line-state` (which wants
@@ -1258,6 +1258,13 @@ func RtAdopt(rtp *port.Cells, oruns *port.Cells, fr int32, olines *port.Cells, o
 		}
 	}
 	port.CellsSet(rtp, RtpPrimary(), primary)
+	// P12.6: the words of a body-ink line that a first-pass line stays with (`sc-xtra-base`): none yet
+	port.CellsSet(scr, scan.ScXtraBase(), fl0)
+	for k < nk {
+		port.CellsSet(scr, scan.ScXtraBase()+(k+1), 0)
+		k += 1
+	}
+	k = 0
 	if primary != fr {
 		pl0 = evidence.OrGet(oruns, primary, evidence.OrfLfirst())
 		pn = evidence.OrGet(oruns, primary, evidence.OrfLcount())
@@ -1307,6 +1314,19 @@ func RtAdopt(rtp *port.Cells, oruns *port.Cells, fr int32, olines *port.Cells, o
 					n = rtSelAdd(scr, n, bl0+b)
 					port.CellsSet(scr, scan.ScBonlyBase()+b, 2)
 					b = rtNextBonly(olines, scr, bl0, bn, ly)
+				}
+			}
+		}
+		// P12.6: a line that stays, with a body-ink line that is its partner both ways and reads words that lie over none of its own (a column the first pass stopped before)
+		if (s == 0) && (brun >= 0) {
+			if evidence.OlGet(olines, l, evidence.LhCount()) > 0 {
+				b = rtBestOver(olines, l, bl0, evidence.OrGet(oruns, brun, evidence.OrfLcount()))
+				if b >= 0 {
+					if rtBestOver(olines, b, fl0, fnl) == l {
+						if scan.ScXtraCount(olines, owords, etext, l, b) > 0 {
+							port.CellsSet(scr, scan.ScXtraBase()+(k+1), b+1)
+						}
+					}
 				}
 			}
 		}

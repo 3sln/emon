@@ -498,6 +498,15 @@ public static class Evidence {
     public static int OeFallback() {
         return 4;
     }
+    public static int OeGarbage() {
+        return 8;
+    }
+    public static int OeRuleGhost() {
+        return 16;
+    }
+    public static int OeCorrected() {
+        return 32;
+    }
     public static int OeEmitName(System.Text.StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.TextAscii(t, "dictionary");
@@ -509,6 +518,18 @@ public static class Evidence {
         }
         if (code == 4) {
             emon.Port.TextAscii(t, "fallback");
+            return 1;
+        }
+        if (code == 8) {
+            emon.Port.TextAscii(t, "garbage");
+            return 1;
+        }
+        if (code == 16) {
+            emon.Port.TextAscii(t, "rule-ghost");
+            return 1;
+        }
+        if (code == 32) {
+            emon.Port.TextAscii(t, "corrected");
             return 1;
         }
         return 0;
@@ -3806,13 +3827,13 @@ public static class Evidence {
         1, 2, 2, 74, 0, 0,
         1, 3, 1, 75, 0, 0,
         1, 4, 9, 28, 0, 7,
-        1, 5, 1, 76, 0, 0,
+        1, 5, 2, 76, 0, 0,
         2, 0, 1, 9, -2147483648, 0,
         2, 1, 8, 31, 0, 19,
         2, 2, 1, 77, -1, 0,
         2, 3, 1, 48, -1, 0,
         2, 4, 12, 36, 0, 0,
-        2, 6, 1, 76, 0, 0,
+        2, 6, 2, 76, 0, 0,
         2, 7, 1, 38, 0, 0,
         2, 8, 1, 78, -1, 0,
         2, 9, 1, 75, 0, 0,

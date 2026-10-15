@@ -557,7 +557,7 @@ pub fn pu_scan_core(i: i32, input: i32, fuse: i32, did: i32, ad: i32, dpi100: i3
         sp_find(i + 1, views, vdec, rules, owords, etext, crate::port::bms_get(bms, rid), pw, s5, s6);
         sp_record(i, s5, cg);
     }
-    nsel = rt_adopt(rtp, oruns, run, olines, owords, scr);
+    nsel = rt_adopt(rtp, oruns, run, olines, owords, etext, scr);
     if seals == 1 {
         nsel = sx_drop_lines(scr, nsel, olines, owords, s1);
         nsel = sp_drop_lines(scr, nsel, olines, owords, s5);
@@ -565,7 +565,7 @@ pub fn pu_scan_core(i: i32, input: i32, fuse: i32, did: i32, ad: i32, dpi100: i3
     rt_upright(rtp, run, epages, i + 1);
     nl = or_get(oruns, run, orf_lcount());
     rotmed = ev_rot_median(olines, l0, nl);
-    sc_emit_sel(olines, owords, osyms, nsel, i + 1, rotmed, scr, words, lines);
+    sc_emit_sel(olines, owords, osyms, nsel, i + 1, rotmed, scr, words, lines, etext, rules, comps, inks);
     crate::port::cells_set(mask, i, mv);
     return us_done();
 }

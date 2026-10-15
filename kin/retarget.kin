@@ -45,7 +45,8 @@
                                    vw-new vw-get vwf-kind vwf-pxw vwf-pxh vwf-dpi vwf-layer vwf-deskew vwf-cropx vwf-cropy ev-overlap-small vk-render tl-count tl-get]]
             [emon.norm :refer [nm-orient nm-osd-conf nm-paper-gray nm-ws-assign nm-ws-lut nm-layer-get nm-role-mask-into nm-box-ink nm-box-both]]
             [emon.player :refer [cg-get cg-set cgf-x0 cgf-y0 cgf-x1 cgf-y1 cgf-flags plg-bink plg-bink-absent]]
-            [emon.scan :refer [sc-request sc-request-at sc-request-view sc-answer sc-lang sc-sel-set sc-sel-max sc-aux-base sc-share-base sc-partner-base sc-bonly-base]]
+            [emon.scan :refer [sc-request sc-request-at sc-request-view sc-answer sc-lang sc-sel-set sc-sel-max sc-aux-base sc-share-base sc-partner-base sc-bonly-base
+                               sc-xtra-base sc-xtra-count]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem]]))
 
@@ -877,7 +878,7 @@
           (set b (+ b 1))))
     (return best)))
 
-(defn ^:pub ^I32 rt-adopt [^:mut ^Cells rtp ^Cells oruns ^I32 fr ^Cells olines ^Cells owords ^:mut ^Cells scr]
+(defn ^:pub ^I32 rt-adopt [^:mut ^Cells rtp ^Cells oruns ^I32 fr ^Cells olines ^Cells owords ^Cells etext ^:mut ^Cells scr]
   (comment "The lines a SCANNED page's pipeline reads, in the order it reads them, written to the selection of `scr` (`sc-sel-set`); answers how")
   (comment "many. `fr` is the first pass's run. A page that was turned (`rtp-q`) is read from its turned view's run when that scores `rt-turn-gain`")
   (comment "per cent of the first pass's; an upright page is read from the first pass, each of its lines kept, replaced or dropped by `rt-line-state` (which wants")
@@ -912,6 +913,12 @@
           (if (>= (* sr 100) (* sf (rt-turn-gain)))
             (set primary rrun))))
     (cells-set rtp (rtp-primary) primary)
+    (comment "P12.6: the words of a body-ink line that a first-pass line stays with (`sc-xtra-base`): none yet")
+    (cells-set scr (sc-xtra-base) fl0)
+    (while (< k nk)
+      (do (cells-set scr (+ (sc-xtra-base) (+ k 1)) 0)
+          (set k (+ k 1))))
+    (set k 0)
     (if (!= primary fr)
       (do (set pl0 (or-get oruns primary (orf-lfirst)))
           (set pn (or-get oruns primary (orf-lcount)))
@@ -951,6 +958,14 @@
                     (do (set n (rt-sel-add scr n (+ bl0 b)))
                         (cells-set scr (+ (sc-bonly-base) b) 2)
                         (set b (rt-next-bonly olines scr bl0 bn ly)))))))
+          (comment "P12.6: a line that stays, with a body-ink line that is its partner both ways and reads words that lie over none of its own (a column the first pass stopped before)")
+          (if (and (== s 0) (>= brun 0))
+            (if (> (ol-get olines l (lh-count)) 0)
+              (do (set b (rt-best-over olines l bl0 (or-get oruns brun (orf-lcount))))
+                  (if (>= b 0)
+                    (if (== (rt-best-over olines b fl0 fnl) l)
+                      (if (> (sc-xtra-count olines owords etext l b) 0)
+                        (cells-set scr (+ (sc-xtra-base) (+ k 1)) (+ b 1))))))))
           (if (== s 0)
             (if (> (ol-get olines l (lh-count)) 0)
               (set n (rt-sel-add scr n l))))

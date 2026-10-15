@@ -1128,7 +1128,7 @@ public static class Retarget {
         }
         return best;
     }
-    public static int RtAdopt(emon.Port.Cells rtp, emon.Port.Cells oruns, int fr, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells scr) {
+    public static int RtAdopt(emon.Port.Cells rtp, emon.Port.Cells oruns, int fr, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Cells scr) {
         // The lines a SCANNED page's pipeline reads, in the order it reads them, written to the selection of `scr` (`sc-sel-set`); answers how
         // many. `fr` is the first pass's run. A page that was turned (`rtp-q`) is read from its turned view's run when that scores `rt-turn-gain`
         // per cent of the first pass's; an upright page is read from the first pass, each of its lines kept, replaced or dropped by `rt-line-state` (which wants
@@ -1165,6 +1165,13 @@ public static class Retarget {
             }
         }
         emon.Port.CellsSet(rtp, RtpPrimary(), primary);
+        // P12.6: the words of a body-ink line that a first-pass line stays with (`sc-xtra-base`): none yet
+        emon.Port.CellsSet(scr, Scan.ScXtraBase(), fl0);
+        while (k < nk) {
+            emon.Port.CellsSet(scr, Scan.ScXtraBase() + (k + 1), 0);
+            k += 1;
+        }
+        k = 0;
         if (primary != fr) {
             pl0 = Evidence.OrGet(oruns, primary, Evidence.OrfLfirst());
             pn = Evidence.OrGet(oruns, primary, Evidence.OrfLcount());
@@ -1214,6 +1221,19 @@ public static class Retarget {
                         n = RtSelAdd(scr, n, bl0 + b);
                         emon.Port.CellsSet(scr, Scan.ScBonlyBase() + b, 2);
                         b = RtNextBonly(olines, scr, bl0, bn, ly);
+                    }
+                }
+            }
+            // P12.6: a line that stays, with a body-ink line that is its partner both ways and reads words that lie over none of its own (a column the first pass stopped before)
+            if ((s == 0) && (brun >= 0)) {
+                if (Evidence.OlGet(olines, l, Evidence.LhCount()) > 0) {
+                    b = RtBestOver(olines, l, bl0, Evidence.OrGet(oruns, brun, Evidence.OrfLcount()));
+                    if (b >= 0) {
+                        if (RtBestOver(olines, b, fl0, fnl) == l) {
+                            if (Scan.ScXtraCount(olines, owords, etext, l, b) > 0) {
+                                emon.Port.CellsSet(scr, Scan.ScXtraBase() + (k + 1), b + 1);
+                            }
+                        }
                     }
                 }
             }

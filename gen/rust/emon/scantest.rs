@@ -425,3 +425,447 @@ fn test_a_pages_lines_of_one_size_measured_a_pixel_apart_get_one_size() {
     crate::testport::assert_eq(wd_get(wd, 4, wf_size()), 1117, "and the last body line");
     crate::testport::assert_eq(wd_get(wd, 3, wf_size()), 1676, "the heading is its own size: its x-height (30 px) times the page's ratio of ascender line to x-height (1.7)");
 }
+pub(crate) fn pcps(mut c: &mut crate::port::Cells, a: i32, b: i32, d: i32, e: i32, f: i32, g: i32, h: i32, i: i32, j: i32, k: i32) -> i32 {
+    // Push these code points (a 0 ends them) onto `c`; answers how many.
+    let n: i32 = crate::port::cells_len(c);
+    if a > 0 {
+        crate::port::cells_push(c, a);
+    }
+    if b > 0 {
+        crate::port::cells_push(c, b);
+    }
+    if d > 0 {
+        crate::port::cells_push(c, d);
+    }
+    if e > 0 {
+        crate::port::cells_push(c, e);
+    }
+    if f > 0 {
+        crate::port::cells_push(c, f);
+    }
+    if g > 0 {
+        crate::port::cells_push(c, g);
+    }
+    if h > 0 {
+        crate::port::cells_push(c, h);
+    }
+    if i > 0 {
+        crate::port::cells_push(c, i);
+    }
+    if j > 0 {
+        crate::port::cells_push(c, j);
+    }
+    if k > 0 {
+        crate::port::cells_push(c, k);
+    }
+    return crate::port::cells_len(c) - n;
+}
+pub(crate) fn txt_of(mut c: &mut crate::port::Cells, a: i32, b: i32, d: i32, e: i32, f: i32, g: i32, h: i32, i: i32, j: i32, k: i32) -> i32 {
+    // A fresh text of these code points; answers where it starts in `c`.
+    let s: i32 = crate::port::cells_len(c);
+    pcps(c, a, b, d, e, f, g, h, i, j, k);
+    return s;
+}
+pub(crate) fn t_impl(mut t: &mut crate::port::Cells, a: i32, b: i32, d: i32, e: i32, f: i32, g: i32, h: i32, i: i32, j: i32, k: i32) -> i32 {
+    // `sc-implausible` of the text these code points spell (a 0 ends them).
+    let s: i32 = txt_of(t, a, b, d, e, f, g, h, i, j, k);
+    return sc_implausible(t, s, crate::port::cells_len(t) - s);
+}
+pub(crate) fn t_leader(mut t: &mut crate::port::Cells, a: i32, b: i32, d: i32, e: i32, f: i32, g: i32, h: i32, i: i32, j: i32, k: i32) -> i32 {
+    let s: i32 = txt_of(t, a, b, d, e, f, g, h, i, j, k);
+    return sc_leader(t, s, crate::port::cells_len(t) - s);
+}
+pub(crate) fn t_amount(mut t: &mut crate::port::Cells, a: i32, b: i32, d: i32, e: i32, f: i32, g: i32, h: i32, i: i32, j: i32, k: i32) -> i32 {
+    let s: i32 = txt_of(t, a, b, d, e, f, g, h, i, j, k);
+    return sc_amount_like(t, s, crate::port::cells_len(t) - s);
+}
+pub(crate) fn t_groups(mut t: &mut crate::port::Cells, a: i32, b: i32, d: i32, e: i32, f: i32, g: i32, h: i32, i: i32, j: i32, k: i32) -> i32 {
+    let s: i32 = txt_of(t, a, b, d, e, f, g, h, i, j, k);
+    return sc_groups_fix(t, s, crate::port::cells_len(t) - s);
+}
+#[test]
+fn test_a_word_of_odd_glyphs_or_a_repeated_few_characters_is_implausible() {
+    let t: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::testport::assert_eq(t_impl(t, 124, 0, 0, 0, 0, 0, 0, 0, 0, 0), 1, "a lone vertical bar is no word");
+    crate::testport::assert_eq(t_impl(t, 167, 0, 0, 0, 0, 0, 0, 0, 0, 0), 1, "a lone section sign is none");
+    crate::testport::assert_eq(t_impl(t, 97, 0, 0, 0, 0, 0, 0, 0, 0, 0), 0, "a lone letter is one");
+    crate::testport::assert_eq(t_impl(t, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0), 0, "and a lone digit");
+    crate::testport::assert_eq(t_impl(t, 120, 123, 121, 125, 0, 0, 0, 0, 0, 0), 1, "two odd glyphs");
+    crate::testport::assert_eq(t_impl(t, 97, 98, 126, 99, 49, 0, 0, 0, 0, 0), 1, "letters, digits and an odd glyph together");
+    crate::testport::assert_eq(t_impl(t, 101, 100, 101, 100, 101, 100, 101, 100, 101, 100), 1, "ten characters of two different ones (a texture read as `ededededed`)");
+    crate::testport::assert_eq(t_impl(t, 80, 101, 116, 101, 116, 101, 116, 100, 101, 100), 0, "ten of four different ones are just odd");
+    crate::testport::assert_eq(t_impl(t, 104, 101, 108, 108, 111, 0, 0, 0, 0, 0), 0, "a word");
+    crate::testport::assert_eq(t_impl(t, 49, 44, 48, 56, 57, 46, 53, 56, 0, 0), 0, "an amount");
+    crate::testport::assert_eq(t_impl(t, 45, 45, 45, 45, 0, 0, 0, 0, 0, 0), 1, "four marks and no letter or digit");
+}
+#[test]
+fn test_a_dot_leader_read_as_characters_is_one() {
+    let t: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::testport::assert_eq(t_leader(t, 46, 46, 46, 0, 0, 0, 0, 0, 0, 0), 1, "three dots");
+    crate::testport::assert_eq(t_leader(t, 46, 46, 0, 0, 0, 0, 0, 0, 0, 0), 0, "two are an ellipsis' remains");
+    crate::testport::assert_eq(t_leader(t, 50, 50, 46, 50, 50, 50, 50, 0, 0, 0), 1, "`22.2222`: a digit repeated, dots among it, and no cents");
+    crate::testport::assert_eq(t_leader(t, 50, 50, 46, 50, 50, 0, 0, 0, 0, 0), 0, "`22.22` is an amount");
+    crate::testport::assert_eq(t_leader(t, 50, 46, 56, 48, 0, 0, 0, 0, 0, 0), 0, "`2.80` is one");
+    crate::testport::assert_eq(t_leader(t, 49, 46, 50, 50, 50, 50, 50, 0, 0, 0), 0, "a digit that is not repeated is a number");
+}
+#[test]
+fn test_an_amount_is_digits_with_separators_and_maybe_a_minus_or_parentheses() {
+    let t: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::testport::assert_eq(t_amount(t, 50, 53, 46, 49, 53, 0, 0, 0, 0, 0), 1, "25.15");
+    crate::testport::assert_eq(t_amount(t, 40, 51, 51, 49, 44, 50, 55, 57, 41, 0), 1, "(331,279)");
+    crate::testport::assert_eq(t_amount(t, 45, 52, 46, 53, 48, 0, 0, 0, 0, 0), 1, "-4.50");
+    crate::testport::assert_eq(t_amount(t, 97, 98, 99, 0, 0, 0, 0, 0, 0, 0), 0, "letters");
+    crate::testport::assert_eq(t_amount(t, 49, 50, 0, 0, 0, 0, 0, 0, 0, 0), 0, "two digits are no amount");
+    crate::testport::assert_eq(t_amount(t, 83, 50, 53, 46, 49, 53, 0, 0, 0, 0), 0, "an S before it is none");
+}
+#[test]
+fn test_thousands_read_with_periods_are_found_and_a_european_whole_number_is_not() {
+    let t: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::testport::assert_eq(t_groups(t, 52, 46, 57, 56, 53, 46, 57, 0, 0, 0), 1, "4.985.9");
+    crate::testport::assert_eq(t_groups(t, 51, 51, 46, 52, 49, 52, 46, 49, 0, 0), 1, "33.414.1");
+    crate::testport::assert_eq(t_groups(t, 49, 46, 50, 51, 52, 46, 53, 54, 55, 0), 0, "1.234.567: the last group is of three: a whole number");
+    crate::testport::assert_eq(t_groups(t, 52, 44, 57, 56, 53, 46, 57, 0, 0, 0), 0, "4,985.9 is right as it is");
+    crate::testport::assert_eq(t_groups(t, 50, 46, 56, 48, 0, 0, 0, 0, 0, 0), 0, "2.80 has one period");
+    crate::testport::assert_eq(t_groups(t, 49, 50, 46, 51, 52, 53, 54, 46, 55, 0), 0, "a group of four is no group");
+}
+pub(crate) fn st_word(mut owords: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, x0: i32, x1: i32, conf: i32, line: i32, a: i32, b: i32, c: i32, d: i32, e: i32, f: i32, g: i32, h: i32) -> i32 {
+    // An OCR word of page 1 from x0 to x1 (100 centipoints high) of OCR line `line`, with this text and confidence; answers its row.
+    let ts: i32 = crate::port::cells_len(etext);
+    let n: i32 = pcps(etext, a, b, c, d, e, f, g, h, 0, 0);
+    return ow_new(owords, 1, x0, 0, x1, 100, x0, 100, x1, 100, 0, 0, ts, n, line, conf, -1);
+}
+pub(crate) fn st_line(mut olines: &mut crate::port::Cells, x0: i32, x1: i32, first: i32, count: i32) -> i32 {
+    return ol_new(olines, 1, x0, 0, x1, 100, x0, 100, x1, 100, 0, 0, first, count);
+}
+pub(crate) fn st_emit(olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, rules: &mut crate::port::Cells, nsel: i32) -> i32 {
+    // The lines 0 to nsel - 1 of `olines` through `sc-emit-sel`, as they are: nothing of a body-ink pass. Answers the lines made.
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    sc_prep(scr);
+    let mut k: i32 = 0;
+    while k < nsel {
+        crate::port::cells_set(scr, sc_sel_base() + k, k);
+        k += 1;
+    }
+    return sc_emit_sel(olines, owords, &mut crate::port::Cells::new(), nsel, 1, 0, scr, words, lines, etext, rules, &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+}
+#[test]
+fn test_a_word_of_no_confidence_and_odd_glyphs_alone_is_kept_out_and_flagged() {
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    st_word(owords, et, 100, 600, 900, 0, 84, 111, 116, 97, 108, 0, 0, 0);
+    st_word(owords, et, 700, 900, 120, 0, 126, 124, 0, 0, 0, 0, 0, 0);
+    st_line(olines, 100, 900, 0, 2);
+    st_word(owords, et, 100, 600, 100, 1, 126, 0, 0, 0, 0, 0, 0, 0);
+    st_line(olines, 100, 600, 2, 1);
+    crate::testport::assert_eq(st_emit(olines, owords, words, lines, et, &mut crate::port::Cells::new(), 2), 1, "the first line stays; the second held nothing but a tilde and is no line");
+    crate::testport::assert_eq(wd_count(words), 1, "one word: the line's `Total`, since a word of confidence 120 and two odd glyphs in a line of two is garbage");
+    crate::testport::assert_eq(ow_get(owords, 1, owf_flags()) & oe_garbage(), oe_garbage(), "the engine's row says it was kept out");
+    crate::testport::assert_eq(ow_get(owords, 2, owf_flags()) & oe_garbage(), oe_garbage(), "and so does the lone tilde's");
+    crate::testport::assert_eq(ow_get(owords, 0, owf_flags()) & oe_garbage(), 0, "the good word's does not");
+}
+#[test]
+fn test_an_unsure_but_plausible_word_in_a_good_line_stays() {
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    st_word(owords, et, 100, 600, 900, 0, 84, 111, 116, 97, 108, 0, 0, 0);
+    st_word(owords, et, 700, 900, 150, 0, 99, 111, 108, 97, 0, 0, 0, 0);
+    st_word(owords, et, 1000, 1400, 920, 0, 66, 111, 120, 0, 0, 0, 0, 0);
+    st_line(olines, 100, 1400, 0, 3);
+    crate::testport::assert_eq(st_emit(olines, owords, words, lines, et, &mut crate::port::Cells::new(), 1), 1, "one line");
+    crate::testport::assert_eq(wd_count(words), 3, "all three words: a word the engine is unsure of is not garbage unless it also is implausible and alone or among such");
+}
+#[test]
+fn test_a_line_of_unsure_words_is_texture_and_is_kept_out() {
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    st_word(owords, et, 100, 300, 272, 0, 82, 97, 101, 0, 0, 0, 0, 0);
+    st_word(owords, et, 400, 600, 201, 0, 111, 101, 0, 0, 0, 0, 0, 0);
+    st_word(owords, et, 700, 900, 294, 0, 101, 101, 0, 0, 0, 0, 0, 0);
+    st_line(olines, 100, 900, 0, 3);
+    st_word(owords, et, 100, 600, 900, 1, 71, 111, 111, 100, 0, 0, 0, 0);
+    st_line(olines, 100, 600, 3, 1);
+    crate::testport::assert_eq(st_emit(olines, owords, words, lines, et, &mut crate::port::Cells::new(), 2), 1, "the first line, three words of a mean confidence of 250 and none over 450, is texture; the second stays");
+    crate::testport::assert_eq(wd_count(words), 1, "one word");
+    crate::testport::assert_eq(wd_get(words, 0, hd_tlen()), 4, "`Good`");
+}
+#[test]
+fn test_a_dot_leader_is_kept_out_whatever_its_confidence() {
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    st_word(owords, et, 100, 600, 900, 0, 84, 111, 116, 97, 108, 0, 0, 0);
+    st_word(owords, et, 700, 1300, 950, 0, 50, 50, 46, 50, 50, 50, 50, 0);
+    st_word(owords, et, 1400, 1800, 930, 0, 49, 46, 56, 48, 0, 0, 0, 0);
+    st_line(olines, 100, 1800, 0, 3);
+    crate::testport::assert_eq(st_emit(olines, owords, words, lines, et, &mut crate::port::Cells::new(), 1), 1, "one line");
+    crate::testport::assert_eq(wd_count(words), 2, "of two words: `22.2222` is a leader and `1.80` is an amount");
+    crate::testport::assert_eq(ow_get(owords, 1, owf_flags()) & oe_garbage(), oe_garbage(), "the leader's row is flagged");
+}
+pub(crate) fn st_rule(mut rules: &mut crate::port::Cells, x: i32, y0: i32, y1: i32) -> i32 {
+    // A vertical rule of page 1 at x from y0 to y1, 10 centipoints thick; answers its row.
+    let r: i32 = rl_new(rules, 1, x - 5, y0, x + 5, y1, 0);
+    rl_set(rules, r, rlf_lx0(), x);
+    rl_set(rules, r, rlf_ly0(), y0);
+    rl_set(rules, r, rlf_lx1(), x);
+    rl_set(rules, r, rlf_ly1(), y1);
+    rl_set(rules, r, rlf_thick(), 10);
+    return r;
+}
+#[test]
+fn test_a_table_rule_read_as_a_character_is_kept_out_where_it_lies_on_a_rule_and_only_there() {
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    st_rule(rules, 1000, 0, 2000);
+    st_word(owords, et, 100, 600, 900, 0, 84, 111, 116, 97, 108, 0, 0, 0);
+    st_word(owords, et, 990, 1010, 800, 0, 124, 0, 0, 0, 0, 0, 0, 0);
+    st_word(owords, et, 1100, 1500, 900, 0, 49, 50, 46, 48, 48, 0, 0, 0);
+    st_line(olines, 100, 1500, 0, 3);
+    st_word(owords, et, 100, 600, 900, 1, 78, 97, 109, 101, 0, 0, 0, 0);
+    st_word(owords, et, 1400, 1420, 800, 1, 73, 0, 0, 0, 0, 0, 0, 0);
+    st_line(olines, 100, 1420, 3, 2);
+    crate::testport::assert_eq(st_emit(olines, owords, words, lines, et, rules, 2), 2, "two lines");
+    crate::testport::assert_eq(wd_count(words), 4, "four words of the five: the bar on the rule at 1000 is out; the `I` at 1400 is on no rule and is a word");
+    crate::testport::assert_eq(ow_get(owords, 1, owf_flags()) & oe_rule_ghost(), oe_rule_ghost(), "the bar's row is flagged as a rule's ghost");
+    crate::testport::assert_eq(ow_get(owords, 4, owf_flags()) & oe_rule_ghost(), 0, "the lone `I` away from a rule is not");
+}
+#[test]
+fn test_a_bar_glued_to_the_end_of_an_amount_on_a_rule_is_cut_off_and_the_engines_text_stays() {
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let osyms: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    st_rule(rules, 1000, 0, 2000);
+    st_word(owords, et, 100, 1010, 900, 0, 49, 44, 50, 48, 46, 53, 48, 124);
+    st_line(olines, 100, 1010, 0, 1);
+    os_new(osyms, 1, 100, 0, 400, 100, 49, 0, 1, 0);
+    os_new(osyms, 1, 996, 0, 1004, 100, 124, 7, 1, 0);
+    ow_set(owords, 0, owf_sfirst(), 0);
+    ow_set(owords, 0, owf_scount(), 2);
+    sc_prep(scr);
+    crate::port::cells_set(scr, sc_sel_base(), 0);
+    crate::testport::assert_eq(sc_emit_sel(olines, owords, osyms, 1, 1, 0, scr, words, lines, et, rules, &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 1, "one line");
+    crate::testport::assert_eq(wd_get(words, 0, hd_tlen()), 7, "`1,20.50`: the bar is cut off");
+    crate::testport::assert_eq(ow_get(owords, 0, hd_tlen()), 8, "and the engine's row still says all eight characters");
+    crate::testport::assert_eq(ow_get(owords, 0, owf_flags()) & oe_corrected(), oe_corrected(), "flagged as corrected");
+}
+#[test]
+fn test_thousands_read_with_periods_get_their_commas_back_in_the_pages_words_and_not_in_the_evidence() {
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    st_word(owords, et, 100, 700, 900, 0, 52, 46, 57, 56, 53, 46, 57, 0);
+    st_line(olines, 100, 700, 0, 1);
+    crate::testport::assert_eq(st_emit(olines, owords, words, lines, et, &mut crate::port::Cells::new(), 1), 1, "one line");
+    let ts: i32 = wd_get(words, 0, hd_tstart());
+    crate::testport::assert_eq(wd_get(words, 0, hd_tlen()), 7, "seven characters");
+    crate::testport::assert_eq(crate::port::cells_at(et, ts), 52, "4");
+    crate::testport::assert_eq(crate::port::cells_at(et, ts + 1), 44, "a comma where the first period was");
+    crate::testport::assert_eq(crate::port::cells_at(et, ts + 5), 46, "and the last period, the decimal point, kept");
+    crate::testport::assert_eq(crate::port::cells_at(et, ow_get(owords, 0, hd_tstart())), 52, "the evidence keeps the engine's text");
+    crate::testport::assert_eq(crate::port::cells_at(et, ow_get(owords, 0, hd_tstart()) + 1), 46, "with its period");
+    crate::testport::assert_eq(ow_get(owords, 0, owf_flags()) & oe_corrected(), oe_corrected(), "and says it was corrected");
+}
+#[test]
+fn test_an_s_or_a_section_sign_alone_before_an_amount_of_its_height_is_a_dollar_and_only_then() {
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    st_word(owords, et, 100, 300, 800, 0, 83, 0, 0, 0, 0, 0, 0, 0);
+    st_word(owords, et, 340, 900, 900, 0, 50, 53, 46, 49, 53, 0, 0, 0);
+    st_line(olines, 100, 900, 0, 2);
+    st_word(owords, et, 100, 300, 800, 1, 167, 0, 0, 0, 0, 0, 0, 0);
+    st_word(owords, et, 340, 900, 900, 1, 49, 44, 50, 48, 48, 0, 0, 0);
+    st_line(olines, 100, 900, 2, 2);
+    st_word(owords, et, 100, 300, 800, 2, 83, 0, 0, 0, 0, 0, 0, 0);
+    st_word(owords, et, 1600, 2100, 900, 2, 50, 53, 46, 49, 53, 0, 0, 0);
+    st_line(olines, 100, 2100, 4, 2);
+    st_word(owords, et, 100, 300, 800, 3, 83, 0, 0, 0, 0, 0, 0, 0);
+    st_word(owords, et, 340, 900, 900, 3, 50, 53, 0, 0, 0, 0, 0, 0);
+    st_line(olines, 100, 900, 6, 2);
+    crate::testport::assert_eq(st_emit(olines, owords, words, lines, et, &mut crate::port::Cells::new(), 4), 4, "four lines");
+    crate::testport::assert_eq(crate::port::cells_at(et, wd_get(words, 0, hd_tstart())), 36, "`S 25.15`: a dollar");
+    crate::testport::assert_eq(wd_get(words, 0, hd_tlen()), 1, "one character");
+    crate::testport::assert_eq(crate::port::cells_at(et, wd_get(words, 2, hd_tstart())), 36, "`§ 1,200`: a dollar");
+    crate::testport::assert_eq(crate::port::cells_at(et, wd_get(words, 4, hd_tstart())), 83, "an S far from the amount is an S");
+    crate::testport::assert_eq(crate::port::cells_at(et, wd_get(words, 6, hd_tstart())), 83, "an S before a number with no cents or separator is an S");
+    crate::testport::assert_eq(ow_get(owords, 0, owf_flags()) & oe_corrected(), oe_corrected(), "the first is flagged as corrected");
+    crate::testport::assert_eq(ow_get(owords, 4, owf_flags()) & oe_corrected(), 0, "and the S far from its amount is not");
+}
+pub(crate) fn dot_scene(dot: i32, above: i32, firstw: i32) -> i32 {
+    // The word `480` of a thermal receipt (0.04 inch of it a dot the engine lost: its first symbol's box is wider than the others', it takes the dot in) emitted with a dot component
+    // of the body layer between the first two digits (`dot` 1), a stroke of body ink above that dot in its column (`above` 1: a broken digit, not a dot), and the first symbol's width
+    // (`firstw`: 504 is wider, 340 is as wide as the others). Answers how long the emitted word is (3 or 4); its text is left in the shared text, after the engine's.
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let osyms: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let comps: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::port::cells_push(et, 52);
+    crate::port::cells_push(et, 56);
+    crate::port::cells_push(et, 48);
+    ow_new(owords, 1, 9480, 15912, 10752, 16464, 9480, 16464, 10752, 16464, 0, 0, 0, 3, 0, 900, -1);
+    ol_new(olines, 1, 9480, 15912, 10752, 16464, 9480, 16464, 10752, 16464, 0, 0, 0, 1);
+    os_new(osyms, 1, 9480, 15912, 9480 + firstw, 16464, 52, 0, 1, 0);
+    os_new(osyms, 1, 10032, 15912, 10368, 16440, 56, 1, 1, 0);
+    os_new(osyms, 1, 10392, 15912, 10752, 16440, 48, 2, 1, 0);
+    ow_set(owords, 0, owf_sfirst(), 0);
+    ow_set(owords, 0, owf_scount(), 3);
+    ik_new(inks, 1, 0);
+    ik_set(inks, 0, ikf_role(), ir_body());
+    if dot == 1 {
+        let r: i32 = co_new(comps, 1, 9912, 16344, 9984, 16440, 0);
+        co_set(comps, r, cf_conf(), 700);
+        co_set(comps, r, cf_ink(), 0);
+    }
+    if above == 1 {
+        let r: i32 = co_new(comps, 1, 9900, 15912, 10000, 16200, 0);
+        co_set(comps, r, cf_conf(), 700);
+        co_set(comps, r, cf_ink(), 0);
+    }
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    sc_prep(scr);
+    crate::port::cells_set(scr, sc_sel_base(), 0);
+    sc_emit_sel(olines, owords, osyms, 1, 1, 0, scr, words, lines, et, &mut crate::port::Cells::new(), comps, inks);
+    return wd_get(words, 0, hd_tlen());
+}
+#[test]
+fn test_a_decimal_point_the_engine_lost_and_the_page_shows_is_put_back_and_only_where_the_page_shows_it() {
+    crate::testport::assert_eq(dot_scene(1, 0, 504), 4, "`480` with a dot between the 4 and the 8, and the 4's box wider than the 8's: `4.80`");
+    crate::testport::assert_eq(dot_scene(0, 0, 504), 3, "no dot in the pixels: `480` stays, a wide box is not evidence enough");
+    crate::testport::assert_eq(dot_scene(1, 0, 340), 3, "a dot in the pixels and no box that took it in: `480` stays (a speck between two digits is not a decimal point)");
+    crate::testport::assert_eq(dot_scene(1, 1, 504), 3, "the speck has ink above it in its column, so it is a part of a broken digit: `480` stays");
+}
+#[test]
+fn test_the_point_put_back_is_in_the_pages_words_and_the_engines_row_keeps_its_text() {
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let osyms: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let comps: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::port::cells_push(et, 52);
+    crate::port::cells_push(et, 56);
+    crate::port::cells_push(et, 48);
+    ow_new(owords, 1, 9480, 15912, 10752, 16464, 9480, 16464, 10752, 16464, 0, 0, 0, 3, 0, 900, -1);
+    ol_new(olines, 1, 9480, 15912, 10752, 16464, 9480, 16464, 10752, 16464, 0, 0, 0, 1);
+    os_new(osyms, 1, 9480, 15912, 9984, 16464, 52, 0, 1, 0);
+    os_new(osyms, 1, 10032, 15912, 10368, 16440, 56, 1, 1, 0);
+    os_new(osyms, 1, 10392, 15912, 10752, 16440, 48, 2, 1, 0);
+    ow_set(owords, 0, owf_sfirst(), 0);
+    ow_set(owords, 0, owf_scount(), 3);
+    ik_new(inks, 1, 0);
+    ik_set(inks, 0, ikf_role(), ir_body());
+    let r: i32 = co_new(comps, 1, 9912, 16344, 9984, 16440, 0);
+    co_set(comps, r, cf_conf(), 700);
+    co_set(comps, r, cf_ink(), 0);
+    sc_prep(scr);
+    crate::port::cells_set(scr, sc_sel_base(), 0);
+    sc_emit_sel(olines, owords, osyms, 1, 1, 0, scr, words, lines, et, &mut crate::port::Cells::new(), comps, inks);
+    let ts: i32 = wd_get(words, 0, hd_tstart());
+    crate::testport::assert_eq(crate::port::cells_at(et, ts), 52, "4");
+    crate::testport::assert_eq(crate::port::cells_at(et, ts + 1), 46, "the point");
+    crate::testport::assert_eq(crate::port::cells_at(et, ts + 2), 56, "8");
+    crate::testport::assert_eq(crate::port::cells_at(et, ts + 3), 48, "0");
+    crate::testport::assert_eq(ow_get(owords, 0, hd_tlen()), 3, "the evidence's word is still three characters");
+    crate::testport::assert_eq(ow_get(owords, 0, owf_flags()) & oe_corrected(), oe_corrected(), "and is flagged as corrected");
+}
+pub(crate) fn st_wordl(mut owords: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, x0: i32, x1: i32, conf: i32, line: i32, a: i32, b: i32, c: i32, d: i32, e: i32, f: i32, g: i32, h: i32, i: i32, j: i32) -> i32 {
+    // `st-word` for a word of up to ten characters.
+    let ts: i32 = crate::port::cells_len(etext);
+    let n: i32 = pcps(etext, a, b, c, d, e, f, g, h, i, j);
+    return ow_new(owords, 1, x0, 0, x1, 100, x0, 100, x1, 100, 0, 0, ts, n, line, conf, -1);
+}
+#[test]
+fn test_a_thousands_comma_read_as_a_period_is_put_back_on_a_page_that_writes_them_with_commas_and_only_there() {
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    st_wordl(owords, et, 100, 700, 900, 0, 52, 53, 57, 44, 48, 56, 56, 0, 0, 0);
+    st_wordl(owords, et, 800, 1400, 900, 0, 50, 51, 55, 44, 50, 51, 56, 0, 0, 0);
+    st_wordl(owords, et, 1500, 2400, 900, 0, 40, 51, 51, 49, 46, 50, 55, 57, 41, 0);
+    st_wordl(owords, et, 2500, 3500, 900, 0, 36, 40, 49, 51, 56, 46, 56, 54, 54, 41);
+    st_line(olines, 100, 3500, 0, 4);
+    crate::testport::assert_eq(st_emit(olines, owords, words, lines, et, &mut crate::port::Cells::new(), 1), 1, "one line");
+    crate::testport::assert_eq(crate::port::cells_at(et, wd_get(words, 2, hd_tstart()) + 4), 44, "`(331.279)` is `(331,279)` on a page whose other amounts have commas");
+    crate::testport::assert_eq(wd_get(words, 2, hd_tlen()), 9, "of the same length");
+    crate::testport::assert_eq(crate::port::cells_at(et, wd_get(words, 3, hd_tstart()) + 5), 44, "and `$(138.866)` is `$(138,866)`");
+    crate::testport::assert_eq(crate::port::cells_at(et, ow_get(owords, 2, hd_tstart()) + 4), 46, "the evidence keeps the engine's period");
+}
+#[test]
+fn test_a_period_before_three_digits_stays_on_a_page_without_thousands_commas() {
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    st_wordl(owords, et, 100, 900, 900, 0, 40, 51, 51, 49, 46, 50, 55, 57, 41, 0);
+    st_wordl(owords, et, 1000, 1400, 900, 0, 49, 46, 50, 51, 52, 0, 0, 0, 0, 0);
+    st_line(olines, 100, 1400, 0, 2);
+    crate::testport::assert_eq(st_emit(olines, owords, words, lines, et, &mut crate::port::Cells::new(), 1), 1, "one line");
+    crate::testport::assert_eq(crate::port::cells_at(et, wd_get(words, 0, hd_tstart()) + 4), 46, "`(331.279)` stays: nothing on the page writes a thousands comma");
+    crate::testport::assert_eq(crate::port::cells_at(et, wd_get(words, 1, hd_tstart()) + 1), 46, "and `1.234` stays");
+}
+#[test]
+fn test_a_dollar_sign_read_as_a_section_sign_is_put_back_on_a_page_that_writes_its_amounts_with_dollar_signs_and_only_there() {
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    st_wordl(owords, et, 100, 900, 900, 0, 36, 52, 53, 57, 44, 48, 56, 56, 0, 0);
+    st_wordl(owords, et, 1000, 1800, 900, 0, 36, 50, 51, 55, 44, 50, 51, 56, 0, 0);
+    st_wordl(owords, et, 1900, 2700, 900, 0, 167, 51, 51, 51, 46, 52, 51, 48, 0, 0);
+    st_line(olines, 100, 2700, 0, 3);
+    st_wordl(owords, et, 100, 300, 800, 1, 115, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    st_wordl(owords, et, 340, 1100, 900, 1, 50, 44, 53, 57, 49, 46, 51, 0, 0, 0);
+    st_line(olines, 100, 1100, 3, 2);
+    crate::testport::assert_eq(st_emit(olines, owords, words, lines, et, &mut crate::port::Cells::new(), 2), 2, "two lines");
+    crate::testport::assert_eq(crate::port::cells_at(et, wd_get(words, 2, hd_tstart())), 36, "`§333.430` is `$333,430`: a dollar sign");
+    crate::testport::assert_eq(crate::port::cells_at(et, wd_get(words, 2, hd_tstart()) + 4), 44, "and its period a comma");
+    crate::testport::assert_eq(crate::port::cells_at(et, wd_get(words, 3, hd_tstart())), 36, "a lone `s` before an amount is a dollar sign on that page, even with no cents");
+}
+#[test]
+fn test_a_section_sign_before_digits_stays_on_a_page_with_no_dollar_signs() {
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    st_wordl(owords, et, 100, 900, 900, 0, 167, 51, 51, 51, 46, 52, 51, 48, 0, 0);
+    st_wordl(owords, et, 1000, 1800, 900, 0, 50, 51, 55, 44, 50, 51, 56, 0, 0, 0);
+    st_wordl(owords, et, 1900, 2700, 900, 0, 52, 53, 57, 44, 48, 56, 56, 0, 0, 0);
+    st_line(olines, 100, 2700, 0, 3);
+    crate::testport::assert_eq(st_emit(olines, owords, words, lines, et, &mut crate::port::Cells::new(), 1), 1, "one line");
+    crate::testport::assert_eq(crate::port::cells_at(et, wd_get(words, 0, hd_tstart())), 167, "`§333.430` stays: no amount on the page has a dollar sign");
+}

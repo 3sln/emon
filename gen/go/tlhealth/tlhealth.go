@@ -846,3 +846,82 @@ func ThWrite(fa *port.Cells, wd *port.Cells, et *port.Cells, ledger *port.Cells,
 	}
 	return rows
 }
+
+func thOcrReason(owords *port.Cells, i int32) int32 {
+	// The ledger reason of OCR word row `i` when the scan stage kept it out of the page's words (P12.6, `sc-fates`): a rule read as a character is a `rule-ghost`, garbage and a dot leader
+	// an `ocr-ghost`; 0 for a word that was kept.
+	var fl int32 = evidence.OwGet(owords, i, evidence.OwfFlags())
+	if (fl & evidence.OeRuleGhost()) != 0 {
+		return model.DrRuleGhost()
+	}
+	if (fl & evidence.OeGarbage()) != 0 {
+		return model.DrOcrGhost()
+	}
+	return 0
+}
+
+func ThWriteOcr(owords *port.Cells, et *port.Cells, ledger *port.Cells, text *port.Cells, tmp *port.Cells, tt *port.Cells) int32 {
+	// The OCR words the scan stage kept out of a scanned page's words (`oe-garbage`, `oe-rule-ghost`: paper texture, handwriting, ruled lines read as characters, dot leaders, a table's rules)
+	// as ledger rows, so that nothing is dropped silently: a run of consecutive such words of one reason on one OCR line is ONE row, its box the union of theirs, its text the words
+	// joined by a space (NFC, ligatures folded, as every ledger text), confidence 700 (an engine's reading), src `ocr`. Answers the rows written.
+	var n int32 = evidence.OwCount(owords)
+	var i int32 = 0
+	var j int32 = 0
+	var k int32 = 0
+	var s int32 = 0
+	var e int32 = 0
+	var x0 int32 = 0
+	var y0 int32 = 0
+	var x1 int32 = 0
+	var y1 int32 = 0
+	var reason int32 = 0
+	var lr int32 = 0
+	var t0 int32 = 0
+	var rows int32 = 0
+	for i < n {
+		reason = thOcrReason(owords, i)
+		j = i + 1
+		if reason > 0 {
+			for (j < n) && ((thOcrReason(owords, j) == reason) && ((evidence.OwGet(owords, j, evidence.HdPage()) == evidence.OwGet(owords, i, evidence.HdPage())) && (evidence.OwGet(owords, j, evidence.HdLine()) == evidence.OwGet(owords, i, evidence.HdLine())))) {
+				j += 1
+			}
+			x0 = evidence.OwGet(owords, i, evidence.HdX0())
+			y0 = evidence.OwGet(owords, i, evidence.HdY0())
+			x1 = evidence.OwGet(owords, i, evidence.HdX1())
+			y1 = evidence.OwGet(owords, i, evidence.HdY1())
+			port.CellsDrop(tt, 0)
+			k = i
+			for k < j {
+				if k > i {
+					port.CellsPush(tt, 32)
+				}
+				if evidence.OwGet(owords, k, evidence.HdX0()) < x0 {
+					x0 = evidence.OwGet(owords, k, evidence.HdX0())
+				}
+				if evidence.OwGet(owords, k, evidence.HdY0()) < y0 {
+					y0 = evidence.OwGet(owords, k, evidence.HdY0())
+				}
+				if evidence.OwGet(owords, k, evidence.HdX1()) > x1 {
+					x1 = evidence.OwGet(owords, k, evidence.HdX1())
+				}
+				if evidence.OwGet(owords, k, evidence.HdY1()) > y1 {
+					y1 = evidence.OwGet(owords, k, evidence.HdY1())
+				}
+				s = evidence.OwGet(owords, k, evidence.HdTstart())
+				e = s + evidence.OwGet(owords, k, evidence.HdTlen())
+				for s < e {
+					port.CellsPush(tt, port.CellsAt(et, s))
+					s += 1
+				}
+				k += 1
+			}
+			lr = model.LedgerAdd(ledger, reason, evidence.OwGet(owords, i, evidence.HdPage()), x0, y0, x1, y1, 700, model.SrOcr())
+			t0 = port.CellsLen(text)
+			normalize.NzNfc(tt, 0, port.CellsLen(tt), text, tmp, normalize.NzFlagLigatures()+normalize.NzFlagRadicals())
+			model.LedgerSetText(ledger, lr, t0, port.CellsLen(text)-t0)
+			rows += 1
+		}
+		i = j
+	}
+	return rows
+}
