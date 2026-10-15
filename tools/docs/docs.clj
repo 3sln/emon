@@ -253,7 +253,7 @@
    "block.at" "Where the node is: regions `[page, x0, y0, x1, y1]` in points, top-left origin, y down. A node spanning pages or columns has one region per fragment."
    "block.src" "Which sources contributed: `text` (the PDF text layer), `hidden-text`, `ocr`, `trace` (pixels), `vector` (drawn rules and fills), `struct` (the tag tree), `annot`, `outline`, `infer`."
    "block.conf" "Confidence that the node is right, 0..1000, calibrated."
-   "block.flags" "Warnings, from a closed set: `low-conf`, `ocr-only`, `text-layer-suspect`, `reconstructed`, `dpi-unknown`, `rotated`, `vertical`, `struct-disagree`, `tag-span-conflict`, `in-table-image`."
+   "block.flags" "Warnings, from a closed set: `low-conf`, `ocr-only`, `text-layer-suspect`, `reconstructed`, `dpi-unknown`, `rotated`, `vertical`, `struct-disagree`, `tag-span-conflict`, `in-table-image`, `script-unread`."
    "block.level" "`section` and `heading`: the depth, from 1. The HTML writer stops at `h6` and adds `aria-level` beyond it."
    "block.number" "`heading`: the section number as printed (`3.2.1`)."
    "block.numbering" "`heading`: the numbering scheme."

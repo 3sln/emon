@@ -96,3 +96,35 @@ fn test_the_lookup_clamps_at_both_ends_of_a_step_function() {
         i += 1;
     }
 }
+#[test]
+fn test_a_block_flagged_script_unread_is_written_at_its_raw_score() {
+    // D1610: the map clamps at its first step, so a raw 100 on OCR text is written as the lowest confidence of text the engine READ; the engine's guess at a script it
+    // cannot read keeps its raw score, and so do the inlines under it
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    let p1: i32 = node_new(nodes, nk_paragraph(), 0);
+    let t1: i32 = node_new(nodes, nk_text(), p1);
+    let p2: i32 = node_new(nodes, nk_paragraph(), 0);
+    node_add_src(nodes, p1, sr_ocr());
+    node_set_conf(nodes, p1, 100);
+    node_add_flag(nodes, p1, fl_script_unread());
+    node_add_src(nodes, t1, sr_ocr());
+    node_set_conf(nodes, t1, 100);
+    node_add_src(nodes, p2, sr_ocr());
+    node_set_conf(nodes, p2, 100);
+    let mapped: i32 = cal_conf(nk_paragraph(), sr_ocr(), 100);
+    let mut want: i32 = 100;
+    if mapped < 100 {
+        want = mapped;
+    }
+    crate::testport::assert_eq(cal_node_conf(nodes, p1), want, "the flagged block: its raw score, when the map would give more");
+    crate::testport::assert_that(cal_node_conf(nodes, p1) <= 100, "never above it");
+    crate::testport::assert_that(cal_node_conf(nodes, t1) <= 100, "the text under it too");
+    crate::testport::assert_eq(cal_node_conf(nodes, p2), mapped, "a block no one flagged is calibrated as it was");
+}

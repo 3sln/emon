@@ -26,11 +26,11 @@
   (:require [emon.lang :refer [I32 I64 Cells Src BitmapSet i64 i32 add64 mul64]]
             [emon.port :refer [cells-len cells-at cells-set cells-drop cells-push limit-of limit-breach]]
             [emon.pdfsrc :refer [ps-len ps-u8]]
-            [emon.plan :refer [rq-decode an-find an-ok an-status an-arg flt-none ps-ok ps-unsupported ps-limit
-                               us-requests pu-id pi-decode pi-ocr]]
+            [emon.plan :refer [rq-decode an-find an-status an-arg flt-none ps-ok ps-unsupported ps-limit
+                               us-requests pu-id pi-decode]]
             [emon.model :refer [page-new page-set-resolution pk-image node-set-flags node-set-attr-int
                                 node-set-attr-text text-append-cp fk-format fk-pages fl-dpi-unknown]]
-            [emon.scan :refer [sc-request sc-lang sc-page]]
+            [emon.pageunit :refer [pu-scan-core]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
 
@@ -114,20 +114,6 @@
   (if (== policy 0) (return 0))
   (return 1))
 
-(defn ^I32 rs-read-page [^Cells ans ^I32 ao ^I32 ad ^I32 page ^I32 oid ^Cells loc
-                         ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells etext ^:mut ^Cells feats
-                         ^:mut ^Cells images ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
-                         ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
-                         ^:mut ^Cells words ^:mut ^Cells lines ^:mut ^Cells scr]
-  (comment "The evidence and the lines of one frame whose OCR answer is at `ao` (its decode's at `ad`).")
-  (let [^I32 w (an-arg ans ad 0)
-        ^I32 h (an-arg ans ad 1)
-        ^I32 eff (rs-eff-dpi100 (an-arg ans ad 3))
-        ^I32 wc (rs-cpt w eff)
-        ^I32 hc (rs-cpt h eff)]
-    (return (sc-page ans ao page oid page wc hc w h eff 0 0 0 0 0 wc hc (sc-lang loc)
-                     epages views etext feats images oruns oblocks olines owords osyms oalts words lines scr))))
-
 (defn ^:pub ^I32 rs-doc [^Src src ^I32 input ^I32 fmt ^Cells ans ^:mut ^Cells rq
                           ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells text ^:mut ^Cells pages
                           ^:mut ^Cells mask]
@@ -175,34 +161,34 @@
             (set f (+ f 1))))
       (return 0))))
 
-(defn ^:pub ^I32 rs-page [^I32 f ^I32 input ^I32 nbytes ^I32 policy ^Cells ans ^:mut ^Cells rq ^Cells loc
-                          ^BitmapSet bms ^:mut ^Cells mask
+(defn ^:pub ^I32 rs-page [^I32 f ^I32 input ^I32 nbytes ^I32 policy ^I32 fuse ^Cells ans ^:mut ^Cells rq ^Cells loc
+                          ^BitmapSet bms ^:mut ^Cells mask ^:mut ^Cells scr
                           ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells etext ^:mut ^Cells feats
                           ^:mut ^Cells images ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
                           ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
-                          ^:mut ^Cells words ^:mut ^Cells lines ^:mut ^Cells scr ^I32 dry]
-  (comment "`dry` is 1 for a DRY attempt (P10.2, `pu-dry`): it stops before the write, having asked what the rounds up to there ask.")
+                          ^:mut ^Cells words ^:mut ^Cells lines ^:mut ^Cells refs ^:mut ^Cells tlines ^:mut ^Cells cg
+                          ^:mut ^Cells inks ^:mut ^Cells comps ^:mut ^Cells rules ^:mut ^Cells prims ^:mut ^Cells tpts
+                          ^:mut ^Cells ws ^:mut ^Cells sv ^:mut ^Cells aux ^:mut ^Cells snap ^:mut ^Cells rtp
+                          ^:mut ^Cells rn ^:mut ^Cells ri ^:mut ^Cells cs ^:mut ^Cells vr ^:mut ^Cells pc ^:mut ^Cells sg ^:mut ^Cells mem
+                          ^:mut ^Cells s1 ^:mut ^Cells s2 ^:mut ^Cells s3 ^:mut ^Cells s4 ^:mut ^Cells s5 ^:mut ^Cells s6]
+  (comment "`fuse` is the page unit's flags (`emon.pageunit`'s `pu-px` and `pu-dry`: bit 2 the hidden setting `no-retarget`, bit 4 a DRY attempt, P10.2: it stops")
+  (comment "before the write, having asked what the rounds up to there ask).")
   (comment "The unit of frame `f` (0-based) of a raster input: its pixels (`decode` id `pi-decode`, a whole image file, whose")
   (comment "failure is the conversion's: an image that cannot be read is refused by name, whatever the policy), then, unless")
-  (comment "`policy` is 0 (never), OCR of the bitmap (id `pi-ocr`); where the answers are in, the frame's evidence and lines are")
-  (comment "appended to `words` and `lines` and `mask[f]` is 1. Answers `us-requests`, a failure status, or 0. It writes nothing")
-  (comment "until every answer it asked for is in.")
+  (comment "`policy` is 0 (never), the scan's page unit (`pu-scan-core`, D1610): OCR of the bitmap (id `pi-ocr`), the ink layers of the bitmap and the targeted")
+  (comment "passes the first pass calls for (a page fed sideways or upside down is read from its turned view, a small raster from an enlarged one); where the answers")
+  (comment "are in, the frame's evidence and lines are appended to `words` and `lines` and `mask[f]` is 1. An image has no seal or signature stage (its document")
+  (comment "unit does not arbitrate). Answers `us-requests`, a failure status, or 0. It writes nothing until every answer it asked for is in.")
   (let [^I32 did (pu-id f (pi-decode))
-        ^I32 oid (pu-id f (pi-ocr))
-        ^I32 ad (an-find ans did)
-        ^:mut ^I32 ao -1]
+        ^I32 ad (an-find ans did)]
     (if (< ad 0)
       (do (rq-decode rq did input 0 nbytes (flt-none) f)
           (return (us-requests))))
     (if (!= (an-status ans ad) (ps-ok)) (return (rs-fail ans ad)))
     (if (== policy 0) (return 0))
-    (set ao (an-find ans oid))
-    (if (< ao 0)
-      (do (sc-request rq oid did (quot (+ (rs-eff-dpi100 (an-arg ans ad 3)) 50) 100) loc)
-          (return (us-requests))))
-    (if (== dry 1) (return 0))
-    (if (== (an-ok ans ao) 1)
-      (do (rs-read-page ans ao ad (+ f 1) oid loc
-                        epages views etext feats images oruns oblocks olines owords osyms oalts words lines scr)
-          (cells-set mask f 1)))
-    (return 0)))
+    (let [^I32 eff (rs-eff-dpi100 (an-arg ans ad 3))
+          ^I32 wc (rs-cpt (an-arg ans ad 0) eff)
+          ^I32 hc (rs-cpt (an-arg ans ad 1) eff)]
+      (return (pu-scan-core f input fuse did ad eff 0 0 0 wc hc wc hc 1 0
+                            ans rq loc bms mask scr epages views etext feats images oruns oblocks olines owords osyms oalts words lines refs tlines cg
+                            inks comps rules prims tpts ws sv aux snap rtp rn ri cs vr pc sg mem s1 s2 s3 s4 s5 s6)))))

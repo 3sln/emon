@@ -250,6 +250,34 @@ public static class Rasterplantest {
         emon.Testport.AssertEq(Rasterplan.RpWeak(2, 0, pl, fw, fl, et, Rasterplan.RiWitness(), 0, 1, owords, oruns, scr, ta, tb, tt), 0, "one compared line: not enough");
     }
     [Xunit.Fact]
+    public static void TestACyrillicLineWithItsReferenceNumberIsNotCompared() {
+        // D1610: the line holds a digit, which the check took for Latin and compared with the engine's English junk; one letter of a script the engine lacks makes it the text layer's
+        emon.Port.Cells pl = emon.Port.NewCells();
+        emon.Port.Cells fw = emon.Port.NewCells();
+        emon.Port.Cells fl = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells oruns = emon.Port.NewCells();
+        emon.Port.Cells owords = emon.Port.NewCells();
+        emon.Port.Cells scr = emon.Port.NewCells();
+        emon.Port.Cells ta = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tt = emon.Port.NewCells();
+        int tw0 = RptWord(et, 1055, 1088, 1080, 49, 49);
+        int tw1 = RptWord(et, 1074, 1077, 49, 50, 51);
+        int bw0 = RptWord(et, 120, 121, 122, 122, 121);
+        int bw1 = RptWord(et, 113, 119, 101, 114, 116);
+        Evidence.WdNew(fw, 1, 100, 100, 600, 200, 100, 100, 600, 200, 0, 0, tw0, 5, 0, 900, -1);
+        Evidence.WdNew(fw, 1, 700, 100, 1200, 200, 700, 100, 1200, 200, 0, 0, tw1, 5, 0, 900, -1);
+        Evidence.WdSet(fw, 0, Evidence.WfFont(), 7);
+        Evidence.WdSet(fw, 1, Evidence.WfFont(), 7);
+        Evidence.LnNew(fl, 1, 100, 100, 1200, 200, 100, 100, 1200, 200, 0, 0, 0, 2);
+        RptWitnessRow(pl, 0, 7);
+        RptWitnessRow(pl, 0, 7);
+        RptReading(oruns, owords, Rasterplan.RiWitness() + 0, bw0, bw1);
+        RptReading(oruns, owords, Rasterplan.RiWitness() + 1, bw0, bw1);
+        emon.Testport.AssertEq(Rasterplan.RpWeak(2, 0, pl, fw, fl, et, Rasterplan.RiWitness(), 0, 2, owords, oruns, scr, ta, tb, tt), 0, "a Cyrillic line the engine reads as junk: the font is not weak");
+    }
+    [Xunit.Fact]
     public static void TestAFontWithNoMappingIsWeakWhereTheEngineReadsLetters() {
         // the text layer has code points of the private use area (what an unmapped font gives); two witness lines read letters over them
         emon.Port.Cells pl2 = emon.Port.NewCells();

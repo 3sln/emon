@@ -264,6 +264,34 @@ func TestWitnessesThatDisagreeWithTheTextEscalateThePage(emonT *testing.T) {
 	port.AssertEq(emonT, rasterplan.RpWeak(2, 0, pl, fw, fl, et, rasterplan.RiWitness(), 0, 1, owords, oruns, scr, ta, tb, tt), 0, "one compared line: not enough")
 }
 
+func TestACyrillicLineWithItsReferenceNumberIsNotCompared(emonT *testing.T) {
+	// D1610: the line holds a digit, which the check took for Latin and compared with the engine's English junk; one letter of a script the engine lacks makes it the text layer's
+	var pl *port.Cells = port.NewCells()
+	var fw *port.Cells = port.NewCells()
+	var fl *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var oruns *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var scr *port.Cells = port.NewCells()
+	var ta *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tt *port.Cells = port.NewCells()
+	var tw0 int32 = rptWord(et, 1055, 1088, 1080, 49, 49)
+	var tw1 int32 = rptWord(et, 1074, 1077, 49, 50, 51)
+	var bw0 int32 = rptWord(et, 120, 121, 122, 122, 121)
+	var bw1 int32 = rptWord(et, 113, 119, 101, 114, 116)
+	evidence.WdNew(fw, 1, 100, 100, 600, 200, 100, 100, 600, 200, 0, 0, tw0, 5, 0, 900, -1)
+	evidence.WdNew(fw, 1, 700, 100, 1200, 200, 700, 100, 1200, 200, 0, 0, tw1, 5, 0, 900, -1)
+	evidence.WdSet(fw, 0, evidence.WfFont(), 7)
+	evidence.WdSet(fw, 1, evidence.WfFont(), 7)
+	evidence.LnNew(fl, 1, 100, 100, 1200, 200, 100, 100, 1200, 200, 0, 0, 0, 2)
+	rptWitnessRow(pl, 0, 7)
+	rptWitnessRow(pl, 0, 7)
+	rptReading(oruns, owords, rasterplan.RiWitness()+0, bw0, bw1)
+	rptReading(oruns, owords, rasterplan.RiWitness()+1, bw0, bw1)
+	port.AssertEq(emonT, rasterplan.RpWeak(2, 0, pl, fw, fl, et, rasterplan.RiWitness(), 0, 2, owords, oruns, scr, ta, tb, tt), 0, "a Cyrillic line the engine reads as junk: the font is not weak")
+}
+
 func TestAFontWithNoMappingIsWeakWhereTheEngineReadsLetters(emonT *testing.T) {
 	// the text layer has code points of the private use area (what an unmapped font gives); two witness lines read letters over them
 	var pl2 *port.Cells = port.NewCells()

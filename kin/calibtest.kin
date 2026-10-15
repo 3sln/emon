@@ -6,11 +6,11 @@
 ;; absent confidence go through as they are, and a more specific class beats `any`. The bytes a calibrated confidence
 ;; has in the JSON are laws of `emon.jsontest`; the fit itself is measured, not tested (`bb calibration`).
 (ns emon.calibtest
-  (:require [emon.lang :refer [I32]]
-            [emon.test :refer [deftest assert-eq assert-that assert-eq-at]]
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.test :refer [deftest assert-eq assert-that assert-eq-at new-cells]]
             [emon.calibdata :refer [cd-count cd-at]]
-            [emon.calib :refer [cal-class cal-conf cal-lookup cal-dropped]]
-            [emon.model :refer [sr-text sr-hidden-text sr-ocr sr-infer sr-struct nk-paragraph]]
+            [emon.calib :refer [cal-class cal-conf cal-node-conf cal-lookup cal-dropped]]
+            [emon.model :refer [sr-text sr-hidden-text sr-ocr sr-infer sr-struct nk-paragraph nk-text model-init node-new node-add-src node-set-conf node-add-flag fl-script-unread]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or bit-or]]))
 
@@ -87,3 +87,32 @@
                   (assert-eq-at (cal-lookup kind 9 0) first-v "raw 0 takes the first step" i)
                   (assert-eq-at (cal-lookup kind 9 1000) last-v "raw 1000 takes the last step" i))))
           (set i (+ i 1))))))
+
+(deftest test-a-block-flagged-script-unread-is-written-at-its-raw-score
+  (comment "D1610: the map clamps at its first step, so a raw 100 on OCR text is written as the lowest confidence of text the engine READ; the engine's guess at a script it")
+  (comment "cannot read keeps its raw score, and so do the inlines under it")
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (let [^I32 p1 (node-new nodes (nk-paragraph) 0)
+          ^I32 t1 (node-new nodes (nk-text) p1)
+          ^I32 p2 (node-new nodes (nk-paragraph) 0)]
+      (node-add-src nodes p1 (sr-ocr))
+      (node-set-conf nodes p1 100)
+      (node-add-flag nodes p1 (fl-script-unread))
+      (node-add-src nodes t1 (sr-ocr))
+      (node-set-conf nodes t1 100)
+      (node-add-src nodes p2 (sr-ocr))
+      (node-set-conf nodes p2 100)
+      (let [^I32 mapped (cal-conf (nk-paragraph) (sr-ocr) 100)
+            ^:mut ^I32 want 100]
+        (if (< mapped 100) (set want mapped))
+        (assert-eq (cal-node-conf nodes p1) want "the flagged block: its raw score, when the map would give more")
+        (assert-that (<= (cal-node-conf nodes p1) 100) "never above it")
+        (assert-that (<= (cal-node-conf nodes t1) 100) "the text under it too")
+        (assert-eq (cal-node-conf nodes p2) mapped "a block no one flagged is calibrated as it was")))))

@@ -42,7 +42,7 @@
 (ns emon.json
   (:require [emon.lang :refer [I32 Cells Text emit-ascii shl32 sar32]]
             [emon.port :refer [cells-len cells-at text-cp text-i32]]
-            [emon.calib :refer [cal-conf cal-dropped]]
+            [emon.calib :refer [cal-conf cal-node-conf cal-dropped]]
             [emon.model :refer [node-count node-kind node-parent node-first-child
                                 node-next node-text-start node-text-len
                                 node-has-text node-region-head
@@ -314,7 +314,8 @@
         ^:mut ^I32 k 0
         ^:mut ^I32 bit 0]
     (emit-ascii t "[")
-    (while (< b 9)
+    (comment "the warning bits 1 to 1024 (D1610 added `script-unread`, 1024; `in-table-image`, 512, is the fused flow's, not a node's)")
+    (while (< b 11)
       (do (set bit (shl32 1 b))
           (if (!= (bit-and bits bit) 0)
             (do (js-fsep t pr k)
@@ -693,7 +694,7 @@
   (comment "`at`, `src`, `conf`, `flags`: the provenance every node may carry.")
   (let [^:mut ^I32 s started
         ^I32 sr (node-src nodes n)
-        ^I32 cf (cal-conf (node-kind nodes n) (node-src nodes n) (node-conf nodes n))
+        ^I32 cf (cal-node-conf nodes n)
         ^I32 fg (node-flags nodes n)]
     (set s (js-at t pr d nodes regions n s))
     (if (!= sr 0)

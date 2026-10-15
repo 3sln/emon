@@ -24,6 +24,8 @@ public final class Pageunittest {
             emon.Port.cellsPush(pl, 0);
             emon.Port.cellsPush(pl, 0);
             emon.Port.cellsPush(pl, 0);
+            // the scan's mode (D1610): the host decodes the DCT stream in place
+            emon.Port.cellsPush(pl, 0);
             i += 1;
         }
         return 0;
@@ -89,6 +91,85 @@ public final class Pageunittest {
         emon.Testport.assertEq(Plan.rqArg(rq, 0, 1), 100, "the stream's start");
         emon.Testport.assertEq(Plan.rqArg(rq, 0, 2), 50, "and length");
         emon.Testport.assertEq(Plan.rqArg(rq, 0, 3), Plan.fltDct(), "a DCT stream");
+    }
+    public static int planFile(int emonT, byte[] file, emon.Port.Cells pl) {
+        // A document through the document pass as the Engine runs it (`pd-open`, `pc-document`, `th-run`) and `pu-plan` under `always`: `pl` has its page rows. Answers the pages.
+        emon.Port.Cells ar = emon.Port.newCells();
+        emon.Port.Cells dc = emon.Port.newCells();
+        emon.Port.Cells a = emon.Port.newCells();
+        emon.Port.Cells b = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        emon.Port.Cells cx = emon.Port.newCells();
+        emon.Port.Cells ox = emon.Port.newCells();
+        emon.Port.Cells cs = emon.Port.newCells();
+        emon.Port.Cells out = emon.Port.newCells();
+        emon.Port.Cells f0 = emon.Port.newCells();
+        emon.Port.Cells f1 = emon.Port.newCells();
+        emon.Port.Cells f2 = emon.Port.newCells();
+        emon.Port.Cells f3 = emon.Port.newCells();
+        emon.Port.Cells gl = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells mk = emon.Port.newCells();
+        emon.Port.Cells fnt = emon.Port.newCells();
+        emon.Port.Cells pg = emon.Port.newCells();
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells im = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells gx = emon.Port.newCells();
+        emon.Port.Cells epages = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells fw = emon.Port.newCells();
+        emon.Port.Cells fl = emon.Port.newCells();
+        emon.Port.Cells fa = emon.Port.newCells();
+        emon.Port.Cells hl = emon.Port.newCells();
+        emon.Port.Cells sc = emon.Port.newCells();
+        emon.Port.Cells sp = emon.Port.newCells();
+        emon.Port.Cells s1 = emon.Port.newCells();
+        emon.Port.Cells s2 = emon.Port.newCells();
+        emon.Port.Src src = emon.Port.srcOfBlob(file);
+        int o = Pdfdoc.pdOpen(src, ar, dc, a, b, st);
+        emon.Testport.assertEqAt(o, 0, "the file opened", 0);
+        emon.Testport.assertEqAt(Pdfcontent.pcDocument(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx), 0, "the file ran", 0);
+        Tlhealth.thRun(pg, gl, et, mk, fnt, wd, ln, im, epages, feats, fw, fl, fa, hl, sc);
+        Pageunit.puPlan(src, ar, dc, a, b, st, pg, im, wd, 2, 0, fw, fl, et, hl, sp, pl, s1, s2);
+        return Pdfdoc.pdPgCount(pg);
+    }
+    public static void testAPageThatIsOneBigImageIsAScanWhateverTheCodec() {
+        // D1610: a page with no text layer and one image over it was a scan only when that image was a lone DCT stream (the host reads those bytes in place). A Flate or RunLength
+        // image (and CCITT, JBIG2, JPX) was `vector`: no OCR, an empty body. It is a scan read from the host's RENDER of the page (any codec), the raster the whole page.
+        emon.Port.Cells pl = emon.Port.newCells();
+        emon.Port.Cells pl2 = emon.Port.newCells();
+        emon.Port.Cells pl3 = emon.Port.newCells();
+        emon.Testport.assertEq(planFile(0, emon.Testport.testFile("raster/flate-gray-72dpi.pdf"), pl), 1, "one page");
+        emon.Testport.assertEq(Pageunit.puKind(pl, 0), Pageunit.pkScan(), "a FlateDecode image over the page: a scan");
+        emon.Testport.assertEq(Pageunit.puField(pl, 0, 14), Pageunit.puScanRender(), "read from a render");
+        emon.Testport.assertEq(Pageunit.puField(pl, 0, 4), 0, "of the whole page: its left");
+        emon.Testport.assertEq(Pageunit.puField(pl, 0, 6), 61200, "its right is the page's 612 pt");
+        emon.Testport.assertEq(Pageunit.puField(pl, 0, 7), 79200, "its bottom the page's 792 pt");
+        emon.Testport.assertEq(Pageunit.puField(pl, 0, 8), 61200, "the page's width");
+        emon.Testport.assertEq(Pageunit.puField(pl, 0, 9), 79200, "and height");
+        emon.Testport.assertEq(planFile(0, emon.Testport.testFile("raster/runlength-gray-72dpi.pdf"), pl2), 1, "one page");
+        emon.Testport.assertEq(Pageunit.puKind(pl2, 0), Pageunit.pkScan(), "a RunLengthDecode image: a scan too");
+        emon.Testport.assertEq(Pageunit.puField(pl2, 0, 14), Pageunit.puScanRender(), "read from a render");
+        emon.Testport.assertEq(planFile(0, emon.Testport.testFile("corpus/synth/scan/h-plain.pdf"), pl3), 2, "two pages");
+        emon.Testport.assertEq(Pageunit.puKind(pl3, 0), Pageunit.pkScan(), "a lone DCT stream is still a scan");
+        emon.Testport.assertEq(Pageunit.puField(pl3, 0, 14), Pageunit.puScanDct(), "its bytes read in place");
+        emon.Testport.assertThat(Pageunit.puField(pl3, 0, 3) > 0, "from its span");
+    }
+    public static void testARenderScansUnitAsksForTheRenderOfItsPage() {
+        emon.Port.Cells pl = emon.Port.newCells();
+        emon.Port.Cells rq = emon.Port.newCells();
+        planOf(pl, 3, Pageunit.pkScan());
+        emon.Port.cellsSet(pl, (1 * Pageunit.puW()) + 14, Pageunit.puScanRender());
+        emon.Testport.assertEq(runPage(1, 2, pl, emon.Port.newCells(), rq), Plan.usRequests(), "it asks");
+        emon.Testport.assertEq(Plan.recKind(rq, 0), Plan.pkRender(), "a render, not a decode");
+        emon.Testport.assertEq(Plan.recId(rq, 0), 516, "under the scan's own id: page 1, 2 * 256 + 4");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, 0), 3, "of input 3");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, 1), 1, "page 1, 0-based");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, 2), 300, "at 300 dpi");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, 3), Plan.layFull(), "as the page is");
     }
     public static void testAUnitWithNoAnswersAsksTheSameEveryTime() {
         emon.Port.Cells pl = emon.Port.newCells();

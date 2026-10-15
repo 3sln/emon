@@ -572,7 +572,7 @@ public class EngineTest {
         for (String w : new String[] {"\"text\": \"Hello\"", "\"ocr\": \"always\"", "\"ocr-only\""}) {
             check(j.contains(w), w + " is not in the JSON");
         }
-        check(kinds(rec.transcript).equals(List.of(2, 2, 3)), "kinds " + kinds(rec.transcript));
+        check(kinds(rec.transcript).equals(List.of(2, 2, 3, 3, 3)), "kinds " + kinds(rec.transcript));
         check(rec.transcript.producer.size() == 1 && rec.transcript.producer.get(0)[0].equals("engine") && rec.transcript.producer.get(0)[1].equals("fake"), "producer");
         Map<String, byte[]> fs = files(rec.transcript);
         check(new String(fs.get("transcript.edn"), StandardCharsets.UTF_8).contains(":producer {:engine \"fake\"}"), "the producer is in the file");
@@ -879,13 +879,13 @@ public class EngineTest {
         SlowOcr one0 = new SlowOcr();
         Engine.Converted c0 = parEngine(one0, null, 1).record(one(Input.bytes(tiff)), o);
         String j0 = js(c0.model);
-        check(one0.peak.get() == 1 && one0.calls.get() == 3, "a serial run reads one page at a time: peak " + one0.peak.get() + " calls " + one0.calls.get());
+        check(one0.peak.get() == 1 && one0.calls.get() == 9, "a serial run reads one page at a time: peak " + one0.peak.get() + " calls " + one0.calls.get());
         for (int n : new int[] {2, 3, 4, 8}) {
             SlowOcr slow = new SlowOcr();
             Engine.Converted c = parEngine(slow, null, n).record(one(Input.bytes(tiff)), o);
             check(js(c.model).equals(j0), "parallel=" + n + ": the Model differs from the serial one");
             check(entriesOf(c.transcript).equals(entriesOf(c0.transcript)), "parallel=" + n + ": the transcript differs from the serial one");
-            check(slow.calls.get() == 3, "parallel=" + n + ": every page is read once (a look ahead's answer is used, not asked again): " + slow.calls.get());
+            check(slow.calls.get() == one0.calls.get(), "parallel=" + n + ": every page is read once (a look ahead's answer is used, not asked again): " + slow.calls.get());
             check(slow.peak.get() >= 2 && slow.peak.get() <= n, "parallel=" + n + ": the pages ahead are read while the loop is on one, at most N at once: peak " + slow.peak.get());
         }
         // limit.workers is the most the option is served with: 1 is serial whatever is asked

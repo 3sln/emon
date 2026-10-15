@@ -293,7 +293,8 @@ func JsBitsFlags(t *strings.Builder, pr int32, bits int32) int32 {
 	var k int32 = 0
 	var bit int32 = 0
 	port.TextAscii(t, "[")
-	for b < 9 {
+	// the warning bits 1 to 1024 (D1610 added `script-unread`, 1024; `in-table-image`, 512, is the fused flow's, not a node's)
+	for b < 11 {
 		bit = (1) << uint(b)
 		if (bits & bit) != 0 {
 			JsFsep(t, pr, k)
@@ -755,7 +756,7 @@ func jsTail(t *strings.Builder, pr int32, d int32, nodes *port.Cells, regions *p
 	// `at`, `src`, `conf`, `flags`: the provenance every node may carry.
 	var s int32 = started
 	var sr int32 = model.NodeSrc(nodes, n)
-	var cf int32 = calib.CalConf(model.NodeKind(nodes, n), model.NodeSrc(nodes, n), model.NodeConf(nodes, n))
+	var cf int32 = calib.CalNodeConf(nodes, n)
 	var fg int32 = model.NodeFlags(nodes, n)
 	s = jsAt(t, pr, d, nodes, regions, n, s)
 	if sr != 0 {

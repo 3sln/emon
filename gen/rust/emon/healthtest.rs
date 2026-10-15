@@ -55,6 +55,9 @@ pub(crate) fn ht_word_in(mut words: &mut crate::port::Cells, mut fw: &mut crate:
     if script == 0 {
         crate::port::cells_push(et, 97);
         crate::port::cells_push(et, 98);
+    } else if script == 2 {
+        crate::port::cells_push(et, 1488);
+        crate::port::cells_push(et, 49);
     } else {
         crate::port::cells_push(et, 1488);
         crate::port::cells_push(et, 1489);
@@ -273,6 +276,27 @@ fn test_a_script_the_engine_cannot_read_is_not_counted() {
     hl_page(1, cg, refs, fw, words, et, feats, ob, ol, ow, hl);
     crate::testport::assert_eq(ht_agreement_of(hl, 1, 5), -1, "no group counted: no agreement");
     crate::testport::assert_eq(ht_score_of(hl, 1, 5), 1000, "and the score is P7.0's");
+    crate::testport::assert_eq(hl_doc(feats, fw, hl), 0, "the document pass has nothing to say");
+}
+#[test]
+fn test_a_foreign_word_with_a_digit_attached_is_not_counted() {
+    // D1610: a Hebrew letter and a digit (a word with its reference number) held to `hh-latin` as Latin and its disagreement with the engine's junk made the font unhealthy
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ob: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ol: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let w: i32 = ht_word_in(words, fw, feats, et, 1, 5, 2);
+    ht_font_row(hl, 1, 5);
+    ht_groups(cg, refs, 1, pl_ea_fw(), w, 10, 0);
+    hl_page(1, cg, refs, fw, words, et, feats, ob, ol, ow, hl);
+    crate::testport::assert_eq(ht_agreement_of(hl, 1, 5), -1, "no group counted: a letter of a script the engine lacks makes the word its text layer's");
+    crate::testport::assert_eq(ht_score_of(hl, 1, 5), 1000, "and the font keeps P7.0's score");
     crate::testport::assert_eq(hl_doc(feats, fw, hl), 0, "the document pass has nothing to say");
 }
 #[test]

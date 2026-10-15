@@ -995,6 +995,9 @@ func FlTagSpanConflict() int32 {
 func FlInTableImage() int32 {
 	return 512
 }
+func FlScriptUnread() int32 {
+	return 1024
+}
 func FlEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "low-conf")
@@ -1034,6 +1037,10 @@ func FlEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 512 {
 		port.TextAscii(t, "in-table-image")
+		return 1
+	}
+	if code == 1024 {
+		port.TextAscii(t, "script-unread")
 		return 1
 	}
 	return 0
@@ -2541,6 +2548,12 @@ func PageSetHealth(pages *port.Cells, p int32, v int32) int32 {
 func PageSetKind(pages *port.Cells, p int32, kind int32) int32 {
 	// A page's source kind (`pk`), after the page is made: `scanned` once the unit finds its text came from OCR (D212).
 	return pset(pages, p, 6, kind)
+}
+
+func PageSetSize(pages *port.Cells, p int32, w int32, h int32) int32 {
+	// A page's size in centipoints, after the page is made: an image read from its turned view (D1610) is as wide as it is high and the reverse, upright.
+	pset(pages, p, 3, w)
+	return pset(pages, p, 4, h)
 }
 
 func PageSetResolution(pages *port.Cells, p int32, dpi int32, pxw int32, pxh int32) int32 {

@@ -2,9 +2,9 @@
 // source: emon.rasterin
 
 use crate::emon::model::*;
+use crate::emon::pageunit::*;
 use crate::emon::pdfsrc::*;
 use crate::emon::plan::*;
-use crate::emon::scan::*;
 
 pub fn rs_none() -> i32 {
     return 0;
@@ -128,15 +128,6 @@ pub(crate) fn rs_want_ocr(info: i32, policy: i32) -> i32 {
     }
     return 1;
 }
-pub(crate) fn rs_read_page(ans: &mut crate::port::Cells, ao: i32, ad: i32, page: i32, oid: i32, loc: &mut crate::port::Cells, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut scr: &mut crate::port::Cells) -> i32 {
-    // The evidence and the lines of one frame whose OCR answer is at `ao` (its decode's at `ad`).
-    let w: i32 = an_arg(ans, ad, 0);
-    let h: i32 = an_arg(ans, ad, 1);
-    let eff: i32 = rs_eff_dpi100(an_arg(ans, ad, 3));
-    let wc: i32 = rs_cpt(w, eff);
-    let hc: i32 = rs_cpt(h, eff);
-    return sc_page(ans, ao, page, oid, page, wc, hc, w, h, eff, 0, 0, 0, 0, 0, wc, hc, sc_lang(loc), epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr);
-}
 pub fn rs_doc(src: &crate::port::Src, input: i32, fmt: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, mut mask: &mut crate::port::Cells) -> i32 {
     // THE DOCUMENT PASS of a raster input (P7.U): stage 0, HEADER ONLY (D187). Round 1 asks for frame 0's header (id 1),
     // round 2 for every other frame's (ids `f + 1`); then the root's `format` and `pages`, and one `image` page row per frame
@@ -201,17 +192,17 @@ pub fn rs_doc(src: &crate::port::Src, input: i32, fmt: i32, ans: &mut crate::por
     }
     return 0;
 }
-pub fn rs_page(f: i32, input: i32, nbytes: i32, policy: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, loc: &mut crate::port::Cells, bms: &crate::port::BitmapSet, mut mask: &mut crate::port::Cells, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, dry: i32) -> i32 {
-    // `dry` is 1 for a DRY attempt (P10.2, `pu-dry`): it stops before the write, having asked what the rounds up to there ask.
+pub fn rs_page(f: i32, input: i32, nbytes: i32, policy: i32, fuse: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, loc: &mut crate::port::Cells, bms: &crate::port::BitmapSet, mut mask: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells, mut cg: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut comps: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tpts: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, mut sv: &mut crate::port::Cells, mut aux: &mut crate::port::Cells, mut snap: &mut crate::port::Cells, mut rtp: &mut crate::port::Cells, mut rn: &mut crate::port::Cells, mut ri: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut vr: &mut crate::port::Cells, mut pc: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut mem: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells, mut s4: &mut crate::port::Cells, mut s5: &mut crate::port::Cells, mut s6: &mut crate::port::Cells) -> i32 {
+    // `fuse` is the page unit's flags (`emon.pageunit`'s `pu-px` and `pu-dry`: bit 2 the hidden setting `no-retarget`, bit 4 a DRY attempt, P10.2: it stops
+    // before the write, having asked what the rounds up to there ask).
     // The unit of frame `f` (0-based) of a raster input: its pixels (`decode` id `pi-decode`, a whole image file, whose
     // failure is the conversion's: an image that cannot be read is refused by name, whatever the policy), then, unless
-    // `policy` is 0 (never), OCR of the bitmap (id `pi-ocr`); where the answers are in, the frame's evidence and lines are
-    // appended to `words` and `lines` and `mask[f]` is 1. Answers `us-requests`, a failure status, or 0. It writes nothing
-    // until every answer it asked for is in.
+    // `policy` is 0 (never), the scan's page unit (`pu-scan-core`, D1610): OCR of the bitmap (id `pi-ocr`), the ink layers of the bitmap and the targeted
+    // passes the first pass calls for (a page fed sideways or upside down is read from its turned view, a small raster from an enlarged one); where the answers
+    // are in, the frame's evidence and lines are appended to `words` and `lines` and `mask[f]` is 1. An image has no seal or signature stage (its document
+    // unit does not arbitrate). Answers `us-requests`, a failure status, or 0. It writes nothing until every answer it asked for is in.
     let did: i32 = pu_id(f, pi_decode());
-    let oid: i32 = pu_id(f, pi_ocr());
     let ad: i32 = an_find(ans, did);
-    let mut ao: i32 = -1;
     if ad < 0 {
         rq_decode(rq, did, input, 0, nbytes, flt_none(), f);
         return us_requests();
@@ -222,17 +213,8 @@ pub fn rs_page(f: i32, input: i32, nbytes: i32, policy: i32, ans: &mut crate::po
     if policy == 0 {
         return 0;
     }
-    ao = an_find(ans, oid);
-    if ao < 0 {
-        sc_request(rq, oid, did, (rs_eff_dpi100(an_arg(ans, ad, 3)) + 50) / 100, loc);
-        return us_requests();
-    }
-    if dry == 1 {
-        return 0;
-    }
-    if an_ok(ans, ao) == 1 {
-        rs_read_page(ans, ao, ad, f + 1, oid, loc, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr);
-        crate::port::cells_set(mask, f, 1);
-    }
-    return 0;
+    let eff: i32 = rs_eff_dpi100(an_arg(ans, ad, 3));
+    let wc: i32 = rs_cpt(an_arg(ans, ad, 0), eff);
+    let hc: i32 = rs_cpt(an_arg(ans, ad, 1), eff);
+    return pu_scan_core(f, input, fuse, did, ad, eff, 0, 0, 0, wc, hc, wc, hc, 1, 0, ans, rq, loc, bms, mask, scr, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, refs, tlines, cg, inks, comps, rules, prims, tpts, ws, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6);
 }

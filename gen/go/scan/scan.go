@@ -1346,9 +1346,49 @@ func scNodePage(nodes *port.Cells, regions *port.Cells, n int32) int32 {
 	return -1
 }
 
+func ScMaskUnread() int32 {
+	// D1610: added to a page's `mask` cell when the engine had no model for the page's script (`emon.scriptcheck`).
+	return 4
+}
+
+func ScUnreadConf() int32 {
+	// D1610: the most confidence (per mille) a block of a page in a script the engine cannot read keeps.
+	return 100
+}
+
+func ScTagUnread(nodes *port.Cells, regions *port.Cells, mask *port.Cells) int32 {
+	// D1610: every node whose text is OCR's (`ocr` in its source) on a page the unit marked `sc-mask-unread` (OSD sure of a script that no model the engine read it
+	// with reads, `emon.scriptcheck`): a block is flagged `script-unread` and `low-conf`, and every node's confidence is held at `sc-unread-conf`. The text is the
+	// engine's guess at a script it cannot read, kept and never presented as confident. After every other provenance stage (the scan's, fusion's). Answers the nodes held.
+	var nn int32 = model.NodeCount(nodes)
+	var n int32 = 1
+	var pg int32 = 0
+	var held int32 = 0
+	for n < nn {
+		pg = scNodePage(nodes, regions, n)
+		if (pg >= 1) && (pg <= port.CellsLen(mask)) {
+			if (port.CellsAt(mask, pg-1) / 4) >= 1 {
+				if (model.NodeSrc(nodes, n) & model.SrOcr()) == model.SrOcr() {
+					if model.NkIsInline(model.NodeKind(nodes, n)) == 0 {
+						model.NodeAddFlag(nodes, n, model.FlScriptUnread())
+						model.NodeAddFlag(nodes, n, model.FlLowConf())
+					}
+					if model.NodeConf(nodes, n) > ScUnreadConf() {
+						model.NodeSetConf(nodes, n, ScUnreadConf())
+					}
+					held += 1
+				}
+			}
+		}
+		n += 1
+	}
+	return held
+}
+
 func ScTag(nodes *port.Cells, attrs *port.Cells, text *port.Cells, regions *port.Cells, pages *port.Cells, mask *port.Cells, policy int32) int32 {
 	// The provenance of OCR text, after the paragraphs are built. `mask` has one cell a page: 0 none, 1 an image page was
-	// OCR'd, 2 a PDF page was (its kind becomes `scanned`, SPEC 3.4). Every node on a masked page: its `text` source becomes
+	// OCR'd, 2 a PDF page was (its kind becomes `scanned`, SPEC 3.4), plus `sc-mask-unread` for a page in a script the engine cannot read (`sc-tag-unread`).
+	// Every node on a masked page: its `text` source becomes
 	// `ocr`, an inline text's confidence 1000 (a glyph's own) becomes 500 (an engine's word: uncalibrated, D130, Phase 10), and a
 	// block that had `text` is flagged `ocr-only`. The root gets `settings.ocr` (`policy` 1 auto, 2 always) when any page was OCR'd.
 	var np int32 = model.PageCount(pages)
@@ -1361,10 +1401,10 @@ func ScTag(nodes *port.Cells, attrs *port.Cells, text *port.Cells, regions *port
 	var s int32 = 0
 	var start int32 = 0
 	for i < np {
-		if (i < port.CellsLen(mask)) && (port.CellsAt(mask, i) >= 1) {
+		if (i < port.CellsLen(mask)) && ((port.CellsAt(mask, i) % 4) >= 1) {
 			any = 1
 		}
-		if (i < port.CellsLen(mask)) && (port.CellsAt(mask, i) == 2) {
+		if (i < port.CellsLen(mask)) && ((port.CellsAt(mask, i) % 4) == 2) {
 			model.PageSetKind(pages, i, model.PkScanned())
 		}
 		i += 1
@@ -1378,7 +1418,7 @@ func ScTag(nodes *port.Cells, attrs *port.Cells, text *port.Cells, regions *port
 		if (pg >= 1) && (pg <= port.CellsLen(mask)) {
 			m = port.CellsAt(mask, pg-1)
 		}
-		if m >= 1 {
+		if (m % 4) >= 1 {
 			s = model.NodeSrc(nodes, n)
 			if (s & model.SrText()) == model.SrText() {
 				model.NodeSetSrc(nodes, n, (s-model.SrText())+model.SrOcr())

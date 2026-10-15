@@ -214,7 +214,7 @@ public static class Engine {
         if (d.Kind == EnKindPdf()) {
             return Pageunit.PuRunPdf(i, idx, c.Ocr, d.Plan, ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, (2 * c.Nort) + (4 * c.Dry), d.Fw, d.Fl, d.Hl, ev.Refs, d.Cg, ev.Tlines, d.Xs0, d.Xs1, d.Xs2, d.Xs3, d.Xs4, d.Xs5, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys1, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18);
         }
-        return Rasterin.RsPage(i, idx, nbytes, c.Ocr, ans, rq, d.Loc, bms, d.Mask, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, d.Pscr, c.Dry);
+        return Rasterin.RsPage(i, idx, nbytes, c.Ocr, (2 * c.Nort) + (4 * c.Dry), ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, ev.Refs, ev.Tlines, d.Cg, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18);
     }
     public static int EnAssetUnit(emon.Port.Src view, emon.Port.Src pw, emon.Enctx.Cfg c, emon.Enctx.Doc d, emon.Enctx.Pass p, int idx, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms, emon.Port.Buf payload) {
         // THE ASSET UNIT (P6.1a, D117, D291, SPEC 10.11): the candidates of the document's image placements, in its own plan/fulfil loop. It re-opens the document
@@ -352,6 +352,7 @@ public static class Engine {
                 emon.Port.CellsSwap(m.Regions, s.Sr);
             }
         }
+        Scan.ScTagUnread(m.Nodes, m.Regions, d.Mask);
         if (kind == 0) {
             EnFields(m, s, d);
         }
@@ -393,6 +394,18 @@ public static class Engine {
         // The raster document unit: stage 3 over the frames' OCR lines. `m` is the Model the document pass began (its pages and nodes); an image has no text layer, so
         // the glyph arenas are empty and nothing is set aside.
         int np = Model.PageCount(m.Pages);
+        int i = 0;
+        int row = 0;
+        // D1610: a frame fed sideways was read from its turned view (`rt-upright` swapped the evidence's page); the Model's page is as wide as the text it holds
+        while (i < np) {
+            row = Evidence.EvPageRow(ev.Epages, i + 1);
+            if (row >= 0) {
+                if ((Evidence.EpGet(ev.Epages, row, Evidence.EpfWidth()) != Model.PageW(m.Pages, i)) || (Evidence.EpGet(ev.Epages, row, Evidence.EpfHeight()) != Model.PageH(m.Pages, i))) {
+                    Model.PageSetSize(m.Pages, i, Evidence.EpGet(ev.Epages, row, Evidence.EpfWidth()), Evidence.EpGet(ev.Epages, row, Evidence.EpfHeight()));
+                }
+            }
+            i += 1;
+        }
         if (c.Keep != 0) {
             EnDump(d.Et, d.Gl, d.Wd, d.Ln, d.Mk, d.Fnt, d.Grl, d.Gfl, s.Ggp, s.Grg, ev, d.Evidence);
         }

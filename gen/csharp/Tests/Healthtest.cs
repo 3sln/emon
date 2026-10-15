@@ -54,6 +54,9 @@ public static class Healthtest {
         if (script == 0) {
             emon.Port.CellsPush(et, 97);
             emon.Port.CellsPush(et, 98);
+        } else if (script == 2) {
+            emon.Port.CellsPush(et, 1488);
+            emon.Port.CellsPush(et, 49);
         } else {
             emon.Port.CellsPush(et, 1488);
             emon.Port.CellsPush(et, 1489);
@@ -272,6 +275,27 @@ public static class Healthtest {
         Health.HlPage(1, cg, refs, fw, words, et, feats, ob, ol, ow, hl);
         emon.Testport.AssertEq(HtAgreementOf(hl, 1, 5), -1, "no group counted: no agreement");
         emon.Testport.AssertEq(HtScoreOf(hl, 1, 5), 1000, "and the score is P7.0's");
+        emon.Testport.AssertEq(Health.HlDoc(feats, fw, hl), 0, "the document pass has nothing to say");
+    }
+    [Xunit.Fact]
+    public static void TestAForeignWordWithADigitAttachedIsNotCounted() {
+        // D1610: a Hebrew letter and a digit (a word with its reference number) held to `hh-latin` as Latin and its disagreement with the engine's junk made the font unhealthy
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells fw = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells cg = emon.Port.NewCells();
+        emon.Port.Cells refs = emon.Port.NewCells();
+        emon.Port.Cells hl = emon.Port.NewCells();
+        emon.Port.Cells ob = emon.Port.NewCells();
+        emon.Port.Cells ol = emon.Port.NewCells();
+        emon.Port.Cells ow = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        int w = HtWordIn(words, fw, feats, et, 1, 5, 2);
+        HtFontRow(hl, 1, 5);
+        HtGroups(cg, refs, 1, Player.PlEaFw(), w, 10, 0);
+        Health.HlPage(1, cg, refs, fw, words, et, feats, ob, ol, ow, hl);
+        emon.Testport.AssertEq(HtAgreementOf(hl, 1, 5), -1, "no group counted: a letter of a script the engine lacks makes the word its text layer's");
+        emon.Testport.AssertEq(HtScoreOf(hl, 1, 5), 1000, "and the font keeps P7.0's score");
         emon.Testport.AssertEq(Health.HlDoc(feats, fw, hl), 0, "the document pass has nothing to say");
     }
     [Xunit.Fact]

@@ -5,9 +5,12 @@ package pageunittest
 
 import (
 	"emon/pageunit"
+	"emon/pdfcontent"
+	"emon/pdfdoc"
 	"emon/plan"
 	"emon/port"
 	"emon/rasterplan"
+	"emon/tlhealth"
 	"testing"
 )
 
@@ -29,6 +32,8 @@ func planOf(pl *port.Cells, pages int32, kind int32) int32 {
 		port.CellsPush(pl, 0)
 		port.CellsPush(pl, 0)
 		port.CellsPush(pl, 0)
+		port.CellsPush(pl, 0)
+		// the scan's mode (D1610): the host decodes the DCT stream in place
 		port.CellsPush(pl, 0)
 		i += 1
 	}
@@ -104,6 +109,88 @@ func TestAScannedPagesUnitAsksForItsStreamUnderItsOwnId(emonT *testing.T) {
 	port.AssertEq(emonT, plan.RqArg(rq, 0, 1), 100, "the stream's start")
 	port.AssertEq(emonT, plan.RqArg(rq, 0, 2), 50, "and length")
 	port.AssertEq(emonT, plan.RqArg(rq, 0, 3), plan.FltDct(), "a DCT stream")
+}
+
+func planFile(emonT *testing.T, file []byte, pl *port.Cells) int32 {
+	// A document through the document pass as the Engine runs it (`pd-open`, `pc-document`, `th-run`) and `pu-plan` under `always`: `pl` has its page rows. Answers the pages.
+	var ar *port.Cells = port.NewCells()
+	var dc *port.Cells = port.NewCells()
+	var a *port.Cells = port.NewCells()
+	var b *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	var cx *port.Cells = port.NewCells()
+	var ox *port.Cells = port.NewCells()
+	var cs *port.Cells = port.NewCells()
+	var out *port.Cells = port.NewCells()
+	var f0 *port.Cells = port.NewCells()
+	var f1 *port.Cells = port.NewCells()
+	var f2 *port.Cells = port.NewCells()
+	var f3 *port.Cells = port.NewCells()
+	var gl *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var fnt *port.Cells = port.NewCells()
+	var pg *port.Cells = port.NewCells()
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var gx *port.Cells = port.NewCells()
+	var epages *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var fw *port.Cells = port.NewCells()
+	var fl *port.Cells = port.NewCells()
+	var fa *port.Cells = port.NewCells()
+	var hl *port.Cells = port.NewCells()
+	var sc *port.Cells = port.NewCells()
+	var sp *port.Cells = port.NewCells()
+	var s1 *port.Cells = port.NewCells()
+	var s2 *port.Cells = port.NewCells()
+	var src *port.Src = port.SrcOfBlob(file)
+	var o int32 = pdfdoc.PdOpen(src, ar, dc, a, b, st)
+	port.AssertEqAt(emonT, o, 0, "the file opened", 0)
+	port.AssertEqAt(emonT, pdfcontent.PcDocument(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx), 0, "the file ran", 0)
+	tlhealth.ThRun(pg, gl, et, mk, fnt, wd, ln, im, epages, feats, fw, fl, fa, hl, sc)
+	pageunit.PuPlan(src, ar, dc, a, b, st, pg, im, wd, 2, 0, fw, fl, et, hl, sp, pl, s1, s2)
+	return pdfdoc.PdPgCount(pg)
+}
+
+func TestAPageThatIsOneBigImageIsAScanWhateverTheCodec(emonT *testing.T) {
+	// D1610: a page with no text layer and one image over it was a scan only when that image was a lone DCT stream (the host reads those bytes in place). A Flate or RunLength
+	// image (and CCITT, JBIG2, JPX) was `vector`: no OCR, an empty body. It is a scan read from the host's RENDER of the page (any codec), the raster the whole page.
+	var pl *port.Cells = port.NewCells()
+	var pl2 *port.Cells = port.NewCells()
+	var pl3 *port.Cells = port.NewCells()
+	port.AssertEq(emonT, planFile(emonT, port.TestFile("raster/flate-gray-72dpi.pdf"), pl), 1, "one page")
+	port.AssertEq(emonT, pageunit.PuKind(pl, 0), pageunit.PkScan(), "a FlateDecode image over the page: a scan")
+	port.AssertEq(emonT, pageunit.PuField(pl, 0, 14), pageunit.PuScanRender(), "read from a render")
+	port.AssertEq(emonT, pageunit.PuField(pl, 0, 4), 0, "of the whole page: its left")
+	port.AssertEq(emonT, pageunit.PuField(pl, 0, 6), 61200, "its right is the page's 612 pt")
+	port.AssertEq(emonT, pageunit.PuField(pl, 0, 7), 79200, "its bottom the page's 792 pt")
+	port.AssertEq(emonT, pageunit.PuField(pl, 0, 8), 61200, "the page's width")
+	port.AssertEq(emonT, pageunit.PuField(pl, 0, 9), 79200, "and height")
+	port.AssertEq(emonT, planFile(emonT, port.TestFile("raster/runlength-gray-72dpi.pdf"), pl2), 1, "one page")
+	port.AssertEq(emonT, pageunit.PuKind(pl2, 0), pageunit.PkScan(), "a RunLengthDecode image: a scan too")
+	port.AssertEq(emonT, pageunit.PuField(pl2, 0, 14), pageunit.PuScanRender(), "read from a render")
+	port.AssertEq(emonT, planFile(emonT, port.TestFile("corpus/synth/scan/h-plain.pdf"), pl3), 2, "two pages")
+	port.AssertEq(emonT, pageunit.PuKind(pl3, 0), pageunit.PkScan(), "a lone DCT stream is still a scan")
+	port.AssertEq(emonT, pageunit.PuField(pl3, 0, 14), pageunit.PuScanDct(), "its bytes read in place")
+	port.AssertThat(emonT, pageunit.PuField(pl3, 0, 3) > 0, "from its span")
+}
+
+func TestARenderScansUnitAsksForTheRenderOfItsPage(emonT *testing.T) {
+	var pl *port.Cells = port.NewCells()
+	var rq *port.Cells = port.NewCells()
+	planOf(pl, 3, pageunit.PkScan())
+	port.CellsSet(pl, (1*pageunit.PuW())+14, pageunit.PuScanRender())
+	port.AssertEq(emonT, runPage(1, 2, pl, port.NewCells(), rq), plan.UsRequests(), "it asks")
+	port.AssertEq(emonT, plan.RecKind(rq, 0), plan.PkRender(), "a render, not a decode")
+	port.AssertEq(emonT, plan.RecId(rq, 0), 516, "under the scan's own id: page 1, 2 * 256 + 4")
+	port.AssertEq(emonT, plan.RqArg(rq, 0, 0), 3, "of input 3")
+	port.AssertEq(emonT, plan.RqArg(rq, 0, 1), 1, "page 1, 0-based")
+	port.AssertEq(emonT, plan.RqArg(rq, 0, 2), 300, "at 300 dpi")
+	port.AssertEq(emonT, plan.RqArg(rq, 0, 3), plan.LayFull(), "as the page is")
 }
 
 func TestAUnitWithNoAnswersAsksTheSameEveryTime(emonT *testing.T) {

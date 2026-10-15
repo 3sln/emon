@@ -213,6 +213,60 @@ public final class Scantest {
         emon.Testport.assertThat(a >= 0, "settings.ocr is written");
         emon.Testport.assertEq(Model.attrLen(attrs, a), 6, "`always`");
     }
+    public static void testAPageInAScriptTheEngineCannotReadIsFlaggedAndHeldAtALowConfidence() {
+        // D1610 (P12.3 I-13): the page unit adds `sc-mask-unread` to the page's mask cell; the blocks of the page say the engine could not read it
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells mask = emon.Port.newCells();
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Model.pageNew(pages, 1, 61200, 79200, 0, Model.pkVector());
+        Model.pageNew(pages, 2, 61200, 79200, 0, Model.pkVector());
+        Model.pageNew(pages, 3, 61200, 79200, 0, Model.pkVector());
+        int p1 = Model.nodeNew(nodes, Model.nkParagraph(), 0);
+        int t1 = Model.nodeNew(nodes, Model.nkText(), p1);
+        int p2 = Model.nodeNew(nodes, Model.nkParagraph(), 0);
+        int p3 = Model.nodeNew(nodes, Model.nkParagraph(), 0);
+        int p4 = Model.nodeNew(nodes, Model.nkParagraph(), 0);
+        Model.nodeAddRegion(nodes, regions, p1, 1, 0, 0, 100, 100);
+        Model.nodeAddRegion(nodes, regions, p2, 2, 0, 0, 100, 100);
+        Model.nodeAddRegion(nodes, regions, p3, 3, 0, 0, 100, 100);
+        Model.nodeAddRegion(nodes, regions, p4, 3, 200, 200, 300, 300);
+        Model.nodeAddSrc(nodes, p1, Model.srText());
+        Model.nodeSetConf(nodes, p1, 900);
+        Model.nodeAddSrc(nodes, t1, Model.srText());
+        Model.nodeSetConf(nodes, t1, 1000);
+        Model.nodeAddSrc(nodes, p2, Model.srText());
+        Model.nodeSetConf(nodes, p2, 900);
+        // page 3 is born digital, OCR'd, and fusion gave a block to OCR (`ocr` and `text`) and left one to the text layer
+        Model.nodeAddSrc(nodes, p3, Model.srText());
+        Model.nodeAddSrc(nodes, p3, Model.srOcr());
+        Model.nodeSetConf(nodes, p3, 900);
+        Model.nodeAddSrc(nodes, p4, Model.srText());
+        Model.nodeSetConf(nodes, p4, 900);
+        emon.Port.cellsPush(mask, 1 + Scan.scMaskUnread());
+        emon.Port.cellsPush(mask, 1);
+        emon.Port.cellsPush(mask, Scan.scMaskUnread());
+        emon.Testport.assertEq(Scan.scTag(nodes, attrs, text, regions, pages, mask, 2), 1, "something was tagged");
+        emon.Testport.assertEq(Model.nodeFlags(nodes, p1), Model.flOcrOnly(), "the scan tags what it always tagged");
+        emon.Testport.assertEq(Scan.scTagUnread(nodes, regions, mask), 3, "the block and the text of page 1, the block of page 3");
+        emon.Testport.assertEq(Model.nodeFlags(nodes, p1), Model.flOcrOnly() + (Model.flLowConf() + Model.flScriptUnread()), "the block: OCR only, low confidence, script unread");
+        emon.Testport.assertEq(Model.nodeConf(nodes, p1), Scan.scUnreadConf(), "its confidence is held at the unread ceiling");
+        emon.Testport.assertEq(Model.nodeConf(nodes, t1), Scan.scUnreadConf(), "so is its text's");
+        emon.Testport.assertEq(Model.nodeFlags(nodes, t1), 0, "an inline is not flagged");
+        emon.Testport.assertEq(Model.nodeSrc(nodes, p1), Model.srOcr(), "its text is still OCR's: it is kept, not dropped");
+        emon.Testport.assertEq(Model.nodeFlags(nodes, p2), Model.flOcrOnly(), "the other page was read by a model that reads it: OCR only, nothing more");
+        emon.Testport.assertEq(Model.nodeConf(nodes, p2), 900, "and its confidence is its own");
+        emon.Testport.assertEq(Model.nodeFlags(nodes, p3), Model.flLowConf() + Model.flScriptUnread(), "a born-digital block OCR won on an unread page: flagged, not `ocr-only`");
+        emon.Testport.assertEq(Model.nodeConf(nodes, p3), Scan.scUnreadConf(), "and held low");
+        emon.Testport.assertEq(Model.nodeFlags(nodes, p4), 0, "a block of the same page that stayed the text layer's is not touched");
+        emon.Testport.assertEq(Model.nodeConf(nodes, p4), 900, "nor its confidence");
+        emon.Testport.assertEq(Model.pageKind(pages, 0), Model.pkVector(), "an image page's kind is not changed by the flag");
+    }
     public static void testWithNoPageReadNothingIsTagged() {
         emon.Port.Cells nodes = emon.Port.newCells();
         emon.Port.Cells attrs = emon.Port.newCells();

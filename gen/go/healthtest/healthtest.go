@@ -61,6 +61,9 @@ func htWordIn(words *port.Cells, fw *port.Cells, feats *port.Cells, et *port.Cel
 	if script == 0 {
 		port.CellsPush(et, 97)
 		port.CellsPush(et, 98)
+	} else if script == 2 {
+		port.CellsPush(et, 1488)
+		port.CellsPush(et, 49)
 	} else {
 		port.CellsPush(et, 1488)
 		port.CellsPush(et, 1489)
@@ -285,6 +288,27 @@ func TestAScriptTheEngineCannotReadIsNotCounted(emonT *testing.T) {
 	health.HlPage(1, cg, refs, fw, words, et, feats, ob, ol, ow, hl)
 	port.AssertEq(emonT, htAgreementOf(hl, 1, 5), -1, "no group counted: no agreement")
 	port.AssertEq(emonT, htScoreOf(hl, 1, 5), 1000, "and the score is P7.0's")
+	port.AssertEq(emonT, health.HlDoc(feats, fw, hl), 0, "the document pass has nothing to say")
+}
+
+func TestAForeignWordWithADigitAttachedIsNotCounted(emonT *testing.T) {
+	// D1610: a Hebrew letter and a digit (a word with its reference number) held to `hh-latin` as Latin and its disagreement with the engine's junk made the font unhealthy
+	var words *port.Cells = port.NewCells()
+	var fw *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var cg *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var hl *port.Cells = port.NewCells()
+	var ob *port.Cells = port.NewCells()
+	var ol *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var w int32 = htWordIn(words, fw, feats, et, 1, 5, 2)
+	htFontRow(hl, 1, 5)
+	htGroups(cg, refs, 1, player.PlEaFw(), w, 10, 0)
+	health.HlPage(1, cg, refs, fw, words, et, feats, ob, ol, ow, hl)
+	port.AssertEq(emonT, htAgreementOf(hl, 1, 5), -1, "no group counted: a letter of a script the engine lacks makes the word its text layer's")
+	port.AssertEq(emonT, htScoreOf(hl, 1, 5), 1000, "and the font keeps P7.0's score")
 	port.AssertEq(emonT, health.HlDoc(feats, fw, hl), 0, "the document pass has nothing to say")
 }
 

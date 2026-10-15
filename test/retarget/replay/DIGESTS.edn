@@ -10,4 +10,12 @@
  "ovl-table-simple-ruled"
  "9346ad9e8b19edcbad617b677a19f3d3c85bfce12d37be36377bec90c753a71e",
  "ovl-watermark-draft"
- "7adaab8650d82c291b11694968e3d64a816a7bbd7a1c4cf99e677e0928e5f64f"}
+ "7adaab8650d82c291b11694968e3d64a816a7bbd7a1c4cf99e677e0928e5f64f",
+ "raster-72dpi"
+ "1ec9315b5c293ef3f32e08002db5be885990394b408ee0da582be6940b0afc5d",
+ "raster-flate-render"
+ "71ab1f5b3fdb5df35eac14d51a1f46e41ba05ed9d1089ccfde3ecdb418ff5c06",
+ "raster-rot180"
+ "8f954a3574e63438fee9e64b19665d91371b082d0d5a86baae6a7bb5c060fc5c",
+ "raster-rot90"
+ "34d3591f4b22984591ef2633eb46e76b801b006482bf771fa3e55a1ad6bc8654"}

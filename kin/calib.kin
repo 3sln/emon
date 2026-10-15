@@ -21,9 +21,9 @@
 ;; clamped at its ends, so a raw score no run has produced yet takes its neighbour's value, never an invented
 ;; one). Absent (-1) stays absent. The map is monotone in the raw score within a class and kind, by the fit.
 (ns emon.calib
-  (:require [emon.lang :refer [I32]]
+  (:require [emon.lang :refer [I32 Cells]]
             [emon.calibdata :refer [cd-count cd-at]]
-            [emon.model :refer [sr-text sr-hidden-text sr-ocr]]
+            [emon.model :refer [sr-text sr-hidden-text sr-ocr node-conf node-src node-kind node-flags node-parent fl-script-unread]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or bit-and bit-or]]))
 
@@ -65,3 +65,18 @@
 (defn ^:pub ^I32 cal-conf [^I32 kind ^I32 src ^I32 raw]
   (comment "The calibrated confidence (per mille) of a raw one for a node kind and source; -1 stays -1.")
   (return (cal-lookup kind (cal-class src) raw)))
+
+(defn ^:pub ^I32 cal-node-conf [^Cells nodes ^I32 n]
+  (comment "The calibrated confidence of node `n`, as the Model writes it (`cal-conf` of its kind, source and raw score), D1610: EXCEPT a node of a block flagged")
+  (comment "`script-unread` (the engine had no model for the page's script, `emon.scriptcheck`), which is written at its raw score when that is lower. The map is a")
+  (comment "step function clamped at its ends, and the lowest step of OCR text is a text the engine read: a raw 100 would be written as that, and the engine's guess")
+  (comment "at a script it cannot read would carry the confidence of what it can.")
+  (let [^I32 raw (node-conf nodes n)
+        ^I32 cf (cal-conf (node-kind nodes n) (node-src nodes n) raw)
+        ^:mut ^I32 a n]
+    (if (< raw 0) (return cf))
+    (if (<= cf raw) (return cf))
+    (while (>= a 0)
+      (do (if (!= (bit-and (node-flags nodes a) (fl-script-unread)) 0) (return raw))
+          (set a (node-parent nodes a))))
+    (return cf)))

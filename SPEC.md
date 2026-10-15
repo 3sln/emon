@@ -286,7 +286,7 @@ API expose.
 | `at` | Zero or more regions `[page, x0, y0, x1, y1]` in page space (§3.4). A node spanning pages or columns has one region per **fragment** (per page and column, in reading order; D112); the column of a region is the page's `layout` cell that contains it (§3.7). Inline `text` nodes have regions only at `detail: words` (§13). |
 | `src` | Provenance: the set of sources that contributed (§3.5). |
 | `conf` | Confidence, integer 0..1000 (§3.5). |
-| `flags` | Small closed set of warnings: `low-conf`, `ocr-only`, `text-layer-suspect`, `reconstructed` (e.g. a repaired table), `dpi-unknown`, `rotated`, `vertical`, `struct-disagree` (a table's tags disagree with its geometry, D225), `tag-span-conflict` (a tagged span crosses an edge the rules close), `in-table-image` (an OCR-only word admitted as the text of a table drawn in an image, §9.9, D224; carried by the fused flow's verdict rows, not by Model nodes). |
+| `flags` | Small closed set of warnings: `low-conf`, `ocr-only`, `text-layer-suspect`, `reconstructed` (e.g. a repaired table), `dpi-unknown`, `rotated`, `vertical`, `struct-disagree` (a table's tags disagree with its geometry, D225), `tag-span-conflict` (a tagged span crosses an edge the rules close), `in-table-image` (an OCR-only word admitted as the text of a table drawn in an image, §9.9, D224; carried by the fused flow's verdict rows, not by Model nodes), `script-unread` (a block of an OCR'd page whose script the engine has no model for: OSD names a script that no model the engine read it with reads, §8.3, D1610; the text is the engine's guess, the block is `low-conf` and its confidence is held at 100). |
 
 ### 3.4 Geometry and units (D009)
 
@@ -1234,6 +1234,19 @@ surer; the body-ink run's line that is its partner both ways), or its ink is mos
 run read where the first pass read none are taken, in reading order, on a page that runs down in one column. On a born-digital page the runs are written after the
 page is aligned and scored: they are evidence, and the body-ink run is a witness (`plg-bink`, `ag-bink`, row 222), never a candidate.
 
+**As built (P12.3, D1610).** (1) *A page whose content is one big image is a scan whatever the codec*: a PDF page with no text layer and an upright image over at least
+half of it is read from the host's DECODE of the image's DCT stream when that is one plain stage, and from a RENDER of the whole page (300 dpi) when it is in any other
+codec (Flate, RunLength, LZW, CCITT, JBIG2, JPX, an encrypted DCT). (2) *An image input is a scan too*: each frame runs the same page unit as a scanned PDF page
+(`pu-scan-core`): the ink layers, and the targeted passes the first pass calls for, among them the quarter-turned view when OSD is sure the page is turned (a PNG fed
+sideways or upside down is read upright; its Model page is then as wide as the text it holds). An image has no seal or signature stage. (3) *A raster too small for the
+engine is read again enlarged*: the median x-height of the first pass's text lines (width-weighted) says what resolution the raster has (`emon.upscale`: ten point type is 5 pt
+of x-height); under `up-xh-trigger` (9 px, about 130 dpi) the raster is made `ceil(20 / x-height)` times as large (at most 4, at most 25 million pixels) by a separable
+Catmull-Rom cubic of kin's own, as a kin-made view, and the engine reads THAT view (pass `upscaled`, told the resolution the text says, not the one the file stated or
+300 when it stated none); a first pass that read fewer than four words of a raster whose longer side is at most 1400 px is read again 3 times as large; the enlarged
+reading replaces the first when it reads at least as much; a page OSD says is turned is first read upright. (4) *A page in a script the engine has no model for*: OSD sure
+(script confidence 15.0) of a script that no model the engine read with (the language of its words) reads, with at least three words: the blocks of the page whose text is OCR's are
+flagged `script-unread` and `low-conf` and their confidence is held at 100, written uncalibrated (`cal-node-conf`).
+
 ### 8.4 The evidence schema, v2 (D056, revised by D096)
 
 Evidence is what fusion (§9) reads, so its shape is set by what fusion must
@@ -1380,7 +1393,7 @@ structure tree; §9.5 defence 1 walks a glyph's `mark` chain for an
 
 | arena | stride | fields |
 | --- | --- | --- |
-| `oruns` | 28 | page, view read, binarised view (the engine's thresholded image, -1 not asked), request id, round, pass kind (`op`: first, region, line, cell, seal-strip, body-ink, text-only, re-rotated), `psm`, region x y w h (view px), languages `tstart tlen` ("eng+deu"), orientation (quarter turns clockwise to upright), writing direction, line order, deskew (centi-degrees), OSD degrees (-1 none), script (ISO 15924 packed), script confidence, orientation confidence (x10, -1), request flags, `bfirst bcount`, `lfirst lcount`, `wfirst wcount` |
+| `oruns` | 28 | page, view read, binarised view (the engine's thresholded image, -1 not asked), request id, round, pass kind (`op`: first, region, line, cell, seal-strip, body-ink, text-only, re-rotated, upscaled), `psm`, region x y w h (view px), languages `tstart tlen` ("eng+deu"), orientation (quarter turns clockwise to upright), writing direction, line order, deskew (centi-degrees), OSD degrees (-1 none), script (ISO 15924 packed), script confidence, orientation confidence (x10, -1), request flags, `bfirst bcount`, `lfirst lcount`, `wfirst wcount` |
 | `oblocks` | 16 | page, box, kind (`ob`: block, paragraph), parent block (-1), run, block type (`bt`, D095), orientation, writing direction (per block: Tesseract reports them per block), child run `first count` (a block's paragraphs, a paragraph's lines), raw confidence, spare |
 | `olines` | 24 | line head (13); paragraph (`oblocks` row); run; raw confidence; x-height, ascender, descender (cpt, -1 unknown); pixel box x y w h; spare |
 | `owords` | 28 | word head (16); style (`sy`); run; `sfirst scount` (its symbols); language (packed); engine flags (`ow`: from-dictionary, numeric, from the engine's fallback model); engine point size (cpt, -1); pixel box x y w h; spare |

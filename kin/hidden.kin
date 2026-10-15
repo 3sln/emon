@@ -29,14 +29,6 @@
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
 
-(defn ^I32 hx-latin-cp [^I32 c]
-  (comment "1 for a Latin letter or a digit: ASCII, Latin-1 (without the multiplication and division signs), Latin Extended-A and -B.")
-  (if (and (>= c 48) (<= c 57)) (return 1))
-  (if (and (>= c 65) (<= c 90)) (return 1))
-  (if (and (>= c 97) (<= c 122)) (return 1))
-  (if (and (>= c 192) (<= c 591) (and (!= c 215) (!= c 247))) (return 1))
-  (return 0))
-
 (defn ^I32 hx-foreign-cp [^I32 c]
   (comment "1 for a letter of a script a Latin engine cannot read (as `emon.arbiter`'s `ar-foreign-cp`).")
   (if (and (>= c 880) (< c 7680)) (return 1))
@@ -44,19 +36,21 @@
   (if (and (>= c 11904) (<= c 55215)) (return 1))
   (if (and (>= c 63744) (<= c 64975)) (return 1))
   (if (and (>= c 65136) (<= c 65276)) (return 1))
+  (if (and (>= c 8448) (<= c 8527)) (return 1))
+  (if (and (>= c 8592) (<= c 8959)) (return 1))
+  (if (and (>= c 119808) (<= c 120831)) (return 1))
   (return 0))
 
 (defn ^I32 hx-word-latin [^Cells ofw ^Cells etext ^I32 row]
-  (comment "1 when the engine can read the flow word `row` (as `ar-word-latin`): a Latin letter or digit, or no letter of another script.")
+  (comment "1 when the engine can read the flow word `row` (as `ar-word-latin`, D1610): it holds no letter of a script the engine lacks, whatever Latin letter or")
+  (comment "digit is attached to it, and it holds a code point.")
   (let [^I32 ts (cells-at ofw (+ (* row 24) 11))
         ^I32 tl (cells-at ofw (+ (* row 24) 12))
-        ^:mut ^I32 j 0
-        ^:mut ^I32 foreign 0]
+        ^:mut ^I32 j 0]
     (while (< j tl)
-      (do (if (== (hx-latin-cp (cells-at etext (+ ts j))) 1) (return 1))
-          (if (== (hx-foreign-cp (cells-at etext (+ ts j))) 1) (set foreign 1))
+      (do (if (== (hx-foreign-cp (cells-at etext (+ ts j))) 1) (return 0))
           (set j (+ j 1))))
-    (if (and (== foreign 0) (> tl 0)) (return 1))
+    (if (> tl 0) (return 1))
     (return 0)))
 
 (defn ^I32 hx-page-ocr [^I32 g ^Cells cg]

@@ -127,7 +127,7 @@
   {:glob "kin/{gfuse*,gvec*,glayer*,trace*,pdfgfx}.kin" :gates ["unit" "gfuse" "sealpx"] :why "graphics fusion and the tracer: the gfuse digests; the seals-from-pixels set reads the tracer's ink"}
   {:glob "kin/{sealfield*,sealmark*,sealpx*,sigmark*,sigpx*}.kin" :gates ["unit" "seals" "sealpx" "sigs"] :why "seals, stamps and signatures: their three replay gates"}
   {:glob "kin/{artifact,align*,xalign*,arbiter*,fuserules}.kin" :gates ["unit" "align" "fusion" "artifacts" "seals"] :why "alignment, arbitration and the fusion rules (and the watermark defence): their replay gates"}
-  {:glob "kin/{ocr,ocrtest,scan,scantest,raster*,rasterin*,rasterplan*}.kin" :gates ["unit" "ocr" "retarget" "sealpx" "sigs"] :why "OCR intake, scans and the raster stage: the committed OCR transcripts, and the pixel replays that read the same views"}
+  {:glob "kin/{ocr,ocrtest,scan,scantest,raster*,rasterin*,rasterplan*,upscale*,scriptcheck*}.kin" :gates ["unit" "ocr" "retarget" "sealpx" "sigs"] :why "OCR intake, scans and the raster stage: the committed OCR transcripts, and the pixel replays that read the same views"}
   {:glob "kin/{asset*,figclass*,png,pngtest,pngcheck,pngchecktest}.kin" :gates ["unit" "asset" "identity" "png-check" "image"] :why "assets, figures and the PNG writer/validator: the asset gate, the writers' identity, the PNG digests"}
 
   ;; ---- kin/scripts: the gate scripts, the builders, the generators ----------------------------------------------------------------------------------
@@ -257,6 +257,7 @@
   {:glob "test/png/**" :gates ["png-check"] :why "PNG digests"}
   {:glob "test/render/**" :gates ["render"] :why "render transcripts"}
   {:glob "test/retarget/**" :gates ["retarget"] :why "targeted-rounds transcripts"}
+  {:glob "test/raster/**" :gates ["unit" "retarget"] :why "P12.3's raster fixtures (tools/synth/raster_fixtures.clj): the laws read the PDFs, the retarget fixtures record the PNGs and PDFs"}
   {:glob "test/scoreboard.edn" :gates ["accuracy" "@replay"] :why "the ratchet: every replay gate holds its entry"}
   {:glob "test/sealpx/**" :gates ["sealpx"] :why "seals-from-pixels transcripts"}
   {:glob "test/seals/**" :gates ["seals"] :why "seals transcripts"}

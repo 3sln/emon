@@ -127,15 +127,6 @@ public final class Rasterin {
         }
         return 1;
     }
-    public static int rsReadPage(emon.Port.Cells ans, int ao, int ad, int page, int oid, emon.Port.Cells loc, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells scr) {
-        // The evidence and the lines of one frame whose OCR answer is at `ao` (its decode's at `ad`).
-        int w = Plan.anArg(ans, ad, 0);
-        int h = Plan.anArg(ans, ad, 1);
-        int eff = rsEffDpi100(Plan.anArg(ans, ad, 3));
-        int wc = rsCpt(w, eff);
-        int hc = rsCpt(h, eff);
-        return Scan.scPage(ans, ao, page, oid, page, wc, hc, w, h, eff, 0, 0, 0, 0, 0, wc, hc, Scan.scLang(loc), epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr);
-    }
     public static int rsDoc(emon.Port.Src src, int input, int fmt, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells mask) {
         // THE DOCUMENT PASS of a raster input (P7.U): stage 0, HEADER ONLY (D187). Round 1 asks for frame 0's header (id 1),
         // round 2 for every other frame's (ids `f + 1`); then the root's `format` and `pages`, and one `image` page row per frame
@@ -200,17 +191,17 @@ public final class Rasterin {
         }
         return 0;
     }
-    public static int rsPage(int f, int input, int nbytes, int policy, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells loc, emon.Port.BitmapSet bms, emon.Port.Cells mask, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells scr, int dry) {
-        // `dry` is 1 for a DRY attempt (P10.2, `pu-dry`): it stops before the write, having asked what the rounds up to there ask.
+    public static int rsPage(int f, int input, int nbytes, int policy, int fuse, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells loc, emon.Port.BitmapSet bms, emon.Port.Cells mask, emon.Port.Cells scr, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells refs, emon.Port.Cells tlines, emon.Port.Cells cg, emon.Port.Cells inks, emon.Port.Cells comps, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tpts, emon.Port.Cells ws, emon.Port.Cells sv, emon.Port.Cells aux, emon.Port.Cells snap, emon.Port.Cells rtp, emon.Port.Cells rn, emon.Port.Cells ri, emon.Port.Cells cs, emon.Port.Cells vr, emon.Port.Cells pc, emon.Port.Cells sg, emon.Port.Cells mem, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6) {
+        // `fuse` is the page unit's flags (`emon.pageunit`'s `pu-px` and `pu-dry`: bit 2 the hidden setting `no-retarget`, bit 4 a DRY attempt, P10.2: it stops
+        // before the write, having asked what the rounds up to there ask).
         // The unit of frame `f` (0-based) of a raster input: its pixels (`decode` id `pi-decode`, a whole image file, whose
         // failure is the conversion's: an image that cannot be read is refused by name, whatever the policy), then, unless
-        // `policy` is 0 (never), OCR of the bitmap (id `pi-ocr`); where the answers are in, the frame's evidence and lines are
-        // appended to `words` and `lines` and `mask[f]` is 1. Answers `us-requests`, a failure status, or 0. It writes nothing
-        // until every answer it asked for is in.
+        // `policy` is 0 (never), the scan's page unit (`pu-scan-core`, D1610): OCR of the bitmap (id `pi-ocr`), the ink layers of the bitmap and the targeted
+        // passes the first pass calls for (a page fed sideways or upside down is read from its turned view, a small raster from an enlarged one); where the answers
+        // are in, the frame's evidence and lines are appended to `words` and `lines` and `mask[f]` is 1. An image has no seal or signature stage (its document
+        // unit does not arbitrate). Answers `us-requests`, a failure status, or 0. It writes nothing until every answer it asked for is in.
         int did = Plan.puId(f, Plan.piDecode());
-        int oid = Plan.puId(f, Plan.piOcr());
         int ad = Plan.anFind(ans, did);
-        int ao = -1;
         if (ad < 0) {
             Plan.rqDecode(rq, did, input, 0, nbytes, Plan.fltNone(), f);
             return Plan.usRequests();
@@ -221,18 +212,9 @@ public final class Rasterin {
         if (policy == 0) {
             return 0;
         }
-        ao = Plan.anFind(ans, oid);
-        if (ao < 0) {
-            Scan.scRequest(rq, oid, did, (rsEffDpi100(Plan.anArg(ans, ad, 3)) + 50) / 100, loc);
-            return Plan.usRequests();
-        }
-        if (dry == 1) {
-            return 0;
-        }
-        if (Plan.anOk(ans, ao) == 1) {
-            rsReadPage(ans, ao, ad, f + 1, oid, loc, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr);
-            emon.Port.cellsSet(mask, f, 1);
-        }
-        return 0;
+        int eff = rsEffDpi100(Plan.anArg(ans, ad, 3));
+        int wc = rsCpt(Plan.anArg(ans, ad, 0), eff);
+        int hc = rsCpt(Plan.anArg(ans, ad, 1), eff);
+        return Pageunit.puScanCore(f, input, fuse, did, ad, eff, 0, 0, 0, wc, hc, wc, hc, 1, 0, ans, rq, loc, bms, mask, scr, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, refs, tlines, cg, inks, comps, rules, prims, tpts, ws, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6);
     }
 }

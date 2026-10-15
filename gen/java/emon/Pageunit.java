@@ -17,6 +17,12 @@ public final class Pageunit {
     public static int puField(emon.Port.Cells pl, int i, int k) {
         return emon.Port.cellsAt(pl, (i * puW()) + k);
     }
+    public static int puScanDct() {
+        return 0;
+    }
+    public static int puScanRender() {
+        return 1;
+    }
     public static int pkNone() {
         return 0;
     }
@@ -93,8 +99,8 @@ public final class Pageunit {
                     jj += 1;
                 }
                 if (best >= 0) {
+                    k = i * puW();
                     if (Scan.scDctSpan(src, ar, dc, a, b, st, Evidence.imGet(im, best, Evidence.mfObj()), sp) == 1) {
-                        k = i * puW();
                         emon.Port.cellsSet(pl, k, 1);
                         emon.Port.cellsSet(pl, k + 1, Evidence.imGet(im, best, Evidence.mfObj()));
                         emon.Port.cellsSet(pl, k + 2, emon.Port.cellsAt(sp, 0));
@@ -105,6 +111,22 @@ public final class Pageunit {
                         emon.Port.cellsSet(pl, k + 7, Evidence.imGet(im, best, Evidence.mfY1()));
                         emon.Port.cellsSet(pl, k + 8, px1 - px0);
                         emon.Port.cellsSet(pl, k + 9, py1 - py0);
+                        emon.Port.cellsSet(pl, k + 14, puScanDct());
+                    } else {
+                        // D1610: a page whose content is one big image is a scan WHATEVER the codec (Flate, RunLength, LZW, CCITT, JBIG2, JPX, a DCT with more
+                        // than one stage or in an encrypted file): kin cannot hand the host those bytes in place, so the host RENDERS the page (pdfium reads every codec,
+                        // colour space, /Decode and mask) and the render is read as the scan is. The raster is the whole page, not the image's box.
+                        emon.Port.cellsSet(pl, k, 1);
+                        emon.Port.cellsSet(pl, k + 1, Evidence.imGet(im, best, Evidence.mfObj()));
+                        emon.Port.cellsSet(pl, k + 2, 0);
+                        emon.Port.cellsSet(pl, k + 3, 0);
+                        emon.Port.cellsSet(pl, k + 4, 0);
+                        emon.Port.cellsSet(pl, k + 5, 0);
+                        emon.Port.cellsSet(pl, k + 6, px1 - px0);
+                        emon.Port.cellsSet(pl, k + 7, py1 - py0);
+                        emon.Port.cellsSet(pl, k + 8, px1 - px0);
+                        emon.Port.cellsSet(pl, k + 9, py1 - py0);
+                        emon.Port.cellsSet(pl, k + 14, puScanRender());
                     }
                 }
                 if (Pdfsrc.psMissed(src)) {
@@ -175,7 +197,7 @@ public final class Pageunit {
         }
         return Pageink.pnHas(bms, id);
     }
-    public static int puRunBorn(int i, int input, int fuse, emon.Port.Cells pl, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells loc, emon.Port.BitmapSet bms, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells fw, emon.Port.Cells fl, emon.Port.Cells hl, emon.Port.Cells refs, emon.Port.Cells cg, emon.Port.Cells tlines, emon.Port.Cells xscr, emon.Port.Cells xgp, emon.Port.Cells xdp, emon.Port.Cells xta, emon.Port.Cells xtb, emon.Port.Cells xtt, emon.Port.Cells scr, emon.Port.Cells images, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells inks, emon.Port.Cells comps, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tpts, emon.Port.Cells ws, emon.Port.Cells ws2, emon.Port.Cells sv, emon.Port.Cells aux, emon.Port.Cells snap, emon.Port.Cells rtp, emon.Port.Cells rn, emon.Port.Cells ri, emon.Port.Cells cs, emon.Port.Cells vr, emon.Port.Cells pc, emon.Port.Cells sg, emon.Port.Cells mem, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6) {
+    public static int puRunBorn(int i, int input, int fuse, emon.Port.Cells pl, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells loc, emon.Port.BitmapSet bms, emon.Port.Cells mask, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells fw, emon.Port.Cells fl, emon.Port.Cells hl, emon.Port.Cells refs, emon.Port.Cells cg, emon.Port.Cells tlines, emon.Port.Cells xscr, emon.Port.Cells xgp, emon.Port.Cells xdp, emon.Port.Cells xta, emon.Port.Cells xtb, emon.Port.Cells xtt, emon.Port.Cells scr, emon.Port.Cells images, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells inks, emon.Port.Cells comps, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tpts, emon.Port.Cells ws, emon.Port.Cells ws2, emon.Port.Cells sv, emon.Port.Cells aux, emon.Port.Cells snap, emon.Port.Cells rtp, emon.Port.Cells rn, emon.Port.Cells ri, emon.Port.Cells cs, emon.Port.Cells vr, emon.Port.Cells pc, emon.Port.Cells sg, emon.Port.Cells mem, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6) {
         int ask = puField(pl, i, Rasterplan.rpFAsk());
         int scripts = puField(pl, i, Rasterplan.rpFScripts());
         int nwit = puField(pl, i, Rasterplan.rpFWn());
@@ -387,20 +409,53 @@ public final class Pageunit {
                 }
             }
         }
+        // a page in a script the engine has no model for (D1610): the page's mask says so, and `sc-tag-unread` holds what OCR won of it at a low confidence
+        if (Scriptcheck.skUnread(ans, ao, s6) == 1) {
+            emon.Port.cellsSet(mask, i, Scan.scMaskUnread());
+        }
         return Plan.usDone();
     }
-    public static int puRunScan(int i, int input, int fuse, emon.Port.Cells pl, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells loc, emon.Port.BitmapSet bms, emon.Port.Cells mask, emon.Port.Cells scr, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells refs, emon.Port.Cells tlines, emon.Port.Cells cg, emon.Port.Cells inks, emon.Port.Cells comps, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tpts, emon.Port.Cells ws, emon.Port.Cells sv, emon.Port.Cells aux, emon.Port.Cells snap, emon.Port.Cells rtp, emon.Port.Cells rn, emon.Port.Cells ri, emon.Port.Cells cs, emon.Port.Cells vr, emon.Port.Cells pc, emon.Port.Cells sg, emon.Port.Cells mem, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6) {
-        // A SCANNED page: `decode` of its stream, the OCR of the bitmap, the ink layers of the bitmap and the targeted passes they and the
-        // first pass call for, then the lines the pipeline reads (`rt-adopt`). With no pixel in the decode answer (a transcript recorded slim) the
-        // page is what it always was: the first pass's lines.
-        int did = Plan.puId(i, Plan.piDecode());
+    public static int puScanPixels(int i, int did, int oid, int ao, int pxw, int pxh, int dpi100, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells loc, emon.Port.BitmapSet bms, int fuse, emon.Port.Cells rtp, emon.Port.Cells s6) {
+        // D1610: 0 when the raster of the page unit is the bitmap under `did`; the factor `k` (2 to 4) when the first pass `ao` of it (the OCR request `oid`) shows
+        // that the raster is too small for the engine to read (`emon.upscale`) and the pixels are there to enlarge: the enlarged raster is then made as a kin-made view
+        // (`rv-upscaled`) and its OCR is asked for (`ri-upscale`, naming the view's pixel hash). Answers -1 when it has asked (the caller answers `us-requests`).
+        if (puPx(bms, did, fuse) == 0) {
+            return 0;
+        }
+        int k = Upscale.upFactor(ans, ao, pxw, pxh, s6);
+        int uvid = Plan.puViewId(i, Upscale.rvUpscaled());
+        int uid = Plan.puId(i, Upscale.riUpscale());
+        if (k < 2) {
+            return 0;
+        }
+        if (Plan.anFind(ans, uid) < 0) {
+            Upscale.upMake(bms, uvid, Plan.puViewId(i, Upscale.rvUpscaleTmp()), emon.Port.bmsGet(bms, did), k, s6);
+            emon.Port.bitmapHash(emon.Port.bmsGet(bms, uvid), rtp, Retarget.rtpHash());
+            Scan.scRequestView(rq, uid, uvid, emon.Port.cellsAt(rtp, Retarget.rtpHash()), emon.Port.cellsAt(rtp, Retarget.rtpHash() + 1), Upscale.upHint(ans, ao, k, dpi100, s6), loc);
+            return -1;
+        }
+        return k;
+    }
+    public static int puScanCore(int i, int input, int fuse, int did, int ad, int dpi100, int obj, int bx0, int by0, int bx1, int by1, int pw, int ph, int maskv, int seals, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells loc, emon.Port.BitmapSet bms, emon.Port.Cells mask, emon.Port.Cells scr, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells refs, emon.Port.Cells tlines, emon.Port.Cells cg, emon.Port.Cells inks, emon.Port.Cells comps, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tpts, emon.Port.Cells ws, emon.Port.Cells sv, emon.Port.Cells aux, emon.Port.Cells snap, emon.Port.Cells rtp, emon.Port.Cells rn, emon.Port.Cells ri, emon.Port.Cells cs, emon.Port.Cells vr, emon.Port.Cells pc, emon.Port.Cells sg, emon.Port.Cells mem, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6) {
+        // A SCANNED page whose raster is in (the decode or the render under `did`, its answer at `ad`; `dpi100` its resolution, `obj` the image's object, the page
+        // region it shows is (`bx0` `by0`)-(`bx1` `by1`) of a page `pw` x `ph`, all centipoints): the OCR of the bitmap, the ink layers of the bitmap and the
+        // targeted passes they and the first pass call for, then the lines the pipeline reads (`rt-adopt`). With no pixel in the decode answer (a transcript recorded
+        // slim) the page is what it always was: the first pass's lines. `maskv` is what the page's `mask` cell becomes (1 an image page, 2 a PDF's scanned page);
+        // `seals` 1 looks for seals and signatures in the pixels (a PDF page: its document unit arbitrates them), 0 does not (an image: it has no such unit).
+        // D1610: a raster the first pass shows to be too small is read again enlarged (`pu-scan-pixels`) and that reading, when it reads as much, is the first pass.
         int oid = Plan.puId(i, Plan.piOcr());
-        int ad = Plan.anFind(ans, did);
-        int ao = -1;
+        int uid = Plan.puId(i, Upscale.riUpscale());
+        int uvid = Plan.puViewId(i, Upscale.rvUpscaled());
+        int rid = did;
+        int roid = oid;
         int pxw = 0;
         int pxh = 0;
-        int wp = 0;
-        int dpi100 = 0;
+        int rdpi = dpi100;
+        int hint = 0;
+        int mv = maskv;
+        int ao = -1;
+        int ua = -1;
+        int k = 0;
         int vdec = 0;
         int l0 = 0;
         int w0 = 0;
@@ -410,17 +465,8 @@ public final class Pageunit {
         int rotmed = 0;
         int asked = 0;
         int nsel = 0;
-        if (ad < 0) {
-            Plan.rqDecode(rq, did, input, puField(pl, i, 2), puField(pl, i, 3), Plan.fltDct(), 0);
-            return Plan.usRequests();
-        }
-        if (Plan.anOk(ans, ad) != 1) {
-            return Plan.usDone();
-        }
         pxw = Plan.anArg(ans, ad, 0);
         pxh = Plan.anArg(ans, ad, 1);
-        wp = puField(pl, i, 6) - puField(pl, i, 4);
-        dpi100 = (int) (((((long) pxw) * ((long) 720000)) + ((long) (wp / 2))) / ((long) wp));
         ao = Plan.anFind(ans, oid);
         if (ao < 0) {
             Scan.scRequest(rq, oid, did, (dpi100 + 50) / 100, loc);
@@ -432,43 +478,103 @@ public final class Pageunit {
         if (puDry(fuse) == 1) {
             return Plan.usDone();
         }
+        Retarget.rtPrep(rtp);
+        // a page in a script the engine has no model for (D1610): the first pass is junk at a confidence it should not have; `sc-tag` says so
+        if (Scriptcheck.skUnread(ans, ao, s6) == 1) {
+            mv += Scan.scMaskUnread();
+        }
+        hint = (dpi100 + 50) / 100;
+        // a raster is enlarged for an engine that can read it: not a page in a script it has no model for
+        if (mv < Scan.scMaskUnread()) {
+            k = puScanPixels(i, did, oid, ao, pxw, pxh, dpi100, ans, rq, loc, bms, fuse, rtp, s6);
+        }
+        if (k < 0) {
+            return Plan.usRequests();
+        }
+        if (k > 1) {
+            ua = Plan.anFind(ans, uid);
+            // the enlarged reading stands when it was made and reads as much as the first: the raster is then the view, at the resolution the text says it has
+            if (ua >= 0) {
+                if (Plan.anOk(ans, ua) == 1) {
+                    if (Upscale.upScore(ans, ua) >= Upscale.upScore(ans, ao)) {
+                        hint = Upscale.upHint(ans, ao, k, dpi100, s6);
+                        rid = uvid;
+                        roid = uid;
+                        ao = ua;
+                        pxw *= k;
+                        pxh *= k;
+                        rdpi = dpi100 * k;
+                        // a unit's attempt has a set of its own: the enlarged raster is made again, from the frame's pixels
+                        Upscale.upMake(bms, uvid, Plan.puViewId(i, Upscale.rvUpscaleTmp()), emon.Port.bmsGet(bms, did), k, s6);
+                    }
+                }
+            }
+        }
         Scan.scPrep(scr);
-        if (puPx(bms, did, fuse) == 0) {
-            Scan.scPage(ans, ao, i + 1, oid, did, puField(pl, i, 8), puField(pl, i, 9), pxw, pxh, dpi100, puField(pl, i, 4), puField(pl, i, 5), puField(pl, i, 1), puField(pl, i, 4), puField(pl, i, 5), puField(pl, i, 6), puField(pl, i, 7), Scan.scLang(loc), epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr);
-            emon.Port.cellsSet(mask, i, 2);
+        if (puPx(bms, rid, fuse) == 0) {
+            Scan.scPage(ans, ao, i + 1, roid, rid, pw, ph, pxw, pxh, rdpi, bx0, by0, obj, bx0, by0, bx1, by1, Scan.scLang(loc), epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr);
+            emon.Port.cellsSet(mask, i, mv);
             return Plan.usDone();
         }
         Pageink.pnMark(snap, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, inks, comps, rules, prims, tpts, tlines, refs, images, words, lines);
-        vdec = Scan.scPageView(epages, views, images, i + 1, did, puField(pl, i, 8), puField(pl, i, 9), pxw, pxh, dpi100, puField(pl, i, 4), puField(pl, i, 5), puField(pl, i, 1), puField(pl, i, 4), puField(pl, i, 5), puField(pl, i, 6), puField(pl, i, 7));
-        Pageink.pnInk(i + 1, vdec, bms, Pageink.pnKText(), emon.Port.bmsGet(bms, did), dpi100, 1, views, inks, comps, rules, prims, tpts, tlines, refs, ws, sv, aux, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6);
+        vdec = Scan.scPageView(epages, views, images, i + 1, rid, pw, ph, pxw, pxh, rdpi, bx0, by0, obj, bx0, by0, bx1, by1);
+        Pageink.pnInk(i + 1, vdec, bms, Pageink.pnKText(), emon.Port.bmsGet(bms, rid), rdpi, 1, views, inks, comps, rules, prims, tpts, tlines, refs, ws, sv, aux, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6);
         l0 = Evidence.olCount(olines);
         w0 = Evidence.owCount(owords);
-        run = Scan.scPageEvidence(ans, ao, i + 1, oid, vdec, dpi100, Scan.scLang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+        run = Scan.scPageEvidence(ans, ao, i + 1, roid, vdec, rdpi, Scan.scLang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+        if (rid == uvid) {
+            Retarget.rtRunMeta(oruns, run, Evidence.opUpscaled(), 3, 3, 0, 0, 0, 0);
+        }
         nw = Evidence.owCount(owords) - w0;
-        Pageink.pnFeatures(i + 1, bms, Pageink.pnKText(), emon.Port.bmsGet(bms, did), oid, w0, nw, ws, comps, owords, feats, scr);
+        Pageink.pnFeatures(i + 1, bms, Pageink.pnKText(), emon.Port.bmsGet(bms, rid), roid, w0, nw, ws, comps, owords, feats, scr);
         Retarget.rtPrep(rtp);
-        asked = Retarget.rtPlan(i, input, 0, 0, did, (dpi100 + 50) / 100, loc, ans, bms, Pageink.pnKText(), emon.Port.bmsGet(bms, did), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr);
+        asked = Retarget.rtPlan(i, input, 0, 0, rid, hint, loc, ans, bms, Pageink.pnKText(), emon.Port.bmsGet(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr);
         // the seals and stamps in the page's pixels (P8.2): their strips and crops are asked in the same round as the targeted passes
-        Sealpx.sxFind(i + 1, views, vdec, prims, inks, puField(pl, i, 8), puField(pl, i, 9), s1);
-        asked += Sealpx.sxPlan(i, loc, ans, bms, emon.Port.bmsGet(bms, did), s1, s2, s3, rq);
+        if (seals == 1) {
+            Sealpx.sxFind(i + 1, views, vdec, prims, inks, pw, ph, s1);
+            asked += Sealpx.sxPlan(i, loc, ans, bms, emon.Port.bmsGet(bms, rid), s1, s2, s3, rq);
+        }
         if (asked > 0) {
             Pageink.pnUndo(snap, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, inks, comps, rules, prims, tpts, tlines, refs, images, words, lines);
             return Plan.usRequests();
         }
-        Retarget.rtRecord(i, vdec, dpi100, loc, ans, rtp, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
-        Sealpx.sxRecord(i, vdec, dpi100, loc, ans, s1, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats, refs, cg, s4);
-        // the pen strokes over a signature line of the scan (P8.3): the lines the first pass made of them are not the page's text
-        Sigpx.spFind(i + 1, views, vdec, rules, owords, etext, emon.Port.bmsGet(bms, did), puField(pl, i, 8), s5, s6);
-        Sigpx.spRecord(i, s5, cg);
+        Retarget.rtRecord(i, vdec, rdpi, loc, ans, rtp, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+        if (seals == 1) {
+            Sealpx.sxRecord(i, vdec, rdpi, loc, ans, s1, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats, refs, cg, s4);
+            // the pen strokes over a signature line of the scan (P8.3): the lines the first pass made of them are not the page's text
+            Sigpx.spFind(i + 1, views, vdec, rules, owords, etext, emon.Port.bmsGet(bms, rid), pw, s5, s6);
+            Sigpx.spRecord(i, s5, cg);
+        }
         nsel = Retarget.rtAdopt(rtp, oruns, run, olines, owords, scr);
-        nsel = Sealpx.sxDropLines(scr, nsel, olines, owords, s1);
-        nsel = Sigpx.spDropLines(scr, nsel, olines, owords, s5);
+        if (seals == 1) {
+            nsel = Sealpx.sxDropLines(scr, nsel, olines, owords, s1);
+            nsel = Sigpx.spDropLines(scr, nsel, olines, owords, s5);
+        }
         Retarget.rtUpright(rtp, run, epages, i + 1);
         nl = Evidence.orGet(oruns, run, Evidence.orfLcount());
         rotmed = Evidence.evRotMedian(olines, l0, nl);
         Scan.scEmitSel(olines, owords, osyms, nsel, i + 1, rotmed, scr, words, lines);
-        emon.Port.cellsSet(mask, i, 2);
+        emon.Port.cellsSet(mask, i, mv);
         return Plan.usDone();
+    }
+    public static int puRunScan(int i, int input, int fuse, emon.Port.Cells pl, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells loc, emon.Port.BitmapSet bms, emon.Port.Cells mask, emon.Port.Cells scr, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells refs, emon.Port.Cells tlines, emon.Port.Cells cg, emon.Port.Cells inks, emon.Port.Cells comps, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tpts, emon.Port.Cells ws, emon.Port.Cells sv, emon.Port.Cells aux, emon.Port.Cells snap, emon.Port.Cells rtp, emon.Port.Cells rn, emon.Port.Cells ri, emon.Port.Cells cs, emon.Port.Cells vr, emon.Port.Cells pc, emon.Port.Cells sg, emon.Port.Cells mem, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6) {
+        // A SCANNED page of a PDF: `decode` of its stream (the host reads the DCT bytes in place) or, in the plan's render mode (D1610: an image in any other codec),
+        // `render` of the page, then `pu-scan-core`: the OCR of the bitmap and what it calls for. A failed raster is `us-done`: the page is left as the text layer made it.
+        int did = Plan.puId(i, Plan.piDecode());
+        int ad = Plan.anFind(ans, did);
+        int wp = puField(pl, i, 6) - puField(pl, i, 4);
+        if (ad < 0) {
+            if (puField(pl, i, 14) == puScanRender()) {
+                Plan.rqRender(rq, did, input, i, puDpi(), Plan.layFull());
+            } else {
+                Plan.rqDecode(rq, did, input, puField(pl, i, 2), puField(pl, i, 3), Plan.fltDct(), 0);
+            }
+            return Plan.usRequests();
+        }
+        if (Plan.anOk(ans, ad) != 1) {
+            return Plan.usDone();
+        }
+        return puScanCore(i, input, fuse, did, ad, (int) (((((long) Plan.anArg(ans, ad, 0)) * ((long) 720000)) + ((long) (wp / 2))) / ((long) wp)), puField(pl, i, 1), puField(pl, i, 4), puField(pl, i, 5), puField(pl, i, 6), puField(pl, i, 7), puField(pl, i, 8), puField(pl, i, 9), 2, 1, ans, rq, loc, bms, mask, scr, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, refs, tlines, cg, inks, comps, rules, prims, tpts, ws, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6);
     }
     public static int puRunPdf(int i, int input, int policy, emon.Port.Cells pl, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells loc, emon.Port.BitmapSet bms, emon.Port.Cells mask, emon.Port.Cells scr, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells words, emon.Port.Cells lines, int fuse, emon.Port.Cells fw, emon.Port.Cells fl, emon.Port.Cells hl, emon.Port.Cells refs, emon.Port.Cells cg, emon.Port.Cells tlines, emon.Port.Cells xscr, emon.Port.Cells xgp, emon.Port.Cells xdp, emon.Port.Cells xta, emon.Port.Cells xtb, emon.Port.Cells xtt, emon.Port.Cells inks, emon.Port.Cells comps, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tpts, emon.Port.Cells ws, emon.Port.Cells ws2, emon.Port.Cells sv, emon.Port.Cells aux, emon.Port.Cells snap, emon.Port.Cells rtp, emon.Port.Cells rn, emon.Port.Cells ri, emon.Port.Cells cs, emon.Port.Cells vr, emon.Port.Cells pc, emon.Port.Cells sg, emon.Port.Cells mem, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6) {
         // The unit of PDF page `i` (0-based). A `pk-scan` page asks `decode` of its stream's bytes (id `pi-decode`), then OCR
@@ -480,7 +586,7 @@ public final class Pageunit {
             return Plan.usDone();
         }
         if (puKind(pl, i) == pkBorn()) {
-            return puRunBorn(i, input, fuse, pl, ans, rq, loc, bms, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, fw, fl, hl, refs, cg, tlines, xscr, xgp, xdp, xta, xtb, xtt, scr, images, words, lines, inks, comps, rules, prims, tpts, ws, ws2, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6);
+            return puRunBorn(i, input, fuse, pl, ans, rq, loc, bms, mask, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, fw, fl, hl, refs, cg, tlines, xscr, xgp, xdp, xta, xtb, xtt, scr, images, words, lines, inks, comps, rules, prims, tpts, ws, ws2, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6);
         }
         if (puKind(pl, i) != pkScan()) {
             return Plan.usDone();

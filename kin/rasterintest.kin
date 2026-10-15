@@ -2,14 +2,16 @@
 ;; then every other frame, ids `f + 1`), the header-only form, the page table it builds from the answers (pixels to
 ;; centipoints at the stated resolution, 300 dpi and a flag when there is none), and its failure statuses.
 (ns emon.rasterintest
-  (:require [emon.lang :refer [I32 Cells Src BitmapSet]]
+  (:require [emon.lang :refer [I32 Cells Src Bitmap BitmapSet]]
             [emon.test :refer [deftest assert-eq assert-that new-cells new-bitmap-set hex-blob]]
-            [emon.port :refer [cells-len cells-at cells-push src-of-blob]]
+            [emon.port :refer [cells-len cells-at cells-push src-of-blob bms-put bms-get bitmap-w bitmap-h bitmap-set-u8]]
             [emon.ocr :refer [ox-begin ox-line ox-block ox-word ox-sym ox-sym-cp ocf-dpi]]
-            [emon.evidence :refer [wd-count wd-get ln-count ln-get ol-count ow-count or-count ep-new wf-size hd-tstart hd-tlen
-                                   lh-first lh-count lh-rot lh-y0 lh-y1]]
-            [emon.plan :refer [pu-id pi-decode pi-ocr rec-id rec-kind rq-arg rq-nargs an-decode an-fail ps-failed ps-unsupported
-                               us-requests pk-decode pk-ocr flt-none an-ocr an-ocr-word an-ocr-cp an-ocr-end]]
+            [emon.evidence :refer [wd-count wd-get ln-count ln-get ol-count ow-count or-count or-get ep-new wf-size hd-tstart hd-tlen
+                                   lh-first lh-count lh-rot lh-y0 lh-y1 orf-pass op-upscaled op-re-rotated]]
+            [emon.plan :refer [pu-id pu-view-id pi-decode pi-ocr rec-id rec-kind rec-find rq-arg rq-nargs an-decode an-fail ps-failed ps-unsupported
+                               us-requests us-done pk-decode pk-ocr flt-none an-ocr an-ocr-word an-ocr-cp an-ocr-end]]
+            [emon.retarget :refer [ri-rotated rv-rotated]]
+            [emon.upscale :refer [ri-upscale rv-upscaled]]
             [emon.model :refer [model-init node-flags node-attr-int-or page-count page-number page-w page-h
                                 page-kind page-dpi page-px-w page-px-h pk-image fl-dpi-unknown fk-pages]]
             [emon.rasterin :refer [rs-sniff rs-none rs-png rs-jpeg rs-tiff rs-doc rs-page rs-cpt rs-undecodable
@@ -40,8 +42,13 @@
 
 (defn ^I32 page-pol [^I32 f ^Cells ans ^Cells rq ^I32 policy ^Cells loc ^Cells mask ^Cells et ^Cells wd ^Cells ln
                      ^Cells oruns ^Cells olines ^Cells owords]
-  (return (rs-page f 7 8 policy ans rq loc (new-bitmap-set) mask (new-cells) (new-cells) et (new-cells) (new-cells)
-                   oruns (new-cells) olines owords (new-cells) (new-cells) wd ln (new-cells) 0)))
+  (comment "no pixel in the bitmap set: the unit is the slim one, the first pass's lines (D1610: with pixels it is `emon.pageunit`'s scan unit, whose laws are there)")
+  (return (rs-page f 7 8 policy 0 ans rq loc (new-bitmap-set) mask (new-cells) (new-cells) (new-cells) et (new-cells) (new-cells)
+                   oruns (new-cells) olines owords (new-cells) (new-cells) wd ln
+                   (new-cells) (new-cells) (new-cells)
+                   (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                   (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                   (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells))))
 
 (deftest test-the-document-pass-asks-for-frame-zeros-header-and-nothing-more
   (let [^Cells ans (new-cells)
@@ -220,3 +227,146 @@
     (assert-eq (ln-get ln 0 (lh-rot)) 0 "upright")
     (assert-eq (ln-get ln 0 (lh-y0)) (- (* 55 24) (* 34 24)) "the box's top is the baseline less x-height and ascenders")
     (assert-eq (ln-get ln 0 (lh-y1)) (+ (* 55 24) (* 6 24)) "and its bottom the baseline plus descenders")))
+
+;; ------------------------------------------------------------------------------------------------ the scan unit's passes for an image (D1610)
+
+(defn ^I32 fake-lines [^:mut ^Cells ans ^I32 id ^I32 nlines ^I32 scale ^I32 xh ^I32 osd ^I32 oconf]
+  (comment "An OCR answer of `nlines` lines, each of one word \"Hi\" (60 x 40 pixels at `scale`, x-height `xh` at `scale`, the line 60 pixels below the one before)")
+  (comment "that OSD says is turned `osd` degrees at the confidence `oconf` (x10; -1: no OSD).")
+  (let [^I32 at (an-ocr ans id)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 word 0]
+    (while (< k nlines)
+      (do (set word (an-ocr-word ans at (* 10 scale) (* (+ 20 (* k 60)) scale) (* 60 scale) (* 40 scale) 900 k 0))
+          (an-ocr-cp ans word 72)
+          (an-ocr-cp ans word 105)
+          (set k (+ k 1))))
+    (ox-begin ans 0 0 0 0 osd 1281455214 100 oconf nlines 1 0 0 0)
+    (set k 0)
+    (while (< k nlines)
+      (do (ox-line ans (* 10 scale) (* (+ 20 (* k 60)) scale) (* 60 scale) (* 40 scale)
+                   (* 10 scale) (* (+ 55 (* k 60)) scale) (* 70 scale) (* (+ 55 (* k 60)) scale) 0 0 0 (* xh scale) 14 6)
+          (set k (+ k 1))))
+    (ox-block ans (* 10 scale) (* 20 scale) (* 60 scale) (* (* nlines 60) scale) 0 0 0)
+    (set k 0)
+    (while (< k nlines)
+      (do (ox-word ans 0 0 -1 0)
+          (set k (+ k 1))))
+    (an-ocr-end ans at)
+    (return at)))
+
+(defn ^I32 white-frame [^BitmapSet bms ^I32 id ^I32 w ^I32 h]
+  (comment "A decoded frame of paper (255) under the id of its decode request, as the host puts one in the set.")
+  (let [^Bitmap b (bms-put bms id w h 1)
+        ^:mut ^I32 y 0
+        ^:mut ^I32 x 0]
+    (while (< y h)
+      (do (set x 0)
+          (while (< x w)
+            (do (bitmap-set-u8 b x y 0 255)
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(defn ^I32 page-px [^Cells ans ^:mut ^Cells rq ^BitmapSet bms ^I32 fuse ^:mut ^Cells mask ^Cells et ^Cells wd ^Cells ln ^Cells oruns ^Cells olines ^Cells owords]
+  (comment "Frame 0 of an input of one frame under the policy `always`, with the pixels of its decode in `bms` and `fuse` the page unit's flags.")
+  (return (rs-page 0 7 8 2 fuse ans rq (new-cells) bms mask (new-cells) (new-cells) (new-cells) et (new-cells) (new-cells)
+                   oruns (new-cells) olines owords (new-cells) (new-cells) wd ln
+                   (new-cells) (new-cells) (new-cells)
+                   (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                   (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                   (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells))))
+
+(deftest test-a-frame-fed-sideways-is-read-from-its-turned-view
+  (comment "P12.3 I-5: an image page went through `rs-page`, which wrote the first pass's lines and never looked at what OSD said, so a PNG turned a quarter or a half was")
+  (comment "read as garbage and no second pass ran. It is the scan unit's now: OSD sure that the page is turned (`nm-orient`) has the unit ask for the turned view.")
+  (let [^Cells ans (new-cells)
+        ^Cells rq1 (new-cells)
+        ^Cells rq2 (new-cells)
+        ^Cells mask (new-cells)
+        ^Cells oruns (new-cells)
+        ^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^BitmapSet bms (new-bitmap-set)
+        ^BitmapSet bms2 (new-bitmap-set)]
+    (comment "a unit's attempt has a set of its own (what kin made in one is dropped with it): the frame's pixels are put in each")
+    (cells-push mask 0)
+    (white-frame bms 260 100 300)
+    (white-frame bms2 260 100 300)
+    (an-decode ans 260 100 300 1 0 1 1)
+    (fake-lines ans 272 5 1 6 90 100)
+    (assert-eq (page-px ans rq1 bms 0 mask (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)) (us-requests) "the first pass is in and the page is turned: it asks")
+    (let [^I32 at (rec-find rq1 (pu-id 0 (ri-rotated)))]
+      (assert-that (>= at 0) "the OCR of the turned view")
+      (assert-eq (rec-kind rq1 at) (pk-ocr) "an OCR request")
+      (assert-eq (rq-arg rq1 at 0) (pu-view-id 0 (rv-rotated)) "of the kin-made view")
+      (assert-eq (bitmap-w (bms-get bms (pu-view-id 0 (rv-rotated)))) 300 "turned a quarter: as wide as the frame is high")
+      (assert-eq (bitmap-h (bms-get bms (pu-view-id 0 (rv-rotated)))) 100 "and as high as it is wide"))
+    (assert-eq (cells-at mask 0) 0 "an attempt that asks writes nothing: the page is not yet read")
+    (comment "the turned view read: the page is done, and the evidence says the turned view was read")
+    (fake-lines ans 274 5 1 6 -1 -1)
+    (assert-eq (page-px ans rq2 bms2 0 mask (new-cells) (new-cells) (new-cells) oruns olines owords) (us-done) "done")
+    (assert-eq (cells-at mask 0) 1 "the page was OCR'd")
+    (assert-eq (or-count oruns) 2 "the first pass and the turned view's reading")
+    (assert-eq (or-get oruns 1 (orf-pass)) (op-re-rotated) "the second run is the re-rotated pass")))
+
+(deftest test-the-hidden-setting-no-retarget-leaves-a-turned-frame-as-the-first-pass-read-it
+  (let [^Cells ans (new-cells)
+        ^Cells rq (new-cells)
+        ^Cells mask (new-cells)
+        ^BitmapSet bms (new-bitmap-set)]
+    (cells-push mask 0)
+    (white-frame bms 260 100 300)
+    (an-decode ans 260 100 300 1 0 1 1)
+    (fake-lines ans 272 5 1 6 90 100)
+    (assert-eq (page-px ans rq bms 2 mask (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)) (us-done) "`no-retarget`: done")
+    (assert-eq (cells-len rq) 0 "no request")
+    (assert-eq (cells-at mask 0) 1 "the first pass's lines")))
+
+(deftest test-a-frame-of-small-text-is-read-again-enlarged
+  (comment "P12.3 I-3: a 72 dpi page was read once, at the size it was; whole words and decimal points were lost and nothing said so. Its first pass shows the text is under 16 pixels")
+  (comment "high (x-height 6): the unit makes the frame 4 times as large as a view and asks for the OCR of THAT, and reads the enlargement when it reads as much.")
+  (let [^Cells ans (new-cells)
+        ^Cells rq1 (new-cells)
+        ^Cells rq2 (new-cells)
+        ^Cells rq3 (new-cells)
+        ^Cells mask (new-cells)
+        ^Cells oruns (new-cells)
+        ^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^BitmapSet bms (new-bitmap-set)
+        ^BitmapSet bms2 (new-bitmap-set)
+        ^BitmapSet bms3 (new-bitmap-set)]
+    (cells-push mask 0)
+    (white-frame bms 260 100 300)
+    (white-frame bms2 260 100 300)
+    (white-frame bms3 260 100 300)
+    (an-decode ans 260 100 300 1 0 1 1)
+    (fake-lines ans 272 5 1 6 -1 -1)
+    (assert-eq (page-px ans rq1 bms 0 mask (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)) (us-requests) "the first pass is in and the text is small: it asks")
+    (let [^I32 at (rec-find rq1 (pu-id 0 (ri-upscale)))]
+      (assert-that (>= at 0) "the OCR of the enlarged view")
+      (assert-eq (rec-kind rq1 at) (pk-ocr) "an OCR request")
+      (assert-eq (rq-arg rq1 at 0) (pu-view-id 0 (rv-upscaled)) "of the kin-made view")
+      (assert-eq (rq-arg rq1 at 1) 3 "psm 3")
+      (assert-eq (ocf-dpi (rq-arg rq1 at 2)) 346 "told the resolution the text says it has, 4 times: ten point type at an x-height of 6 pixels is 86 dpi")
+      (assert-eq (bitmap-w (bms-get bms (pu-view-id 0 (rv-upscaled)))) 400 "4 times as wide")
+      (assert-eq (bitmap-h (bms-get bms (pu-view-id 0 (rv-upscaled)))) 1200 "and as high"))
+    (assert-eq (cells-at mask 0) 0 "nothing is written yet")
+    (comment "the enlargement read as much: it is the page's reading, and the dump says so")
+    (fake-lines ans 277 5 4 6 -1 -1)
+    (assert-eq (page-px ans rq2 bms2 0 mask (new-cells) (new-cells) (new-cells) oruns olines owords) (us-done) "done")
+    (assert-eq (cells-len rq2) 0 "nothing more asked")
+    (assert-eq (cells-at mask 0) 1 "the page was OCR'd")
+    (assert-eq (or-count oruns) 1 "one run: the enlargement's replaces the first pass")
+    (assert-eq (or-get oruns 0 (orf-pass)) (op-upscaled) "the upscaled pass")
+    (comment "a first pass that read nothing of what the enlargement read: the same")
+    (let [^Cells ans2 (new-cells)
+          ^Cells oruns2 (new-cells)
+          ^Cells mask2 (new-cells)]
+      (cells-push mask2 0)
+      (an-decode ans2 260 100 300 1 0 1 1)
+      (fake-lines ans2 272 5 1 6 -1 -1)
+      (fake-lines ans2 277 1 4 6 -1 -1)
+      (assert-eq (page-px ans2 rq3 bms3 0 mask2 (new-cells) (new-cells) (new-cells) oruns2 (new-cells) (new-cells)) (us-done) "done")
+      (assert-eq (or-get oruns2 0 (orf-pass)) 1 "an enlargement that read less than the first pass is not adopted: the first pass stands"))))

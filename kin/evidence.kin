@@ -265,7 +265,8 @@
    [op-seal-strip 5 "seal-strip"]
    [op-body-ink 6 "body-ink"]
    [op-text-only 7 "text-only"]
-   [op-re-rotated 8 "re-rotated"]])
+   [op-re-rotated 8 "re-rotated"]
+   [op-upscaled 9 "upscaled"]])
 
 (defenum ^:pub ir
   [[ir-body 1 "body"]

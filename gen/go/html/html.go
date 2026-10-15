@@ -241,7 +241,7 @@ func hCommon(t *strings.Builder, o int32, nodes *port.Cells, regions *port.Cells
 	var r int32 = 0
 	var i int32 = 0
 	var kind int32 = model.NodeKind(nodes, n)
-	var cf int32 = calib.CalConf(kind, model.NodeSrc(nodes, n), model.NodeConf(nodes, n))
+	var cf int32 = calib.CalNodeConf(nodes, n)
 	if (hOn(o, 1) == 1) && (model.NodeIsInline(nodes, n) == 0) && (kind != model.NkNote()) {
 		port.TextAscii(t, " id=\"emon-")
 		port.TextI32(t, n)

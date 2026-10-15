@@ -56,26 +56,36 @@ func arForeignCp(c int32) int32 {
 	if (c >= 65136) && (c <= 65276) {
 		return 1
 	}
+	// D1610: mathematics is a script the engine does not read either: the letterlike symbols, the arrows and the mathematical operators
+	// (U+2100-214F, U+2190-22FF) and the mathematical alphanumerics (U+1D400-1D7FF). A formula's text is the text layer's.
+	if (c >= 8448) && (c <= 8527) {
+		return 1
+	}
+	if (c >= 8592) && (c <= 8959) {
+		return 1
+	}
+	if (c >= 119808) && (c <= 120831) {
+		return 1
+	}
 	return 0
 }
 
 func arWordLatin(fw *port.Cells, etext *port.Cells, row int32) int32 {
-	// 1 when the engine can read the word: it holds a Latin letter or digit, or it holds no letter of any other script (a word of nothing
-	// but U+FFFD, private-use or control code points, which is what an unmapped font leaves, names no script the engine lacks).
+	// 1 when the engine can read the word: it holds no letter of a script the engine lacks (Cyrillic, Greek, Hebrew, Arabic, CJK, mathematics, ...) and it
+	// holds a code point. D1610: ONE foreign letter makes the word foreign, whatever Latin letter or digit is attached to it (a Cyrillic word with
+	// its reference number [10], a year after a Japanese noun, a variable in a formula): the engine reads those as English junk, and the
+	// text layer's is right. A word of nothing but U+FFFD, private-use or control code points, which is what an unmapped font leaves, names
+	// no script the engine lacks.
 	var ts int32 = port.CellsAt(fw, (row*24)+11)
 	var tl int32 = port.CellsAt(fw, (row*24)+12)
 	var j int32 = 0
-	var foreign int32 = 0
 	for j < tl {
-		if arLatinCp(port.CellsAt(etext, ts+j)) == 1 {
-			return 1
-		}
 		if arForeignCp(port.CellsAt(etext, ts+j)) == 1 {
-			foreign = 1
+			return 0
 		}
 		j += 1
 	}
-	if (foreign == 0) && (tl > 0) {
+	if tl > 0 {
 		return 1
 	}
 	return 0

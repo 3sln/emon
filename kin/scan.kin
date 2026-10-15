@@ -16,11 +16,12 @@
 ;;         paragraphs flagged `ocr-only`, the document's `settings.ocr` written.
 ;;
 ;; WHICH PAGES. An image input is one page per frame (`emon.rasterin`). A PDF page is OCR'd when it has NO text layer at all
-;; (no `words` row: not even a hidden one) and carries an image that covers at least half of it, is upright,
-;; and is one plain image XObject with exactly one filter, DCT (a JPEG stream is a JPEG file, so the host's `ImageDecode` reads
-;; the span in place). A page with a text layer is born-digital whatever else it holds: fusion (P7) does not exist yet, so the text
-;; layer stays authoritative and the policy `always` (D038) runs OCR on it only once fusion can weigh the two (D212). A page whose
-;; image is rotated, tiled, masked, Flate or CCITT coded, or in an encrypted file is left to the `Renderer` (P6.2) and has no text.
+;; (no `words` row: not even a hidden one) and carries an image that covers at least half of it and is upright (a real XObject, not
+;; a stencil mask or an inline image). If that image is one plain XObject with exactly one filter, DCT, a JPEG stream is a JPEG file,
+;; and the host's `ImageDecode` reads the span in place; in ANY OTHER CODEC (Flate, RunLength, LZW, CCITT, JBIG2, JPX, an encrypted
+;; DCT, D1610) the host RENDERS the page and the render is the raster (`emon.pageunit`'s scan mode). A page with a text layer is
+;; born-digital whatever else it holds: fusion (P7) weighs a second reading against the text layer (D212). A page whose image is
+;; rotated or tiled is left to the `Renderer` (P6.2) as a page of its own and has no OCR text.
 ;;
 ;; THE PIPELINE'S LINES FROM AN OCR LINE (D213). An OCR line carries what the text layer's does: a box, a baseline, a rotation, a
 ;; direction, its words. Three things differ and are decided here, once.
@@ -73,7 +74,7 @@
             [emon.pdfdoc :refer [pd-get pd-stream-plan pd-pg-count pd-pg-crop pd-pg-rotate]]
             [emon.model :refer [sr-ocr sr-text node-count node-kind node-parent node-region-head node-region-count
                                 node-src node-conf node-set-src node-set-conf node-add-flag nk-is-inline
-                                region-page fl-ocr-only page-count page-set-kind pk-scanned
+                                region-page fl-ocr-only fl-low-conf fl-script-unread page-count page-set-kind pk-scanned
                                 node-set-attr-text text-append-cp fk-ocr]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem bit-and]]))
@@ -1053,10 +1054,36 @@
           (set t (node-parent nodes t))))
     (return -1)))
 
+(defn ^:pub ^I32 sc-mask-unread [] (comment "D1610: added to a page's `mask` cell when the engine had no model for the page's script (`emon.scriptcheck`).") (return 4))
+(defn ^:pub ^I32 sc-unread-conf [] (comment "D1610: the most confidence (per mille) a block of a page in a script the engine cannot read keeps.") (return 100))
+
+(defn ^:pub ^I32 sc-tag-unread [^:mut ^Cells nodes ^Cells regions ^Cells mask]
+  (comment "D1610: every node whose text is OCR's (`ocr` in its source) on a page the unit marked `sc-mask-unread` (OSD sure of a script that no model the engine read it")
+  (comment "with reads, `emon.scriptcheck`): a block is flagged `script-unread` and `low-conf`, and every node's confidence is held at `sc-unread-conf`. The text is the")
+  (comment "engine's guess at a script it cannot read, kept and never presented as confident. After every other provenance stage (the scan's, fusion's). Answers the nodes held.")
+  (let [^I32 nn (node-count nodes)
+        ^:mut ^I32 n 1
+        ^:mut ^I32 pg 0
+        ^:mut ^I32 held 0]
+    (while (< n nn)
+      (do (set pg (sc-node-page nodes regions n))
+          (if (and (>= pg 1) (<= pg (cells-len mask)))
+            (if (>= (quot (cells-at mask (- pg 1)) 4) 1)
+              (if (== (bit-and (node-src nodes n) (sr-ocr)) (sr-ocr))
+                (do (if (== (nk-is-inline (node-kind nodes n)) 0)
+                      (do (node-add-flag nodes n (fl-script-unread))
+                          (node-add-flag nodes n (fl-low-conf))))
+                    (if (> (node-conf nodes n) (sc-unread-conf))
+                      (node-set-conf nodes n (sc-unread-conf)))
+                    (set held (+ held 1))))))
+          (set n (+ n 1))))
+    (return held)))
+
 (defn ^:pub ^I32 sc-tag [^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells text ^Cells regions
                          ^:mut ^Cells pages ^Cells mask ^I32 policy]
   (comment "The provenance of OCR text, after the paragraphs are built. `mask` has one cell a page: 0 none, 1 an image page was")
-  (comment "OCR'd, 2 a PDF page was (its kind becomes `scanned`, SPEC 3.4). Every node on a masked page: its `text` source becomes")
+  (comment "OCR'd, 2 a PDF page was (its kind becomes `scanned`, SPEC 3.4), plus `sc-mask-unread` for a page in a script the engine cannot read (`sc-tag-unread`).")
+  (comment "Every node on a masked page: its `text` source becomes")
   (comment "`ocr`, an inline text's confidence 1000 (a glyph's own) becomes 500 (an engine's word: uncalibrated, D130, Phase 10), and a")
   (comment "block that had `text` is flagged `ocr-only`. The root gets `settings.ocr` (`policy` 1 auto, 2 always) when any page was OCR'd.")
   (let [^I32 np (page-count pages)
@@ -1069,9 +1096,9 @@
         ^:mut ^I32 s 0
         ^:mut ^I32 start 0]
     (while (< i np)
-      (do (if (and (< i (cells-len mask)) (>= (cells-at mask i) 1))
+      (do (if (and (< i (cells-len mask)) (>= (rem (cells-at mask i) 4) 1))
             (set any 1))
-          (if (and (< i (cells-len mask)) (== (cells-at mask i) 2))
+          (if (and (< i (cells-len mask)) (== (rem (cells-at mask i) 4) 2))
             (page-set-kind pages i (pk-scanned)))
           (set i (+ i 1))))
     (if (== any 0) (return 0))
@@ -1080,7 +1107,7 @@
           (set m 0)
           (if (and (>= pg 1) (<= pg (cells-len mask)))
             (set m (cells-at mask (- pg 1))))
-          (if (>= m 1)
+          (if (>= (rem m 4) 1)
             (do (set s (node-src nodes n))
                 (if (== (bit-and s (sr-text)) (sr-text))
                   (do (node-set-src nodes n (+ (- s (sr-text)) (sr-ocr)))

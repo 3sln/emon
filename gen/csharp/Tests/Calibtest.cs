@@ -96,4 +96,36 @@ public static class Calibtest {
             i += 1;
         }
     }
+    [Xunit.Fact]
+    public static void TestABlockFlaggedScriptUnreadIsWrittenAtItsRawScore() {
+        // D1610: the map clamps at its first step, so a raw 100 on OCR text is written as the lowest confidence of text the engine READ; the engine's guess at a script it
+        // cannot read keeps its raw score, and so do the inlines under it
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        int p1 = Model.NodeNew(nodes, Model.NkParagraph(), 0);
+        int t1 = Model.NodeNew(nodes, Model.NkText(), p1);
+        int p2 = Model.NodeNew(nodes, Model.NkParagraph(), 0);
+        Model.NodeAddSrc(nodes, p1, Model.SrOcr());
+        Model.NodeSetConf(nodes, p1, 100);
+        Model.NodeAddFlag(nodes, p1, Model.FlScriptUnread());
+        Model.NodeAddSrc(nodes, t1, Model.SrOcr());
+        Model.NodeSetConf(nodes, t1, 100);
+        Model.NodeAddSrc(nodes, p2, Model.SrOcr());
+        Model.NodeSetConf(nodes, p2, 100);
+        int mapped = Calib.CalConf(Model.NkParagraph(), Model.SrOcr(), 100);
+        int want = 100;
+        if (mapped < 100) {
+            want = mapped;
+        }
+        emon.Testport.AssertEq(Calib.CalNodeConf(nodes, p1), want, "the flagged block: its raw score, when the map would give more");
+        emon.Testport.AssertThat(Calib.CalNodeConf(nodes, p1) <= 100, "never above it");
+        emon.Testport.AssertThat(Calib.CalNodeConf(nodes, t1) <= 100, "the text under it too");
+        emon.Testport.AssertEq(Calib.CalNodeConf(nodes, p2), mapped, "a block no one flagged is calibrated as it was");
+    }
 }

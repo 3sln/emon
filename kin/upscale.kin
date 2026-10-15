@@ -1,0 +1,240 @@
+;; READING A SMALL RASTER LARGER (D1610, SPEC 3.4, 8.3; D211, D215). emon's own module (D039).
+;;
+;; An OCR engine reads text whose x-height is about twenty pixels (ten point type at 300 dpi). A scan or a screenshot that is far under that (a page saved
+;; at 90 dpi, a table in a 450 x 150 PNG) is read with whole words missing, a decimal point lost, a line cut short, and NOTHING SAYS SO: the engine
+;; answers confidently for what it did read. Smoke review B found paragraphs missing from pages that read whole at 2.5 times their size.
+;;
+;; WHAT KIN DECIDES, from the first pass's own answer (`up-factor`, the engine's rows read as they are, no pixel):
+;;   * THE EFFECTIVE RESOLUTION from the text: the median x-height of the page's text lines, each weighted by its width so that the body counts over a heading
+;;     (`up-xheight`; the engine's own row x-height, or `up-line-share` per cent of a line's box where it says none), and the resolution it implies for ten
+;;     point type (`up-eff-dpi100`: the x-height of body type is `up-body-xh` hundredths of a point). SPEC 3.4's "estimated from the text size", which D215
+;;     left unmade;
+;;   * when that x-height is under `up-xh-trigger` pixels (a resolution under about 130 dpi: the first value, a 150 dpi scan reads well and the recorded transcripts of such scans are not asked again), the raster is read AGAIN, `up-factor` times as large (the smallest
+;;     whole factor that brings the x-height to `up-xh-target`, at most `up-max`, within `up-max-pixels` of output);
+;;   * when the first pass read almost nothing (under `up-rescue-words` words) off a SMALL raster (its longer side at most `up-rescue-side` pixels), it is read
+;;     again `up-rescue-k` times as large: an image of a table or a chart saved at screen size, where no line is there to measure;
+;;   * a page the engine says is turned (a confident orientation) is first read upright: its lines run the other way and say nothing of its size.
+;;
+;; WHAT KIN DOES: `up-make` writes the enlarged raster itself, as a kin-made view (D196) under a view id of its own, by a separable Catmull-Rom cubic of
+;; the whole factor (integer arithmetic, so that every target writes the same pixels), and the page unit asks the engine to read THAT view, naming its pixel
+;; hash. It is the same raster to every later stage: the view's resolution is the factor times the raster's, so a pixel of it maps to the same place on the
+;; page, and the unit adopts the enlarged reading in place of the first pass when it reads at least as much (`up-score`). Hosts do nothing new: the
+;; resampling is not theirs.
+(ns emon.upscale
+  (:require [emon.lang :refer [I32 Cells Bitmap BitmapSet]]
+            [emon.port :refer [cells-len cells-at cells-set cells-drop cells-push bms-put bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8]]
+            [emon.plan :refer [an-ocr-count an-ocr-first aw-next aw-get aw-conf aw-len]]
+            [emon.ocr :refer [ox-find ox-nlines ox-line-at ox-osd ox-oconf]]
+            [emon.norm :refer [nm-orient nm-osd-conf]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot]]))
+
+;; ------------------------------------------------------------- the settings (SPEC 9.4: named, first values, P10.1 calibrates)
+
+(defn ^:pub ^I32 up-xh-trigger [] (comment "`up-xh-trigger`: a page whose text has a median x-height under this many pixels is read again enlarged (9 px is ten point type at 130 dpi: a 150 dpi scan, x-height 10, reads well and is left alone; a 100 dpi one does not).") (return 9))
+(defn ^:pub ^I32 up-xh-target [] (comment "`up-xh-target`: the x-height, in pixels, the enlargement aims at (ten point type at 300 dpi).") (return 20))
+(defn ^:pub ^I32 up-max [] (comment "`up-max`: the largest whole factor a raster is enlarged by.") (return 4))
+(defn ^:pub ^I32 up-max-pixels [] (comment "`up-max-pixels`: the most pixels an enlarged raster has (a smaller factor is used when the larger would pass it).") (return 25000000))
+(defn ^:pub ^I32 up-rescue-words [] (comment "`up-rescue-words`: a first pass of fewer words than this has no line to measure: a small raster is then read enlarged by `up-rescue-k`.") (return 4))
+(defn ^:pub ^I32 up-rescue-side [] (comment "`up-rescue-side`: ...when its longer side is at most this many pixels.") (return 1400))
+(defn ^:pub ^I32 up-rescue-k [] (comment "`up-rescue-k`: the factor of that rescue.") (return 3))
+(defn ^:pub ^I32 up-line-share [] (comment "A line the engine gives no x-height has one of this per cent of its box height.") (return 45))
+(defn ^:pub ^I32 up-body-xh [] (comment "The x-height of body type, in hundredths of a point (ten point type: 5.00), from which a raster's effective resolution is estimated.") (return 500))
+(defn ^:pub ^I32 up-bins [] (comment "The histogram of x-heights `up-xheight` keeps: 0..100 pixels (one more bin than that is 100 and over).") (return 101))
+
+;; ids (page-local `k`, `pu-id` and `pu-view-id`; `emon.retarget`'s are 17-19, 32-87 and 32-38, `emon.sealpx`'s 128 up and 48-90): the OCR of the enlarged raster,
+;; the enlarged raster, and the rows between the two passes that made it
+(defn ^:pub ^I32 ri-upscale [] (return 21))
+(defn ^:pub ^I32 rv-upscaled [] (return 120))
+(defn ^:pub ^I32 rv-upscale-tmp [] (return 121))
+
+;; ------------------------------------------------------------- reading the first pass
+
+(defn ^:pub ^I32 up-eff-dpi100 [^I32 xh]
+  (comment "The resolution (dots per inch x 100) at which ten point type has an x-height of `xh` pixels: `xh` / (`up-body-xh` / 7200 inch). 0 for none.")
+  (if (< xh 1) (return 0))
+  (return (quot (* xh 720000) (up-body-xh))))
+
+(defn ^:pub ^I32 up-xheight [^Cells an ^I32 ext ^:mut ^Cells hist]
+  (comment "The page's typical x-height in pixels, from the extension of the OCR answer (`ext`, `ox-find`): the median over its text lines of the engine's row x-height")
+  (comment "(`up-line-share` per cent of the line's box where it says none), each line weighted by its width. -1 for no line. `hist` is scratch (`up-bins` cells are made).")
+  (let [^I32 nl (ox-nlines an ext)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 l 0
+        ^:mut ^I32 xh 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 total 0
+        ^:mut ^I32 acc 0]
+    (cells-drop hist 0)
+    (while (< k (up-bins))
+      (do (cells-push hist 0)
+          (set k (+ k 1))))
+    (set k 0)
+    (while (< k nl)
+      (do (set l (ox-line-at an ext k))
+          (comment "a line of text (block type 0), its width and its x-height")
+          (if (== (cells-at an (+ l 10)) 0)
+            (do (set w (cells-at an (+ l 2)))
+                (set xh (cells-at an (+ l 11)))
+                (if (<= xh 0) (set xh (quot (* (cells-at an (+ l 3)) (up-line-share)) 100)))
+                (if (and (> xh 0) (> w 0))
+                  (do (if (> xh 100) (set xh 100))
+                      (cells-set hist xh (+ (cells-at hist xh) w))
+                      (set total (+ total w))))))
+          (set k (+ k 1))))
+    (if (<= total 0) (return -1))
+    (set k 0)
+    (while (< k (up-bins))
+      (do (set acc (+ acc (cells-at hist k)))
+          (if (>= (* acc 2) total) (return k))
+          (set k (+ k 1))))
+    (return -1)))
+
+(defn ^:pub ^I32 up-score [^Cells an ^I32 at]
+  (comment "How much the OCR answer at `at` read: the sum over its words of confidence times length, over 16 (`rt-lines-score`'s measure).")
+  (let [^I32 n (an-ocr-count an at)
+        ^:mut ^I32 w (an-ocr-first an at)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 sum 0]
+    (while (< i n)
+      (do (set sum (+ sum (quot (* (aw-get an w (aw-conf)) (aw-get an w (aw-len))) 16)))
+          (set w (aw-next an w))
+          (set i (+ i 1))))
+    (return sum)))
+
+(defn ^:pub ^I32 up-hint [^Cells an ^I32 at ^I32 k ^I32 dpi100 ^:mut ^Cells hist]
+  (comment "The resolution, in dots per inch, the engine is told an enlargement by `k` has: the resolution the first pass's text says the raster has (`up-eff-dpi100`; `dpi100`,")
+  (comment "the resolution it was taken at, when no line was measured) times `k`: a hint of its size heuristics, at least 70 and at most 1200.")
+  (let [^I32 ext (ox-find an at)
+        ^:mut ^I32 est dpi100
+        ^:mut ^I32 xh -1
+        ^:mut ^I32 v 0]
+    (if (>= ext 0) (set xh (up-xheight an ext hist)))
+    (if (> (up-eff-dpi100 xh) 0) (set est (up-eff-dpi100 xh)))
+    (set v (quot (+ (* est k) 50) 100))
+    (if (< v 70) (set v 70))
+    (if (> v 1200) (set v 1200))
+    (return v)))
+
+(defn ^:pub ^I32 up-factor [^Cells an ^I32 at ^I32 pxw ^I32 pxh ^:mut ^Cells hist]
+  (comment "By what whole factor the raster (`pxw` x `pxh`) whose first-pass OCR answer is at `at` is read again, enlarged: 1 for not at all. See the head of this file.")
+  (let [^I32 ext (ox-find an at)
+        ^I32 words (an-ocr-count an at)
+        ^:mut ^I32 k 1
+        ^:mut ^I32 xh 0
+        ^:mut ^I32 side pxw]
+    (if (< ext 0) (return 1))
+    (comment "a page the engine is sure is turned is read upright first: the size of its lines says nothing")
+    (if (> (nm-orient (ox-osd an ext) (ox-oconf an ext) (nm-osd-conf)) 0) (return 1))
+    (if (> pxh side) (set side pxh))
+    (if (< words (up-rescue-words))
+      (if (<= side (up-rescue-side)) (set k (up-rescue-k)))
+      (do (set xh (up-xheight an ext hist))
+          (if (and (> xh 0) (< xh (up-xh-trigger)))
+            (do (set k (quot (+ (up-xh-target) (- xh 1)) xh))
+                (if (< k 2) (set k 2))
+                (if (> k (up-max)) (set k (up-max)))))))
+    (comment "within the pixels an enlarged raster may have")
+    (while (and (> k 1) (> (* pxw pxh) (quot (up-max-pixels) (* k k))))
+      (set k (- k 1)))
+    (return k)))
+
+;; ------------------------------------------------------------- the enlargement
+
+(defn ^I32 up-fdiv [^I32 n ^I32 d]
+  (comment "floor(n / d) for a positive `d`.")
+  (if (>= n 0) (return (quot n d)))
+  (return (- 0 (quot (+ (- 0 n) (- d 1)) d))))
+
+(defn ^:pub ^I32 up-weights [^:mut ^Cells wt ^I32 k]
+  (comment "The four Catmull-Rom weights (in 1024ths, summing to 1024) of each of the `2k` phases of an enlargement by `k`, from cell 0 on, four cells a phase:")
+  (comment "the phase `r` is the output pixel's place between two input pixels, `r` / `2k` of the way from the left one's centre.")
+  (let [^:mut ^I32 r 0
+        ^:mut ^I32 f1 0
+        ^:mut ^I32 f2 0
+        ^:mut ^I32 f3 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 d 0]
+    (while (< (cells-len wt) (* 8 4))
+      (cells-push wt 0))
+    (while (< r (* 2 k))
+      (do (set f1 (quot (* r 1024) (* 2 k)))
+          (set f2 (quot (* f1 f1) 1024))
+          (set f3 (quot (* f2 f1) 1024))
+          (set a (quot (+ (- 0 f3) (- (* 2 f2) f1)) 2))
+          (set c (quot (+ (+ (* -3 f3) (* 4 f2)) f1) 2))
+          (set d (quot (- f3 f2) 2))
+          (set b (- (- (- 1024 a) c) d))
+          (cells-set wt (* r 4) a)
+          (cells-set wt (+ (* r 4) 1) b)
+          (cells-set wt (+ (* r 4) 2) c)
+          (cells-set wt (+ (* r 4) 3) d)
+          (set r (+ r 1))))
+    (return 0)))
+
+(defn ^I32 up-clamp [^I32 v]
+  (if (< v 0) (return 0))
+  (if (> v 255) (return 255))
+  (return v))
+
+(defn ^:pub ^I32 up-make [^BitmapSet bms ^I32 vid ^I32 tid ^Bitmap src ^I32 k ^:mut ^Cells wt]
+  (comment "Write the raster `src` enlarged `k` times (2 to 4) as the kin-made bitmap `vid` (`tid` is a bitmap of its own that holds the rows between the two passes):")
+  (comment "a separable cubic, the horizontal pass over the input's rows and then the vertical. Output pixel `x` is at input position (2x + 1 - k) / 2k.")
+  (let [^I32 w (bitmap-w src)
+        ^I32 h (bitmap-h src)
+        ^I32 ch (bitmap-channels src)
+        ^I32 ow (* w k)
+        ^I32 oh (* h k)
+        ^Bitmap tmp (bms-put bms tid ow h ch)
+        ^Bitmap dst (bms-put bms vid ow oh ch)
+        ^:mut ^I32 c 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 i0 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 p 0]
+    (up-weights wt k)
+    (while (< c ch)
+      (do (set y 0)
+          (while (< y h)
+            (do (set x 0)
+                (while (< x ow)
+                  (do (set n (+ (* 2 x) (- 1 k)))
+                      (set i0 (up-fdiv n (* 2 k)))
+                      (set r (- n (* i0 (* 2 k))))
+                      (set s 0)
+                      (set j 0)
+                      (while (< j 4)
+                        (do (set p (+ i0 (- j 1)))
+                            (if (< p 0) (set p 0))
+                            (if (>= p w) (set p (- w 1)))
+                            (set s (+ s (* (cells-at wt (+ (* r 4) j)) (bitmap-u8 src p y c))))
+                            (set j (+ j 1))))
+                      (bitmap-set-u8 tmp x y c (up-clamp (quot (+ s 512) 1024)))
+                      (set x (+ x 1))))
+                (set y (+ y 1))))
+          (set y 0)
+          (while (< y oh)
+            (do (set n (+ (* 2 y) (- 1 k)))
+                (set i0 (up-fdiv n (* 2 k)))
+                (set r (- n (* i0 (* 2 k))))
+                (set x 0)
+                (while (< x ow)
+                  (do (set s 0)
+                      (set j 0)
+                      (while (< j 4)
+                        (do (set p (+ i0 (- j 1)))
+                            (if (< p 0) (set p 0))
+                            (if (>= p h) (set p (- h 1)))
+                            (set s (+ s (* (cells-at wt (+ (* r 4) j)) (bitmap-u8 tmp x p c))))
+                            (set j (+ j 1))))
+                      (bitmap-set-u8 dst x y c (up-clamp (quot (+ s 512) 1024)))
+                      (set x (+ x 1))))
+                (set y (+ y 1))))
+          (set c (+ c 1))))
+    (return 0)))

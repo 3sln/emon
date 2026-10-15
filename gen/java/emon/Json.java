@@ -268,7 +268,8 @@ public final class Json {
         int k = 0;
         int bit = 0;
         emon.Port.textAscii(t, "[");
-        while (b < 9) {
+        // the warning bits 1 to 1024 (D1610 added `script-unread`, 1024; `in-table-image`, 512, is the fused flow's, not a node's)
+        while (b < 11) {
             bit = (1) << (b);
             if ((bits & bit) != 0) {
                 jsFsep(t, pr, k);
@@ -712,7 +713,7 @@ public final class Json {
         // `at`, `src`, `conf`, `flags`: the provenance every node may carry.
         int s = started;
         int sr = Model.nodeSrc(nodes, n);
-        int cf = Calib.calConf(Model.nodeKind(nodes, n), Model.nodeSrc(nodes, n), Model.nodeConf(nodes, n));
+        int cf = Calib.calNodeConf(nodes, n);
         int fg = Model.nodeFlags(nodes, n);
         s = jsAt(t, pr, d, nodes, regions, n, s);
         if (sr != 0) {

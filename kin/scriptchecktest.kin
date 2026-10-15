@@ -1,0 +1,71 @@
+;; Laws for `emon.scriptcheck` (D1610, P12.3 I-13): a page whose script OSD is sure of and that no model the engine read it with reads is UNREAD; one read by a model that
+;; reads the script, a Latin page, a page OSD is unsure of, and a page of too few words are not.
+(ns emon.scriptchecktest
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.test :refer [deftest assert-eq assert-that new-cells]]
+            [emon.port :refer [cells-at]]
+            [emon.plan :refer [an-ocr an-ocr-word an-ocr-cp an-ocr-end]]
+            [emon.ocr :refer [ox-begin ox-line ox-block ox-word]]
+            [emon.scriptcheck :refer [sk-unread sk-unpack sk-min-conf]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot]]))
+
+(defn ^I32 sk-answer [^:mut ^Cells ans ^I32 id ^I32 n ^I32 script ^I32 sconf ^I32 lang ^I32 lang0]
+  (comment "An OCR answer of `n` words, one a line, each read in the language cell `lang` (the first in `lang0`), whose page OSD says is in `script` at the confidence `sconf`.")
+  (let [^I32 at (an-ocr ans id)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 word 0]
+    (while (< k n)
+      (do (set word (an-ocr-word ans at 10 (+ 20 (* k 60)) 60 40 760 k 0))
+          (an-ocr-cp ans word 72)
+          (an-ocr-cp ans word 105)
+          (set k (+ k 1))))
+    (ox-begin ans 0 0 0 0 0 script sconf 500 n 1 0 0 0)
+    (set k 0)
+    (while (< k n)
+      (do (ox-line ans 10 (+ 20 (* k 60)) 60 40 10 (+ 55 (* k 60)) 70 (+ 55 (* k 60)) 0 0 0 20 14 6)
+          (set k (+ k 1))))
+    (ox-block ans 10 20 60 (* n 60) 0 0 0)
+    (set k 0)
+    (while (< k n)
+      (do (if (== k 0) (ox-word ans 0 lang0 -1 0) (ox-word ans 0 lang -1 0))
+          (set k (+ k 1))))
+    (an-ocr-end ans at)
+    (return at)))
+
+(defn ^I32 unread-of [^I32 n ^I32 script ^I32 sconf ^I32 lang ^I32 lang0]
+  (let [^Cells ans (new-cells)
+        ^I32 at (sk-answer ans 272 n script sconf lang lang0)]
+    (return (sk-unread ans at (new-cells)))))
+
+(deftest test-a-language-cell-unpacks-to-its-letters
+  (let [^Cells out (new-cells)]
+    (assert-eq (sk-unpack 1701734144 out) 3 "`eng` is three letters")
+    (assert-eq (cells-at out 0) 101 "e")
+    (assert-eq (cells-at out 2) 103 "g")
+    (assert-eq (sk-unpack 0 out) 0 "none")))
+
+(deftest test-a-script-no-model-read-is-unread
+  (comment "Deva 1147500129, Latn 1281455214, Cyrl 1132032620; the languages `eng` 1701734144, `hin` 1751739904, `rus` 1920299776")
+  (assert-eq (unread-of 5 1147500129 629 1701734144 1701734144) 1 "a Devanagari page (OSD 62.9) read by `eng`: unread (the smoke review's Hindi scan)")
+  (assert-eq (unread-of 5 1132032620 400 1701734144 1701734144) 1 "a Cyrillic page read by `eng`: unread")
+  (assert-eq (unread-of 5 1147500129 629 1751739904 1751739904) 0 "the same read by `hin`, which reads Devanagari: read")
+  (assert-eq (unread-of 5 1147500129 629 1701734144 1751739904) 0 "one word read by `hin` is a model that reads it: read")
+  (assert-eq (unread-of 5 1132032620 400 1920299776 1920299776) 0 "a Cyrillic page read by `rus`: read")
+  (assert-eq (unread-of 5 1147500129 629 1920299776 1920299776) 1 "a Devanagari page read by `rus` (which reads Cyrillic): unread"))
+
+(deftest test-a-page-the-engine-can-read-or-osd-is-unsure-of-is-not-flagged
+  (assert-eq (unread-of 5 1281455214 629 1701734144 1701734144) 0 "a Latin page")
+  (assert-eq (unread-of 5 1147500129 100 1701734144 1701734144) 0 "OSD unsure (confidence 10: a Latin page reads that)")
+  (assert-eq (unread-of 5 1147500129 (- (sk-min-conf) 1) 1701734144 1701734144) 0 "just under the bound")
+  (assert-eq (unread-of 5 1147500129 (sk-min-conf) 1701734144 1701734144) 1 "at it")
+  (assert-eq (unread-of 2 1147500129 629 1701734144 1701734144) 0 "two words: the engine read nothing of it to speak of")
+  (assert-eq (unread-of 5 0 629 1701734144 1701734144) 0 "no script"))
+
+(deftest test-an-answer-with-no-extension-is-not-flagged
+  (let [^Cells ans (new-cells)
+        ^I32 at (an-ocr ans 272)
+        ^I32 w (an-ocr-word ans at 10 20 60 40 760 0 0)]
+    (an-ocr-cp ans w 72)
+    (an-ocr-end ans at)
+    (assert-eq (sk-unread ans at (new-cells)) 0 "an engine that says nothing of the script")))

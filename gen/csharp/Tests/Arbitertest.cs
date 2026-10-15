@@ -448,6 +448,48 @@ public static class Arbitertest {
         emon.Testport.AssertEq(Player.FvGet(fv, 1, 1), 1, "the text layer's");
     }
     [Xunit.Fact]
+    public static void TestAWordInAScriptTheEngineLacksKeepsItsTextWhateverDigitSitsOnIt() {
+        // D1610: `ar-word-latin` answered 1 for ANY Latin letter or digit, so a Cyrillic word with an attached reference number [10], a CJK word with a
+        // year, or a formula with a variable was 'readable' and rows 120 and 130 gave the group to an English engine that reads it as junk
+        emon.Port.Cells fw = emon.Port.NewCells();
+        emon.Port.Cells fl = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells ow = emon.Port.NewCells();
+        emon.Port.Cells cg = emon.Port.NewCells();
+        emon.Port.Cells refs = emon.Port.NewCells();
+        emon.Port.Cells im = emon.Port.NewCells();
+        emon.Port.Cells ep = emon.Port.NewCells();
+        emon.Port.Cells nfw = emon.Port.NewCells();
+        emon.Port.Cells nfl = emon.Port.NewCells();
+        emon.Port.Cells fv = emon.Port.NewCells();
+        emon.Port.Cells fx = emon.Port.NewCells();
+        emon.Port.Cells afa = emon.Port.NewCells();
+        int w0 = AtTword(fw, feats, et, 0, 0, 0, 1000, 500, 1055, 49);
+        int w1 = AtTword(fw, feats, et, 1000, 0, 0, 1000, 500, 12354, 50);
+        int w2 = AtTword(fw, feats, et, 2000, 0, 5, 60, 0, 1055, 51);
+        int w3 = AtTword(fw, feats, et, 3000, 0, 5, 60, 0, 8721, 120);
+        int w4 = AtTword(fw, feats, et, 4000, 0, 0, 1000, 500, 65, 49);
+        int o0 = AtOword(ow, feats, et, 0, 900, 0, 104, 101, 0);
+        int o1 = AtOword(ow, feats, et, 1000, 1900, 0, 104, 101, 0);
+        int o2 = AtOword(ow, feats, et, 2000, 2900, 0, 104, 101, 0);
+        int o3 = AtOword(ow, feats, et, 3000, 3900, 0, 104, 101, 0);
+        int o4 = AtOword(ow, feats, et, 4000, 4900, 0, 104, 101, 0);
+        AtLine3(fl, 0, 5);
+        AtGroup(cg, refs, w0, 1, o0, 1, 0);
+        AtGroup(cg, refs, w1, 1, o1, 1, 0);
+        AtGroup(cg, refs, w2, 1, o2, 1, 0);
+        AtGroup(cg, refs, w3, 1, o3, 1, 0);
+        AtGroup(cg, refs, w4, 1, o4, 1, 0);
+        AtRun(cg, refs, fw, fl, et, feats, ow, im, ep, nfw, nfl, fv, fx, afa);
+        emon.Testport.AssertEq(Player.FvGet(fv, 0, 2), 190, "a Cyrillic letter and a digit, a bad glyph: the text layer stays");
+        emon.Testport.AssertEq(Player.FvGet(fv, 0, 1), 1, "the text layer's");
+        emon.Testport.AssertEq(Player.FvGet(fv, 1, 2), 190, "a hiragana letter and a digit, a bad glyph: the text layer stays");
+        emon.Testport.AssertEq(Player.FvGet(fv, 2, 2), 190, "a Cyrillic letter and a digit in an unhealthy font: the text layer stays (row 130 needs a script the engine reads)");
+        emon.Testport.AssertEq(Player.FvGet(fv, 3, 2), 190, "a summation sign and a variable in an unhealthy font: the text layer stays");
+        emon.Testport.AssertEq(Player.FvGet(fv, 4, 2), 120, "a Latin letter and a digit with a bad glyph: still OCR's");
+    }
+    [Xunit.Fact]
     public static void TestOcrOnlyGroupsAreDroppedHeldOrNothing() {
         emon.Port.Cells fw = emon.Port.NewCells();
         emon.Port.Cells fl = emon.Port.NewCells();

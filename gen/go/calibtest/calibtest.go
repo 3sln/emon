@@ -101,3 +101,35 @@ func TestTheLookupClampsAtBothEndsOfAStepFunction(emonT *testing.T) {
 		i += 1
 	}
 }
+
+func TestABlockFlaggedScriptUnreadIsWrittenAtItsRawScore(emonT *testing.T) {
+	// D1610: the map clamps at its first step, so a raw 100 on OCR text is written as the lowest confidence of text the engine READ; the engine's guess at a script it
+	// cannot read keeps its raw score, and so do the inlines under it
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	var p1 int32 = model.NodeNew(nodes, model.NkParagraph(), 0)
+	var t1 int32 = model.NodeNew(nodes, model.NkText(), p1)
+	var p2 int32 = model.NodeNew(nodes, model.NkParagraph(), 0)
+	model.NodeAddSrc(nodes, p1, model.SrOcr())
+	model.NodeSetConf(nodes, p1, 100)
+	model.NodeAddFlag(nodes, p1, model.FlScriptUnread())
+	model.NodeAddSrc(nodes, t1, model.SrOcr())
+	model.NodeSetConf(nodes, t1, 100)
+	model.NodeAddSrc(nodes, p2, model.SrOcr())
+	model.NodeSetConf(nodes, p2, 100)
+	var mapped int32 = calib.CalConf(model.NkParagraph(), model.SrOcr(), 100)
+	var want int32 = 100
+	if mapped < 100 {
+		want = mapped
+	}
+	port.AssertEq(emonT, calib.CalNodeConf(nodes, p1), want, "the flagged block: its raw score, when the map would give more")
+	port.AssertThat(emonT, calib.CalNodeConf(nodes, p1) <= 100, "never above it")
+	port.AssertThat(emonT, calib.CalNodeConf(nodes, t1) <= 100, "the text under it too")
+	port.AssertEq(emonT, calib.CalNodeConf(nodes, p2), mapped, "a block no one flagged is calibrated as it was")
+}

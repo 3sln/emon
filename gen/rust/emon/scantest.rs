@@ -223,6 +223,61 @@ fn test_ocr_text_is_tagged_as_ocr_on_the_pages_that_were_read() {
     crate::testport::assert_eq(attr_len(attrs, a), 6, "`always`");
 }
 #[test]
+fn test_a_page_in_a_script_the_engine_cannot_read_is_flagged_and_held_at_a_low_confidence() {
+    // D1610 (P12.3 I-13): the page unit adds `sc-mask-unread` to the page's mask cell; the blocks of the page say the engine could not read it
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mask: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    page_new(pages, 1, 61200, 79200, 0, pk_vector());
+    page_new(pages, 2, 61200, 79200, 0, pk_vector());
+    page_new(pages, 3, 61200, 79200, 0, pk_vector());
+    let p1: i32 = node_new(nodes, nk_paragraph(), 0);
+    let t1: i32 = node_new(nodes, nk_text(), p1);
+    let p2: i32 = node_new(nodes, nk_paragraph(), 0);
+    let p3: i32 = node_new(nodes, nk_paragraph(), 0);
+    let p4: i32 = node_new(nodes, nk_paragraph(), 0);
+    node_add_region(nodes, regions, p1, 1, 0, 0, 100, 100);
+    node_add_region(nodes, regions, p2, 2, 0, 0, 100, 100);
+    node_add_region(nodes, regions, p3, 3, 0, 0, 100, 100);
+    node_add_region(nodes, regions, p4, 3, 200, 200, 300, 300);
+    node_add_src(nodes, p1, sr_text());
+    node_set_conf(nodes, p1, 900);
+    node_add_src(nodes, t1, sr_text());
+    node_set_conf(nodes, t1, 1000);
+    node_add_src(nodes, p2, sr_text());
+    node_set_conf(nodes, p2, 900);
+    // page 3 is born digital, OCR'd, and fusion gave a block to OCR (`ocr` and `text`) and left one to the text layer
+    node_add_src(nodes, p3, sr_text());
+    node_add_src(nodes, p3, sr_ocr());
+    node_set_conf(nodes, p3, 900);
+    node_add_src(nodes, p4, sr_text());
+    node_set_conf(nodes, p4, 900);
+    crate::port::cells_push(mask, 1 + sc_mask_unread());
+    crate::port::cells_push(mask, 1);
+    crate::port::cells_push(mask, sc_mask_unread());
+    crate::testport::assert_eq(sc_tag(nodes, attrs, text, regions, pages, mask, 2), 1, "something was tagged");
+    crate::testport::assert_eq(node_flags(nodes, p1), fl_ocr_only(), "the scan tags what it always tagged");
+    crate::testport::assert_eq(sc_tag_unread(nodes, regions, mask), 3, "the block and the text of page 1, the block of page 3");
+    crate::testport::assert_eq(node_flags(nodes, p1), fl_ocr_only() + (fl_low_conf() + fl_script_unread()), "the block: OCR only, low confidence, script unread");
+    crate::testport::assert_eq(node_conf(nodes, p1), sc_unread_conf(), "its confidence is held at the unread ceiling");
+    crate::testport::assert_eq(node_conf(nodes, t1), sc_unread_conf(), "so is its text's");
+    crate::testport::assert_eq(node_flags(nodes, t1), 0, "an inline is not flagged");
+    crate::testport::assert_eq(node_src(nodes, p1), sr_ocr(), "its text is still OCR's: it is kept, not dropped");
+    crate::testport::assert_eq(node_flags(nodes, p2), fl_ocr_only(), "the other page was read by a model that reads it: OCR only, nothing more");
+    crate::testport::assert_eq(node_conf(nodes, p2), 900, "and its confidence is its own");
+    crate::testport::assert_eq(node_flags(nodes, p3), fl_low_conf() + fl_script_unread(), "a born-digital block OCR won on an unread page: flagged, not `ocr-only`");
+    crate::testport::assert_eq(node_conf(nodes, p3), sc_unread_conf(), "and held low");
+    crate::testport::assert_eq(node_flags(nodes, p4), 0, "a block of the same page that stayed the text layer's is not touched");
+    crate::testport::assert_eq(node_conf(nodes, p4), 900, "nor its confidence");
+    crate::testport::assert_eq(page_kind(pages, 0), pk_vector(), "an image page's kind is not changed by the flag");
+}
+#[test]
 fn test_with_no_page_read_nothing_is_tagged() {
     let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();

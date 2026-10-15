@@ -469,6 +469,48 @@ func TestABadGlyphInAHealthyFontGoesToOcrButOnlyWhereTheEngineReads(emonT *testi
 	port.AssertEq(emonT, player.FvGet(fv, 1, 1), 1, "the text layer's")
 }
 
+func TestAWordInAScriptTheEngineLacksKeepsItsTextWhateverDigitSitsOnIt(emonT *testing.T) {
+	// D1610: `ar-word-latin` answered 1 for ANY Latin letter or digit, so a Cyrillic word with an attached reference number [10], a CJK word with a
+	// year, or a formula with a variable was 'readable' and rows 120 and 130 gave the group to an English engine that reads it as junk
+	var fw *port.Cells = port.NewCells()
+	var fl *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var cg *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var ep *port.Cells = port.NewCells()
+	var nfw *port.Cells = port.NewCells()
+	var nfl *port.Cells = port.NewCells()
+	var fv *port.Cells = port.NewCells()
+	var fx *port.Cells = port.NewCells()
+	var afa *port.Cells = port.NewCells()
+	var w0 int32 = atTword(fw, feats, et, 0, 0, 0, 1000, 500, 1055, 49)
+	var w1 int32 = atTword(fw, feats, et, 1000, 0, 0, 1000, 500, 12354, 50)
+	var w2 int32 = atTword(fw, feats, et, 2000, 0, 5, 60, 0, 1055, 51)
+	var w3 int32 = atTword(fw, feats, et, 3000, 0, 5, 60, 0, 8721, 120)
+	var w4 int32 = atTword(fw, feats, et, 4000, 0, 0, 1000, 500, 65, 49)
+	var o0 int32 = atOword(ow, feats, et, 0, 900, 0, 104, 101, 0)
+	var o1 int32 = atOword(ow, feats, et, 1000, 1900, 0, 104, 101, 0)
+	var o2 int32 = atOword(ow, feats, et, 2000, 2900, 0, 104, 101, 0)
+	var o3 int32 = atOword(ow, feats, et, 3000, 3900, 0, 104, 101, 0)
+	var o4 int32 = atOword(ow, feats, et, 4000, 4900, 0, 104, 101, 0)
+	atLine3(fl, 0, 5)
+	atGroup(cg, refs, w0, 1, o0, 1, 0)
+	atGroup(cg, refs, w1, 1, o1, 1, 0)
+	atGroup(cg, refs, w2, 1, o2, 1, 0)
+	atGroup(cg, refs, w3, 1, o3, 1, 0)
+	atGroup(cg, refs, w4, 1, o4, 1, 0)
+	atRun(cg, refs, fw, fl, et, feats, ow, im, ep, nfw, nfl, fv, fx, afa)
+	port.AssertEq(emonT, player.FvGet(fv, 0, 2), 190, "a Cyrillic letter and a digit, a bad glyph: the text layer stays")
+	port.AssertEq(emonT, player.FvGet(fv, 0, 1), 1, "the text layer's")
+	port.AssertEq(emonT, player.FvGet(fv, 1, 2), 190, "a hiragana letter and a digit, a bad glyph: the text layer stays")
+	port.AssertEq(emonT, player.FvGet(fv, 2, 2), 190, "a Cyrillic letter and a digit in an unhealthy font: the text layer stays (row 130 needs a script the engine reads)")
+	port.AssertEq(emonT, player.FvGet(fv, 3, 2), 190, "a summation sign and a variable in an unhealthy font: the text layer stays")
+	port.AssertEq(emonT, player.FvGet(fv, 4, 2), 120, "a Latin letter and a digit with a bad glyph: still OCR's")
+}
+
 func TestOcrOnlyGroupsAreDroppedHeldOrNothing(emonT *testing.T) {
 	var fw *port.Cells = port.NewCells()
 	var fl *port.Cells = port.NewCells()

@@ -1054,6 +1054,9 @@ func OpTextOnly() int32 {
 func OpReRotated() int32 {
 	return 8
 }
+func OpUpscaled() int32 {
+	return 9
+}
 func OpEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "first")
@@ -1085,6 +1088,10 @@ func OpEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 8 {
 		port.TextAscii(t, "re-rotated")
+		return 1
+	}
+	if code == 9 {
+		port.TextAscii(t, "upscaled")
 		return 1
 	}
 	return 0

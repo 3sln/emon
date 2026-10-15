@@ -57,7 +57,7 @@ pub fn rp_ask_witness() -> i32 {
 }
 pub fn rp_w() -> i32 {
     // The cells of a page's plan row.
-    return 14;
+    return 15;
 }
 pub fn rp_f_ask() -> i32 {
     return 10;
@@ -636,11 +636,19 @@ pub fn rp_weak(n: i32, at: i32, pl: &mut crate::port::Cells, fw: &mut crate::por
                 }
                 q += 1;
             }
+            // D1610: compared only when every letter of the line is one the engine reads: a Cyrillic line with its reference number is not Latin
             latin = 0;
             q = 0;
             while q < crate::port::cells_len(ta) {
                 if crate::port::cells_at(ta, q) < 592 {
                     latin = 1;
+                }
+                q += 1;
+            }
+            q = 0;
+            while q < crate::port::cells_len(ta) {
+                if crate::port::cells_at(ta, q) >= 880 {
+                    latin = 0;
                 }
                 q += 1;
             }

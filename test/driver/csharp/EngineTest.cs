@@ -528,7 +528,7 @@ public static class EngineTest {
         foreach (string w in new[] { "\"text\": \"Hello\"", "\"ocr\": \"always\"", "\"ocr-only\"" }) {
             Check(j.Contains(w), w + " is not in the JSON");
         }
-        Check(Kinds(rec.Transcript).SequenceEqual(new[] { 2, 2, 3 }), "kinds " + Show(Kinds(rec.Transcript)));
+        Check(Kinds(rec.Transcript).SequenceEqual(new[] { 2, 2, 3, 3, 3 }), "kinds " + Show(Kinds(rec.Transcript)));
         Check(rec.Transcript.Producer.Count == 1 && rec.Transcript.Producer[0][0] == "engine" && rec.Transcript.Producer[0][1] == "fake", "producer");
         Dictionary<string, byte[]> fs = Files(rec.Transcript);
         Check(Utf8.GetString(fs["transcript.edn"]).Contains(":producer {:engine \"fake\"}"), "the producer is in the file");
@@ -876,13 +876,13 @@ public static class EngineTest {
         var one0 = new SlowOcr();
         Engine.Converted c0 = ParEngine(one0, null, 1).Record(One(Input.Bytes(tiff)), o);
         string j0 = Js(c0.Model);
-        Check(one0.Peak == 1 && one0.Calls == 3, "a serial run reads one page at a time: peak " + one0.Peak + " calls " + one0.Calls);
+        Check(one0.Peak == 1 && one0.Calls == 9, "a serial run reads one page at a time: peak " + one0.Peak + " calls " + one0.Calls);
         foreach (int n in new[] { 2, 3, 4, 8 }) {
             var slow = new SlowOcr();
             Engine.Converted c = ParEngine(slow, null, n).Record(One(Input.Bytes(tiff)), o);
             Check(Js(c.Model) == j0, "parallel=" + n + ": the Model differs from the serial one");
             Check(EntriesOf(c.Transcript).SequenceEqual(EntriesOf(c0.Transcript)), "parallel=" + n + ": the transcript differs from the serial one");
-            Check(slow.Calls == 3, "parallel=" + n + ": every page is read once (a look ahead's answer is used, not asked again): " + slow.Calls);
+            Check(slow.Calls == one0.Calls, "parallel=" + n + ": every page is read once (a look ahead's answer is used, not asked again): " + slow.Calls);
             Check(slow.Peak >= 2 && slow.Peak <= n, "parallel=" + n + ": the pages ahead are read while the loop is on one, at most N at once: peak " + slow.Peak);
         }
         // limit.workers is the most the option is served with: 1 is serial whatever is asked

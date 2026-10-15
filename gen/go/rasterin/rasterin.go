@@ -5,10 +5,10 @@ package rasterin
 
 import (
 	"emon/model"
+	"emon/pageunit"
 	"emon/pdfsrc"
 	"emon/plan"
 	"emon/port"
-	"emon/scan"
 )
 
 func RsNone() int32 {
@@ -148,16 +148,6 @@ func rsWantOcr(info int32, policy int32) int32 {
 	return 1
 }
 
-func rsReadPage(ans *port.Cells, ao int32, ad int32, page int32, oid int32, loc *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, scr *port.Cells) int32 {
-	// The evidence and the lines of one frame whose OCR answer is at `ao` (its decode's at `ad`).
-	var w int32 = plan.AnArg(ans, ad, 0)
-	var h int32 = plan.AnArg(ans, ad, 1)
-	var eff int32 = rsEffDpi100(plan.AnArg(ans, ad, 3))
-	var wc int32 = RsCpt(w, eff)
-	var hc int32 = RsCpt(h, eff)
-	return scan.ScPage(ans, ao, page, oid, page, wc, hc, w, h, eff, 0, 0, 0, 0, 0, wc, hc, scan.ScLang(loc), epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr)
-}
-
 func RsDoc(src *port.Src, input int32, fmt int32, ans *port.Cells, rq *port.Cells, nodes *port.Cells, attrs *port.Cells, text *port.Cells, pages *port.Cells, mask *port.Cells) int32 {
 	// THE DOCUMENT PASS of a raster input (P7.U): stage 0, HEADER ONLY (D187). Round 1 asks for frame 0's header (id 1),
 	// round 2 for every other frame's (ids `f + 1`); then the root's `format` and `pages`, and one `image` page row per frame
@@ -223,17 +213,17 @@ func RsDoc(src *port.Src, input int32, fmt int32, ans *port.Cells, rq *port.Cell
 	return 0
 }
 
-func RsPage(f int32, input int32, nbytes int32, policy int32, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, mask *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, scr *port.Cells, dry int32) int32 {
-	// `dry` is 1 for a DRY attempt (P10.2, `pu-dry`): it stops before the write, having asked what the rounds up to there ask.
+func RsPage(f int32, input int32, nbytes int32, policy int32, fuse int32, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, mask *port.Cells, scr *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, refs *port.Cells, tlines *port.Cells, cg *port.Cells, inks *port.Cells, comps *port.Cells, rules *port.Cells, prims *port.Cells, tpts *port.Cells, ws *port.Cells, sv *port.Cells, aux *port.Cells, snap *port.Cells, rtp *port.Cells, rn *port.Cells, ri *port.Cells, cs *port.Cells, vr *port.Cells, pc *port.Cells, sg *port.Cells, mem *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells) int32 {
+	// `fuse` is the page unit's flags (`emon.pageunit`'s `pu-px` and `pu-dry`: bit 2 the hidden setting `no-retarget`, bit 4 a DRY attempt, P10.2: it stops
+	// before the write, having asked what the rounds up to there ask).
 	// The unit of frame `f` (0-based) of a raster input: its pixels (`decode` id `pi-decode`, a whole image file, whose
 	// failure is the conversion's: an image that cannot be read is refused by name, whatever the policy), then, unless
-	// `policy` is 0 (never), OCR of the bitmap (id `pi-ocr`); where the answers are in, the frame's evidence and lines are
-	// appended to `words` and `lines` and `mask[f]` is 1. Answers `us-requests`, a failure status, or 0. It writes nothing
-	// until every answer it asked for is in.
+	// `policy` is 0 (never), the scan's page unit (`pu-scan-core`, D1610): OCR of the bitmap (id `pi-ocr`), the ink layers of the bitmap and the targeted
+	// passes the first pass calls for (a page fed sideways or upside down is read from its turned view, a small raster from an enlarged one); where the answers
+	// are in, the frame's evidence and lines are appended to `words` and `lines` and `mask[f]` is 1. An image has no seal or signature stage (its document
+	// unit does not arbitrate). Answers `us-requests`, a failure status, or 0. It writes nothing until every answer it asked for is in.
 	var did int32 = plan.PuId(f, plan.PiDecode())
-	var oid int32 = plan.PuId(f, plan.PiOcr())
 	var ad int32 = plan.AnFind(ans, did)
-	var ao int32 = -1
 	if ad < 0 {
 		plan.RqDecode(rq, did, input, 0, nbytes, plan.FltNone(), f)
 		return plan.UsRequests()
@@ -244,17 +234,8 @@ func RsPage(f int32, input int32, nbytes int32, policy int32, ans *port.Cells, r
 	if policy == 0 {
 		return 0
 	}
-	ao = plan.AnFind(ans, oid)
-	if ao < 0 {
-		scan.ScRequest(rq, oid, did, (rsEffDpi100(plan.AnArg(ans, ad, 3))+50)/100, loc)
-		return plan.UsRequests()
-	}
-	if dry == 1 {
-		return 0
-	}
-	if plan.AnOk(ans, ao) == 1 {
-		rsReadPage(ans, ao, ad, f+1, oid, loc, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr)
-		port.CellsSet(mask, f, 1)
-	}
-	return 0
+	var eff int32 = rsEffDpi100(plan.AnArg(ans, ad, 3))
+	var wc int32 = RsCpt(plan.AnArg(ans, ad, 0), eff)
+	var hc int32 = RsCpt(plan.AnArg(ans, ad, 1), eff)
+	return pageunit.PuScanCore(f, input, fuse, did, ad, eff, 0, 0, 0, wc, hc, wc, hc, 1, 0, ans, rq, loc, bms, mask, scr, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, refs, tlines, cg, inks, comps, rules, prims, tpts, ws, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6)
 }

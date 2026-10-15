@@ -6,6 +6,8 @@ use crate::emon::model::*;
 use crate::emon::ocr::*;
 use crate::emon::plan::*;
 use crate::emon::rasterin::*;
+use crate::emon::retarget::*;
+use crate::emon::upscale::*;
 
 #[test]
 fn test_the_sniff_reads_the_signature_and_nothing_else() {
@@ -30,7 +32,8 @@ pub(crate) fn doc_of(ans: &mut crate::port::Cells, rq: &mut crate::port::Cells, 
     return rs_doc(&crate::port::src_of_blob(&crate::testport::hex_blob("49492a0008000000")[..]), 7, rs_tiff(), ans, rq, nodes, attrs, text, pages, mask);
 }
 pub(crate) fn page_pol(f: i32, ans: &mut crate::port::Cells, rq: &mut crate::port::Cells, policy: i32, loc: &mut crate::port::Cells, mask: &mut crate::port::Cells, et: &mut crate::port::Cells, wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, oruns: &mut crate::port::Cells, olines: &mut crate::port::Cells, owords: &mut crate::port::Cells) -> i32 {
-    return rs_page(f, 7, 8, policy, ans, rq, loc, &crate::port::BitmapSet::new(), mask, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), oruns, &mut crate::port::Cells::new(), olines, owords, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), wd, ln, &mut crate::port::Cells::new(), 0);
+    // no pixel in the bitmap set: the unit is the slim one, the first pass's lines (D1610: with pixels it is `emon.pageunit`'s scan unit, whose laws are there)
+    return rs_page(f, 7, 8, policy, 0, ans, rq, loc, &crate::port::BitmapSet::new(), mask, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), oruns, &mut crate::port::Cells::new(), olines, owords, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), wd, ln, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
 }
 #[test]
 fn test_the_document_pass_asks_for_frame_zeros_header_and_nothing_more() {
@@ -216,4 +219,147 @@ fn test_an_ocr_answer_becomes_evidence_and_the_pipelines_lines() {
     crate::testport::assert_eq(ln_get(ln, 0, lh_rot()), 0, "upright");
     crate::testport::assert_eq(ln_get(ln, 0, lh_y0()), (55 * 24) - (34 * 24), "the box's top is the baseline less x-height and ascenders");
     crate::testport::assert_eq(ln_get(ln, 0, lh_y1()), (55 * 24) + (6 * 24), "and its bottom the baseline plus descenders");
+}
+pub(crate) fn fake_lines(mut ans: &mut crate::port::Cells, id: i32, nlines: i32, scale: i32, xh: i32, osd: i32, oconf: i32) -> i32 {
+    // An OCR answer of `nlines` lines, each of one word "Hi" (60 x 40 pixels at `scale`, x-height `xh` at `scale`, the line 60 pixels below the one before)
+    // that OSD says is turned `osd` degrees at the confidence `oconf` (x10; -1: no OSD).
+    let at: i32 = an_ocr(ans, id);
+    let mut k: i32 = 0;
+    let mut word: i32 = 0;
+    while k < nlines {
+        word = an_ocr_word(ans, at, 10 * scale, (20 + (k * 60)) * scale, 60 * scale, 40 * scale, 900, k, 0);
+        an_ocr_cp(ans, word, 72);
+        an_ocr_cp(ans, word, 105);
+        k += 1;
+    }
+    ox_begin(ans, 0, 0, 0, 0, osd, 1281455214, 100, oconf, nlines, 1, 0, 0, 0);
+    k = 0;
+    while k < nlines {
+        ox_line(ans, 10 * scale, (20 + (k * 60)) * scale, 60 * scale, 40 * scale, 10 * scale, (55 + (k * 60)) * scale, 70 * scale, (55 + (k * 60)) * scale, 0, 0, 0, xh * scale, 14, 6);
+        k += 1;
+    }
+    ox_block(ans, 10 * scale, 20 * scale, 60 * scale, (nlines * 60) * scale, 0, 0, 0);
+    k = 0;
+    while k < nlines {
+        ox_word(ans, 0, 0, -1, 0);
+        k += 1;
+    }
+    an_ocr_end(ans, at);
+    return at;
+}
+pub(crate) fn white_frame(bms: &crate::port::BitmapSet, id: i32, w: i32, h: i32) -> i32 {
+    // A decoded frame of paper (255) under the id of its decode request, as the host puts one in the set.
+    let b: &crate::port::Bitmap = crate::port::bms_put(bms, id, w, h, 1);
+    let mut y: i32 = 0;
+    let mut x: i32 = 0;
+    while y < h {
+        x = 0;
+        while x < w {
+            crate::port::bitmap_set_u8(b, x, y, 0, 255);
+            x += 1;
+        }
+        y += 1;
+    }
+    return 0;
+}
+pub(crate) fn page_px(ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, bms: &crate::port::BitmapSet, fuse: i32, mut mask: &mut crate::port::Cells, et: &mut crate::port::Cells, wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, oruns: &mut crate::port::Cells, olines: &mut crate::port::Cells, owords: &mut crate::port::Cells) -> i32 {
+    // Frame 0 of an input of one frame under the policy `always`, with the pixels of its decode in `bms` and `fuse` the page unit's flags.
+    return rs_page(0, 7, 8, 2, fuse, ans, rq, &mut crate::port::Cells::new(), bms, mask, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), oruns, &mut crate::port::Cells::new(), olines, owords, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), wd, ln, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+}
+#[test]
+fn test_a_frame_fed_sideways_is_read_from_its_turned_view() {
+    // P12.3 I-5: an image page went through `rs-page`, which wrote the first pass's lines and never looked at what OSD said, so a PNG turned a quarter or a half was
+    // read as garbage and no second pass ran. It is the scan unit's now: OSD sure that the page is turned (`nm-orient`) has the unit ask for the turned view.
+    let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mask: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oruns: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let bms: &crate::port::BitmapSet = &crate::port::BitmapSet::new();
+    let bms2: &crate::port::BitmapSet = &crate::port::BitmapSet::new();
+    // a unit's attempt has a set of its own (what kin made in one is dropped with it): the frame's pixels are put in each
+    crate::port::cells_push(mask, 0);
+    white_frame(bms, 260, 100, 300);
+    white_frame(bms2, 260, 100, 300);
+    an_decode(ans, 260, 100, 300, 1, 0, 1, 1);
+    fake_lines(ans, 272, 5, 1, 6, 90, 100);
+    crate::testport::assert_eq(page_px(ans, rq1, bms, 0, mask, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), us_requests(), "the first pass is in and the page is turned: it asks");
+    let at: i32 = rec_find(rq1, pu_id(0, ri_rotated()));
+    crate::testport::assert_that(at >= 0, "the OCR of the turned view");
+    crate::testport::assert_eq(rec_kind(rq1, at), pk_ocr(), "an OCR request");
+    crate::testport::assert_eq(rq_arg(rq1, at, 0), pu_view_id(0, rv_rotated()), "of the kin-made view");
+    crate::testport::assert_eq(crate::port::bitmap_w(crate::port::bms_get(bms, pu_view_id(0, rv_rotated()))), 300, "turned a quarter: as wide as the frame is high");
+    crate::testport::assert_eq(crate::port::bitmap_h(crate::port::bms_get(bms, pu_view_id(0, rv_rotated()))), 100, "and as high as it is wide");
+    crate::testport::assert_eq(crate::port::cells_at(mask, 0), 0, "an attempt that asks writes nothing: the page is not yet read");
+    // the turned view read: the page is done, and the evidence says the turned view was read
+    fake_lines(ans, 274, 5, 1, 6, -1, -1);
+    crate::testport::assert_eq(page_px(ans, rq2, bms2, 0, mask, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), oruns, olines, owords), us_done(), "done");
+    crate::testport::assert_eq(crate::port::cells_at(mask, 0), 1, "the page was OCR'd");
+    crate::testport::assert_eq(or_count(oruns), 2, "the first pass and the turned view's reading");
+    crate::testport::assert_eq(or_get(oruns, 1, orf_pass()), op_re_rotated(), "the second run is the re-rotated pass");
+}
+#[test]
+fn test_the_hidden_setting_no_retarget_leaves_a_turned_frame_as_the_first_pass_read_it() {
+    let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mask: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let bms: &crate::port::BitmapSet = &crate::port::BitmapSet::new();
+    crate::port::cells_push(mask, 0);
+    white_frame(bms, 260, 100, 300);
+    an_decode(ans, 260, 100, 300, 1, 0, 1, 1);
+    fake_lines(ans, 272, 5, 1, 6, 90, 100);
+    crate::testport::assert_eq(page_px(ans, rq, bms, 2, mask, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), us_done(), "`no-retarget`: done");
+    crate::testport::assert_eq(crate::port::cells_len(rq), 0, "no request");
+    crate::testport::assert_eq(crate::port::cells_at(mask, 0), 1, "the first pass's lines");
+}
+#[test]
+fn test_a_frame_of_small_text_is_read_again_enlarged() {
+    // P12.3 I-3: a 72 dpi page was read once, at the size it was; whole words and decimal points were lost and nothing said so. Its first pass shows the text is under 16 pixels
+    // high (x-height 6): the unit makes the frame 4 times as large as a view and asks for the OCR of THAT, and reads the enlargement when it reads as much.
+    let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mask: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oruns: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let bms: &crate::port::BitmapSet = &crate::port::BitmapSet::new();
+    let bms2: &crate::port::BitmapSet = &crate::port::BitmapSet::new();
+    let bms3: &crate::port::BitmapSet = &crate::port::BitmapSet::new();
+    crate::port::cells_push(mask, 0);
+    white_frame(bms, 260, 100, 300);
+    white_frame(bms2, 260, 100, 300);
+    white_frame(bms3, 260, 100, 300);
+    an_decode(ans, 260, 100, 300, 1, 0, 1, 1);
+    fake_lines(ans, 272, 5, 1, 6, -1, -1);
+    crate::testport::assert_eq(page_px(ans, rq1, bms, 0, mask, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), us_requests(), "the first pass is in and the text is small: it asks");
+    let at: i32 = rec_find(rq1, pu_id(0, ri_upscale()));
+    crate::testport::assert_that(at >= 0, "the OCR of the enlarged view");
+    crate::testport::assert_eq(rec_kind(rq1, at), pk_ocr(), "an OCR request");
+    crate::testport::assert_eq(rq_arg(rq1, at, 0), pu_view_id(0, rv_upscaled()), "of the kin-made view");
+    crate::testport::assert_eq(rq_arg(rq1, at, 1), 3, "psm 3");
+    crate::testport::assert_eq(ocf_dpi(rq_arg(rq1, at, 2)), 346, "told the resolution the text says it has, 4 times: ten point type at an x-height of 6 pixels is 86 dpi");
+    crate::testport::assert_eq(crate::port::bitmap_w(crate::port::bms_get(bms, pu_view_id(0, rv_upscaled()))), 400, "4 times as wide");
+    crate::testport::assert_eq(crate::port::bitmap_h(crate::port::bms_get(bms, pu_view_id(0, rv_upscaled()))), 1200, "and as high");
+    crate::testport::assert_eq(crate::port::cells_at(mask, 0), 0, "nothing is written yet");
+    // the enlargement read as much: it is the page's reading, and the dump says so
+    fake_lines(ans, 277, 5, 4, 6, -1, -1);
+    crate::testport::assert_eq(page_px(ans, rq2, bms2, 0, mask, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), oruns, olines, owords), us_done(), "done");
+    crate::testport::assert_eq(crate::port::cells_len(rq2), 0, "nothing more asked");
+    crate::testport::assert_eq(crate::port::cells_at(mask, 0), 1, "the page was OCR'd");
+    crate::testport::assert_eq(or_count(oruns), 1, "one run: the enlargement's replaces the first pass");
+    crate::testport::assert_eq(or_get(oruns, 0, orf_pass()), op_upscaled(), "the upscaled pass");
+    // a first pass that read nothing of what the enlargement read: the same
+    let ans2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oruns2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mask2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::port::cells_push(mask2, 0);
+    an_decode(ans2, 260, 100, 300, 1, 0, 1, 1);
+    fake_lines(ans2, 272, 5, 1, 6, -1, -1);
+    fake_lines(ans2, 277, 1, 4, 6, -1, -1);
+    crate::testport::assert_eq(page_px(ans2, rq3, bms3, 0, mask2, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), oruns2, &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), us_done(), "done");
+    crate::testport::assert_eq(or_get(oruns2, 0, orf_pass()), 1, "an enlargement that read less than the first pass is not adopted: the first pass stands");
 }

@@ -176,7 +176,7 @@ at 40 28 ii
 # 41 paragraph: flags, sources, a region with the extreme values
 n 4 22
 t 41 extremes
-f 41 127
+f 41 1151
 sr 41 511
 c 41 1000
 r 41 4 -2147483648 2147483647 100 -100

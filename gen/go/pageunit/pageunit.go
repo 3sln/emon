@@ -15,8 +15,10 @@ import (
 	"emon/rasterplan"
 	"emon/retarget"
 	"emon/scan"
+	"emon/scriptcheck"
 	"emon/sealpx"
 	"emon/sigpx"
+	"emon/upscale"
 	"emon/xalign"
 )
 
@@ -34,6 +36,14 @@ func PuKind(pl *port.Cells, i int32) int32 {
 
 func PuField(pl *port.Cells, i int32, k int32) int32 {
 	return port.CellsAt(pl, (i*PuW())+k)
+}
+
+func PuScanDct() int32 {
+	return 0
+}
+
+func PuScanRender() int32 {
+	return 1
 }
 
 func PkNone() int32 {
@@ -115,8 +125,8 @@ func PuPlan(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *por
 				jj += 1
 			}
 			if best >= 0 {
+				k = i * PuW()
 				if scan.ScDctSpan(src, ar, dc, a, b, st, evidence.ImGet(im, best, evidence.MfObj()), sp) == 1 {
-					k = i * PuW()
 					port.CellsSet(pl, k, 1)
 					port.CellsSet(pl, k+1, evidence.ImGet(im, best, evidence.MfObj()))
 					port.CellsSet(pl, k+2, port.CellsAt(sp, 0))
@@ -127,6 +137,22 @@ func PuPlan(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *por
 					port.CellsSet(pl, k+7, evidence.ImGet(im, best, evidence.MfY1()))
 					port.CellsSet(pl, k+8, px1-px0)
 					port.CellsSet(pl, k+9, py1-py0)
+					port.CellsSet(pl, k+14, PuScanDct())
+				} else {
+					// D1610: a page whose content is one big image is a scan WHATEVER the codec (Flate, RunLength, LZW, CCITT, JBIG2, JPX, a DCT with more
+					// than one stage or in an encrypted file): kin cannot hand the host those bytes in place, so the host RENDERS the page (pdfium reads every codec,
+					// colour space, /Decode and mask) and the render is read as the scan is. The raster is the whole page, not the image's box.
+					port.CellsSet(pl, k, 1)
+					port.CellsSet(pl, k+1, evidence.ImGet(im, best, evidence.MfObj()))
+					port.CellsSet(pl, k+2, 0)
+					port.CellsSet(pl, k+3, 0)
+					port.CellsSet(pl, k+4, 0)
+					port.CellsSet(pl, k+5, 0)
+					port.CellsSet(pl, k+6, px1-px0)
+					port.CellsSet(pl, k+7, py1-py0)
+					port.CellsSet(pl, k+8, px1-px0)
+					port.CellsSet(pl, k+9, py1-py0)
+					port.CellsSet(pl, k+14, PuScanRender())
 				}
 			}
 			if pdfsrc.PsMissed(src) {
@@ -202,7 +228,7 @@ func puPx(bms *port.BitmapSet, id int32, fuse int32) int32 {
 	return pageink.PnHas(bms, id)
 }
 
-func puRunBorn(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, fw *port.Cells, fl *port.Cells, hl *port.Cells, refs *port.Cells, cg *port.Cells, tlines *port.Cells, xscr *port.Cells, xgp *port.Cells, xdp *port.Cells, xta *port.Cells, xtb *port.Cells, xtt *port.Cells, scr *port.Cells, images *port.Cells, words *port.Cells, lines *port.Cells, inks *port.Cells, comps *port.Cells, rules *port.Cells, prims *port.Cells, tpts *port.Cells, ws *port.Cells, ws2 *port.Cells, sv *port.Cells, aux *port.Cells, snap *port.Cells, rtp *port.Cells, rn *port.Cells, ri *port.Cells, cs *port.Cells, vr *port.Cells, pc *port.Cells, sg *port.Cells, mem *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells) int32 {
+func puRunBorn(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, mask *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, fw *port.Cells, fl *port.Cells, hl *port.Cells, refs *port.Cells, cg *port.Cells, tlines *port.Cells, xscr *port.Cells, xgp *port.Cells, xdp *port.Cells, xta *port.Cells, xtb *port.Cells, xtt *port.Cells, scr *port.Cells, images *port.Cells, words *port.Cells, lines *port.Cells, inks *port.Cells, comps *port.Cells, rules *port.Cells, prims *port.Cells, tpts *port.Cells, ws *port.Cells, ws2 *port.Cells, sv *port.Cells, aux *port.Cells, snap *port.Cells, rtp *port.Cells, rn *port.Cells, ri *port.Cells, cs *port.Cells, vr *port.Cells, pc *port.Cells, sg *port.Cells, mem *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells) int32 {
 	var ask int32 = PuField(pl, i, rasterplan.RpFAsk())
 	var scripts int32 = PuField(pl, i, rasterplan.RpFScripts())
 	var nwit int32 = PuField(pl, i, rasterplan.RpFWn())
@@ -414,21 +440,55 @@ func puRunBorn(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells
 			}
 		}
 	}
+	// a page in a script the engine has no model for (D1610): the page's mask says so, and `sc-tag-unread` holds what OCR won of it at a low confidence
+	if scriptcheck.SkUnread(ans, ao, s6) == 1 {
+		port.CellsSet(mask, i, scan.ScMaskUnread())
+	}
 	return plan.UsDone()
 }
 
-func puRunScan(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, mask *port.Cells, scr *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, refs *port.Cells, tlines *port.Cells, cg *port.Cells, inks *port.Cells, comps *port.Cells, rules *port.Cells, prims *port.Cells, tpts *port.Cells, ws *port.Cells, sv *port.Cells, aux *port.Cells, snap *port.Cells, rtp *port.Cells, rn *port.Cells, ri *port.Cells, cs *port.Cells, vr *port.Cells, pc *port.Cells, sg *port.Cells, mem *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells) int32 {
-	// A SCANNED page: `decode` of its stream, the OCR of the bitmap, the ink layers of the bitmap and the targeted passes they and the
-	// first pass call for, then the lines the pipeline reads (`rt-adopt`). With no pixel in the decode answer (a transcript recorded slim) the
-	// page is what it always was: the first pass's lines.
-	var did int32 = plan.PuId(i, plan.PiDecode())
+func puScanPixels(i int32, did int32, oid int32, ao int32, pxw int32, pxh int32, dpi100 int32, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, fuse int32, rtp *port.Cells, s6 *port.Cells) int32 {
+	// D1610: 0 when the raster of the page unit is the bitmap under `did`; the factor `k` (2 to 4) when the first pass `ao` of it (the OCR request `oid`) shows
+	// that the raster is too small for the engine to read (`emon.upscale`) and the pixels are there to enlarge: the enlarged raster is then made as a kin-made view
+	// (`rv-upscaled`) and its OCR is asked for (`ri-upscale`, naming the view's pixel hash). Answers -1 when it has asked (the caller answers `us-requests`).
+	if puPx(bms, did, fuse) == 0 {
+		return 0
+	}
+	var k int32 = upscale.UpFactor(ans, ao, pxw, pxh, s6)
+	var uvid int32 = plan.PuViewId(i, upscale.RvUpscaled())
+	var uid int32 = plan.PuId(i, upscale.RiUpscale())
+	if k < 2 {
+		return 0
+	}
+	if plan.AnFind(ans, uid) < 0 {
+		upscale.UpMake(bms, uvid, plan.PuViewId(i, upscale.RvUpscaleTmp()), port.BmsGet(bms, did), k, s6)
+		port.BitmapHash(port.BmsGet(bms, uvid), rtp, retarget.RtpHash())
+		scan.ScRequestView(rq, uid, uvid, port.CellsAt(rtp, retarget.RtpHash()), port.CellsAt(rtp, retarget.RtpHash()+1), upscale.UpHint(ans, ao, k, dpi100, s6), loc)
+		return -1
+	}
+	return k
+}
+
+func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 int32, obj int32, bx0 int32, by0 int32, bx1 int32, by1 int32, pw int32, ph int32, maskv int32, seals int32, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, mask *port.Cells, scr *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, refs *port.Cells, tlines *port.Cells, cg *port.Cells, inks *port.Cells, comps *port.Cells, rules *port.Cells, prims *port.Cells, tpts *port.Cells, ws *port.Cells, sv *port.Cells, aux *port.Cells, snap *port.Cells, rtp *port.Cells, rn *port.Cells, ri *port.Cells, cs *port.Cells, vr *port.Cells, pc *port.Cells, sg *port.Cells, mem *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells) int32 {
+	// A SCANNED page whose raster is in (the decode or the render under `did`, its answer at `ad`; `dpi100` its resolution, `obj` the image's object, the page
+	// region it shows is (`bx0` `by0`)-(`bx1` `by1`) of a page `pw` x `ph`, all centipoints): the OCR of the bitmap, the ink layers of the bitmap and the
+	// targeted passes they and the first pass call for, then the lines the pipeline reads (`rt-adopt`). With no pixel in the decode answer (a transcript recorded
+	// slim) the page is what it always was: the first pass's lines. `maskv` is what the page's `mask` cell becomes (1 an image page, 2 a PDF's scanned page);
+	// `seals` 1 looks for seals and signatures in the pixels (a PDF page: its document unit arbitrates them), 0 does not (an image: it has no such unit).
+	// D1610: a raster the first pass shows to be too small is read again enlarged (`pu-scan-pixels`) and that reading, when it reads as much, is the first pass.
 	var oid int32 = plan.PuId(i, plan.PiOcr())
-	var ad int32 = plan.AnFind(ans, did)
-	var ao int32 = -1
+	var uid int32 = plan.PuId(i, upscale.RiUpscale())
+	var uvid int32 = plan.PuViewId(i, upscale.RvUpscaled())
+	var rid int32 = did
+	var roid int32 = oid
 	var pxw int32 = 0
 	var pxh int32 = 0
-	var wp int32 = 0
-	var dpi100 int32 = 0
+	var rdpi int32 = dpi100
+	var hint int32 = 0
+	var mv int32 = maskv
+	var ao int32 = -1
+	var ua int32 = -1
+	var k int32 = 0
 	var vdec int32 = 0
 	var l0 int32 = 0
 	var w0 int32 = 0
@@ -438,17 +498,8 @@ func puRunScan(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells
 	var rotmed int32 = 0
 	var asked int32 = 0
 	var nsel int32 = 0
-	if ad < 0 {
-		plan.RqDecode(rq, did, input, PuField(pl, i, 2), PuField(pl, i, 3), plan.FltDct(), 0)
-		return plan.UsRequests()
-	}
-	if plan.AnOk(ans, ad) != 1 {
-		return plan.UsDone()
-	}
 	pxw = plan.AnArg(ans, ad, 0)
 	pxh = plan.AnArg(ans, ad, 1)
-	wp = PuField(pl, i, 6) - PuField(pl, i, 4)
-	dpi100 = int32(((int64(pxw) * int64(720000)) + int64(wp/2)) / int64(wp))
 	ao = plan.AnFind(ans, oid)
 	if ao < 0 {
 		scan.ScRequest(rq, oid, did, (dpi100+50)/100, loc)
@@ -460,43 +511,104 @@ func puRunScan(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells
 	if PuDry(fuse) == 1 {
 		return plan.UsDone()
 	}
+	retarget.RtPrep(rtp)
+	// a page in a script the engine has no model for (D1610): the first pass is junk at a confidence it should not have; `sc-tag` says so
+	if scriptcheck.SkUnread(ans, ao, s6) == 1 {
+		mv += scan.ScMaskUnread()
+	}
+	hint = (dpi100 + 50) / 100
+	// a raster is enlarged for an engine that can read it: not a page in a script it has no model for
+	if mv < scan.ScMaskUnread() {
+		k = puScanPixels(i, did, oid, ao, pxw, pxh, dpi100, ans, rq, loc, bms, fuse, rtp, s6)
+	}
+	if k < 0 {
+		return plan.UsRequests()
+	}
+	if k > 1 {
+		ua = plan.AnFind(ans, uid)
+		// the enlarged reading stands when it was made and reads as much as the first: the raster is then the view, at the resolution the text says it has
+		if ua >= 0 {
+			if plan.AnOk(ans, ua) == 1 {
+				if upscale.UpScore(ans, ua) >= upscale.UpScore(ans, ao) {
+					hint = upscale.UpHint(ans, ao, k, dpi100, s6)
+					rid = uvid
+					roid = uid
+					ao = ua
+					pxw *= k
+					pxh *= k
+					rdpi = dpi100 * k
+					// a unit's attempt has a set of its own: the enlarged raster is made again, from the frame's pixels
+					upscale.UpMake(bms, uvid, plan.PuViewId(i, upscale.RvUpscaleTmp()), port.BmsGet(bms, did), k, s6)
+				}
+			}
+		}
+	}
 	scan.ScPrep(scr)
-	if puPx(bms, did, fuse) == 0 {
-		scan.ScPage(ans, ao, i+1, oid, did, PuField(pl, i, 8), PuField(pl, i, 9), pxw, pxh, dpi100, PuField(pl, i, 4), PuField(pl, i, 5), PuField(pl, i, 1), PuField(pl, i, 4), PuField(pl, i, 5), PuField(pl, i, 6), PuField(pl, i, 7), scan.ScLang(loc), epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr)
-		port.CellsSet(mask, i, 2)
+	if puPx(bms, rid, fuse) == 0 {
+		scan.ScPage(ans, ao, i+1, roid, rid, pw, ph, pxw, pxh, rdpi, bx0, by0, obj, bx0, by0, bx1, by1, scan.ScLang(loc), epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr)
+		port.CellsSet(mask, i, mv)
 		return plan.UsDone()
 	}
 	pageink.PnMark(snap, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, inks, comps, rules, prims, tpts, tlines, refs, images, words, lines)
-	vdec = scan.ScPageView(epages, views, images, i+1, did, PuField(pl, i, 8), PuField(pl, i, 9), pxw, pxh, dpi100, PuField(pl, i, 4), PuField(pl, i, 5), PuField(pl, i, 1), PuField(pl, i, 4), PuField(pl, i, 5), PuField(pl, i, 6), PuField(pl, i, 7))
-	pageink.PnInk(i+1, vdec, bms, pageink.PnKText(), port.BmsGet(bms, did), dpi100, 1, views, inks, comps, rules, prims, tpts, tlines, refs, ws, sv, aux, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6)
+	vdec = scan.ScPageView(epages, views, images, i+1, rid, pw, ph, pxw, pxh, rdpi, bx0, by0, obj, bx0, by0, bx1, by1)
+	pageink.PnInk(i+1, vdec, bms, pageink.PnKText(), port.BmsGet(bms, rid), rdpi, 1, views, inks, comps, rules, prims, tpts, tlines, refs, ws, sv, aux, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6)
 	l0 = evidence.OlCount(olines)
 	w0 = evidence.OwCount(owords)
-	run = scan.ScPageEvidence(ans, ao, i+1, oid, vdec, dpi100, scan.ScLang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
+	run = scan.ScPageEvidence(ans, ao, i+1, roid, vdec, rdpi, scan.ScLang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
+	if rid == uvid {
+		retarget.RtRunMeta(oruns, run, evidence.OpUpscaled(), 3, 3, 0, 0, 0, 0)
+	}
 	nw = evidence.OwCount(owords) - w0
-	pageink.PnFeatures(i+1, bms, pageink.PnKText(), port.BmsGet(bms, did), oid, w0, nw, ws, comps, owords, feats, scr)
+	pageink.PnFeatures(i+1, bms, pageink.PnKText(), port.BmsGet(bms, rid), roid, w0, nw, ws, comps, owords, feats, scr)
 	retarget.RtPrep(rtp)
-	asked = retarget.RtPlan(i, input, 0, 0, did, (dpi100+50)/100, loc, ans, bms, pageink.PnKText(), port.BmsGet(bms, did), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr)
+	asked = retarget.RtPlan(i, input, 0, 0, rid, hint, loc, ans, bms, pageink.PnKText(), port.BmsGet(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr)
 	// the seals and stamps in the page's pixels (P8.2): their strips and crops are asked in the same round as the targeted passes
-	sealpx.SxFind(i+1, views, vdec, prims, inks, PuField(pl, i, 8), PuField(pl, i, 9), s1)
-	asked += sealpx.SxPlan(i, loc, ans, bms, port.BmsGet(bms, did), s1, s2, s3, rq)
+	if seals == 1 {
+		sealpx.SxFind(i+1, views, vdec, prims, inks, pw, ph, s1)
+		asked += sealpx.SxPlan(i, loc, ans, bms, port.BmsGet(bms, rid), s1, s2, s3, rq)
+	}
 	if asked > 0 {
 		pageink.PnUndo(snap, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, inks, comps, rules, prims, tpts, tlines, refs, images, words, lines)
 		return plan.UsRequests()
 	}
-	retarget.RtRecord(i, vdec, dpi100, loc, ans, rtp, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
-	sealpx.SxRecord(i, vdec, dpi100, loc, ans, s1, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats, refs, cg, s4)
-	// the pen strokes over a signature line of the scan (P8.3): the lines the first pass made of them are not the page's text
-	sigpx.SpFind(i+1, views, vdec, rules, owords, etext, port.BmsGet(bms, did), PuField(pl, i, 8), s5, s6)
-	sigpx.SpRecord(i, s5, cg)
+	retarget.RtRecord(i, vdec, rdpi, loc, ans, rtp, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
+	if seals == 1 {
+		sealpx.SxRecord(i, vdec, rdpi, loc, ans, s1, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats, refs, cg, s4)
+		// the pen strokes over a signature line of the scan (P8.3): the lines the first pass made of them are not the page's text
+		sigpx.SpFind(i+1, views, vdec, rules, owords, etext, port.BmsGet(bms, rid), pw, s5, s6)
+		sigpx.SpRecord(i, s5, cg)
+	}
 	nsel = retarget.RtAdopt(rtp, oruns, run, olines, owords, scr)
-	nsel = sealpx.SxDropLines(scr, nsel, olines, owords, s1)
-	nsel = sigpx.SpDropLines(scr, nsel, olines, owords, s5)
+	if seals == 1 {
+		nsel = sealpx.SxDropLines(scr, nsel, olines, owords, s1)
+		nsel = sigpx.SpDropLines(scr, nsel, olines, owords, s5)
+	}
 	retarget.RtUpright(rtp, run, epages, i+1)
 	nl = evidence.OrGet(oruns, run, evidence.OrfLcount())
 	rotmed = evidence.EvRotMedian(olines, l0, nl)
 	scan.ScEmitSel(olines, owords, osyms, nsel, i+1, rotmed, scr, words, lines)
-	port.CellsSet(mask, i, 2)
+	port.CellsSet(mask, i, mv)
 	return plan.UsDone()
+}
+
+func puRunScan(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, mask *port.Cells, scr *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, refs *port.Cells, tlines *port.Cells, cg *port.Cells, inks *port.Cells, comps *port.Cells, rules *port.Cells, prims *port.Cells, tpts *port.Cells, ws *port.Cells, sv *port.Cells, aux *port.Cells, snap *port.Cells, rtp *port.Cells, rn *port.Cells, ri *port.Cells, cs *port.Cells, vr *port.Cells, pc *port.Cells, sg *port.Cells, mem *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells) int32 {
+	// A SCANNED page of a PDF: `decode` of its stream (the host reads the DCT bytes in place) or, in the plan's render mode (D1610: an image in any other codec),
+	// `render` of the page, then `pu-scan-core`: the OCR of the bitmap and what it calls for. A failed raster is `us-done`: the page is left as the text layer made it.
+	var did int32 = plan.PuId(i, plan.PiDecode())
+	var ad int32 = plan.AnFind(ans, did)
+	var wp int32 = PuField(pl, i, 6) - PuField(pl, i, 4)
+	if ad < 0 {
+		if PuField(pl, i, 14) == PuScanRender() {
+			plan.RqRender(rq, did, input, i, PuDpi(), plan.LayFull())
+		} else {
+			plan.RqDecode(rq, did, input, PuField(pl, i, 2), PuField(pl, i, 3), plan.FltDct(), 0)
+		}
+		return plan.UsRequests()
+	}
+	if plan.AnOk(ans, ad) != 1 {
+		return plan.UsDone()
+	}
+	return PuScanCore(i, input, fuse, did, ad, int32(((int64(plan.AnArg(ans, ad, 0))*int64(720000))+int64(wp/2))/int64(wp)), PuField(pl, i, 1), PuField(pl, i, 4), PuField(pl, i, 5), PuField(pl, i, 6), PuField(pl, i, 7), PuField(pl, i, 8), PuField(pl, i, 9), 2, 1, ans, rq, loc, bms, mask, scr, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, refs, tlines, cg, inks, comps, rules, prims, tpts, ws, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6)
 }
 
 func PuRunPdf(i int32, input int32, policy int32, pl *port.Cells, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, mask *port.Cells, scr *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, fuse int32, fw *port.Cells, fl *port.Cells, hl *port.Cells, refs *port.Cells, cg *port.Cells, tlines *port.Cells, xscr *port.Cells, xgp *port.Cells, xdp *port.Cells, xta *port.Cells, xtb *port.Cells, xtt *port.Cells, inks *port.Cells, comps *port.Cells, rules *port.Cells, prims *port.Cells, tpts *port.Cells, ws *port.Cells, ws2 *port.Cells, sv *port.Cells, aux *port.Cells, snap *port.Cells, rtp *port.Cells, rn *port.Cells, ri *port.Cells, cs *port.Cells, vr *port.Cells, pc *port.Cells, sg *port.Cells, mem *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells) int32 {
@@ -509,7 +621,7 @@ func PuRunPdf(i int32, input int32, policy int32, pl *port.Cells, ans *port.Cell
 		return plan.UsDone()
 	}
 	if PuKind(pl, i) == PkBorn() {
-		return puRunBorn(i, input, fuse, pl, ans, rq, loc, bms, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, fw, fl, hl, refs, cg, tlines, xscr, xgp, xdp, xta, xtb, xtt, scr, images, words, lines, inks, comps, rules, prims, tpts, ws, ws2, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6)
+		return puRunBorn(i, input, fuse, pl, ans, rq, loc, bms, mask, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, fw, fl, hl, refs, cg, tlines, xscr, xgp, xdp, xta, xtb, xtt, scr, images, words, lines, inks, comps, rules, prims, tpts, ws, ws2, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6)
 	}
 	if PuKind(pl, i) != PkScan() {
 		return plan.UsDone()

@@ -24,6 +24,8 @@ public static class Pageunittest {
             emon.Port.CellsPush(pl, 0);
             emon.Port.CellsPush(pl, 0);
             emon.Port.CellsPush(pl, 0);
+            // the scan's mode (D1610): the host decodes the DCT stream in place
+            emon.Port.CellsPush(pl, 0);
             i += 1;
         }
         return 0;
@@ -91,6 +93,87 @@ public static class Pageunittest {
         emon.Testport.AssertEq(Plan.RqArg(rq, 0, 1), 100, "the stream's start");
         emon.Testport.AssertEq(Plan.RqArg(rq, 0, 2), 50, "and length");
         emon.Testport.AssertEq(Plan.RqArg(rq, 0, 3), Plan.FltDct(), "a DCT stream");
+    }
+    internal static int PlanFile(int emonT, byte[] file, emon.Port.Cells pl) {
+        // A document through the document pass as the Engine runs it (`pd-open`, `pc-document`, `th-run`) and `pu-plan` under `always`: `pl` has its page rows. Answers the pages.
+        emon.Port.Cells ar = emon.Port.NewCells();
+        emon.Port.Cells dc = emon.Port.NewCells();
+        emon.Port.Cells a = emon.Port.NewCells();
+        emon.Port.Cells b = emon.Port.NewCells();
+        emon.Port.Cells st = emon.Port.NewCells();
+        emon.Port.Cells cx = emon.Port.NewCells();
+        emon.Port.Cells ox = emon.Port.NewCells();
+        emon.Port.Cells cs = emon.Port.NewCells();
+        emon.Port.Cells @out = emon.Port.NewCells();
+        emon.Port.Cells f0 = emon.Port.NewCells();
+        emon.Port.Cells f1 = emon.Port.NewCells();
+        emon.Port.Cells f2 = emon.Port.NewCells();
+        emon.Port.Cells f3 = emon.Port.NewCells();
+        emon.Port.Cells gl = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells mk = emon.Port.NewCells();
+        emon.Port.Cells fnt = emon.Port.NewCells();
+        emon.Port.Cells pg = emon.Port.NewCells();
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells im = emon.Port.NewCells();
+        emon.Port.Cells pts = emon.Port.NewCells();
+        emon.Port.Cells gx = emon.Port.NewCells();
+        emon.Port.Cells epages = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells fw = emon.Port.NewCells();
+        emon.Port.Cells fl = emon.Port.NewCells();
+        emon.Port.Cells fa = emon.Port.NewCells();
+        emon.Port.Cells hl = emon.Port.NewCells();
+        emon.Port.Cells sc = emon.Port.NewCells();
+        emon.Port.Cells sp = emon.Port.NewCells();
+        emon.Port.Cells s1 = emon.Port.NewCells();
+        emon.Port.Cells s2 = emon.Port.NewCells();
+        emon.Port.Src src = emon.Port.SrcOfBlob(file);
+        int o = Pdfdoc.PdOpen(src, ar, dc, a, b, st);
+        emon.Testport.AssertEqAt(o, 0, "the file opened", 0);
+        emon.Testport.AssertEqAt(Pdfcontent.PcDocument(src, ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx), 0, "the file ran", 0);
+        Tlhealth.ThRun(pg, gl, et, mk, fnt, wd, ln, im, epages, feats, fw, fl, fa, hl, sc);
+        Pageunit.PuPlan(src, ar, dc, a, b, st, pg, im, wd, 2, 0, fw, fl, et, hl, sp, pl, s1, s2);
+        return Pdfdoc.PdPgCount(pg);
+    }
+    [Xunit.Fact]
+    public static void TestAPageThatIsOneBigImageIsAScanWhateverTheCodec() {
+        // D1610: a page with no text layer and one image over it was a scan only when that image was a lone DCT stream (the host reads those bytes in place). A Flate or RunLength
+        // image (and CCITT, JBIG2, JPX) was `vector`: no OCR, an empty body. It is a scan read from the host's RENDER of the page (any codec), the raster the whole page.
+        emon.Port.Cells pl = emon.Port.NewCells();
+        emon.Port.Cells pl2 = emon.Port.NewCells();
+        emon.Port.Cells pl3 = emon.Port.NewCells();
+        emon.Testport.AssertEq(PlanFile(0, emon.Testport.TestFile("raster/flate-gray-72dpi.pdf"), pl), 1, "one page");
+        emon.Testport.AssertEq(Pageunit.PuKind(pl, 0), Pageunit.PkScan(), "a FlateDecode image over the page: a scan");
+        emon.Testport.AssertEq(Pageunit.PuField(pl, 0, 14), Pageunit.PuScanRender(), "read from a render");
+        emon.Testport.AssertEq(Pageunit.PuField(pl, 0, 4), 0, "of the whole page: its left");
+        emon.Testport.AssertEq(Pageunit.PuField(pl, 0, 6), 61200, "its right is the page's 612 pt");
+        emon.Testport.AssertEq(Pageunit.PuField(pl, 0, 7), 79200, "its bottom the page's 792 pt");
+        emon.Testport.AssertEq(Pageunit.PuField(pl, 0, 8), 61200, "the page's width");
+        emon.Testport.AssertEq(Pageunit.PuField(pl, 0, 9), 79200, "and height");
+        emon.Testport.AssertEq(PlanFile(0, emon.Testport.TestFile("raster/runlength-gray-72dpi.pdf"), pl2), 1, "one page");
+        emon.Testport.AssertEq(Pageunit.PuKind(pl2, 0), Pageunit.PkScan(), "a RunLengthDecode image: a scan too");
+        emon.Testport.AssertEq(Pageunit.PuField(pl2, 0, 14), Pageunit.PuScanRender(), "read from a render");
+        emon.Testport.AssertEq(PlanFile(0, emon.Testport.TestFile("corpus/synth/scan/h-plain.pdf"), pl3), 2, "two pages");
+        emon.Testport.AssertEq(Pageunit.PuKind(pl3, 0), Pageunit.PkScan(), "a lone DCT stream is still a scan");
+        emon.Testport.AssertEq(Pageunit.PuField(pl3, 0, 14), Pageunit.PuScanDct(), "its bytes read in place");
+        emon.Testport.AssertThat(Pageunit.PuField(pl3, 0, 3) > 0, "from its span");
+    }
+    [Xunit.Fact]
+    public static void TestARenderScansUnitAsksForTheRenderOfItsPage() {
+        emon.Port.Cells pl = emon.Port.NewCells();
+        emon.Port.Cells rq = emon.Port.NewCells();
+        PlanOf(pl, 3, Pageunit.PkScan());
+        emon.Port.CellsSet(pl, (1 * Pageunit.PuW()) + 14, Pageunit.PuScanRender());
+        emon.Testport.AssertEq(RunPage(1, 2, pl, emon.Port.NewCells(), rq), Plan.UsRequests(), "it asks");
+        emon.Testport.AssertEq(Plan.RecKind(rq, 0), Plan.PkRender(), "a render, not a decode");
+        emon.Testport.AssertEq(Plan.RecId(rq, 0), 516, "under the scan's own id: page 1, 2 * 256 + 4");
+        emon.Testport.AssertEq(Plan.RqArg(rq, 0, 0), 3, "of input 3");
+        emon.Testport.AssertEq(Plan.RqArg(rq, 0, 1), 1, "page 1, 0-based");
+        emon.Testport.AssertEq(Plan.RqArg(rq, 0, 2), 300, "at 300 dpi");
+        emon.Testport.AssertEq(Plan.RqArg(rq, 0, 3), Plan.LayFull(), "as the page is");
     }
     [Xunit.Fact]
     public static void TestAUnitWithNoAnswersAsksTheSameEveryTime() {

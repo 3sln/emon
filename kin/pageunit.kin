@@ -27,19 +27,21 @@
 ;; IDS are `emon.plan`'s `pu-id` (D207).
 (ns emon.pageunit
   (:require [emon.lang :refer [I32 I64 Cells Src BitmapSet i64 i32 add64 mul64]]
-            [emon.port :refer [cells-len cells-at cells-set cells-drop cells-push bms-has bms-get bitmap-w bitmap-h]]
+            [emon.port :refer [cells-len cells-at cells-set cells-drop cells-push bms-has bms-get bitmap-w bitmap-h bitmap-hash]]
             [emon.pdfsrc :refer [ps-missed]]
             [emon.plan :refer [rq-decode rq-render an-find an-ok an-arg flt-dct us-requests us-done
-                               pu-id pi-render-text pi-render-no-text pi-decode pi-ocr lay-full lay-no-text]]
+                               pu-id pu-view-id pi-render-text pi-render-no-text pi-decode pi-ocr lay-full lay-no-text]]
+            [emon.upscale :refer [up-factor up-hint up-make up-score ri-upscale rv-upscaled rv-upscale-tmp]]
+            [emon.scriptcheck :refer [sk-unread]]
             [emon.evidence :refer [im-get im-count wd-get wd-count hd-page mf-page mf-x0 mf-y0 mf-x1 mf-y1 mf-obj vw-new vk-render ol-count ow-count ev-rot-median or-get orf-lcount
                                    ev-page-row ep-get epf-width epf-height
-                                   or-count op-region op-first]]
-            [emon.retarget :refer [rt-prep rt-plan rt-record rt-adopt rt-upright rt-witness rt-run-meta rt-pad]]
+                                   or-count op-region op-first op-upscaled]]
+            [emon.retarget :refer [rt-prep rt-plan rt-record rt-adopt rt-upright rt-witness rt-run-meta rt-pad rtp-hash]]
             [emon.rasterplan :refer [rp-w rp-f-ask rp-f-wat rp-f-wn rp-f-scripts rp-ww rp-ask-none rp-ask-full rp-ask-witness rp-plan rp-request rp-weak
                                      ri-escalate ri-witness ri-none]]
             [emon.player :refer [cg-count]]
             [emon.pdfdoc :refer [pd-pg-count pd-pg-crop pd-pg-rotate]]
-            [emon.scan :refer [sc-eligible sc-dct-span sc-request sc-page sc-page-view sc-page-evidence sc-emit-sel sc-prep sc-lang sc-answer]]
+            [emon.scan :refer [sc-eligible sc-dct-span sc-mask-unread sc-request sc-request-view sc-page sc-page-view sc-page-evidence sc-emit-sel sc-prep sc-lang sc-answer]]
             [emon.pageink :refer [pn-has pn-mark pn-undo pn-ink pn-features pn-k-text pn-k-clean]]
             [emon.sealpx :refer [sx-find sx-plan sx-record sx-drop-lines]]
             [emon.sigpx :refer [sp-find sp-record sp-drop-lines]]
@@ -57,7 +59,12 @@
 (defn ^:pub ^I32 pu-w [] (return (rp-w)))
 (defn ^:pub ^I32 pu-kind [^Cells pl ^I32 i] (return (cells-at pl (* i (pu-w)))))
 (defn ^:pub ^I32 pu-field [^Cells pl ^I32 i ^I32 k] (return (cells-at pl (+ (* i (pu-w)) k))))
-;; fields: 1 object, 2 span start, 3 span length, 4-7 the image's box, 8-9 the page's size (centipoints)
+;; fields: 1 object, 2 span start, 3 span length, 4-7 the image's box, 8-9 the page's size (centipoints), 14 the scan's mode (`pu-scan-*`)
+;; The scan's MODE (D1610): how the page's raster is made. `pu-scan-dct`: the host decodes the image's DCT stream in place (a JPEG file: fields 2 and 3 are
+;; its span, 4-7 the image's box). `pu-scan-render`: the host renders the whole page at `pu-dpi` (the image is in some other codec, or in a stream the host
+;; cannot read in place; fields 4-7 are the page).
+(defn ^:pub ^I32 pu-scan-dct [] (return 0))
+(defn ^:pub ^I32 pu-scan-render [] (return 1))
 (defn ^:pub ^I32 pk-none [] (return 0))
 (defn ^:pub ^I32 pk-scan [] (return 1))
 (defn ^:pub ^I32 pk-born [] (return 2))
@@ -122,9 +129,9 @@
                                   (set bestarea area)))))
                       (set jj (+ jj 1))))
                 (if (>= best 0)
-                  (do (if (== (sc-dct-span src ar dc a b st (im-get im best (mf-obj)) sp) 1)
-                        (do (set k (* i (pu-w)))
-                            (cells-set pl k 1)
+                  (do (set k (* i (pu-w)))
+                      (if (== (sc-dct-span src ar dc a b st (im-get im best (mf-obj)) sp) 1)
+                        (do (cells-set pl k 1)
                             (cells-set pl (+ k 1) (im-get im best (mf-obj)))
                             (cells-set pl (+ k 2) (cells-at sp 0))
                             (cells-set pl (+ k 3) (cells-at sp 1))
@@ -133,7 +140,22 @@
                             (cells-set pl (+ k 6) (im-get im best (mf-x1)))
                             (cells-set pl (+ k 7) (im-get im best (mf-y1)))
                             (cells-set pl (+ k 8) (- px1 px0))
-                            (cells-set pl (+ k 9) (- py1 py0))))))
+                            (cells-set pl (+ k 9) (- py1 py0))
+                            (cells-set pl (+ k 14) (pu-scan-dct)))
+                        (do (comment "D1610: a page whose content is one big image is a scan WHATEVER the codec (Flate, RunLength, LZW, CCITT, JBIG2, JPX, a DCT with more")
+                            (comment "than one stage or in an encrypted file): kin cannot hand the host those bytes in place, so the host RENDERS the page (pdfium reads every codec,")
+                            (comment "colour space, /Decode and mask) and the render is read as the scan is. The raster is the whole page, not the image's box.")
+                            (cells-set pl k 1)
+                            (cells-set pl (+ k 1) (im-get im best (mf-obj)))
+                            (cells-set pl (+ k 2) 0)
+                            (cells-set pl (+ k 3) 0)
+                            (cells-set pl (+ k 4) 0)
+                            (cells-set pl (+ k 5) 0)
+                            (cells-set pl (+ k 6) (- px1 px0))
+                            (cells-set pl (+ k 7) (- py1 py0))
+                            (cells-set pl (+ k 8) (- px1 px0))
+                            (cells-set pl (+ k 9) (- py1 py0))
+                            (cells-set pl (+ k 14) (pu-scan-render))))))
                 (if (ps-missed src) (return 0))))
           (set i (+ i 1))))
     (comment ";; HOOK P7.S: the first-pass requests of the born-digital pages")
@@ -186,7 +208,7 @@
 ;; and when they disagree the whole of the one with it), the ink layers of the rasters and the targeted passes the first pass calls for (`emon.retarget`), and
 ;; the page's alignment and health. Answers `us-requests` when it asked, else `us-done`; writes only in the round in which everything it asked for is in (see
 ;; the head of this file): an attempt that asks gives back the evidence it wrote to decide (`pn-undo`).
-(defn ^I32 pu-run-born [^I32 i ^I32 input ^I32 fuse ^Cells pl ^Cells ans ^:mut ^Cells rq ^Cells loc ^BitmapSet bms
+(defn ^I32 pu-run-born [^I32 i ^I32 input ^I32 fuse ^Cells pl ^Cells ans ^:mut ^Cells rq ^Cells loc ^BitmapSet bms ^:mut ^Cells mask
                         ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells etext ^:mut ^Cells feats
                         ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
                         ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
@@ -356,6 +378,139 @@
                   (comment "the pen strokes over a signature line in the text-free render (P8.3): no request, no view; the groups are written with the seals'")
                   (sp-find (+ i 1) views nview rules owords etext (bms-get bms nid) pgw s5 s6)
                   (sp-record i s5 cg))))))
+    (comment "a page in a script the engine has no model for (D1610): the page's mask says so, and `sc-tag-unread` holds what OCR won of it at a low confidence")
+    (if (== (sk-unread ans ao s6) 1) (cells-set mask i (sc-mask-unread)))
+    (return (us-done))))
+
+(defn ^I32 pu-scan-pixels [^I32 i ^I32 did ^I32 oid ^I32 ao ^I32 pxw ^I32 pxh ^I32 dpi100 ^Cells ans ^:mut ^Cells rq ^Cells loc ^BitmapSet bms ^I32 fuse
+                           ^:mut ^Cells rtp ^:mut ^Cells s6]
+  (comment "D1610: 0 when the raster of the page unit is the bitmap under `did`; the factor `k` (2 to 4) when the first pass `ao` of it (the OCR request `oid`) shows")
+  (comment "that the raster is too small for the engine to read (`emon.upscale`) and the pixels are there to enlarge: the enlarged raster is then made as a kin-made view")
+  (comment "(`rv-upscaled`) and its OCR is asked for (`ri-upscale`, naming the view's pixel hash). Answers -1 when it has asked (the caller answers `us-requests`).")
+  (if (== (pu-px bms did fuse) 0) (return 0))
+  (let [^I32 k (up-factor ans ao pxw pxh s6)
+        ^I32 uvid (pu-view-id i (rv-upscaled))
+        ^I32 uid (pu-id i (ri-upscale))]
+    (if (< k 2) (return 0))
+    (if (< (an-find ans uid) 0)
+      (do (up-make bms uvid (pu-view-id i (rv-upscale-tmp)) (bms-get bms did) k s6)
+          (bitmap-hash (bms-get bms uvid) rtp (rtp-hash))
+          (sc-request-view rq uid uvid (cells-at rtp (rtp-hash)) (cells-at rtp (+ (rtp-hash) 1)) (up-hint ans ao k dpi100 s6) loc)
+          (return -1)))
+    (return k)))
+
+(defn ^:pub ^I32 pu-scan-core [^I32 i ^I32 input ^I32 fuse ^I32 did ^I32 ad ^I32 dpi100 ^I32 obj ^I32 bx0 ^I32 by0 ^I32 bx1 ^I32 by1 ^I32 pw ^I32 ph ^I32 maskv ^I32 seals
+                         ^Cells ans ^:mut ^Cells rq ^Cells loc ^BitmapSet bms ^:mut ^Cells mask ^:mut ^Cells scr
+                         ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells etext ^:mut ^Cells feats
+                         ^:mut ^Cells images ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
+                         ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
+                         ^:mut ^Cells words ^:mut ^Cells lines ^:mut ^Cells refs ^:mut ^Cells tlines ^:mut ^Cells cg
+                         ^:mut ^Cells inks ^:mut ^Cells comps ^:mut ^Cells rules ^:mut ^Cells prims ^:mut ^Cells tpts
+                         ^:mut ^Cells ws ^:mut ^Cells sv ^:mut ^Cells aux ^:mut ^Cells snap ^:mut ^Cells rtp
+                         ^:mut ^Cells rn ^:mut ^Cells ri ^:mut ^Cells cs ^:mut ^Cells vr ^:mut ^Cells pc ^:mut ^Cells sg ^:mut ^Cells mem
+                         ^:mut ^Cells s1 ^:mut ^Cells s2 ^:mut ^Cells s3 ^:mut ^Cells s4 ^:mut ^Cells s5 ^:mut ^Cells s6]
+  (comment "A SCANNED page whose raster is in (the decode or the render under `did`, its answer at `ad`; `dpi100` its resolution, `obj` the image's object, the page")
+  (comment "region it shows is (`bx0` `by0`)-(`bx1` `by1`) of a page `pw` x `ph`, all centipoints): the OCR of the bitmap, the ink layers of the bitmap and the")
+  (comment "targeted passes they and the first pass call for, then the lines the pipeline reads (`rt-adopt`). With no pixel in the decode answer (a transcript recorded")
+  (comment "slim) the page is what it always was: the first pass's lines. `maskv` is what the page's `mask` cell becomes (1 an image page, 2 a PDF's scanned page);")
+  (comment "`seals` 1 looks for seals and signatures in the pixels (a PDF page: its document unit arbitrates them), 0 does not (an image: it has no such unit).")
+  (comment "D1610: a raster the first pass shows to be too small is read again enlarged (`pu-scan-pixels`) and that reading, when it reads as much, is the first pass.")
+  (let [^I32 oid (pu-id i (pi-ocr))
+        ^I32 uid (pu-id i (ri-upscale))
+        ^I32 uvid (pu-view-id i (rv-upscaled))
+        ^:mut ^I32 rid did
+        ^:mut ^I32 roid oid
+        ^:mut ^I32 pxw 0
+        ^:mut ^I32 pxh 0
+        ^:mut ^I32 rdpi dpi100
+        ^:mut ^I32 hint 0
+        ^:mut ^I32 mv maskv
+        ^:mut ^I32 ao -1
+        ^:mut ^I32 ua -1
+        ^:mut ^I32 k 0
+        ^:mut ^I32 vdec 0
+        ^:mut ^I32 l0 0
+        ^:mut ^I32 w0 0
+        ^:mut ^I32 nw 0
+        ^:mut ^I32 run 0
+        ^:mut ^I32 nl 0
+        ^:mut ^I32 rotmed 0
+        ^:mut ^I32 asked 0
+        ^:mut ^I32 nsel 0]
+    (set pxw (an-arg ans ad 0))
+    (set pxh (an-arg ans ad 1))
+    (set ao (an-find ans oid))
+    (if (< ao 0)
+      (do (sc-request rq oid did (quot (+ dpi100 50) 100) loc)
+          (return (us-requests))))
+    (if (!= (an-ok ans ao) 1) (return (us-done)))
+    (if (== (pu-dry fuse) 1) (return (us-done)))
+    (rt-prep rtp)
+    (comment "a page in a script the engine has no model for (D1610): the first pass is junk at a confidence it should not have; `sc-tag` says so")
+    (if (== (sk-unread ans ao s6) 1) (set mv (+ mv (sc-mask-unread))))
+    (set hint (quot (+ dpi100 50) 100))
+    (comment "a raster is enlarged for an engine that can read it: not a page in a script it has no model for")
+    (if (< mv (sc-mask-unread))
+      (set k (pu-scan-pixels i did oid ao pxw pxh dpi100 ans rq loc bms fuse rtp s6)))
+    (if (< k 0) (return (us-requests)))
+    (if (> k 1)
+      (do (set ua (an-find ans uid))
+          (comment "the enlarged reading stands when it was made and reads as much as the first: the raster is then the view, at the resolution the text says it has")
+          (if (>= ua 0)
+            (if (== (an-ok ans ua) 1)
+              (if (>= (up-score ans ua) (up-score ans ao))
+                (do (set hint (up-hint ans ao k dpi100 s6))
+                    (set rid uvid)
+                    (set roid uid)
+                    (set ao ua)
+                    (set pxw (* pxw k))
+                    (set pxh (* pxh k))
+                    (set rdpi (* dpi100 k))
+                    (comment "a unit's attempt has a set of its own: the enlarged raster is made again, from the frame's pixels")
+                    (up-make bms uvid (pu-view-id i (rv-upscale-tmp)) (bms-get bms did) k s6)))))))
+    (sc-prep scr)
+    (if (== (pu-px bms rid fuse) 0)
+      (do (sc-page ans ao (+ i 1) roid rid pw ph pxw pxh rdpi
+                   bx0 by0 obj bx0 by0 bx1 by1 (sc-lang loc)
+                   epages views etext feats images oruns oblocks olines owords osyms oalts words lines scr)
+          (cells-set mask i mv)
+          (return (us-done))))
+    (pn-mark snap epages views etext feats oruns oblocks olines owords osyms oalts inks comps rules prims tpts tlines refs images words lines)
+    (set vdec (sc-page-view epages views images (+ i 1) rid pw ph pxw pxh rdpi
+                            bx0 by0 obj bx0 by0 bx1 by1))
+    (pn-ink (+ i 1) vdec bms (pn-k-text) (bms-get bms rid) rdpi 1 views inks comps rules prims tpts tlines refs ws sv aux
+            rn ri cs vr pc sg mem s1 s2 s3 s4 s5 s6)
+    (set l0 (ol-count olines))
+    (set w0 (ow-count owords))
+    (set run (sc-page-evidence ans ao (+ i 1) roid vdec rdpi (sc-lang loc) views epages etext oruns oblocks olines owords osyms oalts feats))
+    (if (== rid uvid)
+      (rt-run-meta oruns run (op-upscaled) 3 3 0 0 0 0))
+    (set nw (- (ow-count owords) w0))
+    (pn-features (+ i 1) bms (pn-k-text) (bms-get bms rid) roid w0 nw ws comps owords feats scr)
+    (rt-prep rtp)
+    (set asked (rt-plan i input 0 0 rid hint loc ans bms (pn-k-text) (bms-get bms rid) ws oruns run olines owords rules tlines rtp rq scr))
+    (comment "the seals and stamps in the page's pixels (P8.2): their strips and crops are asked in the same round as the targeted passes")
+    (if (== seals 1)
+      (do (sx-find (+ i 1) views vdec prims inks pw ph s1)
+          (set asked (+ asked (sx-plan i loc ans bms (bms-get bms rid) s1 s2 s3 rq)))))
+    (if (> asked 0)
+      (do (pn-undo snap epages views etext feats oruns oblocks olines owords osyms oalts inks comps rules prims tpts tlines refs images words lines)
+          (return (us-requests))))
+    (rt-record i vdec rdpi loc ans rtp views epages etext oruns oblocks olines owords osyms oalts feats)
+    (if (== seals 1)
+      (do (sx-record i vdec rdpi loc ans s1 views epages etext oruns oblocks olines owords osyms oalts feats refs cg s4)
+          (comment "the pen strokes over a signature line of the scan (P8.3): the lines the first pass made of them are not the page's text")
+          (sp-find (+ i 1) views vdec rules owords etext (bms-get bms rid) pw s5 s6)
+          (sp-record i s5 cg)))
+    (set nsel (rt-adopt rtp oruns run olines owords scr))
+    (if (== seals 1)
+      (do (set nsel (sx-drop-lines scr nsel olines owords s1))
+          (set nsel (sp-drop-lines scr nsel olines owords s5))))
+    (rt-upright rtp run epages (+ i 1))
+    (set nl (or-get oruns run (orf-lcount)))
+    (set rotmed (ev-rot-median olines l0 nl))
+    (sc-emit-sel olines owords osyms nsel (+ i 1) rotmed scr words lines)
+    (cells-set mask i mv)
     (return (us-done))))
 
 (defn ^I32 pu-run-scan [^I32 i ^I32 input ^I32 fuse ^Cells pl ^Cells ans ^:mut ^Cells rq ^Cells loc ^BitmapSet bms ^:mut ^Cells mask ^:mut ^Cells scr
@@ -367,81 +522,22 @@
                         ^:mut ^Cells ws ^:mut ^Cells sv ^:mut ^Cells aux ^:mut ^Cells snap ^:mut ^Cells rtp
                         ^:mut ^Cells rn ^:mut ^Cells ri ^:mut ^Cells cs ^:mut ^Cells vr ^:mut ^Cells pc ^:mut ^Cells sg ^:mut ^Cells mem
                         ^:mut ^Cells s1 ^:mut ^Cells s2 ^:mut ^Cells s3 ^:mut ^Cells s4 ^:mut ^Cells s5 ^:mut ^Cells s6]
-  (comment "A SCANNED page: `decode` of its stream, the OCR of the bitmap, the ink layers of the bitmap and the targeted passes they and the")
-  (comment "first pass call for, then the lines the pipeline reads (`rt-adopt`). With no pixel in the decode answer (a transcript recorded slim) the")
-  (comment "page is what it always was: the first pass's lines.")
+  (comment "A SCANNED page of a PDF: `decode` of its stream (the host reads the DCT bytes in place) or, in the plan's render mode (D1610: an image in any other codec),")
+  (comment "`render` of the page, then `pu-scan-core`: the OCR of the bitmap and what it calls for. A failed raster is `us-done`: the page is left as the text layer made it.")
   (let [^I32 did (pu-id i (pi-decode))
-        ^I32 oid (pu-id i (pi-ocr))
         ^I32 ad (an-find ans did)
-        ^:mut ^I32 ao -1
-        ^:mut ^I32 pxw 0
-        ^:mut ^I32 pxh 0
-        ^:mut ^I32 wp 0
-        ^:mut ^I32 dpi100 0
-        ^:mut ^I32 vdec 0
-        ^:mut ^I32 l0 0
-        ^:mut ^I32 w0 0
-        ^:mut ^I32 nw 0
-        ^:mut ^I32 run 0
-        ^:mut ^I32 nl 0
-        ^:mut ^I32 rotmed 0
-        ^:mut ^I32 asked 0
-        ^:mut ^I32 nsel 0]
+        ^I32 wp (- (pu-field pl i 6) (pu-field pl i 4))]
     (if (< ad 0)
-      (do (rq-decode rq did input (pu-field pl i 2) (pu-field pl i 3) (flt-dct) 0)
+      (do (if (== (pu-field pl i 14) (pu-scan-render))
+            (rq-render rq did input i (pu-dpi) (lay-full))
+            (rq-decode rq did input (pu-field pl i 2) (pu-field pl i 3) (flt-dct) 0))
           (return (us-requests))))
     (if (!= (an-ok ans ad) 1) (return (us-done)))
-    (set pxw (an-arg ans ad 0))
-    (set pxh (an-arg ans ad 1))
-    (set wp (- (pu-field pl i 6) (pu-field pl i 4)))
-    (set dpi100 (i32 (quot (add64 (mul64 (i64 pxw) (i64 720000)) (i64 (quot wp 2))) (i64 wp))))
-    (set ao (an-find ans oid))
-    (if (< ao 0)
-      (do (sc-request rq oid did (quot (+ dpi100 50) 100) loc)
-          (return (us-requests))))
-    (if (!= (an-ok ans ao) 1) (return (us-done)))
-    (if (== (pu-dry fuse) 1) (return (us-done)))
-    (sc-prep scr)
-    (if (== (pu-px bms did fuse) 0)
-      (do (sc-page ans ao (+ i 1) oid did (pu-field pl i 8) (pu-field pl i 9) pxw pxh dpi100
-                   (pu-field pl i 4) (pu-field pl i 5) (pu-field pl i 1)
-                   (pu-field pl i 4) (pu-field pl i 5) (pu-field pl i 6) (pu-field pl i 7) (sc-lang loc)
-                   epages views etext feats images oruns oblocks olines owords osyms oalts words lines scr)
-          (cells-set mask i 2)
-          (return (us-done))))
-    (pn-mark snap epages views etext feats oruns oblocks olines owords osyms oalts inks comps rules prims tpts tlines refs images words lines)
-    (set vdec (sc-page-view epages views images (+ i 1) did (pu-field pl i 8) (pu-field pl i 9) pxw pxh dpi100
-                            (pu-field pl i 4) (pu-field pl i 5) (pu-field pl i 1)
-                            (pu-field pl i 4) (pu-field pl i 5) (pu-field pl i 6) (pu-field pl i 7)))
-    (pn-ink (+ i 1) vdec bms (pn-k-text) (bms-get bms did) dpi100 1 views inks comps rules prims tpts tlines refs ws sv aux
-            rn ri cs vr pc sg mem s1 s2 s3 s4 s5 s6)
-    (set l0 (ol-count olines))
-    (set w0 (ow-count owords))
-    (set run (sc-page-evidence ans ao (+ i 1) oid vdec dpi100 (sc-lang loc) views epages etext oruns oblocks olines owords osyms oalts feats))
-    (set nw (- (ow-count owords) w0))
-    (pn-features (+ i 1) bms (pn-k-text) (bms-get bms did) oid w0 nw ws comps owords feats scr)
-    (rt-prep rtp)
-    (set asked (rt-plan i input 0 0 did (quot (+ dpi100 50) 100) loc ans bms (pn-k-text) (bms-get bms did) ws oruns run olines owords rules tlines rtp rq scr))
-    (comment "the seals and stamps in the page's pixels (P8.2): their strips and crops are asked in the same round as the targeted passes")
-    (sx-find (+ i 1) views vdec prims inks (pu-field pl i 8) (pu-field pl i 9) s1)
-    (set asked (+ asked (sx-plan i loc ans bms (bms-get bms did) s1 s2 s3 rq)))
-    (if (> asked 0)
-      (do (pn-undo snap epages views etext feats oruns oblocks olines owords osyms oalts inks comps rules prims tpts tlines refs images words lines)
-          (return (us-requests))))
-    (rt-record i vdec dpi100 loc ans rtp views epages etext oruns oblocks olines owords osyms oalts feats)
-    (sx-record i vdec dpi100 loc ans s1 views epages etext oruns oblocks olines owords osyms oalts feats refs cg s4)
-    (comment "the pen strokes over a signature line of the scan (P8.3): the lines the first pass made of them are not the page's text")
-    (sp-find (+ i 1) views vdec rules owords etext (bms-get bms did) (pu-field pl i 8) s5 s6)
-    (sp-record i s5 cg)
-    (set nsel (rt-adopt rtp oruns run olines owords scr))
-    (set nsel (sx-drop-lines scr nsel olines owords s1))
-    (set nsel (sp-drop-lines scr nsel olines owords s5))
-    (rt-upright rtp run epages (+ i 1))
-    (set nl (or-get oruns run (orf-lcount)))
-    (set rotmed (ev-rot-median olines l0 nl))
-    (sc-emit-sel olines owords osyms nsel (+ i 1) rotmed scr words lines)
-    (cells-set mask i 2)
-    (return (us-done))))
+    (return (pu-scan-core i input fuse did ad
+                          (i32 (quot (add64 (mul64 (i64 (an-arg ans ad 0)) (i64 720000)) (i64 (quot wp 2))) (i64 wp)))
+                          (pu-field pl i 1) (pu-field pl i 4) (pu-field pl i 5) (pu-field pl i 6) (pu-field pl i 7) (pu-field pl i 8) (pu-field pl i 9) 2 1
+                          ans rq loc bms mask scr epages views etext feats images oruns oblocks olines owords osyms oalts words lines refs tlines cg
+                          inks comps rules prims tpts ws sv aux snap rtp rn ri cs vr pc sg mem s1 s2 s3 s4 s5 s6))))
 
 (defn ^:pub ^I32 pu-run-pdf [^I32 i ^I32 input ^I32 policy ^Cells pl ^Cells ans ^:mut ^Cells rq ^Cells loc
                              ^BitmapSet bms ^:mut ^Cells mask ^:mut ^Cells scr
@@ -462,7 +558,7 @@
   (comment "page is OCR'd (the caller sizes it).")
   (if (== policy 0) (return (us-done)))
   (if (== (pu-kind pl i) (pk-born))
-    (return (pu-run-born i input fuse pl ans rq loc bms epages views etext feats oruns oblocks olines owords osyms oalts
+    (return (pu-run-born i input fuse pl ans rq loc bms mask epages views etext feats oruns oblocks olines owords osyms oalts
                          fw fl hl refs cg tlines xscr xgp xdp xta xtb xtt scr images words lines
                          inks comps rules prims tpts ws ws2 sv aux snap rtp rn ri cs vr pc sg mem s1 s2 s3 s4 s5 s6)))
   (if (!= (pu-kind pl i) (pk-scan)) (return (us-done)))
