@@ -472,7 +472,7 @@ pub(crate) fn hd_figure_word(wd: &mut crate::port::Cells, et: &mut crate::port::
     return 0;
 }
 pub(crate) fn hd_address_like(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, l: i32) -> i32 {
-    // D1620: 1 when a line that opens with a bare number (no point, bracket or colon after it) is a street number, a quantity or
+    // D1621: 1 when a line that opens with a bare number (no point, bracket or colon after it) is a street number, a quantity or
     // a price rather than a section's number: the number has three digits (`567 Ortiz Valley`), or a figure (`Suite 979`,
     // `9,000`) follows it, or a word that is not the last ends in a comma (`88 ROAD WAN CHAI, HONG KONG`).
     let w0: i32 = hd_nth_word(wd, ln, l, 0);
@@ -561,7 +561,7 @@ pub fn hd_marker(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &
     let n0: i32 = hd_wl(wd, w0);
     let d: i32 = hd_dec(wd, et, w0);
     // decimal: 1  1.  1.2.3  2)
-    // a bare number that is a street number, a quantity or a price is no heading's (D1620)
+    // a bare number that is a street number, a quantity or a price is no heading's (D1621)
     if (d == 1) && (hd_address_like(wd, ln, et, l) == 1) {
         return 0;
     }
@@ -622,7 +622,7 @@ pub fn hd_marker(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &
         let r: i32 = hd_letters(wd, et, w1, 0, n1);
         let tot: i32 = (n0 + 1) + n1;
         // a label in capitals and an amount (`NET 79.36`, `TENDER 100.00`), or an amount split at its point (`79.` `36`), is
-        // no keyword and number (D1620): the number would be written apart from the text and the point lost with it
+        // no keyword and number (D1621): the number would be written apart from the text and the point lost with it
         if (hd_kcaps(wd, et, w0) == 1) && (hd_frac2(wd, et, w1) == 1) {
             return 0;
         }
@@ -794,7 +794,7 @@ pub(crate) fn hd_partner(wd: &mut crate::port::Cells, ln: &mut crate::port::Cell
     } else if st_get(sf, q, sfk_x0()) >= st_get(sf, l, sfk_x0()) {
         return -1;
     }
-    // a title that opens with a figure (an amount, a date, a reference) is a row's data after its line number (D1620)
+    // a title that opens with a figure (an amount, a date, a reference) is a row's data after its line number (D1621)
     if lm == 1 {
         if hd_opens_figure(wd, ln, et, q) == 1 {
             return -1;
@@ -1160,7 +1160,7 @@ pub(crate) fn hd_unit_score(wd: &mut crate::port::Cells, ln: &mut crate::port::C
     if (ps == 0) && (sp < 1) {
         return -1;
     }
-    // D1620 (smoke A12): on a page of short lines (a receipt, an invoice, a form: no paragraph on it) a bold or capitalised
+    // D1622 (smoke A12): on a page of short lines (a receipt, an invoice, a form: no paragraph on it) a bold or capitalised
     // line of the body's own size, no more apart from the line above it than the rest, is a label or a value, not a section
     if (crate::port::cells_at(ws, WS_FORM) == 1) && ((s == 0) && ((sp < 1) && ((sz * 100) < (st_hget(sf, sfh_size()) * 104)))) {
         return -1;
@@ -2195,7 +2195,7 @@ pub(crate) fn hd_emit(ln: &mut crate::port::Cells, mut hc: &mut crate::port::Cel
     return 0;
 }
 pub(crate) fn hd_formlike(sf: &mut crate::port::Cells, n: i32) -> i32 {
-    // D1620: 1 when the document is a page of short lines: at least eight upright lines, and fewer than one in ten of them has
+    // D1622: 1 when the document is a page of short lines: at least eight upright lines, and fewer than one in ten of them has
     // six words (a sentence's worth). A receipt, an invoice and a form's labels are that; prose, a slide with its bullets and a
     // newspaper column are not.
     let mut l: i32 = 0;

@@ -546,7 +546,7 @@ func hdFigureWord(wd *port.Cells, et *port.Cells, w int32) int32 {
 }
 
 func hdAddressLike(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32) int32 {
-	// D1620: 1 when a line that opens with a bare number (no point, bracket or colon after it) is a street number, a quantity or
+	// D1621: 1 when a line that opens with a bare number (no point, bracket or colon after it) is a street number, a quantity or
 	// a price rather than a section's number: the number has three digits (`567 Ortiz Valley`), or a figure (`Suite 979`,
 	// `9,000`) follows it, or a word that is not the last ends in a comma (`88 ROAD WAN CHAI, HONG KONG`).
 	var w0 int32 = hdNthWord(wd, ln, l, 0)
@@ -638,7 +638,7 @@ func HdMarker(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells, l 
 	var n0 int32 = hdWl(wd, w0)
 	var d int32 = hdDec(wd, et, w0)
 	// decimal: 1  1.  1.2.3  2)
-	// a bare number that is a street number, a quantity or a price is no heading's (D1620)
+	// a bare number that is a street number, a quantity or a price is no heading's (D1621)
 	if (d == 1) && (hdAddressLike(wd, ln, et, l) == 1) {
 		return 0
 	}
@@ -699,7 +699,7 @@ func HdMarker(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells, l 
 		var r int32 = hdLetters(wd, et, w1, 0, n1)
 		var tot int32 = (n0 + 1) + n1
 		// a label in capitals and an amount (`NET 79.36`, `TENDER 100.00`), or an amount split at its point (`79.` `36`), is
-		// no keyword and number (D1620): the number would be written apart from the text and the point lost with it
+		// no keyword and number (D1621): the number would be written apart from the text and the point lost with it
 		if (hdKcaps(wd, et, w0) == 1) && (hdFrac2(wd, et, w1) == 1) {
 			return 0
 		}
@@ -876,7 +876,7 @@ func hdPartner(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells, s
 	} else if style.StGet(sf, q, style.SfkX0()) >= style.StGet(sf, l, style.SfkX0()) {
 		return -1
 	}
-	// a title that opens with a figure (an amount, a date, a reference) is a row's data after its line number (D1620)
+	// a title that opens with a figure (an amount, a date, a reference) is a row's data after its line number (D1621)
 	if lm == 1 {
 		if hdOpensFigure(wd, ln, et, q) == 1 {
 			return -1
@@ -1259,7 +1259,7 @@ func hdUnitScore(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells,
 	if (ps == 0) && (sp < 1) {
 		return -1
 	}
-	// D1620 (smoke A12): on a page of short lines (a receipt, an invoice, a form: no paragraph on it) a bold or capitalised
+	// D1622 (smoke A12): on a page of short lines (a receipt, an invoice, a form: no paragraph on it) a bold or capitalised
 	// line of the body's own size, no more apart from the line above it than the rest, is a label or a value, not a section
 	if (port.CellsAt(ws, wsForm) == 1) && ((s == 0) && ((sp < 1) && ((sz * 100) < (style.StHget(sf, style.SfhSize()) * 104)))) {
 		return -1
@@ -2322,7 +2322,7 @@ func hdEmit(ln *port.Cells, hc *port.Cells, ws *port.Cells, sf *port.Cells, n in
 }
 
 func hdFormlike(sf *port.Cells, n int32) int32 {
-	// D1620: 1 when the document is a page of short lines: at least eight upright lines, and fewer than one in ten of them has
+	// D1622: 1 when the document is a page of short lines: at least eight upright lines, and fewer than one in ten of them has
 	// six words (a sentence's worth). A receipt, an invoice and a form's labels are that; prose, a slide with its bullets and a
 	// newspaper column are not.
 	var l int32 = 0

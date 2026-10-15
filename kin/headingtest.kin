@@ -257,7 +257,7 @@
     (assert-eq (ht-marker wd ln et ws (text-blob "AB. text")) 0 "two letters that are not a numeral")))
 
 (deftest test-an-amount-an-address-and-a-phone-number-are-not-heading-numbers
-  (comment "D1620 (smoke A11, B I-22): a keyword and a figure is a heading number (`Chapter 3`); a label and its amount (`NET 79.36`,")
+  (comment "D1621 (smoke A11, B I-22): a keyword and a figure is a heading number (`Chapter 3`); a label and its amount (`NET 79.36`,")
   (comment "`TENDER 100.00`, the amount's point left at the end of a word by the engine and its cents in the next), a street number")
   (comment "(`567 Ortiz Valley Suite 979`, `88 HENNESSY ROAD WAN CHAI, HONG KONG`), an area code, a quantity and a pronoun are not.")
   (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells ws (new-cells)]
@@ -513,7 +513,7 @@
     (assert-eq (hd-level hc 5) 0 "the wrapped line is the item's")))
 
 (deftest test-a-bold-label-on-a-page-of-short-lines-is-not-a-heading
-  (comment "D1620 (smoke A12): a receipt. Ten lines of two words, a bold name above them with room around it, and a bold line of the")
+  (comment "D1622 (smoke A12): a receipt. Ten lines of two words, a bold name above them with room around it, and a bold line of the")
   (comment "same size as the rest, as close under the line above as they are, in the middle: a label, not a section. The same line on a")
   (comment "page with sentences on it, after a sentence that ended, is a heading.")
   (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
@@ -546,7 +546,7 @@
     (assert-eq (hd-level hc 5) 1 "on a page of sentences the bold line is a heading")))
 
 (deftest test-a-line-number-and-a-row-of-figures-are-not-one-heading-line
-  (comment "D1620 (smoke A12): a statement's rows, in bold, with the line number in a column of its own: `2` and `$89158874 05/02/2024 rent`")
+  (comment "D1621 (smoke A12): a statement's rows, in bold, with the line number in a column of its own: `2` and `$89158874 05/02/2024 rent`")
   (comment "stand on one row, a number apart. A bare number beside a title is the number of a heading line (a heading whose layout")
   (comment "put the number on a line of its own, `h-numbered`); beside a row of figures it is the row's number.")
   (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)

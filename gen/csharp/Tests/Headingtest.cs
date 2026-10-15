@@ -259,7 +259,7 @@ public static class Headingtest {
     }
     [Xunit.Fact]
     public static void TestAnAmountAnAddressAndAPhoneNumberAreNotHeadingNumbers() {
-        // D1620 (smoke A11, B I-22): a keyword and a figure is a heading number (`Chapter 3`); a label and its amount (`NET 79.36`,
+        // D1621 (smoke A11, B I-22): a keyword and a figure is a heading number (`Chapter 3`); a label and its amount (`NET 79.36`,
         // `TENDER 100.00`, the amount's point left at the end of a word by the engine and its cents in the next), a street number
         // (`567 Ortiz Valley Suite 979`, `88 HENNESSY ROAD WAN CHAI, HONG KONG`), an area code, a quantity and a pronoun are not.
         emon.Port.Cells wd = emon.Port.NewCells();
@@ -590,7 +590,7 @@ public static class Headingtest {
     }
     [Xunit.Fact]
     public static void TestABoldLabelOnAPageOfShortLinesIsNotAHeading() {
-        // D1620 (smoke A12): a receipt. Ten lines of two words, a bold name above them with room around it, and a bold line of the
+        // D1622 (smoke A12): a receipt. Ten lines of two words, a bold name above them with room around it, and a bold line of the
         // same size as the rest, as close under the line above as they are, in the middle: a label, not a section. The same line on a
         // page with sentences on it, after a sentence that ended, is a heading.
         emon.Port.Cells wd = emon.Port.NewCells();
@@ -634,7 +634,7 @@ public static class Headingtest {
     }
     [Xunit.Fact]
     public static void TestALineNumberAndARowOfFiguresAreNotOneHeadingLine() {
-        // D1620 (smoke A12): a statement's rows, in bold, with the line number in a column of its own: `2` and `$89158874 05/02/2024 rent`
+        // D1621 (smoke A12): a statement's rows, in bold, with the line number in a column of its own: `2` and `$89158874 05/02/2024 rent`
         // stand on one row, a number apart. A bare number beside a title is the number of a heading line (a heading whose layout
         // put the number on a line of its own, `h-numbered`); beside a row of figures it is the row's number.
         emon.Port.Cells wd = emon.Port.NewCells();

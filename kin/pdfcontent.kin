@@ -1193,7 +1193,7 @@
     (return (ev-angle (i32 x) (i32 y)))))
 
 (defn ^:pub ^I32 pc-pua [^I32 cp]
-  (comment "D1620: the private-use code points of Adobe's Symbol font (U+F8E5..U+F8FE), which TeX's glyph-to-Unicode lists give the")
+  (comment "D1625: the private-use code points of Adobe's Symbol font (U+F8E5..U+F8FE), which TeX's glyph-to-Unicode lists give the")
   (comment "big brackets, braces and parentheses and the extension pieces of a tall delimiter (CMEX10), are the characters Unicode")
   (comment "later gave them (U+239B..U+23AF, U+23D0, the serif signs). Every other code point is itself.")
   (if (or (< cp 63717) (> cp 63742)) (return cp))
@@ -3004,7 +3004,7 @@
   (return v))
 
 (defn ^I32 pc-sheared [^Cells gl ^I32 j ^I32 axis]
-  (comment "D1620: 1 when glyph j's box is longer along the writing axis than its baseline segment: the text matrix has a shear term")
+  (comment "D1623: 1 when glyph j's box is longer along the writing axis than its baseline segment: the text matrix has a shear term")
   (comment "(a synthetic italic: `12 0 4.1041 12 x y Tm`), which leans the cell and makes its axis-aligned box overhang by the shear")
   (comment "times the cell's height, on both sides. 0 for the axes a box measures right (and for the others).")
   (comment "A glyph with no baseline segment of length (a zero-width mark, or evidence made by hand) is never sheared.")
@@ -3094,7 +3094,7 @@
   (return 0))
 
 (defn ^I32 pc-accent [^I32 cp]
-  (comment "D1620: the combining mark a spacing diacritic stands for when it is drawn over a letter (TeX draws an umlaut as the glyph")
+  (comment "D1625: the combining mark a spacing diacritic stands for when it is drawn over a letter (TeX draws an umlaut as the glyph")
   (comment "dieresis, then the u under it): the dieresis, acute, grave, macron, cedilla, circumflex, caron, breve, dot above, ring,")
   (comment "ogonek, small tilde and double acute. 0 for anything else.")
   (if (== cp 168) (return 776))
@@ -3113,7 +3113,7 @@
   (return 0))
 
 (defn ^I32 pc-accent-over [^Cells gl ^I32 p ^I32 g]
-  (comment "D1620: the combining mark that glyph p is when it is a spacing diacritic standing over glyph g, a letter drawn right")
+  (comment "D1625: the combining mark that glyph p is when it is a spacing diacritic standing over glyph g, a letter drawn right")
   (comment "after it: both upright and of one rotation, no text of their own beyond the one code point, and the middle of the diacritic")
   (comment "within the letter's width (Muller is M, the dieresis, then uller backed up under it). 0 when it is not.")
   (let [^I32 comb (pc-accent (gl-get gl p (ch-cp)))
@@ -3150,7 +3150,7 @@
     (comment "is not, starts a new word (P3.6).")
     (if (!= (gl-get gl p (gf-vis)) (gl-get gl g (gf-vis))) (return 0))
     (if (!= (pc-hidden-mode (gl-get gl p (gf-mode))) (pc-hidden-mode (gl-get gl g (gf-mode)))) (return 0))
-    (comment "A spacing diacritic over the letter drawn right after it is part of that letter's word (D1620).")
+    (comment "A spacing diacritic over the letter drawn right after it is part of that letter's word (D1625).")
     (if (> (pc-accent-over gl p g) 0) (return 1))
     (if (> sizep sz) (set sz sizep))
     (if (> sz 200000) (set sz 200000))
@@ -3260,7 +3260,7 @@
     (if (== rtlw 0)
       (do (set j gfst)
           (while (<= j glst)
-            (do (comment "a spacing diacritic over the next letter of the word is written AFTER the letter, as the combining mark (D1620)")
+            (do (comment "a spacing diacritic over the next letter of the word is written AFTER the letter, as the combining mark (D1625)")
                 (set cl (pc-accent-pair gl j glst))
                 (if (> cl 0)
                   (do (pc-glyph-out et gl (+ j 1) 2)

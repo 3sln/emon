@@ -83,7 +83,7 @@
 
 ;; the layout of `ws`
 (defconst ^I32 WS_VAR 8)
-(defconst ^I32 WS_FORM 15)          ;; 1: the document is a page of short lines (a receipt, an invoice, a form), D1620
+(defconst ^I32 WS_FORM 15)          ;; 1: the document is a page of short lines (a receipt, an invoice, a form), D1622
 (defconst ^I32 WS_LINES 24)
 (defconst ^I32 WS_HK 64)
 (defconst ^I32 HK_STRIDE 12)
@@ -372,7 +372,7 @@
     (return 0)))
 
 (defn ^I32 hd-address-like [^Cells wd ^Cells ln ^Cells et ^I32 l]
-  (comment "D1620: 1 when a line that opens with a bare number (no point, bracket or colon after it) is a street number, a quantity or")
+  (comment "D1621: 1 when a line that opens with a bare number (no point, bracket or colon after it) is a street number, a quantity or")
   (comment "a price rather than a section's number: the number has three digits (`567 Ortiz Valley`), or a figure (`Suite 979`,")
   (comment "`9,000`) follows it, or a word that is not the last ends in a comma (`88 ROAD WAN CHAI, HONG KONG`).")
   (let [^I32 w0 (hd-nth-word wd ln l 0)
@@ -435,7 +435,7 @@
     (let [^I32 n0 (hd-wl wd w0)
           ^I32 d (hd-dec wd et w0)]
       (comment "decimal: 1  1.  1.2.3  2)")
-      (comment "a bare number that is a street number, a quantity or a price is no heading's (D1620)")
+      (comment "a bare number that is a street number, a quantity or a price is no heading's (D1621)")
       (if (and (== d 1) (== (hd-address-like wd ln et l) 1)) (return 0))
       (if (> d 0)
         (do (cells-set ws 0 1)
@@ -479,7 +479,7 @@
                   ^I32 r (hd-letters wd et w1 0 n1)
                   ^I32 tot (+ (+ n0 1) n1)]
               (comment "a label in capitals and an amount (`NET 79.36`, `TENDER 100.00`), or an amount split at its point (`79.` `36`), is")
-              (comment "no keyword and number (D1620): the number would be written apart from the text and the point lost with it")
+              (comment "no keyword and number (D1621): the number would be written apart from the text and the point lost with it")
               (if (and (== (hd-kcaps wd et w0) 1) (== (hd-frac2 wd et w1) 1)) (return 0))
               (comment "a keyword and a number followed by two figures or more (`Period 01 Jan 2024 to 31 Mar 2024 ...`) is a row of data")
               (if (>= (hd-figures-after wd ln et l 2) 2) (return 0))
@@ -592,7 +592,7 @@
       (if (== lm 1)
         (if (>= (st-get sf l (sfk-x0)) (st-get sf q (sfk-x0))) (return -1))
         (if (>= (st-get sf q (sfk-x0)) (st-get sf l (sfk-x0))) (return -1)))
-      (comment "a title that opens with a figure (an amount, a date, a reference) is a row's data after its line number (D1620)")
+      (comment "a title that opens with a figure (an amount, a date, a reference) is a row's data after its line number (D1621)")
       (if (== lm 1)
         (if (== (hd-opens-figure wd ln et q) 1) (return -1))
         (if (== (hd-opens-figure wd ln et l) 1) (return -1)))
@@ -859,7 +859,7 @@
           ^I32 b (st-get sf last (sfk-below))
           ^I32 gb (st-get sf last (sfk-gap-below))]
       (if (and (== ps 0) (< sp 1)) (return -1))
-      (comment "D1620 (smoke A12): on a page of short lines (a receipt, an invoice, a form: no paragraph on it) a bold or capitalised")
+      (comment "D1622 (smoke A12): on a page of short lines (a receipt, an invoice, a form: no paragraph on it) a bold or capitalised")
       (comment "line of the body's own size, no more apart from the line above it than the rest, is a label or a value, not a section")
       (if (and (== (cells-at ws WS_FORM) 1)
                (and (== s 0) (and (< sp 1) (< (* sz 100) (* (st-hget sf (sfh-size)) 104)))))
@@ -1680,7 +1680,7 @@
     (return 0)))
 
 (defn ^I32 hd-formlike [^Cells sf ^I32 n]
-  (comment "D1620: 1 when the document is a page of short lines: at least eight upright lines, and fewer than one in ten of them has")
+  (comment "D1622: 1 when the document is a page of short lines: at least eight upright lines, and fewer than one in ten of them has")
   (comment "six words (a sentence's worth). A receipt, an invoice and a form's labels are that; prose, a slide with its bullets and a")
   (comment "newspaper column are not.")
   (let [^:mut ^I32 l 0

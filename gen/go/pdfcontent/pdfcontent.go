@@ -1580,7 +1580,7 @@ func pcDirAngle(a int64, b int64) int32 {
 }
 
 func PcPua(cp int32) int32 {
-	// D1620: the private-use code points of Adobe's Symbol font (U+F8E5..U+F8FE), which TeX's glyph-to-Unicode lists give the
+	// D1625: the private-use code points of Adobe's Symbol font (U+F8E5..U+F8FE), which TeX's glyph-to-Unicode lists give the
 	// big brackets, braces and parentheses and the extension pieces of a tall delimiter (CMEX10), are the characters Unicode
 	// later gave them (U+239B..U+23AF, U+23D0, the serif signs). Every other code point is itself.
 	if (cp < 63717) || (cp > 63742) {
@@ -4060,7 +4060,7 @@ func pcAbs(v int32) int32 {
 }
 
 func pcSheared(gl *port.Cells, j int32, axis int32) int32 {
-	// D1620: 1 when glyph j's box is longer along the writing axis than its baseline segment: the text matrix has a shear term
+	// D1623: 1 when glyph j's box is longer along the writing axis than its baseline segment: the text matrix has a shear term
 	// (a synthetic italic: `12 0 4.1041 12 x y Tm`), which leans the cell and makes its axis-aligned box overhang by the shear
 	// times the cell's height, on both sides. 0 for the axes a box measures right (and for the others).
 	// A glyph with no baseline segment of length (a zero-width mark, or evidence made by hand) is never sheared.
@@ -4200,7 +4200,7 @@ func pcHiddenMode(mode int32) int32 {
 }
 
 func pcAccent(cp int32) int32 {
-	// D1620: the combining mark a spacing diacritic stands for when it is drawn over a letter (TeX draws an umlaut as the glyph
+	// D1625: the combining mark a spacing diacritic stands for when it is drawn over a letter (TeX draws an umlaut as the glyph
 	// dieresis, then the u under it): the dieresis, acute, grave, macron, cedilla, circumflex, caron, breve, dot above, ring,
 	// ogonek, small tilde and double acute. 0 for anything else.
 	if cp == 168 {
@@ -4246,7 +4246,7 @@ func pcAccent(cp int32) int32 {
 }
 
 func pcAccentOver(gl *port.Cells, p int32, g int32) int32 {
-	// D1620: the combining mark that glyph p is when it is a spacing diacritic standing over glyph g, a letter drawn right
+	// D1625: the combining mark that glyph p is when it is a spacing diacritic standing over glyph g, a letter drawn right
 	// after it: both upright and of one rotation, no text of their own beyond the one code point, and the middle of the diacritic
 	// within the letter's width (Muller is M, the dieresis, then uller backed up under it). 0 when it is not.
 	var comb int32 = pcAccent(evidence.GlGet(gl, p, evidence.ChCp()))
@@ -4311,7 +4311,7 @@ func pcContinues(gl *port.Cells, p int32, g int32) int32 {
 	if pcHiddenMode(evidence.GlGet(gl, p, evidence.GfMode())) != pcHiddenMode(evidence.GlGet(gl, g, evidence.GfMode())) {
 		return 0
 	}
-	// A spacing diacritic over the letter drawn right after it is part of that letter's word (D1620).
+	// A spacing diacritic over the letter drawn right after it is part of that letter's word (D1625).
 	if pcAccentOver(gl, p, g) > 0 {
 		return 1
 	}
@@ -4467,7 +4467,7 @@ func pcEmitWord(gl *port.Cells, et *port.Cells, wd *port.Cells, fnt *port.Cells,
 	if rtlw == 0 {
 		j = gfst
 		for j <= glst {
-			// a spacing diacritic over the next letter of the word is written AFTER the letter, as the combining mark (D1620)
+			// a spacing diacritic over the next letter of the word is written AFTER the letter, as the combining mark (D1625)
 			cl = pcAccentPair(gl, j, glst)
 			if cl > 0 {
 				pcGlyphOut(et, gl, j+1, 2)

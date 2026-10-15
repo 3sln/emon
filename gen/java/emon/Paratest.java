@@ -480,7 +480,7 @@ public final class Paratest {
         emon.Testport.assertText(t3, "P1:the report 안녕하세요 세계 end;", "Hangul and Latin keep the space");
     }
     public static void testLinesOfCjkThatStopInsideASentenceAreOneParagraphWhateverTheBoxesSay() {
-        // D1620 (smoke B I-18): the lines of a page set in several fonts have boxes of several heights (three of these are 24 pt tall
+        // D1626 (smoke B I-18): the lines of a page set in several fonts have boxes of several heights (three of these are 24 pt tall
         // in a 12 pt line, as the Wikipedia pages in Japanese are), so the whitespace between two ordinary lines is more than
         // the document's lower quartile of it, which is negative, and a paragraph ended at every such line. The baselines are 16.5 pt
         // apart all the way; a line that stops in a sentence (no 。 ！ ？) is followed by the line that finishes it.

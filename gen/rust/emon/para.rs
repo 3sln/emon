@@ -512,7 +512,7 @@ pub(crate) fn pa_open_end(wd: &mut crate::port::Cells, ln: &mut crate::port::Cel
     return !pa_final_mark(c);
 }
 pub(crate) fn pa_unfinished(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, l: i32) -> bool {
-    // D1620 (smoke B I-18): does line l end inside a sentence of a script set without spaces (Han, kana): its last character
+    // D1626 (smoke B I-18): does line l end inside a sentence of a script set without spaces (Han, kana): its last character
     // is one of them and no mark that closes a sentence, with or without a closing bracket or quotation mark after the mark.
     if !pa_unspaced(pa_last_cp(wd, ln, et, l, 0)) {
         return 0 == 1;
@@ -567,7 +567,7 @@ pub(crate) fn pa_new_par(wd: &mut crate::port::Cells, ln: &mut crate::port::Cell
     let ds: i32 = sa - sb;
     // A line of a script set without spaces that stops inside a sentence and whose next line is within 1.75 of its size of it,
     // baseline to baseline, goes on there whatever the boxes say: the boxes of lines in several fonts are of several heights,
-    // and the whitespace between them is not the leading (D1620, the Wikipedia pages in Japanese).
+    // and the whitespace between them is not the leading (D1626, the Wikipedia pages in Japanese).
     if ((g * PA_GAP_DEN) > (med * PA_GAP_NUM)) && (((g - med) * PA_TINY_DIV) > hb) {
         if !(pa_unfinished(wd, ln, et, a) && (((pa_ymid2(ln, b) - pa_ymid2(ln, a)) * 2) <= (7 * sa))) {
             return 1 == 1;

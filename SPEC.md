@@ -345,7 +345,7 @@ has no map and keeps its raw score, and `bb calibration` says which.
   (U+2F00–2FD5) and the CJK Radicals Supplement characters the UCD pairs with a
   unified ideograph to that ideograph (`⼀` → `一`: a PDF's ToUnicode names the
   glyph by the radical where the text is the ideograph; the glyph evidence keeps
-  the code point the font said), and (D1620) the NFKC fold of the Arabic
+  the code point the font said), and (D1627) the NFKC fold of the Arabic
   Presentation Forms (U+FB50–FDFF, U+FE70–FEFF: a PDF draws the shaped glyph of
   a letter, and the text of the page is the letter; a mark's isolated form folds
   to the mark alone, without the space UAX #15 puts before it). A spacing

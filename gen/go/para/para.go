@@ -587,7 +587,7 @@ func paOpenEnd(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32) bool {
 }
 
 func paUnfinished(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32) bool {
-	// D1620 (smoke B I-18): does line l end inside a sentence of a script set without spaces (Han, kana): its last character
+	// D1626 (smoke B I-18): does line l end inside a sentence of a script set without spaces (Han, kana): its last character
 	// is one of them and no mark that closes a sentence, with or without a closing bracket or quotation mark after the mark.
 	if !paUnspaced(paLastCp(wd, ln, et, l, 0)) {
 		return 0 == 1
@@ -644,7 +644,7 @@ func paNewPar(wd *port.Cells, ln *port.Cells, et *port.Cells, a int32, b int32, 
 	var ds int32 = sa - sb
 	// A line of a script set without spaces that stops inside a sentence and whose next line is within 1.75 of its size of it,
 	// baseline to baseline, goes on there whatever the boxes say: the boxes of lines in several fonts are of several heights,
-	// and the whitespace between them is not the leading (D1620, the Wikipedia pages in Japanese).
+	// and the whitespace between them is not the leading (D1626, the Wikipedia pages in Japanese).
 	if ((g * paGapDen) > (med * paGapNum)) && (((g - med) * paTinyDiv) > hb) {
 		if !(paUnfinished(wd, ln, et, a) && (((paYmid2(ln, b) - paYmid2(ln, a)) * 2) <= (7 * sa))) {
 			return 1 == 1

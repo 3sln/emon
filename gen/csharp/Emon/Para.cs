@@ -504,7 +504,7 @@ public static class Para {
         return !PaFinalMark(c);
     }
     internal static bool PaUnfinished(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l) {
-        // D1620 (smoke B I-18): does line l end inside a sentence of a script set without spaces (Han, kana): its last character
+        // D1626 (smoke B I-18): does line l end inside a sentence of a script set without spaces (Han, kana): its last character
         // is one of them and no mark that closes a sentence, with or without a closing bracket or quotation mark after the mark.
         if (!PaUnspaced(PaLastCp(wd, ln, et, l, 0))) {
             return 0 == 1;
@@ -559,7 +559,7 @@ public static class Para {
         int ds = sa - sb;
         // A line of a script set without spaces that stops inside a sentence and whose next line is within 1.75 of its size of it,
         // baseline to baseline, goes on there whatever the boxes say: the boxes of lines in several fonts are of several heights,
-        // and the whitespace between them is not the leading (D1620, the Wikipedia pages in Japanese).
+        // and the whitespace between them is not the leading (D1626, the Wikipedia pages in Japanese).
         if (((g * PaGapDen) > (med * PaGapNum)) && (((g - med) * PaTinyDiv) > hb)) {
             if (!(PaUnfinished(wd, ln, et, a) && (((PaYmid2(ln, b) - PaYmid2(ln, a)) * 2) <= (7 * sa)))) {
                 return 1 == 1;

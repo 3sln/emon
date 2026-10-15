@@ -404,7 +404,7 @@
     (assert-text t3 "P1:the report 안녕하세요 세계 end;" "Hangul and Latin keep the space")))
 
 (deftest test-lines-of-cjk-that-stop-inside-a-sentence-are-one-paragraph-whatever-the-boxes-say
-  (comment "D1620 (smoke B I-18): the lines of a page set in several fonts have boxes of several heights (three of these are 24 pt tall")
+  (comment "D1626 (smoke B I-18): the lines of a page set in several fonts have boxes of several heights (three of these are 24 pt tall")
   (comment "in a 12 pt line, as the Wikipedia pages in Japanese are), so the whitespace between two ordinary lines is more than")
   (comment "the document's lower quartile of it, which is negative, and a paragraph ended at every such line. The baselines are 16.5 pt")
   (comment "apart all the way; a line that stops in a sentence (no 。 ！ ？) is followed by the line that finishes it.")

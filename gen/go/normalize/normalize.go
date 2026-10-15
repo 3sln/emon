@@ -189,7 +189,7 @@ func nzPutLigature(cp int32, out *port.Cells) int32 {
 }
 
 func nzPutArabic(cp int32, out *port.Cells) int32 {
-	// D1620: append the letters an Arabic presentation form (U+FB50..FDFF, U+FE70..FEFF) is the shaped glyph of and answer 1,
+	// D1627: append the letters an Arabic presentation form (U+FB50..FDFF, U+FE70..FEFF) is the shaped glyph of and answer 1,
 	// or answer 0 and append nothing. NFKC on that range alone; each letter is then decomposed as any other code point is.
 	if (cp < 64336) || ((cp > 65023) && (cp < 65136)) {
 		return 0

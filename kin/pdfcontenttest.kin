@@ -765,7 +765,7 @@
     (ct-group gl et wd ln)
     (assert-eq (ln-count ln) 3 "the word on the next line stays on it")))
 
-;; ------------------------------------------------- D1620: leaning text, accents drawn over letters, Adobe's private use
+;; ------------------------------------------------- D1623, D1625: leaning text, accents drawn over letters, Adobe's private use
 
 (defn ^I32 ct-gx [^:mut ^Cells gl ^I32 x0 ^I32 x1 ^I32 cp ^I32 bx0 ^I32 bx1]
   (comment "One glyph of the scene: the box [x0, x1] by 800, the baseline segment [bx0, bx1] (0, 0 for none), size 1000.")
