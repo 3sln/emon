@@ -30,7 +30,7 @@ pub(crate) const TB_TAIL_BLANK: i32 = 23;
 pub(crate) const TB_TAIL_PITCH: i32 = 16;
 pub(crate) const TB_GAP_SIZE: i32 = 125;
 pub(crate) const TB_GAP_BAND: i32 = 35;
-pub(crate) const TB_SPLIT_ROWS: i32 = 3;
+pub(crate) const TB_SPLIT_MIN: i32 = 3;
 pub(crate) const TB_ROWS_MORE: i32 = 3;
 pub(crate) const TB_ROWS_SLACK: i32 = 150;
 pub(crate) const TB_TAG_OWN: i32 = 700;
@@ -896,15 +896,42 @@ pub(crate) fn tb_head_of(tb: &mut crate::port::Cells, a: i32, b: i32) -> bool {
     let by1: i32 = crate::port::cells_at(tb, (b * TBS) + 4);
     return ((4 * (tb_min(ax1, bx1) - tb_max(ax0, bx0))) >= (3 * (ax1 - ax0))) && ((ay0 <= (by0 + 1500)) && ((ay1 > (by0 + 300)) && (ay1 <= by1)));
 }
-pub(crate) fn tb_part(tb: &mut crate::port::Cells, j: i32, i: i32) -> bool {
+pub(crate) fn tb_block_below(tb: &mut crate::port::Cells, i: i32, ybot: i32, tc: &mut crate::port::Cells) -> bool {
+    // P12.2: has candidate i, below y `ybot`, a row that begins two in five of its columns from the first or further: a block of totals in the last columns
+    // (an invoice's, D559: the table of the rules ends over it, and the whitespace reading that has it in is the worse for it).
+    let cfirst: i32 = crate::port::cells_at(tb, (i * TBS) + 9);
+    let cend: i32 = cfirst + crate::port::cells_at(tb, (i * TBS) + 10);
+    let ncols: i32 = crate::port::cells_at(tb, (i * TBS) + 8);
+    let mut c: i32 = cfirst;
+    let mut row: i32 = -1;
+    let mut first: i32 = -1;
+    while c < cend {
+        if crate::port::cells_at(tc, c * TCS) != row {
+            if (first >= 0) && ((5 * first) >= (2 * ncols)) {
+                return 1 == 1;
+            }
+            row = crate::port::cells_at(tc, c * TCS);
+            first = -1;
+        }
+        if (crate::port::cells_at(tc, (c * TCS) + 5) >= (ybot - 100)) && ((crate::port::cells_at(tc, (c * TCS) + 9) > 0) && (first < 0)) {
+            first = crate::port::cells_at(tc, (c * TCS) + 1);
+        }
+        c += 1;
+    }
+    if (first >= 0) && ((5 * first) >= (2 * ncols)) {
+        return 1 == 1;
+    }
+    return 0 == 1;
+}
+pub(crate) fn tb_part(tb: &mut crate::port::Cells, j: i32, i: i32, tc: &mut crate::port::Cells) -> bool {
     // P12.2: is candidate j only a part of what candidate i reads: it lies in i's box or is its head (`tb-within`, `tb-head-of`) and is no more than three
     // in four of its height (a reading of the same rows beside it is no part), i has the columns (or two fewer: the rules of a header put a column between
     // the years that the text does not have) and `TB_ROWS_MORE` rows more, and a score no more than `TB_ROWS_SLACK` under j's.
     let a: i32 = j * TBS;
     let b: i32 = i * TBS;
-    return (tb_within(tb, j, i) || tb_head_of(tb, j, i)) && (((4 * (crate::port::cells_at(tb, a + 4) - crate::port::cells_at(tb, a + 2))) <= (3 * (crate::port::cells_at(tb, b + 4) - crate::port::cells_at(tb, b + 2)))) && ((crate::port::cells_at(tb, b + 7) >= (crate::port::cells_at(tb, a + 7) + TB_ROWS_MORE)) && (((crate::port::cells_at(tb, b + 8) + 2) >= crate::port::cells_at(tb, a + 8)) && ((crate::port::cells_at(tb, b + 6) + TB_ROWS_SLACK) >= crate::port::cells_at(tb, a + 6)))));
+    return (tb_within(tb, j, i) || tb_head_of(tb, j, i)) && (!tb_block_below(tb, i, crate::port::cells_at(tb, a + 4), tc) && (((4 * (crate::port::cells_at(tb, a + 4) - crate::port::cells_at(tb, a + 2))) <= (3 * (crate::port::cells_at(tb, b + 4) - crate::port::cells_at(tb, b + 2)))) && ((crate::port::cells_at(tb, b + 7) >= (crate::port::cells_at(tb, a + 7) + TB_ROWS_MORE)) && (((crate::port::cells_at(tb, b + 8) + 2) >= crate::port::cells_at(tb, a + 8)) && ((crate::port::cells_at(tb, b + 6) + TB_ROWS_SLACK) >= crate::port::cells_at(tb, a + 6))))));
 }
-pub(crate) fn tb_takes(tb: &mut crate::port::Cells, i: i32, t0: i32, n: i32) -> bool {
+pub(crate) fn tb_takes(tb: &mut crate::port::Cells, i: i32, t0: i32, n: i32, tc: &mut crate::port::Cells) -> bool {
     // P12.2: does candidate i take in the candidates that overlap it and score as well: there is one, and each is only a part of what i reads.
     let b: i32 = i * TBS;
     let mut j: i32 = t0;
@@ -912,7 +939,7 @@ pub(crate) fn tb_takes(tb: &mut crate::port::Cells, i: i32, t0: i32, n: i32) -> 
     while j < n {
         if j != i {
             if tb_overlap(tb, i, j) && (crate::port::cells_at(tb, (j * TBS) + 6) >= crate::port::cells_at(tb, b + 6)) {
-                if tb_part(tb, j, i) {
+                if tb_part(tb, j, i, tc) {
                     any = 1;
                 } else {
                     return 0 == 1;
@@ -923,7 +950,7 @@ pub(crate) fn tb_takes(tb: &mut crate::port::Cells, i: i32, t0: i32, n: i32) -> 
     }
     return any == 1;
 }
-pub(crate) fn tb_promote(tb: &mut crate::port::Cells, t0: i32, n: i32, mut vals: &mut crate::port::Cells) -> i32 {
+pub(crate) fn tb_promote(tb: &mut crate::port::Cells, t0: i32, n: i32, tc: &mut crate::port::Cells, mut vals: &mut crate::port::Cells) -> i32 {
     // P12.2 (smoke review, issue 2): the reading that yields the real row count wins. `vals` holds a pair (the negated key, the candidate) for each candidate
     // t0..n, in order; a candidate that takes in the others it overlaps and that score as well (`tb-takes`: a table's header, ruled, beside the whitespace
     // reading of the whole of it, whose rows the rules do not draw; the stripes of a zebra that stop, two stacks of fills, beside the reading of the rows
@@ -938,7 +965,7 @@ pub(crate) fn tb_promote(tb: &mut crate::port::Cells, t0: i32, n: i32, mut vals:
         rounds += 1;
         i = t0;
         while i < n {
-            if tb_takes(tb, i, t0, n) {
+            if tb_takes(tb, i, t0, n, tc) {
                 j = t0;
                 while j < n {
                     if j != i {
@@ -958,7 +985,7 @@ pub(crate) fn tb_promote(tb: &mut crate::port::Cells, t0: i32, n: i32, mut vals:
     }
     return 0;
 }
-pub(crate) fn tb_select(mut tb: &mut crate::port::Cells, t0: i32, mut so: &mut crate::port::Cells, mut vals: &mut crate::port::Cells, mut sa: &mut crate::port::Cells, grg: &mut crate::port::Cells) -> i32 {
+pub(crate) fn tb_select(mut tb: &mut crate::port::Cells, t0: i32, mut so: &mut crate::port::Cells, mut vals: &mut crate::port::Cells, mut sa: &mut crate::port::Cells, grg: &mut crate::port::Cells, tc: &mut crate::port::Cells) -> i32 {
     // Of the candidates t0.. of one page keep, best score first, those that overlap no better one, and
     // leave them in tb in the order of their tops. Answers how many are kept.
     let n: i32 = tb_rows_of(tb, TBS);
@@ -974,7 +1001,7 @@ pub(crate) fn tb_select(mut tb: &mut crate::port::Cells, t0: i32, mut so: &mut c
         crate::port::cells_push(vals, i);
         i += 1;
     }
-    tb_promote(tb, t0, n, vals);
+    tb_promote(tb, t0, n, tc, vals);
     tb_sort_idx(so, vals, 2, 0, 1);
     i = 0;
     while i < crate::port::cells_len(so) {
@@ -2088,7 +2115,7 @@ pub(crate) fn tb_split_rows(rm: &mut crate::port::Cells, root: i32, wd: &mut cra
     // P12.2 (smoke review, issue 2: BLS, BEA, a 10-K): the rows of a lattice with fewer row cuts than its text has rows. A band between two
     // rules that are drawn across every column, with a rule between every two columns or no word across the place where there is none (a header's
     // column edges run down the page of the BEA's tables, undrawn), holds the rows of a table when the baselines of its words, told into table rows as an unruled table's
-    // are (`tb-row-map`, the lattice's column boundaries the columns: a wrapped cell's tight lines are one row), make at least `TB_SPLIT_ROWS` rows, three in
+    // are (`tb-row-map`, the lattice's column boundaries the columns: a wrapped cell's tight lines are one row), make at least `TB_SPLIT_MIN` rows, three in
     // four of the baselines have words in two columns or more, and three in four have a digit (a header of two-line cells has none, or few: it is the
     // band's own). The cut between two such rows is at the middle of their baselines; the cuts are added to `ys` (kept in order) and listed in `so`
     // (emptied first), and the band's top and bottom are a pair of `bd` (emptied first). Answers how many cuts.
@@ -2133,7 +2160,7 @@ pub(crate) fn tb_split_rows(rm: &mut crate::port::Cells, root: i32, wd: &mut cra
         }
         if closed == 1 {
             nb = tb_rows(wd, et, w0, w1, crate::port::cells_at(xs, 0), crate::port::cells_at(ys, r), crate::port::cells_at(xs, nc), crate::port::cells_at(ys, r + 1), wl, rw, sg);
-            if nb >= TB_SPLIT_ROWS {
+            if nb >= TB_SPLIT_MIN {
                 crate::port::cells_drop(ch, 0);
                 c = 1;
                 while c < nc {
@@ -2167,7 +2194,7 @@ pub(crate) fn tb_split_rows(rm: &mut crate::port::Cells, root: i32, wd: &mut cra
                     num += hasnum;
                     i += 1;
                 }
-                if (rows >= TB_SPLIT_ROWS) && (((tab * 4) >= (nb * 3)) && ((num * 4) >= (nb * 3))) {
+                if (rows >= TB_SPLIT_MIN) && (((tab * 4) >= (nb * 3)) && ((num * 4) >= (nb * 3))) {
                     crate::port::cells_push(bd, crate::port::cells_at(ys, r));
                     crate::port::cells_push(bd, crate::port::cells_at(ys, r + 1));
                     i = 1;
@@ -4062,7 +4089,7 @@ pub(crate) fn tb_trim_end(rw: &mut crate::port::Cells, sg: &mut crate::port::Cel
             }
             r += 1;
         }
-        return jj;
+        t = jj;
     }
     return t;
 }
@@ -4091,7 +4118,8 @@ pub(crate) fn tb_run_tail(rw: &mut crate::port::Cells, sg: &mut crate::port::Cel
         if (tight == 1) && ((m - k) <= 6) {
             return m;
         }
-        if (m - k) <= 2 {
+        // A label is short (six words at most): a paragraph between two tables is no label of either.
+        if ((m - k) <= 2) && ((crate::port::cells_at(rw, (k * RWS) + 1) <= 6) && (((m - k) == 1) || (crate::port::cells_at(rw, ((k + 1) * RWS) + 1) <= 6))) {
             return m;
         }
         return -1;
@@ -4452,7 +4480,7 @@ pub(crate) fn tb_row_words_same(tb: &mut crate::port::Cells, a: i32, ra: i32, b:
     let mut k: i32 = 0;
     let mut wa: i32 = 0;
     let mut wb: i32 = 0;
-    while 1 == 1 {
+    while k < 100000 {
         wa = tb_row_word(tb, a, ra, k, tc, tw);
         wb = tb_row_word(tb, b, rb, k, tc, tw);
         if (wa < 0) && (wb < 0) {
@@ -5305,11 +5333,11 @@ pub fn tb_build(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et
             if tg_trust(ss) >= TB_TAG_VETO_TRUST {
                 tb_veto(tb, t0, wd, tc, tw, se, sc, gl, mk, g0);
             }
-            tb_select(tb, t0, s3, s9, s8, grg);
+            tb_select(tb, t0, s3, s9, s8, grg, tc);
             nk = tb_rows_of(tb, TBS);
             tb_tags(wd, et, p, wi, wj, grl, qi, qj, se, sc, ss, gl, mk, g0, g1, g2, g3, g4, g5, tv, tb, t0, tc, tw, tx, s7, s3);
             if tb_rows_of(tb, TBS) > nk {
-                tb_select(tb, t0, s3, s9, s8, grg);
+                tb_select(tb, t0, s3, s9, s8, grg, tc);
             }
             k = t0;
             while k < tb_rows_of(tb, TBS) {

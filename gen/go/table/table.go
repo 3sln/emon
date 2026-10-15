@@ -57,7 +57,7 @@ const tbGapSize int32 = 125
 
 const tbGapBand int32 = 35
 
-const tbSplitRows int32 = 3
+const tbSplitMin int32 = 3
 
 const tbRowsMore int32 = 3
 
@@ -979,16 +979,44 @@ func tbHeadOf(tb *port.Cells, a int32, b int32) bool {
 	return ((4 * (tbMin(ax1, bx1) - tbMax(ax0, bx0))) >= (3 * (ax1 - ax0))) && ((ay0 <= (by0 + 1500)) && ((ay1 > (by0 + 300)) && (ay1 <= by1)))
 }
 
-func tbPart(tb *port.Cells, j int32, i int32) bool {
+func tbBlockBelow(tb *port.Cells, i int32, ybot int32, tc *port.Cells) bool {
+	// P12.2: has candidate i, below y `ybot`, a row that begins two in five of its columns from the first or further: a block of totals in the last columns
+	// (an invoice's, D559: the table of the rules ends over it, and the whitespace reading that has it in is the worse for it).
+	var cfirst int32 = port.CellsAt(tb, (i*tbs)+9)
+	var cend int32 = cfirst + port.CellsAt(tb, (i*tbs)+10)
+	var ncols int32 = port.CellsAt(tb, (i*tbs)+8)
+	var c int32 = cfirst
+	var row int32 = -1
+	var first int32 = -1
+	for c < cend {
+		if port.CellsAt(tc, c*tcs) != row {
+			if (first >= 0) && ((5 * first) >= (2 * ncols)) {
+				return 1 == 1
+			}
+			row = port.CellsAt(tc, c*tcs)
+			first = -1
+		}
+		if (port.CellsAt(tc, (c*tcs)+5) >= (ybot - 100)) && ((port.CellsAt(tc, (c*tcs)+9) > 0) && (first < 0)) {
+			first = port.CellsAt(tc, (c*tcs)+1)
+		}
+		c += 1
+	}
+	if (first >= 0) && ((5 * first) >= (2 * ncols)) {
+		return 1 == 1
+	}
+	return 0 == 1
+}
+
+func tbPart(tb *port.Cells, j int32, i int32, tc *port.Cells) bool {
 	// P12.2: is candidate j only a part of what candidate i reads: it lies in i's box or is its head (`tb-within`, `tb-head-of`) and is no more than three
 	// in four of its height (a reading of the same rows beside it is no part), i has the columns (or two fewer: the rules of a header put a column between
 	// the years that the text does not have) and `TB_ROWS_MORE` rows more, and a score no more than `TB_ROWS_SLACK` under j's.
 	var a int32 = j * tbs
 	var b int32 = i * tbs
-	return (tbWithin(tb, j, i) || tbHeadOf(tb, j, i)) && (((4 * (port.CellsAt(tb, a+4) - port.CellsAt(tb, a+2))) <= (3 * (port.CellsAt(tb, b+4) - port.CellsAt(tb, b+2)))) && ((port.CellsAt(tb, b+7) >= (port.CellsAt(tb, a+7) + tbRowsMore)) && (((port.CellsAt(tb, b+8) + 2) >= port.CellsAt(tb, a+8)) && ((port.CellsAt(tb, b+6) + tbRowsSlack) >= port.CellsAt(tb, a+6)))))
+	return (tbWithin(tb, j, i) || tbHeadOf(tb, j, i)) && (!tbBlockBelow(tb, i, port.CellsAt(tb, a+4), tc) && (((4 * (port.CellsAt(tb, a+4) - port.CellsAt(tb, a+2))) <= (3 * (port.CellsAt(tb, b+4) - port.CellsAt(tb, b+2)))) && ((port.CellsAt(tb, b+7) >= (port.CellsAt(tb, a+7) + tbRowsMore)) && (((port.CellsAt(tb, b+8) + 2) >= port.CellsAt(tb, a+8)) && ((port.CellsAt(tb, b+6) + tbRowsSlack) >= port.CellsAt(tb, a+6))))))
 }
 
-func tbTakes(tb *port.Cells, i int32, t0 int32, n int32) bool {
+func tbTakes(tb *port.Cells, i int32, t0 int32, n int32, tc *port.Cells) bool {
 	// P12.2: does candidate i take in the candidates that overlap it and score as well: there is one, and each is only a part of what i reads.
 	var b int32 = i * tbs
 	var j int32 = t0
@@ -996,7 +1024,7 @@ func tbTakes(tb *port.Cells, i int32, t0 int32, n int32) bool {
 	for j < n {
 		if j != i {
 			if tbOverlap(tb, i, j) && (port.CellsAt(tb, (j*tbs)+6) >= port.CellsAt(tb, b+6)) {
-				if tbPart(tb, j, i) {
+				if tbPart(tb, j, i, tc) {
 					any = 1
 				} else {
 					return 0 == 1
@@ -1008,7 +1036,7 @@ func tbTakes(tb *port.Cells, i int32, t0 int32, n int32) bool {
 	return any == 1
 }
 
-func tbPromote(tb *port.Cells, t0 int32, n int32, vals *port.Cells) int32 {
+func tbPromote(tb *port.Cells, t0 int32, n int32, tc *port.Cells, vals *port.Cells) int32 {
 	// P12.2 (smoke review, issue 2): the reading that yields the real row count wins. `vals` holds a pair (the negated key, the candidate) for each candidate
 	// t0..n, in order; a candidate that takes in the others it overlaps and that score as well (`tb-takes`: a table's header, ruled, beside the whitespace
 	// reading of the whole of it, whose rows the rules do not draw; the stripes of a zebra that stop, two stacks of fills, beside the reading of the rows
@@ -1023,7 +1051,7 @@ func tbPromote(tb *port.Cells, t0 int32, n int32, vals *port.Cells) int32 {
 		rounds += 1
 		i = t0
 		for i < n {
-			if tbTakes(tb, i, t0, n) {
+			if tbTakes(tb, i, t0, n, tc) {
 				j = t0
 				for j < n {
 					if j != i {
@@ -1044,7 +1072,7 @@ func tbPromote(tb *port.Cells, t0 int32, n int32, vals *port.Cells) int32 {
 	return 0
 }
 
-func tbSelect(tb *port.Cells, t0 int32, so *port.Cells, vals *port.Cells, sa *port.Cells, grg *port.Cells) int32 {
+func tbSelect(tb *port.Cells, t0 int32, so *port.Cells, vals *port.Cells, sa *port.Cells, grg *port.Cells, tc *port.Cells) int32 {
 	// Of the candidates t0.. of one page keep, best score first, those that overlap no better one, and
 	// leave them in tb in the order of their tops. Answers how many are kept.
 	var n int32 = tbRowsOf(tb, tbs)
@@ -1060,7 +1088,7 @@ func tbSelect(tb *port.Cells, t0 int32, so *port.Cells, vals *port.Cells, sa *po
 		port.CellsPush(vals, i)
 		i += 1
 	}
-	tbPromote(tb, t0, n, vals)
+	tbPromote(tb, t0, n, tc, vals)
 	tbSortIdx(so, vals, 2, 0, 1)
 	i = 0
 	for i < port.CellsLen(so) {
@@ -2217,7 +2245,7 @@ func tbSplitRows(rm *port.Cells, root int32, wd *port.Cells, et *port.Cells, w0 
 	// P12.2 (smoke review, issue 2: BLS, BEA, a 10-K): the rows of a lattice with fewer row cuts than its text has rows. A band between two
 	// rules that are drawn across every column, with a rule between every two columns or no word across the place where there is none (a header's
 	// column edges run down the page of the BEA's tables, undrawn), holds the rows of a table when the baselines of its words, told into table rows as an unruled table's
-	// are (`tb-row-map`, the lattice's column boundaries the columns: a wrapped cell's tight lines are one row), make at least `TB_SPLIT_ROWS` rows, three in
+	// are (`tb-row-map`, the lattice's column boundaries the columns: a wrapped cell's tight lines are one row), make at least `TB_SPLIT_MIN` rows, three in
 	// four of the baselines have words in two columns or more, and three in four have a digit (a header of two-line cells has none, or few: it is the
 	// band's own). The cut between two such rows is at the middle of their baselines; the cuts are added to `ys` (kept in order) and listed in `so`
 	// (emptied first), and the band's top and bottom are a pair of `bd` (emptied first). Answers how many cuts.
@@ -2262,7 +2290,7 @@ func tbSplitRows(rm *port.Cells, root int32, wd *port.Cells, et *port.Cells, w0 
 		}
 		if closed == 1 {
 			nb = tbRows(wd, et, w0, w1, port.CellsAt(xs, 0), port.CellsAt(ys, r), port.CellsAt(xs, nc), port.CellsAt(ys, r+1), wl, rw, sg)
-			if nb >= tbSplitRows {
+			if nb >= tbSplitMin {
 				port.CellsDrop(ch, 0)
 				c = 1
 				for c < nc {
@@ -2296,7 +2324,7 @@ func tbSplitRows(rm *port.Cells, root int32, wd *port.Cells, et *port.Cells, w0 
 					num += hasnum
 					i += 1
 				}
-				if (rows >= tbSplitRows) && (((tab * 4) >= (nb * 3)) && ((num * 4) >= (nb * 3))) {
+				if (rows >= tbSplitMin) && (((tab * 4) >= (nb * 3)) && ((num * 4) >= (nb * 3))) {
 					port.CellsPush(bd, port.CellsAt(ys, r))
 					port.CellsPush(bd, port.CellsAt(ys, r+1))
 					i = 1
@@ -4240,7 +4268,7 @@ func tbTrimEnd(rw *port.Cells, sg *port.Cells, a int32, jj int32) int32 {
 			}
 			r += 1
 		}
-		return jj
+		t = jj
 	}
 	return t
 }
@@ -4270,7 +4298,8 @@ func tbRunTail(rw *port.Cells, sg *port.Cells, nr int32, k int32) int32 {
 		if (tight == 1) && ((m - k) <= 6) {
 			return m
 		}
-		if (m - k) <= 2 {
+		// A label is short (six words at most): a paragraph between two tables is no label of either.
+		if ((m - k) <= 2) && ((port.CellsAt(rw, (k*rws)+1) <= 6) && (((m - k) == 1) || (port.CellsAt(rw, ((k+1)*rws)+1) <= 6))) {
 			return m
 		}
 		return -1
@@ -4646,7 +4675,7 @@ func tbRowWordsSame(tb *port.Cells, a int32, ra int32, b int32, rb int32, tc *po
 	var k int32 = 0
 	var wa int32 = 0
 	var wb int32 = 0
-	for 1 == 1 {
+	for k < 100000 {
 		wa = tbRowWord(tb, a, ra, k, tc, tw)
 		wb = tbRowWord(tb, b, rb, k, tc, tw)
 		if (wa < 0) && (wb < 0) {
@@ -5516,11 +5545,11 @@ func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gf
 			if pdfstruct.TgTrust(ss) >= tbTagVetoTrust {
 				tbVeto(tb, t0, wd, tc, tw, se, sc, gl, mk, g0)
 			}
-			tbSelect(tb, t0, s3, s9, s8, grg)
+			tbSelect(tb, t0, s3, s9, s8, grg, tc)
 			nk = tbRowsOf(tb, tbs)
 			tbTags(wd, et, p, wi, wj, grl, qi, qj, se, sc, ss, gl, mk, g0, g1, g2, g3, g4, g5, tv, tb, t0, tc, tw, tx, s7, s3)
 			if tbRowsOf(tb, tbs) > nk {
-				tbSelect(tb, t0, s3, s9, s8, grg)
+				tbSelect(tb, t0, s3, s9, s8, grg, tc)
 			}
 			k = t0
 			for k < tbRowsOf(tb, tbs) {

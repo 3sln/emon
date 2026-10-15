@@ -1400,6 +1400,32 @@ fn test_the_rows_above_the_first_row_of_amounts_are_the_header() {
     crate::testport::assert_text(t, "T3w;Gh;R;Ch[];Ch[Raw];Ch[Adj];R;Ch[];Ch[Aug.];Ch[Jul.];R;Ch[Category];Ch[2026];Ch[2026];Gb;R;C[Food];C[13.5];C[2.7];R;C[Fuel];C[11.5];C[3.1];R;C[Rent];C[12.5];C[4.4];R;C[Cars];C[14.5];C[5.9];R;C[Tolls];C[15.5];C[6.2];R;C[Power];C[16.5];C[7.7];", "the three lines above the first row of amounts are the header (before: the first of them, the others rows of the body)");
 }
 #[test]
+fn test_a_block_of_totals_in_the_last_columns_is_no_part_of_a_whitespace_table() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    // The invoice (D559's guard, now for the whitespace reading, which has more rows than the ruled one that scored best): the rows and under them a
+    // block of totals whose labels begin in the second column, no rule: a table of its rows, the totals paragraphs.
+    tt_rule(pa, 7200, 9550, 32200, 9650);
+    tt_rule(pa, 7200, 11150, 32200, 11250);
+    tt_rule(pa, 7200, 17550, 32200, 17650);
+    tt_row3(wd, ln, et, 10000, &crate::testport::text_blob("Item")[..], &crate::testport::text_blob("Desc")[..], &crate::testport::text_blob("Qty")[..]);
+    tt_row3(wd, ln, et, 11600, &crate::testport::text_blob("A-100")[..], &crate::testport::text_blob("Pipe")[..], &crate::testport::text_blob("40.5")[..]);
+    tt_row3(wd, ln, et, 13200, &crate::testport::text_blob("B-220")[..], &crate::testport::text_blob("Joint")[..], &crate::testport::text_blob("12.5")[..]);
+    tt_row3(wd, ln, et, 14800, &crate::testport::text_blob("C-310")[..], &crate::testport::text_blob("Paste")[..], &crate::testport::text_blob("60.5")[..]);
+    tt_row3(wd, ln, et, 16400, &crate::testport::text_blob("D-005")[..], &crate::testport::text_blob("Tape")[..], &crate::testport::text_blob("70.5")[..]);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Subtotal")[..], 30000, 18000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("46.4")[..], 38000, 18000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("VAT 20%")[..], 30000, 19600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("9.28")[..], 38000, 19600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Total due")[..], 30000, 21200, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("55.7")[..], 38000, 21200, 1, 0);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "totals: well formed");
+    crate::testport::assert_text(t, "T3p;Gh;R;Ch[Item];Ch[Desc];Ch[Qty];Gb;R;C[A-100];C[Pipe];C[40.5];R;C[B-220];C[Joint];C[12.5];R;C[C-310];C[Paste];C[60.5];R;C[D-005];C[Tape];C[70.5];P[Subtotal];P[46.4];P[VAT 20%];P[9.28];P[Total due];P[55.7];", "the rows are the table and the totals are not (D559; before the guard of the whitespace run, the whitespace reading, with more rows, won and took them in)");
+}
+#[test]
 fn test_the_dots_of_a_leader_are_no_cells() {
     let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();

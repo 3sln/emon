@@ -27,7 +27,7 @@ public static class Table {
     internal const int TbTailPitch = 16;
     internal const int TbGapSize = 125;
     internal const int TbGapBand = 35;
-    internal const int TbSplitRows = 3;
+    internal const int TbSplitMin = 3;
     internal const int TbRowsMore = 3;
     internal const int TbRowsSlack = 150;
     internal const int TbTagOwn = 700;
@@ -893,15 +893,42 @@ public static class Table {
         int by1 = emon.Port.CellsAt(tb, (b * Tbs) + 4);
         return ((4 * (TbMin(ax1, bx1) - TbMax(ax0, bx0))) >= (3 * (ax1 - ax0))) && ((ay0 <= (by0 + 1500)) && ((ay1 > (by0 + 300)) && (ay1 <= by1)));
     }
-    internal static bool TbPart(emon.Port.Cells tb, int j, int i) {
+    internal static bool TbBlockBelow(emon.Port.Cells tb, int i, int ybot, emon.Port.Cells tc) {
+        // P12.2: has candidate i, below y `ybot`, a row that begins two in five of its columns from the first or further: a block of totals in the last columns
+        // (an invoice's, D559: the table of the rules ends over it, and the whitespace reading that has it in is the worse for it).
+        int cfirst = emon.Port.CellsAt(tb, (i * Tbs) + 9);
+        int cend = cfirst + emon.Port.CellsAt(tb, (i * Tbs) + 10);
+        int ncols = emon.Port.CellsAt(tb, (i * Tbs) + 8);
+        int c = cfirst;
+        int row = -1;
+        int first = -1;
+        while (c < cend) {
+            if (emon.Port.CellsAt(tc, c * Tcs) != row) {
+                if ((first >= 0) && ((5 * first) >= (2 * ncols))) {
+                    return 1 == 1;
+                }
+                row = emon.Port.CellsAt(tc, c * Tcs);
+                first = -1;
+            }
+            if ((emon.Port.CellsAt(tc, (c * Tcs) + 5) >= (ybot - 100)) && ((emon.Port.CellsAt(tc, (c * Tcs) + 9) > 0) && (first < 0))) {
+                first = emon.Port.CellsAt(tc, (c * Tcs) + 1);
+            }
+            c += 1;
+        }
+        if ((first >= 0) && ((5 * first) >= (2 * ncols))) {
+            return 1 == 1;
+        }
+        return 0 == 1;
+    }
+    internal static bool TbPart(emon.Port.Cells tb, int j, int i, emon.Port.Cells tc) {
         // P12.2: is candidate j only a part of what candidate i reads: it lies in i's box or is its head (`tb-within`, `tb-head-of`) and is no more than three
         // in four of its height (a reading of the same rows beside it is no part), i has the columns (or two fewer: the rules of a header put a column between
         // the years that the text does not have) and `TB_ROWS_MORE` rows more, and a score no more than `TB_ROWS_SLACK` under j's.
         int a = j * Tbs;
         int b = i * Tbs;
-        return (TbWithin(tb, j, i) || TbHeadOf(tb, j, i)) && (((4 * (emon.Port.CellsAt(tb, a + 4) - emon.Port.CellsAt(tb, a + 2))) <= (3 * (emon.Port.CellsAt(tb, b + 4) - emon.Port.CellsAt(tb, b + 2)))) && ((emon.Port.CellsAt(tb, b + 7) >= (emon.Port.CellsAt(tb, a + 7) + TbRowsMore)) && (((emon.Port.CellsAt(tb, b + 8) + 2) >= emon.Port.CellsAt(tb, a + 8)) && ((emon.Port.CellsAt(tb, b + 6) + TbRowsSlack) >= emon.Port.CellsAt(tb, a + 6)))));
+        return (TbWithin(tb, j, i) || TbHeadOf(tb, j, i)) && (!TbBlockBelow(tb, i, emon.Port.CellsAt(tb, a + 4), tc) && (((4 * (emon.Port.CellsAt(tb, a + 4) - emon.Port.CellsAt(tb, a + 2))) <= (3 * (emon.Port.CellsAt(tb, b + 4) - emon.Port.CellsAt(tb, b + 2)))) && ((emon.Port.CellsAt(tb, b + 7) >= (emon.Port.CellsAt(tb, a + 7) + TbRowsMore)) && (((emon.Port.CellsAt(tb, b + 8) + 2) >= emon.Port.CellsAt(tb, a + 8)) && ((emon.Port.CellsAt(tb, b + 6) + TbRowsSlack) >= emon.Port.CellsAt(tb, a + 6))))));
     }
-    internal static bool TbTakes(emon.Port.Cells tb, int i, int t0, int n) {
+    internal static bool TbTakes(emon.Port.Cells tb, int i, int t0, int n, emon.Port.Cells tc) {
         // P12.2: does candidate i take in the candidates that overlap it and score as well: there is one, and each is only a part of what i reads.
         int b = i * Tbs;
         int j = t0;
@@ -909,7 +936,7 @@ public static class Table {
         while (j < n) {
             if (j != i) {
                 if (TbOverlap(tb, i, j) && (emon.Port.CellsAt(tb, (j * Tbs) + 6) >= emon.Port.CellsAt(tb, b + 6))) {
-                    if (TbPart(tb, j, i)) {
+                    if (TbPart(tb, j, i, tc)) {
                         any = 1;
                     } else {
                         return 0 == 1;
@@ -920,7 +947,7 @@ public static class Table {
         }
         return any == 1;
     }
-    internal static int TbPromote(emon.Port.Cells tb, int t0, int n, emon.Port.Cells vals) {
+    internal static int TbPromote(emon.Port.Cells tb, int t0, int n, emon.Port.Cells tc, emon.Port.Cells vals) {
         // P12.2 (smoke review, issue 2): the reading that yields the real row count wins. `vals` holds a pair (the negated key, the candidate) for each candidate
         // t0..n, in order; a candidate that takes in the others it overlaps and that score as well (`tb-takes`: a table's header, ruled, beside the whitespace
         // reading of the whole of it, whose rows the rules do not draw; the stripes of a zebra that stop, two stacks of fills, beside the reading of the rows
@@ -935,7 +962,7 @@ public static class Table {
             rounds += 1;
             i = t0;
             while (i < n) {
-                if (TbTakes(tb, i, t0, n)) {
+                if (TbTakes(tb, i, t0, n, tc)) {
                     j = t0;
                     while (j < n) {
                         if (j != i) {
@@ -955,7 +982,7 @@ public static class Table {
         }
         return 0;
     }
-    internal static int TbSelect(emon.Port.Cells tb, int t0, emon.Port.Cells so, emon.Port.Cells vals, emon.Port.Cells sa, emon.Port.Cells grg) {
+    internal static int TbSelect(emon.Port.Cells tb, int t0, emon.Port.Cells so, emon.Port.Cells vals, emon.Port.Cells sa, emon.Port.Cells grg, emon.Port.Cells tc) {
         // Of the candidates t0.. of one page keep, best score first, those that overlap no better one, and
         // leave them in tb in the order of their tops. Answers how many are kept.
         int n = TbRowsOf(tb, Tbs);
@@ -971,7 +998,7 @@ public static class Table {
             emon.Port.CellsPush(vals, i);
             i += 1;
         }
-        TbPromote(tb, t0, n, vals);
+        TbPromote(tb, t0, n, tc, vals);
         TbSortIdx(so, vals, 2, 0, 1);
         i = 0;
         while (i < emon.Port.CellsLen(so)) {
@@ -2085,7 +2112,7 @@ public static class Table {
         // P12.2 (smoke review, issue 2: BLS, BEA, a 10-K): the rows of a lattice with fewer row cuts than its text has rows. A band between two
         // rules that are drawn across every column, with a rule between every two columns or no word across the place where there is none (a header's
         // column edges run down the page of the BEA's tables, undrawn), holds the rows of a table when the baselines of its words, told into table rows as an unruled table's
-        // are (`tb-row-map`, the lattice's column boundaries the columns: a wrapped cell's tight lines are one row), make at least `TB_SPLIT_ROWS` rows, three in
+        // are (`tb-row-map`, the lattice's column boundaries the columns: a wrapped cell's tight lines are one row), make at least `TB_SPLIT_MIN` rows, three in
         // four of the baselines have words in two columns or more, and three in four have a digit (a header of two-line cells has none, or few: it is the
         // band's own). The cut between two such rows is at the middle of their baselines; the cuts are added to `ys` (kept in order) and listed in `so`
         // (emptied first), and the band's top and bottom are a pair of `bd` (emptied first). Answers how many cuts.
@@ -2130,7 +2157,7 @@ public static class Table {
             }
             if (closed == 1) {
                 nb = TbRows(wd, et, w0, w1, emon.Port.CellsAt(xs, 0), emon.Port.CellsAt(ys, r), emon.Port.CellsAt(xs, nc), emon.Port.CellsAt(ys, r + 1), wl, rw, sg);
-                if (nb >= TbSplitRows) {
+                if (nb >= TbSplitMin) {
                     emon.Port.CellsDrop(ch, 0);
                     c = 1;
                     while (c < nc) {
@@ -2164,7 +2191,7 @@ public static class Table {
                         num += hasnum;
                         i += 1;
                     }
-                    if ((rows >= TbSplitRows) && (((tab * 4) >= (nb * 3)) && ((num * 4) >= (nb * 3)))) {
+                    if ((rows >= TbSplitMin) && (((tab * 4) >= (nb * 3)) && ((num * 4) >= (nb * 3)))) {
                         emon.Port.CellsPush(bd, emon.Port.CellsAt(ys, r));
                         emon.Port.CellsPush(bd, emon.Port.CellsAt(ys, r + 1));
                         i = 1;
@@ -4059,7 +4086,7 @@ public static class Table {
                 }
                 r += 1;
             }
-            return jj;
+            t = jj;
         }
         return t;
     }
@@ -4088,7 +4115,8 @@ public static class Table {
             if ((tight == 1) && ((m - k) <= 6)) {
                 return m;
             }
-            if ((m - k) <= 2) {
+            // A label is short (six words at most): a paragraph between two tables is no label of either.
+            if (((m - k) <= 2) && ((emon.Port.CellsAt(rw, (k * Rws) + 1) <= 6) && (((m - k) == 1) || (emon.Port.CellsAt(rw, ((k + 1) * Rws) + 1) <= 6)))) {
                 return m;
             }
             return -1;
@@ -4449,7 +4477,7 @@ public static class Table {
         int k = 0;
         int wa = 0;
         int wb = 0;
-        while (1 == 1) {
+        while (k < 100000) {
             wa = TbRowWord(tb, a, ra, k, tc, tw);
             wb = TbRowWord(tb, b, rb, k, tc, tw);
             if ((wa < 0) && (wb < 0)) {
@@ -5302,11 +5330,11 @@ public static class Table {
                 if (Pdfstruct.TgTrust(ss) >= TbTagVetoTrust) {
                     TbVeto(tb, t0, wd, tc, tw, se, sc, gl, mk, g0);
                 }
-                TbSelect(tb, t0, s3, s9, s8, grg);
+                TbSelect(tb, t0, s3, s9, s8, grg, tc);
                 nk = TbRowsOf(tb, Tbs);
                 TbTags(wd, et, p, wi, wj, grl, qi, qj, se, sc, ss, gl, mk, g0, g1, g2, g3, g4, g5, tv, tb, t0, tc, tw, tx, s7, s3);
                 if (TbRowsOf(tb, Tbs) > nk) {
-                    TbSelect(tb, t0, s3, s9, s8, grg);
+                    TbSelect(tb, t0, s3, s9, s8, grg, tc);
                 }
                 k = t0;
                 while (k < TbRowsOf(tb, Tbs)) {

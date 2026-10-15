@@ -1444,6 +1444,32 @@ func TestTheRowsAboveTheFirstRowOfAmountsAreTheHeader(emonT *testing.T) {
 	port.AssertText(emonT, t, "T3w;Gh;R;Ch[];Ch[Raw];Ch[Adj];R;Ch[];Ch[Aug.];Ch[Jul.];R;Ch[Category];Ch[2026];Ch[2026];Gb;R;C[Food];C[13.5];C[2.7];R;C[Fuel];C[11.5];C[3.1];R;C[Rent];C[12.5];C[4.4];R;C[Cars];C[14.5];C[5.9];R;C[Tolls];C[15.5];C[6.2];R;C[Power];C[16.5];C[7.7];", "the three lines above the first row of amounts are the header (before: the first of them, the others rows of the body)")
 }
 
+func TestABlockOfTotalsInTheLastColumnsIsNoPartOfAWhitespaceTable(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	// The invoice (D559's guard, now for the whitespace reading, which has more rows than the ruled one that scored best): the rows and under them a
+	// block of totals whose labels begin in the second column, no rule: a table of its rows, the totals paragraphs.
+	ttRule(pa, 7200, 9550, 32200, 9650)
+	ttRule(pa, 7200, 11150, 32200, 11250)
+	ttRule(pa, 7200, 17550, 32200, 17650)
+	ttRow3(wd, ln, et, 10000, port.TextBlob("Item"), port.TextBlob("Desc"), port.TextBlob("Qty"))
+	ttRow3(wd, ln, et, 11600, port.TextBlob("A-100"), port.TextBlob("Pipe"), port.TextBlob("40.5"))
+	ttRow3(wd, ln, et, 13200, port.TextBlob("B-220"), port.TextBlob("Joint"), port.TextBlob("12.5"))
+	ttRow3(wd, ln, et, 14800, port.TextBlob("C-310"), port.TextBlob("Paste"), port.TextBlob("60.5"))
+	ttRow3(wd, ln, et, 16400, port.TextBlob("D-005"), port.TextBlob("Tape"), port.TextBlob("70.5"))
+	ttAt(wd, ln, et, port.TextBlob("Subtotal"), 30000, 18000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("46.4"), 38000, 18000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("VAT 20%"), 30000, 19600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("9.28"), 38000, 19600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Total due"), 30000, 21200, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("55.7"), 38000, 21200, 1, 0)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "totals: well formed")
+	port.AssertText(emonT, t, "T3p;Gh;R;Ch[Item];Ch[Desc];Ch[Qty];Gb;R;C[A-100];C[Pipe];C[40.5];R;C[B-220];C[Joint];C[12.5];R;C[C-310];C[Paste];C[60.5];R;C[D-005];C[Tape];C[70.5];P[Subtotal];P[46.4];P[VAT 20%];P[9.28];P[Total due];P[55.7];", "the rows are the table and the totals are not (D559; before the guard of the whitespace run, the whitespace reading, with more rows, won and took them in)")
+}
+
 func TestTheDotsOfALeaderAreNoCells(emonT *testing.T) {
 	var wd *port.Cells = port.NewCells()
 	var ln *port.Cells = port.NewCells()

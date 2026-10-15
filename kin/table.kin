@@ -87,7 +87,7 @@
 (defconst ^I32 TB_TAIL_PITCH 16)      ;; ... and at most this many tenths of the body's own mean pitch under the row above
 (defconst ^I32 TB_GAP_SIZE 125)       ;; between two rules of a chain: a row this many hundredths of the body's size is a heading (D559)
 (defconst ^I32 TB_GAP_BAND 35)        ;; ... and a band of white this many tenths of the body's size deep between two rows is a gap (D559)
-(defconst ^I32 TB_SPLIT_ROWS 3)       ;; a band of a lattice with no rule between its rows is cut into rows by its baselines when they make at least this many (P12.2)
+(defconst ^I32 TB_SPLIT_MIN 3)      ;; a band of a lattice with no rule between its rows is cut into rows by its baselines when they make at least this many (P12.2)
 (defconst ^I32 TB_ROWS_MORE 3)        ;; a reading with this many rows more than another that lies in it and is a part of its height is the table, the other a part of it (P12.2) ...
 (defconst ^I32 TB_ROWS_SLACK 150)   ;; ... unless its score is this much under the other's
 (defconst ^I32 TB_TAG_OWN 700)      ;; a table that confirms itself (`tb-self-sure`) is read at this trust whatever the tree's (D557)
@@ -833,19 +833,41 @@
     (return (and (>= (* 4 (- (tb-min ax1 bx1) (tb-max ax0 bx0))) (* 3 (- ax1 ax0)))
                  (and (<= ay0 (+ by0 1500)) (and (> ay1 (+ by0 300)) (<= ay1 by1)))))))
 
-(defn ^Bool tb-part [^Cells tb ^I32 j ^I32 i]
+(defn ^Bool tb-block-below [^Cells tb ^I32 i ^I32 ybot ^Cells tc]
+  (comment "P12.2: has candidate i, below y `ybot`, a row that begins two in five of its columns from the first or further: a block of totals in the last columns")
+  (comment "(an invoice's, D559: the table of the rules ends over it, and the whitespace reading that has it in is the worse for it).")
+  (let [^I32 cfirst (cells-at tb (+ (* i TBS) 9))
+        ^I32 cend (+ cfirst (cells-at tb (+ (* i TBS) 10)))
+        ^I32 ncols (cells-at tb (+ (* i TBS) 8))
+        ^:mut ^I32 c cfirst
+        ^:mut ^I32 row -1
+        ^:mut ^I32 first -1]
+    (while (< c cend)
+      (do (if (!= (cells-at tc (* c TCS)) row)
+            (do (if (and (>= first 0) (>= (* 5 first) (* 2 ncols))) (return (== 1 1)))
+                (set row (cells-at tc (* c TCS)))
+                (set first -1)))
+          (if (and (>= (cells-at tc (+ (* c TCS) 5)) (- ybot 100))
+                   (and (> (cells-at tc (+ (* c TCS) 9)) 0) (< first 0)))
+            (set first (cells-at tc (+ (* c TCS) 1))))
+          (set c (+ c 1))))
+    (if (and (>= first 0) (>= (* 5 first) (* 2 ncols))) (return (== 1 1)))
+    (return (== 0 1))))
+
+(defn ^Bool tb-part [^Cells tb ^I32 j ^I32 i ^Cells tc]
   (comment "P12.2: is candidate j only a part of what candidate i reads: it lies in i's box or is its head (`tb-within`, `tb-head-of`) and is no more than three")
   (comment "in four of its height (a reading of the same rows beside it is no part), i has the columns (or two fewer: the rules of a header put a column between")
   (comment "the years that the text does not have) and `TB_ROWS_MORE` rows more, and a score no more than `TB_ROWS_SLACK` under j's.")
   (let [^I32 a (* j TBS)
         ^I32 b (* i TBS)]
     (return (and (or (tb-within tb j i) (tb-head-of tb j i))
+                 (and (not (tb-block-below tb i (cells-at tb (+ a 4)) tc))
                  (and (<= (* 4 (- (cells-at tb (+ a 4)) (cells-at tb (+ a 2)))) (* 3 (- (cells-at tb (+ b 4)) (cells-at tb (+ b 2)))))
                       (and (>= (cells-at tb (+ b 7)) (+ (cells-at tb (+ a 7)) TB_ROWS_MORE))
                            (and (>= (+ (cells-at tb (+ b 8)) 2) (cells-at tb (+ a 8)))
-                                (>= (+ (cells-at tb (+ b 6)) TB_ROWS_SLACK) (cells-at tb (+ a 6))))))))))
+                                (>= (+ (cells-at tb (+ b 6)) TB_ROWS_SLACK) (cells-at tb (+ a 6)))))))))))
 
-(defn ^Bool tb-takes [^Cells tb ^I32 i ^I32 t0 ^I32 n]
+(defn ^Bool tb-takes [^Cells tb ^I32 i ^I32 t0 ^I32 n ^Cells tc]
   (comment "P12.2: does candidate i take in the candidates that overlap it and score as well: there is one, and each is only a part of what i reads.")
   (let [^I32 b (* i TBS)
         ^:mut ^I32 j t0
@@ -853,13 +875,13 @@
     (while (< j n)
       (do (if (!= j i)
             (if (and (tb-overlap tb i j) (>= (cells-at tb (+ (* j TBS) 6)) (cells-at tb (+ b 6))))
-              (if (tb-part tb j i)
+              (if (tb-part tb j i tc)
                 (set any 1)
                 (return (== 0 1)))))
           (set j (+ j 1))))
     (return (== any 1))))
 
-(defn ^I32 tb-promote [^Cells tb ^I32 t0 ^I32 n ^:mut ^Cells vals]
+(defn ^I32 tb-promote [^Cells tb ^I32 t0 ^I32 n ^Cells tc ^:mut ^Cells vals]
   (comment "P12.2 (smoke review, issue 2): the reading that yields the real row count wins. `vals` holds a pair (the negated key, the candidate) for each candidate")
   (comment "t0..n, in order; a candidate that takes in the others it overlaps and that score as well (`tb-takes`: a table's header, ruled, beside the whitespace")
   (comment "reading of the whole of it, whose rows the rules do not draw; the stripes of a zebra that stop, two stacks of fills, beside the reading of the rows")
@@ -874,7 +896,7 @@
           (set rounds (+ rounds 1))
           (set i t0)
           (while (< i n)
-            (do (if (tb-takes tb i t0 n)
+            (do (if (tb-takes tb i t0 n tc)
                   (do (set j t0)
                       (while (< j n)
                         (do (if (!= j i)
@@ -887,7 +909,7 @@
                 (set i (+ i 1))))))
     (return 0)))
 
-(defn ^I32 tb-select [^:mut ^Cells tb ^I32 t0 ^:mut ^Cells so ^:mut ^Cells vals ^:mut ^Cells sa ^Cells grg]
+(defn ^I32 tb-select [^:mut ^Cells tb ^I32 t0 ^:mut ^Cells so ^:mut ^Cells vals ^:mut ^Cells sa ^Cells grg ^Cells tc]
   (comment "Of the candidates t0.. of one page keep, best score first, those that overlap no better one, and")
   (comment "leave them in tb in the order of their tops. Answers how many are kept.")
   (let [^I32 n (tb-rows-of tb TBS)
@@ -902,7 +924,7 @@
           (cells-push vals (- 0 (+ (cells-at tb (+ (* i TBS) 6)) (tb-tie-bonus tb i t0 n grg))))
           (cells-push vals i)
           (set i (+ i 1))))
-    (tb-promote tb t0 n vals)
+    (tb-promote tb t0 n tc vals)
     (tb-sort-idx so vals 2 0 1)
     (set i 0)
     (while (< i (cells-len so))
@@ -1794,7 +1816,7 @@
   (comment "P12.2 (smoke review, issue 2: BLS, BEA, a 10-K): the rows of a lattice with fewer row cuts than its text has rows. A band between two")
   (comment "rules that are drawn across every column, with a rule between every two columns or no word across the place where there is none (a header's")
   (comment "column edges run down the page of the BEA's tables, undrawn), holds the rows of a table when the baselines of its words, told into table rows as an unruled table's")
-  (comment "are (`tb-row-map`, the lattice's column boundaries the columns: a wrapped cell's tight lines are one row), make at least `TB_SPLIT_ROWS` rows, three in")
+  (comment "are (`tb-row-map`, the lattice's column boundaries the columns: a wrapped cell's tight lines are one row), make at least `TB_SPLIT_MIN` rows, three in")
   (comment "four of the baselines have words in two columns or more, and three in four have a digit (a header of two-line cells has none, or few: it is the")
   (comment "band's own). The cut between two such rows is at the middle of their baselines; the cuts are added to `ys` (kept in order) and listed in `so`")
   (comment "(emptied first), and the band's top and bottom are a pair of `bd` (emptied first). Answers how many cuts.")
@@ -1830,7 +1852,7 @@
                 (set c (+ c 1))))
           (if (== closed 1)
             (do (set nb (tb-rows wd et w0 w1 (cells-at xs 0) (cells-at ys r) (cells-at xs nc) (cells-at ys (+ r 1)) wl rw sg))
-                (if (>= nb TB_SPLIT_ROWS)
+                (if (>= nb TB_SPLIT_MIN)
                   (do (cells-drop ch 0)
                       (set c 1)
                       (while (< c nc)
@@ -1856,7 +1878,7 @@
                             (if (>= ncol 2) (set tab (+ tab 1)))
                             (set num (+ num hasnum))
                             (set i (+ i 1))))
-                      (if (and (>= rows TB_SPLIT_ROWS) (and (>= (* tab 4) (* nb 3)) (>= (* num 4) (* nb 3))))
+                      (if (and (>= rows TB_SPLIT_MIN) (and (>= (* tab 4) (* nb 3)) (>= (* num 4) (* nb 3))))
                         (do (cells-push bd (cells-at ys r))
                             (cells-push bd (cells-at ys (+ r 1)))
                             (set i 1)
@@ -3309,7 +3331,7 @@
             (while (<= r jj)
               (do (if (not (tb-under rw sg t r)) (return t))
                   (set r (+ r 1)))))
-          (return jj)))
+          (set t jj)))
     (return t)))
 
 (defn ^I32 tb-run-tail [^Cells rw ^Cells sg ^I32 nr ^I32 k]
@@ -3330,7 +3352,10 @@
                   (set m (+ m 1)))))))
     (if (and (== stop 0) (< m nr))
       (do (if (and (== tight 1) (<= (- m k) 6)) (return m))
-          (if (<= (- m k) 2) (return m))
+          (comment "A label is short (six words at most): a paragraph between two tables is no label of either.")
+          (if (and (<= (- m k) 2)
+                   (and (<= (cells-at rw (+ (* k RWS) 1)) 6) (or (== (- m k) 1) (<= (cells-at rw (+ (* (+ k 1) RWS) 1)) 6))))
+            (return m))
           (return -1)))
     (if (and (== tight 1) (and (> m k) (<= (- m k) 6))) (return m))
     (return -1)))
@@ -3620,7 +3645,7 @@
   (let [^:mut ^I32 k 0
         ^:mut ^I32 wa 0
         ^:mut ^I32 wb 0]
-    (while (== 1 1)
+    (while (< k 100000)
       (do (set wa (tb-row-word tb a ra k tc tw))
           (set wb (tb-row-word tb b rb k tc tw))
           (if (and (< wa 0) (< wb 0)) (return (== 1 1)))
@@ -4304,11 +4329,11 @@
                   (tb-shaded-page s2 p wd et wi wj s1 s8 s9 s10 s11 s12 s13 s14 s15 s16 s6 s17 s18 s7 s3 tb tc tw tx))
                 (tb-whitespace-page p wd et wi wj s1 s10 s11 s12 s13 s14 s15 s16 s6 s17 s18 s7 s3 tb tc tw tx)
                 (if (>= (tg-trust ss) TB_TAG_VETO_TRUST) (tb-veto tb t0 wd tc tw se sc gl mk g0))
-                (tb-select tb t0 s3 s9 s8 grg)
+                (tb-select tb t0 s3 s9 s8 grg tc)
                 ;; the tags are checked against the candidates that were kept (a table of the tags alone joins them and is selected with them)
                 (set nk (tb-rows-of tb TBS))
                 (tb-tags wd et p wi wj grl qi qj se sc ss gl mk g0 g1 g2 g3 g4 g5 tv tb t0 tc tw tx s7 s3)
-                (if (> (tb-rows-of tb TBS) nk) (tb-select tb t0 s3 s9 s8 grg))
+                (if (> (tb-rows-of tb TBS) nk) (tb-select tb t0 s3 s9 s8 grg tc))
                 (set k t0)
                 (while (< k (tb-rows-of tb TBS))
                   (do (tb-finish tb k wd et tc tw ln li lj tq g1 g2 g3 wi g4)
