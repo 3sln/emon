@@ -673,7 +673,7 @@ public static class Columns {
     internal static int LcClose(emon.Port.Cells gu, emon.Port.Cells ac, int a) {
         // An active interval ends: a gutter when it persisted `gutter-rows` rows and held, on each side, words
         // in `gutter-rows` rows, `gutter-words` of them on average. D1630 (smoke review A issue 14): a gutter at least `LC_WIDE` wide (two blocks of an invoice, Seller and Client, a form's left
-        // and right boxes) with at least `LC_WIDE_ROWS` rows with words on each side, `LC_WIDE_WORDS` of them on average, is a gutter too: a block of short lines is not a column of prose, but a gap that wide
+        // and right boxes) with at least `LC_WIDE_ROWS` rows with words on each side, `LC_WIDE_WORDS` of them on average, is a gutter too (when both sides have words in three fifths of the rows it persisted in: a block that goes on alone under two that are side by side, an invoice's address under its title's two blocks, is not a column of its own): a block of short lines is not a column of prose, but a gap that wide
         // between two blocks of lines is not a table's cell padding either (a row of key and value has one word, or a few, in its value).
         int @base = a * GuStride;
         int rows = emon.Port.CellsAt(ac, @base + GuRows);
@@ -687,7 +687,7 @@ public static class Columns {
         if ((rows >= LcRows) && ((lrows >= LcRows) && (rrows >= LcRows)) && ((lsum >= (lrows * LcWords)) && (rsum >= (rrows * LcWords)))) {
             ok = 1;
         }
-        if ((gw >= LcWide) && ((lrows >= LcWideRows) && (rrows >= LcWideRows)) && ((lsum >= (lrows * LcWideWords)) && (rsum >= (rrows * LcWideWords)))) {
+        if ((gw >= LcWide) && ((lrows >= LcWideRows) && (rrows >= LcWideRows)) && ((lsum >= (lrows * LcWideWords)) && (rsum >= (rrows * LcWideWords))) && (((lrows * 10) >= (rows * 6)) && ((rrows * 10) >= (rows * 6)))) {
             ok = 1;
         }
         if (ok == 1) {
