@@ -797,7 +797,7 @@ func fuZoneFloor(h int32) int32 {
 
 func fuRowCells(ln *port.Cells, l int32) int32 {
 	// D1630 (smoke review A issue 15): how many upright lines (this one included) of its page stand on line l's baseline (centres within half its height), among the 40 lines either side of it
-	// in the text layer's order. A row of FU_CELLS or more is a table's row, not a running header or footer (a left, a centre and a right part at the most): the first data row of a
+	// in the text layer's order. A row of FU_CELLS or more in the top zone is a table's row, not a running header (a left, a centre and a right part at the most; a footer of four parts or more is a footer: the real statement's): the first data row of a
 	// continuation page, directly under the repeated header, recurs by position and by the shape of its cells and passed as a header that varies.
 	var nl int32 = evidence.LnCount(ln)
 	var c2 int32 = evidence.LnGet(ln, l, evidence.LhY0()) + evidence.LnGet(ln, l, evidence.LhY1())
@@ -864,7 +864,7 @@ func fuScan(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, mk *
 					zone = 3
 				}
 			}
-			if (zone > 0) && (zone < 3) && (fuRowCells(ln, l) >= fuCells) {
+			if (zone == 1) && (fuRowCells(ln, l) >= fuCells) {
 				zone = 0
 			}
 			if zone > 0 {

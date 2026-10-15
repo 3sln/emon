@@ -98,7 +98,7 @@
 (defconst ^I32 FU_FCAP 170)         ;; ... and never deeper than this per mille of the page's height
 (defconst ^I32 FU_STAMP 60)         ;; a sideways line this near a side edge (per mille of the width, centre) is a margin stamp (D1630) ...
 (defconst ^I32 FU_STAMPLEN 8)       ;; ... of at least this many characters
-(defconst ^I32 FU_CELLS 4)         ;; a row of this many candidates or more on one baseline is a table's row, not a running header (D1630)
+(defconst ^I32 FU_CELLS 4)       ;; a row of this many candidates or more on one baseline is a table's row, not a running header (D1630)
 (defconst ^I32 FU_CHAIN_GAP 1300)   ;; a line this close under (per mille of its height) a header line that qualified goes with it (D1630)
 
 ;; the work arenas' strides (documented where each is made)
@@ -587,7 +587,7 @@
 
 (defn ^I32 fu-row-cells [^Cells ln ^I32 l]
   (comment "D1630 (smoke review A issue 15): how many upright lines (this one included) of its page stand on line l's baseline (centres within half its height), among the 40 lines either side of it")
-  (comment "in the text layer's order. A row of FU_CELLS or more is a table's row, not a running header or footer (a left, a centre and a right part at the most): the first data row of a")
+  (comment "in the text layer's order. A row of FU_CELLS or more in the top zone is a table's row, not a running header (a left, a centre and a right part at the most; a footer of four parts or more is a footer: the real statement's): the first data row of a")
   (comment "continuation page, directly under the repeated header, recurs by position and by the shape of its cells and passed as a header that varies.")
   (let [^I32 nl (ln-count ln)
         ^I32 c2 (+ (ln-get ln l (lh-y0)) (ln-get ln l (lh-y1)))
@@ -642,7 +642,7 @@
                   (if (or (< (fu-abs (- rot 9000)) 100) (< (fu-abs (- rot 27000)) 100))
                     (if (or (< cx2 (quot (* w FU_SIDE) 500)) (> cx2 (quot (* w (- 1000 FU_SIDE)) 500)))
                       (set zone 3))))
-                (if (and (> zone 0) (< zone 3) (>= (fu-row-cells ln l) FU_CELLS)) (set zone 0))
+                (if (and (== zone 1) (>= (fu-row-cells ln l) FU_CELLS)) (set zone 0))
                 (if (> zone 0)
                   (do (set ts (cells-len tx))
                       (set tl (fu-line-text wd ln et tx l))

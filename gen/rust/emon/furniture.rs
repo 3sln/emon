@@ -725,7 +725,7 @@ pub(crate) fn fu_zone_floor(h: i32) -> i32 {
 }
 pub(crate) fn fu_row_cells(ln: &mut crate::port::Cells, l: i32) -> i32 {
     // D1630 (smoke review A issue 15): how many upright lines (this one included) of its page stand on line l's baseline (centres within half its height), among the 40 lines either side of it
-    // in the text layer's order. A row of FU_CELLS or more is a table's row, not a running header or footer (a left, a centre and a right part at the most): the first data row of a
+    // in the text layer's order. A row of FU_CELLS or more in the top zone is a table's row, not a running header (a left, a centre and a right part at the most; a footer of four parts or more is a footer: the real statement's): the first data row of a
     // continuation page, directly under the repeated header, recurs by position and by the shape of its cells and passed as a header that varies.
     let nl: i32 = ln_count(ln);
     let c2: i32 = ln_get(ln, l, lh_y0()) + ln_get(ln, l, lh_y1());
@@ -791,7 +791,7 @@ pub(crate) fn fu_scan(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, 
                     zone = 3;
                 }
             }
-            if (zone > 0) && (zone < 3) && (fu_row_cells(ln, l) >= FU_CELLS) {
+            if (zone == 1) && (fu_row_cells(ln, l) >= FU_CELLS) {
                 zone = 0;
             }
             if zone > 0 {

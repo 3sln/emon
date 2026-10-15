@@ -675,6 +675,27 @@ public final class Furnituretest {
         flLine(wd, ln, et, emon.Testport.textBlob("Creativity comes from where"), 4, 4500, 5700, 30000, 7100, 0, 1400);
         emon.Testport.assertEq(flRootsOf(wd, ln, et, 4), 2, "both lines of the header are furniture");
     }
+    public static void testAFooterOfFourPartsOnOneBaselineIsStillAFooter() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        // D1630: only a row in the TOP zone is a table's (the first data row under a repeated header): a footer of four parts on its baseline (the real statement's address, phone and notice) is furniture,
+        // kept once, four roots
+        flPages(wd, ln, et, 3);
+        flBottom(wd, ln, et, emon.Testport.textBlob("example.com"), 1, 7200, 14000);
+        flBottom(wd, ln, et, emon.Testport.textBlob("Call 555 0100"), 1, 18000, 26000);
+        flBottom(wd, ln, et, emon.Testport.textBlob("PO Box 85123"), 1, 30000, 38000);
+        flBottom(wd, ln, et, emon.Testport.textBlob("Member FDIC"), 1, 42000, 50000);
+        flBottom(wd, ln, et, emon.Testport.textBlob("example.com"), 2, 7200, 14000);
+        flBottom(wd, ln, et, emon.Testport.textBlob("Call 555 0100"), 2, 18000, 26000);
+        flBottom(wd, ln, et, emon.Testport.textBlob("PO Box 85123"), 2, 30000, 38000);
+        flBottom(wd, ln, et, emon.Testport.textBlob("Member FDIC"), 2, 42000, 50000);
+        flBottom(wd, ln, et, emon.Testport.textBlob("example.com"), 3, 7200, 14000);
+        flBottom(wd, ln, et, emon.Testport.textBlob("Call 555 0100"), 3, 18000, 26000);
+        flBottom(wd, ln, et, emon.Testport.textBlob("PO Box 85123"), 3, 30000, 38000);
+        flBottom(wd, ln, et, emon.Testport.textBlob("Member FDIC"), 3, 42000, 50000);
+        emon.Testport.assertEq(flRootsOf(wd, ln, et, 3), 4, "four parts, four furniture roots");
+    }
     public static void testASidewaysStampInTheMarginOfOnePageIsFurniture() {
         emon.Port.Cells wd = emon.Port.newCells();
         emon.Port.Cells ln = emon.Port.newCells();

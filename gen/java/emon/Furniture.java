@@ -724,7 +724,7 @@ public final class Furniture {
     }
     public static int fuRowCells(emon.Port.Cells ln, int l) {
         // D1630 (smoke review A issue 15): how many upright lines (this one included) of its page stand on line l's baseline (centres within half its height), among the 40 lines either side of it
-        // in the text layer's order. A row of FU_CELLS or more is a table's row, not a running header or footer (a left, a centre and a right part at the most): the first data row of a
+        // in the text layer's order. A row of FU_CELLS or more in the top zone is a table's row, not a running header (a left, a centre and a right part at the most; a footer of four parts or more is a footer: the real statement's): the first data row of a
         // continuation page, directly under the repeated header, recurs by position and by the shape of its cells and passed as a header that varies.
         int nl = Evidence.lnCount(ln);
         int c2 = Evidence.lnGet(ln, l, Evidence.lhY0()) + Evidence.lnGet(ln, l, Evidence.lhY1());
@@ -790,7 +790,7 @@ public final class Furniture {
                         zone = 3;
                     }
                 }
-                if ((zone > 0) && (zone < 3) && (fuRowCells(ln, l) >= FU_CELLS)) {
+                if ((zone == 1) && (fuRowCells(ln, l) >= FU_CELLS)) {
                     zone = 0;
                 }
                 if (zone > 0) {

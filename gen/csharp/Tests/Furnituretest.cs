@@ -688,6 +688,28 @@ public static class Furnituretest {
         emon.Testport.AssertEq(FlRootsOf(wd, ln, et, 4), 2, "both lines of the header are furniture");
     }
     [Xunit.Fact]
+    public static void TestAFooterOfFourPartsOnOneBaselineIsStillAFooter() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        // D1630: only a row in the TOP zone is a table's (the first data row under a repeated header): a footer of four parts on its baseline (the real statement's address, phone and notice) is furniture,
+        // kept once, four roots
+        FlPages(wd, ln, et, 3);
+        FlBottom(wd, ln, et, emon.Testport.TextBlob("example.com"), 1, 7200, 14000);
+        FlBottom(wd, ln, et, emon.Testport.TextBlob("Call 555 0100"), 1, 18000, 26000);
+        FlBottom(wd, ln, et, emon.Testport.TextBlob("PO Box 85123"), 1, 30000, 38000);
+        FlBottom(wd, ln, et, emon.Testport.TextBlob("Member FDIC"), 1, 42000, 50000);
+        FlBottom(wd, ln, et, emon.Testport.TextBlob("example.com"), 2, 7200, 14000);
+        FlBottom(wd, ln, et, emon.Testport.TextBlob("Call 555 0100"), 2, 18000, 26000);
+        FlBottom(wd, ln, et, emon.Testport.TextBlob("PO Box 85123"), 2, 30000, 38000);
+        FlBottom(wd, ln, et, emon.Testport.TextBlob("Member FDIC"), 2, 42000, 50000);
+        FlBottom(wd, ln, et, emon.Testport.TextBlob("example.com"), 3, 7200, 14000);
+        FlBottom(wd, ln, et, emon.Testport.TextBlob("Call 555 0100"), 3, 18000, 26000);
+        FlBottom(wd, ln, et, emon.Testport.TextBlob("PO Box 85123"), 3, 30000, 38000);
+        FlBottom(wd, ln, et, emon.Testport.TextBlob("Member FDIC"), 3, 42000, 50000);
+        emon.Testport.AssertEq(FlRootsOf(wd, ln, et, 3), 4, "four parts, four furniture roots");
+    }
+    [Xunit.Fact]
     public static void TestASidewaysStampInTheMarginOfOnePageIsFurniture() {
         emon.Port.Cells wd = emon.Port.NewCells();
         emon.Port.Cells ln = emon.Port.NewCells();

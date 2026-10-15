@@ -717,6 +717,28 @@ func TestATwoLineRunningHeaderIsFurnitureWhole(emonT *testing.T) {
 	port.AssertEq(emonT, flRootsOf(wd, ln, et, 4), 2, "both lines of the header are furniture")
 }
 
+func TestAFooterOfFourPartsOnOneBaselineIsStillAFooter(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	// D1630: only a row in the TOP zone is a table's (the first data row under a repeated header): a footer of four parts on its baseline (the real statement's address, phone and notice) is furniture,
+	// kept once, four roots
+	flPages(wd, ln, et, 3)
+	flBottom(wd, ln, et, port.TextBlob("example.com"), 1, 7200, 14000)
+	flBottom(wd, ln, et, port.TextBlob("Call 555 0100"), 1, 18000, 26000)
+	flBottom(wd, ln, et, port.TextBlob("PO Box 85123"), 1, 30000, 38000)
+	flBottom(wd, ln, et, port.TextBlob("Member FDIC"), 1, 42000, 50000)
+	flBottom(wd, ln, et, port.TextBlob("example.com"), 2, 7200, 14000)
+	flBottom(wd, ln, et, port.TextBlob("Call 555 0100"), 2, 18000, 26000)
+	flBottom(wd, ln, et, port.TextBlob("PO Box 85123"), 2, 30000, 38000)
+	flBottom(wd, ln, et, port.TextBlob("Member FDIC"), 2, 42000, 50000)
+	flBottom(wd, ln, et, port.TextBlob("example.com"), 3, 7200, 14000)
+	flBottom(wd, ln, et, port.TextBlob("Call 555 0100"), 3, 18000, 26000)
+	flBottom(wd, ln, et, port.TextBlob("PO Box 85123"), 3, 30000, 38000)
+	flBottom(wd, ln, et, port.TextBlob("Member FDIC"), 3, 42000, 50000)
+	port.AssertEq(emonT, flRootsOf(wd, ln, et, 3), 4, "four parts, four furniture roots")
+}
+
 func TestASidewaysStampInTheMarginOfOnePageIsFurniture(emonT *testing.T) {
 	var wd *port.Cells = port.NewCells()
 	var ln *port.Cells = port.NewCells()

@@ -695,6 +695,28 @@ fn test_a_two_line_running_header_is_furniture_whole() {
     crate::testport::assert_eq(fl_roots_of(wd, ln, et, 4), 2, "both lines of the header are furniture");
 }
 #[test]
+fn test_a_footer_of_four_parts_on_one_baseline_is_still_a_footer() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    // D1630: only a row in the TOP zone is a table's (the first data row under a repeated header): a footer of four parts on its baseline (the real statement's address, phone and notice) is furniture,
+    // kept once, four roots
+    fl_pages(wd, ln, et, 3);
+    fl_bottom(wd, ln, et, &crate::testport::text_blob("example.com")[..], 1, 7200, 14000);
+    fl_bottom(wd, ln, et, &crate::testport::text_blob("Call 555 0100")[..], 1, 18000, 26000);
+    fl_bottom(wd, ln, et, &crate::testport::text_blob("PO Box 85123")[..], 1, 30000, 38000);
+    fl_bottom(wd, ln, et, &crate::testport::text_blob("Member FDIC")[..], 1, 42000, 50000);
+    fl_bottom(wd, ln, et, &crate::testport::text_blob("example.com")[..], 2, 7200, 14000);
+    fl_bottom(wd, ln, et, &crate::testport::text_blob("Call 555 0100")[..], 2, 18000, 26000);
+    fl_bottom(wd, ln, et, &crate::testport::text_blob("PO Box 85123")[..], 2, 30000, 38000);
+    fl_bottom(wd, ln, et, &crate::testport::text_blob("Member FDIC")[..], 2, 42000, 50000);
+    fl_bottom(wd, ln, et, &crate::testport::text_blob("example.com")[..], 3, 7200, 14000);
+    fl_bottom(wd, ln, et, &crate::testport::text_blob("Call 555 0100")[..], 3, 18000, 26000);
+    fl_bottom(wd, ln, et, &crate::testport::text_blob("PO Box 85123")[..], 3, 30000, 38000);
+    fl_bottom(wd, ln, et, &crate::testport::text_blob("Member FDIC")[..], 3, 42000, 50000);
+    crate::testport::assert_eq(fl_roots_of(wd, ln, et, 3), 4, "four parts, four furniture roots");
+}
+#[test]
 fn test_a_sideways_stamp_in_the_margin_of_one_page_is_furniture() {
     let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
