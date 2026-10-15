@@ -96,6 +96,20 @@
     (pa-set pa r (pf-falpha) 1000)
     (return 0)))
 
+(defn ^I32 tt-atp [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^Blob b ^I32 x ^I32 y ^I32 style ^I32 right ^I32 page]
+  (comment "`tt-at` on page `page` (1 or 2): a word of 500 per character, its left edge at x (its right edge when `right` is 1), 800 tall from y.")
+  (let [^I32 w (* 500 (blob-len b))
+        ^I32 x0 (- x (* right w))
+        ^I32 w0 (wd-count wd)
+        ^I32 ts (cells-len et)]
+    (text-append-utf8 et b 0 (blob-len b))
+    (let [^I32 r (wd-new wd page x0 y (+ x0 w) (+ y 800) x0 (- (+ y 800) 200) (+ x0 w) (- (+ y 800) 200) 0 0 ts (- (cells-len et) ts) -1 -1 -1)]
+      (wd-set wd r (wf-size) 1000)
+      (wd-set wd r (wf-font) 0)
+      (wd-set wd r (wf-style) style))
+    (ln-new ln page x0 y (+ x0 w) (+ y 800) x0 (- (+ y 800) 200) (+ x0 w) (- (+ y 800) 200) 0 0 w0 1)
+    (return 0)))
+
 (defn ^I32 tt-grid [^:mut ^Cells pa ^I32 x0 ^I32 x1 ^I32 x2 ^I32 x3 ^I32 y0 ^I32 y1 ^I32 y2 ^I32 y3]
   (comment "The rules of a 3 x 3 lattice, the vertical at x2 missing between y2 and y3 (the last row's two cells are one).")
   (tt-rule pa x0 (- y0 50) x3 (+ y0 50))
@@ -174,8 +188,8 @@
           (set i (+ i 1))))
     (return 0)))
 
-(defn ^I32 tt-run [^Cells wd ^Cells ln ^Cells et ^Cells pa ^:mut ^Text t]
-  (comment "Tables, then paragraphs, then the brief of the Model. Answers `model-check`'s verdict.")
+(defn ^I32 tt-run-n [^Cells wd ^Cells ln ^Cells et ^Cells pa ^:mut ^Text t ^I32 np]
+  (comment "Tables, then paragraphs, then the brief of the Model, of a document of `np` pages (1 or 2). Answers `model-check`'s verdict.")
   (let [^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
         ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
         ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp (new-cells) ^Cells fr (new-cells)
@@ -191,12 +205,17 @@
         ^Cells grl (new-cells) ^Cells gfl (new-cells) ^Cells cand (new-cells) ^Cells gpts (new-cells) ^Cells gmk (new-cells) ^Cells gim (new-cells) ^Cells t0e (new-cells) ^Cells t1e (new-cells) ^Cells t2e (new-cells) ^Cells t3e (new-cells) ^Cells t4e (new-cells) ^Cells t5e (new-cells) ^Cells t6e (new-cells) ^Cells t7e (new-cells) ^Cells t8e (new-cells) ^Cells t9e (new-cells) ^Cells t10e (new-cells) ^Cells t11e (new-cells) ^Cells t12e (new-cells)]
     (model-init nodes attrs regions text pages ledger layout)
     (page-new pages 1 61200 79200 0 (pk-vector))
-    (gf-doc pa gpts gmk gim 1 (gfx-mode) grl gfl cand (new-cells))
-    (tb-build wd ln et grl gfl 1 tb tc tw tq tx s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 pages t0e t1e t2e t3e t4e t5e t6e t7e t8e t9e t10e t11e t12e)
+    (if (== np 2) (page-new pages 2 61200 79200 0 (pk-vector)))
+    (gf-doc pa gpts gmk gim np (gfx-mode) grl gfl cand (new-cells))
+    (tb-build wd ln et grl gfl np tb tc tw tq tx s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 pages t0e t1e t2e t3e t4e t5e t6e t7e t8e t9e t10e t11e t12e)
     (lc-copy ln lt)
-    (pa-build wd et 1 pages layout nodes attrs regions text ord raw tmp fr gp lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al)
+    (pa-build wd et np pages layout nodes attrs regions text ord raw tmp fr gp lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al)
     (tt-brief t nodes attrs text)
     (return (model-check nodes attrs regions text pages ledger layout st))))
+
+(defn ^I32 tt-run [^Cells wd ^Cells ln ^Cells et ^Cells pa ^:mut ^Text t]
+  (comment "Tables, then paragraphs, then the brief of the Model. Answers `model-check`'s verdict.")
+  (return (tt-run-n wd ln et pa t 1)))
 
 ;; ------------------------------------------------------------------- ruled
 
@@ -939,6 +958,442 @@
     (assert-eq (tt-run wd ln et pa t) 0 "whitespace: well formed")
     (assert-text t "T3w;Gh;R;Ch[Item];Ch[Kind];Chs[Price];Gb;R;C[Bolt];C[Debit];Cs[$803];R;C[Nut];C[Debit];Cs[$91];R;C[Gear];C[Paid];Cs[$1,200];R;C[Cog];C[Debit];Cs[$35];"
                  "a rule through the rows' height between two touching words is a column cut for the whitespace profile too")))
+
+;; ------------------------------------ the smoke review's born-digital table defects (P12.2, D566-)
+
+(defn ^I32 tt-row4 [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^I32 y ^I32 style ^Blob a ^Blob b ^Blob c ^Blob d]
+  (comment "A row of four words, left edges at 7600, 13600, 19600 and 25600 (the columns of a 6000-wide four-column grid from x 7200), 800 tall from y.")
+  (tt-at wd ln et a 7600 y style 0)
+  (tt-at wd ln et b 13600 y style 0)
+  (tt-at wd ln et c 19600 y style 0)
+  (tt-at wd ln et d 25600 y style 0)
+  (return 0))
+
+(deftest test-a-grid-with-no-rules-between-its-rows-has-the-rows-of-its-text
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (comment "Repro shape 1 (BLS, BEA, a 10-K): full-height vertical rules, horizontal rules at the top, under the header and at the bottom,")
+    (comment "and ten rows of four numbers between the last two, a pitch of 1600 apart with nothing ruled between them.")
+    (tt-rule pa 7200 9950 31200 10050)
+    (tt-rule pa 7200 11950 31200 12050)
+    (tt-rule pa 7200 28750 31200 28850)
+    (tt-rule pa 7150 10000 7250 28800)
+    (tt-rule pa 13150 10000 13250 28800)
+    (tt-rule pa 19150 10000 19250 28800)
+    (tt-rule pa 25150 10000 25250 28800)
+    (tt-rule pa 31150 10000 31250 28800)
+    (tt-row4 wd ln et 10600 1 (text-blob "Q1") (text-blob "Q2") (text-blob "Q3") (text-blob "Q4"))
+    (tt-row4 wd ln et 12600 0 (text-blob "0.00") (text-blob "0.10") (text-blob "0.20") (text-blob "0.30"))
+    (tt-row4 wd ln et 14200 0 (text-blob "1.01") (text-blob "1.11") (text-blob "1.21") (text-blob "1.31"))
+    (tt-row4 wd ln et 15800 0 (text-blob "2.02") (text-blob "2.12") (text-blob "2.22") (text-blob "2.32"))
+    (tt-row4 wd ln et 17400 0 (text-blob "3.03") (text-blob "3.13") (text-blob "3.23") (text-blob "3.33"))
+    (tt-row4 wd ln et 19000 0 (text-blob "4.04") (text-blob "4.14") (text-blob "4.24") (text-blob "4.34"))
+    (tt-row4 wd ln et 20600 0 (text-blob "5.05") (text-blob "5.15") (text-blob "5.25") (text-blob "5.35"))
+    (tt-row4 wd ln et 22200 0 (text-blob "6.06") (text-blob "6.16") (text-blob "6.26") (text-blob "6.36"))
+    (tt-row4 wd ln et 23800 0 (text-blob "7.07") (text-blob "7.17") (text-blob "7.27") (text-blob "7.37"))
+    (tt-row4 wd ln et 25400 0 (text-blob "8.08") (text-blob "8.18") (text-blob "8.28") (text-blob "8.38"))
+    (tt-row4 wd ln et 27000 0 (text-blob "9.09") (text-blob "9.19") (text-blob "9.29") (text-blob "9.39"))
+    (assert-eq (tt-run wd ln et pa t) 0 "rows: well formed")
+    (assert-text t "T4r;Gh;R;Ch[Q1];Ch[Q2];Ch[Q3];Ch[Q4];Gb;R;C[0.00];C[0.10];C[0.20];C[0.30];R;C[1.01];C[1.11];C[1.21];C[1.31];R;C[2.02];C[2.12];C[2.22];C[2.32];R;C[3.03];C[3.13];C[3.23];C[3.33];R;C[4.04];C[4.14];C[4.24];C[4.34];R;C[5.05];C[5.15];C[5.25];C[5.35];R;C[6.06];C[6.16];C[6.26];C[6.36];R;C[7.07];C[7.17];C[7.27];C[7.37];R;C[8.08];C[8.18];C[8.28];C[8.38];R;C[9.09];C[9.19];C[9.29];C[9.39];"
+                 "the body is ten rows, one for each line of its text (before: one row of four cells of ten lines each)")))
+
+(deftest test-the-reading-that-yields-the-real-row-count-is-the-table
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (comment "The BLS and BEA shape: the header and two rows are ruled (a lattice of three rows), the eight rows under them are not, their columns")
+    (comment "those of the lattice. The ruled reading scores best and has three rows; the reading of the whitespace has the ten rows of the text.")
+    (tt-rule pa 7200 9950 31200 10050)
+    (tt-rule pa 7200 11950 31200 12050)
+    (tt-rule pa 7200 13550 31200 13650)
+    (tt-rule pa 7200 15150 31200 15250)
+    (tt-rule pa 7150 10000 7250 15200)
+    (tt-rule pa 13150 10000 13250 15200)
+    (tt-rule pa 19150 10000 19250 15200)
+    (tt-rule pa 25150 10000 25250 15200)
+    (tt-rule pa 31150 10000 31250 15200)
+    (tt-row4 wd ln et 10600 1 (text-blob "Q1") (text-blob "Q2") (text-blob "Q3") (text-blob "Q4"))
+    (tt-row4 wd ln et 12400 0 (text-blob "0.00") (text-blob "0.10") (text-blob "0.20") (text-blob "0.30"))
+    (tt-row4 wd ln et 14000 0 (text-blob "1.01") (text-blob "1.11") (text-blob "1.21") (text-blob "1.31"))
+    (tt-row4 wd ln et 15600 0 (text-blob "2.02") (text-blob "2.12") (text-blob "2.22") (text-blob "2.32"))
+    (tt-row4 wd ln et 17200 0 (text-blob "3.03") (text-blob "3.13") (text-blob "3.23") (text-blob "3.33"))
+    (tt-row4 wd ln et 18800 0 (text-blob "4.04") (text-blob "4.14") (text-blob "4.24") (text-blob "4.34"))
+    (tt-row4 wd ln et 20400 0 (text-blob "5.05") (text-blob "5.15") (text-blob "5.25") (text-blob "5.35"))
+    (tt-row4 wd ln et 22000 0 (text-blob "6.06") (text-blob "6.16") (text-blob "6.26") (text-blob "6.36"))
+    (tt-row4 wd ln et 23600 0 (text-blob "7.07") (text-blob "7.17") (text-blob "7.27") (text-blob "7.37"))
+    (tt-row4 wd ln et 25200 0 (text-blob "8.08") (text-blob "8.18") (text-blob "8.28") (text-blob "8.38"))
+    (assert-eq (tt-run wd ln et pa t) 0 "reading: well formed")
+    (assert-text t "T4w;Gh;R;Ch[Q1];Ch[Q2];Ch[Q3];Ch[Q4];Gb;R;C[0.00];C[0.10];C[0.20];C[0.30];R;C[1.01];C[1.11];C[1.21];C[1.31];R;C[2.02];C[2.12];C[2.22];C[2.32];R;C[3.03];C[3.13];C[3.23];C[3.33];R;C[4.04];C[4.14];C[4.24];C[4.34];R;C[5.05];C[5.15];C[5.25];C[5.35];R;C[6.06];C[6.16];C[6.26];C[6.36];R;C[7.07];C[7.17];C[7.27];C[7.37];R;C[8.08];C[8.18];C[8.28];C[8.38];"
+                 "one table of ten rows (before: the ruled three, and the seven rows under them left as paragraphs)")))
+
+(defn ^I32 tt-row3 [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^I32 y ^Blob a ^Blob b ^Blob c]
+  (comment "A row of three four-letter words at x 7600, 20000 and 30000, 800 tall from y (plain).")
+  (tt-at wd ln et a 7600 y 0 0)
+  (tt-at wd ln et b 20000 y 0 0)
+  (tt-at wd ln et c 30000 y 0 0)
+  (return 0))
+
+(deftest test-the-fragments-of-a-zebra-are-the-table-whose-rows-they-are-part-of
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (comment "The 10-K's balance sheet: a zebra whose stripes stop (a stripe is missing, so the fills make two stacks of three) over fourteen rows of one")
+    (comment "pitch. Each stack alone is a reading of its rows; the whitespace reading has all fourteen, the rows between the stacks too.")
+    (tt-fill pa 7200 11600 37200 13200 15000000)
+    (tt-fill pa 7200 14800 37200 16400 15000000)
+    (tt-fill pa 7200 18000 37200 19600 15000000)
+    (tt-fill pa 7200 24400 37200 26000 15000000)
+    (tt-fill pa 7200 27600 37200 29200 15000000)
+    (tt-fill pa 7200 30800 37200 32400 15000000)
+    (tt-row3 wd ln et 12000 (text-blob "Bolt") (text-blob "10.5") (text-blob "2.25"))
+    (tt-row3 wd ln et 13600 (text-blob "Nuts") (text-blob "11.5") (text-blob "3.25"))
+    (tt-row3 wd ln et 15200 (text-blob "Cogs") (text-blob "12.5") (text-blob "4.25"))
+    (tt-row3 wd ln et 16800 (text-blob "Gear") (text-blob "13.5") (text-blob "5.25"))
+    (tt-row3 wd ln et 18400 (text-blob "Axle") (text-blob "14.5") (text-blob "6.25"))
+    (tt-row3 wd ln et 20000 (text-blob "Cams") (text-blob "15.5") (text-blob "7.25"))
+    (tt-row3 wd ln et 21600 (text-blob "Pins") (text-blob "16.5") (text-blob "8.25"))
+    (tt-row3 wd ln et 23200 (text-blob "Rods") (text-blob "17.5") (text-blob "9.25"))
+    (tt-row3 wd ln et 24800 (text-blob "Bars") (text-blob "18.5") (text-blob "1.35"))
+    (tt-row3 wd ln et 26400 (text-blob "Tabs") (text-blob "19.5") (text-blob "2.35"))
+    (tt-row3 wd ln et 28000 (text-blob "Pegs") (text-blob "20.5") (text-blob "3.35"))
+    (tt-row3 wd ln et 29600 (text-blob "Hubs") (text-blob "21.5") (text-blob "4.35"))
+    (tt-row3 wd ln et 31200 (text-blob "Rims") (text-blob "22.5") (text-blob "5.35"))
+    (tt-row3 wd ln et 32800 (text-blob "Tyre") (text-blob "23.5") (text-blob "6.35"))
+    (assert-eq (tt-run wd ln et pa t) 0 "fragments: well formed")
+    (assert-text t "T3w;Gb;R;C[Bolt];C[10.5];C[2.25];R;C[Nuts];C[11.5];C[3.25];R;C[Cogs];C[12.5];C[4.25];R;C[Gear];C[13.5];C[5.25];R;C[Axle];C[14.5];C[6.25];R;C[Cams];C[15.5];C[7.25];R;C[Pins];C[16.5];C[8.25];R;C[Rods];C[17.5];C[9.25];R;C[Bars];C[18.5];C[1.35];R;C[Tabs];C[19.5];C[2.35];R;C[Pegs];C[20.5];C[3.35];R;C[Hubs];C[21.5];C[4.35];R;C[Rims];C[22.5];C[5.35];R;C[Tyre];C[23.5];C[6.35];"
+                 "one table of fourteen rows (before: two tables of the stripes, and the rows between them paragraphs)")))
+
+(defn ^I32 tt-amt [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^I32 y ^I32 style ^Blob label ^Blob a ^Blob b]
+  (comment "A statement row at y: the label at x 7600, the amounts right-aligned at 26000 and 36000 (a statement's two year columns).")
+  (tt-at wd ln et label 7600 y style 0)
+  (tt-at wd ln et a 26000 y style 1)
+  (tt-at wd ln et b 36000 y style 1)
+  (return 0))
+
+(defn ^I32 tt-stmt-head [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^:mut ^Cells pa]
+  (comment "The head of a financial statement (the 10-K's balance sheet): `December 31,` in bold over the two year columns, a short rule under it that")
+  (comment "spans both, the years `2023` and `2022` in bold, each with a short rule under it (y 12100), and the first body row at y 12800.")
+  (tt-at wd ln et (text-blob "December 31,") 23500 10000 1 0)
+  (tt-rule pa 19600 10850 36200 10950)
+  (tt-at wd ln et (text-blob "2023") 26000 11200 1 1)
+  (tt-at wd ln et (text-blob "2022") 36000 11200 1 1)
+  (tt-rule pa 19600 12050 26000 12150)
+  (tt-rule pa 29600 12050 36000 12150)
+  (return 0))
+
+(defn ^I32 tt-stmt-body [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^I32 dollar]
+  (comment "Five rows of a statement from y 12800 a pitch of 1600 apart; when `dollar` is 1 a dollar sign on the first row's amounts, set apart from them")
+  (comment "(a statement sets it at the left of its column: at x 19800 and 29800).")
+  (tt-amt wd ln et 12800 0 (text-blob "Cash and equivalents") (text-blob "33,672") (text-blob "32,260"))
+  (if (== dollar 1)
+    (do (tt-at wd ln et (text-blob "$") 19800 12800 0 0)
+        (tt-at wd ln et (text-blob "$") 29800 12800 0 0)))
+  (tt-amt wd ln et 14400 0 (text-blob "Short-term investments") (text-blob "129,619") (text-blob "92,774"))
+  (tt-amt wd ln et 16000 0 (text-blob "Fixed maturity securities") (text-blob "23,758") (text-blob "25,128"))
+  (tt-amt wd ln et 17600 0 (text-blob "Equity securities") (text-blob "353,842") (text-blob "308,793"))
+  (tt-amt wd ln et 19200 0 (text-blob "Other") (text-blob "19,568") (text-blob "19,657"))
+  (return 0))
+
+(defn ^I32 tt-stmt-total [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^:mut ^Cells pa ^I32 dollar]
+  (comment "The total of the statement: a blank pitch under the last body row (y 19200), a double rule over each amount column (y 21650 and 21850, which")
+  (comment "cluster as one rule) and the total, in bold, at y 22400, a dollar sign on its amounts when `dollar` is 1.")
+  (tt-rule pa 19600 21600 26000 21700)
+  (tt-rule pa 19600 21800 26000 21900)
+  (tt-rule pa 29600 21600 36000 21700)
+  (tt-rule pa 29600 21800 36000 21900)
+  (tt-amt wd ln et 22400 1 (text-blob "Total assets") (text-blob "259,419") (text-blob "251,300"))
+  (if (== dollar 1)
+    (do (tt-at wd ln et (text-blob "$") 19800 22400 1 0)
+        (tt-at wd ln et (text-blob "$") 29800 22400 1 0)))
+  (return 0))
+
+(deftest test-a-header-over-a-short-rule-is-in-the-header
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (comment "Repro shape 3 (the 10-K's statements): `December 31,` over a short rule that spans the two year columns, the years under it with a short")
+    (comment "rule each, then the rows: the label of the columns is a header row that spans them and the years are a header row.")
+    (tt-stmt-head wd ln et pa)
+    (tt-stmt-body wd ln et 0)
+    (assert-eq (tt-run wd ln et pa t) 0 "head: well formed")
+    (assert-text t "T3w;Gh;R;Ch[];Cc2he[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cs[Cash and equivalents];C[33,672];C[32,260];R;Cs[Short-term investments];C[129,619];C[92,774];R;Cs[Fixed maturity securities];C[23,758];C[25,128];R;Cs[Equity securities];C[353,842];C[308,793];R;Cs[Other];C[19,568];C[19,657];"
+                 "the header is two rows, a spanning label over the year columns and the years (before: the label a paragraph over the table)")))
+
+(defn ^I32 tt-wrapped [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^I32 y ^Blob date ^Blob a ^Blob b ^Blob c ^Blob d ^Blob amt]
+  (comment "A row whose Details cell has four lines (x 14000, a pitch of 1200) with the date at x 7600 and the amount, right-aligned at 36000, on the first line")
+  (comment "only: the next row begins 2400 under the fourth line (a gap of one line).")
+  (tt-at wd ln et date 7600 y 0 0)
+  (tt-at wd ln et a 14000 y 0 0)
+  (tt-at wd ln et amt 36000 y 0 1)
+  (tt-at wd ln et b 14000 (+ y 1200) 0 0)
+  (tt-at wd ln et c 14000 (+ y 2400) 0 0)
+  (tt-at wd ln et d 14000 (+ y 3600) 0 0)
+  (return 0))
+
+(deftest test-the-lines-of-a-wrapped-cell-are-in-one-row
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (comment "Repro shape 5 (the Agami statements): no rules, four-line Details cells with the date and the amount on the first line, a gap of a line between")
+    (comment "the rows. The lines under the first have one chunk each (before: a header and no body, the last line a heading).")
+    (tt-at wd ln et (text-blob "Date") 7600 10000 1 0)
+    (tt-at wd ln et (text-blob "Details") 14000 10000 1 0)
+    (tt-at wd ln et (text-blob "Amount") 36000 10000 1 1)
+    (tt-wrapped wd ln et 11600 (text-blob "05 Jan") (text-blob "Payment to Acme Supply") (text-blob "Invoice 4471 settled") (text-blob "Ref ABC 123") (text-blob "Thank you") (text-blob "120.50"))
+    (tt-wrapped wd ln et 17600 (text-blob "12 Jan") (text-blob "Card purchase Bolt Co") (text-blob "Order 5512 shipped") (text-blob "Ref DEF 456") (text-blob "Paid in full") (text-blob "75.00"))
+    (tt-wrapped wd ln et 23600 (text-blob "19 Jan") (text-blob "Transfer to savings") (text-blob "Monthly plan") (text-blob "Ref GHI 789") (text-blob "Standing order") (text-blob "300.00"))
+    (assert-eq (tt-run wd ln et pa t) 0 "wrapped: well formed")
+    (assert-text t "T3w;Gh;R;Ch[Date];Chs[Details];Ch[Amount];Gb;R;C[05 Jan];Cs[Payment to Acme Supply Invoice 4471 settled Ref ABC 123 Thank you];C[120.50];R;C[12 Jan];Cs[Card purchase Bolt Co Order 5512 shipped Ref DEF 456 Paid in full];C[75.00];R;C[19 Jan];Cs[Transfer to savings Monthly plan Ref GHI 789 Standing order];C[300.00];"
+                 "three rows, each with its four lines in one cell (before: no table, a paragraph for each line, in the real statements a header and no body)")))
+
+(deftest test-a-ruled-header-over-wrapped-unruled-rows-is-the-head-of-their-table
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (comment "The Agami statements: a title above the header, the header in two lines (a language each), a rule above the title and one under the header, the")
+    (comment "rows unruled below it, their Details cells wrapped. The chain of the two rules reads the title, the header and a row or two under the rule; the")
+    (comment "whitespace reads the header and every row: the head of the table beside the table (before: the table of the chain, its rows cut after the first).")
+    (tt-rule pa 7200 7950 37200 8050)
+    (tt-rule pa 7200 11950 37200 12050)
+    (tt-at wd ln et (text-blob "Current Account") 7600 8600 1 0)
+    (tt-at wd ln et (text-blob "Date") 7600 10000 1 0)
+    (tt-at wd ln et (text-blob "Details") 14000 10000 1 0)
+    (tt-at wd ln et (text-blob "Amount") 36000 10000 1 1)
+    (tt-at wd ln et (text-blob "Dt") 7600 11000 0 0)
+    (tt-at wd ln et (text-blob "Dx") 14000 11000 0 0)
+    (tt-at wd ln et (text-blob "Am") 36000 11000 0 1)
+    (tt-wrapped wd ln et 12600 (text-blob "05 Jan") (text-blob "Payment to Acme Supply") (text-blob "Invoice 4471 settled") (text-blob "Ref ABC 123") (text-blob "Thank you") (text-blob "120.50"))
+    (tt-wrapped wd ln et 18600 (text-blob "12 Jan") (text-blob "Card purchase Bolt Co") (text-blob "Order 5512 shipped") (text-blob "Ref DEF 456") (text-blob "Paid in full") (text-blob "75.00"))
+    (tt-wrapped wd ln et 24600 (text-blob "19 Jan") (text-blob "Transfer to savings") (text-blob "Monthly plan") (text-blob "Ref GHI 789") (text-blob "Standing order") (text-blob "300.00"))
+    (tt-wrapped wd ln et 30600 (text-blob "26 Jan") (text-blob "Interest paid") (text-blob "Quarterly") (text-blob "Ref JKL 012") (text-blob "Credit") (text-blob "4.20"))
+    (tt-wrapped wd ln et 36600 (text-blob "28 Jan") (text-blob "Cash deposit") (text-blob "Branch 14") (text-blob "Ref MNO 345") (text-blob "Counter") (text-blob "50.00"))
+    (tt-wrapped wd ln et 42600 (text-blob "31 Jan") (text-blob "Service charge") (text-blob "Monthly fee") (text-blob "Ref PQR 678") (text-blob "Account") (text-blob "8.00"))
+    (assert-eq (tt-run wd ln et pa t) 0 "head: well formed")
+    (assert-text t "P[Current Account];T3w;Gh;R;Chs[Date];Chs[Details];Ch[Amount];Gb;R;Cs[Dt];Cs[Dx];Ce[Am];R;Cs[05 Jan];Cs[Payment to Acme Supply Invoice 4471 settled Ref ABC 123 Thank you];Ce[120.50];R;Cs[12 Jan];Cs[Card purchase Bolt Co Order 5512 shipped Ref DEF 456 Paid in full];Ce[75.00];R;Cs[19 Jan];Cs[Transfer to savings Monthly plan Ref GHI 789 Standing order];Ce[300.00];R;Cs[26 Jan];Cs[Interest paid Quarterly Ref JKL 012 Credit];Ce[4.20];R;Cs[28 Jan];Cs[Cash deposit Branch 14 Ref MNO 345 Counter];Ce[50.00];R;Cs[31 Jan];Cs[Service charge Monthly fee Ref PQR 678 Account];Ce[8.00];"
+                 "one table, the header and the six rows (before: the table of the rules, its header and one row, and the rest paragraphs)")))
+
+(defn ^I32 tt-cols5 [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^I32 page ^I32 y ^I32 style ^Blob date ^Blob what ^Blob debit ^Blob credit ^Blob bal]
+  (comment "A row of a ledger on page `page` at y: the date at x 7600, the details at 14000, the debit, the credit and the balance right-aligned at 26000,")
+  (comment "36000 and 46000 (an empty blob is no word).")
+  (tt-atp wd ln et date 7600 y style 0 page)
+  (tt-atp wd ln et what 14000 y style 0 page)
+  (if (> (blob-len debit) 0) (tt-atp wd ln et debit 26000 y style 1 page))
+  (if (> (blob-len credit) 0) (tt-atp wd ln et credit 36000 y style 1 page))
+  (tt-atp wd ln et bal 46000 y style 1 page)
+  (return 0))
+
+(defn ^I32 tt-french [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^I32 y ^I32 style ^Blob what ^Blob d1 ^Blob d2 ^Blob b1 ^Blob b2]
+  (comment "A row of a French statement at y: the details at x 7600, a debit `1 895,80 $` (three words, the sign after the amount) at 24000 and a balance")
+  (comment "`11 732,54 $` at 38000, the signs set a gap from the amounts that is the width of a space (the amounts before the next column's).")
+  (tt-at wd ln et what 7600 y style 0)
+  (if (> (blob-len d1) 0)
+    (do (tt-at wd ln et d1 24000 y style 0)
+        (tt-at wd ln et d2 24900 y style 0)
+        (tt-at wd ln et (text-blob "$") 28300 y style 0)))
+  (tt-at wd ln et b1 38000 y style 0)
+  (tt-at wd ln et b2 39400 y style 0)
+  (tt-at wd ln et (text-blob "$") 42800 y style 0)
+  (return 0))
+
+(defn ^I32 tt-leader [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^I32 y ^Blob label ^Blob line ^Blob amt]
+  (comment "An IRS-style row at y: the label at x 7600, six full stops of their own (every 1400 from x 22000, a gap each of 900), the line number at 33000 and the")
+  (comment "amount right-aligned at 43000.")
+  (tt-at wd ln et label 7600 y 0 0)
+  (tt-at wd ln et (text-blob ".") 22000 y 0 0)
+  (tt-at wd ln et (text-blob ".") 23400 y 0 0)
+  (tt-at wd ln et (text-blob ".") 24800 y 0 0)
+  (tt-at wd ln et (text-blob ".") 26200 y 0 0)
+  (tt-at wd ln et (text-blob ".") 27600 y 0 0)
+  (tt-at wd ln et (text-blob ".") 29000 y 0 0)
+  (tt-at wd ln et line 33000 y 0 0)
+  (tt-at wd ln et amt 43000 y 0 1)
+  (return 0))
+
+(deftest test-the-rows-above-the-first-row-of-amounts-are-the-header
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (comment "The BLS and BEA tables: a header of cells that wrap into lines (a group's name, `Aug.`, `2026`), in the type of the body and not bold, over rows of")
+    (comment "amounts with a decimal point: the header is every row above the first of them (before: the first row alone, or none).")
+    (tt-at wd ln et (text-blob "Raw") 20000 10000 0 0)
+    (tt-at wd ln et (text-blob "Adj") 30000 10000 0 0)
+    (tt-at wd ln et (text-blob "Aug.") 20000 11200 0 0)
+    (tt-at wd ln et (text-blob "Jul.") 30000 11200 0 0)
+    (tt-at wd ln et (text-blob "2026") 20000 12400 0 0)
+    (tt-at wd ln et (text-blob "2026") 30000 12400 0 0)
+    (tt-at wd ln et (text-blob "Category") 7600 12400 0 0)
+    (tt-row3 wd ln et 14400 (text-blob "Food") (text-blob "13.5") (text-blob "2.7"))
+    (tt-row3 wd ln et 16000 (text-blob "Fuel") (text-blob "11.5") (text-blob "3.1"))
+    (tt-row3 wd ln et 17600 (text-blob "Rent") (text-blob "12.5") (text-blob "4.4"))
+    (tt-row3 wd ln et 19200 (text-blob "Cars") (text-blob "14.5") (text-blob "5.9"))
+    (tt-row3 wd ln et 20800 (text-blob "Tolls") (text-blob "15.5") (text-blob "6.2"))
+    (tt-row3 wd ln et 22400 (text-blob "Power") (text-blob "16.5") (text-blob "7.7"))
+    (assert-eq (tt-run wd ln et pa t) 0 "head: well formed")
+    (assert-text t "T3w;Gh;R;Ch[];Ch[Raw];Ch[Adj];R;Ch[];Ch[Aug.];Ch[Jul.];R;Ch[Category];Ch[2026];Ch[2026];Gb;R;C[Food];C[13.5];C[2.7];R;C[Fuel];C[11.5];C[3.1];R;C[Rent];C[12.5];C[4.4];R;C[Cars];C[14.5];C[5.9];R;C[Tolls];C[15.5];C[6.2];R;C[Power];C[16.5];C[7.7];"
+                 "the three lines above the first row of amounts are the header (before: the first of them, the others rows of the body)")))
+
+(deftest test-a-block-of-totals-in-the-last-columns-is-no-part-of-a-whitespace-table
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (comment "The invoice (D559's guard, now for the whitespace reading, which has more rows than the ruled one that scored best): the rows and under them a")
+    (comment "block of totals whose labels begin in the second column, no rule: a table of its rows, the totals paragraphs.")
+    (tt-rule pa 7200 9550 32200 9650)
+    (tt-rule pa 7200 11150 32200 11250)
+    (tt-rule pa 7200 17550 32200 17650)
+    (tt-row3 wd ln et 10000 (text-blob "Item") (text-blob "Desc") (text-blob "Qty"))
+    (tt-row3 wd ln et 11600 (text-blob "A-100") (text-blob "Pipe") (text-blob "40.5"))
+    (tt-row3 wd ln et 13200 (text-blob "B-220") (text-blob "Joint") (text-blob "12.5"))
+    (tt-row3 wd ln et 14800 (text-blob "C-310") (text-blob "Paste") (text-blob "60.5"))
+    (tt-row3 wd ln et 16400 (text-blob "D-005") (text-blob "Tape") (text-blob "70.5"))
+    (tt-at wd ln et (text-blob "Subtotal") 30000 18000 0 0)
+    (tt-at wd ln et (text-blob "46.4") 38000 18000 0 0)
+    (tt-at wd ln et (text-blob "VAT 20%") 30000 19600 0 0)
+    (tt-at wd ln et (text-blob "9.28") 38000 19600 0 0)
+    (tt-at wd ln et (text-blob "Total due") 30000 21200 1 0)
+    (tt-at wd ln et (text-blob "55.7") 38000 21200 1 0)
+    (assert-eq (tt-run wd ln et pa t) 0 "totals: well formed")
+    (assert-text t "T3p;Gh;R;Ch[Item];Ch[Desc];Ch[Qty];Gb;R;C[A-100];C[Pipe];C[40.5];R;C[B-220];C[Joint];C[12.5];R;C[C-310];C[Paste];C[60.5];R;C[D-005];C[Tape];C[70.5];P[Subtotal];P[46.4];P[VAT 20%];P[9.28];P[Total due];P[55.7];"
+                 "the rows are the table and the totals are not (D559; before the guard of the whitespace run, the whitespace reading, with more rows, won and took them in)")))
+
+(deftest test-the-dots-of-a-leader-are-no-cells
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (comment "The 1120's lines (D17, D18, D20): a label, a leader of full stops a gap apart, the line number, the amount. Each full stop is a chunk of its own to the")
+    (comment "rows' words and the six of a row, in the same places in every row, are columns of the table (before: a table of nine columns, the dots cells).")
+    (tt-at wd ln et (text-blob "Item") 7600 10000 1 0)
+    (tt-at wd ln et (text-blob "Line") 33000 10000 1 0)
+    (tt-at wd ln et (text-blob "Amount") 43000 10000 1 1)
+    (tt-leader wd ln et 11600 (text-blob "Gross receipts") (text-blob "1a") (text-blob "1,200"))
+    (tt-leader wd ln et 13200 (text-blob "Returns") (text-blob "1b") (text-blob "30"))
+    (tt-leader wd ln et 14800 (text-blob "Cost of goods sold") (text-blob "2") (text-blob "450"))
+    (tt-leader wd ln et 16400 (text-blob "Gross profit") (text-blob "3") (text-blob "720"))
+    (tt-leader wd ln et 18000 (text-blob "Dividends") (text-blob "4") (text-blob "15"))
+    (assert-eq (tt-run wd ln et pa t) 0 "leader: well formed")
+    (assert-text t "T3w;Gh;R;Ch[Item];Ch[Line];Ch[Amount];Gb;R;C[Gross receipts . . . . . .];C[1a];Ce[1,200];R;C[Returns . . . . . .];C[1b];Ce[30];R;C[Cost of goods sold . . . . . .];C[2];Ce[450];R;C[Gross profit . . . . . .];C[3];Ce[720];R;C[Dividends . . . . . .];C[4];Ce[15];"
+                 "the leader is the end of the label's cell: three columns (before: nine, the six full stops the cells of six of them)")))
+
+(deftest test-a-row-span-does-not-cross-into-the-foot
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (comment "Repro shape 13 (the ICDAR table of savings): a label that spans three rows and the bold total that ends its group, a fourth row of the same span.")
+    (comment "The total is the last row, bold under rows that are not, and would be the foot: but the span goes down into it, and a row group does not cross")
+    (comment "from the body into the foot. The total stays in the body, the span whole (before: a foot of one row, the span four rows of it three).")
+    (tt-rule pa 7200 9950 37200 10050)
+    (tt-rule pa 7200 11950 37200 12050)
+    (tt-rule pa 17200 13550 37200 13650)
+    (tt-rule pa 17200 15150 37200 15250)
+    (tt-rule pa 17200 16750 37200 16850)
+    (tt-rule pa 7200 18350 37200 18450)
+    (tt-rule pa 7150 10000 7250 18400)
+    (tt-rule pa 17150 10000 17250 18400)
+    (tt-rule pa 27150 10000 27250 18400)
+    (tt-rule pa 37150 10000 37250 18400)
+    (tt-at wd ln et (text-blob "Group") 7600 10600 1 0)
+    (tt-at wd ln et (text-blob "Level") 17600 10600 1 0)
+    (tt-at wd ln et (text-blob "Pct") 27600 10600 1 0)
+    (tt-at wd ln et (text-blob "Combined") 7600 12200 0 0)
+    (tt-at wd ln et (text-blob "Med-low") 17600 12200 0 0)
+    (tt-at wd ln et (text-blob "1.5%") 27600 12200 0 0)
+    (tt-at wd ln et (text-blob "Med-high") 17600 13800 0 0)
+    (tt-at wd ln et (text-blob "2.3%") 27600 13800 0 0)
+    (tt-at wd ln et (text-blob "Very high") 17600 15400 0 0)
+    (tt-at wd ln et (text-blob "2.4%") 27600 15400 0 0)
+    (tt-at wd ln et (text-blob "Total") 17600 17000 1 0)
+    (tt-at wd ln et (text-blob "6%") 27600 17000 1 0)
+    (assert-eq (tt-run wd ln et pa t) 0 "span: well formed")
+    (assert-text t "T3r;Gh;R;Ch[Group];Ch[Level];Ch[Pct];Gb;R;Cr4[Combined];Cs[Med-low];Cs[1.5%];R;Cs[Med-high];Cs[2.3%];R;Cs[Very high];Cs[2.4%];R;Cs[Total];Cs[6%];"
+                 "the total is in the body with the rows its label spans (before: `Gf;R;Cws[Total];Cw[6%];` under a label of four rows that began in the body)")))
+
+(deftest test-a-currency-sign-after-its-amount-stays-with-it
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (comment "The Harbour statement writes `1 895,80 $` and `11 732,54 $`: the sign is the end of its amount and not the lead of the next one (a sign of a word")
+    (comment "of its own before a figure is the figure's only when the row's signs go before the figures).")
+    (tt-at wd ln et (text-blob "Details") 7600 10000 1 0)
+    (tt-at wd ln et (text-blob "Debit") 24000 10000 1 0)
+    (tt-at wd ln et (text-blob "Solde") 38000 10000 1 0)
+    (tt-french wd ln et 11600 0 (text-blob "Uber") (text-blob "1") (text-blob "895,80") (text-blob "11") (text-blob "732,54"))
+    (tt-french wd ln et 13200 0 (text-blob "La Baie") (text-blob "88") (text-blob "96") (text-blob "11") (text-blob "643,58"))
+    (tt-french wd ln et 14800 0 (text-blob "Tim") (text-blob "53") (text-blob "50") (text-blob "11") (text-blob "590,08"))
+    (tt-french wd ln et 16400 0 (text-blob "Apple") (text-blob "17") (text-blob "26") (text-blob "11") (text-blob "572,82"))
+    (assert-eq (tt-run wd ln et pa t) 0 "french: well formed")
+    (assert-text t "T3w;Gh;R;Chs[Details];Ch[Debit];Ch[Solde];Gb;R;Cs[Uber];C[1 895,80 $];C[11 732,54 $];R;Cs[La Baie];C[88 96 $];C[11 643,58 $];R;Cs[Tim];C[53 50 $];C[11 590,08 $];R;Cs[Apple];C[17 26 $];C[11 572,82 $];"
+                 "each amount keeps its sign: three columns (a sign that went to the amount after it made the debit and the balance one cell)")))
+
+(deftest test-a-table-whose-page-has-an-empty-column-is-one-with-the-page-before
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (comment "Repro shape 4 (the Harbour statement): five columns on the first page, the second page has only debits (its credit column is empty but for")
+    (comment "the header the table repeats): the columns of the second are a subset of the first's, aligned by x, so it is the same table; its rows have the empty")
+    (comment "cell (before: a table of four columns on the second page, the pages not linked).")
+    (tt-cols5 wd ln et 1 10000 1 (text-blob "Date") (text-blob "Details") (text-blob "Debit") (text-blob "Credit") (text-blob "Balance"))
+    (tt-cols5 wd ln et 1 11600 0 (text-blob "02 Jan") (text-blob "Skip Plats") (text-blob "151.30") (text-blob "") (text-blob "10,598.70"))
+    (tt-cols5 wd ln et 1 13200 0 (text-blob "02 Jan") (text-blob "Salary") (text-blob "") (text-blob "10.33") (text-blob "10,609.03"))
+    (tt-cols5 wd ln et 1 14800 0 (text-blob "03 Jan") (text-blob "Amazon") (text-blob "1,200.45") (text-blob "") (text-blob "9,408.58"))
+    (tt-cols5 wd ln et 1 16400 0 (text-blob "06 Jan") (text-blob "Paie") (text-blob "") (text-blob "101.15") (text-blob "9,509.73"))
+    (tt-cols5 wd ln et 1 18000 0 (text-blob "06 Jan") (text-blob "Petro") (text-blob "29.69") (text-blob "") (text-blob "9,480.04"))
+    (tt-cols5 wd ln et 1 19600 0 (text-blob "06 Jan") (text-blob "Spotify") (text-blob "541.27") (text-blob "") (text-blob "8,938.77"))
+    (tt-cols5 wd ln et 2 10000 1 (text-blob "Date") (text-blob "Details") (text-blob "Debit") (text-blob "Credit") (text-blob "Balance"))
+    (tt-cols5 wd ln et 2 11600 0 (text-blob "21 Jan") (text-blob "Uber") (text-blob "1,895.80") (text-blob "") (text-blob "11,732.54"))
+    (tt-cols5 wd ln et 2 13200 0 (text-blob "23 Jan") (text-blob "La Baie") (text-blob "88.96") (text-blob "") (text-blob "11,643.58"))
+    (tt-cols5 wd ln et 2 14800 0 (text-blob "24 Jan") (text-blob "Tim") (text-blob "53.50") (text-blob "") (text-blob "11,590.08"))
+    (tt-cols5 wd ln et 2 16400 0 (text-blob "25 Jan") (text-blob "Apple") (text-blob "17.26") (text-blob "") (text-blob "11,572.82"))
+    (tt-cols5 wd ln et 2 18000 0 (text-blob "26 Jan") (text-blob "Gaz") (text-blob "422.11") (text-blob "") (text-blob "11,150.71"))
+    (tt-cols5 wd ln et 2 19600 0 (text-blob "26 Jan") (text-blob "Netflix") (text-blob "17.11") (text-blob "") (text-blob "11,133.60"))
+    (assert-eq (tt-run-n wd ln et pa t 2) 0 "ledger: well formed")
+    (assert-text t "T5w;Gh;R;Ch[Date];Chs[Details];Che[Debit];Ch[Credit];Che[Balance];Gb;R;C[02 Jan];Cs[Skip Plats];Ce[151.30];C[];C[10,598.70];R;C[02 Jan];Cs[Salary];Ce[];C[10.33];C[10,609.03];R;C[03 Jan];Cs[Amazon];Ce[1,200.45];C[];C[9,408.58];R;C[06 Jan];Cs[Paie];Ce[];C[101.15];C[9,509.73];R;C[06 Jan];Cs[Petro];Ce[29.69];C[];C[9,480.04];R;C[06 Jan];Cs[Spotify];Ce[541.27];C[];C[8,938.77];R;C[21 Jan];Cs[Uber];Ce[1,895.80];C[];C[11,732.54];R;C[23 Jan];Cs[La Baie];Ce[88.96];C[];C[11,643.58];R;C[24 Jan];Cs[Tim];Ce[53.50];C[];C[11,590.08];R;C[25 Jan];Cs[Apple];Ce[17.26];C[];C[11,572.82];R;C[26 Jan];Cs[Gaz];Ce[422.11];C[];C[11,150.71];R;C[26 Jan];Cs[Netflix];Ce[17.11];C[];C[11,133.60];"
+                 "one table of five columns across the two pages, the second page's rows with their empty credit cells (before: two tables, four columns on the second)")))
+
+(deftest test-a-sections-label-in-a-table-is-a-row-that-spans-it
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (comment "The 10-K's labels: `ASSETS` before the first row and `Railroad, Utilities and Energy:` between two groups of rows, each in bold, one cell,")
+    (comment "no amount. They are rows of the table whose one cell spans the columns (before: a heading or a paragraph that split the table, or a cell of the")
+    (comment "first column and cells that are empty).")
+    (tt-stmt-head wd ln et pa)
+    (tt-at wd ln et (text-blob "ASSETS") 7600 12800 1 0)
+    (tt-amt wd ln et 14400 0 (text-blob "Cash and equivalents") (text-blob "33,672") (text-blob "32,260"))
+    (tt-amt wd ln et 16000 0 (text-blob "Short-term investments") (text-blob "129,619") (text-blob "92,774"))
+    (tt-at wd ln et (text-blob "Railroad, Utilities and Energy:") 7600 17600 1 0)
+    (tt-amt wd ln et 19200 0 (text-blob "Receivables") (text-blob "7,086") (text-blob "4,795"))
+    (tt-amt wd ln et 20800 0 (text-blob "Goodwill") (text-blob "33,758") (text-blob "26,597"))
+    (assert-eq (tt-run wd ln et pa t) 0 "labels: well formed")
+    (assert-text t "T3w;Gh;R;Ch[];Cc2he[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cc3[ASSETS];R;Cs[Cash and equivalents];Ce[33,672];C[32,260];R;Cs[Short-term investments];Ce[129,619];C[92,774];R;Cc3[Railroad, Utilities and Energy:];R;Cs[Receivables];Ce[7,086];C[4,795];R;Cs[Goodwill];Ce[33,758];C[26,597];"
+                 "a label with no amount, in bold, is one cell that spans the row: the table is one table, `ASSETS` no header row")))
+
+(deftest test-a-currency-sign-set-apart-from-its-amount-is-in-its-cell
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (comment "A statement sets the dollar sign at the left of its column and the amount at the right of it (the first row's amounts here, 2700 apart): the")
+    (comment "sign is part of its amount's cell, no cell of its own (before: a column of its own, or the end of the cell before it).")
+    (tt-stmt-head wd ln et pa)
+    (tt-stmt-body wd ln et 1)
+    (assert-eq (tt-run wd ln et pa t) 0 "dollar: well formed")
+    (assert-text t "T3w;Gh;R;Ch[];Cc2he[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cs[Cash and equivalents];Ce[$ 33,672];Ce[$ 32,260];R;Cs[Short-term investments];Ce[129,619];Ce[92,774];R;Cs[Fixed maturity securities];Ce[23,758];Ce[25,128];R;Cs[Equity securities];Ce[353,842];Ce[308,793];R;Cs[Other];Ce[19,568];Ce[19,657];"
+                 "the signs are in the cells of the amounts after them: three columns")))
+
+(deftest test-the-total-under-a-double-rule-is-a-row-of-the-table
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text) ^Text t2 (new-text)]
+    (comment "Repro shape 3: the total stands a blank pitch under the body, under a double rule over the amount columns, its label in the first column:")
+    (comment "the last row of the table (before: five paragraphs under it).")
+    (tt-stmt-head wd ln et pa)
+    (tt-stmt-body wd ln et 1)
+    (tt-stmt-total wd ln et pa 1)
+    (assert-eq (tt-run wd ln et pa t) 0 "total: well formed")
+    (assert-text t "T3p;Gh;R;Ch[];Cc2h[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cs[Cash and equivalents];Ce[$ 33,672];Ce[$ 32,260];R;Cs[Short-term investments];Ce[129,619];Ce[92,774];R;Cs[Fixed maturity securities];Ce[23,758];Ce[25,128];R;Cs[Equity securities];Ce[353,842];Ce[308,793];R;Cs[Other];Ce[19,568];Ce[19,657];Gf;R;Cws[Total assets];Cwe[$ 259,419];Cwe[$ 251,300];"
+                 "the total is a row of the table, in its foot")
+    (comment "A block of totals in the last columns under it (an invoice's: its label is not in the first column) is no row of the table (D559).")
+    (cells-drop wd 0)
+    (cells-drop ln 0)
+    (cells-drop et 0)
+    (cells-drop pa 0)
+    (tt-stmt-head wd ln et pa)
+    (tt-stmt-body wd ln et 1)
+    (tt-rule pa 19600 21600 26000 21700)
+    (tt-rule pa 19600 21800 26000 21900)
+    (tt-rule pa 29600 21600 36000 21700)
+    (tt-rule pa 29600 21800 36000 21900)
+    (tt-at wd ln et (text-blob "Total due") 14000 22400 1 0)
+    (tt-at wd ln et (text-blob "259,419") 26000 22400 1 1)
+    (tt-at wd ln et (text-blob "251,300") 36000 22400 1 1)
+    (assert-eq (tt-run wd ln et pa t2) 0 "block: well formed")
+    (assert-text t2 "T3p;Gh;R;Ch[];Cc2he[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cs[Cash and equivalents];Ce[$ 33,672];Ce[$ 32,260];R;Cs[Short-term investments];Ce[129,619];Ce[92,774];R;Cs[Fixed maturity securities];Ce[23,758];Ce[25,128];R;Cs[Equity securities];Ce[353,842];Ce[308,793];R;Cs[Other];Ce[19,568];Ce[19,657];P[Total due];P[259,419];P[251,300];"
+                 "a block of totals that does not begin in the first column is not the table's, whatever its rule")))
 
 ;; --------------------------------------------------------------- real documents
 

@@ -84,6 +84,21 @@ func ttFill(pa *port.Cells, x0 int32, y0 int32, x1 int32, y1 int32, colour int32
 	return 0
 }
 
+func ttAtp(wd *port.Cells, ln *port.Cells, et *port.Cells, b []byte, x int32, y int32, style int32, right int32, page int32) int32 {
+	// `tt-at` on page `page` (1 or 2): a word of 500 per character, its left edge at x (its right edge when `right` is 1), 800 tall from y.
+	var w int32 = 500 * port.BlobLen(b)
+	var x0 int32 = x - (right * w)
+	var w0 int32 = evidence.WdCount(wd)
+	var ts int32 = port.CellsLen(et)
+	model.TextAppendUtf8(et, b, 0, port.BlobLen(b))
+	var r int32 = evidence.WdNew(wd, page, x0, y, x0+w, y+800, x0, (y+800)-200, x0+w, (y+800)-200, 0, 0, ts, port.CellsLen(et)-ts, -1, -1, -1)
+	evidence.WdSet(wd, r, evidence.WfSize(), 1000)
+	evidence.WdSet(wd, r, evidence.WfFont(), 0)
+	evidence.WdSet(wd, r, evidence.WfStyle(), style)
+	evidence.LnNew(ln, page, x0, y, x0+w, y+800, x0, (y+800)-200, x0+w, (y+800)-200, 0, 0, w0, 1)
+	return 0
+}
+
 func ttGrid(pa *port.Cells, x0 int32, x1 int32, x2 int32, x3 int32, y0 int32, y1 int32, y2 int32, y3 int32) int32 {
 	// The rules of a 3 x 3 lattice, the vertical at x2 missing between y2 and y3 (the last row's two cells are one).
 	ttRule(pa, x0, y0-50, x3, y0+50)
@@ -207,8 +222,8 @@ func ttBrief(t *strings.Builder, nodes *port.Cells, attrs *port.Cells, text *por
 	return 0
 }
 
-func ttRun(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *strings.Builder) int32 {
-	// Tables, then paragraphs, then the brief of the Model. Answers `model-check`'s verdict.
+func ttRunN(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *strings.Builder, np int32) int32 {
+	// Tables, then paragraphs, then the brief of the Model, of a document of `np` pages (1 or 2). Answers `model-check`'s verdict.
 	var nodes *port.Cells = port.NewCells()
 	var attrs *port.Cells = port.NewCells()
 	var regions *port.Cells = port.NewCells()
@@ -283,12 +298,20 @@ func ttRun(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *st
 	var t12e *port.Cells = port.NewCells()
 	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
 	model.PageNew(pages, 1, 61200, 79200, 0, model.PkVector())
-	gfuse.GfDoc(pa, gpts, gmk, gim, 1, gfuse.GfxMode(), grl, gfl, cand, port.NewCells())
-	table.TbBuild(wd, ln, et, grl, gfl, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e)
+	if np == 2 {
+		model.PageNew(pages, 2, 61200, 79200, 0, model.PkVector())
+	}
+	gfuse.GfDoc(pa, gpts, gmk, gim, np, gfuse.GfxMode(), grl, gfl, cand, port.NewCells())
+	table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e)
 	columns.LcCopy(ln, lt)
-	para.PaBuild(wd, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al)
+	para.PaBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al)
 	ttBrief(t, nodes, attrs, text)
 	return model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st)
+}
+
+func ttRun(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *strings.Builder) int32 {
+	// Tables, then paragraphs, then the brief of the Model. Answers `model-check`'s verdict.
+	return ttRunN(wd, ln, et, pa, t, 1)
 }
 
 func TestALatticeIsATableAndAMissingRuleIsASpan(emonT *testing.T) {
@@ -1116,6 +1139,502 @@ func TestAVerticalRuleCutsTheColumnsOfATableWithoutHorizontalRules(emonT *testin
 	ttRule(pa, 27000, 9800, 27100, 17400)
 	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "whitespace: well formed")
 	port.AssertText(emonT, t, "T3w;Gh;R;Ch[Item];Ch[Kind];Chs[Price];Gb;R;C[Bolt];C[Debit];Cs[$803];R;C[Nut];C[Debit];Cs[$91];R;C[Gear];C[Paid];Cs[$1,200];R;C[Cog];C[Debit];Cs[$35];", "a rule through the rows' height between two touching words is a column cut for the whitespace profile too")
+}
+
+func ttRow4(wd *port.Cells, ln *port.Cells, et *port.Cells, y int32, style int32, a []byte, b []byte, c []byte, d []byte) int32 {
+	// A row of four words, left edges at 7600, 13600, 19600 and 25600 (the columns of a 6000-wide four-column grid from x 7200), 800 tall from y.
+	ttAt(wd, ln, et, a, 7600, y, style, 0)
+	ttAt(wd, ln, et, b, 13600, y, style, 0)
+	ttAt(wd, ln, et, c, 19600, y, style, 0)
+	ttAt(wd, ln, et, d, 25600, y, style, 0)
+	return 0
+}
+
+func TestAGridWithNoRulesBetweenItsRowsHasTheRowsOfItsText(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	// Repro shape 1 (BLS, BEA, a 10-K): full-height vertical rules, horizontal rules at the top, under the header and at the bottom,
+	// and ten rows of four numbers between the last two, a pitch of 1600 apart with nothing ruled between them.
+	ttRule(pa, 7200, 9950, 31200, 10050)
+	ttRule(pa, 7200, 11950, 31200, 12050)
+	ttRule(pa, 7200, 28750, 31200, 28850)
+	ttRule(pa, 7150, 10000, 7250, 28800)
+	ttRule(pa, 13150, 10000, 13250, 28800)
+	ttRule(pa, 19150, 10000, 19250, 28800)
+	ttRule(pa, 25150, 10000, 25250, 28800)
+	ttRule(pa, 31150, 10000, 31250, 28800)
+	ttRow4(wd, ln, et, 10600, 1, port.TextBlob("Q1"), port.TextBlob("Q2"), port.TextBlob("Q3"), port.TextBlob("Q4"))
+	ttRow4(wd, ln, et, 12600, 0, port.TextBlob("0.00"), port.TextBlob("0.10"), port.TextBlob("0.20"), port.TextBlob("0.30"))
+	ttRow4(wd, ln, et, 14200, 0, port.TextBlob("1.01"), port.TextBlob("1.11"), port.TextBlob("1.21"), port.TextBlob("1.31"))
+	ttRow4(wd, ln, et, 15800, 0, port.TextBlob("2.02"), port.TextBlob("2.12"), port.TextBlob("2.22"), port.TextBlob("2.32"))
+	ttRow4(wd, ln, et, 17400, 0, port.TextBlob("3.03"), port.TextBlob("3.13"), port.TextBlob("3.23"), port.TextBlob("3.33"))
+	ttRow4(wd, ln, et, 19000, 0, port.TextBlob("4.04"), port.TextBlob("4.14"), port.TextBlob("4.24"), port.TextBlob("4.34"))
+	ttRow4(wd, ln, et, 20600, 0, port.TextBlob("5.05"), port.TextBlob("5.15"), port.TextBlob("5.25"), port.TextBlob("5.35"))
+	ttRow4(wd, ln, et, 22200, 0, port.TextBlob("6.06"), port.TextBlob("6.16"), port.TextBlob("6.26"), port.TextBlob("6.36"))
+	ttRow4(wd, ln, et, 23800, 0, port.TextBlob("7.07"), port.TextBlob("7.17"), port.TextBlob("7.27"), port.TextBlob("7.37"))
+	ttRow4(wd, ln, et, 25400, 0, port.TextBlob("8.08"), port.TextBlob("8.18"), port.TextBlob("8.28"), port.TextBlob("8.38"))
+	ttRow4(wd, ln, et, 27000, 0, port.TextBlob("9.09"), port.TextBlob("9.19"), port.TextBlob("9.29"), port.TextBlob("9.39"))
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "rows: well formed")
+	port.AssertText(emonT, t, "T4r;Gh;R;Ch[Q1];Ch[Q2];Ch[Q3];Ch[Q4];Gb;R;C[0.00];C[0.10];C[0.20];C[0.30];R;C[1.01];C[1.11];C[1.21];C[1.31];R;C[2.02];C[2.12];C[2.22];C[2.32];R;C[3.03];C[3.13];C[3.23];C[3.33];R;C[4.04];C[4.14];C[4.24];C[4.34];R;C[5.05];C[5.15];C[5.25];C[5.35];R;C[6.06];C[6.16];C[6.26];C[6.36];R;C[7.07];C[7.17];C[7.27];C[7.37];R;C[8.08];C[8.18];C[8.28];C[8.38];R;C[9.09];C[9.19];C[9.29];C[9.39];", "the body is ten rows, one for each line of its text (before: one row of four cells of ten lines each)")
+}
+
+func TestTheReadingThatYieldsTheRealRowCountIsTheTable(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	// The BLS and BEA shape: the header and two rows are ruled (a lattice of three rows), the eight rows under them are not, their columns
+	// those of the lattice. The ruled reading scores best and has three rows; the reading of the whitespace has the ten rows of the text.
+	ttRule(pa, 7200, 9950, 31200, 10050)
+	ttRule(pa, 7200, 11950, 31200, 12050)
+	ttRule(pa, 7200, 13550, 31200, 13650)
+	ttRule(pa, 7200, 15150, 31200, 15250)
+	ttRule(pa, 7150, 10000, 7250, 15200)
+	ttRule(pa, 13150, 10000, 13250, 15200)
+	ttRule(pa, 19150, 10000, 19250, 15200)
+	ttRule(pa, 25150, 10000, 25250, 15200)
+	ttRule(pa, 31150, 10000, 31250, 15200)
+	ttRow4(wd, ln, et, 10600, 1, port.TextBlob("Q1"), port.TextBlob("Q2"), port.TextBlob("Q3"), port.TextBlob("Q4"))
+	ttRow4(wd, ln, et, 12400, 0, port.TextBlob("0.00"), port.TextBlob("0.10"), port.TextBlob("0.20"), port.TextBlob("0.30"))
+	ttRow4(wd, ln, et, 14000, 0, port.TextBlob("1.01"), port.TextBlob("1.11"), port.TextBlob("1.21"), port.TextBlob("1.31"))
+	ttRow4(wd, ln, et, 15600, 0, port.TextBlob("2.02"), port.TextBlob("2.12"), port.TextBlob("2.22"), port.TextBlob("2.32"))
+	ttRow4(wd, ln, et, 17200, 0, port.TextBlob("3.03"), port.TextBlob("3.13"), port.TextBlob("3.23"), port.TextBlob("3.33"))
+	ttRow4(wd, ln, et, 18800, 0, port.TextBlob("4.04"), port.TextBlob("4.14"), port.TextBlob("4.24"), port.TextBlob("4.34"))
+	ttRow4(wd, ln, et, 20400, 0, port.TextBlob("5.05"), port.TextBlob("5.15"), port.TextBlob("5.25"), port.TextBlob("5.35"))
+	ttRow4(wd, ln, et, 22000, 0, port.TextBlob("6.06"), port.TextBlob("6.16"), port.TextBlob("6.26"), port.TextBlob("6.36"))
+	ttRow4(wd, ln, et, 23600, 0, port.TextBlob("7.07"), port.TextBlob("7.17"), port.TextBlob("7.27"), port.TextBlob("7.37"))
+	ttRow4(wd, ln, et, 25200, 0, port.TextBlob("8.08"), port.TextBlob("8.18"), port.TextBlob("8.28"), port.TextBlob("8.38"))
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "reading: well formed")
+	port.AssertText(emonT, t, "T4w;Gh;R;Ch[Q1];Ch[Q2];Ch[Q3];Ch[Q4];Gb;R;C[0.00];C[0.10];C[0.20];C[0.30];R;C[1.01];C[1.11];C[1.21];C[1.31];R;C[2.02];C[2.12];C[2.22];C[2.32];R;C[3.03];C[3.13];C[3.23];C[3.33];R;C[4.04];C[4.14];C[4.24];C[4.34];R;C[5.05];C[5.15];C[5.25];C[5.35];R;C[6.06];C[6.16];C[6.26];C[6.36];R;C[7.07];C[7.17];C[7.27];C[7.37];R;C[8.08];C[8.18];C[8.28];C[8.38];", "one table of ten rows (before: the ruled three, and the seven rows under them left as paragraphs)")
+}
+
+func ttRow3(wd *port.Cells, ln *port.Cells, et *port.Cells, y int32, a []byte, b []byte, c []byte) int32 {
+	// A row of three four-letter words at x 7600, 20000 and 30000, 800 tall from y (plain).
+	ttAt(wd, ln, et, a, 7600, y, 0, 0)
+	ttAt(wd, ln, et, b, 20000, y, 0, 0)
+	ttAt(wd, ln, et, c, 30000, y, 0, 0)
+	return 0
+}
+
+func TestTheFragmentsOfAZebraAreTheTableWhoseRowsTheyArePartOf(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	// The 10-K's balance sheet: a zebra whose stripes stop (a stripe is missing, so the fills make two stacks of three) over fourteen rows of one
+	// pitch. Each stack alone is a reading of its rows; the whitespace reading has all fourteen, the rows between the stacks too.
+	ttFill(pa, 7200, 11600, 37200, 13200, 15000000)
+	ttFill(pa, 7200, 14800, 37200, 16400, 15000000)
+	ttFill(pa, 7200, 18000, 37200, 19600, 15000000)
+	ttFill(pa, 7200, 24400, 37200, 26000, 15000000)
+	ttFill(pa, 7200, 27600, 37200, 29200, 15000000)
+	ttFill(pa, 7200, 30800, 37200, 32400, 15000000)
+	ttRow3(wd, ln, et, 12000, port.TextBlob("Bolt"), port.TextBlob("10.5"), port.TextBlob("2.25"))
+	ttRow3(wd, ln, et, 13600, port.TextBlob("Nuts"), port.TextBlob("11.5"), port.TextBlob("3.25"))
+	ttRow3(wd, ln, et, 15200, port.TextBlob("Cogs"), port.TextBlob("12.5"), port.TextBlob("4.25"))
+	ttRow3(wd, ln, et, 16800, port.TextBlob("Gear"), port.TextBlob("13.5"), port.TextBlob("5.25"))
+	ttRow3(wd, ln, et, 18400, port.TextBlob("Axle"), port.TextBlob("14.5"), port.TextBlob("6.25"))
+	ttRow3(wd, ln, et, 20000, port.TextBlob("Cams"), port.TextBlob("15.5"), port.TextBlob("7.25"))
+	ttRow3(wd, ln, et, 21600, port.TextBlob("Pins"), port.TextBlob("16.5"), port.TextBlob("8.25"))
+	ttRow3(wd, ln, et, 23200, port.TextBlob("Rods"), port.TextBlob("17.5"), port.TextBlob("9.25"))
+	ttRow3(wd, ln, et, 24800, port.TextBlob("Bars"), port.TextBlob("18.5"), port.TextBlob("1.35"))
+	ttRow3(wd, ln, et, 26400, port.TextBlob("Tabs"), port.TextBlob("19.5"), port.TextBlob("2.35"))
+	ttRow3(wd, ln, et, 28000, port.TextBlob("Pegs"), port.TextBlob("20.5"), port.TextBlob("3.35"))
+	ttRow3(wd, ln, et, 29600, port.TextBlob("Hubs"), port.TextBlob("21.5"), port.TextBlob("4.35"))
+	ttRow3(wd, ln, et, 31200, port.TextBlob("Rims"), port.TextBlob("22.5"), port.TextBlob("5.35"))
+	ttRow3(wd, ln, et, 32800, port.TextBlob("Tyre"), port.TextBlob("23.5"), port.TextBlob("6.35"))
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "fragments: well formed")
+	port.AssertText(emonT, t, "T3w;Gb;R;C[Bolt];C[10.5];C[2.25];R;C[Nuts];C[11.5];C[3.25];R;C[Cogs];C[12.5];C[4.25];R;C[Gear];C[13.5];C[5.25];R;C[Axle];C[14.5];C[6.25];R;C[Cams];C[15.5];C[7.25];R;C[Pins];C[16.5];C[8.25];R;C[Rods];C[17.5];C[9.25];R;C[Bars];C[18.5];C[1.35];R;C[Tabs];C[19.5];C[2.35];R;C[Pegs];C[20.5];C[3.35];R;C[Hubs];C[21.5];C[4.35];R;C[Rims];C[22.5];C[5.35];R;C[Tyre];C[23.5];C[6.35];", "one table of fourteen rows (before: two tables of the stripes, and the rows between them paragraphs)")
+}
+
+func ttAmt(wd *port.Cells, ln *port.Cells, et *port.Cells, y int32, style int32, label []byte, a []byte, b []byte) int32 {
+	// A statement row at y: the label at x 7600, the amounts right-aligned at 26000 and 36000 (a statement's two year columns).
+	ttAt(wd, ln, et, label, 7600, y, style, 0)
+	ttAt(wd, ln, et, a, 26000, y, style, 1)
+	ttAt(wd, ln, et, b, 36000, y, style, 1)
+	return 0
+}
+
+func ttStmtHead(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells) int32 {
+	// The head of a financial statement (the 10-K's balance sheet): `December 31,` in bold over the two year columns, a short rule under it that
+	// spans both, the years `2023` and `2022` in bold, each with a short rule under it (y 12100), and the first body row at y 12800.
+	ttAt(wd, ln, et, port.TextBlob("December 31,"), 23500, 10000, 1, 0)
+	ttRule(pa, 19600, 10850, 36200, 10950)
+	ttAt(wd, ln, et, port.TextBlob("2023"), 26000, 11200, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("2022"), 36000, 11200, 1, 1)
+	ttRule(pa, 19600, 12050, 26000, 12150)
+	ttRule(pa, 29600, 12050, 36000, 12150)
+	return 0
+}
+
+func ttStmtBody(wd *port.Cells, ln *port.Cells, et *port.Cells, dollar int32) int32 {
+	// Five rows of a statement from y 12800 a pitch of 1600 apart; when `dollar` is 1 a dollar sign on the first row's amounts, set apart from them
+	// (a statement sets it at the left of its column: at x 19800 and 29800).
+	ttAmt(wd, ln, et, 12800, 0, port.TextBlob("Cash and equivalents"), port.TextBlob("33,672"), port.TextBlob("32,260"))
+	if dollar == 1 {
+		ttAt(wd, ln, et, port.TextBlob("$"), 19800, 12800, 0, 0)
+		ttAt(wd, ln, et, port.TextBlob("$"), 29800, 12800, 0, 0)
+	}
+	ttAmt(wd, ln, et, 14400, 0, port.TextBlob("Short-term investments"), port.TextBlob("129,619"), port.TextBlob("92,774"))
+	ttAmt(wd, ln, et, 16000, 0, port.TextBlob("Fixed maturity securities"), port.TextBlob("23,758"), port.TextBlob("25,128"))
+	ttAmt(wd, ln, et, 17600, 0, port.TextBlob("Equity securities"), port.TextBlob("353,842"), port.TextBlob("308,793"))
+	ttAmt(wd, ln, et, 19200, 0, port.TextBlob("Other"), port.TextBlob("19,568"), port.TextBlob("19,657"))
+	return 0
+}
+
+func ttStmtTotal(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, dollar int32) int32 {
+	// The total of the statement: a blank pitch under the last body row (y 19200), a double rule over each amount column (y 21650 and 21850, which
+	// cluster as one rule) and the total, in bold, at y 22400, a dollar sign on its amounts when `dollar` is 1.
+	ttRule(pa, 19600, 21600, 26000, 21700)
+	ttRule(pa, 19600, 21800, 26000, 21900)
+	ttRule(pa, 29600, 21600, 36000, 21700)
+	ttRule(pa, 29600, 21800, 36000, 21900)
+	ttAmt(wd, ln, et, 22400, 1, port.TextBlob("Total assets"), port.TextBlob("259,419"), port.TextBlob("251,300"))
+	if dollar == 1 {
+		ttAt(wd, ln, et, port.TextBlob("$"), 19800, 22400, 1, 0)
+		ttAt(wd, ln, et, port.TextBlob("$"), 29800, 22400, 1, 0)
+	}
+	return 0
+}
+
+func TestAHeaderOverAShortRuleIsInTheHeader(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	// Repro shape 3 (the 10-K's statements): `December 31,` over a short rule that spans the two year columns, the years under it with a short
+	// rule each, then the rows: the label of the columns is a header row that spans them and the years are a header row.
+	ttStmtHead(wd, ln, et, pa)
+	ttStmtBody(wd, ln, et, 0)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "head: well formed")
+	port.AssertText(emonT, t, "T3w;Gh;R;Ch[];Cc2he[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cs[Cash and equivalents];C[33,672];C[32,260];R;Cs[Short-term investments];C[129,619];C[92,774];R;Cs[Fixed maturity securities];C[23,758];C[25,128];R;Cs[Equity securities];C[353,842];C[308,793];R;Cs[Other];C[19,568];C[19,657];", "the header is two rows, a spanning label over the year columns and the years (before: the label a paragraph over the table)")
+}
+
+func ttWrapped(wd *port.Cells, ln *port.Cells, et *port.Cells, y int32, date []byte, a []byte, b []byte, c []byte, d []byte, amt []byte) int32 {
+	// A row whose Details cell has four lines (x 14000, a pitch of 1200) with the date at x 7600 and the amount, right-aligned at 36000, on the first line
+	// only: the next row begins 2400 under the fourth line (a gap of one line).
+	ttAt(wd, ln, et, date, 7600, y, 0, 0)
+	ttAt(wd, ln, et, a, 14000, y, 0, 0)
+	ttAt(wd, ln, et, amt, 36000, y, 0, 1)
+	ttAt(wd, ln, et, b, 14000, y+1200, 0, 0)
+	ttAt(wd, ln, et, c, 14000, y+2400, 0, 0)
+	ttAt(wd, ln, et, d, 14000, y+3600, 0, 0)
+	return 0
+}
+
+func TestTheLinesOfAWrappedCellAreInOneRow(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	// Repro shape 5 (the Agami statements): no rules, four-line Details cells with the date and the amount on the first line, a gap of a line between
+	// the rows. The lines under the first have one chunk each (before: a header and no body, the last line a heading).
+	ttAt(wd, ln, et, port.TextBlob("Date"), 7600, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Details"), 14000, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Amount"), 36000, 10000, 1, 1)
+	ttWrapped(wd, ln, et, 11600, port.TextBlob("05 Jan"), port.TextBlob("Payment to Acme Supply"), port.TextBlob("Invoice 4471 settled"), port.TextBlob("Ref ABC 123"), port.TextBlob("Thank you"), port.TextBlob("120.50"))
+	ttWrapped(wd, ln, et, 17600, port.TextBlob("12 Jan"), port.TextBlob("Card purchase Bolt Co"), port.TextBlob("Order 5512 shipped"), port.TextBlob("Ref DEF 456"), port.TextBlob("Paid in full"), port.TextBlob("75.00"))
+	ttWrapped(wd, ln, et, 23600, port.TextBlob("19 Jan"), port.TextBlob("Transfer to savings"), port.TextBlob("Monthly plan"), port.TextBlob("Ref GHI 789"), port.TextBlob("Standing order"), port.TextBlob("300.00"))
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "wrapped: well formed")
+	port.AssertText(emonT, t, "T3w;Gh;R;Ch[Date];Chs[Details];Ch[Amount];Gb;R;C[05 Jan];Cs[Payment to Acme Supply Invoice 4471 settled Ref ABC 123 Thank you];C[120.50];R;C[12 Jan];Cs[Card purchase Bolt Co Order 5512 shipped Ref DEF 456 Paid in full];C[75.00];R;C[19 Jan];Cs[Transfer to savings Monthly plan Ref GHI 789 Standing order];C[300.00];", "three rows, each with its four lines in one cell (before: no table, a paragraph for each line, in the real statements a header and no body)")
+}
+
+func TestARuledHeaderOverWrappedUnruledRowsIsTheHeadOfTheirTable(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	// The Agami statements: a title above the header, the header in two lines (a language each), a rule above the title and one under the header, the
+	// rows unruled below it, their Details cells wrapped. The chain of the two rules reads the title, the header and a row or two under the rule; the
+	// whitespace reads the header and every row: the head of the table beside the table (before: the table of the chain, its rows cut after the first).
+	ttRule(pa, 7200, 7950, 37200, 8050)
+	ttRule(pa, 7200, 11950, 37200, 12050)
+	ttAt(wd, ln, et, port.TextBlob("Current Account"), 7600, 8600, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Date"), 7600, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Details"), 14000, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Amount"), 36000, 10000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("Dt"), 7600, 11000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Dx"), 14000, 11000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Am"), 36000, 11000, 0, 1)
+	ttWrapped(wd, ln, et, 12600, port.TextBlob("05 Jan"), port.TextBlob("Payment to Acme Supply"), port.TextBlob("Invoice 4471 settled"), port.TextBlob("Ref ABC 123"), port.TextBlob("Thank you"), port.TextBlob("120.50"))
+	ttWrapped(wd, ln, et, 18600, port.TextBlob("12 Jan"), port.TextBlob("Card purchase Bolt Co"), port.TextBlob("Order 5512 shipped"), port.TextBlob("Ref DEF 456"), port.TextBlob("Paid in full"), port.TextBlob("75.00"))
+	ttWrapped(wd, ln, et, 24600, port.TextBlob("19 Jan"), port.TextBlob("Transfer to savings"), port.TextBlob("Monthly plan"), port.TextBlob("Ref GHI 789"), port.TextBlob("Standing order"), port.TextBlob("300.00"))
+	ttWrapped(wd, ln, et, 30600, port.TextBlob("26 Jan"), port.TextBlob("Interest paid"), port.TextBlob("Quarterly"), port.TextBlob("Ref JKL 012"), port.TextBlob("Credit"), port.TextBlob("4.20"))
+	ttWrapped(wd, ln, et, 36600, port.TextBlob("28 Jan"), port.TextBlob("Cash deposit"), port.TextBlob("Branch 14"), port.TextBlob("Ref MNO 345"), port.TextBlob("Counter"), port.TextBlob("50.00"))
+	ttWrapped(wd, ln, et, 42600, port.TextBlob("31 Jan"), port.TextBlob("Service charge"), port.TextBlob("Monthly fee"), port.TextBlob("Ref PQR 678"), port.TextBlob("Account"), port.TextBlob("8.00"))
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "head: well formed")
+	port.AssertText(emonT, t, "P[Current Account];T3w;Gh;R;Chs[Date];Chs[Details];Ch[Amount];Gb;R;Cs[Dt];Cs[Dx];Ce[Am];R;Cs[05 Jan];Cs[Payment to Acme Supply Invoice 4471 settled Ref ABC 123 Thank you];Ce[120.50];R;Cs[12 Jan];Cs[Card purchase Bolt Co Order 5512 shipped Ref DEF 456 Paid in full];Ce[75.00];R;Cs[19 Jan];Cs[Transfer to savings Monthly plan Ref GHI 789 Standing order];Ce[300.00];R;Cs[26 Jan];Cs[Interest paid Quarterly Ref JKL 012 Credit];Ce[4.20];R;Cs[28 Jan];Cs[Cash deposit Branch 14 Ref MNO 345 Counter];Ce[50.00];R;Cs[31 Jan];Cs[Service charge Monthly fee Ref PQR 678 Account];Ce[8.00];", "one table, the header and the six rows (before: the table of the rules, its header and one row, and the rest paragraphs)")
+}
+
+func ttCols5(wd *port.Cells, ln *port.Cells, et *port.Cells, page int32, y int32, style int32, date []byte, what []byte, debit []byte, credit []byte, bal []byte) int32 {
+	// A row of a ledger on page `page` at y: the date at x 7600, the details at 14000, the debit, the credit and the balance right-aligned at 26000,
+	// 36000 and 46000 (an empty blob is no word).
+	ttAtp(wd, ln, et, date, 7600, y, style, 0, page)
+	ttAtp(wd, ln, et, what, 14000, y, style, 0, page)
+	if port.BlobLen(debit) > 0 {
+		ttAtp(wd, ln, et, debit, 26000, y, style, 1, page)
+	}
+	if port.BlobLen(credit) > 0 {
+		ttAtp(wd, ln, et, credit, 36000, y, style, 1, page)
+	}
+	ttAtp(wd, ln, et, bal, 46000, y, style, 1, page)
+	return 0
+}
+
+func ttFrench(wd *port.Cells, ln *port.Cells, et *port.Cells, y int32, style int32, what []byte, d1 []byte, d2 []byte, b1 []byte, b2 []byte) int32 {
+	// A row of a French statement at y: the details at x 7600, a debit `1 895,80 $` (three words, the sign after the amount) at 24000 and a balance
+	// `11 732,54 $` at 38000, the signs set a gap from the amounts that is the width of a space (the amounts before the next column's).
+	ttAt(wd, ln, et, what, 7600, y, style, 0)
+	if port.BlobLen(d1) > 0 {
+		ttAt(wd, ln, et, d1, 24000, y, style, 0)
+		ttAt(wd, ln, et, d2, 24900, y, style, 0)
+		ttAt(wd, ln, et, port.TextBlob("$"), 28300, y, style, 0)
+	}
+	ttAt(wd, ln, et, b1, 38000, y, style, 0)
+	ttAt(wd, ln, et, b2, 39400, y, style, 0)
+	ttAt(wd, ln, et, port.TextBlob("$"), 42800, y, style, 0)
+	return 0
+}
+
+func ttLeader(wd *port.Cells, ln *port.Cells, et *port.Cells, y int32, label []byte, line []byte, amt []byte) int32 {
+	// An IRS-style row at y: the label at x 7600, six full stops of their own (every 1400 from x 22000, a gap each of 900), the line number at 33000 and the
+	// amount right-aligned at 43000.
+	ttAt(wd, ln, et, label, 7600, y, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("."), 22000, y, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("."), 23400, y, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("."), 24800, y, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("."), 26200, y, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("."), 27600, y, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("."), 29000, y, 0, 0)
+	ttAt(wd, ln, et, line, 33000, y, 0, 0)
+	ttAt(wd, ln, et, amt, 43000, y, 0, 1)
+	return 0
+}
+
+func TestTheRowsAboveTheFirstRowOfAmountsAreTheHeader(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	// The BLS and BEA tables: a header of cells that wrap into lines (a group's name, `Aug.`, `2026`), in the type of the body and not bold, over rows of
+	// amounts with a decimal point: the header is every row above the first of them (before: the first row alone, or none).
+	ttAt(wd, ln, et, port.TextBlob("Raw"), 20000, 10000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Adj"), 30000, 10000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Aug."), 20000, 11200, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Jul."), 30000, 11200, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("2026"), 20000, 12400, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("2026"), 30000, 12400, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Category"), 7600, 12400, 0, 0)
+	ttRow3(wd, ln, et, 14400, port.TextBlob("Food"), port.TextBlob("13.5"), port.TextBlob("2.7"))
+	ttRow3(wd, ln, et, 16000, port.TextBlob("Fuel"), port.TextBlob("11.5"), port.TextBlob("3.1"))
+	ttRow3(wd, ln, et, 17600, port.TextBlob("Rent"), port.TextBlob("12.5"), port.TextBlob("4.4"))
+	ttRow3(wd, ln, et, 19200, port.TextBlob("Cars"), port.TextBlob("14.5"), port.TextBlob("5.9"))
+	ttRow3(wd, ln, et, 20800, port.TextBlob("Tolls"), port.TextBlob("15.5"), port.TextBlob("6.2"))
+	ttRow3(wd, ln, et, 22400, port.TextBlob("Power"), port.TextBlob("16.5"), port.TextBlob("7.7"))
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "head: well formed")
+	port.AssertText(emonT, t, "T3w;Gh;R;Ch[];Ch[Raw];Ch[Adj];R;Ch[];Ch[Aug.];Ch[Jul.];R;Ch[Category];Ch[2026];Ch[2026];Gb;R;C[Food];C[13.5];C[2.7];R;C[Fuel];C[11.5];C[3.1];R;C[Rent];C[12.5];C[4.4];R;C[Cars];C[14.5];C[5.9];R;C[Tolls];C[15.5];C[6.2];R;C[Power];C[16.5];C[7.7];", "the three lines above the first row of amounts are the header (before: the first of them, the others rows of the body)")
+}
+
+func TestABlockOfTotalsInTheLastColumnsIsNoPartOfAWhitespaceTable(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	// The invoice (D559's guard, now for the whitespace reading, which has more rows than the ruled one that scored best): the rows and under them a
+	// block of totals whose labels begin in the second column, no rule: a table of its rows, the totals paragraphs.
+	ttRule(pa, 7200, 9550, 32200, 9650)
+	ttRule(pa, 7200, 11150, 32200, 11250)
+	ttRule(pa, 7200, 17550, 32200, 17650)
+	ttRow3(wd, ln, et, 10000, port.TextBlob("Item"), port.TextBlob("Desc"), port.TextBlob("Qty"))
+	ttRow3(wd, ln, et, 11600, port.TextBlob("A-100"), port.TextBlob("Pipe"), port.TextBlob("40.5"))
+	ttRow3(wd, ln, et, 13200, port.TextBlob("B-220"), port.TextBlob("Joint"), port.TextBlob("12.5"))
+	ttRow3(wd, ln, et, 14800, port.TextBlob("C-310"), port.TextBlob("Paste"), port.TextBlob("60.5"))
+	ttRow3(wd, ln, et, 16400, port.TextBlob("D-005"), port.TextBlob("Tape"), port.TextBlob("70.5"))
+	ttAt(wd, ln, et, port.TextBlob("Subtotal"), 30000, 18000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("46.4"), 38000, 18000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("VAT 20%"), 30000, 19600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("9.28"), 38000, 19600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Total due"), 30000, 21200, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("55.7"), 38000, 21200, 1, 0)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "totals: well formed")
+	port.AssertText(emonT, t, "T3p;Gh;R;Ch[Item];Ch[Desc];Ch[Qty];Gb;R;C[A-100];C[Pipe];C[40.5];R;C[B-220];C[Joint];C[12.5];R;C[C-310];C[Paste];C[60.5];R;C[D-005];C[Tape];C[70.5];P[Subtotal];P[46.4];P[VAT 20%];P[9.28];P[Total due];P[55.7];", "the rows are the table and the totals are not (D559; before the guard of the whitespace run, the whitespace reading, with more rows, won and took them in)")
+}
+
+func TestTheDotsOfALeaderAreNoCells(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	// The 1120's lines (D17, D18, D20): a label, a leader of full stops a gap apart, the line number, the amount. Each full stop is a chunk of its own to the
+	// rows' words and the six of a row, in the same places in every row, are columns of the table (before: a table of nine columns, the dots cells).
+	ttAt(wd, ln, et, port.TextBlob("Item"), 7600, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Line"), 33000, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Amount"), 43000, 10000, 1, 1)
+	ttLeader(wd, ln, et, 11600, port.TextBlob("Gross receipts"), port.TextBlob("1a"), port.TextBlob("1,200"))
+	ttLeader(wd, ln, et, 13200, port.TextBlob("Returns"), port.TextBlob("1b"), port.TextBlob("30"))
+	ttLeader(wd, ln, et, 14800, port.TextBlob("Cost of goods sold"), port.TextBlob("2"), port.TextBlob("450"))
+	ttLeader(wd, ln, et, 16400, port.TextBlob("Gross profit"), port.TextBlob("3"), port.TextBlob("720"))
+	ttLeader(wd, ln, et, 18000, port.TextBlob("Dividends"), port.TextBlob("4"), port.TextBlob("15"))
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "leader: well formed")
+	port.AssertText(emonT, t, "T3w;Gh;R;Ch[Item];Ch[Line];Ch[Amount];Gb;R;C[Gross receipts . . . . . .];C[1a];Ce[1,200];R;C[Returns . . . . . .];C[1b];Ce[30];R;C[Cost of goods sold . . . . . .];C[2];Ce[450];R;C[Gross profit . . . . . .];C[3];Ce[720];R;C[Dividends . . . . . .];C[4];Ce[15];", "the leader is the end of the label's cell: three columns (before: nine, the six full stops the cells of six of them)")
+}
+
+func TestARowSpanDoesNotCrossIntoTheFoot(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	// Repro shape 13 (the ICDAR table of savings): a label that spans three rows and the bold total that ends its group, a fourth row of the same span.
+	// The total is the last row, bold under rows that are not, and would be the foot: but the span goes down into it, and a row group does not cross
+	// from the body into the foot. The total stays in the body, the span whole (before: a foot of one row, the span four rows of it three).
+	ttRule(pa, 7200, 9950, 37200, 10050)
+	ttRule(pa, 7200, 11950, 37200, 12050)
+	ttRule(pa, 17200, 13550, 37200, 13650)
+	ttRule(pa, 17200, 15150, 37200, 15250)
+	ttRule(pa, 17200, 16750, 37200, 16850)
+	ttRule(pa, 7200, 18350, 37200, 18450)
+	ttRule(pa, 7150, 10000, 7250, 18400)
+	ttRule(pa, 17150, 10000, 17250, 18400)
+	ttRule(pa, 27150, 10000, 27250, 18400)
+	ttRule(pa, 37150, 10000, 37250, 18400)
+	ttAt(wd, ln, et, port.TextBlob("Group"), 7600, 10600, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Level"), 17600, 10600, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Pct"), 27600, 10600, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Combined"), 7600, 12200, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Med-low"), 17600, 12200, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("1.5%"), 27600, 12200, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Med-high"), 17600, 13800, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("2.3%"), 27600, 13800, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Very high"), 17600, 15400, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("2.4%"), 27600, 15400, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Total"), 17600, 17000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("6%"), 27600, 17000, 1, 0)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "span: well formed")
+	port.AssertText(emonT, t, "T3r;Gh;R;Ch[Group];Ch[Level];Ch[Pct];Gb;R;Cr4[Combined];Cs[Med-low];Cs[1.5%];R;Cs[Med-high];Cs[2.3%];R;Cs[Very high];Cs[2.4%];R;Cs[Total];Cs[6%];", "the total is in the body with the rows its label spans (before: `Gf;R;Cws[Total];Cw[6%];` under a label of four rows that began in the body)")
+}
+
+func TestACurrencySignAfterItsAmountStaysWithIt(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	// The Harbour statement writes `1 895,80 $` and `11 732,54 $`: the sign is the end of its amount and not the lead of the next one (a sign of a word
+	// of its own before a figure is the figure's only when the row's signs go before the figures).
+	ttAt(wd, ln, et, port.TextBlob("Details"), 7600, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Debit"), 24000, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Solde"), 38000, 10000, 1, 0)
+	ttFrench(wd, ln, et, 11600, 0, port.TextBlob("Uber"), port.TextBlob("1"), port.TextBlob("895,80"), port.TextBlob("11"), port.TextBlob("732,54"))
+	ttFrench(wd, ln, et, 13200, 0, port.TextBlob("La Baie"), port.TextBlob("88"), port.TextBlob("96"), port.TextBlob("11"), port.TextBlob("643,58"))
+	ttFrench(wd, ln, et, 14800, 0, port.TextBlob("Tim"), port.TextBlob("53"), port.TextBlob("50"), port.TextBlob("11"), port.TextBlob("590,08"))
+	ttFrench(wd, ln, et, 16400, 0, port.TextBlob("Apple"), port.TextBlob("17"), port.TextBlob("26"), port.TextBlob("11"), port.TextBlob("572,82"))
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "french: well formed")
+	port.AssertText(emonT, t, "T3w;Gh;R;Chs[Details];Ch[Debit];Ch[Solde];Gb;R;Cs[Uber];C[1 895,80 $];C[11 732,54 $];R;Cs[La Baie];C[88 96 $];C[11 643,58 $];R;Cs[Tim];C[53 50 $];C[11 590,08 $];R;Cs[Apple];C[17 26 $];C[11 572,82 $];", "each amount keeps its sign: three columns (a sign that went to the amount after it made the debit and the balance one cell)")
+}
+
+func TestATableWhosePageHasAnEmptyColumnIsOneWithThePageBefore(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	// Repro shape 4 (the Harbour statement): five columns on the first page, the second page has only debits (its credit column is empty but for
+	// the header the table repeats): the columns of the second are a subset of the first's, aligned by x, so it is the same table; its rows have the empty
+	// cell (before: a table of four columns on the second page, the pages not linked).
+	ttCols5(wd, ln, et, 1, 10000, 1, port.TextBlob("Date"), port.TextBlob("Details"), port.TextBlob("Debit"), port.TextBlob("Credit"), port.TextBlob("Balance"))
+	ttCols5(wd, ln, et, 1, 11600, 0, port.TextBlob("02 Jan"), port.TextBlob("Skip Plats"), port.TextBlob("151.30"), port.TextBlob(""), port.TextBlob("10,598.70"))
+	ttCols5(wd, ln, et, 1, 13200, 0, port.TextBlob("02 Jan"), port.TextBlob("Salary"), port.TextBlob(""), port.TextBlob("10.33"), port.TextBlob("10,609.03"))
+	ttCols5(wd, ln, et, 1, 14800, 0, port.TextBlob("03 Jan"), port.TextBlob("Amazon"), port.TextBlob("1,200.45"), port.TextBlob(""), port.TextBlob("9,408.58"))
+	ttCols5(wd, ln, et, 1, 16400, 0, port.TextBlob("06 Jan"), port.TextBlob("Paie"), port.TextBlob(""), port.TextBlob("101.15"), port.TextBlob("9,509.73"))
+	ttCols5(wd, ln, et, 1, 18000, 0, port.TextBlob("06 Jan"), port.TextBlob("Petro"), port.TextBlob("29.69"), port.TextBlob(""), port.TextBlob("9,480.04"))
+	ttCols5(wd, ln, et, 1, 19600, 0, port.TextBlob("06 Jan"), port.TextBlob("Spotify"), port.TextBlob("541.27"), port.TextBlob(""), port.TextBlob("8,938.77"))
+	ttCols5(wd, ln, et, 2, 10000, 1, port.TextBlob("Date"), port.TextBlob("Details"), port.TextBlob("Debit"), port.TextBlob("Credit"), port.TextBlob("Balance"))
+	ttCols5(wd, ln, et, 2, 11600, 0, port.TextBlob("21 Jan"), port.TextBlob("Uber"), port.TextBlob("1,895.80"), port.TextBlob(""), port.TextBlob("11,732.54"))
+	ttCols5(wd, ln, et, 2, 13200, 0, port.TextBlob("23 Jan"), port.TextBlob("La Baie"), port.TextBlob("88.96"), port.TextBlob(""), port.TextBlob("11,643.58"))
+	ttCols5(wd, ln, et, 2, 14800, 0, port.TextBlob("24 Jan"), port.TextBlob("Tim"), port.TextBlob("53.50"), port.TextBlob(""), port.TextBlob("11,590.08"))
+	ttCols5(wd, ln, et, 2, 16400, 0, port.TextBlob("25 Jan"), port.TextBlob("Apple"), port.TextBlob("17.26"), port.TextBlob(""), port.TextBlob("11,572.82"))
+	ttCols5(wd, ln, et, 2, 18000, 0, port.TextBlob("26 Jan"), port.TextBlob("Gaz"), port.TextBlob("422.11"), port.TextBlob(""), port.TextBlob("11,150.71"))
+	ttCols5(wd, ln, et, 2, 19600, 0, port.TextBlob("26 Jan"), port.TextBlob("Netflix"), port.TextBlob("17.11"), port.TextBlob(""), port.TextBlob("11,133.60"))
+	port.AssertEq(emonT, ttRunN(wd, ln, et, pa, t, 2), 0, "ledger: well formed")
+	port.AssertText(emonT, t, "T5w;Gh;R;Ch[Date];Chs[Details];Che[Debit];Ch[Credit];Che[Balance];Gb;R;C[02 Jan];Cs[Skip Plats];Ce[151.30];C[];C[10,598.70];R;C[02 Jan];Cs[Salary];Ce[];C[10.33];C[10,609.03];R;C[03 Jan];Cs[Amazon];Ce[1,200.45];C[];C[9,408.58];R;C[06 Jan];Cs[Paie];Ce[];C[101.15];C[9,509.73];R;C[06 Jan];Cs[Petro];Ce[29.69];C[];C[9,480.04];R;C[06 Jan];Cs[Spotify];Ce[541.27];C[];C[8,938.77];R;C[21 Jan];Cs[Uber];Ce[1,895.80];C[];C[11,732.54];R;C[23 Jan];Cs[La Baie];Ce[88.96];C[];C[11,643.58];R;C[24 Jan];Cs[Tim];Ce[53.50];C[];C[11,590.08];R;C[25 Jan];Cs[Apple];Ce[17.26];C[];C[11,572.82];R;C[26 Jan];Cs[Gaz];Ce[422.11];C[];C[11,150.71];R;C[26 Jan];Cs[Netflix];Ce[17.11];C[];C[11,133.60];", "one table of five columns across the two pages, the second page's rows with their empty credit cells (before: two tables, four columns on the second)")
+}
+
+func TestASectionsLabelInATableIsARowThatSpansIt(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	// The 10-K's labels: `ASSETS` before the first row and `Railroad, Utilities and Energy:` between two groups of rows, each in bold, one cell,
+	// no amount. They are rows of the table whose one cell spans the columns (before: a heading or a paragraph that split the table, or a cell of the
+	// first column and cells that are empty).
+	ttStmtHead(wd, ln, et, pa)
+	ttAt(wd, ln, et, port.TextBlob("ASSETS"), 7600, 12800, 1, 0)
+	ttAmt(wd, ln, et, 14400, 0, port.TextBlob("Cash and equivalents"), port.TextBlob("33,672"), port.TextBlob("32,260"))
+	ttAmt(wd, ln, et, 16000, 0, port.TextBlob("Short-term investments"), port.TextBlob("129,619"), port.TextBlob("92,774"))
+	ttAt(wd, ln, et, port.TextBlob("Railroad, Utilities and Energy:"), 7600, 17600, 1, 0)
+	ttAmt(wd, ln, et, 19200, 0, port.TextBlob("Receivables"), port.TextBlob("7,086"), port.TextBlob("4,795"))
+	ttAmt(wd, ln, et, 20800, 0, port.TextBlob("Goodwill"), port.TextBlob("33,758"), port.TextBlob("26,597"))
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "labels: well formed")
+	port.AssertText(emonT, t, "T3w;Gh;R;Ch[];Cc2he[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cc3[ASSETS];R;Cs[Cash and equivalents];Ce[33,672];C[32,260];R;Cs[Short-term investments];Ce[129,619];C[92,774];R;Cc3[Railroad, Utilities and Energy:];R;Cs[Receivables];Ce[7,086];C[4,795];R;Cs[Goodwill];Ce[33,758];C[26,597];", "a label with no amount, in bold, is one cell that spans the row: the table is one table, `ASSETS` no header row")
+}
+
+func TestACurrencySignSetApartFromItsAmountIsInItsCell(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	// A statement sets the dollar sign at the left of its column and the amount at the right of it (the first row's amounts here, 2700 apart): the
+	// sign is part of its amount's cell, no cell of its own (before: a column of its own, or the end of the cell before it).
+	ttStmtHead(wd, ln, et, pa)
+	ttStmtBody(wd, ln, et, 1)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "dollar: well formed")
+	port.AssertText(emonT, t, "T3w;Gh;R;Ch[];Cc2he[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cs[Cash and equivalents];Ce[$ 33,672];Ce[$ 32,260];R;Cs[Short-term investments];Ce[129,619];Ce[92,774];R;Cs[Fixed maturity securities];Ce[23,758];Ce[25,128];R;Cs[Equity securities];Ce[353,842];Ce[308,793];R;Cs[Other];Ce[19,568];Ce[19,657];", "the signs are in the cells of the amounts after them: three columns")
+}
+
+func TestTheTotalUnderADoubleRuleIsARowOfTheTable(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	var t2 *strings.Builder = port.NewText()
+	// Repro shape 3: the total stands a blank pitch under the body, under a double rule over the amount columns, its label in the first column:
+	// the last row of the table (before: five paragraphs under it).
+	ttStmtHead(wd, ln, et, pa)
+	ttStmtBody(wd, ln, et, 1)
+	ttStmtTotal(wd, ln, et, pa, 1)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "total: well formed")
+	port.AssertText(emonT, t, "T3p;Gh;R;Ch[];Cc2h[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cs[Cash and equivalents];Ce[$ 33,672];Ce[$ 32,260];R;Cs[Short-term investments];Ce[129,619];Ce[92,774];R;Cs[Fixed maturity securities];Ce[23,758];Ce[25,128];R;Cs[Equity securities];Ce[353,842];Ce[308,793];R;Cs[Other];Ce[19,568];Ce[19,657];Gf;R;Cws[Total assets];Cwe[$ 259,419];Cwe[$ 251,300];", "the total is a row of the table, in its foot")
+	// A block of totals in the last columns under it (an invoice's: its label is not in the first column) is no row of the table (D559).
+	port.CellsDrop(wd, 0)
+	port.CellsDrop(ln, 0)
+	port.CellsDrop(et, 0)
+	port.CellsDrop(pa, 0)
+	ttStmtHead(wd, ln, et, pa)
+	ttStmtBody(wd, ln, et, 1)
+	ttRule(pa, 19600, 21600, 26000, 21700)
+	ttRule(pa, 19600, 21800, 26000, 21900)
+	ttRule(pa, 29600, 21600, 36000, 21700)
+	ttRule(pa, 29600, 21800, 36000, 21900)
+	ttAt(wd, ln, et, port.TextBlob("Total due"), 14000, 22400, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("259,419"), 26000, 22400, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("251,300"), 36000, 22400, 1, 1)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t2), 0, "block: well formed")
+	port.AssertText(emonT, t2, "T3p;Gh;R;Ch[];Cc2he[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cs[Cash and equivalents];Ce[$ 33,672];Ce[$ 32,260];R;Cs[Short-term investments];Ce[129,619];Ce[92,774];R;Cs[Fixed maturity securities];Ce[23,758];Ce[25,128];R;Cs[Equity securities];Ce[353,842];Ce[308,793];R;Cs[Other];Ce[19,568];Ce[19,657];P[Total due];P[259,419];P[251,300];", "a block of totals that does not begin in the first column is not the table's, whatever its rule")
 }
 
 func ttGolden(pdf []byte, t *strings.Builder, tvt *strings.Builder) int32 {

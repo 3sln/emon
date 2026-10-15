@@ -71,6 +71,20 @@ pub(crate) fn tt_fill(mut pa: &mut crate::port::Cells, x0: i32, y0: i32, x1: i32
     pa_set(pa, r, pf_falpha(), 1000);
     return 0;
 }
+pub(crate) fn tt_atp(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, b: &[u8], x: i32, y: i32, style: i32, right: i32, page: i32) -> i32 {
+    // `tt-at` on page `page` (1 or 2): a word of 500 per character, its left edge at x (its right edge when `right` is 1), 800 tall from y.
+    let w: i32 = 500 * crate::port::blob_len(b);
+    let x0: i32 = x - (right * w);
+    let w0: i32 = wd_count(wd);
+    let ts: i32 = crate::port::cells_len(et);
+    text_append_utf8(et, b, 0, crate::port::blob_len(b));
+    let r: i32 = wd_new(wd, page, x0, y, x0 + w, y + 800, x0, (y + 800) - 200, x0 + w, (y + 800) - 200, 0, 0, ts, crate::port::cells_len(et) - ts, -1, -1, -1);
+    wd_set(wd, r, wf_size(), 1000);
+    wd_set(wd, r, wf_font(), 0);
+    wd_set(wd, r, wf_style(), style);
+    ln_new(ln, page, x0, y, x0 + w, y + 800, x0, (y + 800) - 200, x0 + w, (y + 800) - 200, 0, 0, w0, 1);
+    return 0;
+}
 pub(crate) fn tt_grid(mut pa: &mut crate::port::Cells, x0: i32, x1: i32, x2: i32, x3: i32, y0: i32, y1: i32, y2: i32, y3: i32) -> i32 {
     // The rules of a 3 x 3 lattice, the vertical at x2 missing between y2 and y3 (the last row's two cells are one).
     tt_rule(pa, x0, y0 - 50, x3, y0 + 50);
@@ -191,8 +205,8 @@ pub(crate) fn tt_brief(mut t: &mut String, nodes: &mut crate::port::Cells, attrs
     }
     return 0;
 }
-pub(crate) fn tt_run(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, pa: &mut crate::port::Cells, mut t: &mut String) -> i32 {
-    // Tables, then paragraphs, then the brief of the Model. Answers `model-check`'s verdict.
+pub(crate) fn tt_run_n(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, pa: &mut crate::port::Cells, mut t: &mut String, np: i32) -> i32 {
+    // Tables, then paragraphs, then the brief of the Model, of a document of `np` pages (1 or 2). Answers `model-check`'s verdict.
     let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -267,12 +281,19 @@ pub(crate) fn tt_run(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, e
     let t12e: &mut crate::port::Cells = &mut crate::port::Cells::new();
     model_init(nodes, attrs, regions, text, pages, ledger, layout);
     page_new(pages, 1, 61200, 79200, 0, pk_vector());
-    gf_doc(pa, gpts, gmk, gim, 1, gfx_mode(), grl, gfl, cand, &mut crate::port::Cells::new());
-    tb_build(wd, ln, et, grl, gfl, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e);
+    if np == 2 {
+        page_new(pages, 2, 61200, 79200, 0, pk_vector());
+    }
+    gf_doc(pa, gpts, gmk, gim, np, gfx_mode(), grl, gfl, cand, &mut crate::port::Cells::new());
+    tb_build(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e);
     lc_copy(ln, lt);
-    pa_build(wd, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
+    pa_build(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
     tt_brief(t, nodes, attrs, text);
     return model_check(nodes, attrs, regions, text, pages, ledger, layout, st);
+}
+pub(crate) fn tt_run(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, pa: &mut crate::port::Cells, mut t: &mut String) -> i32 {
+    // Tables, then paragraphs, then the brief of the Model. Answers `model-check`'s verdict.
+    return tt_run_n(wd, ln, et, pa, t, 1);
 }
 #[test]
 fn test_a_lattice_is_a_table_and_a_missing_rule_is_a_span() {
@@ -1084,6 +1105,492 @@ fn test_a_vertical_rule_cuts_the_columns_of_a_table_without_horizontal_rules() {
     tt_rule(pa, 27000, 9800, 27100, 17400);
     crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "whitespace: well formed");
     crate::testport::assert_text(t, "T3w;Gh;R;Ch[Item];Ch[Kind];Chs[Price];Gb;R;C[Bolt];C[Debit];Cs[$803];R;C[Nut];C[Debit];Cs[$91];R;C[Gear];C[Paid];Cs[$1,200];R;C[Cog];C[Debit];Cs[$35];", "a rule through the rows' height between two touching words is a column cut for the whitespace profile too");
+}
+pub(crate) fn tt_row4(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, y: i32, style: i32, a: &[u8], b: &[u8], c: &[u8], d: &[u8]) -> i32 {
+    // A row of four words, left edges at 7600, 13600, 19600 and 25600 (the columns of a 6000-wide four-column grid from x 7200), 800 tall from y.
+    tt_at(wd, ln, et, a, 7600, y, style, 0);
+    tt_at(wd, ln, et, b, 13600, y, style, 0);
+    tt_at(wd, ln, et, c, 19600, y, style, 0);
+    tt_at(wd, ln, et, d, 25600, y, style, 0);
+    return 0;
+}
+#[test]
+fn test_a_grid_with_no_rules_between_its_rows_has_the_rows_of_its_text() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    // Repro shape 1 (BLS, BEA, a 10-K): full-height vertical rules, horizontal rules at the top, under the header and at the bottom,
+    // and ten rows of four numbers between the last two, a pitch of 1600 apart with nothing ruled between them.
+    tt_rule(pa, 7200, 9950, 31200, 10050);
+    tt_rule(pa, 7200, 11950, 31200, 12050);
+    tt_rule(pa, 7200, 28750, 31200, 28850);
+    tt_rule(pa, 7150, 10000, 7250, 28800);
+    tt_rule(pa, 13150, 10000, 13250, 28800);
+    tt_rule(pa, 19150, 10000, 19250, 28800);
+    tt_rule(pa, 25150, 10000, 25250, 28800);
+    tt_rule(pa, 31150, 10000, 31250, 28800);
+    tt_row4(wd, ln, et, 10600, 1, &crate::testport::text_blob("Q1")[..], &crate::testport::text_blob("Q2")[..], &crate::testport::text_blob("Q3")[..], &crate::testport::text_blob("Q4")[..]);
+    tt_row4(wd, ln, et, 12600, 0, &crate::testport::text_blob("0.00")[..], &crate::testport::text_blob("0.10")[..], &crate::testport::text_blob("0.20")[..], &crate::testport::text_blob("0.30")[..]);
+    tt_row4(wd, ln, et, 14200, 0, &crate::testport::text_blob("1.01")[..], &crate::testport::text_blob("1.11")[..], &crate::testport::text_blob("1.21")[..], &crate::testport::text_blob("1.31")[..]);
+    tt_row4(wd, ln, et, 15800, 0, &crate::testport::text_blob("2.02")[..], &crate::testport::text_blob("2.12")[..], &crate::testport::text_blob("2.22")[..], &crate::testport::text_blob("2.32")[..]);
+    tt_row4(wd, ln, et, 17400, 0, &crate::testport::text_blob("3.03")[..], &crate::testport::text_blob("3.13")[..], &crate::testport::text_blob("3.23")[..], &crate::testport::text_blob("3.33")[..]);
+    tt_row4(wd, ln, et, 19000, 0, &crate::testport::text_blob("4.04")[..], &crate::testport::text_blob("4.14")[..], &crate::testport::text_blob("4.24")[..], &crate::testport::text_blob("4.34")[..]);
+    tt_row4(wd, ln, et, 20600, 0, &crate::testport::text_blob("5.05")[..], &crate::testport::text_blob("5.15")[..], &crate::testport::text_blob("5.25")[..], &crate::testport::text_blob("5.35")[..]);
+    tt_row4(wd, ln, et, 22200, 0, &crate::testport::text_blob("6.06")[..], &crate::testport::text_blob("6.16")[..], &crate::testport::text_blob("6.26")[..], &crate::testport::text_blob("6.36")[..]);
+    tt_row4(wd, ln, et, 23800, 0, &crate::testport::text_blob("7.07")[..], &crate::testport::text_blob("7.17")[..], &crate::testport::text_blob("7.27")[..], &crate::testport::text_blob("7.37")[..]);
+    tt_row4(wd, ln, et, 25400, 0, &crate::testport::text_blob("8.08")[..], &crate::testport::text_blob("8.18")[..], &crate::testport::text_blob("8.28")[..], &crate::testport::text_blob("8.38")[..]);
+    tt_row4(wd, ln, et, 27000, 0, &crate::testport::text_blob("9.09")[..], &crate::testport::text_blob("9.19")[..], &crate::testport::text_blob("9.29")[..], &crate::testport::text_blob("9.39")[..]);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "rows: well formed");
+    crate::testport::assert_text(t, "T4r;Gh;R;Ch[Q1];Ch[Q2];Ch[Q3];Ch[Q4];Gb;R;C[0.00];C[0.10];C[0.20];C[0.30];R;C[1.01];C[1.11];C[1.21];C[1.31];R;C[2.02];C[2.12];C[2.22];C[2.32];R;C[3.03];C[3.13];C[3.23];C[3.33];R;C[4.04];C[4.14];C[4.24];C[4.34];R;C[5.05];C[5.15];C[5.25];C[5.35];R;C[6.06];C[6.16];C[6.26];C[6.36];R;C[7.07];C[7.17];C[7.27];C[7.37];R;C[8.08];C[8.18];C[8.28];C[8.38];R;C[9.09];C[9.19];C[9.29];C[9.39];", "the body is ten rows, one for each line of its text (before: one row of four cells of ten lines each)");
+}
+#[test]
+fn test_the_reading_that_yields_the_real_row_count_is_the_table() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    // The BLS and BEA shape: the header and two rows are ruled (a lattice of three rows), the eight rows under them are not, their columns
+    // those of the lattice. The ruled reading scores best and has three rows; the reading of the whitespace has the ten rows of the text.
+    tt_rule(pa, 7200, 9950, 31200, 10050);
+    tt_rule(pa, 7200, 11950, 31200, 12050);
+    tt_rule(pa, 7200, 13550, 31200, 13650);
+    tt_rule(pa, 7200, 15150, 31200, 15250);
+    tt_rule(pa, 7150, 10000, 7250, 15200);
+    tt_rule(pa, 13150, 10000, 13250, 15200);
+    tt_rule(pa, 19150, 10000, 19250, 15200);
+    tt_rule(pa, 25150, 10000, 25250, 15200);
+    tt_rule(pa, 31150, 10000, 31250, 15200);
+    tt_row4(wd, ln, et, 10600, 1, &crate::testport::text_blob("Q1")[..], &crate::testport::text_blob("Q2")[..], &crate::testport::text_blob("Q3")[..], &crate::testport::text_blob("Q4")[..]);
+    tt_row4(wd, ln, et, 12400, 0, &crate::testport::text_blob("0.00")[..], &crate::testport::text_blob("0.10")[..], &crate::testport::text_blob("0.20")[..], &crate::testport::text_blob("0.30")[..]);
+    tt_row4(wd, ln, et, 14000, 0, &crate::testport::text_blob("1.01")[..], &crate::testport::text_blob("1.11")[..], &crate::testport::text_blob("1.21")[..], &crate::testport::text_blob("1.31")[..]);
+    tt_row4(wd, ln, et, 15600, 0, &crate::testport::text_blob("2.02")[..], &crate::testport::text_blob("2.12")[..], &crate::testport::text_blob("2.22")[..], &crate::testport::text_blob("2.32")[..]);
+    tt_row4(wd, ln, et, 17200, 0, &crate::testport::text_blob("3.03")[..], &crate::testport::text_blob("3.13")[..], &crate::testport::text_blob("3.23")[..], &crate::testport::text_blob("3.33")[..]);
+    tt_row4(wd, ln, et, 18800, 0, &crate::testport::text_blob("4.04")[..], &crate::testport::text_blob("4.14")[..], &crate::testport::text_blob("4.24")[..], &crate::testport::text_blob("4.34")[..]);
+    tt_row4(wd, ln, et, 20400, 0, &crate::testport::text_blob("5.05")[..], &crate::testport::text_blob("5.15")[..], &crate::testport::text_blob("5.25")[..], &crate::testport::text_blob("5.35")[..]);
+    tt_row4(wd, ln, et, 22000, 0, &crate::testport::text_blob("6.06")[..], &crate::testport::text_blob("6.16")[..], &crate::testport::text_blob("6.26")[..], &crate::testport::text_blob("6.36")[..]);
+    tt_row4(wd, ln, et, 23600, 0, &crate::testport::text_blob("7.07")[..], &crate::testport::text_blob("7.17")[..], &crate::testport::text_blob("7.27")[..], &crate::testport::text_blob("7.37")[..]);
+    tt_row4(wd, ln, et, 25200, 0, &crate::testport::text_blob("8.08")[..], &crate::testport::text_blob("8.18")[..], &crate::testport::text_blob("8.28")[..], &crate::testport::text_blob("8.38")[..]);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "reading: well formed");
+    crate::testport::assert_text(t, "T4w;Gh;R;Ch[Q1];Ch[Q2];Ch[Q3];Ch[Q4];Gb;R;C[0.00];C[0.10];C[0.20];C[0.30];R;C[1.01];C[1.11];C[1.21];C[1.31];R;C[2.02];C[2.12];C[2.22];C[2.32];R;C[3.03];C[3.13];C[3.23];C[3.33];R;C[4.04];C[4.14];C[4.24];C[4.34];R;C[5.05];C[5.15];C[5.25];C[5.35];R;C[6.06];C[6.16];C[6.26];C[6.36];R;C[7.07];C[7.17];C[7.27];C[7.37];R;C[8.08];C[8.18];C[8.28];C[8.38];", "one table of ten rows (before: the ruled three, and the seven rows under them left as paragraphs)");
+}
+pub(crate) fn tt_row3(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, y: i32, a: &[u8], b: &[u8], c: &[u8]) -> i32 {
+    // A row of three four-letter words at x 7600, 20000 and 30000, 800 tall from y (plain).
+    tt_at(wd, ln, et, a, 7600, y, 0, 0);
+    tt_at(wd, ln, et, b, 20000, y, 0, 0);
+    tt_at(wd, ln, et, c, 30000, y, 0, 0);
+    return 0;
+}
+#[test]
+fn test_the_fragments_of_a_zebra_are_the_table_whose_rows_they_are_part_of() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    // The 10-K's balance sheet: a zebra whose stripes stop (a stripe is missing, so the fills make two stacks of three) over fourteen rows of one
+    // pitch. Each stack alone is a reading of its rows; the whitespace reading has all fourteen, the rows between the stacks too.
+    tt_fill(pa, 7200, 11600, 37200, 13200, 15000000);
+    tt_fill(pa, 7200, 14800, 37200, 16400, 15000000);
+    tt_fill(pa, 7200, 18000, 37200, 19600, 15000000);
+    tt_fill(pa, 7200, 24400, 37200, 26000, 15000000);
+    tt_fill(pa, 7200, 27600, 37200, 29200, 15000000);
+    tt_fill(pa, 7200, 30800, 37200, 32400, 15000000);
+    tt_row3(wd, ln, et, 12000, &crate::testport::text_blob("Bolt")[..], &crate::testport::text_blob("10.5")[..], &crate::testport::text_blob("2.25")[..]);
+    tt_row3(wd, ln, et, 13600, &crate::testport::text_blob("Nuts")[..], &crate::testport::text_blob("11.5")[..], &crate::testport::text_blob("3.25")[..]);
+    tt_row3(wd, ln, et, 15200, &crate::testport::text_blob("Cogs")[..], &crate::testport::text_blob("12.5")[..], &crate::testport::text_blob("4.25")[..]);
+    tt_row3(wd, ln, et, 16800, &crate::testport::text_blob("Gear")[..], &crate::testport::text_blob("13.5")[..], &crate::testport::text_blob("5.25")[..]);
+    tt_row3(wd, ln, et, 18400, &crate::testport::text_blob("Axle")[..], &crate::testport::text_blob("14.5")[..], &crate::testport::text_blob("6.25")[..]);
+    tt_row3(wd, ln, et, 20000, &crate::testport::text_blob("Cams")[..], &crate::testport::text_blob("15.5")[..], &crate::testport::text_blob("7.25")[..]);
+    tt_row3(wd, ln, et, 21600, &crate::testport::text_blob("Pins")[..], &crate::testport::text_blob("16.5")[..], &crate::testport::text_blob("8.25")[..]);
+    tt_row3(wd, ln, et, 23200, &crate::testport::text_blob("Rods")[..], &crate::testport::text_blob("17.5")[..], &crate::testport::text_blob("9.25")[..]);
+    tt_row3(wd, ln, et, 24800, &crate::testport::text_blob("Bars")[..], &crate::testport::text_blob("18.5")[..], &crate::testport::text_blob("1.35")[..]);
+    tt_row3(wd, ln, et, 26400, &crate::testport::text_blob("Tabs")[..], &crate::testport::text_blob("19.5")[..], &crate::testport::text_blob("2.35")[..]);
+    tt_row3(wd, ln, et, 28000, &crate::testport::text_blob("Pegs")[..], &crate::testport::text_blob("20.5")[..], &crate::testport::text_blob("3.35")[..]);
+    tt_row3(wd, ln, et, 29600, &crate::testport::text_blob("Hubs")[..], &crate::testport::text_blob("21.5")[..], &crate::testport::text_blob("4.35")[..]);
+    tt_row3(wd, ln, et, 31200, &crate::testport::text_blob("Rims")[..], &crate::testport::text_blob("22.5")[..], &crate::testport::text_blob("5.35")[..]);
+    tt_row3(wd, ln, et, 32800, &crate::testport::text_blob("Tyre")[..], &crate::testport::text_blob("23.5")[..], &crate::testport::text_blob("6.35")[..]);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "fragments: well formed");
+    crate::testport::assert_text(t, "T3w;Gb;R;C[Bolt];C[10.5];C[2.25];R;C[Nuts];C[11.5];C[3.25];R;C[Cogs];C[12.5];C[4.25];R;C[Gear];C[13.5];C[5.25];R;C[Axle];C[14.5];C[6.25];R;C[Cams];C[15.5];C[7.25];R;C[Pins];C[16.5];C[8.25];R;C[Rods];C[17.5];C[9.25];R;C[Bars];C[18.5];C[1.35];R;C[Tabs];C[19.5];C[2.35];R;C[Pegs];C[20.5];C[3.35];R;C[Hubs];C[21.5];C[4.35];R;C[Rims];C[22.5];C[5.35];R;C[Tyre];C[23.5];C[6.35];", "one table of fourteen rows (before: two tables of the stripes, and the rows between them paragraphs)");
+}
+pub(crate) fn tt_amt(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, y: i32, style: i32, label: &[u8], a: &[u8], b: &[u8]) -> i32 {
+    // A statement row at y: the label at x 7600, the amounts right-aligned at 26000 and 36000 (a statement's two year columns).
+    tt_at(wd, ln, et, label, 7600, y, style, 0);
+    tt_at(wd, ln, et, a, 26000, y, style, 1);
+    tt_at(wd, ln, et, b, 36000, y, style, 1);
+    return 0;
+}
+pub(crate) fn tt_stmt_head(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut pa: &mut crate::port::Cells) -> i32 {
+    // The head of a financial statement (the 10-K's balance sheet): `December 31,` in bold over the two year columns, a short rule under it that
+    // spans both, the years `2023` and `2022` in bold, each with a short rule under it (y 12100), and the first body row at y 12800.
+    tt_at(wd, ln, et, &crate::testport::text_blob("December 31,")[..], 23500, 10000, 1, 0);
+    tt_rule(pa, 19600, 10850, 36200, 10950);
+    tt_at(wd, ln, et, &crate::testport::text_blob("2023")[..], 26000, 11200, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("2022")[..], 36000, 11200, 1, 1);
+    tt_rule(pa, 19600, 12050, 26000, 12150);
+    tt_rule(pa, 29600, 12050, 36000, 12150);
+    return 0;
+}
+pub(crate) fn tt_stmt_body(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, dollar: i32) -> i32 {
+    // Five rows of a statement from y 12800 a pitch of 1600 apart; when `dollar` is 1 a dollar sign on the first row's amounts, set apart from them
+    // (a statement sets it at the left of its column: at x 19800 and 29800).
+    tt_amt(wd, ln, et, 12800, 0, &crate::testport::text_blob("Cash and equivalents")[..], &crate::testport::text_blob("33,672")[..], &crate::testport::text_blob("32,260")[..]);
+    if dollar == 1 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("$")[..], 19800, 12800, 0, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("$")[..], 29800, 12800, 0, 0);
+    }
+    tt_amt(wd, ln, et, 14400, 0, &crate::testport::text_blob("Short-term investments")[..], &crate::testport::text_blob("129,619")[..], &crate::testport::text_blob("92,774")[..]);
+    tt_amt(wd, ln, et, 16000, 0, &crate::testport::text_blob("Fixed maturity securities")[..], &crate::testport::text_blob("23,758")[..], &crate::testport::text_blob("25,128")[..]);
+    tt_amt(wd, ln, et, 17600, 0, &crate::testport::text_blob("Equity securities")[..], &crate::testport::text_blob("353,842")[..], &crate::testport::text_blob("308,793")[..]);
+    tt_amt(wd, ln, et, 19200, 0, &crate::testport::text_blob("Other")[..], &crate::testport::text_blob("19,568")[..], &crate::testport::text_blob("19,657")[..]);
+    return 0;
+}
+pub(crate) fn tt_stmt_total(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut pa: &mut crate::port::Cells, dollar: i32) -> i32 {
+    // The total of the statement: a blank pitch under the last body row (y 19200), a double rule over each amount column (y 21650 and 21850, which
+    // cluster as one rule) and the total, in bold, at y 22400, a dollar sign on its amounts when `dollar` is 1.
+    tt_rule(pa, 19600, 21600, 26000, 21700);
+    tt_rule(pa, 19600, 21800, 26000, 21900);
+    tt_rule(pa, 29600, 21600, 36000, 21700);
+    tt_rule(pa, 29600, 21800, 36000, 21900);
+    tt_amt(wd, ln, et, 22400, 1, &crate::testport::text_blob("Total assets")[..], &crate::testport::text_blob("259,419")[..], &crate::testport::text_blob("251,300")[..]);
+    if dollar == 1 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("$")[..], 19800, 22400, 1, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("$")[..], 29800, 22400, 1, 0);
+    }
+    return 0;
+}
+#[test]
+fn test_a_header_over_a_short_rule_is_in_the_header() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    // Repro shape 3 (the 10-K's statements): `December 31,` over a short rule that spans the two year columns, the years under it with a short
+    // rule each, then the rows: the label of the columns is a header row that spans them and the years are a header row.
+    tt_stmt_head(wd, ln, et, pa);
+    tt_stmt_body(wd, ln, et, 0);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "head: well formed");
+    crate::testport::assert_text(t, "T3w;Gh;R;Ch[];Cc2he[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cs[Cash and equivalents];C[33,672];C[32,260];R;Cs[Short-term investments];C[129,619];C[92,774];R;Cs[Fixed maturity securities];C[23,758];C[25,128];R;Cs[Equity securities];C[353,842];C[308,793];R;Cs[Other];C[19,568];C[19,657];", "the header is two rows, a spanning label over the year columns and the years (before: the label a paragraph over the table)");
+}
+pub(crate) fn tt_wrapped(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, y: i32, date: &[u8], a: &[u8], b: &[u8], c: &[u8], d: &[u8], amt: &[u8]) -> i32 {
+    // A row whose Details cell has four lines (x 14000, a pitch of 1200) with the date at x 7600 and the amount, right-aligned at 36000, on the first line
+    // only: the next row begins 2400 under the fourth line (a gap of one line).
+    tt_at(wd, ln, et, date, 7600, y, 0, 0);
+    tt_at(wd, ln, et, a, 14000, y, 0, 0);
+    tt_at(wd, ln, et, amt, 36000, y, 0, 1);
+    tt_at(wd, ln, et, b, 14000, y + 1200, 0, 0);
+    tt_at(wd, ln, et, c, 14000, y + 2400, 0, 0);
+    tt_at(wd, ln, et, d, 14000, y + 3600, 0, 0);
+    return 0;
+}
+#[test]
+fn test_the_lines_of_a_wrapped_cell_are_in_one_row() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    // Repro shape 5 (the Agami statements): no rules, four-line Details cells with the date and the amount on the first line, a gap of a line between
+    // the rows. The lines under the first have one chunk each (before: a header and no body, the last line a heading).
+    tt_at(wd, ln, et, &crate::testport::text_blob("Date")[..], 7600, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Details")[..], 14000, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Amount")[..], 36000, 10000, 1, 1);
+    tt_wrapped(wd, ln, et, 11600, &crate::testport::text_blob("05 Jan")[..], &crate::testport::text_blob("Payment to Acme Supply")[..], &crate::testport::text_blob("Invoice 4471 settled")[..], &crate::testport::text_blob("Ref ABC 123")[..], &crate::testport::text_blob("Thank you")[..], &crate::testport::text_blob("120.50")[..]);
+    tt_wrapped(wd, ln, et, 17600, &crate::testport::text_blob("12 Jan")[..], &crate::testport::text_blob("Card purchase Bolt Co")[..], &crate::testport::text_blob("Order 5512 shipped")[..], &crate::testport::text_blob("Ref DEF 456")[..], &crate::testport::text_blob("Paid in full")[..], &crate::testport::text_blob("75.00")[..]);
+    tt_wrapped(wd, ln, et, 23600, &crate::testport::text_blob("19 Jan")[..], &crate::testport::text_blob("Transfer to savings")[..], &crate::testport::text_blob("Monthly plan")[..], &crate::testport::text_blob("Ref GHI 789")[..], &crate::testport::text_blob("Standing order")[..], &crate::testport::text_blob("300.00")[..]);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "wrapped: well formed");
+    crate::testport::assert_text(t, "T3w;Gh;R;Ch[Date];Chs[Details];Ch[Amount];Gb;R;C[05 Jan];Cs[Payment to Acme Supply Invoice 4471 settled Ref ABC 123 Thank you];C[120.50];R;C[12 Jan];Cs[Card purchase Bolt Co Order 5512 shipped Ref DEF 456 Paid in full];C[75.00];R;C[19 Jan];Cs[Transfer to savings Monthly plan Ref GHI 789 Standing order];C[300.00];", "three rows, each with its four lines in one cell (before: no table, a paragraph for each line, in the real statements a header and no body)");
+}
+#[test]
+fn test_a_ruled_header_over_wrapped_unruled_rows_is_the_head_of_their_table() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    // The Agami statements: a title above the header, the header in two lines (a language each), a rule above the title and one under the header, the
+    // rows unruled below it, their Details cells wrapped. The chain of the two rules reads the title, the header and a row or two under the rule; the
+    // whitespace reads the header and every row: the head of the table beside the table (before: the table of the chain, its rows cut after the first).
+    tt_rule(pa, 7200, 7950, 37200, 8050);
+    tt_rule(pa, 7200, 11950, 37200, 12050);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Current Account")[..], 7600, 8600, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Date")[..], 7600, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Details")[..], 14000, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Amount")[..], 36000, 10000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Dt")[..], 7600, 11000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Dx")[..], 14000, 11000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Am")[..], 36000, 11000, 0, 1);
+    tt_wrapped(wd, ln, et, 12600, &crate::testport::text_blob("05 Jan")[..], &crate::testport::text_blob("Payment to Acme Supply")[..], &crate::testport::text_blob("Invoice 4471 settled")[..], &crate::testport::text_blob("Ref ABC 123")[..], &crate::testport::text_blob("Thank you")[..], &crate::testport::text_blob("120.50")[..]);
+    tt_wrapped(wd, ln, et, 18600, &crate::testport::text_blob("12 Jan")[..], &crate::testport::text_blob("Card purchase Bolt Co")[..], &crate::testport::text_blob("Order 5512 shipped")[..], &crate::testport::text_blob("Ref DEF 456")[..], &crate::testport::text_blob("Paid in full")[..], &crate::testport::text_blob("75.00")[..]);
+    tt_wrapped(wd, ln, et, 24600, &crate::testport::text_blob("19 Jan")[..], &crate::testport::text_blob("Transfer to savings")[..], &crate::testport::text_blob("Monthly plan")[..], &crate::testport::text_blob("Ref GHI 789")[..], &crate::testport::text_blob("Standing order")[..], &crate::testport::text_blob("300.00")[..]);
+    tt_wrapped(wd, ln, et, 30600, &crate::testport::text_blob("26 Jan")[..], &crate::testport::text_blob("Interest paid")[..], &crate::testport::text_blob("Quarterly")[..], &crate::testport::text_blob("Ref JKL 012")[..], &crate::testport::text_blob("Credit")[..], &crate::testport::text_blob("4.20")[..]);
+    tt_wrapped(wd, ln, et, 36600, &crate::testport::text_blob("28 Jan")[..], &crate::testport::text_blob("Cash deposit")[..], &crate::testport::text_blob("Branch 14")[..], &crate::testport::text_blob("Ref MNO 345")[..], &crate::testport::text_blob("Counter")[..], &crate::testport::text_blob("50.00")[..]);
+    tt_wrapped(wd, ln, et, 42600, &crate::testport::text_blob("31 Jan")[..], &crate::testport::text_blob("Service charge")[..], &crate::testport::text_blob("Monthly fee")[..], &crate::testport::text_blob("Ref PQR 678")[..], &crate::testport::text_blob("Account")[..], &crate::testport::text_blob("8.00")[..]);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "head: well formed");
+    crate::testport::assert_text(t, "P[Current Account];T3w;Gh;R;Chs[Date];Chs[Details];Ch[Amount];Gb;R;Cs[Dt];Cs[Dx];Ce[Am];R;Cs[05 Jan];Cs[Payment to Acme Supply Invoice 4471 settled Ref ABC 123 Thank you];Ce[120.50];R;Cs[12 Jan];Cs[Card purchase Bolt Co Order 5512 shipped Ref DEF 456 Paid in full];Ce[75.00];R;Cs[19 Jan];Cs[Transfer to savings Monthly plan Ref GHI 789 Standing order];Ce[300.00];R;Cs[26 Jan];Cs[Interest paid Quarterly Ref JKL 012 Credit];Ce[4.20];R;Cs[28 Jan];Cs[Cash deposit Branch 14 Ref MNO 345 Counter];Ce[50.00];R;Cs[31 Jan];Cs[Service charge Monthly fee Ref PQR 678 Account];Ce[8.00];", "one table, the header and the six rows (before: the table of the rules, its header and one row, and the rest paragraphs)");
+}
+pub(crate) fn tt_cols5(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, page: i32, y: i32, style: i32, date: &[u8], what: &[u8], debit: &[u8], credit: &[u8], bal: &[u8]) -> i32 {
+    // A row of a ledger on page `page` at y: the date at x 7600, the details at 14000, the debit, the credit and the balance right-aligned at 26000,
+    // 36000 and 46000 (an empty blob is no word).
+    tt_atp(wd, ln, et, date, 7600, y, style, 0, page);
+    tt_atp(wd, ln, et, what, 14000, y, style, 0, page);
+    if crate::port::blob_len(debit) > 0 {
+        tt_atp(wd, ln, et, debit, 26000, y, style, 1, page);
+    }
+    if crate::port::blob_len(credit) > 0 {
+        tt_atp(wd, ln, et, credit, 36000, y, style, 1, page);
+    }
+    tt_atp(wd, ln, et, bal, 46000, y, style, 1, page);
+    return 0;
+}
+pub(crate) fn tt_french(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, y: i32, style: i32, what: &[u8], d1: &[u8], d2: &[u8], b1: &[u8], b2: &[u8]) -> i32 {
+    // A row of a French statement at y: the details at x 7600, a debit `1 895,80 $` (three words, the sign after the amount) at 24000 and a balance
+    // `11 732,54 $` at 38000, the signs set a gap from the amounts that is the width of a space (the amounts before the next column's).
+    tt_at(wd, ln, et, what, 7600, y, style, 0);
+    if crate::port::blob_len(d1) > 0 {
+        tt_at(wd, ln, et, d1, 24000, y, style, 0);
+        tt_at(wd, ln, et, d2, 24900, y, style, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("$")[..], 28300, y, style, 0);
+    }
+    tt_at(wd, ln, et, b1, 38000, y, style, 0);
+    tt_at(wd, ln, et, b2, 39400, y, style, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("$")[..], 42800, y, style, 0);
+    return 0;
+}
+pub(crate) fn tt_leader(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, y: i32, label: &[u8], line: &[u8], amt: &[u8]) -> i32 {
+    // An IRS-style row at y: the label at x 7600, six full stops of their own (every 1400 from x 22000, a gap each of 900), the line number at 33000 and the
+    // amount right-aligned at 43000.
+    tt_at(wd, ln, et, label, 7600, y, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob(".")[..], 22000, y, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob(".")[..], 23400, y, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob(".")[..], 24800, y, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob(".")[..], 26200, y, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob(".")[..], 27600, y, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob(".")[..], 29000, y, 0, 0);
+    tt_at(wd, ln, et, line, 33000, y, 0, 0);
+    tt_at(wd, ln, et, amt, 43000, y, 0, 1);
+    return 0;
+}
+#[test]
+fn test_the_rows_above_the_first_row_of_amounts_are_the_header() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    // The BLS and BEA tables: a header of cells that wrap into lines (a group's name, `Aug.`, `2026`), in the type of the body and not bold, over rows of
+    // amounts with a decimal point: the header is every row above the first of them (before: the first row alone, or none).
+    tt_at(wd, ln, et, &crate::testport::text_blob("Raw")[..], 20000, 10000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Adj")[..], 30000, 10000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Aug.")[..], 20000, 11200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Jul.")[..], 30000, 11200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("2026")[..], 20000, 12400, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("2026")[..], 30000, 12400, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Category")[..], 7600, 12400, 0, 0);
+    tt_row3(wd, ln, et, 14400, &crate::testport::text_blob("Food")[..], &crate::testport::text_blob("13.5")[..], &crate::testport::text_blob("2.7")[..]);
+    tt_row3(wd, ln, et, 16000, &crate::testport::text_blob("Fuel")[..], &crate::testport::text_blob("11.5")[..], &crate::testport::text_blob("3.1")[..]);
+    tt_row3(wd, ln, et, 17600, &crate::testport::text_blob("Rent")[..], &crate::testport::text_blob("12.5")[..], &crate::testport::text_blob("4.4")[..]);
+    tt_row3(wd, ln, et, 19200, &crate::testport::text_blob("Cars")[..], &crate::testport::text_blob("14.5")[..], &crate::testport::text_blob("5.9")[..]);
+    tt_row3(wd, ln, et, 20800, &crate::testport::text_blob("Tolls")[..], &crate::testport::text_blob("15.5")[..], &crate::testport::text_blob("6.2")[..]);
+    tt_row3(wd, ln, et, 22400, &crate::testport::text_blob("Power")[..], &crate::testport::text_blob("16.5")[..], &crate::testport::text_blob("7.7")[..]);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "head: well formed");
+    crate::testport::assert_text(t, "T3w;Gh;R;Ch[];Ch[Raw];Ch[Adj];R;Ch[];Ch[Aug.];Ch[Jul.];R;Ch[Category];Ch[2026];Ch[2026];Gb;R;C[Food];C[13.5];C[2.7];R;C[Fuel];C[11.5];C[3.1];R;C[Rent];C[12.5];C[4.4];R;C[Cars];C[14.5];C[5.9];R;C[Tolls];C[15.5];C[6.2];R;C[Power];C[16.5];C[7.7];", "the three lines above the first row of amounts are the header (before: the first of them, the others rows of the body)");
+}
+#[test]
+fn test_a_block_of_totals_in_the_last_columns_is_no_part_of_a_whitespace_table() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    // The invoice (D559's guard, now for the whitespace reading, which has more rows than the ruled one that scored best): the rows and under them a
+    // block of totals whose labels begin in the second column, no rule: a table of its rows, the totals paragraphs.
+    tt_rule(pa, 7200, 9550, 32200, 9650);
+    tt_rule(pa, 7200, 11150, 32200, 11250);
+    tt_rule(pa, 7200, 17550, 32200, 17650);
+    tt_row3(wd, ln, et, 10000, &crate::testport::text_blob("Item")[..], &crate::testport::text_blob("Desc")[..], &crate::testport::text_blob("Qty")[..]);
+    tt_row3(wd, ln, et, 11600, &crate::testport::text_blob("A-100")[..], &crate::testport::text_blob("Pipe")[..], &crate::testport::text_blob("40.5")[..]);
+    tt_row3(wd, ln, et, 13200, &crate::testport::text_blob("B-220")[..], &crate::testport::text_blob("Joint")[..], &crate::testport::text_blob("12.5")[..]);
+    tt_row3(wd, ln, et, 14800, &crate::testport::text_blob("C-310")[..], &crate::testport::text_blob("Paste")[..], &crate::testport::text_blob("60.5")[..]);
+    tt_row3(wd, ln, et, 16400, &crate::testport::text_blob("D-005")[..], &crate::testport::text_blob("Tape")[..], &crate::testport::text_blob("70.5")[..]);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Subtotal")[..], 30000, 18000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("46.4")[..], 38000, 18000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("VAT 20%")[..], 30000, 19600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("9.28")[..], 38000, 19600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Total due")[..], 30000, 21200, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("55.7")[..], 38000, 21200, 1, 0);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "totals: well formed");
+    crate::testport::assert_text(t, "T3p;Gh;R;Ch[Item];Ch[Desc];Ch[Qty];Gb;R;C[A-100];C[Pipe];C[40.5];R;C[B-220];C[Joint];C[12.5];R;C[C-310];C[Paste];C[60.5];R;C[D-005];C[Tape];C[70.5];P[Subtotal];P[46.4];P[VAT 20%];P[9.28];P[Total due];P[55.7];", "the rows are the table and the totals are not (D559; before the guard of the whitespace run, the whitespace reading, with more rows, won and took them in)");
+}
+#[test]
+fn test_the_dots_of_a_leader_are_no_cells() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    // The 1120's lines (D17, D18, D20): a label, a leader of full stops a gap apart, the line number, the amount. Each full stop is a chunk of its own to the
+    // rows' words and the six of a row, in the same places in every row, are columns of the table (before: a table of nine columns, the dots cells).
+    tt_at(wd, ln, et, &crate::testport::text_blob("Item")[..], 7600, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Line")[..], 33000, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Amount")[..], 43000, 10000, 1, 1);
+    tt_leader(wd, ln, et, 11600, &crate::testport::text_blob("Gross receipts")[..], &crate::testport::text_blob("1a")[..], &crate::testport::text_blob("1,200")[..]);
+    tt_leader(wd, ln, et, 13200, &crate::testport::text_blob("Returns")[..], &crate::testport::text_blob("1b")[..], &crate::testport::text_blob("30")[..]);
+    tt_leader(wd, ln, et, 14800, &crate::testport::text_blob("Cost of goods sold")[..], &crate::testport::text_blob("2")[..], &crate::testport::text_blob("450")[..]);
+    tt_leader(wd, ln, et, 16400, &crate::testport::text_blob("Gross profit")[..], &crate::testport::text_blob("3")[..], &crate::testport::text_blob("720")[..]);
+    tt_leader(wd, ln, et, 18000, &crate::testport::text_blob("Dividends")[..], &crate::testport::text_blob("4")[..], &crate::testport::text_blob("15")[..]);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "leader: well formed");
+    crate::testport::assert_text(t, "T3w;Gh;R;Ch[Item];Ch[Line];Ch[Amount];Gb;R;C[Gross receipts . . . . . .];C[1a];Ce[1,200];R;C[Returns . . . . . .];C[1b];Ce[30];R;C[Cost of goods sold . . . . . .];C[2];Ce[450];R;C[Gross profit . . . . . .];C[3];Ce[720];R;C[Dividends . . . . . .];C[4];Ce[15];", "the leader is the end of the label's cell: three columns (before: nine, the six full stops the cells of six of them)");
+}
+#[test]
+fn test_a_row_span_does_not_cross_into_the_foot() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    // Repro shape 13 (the ICDAR table of savings): a label that spans three rows and the bold total that ends its group, a fourth row of the same span.
+    // The total is the last row, bold under rows that are not, and would be the foot: but the span goes down into it, and a row group does not cross
+    // from the body into the foot. The total stays in the body, the span whole (before: a foot of one row, the span four rows of it three).
+    tt_rule(pa, 7200, 9950, 37200, 10050);
+    tt_rule(pa, 7200, 11950, 37200, 12050);
+    tt_rule(pa, 17200, 13550, 37200, 13650);
+    tt_rule(pa, 17200, 15150, 37200, 15250);
+    tt_rule(pa, 17200, 16750, 37200, 16850);
+    tt_rule(pa, 7200, 18350, 37200, 18450);
+    tt_rule(pa, 7150, 10000, 7250, 18400);
+    tt_rule(pa, 17150, 10000, 17250, 18400);
+    tt_rule(pa, 27150, 10000, 27250, 18400);
+    tt_rule(pa, 37150, 10000, 37250, 18400);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Group")[..], 7600, 10600, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Level")[..], 17600, 10600, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Pct")[..], 27600, 10600, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Combined")[..], 7600, 12200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Med-low")[..], 17600, 12200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("1.5%")[..], 27600, 12200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Med-high")[..], 17600, 13800, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("2.3%")[..], 27600, 13800, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Very high")[..], 17600, 15400, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("2.4%")[..], 27600, 15400, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Total")[..], 17600, 17000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("6%")[..], 27600, 17000, 1, 0);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "span: well formed");
+    crate::testport::assert_text(t, "T3r;Gh;R;Ch[Group];Ch[Level];Ch[Pct];Gb;R;Cr4[Combined];Cs[Med-low];Cs[1.5%];R;Cs[Med-high];Cs[2.3%];R;Cs[Very high];Cs[2.4%];R;Cs[Total];Cs[6%];", "the total is in the body with the rows its label spans (before: `Gf;R;Cws[Total];Cw[6%];` under a label of four rows that began in the body)");
+}
+#[test]
+fn test_a_currency_sign_after_its_amount_stays_with_it() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    // The Harbour statement writes `1 895,80 $` and `11 732,54 $`: the sign is the end of its amount and not the lead of the next one (a sign of a word
+    // of its own before a figure is the figure's only when the row's signs go before the figures).
+    tt_at(wd, ln, et, &crate::testport::text_blob("Details")[..], 7600, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Debit")[..], 24000, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Solde")[..], 38000, 10000, 1, 0);
+    tt_french(wd, ln, et, 11600, 0, &crate::testport::text_blob("Uber")[..], &crate::testport::text_blob("1")[..], &crate::testport::text_blob("895,80")[..], &crate::testport::text_blob("11")[..], &crate::testport::text_blob("732,54")[..]);
+    tt_french(wd, ln, et, 13200, 0, &crate::testport::text_blob("La Baie")[..], &crate::testport::text_blob("88")[..], &crate::testport::text_blob("96")[..], &crate::testport::text_blob("11")[..], &crate::testport::text_blob("643,58")[..]);
+    tt_french(wd, ln, et, 14800, 0, &crate::testport::text_blob("Tim")[..], &crate::testport::text_blob("53")[..], &crate::testport::text_blob("50")[..], &crate::testport::text_blob("11")[..], &crate::testport::text_blob("590,08")[..]);
+    tt_french(wd, ln, et, 16400, 0, &crate::testport::text_blob("Apple")[..], &crate::testport::text_blob("17")[..], &crate::testport::text_blob("26")[..], &crate::testport::text_blob("11")[..], &crate::testport::text_blob("572,82")[..]);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "french: well formed");
+    crate::testport::assert_text(t, "T3w;Gh;R;Chs[Details];Ch[Debit];Ch[Solde];Gb;R;Cs[Uber];C[1 895,80 $];C[11 732,54 $];R;Cs[La Baie];C[88 96 $];C[11 643,58 $];R;Cs[Tim];C[53 50 $];C[11 590,08 $];R;Cs[Apple];C[17 26 $];C[11 572,82 $];", "each amount keeps its sign: three columns (a sign that went to the amount after it made the debit and the balance one cell)");
+}
+#[test]
+fn test_a_table_whose_page_has_an_empty_column_is_one_with_the_page_before() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    // Repro shape 4 (the Harbour statement): five columns on the first page, the second page has only debits (its credit column is empty but for
+    // the header the table repeats): the columns of the second are a subset of the first's, aligned by x, so it is the same table; its rows have the empty
+    // cell (before: a table of four columns on the second page, the pages not linked).
+    tt_cols5(wd, ln, et, 1, 10000, 1, &crate::testport::text_blob("Date")[..], &crate::testport::text_blob("Details")[..], &crate::testport::text_blob("Debit")[..], &crate::testport::text_blob("Credit")[..], &crate::testport::text_blob("Balance")[..]);
+    tt_cols5(wd, ln, et, 1, 11600, 0, &crate::testport::text_blob("02 Jan")[..], &crate::testport::text_blob("Skip Plats")[..], &crate::testport::text_blob("151.30")[..], &crate::testport::text_blob("")[..], &crate::testport::text_blob("10,598.70")[..]);
+    tt_cols5(wd, ln, et, 1, 13200, 0, &crate::testport::text_blob("02 Jan")[..], &crate::testport::text_blob("Salary")[..], &crate::testport::text_blob("")[..], &crate::testport::text_blob("10.33")[..], &crate::testport::text_blob("10,609.03")[..]);
+    tt_cols5(wd, ln, et, 1, 14800, 0, &crate::testport::text_blob("03 Jan")[..], &crate::testport::text_blob("Amazon")[..], &crate::testport::text_blob("1,200.45")[..], &crate::testport::text_blob("")[..], &crate::testport::text_blob("9,408.58")[..]);
+    tt_cols5(wd, ln, et, 1, 16400, 0, &crate::testport::text_blob("06 Jan")[..], &crate::testport::text_blob("Paie")[..], &crate::testport::text_blob("")[..], &crate::testport::text_blob("101.15")[..], &crate::testport::text_blob("9,509.73")[..]);
+    tt_cols5(wd, ln, et, 1, 18000, 0, &crate::testport::text_blob("06 Jan")[..], &crate::testport::text_blob("Petro")[..], &crate::testport::text_blob("29.69")[..], &crate::testport::text_blob("")[..], &crate::testport::text_blob("9,480.04")[..]);
+    tt_cols5(wd, ln, et, 1, 19600, 0, &crate::testport::text_blob("06 Jan")[..], &crate::testport::text_blob("Spotify")[..], &crate::testport::text_blob("541.27")[..], &crate::testport::text_blob("")[..], &crate::testport::text_blob("8,938.77")[..]);
+    tt_cols5(wd, ln, et, 2, 10000, 1, &crate::testport::text_blob("Date")[..], &crate::testport::text_blob("Details")[..], &crate::testport::text_blob("Debit")[..], &crate::testport::text_blob("Credit")[..], &crate::testport::text_blob("Balance")[..]);
+    tt_cols5(wd, ln, et, 2, 11600, 0, &crate::testport::text_blob("21 Jan")[..], &crate::testport::text_blob("Uber")[..], &crate::testport::text_blob("1,895.80")[..], &crate::testport::text_blob("")[..], &crate::testport::text_blob("11,732.54")[..]);
+    tt_cols5(wd, ln, et, 2, 13200, 0, &crate::testport::text_blob("23 Jan")[..], &crate::testport::text_blob("La Baie")[..], &crate::testport::text_blob("88.96")[..], &crate::testport::text_blob("")[..], &crate::testport::text_blob("11,643.58")[..]);
+    tt_cols5(wd, ln, et, 2, 14800, 0, &crate::testport::text_blob("24 Jan")[..], &crate::testport::text_blob("Tim")[..], &crate::testport::text_blob("53.50")[..], &crate::testport::text_blob("")[..], &crate::testport::text_blob("11,590.08")[..]);
+    tt_cols5(wd, ln, et, 2, 16400, 0, &crate::testport::text_blob("25 Jan")[..], &crate::testport::text_blob("Apple")[..], &crate::testport::text_blob("17.26")[..], &crate::testport::text_blob("")[..], &crate::testport::text_blob("11,572.82")[..]);
+    tt_cols5(wd, ln, et, 2, 18000, 0, &crate::testport::text_blob("26 Jan")[..], &crate::testport::text_blob("Gaz")[..], &crate::testport::text_blob("422.11")[..], &crate::testport::text_blob("")[..], &crate::testport::text_blob("11,150.71")[..]);
+    tt_cols5(wd, ln, et, 2, 19600, 0, &crate::testport::text_blob("26 Jan")[..], &crate::testport::text_blob("Netflix")[..], &crate::testport::text_blob("17.11")[..], &crate::testport::text_blob("")[..], &crate::testport::text_blob("11,133.60")[..]);
+    crate::testport::assert_eq(tt_run_n(wd, ln, et, pa, t, 2), 0, "ledger: well formed");
+    crate::testport::assert_text(t, "T5w;Gh;R;Ch[Date];Chs[Details];Che[Debit];Ch[Credit];Che[Balance];Gb;R;C[02 Jan];Cs[Skip Plats];Ce[151.30];C[];C[10,598.70];R;C[02 Jan];Cs[Salary];Ce[];C[10.33];C[10,609.03];R;C[03 Jan];Cs[Amazon];Ce[1,200.45];C[];C[9,408.58];R;C[06 Jan];Cs[Paie];Ce[];C[101.15];C[9,509.73];R;C[06 Jan];Cs[Petro];Ce[29.69];C[];C[9,480.04];R;C[06 Jan];Cs[Spotify];Ce[541.27];C[];C[8,938.77];R;C[21 Jan];Cs[Uber];Ce[1,895.80];C[];C[11,732.54];R;C[23 Jan];Cs[La Baie];Ce[88.96];C[];C[11,643.58];R;C[24 Jan];Cs[Tim];Ce[53.50];C[];C[11,590.08];R;C[25 Jan];Cs[Apple];Ce[17.26];C[];C[11,572.82];R;C[26 Jan];Cs[Gaz];Ce[422.11];C[];C[11,150.71];R;C[26 Jan];Cs[Netflix];Ce[17.11];C[];C[11,133.60];", "one table of five columns across the two pages, the second page's rows with their empty credit cells (before: two tables, four columns on the second)");
+}
+#[test]
+fn test_a_sections_label_in_a_table_is_a_row_that_spans_it() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    // The 10-K's labels: `ASSETS` before the first row and `Railroad, Utilities and Energy:` between two groups of rows, each in bold, one cell,
+    // no amount. They are rows of the table whose one cell spans the columns (before: a heading or a paragraph that split the table, or a cell of the
+    // first column and cells that are empty).
+    tt_stmt_head(wd, ln, et, pa);
+    tt_at(wd, ln, et, &crate::testport::text_blob("ASSETS")[..], 7600, 12800, 1, 0);
+    tt_amt(wd, ln, et, 14400, 0, &crate::testport::text_blob("Cash and equivalents")[..], &crate::testport::text_blob("33,672")[..], &crate::testport::text_blob("32,260")[..]);
+    tt_amt(wd, ln, et, 16000, 0, &crate::testport::text_blob("Short-term investments")[..], &crate::testport::text_blob("129,619")[..], &crate::testport::text_blob("92,774")[..]);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Railroad, Utilities and Energy:")[..], 7600, 17600, 1, 0);
+    tt_amt(wd, ln, et, 19200, 0, &crate::testport::text_blob("Receivables")[..], &crate::testport::text_blob("7,086")[..], &crate::testport::text_blob("4,795")[..]);
+    tt_amt(wd, ln, et, 20800, 0, &crate::testport::text_blob("Goodwill")[..], &crate::testport::text_blob("33,758")[..], &crate::testport::text_blob("26,597")[..]);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "labels: well formed");
+    crate::testport::assert_text(t, "T3w;Gh;R;Ch[];Cc2he[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cc3[ASSETS];R;Cs[Cash and equivalents];Ce[33,672];C[32,260];R;Cs[Short-term investments];Ce[129,619];C[92,774];R;Cc3[Railroad, Utilities and Energy:];R;Cs[Receivables];Ce[7,086];C[4,795];R;Cs[Goodwill];Ce[33,758];C[26,597];", "a label with no amount, in bold, is one cell that spans the row: the table is one table, `ASSETS` no header row");
+}
+#[test]
+fn test_a_currency_sign_set_apart_from_its_amount_is_in_its_cell() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    // A statement sets the dollar sign at the left of its column and the amount at the right of it (the first row's amounts here, 2700 apart): the
+    // sign is part of its amount's cell, no cell of its own (before: a column of its own, or the end of the cell before it).
+    tt_stmt_head(wd, ln, et, pa);
+    tt_stmt_body(wd, ln, et, 1);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "dollar: well formed");
+    crate::testport::assert_text(t, "T3w;Gh;R;Ch[];Cc2he[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cs[Cash and equivalents];Ce[$ 33,672];Ce[$ 32,260];R;Cs[Short-term investments];Ce[129,619];Ce[92,774];R;Cs[Fixed maturity securities];Ce[23,758];Ce[25,128];R;Cs[Equity securities];Ce[353,842];Ce[308,793];R;Cs[Other];Ce[19,568];Ce[19,657];", "the signs are in the cells of the amounts after them: three columns");
+}
+#[test]
+fn test_the_total_under_a_double_rule_is_a_row_of_the_table() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    let t2: &mut String = &mut crate::port::new_text();
+    // Repro shape 3: the total stands a blank pitch under the body, under a double rule over the amount columns, its label in the first column:
+    // the last row of the table (before: five paragraphs under it).
+    tt_stmt_head(wd, ln, et, pa);
+    tt_stmt_body(wd, ln, et, 1);
+    tt_stmt_total(wd, ln, et, pa, 1);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "total: well formed");
+    crate::testport::assert_text(t, "T3p;Gh;R;Ch[];Cc2h[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cs[Cash and equivalents];Ce[$ 33,672];Ce[$ 32,260];R;Cs[Short-term investments];Ce[129,619];Ce[92,774];R;Cs[Fixed maturity securities];Ce[23,758];Ce[25,128];R;Cs[Equity securities];Ce[353,842];Ce[308,793];R;Cs[Other];Ce[19,568];Ce[19,657];Gf;R;Cws[Total assets];Cwe[$ 259,419];Cwe[$ 251,300];", "the total is a row of the table, in its foot");
+    // A block of totals in the last columns under it (an invoice's: its label is not in the first column) is no row of the table (D559).
+    crate::port::cells_drop(wd, 0);
+    crate::port::cells_drop(ln, 0);
+    crate::port::cells_drop(et, 0);
+    crate::port::cells_drop(pa, 0);
+    tt_stmt_head(wd, ln, et, pa);
+    tt_stmt_body(wd, ln, et, 1);
+    tt_rule(pa, 19600, 21600, 26000, 21700);
+    tt_rule(pa, 19600, 21800, 26000, 21900);
+    tt_rule(pa, 29600, 21600, 36000, 21700);
+    tt_rule(pa, 29600, 21800, 36000, 21900);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Total due")[..], 14000, 22400, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("259,419")[..], 26000, 22400, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("251,300")[..], 36000, 22400, 1, 1);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t2), 0, "block: well formed");
+    crate::testport::assert_text(t2, "T3p;Gh;R;Ch[];Cc2he[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cs[Cash and equivalents];Ce[$ 33,672];Ce[$ 32,260];R;Cs[Short-term investments];Ce[129,619];Ce[92,774];R;Cs[Fixed maturity securities];Ce[23,758];Ce[25,128];R;Cs[Equity securities];Ce[353,842];Ce[308,793];R;Cs[Other];Ce[19,568];Ce[19,657];P[Total due];P[259,419];P[251,300];", "a block of totals that does not begin in the first column is not the table's, whatever its rule");
 }
 pub(crate) fn tt_golden(pdf: &[u8], mut t: &mut String, mut tvt: &mut String) -> i32 {
     // PDF -> content -> tables -> paragraphs -> Model -> pretty JSON; answer 0 when every step answered 0, else a
