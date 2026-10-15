@@ -251,6 +251,61 @@ public final class Retargettest {
         Evidence.olSet(olines, l, Evidence.olfPh(), 1500);
         return l;
     }
+    public static int rttFill1(emon.Port.Bitmap b, int x0, int y0, int x1, int y1, int v) {
+        int y = y0;
+        int x = 0;
+        while (y < y1) {
+            x = x0;
+            while (x < x1) {
+                emon.Port.bitmapSetU8(b, x, y, 0, v);
+                x += 1;
+            }
+            y += 1;
+        }
+        return 0;
+    }
+    public static int rttBandScene(int bandgray, int pxh) {
+        // A 40 x 20 gray page (paper 240) with a band of gray `bandgray` from (5,5) 30 pixels wide and `pxh` high, white text at (10..13, 8..12) in it and one black pixel of body ink at (30, 10);
+        // the band as the tracer found it (a component of a colour layer, solid, six holes). Answers how many bands `rt-invert-bands` turned, leaving the view in the caller's `dst` (cells of the test).
+        emon.Port.Bitmap gray = emon.Port.bitmapNew(40, 20, 1);
+        emon.Port.Bitmap bodym = emon.Port.bitmapNew(40, 20, 1);
+        emon.Port.Bitmap dst = emon.Port.bitmapNew(40, 20, 1);
+        emon.Port.Cells comps = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
+        rttFill1(gray, 0, 0, 40, 20, 240);
+        rttFill1(gray, 5, 5, 35, 5 + pxh, bandgray);
+        rttFill1(gray, 10, 8, 14, 13, 255);
+        emon.Port.bitmapSetU8(gray, 30, 10, 0, 0);
+        rttFill1(bodym, 0, 0, 40, 20, 0);
+        emon.Port.bitmapSetU8(bodym, 30, 10, 0, 255);
+        rttFill1(dst, 0, 0, 40, 20, 240);
+        int ink = Evidence.ikNew(inks, 1, 0);
+        int c = Evidence.coNew(comps, 1, 0, 0, 3000, 1000, 0);
+        Evidence.ikSet(inks, ink, Evidence.ikfRole(), Evidence.irColor());
+        Evidence.coSet(comps, c, Evidence.cfInk(), ink);
+        Evidence.coSet(comps, c, Evidence.cfConf(), 700);
+        Evidence.coSet(comps, c, Evidence.cfPxx(), 5);
+        Evidence.coSet(comps, c, Evidence.cfPxy(), 5);
+        Evidence.coSet(comps, c, Evidence.cfPxw(), 30);
+        Evidence.coSet(comps, c, Evidence.cfPxh(), pxh);
+        Evidence.coSet(comps, c, Evidence.cfFill(), 900);
+        Evidence.coSet(comps, c, Evidence.cfHoles(), 6);
+        Evidence.coSet(comps, c, Evidence.cfGray(), bandgray);
+        int n = Retarget.rtInvertBands(dst, gray, bodym, comps, inks, 1, 72, 240);
+        if (n == 1) {
+            emon.Testport.assertEq(emon.Port.bitmapU8(dst, 11, 10, 0), 0, "the light text is ink");
+            emon.Testport.assertEq(emon.Port.bitmapU8(dst, 20, 7, 0), 240, "the band's ground is paper");
+            emon.Testport.assertEq(emon.Port.bitmapU8(dst, 30, 10, 0), 0, "a pixel of body ink is as it was");
+            emon.Testport.assertEq(emon.Port.bitmapU8(dst, 2, 2, 0), 240, "and outside the band nothing is touched");
+        }
+        return n;
+    }
+    public static void testABandOfColourWithLightTextIsTurnedInsideOutAndALightBandIsNot() {
+        // P12.6 (issue 14, E09's white-on-blue header): the view the body-ink pass reads showed the band and its text as paper, and the text was never read
+        emon.Testport.assertEq(rttBandScene(149, 10), 1, "a band of gray 149, white text in it");
+        emon.Testport.assertEq(rttBandScene(220, 10), 0, "a light band holds dark text: the engine reads it as it is");
+        emon.Testport.assertEq(rttBandScene(149, 3), 0, "a band 3 pixels high at 72 dpi is a rule, not a header");
+    }
     public static void testALineTheEngineFoundAndReadAsNothingIsReadAloneAndItsWordsAreThePagesWhenSure() {
         // P12.6, `RUNNING FOR (CHECK ONE):` before its blank: the page read as a page finds the line and no word in it; read as a line it is text
         emon.Port.Cells oruns = emon.Port.newCells();

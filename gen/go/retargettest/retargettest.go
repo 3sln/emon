@@ -271,6 +271,64 @@ func rttEmpty(olines *port.Cells, y0 int32) int32 {
 	return l
 }
 
+func rttFill1(b *port.Bitmap, x0 int32, y0 int32, x1 int32, y1 int32, v int32) int32 {
+	var y int32 = y0
+	var x int32 = 0
+	for y < y1 {
+		x = x0
+		for x < x1 {
+			port.BitmapSetU8(b, x, y, 0, v)
+			x += 1
+		}
+		y += 1
+	}
+	return 0
+}
+
+func rttBandScene(bandgray int32, pxh int32) int32 {
+	// A 40 x 20 gray page (paper 240) with a band of gray `bandgray` from (5,5) 30 pixels wide and `pxh` high, white text at (10..13, 8..12) in it and one black pixel of body ink at (30, 10);
+	// the band as the tracer found it (a component of a colour layer, solid, six holes). Answers how many bands `rt-invert-bands` turned, leaving the view in the caller's `dst` (cells of the test).
+	var gray *port.Bitmap = port.BitmapNew(40, 20, 1)
+	var bodym *port.Bitmap = port.BitmapNew(40, 20, 1)
+	var dst *port.Bitmap = port.BitmapNew(40, 20, 1)
+	var comps *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	rttFill1(gray, 0, 0, 40, 20, 240)
+	rttFill1(gray, 5, 5, 35, 5+pxh, bandgray)
+	rttFill1(gray, 10, 8, 14, 13, 255)
+	port.BitmapSetU8(gray, 30, 10, 0, 0)
+	rttFill1(bodym, 0, 0, 40, 20, 0)
+	port.BitmapSetU8(bodym, 30, 10, 0, 255)
+	rttFill1(dst, 0, 0, 40, 20, 240)
+	var ink int32 = evidence.IkNew(inks, 1, 0)
+	var c int32 = evidence.CoNew(comps, 1, 0, 0, 3000, 1000, 0)
+	evidence.IkSet(inks, ink, evidence.IkfRole(), evidence.IrColor())
+	evidence.CoSet(comps, c, evidence.CfInk(), ink)
+	evidence.CoSet(comps, c, evidence.CfConf(), 700)
+	evidence.CoSet(comps, c, evidence.CfPxx(), 5)
+	evidence.CoSet(comps, c, evidence.CfPxy(), 5)
+	evidence.CoSet(comps, c, evidence.CfPxw(), 30)
+	evidence.CoSet(comps, c, evidence.CfPxh(), pxh)
+	evidence.CoSet(comps, c, evidence.CfFill(), 900)
+	evidence.CoSet(comps, c, evidence.CfHoles(), 6)
+	evidence.CoSet(comps, c, evidence.CfGray(), bandgray)
+	var n int32 = retarget.RtInvertBands(dst, gray, bodym, comps, inks, 1, 72, 240)
+	if n == 1 {
+		port.AssertEq(emonT, port.BitmapU8(dst, 11, 10, 0), 0, "the light text is ink")
+		port.AssertEq(emonT, port.BitmapU8(dst, 20, 7, 0), 240, "the band's ground is paper")
+		port.AssertEq(emonT, port.BitmapU8(dst, 30, 10, 0), 0, "a pixel of body ink is as it was")
+		port.AssertEq(emonT, port.BitmapU8(dst, 2, 2, 0), 240, "and outside the band nothing is touched")
+	}
+	return n
+}
+
+func TestABandOfColourWithLightTextIsTurnedInsideOutAndALightBandIsNot(emonT *testing.T) {
+	// P12.6 (issue 14, E09's white-on-blue header): the view the body-ink pass reads showed the band and its text as paper, and the text was never read
+	port.AssertEq(emonT, rttBandScene(149, 10), 1, "a band of gray 149, white text in it")
+	port.AssertEq(emonT, rttBandScene(220, 10), 0, "a light band holds dark text: the engine reads it as it is")
+	port.AssertEq(emonT, rttBandScene(149, 3), 0, "a band 3 pixels high at 72 dpi is a rule, not a header")
+}
+
 func TestALineTheEngineFoundAndReadAsNothingIsReadAloneAndItsWordsAreThePagesWhenSure(emonT *testing.T) {
 	// P12.6, `RUNNING FOR (CHECK ONE):` before its blank: the page read as a page finds the line and no word in it; read as a line it is text
 	var oruns *port.Cells = port.NewCells()

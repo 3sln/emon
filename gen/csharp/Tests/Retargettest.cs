@@ -256,6 +256,62 @@ public static class Retargettest {
         Evidence.OlSet(olines, l, Evidence.OlfPh(), 1500);
         return l;
     }
+    internal static int RttFill1(emon.Port.Bitmap b, int x0, int y0, int x1, int y1, int v) {
+        int y = y0;
+        int x = 0;
+        while (y < y1) {
+            x = x0;
+            while (x < x1) {
+                emon.Port.BitmapSetU8(b, x, y, 0, v);
+                x += 1;
+            }
+            y += 1;
+        }
+        return 0;
+    }
+    internal static int RttBandScene(int bandgray, int pxh) {
+        // A 40 x 20 gray page (paper 240) with a band of gray `bandgray` from (5,5) 30 pixels wide and `pxh` high, white text at (10..13, 8..12) in it and one black pixel of body ink at (30, 10);
+        // the band as the tracer found it (a component of a colour layer, solid, six holes). Answers how many bands `rt-invert-bands` turned, leaving the view in the caller's `dst` (cells of the test).
+        emon.Port.Bitmap gray = emon.Port.BitmapNew(40, 20, 1);
+        emon.Port.Bitmap bodym = emon.Port.BitmapNew(40, 20, 1);
+        emon.Port.Bitmap dst = emon.Port.BitmapNew(40, 20, 1);
+        emon.Port.Cells comps = emon.Port.NewCells();
+        emon.Port.Cells inks = emon.Port.NewCells();
+        RttFill1(gray, 0, 0, 40, 20, 240);
+        RttFill1(gray, 5, 5, 35, 5 + pxh, bandgray);
+        RttFill1(gray, 10, 8, 14, 13, 255);
+        emon.Port.BitmapSetU8(gray, 30, 10, 0, 0);
+        RttFill1(bodym, 0, 0, 40, 20, 0);
+        emon.Port.BitmapSetU8(bodym, 30, 10, 0, 255);
+        RttFill1(dst, 0, 0, 40, 20, 240);
+        int ink = Evidence.IkNew(inks, 1, 0);
+        int c = Evidence.CoNew(comps, 1, 0, 0, 3000, 1000, 0);
+        Evidence.IkSet(inks, ink, Evidence.IkfRole(), Evidence.IrColor());
+        Evidence.CoSet(comps, c, Evidence.CfInk(), ink);
+        Evidence.CoSet(comps, c, Evidence.CfConf(), 700);
+        Evidence.CoSet(comps, c, Evidence.CfPxx(), 5);
+        Evidence.CoSet(comps, c, Evidence.CfPxy(), 5);
+        Evidence.CoSet(comps, c, Evidence.CfPxw(), 30);
+        Evidence.CoSet(comps, c, Evidence.CfPxh(), pxh);
+        Evidence.CoSet(comps, c, Evidence.CfFill(), 900);
+        Evidence.CoSet(comps, c, Evidence.CfHoles(), 6);
+        Evidence.CoSet(comps, c, Evidence.CfGray(), bandgray);
+        int n = Retarget.RtInvertBands(dst, gray, bodym, comps, inks, 1, 72, 240);
+        if (n == 1) {
+            emon.Testport.AssertEq(emon.Port.BitmapU8(dst, 11, 10, 0), 0, "the light text is ink");
+            emon.Testport.AssertEq(emon.Port.BitmapU8(dst, 20, 7, 0), 240, "the band's ground is paper");
+            emon.Testport.AssertEq(emon.Port.BitmapU8(dst, 30, 10, 0), 0, "a pixel of body ink is as it was");
+            emon.Testport.AssertEq(emon.Port.BitmapU8(dst, 2, 2, 0), 240, "and outside the band nothing is touched");
+        }
+        return n;
+    }
+    [Xunit.Fact]
+    public static void TestABandOfColourWithLightTextIsTurnedInsideOutAndALightBandIsNot() {
+        // P12.6 (issue 14, E09's white-on-blue header): the view the body-ink pass reads showed the band and its text as paper, and the text was never read
+        emon.Testport.AssertEq(RttBandScene(149, 10), 1, "a band of gray 149, white text in it");
+        emon.Testport.AssertEq(RttBandScene(220, 10), 0, "a light band holds dark text: the engine reads it as it is");
+        emon.Testport.AssertEq(RttBandScene(149, 3), 0, "a band 3 pixels high at 72 dpi is a rule, not a header");
+    }
     [Xunit.Fact]
     public static void TestALineTheEngineFoundAndReadAsNothingIsReadAloneAndItsWordsAreThePagesWhenSure() {
         // P12.6, `RUNNING FOR (CHECK ONE):` before its blank: the page read as a page finds the line and no word in it; read as a line it is text

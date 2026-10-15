@@ -258,6 +258,11 @@ func RtpXs() int32 {
 	return 200
 }
 
+func RtpBands() int32 {
+	// P12.6: the bands of colour with light text in them that the body-ink view turned inside out (`rt-invert-bands`)
+	return 248
+}
+
 func RtpPrimary() int32 {
 	// the run the pipeline reads from: the first pass or a turned page's reading
 	return 91
@@ -612,7 +617,7 @@ func RtDecide(born int32, q int32, touched int32, oruns *port.Cells, run int32, 
 	var n int32 = 0
 	port.CellsSet(rtp, RtpQ(), q)
 	if q == 0 {
-		if (touched > 0) || (port.CellsAt(rtp, RtpErased()) >= RtEraseMin()) {
+		if (touched > 0) || ((port.CellsAt(rtp, RtpBands()) > 0) || (port.CellsAt(rtp, RtpErased()) >= RtEraseMin())) {
 			port.CellsSet(rtp, RtpBody(), 1)
 		}
 	}
@@ -757,6 +762,133 @@ func RtEraseInto(src *port.Bitmap, gray *port.Bitmap, ws *port.Cells, mask *port
 	return 0
 }
 
+func RtBandH() int32 {
+	// P12.6: a band of colour that holds light text (`rt-invert-bands`) is at least this many pixels high per 100 dpi (rounded up)...
+	return 5
+}
+
+func RtBandAspect() int32 {
+	// ...at least this many times as wide as high...
+	return 3
+}
+
+func RtBandFill() int32 {
+	// ...of ink that fills at least this much (per mille) of its box...
+	return 600
+}
+
+func RtBandHoles() int32 {
+	// ...with at least this many holes in it (the letters)...
+	return 4
+}
+
+func RtBandGray() int32 {
+	// ...and its colour darker than this gray: a light band holds dark text, which the engine reads as it is.
+	return 181
+}
+
+func RtBandMax() int32 {
+	// At most this many bands of a page are turned inside out.
+	return 8
+}
+
+func rtBandLike(comps *port.Cells, inks *port.Cells, r int32, page1 int32, dpi int32) int32 {
+	// 1 when component `r` of page `page1` is a BAND of colour with light text in it: of a layer that is not the body's (a colour, light or background one), sure, of a ground
+	// darker than `rt-band-gray`, solid (`rt-band-fill`), with holes (`rt-band-holes`: the letters), wide (`rt-band-aspect`) and at least `rt-band-h` pixels per 100 dpi high.
+	var ink int32 = evidence.CoGet(comps, r, evidence.CfInk())
+	var h int32 = evidence.CoGet(comps, r, evidence.CfPxh())
+	var w int32 = evidence.CoGet(comps, r, evidence.CfPxw())
+	var role int32 = 0
+	if evidence.CoGet(comps, r, evidence.CfPage()) != page1 {
+		return 0
+	}
+	if evidence.CoGet(comps, r, evidence.CfConf()) < 500 {
+		return 0
+	}
+	if ink < 0 {
+		return 0
+	}
+	role = evidence.IkGet(inks, ink, evidence.IkfRole())
+	if role == evidence.IrBody() {
+		return 0
+	}
+	if evidence.CoGet(comps, r, evidence.CfGray()) > RtBandGray() {
+		return 0
+	}
+	if evidence.CoGet(comps, r, evidence.CfFill()) < RtBandFill() {
+		return 0
+	}
+	if evidence.CoGet(comps, r, evidence.CfHoles()) < RtBandHoles() {
+		return 0
+	}
+	if (h * 100) < (RtBandH() * dpi) {
+		return 0
+	}
+	if w < (h * RtBandAspect()) {
+		return 0
+	}
+	return 1
+}
+
+func RtInvertBands(dst *port.Bitmap, gray *port.Bitmap, bodym *port.Bitmap, comps *port.Cells, inks *port.Cells, page1 int32, dpi int32, paper int32) int32 {
+	// P12.6 (issue 14): the white-on-blue header of a statement is a BAND of colour (`rt-band-like`) with light text in it, and the body-ink view painted both the ground and the text
+	// the paper's: the text was never read. Inside each such band's box the view now shows the light text as ink (a pixel brighter than half way between the band's gray and white
+	// is black), the band's ground as paper, and what is body ink (dark text on the band) as it was. Answers how many bands (`rt-band-max` at most).
+	var nc int32 = evidence.CoCount(comps)
+	var w int32 = port.BitmapW(dst)
+	var h int32 = port.BitmapH(dst)
+	var r int32 = 0
+	var n int32 = 0
+	var x0 int32 = 0
+	var y0 int32 = 0
+	var x1 int32 = 0
+	var y1 int32 = 0
+	var x int32 = 0
+	var y int32 = 0
+	var g int32 = 0
+	var mid int32 = 0
+	for (r < nc) && (n < RtBandMax()) {
+		if rtBandLike(comps, inks, r, page1, dpi) == 1 {
+			x0 = evidence.CoGet(comps, r, evidence.CfPxx())
+			y0 = evidence.CoGet(comps, r, evidence.CfPxy())
+			x1 = x0 + evidence.CoGet(comps, r, evidence.CfPxw())
+			y1 = y0 + evidence.CoGet(comps, r, evidence.CfPxh())
+			if x0 < 0 {
+				x0 = 0
+			}
+			if y0 < 0 {
+				y0 = 0
+			}
+			if x1 > w {
+				x1 = w
+			}
+			if y1 > h {
+				y1 = h
+			}
+			mid = (evidence.CoGet(comps, r, evidence.CfGray()) + 255) / 2
+			y = y0
+			for y < y1 {
+				x = x0
+				for x < x1 {
+					g = port.BitmapU8(gray, x, y, 0)
+					if port.BitmapU8(bodym, x, y, 0) != 0 {
+						port.BitmapSetU8(dst, x, y, 0, g)
+					} else if g >= mid {
+						port.BitmapSetU8(dst, x, y, 0, 0)
+					} else {
+						port.BitmapSetU8(dst, x, y, 0, paper)
+					}
+					x += 1
+				}
+				y += 1
+			}
+			n += 1
+		}
+		r += 1
+	}
+	return n
+}
+
 func RtCap(n int32) int32 {
 	// `n` lines, but at most `sc-sel-max` (D523): the per-line regions of `scr` (`sc-share-base`, `sc-aux-base`, `sc-partner-base`, `sc-bonly-base`) are
 	// that long and the last ends the scratch, so a page of more lines than that wrote the next region's cells, and past the last, off the end.
@@ -772,7 +904,7 @@ func RtPermille(n int32, d int32) int32 {
 	return int32((int64(n) * 1000) / int64(d))
 }
 
-func RtMeasure(page int32, bms *port.BitmapSet, k0 int32, src *port.Bitmap, ws *port.Cells, dpi int32, oruns *port.Cells, run int32, olines *port.Cells, owords *port.Cells, scr *port.Cells, rtp *port.Cells) int32 {
+func RtMeasure(page int32, bms *port.BitmapSet, k0 int32, src *port.Bitmap, ws *port.Cells, dpi int32, oruns *port.Cells, run int32, olines *port.Cells, owords *port.Cells, scr *port.Cells, rtp *port.Cells, comps *port.Cells, inks *port.Cells) int32 {
 	// Make the BODY-INK VIEW of the raster `src` the first pass read (`rt-erase-into`; the kin-made bitmaps `rv-erased`, `rv-mask`, `rv-body-mask`, `rv-emap`
 	// of page `page`, 0-based, from the page's view ids) and measure, of every line of the first pass `run`, the share (per mille) of its ink that the view paints
 	// over: the ink under its words' pixel boxes on the binary view `emon.pageink` made (`k0` its id group) that is in the view's `emap`. Written to `scr` at
@@ -798,6 +930,7 @@ func RtMeasure(page int32, bms *port.BitmapSet, k0 int32, src *port.Bitmap, ws *
 	var both int32 = 0
 	var touched int32 = 0
 	RtEraseInto(src, port.BmsGet(bms, plan.PuViewId(page, k0)), ws, mask, bodym, dpi, emap, erased)
+	port.CellsSet(rtp, RtpBands(), RtInvertBands(erased, port.BmsGet(bms, plan.PuViewId(page, k0)), bodym, comps, inks, page+1, dpi, norm.NmPaperGray(ws)))
 	for k < ln {
 		f = evidence.OlGet(olines, l0+k, evidence.LhFirst())
 		c = evidence.OlGet(olines, l0+k, evidence.LhCount())
@@ -937,7 +1070,7 @@ func rtAskRotated(page int32, dpi int32, loc *port.Cells, ans *port.Cells, bms *
 	return 1
 }
 
-func RtPlan(page int32, input int32, born int32, wanttext int32, rid int32, dpi int32, loc *port.Cells, ans *port.Cells, bms *port.BitmapSet, k0 int32, src *port.Bitmap, ws *port.Cells, oruns *port.Cells, run int32, olines *port.Cells, owords *port.Cells, rules *port.Cells, tlines *port.Cells, rtp *port.Cells, rq *port.Cells, scr *port.Cells) int32 {
+func RtPlan(page int32, input int32, born int32, wanttext int32, rid int32, dpi int32, loc *port.Cells, ans *port.Cells, bms *port.BitmapSet, k0 int32, src *port.Bitmap, ws *port.Cells, oruns *port.Cells, run int32, olines *port.Cells, owords *port.Cells, rules *port.Cells, tlines *port.Cells, rtp *port.Cells, rq *port.Cells, scr *port.Cells, comps *port.Cells, inks *port.Cells) int32 {
 	// Decide and ask what is not yet answered, in the brief's order: the table cells and the lines, the text-only render and its OCR, the body-ink view,
 	// the quarter-turned view. `page` is 0-based (ids), `rid` the request id of the raster `src` that the first pass read at `dpi`, `k0` the id group
 	// `emon.pageink` normalized it under, `ws` its layer workspace, `scr` the unit's scratch (`sc-prep`: the measure of every first-pass line is left in it).
@@ -948,7 +1081,7 @@ func RtPlan(page int32, input int32, born int32, wanttext int32, rid int32, dpi 
 	var touched int32 = 0
 	var asked int32 = 0
 	if q == 0 {
-		touched = RtMeasure(page, bms, k0, src, ws, dpi, oruns, run, olines, owords, scr, rtp)
+		touched = RtMeasure(page, bms, k0, src, ws, dpi, oruns, run, olines, owords, scr, rtp, comps, inks)
 	}
 	RtDecide(born, q, touched, oruns, run, olines, owords, rules, page+1, dpi, rtp)
 	asked += rtAskCells(page, rid, dpi, loc, ans, rtp, rq)

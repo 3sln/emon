@@ -202,6 +202,10 @@ pub fn rtp_xs() -> i32 {
     // scratch: the column borders a line crosses (8 cells)
     return 200;
 }
+pub fn rtp_bands() -> i32 {
+    // P12.6: the bands of colour with light text in them that the body-ink view turned inside out (`rt-invert-bands`)
+    return 248;
+}
 pub fn rtp_primary() -> i32 {
     // the run the pipeline reads from: the first pass or a turned page's reading
     return 91;
@@ -539,7 +543,7 @@ pub fn rt_decide(born: i32, q: i32, touched: i32, oruns: &mut crate::port::Cells
     let mut n: i32 = 0;
     crate::port::cells_set(rtp, rtp_q(), q);
     if q == 0 {
-        if (touched > 0) || (crate::port::cells_at(rtp, rtp_erased()) >= rt_erase_min()) {
+        if (touched > 0) || ((crate::port::cells_at(rtp, rtp_bands()) > 0) || (crate::port::cells_at(rtp, rtp_erased()) >= rt_erase_min())) {
             crate::port::cells_set(rtp, rtp_body(), 1);
         }
     }
@@ -682,6 +686,125 @@ pub fn rt_erase_into(src: &crate::port::Bitmap, gray: &crate::port::Bitmap, mut 
     }
     return 0;
 }
+pub fn rt_band_h() -> i32 {
+    // P12.6: a band of colour that holds light text (`rt-invert-bands`) is at least this many pixels high per 100 dpi (rounded up)...
+    return 5;
+}
+pub fn rt_band_aspect() -> i32 {
+    // ...at least this many times as wide as high...
+    return 3;
+}
+pub fn rt_band_fill() -> i32 {
+    // ...of ink that fills at least this much (per mille) of its box...
+    return 600;
+}
+pub fn rt_band_holes() -> i32 {
+    // ...with at least this many holes in it (the letters)...
+    return 4;
+}
+pub fn rt_band_gray() -> i32 {
+    // ...and its colour darker than this gray: a light band holds dark text, which the engine reads as it is.
+    return 181;
+}
+pub fn rt_band_max() -> i32 {
+    // At most this many bands of a page are turned inside out.
+    return 8;
+}
+pub(crate) fn rt_band_like(comps: &mut crate::port::Cells, inks: &mut crate::port::Cells, r: i32, page1: i32, dpi: i32) -> i32 {
+    // 1 when component `r` of page `page1` is a BAND of colour with light text in it: of a layer that is not the body's (a colour, light or background one), sure, of a ground
+    // darker than `rt-band-gray`, solid (`rt-band-fill`), with holes (`rt-band-holes`: the letters), wide (`rt-band-aspect`) and at least `rt-band-h` pixels per 100 dpi high.
+    let ink: i32 = co_get(comps, r, cf_ink());
+    let h: i32 = co_get(comps, r, cf_pxh());
+    let w: i32 = co_get(comps, r, cf_pxw());
+    let mut role: i32 = 0;
+    if co_get(comps, r, cf_page()) != page1 {
+        return 0;
+    }
+    if co_get(comps, r, cf_conf()) < 500 {
+        return 0;
+    }
+    if ink < 0 {
+        return 0;
+    }
+    role = ik_get(inks, ink, ikf_role());
+    if role == ir_body() {
+        return 0;
+    }
+    if co_get(comps, r, cf_gray()) > rt_band_gray() {
+        return 0;
+    }
+    if co_get(comps, r, cf_fill()) < rt_band_fill() {
+        return 0;
+    }
+    if co_get(comps, r, cf_holes()) < rt_band_holes() {
+        return 0;
+    }
+    if (h * 100) < (rt_band_h() * dpi) {
+        return 0;
+    }
+    if w < (h * rt_band_aspect()) {
+        return 0;
+    }
+    return 1;
+}
+pub fn rt_invert_bands(dst: &crate::port::Bitmap, gray: &crate::port::Bitmap, bodym: &crate::port::Bitmap, comps: &mut crate::port::Cells, inks: &mut crate::port::Cells, page1: i32, dpi: i32, paper: i32) -> i32 {
+    // P12.6 (issue 14): the white-on-blue header of a statement is a BAND of colour (`rt-band-like`) with light text in it, and the body-ink view painted both the ground and the text
+    // the paper's: the text was never read. Inside each such band's box the view now shows the light text as ink (a pixel brighter than half way between the band's gray and white
+    // is black), the band's ground as paper, and what is body ink (dark text on the band) as it was. Answers how many bands (`rt-band-max` at most).
+    let nc: i32 = co_count(comps);
+    let w: i32 = crate::port::bitmap_w(dst);
+    let h: i32 = crate::port::bitmap_h(dst);
+    let mut r: i32 = 0;
+    let mut n: i32 = 0;
+    let mut x0: i32 = 0;
+    let mut y0: i32 = 0;
+    let mut x1: i32 = 0;
+    let mut y1: i32 = 0;
+    let mut x: i32 = 0;
+    let mut y: i32 = 0;
+    let mut g: i32 = 0;
+    let mut mid: i32 = 0;
+    while (r < nc) && (n < rt_band_max()) {
+        if rt_band_like(comps, inks, r, page1, dpi) == 1 {
+            x0 = co_get(comps, r, cf_pxx());
+            y0 = co_get(comps, r, cf_pxy());
+            x1 = x0 + co_get(comps, r, cf_pxw());
+            y1 = y0 + co_get(comps, r, cf_pxh());
+            if x0 < 0 {
+                x0 = 0;
+            }
+            if y0 < 0 {
+                y0 = 0;
+            }
+            if x1 > w {
+                x1 = w;
+            }
+            if y1 > h {
+                y1 = h;
+            }
+            mid = (co_get(comps, r, cf_gray()) + 255) / 2;
+            y = y0;
+            while y < y1 {
+                x = x0;
+                while x < x1 {
+                    g = crate::port::bitmap_u8(gray, x, y, 0);
+                    if crate::port::bitmap_u8(bodym, x, y, 0) != 0 {
+                        crate::port::bitmap_set_u8(dst, x, y, 0, g);
+                    } else if g >= mid {
+                        crate::port::bitmap_set_u8(dst, x, y, 0, 0);
+                    } else {
+                        crate::port::bitmap_set_u8(dst, x, y, 0, paper);
+                    }
+                    x += 1;
+                }
+                y += 1;
+            }
+            n += 1;
+        }
+        r += 1;
+    }
+    return n;
+}
 pub fn rt_cap(n: i32) -> i32 {
     // `n` lines, but at most `sc-sel-max` (D523): the per-line regions of `scr` (`sc-share-base`, `sc-aux-base`, `sc-partner-base`, `sc-bonly-base`) are
     // that long and the last ends the scratch, so a page of more lines than that wrote the next region's cells, and past the last, off the end.
@@ -695,7 +818,7 @@ pub fn rt_permille(n: i32, d: i32) -> i32 {
     // on Go, Java and C# and was an overflow panic on Rust. `d` is positive.
     return (((n as i64) * 1000) / (d as i64)) as i32;
 }
-pub fn rt_measure(page: i32, bms: &crate::port::BitmapSet, k0: i32, src: &crate::port::Bitmap, mut ws: &mut crate::port::Cells, dpi: i32, oruns: &mut crate::port::Cells, run: i32, olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, mut rtp: &mut crate::port::Cells) -> i32 {
+pub fn rt_measure(page: i32, bms: &crate::port::BitmapSet, k0: i32, src: &crate::port::Bitmap, mut ws: &mut crate::port::Cells, dpi: i32, oruns: &mut crate::port::Cells, run: i32, olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, mut rtp: &mut crate::port::Cells, comps: &mut crate::port::Cells, inks: &mut crate::port::Cells) -> i32 {
     // Make the BODY-INK VIEW of the raster `src` the first pass read (`rt-erase-into`; the kin-made bitmaps `rv-erased`, `rv-mask`, `rv-body-mask`, `rv-emap`
     // of page `page`, 0-based, from the page's view ids) and measure, of every line of the first pass `run`, the share (per mille) of its ink that the view paints
     // over: the ink under its words' pixel boxes on the binary view `emon.pageink` made (`k0` its id group) that is in the view's `emap`. Written to `scr` at
@@ -721,6 +844,7 @@ pub fn rt_measure(page: i32, bms: &crate::port::BitmapSet, k0: i32, src: &crate:
     let mut both: i32 = 0;
     let mut touched: i32 = 0;
     rt_erase_into(src, crate::port::bms_get(bms, pu_view_id(page, k0)), ws, mask, bodym, dpi, emap, erased);
+    crate::port::cells_set(rtp, rtp_bands(), rt_invert_bands(erased, crate::port::bms_get(bms, pu_view_id(page, k0)), bodym, comps, inks, page + 1, dpi, nm_paper_gray(ws)));
     while k < ln {
         f = ol_get(olines, l0 + k, lh_first());
         c = ol_get(olines, l0 + k, lh_count());
@@ -852,7 +976,7 @@ pub(crate) fn rt_ask_rotated(page: i32, dpi: i32, loc: &mut crate::port::Cells, 
     }
     return 1;
 }
-pub fn rt_plan(page: i32, input: i32, born: i32, wanttext: i32, rid: i32, dpi: i32, loc: &mut crate::port::Cells, ans: &mut crate::port::Cells, bms: &crate::port::BitmapSet, k0: i32, src: &crate::port::Bitmap, mut ws: &mut crate::port::Cells, oruns: &mut crate::port::Cells, run: i32, olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, rules: &mut crate::port::Cells, tlines: &mut crate::port::Cells, mut rtp: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut scr: &mut crate::port::Cells) -> i32 {
+pub fn rt_plan(page: i32, input: i32, born: i32, wanttext: i32, rid: i32, dpi: i32, loc: &mut crate::port::Cells, ans: &mut crate::port::Cells, bms: &crate::port::BitmapSet, k0: i32, src: &crate::port::Bitmap, mut ws: &mut crate::port::Cells, oruns: &mut crate::port::Cells, run: i32, olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, rules: &mut crate::port::Cells, tlines: &mut crate::port::Cells, mut rtp: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, comps: &mut crate::port::Cells, inks: &mut crate::port::Cells) -> i32 {
     // Decide and ask what is not yet answered, in the brief's order: the table cells and the lines, the text-only render and its OCR, the body-ink view,
     // the quarter-turned view. `page` is 0-based (ids), `rid` the request id of the raster `src` that the first pass read at `dpi`, `k0` the id group
     // `emon.pageink` normalized it under, `ws` its layer workspace, `scr` the unit's scratch (`sc-prep`: the measure of every first-pass line is left in it).
@@ -863,7 +987,7 @@ pub fn rt_plan(page: i32, input: i32, born: i32, wanttext: i32, rid: i32, dpi: i
     let mut touched: i32 = 0;
     let mut asked: i32 = 0;
     if q == 0 {
-        touched = rt_measure(page, bms, k0, src, ws, dpi, oruns, run, olines, owords, scr, rtp);
+        touched = rt_measure(page, bms, k0, src, ws, dpi, oruns, run, olines, owords, scr, rtp, comps, inks);
     }
     rt_decide(born, q, touched, oruns, run, olines, owords, rules, page + 1, dpi, rtp);
     asked += rt_ask_cells(page, rid, dpi, loc, ans, rtp, rq);

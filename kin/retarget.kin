@@ -36,6 +36,7 @@
                                bitmap-hash bitmap-quarter-into bitmap-lut-into]]
             [emon.plan :refer [rq-render an-find an-ok an-arg pu-id pu-view-id pi-ocr pi-render-text-only lay-text-only]]
             [emon.evidence :refer [ik-get ikf-count ikf-role ir-body ir-light ir-color ir-background
+                                   co-count co-get cf-page cf-pxx cf-pxy cf-pxw cf-pxh cf-fill cf-holes cf-gray cf-ink cf-conf
                                    ol-get ow-get ow-count ol-count or-get or-set or-count fe-get xo-body-share rl-count rl-get rlf-page rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1
                                    olf-px olf-py olf-pw olf-ph owf-px owf-py owf-pw owf-ph lh-first lh-count lh-x0 lh-y0 lh-x1 lh-y1 hd-x0 hd-y0 hd-x1 hd-y1 hd-conf hd-tlen hd-feat
                                    orf-pass orf-round orf-psm orf-rx orf-ry orf-rw orf-rh orf-osd orf-oconf orf-lfirst orf-lcount
@@ -108,7 +109,8 @@
 (defn ^:pub ^I32 rtp-line0 [] (comment "line j: `olines` row, `oruns` row of its re-reading (-1 none): two cells each") (return 8))
 (defn ^:pub ^I32 rtp-cell0 [] (comment "cell c: pixel box x y w h, first-pass line row, run row: six cells each (`rt-cells` of them)") (return 40))
 (defn ^:pub ^I32 rtp-xs [] (comment "scratch: the column borders a line crosses (8 cells)") (return 200))
-(defn ^:pub ^I32 rtp-primary [] (comment "the run the pipeline reads from: the first pass or a turned page's reading") (return 91))
+(defn ^:pub ^I32 rtp-bands [] (comment "P12.6: the bands of colour with light text in them that the body-ink view turned inside out (`rt-invert-bands`)") (return 248))
+(defn ^:pub ^I32 rtp-primary [](comment "the run the pipeline reads from: the first pass or a turned page's reading") (return 91))
 (defn ^:pub ^I32 rtp-erased [] (comment "the share (per mille) of the whole page's area that the body-ink view paints over") (return 92))
 (defn ^:pub ^I32 rtp-hash [] (comment "two cells the pixel hash is written to") (return 254))
 (defn ^:pub ^I32 rtp-size [] (return 256))
@@ -369,7 +371,7 @@
         ^:mut ^I32 n 0]
     (cells-set rtp (rtp-q) q)
     (if (== q 0)
-      (if (or (> touched 0) (>= (cells-at rtp (rtp-erased)) (rt-erase-min)))
+      (if (or (> touched 0) (or (> (cells-at rtp (rtp-bands)) 0) (>= (cells-at rtp (rtp-erased)) (rt-erase-min))))
         (cells-set rtp (rtp-body) 1)))
     (if (and (== q 0) (== born 0))
       (do (set nc (rt-decide-cells oruns run olines rules page1 dpi (- (rt-max) (rt-reserved)) rtp))
@@ -476,6 +478,76 @@
           (set y (+ y 1))))
     (return 0)))
 
+(defn ^:pub ^I32 rt-band-h [] (comment "P12.6: a band of colour that holds light text (`rt-invert-bands`) is at least this many pixels high per 100 dpi (rounded up)...") (return 5))
+(defn ^:pub ^I32 rt-band-aspect [] (comment "...at least this many times as wide as high...") (return 3))
+(defn ^:pub ^I32 rt-band-fill [] (comment "...of ink that fills at least this much (per mille) of its box...") (return 600))
+(defn ^:pub ^I32 rt-band-holes [] (comment "...with at least this many holes in it (the letters)...") (return 4))
+(defn ^:pub ^I32 rt-band-gray [] (comment "...and its colour darker than this gray: a light band holds dark text, which the engine reads as it is.") (return 181))
+(defn ^:pub ^I32 rt-band-max [] (comment "At most this many bands of a page are turned inside out.") (return 8))
+
+(defn ^I32 rt-band-like [^Cells comps ^Cells inks ^I32 r ^I32 page1 ^I32 dpi]
+  (comment "1 when component `r` of page `page1` is a BAND of colour with light text in it: of a layer that is not the body's (a colour, light or background one), sure, of a ground")
+  (comment "darker than `rt-band-gray`, solid (`rt-band-fill`), with holes (`rt-band-holes`: the letters), wide (`rt-band-aspect`) and at least `rt-band-h` pixels per 100 dpi high.")
+  (let [^I32 ink (co-get comps r (cf-ink))
+        ^I32 h (co-get comps r (cf-pxh))
+        ^I32 w (co-get comps r (cf-pxw))
+        ^:mut ^I32 role 0]
+    (if (!= (co-get comps r (cf-page)) page1) (return 0))
+    (if (< (co-get comps r (cf-conf)) 500) (return 0))
+    (if (< ink 0) (return 0))
+    (set role (ik-get inks ink (ikf-role)))
+    (if (== role (ir-body)) (return 0))
+    (if (> (co-get comps r (cf-gray)) (rt-band-gray)) (return 0))
+    (if (< (co-get comps r (cf-fill)) (rt-band-fill)) (return 0))
+    (if (< (co-get comps r (cf-holes)) (rt-band-holes)) (return 0))
+    (if (< (* h 100) (* (rt-band-h) dpi)) (return 0))
+    (if (< w (* h (rt-band-aspect))) (return 0))
+    (return 1)))
+
+(defn ^:pub ^I32 rt-invert-bands [^Bitmap dst ^Bitmap gray ^Bitmap bodym ^Cells comps ^Cells inks ^I32 page1 ^I32 dpi ^I32 paper]
+  (comment "P12.6 (issue 14): the white-on-blue header of a statement is a BAND of colour (`rt-band-like`) with light text in it, and the body-ink view painted both the ground and the text")
+  (comment "the paper's: the text was never read. Inside each such band's box the view now shows the light text as ink (a pixel brighter than half way between the band's gray and white")
+  (comment "is black), the band's ground as paper, and what is body ink (dark text on the band) as it was. Answers how many bands (`rt-band-max` at most).")
+  (let [^I32 nc (co-count comps)
+        ^I32 w (bitmap-w dst)
+        ^I32 h (bitmap-h dst)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 g 0
+        ^:mut ^I32 mid 0]
+    (while (and (< r nc) (< n (rt-band-max)))
+      (do (if (== (rt-band-like comps inks r page1 dpi) 1)
+            (do (set x0 (co-get comps r (cf-pxx)))
+                (set y0 (co-get comps r (cf-pxy)))
+                (set x1 (+ x0 (co-get comps r (cf-pxw))))
+                (set y1 (+ y0 (co-get comps r (cf-pxh))))
+                (if (< x0 0) (set x0 0))
+                (if (< y0 0) (set y0 0))
+                (if (> x1 w) (set x1 w))
+                (if (> y1 h) (set y1 h))
+                (set mid (quot (+ (co-get comps r (cf-gray)) 255) 2))
+                (set y y0)
+                (while (< y y1)
+                  (do (set x x0)
+                      (while (< x x1)
+                        (do (set g (bitmap-u8 gray x y 0))
+                            (if (!= (bitmap-u8 bodym x y 0) 0)
+                              (bitmap-set-u8 dst x y 0 g)
+                              (if (>= g mid)
+                                (bitmap-set-u8 dst x y 0 0)
+                                (bitmap-set-u8 dst x y 0 paper)))
+                            (set x (+ x 1))))
+                      (set y (+ y 1))))
+                (set n (+ n 1))))
+          (set r (+ r 1))))
+    (return n)))
+
 (defn ^:pub ^I32 rt-cap [^I32 n]
   (comment "`n` lines, but at most `sc-sel-max` (D523): the per-line regions of `scr` (`sc-share-base`, `sc-aux-base`, `sc-partner-base`, `sc-bonly-base`) are")
   (comment "that long and the last ends the scratch, so a page of more lines than that wrote the next region's cells, and past the last, off the end.")
@@ -488,7 +560,7 @@
   (return (i32 (quot (* (i64 n) 1000) (i64 d)))))
 
 (defn ^:pub ^I32 rt-measure [^I32 page ^BitmapSet bms ^I32 k0 ^Bitmap src ^:mut ^Cells ws ^I32 dpi
-                             ^Cells oruns ^I32 run ^Cells olines ^Cells owords ^:mut ^Cells scr ^:mut ^Cells rtp]
+                             ^Cells oruns ^I32 run ^Cells olines ^Cells owords ^:mut ^Cells scr ^:mut ^Cells rtp ^Cells comps ^Cells inks]
   (comment "Make the BODY-INK VIEW of the raster `src` the first pass read (`rt-erase-into`; the kin-made bitmaps `rv-erased`, `rv-mask`, `rv-body-mask`, `rv-emap`")
   (comment "of page `page`, 0-based, from the page's view ids) and measure, of every line of the first pass `run`, the share (per mille) of its ink that the view paints")
   (comment "over: the ink under its words' pixel boxes on the binary view `emon.pageink` made (`k0` its id group) that is in the view's `emap`. Written to `scr` at")
@@ -514,6 +586,7 @@
         ^:mut ^I32 both 0
         ^:mut ^I32 touched 0]
     (rt-erase-into src (bms-get bms (pu-view-id page k0)) ws mask bodym dpi emap erased)
+    (cells-set rtp (rtp-bands) (rt-invert-bands erased (bms-get bms (pu-view-id page k0)) bodym comps inks (+ page 1) dpi (nm-paper-gray ws)))
     (while (< k ln)
       (do (set f (ol-get olines (+ l0 k) (lh-first)))
           (set c (ol-get olines (+ l0 k) (lh-count)))
@@ -626,7 +699,7 @@
 
 (defn ^:pub ^I32 rt-plan [^I32 page ^I32 input ^I32 born ^I32 wanttext ^I32 rid ^I32 dpi ^Cells loc ^Cells ans ^BitmapSet bms ^I32 k0
                           ^Bitmap src ^:mut ^Cells ws ^Cells oruns ^I32 run ^Cells olines ^Cells owords ^Cells rules ^Cells tlines
-                          ^:mut ^Cells rtp ^:mut ^Cells rq ^:mut ^Cells scr]
+                          ^:mut ^Cells rtp ^:mut ^Cells rq ^:mut ^Cells scr ^Cells comps ^Cells inks]
   (comment "Decide and ask what is not yet answered, in the brief's order: the table cells and the lines, the text-only render and its OCR, the body-ink view,")
   (comment "the quarter-turned view. `page` is 0-based (ids), `rid` the request id of the raster `src` that the first pass read at `dpi`, `k0` the id group")
   (comment "`emon.pageink` normalized it under, `ws` its layer workspace, `scr` the unit's scratch (`sc-prep`: the measure of every first-pass line is left in it).")
@@ -637,7 +710,7 @@
         ^:mut ^I32 touched 0
         ^:mut ^I32 asked 0]
     (if (== q 0)
-      (set touched (rt-measure page bms k0 src ws dpi oruns run olines owords scr rtp)))
+      (set touched (rt-measure page bms k0 src ws dpi oruns run olines owords scr rtp comps inks)))
     (rt-decide born q touched oruns run olines owords rules (+ page 1) dpi rtp)
     (set asked (+ asked (rt-ask-cells page rid dpi loc ans rtp rq)))
     (set asked (+ asked (rt-ask-lines page rid dpi loc ans src olines rtp rq)))

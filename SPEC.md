@@ -1239,6 +1239,14 @@ surer; the body-ink run's line that is its partner both ways), or its ink is mos
 run read where the first pass read none are taken, in reading order, on a page that runs down in one column. On a born-digital page the runs are written after the
 page is aligned and scored: they are evidence, and the body-ink run is a witness (`plg-bink`, `ag-bink`, row 222), never a candidate.
 
+**As built (P12.6, D1650-D1660).** What a scanned page's lines are made of, once `rt-adopt` has chosen them (`emon.scan`'s `sc-emit-vetted`): (1) a first-pass line that stays
+reads with it the words of its partner body-ink line that lie over none of its own (a right-aligned column the first pass stopped before); (2) a word of confidence 0.3 or
+less with implausible characters, alone or among such words, a dot leader and a table rule read as a character are kept out of the page's `words`, flagged in the evidence
+(`oe`) and written to the dropped ledger (`ocr-ghost`, `rule-ghost`); (3) the corrections a page shows for itself, never a digit: a decimal point the pixels have and the
+engine's box swallowed, thousands read with periods, a currency sign read as `S` or `§`. The engine's text stays in the evidence. A first-pass line with no word that has the size
+of a line of text is read alone (`psm 7`) and its words are the page's when sure (text that meets a rule); the body-ink view shows the light text of a band of colour as ink.
+The ledger names a page that came out empty and held an image (`background`).
+
 **As built (P12.3, D564).** (1) *A page whose content is one big image is a scan whatever the codec*: a PDF page with no text layer and an upright image over at least
 half of it is read from the host's DECODE of the image's DCT stream when that is one plain stage, and from a RENDER of the whole page (300 dpi) when it is in any other
 codec (Flate, RunLength, LZW, CCITT, JBIG2, JPX, an encrypted DCT). (2) *An image input is a scan too*: each frame runs the same page unit as a scanned PDF page
@@ -1327,7 +1335,7 @@ allocate, the host allocates and kin fills, a row is its index, absent is
 
 | arena | stride | fields |
 | --- | --- | --- |
-| `epages` | 12 | page, width, height (cpt, as displayed), quarter turns of `/Rotate` applied, flags (`has-text-layer`, `raster`, `dpi-unknown`), raster dpi x100 (0 unknown), spare |
+| `epages` | 12 | page, width, height (cpt, as displayed), quarter turns of `/Rotate` applied, flags (`has-text-layer`, `raster`, `dpi-unknown`), raster dpi x100 (0 unknown; the dump prints it in dpi, 300 and not 30000, P12.6), spare |
 | `views` | 24 | page, kind (`vk`), request id whose bitmap it is (-1 when kin made it), parent view, pixel width, height, dpi x100, render layer (`lay-*`, D089), ink row (an ink-mask view's `inks` row, -1), quarter turns applied, deskew applied (centi-degrees), crop origin x y (cpt), px→cpt linear part a b c d (16.16) and translation e f (cpt), cpt→px inverse a' b' c' d' (16.16), flags (`bilevel`, `nonaffine`, `engine-binary`) |
 | `pts` | 3 | x, y (cpt), op (`po`: move, line, curve-control, close) — path and contour geometry |
 | `refs` | 2 | `ea`, index |
@@ -1401,7 +1409,7 @@ structure tree; §9.5 defence 1 walks a glyph's `mark` chain for an
 | `oruns` | 28 | page, view read, binarised view (the engine's thresholded image, -1 not asked), request id, round, pass kind (`op`: first, region, line, cell, seal-strip, body-ink, text-only, re-rotated, upscaled), `psm`, region x y w h (view px), languages `tstart tlen` ("eng+deu"), orientation (quarter turns clockwise to upright), writing direction, line order, deskew (centi-degrees), OSD degrees (-1 none), script (ISO 15924 packed), script confidence, orientation confidence (x10, -1), request flags, `bfirst bcount`, `lfirst lcount`, `wfirst wcount` |
 | `oblocks` | 16 | page, box, kind (`ob`: block, paragraph), parent block (-1), run, block type (`bt`, D095), orientation, writing direction (per block: Tesseract reports them per block), child run `first count` (a block's paragraphs, a paragraph's lines), raw confidence, spare |
 | `olines` | 24 | line head (13); paragraph (`oblocks` row); run; raw confidence; x-height, ascender, descender (cpt, -1 unknown); pixel box x y w h; spare |
-| `owords` | 28 | word head (16); style (`sy`); run; `sfirst scount` (its symbols); language (packed); engine flags (`ow`: from-dictionary, numeric, from the engine's fallback model); engine point size (cpt, -1); pixel box x y w h; spare |
+| `owords` | 28 | word head (16); style (`sy`); run; `sfirst scount` (its symbols); language (packed); engine flags (`oe`: from-dictionary, numeric, from the engine's fallback model; and what emon did with the word, P12.6: kept out as garbage, kept out as a rule's ghost, text corrected in the page's words); engine point size (cpt, -1); pixel box x y w h; spare |
 | `osyms` | 20 | char head (9); raw confidence; `afirst acount` (its alternatives); flags (`os`: superscript, subscript, drop-cap); pixel box x y w h; spare |
 | `oalts` | 4 | symbol, `tstart tlen` (the candidate's text: any number of code points), confidence (x10) — a contiguous run per symbol, in engine order, verbatim |
 | `inks` | 12 | page, view clustered, centroid colour, lightness (0..1000), chroma, pixel count, role guess (`ir`: body, light, colour, background, unknown), mask view (-1), spread, spare |

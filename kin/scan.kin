@@ -16,7 +16,7 @@
 ;;         paragraphs flagged `ocr-only`, the document's `settings.ocr` written.
 ;;
 ;; WHICH PAGES. An image input is one page per frame (`emon.rasterin`). A PDF page is OCR'd when it has NO text layer at all
-;; (no `words` row: not even a hidden one) and carries an image that covers at least half of it and is upright (a real XObject, not
+;; (no `words` row: not even a hidden one) and carries an image that covers at least a quarter of it (`sc-cover-min`; a half until P12.6) and is upright (a real XObject, not
 ;; a stencil mask or an inline image). If that image is one plain XObject with exactly one filter, DCT, a JPEG stream is a JPEG file,
 ;; and the host's `ImageDecode` reads the span in place; in ANY OTHER CODEC (Flate, RunLength, LZW, CCITT, JBIG2, JPX, an encrypted
 ;; DCT, D564) the host RENDERS the page and the render is the raster (`emon.pageunit`'s scan mode). A page with a text layer is

@@ -258,6 +258,62 @@ pub(crate) fn rtt_empty(mut olines: &mut crate::port::Cells, y0: i32) -> i32 {
     ol_set(olines, l, olf_ph(), 1500);
     return l;
 }
+pub(crate) fn rtt_fill1(b: &crate::port::Bitmap, x0: i32, y0: i32, x1: i32, y1: i32, v: i32) -> i32 {
+    let mut y: i32 = y0;
+    let mut x: i32 = 0;
+    while y < y1 {
+        x = x0;
+        while x < x1 {
+            crate::port::bitmap_set_u8(b, x, y, 0, v);
+            x += 1;
+        }
+        y += 1;
+    }
+    return 0;
+}
+pub(crate) fn rtt_band_scene(bandgray: i32, pxh: i32) -> i32 {
+    // A 40 x 20 gray page (paper 240) with a band of gray `bandgray` from (5,5) 30 pixels wide and `pxh` high, white text at (10..13, 8..12) in it and one black pixel of body ink at (30, 10);
+    // the band as the tracer found it (a component of a colour layer, solid, six holes). Answers how many bands `rt-invert-bands` turned, leaving the view in the caller's `dst` (cells of the test).
+    let gray: &crate::port::Bitmap = &crate::port::bitmap_new(40, 20, 1);
+    let bodym: &crate::port::Bitmap = &crate::port::bitmap_new(40, 20, 1);
+    let dst: &crate::port::Bitmap = &crate::port::bitmap_new(40, 20, 1);
+    let comps: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    rtt_fill1(gray, 0, 0, 40, 20, 240);
+    rtt_fill1(gray, 5, 5, 35, 5 + pxh, bandgray);
+    rtt_fill1(gray, 10, 8, 14, 13, 255);
+    crate::port::bitmap_set_u8(gray, 30, 10, 0, 0);
+    rtt_fill1(bodym, 0, 0, 40, 20, 0);
+    crate::port::bitmap_set_u8(bodym, 30, 10, 0, 255);
+    rtt_fill1(dst, 0, 0, 40, 20, 240);
+    let ink: i32 = ik_new(inks, 1, 0);
+    let c: i32 = co_new(comps, 1, 0, 0, 3000, 1000, 0);
+    ik_set(inks, ink, ikf_role(), ir_color());
+    co_set(comps, c, cf_ink(), ink);
+    co_set(comps, c, cf_conf(), 700);
+    co_set(comps, c, cf_pxx(), 5);
+    co_set(comps, c, cf_pxy(), 5);
+    co_set(comps, c, cf_pxw(), 30);
+    co_set(comps, c, cf_pxh(), pxh);
+    co_set(comps, c, cf_fill(), 900);
+    co_set(comps, c, cf_holes(), 6);
+    co_set(comps, c, cf_gray(), bandgray);
+    let n: i32 = rt_invert_bands(dst, gray, bodym, comps, inks, 1, 72, 240);
+    if n == 1 {
+        crate::testport::assert_eq(crate::port::bitmap_u8(dst, 11, 10, 0), 0, "the light text is ink");
+        crate::testport::assert_eq(crate::port::bitmap_u8(dst, 20, 7, 0), 240, "the band's ground is paper");
+        crate::testport::assert_eq(crate::port::bitmap_u8(dst, 30, 10, 0), 0, "a pixel of body ink is as it was");
+        crate::testport::assert_eq(crate::port::bitmap_u8(dst, 2, 2, 0), 240, "and outside the band nothing is touched");
+    }
+    return n;
+}
+#[test]
+fn test_a_band_of_colour_with_light_text_is_turned_inside_out_and_a_light_band_is_not() {
+    // P12.6 (issue 14, E09's white-on-blue header): the view the body-ink pass reads showed the band and its text as paper, and the text was never read
+    crate::testport::assert_eq(rtt_band_scene(149, 10), 1, "a band of gray 149, white text in it");
+    crate::testport::assert_eq(rtt_band_scene(220, 10), 0, "a light band holds dark text: the engine reads it as it is");
+    crate::testport::assert_eq(rtt_band_scene(149, 3), 0, "a band 3 pixels high at 72 dpi is a rule, not a header");
+}
 #[test]
 fn test_a_line_the_engine_found_and_read_as_nothing_is_read_alone_and_its_words_are_the_pages_when_sure() {
     // P12.6, `RUNNING FOR (CHECK ONE):` before its blank: the page read as a page finds the line and no word in it; read as a line it is text

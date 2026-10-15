@@ -390,7 +390,7 @@ pub(crate) fn pu_run_born(i: i32, input: i32, fuse: i32, pl: &mut crate::port::C
             if esc >= 0 {
                 run = esc;
             }
-            asked = rt_plan(i, input, 1, 0, rid, pu_dpi(), loc, ans, bms, pn_k_text(), crate::port::bms_get(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr);
+            asked = rt_plan(i, input, 1, 0, rid, pu_dpi(), loc, ans, bms, pn_k_text(), crate::port::bms_get(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr, comps, inks);
             // the seals and stamps in the text-free render's pixels (P8.2): the strips and crops that are read, asked in the same round as the targeted passes
             if pu_px(bms, nid, fuse) == 1 {
                 pgrow = ev_page_row(epages, i + 1);
@@ -540,7 +540,7 @@ pub fn pu_scan_core(i: i32, input: i32, fuse: i32, did: i32, ad: i32, dpi100: i3
     nw = ow_count(owords) - w0;
     pn_features(i + 1, bms, pn_k_text(), crate::port::bms_get(bms, rid), roid, w0, nw, ws, comps, owords, feats, scr);
     rt_prep(rtp);
-    asked = rt_plan(i, input, 0, 0, rid, hint, loc, ans, bms, pn_k_text(), crate::port::bms_get(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr);
+    asked = rt_plan(i, input, 0, 0, rid, hint, loc, ans, bms, pn_k_text(), crate::port::bms_get(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr, comps, inks);
     // the seals and stamps in the page's pixels (P8.2): their strips and crops are asked in the same round as the targeted passes
     if seals == 1 {
         sx_find(i + 1, views, vdec, prims, inks, pw, ph, s1);

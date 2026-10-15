@@ -378,7 +378,7 @@ public static class Pageunit {
                 if (esc >= 0) {
                     run = esc;
                 }
-                asked = Retarget.RtPlan(i, input, 1, 0, rid, PuDpi(), loc, ans, bms, Pageink.PnKText(), emon.Port.BmsGet(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr);
+                asked = Retarget.RtPlan(i, input, 1, 0, rid, PuDpi(), loc, ans, bms, Pageink.PnKText(), emon.Port.BmsGet(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr, comps, inks);
                 // the seals and stamps in the text-free render's pixels (P8.2): the strips and crops that are read, asked in the same round as the targeted passes
                 if (PuPx(bms, nid, fuse) == 1) {
                     pgrow = Evidence.EvPageRow(epages, i + 1);
@@ -528,7 +528,7 @@ public static class Pageunit {
         nw = Evidence.OwCount(owords) - w0;
         Pageink.PnFeatures(i + 1, bms, Pageink.PnKText(), emon.Port.BmsGet(bms, rid), roid, w0, nw, ws, comps, owords, feats, scr);
         Retarget.RtPrep(rtp);
-        asked = Retarget.RtPlan(i, input, 0, 0, rid, hint, loc, ans, bms, Pageink.PnKText(), emon.Port.BmsGet(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr);
+        asked = Retarget.RtPlan(i, input, 0, 0, rid, hint, loc, ans, bms, Pageink.PnKText(), emon.Port.BmsGet(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr, comps, inks);
         // the seals and stamps in the page's pixels (P8.2): their strips and crops are asked in the same round as the targeted passes
         if (seals == 1) {
             Sealpx.SxFind(i + 1, views, vdec, prims, inks, pw, ph, s1);
