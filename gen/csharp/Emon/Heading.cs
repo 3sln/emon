@@ -8,6 +8,7 @@ public static class Heading {
     internal const int HdMin = 4;
     internal const int HdMaxlines = 4;
     internal const int HdMaxcps = 160;
+    internal const int HdPure = 85;
     internal const int WDepth = 20;
     internal const int WPrior = 20;
     internal const int WSkip = 4;
@@ -42,6 +43,7 @@ public static class Heading {
         return 5;
     }
     internal const int WsVar = 8;
+    internal const int WsForm = 15;
     internal const int WsLines = 24;
     internal const int WsHk = 64;
     internal const int HkStride = 12;
@@ -354,8 +356,12 @@ public static class Heading {
             }
             i += 1;
         }
+        // a number in brackets of three digits or more is an area code (`(202) 691-5902`), not an item's
         if (dig == (n - 2)) {
-            return 1;
+            if (dig <= 2) {
+                return 1;
+            }
+            return 0;
         }
         return HdLetters(wd, et, w, 1, n - 2);
     }
@@ -391,6 +397,147 @@ public static class Heading {
         }
         return 0;
     }
+    internal static int HdKcaps(emon.Port.Cells wd, emon.Port.Cells et, int w) {
+        // 1 when the word has no lower case letter (a keyword in capitals: `NET`, `CHAPTER`).
+        int n = HdWl(wd, w);
+        int i = 0;
+        while (i < n) {
+            if (Style.StLower(HdWc(wd, et, w, i))) {
+                return 0;
+            }
+            i += 1;
+        }
+        return 1;
+    }
+    internal static int HdFrac2(emon.Port.Cells wd, emon.Port.Cells et, int w) {
+        // 1 when the word is a number of two dotted components whose second is exactly two digits: `79.36`, `100.00`, an
+        // amount in cents (an outline's `1.10` is one too, which is why the caller asks for capitals).
+        int n = HdWl(wd, w);
+        if ((n < 4) || ((HdDec(wd, et, w) % 64) != 2)) {
+            return 0;
+        }
+        if (HdDec(wd, et, w) == (2 + 64)) {
+            return 0;
+        }
+        if (HdWc(wd, et, w, n - 3) != 46) {
+            return 0;
+        }
+        if ((HdWc(wd, et, w, n - 1) >= 48) && (HdWc(wd, et, w, n - 1) <= 57)) {
+            if ((HdWc(wd, et, w, n - 2) >= 48) && (HdWc(wd, et, w, n - 2) <= 57)) {
+                return 1;
+            }
+        }
+        return 0;
+    }
+    internal static int HdSplitDecimal(emon.Port.Cells wd, emon.Port.Cells et, int w, int w2) {
+        // 1 when the word is a whole number with a point at its end and the next word is one to three digits: an amount whose cents
+        // the engine put in a word of their own (`79.` `36`).
+        if (w2 < 0) {
+            return 0;
+        }
+        int n = HdWl(wd, w);
+        int n2 = HdWl(wd, w2);
+        if (HdDec(wd, et, w) != (1 + 64)) {
+            return 0;
+        }
+        if (HdWc(wd, et, w, n - 1) != 46) {
+            return 0;
+        }
+        if ((HdDec(wd, et, w2) == 1) && (n2 <= 3)) {
+            return 1;
+        }
+        return 0;
+    }
+    internal static int HdFigureWord(emon.Port.Cells wd, emon.Port.Cells et, int w) {
+        // 1 when the word is a figure: two digits or more, and between or around them only the marks , . / : - $ % (a date, an
+        // amount, a telephone number, a postcode).
+        int n = HdWl(wd, w);
+        int i = 0;
+        int digs = 0;
+        int ok = 1;
+        while ((i < n) && (ok == 1)) {
+            int c = HdWc(wd, et, w, i);
+            if ((c >= 48) && (c <= 57)) {
+                digs += 1;
+            } else if ((c == 44) || ((c == 46) || ((c == 47) || ((c == 58) || ((c == 45) || ((c == 36) || (c == 37))))))) {
+                ok = 1;
+            } else {
+                ok = 0;
+            }
+            i += 1;
+        }
+        if ((ok == 1) && (digs >= 2)) {
+            return 1;
+        }
+        return 0;
+    }
+    internal static int HdAddressLike(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l) {
+        // D1620: 1 when a line that opens with a bare number (no point, bracket or colon after it) is a street number, a quantity or
+        // a price rather than a section's number: the number has three digits (`567 Ortiz Valley`), or a figure (`Suite 979`,
+        // `9,000`) follows it, or a word that is not the last ends in a comma (`88 ROAD WAN CHAI, HONG KONG`).
+        int w0 = HdNthWord(wd, ln, l, 0);
+        int first = Evidence.LnGet(ln, l, Evidence.LhFirst());
+        int end = first + Evidence.LnGet(ln, l, Evidence.LhCount());
+        int w = w0 + 1;
+        if (w0 < 0) {
+            return 0;
+        }
+        if (HdWl(wd, w0) >= 3) {
+            return 1;
+        }
+        while (w < end) {
+            int n = HdWl(wd, w);
+            if (n > 0) {
+                if (HdFigureWord(wd, et, w) == 1) {
+                    return 1;
+                }
+                if ((HdWc(wd, et, w, n - 1) == 44) && ((w + 1) < end)) {
+                    return 1;
+                }
+            }
+            w += 1;
+        }
+        return 0;
+    }
+    internal static int HdFiguresAfter(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l, int k) {
+        // How many words of line l from its k-th word on are figures (`hd-figure-word`).
+        int first = Evidence.LnGet(ln, l, Evidence.LhFirst());
+        int end = first + Evidence.LnGet(ln, l, Evidence.LhCount());
+        int w = first;
+        int seen = 0;
+        int n = 0;
+        while (w < end) {
+            if (HdWl(wd, w) > 0) {
+                if (seen >= k) {
+                    if (HdFigureWord(wd, et, w) == 1) {
+                        n += 1;
+                    }
+                }
+                seen += 1;
+            }
+            w += 1;
+        }
+        return n;
+    }
+    internal static int HdPronoun(emon.Port.Cells wd, emon.Port.Cells et, int w2) {
+        // 1 when the word after a lone `I` says it is the English pronoun, not a Roman numeral: it starts in lower case or has an
+        // apostrophe in it (`Series I Don't Want`, `Series I think`). A line that stops at the `I` is a numeral.
+        if (w2 < 0) {
+            return 0;
+        }
+        int n = HdWl(wd, w2);
+        int i = 0;
+        if (Style.StLower(HdWc(wd, et, w2, 0))) {
+            return 1;
+        }
+        while (i < n) {
+            if ((HdWc(wd, et, w2, i) == 39) || (HdWc(wd, et, w2, i) == 8217)) {
+                return 1;
+            }
+            i += 1;
+        }
+        return 0;
+    }
     public static int HdMarker(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells ws, int l) {
         // Does line l start with a numbering pattern? The scheme (0 none), and in ws[0..4]: scheme, depth (the
         // dotted components of a decimal number, 0 for a letter or a roman), where the number is in the line's
@@ -414,6 +561,10 @@ public static class Heading {
         int n0 = HdWl(wd, w0);
         int d = HdDec(wd, et, w0);
         // decimal: 1  1.  1.2.3  2)
+        // a bare number that is a street number, a quantity or a price is no heading's (D1620)
+        if ((d == 1) && (HdAddressLike(wd, ln, et, l) == 1)) {
+            return 0;
+        }
         if (d > 0) {
             emon.Port.CellsSet(ws, 0, 1);
             emon.Port.CellsSet(ws, 1, d % 64);
@@ -470,6 +621,18 @@ public static class Heading {
             int d2 = HdDec(wd, et, w1);
             int r = HdLetters(wd, et, w1, 0, n1);
             int tot = (n0 + 1) + n1;
+            // a label in capitals and an amount (`NET 79.36`, `TENDER 100.00`), or an amount split at its point (`79.` `36`), is
+            // no keyword and number (D1620): the number would be written apart from the text and the point lost with it
+            if ((HdKcaps(wd, et, w0) == 1) && (HdFrac2(wd, et, w1) == 1)) {
+                return 0;
+            }
+            // a keyword and a number followed by two figures or more (`Period 01 Jan 2024 to 31 Mar 2024 ...`) is a row of data
+            if (HdFiguresAfter(wd, ln, et, l, 2) >= 2) {
+                return 0;
+            }
+            if (HdSplitDecimal(wd, et, w1, w2) == 1) {
+                return 0;
+            }
             if (d2 > 0) {
                 emon.Port.CellsSet(ws, 0, 6);
                 emon.Port.CellsSet(ws, 1, d2 % 64);
@@ -481,6 +644,9 @@ public static class Heading {
                 return 6;
             }
             // a roman numeral, or a lone capital letter only when the line stops there (`Appendix A`)
+            if ((r == 2) && ((n1 == 1) && (HdPronoun(wd, et, w2) == 1))) {
+                return 0;
+            }
             if ((r == 2) || ((r == 4) && (w2 < 0))) {
                 emon.Port.CellsSet(ws, 0, 6);
                 emon.Port.CellsSet(ws, 1, 0);
@@ -516,6 +682,7 @@ public static class Heading {
         int bbits = Style.ScGet(sc, body, Style.SckBits());
         int col = Style.StGet(sf, l, Style.SfkColor());
         int bcol = Style.ScGet(sc, body, Style.SckColor());
+        int pure = Style.StGet(sf, l, Style.SfkPure());
         int p = 0;
         int weight = 0;
         if (((bits & 64) != 0) && ((bbits & 64) == 0)) {
@@ -527,7 +694,9 @@ public static class Heading {
         if ((sz * 100) >= (bsz * 120)) {
             p += 1;
         }
-        if (((bits & 1) != 0) && ((bbits & 1) == 0)) {
+        // D1620: a line that is only partly bold (or italic) has the style of its bold words, but it is a line with a bold phrase
+        // in it, not a bold line: the weight says nothing then (the phrase is an inline span of the paragraph it is in)
+        if (((bits & 1) != 0) && (((bbits & 1) == 0) && (pure >= HdPure))) {
             p += 3;
             weight = 1;
         }
@@ -535,7 +704,7 @@ public static class Heading {
             p += 2;
             weight = 1;
         }
-        if (((bits & 2) != 0) && ((bbits & 2) == 0)) {
+        if (((bits & 2) != 0) && (((bbits & 2) == 0) && (pure >= HdPure))) {
             p += 1;
         }
         if ((col >= 0) && ((bcol >= 0) && (col != bcol))) {
@@ -563,6 +732,32 @@ public static class Heading {
             return 0;
         }
         return emon.Port.CellsAt(ws, 5);
+    }
+    internal static int HdOpensFigure(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l) {
+        // 1 when line l is the data of a row rather than a title: its first word is a figure (`hd-figure-word`), or it has two
+        // figures, or a word that is not its last ends in a comma (an address).
+        int w = HdNthWord(wd, ln, l, 0);
+        int first = Evidence.LnGet(ln, l, Evidence.LhFirst());
+        int end = first + Evidence.LnGet(ln, l, Evidence.LhCount());
+        int j = first;
+        int n = 0;
+        if (w < 0) {
+            return 0;
+        }
+        if (HdFigureWord(wd, et, w) == 1) {
+            return 1;
+        }
+        if (HdFiguresAfter(wd, ln, et, l, 0) >= 2) {
+            return 1;
+        }
+        while (j < end) {
+            n = HdWl(wd, j);
+            if ((n > 0) && (((j + 1) < end) && (HdWc(wd, et, j, n - 1) == 44))) {
+                return 1;
+            }
+            j += 1;
+        }
+        return 0;
     }
     internal static int HdPartner(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells ws, emon.Port.Cells sf, int l) {
         // The line that is the other half of line l's heading line, or -1: l and its one sibling on the row are
@@ -597,6 +792,14 @@ public static class Heading {
                 return -1;
             }
         } else if (Style.StGet(sf, q, Style.SfkX0()) >= Style.StGet(sf, l, Style.SfkX0())) {
+            return -1;
+        }
+        // a title that opens with a figure (an amount, a date, a reference) is a row's data after its line number (D1620)
+        if (lm == 1) {
+            if (HdOpensFigure(wd, ln, et, q) == 1) {
+                return -1;
+            }
+        } else if (HdOpensFigure(wd, ln, et, l) == 1) {
             return -1;
         }
         return q;
@@ -773,6 +976,93 @@ public static class Heading {
         }
         return 0;
     }
+    internal static int HdTail(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l, int back) {
+        // The code point `back` places from the end of line l's text (0 the last, 1 the one before it); -1 when there is none.
+        int w0 = Evidence.LnGet(ln, l, Evidence.LhFirst());
+        int wn = Evidence.LnGet(ln, l, Evidence.LhCount());
+        int k = wn - 1;
+        int left = back;
+        while (k >= 0) {
+            int tl = HdWl(wd, w0 + k);
+            if (tl > 0) {
+                if (left < tl) {
+                    return HdWc(wd, et, w0 + k, (tl - 1) - left);
+                }
+                left -= tl;
+            }
+            k -= 1;
+        }
+        return -1;
+    }
+    internal static int HdStop(int c) {
+        // A mark that ends a sentence or a statement: . ! ? : an ellipsis, the CJK full stops. Not a comma or a semicolon.
+        if ((c == 46) || ((c == 33) || ((c == 63) || ((c == 58) || ((c == 8230) || ((c == 12290) || ((c == 65281) || ((c == 65311) || ((c == 65294) || (c == 65306)))))))))) {
+            return 1;
+        }
+        return 0;
+    }
+    internal static int HdLineClosed(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l) {
+        // D1620: 1 when line l ends a sentence or a statement (a stop, after any closing quote or bracket; or a figure: a
+        // label and its value), or has no text; 0 when its sentence goes on to the next line.
+        int c = HdTail(wd, ln, et, l, 0);
+        if (c < 0) {
+            return 1;
+        }
+        if ((c >= 48) && (c <= 57)) {
+            return 1;
+        }
+        if ((c == 41) || ((c == 93) || ((c == 125) || ((c == 34) || ((c == 39) || ((c == 8221) || ((c == 8217) || ((c == 187) || (c == 12301))))))))) {
+            c = HdTail(wd, ln, et, l, 1);
+            if (c < 0) {
+                return 1;
+            }
+        }
+        return HdStop(c);
+    }
+    internal static int HdContinues(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells ws, emon.Port.Cells sf, int top, int last) {
+        // D1620: does the unit (line top to line last) go on a sentence, a list item or a paragraph that is not its own? A
+        // bold or underlined phrase, or a font change, in the middle of a paragraph is a line of the paragraph with a style change
+        // in it (an inline span), never a heading. Three ways to tell: (1) the unit is not well set apart from the line above it (a
+        // list item's space is less than a title's), and the line below it, close under it, starts in lower case (its sentence goes on there:
+        // `4 Should Section 230 of the Act, which prohibits` / `the application of ...`); (2) a line
+        // without a number or a bullet of its own, no more apart from the line above it than body lines are, and that line does
+        // not end a sentence; (3) a line without a marker of its own under the marker line of a list item and further in than it
+        // (the wrapped lines of the item, up to four lines). Clobbers ws[0..5] (the numbering of line top).
+        int sp = HdSpacing(sf, top, last);
+        int a = Style.StGet(sf, top, Style.SfkAbove());
+        int b = Style.StGet(sf, last, Style.SfkBelow());
+        int body = Style.StHget(sf, Style.SfhBody());
+        int own = HdMarker(wd, ln, et, ws, top);
+        int f = Style.StGet(sf, top, Style.SfkFirst());
+        if ((b >= 0) && (sp < 2)) {
+            if ((Style.StGet(sf, b, Style.SfkClass()) == body) && ((HdTight(sf, last, b) == 1) && Style.StLower(Style.StGet(sf, b, Style.SfkFirst())))) {
+                return 1;
+            }
+        }
+        if ((own == 0) && ((a >= 0) && (HdBullet(f) == 0))) {
+            if ((sp < 1) && ((Style.StGet(sf, a, Style.SfkClass()) == body) && ((HdTight(sf, a, top) == 1) && (HdLineClosed(wd, ln, et, a) == 0)))) {
+                return 1;
+            }
+            int cur = a;
+            int child = top;
+            int steps = 0;
+            while ((cur >= 0) && (steps < 4)) {
+                if (HdTight(sf, cur, child) == 1) {
+                    if (Style.StGet(sf, top, Style.SfkX0()) > (Style.StGet(sf, cur, Style.SfkX0()) + (Style.StGet(sf, cur, Style.SfkSize()) / 2))) {
+                        if ((HdBullet(Style.StGet(sf, cur, Style.SfkFirst())) == 1) || (HdMarker(wd, ln, et, ws, cur) != 0)) {
+                            return 1;
+                        }
+                    }
+                    child = cur;
+                    cur = Style.StGet(sf, cur, Style.SfkAbove());
+                    steps += 1;
+                } else {
+                    steps = 99;
+                }
+            }
+        }
+        return 0;
+    }
     internal static int HdSandwich(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells ws, emon.Port.Cells sf, int top, int last, int cnt) {
         // Is a body-styled numbered line a title standing BETWEEN paragraphs (D395): one short line, no marker on
         // the line above or below it, and the line below it flush with it (a paragraph's first line, not the hanging
@@ -850,6 +1140,9 @@ public static class Heading {
         if (ps == 0) {
             sand = HdSandwich(wd, ln, et, ws, sf, top, last, cnt);
         }
+        if (HdContinues(wd, ln, et, ws, sf, top, last) == 1) {
+            return -1;
+        }
         s = HdMarker(wd, ln, et, ws, top);
         pts = ps;
         if (s > 0) {
@@ -865,6 +1158,11 @@ public static class Heading {
         int b = Style.StGet(sf, last, Style.SfkBelow());
         int gb = Style.StGet(sf, last, Style.SfkGapBelow());
         if ((ps == 0) && (sp < 1)) {
+            return -1;
+        }
+        // D1620 (smoke A12): on a page of short lines (a receipt, an invoice, a form: no paragraph on it) a bold or capitalised
+        // line of the body's own size, no more apart from the line above it than the rest, is a label or a value, not a section
+        if ((emon.Port.CellsAt(ws, WsForm) == 1) && ((s == 0) && ((sp < 1) && ((sz * 100) < (Style.StHget(sf, Style.SfhSize()) * 104))))) {
             return -1;
         }
         // a body-styled numbered line followed at the body's own line gap is a paragraph or a list item
@@ -1896,6 +2194,27 @@ public static class Heading {
         }
         return 0;
     }
+    internal static int HdFormlike(emon.Port.Cells sf, int n) {
+        // D1620: 1 when the document is a page of short lines: at least eight upright lines, and fewer than one in ten of them has
+        // six words (a sentence's worth). A receipt, an invoice and a form's labels are that; prose, a slide with its bullets and a
+        // newspaper column are not.
+        int l = 0;
+        int total = 0;
+        int prose = 0;
+        while (l < n) {
+            if (Style.StGet(sf, l, Style.SfkUpright()) == 1) {
+                total += 1;
+                if (Style.StGet(sf, l, Style.SfkWords()) >= 6) {
+                    prose += 1;
+                }
+            }
+            l += 1;
+        }
+        if ((total >= 8) && ((prose * 10) < total)) {
+            return 1;
+        }
+        return 0;
+    }
     public static int HdAnalyze(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells gl, emon.Port.Cells sf, emon.Port.Cells sc, emon.Port.Cells hc, emon.Port.Cells ws, emon.Port.Cells tmp, emon.Port.Cells pr, emon.Port.Cells ptxt) {
         // Decide which lines are headings and at what level. `sf`, `sc`, `ws`, `tmp` are scratch, `hc` the answer
         // (emptied first); `pr` and `ptxt` the priors (`hd-prior-add`), empty when there are none. Answers the
@@ -1926,6 +2245,7 @@ public static class Heading {
         if (Style.StHget(sf, Style.SfhBody()) < 0) {
             return 0;
         }
+        emon.Port.CellsSet(ws, WsForm, HdFormlike(sf, n));
         l = 0;
         while (l < n) {
             Style.StSet(sf, l, Style.SfkUnit(), -1);

@@ -285,6 +285,26 @@ func paStyle(wd *port.Cells, ln *port.Cells, l int32) int32 {
 	return evidence.WdGet(wd, d, evidence.WfStyle())
 }
 
+func paMixed(wd *port.Cells, ln *port.Cells, l int32) int32 {
+	// D1620: 1 when the line has words of more than one combination of bold, italic and mono: it is a line with a styled
+	// phrase in it, and `pa-style` (the style of its dominant word) is the style of the phrase or of the rest by a margin of
+	// one word. 0 for a line of one style.
+	var d int32 = paDom(wd, ln, l)
+	var w0 int32 = evidence.LnGet(ln, l, evidence.LhFirst())
+	var wn int32 = evidence.LnGet(ln, l, evidence.LhCount())
+	var k int32 = 0
+	if d < 0 {
+		return 0
+	}
+	for k < wn {
+		if (evidence.WdGet(wd, w0+k, evidence.HdTlen()) > 0) && ((evidence.WdGet(wd, w0+k, evidence.WfStyle()) & 67) != (evidence.WdGet(wd, d, evidence.WfStyle()) & 67)) {
+			return 1
+		}
+		k += 1
+	}
+	return 0
+}
+
 func paStart(ln *port.Cells, l int32) int32 {
 	// Where the line starts, as a distance that grows INWARD: x0 for a line that reads left to right,
 	// minus x1 for one that reads right to left.
@@ -497,7 +517,98 @@ func paIndents(wd *port.Cells, ln *port.Cells, cf *port.Cells, lo *port.Cells) i
 	return n
 }
 
-func paNewPar(wd *port.Cells, ln *port.Cells, a int32, b int32, med int32, margin int32, hc *port.Cells) bool {
+func paUnspaced(cp int32) bool {
+	// A code point of a script set without spaces between words (P11.x2): Han (and the Kangxi radicals, which are folded
+	// to Han only after the join), kana, the CJK symbols and punctuation,
+	// the full-width and half-width forms. Hangul is not (it has spaces) and is left out.
+	if (cp >= 11904) && (cp <= 12255) {
+		return 1 == 1
+	}
+	if (cp >= 12288) && (cp <= 12543) {
+		return 1 == 1
+	}
+	if (cp >= 13312) && (cp <= 19903) {
+		return 1 == 1
+	}
+	if (cp >= 19968) && (cp <= 40959) {
+		return 1 == 1
+	}
+	if (cp >= 63744) && (cp <= 64255) {
+		return 1 == 1
+	}
+	if (cp >= 65280) && (cp < 65440) {
+		return 1 == 1
+	}
+	if (cp > 65500) && (cp <= 65519) {
+		return 1 == 1
+	}
+	if (cp >= 131072) && (cp <= 205743) {
+		return 1 == 1
+	}
+	return 0 == 1
+}
+
+func paLastCp(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32, back int32) int32 {
+	// The code point `back` places from the end of line l's text (0 the last); -1 when there is none.
+	var w0 int32 = evidence.LnGet(ln, l, evidence.LhFirst())
+	var k int32 = evidence.LnGet(ln, l, evidence.LhCount()) - 1
+	var left int32 = back
+	for k >= 0 {
+		var ts int32 = evidence.WdGet(wd, w0+k, evidence.HdTstart())
+		var tl int32 = evidence.WdGet(wd, w0+k, evidence.HdTlen())
+		if (ts >= 0) && (tl > 0) {
+			if left < tl {
+				return port.CellsAt(et, ts+((tl-1)-left))
+			}
+			left -= tl
+		}
+		k -= 1
+	}
+	return -1
+}
+
+func paOpenEnd(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32) bool {
+	// D1620: does line l end inside a sentence: it has text, its last character is not a figure (a label and its value is a
+	// statement) or a mark that closes a sentence, with or without a closing bracket or quotation mark after the mark.
+	var c int32 = paLastCp(wd, ln, et, l, 0)
+	if c < 0 {
+		return 0 == 1
+	}
+	if (c >= 48) && (c <= 57) {
+		return 0 == 1
+	}
+	if (c == 12301) || ((c == 12303) || ((c == 65289) || ((c == 12305) || ((c == 12299) || ((c == 12297) || ((c == 41) || ((c == 93) || ((c == 34) || ((c == 39) || ((c == 8221) || ((c == 8217) || (c == 187)))))))))))) {
+		c = paLastCp(wd, ln, et, l, 1)
+		if c < 0 {
+			return 0 == 1
+		}
+	}
+	return !paFinalMark(c)
+}
+
+func paUnfinished(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32) bool {
+	// D1620 (smoke B I-18): does line l end inside a sentence of a script set without spaces (Han, kana): its last character
+	// is one of them and no mark that closes a sentence, with or without a closing bracket or quotation mark after the mark.
+	if !paUnspaced(paLastCp(wd, ln, et, l, 0)) {
+		return 0 == 1
+	}
+	return paOpenEnd(wd, ln, et, l)
+}
+
+func paStyleDiffers(wd *port.Cells, ln *port.Cells, a int32, b int32, open bool) bool {
+	// Do the dominant styles of lines a and b differ: a line with a bold phrase in it, when the sentence of line a goes on
+	// (`open`), is no different from the lines around it (D1620, smoke B I-2: it ended the paragraph, once above and once
+	// below). At the end of a sentence a bold label and its value that follow are a line of their own, as ever.
+	if paStyle(wd, ln, a) == paStyle(wd, ln, b) {
+		return 0 == 1
+	}
+	if open && ((paMixed(wd, ln, a) == 1) || (paMixed(wd, ln, b) == 1)) {
+		return 0 == 1
+	}
+	return 1 == 1
+}
+
+func paNewPar(wd *port.Cells, ln *port.Cells, et *port.Cells, a int32, b int32, med int32, margin int32, hc *port.Cells) bool {
 	// Does line b, the next one on the page, start a paragraph after line a (D135). The heading analysis
 	// (P4.4) decides first where it has an opinion: a heading is a block of its own (D167).
 	var op int32 = heading.HdOpinion(hc, a, b)
@@ -531,8 +642,13 @@ func paNewPar(wd *port.Cells, ln *port.Cells, a int32, b int32, med int32, margi
 	var sa int32 = paSize(wd, ln, a)
 	var sb int32 = paSize(wd, ln, b)
 	var ds int32 = sa - sb
+	// A line of a script set without spaces that stops inside a sentence and whose next line is within 1.75 of its size of it,
+	// baseline to baseline, goes on there whatever the boxes say: the boxes of lines in several fonts are of several heights,
+	// and the whitespace between them is not the leading (D1620, the Wikipedia pages in Japanese).
 	if ((g * paGapDen) > (med * paGapNum)) && (((g - med) * paTinyDiv) > hb) {
-		return 1 == 1
+		if !(paUnfinished(wd, ln, et, a) && (((paYmid2(ln, b) - paYmid2(ln, a)) * 2) <= (7 * sa))) {
+			return 1 == 1
+		}
 	}
 	if (((paStart(ln, b) - paStart(ln, a)) * paIndentDiv) > sb) && (((paStart(ln, a) - margin) * paIndentDiv) <= sb) && (lists.LsHang(hc, ln, a, b) == 0) {
 		return 1 == 1
@@ -540,7 +656,8 @@ func paNewPar(wd *port.Cells, ln *port.Cells, a int32, b int32, med int32, margi
 	if (paAbs(ds) * paSizeDiv) > sa {
 		return 1 == 1
 	}
-	if paStyle(wd, ln, a) != paStyle(wd, ln, b) {
+	var opened bool = paOpenEnd(wd, ln, et, a)
+	if paStyleDiffers(wd, ln, a, b, opened) {
 		return 1 == 1
 	}
 	return 0 == 1
@@ -575,37 +692,6 @@ func paFirstCp(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32) int32 {
 		k += 1
 	}
 	return -1
-}
-
-func paUnspaced(cp int32) bool {
-	// A code point of a script set without spaces between words (P11.x2): Han (and the Kangxi radicals, which are folded
-	// to Han only after the join), kana, the CJK symbols and punctuation,
-	// the full-width and half-width forms. Hangul is not (it has spaces) and is left out.
-	if (cp >= 11904) && (cp <= 12255) {
-		return 1 == 1
-	}
-	if (cp >= 12288) && (cp <= 12543) {
-		return 1 == 1
-	}
-	if (cp >= 13312) && (cp <= 19903) {
-		return 1 == 1
-	}
-	if (cp >= 19968) && (cp <= 40959) {
-		return 1 == 1
-	}
-	if (cp >= 63744) && (cp <= 64255) {
-		return 1 == 1
-	}
-	if (cp >= 65280) && (cp < 65440) {
-		return 1 == 1
-	}
-	if (cp > 65500) && (cp <= 65519) {
-		return 1 == 1
-	}
-	if (cp >= 131072) && (cp <= 205743) {
-		return 1 == 1
-	}
-	return 0 == 1
 }
 
 func paJoin(wd *port.Cells, ln *port.Cells, et *port.Cells, raw *port.Cells, l int32) int32 {
@@ -1569,7 +1655,7 @@ func paJoinScore(wd *port.Cells, ln *port.Cells, et *port.Cells, raw *port.Cells
 	if paMarker(wd, ln, et, b) {
 		pts += jsMarker
 	}
-	if ((paAbs(sa-sb) * paSizeDiv) > sa) || (paStyle(wd, ln, a) != paStyle(wd, ln, b)) {
+	if ((paAbs(sa-sb) * paSizeDiv) > sa) || paStyleDiffers(wd, ln, a, b, !paEndsSentence(raw)) {
 		pts += jsStyle
 	}
 	if (evidence.LnGet(ln, a, evidence.LhFirst()) + evidence.LnGet(ln, a, evidence.LhCount())) == evidence.LnGet(ln, b, evidence.LhFirst()) {
@@ -1654,7 +1740,7 @@ func paNote(wd *port.Cells, ln *port.Cells, et *port.Cells, nodes *port.Cells, a
 		var b int32 = port.CellsAt(lo, first+i)
 		// a line a table holds stays the table's cell (D504)
 		if table.TbClaimed(ln, b) == 0 {
-			if (initial.InRow(ln, b) >= 0) || paNewPar(wd, ln, prev, b, med, mg, hc) {
+			if (initial.InRow(ln, b) >= 0) || paNewPar(wd, ln, et, prev, b, med, mg, hc) {
 				paFlush(nodes, attrs, regions, text, raw, tmp, fr, al, hc, note)
 				paFragOpen(fr, ln, page, b, 0)
 				paIniStart(wd, ln, et, raw, fr, ii, b)
@@ -1949,7 +2035,7 @@ func PaBuild(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, la
 					for cont < cnt {
 						b = port.CellsAt(lo, first+cont)
 						if table.TbClaimed(lt, b) == 0 {
-							if (initial.InRow(lt, b) >= 0) || (paNewPar(wd, lt, prev, b, med, mg, hc) || table.TbDue(tb, tcur, p, paYmid2(lt, b))) {
+							if (initial.InRow(lt, b) >= 0) || (paNewPar(wd, lt, et, prev, b, med, mg, hc) || table.TbDue(tb, tcur, p, paYmid2(lt, b))) {
 								ty = evidence.LnGet(lt, b, evidence.LhY0())
 								pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, i, ty, hc)
 								tcur = paTables(tb, tcur, p, paYmid2(lt, b), wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc)

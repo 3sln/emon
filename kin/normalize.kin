@@ -7,9 +7,11 @@
 ;; removal of soft hyphens (U+00AD), and the fold of the Kangxi Radicals
 ;; (U+2F00..2FD5) and CJK Radicals Supplement (U+2E80..2EF3) characters that
 ;; have an equivalent to the unified ideograph they are drawn as (U+2F00 to
-;; U+4E00; `emon.radicals`, from the UCD). NOT NFKC: full-width forms,
-;; superscripts and the like are content. So there is no compatibility data
-;; beyond those. NFD is here because NFC is defined through it.
+;; U+4E00; `emon.radicals`, from the UCD), and (D1620) the Arabic presentation forms
+;; (U+FB50..FDFF, U+FE70..FEFF: the shaped glyphs of the letters, which is what a
+;; PDF's text layer holds) to the letters they are the glyphs of, with the ligature flag.
+;; NOT NFKC: full-width forms, superscripts and the like are content. So there is no
+;; compatibility data beyond those. NFD is here because NFC is defined through it.
 ;;
 ;; WHY NFC MATTERS TO A PDF READER. A PDF draws glyphs, not characters: the
 ;; text layer for `é` may be the precomposed U+00E9 or `e` + U+0301, chosen
@@ -36,7 +38,8 @@
             [emon.radicals :refer [rad-count rad-at]]
             [emon.nftable :refer [nf-ccc-count nf-ccc-at nf-dec-count nf-dec-at
                                   nf-pool-at nf-comp-count nf-comp-at
-                                  nf-lig-count nf-lig-at]]
+                                  nf-lig-count nf-lig-at
+                                  nf-arab-count nf-arab-at nf-apool-at]]
             [kin.lang :refer [defn defconst return let set while if comment do
                               + - * < > <= >= == != and or quot rem]]))
 
@@ -171,6 +174,28 @@
           (set k (+ k 1))))
     (return 1)))
 
+(defn ^I32 nz-put-arabic [^I32 cp ^:mut ^Cells out]
+  (comment "D1620: append the letters an Arabic presentation form (U+FB50..FDFF, U+FE70..FEFF) is the shaped glyph of and answer 1,")
+  (comment "or answer 0 and append nothing. NFKC on that range alone; each letter is then decomposed as any other code point is.")
+  (if (or (< cp 64336) (and (> cp 65023) (< cp 65136))) (return 0))
+  (if (> cp 65279) (return 0))
+  (let [^:mut ^I32 lo 0
+        ^:mut ^I32 hi (- (nf-arab-count 0) 1)
+        ^:mut ^I32 mid 0
+        ^:mut ^I32 k 0]
+    (while (<= lo hi)
+      (do (set mid (+ lo (quot (- hi lo) 2)))
+          (if (< cp (nf-arab-at 0 mid 0))
+            (set hi (- mid 1))
+            (if (> cp (nf-arab-at 0 mid 0))
+              (set lo (+ mid 1))
+              (do (set k 0)
+                  (while (< k (nf-arab-at 0 mid 2))
+                    (do (nz-put-full (nf-apool-at 0 (+ (nf-arab-at 0 mid 1) k)) out)
+                        (set k (+ k 1))))
+                  (return 1))))))
+    (return 0)))
+
 (defn ^I32 nz-order [^:mut ^Cells out ^I32 start]
   (comment "Canonical ordering of out[start..]: within each run of non-starters")
   (comment "(ccc != 0) a STABLE sort by ccc. An insertion sort: runs are a")
@@ -208,6 +233,8 @@
           (if (== want-rad 1) (set cp (nz-radical-fold cp)))
           (if (and (== want-lig 1) (>= cp 64256))
             (set lig (nz-put-ligature cp out)))
+          (if (and (== want-lig 1) (and (== lig 0) (>= cp 64336)))
+            (set lig (nz-put-arabic cp out)))
           (if (and (== lig 0) (and (== cp 173) (== want-soft 1)))
             (set lig 1))
           (if (== lig 0) (nz-put-full cp out))

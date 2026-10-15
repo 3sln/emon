@@ -332,6 +332,68 @@ func TestAGapAndAnIndentEndAParagraph(emonT *testing.T) {
 	port.AssertText(emonT, t4, "P1:left col;P1:right col;", "two lines on one row are two paragraphs")
 }
 
+func ptBoldWords(wd *port.Cells, w0 int32, from int32, to int32) int32 {
+	// Words from..to (counted from the word w0, a line's first) are bold (style bit 1).
+	var k int32 = from
+	for k < to {
+		evidence.WdSet(wd, w0+k, evidence.WfStyle(), 1)
+		k += 1
+	}
+	return 0
+}
+
+func TestALineWithABoldPhraseInItDoesNotEndTheParagraph(emonT *testing.T) {
+	// D1620 (smoke B I-2): the style of a line is the style of its dominant word, so a line of which most is bold differed from
+	// the regular lines above and below it and a paragraph ended at each. A line that holds both is a line of the paragraph;
+	// a line that is bold all through still ends it.
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var ord *port.Cells = port.NewCells()
+	var raw *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var fr *port.Cells = port.NewCells()
+	var gp *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	var t1 *strings.Builder = port.NewText()
+	var t2 *strings.Builder = port.NewText()
+	var t3 *strings.Builder = port.NewText()
+	var w0 int32 = 0
+	ptLine(wd, ln, et, port.TextBlob("thank you very much for downloading"), 1, 7200, 10000, 50000, 11200, 0, 0, 1000)
+	w0 = evidence.WdCount(wd)
+	ptLine(wd, ln, et, port.TextBlob("answers for elementary statistics and more"), 1, 7200, 11500, 50000, 12700, 0, 0, 1000)
+	ptBoldWords(wd, w0, 0, 5)
+	ptLine(wd, ln, et, port.TextBlob("have knowledge that people have looked"), 1, 7200, 13000, 50000, 14200, 0, 0, 1000)
+	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "mixed: well formed")
+	ptBrief(t1, nodes, regions, text)
+	port.AssertText(emonT, t1, "P1:thank you very much for downloading answers for elementary statistics and more have knowledge that people have looked;", "a bold phrase is not a change of style")
+	ptClear(wd, ln, et)
+	ptLine(wd, ln, et, port.TextBlob("thank you very much for downloading"), 1, 7200, 10000, 50000, 11200, 0, 0, 1000)
+	w0 = evidence.WdCount(wd)
+	ptLine(wd, ln, et, port.TextBlob("answers for elementary statistics"), 1, 7200, 11500, 50000, 12700, 0, 0, 1000)
+	ptBoldWords(wd, w0, 0, 4)
+	ptLine(wd, ln, et, port.TextBlob("have knowledge that people have looked"), 1, 7200, 13000, 50000, 14200, 0, 0, 1000)
+	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "bold: well formed")
+	ptBrief(t2, nodes, regions, text)
+	port.AssertText(emonT, t2, "P1:thank you very much for downloading;P1:answers for elementary statistics;P1:have knowledge that people have looked;", "a line bold all through is a line of its own")
+	// a bold label and its value, after a line that ends in a figure: the line of a statement, not the rest of a sentence
+	ptClear(wd, ln, et)
+	ptLine(wd, ln, et, port.TextBlob("Statement period 01 Mar 2026 31 Mar 2026"), 1, 7200, 10000, 50000, 11200, 0, 0, 1000)
+	w0 = evidence.WdCount(wd)
+	ptLine(wd, ln, et, port.TextBlob("Opening balance 4,210.55"), 1, 7200, 11500, 50000, 12700, 0, 0, 1000)
+	ptBoldWords(wd, w0, 0, 2)
+	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "label: well formed")
+	ptBrief(t3, nodes, regions, text)
+	port.AssertText(emonT, t3, "P1:Statement period 01 Mar 2026 31 Mar 2026;P1:Opening balance 4,210.55;", "a line of a label and a value after a figure is a line of its own")
+}
+
 func TestLinesAreReadTopToBottomWhateverOrderTheyWerePainted(emonT *testing.T) {
 	var wd *port.Cells = port.NewCells()
 	var ln *port.Cells = port.NewCells()
@@ -447,6 +509,51 @@ func TestALineBreakBetweenCjkCharactersAddsNoSpace(emonT *testing.T) {
 	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "hangul: well formed")
 	ptBrief(t3, nodes, regions, text)
 	port.AssertText(emonT, t3, "P1:the report 안녕하세요 세계 end;", "Hangul and Latin keep the space")
+}
+
+func TestLinesOfCjkThatStopInsideASentenceAreOneParagraphWhateverTheBoxesSay(emonT *testing.T) {
+	// D1620 (smoke B I-18): the lines of a page set in several fonts have boxes of several heights (three of these are 24 pt tall
+	// in a 12 pt line, as the Wikipedia pages in Japanese are), so the whitespace between two ordinary lines is more than
+	// the document's lower quartile of it, which is negative, and a paragraph ended at every such line. The baselines are 16.5 pt
+	// apart all the way; a line that stops in a sentence (no 。 ！ ？) is followed by the line that finishes it.
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var ord *port.Cells = port.NewCells()
+	var raw *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var fr *port.Cells = port.NewCells()
+	var gp *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	var t1 *strings.Builder = port.NewText()
+	var t2 *strings.Builder = port.NewText()
+	ptLine(wd, ln, et, port.TextBlob("成为本地区最大的机构之"), 1, 7200, 10000, 50000, 10912, 0, 0, 1200)
+	ptLine(wd, ln, et, port.TextBlob("一，并且在许多国家和地"), 1, 7200, 10162, 50000, 12562, 0, 0, 1200)
+	ptLine(wd, ln, et, port.TextBlob("区设有分支机构，主要负"), 1, 7200, 11812, 50000, 14212, 0, 0, 1200)
+	ptLine(wd, ln, et, port.TextBlob("责推动教育和科学研究"), 1, 7200, 13462, 50000, 15862, 0, 0, 1200)
+	ptLine(wd, ln, et, port.TextBlob("的合作项目与交流活动"), 1, 7200, 16600, 50000, 17512, 0, 0, 1200)
+	ptLine(wd, ln, et, port.TextBlob("等等。"), 1, 7200, 18250, 50000, 19162, 0, 0, 1200)
+	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "open: well formed")
+	ptBrief(t1, nodes, regions, text)
+	port.AssertText(emonT, t1, "P1:成为本地区最大的机构之一，并且在许多国家和地区设有分支机构，主要负责推动教育和科学研究的合作项目与交流活动等等。;", "six lines, one paragraph")
+	// the same geometry, the fourth line ending its sentence: the paragraph ends there
+	ptClear(wd, ln, et)
+	ptLine(wd, ln, et, port.TextBlob("成为本地区最大的机构之"), 1, 7200, 10000, 50000, 10912, 0, 0, 1200)
+	ptLine(wd, ln, et, port.TextBlob("一，并且在许多国家和地"), 1, 7200, 10162, 50000, 12562, 0, 0, 1200)
+	ptLine(wd, ln, et, port.TextBlob("区设有分支机构，主要负"), 1, 7200, 11812, 50000, 14212, 0, 0, 1200)
+	ptLine(wd, ln, et, port.TextBlob("责推动教育和科学研究。"), 1, 7200, 13462, 50000, 15862, 0, 0, 1200)
+	ptLine(wd, ln, et, port.TextBlob("的合作项目与交流活动"), 1, 7200, 16600, 50000, 17512, 0, 0, 1200)
+	ptLine(wd, ln, et, port.TextBlob("等等。"), 1, 7200, 18250, 50000, 19162, 0, 0, 1200)
+	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "closed: well formed")
+	ptBrief(t2, nodes, regions, text)
+	port.AssertText(emonT, t2, "P1:成为本地区最大的机构之一，并且在许多国家和地区设有分支机构，主要负责推动教育和科学研究。;P1:的合作项目与交流活动等等。;", "a sentence that ends ends the paragraph when the lines are apart")
 }
 
 func TestAPageEndIsAMilestoneBetweenBlocksOrInsideAParagraph(emonT *testing.T) {

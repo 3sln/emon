@@ -16,6 +16,8 @@ const hdMaxlines int32 = 4
 
 const hdMaxcps int32 = 160
 
+const hdPure int32 = 85
+
 const wDepth int32 = 20
 
 const wPrior int32 = 20
@@ -71,6 +73,8 @@ func HckFlags() int32 {
 }
 
 const wsVar int32 = 8
+
+const wsForm int32 = 15
 
 const wsLines int32 = 24
 
@@ -420,8 +424,12 @@ func hdParen(wd *port.Cells, et *port.Cells, w int32) int32 {
 		}
 		i += 1
 	}
+	// a number in brackets of three digits or more is an area code (`(202) 691-5902`), not an item's
 	if dig == (n - 2) {
-		return 1
+		if dig <= 2 {
+			return 1
+		}
+		return 0
 	}
 	return hdLetters(wd, et, w, 1, n-2)
 }
@@ -459,6 +467,154 @@ func hdKword(wd *port.Cells, et *port.Cells, w int32) int32 {
 	return 0
 }
 
+func hdKcaps(wd *port.Cells, et *port.Cells, w int32) int32 {
+	// 1 when the word has no lower case letter (a keyword in capitals: `NET`, `CHAPTER`).
+	var n int32 = hdWl(wd, w)
+	var i int32 = 0
+	for i < n {
+		if style.StLower(hdWc(wd, et, w, i)) {
+			return 0
+		}
+		i += 1
+	}
+	return 1
+}
+
+func hdFrac2(wd *port.Cells, et *port.Cells, w int32) int32 {
+	// 1 when the word is a number of two dotted components whose second is exactly two digits: `79.36`, `100.00`, an
+	// amount in cents (an outline's `1.10` is one too, which is why the caller asks for capitals).
+	var n int32 = hdWl(wd, w)
+	if (n < 4) || ((hdDec(wd, et, w) % 64) != 2) {
+		return 0
+	}
+	if hdDec(wd, et, w) == (2 + 64) {
+		return 0
+	}
+	if hdWc(wd, et, w, n-3) != 46 {
+		return 0
+	}
+	if (hdWc(wd, et, w, n-1) >= 48) && (hdWc(wd, et, w, n-1) <= 57) {
+		if (hdWc(wd, et, w, n-2) >= 48) && (hdWc(wd, et, w, n-2) <= 57) {
+			return 1
+		}
+	}
+	return 0
+}
+
+func hdSplitDecimal(wd *port.Cells, et *port.Cells, w int32, w2 int32) int32 {
+	// 1 when the word is a whole number with a point at its end and the next word is one to three digits: an amount whose cents
+	// the engine put in a word of their own (`79.` `36`).
+	if w2 < 0 {
+		return 0
+	}
+	var n int32 = hdWl(wd, w)
+	var n2 int32 = hdWl(wd, w2)
+	if hdDec(wd, et, w) != (1 + 64) {
+		return 0
+	}
+	if hdWc(wd, et, w, n-1) != 46 {
+		return 0
+	}
+	if (hdDec(wd, et, w2) == 1) && (n2 <= 3) {
+		return 1
+	}
+	return 0
+}
+
+func hdFigureWord(wd *port.Cells, et *port.Cells, w int32) int32 {
+	// 1 when the word is a figure: two digits or more, and between or around them only the marks , . / : - $ % (a date, an
+	// amount, a telephone number, a postcode).
+	var n int32 = hdWl(wd, w)
+	var i int32 = 0
+	var digs int32 = 0
+	var ok int32 = 1
+	for (i < n) && (ok == 1) {
+		var c int32 = hdWc(wd, et, w, i)
+		if (c >= 48) && (c <= 57) {
+			digs += 1
+		} else if (c == 44) || ((c == 46) || ((c == 47) || ((c == 58) || ((c == 45) || ((c == 36) || (c == 37)))))) {
+			ok = 1
+		} else {
+			ok = 0
+		}
+		i += 1
+	}
+	if (ok == 1) && (digs >= 2) {
+		return 1
+	}
+	return 0
+}
+
+func hdAddressLike(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32) int32 {
+	// D1620: 1 when a line that opens with a bare number (no point, bracket or colon after it) is a street number, a quantity or
+	// a price rather than a section's number: the number has three digits (`567 Ortiz Valley`), or a figure (`Suite 979`,
+	// `9,000`) follows it, or a word that is not the last ends in a comma (`88 ROAD WAN CHAI, HONG KONG`).
+	var w0 int32 = hdNthWord(wd, ln, l, 0)
+	var first int32 = evidence.LnGet(ln, l, evidence.LhFirst())
+	var end int32 = first + evidence.LnGet(ln, l, evidence.LhCount())
+	var w int32 = w0 + 1
+	if w0 < 0 {
+		return 0
+	}
+	if hdWl(wd, w0) >= 3 {
+		return 1
+	}
+	for w < end {
+		var n int32 = hdWl(wd, w)
+		if n > 0 {
+			if hdFigureWord(wd, et, w) == 1 {
+				return 1
+			}
+			if (hdWc(wd, et, w, n-1) == 44) && ((w + 1) < end) {
+				return 1
+			}
+		}
+		w += 1
+	}
+	return 0
+}
+
+func hdFiguresAfter(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32, k int32) int32 {
+	// How many words of line l from its k-th word on are figures (`hd-figure-word`).
+	var first int32 = evidence.LnGet(ln, l, evidence.LhFirst())
+	var end int32 = first + evidence.LnGet(ln, l, evidence.LhCount())
+	var w int32 = first
+	var seen int32 = 0
+	var n int32 = 0
+	for w < end {
+		if hdWl(wd, w) > 0 {
+			if seen >= k {
+				if hdFigureWord(wd, et, w) == 1 {
+					n += 1
+				}
+			}
+			seen += 1
+		}
+		w += 1
+	}
+	return n
+}
+
+func hdPronoun(wd *port.Cells, et *port.Cells, w2 int32) int32 {
+	// 1 when the word after a lone `I` says it is the English pronoun, not a Roman numeral: it starts in lower case or has an
+	// apostrophe in it (`Series I Don't Want`, `Series I think`). A line that stops at the `I` is a numeral.
+	if w2 < 0 {
+		return 0
+	}
+	var n int32 = hdWl(wd, w2)
+	var i int32 = 0
+	if style.StLower(hdWc(wd, et, w2, 0)) {
+		return 1
+	}
+	for i < n {
+		if (hdWc(wd, et, w2, i) == 39) || (hdWc(wd, et, w2, i) == 8217) {
+			return 1
+		}
+		i += 1
+	}
+	return 0
+}
+
 func HdMarker(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells, l int32) int32 {
 	// Does line l start with a numbering pattern? The scheme (0 none), and in ws[0..4]: scheme, depth (the
 	// dotted components of a decimal number, 0 for a letter or a roman), where the number is in the line's
@@ -482,6 +638,10 @@ func HdMarker(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells, l 
 	var n0 int32 = hdWl(wd, w0)
 	var d int32 = hdDec(wd, et, w0)
 	// decimal: 1  1.  1.2.3  2)
+	// a bare number that is a street number, a quantity or a price is no heading's (D1620)
+	if (d == 1) && (hdAddressLike(wd, ln, et, l) == 1) {
+		return 0
+	}
 	if d > 0 {
 		port.CellsSet(ws, 0, 1)
 		port.CellsSet(ws, 1, d%64)
@@ -538,6 +698,18 @@ func HdMarker(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells, l 
 		var d2 int32 = hdDec(wd, et, w1)
 		var r int32 = hdLetters(wd, et, w1, 0, n1)
 		var tot int32 = (n0 + 1) + n1
+		// a label in capitals and an amount (`NET 79.36`, `TENDER 100.00`), or an amount split at its point (`79.` `36`), is
+		// no keyword and number (D1620): the number would be written apart from the text and the point lost with it
+		if (hdKcaps(wd, et, w0) == 1) && (hdFrac2(wd, et, w1) == 1) {
+			return 0
+		}
+		// a keyword and a number followed by two figures or more (`Period 01 Jan 2024 to 31 Mar 2024 ...`) is a row of data
+		if hdFiguresAfter(wd, ln, et, l, 2) >= 2 {
+			return 0
+		}
+		if hdSplitDecimal(wd, et, w1, w2) == 1 {
+			return 0
+		}
 		if d2 > 0 {
 			port.CellsSet(ws, 0, 6)
 			port.CellsSet(ws, 1, d2%64)
@@ -549,6 +721,9 @@ func HdMarker(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells, l 
 			return 6
 		}
 		// a roman numeral, or a lone capital letter only when the line stops there (`Appendix A`)
+		if (r == 2) && ((n1 == 1) && (hdPronoun(wd, et, w2) == 1)) {
+			return 0
+		}
 		if (r == 2) || ((r == 4) && (w2 < 0)) {
 			port.CellsSet(ws, 0, 6)
 			port.CellsSet(ws, 1, 0)
@@ -585,6 +760,7 @@ func hdStylePoints(sf *port.Cells, sc *port.Cells, l int32) int32 {
 	var bbits int32 = style.ScGet(sc, body, style.SckBits())
 	var col int32 = style.StGet(sf, l, style.SfkColor())
 	var bcol int32 = style.ScGet(sc, body, style.SckColor())
+	var pure int32 = style.StGet(sf, l, style.SfkPure())
 	var p int32 = 0
 	var weight int32 = 0
 	if ((bits & 64) != 0) && ((bbits & 64) == 0) {
@@ -596,7 +772,9 @@ func hdStylePoints(sf *port.Cells, sc *port.Cells, l int32) int32 {
 	if (sz * 100) >= (bsz * 120) {
 		p += 1
 	}
-	if ((bits & 1) != 0) && ((bbits & 1) == 0) {
+	// D1620: a line that is only partly bold (or italic) has the style of its bold words, but it is a line with a bold phrase
+	// in it, not a bold line: the weight says nothing then (the phrase is an inline span of the paragraph it is in)
+	if ((bits & 1) != 0) && (((bbits & 1) == 0) && (pure >= hdPure)) {
 		p += 3
 		weight = 1
 	}
@@ -604,7 +782,7 @@ func hdStylePoints(sf *port.Cells, sc *port.Cells, l int32) int32 {
 		p += 2
 		weight = 1
 	}
-	if ((bits & 2) != 0) && ((bbits & 2) == 0) {
+	if ((bits & 2) != 0) && (((bbits & 2) == 0) && (pure >= hdPure)) {
 		p += 1
 	}
 	if (col >= 0) && ((bcol >= 0) && (col != bcol)) {
@@ -634,6 +812,33 @@ func hdMarkerOnly(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells
 		return 0
 	}
 	return port.CellsAt(ws, 5)
+}
+
+func hdOpensFigure(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32) int32 {
+	// 1 when line l is the data of a row rather than a title: its first word is a figure (`hd-figure-word`), or it has two
+	// figures, or a word that is not its last ends in a comma (an address).
+	var w int32 = hdNthWord(wd, ln, l, 0)
+	var first int32 = evidence.LnGet(ln, l, evidence.LhFirst())
+	var end int32 = first + evidence.LnGet(ln, l, evidence.LhCount())
+	var j int32 = first
+	var n int32 = 0
+	if w < 0 {
+		return 0
+	}
+	if hdFigureWord(wd, et, w) == 1 {
+		return 1
+	}
+	if hdFiguresAfter(wd, ln, et, l, 0) >= 2 {
+		return 1
+	}
+	for j < end {
+		n = hdWl(wd, j)
+		if (n > 0) && (((j + 1) < end) && (hdWc(wd, et, j, n-1) == 44)) {
+			return 1
+		}
+		j += 1
+	}
+	return 0
 }
 
 func hdPartner(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells, sf *port.Cells, l int32) int32 {
@@ -669,6 +874,14 @@ func hdPartner(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells, s
 			return -1
 		}
 	} else if style.StGet(sf, q, style.SfkX0()) >= style.StGet(sf, l, style.SfkX0()) {
+		return -1
+	}
+	// a title that opens with a figure (an amount, a date, a reference) is a row's data after its line number (D1620)
+	if lm == 1 {
+		if hdOpensFigure(wd, ln, et, q) == 1 {
+			return -1
+		}
+	} else if hdOpensFigure(wd, ln, et, l) == 1 {
 		return -1
 	}
 	return q
@@ -857,6 +1070,97 @@ func hdListRun(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells, s
 	return 0
 }
 
+func hdTail(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32, back int32) int32 {
+	// The code point `back` places from the end of line l's text (0 the last, 1 the one before it); -1 when there is none.
+	var w0 int32 = evidence.LnGet(ln, l, evidence.LhFirst())
+	var wn int32 = evidence.LnGet(ln, l, evidence.LhCount())
+	var k int32 = wn - 1
+	var left int32 = back
+	for k >= 0 {
+		var tl int32 = hdWl(wd, w0+k)
+		if tl > 0 {
+			if left < tl {
+				return hdWc(wd, et, w0+k, (tl-1)-left)
+			}
+			left -= tl
+		}
+		k -= 1
+	}
+	return -1
+}
+
+func hdStop(c int32) int32 {
+	// A mark that ends a sentence or a statement: . ! ? : an ellipsis, the CJK full stops. Not a comma or a semicolon.
+	if (c == 46) || ((c == 33) || ((c == 63) || ((c == 58) || ((c == 8230) || ((c == 12290) || ((c == 65281) || ((c == 65311) || ((c == 65294) || (c == 65306))))))))) {
+		return 1
+	}
+	return 0
+}
+
+func hdLineClosed(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32) int32 {
+	// D1620: 1 when line l ends a sentence or a statement (a stop, after any closing quote or bracket; or a figure: a
+	// label and its value), or has no text; 0 when its sentence goes on to the next line.
+	var c int32 = hdTail(wd, ln, et, l, 0)
+	if c < 0 {
+		return 1
+	}
+	if (c >= 48) && (c <= 57) {
+		return 1
+	}
+	if (c == 41) || ((c == 93) || ((c == 125) || ((c == 34) || ((c == 39) || ((c == 8221) || ((c == 8217) || ((c == 187) || (c == 12301)))))))) {
+		c = hdTail(wd, ln, et, l, 1)
+		if c < 0 {
+			return 1
+		}
+	}
+	return hdStop(c)
+}
+
+func hdContinues(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells, sf *port.Cells, top int32, last int32) int32 {
+	// D1620: does the unit (line top to line last) go on a sentence, a list item or a paragraph that is not its own? A
+	// bold or underlined phrase, or a font change, in the middle of a paragraph is a line of the paragraph with a style change
+	// in it (an inline span), never a heading. Three ways to tell: (1) the unit is not well set apart from the line above it (a
+	// list item's space is less than a title's), and the line below it, close under it, starts in lower case (its sentence goes on there:
+	// `4 Should Section 230 of the Act, which prohibits` / `the application of ...`); (2) a line
+	// without a number or a bullet of its own, no more apart from the line above it than body lines are, and that line does
+	// not end a sentence; (3) a line without a marker of its own under the marker line of a list item and further in than it
+	// (the wrapped lines of the item, up to four lines). Clobbers ws[0..5] (the numbering of line top).
+	var sp int32 = hdSpacing(sf, top, last)
+	var a int32 = style.StGet(sf, top, style.SfkAbove())
+	var b int32 = style.StGet(sf, last, style.SfkBelow())
+	var body int32 = style.StHget(sf, style.SfhBody())
+	var own int32 = HdMarker(wd, ln, et, ws, top)
+	var f int32 = style.StGet(sf, top, style.SfkFirst())
+	if (b >= 0) && (sp < 2) {
+		if (style.StGet(sf, b, style.SfkClass()) == body) && ((hdTight(sf, last, b) == 1) && style.StLower(style.StGet(sf, b, style.SfkFirst()))) {
+			return 1
+		}
+	}
+	if (own == 0) && ((a >= 0) && (hdBullet(f) == 0)) {
+		if (sp < 1) && ((style.StGet(sf, a, style.SfkClass()) == body) && ((hdTight(sf, a, top) == 1) && (hdLineClosed(wd, ln, et, a) == 0))) {
+			return 1
+		}
+		var cur int32 = a
+		var child int32 = top
+		var steps int32 = 0
+		for (cur >= 0) && (steps < 4) {
+			if hdTight(sf, cur, child) == 1 {
+				if style.StGet(sf, top, style.SfkX0()) > (style.StGet(sf, cur, style.SfkX0()) + (style.StGet(sf, cur, style.SfkSize()) / 2)) {
+					if (hdBullet(style.StGet(sf, cur, style.SfkFirst())) == 1) || (HdMarker(wd, ln, et, ws, cur) != 0) {
+						return 1
+					}
+				}
+				child = cur
+				cur = style.StGet(sf, cur, style.SfkAbove())
+				steps += 1
+			} else {
+				steps = 99
+			}
+		}
+	}
+	return 0
+}
+
 func hdSandwich(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells, sf *port.Cells, top int32, last int32, cnt int32) int32 {
 	// Is a body-styled numbered line a title standing BETWEEN paragraphs (D395): one short line, no marker on
 	// the line above or below it, and the line below it flush with it (a paragraph's first line, not the hanging
@@ -935,6 +1239,9 @@ func hdUnitScore(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells,
 	if ps == 0 {
 		sand = hdSandwich(wd, ln, et, ws, sf, top, last, cnt)
 	}
+	if hdContinues(wd, ln, et, ws, sf, top, last) == 1 {
+		return -1
+	}
 	s = HdMarker(wd, ln, et, ws, top)
 	pts = ps
 	if s > 0 {
@@ -950,6 +1257,11 @@ func hdUnitScore(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells,
 	var b int32 = style.StGet(sf, last, style.SfkBelow())
 	var gb int32 = style.StGet(sf, last, style.SfkGapBelow())
 	if (ps == 0) && (sp < 1) {
+		return -1
+	}
+	// D1620 (smoke A12): on a page of short lines (a receipt, an invoice, a form: no paragraph on it) a bold or capitalised
+	// line of the body's own size, no more apart from the line above it than the rest, is a label or a value, not a section
+	if (port.CellsAt(ws, wsForm) == 1) && ((s == 0) && ((sp < 1) && ((sz * 100) < (style.StHget(sf, style.SfhSize()) * 104)))) {
 		return -1
 	}
 	// a body-styled numbered line followed at the body's own line gap is a paragraph or a list item
@@ -2009,6 +2321,28 @@ func hdEmit(ln *port.Cells, hc *port.Cells, ws *port.Cells, sf *port.Cells, n in
 	return 0
 }
 
+func hdFormlike(sf *port.Cells, n int32) int32 {
+	// D1620: 1 when the document is a page of short lines: at least eight upright lines, and fewer than one in ten of them has
+	// six words (a sentence's worth). A receipt, an invoice and a form's labels are that; prose, a slide with its bullets and a
+	// newspaper column are not.
+	var l int32 = 0
+	var total int32 = 0
+	var prose int32 = 0
+	for l < n {
+		if style.StGet(sf, l, style.SfkUpright()) == 1 {
+			total += 1
+			if style.StGet(sf, l, style.SfkWords()) >= 6 {
+				prose += 1
+			}
+		}
+		l += 1
+	}
+	if (total >= 8) && ((prose * 10) < total) {
+		return 1
+	}
+	return 0
+}
+
 func HdAnalyze(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, sf *port.Cells, sc *port.Cells, hc *port.Cells, ws *port.Cells, tmp *port.Cells, pr *port.Cells, ptxt *port.Cells) int32 {
 	// Decide which lines are headings and at what level. `sf`, `sc`, `ws`, `tmp` are scratch, `hc` the answer
 	// (emptied first); `pr` and `ptxt` the priors (`hd-prior-add`), empty when there are none. Answers the
@@ -2039,6 +2373,7 @@ func HdAnalyze(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, s
 	if style.StHget(sf, style.SfhBody()) < 0 {
 		return 0
 	}
+	port.CellsSet(ws, wsForm, hdFormlike(sf, n))
 	l = 0
 	for l < n {
 		style.StSet(sf, l, style.SfkUnit(), -1)

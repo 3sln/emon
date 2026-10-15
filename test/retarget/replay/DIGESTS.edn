@@ -1,6 +1,6 @@
 ;; The SHA-256 of each replayed bundle (JSON, HTML, evidence) of test/retarget/replay/ID, as `bb retarget-record` made it (P7.4, D347).
 {"born-icdar-us-034"
- "9d7d690d1697bdbdfb6366351d0df8a4dff69b0f92813bdef9468eecea5342ce",
+ "1ff5813b48b15d516feb1e13178850e6d2e40631948c60e27709ea70c1ee12d2",
  "born-wm-gray-behind"
  "9674e6730bb7db5277a41244c382aa8c0c6a49fe07044a07fb70a402656cef89",
  "ovl-h-numbered"

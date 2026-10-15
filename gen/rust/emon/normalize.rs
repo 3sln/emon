@@ -165,6 +165,36 @@ pub(crate) fn nz_put_ligature(cp: i32, mut out: &mut crate::port::Cells) -> i32 
     }
     return 1;
 }
+pub(crate) fn nz_put_arabic(cp: i32, mut out: &mut crate::port::Cells) -> i32 {
+    // D1620: append the letters an Arabic presentation form (U+FB50..FDFF, U+FE70..FEFF) is the shaped glyph of and answer 1,
+    // or answer 0 and append nothing. NFKC on that range alone; each letter is then decomposed as any other code point is.
+    if (cp < 64336) || ((cp > 65023) && (cp < 65136)) {
+        return 0;
+    }
+    if cp > 65279 {
+        return 0;
+    }
+    let mut lo: i32 = 0;
+    let mut hi: i32 = 731 - 1;
+    let mut mid: i32 = 0;
+    let mut k: i32 = 0;
+    while lo <= hi {
+        mid = lo + ((hi - lo) / 2);
+        if cp < NF_ARAB[(mid * 3 + 0) as usize] {
+            hi = mid - 1;
+        } else if cp > NF_ARAB[(mid * 3 + 0) as usize] {
+            lo = mid + 1;
+        } else {
+            k = 0;
+            while k < NF_ARAB[(mid * 3 + 2) as usize] {
+                nz_put_full(NF_APOOL[(NF_ARAB[(mid * 3 + 1) as usize] + k) as usize], out);
+                k += 1;
+            }
+            return 1;
+        }
+    }
+    return 0;
+}
 pub(crate) fn nz_order(mut out: &mut crate::port::Cells, start: i32) -> i32 {
     // Canonical ordering of out[start..]: within each run of non-starters
     // (ccc != 0) a STABLE sort by ccc. An insertion sort: runs are a
@@ -207,6 +237,9 @@ pub fn nz_nfd(src: &mut crate::port::Cells, from: i32, to: i32, mut out: &mut cr
         }
         if (want_lig == 1) && (cp >= 64256) {
             lig = nz_put_ligature(cp, out);
+        }
+        if (want_lig == 1) && ((lig == 0) && (cp >= 64336)) {
+            lig = nz_put_arabic(cp, out);
         }
         if (lig == 0) && ((cp == 173) && (want_soft == 1)) {
             lig = 1;

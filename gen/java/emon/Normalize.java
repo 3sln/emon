@@ -166,6 +166,36 @@ public final class Normalize {
         }
         return 1;
     }
+    public static int nzPutArabic(int cp, emon.Port.Cells out) {
+        // D1620: append the letters an Arabic presentation form (U+FB50..FDFF, U+FE70..FEFF) is the shaped glyph of and answer 1,
+        // or answer 0 and append nothing. NFKC on that range alone; each letter is then decomposed as any other code point is.
+        if ((cp < 64336) || ((cp > 65023) && (cp < 65136))) {
+            return 0;
+        }
+        if (cp > 65279) {
+            return 0;
+        }
+        int lo = 0;
+        int hi = 731 - 1;
+        int mid = 0;
+        int k = 0;
+        while (lo <= hi) {
+            mid = lo + ((hi - lo) / 2);
+            if (cp < Nftable.NF_ARAB[mid * 3 + 0]) {
+                hi = mid - 1;
+            } else if (cp > Nftable.NF_ARAB[mid * 3 + 0]) {
+                lo = mid + 1;
+            } else {
+                k = 0;
+                while (k < Nftable.NF_ARAB[mid * 3 + 2]) {
+                    nzPutFull(Nftable.NF_APOOL[Nftable.NF_ARAB[mid * 3 + 1] + k], out);
+                    k += 1;
+                }
+                return 1;
+            }
+        }
+        return 0;
+    }
     public static int nzOrder(emon.Port.Cells out, int start) {
         // Canonical ordering of out[start..]: within each run of non-starters
         // (ccc != 0) a STABLE sort by ccc. An insertion sort: runs are a
@@ -208,6 +238,9 @@ public final class Normalize {
             }
             if ((wantLig == 1) && (cp >= 64256)) {
                 lig = nzPutLigature(cp, out);
+            }
+            if ((wantLig == 1) && ((lig == 0) && (cp >= 64336))) {
+                lig = nzPutArabic(cp, out);
             }
             if ((lig == 0) && ((cp == 173) && (wantSoft == 1))) {
                 lig = 1;

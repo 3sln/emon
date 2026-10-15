@@ -218,6 +218,25 @@ public final class Para {
         }
         return Evidence.wdGet(wd, d, Evidence.wfStyle());
     }
+    public static int paMixed(emon.Port.Cells wd, emon.Port.Cells ln, int l) {
+        // D1620: 1 when the line has words of more than one combination of bold, italic and mono: it is a line with a styled
+        // phrase in it, and `pa-style` (the style of its dominant word) is the style of the phrase or of the rest by a margin of
+        // one word. 0 for a line of one style.
+        int d = paDom(wd, ln, l);
+        int w0 = Evidence.lnGet(ln, l, Evidence.lhFirst());
+        int wn = Evidence.lnGet(ln, l, Evidence.lhCount());
+        int k = 0;
+        if (d < 0) {
+            return 0;
+        }
+        while (k < wn) {
+            if ((Evidence.wdGet(wd, w0 + k, Evidence.hdTlen()) > 0) && ((Evidence.wdGet(wd, w0 + k, Evidence.wfStyle()) & 67) != (Evidence.wdGet(wd, d, Evidence.wfStyle()) & 67))) {
+                return 1;
+            }
+            k += 1;
+        }
+        return 0;
+    }
     public static int paStart(emon.Port.Cells ln, int l) {
         // Where the line starts, as a distance that grows INWARD: x0 for a line that reads left to right,
         // minus x1 for one that reads right to left.
@@ -418,7 +437,93 @@ public final class Para {
         }
         return n;
     }
-    public static boolean paNewPar(emon.Port.Cells wd, emon.Port.Cells ln, int a, int b, int med, int margin, emon.Port.Cells hc) {
+    public static boolean paUnspaced(int cp) {
+        // A code point of a script set without spaces between words (P11.x2): Han (and the Kangxi radicals, which are folded
+        // to Han only after the join), kana, the CJK symbols and punctuation,
+        // the full-width and half-width forms. Hangul is not (it has spaces) and is left out.
+        if ((cp >= 11904) && (cp <= 12255)) {
+            return 1 == 1;
+        }
+        if ((cp >= 12288) && (cp <= 12543)) {
+            return 1 == 1;
+        }
+        if ((cp >= 13312) && (cp <= 19903)) {
+            return 1 == 1;
+        }
+        if ((cp >= 19968) && (cp <= 40959)) {
+            return 1 == 1;
+        }
+        if ((cp >= 63744) && (cp <= 64255)) {
+            return 1 == 1;
+        }
+        if ((cp >= 65280) && (cp < 65440)) {
+            return 1 == 1;
+        }
+        if ((cp > 65500) && (cp <= 65519)) {
+            return 1 == 1;
+        }
+        if ((cp >= 131072) && (cp <= 205743)) {
+            return 1 == 1;
+        }
+        return 0 == 1;
+    }
+    public static int paLastCp(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l, int back) {
+        // The code point `back` places from the end of line l's text (0 the last); -1 when there is none.
+        int w0 = Evidence.lnGet(ln, l, Evidence.lhFirst());
+        int k = Evidence.lnGet(ln, l, Evidence.lhCount()) - 1;
+        int left = back;
+        while (k >= 0) {
+            int ts = Evidence.wdGet(wd, w0 + k, Evidence.hdTstart());
+            int tl = Evidence.wdGet(wd, w0 + k, Evidence.hdTlen());
+            if ((ts >= 0) && (tl > 0)) {
+                if (left < tl) {
+                    return emon.Port.cellsAt(et, ts + ((tl - 1) - left));
+                }
+                left -= tl;
+            }
+            k -= 1;
+        }
+        return -1;
+    }
+    public static boolean paOpenEnd(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l) {
+        // D1620: does line l end inside a sentence: it has text, its last character is not a figure (a label and its value is a
+        // statement) or a mark that closes a sentence, with or without a closing bracket or quotation mark after the mark.
+        int c = paLastCp(wd, ln, et, l, 0);
+        if (c < 0) {
+            return 0 == 1;
+        }
+        if ((c >= 48) && (c <= 57)) {
+            return 0 == 1;
+        }
+        if ((c == 12301) || ((c == 12303) || ((c == 65289) || ((c == 12305) || ((c == 12299) || ((c == 12297) || ((c == 41) || ((c == 93) || ((c == 34) || ((c == 39) || ((c == 8221) || ((c == 8217) || (c == 187))))))))))))) {
+            c = paLastCp(wd, ln, et, l, 1);
+            if (c < 0) {
+                return 0 == 1;
+            }
+        }
+        return !paFinalMark(c);
+    }
+    public static boolean paUnfinished(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l) {
+        // D1620 (smoke B I-18): does line l end inside a sentence of a script set without spaces (Han, kana): its last character
+        // is one of them and no mark that closes a sentence, with or without a closing bracket or quotation mark after the mark.
+        if (!paUnspaced(paLastCp(wd, ln, et, l, 0))) {
+            return 0 == 1;
+        }
+        return paOpenEnd(wd, ln, et, l);
+    }
+    public static boolean paStyleDiffers(emon.Port.Cells wd, emon.Port.Cells ln, int a, int b, boolean open) {
+        // Do the dominant styles of lines a and b differ: a line with a bold phrase in it, when the sentence of line a goes on
+        // (`open`), is no different from the lines around it (D1620, smoke B I-2: it ended the paragraph, once above and once
+        // below). At the end of a sentence a bold label and its value that follow are a line of their own, as ever.
+        if (paStyle(wd, ln, a) == paStyle(wd, ln, b)) {
+            return 0 == 1;
+        }
+        if (open && ((paMixed(wd, ln, a) == 1) || (paMixed(wd, ln, b) == 1))) {
+            return 0 == 1;
+        }
+        return 1 == 1;
+    }
+    public static boolean paNewPar(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int a, int b, int med, int margin, emon.Port.Cells hc) {
         // Does line b, the next one on the page, start a paragraph after line a (D135). The heading analysis
         // (P4.4) decides first where it has an opinion: a heading is a block of its own (D167).
         int op = Heading.hdOpinion(hc, a, b);
@@ -452,8 +557,13 @@ public final class Para {
         int sa = paSize(wd, ln, a);
         int sb = paSize(wd, ln, b);
         int ds = sa - sb;
+        // A line of a script set without spaces that stops inside a sentence and whose next line is within 1.75 of its size of it,
+        // baseline to baseline, goes on there whatever the boxes say: the boxes of lines in several fonts are of several heights,
+        // and the whitespace between them is not the leading (D1620, the Wikipedia pages in Japanese).
         if (((g * PA_GAP_DEN) > (med * PA_GAP_NUM)) && (((g - med) * PA_TINY_DIV) > hb)) {
-            return 1 == 1;
+            if (!(paUnfinished(wd, ln, et, a) && (((paYmid2(ln, b) - paYmid2(ln, a)) * 2) <= (7 * sa)))) {
+                return 1 == 1;
+            }
         }
         if ((((paStart(ln, b) - paStart(ln, a)) * PA_INDENT_DIV) > sb) && (((paStart(ln, a) - margin) * PA_INDENT_DIV) <= sb) && (Lists.lsHang(hc, ln, a, b) == 0)) {
             return 1 == 1;
@@ -461,7 +571,8 @@ public final class Para {
         if ((paAbs(ds) * PA_SIZE_DIV) > sa) {
             return 1 == 1;
         }
-        if (paStyle(wd, ln, a) != paStyle(wd, ln, b)) {
+        boolean opened = paOpenEnd(wd, ln, et, a);
+        if (paStyleDiffers(wd, ln, a, b, opened)) {
             return 1 == 1;
         }
         return 0 == 1;
@@ -494,36 +605,6 @@ public final class Para {
             k += 1;
         }
         return -1;
-    }
-    public static boolean paUnspaced(int cp) {
-        // A code point of a script set without spaces between words (P11.x2): Han (and the Kangxi radicals, which are folded
-        // to Han only after the join), kana, the CJK symbols and punctuation,
-        // the full-width and half-width forms. Hangul is not (it has spaces) and is left out.
-        if ((cp >= 11904) && (cp <= 12255)) {
-            return 1 == 1;
-        }
-        if ((cp >= 12288) && (cp <= 12543)) {
-            return 1 == 1;
-        }
-        if ((cp >= 13312) && (cp <= 19903)) {
-            return 1 == 1;
-        }
-        if ((cp >= 19968) && (cp <= 40959)) {
-            return 1 == 1;
-        }
-        if ((cp >= 63744) && (cp <= 64255)) {
-            return 1 == 1;
-        }
-        if ((cp >= 65280) && (cp < 65440)) {
-            return 1 == 1;
-        }
-        if ((cp > 65500) && (cp <= 65519)) {
-            return 1 == 1;
-        }
-        if ((cp >= 131072) && (cp <= 205743)) {
-            return 1 == 1;
-        }
-        return 0 == 1;
     }
     public static int paJoin(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells raw, int l) {
         // What goes between the text so far and the line l: nothing after a soft hyphen (which goes), nothing
@@ -1458,7 +1539,7 @@ public final class Para {
         if (paMarker(wd, ln, et, b)) {
             pts += JS_MARKER;
         }
-        if (((paAbs(sa - sb) * PA_SIZE_DIV) > sa) || (paStyle(wd, ln, a) != paStyle(wd, ln, b))) {
+        if (((paAbs(sa - sb) * PA_SIZE_DIV) > sa) || paStyleDiffers(wd, ln, a, b, !paEndsSentence(raw))) {
             pts += JS_STYLE;
         }
         if ((Evidence.lnGet(ln, a, Evidence.lhFirst()) + Evidence.lnGet(ln, a, Evidence.lhCount())) == Evidence.lnGet(ln, b, Evidence.lhFirst())) {
@@ -1539,7 +1620,7 @@ public final class Para {
             int b = emon.Port.cellsAt(lo, first + i);
             // a line a table holds stays the table's cell (D504)
             if (Table.tbClaimed(ln, b) == 0) {
-                if ((Initial.inRow(ln, b) >= 0) || paNewPar(wd, ln, prev, b, med, mg, hc)) {
+                if ((Initial.inRow(ln, b) >= 0) || paNewPar(wd, ln, et, prev, b, med, mg, hc)) {
                     paFlush(nodes, attrs, regions, text, raw, tmp, fr, al, hc, note);
                     paFragOpen(fr, ln, page, b, 0);
                     paIniStart(wd, ln, et, raw, fr, ii, b);
@@ -1827,7 +1908,7 @@ public final class Para {
                         while (cont < cnt) {
                             b = emon.Port.cellsAt(lo, first + cont);
                             if (Table.tbClaimed(lt, b) == 0) {
-                                if ((Initial.inRow(lt, b) >= 0) || (paNewPar(wd, lt, prev, b, med, mg, hc) || Table.tbDue(tb, tcur, p, paYmid2(lt, b)))) {
+                                if ((Initial.inRow(lt, b) >= 0) || (paNewPar(wd, lt, et, prev, b, med, mg, hc) || Table.tbDue(tb, tcur, p, paYmid2(lt, b)))) {
                                     ty = Evidence.lnGet(lt, b, Evidence.lhY0());
                                     pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, i, ty, hc);
                                     tcur = paTables(tb, tcur, p, paYmid2(lt, b), wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);

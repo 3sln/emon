@@ -1314,6 +1314,54 @@ public static class Pdfcontent {
         }
         return Evidence.EvAngle((int) x, (int) y);
     }
+    public static int PcPua(int cp) {
+        // D1620: the private-use code points of Adobe's Symbol font (U+F8E5..U+F8FE), which TeX's glyph-to-Unicode lists give the
+        // big brackets, braces and parentheses and the extension pieces of a tall delimiter (CMEX10), are the characters Unicode
+        // later gave them (U+239B..U+23AF, U+23D0, the serif signs). Every other code point is itself.
+        if ((cp < 63717) || (cp > 63742)) {
+            return cp;
+        }
+        if (cp == 63717) {
+            return 9135;
+        }
+        if (cp == 63718) {
+            return 9168;
+        }
+        if (cp == 63719) {
+            return 9135;
+        }
+        if (cp == 63720) {
+            return 174;
+        }
+        if (cp == 63721) {
+            return 169;
+        }
+        if (cp == 63722) {
+            return 8482;
+        }
+        if (cp <= 63725) {
+            return 9115 + (cp - 63723);
+        }
+        if (cp <= 63728) {
+            return 9121 + (cp - 63726);
+        }
+        if (cp <= 63731) {
+            return 9127 + (cp - 63729);
+        }
+        if (cp == 63732) {
+            return 9130;
+        }
+        if (cp == 63733) {
+            return 9134;
+        }
+        if (cp <= 63736) {
+            return 9118 + (cp - 63734);
+        }
+        if (cp <= 63739) {
+            return 9124 + (cp - 63737);
+        }
+        return 9131 + (cp - 63740);
+    }
     internal static int PcGlyph(emon.Port.Cells cx, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, int code, int ncode) {
         // One shown glyph: look the code up, put its cell in page space, record it,
         // advance the text position by its width, the character and word spacing.
@@ -1360,7 +1408,7 @@ public static class Pdfcontent {
             }
         }
         if (cnt > 0) {
-            cp0 = PcFCp(f0, f1, f2, f3, slot, 0);
+            cp0 = PcPua(PcFCp(f0, f1, f2, f3, slot, 0));
         }
         // A composite font's ToUnicode may say U+0000 or U+FFFD for a glyph it has no value
         // for (Skia does, for the parts of a Devanagari conjunct): that is no value.
@@ -1479,7 +1527,7 @@ public static class Pdfcontent {
         if (cnt > 1) {
             i = 0;
             while (i < cnt) {
-                idx = Evidence.EtxAppendCp(et, PcFCp(f0, f1, f2, f3, slot, i));
+                idx = Evidence.EtxAppendCp(et, PcPua(PcFCp(f0, f1, f2, f3, slot, i)));
                 if (i == 0) {
                     tstart = idx;
                 }
@@ -3674,9 +3722,47 @@ public static class Pdfcontent {
         }
         return Evidence.GlGet(gl, j, Evidence.GfBy0());
     }
+    internal static int PcAbs(int v) {
+        if (v < 0) {
+            return 0 - v;
+        }
+        return v;
+    }
+    internal static int PcSheared(emon.Port.Cells gl, int j, int axis) {
+        // D1620: 1 when glyph j's box is longer along the writing axis than its baseline segment: the text matrix has a shear term
+        // (a synthetic italic: `12 0 4.1041 12 x y Tm`), which leans the cell and makes its axis-aligned box overhang by the shear
+        // times the cell's height, on both sides. 0 for the axes a box measures right (and for the others).
+        // A glyph with no baseline segment of length (a zero-width mark, or evidence made by hand) is never sheared.
+        int bx = PcAbs(Evidence.GlGet(gl, j, Evidence.GfBx1()) - Evidence.GlGet(gl, j, Evidence.GfBx0()));
+        int by = PcAbs(Evidence.GlGet(gl, j, Evidence.GfBy1()) - Evidence.GlGet(gl, j, Evidence.GfBy0()));
+        if ((axis == 0) || (axis == 2)) {
+            if ((bx > 0) && (((Evidence.GlGet(gl, j, Evidence.ChX1()) - Evidence.GlGet(gl, j, Evidence.ChX0())) - bx) > 1)) {
+                return 1;
+            }
+        }
+        if ((axis == 1) || (axis == 3)) {
+            if ((by > 0) && (((Evidence.GlGet(gl, j, Evidence.ChY1()) - Evidence.GlGet(gl, j, Evidence.ChY0())) - by) > 1)) {
+                return 1;
+            }
+        }
+        return 0;
+    }
     internal static int PcGap(emon.Port.Cells gl, int p, int g, int axis) {
         // The space along the axis between glyph p and the glyph g after it
-        // (negative when they overlap or g is before p).
+        // (negative when they overlap or g is before p). Between leaning glyphs (a shear term in the text matrix) it is the space
+        // between the end of p's baseline segment and the origin of g's, which their boxes only measure when they are upright.
+        if ((PcSheared(gl, p, axis) == 1) || (PcSheared(gl, g, axis) == 1)) {
+            if (axis == 0) {
+                return Evidence.GlGet(gl, g, Evidence.GfBx0()) - Evidence.GlGet(gl, p, Evidence.GfBx1());
+            }
+            if (axis == 2) {
+                return Evidence.GlGet(gl, p, Evidence.GfBx1()) - Evidence.GlGet(gl, g, Evidence.GfBx0());
+            }
+            if (axis == 1) {
+                return Evidence.GlGet(gl, p, Evidence.GfBy1()) - Evidence.GlGet(gl, g, Evidence.GfBy0());
+            }
+            return Evidence.GlGet(gl, g, Evidence.GfBy0()) - Evidence.GlGet(gl, p, Evidence.GfBy1());
+        }
         if (axis == 0) {
             return Evidence.GlGet(gl, g, Evidence.ChX0()) - Evidence.GlGet(gl, p, Evidence.ChX1());
         }
@@ -3772,6 +3858,93 @@ public static class Pdfcontent {
         }
         return 0;
     }
+    internal static int PcAccent(int cp) {
+        // D1620: the combining mark a spacing diacritic stands for when it is drawn over a letter (TeX draws an umlaut as the glyph
+        // dieresis, then the u under it): the dieresis, acute, grave, macron, cedilla, circumflex, caron, breve, dot above, ring,
+        // ogonek, small tilde and double acute. 0 for anything else.
+        if (cp == 168) {
+            return 776;
+        }
+        if (cp == 180) {
+            return 769;
+        }
+        if (cp == 96) {
+            return 768;
+        }
+        if (cp == 175) {
+            return 772;
+        }
+        if (cp == 184) {
+            return 807;
+        }
+        if (cp == 710) {
+            return 770;
+        }
+        if (cp == 711) {
+            return 780;
+        }
+        if (cp == 728) {
+            return 774;
+        }
+        if (cp == 729) {
+            return 775;
+        }
+        if (cp == 730) {
+            return 778;
+        }
+        if (cp == 731) {
+            return 808;
+        }
+        if (cp == 732) {
+            return 771;
+        }
+        if (cp == 733) {
+            return 779;
+        }
+        return 0;
+    }
+    internal static int PcAccentOver(emon.Port.Cells gl, int p, int g) {
+        // D1620: the combining mark that glyph p is when it is a spacing diacritic standing over glyph g, a letter drawn right
+        // after it: both upright and of one rotation, no text of their own beyond the one code point, and the middle of the diacritic
+        // within the letter's width (Muller is M, the dieresis, then uller backed up under it). 0 when it is not.
+        int comb = PcAccent(Evidence.GlGet(gl, p, Evidence.ChCp()));
+        int cx2 = Evidence.GlGet(gl, p, Evidence.ChX0()) + Evidence.GlGet(gl, p, Evidence.ChX1());
+        if (comb == 0) {
+            return 0;
+        }
+        if (Evidence.GlGet(gl, p, Evidence.ChTstart()) >= 0) {
+            return 0;
+        }
+        if (Evidence.GlGet(gl, g, Evidence.ChTstart()) >= 0) {
+            return 0;
+        }
+        if (Bidi.BdStrong(Evidence.GlGet(gl, g, Evidence.ChCp())) != 2) {
+            return 0;
+        }
+        if (PcAxis(Evidence.GlGet(gl, p, Evidence.GfRot())) != 0) {
+            return 0;
+        }
+        if (PcRotSame(Evidence.GlGet(gl, p, Evidence.GfRot()), Evidence.GlGet(gl, g, Evidence.GfRot())) == 0) {
+            return 0;
+        }
+        if (Evidence.GlGet(gl, p, Evidence.GfVis()) != Evidence.GlGet(gl, g, Evidence.GfVis())) {
+            return 0;
+        }
+        if (cx2 < (2 * Evidence.GlGet(gl, g, Evidence.ChX0()))) {
+            return 0;
+        }
+        if (cx2 > (2 * Evidence.GlGet(gl, g, Evidence.ChX1()))) {
+            return 0;
+        }
+        return comb;
+    }
+    internal static int PcAccentPair(emon.Port.Cells gl, int j, int glst) {
+        // The combining mark glyph j is when it is a spacing diacritic over glyph j+1, which is in the same word (j+1 <= glst); else 0.
+        if (j >= glst) {
+            return 0;
+        }
+        return PcAccentOver(gl, j, j + 1);
+    }
     internal static int PcContinues(emon.Port.Cells gl, int p, int g) {
         // 1 when glyph g continues the word glyph p is in: the same rotation, on the
         // same baseline (to 45 percent of the size: sub- and superscripts stay), and
@@ -3793,6 +3966,10 @@ public static class Pdfcontent {
         }
         if (PcHiddenMode(Evidence.GlGet(gl, p, Evidence.GfMode())) != PcHiddenMode(Evidence.GlGet(gl, g, Evidence.GfMode()))) {
             return 0;
+        }
+        // A spacing diacritic over the letter drawn right after it is part of that letter's word (D1620).
+        if (PcAccentOver(gl, p, g) > 0) {
+            return 1;
         }
         if (sizep > sz) {
             sz = sizep;
@@ -3942,8 +4119,16 @@ public static class Pdfcontent {
         if (rtlw == 0) {
             j = gfst;
             while (j <= glst) {
-                PcGlyphOut(et, gl, j, 2);
-                j += 1;
+                // a spacing diacritic over the next letter of the word is written AFTER the letter, as the combining mark (D1620)
+                cl = PcAccentPair(gl, j, glst);
+                if (cl > 0) {
+                    PcGlyphOut(et, gl, j + 1, 2);
+                    Evidence.EtxAppendCp(et, cl);
+                    j += 2;
+                } else {
+                    PcGlyphOut(et, gl, j, 2);
+                    j += 1;
+                }
             }
         } else {
             tstart = PcBidiText(et, gl, gfst, glst);

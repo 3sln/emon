@@ -25,7 +25,7 @@
                                 page-layout-count page-layout-first layout-band layout-col layout-role layout-x0]]
             [emon.json :refer [js-emit]]
             [emon.html :refer [html-emit]]
-            [emon.evidence :refer [wd-new wd-set wd-get wd-count ln-new wf-size wf-font hd-x0 hd-x1]]
+            [emon.evidence :refer [wd-new wd-set wd-get wd-count ln-new wf-size wf-font wf-style hd-x0 hd-x1]]
             [emon.pdfdoc :refer [pd-open]]
             [emon.pdfcontent :refer [pc-document]]
             [emon.para :refer [pa-pages pa-build pa-dump]]
@@ -273,6 +273,55 @@
     (pt-brief t4 nodes regions text)
     (assert-text t4 "P1:left col;P1:right col;" "two lines on one row are two paragraphs")))
 
+(defn ^I32 pt-bold-words [^:mut ^Cells wd ^I32 w0 ^I32 from ^I32 to]
+  (comment "Words from..to (counted from the word w0, a line's first) are bold (style bit 1).")
+  (let [^:mut ^I32 k from]
+    (while (< k to)
+      (do (wd-set wd (+ w0 k) (wf-style) 1)
+          (set k (+ k 1))))
+    (return 0)))
+
+(deftest test-a-line-with-a-bold-phrase-in-it-does-not-end-the-paragraph
+  (comment "D1620 (smoke B I-2): the style of a line is the style of its dominant word, so a line of which most is bold differed from")
+  (comment "the regular lines above and below it and a paragraph ended at each. A line that holds both is a line of the paragraph;")
+  (comment "a line that is bold all through still ends it.")
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp (new-cells) ^Cells fr (new-cells)
+        ^Cells gp (new-cells) ^Cells st (new-cells)
+        ^Text t1 (new-text) ^Text t2 (new-text) ^Text t3 (new-text)
+        ^:mut ^I32 w0 0]
+    (pt-line wd ln et (text-blob "thank you very much for downloading") 1 7200 10000 50000 11200 0 0 1000)
+    (set w0 (wd-count wd))
+    (pt-line wd ln et (text-blob "answers for elementary statistics and more") 1 7200 11500 50000 12700 0 0 1000)
+    (pt-bold-words wd w0 0 5)
+    (pt-line wd ln et (text-blob "have knowledge that people have looked") 1 7200 13000 50000 14200 0 0 1000)
+    (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "mixed: well formed")
+    (pt-brief t1 nodes regions text)
+    (assert-text t1 "P1:thank you very much for downloading answers for elementary statistics and more have knowledge that people have looked;"
+                 "a bold phrase is not a change of style")
+    (pt-clear wd ln et)
+    (pt-line wd ln et (text-blob "thank you very much for downloading") 1 7200 10000 50000 11200 0 0 1000)
+    (set w0 (wd-count wd))
+    (pt-line wd ln et (text-blob "answers for elementary statistics") 1 7200 11500 50000 12700 0 0 1000)
+    (pt-bold-words wd w0 0 4)
+    (pt-line wd ln et (text-blob "have knowledge that people have looked") 1 7200 13000 50000 14200 0 0 1000)
+    (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "bold: well formed")
+    (pt-brief t2 nodes regions text)
+    (assert-text t2 "P1:thank you very much for downloading;P1:answers for elementary statistics;P1:have knowledge that people have looked;"
+                 "a line bold all through is a line of its own")
+    (comment "a bold label and its value, after a line that ends in a figure: the line of a statement, not the rest of a sentence")
+    (pt-clear wd ln et)
+    (pt-line wd ln et (text-blob "Statement period 01 Mar 2026 31 Mar 2026") 1 7200 10000 50000 11200 0 0 1000)
+    (set w0 (wd-count wd))
+    (pt-line wd ln et (text-blob "Opening balance 4,210.55") 1 7200 11500 50000 12700 0 0 1000)
+    (pt-bold-words wd w0 0 2)
+    (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "label: well formed")
+    (pt-brief t3 nodes regions text)
+    (assert-text t3 "P1:Statement period 01 Mar 2026 31 Mar 2026;P1:Opening balance 4,210.55;"
+                 "a line of a label and a value after a figure is a line of its own")))
+
 ;; ------------------------------------------------------------------ the order
 
 (deftest test-lines-are-read-top-to-bottom-whatever-order-they-were-painted
@@ -353,6 +402,40 @@
     (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "hangul: well formed")
     (pt-brief t3 nodes regions text)
     (assert-text t3 "P1:the report 안녕하세요 세계 end;" "Hangul and Latin keep the space")))
+
+(deftest test-lines-of-cjk-that-stop-inside-a-sentence-are-one-paragraph-whatever-the-boxes-say
+  (comment "D1620 (smoke B I-18): the lines of a page set in several fonts have boxes of several heights (three of these are 24 pt tall")
+  (comment "in a 12 pt line, as the Wikipedia pages in Japanese are), so the whitespace between two ordinary lines is more than")
+  (comment "the document's lower quartile of it, which is negative, and a paragraph ended at every such line. The baselines are 16.5 pt")
+  (comment "apart all the way; a line that stops in a sentence (no 。 ！ ？) is followed by the line that finishes it.")
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp (new-cells) ^Cells fr (new-cells)
+        ^Cells gp (new-cells) ^Cells st (new-cells)
+        ^Text t1 (new-text) ^Text t2 (new-text)]
+    (pt-line wd ln et (text-blob "成为本地区最大的机构之") 1 7200 10000 50000 10912 0 0 1200)
+    (pt-line wd ln et (text-blob "一，并且在许多国家和地") 1 7200 10162 50000 12562 0 0 1200)
+    (pt-line wd ln et (text-blob "区设有分支机构，主要负") 1 7200 11812 50000 14212 0 0 1200)
+    (pt-line wd ln et (text-blob "责推动教育和科学研究") 1 7200 13462 50000 15862 0 0 1200)
+    (pt-line wd ln et (text-blob "的合作项目与交流活动") 1 7200 16600 50000 17512 0 0 1200)
+    (pt-line wd ln et (text-blob "等等。") 1 7200 18250 50000 19162 0 0 1200)
+    (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "open: well formed")
+    (pt-brief t1 nodes regions text)
+    (assert-text t1 "P1:成为本地区最大的机构之一，并且在许多国家和地区设有分支机构，主要负责推动教育和科学研究的合作项目与交流活动等等。;"
+                 "six lines, one paragraph")
+    (comment "the same geometry, the fourth line ending its sentence: the paragraph ends there")
+    (pt-clear wd ln et)
+    (pt-line wd ln et (text-blob "成为本地区最大的机构之") 1 7200 10000 50000 10912 0 0 1200)
+    (pt-line wd ln et (text-blob "一，并且在许多国家和地") 1 7200 10162 50000 12562 0 0 1200)
+    (pt-line wd ln et (text-blob "区设有分支机构，主要负") 1 7200 11812 50000 14212 0 0 1200)
+    (pt-line wd ln et (text-blob "责推动教育和科学研究。") 1 7200 13462 50000 15862 0 0 1200)
+    (pt-line wd ln et (text-blob "的合作项目与交流活动") 1 7200 16600 50000 17512 0 0 1200)
+    (pt-line wd ln et (text-blob "等等。") 1 7200 18250 50000 19162 0 0 1200)
+    (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "closed: well formed")
+    (pt-brief t2 nodes regions text)
+    (assert-text t2 "P1:成为本地区最大的机构之一，并且在许多国家和地区设有分支机构，主要负责推动教育和科学研究。;P1:的合作项目与交流活动等等。;"
+                 "a sentence that ends ends the paragraph when the lines are apart")))
 
 ;; ------------------------------------------------------------- across a page's end
 

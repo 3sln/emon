@@ -8,6 +8,7 @@ public final class Heading {
     public static final int HD_MIN = 4;
     public static final int HD_MAXLINES = 4;
     public static final int HD_MAXCPS = 160;
+    public static final int HD_PURE = 85;
     public static final int W_DEPTH = 20;
     public static final int W_PRIOR = 20;
     public static final int W_SKIP = 4;
@@ -42,6 +43,7 @@ public final class Heading {
         return 5;
     }
     public static final int WS_VAR = 8;
+    public static final int WS_FORM = 15;
     public static final int WS_LINES = 24;
     public static final int WS_HK = 64;
     public static final int HK_STRIDE = 12;
@@ -354,8 +356,12 @@ public final class Heading {
             }
             i += 1;
         }
+        // a number in brackets of three digits or more is an area code (`(202) 691-5902`), not an item's
         if (dig == (n - 2)) {
-            return 1;
+            if (dig <= 2) {
+                return 1;
+            }
+            return 0;
         }
         return hdLetters(wd, et, w, 1, n - 2);
     }
@@ -391,6 +397,147 @@ public final class Heading {
         }
         return 0;
     }
+    public static int hdKcaps(emon.Port.Cells wd, emon.Port.Cells et, int w) {
+        // 1 when the word has no lower case letter (a keyword in capitals: `NET`, `CHAPTER`).
+        int n = hdWl(wd, w);
+        int i = 0;
+        while (i < n) {
+            if (Style.stLower(hdWc(wd, et, w, i))) {
+                return 0;
+            }
+            i += 1;
+        }
+        return 1;
+    }
+    public static int hdFrac2(emon.Port.Cells wd, emon.Port.Cells et, int w) {
+        // 1 when the word is a number of two dotted components whose second is exactly two digits: `79.36`, `100.00`, an
+        // amount in cents (an outline's `1.10` is one too, which is why the caller asks for capitals).
+        int n = hdWl(wd, w);
+        if ((n < 4) || ((hdDec(wd, et, w) % 64) != 2)) {
+            return 0;
+        }
+        if (hdDec(wd, et, w) == (2 + 64)) {
+            return 0;
+        }
+        if (hdWc(wd, et, w, n - 3) != 46) {
+            return 0;
+        }
+        if ((hdWc(wd, et, w, n - 1) >= 48) && (hdWc(wd, et, w, n - 1) <= 57)) {
+            if ((hdWc(wd, et, w, n - 2) >= 48) && (hdWc(wd, et, w, n - 2) <= 57)) {
+                return 1;
+            }
+        }
+        return 0;
+    }
+    public static int hdSplitDecimal(emon.Port.Cells wd, emon.Port.Cells et, int w, int w2) {
+        // 1 when the word is a whole number with a point at its end and the next word is one to three digits: an amount whose cents
+        // the engine put in a word of their own (`79.` `36`).
+        if (w2 < 0) {
+            return 0;
+        }
+        int n = hdWl(wd, w);
+        int n2 = hdWl(wd, w2);
+        if (hdDec(wd, et, w) != (1 + 64)) {
+            return 0;
+        }
+        if (hdWc(wd, et, w, n - 1) != 46) {
+            return 0;
+        }
+        if ((hdDec(wd, et, w2) == 1) && (n2 <= 3)) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int hdFigureWord(emon.Port.Cells wd, emon.Port.Cells et, int w) {
+        // 1 when the word is a figure: two digits or more, and between or around them only the marks , . / : - $ % (a date, an
+        // amount, a telephone number, a postcode).
+        int n = hdWl(wd, w);
+        int i = 0;
+        int digs = 0;
+        int ok = 1;
+        while ((i < n) && (ok == 1)) {
+            int c = hdWc(wd, et, w, i);
+            if ((c >= 48) && (c <= 57)) {
+                digs += 1;
+            } else if ((c == 44) || ((c == 46) || ((c == 47) || ((c == 58) || ((c == 45) || ((c == 36) || (c == 37))))))) {
+                ok = 1;
+            } else {
+                ok = 0;
+            }
+            i += 1;
+        }
+        if ((ok == 1) && (digs >= 2)) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int hdAddressLike(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l) {
+        // D1620: 1 when a line that opens with a bare number (no point, bracket or colon after it) is a street number, a quantity or
+        // a price rather than a section's number: the number has three digits (`567 Ortiz Valley`), or a figure (`Suite 979`,
+        // `9,000`) follows it, or a word that is not the last ends in a comma (`88 ROAD WAN CHAI, HONG KONG`).
+        int w0 = hdNthWord(wd, ln, l, 0);
+        int first = Evidence.lnGet(ln, l, Evidence.lhFirst());
+        int end = first + Evidence.lnGet(ln, l, Evidence.lhCount());
+        int w = w0 + 1;
+        if (w0 < 0) {
+            return 0;
+        }
+        if (hdWl(wd, w0) >= 3) {
+            return 1;
+        }
+        while (w < end) {
+            int n = hdWl(wd, w);
+            if (n > 0) {
+                if (hdFigureWord(wd, et, w) == 1) {
+                    return 1;
+                }
+                if ((hdWc(wd, et, w, n - 1) == 44) && ((w + 1) < end)) {
+                    return 1;
+                }
+            }
+            w += 1;
+        }
+        return 0;
+    }
+    public static int hdFiguresAfter(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l, int k) {
+        // How many words of line l from its k-th word on are figures (`hd-figure-word`).
+        int first = Evidence.lnGet(ln, l, Evidence.lhFirst());
+        int end = first + Evidence.lnGet(ln, l, Evidence.lhCount());
+        int w = first;
+        int seen = 0;
+        int n = 0;
+        while (w < end) {
+            if (hdWl(wd, w) > 0) {
+                if (seen >= k) {
+                    if (hdFigureWord(wd, et, w) == 1) {
+                        n += 1;
+                    }
+                }
+                seen += 1;
+            }
+            w += 1;
+        }
+        return n;
+    }
+    public static int hdPronoun(emon.Port.Cells wd, emon.Port.Cells et, int w2) {
+        // 1 when the word after a lone `I` says it is the English pronoun, not a Roman numeral: it starts in lower case or has an
+        // apostrophe in it (`Series I Don't Want`, `Series I think`). A line that stops at the `I` is a numeral.
+        if (w2 < 0) {
+            return 0;
+        }
+        int n = hdWl(wd, w2);
+        int i = 0;
+        if (Style.stLower(hdWc(wd, et, w2, 0))) {
+            return 1;
+        }
+        while (i < n) {
+            if ((hdWc(wd, et, w2, i) == 39) || (hdWc(wd, et, w2, i) == 8217)) {
+                return 1;
+            }
+            i += 1;
+        }
+        return 0;
+    }
     public static int hdMarker(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells ws, int l) {
         // Does line l start with a numbering pattern? The scheme (0 none), and in ws[0..4]: scheme, depth (the
         // dotted components of a decimal number, 0 for a letter or a roman), where the number is in the line's
@@ -414,6 +561,10 @@ public final class Heading {
         int n0 = hdWl(wd, w0);
         int d = hdDec(wd, et, w0);
         // decimal: 1  1.  1.2.3  2)
+        // a bare number that is a street number, a quantity or a price is no heading's (D1620)
+        if ((d == 1) && (hdAddressLike(wd, ln, et, l) == 1)) {
+            return 0;
+        }
         if (d > 0) {
             emon.Port.cellsSet(ws, 0, 1);
             emon.Port.cellsSet(ws, 1, d % 64);
@@ -470,6 +621,18 @@ public final class Heading {
             int d2 = hdDec(wd, et, w1);
             int r = hdLetters(wd, et, w1, 0, n1);
             int tot = (n0 + 1) + n1;
+            // a label in capitals and an amount (`NET 79.36`, `TENDER 100.00`), or an amount split at its point (`79.` `36`), is
+            // no keyword and number (D1620): the number would be written apart from the text and the point lost with it
+            if ((hdKcaps(wd, et, w0) == 1) && (hdFrac2(wd, et, w1) == 1)) {
+                return 0;
+            }
+            // a keyword and a number followed by two figures or more (`Period 01 Jan 2024 to 31 Mar 2024 ...`) is a row of data
+            if (hdFiguresAfter(wd, ln, et, l, 2) >= 2) {
+                return 0;
+            }
+            if (hdSplitDecimal(wd, et, w1, w2) == 1) {
+                return 0;
+            }
             if (d2 > 0) {
                 emon.Port.cellsSet(ws, 0, 6);
                 emon.Port.cellsSet(ws, 1, d2 % 64);
@@ -481,6 +644,9 @@ public final class Heading {
                 return 6;
             }
             // a roman numeral, or a lone capital letter only when the line stops there (`Appendix A`)
+            if ((r == 2) && ((n1 == 1) && (hdPronoun(wd, et, w2) == 1))) {
+                return 0;
+            }
             if ((r == 2) || ((r == 4) && (w2 < 0))) {
                 emon.Port.cellsSet(ws, 0, 6);
                 emon.Port.cellsSet(ws, 1, 0);
@@ -516,6 +682,7 @@ public final class Heading {
         int bbits = Style.scGet(sc, body, Style.sckBits());
         int col = Style.stGet(sf, l, Style.sfkColor());
         int bcol = Style.scGet(sc, body, Style.sckColor());
+        int pure = Style.stGet(sf, l, Style.sfkPure());
         int p = 0;
         int weight = 0;
         if (((bits & 64) != 0) && ((bbits & 64) == 0)) {
@@ -527,7 +694,9 @@ public final class Heading {
         if ((sz * 100) >= (bsz * 120)) {
             p += 1;
         }
-        if (((bits & 1) != 0) && ((bbits & 1) == 0)) {
+        // D1620: a line that is only partly bold (or italic) has the style of its bold words, but it is a line with a bold phrase
+        // in it, not a bold line: the weight says nothing then (the phrase is an inline span of the paragraph it is in)
+        if (((bits & 1) != 0) && (((bbits & 1) == 0) && (pure >= HD_PURE))) {
             p += 3;
             weight = 1;
         }
@@ -535,7 +704,7 @@ public final class Heading {
             p += 2;
             weight = 1;
         }
-        if (((bits & 2) != 0) && ((bbits & 2) == 0)) {
+        if (((bits & 2) != 0) && (((bbits & 2) == 0) && (pure >= HD_PURE))) {
             p += 1;
         }
         if ((col >= 0) && ((bcol >= 0) && (col != bcol))) {
@@ -563,6 +732,32 @@ public final class Heading {
             return 0;
         }
         return emon.Port.cellsAt(ws, 5);
+    }
+    public static int hdOpensFigure(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l) {
+        // 1 when line l is the data of a row rather than a title: its first word is a figure (`hd-figure-word`), or it has two
+        // figures, or a word that is not its last ends in a comma (an address).
+        int w = hdNthWord(wd, ln, l, 0);
+        int first = Evidence.lnGet(ln, l, Evidence.lhFirst());
+        int end = first + Evidence.lnGet(ln, l, Evidence.lhCount());
+        int j = first;
+        int n = 0;
+        if (w < 0) {
+            return 0;
+        }
+        if (hdFigureWord(wd, et, w) == 1) {
+            return 1;
+        }
+        if (hdFiguresAfter(wd, ln, et, l, 0) >= 2) {
+            return 1;
+        }
+        while (j < end) {
+            n = hdWl(wd, j);
+            if ((n > 0) && (((j + 1) < end) && (hdWc(wd, et, j, n - 1) == 44))) {
+                return 1;
+            }
+            j += 1;
+        }
+        return 0;
     }
     public static int hdPartner(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells ws, emon.Port.Cells sf, int l) {
         // The line that is the other half of line l's heading line, or -1: l and its one sibling on the row are
@@ -597,6 +792,14 @@ public final class Heading {
                 return -1;
             }
         } else if (Style.stGet(sf, q, Style.sfkX0()) >= Style.stGet(sf, l, Style.sfkX0())) {
+            return -1;
+        }
+        // a title that opens with a figure (an amount, a date, a reference) is a row's data after its line number (D1620)
+        if (lm == 1) {
+            if (hdOpensFigure(wd, ln, et, q) == 1) {
+                return -1;
+            }
+        } else if (hdOpensFigure(wd, ln, et, l) == 1) {
             return -1;
         }
         return q;
@@ -773,6 +976,93 @@ public final class Heading {
         }
         return 0;
     }
+    public static int hdTail(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l, int back) {
+        // The code point `back` places from the end of line l's text (0 the last, 1 the one before it); -1 when there is none.
+        int w0 = Evidence.lnGet(ln, l, Evidence.lhFirst());
+        int wn = Evidence.lnGet(ln, l, Evidence.lhCount());
+        int k = wn - 1;
+        int left = back;
+        while (k >= 0) {
+            int tl = hdWl(wd, w0 + k);
+            if (tl > 0) {
+                if (left < tl) {
+                    return hdWc(wd, et, w0 + k, (tl - 1) - left);
+                }
+                left -= tl;
+            }
+            k -= 1;
+        }
+        return -1;
+    }
+    public static int hdStop(int c) {
+        // A mark that ends a sentence or a statement: . ! ? : an ellipsis, the CJK full stops. Not a comma or a semicolon.
+        if ((c == 46) || ((c == 33) || ((c == 63) || ((c == 58) || ((c == 8230) || ((c == 12290) || ((c == 65281) || ((c == 65311) || ((c == 65294) || (c == 65306)))))))))) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int hdLineClosed(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l) {
+        // D1620: 1 when line l ends a sentence or a statement (a stop, after any closing quote or bracket; or a figure: a
+        // label and its value), or has no text; 0 when its sentence goes on to the next line.
+        int c = hdTail(wd, ln, et, l, 0);
+        if (c < 0) {
+            return 1;
+        }
+        if ((c >= 48) && (c <= 57)) {
+            return 1;
+        }
+        if ((c == 41) || ((c == 93) || ((c == 125) || ((c == 34) || ((c == 39) || ((c == 8221) || ((c == 8217) || ((c == 187) || (c == 12301))))))))) {
+            c = hdTail(wd, ln, et, l, 1);
+            if (c < 0) {
+                return 1;
+            }
+        }
+        return hdStop(c);
+    }
+    public static int hdContinues(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells ws, emon.Port.Cells sf, int top, int last) {
+        // D1620: does the unit (line top to line last) go on a sentence, a list item or a paragraph that is not its own? A
+        // bold or underlined phrase, or a font change, in the middle of a paragraph is a line of the paragraph with a style change
+        // in it (an inline span), never a heading. Three ways to tell: (1) the unit is not well set apart from the line above it (a
+        // list item's space is less than a title's), and the line below it, close under it, starts in lower case (its sentence goes on there:
+        // `4 Should Section 230 of the Act, which prohibits` / `the application of ...`); (2) a line
+        // without a number or a bullet of its own, no more apart from the line above it than body lines are, and that line does
+        // not end a sentence; (3) a line without a marker of its own under the marker line of a list item and further in than it
+        // (the wrapped lines of the item, up to four lines). Clobbers ws[0..5] (the numbering of line top).
+        int sp = hdSpacing(sf, top, last);
+        int a = Style.stGet(sf, top, Style.sfkAbove());
+        int b = Style.stGet(sf, last, Style.sfkBelow());
+        int body = Style.stHget(sf, Style.sfhBody());
+        int own = hdMarker(wd, ln, et, ws, top);
+        int f = Style.stGet(sf, top, Style.sfkFirst());
+        if ((b >= 0) && (sp < 2)) {
+            if ((Style.stGet(sf, b, Style.sfkClass()) == body) && ((hdTight(sf, last, b) == 1) && Style.stLower(Style.stGet(sf, b, Style.sfkFirst())))) {
+                return 1;
+            }
+        }
+        if ((own == 0) && ((a >= 0) && (hdBullet(f) == 0))) {
+            if ((sp < 1) && ((Style.stGet(sf, a, Style.sfkClass()) == body) && ((hdTight(sf, a, top) == 1) && (hdLineClosed(wd, ln, et, a) == 0)))) {
+                return 1;
+            }
+            int cur = a;
+            int child = top;
+            int steps = 0;
+            while ((cur >= 0) && (steps < 4)) {
+                if (hdTight(sf, cur, child) == 1) {
+                    if (Style.stGet(sf, top, Style.sfkX0()) > (Style.stGet(sf, cur, Style.sfkX0()) + (Style.stGet(sf, cur, Style.sfkSize()) / 2))) {
+                        if ((hdBullet(Style.stGet(sf, cur, Style.sfkFirst())) == 1) || (hdMarker(wd, ln, et, ws, cur) != 0)) {
+                            return 1;
+                        }
+                    }
+                    child = cur;
+                    cur = Style.stGet(sf, cur, Style.sfkAbove());
+                    steps += 1;
+                } else {
+                    steps = 99;
+                }
+            }
+        }
+        return 0;
+    }
     public static int hdSandwich(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells ws, emon.Port.Cells sf, int top, int last, int cnt) {
         // Is a body-styled numbered line a title standing BETWEEN paragraphs (D395): one short line, no marker on
         // the line above or below it, and the line below it flush with it (a paragraph's first line, not the hanging
@@ -850,6 +1140,9 @@ public final class Heading {
         if (ps == 0) {
             sand = hdSandwich(wd, ln, et, ws, sf, top, last, cnt);
         }
+        if (hdContinues(wd, ln, et, ws, sf, top, last) == 1) {
+            return -1;
+        }
         s = hdMarker(wd, ln, et, ws, top);
         pts = ps;
         if (s > 0) {
@@ -865,6 +1158,11 @@ public final class Heading {
         int b = Style.stGet(sf, last, Style.sfkBelow());
         int gb = Style.stGet(sf, last, Style.sfkGapBelow());
         if ((ps == 0) && (sp < 1)) {
+            return -1;
+        }
+        // D1620 (smoke A12): on a page of short lines (a receipt, an invoice, a form: no paragraph on it) a bold or capitalised
+        // line of the body's own size, no more apart from the line above it than the rest, is a label or a value, not a section
+        if ((emon.Port.cellsAt(ws, WS_FORM) == 1) && ((s == 0) && ((sp < 1) && ((sz * 100) < (Style.stHget(sf, Style.sfhSize()) * 104))))) {
             return -1;
         }
         // a body-styled numbered line followed at the body's own line gap is a paragraph or a list item
@@ -1896,6 +2194,27 @@ public final class Heading {
         }
         return 0;
     }
+    public static int hdFormlike(emon.Port.Cells sf, int n) {
+        // D1620: 1 when the document is a page of short lines: at least eight upright lines, and fewer than one in ten of them has
+        // six words (a sentence's worth). A receipt, an invoice and a form's labels are that; prose, a slide with its bullets and a
+        // newspaper column are not.
+        int l = 0;
+        int total = 0;
+        int prose = 0;
+        while (l < n) {
+            if (Style.stGet(sf, l, Style.sfkUpright()) == 1) {
+                total += 1;
+                if (Style.stGet(sf, l, Style.sfkWords()) >= 6) {
+                    prose += 1;
+                }
+            }
+            l += 1;
+        }
+        if ((total >= 8) && ((prose * 10) < total)) {
+            return 1;
+        }
+        return 0;
+    }
     public static int hdAnalyze(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells gl, emon.Port.Cells sf, emon.Port.Cells sc, emon.Port.Cells hc, emon.Port.Cells ws, emon.Port.Cells tmp, emon.Port.Cells pr, emon.Port.Cells ptxt) {
         // Decide which lines are headings and at what level. `sf`, `sc`, `ws`, `tmp` are scratch, `hc` the answer
         // (emptied first); `pr` and `ptxt` the priors (`hd-prior-add`), empty when there are none. Answers the
@@ -1926,6 +2245,7 @@ public final class Heading {
         if (Style.stHget(sf, Style.sfhBody()) < 0) {
             return 0;
         }
+        emon.Port.cellsSet(ws, WS_FORM, hdFormlike(sf, n));
         l = 0;
         while (l < n) {
             Style.stSet(sf, l, Style.sfkUnit(), -1);

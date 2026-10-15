@@ -306,6 +306,67 @@ public static class Paratest {
         PtBrief(t4, nodes, regions, text);
         emon.Testport.AssertText(t4, "P1:left col;P1:right col;", "two lines on one row are two paragraphs");
     }
+    internal static int PtBoldWords(emon.Port.Cells wd, int w0, int from, int to) {
+        // Words from..to (counted from the word w0, a line's first) are bold (style bit 1).
+        int k = from;
+        while (k < to) {
+            Evidence.WdSet(wd, w0 + k, Evidence.WfStyle(), 1);
+            k += 1;
+        }
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestALineWithABoldPhraseInItDoesNotEndTheParagraph() {
+        // D1620 (smoke B I-2): the style of a line is the style of its dominant word, so a line of which most is bold differed from
+        // the regular lines above and below it and a paragraph ended at each. A line that holds both is a line of the paragraph;
+        // a line that is bold all through still ends it.
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells ord = emon.Port.NewCells();
+        emon.Port.Cells raw = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells fr = emon.Port.NewCells();
+        emon.Port.Cells gp = emon.Port.NewCells();
+        emon.Port.Cells st = emon.Port.NewCells();
+        System.Text.StringBuilder t1 = emon.Testport.NewText();
+        System.Text.StringBuilder t2 = emon.Testport.NewText();
+        System.Text.StringBuilder t3 = emon.Testport.NewText();
+        int w0 = 0;
+        PtLine(wd, ln, et, emon.Testport.TextBlob("thank you very much for downloading"), 1, 7200, 10000, 50000, 11200, 0, 0, 1000);
+        w0 = Evidence.WdCount(wd);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("answers for elementary statistics and more"), 1, 7200, 11500, 50000, 12700, 0, 0, 1000);
+        PtBoldWords(wd, w0, 0, 5);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("have knowledge that people have looked"), 1, 7200, 13000, 50000, 14200, 0, 0, 1000);
+        emon.Testport.AssertEq(PtRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "mixed: well formed");
+        PtBrief(t1, nodes, regions, text);
+        emon.Testport.AssertText(t1, "P1:thank you very much for downloading answers for elementary statistics and more have knowledge that people have looked;", "a bold phrase is not a change of style");
+        PtClear(wd, ln, et);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("thank you very much for downloading"), 1, 7200, 10000, 50000, 11200, 0, 0, 1000);
+        w0 = Evidence.WdCount(wd);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("answers for elementary statistics"), 1, 7200, 11500, 50000, 12700, 0, 0, 1000);
+        PtBoldWords(wd, w0, 0, 4);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("have knowledge that people have looked"), 1, 7200, 13000, 50000, 14200, 0, 0, 1000);
+        emon.Testport.AssertEq(PtRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "bold: well formed");
+        PtBrief(t2, nodes, regions, text);
+        emon.Testport.AssertText(t2, "P1:thank you very much for downloading;P1:answers for elementary statistics;P1:have knowledge that people have looked;", "a line bold all through is a line of its own");
+        // a bold label and its value, after a line that ends in a figure: the line of a statement, not the rest of a sentence
+        PtClear(wd, ln, et);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("Statement period 01 Mar 2026 31 Mar 2026"), 1, 7200, 10000, 50000, 11200, 0, 0, 1000);
+        w0 = Evidence.WdCount(wd);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("Opening balance 4,210.55"), 1, 7200, 11500, 50000, 12700, 0, 0, 1000);
+        PtBoldWords(wd, w0, 0, 2);
+        emon.Testport.AssertEq(PtRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "label: well formed");
+        PtBrief(t3, nodes, regions, text);
+        emon.Testport.AssertText(t3, "P1:Statement period 01 Mar 2026 31 Mar 2026;P1:Opening balance 4,210.55;", "a line of a label and a value after a figure is a line of its own");
+    }
     [Xunit.Fact]
     public static void TestLinesAreReadTopToBottomWhateverOrderTheyWerePainted() {
         emon.Port.Cells wd = emon.Port.NewCells();
@@ -422,6 +483,51 @@ public static class Paratest {
         emon.Testport.AssertEq(PtRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "hangul: well formed");
         PtBrief(t3, nodes, regions, text);
         emon.Testport.AssertText(t3, "P1:the report 안녕하세요 세계 end;", "Hangul and Latin keep the space");
+    }
+    [Xunit.Fact]
+    public static void TestLinesOfCjkThatStopInsideASentenceAreOneParagraphWhateverTheBoxesSay() {
+        // D1620 (smoke B I-18): the lines of a page set in several fonts have boxes of several heights (three of these are 24 pt tall
+        // in a 12 pt line, as the Wikipedia pages in Japanese are), so the whitespace between two ordinary lines is more than
+        // the document's lower quartile of it, which is negative, and a paragraph ended at every such line. The baselines are 16.5 pt
+        // apart all the way; a line that stops in a sentence (no 。 ！ ？) is followed by the line that finishes it.
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells ord = emon.Port.NewCells();
+        emon.Port.Cells raw = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells fr = emon.Port.NewCells();
+        emon.Port.Cells gp = emon.Port.NewCells();
+        emon.Port.Cells st = emon.Port.NewCells();
+        System.Text.StringBuilder t1 = emon.Testport.NewText();
+        System.Text.StringBuilder t2 = emon.Testport.NewText();
+        PtLine(wd, ln, et, emon.Testport.TextBlob("成为本地区最大的机构之"), 1, 7200, 10000, 50000, 10912, 0, 0, 1200);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("一，并且在许多国家和地"), 1, 7200, 10162, 50000, 12562, 0, 0, 1200);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("区设有分支机构，主要负"), 1, 7200, 11812, 50000, 14212, 0, 0, 1200);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("责推动教育和科学研究"), 1, 7200, 13462, 50000, 15862, 0, 0, 1200);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("的合作项目与交流活动"), 1, 7200, 16600, 50000, 17512, 0, 0, 1200);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("等等。"), 1, 7200, 18250, 50000, 19162, 0, 0, 1200);
+        emon.Testport.AssertEq(PtRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "open: well formed");
+        PtBrief(t1, nodes, regions, text);
+        emon.Testport.AssertText(t1, "P1:成为本地区最大的机构之一，并且在许多国家和地区设有分支机构，主要负责推动教育和科学研究的合作项目与交流活动等等。;", "six lines, one paragraph");
+        // the same geometry, the fourth line ending its sentence: the paragraph ends there
+        PtClear(wd, ln, et);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("成为本地区最大的机构之"), 1, 7200, 10000, 50000, 10912, 0, 0, 1200);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("一，并且在许多国家和地"), 1, 7200, 10162, 50000, 12562, 0, 0, 1200);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("区设有分支机构，主要负"), 1, 7200, 11812, 50000, 14212, 0, 0, 1200);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("责推动教育和科学研究。"), 1, 7200, 13462, 50000, 15862, 0, 0, 1200);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("的合作项目与交流活动"), 1, 7200, 16600, 50000, 17512, 0, 0, 1200);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("等等。"), 1, 7200, 18250, 50000, 19162, 0, 0, 1200);
+        emon.Testport.AssertEq(PtRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "closed: well formed");
+        PtBrief(t2, nodes, regions, text);
+        emon.Testport.AssertText(t2, "P1:成为本地区最大的机构之一，并且在许多国家和地区设有分支机构，主要负责推动教育和科学研究。;P1:的合作项目与交流活动等等。;", "a sentence that ends ends the paragraph when the lines are apart");
     }
     [Xunit.Fact]
     public static void TestAPageEndIsAMilestoneBetweenBlocksOrInsideAParagraph() {

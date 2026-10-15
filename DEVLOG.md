@@ -4063,6 +4063,15 @@ Work for the release after 0.1.0 (ids from D559; the coordinator renumbers at th
   an image input runs the scan page unit (a sideways or upside-down PNG is read upright); a raster whose text is too small is read again enlarged, with the resolution the text
   says; a page in a script the engine cannot read is flagged `script-unread` and held at a low confidence. Deferred, with reasons (D565): raster tables with light rules, the
   large-text miss, paper-texture ghosts, numeric post-correction, the OSD "Invalid resolution" warning.
+- [x] P12.4 smoke batch 3: headings, inline style, text layer. DONE (D1620-D1627): the heading, inline-style and text-layer defects the two smoke reviews found.
+  A bold or underlined phrase in a paragraph, a font change inside a list item and a bold line that carries a sentence on are not headings, and a line with a
+  styled phrase in it no longer ends its paragraph (D1620); an amount, an address, a telephone number, a quantity and the pronoun I are not heading numbers (D1621);
+  a page of short lines (a receipt, an invoice) asks more of a heading, and a line number beside a row of figures is no heading line (D1622); the box of a leaning
+  glyph no longer splits synthetic italic into letters (D1623); the diacritic TeX draws over a letter is the letter's combining mark and Adobe's private-use delimiter
+  pieces are the characters Unicode named them (D1625); CJK lines that stop inside a sentence are one paragraph (D1626); the Arabic presentation forms fold to the
+  letters (D1627). Each has a law written first (it failed on the code before). Deferred, with the cause found: rotated side labels read backwards in a table cell
+  (`table.kin`, not touched here: D1624), the order of the punctuation of a Latin run inside a right-to-left line and the two U+FFFD of a CID font with no ToUnicode
+  (D1627, D1625).
 
 ---
 

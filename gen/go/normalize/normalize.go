@@ -188,6 +188,37 @@ func nzPutLigature(cp int32, out *port.Cells) int32 {
 	return 1
 }
 
+func nzPutArabic(cp int32, out *port.Cells) int32 {
+	// D1620: append the letters an Arabic presentation form (U+FB50..FDFF, U+FE70..FEFF) is the shaped glyph of and answer 1,
+	// or answer 0 and append nothing. NFKC on that range alone; each letter is then decomposed as any other code point is.
+	if (cp < 64336) || ((cp > 65023) && (cp < 65136)) {
+		return 0
+	}
+	if cp > 65279 {
+		return 0
+	}
+	var lo int32 = 0
+	var hi int32 = 731 - 1
+	var mid int32 = 0
+	var k int32 = 0
+	for lo <= hi {
+		mid = lo + ((hi - lo) / 2)
+		if cp < nftable.NfArab[mid*3+0] {
+			hi = mid - 1
+		} else if cp > nftable.NfArab[mid*3+0] {
+			lo = mid + 1
+		} else {
+			k = 0
+			for k < nftable.NfArab[mid*3+2] {
+				nzPutFull(nftable.NfApool[nftable.NfArab[mid*3+1]+k], out)
+				k += 1
+			}
+			return 1
+		}
+	}
+	return 0
+}
+
 func nzOrder(out *port.Cells, start int32) int32 {
 	// Canonical ordering of out[start..]: within each run of non-starters
 	// (ccc != 0) a STABLE sort by ccc. An insertion sort: runs are a
@@ -231,6 +262,9 @@ func NzNfd(src *port.Cells, from int32, to int32, out *port.Cells, flags int32) 
 		}
 		if (wantLig == 1) && (cp >= 64256) {
 			lig = nzPutLigature(cp, out)
+		}
+		if (wantLig == 1) && ((lig == 0) && (cp >= 64336)) {
+			lig = nzPutArabic(cp, out)
 		}
 		if (lig == 0) && ((cp == 173) && (wantSoft == 1)) {
 			lig = 1

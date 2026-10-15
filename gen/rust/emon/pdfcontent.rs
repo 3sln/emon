@@ -1325,6 +1325,54 @@ pub(crate) fn pc_dir_angle(a: i64, b: i64) -> i32 {
     }
     return ev_angle(x as i32, y as i32);
 }
+pub fn pc_pua(cp: i32) -> i32 {
+    // D1620: the private-use code points of Adobe's Symbol font (U+F8E5..U+F8FE), which TeX's glyph-to-Unicode lists give the
+    // big brackets, braces and parentheses and the extension pieces of a tall delimiter (CMEX10), are the characters Unicode
+    // later gave them (U+239B..U+23AF, U+23D0, the serif signs). Every other code point is itself.
+    if (cp < 63717) || (cp > 63742) {
+        return cp;
+    }
+    if cp == 63717 {
+        return 9135;
+    }
+    if cp == 63718 {
+        return 9168;
+    }
+    if cp == 63719 {
+        return 9135;
+    }
+    if cp == 63720 {
+        return 174;
+    }
+    if cp == 63721 {
+        return 169;
+    }
+    if cp == 63722 {
+        return 8482;
+    }
+    if cp <= 63725 {
+        return 9115 + (cp - 63723);
+    }
+    if cp <= 63728 {
+        return 9121 + (cp - 63726);
+    }
+    if cp <= 63731 {
+        return 9127 + (cp - 63729);
+    }
+    if cp == 63732 {
+        return 9130;
+    }
+    if cp == 63733 {
+        return 9134;
+    }
+    if cp <= 63736 {
+        return 9118 + (cp - 63734);
+    }
+    if cp <= 63739 {
+        return 9124 + (cp - 63737);
+    }
+    return 9131 + (cp - 63740);
+}
 pub(crate) fn pc_glyph(mut cx: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, code: i32, ncode: i32) -> i32 {
     // One shown glyph: look the code up, put its cell in page space, record it,
     // advance the text position by its width, the character and word spacing.
@@ -1371,7 +1419,7 @@ pub(crate) fn pc_glyph(mut cx: &mut crate::port::Cells, mut gl: &mut crate::port
         }
     }
     if cnt > 0 {
-        cp0 = pc_f_cp(f0, f1, f2, f3, slot, 0);
+        cp0 = pc_pua(pc_f_cp(f0, f1, f2, f3, slot, 0));
     }
     // A composite font's ToUnicode may say U+0000 or U+FFFD for a glyph it has no value
     // for (Skia does, for the parts of a Devanagari conjunct): that is no value.
@@ -1490,7 +1538,7 @@ pub(crate) fn pc_glyph(mut cx: &mut crate::port::Cells, mut gl: &mut crate::port
     if cnt > 1 {
         i = 0;
         while i < cnt {
-            idx = etx_append_cp(et, pc_f_cp(f0, f1, f2, f3, slot, i));
+            idx = etx_append_cp(et, pc_pua(pc_f_cp(f0, f1, f2, f3, slot, i)));
             if i == 0 {
                 tstart = idx;
             }
@@ -3685,9 +3733,47 @@ pub(crate) fn pc_offset(gl: &mut crate::port::Cells, j: i32, axis: i32) -> i32 {
     }
     return gl_get(gl, j, gf_by0());
 }
+pub(crate) fn pc_abs(v: i32) -> i32 {
+    if v < 0 {
+        return 0 - v;
+    }
+    return v;
+}
+pub(crate) fn pc_sheared(gl: &mut crate::port::Cells, j: i32, axis: i32) -> i32 {
+    // D1620: 1 when glyph j's box is longer along the writing axis than its baseline segment: the text matrix has a shear term
+    // (a synthetic italic: `12 0 4.1041 12 x y Tm`), which leans the cell and makes its axis-aligned box overhang by the shear
+    // times the cell's height, on both sides. 0 for the axes a box measures right (and for the others).
+    // A glyph with no baseline segment of length (a zero-width mark, or evidence made by hand) is never sheared.
+    let bx: i32 = pc_abs(gl_get(gl, j, gf_bx1()) - gl_get(gl, j, gf_bx0()));
+    let by: i32 = pc_abs(gl_get(gl, j, gf_by1()) - gl_get(gl, j, gf_by0()));
+    if (axis == 0) || (axis == 2) {
+        if (bx > 0) && (((gl_get(gl, j, ch_x1()) - gl_get(gl, j, ch_x0())) - bx) > 1) {
+            return 1;
+        }
+    }
+    if (axis == 1) || (axis == 3) {
+        if (by > 0) && (((gl_get(gl, j, ch_y1()) - gl_get(gl, j, ch_y0())) - by) > 1) {
+            return 1;
+        }
+    }
+    return 0;
+}
 pub(crate) fn pc_gap(gl: &mut crate::port::Cells, p: i32, g: i32, axis: i32) -> i32 {
     // The space along the axis between glyph p and the glyph g after it
-    // (negative when they overlap or g is before p).
+    // (negative when they overlap or g is before p). Between leaning glyphs (a shear term in the text matrix) it is the space
+    // between the end of p's baseline segment and the origin of g's, which their boxes only measure when they are upright.
+    if (pc_sheared(gl, p, axis) == 1) || (pc_sheared(gl, g, axis) == 1) {
+        if axis == 0 {
+            return gl_get(gl, g, gf_bx0()) - gl_get(gl, p, gf_bx1());
+        }
+        if axis == 2 {
+            return gl_get(gl, p, gf_bx1()) - gl_get(gl, g, gf_bx0());
+        }
+        if axis == 1 {
+            return gl_get(gl, p, gf_by1()) - gl_get(gl, g, gf_by0());
+        }
+        return gl_get(gl, g, gf_by0()) - gl_get(gl, p, gf_by1());
+    }
     if axis == 0 {
         return gl_get(gl, g, ch_x0()) - gl_get(gl, p, ch_x1());
     }
@@ -3783,6 +3869,93 @@ pub(crate) fn pc_hidden_mode(mode: i32) -> i32 {
     }
     return 0;
 }
+pub(crate) fn pc_accent(cp: i32) -> i32 {
+    // D1620: the combining mark a spacing diacritic stands for when it is drawn over a letter (TeX draws an umlaut as the glyph
+    // dieresis, then the u under it): the dieresis, acute, grave, macron, cedilla, circumflex, caron, breve, dot above, ring,
+    // ogonek, small tilde and double acute. 0 for anything else.
+    if cp == 168 {
+        return 776;
+    }
+    if cp == 180 {
+        return 769;
+    }
+    if cp == 96 {
+        return 768;
+    }
+    if cp == 175 {
+        return 772;
+    }
+    if cp == 184 {
+        return 807;
+    }
+    if cp == 710 {
+        return 770;
+    }
+    if cp == 711 {
+        return 780;
+    }
+    if cp == 728 {
+        return 774;
+    }
+    if cp == 729 {
+        return 775;
+    }
+    if cp == 730 {
+        return 778;
+    }
+    if cp == 731 {
+        return 808;
+    }
+    if cp == 732 {
+        return 771;
+    }
+    if cp == 733 {
+        return 779;
+    }
+    return 0;
+}
+pub(crate) fn pc_accent_over(gl: &mut crate::port::Cells, p: i32, g: i32) -> i32 {
+    // D1620: the combining mark that glyph p is when it is a spacing diacritic standing over glyph g, a letter drawn right
+    // after it: both upright and of one rotation, no text of their own beyond the one code point, and the middle of the diacritic
+    // within the letter's width (Muller is M, the dieresis, then uller backed up under it). 0 when it is not.
+    let comb: i32 = pc_accent(gl_get(gl, p, ch_cp()));
+    let cx2: i32 = gl_get(gl, p, ch_x0()) + gl_get(gl, p, ch_x1());
+    if comb == 0 {
+        return 0;
+    }
+    if gl_get(gl, p, ch_tstart()) >= 0 {
+        return 0;
+    }
+    if gl_get(gl, g, ch_tstart()) >= 0 {
+        return 0;
+    }
+    if bd_strong(gl_get(gl, g, ch_cp())) != 2 {
+        return 0;
+    }
+    if pc_axis(gl_get(gl, p, gf_rot())) != 0 {
+        return 0;
+    }
+    if pc_rot_same(gl_get(gl, p, gf_rot()), gl_get(gl, g, gf_rot())) == 0 {
+        return 0;
+    }
+    if gl_get(gl, p, gf_vis()) != gl_get(gl, g, gf_vis()) {
+        return 0;
+    }
+    if cx2 < (2 * gl_get(gl, g, ch_x0())) {
+        return 0;
+    }
+    if cx2 > (2 * gl_get(gl, g, ch_x1())) {
+        return 0;
+    }
+    return comb;
+}
+pub(crate) fn pc_accent_pair(gl: &mut crate::port::Cells, j: i32, glst: i32) -> i32 {
+    // The combining mark glyph j is when it is a spacing diacritic over glyph j+1, which is in the same word (j+1 <= glst); else 0.
+    if j >= glst {
+        return 0;
+    }
+    return pc_accent_over(gl, j, j + 1);
+}
 pub(crate) fn pc_continues(gl: &mut crate::port::Cells, p: i32, g: i32) -> i32 {
     // 1 when glyph g continues the word glyph p is in: the same rotation, on the
     // same baseline (to 45 percent of the size: sub- and superscripts stay), and
@@ -3804,6 +3977,10 @@ pub(crate) fn pc_continues(gl: &mut crate::port::Cells, p: i32, g: i32) -> i32 {
     }
     if pc_hidden_mode(gl_get(gl, p, gf_mode())) != pc_hidden_mode(gl_get(gl, g, gf_mode())) {
         return 0;
+    }
+    // A spacing diacritic over the letter drawn right after it is part of that letter's word (D1620).
+    if pc_accent_over(gl, p, g) > 0 {
+        return 1;
     }
     if sizep > sz {
         sz = sizep;
@@ -3953,8 +4130,16 @@ pub(crate) fn pc_emit_word(mut gl: &mut crate::port::Cells, mut et: &mut crate::
     if rtlw == 0 {
         j = gfst;
         while j <= glst {
-            pc_glyph_out(et, gl, j, 2);
-            j += 1;
+            // a spacing diacritic over the next letter of the word is written AFTER the letter, as the combining mark (D1620)
+            cl = pc_accent_pair(gl, j, glst);
+            if cl > 0 {
+                pc_glyph_out(et, gl, j + 1, 2);
+                etx_append_cp(et, cl);
+                j += 2;
+            } else {
+                pc_glyph_out(et, gl, j, 2);
+                j += 1;
+            }
         }
     } else {
         tstart = pc_bidi_text(et, gl, gfst, glst);

@@ -116,6 +116,10 @@ func SfkSibgap() int32 {
 	return 29
 }
 
+func SfkPure() int32 {
+	return 31
+}
+
 func SfkX0() int32 {
 	return 14
 }
@@ -323,6 +327,36 @@ func stDom(wd *port.Cells, ln *port.Cells, l int32) int32 {
 	return best
 }
 
+func stPure(wd *port.Cells, ln *port.Cells, l int32, d int32) int32 {
+	// D1620: how much of the line is set in the dominant word's style: the per cent of the line's code points whose word
+	// has the same bold, italic and mono bits as word d. A line that is 70 per cent bold has the style of its bold words (the
+	// dominant word), but it is a line with a bold phrase in it, not a bold line; 100 when it has no words with text.
+	if d < 0 {
+		return 100
+	}
+	var w0 int32 = stLn(ln, l, evidence.LhFirst())
+	var wn int32 = stLn(ln, l, evidence.LhCount())
+	var want int32 = evidence.WdGet(wd, d, evidence.WfStyle()) & 67
+	var k int32 = 0
+	var all int32 = 0
+	var same int32 = 0
+	for k < wn {
+		var ts int32 = evidence.WdGet(wd, w0+k, evidence.HdTstart())
+		var tl int32 = evidence.WdGet(wd, w0+k, evidence.HdTlen())
+		if (ts >= 0) && (tl > 0) {
+			all += tl
+			if (evidence.WdGet(wd, w0+k, evidence.WfStyle()) & 67) == want {
+				same += tl
+			}
+		}
+		k += 1
+	}
+	if all <= 0 {
+		return 100
+	}
+	return (same * 100) / all
+}
+
 func stLineFeatures(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, sf *port.Cells, l int32) int32 {
 	// Everything about line l that needs only the line: the dominant word's size, bits and colour; the
 	// text's length, ends and case.
@@ -359,6 +393,7 @@ func stLineFeatures(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cel
 		}
 	}
 	stPut(sf, l, SfkColor(), col)
+	stPut(sf, l, SfkPure(), stPure(wd, ln, l, d))
 	for k < wn {
 		var ts int32 = evidence.WdGet(wd, w0+k, evidence.HdTstart())
 		var tl int32 = evidence.WdGet(wd, w0+k, evidence.HdTlen())

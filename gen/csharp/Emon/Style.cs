@@ -83,6 +83,9 @@ public static class Style {
     public static int SfkSibgap() {
         return 29;
     }
+    public static int SfkPure() {
+        return 31;
+    }
     public static int SfkX0() {
         return 14;
     }
@@ -259,6 +262,35 @@ public static class Style {
         }
         return best;
     }
+    internal static int StPure(emon.Port.Cells wd, emon.Port.Cells ln, int l, int d) {
+        // D1620: how much of the line is set in the dominant word's style: the per cent of the line's code points whose word
+        // has the same bold, italic and mono bits as word d. A line that is 70 per cent bold has the style of its bold words (the
+        // dominant word), but it is a line with a bold phrase in it, not a bold line; 100 when it has no words with text.
+        if (d < 0) {
+            return 100;
+        }
+        int w0 = StLn(ln, l, Evidence.LhFirst());
+        int wn = StLn(ln, l, Evidence.LhCount());
+        int want = Evidence.WdGet(wd, d, Evidence.WfStyle()) & 67;
+        int k = 0;
+        int all = 0;
+        int same = 0;
+        while (k < wn) {
+            int ts = Evidence.WdGet(wd, w0 + k, Evidence.HdTstart());
+            int tl = Evidence.WdGet(wd, w0 + k, Evidence.HdTlen());
+            if ((ts >= 0) && (tl > 0)) {
+                all += tl;
+                if ((Evidence.WdGet(wd, w0 + k, Evidence.WfStyle()) & 67) == want) {
+                    same += tl;
+                }
+            }
+            k += 1;
+        }
+        if (all <= 0) {
+            return 100;
+        }
+        return (same * 100) / all;
+    }
     internal static int StLineFeatures(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells gl, emon.Port.Cells sf, int l) {
         // Everything about line l that needs only the line: the dominant word's size, bits and colour; the
         // text's length, ends and case.
@@ -295,6 +327,7 @@ public static class Style {
             }
         }
         StPut(sf, l, SfkColor(), col);
+        StPut(sf, l, SfkPure(), StPure(wd, ln, l, d));
         while (k < wn) {
             int ts = Evidence.WdGet(wd, w0 + k, Evidence.HdTstart());
             int tl = Evidence.WdGet(wd, w0 + k, Evidence.HdTlen());

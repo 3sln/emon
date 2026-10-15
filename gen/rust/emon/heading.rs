@@ -8,6 +8,7 @@ use crate::emon::style::*;
 pub(crate) const HD_MIN: i32 = 4;
 pub(crate) const HD_MAXLINES: i32 = 4;
 pub(crate) const HD_MAXCPS: i32 = 160;
+pub(crate) const HD_PURE: i32 = 85;
 pub(crate) const W_DEPTH: i32 = 20;
 pub(crate) const W_PRIOR: i32 = 20;
 pub(crate) const W_SKIP: i32 = 4;
@@ -42,6 +43,7 @@ pub fn hck_flags() -> i32 {
     return 5;
 }
 pub(crate) const WS_VAR: i32 = 8;
+pub(crate) const WS_FORM: i32 = 15;
 pub(crate) const WS_LINES: i32 = 24;
 pub(crate) const WS_HK: i32 = 64;
 pub(crate) const HK_STRIDE: i32 = 12;
@@ -354,8 +356,12 @@ pub(crate) fn hd_paren(wd: &mut crate::port::Cells, et: &mut crate::port::Cells,
         }
         i += 1;
     }
+    // a number in brackets of three digits or more is an area code (`(202) 691-5902`), not an item's
     if dig == (n - 2) {
-        return 1;
+        if dig <= 2 {
+            return 1;
+        }
+        return 0;
     }
     return hd_letters(wd, et, w, 1, n - 2);
 }
@@ -391,6 +397,147 @@ pub(crate) fn hd_kword(wd: &mut crate::port::Cells, et: &mut crate::port::Cells,
     }
     return 0;
 }
+pub(crate) fn hd_kcaps(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w: i32) -> i32 {
+    // 1 when the word has no lower case letter (a keyword in capitals: `NET`, `CHAPTER`).
+    let n: i32 = hd_wl(wd, w);
+    let mut i: i32 = 0;
+    while i < n {
+        if st_lower(hd_wc(wd, et, w, i)) {
+            return 0;
+        }
+        i += 1;
+    }
+    return 1;
+}
+pub(crate) fn hd_frac2(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w: i32) -> i32 {
+    // 1 when the word is a number of two dotted components whose second is exactly two digits: `79.36`, `100.00`, an
+    // amount in cents (an outline's `1.10` is one too, which is why the caller asks for capitals).
+    let n: i32 = hd_wl(wd, w);
+    if (n < 4) || ((hd_dec(wd, et, w) % 64) != 2) {
+        return 0;
+    }
+    if hd_dec(wd, et, w) == (2 + 64) {
+        return 0;
+    }
+    if hd_wc(wd, et, w, n - 3) != 46 {
+        return 0;
+    }
+    if (hd_wc(wd, et, w, n - 1) >= 48) && (hd_wc(wd, et, w, n - 1) <= 57) {
+        if (hd_wc(wd, et, w, n - 2) >= 48) && (hd_wc(wd, et, w, n - 2) <= 57) {
+            return 1;
+        }
+    }
+    return 0;
+}
+pub(crate) fn hd_split_decimal(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w: i32, w2: i32) -> i32 {
+    // 1 when the word is a whole number with a point at its end and the next word is one to three digits: an amount whose cents
+    // the engine put in a word of their own (`79.` `36`).
+    if w2 < 0 {
+        return 0;
+    }
+    let n: i32 = hd_wl(wd, w);
+    let n2: i32 = hd_wl(wd, w2);
+    if hd_dec(wd, et, w) != (1 + 64) {
+        return 0;
+    }
+    if hd_wc(wd, et, w, n - 1) != 46 {
+        return 0;
+    }
+    if (hd_dec(wd, et, w2) == 1) && (n2 <= 3) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn hd_figure_word(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w: i32) -> i32 {
+    // 1 when the word is a figure: two digits or more, and between or around them only the marks , . / : - $ % (a date, an
+    // amount, a telephone number, a postcode).
+    let n: i32 = hd_wl(wd, w);
+    let mut i: i32 = 0;
+    let mut digs: i32 = 0;
+    let mut ok: i32 = 1;
+    while (i < n) && (ok == 1) {
+        let c: i32 = hd_wc(wd, et, w, i);
+        if (c >= 48) && (c <= 57) {
+            digs += 1;
+        } else if (c == 44) || ((c == 46) || ((c == 47) || ((c == 58) || ((c == 45) || ((c == 36) || (c == 37)))))) {
+            ok = 1;
+        } else {
+            ok = 0;
+        }
+        i += 1;
+    }
+    if (ok == 1) && (digs >= 2) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn hd_address_like(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, l: i32) -> i32 {
+    // D1620: 1 when a line that opens with a bare number (no point, bracket or colon after it) is a street number, a quantity or
+    // a price rather than a section's number: the number has three digits (`567 Ortiz Valley`), or a figure (`Suite 979`,
+    // `9,000`) follows it, or a word that is not the last ends in a comma (`88 ROAD WAN CHAI, HONG KONG`).
+    let w0: i32 = hd_nth_word(wd, ln, l, 0);
+    let first: i32 = ln_get(ln, l, lh_first());
+    let end: i32 = first + ln_get(ln, l, lh_count());
+    let mut w: i32 = w0 + 1;
+    if w0 < 0 {
+        return 0;
+    }
+    if hd_wl(wd, w0) >= 3 {
+        return 1;
+    }
+    while w < end {
+        let n: i32 = hd_wl(wd, w);
+        if n > 0 {
+            if hd_figure_word(wd, et, w) == 1 {
+                return 1;
+            }
+            if (hd_wc(wd, et, w, n - 1) == 44) && ((w + 1) < end) {
+                return 1;
+            }
+        }
+        w += 1;
+    }
+    return 0;
+}
+pub(crate) fn hd_figures_after(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, l: i32, k: i32) -> i32 {
+    // How many words of line l from its k-th word on are figures (`hd-figure-word`).
+    let first: i32 = ln_get(ln, l, lh_first());
+    let end: i32 = first + ln_get(ln, l, lh_count());
+    let mut w: i32 = first;
+    let mut seen: i32 = 0;
+    let mut n: i32 = 0;
+    while w < end {
+        if hd_wl(wd, w) > 0 {
+            if seen >= k {
+                if hd_figure_word(wd, et, w) == 1 {
+                    n += 1;
+                }
+            }
+            seen += 1;
+        }
+        w += 1;
+    }
+    return n;
+}
+pub(crate) fn hd_pronoun(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w2: i32) -> i32 {
+    // 1 when the word after a lone `I` says it is the English pronoun, not a Roman numeral: it starts in lower case or has an
+    // apostrophe in it (`Series I Don't Want`, `Series I think`). A line that stops at the `I` is a numeral.
+    if w2 < 0 {
+        return 0;
+    }
+    let n: i32 = hd_wl(wd, w2);
+    let mut i: i32 = 0;
+    if st_lower(hd_wc(wd, et, w2, 0)) {
+        return 1;
+    }
+    while i < n {
+        if (hd_wc(wd, et, w2, i) == 39) || (hd_wc(wd, et, w2, i) == 8217) {
+            return 1;
+        }
+        i += 1;
+    }
+    return 0;
+}
 pub fn hd_marker(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, l: i32) -> i32 {
     // Does line l start with a numbering pattern? The scheme (0 none), and in ws[0..4]: scheme, depth (the
     // dotted components of a decimal number, 0 for a letter or a roman), where the number is in the line's
@@ -414,6 +561,10 @@ pub fn hd_marker(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &
     let n0: i32 = hd_wl(wd, w0);
     let d: i32 = hd_dec(wd, et, w0);
     // decimal: 1  1.  1.2.3  2)
+    // a bare number that is a street number, a quantity or a price is no heading's (D1620)
+    if (d == 1) && (hd_address_like(wd, ln, et, l) == 1) {
+        return 0;
+    }
     if d > 0 {
         crate::port::cells_set(ws, 0, 1);
         crate::port::cells_set(ws, 1, d % 64);
@@ -470,6 +621,18 @@ pub fn hd_marker(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &
         let d2: i32 = hd_dec(wd, et, w1);
         let r: i32 = hd_letters(wd, et, w1, 0, n1);
         let tot: i32 = (n0 + 1) + n1;
+        // a label in capitals and an amount (`NET 79.36`, `TENDER 100.00`), or an amount split at its point (`79.` `36`), is
+        // no keyword and number (D1620): the number would be written apart from the text and the point lost with it
+        if (hd_kcaps(wd, et, w0) == 1) && (hd_frac2(wd, et, w1) == 1) {
+            return 0;
+        }
+        // a keyword and a number followed by two figures or more (`Period 01 Jan 2024 to 31 Mar 2024 ...`) is a row of data
+        if hd_figures_after(wd, ln, et, l, 2) >= 2 {
+            return 0;
+        }
+        if hd_split_decimal(wd, et, w1, w2) == 1 {
+            return 0;
+        }
         if d2 > 0 {
             crate::port::cells_set(ws, 0, 6);
             crate::port::cells_set(ws, 1, d2 % 64);
@@ -481,6 +644,9 @@ pub fn hd_marker(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &
             return 6;
         }
         // a roman numeral, or a lone capital letter only when the line stops there (`Appendix A`)
+        if (r == 2) && ((n1 == 1) && (hd_pronoun(wd, et, w2) == 1)) {
+            return 0;
+        }
         if (r == 2) || ((r == 4) && (w2 < 0)) {
             crate::port::cells_set(ws, 0, 6);
             crate::port::cells_set(ws, 1, 0);
@@ -516,6 +682,7 @@ pub(crate) fn hd_style_points(sf: &mut crate::port::Cells, sc: &mut crate::port:
     let bbits: i32 = sc_get(sc, body, sck_bits());
     let col: i32 = st_get(sf, l, sfk_color());
     let bcol: i32 = sc_get(sc, body, sck_color());
+    let pure: i32 = st_get(sf, l, sfk_pure());
     let mut p: i32 = 0;
     let mut weight: i32 = 0;
     if ((bits & 64) != 0) && ((bbits & 64) == 0) {
@@ -527,7 +694,9 @@ pub(crate) fn hd_style_points(sf: &mut crate::port::Cells, sc: &mut crate::port:
     if (sz * 100) >= (bsz * 120) {
         p += 1;
     }
-    if ((bits & 1) != 0) && ((bbits & 1) == 0) {
+    // D1620: a line that is only partly bold (or italic) has the style of its bold words, but it is a line with a bold phrase
+    // in it, not a bold line: the weight says nothing then (the phrase is an inline span of the paragraph it is in)
+    if ((bits & 1) != 0) && (((bbits & 1) == 0) && (pure >= HD_PURE)) {
         p += 3;
         weight = 1;
     }
@@ -535,7 +704,7 @@ pub(crate) fn hd_style_points(sf: &mut crate::port::Cells, sc: &mut crate::port:
         p += 2;
         weight = 1;
     }
-    if ((bits & 2) != 0) && ((bbits & 2) == 0) {
+    if ((bits & 2) != 0) && (((bbits & 2) == 0) && (pure >= HD_PURE)) {
         p += 1;
     }
     if (col >= 0) && ((bcol >= 0) && (col != bcol)) {
@@ -563,6 +732,32 @@ pub(crate) fn hd_marker_only(wd: &mut crate::port::Cells, ln: &mut crate::port::
         return 0;
     }
     return crate::port::cells_at(ws, 5);
+}
+pub(crate) fn hd_opens_figure(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, l: i32) -> i32 {
+    // 1 when line l is the data of a row rather than a title: its first word is a figure (`hd-figure-word`), or it has two
+    // figures, or a word that is not its last ends in a comma (an address).
+    let w: i32 = hd_nth_word(wd, ln, l, 0);
+    let first: i32 = ln_get(ln, l, lh_first());
+    let end: i32 = first + ln_get(ln, l, lh_count());
+    let mut j: i32 = first;
+    let mut n: i32 = 0;
+    if w < 0 {
+        return 0;
+    }
+    if hd_figure_word(wd, et, w) == 1 {
+        return 1;
+    }
+    if hd_figures_after(wd, ln, et, l, 0) >= 2 {
+        return 1;
+    }
+    while j < end {
+        n = hd_wl(wd, j);
+        if (n > 0) && (((j + 1) < end) && (hd_wc(wd, et, j, n - 1) == 44)) {
+            return 1;
+        }
+        j += 1;
+    }
+    return 0;
 }
 pub(crate) fn hd_partner(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, sf: &mut crate::port::Cells, l: i32) -> i32 {
     // The line that is the other half of line l's heading line, or -1: l and its one sibling on the row are
@@ -597,6 +792,14 @@ pub(crate) fn hd_partner(wd: &mut crate::port::Cells, ln: &mut crate::port::Cell
             return -1;
         }
     } else if st_get(sf, q, sfk_x0()) >= st_get(sf, l, sfk_x0()) {
+        return -1;
+    }
+    // a title that opens with a figure (an amount, a date, a reference) is a row's data after its line number (D1620)
+    if lm == 1 {
+        if hd_opens_figure(wd, ln, et, q) == 1 {
+            return -1;
+        }
+    } else if hd_opens_figure(wd, ln, et, l) == 1 {
         return -1;
     }
     return q;
@@ -773,6 +976,93 @@ pub(crate) fn hd_list_run(wd: &mut crate::port::Cells, ln: &mut crate::port::Cel
     }
     return 0;
 }
+pub(crate) fn hd_tail(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, l: i32, back: i32) -> i32 {
+    // The code point `back` places from the end of line l's text (0 the last, 1 the one before it); -1 when there is none.
+    let w0: i32 = ln_get(ln, l, lh_first());
+    let wn: i32 = ln_get(ln, l, lh_count());
+    let mut k: i32 = wn - 1;
+    let mut left: i32 = back;
+    while k >= 0 {
+        let tl: i32 = hd_wl(wd, w0 + k);
+        if tl > 0 {
+            if left < tl {
+                return hd_wc(wd, et, w0 + k, (tl - 1) - left);
+            }
+            left -= tl;
+        }
+        k -= 1;
+    }
+    return -1;
+}
+pub(crate) fn hd_stop(c: i32) -> i32 {
+    // A mark that ends a sentence or a statement: . ! ? : an ellipsis, the CJK full stops. Not a comma or a semicolon.
+    if (c == 46) || ((c == 33) || ((c == 63) || ((c == 58) || ((c == 8230) || ((c == 12290) || ((c == 65281) || ((c == 65311) || ((c == 65294) || (c == 65306))))))))) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn hd_line_closed(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, l: i32) -> i32 {
+    // D1620: 1 when line l ends a sentence or a statement (a stop, after any closing quote or bracket; or a figure: a
+    // label and its value), or has no text; 0 when its sentence goes on to the next line.
+    let mut c: i32 = hd_tail(wd, ln, et, l, 0);
+    if c < 0 {
+        return 1;
+    }
+    if (c >= 48) && (c <= 57) {
+        return 1;
+    }
+    if (c == 41) || ((c == 93) || ((c == 125) || ((c == 34) || ((c == 39) || ((c == 8221) || ((c == 8217) || ((c == 187) || (c == 12301)))))))) {
+        c = hd_tail(wd, ln, et, l, 1);
+        if c < 0 {
+            return 1;
+        }
+    }
+    return hd_stop(c);
+}
+pub(crate) fn hd_continues(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, sf: &mut crate::port::Cells, top: i32, last: i32) -> i32 {
+    // D1620: does the unit (line top to line last) go on a sentence, a list item or a paragraph that is not its own? A
+    // bold or underlined phrase, or a font change, in the middle of a paragraph is a line of the paragraph with a style change
+    // in it (an inline span), never a heading. Three ways to tell: (1) the unit is not well set apart from the line above it (a
+    // list item's space is less than a title's), and the line below it, close under it, starts in lower case (its sentence goes on there:
+    // `4 Should Section 230 of the Act, which prohibits` / `the application of ...`); (2) a line
+    // without a number or a bullet of its own, no more apart from the line above it than body lines are, and that line does
+    // not end a sentence; (3) a line without a marker of its own under the marker line of a list item and further in than it
+    // (the wrapped lines of the item, up to four lines). Clobbers ws[0..5] (the numbering of line top).
+    let sp: i32 = hd_spacing(sf, top, last);
+    let a: i32 = st_get(sf, top, sfk_above());
+    let b: i32 = st_get(sf, last, sfk_below());
+    let body: i32 = st_hget(sf, sfh_body());
+    let own: i32 = hd_marker(wd, ln, et, ws, top);
+    let f: i32 = st_get(sf, top, sfk_first());
+    if (b >= 0) && (sp < 2) {
+        if (st_get(sf, b, sfk_class()) == body) && ((hd_tight(sf, last, b) == 1) && st_lower(st_get(sf, b, sfk_first()))) {
+            return 1;
+        }
+    }
+    if (own == 0) && ((a >= 0) && (hd_bullet(f) == 0)) {
+        if (sp < 1) && ((st_get(sf, a, sfk_class()) == body) && ((hd_tight(sf, a, top) == 1) && (hd_line_closed(wd, ln, et, a) == 0))) {
+            return 1;
+        }
+        let mut cur: i32 = a;
+        let mut child: i32 = top;
+        let mut steps: i32 = 0;
+        while (cur >= 0) && (steps < 4) {
+            if hd_tight(sf, cur, child) == 1 {
+                if st_get(sf, top, sfk_x0()) > (st_get(sf, cur, sfk_x0()) + (st_get(sf, cur, sfk_size()) / 2)) {
+                    if (hd_bullet(st_get(sf, cur, sfk_first())) == 1) || (hd_marker(wd, ln, et, ws, cur) != 0) {
+                        return 1;
+                    }
+                }
+                child = cur;
+                cur = st_get(sf, cur, sfk_above());
+                steps += 1;
+            } else {
+                steps = 99;
+            }
+        }
+    }
+    return 0;
+}
 pub(crate) fn hd_sandwich(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, sf: &mut crate::port::Cells, top: i32, last: i32, cnt: i32) -> i32 {
     // Is a body-styled numbered line a title standing BETWEEN paragraphs (D395): one short line, no marker on
     // the line above or below it, and the line below it flush with it (a paragraph's first line, not the hanging
@@ -850,6 +1140,9 @@ pub(crate) fn hd_unit_score(wd: &mut crate::port::Cells, ln: &mut crate::port::C
     if ps == 0 {
         sand = hd_sandwich(wd, ln, et, ws, sf, top, last, cnt);
     }
+    if hd_continues(wd, ln, et, ws, sf, top, last) == 1 {
+        return -1;
+    }
     s = hd_marker(wd, ln, et, ws, top);
     pts = ps;
     if s > 0 {
@@ -865,6 +1158,11 @@ pub(crate) fn hd_unit_score(wd: &mut crate::port::Cells, ln: &mut crate::port::C
     let b: i32 = st_get(sf, last, sfk_below());
     let gb: i32 = st_get(sf, last, sfk_gap_below());
     if (ps == 0) && (sp < 1) {
+        return -1;
+    }
+    // D1620 (smoke A12): on a page of short lines (a receipt, an invoice, a form: no paragraph on it) a bold or capitalised
+    // line of the body's own size, no more apart from the line above it than the rest, is a label or a value, not a section
+    if (crate::port::cells_at(ws, WS_FORM) == 1) && ((s == 0) && ((sp < 1) && ((sz * 100) < (st_hget(sf, sfh_size()) * 104)))) {
         return -1;
     }
     // a body-styled numbered line followed at the body's own line gap is a paragraph or a list item
@@ -1896,6 +2194,27 @@ pub(crate) fn hd_emit(ln: &mut crate::port::Cells, mut hc: &mut crate::port::Cel
     }
     return 0;
 }
+pub(crate) fn hd_formlike(sf: &mut crate::port::Cells, n: i32) -> i32 {
+    // D1620: 1 when the document is a page of short lines: at least eight upright lines, and fewer than one in ten of them has
+    // six words (a sentence's worth). A receipt, an invoice and a form's labels are that; prose, a slide with its bullets and a
+    // newspaper column are not.
+    let mut l: i32 = 0;
+    let mut total: i32 = 0;
+    let mut prose: i32 = 0;
+    while l < n {
+        if st_get(sf, l, sfk_upright()) == 1 {
+            total += 1;
+            if st_get(sf, l, sfk_words()) >= 6 {
+                prose += 1;
+            }
+        }
+        l += 1;
+    }
+    if (total >= 8) && ((prose * 10) < total) {
+        return 1;
+    }
+    return 0;
+}
 pub fn hd_analyze(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, gl: &mut crate::port::Cells, mut sf: &mut crate::port::Cells, mut sc: &mut crate::port::Cells, mut hc: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, pr: &mut crate::port::Cells, ptxt: &mut crate::port::Cells) -> i32 {
     // Decide which lines are headings and at what level. `sf`, `sc`, `ws`, `tmp` are scratch, `hc` the answer
     // (emptied first); `pr` and `ptxt` the priors (`hd-prior-add`), empty when there are none. Answers the
@@ -1926,6 +2245,7 @@ pub fn hd_analyze(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: 
     if st_hget(sf, sfh_body()) < 0 {
         return 0;
     }
+    crate::port::cells_set(ws, WS_FORM, hd_formlike(sf, n));
     l = 0;
     while l < n {
         st_set(sf, l, sfk_unit(), -1);

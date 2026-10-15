@@ -783,3 +783,71 @@ fn test_runs_in_order_or_too_far_apart_or_overprinted_stay_the_lines_they_were()
     ct_group(gl, et, wd, ln);
     crate::testport::assert_eq(ln_count(ln), 3, "the word on the next line stays on it");
 }
+pub(crate) fn ct_gx(mut gl: &mut crate::port::Cells, x0: i32, x1: i32, cp: i32, bx0: i32, bx1: i32) -> i32 {
+    // One glyph of the scene: the box [x0, x1] by 800, the baseline segment [bx0, bx1] (0, 0 for none), size 1000.
+    let g: i32 = gl_new(gl, 1, x0, 0, x1, 800, cp, -1, 0, -1);
+    gl_set(gl, g, gf_size(), 1000);
+    gl_set(gl, g, gf_bx0(), bx0);
+    gl_set(gl, g, gf_bx1(), bx1);
+    return g;
+}
+#[test]
+fn test_leaning_glyphs_of_a_synthetic_italic_make_one_word() {
+    // Smoke B I-6: a Tm of `12 0 4.1041 12 x y` leans the cell, so the box of each glyph overhangs its baseline segment on both
+    // sides by the shear times the cell's height. Three glyphs of 500 whose boxes overhang by 300 on each side: the box of one
+    // ends 600 past where the next one's begins, further back than a word allows, but the baselines meet.
+    let gl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    ct_gx(gl, 700, 1800, 1055, 1000, 1500);
+    ct_gx(gl, 1200, 2300, 1088, 1500, 2000);
+    ct_gx(gl, 1700, 2800, 1080, 2000, 2500);
+    ct_group(gl, et, wd, ln);
+    crate::testport::assert_eq(wd_count(wd), 1, "one word, not three letters");
+    crate::testport::assert_eq(wd_get(wd, 0, hd_tlen()), 3, "of three code points");
+}
+#[test]
+fn test_a_diacritic_drawn_over_a_letter_is_the_combining_mark_after_it() {
+    // Smoke B I-21: TeX draws an umlaut as the dieresis glyph and then the u, backed up under it: `M` `dieresis` `u` `ller`. The
+    // word is Mu, U+0308, ller; the paragraph's normalisation composes it. A dieresis that is not over the letter after it is left.
+    let gl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    ct_gx(gl, 1000, 1500, 77, 1000, 1500);
+    ct_gx(gl, 1650, 1950, 168, 1650, 1950);
+    ct_gx(gl, 1500, 2000, 117, 1500, 2000);
+    ct_gx(gl, 2000, 2500, 108, 2000, 2500);
+    ct_gx(gl, 2500, 3000, 108, 2500, 3000);
+    ct_gx(gl, 3000, 3500, 101, 3000, 3500);
+    ct_gx(gl, 3500, 4000, 114, 3500, 4000);
+    ct_group(gl, et, wd, ln);
+    crate::testport::assert_eq(wd_count(wd), 1, "one word");
+    crate::testport::assert_eq(wd_get(wd, 0, hd_tlen()), 7, "of seven code points: the dieresis is written after the u");
+    crate::testport::assert_eq(crate::port::cells_at(et, wd_get(wd, 0, hd_tstart()) + 1), 117, "the letter first");
+    crate::testport::assert_eq(crate::port::cells_at(et, wd_get(wd, 0, hd_tstart()) + 2), 776, "then U+0308");
+    // a spacing acute standing apart, as an apostrophe (it's), over nothing: not a combining mark
+    crate::port::cells_drop(gl, 0);
+    crate::port::cells_drop(et, 0);
+    crate::port::cells_drop(wd, 0);
+    crate::port::cells_drop(ln, 0);
+    ct_gx(gl, 1000, 1500, 105, 1000, 1500);
+    ct_gx(gl, 1500, 1800, 180, 1500, 1800);
+    ct_gx(gl, 1800, 2300, 115, 1800, 2300);
+    ct_group(gl, et, wd, ln);
+    crate::testport::assert_eq(wd_get(wd, 0, hd_tlen()), 3, "three code points, in the order they were shown");
+    crate::testport::assert_eq(crate::port::cells_at(et, wd_get(wd, 0, hd_tstart()) + 1), 180, "the acute is itself");
+}
+#[test]
+fn test_adobes_symbol_private_use_is_the_delimiter_pieces_unicode_names() {
+    crate::testport::assert_eq(pc_pua(63726), 9121, "U+F8EE, bracketlefttp, is U+23A1");
+    crate::testport::assert_eq(pc_pua(63728), 9123, "U+F8F0, bracketleftbt, is U+23A3");
+    crate::testport::assert_eq(pc_pua(63739), 9126, "U+F8FB, bracketrightbt, is U+23A6");
+    crate::testport::assert_eq(pc_pua(63723), 9115, "U+F8EB, parenlefttp, is U+239B");
+    crate::testport::assert_eq(pc_pua(63742), 9133, "U+F8FE, bracerightbt, is U+23AD");
+    crate::testport::assert_eq(pc_pua(63733), 9134, "U+F8F5, integralex, is U+23AE");
+    crate::testport::assert_eq(pc_pua(65), 65, "a letter is itself");
+    crate::testport::assert_eq(pc_pua(-1), -1, "no value stays none");
+    crate::testport::assert_eq(pc_pua(57344), 57344, "a private-use code point of anyone else's is not touched");
+}

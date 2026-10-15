@@ -36,7 +36,7 @@ public static class Headingtest {
         int i = 0;
         int yy = y;
         while (i < count) {
-            HtLine(wd, ln, et, emon.Testport.TextBlob("lorem ipsum dolor sit amet consectetur adipiscing elit sed do"), page, 7200, yy, 54000, yy + 1200, 1100, 0);
+            HtLine(wd, ln, et, emon.Testport.TextBlob("Lorem ipsum dolor sit amet consectetur adipiscing elit sed do"), page, 7200, yy, 54000, yy + 1200, 1100, 0);
             yy += 1400;
             i += 1;
         }
@@ -258,6 +258,32 @@ public static class Headingtest {
         emon.Testport.AssertEq(HtMarker(wd, ln, et, ws, emon.Testport.TextBlob("AB. text")), 0, "two letters that are not a numeral");
     }
     [Xunit.Fact]
+    public static void TestAnAmountAnAddressAndAPhoneNumberAreNotHeadingNumbers() {
+        // D1620 (smoke A11, B I-22): a keyword and a figure is a heading number (`Chapter 3`); a label and its amount (`NET 79.36`,
+        // `TENDER 100.00`, the amount's point left at the end of a word by the engine and its cents in the next), a street number
+        // (`567 Ortiz Valley Suite 979`, `88 HENNESSY ROAD WAN CHAI, HONG KONG`), an area code, a quantity and a pronoun are not.
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        emon.Testport.AssertEq(HtMarker(wd, ln, et, ws, emon.Testport.TextBlob("NET 79.36")), 0, "a label in capitals and an amount");
+        emon.Testport.AssertEq(HtMarker(wd, ln, et, ws, emon.Testport.TextBlob("TENDER 100.00")), 0, "so is this one");
+        emon.Testport.AssertEq(HtMarker(wd, ln, et, ws, emon.Testport.TextBlob("NET 79. 36")), 0, "an amount whose cents the engine put in the next word");
+        emon.Testport.AssertEq(HtMarker(wd, ln, et, ws, emon.Testport.TextBlob("567 Ortiz Valley Suite 979")), 0, "a street number of three digits, and another figure after it");
+        emon.Testport.AssertEq(HtMarker(wd, ln, et, ws, emon.Testport.TextBlob("88 HENNESSY ROAD WAN CHAI, HONG KONG")), 0, "an address: a comma in it");
+        emon.Testport.AssertEq(HtMarker(wd, ln, et, ws, emon.Testport.TextBlob("(202) 691-5902")), 0, "a telephone number");
+        emon.Testport.AssertEq(HtMarker(wd, ln, et, ws, emon.Testport.TextBlob("202 691-5902")), 0, "the same without the brackets");
+        emon.Testport.AssertEq(HtMarker(wd, ln, et, ws, emon.Testport.TextBlob("1 REDBEAN BRED 9,000")), 0, "a quantity, a name and a price");
+        emon.Testport.AssertEq(HtMarker(wd, ln, et, ws, emon.Testport.TextBlob("Series I Don't Want To Be")), 0, "a pronoun is not a Roman numeral");
+        emon.Testport.AssertEq(HtMarker(wd, ln, et, ws, emon.Testport.TextBlob("Series I think so")), 0, "nor this one");
+        emon.Testport.AssertEq(HtMarker(wd, ln, et, ws, emon.Testport.TextBlob("Period 01 Jan 2024 to 31 Mar 2024 Opening Balance")), 0, "a keyword, a number and a row of dates");
+        emon.Testport.AssertEq(HtMarker(wd, ln, et, ws, emon.Testport.TextBlob("Chapter 3 Formation in 1980")), 6, "one figure after a keyword form is a title with a year");
+        emon.Testport.AssertEq(HtMarker(wd, ln, et, ws, emon.Testport.TextBlob("2 Methods")), 1, "a section number stands");
+        emon.Testport.AssertEq(HtMarker(wd, ln, et, ws, emon.Testport.TextBlob("10 Conclusion")), 1, "of two digits too");
+        emon.Testport.AssertEq(HtMarker(wd, ln, et, ws, emon.Testport.TextBlob("Part I Summary")), 6, "Part I");
+        emon.Testport.AssertEq(HtMarker(wd, ln, et, ws, emon.Testport.TextBlob("Article 1.10 Fees")), 6, "a title-case keyword and a dotted number are an outline's, even of two digits");
+    }
+    [Xunit.Fact]
     public static void TestAHigherHeadingMayPrintSmaller() {
         emon.Port.Cells wd = emon.Port.NewCells();
         emon.Port.Cells ln = emon.Port.NewCells();
@@ -440,6 +466,218 @@ public static class Headingtest {
         emon.Testport.AssertEq(Heading.HdLevel(hc, 24), 2, "the accounts are at level 2");
         emon.Testport.AssertEq(Heading.HdLevel(hc, 27), Heading.HdLevel(hc, 33), "the product lines are peers");
         emon.Testport.AssertEq(Heading.HdLevel(hc, 27), 3, "and at level 3");
+    }
+    internal static int HtStyleWords(emon.Port.Cells wd, int w0, int from, int to, int style) {
+        // Words from..to (counted from the word w0, a line's first) take the style bits `style`.
+        int k = from;
+        while (k < to) {
+            Evidence.WdSet(wd, w0 + k, Evidence.WfStyle(), style);
+            k += 1;
+        }
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestAMostlyBoldLineInAParagraphIsNotAHeading() {
+        // D1620 (smoke B I-2): five lines of a paragraph, the second of them 83 per cent bold (seven words of ten). `emon.style` gives
+        // the line the style of its dominant word, which is the bold one; a bold PHRASE is not a bold LINE.
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells sf = emon.Port.NewCells();
+        emon.Port.Cells sc = emon.Port.NewCells();
+        emon.Port.Cells hc = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells pr = emon.Port.NewCells();
+        emon.Port.Cells ptxt = emon.Port.NewCells();
+        int y = 5000;
+        int w0 = 0;
+        y = HtBody(wd, ln, et, 1, y, 1);
+        w0 = Evidence.WdCount(wd);
+        HtLine(wd, ln, et, emon.Testport.TextBlob("Lorem ipsum dolor sit amet consectetur adipiscing elit sed do"), 1, 7200, y, 54000, y + 1200, 1100, 1);
+        HtStyleWords(wd, w0, 7, 10, 0);
+        y += 1400;
+        y = HtBody(wd, ln, et, 1, y, 3);
+        emon.Testport.AssertEq(HtRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 0, "no heading");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 1), 0, "the line with the bold phrase is a line of the paragraph");
+    }
+    [Xunit.Fact]
+    public static void TestABoldLineThatGoesOnTheSentenceAboveIsNotAHeading() {
+        // D1620 (smoke B I-2, d05): a WHOLE bold line, as close under the line above as the lines of a paragraph are, whose sentence
+        // the line above has not ended, is the paragraph's own (a link, a name, a phrase set in bold type); set apart it is a heading.
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells sf = emon.Port.NewCells();
+        emon.Port.Cells sc = emon.Port.NewCells();
+        emon.Port.Cells hc = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells pr = emon.Port.NewCells();
+        emon.Port.Cells ptxt = emon.Port.NewCells();
+        int y = 5000;
+        y = HtBody(wd, ln, et, 1, y, 3);
+        HtLine(wd, ln, et, emon.Testport.TextBlob("Statistics Sixth Edition Bluman"), 1, 7200, y, 54000, y + 1200, 1100, 1);
+        y += 1400;
+        y = HtBody(wd, ln, et, 1, y, 3);
+        emon.Testport.AssertEq(HtRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 0, "no heading");
+        // the same line with the room above it a title has, after a line that ends no sentence either, is a heading
+        emon.Port.CellsDrop(wd, 0);
+        emon.Port.CellsDrop(ln, 0);
+        emon.Port.CellsDrop(et, 0);
+        y = HtBody(wd, ln, et, 1, 5000, 3);
+        y += 900;
+        HtLine(wd, ln, et, emon.Testport.TextBlob("Statistics Sixth Edition Bluman"), 1, 7200, y, 54000, y + 1200, 1100, 1);
+        y += 1400;
+        y = HtBody(wd, ln, et, 1, y, 3);
+        emon.Testport.AssertEq(HtRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 1, "one heading");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 3), 1, "set apart, the bold line is the heading");
+    }
+    [Xunit.Fact]
+    public static void TestANumberedItemThatChangesFontIsNotAHeading() {
+        // D1620 (smoke B I-2, d08): list item 4 opens with a bold number and goes on in a bold face of another family; the next line
+        // carries its sentence on (it starts in lower case). The items before it are in the body style.
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells sf = emon.Port.NewCells();
+        emon.Port.Cells sc = emon.Port.NewCells();
+        emon.Port.Cells hc = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells pr = emon.Port.NewCells();
+        emon.Port.Cells ptxt = emon.Port.NewCells();
+        int y = 5000;
+        y = HtBody(wd, ln, et, 1, y, 4);
+        y += 900;
+        HtLine(wd, ln, et, emon.Testport.TextBlob("1. How should speech be restricted online?"), 1, 7200, y, 54000, y + 1200, 1100, 0);
+        y += 1400;
+        HtLine(wd, ln, et, emon.Testport.TextBlob("2. What should be done to involve the government more?"), 1, 7200, y, 54000, y + 1200, 1100, 0);
+        y += 1400;
+        HtLine(wd, ln, et, emon.Testport.TextBlob("3. How effective are oversight boards in practice?"), 1, 7200, y, 54000, y + 1200, 1100, 0);
+        y += 1400;
+        HtLine(wd, ln, et, emon.Testport.TextBlob("4. Should Section 230 of the Communications Decency Act which prohibits"), 1, 7200, y, 54000, y + 1200, 1100, 1);
+        y += 1400;
+        HtLine(wd, ln, et, emon.Testport.TextBlob("the application of intermediary laws that would hold companies responsible be repealed?"), 1, 7200, y, 54000, y + 1200, 1100, 0);
+        y += 1400;
+        HtLine(wd, ln, et, emon.Testport.TextBlob("5. Who decides what counts as speech?"), 1, 7200, y, 54000, y + 1200, 1100, 0);
+        emon.Testport.AssertEq(HtRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 0, "no heading");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 8), 0, "item 4 is an item");
+    }
+    [Xunit.Fact]
+    public static void TestABoldLineInsideAListItemIsNotAHeading() {
+        // D1620 (smoke A13): the wrapped line of a bullet, set in bold and further in than the bullet, belongs to the item.
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells sf = emon.Port.NewCells();
+        emon.Port.Cells sc = emon.Port.NewCells();
+        emon.Port.Cells hc = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells pr = emon.Port.NewCells();
+        emon.Port.Cells ptxt = emon.Port.NewCells();
+        int y = 5000;
+        y = HtBody(wd, ln, et, 1, y, 4);
+        y += 900;
+        HtLine(wd, ln, et, emon.Testport.TextBlob("• The first sentence of the item."), 1, 7200, y, 54000, y + 1200, 1100, 0);
+        y += 1400;
+        HtLine(wd, ln, et, emon.Testport.TextBlob("Second sentence set in bold type"), 1, 8800, y, 54000, y + 1200, 1100, 1);
+        y += 1400;
+        HtLine(wd, ln, et, emon.Testport.TextBlob("• The next item of the list."), 1, 7200, y, 54000, y + 1200, 1100, 0);
+        emon.Testport.AssertEq(HtRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 0, "no heading");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 5), 0, "the wrapped line is the item's");
+    }
+    [Xunit.Fact]
+    public static void TestABoldLabelOnAPageOfShortLinesIsNotAHeading() {
+        // D1620 (smoke A12): a receipt. Ten lines of two words, a bold name above them with room around it, and a bold line of the
+        // same size as the rest, as close under the line above as they are, in the middle: a label, not a section. The same line on a
+        // page with sentences on it, after a sentence that ended, is a heading.
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells sf = emon.Port.NewCells();
+        emon.Port.Cells sc = emon.Port.NewCells();
+        emon.Port.Cells hc = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells pr = emon.Port.NewCells();
+        emon.Port.Cells ptxt = emon.Port.NewCells();
+        int y = 5000;
+        int i = 0;
+        HtHeading(wd, ln, et, emon.Testport.TextBlob("STORE NAME"), y, 1500, 1);
+        y += 2900;
+        while (i < 10) {
+            if (i == 5) {
+                HtLine(wd, ln, et, emon.Testport.TextBlob("Cashier Anna"), 1, 7200, y, 30000, y + 1200, 1100, 1);
+            } else {
+                HtLine(wd, ln, et, emon.Testport.TextBlob("bread loaf"), 1, 7200, y, 30000, y + 1200, 1100, 0);
+            }
+            y += 1400;
+            i += 1;
+        }
+        emon.Testport.AssertEq(HtRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 1, "one heading: the name");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 0), 1, "the name is the heading");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 6), 0, "the bold label among the lines is not");
+        // prose: the same bold line after a line that ends a sentence
+        emon.Port.CellsDrop(wd, 0);
+        emon.Port.CellsDrop(ln, 0);
+        emon.Port.CellsDrop(et, 0);
+        y = HtBody(wd, ln, et, 1, 5000, 4);
+        HtLine(wd, ln, et, emon.Testport.TextBlob("Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eius."), 1, 7200, y, 54000, y + 1200, 1100, 0);
+        y += 1400;
+        HtLine(wd, ln, et, emon.Testport.TextBlob("Cashier Anna"), 1, 7200, y, 30000, y + 1200, 1100, 1);
+        y += 1400;
+        y = HtBody(wd, ln, et, 1, y, 4);
+        emon.Testport.AssertEq(HtRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 1, "one heading");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 5), 1, "on a page of sentences the bold line is a heading");
+    }
+    [Xunit.Fact]
+    public static void TestALineNumberAndARowOfFiguresAreNotOneHeadingLine() {
+        // D1620 (smoke A12): a statement's rows, in bold, with the line number in a column of its own: `2` and `$89158874 05/02/2024 rent`
+        // stand on one row, a number apart. A bare number beside a title is the number of a heading line (a heading whose layout
+        // put the number on a line of its own, `h-numbered`); beside a row of figures it is the row's number.
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells sf = emon.Port.NewCells();
+        emon.Port.Cells sc = emon.Port.NewCells();
+        emon.Port.Cells hc = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells pr = emon.Port.NewCells();
+        emon.Port.Cells ptxt = emon.Port.NewCells();
+        int y = 5000;
+        y = HtBody(wd, ln, et, 1, y, 4);
+        y += 900;
+        HtLine(wd, ln, et, emon.Testport.TextBlob("2"), 1, 7200, y, 7800, y + 1200, 1200, 1);
+        HtLine(wd, ln, et, emon.Testport.TextBlob("$89158874 05/02/2024 rent"), 1, 9000, y, 30000, y + 1200, 1200, 1);
+        y += 2300;
+        y = HtBody(wd, ln, et, 1, y, 4);
+        emon.Testport.AssertEq(HtRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 0, "no heading");
+        // nor is a street number beside its street
+        emon.Port.CellsDrop(wd, 0);
+        emon.Port.CellsDrop(ln, 0);
+        emon.Port.CellsDrop(et, 0);
+        y = HtBody(wd, ln, et, 1, 5000, 4);
+        y += 900;
+        HtLine(wd, ln, et, emon.Testport.TextBlob("88"), 1, 7200, y, 7800, y + 1200, 1200, 1);
+        HtLine(wd, ln, et, emon.Testport.TextBlob("HENNESSY ROAD WAN CHAI, HONG KONG"), 1, 9000, y, 30000, y + 1200, 1200, 1);
+        y += 2300;
+        y = HtBody(wd, ln, et, 1, y, 4);
+        emon.Testport.AssertEq(HtRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 0, "no heading");
+        // the same number beside a title is one heading line
+        emon.Port.CellsDrop(wd, 0);
+        emon.Port.CellsDrop(ln, 0);
+        emon.Port.CellsDrop(et, 0);
+        y = HtBody(wd, ln, et, 1, 5000, 4);
+        y += 900;
+        HtLine(wd, ln, et, emon.Testport.TextBlob("2"), 1, 7200, y, 7800, y + 1200, 1200, 1);
+        HtLine(wd, ln, et, emon.Testport.TextBlob("Methods and data"), 1, 9000, y, 30000, y + 1200, 1200, 1);
+        y += 2300;
+        y = HtBody(wd, ln, et, 1, y, 4);
+        emon.Testport.AssertEq(HtRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 1, "one heading");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 4), 1, "the number is the heading's");
     }
     [Xunit.Fact]
     public static void TestANumberedListIsNotARunOfHeadings() {
