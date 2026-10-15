@@ -106,6 +106,10 @@ retarget/replay/ovl-h-numbered/transcript.edn
 retarget/replay/ovl-stamp-seal/transcript.edn
 retarget/replay/ovl-table-simple-ruled/transcript.edn
 retarget/replay/ovl-watermark-draft/transcript.edn
+retarget/replay/raster-72dpi/transcript.edn
+retarget/replay/raster-flate-render/transcript.edn
+retarget/replay/raster-rot180/transcript.edn
+retarget/replay/raster-rot90/transcript.edn
 sealpx/replay/ovl-seal-over-text/transcript.edn
 sealpx/replay/ovl-sig-over-name/transcript.edn
 sealpx/replay/ovl-stamp-seal/transcript.edn
