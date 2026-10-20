@@ -4063,6 +4063,41 @@ public final class Pdfcontent {
         emon.Port.cellsDrop(et, b + (emon.Port.cellsLen(et) - e));
         return b;
     }
+    public static int pcBaseGlyph(emon.Port.Cells gl, int gfst, int glst, int fromEnd) {
+        // P12.7 (smoke A N2): the glyph a word's baseline is read from at its start (from-end 0) or at its end (1): the first (last) of its glyphs that is not set small against the biggest of the
+        // word (at most 80 per cent of its size). The raised digits of a footnote marker, `white¹,`, sit above the line's baseline: a word's baseline is not theirs, or the rows of a table that
+        // sorts its words by baseline put `bread¹,` before `White`. The last (first) glyph itself when none is, or the word has one glyph.
+        int mx = 0;
+        int j = gfst;
+        while (j <= glst) {
+            if (Evidence.glGet(gl, j, Evidence.gfSize()) > mx) {
+                mx = Evidence.glGet(gl, j, Evidence.gfSize());
+            }
+            j += 1;
+        }
+        // Compare against floor(4 * mx / 5), dividing first so huge glyph sizes cannot overflow (identity fuzz corpus).
+        if (fromEnd == 1) {
+            j = glst;
+            while (j >= gfst) {
+                if (Evidence.glGet(gl, j, Evidence.gfSize()) > (((mx / 5) * 4) + (((mx % 5) * 4) / 5))) {
+                    return j;
+                }
+                j -= 1;
+            }
+        } else {
+            j = gfst;
+            while (j <= glst) {
+                if (Evidence.glGet(gl, j, Evidence.gfSize()) > (((mx / 5) * 4) + (((mx % 5) * 4) / 5))) {
+                    return j;
+                }
+                j += 1;
+            }
+        }
+        if (fromEnd == 1) {
+            return glst;
+        }
+        return gfst;
+    }
     public static int pcEmitWord(emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells wd, emon.Port.Cells fnt, int page, int gfst, int glst, int wbk) {
         // Record glyphs [gfst, glst] as a word: the union of their boxes, their text, the
         // dominant font and size of the first, and `hidden-text` as its source when every
@@ -4133,7 +4168,9 @@ public final class Pdfcontent {
         } else {
             tstart = pcBidiText(et, gl, gfst, glst);
         }
-        int w = Evidence.wdNew(wd, page, x0, y0, x1, y1, Evidence.glGet(gl, gfst, Evidence.gfBx0()), Evidence.glGet(gl, gfst, Evidence.gfBy0()), Evidence.glGet(gl, glst, Evidence.gfBx1()), Evidence.glGet(gl, glst, Evidence.gfBy1()), Evidence.glGet(gl, gfst, Evidence.gfRot()), 0, tstart, emon.Port.cellsLen(et) - tstart, -1, -1, -1);
+        int gb0 = pcBaseGlyph(gl, gfst, glst, 0);
+        int gb1 = pcBaseGlyph(gl, gfst, glst, 1);
+        int w = Evidence.wdNew(wd, page, x0, y0, x1, y1, Evidence.glGet(gl, gfst, Evidence.gfBx0()), Evidence.glGet(gl, gb0, Evidence.gfBy0()), Evidence.glGet(gl, glst, Evidence.gfBx1()), Evidence.glGet(gl, gb1, Evidence.gfBy1()), Evidence.glGet(gl, gfst, Evidence.gfRot()), 0, tstart, emon.Port.cellsLen(et) - tstart, -1, -1, -1);
         int fo = Evidence.glGet(gl, gfst, Evidence.gfFont());
         if (rtlw == 1) {
             Evidence.wdSet(wd, w, Evidence.hdDir(), Evidence.ldRtl());

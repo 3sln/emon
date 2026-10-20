@@ -275,6 +275,78 @@ public final class Notes {
         }
         return 1;
     }
+    public static int ntNthWord(emon.Port.Cells wd, emon.Port.Cells ln, int l, int n) {
+        // The n-th (from 0) word with text of line l; -1 when it has fewer.
+        int w0 = Evidence.lnGet(ln, l, Evidence.lhFirst());
+        int wn = Evidence.lnGet(ln, l, Evidence.lhCount());
+        int i = 0;
+        int seen = 0;
+        while (i < wn) {
+            if (Lists.lsWl(wd, w0 + i) > 0) {
+                if (seen == n) {
+                    return w0 + i;
+                }
+                seen += 1;
+            }
+            i += 1;
+        }
+        return -1;
+    }
+    public static int ntSameWords(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int a, int b, int n) {
+        // 1 when the first n words of lines a and b are the same, character for character.
+        int k = 0;
+        int j = 0;
+        while (k < n) {
+            int wa = ntNthWord(wd, ln, a, k);
+            int wb = ntNthWord(wd, ln, b, k);
+            if ((wa < 0) || (wb < 0)) {
+                return 0;
+            }
+            if (Lists.lsWl(wd, wa) != Lists.lsWl(wd, wb)) {
+                return 0;
+            }
+            j = 0;
+            while (j < Lists.lsWl(wd, wa)) {
+                if (Lists.lsWc(wd, et, wa, j) != Lists.lsWc(wd, et, wb, j)) {
+                    return 0;
+                }
+                j += 1;
+            }
+            k += 1;
+        }
+        return 1;
+    }
+    public static int ntMarginLine(emon.Port.Cells ln, emon.Port.Cells pages, int l) {
+        // Running text occupies a page margin: the top or bottom fifteen per cent. A repeated caption in the body can belong to a continued table.
+        int h = Model.pageH(pages, Evidence.lnGet(ln, l, Evidence.lhPage()) - 1);
+        int y = Evidence.lnGet(ln, l, Evidence.lhY0()) + Evidence.lnGet(ln, l, Evidence.lhY1());
+        if (h <= 0) {
+            return 0;
+        }
+        if (((y * 100) <= (h * 30)) || ((y * 100) >= (h * 170))) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int ntRunningLabel(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells hc, emon.Port.Cells pages, int l) {
+        // P12.7 (smoke A N1): 1 when caption candidate l begins with the same four words as another candidate on another page: `Schedule 1 (Form 1040) 2025` at the foot of one page and at the head of the next is a running
+        // header or footer and no caption (the caption of a figure or a table has its number, which is its own; a label that recurs is the document's). Candidates are the lines flagged 8, and 64 (let go as an entry of a list).
+        int n = Evidence.lnCount(ln);
+        int pg = Evidence.lnGet(ln, l, Evidence.lhPage());
+        int m = 0;
+        while (m < n) {
+            if ((m != l) && (Evidence.lnGet(ln, m, Evidence.lhPage()) != pg) && ((ntMarginLine(ln, pages, m) == 1) || (ntMarginLine(ln, pages, l) == 1))) {
+                int fl = Lists.lsGet(hc, m, Lists.lsKFlags());
+                if ((fl == Lists.lsFCap()) || (fl == 64)) {
+                    if (ntSameWords(wd, ln, et, l, m, 4) == 1) {
+                        return 1;
+                    }
+                }
+            }
+            m += 1;
+        }
+        return 0;
+    }
     public static int ntAfter(emon.Port.Cells wd, emon.Port.Cells ln, int l, int w) {
         // The word with text that follows word w in line l; -1 when there is none.
         int w0 = Evidence.lnGet(ln, l, Evidence.lhFirst());
@@ -811,6 +883,54 @@ public final class Notes {
         }
         return n;
     }
+    public static int ntSameShape(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int a, int b) {
+        // P12.7 (smoke B N4): 1 when lines a and b have the same words, a digit standing for any digit.
+        int na = Evidence.lnGet(ln, a, Evidence.lhCount());
+        int wa = Evidence.lnGet(ln, a, Evidence.lhFirst());
+        int wb = Evidence.lnGet(ln, b, Evidence.lhFirst());
+        int i = 0;
+        int j = 0;
+        if (na != Evidence.lnGet(ln, b, Evidence.lhCount())) {
+            return 0;
+        }
+        while (i < na) {
+            int tl = Lists.lsWl(wd, wa + i);
+            if (tl != Lists.lsWl(wd, wb + i)) {
+                return 0;
+            }
+            j = 0;
+            while (j < tl) {
+                int ca = Lists.lsWc(wd, et, wa + i, j);
+                int cb = Lists.lsWc(wd, et, wb + i, j);
+                if ((ca != cb) && ((Lists.lsDigit(ca) < 0) || (Lists.lsDigit(cb) < 0))) {
+                    return 0;
+                }
+                j += 1;
+            }
+            i += 1;
+        }
+        return 1;
+    }
+    public static int ntRepeats(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l) {
+        // P12.7 (smoke B N4): 1 when line l has a twin on another page: the same words (digits alike), the same type size and the same height within 15 pt. A line that recurs at the foot of every page is furniture
+        // (an address, a motto), never a note: notes do not repeat.
+        int n = Evidence.lnCount(ln);
+        int pg = Evidence.lnGet(ln, l, Evidence.lhPage());
+        int y = Evidence.lnGet(ln, l, Evidence.lhY0());
+        int m = 0;
+        if (Evidence.lnGet(ln, l, Evidence.lhCount()) < 2) {
+            return 0;
+        }
+        while (m < n) {
+            if ((Evidence.lnGet(ln, m, Evidence.lhPage()) != pg) && (Lists.lsAbs(Evidence.lnGet(ln, m, Evidence.lhY0()) - y) <= 1500)) {
+                if (ntSameShape(wd, ln, et, l, m) == 1) {
+                    return 1;
+                }
+            }
+            m += 1;
+        }
+        return 0;
+    }
     public static int ntFoot(emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells ln, emon.Port.Cells sf, emon.Port.Cells rf, emon.Port.Cells nb, emon.Port.Cells mk, int i) {
         // Is note body candidate i a footnote? In the lower half of the page (the band) and small or marked in superscript,
         // with a reference on its page; or small, with a reference on the page before (a note a column or a page break pushed
@@ -845,7 +965,8 @@ public final class Notes {
         if ((kind == 2) && ((szok == 1) && (band == 1))) {
             int bsz = Style.stHget(sf, Style.sfhSize());
             int w = emon.Port.cellsAt(nb, b + 2);
-            if ((Lists.lsWc(wd, et, w, 0) != 91) && (ntPlainPeers(nb, i) <= 5)) {
+            // P12.7 (smoke B N4): a note's number has at most two digits (302 is a street number), and a line that recurs on other pages is no note
+            if ((Lists.lsWc(wd, et, w, 0) != 91) && ((ntPlainPeers(nb, i) <= 5) && ((emon.Port.cellsAt(nb, b + 6) <= 2) && (ntRepeats(wd, ln, et, emon.Port.cellsAt(nb, b)) == 0)))) {
                 if (ntSmallToEnd(ln, sf, emon.Port.cellsAt(nb, b), bsz) == 1) {
                     emon.Port.cellsSet(nb, b + 7, 1);
                     return 1;
@@ -1249,7 +1370,7 @@ public final class Notes {
         l = 0;
         while (l < n) {
             if (Lists.lsGet(hc, l, Lists.lsKFlags()) == Lists.lsFCap()) {
-                if ((ntInRun(sf, ln, hc, l) == 1) || ((ntTocLike(wd, ln, et, sf, l) == 1) || (ntInProse(ln, sf, sc, l) == 1))) {
+                if ((ntInRun(sf, ln, hc, l) == 1) || ((ntTocLike(wd, ln, et, sf, l) == 1) || ((ntInProse(ln, sf, sc, l) == 1) || (ntRunningLabel(wd, ln, et, hc, pages, l) == 1)))) {
                     Lists.lsPut(hc, l, Lists.lsKFlags(), 64);
                 }
             }

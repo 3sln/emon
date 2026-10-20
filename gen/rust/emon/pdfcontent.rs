@@ -4074,6 +4074,41 @@ pub(crate) fn pc_bidi_text(mut et: &mut crate::port::Cells, gl: &mut crate::port
     crate::port::cells_drop(et, b + (crate::port::cells_len(et) - e));
     return b;
 }
+pub fn pc_base_glyph(gl: &mut crate::port::Cells, gfst: i32, glst: i32, from_end: i32) -> i32 {
+    // P12.7 (smoke A N2): the glyph a word's baseline is read from at its start (from-end 0) or at its end (1): the first (last) of its glyphs that is not set small against the biggest of the
+    // word (at most 80 per cent of its size). The raised digits of a footnote marker, `white¹,`, sit above the line's baseline: a word's baseline is not theirs, or the rows of a table that
+    // sorts its words by baseline put `bread¹,` before `White`. The last (first) glyph itself when none is, or the word has one glyph.
+    let mut mx: i32 = 0;
+    let mut j: i32 = gfst;
+    while j <= glst {
+        if gl_get(gl, j, gf_size()) > mx {
+            mx = gl_get(gl, j, gf_size());
+        }
+        j += 1;
+    }
+    // Compare against floor(4 * mx / 5), dividing first so huge glyph sizes cannot overflow (identity fuzz corpus).
+    if from_end == 1 {
+        j = glst;
+        while j >= gfst {
+            if gl_get(gl, j, gf_size()) > (((mx / 5) * 4) + (((mx % 5) * 4) / 5)) {
+                return j;
+            }
+            j -= 1;
+        }
+    } else {
+        j = gfst;
+        while j <= glst {
+            if gl_get(gl, j, gf_size()) > (((mx / 5) * 4) + (((mx % 5) * 4) / 5)) {
+                return j;
+            }
+            j += 1;
+        }
+    }
+    if from_end == 1 {
+        return glst;
+    }
+    return gfst;
+}
 pub(crate) fn pc_emit_word(mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut wd: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, page: i32, gfst: i32, glst: i32, wbk: i32) -> i32 {
     // Record glyphs [gfst, glst] as a word: the union of their boxes, their text, the
     // dominant font and size of the first, and `hidden-text` as its source when every
@@ -4144,7 +4179,9 @@ pub(crate) fn pc_emit_word(mut gl: &mut crate::port::Cells, mut et: &mut crate::
     } else {
         tstart = pc_bidi_text(et, gl, gfst, glst);
     }
-    let w: i32 = wd_new(wd, page, x0, y0, x1, y1, gl_get(gl, gfst, gf_bx0()), gl_get(gl, gfst, gf_by0()), gl_get(gl, glst, gf_bx1()), gl_get(gl, glst, gf_by1()), gl_get(gl, gfst, gf_rot()), 0, tstart, crate::port::cells_len(et) - tstart, -1, -1, -1);
+    let gb0: i32 = pc_base_glyph(gl, gfst, glst, 0);
+    let gb1: i32 = pc_base_glyph(gl, gfst, glst, 1);
+    let w: i32 = wd_new(wd, page, x0, y0, x1, y1, gl_get(gl, gfst, gf_bx0()), gl_get(gl, gb0, gf_by0()), gl_get(gl, glst, gf_bx1()), gl_get(gl, gb1, gf_by1()), gl_get(gl, gfst, gf_rot()), 0, tstart, crate::port::cells_len(et) - tstart, -1, -1, -1);
     let fo: i32 = gl_get(gl, gfst, gf_font());
     if rtlw == 1 {
         wd_set(wd, w, hd_dir(), ld_rtl());

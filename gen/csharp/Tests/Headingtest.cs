@@ -732,6 +732,67 @@ public static class Headingtest {
         emon.Testport.AssertEq(Heading.HdLevel(hc, 8), 0, "the third");
     }
     [Xunit.Fact]
+    public static void TestALabelAndItsValueAndAFolioAreNoHeadings() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells sf = emon.Port.NewCells();
+        emon.Port.Cells sc = emon.Port.NewCells();
+        emon.Port.Cells hc = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells pr = emon.Port.NewCells();
+        emon.Port.Cells ptxt = emon.Port.NewCells();
+        int y = 5000;
+        // P12.7 (smoke A issue 11): set in a bold larger than the body, `Tax Id: 988-96-5242` (a label and a value with digits in it) and `A-3` (the folio of an appendix) were headings of a document about invoices and
+        // a glossary. A bold line that has no digit in it (`Findings`) is still the heading.
+        y = HtBody(wd, ln, et, 1, y, 5);
+        y += 900;
+        HtHeading(wd, ln, et, emon.Testport.TextBlob("Findings"), y, 1400, 1);
+        y += 2300;
+        y = HtBody(wd, ln, et, 1, y, 4);
+        y += 900;
+        HtHeading(wd, ln, et, emon.Testport.TextBlob("Tax Id: 988-96-5242"), y, 1400, 1);
+        y += 2300;
+        y = HtBody(wd, ln, et, 1, y, 4);
+        y += 900;
+        HtHeading(wd, ln, et, emon.Testport.TextBlob("A-3"), y, 1400, 1);
+        y += 2300;
+        y = HtBody(wd, ln, et, 1, y, 4);
+        emon.Testport.AssertEq(HtRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 1, "one heading");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 5), 1, "`Findings`");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 10), 0, "`Tax Id: 988-96-5242`");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 15), 0, "`A-3`");
+    }
+    [Xunit.Fact]
+    public static void TestAnArticleWithNumberedItemsUnderItIsAHeading() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells sf = emon.Port.NewCells();
+        emon.Port.Cells sc = emon.Port.NewCells();
+        emon.Port.Cells hc = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells pr = emon.Port.NewCells();
+        emon.Port.Cells ptxt = emon.Port.NewCells();
+        int y = 5000;
+        // P12.7 (smoke B L8): the declaration's `Статья 11` is a keyword and a number in the body's own style, with a gap under it and then the numbered items `1.` and `2.` of the article. A numbered line next to
+        // another numbered line (the first item) was an item of a run, and the article a paragraph; 14 of the 30 were. A keyword and a number is the head of the items under it.
+        y = HtBody(wd, ln, et, 1, y, 5);
+        y += 900;
+        HtLine(wd, ln, et, emon.Testport.TextBlob("Article 11"), 1, 7200, y, 40000, y + 1200, 1100, 0);
+        y += 2600;
+        HtLine(wd, ln, et, emon.Testport.TextBlob("1. Everyone charged with a penal offence has the right to be presumed innocent"), 1, 7200, y, 40000, y + 1200, 1100, 0);
+        y += 1400;
+        HtLine(wd, ln, et, emon.Testport.TextBlob("2. No one shall be held guilty of any penal offence on account of any act"), 1, 7200, y, 40000, y + 1200, 1100, 0);
+        y += 1400;
+        emon.Testport.AssertEq(HtRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 1, "one heading");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 5), 1, "`Article 11`");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 6), 0, "the first item");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 7), 0, "the second");
+    }
+    [Xunit.Fact]
     public static void TestANumberedTitleBetweenParagraphsIsAHeading() {
         // D395: no weight, no size, no italic (a scan): a short numbered line with a paragraph above and below, the
         // paragraph flush with it, is a heading; the same numbers closing a list are not.

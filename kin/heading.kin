@@ -404,6 +404,51 @@
           (set w (+ w 1))))
     (return n)))
 
+(defn ^I32 hd-letter [^I32 c]
+  (comment "1 for a letter of a cased script or of any script above U+024F (so a heading in Han or Arabic has letters).")
+  (if (st-lower c) (return 1))
+  (if (st-upper c) (return 1))
+  (if (> c 591) (return 1))
+  (return 0))
+
+(defn ^I32 hd-datum-line [^Cells wd ^Cells ln ^Cells et ^I32 l]
+  (comment "P12.7 (smoke A issue 11): 1 when line l is a datum and no title: (1) a label, a colon, and a value that has a digit in it (`Tax Id: 988-96-5242`, `IBAN: GB83FTEF94522626404124`, `Date of")
+  (comment "issue: 03/23/2019`): a word of the first four ends in a colon, a word follows it, and every word that follows has a digit; (2) a short mark of at most two letters and a digit with no more than 12 characters")
+  (comment "(`A-3`, a page number of an appendix) is a page's folio. Neither is any section's name.")
+  (let [^I32 first (ln-get ln l (lh-first))
+        ^I32 end (+ first (ln-get ln l (lh-count)))
+        ^:mut ^I32 w first
+        ^:mut ^I32 k 0
+        ^:mut ^I32 colon -1
+        ^:mut ^I32 j 0
+        ^:mut ^I32 letters 0
+        ^:mut ^I32 digits 0
+        ^:mut ^I32 chars 0
+        ^:mut ^I32 words 0
+        ^:mut ^I32 has 0
+        ^:mut ^I32 ok 1]
+    (while (< w end)
+      (do (let [^I32 n (hd-wl wd w)]
+            (if (> n 0)
+              (do (set words (+ words 1))
+                  (set j 0)
+                  (set has 0)
+                  (while (< j n)
+                    (do (let [^I32 c (hd-wc wd et w j)]
+                          (set chars (+ chars 1))
+                          (if (== (hd-letter c) 1) (set letters (+ letters 1)))
+                          (if (and (>= c 48) (<= c 57))
+                            (do (set digits (+ digits 1))
+                                (set has 1))))
+                        (set j (+ j 1))))
+                  (if (and (< colon 0) (and (< k 4) (== (hd-wc wd et w (- n 1)) 58))) (set colon k))
+                  (if (and (>= colon 0) (> k colon) (== has 0)) (set ok 0))
+                  (set k (+ k 1)))))
+          (set w (+ w 1))))
+    (if (and (>= colon 0) (and (== ok 1) (> words (+ colon 1)))) (return 1))
+    (if (and (<= letters 2) (and (>= digits 1) (and (<= chars 12) (== words 1)))) (return 1))
+    (return 0)))
+
 (defn ^I32 hd-pronoun [^Cells wd ^Cells et ^I32 w2]
   (comment "1 when the word after a lone `I` says it is the English pronoun, not a Roman numeral: it starts in lower case or has an")
   (comment "apostrophe in it (`Series I Don't Want`, `Series I think`). A line that stops at the `I` is a numeral.")
@@ -731,6 +776,9 @@
   (let [^I32 a (st-get sf top (sfk-above))
         ^I32 b (st-get sf last (sfk-below))
         ^I32 c (st-get sf top (sfk-class))]
+    (comment "P12.7 (smoke B L8): a keyword and a number (`Статья 11`, `Article 5`, `Section 2`) is the head of what follows, never an item of a run: the numbered items under it (`1.`, `2.`) are its own, and made it")
+    (comment "an item of theirs, a paragraph (14 of the declaration's 30 articles). `hd-marker` clobbers ws[0..5], which the caller makes again.")
+    (if (== (hd-marker wd ln et ws top) 6) (return 0))
     (if (and (>= a 0) (and (== (st-get sf a (sfk-class)) c) (== (st-get sf a (sfk-head)) 1)))
       (return 1))
     (if (and (>= b 0) (and (== (st-get sf b (sfk-class)) c) (== (st-get sf b (sfk-head)) 1)))
@@ -851,6 +899,9 @@
           (set i (+ i 1))))
     (if (> total HD_MAXCPS) (return -1))
     (if (hd-sentence-end (st-get sf last (sfk-last))) (return -1))
+    (comment "P12.7 (smoke A issue 11): a label and its value, and a page's folio, are data and no title")
+    (if (== cnt 1)
+      (if (and (== (hd-marker wd ln et ws top) 0) (== (hd-datum-line wd ln et top) 1)) (return -1)))
     (if (== ps 0)
       (if (== (hd-list-run wd ln et ws sf top last) 1) (return -1)))
     (if (== ps 0)

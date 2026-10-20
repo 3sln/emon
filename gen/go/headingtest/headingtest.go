@@ -757,6 +757,67 @@ func TestANumberedListIsNotARunOfHeadings(emonT *testing.T) {
 	port.AssertEq(emonT, heading.HdLevel(hc, 8), 0, "the third")
 }
 
+func TestALabelAndItsValueAndAFolioAreNoHeadings(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var sf *port.Cells = port.NewCells()
+	var sc *port.Cells = port.NewCells()
+	var hc *port.Cells = port.NewCells()
+	var ws *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var pr *port.Cells = port.NewCells()
+	var ptxt *port.Cells = port.NewCells()
+	var y int32 = 5000
+	// P12.7 (smoke A issue 11): set in a bold larger than the body, `Tax Id: 988-96-5242` (a label and a value with digits in it) and `A-3` (the folio of an appendix) were headings of a document about invoices and
+	// a glossary. A bold line that has no digit in it (`Findings`) is still the heading.
+	y = htBody(wd, ln, et, 1, y, 5)
+	y += 900
+	htHeading(wd, ln, et, port.TextBlob("Findings"), y, 1400, 1)
+	y += 2300
+	y = htBody(wd, ln, et, 1, y, 4)
+	y += 900
+	htHeading(wd, ln, et, port.TextBlob("Tax Id: 988-96-5242"), y, 1400, 1)
+	y += 2300
+	y = htBody(wd, ln, et, 1, y, 4)
+	y += 900
+	htHeading(wd, ln, et, port.TextBlob("A-3"), y, 1400, 1)
+	y += 2300
+	y = htBody(wd, ln, et, 1, y, 4)
+	port.AssertEq(emonT, htRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 1, "one heading")
+	port.AssertEq(emonT, heading.HdLevel(hc, 5), 1, "`Findings`")
+	port.AssertEq(emonT, heading.HdLevel(hc, 10), 0, "`Tax Id: 988-96-5242`")
+	port.AssertEq(emonT, heading.HdLevel(hc, 15), 0, "`A-3`")
+}
+
+func TestAnArticleWithNumberedItemsUnderItIsAHeading(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var sf *port.Cells = port.NewCells()
+	var sc *port.Cells = port.NewCells()
+	var hc *port.Cells = port.NewCells()
+	var ws *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var pr *port.Cells = port.NewCells()
+	var ptxt *port.Cells = port.NewCells()
+	var y int32 = 5000
+	// P12.7 (smoke B L8): the declaration's `Статья 11` is a keyword and a number in the body's own style, with a gap under it and then the numbered items `1.` and `2.` of the article. A numbered line next to
+	// another numbered line (the first item) was an item of a run, and the article a paragraph; 14 of the 30 were. A keyword and a number is the head of the items under it.
+	y = htBody(wd, ln, et, 1, y, 5)
+	y += 900
+	htLine(wd, ln, et, port.TextBlob("Article 11"), 1, 7200, y, 40000, y+1200, 1100, 0)
+	y += 2600
+	htLine(wd, ln, et, port.TextBlob("1. Everyone charged with a penal offence has the right to be presumed innocent"), 1, 7200, y, 40000, y+1200, 1100, 0)
+	y += 1400
+	htLine(wd, ln, et, port.TextBlob("2. No one shall be held guilty of any penal offence on account of any act"), 1, 7200, y, 40000, y+1200, 1100, 0)
+	y += 1400
+	port.AssertEq(emonT, htRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 1, "one heading")
+	port.AssertEq(emonT, heading.HdLevel(hc, 5), 1, "`Article 11`")
+	port.AssertEq(emonT, heading.HdLevel(hc, 6), 0, "the first item")
+	port.AssertEq(emonT, heading.HdLevel(hc, 7), 0, "the second")
+}
+
 func TestANumberedTitleBetweenParagraphsIsAHeading(emonT *testing.T) {
 	// D395: no weight, no size, no italic (a scan): a short numbered line with a paragraph above and below, the
 	// paragraph flush with it, is a heading; the same numbers closing a list are not.

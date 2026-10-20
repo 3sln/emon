@@ -85,6 +85,14 @@
         ^I32 b (sg-abs dy)]
     (return (+ (sg-hi a b) (quot (* 3 (sg-lo a b)) 8)))))
 
+(defn ^I32 sg-ink-diff [^I32 a ^I32 b]
+  (comment "P12.7 (smoke B N3): the sum of the channel differences of two inks (0xRRGGBB); 0 when either is unknown (negative).")
+  (if (< a 0) (return 0))
+  (if (< b 0) (return 0))
+  (return (+ (sg-abs (- (rem (quot a 65536) 256) (rem (quot b 65536) 256)))
+             (+ (sg-abs (- (rem (quot a 256) 256) (rem (quot b 256) 256)))
+                (sg-abs (- (rem a 256) (rem b 256)))))))
+
 (defn ^I32 sg-gap-of [^I32 a0 ^I32 a1 ^I32 b0 ^I32 b1]
   (comment "The distance between the intervals [a0, a1] and [b0, b1]; 0 when they overlap.")
   (if (> b0 a1) (return (- b0 a1)))
@@ -404,6 +412,9 @@
                                     (cells-set tmp (+ a 2) (sg-hi (cells-at tmp (+ a 2)) (cells-at tmp (+ b 2))))
                                     (cells-set tmp (+ a 3) (sg-hi (cells-at tmp (+ a 3)) (cells-at tmp (+ b 3))))
                                     (cells-set tmp (+ a 4) (+ (cells-at tmp (+ a 4)) (cells-at tmp (+ b 4))))
+                                    (comment "P12.7 (smoke B N3): strokes of two inks are a chart's lines and a legend's samples, not one pen: the cluster's ink (cell 6) becomes -2")
+                                    (if (or (== (cells-at tmp (+ a 6)) -2) (or (== (cells-at tmp (+ b 6)) -2) (> (sg-ink-diff (cells-at tmp (+ a 6)) (cells-at tmp (+ b 6))) 96)))
+                                      (cells-set tmp (+ a 6) -2))
                                     (set la (cells-at tmp (+ a 7)))
                                     (set lb (cells-at tmp (+ b 7)))
                                     (if (or (< la 0) (< lb 0))
@@ -504,7 +515,8 @@
           (set kind 0)
           (set conf 0)
           (if (and (== (sg-tortuous (cells-at sgc (+ c 8)) (cells-at sgc (+ c 15))) 1)
-                   (< (sg-legible-words owords et fw (cells-at sgc c) (cells-at sgc (+ c 1)) (cells-at sgc (+ c 2)) (cells-at sgc (+ c 3)) (cells-at sgc (+ c 4))) 2))
+                   (and (!= (cells-at sgc (+ c 7)) -2)
+                   (< (sg-legible-words owords et fw (cells-at sgc c) (cells-at sgc (+ c 1)) (cells-at sgc (+ c 2)) (cells-at sgc (+ c 3)) (cells-at sgc (+ c 4))) 2)))
             (do (if (== (sg-small sgc c) 1)
                   (do (set rec (sg-recurrence sgc n c))
                       (if (or (!= (bit-and cues 7) 0) (or (and (>= rec 1) (== (sg-in-margin sgc c) 1)) (>= rec 2)))

@@ -132,6 +132,46 @@ public final class Fields {
         }
         return n;
     }
+    public static int flLeaderTail(emon.Port.Cells on, emon.Port.Cells text, int n) {
+        // 1 when a label's own text ends in at least three spaced leader dots. Paragraph assembly may already have joined the leader run to its label; it still connects the field on that row.
+        int c = -1;
+        int last = -1;
+        int dots = 0;
+        int spaces = 0;
+        int j = Model.nodeTextLen(on, n) - 1;
+        int start = Model.nodeTextStart(on, n);
+        if ((Model.nodeHasText(on, n) == 1) && (j >= 0)) {
+            while (j >= 0) {
+                c = emon.Port.cellsAt(text, start + j);
+                if (c == 46) {
+                    dots += 1;
+                } else if ((c == 32) || (c == 9)) {
+                    spaces += 1;
+                } else {
+                    if ((dots >= 3) && (spaces >= 2)) {
+                        return 1;
+                    }
+                    return 0;
+                }
+                j -= 1;
+            }
+            if ((dots >= 3) && (spaces >= 2)) {
+                return 1;
+            }
+            return 0;
+        }
+        c = Model.nodeFirstChild(on, n);
+        while (c >= 0) {
+            if ((Model.nodeIsInline(on, c) == 1) && (flHasContent(on, c) == 1)) {
+                last = c;
+            }
+            c = Model.nodeNext(on, c);
+        }
+        if (last >= 0) {
+            return flLeaderTail(on, text, last);
+        }
+        return 0;
+    }
     public static int flBlocks(emon.Port.Cells on, emon.Port.Cells orr, emon.Port.Cells text, int ndoc, emon.Port.Cells bt) {
         // The block rows `bt` (see FL_B): a row a region of every block that holds a field, has words of its own (text, or inline children's) and a place on a page; and of
         // every table cell that has nothing in it (flags 4: a box can stand in it).
@@ -169,7 +209,7 @@ public final class Fields {
                     emon.Port.cellsPush(bt, Model.regionX1(orr, r));
                     emon.Port.cellsPush(bt, Model.regionY1(orr, r));
                     emon.Port.cellsPush(bt, flags);
-                    emon.Port.cellsPush(bt, 0);
+                    emon.Port.cellsPush(bt, flLeaderTail(on, text, n));
                     r = Model.regionNext(orr, r);
                 }
             }
@@ -227,7 +267,9 @@ public final class Fields {
             b += 1;
         }
         if (best >= 0) {
-            if (bestgap > FL_NEAR_L) {
+            if (emon.Port.cellsAt(bt, (best * FL_B) + 7) == 1) {
+                bestgap = 0;
+            } else if (bestgap > FL_NEAR_L) {
                 if (flBridged(bt, nb, page, y0, y1, best, x0) == 0) {
                     best = -1;
                 }

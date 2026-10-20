@@ -431,4 +431,63 @@ public final class Fieldstest {
         Json.jsEmit(out, 0, nn, na, nr, text, pages, ledger, layout, emon.Port.newCells(), emon.Port.newCells());
         emon.Testport.assertText(out, "{\"emon\":\"1.1\",\"settings\":{\"locale\":null},\"conf\":\"calibrated\",\"pages\":[],\"body\":{\"id\":0,\"kind\":\"document\",\"children\":[{\"id\":1,\"kind\":\"paragraph\",\"text\":\"Agree\",\"inlines\":[{\"kind\":\"field\",\"name\":\"agree\",\"type\":\"checkbox\",\"value\":\"Yes\",\"checked\":true,\"at\":[[1,73,180.2,81,188.2]],\"src\":[\"annot\"],\"conf\":950},{\"kind\":\"text\",\"text\":\"Agree\",\"src\":[\"text\"],\"conf\":815}],\"at\":[[1,87,180,164,188]]}]},\"furniture\":[],\"dropped\":[]}", "the JSON");
     }
+    public static void testALabelsOwnLeadersConnectItsFieldPastTheNearerRowAbove() {
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells an = emon.Port.newCells();
+        emon.Port.Cells txt = emon.Port.newCells();
+        StringBuilder out = emon.Testport.newText();
+        // A form row's leader dots may already belong to the label paragraph. They still bridge the gap to its field: the wide previous row above must not take the next two fields.
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        fdtPar(nodes, regions, text, emon.Testport.textBlob("28 Taxable income"), 5590, 50591, 47022, 51545);
+        fdtPar(nodes, regions, text, emon.Testport.textBlob("29a Net operating loss deduction . . ."), 5590, 51791, 37422, 52745);
+        fdtPar(nodes, regions, text, emon.Testport.textBlob("b Special deductions . . ."), 5590, 52991, 37422, 53945);
+        fdtField(an, txt, 4, -1, emon.Testport.textBlob("loss"), emon.Testport.textBlob(""), emon.Testport.textBlob(""), 41040, 51600, 48165, 52800);
+        fdtField(an, txt, 4, -1, emon.Testport.textBlob("special"), emon.Testport.textBlob(""), emon.Testport.textBlob(""), 41040, 52800, 48165, 54000);
+        fdtHtml(0, nodes, attrs, regions, text, an, txt, out);
+        emon.Testport.assertText(out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>28 Taxable income</p><p>29a Net operating loss deduction . . .<span data-emon=\"field\" data-emon-name=\"loss\" data-emon-type=\"text\"></span></p><p>b Special deductions . . .<span data-emon=\"field\" data-emon-name=\"special\" data-emon-type=\"text\"></span></p></main></body></html>", "each field belongs to its row's leader label");
+    }
+    public static void testAnExplicitLeaderLabelBeatsTheBareRowNumberBesideItsField() {
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells an = emon.Port.newCells();
+        emon.Port.Cells txt = emon.Port.newCells();
+        StringBuilder out = emon.Testport.newText();
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        fdtPar(nodes, regions, text, emon.Testport.textBlob("29a Net loss . . ."), 5590, 51791, 37422, 52745);
+        fdtPar(nodes, regions, text, emon.Testport.textBlob("29a"), 39285, 51791, 40634, 52745);
+        fdtField(an, txt, 4, -1, emon.Testport.textBlob("loss"), emon.Testport.textBlob(""), emon.Testport.textBlob(""), 41040, 51600, 48165, 52800);
+        fdtHtml(0, nodes, attrs, regions, text, an, txt, out);
+        emon.Testport.assertText(out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>29a Net loss . . .<span data-emon=\"field\" data-emon-name=\"loss\" data-emon-type=\"text\"></span></p><p>29a</p></main></body></html>", "the leader connects the descriptive label past its row number");
+    }
+    public static void testUnattachedPrintingDotsAreNotFormParagraphsAndDoNotDropFields() {
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells an = emon.Port.newCells();
+        emon.Port.Cells txt = emon.Port.newCells();
+        StringBuilder out = emon.Testport.newText();
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        fdtPar(nodes, regions, text, emon.Testport.textBlob(". . . ."), 7200, 10000, 16000, 11200);
+        fdtPar(nodes, regions, text, emon.Testport.textBlob("."), 7200, 11500, 7400, 12700);
+        fdtPar(nodes, regions, text, emon.Testport.textBlob("..."), 7200, 16000, 7800, 17200);
+        fdtPar(nodes, regions, text, emon.Testport.textBlob("Label"), 7200, 20000, 16000, 21200);
+        fdtField(an, txt, 4, -1, emon.Testport.textBlob("orphan"), emon.Testport.textBlob(""), emon.Testport.textBlob(""), 50000, 13000, 56000, 14200);
+        fdtHtml(0, nodes, attrs, regions, text, an, txt, out);
+        emon.Testport.assertText(out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p><span data-emon=\"field\" data-emon-name=\"orphan\" data-emon-type=\"text\"></span></p><p>...</p><p>Label</p></main></body></html>", "printing leaders disappear, a meaningful ellipsis and the anchored field remain");
+    }
 }

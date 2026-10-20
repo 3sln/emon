@@ -47,10 +47,11 @@
 (declarefn fl-tree)
 (declarefn fl-has-words)
 (declarefn fl-has-content)
+(declarefn fl-leader-tail)
 
 (defconst ^I32 AN_STRIDE 38)        ;; an annotation row (`AN_STRIDE` of `emon.pdfannot`)
 (defconst ^I32 FL_W 16)              ;; a field row of `fc`: 0 `an` row, 1 page (1 based), 2-5 box, 6 target node, 7 slot, 8 next in its chain, 9 kind
-(defconst ^I32 FL_B 8)               ;; a block row of `bt`: 0 node, 1 page, 2-5 box, 6 flags (1 can be a label, 2 can be the anchor of a field of its own)
+(defconst ^I32 FL_B 8)               ;; a block row of `bt`: 0 node, 1 page, 2-5 box, 6 flags (1 can be a label, 2 can be the anchor of a field of its own), 7 ends in spaced leader dots
 (defconst ^I32 FL_MAXF 4000)         ;; fields placed
 (defconst ^I32 FL_MAXB 400000)       ;; block rows
 (defconst ^I32 FL_TOL 200)           ;; 2 pt: how far a box may lie over a neighbour's edge
@@ -131,6 +132,33 @@
           (set i (+ i 1))))
     (return n)))
 
+(defn ^I32 fl-leader-tail [^Cells on ^Cells text ^I32 n]
+  (comment "1 when a label's own text ends in at least three spaced leader dots. Paragraph assembly may already have joined the leader run to its label; it still connects the field on that row.")
+  (let [^:mut ^I32 c -1
+        ^:mut ^I32 last -1
+        ^:mut ^I32 dots 0
+        ^:mut ^I32 spaces 0
+        ^:mut ^I32 j (- (node-text-len on n) 1)
+        ^I32 start (node-text-start on n)]
+    (if (and (== (node-has-text on n) 1) (>= j 0))
+      (do (while (>= j 0)
+            (do (set c (cells-at text (+ start j)))
+                (if (== c 46)
+                  (set dots (+ dots 1))
+                  (if (or (== c 32) (== c 9))
+                    (set spaces (+ spaces 1))
+                    (do (if (and (>= dots 3) (>= spaces 2)) (return 1))
+                        (return 0))))
+                (set j (- j 1))))
+          (if (and (>= dots 3) (>= spaces 2)) (return 1))
+          (return 0)))
+    (set c (node-first-child on n))
+    (while (>= c 0)
+      (do (if (and (== (node-is-inline on c) 1) (== (fl-has-content on c) 1)) (set last c))
+          (set c (node-next on c))))
+    (if (>= last 0) (return (fl-leader-tail on text last)))
+    (return 0)))
+
 (defn ^I32 fl-blocks [^Cells on ^Cells orr ^Cells text ^I32 ndoc ^:mut ^Cells bt]
   (comment "The block rows `bt` (see FL_B): a row a region of every block that holds a field, has words of its own (text, or inline children's) and a place on a page; and of")
   (comment "every table cell that has nothing in it (flags 4: a box can stand in it).")
@@ -162,7 +190,7 @@
                       (cells-push bt (region-x1 orr r))
                       (cells-push bt (region-y1 orr r))
                       (cells-push bt flags)
-                      (cells-push bt 0)
+                      (cells-push bt (fl-leader-tail on text n))
                       (set r (region-next orr r))))))
           (set n (+ n 1))))
     (return (quot (cells-len bt) FL_B))))
@@ -209,9 +237,10 @@
                       (set bestgap gap)))))
           (set b (+ b 1))))
     (if (>= best 0)
-      (if (> bestgap FL_NEAR_L)
-        (if (== (fl-bridged bt nb page y0 y1 best x0) 0)
-          (set best -1))))
+      (if (== (cells-at bt (+ (* best FL_B) 7)) 1)
+        (set bestgap 0)
+        (if (> bestgap FL_NEAR_L)
+          (if (== (fl-bridged bt nb page y0 y1 best x0) 0) (set best -1)))))
     (cells-set out at best)
     (cells-set out (+ at 1) bestgap)
     (return best)))

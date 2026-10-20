@@ -298,6 +298,82 @@ func ntInProse(ln *port.Cells, sf *port.Cells, sc *port.Cells, l int32) int32 {
 	return 1
 }
 
+func ntNthWord(wd *port.Cells, ln *port.Cells, l int32, n int32) int32 {
+	// The n-th (from 0) word with text of line l; -1 when it has fewer.
+	var w0 int32 = evidence.LnGet(ln, l, evidence.LhFirst())
+	var wn int32 = evidence.LnGet(ln, l, evidence.LhCount())
+	var i int32 = 0
+	var seen int32 = 0
+	for i < wn {
+		if lists.LsWl(wd, w0+i) > 0 {
+			if seen == n {
+				return w0 + i
+			}
+			seen += 1
+		}
+		i += 1
+	}
+	return -1
+}
+
+func ntSameWords(wd *port.Cells, ln *port.Cells, et *port.Cells, a int32, b int32, n int32) int32 {
+	// 1 when the first n words of lines a and b are the same, character for character.
+	var k int32 = 0
+	var j int32 = 0
+	for k < n {
+		var wa int32 = ntNthWord(wd, ln, a, k)
+		var wb int32 = ntNthWord(wd, ln, b, k)
+		if (wa < 0) || (wb < 0) {
+			return 0
+		}
+		if lists.LsWl(wd, wa) != lists.LsWl(wd, wb) {
+			return 0
+		}
+		j = 0
+		for j < lists.LsWl(wd, wa) {
+			if lists.LsWc(wd, et, wa, j) != lists.LsWc(wd, et, wb, j) {
+				return 0
+			}
+			j += 1
+		}
+		k += 1
+	}
+	return 1
+}
+
+func ntMarginLine(ln *port.Cells, pages *port.Cells, l int32) int32 {
+	// Running text occupies a page margin: the top or bottom fifteen per cent. A repeated caption in the body can belong to a continued table.
+	var h int32 = model.PageH(pages, evidence.LnGet(ln, l, evidence.LhPage())-1)
+	var y int32 = evidence.LnGet(ln, l, evidence.LhY0()) + evidence.LnGet(ln, l, evidence.LhY1())
+	if h <= 0 {
+		return 0
+	}
+	if ((y * 100) <= (h * 30)) || ((y * 100) >= (h * 170)) {
+		return 1
+	}
+	return 0
+}
+
+func ntRunningLabel(wd *port.Cells, ln *port.Cells, et *port.Cells, hc *port.Cells, pages *port.Cells, l int32) int32 {
+	// P12.7 (smoke A N1): 1 when caption candidate l begins with the same four words as another candidate on another page: `Schedule 1 (Form 1040) 2025` at the foot of one page and at the head of the next is a running
+	// header or footer and no caption (the caption of a figure or a table has its number, which is its own; a label that recurs is the document's). Candidates are the lines flagged 8, and 64 (let go as an entry of a list).
+	var n int32 = evidence.LnCount(ln)
+	var pg int32 = evidence.LnGet(ln, l, evidence.LhPage())
+	var m int32 = 0
+	for m < n {
+		if (m != l) && (evidence.LnGet(ln, m, evidence.LhPage()) != pg) && ((ntMarginLine(ln, pages, m) == 1) || (ntMarginLine(ln, pages, l) == 1)) {
+			var fl int32 = lists.LsGet(hc, m, lists.LsKFlags())
+			if (fl == lists.LsFCap()) || (fl == 64) {
+				if ntSameWords(wd, ln, et, l, m, 4) == 1 {
+					return 1
+				}
+			}
+		}
+		m += 1
+	}
+	return 0
+}
+
 func ntAfter(wd *port.Cells, ln *port.Cells, l int32, w int32) int32 {
 	// The word with text that follows word w in line l; -1 when there is none.
 	var w0 int32 = evidence.LnGet(ln, l, evidence.LhFirst())
@@ -856,6 +932,56 @@ func ntPlainPeers(nb *port.Cells, i int32) int32 {
 	return n
 }
 
+func ntSameShape(wd *port.Cells, ln *port.Cells, et *port.Cells, a int32, b int32) int32 {
+	// P12.7 (smoke B N4): 1 when lines a and b have the same words, a digit standing for any digit.
+	var na int32 = evidence.LnGet(ln, a, evidence.LhCount())
+	var wa int32 = evidence.LnGet(ln, a, evidence.LhFirst())
+	var wb int32 = evidence.LnGet(ln, b, evidence.LhFirst())
+	var i int32 = 0
+	var j int32 = 0
+	if na != evidence.LnGet(ln, b, evidence.LhCount()) {
+		return 0
+	}
+	for i < na {
+		var tl int32 = lists.LsWl(wd, wa+i)
+		if tl != lists.LsWl(wd, wb+i) {
+			return 0
+		}
+		j = 0
+		for j < tl {
+			var ca int32 = lists.LsWc(wd, et, wa+i, j)
+			var cb int32 = lists.LsWc(wd, et, wb+i, j)
+			if (ca != cb) && ((lists.LsDigit(ca) < 0) || (lists.LsDigit(cb) < 0)) {
+				return 0
+			}
+			j += 1
+		}
+		i += 1
+	}
+	return 1
+}
+
+func ntRepeats(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32) int32 {
+	// P12.7 (smoke B N4): 1 when line l has a twin on another page: the same words (digits alike), the same type size and the same height within 15 pt. A line that recurs at the foot of every page is furniture
+	// (an address, a motto), never a note: notes do not repeat.
+	var n int32 = evidence.LnCount(ln)
+	var pg int32 = evidence.LnGet(ln, l, evidence.LhPage())
+	var y int32 = evidence.LnGet(ln, l, evidence.LhY0())
+	var m int32 = 0
+	if evidence.LnGet(ln, l, evidence.LhCount()) < 2 {
+		return 0
+	}
+	for m < n {
+		if (evidence.LnGet(ln, m, evidence.LhPage()) != pg) && (lists.LsAbs(evidence.LnGet(ln, m, evidence.LhY0())-y) <= 1500) {
+			if ntSameShape(wd, ln, et, l, m) == 1 {
+				return 1
+			}
+		}
+		m += 1
+	}
+	return 0
+}
+
 func ntFoot(wd *port.Cells, et *port.Cells, ln *port.Cells, sf *port.Cells, rf *port.Cells, nb *port.Cells, mk *port.Cells, i int32) int32 {
 	// Is note body candidate i a footnote? In the lower half of the page (the band) and small or marked in superscript,
 	// with a reference on its page; or small, with a reference on the page before (a note a column or a page break pushed
@@ -890,7 +1016,8 @@ func ntFoot(wd *port.Cells, et *port.Cells, ln *port.Cells, sf *port.Cells, rf *
 	if (kind == 2) && ((szok == 1) && (band == 1)) {
 		var bsz int32 = style.StHget(sf, style.SfhSize())
 		var w int32 = port.CellsAt(nb, b+2)
-		if (lists.LsWc(wd, et, w, 0) != 91) && (ntPlainPeers(nb, i) <= 5) {
+		// P12.7 (smoke B N4): a note's number has at most two digits (302 is a street number), and a line that recurs on other pages is no note
+		if (lists.LsWc(wd, et, w, 0) != 91) && ((ntPlainPeers(nb, i) <= 5) && ((port.CellsAt(nb, b+6) <= 2) && (ntRepeats(wd, ln, et, port.CellsAt(nb, b)) == 0))) {
 			if ntSmallToEnd(ln, sf, port.CellsAt(nb, b), bsz) == 1 {
 				port.CellsSet(nb, b+7, 1)
 				return 1
@@ -1311,7 +1438,7 @@ func NtAnalyze(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, s
 	l = 0
 	for l < n {
 		if lists.LsGet(hc, l, lists.LsKFlags()) == lists.LsFCap() {
-			if (ntInRun(sf, ln, hc, l) == 1) || ((ntTocLike(wd, ln, et, sf, l) == 1) || (ntInProse(ln, sf, sc, l) == 1)) {
+			if (ntInRun(sf, ln, hc, l) == 1) || ((ntTocLike(wd, ln, et, sf, l) == 1) || ((ntInProse(ln, sf, sc, l) == 1) || (ntRunningLabel(wd, ln, et, hc, pages, l) == 1))) {
 				lists.LsPut(hc, l, lists.LsKFlags(), 64)
 			}
 		}

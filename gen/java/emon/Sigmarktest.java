@@ -194,6 +194,24 @@ public final class Sigmarktest {
         gtOword(ow, et, 1, 11800, 20200, emon.Testport.textBlob("agenda"), 250);
         emon.Testport.assertEq(gtFind(pa, pts, fw, et, ow, an, txt, 1, sm), 1, "the same words the engine is unsure of are noise: a signature");
     }
+    public static void testAChartLegendInTwoInksIsNoSignature() {
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells fw = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells an = emon.Port.newCells();
+        emon.Port.Cells txt = emon.Port.newCells();
+        emon.Port.Cells sm = emon.Port.newCells();
+        // A chart legend can have looping strokes and a rule beneath it, like a signature. Its two distinctly coloured samples are not one pen. The same strokes in one ink remain a signature.
+        gtLoops(pa, pts, 1, 10000, 20000, 5, 800, 1800);
+        int r = gtLoops(pa, pts, 1, 10000, 20400, 5, 800, 1800);
+        Evidence.paSet(pa, r, Evidence.pfStroke(), 13369344);
+        gtRule(pa, pts, 1, 8000, 20000, 22400);
+        emon.Testport.assertEq(gtFind(pa, pts, fw, et, ow, an, txt, 1, sm), 0, "two inks distinguish a legend from a pen");
+        Evidence.paSet(pa, r, Evidence.pfStroke(), 2047903);
+        emon.Testport.assertEq(gtFind(pa, pts, fw, et, ow, an, txt, 1, sm), 1, "the one-ink control remains a signature");
+    }
     public static void testTheTypedNameUnderTheRuleIsTheName() {
         emon.Port.Cells pa = emon.Port.newCells();
         emon.Port.Cells pts = emon.Port.newCells();

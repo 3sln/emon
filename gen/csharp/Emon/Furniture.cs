@@ -1316,13 +1316,13 @@ public static class Furniture {
                 if (CdGet(cd, r, 2) == 1) {
                     gap = CdGet(cd, r, 3) - CdGet(cd, q, 4);
                     if ((gap >= -200) && ((gap * 1000) <= (h * FuChainGap)) && (CdGet(cd, q, 3) < CdGet(cd, r, 3))) {
-                        return 1;
+                        return CdGet(cd, q, 8) + 1;
                     }
                 }
                 if (CdGet(cd, r, 2) == 2) {
                     gap = CdGet(cd, q, 3) - CdGet(cd, r, 4);
                     if ((gap >= -200) && ((gap * 1000) <= (h * FuChainGap)) && (CdGet(cd, q, 3) > CdGet(cd, r, 3))) {
-                        return 1;
+                        return CdGet(cd, q, 8) + 1;
                     }
                 }
             }
@@ -1340,6 +1340,8 @@ public static class Furniture {
         int g = 0;
         int i = 0;
         int adj = 0;
+        int fewer = 0;
+        int up = 0;
         int old = 0;
         int f = 0;
         int m = 0;
@@ -1351,12 +1353,21 @@ public static class Furniture {
                     f = GrGet(gr, g, 0);
                     m = GrGet(gr, g, 1);
                     adj = 0;
+                    fewer = 0;
                     i = 0;
                     while (i < m) {
-                        adj += FuChainAdjacent(ln, cd, ncd, emon.Port.CellsAt(ord, f + i));
+                        up = FuChainAdjacent(ln, cd, ncd, emon.Port.CellsAt(ord, f + i));
+                        if (up > 0) {
+                            adj += 1;
+                            // P12.7 (smoke A N3): a line is the next of a header only when it recurs on every page the header does: a statement's title under the company's name is on the pages of that statement
+                            // (`CONSOLIDATED BALANCE SHEETS` on two of three), a heading that varies with the page, and not the third line of the header
+                            if (GrGet(gr, g, 2) < GrGet(gr, up - 1, 2)) {
+                                fewer = 1;
+                            }
+                        }
                         i += 1;
                     }
-                    if ((adj * 100) >= (m * 70)) {
+                    if ((fewer == 0) && ((adj * 100) >= (m * 70))) {
                         old = GrGet(gr, g, 9);
                         GrSet(gr, g, 9, m);
                         if (FuQualify(ord, cd, sl, tx, gr, g, npages, trust) == 1) {

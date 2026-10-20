@@ -125,6 +125,16 @@ pub(crate) fn sg_dist(dx: i32, dy: i32) -> i32 {
     let b: i32 = sg_abs(dy);
     return sg_hi(a, b) + ((3 * sg_lo(a, b)) / 8);
 }
+pub(crate) fn sg_ink_diff(a: i32, b: i32) -> i32 {
+    // P12.7 (smoke B N3): the sum of the channel differences of two inks (0xRRGGBB); 0 when either is unknown (negative).
+    if a < 0 {
+        return 0;
+    }
+    if b < 0 {
+        return 0;
+    }
+    return sg_abs(((a / 65536) % 256) - ((b / 65536) % 256)) + (sg_abs(((a / 256) % 256) - ((b / 256) % 256)) + sg_abs((a % 256) - (b % 256)));
+}
 pub(crate) fn sg_gap_of(a0: i32, a1: i32, b0: i32, b1: i32) -> i32 {
     // The distance between the intervals [a0, a1] and [b0, b1]; 0 when they overlap.
     if b0 > a1 {
@@ -563,6 +573,10 @@ pub fn sg_collect(pa: &mut crate::port::Cells, pts: &mut crate::port::Cells, fw:
                             crate::port::cells_set(tmp, a + 2, sg_hi(crate::port::cells_at(tmp, a + 2), crate::port::cells_at(tmp, b + 2)));
                             crate::port::cells_set(tmp, a + 3, sg_hi(crate::port::cells_at(tmp, a + 3), crate::port::cells_at(tmp, b + 3)));
                             crate::port::cells_set(tmp, a + 4, crate::port::cells_at(tmp, a + 4) + crate::port::cells_at(tmp, b + 4));
+                            // P12.7 (smoke B N3): strokes of two inks are a chart's lines and a legend's samples, not one pen: the cluster's ink (cell 6) becomes -2
+                            if (crate::port::cells_at(tmp, a + 6) == -2) || ((crate::port::cells_at(tmp, b + 6) == -2) || (sg_ink_diff(crate::port::cells_at(tmp, a + 6), crate::port::cells_at(tmp, b + 6)) > 96)) {
+                                crate::port::cells_set(tmp, a + 6, -2);
+                            }
                             la = crate::port::cells_at(tmp, a + 7);
                             lb = crate::port::cells_at(tmp, b + 7);
                             if (la < 0) || (lb < 0) {
@@ -693,7 +707,7 @@ pub fn sg_decide(mut sgc: &mut crate::port::Cells, owords: &mut crate::port::Cel
         h = crate::port::cells_at(sgc, c + 4) - crate::port::cells_at(sgc, c + 2);
         kind = 0;
         conf = 0;
-        if (sg_tortuous(crate::port::cells_at(sgc, c + 8), crate::port::cells_at(sgc, c + 15)) == 1) && (sg_legible_words(owords, et, fw, crate::port::cells_at(sgc, c), crate::port::cells_at(sgc, c + 1), crate::port::cells_at(sgc, c + 2), crate::port::cells_at(sgc, c + 3), crate::port::cells_at(sgc, c + 4)) < 2) {
+        if (sg_tortuous(crate::port::cells_at(sgc, c + 8), crate::port::cells_at(sgc, c + 15)) == 1) && ((crate::port::cells_at(sgc, c + 7) != -2) && (sg_legible_words(owords, et, fw, crate::port::cells_at(sgc, c), crate::port::cells_at(sgc, c + 1), crate::port::cells_at(sgc, c + 2), crate::port::cells_at(sgc, c + 3), crate::port::cells_at(sgc, c + 4)) < 2)) {
             if sg_small(sgc, c) == 1 {
                 rec = sg_recurrence(sgc, n, c);
                 if ((cues & 7) != 0) || (((rec >= 1) && (sg_in_margin(sgc, c) == 1)) || (rec >= 2)) {

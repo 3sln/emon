@@ -440,7 +440,7 @@ public static class Table {
         }
         return 0 == 1;
     }
-    internal static int TbAdd(emon.Port.Cells tb, int page, int x0, int y0, int x1, int y1, int profile, int score, int nrows, int ncols, int cfirst, int ncells) {
+    public static int TbAdd(emon.Port.Cells tb, int page, int x0, int y0, int x1, int y1, int profile, int score, int nrows, int ncols, int cfirst, int ncells) {
         // Append a candidate table; answers its index.
         int k = TbRowsOf(tb, Tbs);
         emon.Port.CellsPush(tb, page);
@@ -1404,6 +1404,21 @@ public static class Table {
             return 0 == 1;
         }
         return (2 * emon.Port.CellsAt(tb, (k * Tbs) + 2)) <= ymid2;
+    }
+    public static bool TbDueFor(emon.Port.Cells tb, int k, int page, int ymid2, emon.Port.Cells ln, int l) {
+        // P12.7 (smoke A N4): `tb-due`, with the line `l` the table would be written before (-1: no line, only `ymid2`). A line to the left of the table (it ends within 6 pt of its left edge) that begins in the
+        // table's own height is the label of what the table holds (a form's column of boxes and line numbers beside its rows): the field comes after its label, so such a line is written before the table.
+        if (!TbDue(tb, k, page, ymid2)) {
+            return 0 == 1;
+        }
+        if (l < 0) {
+            return 1 == 1;
+        }
+        int b = k * Tbs;
+        if ((Evidence.LnGet(ln, l, Evidence.LhX1()) <= (emon.Port.CellsAt(tb, b + 1) + 600)) && ((Evidence.LnGet(ln, l, Evidence.LhY0()) >= (emon.Port.CellsAt(tb, b + 2) - 100)) && (Evidence.LnGet(ln, l, Evidence.LhY0()) <= emon.Port.CellsAt(tb, b + 4)))) {
+            return 0 == 1;
+        }
+        return 1 == 1;
     }
     public static int TbSkip(emon.Port.Cells tb, int k, int page) {
         // The first table at or after k that is on a page at or after `page`.

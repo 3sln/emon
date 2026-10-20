@@ -739,6 +739,67 @@ fn test_a_numbered_list_is_not_a_run_of_headings() {
     crate::testport::assert_eq(hd_level(hc, 8), 0, "the third");
 }
 #[test]
+fn test_a_label_and_its_value_and_a_folio_are_no_headings() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ptxt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut y: i32 = 5000;
+    // P12.7 (smoke A issue 11): set in a bold larger than the body, `Tax Id: 988-96-5242` (a label and a value with digits in it) and `A-3` (the folio of an appendix) were headings of a document about invoices and
+    // a glossary. A bold line that has no digit in it (`Findings`) is still the heading.
+    y = ht_body(wd, ln, et, 1, y, 5);
+    y += 900;
+    ht_heading(wd, ln, et, &crate::testport::text_blob("Findings")[..], y, 1400, 1);
+    y += 2300;
+    y = ht_body(wd, ln, et, 1, y, 4);
+    y += 900;
+    ht_heading(wd, ln, et, &crate::testport::text_blob("Tax Id: 988-96-5242")[..], y, 1400, 1);
+    y += 2300;
+    y = ht_body(wd, ln, et, 1, y, 4);
+    y += 900;
+    ht_heading(wd, ln, et, &crate::testport::text_blob("A-3")[..], y, 1400, 1);
+    y += 2300;
+    y = ht_body(wd, ln, et, 1, y, 4);
+    crate::testport::assert_eq(ht_run(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 1, "one heading");
+    crate::testport::assert_eq(hd_level(hc, 5), 1, "`Findings`");
+    crate::testport::assert_eq(hd_level(hc, 10), 0, "`Tax Id: 988-96-5242`");
+    crate::testport::assert_eq(hd_level(hc, 15), 0, "`A-3`");
+}
+#[test]
+fn test_an_article_with_numbered_items_under_it_is_a_heading() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ptxt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut y: i32 = 5000;
+    // P12.7 (smoke B L8): the declaration's `Статья 11` is a keyword and a number in the body's own style, with a gap under it and then the numbered items `1.` and `2.` of the article. A numbered line next to
+    // another numbered line (the first item) was an item of a run, and the article a paragraph; 14 of the 30 were. A keyword and a number is the head of the items under it.
+    y = ht_body(wd, ln, et, 1, y, 5);
+    y += 900;
+    ht_line(wd, ln, et, &crate::testport::text_blob("Article 11")[..], 1, 7200, y, 40000, y + 1200, 1100, 0);
+    y += 2600;
+    ht_line(wd, ln, et, &crate::testport::text_blob("1. Everyone charged with a penal offence has the right to be presumed innocent")[..], 1, 7200, y, 40000, y + 1200, 1100, 0);
+    y += 1400;
+    ht_line(wd, ln, et, &crate::testport::text_blob("2. No one shall be held guilty of any penal offence on account of any act")[..], 1, 7200, y, 40000, y + 1200, 1100, 0);
+    y += 1400;
+    crate::testport::assert_eq(ht_run(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 1, "one heading");
+    crate::testport::assert_eq(hd_level(hc, 5), 1, "`Article 11`");
+    crate::testport::assert_eq(hd_level(hc, 6), 0, "the first item");
+    crate::testport::assert_eq(hd_level(hc, 7), 0, "the second");
+}
+#[test]
 fn test_a_numbered_title_between_paragraphs_is_a_heading() {
     // D395: no weight, no size, no italic (a scan): a short numbered line with a paragraph above and below, the
     // paragraph flush with it, is a heading; the same numbers closing a list are not.

@@ -839,6 +839,60 @@ func TestLeaningGlyphsOfASyntheticItalicMakeOneWord(emonT *testing.T) {
 	port.AssertEq(emonT, evidence.WdGet(wd, 0, evidence.HdTlen()), 3, "of three code points")
 }
 
+func ctGs(gl *port.Cells, x0 int32, x1 int32, cp int32, size int32, by int32) int32 {
+	// One glyph of the scene: the box [x0, x1] by 800, set in `size`, its baseline segment at height `by`.
+	var g int32 = evidence.GlNew(gl, 1, x0, 0, x1, 800, cp, -1, 0, -1)
+	evidence.GlSet(gl, g, evidence.GfSize(), size)
+	evidence.GlSet(gl, g, evidence.GfBx0(), x0)
+	evidence.GlSet(gl, g, evidence.GfBx1(), x1)
+	evidence.GlSet(gl, g, evidence.GfBy0(), by)
+	evidence.GlSet(gl, g, evidence.GfBy1(), by)
+	return g
+}
+
+func TestAWordsBaselineIsNotItsRaisedMarker(emonT *testing.T) {
+	// P12.7 (smoke A N2): `bread` and a raised, smaller `1,` (a footnote marker: set at 600 where the letters are 1000, its baseline 300 above theirs) are one word `bread1,`. Its baseline ends where its letters'
+	// do, not at the marker: the rows of a table sort their words by that baseline, and `bread1,` came before `White` on the row it ends. A marker that begins a word is no more the start of its baseline.
+	var gl *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	ctGs(gl, 1000, 1500, 98, 1000, 800)
+	ctGs(gl, 1500, 2000, 114, 1000, 800)
+	ctGs(gl, 2000, 2300, 49, 600, 500)
+	ctGs(gl, 2300, 2600, 44, 600, 500)
+	ctGroup(gl, et, wd, ln)
+	port.AssertEq(emonT, evidence.WdCount(wd), 1, "one word")
+	port.AssertEq(emonT, evidence.WdGet(wd, 0, evidence.HdBy0()), 800, "its baseline begins at its first letter's")
+	port.AssertEq(emonT, evidence.WdGet(wd, 0, evidence.HdBy1()), 800, "and ends at its last letter's, not at the raised marker's")
+	port.CellsDrop(gl, 0)
+	port.CellsDrop(et, 0)
+	port.CellsDrop(wd, 0)
+	port.CellsDrop(ln, 0)
+	ctGs(gl, 1000, 1300, 51, 600, 500)
+	ctGs(gl, 1300, 1800, 98, 1000, 800)
+	ctGs(gl, 1800, 2300, 114, 1000, 800)
+	ctGroup(gl, et, wd, ln)
+	port.AssertEq(emonT, evidence.WdCount(wd), 1, "a marker that begins the word: one word")
+	port.AssertEq(emonT, evidence.WdGet(wd, 0, evidence.HdBy0()), 800, "its baseline begins at the letters'")
+	port.AssertEq(emonT, evidence.WdGet(wd, 0, evidence.HdBy1()), 800, "and ends there")
+}
+
+func TestWordBaselineSizeComparisonsDoNotOverflow(emonT *testing.T) {
+	var gl *port.Cells = port.NewCells()
+	// The identity fuzz corpus contains huge glyph sizes. Comparing eighty per cent must work at the I32 limit, including the strict threshold, without multiplication overflow on any target.
+	ctGs(gl, 1000, 1500, 98, 1000, 800)
+	ctGs(gl, 1500, 1800, 49, 600, 500)
+	evidence.GlSet(gl, 0, evidence.GfSize(), 2147483647)
+	evidence.GlSet(gl, 1, evidence.GfSize(), 1000000000)
+	port.AssertEq(emonT, pdfcontent.PcBaseGlyph(gl, 0, 1, 0), 0, "huge letters supply the start")
+	port.AssertEq(emonT, pdfcontent.PcBaseGlyph(gl, 0, 1, 1), 0, "the smaller marker cannot supply the end")
+	evidence.GlSet(gl, 1, evidence.GfSize(), 1717986917)
+	port.AssertEq(emonT, pdfcontent.PcBaseGlyph(gl, 0, 1, 1), 0, "the integer just below eighty per cent stays small")
+	evidence.GlSet(gl, 1, evidence.GfSize(), 1717986918)
+	port.AssertEq(emonT, pdfcontent.PcBaseGlyph(gl, 0, 1, 1), 1, "the next integer is above the threshold")
+}
+
 func TestADiacriticDrawnOverALetterIsTheCombiningMarkAfterIt(emonT *testing.T) {
 	// Smoke B I-21: TeX draws an umlaut as the dieresis glyph and then the u, backed up under it: `M` `dieresis` `u` `ller`. The
 	// word is Mu, U+0308, ller; the paragraph's normalisation composes it. A dieresis that is not over the letter after it is left.

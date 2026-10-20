@@ -132,6 +132,46 @@ public static class Fields {
         }
         return n;
     }
+    internal static int FlLeaderTail(emon.Port.Cells on, emon.Port.Cells text, int n) {
+        // 1 when a label's own text ends in at least three spaced leader dots. Paragraph assembly may already have joined the leader run to its label; it still connects the field on that row.
+        int c = -1;
+        int last = -1;
+        int dots = 0;
+        int spaces = 0;
+        int j = Model.NodeTextLen(on, n) - 1;
+        int start = Model.NodeTextStart(on, n);
+        if ((Model.NodeHasText(on, n) == 1) && (j >= 0)) {
+            while (j >= 0) {
+                c = emon.Port.CellsAt(text, start + j);
+                if (c == 46) {
+                    dots += 1;
+                } else if ((c == 32) || (c == 9)) {
+                    spaces += 1;
+                } else {
+                    if ((dots >= 3) && (spaces >= 2)) {
+                        return 1;
+                    }
+                    return 0;
+                }
+                j -= 1;
+            }
+            if ((dots >= 3) && (spaces >= 2)) {
+                return 1;
+            }
+            return 0;
+        }
+        c = Model.NodeFirstChild(on, n);
+        while (c >= 0) {
+            if ((Model.NodeIsInline(on, c) == 1) && (FlHasContent(on, c) == 1)) {
+                last = c;
+            }
+            c = Model.NodeNext(on, c);
+        }
+        if (last >= 0) {
+            return FlLeaderTail(on, text, last);
+        }
+        return 0;
+    }
     internal static int FlBlocks(emon.Port.Cells on, emon.Port.Cells orr, emon.Port.Cells text, int ndoc, emon.Port.Cells bt) {
         // The block rows `bt` (see FL_B): a row a region of every block that holds a field, has words of its own (text, or inline children's) and a place on a page; and of
         // every table cell that has nothing in it (flags 4: a box can stand in it).
@@ -169,7 +209,7 @@ public static class Fields {
                     emon.Port.CellsPush(bt, Model.RegionX1(orr, r));
                     emon.Port.CellsPush(bt, Model.RegionY1(orr, r));
                     emon.Port.CellsPush(bt, flags);
-                    emon.Port.CellsPush(bt, 0);
+                    emon.Port.CellsPush(bt, FlLeaderTail(on, text, n));
                     r = Model.RegionNext(orr, r);
                 }
             }
@@ -227,7 +267,9 @@ public static class Fields {
             b += 1;
         }
         if (best >= 0) {
-            if (bestgap > FlNearL) {
+            if (emon.Port.CellsAt(bt, (best * FlB) + 7) == 1) {
+                bestgap = 0;
+            } else if (bestgap > FlNearL) {
                 if (FlBridged(bt, nb, page, y0, y1, best, x0) == 0) {
                     best = -1;
                 }

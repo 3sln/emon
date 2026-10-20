@@ -49,7 +49,7 @@
             [emon.evidence :refer [wd-get ln-get ln-count lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-by0 lh-by1
                                    lh-rot lh-dir lh-first lh-count hd-tstart hd-tlen wf-font wf-size wf-style]]
             [emon.columns :refer [lc-copy lc-page]]
-            [emon.table :refer [tb-due tb-skip tb-emit tb-claimed]]
+            [emon.table :refer [tb-due tb-due-for tb-skip tb-emit tb-claimed]]
             [emon.initial :refer [in-retire in-row in-get-ii in-cell]]
             [emon.align :refer [al-line al-mark al-pass]]
             [emon.model :refer [node-new node-set-text node-set-sub node-set-conf node-add-src
@@ -498,6 +498,69 @@
   (if (and open (or (== (pa-mixed wd ln a) 1) (== (pa-mixed wd ln b) 1))) (return (== 0 1)))
   (return (== 1 1)))
 
+(defn ^Bool pa-leader-only [^Cells wd ^Cells ln ^Cells et ^I32 l]
+  (comment "P12.7 (smoke A N4): is line l nothing but leader dots: at least three of `.` (or the ellipsis or the middle dot) and no other character. A form's rows hold their label and, in separate runs after a gap,")
+  (comment "the dots that lead the eye to the field: `1a Gross receipts or sales . .` and `. . . . .` are one row, and the dots are no paragraph.")
+  (let [^I32 w0 (ln-get ln l (lh-first))
+        ^I32 wn (ln-get ln l (lh-count))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 dots 0]
+    (while (< k wn)
+      (do (let [^I32 ts (wd-get wd (+ w0 k) (hd-tstart))
+                ^I32 tl (wd-get wd (+ w0 k) (hd-tlen))]
+            (set j 0)
+            (while (and (>= ts 0) (< j tl))
+              (do (let [^I32 c (cells-at et (+ ts j))]
+                    (if (or (== c 46) (or (== c 8230) (== c 183)))
+                      (set dots (+ dots 1))
+                      (return (== 0 1))))
+                  (set j (+ j 1)))))
+          (set k (+ k 1))))
+    (return (>= dots 3))))
+
+(defn ^Bool pa-big-leadin [^Cells wd ^Cells ln ^I32 l]
+  (comment "P12.7 (smoke B side effect): does line l begin with a run-in head set larger than the rest of the line: at least two words, each over 4 per cent bigger than the line's dominant size, followed by at least three words")
+  (comment "of the dominant size. The Russian declaration's clauses, `принимая во внимание, что ...`, each begin so: with no gap and no indent between them, the lead-in is the only sign that a clause is a paragraph (the heading")
+  (comment "stage no longer takes it for a heading, D575, so the paragraph stage must).")
+  (let [^I32 d (pa-dom wd ln l)
+        ^I32 w0 (ln-get ln l (lh-first))
+        ^I32 wn (ln-get ln l (lh-count))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 big 0
+        ^:mut ^I32 rest 0]
+    (if (< d 0) (return (== 0 1)))
+    (let [^I32 sz (wd-get wd d (wf-size))]
+      (if (<= sz 0) (return (== 0 1)))
+      (while (and (< k wn) (> (* (wd-get wd (+ w0 k) (wf-size)) 100) (* sz 104)))
+        (do (set big (+ big 1))
+            (set k (+ k 1))))
+      (if (< big 2) (return (== 0 1)))
+      (while (< k wn)
+        (do (if (and (> (wd-get wd (+ w0 k) (hd-tlen)) 0) (<= (* (wd-get wd (+ w0 k) (wf-size)) 100) (* sz 104)))
+              (set rest (+ rest 1)))
+            (set k (+ k 1))))
+      (return (>= rest 3)))))
+
+(defn ^Bool pa-reference-start [^Cells wd ^Cells ln ^Cells et ^I32 l]
+  (comment "A bracketed numeric entry at the beginning of a line: [1] through [9999], followed by text. Unlike a citation inside prose it supplies an explicit paragraph boundary even without a hanging indent.")
+  (let [^I32 first (ln-get ln l (lh-first))
+        ^I32 end (+ first (ln-get ln l (lh-count)))
+        ^:mut ^I32 w first
+        ^:mut ^I32 j 1]
+    (while (and (< w end) (<= (wd-get wd w (hd-tlen)) 0))
+      (set w (+ w 1)))
+    (if (>= w (- end 1)) (return (== 0 1)))
+    (let [^I32 ts (wd-get wd w (hd-tstart))
+          ^I32 n (wd-get wd w (hd-tlen))]
+      (if (or (< ts 0) (or (< n 3) (> n 6))) (return (== 0 1)))
+      (if (or (!= (cells-at et ts) 91) (!= (cells-at et (+ ts (- n 1))) 93)) (return (== 0 1)))
+      (while (< j (- n 1))
+        (do (let [^I32 c (cells-at et (+ ts j))]
+              (if (or (< c 48) (> c 57)) (return (== 0 1))))
+            (set j (+ j 1))))
+      (return (== 1 1)))))
+
 (defn ^Bool pa-new-par [^Cells wd ^Cells ln ^Cells et ^I32 a ^I32 b ^I32 med ^I32 margin ^Cells hc]
   (comment "Does line b, the next one on the page, start a paragraph after line a (D135). The heading analysis")
   (comment "(P4.4) decides first where it has an opinion: a heading is a block of its own (D167).")
@@ -506,6 +569,12 @@
     (if (== op 2) (return (== 1 1))))
   (comment "an item, a note body or a caption starts here (P4.5, P4.6: the list stage's rows after the heading rows)")
   (if (== (ls-split hc a b) 1) (return (== 1 1)))
+  (comment "Leader dots join a label on their own baseline, never the previous row: stretching that row's region would attach the next row's field to it (P12.7, smoke A N4).")
+  (if (pa-leader-only wd ln et b)
+    (do (if (and (pa-upright ln a) (pa-upright ln b)
+                 (<= (pa-abs (- (pa-ymid2 ln a) (pa-ymid2 ln b))) (quot (pa-size wd ln b) 2)))
+          (return (== 0 1)))
+        (return (== 1 1))))
   (if (not (pa-upright ln a)) (return (== 1 1)))
   (if (not (pa-upright ln b)) (return (== 1 1)))
   (if (!= (ln-get ln a (lh-dir)) (ln-get ln b (lh-dir))) (return (== 1 1)))
@@ -533,6 +602,10 @@
     (let [^Bool opened (pa-open-end wd ln et a)]
       (if (pa-style-differs wd ln a b opened)
         (return (== 1 1))))
+    (if (pa-big-leadin wd ln b) (return (== 1 1)))
+    (if (and (pa-reference-start wd ln et b)
+             (<= (* (pa-abs (- (pa-start ln b) margin)) PA_INDENT_DIV) sb))
+      (return (== 1 1)))
     (return (== 0 1))))
 
 ;; -------------------------------------------------------------------- the text
@@ -1227,13 +1300,22 @@
   (if (> a b) (return a))
   (return b))
 
+(defn ^I32 pa-open-note [^Cells raw ^Cells fr]
+  (comment "1 when the open paragraph (its text so far in `raw`, its fragments in `fr`) begins with a note body's group: a footnote or an endnote.")
+  (if (< (cells-len fr) FR_STRIDE) (return 0))
+  (let [^I32 s0 (cells-at fr 5)]
+    (if (>= s0 (cells-len raw)) (return 0))
+    (if (== (cells-at raw s0) (ls-s-note)) (return 1))
+    (return 0)))
+
 (defn ^I32 pa-join-score [^Cells wd ^Cells ln ^Cells et ^Cells raw ^I32 a ^I32 b
                           ^I32 colx0 ^I32 colx1 ^I32 ncol ^I32 bmargin ^I32 indents ^I32 bottom
-                          ^I32 bx0 ^I32 bx1 ^I32 bn ^Cells hc]
+                          ^I32 bx0 ^I32 bx1 ^I32 bn ^Cells hc ^I32 note]
   (comment "The points for the paragraph that ended its fragment (its last line a, the text so far in `raw`) going")
   (comment "on with line b, the first of the next fragment (SPEC 10.1.2, D164). `colx0`..`colx1` is the extent of a's")
   (comment "fragment, `ncol` its lines (the edge signals need two), `bmargin` the margin of b's, `indents` whether")
   (comment "the document's paragraphs have first-line indents, `bottom` the bottom of the fragments of a's band.")
+  (comment "`note` is 1 when the paragraph is a note body (P12.7, smoke B N1): a footnote goes on in type of its own size, and the body type of the next column or page is not its continuation.")
   (let [^I32 n (cells-len raw)
         ^I32 sa (pa-size wd ln a)
         ^I32 sb (pa-size wd ln b)
@@ -1241,6 +1323,7 @@
     (if (< n 1) (return -100))
     (if (or (> (hd-level hc a) 0) (> (hd-level hc b) 0)) (return -100))
     (if (== (ls-start hc b) 1) (return -100))
+    (if (and (== note 1) (> (* (pa-abs (- sa sb)) PA_SIZE_DIV) sa)) (return -100))
     (let [^I32 last (cells-at raw (- n 1))]
       (if (and (or (== last 45) (== last 173)) (>= n 2))
         (if (pa-letter (cells-at raw (- n 2))) (set pts (+ pts JS_HYPHEN)))))
@@ -1384,18 +1467,31 @@
   (comment "paragraph of each line queued in `dq` (the lines that are not upright, D136) and empty the queue.")
   (comment "Answers the first side row not written yet.")
   (let [^I32 nq (cells-len dq)
+        ^I32 nf (quot (cells-len cf) CF_STRIDE)
         ^:mut ^I32 k 0
-        ^:mut ^I32 pend 0]
+        ^:mut ^I32 kept 0
+        ^:mut ^I32 pend 0
+        ^:mut ^I32 now 0]
     (pa-flush nodes attrs regions text raw tmp fr al hc 0)
     (set pend (pa-notes wd ln et nodes attrs regions text raw tmp fr al ii cf lo med from cur ty hc))
+    (comment "P12.7 (smoke A N4): a line that is not upright (a label turned a quarter, in a form's margin) is written where its top is: before the first paragraph that starts at or below it on its page (`ty` the top")
+    (comment "of the line that starts the next paragraph), not after the page's last; all of them when the close is the page's end (`cur` past the fragments)")
     (while (< k nq)
       (do (let [^I32 l (cells-at dq k)
                 ^I32 pg (ln-get ln l (lh-page))]
-            (pa-frag-open fr ln pg l 0)
-            (pa-add-line wd ln et raw l hc fr)
-            (pa-flush nodes attrs regions text raw tmp fr al hc 0))
+            (set now 1)
+            (if (< cur nf)
+              (do (set now 0)
+                  (if (< pg (cells-at cf (+ (* cur CF_STRIDE) CF_PAGE))) (set now 1))
+                  (if (and (== pg (cells-at cf (+ (* cur CF_STRIDE) CF_PAGE))) (<= (ln-get ln l (lh-y0)) ty)) (set now 1))))
+            (if (== now 1)
+              (do (pa-frag-open fr ln pg l 0)
+                  (pa-add-line wd ln et raw l hc fr)
+                  (pa-flush nodes attrs regions text raw tmp fr al hc 0))
+              (do (cells-set dq kept l)
+                  (set kept (+ kept 1)))))
           (set k (+ k 1))))
-    (cells-drop dq 0)
+    (cells-drop dq kept)
     (return pend)))
 
 (defn ^I32 pa-upright-count [^Cells ln ^Cells ord]
@@ -1471,14 +1567,14 @@
           (set p (+ p 1))))
     (return 0)))
 
-(defn ^I32 pa-tables [^Cells tb ^I32 tcur ^I32 p ^I32 ymid2 ^Cells wd ^Cells ln ^Cells et ^Cells tc ^Cells tw ^Cells tq
+(defn ^I32 pa-tables [^Cells tb ^I32 tcur ^I32 p ^I32 ymid2 ^I32 lb ^Cells wd ^Cells ln ^Cells et ^Cells tc ^Cells tw ^Cells tq
                       ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
                       ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells ledger ^Cells hc]
   (comment "Emit, in document order, the tables of page p from `tcur` on whose top is at or above `ymid2` (twice")
   (comment "a baseline y: the order key of `pa-ymid2`). The open paragraph has been closed. Answers the next table")
   (comment "to emit (P5.1: a table is a block, found before this and placed here by its top, D178).")
   (let [^:mut ^I32 k tcur]
-    (while (tb-due tb k p ymid2)
+    (while (tb-due-for tb k p ymid2 ln lb)
       (do (tb-emit tb k (hd-cur hc) wd et ln tc tw tq nodes attrs regions text raw tmp ledger)
           (set k (+ k 1))))
     (cells-drop raw 0)
@@ -1527,6 +1623,7 @@
         ^:mut ^I32 ty 0
         ^:mut ^I32 tcur 0
         ^:mut ^I32 k0 0
+        ^:mut ^I32 opn 0
         ^:mut ^I32 score 0]
     (in-retire lt ii)
     (pa-columns wd et npages pages layout lt ord ls sd it io rw gu ac tm cf lo pr)
@@ -1542,6 +1639,12 @@
       (do (pa-collect ord lt p)
           (set n (cells-len ord))
           (set nu (pa-upright-count lt ord))
+          ;; the lines that are not upright stand alone (D136), each written before the first paragraph that starts at or below its top (P12.7, `pa-close`): queued as the page begins
+          (set i nu)
+          (while (< i n)
+            (do (if (== (tb-claimed lt (cells-at ord i)) 0)
+                  (cells-push gp (cells-at ord i)))
+                (set i (+ i 1))))
           ;; the rows of cf of this page: the body ones, then the side ones
           (set tcur (tb-skip tb tcur p))
           (while (and (< r nf) (< (cells-at cf (+ (* r CF_STRIDE) CF_PAGE)) p))
@@ -1555,7 +1658,7 @@
                 (set open 0)
                 (set prev -1)
                 (if (> p 1) (pa-milestone nodes p hc))
-                (set tcur (pa-tables tb tcur p PA_ALL wd lt et tc tw tq nodes attrs regions text raw tmp ledger hc)))
+                (set tcur (pa-tables tb tcur p PA_ALL -1 wd lt et tc tw tq nodes attrs regions text raw tmp ledger hc)))
             (do (set i r)
                 (while (< i r1)
                   (do (set first (cells-at cf (+ (* i CF_STRIDE) CF_FIRST)))
@@ -1569,14 +1672,15 @@
                       (set b (cells-at lo first))
                       (set cont 0)
                       (if (== open 1)
-                        (do (set score (pa-join-score wd lt et raw prev b
+                        (do (set opn (pa-open-note raw fr))
+                            (set score (pa-join-score wd lt et raw prev b
                                                       (cells-at cf (+ (* prevfr CF_STRIDE) CF_X0))
                                                       (cells-at cf (+ (* prevfr CF_STRIDE) CF_X1))
                                                       (cells-at cf (+ (* prevfr CF_STRIDE) CF_COUNT))
                                                       mg indents (pa-bottom cf prevfr)
                                                       (cells-at cf (+ (* i CF_STRIDE) CF_X0))
                                                       (cells-at cf (+ (* i CF_STRIDE) CF_X1))
-                                                      (cells-at cf (+ (* i CF_STRIDE) CF_COUNT)) hc))
+                                                      (cells-at cf (+ (* i CF_STRIDE) CF_COUNT)) hc opn))
                             (cells-push dbg i)
                             (cells-push dbg prev)
                             (cells-push dbg b)
@@ -1586,13 +1690,13 @@
                             (cells-push dbg (ln-get lt prev (lh-x1)))
                             (cells-push dbg (cells-at cf (+ (* prevfr CF_STRIDE) CF_COUNT)))
                             (if (>= score JOIN_MIN) (set cont 1))
-                            (if (tb-due tb tcur p (pa-ymid2 lt b)) (set cont 0))))
+                            (if (tb-due-for tb tcur p (pa-ymid2 lt b) lt b) (set cont 0))))
                       (if (>= (in-row lt b) 0) (set cont 0))
                       (if (== cont 0)
                         (do (set ty (ln-get lt b (lh-y0)))
                             (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend i ty hc))
                             (if (and (== i r) (> p 1)) (pa-milestone nodes p hc))
-                            (set tcur (pa-tables tb tcur p (pa-ymid2 lt b) wd lt et tc tw tq nodes attrs regions text raw tmp ledger hc))
+                            (set tcur (pa-tables tb tcur p (pa-ymid2 lt b) b wd lt et tc tw tq nodes attrs regions text raw tmp ledger hc))
                             (pa-frag-open fr lt p b 0)
                             (pa-ini-start wd lt et raw fr ii b))
                         (do (pa-join wd lt et raw b)
@@ -1607,10 +1711,10 @@
                       (while (< cont cnt)
                         (do (set b (cells-at lo (+ first cont)))
                             (if (== (tb-claimed lt b) 0)
-                              (do (if (or (>= (in-row lt b) 0) (or (pa-new-par wd lt et prev b med mg hc) (tb-due tb tcur p (pa-ymid2 lt b))))
+                              (do (if (or (>= (in-row lt b) 0) (or (pa-new-par wd lt et prev b med mg hc) (tb-due-for tb tcur p (pa-ymid2 lt b) lt b)))
                                     (do (set ty (ln-get lt b (lh-y0)))
                                         (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend i ty hc))
-                                        (set tcur (pa-tables tb tcur p (pa-ymid2 lt b) wd lt et tc tw tq nodes attrs regions text raw tmp ledger hc))
+                                        (set tcur (pa-tables tb tcur p (pa-ymid2 lt b) b wd lt et tc tw tq nodes attrs regions text raw tmp ledger hc))
                                         (pa-frag-open fr lt p b 0)
                                         (pa-ini-start wd lt et raw fr ii b))
                                     (do (pa-join wd lt et raw b)
@@ -1624,14 +1728,7 @@
                   (do (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend nf 1000000000 hc))
                       (set open 0)
                       (set prev -1)
-                      (set tcur (pa-tables tb tcur p PA_ALL wd lt et tc tw tq nodes attrs regions text raw tmp ledger hc))))))
-          ;; the lines that are not upright stand alone, after the page's upright ones (D136): queued now,
-          ;; written at the next close
-          (set i nu)
-          (while (< i n)
-            (do (if (== (tb-claimed lt (cells-at ord i)) 0)
-                  (cells-push gp (cells-at ord i)))
-                (set i (+ i 1))))
+                      (set tcur (pa-tables tb tcur p PA_ALL -1 wd lt et tc tw tq nodes attrs regions text raw tmp ledger hc))))))
           (set p (+ p 1))))
     (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend nf 1000000000 hc)
     (al-pass nodes attrs al tm)

@@ -213,6 +213,25 @@ func TestAStraightStrokeAndHandwritingOcrReadsAreNotSignatures(emonT *testing.T)
 	port.AssertEq(emonT, gtFind(pa, pts, fw, et, ow, an, txt, 1, sm), 1, "the same words the engine is unsure of are noise: a signature")
 }
 
+func TestAChartLegendInTwoInksIsNoSignature(emonT *testing.T) {
+	var pa *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var fw *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var an *port.Cells = port.NewCells()
+	var txt *port.Cells = port.NewCells()
+	var sm *port.Cells = port.NewCells()
+	// A chart legend can have looping strokes and a rule beneath it, like a signature. Its two distinctly coloured samples are not one pen. The same strokes in one ink remain a signature.
+	gtLoops(pa, pts, 1, 10000, 20000, 5, 800, 1800)
+	var r int32 = gtLoops(pa, pts, 1, 10000, 20400, 5, 800, 1800)
+	evidence.PaSet(pa, r, evidence.PfStroke(), 13369344)
+	gtRule(pa, pts, 1, 8000, 20000, 22400)
+	port.AssertEq(emonT, gtFind(pa, pts, fw, et, ow, an, txt, 1, sm), 0, "two inks distinguish a legend from a pen")
+	evidence.PaSet(pa, r, evidence.PfStroke(), 2047903)
+	port.AssertEq(emonT, gtFind(pa, pts, fw, et, ow, an, txt, 1, sm), 1, "the one-ink control remains a signature")
+}
+
 func TestTheTypedNameUnderTheRuleIsTheName(emonT *testing.T) {
 	var pa *port.Cells = port.NewCells()
 	var pts *port.Cells = port.NewCells()

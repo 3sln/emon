@@ -202,6 +202,25 @@ fn test_a_straight_stroke_and_handwriting_ocr_reads_are_not_signatures() {
     crate::testport::assert_eq(gt_find(pa, pts, fw, et, ow, an, txt, 1, sm), 1, "the same words the engine is unsure of are noise: a signature");
 }
 #[test]
+fn test_a_chart_legend_in_two_inks_is_no_signature() {
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let an: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let txt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sm: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    // A chart legend can have looping strokes and a rule beneath it, like a signature. Its two distinctly coloured samples are not one pen. The same strokes in one ink remain a signature.
+    gt_loops(pa, pts, 1, 10000, 20000, 5, 800, 1800);
+    let r: i32 = gt_loops(pa, pts, 1, 10000, 20400, 5, 800, 1800);
+    pa_set(pa, r, pf_stroke(), 13369344);
+    gt_rule(pa, pts, 1, 8000, 20000, 22400);
+    crate::testport::assert_eq(gt_find(pa, pts, fw, et, ow, an, txt, 1, sm), 0, "two inks distinguish a legend from a pen");
+    pa_set(pa, r, pf_stroke(), 2047903);
+    crate::testport::assert_eq(gt_find(pa, pts, fw, et, ow, an, txt, 1, sm), 1, "the one-ink control remains a signature");
+}
+#[test]
 fn test_the_typed_name_under_the_rule_is_the_name() {
     let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();

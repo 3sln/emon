@@ -4063,6 +4063,41 @@ public static class Pdfcontent {
         emon.Port.CellsDrop(et, b + (emon.Port.CellsLen(et) - e));
         return b;
     }
+    public static int PcBaseGlyph(emon.Port.Cells gl, int gfst, int glst, int fromEnd) {
+        // P12.7 (smoke A N2): the glyph a word's baseline is read from at its start (from-end 0) or at its end (1): the first (last) of its glyphs that is not set small against the biggest of the
+        // word (at most 80 per cent of its size). The raised digits of a footnote marker, `white¹,`, sit above the line's baseline: a word's baseline is not theirs, or the rows of a table that
+        // sorts its words by baseline put `bread¹,` before `White`. The last (first) glyph itself when none is, or the word has one glyph.
+        int mx = 0;
+        int j = gfst;
+        while (j <= glst) {
+            if (Evidence.GlGet(gl, j, Evidence.GfSize()) > mx) {
+                mx = Evidence.GlGet(gl, j, Evidence.GfSize());
+            }
+            j += 1;
+        }
+        // Compare against floor(4 * mx / 5), dividing first so huge glyph sizes cannot overflow (identity fuzz corpus).
+        if (fromEnd == 1) {
+            j = glst;
+            while (j >= gfst) {
+                if (Evidence.GlGet(gl, j, Evidence.GfSize()) > (((mx / 5) * 4) + (((mx % 5) * 4) / 5))) {
+                    return j;
+                }
+                j -= 1;
+            }
+        } else {
+            j = gfst;
+            while (j <= glst) {
+                if (Evidence.GlGet(gl, j, Evidence.GfSize()) > (((mx / 5) * 4) + (((mx % 5) * 4) / 5))) {
+                    return j;
+                }
+                j += 1;
+            }
+        }
+        if (fromEnd == 1) {
+            return glst;
+        }
+        return gfst;
+    }
     internal static int PcEmitWord(emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells wd, emon.Port.Cells fnt, int page, int gfst, int glst, int wbk) {
         // Record glyphs [gfst, glst] as a word: the union of their boxes, their text, the
         // dominant font and size of the first, and `hidden-text` as its source when every
@@ -4133,7 +4168,9 @@ public static class Pdfcontent {
         } else {
             tstart = PcBidiText(et, gl, gfst, glst);
         }
-        int w = Evidence.WdNew(wd, page, x0, y0, x1, y1, Evidence.GlGet(gl, gfst, Evidence.GfBx0()), Evidence.GlGet(gl, gfst, Evidence.GfBy0()), Evidence.GlGet(gl, glst, Evidence.GfBx1()), Evidence.GlGet(gl, glst, Evidence.GfBy1()), Evidence.GlGet(gl, gfst, Evidence.GfRot()), 0, tstart, emon.Port.CellsLen(et) - tstart, -1, -1, -1);
+        int gb0 = PcBaseGlyph(gl, gfst, glst, 0);
+        int gb1 = PcBaseGlyph(gl, gfst, glst, 1);
+        int w = Evidence.WdNew(wd, page, x0, y0, x1, y1, Evidence.GlGet(gl, gfst, Evidence.GfBx0()), Evidence.GlGet(gl, gb0, Evidence.GfBy0()), Evidence.GlGet(gl, glst, Evidence.GfBx1()), Evidence.GlGet(gl, gb1, Evidence.GfBy1()), Evidence.GlGet(gl, gfst, Evidence.GfRot()), 0, tstart, emon.Port.CellsLen(et) - tstart, -1, -1, -1);
         int fo = Evidence.GlGet(gl, gfst, Evidence.GfFont());
         if (rtlw == 1) {
             Evidence.WdSet(wd, w, Evidence.HdDir(), Evidence.LdRtl());

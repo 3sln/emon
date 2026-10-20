@@ -308,6 +308,63 @@ public final class Sealmarktest {
         stQuad(pa, pts, 5000, 5000, 15000, 9000, 1118481, 300);
         emon.Testport.assertEq(stFind(pa, pts, gl, fw, et, cg, refs, ow, sm), 0, "a black frame is a table's or a box's");
     }
+    public static void testTextThatFlowsInARedFrameIsATextBoxAndNoStamp() {
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells gl = emon.Port.newCells();
+        emon.Port.Cells fw = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells cg = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells sm = emon.Port.newCells();
+        int k = 0;
+        // P12.7 (smoke B N2): a 2 pt red frame holding red words on three lines is a stamp; on four lines (the words of a text box, set in the colour of its frame) it is a box of the page's text: nothing is a stamp and no
+        // group is the stamp's, so that the words stay in the body and not in an `alt`.
+        stQuad(pa, pts, 5000, 5000, 15000, 9000, 12591135, 200);
+        int a = stWord(fw, gl, et, 8000, 5800, 0, 12591135, 80);
+        int c = stWord(fw, gl, et, 8000, 7400, 0, 12591135, 82);
+        int ga = stTgroup(cg, refs, a);
+        int gc = stTgroup(cg, refs, c);
+        stWord(fw, gl, et, 8000, 6600, 0, 12591135, 81);
+        emon.Testport.assertEq(stFind(pa, pts, gl, fw, et, cg, refs, ow, sm), 1, "three lines of red words in a red frame: a stamp");
+        emon.Testport.assertEq(Player.cgGet(cg, gc, Player.cgfFlags()), Player.plgInSeal(), "and the words are its");
+        emon.Testport.assertEq(Player.cgGet(cg, ga, Player.cgfFlags()), Player.plgInSeal(), "the first too");
+        emon.Port.Cells pa2 = emon.Port.newCells();
+        emon.Port.Cells pts2 = emon.Port.newCells();
+        emon.Port.Cells gl2 = emon.Port.newCells();
+        emon.Port.Cells fw2 = emon.Port.newCells();
+        emon.Port.Cells et2 = emon.Port.newCells();
+        emon.Port.Cells cg2 = emon.Port.newCells();
+        emon.Port.Cells refs2 = emon.Port.newCells();
+        emon.Port.Cells sm2 = emon.Port.newCells();
+        stQuad(pa2, pts2, 5000, 5000, 15000, 9000, 12591135, 200);
+        int a2 = stWord(fw2, gl2, et2, 8000, 5600, 0, 12591135, 80);
+        int d = stWord(fw2, gl2, et2, 8000, 7700, 0, 12591135, 83);
+        int ga2 = stTgroup(cg2, refs2, a2);
+        int gd = stTgroup(cg2, refs2, d);
+        stWord(fw2, gl2, et2, 8000, 6300, 0, 12591135, 81);
+        stWord(fw2, gl2, et2, 8000, 7000, 0, 12591135, 82);
+        emon.Testport.assertEq(stFind(pa2, pts2, gl2, fw2, et2, cg2, refs2, ow, sm2), 0, "four lines in the frame are a box of text, not a stamp");
+        emon.Testport.assertEq(Player.cgGet(cg2, gd, Player.cgfFlags()), 0, "the words are the page's own");
+        emon.Testport.assertEq(Player.cgGet(cg2, ga2, Player.cgfFlags()), 0, "all of them");
+        // a frame round a block of black text with one red word in it is a frame, not a stamp: twelve black words and one red
+        emon.Port.Cells pa3 = emon.Port.newCells();
+        emon.Port.Cells pts3 = emon.Port.newCells();
+        emon.Port.Cells gl3 = emon.Port.newCells();
+        emon.Port.Cells fw3 = emon.Port.newCells();
+        emon.Port.Cells et3 = emon.Port.newCells();
+        emon.Port.Cells cg3 = emon.Port.newCells();
+        emon.Port.Cells refs3 = emon.Port.newCells();
+        emon.Port.Cells sm3 = emon.Port.newCells();
+        stQuad(pa3, pts3, 5000, 5000, 15000, 9000, 12591135, 200);
+        stWord(fw3, gl3, et3, 6000, 5800, 0, 12591135, 80);
+        while (k < 12) {
+            stWord(fw3, gl3, et3, 8000 + ((k % 4) * 1500), 5800 + ((k / 4) * 1000), 0, 1118481, 66);
+            k += 1;
+        }
+        emon.Testport.assertEq(stFind(pa3, pts3, gl3, fw3, et3, cg3, refs3, ow, sm3), 0, "one red word among twelve black ones in a red frame is no stamp");
+    }
     public static int stStroke(emon.Port.Cells pa, emon.Port.Cells pts, int x0, int y0, int segs) {
         // An open stroked curve of `segs` Bezier segments from (x0, y0), 800 wide each and 1500 high; answers its row.
         int first = emon.Port.cellsLen(pts) / 3;
@@ -378,6 +435,24 @@ public final class Sealmarktest {
         emon.Port.cellsDrop(gl, 0);
         stText(fw, gl, et, 7200, 30000, 66, 121, 58);
         emon.Testport.assertEq(stFind(pa, pts, gl, fw, et, cg, refs, ow, sm), 0, "a cue far above is none");
+    }
+    public static void testStrokesOfTwoInksAreAChartsCurvesAndNoSignature() {
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells gl = emon.Port.newCells();
+        emon.Port.Cells fw = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells cg = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells sm = emon.Port.newCells();
+        // P12.7 (smoke B N3): a chart's curves and its legend's line samples, in a blue, a red and a green, merged into one cluster that a cue near it made a signature (the typed name the label under the legend). One pen
+        // has one ink: the same two strokes in two inks are no signature, in one they are (the law above).
+        stStroke(pa, pts, 10000, 20000, 4);
+        int b = stStroke(pa, pts, 10500, 20400, 1);
+        Evidence.paSet(pa, b, Evidence.pfStroke(), 12591135);
+        stText(fw, gl, et, 7200, 20300, 66, 121, 58);
+        emon.Testport.assertEq(stFind(pa, pts, gl, fw, et, cg, refs, ow, sm), 0, "a blue stroke and a red one together, with a cue beside them: a chart");
     }
     public static int stOword(emon.Port.Cells ow, emon.Port.Cells et, int x, int y, int a, int b) {
         int ts = emon.Port.cellsLen(et);

@@ -595,6 +595,73 @@ func hdFiguresAfter(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32, k i
 	return n
 }
 
+func hdLetter(c int32) int32 {
+	// 1 for a letter of a cased script or of any script above U+024F (so a heading in Han or Arabic has letters).
+	if style.StLower(c) {
+		return 1
+	}
+	if style.StUpper(c) {
+		return 1
+	}
+	if c > 591 {
+		return 1
+	}
+	return 0
+}
+
+func hdDatumLine(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32) int32 {
+	// P12.7 (smoke A issue 11): 1 when line l is a datum and no title: (1) a label, a colon, and a value that has a digit in it (`Tax Id: 988-96-5242`, `IBAN: GB83FTEF94522626404124`, `Date of
+	// issue: 03/23/2019`): a word of the first four ends in a colon, a word follows it, and every word that follows has a digit; (2) a short mark of at most two letters and a digit with no more than 12 characters
+	// (`A-3`, a page number of an appendix) is a page's folio. Neither is any section's name.
+	var first int32 = evidence.LnGet(ln, l, evidence.LhFirst())
+	var end int32 = first + evidence.LnGet(ln, l, evidence.LhCount())
+	var w int32 = first
+	var k int32 = 0
+	var colon int32 = -1
+	var j int32 = 0
+	var letters int32 = 0
+	var digits int32 = 0
+	var chars int32 = 0
+	var words int32 = 0
+	var has int32 = 0
+	var ok int32 = 1
+	for w < end {
+		var n int32 = hdWl(wd, w)
+		if n > 0 {
+			words += 1
+			j = 0
+			has = 0
+			for j < n {
+				var c int32 = hdWc(wd, et, w, j)
+				chars += 1
+				if hdLetter(c) == 1 {
+					letters += 1
+				}
+				if (c >= 48) && (c <= 57) {
+					digits += 1
+					has = 1
+				}
+				j += 1
+			}
+			if (colon < 0) && ((k < 4) && (hdWc(wd, et, w, n-1) == 58)) {
+				colon = k
+			}
+			if (colon >= 0) && (k > colon) && (has == 0) {
+				ok = 0
+			}
+			k += 1
+		}
+		w += 1
+	}
+	if (colon >= 0) && ((ok == 1) && (words > (colon + 1))) {
+		return 1
+	}
+	if (letters <= 2) && ((digits >= 1) && ((chars <= 12) && (words == 1))) {
+		return 1
+	}
+	return 0
+}
+
 func hdPronoun(wd *port.Cells, et *port.Cells, w2 int32) int32 {
 	// 1 when the word after a lone `I` says it is the English pronoun, not a Roman numeral: it starts in lower case or has an
 	// apostrophe in it (`Series I Don't Want`, `Series I think`). A line that stops at the `I` is a numeral.
@@ -1077,6 +1144,11 @@ func hdListRun(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells, s
 	var a int32 = style.StGet(sf, top, style.SfkAbove())
 	var b int32 = style.StGet(sf, last, style.SfkBelow())
 	var c int32 = style.StGet(sf, top, style.SfkClass())
+	// P12.7 (smoke B L8): a keyword and a number (`Статья 11`, `Article 5`, `Section 2`) is the head of what follows, never an item of a run: the numbered items under it (`1.`, `2.`) are its own, and made it
+	// an item of theirs, a paragraph (14 of the declaration's 30 articles). `hd-marker` clobbers ws[0..5], which the caller makes again.
+	if HdMarker(wd, ln, et, ws, top) == 6 {
+		return 0
+	}
 	if (a >= 0) && ((style.StGet(sf, a, style.SfkClass()) == c) && (style.StGet(sf, a, style.SfkHead()) == 1)) {
 		return 1
 	}
@@ -1247,6 +1319,12 @@ func hdUnitScore(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells,
 	}
 	if hdSentenceEnd(style.StGet(sf, last, style.SfkLast())) {
 		return -1
+	}
+	// P12.7 (smoke A issue 11): a label and its value, and a page's folio, are data and no title
+	if cnt == 1 {
+		if (HdMarker(wd, ln, et, ws, top) == 0) && (hdDatumLine(wd, ln, et, top) == 1) {
+			return -1
+		}
 	}
 	if ps == 0 {
 		if hdListRun(wd, ln, et, ws, sf, top, last) == 1 {

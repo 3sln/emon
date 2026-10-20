@@ -446,3 +446,65 @@ fn test_the_json_of_a_field_is_an_inline_with_its_widgets_box() {
     js_emit(out, 0, nn, na, nr, text, pages, ledger, layout, &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
     crate::testport::assert_text(out, "{\"emon\":\"1.1\",\"settings\":{\"locale\":null},\"conf\":\"calibrated\",\"pages\":[],\"body\":{\"id\":0,\"kind\":\"document\",\"children\":[{\"id\":1,\"kind\":\"paragraph\",\"text\":\"Agree\",\"inlines\":[{\"kind\":\"field\",\"name\":\"agree\",\"type\":\"checkbox\",\"value\":\"Yes\",\"checked\":true,\"at\":[[1,73,180.2,81,188.2]],\"src\":[\"annot\"],\"conf\":950},{\"kind\":\"text\",\"text\":\"Agree\",\"src\":[\"text\"],\"conf\":815}],\"at\":[[1,87,180,164,188]]}]},\"furniture\":[],\"dropped\":[]}", "the JSON");
 }
+#[test]
+fn test_a_labels_own_leaders_connect_its_field_past_the_nearer_row_above() {
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let an: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let txt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut String = &mut crate::port::new_text();
+    // A form row's leader dots may already belong to the label paragraph. They still bridge the gap to its field: the wide previous row above must not take the next two fields.
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    fdt_par(nodes, regions, text, &crate::testport::text_blob("28 Taxable income")[..], 5590, 50591, 47022, 51545);
+    fdt_par(nodes, regions, text, &crate::testport::text_blob("29a Net operating loss deduction . . .")[..], 5590, 51791, 37422, 52745);
+    fdt_par(nodes, regions, text, &crate::testport::text_blob("b Special deductions . . .")[..], 5590, 52991, 37422, 53945);
+    fdt_field(an, txt, 4, -1, &crate::testport::text_blob("loss")[..], &crate::testport::text_blob("")[..], &crate::testport::text_blob("")[..], 41040, 51600, 48165, 52800);
+    fdt_field(an, txt, 4, -1, &crate::testport::text_blob("special")[..], &crate::testport::text_blob("")[..], &crate::testport::text_blob("")[..], 41040, 52800, 48165, 54000);
+    fdt_html(0, nodes, attrs, regions, text, an, txt, out);
+    crate::testport::assert_text(out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>28 Taxable income</p><p>29a Net operating loss deduction . . .<span data-emon=\"field\" data-emon-name=\"loss\" data-emon-type=\"text\"></span></p><p>b Special deductions . . .<span data-emon=\"field\" data-emon-name=\"special\" data-emon-type=\"text\"></span></p></main></body></html>", "each field belongs to its row's leader label");
+}
+#[test]
+fn test_an_explicit_leader_label_beats_the_bare_row_number_beside_its_field() {
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let an: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let txt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut String = &mut crate::port::new_text();
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    fdt_par(nodes, regions, text, &crate::testport::text_blob("29a Net loss . . .")[..], 5590, 51791, 37422, 52745);
+    fdt_par(nodes, regions, text, &crate::testport::text_blob("29a")[..], 39285, 51791, 40634, 52745);
+    fdt_field(an, txt, 4, -1, &crate::testport::text_blob("loss")[..], &crate::testport::text_blob("")[..], &crate::testport::text_blob("")[..], 41040, 51600, 48165, 52800);
+    fdt_html(0, nodes, attrs, regions, text, an, txt, out);
+    crate::testport::assert_text(out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>29a Net loss . . .<span data-emon=\"field\" data-emon-name=\"loss\" data-emon-type=\"text\"></span></p><p>29a</p></main></body></html>", "the leader connects the descriptive label past its row number");
+}
+#[test]
+fn test_unattached_printing_dots_are_not_form_paragraphs_and_do_not_drop_fields() {
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let an: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let txt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut String = &mut crate::port::new_text();
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    fdt_par(nodes, regions, text, &crate::testport::text_blob(". . . .")[..], 7200, 10000, 16000, 11200);
+    fdt_par(nodes, regions, text, &crate::testport::text_blob(".")[..], 7200, 11500, 7400, 12700);
+    fdt_par(nodes, regions, text, &crate::testport::text_blob("...")[..], 7200, 16000, 7800, 17200);
+    fdt_par(nodes, regions, text, &crate::testport::text_blob("Label")[..], 7200, 20000, 16000, 21200);
+    fdt_field(an, txt, 4, -1, &crate::testport::text_blob("orphan")[..], &crate::testport::text_blob("")[..], &crate::testport::text_blob("")[..], 50000, 13000, 56000, 14200);
+    fdt_html(0, nodes, attrs, regions, text, an, txt, out);
+    crate::testport::assert_text(out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p><span data-emon=\"field\" data-emon-name=\"orphan\" data-emon-type=\"text\"></span></p><p>...</p><p>Label</p></main></body></html>", "printing leaders disappear, a meaningful ellipsis and the anchored field remain");
+}

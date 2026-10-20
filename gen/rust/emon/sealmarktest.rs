@@ -316,6 +316,64 @@ fn test_a_stamp_is_a_chromatic_frame_holding_words_of_its_ink() {
     st_quad(pa, pts, 5000, 5000, 15000, 9000, 1118481, 300);
     crate::testport::assert_eq(st_find(pa, pts, gl, fw, et, cg, refs, ow, sm), 0, "a black frame is a table's or a box's");
 }
+#[test]
+fn test_text_that_flows_in_a_red_frame_is_a_text_box_and_no_stamp() {
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sm: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut k: i32 = 0;
+    // P12.7 (smoke B N2): a 2 pt red frame holding red words on three lines is a stamp; on four lines (the words of a text box, set in the colour of its frame) it is a box of the page's text: nothing is a stamp and no
+    // group is the stamp's, so that the words stay in the body and not in an `alt`.
+    st_quad(pa, pts, 5000, 5000, 15000, 9000, 12591135, 200);
+    let a: i32 = st_word(fw, gl, et, 8000, 5800, 0, 12591135, 80);
+    let c: i32 = st_word(fw, gl, et, 8000, 7400, 0, 12591135, 82);
+    let ga: i32 = st_tgroup(cg, refs, a);
+    let gc: i32 = st_tgroup(cg, refs, c);
+    st_word(fw, gl, et, 8000, 6600, 0, 12591135, 81);
+    crate::testport::assert_eq(st_find(pa, pts, gl, fw, et, cg, refs, ow, sm), 1, "three lines of red words in a red frame: a stamp");
+    crate::testport::assert_eq(cg_get(cg, gc, cgf_flags()), plg_in_seal(), "and the words are its");
+    crate::testport::assert_eq(cg_get(cg, ga, cgf_flags()), plg_in_seal(), "the first too");
+    let pa2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gl2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fw2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cg2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sm2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    st_quad(pa2, pts2, 5000, 5000, 15000, 9000, 12591135, 200);
+    let a2: i32 = st_word(fw2, gl2, et2, 8000, 5600, 0, 12591135, 80);
+    let d: i32 = st_word(fw2, gl2, et2, 8000, 7700, 0, 12591135, 83);
+    let ga2: i32 = st_tgroup(cg2, refs2, a2);
+    let gd: i32 = st_tgroup(cg2, refs2, d);
+    st_word(fw2, gl2, et2, 8000, 6300, 0, 12591135, 81);
+    st_word(fw2, gl2, et2, 8000, 7000, 0, 12591135, 82);
+    crate::testport::assert_eq(st_find(pa2, pts2, gl2, fw2, et2, cg2, refs2, ow, sm2), 0, "four lines in the frame are a box of text, not a stamp");
+    crate::testport::assert_eq(cg_get(cg2, gd, cgf_flags()), 0, "the words are the page's own");
+    crate::testport::assert_eq(cg_get(cg2, ga2, cgf_flags()), 0, "all of them");
+    // a frame round a block of black text with one red word in it is a frame, not a stamp: twelve black words and one red
+    let pa3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gl3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fw3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cg3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sm3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    st_quad(pa3, pts3, 5000, 5000, 15000, 9000, 12591135, 200);
+    st_word(fw3, gl3, et3, 6000, 5800, 0, 12591135, 80);
+    while k < 12 {
+        st_word(fw3, gl3, et3, 8000 + ((k % 4) * 1500), 5800 + ((k / 4) * 1000), 0, 1118481, 66);
+        k += 1;
+    }
+    crate::testport::assert_eq(st_find(pa3, pts3, gl3, fw3, et3, cg3, refs3, ow, sm3), 0, "one red word among twelve black ones in a red frame is no stamp");
+}
 pub(crate) fn st_stroke(mut pa: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, x0: i32, y0: i32, segs: i32) -> i32 {
     // An open stroked curve of `segs` Bezier segments from (x0, y0), 800 wide each and 1500 high; answers its row.
     let first: i32 = crate::port::cells_len(pts) / 3;
@@ -387,6 +445,25 @@ fn test_a_signature_is_pen_strokes_near_a_cue() {
     crate::port::cells_drop(gl, 0);
     st_text(fw, gl, et, 7200, 30000, 66, 121, 58);
     crate::testport::assert_eq(st_find(pa, pts, gl, fw, et, cg, refs, ow, sm), 0, "a cue far above is none");
+}
+#[test]
+fn test_strokes_of_two_inks_are_a_charts_curves_and_no_signature() {
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sm: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    // P12.7 (smoke B N3): a chart's curves and its legend's line samples, in a blue, a red and a green, merged into one cluster that a cue near it made a signature (the typed name the label under the legend). One pen
+    // has one ink: the same two strokes in two inks are no signature, in one they are (the law above).
+    st_stroke(pa, pts, 10000, 20000, 4);
+    let b: i32 = st_stroke(pa, pts, 10500, 20400, 1);
+    pa_set(pa, b, pf_stroke(), 12591135);
+    st_text(fw, gl, et, 7200, 20300, 66, 121, 58);
+    crate::testport::assert_eq(st_find(pa, pts, gl, fw, et, cg, refs, ow, sm), 0, "a blue stroke and a red one together, with a cue beside them: a chart");
 }
 pub(crate) fn st_oword(mut ow: &mut crate::port::Cells, mut et: &mut crate::port::Cells, x: i32, y: i32, a: i32, b: i32) -> i32 {
     let ts: i32 = crate::port::cells_len(et);

@@ -444,7 +444,7 @@ pub(crate) fn tb_open_band(bd: &mut crate::port::Cells, ya: i32, yb: i32) -> boo
     }
     return 0 == 1;
 }
-pub(crate) fn tb_add(mut tb: &mut crate::port::Cells, page: i32, x0: i32, y0: i32, x1: i32, y1: i32, profile: i32, score: i32, nrows: i32, ncols: i32, cfirst: i32, ncells: i32) -> i32 {
+pub fn tb_add(mut tb: &mut crate::port::Cells, page: i32, x0: i32, y0: i32, x1: i32, y1: i32, profile: i32, score: i32, nrows: i32, ncols: i32, cfirst: i32, ncells: i32) -> i32 {
     // Append a candidate table; answers its index.
     let k: i32 = tb_rows_of(tb, TBS);
     crate::port::cells_push(tb, page);
@@ -1408,6 +1408,21 @@ pub fn tb_due(tb: &mut crate::port::Cells, k: i32, page: i32, ymid2: i32) -> boo
         return 0 == 1;
     }
     return (2 * crate::port::cells_at(tb, (k * TBS) + 2)) <= ymid2;
+}
+pub fn tb_due_for(tb: &mut crate::port::Cells, k: i32, page: i32, ymid2: i32, ln: &mut crate::port::Cells, l: i32) -> bool {
+    // P12.7 (smoke A N4): `tb-due`, with the line `l` the table would be written before (-1: no line, only `ymid2`). A line to the left of the table (it ends within 6 pt of its left edge) that begins in the
+    // table's own height is the label of what the table holds (a form's column of boxes and line numbers beside its rows): the field comes after its label, so such a line is written before the table.
+    if !tb_due(tb, k, page, ymid2) {
+        return 0 == 1;
+    }
+    if l < 0 {
+        return 1 == 1;
+    }
+    let b: i32 = k * TBS;
+    if (ln_get(ln, l, lh_x1()) <= (crate::port::cells_at(tb, b + 1) + 600)) && ((ln_get(ln, l, lh_y0()) >= (crate::port::cells_at(tb, b + 2) - 100)) && (ln_get(ln, l, lh_y0()) <= crate::port::cells_at(tb, b + 4))) {
+        return 0 == 1;
+    }
+    return 1 == 1;
 }
 pub fn tb_skip(tb: &mut crate::port::Cells, k: i32, page: i32) -> i32 {
     // The first table at or after k that is on a page at or after `page`.

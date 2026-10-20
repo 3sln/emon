@@ -156,6 +156,47 @@ func flDocEnd(on *port.Cells) int32 {
 	return n
 }
 
+func flLeaderTail(on *port.Cells, text *port.Cells, n int32) int32 {
+	// 1 when a label's own text ends in at least three spaced leader dots. Paragraph assembly may already have joined the leader run to its label; it still connects the field on that row.
+	var c int32 = -1
+	var last int32 = -1
+	var dots int32 = 0
+	var spaces int32 = 0
+	var j int32 = model.NodeTextLen(on, n) - 1
+	var start int32 = model.NodeTextStart(on, n)
+	if (model.NodeHasText(on, n) == 1) && (j >= 0) {
+		for j >= 0 {
+			c = port.CellsAt(text, start+j)
+			if c == 46 {
+				dots += 1
+			} else if (c == 32) || (c == 9) {
+				spaces += 1
+			} else {
+				if (dots >= 3) && (spaces >= 2) {
+					return 1
+				}
+				return 0
+			}
+			j -= 1
+		}
+		if (dots >= 3) && (spaces >= 2) {
+			return 1
+		}
+		return 0
+	}
+	c = model.NodeFirstChild(on, n)
+	for c >= 0 {
+		if (model.NodeIsInline(on, c) == 1) && (flHasContent(on, c) == 1) {
+			last = c
+		}
+		c = model.NodeNext(on, c)
+	}
+	if last >= 0 {
+		return flLeaderTail(on, text, last)
+	}
+	return 0
+}
+
 func flBlocks(on *port.Cells, orr *port.Cells, text *port.Cells, ndoc int32, bt *port.Cells) int32 {
 	// The block rows `bt` (see FL_B): a row a region of every block that holds a field, has words of its own (text, or inline children's) and a place on a page; and of
 	// every table cell that has nothing in it (flags 4: a box can stand in it).
@@ -193,7 +234,7 @@ func flBlocks(on *port.Cells, orr *port.Cells, text *port.Cells, ndoc int32, bt 
 				port.CellsPush(bt, model.RegionX1(orr, r))
 				port.CellsPush(bt, model.RegionY1(orr, r))
 				port.CellsPush(bt, flags)
-				port.CellsPush(bt, 0)
+				port.CellsPush(bt, flLeaderTail(on, text, n))
 				r = model.RegionNext(orr, r)
 			}
 		}
@@ -254,7 +295,9 @@ func flLeft(bt *port.Cells, nb int32, page int32, x0 int32, y0 int32, y1 int32, 
 		b += 1
 	}
 	if best >= 0 {
-		if bestgap > flNearL {
+		if port.CellsAt(bt, (best*flB)+7) == 1 {
+			bestgap = 0
+		} else if bestgap > flNearL {
 			if flBridged(bt, nb, page, y0, y1, best, x0) == 0 {
 				best = -1
 			}

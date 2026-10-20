@@ -804,6 +804,59 @@ public static class Pdfcontenttest {
         emon.Testport.AssertEq(Evidence.WdCount(wd), 1, "one word, not three letters");
         emon.Testport.AssertEq(Evidence.WdGet(wd, 0, Evidence.HdTlen()), 3, "of three code points");
     }
+    internal static int CtGs(emon.Port.Cells gl, int x0, int x1, int cp, int size, int by) {
+        // One glyph of the scene: the box [x0, x1] by 800, set in `size`, its baseline segment at height `by`.
+        int g = Evidence.GlNew(gl, 1, x0, 0, x1, 800, cp, -1, 0, -1);
+        Evidence.GlSet(gl, g, Evidence.GfSize(), size);
+        Evidence.GlSet(gl, g, Evidence.GfBx0(), x0);
+        Evidence.GlSet(gl, g, Evidence.GfBx1(), x1);
+        Evidence.GlSet(gl, g, Evidence.GfBy0(), by);
+        Evidence.GlSet(gl, g, Evidence.GfBy1(), by);
+        return g;
+    }
+    [Xunit.Fact]
+    public static void TestAWordsBaselineIsNotItsRaisedMarker() {
+        // P12.7 (smoke A N2): `bread` and a raised, smaller `1,` (a footnote marker: set at 600 where the letters are 1000, its baseline 300 above theirs) are one word `bread1,`. Its baseline ends where its letters'
+        // do, not at the marker: the rows of a table sort their words by that baseline, and `bread1,` came before `White` on the row it ends. A marker that begins a word is no more the start of its baseline.
+        emon.Port.Cells gl = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        CtGs(gl, 1000, 1500, 98, 1000, 800);
+        CtGs(gl, 1500, 2000, 114, 1000, 800);
+        CtGs(gl, 2000, 2300, 49, 600, 500);
+        CtGs(gl, 2300, 2600, 44, 600, 500);
+        CtGroup(gl, et, wd, ln);
+        emon.Testport.AssertEq(Evidence.WdCount(wd), 1, "one word");
+        emon.Testport.AssertEq(Evidence.WdGet(wd, 0, Evidence.HdBy0()), 800, "its baseline begins at its first letter's");
+        emon.Testport.AssertEq(Evidence.WdGet(wd, 0, Evidence.HdBy1()), 800, "and ends at its last letter's, not at the raised marker's");
+        emon.Port.CellsDrop(gl, 0);
+        emon.Port.CellsDrop(et, 0);
+        emon.Port.CellsDrop(wd, 0);
+        emon.Port.CellsDrop(ln, 0);
+        CtGs(gl, 1000, 1300, 51, 600, 500);
+        CtGs(gl, 1300, 1800, 98, 1000, 800);
+        CtGs(gl, 1800, 2300, 114, 1000, 800);
+        CtGroup(gl, et, wd, ln);
+        emon.Testport.AssertEq(Evidence.WdCount(wd), 1, "a marker that begins the word: one word");
+        emon.Testport.AssertEq(Evidence.WdGet(wd, 0, Evidence.HdBy0()), 800, "its baseline begins at the letters'");
+        emon.Testport.AssertEq(Evidence.WdGet(wd, 0, Evidence.HdBy1()), 800, "and ends there");
+    }
+    [Xunit.Fact]
+    public static void TestWordBaselineSizeComparisonsDoNotOverflow() {
+        emon.Port.Cells gl = emon.Port.NewCells();
+        // The identity fuzz corpus contains huge glyph sizes. Comparing eighty per cent must work at the I32 limit, including the strict threshold, without multiplication overflow on any target.
+        CtGs(gl, 1000, 1500, 98, 1000, 800);
+        CtGs(gl, 1500, 1800, 49, 600, 500);
+        Evidence.GlSet(gl, 0, Evidence.GfSize(), 2147483647);
+        Evidence.GlSet(gl, 1, Evidence.GfSize(), 1000000000);
+        emon.Testport.AssertEq(Pdfcontent.PcBaseGlyph(gl, 0, 1, 0), 0, "huge letters supply the start");
+        emon.Testport.AssertEq(Pdfcontent.PcBaseGlyph(gl, 0, 1, 1), 0, "the smaller marker cannot supply the end");
+        Evidence.GlSet(gl, 1, Evidence.GfSize(), 1717986917);
+        emon.Testport.AssertEq(Pdfcontent.PcBaseGlyph(gl, 0, 1, 1), 0, "the integer just below eighty per cent stays small");
+        Evidence.GlSet(gl, 1, Evidence.GfSize(), 1717986918);
+        emon.Testport.AssertEq(Pdfcontent.PcBaseGlyph(gl, 0, 1, 1), 1, "the next integer is above the threshold");
+    }
     [Xunit.Fact]
     public static void TestADiacriticDrawnOverALetterIsTheCombiningMarkAfterIt() {
         // Smoke B I-21: TeX draws an umlaut as the dieresis glyph and then the u, backed up under it: `M` `dieresis` `u` `ller`. The

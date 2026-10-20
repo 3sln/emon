@@ -788,6 +788,57 @@ public final class Pdfcontenttest {
         emon.Testport.assertEq(Evidence.wdCount(wd), 1, "one word, not three letters");
         emon.Testport.assertEq(Evidence.wdGet(wd, 0, Evidence.hdTlen()), 3, "of three code points");
     }
+    public static int ctGs(emon.Port.Cells gl, int x0, int x1, int cp, int size, int by) {
+        // One glyph of the scene: the box [x0, x1] by 800, set in `size`, its baseline segment at height `by`.
+        int g = Evidence.glNew(gl, 1, x0, 0, x1, 800, cp, -1, 0, -1);
+        Evidence.glSet(gl, g, Evidence.gfSize(), size);
+        Evidence.glSet(gl, g, Evidence.gfBx0(), x0);
+        Evidence.glSet(gl, g, Evidence.gfBx1(), x1);
+        Evidence.glSet(gl, g, Evidence.gfBy0(), by);
+        Evidence.glSet(gl, g, Evidence.gfBy1(), by);
+        return g;
+    }
+    public static void testAWordsBaselineIsNotItsRaisedMarker() {
+        // P12.7 (smoke A N2): `bread` and a raised, smaller `1,` (a footnote marker: set at 600 where the letters are 1000, its baseline 300 above theirs) are one word `bread1,`. Its baseline ends where its letters'
+        // do, not at the marker: the rows of a table sort their words by that baseline, and `bread1,` came before `White` on the row it ends. A marker that begins a word is no more the start of its baseline.
+        emon.Port.Cells gl = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        ctGs(gl, 1000, 1500, 98, 1000, 800);
+        ctGs(gl, 1500, 2000, 114, 1000, 800);
+        ctGs(gl, 2000, 2300, 49, 600, 500);
+        ctGs(gl, 2300, 2600, 44, 600, 500);
+        ctGroup(gl, et, wd, ln);
+        emon.Testport.assertEq(Evidence.wdCount(wd), 1, "one word");
+        emon.Testport.assertEq(Evidence.wdGet(wd, 0, Evidence.hdBy0()), 800, "its baseline begins at its first letter's");
+        emon.Testport.assertEq(Evidence.wdGet(wd, 0, Evidence.hdBy1()), 800, "and ends at its last letter's, not at the raised marker's");
+        emon.Port.cellsDrop(gl, 0);
+        emon.Port.cellsDrop(et, 0);
+        emon.Port.cellsDrop(wd, 0);
+        emon.Port.cellsDrop(ln, 0);
+        ctGs(gl, 1000, 1300, 51, 600, 500);
+        ctGs(gl, 1300, 1800, 98, 1000, 800);
+        ctGs(gl, 1800, 2300, 114, 1000, 800);
+        ctGroup(gl, et, wd, ln);
+        emon.Testport.assertEq(Evidence.wdCount(wd), 1, "a marker that begins the word: one word");
+        emon.Testport.assertEq(Evidence.wdGet(wd, 0, Evidence.hdBy0()), 800, "its baseline begins at the letters'");
+        emon.Testport.assertEq(Evidence.wdGet(wd, 0, Evidence.hdBy1()), 800, "and ends there");
+    }
+    public static void testWordBaselineSizeComparisonsDoNotOverflow() {
+        emon.Port.Cells gl = emon.Port.newCells();
+        // The identity fuzz corpus contains huge glyph sizes. Comparing eighty per cent must work at the I32 limit, including the strict threshold, without multiplication overflow on any target.
+        ctGs(gl, 1000, 1500, 98, 1000, 800);
+        ctGs(gl, 1500, 1800, 49, 600, 500);
+        Evidence.glSet(gl, 0, Evidence.gfSize(), 2147483647);
+        Evidence.glSet(gl, 1, Evidence.gfSize(), 1000000000);
+        emon.Testport.assertEq(Pdfcontent.pcBaseGlyph(gl, 0, 1, 0), 0, "huge letters supply the start");
+        emon.Testport.assertEq(Pdfcontent.pcBaseGlyph(gl, 0, 1, 1), 0, "the smaller marker cannot supply the end");
+        Evidence.glSet(gl, 1, Evidence.gfSize(), 1717986917);
+        emon.Testport.assertEq(Pdfcontent.pcBaseGlyph(gl, 0, 1, 1), 0, "the integer just below eighty per cent stays small");
+        Evidence.glSet(gl, 1, Evidence.gfSize(), 1717986918);
+        emon.Testport.assertEq(Pdfcontent.pcBaseGlyph(gl, 0, 1, 1), 1, "the next integer is above the threshold");
+    }
     public static void testADiacriticDrawnOverALetterIsTheCombiningMarkAfterIt() {
         // Smoke B I-21: TeX draws an umlaut as the dieresis glyph and then the u, backed up under it: `M` `dieresis` `u` `ller`. The
         // word is Mu, U+0308, ller; the paragraph's normalisation composes it. A dieresis that is not over the letter after it is left.

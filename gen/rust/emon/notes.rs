@@ -277,6 +277,78 @@ pub(crate) fn nt_in_prose(ln: &mut crate::port::Cells, sf: &mut crate::port::Cel
     }
     return 1;
 }
+pub(crate) fn nt_nth_word(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, l: i32, n: i32) -> i32 {
+    // The n-th (from 0) word with text of line l; -1 when it has fewer.
+    let w0: i32 = ln_get(ln, l, lh_first());
+    let wn: i32 = ln_get(ln, l, lh_count());
+    let mut i: i32 = 0;
+    let mut seen: i32 = 0;
+    while i < wn {
+        if ls_wl(wd, w0 + i) > 0 {
+            if seen == n {
+                return w0 + i;
+            }
+            seen += 1;
+        }
+        i += 1;
+    }
+    return -1;
+}
+pub(crate) fn nt_same_words(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, a: i32, b: i32, n: i32) -> i32 {
+    // 1 when the first n words of lines a and b are the same, character for character.
+    let mut k: i32 = 0;
+    let mut j: i32 = 0;
+    while k < n {
+        let wa: i32 = nt_nth_word(wd, ln, a, k);
+        let wb: i32 = nt_nth_word(wd, ln, b, k);
+        if (wa < 0) || (wb < 0) {
+            return 0;
+        }
+        if ls_wl(wd, wa) != ls_wl(wd, wb) {
+            return 0;
+        }
+        j = 0;
+        while j < ls_wl(wd, wa) {
+            if ls_wc(wd, et, wa, j) != ls_wc(wd, et, wb, j) {
+                return 0;
+            }
+            j += 1;
+        }
+        k += 1;
+    }
+    return 1;
+}
+pub(crate) fn nt_margin_line(ln: &mut crate::port::Cells, pages: &mut crate::port::Cells, l: i32) -> i32 {
+    // Running text occupies a page margin: the top or bottom fifteen per cent. A repeated caption in the body can belong to a continued table.
+    let h: i32 = page_h(pages, ln_get(ln, l, lh_page()) - 1);
+    let y: i32 = ln_get(ln, l, lh_y0()) + ln_get(ln, l, lh_y1());
+    if h <= 0 {
+        return 0;
+    }
+    if ((y * 100) <= (h * 30)) || ((y * 100) >= (h * 170)) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn nt_running_label(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, hc: &mut crate::port::Cells, pages: &mut crate::port::Cells, l: i32) -> i32 {
+    // P12.7 (smoke A N1): 1 when caption candidate l begins with the same four words as another candidate on another page: `Schedule 1 (Form 1040) 2025` at the foot of one page and at the head of the next is a running
+    // header or footer and no caption (the caption of a figure or a table has its number, which is its own; a label that recurs is the document's). Candidates are the lines flagged 8, and 64 (let go as an entry of a list).
+    let n: i32 = ln_count(ln);
+    let pg: i32 = ln_get(ln, l, lh_page());
+    let mut m: i32 = 0;
+    while m < n {
+        if (m != l) && (ln_get(ln, m, lh_page()) != pg) && ((nt_margin_line(ln, pages, m) == 1) || (nt_margin_line(ln, pages, l) == 1)) {
+            let fl: i32 = ls_get(hc, m, ls_k_flags());
+            if (fl == ls_f_cap()) || (fl == 64) {
+                if nt_same_words(wd, ln, et, l, m, 4) == 1 {
+                    return 1;
+                }
+            }
+        }
+        m += 1;
+    }
+    return 0;
+}
 pub(crate) fn nt_after(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, l: i32, w: i32) -> i32 {
     // The word with text that follows word w in line l; -1 when there is none.
     let w0: i32 = ln_get(ln, l, lh_first());
@@ -813,6 +885,54 @@ pub(crate) fn nt_plain_peers(nb: &mut crate::port::Cells, i: i32) -> i32 {
     }
     return n;
 }
+pub(crate) fn nt_same_shape(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, a: i32, b: i32) -> i32 {
+    // P12.7 (smoke B N4): 1 when lines a and b have the same words, a digit standing for any digit.
+    let na: i32 = ln_get(ln, a, lh_count());
+    let wa: i32 = ln_get(ln, a, lh_first());
+    let wb: i32 = ln_get(ln, b, lh_first());
+    let mut i: i32 = 0;
+    let mut j: i32 = 0;
+    if na != ln_get(ln, b, lh_count()) {
+        return 0;
+    }
+    while i < na {
+        let tl: i32 = ls_wl(wd, wa + i);
+        if tl != ls_wl(wd, wb + i) {
+            return 0;
+        }
+        j = 0;
+        while j < tl {
+            let ca: i32 = ls_wc(wd, et, wa + i, j);
+            let cb: i32 = ls_wc(wd, et, wb + i, j);
+            if (ca != cb) && ((ls_digit(ca) < 0) || (ls_digit(cb) < 0)) {
+                return 0;
+            }
+            j += 1;
+        }
+        i += 1;
+    }
+    return 1;
+}
+pub(crate) fn nt_repeats(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, l: i32) -> i32 {
+    // P12.7 (smoke B N4): 1 when line l has a twin on another page: the same words (digits alike), the same type size and the same height within 15 pt. A line that recurs at the foot of every page is furniture
+    // (an address, a motto), never a note: notes do not repeat.
+    let n: i32 = ln_count(ln);
+    let pg: i32 = ln_get(ln, l, lh_page());
+    let y: i32 = ln_get(ln, l, lh_y0());
+    let mut m: i32 = 0;
+    if ln_get(ln, l, lh_count()) < 2 {
+        return 0;
+    }
+    while m < n {
+        if (ln_get(ln, m, lh_page()) != pg) && (ls_abs(ln_get(ln, m, lh_y0()) - y) <= 1500) {
+            if nt_same_shape(wd, ln, et, l, m) == 1 {
+                return 1;
+            }
+        }
+        m += 1;
+    }
+    return 0;
+}
 pub(crate) fn nt_foot(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, ln: &mut crate::port::Cells, sf: &mut crate::port::Cells, mut rf: &mut crate::port::Cells, mut nb: &mut crate::port::Cells, mk: &mut crate::port::Cells, i: i32) -> i32 {
     // Is note body candidate i a footnote? In the lower half of the page (the band) and small or marked in superscript,
     // with a reference on its page; or small, with a reference on the page before (a note a column or a page break pushed
@@ -847,7 +967,8 @@ pub(crate) fn nt_foot(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, 
     if (kind == 2) && ((szok == 1) && (band == 1)) {
         let bsz: i32 = st_hget(sf, sfh_size());
         let w: i32 = crate::port::cells_at(nb, b + 2);
-        if (ls_wc(wd, et, w, 0) != 91) && (nt_plain_peers(nb, i) <= 5) {
+        // P12.7 (smoke B N4): a note's number has at most two digits (302 is a street number), and a line that recurs on other pages is no note
+        if (ls_wc(wd, et, w, 0) != 91) && ((nt_plain_peers(nb, i) <= 5) && ((crate::port::cells_at(nb, b + 6) <= 2) && (nt_repeats(wd, ln, et, crate::port::cells_at(nb, b)) == 0))) {
             if nt_small_to_end(ln, sf, crate::port::cells_at(nb, b), bsz) == 1 {
                 crate::port::cells_set(nb, b + 7, 1);
                 return 1;
@@ -1251,7 +1372,7 @@ pub fn nt_analyze(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cel
     l = 0;
     while l < n {
         if ls_get(hc, l, ls_k_flags()) == ls_f_cap() {
-            if (nt_in_run(sf, ln, hc, l) == 1) || ((nt_toc_like(wd, ln, et, sf, l) == 1) || (nt_in_prose(ln, sf, sc, l) == 1)) {
+            if (nt_in_run(sf, ln, hc, l) == 1) || ((nt_toc_like(wd, ln, et, sf, l) == 1) || ((nt_in_prose(ln, sf, sc, l) == 1) || (nt_running_label(wd, ln, et, hc, pages, l) == 1))) {
                 ls_put(hc, l, ls_k_flags(), 64);
             }
         }

@@ -28,11 +28,11 @@
                                cells-drop text-cp text-i32 src-of-blob src-of-cells]]
             [emon.pdfsrc :refer [ps-missed]]
             [emon.pdfdoc :refer [pd-open]]
-            [emon.pdfcontent :refer [pc-document pc-warn pc-fonts pc-group pc-pua]]
+            [emon.pdfcontent :refer [pc-document pc-warn pc-fonts pc-group pc-pua pc-base-glyph]]
             [emon.contentrows :refer [cr-page-text cr-page-lines cr-all-text cr-word cr-span cr-digest]]
             [emon.evidence :refer [gl-count gl-get gl-new gl-set wd-get hd-x0 hd-line wf-wbreak wb-gap wb-line-end
                                    ln-count ln-get lh-first lh-count ch-word wd-count mk-count
-                                   ch-cp ch-x0 ch-y0 ch-x1 ch-y1 gf-by0 gf-size gf-rot gf-bx0 gf-bx1 hd-tstart hd-tlen
+                                   ch-cp ch-x0 ch-y0 ch-x1 ch-y1 gf-by0 gf-by1 gf-size gf-rot gf-bx0 gf-bx1 hd-tstart hd-tlen hd-by0 hd-by1
                                    gf-mode ch-page ev-emit ev-init ev-check]]
             [emon.splitmix :refer [sm-seed sm-below]]
             [kin.lang :refer [defn return let set while if do comment
@@ -786,6 +786,54 @@
     (ct-group gl et wd ln)
     (assert-eq (wd-count wd) 1 "one word, not three letters")
     (assert-eq (wd-get wd 0 (hd-tlen)) 3 "of three code points")))
+
+(defn ^I32 ct-gs [^:mut ^Cells gl ^I32 x0 ^I32 x1 ^I32 cp ^I32 size ^I32 by]
+  (comment "One glyph of the scene: the box [x0, x1] by 800, set in `size`, its baseline segment at height `by`.")
+  (let [^I32 g (gl-new gl 1 x0 0 x1 800 cp -1 0 -1)]
+    (gl-set gl g (gf-size) size)
+    (gl-set gl g (gf-bx0) x0)
+    (gl-set gl g (gf-bx1) x1)
+    (gl-set gl g (gf-by0) by)
+    (gl-set gl g (gf-by1) by)
+    (return g)))
+
+(deftest test-a-words-baseline-is-not-its-raised-marker
+  (comment "P12.7 (smoke A N2): `bread` and a raised, smaller `1,` (a footnote marker: set at 600 where the letters are 1000, its baseline 300 above theirs) are one word `bread1,`. Its baseline ends where its letters'")
+  (comment "do, not at the marker: the rows of a table sort their words by that baseline, and `bread1,` came before `White` on the row it ends. A marker that begins a word is no more the start of its baseline.")
+  (let [^Cells gl (new-cells) ^Cells et (new-cells) ^Cells wd (new-cells) ^Cells ln (new-cells)]
+    (ct-gs gl 1000 1500 98 1000 800)
+    (ct-gs gl 1500 2000 114 1000 800)
+    (ct-gs gl 2000 2300 49 600 500)
+    (ct-gs gl 2300 2600 44 600 500)
+    (ct-group gl et wd ln)
+    (assert-eq (wd-count wd) 1 "one word")
+    (assert-eq (wd-get wd 0 (hd-by0)) 800 "its baseline begins at its first letter's")
+    (assert-eq (wd-get wd 0 (hd-by1)) 800 "and ends at its last letter's, not at the raised marker's")
+    (cells-drop gl 0)
+    (cells-drop et 0)
+    (cells-drop wd 0)
+    (cells-drop ln 0)
+    (ct-gs gl 1000 1300 51 600 500)
+    (ct-gs gl 1300 1800 98 1000 800)
+    (ct-gs gl 1800 2300 114 1000 800)
+    (ct-group gl et wd ln)
+    (assert-eq (wd-count wd) 1 "a marker that begins the word: one word")
+    (assert-eq (wd-get wd 0 (hd-by0)) 800 "its baseline begins at the letters'")
+    (assert-eq (wd-get wd 0 (hd-by1)) 800 "and ends there")))
+
+(deftest test-word-baseline-size-comparisons-do-not-overflow
+  (let [^Cells gl (new-cells)]
+    (comment "The identity fuzz corpus contains huge glyph sizes. Comparing eighty per cent must work at the I32 limit, including the strict threshold, without multiplication overflow on any target.")
+    (ct-gs gl 1000 1500 98 1000 800)
+    (ct-gs gl 1500 1800 49 600 500)
+    (gl-set gl 0 (gf-size) 2147483647)
+    (gl-set gl 1 (gf-size) 1000000000)
+    (assert-eq (pc-base-glyph gl 0 1 0) 0 "huge letters supply the start")
+    (assert-eq (pc-base-glyph gl 0 1 1) 0 "the smaller marker cannot supply the end")
+    (gl-set gl 1 (gf-size) 1717986917)
+    (assert-eq (pc-base-glyph gl 0 1 1) 0 "the integer just below eighty per cent stays small")
+    (gl-set gl 1 (gf-size) 1717986918)
+    (assert-eq (pc-base-glyph gl 0 1 1) 1 "the next integer is above the threshold")))
 
 (deftest test-a-diacritic-drawn-over-a-letter-is-the-combining-mark-after-it
   (comment "Smoke B I-21: TeX draws an umlaut as the dieresis glyph and then the u, backed up under it: `M` `dieresis` `u` `ller`. The")

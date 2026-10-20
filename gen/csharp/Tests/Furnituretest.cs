@@ -688,6 +688,46 @@ public static class Furnituretest {
         emon.Testport.AssertEq(FlRootsOf(wd, ln, et, 4), 2, "both lines of the header are furniture");
     }
     [Xunit.Fact]
+    public static void TestAStatementsTitleUnderTheCompanysNameIsFurnitureOnlyWhenItRecursWithIt() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells wd2 = emon.Port.NewCells();
+        emon.Port.Cells ln2 = emon.Port.NewCells();
+        emon.Port.Cells et2 = emon.Port.NewCells();
+        // P12.7 (smoke A N3): a 10-K's three pages under a header of two lines (the company's name and `and Subsidiaries`, on every page) and a third line: the title of the statement, `CONSOLIDATED BALANCE SHEETS` on
+        // two of the pages and the next statement's on the third. A line goes with the header above it only when it recurs on every page the header does: the title is the statement's heading. The control: the
+        // same title on all three pages is the third line of the header.
+        FlPages(wd, ln, et, 3);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("BERKSHIRE HATHAWAY INC."), 1, 4250, 1800, 17700, 3100, 0, 1000);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("and Subsidiaries"), 1, 4250, 3550, 20000, 4850, 0, 1000);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("CONSOLIDATED BALANCE SHEETS"), 1, 4250, 5300, 30000, 6600, 0, 1000);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("Erie hospitals seek answers"), 1, 4500, 7050, 30000, 8350, 0, 1000);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("BERKSHIRE HATHAWAY INC."), 2, 4250, 1800, 17700, 3100, 0, 1000);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("and Subsidiaries"), 2, 4250, 3550, 20000, 4850, 0, 1000);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("CONSOLIDATED BALANCE SHEETS"), 2, 4250, 5300, 30000, 6600, 0, 1000);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("Garland district fenced areas"), 2, 4500, 7050, 30000, 8350, 0, 1000);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("BERKSHIRE HATHAWAY INC."), 3, 4250, 1800, 17700, 3100, 0, 1000);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("and Subsidiaries"), 3, 4250, 3550, 20000, 4850, 0, 1000);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("CONSOLIDATED STATEMENTS OF EARNINGS"), 3, 4250, 5300, 30000, 6600, 0, 1000);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("Women account for research"), 3, 4500, 7050, 30000, 8350, 0, 1000);
+        emon.Testport.AssertEq(FlRootsOf(wd, ln, et, 3), 2, "the company's name and `and Subsidiaries` are furniture; the title that is on two of three pages is a heading");
+        FlPages(wd2, ln2, et2, 3);
+        FlLine(wd2, ln2, et2, emon.Testport.TextBlob("BERKSHIRE HATHAWAY INC."), 1, 4250, 1800, 17700, 3100, 0, 1000);
+        FlLine(wd2, ln2, et2, emon.Testport.TextBlob("and Subsidiaries"), 1, 4250, 3550, 20000, 4850, 0, 1000);
+        FlLine(wd2, ln2, et2, emon.Testport.TextBlob("CONSOLIDATED BALANCE SHEETS"), 1, 4250, 5300, 30000, 6600, 0, 1000);
+        FlLine(wd2, ln2, et2, emon.Testport.TextBlob("Erie hospitals seek answers"), 1, 4500, 7050, 30000, 8350, 0, 1000);
+        FlLine(wd2, ln2, et2, emon.Testport.TextBlob("BERKSHIRE HATHAWAY INC."), 2, 4250, 1800, 17700, 3100, 0, 1000);
+        FlLine(wd2, ln2, et2, emon.Testport.TextBlob("and Subsidiaries"), 2, 4250, 3550, 20000, 4850, 0, 1000);
+        FlLine(wd2, ln2, et2, emon.Testport.TextBlob("CONSOLIDATED BALANCE SHEETS"), 2, 4250, 5300, 30000, 6600, 0, 1000);
+        FlLine(wd2, ln2, et2, emon.Testport.TextBlob("Garland district fenced areas"), 2, 4500, 7050, 30000, 8350, 0, 1000);
+        FlLine(wd2, ln2, et2, emon.Testport.TextBlob("BERKSHIRE HATHAWAY INC."), 3, 4250, 1800, 17700, 3100, 0, 1000);
+        FlLine(wd2, ln2, et2, emon.Testport.TextBlob("and Subsidiaries"), 3, 4250, 3550, 20000, 4850, 0, 1000);
+        FlLine(wd2, ln2, et2, emon.Testport.TextBlob("CONSOLIDATED BALANCE SHEETS"), 3, 4250, 5300, 30000, 6600, 0, 1000);
+        FlLine(wd2, ln2, et2, emon.Testport.TextBlob("Women account for research"), 3, 4500, 7050, 30000, 8350, 0, 1000);
+        emon.Testport.AssertEq(FlRootsOf(wd2, ln2, et2, 3), 3, "a title on every page is the third line of the header");
+    }
+    [Xunit.Fact]
     public static void TestAFooterOfFourPartsOnOneBaselineIsStillAFooter() {
         emon.Port.Cells wd = emon.Port.NewCells();
         emon.Port.Cells ln = emon.Port.NewCells();

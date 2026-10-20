@@ -523,6 +523,92 @@ public static class Para {
         }
         return 1 == 1;
     }
+    internal static bool PaLeaderOnly(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l) {
+        // P12.7 (smoke A N4): is line l nothing but leader dots: at least three of `.` (or the ellipsis or the middle dot) and no other character. A form's rows hold their label and, in separate runs after a gap,
+        // the dots that lead the eye to the field: `1a Gross receipts or sales . .` and `. . . . .` are one row, and the dots are no paragraph.
+        int w0 = Evidence.LnGet(ln, l, Evidence.LhFirst());
+        int wn = Evidence.LnGet(ln, l, Evidence.LhCount());
+        int k = 0;
+        int j = 0;
+        int dots = 0;
+        while (k < wn) {
+            int ts = Evidence.WdGet(wd, w0 + k, Evidence.HdTstart());
+            int tl = Evidence.WdGet(wd, w0 + k, Evidence.HdTlen());
+            j = 0;
+            while ((ts >= 0) && (j < tl)) {
+                int c = emon.Port.CellsAt(et, ts + j);
+                if ((c == 46) || ((c == 8230) || (c == 183))) {
+                    dots += 1;
+                } else {
+                    return 0 == 1;
+                }
+                j += 1;
+            }
+            k += 1;
+        }
+        return dots >= 3;
+    }
+    internal static bool PaBigLeadin(emon.Port.Cells wd, emon.Port.Cells ln, int l) {
+        // P12.7 (smoke B side effect): does line l begin with a run-in head set larger than the rest of the line: at least two words, each over 4 per cent bigger than the line's dominant size, followed by at least three words
+        // of the dominant size. The Russian declaration's clauses, `принимая во внимание, что ...`, each begin so: with no gap and no indent between them, the lead-in is the only sign that a clause is a paragraph (the heading
+        // stage no longer takes it for a heading, D575, so the paragraph stage must).
+        int d = PaDom(wd, ln, l);
+        int w0 = Evidence.LnGet(ln, l, Evidence.LhFirst());
+        int wn = Evidence.LnGet(ln, l, Evidence.LhCount());
+        int k = 0;
+        int big = 0;
+        int rest = 0;
+        if (d < 0) {
+            return 0 == 1;
+        }
+        int sz = Evidence.WdGet(wd, d, Evidence.WfSize());
+        if (sz <= 0) {
+            return 0 == 1;
+        }
+        while ((k < wn) && ((Evidence.WdGet(wd, w0 + k, Evidence.WfSize()) * 100) > (sz * 104))) {
+            big += 1;
+            k += 1;
+        }
+        if (big < 2) {
+            return 0 == 1;
+        }
+        while (k < wn) {
+            if ((Evidence.WdGet(wd, w0 + k, Evidence.HdTlen()) > 0) && ((Evidence.WdGet(wd, w0 + k, Evidence.WfSize()) * 100) <= (sz * 104))) {
+                rest += 1;
+            }
+            k += 1;
+        }
+        return rest >= 3;
+    }
+    internal static bool PaReferenceStart(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l) {
+        // A bracketed numeric entry at the beginning of a line: [1] through [9999], followed by text. Unlike a citation inside prose it supplies an explicit paragraph boundary even without a hanging indent.
+        int first = Evidence.LnGet(ln, l, Evidence.LhFirst());
+        int end = first + Evidence.LnGet(ln, l, Evidence.LhCount());
+        int w = first;
+        int j = 1;
+        while ((w < end) && (Evidence.WdGet(wd, w, Evidence.HdTlen()) <= 0)) {
+            w += 1;
+        }
+        if (w >= (end - 1)) {
+            return 0 == 1;
+        }
+        int ts = Evidence.WdGet(wd, w, Evidence.HdTstart());
+        int n = Evidence.WdGet(wd, w, Evidence.HdTlen());
+        if ((ts < 0) || ((n < 3) || (n > 6))) {
+            return 0 == 1;
+        }
+        if ((emon.Port.CellsAt(et, ts) != 91) || (emon.Port.CellsAt(et, ts + (n - 1)) != 93)) {
+            return 0 == 1;
+        }
+        while (j < (n - 1)) {
+            int c = emon.Port.CellsAt(et, ts + j);
+            if ((c < 48) || (c > 57)) {
+                return 0 == 1;
+            }
+            j += 1;
+        }
+        return 1 == 1;
+    }
     internal static bool PaNewPar(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int a, int b, int med, int margin, emon.Port.Cells hc) {
         // Does line b, the next one on the page, start a paragraph after line a (D135). The heading analysis
         // (P4.4) decides first where it has an opinion: a heading is a block of its own (D167).
@@ -535,6 +621,13 @@ public static class Para {
         }
         // an item, a note body or a caption starts here (P4.5, P4.6: the list stage's rows after the heading rows)
         if (Lists.LsSplit(hc, a, b) == 1) {
+            return 1 == 1;
+        }
+        // Leader dots join a label on their own baseline, never the previous row: stretching that row's region would attach the next row's field to it (P12.7, smoke A N4).
+        if (PaLeaderOnly(wd, ln, et, b)) {
+            if (PaUpright(ln, a) && PaUpright(ln, b) && (PaAbs(PaYmid2(ln, a) - PaYmid2(ln, b)) <= (PaSize(wd, ln, b) / 2))) {
+                return 0 == 1;
+            }
             return 1 == 1;
         }
         if (!PaUpright(ln, a)) {
@@ -573,6 +666,12 @@ public static class Para {
         }
         bool opened = PaOpenEnd(wd, ln, et, a);
         if (PaStyleDiffers(wd, ln, a, b, opened)) {
+            return 1 == 1;
+        }
+        if (PaBigLeadin(wd, ln, b)) {
+            return 1 == 1;
+        }
+        if (PaReferenceStart(wd, ln, et, b) && ((PaAbs(PaStart(ln, b) - margin) * PaIndentDiv) <= sb)) {
             return 1 == 1;
         }
         return 0 == 1;
@@ -1495,11 +1594,26 @@ public static class Para {
         }
         return b;
     }
-    internal static int PaJoinScore(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells raw, int a, int b, int colx0, int colx1, int ncol, int bmargin, int indents, int bottom, int bx0, int bx1, int bn, emon.Port.Cells hc) {
+    internal static int PaOpenNote(emon.Port.Cells raw, emon.Port.Cells fr) {
+        // 1 when the open paragraph (its text so far in `raw`, its fragments in `fr`) begins with a note body's group: a footnote or an endnote.
+        if (emon.Port.CellsLen(fr) < FrStride) {
+            return 0;
+        }
+        int s0 = emon.Port.CellsAt(fr, 5);
+        if (s0 >= emon.Port.CellsLen(raw)) {
+            return 0;
+        }
+        if (emon.Port.CellsAt(raw, s0) == Lists.LsSNote()) {
+            return 1;
+        }
+        return 0;
+    }
+    internal static int PaJoinScore(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells raw, int a, int b, int colx0, int colx1, int ncol, int bmargin, int indents, int bottom, int bx0, int bx1, int bn, emon.Port.Cells hc, int note) {
         // The points for the paragraph that ended its fragment (its last line a, the text so far in `raw`) going
         // on with line b, the first of the next fragment (SPEC 10.1.2, D164). `colx0`..`colx1` is the extent of a's
         // fragment, `ncol` its lines (the edge signals need two), `bmargin` the margin of b's, `indents` whether
         // the document's paragraphs have first-line indents, `bottom` the bottom of the fragments of a's band.
+        // `note` is 1 when the paragraph is a note body (P12.7, smoke B N1): a footnote goes on in type of its own size, and the body type of the next column or page is not its continuation.
         int n = emon.Port.CellsLen(raw);
         int sa = PaSize(wd, ln, a);
         int sb = PaSize(wd, ln, b);
@@ -1511,6 +1625,9 @@ public static class Para {
             return -100;
         }
         if (Lists.LsStart(hc, b) == 1) {
+            return -100;
+        }
+        if ((note == 1) && ((PaAbs(sa - sb) * PaSizeDiv) > sa)) {
             return -100;
         }
         int last = emon.Port.CellsAt(raw, n - 1);
@@ -1670,19 +1787,39 @@ public static class Para {
         // paragraph of each line queued in `dq` (the lines that are not upright, D136) and empty the queue.
         // Answers the first side row not written yet.
         int nq = emon.Port.CellsLen(dq);
+        int nf = emon.Port.CellsLen(cf) / CfStride;
         int k = 0;
+        int kept = 0;
         int pend = 0;
+        int now = 0;
         PaFlush(nodes, attrs, regions, text, raw, tmp, fr, al, hc, 0);
         pend = PaNotes(wd, ln, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, med, from, cur, ty, hc);
+        // P12.7 (smoke A N4): a line that is not upright (a label turned a quarter, in a form's margin) is written where its top is: before the first paragraph that starts at or below it on its page (`ty` the top
+        // of the line that starts the next paragraph), not after the page's last; all of them when the close is the page's end (`cur` past the fragments)
         while (k < nq) {
             int l = emon.Port.CellsAt(dq, k);
             int pg = Evidence.LnGet(ln, l, Evidence.LhPage());
-            PaFragOpen(fr, ln, pg, l, 0);
-            PaAddLine(wd, ln, et, raw, l, hc, fr);
-            PaFlush(nodes, attrs, regions, text, raw, tmp, fr, al, hc, 0);
+            now = 1;
+            if (cur < nf) {
+                now = 0;
+                if (pg < emon.Port.CellsAt(cf, (cur * CfStride) + CfPage)) {
+                    now = 1;
+                }
+                if ((pg == emon.Port.CellsAt(cf, (cur * CfStride) + CfPage)) && (Evidence.LnGet(ln, l, Evidence.LhY0()) <= ty)) {
+                    now = 1;
+                }
+            }
+            if (now == 1) {
+                PaFragOpen(fr, ln, pg, l, 0);
+                PaAddLine(wd, ln, et, raw, l, hc, fr);
+                PaFlush(nodes, attrs, regions, text, raw, tmp, fr, al, hc, 0);
+            } else {
+                emon.Port.CellsSet(dq, kept, l);
+                kept += 1;
+            }
             k += 1;
         }
-        emon.Port.CellsDrop(dq, 0);
+        emon.Port.CellsDrop(dq, kept);
         return pend;
     }
     internal static int PaUprightCount(emon.Port.Cells ln, emon.Port.Cells ord) {
@@ -1772,12 +1909,12 @@ public static class Para {
         }
         return 0;
     }
-    internal static int PaTables(emon.Port.Cells tb, int tcur, int p, int ymid2, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells ledger, emon.Port.Cells hc) {
+    internal static int PaTables(emon.Port.Cells tb, int tcur, int p, int ymid2, int lb, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells ledger, emon.Port.Cells hc) {
         // Emit, in document order, the tables of page p from `tcur` on whose top is at or above `ymid2` (twice
         // a baseline y: the order key of `pa-ymid2`). The open paragraph has been closed. Answers the next table
         // to emit (P5.1: a table is a block, found before this and placed here by its top, D178).
         int k = tcur;
-        while (Table.TbDue(tb, k, p, ymid2)) {
+        while (Table.TbDueFor(tb, k, p, ymid2, ln, lb)) {
             Table.TbEmit(tb, k, Heading.HdCur(hc), wd, et, ln, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger);
             k += 1;
         }
@@ -1820,6 +1957,7 @@ public static class Para {
         int ty = 0;
         int tcur = 0;
         int k0 = 0;
+        int opn = 0;
         int score = 0;
         Initial.InRetire(lt, ii);
         PaColumns(wd, et, npages, pages, layout, lt, ord, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr);
@@ -1837,6 +1975,13 @@ public static class Para {
             PaCollect(ord, lt, p);
             n = emon.Port.CellsLen(ord);
             nu = PaUprightCount(lt, ord);
+            i = nu;
+            while (i < n) {
+                if (Table.TbClaimed(lt, emon.Port.CellsAt(ord, i)) == 0) {
+                    emon.Port.CellsPush(gp, emon.Port.CellsAt(ord, i));
+                }
+                i += 1;
+            }
             tcur = Table.TbSkip(tb, tcur, p);
             while ((r < nf) && (emon.Port.CellsAt(cf, (r * CfStride) + CfPage) < p)) {
                 r += 1;
@@ -1852,7 +1997,7 @@ public static class Para {
                 if (p > 1) {
                     PaMilestone(nodes, p, hc);
                 }
-                tcur = PaTables(tb, tcur, p, PaAll, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
+                tcur = PaTables(tb, tcur, p, PaAll, -1, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
             } else {
                 i = r;
                 while (i < r1) {
@@ -1866,7 +2011,8 @@ public static class Para {
                         b = emon.Port.CellsAt(lo, first);
                         cont = 0;
                         if (open == 1) {
-                            score = PaJoinScore(wd, lt, et, raw, prev, b, emon.Port.CellsAt(cf, (prevfr * CfStride) + CfX0), emon.Port.CellsAt(cf, (prevfr * CfStride) + CfX1), emon.Port.CellsAt(cf, (prevfr * CfStride) + CfCount), mg, indents, PaBottom(cf, prevfr), emon.Port.CellsAt(cf, (i * CfStride) + CfX0), emon.Port.CellsAt(cf, (i * CfStride) + CfX1), emon.Port.CellsAt(cf, (i * CfStride) + CfCount), hc);
+                            opn = PaOpenNote(raw, fr);
+                            score = PaJoinScore(wd, lt, et, raw, prev, b, emon.Port.CellsAt(cf, (prevfr * CfStride) + CfX0), emon.Port.CellsAt(cf, (prevfr * CfStride) + CfX1), emon.Port.CellsAt(cf, (prevfr * CfStride) + CfCount), mg, indents, PaBottom(cf, prevfr), emon.Port.CellsAt(cf, (i * CfStride) + CfX0), emon.Port.CellsAt(cf, (i * CfStride) + CfX1), emon.Port.CellsAt(cf, (i * CfStride) + CfCount), hc, opn);
                             emon.Port.CellsPush(dbg, i);
                             emon.Port.CellsPush(dbg, prev);
                             emon.Port.CellsPush(dbg, b);
@@ -1878,7 +2024,7 @@ public static class Para {
                             if (score >= JoinMin) {
                                 cont = 1;
                             }
-                            if (Table.TbDue(tb, tcur, p, PaYmid2(lt, b))) {
+                            if (Table.TbDueFor(tb, tcur, p, PaYmid2(lt, b), lt, b)) {
                                 cont = 0;
                             }
                         }
@@ -1891,7 +2037,7 @@ public static class Para {
                             if ((i == r) && (p > 1)) {
                                 PaMilestone(nodes, p, hc);
                             }
-                            tcur = PaTables(tb, tcur, p, PaYmid2(lt, b), wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
+                            tcur = PaTables(tb, tcur, p, PaYmid2(lt, b), b, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
                             PaFragOpen(fr, lt, p, b, 0);
                             PaIniStart(wd, lt, et, raw, fr, ii, b);
                         } else {
@@ -1908,10 +2054,10 @@ public static class Para {
                         while (cont < cnt) {
                             b = emon.Port.CellsAt(lo, first + cont);
                             if (Table.TbClaimed(lt, b) == 0) {
-                                if ((Initial.InRow(lt, b) >= 0) || (PaNewPar(wd, lt, et, prev, b, med, mg, hc) || Table.TbDue(tb, tcur, p, PaYmid2(lt, b)))) {
+                                if ((Initial.InRow(lt, b) >= 0) || (PaNewPar(wd, lt, et, prev, b, med, mg, hc) || Table.TbDueFor(tb, tcur, p, PaYmid2(lt, b), lt, b))) {
                                     ty = Evidence.LnGet(lt, b, Evidence.LhY0());
                                     pend = PaClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, i, ty, hc);
-                                    tcur = PaTables(tb, tcur, p, PaYmid2(lt, b), wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
+                                    tcur = PaTables(tb, tcur, p, PaYmid2(lt, b), b, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
                                     PaFragOpen(fr, lt, p, b, 0);
                                     PaIniStart(wd, lt, et, raw, fr, ii, b);
                                 } else {
@@ -1931,15 +2077,8 @@ public static class Para {
                     pend = PaClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, hc);
                     open = 0;
                     prev = -1;
-                    tcur = PaTables(tb, tcur, p, PaAll, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
+                    tcur = PaTables(tb, tcur, p, PaAll, -1, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
                 }
-            }
-            i = nu;
-            while (i < n) {
-                if (Table.TbClaimed(lt, emon.Port.CellsAt(ord, i)) == 0) {
-                    emon.Port.CellsPush(gp, emon.Port.CellsAt(ord, i));
-                }
-                i += 1;
             }
             p += 1;
         }

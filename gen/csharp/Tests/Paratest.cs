@@ -306,6 +306,203 @@ public static class Paratest {
         PtBrief(t4, nodes, regions, text);
         emon.Testport.AssertText(t4, "P1:left col;P1:right col;", "two lines on one row are two paragraphs");
     }
+    [Xunit.Fact]
+    public static void TestBracketedReferenceEntriesKeepTheirParagraphs() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells ord = emon.Port.NewCells();
+        emon.Port.Cells raw = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells fr = emon.Port.NewCells();
+        emon.Port.Cells gp = emon.Port.NewCells();
+        emon.Port.Cells st = emon.Port.NewCells();
+        System.Text.StringBuilder @out = emon.Testport.NewText();
+        // References printed without hanging indents still begin distinct entries. Wrapped lines and a citation inside prose keep their ordinary continuation.
+        PtLine(wd, ln, et, emon.Testport.TextBlob("[28] Alpha Beta. A study."), 1, 7200, 10000, 50000, 11200, 0, 0, 1000);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("[29] Gamma Delta. Another study"), 1, 7200, 11500, 50000, 12700, 0, 0, 1000);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("continued with citation [30] in prose."), 1, 7200, 13000, 50000, 14200, 0, 0, 1000);
+        emon.Testport.AssertEq(PtRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "references: well formed");
+        PtBrief(@out, nodes, regions, text);
+        emon.Testport.AssertText(@out, "P1:[28] Alpha Beta. A study.;P1:[29] Gamma Delta. Another study continued with citation [30] in prose.;", "entries split without making headings; wrapped text stays joined");
+    }
+    [Xunit.Fact]
+    public static void TestARunOfLeaderDotsIsNoParagraphOfItsOwn() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells ord = emon.Port.NewCells();
+        emon.Port.Cells raw = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells fr = emon.Port.NewCells();
+        emon.Port.Cells gp = emon.Port.NewCells();
+        emon.Port.Cells st = emon.Port.NewCells();
+        System.Text.StringBuilder t1 = emon.Testport.NewText();
+        // P12.7 (smoke A N4): a form's row is its label, the dots that lead to the field (a run of their own after a gap) and the line's number: the dots are the label's, and were 62 paragraphs of nothing but dots on the
+        // first page of the 1120. They go on the line before them; the number, which is no dots, is a paragraph of its own.
+        PtLine(wd, ln, et, emon.Testport.TextBlob("1a Gross receipts or sales . ."), 1, 7200, 10000, 30000, 11200, 0, 0, 1000);
+        PtLine(wd, ln, et, emon.Testport.TextBlob(". . . . ."), 1, 33000, 10000, 40000, 11200, 0, 0, 1000);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("1a"), 1, 44000, 10000, 46000, 11200, 0, 0, 1000);
+        emon.Testport.AssertEq(PtRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "leaders: well formed");
+        PtBrief(t1, nodes, regions, text);
+        emon.Testport.AssertText(t1, "P1:1a Gross receipts or sales . . . . . . .;P1:1a;", "the dots go on the label's line, the number is its own");
+    }
+    [Xunit.Fact]
+    public static void TestLeaderDotsOnTheNextRowDoNotExtendThePreviousLabel() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells ord = emon.Port.NewCells();
+        emon.Port.Cells raw = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells fr = emon.Port.NewCells();
+        emon.Port.Cells gp = emon.Port.NewCells();
+        emon.Port.Cells st = emon.Port.NewCells();
+        System.Text.StringBuilder @out = emon.Testport.NewText();
+        // A form's numbered label must not absorb leader dots on a later row: the enlarged label box would then claim the later row's field. Leaders join only a label on their own baseline.
+        PtLine(wd, ln, et, emon.Testport.TextBlob("8"), 1, 44000, 10000, 46000, 11200, 0, 0, 1000);
+        PtLine(wd, ln, et, emon.Testport.TextBlob(". . . ."), 1, 33000, 11500, 40000, 12700, 0, 0, 1000);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("9"), 1, 44000, 11500, 46000, 12700, 0, 0, 1000);
+        emon.Testport.AssertEq(PtRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "rows: well formed");
+        PtBrief(@out, nodes, regions, text);
+        emon.Testport.AssertText(@out, "P1:8;P1:. . . .;P1:9;", "the previous label keeps its own row");
+    }
+    [Xunit.Fact]
+    public static void TestDottedFormRowsAndTheirNumberLabelsKeepRowBoundaries() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells ord = emon.Port.NewCells();
+        emon.Port.Cells raw = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells fr = emon.Port.NewCells();
+        emon.Port.Cells gp = emon.Port.NewCells();
+        emon.Port.Cells st = emon.Port.NewCells();
+        System.Text.StringBuilder out1 = emon.Testport.NewText();
+        System.Text.StringBuilder out2 = emon.Testport.NewText();
+        // Rows with an unpunctuated form marker and trailing printing leaders are separate labels, even at ordinary body leading. Their separate number column also keeps one row per label. Wrapped prose still continues within its label.
+        PtLine(wd, ln, et, emon.Testport.TextBlob("29a Net loss . . ."), 1, 7200, 10000, 40000, 11200, 0, 0, 1000);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("b Special deduction . . ."), 1, 7200, 11500, 40000, 12700, 0, 0, 1000);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("continued detail without leaders"), 1, 7200, 13000, 40000, 14200, 0, 0, 1000);
+        emon.Testport.AssertEq(PtRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "labels: well formed");
+        PtBrief(out1, nodes, regions, text);
+        emon.Testport.AssertText(out1, "P1:29a Net loss . . .;P1:b Special deduction . . . continued detail without leaders;", "each form label starts a paragraph");
+        PtClear(wd, ln, et);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("29a"), 1, 39200, 10000, 40600, 11200, 0, 0, 1000);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("29b"), 1, 39200, 11500, 40600, 12700, 0, 0, 1000);
+        emon.Testport.AssertEq(PtRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "numbers: well formed");
+        PtBrief(out2, nodes, regions, text);
+        emon.Testport.AssertText(out2, "P1:29a;P1:29b;", "aligned row numbers do not become one label");
+    }
+    internal static int PtBigWords(emon.Port.Cells wd, int w0, int to, int size) {
+        // Words 0..to of the line whose first word is w0 are set in `size`.
+        int k = 0;
+        while (k < to) {
+            Evidence.WdSet(wd, w0 + k, Evidence.WfSize(), size);
+            k += 1;
+        }
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestARunInHeadSetLargerBeginsAParagraph() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells ord = emon.Port.NewCells();
+        emon.Port.Cells raw = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells fr = emon.Port.NewCells();
+        emon.Port.Cells gp = emon.Port.NewCells();
+        emon.Port.Cells st = emon.Port.NewCells();
+        System.Text.StringBuilder t1 = emon.Testport.NewText();
+        System.Text.StringBuilder t2 = emon.Testport.NewText();
+        int w0 = 0;
+        // P12.7 (smoke B side effect): the clauses of the Russian declaration's preamble follow one another at the same leading, none indented; each begins with a head of three words set at 12.68 where the text is at 12. The
+        // heading stage took them for headings (a bug: D575) and so cut the preamble in clauses; with no heading the clauses were one paragraph of 1425 characters. A run-in head of two words or more over 4 per cent larger than
+        // the line, with three words of the text after it, starts a paragraph; the same line with its first words as big as the rest does not.
+        PtLine(wd, ln, et, emon.Testport.TextBlob("alpha beta gamma delta epsilon zeta eta"), 1, 7200, 10000, 50000, 11200, 0, 0, 1100);
+        w0 = Evidence.WdCount(wd);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("iota kappa lambda mu nu xi omicron pi"), 1, 7200, 11500, 50000, 12700, 0, 0, 1100);
+        PtBigWords(wd, w0, 3, 1160);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("rho sigma tau upsilon phi chi psi omega"), 1, 7200, 13000, 50000, 14200, 0, 0, 1100);
+        emon.Testport.AssertEq(PtRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "lead-in: well formed");
+        PtBrief(t1, nodes, regions, text);
+        emon.Testport.AssertText(t1, "P1:alpha beta gamma delta epsilon zeta eta;P1:iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega;", "the run-in head begins a paragraph");
+        PtClear(wd, ln, et);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("alpha beta gamma delta epsilon zeta eta"), 1, 7200, 10000, 50000, 11200, 0, 0, 1100);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("iota kappa lambda mu nu xi omicron pi"), 1, 7200, 11500, 50000, 12700, 0, 0, 1100);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("rho sigma tau upsilon phi chi psi omega"), 1, 7200, 13000, 50000, 14200, 0, 0, 1100);
+        emon.Testport.AssertEq(PtRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "plain: well formed");
+        PtBrief(t2, nodes, regions, text);
+        emon.Testport.AssertText(t2, "P1:alpha beta gamma delta epsilon zeta eta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega;", "lines of one size are one paragraph");
+    }
+    [Xunit.Fact]
+    public static void TestALabelTurnedAQuarterStandsWhereItsTopIsAndNotAtThePagesEnd() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells ord = emon.Port.NewCells();
+        emon.Port.Cells raw = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells fr = emon.Port.NewCells();
+        emon.Port.Cells gp = emon.Port.NewCells();
+        emon.Port.Cells st = emon.Port.NewCells();
+        System.Text.StringBuilder t1 = emon.Testport.NewText();
+        // P12.7 (smoke A N4): the 1120's section labels (`Tax and Payments`, `Income`) are set a quarter turn in the margin beside their section; a line that is not upright was written after the page's last upright one, so the
+        // labels came at the end of the page. It is written before the first paragraph that starts at or below its top: here the second of three.
+        PtLine(wd, ln, et, emon.Testport.TextBlob("alpha beta"), 1, 7200, 10000, 30000, 11200, 0, 0, 1000);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("gamma delta"), 1, 7200, 11500, 30000, 12700, 0, 0, 1000);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("epsilon zeta"), 1, 7200, 14500, 30000, 15700, 0, 0, 1000);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("eta theta"), 1, 7200, 16000, 30000, 17200, 0, 0, 1000);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("iota kappa"), 1, 7200, 19000, 30000, 20200, 0, 0, 1000);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("lambda mu"), 1, 7200, 20500, 30000, 21700, 0, 0, 1000);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("Income"), 1, 3000, 14000, 4200, 19000, 9000, 0, 1000);
+        emon.Testport.AssertEq(PtRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "turned: well formed");
+        PtBrief(t1, nodes, regions, text);
+        emon.Testport.AssertText(t1, "P1:alpha beta gamma delta;P1:Income;P1:epsilon zeta eta theta;P1:iota kappa lambda mu;", "the label stands before the paragraph that starts below its top");
+    }
     internal static int PtBoldWords(emon.Port.Cells wd, int w0, int from, int to) {
         // Words from..to (counted from the word w0, a line's first) are bold (style bit 1).
         int k = from;

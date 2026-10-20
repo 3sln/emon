@@ -3221,6 +3221,28 @@
     (cells-drop et (+ b (- (cells-len et) e)))
     (return b)))
 
+(defn ^:pub ^I32 pc-base-glyph [^Cells gl ^I32 gfst ^I32 glst ^I32 from-end]
+  (comment "P12.7 (smoke A N2): the glyph a word's baseline is read from at its start (from-end 0) or at its end (1): the first (last) of its glyphs that is not set small against the biggest of the")
+  (comment "word (at most 80 per cent of its size). The raised digits of a footnote marker, `white¹,`, sit above the line's baseline: a word's baseline is not theirs, or the rows of a table that")
+  (comment "sorts its words by baseline put `bread¹,` before `White`. The last (first) glyph itself when none is, or the word has one glyph.")
+  (let [^:mut ^I32 mx 0
+        ^:mut ^I32 j gfst]
+    (while (<= j glst)
+      (do (if (> (gl-get gl j (gf-size)) mx) (set mx (gl-get gl j (gf-size))))
+          (set j (+ j 1))))
+    (comment "Compare against floor(4 * mx / 5), dividing first so huge glyph sizes cannot overflow (identity fuzz corpus).")
+    (if (== from-end 1)
+      (do (set j glst)
+          (while (>= j gfst)
+            (do (if (> (gl-get gl j (gf-size)) (+ (* (quot mx 5) 4) (quot (* (rem mx 5) 4) 5))) (return j))
+                (set j (- j 1)))))
+      (do (set j gfst)
+          (while (<= j glst)
+            (do (if (> (gl-get gl j (gf-size)) (+ (* (quot mx 5) 4) (quot (* (rem mx 5) 4) 5))) (return j))
+                (set j (+ j 1))))))
+    (if (== from-end 1) (return glst))
+    (return gfst)))
+
 (defn ^I32 pc-emit-word [^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells wd ^:mut ^Cells fnt
                          ^I32 page ^I32 gfst ^I32 glst ^I32 wbk]
   (comment "Record glyphs [gfst, glst] as a word: the union of their boxes, their text, the")
@@ -3269,9 +3291,11 @@
                   (do (pc-glyph-out et gl j 2)
                       (set j (+ j 1)))))))
       (set tstart (pc-bidi-text et gl gfst glst)))
-    (let [^I32 w (wd-new wd page x0 y0 x1 y1
-                         (gl-get gl gfst (gf-bx0)) (gl-get gl gfst (gf-by0))
-                         (gl-get gl glst (gf-bx1)) (gl-get gl glst (gf-by1))
+    (let [^I32 gb0 (pc-base-glyph gl gfst glst 0)
+          ^I32 gb1 (pc-base-glyph gl gfst glst 1)
+          ^I32 w (wd-new wd page x0 y0 x1 y1
+                         (gl-get gl gfst (gf-bx0)) (gl-get gl gb0 (gf-by0))
+                         (gl-get gl glst (gf-bx1)) (gl-get gl gb1 (gf-by1))
                          (gl-get gl gfst (gf-rot)) 0 tstart (- (cells-len et) tstart) -1 -1 -1)
           ^I32 fo (gl-get gl gfst (gf-font))]
       (if (== rtlw 1) (wd-set wd w (hd-dir) (ld-rtl)))

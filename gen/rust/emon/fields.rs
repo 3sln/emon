@@ -132,6 +132,46 @@ pub(crate) fn fl_doc_end(on: &mut crate::port::Cells) -> i32 {
     }
     return n;
 }
+pub(crate) fn fl_leader_tail(on: &mut crate::port::Cells, text: &mut crate::port::Cells, n: i32) -> i32 {
+    // 1 when a label's own text ends in at least three spaced leader dots. Paragraph assembly may already have joined the leader run to its label; it still connects the field on that row.
+    let mut c: i32 = -1;
+    let mut last: i32 = -1;
+    let mut dots: i32 = 0;
+    let mut spaces: i32 = 0;
+    let mut j: i32 = node_text_len(on, n) - 1;
+    let start: i32 = node_text_start(on, n);
+    if (node_has_text(on, n) == 1) && (j >= 0) {
+        while j >= 0 {
+            c = crate::port::cells_at(text, start + j);
+            if c == 46 {
+                dots += 1;
+            } else if (c == 32) || (c == 9) {
+                spaces += 1;
+            } else {
+                if (dots >= 3) && (spaces >= 2) {
+                    return 1;
+                }
+                return 0;
+            }
+            j -= 1;
+        }
+        if (dots >= 3) && (spaces >= 2) {
+            return 1;
+        }
+        return 0;
+    }
+    c = node_first_child(on, n);
+    while c >= 0 {
+        if (node_is_inline(on, c) == 1) && (fl_has_content(on, c) == 1) {
+            last = c;
+        }
+        c = node_next(on, c);
+    }
+    if last >= 0 {
+        return fl_leader_tail(on, text, last);
+    }
+    return 0;
+}
 pub(crate) fn fl_blocks(on: &mut crate::port::Cells, orr: &mut crate::port::Cells, text: &mut crate::port::Cells, ndoc: i32, mut bt: &mut crate::port::Cells) -> i32 {
     // The block rows `bt` (see FL_B): a row a region of every block that holds a field, has words of its own (text, or inline children's) and a place on a page; and of
     // every table cell that has nothing in it (flags 4: a box can stand in it).
@@ -169,7 +209,7 @@ pub(crate) fn fl_blocks(on: &mut crate::port::Cells, orr: &mut crate::port::Cell
                 crate::port::cells_push(bt, region_x1(orr, r));
                 crate::port::cells_push(bt, region_y1(orr, r));
                 crate::port::cells_push(bt, flags);
-                crate::port::cells_push(bt, 0);
+                crate::port::cells_push(bt, fl_leader_tail(on, text, n));
                 r = region_next(orr, r);
             }
         }
@@ -227,7 +267,9 @@ pub(crate) fn fl_left(bt: &mut crate::port::Cells, nb: i32, page: i32, x0: i32, 
         b += 1;
     }
     if best >= 0 {
-        if bestgap > FL_NEAR_L {
+        if crate::port::cells_at(bt, (best * FL_B) + 7) == 1 {
+            bestgap = 0;
+        } else if bestgap > FL_NEAR_L {
             if fl_bridged(bt, nb, page, y0, y1, best, x0) == 0 {
                 best = -1;
             }

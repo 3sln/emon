@@ -519,6 +519,71 @@ pub(crate) fn hd_figures_after(wd: &mut crate::port::Cells, ln: &mut crate::port
     }
     return n;
 }
+pub(crate) fn hd_letter(c: i32) -> i32 {
+    // 1 for a letter of a cased script or of any script above U+024F (so a heading in Han or Arabic has letters).
+    if st_lower(c) {
+        return 1;
+    }
+    if st_upper(c) {
+        return 1;
+    }
+    if c > 591 {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn hd_datum_line(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, l: i32) -> i32 {
+    // P12.7 (smoke A issue 11): 1 when line l is a datum and no title: (1) a label, a colon, and a value that has a digit in it (`Tax Id: 988-96-5242`, `IBAN: GB83FTEF94522626404124`, `Date of
+    // issue: 03/23/2019`): a word of the first four ends in a colon, a word follows it, and every word that follows has a digit; (2) a short mark of at most two letters and a digit with no more than 12 characters
+    // (`A-3`, a page number of an appendix) is a page's folio. Neither is any section's name.
+    let first: i32 = ln_get(ln, l, lh_first());
+    let end: i32 = first + ln_get(ln, l, lh_count());
+    let mut w: i32 = first;
+    let mut k: i32 = 0;
+    let mut colon: i32 = -1;
+    let mut j: i32 = 0;
+    let mut letters: i32 = 0;
+    let mut digits: i32 = 0;
+    let mut chars: i32 = 0;
+    let mut words: i32 = 0;
+    let mut has: i32 = 0;
+    let mut ok: i32 = 1;
+    while w < end {
+        let n: i32 = hd_wl(wd, w);
+        if n > 0 {
+            words += 1;
+            j = 0;
+            has = 0;
+            while j < n {
+                let c: i32 = hd_wc(wd, et, w, j);
+                chars += 1;
+                if hd_letter(c) == 1 {
+                    letters += 1;
+                }
+                if (c >= 48) && (c <= 57) {
+                    digits += 1;
+                    has = 1;
+                }
+                j += 1;
+            }
+            if (colon < 0) && ((k < 4) && (hd_wc(wd, et, w, n - 1) == 58)) {
+                colon = k;
+            }
+            if (colon >= 0) && (k > colon) && (has == 0) {
+                ok = 0;
+            }
+            k += 1;
+        }
+        w += 1;
+    }
+    if (colon >= 0) && ((ok == 1) && (words > (colon + 1))) {
+        return 1;
+    }
+    if (letters <= 2) && ((digits >= 1) && ((chars <= 12) && (words == 1))) {
+        return 1;
+    }
+    return 0;
+}
 pub(crate) fn hd_pronoun(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w2: i32) -> i32 {
     // 1 when the word after a lone `I` says it is the English pronoun, not a Roman numeral: it starts in lower case or has an
     // apostrophe in it (`Series I Don't Want`, `Series I think`). A line that stops at the `I` is a numeral.
@@ -983,6 +1048,11 @@ pub(crate) fn hd_list_run(wd: &mut crate::port::Cells, ln: &mut crate::port::Cel
     let a: i32 = st_get(sf, top, sfk_above());
     let b: i32 = st_get(sf, last, sfk_below());
     let c: i32 = st_get(sf, top, sfk_class());
+    // P12.7 (smoke B L8): a keyword and a number (`Статья 11`, `Article 5`, `Section 2`) is the head of what follows, never an item of a run: the numbered items under it (`1.`, `2.`) are its own, and made it
+    // an item of theirs, a paragraph (14 of the declaration's 30 articles). `hd-marker` clobbers ws[0..5], which the caller makes again.
+    if hd_marker(wd, ln, et, ws, top) == 6 {
+        return 0;
+    }
     if (a >= 0) && ((st_get(sf, a, sfk_class()) == c) && (st_get(sf, a, sfk_head()) == 1)) {
         return 1;
     }
@@ -1147,6 +1217,12 @@ pub(crate) fn hd_unit_score(wd: &mut crate::port::Cells, ln: &mut crate::port::C
     }
     if hd_sentence_end(st_get(sf, last, sfk_last())) {
         return -1;
+    }
+    // P12.7 (smoke A issue 11): a label and its value, and a page's folio, are data and no title
+    if cnt == 1 {
+        if (hd_marker(wd, ln, et, ws, top) == 0) && (hd_datum_line(wd, ln, et, top) == 1) {
+            return -1;
+        }
     }
     if ps == 0 {
         if hd_list_run(wd, ln, et, ws, sf, top, last) == 1 {
