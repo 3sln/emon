@@ -909,4 +909,100 @@ public static class Scantest {
         emon.Testport.AssertEq(Model.LedgerReason(ledger, 0), Model.DrBackground(), "as a background");
         emon.Testport.AssertEq(Model.LedgerX1(ledger, 0), 30000, "the biggest image's");
     }
+    [Xunit.Fact]
+    public static void TestALaterPassWordAlreadyReadOnAnotherFirstPassLineIsNotAdded() {
+        emon.Port.Cells owords = emon.Port.NewCells();
+        emon.Port.Cells etext = emon.Port.NewCells();
+        emon.Port.CellsPush(etext, 49);
+        Evidence.OwNew(owords, 1, 0, 0, 100, 100, 0, 100, 100, 100, 0, 0, 0, 1, 0, 900, -1);
+        Evidence.OwNew(owords, 1, 200, 0, 300, 100, 200, 100, 300, 100, 0, 0, 0, 1, 1, 900, -1);
+        Evidence.OwNew(owords, 1, 200, 0, 300, 100, 200, 100, 300, 100, 0, 0, 0, 1, 2, 900, -1);
+        Evidence.OwSet(owords, 2, Evidence.OwfRun(), 1);
+        emon.Testport.AssertEq(Scan.ScXtraOk(owords, etext, 0, 1, 2), 0, "the partner line missed it, but another first-pass line already read the same ink");
+        Evidence.OwSet(owords, 1, Evidence.HdY0(), 200);
+        Evidence.OwSet(owords, 1, Evidence.HdY1(), 300);
+        emon.Testport.AssertEq(Scan.ScXtraOk(owords, etext, 0, 1, 2), 1, "the same column on another row is different ink");
+        Evidence.OwSet(owords, 1, Evidence.HdY0(), 0);
+        Evidence.OwSet(owords, 1, Evidence.HdY1(), 100);
+        Evidence.OwSet(owords, 1, Evidence.OwfRun(), 2);
+        emon.Testport.AssertEq(Scan.ScXtraOk(owords, etext, 0, 1, 2), 1, "another later pass is not the first pass");
+    }
+    [Xunit.Fact]
+    public static void TestAWeakTinyLaterPassSpeckIsNotAddedAsAWord() {
+        emon.Port.Cells owords = emon.Port.NewCells();
+        emon.Port.Cells etext = emon.Port.NewCells();
+        emon.Port.CellsPush(etext, 49);
+        Evidence.OwNew(owords, 1, 0, 0, 100, 100, 0, 100, 100, 100, 0, 0, 0, 1, 0, 900, -1);
+        Evidence.OwNew(owords, 1, 200, 0, 300, 20, 200, 100, 300, 100, 0, 0, 0, 1, 1, 421, -1);
+        Evidence.OwSet(owords, 1, Evidence.OwfRun(), 1);
+        emon.Testport.AssertEq(Scan.ScXtraOk(owords, etext, 0, 1, 1), 0, "an unsure speck under half the height of the line's words is not recovered text");
+        Evidence.OwSet(owords, 1, Evidence.HdY1(), 100);
+        emon.Testport.AssertEq(Scan.ScXtraOk(owords, etext, 0, 1, 1), 1, "an unsure word of the line's height can fill a missed column");
+        Evidence.OwSet(owords, 1, Evidence.HdY1(), 20);
+        Evidence.OwSet(owords, 1, Evidence.HdConf(), 900);
+        emon.Testport.AssertEq(Scan.ScXtraOk(owords, etext, 0, 1, 1), 1, "a confident small reading can be a superscript");
+    }
+    [Xunit.Fact]
+    public static void TestLaterPassLettersNeedAConfidentWordButAmountsKeepTheirLowerBound() {
+        emon.Port.Cells owords = emon.Port.NewCells();
+        emon.Port.Cells etext = emon.Port.NewCells();
+        emon.Port.CellsPush(etext, 111);
+        emon.Port.CellsPush(etext, 114);
+        emon.Port.CellsPush(etext, 110);
+        emon.Port.CellsPush(etext, 101);
+        emon.Port.CellsPush(etext, 119);
+        emon.Port.CellsPush(etext, 49);
+        emon.Port.CellsPush(etext, 50);
+        emon.Port.CellsPush(etext, 51);
+        Evidence.OwNew(owords, 1, 0, 0, 100, 100, 0, 100, 100, 100, 0, 0, 2, 3, 0, 950, -1);
+        Evidence.OwNew(owords, 1, 200, 0, 300, 100, 200, 100, 300, 100, 0, 0, 0, 2, 1, 950, -1);
+        Evidence.OwSet(owords, 1, Evidence.OwfRun(), 1);
+        emon.Testport.AssertEq(Scan.ScXtraOk(owords, etext, 0, 1, 1), 0, "two letters on a seal can be a fragment of its strokes, even at high OCR confidence");
+        Evidence.OwSet(owords, 1, Evidence.HdTstart(), 2);
+        Evidence.OwSet(owords, 1, Evidence.HdTlen(), 3);
+        Evidence.OwSet(owords, 1, Evidence.HdConf(), 500);
+        emon.Testport.AssertEq(Scan.ScXtraOk(owords, etext, 0, 1, 1), 0, "a weak new alphabetic word has no first-pass reading to corroborate it");
+        Evidence.OwSet(owords, 1, Evidence.HdConf(), 950);
+        emon.Testport.AssertEq(Scan.ScXtraOk(owords, etext, 0, 1, 1), 1, "a confident word can fill what the first line missed");
+        Evidence.OwSet(owords, 1, Evidence.HdTstart(), 5);
+        Evidence.OwSet(owords, 1, Evidence.HdConf(), 500);
+        emon.Testport.AssertEq(Scan.ScXtraOk(owords, etext, 0, 1, 1), 1, "a numeric column retains its lower rescue bound");
+    }
+    [Xunit.Fact]
+    public static void TestLaterPassRescueExtendsTheFirstPassLineRatherThanFillingHolesOrPrefixingProse() {
+        emon.Port.Cells owords = emon.Port.NewCells();
+        emon.Port.Cells etext = emon.Port.NewCells();
+        emon.Port.CellsPush(etext, 49);
+        Evidence.OwNew(owords, 1, 200, 0, 300, 100, 200, 100, 300, 100, 0, 0, 0, 1, 0, 900, -1);
+        Evidence.OwNew(owords, 1, 600, 0, 700, 100, 600, 100, 700, 100, 0, 0, 0, 1, 0, 900, -1);
+        Evidence.OwNew(owords, 1, 400, 0, 500, 100, 400, 100, 500, 100, 0, 0, 0, 1, 1, 900, -1);
+        Evidence.OwSet(owords, 2, Evidence.OwfRun(), 1);
+        emon.Testport.AssertEq(Scan.ScXtraOk(owords, etext, 0, 2, 2), 0, "an interior gap can be overlay ink, rather than a lost column");
+        Evidence.OwSet(owords, 2, Evidence.HdX0(), 800);
+        Evidence.OwSet(owords, 2, Evidence.HdX1(), 900);
+        emon.Testport.AssertEq(Scan.ScXtraOk(owords, etext, 0, 2, 2), 1, "the amount beyond the first pass's end is recovered");
+        Evidence.OwSet(owords, 2, Evidence.HdX0(), 0);
+        Evidence.OwSet(owords, 2, Evidence.HdX1(), 100);
+        emon.Testport.AssertEq(Scan.ScXtraOk(owords, etext, 0, 2, 2), 0, "a new prefix is not the missing trailing column");
+    }
+    internal static int SctDirectDct(string file) {
+        emon.Port.Src src = emon.Port.SrcOfBlob(emon.Testport.TestFile(file));
+        emon.Port.Cells ar = emon.Port.NewCells();
+        emon.Port.Cells dc = emon.Port.NewCells();
+        emon.Port.Cells a = emon.Port.NewCells();
+        emon.Port.Cells b = emon.Port.NewCells();
+        emon.Port.Cells st = emon.Port.NewCells();
+        emon.Port.Cells sp = emon.Port.NewCells();
+        if (Pdfdoc.PdOpen(src, ar, dc, a, b, st) != 0) {
+            return -1;
+        }
+        return Scan.ScDctSpan(src, ar, dc, a, b, st, 5, sp);
+    }
+    [Xunit.Fact]
+    public static void TestAScanJpegOutsideTheSharedNativeSubsetIsRenderedRatherThanDecodedDirectly() {
+        emon.Testport.AssertEq(SctDirectDct("assets/dct-arith.pdf"), 0, "arithmetic JPEG needs page rendering, not a host-dependent native decode");
+        emon.Testport.AssertEq(SctDirectDct("assets/dct-cmyk.pdf"), 0, "CMYK also needs rendering for scan OCR");
+        emon.Testport.AssertEq(SctDirectDct("assets/dct-decode.pdf"), 1, "ordinary 8-bit three-component JPEG stays on the direct path");
+        emon.Testport.AssertEq(SctDirectDct("assets/dct-a85-decode.pdf"), 0, "a filter chain still needs rendering");
+    }
 }

@@ -271,7 +271,7 @@ pub(crate) fn rtt_fill1(b: &crate::port::Bitmap, x0: i32, y0: i32, x1: i32, y1: 
     }
     return 0;
 }
-pub(crate) fn rtt_band_scene(bandgray: i32, pxh: i32) -> i32 {
+pub(crate) fn rtt_band_scene(emon_t: i32, bandgray: i32, pxh: i32) -> i32 {
     // A 40 x 20 gray page (paper 240) with a band of gray `bandgray` from (5,5) 30 pixels wide and `pxh` high, white text at (10..13, 8..12) in it and one black pixel of body ink at (30, 10);
     // the band as the tracer found it (a component of a colour layer, solid, six holes). Answers how many bands `rt-invert-bands` turned, leaving the view in the caller's `dst` (cells of the test).
     let gray: &crate::port::Bitmap = &crate::port::bitmap_new(40, 20, 1);
@@ -310,9 +310,9 @@ pub(crate) fn rtt_band_scene(bandgray: i32, pxh: i32) -> i32 {
 #[test]
 fn test_a_band_of_colour_with_light_text_is_turned_inside_out_and_a_light_band_is_not() {
     // P12.6 (issue 14, E09's white-on-blue header): the view the body-ink pass reads showed the band and its text as paper, and the text was never read
-    crate::testport::assert_eq(rtt_band_scene(149, 10), 1, "a band of gray 149, white text in it");
-    crate::testport::assert_eq(rtt_band_scene(220, 10), 0, "a light band holds dark text: the engine reads it as it is");
-    crate::testport::assert_eq(rtt_band_scene(149, 3), 0, "a band 3 pixels high at 72 dpi is a rule, not a header");
+    crate::testport::assert_eq(rtt_band_scene(0, 149, 10), 1, "a band of gray 149, white text in it");
+    crate::testport::assert_eq(rtt_band_scene(0, 220, 10), 0, "a light band holds dark text: the engine reads it as it is");
+    crate::testport::assert_eq(rtt_band_scene(0, 149, 3), 0, "a band 3 pixels high at 72 dpi is a rule, not a header");
 }
 #[test]
 fn test_a_line_the_engine_found_and_read_as_nothing_is_read_alone_and_its_words_are_the_pages_when_sure() {

@@ -1240,16 +1240,16 @@ run read where the first pass read none are taken, in reading order, on a page t
 page is aligned and scored: they are evidence, and the body-ink run is a witness (`plg-bink`, `ag-bink`, row 222), never a candidate.
 
 **As built (P12.6, D1650-D1660).** What a scanned page's lines are made of, once `rt-adopt` has chosen them (`emon.scan`'s `sc-emit-vetted`): (1) a first-pass line that stays
-reads with it the words of its partner body-ink line that lie over none of its own (a right-aligned column the first pass stopped before); (2) a word of confidence 0.3 or
+reads with it the words of its partner body-ink line that lie over none of its own and no word on another line of the first-pass run (a right-aligned column the first pass stopped before; D1661 prevents reading the same ink twice); additions must extend beyond the partner's last word; alphabetic additions need three letters and confidence 0.6, while numeric additions retain their 0.4 bound (D1666); a proposed addition under half the height of every word in its partner needs confidence 0.7 (D1663); (2) a word of confidence 0.3 or
 less with implausible characters, alone or among such words, a dot leader and a table rule read as a character are kept out of the page's `words`, flagged in the evidence
 (`oe`) and written to the dropped ledger (`ocr-ghost`, `rule-ghost`); (3) the corrections a page shows for itself, never a digit: a decimal point the pixels have and the
 engine's box swallowed, thousands read with periods, a currency sign read as `S` or `§`. The engine's text stays in the evidence. A first-pass line with no word that has the size
 of a line of text is read alone (`psm 7`) and its words are the page's when sure (text that meets a rule); the body-ink view shows the light text of a band of colour as ink.
 The ledger names a page that came out empty and held an image (`background`).
 
-**As built (P12.3, D564).** (1) *A page whose content is one big image is a scan whatever the codec*: a PDF page with no text layer and an upright image over at least
-half of it is read from the host's DECODE of the image's DCT stream when that is one plain stage, and from a RENDER of the whole page (300 dpi) when it is in any other
-codec (Flate, RunLength, LZW, CCITT, JBIG2, JPX, an encrypted DCT). (2) *An image input is a scan too*: each frame runs the same page unit as a scanned PDF page
+**As built (P12.3, P12.6; D564, D1656, D1665).** (1) *A page whose content is one big image is a scan whatever the codec*: a PDF page with no text layer and an upright image over at least
+a quarter of it is read from the host's DECODE of the image's DCT stream when that is one plain stage of 8-bit SOF0/1/2 JPEG with one or three components, and from a RENDER of the whole page (300 dpi) for other JPEG frames
+or codecs (arithmetic or CMYK JPEG, Flate, RunLength, LZW, CCITT, JBIG2, JPX, an encrypted DCT). (2) *An image input is a scan too*: each frame runs the same page unit as a scanned PDF page
 (`pu-scan-core`): the ink layers, and the targeted passes the first pass calls for, among them the quarter-turned view when OSD is sure the page is turned (a PNG fed
 sideways or upside down is read upright; its Model page is then as wide as the text it holds). An image has no seal or signature stage. (3) *A raster too small for the
 engine is read again enlarged*: the median x-height of the first pass's text lines (width-weighted) says what resolution the raster has (`emon.upscale`: ten point type is 5 pt

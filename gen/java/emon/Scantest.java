@@ -877,4 +877,95 @@ public final class Scantest {
         emon.Testport.assertEq(Model.ledgerReason(ledger, 0), Model.drBackground(), "as a background");
         emon.Testport.assertEq(Model.ledgerX1(ledger, 0), 30000, "the biggest image's");
     }
+    public static void testALaterPassWordAlreadyReadOnAnotherFirstPassLineIsNotAdded() {
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells etext = emon.Port.newCells();
+        emon.Port.cellsPush(etext, 49);
+        Evidence.owNew(owords, 1, 0, 0, 100, 100, 0, 100, 100, 100, 0, 0, 0, 1, 0, 900, -1);
+        Evidence.owNew(owords, 1, 200, 0, 300, 100, 200, 100, 300, 100, 0, 0, 0, 1, 1, 900, -1);
+        Evidence.owNew(owords, 1, 200, 0, 300, 100, 200, 100, 300, 100, 0, 0, 0, 1, 2, 900, -1);
+        Evidence.owSet(owords, 2, Evidence.owfRun(), 1);
+        emon.Testport.assertEq(Scan.scXtraOk(owords, etext, 0, 1, 2), 0, "the partner line missed it, but another first-pass line already read the same ink");
+        Evidence.owSet(owords, 1, Evidence.hdY0(), 200);
+        Evidence.owSet(owords, 1, Evidence.hdY1(), 300);
+        emon.Testport.assertEq(Scan.scXtraOk(owords, etext, 0, 1, 2), 1, "the same column on another row is different ink");
+        Evidence.owSet(owords, 1, Evidence.hdY0(), 0);
+        Evidence.owSet(owords, 1, Evidence.hdY1(), 100);
+        Evidence.owSet(owords, 1, Evidence.owfRun(), 2);
+        emon.Testport.assertEq(Scan.scXtraOk(owords, etext, 0, 1, 2), 1, "another later pass is not the first pass");
+    }
+    public static void testAWeakTinyLaterPassSpeckIsNotAddedAsAWord() {
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells etext = emon.Port.newCells();
+        emon.Port.cellsPush(etext, 49);
+        Evidence.owNew(owords, 1, 0, 0, 100, 100, 0, 100, 100, 100, 0, 0, 0, 1, 0, 900, -1);
+        Evidence.owNew(owords, 1, 200, 0, 300, 20, 200, 100, 300, 100, 0, 0, 0, 1, 1, 421, -1);
+        Evidence.owSet(owords, 1, Evidence.owfRun(), 1);
+        emon.Testport.assertEq(Scan.scXtraOk(owords, etext, 0, 1, 1), 0, "an unsure speck under half the height of the line's words is not recovered text");
+        Evidence.owSet(owords, 1, Evidence.hdY1(), 100);
+        emon.Testport.assertEq(Scan.scXtraOk(owords, etext, 0, 1, 1), 1, "an unsure word of the line's height can fill a missed column");
+        Evidence.owSet(owords, 1, Evidence.hdY1(), 20);
+        Evidence.owSet(owords, 1, Evidence.hdConf(), 900);
+        emon.Testport.assertEq(Scan.scXtraOk(owords, etext, 0, 1, 1), 1, "a confident small reading can be a superscript");
+    }
+    public static void testLaterPassLettersNeedAConfidentWordButAmountsKeepTheirLowerBound() {
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells etext = emon.Port.newCells();
+        emon.Port.cellsPush(etext, 111);
+        emon.Port.cellsPush(etext, 114);
+        emon.Port.cellsPush(etext, 110);
+        emon.Port.cellsPush(etext, 101);
+        emon.Port.cellsPush(etext, 119);
+        emon.Port.cellsPush(etext, 49);
+        emon.Port.cellsPush(etext, 50);
+        emon.Port.cellsPush(etext, 51);
+        Evidence.owNew(owords, 1, 0, 0, 100, 100, 0, 100, 100, 100, 0, 0, 2, 3, 0, 950, -1);
+        Evidence.owNew(owords, 1, 200, 0, 300, 100, 200, 100, 300, 100, 0, 0, 0, 2, 1, 950, -1);
+        Evidence.owSet(owords, 1, Evidence.owfRun(), 1);
+        emon.Testport.assertEq(Scan.scXtraOk(owords, etext, 0, 1, 1), 0, "two letters on a seal can be a fragment of its strokes, even at high OCR confidence");
+        Evidence.owSet(owords, 1, Evidence.hdTstart(), 2);
+        Evidence.owSet(owords, 1, Evidence.hdTlen(), 3);
+        Evidence.owSet(owords, 1, Evidence.hdConf(), 500);
+        emon.Testport.assertEq(Scan.scXtraOk(owords, etext, 0, 1, 1), 0, "a weak new alphabetic word has no first-pass reading to corroborate it");
+        Evidence.owSet(owords, 1, Evidence.hdConf(), 950);
+        emon.Testport.assertEq(Scan.scXtraOk(owords, etext, 0, 1, 1), 1, "a confident word can fill what the first line missed");
+        Evidence.owSet(owords, 1, Evidence.hdTstart(), 5);
+        Evidence.owSet(owords, 1, Evidence.hdConf(), 500);
+        emon.Testport.assertEq(Scan.scXtraOk(owords, etext, 0, 1, 1), 1, "a numeric column retains its lower rescue bound");
+    }
+    public static void testLaterPassRescueExtendsTheFirstPassLineRatherThanFillingHolesOrPrefixingProse() {
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells etext = emon.Port.newCells();
+        emon.Port.cellsPush(etext, 49);
+        Evidence.owNew(owords, 1, 200, 0, 300, 100, 200, 100, 300, 100, 0, 0, 0, 1, 0, 900, -1);
+        Evidence.owNew(owords, 1, 600, 0, 700, 100, 600, 100, 700, 100, 0, 0, 0, 1, 0, 900, -1);
+        Evidence.owNew(owords, 1, 400, 0, 500, 100, 400, 100, 500, 100, 0, 0, 0, 1, 1, 900, -1);
+        Evidence.owSet(owords, 2, Evidence.owfRun(), 1);
+        emon.Testport.assertEq(Scan.scXtraOk(owords, etext, 0, 2, 2), 0, "an interior gap can be overlay ink, rather than a lost column");
+        Evidence.owSet(owords, 2, Evidence.hdX0(), 800);
+        Evidence.owSet(owords, 2, Evidence.hdX1(), 900);
+        emon.Testport.assertEq(Scan.scXtraOk(owords, etext, 0, 2, 2), 1, "the amount beyond the first pass's end is recovered");
+        Evidence.owSet(owords, 2, Evidence.hdX0(), 0);
+        Evidence.owSet(owords, 2, Evidence.hdX1(), 100);
+        emon.Testport.assertEq(Scan.scXtraOk(owords, etext, 0, 2, 2), 0, "a new prefix is not the missing trailing column");
+    }
+    public static int sctDirectDct(String file) {
+        emon.Port.Src src = emon.Port.srcOfBlob(emon.Testport.testFile(file));
+        emon.Port.Cells ar = emon.Port.newCells();
+        emon.Port.Cells dc = emon.Port.newCells();
+        emon.Port.Cells a = emon.Port.newCells();
+        emon.Port.Cells b = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        emon.Port.Cells sp = emon.Port.newCells();
+        if (Pdfdoc.pdOpen(src, ar, dc, a, b, st) != 0) {
+            return -1;
+        }
+        return Scan.scDctSpan(src, ar, dc, a, b, st, 5, sp);
+    }
+    public static void testAScanJpegOutsideTheSharedNativeSubsetIsRenderedRatherThanDecodedDirectly() {
+        emon.Testport.assertEq(sctDirectDct("assets/dct-arith.pdf"), 0, "arithmetic JPEG needs page rendering, not a host-dependent native decode");
+        emon.Testport.assertEq(sctDirectDct("assets/dct-cmyk.pdf"), 0, "CMYK also needs rendering for scan OCR");
+        emon.Testport.assertEq(sctDirectDct("assets/dct-decode.pdf"), 1, "ordinary 8-bit three-component JPEG stays on the direct path");
+        emon.Testport.assertEq(sctDirectDct("assets/dct-a85-decode.pdf"), 0, "a filter chain still needs rendering");
+    }
 }

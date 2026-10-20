@@ -269,7 +269,7 @@ public static class Retargettest {
         }
         return 0;
     }
-    internal static int RttBandScene(int bandgray, int pxh) {
+    internal static int RttBandScene(int emonT, int bandgray, int pxh) {
         // A 40 x 20 gray page (paper 240) with a band of gray `bandgray` from (5,5) 30 pixels wide and `pxh` high, white text at (10..13, 8..12) in it and one black pixel of body ink at (30, 10);
         // the band as the tracer found it (a component of a colour layer, solid, six holes). Answers how many bands `rt-invert-bands` turned, leaving the view in the caller's `dst` (cells of the test).
         emon.Port.Bitmap gray = emon.Port.BitmapNew(40, 20, 1);
@@ -308,9 +308,9 @@ public static class Retargettest {
     [Xunit.Fact]
     public static void TestABandOfColourWithLightTextIsTurnedInsideOutAndALightBandIsNot() {
         // P12.6 (issue 14, E09's white-on-blue header): the view the body-ink pass reads showed the band and its text as paper, and the text was never read
-        emon.Testport.AssertEq(RttBandScene(149, 10), 1, "a band of gray 149, white text in it");
-        emon.Testport.AssertEq(RttBandScene(220, 10), 0, "a light band holds dark text: the engine reads it as it is");
-        emon.Testport.AssertEq(RttBandScene(149, 3), 0, "a band 3 pixels high at 72 dpi is a rule, not a header");
+        emon.Testport.AssertEq(RttBandScene(0, 149, 10), 1, "a band of gray 149, white text in it");
+        emon.Testport.AssertEq(RttBandScene(0, 220, 10), 0, "a light band holds dark text: the engine reads it as it is");
+        emon.Testport.AssertEq(RttBandScene(0, 149, 3), 0, "a band 3 pixels high at 72 dpi is a rule, not a header");
     }
     [Xunit.Fact]
     public static void TestALineTheEngineFoundAndReadAsNothingIsReadAloneAndItsWordsAreThePagesWhenSure() {

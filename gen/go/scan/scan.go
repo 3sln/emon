@@ -1153,6 +1153,21 @@ func scLoConf() int32 {
 	return 300
 }
 
+func scXtraTextConf() int32 {
+	// A newly recovered alphabetic word needs stronger evidence than an amount: weak readings of overlay strokes must not become prose.
+	return 600
+}
+
+func scXtraTextLetters() int32 {
+	// Fewer letters can be fragments of overlay strokes, even at a high engine confidence.
+	return 3
+}
+
+func scXtraSmallConf() int32 {
+	// A later-pass word under half the height of every partner word needs this confidence: an unsure speck must not create a column.
+	return 700
+}
+
 func scXtraConf() int32 {
 	// A body-ink word that lies over none of the first-pass line's words is read with it only when its confidence (per mille) is at least this.
 	return 400
@@ -1532,15 +1547,35 @@ func ScXtraOk(owords *port.Cells, etext *port.Cells, w0 int32, cnt int32, xw int
 	var pb int32 = 0
 	var ov int32 = 0
 	var nar int32 = 0
+	var yo int32 = 0
+	var yh int32 = 0
+	var mh int32 = 0
+	var hh int32 = 0
+	var edge int32 = 0
 	if evidence.OwGet(owords, xw, evidence.HdConf()) < scXtraConf() {
 		return 0
+	}
+	var letters int32 = scCountClass(etext, evidence.OwGet(owords, xw, evidence.HdTstart()), evidence.OwGet(owords, xw, evidence.HdTlen()), 0)
+	if letters > 0 {
+		if (letters < scXtraTextLetters()) || (evidence.OwGet(owords, xw, evidence.HdConf()) < scXtraTextConf()) {
+			return 0
+		}
 	}
 	if ScImplausible(etext, evidence.OwGet(owords, xw, evidence.HdTstart()), evidence.OwGet(owords, xw, evidence.HdTlen())) == 1 {
 		return 0
 	}
 	for j < cnt {
+		hh = evidence.OwGet(owords, w0+j, evidence.HdY1()) - evidence.OwGet(owords, w0+j, evidence.HdY0())
+		if hh > 0 {
+			if (mh == 0) || (hh < mh) {
+				mh = hh
+			}
+		}
 		pa = evidence.OwGet(owords, w0+j, evidence.HdX0())
 		pb = evidence.OwGet(owords, w0+j, evidence.HdX1())
+		if pb > edge {
+			edge = pb
+		}
 		ov = scMn(xb, pb) - scMx(xa, pa)
 		nar = scMn(xb-xa, pb-pa)
 		if ov > 0 {
@@ -1549,6 +1584,36 @@ func ScXtraOk(owords *port.Cells, etext *port.Cells, w0 int32, cnt int32, xw int
 			}
 		}
 		j += 1
+	}
+	if (cnt > 0) && (xb <= edge) {
+		return 0
+	}
+	if (mh > 0) && ((2 * (evidence.OwGet(owords, xw, evidence.HdY1()) - evidence.OwGet(owords, xw, evidence.HdY0()))) < mh) {
+		if evidence.OwGet(owords, xw, evidence.HdConf()) < scXtraSmallConf() {
+			return 0
+		}
+	}
+	// A different first-pass line can already hold this ink (a table row split at its last column). Check the entire first-pass run in two dimensions, not just the partner line.
+	if (cnt > 0) && (evidence.OwGet(owords, w0, evidence.OwfRun()) != evidence.OwGet(owords, xw, evidence.OwfRun())) {
+		j = 0
+		for j < evidence.OwCount(owords) {
+			if evidence.OwGet(owords, j, evidence.OwfRun()) == evidence.OwGet(owords, w0, evidence.OwfRun()) {
+				if evidence.OwGet(owords, j, evidence.HdPage()) == evidence.OwGet(owords, xw, evidence.HdPage()) {
+					yo = scMn(evidence.OwGet(owords, j, evidence.HdY1()), evidence.OwGet(owords, xw, evidence.HdY1())) - scMx(evidence.OwGet(owords, j, evidence.HdY0()), evidence.OwGet(owords, xw, evidence.HdY0()))
+					yh = scMn(evidence.OwGet(owords, j, evidence.HdY1())-evidence.OwGet(owords, j, evidence.HdY0()), evidence.OwGet(owords, xw, evidence.HdY1())-evidence.OwGet(owords, xw, evidence.HdY0()))
+					if (yo > 0) && ((yo * 2) > yh) {
+						pa = evidence.OwGet(owords, j, evidence.HdX0())
+						pb = evidence.OwGet(owords, j, evidence.HdX1())
+						ov = scMn(xb, pb) - scMx(xa, pa)
+						nar = scMn(xb-xa, pb-pa)
+						if (ov > 0) && ((ov * 4) > nar) {
+							return 0
+						}
+					}
+				}
+			}
+			j += 1
+		}
 	}
 	return 1
 }
@@ -2704,6 +2769,57 @@ func ScTag(nodes *port.Cells, attrs *port.Cells, text *port.Cells, regions *port
 	return 1
 }
 
+func scNativeJpeg(src *port.Src, start int32, n int32) int32 {
+	// The JPEG subset every ImageDecode host reads for scans: SOF0/1/2, 8-bit, one or three components. Other frames need page rendering; native libraries differ on arithmetic JPEG.
+	var i int32 = 2
+	var m int32 = 0
+	var size int32 = 0
+	var comps int32 = 0
+	if n < 4 {
+		return 0
+	}
+	if (pdfsrc.PsU8(src, start) != 255) || (pdfsrc.PsU8(src, start+1) != 216) {
+		return 0
+	}
+	for (i + 4) <= n {
+		if pdfsrc.PsU8(src, start+i) != 255 {
+			return 0
+		}
+		m = pdfsrc.PsU8(src, start+(i+1))
+		if m == 255 {
+			i += 1
+		} else if (m == 216) || ((m == 1) || ((m >= 208) && (m <= 215))) {
+			i += 2
+		} else {
+			if (m == 217) || (m == 218) {
+				return 0
+			}
+			size = (256 * pdfsrc.PsU8(src, start+(i+2))) + pdfsrc.PsU8(src, start+(i+3))
+			if (size < 2) || (size > (n - (i + 2))) {
+				return 0
+			}
+			if (m >= 192) && ((m <= 207) && ((m != 196) && ((m != 200) && (m != 204)))) {
+				if (m < 192) || (m > 194) {
+					return 0
+				}
+				if size < 8 {
+					return 0
+				}
+				if pdfsrc.PsU8(src, start+(i+4)) != 8 {
+					return 0
+				}
+				comps = pdfsrc.PsU8(src, start+(i+9))
+				if (comps == 1) || (comps == 3) {
+					return 1
+				}
+				return 0
+			}
+			i += size + 2
+		}
+	}
+	return 0
+}
+
 func ScDctSpan(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, obj int32, sp *port.Cells) int32 {
 	// Is object `obj` a stream whose whole filter chain is one DCT stage, in a file that is not encrypted? Then 1 and `sp`
 	// holds [start, length] of its bytes in the file: a JPEG stream is a JPEG file, and the host's `ImageDecode` reads it in
@@ -2745,6 +2861,12 @@ func ScDctSpan(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *
 		j += 1
 	}
 	if pdflex.PlIntValue(ar, kt) != 0 {
+		return 0
+	}
+	if scNativeJpeg(src, pdflex.PlStreamStart(ar, h), pdflex.PlStreamLen(ar, h)) == 0 {
+		return 0
+	}
+	if pdfsrc.PsMissed(src) {
 		return 0
 	}
 	port.CellsDrop(sp, 0)

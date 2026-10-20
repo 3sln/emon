@@ -4,6 +4,7 @@
 use crate::emon::evidence::*;
 use crate::emon::model::*;
 use crate::emon::ocr::*;
+use crate::emon::pdfdoc::*;
 use crate::emon::plan::*;
 use crate::emon::scan::*;
 
@@ -910,4 +911,100 @@ fn test_a_page_that_comes_out_empty_and_held_a_big_image_has_it_in_the_ledger() 
     crate::testport::assert_eq(ledger_page(ledger, 0), 2, "of page 2");
     crate::testport::assert_eq(ledger_reason(ledger, 0), dr_background(), "as a background");
     crate::testport::assert_eq(ledger_x1(ledger, 0), 30000, "the biggest image's");
+}
+#[test]
+fn test_a_later_pass_word_already_read_on_another_first_pass_line_is_not_added() {
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::port::cells_push(etext, 49);
+    ow_new(owords, 1, 0, 0, 100, 100, 0, 100, 100, 100, 0, 0, 0, 1, 0, 900, -1);
+    ow_new(owords, 1, 200, 0, 300, 100, 200, 100, 300, 100, 0, 0, 0, 1, 1, 900, -1);
+    ow_new(owords, 1, 200, 0, 300, 100, 200, 100, 300, 100, 0, 0, 0, 1, 2, 900, -1);
+    ow_set(owords, 2, owf_run(), 1);
+    crate::testport::assert_eq(sc_xtra_ok(owords, etext, 0, 1, 2), 0, "the partner line missed it, but another first-pass line already read the same ink");
+    ow_set(owords, 1, hd_y0(), 200);
+    ow_set(owords, 1, hd_y1(), 300);
+    crate::testport::assert_eq(sc_xtra_ok(owords, etext, 0, 1, 2), 1, "the same column on another row is different ink");
+    ow_set(owords, 1, hd_y0(), 0);
+    ow_set(owords, 1, hd_y1(), 100);
+    ow_set(owords, 1, owf_run(), 2);
+    crate::testport::assert_eq(sc_xtra_ok(owords, etext, 0, 1, 2), 1, "another later pass is not the first pass");
+}
+#[test]
+fn test_a_weak_tiny_later_pass_speck_is_not_added_as_a_word() {
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::port::cells_push(etext, 49);
+    ow_new(owords, 1, 0, 0, 100, 100, 0, 100, 100, 100, 0, 0, 0, 1, 0, 900, -1);
+    ow_new(owords, 1, 200, 0, 300, 20, 200, 100, 300, 100, 0, 0, 0, 1, 1, 421, -1);
+    ow_set(owords, 1, owf_run(), 1);
+    crate::testport::assert_eq(sc_xtra_ok(owords, etext, 0, 1, 1), 0, "an unsure speck under half the height of the line's words is not recovered text");
+    ow_set(owords, 1, hd_y1(), 100);
+    crate::testport::assert_eq(sc_xtra_ok(owords, etext, 0, 1, 1), 1, "an unsure word of the line's height can fill a missed column");
+    ow_set(owords, 1, hd_y1(), 20);
+    ow_set(owords, 1, hd_conf(), 900);
+    crate::testport::assert_eq(sc_xtra_ok(owords, etext, 0, 1, 1), 1, "a confident small reading can be a superscript");
+}
+#[test]
+fn test_later_pass_letters_need_a_confident_word_but_amounts_keep_their_lower_bound() {
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::port::cells_push(etext, 111);
+    crate::port::cells_push(etext, 114);
+    crate::port::cells_push(etext, 110);
+    crate::port::cells_push(etext, 101);
+    crate::port::cells_push(etext, 119);
+    crate::port::cells_push(etext, 49);
+    crate::port::cells_push(etext, 50);
+    crate::port::cells_push(etext, 51);
+    ow_new(owords, 1, 0, 0, 100, 100, 0, 100, 100, 100, 0, 0, 2, 3, 0, 950, -1);
+    ow_new(owords, 1, 200, 0, 300, 100, 200, 100, 300, 100, 0, 0, 0, 2, 1, 950, -1);
+    ow_set(owords, 1, owf_run(), 1);
+    crate::testport::assert_eq(sc_xtra_ok(owords, etext, 0, 1, 1), 0, "two letters on a seal can be a fragment of its strokes, even at high OCR confidence");
+    ow_set(owords, 1, hd_tstart(), 2);
+    ow_set(owords, 1, hd_tlen(), 3);
+    ow_set(owords, 1, hd_conf(), 500);
+    crate::testport::assert_eq(sc_xtra_ok(owords, etext, 0, 1, 1), 0, "a weak new alphabetic word has no first-pass reading to corroborate it");
+    ow_set(owords, 1, hd_conf(), 950);
+    crate::testport::assert_eq(sc_xtra_ok(owords, etext, 0, 1, 1), 1, "a confident word can fill what the first line missed");
+    ow_set(owords, 1, hd_tstart(), 5);
+    ow_set(owords, 1, hd_conf(), 500);
+    crate::testport::assert_eq(sc_xtra_ok(owords, etext, 0, 1, 1), 1, "a numeric column retains its lower rescue bound");
+}
+#[test]
+fn test_later_pass_rescue_extends_the_first_pass_line_rather_than_filling_holes_or_prefixing_prose() {
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::port::cells_push(etext, 49);
+    ow_new(owords, 1, 200, 0, 300, 100, 200, 100, 300, 100, 0, 0, 0, 1, 0, 900, -1);
+    ow_new(owords, 1, 600, 0, 700, 100, 600, 100, 700, 100, 0, 0, 0, 1, 0, 900, -1);
+    ow_new(owords, 1, 400, 0, 500, 100, 400, 100, 500, 100, 0, 0, 0, 1, 1, 900, -1);
+    ow_set(owords, 2, owf_run(), 1);
+    crate::testport::assert_eq(sc_xtra_ok(owords, etext, 0, 2, 2), 0, "an interior gap can be overlay ink, rather than a lost column");
+    ow_set(owords, 2, hd_x0(), 800);
+    ow_set(owords, 2, hd_x1(), 900);
+    crate::testport::assert_eq(sc_xtra_ok(owords, etext, 0, 2, 2), 1, "the amount beyond the first pass's end is recovered");
+    ow_set(owords, 2, hd_x0(), 0);
+    ow_set(owords, 2, hd_x1(), 100);
+    crate::testport::assert_eq(sc_xtra_ok(owords, etext, 0, 2, 2), 0, "a new prefix is not the missing trailing column");
+}
+pub(crate) fn sct_direct_dct(file: &str) -> i32 {
+    let src: &crate::port::Src = &crate::port::src_of_blob(&crate::testport::test_file(file)[..]);
+    let ar: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let dc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let a: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let b: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    if pd_open(src, ar, dc, a, b, st) != 0 {
+        return -1;
+    }
+    return sc_dct_span(src, ar, dc, a, b, st, 5, sp);
+}
+#[test]
+fn test_a_scan_jpeg_outside_the_shared_native_subset_is_rendered_rather_than_decoded_directly() {
+    crate::testport::assert_eq(sct_direct_dct("assets/dct-arith.pdf"), 0, "arithmetic JPEG needs page rendering, not a host-dependent native decode");
+    crate::testport::assert_eq(sct_direct_dct("assets/dct-cmyk.pdf"), 0, "CMYK also needs rendering for scan OCR");
+    crate::testport::assert_eq(sct_direct_dct("assets/dct-decode.pdf"), 1, "ordinary 8-bit three-component JPEG stays on the direct path");
+    crate::testport::assert_eq(sct_direct_dct("assets/dct-a85-decode.pdf"), 0, "a filter chain still needs rendering");
 }

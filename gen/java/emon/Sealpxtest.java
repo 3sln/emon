@@ -294,8 +294,8 @@ public final class Sealpxtest {
         emon.Testport.assertEq(Sealpx.sxFind(1, views, 0, prims, inks, 61200, 79200, cand), 1, "the same curve, an outline (coverage 150): a stamp");
         // a rectangle of the same size as a stamp, solid
         sptPrim(prims, Evidence.pmRect(), 30000, 20000, 5000, 2000, 2, 12591135, 1, 200);
-        int r = sptPrim(prims, Evidence.pmRect(), 30000, 25000, 5000, 2000, 2, 12591135, 1, 200);
-        Evidence.pmSet(prims, r, Evidence.pmfFill(), 950);
+        int rect = sptPrim(prims, Evidence.pmRect(), 30000, 25000, 5000, 2000, 2, 12591135, 1, 200);
+        Evidence.pmSet(prims, rect, Evidence.pmfFill(), 950);
         emon.Testport.assertEq(Sealpx.sxFind(1, views, 0, prims, inks, 61200, 79200, cand), 2, "a solid 100 pt rectangle is no stamp; the outlined one is, with the curve: two");
     }
     public static int sptOword(emon.Port.Cells ow, int x, int y) {

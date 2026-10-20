@@ -1111,6 +1111,18 @@ public final class Scan {
         // `ocr-garbage-conf`: a word of at most this confidence (per mille) is a candidate for being no text.
         return 300;
     }
+    public static int scXtraTextConf() {
+        // A newly recovered alphabetic word needs stronger evidence than an amount: weak readings of overlay strokes must not become prose.
+        return 600;
+    }
+    public static int scXtraTextLetters() {
+        // Fewer letters can be fragments of overlay strokes, even at a high engine confidence.
+        return 3;
+    }
+    public static int scXtraSmallConf() {
+        // A later-pass word under half the height of every partner word needs this confidence: an unsure speck must not create a column.
+        return 700;
+    }
     public static int scXtraConf() {
         // A body-ink word that lies over none of the first-pass line's words is read with it only when its confidence (per mille) is at least this.
         return 400;
@@ -1477,15 +1489,35 @@ public final class Scan {
         int pb = 0;
         int ov = 0;
         int nar = 0;
+        int yo = 0;
+        int yh = 0;
+        int mh = 0;
+        int hh = 0;
+        int edge = 0;
         if (Evidence.owGet(owords, xw, Evidence.hdConf()) < scXtraConf()) {
             return 0;
+        }
+        int letters = scCountClass(etext, Evidence.owGet(owords, xw, Evidence.hdTstart()), Evidence.owGet(owords, xw, Evidence.hdTlen()), 0);
+        if (letters > 0) {
+            if ((letters < scXtraTextLetters()) || (Evidence.owGet(owords, xw, Evidence.hdConf()) < scXtraTextConf())) {
+                return 0;
+            }
         }
         if (scImplausible(etext, Evidence.owGet(owords, xw, Evidence.hdTstart()), Evidence.owGet(owords, xw, Evidence.hdTlen())) == 1) {
             return 0;
         }
         while (j < cnt) {
+            hh = Evidence.owGet(owords, w0 + j, Evidence.hdY1()) - Evidence.owGet(owords, w0 + j, Evidence.hdY0());
+            if (hh > 0) {
+                if ((mh == 0) || (hh < mh)) {
+                    mh = hh;
+                }
+            }
             pa = Evidence.owGet(owords, w0 + j, Evidence.hdX0());
             pb = Evidence.owGet(owords, w0 + j, Evidence.hdX1());
+            if (pb > edge) {
+                edge = pb;
+            }
             ov = scMn(xb, pb) - scMx(xa, pa);
             nar = scMn(xb - xa, pb - pa);
             if (ov > 0) {
@@ -1494,6 +1526,36 @@ public final class Scan {
                 }
             }
             j += 1;
+        }
+        if ((cnt > 0) && (xb <= edge)) {
+            return 0;
+        }
+        if ((mh > 0) && ((2 * (Evidence.owGet(owords, xw, Evidence.hdY1()) - Evidence.owGet(owords, xw, Evidence.hdY0()))) < mh)) {
+            if (Evidence.owGet(owords, xw, Evidence.hdConf()) < scXtraSmallConf()) {
+                return 0;
+            }
+        }
+        // A different first-pass line can already hold this ink (a table row split at its last column). Check the entire first-pass run in two dimensions, not just the partner line.
+        if ((cnt > 0) && (Evidence.owGet(owords, w0, Evidence.owfRun()) != Evidence.owGet(owords, xw, Evidence.owfRun()))) {
+            j = 0;
+            while (j < Evidence.owCount(owords)) {
+                if (Evidence.owGet(owords, j, Evidence.owfRun()) == Evidence.owGet(owords, w0, Evidence.owfRun())) {
+                    if (Evidence.owGet(owords, j, Evidence.hdPage()) == Evidence.owGet(owords, xw, Evidence.hdPage())) {
+                        yo = scMn(Evidence.owGet(owords, j, Evidence.hdY1()), Evidence.owGet(owords, xw, Evidence.hdY1())) - scMx(Evidence.owGet(owords, j, Evidence.hdY0()), Evidence.owGet(owords, xw, Evidence.hdY0()));
+                        yh = scMn(Evidence.owGet(owords, j, Evidence.hdY1()) - Evidence.owGet(owords, j, Evidence.hdY0()), Evidence.owGet(owords, xw, Evidence.hdY1()) - Evidence.owGet(owords, xw, Evidence.hdY0()));
+                        if ((yo > 0) && ((yo * 2) > yh)) {
+                            pa = Evidence.owGet(owords, j, Evidence.hdX0());
+                            pb = Evidence.owGet(owords, j, Evidence.hdX1());
+                            ov = scMn(xb, pb) - scMx(xa, pa);
+                            nar = scMn(xb - xa, pb - pa);
+                            if ((ov > 0) && ((ov * 4) > nar)) {
+                                return 0;
+                            }
+                        }
+                    }
+                }
+                j += 1;
+            }
         }
         return 1;
     }
@@ -2618,6 +2680,56 @@ public final class Scan {
         }
         return 1;
     }
+    public static int scNativeJpeg(emon.Port.Src src, int start, int n) {
+        // The JPEG subset every ImageDecode host reads for scans: SOF0/1/2, 8-bit, one or three components. Other frames need page rendering; native libraries differ on arithmetic JPEG.
+        int i = 2;
+        int m = 0;
+        int size = 0;
+        int comps = 0;
+        if (n < 4) {
+            return 0;
+        }
+        if ((Pdfsrc.psU8(src, start) != 255) || (Pdfsrc.psU8(src, start + 1) != 216)) {
+            return 0;
+        }
+        while ((i + 4) <= n) {
+            if (Pdfsrc.psU8(src, start + i) != 255) {
+                return 0;
+            }
+            m = Pdfsrc.psU8(src, start + (i + 1));
+            if (m == 255) {
+                i += 1;
+            } else if ((m == 216) || ((m == 1) || ((m >= 208) && (m <= 215)))) {
+                i += 2;
+            } else {
+                if ((m == 217) || (m == 218)) {
+                    return 0;
+                }
+                size = (256 * Pdfsrc.psU8(src, start + (i + 2))) + Pdfsrc.psU8(src, start + (i + 3));
+                if ((size < 2) || (size > (n - (i + 2)))) {
+                    return 0;
+                }
+                if ((m >= 192) && ((m <= 207) && ((m != 196) && ((m != 200) && (m != 204))))) {
+                    if ((m < 192) || (m > 194)) {
+                        return 0;
+                    }
+                    if (size < 8) {
+                        return 0;
+                    }
+                    if (Pdfsrc.psU8(src, start + (i + 4)) != 8) {
+                        return 0;
+                    }
+                    comps = Pdfsrc.psU8(src, start + (i + 9));
+                    if ((comps == 1) || (comps == 3)) {
+                        return 1;
+                    }
+                    return 0;
+                }
+                i += size + 2;
+            }
+        }
+        return 0;
+    }
     public static int scDctSpan(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int obj, emon.Port.Cells sp) {
         // Is object `obj` a stream whose whole filter chain is one DCT stage, in a file that is not encrypted? Then 1 and `sp`
         // holds [start, length] of its bytes in the file: a JPEG stream is a JPEG file, and the host's `ImageDecode` reads it in
@@ -2659,6 +2771,12 @@ public final class Scan {
             j += 1;
         }
         if (Pdflex.plIntValue(ar, kt) != 0) {
+            return 0;
+        }
+        if (scNativeJpeg(src, Pdflex.plStreamStart(ar, h), Pdflex.plStreamLen(ar, h)) == 0) {
+            return 0;
+        }
+        if (Pdfsrc.psMissed(src)) {
             return 0;
         }
         emon.Port.cellsDrop(sp, 0);

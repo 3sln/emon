@@ -305,8 +305,8 @@ public static class Sealpxtest {
         emon.Testport.AssertEq(Sealpx.SxFind(1, views, 0, prims, inks, 61200, 79200, cand), 1, "the same curve, an outline (coverage 150): a stamp");
         // a rectangle of the same size as a stamp, solid
         SptPrim(prims, Evidence.PmRect(), 30000, 20000, 5000, 2000, 2, 12591135, 1, 200);
-        int r = SptPrim(prims, Evidence.PmRect(), 30000, 25000, 5000, 2000, 2, 12591135, 1, 200);
-        Evidence.PmSet(prims, r, Evidence.PmfFill(), 950);
+        int rect = SptPrim(prims, Evidence.PmRect(), 30000, 25000, 5000, 2000, 2, 12591135, 1, 200);
+        Evidence.PmSet(prims, rect, Evidence.PmfFill(), 950);
         emon.Testport.AssertEq(Sealpx.SxFind(1, views, 0, prims, inks, 61200, 79200, cand), 2, "a solid 100 pt rectangle is no stamp; the outlined one is, with the curve: two");
     }
     internal static int SptOword(emon.Port.Cells ow, int x, int y) {

@@ -1,9 +1,10 @@
 ;; Laws for `emon.scan` (P6.5, P6.5a; D211-D215): the language a locale hint names, the OCR request it builds, an answer's evidence
 ;; and the pipeline's lines made from it (size, box and rotation of a line, D213), and the provenance of OCR text in the Model.
 (ns emon.scantest
-  (:require [emon.lang :refer [I32 Cells]]
-            [emon.test :refer [deftest assert-eq assert-that new-cells]]
-            [emon.port :refer [cells-len cells-at cells-push cells-set]]
+  (:require [emon.lang :refer [I32 Cells Src]]
+            [emon.test :refer [deftest assert-eq assert-that new-cells test-file Str]]
+            [emon.port :refer [cells-len cells-at cells-push cells-set src-of-blob]]
+            [emon.pdfdoc :refer [pd-open]]
             [emon.plan :refer [rec-kind rec-id rq-arg rq-nargs an-ocr an-ocr-word an-ocr-cp an-ocr-end pk-ocr]]
             [emon.ocr :refer [ox-begin ox-line ox-block ox-word ox-sym ox-sym-cp ocf-dpi]]
             [emon.evidence :refer [ol-new ow-new ow-set os-new rl-new rl-set rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1 rlf-thick owf-sfirst owf-scount
@@ -13,12 +14,12 @@
                                    ob-count ob-get vw-px-to-cpt
                                    lh-first lh-count lh-rot lh-dir lh-x0 lh-x1 lh-y0 lh-y1 lh-by0 lh-by1
                                    wf-size wf-style wf-gap wf-wbreak wf-src wf-font lf-src lf-order hd-tstart hd-tlen hd-line
-                                   hd-x0 hd-x1 hd-conf olf-xheight olf-asc olf-desc owf-psize owf-flags
+                                   hd-x0 hd-x1 hd-y0 hd-y1 hd-conf owf-run olf-xheight olf-asc olf-desc owf-psize owf-flags
                                    orf-bview orf-lang orf-langlen orf-osd orf-script orf-view
                                    obf-orient obf-wdir obf-btype vwf-kind vk-engine-binary wb-space wb-line-end
                                    epf-page epf-flags eg-raster ep-count]]
-            [emon.scan :refer [sc-lang sc-request sc-page sc-tag sc-tag-unread sc-mask-unread sc-unread-conf sc-eligible sc-write-bare
-                               sc-emit-sel sc-prep sc-sel-base sc-implausible sc-leader sc-amount-like sc-groups-fix]]
+            [emon.scan :refer [sc-lang sc-request sc-page sc-tag sc-tag-unread sc-mask-unread sc-unread-conf sc-eligible sc-write-bare sc-dct-span
+                               sc-emit-sel sc-prep sc-sel-base sc-xtra-ok sc-implausible sc-leader sc-amount-like sc-groups-fix]]
             [emon.model :refer [model-init node-new node-add-src node-set-conf node-src node-conf node-flags
                                 node-add-region node-set-text node-attr attr-len page-new page-kind
                                 nk-paragraph nk-text nk-document sr-text sr-ocr sr-infer fl-ocr-only fl-low-conf fl-script-unread pk-vector pk-scanned
@@ -874,3 +875,80 @@
     (assert-eq (ledger-page ledger 0) 2 "of page 2")
     (assert-eq (ledger-reason ledger 0) (dr-background) "as a background")
     (assert-eq (ledger-x1 ledger 0) 30000 "the biggest image's")))
+
+(deftest test-a-later-pass-word-already-read-on-another-first-pass-line-is-not-added
+  (let [^Cells owords (new-cells)
+        ^Cells etext (new-cells)]
+    (cells-push etext 49)
+    (ow-new owords 1 0 0 100 100 0 100 100 100 0 0 0 1 0 900 -1)
+    (ow-new owords 1 200 0 300 100 200 100 300 100 0 0 0 1 1 900 -1)
+    (ow-new owords 1 200 0 300 100 200 100 300 100 0 0 0 1 2 900 -1)
+    (ow-set owords 2 (owf-run) 1)
+    (assert-eq (sc-xtra-ok owords etext 0 1 2) 0 "the partner line missed it, but another first-pass line already read the same ink")
+    (ow-set owords 1 (hd-y0) 200)
+    (ow-set owords 1 (hd-y1) 300)
+    (assert-eq (sc-xtra-ok owords etext 0 1 2) 1 "the same column on another row is different ink")
+    (ow-set owords 1 (hd-y0) 0)
+    (ow-set owords 1 (hd-y1) 100)
+    (ow-set owords 1 (owf-run) 2)
+    (assert-eq (sc-xtra-ok owords etext 0 1 2) 1 "another later pass is not the first pass")))
+
+(deftest test-a-weak-tiny-later-pass-speck-is-not-added-as-a-word
+  (let [^Cells owords (new-cells)
+        ^Cells etext (new-cells)]
+    (cells-push etext 49)
+    (ow-new owords 1 0 0 100 100 0 100 100 100 0 0 0 1 0 900 -1)
+    (ow-new owords 1 200 0 300 20 200 100 300 100 0 0 0 1 1 421 -1)
+    (ow-set owords 1 (owf-run) 1)
+    (assert-eq (sc-xtra-ok owords etext 0 1 1) 0 "an unsure speck under half the height of the line's words is not recovered text")
+    (ow-set owords 1 (hd-y1) 100)
+    (assert-eq (sc-xtra-ok owords etext 0 1 1) 1 "an unsure word of the line's height can fill a missed column")
+    (ow-set owords 1 (hd-y1) 20)
+    (ow-set owords 1 (hd-conf) 900)
+    (assert-eq (sc-xtra-ok owords etext 0 1 1) 1 "a confident small reading can be a superscript")))
+
+(deftest test-later-pass-letters-need-a-confident-word-but-amounts-keep-their-lower-bound
+  (let [^Cells owords (new-cells)
+        ^Cells etext (new-cells)]
+    (cells-push etext 111) (cells-push etext 114)
+    (cells-push etext 110) (cells-push etext 101) (cells-push etext 119)
+    (cells-push etext 49) (cells-push etext 50) (cells-push etext 51)
+    (ow-new owords 1 0 0 100 100 0 100 100 100 0 0 2 3 0 950 -1)
+    (ow-new owords 1 200 0 300 100 200 100 300 100 0 0 0 2 1 950 -1)
+    (ow-set owords 1 (owf-run) 1)
+    (assert-eq (sc-xtra-ok owords etext 0 1 1) 0 "two letters on a seal can be a fragment of its strokes, even at high OCR confidence")
+    (ow-set owords 1 (hd-tstart) 2) (ow-set owords 1 (hd-tlen) 3)
+    (ow-set owords 1 (hd-conf) 500)
+    (assert-eq (sc-xtra-ok owords etext 0 1 1) 0 "a weak new alphabetic word has no first-pass reading to corroborate it")
+    (ow-set owords 1 (hd-conf) 950)
+    (assert-eq (sc-xtra-ok owords etext 0 1 1) 1 "a confident word can fill what the first line missed")
+    (ow-set owords 1 (hd-tstart) 5) (ow-set owords 1 (hd-conf) 500)
+    (assert-eq (sc-xtra-ok owords etext 0 1 1) 1 "a numeric column retains its lower rescue bound")))
+
+(deftest test-later-pass-rescue-extends-the-first-pass-line-rather-than-filling-holes-or-prefixing-prose
+  (let [^Cells owords (new-cells)
+        ^Cells etext (new-cells)]
+    (cells-push etext 49)
+    (ow-new owords 1 200 0 300 100 200 100 300 100 0 0 0 1 0 900 -1)
+    (ow-new owords 1 600 0 700 100 600 100 700 100 0 0 0 1 0 900 -1)
+    (ow-new owords 1 400 0 500 100 400 100 500 100 0 0 0 1 1 900 -1)
+    (ow-set owords 2 (owf-run) 1)
+    (assert-eq (sc-xtra-ok owords etext 0 2 2) 0 "an interior gap can be overlay ink, rather than a lost column")
+    (ow-set owords 2 (hd-x0) 800) (ow-set owords 2 (hd-x1) 900)
+    (assert-eq (sc-xtra-ok owords etext 0 2 2) 1 "the amount beyond the first pass's end is recovered")
+    (ow-set owords 2 (hd-x0) 0) (ow-set owords 2 (hd-x1) 100)
+    (assert-eq (sc-xtra-ok owords etext 0 2 2) 0 "a new prefix is not the missing trailing column")))
+
+(defn ^I32 sct-direct-dct [^Str file]
+  (let [^Src src (src-of-blob (test-file file))
+        ^Cells ar (new-cells) ^Cells dc (new-cells)
+        ^Cells a (new-cells) ^Cells b (new-cells)
+        ^Cells st (new-cells) ^Cells sp (new-cells)]
+    (if (!= (pd-open src ar dc a b st) 0) (return -1))
+    (return (sc-dct-span src ar dc a b st 5 sp))))
+
+(deftest test-a-scan-jpeg-outside-the-shared-native-subset-is-rendered-rather-than-decoded-directly
+  (assert-eq (sct-direct-dct "assets/dct-arith.pdf") 0 "arithmetic JPEG needs page rendering, not a host-dependent native decode")
+  (assert-eq (sct-direct-dct "assets/dct-cmyk.pdf") 0 "CMYK also needs rendering for scan OCR")
+  (assert-eq (sct-direct-dct "assets/dct-decode.pdf") 1 "ordinary 8-bit three-component JPEG stays on the direct path")
+  (assert-eq (sct-direct-dct "assets/dct-a85-decode.pdf") 0 "a filter chain still needs rendering"))

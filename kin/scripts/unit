@@ -259,8 +259,9 @@ finish() {
     printf '%s\n' "$out" | sed 's/^/    /' | tail -10
     fails=$((fails+1))
   else
-    echo "  FAIL $arm"
-    printf '%s\n' "$out" | sed 's/^/    /' | head -40
+    echo "  FAIL $arm    $count laws (exit $rc)"
+    # Keep the failing law even when earlier packages passed; truncating at head can also SIGPIPE under pipefail.
+    printf '%s\n' "$out" | sed 's/^/    /'
     fails=$((fails+1))
   fi
 }

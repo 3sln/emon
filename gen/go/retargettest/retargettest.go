@@ -285,7 +285,7 @@ func rttFill1(b *port.Bitmap, x0 int32, y0 int32, x1 int32, y1 int32, v int32) i
 	return 0
 }
 
-func rttBandScene(bandgray int32, pxh int32) int32 {
+func rttBandScene(emonT *testing.T, bandgray int32, pxh int32) int32 {
 	// A 40 x 20 gray page (paper 240) with a band of gray `bandgray` from (5,5) 30 pixels wide and `pxh` high, white text at (10..13, 8..12) in it and one black pixel of body ink at (30, 10);
 	// the band as the tracer found it (a component of a colour layer, solid, six holes). Answers how many bands `rt-invert-bands` turned, leaving the view in the caller's `dst` (cells of the test).
 	var gray *port.Bitmap = port.BitmapNew(40, 20, 1)
@@ -324,9 +324,9 @@ func rttBandScene(bandgray int32, pxh int32) int32 {
 
 func TestABandOfColourWithLightTextIsTurnedInsideOutAndALightBandIsNot(emonT *testing.T) {
 	// P12.6 (issue 14, E09's white-on-blue header): the view the body-ink pass reads showed the band and its text as paper, and the text was never read
-	port.AssertEq(emonT, rttBandScene(149, 10), 1, "a band of gray 149, white text in it")
-	port.AssertEq(emonT, rttBandScene(220, 10), 0, "a light band holds dark text: the engine reads it as it is")
-	port.AssertEq(emonT, rttBandScene(149, 3), 0, "a band 3 pixels high at 72 dpi is a rule, not a header")
+	port.AssertEq(emonT, rttBandScene(emonT, 149, 10), 1, "a band of gray 149, white text in it")
+	port.AssertEq(emonT, rttBandScene(emonT, 220, 10), 0, "a light band holds dark text: the engine reads it as it is")
+	port.AssertEq(emonT, rttBandScene(emonT, 149, 3), 0, "a band 3 pixels high at 72 dpi is a rule, not a header")
 }
 
 func TestALineTheEngineFoundAndReadAsNothingIsReadAloneAndItsWordsAreThePagesWhenSure(emonT *testing.T) {

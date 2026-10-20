@@ -7,6 +7,7 @@ import (
 	"emon/evidence"
 	"emon/model"
 	"emon/ocr"
+	"emon/pdfdoc"
 	"emon/plan"
 	"emon/port"
 	"emon/scan"
@@ -933,4 +934,101 @@ func TestAPageThatComesOutEmptyAndHeldABigImageHasItInTheLedger(emonT *testing.T
 	port.AssertEq(emonT, model.LedgerPage(ledger, 0), 2, "of page 2")
 	port.AssertEq(emonT, model.LedgerReason(ledger, 0), model.DrBackground(), "as a background")
 	port.AssertEq(emonT, model.LedgerX1(ledger, 0), 30000, "the biggest image's")
+}
+
+func TestALaterPassWordAlreadyReadOnAnotherFirstPassLineIsNotAdded(emonT *testing.T) {
+	var owords *port.Cells = port.NewCells()
+	var etext *port.Cells = port.NewCells()
+	port.CellsPush(etext, 49)
+	evidence.OwNew(owords, 1, 0, 0, 100, 100, 0, 100, 100, 100, 0, 0, 0, 1, 0, 900, -1)
+	evidence.OwNew(owords, 1, 200, 0, 300, 100, 200, 100, 300, 100, 0, 0, 0, 1, 1, 900, -1)
+	evidence.OwNew(owords, 1, 200, 0, 300, 100, 200, 100, 300, 100, 0, 0, 0, 1, 2, 900, -1)
+	evidence.OwSet(owords, 2, evidence.OwfRun(), 1)
+	port.AssertEq(emonT, scan.ScXtraOk(owords, etext, 0, 1, 2), 0, "the partner line missed it, but another first-pass line already read the same ink")
+	evidence.OwSet(owords, 1, evidence.HdY0(), 200)
+	evidence.OwSet(owords, 1, evidence.HdY1(), 300)
+	port.AssertEq(emonT, scan.ScXtraOk(owords, etext, 0, 1, 2), 1, "the same column on another row is different ink")
+	evidence.OwSet(owords, 1, evidence.HdY0(), 0)
+	evidence.OwSet(owords, 1, evidence.HdY1(), 100)
+	evidence.OwSet(owords, 1, evidence.OwfRun(), 2)
+	port.AssertEq(emonT, scan.ScXtraOk(owords, etext, 0, 1, 2), 1, "another later pass is not the first pass")
+}
+
+func TestAWeakTinyLaterPassSpeckIsNotAddedAsAWord(emonT *testing.T) {
+	var owords *port.Cells = port.NewCells()
+	var etext *port.Cells = port.NewCells()
+	port.CellsPush(etext, 49)
+	evidence.OwNew(owords, 1, 0, 0, 100, 100, 0, 100, 100, 100, 0, 0, 0, 1, 0, 900, -1)
+	evidence.OwNew(owords, 1, 200, 0, 300, 20, 200, 100, 300, 100, 0, 0, 0, 1, 1, 421, -1)
+	evidence.OwSet(owords, 1, evidence.OwfRun(), 1)
+	port.AssertEq(emonT, scan.ScXtraOk(owords, etext, 0, 1, 1), 0, "an unsure speck under half the height of the line's words is not recovered text")
+	evidence.OwSet(owords, 1, evidence.HdY1(), 100)
+	port.AssertEq(emonT, scan.ScXtraOk(owords, etext, 0, 1, 1), 1, "an unsure word of the line's height can fill a missed column")
+	evidence.OwSet(owords, 1, evidence.HdY1(), 20)
+	evidence.OwSet(owords, 1, evidence.HdConf(), 900)
+	port.AssertEq(emonT, scan.ScXtraOk(owords, etext, 0, 1, 1), 1, "a confident small reading can be a superscript")
+}
+
+func TestLaterPassLettersNeedAConfidentWordButAmountsKeepTheirLowerBound(emonT *testing.T) {
+	var owords *port.Cells = port.NewCells()
+	var etext *port.Cells = port.NewCells()
+	port.CellsPush(etext, 111)
+	port.CellsPush(etext, 114)
+	port.CellsPush(etext, 110)
+	port.CellsPush(etext, 101)
+	port.CellsPush(etext, 119)
+	port.CellsPush(etext, 49)
+	port.CellsPush(etext, 50)
+	port.CellsPush(etext, 51)
+	evidence.OwNew(owords, 1, 0, 0, 100, 100, 0, 100, 100, 100, 0, 0, 2, 3, 0, 950, -1)
+	evidence.OwNew(owords, 1, 200, 0, 300, 100, 200, 100, 300, 100, 0, 0, 0, 2, 1, 950, -1)
+	evidence.OwSet(owords, 1, evidence.OwfRun(), 1)
+	port.AssertEq(emonT, scan.ScXtraOk(owords, etext, 0, 1, 1), 0, "two letters on a seal can be a fragment of its strokes, even at high OCR confidence")
+	evidence.OwSet(owords, 1, evidence.HdTstart(), 2)
+	evidence.OwSet(owords, 1, evidence.HdTlen(), 3)
+	evidence.OwSet(owords, 1, evidence.HdConf(), 500)
+	port.AssertEq(emonT, scan.ScXtraOk(owords, etext, 0, 1, 1), 0, "a weak new alphabetic word has no first-pass reading to corroborate it")
+	evidence.OwSet(owords, 1, evidence.HdConf(), 950)
+	port.AssertEq(emonT, scan.ScXtraOk(owords, etext, 0, 1, 1), 1, "a confident word can fill what the first line missed")
+	evidence.OwSet(owords, 1, evidence.HdTstart(), 5)
+	evidence.OwSet(owords, 1, evidence.HdConf(), 500)
+	port.AssertEq(emonT, scan.ScXtraOk(owords, etext, 0, 1, 1), 1, "a numeric column retains its lower rescue bound")
+}
+
+func TestLaterPassRescueExtendsTheFirstPassLineRatherThanFillingHolesOrPrefixingProse(emonT *testing.T) {
+	var owords *port.Cells = port.NewCells()
+	var etext *port.Cells = port.NewCells()
+	port.CellsPush(etext, 49)
+	evidence.OwNew(owords, 1, 200, 0, 300, 100, 200, 100, 300, 100, 0, 0, 0, 1, 0, 900, -1)
+	evidence.OwNew(owords, 1, 600, 0, 700, 100, 600, 100, 700, 100, 0, 0, 0, 1, 0, 900, -1)
+	evidence.OwNew(owords, 1, 400, 0, 500, 100, 400, 100, 500, 100, 0, 0, 0, 1, 1, 900, -1)
+	evidence.OwSet(owords, 2, evidence.OwfRun(), 1)
+	port.AssertEq(emonT, scan.ScXtraOk(owords, etext, 0, 2, 2), 0, "an interior gap can be overlay ink, rather than a lost column")
+	evidence.OwSet(owords, 2, evidence.HdX0(), 800)
+	evidence.OwSet(owords, 2, evidence.HdX1(), 900)
+	port.AssertEq(emonT, scan.ScXtraOk(owords, etext, 0, 2, 2), 1, "the amount beyond the first pass's end is recovered")
+	evidence.OwSet(owords, 2, evidence.HdX0(), 0)
+	evidence.OwSet(owords, 2, evidence.HdX1(), 100)
+	port.AssertEq(emonT, scan.ScXtraOk(owords, etext, 0, 2, 2), 0, "a new prefix is not the missing trailing column")
+}
+
+func sctDirectDct(file string) int32 {
+	var src *port.Src = port.SrcOfBlob(port.TestFile(file))
+	var ar *port.Cells = port.NewCells()
+	var dc *port.Cells = port.NewCells()
+	var a *port.Cells = port.NewCells()
+	var b *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	var sp *port.Cells = port.NewCells()
+	if pdfdoc.PdOpen(src, ar, dc, a, b, st) != 0 {
+		return -1
+	}
+	return scan.ScDctSpan(src, ar, dc, a, b, st, 5, sp)
+}
+
+func TestAScanJpegOutsideTheSharedNativeSubsetIsRenderedRatherThanDecodedDirectly(emonT *testing.T) {
+	port.AssertEq(emonT, sctDirectDct("assets/dct-arith.pdf"), 0, "arithmetic JPEG needs page rendering, not a host-dependent native decode")
+	port.AssertEq(emonT, sctDirectDct("assets/dct-cmyk.pdf"), 0, "CMYK also needs rendering for scan OCR")
+	port.AssertEq(emonT, sctDirectDct("assets/dct-decode.pdf"), 1, "ordinary 8-bit three-component JPEG stays on the direct path")
+	port.AssertEq(emonT, sctDirectDct("assets/dct-a85-decode.pdf"), 0, "a filter chain still needs rendering")
 }

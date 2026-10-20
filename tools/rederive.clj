@@ -57,6 +57,8 @@
    {:id "table" :why "test/table goldens from the Rust driver" :cmd ["bb" "kin/scripts/table-goldens"] :writes ["test/table"]}
    {:id "slice" :why "test/slice HTML goldens (after para: `bb slice` holds its JSON to test/para); only the Rust and Go hosts are needed to write them"
     :cmd ["bb" "slice" "--update"] :env {"EMON_SKIP_JAVA" "1" "EMON_SKIP_CSHARP" "1" "EMON_SKIP_C" "1" "EMON_SKIP_POD" "1"} :writes ["test/slice"]}
+   {:id "ocr-spike" :why "the OCR spike evidence dump, including dpi serialization, from its committed transcript"
+    :covers ["ocr"] :cmd ["bb" "tools/ocr/record.clj" "--digests"] :writes ["test/ocr/h-keyword.dump"]}
    ;; the replay sets' digests: the committed transcripts through the Rust driver
    {:id "fusion" :why "the fusion replay set's digests" :covers ["fusion"]
     :cmd ["bb" "fusion-record" "--digests"] :writes ["test/fusion/replay/DIGESTS.edn"]}

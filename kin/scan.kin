@@ -879,6 +879,9 @@
 ;;     as the last period is the decimal one. The engine's text stays in the evidence. NO DIGIT IS EVER GUESSED.
 
 (defn ^I32 sc-lo-conf [] (comment "`ocr-garbage-conf`: a word of at most this confidence (per mille) is a candidate for being no text.") (return 300))
+(defn ^I32 sc-xtra-text-conf [] (comment "A newly recovered alphabetic word needs stronger evidence than an amount: weak readings of overlay strokes must not become prose.") (return 600))
+(defn ^I32 sc-xtra-text-letters [] (comment "Fewer letters can be fragments of overlay strokes, even at a high engine confidence.") (return 3))
+(defn ^I32 sc-xtra-small-conf [] (comment "A later-pass word under half the height of every partner word needs this confidence: an unsure speck must not create a column.") (return 700))
 (defn ^I32 sc-xtra-conf [] (comment "A body-ink word that lies over none of the first-pass line's words is read with it only when its confidence (per mille) is at least this.") (return 400))
 (defn ^I32 sc-rule-slack [] (comment "A character is on a rule when its centre is within this many centipoints (and the rule's half thickness) of the rule's centre line.") (return 150))
 
@@ -1102,17 +1105,48 @@
         ^:mut ^I32 pa 0
         ^:mut ^I32 pb 0
         ^:mut ^I32 ov 0
-        ^:mut ^I32 nar 0]
+        ^:mut ^I32 nar 0
+        ^:mut ^I32 yo 0
+        ^:mut ^I32 yh 0
+        ^:mut ^I32 mh 0
+        ^:mut ^I32 hh 0
+        ^:mut ^I32 edge 0]
     (if (< (ow-get owords xw (hd-conf)) (sc-xtra-conf)) (return 0))
+    (let [^I32 letters (sc-count-class etext (ow-get owords xw (hd-tstart)) (ow-get owords xw (hd-tlen)) 0)]
+      (if (> letters 0)
+        (if (or (< letters (sc-xtra-text-letters)) (< (ow-get owords xw (hd-conf)) (sc-xtra-text-conf))) (return 0))))
     (if (== (sc-implausible etext (ow-get owords xw (hd-tstart)) (ow-get owords xw (hd-tlen))) 1) (return 0))
     (while (< j cnt)
-      (do (set pa (ow-get owords (+ w0 j) (hd-x0)))
+      (do (set hh (- (ow-get owords (+ w0 j) (hd-y1)) (ow-get owords (+ w0 j) (hd-y0))))
+          (if (> hh 0) (if (or (== mh 0) (< hh mh)) (set mh hh)))
+          (set pa (ow-get owords (+ w0 j) (hd-x0)))
           (set pb (ow-get owords (+ w0 j) (hd-x1)))
+          (if (> pb edge) (set edge pb))
           (set ov (- (sc-mn xb pb) (sc-mx xa pa)))
           (set nar (sc-mn (- xb xa) (- pb pa)))
           (if (> ov 0)
             (if (> (* ov 4) nar) (return 0)))
           (set j (+ j 1))))
+    (if (and (> cnt 0) (<= xb edge)) (return 0))
+    (if (and (> mh 0) (< (* 2 (- (ow-get owords xw (hd-y1)) (ow-get owords xw (hd-y0)))) mh))
+      (if (< (ow-get owords xw (hd-conf)) (sc-xtra-small-conf)) (return 0)))
+    (comment "A different first-pass line can already hold this ink (a table row split at its last column). Check the entire first-pass run in two dimensions, not just the partner line.")
+    (if (and (> cnt 0) (!= (ow-get owords w0 (owf-run)) (ow-get owords xw (owf-run))))
+      (do (set j 0)
+          (while (< j (ow-count owords))
+            (do (if (== (ow-get owords j (owf-run)) (ow-get owords w0 (owf-run)))
+                  (if (== (ow-get owords j (hd-page)) (ow-get owords xw (hd-page)))
+                    (do (set yo (- (sc-mn (ow-get owords j (hd-y1)) (ow-get owords xw (hd-y1)))
+                                   (sc-mx (ow-get owords j (hd-y0)) (ow-get owords xw (hd-y0)))))
+                        (set yh (sc-mn (- (ow-get owords j (hd-y1)) (ow-get owords j (hd-y0)))
+                                      (- (ow-get owords xw (hd-y1)) (ow-get owords xw (hd-y0)))))
+                        (if (and (> yo 0) (> (* yo 2) yh))
+                          (do (set pa (ow-get owords j (hd-x0)))
+                              (set pb (ow-get owords j (hd-x1)))
+                              (set ov (- (sc-mn xb pb) (sc-mx xa pa)))
+                              (set nar (sc-mn (- xb xa) (- pb pa)))
+                              (if (and (> ov 0) (> (* ov 4) nar)) (return 0)))))))
+                (set j (+ j 1))))))
     (return 1)))
 
 (defn ^:pub ^I32 sc-xtra-count [^Cells olines ^Cells owords ^Cells etext ^I32 l ^I32 xl]
@@ -1998,6 +2032,34 @@
 
 ;; ============================================================== a PDF's scanned pages
 
+(defn ^I32 sc-native-jpeg [^Src src ^I32 start ^I32 n]
+  (comment "The JPEG subset every ImageDecode host reads for scans: SOF0/1/2, 8-bit, one or three components. Other frames need page rendering; native libraries differ on arithmetic JPEG.")
+  (let [^:mut ^I32 i 2
+        ^:mut ^I32 m 0
+        ^:mut ^I32 size 0
+        ^:mut ^I32 comps 0]
+    (if (< n 4) (return 0))
+    (if (or (!= (ps-u8 src start) 255) (!= (ps-u8 src (+ start 1)) 216)) (return 0))
+    (while (<= (+ i 4) n)
+      (do (if (!= (ps-u8 src (+ start i)) 255) (return 0))
+          (set m (ps-u8 src (+ start (+ i 1))))
+          (if (== m 255)
+            (set i (+ i 1))
+            (if (or (== m 216) (or (== m 1) (and (>= m 208) (<= m 215))))
+              (set i (+ i 2))
+              (do (if (or (== m 217) (== m 218)) (return 0))
+                  (set size (+ (* 256 (ps-u8 src (+ start (+ i 2)))) (ps-u8 src (+ start (+ i 3)))))
+                  (if (or (< size 2) (> size (- n (+ i 2)))) (return 0))
+                  (if (and (>= m 192) (and (<= m 207) (and (!= m 196) (and (!= m 200) (!= m 204)))))
+                    (do (if (or (< m 192) (> m 194)) (return 0))
+                        (if (< size 8) (return 0))
+                        (if (!= (ps-u8 src (+ start (+ i 4))) 8) (return 0))
+                        (set comps (ps-u8 src (+ start (+ i 9))))
+                        (if (or (== comps 1) (== comps 3)) (return 1))
+                        (return 0)))
+                  (set i (+ i (+ size 2))))))))
+    (return 0)))
+
 (defn ^:pub ^I32 sc-dct-span [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
                         ^I32 obj ^:mut ^Cells sp]
   (comment "Is object `obj` a stream whose whole filter chain is one DCT stage, in a file that is not encrypted? Then 1 and `sp`")
@@ -2027,6 +2089,8 @@
       (do (set kt (pl-next ar kt))
           (set j (+ j 1))))
     (if (!= (pl-int-value ar kt) 0) (return 0))
+    (if (== (sc-native-jpeg src (pl-stream-start ar h) (pl-stream-len ar h)) 0) (return 0))
+    (if (ps-missed src) (return 0))
     (cells-drop sp 0)
     (cells-push sp (pl-stream-start ar h))
     (cells-push sp (pl-stream-len ar h))

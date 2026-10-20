@@ -317,8 +317,8 @@ func TestASolidBlockOfColourIsNoStampAndAnOutlineOfTheSameSizeIs(emonT *testing.
 	port.AssertEq(emonT, sealpx.SxFind(1, views, 0, prims, inks, 61200, 79200, cand), 1, "the same curve, an outline (coverage 150): a stamp")
 	// a rectangle of the same size as a stamp, solid
 	sptPrim(prims, evidence.PmRect(), 30000, 20000, 5000, 2000, 2, 12591135, 1, 200)
-	var r int32 = sptPrim(prims, evidence.PmRect(), 30000, 25000, 5000, 2000, 2, 12591135, 1, 200)
-	evidence.PmSet(prims, r, evidence.PmfFill(), 950)
+	var rect int32 = sptPrim(prims, evidence.PmRect(), 30000, 25000, 5000, 2000, 2, 12591135, 1, 200)
+	evidence.PmSet(prims, rect, evidence.PmfFill(), 950)
 	port.AssertEq(emonT, sealpx.SxFind(1, views, 0, prims, inks, 61200, 79200, cand), 2, "a solid 100 pt rectangle is no stamp; the outlined one is, with the curve: two")
 }
 

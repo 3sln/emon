@@ -1,4 +1,6 @@
 {:emon-transcript 1
  :inputs [{:index 0 :length 1283}]
  :entries [
-  {:round 0 :kind :decode-img :req [34 6 1 1 24 16 3 8 0 0 0 0 0 440 644 0 0 0 0 0 0 0 0 -1 0 0 0 0 0 0 0 0 0 0] :ans [4 6 1 1]}]}
+  {:round 0 :kind :decode-img :req [34 6 1 1 24 16 3 8 0 0 0 0 0 440 644 0 0 0 0 0 0 0 0 -1 0 0 0 0 0 0 0 0 0 0] :ans [4 6 1 1]}
+  {:round 0 :kind :decode :req [8 2 260 0 440 644 1 0] :ans [4 2 260 1]}
+  {:round 0 :kind :render :req [7 1 260 0 0 300 0] :ans [4 1 260 2]}]}
