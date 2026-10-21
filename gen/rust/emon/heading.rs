@@ -824,9 +824,58 @@ pub(crate) fn hd_put_head(mut sf: &mut crate::port::Cells, l: i32, h: i32, p: i3
     st_set(sf, l, sfk_points(), p);
     return 0;
 }
+pub(crate) fn hd_ocr_row(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, l: i32) -> i32 {
+    // A scanned row can be one OCR line: separated columns are not a heading's word spacing.
+    if (ln_get(ln, l, lf_src()) & 4) == 0 {
+        return 0;
+    }
+    let first: i32 = ln_get(ln, l, lh_first());
+    let count: i32 = ln_get(ln, l, lh_count());
+    let mut i: i32 = 0;
+    let mut gaps: i32 = 0;
+    let mut numbers: i32 = 0;
+    let mut w: i32 = 0;
+    let mut cp: i32 = 0;
+    let mut colons: i32 = 0;
+    if count > 0 {
+        while i < wd_get(wd, first, hd_tlen()) {
+            if crate::port::cells_at(et, wd_get(wd, first, hd_tstart()) + i) == 58 {
+                colons += 1;
+            }
+            i += 1;
+        }
+        if (colons >= 2) && (hd_figure_word(wd, et, first) == 1) {
+            return 1;
+        }
+        i = 0;
+    }
+    while i < count {
+        w = first + i;
+        if ((i + 1) < count) && (wd_get(wd, w, wf_gap()) > (3 * wd_get(wd, w, wf_size()))) {
+            gaps += 1;
+        }
+        if wd_get(wd, w, hd_tlen()) > 0 {
+            cp = crate::port::cells_at(et, wd_get(wd, w, hd_tstart()));
+            if (cp >= 48) && (cp <= 57) {
+                numbers += 1;
+            }
+        }
+        i += 1;
+    }
+    if (gaps >= 2) || ((gaps >= 1) && (numbers >= 2)) {
+        return 1;
+    }
+    return 0;
+}
 pub(crate) fn hd_headish(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, mut sf: &mut crate::port::Cells, sc: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, l: i32) -> i32 {
     // Can line l be (part of) a heading: sets its `head` field (1) and `points` (the style points).
     hd_put_head(sf, l, 0, 0);
+    if hd_ocr_row(wd, ln, et, l) == 1 {
+        return 0;
+    }
+    if (ln_get(ln, l, lf_src()) & ls_revised()) != 0 {
+        return 0;
+    }
     if st_get(sf, l, sfk_upright()) != 1 {
         return 0;
     }
@@ -851,7 +900,7 @@ pub(crate) fn hd_headish(wd: &mut crate::port::Cells, ln: &mut crate::port::Cell
     if pq < 0 {
         // beside something that is not a column of body text: a table cell, a label and its value
         // (a headline set a fifth bigger than the body is not a table cell, whatever is beside it: a column's)
-        if (nsib > st_get(sf, l, sfk_ncol())) && ((st_get(sf, l, sfk_size()) * 100) < (st_hget(sf, sfh_size()) * 120)) {
+        if (nsib > st_get(sf, l, sfk_ncol())) && (((ln_get(ln, l, lf_src()) & 4) != 0) || ((st_get(sf, l, sfk_size()) * 100) < (st_hget(sf, sfh_size()) * 120))) {
             return 0;
         }
         // an initial: one or two code points with anything beside it; a divider has nothing on its row

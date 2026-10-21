@@ -3119,6 +3119,10 @@ public final class Evidence {
     public static int lfOrder() {
         return 14;
     }
+    public static int lsRevised() {
+        // Source metadata bit: OCR line composed or recovered after the first reading; no independent heading evidence.
+        return 256;
+    }
     public static int mkfPage() {
         return 0;
     }

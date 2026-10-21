@@ -681,6 +681,7 @@
 ;; lines (stride 16), head line
 (defn ^:pub ^I32 lf-src [] (return 13))
 (defn ^:pub ^I32 lf-order [] (return 14))
+(defn ^:pub ^I32 ls-revised [] (comment "Source metadata bit: OCR line composed or recovered after the first reading; no independent heading evidence.") (return 256))
 
 ;; marks (stride 24)
 (defn ^:pub ^I32 mkf-page [] (return 0))

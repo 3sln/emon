@@ -3119,6 +3119,10 @@ pub fn lf_src() -> i32 {
 pub fn lf_order() -> i32 {
     return 14;
 }
+pub fn ls_revised() -> i32 {
+    // Source metadata bit: OCR line composed or recovered after the first reading; no independent heading evidence.
+    return 256;
+}
 pub fn mkf_page() -> i32 {
     return 0;
 }

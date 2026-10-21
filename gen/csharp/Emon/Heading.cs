@@ -824,9 +824,58 @@ public static class Heading {
         Style.StSet(sf, l, Style.SfkPoints(), p);
         return 0;
     }
+    internal static int HdOcrRow(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l) {
+        // A scanned row can be one OCR line: separated columns are not a heading's word spacing.
+        if ((Evidence.LnGet(ln, l, Evidence.LfSrc()) & 4) == 0) {
+            return 0;
+        }
+        int first = Evidence.LnGet(ln, l, Evidence.LhFirst());
+        int count = Evidence.LnGet(ln, l, Evidence.LhCount());
+        int i = 0;
+        int gaps = 0;
+        int numbers = 0;
+        int w = 0;
+        int cp = 0;
+        int colons = 0;
+        if (count > 0) {
+            while (i < Evidence.WdGet(wd, first, Evidence.HdTlen())) {
+                if (emon.Port.CellsAt(et, Evidence.WdGet(wd, first, Evidence.HdTstart()) + i) == 58) {
+                    colons += 1;
+                }
+                i += 1;
+            }
+            if ((colons >= 2) && (HdFigureWord(wd, et, first) == 1)) {
+                return 1;
+            }
+            i = 0;
+        }
+        while (i < count) {
+            w = first + i;
+            if (((i + 1) < count) && (Evidence.WdGet(wd, w, Evidence.WfGap()) > (3 * Evidence.WdGet(wd, w, Evidence.WfSize())))) {
+                gaps += 1;
+            }
+            if (Evidence.WdGet(wd, w, Evidence.HdTlen()) > 0) {
+                cp = emon.Port.CellsAt(et, Evidence.WdGet(wd, w, Evidence.HdTstart()));
+                if ((cp >= 48) && (cp <= 57)) {
+                    numbers += 1;
+                }
+            }
+            i += 1;
+        }
+        if ((gaps >= 2) || ((gaps >= 1) && (numbers >= 2))) {
+            return 1;
+        }
+        return 0;
+    }
     internal static int HdHeadish(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells sf, emon.Port.Cells sc, emon.Port.Cells ws, int l) {
         // Can line l be (part of) a heading: sets its `head` field (1) and `points` (the style points).
         HdPutHead(sf, l, 0, 0);
+        if (HdOcrRow(wd, ln, et, l) == 1) {
+            return 0;
+        }
+        if ((Evidence.LnGet(ln, l, Evidence.LfSrc()) & Evidence.LsRevised()) != 0) {
+            return 0;
+        }
         if (Style.StGet(sf, l, Style.SfkUpright()) != 1) {
             return 0;
         }
@@ -851,7 +900,7 @@ public static class Heading {
         if (pq < 0) {
             // beside something that is not a column of body text: a table cell, a label and its value
             // (a headline set a fifth bigger than the body is not a table cell, whatever is beside it: a column's)
-            if ((nsib > Style.StGet(sf, l, Style.SfkNcol())) && ((Style.StGet(sf, l, Style.SfkSize()) * 100) < (Style.StHget(sf, Style.SfhSize()) * 120))) {
+            if ((nsib > Style.StGet(sf, l, Style.SfkNcol())) && (((Evidence.LnGet(ln, l, Evidence.LfSrc()) & 4) != 0) || ((Style.StGet(sf, l, Style.SfkSize()) * 100) < (Style.StHget(sf, Style.SfhSize()) * 120)))) {
                 return 0;
             }
             // an initial: one or two code points with anything beside it; a divider has nothing on its row

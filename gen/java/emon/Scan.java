@@ -2257,6 +2257,7 @@ public final class Scan {
         int made = 0;
         int l = 0;
         int cnt = 0;
+        int revised = 0;
         int mc = 0;
         int mg = 0;
         int xl = 0;
@@ -2372,12 +2373,19 @@ public final class Scan {
                 if (dir != 0) {
                     xl = -1;
                 }
+                revised = 0;
+                if (Evidence.olGet(olines, l, Evidence.olfRun()) != Evidence.olGet(olines, emon.Port.cellsAt(scr, scXtraBase()), Evidence.olfRun())) {
+                    revised = 1;
+                }
                 mg = 0;
                 mc = cnt;
                 j = scLineWords(olines, owords, etext, l, xl, scr);
                 if (j > 0) {
                     mg = 1;
                     mc = scFates(owords, etext, osyms, rules, comps, inks, page, j, scr);
+                    if ((j > cnt) || (mc < j)) {
+                        revised = 1;
+                    }
                 }
                 if ((mg == 1) && (mc > 0)) {
                     if (j > cnt) {
@@ -2449,7 +2457,7 @@ public final class Scan {
                 }
                 if (mc > 0) {
                     r = Evidence.lnNew(lines, page, lx0, ly0, lx1, ly1, bx0, by0, bx1, by1, rot, dir, first, mc);
-                    Evidence.lnSet(lines, r, Evidence.lfSrc(), Model.srOcr());
+                    Evidence.lnSet(lines, r, Evidence.lfSrc(), Model.srOcr() + (revised * Evidence.lsRevised()));
                     Evidence.lnSet(lines, r, Evidence.lfOrder(), r);
                     made += 1;
                 }

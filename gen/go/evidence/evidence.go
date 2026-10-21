@@ -3288,6 +3288,11 @@ func LfOrder() int32 {
 	return 14
 }
 
+func LsRevised() int32 {
+	// Source metadata bit: OCR line composed or recovered after the first reading; no independent heading evidence.
+	return 256
+}
+
 func MkfPage() int32 {
 	return 0
 }

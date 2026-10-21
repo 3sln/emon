@@ -2257,6 +2257,7 @@ public static class Scan {
         int made = 0;
         int l = 0;
         int cnt = 0;
+        int revised = 0;
         int mc = 0;
         int mg = 0;
         int xl = 0;
@@ -2372,12 +2373,19 @@ public static class Scan {
                 if (dir != 0) {
                     xl = -1;
                 }
+                revised = 0;
+                if (Evidence.OlGet(olines, l, Evidence.OlfRun()) != Evidence.OlGet(olines, emon.Port.CellsAt(scr, ScXtraBase()), Evidence.OlfRun())) {
+                    revised = 1;
+                }
                 mg = 0;
                 mc = cnt;
                 j = ScLineWords(olines, owords, etext, l, xl, scr);
                 if (j > 0) {
                     mg = 1;
                     mc = ScFates(owords, etext, osyms, rules, comps, inks, page, j, scr);
+                    if ((j > cnt) || (mc < j)) {
+                        revised = 1;
+                    }
                 }
                 if ((mg == 1) && (mc > 0)) {
                     if (j > cnt) {
@@ -2449,7 +2457,7 @@ public static class Scan {
                 }
                 if (mc > 0) {
                     r = Evidence.LnNew(lines, page, lx0, ly0, lx1, ly1, bx0, by0, bx1, by1, rot, dir, first, mc);
-                    Evidence.LnSet(lines, r, Evidence.LfSrc(), Model.SrOcr());
+                    Evidence.LnSet(lines, r, Evidence.LfSrc(), Model.SrOcr() + (revised * Evidence.LsRevised()));
                     Evidence.LnSet(lines, r, Evidence.LfOrder(), r);
                     made += 1;
                 }

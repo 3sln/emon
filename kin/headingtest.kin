@@ -25,7 +25,7 @@
                                 node-text-start node-text-len text-at text-append-utf8
                                 nk-paragraph nk-heading nk-section nk-break]]
             [emon.json :refer [js-emit]]
-            [emon.evidence :refer [wd-new wd-set wd-count ln-new ln-count wf-size wf-font wf-style]]
+            [emon.evidence :refer [wd-new wd-set wd-count ln-new ln-count ln-set lf-src ls-revised wf-gap wf-size wf-font wf-style]]
             [emon.pdfdoc :refer [pd-open]]
             [emon.pdfcontent :refer [pc-document]]
             [emon.para :refer [pa-pages pa-build]]
@@ -894,3 +894,35 @@
     (assert-text-span t7 (test-file "heading/initial-letter-headings.json") 0 (jt-end (test-file "heading/initial-letter-headings.json")) "initial-letter-headings" 0)
     (assert-eq (ht-golden (test-file "corpus/synth/pdf/lists-basic.pdf") t8 ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln nodes attrs regions text pages ledger layout ord raw tmp fr gp mst sf sc hc ws tmp2 pr ptxt) 0 "lists-basic runs")
     (assert-text-span t8 (test-file "heading/lists-basic.json") 0 (jt-end (test-file "heading/lists-basic.json")) "lists-basic" 0)))
+
+(deftest test-recovered-ocr-text-does-not-supply-heading-evidence
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells hc (new-cells) ^Cells ws (new-cells) ^Cells tmp (new-cells)
+        ^Cells pr (new-cells) ^Cells ptxt (new-cells)]
+    (ht-outline-doc wd ln et)
+    (ln-set ln 4 (lf-src) (+ 4 (ls-revised)))
+    (assert-eq (ht-run wd ln et sf sc hc ws tmp pr ptxt) 4 "recovered words stay in the text, but cannot open a section")
+    (assert-eq (hd-level hc 4) 0 "the recovered line is body text")
+    (assert-eq (hd-level hc 0) 1 "the first reading still supplies the document title")))
+
+(deftest test-a-scanned-row-with-separated-columns-is-not-a-heading
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells hc (new-cells) ^Cells ws (new-cells) ^Cells tmp (new-cells)
+        ^Cells pr (new-cells) ^Cells ptxt (new-cells)]
+    (ht-heading wd ln et (text-blob "Account Transfer Summary") 5000 2100 1)
+    (ht-body wd ln et 1 9000 6)
+    (ln-set ln 0 (lf-src) 4)
+    (wd-set wd 0 (wf-gap) 10000)
+    (wd-set wd 1 (wf-gap) 10000)
+    (assert-eq (ht-run wd ln et sf sc hc ws tmp pr ptxt) 0 "a scanned row's gaps do not establish a section")
+    (assert-eq (hd-level hc 0) 0 "the row is body text")))
+
+(deftest test-a-scanned-transaction-time-is-not-a-section-number
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells hc (new-cells) ^Cells ws (new-cells) ^Cells tmp (new-cells)
+        ^Cells pr (new-cells) ^Cells ptxt (new-cells)]
+    (ht-heading wd ln et (text-blob "12:34:56 Transfer") 5000 2100 1)
+    (ht-body wd ln et 1 9000 6)
+    (ln-set ln 0 (lf-src) 4)
+    (assert-eq (ht-run wd ln et sf sc hc ws tmp pr ptxt) 0 "a transaction continuation is no section")
+    (assert-eq (hd-level hc 0) 0 "the time-prefixed row is body text")))

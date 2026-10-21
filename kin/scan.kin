@@ -68,7 +68,7 @@
                                    owf-style owf-run owf-sfirst owf-scount owf-lang owf-flags owf-psize
                                    owf-px owf-py owf-pw owf-ph
                                    osf-conf osf-afirst osf-acount osf-px osf-py osf-pw osf-ph
-                                   wf-style wf-size wf-font wf-gap wf-wbreak wf-src lf-src lf-order
+                                   wf-style wf-size wf-font wf-gap wf-wbreak wf-src lf-src lf-order ls-revised
                                    ch-x0 ch-y0 ch-x1 ch-y1 ch-cp ld-rtl ld-ttb ob-block ob-paragraph
                                    vk-decode vk-engine-binary eg-raster wb-space wb-line-end
                                    mf-page mf-x0 mf-y0 mf-x1 mf-y1 mf-obj mf-pxw mf-pxh mf-flags mf-rot
@@ -1666,6 +1666,7 @@
         ^:mut ^I32 made 0
         ^:mut ^I32 l 0
         ^:mut ^I32 cnt 0
+        ^:mut ^I32 revised 0
         ^:mut ^I32 mc 0
         ^:mut ^I32 mg 0
         ^:mut ^I32 xl 0
@@ -1765,12 +1766,16 @@
                 (if (and (>= kk 0) (< kk (sc-sel-max)))
                   (set xl (- (cells-at scr (+ (sc-xtra-base) (+ kk 1))) 1)))
                 (if (!= dir 0) (set xl -1))
+                (set revised 0)
+                (if (!= (ol-get olines l (olf-run)) (ol-get olines (cells-at scr (sc-xtra-base)) (olf-run)))
+                  (set revised 1))
                 (set mg 0)
                 (set mc cnt)
                 (set j (sc-line-words olines owords etext l xl scr))
                 (if (> j 0)
                   (do (set mg 1)
-                      (set mc (sc-fates owords etext osyms rules comps inks page j scr))))
+                      (set mc (sc-fates owords etext osyms rules comps inks page j scr))
+                      (if (or (> j cnt) (< mc j)) (set revised 1))))
                 (if (and (== mg 1) (> mc 0))
                   (if (> j cnt)
                     (do (set wi (cells-at scr fb))
@@ -1832,7 +1837,7 @@
                       (set j (+ j 1))))
                 (if (> mc 0)
                   (do (set r (ln-new lines page lx0 ly0 lx1 ly1 bx0 by0 bx1 by1 rot dir first mc))
-                      (ln-set lines r (lf-src) (sr-ocr))
+                      (ln-set lines r (lf-src) (+ (sr-ocr) (* revised (ls-revised))))
                       (ln-set lines r (lf-order) r)
                       (set made (+ made 1))))))
           (set k (+ k 1))))

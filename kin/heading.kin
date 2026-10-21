@@ -38,7 +38,7 @@
 (ns emon.heading
   (:require [emon.lang :refer [I32 Bool Cells]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
-            [emon.evidence :refer [wd-get ln-get ln-count lh-first lh-count lh-y0 hd-tstart hd-tlen]]
+            [emon.evidence :refer [wd-get ln-get ln-count lh-first lh-count lh-y0 hd-tstart hd-tlen lf-src ls-revised wf-gap wf-size]]
             [emon.model :refer [node-new node-set-sub node-set-conf node-add-src nk-section sr-infer
                                 text-append-cp]]
             [emon.style :refer [st-build st-get st-hget sc-get st-upper st-lower
@@ -612,9 +612,35 @@
   (st-set sf l (sfk-points) p)
   (return 0))
 
+(defn ^I32 hd-ocr-row [^Cells wd ^Cells ln ^Cells et ^I32 l]
+  (comment "A scanned row can be one OCR line: separated columns are not a heading's word spacing.")
+  (if (== (bit-and (ln-get ln l (lf-src)) 4) 0) (return 0))
+  (let [^I32 first (ln-get ln l (lh-first))
+        ^I32 count (ln-get ln l (lh-count))
+        ^:mut ^I32 i 0 ^:mut ^I32 gaps 0 ^:mut ^I32 numbers 0 ^:mut ^I32 w 0 ^:mut ^I32 cp 0 ^:mut ^I32 colons 0]
+    (if (> count 0)
+      (do (while (< i (wd-get wd first (hd-tlen)))
+            (do (if (== (cells-at et (+ (wd-get wd first (hd-tstart)) i)) 58)
+                  (set colons (+ colons 1)))
+                (set i (+ i 1))))
+          (if (and (>= colons 2) (== (hd-figure-word wd et first) 1)) (return 1))
+          (set i 0)))
+    (while (< i count)
+      (do (set w (+ first i))
+          (if (and (< (+ i 1) count) (> (wd-get wd w (wf-gap)) (* 3 (wd-get wd w (wf-size)))))
+            (set gaps (+ gaps 1)))
+          (if (> (wd-get wd w (hd-tlen)) 0)
+            (do (set cp (cells-at et (wd-get wd w (hd-tstart))))
+                (if (and (>= cp 48) (<= cp 57)) (set numbers (+ numbers 1)))))
+          (set i (+ i 1))))
+    (if (or (>= gaps 2) (and (>= gaps 1) (>= numbers 2))) (return 1))
+    (return 0)))
+
 (defn ^I32 hd-headish [^Cells wd ^Cells ln ^Cells et ^:mut ^Cells sf ^Cells sc ^:mut ^Cells ws ^I32 l]
   (comment "Can line l be (part of) a heading: sets its `head` field (1) and `points` (the style points).")
   (hd-put-head sf l 0 0)
+  (if (== (hd-ocr-row wd ln et l) 1) (return 0))
+  (if (!= (bit-and (ln-get ln l (lf-src)) (ls-revised)) 0) (return 0))
   (if (!= (st-get sf l (sfk-upright)) 1) (return 0))
   (comment "a line a table holds (the spare cell 15, `tb-claimed`, P5, D178) is a cell, never a heading; it still counts")
   (comment "as a neighbour (the heading above a table is followed by it) and in the style classes")
@@ -632,7 +658,8 @@
         (do (comment "beside something that is not a column of body text: a table cell, a label and its value")
             (comment "(a headline set a fifth bigger than the body is not a table cell, whatever is beside it: a column's)")
             (if (and (> nsib (st-get sf l (sfk-ncol)))
-                     (< (* (st-get sf l (sfk-size)) 100) (* (st-hget sf (sfh-size)) 120)))
+                     (or (!= (bit-and (ln-get ln l (lf-src)) 4) 0)
+                         (< (* (st-get sf l (sfk-size)) 100) (* (st-hget sf (sfh-size)) 120))))
               (return 0))
             (comment "an initial: one or two code points with anything beside it; a divider has nothing on its row")
             (if (and (<= cps 2) (> nsib 0)) (return 0))

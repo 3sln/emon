@@ -2261,6 +2261,7 @@ pub fn sc_emit_vetted(olines: &mut crate::port::Cells, mut owords: &mut crate::p
     let mut made: i32 = 0;
     let mut l: i32 = 0;
     let mut cnt: i32 = 0;
+    let mut revised: i32 = 0;
     let mut mc: i32 = 0;
     let mut mg: i32 = 0;
     let mut xl: i32 = 0;
@@ -2376,12 +2377,19 @@ pub fn sc_emit_vetted(olines: &mut crate::port::Cells, mut owords: &mut crate::p
             if dir != 0 {
                 xl = -1;
             }
+            revised = 0;
+            if ol_get(olines, l, olf_run()) != ol_get(olines, crate::port::cells_at(scr, sc_xtra_base()), olf_run()) {
+                revised = 1;
+            }
             mg = 0;
             mc = cnt;
             j = sc_line_words(olines, owords, etext, l, xl, scr);
             if j > 0 {
                 mg = 1;
                 mc = sc_fates(owords, etext, osyms, rules, comps, inks, page, j, scr);
+                if (j > cnt) || (mc < j) {
+                    revised = 1;
+                }
             }
             if (mg == 1) && (mc > 0) {
                 if j > cnt {
@@ -2453,7 +2461,7 @@ pub fn sc_emit_vetted(olines: &mut crate::port::Cells, mut owords: &mut crate::p
             }
             if mc > 0 {
                 r = ln_new(lines, page, lx0, ly0, lx1, ly1, bx0, by0, bx1, by1, rot, dir, first, mc);
-                ln_set(lines, r, lf_src(), sr_ocr());
+                ln_set(lines, r, lf_src(), sr_ocr() + (revised * ls_revised()));
                 ln_set(lines, r, lf_order(), r);
                 made += 1;
             }

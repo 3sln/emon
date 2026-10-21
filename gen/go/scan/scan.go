@@ -2333,6 +2333,7 @@ func ScEmitVetted(olines *port.Cells, owords *port.Cells, osyms *port.Cells, nse
 	var made int32 = 0
 	var l int32 = 0
 	var cnt int32 = 0
+	var revised int32 = 0
 	var mc int32 = 0
 	var mg int32 = 0
 	var xl int32 = 0
@@ -2448,12 +2449,19 @@ func ScEmitVetted(olines *port.Cells, owords *port.Cells, osyms *port.Cells, nse
 			if dir != 0 {
 				xl = -1
 			}
+			revised = 0
+			if evidence.OlGet(olines, l, evidence.OlfRun()) != evidence.OlGet(olines, port.CellsAt(scr, ScXtraBase()), evidence.OlfRun()) {
+				revised = 1
+			}
 			mg = 0
 			mc = cnt
 			j = scLineWords(olines, owords, etext, l, xl, scr)
 			if j > 0 {
 				mg = 1
 				mc = scFates(owords, etext, osyms, rules, comps, inks, page, j, scr)
+				if (j > cnt) || (mc < j) {
+					revised = 1
+				}
 			}
 			if (mg == 1) && (mc > 0) {
 				if j > cnt {
@@ -2525,7 +2533,7 @@ func ScEmitVetted(olines *port.Cells, owords *port.Cells, osyms *port.Cells, nse
 			}
 			if mc > 0 {
 				r = evidence.LnNew(lines, page, lx0, ly0, lx1, ly1, bx0, by0, bx1, by1, rot, dir, first, mc)
-				evidence.LnSet(lines, r, evidence.LfSrc(), model.SrOcr())
+				evidence.LnSet(lines, r, evidence.LfSrc(), model.SrOcr()+(revised*evidence.LsRevised()))
 				evidence.LnSet(lines, r, evidence.LfOrder(), r)
 				made += 1
 			}

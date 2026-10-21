@@ -824,9 +824,58 @@ public final class Heading {
         Style.stSet(sf, l, Style.sfkPoints(), p);
         return 0;
     }
+    public static int hdOcrRow(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l) {
+        // A scanned row can be one OCR line: separated columns are not a heading's word spacing.
+        if ((Evidence.lnGet(ln, l, Evidence.lfSrc()) & 4) == 0) {
+            return 0;
+        }
+        int first = Evidence.lnGet(ln, l, Evidence.lhFirst());
+        int count = Evidence.lnGet(ln, l, Evidence.lhCount());
+        int i = 0;
+        int gaps = 0;
+        int numbers = 0;
+        int w = 0;
+        int cp = 0;
+        int colons = 0;
+        if (count > 0) {
+            while (i < Evidence.wdGet(wd, first, Evidence.hdTlen())) {
+                if (emon.Port.cellsAt(et, Evidence.wdGet(wd, first, Evidence.hdTstart()) + i) == 58) {
+                    colons += 1;
+                }
+                i += 1;
+            }
+            if ((colons >= 2) && (hdFigureWord(wd, et, first) == 1)) {
+                return 1;
+            }
+            i = 0;
+        }
+        while (i < count) {
+            w = first + i;
+            if (((i + 1) < count) && (Evidence.wdGet(wd, w, Evidence.wfGap()) > (3 * Evidence.wdGet(wd, w, Evidence.wfSize())))) {
+                gaps += 1;
+            }
+            if (Evidence.wdGet(wd, w, Evidence.hdTlen()) > 0) {
+                cp = emon.Port.cellsAt(et, Evidence.wdGet(wd, w, Evidence.hdTstart()));
+                if ((cp >= 48) && (cp <= 57)) {
+                    numbers += 1;
+                }
+            }
+            i += 1;
+        }
+        if ((gaps >= 2) || ((gaps >= 1) && (numbers >= 2))) {
+            return 1;
+        }
+        return 0;
+    }
     public static int hdHeadish(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells sf, emon.Port.Cells sc, emon.Port.Cells ws, int l) {
         // Can line l be (part of) a heading: sets its `head` field (1) and `points` (the style points).
         hdPutHead(sf, l, 0, 0);
+        if (hdOcrRow(wd, ln, et, l) == 1) {
+            return 0;
+        }
+        if ((Evidence.lnGet(ln, l, Evidence.lfSrc()) & Evidence.lsRevised()) != 0) {
+            return 0;
+        }
         if (Style.stGet(sf, l, Style.sfkUpright()) != 1) {
             return 0;
         }
@@ -851,7 +900,7 @@ public final class Heading {
         if (pq < 0) {
             // beside something that is not a column of body text: a table cell, a label and its value
             // (a headline set a fifth bigger than the body is not a table cell, whatever is beside it: a column's)
-            if ((nsib > Style.stGet(sf, l, Style.sfkNcol())) && ((Style.stGet(sf, l, Style.sfkSize()) * 100) < (Style.stHget(sf, Style.sfhSize()) * 120))) {
+            if ((nsib > Style.stGet(sf, l, Style.sfkNcol())) && (((Evidence.lnGet(ln, l, Evidence.lfSrc()) & 4) != 0) || ((Style.stGet(sf, l, Style.sfkSize()) * 100) < (Style.stHget(sf, Style.sfhSize()) * 120)))) {
                 return 0;
             }
             // an initial: one or two code points with anything beside it; a divider has nothing on its row
