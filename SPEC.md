@@ -1247,11 +1247,13 @@ engine's box swallowed, thousands read with periods, a currency sign read as `S`
 of a line of text is read alone (`psm 7`) and its words are the page's when sure (text that meets a rule); the body-ink view shows the light text of a band of colour as ink.
 The ledger names a page that came out empty and held an image (`background`).
 
+**As built (P12.8, D1702-D1703).** An unread first pass on a scan or full-scope born-digital page is retried once with OSD's script plus English; kin selects the installed models, and a reading still unsupported by a matching model retains `script-unread`. Chinese word-language aliases `chs` and `cht` count as Han models. An isolated punctuation speck at most one point each way is also ledgered as `ocr-ghost` at high engine confidence. Paragraph grouping tolerates twenty-percent inferred size variation between two OCR prose lines of at least four words each; shorter labels keep the five-percent boundary.
+
 **As built (P12.3, P12.6; D564, D616, D625).** (1) *A page whose content is one big image is a scan whatever the codec*: a PDF page with no text layer and an upright image over at least
 a quarter of it is read from the host's DECODE of the image's DCT stream when that is one plain stage of 8-bit SOF0/1/2 JPEG with one or three components, and from a RENDER of the whole page (300 dpi) for other JPEG frames
 or codecs (arithmetic or CMYK JPEG, Flate, RunLength, LZW, CCITT, JBIG2, JPX, an encrypted DCT). (2) *An image input is a scan too*: each frame runs the same page unit as a scanned PDF page
 (`pu-scan-core`): the ink layers, and the targeted passes the first pass calls for, among them the quarter-turned view when OSD is sure the page is turned (a PNG fed
-sideways or upside down is read upright; its Model page is then as wide as the text it holds). An image has no seal or signature stage. (3) *A raster too small for the
+sideways or upside down is read upright; its Model page is then as wide as the text it holds). P12.8 (D1700, D1704) also runs graphics fusion in the image document unit and the scan seal/signature stages on its frames; their candidates become Model nodes. (3) *A raster too small for the
 engine is read again enlarged*: the median x-height of the first pass's text lines (width-weighted) says what resolution the raster has (`emon.upscale`: ten point type is 5 pt
 of x-height); under `up-xh-trigger` (9 px, about 130 dpi) the raster is made `ceil(20 / x-height)` times as large (at most 4, at most 25 million pixels) by a separable
 Catmull-Rom cubic of kin's own, as a kin-made view, and the engine reads THAT view (pass `upscaled`, told the resolution the text says, not the one the file stated or
@@ -2048,6 +2050,7 @@ interval run (rules) or per fill group, each reading graphics measures (the
 | 520 | trace only, in R0, in a group that has an exactly known visible vector member | dropped: the vector says where its rule ends, and a stretch it leaves open is a span (D179), not a dropout |
 | 530 | trace only, inside an image region Rᵢ | a rule (`traced`, `in-image`) when the tracer's confidence ≥ `gf-trace-min` (600), lowered by `gf-ocr-bonus` (150) when an OCR `bt-line` block covers ≥ 500 per-mille of it (the tie-breaker), and the region's score ≥ `gf-img-health` (500); confidence: the tracer's × the region's / 1000 |
 | 531 | trace only, raster page | as 530, without `in-image` |
+| 536 | raster-only long, thin, straight, high-confidence light neutral rule | admitted independently of region skew noise, 700; OCR-word rejection still precedes this row (P12.8, D1700) |
 | 532 | trace only, R0 of a born-digital page | dropped when ≥ 500 per-mille of its box lies in glyph cells or text-layer word boxes (strokes of letters); else a rule (`traced`, 600) only when the page's tracer precision ≥ `gf-tprec-min` (900) |
 | 533 | trace only, ≥ 800 per-mille of its box inside one OCR word of ≥ 3 code points not of the rule-glyph set | dropped (the bar of a large `E` or `T`) |
 | 540 | OCR line block only | never a rule; recorded |
@@ -2055,6 +2058,7 @@ interval run (rules) or per fill group, each reading graphics measures (the
 | 561 | vector fill of colour -1 (shading, pattern) with a `tint` witness | vector box, the tint's colour (`tint-coloured`), 950 |
 | 562 | vector fill of colour -1, no witness | vector box, colour -1, 600 |
 | 570 | `tint` only, in Rᵢ or on a raster page, region score ≥ `gf-img-health` | a fill (`in-image` in Rᵢ), 700 |
+| 575 | raster-only high-confidence uniform wide light neutral row band | admitted independently of region skew noise, 700 (P12.8, D1700) |
 | 571 | `tint` only, R0 of a born-digital page | a fill, 500, when the page's tracer precision ≥ `gf-tprec-min` (a tiling pattern emon does not interpret); else dropped |
 
 **The graphics contract (D222)**, the counterpart of D201: a visible, exactly
@@ -2591,10 +2595,10 @@ and its parameters in the linear-part cells, or `vk-cropped`), read as a targete
 the answers are OCR runs of pass `seal-strip` (region: the seal's box in the raster's pixels) whose words are laid back on the ring (box, baseline and `rot`), and one `cg`
 group a seal, flagged `in-seal`, `ocr-only` and `seal-px` (and `seal-stamp`), its `rot` cell the colour code, holds the words: `sm-find` makes its `sl` row (flag 128: the
 cell 15 is the colour code), its words never reach the body (rules 401, 402), and a candidate found in the vector paths of the same box is not written twice. A seal on a
-SCANNED page makes the document a fused one (evidence version 2) so that `sm-write` writes its node; the page's chosen lines that lie wholly inside a kept seal are not
+scanned PDF page makes the document a fused one (evidence version 2) so that `sm-write` writes its node; the page's chosen lines that lie wholly inside a kept seal are not
 body text (`sx-drop-lines`; also a line with 60 per cent of its characters inside whose mean confidence is under 600 per mille). A pixel-read seal's text keeps the words the engine was sure of (`sm-px-keep`: not
 a noisy mixed-case or punctuation-ridden misread), and leaves the ring's lone separators out of the node's `text` (the name field is cut by them first). A stamp is also a curve or ellipse of a colour layer
-whose sides differ by more than 15 per cent (a rotated outline). Not built: raster inputs (PNG, JPEG, TIFF files: their page unit has no ink arenas), a seal the layer clustering did not separate from the
+whose sides differ by more than 15 per cent (a rotated outline). P12.8 (D1704) wires the same pixel stages for PNG, JPEG and TIFF frames, whose selected OCR body needs no text-layer arbitration. Not built: a seal the layer clustering did not separate from the
 body (a faint stamp on a tinted ground), the second strip for text written with its tops inward, the locale hint at `sm-write`.
 
 **As built (P8.3, D426-D433): handwritten signatures, initials and digital signatures.** *Digital signatures* (`emon.sigmark`, `emon.pdfannot`): every `/Sig` field that has a widget on a page is a `seal` node of subkind

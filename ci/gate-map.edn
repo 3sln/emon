@@ -187,7 +187,7 @@
   {:glob "tools/import/**" :gates [] :why "public-dataset importers: the corpus is not in git, nothing here is a gate"}
   {:glob "tools/lib/**" :gates ["repeat" "fuzz" "accuracy" "@replay"] :why "libraries: extra_hosts (every replay gate's other hosts), pdfreverse (repeat), nfc and the python formatters (the synthetic corpus)"}
   {:glob "tools/limits/**" :gates [] :why "`bb limits` is a report, not a gate"}
-  {:glob "tools/native/**" :gates [] :why "`bb native` (P11.5, D540): the pinned source tarballs and the CMake builds of static Tesseract and Leptonica for the release CLI, run by .github/workflows/native.yml and by hand; not a gate. The fast core's release-audit holds the inventory and licence texts it feeds; `bb native --check` holds its pins"}
+  {:glob "tools/{native,tessdata}/**" :gates ["release-audit"] :why "`bb native` (P11.5, D540): the pinned source tarballs and the CMake builds of static Tesseract and Leptonica for the release CLI, run by .github/workflows/native.yml and by hand; not a gate. The fast core's release-audit holds the inventory and licence texts it feeds; `bb native --check` holds its pins"}
   {:glob "tools/ocr/**" :gates ["ocr"] :why "the OCR recorders, CER and gold sampler"}
   {:glob "tools/oracle/**" :gates [] :why "python oracles for baselines (run by `bb baselines`); not gates"}
   {:glob "tools/parbench/**" :gates [] :why "a benchmark"}
@@ -261,7 +261,7 @@
   {:glob "test/png/**" :gates ["png-check"] :why "PNG digests"}
   {:glob "test/render/**" :gates ["render"] :why "render transcripts"}
   {:glob "test/retarget/**" :gates ["retarget"] :why "targeted-rounds transcripts"}
-  {:glob "test/raster/**" :gates ["unit" "retarget"] :why "P12.3's raster fixtures (tools/synth/raster_fixtures.clj): the laws read the PDFs, the retarget fixtures record the PNGs and PDFs"}
+  {:glob "test/{raster,raster-quality}/**" :gates ["unit" "retarget" "gfuse"] :why "P12.3/P12.8 raster fixtures (tools/synth/raster_fixtures.clj and test/raster-quality): the laws read the PDFs, the retarget fixtures record the PNGs and PDFs"}
   {:glob "test/scoreboard.edn" :gates ["accuracy" "@replay"] :why "the ratchet: every replay gate holds its entry"}
   {:glob "test/sealpx/**" :gates ["sealpx"] :why "seals-from-pixels transcripts"}
   {:glob "test/seals/**" :gates ["seals"] :why "seals transcripts"}

@@ -3,10 +3,10 @@
 (ns emon.scriptchecktest
   (:require [emon.lang :refer [I32 Cells]]
             [emon.test :refer [deftest assert-eq assert-that new-cells]]
-            [emon.port :refer [cells-at]]
-            [emon.plan :refer [an-ocr an-ocr-word an-ocr-cp an-ocr-end]]
+            [emon.port :refer [cells-at cells-drop]]
+            [emon.plan :refer [an-ocr an-ocr-word an-ocr-cp an-ocr-end rq-arg rec-count an-find]]
             [emon.ocr :refer [ox-begin ox-line ox-block ox-word]]
-            [emon.scriptcheck :refer [sk-unread sk-unpack sk-min-conf sk-weak-conf]]
+            [emon.scriptcheck :refer [sk-route sk-unread sk-unpack sk-min-conf sk-weak-conf]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
 
@@ -75,3 +75,19 @@
     (an-ocr-cp ans w 72)
     (an-ocr-end ans at)
     (assert-eq (sk-unread ans at (new-cells)) 0 "an engine that says nothing of the script")))
+
+(deftest test-osd-routes-an-unread-page-through-its-script-and-english
+  (let [^Cells ans (new-cells) ^Cells rq (new-cells)]
+    (sk-answer ans 10 5 1147500129 629 1701734144 1701734144 0)
+    (assert-eq (sk-route ans 0 28 260 300 rq (new-cells)) -1 "an unread Devanagari page asks for its script")
+    (assert-eq (rec-count rq) 1 "one extra pass")
+    (assert-eq (rq-arg rq 0 7) 1147500129 "Deva reads with installed script models")
+    (assert-eq (rq-arg rq 0 8) 1701734144 "plus English")
+    (cells-drop rq 0)
+    (sk-answer ans 28 5 1147500129 629 1751739904 1751739904 1)
+    (assert-eq (sk-route ans 0 28 260 300 rq (new-cells)) (an-find ans 28) "the answer is adopted")
+    (assert-eq (rec-count rq) 0 "a completed pass is not asked again")))
+
+(deftest test-chinese-word-language-aliases-count-as-installed-han-models
+  (assert-eq (unread-of 5 1214344809 629 1667789568 1667789568) 0 "chi_sim words are recorded as chs and read Han")
+  (assert-eq (unread-of 5 1214344809 629 1667789824 1667789824) 0 "chi_tra words are recorded as cht and read Han"))

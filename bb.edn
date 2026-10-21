@@ -58,6 +58,8 @@
                       :task (apply shell "bb" "tools/pdfium_wasm/record.clj" *command-line-args*)}
   png-check {:doc "Do independent decoders (ImageMagick, java.util.zip) read emon's canonical PNGs to the same pixels; size against zlib level 6 (P3.11, D117).  bb png-check [--update-digests]"
              :task (apply shell "kin/scripts/png-check" *command-line-args*)}
+  tessdata-fetch {:doc "Fetch pinned, SHA-256 checked Apache-2.0 OCR models into .cache/tessdata. bb tessdata-fetch [--langs eng,spa,...]"
+                  :task (apply shell "bb" "tools/tessdata/fetch.clj" *command-line-args*)}
   ink {:doc "How well do kin's ink layers separate body ink from stamps, seals, signatures and watermarks, and how close is the deskew, on P6.6's colour and overlay scans of known truth (P6.3, D197). NOT a gate; needs poppler, ImageMagick and corpus/.  bb ink [--go] [--limit N] [--rebuild]"
        :task (apply shell "bb" "kin/scripts/ink" *command-line-args*)}
   trace {:doc "How well does kin's tracer find rules, tints, text lines (watermarks too), rings and rects: against the vector paths of the no-text renders, the text layer's lines, the PDF's own watermark matrix, and (live) mapo80's labelled stamps; counts and time per page, Rust and Go (P6.4, D252-D258). NOT a gate; needs poppler, ghostscript, qpdf, ImageMagick.  bb trace [--go] [--limit N] [--only STEM] [--rebuild] [--mapo N]"

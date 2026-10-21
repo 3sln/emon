@@ -412,7 +412,9 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 	rasterplan.RpSettings(m.Nodes, m.Attrs, m.Text, c.Scope)
 	if d.Fused == 1 {
 		arbiter.ArWrite(s.Afa, ev.Owords, d.Et, m.Ledger, m.Text, s.Tmp, s.Ttx)
-		arbiter.ArTag(m.Nodes, m.Regions, d.Fw, s.Fv)
+		if kind == 0 {
+			arbiter.ArTag(m.Nodes, m.Regions, d.Fw, s.Fv)
+		}
 		w = sealmark.SmWrite(s.Sm, d.Et, m.Nodes, m.Attrs, m.Regions, m.Text, s.Sn, s.Sa, s.Sr, s.Snm)
 		if w > 0 {
 			port.CellsSwap(m.Nodes, s.Sn)
@@ -475,10 +477,15 @@ func EnFinishRaster(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Are
 		}
 		i += 1
 	}
+	gfuse.GfFuse(np, ev.Epages, ev.Inks, ev.Rules, ev.Prims, ev.Oblocks, ev.Owords, d.Wd, d.Et, d.Pa, d.Im, ev.Feats, d.Grl, d.Gfl, s.Ggp, s.Grg, ev.Refs, d.Hl, s.Fx, s.Gfa, s.Ga0, s.Ga1, s.Ga2, s.Ga3, s.Ga4, s.Ga5, s.Ga6)
 	if c.Keep != 0 {
 		EnDump(d.Et, d.Gl, d.Wd, d.Ln, d.Mk, d.Fnt, d.Grl, d.Gfl, s.Ggp, s.Grg, ev, d.Evidence)
 	}
 	tlhealth.ThAppend(d.Wd, d.Ln, d.Fw, d.Fl, 0)
+	if port.CellsLen(d.Cg) > 0 {
+		d.Fused = 1
+		sealmark.SmFind(d.Pa, d.Pts, d.Gl, d.Fw, d.Et, ev.Epages, d.Cg, ev.Refs, ev.Owords, d.An, d.Txt, np, s.Sm, s.Sscr, s.Stmp, s.Sgc)
+	}
 	return enStage3(c, d, ev, m, s, np, 1)
 }
 

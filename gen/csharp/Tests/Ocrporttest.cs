@@ -259,7 +259,7 @@ public static class Ocrporttest {
     }
     internal static int TRows(int emonT) {
         // Every row of the name table: a known kind and a value that is an ISO 15924 code (or a request name of a Chinese model).
-        int n = 627;
+        int n = 639;
         int i = 0;
         int j = 0;
         int rows = 0;

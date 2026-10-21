@@ -148,6 +148,21 @@ public static class Gfuse {
         }
         return (((299 * ((rgb / 65536) & 255)) + (587 * ((rgb / 256) & 255))) + (114 * (rgb & 255))) / 255;
     }
+    internal static int GfLightNeutral(int rgb) {
+        // Light neutral paint, including #ccc rules and #e6e6e6 row bands; neither near-white paper noise nor coloured annotations.
+        if (rgb < 0) {
+            return 0;
+        }
+        int r = (rgb / 65536) & 255;
+        int g = (rgb / 256) & 255;
+        int b = rgb & 255;
+        int lo = GfMin(r, GfMin(g, b));
+        int hi = GfMax(r, GfMax(g, b));
+        if ((lo >= 160) && ((hi <= 245) && ((hi - lo) <= 12))) {
+            return 1;
+        }
+        return 0;
+    }
     internal static int GfOrientOf(int a) {
         // `go` of an angle in [0, 18000): h within `gf-axis` of 0, v of 9000, else slant.
         if ((a <= Fuserules.FgAxis()) || (a >= (18000 - Fuserules.FgAxis()))) {
@@ -1380,6 +1395,10 @@ public static class Gfuse {
                     emon.Port.CellsSet(gv, 108, kind);
                     score = GfRegionScore(hl, page, rg);
                     emon.Port.CellsSet(gv, 109, score);
+                    // Long, thin, straight light rules have geometric evidence independent of short letter strokes spoiling region skew (D1700).
+                    if ((kind == 2) && ((tconf >= 900) && ((GfLightNeutral(Unat(un, u, 7)) == 1) && (((Unat(un, u, 4) - Unat(un, u, 3)) >= 5669) && (Unat(un, u, 6) <= 200))))) {
+                        emon.Port.CellsSet(gv, 119, 1);
+                    }
                     emon.Port.CellsSet(gv, 111, emon.Port.CellsAt(ctx, XPrec));
                     emon.Port.CellsSet(gv, 118, Unat(un, u, 16));
                     GfUnitBox(un, u, gv);
@@ -1496,6 +1515,10 @@ public static class Gfuse {
                     emon.Port.CellsSet(gv, 107, 0);
                 }
                 emon.Port.CellsSet(gv, 109, GfRegionScore(hl, page, rg));
+                // A highly uniform, light, wide row band is evidence even when glyph strokes spoiled the region's skew score.
+                if ((kind == 2) && ((Unat(un, u, 9) >= 900) && ((GfLightNeutral(Unat(un, u, 7)) == 1) && (((Unat(un, u, 13) - Unat(un, u, 11)) >= 5669) && (((Unat(un, u, 14) - Unat(un, u, 12)) >= 600) && ((Unat(un, u, 13) - Unat(un, u, 11)) >= (2 * (Unat(un, u, 14) - Unat(un, u, 12))))))))) {
+                    emon.Port.CellsSet(gv, 119, 1);
+                }
                 emon.Port.CellsSet(gv, 111, emon.Port.CellsAt(ctx, XPrec));
                 fr = Fuserules.FrDecideBlock(gv, 500);
                 GfExplain(fx, gid, fr, gv);

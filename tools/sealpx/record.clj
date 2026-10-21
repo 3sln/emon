@@ -39,7 +39,7 @@
 (defn untargeted?
   "An entry whose bitmap kin reads: the page unit's render or decode (page-local ids 1-4) or the first OCR pass (16)."
   [req-id]
-  (contains? #{1 2 3 4 16} (mod req-id 256)))
+  (contains? #{1 2 3 4 16 21 28} (mod req-id 256)))
 
 (defn strip-unread-bitmaps
   "Drop the `:bitmap` of every entry kin never reads (an OCR answer of a targeted pass), and its file."

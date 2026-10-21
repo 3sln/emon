@@ -111,3 +111,25 @@ func SkUnread(an *port.Cells, at int32, scr *port.Cells) int32 {
 	}
 	return 1
 }
+
+func SkRoute(ans *port.Cells, at int32, id int32, bitmap int32, dpi int32, rq *port.Cells, scr *port.Cells) int32 {
+	// An unread first pass is retried once in the script OSD named plus English. `op-models` in kin selects the installed
+	// models; a missing script model leaves English and `sk-unread` still flags the answer. -1 means the request needs an answer.
+	if SkUnread(ans, at, scr) == 0 {
+		return at
+	}
+	var found int32 = plan.AnFind(ans, id)
+	var ext int32 = ocr.OxFind(ans, at)
+	var script int32 = ocr.OxScript(ans, ext)
+	if found >= 0 {
+		if plan.AnOk(ans, found) == 1 {
+			return found
+		}
+		return at
+	}
+	var q int32 = plan.RqOcr(rq, id, bitmap, 3, (ocr.OcfSymbols()+ocr.OcfOsd())+(dpi*ocr.OcfDpiUnit()), 0, 0, 0, 0)
+	plan.RqOcrLang(rq, script/16777216, (script/65536)%256, (script/256)%256, script%256)
+	plan.RqOcrLang(rq, 101, 110, 103, 0)
+	plan.RqOcrEnd(rq, q)
+	return -1
+}

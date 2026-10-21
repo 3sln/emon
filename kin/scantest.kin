@@ -952,3 +952,11 @@
   (assert-eq (sct-direct-dct "assets/dct-cmyk.pdf") 0 "CMYK also needs rendering for scan OCR")
   (assert-eq (sct-direct-dct "assets/dct-decode.pdf") 1 "ordinary 8-bit three-component JPEG stays on the direct path")
   (assert-eq (sct-direct-dct "assets/dct-a85-decode.pdf") 0 "a filter chain still needs rendering"))
+
+(deftest test-a-confident-isolated-dot-speck-is-kept-out-of-the-body
+  (let [^Cells olines (new-cells) ^Cells owords (new-cells) ^Cells words (new-cells)
+        ^Cells lines (new-cells) ^Cells et (new-cells)]
+    (st-word owords et 100 200 950 0 46 0 0 0 0 0 0 0)
+    (st-line olines 100 200 0 1)
+    (assert-eq (st-emit olines owords words lines et (new-cells) 1) 0 "a one-point dot alone is no paragraph even at high engine confidence")
+    (assert-eq (bit-and (ow-get owords 0 (owf-flags)) (oe-garbage)) (oe-garbage) "the evidence retains it for the garbage ledger")))

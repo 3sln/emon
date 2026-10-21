@@ -259,7 +259,7 @@ fn test_the_script_codes_are_their_letters_packed() {
 }
 pub(crate) fn t_rows(emon_t: i32) -> i32 {
     // Every row of the name table: a known kind and a value that is an ISO 15924 code (or a request name of a Chinese model).
-    let n: i32 = 627;
+    let n: i32 = 639;
     let mut i: i32 = 0;
     let mut j: i32 = 0;
     let mut rows: i32 = 0;

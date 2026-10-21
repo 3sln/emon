@@ -1402,3 +1402,47 @@ fn test_a_paragraphs_alignment_is_measured_against_its_fragment() {
     crate::testport::assert_eq(pt_run(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "rtl start: well formed");
     crate::testport::assert_eq(node_sub(nodes, 1), al_start(), "right-to-left, flush right: start");
 }
+#[test]
+fn test_ocr_size_jitter_does_not_split_wrapped_prose() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut w: i32 = 0;
+    pt_line(wd, ln, et, &crate::testport::text_blob("These scanned words continue on")[..], 1, 7200, 10000, 50000, 11200, 0, 0, 1200);
+    pt_line(wd, ln, et, &crate::testport::text_blob("the next line of the paragraph.")[..], 1, 7200, 11500, 50000, 12700, 0, 0, 1320);
+    while w < wd_count(wd) {
+        wd_set(wd, w, wf_src(), sr_ocr());
+        w += 1;
+    }
+    ln_set(ln, 0, lf_src(), sr_ocr());
+    ln_set(ln, 1, lf_src(), sr_ocr());
+    pt_run(wd, ln, et, 1, nodes, &mut crate::port::Cells::new(), regions, text, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+    pt_brief(t, nodes, regions, text);
+    crate::testport::assert_text(t, "P1:These scanned words continue on the next line of the paragraph.;", "OCR x-height varies between wrapped lines");
+}
+#[test]
+fn test_ocr_size_jitter_does_not_join_short_labels_to_values() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut w: i32 = 0;
+    pt_line(wd, ln, et, &crate::testport::text_blob("Bill to")[..], 1, 7200, 10000, 50000, 11200, 0, 0, 1200);
+    pt_line(wd, ln, et, &crate::testport::text_blob("Harwell and Sons Oxford")[..], 1, 7200, 11500, 50000, 12700, 0, 0, 1320);
+    while w < wd_count(wd) {
+        wd_set(wd, w, wf_src(), sr_ocr());
+        w += 1;
+    }
+    ln_set(ln, 0, lf_src(), sr_ocr());
+    ln_set(ln, 1, lf_src(), sr_ocr());
+    pt_run(wd, ln, et, 1, nodes, &mut crate::port::Cells::new(), regions, text, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+    pt_brief(t, nodes, regions, text);
+    crate::testport::assert_text(t, "P1:Bill to;P1:Harwell and Sons Oxford;", "short labels retain paragraph boundaries");
+}

@@ -236,6 +236,22 @@ func gfLightness(rgb int32) int32 {
 	return (((299 * ((rgb / 65536) & 255)) + (587 * ((rgb / 256) & 255))) + (114 * (rgb & 255))) / 255
 }
 
+func gfLightNeutral(rgb int32) int32 {
+	// Light neutral paint, including #ccc rules and #e6e6e6 row bands; neither near-white paper noise nor coloured annotations.
+	if rgb < 0 {
+		return 0
+	}
+	var r int32 = (rgb / 65536) & 255
+	var g int32 = (rgb / 256) & 255
+	var b int32 = rgb & 255
+	var lo int32 = gfMin(r, gfMin(g, b))
+	var hi int32 = gfMax(r, gfMax(g, b))
+	if (lo >= 160) && ((hi <= 245) && ((hi - lo) <= 12)) {
+		return 1
+	}
+	return 0
+}
+
 func gfOrientOf(a int32) int32 {
 	// `go` of an angle in [0, 18000): h within `gf-axis` of 0, v of 9000, else slant.
 	if (a <= fuserules.FgAxis()) || (a >= (18000 - fuserules.FgAxis())) {
@@ -1515,6 +1531,10 @@ func gfEmitTraceUnits(ctx *port.Cells, un *port.Cells, im *port.Cells, hl *port.
 				port.CellsSet(gv, 108, kind)
 				score = gfRegionScore(hl, page, rg)
 				port.CellsSet(gv, 109, score)
+				// Long, thin, straight light rules have geometric evidence independent of short letter strokes spoiling region skew (D1700).
+				if (kind == 2) && ((tconf >= 900) && ((gfLightNeutral(unat(un, u, 7)) == 1) && (((unat(un, u, 4) - unat(un, u, 3)) >= 5669) && (unat(un, u, 6) <= 200)))) {
+					port.CellsSet(gv, 119, 1)
+				}
 				port.CellsSet(gv, 111, port.CellsAt(ctx, xPrec))
 				port.CellsSet(gv, 118, unat(un, u, 16))
 				gfUnitBox(un, u, gv)
@@ -1632,6 +1652,10 @@ func gfEmitFills(ctx *port.Cells, gc *port.Cells, n int32, aux *port.Cells, ofl 
 				port.CellsSet(gv, 107, 0)
 			}
 			port.CellsSet(gv, 109, gfRegionScore(hl, page, rg))
+			// A highly uniform, light, wide row band is evidence even when glyph strokes spoiled the region's skew score.
+			if (kind == 2) && ((unat(un, u, 9) >= 900) && ((gfLightNeutral(unat(un, u, 7)) == 1) && (((unat(un, u, 13) - unat(un, u, 11)) >= 5669) && (((unat(un, u, 14) - unat(un, u, 12)) >= 600) && ((unat(un, u, 13) - unat(un, u, 11)) >= (2 * (unat(un, u, 14) - unat(un, u, 12)))))))) {
+				port.CellsSet(gv, 119, 1)
+			}
 			port.CellsSet(gv, 111, port.CellsAt(ctx, xPrec))
 			fr = fuserules.FrDecideBlock(gv, 500)
 			gfExplain(fx, gid, fr, gv)

@@ -287,7 +287,7 @@ func TestTheScriptCodesAreTheirLettersPacked(emonT *testing.T) {
 
 func tRows(emonT *testing.T) int32 {
 	// Every row of the name table: a known kind and a value that is an ISO 15924 code (or a request name of a Chinese model).
-	var n int32 = 627
+	var n int32 = 639
 	var i int32 = 0
 	var j int32 = 0
 	var rows int32 = 0

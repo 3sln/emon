@@ -712,6 +712,7 @@ public static class Para {
         int sa = PaSize(wd, ln, a);
         int sb = PaSize(wd, ln, b);
         int ds = sa - sb;
+        int sizeDiv = PaSizeDiv;
         // A line of a script set without spaces that stops inside a sentence and whose next line is within 1.75 of its size of it,
         // baseline to baseline, goes on there whatever the boxes say: the boxes of lines in several fonts are of several heights,
         // and the whitespace between them is not the leading (D581, the Wikipedia pages in Japanese).
@@ -723,7 +724,11 @@ public static class Para {
         if ((((PaStart(ln, b) - PaStart(ln, a)) * PaIndentDiv) > sb) && (((PaStart(ln, a) - margin) * PaIndentDiv) <= sb) && (Lists.LsHang(hc, ln, a, b) == 0)) {
             return 1 == 1;
         }
-        if ((PaAbs(ds) * PaSizeDiv) > sa) {
+        // OCR prose has quantized, inferred x-heights: tolerate 20 percent variation between lines of at least four words. Short labels keep their stricter boundary.
+        if ((((Evidence.LnGet(ln, a, Evidence.LfSrc()) & 255) == Model.SrOcr()) && ((Evidence.LnGet(ln, b, Evidence.LfSrc()) & 255) == Model.SrOcr())) && ((Evidence.LnGet(ln, a, Evidence.LhCount()) >= 4) && (Evidence.LnGet(ln, b, Evidence.LhCount()) >= 4))) {
+            sizeDiv = 5;
+        }
+        if ((PaAbs(ds) * sizeDiv) > sa) {
             return 1 == 1;
         }
         bool opened = PaOpenEnd(wd, ln, et, a);

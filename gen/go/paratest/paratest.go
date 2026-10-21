@@ -1426,3 +1426,47 @@ func TestAParagraphsAlignmentIsMeasuredAgainstItsFragment(emonT *testing.T) {
 	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "rtl start: well formed")
 	port.AssertEq(emonT, model.NodeSub(nodes, 1), model.AlStart(), "right-to-left, flush right: start")
 }
+
+func TestOcrSizeJitterDoesNotSplitWrappedProse(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	var nodes *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var w int32 = 0
+	ptLine(wd, ln, et, port.TextBlob("These scanned words continue on"), 1, 7200, 10000, 50000, 11200, 0, 0, 1200)
+	ptLine(wd, ln, et, port.TextBlob("the next line of the paragraph."), 1, 7200, 11500, 50000, 12700, 0, 0, 1320)
+	for w < evidence.WdCount(wd) {
+		evidence.WdSet(wd, w, evidence.WfSrc(), model.SrOcr())
+		w += 1
+	}
+	evidence.LnSet(ln, 0, evidence.LfSrc(), model.SrOcr())
+	evidence.LnSet(ln, 1, evidence.LfSrc(), model.SrOcr())
+	ptRun(wd, ln, et, 1, nodes, port.NewCells(), regions, text, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
+	ptBrief(t, nodes, regions, text)
+	port.AssertText(emonT, t, "P1:These scanned words continue on the next line of the paragraph.;", "OCR x-height varies between wrapped lines")
+}
+
+func TestOcrSizeJitterDoesNotJoinShortLabelsToValues(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	var nodes *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var w int32 = 0
+	ptLine(wd, ln, et, port.TextBlob("Bill to"), 1, 7200, 10000, 50000, 11200, 0, 0, 1200)
+	ptLine(wd, ln, et, port.TextBlob("Harwell and Sons Oxford"), 1, 7200, 11500, 50000, 12700, 0, 0, 1320)
+	for w < evidence.WdCount(wd) {
+		evidence.WdSet(wd, w, evidence.WfSrc(), model.SrOcr())
+		w += 1
+	}
+	evidence.LnSet(ln, 0, evidence.LfSrc(), model.SrOcr())
+	evidence.LnSet(ln, 1, evidence.LfSrc(), model.SrOcr())
+	ptRun(wd, ln, et, 1, nodes, port.NewCells(), regions, text, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
+	ptBrief(t, nodes, regions, text)
+	port.AssertText(emonT, t, "P1:Bill to;P1:Harwell and Sons Oxford;", "short labels retain paragraph boundaries")
+}

@@ -148,6 +148,21 @@ public final class Gfuse {
         }
         return (((299 * ((rgb / 65536) & 255)) + (587 * ((rgb / 256) & 255))) + (114 * (rgb & 255))) / 255;
     }
+    public static int gfLightNeutral(int rgb) {
+        // Light neutral paint, including #ccc rules and #e6e6e6 row bands; neither near-white paper noise nor coloured annotations.
+        if (rgb < 0) {
+            return 0;
+        }
+        int r = (rgb / 65536) & 255;
+        int g = (rgb / 256) & 255;
+        int b = rgb & 255;
+        int lo = gfMin(r, gfMin(g, b));
+        int hi = gfMax(r, gfMax(g, b));
+        if ((lo >= 160) && ((hi <= 245) && ((hi - lo) <= 12))) {
+            return 1;
+        }
+        return 0;
+    }
     public static int gfOrientOf(int a) {
         // `go` of an angle in [0, 18000): h within `gf-axis` of 0, v of 9000, else slant.
         if ((a <= Fuserules.fgAxis()) || (a >= (18000 - Fuserules.fgAxis()))) {
@@ -1380,6 +1395,10 @@ public final class Gfuse {
                     emon.Port.cellsSet(gv, 108, kind);
                     score = gfRegionScore(hl, page, rg);
                     emon.Port.cellsSet(gv, 109, score);
+                    // Long, thin, straight light rules have geometric evidence independent of short letter strokes spoiling region skew (D1700).
+                    if ((kind == 2) && ((tconf >= 900) && ((gfLightNeutral(unat(un, u, 7)) == 1) && (((unat(un, u, 4) - unat(un, u, 3)) >= 5669) && (unat(un, u, 6) <= 200))))) {
+                        emon.Port.cellsSet(gv, 119, 1);
+                    }
                     emon.Port.cellsSet(gv, 111, emon.Port.cellsAt(ctx, X_PREC));
                     emon.Port.cellsSet(gv, 118, unat(un, u, 16));
                     gfUnitBox(un, u, gv);
@@ -1496,6 +1515,10 @@ public final class Gfuse {
                     emon.Port.cellsSet(gv, 107, 0);
                 }
                 emon.Port.cellsSet(gv, 109, gfRegionScore(hl, page, rg));
+                // A highly uniform, light, wide row band is evidence even when glyph strokes spoiled the region's skew score.
+                if ((kind == 2) && ((unat(un, u, 9) >= 900) && ((gfLightNeutral(unat(un, u, 7)) == 1) && (((unat(un, u, 13) - unat(un, u, 11)) >= 5669) && (((unat(un, u, 14) - unat(un, u, 12)) >= 600) && ((unat(un, u, 13) - unat(un, u, 11)) >= (2 * (unat(un, u, 14) - unat(un, u, 12))))))))) {
+                    emon.Port.cellsSet(gv, 119, 1);
+                }
                 emon.Port.cellsSet(gv, 111, emon.Port.cellsAt(ctx, X_PREC));
                 fr = Fuserules.frDecideBlock(gv, 500);
                 gfExplain(fx, gid, fr, gv);

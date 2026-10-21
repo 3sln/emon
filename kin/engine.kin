@@ -406,7 +406,7 @@
     (if (== (fd d fused) 1)
       (do
         (ar-write (fd s afa) (fd ev owords) (fd d et) (fd m ledger) (fd m text) (fd s tmp) (fd s ttx))
-        (ar-tag (fd m nodes) (fd m regions) (fd d fw) (fd s fv))
+        (if (== kind 0) (ar-tag (fd m nodes) (fd m regions) (fd d fw) (fd s fv)))
         ;; the seals' nodes (P7.7): the body copied again with a `seal` node in reading order for every candidate
         (set w (sm-write (fd s sm) (fd d et) (fd m nodes) (fd m attrs) (fd m regions) (fd m text) (fd s sn) (fd s sa) (fd s sr) (fd s snm)))
         (if (> w 0)
@@ -460,10 +460,19 @@
             (if (or (!= (ep-get (fd ev epages) row (epf-width)) (page-w (fd m pages) i)) (!= (ep-get (fd ev epages) row (epf-height)) (page-h (fd m pages) i)))
               (page-set-size (fd m pages) i (ep-get (fd ev epages) row (epf-width)) (ep-get (fd ev epages) row (epf-height)))))
           (set i (+ i 1))))
+    ;; P12.8: frames carry the same tracer evidence as scanned PDF pages.
+    (gf-fuse np (fd ev epages) (fd ev inks) (fd ev rules) (fd ev prims) (fd ev oblocks) (fd ev owords) (fd d wd) (fd d et) (fd d pa) (fd d im)
+         (fd ev feats) (fd d grl) (fd d gfl) (fd s ggp) (fd s grg) (fd ev refs) (fd d hl) (fd s fx) (fd s gfa) (fd s ga0) (fd s ga1) (fd s ga2)
+         (fd s ga3) (fd s ga4) (fd s ga5) (fd s ga6))
     (if (!= (fd c keep) 0)
       (en-dump (fd d et) (fd d gl) (fd d wd) (fd d ln) (fd d mk) (fd d fnt) (fd d grl) (fd d gfl) (fd s ggp) (fd s grg) ev (fd d evidence)))
     ;; the triage's flow (P7.0, D241): an image has no text layer, so nothing is set aside and the flow is the OCR lines as they are
     (th-append (fd d wd) (fd d ln) (fd d fw) (fd d fl) 0)
+    ;; The frame unit kept seal/signature readings out of the body. Find their Model candidates before stage 3 writes them.
+    (if (> (cells-len (fd d cg)) 0)
+      (do (set (fd d fused) 1)
+          (sm-find (fd d pa) (fd d pts) (fd d gl) (fd d fw) (fd d et) (fd ev epages) (fd d cg) (fd ev refs) (fd ev owords) (fd d an) (fd d txt) np (fd s sm) (fd s sscr)
+                   (fd s stmp) (fd s sgc))))
     (return (en-stage3 c d ev m s np 1))))
 
 (defn ^:pub ^I32 en-finish-pdf [^Cfg c ^Doc d ^EvArenas ev ^Arenas m ^Scratch s]

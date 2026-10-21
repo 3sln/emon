@@ -100,4 +100,25 @@ public final class Scriptcheck {
         }
         return 1;
     }
+    public static int skRoute(emon.Port.Cells ans, int at, int id, int bitmap, int dpi, emon.Port.Cells rq, emon.Port.Cells scr) {
+        // An unread first pass is retried once in the script OSD named plus English. `op-models` in kin selects the installed
+        // models; a missing script model leaves English and `sk-unread` still flags the answer. -1 means the request needs an answer.
+        if (skUnread(ans, at, scr) == 0) {
+            return at;
+        }
+        int found = Plan.anFind(ans, id);
+        int ext = Ocr.oxFind(ans, at);
+        int script = Ocr.oxScript(ans, ext);
+        if (found >= 0) {
+            if (Plan.anOk(ans, found) == 1) {
+                return found;
+            }
+            return at;
+        }
+        int q = Plan.rqOcr(rq, id, bitmap, 3, (Ocr.ocfSymbols() + Ocr.ocfOsd()) + (dpi * Ocr.ocfDpiUnit()), 0, 0, 0, 0);
+        Plan.rqOcrLang(rq, script / 16777216, (script / 65536) % 256, (script / 256) % 256, script % 256);
+        Plan.rqOcrLang(rq, 101, 110, 103, 0);
+        Plan.rqOcrEnd(rq, q);
+        return -1;
+    }
 }

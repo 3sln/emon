@@ -349,7 +349,9 @@ public final class Engine {
         Rasterplan.rpSettings(m.nodes, m.attrs, m.text, c.scope);
         if (d.fused == 1) {
             Arbiter.arWrite(s.afa, ev.owords, d.et, m.ledger, m.text, s.tmp, s.ttx);
-            Arbiter.arTag(m.nodes, m.regions, d.fw, s.fv);
+            if (kind == 0) {
+                Arbiter.arTag(m.nodes, m.regions, d.fw, s.fv);
+            }
             w = Sealmark.smWrite(s.sm, d.et, m.nodes, m.attrs, m.regions, m.text, s.sn, s.sa, s.sr, s.snm);
             if (w > 0) {
                 emon.Port.cellsSwap(m.nodes, s.sn);
@@ -411,10 +413,15 @@ public final class Engine {
             }
             i += 1;
         }
+        Gfuse.gfFuse(np, ev.epages, ev.inks, ev.rules, ev.prims, ev.oblocks, ev.owords, d.wd, d.et, d.pa, d.im, ev.feats, d.grl, d.gfl, s.ggp, s.grg, ev.refs, d.hl, s.fx, s.gfa, s.ga0, s.ga1, s.ga2, s.ga3, s.ga4, s.ga5, s.ga6);
         if (c.keep != 0) {
             enDump(d.et, d.gl, d.wd, d.ln, d.mk, d.fnt, d.grl, d.gfl, s.ggp, s.grg, ev, d.evidence);
         }
         Tlhealth.thAppend(d.wd, d.ln, d.fw, d.fl, 0);
+        if (emon.Port.cellsLen(d.cg) > 0) {
+            d.fused = 1;
+            Sealmark.smFind(d.pa, d.pts, d.gl, d.fw, d.et, ev.epages, d.cg, ev.refs, ev.owords, d.an, d.txt, np, s.sm, s.sscr, s.stmp, s.sgc);
+        }
         return enStage3(c, d, ev, m, s, np, 1);
     }
     public static int enFinishPdf(emon.Enctx.Cfg c, emon.Enctx.Doc d, emon.Enctx.EvArenas ev, emon.Enctx.Arenas m, emon.Enctx.Scratch s) {

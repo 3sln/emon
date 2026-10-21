@@ -712,6 +712,7 @@ public final class Para {
         int sa = paSize(wd, ln, a);
         int sb = paSize(wd, ln, b);
         int ds = sa - sb;
+        int sizeDiv = PA_SIZE_DIV;
         // A line of a script set without spaces that stops inside a sentence and whose next line is within 1.75 of its size of it,
         // baseline to baseline, goes on there whatever the boxes say: the boxes of lines in several fonts are of several heights,
         // and the whitespace between them is not the leading (D581, the Wikipedia pages in Japanese).
@@ -723,7 +724,11 @@ public final class Para {
         if ((((paStart(ln, b) - paStart(ln, a)) * PA_INDENT_DIV) > sb) && (((paStart(ln, a) - margin) * PA_INDENT_DIV) <= sb) && (Lists.lsHang(hc, ln, a, b) == 0)) {
             return 1 == 1;
         }
-        if ((paAbs(ds) * PA_SIZE_DIV) > sa) {
+        // OCR prose has quantized, inferred x-heights: tolerate 20 percent variation between lines of at least four words. Short labels keep their stricter boundary.
+        if ((((Evidence.lnGet(ln, a, Evidence.lfSrc()) & 255) == Model.srOcr()) && ((Evidence.lnGet(ln, b, Evidence.lfSrc()) & 255) == Model.srOcr())) && ((Evidence.lnGet(ln, a, Evidence.lhCount()) >= 4) && (Evidence.lnGet(ln, b, Evidence.lhCount()) >= 4))) {
+            sizeDiv = 5;
+        }
+        if ((paAbs(ds) * sizeDiv) > sa) {
             return 1 == 1;
         }
         boolean opened = paOpenEnd(wd, ln, et, a);

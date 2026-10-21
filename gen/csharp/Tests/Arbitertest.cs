@@ -109,7 +109,7 @@ public static class Arbitertest {
         emon.Testport.AssertEq(Fuserules.FrOrder(4), 100, "then the core");
         emon.Testport.AssertEq(Fuserules.FrOrder(5), -1, "and no more");
         int i = 0;
-        while (i < 66) {
+        while (i < 68) {
             emon.Testport.AssertThat((((Fuserules.FrBlock(i) == 100) || (Fuserules.FrBlock(i) == 200)) || ((Fuserules.FrBlock(i) == 300) || (Fuserules.FrBlock(i) == 400))) || ((Fuserules.FrBlock(i) == 500) || (Fuserules.FrBlock(i) == 600)), "every row of P7.3, P7.5, P7.6, P7.7 and P7.G is in block 100, 200, 300, 400, 500 or 600");
             i += 1;
         }

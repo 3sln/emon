@@ -177,8 +177,8 @@
   (comment "failure is the conversion's: an image that cannot be read is refused by name, whatever the policy), then, unless")
   (comment "`policy` is 0 (never), the scan's page unit (`pu-scan-core`, D564): OCR of the bitmap (id `pi-ocr`), the ink layers of the bitmap and the targeted")
   (comment "passes the first pass calls for (a page fed sideways or upside down is read from its turned view, a small raster from an enlarged one); where the answers")
-  (comment "are in, the frame's evidence and lines are appended to `words` and `lines` and `mask[f]` is 1. An image has no seal or signature stage (its document")
-  (comment "unit does not arbitrate). Answers `us-requests`, a failure status, or 0. It writes nothing until every answer it asked for is in.")
+  (comment "are in, the frame's evidence and lines are appended to `words` and `lines` and `mask[f]` is 1. An image runs the scan seal and signature stages (its document")
+  (comment "unit writes their candidates). Answers `us-requests`, a failure status, or 0. It writes nothing until every answer it asked for is in.")
   (let [^I32 did (pu-id f (pi-decode))
         ^I32 ad (an-find ans did)]
     (if (< ad 0)
@@ -189,6 +189,6 @@
     (let [^I32 eff (rs-eff-dpi100 (an-arg ans ad 3))
           ^I32 wc (rs-cpt (an-arg ans ad 0) eff)
           ^I32 hc (rs-cpt (an-arg ans ad 1) eff)]
-      (return (pu-scan-core f input fuse did ad eff 0 0 0 wc hc wc hc 1 0
+      (return (pu-scan-core f input fuse did ad eff 0 0 0 wc hc wc hc 1 1
                             ans rq loc bms mask scr epages views etext feats images oruns oblocks olines owords osyms oalts words lines refs tlines cg
                             inks comps rules prims tpts ws sv aux snap rtp rn ri cs vr pc sg mem s1 s2 s3 s4 s5 s6)))))

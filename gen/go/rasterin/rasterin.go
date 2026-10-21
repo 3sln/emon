@@ -220,8 +220,8 @@ func RsPage(f int32, input int32, nbytes int32, policy int32, fuse int32, ans *p
 	// failure is the conversion's: an image that cannot be read is refused by name, whatever the policy), then, unless
 	// `policy` is 0 (never), the scan's page unit (`pu-scan-core`, D564): OCR of the bitmap (id `pi-ocr`), the ink layers of the bitmap and the targeted
 	// passes the first pass calls for (a page fed sideways or upside down is read from its turned view, a small raster from an enlarged one); where the answers
-	// are in, the frame's evidence and lines are appended to `words` and `lines` and `mask[f]` is 1. An image has no seal or signature stage (its document
-	// unit does not arbitrate). Answers `us-requests`, a failure status, or 0. It writes nothing until every answer it asked for is in.
+	// are in, the frame's evidence and lines are appended to `words` and `lines` and `mask[f]` is 1. An image runs the scan seal and signature stages (its document
+	// unit writes their candidates). Answers `us-requests`, a failure status, or 0. It writes nothing until every answer it asked for is in.
 	var did int32 = plan.PuId(f, plan.PiDecode())
 	var ad int32 = plan.AnFind(ans, did)
 	if ad < 0 {
@@ -237,5 +237,5 @@ func RsPage(f int32, input int32, nbytes int32, policy int32, fuse int32, ans *p
 	var eff int32 = rsEffDpi100(plan.AnArg(ans, ad, 3))
 	var wc int32 = RsCpt(plan.AnArg(ans, ad, 0), eff)
 	var hc int32 = RsCpt(plan.AnArg(ans, ad, 1), eff)
-	return pageunit.PuScanCore(f, input, fuse, did, ad, eff, 0, 0, 0, wc, hc, wc, hc, 1, 0, ans, rq, loc, bms, mask, scr, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, refs, tlines, cg, inks, comps, rules, prims, tpts, ws, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6)
+	return pageunit.PuScanCore(f, input, fuse, did, ad, eff, 0, 0, 0, wc, hc, wc, hc, 1, 1, ans, rq, loc, bms, mask, scr, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, refs, tlines, cg, inks, comps, rules, prims, tpts, ws, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6)
 }

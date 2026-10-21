@@ -1394,4 +1394,48 @@ public static class Paratest {
         emon.Testport.AssertEq(PtRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "rtl start: well formed");
         emon.Testport.AssertEq(Model.NodeSub(nodes, 1), Model.AlStart(), "right-to-left, flush right: start");
     }
+    [Xunit.Fact]
+    public static void TestOcrSizeJitterDoesNotSplitWrappedProse() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        int w = 0;
+        PtLine(wd, ln, et, emon.Testport.TextBlob("These scanned words continue on"), 1, 7200, 10000, 50000, 11200, 0, 0, 1200);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("the next line of the paragraph."), 1, 7200, 11500, 50000, 12700, 0, 0, 1320);
+        while (w < Evidence.WdCount(wd)) {
+            Evidence.WdSet(wd, w, Evidence.WfSrc(), Model.SrOcr());
+            w += 1;
+        }
+        Evidence.LnSet(ln, 0, Evidence.LfSrc(), Model.SrOcr());
+        Evidence.LnSet(ln, 1, Evidence.LfSrc(), Model.SrOcr());
+        PtRun(wd, ln, et, 1, nodes, emon.Port.NewCells(), regions, text, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells());
+        PtBrief(t, nodes, regions, text);
+        emon.Testport.AssertText(t, "P1:These scanned words continue on the next line of the paragraph.;", "OCR x-height varies between wrapped lines");
+    }
+    [Xunit.Fact]
+    public static void TestOcrSizeJitterDoesNotJoinShortLabelsToValues() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        int w = 0;
+        PtLine(wd, ln, et, emon.Testport.TextBlob("Bill to"), 1, 7200, 10000, 50000, 11200, 0, 0, 1200);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("Harwell and Sons Oxford"), 1, 7200, 11500, 50000, 12700, 0, 0, 1320);
+        while (w < Evidence.WdCount(wd)) {
+            Evidence.WdSet(wd, w, Evidence.WfSrc(), Model.SrOcr());
+            w += 1;
+        }
+        Evidence.LnSet(ln, 0, Evidence.LfSrc(), Model.SrOcr());
+        Evidence.LnSet(ln, 1, Evidence.LfSrc(), Model.SrOcr());
+        PtRun(wd, ln, et, 1, nodes, emon.Port.NewCells(), regions, text, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells());
+        PtBrief(t, nodes, regions, text);
+        emon.Testport.AssertText(t, "P1:Bill to;P1:Harwell and Sons Oxford;", "short labels retain paragraph boundaries");
+    }
 }

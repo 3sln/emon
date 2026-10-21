@@ -78,4 +78,21 @@ public final class Scriptchecktest {
         Plan.anOcrEnd(ans, at);
         emon.Testport.assertEq(Scriptcheck.skUnread(ans, at, emon.Port.newCells()), 0, "an engine that says nothing of the script");
     }
+    public static void testOsdRoutesAnUnreadPageThroughItsScriptAndEnglish() {
+        emon.Port.Cells ans = emon.Port.newCells();
+        emon.Port.Cells rq = emon.Port.newCells();
+        skAnswer(ans, 10, 5, 1147500129, 629, 1701734144, 1701734144, 0);
+        emon.Testport.assertEq(Scriptcheck.skRoute(ans, 0, 28, 260, 300, rq, emon.Port.newCells()), -1, "an unread Devanagari page asks for its script");
+        emon.Testport.assertEq(Plan.recCount(rq), 1, "one extra pass");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, 7), 1147500129, "Deva reads with installed script models");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, 8), 1701734144, "plus English");
+        emon.Port.cellsDrop(rq, 0);
+        skAnswer(ans, 28, 5, 1147500129, 629, 1751739904, 1751739904, 1);
+        emon.Testport.assertEq(Scriptcheck.skRoute(ans, 0, 28, 260, 300, rq, emon.Port.newCells()), Plan.anFind(ans, 28), "the answer is adopted");
+        emon.Testport.assertEq(Plan.recCount(rq), 0, "a completed pass is not asked again");
+    }
+    public static void testChineseWordLanguageAliasesCountAsInstalledHanModels() {
+        emon.Testport.assertEq(unreadOf(5, 1214344809, 629, 1667789568, 1667789568), 0, "chi_sim words are recorded as chs and read Han");
+        emon.Testport.assertEq(unreadOf(5, 1214344809, 629, 1667789824, 1667789824), 0, "chi_tra words are recorded as cht and read Han");
+    }
 }

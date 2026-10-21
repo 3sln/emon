@@ -3,7 +3,7 @@
 // itself and hands the Engine bytes, a seekable `File` or a spooled `Read` (D058).
 //
 //     emon-rs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG]
-//             [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--pdfium] [--ocr-scope=full|witness] [--assets=none|images|figures] [--password=TEXT] [--source=bytes|seek|spool]
+//             [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--tessdata=DIR --lang=eng+spa] [--pdfium] [--ocr-scope=full|witness] [--assets=none|images|figures] [--password=TEXT] [--source=bytes|seek|spool]
 //             [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D]
 //             [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--concurrent=N] [--parallel=N] FILE
 //
@@ -21,6 +21,7 @@
 //                    `== html-full` (ids,geometry,confidence=950,ledger,pretty), `== evidence`, `== intake`, each a line
 //                    `== NAME` then the text and a newline (the flags --pretty and --html are ignored)
 //   --out=intake     stage 0 only: `FORMAT VERSION pages=N encrypted=BOOL bytes=N`
+//   --tessdata=D    alias for --tesseract=D; --lang=eng+spa filters the models in that directory
 //   --out=pixels     one RECORDING, printed as one line per `decode` entry: `frame F w W h H ch C dpi100 D bilevel B frames N
 //                    fnv HEX` (FNV-1a 64 of the decoded pixels), or `frame F status S` for an answer that is not ok: what
 //                    `bb image` compares across hosts and with the generator's pixels (D190)
@@ -66,7 +67,7 @@ fn kin_flag(a: &str) -> Option<String> {
 
 fn usage(msg: &str) -> ! {
     eprintln!("emon-rs: {}", msg);
-    eprintln!("usage: emon-rs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--pdfium] [--codecs] [--ocr-scope=full|witness] [--assets=none|images|figures] [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D] [--html-assets=inline|external|omit] [--asset-prefix=P] [--password=TEXT] [--source=bytes|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--concurrent=N] [--parallel=N] FILE");
+    eprintln!("usage: emon-rs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--tessdata=DIR --lang=eng+spa] [--pdfium] [--codecs] [--ocr-scope=full|witness] [--assets=none|images|figures] [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D] [--html-assets=inline|external|omit] [--asset-prefix=P] [--password=TEXT] [--source=bytes|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--concurrent=N] [--parallel=N] FILE");
     std::process::exit(2);
 }
 
@@ -228,6 +229,7 @@ fn main() {
     let mut use_pdfium = false;
     let mut use_codecs = false;
     let mut fake_ports = false;
+    let mut tess_langs: Option<Vec<String>> = None;
     for a in std::env::args().skip(1) {
         if let Some(v) = a.strip_prefix("--out=") {
             out = v.to_string();
@@ -261,9 +263,15 @@ fn main() {
         } else if a == "--fake-ports" {
             fake_ports = true;
         } else if a == "--tesseract" {
-            tess = Some(None);
+            if tess.is_none() { tess = Some(None); }
         } else if let Some(v) = a.strip_prefix("--tesseract=") {
             tess = Some(Some(v.to_string()));
+        } else if let Some(v) = a.strip_prefix("--tessdata=") {
+            tess = Some(Some(v.to_string()));
+        } else if let Some(v) = a.strip_prefix("--lang=") {
+            let names: Vec<String> = v.split('+').filter(|s| !s.is_empty()).map(str::to_string).collect();
+            if names.is_empty() { usage("--lang wants models joined by +"); }
+            tess_langs = Some(names);
         } else if a == "--stats" {
             stats = true;
         } else if let Some(v) = a.strip_prefix("--record=") {
@@ -336,12 +344,18 @@ fn main() {
     if let Some(dir) = &tess {
         #[cfg(feature = "tesseract")]
         {
-            let t = emon::tess::TessOcr::new(dir.as_deref()).unwrap_or_else(|e| usage(&e));
+            let t = match &tess_langs {
+                Some(langs) => {
+                    let path = dir.clone().or_else(|| std::env::var("TESSDATA_PREFIX").ok()).unwrap_or_else(|| usage("--lang requires --tessdata=DIR (or TESSDATA_PREFIX)"));
+                    emon::tess::TessOcr::with_languages(&path, langs)
+                }
+                None => emon::tess::TessOcr::new(dir.as_deref()),
+            }.unwrap_or_else(|e| usage(&e));
             cfg.ocr = Some(emon::OcrPort(std::sync::Arc::new(t)));
         }
         #[cfg(not(feature = "tesseract"))]
         {
-            let _ = dir;
+            let _ = (dir, &tess_langs);
             usage("--tesseract needs a build with the tesseract feature (EMON_RS_LIVE=1 kin/scripts/emon-rs-build)");
         }
     }

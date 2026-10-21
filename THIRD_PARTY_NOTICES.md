@@ -189,6 +189,78 @@ Not carried by the Rust, Go, Java and C# library packages (they load pdfium and 
   carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552).
   Licence text: [46](#licence-text-46).
 
+- **Tesseract spa.traineddata** tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 6f2e04d02774a18f01bed44b1111f2cd7f3ba7ac9dc4373cd3f898a40ea6b464 - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_fast
+  carried by no release artifact.
+  Licence text: [46](#licence-text-46).
+
+- **Tesseract fra.traineddata** tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 ced037562e8c80c13122dece28dd477d399af80911a28791a66a63ac1e3445ca - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_fast
+  carried by no release artifact.
+  Licence text: [46](#licence-text-46).
+
+- **Tesseract deu.traineddata** tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 19d219bbb6672c869d20a9636c6816a81eb9a71796cb93ebe0cb1530e2cdb22d - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_fast
+  carried by no release artifact.
+  Licence text: [46](#licence-text-46).
+
+- **Tesseract por.traineddata** tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 c4932b937207a9514b7514d518b931a99938c02a28a5a5a553f8599ed58b7deb - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_fast
+  carried by no release artifact.
+  Licence text: [46](#licence-text-46).
+
+- **Tesseract ita.traineddata** tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 b8f89e1e785118dac4d51ae042c029a64edb5c3ee42ef73027a6d412748d8827 - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_fast
+  carried by no release artifact.
+  Licence text: [46](#licence-text-46).
+
+- **Tesseract nld.traineddata** tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 ced0e5e046a84c908a6aa7accbef9a232c4a5d9a8276691b81c6ee64d02963f6 - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_fast
+  carried by no release artifact.
+  Licence text: [46](#licence-text-46).
+
+- **Tesseract rus.traineddata** tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 e16e5e036cce1d9ec2b00063cf8b54472625b9e14d893a169e2b0dedeb4df225 - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_fast
+  carried by no release artifact.
+  Licence text: [46](#licence-text-46).
+
+- **Tesseract ukr.traineddata** tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 d59e53e2bded32f4445f124b4b00240fcac7e8044c003ab822ccb94f0b3db59b - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_fast
+  carried by no release artifact.
+  Licence text: [46](#licence-text-46).
+
+- **Tesseract ara.traineddata** tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 e3206d3dc87fd50c24a0fb9f01838615911d25168f4e64415244b67d2bb3e729 - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_fast
+  carried by no release artifact.
+  Licence text: [46](#licence-text-46).
+
+- **Tesseract heb.traineddata** tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 11f9e43ab227f786352a50f75c94c2e9906f1baba86d93276da19da7ce0904db - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_fast
+  carried by no release artifact.
+  Licence text: [46](#licence-text-46).
+
+- **Tesseract hin.traineddata** tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 4c73ffc59d497c186b19d1e90f5d721d678ea6b2e277b719bee4e2af12271825 - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_fast
+  carried by no release artifact.
+  Licence text: [46](#licence-text-46).
+
+- **Tesseract urd.traineddata** tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 62e8250ce2a994106e313a82e26a516a39e2cf159d0ce3c5b5008387fd0d555f - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_fast
+  carried by no release artifact.
+  Licence text: [46](#licence-text-46).
+
+- **Tesseract fas.traineddata** tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 db1c0a91208aff00d3cf1ed2c1d23f76419afd5f024688b4f71adc3f2ce4a505 - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_fast
+  carried by no release artifact.
+  Licence text: [46](#licence-text-46).
+
+- **Tesseract chi_sim.traineddata** tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 a5fcb6f0db1e1d6d8522f39db4e848f05984669172e584e8d76b6b3141e1f730 - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_fast
+  carried by no release artifact.
+  Licence text: [46](#licence-text-46).
+
+- **Tesseract chi_tra.traineddata** tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 529c5b5797d64b126065cd55f2bb4c7fd7b15790798091b1ff259941a829330b - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_fast
+  carried by no release artifact.
+  Licence text: [46](#licence-text-46).
+
+- **Tesseract jpn.traineddata** tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 1f5de9236d2e85f5fdf4b3c500f2d4926f8d9449f28f5394472d9e8d83b91b4d - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_fast
+  carried by no release artifact.
+  Licence text: [46](#licence-text-46).
+
+- **Tesseract kor.traineddata** tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 6b85e11d9bbf07863b97b3523b1b112844c43e713df8b66418a081fd1060b3b2 - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_fast
+  carried by no release artifact.
+  Licence text: [46](#licence-text-46).
+
+- **Tesseract amh.traineddata** tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 3ec3311833a108e07d58a1152b00c0cf1848752e4f85769d46e8ca2b718a2ccc - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_fast
+  carried by no release artifact.
+  Licence text: [46](#licence-text-46).
+
 - **Tesseract eng.traineddata (tessdata_best, integer model)** 4.0.0_best_int, 2952873 bytes gzipped (from @tesseract.js-data/eng 1.0.0) - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_best
   carried by the browser demo page (P11.4c). The browser demo's English model (vendor/tesseract/lang/eng.traineddata.gz). The CLI's model is the tessdata_fast one above.
   Licence text: [46](#licence-text-46).
@@ -4247,7 +4319,7 @@ SOFTWARE.
 
 ### Licence text 46
 
-Used by: Tesseract eng.traineddata tessdata_fast 4.1.0, 4113088 bytes, sha256 7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2, Tesseract osd.traineddata tessdata_fast 4.1.0, sha256 9cf5d576fcc47564f11265841e5ca839001e7e6f38ff7f7aacf46d15a96b00ff, Tesseract eng.traineddata (tessdata_best, integer model) 4.0.0_best_int, 2952873 bytes gzipped (from @tesseract.js-data/eng 1.0.0), Tesseract (as built into tesseract.js-core 7.0.0) the version string inside the build is 5.1.0-288-g2a9c1, pdf.js font encoding and charset tables (encodings.js, charsets.js, cff_parser.js, fonts.js) commit 81525fd446779f0a29003cf06e3ba33751954826.
+Used by: Tesseract eng.traineddata tessdata_fast 4.1.0, 4113088 bytes, sha256 7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2, Tesseract osd.traineddata tessdata_fast 4.1.0, sha256 9cf5d576fcc47564f11265841e5ca839001e7e6f38ff7f7aacf46d15a96b00ff, Tesseract spa.traineddata tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 6f2e04d02774a18f01bed44b1111f2cd7f3ba7ac9dc4373cd3f898a40ea6b464, Tesseract fra.traineddata tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 ced037562e8c80c13122dece28dd477d399af80911a28791a66a63ac1e3445ca, Tesseract deu.traineddata tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 19d219bbb6672c869d20a9636c6816a81eb9a71796cb93ebe0cb1530e2cdb22d, Tesseract por.traineddata tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 c4932b937207a9514b7514d518b931a99938c02a28a5a5a553f8599ed58b7deb, Tesseract ita.traineddata tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 b8f89e1e785118dac4d51ae042c029a64edb5c3ee42ef73027a6d412748d8827, Tesseract nld.traineddata tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 ced0e5e046a84c908a6aa7accbef9a232c4a5d9a8276691b81c6ee64d02963f6, Tesseract rus.traineddata tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 e16e5e036cce1d9ec2b00063cf8b54472625b9e14d893a169e2b0dedeb4df225, Tesseract ukr.traineddata tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 d59e53e2bded32f4445f124b4b00240fcac7e8044c003ab822ccb94f0b3db59b, Tesseract ara.traineddata tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 e3206d3dc87fd50c24a0fb9f01838615911d25168f4e64415244b67d2bb3e729, Tesseract heb.traineddata tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 11f9e43ab227f786352a50f75c94c2e9906f1baba86d93276da19da7ce0904db, Tesseract hin.traineddata tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 4c73ffc59d497c186b19d1e90f5d721d678ea6b2e277b719bee4e2af12271825, Tesseract urd.traineddata tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 62e8250ce2a994106e313a82e26a516a39e2cf159d0ce3c5b5008387fd0d555f, Tesseract fas.traineddata tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 db1c0a91208aff00d3cf1ed2c1d23f76419afd5f024688b4f71adc3f2ce4a505, Tesseract chi_sim.traineddata tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 a5fcb6f0db1e1d6d8522f39db4e848f05984669172e584e8d76b6b3141e1f730, Tesseract chi_tra.traineddata tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 529c5b5797d64b126065cd55f2bb4c7fd7b15790798091b1ff259941a829330b, Tesseract jpn.traineddata tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 1f5de9236d2e85f5fdf4b3c500f2d4926f8d9449f28f5394472d9e8d83b91b4d, Tesseract kor.traineddata tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 6b85e11d9bbf07863b97b3523b1b112844c43e713df8b66418a081fd1060b3b2, Tesseract amh.traineddata tessdata_fast 87416418657359cb625c412a48b6e1d6d41c29bd, sha256 3ec3311833a108e07d58a1152b00c0cf1848752e4f85769d46e8ca2b718a2ccc, Tesseract eng.traineddata (tessdata_best, integer model) 4.0.0_best_int, 2952873 bytes gzipped (from @tesseract.js-data/eng 1.0.0), Tesseract (as built into tesseract.js-core 7.0.0) the version string inside the build is 5.1.0-288-g2a9c1, pdf.js font encoding and charset tables (encodings.js, charsets.js, cff_parser.js, fonts.js) commit 81525fd446779f0a29003cf06e3ba33751954826.
 
 ````text
                               Apache License

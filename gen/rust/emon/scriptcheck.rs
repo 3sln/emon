@@ -100,3 +100,24 @@ pub fn sk_unread(an: &mut crate::port::Cells, at: i32, mut scr: &mut crate::port
     }
     return 1;
 }
+pub fn sk_route(ans: &mut crate::port::Cells, at: i32, id: i32, bitmap: i32, dpi: i32, mut rq: &mut crate::port::Cells, mut scr: &mut crate::port::Cells) -> i32 {
+    // An unread first pass is retried once in the script OSD named plus English. `op-models` in kin selects the installed
+    // models; a missing script model leaves English and `sk-unread` still flags the answer. -1 means the request needs an answer.
+    if sk_unread(ans, at, scr) == 0 {
+        return at;
+    }
+    let found: i32 = an_find(ans, id);
+    let ext: i32 = ox_find(ans, at);
+    let script: i32 = ox_script(ans, ext);
+    if found >= 0 {
+        if an_ok(ans, found) == 1 {
+            return found;
+        }
+        return at;
+    }
+    let q: i32 = rq_ocr(rq, id, bitmap, 3, (ocf_symbols() + ocf_osd()) + (dpi * ocf_dpi_unit()), 0, 0, 0, 0);
+    rq_ocr_lang(rq, script / 16777216, (script / 65536) % 256, (script / 256) % 256, script % 256);
+    rq_ocr_lang(rq, 101, 110, 103, 0);
+    rq_ocr_end(rq, q);
+    return -1;
+}

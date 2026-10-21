@@ -968,4 +968,15 @@ public final class Scantest {
         emon.Testport.assertEq(sctDirectDct("assets/dct-decode.pdf"), 1, "ordinary 8-bit three-component JPEG stays on the direct path");
         emon.Testport.assertEq(sctDirectDct("assets/dct-a85-decode.pdf"), 0, "a filter chain still needs rendering");
     }
+    public static void testAConfidentIsolatedDotSpeckIsKeptOutOfTheBody() {
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        stWord(owords, et, 100, 200, 950, 0, 46, 0, 0, 0, 0, 0, 0, 0);
+        stLine(olines, 100, 200, 0, 1);
+        emon.Testport.assertEq(stEmit(olines, owords, words, lines, et, emon.Port.newCells(), 1), 0, "a one-point dot alone is no paragraph even at high engine confidence");
+        emon.Testport.assertEq(Evidence.owGet(owords, 0, Evidence.owfFlags()) & Evidence.oeGarbage(), Evidence.oeGarbage(), "the evidence retains it for the garbage ledger");
+    }
 }

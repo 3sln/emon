@@ -82,3 +82,22 @@ fn test_an_answer_with_no_extension_is_not_flagged() {
     an_ocr_end(ans, at);
     crate::testport::assert_eq(sk_unread(ans, at, &mut crate::port::Cells::new()), 0, "an engine that says nothing of the script");
 }
+#[test]
+fn test_osd_routes_an_unread_page_through_its_script_and_english() {
+    let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    sk_answer(ans, 10, 5, 1147500129, 629, 1701734144, 1701734144, 0);
+    crate::testport::assert_eq(sk_route(ans, 0, 28, 260, 300, rq, &mut crate::port::Cells::new()), -1, "an unread Devanagari page asks for its script");
+    crate::testport::assert_eq(rec_count(rq), 1, "one extra pass");
+    crate::testport::assert_eq(rq_arg(rq, 0, 7), 1147500129, "Deva reads with installed script models");
+    crate::testport::assert_eq(rq_arg(rq, 0, 8), 1701734144, "plus English");
+    crate::port::cells_drop(rq, 0);
+    sk_answer(ans, 28, 5, 1147500129, 629, 1751739904, 1751739904, 1);
+    crate::testport::assert_eq(sk_route(ans, 0, 28, 260, 300, rq, &mut crate::port::Cells::new()), an_find(ans, 28), "the answer is adopted");
+    crate::testport::assert_eq(rec_count(rq), 0, "a completed pass is not asked again");
+}
+#[test]
+fn test_chinese_word_language_aliases_count_as_installed_han_models() {
+    crate::testport::assert_eq(unread_of(5, 1214344809, 629, 1667789568, 1667789568), 0, "chi_sim words are recorded as chs and read Han");
+    crate::testport::assert_eq(unread_of(5, 1214344809, 629, 1667789824, 1667789824), 0, "chi_tra words are recorded as cht and read Han");
+}

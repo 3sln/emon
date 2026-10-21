@@ -1,0 +1,78 @@
+;; Raster document wiring laws (P12.8, D1700).
+(ns emon.rasterqualitytest
+  (:require [emon.lang :refer [I32 Cells fd]]
+            [emon.enctx :refer [Cfg Doc EvArenas Arenas Scratch]]
+            [emon.test :refer [deftest assert-eq new-cells new-ctx]]
+            [emon.config :refer [cf-parse]]
+            [emon.engine :refer [en-finish-raster]]
+            [emon.model :refer [model-init page-new pk-image node-count node-kind nk-seal]]
+            [emon.evidence :refer [ep-new ep-set epf-flags eg-raster rl-new rl-set rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1 rlf-thick rlf-conf rlf-color pm-new pm-set pm-rect pmf-color pmf-flags pmf-conf pmf-fill]]
+            [emon.player :refer [cg-new cg-set cgf-flags plg-seal-px]]
+            [emon.glayer :refer [grl-count gfl-count]]
+            [kin.lang :refer [defn let return]]))
+
+(deftest test-raster-document-fuses-the-frames-traced-rules
+  (let [^Cfg c (new-ctx Cfg) ^Doc d (new-ctx Doc) ^EvArenas ev (new-ctx EvArenas)
+        ^Arenas m (new-ctx Arenas) ^Scratch s (new-ctx Scratch)]
+    (cf-parse (new-cells) c)
+    (model-init (fd m nodes) (fd m attrs) (fd m regions) (fd m text) (fd m pages) (fd m ledger) (fd m layout))
+    (page-new (fd m pages) 1 30000 40000 0 (pk-image))
+    (ep-new (fd ev epages) 1 30000 40000)
+    (ep-set (fd ev epages) 0 (epf-flags) (eg-raster))
+    (rl-new (fd ev rules) 1 1000 1950 29000 2050 0)
+    (rl-set (fd ev rules) 0 (rlf-lx0) 1000)
+    (rl-set (fd ev rules) 0 (rlf-ly0) 2000)
+    (rl-set (fd ev rules) 0 (rlf-lx1) 29000)
+    (rl-set (fd ev rules) 0 (rlf-ly1) 2000)
+    (rl-set (fd ev rules) 0 (rlf-thick) 100)
+    (rl-set (fd ev rules) 0 (rlf-color) 13421772)
+    (rl-set (fd ev rules) 0 (rlf-conf) 1000)
+    (assert-eq (en-finish-raster c d ev m s) 0 "the empty frame finishes")
+    (assert-eq (grl-count (fd d grl)) 1 "the frame's light rule reaches the table stage")))
+
+(deftest test-raster-document-writes-a-seal-found-by-the-frame-unit
+  (let [^Cfg c (new-ctx Cfg) ^Doc d (new-ctx Doc) ^EvArenas ev (new-ctx EvArenas)
+        ^Arenas m (new-ctx Arenas) ^Scratch s (new-ctx Scratch)]
+    (cf-parse (new-cells) c)
+    (model-init (fd m nodes) (fd m attrs) (fd m regions) (fd m text) (fd m pages) (fd m ledger) (fd m layout))
+    (page-new (fd m pages) 1 30000 40000 0 (pk-image))
+    (ep-new (fd ev epages) 1 30000 40000)
+    (ep-set (fd ev epages) 0 (epf-flags) (eg-raster))
+    (cg-new (fd d cg) 1 1000 1000 5000 5000 3)
+    (cg-set (fd d cg) 0 (cgf-flags) (plg-seal-px))
+    (assert-eq (en-finish-raster c d ev m s) 0 "the frame finishes")
+    (assert-eq (node-count (fd m nodes)) 2 "the document holds its seal")
+    (assert-eq (node-kind (fd m nodes) 1) (nk-seal) "the pixel candidate becomes a seal")))
+
+(deftest test-long-light-rules-and-uniform-row-fills-survive-short-stroke-skew-noise
+  (let [^Cfg c (new-ctx Cfg) ^Doc d (new-ctx Doc) ^EvArenas ev (new-ctx EvArenas)
+        ^Arenas m (new-ctx Arenas) ^Scratch s (new-ctx Scratch)]
+    (cf-parse (new-cells) c)
+    (model-init (fd m nodes) (fd m attrs) (fd m regions) (fd m text) (fd m pages) (fd m ledger) (fd m layout))
+    (page-new (fd m pages) 1 30000 40000 0 (pk-image))
+    (ep-new (fd ev epages) 1 30000 40000)
+    (ep-set (fd ev epages) 0 (epf-flags) (eg-raster))
+    (rl-new (fd ev rules) 1 1000 1950 29000 2050 0)
+    (rl-set (fd ev rules) 0 (rlf-lx0) 1000)
+    (rl-set (fd ev rules) 0 (rlf-ly0) 2000)
+    (rl-set (fd ev rules) 0 (rlf-lx1) 29000)
+    (rl-set (fd ev rules) 0 (rlf-ly1) 2000)
+    (rl-set (fd ev rules) 0 (rlf-thick) 100)
+    (rl-set (fd ev rules) 0 (rlf-color) 13421772)
+    (rl-set (fd ev rules) 0 (rlf-conf) 1000)
+    (rl-new (fd ev rules) 1 1000 10000 1600 10060 0)
+    (rl-set (fd ev rules) 1 (rlf-lx0) 1000)
+    (rl-set (fd ev rules) 1 (rlf-ly0) 10000)
+    (rl-set (fd ev rules) 1 (rlf-lx1) 1600)
+    (rl-set (fd ev rules) 1 (rlf-ly1) 10060)
+    (rl-set (fd ev rules) 1 (rlf-thick) 100)
+    (rl-set (fd ev rules) 1 (rlf-color) 0)
+    (rl-set (fd ev rules) 1 (rlf-conf) 1000)
+    (pm-new (fd ev prims) 1 1000 2000 29000 4000 (pm-rect))
+    (pm-set (fd ev prims) 0 (pmf-color) 15132390)
+    (pm-set (fd ev prims) 0 (pmf-flags) 11)
+    (pm-set (fd ev prims) 0 (pmf-conf) 1000)
+    (pm-set (fd ev prims) 0 (pmf-fill) 1000)
+    (assert-eq (en-finish-raster c d ev m s) 0 "the frame finishes")
+    (assert-eq (grl-count (fd d grl)) 1 "the long light rule survives letter-stroke angle noise")
+    (assert-eq (gfl-count (fd d gfl)) 1 "the uniform light row band survives too")))
