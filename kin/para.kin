@@ -47,13 +47,13 @@
   (:require [emon.lang :refer [I32 Bool Cells Text emit-ascii]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop text-i32 text-cp]]
             [emon.evidence :refer [wd-get ln-get ln-count lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-by0 lh-by1
-                                   lh-rot lh-dir lh-first lh-count hd-tstart hd-tlen wf-font wf-size wf-style]]
+                                   lh-rot lh-dir lf-src lh-first lh-count hd-tstart hd-tlen wf-font wf-size wf-style]]
             [emon.columns :refer [lc-copy lc-page]]
             [emon.table :refer [tb-due tb-due-for tb-skip tb-emit tb-claimed]]
             [emon.initial :refer [in-retire in-row in-get-ii in-cell]]
             [emon.align :refer [al-line al-mark al-pass]]
             [emon.model :refer [node-new node-set-text node-set-sub node-set-conf node-add-src
-                                node-add-region page-new nk-paragraph nk-break nk-text nk-note sr-text
+                                node-add-region page-new nk-paragraph nk-break nk-text nk-note sr-ocr sr-text
                                 sr-infer pk-vector lay-add rl-body nk-initial node-set-aux node-add-flag
                                 fl-low-conf node-set-align nk-heading node-set-attr-text
                                 fk-number fk-numbering nk-item nk-caption nk-ref node-kind
@@ -625,7 +625,8 @@
         ^I32 hb (- (ln-get ln b (lh-y1)) (ln-get ln b (lh-y0)))
         ^I32 sa (pa-size wd ln a)
         ^I32 sb (pa-size wd ln b)
-        ^I32 ds (- sa sb)]
+        ^I32 ds (- sa sb)
+        ^:mut ^I32 size-div PA_SIZE_DIV]
     (comment "A line of a script set without spaces that stops inside a sentence and whose next line is within 1.75 of its size of it,")
     (comment "baseline to baseline, goes on there whatever the boxes say: the boxes of lines in several fonts are of several heights,")
     (comment "and the whitespace between them is not the leading (D581, the Wikipedia pages in Japanese).")
@@ -638,7 +639,11 @@
              (<= (* (- (pa-start ln a) margin) PA_INDENT_DIV) sb)
              (== (ls-hang hc ln a b) 0))
       (return (== 1 1)))
-    (if (> (* (pa-abs ds) PA_SIZE_DIV) sa)
+    (comment "OCR prose has quantized, inferred x-heights: tolerate 20 percent variation between lines of at least four words. Short labels keep their stricter boundary.")
+    (if (and (and (== (bit-and (ln-get ln a (lf-src)) 255) (sr-ocr)) (== (bit-and (ln-get ln b (lf-src)) 255) (sr-ocr)))
+             (and (>= (ln-get ln a (lh-count)) 4) (>= (ln-get ln b (lh-count)) 4)))
+      (set size-div 5))
+    (if (> (* (pa-abs ds) size-div) sa)
       (return (== 1 1)))
     (let [^Bool opened (pa-open-end wd ln et a)]
       (if (pa-style-differs wd ln a b opened)

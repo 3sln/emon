@@ -152,6 +152,21 @@ pub(crate) fn gf_lightness(rgb: i32) -> i32 {
     }
     return (((299 * ((rgb / 65536) & 255)) + (587 * ((rgb / 256) & 255))) + (114 * (rgb & 255))) / 255;
 }
+pub(crate) fn gf_light_neutral(rgb: i32) -> i32 {
+    // Light neutral paint, including #ccc rules and #e6e6e6 row bands; neither near-white paper noise nor coloured annotations.
+    if rgb < 0 {
+        return 0;
+    }
+    let r: i32 = (rgb / 65536) & 255;
+    let g: i32 = (rgb / 256) & 255;
+    let b: i32 = rgb & 255;
+    let lo: i32 = gf_min(r, gf_min(g, b));
+    let hi: i32 = gf_max(r, gf_max(g, b));
+    if (lo >= 160) && ((hi <= 245) && ((hi - lo) <= 12)) {
+        return 1;
+    }
+    return 0;
+}
 pub(crate) fn gf_orient_of(a: i32) -> i32 {
     // `go` of an angle in [0, 18000): h within `gf-axis` of 0, v of 9000, else slant.
     if (a <= fg_axis()) || (a >= (18000 - fg_axis())) {
@@ -1384,6 +1399,10 @@ pub(crate) fn gf_emit_trace_units(ctx: &mut crate::port::Cells, un: &mut crate::
                 crate::port::cells_set(gv, 108, kind);
                 score = gf_region_score(hl, page, rg);
                 crate::port::cells_set(gv, 109, score);
+                // Long, thin, straight light rules have geometric evidence independent of short letter strokes spoiling region skew (D1700).
+                if (kind == 2) && ((tconf >= 900) && ((gf_light_neutral(unat(un, u, 7)) == 1) && (((unat(un, u, 4) - unat(un, u, 3)) >= 5669) && (unat(un, u, 6) <= 200)))) {
+                    crate::port::cells_set(gv, 119, 1);
+                }
                 crate::port::cells_set(gv, 111, crate::port::cells_at(ctx, X_PREC));
                 crate::port::cells_set(gv, 118, unat(un, u, 16));
                 gf_unit_box(un, u, gv);
@@ -1500,6 +1519,10 @@ pub(crate) fn gf_emit_fills(ctx: &mut crate::port::Cells, gc: &mut crate::port::
                 crate::port::cells_set(gv, 107, 0);
             }
             crate::port::cells_set(gv, 109, gf_region_score(hl, page, rg));
+            // A highly uniform, light, wide row band is evidence even when glyph strokes spoiled the region's skew score.
+            if (kind == 2) && ((unat(un, u, 9) >= 900) && ((gf_light_neutral(unat(un, u, 7)) == 1) && (((unat(un, u, 13) - unat(un, u, 11)) >= 5669) && (((unat(un, u, 14) - unat(un, u, 12)) >= 600) && ((unat(un, u, 13) - unat(un, u, 11)) >= (2 * (unat(un, u, 14) - unat(un, u, 12)))))))) {
+                crate::port::cells_set(gv, 119, 1);
+            }
             crate::port::cells_set(gv, 111, crate::port::cells_at(ctx, X_PREC));
             fr = fr_decide_block(gv, 500);
             gf_explain(fx, gid, fr, gv);

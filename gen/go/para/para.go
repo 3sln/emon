@@ -802,6 +802,7 @@ func paNewPar(wd *port.Cells, ln *port.Cells, et *port.Cells, a int32, b int32, 
 	var sa int32 = paSize(wd, ln, a)
 	var sb int32 = paSize(wd, ln, b)
 	var ds int32 = sa - sb
+	var sizeDiv int32 = paSizeDiv
 	// A line of a script set without spaces that stops inside a sentence and whose next line is within 1.75 of its size of it,
 	// baseline to baseline, goes on there whatever the boxes say: the boxes of lines in several fonts are of several heights,
 	// and the whitespace between them is not the leading (D581, the Wikipedia pages in Japanese).
@@ -813,7 +814,11 @@ func paNewPar(wd *port.Cells, ln *port.Cells, et *port.Cells, a int32, b int32, 
 	if (((paStart(ln, b) - paStart(ln, a)) * paIndentDiv) > sb) && (((paStart(ln, a) - margin) * paIndentDiv) <= sb) && (lists.LsHang(hc, ln, a, b) == 0) {
 		return 1 == 1
 	}
-	if (paAbs(ds) * paSizeDiv) > sa {
+	// OCR prose has quantized, inferred x-heights: tolerate 20 percent variation between lines of at least four words. Short labels keep their stricter boundary.
+	if (((evidence.LnGet(ln, a, evidence.LfSrc()) & 255) == model.SrOcr()) && ((evidence.LnGet(ln, b, evidence.LfSrc()) & 255) == model.SrOcr())) && ((evidence.LnGet(ln, a, evidence.LhCount()) >= 4) && (evidence.LnGet(ln, b, evidence.LhCount()) >= 4)) {
+		sizeDiv = 5
+	}
+	if (paAbs(ds) * sizeDiv) > sa {
 		return 1 == 1
 	}
 	var opened bool = paOpenEnd(wd, ln, et, a)

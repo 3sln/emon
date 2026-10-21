@@ -1951,6 +1951,15 @@ pub(crate) fn sc_fates(mut owords: &mut crate::port::Cells, mut etext: &mut crat
         if sc_leader(etext, ts, n) == 1 {
             f = 3;
         }
+        // An isolated punctuation speck at most one point each way is no text even when the engine is confident. Keep its evidence for the ledger.
+        if (f == 0) && ((m == 1) && (n == 1)) {
+            if ((ow_get(owords, w, hd_x1()) - ow_get(owords, w, hd_x0())) <= 100) && ((ow_get(owords, w, hd_y1()) - ow_get(owords, w, hd_y0())) <= 100) {
+                c = crate::port::cells_at(etext, ts);
+                if (c == 46) || ((c == 44) || ((c == 39) || ((c == 96) || (c == 183)))) {
+                    f = 1;
+                }
+            }
+        }
         // texture: a line of three words or more, all of them unsure
         if f == 0 {
             if (m >= 3) && ((lmean <= sc_lo_conf()) && ((mx <= 450) && (tch <= (4 * m)))) {

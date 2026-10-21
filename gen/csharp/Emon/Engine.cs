@@ -349,7 +349,9 @@ public static class Engine {
         Rasterplan.RpSettings(m.Nodes, m.Attrs, m.Text, c.Scope);
         if (d.Fused == 1) {
             Arbiter.ArWrite(s.Afa, ev.Owords, d.Et, m.Ledger, m.Text, s.Tmp, s.Ttx);
-            Arbiter.ArTag(m.Nodes, m.Regions, d.Fw, s.Fv);
+            if (kind == 0) {
+                Arbiter.ArTag(m.Nodes, m.Regions, d.Fw, s.Fv);
+            }
             w = Sealmark.SmWrite(s.Sm, d.Et, m.Nodes, m.Attrs, m.Regions, m.Text, s.Sn, s.Sa, s.Sr, s.Snm);
             if (w > 0) {
                 emon.Port.CellsSwap(m.Nodes, s.Sn);
@@ -411,10 +413,15 @@ public static class Engine {
             }
             i += 1;
         }
+        Gfuse.GfFuse(np, ev.Epages, ev.Inks, ev.Rules, ev.Prims, ev.Oblocks, ev.Owords, d.Wd, d.Et, d.Pa, d.Im, ev.Feats, d.Grl, d.Gfl, s.Ggp, s.Grg, ev.Refs, d.Hl, s.Fx, s.Gfa, s.Ga0, s.Ga1, s.Ga2, s.Ga3, s.Ga4, s.Ga5, s.Ga6);
         if (c.Keep != 0) {
             EnDump(d.Et, d.Gl, d.Wd, d.Ln, d.Mk, d.Fnt, d.Grl, d.Gfl, s.Ggp, s.Grg, ev, d.Evidence);
         }
         Tlhealth.ThAppend(d.Wd, d.Ln, d.Fw, d.Fl, 0);
+        if (emon.Port.CellsLen(d.Cg) > 0) {
+            d.Fused = 1;
+            Sealmark.SmFind(d.Pa, d.Pts, d.Gl, d.Fw, d.Et, ev.Epages, d.Cg, ev.Refs, ev.Owords, d.An, d.Txt, np, s.Sm, s.Sscr, s.Stmp, s.Sgc);
+        }
         return EnStage3(c, d, ev, m, s, np, 1);
     }
     public static int EnFinishPdf(emon.Enctx.Cfg c, emon.Enctx.Doc d, emon.Enctx.EvArenas ev, emon.Enctx.Arenas m, emon.Enctx.Scratch s) {

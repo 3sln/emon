@@ -199,8 +199,8 @@ pub fn rs_page(f: i32, input: i32, nbytes: i32, policy: i32, fuse: i32, ans: &mu
     // failure is the conversion's: an image that cannot be read is refused by name, whatever the policy), then, unless
     // `policy` is 0 (never), the scan's page unit (`pu-scan-core`, D564): OCR of the bitmap (id `pi-ocr`), the ink layers of the bitmap and the targeted
     // passes the first pass calls for (a page fed sideways or upside down is read from its turned view, a small raster from an enlarged one); where the answers
-    // are in, the frame's evidence and lines are appended to `words` and `lines` and `mask[f]` is 1. An image has no seal or signature stage (its document
-    // unit does not arbitrate). Answers `us-requests`, a failure status, or 0. It writes nothing until every answer it asked for is in.
+    // are in, the frame's evidence and lines are appended to `words` and `lines` and `mask[f]` is 1. An image runs the scan seal and signature stages (its document
+    // unit writes their candidates). Answers `us-requests`, a failure status, or 0. It writes nothing until every answer it asked for is in.
     let did: i32 = pu_id(f, pi_decode());
     let ad: i32 = an_find(ans, did);
     if ad < 0 {
@@ -216,5 +216,5 @@ pub fn rs_page(f: i32, input: i32, nbytes: i32, policy: i32, fuse: i32, ans: &mu
     let eff: i32 = rs_eff_dpi100(an_arg(ans, ad, 3));
     let wc: i32 = rs_cpt(an_arg(ans, ad, 0), eff);
     let hc: i32 = rs_cpt(an_arg(ans, ad, 1), eff);
-    return pu_scan_core(f, input, fuse, did, ad, eff, 0, 0, 0, wc, hc, wc, hc, 1, 0, ans, rq, loc, bms, mask, scr, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, refs, tlines, cg, inks, comps, rules, prims, tpts, ws, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6);
+    return pu_scan_core(f, input, fuse, did, ad, eff, 0, 0, 0, wc, hc, wc, hc, 1, 1, ans, rq, loc, bms, mask, scr, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, refs, tlines, cg, inks, comps, rules, prims, tpts, ws, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6);
 }

@@ -22,10 +22,10 @@
                                 node-text-start node-text-len node-region-count node-sub text-at
                                 text-append-utf8 nk-paragraph nk-break nk-text nk-note nk-initial node-aux node-flags
                                 ifm-drop ifm-margin fl-low-conf al-start al-center al-end al-justify
-                                page-layout-count page-layout-first layout-band layout-col layout-role layout-x0]]
+                                sr-ocr page-layout-count page-layout-first layout-band layout-col layout-role layout-x0]]
             [emon.json :refer [js-emit]]
             [emon.html :refer [html-emit]]
-            [emon.evidence :refer [wd-new wd-set wd-get wd-count ln-new wf-size wf-font wf-style hd-x0 hd-x1]]
+            [emon.evidence :refer [wd-new wd-set wd-get wd-count ln-new ln-set lf-src wf-src wf-size wf-font wf-style hd-x0 hd-x1]]
             [emon.pdfdoc :refer [pd-open]]
             [emon.pdfcontent :refer [pc-document]]
             [emon.para :refer [pa-pages pa-build pa-dump]]
@@ -1025,3 +1025,33 @@
     (pt-line wd ln et (text-blob "mm nn") 1 33000 14500 50000 15700 0 1 1000)
     (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "rtl start: well formed")
     (assert-eq (node-sub nodes 1) (al-start) "right-to-left, flush right: start")))
+
+(deftest test-ocr-size-jitter-does-not-split-wrapped-prose
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Text t (new-text)
+        ^Cells nodes (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^:mut ^I32 w 0]
+    (pt-line wd ln et (text-blob "These scanned words continue on") 1 7200 10000 50000 11200 0 0 1200)
+    (pt-line wd ln et (text-blob "the next line of the paragraph.") 1 7200 11500 50000 12700 0 0 1320)
+    (while (< w (wd-count wd))
+      (do (wd-set wd w (wf-src) (sr-ocr)) (set w (+ w 1))))
+    (ln-set ln 0 (lf-src) (sr-ocr))
+    (ln-set ln 1 (lf-src) (sr-ocr))
+    (pt-run wd ln et 1 nodes (new-cells) regions text (new-cells) (new-cells) (new-cells)
+            (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells))
+    (pt-brief t nodes regions text)
+    (assert-text t "P1:These scanned words continue on the next line of the paragraph.;" "OCR x-height varies between wrapped lines")))
+
+(deftest test-ocr-size-jitter-does-not-join-short-labels-to-values
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Text t (new-text)
+        ^Cells nodes (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^:mut ^I32 w 0]
+    (pt-line wd ln et (text-blob "Bill to") 1 7200 10000 50000 11200 0 0 1200)
+    (pt-line wd ln et (text-blob "Harwell and Sons Oxford") 1 7200 11500 50000 12700 0 0 1320)
+    (while (< w (wd-count wd))
+      (do (wd-set wd w (wf-src) (sr-ocr)) (set w (+ w 1))))
+    (ln-set ln 0 (lf-src) (sr-ocr))
+    (ln-set ln 1 (lf-src) (sr-ocr))
+    (pt-run wd ln et 1 nodes (new-cells) regions text (new-cells) (new-cells) (new-cells)
+            (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells))
+    (pt-brief t nodes regions text)
+    (assert-text t "P1:Bill to;P1:Harwell and Sons Oxford;" "short labels retain paragraph boundaries")))

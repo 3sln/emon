@@ -201,6 +201,7 @@
 
 (defn ^I32 t-rows [^TestT emon-t]
   (comment "Every row of the name table: a known kind and a value that is an ISO 15924 code (or a request name of a Chinese model).")
+  (comment "D642 adds the chs/cht word-language aliases as Han model rows: 76 rows, including these two intended aliases.")
   (let [^I32 n (op-names-count 0)
         ^:mut ^I32 i 0
         ^:mut ^I32 j 0
@@ -219,7 +220,7 @@
           (assert-that (> j (+ i 1)) "a name")
           (set rows (+ rows 1))
           (set i (+ j 2))))
-    (assert-eq rows 74 "the rows of the three kinds")
+    (assert-eq rows 76 "the rows of the three kinds")
     (return 0)))
 
 (deftest test-every-row-of-the-name-table-is-sound

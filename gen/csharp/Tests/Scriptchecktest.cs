@@ -82,4 +82,23 @@ public static class Scriptchecktest {
         Plan.AnOcrEnd(ans, at);
         emon.Testport.AssertEq(Scriptcheck.SkUnread(ans, at, emon.Port.NewCells()), 0, "an engine that says nothing of the script");
     }
+    [Xunit.Fact]
+    public static void TestOsdRoutesAnUnreadPageThroughItsScriptAndEnglish() {
+        emon.Port.Cells ans = emon.Port.NewCells();
+        emon.Port.Cells rq = emon.Port.NewCells();
+        SkAnswer(ans, 10, 5, 1147500129, 629, 1701734144, 1701734144, 0);
+        emon.Testport.AssertEq(Scriptcheck.SkRoute(ans, 0, 28, 260, 300, rq, emon.Port.NewCells()), -1, "an unread Devanagari page asks for its script");
+        emon.Testport.AssertEq(Plan.RecCount(rq), 1, "one extra pass");
+        emon.Testport.AssertEq(Plan.RqArg(rq, 0, 7), 1147500129, "Deva reads with installed script models");
+        emon.Testport.AssertEq(Plan.RqArg(rq, 0, 8), 1701734144, "plus English");
+        emon.Port.CellsDrop(rq, 0);
+        SkAnswer(ans, 28, 5, 1147500129, 629, 1751739904, 1751739904, 1);
+        emon.Testport.AssertEq(Scriptcheck.SkRoute(ans, 0, 28, 260, 300, rq, emon.Port.NewCells()), Plan.AnFind(ans, 28), "the answer is adopted");
+        emon.Testport.AssertEq(Plan.RecCount(rq), 0, "a completed pass is not asked again");
+    }
+    [Xunit.Fact]
+    public static void TestChineseWordLanguageAliasesCountAsInstalledHanModels() {
+        emon.Testport.AssertEq(UnreadOf(5, 1214344809, 629, 1667789568, 1667789568), 0, "chi_sim words are recorded as chs and read Han");
+        emon.Testport.AssertEq(UnreadOf(5, 1214344809, 629, 1667789824, 1667789824), 0, "chi_tra words are recorded as cht and read Han");
+    }
 }

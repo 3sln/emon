@@ -1032,3 +1032,15 @@ func TestAScanJpegOutsideTheSharedNativeSubsetIsRenderedRatherThanDecodedDirectl
 	port.AssertEq(emonT, sctDirectDct("assets/dct-decode.pdf"), 1, "ordinary 8-bit three-component JPEG stays on the direct path")
 	port.AssertEq(emonT, sctDirectDct("assets/dct-a85-decode.pdf"), 0, "a filter chain still needs rendering")
 }
+
+func TestAConfidentIsolatedDotSpeckIsKeptOutOfTheBody(emonT *testing.T) {
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	stWord(owords, et, 100, 200, 950, 0, 46, 0, 0, 0, 0, 0, 0, 0)
+	stLine(olines, 100, 200, 0, 1)
+	port.AssertEq(emonT, stEmit(olines, owords, words, lines, et, port.NewCells(), 1), 0, "a one-point dot alone is no paragraph even at high engine confidence")
+	port.AssertEq(emonT, evidence.OwGet(owords, 0, evidence.OwfFlags())&evidence.OeGarbage(), evidence.OeGarbage(), "the evidence retains it for the garbage ledger")
+}

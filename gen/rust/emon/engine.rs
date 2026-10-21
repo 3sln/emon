@@ -380,7 +380,9 @@ pub(crate) fn en_stage3(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::en
     rp_settings(&mut m.nodes, &mut m.attrs, &mut m.text, c.scope);
     if d.fused == 1 {
         ar_write(&mut s.afa, &mut ev.owords, &mut d.et, &mut m.ledger, &mut m.text, &mut s.tmp, &mut s.ttx);
-        ar_tag(&mut m.nodes, &mut m.regions, &mut d.fw, &mut s.fv);
+        if kind == 0 {
+            ar_tag(&mut m.nodes, &mut m.regions, &mut d.fw, &mut s.fv);
+        }
         w = sm_write(&mut s.sm, &mut d.et, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut s.sn, &mut s.sa, &mut s.sr, &mut s.snm);
         if w > 0 {
             crate::port::cells_swap(&mut m.nodes, &mut s.sn);
@@ -442,10 +444,15 @@ pub fn en_finish_raster(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::en
         }
         i += 1;
     }
+    gf_fuse(np, &mut ev.epages, &mut ev.inks, &mut ev.rules, &mut ev.prims, &mut ev.oblocks, &mut ev.owords, &mut d.wd, &mut d.et, &mut d.pa, &mut d.im, &mut ev.feats, &mut d.grl, &mut d.gfl, &mut s.ggp, &mut s.grg, &mut ev.refs, &mut d.hl, &mut s.fx, &mut s.gfa, &mut s.ga0, &mut s.ga1, &mut s.ga2, &mut s.ga3, &mut s.ga4, &mut s.ga5, &mut s.ga6);
     if c.keep != 0 {
         en_dump(&mut d.et, &mut d.gl, &mut d.wd, &mut d.ln, &mut d.mk, &mut d.fnt, &mut d.grl, &mut d.gfl, &mut s.ggp, &mut s.grg, ev, &mut d.evidence);
     }
     th_append(&mut d.wd, &mut d.ln, &mut d.fw, &mut d.fl, 0);
+    if crate::port::cells_len(&mut d.cg) > 0 {
+        d.fused = 1;
+        sm_find(&mut d.pa, &mut d.pts, &mut d.gl, &mut d.fw, &mut d.et, &mut ev.epages, &mut d.cg, &mut ev.refs, &mut ev.owords, &mut d.an, &mut d.txt, np, &mut s.sm, &mut s.sscr, &mut s.stmp, &mut s.sgc);
+    }
     return en_stage3(c, d, ev, m, s, np, 1);
 }
 pub fn en_finish_pdf(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::enctx::Doc, ev: &mut crate::emon::enctx::EvArenas, m: &mut crate::emon::enctx::Arenas, s: &mut crate::emon::enctx::Scratch) -> i32 {

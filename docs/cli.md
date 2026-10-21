@@ -76,6 +76,12 @@ missing library is a sentence and exit 3, not a loader failure.
 
 ## More languages
 
+From a source checkout, `bb tessdata-fetch` downloads all 20 pinned models into `.cache/tessdata/`.
+Use `bb tessdata-fetch --langs eng,osd,spa,fra` for a subset. Each download is SHA-256 checked against
+`tools/tessdata/models.edn` at an immutable tessdata_fast revision; the models are Apache-2.0.
+Pass the fetched directory with `--tessdata .cache/tessdata` and choose models with `--lang spa+eng`.
+The default release bundle keeps `eng` and `osd` only.
+
 Tesseract models are `<code>.traineddata` files (ISO 639-3: `deu`, `fra`, `chi_sim`...), from
 [tessdata_fast](https://github.com/tesseract-ocr/tessdata_fast) (small), or `tessdata_best`. Either put
 them in `share/emon/tessdata/` beside the bundled two, or make a directory with the models you want

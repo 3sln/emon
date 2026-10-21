@@ -231,6 +231,14 @@ The pdfium that emon is tested with is `chromium/8076` of
 [bblanchon/pdfium-binaries](https://github.com/bblanchon/pdfium-binaries). Tesseract models are the
 `.traineddata` files of [tessdata_fast](https://github.com/tesseract-ocr/tessdata_fast); the CLI, the C library and the pod
 bundle `eng` and `osd`.
+
+Fetch additional pinned, SHA-256 checked Apache-2.0 language models with
+`bb tessdata-fetch` (all 20 supported models), or `bb tessdata-fetch --langs eng,osd,spa,fra`.
+Use the downloaded directory with `emon convert scan.pdf --tessdata .cache/tessdata --lang spa+eng`.
+
+The live Rust test driver accepts `--tessdata=.cache/tessdata --lang=spa+eng`.
+The library hosts accept a tessdata directory; the OCR request's language or script list
+selects installed models in kin. Default release bundles continue to carry English and orientation models.
 Never in any build: JBIG2 and JPEG 2000 decoders (see below).
 
 ## Options, the Model, the API

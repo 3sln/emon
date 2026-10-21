@@ -32,7 +32,7 @@
             [emon.plan :refer [rq-decode rq-render an-find an-ok an-arg flt-dct us-requests us-done
                                pu-id pu-view-id pi-render-text pi-render-no-text pi-decode pi-ocr lay-full lay-no-text]]
             [emon.upscale :refer [up-factor up-hint up-make up-score ri-upscale rv-upscaled rv-upscale-tmp]]
-            [emon.scriptcheck :refer [sk-unread]]
+            [emon.scriptcheck :refer [sk-unread sk-route]]
             [emon.evidence :refer [im-get im-count wd-get wd-count hd-page mf-page mf-x0 mf-y0 mf-x1 mf-y1 mf-obj vw-new vk-render ol-count ow-count ev-rot-median or-get orf-lcount
                                    ev-page-row ep-get epf-width epf-height
                                    or-count op-region op-first op-upscaled]]
@@ -225,7 +225,7 @@
         ^I32 wat (pu-field pl i (rp-f-wat))
         ^I32 rid (pu-id i (pi-render-text))
         ^I32 nid (pu-id i (pi-render-no-text))
-        ^I32 oid (pu-id i (pi-ocr))
+        ^:mut ^I32 oid (pu-id i (pi-ocr))
         ^I32 eid (pu-id i (ri-escalate))
         ^I32 wid (pu-id i (ri-witness))
         ^I32 ar (an-find ans rid)
@@ -289,6 +289,10 @@
     (if (!= (an-ok ans ao) 1) (return (us-done)))
     (comment "A DRY ATTEMPT (P10.2, `pu-dry`) is a prefix of an attempt: it stops here, before the first write, having asked what the rounds up to here ask")
     (if (== (pu-dry fuse) 1) (return (us-done)))
+    (if (== ask (rp-ask-full))
+      (do (set ao (sk-route ans ao (pu-id i 28) rid dpi rq s6))
+          (if (< ao 0) (return (us-requests)))
+          (if (!= ao (an-find ans oid)) (set oid (pu-id i 28)))))
     (pn-mark snap epages views etext feats oruns oblocks olines owords osyms oalts inks comps rules prims tpts tlines refs images words lines)
     (set view (vw-new views (+ i 1) (vk-render) rid -1 w h (* dpi 100) (lay-full) -1 0 0 0 0 0))
     (set w0 (ow-count owords))
@@ -413,7 +417,7 @@
   (comment "region it shows is (`bx0` `by0`)-(`bx1` `by1`) of a page `pw` x `ph`, all centipoints): the OCR of the bitmap, the ink layers of the bitmap and the")
   (comment "targeted passes they and the first pass call for, then the lines the pipeline reads (`rt-adopt`). With no pixel in the decode answer (a transcript recorded")
   (comment "slim) the page is what it always was: the first pass's lines. `maskv` is what the page's `mask` cell becomes (1 an image page, 2 a PDF's scanned page);")
-  (comment "`seals` 1 looks for seals and signatures in the pixels (a PDF page: its document unit arbitrates them), 0 does not (an image: it has no such unit).")
+  (comment "`seals` 1 looks for seals and signatures in the pixels (PDF pages and image frames); 0 skips those stages.")
   (comment "D564: a raster the first pass shows to be too small is read again enlarged (`pu-scan-pixels`) and that reading, when it reads as much, is the first pass.")
   (let [^I32 oid (pu-id i (pi-ocr))
         ^I32 uid (pu-id i (ri-upscale))
@@ -445,6 +449,10 @@
           (return (us-requests))))
     (if (!= (an-ok ans ao) 1) (return (us-done)))
     (if (== (pu-dry fuse) 1) (return (us-done)))
+    (set ua (sk-route ans ao (pu-id i 28) did (quot (+ dpi100 50) 100) rq s6))
+    (if (< ua 0) (return (us-requests)))
+    (if (!= ua ao) (set roid (pu-id i 28)))
+    (set ao ua)
     (rt-prep rtp)
     (comment "a page in a script the engine has no model for (D564): the first pass is junk at a confidence it should not have; `sc-tag` says so")
     (if (== (sk-unread ans ao s6) 1) (set mv (+ mv (sc-mask-unread))))

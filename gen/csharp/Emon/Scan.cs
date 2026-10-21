@@ -1947,6 +1947,15 @@ public static class Scan {
             if (ScLeader(etext, ts, n) == 1) {
                 f = 3;
             }
+            // An isolated punctuation speck at most one point each way is no text even when the engine is confident. Keep its evidence for the ledger.
+            if ((f == 0) && ((m == 1) && (n == 1))) {
+                if (((Evidence.OwGet(owords, w, Evidence.HdX1()) - Evidence.OwGet(owords, w, Evidence.HdX0())) <= 100) && ((Evidence.OwGet(owords, w, Evidence.HdY1()) - Evidence.OwGet(owords, w, Evidence.HdY0())) <= 100)) {
+                    c = emon.Port.CellsAt(etext, ts);
+                    if ((c == 46) || ((c == 44) || ((c == 39) || ((c == 96) || (c == 183))))) {
+                        f = 1;
+                    }
+                }
+            }
             // texture: a line of three words or more, all of them unsure
             if (f == 0) {
                 if ((m >= 3) && ((lmean <= ScLoConf()) && ((mx <= 450) && (tch <= (4 * m))))) {

@@ -1008,3 +1008,15 @@ fn test_a_scan_jpeg_outside_the_shared_native_subset_is_rendered_rather_than_dec
     crate::testport::assert_eq(sct_direct_dct("assets/dct-decode.pdf"), 1, "ordinary 8-bit three-component JPEG stays on the direct path");
     crate::testport::assert_eq(sct_direct_dct("assets/dct-a85-decode.pdf"), 0, "a filter chain still needs rendering");
 }
+#[test]
+fn test_a_confident_isolated_dot_speck_is_kept_out_of_the_body() {
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    st_word(owords, et, 100, 200, 950, 0, 46, 0, 0, 0, 0, 0, 0, 0);
+    st_line(olines, 100, 200, 0, 1);
+    crate::testport::assert_eq(st_emit(olines, owords, words, lines, et, &mut crate::port::Cells::new(), 1), 0, "a one-point dot alone is no paragraph even at high engine confidence");
+    crate::testport::assert_eq(ow_get(owords, 0, owf_flags()) & oe_garbage(), oe_garbage(), "the evidence retains it for the garbage ledger");
+}

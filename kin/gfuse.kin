@@ -147,6 +147,17 @@
   (if (< rgb 0) (return -1))
   (return (quot (+ (+ (* 299 (bit-and (quot rgb 65536) 255)) (* 587 (bit-and (quot rgb 256) 255))) (* 114 (bit-and rgb 255))) 255)))
 
+(defn ^I32 gf-light-neutral [^I32 rgb]
+  (comment "Light neutral paint, including #ccc rules and #e6e6e6 row bands; neither near-white paper noise nor coloured annotations.")
+  (if (< rgb 0) (return 0))
+  (let [^I32 r (bit-and (quot rgb 65536) 255)
+        ^I32 g (bit-and (quot rgb 256) 255)
+        ^I32 b (bit-and rgb 255)
+        ^I32 lo (gf-min r (gf-min g b))
+        ^I32 hi (gf-max r (gf-max g b))]
+    (if (and (>= lo 160) (and (<= hi 245) (<= (- hi lo) 12))) (return 1))
+    (return 0)))
+
 (defn ^I32 gf-orient-of [^I32 a]
   (comment "`go` of an angle in [0, 18000): h within `gf-axis` of 0, v of 9000, else slant.")
   (if (or (<= a (fg-axis)) (>= a (- 18000 (fg-axis)))) (return (go-h)))
@@ -1151,6 +1162,10 @@
                       (cells-set gv 108 kind)
                       (set score (gf-region-score hl page rg))
                       (cells-set gv 109 score)
+                      (comment "Long, thin, straight light rules have geometric evidence independent of short letter strokes spoiling region skew (D640).")
+                      (if (and (== kind 2) (and (>= tconf 900) (and (== (gf-light-neutral (unat un u 7)) 1)
+                               (and (>= (- (unat un u 4) (unat un u 3)) 5669) (<= (unat un u 6) 200)))))
+                        (cells-set gv 119 1))
                       (cells-set gv 111 (cells-at ctx X_PREC))
                       (cells-set gv 118 (unat un u 16))
                       (gf-unit-box un u gv)
@@ -1241,6 +1256,12 @@
                 (cells-set gv 108 kind)
                 (if (and (== kind 1) (>= rg 0)) (cells-set gv 107 1) (cells-set gv 107 0))
                 (cells-set gv 109 (gf-region-score hl page rg))
+                (comment "A highly uniform, light, wide row band is evidence even when glyph strokes spoiled the region's skew score.")
+                (if (and (== kind 2) (and (>= (unat un u 9) 900) (and (== (gf-light-neutral (unat un u 7)) 1)
+                         (and (>= (- (unat un u 13) (unat un u 11)) 5669)
+                              (and (>= (- (unat un u 14) (unat un u 12)) 600)
+                                   (>= (- (unat un u 13) (unat un u 11)) (* 2 (- (unat un u 14) (unat un u 12)))))))))
+                  (cells-set gv 119 1))
                 (cells-set gv 111 (cells-at ctx X_PREC))
                 (set fr (fr-decide-block gv 500))
                 (gf-explain fx gid fr gv)

@@ -1005,4 +1005,16 @@ public static class Scantest {
         emon.Testport.AssertEq(SctDirectDct("assets/dct-decode.pdf"), 1, "ordinary 8-bit three-component JPEG stays on the direct path");
         emon.Testport.AssertEq(SctDirectDct("assets/dct-a85-decode.pdf"), 0, "a filter chain still needs rendering");
     }
+    [Xunit.Fact]
+    public static void TestAConfidentIsolatedDotSpeckIsKeptOutOfTheBody() {
+        emon.Port.Cells olines = emon.Port.NewCells();
+        emon.Port.Cells owords = emon.Port.NewCells();
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells lines = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        StWord(owords, et, 100, 200, 950, 0, 46, 0, 0, 0, 0, 0, 0, 0);
+        StLine(olines, 100, 200, 0, 1);
+        emon.Testport.AssertEq(StEmit(olines, owords, words, lines, et, emon.Port.NewCells(), 1), 0, "a one-point dot alone is no paragraph even at high engine confidence");
+        emon.Testport.AssertEq(Evidence.OwGet(owords, 0, Evidence.OwfFlags()) & Evidence.OeGarbage(), Evidence.OeGarbage(), "the evidence retains it for the garbage ledger");
+    }
 }

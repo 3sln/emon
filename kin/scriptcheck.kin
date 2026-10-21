@@ -13,8 +13,8 @@
 (ns emon.scriptcheck
   (:require [emon.lang :refer [I32 Cells]]
             [emon.port :refer [cells-drop cells-push]]
-            [emon.plan :refer [an-ocr-count]]
-            [emon.ocr :refer [ox-find ox-script ox-sconf ox-first-word ox-word-next ox-wlang ox-wdflags ocw-dict]]
+            [emon.plan :refer [an-ocr-count an-find an-ok rq-ocr rq-ocr-lang rq-ocr-end]]
+            [emon.ocr :refer [ox-find ox-script ox-sconf ox-first-word ox-word-next ox-wlang ox-wdflags ocw-dict ocf-symbols ocf-osd ocf-dpi-unit]]
             [emon.ocrport :refer [op-model-script op-script-reads sc-latn sc-latf]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem bit-and]]))
@@ -78,3 +78,19 @@
           (set w (ox-word-next an w))
           (set i (+ i 1))))
     (return 1)))
+
+(defn ^:pub ^I32 sk-route [^Cells ans ^I32 at ^I32 id ^I32 bitmap ^I32 dpi ^:mut ^Cells rq ^:mut ^Cells scr]
+  (comment "An unread first pass is retried once in the script OSD named plus English. `op-models` in kin selects the installed")
+  (comment "models; a missing script model leaves English and `sk-unread` still flags the answer. -1 means the request needs an answer.")
+  (if (== (sk-unread ans at scr) 0) (return at))
+  (let [^I32 found (an-find ans id)
+        ^I32 ext (ox-find ans at)
+        ^I32 script (ox-script ans ext)]
+    (if (>= found 0)
+      (do (if (== (an-ok ans found) 1) (return found))
+          (return at)))
+    (let [^I32 q (rq-ocr rq id bitmap 3 (+ (+ (ocf-symbols) (ocf-osd)) (* dpi (ocf-dpi-unit))) 0 0 0 0)]
+      (rq-ocr-lang rq (quot script 16777216) (rem (quot script 65536) 256) (rem (quot script 256) 256) (rem script 256))
+      (rq-ocr-lang rq 101 110 103 0)
+      (rq-ocr-end rq q))
+    (return -1)))

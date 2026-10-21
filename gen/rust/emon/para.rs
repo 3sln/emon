@@ -720,6 +720,7 @@ pub(crate) fn pa_new_par(wd: &mut crate::port::Cells, ln: &mut crate::port::Cell
     let sa: i32 = pa_size(wd, ln, a);
     let sb: i32 = pa_size(wd, ln, b);
     let ds: i32 = sa - sb;
+    let mut size_div: i32 = PA_SIZE_DIV;
     // A line of a script set without spaces that stops inside a sentence and whose next line is within 1.75 of its size of it,
     // baseline to baseline, goes on there whatever the boxes say: the boxes of lines in several fonts are of several heights,
     // and the whitespace between them is not the leading (D581, the Wikipedia pages in Japanese).
@@ -731,7 +732,11 @@ pub(crate) fn pa_new_par(wd: &mut crate::port::Cells, ln: &mut crate::port::Cell
     if (((pa_start(ln, b) - pa_start(ln, a)) * PA_INDENT_DIV) > sb) && (((pa_start(ln, a) - margin) * PA_INDENT_DIV) <= sb) && (ls_hang(hc, ln, a, b) == 0) {
         return 1 == 1;
     }
-    if (pa_abs(ds) * PA_SIZE_DIV) > sa {
+    // OCR prose has quantized, inferred x-heights: tolerate 20 percent variation between lines of at least four words. Short labels keep their stricter boundary.
+    if (((ln_get(ln, a, lf_src()) & 255) == sr_ocr()) && ((ln_get(ln, b, lf_src()) & 255) == sr_ocr())) && ((ln_get(ln, a, lh_count()) >= 4) && (ln_get(ln, b, lh_count()) >= 4)) {
+        size_div = 5;
+    }
+    if (pa_abs(ds) * size_div) > sa {
         return 1 == 1;
     }
     let opened: bool = pa_open_end(wd, ln, et, a);

@@ -90,3 +90,22 @@ func TestAnAnswerWithNoExtensionIsNotFlagged(emonT *testing.T) {
 	plan.AnOcrEnd(ans, at)
 	port.AssertEq(emonT, scriptcheck.SkUnread(ans, at, port.NewCells()), 0, "an engine that says nothing of the script")
 }
+
+func TestOsdRoutesAnUnreadPageThroughItsScriptAndEnglish(emonT *testing.T) {
+	var ans *port.Cells = port.NewCells()
+	var rq *port.Cells = port.NewCells()
+	skAnswer(ans, 10, 5, 1147500129, 629, 1701734144, 1701734144, 0)
+	port.AssertEq(emonT, scriptcheck.SkRoute(ans, 0, 28, 260, 300, rq, port.NewCells()), -1, "an unread Devanagari page asks for its script")
+	port.AssertEq(emonT, plan.RecCount(rq), 1, "one extra pass")
+	port.AssertEq(emonT, plan.RqArg(rq, 0, 7), 1147500129, "Deva reads with installed script models")
+	port.AssertEq(emonT, plan.RqArg(rq, 0, 8), 1701734144, "plus English")
+	port.CellsDrop(rq, 0)
+	skAnswer(ans, 28, 5, 1147500129, 629, 1751739904, 1751739904, 1)
+	port.AssertEq(emonT, scriptcheck.SkRoute(ans, 0, 28, 260, 300, rq, port.NewCells()), plan.AnFind(ans, 28), "the answer is adopted")
+	port.AssertEq(emonT, plan.RecCount(rq), 0, "a completed pass is not asked again")
+}
+
+func TestChineseWordLanguageAliasesCountAsInstalledHanModels(emonT *testing.T) {
+	port.AssertEq(emonT, unreadOf(5, 1214344809, 629, 1667789568, 1667789568), 0, "chi_sim words are recorded as chs and read Han")
+	port.AssertEq(emonT, unreadOf(5, 1214344809, 629, 1667789824, 1667789824), 0, "chi_tra words are recorded as cht and read Han")
+}

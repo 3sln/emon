@@ -325,6 +325,15 @@ func puRunBorn(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells
 	if PuDry(fuse) == 1 {
 		return plan.UsDone()
 	}
+	if ask == rasterplan.RpAskFull() {
+		ao = scriptcheck.SkRoute(ans, ao, plan.PuId(i, 28), rid, dpi, rq, s6)
+		if ao < 0 {
+			return plan.UsRequests()
+		}
+		if ao != plan.AnFind(ans, oid) {
+			oid = plan.PuId(i, 28)
+		}
+	}
 	pageink.PnMark(snap, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, inks, comps, rules, prims, tpts, tlines, refs, images, words, lines)
 	view = evidence.VwNew(views, i+1, evidence.VkRender(), rid, -1, w, h, dpi*100, plan.LayFull(), -1, 0, 0, 0, 0, 0)
 	w0 = evidence.OwCount(owords)
@@ -474,7 +483,7 @@ func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 in
 	// region it shows is (`bx0` `by0`)-(`bx1` `by1`) of a page `pw` x `ph`, all centipoints): the OCR of the bitmap, the ink layers of the bitmap and the
 	// targeted passes they and the first pass call for, then the lines the pipeline reads (`rt-adopt`). With no pixel in the decode answer (a transcript recorded
 	// slim) the page is what it always was: the first pass's lines. `maskv` is what the page's `mask` cell becomes (1 an image page, 2 a PDF's scanned page);
-	// `seals` 1 looks for seals and signatures in the pixels (a PDF page: its document unit arbitrates them), 0 does not (an image: it has no such unit).
+	// `seals` 1 looks for seals and signatures in the pixels (PDF pages and image frames); 0 skips those stages.
 	// D564: a raster the first pass shows to be too small is read again enlarged (`pu-scan-pixels`) and that reading, when it reads as much, is the first pass.
 	var oid int32 = plan.PuId(i, plan.PiOcr())
 	var uid int32 = plan.PuId(i, upscale.RiUpscale())
@@ -511,6 +520,14 @@ func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 in
 	if PuDry(fuse) == 1 {
 		return plan.UsDone()
 	}
+	ua = scriptcheck.SkRoute(ans, ao, plan.PuId(i, 28), did, (dpi100+50)/100, rq, s6)
+	if ua < 0 {
+		return plan.UsRequests()
+	}
+	if ua != ao {
+		roid = plan.PuId(i, 28)
+	}
+	ao = ua
 	retarget.RtPrep(rtp)
 	// a page in a script the engine has no model for (D564): the first pass is junk at a confidence it should not have; `sc-tag` says so
 	if scriptcheck.SkUnread(ans, ao, s6) == 1 {

@@ -287,7 +287,8 @@ func TestTheScriptCodesAreTheirLettersPacked(emonT *testing.T) {
 
 func tRows(emonT *testing.T) int32 {
 	// Every row of the name table: a known kind and a value that is an ISO 15924 code (or a request name of a Chinese model).
-	var n int32 = 627
+	// D1702 adds the chs/cht word-language aliases as Han model rows: 76 rows, including these two intended aliases.
+	var n int32 = 639
 	var i int32 = 0
 	var j int32 = 0
 	var rows int32 = 0
@@ -309,7 +310,7 @@ func tRows(emonT *testing.T) int32 {
 		rows += 1
 		i = j + 2
 	}
-	port.AssertEq(emonT, rows, 74, "the rows of the three kinds")
+	port.AssertEq(emonT, rows, 76, "the rows of the three kinds")
 	return 0
 }
 

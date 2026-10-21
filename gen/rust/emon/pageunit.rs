@@ -216,7 +216,7 @@ pub(crate) fn pu_run_born(i: i32, input: i32, fuse: i32, pl: &mut crate::port::C
     let wat: i32 = pu_field(pl, i, rp_f_wat());
     let rid: i32 = pu_id(i, pi_render_text());
     let nid: i32 = pu_id(i, pi_render_no_text());
-    let oid: i32 = pu_id(i, pi_ocr());
+    let mut oid: i32 = pu_id(i, pi_ocr());
     let eid: i32 = pu_id(i, ri_escalate());
     let wid: i32 = pu_id(i, ri_witness());
     let ar: i32 = an_find(ans, rid);
@@ -305,6 +305,15 @@ pub(crate) fn pu_run_born(i: i32, input: i32, fuse: i32, pl: &mut crate::port::C
     // A DRY ATTEMPT (P10.2, `pu-dry`) is a prefix of an attempt: it stops here, before the first write, having asked what the rounds up to here ask
     if pu_dry(fuse) == 1 {
         return us_done();
+    }
+    if ask == rp_ask_full() {
+        ao = sk_route(ans, ao, pu_id(i, 28), rid, dpi, rq, s6);
+        if ao < 0 {
+            return us_requests();
+        }
+        if ao != an_find(ans, oid) {
+            oid = pu_id(i, 28);
+        }
     }
     pn_mark(snap, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, inks, comps, rules, prims, tpts, tlines, refs, images, words, lines);
     view = vw_new(views, i + 1, vk_render(), rid, -1, w, h, dpi * 100, lay_full(), -1, 0, 0, 0, 0, 0);
@@ -453,7 +462,7 @@ pub fn pu_scan_core(i: i32, input: i32, fuse: i32, did: i32, ad: i32, dpi100: i3
     // region it shows is (`bx0` `by0`)-(`bx1` `by1`) of a page `pw` x `ph`, all centipoints): the OCR of the bitmap, the ink layers of the bitmap and the
     // targeted passes they and the first pass call for, then the lines the pipeline reads (`rt-adopt`). With no pixel in the decode answer (a transcript recorded
     // slim) the page is what it always was: the first pass's lines. `maskv` is what the page's `mask` cell becomes (1 an image page, 2 a PDF's scanned page);
-    // `seals` 1 looks for seals and signatures in the pixels (a PDF page: its document unit arbitrates them), 0 does not (an image: it has no such unit).
+    // `seals` 1 looks for seals and signatures in the pixels (PDF pages and image frames); 0 skips those stages.
     // D564: a raster the first pass shows to be too small is read again enlarged (`pu-scan-pixels`) and that reading, when it reads as much, is the first pass.
     let oid: i32 = pu_id(i, pi_ocr());
     let uid: i32 = pu_id(i, ri_upscale());
@@ -490,6 +499,14 @@ pub fn pu_scan_core(i: i32, input: i32, fuse: i32, did: i32, ad: i32, dpi100: i3
     if pu_dry(fuse) == 1 {
         return us_done();
     }
+    ua = sk_route(ans, ao, pu_id(i, 28), did, (dpi100 + 50) / 100, rq, s6);
+    if ua < 0 {
+        return us_requests();
+    }
+    if ua != ao {
+        roid = pu_id(i, 28);
+    }
+    ao = ua;
     rt_prep(rtp);
     // a page in a script the engine has no model for (D564): the first pass is junk at a confidence it should not have; `sc-tag` says so
     if sk_unread(ans, ao, s6) == 1 {

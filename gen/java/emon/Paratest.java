@@ -1368,4 +1368,46 @@ public final class Paratest {
         emon.Testport.assertEq(ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "rtl start: well formed");
         emon.Testport.assertEq(Model.nodeSub(nodes, 1), Model.alStart(), "right-to-left, flush right: start");
     }
+    public static void testOcrSizeJitterDoesNotSplitWrappedProse() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        int w = 0;
+        ptLine(wd, ln, et, emon.Testport.textBlob("These scanned words continue on"), 1, 7200, 10000, 50000, 11200, 0, 0, 1200);
+        ptLine(wd, ln, et, emon.Testport.textBlob("the next line of the paragraph."), 1, 7200, 11500, 50000, 12700, 0, 0, 1320);
+        while (w < Evidence.wdCount(wd)) {
+            Evidence.wdSet(wd, w, Evidence.wfSrc(), Model.srOcr());
+            w += 1;
+        }
+        Evidence.lnSet(ln, 0, Evidence.lfSrc(), Model.srOcr());
+        Evidence.lnSet(ln, 1, Evidence.lfSrc(), Model.srOcr());
+        ptRun(wd, ln, et, 1, nodes, emon.Port.newCells(), regions, text, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells());
+        ptBrief(t, nodes, regions, text);
+        emon.Testport.assertText(t, "P1:These scanned words continue on the next line of the paragraph.;", "OCR x-height varies between wrapped lines");
+    }
+    public static void testOcrSizeJitterDoesNotJoinShortLabelsToValues() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        int w = 0;
+        ptLine(wd, ln, et, emon.Testport.textBlob("Bill to"), 1, 7200, 10000, 50000, 11200, 0, 0, 1200);
+        ptLine(wd, ln, et, emon.Testport.textBlob("Harwell and Sons Oxford"), 1, 7200, 11500, 50000, 12700, 0, 0, 1320);
+        while (w < Evidence.wdCount(wd)) {
+            Evidence.wdSet(wd, w, Evidence.wfSrc(), Model.srOcr());
+            w += 1;
+        }
+        Evidence.lnSet(ln, 0, Evidence.lfSrc(), Model.srOcr());
+        Evidence.lnSet(ln, 1, Evidence.lfSrc(), Model.srOcr());
+        ptRun(wd, ln, et, 1, nodes, emon.Port.newCells(), regions, text, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells());
+        ptBrief(t, nodes, regions, text);
+        emon.Testport.assertText(t, "P1:Bill to;P1:Harwell and Sons Oxford;", "short labels retain paragraph boundaries");
+    }
 }

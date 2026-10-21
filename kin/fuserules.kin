@@ -315,6 +315,8 @@
          533 500 0 0 0 0   100 2 20 113 0 27 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
          ;; 530 trace only, inside an image region: a rule (`traced`, `in-image`) when the tracer's confidence (lowered by an OCR line) and the region's score allow
          530 500 2 0 5 -1   100 2 20 107 2 1 105 0 23 109 0 24 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 536 raster-only, long thin straight light rule; region skew can be corrupted by short letter strokes (P12.8).
+         536 500 2 0 1 700   100 2 20 108 2 20 119 2 1 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
          ;; 531 trace only, raster page: as 530, without `in-image`
          531 500 2 0 1 -1   100 2 20 108 2 20 105 0 23 109 0 24 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
          ;; 532 trace only, R0 of a born-digital page, half or more of its box in glyph or word boxes (strokes of letters): dropped
@@ -333,6 +335,8 @@
          562 500 1 0 0 600   100 2 21 115 2 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
          ;; 570 tint only, inside an image region whose score allows: a fill (`in-image`)
          570 500 2 0 4 700   100 2 30 107 2 1 109 0 24 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 575 raster-only uniform light row band, wide and short; independent evidence of a filled row (P12.8).
+         575 500 2 0 0 700   100 2 30 108 2 20 119 2 1 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
          ;; 574 tint only, raster page, the page's score allows: a fill
          574 500 2 0 0 700   100 2 30 108 2 20 109 0 24 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
          ;; 571 tint only, R0 of a born-digital page whose tracer precision is high (a tiling pattern emon does not interpret): a fill, 500
