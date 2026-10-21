@@ -1,5 +1,5 @@
 ;; The third-party inventory of a release (P11.3, D526). Read by `bb release-audit`, which fails when it is out of step with
-;; host/rust/Cargo.lock, host/js/package-lock.json, the build scripts or the host sources; THIRD_PARTY_NOTICES.md is generated from it
+;; host/rust/Cargo.lock, host/js/package-lock.json, site/package-lock.json, the build scripts or the host sources; THIRD_PARTY_NOTICES.md is generated from it
 ;; (`bb release-audit --write`). A component is a Rust crate (:crate), an npm package (:npm), a native library or file a bundle will carry
 ;; (:native), or data the generated code embeds (:data). :licence is an SPDX expression; :elected the arm used when it is an OR.
 ;; :carried-by lists the artifacts that contain or statically link it, :loaded-by those that only load it at run time. :status is
@@ -15,14 +15,16 @@
              :c-library "the C library and emon.h (with pdfium and the English and orientation models, D552)"
              :pod "the babashka pod (with pdfium and the English and orientation models, D552)"
              :cli "the per-platform CLI (P11.4b)"
-             :browser-demo "the browser demo page (P11.4c)"}
+             :browser-demo "the browser demo page (P11.4c)"
+             :site "the project website emon.3sln.com"}
  :no-bundled {:fonts "none: no font file is tracked or shipped (pdfium draws with the fonts a document embeds or the host has)"
               :icc-profiles "none: no ICC profile file is tracked or shipped (moxcms, a crate, converts with the profile a file embeds)"
               :go-modules "none: the Go module has no third-party requirement (go.mod is `module emon`)"
               :java-and-csharp "no Maven or NuGet dependency today; P11.4 creates their manifests and extends this audit with them"}
  ;; THE DEMO'S VENDORED FILES (P11.4c). Every file `bb demo` copies under vendor/ (tools/demo/build.clj) is under one of these site-relative prefixes, and every id
  ;; listed here is a component the browser demo carries: `bb release-audit` fails on a vendored file that maps to nothing, so a file cannot be shipped unlisted.
- :demo-files {"vendor/pdfium/" ["native/pdfium@chromium-8076" "native/pdfium-binaries@chromium-8076" "native/pdfium-abseil" "native/pdfium-agg23" "native/pdfium-fast_float"
+ :demo-files {"vendor/bab/" ["npm/@3sln/bab@0.2.0"]
+              "vendor/pdfium/" ["native/pdfium@chromium-8076" "native/pdfium-binaries@chromium-8076" "native/pdfium-abseil" "native/pdfium-agg23" "native/pdfium-fast_float"
                                 "native/pdfium-freetype" "native/pdfium-icu" "native/pdfium-lcms" "native/pdfium-libjpeg-turbo" "native/pdfium-libopenjpeg" "native/pdfium-libpng"
                                 "native/pdfium-simdutf" "native/pdfium-zlib"]
               "vendor/tesseract/core/" ["npm/tesseract.js-core@7.0.0" "native/tjs-core-tesseract" "native/tjs-core-leptonica" "native/tjs-core-libpng" "native/tjs-core-libjpeg"
@@ -40,6 +42,15 @@
    :set-only-in ["emon-rs-build" "emon-bind-build"]}]
  :components
  [
+  {:id "npm/@3sln/bab@0.2.0" :kind :npm :name "@3sln/bab" :version "0.2.0" :licence "MIT" :url "https://www.npmjs.com/package/@3sln/bab" :status :shipped :carried-by [:browser-demo] :text ["npm-3sln-bab-0.2.0.txt"]}
+  {:id "npm/@3sln/bab-extract@0.2.0" :kind :npm :name "@3sln/bab-extract" :version "0.2.0" :licence "MIT" :url "https://www.npmjs.com/package/@3sln/bab-extract" :status :dev-only :carried-by [] :text :not-shipped}
+  {:id "npm/acorn@8.19.0" :kind :npm :name "acorn" :version "8.19.0" :licence "MIT" :url "https://www.npmjs.com/package/acorn" :status :dev-only :carried-by [] :text :not-shipped}
+  {:id "npm/acorn-jsx@5.3.2" :kind :npm :name "acorn-jsx" :version "5.3.2" :licence "MIT" :url "https://www.npmjs.com/package/acorn-jsx" :status :dev-only :carried-by [] :text :not-shipped}
+  {:id "npm/fdir@6.5.0" :kind :npm :name "fdir" :version "6.5.0" :licence "MIT" :url "https://www.npmjs.com/package/fdir" :status :dev-only :carried-by [] :text :not-shipped}
+  {:id "npm/highlight.js@11.12.0" :kind :npm :name "highlight.js" :version "11.12.0" :licence "BSD-3-Clause" :url "https://www.npmjs.com/package/highlight.js" :status :dev-only :carried-by [] :text :not-shipped}
+  {:id "npm/marked@18.1.1" :kind :npm :name "marked" :version "18.1.1" :licence "MIT" :url "https://www.npmjs.com/package/marked" :status :dev-only :carried-by [] :text :not-shipped}
+  {:id "npm/picomatch@4.0.7" :kind :npm :name "picomatch" :version "4.0.7" :licence "MIT" :url "https://www.npmjs.com/package/picomatch" :status :dev-only :carried-by [] :text :not-shipped}
+  {:id "npm/tinyglobby@0.2.17" :kind :npm :name "tinyglobby" :version "0.2.17" :licence "MIT" :url "https://www.npmjs.com/package/tinyglobby" :status :dev-only :carried-by [] :text :not-shipped}
   {:id "cargo/adler2@2.0.1" :kind :crate :name "adler2" :version "2.0.1" :licence "0BSD OR MIT OR Apache-2.0" :elected "MIT" :url "https://crates.io/crates/adler2" :status :shipped :carried-by [:rust-crate :npm :c-library :pod :cli :browser-demo]}
   {:id "cargo/autocfg@1.5.1" :kind :crate :name "autocfg" :version "1.5.1" :licence "Apache-2.0 OR MIT" :elected "MIT" :url "https://crates.io/crates/autocfg" :status :shipped :carried-by [:rust-crate :npm :c-library :pod :cli :browser-demo]}
   {:id "cargo/bitflags@2.13.2" :kind :crate :name "bitflags" :version "2.13.2" :licence "MIT OR Apache-2.0" :elected "MIT" :url "https://crates.io/crates/bitflags" :status :shipped :carried-by [:rust-crate :npm :c-library :pod :cli :browser-demo]}

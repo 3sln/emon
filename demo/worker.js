@@ -64,7 +64,7 @@ const remote = async (req) => {
 
 let job = null; // the conversion in progress: its id, for the stages
 
-const stage = (text) => job && postMessage({ type: 'stage', id: job, text });
+const stage = (text, extra = {}) => job && postMessage({ type: 'stage', id: job, text, ...extra });
 
 // the ports, watched so the page can say what is going on
 let opened = false;
@@ -72,7 +72,7 @@ const watchedRenderer = {
   layers: renderer.layers,
   producer: renderer.producer,
   async open(doc, limits) {
-    if (!opened) stage('rendering pages with pdfium (first use: loading it)');
+    if (!opened) stage('rendering');
     opened = true;
     return renderer.open(doc, limits);
   },
@@ -81,7 +81,7 @@ const watchedRenderer = {
 let recognising = 0;
 const ocr = async (req) => {
   recognising += 1;
-  stage(`reading text with Tesseract (${recognising} ${recognising === 1 ? 'page or region' : 'pages and regions'}${nested ? '' : ', on the page thread'})`);
+  stage('recognising', { count: recognising, onPage: !nested });
   return (nested ? local : remote)(req);
 };
 

@@ -1,0 +1,8 @@
+[{:code "en" :path "" :name "English" :dir "ltr" :translated-by nil :reviewed-by nil}
+ {:code "es" :path "es" :name "Español" :dir "ltr" :translated-by "machine: OpenAI, 2026-10" :reviewed-by nil}
+ {:code "pt-BR" :path "pt-br" :name "Português (Brasil)" :dir "ltr" :translated-by "machine: OpenAI, 2026-10" :reviewed-by nil}
+ {:code "fr" :path "fr" :name "Français" :dir "ltr" :translated-by "machine: OpenAI, 2026-10" :reviewed-by nil}
+ {:code "de" :path "de" :name "Deutsch" :dir "ltr" :translated-by "machine: OpenAI, 2026-10" :reviewed-by nil}
+ {:code "ja" :path "ja" :name "日本語" :dir "ltr" :translated-by "machine: OpenAI, 2026-10" :reviewed-by nil}
+ {:code "zh-Hans" :path "zh-hans" :name "简体中文" :dir "ltr" :translated-by "machine: OpenAI, 2026-10" :reviewed-by nil}
+ {:code "ko" :path "ko" :name "한국어" :dir "ltr" :translated-by "machine: OpenAI, 2026-10" :reviewed-by nil}]

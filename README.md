@@ -11,7 +11,7 @@ It is one specification, written once and generated into Rust, Go, Java and C#; 
 library, the babashka pod and the command-line tool are the Rust build. **Every host gives the same bytes for the
 same input**, and the project's gates hold them to it.
 
-[Try it in your browser](https://emon.3sln.com/) (nothing is uploaded; it runs in WebAssembly) ·
+[Try it in your browser](https://emon.3sln.com/demo/) (nothing is uploaded; it runs in WebAssembly) ·
 [the samples](samples/) · [the side-by-side viewer](samples/index.html) · [the command-line tool](docs/cli.md)
 
 ## What you get

@@ -1,0 +1,1499 @@
+msgid ""
+msgstr ""
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
+"X-Generator: @3sln/bab-extract\n"
+"X-Bab-Plural-Key: msgid_plural\n"
+
+#: site/pages/layout.js:4
+msgid "Browser demo"
+msgstr ""
+
+#: site/pages/layout.js:19
+#: site/pages/layout.js:21
+msgid "Changelog"
+msgstr ""
+
+#: site/pages/layout.js:19
+msgid "Demo"
+msgstr ""
+
+#: site/pages/layout.js:19
+msgid "Docs"
+msgstr ""
+
+#: site/pages/layout.js:4
+msgid "Documents, with structure"
+msgstr ""
+
+#: site/pages/layout.js:3
+#: site/pages/layout.js:21
+msgid "Documents, with structure."
+msgstr ""
+
+#: site/pages/layout.js:21
+msgid "Footer navigation"
+msgstr ""
+
+#: site/pages/notfound.js:4
+msgid "Home"
+msgstr ""
+
+#: site/pages/layout.js:21
+msgid "Improve it on GitHub."
+msgstr ""
+
+#: site/pages/layout.js:21
+msgid "Licence"
+msgstr ""
+
+#: site/pages/layout.js:19
+msgid "Main navigation"
+msgstr ""
+
+#: site/pages/notfound.js:4
+msgid "Page not found"
+msgstr ""
+
+#: site/pages/layout.js:4
+msgid "Sample documents"
+msgstr ""
+
+#: site/pages/layout.js:19
+msgid "Samples"
+msgstr ""
+
+#: site/pages/layout.js:19
+msgid "Skip to content"
+msgstr ""
+
+#: site/pages/layout.js:21
+msgid "Third-party notices"
+msgstr ""
+
+#: site/pages/notfound.js:4
+msgid "This page may have moved, or the address may be incomplete."
+msgstr ""
+
+#: site/pages/layout.js:21
+msgid "This translation was made by machine."
+msgstr ""
+
+#: site/pages/layout.js:21
+msgid "Your documents stay on your device."
+msgstr ""
+
+#: demo/app.js:167
+msgctxt "demo"
+msgid " (on the page thread: this browser has no nested Workers)"
+msgstr ""
+
+#: demo/app.js:39
+msgctxt "demo"
+msgid " (on the page thread)"
+msgstr ""
+
+#: demo/app.js:140
+msgctxt "demo"
+msgid "{#} byte"
+msgid_plural "{#} bytes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: demo/app.js:167
+msgctxt "demo"
+msgid "{#} recognition"
+msgid_plural "{#} recognitions"
+msgstr[0] ""
+msgstr[1] ""
+
+#: demo/app.js:165
+msgctxt "demo"
+msgid "{attempts} (a unit that missed bytes is run again), {rounds} fetch rounds"
+msgstr ""
+
+#: demo/app.js:202
+msgctxt "demo"
+msgid "{name}: {error}"
+msgstr ""
+
+#: demo/app.js:198
+msgctxt "demo"
+msgid "{name}: done in {seconds} s. Everything ran in this page; nothing was uploaded."
+msgstr ""
+
+#: demo/app.js:163
+msgctxt "demo"
+msgid "{seconds} s, in your browser"
+msgstr ""
+
+#: demo/app.js:164
+msgctxt "demo"
+msgid "{size} in {#} read"
+msgid_plural "{size} in {#} reads"
+msgstr[0] ""
+msgstr[1] ""
+
+#: demo/app.js:18
+msgctxt "demo"
+msgid "a picture of text: Tesseract reads it (a PNG or JPEG of a page works too: drop one in)"
+msgstr ""
+
+#: demo/app.js:16
+msgctxt "demo"
+msgid "a table that continues, header and all"
+msgstr ""
+
+#: demo/page.js:44
+msgctxt "demo"
+msgid "always: read every page, and fuse it with the text layer"
+msgstr ""
+
+#: demo/page.js:43
+msgctxt "demo"
+msgid "auto: read a page when its text is missing or broken"
+msgstr ""
+
+#: demo/app.js:14
+msgctxt "demo"
+msgid "Bank statement"
+msgstr ""
+
+#: demo/app.js:13
+msgctxt "demo"
+msgid "born-digital: its own text, no pdfium and no OCR"
+msgstr ""
+
+#: demo/page.js:87
+msgctxt "demo"
+msgid "Browsers. emon's module needs WebAssembly's standardised exception handling: Chrome 137, Firefox 131, Safari 18.4 or newer. Large pages are limited to 64 megapixels when drawn."
+msgstr ""
+
+#: demo/app.js:17
+msgctxt "demo"
+msgid "Charts and figures"
+msgstr ""
+
+#: demo/app.js:165
+msgctxt "demo"
+msgid "conversion attempts"
+msgstr ""
+
+#: demo/page.js:34
+msgctxt "demo"
+msgid "Convert a document"
+msgstr ""
+
+#: demo/app.js:37
+msgctxt "demo"
+msgid "Converting"
+msgstr ""
+
+#: demo/page.js:65
+msgctxt "demo"
+msgid "Details"
+msgstr ""
+
+#: demo/app.js:162
+msgctxt "demo"
+msgid "document"
+msgstr ""
+
+#: demo/page.js:66
+msgctxt "demo"
+msgid "Download HTML"
+msgstr ""
+
+#: demo/page.js:66
+msgctxt "demo"
+msgid "Download JSON"
+msgstr ""
+
+#: demo/page.js:36
+msgctxt "demo"
+msgid "Drop a PDF or an image here"
+msgstr ""
+
+#: demo/page.js:26
+msgctxt "demo"
+msgid "emon"
+msgstr ""
+
+#: demo/page.js:11
+msgctxt "demo"
+msgid "emon demo"
+msgstr ""
+
+#: demo/page.js:12
+msgctxt "demo"
+msgid "emon turns PDFs and images into semantic HTML, in your browser. Nothing is uploaded."
+msgstr ""
+
+#: demo/page.js:69
+msgctxt "demo"
+msgid "emon's HTML for the document"
+msgstr ""
+
+#: demo/page.js:62
+msgctxt "demo"
+msgid "emon's output"
+msgstr ""
+
+#: demo/app.js:168
+msgctxt "demo"
+msgid "figure images"
+msgstr ""
+
+#: demo/page.js:48
+msgctxt "demo"
+msgid "Figures as images (pdfium draws each chart, logo and diagram)"
+msgstr ""
+
+#: demo/app.js:17
+msgctxt "demo"
+msgid "figures become images: pdfium renders them"
+msgstr ""
+
+#: demo/page.js:86
+msgctxt "demo"
+msgid "Fonts. pdfium draws a font that a PDF names but does not embed from its own built-in set, not from your system's fonts, so the lettering inside a figure may differ a little from a desktop viewer's. The text of the HTML is the PDF's own and does not depend on it."
+msgstr ""
+
+#: demo/page.js:88
+msgctxt "demo"
+msgid "Free software. emon is MIT-licensed; pdfium, Tesseract and the other components this page ships are listed with their licences."
+msgstr ""
+
+#: demo/page.js:83
+msgctxt "demo"
+msgid "Good to know"
+msgstr ""
+
+#: demo/page.js:63
+msgctxt "demo"
+msgid "HTML"
+msgstr ""
+
+#: demo/app.js:13
+msgctxt "demo"
+msgid "Invoice"
+msgstr ""
+
+#: demo/page.js:85
+msgctxt "demo"
+msgid "It loads what the document needs. A PDF with a healthy text layer never loads pdfium (5 MiB of WebAssembly, for drawing pages) or Tesseract (10 MiB, for reading pictures of text)."
+msgstr ""
+
+#: demo/page.js:64
+msgctxt "demo"
+msgid "JSON"
+msgstr ""
+
+#: demo/app.js:36
+msgctxt "demo"
+msgid "Loading emon"
+msgstr ""
+
+#: demo/page.js:45
+msgctxt "demo"
+msgid "never: use the text layer only"
+msgstr ""
+
+#: demo/app.js:169
+msgctxt "demo"
+msgid "none"
+msgstr ""
+
+#: demo/app.js:166
+msgctxt "demo"
+msgid "not loaded: nothing here needed a render"
+msgstr ""
+
+#: demo/app.js:167
+msgctxt "demo"
+msgid "not loaded: nothing here needed OCR"
+msgstr ""
+
+#: demo/app.js:169
+msgctxt "demo"
+msgid "notes"
+msgstr ""
+
+#: demo/page.js:41
+msgctxt "demo"
+msgid "Options"
+msgstr ""
+
+#: demo/page.js:36
+msgctxt "demo"
+msgid "or choose a file"
+msgstr ""
+
+#: demo/page.js:39
+msgctxt "demo"
+msgid "Or try a sample:"
+msgstr ""
+
+#: demo/page.js:36
+msgctxt "demo"
+msgid "PDF, PNG, JPEG or TIFF"
+msgstr ""
+
+#: demo/app.js:166
+msgctxt "demo"
+msgid "pdfium"
+msgstr ""
+
+#: demo/page.js:27
+msgctxt "demo"
+msgid "PDFs and images to semantic HTML: headings, paragraphs, tables, lists, figures, footnotes. It runs in this page, in WebAssembly. Nothing is uploaded: the file stays in your browser."
+msgstr ""
+
+#: demo/page.js:50
+msgctxt "demo"
+msgid "Pick a file to begin."
+msgstr ""
+
+#: demo/app.js:164
+msgctxt "demo"
+msgid "read from the file"
+msgstr ""
+
+#: demo/app.js:194
+msgctxt "demo"
+msgid "Reading {name}"
+msgstr ""
+
+#: demo/app.js:15
+msgctxt "demo"
+msgid "reading order down each column"
+msgstr ""
+
+#: demo/app.js:39
+msgctxt "demo"
+msgid "Reading text with Tesseract ({#} page or region)"
+msgid_plural "Reading text with Tesseract ({#} pages and regions)"
+msgstr[0] ""
+msgstr[1] ""
+
+#: demo/app.js:38
+msgctxt "demo"
+msgid "Rendering pages with pdfium (first use: loading it)"
+msgstr ""
+
+#: demo/page.js:55
+msgctxt "demo"
+msgid "Result"
+msgstr ""
+
+#: demo/app.js:18
+msgctxt "demo"
+msgid "Scanned page"
+msgstr ""
+
+#: demo/page.js:23
+msgctxt "demo"
+msgid "Skip to content"
+msgstr ""
+
+#: demo/app.js:16
+msgctxt "demo"
+msgid "Table over four pages"
+msgstr ""
+
+#: demo/app.js:167
+msgctxt "demo"
+msgid "Tesseract"
+msgstr ""
+
+#: demo/page.js:42
+msgctxt "demo"
+msgid "Text recognition (OCR)"
+msgstr ""
+
+#: demo/page.js:88
+msgctxt "demo"
+msgid "The build manifest lists the versions and checksums of this build."
+msgstr ""
+
+#: demo/page.js:58
+msgctxt "demo"
+msgid "The document"
+msgstr ""
+
+#: demo/app.js:148
+#: demo/app.js:153
+msgctxt "demo"
+msgid "The document: {name}"
+msgstr ""
+
+#: demo/page.js:79
+msgctxt "demo"
+msgid "The HTML is shown in a sandboxed frame without scripts; its figures are inline images. The JSON is emon's Model, the same on every platform emon runs on."
+msgstr ""
+
+#: demo/app.js:76
+msgctxt "demo"
+msgid "the worker failed"
+msgstr ""
+
+#: demo/app.js:75
+msgctxt "demo"
+msgid "the worker failed to start"
+msgstr ""
+
+#: demo/app.js:218
+msgctxt "demo"
+msgid "This browser cannot run emon: its WebAssembly module uses the standardised exception handling that Chrome 137, Firefox 131 and Safari 18.4 (and newer) have. Update the browser and try again."
+msgstr ""
+
+#: demo/app.js:14
+msgctxt "demo"
+msgid "three pages, tables"
+msgstr ""
+
+#: demo/app.js:163
+msgctxt "demo"
+msgid "time"
+msgstr ""
+
+#: demo/app.js:15
+msgctxt "demo"
+msgid "Two columns"
+msgstr ""
+
+#: demo/app.js:166
+msgctxt "demo"
+msgid "used: pages rendered for figures or for reading"
+msgstr ""
+
+#: demo/app.js:40
+msgctxt "demo"
+msgid "Working"
+msgstr ""
+
+#. Install csharp: requirement
+#: site/install.edn:1
+msgctxt "landing"
+msgid ".NET 8 or newer."
+msgstr ""
+
+#: site/pages/landing.js:45
+msgctxt "landing"
+msgid "A document, understood"
+msgstr ""
+
+#: site/pages/landing.js:23
+msgctxt "landing"
+msgid "A PDF table with grouped year headers and spanning cells"
+msgstr ""
+
+#: site/pages/landing.js:35
+msgctxt "landing"
+msgid "A row of spaces cannot tell you which year a number belongs to. Semantic HTML can."
+msgstr ""
+
+#: site/pages/landing.js:49
+msgctxt "landing"
+msgid "A small core. Clear boundaries."
+msgstr ""
+
+#: site/pages/landing.js:23
+msgctxt "landing"
+msgid "Body cell"
+msgstr ""
+
+#: site/pages/landing.js:48
+msgctxt "landing"
+msgid "Build it into your workflow"
+msgstr ""
+
+#: site/pages/landing.js:34
+msgctxt "landing"
+msgid "Built for scraping. Reading order, headings, tables with spans, footnotes and figures — with the page, place and confidence of every node."
+msgstr ""
+
+#: site/pages/landing.js:48
+msgctxt "landing"
+msgid "Choose a host"
+msgstr ""
+
+#: site/pages/landing.js:27
+msgctxt "landing"
+msgid "Columns become a continuous reading order. Headings become a document outline."
+msgstr ""
+
+#: site/pages/landing.js:49
+msgctxt "landing"
+msgid "Conversion is a pure function of the input and the answers. The engine asks for byte ranges, a page render or an OCR reading; the host fulfils each request."
+msgstr ""
+
+#: site/pages/landing.js:48
+msgctxt "landing"
+msgid "Copied!"
+msgstr ""
+
+#: site/pages/landing.js:48
+msgctxt "landing"
+msgid "Copy"
+msgstr ""
+
+#: site/pages/landing.js:49
+msgctxt "landing"
+msgid "Document"
+msgstr ""
+
+#: site/pages/landing.js:49
+msgctxt "landing"
+msgid "Document to plan, host fulfilment, Model, then HTML or JSON"
+msgstr ""
+
+#: site/pages/landing.js:48
+msgctxt "landing"
+msgid "Download from GitHub Releases"
+msgstr ""
+
+#. Install cli: requirement
+#: site/install.edn:1
+msgctxt "landing"
+msgid "Download the archive for your platform from GitHub Releases."
+msgstr ""
+
+#. Install c: requirement
+#: site/install.edn:1
+msgctxt "landing"
+msgid "Download the C library archive from GitHub Releases."
+msgstr ""
+
+#. Install pod: requirement
+#: site/install.edn:1
+msgctxt "landing"
+msgid "Download the emon-pod archive from GitHub Releases."
+msgstr ""
+
+#: site/pages/landing.js:51
+msgctxt "landing"
+msgid "emon is MIT licensed. Thanks to pdfium for page rendering and Tesseract for OCR. No telemetry, no cookies, no third-party requests."
+msgstr ""
+
+#: site/pages/landing.js:32
+msgctxt "landing"
+msgid "Every node has evidence."
+msgstr ""
+
+#: site/pages/landing.js:49
+msgctxt "landing"
+msgid "Explore the Model"
+msgstr ""
+
+#: site/pages/landing.js:31
+msgctxt "landing"
+msgid "Figures, captions, seals and signatures become distinct nodes, with optional image assets."
+msgstr ""
+
+#: site/pages/landing.js:29
+msgctxt "landing"
+msgid "Footnotes link back to their marks. Running headers and footers stay out of the body."
+msgstr ""
+
+#: site/pages/landing.js:51
+msgctxt "landing"
+msgid "Free software. Yours to build on."
+msgstr ""
+
+#: site/pages/landing.js:49
+msgctxt "landing"
+msgid "fulfil"
+msgstr ""
+
+#: site/pages/landing.js:23
+msgctxt "landing"
+msgid "Header cell"
+msgstr ""
+
+#: site/pages/landing.js:23
+msgctxt "landing"
+msgid "Heading"
+msgstr ""
+
+#: site/pages/landing.js:34
+msgctxt "landing"
+msgid "Install"
+msgstr ""
+
+#. Install java: requirement
+#: site/install.edn:1
+msgctxt "landing"
+msgid "JDK 22 or newer."
+msgstr ""
+
+#: site/pages/landing.js:45
+msgctxt "landing"
+msgid "Keep what the page means."
+msgstr ""
+
+#: site/pages/landing.js:34
+msgctxt "landing"
+msgid "Local by design. No uploads. MIT licensed."
+msgstr ""
+
+#: site/pages/landing.js:31
+msgctxt "landing"
+msgid "More than words."
+msgstr ""
+
+#. Install go: requirement
+#: site/install.edn:1
+msgctxt "landing"
+msgid "No third-party Go dependencies."
+msgstr ""
+
+#. Install js: requirement
+#: site/install.edn:1
+msgctxt "landing"
+msgid "Node 22 or newer; WebAssembly exception handling in browsers."
+msgstr ""
+
+#: site/pages/landing.js:29
+msgctxt "landing"
+msgid "Notes in their place."
+msgstr ""
+
+#: site/pages/landing.js:47
+msgctxt "landing"
+msgid "Nothing is uploaded"
+msgstr ""
+
+#: site/pages/landing.js:46
+msgctxt "landing"
+msgid "One kin specification, generated into four languages. Every host gives byte-identical output, and the gates hold them to it."
+msgstr ""
+
+#: site/pages/landing.js:46
+msgctxt "landing"
+msgid "One specification. Every platform."
+msgstr ""
+
+#: site/pages/landing.js:34
+msgctxt "landing"
+msgid "Open source document conversion"
+msgstr ""
+
+#: site/pages/landing.js:47
+msgctxt "landing"
+msgid "Open the browser demo"
+msgstr ""
+
+#: site/pages/landing.js:32
+msgctxt "landing"
+msgid "Page, region, source and calibrated confidence. A ledger records what was dropped."
+msgstr ""
+
+#: site/pages/landing.js:23
+msgctxt "landing"
+msgid "Paragraph"
+msgstr ""
+
+#: site/pages/landing.js:23
+msgctxt "landing"
+msgid "PDF with grouped table headers"
+msgstr ""
+
+#: site/pages/landing.js:34
+msgctxt "landing"
+msgid "PDFs and images in."
+msgstr ""
+
+#: site/pages/landing.js:30
+msgctxt "landing"
+msgid "Pictures become text."
+msgstr ""
+
+#: site/pages/landing.js:49
+msgctxt "landing"
+msgid "plan"
+msgstr ""
+
+#: site/pages/landing.js:49
+msgctxt "landing"
+msgid "Plan. Fulfil. Convert."
+msgstr ""
+
+#: site/pages/landing.js:50
+msgctxt "landing"
+msgid "Proof, page by page"
+msgstr ""
+
+#: site/pages/landing.js:48
+msgctxt "landing"
+msgid "Read the host guide"
+msgstr ""
+
+#: site/pages/landing.js:51
+msgctxt "landing"
+msgid "Read the licence"
+msgstr ""
+
+#: site/pages/landing.js:27
+msgctxt "landing"
+msgid "Reading order, recovered."
+msgstr ""
+
+#: site/pages/landing.js:49
+msgctxt "landing"
+msgid "Record those answers as a transcript and replay them. The core is one kin specification generated into Rust, Go, Java and C#."
+msgstr ""
+
+#: site/pages/landing.js:23
+msgctxt "landing"
+msgid "Rendered"
+msgstr ""
+
+#. Install rust: requirement
+#: site/install.edn:1
+msgctxt "landing"
+msgid "Rust 2021 edition."
+msgstr ""
+
+#: site/pages/landing.js:46
+msgctxt "landing"
+msgid "Same bytes everywhere."
+msgstr ""
+
+#: site/pages/landing.js:50
+msgctxt "landing"
+msgid "See the {#} sample"
+msgid_plural "See all {#} samples"
+msgstr[0] ""
+msgstr[1] ""
+
+#: site/pages/landing.js:47
+msgctxt "landing"
+msgid "See it with your own files."
+msgstr ""
+
+#: site/pages/landing.js:34
+msgctxt "landing"
+msgid "Semantic HTML out."
+msgstr ""
+
+#: site/pages/landing.js:35
+msgctxt "landing"
+msgid "Spaces are not structure"
+msgstr ""
+
+#: site/pages/landing.js:28
+msgctxt "landing"
+msgid "Spanning headers, unruled rows and tables that continue across pages. Real cells, not aligned spaces."
+msgstr ""
+
+#: site/pages/landing.js:48
+msgctxt "landing"
+msgid "Start with a born-digital PDF. Add pdfium and Tesseract when you need page rendering and OCR."
+msgstr ""
+
+#: site/pages/landing.js:28
+msgctxt "landing"
+msgid "Tables that stay tables."
+msgstr ""
+
+#: site/pages/landing.js:50
+msgctxt "landing"
+msgid "Take a closer look."
+msgstr ""
+
+#: site/pages/landing.js:30
+msgctxt "landing"
+msgid "Tesseract reads scans and images. emon combines OCR with the existing text layer."
+msgstr ""
+
+#: site/pages/landing.js:47
+msgctxt "landing"
+msgid "The demo runs in your browser with WebAssembly. Nothing is uploaded."
+msgstr ""
+
+#: site/pages/landing.js:23
+msgctxt "landing"
+msgid "The document"
+msgstr ""
+
+#: site/pages/landing.js:49
+msgctxt "landing"
+msgid "The engine asks"
+msgstr ""
+
+#: site/pages/landing.js:23
+msgctxt "landing"
+msgid "The structure"
+msgstr ""
+
+#: site/pages/landing.js:51
+msgctxt "landing"
+msgid "Third-party notices"
+msgstr ""
+
+#: site/pages/landing.js:47
+msgctxt "landing"
+msgid "Try a PDF or image"
+msgstr ""
+
+#: site/pages/landing.js:34
+msgctxt "landing"
+msgid "Try it in your browser"
+msgstr ""
+
+#: site/pages/landing.js:35
+msgctxt "landing"
+msgid "What plain text extraction gives you."
+msgstr ""
+
+#: site/pages/landing.js:47
+msgctxt "landing"
+msgid "Your document stays yours"
+msgstr ""
+
+#: site/pages/landing.js:48
+msgctxt "landing"
+msgid "Your language. The same Model."
+msgstr ""
+
+#. Sample dropcap: look-at
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "`<span data-emon=\"initial\" data-emon-form=\"drop\">` and the word kept whole"
+msgstr ""
+
+#. Sample align-justify: look-at
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "`data-emon-align`, hyphenated line ends rejoined"
+msgstr ""
+
+#. Sample signature: look-at
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "`data-emon-kind=signature`, the typed name still read"
+msgstr ""
+
+#. Sample footnotes: look-at
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "`doc-noteref` links to `doc-footnote` asides, notes out of the body"
+msgstr ""
+
+#. Sample figures-charts: look-at
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "`figure data-emon-kind=chart/diagram/photo` with captions; `.assets.html` has the image data"
+msgstr ""
+
+#. Sample seal-stamp: look-at
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "`figure data-emon-kind=seal/stamp` with name, date, colour; their words are not in the body"
+msgstr ""
+
+#. Sample table-spans: look-at
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "`rowspan`/`colspan` in the header"
+msgstr ""
+
+#. Sample image-invoice: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "A bare JPEG as input (synthetic katanaml invoice, MIT / CC BY 4.0): same pipeline as a scan."
+msgstr ""
+
+#. Sample image-statement: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "A bare PNG (synthetic Bankstatemently preview, MIT) with a faint BANK DOCUMENT watermark; low resolution on purpose."
+msgstr ""
+
+#. Sample scan-color-invoice: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "A colour raster with paper tone; table recovered from OCR geometry."
+msgstr ""
+
+#. Sample watermark-draft: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "A diagonal DRAFT watermark: it must be recorded as a watermark and stay out of the body."
+msgstr ""
+
+#. Sample signature: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "A handwritten-style signature across a typed name: a seal node of subkind signature, name still read."
+msgstr ""
+
+#. Sample dropcap: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "A large initial letter that must rejoin its word instead of becoming a stray paragraph."
+msgstr ""
+
+#. Sample scan-plain: look-at
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "a page with no text layer, all OCR; headings and paragraphs still found, a few character errors"
+msgstr ""
+
+#. Sample irs-form-w9: look-at
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "a real form: numbered lines, bold line numbers, signature; its 8 AcroForm check boxes and 15 text fields as `<span data-emon=\"field\">` beside their labels (`role=\"checkbox\"`, `data-emon-checked`, `data-emon-value`)"
+msgstr ""
+
+#. Sample bank-statement-real: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "A real retail bank statement, PII replaced: account summary, three transaction tables with styled header rows, right-aligned amount and balance columns, running header and footer."
+msgstr ""
+
+#. Sample irs-form-w9: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "A real US tax form: fields, checkboxes, numbered lines, boxed parts. Public domain."
+msgstr ""
+
+#. Sample uscourts-table: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "A real, wide statistical table with spanning headers and footnotes. US Government work."
+msgstr ""
+
+#. Sample table-multipage: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "A ruled table whose header row repeats per page (thead) and whose body continues."
+msgstr ""
+
+#. Sample scan-stamp-overlay: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "A stamp printed over the text: the stamp should become a seal node, the body text survive."
+msgstr ""
+
+#. Sample tagged-table: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "A tagged PDF: the structure tree (Table/TR/TH/TD) is the source of the table."
+msgstr ""
+
+#. Sample bank-statement: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "A transaction table over three pages with its header repeated on each: one table, one thead."
+msgstr ""
+
+#. Sample seal-stamp: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "A vector stamp and a seal: each becomes a seal node, its words stay out of the body."
+msgstr ""
+
+#. Sample uscourts-table: look-at
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "a wide real statistical table over 4 pages"
+msgstr ""
+
+#. Sample align-justify: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Alignment and hyphenation"
+msgstr ""
+
+#: site/pages/sample.js:9
+msgctxt "samples"
+msgid "All samples"
+msgstr ""
+
+#. Sample arabic-rtl: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Arabic (right to left)"
+msgstr ""
+
+#. Sample watermark-draft: group
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Artifacts"
+msgstr ""
+
+#. Sample bank-statement: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Bank statement (3 pages)"
+msgstr ""
+
+#. Sample scan-plain: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Black-and-white raster only, no text layer: everything is OCR."
+msgstr ""
+
+#. Sample gao-report: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Born-digital government report: cover, headings, running furniture, footnote-style notes, tables. US Government work, trimmed from 45 pages."
+msgstr ""
+
+#. Sample columns-two: group
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Born-digital layout"
+msgstr ""
+
+#. Sample broken-tounicode: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Broken ToUnicode font"
+msgstr ""
+
+#. Sample invoice: group
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Business documents"
+msgstr ""
+
+#. Sample figures-charts: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Charts with captions as figure nodes. The .assets.html variant (assets=figures) inlines each figure as a PNG."
+msgstr ""
+
+#. Sample cjk: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Chinese/Japanese text: no inter-word spaces, ideographic punctuation, CJK font."
+msgstr ""
+
+#. Sample cjk: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "CJK"
+msgstr ""
+
+#. Sample scan-color-invoice: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Colour scan of an invoice"
+msgstr ""
+
+#. Sample scan-color-invoice: look-at
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "colour scan: table recovered, some cells merged"
+msgstr ""
+
+#: site/pages/samples.js:9
+msgctxt "samples"
+msgid "Compare source and output"
+msgstr ""
+
+#: site/pages/samples.js:7
+msgctxt "samples"
+msgid "Document preview"
+msgstr ""
+
+#: site/pages/sample.js:9
+msgctxt "samples"
+msgid "Download source"
+msgstr ""
+
+#. Sample watermark-draft: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "DRAFT watermark"
+msgstr ""
+
+#. Sample dropcap: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Drop cap / initial"
+msgstr ""
+
+#: site/pages/sample.js:9
+msgctxt "samples"
+msgid "emon output"
+msgstr ""
+
+#: site/pages/samples.js:12
+msgctxt "samples"
+msgid "Explore the source documents beside the HTML and JSON that emon produces. Every sample is available to download."
+msgstr ""
+
+#. Sample figures-charts: group
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Figures"
+msgstr ""
+
+#. Sample figures-charts: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Figures, charts and captions"
+msgstr ""
+
+#. Sample footnotes: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Footnotes"
+msgstr ""
+
+#. Sample gao-report: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "GAO report (excerpt, 8 pages)"
+msgstr ""
+
+#. Sample invoice: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Header block, bill-to, line-item table with right-aligned amounts, totals, a footer."
+msgstr ""
+
+#. Sample invoice: look-at
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "header block, one table with a thead, right-aligned amounts, footer furniture"
+msgstr ""
+
+#. Sample gao-report: look-at
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "headings as nested sections, running header/footer as `aside` furniture, the logo/photo as figures, tables"
+msgstr ""
+
+#: site/pages/sample.js:9
+msgctxt "samples"
+msgid "HTML source"
+msgstr ""
+
+#: site/pages/sample.js:9
+msgctxt "samples"
+msgid "HTML with figures"
+msgstr ""
+
+#. Sample invoice: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Invoice"
+msgstr ""
+
+#. Sample irs-form-1040: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "IRS Form 1040 (2 pages)"
+msgstr ""
+
+#. Sample irs-form-w9: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "IRS Form W-9 (pages 1-2)"
+msgstr ""
+
+#. Sample irs-pub15-excerpt: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "IRS Publication 15 (pages 1-10)"
+msgstr ""
+
+#. Sample image-invoice: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "JPEG input (invoice)"
+msgstr ""
+
+#. Sample align-justify: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Justified, ragged and centred paragraphs with hyphenated line ends; data-emon-align on blocks."
+msgstr ""
+
+#: site/pages/sample.js:9
+msgctxt "samples"
+msgid "Look at:"
+msgstr ""
+
+#. Sample table-unruled: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "No lines at all: columns found from alignment of the text."
+msgstr ""
+
+#. Sample broken-tounicode: group
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "OCR fusion"
+msgstr ""
+
+#. Sample bank-statement: look-at
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "one `table` with one `thead` over 3 pages; header and footer lines as furniture on pages 1 2 3"
+msgstr ""
+
+#. Sample table-spans: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Partial rowspan/colspan: cells that span rows or columns."
+msgstr ""
+
+#. Sample footnotes: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Per-page footnotes tied to their marks and kept out of the body."
+msgstr ""
+
+#. Sample scan-plain: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Plain scan (two columns)"
+msgstr ""
+
+#. Sample image-statement: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "PNG input (statement, low resolution)"
+msgstr ""
+
+#: site/pages/sample.js:9
+msgctxt "samples"
+msgid "Preview unavailable. Download the source to view the document."
+msgstr ""
+
+#. Sample image-invoice: group
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Raster images"
+msgstr ""
+
+#. Sample image-invoice: look-at
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "raster inputs through the same pipeline"
+msgstr ""
+
+#. Sample columns-two: look-at
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "reading order down each column, then across pages"
+msgstr ""
+
+#. Sample bank-statement-real: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Real bank statement (4 pages)"
+msgstr ""
+
+#: site/pages/samples.js:12
+msgctxt "samples"
+msgid "Real pages. Structured results."
+msgstr ""
+
+#. Sample gao-report: group
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Real-world reports"
+msgstr ""
+
+#. Sample seal-stamp: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Round seal and stamp"
+msgstr ""
+
+#. Sample table-zebra: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Rows told apart by shading only, no ruling lines."
+msgstr ""
+
+#. Sample arabic-rtl: look-at
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "RTL text and CJK text in logical order"
+msgstr ""
+
+#. Sample arabic-rtl: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "RTL text: dir attributes and logical order, not the visual order of the glyphs."
+msgstr ""
+
+#. Sample scan-stamp-overlay: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Scan with a stamp overlay"
+msgstr ""
+
+#. Sample scan-plain: group
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Scans"
+msgstr ""
+
+#. Sample arabic-rtl: group
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Scripts"
+msgstr ""
+
+#: site/pages/sample.js:9
+msgctxt "samples"
+msgid "Semantic HTML"
+msgstr ""
+
+#. Sample signature: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Signature over a name"
+msgstr ""
+
+#: site/pages/sample.js:9
+msgctxt "samples"
+msgid "Source document"
+msgstr ""
+
+#: site/pages/sample.js:9
+msgctxt "samples"
+msgid "Source page {number}"
+msgstr ""
+
+#. Sample table-spans: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Spanning cells"
+msgstr ""
+
+#. Sample columns-two: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Synthetic two-column article: reading order across columns and pages."
+msgstr ""
+
+#. Sample table-multipage: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Table across four pages"
+msgstr ""
+
+#. Sample tagged-table: look-at
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "table from the structure tree, `caption` with its label"
+msgstr ""
+
+#. Sample table-multipage: group
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Tables"
+msgstr ""
+
+#. Sample table-zebra: look-at
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "tables found from shading only or from alignment only"
+msgstr ""
+
+#. Sample tagged-table: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Tagged PDF (table)"
+msgstr ""
+
+#. Sample bank-statement-real: look-at
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "the account summary table, the three transaction tables (header row, AMOUNT and BALANCE columns), the mixed-style lines of page 1; see the weak spots below"
+msgstr ""
+
+#: site/pages/samples.js:12
+msgctxt "samples"
+msgid "The evidence is in the documents"
+msgstr ""
+
+#. Sample broken-tounicode: look-at
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "the font's text layer is wrong; the HTML text is nevertheless right (OCR fusion)"
+msgstr ""
+
+#. Sample irs-pub15-excerpt: look-at
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "the large real-world document: lists with `data-emon-marker`, multi-column reading order, boxes, tables (68 KB HTML for 10 pages)"
+msgstr ""
+
+#. Sample irs-pub15-excerpt: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "The large real-world stand-in (a 10-K was not redistributable): dense multi-column publication text, lists, boxes, tables. Public domain."
+msgstr ""
+
+#. Sample irs-form-1040: look-at
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "the real 2025 Form 1040 (2 pages); it crashed on an `i32` overflow until D521; its 199 fields (73 buttons, 126 text) beside their line numbers and labels, the ones with no label in a paragraph of their own"
+msgstr ""
+
+#. Sample irs-form-1040: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "The real 2025 Form 1040: income lines, dependants, checkboxes, boxed parts. Public domain. It crashed the Rust driver (i32 overflow, D521) until it was fixed."
+msgstr ""
+
+#. Sample table-multipage: look-at
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "the repeated header row folded into one thead"
+msgstr ""
+
+#. Sample scan-stamp-overlay: look-at
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "the seal and stamp found as nodes over a scan; the body text mostly survives"
+msgstr ""
+
+#. Sample watermark-draft: look-at
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "the text DRAFT is in no body (`grep DRAFT watermark-draft.html` is empty); it is in the JSON ledger"
+msgstr ""
+
+#. Sample broken-tounicode: note
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "The text layer is wrong (unmapped glyphs); OCR fusion replaces it with what the page shows."
+msgstr ""
+
+#. Sample columns-two: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Two columns"
+msgstr ""
+
+#. Sample table-unruled: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Unruled (whitespace) table"
+msgstr ""
+
+#. Sample uscourts-table: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "US Courts statistical table (4 pages)"
+msgstr ""
+
+#. Sample table-zebra: title
+#: samples/catalog.edn:1
+msgctxt "samples"
+msgid "Zebra-striped table"
+msgstr ""

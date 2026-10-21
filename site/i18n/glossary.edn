@@ -1,0 +1,9 @@
+{:do-not-translate ["emon" "PDF" "HTML" "JSON" "OCR" "WebAssembly" "pdfium" "Tesseract" "kin" "Rust" "Go" "Java" "C#" "JavaScript" "C" "babashka" "Model"]
+ :identical-allowed ["Licence" "document" "Document" "notes" "Options" "Figures" "Scans" "{name}: {error}" "{#} bytes" "GitHub" "Demo" "PDF" "HTML" "JSON" "OCR" "JPEG" "PNG" "CJK" "CLI" "Rust" "Go" "Java" "C#" "JavaScript" "C" "babashka" "WebAssembly" "MIT" "Tesseract" "pdfium" "emon" "Model" "Details" "Format" "Provenance" "Installation" "Install" "Source" "Code" "Version"]
+ :preferred {:es {"table" "tabla" "heading" "encabezado" "footnote" "nota al pie" "scan" "escaneo" "file" "archivo" "computer" "computadora"}
+             :pt-BR {"table" "tabela" "heading" "título" "footnote" "nota de rodapé" "scan" "digitalização"}
+             :fr {"table" "tableau" "heading" "titre" "footnote" "note de bas de page" "scan" "numérisation"}
+             :de {"table" "Tabelle" "heading" "Überschrift" "footnote" "Fußnote" "scan" "Scan"}
+             :ja {"table" "表" "heading" "見出し" "footnote" "脚注" "scan" "スキャン"}
+             :zh-Hans {"table" "表格" "heading" "标题" "footnote" "脚注" "scan" "扫描件"}
+             :ko {"table" "표" "heading" "제목" "footnote" "각주" "scan" "스캔"}}}

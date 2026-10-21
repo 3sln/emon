@@ -1,8 +1,6 @@
-# The browser demo on GitHub Pages (P11.4c, D535): built from the verified commit of a release (publish.yml calls this), or by hand; deployed as it is built.
-#   gh workflow run pages.yml [-f ref=main]
-# `bb demo` builds the static site: the page, the JS SDK, emon.wasm (the pinned nightly, for the unwinding std), pdfium's WebAssembly build (`bb pdfium-fetch
-# --platform wasm`, sha-checked against tools/pdfium/pdfium.edn) and tesseract.js with its model (`npm ci`, pinned by host/js/package-lock.json), and fails when a
-# size budget is over. Settings > Pages > Source must be "GitHub Actions".
+# The project website on GitHub Pages: built and checked from the verified release commit or a manually selected ref.
+# Includes localized landing pages, samples, English documentation, and the browser demo under /demo/.
+# Settings > Pages > Source must be "GitHub Actions"; the custom domain remains a repository setting.
 name: pages
 
 #   publish.yml (P11.10, D547) CALLS this file (`workflow_call`, `ref` = the verified commit) after it has re-verified the release; it no longer starts on a
@@ -39,7 +37,7 @@ defaults:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
@@ -57,8 +55,10 @@ jobs:
         run: bb pdfium-fetch --platform wasm
       - name: tesseract.js and its model (pinned by the lockfile)
         run: npm ci --prefix host/js
-      - name: Build the site
-        run: bb demo --out _site
+      - name: Website dependencies (pinned by the site lockfile)
+        run: npm ci --prefix site
+      - name: Build and check the site
+        run: bb site --out _site --check
       - uses: actions/upload-pages-artifact@v3
         with:
           path: emon/_site

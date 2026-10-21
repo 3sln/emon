@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.wasm': 'application/wasm',
-  '.pdf': 'application/pdf', '.png': 'image/png', '.jpg': 'image/jpeg', '.gz': 'application/gzip', '.md': 'text/markdown; charset=utf-8', '.txt': 'text/plain; charset=utf-8',
+  '.svg': 'image/svg+xml', '.xml': 'application/xml', '.pdf': 'application/pdf', '.png': 'image/png', '.jpg': 'image/jpeg', '.gz': 'application/gzip', '.md': 'text/markdown; charset=utf-8', '.txt': 'text/plain; charset=utf-8',
 };
 
 /** Serve `dir`; -> { origin, port, requests (paths asked for, in order), close() }. */
@@ -19,6 +19,15 @@ export function serve(dir, port = 0) {
   const server = http.createServer((req, res) => {
     try {
       let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+      const candidate = path.resolve(root, '.' + p);
+      if (!candidate.startsWith(root + path.sep) && candidate !== root) {
+        res.writeHead(403); return res.end();
+      }
+      if (!p.endsWith('/') && fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
+        requests.push([p, 301]);
+        res.writeHead(301, { Location: p + '/' + new URL(req.url, 'http://x').search });
+        return res.end();
+      }
       if (p.endsWith('/')) p += 'index.html';
       const f = path.resolve(root, '.' + p);
       if (!f.startsWith(root + path.sep) && f !== root) {
@@ -27,8 +36,9 @@ export function serve(dir, port = 0) {
       }
       if (!fs.existsSync(f) || !fs.statSync(f).isFile()) {
         requests.push([p, 404]);
-        res.writeHead(404);
-        return res.end('not found');
+        const fallback = path.join(root, '404.html');
+        res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' });
+        return res.end(fs.existsSync(fallback) ? fs.readFileSync(fallback) : 'not found');
       }
       requests.push([p, 200]);
       const body = fs.readFileSync(f);

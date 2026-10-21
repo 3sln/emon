@@ -73,3 +73,10 @@ li { margin: 0.4rem 0; }
   .pair { grid-template-columns: 1fr; }
   .frame { height: 60vh; }
 }
+
+.skip-link { position:absolute; inset-block-start:-5rem; inset-inline-start:1rem; padding:.5rem 1rem; background:var(--bg,#fff); z-index:10; }
+.skip-link:focus { inset-block-start:1rem; }
+:focus-visible { outline:3px solid #5478f5; outline-offset:3px; }
+:lang(ja), :lang(zh-Hans), :lang(ko) { line-height:1.8; }
+/* The site chrome wraps the independent converter when built by bb site. */
+body:has(.site-header){padding:0 0 48px}.site-header{max-width:none}.site-header~header,.site-header~main{width:min(72rem,calc(100% - 2rem))}.site-header~header{padding-block:1.5rem}.site-header~header h1{font-size:2rem}.site-header~main>section{padding-block:1.5rem;border-block-end:1px solid var(--line)}.site-footer{max-width:72rem}.site-footer p{font-size:.8rem}.site-footer .wordmark{color:var(--fg)}

@@ -13,7 +13,8 @@
 ;;
 ;; The sources are committed beside the outputs, so nothing here reads corpus/. The viewer's light styling lives ONLY in
 ;; index.html (each generated page is shown through `srcdoc` with a style element spliced in); the output files are untouched.
-(require '[clojure.java.io :as io]
+(require '[clojure.edn]
+         '[clojure.java.io :as io]
          '[babashka.fs :as fs]
          '[babashka.process :refer [shell]]
          '[clojure.string :as str])
@@ -23,65 +24,7 @@
 (def runner (str root "/tools/accuracy/predict-emon-fusion-live.sh"))
 
 ;; id, source file, kind (:pdf or :img), group, one line for the index, extra driver flags for an assets variant
-(def samples
-  [{:id "gao-report" :src "gao-report.pdf" :group "Real-world reports" :title "GAO report (excerpt, 8 pages)"
-    :note "Born-digital government report: cover, headings, running furniture, footnote-style notes, tables. US Government work, trimmed from 45 pages."}
-   {:id "irs-pub15-excerpt" :src "irs-pub15-excerpt.pdf" :group "Real-world reports" :title "IRS Publication 15 (pages 1-10)"
-    :note "The large real-world stand-in (a 10-K was not redistributable): dense multi-column publication text, lists, boxes, tables. Public domain."}
-   {:id "columns-two" :src "columns-two.pdf" :group "Born-digital layout" :title "Two columns"
-    :note "Synthetic two-column article: reading order across columns and pages."}
-   {:id "footnotes" :src "footnotes.pdf" :group "Born-digital layout" :title "Footnotes"
-    :note "Per-page footnotes tied to their marks and kept out of the body."}
-   {:id "dropcap" :src "dropcap.pdf" :group "Born-digital layout" :title "Drop cap / initial"
-    :note "A large initial letter that must rejoin its word instead of becoming a stray paragraph."}
-   {:id "align-justify" :src "align-justify.pdf" :group "Born-digital layout" :title "Alignment and hyphenation"
-    :note "Justified, ragged and centred paragraphs with hyphenated line ends; data-emon-align on blocks."}
-   {:id "figures-charts" :src "figures-charts.pdf" :group "Figures" :title "Figures, charts and captions" :assets true
-    :note "Charts with captions as figure nodes. The .assets.html variant (assets=figures) inlines each figure as a PNG."}
-   {:id "invoice" :src "invoice.pdf" :group "Business documents" :title "Invoice"
-    :note "Header block, bill-to, line-item table with right-aligned amounts, totals, a footer."}
-   {:id "bank-statement" :src "bank-statement.pdf" :group "Business documents" :title "Bank statement (3 pages)"
-    :note "A transaction table over three pages with its header repeated on each: one table, one thead."}
-   {:id "bank-statement-real" :src "bank-statement-real.pdf" :group "Business documents" :title "Real bank statement (4 pages)"
-    :note "A real retail bank statement, PII replaced: account summary, three transaction tables with styled header rows, right-aligned amount and balance columns, running header and footer."}
-   {:id "irs-form-w9" :src "irs-form-w9.pdf" :group "Business documents" :title "IRS Form W-9 (pages 1-2)"
-    :note "A real US tax form: fields, checkboxes, numbered lines, boxed parts. Public domain."}
-   {:id "irs-form-1040" :src "irs-form-1040.pdf" :group "Business documents" :title "IRS Form 1040 (2 pages)"
-    :note "The real 2025 Form 1040: income lines, dependants, checkboxes, boxed parts. Public domain. It crashed the Rust driver (i32 overflow, D521) until it was fixed."}
-   {:id "table-multipage" :src "table-multipage.pdf" :group "Tables" :title "Table across four pages"
-    :note "A ruled table whose header row repeats per page (thead) and whose body continues."}
-   {:id "table-zebra" :src "table-zebra.pdf" :group "Tables" :title "Zebra-striped table"
-    :note "Rows told apart by shading only, no ruling lines."}
-   {:id "table-spans" :src "table-spans.pdf" :group "Tables" :title "Spanning cells"
-    :note "Partial rowspan/colspan: cells that span rows or columns."}
-   {:id "table-unruled" :src "table-unruled.pdf" :group "Tables" :title "Unruled (whitespace) table"
-    :note "No lines at all: columns found from alignment of the text."}
-   {:id "uscourts-table" :src "uscourts-table.pdf" :group "Tables" :title "US Courts statistical table (4 pages)"
-    :note "A real, wide statistical table with spanning headers and footnotes. US Government work."}
-   {:id "watermark-draft" :src "watermark-draft.pdf" :group "Artifacts" :title "DRAFT watermark"
-    :note "A diagonal DRAFT watermark: it must be recorded as a watermark and stay out of the body."}
-   {:id "seal-stamp" :src "seal-stamp.pdf" :group "Artifacts" :title "Round seal and stamp"
-    :note "A vector stamp and a seal: each becomes a seal node, its words stay out of the body."}
-   {:id "signature" :src "signature.pdf" :group "Artifacts" :title "Signature over a name"
-    :note "A handwritten-style signature across a typed name: a seal node of subkind signature, name still read."}
-   {:id "tagged-table" :src "tagged-table.pdf" :group "Born-digital layout" :title "Tagged PDF (table)"
-    :note "A tagged PDF: the structure tree (Table/TR/TH/TD) is the source of the table."}
-   {:id "broken-tounicode" :src "broken-tounicode.pdf" :group "OCR fusion" :title "Broken ToUnicode font"
-    :note "The text layer is wrong (unmapped glyphs); OCR fusion replaces it with what the page shows."}
-   {:id "scan-plain" :src "scan-plain.pdf" :group "Scans" :title "Plain scan (two columns)"
-    :note "Black-and-white raster only, no text layer: everything is OCR."}
-   {:id "scan-color-invoice" :src "scan-color-invoice.pdf" :group "Scans" :title "Colour scan of an invoice"
-    :note "A colour raster with paper tone; table recovered from OCR geometry."}
-   {:id "scan-stamp-overlay" :src "scan-stamp-overlay.pdf" :group "Scans" :title "Scan with a stamp overlay"
-    :note "A stamp printed over the text: the stamp should become a seal node, the body text survive."}
-   {:id "image-invoice" :src "image-invoice.jpg" :kind :img :group "Raster images" :title "JPEG input (invoice)"
-    :note "A bare JPEG as input (synthetic katanaml invoice, MIT / CC BY 4.0): same pipeline as a scan."}
-   {:id "image-statement" :src "image-statement.png" :group "Raster images" :title "PNG input (statement, low resolution)"
-    :note "A bare PNG (synthetic Bankstatemently preview, MIT) with a faint BANK DOCUMENT watermark; low resolution on purpose."}
-   {:id "arabic-rtl" :src "arabic-rtl.pdf" :group "Scripts" :title "Arabic (right to left)"
-    :note "RTL text: dir attributes and logical order, not the visual order of the glyphs."}
-   {:id "cjk" :src "cjk.pdf" :group "Scripts" :title "CJK"
-    :note "Chinese/Japanese text: no inter-word spaces, ideographic punctuation, CJK font."}])
+(def samples (clojure.edn/read-string (slurp (str sdir "/catalog.edn"))))
 
 (defn convert! [{:keys [id src]} ext env-out flags dest]
   (let [tmp (str dest ".tmp")

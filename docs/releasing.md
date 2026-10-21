@@ -22,7 +22,7 @@ secrets**. Five workflows do the work and a person decides:
 * **`draft.yml`** (push to `main` touching `version.edn`, `workflow_call`, `workflow_dispatch`) keeps a DRAFT release for the version in `version.edn`, pointed at a
   commit of `main` by its full sha. The tag `vX.Y.Z` does not exist yet: GitHub makes it at that commit when you publish the draft.
 * **`publish.yml`** (starts when you publish the draft) re-verifies everything itself, waits for your approval, then attaches the archives and publishes to every registry.
-* `native.yml` (the five CLI targets) and `pages.yml` (the demo) are called by the others; `pr.yml` checks pull requests (`pr / verdict`).
+* `native.yml` (the five CLI targets) and `pages.yml` (the website) are called by the others; `pr.yml` checks pull requests (`pr / verdict`).
 
 Nothing is published until you publish the draft **and** approve the `release` environment: two deliberate clicks.
 
@@ -110,10 +110,13 @@ Nothing else is needed: the Go module, the draft, the statuses and the assets us
   *Deployment branches and tags*: *Selected branches and tags*, add the branch rule `main` and the **tag rule `v*`** (a `release` event runs on the tag ref; without the tag
   rule the publish jobs are refused).
 * **`github-pages`** (GitHub created it when Pages was first deployed, or create it). Its default allows only the `main` branch: add the **tag rule `v*`**, because
-  `publish.yml` deploys the demo from the release tag's commit.
+  `publish.yml` deploys the website from the release tag's commit.
 
 **Pages.** Settings > Pages > *Source*: **GitHub Actions**. The custom domain `emon.3sln.com` is set (a DNS CNAME to `3sln.github.io`; tick *Enforce HTTPS* once the
-certificate is issued). A deployment from Actions keeps the domain; no `CNAME` file is needed.
+certificate is issued). A deployment from Actions keeps the domain; no `CNAME` file is needed. The root is the website;
+the browser demo lives under `/demo/`. `pages.yml` installs both npm lockfiles, fetches the pinned pdfium WebAssembly build, and runs
+`bb site --out _site --check` before uploading the artifact. This checks the translated pages, documentation and samples as well as converting
+documents in headless Chrome. A deployment uses the verified release commit; a manual run can publish a selected ref.
 
 **`main` and the bump.** `bump.yml` pushes `Release vX.Y.Z` directly to `main` with `GITHUB_TOKEN`. If `main` gets a branch protection rule or ruleset (required pull requests,
 required checks), that push is refused unless **`github-actions` is a bypass actor** (Settings > Rules > Rulesets > the ruleset > *Bypass list* > add *GitHub Actions*; for the
@@ -145,8 +148,8 @@ bb package                          # builds every artifact into dist/ (the pack
 4. Have the secrets and the NuGet setup of section 4 in place, then `gh workflow run publish.yml -f tag=v0.1.0 -f ref=main` : **a manual run is always a dry run.** It runs the version check, reports that
    the tag, release or status does not exist yet (SKIP), finds the archives of `main`'s tip and checks the artifact is still there, then in each registry job prints which
    credentials are set, asks the registry whether the version is already there, and runs `cargo publish --dry-run` / `npm publish --dry-run`. It attaches nothing and deploys no
-   demo. Read its summary.
-5. `gh workflow run pages.yml -f ref=main` : deploys the demo from `main` (this one is real, but it is the demo page, and a rerun replaces it).
+   website. Read its summary.
+5. `gh workflow run pages.yml -f ref=main` : deploys the website from `main` (this is a real deployment, and a rerun replaces it).
 
 ## 6. Releasing
 
@@ -168,7 +171,7 @@ bb package                          # builds every artifact into dist/ (the pack
    after it was published" below.)
 5. Watch the **summary** job. All green: install each package from its registry in a scratch directory and convert a sample (`cargo add emon`, `npm i @3sln/emon`,
    `dotnet add package Emon`, a Maven dependency on `com.3sln:emon`, `go get github.com/3sln/emon/go@v0.1.0`). Maven Central shows the artifact within about
-   30 minutes of `PUBLISHED`; NuGet within minutes; the Go proxy on first request; the demo at <https://emon.3sln.com>.
+   30 minutes of `PUBLISHED`; NuGet within minutes; the Go proxy on first request; the website at <https://emon.3sln.com/> and the demo at <https://emon.3sln.com/demo/>.
 
 ### Every later release
 

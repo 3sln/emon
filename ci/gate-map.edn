@@ -34,6 +34,8 @@
   {:id "publish-selftest"        :cmd ["bb" "publish" "--self-test"]                          :secs 1   :why "the registry publishers' idempotence checks and parsers (D547)"}
   {:id "docs"          :cmd ["bb" "docs" "--check"]                                    :secs 1   :why "the documentation is what `bb docs` generates: the option, limit and Model tables, the host API indexes, the snippets; every code block is a compiled snippet or marked unverified (D549)"}
   {:id "docs-selftest" :cmd ["bb" "docs" "--self-test"]                                :secs 1   :why "the documentation checks catch a stale table, a stale snippet, an unmarked code block, a dead link and a stale version (D549)"}
+  {:id "site"          :cmd ["bb" "site" "--check" "--no-demo"]                         :secs 2   :why "the site builds; every catalogue is complete, links, fragments, HTML, sizes and contrast hold; demo and pdfium renders skip loudly (D629); measured 1.9s with warm dependencies"}
+  {:id "site-selftest" :cmd ["bb" "site" "--self-test"]                                :secs 1   :why "planted translation, placeholder, link, fragment, HTML, size and contrast failures are caught (D629)"}
   {:id "ci-selftest"   :cmd ["bb" "ci" "map-coverage" "--self-test"]                  :secs 32  :why "the planner: globs, planted map failures, the plan, the version-only rule (the release bump plans no gate) and what verify.yml runs (D528, D550)"}
   {:id "ci-coverage"   :cmd ["bb" "ci" "coverage"]                                    :secs 1   :why "the gate map covers the tree, every gate is in a shard, every workflow task exists, every replay gate re-derives (includes rederive --check)"}]
 
@@ -101,7 +103,7 @@
   {:glob ".env.example" :gates [] :why "a template of the corpus credentials; nothing reads it"}
   {:glob ".github/**" :gates [] :why "workflows and the setup action: the fast core's `ci coverage` reads every workflow (tasks exist, shards run, the plan is called)"}
   {:glob "ci/**" :gates [] :why "this map: the fast core's `ci coverage` runs map-coverage over it"}
-  {:glob "samples/**" :gates [] :why "comparison samples regenerated LIVE by `bb samples` (needs pdfium and Tesseract); not read by a gate"}
+  {:glob "samples/**" :gates [] :why "committed source and output samples feed the website; regeneration by `bb samples` needs pdfium and Tesseract, the fast core checks site links and catalogues"}
   {:glob "bench/**" :gates [] :why "benchmark mains and scripts, run by hand (nome's bench); not a gate"}
   {:glob "bb.edn" :gates [] :why "the task table: `ci coverage` and `kin/scripts/gates` hold it to the gate list; what a gate does lives in its script, which is mapped"}
   {:glob "deps.edn" :gates [] :why "the Clojure-consumer form of bb.edn's paths"}
@@ -192,6 +194,8 @@
   {:glob "tools/perf/**" :gates [] :why "the perf comparators (`bb perf`): a report, not a gate"}
   {:glob "tools/pdfium/**" :gates ["render" "pdfium-wasm"] :why "the pinned pdfium and its fetcher (native and the wasm build): the render and pdfium-wasm transcripts are recorded with it"}
   {:glob "tools/pdfium_wasm/**" :gates ["pdfium-wasm"] :why "the pdfium-wasm recorder (live, through the JS SDK in Node) and its digests"}
+  {:glob "site/**" :gates [] :why "website content, styles and translations; fast core site and site-selftest hold it (D629)"}
+  {:glob "tools/site/**" :gates [] :why "website generator and checks; fast core site and site-selftest hold them (D629)"}
   {:glob "tools/demo/**" :gates [] :why "`bb demo` builds and checks the browser demo (Chrome, downloads): not a gate; the fast core's release-audit holds what it vendors against the inventory"}
   {:glob "tools/render/**" :gates ["render"] :why "the render recorder and fixtures"}
   {:glob "tools/asset/**" :gates ["asset"] :why "the asset recorder"}
@@ -217,7 +221,7 @@
   {:glob "host/pod/**" :gates ["@host"] :hosts ["pod"] :why "the babashka pod"}
   {:glob "host/{wasm,js}/**" :gates ["@host"] :hosts ["wasm"] :why "the WASM binding and the JS SDK"}
   {:glob "host/js/src/{pdfium,render}.js" :gates ["pdfium-wasm"] :hosts ["wasm"] :why "the browser's pdfium adapter and the render port's form: the pdfium-wasm gate drives them live in Node"}
-  {:glob "demo/**" :gates [] :why "the browser demo's page and Worker: `bb demo --check` (headless Chrome) is its check, not a gate"}
+  {:glob "demo/**" :gates [] :why "the browser demo and its translations feed the website; the fast core checks catalogues, full `bb site --check` and `bb demo --check` use headless Chrome; not a gate"}
   {:glob "gen/rust/**" :gates ["@engine" "fuzz"] :why "the generated tree: drift (core) says it is what kin says; these say what it does"}
   {:glob "gen/go/**" :gates ["@engine" "fuzz"] :hosts ["go"] :why "the generated Go"}
   {:glob "gen/java/**" :gates ["@engine" "fuzz"] :hosts ["java"] :why "the generated Java"}

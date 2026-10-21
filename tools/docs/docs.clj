@@ -29,7 +29,7 @@
          '[clojure.string :as str])
 
 (def hosts [:rust :go :java :csharp :js :c :pod])
-(def demo-url "https://emon.3sln.com/") ; the browser demo (GitHub Pages, custom domain)
+(def demo-url "https://emon.3sln.com/demo/") ; the browser demo (GitHub Pages, custom domain)
 (def code-langs #{"rust" "go" "java" "csharp" "js" "c" "clojure" "sh" "toml" "xml"})
 (def md-files (fn [] (vec (concat ["README.md" "CONTRIBUTING.md" "docs/model.md" "docs/options.md" "release/pkg/README.md"]
                                   (map #(str "docs/hosts/" (name %) ".md") hosts)))))
