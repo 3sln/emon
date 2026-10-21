@@ -1,11 +1,12 @@
-# The project website on GitHub Pages: built and checked from the verified release commit or a manually selected ref.
+# The project website on GitHub Pages: built and checked from main or a manually selected ref.
 # Includes localized landing pages, samples, English documentation, and the browser demo under /demo/.
 # Settings > Pages > Source must be "GitHub Actions"; the custom domain remains a repository setting.
 name: pages
 
-#   publish.yml (P11.10, D547) CALLS this file (`workflow_call`, `ref` = the verified commit) after it has re-verified the release; it no longer starts on a
-#   `release` event of its own, which would deploy before the verification.
+# D1760: deploy main independently of releases, so old release tags cannot roll back the site.
 on:
+  push:
+    branches: [main]
   workflow_call:
     inputs:
       ref:
@@ -42,7 +43,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: 3sln/emon
-          ref: ${{ inputs.ref }}
+          ref: ${{ inputs.ref || github.event.repository.default_branch }}
           path: emon
       - uses: actions/checkout@v4
         with:

@@ -29,7 +29,7 @@
 
 (def triples-cli ["aarch64-apple-darwin" "x86_64-apple-darwin" "x86_64-unknown-linux-gnu" "aarch64-unknown-linux-gnu" "x86_64-pc-windows-msvc"])
 (def triples-lib ["aarch64-apple-darwin" "x86_64-apple-darwin" "x86_64-unknown-linux-gnu" "aarch64-unknown-linux-gnu"])
-(def registries ["crates" "npm" "nuget" "maven" "go" "pages"])
+(def registries ["crates" "npm" "nuget" "maven" "go"])
 (def sums-file "SHA256SUMS")
 (def artifact-name "release-archives")
 
@@ -359,7 +359,7 @@
       (t! "summary names the failed registries and the recovery" (and (str/includes? (:markdown bad) "Failed: npm, maven") (str/includes? (:markdown bad) "Re-run failed jobs")))
       (t! "summary: a dry run says so, and never claims anything was published"
           (let [m (:markdown (summary-md "v1.2.3" [["npm" "success" "dry-run"]] true))] (and (str/includes? m "DRY RUN: nothing was published") (not (str/includes? m "published |")))))
-      (t! "summary: a skipped registry is not a failure" (:ok? (summary-md "v1.2.3" [["pages" "skipped" nil]]))))
+      (t! "summary: a skipped registry is not a failure" (:ok? (summary-md "v1.2.3" [["crates" "skipped" nil]]))))
     (done!)))
 
 ;; ---------------------------------------------------------------------------------------------------- main

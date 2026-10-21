@@ -8,7 +8,7 @@ secrets**. Five workflows do the work and a person decides:
  ----------------------      -----------------      ------------------------------     ---------------------------------
  verify.yml                  bump.yml               draft.yml                          publish.yml
   fast core + the gates       commit "Release        a DRAFT release vX.Y.Z             verify -> approve (environment `release`)
-  the change since the        vX.Y.Z" to main,       targeting that commit              assets | crates | npm | nuget | maven | go | pages
+  the change since the        vX.Y.Z" to main,       targeting that commit              assets | crates | npm | nuget | maven | go
   last verified commit        then calls verify.yml  (no tag yet)                       summary (names any partial publish)
   calls for, in full;         and draft.yml for it
   status emon/verified;
@@ -22,7 +22,7 @@ secrets**. Five workflows do the work and a person decides:
 * **`draft.yml`** (push to `main` touching `version.edn`, `workflow_call`, `workflow_dispatch`) keeps a DRAFT release for the version in `version.edn`, pointed at a
   commit of `main` by its full sha. The tag `vX.Y.Z` does not exist yet: GitHub makes it at that commit when you publish the draft.
 * **`publish.yml`** (starts when you publish the draft) re-verifies everything itself, waits for your approval, then attaches the archives and publishes to every registry.
-* `native.yml` (the five CLI targets) and `pages.yml` (the website) are called by the others; `pr.yml` checks pull requests (`pr / verdict`).
+* `native.yml` (the five CLI targets) is called by verification; `pages.yml` deploys the website on push to `main`; `pr.yml` checks pull requests (`pr / verdict`).
 
 Nothing is published until you publish the draft **and** approve the `release` environment: two deliberate clicks.
 
@@ -98,7 +98,7 @@ job's OIDC token for a short-lived API key (about an hour) and hands it to `bb p
 1. nuget.org > your profile > *Trusted Publishing* > create a policy: repository owner `3sln`, repository `emon`, workflow file `publish.yml`, environment `release`.
 2. An **organization** Actions variable `NUGET_USER` (Organization settings > Secrets and variables > Actions > Variables) holding your nuget.org **profile name** (not your
    email). **An organization variable must grant repository access to `emon`** (*Repository access*: all repositories, or selected, with `emon` in the list); otherwise
-   `vars.NUGET_USER` is empty in the job and the login fails.
+   `vars.NUGET_USER` is empty. Alternatively create a repository Actions variable `NUGET_USER`. The job checks this before building, including on dry runs, and explains how to fix access.
 
 The login runs only for a real publish (the `release` event). A manual dry run mints no key and `bb publish nuget --dry-run` needs none.
 
@@ -109,10 +109,9 @@ Nothing else is needed: the Go module, the draft, the statuses and the assets us
 * **`release`** (create it). *Required reviewers*: add **@raystubbs**. **Untick "Prevent self-review"**, otherwise a sole maintainer cannot approve their own release.
   *Deployment branches and tags*: *Selected branches and tags*, add the branch rule `main` and the **tag rule `v*`** (a `release` event runs on the tag ref; without the tag
   rule the publish jobs are refused).
-* **`github-pages`** (GitHub created it when Pages was first deployed, or create it). Its default allows only the `main` branch: add the **tag rule `v*`**, because
-  `publish.yml` deploys the website from the release tag's commit.
+* **`github-pages`** (GitHub created it when Pages was first deployed, or create it). Allow the `main` branch; release tags need no access.
 
-**Pages.** Settings > Pages > *Source*: **GitHub Actions**. The custom domain `emon.3sln.com` is set (a DNS CNAME to `3sln.github.io`; tick *Enforce HTTPS* once the
+**Pages.** D1760 supersedes D547/D550: publish does not call Pages. Pushes to `main` deploy the current site independently, preventing an older release from reverting it and avoiding tag environment restrictions. The site documents the release version in its source. Settings > Pages > *Source*: **GitHub Actions**. The custom domain `emon.3sln.com` is set (a DNS CNAME to `3sln.github.io`; tick *Enforce HTTPS* once the
 certificate is issued). A deployment from Actions keeps the domain; no `CNAME` file is needed. The root is the website;
 the browser demo lives under `/demo/`. `pages.yml` installs both npm lockfiles, fetches the pinned pdfium WebAssembly build, and runs
 `bb site --out _site --check` before uploading the artifact. This checks the translated pages, documentation and samples as well as converting
@@ -223,7 +222,7 @@ registry did not succeed. Every registry step first asks whether the version is 
      (*Publishing > Deployments*); a `PUBLISHED` one is permanent. If the job timed out while the Portal was still validating, look at the deployment in the Portal
      first, and only rerun when it is gone or failed (a second upload of the same version while the first validates is rejected).
    - **Go**: the tag `go/vX` exists once pushed and the proxy keeps the module forever. A bad Go version is superseded by the next one (add `retract` to the module's go.mod then).
-   - **Pages**: rerun the `pages` job or `gh workflow run pages.yml -f ref=vX.Y.Z`; a newer deployment replaces the old.
+   - **Pages**: run `gh workflow run pages.yml --ref main -f ref=main`; the website follows `main`, independently of publication.
 5. If some registries have the version and the fix needs **code**: the published ones are permanent. Fix on `main`, `bump.yml` the next patch version and release that to all
    registries; leave the half-published version's release marked *pre-release* with a note.
 
@@ -244,3 +243,5 @@ it, so a moved tag cannot publish.
 * Locally: `bb release-notes --since TAG`, `bb release-verify --tag T --dry-run`, `bb release-ops next --bump patch`, `bb ci plan --base REF`, `bb ci verify-plan --head SHA`
   (needs `gh`), `bb publish crates --dry-run` (checks `CARGO_REGISTRY_TOKEN` is in your environment, and runs `cargo publish --dry-run` over `dist/` after `bb package --host rust`).
 * The Go module is `github.com/3sln/emon/go`, tag `go/vX.Y.Z`, committed as `go/` on a tag-only commit by the publish job (D542); the repository's own tag is `vX.Y.Z`.
+
+The Go tag-only commit keeps the verified release commit as its sole parent and changes only `go/` and `.github/workflows/`; the workflows tree is copied from the freshly fetched origin default branch. An isolated index and `commit-tree` leave the checkout untouched. Existing tags with that parent and changes confined to those paths (including legacy tags changing only `go/`) are skipped. For 0.1.0 the coordinator pushed `go/v0.1.0` manually from a local checkout; its parent is `2e87e026`, and reruns recognise it.

@@ -69,7 +69,7 @@
 (defn npm-args
   "npm publish arguments for a tarball. provenance? only in Actions with an OIDC token (the workflow grants id-token: write)."
   [tgz v provenance? userconfig]
-  (vec (concat ["publish" tgz "--access" "public" "--userconfig" userconfig]
+  (vec (concat ["publish" tgz "--access" "public" (str "--userconfig=" userconfig)]
                (when provenance? ["--provenance"])
                (when (prerelease? v) ["--tag" "next"]))))
 
@@ -100,11 +100,29 @@
 
 (defn go-tag [v] (str "go/v" v))
 (defn go-decision
-  "What to do about the Go tag. remote: the sha the tag has on the remote or nil; parent: that commit's first parent (known only if remote); head: the verified commit."
-  [{:keys [remote parent head]}]
+  "What to do about the Go tag. remote: the sha the tag has on the remote or nil; parent: that commit's first parent (known only if remote); head: the verified commit; valid-tree?: changes confined to go/ and workflows, including legacy go-only tags."
+  [{:keys [remote parent head valid-tree?]}]
   (cond (nil? remote) :create
-        (= parent head) :exists
+        (and (= parent head) valid-tree?) :exists
         :else :conflict))
+
+(defn go-shape? [paths]
+  (and (some #(str/starts-with? % "go/") paths)
+       (every? #(or (str/starts-with? % "go/") (str/starts-with? % ".github/workflows/")) paths)))
+
+(defn go-commit! "Build an isolated index; never move HEAD or alter the checkout/index." [dir head default-tip module v]
+  (let [tmp (fs/create-temp-dir {:prefix "emon-go-"})
+        opts {:dir dir :extra-env {"GIT_INDEX_FILE" (str (fs/path tmp "index"))}}
+        git! (fn [& args] (str/trim (:out (apply rl/run! opts "git" args))))]
+    (try
+      (fs/copy-tree module (fs/path tmp "go"))
+      (git! "read-tree" head)
+      (git! "rm" "-r" "--cached" "--ignore-unmatch" ".github/workflows")
+      (git! "read-tree" "--prefix=.github/workflows/" (str default-tip ":.github/workflows"))
+      (git! (str "--work-tree=" tmp) "add" "-f" "go")
+      (git! "-c" "user.name=github-actions[bot]" "-c" "user.email=41898282+github-actions[bot]@users.noreply.github.com"
+            "commit-tree" (git! "write-tree") "-p" head "-m" (str "go module " v " (tag-only commit)"))
+      (finally (fs/delete-tree tmp)))))
 
 ;; ---------------------------------------------------------------------------------------------------- helpers
 (defn- check-env! [registry dry?]
@@ -163,7 +181,7 @@
             _ (spit rc "//registry.npmjs.org/:_authToken=${NPM_TOKEN}\nregistry=https://registry.npmjs.org/\n")
             prov? (and (= "true" (System/getenv "GITHUB_ACTIONS")) (not (str/blank? (System/getenv "ACTIONS_ID_TOKEN_REQUEST_URL"))))
             args (cond-> (npm-args tgz v prov? rc) dry? (conj "--dry-run"))]
-        (say "npm " (str/join " " (remove #{rc} args)) (when-not prov? "   (no OIDC token: published WITHOUT provenance)"))
+        (say "npm " (str/join " " (map #(if (= % (str "--userconfig=" rc)) "--userconfig=<private npmrc>" %) args)) (when-not prov? "   (no OIDC token: published WITHOUT provenance)"))
         (let [r (apply run-live! {} "npm" args)]
           (cond (zero? (:exit r)) (do (say (if dry? "npm dry run ok" (str "published " pkg "@" v))) (if dry? "dry-run" "published"))
                 (re-find #"cannot publish over|previously published" (str (:err r) (:out r))) (do (say "npm says it has it: skipped") "already-published")
@@ -270,17 +288,19 @@
                    (rl/git! "fetch" "--no-tags" "origin" (str "+refs/tags/" tag ":refs/tags/" tag))
                    (let [r (rl/git "rev-parse" (str "refs/tags/" tag "^{commit}^"))] (when (zero? (:exit r)) (str/trim (:out r)))))]
       (say "the Go module is github.com/3sln/emon/go, tag " tag)
-      (case (go-decision {:remote remote :parent parent :head head})
+      (case (go-decision {:remote remote :parent parent :head head
+                          :valid-tree? (when remote
+                                         (go-shape? (str/split-lines (:out (rl/git! "diff-tree" "--no-commit-id" "--name-only" "-r" head remote)))))})
         :exists (do (say tag " already exists on the remote, as a tag-only commit on " head ": skipped") (outcome! "already-published"))
         :conflict (rl/die 1 (str tag " exists on the remote (" remote ") but is not a tag-only commit on " head ". A Go version is permanent once the proxy has it; release the next version."))
         :create (if dry?
-                  (do (say "[dry run] would: copy " tree " to ./go, commit it on top of " head ", tag " tag " and push the tag only") (outcome! "dry-run"))
-                  (do (fs/copy-tree tree "go")
-                      (rl/git! "add" "-f" "go")
-                      (rl/git! "-c" "user.name=github-actions[bot]" "-c" "user.email=41898282+github-actions[bot]@users.noreply.github.com"
-                               "commit" "-q" "-m" (str "go module " v " (tag-only commit)\n\nThe assembled tree of `bb package --host go`, committed as go/ so that\n"
-                                                      "github.com/3sln/emon/go@v" v " resolves (tag " tag "). Not on any branch."))
-                      (rl/git! "tag" tag)
+                  (do (say "[dry run] would: assemble " tree " as go/ with default-branch workflows, in an isolated index on top of " head ", tag " tag " and push the tag only") (outcome! "dry-run"))
+                  (let [default (str/trim (:out (rl/git! "ls-remote" "--symref" "origin" "HEAD")))
+                        branch (second (re-find #"(?m)^ref: refs/heads/([^\s]+)\s+HEAD" default))
+                        _ (when-not branch (rl/die 1 "Cannot discover origin's default branch"))
+                        _ (rl/git! "fetch" "--no-tags" "origin" (str "+refs/heads/" branch ":refs/remotes/origin/" branch))
+                        commit (go-commit! (str (fs/cwd)) head (str "refs/remotes/origin/" branch) (str (fs/absolutize tree)) v)]
+                      (rl/git! "tag" tag commit)
                       (rl/git! "push" "origin" (str "refs/tags/" tag))
                       (say "pushed " tag)
                       ;; tell the proxy now (best effort): it learns on the first request, and the first request should be ours
@@ -313,12 +333,13 @@
     (t! "npm view: empty means absent" (not (npm-has? "" "0.1.0")))
     (t! "npm view: another version is not this one" (not (npm-has? "0.1.1" "0.1.0")))
     (t! "npm args: public access, a private userconfig, no provenance outside Actions"
-        (= ["publish" "a.tgz" "--access" "public" "--userconfig" "rc"] (npm-args "a.tgz" "0.1.0" false "rc")))
+        (= ["publish" "a.tgz" "--access" "public" "--userconfig=rc"] (npm-args "a.tgz" "0.1.0" false "rc")))
     (t! "npm packages: pdfium-wasm first, both tarballs named by version" (= [["@3sln/pdfium-wasm" "dist/js/3sln-pdfium-wasm-0.1.0.tgz"] ["@3sln/emon" "dist/js/3sln-emon-0.1.0.tgz"]] (npm-packages "0.1.0")))
     (t! "npm outcome: published when any package was, dry-run, else already-published"
         (and (= "published" (npm-outcome ["already-published" "published"])) (= "dry-run" (npm-outcome ["dry-run" "already-published"]))
              (= "already-published" (npm-outcome ["already-published" "already-published"]))))
-    (t! "npm args: provenance when asked"(some #{"--provenance"} (npm-args "a.tgz" "0.1.0" true "rc")))
+    (t! "npm args: config cannot swallow provenance"
+        (= ["publish" "a.tgz" "--access" "public" "--userconfig=rc" "--provenance"] (npm-args "a.tgz" "0.1.0" true "rc")))
     (t! "npm args: a prerelease goes to the next tag" (= ["--tag" "next"] (take-last 2 (npm-args "a.tgz" "0.2.0-rc.1" false "rc"))))
     (t! "central auth is bearer base64(user:pass)" (= "Bearer dTpw" (central-auth "u" "p")))
     (t! "central state: PUBLISHED" (= :published (:state (central-state "{\"deploymentState\":\"PUBLISHED\"}"))))
@@ -339,9 +360,40 @@
             (fs/delete f) ok)))
     (t! "go tag" (= "go/v0.1.0" (go-tag "0.1.0")))
     (t! "go: no remote tag -> create" (= :create (go-decision {:head "h"})))
-    (t! "go: remote tag on a child of HEAD -> exists" (= :exists (go-decision {:remote "r" :parent "h" :head "h"})))
+    (t! "go: remote tag on a child of HEAD -> exists" (= :exists (go-decision {:remote "r" :parent "h" :head "h" :valid-tree? true})))
     (t! "go: remote tag elsewhere -> conflict" (= :conflict (go-decision {:remote "r" :parent "x" :head "h"})))
     (t! "go: remote tag whose parent is unknown -> conflict" (= :conflict (go-decision {:remote "r" :parent nil :head "h"})))
+    (t! "Go tree construction, legacy tags and checkout isolation"
+        (let [dir (str (fs/create-temp-dir {:prefix "emon-go-test-"}))
+              git! (fn [& args] (str/trim (:out (apply rl/run! {:dir dir} "git" args))))]
+          (try
+            (git! "init" "-q")
+            (git! "config" "user.name" "Test") (git! "config" "user.email" "test@example.com")
+            (fs/create-dirs (fs/path dir ".github/workflows"))
+            (spit (str (fs/path dir ".github/workflows/old.yml")) "old")
+            (spit (str (fs/path dir "keep")) "release")
+            (git! "add" ".") (git! "commit" "-qm" "release")
+            (let [head (git! "rev-parse" "HEAD")]
+              (fs/delete (fs/path dir ".github/workflows/old.yml"))
+              (spit (str (fs/path dir ".github/workflows/new.yml")) "new")
+              (spit (str (fs/path dir "keep")) "main")
+              (git! "add" ".") (git! "commit" "-qm" "default")
+              (let [tip (git! "rev-parse" "HEAD") module (fs/path dir "module")]
+                (fs/create-dirs module) (spit (str (fs/path module "go.mod")) "module example.com/go")
+                (let [before (git! "status" "--porcelain")
+                      commit (go-commit! dir head tip (str module) "0.1.0")
+                      legacy (go-commit! dir head head (str module) "0.1.0")
+                      paths (str/split-lines (git! "diff-tree" "--no-commit-id" "--name-only" "-r" head commit))]
+                  (and (= head (git! "rev-parse" (str commit "^")))
+                       (= (git! "rev-parse" (str tip ":.github/workflows")) (git! "rev-parse" (str commit ":.github/workflows")))
+                       (= "release" (git! "show" (str commit ":keep")))
+                       (= "module example.com/go" (git! "show" (str commit ":go/go.mod")))
+                       (= tip (git! "rev-parse" "HEAD")) (= before (git! "status" "--porcelain"))
+                       (go-shape? paths)
+                       (go-shape? (str/split-lines (git! "diff-tree" "--no-commit-id" "--name-only" "-r" head legacy)))
+                       (not (go-shape? ["go/go.mod" "keep"]))
+                       (= :conflict (go-decision {:remote commit :parent head :head head :valid-tree? false}))))))
+            (finally (fs/delete-tree dir)))))
     (t! "prerelease?" (and (prerelease? "1.0.0-rc.1") (not (prerelease? "1.0.0"))))
     (done!)))
 
