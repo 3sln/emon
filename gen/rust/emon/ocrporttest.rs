@@ -259,6 +259,7 @@ fn test_the_script_codes_are_their_letters_packed() {
 }
 pub(crate) fn t_rows(emon_t: i32) -> i32 {
     // Every row of the name table: a known kind and a value that is an ISO 15924 code (or a request name of a Chinese model).
+    // D1702 adds the chs/cht word-language aliases as Han model rows: 76 rows, including these two intended aliases.
     let n: i32 = 639;
     let mut i: i32 = 0;
     let mut j: i32 = 0;
@@ -281,7 +282,7 @@ pub(crate) fn t_rows(emon_t: i32) -> i32 {
         rows += 1;
         i = j + 2;
     }
-    crate::testport::assert_eq(rows, 74, "the rows of the three kinds");
+    crate::testport::assert_eq(rows, 76, "the rows of the three kinds");
     return 0;
 }
 #[test]

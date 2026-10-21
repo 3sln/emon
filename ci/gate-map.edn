@@ -179,7 +179,7 @@
   {:glob "tools/calibration/**" :gates ["accuracy"] :why "calibration reports and the fit (writes kin/calibdata.kin, which is mapped on its own)"}
   {:glob "tools/evidence/**" :gates ["unit"] :why "evidence-dump v0 reader the laws use"}
   {:glob "tools/fusion/{align_lib,align_report,record-align}.clj" :gates ["align"] :why "the alignment library and recorder"}
-  {:glob "tools/fusion/{gfuse_lib,gfuse_measure,icdar_live,record-graphics}.clj" :gates ["gfuse"] :why "the graphics-fusion library, measures and recorder"}
+  {:glob "tools/fusion/{gfuse_lib,gfuse_measure,icdar_live,raster_quality,record-graphics}.clj" :gates ["gfuse"] :why "the graphics-fusion library, measures and recorder"}
   {:glob "tools/fusion/{record-replay,record_health,fusion_live,explain,compare,bench,ghost_health}.clj" :gates ["fusion"] :why "the fusion recorder and its reports"}
   {:glob "tools/fusion/explain.py" :gates [] :why "a report helper"}
   {:glob "tools/fusion/live-sets.edn" :gates [] :why "the live sets' list (never committed data)"}
