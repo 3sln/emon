@@ -350,6 +350,34 @@ the same, the stream is not Python's.)"
     (is (= 0.0 ((M (counts g (pred [(P "a b c d")]))) "table-teds-lite")))))
 
 ;; ------------------------------------------------------ Layout features (D115) ----
+
+(deftest real-table-teds
+  (let [cell (fn [s] {"kind" "cell" "text" s})
+        row (fn [& cs] {"kind" "row" "children" (vec cs)})
+        table (fn [& rs] {"kind" "table" "children"
+                         [{"kind" "rowgroup" "role" "body" "children" (vec rs)}]})
+        a (table (row (cell "abcd") (cell "z")))
+        score (fn [p] (M (counts (gold [a]) (pred [p]))))]
+    (is (= 1.0 (get (score a) "table-teds")))
+    ;; Four descendants of table; one character substitution costs 1/4.
+    (is (almost= 0.9375 (get (score (table (row (cell "abce") (cell "z")))) "table-teds")))
+    (is (= 1.0 (get (score (table (row (cell "abce") (cell "z")))) "table-teds-struct")))
+    ;; Deleting a row promotes its children in ordered tree edit distance.
+    ;; This differs from recursively comparing only sibling sequences.
+    (is (almost= 0.75 (get (S/table-teds a (table (cell "abcd") (cell "z"))) "teds")))
+    (is (= 0.0 (get (score (P "abcd z")) "table-teds")))
+    (is (< (get (score (table (row (assoc (cell "abcd") "colspan" 2) (cell "z")))) "table-teds-struct") 1.0))
+    (is (< (get (score (assoc-in a ["children" 0 "role"] "head")) "table-teds-struct") 1.0))
+    (let [styled (assoc-in a ["children" 0 "children" 0 "children" 0 "inlines"]
+                           [{"kind" "span" "style" ["bold"]
+                             "children" [{"kind" "text" "text" "abcd"}]}])]
+      ;; Two formatting tokens inserted in six tokens, divided by five HTML descendants.
+      (is (almost= (- 1.0 (/ 1.0 15)) (get (score styled) "table-teds")))
+      (is (= 1.0 (get (score styled) "table-teds-struct"))))
+    (let [inline (fn [n] (assoc-in a ["children" 0 "children" 0 "children" 0 "inlines"] [n]))]
+      ;; An unresolved reference emits a span and falls back to its marker.
+      (is (= 1.0 (get (S/table-teds (inline {"kind" "ref" "marker" "abcd"})
+                                   (inline {"kind" "span" "children" [{"kind" "text" "text" "abcd"}]})) "teds"))))))
 ;; Hand-built golds; every expected number is worked out in the comment beside it.
 
 (def FEAT {"paragraph" ["initial" "align"] "heading" ["level" "align"] "caption" ["align"]

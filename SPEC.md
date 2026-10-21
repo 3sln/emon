@@ -3480,7 +3480,7 @@ commit (the ratchet). Metrics:
 | Reading order | Kendall τ over matched blocks |
 | Blocks | per-kind precision/recall at IoU ≥ 0.5 (DocLayNet classes mapped to Model kinds) |
 | Headings | detection P/R; level accuracy; hierarchy TEDS |
-| Tables | TEDS and TEDS-structure-only; cross-page merge P/R; ICDAR 2013's own **adjacency-relation F1** (`table-adj-f1`, D227) |
+| Tables | `table-teds` and `table-teds-struct`: ordered tree edit similarity over canonical table HTML, with unit insertion/deletion, span/tag mismatch cost 1 and normalized cell-token edit cost (content ignored for structure-only); normalized by the maximum HTML descendant count excluding the table root (D631). The older `table-teds-lite` and `table-teds-struct-lite` cell-sequence metrics retain their ratchets. Cross-page merge P/R; ICDAR 2013's own **adjacency-relation F1** (`table-adj-f1`, D227) |
 | Graphics (D227) | `rule-p`, `rule-r`: length-weighted, a predicted `grl` stretch matching a truth rule of its orientation (≤ 150 centi-degrees) within half their thicknesses plus max(1 pt, 1 px of the variant's dpi); `fill-p`, `fill-r` by area; `twin-gap` (a document's `pdf/` table TEDS-lite minus its scan variant's, recorded); `tag-verdict-acc` (tagged-table verdicts equal to the fixture's declared truth); `tag-table-agree` (the share of tagged `Table` elements confirmed, on the real corpus: recorded, not ratcheted); `rule-ghost` (lower is better: body words that are only rule marks, beyond the gold's, over the body's words; D517) |
 | Furniture | P/R of dropped running elements; label accuracy |
 | Figures | detection P/R; `kind` accuracy |

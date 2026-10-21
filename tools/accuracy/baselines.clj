@@ -59,7 +59,7 @@ live in tools/oracle/baselines.py and run in venvs under .cache/ (gitignored); e
 
 (def REPORT-CATS ["all" "headings" "tables" "lists" "columns" "furniture" "footnotes" "scripts"])
 (def REPORT-METRICS [":cer" ":wer" ":bow-f1" ":order-tau" ":block-heading-f1" ":heading-level-acc" ":block-paragraph-f1"
-                     ":para-boundary-f1" ":block-list-f1" ":block-table-f1" ":table-teds-lite" ":table-teds-struct-lite"
+                     ":para-boundary-f1" ":block-list-f1" ":block-table-f1" ":table-teds" ":table-teds-struct" ":table-teds-lite" ":table-teds-struct-lite"
                      ":furniture-f1"])
 
 (defn fmt [v] (if (nil? v) "-" (A/fmt-f v 3)))

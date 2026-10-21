@@ -1733,6 +1733,105 @@ public final class Tabletest {
         emon.Testport.assertEq(ttRun(wd, ln, et, pa, t2), 0, "block: well formed");
         emon.Testport.assertText(t2, "T3p;Gh;R;Ch[];Cc2he[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cs[Cash and equivalents];Ce[$ 33,672];Ce[$ 32,260];R;Cs[Short-term investments];Ce[129,619];Ce[92,774];R;Cs[Fixed maturity securities];Ce[23,758];Ce[25,128];R;Cs[Equity securities];Ce[353,842];Ce[308,793];R;Cs[Other];Ce[19,568];Ce[19,657];P[Total due];P[259,419];P[251,300];", "a block of totals that does not begin in the first column is not the table's, whatever its rule");
     }
+    public static void testADenseFourColumnTableNeedsNoPurelyNumericColumn() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        int r = 0;
+        // E14: salary bands are categorical values (currency ranges, 'or less', 'Greater than'), not pure numbers. Four aligned, dense columns of short cells are a table without a numeric column or bold header.
+        while (r < 5) {
+            ttAt(wd, ln, et, emon.Testport.textBlob("Band"), 7200, 10000 + (r * 1600), 0, 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("Low"), 18000, 10000 + (r * 1600), 0, 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("Medium"), 28000, 10000 + (r * 1600), 0, 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("High"), 40000, 10000 + (r * 1600), 0, 0);
+            r += 1;
+        }
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "categorical table: well formed");
+        emon.Testport.assertText(t, "T4w;Gb;R;C[Band];C[Low];C[Medium];C[High];R;C[Band];C[Low];C[Medium];C[High];R;C[Band];C[Low];C[Medium];C[High];R;C[Band];C[Low];C[Medium];C[High];R;C[Band];C[Low];C[Medium];C[High];", "a dense grid of four short categorical columns is a table");
+    }
+    public static void testThreeLabelAndAmountRowsAreASummaryTable() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        ttAt(wd, ln, et, emon.Testport.textBlob("Subtotal"), 7200, 10000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("100.00"), 30000, 10000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Tax"), 7200, 11600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("15.00"), 30000, 11600, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Total"), 7200, 13200, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("115.00"), 30000, 13200, 1, 1);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "summary: well formed");
+        emon.Testport.assertText(t, "T2w;Gb;R;Cs[Subtotal];C[100.00];R;Cs[Tax];C[15.00];Gf;R;Cws[Total];Cw[115.00];", "three numeric rows need no separate header to qualify as a summary table");
+    }
+    public static void testAnOcrOnlyCategoricalGridNeedsItsOwnTableEvidence() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        int r = 0;
+        while (r < 5) {
+            ttAt(wd, ln, et, emon.Testport.textBlob("Band"), 7200, 10000 + (r * 1600), 0, 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("Low"), 18000, 10000 + (r * 1600), 0, 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("Medium"), 28000, 10000 + (r * 1600), 0, 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("High"), 40000, 10000 + (r * 1600), 0, 0);
+            r += 1;
+        }
+        r = 0;
+        while (r < Evidence.wdCount(wd)) {
+            Evidence.wdSet(wd, r, Evidence.wfSrc(), 4);
+            r += 1;
+        }
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "OCR-only grid: well formed");
+        emon.Testport.assertText(t, "P[Band];P[Low];P[Medium];P[High];P[Band];P[Low];P[Medium];P[High];P[Band];P[Low];P[Medium];P[High];P[Band];P[Low];P[Medium];P[High];P[Band];P[Low];P[Medium];P[High];", "the born-digital categorical rule does not relax an OCR-only grid's evidence threshold");
+    }
+    public static void testAnUnruledBodyCanSpanTheHeadersColumns() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        int r = 0;
+        // E13: the ruled header has finer columns than the labels in the unruled body. A label crossing one undrawn boundary must span those columns without preventing the body's row cuts.
+        ttRule(pa, 7200, 9950, 37200, 10050);
+        ttRule(pa, 7200, 11950, 37200, 12050);
+        ttRule(pa, 7200, 17950, 37200, 18050);
+        ttRule(pa, 7150, 10000, 7250, 18000);
+        ttRule(pa, 37150, 10000, 37250, 18000);
+        ttRule(pa, 17150, 10000, 17250, 12000);
+        ttRule(pa, 27150, 10000, 27250, 12000);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Group"), 7600, 10600, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Label"), 17600, 10600, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Value"), 27600, 10600, 1, 0);
+        while (r < 3) {
+            ttWord(wd, ln, et, emon.Testport.textBlob("Category"), 7600, 12600 + (r * 1600), 22000, 13400 + (r * 1600), 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("12.50"), 27600, 12600 + (r * 1600), 0, 0);
+            r += 1;
+        }
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "spanning unruled body: well formed");
+        emon.Testport.assertText(t, "T3r;Gh;R;Ch[Group];Ch[Label];Ch[Value];Gb;R;Cc2[Category];C[12.50];R;Cc2[Category];C[12.50];R;Cc2[Category];C[12.50];", "body rows survive a label spanning the header's first two columns");
+    }
+    public static void testAPrefixCurrencySignStartsTheNextAmountEvenWithASmallGap() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        // D28: the next year's dollar sign is close to the preceding negative amount, but the sign is a prefix of its own amount, not the end of a chunk spanning both years.
+        ttStmtHead(wd, ln, et, pa);
+        ttAmt(wd, ln, et, 12800, 0, emon.Testport.textBlob("Income"), emon.Testport.textBlob("(22,759)"), emon.Testport.textBlob("89,937"));
+        ttAt(wd, ln, et, emon.Testport.textBlob("$"), 19800, 12800, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("$"), 26100, 12800, 0, 0);
+        ttAmt(wd, ln, et, 14400, 0, emon.Testport.textBlob("Investments"), emon.Testport.textBlob("129,619"), emon.Testport.textBlob("92,774"));
+        ttAmt(wd, ln, et, 16000, 0, emon.Testport.textBlob("Securities"), emon.Testport.textBlob("23,758"), emon.Testport.textBlob("25,128"));
+        ttAmt(wd, ln, et, 17600, 0, emon.Testport.textBlob("Equity"), emon.Testport.textBlob("353,842"), emon.Testport.textBlob("308,793"));
+        ttAmt(wd, ln, et, 19200, 0, emon.Testport.textBlob("Other"), emon.Testport.textBlob("19,568"), emon.Testport.textBlob("19,657"));
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "prefix signs: well formed");
+        emon.Testport.assertText(t, "T3w;Gh;R;Ch[];Cc2he[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cs[Income];Ce[$ (22,759)];Ce[$ 89,937];R;Cs[Investments];Ce[129,619];Ce[92,774];R;Cs[Securities];Ce[23,758];Ce[25,128];R;Cs[Equity];Ce[353,842];Ce[308,793];R;Cs[Other];Ce[19,568];Ce[19,657];", "a close prefix sign does not merge the two years into a spanning cell");
+    }
     public static int ttGolden(byte[] pdf, StringBuilder t, StringBuilder tvt) {
         // PDF -> content -> tables -> paragraphs -> Model -> pretty JSON; answer 0 when every step answered 0, else a
         // code naming the step (1 open, 2 content, 3 the Model's check). The JSON is `t`. The tagged tree is read and joined (P5.5), and the

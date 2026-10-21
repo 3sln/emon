@@ -26,7 +26,7 @@
                                 nk-paragraph nk-note nk-table nk-rowgroup nk-row nk-cell nk-caption
                                 fk-rowspan fk-colspan fk-columns fk-profile fk-label fk-align]]
             [emon.json :refer [js-emit]]
-            [emon.evidence :refer [wd-new wd-set wd-count ln-new ln-count wf-size wf-font wf-style hd-line
+            [emon.evidence :refer [wd-new wd-set wd-count ln-new ln-count wf-size wf-font wf-style wf-src hd-line
                                    pa-new pa-set pa-rect pf-flags pf-fill pf-falpha pg-filled]]
             [emon.pdfdoc :refer [pd-open]]
             [emon.pdfannot :refer [an-field]]
@@ -1567,6 +1567,91 @@
     (assert-eq (tt-run wd ln et pa t2) 0 "block: well formed")
     (assert-text t2 "T3p;Gh;R;Ch[];Cc2he[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cs[Cash and equivalents];Ce[$ 33,672];Ce[$ 32,260];R;Cs[Short-term investments];Ce[129,619];Ce[92,774];R;Cs[Fixed maturity securities];Ce[23,758];Ce[25,128];R;Cs[Equity securities];Ce[353,842];Ce[308,793];R;Cs[Other];Ce[19,568];Ce[19,657];P[Total due];P[259,419];P[251,300];"
                  "a block of totals that does not begin in the first column is not the table's, whatever its rule")))
+
+(deftest test-a-dense-four-column-table-needs-no-purely-numeric-column
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)
+        ^:mut ^I32 r 0]
+    (comment "E14: salary bands are categorical values (currency ranges, 'or less', 'Greater than'), not pure numbers. Four aligned, dense columns of short cells are a table without a numeric column or bold header.")
+    (while (< r 5)
+      (do (tt-at wd ln et (text-blob "Band") 7200 (+ 10000 (* r 1600)) 0 0)
+          (tt-at wd ln et (text-blob "Low") 18000 (+ 10000 (* r 1600)) 0 0)
+          (tt-at wd ln et (text-blob "Medium") 28000 (+ 10000 (* r 1600)) 0 0)
+          (tt-at wd ln et (text-blob "High") 40000 (+ 10000 (* r 1600)) 0 0)
+          (set r (+ r 1))))
+    (assert-eq (tt-run wd ln et pa t) 0 "categorical table: well formed")
+    (assert-text t "T4w;Gb;R;C[Band];C[Low];C[Medium];C[High];R;C[Band];C[Low];C[Medium];C[High];R;C[Band];C[Low];C[Medium];C[High];R;C[Band];C[Low];C[Medium];C[High];R;C[Band];C[Low];C[Medium];C[High];"
+                 "a dense grid of four short categorical columns is a table")))
+
+(deftest test-three-label-and-amount-rows-are-a-summary-table
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (tt-at wd ln et (text-blob "Subtotal") 7200 10000 0 0)
+    (tt-at wd ln et (text-blob "100.00") 30000 10000 0 1)
+    (tt-at wd ln et (text-blob "Tax") 7200 11600 0 0)
+    (tt-at wd ln et (text-blob "15.00") 30000 11600 0 1)
+    (tt-at wd ln et (text-blob "Total") 7200 13200 1 0)
+    (tt-at wd ln et (text-blob "115.00") 30000 13200 1 1)
+    (assert-eq (tt-run wd ln et pa t) 0 "summary: well formed")
+    (assert-text t "T2w;Gb;R;Cs[Subtotal];C[100.00];R;Cs[Tax];C[15.00];Gf;R;Cws[Total];Cw[115.00];"
+                 "three numeric rows need no separate header to qualify as a summary table")))
+
+(deftest test-an-ocr-only-categorical-grid-needs-its-own-table-evidence
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)
+        ^:mut ^I32 r 0]
+    (while (< r 5)
+      (do (tt-at wd ln et (text-blob "Band") 7200 (+ 10000 (* r 1600)) 0 0)
+          (tt-at wd ln et (text-blob "Low") 18000 (+ 10000 (* r 1600)) 0 0)
+          (tt-at wd ln et (text-blob "Medium") 28000 (+ 10000 (* r 1600)) 0 0)
+          (tt-at wd ln et (text-blob "High") 40000 (+ 10000 (* r 1600)) 0 0)
+          (set r (+ r 1))))
+    (set r 0)
+    (while (< r (wd-count wd))
+      (do (wd-set wd r (wf-src) 4)
+          (set r (+ r 1))))
+    (assert-eq (tt-run wd ln et pa t) 0 "OCR-only grid: well formed")
+    (assert-text t "P[Band];P[Low];P[Medium];P[High];P[Band];P[Low];P[Medium];P[High];P[Band];P[Low];P[Medium];P[High];P[Band];P[Low];P[Medium];P[High];P[Band];P[Low];P[Medium];P[High];"
+                 "the born-digital categorical rule does not relax an OCR-only grid's evidence threshold")))
+
+(deftest test-an-unruled-body-can-span-the-headers-columns
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)
+        ^:mut ^I32 r 0]
+    (comment "E13: the ruled header has finer columns than the labels in the unruled body. A label crossing one undrawn boundary must span those columns without preventing the body's row cuts.")
+    (tt-rule pa 7200 9950 37200 10050)
+    (tt-rule pa 7200 11950 37200 12050)
+    (tt-rule pa 7200 17950 37200 18050)
+    (tt-rule pa 7150 10000 7250 18000)
+    (tt-rule pa 37150 10000 37250 18000)
+    (tt-rule pa 17150 10000 17250 12000)
+    (tt-rule pa 27150 10000 27250 12000)
+    (tt-at wd ln et (text-blob "Group") 7600 10600 1 0)
+    (tt-at wd ln et (text-blob "Label") 17600 10600 1 0)
+    (tt-at wd ln et (text-blob "Value") 27600 10600 1 0)
+    (while (< r 3)
+      (do (tt-word wd ln et (text-blob "Category") 7600 (+ 12600 (* r 1600)) 22000 (+ 13400 (* r 1600)) 0)
+          (tt-at wd ln et (text-blob "12.50") 27600 (+ 12600 (* r 1600)) 0 0)
+          (set r (+ r 1))))
+    (assert-eq (tt-run wd ln et pa t) 0 "spanning unruled body: well formed")
+    (assert-text t "T3r;Gh;R;Ch[Group];Ch[Label];Ch[Value];Gb;R;Cc2[Category];C[12.50];R;Cc2[Category];C[12.50];R;Cc2[Category];C[12.50];"
+                 "body rows survive a label spanning the header's first two columns")))
+
+(deftest test-a-prefix-currency-sign-starts-the-next-amount-even-with-a-small-gap
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (comment "D28: the next year's dollar sign is close to the preceding negative amount, but the sign is a prefix of its own amount, not the end of a chunk spanning both years.")
+    (tt-stmt-head wd ln et pa)
+    (tt-amt wd ln et 12800 0 (text-blob "Income") (text-blob "(22,759)") (text-blob "89,937"))
+    (tt-at wd ln et (text-blob "$") 19800 12800 0 0)
+    (tt-at wd ln et (text-blob "$") 26100 12800 0 0)
+    (tt-amt wd ln et 14400 0 (text-blob "Investments") (text-blob "129,619") (text-blob "92,774"))
+    (tt-amt wd ln et 16000 0 (text-blob "Securities") (text-blob "23,758") (text-blob "25,128"))
+    (tt-amt wd ln et 17600 0 (text-blob "Equity") (text-blob "353,842") (text-blob "308,793"))
+    (tt-amt wd ln et 19200 0 (text-blob "Other") (text-blob "19,568") (text-blob "19,657"))
+    (assert-eq (tt-run wd ln et pa t) 0 "prefix signs: well formed")
+    (assert-text t "T3w;Gh;R;Ch[];Cc2he[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cs[Income];Ce[$ (22,759)];Ce[$ 89,937];R;Cs[Investments];Ce[129,619];Ce[92,774];R;Cs[Securities];Ce[23,758];Ce[25,128];R;Cs[Equity];Ce[353,842];Ce[308,793];R;Cs[Other];Ce[19,568];Ce[19,657];"
+                 "a close prefix sign does not merge the two years into a spanning cell")))
 
 ;; --------------------------------------------------------------- real documents
 

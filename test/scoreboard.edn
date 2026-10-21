@@ -2701,7 +2701,9 @@
         :table-adj-p 1.0
         :table-adj-r 1.0
         :table-continued-acc 1.0
+        :table-teds 1.0
         :table-teds-lite 1.0
+        :table-teds-struct 1.0
         :table-teds-struct-lite 1.0
         :tl-override 0.0
         :wer 0.080851}
@@ -2898,7 +2900,9 @@
         :table-adj-p 1.0
         :table-adj-r 1.0
         :table-continued-acc 1.0
+        :table-teds 1.0
         :table-teds-lite 1.0
+        :table-teds-struct 1.0
         :table-teds-struct-lite 1.0
         :tl-override 0.0
         :wer 0.0}
@@ -3005,7 +3009,9 @@
         :table-adj-p 1.0
         :table-adj-r 1.0
         :table-continued-acc 1.0
+        :table-teds 1.0
         :table-teds-lite 1.0
+        :table-teds-struct 1.0
         :table-teds-struct-lite 1.0
         :tl-override 0.0
         :wer 0.010846}
@@ -3051,7 +3057,7 @@
         :bow-f1 0.959849
         :bow-p 0.970747
         :bow-r 0.949193
-        :cer 0.040632
+        :cer 0.040094
         :conf-brier-all 0.030454
         :conf-brier-caption 0.003844
         :conf-brier-caption-text 0.003844
@@ -3197,12 +3203,14 @@
         :table-adj-p 0.996966
         :table-adj-r 0.966661
         :table-continued-acc 0.918033
+        :table-teds 0.896124
         :table-teds-lite 0.898604
+        :table-teds-struct 0.903722
         :table-teds-struct-lite 0.914633
         :tag-verdict-acc 1.0
         :tl-override 0.0
         :watermark-leak 0.0
-        :wer 0.055149}
+        :wer 0.054823}
       "pdf/columns" {
         :block-caption-f1 1.0
         :block-caption-p 1.0
@@ -3301,7 +3309,9 @@
         :table-adj-p 1.0
         :table-adj-r 1.0
         :table-continued-acc 1.0
+        :table-teds 1.0
         :table-teds-lite 1.0
+        :table-teds-struct 1.0
         :table-teds-struct-lite 1.0
         :tl-override 0.0
         :wer 0.001594}
@@ -3537,7 +3547,9 @@
         :table-adj-p 1.0
         :table-adj-r 0.983977
         :table-continued-acc 0.5
+        :table-teds 0.5
         :table-teds-lite 0.5
+        :table-teds-struct 0.5
         :table-teds-struct-lite 0.5
         :tl-override 0.0
         :wer 0.012121}
@@ -3683,7 +3695,9 @@
         :table-adj-p 1.0
         :table-adj-r 0.813441
         :table-continued-acc 0.884615
+        :table-teds 0.884615
         :table-teds-lite 0.884615
+        :table-teds-struct 0.884615
         :table-teds-struct-lite 0.884615
         :tag-verdict-acc 1.0
         :tl-override 0.0
@@ -3752,7 +3766,9 @@
         :table-adj-p 1.0
         :table-adj-r 1.0
         :table-continued-acc 1.0
+        :table-teds 1.0
         :table-teds-lite 1.0
+        :table-teds-struct 1.0
         :table-teds-struct-lite 1.0
         :tl-override 0.0
         :wer 0.01988}
@@ -3993,7 +4009,9 @@
         :table-adj-p 0.7
         :table-adj-r 0.7
         :table-continued-acc 1.0
+        :table-teds 0.616226
         :table-teds-lite 0.674074
+        :table-teds-struct 0.770723
         :table-teds-struct-lite 1.0
         :tl-override 0.0
         :wer 0.239544}
@@ -4013,7 +4031,7 @@
         :bow-f1 0.976532
         :bow-p 0.961379
         :bow-r 0.992171
-        :cer 0.027342
+        :cer 0.01557
         :conf-brier-all 0.2207
         :conf-brier-cell 9e-06
         :conf-brier-cell-text 9e-06
@@ -4082,10 +4100,12 @@
         :table-adj-p 1.0
         :table-adj-r 1.0
         :table-continued-acc 1.0
+        :table-teds 1.0
         :table-teds-lite 1.0
+        :table-teds-struct 1.0
         :table-teds-struct-lite 1.0
         :tl-override 0.0
-        :wer 0.04911}
+        :wer 0.041993}
       "pdf/tables" {
         :block-caption-f1 1.0
         :block-caption-p 1.0
@@ -4166,7 +4186,9 @@
         :table-adj-p 1.0
         :table-adj-r 0.997582
         :table-continued-acc 1.0
+        :table-teds 0.987658
         :table-teds-lite 0.986175
+        :table-teds-struct 0.987658
         :table-teds-struct-lite 0.986175
         :tl-override 0.0
         :wer 0.0}
@@ -4234,7 +4256,9 @@
         :table-adj-p 1.0
         :table-adj-r 1.0
         :table-continued-acc 1.0
+        :table-teds 1.0
         :table-teds-lite 1.0
+        :table-teds-struct 1.0
         :table-teds-struct-lite 1.0
         :wer 0.853308}
       "pdf/watermarks" {
@@ -4309,7 +4333,9 @@
         :table-adj-p 1.0
         :table-adj-r 1.0
         :table-continued-acc 1.0
+        :table-teds 1.0
         :table-teds-lite 1.0
+        :table-teds-struct 1.0
         :table-teds-struct-lite 1.0
         :tl-override 0.0
         :watermark-leak 0.0
@@ -4373,7 +4399,9 @@
         :table-adj-p 0.0
         :table-adj-r 0.0
         :table-continued-acc 0.0
+        :table-teds 0.0
         :table-teds-lite 0.0
+        :table-teds-struct 0.0
         :table-teds-struct-lite 0.0
         :tl-override 0.0
         :watermark-leak 0.0
@@ -4477,7 +4505,9 @@
         :table-adj-p 0.0
         :table-adj-r 0.0
         :table-continued-acc 0.0
+        :table-teds 0.0
         :table-teds-lite 0.0
+        :table-teds-struct 0.0
         :table-teds-struct-lite 0.0
         :tl-override 0.0
         :wer 1.0}
@@ -4515,7 +4545,9 @@
         :table-adj-p 0.0
         :table-adj-r 0.0
         :table-continued-acc 0.0
+        :table-teds 0.0
         :table-teds-lite 0.0
+        :table-teds-struct 0.0
         :table-teds-struct-lite 0.0
         :tl-override 0.0
         :wer 1.0}
@@ -4549,7 +4581,9 @@
         :table-adj-p 0.0
         :table-adj-r 0.0
         :table-continued-acc 0.0
+        :table-teds 0.0
         :table-teds-lite 0.0
+        :table-teds-struct 0.0
         :table-teds-struct-lite 0.0
         :tl-override 0.0
         :wer 1.0}
@@ -4620,7 +4654,9 @@
         :table-adj-p 0.0
         :table-adj-r 0.0
         :table-continued-acc 0.0
+        :table-teds 0.0
         :table-teds-lite 0.0
+        :table-teds-struct 0.0
         :table-teds-struct-lite 0.0
         :tl-override 0.0
         :wer 1.0}
@@ -4667,7 +4703,9 @@
         :table-adj-p 0.0
         :table-adj-r 0.0
         :table-continued-acc 0.0
+        :table-teds 0.0
         :table-teds-lite 0.0
+        :table-teds-struct 0.0
         :table-teds-struct-lite 0.0
         :tl-override 0.0
         :wer 1.0}
@@ -4708,7 +4746,9 @@
         :table-adj-p 0.0
         :table-adj-r 0.0
         :table-continued-acc 0.0
+        :table-teds 0.0
         :table-teds-lite 0.0
+        :table-teds-struct 0.0
         :table-teds-struct-lite 0.0
         :tl-override 0.0
         :wer 1.0}
@@ -4742,7 +4782,9 @@
         :table-adj-p 0.0
         :table-adj-r 0.0
         :table-continued-acc 0.0
+        :table-teds 0.0
         :table-teds-lite 0.0
+        :table-teds-struct 0.0
         :table-teds-struct-lite 0.0
         :wer 1.0}
       "scan-color/watermarks" {
@@ -4775,7 +4817,9 @@
         :table-adj-p 0.0
         :table-adj-r 0.0
         :table-continued-acc 0.0
+        :table-teds 0.0
         :table-teds-lite 0.0
+        :table-teds-struct 0.0
         :table-teds-struct-lite 0.0
         :tl-override 0.0
         :watermark-leak 0.0
@@ -4839,7 +4883,9 @@
         :table-adj-p 0.0
         :table-adj-r 0.0
         :table-continued-acc 0.0
+        :table-teds 0.0
         :table-teds-lite 0.0
+        :table-teds-struct 0.0
         :table-teds-struct-lite 0.0
         :tl-override 0.0
         :watermark-leak 0.0
@@ -4966,7 +5012,9 @@
         :table-adj-p 0.0
         :table-adj-r 0.0
         :table-continued-acc 0.0
+        :table-teds 0.0
         :table-teds-lite 0.0
+        :table-teds-struct 0.0
         :table-teds-struct-lite 0.0
         :tl-override 0.0
         :watermark-leak 0.0
@@ -5008,7 +5056,9 @@
         :table-adj-p 0.0
         :table-adj-r 0.0
         :table-continued-acc 0.0
+        :table-teds 0.0
         :table-teds-lite 0.0
+        :table-teds-struct 0.0
         :table-teds-struct-lite 0.0
         :tl-override 0.0
         :watermark-leak 0.0
@@ -5092,7 +5142,9 @@
         :table-adj-p 0.0
         :table-adj-r 0.0
         :table-continued-acc 0.0
+        :table-teds 0.0
         :table-teds-lite 0.0
+        :table-teds-struct 0.0
         :table-teds-struct-lite 0.0
         :tl-override 0.0
         :watermark-leak 0.0
@@ -5140,7 +5192,9 @@
         :table-adj-p 0.0
         :table-adj-r 0.0
         :table-continued-acc 0.0
+        :table-teds 0.0
         :table-teds-lite 0.0
+        :table-teds-struct 0.0
         :table-teds-struct-lite 0.0
         :tl-override 0.0
         :watermark-leak 0.0
@@ -5189,7 +5243,9 @@
         :table-adj-p 0.0
         :table-adj-r 0.0
         :table-continued-acc 0.0
+        :table-teds 0.0
         :table-teds-lite 0.0
+        :table-teds-struct 0.0
         :table-teds-struct-lite 0.0
         :tl-override 0.0
         :watermark-leak 0.0
@@ -5228,7 +5284,9 @@
         :table-adj-p 0.0
         :table-adj-r 0.0
         :table-continued-acc 0.0
+        :table-teds 0.0
         :table-teds-lite 0.0
+        :table-teds-struct 0.0
         :table-teds-struct-lite 0.0
         :tl-override 0.0
         :watermark-leak 0.0
@@ -5270,7 +5328,9 @@
         :table-adj-p 0.0
         :table-adj-r 0.0
         :table-continued-acc 0.0
+        :table-teds 0.0
         :table-teds-lite 0.0
+        :table-teds-struct 0.0
         :table-teds-struct-lite 0.0
         :tl-override 0.0
         :watermark-leak 0.0
@@ -5327,7 +5387,9 @@
         :table-adj-p 0.0
         :table-adj-r 0.0
         :table-continued-acc 0.0
+        :table-teds 0.0
         :table-teds-lite 0.0
+        :table-teds-struct 0.0
         :table-teds-struct-lite 0.0
         :wer 1.0}
       "scan/all" {
@@ -5419,7 +5481,9 @@
         :table-adj-p 0.0
         :table-adj-r 0.0
         :table-continued-acc 0.0
+        :table-teds 0.0
         :table-teds-lite 0.0
+        :table-teds-struct 0.0
         :table-teds-struct-lite 0.0
         :watermark-leak 0.0
         :wer 1.0}
@@ -5467,7 +5531,9 @@
         :table-adj-p 0.0
         :table-adj-r 0.0
         :table-continued-acc 0.0
+        :table-teds 0.0
         :table-teds-lite 0.0
+        :table-teds-struct 0.0
         :table-teds-struct-lite 0.0
         :wer 1.0}
       "scan/figures" {
@@ -5573,7 +5639,9 @@
         :table-adj-p 0.0
         :table-adj-r 0.0
         :table-continued-acc 0.0
+        :table-teds 0.0
         :table-teds-lite 0.0
+        :table-teds-struct 0.0
         :table-teds-struct-lite 0.0
         :wer 1.0}
       "scan/furniture" {
@@ -5647,7 +5715,9 @@
         :table-adj-p 0.0
         :table-adj-r 0.0
         :table-continued-acc 0.0
+        :table-teds 0.0
         :table-teds-lite 0.0
+        :table-teds-struct 0.0
         :table-teds-struct-lite 0.0
         :wer 1.0}
       "scan/headings" {
@@ -5798,7 +5868,9 @@
         :table-adj-p 0.0
         :table-adj-r 0.0
         :table-continued-acc 0.0
+        :table-teds 0.0
         :table-teds-lite 0.0
+        :table-teds-struct 0.0
         :table-teds-struct-lite 0.0
         :wer 1.0}
       "scan/seals" {
@@ -5874,7 +5946,9 @@
         :table-adj-p 0.0
         :table-adj-r 0.0
         :table-continued-acc 0.0
+        :table-teds 0.0
         :table-teds-lite 0.0
+        :table-teds-struct 0.0
         :table-teds-struct-lite 0.0
         :wer 1.0}
       "scan/watermarks" {
