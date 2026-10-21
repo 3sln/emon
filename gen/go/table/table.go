@@ -513,7 +513,7 @@ func tbOpenBand(bd *port.Cells, ya int32, yb int32) bool {
 	return 0 == 1
 }
 
-func tbAdd(tb *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32, profile int32, score int32, nrows int32, ncols int32, cfirst int32, ncells int32) int32 {
+func TbAdd(tb *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32, profile int32, score int32, nrows int32, ncols int32, cfirst int32, ncells int32) int32 {
 	// Append a candidate table; answers its index.
 	var k int32 = tbRowsOf(tb, tbs)
 	port.CellsPush(tb, page)
@@ -945,7 +945,7 @@ func tbLattice(rm *port.Cells, root int32, xs *port.Cells, ys *port.Cells, page 
 		port.CellsDrop(tw, tw0)
 		return -1
 	}
-	var t int32 = tbAdd(tb, page, port.CellsAt(xs, 0), port.CellsAt(ys, 0), port.CellsAt(xs, nc), port.CellsAt(ys, nr), pfRuled, 900, nr, nc, cfirst, total)
+	var t int32 = TbAdd(tb, page, port.CellsAt(xs, 0), port.CellsAt(ys, 0), port.CellsAt(xs, nc), port.CellsAt(ys, nr), pfRuled, 900, nr, nc, cfirst, total)
 	var i int32 = 0
 	port.CellsSet(tb, (t*tbs)+16, port.CellsLen(tx))
 	port.CellsSet(tb, (t*tbs)+17, nc+1)
@@ -1510,6 +1510,22 @@ func TbDue(tb *port.Cells, k int32, page int32, ymid2 int32) bool {
 		return 0 == 1
 	}
 	return (2 * port.CellsAt(tb, (k*tbs)+2)) <= ymid2
+}
+
+func TbDueFor(tb *port.Cells, k int32, page int32, ymid2 int32, ln *port.Cells, l int32) bool {
+	// P12.7 (smoke A N4): `tb-due`, with the line `l` the table would be written before (-1: no line, only `ymid2`). A line to the left of the table (it ends within 6 pt of its left edge) that begins in the
+	// table's own height is the label of what the table holds (a form's column of boxes and line numbers beside its rows): the field comes after its label, so such a line is written before the table.
+	if !TbDue(tb, k, page, ymid2) {
+		return 0 == 1
+	}
+	if l < 0 {
+		return 1 == 1
+	}
+	var b int32 = k * tbs
+	if (evidence.LnGet(ln, l, evidence.LhX1()) <= (port.CellsAt(tb, b+1) + 600)) && ((evidence.LnGet(ln, l, evidence.LhY0()) >= (port.CellsAt(tb, b+2) - 100)) && (evidence.LnGet(ln, l, evidence.LhY0()) <= port.CellsAt(tb, b+4))) {
+		return 0 == 1
+	}
+	return 1 == 1
 }
 
 func TbSkip(tb *port.Cells, k int32, page int32) int32 {
@@ -2665,7 +2681,7 @@ func tbTextGrid(wd *port.Cells, et *port.Cells, wl *port.Cells, rw *port.Cells, 
 	if by1 > y1 {
 		y1 = by1
 	}
-	var t int32 = tbAdd(tb, page, x0, y0, x1, y1, profile, score, nrows, ncols, cfirst, tbRowsOf(tc, tcs)-cfirst)
+	var t int32 = TbAdd(tb, page, x0, y0, x1, y1, profile, score, nrows, ncols, cfirst, tbRowsOf(tc, tcs)-cfirst)
 	var k int32 = 0
 	port.CellsSet(tb, (t*tbs)+16, port.CellsLen(tx))
 	port.CellsSet(tb, (t*tbs)+17, ncols+1)
@@ -5172,7 +5188,7 @@ func tbStructCand(wd *port.Cells, et *port.Cells, p int32, w0 int32, w1 int32, t
 		w += 1
 	}
 	tbFlushPairs(pr, so, wd, tc, tw)
-	t = tbAdd(tb, p, bx0, by0, bx1, by1, pfStruct, (850*trust)/1000, nr, nc, c0, nct)
+	t = TbAdd(tb, p, bx0, by0, bx1, by1, pfStruct, (850*trust)/1000, nr, nc, c0, nct)
 	if (keep == 0) || (tbScore(tb, t, wd, et, tc, tw) == 0) {
 		hi = tbScore(tb, t, wd, et, tc, tw)
 		tbReject(tb, tc, tw, tx, nt, c0, wl0, xl0)

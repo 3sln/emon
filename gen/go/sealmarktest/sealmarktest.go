@@ -329,6 +329,64 @@ func TestAStampIsAChromaticFrameHoldingWordsOfItsInk(emonT *testing.T) {
 	port.AssertEq(emonT, stFind(pa, pts, gl, fw, et, cg, refs, ow, sm), 0, "a black frame is a table's or a box's")
 }
 
+func TestTextThatFlowsInARedFrameIsATextBoxAndNoStamp(emonT *testing.T) {
+	var pa *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var gl *port.Cells = port.NewCells()
+	var fw *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var cg *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var sm *port.Cells = port.NewCells()
+	var k int32 = 0
+	// P12.7 (smoke B N2): a 2 pt red frame holding red words on three lines is a stamp; on four lines (the words of a text box, set in the colour of its frame) it is a box of the page's text: nothing is a stamp and no
+	// group is the stamp's, so that the words stay in the body and not in an `alt`.
+	stQuad(pa, pts, 5000, 5000, 15000, 9000, 12591135, 200)
+	var a int32 = stWord(fw, gl, et, 8000, 5800, 0, 12591135, 80)
+	var c int32 = stWord(fw, gl, et, 8000, 7400, 0, 12591135, 82)
+	var ga int32 = stTgroup(cg, refs, a)
+	var gc int32 = stTgroup(cg, refs, c)
+	stWord(fw, gl, et, 8000, 6600, 0, 12591135, 81)
+	port.AssertEq(emonT, stFind(pa, pts, gl, fw, et, cg, refs, ow, sm), 1, "three lines of red words in a red frame: a stamp")
+	port.AssertEq(emonT, player.CgGet(cg, gc, player.CgfFlags()), player.PlgInSeal(), "and the words are its")
+	port.AssertEq(emonT, player.CgGet(cg, ga, player.CgfFlags()), player.PlgInSeal(), "the first too")
+	var pa2 *port.Cells = port.NewCells()
+	var pts2 *port.Cells = port.NewCells()
+	var gl2 *port.Cells = port.NewCells()
+	var fw2 *port.Cells = port.NewCells()
+	var et2 *port.Cells = port.NewCells()
+	var cg2 *port.Cells = port.NewCells()
+	var refs2 *port.Cells = port.NewCells()
+	var sm2 *port.Cells = port.NewCells()
+	stQuad(pa2, pts2, 5000, 5000, 15000, 9000, 12591135, 200)
+	var a2 int32 = stWord(fw2, gl2, et2, 8000, 5600, 0, 12591135, 80)
+	var d int32 = stWord(fw2, gl2, et2, 8000, 7700, 0, 12591135, 83)
+	var ga2 int32 = stTgroup(cg2, refs2, a2)
+	var gd int32 = stTgroup(cg2, refs2, d)
+	stWord(fw2, gl2, et2, 8000, 6300, 0, 12591135, 81)
+	stWord(fw2, gl2, et2, 8000, 7000, 0, 12591135, 82)
+	port.AssertEq(emonT, stFind(pa2, pts2, gl2, fw2, et2, cg2, refs2, ow, sm2), 0, "four lines in the frame are a box of text, not a stamp")
+	port.AssertEq(emonT, player.CgGet(cg2, gd, player.CgfFlags()), 0, "the words are the page's own")
+	port.AssertEq(emonT, player.CgGet(cg2, ga2, player.CgfFlags()), 0, "all of them")
+	// a frame round a block of black text with one red word in it is a frame, not a stamp: twelve black words and one red
+	var pa3 *port.Cells = port.NewCells()
+	var pts3 *port.Cells = port.NewCells()
+	var gl3 *port.Cells = port.NewCells()
+	var fw3 *port.Cells = port.NewCells()
+	var et3 *port.Cells = port.NewCells()
+	var cg3 *port.Cells = port.NewCells()
+	var refs3 *port.Cells = port.NewCells()
+	var sm3 *port.Cells = port.NewCells()
+	stQuad(pa3, pts3, 5000, 5000, 15000, 9000, 12591135, 200)
+	stWord(fw3, gl3, et3, 6000, 5800, 0, 12591135, 80)
+	for k < 12 {
+		stWord(fw3, gl3, et3, 8000+((k%4)*1500), 5800+((k/4)*1000), 0, 1118481, 66)
+		k += 1
+	}
+	port.AssertEq(emonT, stFind(pa3, pts3, gl3, fw3, et3, cg3, refs3, ow, sm3), 0, "one red word among twelve black ones in a red frame is no stamp")
+}
+
 func stStroke(pa *port.Cells, pts *port.Cells, x0 int32, y0 int32, segs int32) int32 {
 	// An open stroked curve of `segs` Bezier segments from (x0, y0), 800 wide each and 1500 high; answers its row.
 	var first int32 = port.CellsLen(pts) / 3
@@ -401,6 +459,25 @@ func TestASignatureIsPenStrokesNearACue(emonT *testing.T) {
 	port.CellsDrop(gl, 0)
 	stText(fw, gl, et, 7200, 30000, 66, 121, 58)
 	port.AssertEq(emonT, stFind(pa, pts, gl, fw, et, cg, refs, ow, sm), 0, "a cue far above is none")
+}
+
+func TestStrokesOfTwoInksAreAChartsCurvesAndNoSignature(emonT *testing.T) {
+	var pa *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var gl *port.Cells = port.NewCells()
+	var fw *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var cg *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var sm *port.Cells = port.NewCells()
+	// P12.7 (smoke B N3): a chart's curves and its legend's line samples, in a blue, a red and a green, merged into one cluster that a cue near it made a signature (the typed name the label under the legend). One pen
+	// has one ink: the same two strokes in two inks are no signature, in one they are (the law above).
+	stStroke(pa, pts, 10000, 20000, 4)
+	var b int32 = stStroke(pa, pts, 10500, 20400, 1)
+	evidence.PaSet(pa, b, evidence.PfStroke(), 12591135)
+	stText(fw, gl, et, 7200, 20300, 66, 121, 58)
+	port.AssertEq(emonT, stFind(pa, pts, gl, fw, et, cg, refs, ow, sm), 0, "a blue stroke and a red one together, with a cue beside them: a chart")
 }
 
 func stOword(ow *port.Cells, et *port.Cells, x int32, y int32, a int32, b int32) int32 {

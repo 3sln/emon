@@ -132,6 +132,46 @@ pub(crate) fn fl_doc_end(on: &mut crate::port::Cells) -> i32 {
     }
     return n;
 }
+pub(crate) fn fl_leader_tail(on: &mut crate::port::Cells, text: &mut crate::port::Cells, n: i32) -> i32 {
+    // 1 when a label's own text ends in at least three spaced leader dots. Paragraph assembly may already have joined the leader run to its label; it still connects the field on that row.
+    let mut c: i32 = -1;
+    let mut last: i32 = -1;
+    let mut dots: i32 = 0;
+    let mut spaces: i32 = 0;
+    let mut j: i32 = node_text_len(on, n) - 1;
+    let start: i32 = node_text_start(on, n);
+    if (node_has_text(on, n) == 1) && (j >= 0) {
+        while j >= 0 {
+            c = crate::port::cells_at(text, start + j);
+            if c == 46 {
+                dots += 1;
+            } else if (c == 32) || (c == 9) {
+                spaces += 1;
+            } else {
+                if (dots >= 3) && (spaces >= 2) {
+                    return 1;
+                }
+                return 0;
+            }
+            j -= 1;
+        }
+        if (dots >= 3) && (spaces >= 2) {
+            return 1;
+        }
+        return 0;
+    }
+    c = node_first_child(on, n);
+    while c >= 0 {
+        if (node_is_inline(on, c) == 1) && (fl_has_content(on, c) == 1) {
+            last = c;
+        }
+        c = node_next(on, c);
+    }
+    if last >= 0 {
+        return fl_leader_tail(on, text, last);
+    }
+    return 0;
+}
 pub(crate) fn fl_blocks(on: &mut crate::port::Cells, orr: &mut crate::port::Cells, text: &mut crate::port::Cells, ndoc: i32, mut bt: &mut crate::port::Cells) -> i32 {
     // The block rows `bt` (see FL_B): a row a region of every block that holds a field, has words of its own (text, or inline children's) and a place on a page; and of
     // every table cell that has nothing in it (flags 4: a box can stand in it).
@@ -169,7 +209,7 @@ pub(crate) fn fl_blocks(on: &mut crate::port::Cells, orr: &mut crate::port::Cell
                 crate::port::cells_push(bt, region_x1(orr, r));
                 crate::port::cells_push(bt, region_y1(orr, r));
                 crate::port::cells_push(bt, flags);
-                crate::port::cells_push(bt, 0);
+                crate::port::cells_push(bt, fl_leader_tail(on, text, n));
                 r = region_next(orr, r);
             }
         }
@@ -209,9 +249,11 @@ pub(crate) fn fl_bridged(bt: &mut crate::port::Cells, nb: i32, page: i32, y0: i3
     return 0;
 }
 pub(crate) fn fl_left(bt: &mut crate::port::Cells, nb: i32, page: i32, x0: i32, y0: i32, y1: i32, mut out: &mut crate::port::Cells, at: i32) -> i32 {
-    // The label to the left on the box's line (rule 2): its block row, and the gap, into out[at], out[at + 1]; -1 when there is none that is near enough or joined by a leader.
+    // The left label on the box's line: a label's own explicit leaders beat a nearby bare row number; otherwise retain the nearest-label and separate-bridge rules.
     let mut best: i32 = -1;
     let mut bestgap: i32 = 2000000000;
+    let mut bestlink: i32 = 0;
+    let mut link: i32 = 0;
     let mut b: i32 = 0;
     let mut o: i32 = 0;
     let mut gap: i32 = 0;
@@ -219,15 +261,19 @@ pub(crate) fn fl_left(bt: &mut crate::port::Cells, nb: i32, page: i32, x0: i32, 
         o = b * FL_B;
         if (crate::port::cells_at(bt, o + 1) == page) && ((crate::port::cells_at(bt, o + 6) % 2) == 1) {
             gap = x0 - crate::port::cells_at(bt, o + 4);
-            if (gap >= (0 - FL_TOL)) && (gap < bestgap) && (fl_same_line(bt, b, y0, y1) == 1) {
+            link = crate::port::cells_at(bt, o + 7);
+            if (gap >= (0 - FL_TOL)) && (fl_same_line(bt, b, y0, y1) == 1) && ((best < 0) || ((link > bestlink) || ((link == bestlink) && (gap < bestgap)))) {
                 best = b;
                 bestgap = gap;
+                bestlink = link;
             }
         }
         b += 1;
     }
     if best >= 0 {
-        if bestgap > FL_NEAR_L {
+        if bestlink == 1 {
+            bestgap = 0;
+        } else if bestgap > FL_NEAR_L {
             if fl_bridged(bt, nb, page, y0, y1, best, x0) == 0 {
                 best = -1;
             }
@@ -705,6 +751,68 @@ pub(crate) fn fl_has_inline(on: &mut crate::port::Cells, n: i32) -> i32 {
     }
     return 0;
 }
+pub(crate) fn fl_unattached_dots(on: &mut crate::port::Cells, orr: &mut crate::port::Cells, text: &mut crate::port::Cells, fc: &mut crate::port::Cells, n: i32) -> i32 {
+    // Printing-dot paragraphs on forms are omitted unless they bridge an actual field and its label. Keep an unspaced ellipsis and any inline content; orphan fields are emitted separately from their omitted anchor.
+    if (node_kind(on, n) != nk_paragraph()) || (node_first_child(on, n) >= 0) {
+        return 0;
+    }
+    let ts: i32 = node_text_start(on, n);
+    let tlen: i32 = node_text_len(on, n);
+    let nf: i32 = crate::port::cells_len(fc) / FL_W;
+    let mut j: i32 = 0;
+    let mut dots: i32 = 0;
+    let mut spaces: i32 = 0;
+    let mut r: i32 = 0;
+    let mut f: i32 = 0;
+    let mut o: i32 = 0;
+    let mut lr: i32 = 0;
+    let mut ov: i32 = 0;
+    let mut sm: i32 = 0;
+    if (ts < 0) || (tlen <= 0) {
+        return 0;
+    }
+    while j < tlen {
+        let c: i32 = crate::port::cells_at(text, ts + j);
+        if (c == 46) || (c == 183) {
+            dots += 1;
+        } else if (c == 32) || (c == 160) {
+            spaces += 1;
+        } else {
+            return 0;
+        }
+        j += 1;
+    }
+    if (dots == 0) || ((dots > 1) && (spaces == 0)) {
+        return 0;
+    }
+    r = node_region_head(on, n);
+    while r >= 0 {
+        f = 0;
+        while f < nf {
+            o = f * FL_W;
+            if (crate::port::cells_at(fc, o + 7) <= 1) && (crate::port::cells_at(fc, o + 1) == region_page(orr, r)) && (crate::port::cells_at(fc, o + 2) >= (region_x1(orr, r) - FL_TOL)) && (fl_has_words(on, text, crate::port::cells_at(fc, o + 6)) == 1) {
+                ov = fl_min(crate::port::cells_at(fc, o + 5), region_y1(orr, r)) - fl_max(crate::port::cells_at(fc, o + 3), region_y0(orr, r));
+                sm = fl_min(crate::port::cells_at(fc, o + 5) - crate::port::cells_at(fc, o + 3), region_y1(orr, r) - region_y0(orr, r));
+                if (ov > 0) && ((ov * 2) >= sm) {
+                    lr = node_region_head(on, crate::port::cells_at(fc, o + 6));
+                    while lr >= 0 {
+                        if (region_page(orr, lr) == region_page(orr, r)) && (region_x1(orr, lr) <= (region_x0(orr, r) + FL_TOL)) {
+                            ov = fl_min(region_y1(orr, lr), region_y1(orr, r)) - fl_max(region_y0(orr, lr), region_y0(orr, r));
+                            sm = fl_min(region_y1(orr, lr) - region_y0(orr, lr), region_y1(orr, r) - region_y0(orr, r));
+                            if (ov > 0) && ((ov * 2) >= sm) {
+                                return 0;
+                            }
+                        }
+                        lr = region_next(orr, lr);
+                    }
+                }
+            }
+            f += 1;
+        }
+        r = region_next(orr, r);
+    }
+    return 1;
+}
 pub(crate) fn fl_tree(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, orr: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut nm: &mut crate::port::Cells, an: &mut crate::port::Cells, txt: &mut crate::port::Cells, fc: &mut crate::port::Cells, fh: &mut crate::port::Cells, n: i32, np: i32) -> i32 {
     // Copy old node n and its subtree as the last child of new node np (-1: a new root), with the fields that go in it: those before its text first, then its
     // children (a block that was plain text gets a `text` inline for its words), the fields after its text before its first block child, and the paragraph of the
@@ -719,6 +827,12 @@ pub(crate) fn fl_tree(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, 
     let mut t: i32 = 0;
     if (hp >= 0) && (np >= 0) {
         fl_orphans(an, txt, fc, hp, nodes, attrs, regions, text, np);
+    }
+    if (hb < 0) && (ha < 0) && (fl_unattached_dots(on, orr, text, fc, n) == 1) {
+        if (ho >= 0) && (np >= 0) {
+            fl_orphans(an, txt, fc, ho, nodes, attrs, regions, text, np);
+        }
+        return -1;
     }
     nn = rs_node(on, oa, orr, nodes, attrs, regions, nm, n, np);
     if nn < 0 {

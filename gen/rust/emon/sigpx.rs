@@ -444,6 +444,55 @@ pub(crate) fn sp_ruled_ink(mask: &mut crate::port::Cells, zw: i32, zh: i32, wpx:
     }
     return 0;
 }
+pub(crate) fn sp_mixed_inks(src: &crate::port::Bitmap, zx0: i32, zy0: i32, mask: &mut crate::port::Cells, zw: i32, zh: i32, ink: i32) -> i32 {
+    // Distinct strongly chromatic inks in a rule's zone are chart curves, not one pen. Ignore neutral ink and antialiasing; each of two dominant channels must have at least the minimum pen ink and five per cent of the zone's ink.
+    let mut x: i32 = 0;
+    let mut y: i32 = 0;
+    let mut nr: i32 = 0;
+    let mut ng: i32 = 0;
+    let mut nb: i32 = 0;
+    let mut r: i32 = 0;
+    let mut g: i32 = 0;
+    let mut b: i32 = 0;
+    let mut have: i32 = 0;
+    if crate::port::bitmap_channels(src) < 3 {
+        return 0;
+    }
+    while y < zh {
+        x = 0;
+        while x < zw {
+            if crate::port::cells_at(mask, (y * zw) + x) == 1 {
+                r = crate::port::bitmap_u8(src, zx0 + x, zy0 + y, 0);
+                g = crate::port::bitmap_u8(src, zx0 + x, zy0 + y, 1);
+                b = crate::port::bitmap_u8(src, zx0 + x, zy0 + y, 2);
+                if ((r - g) > sp_spread()) && ((r - b) > sp_spread()) {
+                    nr += 1;
+                }
+                if ((g - r) > sp_spread()) && ((g - b) > sp_spread()) {
+                    ng += 1;
+                }
+                if ((b - r) > sp_spread()) && ((b - g) > sp_spread()) {
+                    nb += 1;
+                }
+            }
+            x += 1;
+        }
+        y += 1;
+    }
+    if (nr >= sp_min_ink()) && ((nr * 20) >= ink) {
+        have += 1;
+    }
+    if (ng >= sp_min_ink()) && ((ng * 20) >= ink) {
+        have += 1;
+    }
+    if (nb >= sp_min_ink()) && ((nb * 20) >= ink) {
+        have += 1;
+    }
+    if have >= 2 {
+        return 1;
+    }
+    return 0;
+}
 pub(crate) fn sp_judge(page1: i32, views: &mut crate::port::Cells, srcview: i32, owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, src: &crate::port::Bitmap, rules: &mut crate::port::Cells, row: i32, zx0: i32, zy0: i32, mask: &mut crate::port::Cells, n: i32, zw: i32, zh: i32, mut cand: &mut crate::port::Cells) -> i32 {
     // Is the ink of a zone (statistics at mask[n...]) a pen's? Add a candidate when it is: the box, the stroke width, the loops of the path, the coverage, no legible word, then the size says
     // signature or initials. Answers 1 when added.
@@ -519,6 +568,9 @@ pub(crate) fn sp_judge(page1: i32, views: &mut crate::port::Cells, srcview: i32,
         kind = 3;
     }
     if kind == 0 {
+        return 0;
+    }
+    if sp_mixed_inks(src, zx0, zy0, mask, zw, zh, ink) == 1 {
         return 0;
     }
     conf = 600;

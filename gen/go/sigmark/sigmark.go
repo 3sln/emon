@@ -158,6 +158,17 @@ func sgDist(dx int32, dy int32) int32 {
 	return sgHi(a, b) + ((3 * sgLo(a, b)) / 8)
 }
 
+func sgInkDiff(a int32, b int32) int32 {
+	// P12.7 (smoke B N3): the sum of the channel differences of two inks (0xRRGGBB); 0 when either is unknown (negative).
+	if a < 0 {
+		return 0
+	}
+	if b < 0 {
+		return 0
+	}
+	return sgAbs(((a/65536)%256)-((b/65536)%256)) + (sgAbs(((a/256)%256)-((b/256)%256)) + sgAbs((a%256)-(b%256)))
+}
+
 func sgGapOf(a0 int32, a1 int32, b0 int32, b1 int32) int32 {
 	// The distance between the intervals [a0, a1] and [b0, b1]; 0 when they overlap.
 	if b0 > a1 {
@@ -613,6 +624,10 @@ func SgCollect(pa *port.Cells, pts *port.Cells, fw *port.Cells, et *port.Cells, 
 							port.CellsSet(tmp, a+2, sgHi(port.CellsAt(tmp, a+2), port.CellsAt(tmp, b+2)))
 							port.CellsSet(tmp, a+3, sgHi(port.CellsAt(tmp, a+3), port.CellsAt(tmp, b+3)))
 							port.CellsSet(tmp, a+4, port.CellsAt(tmp, a+4)+port.CellsAt(tmp, b+4))
+							// P12.7 (smoke B N3): strokes of two inks are a chart's lines and a legend's samples, not one pen: the cluster's ink (cell 6) becomes -2
+							if (port.CellsAt(tmp, a+6) == -2) || ((port.CellsAt(tmp, b+6) == -2) || (sgInkDiff(port.CellsAt(tmp, a+6), port.CellsAt(tmp, b+6)) > 96)) {
+								port.CellsSet(tmp, a+6, -2)
+							}
 							la = port.CellsAt(tmp, a+7)
 							lb = port.CellsAt(tmp, b+7)
 							if (la < 0) || (lb < 0) {
@@ -748,7 +763,7 @@ func SgDecide(sgc *port.Cells, owords *port.Cells, et *port.Cells, fw *port.Cell
 		h = port.CellsAt(sgc, c+4) - port.CellsAt(sgc, c+2)
 		kind = 0
 		conf = 0
-		if (sgTortuous(port.CellsAt(sgc, c+8), port.CellsAt(sgc, c+15)) == 1) && (SgLegibleWords(owords, et, fw, port.CellsAt(sgc, c), port.CellsAt(sgc, c+1), port.CellsAt(sgc, c+2), port.CellsAt(sgc, c+3), port.CellsAt(sgc, c+4)) < 2) {
+		if (sgTortuous(port.CellsAt(sgc, c+8), port.CellsAt(sgc, c+15)) == 1) && ((port.CellsAt(sgc, c+7) != -2) && (SgLegibleWords(owords, et, fw, port.CellsAt(sgc, c), port.CellsAt(sgc, c+1), port.CellsAt(sgc, c+2), port.CellsAt(sgc, c+3), port.CellsAt(sgc, c+4)) < 2)) {
 			if sgSmall(sgc, c) == 1 {
 				rec = sgRecurrence(sgc, n, c)
 				if ((cues & 7) != 0) || (((rec >= 1) && (sgInMargin(sgc, c) == 1)) || (rec >= 2)) {

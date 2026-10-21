@@ -86,6 +86,21 @@
     (vw-new views 1 (vk-render) -1 -1 (bitmap-w b) (bitmap-h b) 7200 0 -1 0 0 0 0 0)
     (return (sp-find 1 views 0 rules ow et b 61200 cand mask))))
 
+(deftest test-raster-curves-of-two-inks-are-no-signature
+  (let [^Bitmap b (bitmap-new 300 120 3)
+        ^Cells rules (new-cells) ^Cells ow (new-cells) ^Cells et (new-cells) ^Cells cand (new-cells)]
+    (spx-paper b)
+    (spx-line b 20 280 100)
+    (spx-zig b 40 98 70 24 36 20 40 120)
+    (spx-zig b 120 98 70 24 36 180 30 20)
+    (spx-rule rules 20 280 100)
+    (assert-eq (spx-find rules ow et b cand) 0 "two strongly coloured curves on one rule are a chart")
+    (spx-paper b)
+    (spx-line b 20 280 100)
+    (spx-zig b 40 98 70 24 36 20 40 120)
+    (spx-zig b 120 98 70 24 36 20 40 120)
+    (assert-eq (spx-find rules ow et b cand) 1 "the same geometry in one ink remains a signature")))
+
 (deftest test-a-pen-over-a-line-is-a-signature
   (let [^Bitmap b (bitmap-new 300 120 3)
         ^Cells rules (new-cells)

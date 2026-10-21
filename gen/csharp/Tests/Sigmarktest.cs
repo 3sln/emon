@@ -199,6 +199,25 @@ public static class Sigmarktest {
         emon.Testport.AssertEq(GtFind(pa, pts, fw, et, ow, an, txt, 1, sm), 1, "the same words the engine is unsure of are noise: a signature");
     }
     [Xunit.Fact]
+    public static void TestAChartLegendInTwoInksIsNoSignature() {
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells pts = emon.Port.NewCells();
+        emon.Port.Cells fw = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells ow = emon.Port.NewCells();
+        emon.Port.Cells an = emon.Port.NewCells();
+        emon.Port.Cells txt = emon.Port.NewCells();
+        emon.Port.Cells sm = emon.Port.NewCells();
+        // A chart legend can have looping strokes and a rule beneath it, like a signature. Its two distinctly coloured samples are not one pen. The same strokes in one ink remain a signature.
+        GtLoops(pa, pts, 1, 10000, 20000, 5, 800, 1800);
+        int r = GtLoops(pa, pts, 1, 10000, 20400, 5, 800, 1800);
+        Evidence.PaSet(pa, r, Evidence.PfStroke(), 13369344);
+        GtRule(pa, pts, 1, 8000, 20000, 22400);
+        emon.Testport.AssertEq(GtFind(pa, pts, fw, et, ow, an, txt, 1, sm), 0, "two inks distinguish a legend from a pen");
+        Evidence.PaSet(pa, r, Evidence.PfStroke(), 2047903);
+        emon.Testport.AssertEq(GtFind(pa, pts, fw, et, ow, an, txt, 1, sm), 1, "the one-ink control remains a signature");
+    }
+    [Xunit.Fact]
     public static void TestTheTypedNameUnderTheRuleIsTheName() {
         emon.Port.Cells pa = emon.Port.NewCells();
         emon.Port.Cells pts = emon.Port.NewCells();

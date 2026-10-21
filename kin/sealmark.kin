@@ -497,6 +497,44 @@
           (set w (+ w 1))))
     (return n)))
 
+(defn ^I32 sm-inside-words [^Cells scr ^I32 c ^Cells fw ^I32 page]
+  (comment "P12.7 (smoke B N2): how many text-layer words of `page`, of any ink, have their centre inside the candidate at record `c`.")
+  (let [^I32 nfw (quot (cells-len fw) 24)
+        ^:mut ^I32 w 0
+        ^:mut ^I32 n 0]
+    (while (< w nfw)
+      (do (if (== (cells-at fw (* w 24)) page)
+            (if (== (sm-inside scr c (sm-cx fw w) (sm-cy fw w)) 1) (set n (+ n 1))))
+          (set w (+ w 1))))
+    (return n)))
+
+(defn ^I32 sm-member-lines [^Cells scr ^I32 c ^Cells fw ^Cells gl ^I32 page]
+  (comment "P12.7 (smoke B N2): how many lines the members of the candidate at record `c` are on: a word starts a new line when its centre is more than half its height off the one before.")
+  (let [^I32 nfw (quot (cells-len fw) 24)
+        ^:mut ^I32 w 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 prev -1
+        ^:mut ^I32 h 0]
+    (while (< w nfw)
+      (do (if (== (cells-at fw (* w 24)) page)
+            (if (== (sm-member scr c fw gl w) 1)
+              (do (set h (- (cells-at fw (+ (* w 24) 4)) (cells-at fw (+ (* w 24) 2))))
+                  (if (or (< prev 0) (> (* (sm-abs (- (sm-cy fw w) (sm-cy fw prev))) 2) h))
+                    (set n (+ n 1)))
+                  (set prev w))))
+          (set w (+ w 1))))
+    (return n)))
+
+(defn ^I32 sm-text-box [^Cells scr ^I32 c ^Cells fw ^Cells gl ^I32 page ^I32 tl]
+  (comment "P12.7 (smoke B N2): 1 when the stamp candidate at record `c` (with `tl` words of its ink) is a TEXT BOX and not a stamp: its words run to four lines or more (a stamp is a few words; text that flows as paragraphs in a")
+  (comment "frame is the page's own text and stays in the body), or the frame holds text-layer words and none of them is of its ink (the OCR words inside are a picture's: a logo in a frame), or it holds three words of its ink at")
+  (comment "most among twelve other words or more (a frame round a block of the page that has one coloured word in it).")
+  (let [^I32 tot (sm-inside-words scr c fw page)]
+    (if (>= (sm-member-lines scr c fw gl page) 4) (return 1))
+    (if (and (== tl 0) (> tot 0)) (return 1))
+    (if (and (<= tl 3) (>= (- tot tl) 12)) (return 1))
+    (return 0)))
+
 (defn ^I32 sm-text-layer-text [^Cells scr ^I32 c ^Cells fw ^Cells gl ^:mut ^Cells et ^I32 page]
   (comment "Append to `et` the words of the candidate at record `c`, in the text layer's order, one space between two words unless both are one glyph and no wider")
   (comment "apart than 1.4 times the mean step of the single glyphs (the arc text of a seal: a glyph a word, the spaces of the ring are no word).")
@@ -571,7 +609,8 @@
           (if (== kind (pls-seal))
             (if (and (== (+ tl oc) 0) (!= (bit-and (cells-at scr (+ c 10)) 3) 3)) (set keep 0)))
           (if (== kind (pls-stamp))
-            (if (== (+ tl oc) 0) (set keep 0)))
+            (do (if (== (+ tl oc) 0) (set keep 0))
+                (if (== (sm-text-box scr c fw gl page tl) 1) (set keep 0))))
           (comment "a ring that is another's inner ring is part of that seal")
           (if (!= (bit-and (cells-at scr (+ c 10)) 4) 0) (set keep 0))
           (if (== keep 0) (cells-set scr c 0))

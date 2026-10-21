@@ -4411,6 +4411,42 @@ func pcBidiText(et *port.Cells, gl *port.Cells, gfst int32, glst int32) int32 {
 	return b
 }
 
+func PcBaseGlyph(gl *port.Cells, gfst int32, glst int32, fromEnd int32) int32 {
+	// P12.7 (smoke A N2): the glyph a word's baseline is read from at its start (from-end 0) or at its end (1): the first (last) of its glyphs that is not set small against the biggest of the
+	// word (at most 80 per cent of its size). The raised digits of a footnote marker, `white¹,`, sit above the line's baseline: a word's baseline is not theirs, or the rows of a table that
+	// sorts its words by baseline put `bread¹,` before `White`. The last (first) glyph itself when none is, or the word has one glyph.
+	var mx int32 = 0
+	var j int32 = gfst
+	for j <= glst {
+		if evidence.GlGet(gl, j, evidence.GfSize()) > mx {
+			mx = evidence.GlGet(gl, j, evidence.GfSize())
+		}
+		j += 1
+	}
+	// Compare against floor(4 * mx / 5), dividing first so huge glyph sizes cannot overflow (identity fuzz corpus).
+	if fromEnd == 1 {
+		j = glst
+		for j >= gfst {
+			if evidence.GlGet(gl, j, evidence.GfSize()) > (((mx / 5) * 4) + (((mx % 5) * 4) / 5)) {
+				return j
+			}
+			j -= 1
+		}
+	} else {
+		j = gfst
+		for j <= glst {
+			if evidence.GlGet(gl, j, evidence.GfSize()) > (((mx / 5) * 4) + (((mx % 5) * 4) / 5)) {
+				return j
+			}
+			j += 1
+		}
+	}
+	if fromEnd == 1 {
+		return glst
+	}
+	return gfst
+}
+
 func pcEmitWord(gl *port.Cells, et *port.Cells, wd *port.Cells, fnt *port.Cells, page int32, gfst int32, glst int32, wbk int32) int32 {
 	// Record glyphs [gfst, glst] as a word: the union of their boxes, their text, the
 	// dominant font and size of the first, and `hidden-text` as its source when every
@@ -4481,7 +4517,9 @@ func pcEmitWord(gl *port.Cells, et *port.Cells, wd *port.Cells, fnt *port.Cells,
 	} else {
 		tstart = pcBidiText(et, gl, gfst, glst)
 	}
-	var w int32 = evidence.WdNew(wd, page, x0, y0, x1, y1, evidence.GlGet(gl, gfst, evidence.GfBx0()), evidence.GlGet(gl, gfst, evidence.GfBy0()), evidence.GlGet(gl, glst, evidence.GfBx1()), evidence.GlGet(gl, glst, evidence.GfBy1()), evidence.GlGet(gl, gfst, evidence.GfRot()), 0, tstart, port.CellsLen(et)-tstart, -1, -1, -1)
+	var gb0 int32 = PcBaseGlyph(gl, gfst, glst, 0)
+	var gb1 int32 = PcBaseGlyph(gl, gfst, glst, 1)
+	var w int32 = evidence.WdNew(wd, page, x0, y0, x1, y1, evidence.GlGet(gl, gfst, evidence.GfBx0()), evidence.GlGet(gl, gb0, evidence.GfBy0()), evidence.GlGet(gl, glst, evidence.GfBx1()), evidence.GlGet(gl, gb1, evidence.GfBy1()), evidence.GlGet(gl, gfst, evidence.GfRot()), 0, tstart, port.CellsLen(et)-tstart, -1, -1, -1)
 	var fo int32 = evidence.GlGet(gl, gfst, evidence.GfFont())
 	if rtlw == 1 {
 		evidence.WdSet(wd, w, evidence.HdDir(), evidence.LdRtl())

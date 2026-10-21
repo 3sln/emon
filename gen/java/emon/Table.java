@@ -1405,6 +1405,21 @@ public final class Table {
         }
         return (2 * emon.Port.cellsAt(tb, (k * TBS) + 2)) <= ymid2;
     }
+    public static boolean tbDueFor(emon.Port.Cells tb, int k, int page, int ymid2, emon.Port.Cells ln, int l) {
+        // P12.7 (smoke A N4): `tb-due`, with the line `l` the table would be written before (-1: no line, only `ymid2`). A line to the left of the table (it ends within 6 pt of its left edge) that begins in the
+        // table's own height is the label of what the table holds (a form's column of boxes and line numbers beside its rows): the field comes after its label, so such a line is written before the table.
+        if (!tbDue(tb, k, page, ymid2)) {
+            return 0 == 1;
+        }
+        if (l < 0) {
+            return 1 == 1;
+        }
+        int b = k * TBS;
+        if ((Evidence.lnGet(ln, l, Evidence.lhX1()) <= (emon.Port.cellsAt(tb, b + 1) + 600)) && ((Evidence.lnGet(ln, l, Evidence.lhY0()) >= (emon.Port.cellsAt(tb, b + 2) - 100)) && (Evidence.lnGet(ln, l, Evidence.lhY0()) <= emon.Port.cellsAt(tb, b + 4)))) {
+            return 0 == 1;
+        }
+        return 1 == 1;
+    }
     public static int tbSkip(emon.Port.Cells tb, int k, int page) {
         // The first table at or after k that is on a page at or after `page`.
         int i = k;

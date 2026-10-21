@@ -1317,13 +1317,13 @@ pub(crate) fn fu_chain_adjacent(ln: &mut crate::port::Cells, cd: &mut crate::por
             if cd_get(cd, r, 2) == 1 {
                 gap = cd_get(cd, r, 3) - cd_get(cd, q, 4);
                 if (gap >= -200) && ((gap * 1000) <= (h * FU_CHAIN_GAP)) && (cd_get(cd, q, 3) < cd_get(cd, r, 3)) {
-                    return 1;
+                    return cd_get(cd, q, 8) + 1;
                 }
             }
             if cd_get(cd, r, 2) == 2 {
                 gap = cd_get(cd, q, 3) - cd_get(cd, r, 4);
                 if (gap >= -200) && ((gap * 1000) <= (h * FU_CHAIN_GAP)) && (cd_get(cd, q, 3) > cd_get(cd, r, 3)) {
-                    return 1;
+                    return cd_get(cd, q, 8) + 1;
                 }
             }
         }
@@ -1341,6 +1341,8 @@ pub(crate) fn fu_chain(ln: &mut crate::port::Cells, ord: &mut crate::port::Cells
     let mut g: i32 = 0;
     let mut i: i32 = 0;
     let mut adj: i32 = 0;
+    let mut fewer: i32 = 0;
+    let mut up: i32 = 0;
     let mut old: i32 = 0;
     let mut f: i32 = 0;
     let mut m: i32 = 0;
@@ -1352,12 +1354,21 @@ pub(crate) fn fu_chain(ln: &mut crate::port::Cells, ord: &mut crate::port::Cells
                 f = gr_get(gr, g, 0);
                 m = gr_get(gr, g, 1);
                 adj = 0;
+                fewer = 0;
                 i = 0;
                 while i < m {
-                    adj += fu_chain_adjacent(ln, cd, ncd, crate::port::cells_at(ord, f + i));
+                    up = fu_chain_adjacent(ln, cd, ncd, crate::port::cells_at(ord, f + i));
+                    if up > 0 {
+                        adj += 1;
+                        // P12.7 (smoke A N3): a line is the next of a header only when it recurs on every page the header does: a statement's title under the company's name is on the pages of that statement
+                        // (`CONSOLIDATED BALANCE SHEETS` on two of three), a heading that varies with the page, and not the third line of the header
+                        if gr_get(gr, g, 2) < gr_get(gr, up - 1, 2) {
+                            fewer = 1;
+                        }
+                    }
                     i += 1;
                 }
-                if (adj * 100) >= (m * 70) {
+                if (fewer == 0) && ((adj * 100) >= (m * 70)) {
                     old = gr_get(gr, g, 9);
                     gr_set(gr, g, 9, m);
                     if fu_qualify(ord, cd, sl, tx, gr, g, npages, trust) == 1 {

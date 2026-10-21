@@ -807,6 +807,59 @@ fn test_leaning_glyphs_of_a_synthetic_italic_make_one_word() {
     crate::testport::assert_eq(wd_count(wd), 1, "one word, not three letters");
     crate::testport::assert_eq(wd_get(wd, 0, hd_tlen()), 3, "of three code points");
 }
+pub(crate) fn ct_gs(mut gl: &mut crate::port::Cells, x0: i32, x1: i32, cp: i32, size: i32, by: i32) -> i32 {
+    // One glyph of the scene: the box [x0, x1] by 800, set in `size`, its baseline segment at height `by`.
+    let g: i32 = gl_new(gl, 1, x0, 0, x1, 800, cp, -1, 0, -1);
+    gl_set(gl, g, gf_size(), size);
+    gl_set(gl, g, gf_bx0(), x0);
+    gl_set(gl, g, gf_bx1(), x1);
+    gl_set(gl, g, gf_by0(), by);
+    gl_set(gl, g, gf_by1(), by);
+    return g;
+}
+#[test]
+fn test_a_words_baseline_is_not_its_raised_marker() {
+    // P12.7 (smoke A N2): `bread` and a raised, smaller `1,` (a footnote marker: set at 600 where the letters are 1000, its baseline 300 above theirs) are one word `bread1,`. Its baseline ends where its letters'
+    // do, not at the marker: the rows of a table sort their words by that baseline, and `bread1,` came before `White` on the row it ends. A marker that begins a word is no more the start of its baseline.
+    let gl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    ct_gs(gl, 1000, 1500, 98, 1000, 800);
+    ct_gs(gl, 1500, 2000, 114, 1000, 800);
+    ct_gs(gl, 2000, 2300, 49, 600, 500);
+    ct_gs(gl, 2300, 2600, 44, 600, 500);
+    ct_group(gl, et, wd, ln);
+    crate::testport::assert_eq(wd_count(wd), 1, "one word");
+    crate::testport::assert_eq(wd_get(wd, 0, hd_by0()), 800, "its baseline begins at its first letter's");
+    crate::testport::assert_eq(wd_get(wd, 0, hd_by1()), 800, "and ends at its last letter's, not at the raised marker's");
+    crate::port::cells_drop(gl, 0);
+    crate::port::cells_drop(et, 0);
+    crate::port::cells_drop(wd, 0);
+    crate::port::cells_drop(ln, 0);
+    ct_gs(gl, 1000, 1300, 51, 600, 500);
+    ct_gs(gl, 1300, 1800, 98, 1000, 800);
+    ct_gs(gl, 1800, 2300, 114, 1000, 800);
+    ct_group(gl, et, wd, ln);
+    crate::testport::assert_eq(wd_count(wd), 1, "a marker that begins the word: one word");
+    crate::testport::assert_eq(wd_get(wd, 0, hd_by0()), 800, "its baseline begins at the letters'");
+    crate::testport::assert_eq(wd_get(wd, 0, hd_by1()), 800, "and ends there");
+}
+#[test]
+fn test_word_baseline_size_comparisons_do_not_overflow() {
+    let gl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    // The identity fuzz corpus contains huge glyph sizes. Comparing eighty per cent must work at the I32 limit, including the strict threshold, without multiplication overflow on any target.
+    ct_gs(gl, 1000, 1500, 98, 1000, 800);
+    ct_gs(gl, 1500, 1800, 49, 600, 500);
+    gl_set(gl, 0, gf_size(), 2147483647);
+    gl_set(gl, 1, gf_size(), 1000000000);
+    crate::testport::assert_eq(pc_base_glyph(gl, 0, 1, 0), 0, "huge letters supply the start");
+    crate::testport::assert_eq(pc_base_glyph(gl, 0, 1, 1), 0, "the smaller marker cannot supply the end");
+    gl_set(gl, 1, gf_size(), 1717986917);
+    crate::testport::assert_eq(pc_base_glyph(gl, 0, 1, 1), 0, "the integer just below eighty per cent stays small");
+    gl_set(gl, 1, gf_size(), 1717986918);
+    crate::testport::assert_eq(pc_base_glyph(gl, 0, 1, 1), 1, "the next integer is above the threshold");
+}
 #[test]
 fn test_a_diacritic_drawn_over_a_letter_is_the_combining_mark_after_it() {
     // Smoke B I-21: TeX draws an umlaut as the dieresis glyph and then the u, backed up under it: `M` `dieresis` `u` `ller`. The

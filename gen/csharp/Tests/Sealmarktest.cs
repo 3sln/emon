@@ -315,6 +315,64 @@ public static class Sealmarktest {
         StQuad(pa, pts, 5000, 5000, 15000, 9000, 1118481, 300);
         emon.Testport.AssertEq(StFind(pa, pts, gl, fw, et, cg, refs, ow, sm), 0, "a black frame is a table's or a box's");
     }
+    [Xunit.Fact]
+    public static void TestTextThatFlowsInARedFrameIsATextBoxAndNoStamp() {
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells pts = emon.Port.NewCells();
+        emon.Port.Cells gl = emon.Port.NewCells();
+        emon.Port.Cells fw = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells cg = emon.Port.NewCells();
+        emon.Port.Cells refs = emon.Port.NewCells();
+        emon.Port.Cells ow = emon.Port.NewCells();
+        emon.Port.Cells sm = emon.Port.NewCells();
+        int k = 0;
+        // P12.7 (smoke B N2): a 2 pt red frame holding red words on three lines is a stamp; on four lines (the words of a text box, set in the colour of its frame) it is a box of the page's text: nothing is a stamp and no
+        // group is the stamp's, so that the words stay in the body and not in an `alt`.
+        StQuad(pa, pts, 5000, 5000, 15000, 9000, 12591135, 200);
+        int a = StWord(fw, gl, et, 8000, 5800, 0, 12591135, 80);
+        int c = StWord(fw, gl, et, 8000, 7400, 0, 12591135, 82);
+        int ga = StTgroup(cg, refs, a);
+        int gc = StTgroup(cg, refs, c);
+        StWord(fw, gl, et, 8000, 6600, 0, 12591135, 81);
+        emon.Testport.AssertEq(StFind(pa, pts, gl, fw, et, cg, refs, ow, sm), 1, "three lines of red words in a red frame: a stamp");
+        emon.Testport.AssertEq(Player.CgGet(cg, gc, Player.CgfFlags()), Player.PlgInSeal(), "and the words are its");
+        emon.Testport.AssertEq(Player.CgGet(cg, ga, Player.CgfFlags()), Player.PlgInSeal(), "the first too");
+        emon.Port.Cells pa2 = emon.Port.NewCells();
+        emon.Port.Cells pts2 = emon.Port.NewCells();
+        emon.Port.Cells gl2 = emon.Port.NewCells();
+        emon.Port.Cells fw2 = emon.Port.NewCells();
+        emon.Port.Cells et2 = emon.Port.NewCells();
+        emon.Port.Cells cg2 = emon.Port.NewCells();
+        emon.Port.Cells refs2 = emon.Port.NewCells();
+        emon.Port.Cells sm2 = emon.Port.NewCells();
+        StQuad(pa2, pts2, 5000, 5000, 15000, 9000, 12591135, 200);
+        int a2 = StWord(fw2, gl2, et2, 8000, 5600, 0, 12591135, 80);
+        int d = StWord(fw2, gl2, et2, 8000, 7700, 0, 12591135, 83);
+        int ga2 = StTgroup(cg2, refs2, a2);
+        int gd = StTgroup(cg2, refs2, d);
+        StWord(fw2, gl2, et2, 8000, 6300, 0, 12591135, 81);
+        StWord(fw2, gl2, et2, 8000, 7000, 0, 12591135, 82);
+        emon.Testport.AssertEq(StFind(pa2, pts2, gl2, fw2, et2, cg2, refs2, ow, sm2), 0, "four lines in the frame are a box of text, not a stamp");
+        emon.Testport.AssertEq(Player.CgGet(cg2, gd, Player.CgfFlags()), 0, "the words are the page's own");
+        emon.Testport.AssertEq(Player.CgGet(cg2, ga2, Player.CgfFlags()), 0, "all of them");
+        // a frame round a block of black text with one red word in it is a frame, not a stamp: twelve black words and one red
+        emon.Port.Cells pa3 = emon.Port.NewCells();
+        emon.Port.Cells pts3 = emon.Port.NewCells();
+        emon.Port.Cells gl3 = emon.Port.NewCells();
+        emon.Port.Cells fw3 = emon.Port.NewCells();
+        emon.Port.Cells et3 = emon.Port.NewCells();
+        emon.Port.Cells cg3 = emon.Port.NewCells();
+        emon.Port.Cells refs3 = emon.Port.NewCells();
+        emon.Port.Cells sm3 = emon.Port.NewCells();
+        StQuad(pa3, pts3, 5000, 5000, 15000, 9000, 12591135, 200);
+        StWord(fw3, gl3, et3, 6000, 5800, 0, 12591135, 80);
+        while (k < 12) {
+            StWord(fw3, gl3, et3, 8000 + ((k % 4) * 1500), 5800 + ((k / 4) * 1000), 0, 1118481, 66);
+            k += 1;
+        }
+        emon.Testport.AssertEq(StFind(pa3, pts3, gl3, fw3, et3, cg3, refs3, ow, sm3), 0, "one red word among twelve black ones in a red frame is no stamp");
+    }
     internal static int StStroke(emon.Port.Cells pa, emon.Port.Cells pts, int x0, int y0, int segs) {
         // An open stroked curve of `segs` Bezier segments from (x0, y0), 800 wide each and 1500 high; answers its row.
         int first = emon.Port.CellsLen(pts) / 3;
@@ -386,6 +444,25 @@ public static class Sealmarktest {
         emon.Port.CellsDrop(gl, 0);
         StText(fw, gl, et, 7200, 30000, 66, 121, 58);
         emon.Testport.AssertEq(StFind(pa, pts, gl, fw, et, cg, refs, ow, sm), 0, "a cue far above is none");
+    }
+    [Xunit.Fact]
+    public static void TestStrokesOfTwoInksAreAChartsCurvesAndNoSignature() {
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells pts = emon.Port.NewCells();
+        emon.Port.Cells gl = emon.Port.NewCells();
+        emon.Port.Cells fw = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells cg = emon.Port.NewCells();
+        emon.Port.Cells refs = emon.Port.NewCells();
+        emon.Port.Cells ow = emon.Port.NewCells();
+        emon.Port.Cells sm = emon.Port.NewCells();
+        // P12.7 (smoke B N3): a chart's curves and its legend's line samples, in a blue, a red and a green, merged into one cluster that a cue near it made a signature (the typed name the label under the legend). One pen
+        // has one ink: the same two strokes in two inks are no signature, in one they are (the law above).
+        StStroke(pa, pts, 10000, 20000, 4);
+        int b = StStroke(pa, pts, 10500, 20400, 1);
+        Evidence.PaSet(pa, b, Evidence.PfStroke(), 12591135);
+        StText(fw, gl, et, 7200, 20300, 66, 121, 58);
+        emon.Testport.AssertEq(StFind(pa, pts, gl, fw, et, cg, refs, ow, sm), 0, "a blue stroke and a red one together, with a cue beside them: a chart");
     }
     internal static int StOword(emon.Port.Cells ow, emon.Port.Cells et, int x, int y, int a, int b) {
         int ts = emon.Port.CellsLen(et);

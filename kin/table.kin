@@ -435,7 +435,7 @@
 
 ;; ------------------------------------------------------------- the table list
 
-(defn ^I32 tb-add [^:mut ^Cells tb ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 profile ^I32 score
+(defn ^:pub ^I32 tb-add [^:mut ^Cells tb ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 profile ^I32 score
                    ^I32 nrows ^I32 ncols ^I32 cfirst ^I32 ncells]
   (comment "Append a candidate table; answers its index.")
   (let [^I32 k (tb-rows-of tb TBS)]
@@ -1237,6 +1237,18 @@
   (if (>= k (tb-rows-of tb TBS)) (return (== 0 1)))
   (if (!= (cells-at tb (* k TBS)) page) (return (== 0 1)))
   (return (<= (* 2 (cells-at tb (+ (* k TBS) 2))) ymid2)))
+
+(defn ^:pub ^Bool tb-due-for [^Cells tb ^I32 k ^I32 page ^I32 ymid2 ^Cells ln ^I32 l]
+  (comment "P12.7 (smoke A N4): `tb-due`, with the line `l` the table would be written before (-1: no line, only `ymid2`). A line to the left of the table (it ends within 6 pt of its left edge) that begins in the")
+  (comment "table's own height is the label of what the table holds (a form's column of boxes and line numbers beside its rows): the field comes after its label, so such a line is written before the table.")
+  (if (not (tb-due tb k page ymid2)) (return (== 0 1)))
+  (if (< l 0) (return (== 1 1)))
+  (let [^I32 b (* k TBS)]
+    (if (and (<= (ln-get ln l (lh-x1)) (+ (cells-at tb (+ b 1)) 600))
+             (and (>= (ln-get ln l (lh-y0)) (- (cells-at tb (+ b 2)) 100))
+                  (<= (ln-get ln l (lh-y0)) (cells-at tb (+ b 4)))))
+      (return (== 0 1)))
+    (return (== 1 1))))
 
 (defn ^:pub ^I32 tb-skip [^Cells tb ^I32 k ^I32 page]
   (comment "The first table at or after k that is on a page at or after `page`.")

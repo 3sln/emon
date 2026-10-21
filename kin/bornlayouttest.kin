@@ -1,0 +1,222 @@
+;; Laws for the born-digital layout defects of the second smoke sweep (P12.7, D1670-), on every target: the stages are run on lines and words written by hand (centipoints, a page is
+;; Letter), through the paragraph builder as the Engine makes it (the heading analysis, the notes stage, the list stage, the paragraphs), and the Model is read.
+;;
+;;   * a FOOTNOTE's paragraph goes on only in small type: the first line of the next page's body is not its continuation;
+(ns emon.bornlayouttest
+  (:require [emon.lang :refer [I32 Blob Cells Text]]
+            [emon.test :refer [deftest assert-eq new-cells text-blob]]
+            [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.model :refer [model-init model-check page-new pk-vector node-count node-kind node-sub node-parent node-first-child node-next
+                                node-text-start node-text-len text-append-utf8 nk-paragraph nk-note nk-heading nk-caption nk-item]]
+            [emon.evidence :refer [wd-new wd-set wd-count ln-new ln-count ln-get lh-by0 lh-by1 wf-size wf-font hd-x1]]
+            [emon.table :refer [tb-add tb-due-for]]
+            [emon.columns :refer [lc-copy]]
+            [emon.heading :refer [hd-analyze]]
+            [emon.notes :refer [nt-analyze]]
+            [emon.lists :refer [ls-analyze]]
+            [emon.para :refer [pa-build]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem]]))
+
+(defn ^I32 bl-line [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^Blob b ^I32 page ^I32 x ^I32 y ^I32 size]
+  (comment "One line on `page` from x at y: the words of b (split at spaces) in type of `size` (centipoints), a word 24/11 of the size wide and a word 28/11 of it apart, the line 100 taller than the type,")
+  (comment "its baseline 200 above its bottom.")
+  (let [^I32 w0 (wd-count wd)
+        ^I32 n (blob-len b)
+        ^I32 y1 (+ y (+ size 100))
+        ^I32 ww (quot (* size 24) 11)
+        ^I32 st (quot (* size 28) 11)
+        ^:mut ^I32 s 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 xe x]
+    (while (<= k n)
+      (do (if (or (== k n) (== (blob-u8 b k) 32))
+            (do (if (> k s)
+                  (do (let [^I32 ts (cells-len et)
+                            ^I32 wx (+ x (* i st))
+                            ^I32 wx1 (+ wx ww)]
+                        (text-append-utf8 et b s k)
+                        (let [^I32 tl (- (cells-len et) ts)
+                              ^I32 r (wd-new wd page wx y wx1 y1 wx (- y1 200) wx1 (- y1 200) 0 0 ts tl -1 -1 -1)]
+                          (wd-set wd r (wf-size) size)
+                          (wd-set wd r (wf-font) 0))
+                        (set xe wx1)
+                        (set i (+ i 1)))))
+                (set s (+ k 1))))
+          (set k (+ k 1))))
+    (ln-new ln page x y xe y1 x (- y1 200) xe (- y1 200) 0 0 w0 (- (wd-count wd) w0))
+    (return 0)))
+
+(defn ^I32 bl-model [^Cells wd ^Cells ln ^Cells et ^I32 npages
+                     ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text ^:mut ^Cells pages]
+  (comment "The Model of the evidence as the Engine makes it, without the tables and the furniture: the copy of the lines, the heading analysis, the notes stage, the list stage and the paragraphs.")
+  (let [^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells hc (new-cells) ^Cells ws (new-cells) ^Cells tmp (new-cells)
+        ^Cells pr (new-cells) ^Cells ptxt (new-cells) ^Cells pa (new-cells) ^Cells cd (new-cells) ^Cells pi (new-cells)
+        ^Cells lws (new-cells) ^Cells tw (new-cells) ^Cells gl (new-cells) ^Cells rf (new-cells) ^Cells nb (new-cells) ^Cells mk (new-cells)
+        ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp2 (new-cells) ^Cells fr (new-cells) ^Cells gp (new-cells)
+        ^Cells lt (new-cells) ^Cells ls (new-cells) ^Cells sd (new-cells) ^Cells it (new-cells)
+        ^Cells io (new-cells) ^Cells rw (new-cells) ^Cells gu (new-cells) ^Cells ac (new-cells)
+        ^Cells tm (new-cells) ^Cells cf (new-cells) ^Cells lo (new-cells) ^Cells pr2 (new-cells) ^Cells dbg (new-cells)
+        ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tq (new-cells) ^Cells ii (new-cells) ^Cells al (new-cells)
+        ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^:mut ^I32 p 1]
+    (lc-copy ln lt)
+    (model-init nodes attrs regions text pages ledger layout)
+    (while (<= p npages)
+      (do (page-new pages p 61200 79200 0 (pk-vector))
+          (set p (+ p 1))))
+    (hd-analyze wd lt et gl sf sc hc ws tmp pr ptxt)
+    (nt-analyze wd lt et gl sf sc pages hc rf nb mk tw)
+    (ls-analyze wd lt et sf pa hc cd pi lws tw)
+    (pa-build wd et npages pages layout nodes attrs regions text ord raw tmp2 fr gp
+              lt ls sd it io rw gu ac tm cf lo pr2 dbg hc tb tc tw tq ledger ii al)
+    (return 0)))
+
+(defn ^I32 bl-find [^Cells nodes ^I32 kind ^I32 nth]
+  (comment "The nth node (from 0) of the kind, -1 when there are not so many.")
+  (let [^I32 n (node-count nodes)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 seen 0]
+    (while (< i n)
+      (do (if (== (node-kind nodes i) kind)
+            (do (if (== seen nth) (return i))
+                (set seen (+ seen 1))))
+          (set i (+ i 1))))
+    (return -1)))
+
+(defn ^I32 bl-yes [^I32 n]
+  (if (>= n 0) (return 1))
+  (return 0))
+
+(defn ^I32 bl-own [^Cells nodes ^Cells text ^I32 n ^Blob b]
+  (comment "1 when node n's own text is the ASCII text b.")
+  (let [^I32 start (node-text-start nodes n)
+        ^:mut ^I32 i 0]
+    (if (!= (node-text-len nodes n) (blob-len b)) (return 0))
+    (while (< i (blob-len b))
+      (do (if (!= (cells-at text (+ start i)) (blob-u8 b i)) (return 0))
+          (set i (+ i 1))))
+    (return 1)))
+
+;; ------------------------------------------------------------------------------------- notes
+
+(deftest test-a-footnote-does-not-go-on-in-the-body-of-the-next-page
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells) ^Cells pages (new-cells)]
+    (comment "P12.7 (smoke B N1): page 1 ends with a footnote in 8 pt whose last line stops at a hyphen; page 2 begins with body type that does not begin with a capital's full stop. The next page's body was the")
+    (comment "footnote's continuation (a hyphen, a line that reaches the edge, no full stop); a footnote's text goes on only in type of its own size.")
+    (bl-line wd ln et (text-blob "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor") 1 7200 5000 1100)
+    (bl-line wd ln et (text-blob "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor") 1 7200 6400 1100)
+    (bl-line wd ln et (text-blob "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor") 1 7200 7800 1100)
+    (bl-line wd ln et (text-blob "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor") 1 7200 9200 1100)
+    (bl-line wd ln et (text-blob "4 We note that in the literature and the usage of the model the bidirectional Trans-") 1 7200 70000 800)
+    (bl-line wd ln et (text-blob "Input Output Representations To make BERT handle a variety of tasks our input is able") 2 7200 5000 1100)
+    (bl-line wd ln et (text-blob "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor") 2 7200 6400 1100)
+    (bl-line wd ln et (text-blob "former is often referred to as a transformer encoder") 2 7200 70000 800)
+    (bl-model wd ln et 2 nodes attrs regions text pages)
+    (let [^I32 note (bl-find nodes (nk-note) 0)
+          ^I32 np (node-first-child nodes note)]
+      (assert-eq (bl-yes note) 1 "the small line with the marker 4 at the foot of page 1 is a footnote")
+      (assert-eq (bl-own nodes text np (text-blob "We note that in the literature and the usage of the model the bidirectional Trans-")) 1
+                 "the footnote is its own line and not the next page's body"))))
+
+(defn ^I32 bl-body [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^I32 page]
+  (comment "Four lines of body type on the page from y 5000.")
+  (bl-line wd ln et (text-blob "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor") page 7200 5000 1100)
+  (bl-line wd ln et (text-blob "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor") page 7200 6400 1100)
+  (bl-line wd ln et (text-blob "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor") page 7200 7800 1100)
+  (bl-line wd ln et (text-blob "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor") page 7200 9200 1100)
+  (return 0))
+
+(deftest test-an-address-at-the-foot-of-every-page-and-a-street-number-are-no-footnotes
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells) ^Cells pages (new-cells)
+        ^Cells wd2 (new-cells) ^Cells ln2 (new-cells) ^Cells et2 (new-cells)
+        ^Cells nodes2 (new-cells) ^Cells attrs2 (new-cells) ^Cells regions2 (new-cells) ^Cells text2 (new-cells) ^Cells pages2 (new-cells)]
+    (comment "P12.7 (smoke B N4): the same small line, `2 nd Ave West ...`, at the foot of both pages recurs: furniture, not a note (a note does not repeat); and `302 2nd Ave West` on one page is a street number,")
+    (comment "not the marker 302 (a note's number has one or two digits).")
+    (bl-body wd ln et 1)
+    (bl-line wd ln et (text-blob "2 nd Ave West PO Box 430 Hanna AB T0J1P0 P 403 854 4433 hanna ca") 1 7200 70000 800)
+    (bl-body wd ln et 2)
+    (bl-line wd ln et (text-blob "2 nd Ave West PO Box 430 Hanna AB T0J1P0 P 403 854 4433 hanna ca") 2 7200 70000 800)
+    (bl-model wd ln et 2 nodes attrs regions text pages)
+    (assert-eq (bl-yes (bl-find nodes (nk-note) 0)) 0 "a line that recurs on the pages is no footnote")
+    (bl-body wd2 ln2 et2 1)
+    (bl-line wd2 ln2 et2 (text-blob "302 2nd Ave West PO Box 430 Hanna AB T0J1P0 P 403 854 4433 hanna ca") 1 7200 70000 800)
+    (bl-model wd2 ln2 et2 1 nodes2 attrs2 regions2 text2 pages2)
+    (assert-eq (bl-yes (bl-find nodes2 (nk-note) 0)) 0 "a three-digit number is no note marker")))
+
+(defn ^I32 bl-due [^Cells tb ^Cells ln ^I32 l]
+  (comment "1 when the table 0 is due before line l (`tb-due-for`), the line's baseline sum its order key.")
+  (if (tb-due-for tb 0 1 (+ (ln-get ln l (lh-by0)) (ln-get ln l (lh-by1))) ln l) (return 1))
+  (return 0))
+
+(deftest test-a-label-beside-a-table-of-fields-comes-before-it
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells tb (new-cells)]
+    (comment "P12.7 (smoke A N4): the 1120's column of boxes and line numbers (x 468 to 576, y 325.9 to 372) stands beside the labels of its rows, which end at x 338: a field comes after its label. A line to the left of")
+    (comment "the table that begins in its height is written before it; one below it, or to the right of its left edge, is not (the table goes first, as ever).")
+    (tb-add tb 1 46800 32590 57620 37200 0 1000 3 3 0 0)
+    (bl-line wd ln et (text-blob "13 Salaries and wages") 1 5590 32590 800)
+    (bl-line wd ln et (text-blob "Repairs") 1 5590 36000 800)
+    (bl-line wd ln et (text-blob "later text") 1 5590 38000 800)
+    (bl-line wd ln et (text-blob "right of it") 1 50000 32590 800)
+    (assert-eq (bl-due tb ln 0) 0 "a label at the table's top, to its left: it comes first")
+    (assert-eq (bl-due tb ln 1) 0 "so does the label of its fourth row")
+    (assert-eq (bl-due tb ln 2) 1 "a line under the table: the table goes first")
+    (assert-eq (bl-due tb ln 3) 1 "a line at its top but to its right: the table goes first")))
+
+(deftest test-a-running-header-and-footer-are-no-captions
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells) ^Cells pages (new-cells)
+        ^Cells wd2 (new-cells) ^Cells ln2 (new-cells) ^Cells et2 (new-cells)
+        ^Cells nodes2 (new-cells) ^Cells attrs2 (new-cells) ^Cells regions2 (new-cells) ^Cells text2 (new-cells) ^Cells pages2 (new-cells)]
+    (comment "P12.7 (smoke A N1): `Schedule 1 (Form 1040) 2025 Created 7/25/25` small at the foot of page 1 and `Schedule 1 (Form 1040) 2025` small at the head of page 2 are a keyword and a number in type smaller than")
+    (comment "the body, which made each a caption (its label gone from the text, the second the caption of the table under it). The same label with the same words after it on two pages is the document's running text. The")
+    (comment "control: the same line on one page only is a caption.")
+    (bl-body wd ln et 1)
+    (bl-line wd ln et (text-blob "Schedule 1 (Form 1040) 2025 Created 7/25/25") 1 7200 55500 800)
+    (bl-line wd ln et (text-blob "Schedule 1 (Form 1040) 2025") 2 7200 3000 800)
+    (bl-body wd ln et 2)
+    (bl-model wd ln et 2 nodes attrs regions text pages)
+    (assert-eq (bl-yes (bl-find nodes (nk-caption) 0)) 0 "a running header and footer are no captions")
+    (bl-line wd2 ln2 et2 (text-blob "Schedule 1 (Form 1040) 2025") 1 7200 3000 800)
+    (bl-body wd2 ln2 et2 1)
+    (bl-model wd2 ln2 et2 1 nodes2 attrs2 regions2 text2 pages2)
+    (assert-eq (bl-yes (bl-find nodes2 (nk-caption) 0)) 1 "the same line on one page is a caption")))
+
+(deftest test-repeated-captions-in-the-body-are-not-running-headers
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells) ^Cells pages (new-cells)]
+    (comment "A continued table can repeat its caption on successive pages. Recurrence in the body does not make that caption a running header or footer.")
+    (bl-body wd ln et 1)
+    (bl-line wd ln et (text-blob "Table 1 Summary of results") 1 7200 30000 800)
+    (bl-body wd ln et 2)
+    (bl-line wd ln et (text-blob "Table 1 Summary of results") 2 7200 30000 800)
+    (bl-model wd ln et 2 nodes attrs regions text pages)
+    (assert-eq (bl-yes (bl-find nodes (nk-caption) 1)) 1 "both body captions survive")))
+
+(deftest test-a-reference-marker-is-no-column-of-its-own
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells) ^Cells pages (new-cells)
+        ^:mut ^I32 i 0 ^:mut ^I32 w0 0 ^:mut ^I32 empty 0 ^:mut ^I32 items 0]
+    (while (< i 12)
+      (do (bl-line wd ln et (text-blob "ordinary body words continue across the left column here") 1 5000 (+ 10000 (* i 1000)) 800)
+          (set w0 (wd-count wd))
+          (if (== (rem i 3) 0)
+            (do (if (== i 0) (bl-line wd ln et (text-blob "[28] Alpha Beta a reference with several words") 1 30886 (+ 10000 (* i 1000)) 800))
+                (if (== i 3) (bl-line wd ln et (text-blob "[29] Gamma Delta a reference with several words") 1 30886 (+ 10000 (* i 1000)) 800))
+                (if (== i 6) (bl-line wd ln et (text-blob "[30] Epsilon Zeta a reference with several words") 1 30886 (+ 10000 (* i 1000)) 800))
+                (if (== i 9) (bl-line wd ln et (text-blob "[31] Eta Theta a reference with several words") 1 30886 (+ 10000 (* i 1000)) 800)))
+            (bl-line wd ln et (text-blob "wrapped reference text continues in this column here") 1 32922 (+ 10000 (* i 1000)) 800))
+          (if (== (rem i 3) 0) (wd-set wd w0 (hd-x1) 31886))
+          (set i (+ i 1))))
+    (bl-model wd ln et 1 nodes attrs regions text pages)
+    (set i 0)
+    (while (< i (node-count nodes))
+      (do (if (== (node-kind nodes i) (nk-item))
+            (do (set items (+ items 1))
+                (if (and (== (node-text-len nodes i) 0) (< (node-first-child nodes i) 0)) (set empty (+ empty 1)))))
+          (set i (+ i 1))))
+    (assert-eq items 4 "one item per reference entry")
+    (assert-eq empty 0 "the gutter leaves no empty marker items apart from their text")))

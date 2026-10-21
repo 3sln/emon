@@ -103,6 +103,25 @@ func spxFind(rules *port.Cells, ow *port.Cells, et *port.Cells, b *port.Bitmap, 
 	return sigpx.SpFind(1, views, 0, rules, ow, et, b, 61200, cand, mask)
 }
 
+func TestRasterCurvesOfTwoInksAreNoSignature(emonT *testing.T) {
+	var b *port.Bitmap = port.BitmapNew(300, 120, 3)
+	var rules *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var cand *port.Cells = port.NewCells()
+	spxPaper(b)
+	spxLine(b, 20, 280, 100)
+	spxZig(b, 40, 98, 70, 24, 36, 20, 40, 120)
+	spxZig(b, 120, 98, 70, 24, 36, 180, 30, 20)
+	spxRule(rules, 20, 280, 100)
+	port.AssertEq(emonT, spxFind(rules, ow, et, b, cand), 0, "two strongly coloured curves on one rule are a chart")
+	spxPaper(b)
+	spxLine(b, 20, 280, 100)
+	spxZig(b, 40, 98, 70, 24, 36, 20, 40, 120)
+	spxZig(b, 120, 98, 70, 24, 36, 20, 40, 120)
+	port.AssertEq(emonT, spxFind(rules, ow, et, b, cand), 1, "the same geometry in one ink remains a signature")
+}
+
 func TestAPenOverALineIsASignature(emonT *testing.T) {
 	var b *port.Bitmap = port.BitmapNew(300, 120, 3)
 	var rules *port.Cells = port.NewCells()

@@ -275,6 +275,78 @@ public static class Notes {
         }
         return 1;
     }
+    internal static int NtNthWord(emon.Port.Cells wd, emon.Port.Cells ln, int l, int n) {
+        // The n-th (from 0) word with text of line l; -1 when it has fewer.
+        int w0 = Evidence.LnGet(ln, l, Evidence.LhFirst());
+        int wn = Evidence.LnGet(ln, l, Evidence.LhCount());
+        int i = 0;
+        int seen = 0;
+        while (i < wn) {
+            if (Lists.LsWl(wd, w0 + i) > 0) {
+                if (seen == n) {
+                    return w0 + i;
+                }
+                seen += 1;
+            }
+            i += 1;
+        }
+        return -1;
+    }
+    internal static int NtSameWords(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int a, int b, int n) {
+        // 1 when the first n words of lines a and b are the same, character for character.
+        int k = 0;
+        int j = 0;
+        while (k < n) {
+            int wa = NtNthWord(wd, ln, a, k);
+            int wb = NtNthWord(wd, ln, b, k);
+            if ((wa < 0) || (wb < 0)) {
+                return 0;
+            }
+            if (Lists.LsWl(wd, wa) != Lists.LsWl(wd, wb)) {
+                return 0;
+            }
+            j = 0;
+            while (j < Lists.LsWl(wd, wa)) {
+                if (Lists.LsWc(wd, et, wa, j) != Lists.LsWc(wd, et, wb, j)) {
+                    return 0;
+                }
+                j += 1;
+            }
+            k += 1;
+        }
+        return 1;
+    }
+    internal static int NtMarginLine(emon.Port.Cells ln, emon.Port.Cells pages, int l) {
+        // Running text occupies a page margin: the top or bottom fifteen per cent. A repeated caption in the body can belong to a continued table.
+        int h = Model.PageH(pages, Evidence.LnGet(ln, l, Evidence.LhPage()) - 1);
+        int y = Evidence.LnGet(ln, l, Evidence.LhY0()) + Evidence.LnGet(ln, l, Evidence.LhY1());
+        if (h <= 0) {
+            return 0;
+        }
+        if (((y * 100) <= (h * 30)) || ((y * 100) >= (h * 170))) {
+            return 1;
+        }
+        return 0;
+    }
+    internal static int NtRunningLabel(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells hc, emon.Port.Cells pages, int l) {
+        // P12.7 (smoke A N1): 1 when caption candidate l begins with the same four words as another candidate on another page: `Schedule 1 (Form 1040) 2025` at the foot of one page and at the head of the next is a running
+        // header or footer and no caption (the caption of a figure or a table has its number, which is its own; a label that recurs is the document's). Candidates are the lines flagged 8, and 64 (let go as an entry of a list).
+        int n = Evidence.LnCount(ln);
+        int pg = Evidence.LnGet(ln, l, Evidence.LhPage());
+        int m = 0;
+        while (m < n) {
+            if ((m != l) && (Evidence.LnGet(ln, m, Evidence.LhPage()) != pg) && ((NtMarginLine(ln, pages, m) == 1) || (NtMarginLine(ln, pages, l) == 1))) {
+                int fl = Lists.LsGet(hc, m, Lists.LsKFlags());
+                if ((fl == Lists.LsFCap()) || (fl == 64)) {
+                    if (NtSameWords(wd, ln, et, l, m, 4) == 1) {
+                        return 1;
+                    }
+                }
+            }
+            m += 1;
+        }
+        return 0;
+    }
     internal static int NtAfter(emon.Port.Cells wd, emon.Port.Cells ln, int l, int w) {
         // The word with text that follows word w in line l; -1 when there is none.
         int w0 = Evidence.LnGet(ln, l, Evidence.LhFirst());
@@ -811,6 +883,54 @@ public static class Notes {
         }
         return n;
     }
+    internal static int NtSameShape(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int a, int b) {
+        // P12.7 (smoke B N4): 1 when lines a and b have the same words, a digit standing for any digit.
+        int na = Evidence.LnGet(ln, a, Evidence.LhCount());
+        int wa = Evidence.LnGet(ln, a, Evidence.LhFirst());
+        int wb = Evidence.LnGet(ln, b, Evidence.LhFirst());
+        int i = 0;
+        int j = 0;
+        if (na != Evidence.LnGet(ln, b, Evidence.LhCount())) {
+            return 0;
+        }
+        while (i < na) {
+            int tl = Lists.LsWl(wd, wa + i);
+            if (tl != Lists.LsWl(wd, wb + i)) {
+                return 0;
+            }
+            j = 0;
+            while (j < tl) {
+                int ca = Lists.LsWc(wd, et, wa + i, j);
+                int cb = Lists.LsWc(wd, et, wb + i, j);
+                if ((ca != cb) && ((Lists.LsDigit(ca) < 0) || (Lists.LsDigit(cb) < 0))) {
+                    return 0;
+                }
+                j += 1;
+            }
+            i += 1;
+        }
+        return 1;
+    }
+    internal static int NtRepeats(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l) {
+        // P12.7 (smoke B N4): 1 when line l has a twin on another page: the same words (digits alike), the same type size and the same height within 15 pt. A line that recurs at the foot of every page is furniture
+        // (an address, a motto), never a note: notes do not repeat.
+        int n = Evidence.LnCount(ln);
+        int pg = Evidence.LnGet(ln, l, Evidence.LhPage());
+        int y = Evidence.LnGet(ln, l, Evidence.LhY0());
+        int m = 0;
+        if (Evidence.LnGet(ln, l, Evidence.LhCount()) < 2) {
+            return 0;
+        }
+        while (m < n) {
+            if ((Evidence.LnGet(ln, m, Evidence.LhPage()) != pg) && (Lists.LsAbs(Evidence.LnGet(ln, m, Evidence.LhY0()) - y) <= 1500)) {
+                if (NtSameShape(wd, ln, et, l, m) == 1) {
+                    return 1;
+                }
+            }
+            m += 1;
+        }
+        return 0;
+    }
     internal static int NtFoot(emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells ln, emon.Port.Cells sf, emon.Port.Cells rf, emon.Port.Cells nb, emon.Port.Cells mk, int i) {
         // Is note body candidate i a footnote? In the lower half of the page (the band) and small or marked in superscript,
         // with a reference on its page; or small, with a reference on the page before (a note a column or a page break pushed
@@ -845,7 +965,8 @@ public static class Notes {
         if ((kind == 2) && ((szok == 1) && (band == 1))) {
             int bsz = Style.StHget(sf, Style.SfhSize());
             int w = emon.Port.CellsAt(nb, b + 2);
-            if ((Lists.LsWc(wd, et, w, 0) != 91) && (NtPlainPeers(nb, i) <= 5)) {
+            // P12.7 (smoke B N4): a note's number has at most two digits (302 is a street number), and a line that recurs on other pages is no note
+            if ((Lists.LsWc(wd, et, w, 0) != 91) && ((NtPlainPeers(nb, i) <= 5) && ((emon.Port.CellsAt(nb, b + 6) <= 2) && (NtRepeats(wd, ln, et, emon.Port.CellsAt(nb, b)) == 0)))) {
                 if (NtSmallToEnd(ln, sf, emon.Port.CellsAt(nb, b), bsz) == 1) {
                     emon.Port.CellsSet(nb, b + 7, 1);
                     return 1;
@@ -1249,7 +1370,7 @@ public static class Notes {
         l = 0;
         while (l < n) {
             if (Lists.LsGet(hc, l, Lists.LsKFlags()) == Lists.LsFCap()) {
-                if ((NtInRun(sf, ln, hc, l) == 1) || ((NtTocLike(wd, ln, et, sf, l) == 1) || (NtInProse(ln, sf, sc, l) == 1))) {
+                if ((NtInRun(sf, ln, hc, l) == 1) || ((NtTocLike(wd, ln, et, sf, l) == 1) || ((NtInProse(ln, sf, sc, l) == 1) || (NtRunningLabel(wd, ln, et, hc, pages, l) == 1)))) {
                     Lists.LsPut(hc, l, Lists.LsKFlags(), 64);
                 }
             }

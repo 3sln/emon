@@ -6,6 +6,7 @@ package columns
 import (
 	"emon/evidence"
 	"emon/glayer"
+	"emon/lists"
 	"emon/model"
 	"emon/port"
 )
@@ -328,7 +329,7 @@ func lcWordSide(wd *port.Cells, w int32, gm2 int32) int32 {
 	return 1
 }
 
-func lcSplit(wd *port.Cells, lt *port.Cells, ls *port.Cells, l int32, gx0 int32, gx1 int32) int32 {
+func lcSplit(wd *port.Cells, et *port.Cells, lt *port.Cells, ls *port.Cells, l int32, gx0 int32, gx1 int32) int32 {
 	// Split line l at the gutter [gx0, gx1] when its words are on both sides of it, each side's together
 	// (left to right or right to left): l keeps the first run, a new line (appended to `lt` and `ls`) the
 	// second. Answers 1 when it split.
@@ -357,6 +358,22 @@ func lcSplit(wd *port.Cells, lt *port.Cells, ls *port.Cells, l int32, gx0 int32,
 	}
 	if flips != 1 {
 		return 0
+	}
+	// A list marker belongs to the text that follows it even when a gutter's continuation crosses the marker's hanging indent. Keep its word and line identity, but use the text's edge to assign the intact item to its column.
+	if cut == 1 {
+		var ts int32 = evidence.WdGet(wd, w0, evidence.HdTstart())
+		if (ts >= 0) && (evidence.WdGet(wd, w0, evidence.HdTlen()) > 0) {
+			if port.CellsAt(et, ts) == lists.LsSItem() {
+				if evidence.LnGet(lt, l, evidence.LhDir()) == 0 {
+					port.CellsSet(lt, (l*16)+evidence.LhX0(), evidence.WdGet(wd, w0+1, evidence.HdX0()))
+					port.CellsSet(lt, (l*16)+evidence.LhBx0(), evidence.WdGet(wd, w0+1, evidence.HdBx0()))
+				} else {
+					port.CellsSet(lt, (l*16)+evidence.LhX1(), evidence.WdGet(wd, w0+1, evidence.HdX1()))
+					port.CellsSet(lt, (l*16)+evidence.LhBx1(), evidence.WdGet(wd, w0+1, evidence.HdBx1()))
+				}
+				return 0
+			}
+		}
 	}
 	for f < 16 {
 		v = port.CellsAt(lt, (l*16)+f)
@@ -1251,7 +1268,7 @@ func lcSortGu(gu *port.Cells) int32 {
 	return 0
 }
 
-func lcSplitAll(wd *port.Cells, lt *port.Cells, ls *port.Cells, gu *port.Cells) int32 {
+func lcSplitAll(wd *port.Cells, et *port.Cells, lt *port.Cells, ls *port.Cells, gu *port.Cells) int32 {
 	// SPLIT (step 2): every line inside a gutter's extent whose words are on both sides of it.
 	var ng int32 = port.CellsLen(gu) / guStride
 	var g int32 = 0
@@ -1267,7 +1284,7 @@ func lcSplitAll(wd *port.Cells, lt *port.Cells, ls *port.Cells, gu *port.Cells) 
 			var l int32 = port.CellsAt(ls, i)
 			var ym int32 = lcYm2(lt, l)
 			if (ym >= top2) && (ym <= bot2) {
-				lcSplit(wd, lt, ls, l, gx0, gx1)
+				lcSplit(wd, et, lt, ls, l, gx0, gx1)
 			}
 			i += 1
 		}
@@ -2020,7 +2037,7 @@ func LcPage(wd *port.Cells, et *port.Cells, lt *port.Cells, page int32, ls *port
 	lcSweep(wd, lt, ls, dom, it, io, rw, gu, ac, tm)
 	lcMerge(gu, dom)
 	lcSortGu(gu)
-	lcSplitAll(wd, lt, ls, gu)
+	lcSplitAll(wd, et, lt, ls, gu)
 	lcSortLines(lt, ls, 0, port.CellsLen(ls))
 	lcExtendUp(wd, lt, ls, gu, dom)
 	lcTree(lt, ls, gu, ac, tm, rw, cf, lo, pr, page)

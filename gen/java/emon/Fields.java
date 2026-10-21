@@ -132,6 +132,46 @@ public final class Fields {
         }
         return n;
     }
+    public static int flLeaderTail(emon.Port.Cells on, emon.Port.Cells text, int n) {
+        // 1 when a label's own text ends in at least three spaced leader dots. Paragraph assembly may already have joined the leader run to its label; it still connects the field on that row.
+        int c = -1;
+        int last = -1;
+        int dots = 0;
+        int spaces = 0;
+        int j = Model.nodeTextLen(on, n) - 1;
+        int start = Model.nodeTextStart(on, n);
+        if ((Model.nodeHasText(on, n) == 1) && (j >= 0)) {
+            while (j >= 0) {
+                c = emon.Port.cellsAt(text, start + j);
+                if (c == 46) {
+                    dots += 1;
+                } else if ((c == 32) || (c == 9)) {
+                    spaces += 1;
+                } else {
+                    if ((dots >= 3) && (spaces >= 2)) {
+                        return 1;
+                    }
+                    return 0;
+                }
+                j -= 1;
+            }
+            if ((dots >= 3) && (spaces >= 2)) {
+                return 1;
+            }
+            return 0;
+        }
+        c = Model.nodeFirstChild(on, n);
+        while (c >= 0) {
+            if ((Model.nodeIsInline(on, c) == 1) && (flHasContent(on, c) == 1)) {
+                last = c;
+            }
+            c = Model.nodeNext(on, c);
+        }
+        if (last >= 0) {
+            return flLeaderTail(on, text, last);
+        }
+        return 0;
+    }
     public static int flBlocks(emon.Port.Cells on, emon.Port.Cells orr, emon.Port.Cells text, int ndoc, emon.Port.Cells bt) {
         // The block rows `bt` (see FL_B): a row a region of every block that holds a field, has words of its own (text, or inline children's) and a place on a page; and of
         // every table cell that has nothing in it (flags 4: a box can stand in it).
@@ -169,7 +209,7 @@ public final class Fields {
                     emon.Port.cellsPush(bt, Model.regionX1(orr, r));
                     emon.Port.cellsPush(bt, Model.regionY1(orr, r));
                     emon.Port.cellsPush(bt, flags);
-                    emon.Port.cellsPush(bt, 0);
+                    emon.Port.cellsPush(bt, flLeaderTail(on, text, n));
                     r = Model.regionNext(orr, r);
                 }
             }
@@ -209,9 +249,11 @@ public final class Fields {
         return 0;
     }
     public static int flLeft(emon.Port.Cells bt, int nb, int page, int x0, int y0, int y1, emon.Port.Cells out, int at) {
-        // The label to the left on the box's line (rule 2): its block row, and the gap, into out[at], out[at + 1]; -1 when there is none that is near enough or joined by a leader.
+        // The left label on the box's line: a label's own explicit leaders beat a nearby bare row number; otherwise retain the nearest-label and separate-bridge rules.
         int best = -1;
         int bestgap = 2000000000;
+        int bestlink = 0;
+        int link = 0;
         int b = 0;
         int o = 0;
         int gap = 0;
@@ -219,15 +261,19 @@ public final class Fields {
             o = b * FL_B;
             if ((emon.Port.cellsAt(bt, o + 1) == page) && ((emon.Port.cellsAt(bt, o + 6) % 2) == 1)) {
                 gap = x0 - emon.Port.cellsAt(bt, o + 4);
-                if ((gap >= (0 - FL_TOL)) && (gap < bestgap) && (flSameLine(bt, b, y0, y1) == 1)) {
+                link = emon.Port.cellsAt(bt, o + 7);
+                if ((gap >= (0 - FL_TOL)) && (flSameLine(bt, b, y0, y1) == 1) && ((best < 0) || ((link > bestlink) || ((link == bestlink) && (gap < bestgap))))) {
                     best = b;
                     bestgap = gap;
+                    bestlink = link;
                 }
             }
             b += 1;
         }
         if (best >= 0) {
-            if (bestgap > FL_NEAR_L) {
+            if (bestlink == 1) {
+                bestgap = 0;
+            } else if (bestgap > FL_NEAR_L) {
                 if (flBridged(bt, nb, page, y0, y1, best, x0) == 0) {
                     best = -1;
                 }
@@ -705,6 +751,68 @@ public final class Fields {
         }
         return 0;
     }
+    public static int flUnattachedDots(emon.Port.Cells on, emon.Port.Cells orr, emon.Port.Cells text, emon.Port.Cells fc, int n) {
+        // Printing-dot paragraphs on forms are omitted unless they bridge an actual field and its label. Keep an unspaced ellipsis and any inline content; orphan fields are emitted separately from their omitted anchor.
+        if ((Model.nodeKind(on, n) != Model.nkParagraph()) || (Model.nodeFirstChild(on, n) >= 0)) {
+            return 0;
+        }
+        int ts = Model.nodeTextStart(on, n);
+        int tlen = Model.nodeTextLen(on, n);
+        int nf = emon.Port.cellsLen(fc) / FL_W;
+        int j = 0;
+        int dots = 0;
+        int spaces = 0;
+        int r = 0;
+        int f = 0;
+        int o = 0;
+        int lr = 0;
+        int ov = 0;
+        int sm = 0;
+        if ((ts < 0) || (tlen <= 0)) {
+            return 0;
+        }
+        while (j < tlen) {
+            int c = emon.Port.cellsAt(text, ts + j);
+            if ((c == 46) || (c == 183)) {
+                dots += 1;
+            } else if ((c == 32) || (c == 160)) {
+                spaces += 1;
+            } else {
+                return 0;
+            }
+            j += 1;
+        }
+        if ((dots == 0) || ((dots > 1) && (spaces == 0))) {
+            return 0;
+        }
+        r = Model.nodeRegionHead(on, n);
+        while (r >= 0) {
+            f = 0;
+            while (f < nf) {
+                o = f * FL_W;
+                if ((emon.Port.cellsAt(fc, o + 7) <= 1) && (emon.Port.cellsAt(fc, o + 1) == Model.regionPage(orr, r)) && (emon.Port.cellsAt(fc, o + 2) >= (Model.regionX1(orr, r) - FL_TOL)) && (flHasWords(on, text, emon.Port.cellsAt(fc, o + 6)) == 1)) {
+                    ov = flMin(emon.Port.cellsAt(fc, o + 5), Model.regionY1(orr, r)) - flMax(emon.Port.cellsAt(fc, o + 3), Model.regionY0(orr, r));
+                    sm = flMin(emon.Port.cellsAt(fc, o + 5) - emon.Port.cellsAt(fc, o + 3), Model.regionY1(orr, r) - Model.regionY0(orr, r));
+                    if ((ov > 0) && ((ov * 2) >= sm)) {
+                        lr = Model.nodeRegionHead(on, emon.Port.cellsAt(fc, o + 6));
+                        while (lr >= 0) {
+                            if ((Model.regionPage(orr, lr) == Model.regionPage(orr, r)) && (Model.regionX1(orr, lr) <= (Model.regionX0(orr, r) + FL_TOL))) {
+                                ov = flMin(Model.regionY1(orr, lr), Model.regionY1(orr, r)) - flMax(Model.regionY0(orr, lr), Model.regionY0(orr, r));
+                                sm = flMin(Model.regionY1(orr, lr) - Model.regionY0(orr, lr), Model.regionY1(orr, r) - Model.regionY0(orr, r));
+                                if ((ov > 0) && ((ov * 2) >= sm)) {
+                                    return 0;
+                                }
+                            }
+                            lr = Model.regionNext(orr, lr);
+                        }
+                    }
+                }
+                f += 1;
+            }
+            r = Model.regionNext(orr, r);
+        }
+        return 1;
+    }
     public static int flTree(emon.Port.Cells on, emon.Port.Cells oa, emon.Port.Cells orr, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells nm, emon.Port.Cells an, emon.Port.Cells txt, emon.Port.Cells fc, emon.Port.Cells fh, int n, int np) {
         // Copy old node n and its subtree as the last child of new node np (-1: a new root), with the fields that go in it: those before its text first, then its
         // children (a block that was plain text gets a `text` inline for its words), the fields after its text before its first block child, and the paragraph of the
@@ -719,6 +827,12 @@ public final class Fields {
         int t = 0;
         if ((hp >= 0) && (np >= 0)) {
             flOrphans(an, txt, fc, hp, nodes, attrs, regions, text, np);
+        }
+        if ((hb < 0) && (ha < 0) && (flUnattachedDots(on, orr, text, fc, n) == 1)) {
+            if ((ho >= 0) && (np >= 0)) {
+                flOrphans(an, txt, fc, ho, nodes, attrs, regions, text, np);
+            }
+            return -1;
         }
         nn = Restruct.rsNode(on, oa, orr, nodes, attrs, regions, nm, n, np);
         if (nn < 0) {

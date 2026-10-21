@@ -221,6 +221,57 @@
     (if (> (* (ls-abs (- (ls-line-size sf ln a) sz)) 25) sz) (return 0))
     (return 1)))
 
+(defn ^I32 nt-nth-word [^Cells wd ^Cells ln ^I32 l ^I32 n]
+  (comment "The n-th (from 0) word with text of line l; -1 when it has fewer.")
+  (let [^I32 w0 (ln-get ln l (lh-first))
+        ^I32 wn (ln-get ln l (lh-count))
+        ^:mut ^I32 i 0
+        ^:mut ^I32 seen 0]
+    (while (< i wn)
+      (do (if (> (ls-wl wd (+ w0 i)) 0)
+            (do (if (== seen n) (return (+ w0 i)))
+                (set seen (+ seen 1))))
+          (set i (+ i 1))))
+    (return -1)))
+
+(defn ^I32 nt-same-words [^Cells wd ^Cells ln ^Cells et ^I32 a ^I32 b ^I32 n]
+  (comment "1 when the first n words of lines a and b are the same, character for character.")
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 j 0]
+    (while (< k n)
+      (do (let [^I32 wa (nt-nth-word wd ln a k)
+                ^I32 wb (nt-nth-word wd ln b k)]
+            (if (or (< wa 0) (< wb 0)) (return 0))
+            (if (!= (ls-wl wd wa) (ls-wl wd wb)) (return 0))
+            (set j 0)
+            (while (< j (ls-wl wd wa))
+              (do (if (!= (ls-wc wd et wa j) (ls-wc wd et wb j)) (return 0))
+                  (set j (+ j 1)))))
+          (set k (+ k 1))))
+    (return 1)))
+
+(defn ^I32 nt-margin-line [^Cells ln ^Cells pages ^I32 l]
+  (comment "Running text occupies a page margin: the top or bottom fifteen per cent. A repeated caption in the body can belong to a continued table.")
+  (let [^I32 h (page-h pages (- (ln-get ln l (lh-page)) 1))
+        ^I32 y (+ (ln-get ln l (lh-y0)) (ln-get ln l (lh-y1)))]
+    (if (<= h 0) (return 0))
+    (if (or (<= (* y 100) (* h 30)) (>= (* y 100) (* h 170))) (return 1))
+    (return 0)))
+
+(defn ^I32 nt-running-label [^Cells wd ^Cells ln ^Cells et ^Cells hc ^Cells pages ^I32 l]
+  (comment "P12.7 (smoke A N1): 1 when caption candidate l begins with the same four words as another candidate on another page: `Schedule 1 (Form 1040) 2025` at the foot of one page and at the head of the next is a running")
+  (comment "header or footer and no caption (the caption of a figure or a table has its number, which is its own; a label that recurs is the document's). Candidates are the lines flagged 8, and 64 (let go as an entry of a list).")
+  (let [^I32 n (ln-count ln)
+        ^I32 pg (ln-get ln l (lh-page))
+        ^:mut ^I32 m 0]
+    (while (< m n)
+      (do (if (and (!= m l) (!= (ln-get ln m (lh-page)) pg) (or (== (nt-margin-line ln pages m) 1) (== (nt-margin-line ln pages l) 1)))
+            (do (let [^I32 fl (ls-get hc m (ls-k-flags))]
+                  (if (or (== fl (ls-f-cap)) (== fl 64))
+                    (do (if (== (nt-same-words wd ln et l m 4) 1) (return 1)))))))
+          (set m (+ m 1))))
+    (return 0)))
+
 (defn ^I32 nt-after [^Cells wd ^Cells ln ^I32 l ^I32 w]
   (comment "The word with text that follows word w in line l; -1 when there is none.")
   (let [^I32 w0 (ln-get ln l (lh-first))
@@ -621,6 +672,40 @@
           (set j (+ j 1))))
     (return n)))
 
+(defn ^I32 nt-same-shape [^Cells wd ^Cells ln ^Cells et ^I32 a ^I32 b]
+  (comment "P12.7 (smoke B N4): 1 when lines a and b have the same words, a digit standing for any digit.")
+  (let [^I32 na (ln-get ln a (lh-count))
+        ^I32 wa (ln-get ln a (lh-first))
+        ^I32 wb (ln-get ln b (lh-first))
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0]
+    (if (!= na (ln-get ln b (lh-count))) (return 0))
+    (while (< i na)
+      (do (let [^I32 tl (ls-wl wd (+ wa i))]
+            (if (!= tl (ls-wl wd (+ wb i))) (return 0))
+            (set j 0)
+            (while (< j tl)
+              (do (let [^I32 ca (ls-wc wd et (+ wa i) j)
+                        ^I32 cb (ls-wc wd et (+ wb i) j)]
+                    (if (and (!= ca cb) (or (< (ls-digit ca) 0) (< (ls-digit cb) 0))) (return 0)))
+                  (set j (+ j 1)))))
+          (set i (+ i 1))))
+    (return 1)))
+
+(defn ^I32 nt-repeats [^Cells wd ^Cells ln ^Cells et ^I32 l]
+  (comment "P12.7 (smoke B N4): 1 when line l has a twin on another page: the same words (digits alike), the same type size and the same height within 15 pt. A line that recurs at the foot of every page is furniture")
+  (comment "(an address, a motto), never a note: notes do not repeat.")
+  (let [^I32 n (ln-count ln)
+        ^I32 pg (ln-get ln l (lh-page))
+        ^I32 y (ln-get ln l (lh-y0))
+        ^:mut ^I32 m 0]
+    (if (< (ln-get ln l (lh-count)) 2) (return 0))
+    (while (< m n)
+      (do (if (and (!= (ln-get ln m (lh-page)) pg) (<= (ls-abs (- (ln-get ln m (lh-y0)) y)) 1500))
+            (do (if (== (nt-same-shape wd ln et l m) 1) (return 1))))
+          (set m (+ m 1))))
+    (return 0)))
+
 (defn ^I32 nt-foot [^Cells wd ^Cells et ^Cells ln ^Cells sf ^:mut ^Cells rf ^:mut ^Cells nb ^Cells mk ^I32 i]
   (comment "Is note body candidate i a footnote? In the lower half of the page (the band) and small or marked in superscript,")
   (comment "with a reference on its page; or small, with a reference on the page before (a note a column or a page break pushed")
@@ -649,7 +734,9 @@
     (if (and (== kind 2) (and (== szok 1) (== band 1)))
       (do (let [^I32 bsz (st-hget sf (sfh-size))
                 ^I32 w (cells-at nb (+ b 2))]
-            (if (and (!= (ls-wc wd et w 0) 91) (<= (nt-plain-peers nb i) 5))
+            (comment "P12.7 (smoke B N4): a note's number has at most two digits (302 is a street number), and a line that recurs on other pages is no note")
+            (if (and (!= (ls-wc wd et w 0) 91) (and (<= (nt-plain-peers nb i) 5)
+                     (and (<= (cells-at nb (+ b 6)) 2) (== (nt-repeats wd ln et (cells-at nb b)) 0))))
               (do (if (== (nt-small-to-end ln sf (cells-at nb b) bsz) 1)
                     (do (cells-set nb (+ b 7) 1)
                         (return 1))))))))
@@ -963,7 +1050,7 @@
     (set l 0)
     (while (< l n)
       (do (if (== (ls-get hc l (ls-k-flags)) (ls-f-cap))
-            (do (if (or (== (nt-in-run sf ln hc l) 1) (or (== (nt-toc-like wd ln et sf l) 1) (== (nt-in-prose ln sf sc l) 1)))
+            (do (if (or (== (nt-in-run sf ln hc l) 1) (or (== (nt-toc-like wd ln et sf l) 1) (or (== (nt-in-prose ln sf sc l) 1) (== (nt-running-label wd ln et hc pages l) 1))))
                   (ls-put hc l (ls-k-flags) 64))))
           (set l (+ l 1))))
     (set l 0)

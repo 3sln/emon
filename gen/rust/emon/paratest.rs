@@ -314,6 +314,237 @@ fn test_a_gap_and_an_indent_end_a_paragraph() {
     pt_brief(t4, nodes, regions, text);
     crate::testport::assert_text(t4, "P1:left col;P1:right col;", "two lines on one row are two paragraphs");
 }
+#[test]
+fn test_bracketed_reference_entries_keep_their_paragraphs() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ord: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let raw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut String = &mut crate::port::new_text();
+    // References printed without hanging indents still begin distinct entries. Wrapped lines and a citation inside prose keep their ordinary continuation.
+    pt_line(wd, ln, et, &crate::testport::text_blob("[28] Alpha Beta. A study.")[..], 1, 7200, 10000, 50000, 11200, 0, 0, 1000);
+    pt_line(wd, ln, et, &crate::testport::text_blob("[29] Gamma Delta. Another study")[..], 1, 7200, 11500, 50000, 12700, 0, 0, 1000);
+    pt_line(wd, ln, et, &crate::testport::text_blob("continued with citation [30] in prose.")[..], 1, 7200, 13000, 50000, 14200, 0, 0, 1000);
+    crate::testport::assert_eq(pt_run(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "references: well formed");
+    pt_brief(out, nodes, regions, text);
+    crate::testport::assert_text(out, "P1:[28] Alpha Beta. A study.;P1:[29] Gamma Delta. Another study continued with citation [30] in prose.;", "entries split without making headings; wrapped text stays joined");
+}
+#[test]
+fn test_a_run_of_leader_dots_is_no_paragraph_of_its_own() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ord: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let raw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t1: &mut String = &mut crate::port::new_text();
+    // P12.7 (smoke A N4): a form's row is its label, the dots that lead to the field (a run of their own after a gap) and the line's number: the dots are the label's, and were 62 paragraphs of nothing but dots on the
+    // first page of the 1120. They go on the line before them; the number, which is no dots, is a paragraph of its own.
+    pt_line(wd, ln, et, &crate::testport::text_blob("1a Gross receipts or sales . .")[..], 1, 7200, 10000, 30000, 11200, 0, 0, 1000);
+    pt_line(wd, ln, et, &crate::testport::text_blob(". . . . .")[..], 1, 33000, 10000, 40000, 11200, 0, 0, 1000);
+    pt_line(wd, ln, et, &crate::testport::text_blob("1a")[..], 1, 44000, 10000, 46000, 11200, 0, 0, 1000);
+    crate::testport::assert_eq(pt_run(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "leaders: well formed");
+    pt_brief(t1, nodes, regions, text);
+    crate::testport::assert_text(t1, "P1:1a Gross receipts or sales . . . . . . .;P1:1a;", "the dots go on the label's line, the number is its own");
+}
+#[test]
+fn test_leader_dots_on_the_next_row_do_not_extend_the_previous_label() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ord: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let raw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut String = &mut crate::port::new_text();
+    // A form's numbered label must not absorb leader dots on a later row: the enlarged label box would then claim the later row's field. Leaders join only a label on their own baseline.
+    pt_line(wd, ln, et, &crate::testport::text_blob("8")[..], 1, 44000, 10000, 46000, 11200, 0, 0, 1000);
+    pt_line(wd, ln, et, &crate::testport::text_blob(". . . .")[..], 1, 33000, 11500, 40000, 12700, 0, 0, 1000);
+    pt_line(wd, ln, et, &crate::testport::text_blob("9")[..], 1, 44000, 11500, 46000, 12700, 0, 0, 1000);
+    crate::testport::assert_eq(pt_run(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "rows: well formed");
+    pt_brief(out, nodes, regions, text);
+    crate::testport::assert_text(out, "P1:8;P1:. . . .;P1:9;", "the previous label keeps its own row");
+}
+#[test]
+fn test_dotted_form_rows_and_their_number_labels_keep_row_boundaries() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ord: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let raw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out1: &mut String = &mut crate::port::new_text();
+    let out2: &mut String = &mut crate::port::new_text();
+    // Rows with an unpunctuated form marker and trailing printing leaders are separate labels, even at ordinary body leading. Their separate number column also keeps one row per label. Wrapped prose still continues within its label.
+    pt_line(wd, ln, et, &crate::testport::text_blob("29a Net loss . . .")[..], 1, 7200, 10000, 40000, 11200, 0, 0, 1000);
+    pt_line(wd, ln, et, &crate::testport::text_blob("b Special deduction . . .")[..], 1, 7200, 11500, 40000, 12700, 0, 0, 1000);
+    pt_line(wd, ln, et, &crate::testport::text_blob("continued detail without leaders")[..], 1, 7200, 13000, 40000, 14200, 0, 0, 1000);
+    crate::testport::assert_eq(pt_run(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "labels: well formed");
+    pt_brief(out1, nodes, regions, text);
+    crate::testport::assert_text(out1, "P1:29a Net loss . . .;P1:b Special deduction . . . continued detail without leaders;", "each form label starts a paragraph");
+    pt_clear(wd, ln, et);
+    pt_line(wd, ln, et, &crate::testport::text_blob("29a")[..], 1, 39200, 10000, 40600, 11200, 0, 0, 1000);
+    pt_line(wd, ln, et, &crate::testport::text_blob("29b")[..], 1, 39200, 11500, 40600, 12700, 0, 0, 1000);
+    crate::testport::assert_eq(pt_run(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "numbers: well formed");
+    pt_brief(out2, nodes, regions, text);
+    crate::testport::assert_text(out2, "P1:29a;P1:29b;", "aligned row numbers do not become one label");
+}
+pub(crate) fn pt_big_words(mut wd: &mut crate::port::Cells, w0: i32, to: i32, size: i32) -> i32 {
+    // Words 0..to of the line whose first word is w0 are set in `size`.
+    let mut k: i32 = 0;
+    while k < to {
+        wd_set(wd, w0 + k, wf_size(), size);
+        k += 1;
+    }
+    return 0;
+}
+#[test]
+fn test_a_run_in_head_set_larger_begins_a_paragraph() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ord: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let raw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t1: &mut String = &mut crate::port::new_text();
+    let t2: &mut String = &mut crate::port::new_text();
+    let mut w0: i32 = 0;
+    // P12.7 (smoke B side effect): the clauses of the Russian declaration's preamble follow one another at the same leading, none indented; each begins with a head of three words set at 12.68 where the text is at 12. The
+    // heading stage took them for headings (a bug: D575) and so cut the preamble in clauses; with no heading the clauses were one paragraph of 1425 characters. A run-in head of two words or more over 4 per cent larger than
+    // the line, with three words of the text after it, starts a paragraph; the same line with its first words as big as the rest does not.
+    pt_line(wd, ln, et, &crate::testport::text_blob("alpha beta gamma delta epsilon zeta eta")[..], 1, 7200, 10000, 50000, 11200, 0, 0, 1100);
+    w0 = wd_count(wd);
+    pt_line(wd, ln, et, &crate::testport::text_blob("iota kappa lambda mu nu xi omicron pi")[..], 1, 7200, 11500, 50000, 12700, 0, 0, 1100);
+    pt_big_words(wd, w0, 3, 1160);
+    pt_line(wd, ln, et, &crate::testport::text_blob("rho sigma tau upsilon phi chi psi omega")[..], 1, 7200, 13000, 50000, 14200, 0, 0, 1100);
+    crate::testport::assert_eq(pt_run(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "lead-in: well formed");
+    pt_brief(t1, nodes, regions, text);
+    crate::testport::assert_text(t1, "P1:alpha beta gamma delta epsilon zeta eta;P1:iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega;", "the run-in head begins a paragraph");
+    pt_clear(wd, ln, et);
+    pt_line(wd, ln, et, &crate::testport::text_blob("alpha beta gamma delta epsilon zeta eta")[..], 1, 7200, 10000, 50000, 11200, 0, 0, 1100);
+    pt_line(wd, ln, et, &crate::testport::text_blob("iota kappa lambda mu nu xi omicron pi")[..], 1, 7200, 11500, 50000, 12700, 0, 0, 1100);
+    pt_line(wd, ln, et, &crate::testport::text_blob("rho sigma tau upsilon phi chi psi omega")[..], 1, 7200, 13000, 50000, 14200, 0, 0, 1100);
+    crate::testport::assert_eq(pt_run(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "plain: well formed");
+    pt_brief(t2, nodes, regions, text);
+    crate::testport::assert_text(t2, "P1:alpha beta gamma delta epsilon zeta eta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega;", "lines of one size are one paragraph");
+}
+#[test]
+fn test_a_page_milestone_precedes_its_queued_turned_lines() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ord: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let raw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let only: &mut String = &mut crate::port::new_text();
+    let mixed: &mut String = &mut crate::port::new_text();
+    // A page containing only non-upright lines must keep its milestone before those lines.
+    pt_line(wd, ln, et, &crate::testport::text_blob("First page.")[..], 1, 7200, 10000, 30000, 11200, 0, 0, 1000);
+    pt_line(wd, ln, et, &crate::testport::text_blob("Turned label")[..], 2, 3000, 8000, 4200, 19000, 9000, 0, 1000);
+    crate::testport::assert_eq(pt_run(wd, ln, et, 2, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "turned page: well formed");
+    pt_brief(only, nodes, regions, text);
+    crate::testport::assert_text(only, "P1:First page.;B2;P1:Turned label;", "the page starts before its queued lines");
+    pt_clear(wd, ln, et);
+    pt_line(wd, ln, et, &crate::testport::text_blob("First page.")[..], 1, 7200, 10000, 30000, 11200, 0, 0, 1000);
+    pt_line(wd, ln, et, &crate::testport::text_blob("Turned label")[..], 2, 3000, 8000, 4200, 19000, 9000, 0, 1000);
+    pt_line(wd, ln, et, &crate::testport::text_blob("Second page.")[..], 2, 7200, 10000, 30000, 11200, 0, 0, 1000);
+    crate::testport::assert_eq(pt_run(wd, ln, et, 2, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "mixed page: well formed");
+    pt_brief(mixed, nodes, regions, text);
+    crate::testport::assert_text(mixed, "P1:First page.;B2;P1:Turned label;P1:Second page.;", "a top side label follows the milestone and precedes the body");
+}
+#[test]
+fn test_a_label_turned_a_quarter_stands_where_its_top_is_and_not_at_the_pages_end() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ord: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let raw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t1: &mut String = &mut crate::port::new_text();
+    // P12.7 (smoke A N4): the 1120's section labels (`Tax and Payments`, `Income`) are set a quarter turn in the margin beside their section; a line that is not upright was written after the page's last upright one, so the
+    // labels came at the end of the page. It is written before the first paragraph that starts at or below its top: here the second of three.
+    pt_line(wd, ln, et, &crate::testport::text_blob("alpha beta")[..], 1, 7200, 10000, 30000, 11200, 0, 0, 1000);
+    pt_line(wd, ln, et, &crate::testport::text_blob("gamma delta")[..], 1, 7200, 11500, 30000, 12700, 0, 0, 1000);
+    pt_line(wd, ln, et, &crate::testport::text_blob("epsilon zeta")[..], 1, 7200, 14500, 30000, 15700, 0, 0, 1000);
+    pt_line(wd, ln, et, &crate::testport::text_blob("eta theta")[..], 1, 7200, 16000, 30000, 17200, 0, 0, 1000);
+    pt_line(wd, ln, et, &crate::testport::text_blob("iota kappa")[..], 1, 7200, 19000, 30000, 20200, 0, 0, 1000);
+    pt_line(wd, ln, et, &crate::testport::text_blob("lambda mu")[..], 1, 7200, 20500, 30000, 21700, 0, 0, 1000);
+    pt_line(wd, ln, et, &crate::testport::text_blob("Income")[..], 1, 3000, 14000, 4200, 19000, 9000, 0, 1000);
+    crate::testport::assert_eq(pt_run(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "turned: well formed");
+    pt_brief(t1, nodes, regions, text);
+    crate::testport::assert_text(t1, "P1:alpha beta gamma delta;P1:Income;P1:epsilon zeta eta theta;P1:iota kappa lambda mu;", "the label stands before the paragraph that starts below its top");
+}
 pub(crate) fn pt_bold_words(mut wd: &mut crate::port::Cells, w0: i32, from: i32, to: i32) -> i32 {
     // Words from..to (counted from the word w0, a line's first) are bold (style bit 1).
     let mut k: i32 = from;

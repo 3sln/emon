@@ -3,6 +3,7 @@
 
 use crate::emon::evidence::*;
 use crate::emon::glayer::*;
+use crate::emon::lists::*;
 use crate::emon::model::*;
 
 pub(crate) const LC_ROWS: i32 = 3;
@@ -247,7 +248,7 @@ pub(crate) fn lc_word_side(wd: &mut crate::port::Cells, w: i32, gm2: i32) -> i32
     }
     return 1;
 }
-pub(crate) fn lc_split(wd: &mut crate::port::Cells, mut lt: &mut crate::port::Cells, mut ls: &mut crate::port::Cells, l: i32, gx0: i32, gx1: i32) -> i32 {
+pub(crate) fn lc_split(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, mut lt: &mut crate::port::Cells, mut ls: &mut crate::port::Cells, l: i32, gx0: i32, gx1: i32) -> i32 {
     // Split line l at the gutter [gx0, gx1] when its words are on both sides of it, each side's together
     // (left to right or right to left): l keeps the first run, a new line (appended to `lt` and `ls`) the
     // second. Answers 1 when it split.
@@ -276,6 +277,22 @@ pub(crate) fn lc_split(wd: &mut crate::port::Cells, mut lt: &mut crate::port::Ce
     }
     if flips != 1 {
         return 0;
+    }
+    // A list marker belongs to the text that follows it even when a gutter's continuation crosses the marker's hanging indent. Keep its word and line identity, but use the text's edge to assign the intact item to its column.
+    if cut == 1 {
+        let ts: i32 = wd_get(wd, w0, hd_tstart());
+        if (ts >= 0) && (wd_get(wd, w0, hd_tlen()) > 0) {
+            if crate::port::cells_at(et, ts) == ls_s_item() {
+                if ln_get(lt, l, lh_dir()) == 0 {
+                    crate::port::cells_set(lt, (l * 16) + lh_x0(), wd_get(wd, w0 + 1, hd_x0()));
+                    crate::port::cells_set(lt, (l * 16) + lh_bx0(), wd_get(wd, w0 + 1, hd_bx0()));
+                } else {
+                    crate::port::cells_set(lt, (l * 16) + lh_x1(), wd_get(wd, w0 + 1, hd_x1()));
+                    crate::port::cells_set(lt, (l * 16) + lh_bx1(), wd_get(wd, w0 + 1, hd_bx1()));
+                }
+                return 0;
+            }
+        }
     }
     while f < 16 {
         v = crate::port::cells_at(lt, (l * 16) + f);
@@ -1146,7 +1163,7 @@ pub(crate) fn lc_sort_gu(mut gu: &mut crate::port::Cells) -> i32 {
     }
     return 0;
 }
-pub(crate) fn lc_split_all(wd: &mut crate::port::Cells, mut lt: &mut crate::port::Cells, mut ls: &mut crate::port::Cells, gu: &mut crate::port::Cells) -> i32 {
+pub(crate) fn lc_split_all(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, mut lt: &mut crate::port::Cells, mut ls: &mut crate::port::Cells, gu: &mut crate::port::Cells) -> i32 {
     // SPLIT (step 2): every line inside a gutter's extent whose words are on both sides of it.
     let ng: i32 = crate::port::cells_len(gu) / GU_STRIDE;
     let mut g: i32 = 0;
@@ -1162,7 +1179,7 @@ pub(crate) fn lc_split_all(wd: &mut crate::port::Cells, mut lt: &mut crate::port
             let l: i32 = crate::port::cells_at(ls, i);
             let ym: i32 = lc_ym2(lt, l);
             if (ym >= top2) && (ym <= bot2) {
-                lc_split(wd, lt, ls, l, gx0, gx1);
+                lc_split(wd, et, lt, ls, l, gx0, gx1);
             }
             i += 1;
         }
@@ -1882,7 +1899,7 @@ pub fn lc_page(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, mut lt:
     lc_sweep(wd, lt, ls, dom, it, io, rw, gu, ac, tm);
     lc_merge(gu, dom);
     lc_sort_gu(gu);
-    lc_split_all(wd, lt, ls, gu);
+    lc_split_all(wd, et, lt, ls, gu);
     lc_sort_lines(lt, ls, 0, crate::port::cells_len(ls));
     lc_extend_up(wd, lt, ls, gu, dom);
     lc_tree(lt, ls, gu, ac, tm, rw, cf, lo, pr, page);

@@ -695,6 +695,46 @@ fn test_a_two_line_running_header_is_furniture_whole() {
     crate::testport::assert_eq(fl_roots_of(wd, ln, et, 4), 2, "both lines of the header are furniture");
 }
 #[test]
+fn test_a_statements_title_under_the_companys_name_is_furniture_only_when_it_recurs_with_it() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let wd2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    // P12.7 (smoke A N3): a 10-K's three pages under a header of two lines (the company's name and `and Subsidiaries`, on every page) and a third line: the title of the statement, `CONSOLIDATED BALANCE SHEETS` on
+    // two of the pages and the next statement's on the third. A line goes with the header above it only when it recurs on every page the header does: the title is the statement's heading. The control: the
+    // same title on all three pages is the third line of the header.
+    fl_pages(wd, ln, et, 3);
+    fl_line(wd, ln, et, &crate::testport::text_blob("BERKSHIRE HATHAWAY INC.")[..], 1, 4250, 1800, 17700, 3100, 0, 1000);
+    fl_line(wd, ln, et, &crate::testport::text_blob("and Subsidiaries")[..], 1, 4250, 3550, 20000, 4850, 0, 1000);
+    fl_line(wd, ln, et, &crate::testport::text_blob("CONSOLIDATED BALANCE SHEETS")[..], 1, 4250, 5300, 30000, 6600, 0, 1000);
+    fl_line(wd, ln, et, &crate::testport::text_blob("Erie hospitals seek answers")[..], 1, 4500, 7050, 30000, 8350, 0, 1000);
+    fl_line(wd, ln, et, &crate::testport::text_blob("BERKSHIRE HATHAWAY INC.")[..], 2, 4250, 1800, 17700, 3100, 0, 1000);
+    fl_line(wd, ln, et, &crate::testport::text_blob("and Subsidiaries")[..], 2, 4250, 3550, 20000, 4850, 0, 1000);
+    fl_line(wd, ln, et, &crate::testport::text_blob("CONSOLIDATED BALANCE SHEETS")[..], 2, 4250, 5300, 30000, 6600, 0, 1000);
+    fl_line(wd, ln, et, &crate::testport::text_blob("Garland district fenced areas")[..], 2, 4500, 7050, 30000, 8350, 0, 1000);
+    fl_line(wd, ln, et, &crate::testport::text_blob("BERKSHIRE HATHAWAY INC.")[..], 3, 4250, 1800, 17700, 3100, 0, 1000);
+    fl_line(wd, ln, et, &crate::testport::text_blob("and Subsidiaries")[..], 3, 4250, 3550, 20000, 4850, 0, 1000);
+    fl_line(wd, ln, et, &crate::testport::text_blob("CONSOLIDATED STATEMENTS OF EARNINGS")[..], 3, 4250, 5300, 30000, 6600, 0, 1000);
+    fl_line(wd, ln, et, &crate::testport::text_blob("Women account for research")[..], 3, 4500, 7050, 30000, 8350, 0, 1000);
+    crate::testport::assert_eq(fl_roots_of(wd, ln, et, 3), 2, "the company's name and `and Subsidiaries` are furniture; the title that is on two of three pages is a heading");
+    fl_pages(wd2, ln2, et2, 3);
+    fl_line(wd2, ln2, et2, &crate::testport::text_blob("BERKSHIRE HATHAWAY INC.")[..], 1, 4250, 1800, 17700, 3100, 0, 1000);
+    fl_line(wd2, ln2, et2, &crate::testport::text_blob("and Subsidiaries")[..], 1, 4250, 3550, 20000, 4850, 0, 1000);
+    fl_line(wd2, ln2, et2, &crate::testport::text_blob("CONSOLIDATED BALANCE SHEETS")[..], 1, 4250, 5300, 30000, 6600, 0, 1000);
+    fl_line(wd2, ln2, et2, &crate::testport::text_blob("Erie hospitals seek answers")[..], 1, 4500, 7050, 30000, 8350, 0, 1000);
+    fl_line(wd2, ln2, et2, &crate::testport::text_blob("BERKSHIRE HATHAWAY INC.")[..], 2, 4250, 1800, 17700, 3100, 0, 1000);
+    fl_line(wd2, ln2, et2, &crate::testport::text_blob("and Subsidiaries")[..], 2, 4250, 3550, 20000, 4850, 0, 1000);
+    fl_line(wd2, ln2, et2, &crate::testport::text_blob("CONSOLIDATED BALANCE SHEETS")[..], 2, 4250, 5300, 30000, 6600, 0, 1000);
+    fl_line(wd2, ln2, et2, &crate::testport::text_blob("Garland district fenced areas")[..], 2, 4500, 7050, 30000, 8350, 0, 1000);
+    fl_line(wd2, ln2, et2, &crate::testport::text_blob("BERKSHIRE HATHAWAY INC.")[..], 3, 4250, 1800, 17700, 3100, 0, 1000);
+    fl_line(wd2, ln2, et2, &crate::testport::text_blob("and Subsidiaries")[..], 3, 4250, 3550, 20000, 4850, 0, 1000);
+    fl_line(wd2, ln2, et2, &crate::testport::text_blob("CONSOLIDATED BALANCE SHEETS")[..], 3, 4250, 5300, 30000, 6600, 0, 1000);
+    fl_line(wd2, ln2, et2, &crate::testport::text_blob("Women account for research")[..], 3, 4500, 7050, 30000, 8350, 0, 1000);
+    crate::testport::assert_eq(fl_roots_of(wd2, ln2, et2, 3), 3, "a title on every page is the third line of the header");
+}
+#[test]
 fn test_a_footer_of_four_parts_on_one_baseline_is_still_a_footer() {
     let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();

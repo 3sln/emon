@@ -1403,13 +1403,13 @@ func fuChainAdjacent(ln *port.Cells, cd *port.Cells, ncd int32, r int32) int32 {
 			if cdGet(cd, r, 2) == 1 {
 				gap = cdGet(cd, r, 3) - cdGet(cd, q, 4)
 				if (gap >= -200) && ((gap * 1000) <= (h * fuChainGap)) && (cdGet(cd, q, 3) < cdGet(cd, r, 3)) {
-					return 1
+					return cdGet(cd, q, 8) + 1
 				}
 			}
 			if cdGet(cd, r, 2) == 2 {
 				gap = cdGet(cd, q, 3) - cdGet(cd, r, 4)
 				if (gap >= -200) && ((gap * 1000) <= (h * fuChainGap)) && (cdGet(cd, q, 3) > cdGet(cd, r, 3)) {
-					return 1
+					return cdGet(cd, q, 8) + 1
 				}
 			}
 		}
@@ -1428,6 +1428,8 @@ func fuChain(ln *port.Cells, ord *port.Cells, cd *port.Cells, sl *port.Cells, tx
 	var g int32 = 0
 	var i int32 = 0
 	var adj int32 = 0
+	var fewer int32 = 0
+	var up int32 = 0
 	var old int32 = 0
 	var f int32 = 0
 	var m int32 = 0
@@ -1439,12 +1441,21 @@ func fuChain(ln *port.Cells, ord *port.Cells, cd *port.Cells, sl *port.Cells, tx
 				f = grGet(gr, g, 0)
 				m = grGet(gr, g, 1)
 				adj = 0
+				fewer = 0
 				i = 0
 				for i < m {
-					adj += fuChainAdjacent(ln, cd, ncd, port.CellsAt(ord, f+i))
+					up = fuChainAdjacent(ln, cd, ncd, port.CellsAt(ord, f+i))
+					if up > 0 {
+						adj += 1
+						// P12.7 (smoke A N3): a line is the next of a header only when it recurs on every page the header does: a statement's title under the company's name is on the pages of that statement
+						// (`CONSOLIDATED BALANCE SHEETS` on two of three), a heading that varies with the page, and not the third line of the header
+						if grGet(gr, g, 2) < grGet(gr, up-1, 2) {
+							fewer = 1
+						}
+					}
 					i += 1
 				}
-				if (adj * 100) >= (m * 70) {
+				if (fewer == 0) && ((adj * 100) >= (m * 70)) {
 					old = grGet(gr, g, 9)
 					grSet(gr, g, 9, m)
 					if fuQualify(ord, cd, sl, tx, gr, g, npages, trust) == 1 {

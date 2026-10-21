@@ -444,4 +444,66 @@ public static class Fieldstest {
         Json.JsEmit(@out, 0, nn, na, nr, text, pages, ledger, layout, emon.Port.NewCells(), emon.Port.NewCells());
         emon.Testport.AssertText(@out, "{\"emon\":\"1.1\",\"settings\":{\"locale\":null},\"conf\":\"calibrated\",\"pages\":[],\"body\":{\"id\":0,\"kind\":\"document\",\"children\":[{\"id\":1,\"kind\":\"paragraph\",\"text\":\"Agree\",\"inlines\":[{\"kind\":\"field\",\"name\":\"agree\",\"type\":\"checkbox\",\"value\":\"Yes\",\"checked\":true,\"at\":[[1,73,180.2,81,188.2]],\"src\":[\"annot\"],\"conf\":950},{\"kind\":\"text\",\"text\":\"Agree\",\"src\":[\"text\"],\"conf\":815}],\"at\":[[1,87,180,164,188]]}]},\"furniture\":[],\"dropped\":[]}", "the JSON");
     }
+    [Xunit.Fact]
+    public static void TestALabelsOwnLeadersConnectItsFieldPastTheNearerRowAbove() {
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells an = emon.Port.NewCells();
+        emon.Port.Cells txt = emon.Port.NewCells();
+        System.Text.StringBuilder @out = emon.Testport.NewText();
+        // A form row's leader dots may already belong to the label paragraph. They still bridge the gap to its field: the wide previous row above must not take the next two fields.
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        FdtPar(nodes, regions, text, emon.Testport.TextBlob("28 Taxable income"), 5590, 50591, 47022, 51545);
+        FdtPar(nodes, regions, text, emon.Testport.TextBlob("29a Net operating loss deduction . . ."), 5590, 51791, 37422, 52745);
+        FdtPar(nodes, regions, text, emon.Testport.TextBlob("b Special deductions . . ."), 5590, 52991, 37422, 53945);
+        FdtField(an, txt, 4, -1, emon.Testport.TextBlob("loss"), emon.Testport.TextBlob(""), emon.Testport.TextBlob(""), 41040, 51600, 48165, 52800);
+        FdtField(an, txt, 4, -1, emon.Testport.TextBlob("special"), emon.Testport.TextBlob(""), emon.Testport.TextBlob(""), 41040, 52800, 48165, 54000);
+        FdtHtml(0, nodes, attrs, regions, text, an, txt, @out);
+        emon.Testport.AssertText(@out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>28 Taxable income</p><p>29a Net operating loss deduction . . .<span data-emon=\"field\" data-emon-name=\"loss\" data-emon-type=\"text\"></span></p><p>b Special deductions . . .<span data-emon=\"field\" data-emon-name=\"special\" data-emon-type=\"text\"></span></p></main></body></html>", "each field belongs to its row's leader label");
+    }
+    [Xunit.Fact]
+    public static void TestAnExplicitLeaderLabelBeatsTheBareRowNumberBesideItsField() {
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells an = emon.Port.NewCells();
+        emon.Port.Cells txt = emon.Port.NewCells();
+        System.Text.StringBuilder @out = emon.Testport.NewText();
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        FdtPar(nodes, regions, text, emon.Testport.TextBlob("29a Net loss . . ."), 5590, 51791, 37422, 52745);
+        FdtPar(nodes, regions, text, emon.Testport.TextBlob("29a"), 39285, 51791, 40634, 52745);
+        FdtField(an, txt, 4, -1, emon.Testport.TextBlob("loss"), emon.Testport.TextBlob(""), emon.Testport.TextBlob(""), 41040, 51600, 48165, 52800);
+        FdtHtml(0, nodes, attrs, regions, text, an, txt, @out);
+        emon.Testport.AssertText(@out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>29a Net loss . . .<span data-emon=\"field\" data-emon-name=\"loss\" data-emon-type=\"text\"></span></p><p>29a</p></main></body></html>", "the leader connects the descriptive label past its row number");
+    }
+    [Xunit.Fact]
+    public static void TestUnattachedPrintingDotsAreNotFormParagraphsAndDoNotDropFields() {
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells an = emon.Port.NewCells();
+        emon.Port.Cells txt = emon.Port.NewCells();
+        System.Text.StringBuilder @out = emon.Testport.NewText();
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        FdtPar(nodes, regions, text, emon.Testport.TextBlob(". . . ."), 7200, 10000, 16000, 11200);
+        FdtPar(nodes, regions, text, emon.Testport.TextBlob("."), 7200, 11500, 7400, 12700);
+        FdtPar(nodes, regions, text, emon.Testport.TextBlob("..."), 7200, 16000, 7800, 17200);
+        FdtPar(nodes, regions, text, emon.Testport.TextBlob("Label"), 7200, 20000, 16000, 21200);
+        FdtField(an, txt, 4, -1, emon.Testport.TextBlob("orphan"), emon.Testport.TextBlob(""), emon.Testport.TextBlob(""), 50000, 13000, 56000, 14200);
+        FdtHtml(0, nodes, attrs, regions, text, an, txt, @out);
+        emon.Testport.AssertText(@out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p><span data-emon=\"field\" data-emon-name=\"orphan\" data-emon-type=\"text\"></span></p><p>...</p><p>Label</p></main></body></html>", "printing leaders disappear, a meaningful ellipsis and the anchored field remain");
+    }
 }

@@ -125,6 +125,16 @@ public final class Sigmark {
         int b = sgAbs(dy);
         return sgHi(a, b) + ((3 * sgLo(a, b)) / 8);
     }
+    public static int sgInkDiff(int a, int b) {
+        // P12.7 (smoke B N3): the sum of the channel differences of two inks (0xRRGGBB); 0 when either is unknown (negative).
+        if (a < 0) {
+            return 0;
+        }
+        if (b < 0) {
+            return 0;
+        }
+        return sgAbs(((a / 65536) % 256) - ((b / 65536) % 256)) + (sgAbs(((a / 256) % 256) - ((b / 256) % 256)) + sgAbs((a % 256) - (b % 256)));
+    }
     public static int sgGapOf(int a0, int a1, int b0, int b1) {
         // The distance between the intervals [a0, a1] and [b0, b1]; 0 when they overlap.
         if (b0 > a1) {
@@ -563,6 +573,10 @@ public final class Sigmark {
                                 emon.Port.cellsSet(tmp, a + 2, sgHi(emon.Port.cellsAt(tmp, a + 2), emon.Port.cellsAt(tmp, b + 2)));
                                 emon.Port.cellsSet(tmp, a + 3, sgHi(emon.Port.cellsAt(tmp, a + 3), emon.Port.cellsAt(tmp, b + 3)));
                                 emon.Port.cellsSet(tmp, a + 4, emon.Port.cellsAt(tmp, a + 4) + emon.Port.cellsAt(tmp, b + 4));
+                                // P12.7 (smoke B N3): strokes of two inks are a chart's lines and a legend's samples, not one pen: the cluster's ink (cell 6) becomes -2
+                                if ((emon.Port.cellsAt(tmp, a + 6) == -2) || ((emon.Port.cellsAt(tmp, b + 6) == -2) || (sgInkDiff(emon.Port.cellsAt(tmp, a + 6), emon.Port.cellsAt(tmp, b + 6)) > 96))) {
+                                    emon.Port.cellsSet(tmp, a + 6, -2);
+                                }
                                 la = emon.Port.cellsAt(tmp, a + 7);
                                 lb = emon.Port.cellsAt(tmp, b + 7);
                                 if ((la < 0) || (lb < 0)) {
@@ -693,7 +707,7 @@ public final class Sigmark {
             h = emon.Port.cellsAt(sgc, c + 4) - emon.Port.cellsAt(sgc, c + 2);
             kind = 0;
             conf = 0;
-            if ((sgTortuous(emon.Port.cellsAt(sgc, c + 8), emon.Port.cellsAt(sgc, c + 15)) == 1) && (sgLegibleWords(owords, et, fw, emon.Port.cellsAt(sgc, c), emon.Port.cellsAt(sgc, c + 1), emon.Port.cellsAt(sgc, c + 2), emon.Port.cellsAt(sgc, c + 3), emon.Port.cellsAt(sgc, c + 4)) < 2)) {
+            if ((sgTortuous(emon.Port.cellsAt(sgc, c + 8), emon.Port.cellsAt(sgc, c + 15)) == 1) && ((emon.Port.cellsAt(sgc, c + 7) != -2) && (sgLegibleWords(owords, et, fw, emon.Port.cellsAt(sgc, c), emon.Port.cellsAt(sgc, c + 1), emon.Port.cellsAt(sgc, c + 2), emon.Port.cellsAt(sgc, c + 3), emon.Port.cellsAt(sgc, c + 4)) < 2))) {
                 if (sgSmall(sgc, c) == 1) {
                     rec = sgRecurrence(sgc, n, c);
                     if (((cues & 7) != 0) || (((rec >= 1) && (sgInMargin(sgc, c) == 1)) || (rec >= 2))) {

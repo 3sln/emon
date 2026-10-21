@@ -714,6 +714,61 @@ func smCountMembers(scr *port.Cells, c int32, fw *port.Cells, gl *port.Cells, pa
 	return n
 }
 
+func smInsideWords(scr *port.Cells, c int32, fw *port.Cells, page int32) int32 {
+	// P12.7 (smoke B N2): how many text-layer words of `page`, of any ink, have their centre inside the candidate at record `c`.
+	var nfw int32 = port.CellsLen(fw) / 24
+	var w int32 = 0
+	var n int32 = 0
+	for w < nfw {
+		if port.CellsAt(fw, w*24) == page {
+			if smInside(scr, c, smCx(fw, w), smCy(fw, w)) == 1 {
+				n += 1
+			}
+		}
+		w += 1
+	}
+	return n
+}
+
+func smMemberLines(scr *port.Cells, c int32, fw *port.Cells, gl *port.Cells, page int32) int32 {
+	// P12.7 (smoke B N2): how many lines the members of the candidate at record `c` are on: a word starts a new line when its centre is more than half its height off the one before.
+	var nfw int32 = port.CellsLen(fw) / 24
+	var w int32 = 0
+	var n int32 = 0
+	var prev int32 = -1
+	var h int32 = 0
+	for w < nfw {
+		if port.CellsAt(fw, w*24) == page {
+			if smMember(scr, c, fw, gl, w) == 1 {
+				h = port.CellsAt(fw, (w*24)+4) - port.CellsAt(fw, (w*24)+2)
+				if (prev < 0) || ((smAbs(smCy(fw, w)-smCy(fw, prev)) * 2) > h) {
+					n += 1
+				}
+				prev = w
+			}
+		}
+		w += 1
+	}
+	return n
+}
+
+func smTextBox(scr *port.Cells, c int32, fw *port.Cells, gl *port.Cells, page int32, tl int32) int32 {
+	// P12.7 (smoke B N2): 1 when the stamp candidate at record `c` (with `tl` words of its ink) is a TEXT BOX and not a stamp: its words run to four lines or more (a stamp is a few words; text that flows as paragraphs in a
+	// frame is the page's own text and stays in the body), or the frame holds text-layer words and none of them is of its ink (the OCR words inside are a picture's: a logo in a frame), or it holds three words of its ink at
+	// most among twelve other words or more (a frame round a block of the page that has one coloured word in it).
+	var tot int32 = smInsideWords(scr, c, fw, page)
+	if smMemberLines(scr, c, fw, gl, page) >= 4 {
+		return 1
+	}
+	if (tl == 0) && (tot > 0) {
+		return 1
+	}
+	if (tl <= 3) && ((tot - tl) >= 12) {
+		return 1
+	}
+	return 0
+}
+
 func smTextLayerText(scr *port.Cells, c int32, fw *port.Cells, gl *port.Cells, et *port.Cells, page int32) int32 {
 	// Append to `et` the words of the candidate at record `c`, in the text layer's order, one space between two words unless both are one glyph and no wider
 	// apart than 1.4 times the mean step of the single glyphs (the arc text of a seal: a glyph a word, the spaces of the ring are no word).
@@ -808,6 +863,9 @@ func smPage(scr *port.Cells, n int32, page int32, fw *port.Cells, gl *port.Cells
 		}
 		if kind == player.PlsStamp() {
 			if (tl + oc) == 0 {
+				keep = 0
+			}
+			if smTextBox(scr, c, fw, gl, page, tl) == 1 {
 				keep = 0
 			}
 		}

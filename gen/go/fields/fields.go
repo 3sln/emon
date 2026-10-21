@@ -156,6 +156,47 @@ func flDocEnd(on *port.Cells) int32 {
 	return n
 }
 
+func flLeaderTail(on *port.Cells, text *port.Cells, n int32) int32 {
+	// 1 when a label's own text ends in at least three spaced leader dots. Paragraph assembly may already have joined the leader run to its label; it still connects the field on that row.
+	var c int32 = -1
+	var last int32 = -1
+	var dots int32 = 0
+	var spaces int32 = 0
+	var j int32 = model.NodeTextLen(on, n) - 1
+	var start int32 = model.NodeTextStart(on, n)
+	if (model.NodeHasText(on, n) == 1) && (j >= 0) {
+		for j >= 0 {
+			c = port.CellsAt(text, start+j)
+			if c == 46 {
+				dots += 1
+			} else if (c == 32) || (c == 9) {
+				spaces += 1
+			} else {
+				if (dots >= 3) && (spaces >= 2) {
+					return 1
+				}
+				return 0
+			}
+			j -= 1
+		}
+		if (dots >= 3) && (spaces >= 2) {
+			return 1
+		}
+		return 0
+	}
+	c = model.NodeFirstChild(on, n)
+	for c >= 0 {
+		if (model.NodeIsInline(on, c) == 1) && (flHasContent(on, c) == 1) {
+			last = c
+		}
+		c = model.NodeNext(on, c)
+	}
+	if last >= 0 {
+		return flLeaderTail(on, text, last)
+	}
+	return 0
+}
+
 func flBlocks(on *port.Cells, orr *port.Cells, text *port.Cells, ndoc int32, bt *port.Cells) int32 {
 	// The block rows `bt` (see FL_B): a row a region of every block that holds a field, has words of its own (text, or inline children's) and a place on a page; and of
 	// every table cell that has nothing in it (flags 4: a box can stand in it).
@@ -193,7 +234,7 @@ func flBlocks(on *port.Cells, orr *port.Cells, text *port.Cells, ndoc int32, bt 
 				port.CellsPush(bt, model.RegionX1(orr, r))
 				port.CellsPush(bt, model.RegionY1(orr, r))
 				port.CellsPush(bt, flags)
-				port.CellsPush(bt, 0)
+				port.CellsPush(bt, flLeaderTail(on, text, n))
 				r = model.RegionNext(orr, r)
 			}
 		}
@@ -236,9 +277,11 @@ func flBridged(bt *port.Cells, nb int32, page int32, y0 int32, y1 int32, left in
 }
 
 func flLeft(bt *port.Cells, nb int32, page int32, x0 int32, y0 int32, y1 int32, out *port.Cells, at int32) int32 {
-	// The label to the left on the box's line (rule 2): its block row, and the gap, into out[at], out[at + 1]; -1 when there is none that is near enough or joined by a leader.
+	// The left label on the box's line: a label's own explicit leaders beat a nearby bare row number; otherwise retain the nearest-label and separate-bridge rules.
 	var best int32 = -1
 	var bestgap int32 = 2000000000
+	var bestlink int32 = 0
+	var link int32 = 0
 	var b int32 = 0
 	var o int32 = 0
 	var gap int32 = 0
@@ -246,15 +289,19 @@ func flLeft(bt *port.Cells, nb int32, page int32, x0 int32, y0 int32, y1 int32, 
 		o = b * flB
 		if (port.CellsAt(bt, o+1) == page) && ((port.CellsAt(bt, o+6) % 2) == 1) {
 			gap = x0 - port.CellsAt(bt, o+4)
-			if (gap >= (0 - flTol)) && (gap < bestgap) && (flSameLine(bt, b, y0, y1) == 1) {
+			link = port.CellsAt(bt, o+7)
+			if (gap >= (0 - flTol)) && (flSameLine(bt, b, y0, y1) == 1) && ((best < 0) || ((link > bestlink) || ((link == bestlink) && (gap < bestgap)))) {
 				best = b
 				bestgap = gap
+				bestlink = link
 			}
 		}
 		b += 1
 	}
 	if best >= 0 {
-		if bestgap > flNearL {
+		if bestlink == 1 {
+			bestgap = 0
+		} else if bestgap > flNearL {
 			if flBridged(bt, nb, page, y0, y1, best, x0) == 0 {
 				best = -1
 			}
@@ -751,6 +798,69 @@ func flHasInline(on *port.Cells, n int32) int32 {
 	return 0
 }
 
+func flUnattachedDots(on *port.Cells, orr *port.Cells, text *port.Cells, fc *port.Cells, n int32) int32 {
+	// Printing-dot paragraphs on forms are omitted unless they bridge an actual field and its label. Keep an unspaced ellipsis and any inline content; orphan fields are emitted separately from their omitted anchor.
+	if (model.NodeKind(on, n) != model.NkParagraph()) || (model.NodeFirstChild(on, n) >= 0) {
+		return 0
+	}
+	var ts int32 = model.NodeTextStart(on, n)
+	var tlen int32 = model.NodeTextLen(on, n)
+	var nf int32 = port.CellsLen(fc) / flW
+	var j int32 = 0
+	var dots int32 = 0
+	var spaces int32 = 0
+	var r int32 = 0
+	var f int32 = 0
+	var o int32 = 0
+	var lr int32 = 0
+	var ov int32 = 0
+	var sm int32 = 0
+	if (ts < 0) || (tlen <= 0) {
+		return 0
+	}
+	for j < tlen {
+		var c int32 = port.CellsAt(text, ts+j)
+		if (c == 46) || (c == 183) {
+			dots += 1
+		} else if (c == 32) || (c == 160) {
+			spaces += 1
+		} else {
+			return 0
+		}
+		j += 1
+	}
+	if (dots == 0) || ((dots > 1) && (spaces == 0)) {
+		return 0
+	}
+	r = model.NodeRegionHead(on, n)
+	for r >= 0 {
+		f = 0
+		for f < nf {
+			o = f * flW
+			if (port.CellsAt(fc, o+7) <= 1) && (port.CellsAt(fc, o+1) == model.RegionPage(orr, r)) && (port.CellsAt(fc, o+2) >= (model.RegionX1(orr, r) - flTol)) && (flHasWords(on, text, port.CellsAt(fc, o+6)) == 1) {
+				ov = flMin(port.CellsAt(fc, o+5), model.RegionY1(orr, r)) - flMax(port.CellsAt(fc, o+3), model.RegionY0(orr, r))
+				sm = flMin(port.CellsAt(fc, o+5)-port.CellsAt(fc, o+3), model.RegionY1(orr, r)-model.RegionY0(orr, r))
+				if (ov > 0) && ((ov * 2) >= sm) {
+					lr = model.NodeRegionHead(on, port.CellsAt(fc, o+6))
+					for lr >= 0 {
+						if (model.RegionPage(orr, lr) == model.RegionPage(orr, r)) && (model.RegionX1(orr, lr) <= (model.RegionX0(orr, r) + flTol)) {
+							ov = flMin(model.RegionY1(orr, lr), model.RegionY1(orr, r)) - flMax(model.RegionY0(orr, lr), model.RegionY0(orr, r))
+							sm = flMin(model.RegionY1(orr, lr)-model.RegionY0(orr, lr), model.RegionY1(orr, r)-model.RegionY0(orr, r))
+							if (ov > 0) && ((ov * 2) >= sm) {
+								return 0
+							}
+						}
+						lr = model.RegionNext(orr, lr)
+					}
+				}
+			}
+			f += 1
+		}
+		r = model.RegionNext(orr, r)
+	}
+	return 1
+}
+
 func flTree(on *port.Cells, oa *port.Cells, orr *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, nm *port.Cells, an *port.Cells, txt *port.Cells, fc *port.Cells, fh *port.Cells, n int32, np int32) int32 {
 	// Copy old node n and its subtree as the last child of new node np (-1: a new root), with the fields that go in it: those before its text first, then its
 	// children (a block that was plain text gets a `text` inline for its words), the fields after its text before its first block child, and the paragraph of the
@@ -765,6 +875,12 @@ func flTree(on *port.Cells, oa *port.Cells, orr *port.Cells, nodes *port.Cells, 
 	var t int32 = 0
 	if (hp >= 0) && (np >= 0) {
 		flOrphans(an, txt, fc, hp, nodes, attrs, regions, text, np)
+	}
+	if (hb < 0) && (ha < 0) && (flUnattachedDots(on, orr, text, fc, n) == 1) {
+		if (ho >= 0) && (np >= 0) {
+			flOrphans(an, txt, fc, ho, nodes, attrs, regions, text, np)
+		}
+		return -1
 	}
 	nn = restruct.RsNode(on, oa, orr, nodes, attrs, regions, nm, n, np)
 	if nn < 0 {
