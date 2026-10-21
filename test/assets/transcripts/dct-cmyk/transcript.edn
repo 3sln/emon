@@ -2,5 +2,4 @@
  :inputs [{:index 0 :length 1614}]
  :entries [
   {:round 0 :kind :decode-img :req [34 6 1 1 24 16 4 8 0 0 0 0 0 465 950 0 0 0 0 0 0 0 0 -1 0 0 0 0 0 0 0 0 0 0] :ans [10 6 1 0 24 16 3 0 0 1] :bitmap "bitmap-0000.png"}
-  {:round 0 :kind :decode :req [8 2 260 0 465 950 1 0] :ans [4 2 260 2]}
   {:round 0 :kind :render :req [7 1 260 0 0 300 0] :ans [4 1 260 2]}]}
