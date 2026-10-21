@@ -1175,4 +1175,60 @@ public static class Headingtest {
         emon.Testport.AssertEq(HtGolden(emon.Testport.TestFile("corpus/synth/pdf/lists-basic.pdf"), t8, ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, mst, sf, sc, hc, ws, tmp2, pr, ptxt), 0, "lists-basic runs");
         emon.Testport.AssertTextSpan(t8, emon.Testport.TestFile("heading/lists-basic.json"), 0, Mscript.JtEnd(emon.Testport.TestFile("heading/lists-basic.json")), "lists-basic", 0);
     }
+    [Xunit.Fact]
+    public static void TestRecoveredOcrTextDoesNotSupplyHeadingEvidence() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells sf = emon.Port.NewCells();
+        emon.Port.Cells sc = emon.Port.NewCells();
+        emon.Port.Cells hc = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells pr = emon.Port.NewCells();
+        emon.Port.Cells ptxt = emon.Port.NewCells();
+        HtOutlineDoc(wd, ln, et);
+        Evidence.LnSet(ln, 4, Evidence.LfSrc(), 4 + Evidence.LsRevised());
+        emon.Testport.AssertEq(HtRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 4, "recovered words stay in the text, but cannot open a section");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 4), 0, "the recovered line is body text");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 0), 1, "the first reading still supplies the document title");
+    }
+    [Xunit.Fact]
+    public static void TestAScannedRowWithSeparatedColumnsIsNotAHeading() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells sf = emon.Port.NewCells();
+        emon.Port.Cells sc = emon.Port.NewCells();
+        emon.Port.Cells hc = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells pr = emon.Port.NewCells();
+        emon.Port.Cells ptxt = emon.Port.NewCells();
+        HtHeading(wd, ln, et, emon.Testport.TextBlob("Account Transfer Summary"), 5000, 2100, 1);
+        HtBody(wd, ln, et, 1, 9000, 6);
+        Evidence.LnSet(ln, 0, Evidence.LfSrc(), 4);
+        Evidence.WdSet(wd, 0, Evidence.WfGap(), 10000);
+        Evidence.WdSet(wd, 1, Evidence.WfGap(), 10000);
+        emon.Testport.AssertEq(HtRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 0, "a scanned row's gaps do not establish a section");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 0), 0, "the row is body text");
+    }
+    [Xunit.Fact]
+    public static void TestAScannedTransactionTimeIsNotASectionNumber() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells sf = emon.Port.NewCells();
+        emon.Port.Cells sc = emon.Port.NewCells();
+        emon.Port.Cells hc = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells pr = emon.Port.NewCells();
+        emon.Port.Cells ptxt = emon.Port.NewCells();
+        HtHeading(wd, ln, et, emon.Testport.TextBlob("12:34:56 Transfer"), 5000, 2100, 1);
+        HtBody(wd, ln, et, 1, 9000, 6);
+        Evidence.LnSet(ln, 0, Evidence.LfSrc(), 4);
+        emon.Testport.AssertEq(HtRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 0, "a transaction continuation is no section");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 0), 0, "the time-prefixed row is body text");
+    }
 }

@@ -7,6 +7,7 @@ import (
 	"emon/evidence"
 	"emon/model"
 	"emon/ocr"
+	"emon/pdfdoc"
 	"emon/plan"
 	"emon/port"
 	"emon/scan"
@@ -435,4 +436,599 @@ func TestAPagesLinesOfOneSizeMeasuredAPixelApartGetOneSize(emonT *testing.T) {
 	port.AssertEq(emonT, evidence.WdGet(wd, 2, evidence.WfSize()), 1117, "34 px again")
 	port.AssertEq(emonT, evidence.WdGet(wd, 4, evidence.WfSize()), 1117, "and the last body line")
 	port.AssertEq(emonT, evidence.WdGet(wd, 3, evidence.WfSize()), 1676, "the heading is its own size: its x-height (30 px) times the page's ratio of ascender line to x-height (1.7)")
+}
+
+func pcps(c *port.Cells, a int32, b int32, d int32, e int32, f int32, g int32, h int32, i int32, j int32, k int32) int32 {
+	// Push these code points (a 0 ends them) onto `c`; answers how many.
+	var n int32 = port.CellsLen(c)
+	if a > 0 {
+		port.CellsPush(c, a)
+	}
+	if b > 0 {
+		port.CellsPush(c, b)
+	}
+	if d > 0 {
+		port.CellsPush(c, d)
+	}
+	if e > 0 {
+		port.CellsPush(c, e)
+	}
+	if f > 0 {
+		port.CellsPush(c, f)
+	}
+	if g > 0 {
+		port.CellsPush(c, g)
+	}
+	if h > 0 {
+		port.CellsPush(c, h)
+	}
+	if i > 0 {
+		port.CellsPush(c, i)
+	}
+	if j > 0 {
+		port.CellsPush(c, j)
+	}
+	if k > 0 {
+		port.CellsPush(c, k)
+	}
+	return port.CellsLen(c) - n
+}
+
+func txtOf(c *port.Cells, a int32, b int32, d int32, e int32, f int32, g int32, h int32, i int32, j int32, k int32) int32 {
+	// A fresh text of these code points; answers where it starts in `c`.
+	var s int32 = port.CellsLen(c)
+	pcps(c, a, b, d, e, f, g, h, i, j, k)
+	return s
+}
+
+func tImpl(t *port.Cells, a int32, b int32, d int32, e int32, f int32, g int32, h int32, i int32, j int32, k int32) int32 {
+	// `sc-implausible` of the text these code points spell (a 0 ends them).
+	var s int32 = txtOf(t, a, b, d, e, f, g, h, i, j, k)
+	return scan.ScImplausible(t, s, port.CellsLen(t)-s)
+}
+
+func tLeader(t *port.Cells, a int32, b int32, d int32, e int32, f int32, g int32, h int32, i int32, j int32, k int32) int32 {
+	var s int32 = txtOf(t, a, b, d, e, f, g, h, i, j, k)
+	return scan.ScLeader(t, s, port.CellsLen(t)-s)
+}
+
+func tAmount(t *port.Cells, a int32, b int32, d int32, e int32, f int32, g int32, h int32, i int32, j int32, k int32) int32 {
+	var s int32 = txtOf(t, a, b, d, e, f, g, h, i, j, k)
+	return scan.ScAmountLike(t, s, port.CellsLen(t)-s)
+}
+
+func tGroups(t *port.Cells, a int32, b int32, d int32, e int32, f int32, g int32, h int32, i int32, j int32, k int32) int32 {
+	var s int32 = txtOf(t, a, b, d, e, f, g, h, i, j, k)
+	return scan.ScGroupsFix(t, s, port.CellsLen(t)-s)
+}
+
+func TestAWordOfOddGlyphsOrARepeatedFewCharactersIsImplausible(emonT *testing.T) {
+	var t *port.Cells = port.NewCells()
+	port.AssertEq(emonT, tImpl(t, 124, 0, 0, 0, 0, 0, 0, 0, 0, 0), 1, "a lone vertical bar is no word")
+	port.AssertEq(emonT, tImpl(t, 167, 0, 0, 0, 0, 0, 0, 0, 0, 0), 1, "a lone section sign is none")
+	port.AssertEq(emonT, tImpl(t, 97, 0, 0, 0, 0, 0, 0, 0, 0, 0), 0, "a lone letter is one")
+	port.AssertEq(emonT, tImpl(t, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0), 0, "and a lone digit")
+	port.AssertEq(emonT, tImpl(t, 120, 123, 121, 125, 0, 0, 0, 0, 0, 0), 1, "two odd glyphs")
+	port.AssertEq(emonT, tImpl(t, 97, 98, 126, 99, 49, 0, 0, 0, 0, 0), 1, "letters, digits and an odd glyph together")
+	port.AssertEq(emonT, tImpl(t, 101, 100, 101, 100, 101, 100, 101, 100, 101, 100), 1, "ten characters of two different ones (a texture read as `ededededed`)")
+	port.AssertEq(emonT, tImpl(t, 80, 101, 116, 101, 116, 101, 116, 100, 101, 100), 0, "ten of four different ones are just odd")
+	port.AssertEq(emonT, tImpl(t, 45, 60, 101, 101, 114, 101, 119, 101, 46, 0), 1, "an odd glyph among nine characters (`-<eerewe.`)")
+	port.AssertEq(emonT, tImpl(t, 104, 101, 108, 108, 111, 0, 0, 0, 0, 0), 0, "a word")
+	port.AssertEq(emonT, tImpl(t, 49, 44, 48, 56, 57, 46, 53, 56, 0, 0), 0, "an amount")
+	port.AssertEq(emonT, tImpl(t, 45, 45, 45, 45, 0, 0, 0, 0, 0, 0), 1, "four marks and no letter or digit")
+}
+
+func TestADotLeaderReadAsCharactersIsOne(emonT *testing.T) {
+	var t *port.Cells = port.NewCells()
+	port.AssertEq(emonT, tLeader(t, 46, 46, 46, 0, 0, 0, 0, 0, 0, 0), 1, "three dots")
+	port.AssertEq(emonT, tLeader(t, 46, 46, 0, 0, 0, 0, 0, 0, 0, 0), 0, "two are an ellipsis' remains")
+	port.AssertEq(emonT, tLeader(t, 50, 50, 46, 50, 50, 50, 50, 0, 0, 0), 1, "`22.2222`: a digit repeated, dots among it, and no cents")
+	port.AssertEq(emonT, tLeader(t, 50, 50, 46, 50, 50, 0, 0, 0, 0, 0), 0, "`22.22` is an amount")
+	port.AssertEq(emonT, tLeader(t, 50, 46, 56, 48, 0, 0, 0, 0, 0, 0), 0, "`2.80` is one")
+	port.AssertEq(emonT, tLeader(t, 49, 46, 50, 50, 50, 50, 50, 0, 0, 0), 0, "a digit that is not repeated is a number")
+}
+
+func TestAnAmountIsDigitsWithSeparatorsAndMaybeAMinusOrParentheses(emonT *testing.T) {
+	var t *port.Cells = port.NewCells()
+	port.AssertEq(emonT, tAmount(t, 50, 53, 46, 49, 53, 0, 0, 0, 0, 0), 1, "25.15")
+	port.AssertEq(emonT, tAmount(t, 40, 51, 51, 49, 44, 50, 55, 57, 41, 0), 1, "(331,279)")
+	port.AssertEq(emonT, tAmount(t, 45, 52, 46, 53, 48, 0, 0, 0, 0, 0), 1, "-4.50")
+	port.AssertEq(emonT, tAmount(t, 97, 98, 99, 0, 0, 0, 0, 0, 0, 0), 0, "letters")
+	port.AssertEq(emonT, tAmount(t, 49, 50, 0, 0, 0, 0, 0, 0, 0, 0), 0, "two digits are no amount")
+	port.AssertEq(emonT, tAmount(t, 83, 50, 53, 46, 49, 53, 0, 0, 0, 0), 0, "an S before it is none")
+}
+
+func TestThousandsReadWithPeriodsAreFoundAndAEuropeanWholeNumberIsNot(emonT *testing.T) {
+	var t *port.Cells = port.NewCells()
+	port.AssertEq(emonT, tGroups(t, 52, 46, 57, 56, 53, 46, 57, 0, 0, 0), 1, "4.985.9")
+	port.AssertEq(emonT, tGroups(t, 51, 51, 46, 52, 49, 52, 46, 49, 0, 0), 1, "33.414.1")
+	port.AssertEq(emonT, tGroups(t, 49, 46, 50, 51, 52, 46, 53, 54, 55, 0), 0, "1.234.567: the last group is of three: a whole number")
+	port.AssertEq(emonT, tGroups(t, 52, 44, 57, 56, 53, 46, 57, 0, 0, 0), 0, "4,985.9 is right as it is")
+	port.AssertEq(emonT, tGroups(t, 50, 46, 56, 48, 0, 0, 0, 0, 0, 0), 0, "2.80 has one period")
+	port.AssertEq(emonT, tGroups(t, 49, 50, 46, 51, 52, 53, 54, 46, 55, 0), 0, "a group of four is no group")
+}
+
+func stWord(owords *port.Cells, etext *port.Cells, x0 int32, x1 int32, conf int32, line int32, a int32, b int32, c int32, d int32, e int32, f int32, g int32, h int32) int32 {
+	// An OCR word of page 1 from x0 to x1 (100 centipoints high) of OCR line `line`, with this text and confidence; answers its row.
+	var ts int32 = port.CellsLen(etext)
+	var n int32 = pcps(etext, a, b, c, d, e, f, g, h, 0, 0)
+	return evidence.OwNew(owords, 1, x0, 0, x1, 100, x0, 100, x1, 100, 0, 0, ts, n, line, conf, -1)
+}
+
+func stLine(olines *port.Cells, x0 int32, x1 int32, first int32, count int32) int32 {
+	return evidence.OlNew(olines, 1, x0, 0, x1, 100, x0, 100, x1, 100, 0, 0, first, count)
+}
+
+func stEmit(olines *port.Cells, owords *port.Cells, words *port.Cells, lines *port.Cells, etext *port.Cells, rules *port.Cells, nsel int32) int32 {
+	// The lines 0 to nsel - 1 of `olines` through `sc-emit-sel`, as they are: nothing of a body-ink pass. Answers the lines made.
+	var scr *port.Cells = port.NewCells()
+	scan.ScPrep(scr)
+	var k int32 = 0
+	for k < nsel {
+		port.CellsSet(scr, scan.ScSelBase()+k, k)
+		k += 1
+	}
+	return scan.ScEmitSel(olines, owords, port.NewCells(), nsel, 1, 0, scr, words, lines, etext, rules, port.NewCells(), port.NewCells())
+}
+
+func TestAWordOfNoConfidenceAndOddGlyphsAloneIsKeptOutAndFlagged(emonT *testing.T) {
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	stWord(owords, et, 100, 600, 900, 0, 84, 111, 116, 97, 108, 0, 0, 0)
+	stWord(owords, et, 700, 900, 120, 0, 126, 124, 0, 0, 0, 0, 0, 0)
+	stLine(olines, 100, 900, 0, 2)
+	stWord(owords, et, 100, 600, 100, 1, 126, 0, 0, 0, 0, 0, 0, 0)
+	stLine(olines, 100, 600, 2, 1)
+	port.AssertEq(emonT, stEmit(olines, owords, words, lines, et, port.NewCells(), 2), 1, "the first line stays; the second held nothing but a tilde and is no line")
+	port.AssertEq(emonT, evidence.WdCount(words), 1, "one word: the line's `Total`, since a word of confidence 120 and two odd glyphs in a line of two is garbage")
+	port.AssertEq(emonT, evidence.OwGet(owords, 1, evidence.OwfFlags())&evidence.OeGarbage(), evidence.OeGarbage(), "the engine's row says it was kept out")
+	port.AssertEq(emonT, evidence.OwGet(owords, 2, evidence.OwfFlags())&evidence.OeGarbage(), evidence.OeGarbage(), "and so does the lone tilde's")
+	port.AssertEq(emonT, evidence.OwGet(owords, 0, evidence.OwfFlags())&evidence.OeGarbage(), 0, "the good word's does not")
+}
+
+func TestAnUnsureButPlausibleWordInAGoodLineStays(emonT *testing.T) {
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	stWord(owords, et, 100, 600, 900, 0, 84, 111, 116, 97, 108, 0, 0, 0)
+	stWord(owords, et, 700, 900, 150, 0, 99, 111, 108, 97, 0, 0, 0, 0)
+	stWord(owords, et, 1000, 1400, 920, 0, 66, 111, 120, 0, 0, 0, 0, 0)
+	stLine(olines, 100, 1400, 0, 3)
+	port.AssertEq(emonT, stEmit(olines, owords, words, lines, et, port.NewCells(), 1), 1, "one line")
+	port.AssertEq(emonT, evidence.WdCount(words), 3, "all three words: a word the engine is unsure of is not garbage unless it also is implausible and alone or among such")
+}
+
+func TestALineOfUnsureWordsIsTextureAndIsKeptOut(emonT *testing.T) {
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	stWord(owords, et, 100, 300, 272, 0, 82, 97, 101, 0, 0, 0, 0, 0)
+	stWord(owords, et, 400, 600, 201, 0, 111, 101, 0, 0, 0, 0, 0, 0)
+	stWord(owords, et, 700, 900, 294, 0, 101, 101, 0, 0, 0, 0, 0, 0)
+	stLine(olines, 100, 900, 0, 3)
+	stWord(owords, et, 100, 600, 900, 1, 71, 111, 111, 100, 0, 0, 0, 0)
+	stLine(olines, 100, 600, 3, 1)
+	port.AssertEq(emonT, stEmit(olines, owords, words, lines, et, port.NewCells(), 2), 1, "the first line, three words of a mean confidence of 250 and none over 450, is texture; the second stays")
+	port.AssertEq(emonT, evidence.WdCount(words), 1, "one word")
+	port.AssertEq(emonT, evidence.WdGet(words, 0, evidence.HdTlen()), 4, "`Good`")
+}
+
+func TestADotLeaderIsKeptOutWhateverItsConfidence(emonT *testing.T) {
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	stWord(owords, et, 100, 600, 900, 0, 84, 111, 116, 97, 108, 0, 0, 0)
+	stWord(owords, et, 700, 1300, 950, 0, 50, 50, 46, 50, 50, 50, 50, 0)
+	stWord(owords, et, 1400, 1800, 930, 0, 49, 46, 56, 48, 0, 0, 0, 0)
+	stLine(olines, 100, 1800, 0, 3)
+	port.AssertEq(emonT, stEmit(olines, owords, words, lines, et, port.NewCells(), 1), 1, "one line")
+	port.AssertEq(emonT, evidence.WdCount(words), 2, "of two words: `22.2222` is a leader and `1.80` is an amount")
+	port.AssertEq(emonT, evidence.OwGet(owords, 1, evidence.OwfFlags())&evidence.OeGarbage(), evidence.OeGarbage(), "the leader's row is flagged")
+}
+
+func stRule(rules *port.Cells, x int32, y0 int32, y1 int32) int32 {
+	// A vertical rule of page 1 at x from y0 to y1, 10 centipoints thick; answers its row.
+	var r int32 = evidence.RlNew(rules, 1, x-5, y0, x+5, y1, 0)
+	evidence.RlSet(rules, r, evidence.RlfLx0(), x)
+	evidence.RlSet(rules, r, evidence.RlfLy0(), y0)
+	evidence.RlSet(rules, r, evidence.RlfLx1(), x)
+	evidence.RlSet(rules, r, evidence.RlfLy1(), y1)
+	evidence.RlSet(rules, r, evidence.RlfThick(), 10)
+	return r
+}
+
+func TestATableRuleReadAsACharacterIsKeptOutWhereItLiesOnARuleAndOnlyThere(emonT *testing.T) {
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var rules *port.Cells = port.NewCells()
+	stRule(rules, 1000, 0, 2000)
+	stWord(owords, et, 100, 600, 900, 0, 84, 111, 116, 97, 108, 0, 0, 0)
+	stWord(owords, et, 990, 1010, 800, 0, 124, 0, 0, 0, 0, 0, 0, 0)
+	stWord(owords, et, 1100, 1500, 900, 0, 49, 50, 46, 48, 48, 0, 0, 0)
+	stLine(olines, 100, 1500, 0, 3)
+	stWord(owords, et, 100, 600, 900, 1, 78, 97, 109, 101, 0, 0, 0, 0)
+	stWord(owords, et, 1400, 1420, 800, 1, 73, 0, 0, 0, 0, 0, 0, 0)
+	stLine(olines, 100, 1420, 3, 2)
+	port.AssertEq(emonT, stEmit(olines, owords, words, lines, et, rules, 2), 2, "two lines")
+	port.AssertEq(emonT, evidence.WdCount(words), 4, "four words of the five: the bar on the rule at 1000 is out; the `I` at 1400 is on no rule and is a word")
+	port.AssertEq(emonT, evidence.OwGet(owords, 1, evidence.OwfFlags())&evidence.OeRuleGhost(), evidence.OeRuleGhost(), "the bar's row is flagged as a rule's ghost")
+	port.AssertEq(emonT, evidence.OwGet(owords, 4, evidence.OwfFlags())&evidence.OeRuleGhost(), 0, "the lone `I` away from a rule is not")
+}
+
+func TestABarGluedToTheEndOfAnAmountOnARuleIsCutOffAndTheEnginesTextStays(emonT *testing.T) {
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var osyms *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var rules *port.Cells = port.NewCells()
+	var scr *port.Cells = port.NewCells()
+	stRule(rules, 1000, 0, 2000)
+	stWord(owords, et, 100, 1010, 900, 0, 49, 44, 50, 48, 46, 53, 48, 124)
+	stLine(olines, 100, 1010, 0, 1)
+	evidence.OsNew(osyms, 1, 100, 0, 400, 100, 49, 0, 1, 0)
+	evidence.OsNew(osyms, 1, 996, 0, 1004, 100, 124, 7, 1, 0)
+	evidence.OwSet(owords, 0, evidence.OwfSfirst(), 0)
+	evidence.OwSet(owords, 0, evidence.OwfScount(), 2)
+	scan.ScPrep(scr)
+	port.CellsSet(scr, scan.ScSelBase(), 0)
+	port.AssertEq(emonT, scan.ScEmitSel(olines, owords, osyms, 1, 1, 0, scr, words, lines, et, rules, port.NewCells(), port.NewCells()), 1, "one line")
+	port.AssertEq(emonT, evidence.WdGet(words, 0, evidence.HdTlen()), 7, "`1,20.50`: the bar is cut off")
+	port.AssertEq(emonT, evidence.OwGet(owords, 0, evidence.HdTlen()), 8, "and the engine's row still says all eight characters")
+	port.AssertEq(emonT, evidence.OwGet(owords, 0, evidence.OwfFlags())&evidence.OeCorrected(), evidence.OeCorrected(), "flagged as corrected")
+}
+
+func TestThousandsReadWithPeriodsGetTheirCommasBackInThePagesWordsAndNotInTheEvidence(emonT *testing.T) {
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	stWord(owords, et, 100, 700, 900, 0, 52, 46, 57, 56, 53, 46, 57, 0)
+	stLine(olines, 100, 700, 0, 1)
+	port.AssertEq(emonT, stEmit(olines, owords, words, lines, et, port.NewCells(), 1), 1, "one line")
+	var ts int32 = evidence.WdGet(words, 0, evidence.HdTstart())
+	port.AssertEq(emonT, evidence.WdGet(words, 0, evidence.HdTlen()), 7, "seven characters")
+	port.AssertEq(emonT, port.CellsAt(et, ts), 52, "4")
+	port.AssertEq(emonT, port.CellsAt(et, ts+1), 44, "a comma where the first period was")
+	port.AssertEq(emonT, port.CellsAt(et, ts+5), 46, "and the last period, the decimal point, kept")
+	port.AssertEq(emonT, port.CellsAt(et, evidence.OwGet(owords, 0, evidence.HdTstart())), 52, "the evidence keeps the engine's text")
+	port.AssertEq(emonT, port.CellsAt(et, evidence.OwGet(owords, 0, evidence.HdTstart())+1), 46, "with its period")
+	port.AssertEq(emonT, evidence.OwGet(owords, 0, evidence.OwfFlags())&evidence.OeCorrected(), evidence.OeCorrected(), "and says it was corrected")
+}
+
+func TestAnSOrASectionSignAloneBeforeAnAmountOfItsHeightIsADollarAndOnlyThen(emonT *testing.T) {
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	stWord(owords, et, 100, 300, 800, 0, 83, 0, 0, 0, 0, 0, 0, 0)
+	stWord(owords, et, 340, 900, 900, 0, 50, 53, 46, 49, 53, 0, 0, 0)
+	stLine(olines, 100, 900, 0, 2)
+	stWord(owords, et, 100, 300, 800, 1, 167, 0, 0, 0, 0, 0, 0, 0)
+	stWord(owords, et, 340, 900, 900, 1, 49, 44, 50, 48, 48, 0, 0, 0)
+	stLine(olines, 100, 900, 2, 2)
+	stWord(owords, et, 100, 300, 800, 2, 83, 0, 0, 0, 0, 0, 0, 0)
+	stWord(owords, et, 1600, 2100, 900, 2, 50, 53, 46, 49, 53, 0, 0, 0)
+	stLine(olines, 100, 2100, 4, 2)
+	stWord(owords, et, 100, 300, 800, 3, 83, 0, 0, 0, 0, 0, 0, 0)
+	stWord(owords, et, 340, 900, 900, 3, 50, 53, 0, 0, 0, 0, 0, 0)
+	stLine(olines, 100, 900, 6, 2)
+	port.AssertEq(emonT, stEmit(olines, owords, words, lines, et, port.NewCells(), 4), 4, "four lines")
+	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(words, 0, evidence.HdTstart())), 36, "`S 25.15`: a dollar")
+	port.AssertEq(emonT, evidence.WdGet(words, 0, evidence.HdTlen()), 1, "one character")
+	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(words, 2, evidence.HdTstart())), 36, "`§ 1,200`: a dollar")
+	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(words, 4, evidence.HdTstart())), 83, "an S far from the amount is an S")
+	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(words, 6, evidence.HdTstart())), 83, "an S before a number with no cents or separator is an S")
+	port.AssertEq(emonT, evidence.OwGet(owords, 0, evidence.OwfFlags())&evidence.OeCorrected(), evidence.OeCorrected(), "the first is flagged as corrected")
+	port.AssertEq(emonT, evidence.OwGet(owords, 4, evidence.OwfFlags())&evidence.OeCorrected(), 0, "and the S far from its amount is not")
+}
+
+func dotScene(dot int32, above int32, firstw int32) int32 {
+	// The word `480` of a thermal receipt (0.04 inch of it a dot the engine lost: its first symbol's box is wider than the others', it takes the dot in) emitted with a dot component
+	// of the body layer between the first two digits (`dot` 1), a stroke of body ink above that dot in its column (`above` 1: a broken digit, not a dot), and the first symbol's width
+	// (`firstw`: 504 is wider, 340 is as wide as the others). Answers how long the emitted word is (3 or 4); its text is left in the shared text, after the engine's.
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var osyms *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var comps *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	port.CellsPush(et, 52)
+	port.CellsPush(et, 56)
+	port.CellsPush(et, 48)
+	evidence.OwNew(owords, 1, 9480, 15912, 10752, 16464, 9480, 16464, 10752, 16464, 0, 0, 0, 3, 0, 900, -1)
+	evidence.OlNew(olines, 1, 9480, 15912, 10752, 16464, 9480, 16464, 10752, 16464, 0, 0, 0, 1)
+	evidence.OsNew(osyms, 1, 9480, 15912, 9480+firstw, 16464, 52, 0, 1, 0)
+	evidence.OsNew(osyms, 1, 10032, 15912, 10368, 16440, 56, 1, 1, 0)
+	evidence.OsNew(osyms, 1, 10392, 15912, 10752, 16440, 48, 2, 1, 0)
+	evidence.OwSet(owords, 0, evidence.OwfSfirst(), 0)
+	evidence.OwSet(owords, 0, evidence.OwfScount(), 3)
+	evidence.IkNew(inks, 1, 0)
+	evidence.IkSet(inks, 0, evidence.IkfRole(), evidence.IrBody())
+	if dot == 1 {
+		var r int32 = evidence.CoNew(comps, 1, 9912, 16344, 9984, 16440, 0)
+		evidence.CoSet(comps, r, evidence.CfConf(), 700)
+		evidence.CoSet(comps, r, evidence.CfInk(), 0)
+	}
+	if above == 1 {
+		var r int32 = evidence.CoNew(comps, 1, 9900, 15912, 10000, 16200, 0)
+		evidence.CoSet(comps, r, evidence.CfConf(), 700)
+		evidence.CoSet(comps, r, evidence.CfInk(), 0)
+	}
+	var scr *port.Cells = port.NewCells()
+	scan.ScPrep(scr)
+	port.CellsSet(scr, scan.ScSelBase(), 0)
+	scan.ScEmitSel(olines, owords, osyms, 1, 1, 0, scr, words, lines, et, port.NewCells(), comps, inks)
+	return evidence.WdGet(words, 0, evidence.HdTlen())
+}
+
+func TestADecimalPointTheEngineLostAndThePageShowsIsPutBackAndOnlyWhereThePageShowsIt(emonT *testing.T) {
+	port.AssertEq(emonT, dotScene(1, 0, 504), 4, "`480` with a dot between the 4 and the 8, and the 4's box wider than the 8's: `4.80`")
+	port.AssertEq(emonT, dotScene(0, 0, 504), 3, "no dot in the pixels: `480` stays, a wide box is not evidence enough")
+	port.AssertEq(emonT, dotScene(1, 0, 340), 3, "a dot in the pixels and no box that took it in: `480` stays (a speck between two digits is not a decimal point)")
+	port.AssertEq(emonT, dotScene(1, 1, 504), 3, "the speck has ink above it in its column, so it is a part of a broken digit: `480` stays")
+}
+
+func TestThePointPutBackIsInThePagesWordsAndTheEnginesRowKeepsItsText(emonT *testing.T) {
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var osyms *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var comps *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	var scr *port.Cells = port.NewCells()
+	port.CellsPush(et, 52)
+	port.CellsPush(et, 56)
+	port.CellsPush(et, 48)
+	evidence.OwNew(owords, 1, 9480, 15912, 10752, 16464, 9480, 16464, 10752, 16464, 0, 0, 0, 3, 0, 900, -1)
+	evidence.OlNew(olines, 1, 9480, 15912, 10752, 16464, 9480, 16464, 10752, 16464, 0, 0, 0, 1)
+	evidence.OsNew(osyms, 1, 9480, 15912, 9984, 16464, 52, 0, 1, 0)
+	evidence.OsNew(osyms, 1, 10032, 15912, 10368, 16440, 56, 1, 1, 0)
+	evidence.OsNew(osyms, 1, 10392, 15912, 10752, 16440, 48, 2, 1, 0)
+	evidence.OwSet(owords, 0, evidence.OwfSfirst(), 0)
+	evidence.OwSet(owords, 0, evidence.OwfScount(), 3)
+	evidence.IkNew(inks, 1, 0)
+	evidence.IkSet(inks, 0, evidence.IkfRole(), evidence.IrBody())
+	var r int32 = evidence.CoNew(comps, 1, 9912, 16344, 9984, 16440, 0)
+	evidence.CoSet(comps, r, evidence.CfConf(), 700)
+	evidence.CoSet(comps, r, evidence.CfInk(), 0)
+	scan.ScPrep(scr)
+	port.CellsSet(scr, scan.ScSelBase(), 0)
+	scan.ScEmitSel(olines, owords, osyms, 1, 1, 0, scr, words, lines, et, port.NewCells(), comps, inks)
+	var ts int32 = evidence.WdGet(words, 0, evidence.HdTstart())
+	port.AssertEq(emonT, port.CellsAt(et, ts), 52, "4")
+	port.AssertEq(emonT, port.CellsAt(et, ts+1), 46, "the point")
+	port.AssertEq(emonT, port.CellsAt(et, ts+2), 56, "8")
+	port.AssertEq(emonT, port.CellsAt(et, ts+3), 48, "0")
+	port.AssertEq(emonT, evidence.OwGet(owords, 0, evidence.HdTlen()), 3, "the evidence's word is still three characters")
+	port.AssertEq(emonT, evidence.OwGet(owords, 0, evidence.OwfFlags())&evidence.OeCorrected(), evidence.OeCorrected(), "and is flagged as corrected")
+}
+
+func stWordl(owords *port.Cells, etext *port.Cells, x0 int32, x1 int32, conf int32, line int32, a int32, b int32, c int32, d int32, e int32, f int32, g int32, h int32, i int32, j int32) int32 {
+	// `st-word` for a word of up to ten characters.
+	var ts int32 = port.CellsLen(etext)
+	var n int32 = pcps(etext, a, b, c, d, e, f, g, h, i, j)
+	return evidence.OwNew(owords, 1, x0, 0, x1, 100, x0, 100, x1, 100, 0, 0, ts, n, line, conf, -1)
+}
+
+func TestAThousandsCommaReadAsAPeriodIsPutBackOnAPageThatWritesThemWithCommasAndOnlyThere(emonT *testing.T) {
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	stWordl(owords, et, 100, 700, 900, 0, 52, 53, 57, 44, 48, 56, 56, 0, 0, 0)
+	stWordl(owords, et, 800, 1400, 900, 0, 50, 51, 55, 44, 50, 51, 56, 0, 0, 0)
+	stWordl(owords, et, 1500, 2400, 900, 0, 40, 51, 51, 49, 46, 50, 55, 57, 41, 0)
+	stWordl(owords, et, 2500, 3500, 900, 0, 36, 40, 49, 51, 56, 46, 56, 54, 54, 41)
+	stLine(olines, 100, 3500, 0, 4)
+	port.AssertEq(emonT, stEmit(olines, owords, words, lines, et, port.NewCells(), 1), 1, "one line")
+	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(words, 2, evidence.HdTstart())+4), 44, "`(331.279)` is `(331,279)` on a page whose other amounts have commas")
+	port.AssertEq(emonT, evidence.WdGet(words, 2, evidence.HdTlen()), 9, "of the same length")
+	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(words, 3, evidence.HdTstart())+5), 44, "and `$(138.866)` is `$(138,866)`")
+	port.AssertEq(emonT, port.CellsAt(et, evidence.OwGet(owords, 2, evidence.HdTstart())+4), 46, "the evidence keeps the engine's period")
+}
+
+func TestAPeriodBeforeThreeDigitsStaysOnAPageWithoutThousandsCommas(emonT *testing.T) {
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	stWordl(owords, et, 100, 900, 900, 0, 40, 51, 51, 49, 46, 50, 55, 57, 41, 0)
+	stWordl(owords, et, 1000, 1400, 900, 0, 49, 46, 50, 51, 52, 0, 0, 0, 0, 0)
+	stLine(olines, 100, 1400, 0, 2)
+	port.AssertEq(emonT, stEmit(olines, owords, words, lines, et, port.NewCells(), 1), 1, "one line")
+	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(words, 0, evidence.HdTstart())+4), 46, "`(331.279)` stays: nothing on the page writes a thousands comma")
+	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(words, 1, evidence.HdTstart())+1), 46, "and `1.234` stays")
+}
+
+func TestADollarSignReadAsASectionSignIsPutBackOnAPageThatWritesItsAmountsWithDollarSignsAndOnlyThere(emonT *testing.T) {
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	stWordl(owords, et, 100, 900, 900, 0, 36, 52, 53, 57, 44, 48, 56, 56, 0, 0)
+	stWordl(owords, et, 1000, 1800, 900, 0, 36, 50, 51, 55, 44, 50, 51, 56, 0, 0)
+	stWordl(owords, et, 1900, 2700, 900, 0, 167, 51, 51, 51, 46, 52, 51, 48, 0, 0)
+	stLine(olines, 100, 2700, 0, 3)
+	stWordl(owords, et, 100, 300, 800, 1, 115, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	stWordl(owords, et, 340, 1100, 900, 1, 50, 44, 53, 57, 49, 46, 51, 0, 0, 0)
+	stLine(olines, 100, 1100, 3, 2)
+	port.AssertEq(emonT, stEmit(olines, owords, words, lines, et, port.NewCells(), 2), 2, "two lines")
+	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(words, 2, evidence.HdTstart())), 36, "`§333.430` is `$333,430`: a dollar sign")
+	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(words, 2, evidence.HdTstart())+4), 44, "and its period a comma")
+	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(words, 3, evidence.HdTstart())), 36, "a lone `s` before an amount is a dollar sign on that page, even with no cents")
+}
+
+func TestASectionSignBeforeDigitsStaysOnAPageWithNoDollarSigns(emonT *testing.T) {
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	stWordl(owords, et, 100, 900, 900, 0, 167, 51, 51, 51, 46, 52, 51, 48, 0, 0)
+	stWordl(owords, et, 1000, 1800, 900, 0, 50, 51, 55, 44, 50, 51, 56, 0, 0, 0)
+	stWordl(owords, et, 1900, 2700, 900, 0, 52, 53, 57, 44, 48, 56, 56, 0, 0, 0)
+	stLine(olines, 100, 2700, 0, 3)
+	port.AssertEq(emonT, stEmit(olines, owords, words, lines, et, port.NewCells(), 1), 1, "one line")
+	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(words, 0, evidence.HdTstart())), 167, "`§333.430` stays: no amount on the page has a dollar sign")
+}
+
+func TestAnImageThatHoldsAQuarterOfAPageWithNoTextIsThePageAndASmallOneIsNot(emonT *testing.T) {
+	// P12.6 (R1): n11 of the prose sweep, a 96 dpi book page (386 x 643 pt) on an A4 page covers 49.6 per cent of it; it was read only above a half
+	var im *port.Cells = port.NewCells()
+	evidence.ImNew(im, 1, 10000, 10000, 48600, 74300, 10, 515, 857)
+	port.AssertEq(emonT, scan.ScEligible(im, 0, 59520, 84168), 1, "49.6 per cent of the page: read")
+	evidence.ImNew(im, 1, 0, 0, 20000, 20000, 11, 100, 100)
+	port.AssertEq(emonT, scan.ScEligible(im, 1, 59520, 84168), 0, "8 per cent (a logo): not")
+	evidence.ImNew(im, 1, 0, 0, 30000, 40000, 12, 300, 400)
+	port.AssertEq(emonT, scan.ScEligible(im, 2, 59520, 84168), 0, "24 per cent: not")
+	evidence.ImNew(im, 1, 0, 0, 31000, 41000, 13, 300, 400)
+	port.AssertEq(emonT, scan.ScEligible(im, 3, 59520, 84168), 1, "25.4 per cent: read")
+}
+
+func TestAPageThatComesOutEmptyAndHeldABigImageHasItInTheLedger(emonT *testing.T) {
+	// P12.6 (R1): a page that vanishes (no node on it) never has nothing dropped: the biggest image of a tenth of it or more is a `background` row
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	model.PageNew(pages, 1, 61200, 79200, 0, model.PkVector())
+	model.PageNew(pages, 2, 61200, 79200, 0, model.PkVector())
+	model.PageNew(pages, 3, 61200, 79200, 0, model.PkVector())
+	var p1 int32 = model.NodeNew(nodes, model.NkParagraph(), 0)
+	model.NodeAddRegion(nodes, regions, p1, 1, 0, 0, 100, 100)
+	// page 1 has a node and an image; page 2 has an image and no node; page 3 has a small one and no node
+	evidence.ImNew(im, 1, 0, 0, 40000, 40000, 10, 100, 100)
+	evidence.ImNew(im, 2, 1000, 2000, 30000, 50000, 11, 100, 100)
+	evidence.ImNew(im, 2, 0, 0, 5000, 5000, 12, 100, 100)
+	evidence.ImNew(im, 3, 0, 0, 5000, 5000, 13, 100, 100)
+	port.AssertEq(emonT, scan.ScWriteBare(nodes, regions, pages, im, ledger), 1, "one row")
+	port.AssertEq(emonT, model.LedgerCount(ledger), 1, "in the ledger")
+	port.AssertEq(emonT, model.LedgerPage(ledger, 0), 2, "of page 2")
+	port.AssertEq(emonT, model.LedgerReason(ledger, 0), model.DrBackground(), "as a background")
+	port.AssertEq(emonT, model.LedgerX1(ledger, 0), 30000, "the biggest image's")
+}
+
+func TestALaterPassWordAlreadyReadOnAnotherFirstPassLineIsNotAdded(emonT *testing.T) {
+	var owords *port.Cells = port.NewCells()
+	var etext *port.Cells = port.NewCells()
+	port.CellsPush(etext, 49)
+	evidence.OwNew(owords, 1, 0, 0, 100, 100, 0, 100, 100, 100, 0, 0, 0, 1, 0, 900, -1)
+	evidence.OwNew(owords, 1, 200, 0, 300, 100, 200, 100, 300, 100, 0, 0, 0, 1, 1, 900, -1)
+	evidence.OwNew(owords, 1, 200, 0, 300, 100, 200, 100, 300, 100, 0, 0, 0, 1, 2, 900, -1)
+	evidence.OwSet(owords, 2, evidence.OwfRun(), 1)
+	port.AssertEq(emonT, scan.ScXtraOk(owords, etext, 0, 1, 2), 0, "the partner line missed it, but another first-pass line already read the same ink")
+	evidence.OwSet(owords, 1, evidence.HdY0(), 200)
+	evidence.OwSet(owords, 1, evidence.HdY1(), 300)
+	port.AssertEq(emonT, scan.ScXtraOk(owords, etext, 0, 1, 2), 1, "the same column on another row is different ink")
+	evidence.OwSet(owords, 1, evidence.HdY0(), 0)
+	evidence.OwSet(owords, 1, evidence.HdY1(), 100)
+	evidence.OwSet(owords, 1, evidence.OwfRun(), 2)
+	port.AssertEq(emonT, scan.ScXtraOk(owords, etext, 0, 1, 2), 1, "another later pass is not the first pass")
+}
+
+func TestAWeakTinyLaterPassSpeckIsNotAddedAsAWord(emonT *testing.T) {
+	var owords *port.Cells = port.NewCells()
+	var etext *port.Cells = port.NewCells()
+	port.CellsPush(etext, 49)
+	evidence.OwNew(owords, 1, 0, 0, 100, 100, 0, 100, 100, 100, 0, 0, 0, 1, 0, 900, -1)
+	evidence.OwNew(owords, 1, 200, 0, 300, 20, 200, 100, 300, 100, 0, 0, 0, 1, 1, 421, -1)
+	evidence.OwSet(owords, 1, evidence.OwfRun(), 1)
+	port.AssertEq(emonT, scan.ScXtraOk(owords, etext, 0, 1, 1), 0, "an unsure speck under half the height of the line's words is not recovered text")
+	evidence.OwSet(owords, 1, evidence.HdY1(), 100)
+	port.AssertEq(emonT, scan.ScXtraOk(owords, etext, 0, 1, 1), 1, "an unsure word of the line's height can fill a missed column")
+	evidence.OwSet(owords, 1, evidence.HdY1(), 20)
+	evidence.OwSet(owords, 1, evidence.HdConf(), 900)
+	port.AssertEq(emonT, scan.ScXtraOk(owords, etext, 0, 1, 1), 1, "a confident small reading can be a superscript")
+}
+
+func TestLaterPassLettersNeedAConfidentWordButAmountsKeepTheirLowerBound(emonT *testing.T) {
+	var owords *port.Cells = port.NewCells()
+	var etext *port.Cells = port.NewCells()
+	port.CellsPush(etext, 111)
+	port.CellsPush(etext, 114)
+	port.CellsPush(etext, 110)
+	port.CellsPush(etext, 101)
+	port.CellsPush(etext, 119)
+	port.CellsPush(etext, 49)
+	port.CellsPush(etext, 50)
+	port.CellsPush(etext, 51)
+	evidence.OwNew(owords, 1, 0, 0, 100, 100, 0, 100, 100, 100, 0, 0, 2, 3, 0, 950, -1)
+	evidence.OwNew(owords, 1, 200, 0, 300, 100, 200, 100, 300, 100, 0, 0, 0, 2, 1, 950, -1)
+	evidence.OwSet(owords, 1, evidence.OwfRun(), 1)
+	port.AssertEq(emonT, scan.ScXtraOk(owords, etext, 0, 1, 1), 0, "two letters on a seal can be a fragment of its strokes, even at high OCR confidence")
+	evidence.OwSet(owords, 1, evidence.HdTstart(), 2)
+	evidence.OwSet(owords, 1, evidence.HdTlen(), 3)
+	evidence.OwSet(owords, 1, evidence.HdConf(), 500)
+	port.AssertEq(emonT, scan.ScXtraOk(owords, etext, 0, 1, 1), 0, "a weak new alphabetic word has no first-pass reading to corroborate it")
+	evidence.OwSet(owords, 1, evidence.HdConf(), 950)
+	port.AssertEq(emonT, scan.ScXtraOk(owords, etext, 0, 1, 1), 1, "a confident word can fill what the first line missed")
+	evidence.OwSet(owords, 1, evidence.HdTstart(), 5)
+	evidence.OwSet(owords, 1, evidence.HdConf(), 500)
+	port.AssertEq(emonT, scan.ScXtraOk(owords, etext, 0, 1, 1), 1, "a numeric column retains its lower rescue bound")
+}
+
+func TestLaterPassRescueExtendsTheFirstPassLineRatherThanFillingHolesOrPrefixingProse(emonT *testing.T) {
+	var owords *port.Cells = port.NewCells()
+	var etext *port.Cells = port.NewCells()
+	port.CellsPush(etext, 49)
+	evidence.OwNew(owords, 1, 200, 0, 300, 100, 200, 100, 300, 100, 0, 0, 0, 1, 0, 900, -1)
+	evidence.OwNew(owords, 1, 600, 0, 700, 100, 600, 100, 700, 100, 0, 0, 0, 1, 0, 900, -1)
+	evidence.OwNew(owords, 1, 400, 0, 500, 100, 400, 100, 500, 100, 0, 0, 0, 1, 1, 900, -1)
+	evidence.OwSet(owords, 2, evidence.OwfRun(), 1)
+	port.AssertEq(emonT, scan.ScXtraOk(owords, etext, 0, 2, 2), 0, "an interior gap can be overlay ink, rather than a lost column")
+	evidence.OwSet(owords, 2, evidence.HdX0(), 800)
+	evidence.OwSet(owords, 2, evidence.HdX1(), 900)
+	port.AssertEq(emonT, scan.ScXtraOk(owords, etext, 0, 2, 2), 1, "the amount beyond the first pass's end is recovered")
+	evidence.OwSet(owords, 2, evidence.HdX0(), 0)
+	evidence.OwSet(owords, 2, evidence.HdX1(), 100)
+	port.AssertEq(emonT, scan.ScXtraOk(owords, etext, 0, 2, 2), 0, "a new prefix is not the missing trailing column")
+}
+
+func sctDirectDct(file string) int32 {
+	var src *port.Src = port.SrcOfBlob(port.TestFile(file))
+	var ar *port.Cells = port.NewCells()
+	var dc *port.Cells = port.NewCells()
+	var a *port.Cells = port.NewCells()
+	var b *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	var sp *port.Cells = port.NewCells()
+	if pdfdoc.PdOpen(src, ar, dc, a, b, st) != 0 {
+		return -1
+	}
+	return scan.ScDctSpan(src, ar, dc, a, b, st, 5, sp)
+}
+
+func TestAScanJpegOutsideTheSharedNativeSubsetIsRenderedRatherThanDecodedDirectly(emonT *testing.T) {
+	port.AssertEq(emonT, sctDirectDct("assets/dct-arith.pdf"), 0, "arithmetic JPEG needs page rendering, not a host-dependent native decode")
+	port.AssertEq(emonT, sctDirectDct("assets/dct-cmyk.pdf"), 0, "CMYK also needs rendering for scan OCR")
+	port.AssertEq(emonT, sctDirectDct("assets/dct-decode.pdf"), 1, "ordinary 8-bit three-component JPEG stays on the direct path")
+	port.AssertEq(emonT, sctDirectDct("assets/dct-a85-decode.pdf"), 0, "a filter chain still needs rendering")
 }

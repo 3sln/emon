@@ -806,11 +806,23 @@ public final class Scan {
         // ...and another: one cell for each line of the body-ink run (1 a line no first-pass line covers, to be taken; 2 taken).
         return 8300;
     }
+    public static int scXtraBase() {
+        // ...and another (P12.6): the first cell is the row of the first-pass run's first line, and the cell after it for line k of that run is 0, or 1 + the row of the body-ink line whose words that lie over none of the first-pass line's are read with it (`rt-adopt`, `sc-line-words`).
+        return 9800;
+    }
+    public static int scFateBase() {
+        // ...and the last (P12.6): four regions of `sc-fate-max` cells for the words one line is emitted with: their `owords` rows, what becomes of each (`sc-fates`), and the start and length of the text of a corrected one.
+        return 11301;
+    }
+    public static int scFateMax() {
+        // The most words of a line `sc-line-words` lists; a line of more is emitted as it is.
+        return 400;
+    }
     public static int scPrep(emon.Port.Cells scr) {
         // The scratch of `sc-sample` and `sc-cluster`: 242 cells (two for the metrics and 240 samples), three for each of the first
         // `sc-cap` lines of a page (its ascender line, its descender depth, whether clustered), and `sc-cap` more for sorting a
         // cluster's members; made once.
-        while (emon.Port.cellsLen(scr) < (scBonlyBase() + scSelMax())) {
+        while (emon.Port.cellsLen(scr) < (scFateBase() + ((4 * scFateMax()) + 2))) {
             emon.Port.cellsPush(scr, 0);
         }
         return 0;
@@ -1095,6 +1107,1010 @@ public final class Scan {
         scCluster(scr, n);
         return r;
     }
+    public static int scLoConf() {
+        // `ocr-garbage-conf`: a word of at most this confidence (per mille) is a candidate for being no text.
+        return 300;
+    }
+    public static int scXtraTextConf() {
+        // A newly recovered alphabetic word needs stronger evidence than an amount: weak readings of overlay strokes must not become prose.
+        return 600;
+    }
+    public static int scXtraTextLetters() {
+        // Fewer letters can be fragments of overlay strokes, even at a high engine confidence.
+        return 3;
+    }
+    public static int scXtraSmallConf() {
+        // A later-pass word under half the height of every partner word needs this confidence: an unsure speck must not create a column.
+        return 700;
+    }
+    public static int scXtraConf() {
+        // A body-ink word that lies over none of the first-pass line's words is read with it only when its confidence (per mille) is at least this.
+        return 400;
+    }
+    public static int scRuleSlack() {
+        // A character is on a rule when its centre is within this many centipoints (and the rule's half thickness) of the rule's centre line.
+        return 150;
+    }
+    public static int scMn(int a, int b) {
+        if (a < b) {
+            return a;
+        }
+        return b;
+    }
+    public static int scMx(int a, int b) {
+        if (a > b) {
+            return a;
+        }
+        return b;
+    }
+    public static int scCpClass(int c) {
+        // What a code point is to a word's plausibility: 1 a digit, 0 a letter (ASCII, Latin-1 and Latin Extended, and every script above them up to the private use area), 2 an ODD glyph
+        // (one an engine invents over ink that is no text: the vertical bar, tilde, caret, grave, backslash, angle brackets, braces and square brackets, the section sign, copyright and registered
+        // signs and the like of Latin-1, daggers, arrows and shapes, the private use area, the replacement character), 3 any other punctuation, currency sign or mark.
+        if ((c >= 48) && (c <= 57)) {
+            return 1;
+        }
+        if ((c >= 65) && (c <= 90)) {
+            return 0;
+        }
+        if ((c >= 97) && (c <= 122)) {
+            return 0;
+        }
+        if (c == 124) {
+            return 2;
+        }
+        if (c == 126) {
+            return 2;
+        }
+        if (c == 94) {
+            return 2;
+        }
+        if (c == 96) {
+            return 2;
+        }
+        if (c == 92) {
+            return 2;
+        }
+        if ((c == 60) || (c == 62)) {
+            return 2;
+        }
+        if ((c == 123) || (c == 125)) {
+            return 2;
+        }
+        if ((c == 91) || (c == 93)) {
+            return 2;
+        }
+        if (c < 128) {
+            return 3;
+        }
+        if (c < 192) {
+            if ((c == 170) || ((c == 181) || (c == 186))) {
+                return 0;
+            }
+            if ((c == 161) || ((c == 164) || ((c == 166) || ((c == 167) || ((c == 168) || ((c == 169) || (c == 172))))))) {
+                return 2;
+            }
+            if ((c == 174) || ((c == 175) || ((c == 180) || ((c == 182) || ((c == 184) || (c == 191)))))) {
+                return 2;
+            }
+            return 3;
+        }
+        if (c < 880) {
+            if ((c == 215) || (c == 247)) {
+                return 3;
+            }
+            return 0;
+        }
+        if (c < 8192) {
+            return 0;
+        }
+        if (c < 8224) {
+            return 3;
+        }
+        if (c < 8352) {
+            if ((c == 8226) || ((c == 8230) || (c == 8240))) {
+                return 3;
+            }
+            return 2;
+        }
+        if (c < 8400) {
+            return 3;
+        }
+        if (c < 11264) {
+            return 2;
+        }
+        if (c < 57344) {
+            return 0;
+        }
+        if (c < 63744) {
+            return 2;
+        }
+        if (c == 65533) {
+            return 2;
+        }
+        return 0;
+    }
+    public static int scCountClass(emon.Port.Cells etext, int ts, int n, int cls) {
+        // How many of the word's `n` code points (from `ts` in the shared text) are of the class `cls` (`sc-cp-class`).
+        int i = 0;
+        int k = 0;
+        while (i < n) {
+            if (scCpClass(emon.Port.cellsAt(etext, ts + i)) == cls) {
+                k += 1;
+            }
+            i += 1;
+        }
+        return k;
+    }
+    public static int scDistinct(emon.Port.Cells etext, int ts, int n) {
+        // How many different code points there are among the first 40 of the word's.
+        int m = n;
+        int i = 0;
+        int j = 0;
+        int d = 0;
+        int seen = 0;
+        if (m > 40) {
+            m = 40;
+        }
+        while (i < m) {
+            seen = 0;
+            j = 0;
+            while (j < i) {
+                if (emon.Port.cellsAt(etext, ts + j) == emon.Port.cellsAt(etext, ts + i)) {
+                    seen = 1;
+                }
+                j += 1;
+            }
+            if (seen == 0) {
+                d += 1;
+            }
+            i += 1;
+        }
+        return d;
+    }
+    public static int scImplausible(emon.Port.Cells etext, int ts, int n) {
+        // 1 when a word's characters are not those of a word: a single glyph that is no letter or digit; two odd glyphs (`sc-cp-class`); letters, digits and an odd glyph together; an odd glyph among five characters or more;
+        // four or more characters and not one a letter or a digit; eight or more of which a quarter or fewer differ (`Petetetdedtededededet`). Else 0.
+        int nl = scCountClass(etext, ts, n, 0);
+        int nd = scCountClass(etext, ts, n, 1);
+        int no = scCountClass(etext, ts, n, 2);
+        if (n <= 0) {
+            return 0;
+        }
+        if ((n == 1) && ((nl + nd) == 0)) {
+            return 1;
+        }
+        if (no >= 2) {
+            return 1;
+        }
+        if ((no > 0) && ((nd > 0) && (nl > 0))) {
+            return 1;
+        }
+        if ((no > 0) && (n >= 5)) {
+            return 1;
+        }
+        if ((n >= 4) && ((nl + nd) == 0)) {
+            return 1;
+        }
+        if ((n >= 8) && ((4 * scDistinct(etext, ts, n)) <= n)) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int scLeader(emon.Port.Cells etext, int ts, int n) {
+        // 1 for a dot leader the engine read as characters: three or more dots and commas and nothing else, or dots and commas with one digit repeated four or more times (`22.2222`)
+        // that is no amount (an amount ends in a separator and two digits). Else 0.
+        int i = 0;
+        int dots = 0;
+        int digs = 0;
+        int other = 0;
+        int d0 = -1;
+        int same = 1;
+        int c = 0;
+        while (i < n) {
+            c = emon.Port.cellsAt(etext, ts + i);
+            if ((c == 46) || (c == 44)) {
+                dots += 1;
+            } else if ((c >= 48) && (c <= 57)) {
+                digs += 1;
+                if (d0 < 0) {
+                    d0 = c;
+                }
+                if (c != d0) {
+                    same = 0;
+                }
+            } else {
+                other += 1;
+            }
+            i += 1;
+        }
+        if (other > 0) {
+            return 0;
+        }
+        if ((digs == 0) && (dots >= 3)) {
+            return 1;
+        }
+        if ((digs >= 4) && ((same == 1) && (dots >= 1))) {
+            if (n >= 4) {
+                if (((emon.Port.cellsAt(etext, ts + (n - 3)) == 46) || (emon.Port.cellsAt(etext, ts + (n - 3)) == 44)) && ((emon.Port.cellsAt(etext, ts + (n - 2)) >= 48) && ((emon.Port.cellsAt(etext, ts + (n - 2)) <= 57) && ((emon.Port.cellsAt(etext, ts + (n - 1)) >= 48) && (emon.Port.cellsAt(etext, ts + (n - 1)) <= 57))))) {
+                    return 0;
+                }
+            }
+            return 1;
+        }
+        return 0;
+    }
+    public static int scCents(emon.Port.Cells etext, int ts, int n) {
+        // 1 when the word ends in a separator and two digits (the cents of an amount).
+        if (n < 4) {
+            return 0;
+        }
+        if (((emon.Port.cellsAt(etext, ts + (n - 3)) == 46) || (emon.Port.cellsAt(etext, ts + (n - 3)) == 44)) && ((emon.Port.cellsAt(etext, ts + (n - 2)) >= 48) && ((emon.Port.cellsAt(etext, ts + (n - 2)) <= 57) && ((emon.Port.cellsAt(etext, ts + (n - 1)) >= 48) && (emon.Port.cellsAt(etext, ts + (n - 1)) <= 57))))) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int scAmountLike(emon.Port.Cells etext, int ts, int n) {
+        // 1 for a word that reads as an amount: digits with dots or commas among them, at least one of each, starting with a digit and ending in one, between an opening
+        // and a closing parenthesis or after a minus if it has them. Else 0.
+        int i = 0;
+        int nd = 0;
+        int ns = 0;
+        int c = 0;
+        int a = 0;
+        int b = n;
+        if (n < 3) {
+            return 0;
+        }
+        if ((emon.Port.cellsAt(etext, ts) == 40) || (emon.Port.cellsAt(etext, ts) == 45)) {
+            a = 1;
+        }
+        if (emon.Port.cellsAt(etext, ts + (n - 1)) == 41) {
+            b = n - 1;
+        }
+        i = a;
+        while (i < b) {
+            c = emon.Port.cellsAt(etext, ts + i);
+            if ((c >= 48) && (c <= 57)) {
+                nd += 1;
+            } else if ((c == 46) || (c == 44)) {
+                ns += 1;
+            } else {
+                return 0;
+            }
+            i += 1;
+        }
+        if ((nd == 0) || (ns == 0)) {
+            return 0;
+        }
+        c = emon.Port.cellsAt(etext, ts + (b - 1));
+        if ((c >= 48) && (c <= 57)) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int scGroupsFix(emon.Port.Cells etext, int ts, int n) {
+        // 1 when a word is an amount whose thousands were read with periods: digits and at least two periods, a first group of one to three digits, then groups of exactly three, and
+        // the last group of one or two (the decimals): `4.985.9` is `4,985.9`, and `1.234.567` (a last group of three) is a European whole number and left alone.
+        int i = 0;
+        int dots = 0;
+        int run = 0;
+        int groups = 0;
+        int c = 0;
+        int ok = 1;
+        if (n < 5) {
+            return 0;
+        }
+        while (i < n) {
+            c = emon.Port.cellsAt(etext, ts + i);
+            if ((c >= 48) && (c <= 57)) {
+                run += 1;
+            } else if (c == 46) {
+                if (run == 0) {
+                    ok = 0;
+                }
+                if ((groups == 0) && (run > 3)) {
+                    ok = 0;
+                }
+                if ((groups > 0) && (run != 3)) {
+                    ok = 0;
+                }
+                groups += 1;
+                dots += 1;
+                run = 0;
+            } else {
+                ok = 0;
+            }
+            i += 1;
+        }
+        if (ok == 0) {
+            return 0;
+        }
+        if (dots < 2) {
+            return 0;
+        }
+        if ((run >= 1) && (run <= 2)) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int scOnVrule(emon.Port.Cells rules, int page, int cx, int cy, int slack) {
+        // 1 when the point (`cx`, `cy`) centipoints of page `page` lies on one of the tracer's vertical rules: at least 8 pt long and eight times as long as wide, covering `cy`, with
+        // its centre line within `slack` and half its thickness of `cx`.
+        int n = Evidence.rlCount(rules);
+        int r = 0;
+        int xa = 0;
+        int xb = 0;
+        int ya = 0;
+        int yb = 0;
+        int dx = 0;
+        int dy = 0;
+        int d = 0;
+        int t = 0;
+        while (r < n) {
+            if (Evidence.rlGet(rules, r, Evidence.rlfPage()) == page) {
+                xa = Evidence.rlGet(rules, r, Evidence.rlfLx0());
+                xb = Evidence.rlGet(rules, r, Evidence.rlfLx1());
+                ya = Evidence.rlGet(rules, r, Evidence.rlfLy0());
+                yb = Evidence.rlGet(rules, r, Evidence.rlfLy1());
+                if (yb < ya) {
+                    t = ya;
+                    ya = yb;
+                    yb = t;
+                }
+                dx = xb - xa;
+                if (dx < 0) {
+                    dx = 0 - dx;
+                }
+                dy = yb - ya;
+                if ((dy >= 800) && ((dx * 8) <= dy)) {
+                    if ((cy >= ya) && (cy <= yb)) {
+                        d = cx - ((xa + xb) / 2);
+                        if (d < 0) {
+                            d = 0 - d;
+                        }
+                        if (d <= (slack + (Evidence.rlGet(rules, r, Evidence.rlfThick()) / 2))) {
+                            return 1;
+                        }
+                    }
+                }
+            }
+            r += 1;
+        }
+        return 0;
+    }
+    public static int scXtraOk(emon.Port.Cells owords, emon.Port.Cells etext, int w0, int cnt, int xw) {
+        // Does the body-ink word `xw` lie over none of the `cnt` first-pass words from `w0` (no more than a quarter of the narrower of two shares their extent along the line),
+        // is it sure enough (`sc-xtra-conf`) to be read with the line, and are its characters those of a word (`sc-implausible`: a lone `§` is not)? 1 or 0.
+        int xa = Evidence.owGet(owords, xw, Evidence.hdX0());
+        int xb = Evidence.owGet(owords, xw, Evidence.hdX1());
+        int j = 0;
+        int pa = 0;
+        int pb = 0;
+        int ov = 0;
+        int nar = 0;
+        int yo = 0;
+        int yh = 0;
+        int mh = 0;
+        int hh = 0;
+        int edge = 0;
+        if (Evidence.owGet(owords, xw, Evidence.hdConf()) < scXtraConf()) {
+            return 0;
+        }
+        int letters = scCountClass(etext, Evidence.owGet(owords, xw, Evidence.hdTstart()), Evidence.owGet(owords, xw, Evidence.hdTlen()), 0);
+        if (letters > 0) {
+            if ((letters < scXtraTextLetters()) || (Evidence.owGet(owords, xw, Evidence.hdConf()) < scXtraTextConf())) {
+                return 0;
+            }
+        }
+        if (scImplausible(etext, Evidence.owGet(owords, xw, Evidence.hdTstart()), Evidence.owGet(owords, xw, Evidence.hdTlen())) == 1) {
+            return 0;
+        }
+        while (j < cnt) {
+            hh = Evidence.owGet(owords, w0 + j, Evidence.hdY1()) - Evidence.owGet(owords, w0 + j, Evidence.hdY0());
+            if (hh > 0) {
+                if ((mh == 0) || (hh < mh)) {
+                    mh = hh;
+                }
+            }
+            pa = Evidence.owGet(owords, w0 + j, Evidence.hdX0());
+            pb = Evidence.owGet(owords, w0 + j, Evidence.hdX1());
+            if (pb > edge) {
+                edge = pb;
+            }
+            ov = scMn(xb, pb) - scMx(xa, pa);
+            nar = scMn(xb - xa, pb - pa);
+            if (ov > 0) {
+                if ((ov * 4) > nar) {
+                    return 0;
+                }
+            }
+            j += 1;
+        }
+        if ((cnt > 0) && (xb <= edge)) {
+            return 0;
+        }
+        if ((mh > 0) && ((2 * (Evidence.owGet(owords, xw, Evidence.hdY1()) - Evidence.owGet(owords, xw, Evidence.hdY0()))) < mh)) {
+            if (Evidence.owGet(owords, xw, Evidence.hdConf()) < scXtraSmallConf()) {
+                return 0;
+            }
+        }
+        // A different first-pass line can already hold this ink (a table row split at its last column). Check the entire first-pass run in two dimensions, not just the partner line.
+        if ((cnt > 0) && (Evidence.owGet(owords, w0, Evidence.owfRun()) != Evidence.owGet(owords, xw, Evidence.owfRun()))) {
+            j = 0;
+            while (j < Evidence.owCount(owords)) {
+                if (Evidence.owGet(owords, j, Evidence.owfRun()) == Evidence.owGet(owords, w0, Evidence.owfRun())) {
+                    if (Evidence.owGet(owords, j, Evidence.hdPage()) == Evidence.owGet(owords, xw, Evidence.hdPage())) {
+                        yo = scMn(Evidence.owGet(owords, j, Evidence.hdY1()), Evidence.owGet(owords, xw, Evidence.hdY1())) - scMx(Evidence.owGet(owords, j, Evidence.hdY0()), Evidence.owGet(owords, xw, Evidence.hdY0()));
+                        yh = scMn(Evidence.owGet(owords, j, Evidence.hdY1()) - Evidence.owGet(owords, j, Evidence.hdY0()), Evidence.owGet(owords, xw, Evidence.hdY1()) - Evidence.owGet(owords, xw, Evidence.hdY0()));
+                        if ((yo > 0) && ((yo * 2) > yh)) {
+                            pa = Evidence.owGet(owords, j, Evidence.hdX0());
+                            pb = Evidence.owGet(owords, j, Evidence.hdX1());
+                            ov = scMn(xb, pb) - scMx(xa, pa);
+                            nar = scMn(xb - xa, pb - pa);
+                            if ((ov > 0) && ((ov * 4) > nar)) {
+                                return 0;
+                            }
+                        }
+                    }
+                }
+                j += 1;
+            }
+        }
+        return 1;
+    }
+    public static int scXtraCount(emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells etext, int l, int xl) {
+        // How many words of the body-ink line `xl` are read with the first-pass line `l` (`sc-xtra-ok`).
+        int w0 = Evidence.olGet(olines, l, Evidence.lhFirst());
+        int cnt = Evidence.olGet(olines, l, Evidence.lhCount());
+        int x0 = Evidence.olGet(olines, xl, Evidence.lhFirst());
+        int xn = Evidence.olGet(olines, xl, Evidence.lhCount());
+        int j = 0;
+        int k = 0;
+        while (j < xn) {
+            if (scXtraOk(owords, etext, w0, cnt, x0 + j) == 1) {
+                k += 1;
+            }
+            j += 1;
+        }
+        return k;
+    }
+    public static int scLineWords(emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells etext, int l, int xl, emon.Port.Cells scr) {
+        // The words line `l` is emitted with, in the order along it, written to `scr` from `sc-fate-base`: its own, and with them those of the body-ink line `xl` (-1 none) that
+        // lie over none of its own (`sc-xtra-ok`). Answers how many; 0 when they are more than the scratch holds (the line is then emitted as it is, with nothing added).
+        int fb = scFateBase();
+        int w0 = Evidence.olGet(olines, l, Evidence.lhFirst());
+        int cnt = Evidence.olGet(olines, l, Evidence.lhCount());
+        int x0 = 0;
+        int xn = 0;
+        int i = 0;
+        int j = 0;
+        int n = 0;
+        if (cnt > scFateMax()) {
+            return 0;
+        }
+        if (xl >= 0) {
+            x0 = Evidence.olGet(olines, xl, Evidence.lhFirst());
+            xn = Evidence.olGet(olines, xl, Evidence.lhCount());
+        }
+        while ((j < xn) && (scXtraOk(owords, etext, w0, cnt, x0 + j) == 0)) {
+            j += 1;
+        }
+        while ((i < cnt) || (j < xn)) {
+            if (n >= scFateMax()) {
+                return 0;
+            }
+            if ((i < cnt) && ((j >= xn) || (Evidence.owGet(owords, w0 + i, Evidence.hdX0()) <= Evidence.owGet(owords, x0 + j, Evidence.hdX0())))) {
+                emon.Port.cellsSet(scr, fb + n, w0 + i);
+                i += 1;
+            } else {
+                emon.Port.cellsSet(scr, fb + n, x0 + j);
+                j += 1;
+                while ((j < xn) && (scXtraOk(owords, etext, w0, cnt, x0 + j) == 0)) {
+                    j += 1;
+                }
+            }
+            n += 1;
+        }
+        return n;
+    }
+    public static int scTailOnVrule(emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells rules, int page, int w) {
+        // 1 when the last symbol of word `w` is a vertical bar that lies on one of the page's vertical rules.
+        int sn = Evidence.owGet(owords, w, Evidence.owfScount());
+        int s = (Evidence.owGet(owords, w, Evidence.owfSfirst()) + sn) - 1;
+        if (sn < 2) {
+            return 0;
+        }
+        if (Evidence.osGet(osyms, s, Evidence.chCp()) != 124) {
+            return 0;
+        }
+        return scOnVrule(rules, page, (Evidence.osGet(osyms, s, Evidence.chX0()) + Evidence.osGet(osyms, s, Evidence.chX1())) / 2, (Evidence.osGet(osyms, s, Evidence.chY0()) + Evidence.osGet(osyms, s, Evidence.chY1())) / 2, scRuleSlack());
+    }
+    public static int scBodyComp(emon.Port.Cells comps, emon.Port.Cells inks, int r, int page) {
+        // 1 when component `r` is of page `page`, of the body layer (`ir-body`) and sure (confidence at least 500).
+        int ink = Evidence.coGet(comps, r, Evidence.cfInk());
+        if (Evidence.coGet(comps, r, Evidence.cfPage()) != page) {
+            return 0;
+        }
+        if (Evidence.coGet(comps, r, Evidence.cfConf()) < 500) {
+            return 0;
+        }
+        if (ink < 0) {
+            return 0;
+        }
+        if (Evidence.ikGet(inks, ink, Evidence.ikfRole()) != Evidence.irBody()) {
+            return 0;
+        }
+        return 1;
+    }
+    public static int scDotLike(emon.Port.Cells comps, emon.Port.Cells inks, int page, int r, int wy0, int wy1, int hh) {
+        // 1 when body component `r` looks like a dot of a word whose box is from `wy0` to `wy1` (`hh` high): sure, at most 0.45 and at least 0.08 of the height each way, its bottom
+        // in the lowest quarter of the box and not more than 0.15 of the height below it.
+        int w = Evidence.coGet(comps, r, Evidence.cfX1()) - Evidence.coGet(comps, r, Evidence.cfX0());
+        int h = Evidence.coGet(comps, r, Evidence.cfY1()) - Evidence.coGet(comps, r, Evidence.cfY0());
+        int dy1 = Evidence.coGet(comps, r, Evidence.cfY1());
+        if (scBodyComp(comps, inks, r, page) == 0) {
+            return 0;
+        }
+        if (((w * 100) > (hh * 45)) || ((h * 100) > (hh * 45))) {
+            return 0;
+        }
+        if (((w * 100) < (hh * 8)) || ((h * 100) < (hh * 8))) {
+            return 0;
+        }
+        if (((dy1 - wy0) * 100) < (hh * 75)) {
+            return 0;
+        }
+        if (((dy1 - wy1) * 100) > (hh * 15)) {
+            return 0;
+        }
+        return 1;
+    }
+    public static int scDotBetween(emon.Port.Cells osyms, int s0, int sn, int cx) {
+        // The index i of the symbol such that the x `cx` lies between the centres of symbols i and i + 1 of the word that starts at symbol `s0`, or -1.
+        int i = 0;
+        while ((i + 1) < sn) {
+            if (((2 * cx) > (Evidence.osGet(osyms, s0 + i, Evidence.chX0()) + Evidence.osGet(osyms, s0 + i, Evidence.chX1()))) && ((2 * cx) < (Evidence.osGet(osyms, s0 + (i + 1), Evidence.chX0()) + Evidence.osGet(osyms, s0 + (i + 1), Evidence.chX1())))) {
+                return i;
+            }
+            i += 1;
+        }
+        return -1;
+    }
+    public static int scDotClear(emon.Port.Cells comps, emon.Port.Cells inks, int page, int r, int wy0, int hh) {
+        // 1 when no body ink lies above component `r` in its column, between the top of the word (`wy0`) and a fifth of the word's height above the component: a stroke of a broken digit would.
+        int nc = Evidence.coCount(comps);
+        int dx0 = Evidence.coGet(comps, r, Evidence.cfX0());
+        int dx1 = Evidence.coGet(comps, r, Evidence.cfX1());
+        int dy0 = Evidence.coGet(comps, r, Evidence.cfY0());
+        int q = 0;
+        while (q < nc) {
+            if (q != r) {
+                if (scBodyComp(comps, inks, q, page) == 1) {
+                    if ((Evidence.coGet(comps, q, Evidence.cfX0()) < dx1) && (Evidence.coGet(comps, q, Evidence.cfX1()) > dx0)) {
+                        if ((Evidence.coGet(comps, q, Evidence.cfY1()) > wy0) && (Evidence.coGet(comps, q, Evidence.cfY0()) < (dy0 - ((hh * 20) / 100)))) {
+                            return 0;
+                        }
+                    }
+                }
+            }
+            q += 1;
+        }
+        return 1;
+    }
+    public static int scDotAfter(emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells comps, emon.Port.Cells inks, int page, int w) {
+        // The decimal point the engine lost, when the page's pixels show it: the index of the symbol of word `w` after which a point goes, or -1. The word must be digits and nothing else
+        // (three to nine symbols, as many as its characters), one of them at least a quarter wider than the narrowest digit that is not a 1 (the engine's box for the digit before a
+        // point it did not read takes the point in), and there must be a dot between two digits: a component of the body layer that is sure, no more than 0.45 of the word's height
+        // each way, on its baseline, whose centre lies between the centres of two neighbouring symbols, with no body ink above it in its column (a stroke of a broken digit has some).
+        // One or two digits must follow the point and one at least precede it. NO DIGIT IS GUESSED: the point is a thing the page shows.
+        int sn = Evidence.owGet(owords, w, Evidence.owfScount());
+        int s0 = Evidence.owGet(owords, w, Evidence.owfSfirst());
+        int wy0 = Evidence.owGet(owords, w, Evidence.hdY0());
+        int wy1 = Evidence.owGet(owords, w, Evidence.hdY1());
+        int hh = wy1 - wy0;
+        int nc = Evidence.coCount(comps);
+        int i = 0;
+        int c = 0;
+        int wd = 0;
+        int ref = -1;
+        int wide = 0;
+        int r = 0;
+        int cx = 0;
+        int at = -1;
+        if ((sn < 3) || (sn > 9)) {
+            return -1;
+        }
+        if (Evidence.owGet(owords, w, Evidence.hdTlen()) != sn) {
+            return -1;
+        }
+        if (hh <= 0) {
+            return -1;
+        }
+        if (nc == 0) {
+            return -1;
+        }
+        while (i < sn) {
+            c = Evidence.osGet(osyms, s0 + i, Evidence.chCp());
+            if ((c < 48) || (c > 57)) {
+                return -1;
+            }
+            wd = Evidence.osGet(osyms, s0 + i, Evidence.chX1()) - Evidence.osGet(osyms, s0 + i, Evidence.chX0());
+            if (c != 49) {
+                if ((ref < 0) || (wd < ref)) {
+                    ref = wd;
+                }
+            }
+            i += 1;
+        }
+        if (ref <= 0) {
+            return -1;
+        }
+        i = 0;
+        while (i < sn) {
+            c = Evidence.osGet(osyms, s0 + i, Evidence.chCp());
+            wd = Evidence.osGet(osyms, s0 + i, Evidence.chX1()) - Evidence.osGet(osyms, s0 + i, Evidence.chX0());
+            if (c != 49) {
+                if ((wd * 100) >= (ref * 125)) {
+                    wide = 1;
+                }
+            }
+            i += 1;
+        }
+        if (wide == 0) {
+            return -1;
+        }
+        // a dot: small, on the baseline, between the centres of two neighbouring symbols
+        r = 0;
+        while ((r < nc) && (at < 0)) {
+            if (scDotLike(comps, inks, page, r, wy0, wy1, hh) == 1) {
+                cx = (Evidence.coGet(comps, r, Evidence.cfX0()) + Evidence.coGet(comps, r, Evidence.cfX1())) / 2;
+                at = scDotBetween(osyms, s0, sn, cx);
+                if (at >= 0) {
+                    if (scDotClear(comps, inks, page, r, wy0, hh) == 0) {
+                        at = -1;
+                    }
+                }
+            }
+            r += 1;
+        }
+        if (at < 0) {
+            return -1;
+        }
+        // the digits that follow: one or two
+        wd = sn - (at + 1);
+        if ((wd < 1) || (wd > 2)) {
+            return -1;
+        }
+        return at;
+    }
+    public static int scIsdig(int c) {
+        if ((c >= 48) && (c <= 57)) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int scDigitsBefore(emon.Port.Cells etext, int ts, int i) {
+        // How many digits end just before index `i` of the word that starts at `ts`.
+        int j = i - 1;
+        int k = 0;
+        while ((j >= 0) && (scIsdig(emon.Port.cellsAt(etext, ts + j)) == 1)) {
+            k += 1;
+            j -= 1;
+        }
+        return k;
+    }
+    public static int scDigitsAfter(emon.Port.Cells etext, int ts, int n, int i) {
+        // How many digits start just after index `i` of the word of `n` characters that starts at `ts`.
+        int j = i + 1;
+        int k = 0;
+        while ((j < n) && (scIsdig(emon.Port.cellsAt(etext, ts + j)) == 1)) {
+            k += 1;
+            j += 1;
+        }
+        return k;
+    }
+    public static int scThousandsComma(emon.Port.Cells etext, int ts, int n) {
+        // 1 when the word has a thousands comma: one with one to three digits before it and exactly three after it (`459,088`). The page's own convention, when a page has some.
+        int i = 0;
+        int b = 0;
+        while (i < n) {
+            if (emon.Port.cellsAt(etext, ts + i) == 44) {
+                b = scDigitsBefore(etext, ts, i);
+                if ((b >= 1) && (b <= 3)) {
+                    if (scDigitsAfter(etext, ts, n, i) == 3) {
+                        return 1;
+                    }
+                }
+            }
+            i += 1;
+        }
+        return 0;
+    }
+    public static int scDollarWord(emon.Port.Cells etext, int ts, int n) {
+        // 1 for a word that is a dollar sign, or one that starts with it (after an opening parenthesis or a minus) and goes on with a digit: the page's own way of writing an amount.
+        int a = 0;
+        if (n <= 0) {
+            return 0;
+        }
+        if ((n == 1) && (emon.Port.cellsAt(etext, ts) == 36)) {
+            return 1;
+        }
+        if ((emon.Port.cellsAt(etext, ts) == 40) || (emon.Port.cellsAt(etext, ts) == 45)) {
+            a = 1;
+        }
+        if ((a + 1) < n) {
+            if ((emon.Port.cellsAt(etext, ts + a) == 36) && (scIsdig(emon.Port.cellsAt(etext, ts + (a + 1))) == 1)) {
+                return 1;
+            }
+        }
+        return 0;
+    }
+    public static int scPeriodThousands(emon.Port.Cells etext, int ts, int n, int sign) {
+        // The index of the period of a word of the shape `(331.279)`: after any opening parenthesis, minus or dollar sign (and, when `sign` is 1, an S or a section sign read for one), one to three digits
+        // that do not start with 0, one period and exactly three digits, then at most a closing parenthesis. A thousands comma read as a period (the page's own, see `sc-fates`); else -1.
+        int a = 0;
+        int b = n;
+        int d = 0;
+        while ((a < 3) && ((a < n) && ((emon.Port.cellsAt(etext, ts + a) == 40) || ((emon.Port.cellsAt(etext, ts + a) == 45) || (emon.Port.cellsAt(etext, ts + a) == 36))))) {
+            a += 1;
+        }
+        if ((sign == 1) && (a < n)) {
+            if ((emon.Port.cellsAt(etext, ts + a) == 167) || (emon.Port.cellsAt(etext, ts + a) == 83)) {
+                a += 1;
+            }
+        }
+        if (a >= n) {
+            return -1;
+        }
+        if (emon.Port.cellsAt(etext, ts + (n - 1)) == 41) {
+            b = n - 1;
+        }
+        d = scDigitsAfter(etext, ts, b, a - 1);
+        if ((d < 1) || (d > 3)) {
+            return -1;
+        }
+        if (emon.Port.cellsAt(etext, ts + a) == 48) {
+            return -1;
+        }
+        if (emon.Port.cellsAt(etext, ts + (a + d)) != 46) {
+            return -1;
+        }
+        if (scDigitsAfter(etext, ts, b, a + d) != 3) {
+            return -1;
+        }
+        if ((a + (d + 4)) != b) {
+            return -1;
+        }
+        return a + d;
+    }
+    public static int scFlag(emon.Port.Cells owords, int w, int bit) {
+        // Set `bit` among the engine flags of word row `w`.
+        int v = Evidence.owGet(owords, w, Evidence.owfFlags()) | bit;
+        Evidence.owSet(owords, w, Evidence.owfFlags(), v);
+        return 0;
+    }
+    public static int scFates(emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Cells osyms, emon.Port.Cells rules, emon.Port.Cells comps, emon.Port.Cells inks, int page, int m, emon.Port.Cells scr) {
+        // What becomes of each of the `m` words of a line (listed at `sc-fate-base`): 0 it stays, 1 it is garbage (confidence at most `sc-lo-conf` and implausible characters (`sc-implausible`) on a line of
+        // two words or fewer or of a mean confidence of 450 or less; or a word of a line of three or more whose mean is at most `sc-lo-conf`, best at most 450 and words of four characters or fewer on average: texture), 2 it is the ghost of a rule (a lone bar, `I`, `l` or `!`
+        // on a vertical rule), 3 it is a dot leader (`sc-leader`), 4 its text is corrected (the cells at +2 and +3 regions say how). The words with a fate of 1 to 3 are flagged in `owords` (`oe-garbage`, `oe-rule-ghost`, one corrected: `oe-corrected`)
+        // and taken out of the list; the corrected text is appended to `etext`. Answers how many words are left.
+        int fb = scFateBase();
+        int fm = scFateMax();
+        int commas = emon.Port.cellsAt(scr, scFateBase() + (4 * scFateMax()));
+        int dollars = emon.Port.cellsAt(scr, scFateBase() + ((4 * scFateMax()) + 1));
+        int gl = 0;
+        int pd = -1;
+        int i = 0;
+        int w = 0;
+        int w2 = 0;
+        int ts = 0;
+        int n = 0;
+        int ts2 = 0;
+        int n2 = 0;
+        int conf = 0;
+        int sum = 0;
+        int tch = 0;
+        int mx = 0;
+        int lmean = 0;
+        int f = 0;
+        int c = 0;
+        int hh = 0;
+        int h2 = 0;
+        int gp = 0;
+        int nt = 0;
+        int k = 0;
+        int last = 0;
+        int kept = 0;
+        int changed = 0;
+        while (i < m) {
+            w = emon.Port.cellsAt(scr, fb + i);
+            conf = Evidence.owGet(owords, w, Evidence.hdConf());
+            sum += conf;
+            tch += Evidence.owGet(owords, w, Evidence.hdTlen());
+            if (conf > mx) {
+                mx = conf;
+            }
+            i += 1;
+        }
+        lmean = sum / m;
+        i = 0;
+        while (i < m) {
+            w = emon.Port.cellsAt(scr, fb + i);
+            ts = Evidence.owGet(owords, w, Evidence.hdTstart());
+            n = Evidence.owGet(owords, w, Evidence.hdTlen());
+            conf = Evidence.owGet(owords, w, Evidence.hdConf());
+            f = 0;
+            emon.Port.cellsSet(scr, fb + ((2 * fm) + i), -1);
+            emon.Port.cellsSet(scr, fb + ((3 * fm) + i), 0);
+            // a dot leader
+            if (scLeader(etext, ts, n) == 1) {
+                f = 3;
+            }
+            // texture: a line of three words or more, all of them unsure
+            if (f == 0) {
+                if ((m >= 3) && ((lmean <= scLoConf()) && ((mx <= 450) && (tch <= (4 * m))))) {
+                    f = 1;
+                }
+            }
+            // very unsure and no word, alone or among such words
+            if (f == 0) {
+                if (conf <= scLoConf()) {
+                    if (scImplausible(etext, ts, n) == 1) {
+                        if ((m <= 2) || (lmean <= 450)) {
+                            f = 1;
+                        }
+                    }
+                }
+            }
+            // a rule read as a character
+            if ((f == 0) && (n == 1)) {
+                c = emon.Port.cellsAt(etext, ts);
+                if ((c == 124) || ((c == 73) || ((c == 108) || (c == 33)))) {
+                    if (scOnVrule(rules, page, (Evidence.owGet(owords, w, Evidence.hdX0()) + Evidence.owGet(owords, w, Evidence.hdX1())) / 2, (Evidence.owGet(owords, w, Evidence.hdY0()) + Evidence.owGet(owords, w, Evidence.hdY1())) / 2, scRuleSlack()) == 1) {
+                        f = 2;
+                    }
+                }
+            }
+            // a rule's stroke glued to the end of a word
+            if ((f == 0) && (n >= 2)) {
+                if (emon.Port.cellsAt(etext, ts + (n - 1)) == 124) {
+                    if (scTailOnVrule(owords, osyms, rules, page, w) == 1) {
+                        emon.Port.cellsSet(scr, fb + ((2 * fm) + i), ts);
+                        emon.Port.cellsSet(scr, fb + ((3 * fm) + i), n - 1);
+                        f = 4;
+                    }
+                }
+            }
+            // thousands read with periods
+            if ((f == 0) && (scGroupsFix(etext, ts, n) == 1)) {
+                nt = Evidence.etxLen(etext);
+                last = n - 1;
+                while ((last > 0) && (emon.Port.cellsAt(etext, ts + last) != 46)) {
+                    last -= 1;
+                }
+                k = 0;
+                while (k < n) {
+                    c = emon.Port.cellsAt(etext, ts + k);
+                    if ((c == 46) && (k != last)) {
+                        c = 44;
+                    }
+                    Evidence.etxAppendCp(etext, c);
+                    k += 1;
+                }
+                emon.Port.cellsSet(scr, fb + ((2 * fm) + i), nt);
+                emon.Port.cellsSet(scr, fb + ((3 * fm) + i), n);
+                f = 4;
+            }
+            // the page's own conventions: a thousands comma read as a period on a page that writes them with commas (two words at least), and a dollar sign glued to an amount and read as an S or a section sign on a page that writes its amounts with dollar signs (two words at least)
+            if ((f == 0) && (n >= 4)) {
+                gl = 0;
+                c = emon.Port.cellsAt(etext, ts);
+                if (dollars >= 2) {
+                    if ((c == 167) || (c == 83)) {
+                        if (scAmountLike(etext, ts + 1, n - 1) == 1) {
+                            gl = 1;
+                        }
+                    }
+                }
+                pd = -1;
+                if (commas >= 2) {
+                    pd = scPeriodThousands(etext, ts, n, gl);
+                }
+                if ((gl == 1) || (pd >= 0)) {
+                    nt = Evidence.etxLen(etext);
+                    k = 0;
+                    while (k < n) {
+                        c = emon.Port.cellsAt(etext, ts + k);
+                        if ((gl == 1) && (k == 0)) {
+                            c = 36;
+                        }
+                        if (k == pd) {
+                            c = 44;
+                        }
+                        Evidence.etxAppendCp(etext, c);
+                        k += 1;
+                    }
+                    emon.Port.cellsSet(scr, fb + ((2 * fm) + i), nt);
+                    emon.Port.cellsSet(scr, fb + ((3 * fm) + i), n);
+                    f = 4;
+                }
+            }
+            // a decimal point the engine lost and the page shows (`sc-dot-after`)
+            if ((f == 0) && (n >= 3)) {
+                k = scDotAfter(owords, osyms, comps, inks, page, w);
+                if (k >= 0) {
+                    nt = Evidence.etxLen(etext);
+                    c = 0;
+                    while (c < n) {
+                        last = emon.Port.cellsAt(etext, ts + c);
+                        Evidence.etxAppendCp(etext, last);
+                        if (c == k) {
+                            Evidence.etxAppendCp(etext, 46);
+                        }
+                        c += 1;
+                    }
+                    emon.Port.cellsSet(scr, fb + ((2 * fm) + i), nt);
+                    emon.Port.cellsSet(scr, fb + ((3 * fm) + i), n + 1);
+                    f = 4;
+                }
+            }
+            // a currency sign read as an S or a section sign, alone just before an amount of the same height
+            if ((f == 0) && (n == 1)) {
+                c = emon.Port.cellsAt(etext, ts);
+                if (((i + 1) < m) && ((c == 83) || ((c == 167) || (c == 115)))) {
+                    w2 = emon.Port.cellsAt(scr, fb + (i + 1));
+                    ts2 = Evidence.owGet(owords, w2, Evidence.hdTstart());
+                    n2 = Evidence.owGet(owords, w2, Evidence.hdTlen());
+                    hh = Evidence.owGet(owords, w, Evidence.hdY1()) - Evidence.owGet(owords, w, Evidence.hdY0());
+                    h2 = Evidence.owGet(owords, w2, Evidence.hdY1()) - Evidence.owGet(owords, w2, Evidence.hdY0());
+                    gp = Evidence.owGet(owords, w2, Evidence.hdX0()) - Evidence.owGet(owords, w, Evidence.hdX1());
+                    if ((scAmountLike(etext, ts2, n2) == 1) && ((gp >= 0) && (gp <= (2 * hh)))) {
+                        if (((hh * 100) >= (60 * h2)) && ((hh * 100) <= (160 * h2))) {
+                            if ((c == 167) || ((scCents(etext, ts2, n2) == 1) || (dollars >= 2))) {
+                                nt = Evidence.etxLen(etext);
+                                Evidence.etxAppendCp(etext, 36);
+                                emon.Port.cellsSet(scr, fb + ((2 * fm) + i), nt);
+                                emon.Port.cellsSet(scr, fb + ((3 * fm) + i), 1);
+                                f = 4;
+                            }
+                        }
+                    }
+                }
+            }
+            emon.Port.cellsSet(scr, fb + (fm + i), f);
+            if ((f == 1) || (f == 3)) {
+                scFlag(owords, w, Evidence.oeGarbage());
+                changed = 1;
+            }
+            if (f == 2) {
+                scFlag(owords, w, Evidence.oeRuleGhost());
+                changed = 1;
+            }
+            if (f == 4) {
+                scFlag(owords, w, Evidence.oeCorrected());
+                changed = 1;
+            }
+            i += 1;
+        }
+        if (changed == 0) {
+            return m;
+        }
+        // the words that stay, packed to the front
+        i = 0;
+        while (i < m) {
+            f = emon.Port.cellsAt(scr, fb + (fm + i));
+            if ((f == 0) || (f == 4)) {
+                emon.Port.cellsSet(scr, fb + kept, emon.Port.cellsAt(scr, fb + i));
+                emon.Port.cellsSet(scr, fb + (fm + kept), f);
+                emon.Port.cellsSet(scr, fb + ((2 * fm) + kept), emon.Port.cellsAt(scr, fb + ((2 * fm) + i)));
+                emon.Port.cellsSet(scr, fb + ((3 * fm) + kept), emon.Port.cellsAt(scr, fb + ((3 * fm) + i)));
+                kept += 1;
+            }
+            i += 1;
+        }
+        return kept;
+    }
     public static int scEmitCore(emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, int l0, int nl, int page, int rotmed, emon.Port.Cells scr, emon.Port.Cells words, emon.Port.Cells lines, int usesel) {
         int k = 0;
         int made = 0;
@@ -1230,17 +2246,238 @@ public final class Scan {
         }
         return made;
     }
+    public static int scEmitVetted(emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, int nsel, int page, int rotmed, emon.Port.Cells scr, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells etext, emon.Port.Cells rules, emon.Port.Cells comps, emon.Port.Cells inks) {
+        // `sc-emit-core` over the selection of `scr`, as `sc-emit-sel` does it, and with what becomes of the words of the lines (P12.6): the words a body-ink line adds to a
+        // first-pass line (`sc-xtra-base`, `sc-line-words`), the words that are no text kept out and flagged in `owords`, the safe corrections made (`sc-fates`). A line of which every
+        // word is kept out is not a line. The line's box and baseline are widened to the words that were added, and are otherwise the line's own, so that a page where nothing was added,
+        // dropped or corrected is emitted as it always was. Answers the lines made.
+        int fb = scFateBase();
+        int fm = scFateMax();
+        int k = 0;
+        int made = 0;
+        int l = 0;
+        int cnt = 0;
+        int revised = 0;
+        int mc = 0;
+        int mg = 0;
+        int xl = 0;
+        int kk = 0;
+        int w0 = 0;
+        int wi = 0;
+        int wn = 0;
+        int ts = 0;
+        int tl = 0;
+        int j = 0;
+        int r = 0;
+        int lnx = 0;
+        int lx0 = 0;
+        int ly0 = 0;
+        int lx1 = 0;
+        int ly1 = 0;
+        int bx0 = 0;
+        int by0 = 0;
+        int bx1 = 0;
+        int by1 = 0;
+        int ymid = 0;
+        int asc = 0;
+        int dsc = 0;
+        int size = 0;
+        int rot = 0;
+        int dir = 0;
+        int gap = 0;
+        int first = 0;
+        int ox = 0;
+        int ox1 = 0;
+        int nx0 = 0;
+        int xm = 0;
+        int commas = 0;
+        int dollars = 0;
+        int nx1 = 0;
+        // Pass 1: every line's metrics, then their sizes clustered over the page.
+        while (k < nsel) {
+            if (k < scCap()) {
+                l = emon.Port.cellsAt(scr, scSelBase() + k);
+                emon.Port.cellsSet(scr, 244 + (4 * k), 0);
+                emon.Port.cellsSet(scr, 242 + (4 * k), -1);
+                emon.Port.cellsSet(scr, 243 + (4 * k), -1);
+                emon.Port.cellsSet(scr, 245 + (4 * k), -1);
+                if (Evidence.olGet(olines, l, Evidence.lhCount()) > 0) {
+                    xm = scMetrics(olines, owords, osyms, l, scr);
+                    emon.Port.cellsSet(scr, 245 + (4 * k), xm);
+                    emon.Port.cellsSet(scr, 242 + (4 * k), emon.Port.cellsAt(scr, 0));
+                    emon.Port.cellsSet(scr, 243 + (4 * k), emon.Port.cellsAt(scr, 1));
+                }
+            }
+            k += 1;
+        }
+        if (nsel < scCap()) {
+            scFit(scr, nsel);
+        } else {
+            scFit(scr, scCap());
+        }
+        // the page's own conventions, counted over its words: how many write a thousands comma, how many a dollar sign
+        commas = 0;
+        dollars = 0;
+        k = 0;
+        while (k < nsel) {
+            l = emon.Port.cellsAt(scr, scSelBase() + k);
+            cnt = Evidence.olGet(olines, l, Evidence.lhCount());
+            w0 = Evidence.olGet(olines, l, Evidence.lhFirst());
+            j = 0;
+            while (j < cnt) {
+                wi = w0 + j;
+                if (scThousandsComma(etext, Evidence.owGet(owords, wi, Evidence.hdTstart()), Evidence.owGet(owords, wi, Evidence.hdTlen())) == 1) {
+                    commas += 1;
+                }
+                if (scDollarWord(etext, Evidence.owGet(owords, wi, Evidence.hdTstart()), Evidence.owGet(owords, wi, Evidence.hdTlen())) == 1) {
+                    dollars += 1;
+                }
+                j += 1;
+            }
+            k += 1;
+        }
+        emon.Port.cellsSet(scr, fb + (4 * fm), commas);
+        emon.Port.cellsSet(scr, fb + ((4 * fm) + 1), dollars);
+        k = 0;
+        while (k < nsel) {
+            l = emon.Port.cellsAt(scr, scSelBase() + k);
+            cnt = Evidence.olGet(olines, l, Evidence.lhCount());
+            if (cnt > 0) {
+                w0 = Evidence.olGet(olines, l, Evidence.lhFirst());
+                lx0 = Evidence.olGet(olines, l, Evidence.lhX0());
+                ly0 = Evidence.olGet(olines, l, Evidence.lhY0());
+                lx1 = Evidence.olGet(olines, l, Evidence.lhX1());
+                ly1 = Evidence.olGet(olines, l, Evidence.lhY1());
+                bx0 = Evidence.olGet(olines, l, Evidence.lhBx0());
+                by0 = Evidence.olGet(olines, l, Evidence.lhBy0());
+                bx1 = Evidence.olGet(olines, l, Evidence.lhBx1());
+                by1 = Evidence.olGet(olines, l, Evidence.lhBy1());
+                dir = Evidence.olGet(olines, l, Evidence.lhDir());
+                if (k < scCap()) {
+                    asc = emon.Port.cellsAt(scr, 242 + (4 * k));
+                    dsc = emon.Port.cellsAt(scr, 243 + (4 * k));
+                } else {
+                    scMetrics(olines, owords, osyms, l, scr);
+                    asc = emon.Port.cellsAt(scr, 0);
+                    dsc = emon.Port.cellsAt(scr, 1);
+                    if (dsc < 0) {
+                        dsc = (asc * 27) / 100;
+                    }
+                }
+                // the words the line is emitted with: its own and the body-ink line's that lie over none of them, less the ones that are no text
+                xl = -1;
+                kk = l - emon.Port.cellsAt(scr, scXtraBase());
+                if ((kk >= 0) && (kk < scSelMax())) {
+                    xl = emon.Port.cellsAt(scr, scXtraBase() + (kk + 1)) - 1;
+                }
+                if (dir != 0) {
+                    xl = -1;
+                }
+                revised = 0;
+                if (Evidence.olGet(olines, l, Evidence.olfRun()) != Evidence.olGet(olines, emon.Port.cellsAt(scr, scXtraBase()), Evidence.olfRun())) {
+                    revised = 1;
+                }
+                mg = 0;
+                mc = cnt;
+                j = scLineWords(olines, owords, etext, l, xl, scr);
+                if (j > 0) {
+                    mg = 1;
+                    mc = scFates(owords, etext, osyms, rules, comps, inks, page, j, scr);
+                    if ((j > cnt) || (mc < j)) {
+                        revised = 1;
+                    }
+                }
+                if ((mg == 1) && (mc > 0)) {
+                    if (j > cnt) {
+                        wi = emon.Port.cellsAt(scr, fb);
+                        wn = emon.Port.cellsAt(scr, fb + (mc - 1));
+                        bx0 = Evidence.owGet(owords, wi, Evidence.hdBx0());
+                        by0 = Evidence.owGet(owords, wi, Evidence.hdBy0());
+                        bx1 = Evidence.owGet(owords, wn, Evidence.hdBx1());
+                        by1 = Evidence.owGet(owords, wn, Evidence.hdBy1());
+                        lx0 = scMn(lx0, Evidence.owGet(owords, wi, Evidence.hdX0()));
+                        lx1 = scMx(lx1, Evidence.owGet(owords, wn, Evidence.hdX1()));
+                    }
+                }
+                ymid = (by0 + by1) / 2;
+                if (asc > 0) {
+                    size = (asc * 137) / 100;
+                    ly0 = ymid - asc;
+                    ly1 = ymid + dsc;
+                } else {
+                    size = ((ly1 - ly0) * 108) / 100;
+                }
+                if (size < 1) {
+                    size = 1;
+                }
+                rot = ((Evidence.evAngle(bx1 - bx0, by1 - by0) - rotmed) + 36000) % 36000;
+                lnx = Evidence.lnCount(lines);
+                first = Evidence.wdCount(words);
+                j = 0;
+                while (j < mc) {
+                    wi = w0 + j;
+                    wn = w0 + (j + 1);
+                    ts = 0;
+                    tl = 0;
+                    if (mg == 1) {
+                        wi = emon.Port.cellsAt(scr, fb + j);
+                        wn = emon.Port.cellsAt(scr, fb + (j + 1));
+                    }
+                    ts = Evidence.owGet(owords, wi, Evidence.hdTstart());
+                    tl = Evidence.owGet(owords, wi, Evidence.hdTlen());
+                    if (mg == 1) {
+                        if (emon.Port.cellsAt(scr, fb + ((2 * fm) + j)) >= 0) {
+                            ts = emon.Port.cellsAt(scr, fb + ((2 * fm) + j));
+                            tl = emon.Port.cellsAt(scr, fb + ((3 * fm) + j));
+                        }
+                    }
+                    gap = -1;
+                    if ((j + 1) < mc) {
+                        ox = Evidence.owGet(owords, wi, Evidence.hdX0());
+                        ox1 = Evidence.owGet(owords, wi, Evidence.hdX1());
+                        nx0 = Evidence.owGet(owords, wn, Evidence.hdX0());
+                        nx1 = Evidence.owGet(owords, wn, Evidence.hdX1());
+                        if (dir == 1) {
+                            gap = ox - nx1;
+                        } else {
+                            gap = nx0 - ox1;
+                        }
+                    }
+                    r = Evidence.wdNew(words, page, Evidence.owGet(owords, wi, Evidence.hdX0()), Evidence.owGet(owords, wi, Evidence.hdY0()), Evidence.owGet(owords, wi, Evidence.hdX1()), Evidence.owGet(owords, wi, Evidence.hdY1()), Evidence.owGet(owords, wi, Evidence.hdBx0()), Evidence.owGet(owords, wi, Evidence.hdBy0()), Evidence.owGet(owords, wi, Evidence.hdBx1()), Evidence.owGet(owords, wi, Evidence.hdBy1()), rot, dir, ts, tl, lnx, Evidence.owGet(owords, wi, Evidence.hdConf()), -1);
+                    Evidence.wdSet(words, r, Evidence.wfStyle(), Evidence.owGet(owords, wi, Evidence.owfStyle()));
+                    Evidence.wdSet(words, r, Evidence.wfSize(), size);
+                    Evidence.wdSet(words, r, Evidence.wfFont(), -1);
+                    Evidence.wdSet(words, r, Evidence.wfGap(), gap);
+                    Evidence.wdSet(words, r, Evidence.wfWbreak(), Evidence.wbSpace());
+                    if ((j + 1) == mc) {
+                        Evidence.wdSet(words, r, Evidence.wfWbreak(), Evidence.wbLineEnd());
+                    }
+                    Evidence.wdSet(words, r, Evidence.wfSrc(), Model.srOcr());
+                    j += 1;
+                }
+                if (mc > 0) {
+                    r = Evidence.lnNew(lines, page, lx0, ly0, lx1, ly1, bx0, by0, bx1, by1, rot, dir, first, mc);
+                    Evidence.lnSet(lines, r, Evidence.lfSrc(), Model.srOcr() + (revised * Evidence.lsRevised()));
+                    Evidence.lnSet(lines, r, Evidence.lfOrder(), r);
+                    made += 1;
+                }
+            }
+            k += 1;
+        }
+        return made;
+    }
     public static int scEmitLines(emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, int l0, int nl, int page, int rotmed, emon.Port.Cells scr, emon.Port.Cells words, emon.Port.Cells lines) {
         // Every OCR line of the run [l0, l0 + nl) that has words as a `lines` row, and its words as `words` rows, in the arenas
         // the text layer fills (D213: size, box and rotation are the line's, see the head of this file). The words' text is
         // the shared `etext`'s: `hd-tstart` and `hd-tlen` of an OCR word are read as they are. Answers the lines made.
         return scEmitCore(olines, owords, osyms, l0, nl, page, rotmed, scr, words, lines, 0);
     }
-    public static int scEmitSel(emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, int nsel, int page, int rotmed, emon.Port.Cells scr, emon.Port.Cells words, emon.Port.Cells lines) {
+    public static int scEmitSel(emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, int nsel, int page, int rotmed, emon.Port.Cells scr, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells etext, emon.Port.Cells rules, emon.Port.Cells comps, emon.Port.Cells inks) {
         // `sc-emit-lines` over the OCR lines the scratch names (P7.4): `nsel` `olines` rows, in the order to emit them, at `scr`
         // cells `sc-sel-base` and up (`sc-sel-set`; `sc-prep` makes room for `sc-sel-max` of them): the lines of several runs chosen
-        // line by line, their size clustered over the chosen lines. Answers the lines made.
-        return scEmitCore(olines, owords, osyms, 0, nsel, page, rotmed, scr, words, lines, 1);
+        // line by line, their size clustered over the chosen lines; and (P12.6, `sc-emit-vetted`) with the words a body-ink line adds, the words that
+        // are no text left out and the safe corrections made, `rules`, `comps` and `inks` being the tracer's rules, components and ink layers. Answers the lines made.
+        return scEmitVetted(olines, owords, osyms, nsel, page, rotmed, scr, words, lines, etext, rules, comps, inks);
     }
     public static int scSelSet(emon.Port.Cells scr, int k, int row) {
         emon.Port.cellsSet(scr, scSelBase() + k, row);
@@ -1336,6 +2573,54 @@ public final class Scan {
         }
         return held;
     }
+    public static int scWriteBare(emon.Port.Cells nodes, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells im, emon.Port.Cells ledger) {
+        // P12.6 (R1): a page of the Model with no node on it and an image of at least a tenth of its area (the biggest such image) gets a ledger row, `background`, for that image, so that a page
+        // that comes out empty never has nothing dropped: the image is what it held and was not read, not drawn as a figure and not kept. Answers the rows written.
+        int np = Model.pageCount(pages);
+        int nn = Model.nodeCount(nodes);
+        int ni = Evidence.imCount(im);
+        int p = 0;
+        int j = 0;
+        int n = 0;
+        int best = -1;
+        int has = 0;
+        int rows = 0;
+        long area = (long) 0;
+        long bestarea = (long) 0;
+        while (p < np) {
+            best = -1;
+            bestarea = (long) 0;
+            j = 0;
+            while (j < ni) {
+                if (Evidence.imGet(im, j, Evidence.mfPage()) == (p + 1)) {
+                    area = ((long) (Evidence.imGet(im, j, Evidence.mfX1()) - Evidence.imGet(im, j, Evidence.mfX0()))) * ((long) (Evidence.imGet(im, j, Evidence.mfY1()) - Evidence.imGet(im, j, Evidence.mfY0())));
+                    if ((area * ((long) 10)) >= (((long) Model.pageW(pages, p)) * ((long) Model.pageH(pages, p)))) {
+                        if (area > bestarea) {
+                            best = j;
+                            bestarea = area;
+                        }
+                    }
+                }
+                j += 1;
+            }
+            if (best >= 0) {
+                has = 0;
+                n = 1;
+                while ((n < nn) && (has == 0)) {
+                    if (scNodePage(nodes, regions, n) == (p + 1)) {
+                        has = 1;
+                    }
+                    n += 1;
+                }
+                if (has == 0) {
+                    Model.ledgerAdd(ledger, Model.drBackground(), p + 1, Evidence.imGet(im, best, Evidence.mfX0()), Evidence.imGet(im, best, Evidence.mfY0()), Evidence.imGet(im, best, Evidence.mfX1()), Evidence.imGet(im, best, Evidence.mfY1()), 600, Model.srVector());
+                    rows += 1;
+                }
+            }
+            p += 1;
+        }
+        return rows;
+    }
     public static int scTag(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells mask, int policy) {
         // The provenance of OCR text, after the paragraphs are built. `mask` has one cell a page: 0 none, 1 an image page was
         // OCR'd, 2 a PDF page was (its kind becomes `scanned`, SPEC 3.4), plus `sc-mask-unread` for a page in a script the engine cannot read (`sc-tag-unread`).
@@ -1403,6 +2688,56 @@ public final class Scan {
         }
         return 1;
     }
+    public static int scNativeJpeg(emon.Port.Src src, int start, int n) {
+        // The JPEG subset every ImageDecode host reads for scans: SOF0/1/2, 8-bit, one or three components. Other frames need page rendering; native libraries differ on arithmetic JPEG.
+        int i = 2;
+        int m = 0;
+        int size = 0;
+        int comps = 0;
+        if (n < 4) {
+            return 0;
+        }
+        if ((Pdfsrc.psU8(src, start) != 255) || (Pdfsrc.psU8(src, start + 1) != 216)) {
+            return 0;
+        }
+        while ((i + 4) <= n) {
+            if (Pdfsrc.psU8(src, start + i) != 255) {
+                return 0;
+            }
+            m = Pdfsrc.psU8(src, start + (i + 1));
+            if (m == 255) {
+                i += 1;
+            } else if ((m == 216) || ((m == 1) || ((m >= 208) && (m <= 215)))) {
+                i += 2;
+            } else {
+                if ((m == 217) || (m == 218)) {
+                    return 0;
+                }
+                size = (256 * Pdfsrc.psU8(src, start + (i + 2))) + Pdfsrc.psU8(src, start + (i + 3));
+                if ((size < 2) || (size > (n - (i + 2)))) {
+                    return 0;
+                }
+                if ((m >= 192) && ((m <= 207) && ((m != 196) && ((m != 200) && (m != 204))))) {
+                    if ((m < 192) || (m > 194)) {
+                        return 0;
+                    }
+                    if (size < 8) {
+                        return 0;
+                    }
+                    if (Pdfsrc.psU8(src, start + (i + 4)) != 8) {
+                        return 0;
+                    }
+                    comps = Pdfsrc.psU8(src, start + (i + 9));
+                    if ((comps == 1) || (comps == 3)) {
+                        return 1;
+                    }
+                    return 0;
+                }
+                i += size + 2;
+            }
+        }
+        return 0;
+    }
     public static int scDctSpan(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int obj, emon.Port.Cells sp) {
         // Is object `obj` a stream whose whole filter chain is one DCT stage, in a file that is not encrypted? Then 1 and `sp`
         // holds [start, length] of its bytes in the file: a JPEG stream is a JPEG file, and the host's `ImageDecode` reads it in
@@ -1446,14 +2781,25 @@ public final class Scan {
         if (Pdflex.plIntValue(ar, kt) != 0) {
             return 0;
         }
+        if (scNativeJpeg(src, Pdflex.plStreamStart(ar, h), Pdflex.plStreamLen(ar, h)) == 0) {
+            return 0;
+        }
+        if (Pdfsrc.psMissed(src)) {
+            return 0;
+        }
         emon.Port.cellsDrop(sp, 0);
         emon.Port.cellsPush(sp, Pdflex.plStreamStart(ar, h));
         emon.Port.cellsPush(sp, Pdflex.plStreamLen(ar, h));
         return 1;
     }
+    public static int scCoverMin() {
+        // P12.6 (R1): the share of a page's area (per mille) that the image of a page with no text at all must cover to be read as the page: a quarter. It was a half, and a 96 dpi book page on an A4 page covers 49.5 per cent of it: the page was dropped, body and ledger empty.
+        return 250;
+    }
     public static int scEligible(emon.Port.Cells im, int j, int pw, int ph) {
         // Can image placement `j` be OCR'd as the page? Upright and not skewed, a real XObject (not inline, not a stencil
-        // mask), at least 16 pixels each way, and covering at least half the page (`pw` x `ph` centipoints) by area.
+        // mask), at least 16 pixels each way, and covering at least `sc-cover-min` of the page (`pw` x `ph` centipoints) by area. The caller has already seen that the page has no text at all, so the
+        // image is what the page holds (the biggest of them, when it has more).
         if (Evidence.imGet(im, j, Evidence.mfObj()) <= 0) {
             return 0;
         }
@@ -1474,7 +2820,7 @@ public final class Scan {
         }
         long area = ((long) (Evidence.imGet(im, j, Evidence.mfX1()) - Evidence.imGet(im, j, Evidence.mfX0()))) * ((long) (Evidence.imGet(im, j, Evidence.mfY1()) - Evidence.imGet(im, j, Evidence.mfY0())));
         long whole = ((long) pw) * ((long) ph);
-        if ((area * ((long) 2)) < whole) {
+        if ((area * ((long) 1000)) < (whole * ((long) scCoverMin()))) {
             return 0;
         }
         if (whole <= ((long) 0)) {

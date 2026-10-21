@@ -498,6 +498,15 @@ public final class Evidence {
     public static int oeFallback() {
         return 4;
     }
+    public static int oeGarbage() {
+        return 8;
+    }
+    public static int oeRuleGhost() {
+        return 16;
+    }
+    public static int oeCorrected() {
+        return 32;
+    }
     public static int oeEmitName(StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.textAscii(t, "dictionary");
@@ -509,6 +518,18 @@ public final class Evidence {
         }
         if (code == 4) {
             emon.Port.textAscii(t, "fallback");
+            return 1;
+        }
+        if (code == 8) {
+            emon.Port.textAscii(t, "garbage");
+            return 1;
+        }
+        if (code == 16) {
+            emon.Port.textAscii(t, "rule-ghost");
+            return 1;
+        }
+        if (code == 32) {
+            emon.Port.textAscii(t, "corrected");
             return 1;
         }
         return 0;
@@ -3098,6 +3119,10 @@ public final class Evidence {
     public static int lfOrder() {
         return 14;
     }
+    public static int lsRevised() {
+        // Source metadata bit: OCR line composed or recovered after the first reading; no independent heading evidence.
+        return 256;
+    }
     public static int mkfPage() {
         return 0;
     }
@@ -3806,13 +3831,13 @@ public final class Evidence {
         1, 2, 2, 74, 0, 0,
         1, 3, 1, 75, 0, 0,
         1, 4, 9, 28, 0, 7,
-        1, 5, 1, 76, 0, 0,
+        1, 5, 2, 76, 0, 0,
         2, 0, 1, 9, -2147483648, 0,
         2, 1, 8, 31, 0, 19,
         2, 2, 1, 77, -1, 0,
         2, 3, 1, 48, -1, 0,
         2, 4, 12, 36, 0, 0,
-        2, 6, 1, 76, 0, 0,
+        2, 6, 2, 76, 0, 0,
         2, 7, 1, 38, 0, 0,
         2, 8, 1, 78, -1, 0,
         2, 9, 1, 75, 0, 0,

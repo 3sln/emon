@@ -269,4 +269,60 @@ public final class Tlhealthtest {
         emon.Testport.assertEq(ttHealth(emon.Testport.testFile("corpus/synth/pdf/bank-statement.pdf"), 0), ttHealth(emon.Testport.testFile("corpus/synth/pdf/bank-statement.pdf"), 1), "bank statement");
         emon.Testport.assertEq(ttHealth(emon.Testport.testFile("vis/visible.pdf"), 0), ttHealth(emon.Testport.testFile("vis/visible.pdf"), 1), "visible");
     }
+    public static int ttTrustOf(int how) {
+        // The `xt-trust` (share of glyphs mapped, per mille) of a word of two glyphs whose Unicode was obtained `how`.
+        emon.Port.Cells epages = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells gl = emon.Port.newCells();
+        emon.Port.Cells fnt = emon.Port.newCells();
+        emon.Port.Cells mk = emon.Port.newCells();
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        Evidence.epNew(epages, 1, 61200, 79200);
+        Evidence.glNew(gl, 1, 1000, 1000, 1500, 2200, 72, -1, 0, 0);
+        Evidence.glNew(gl, 1, 1500, 1000, 2000, 2200, 105, -1, 0, 0);
+        Evidence.glSet(gl, 0, Evidence.gfHow(), how);
+        Evidence.glSet(gl, 1, Evidence.gfHow(), how);
+        Evidence.glSet(gl, 0, Evidence.gfFont(), -1);
+        Evidence.glSet(gl, 1, Evidence.gfFont(), -1);
+        Evidence.wdNew(wd, 1, 1000, 1000, 2000, 2200, 1000, 2200, 2000, 2200, 0, 0, -1, 0, 0, -1, -1);
+        Evidence.wdSet(wd, 0, Evidence.wfGfirst(), 0);
+        Evidence.wdSet(wd, 0, Evidence.wfGcount(), 2);
+        Evidence.lnNew(ln, 1, 1000, 1000, 2000, 2200, 1000, 2200, 2000, 2200, 0, 0, 0, 1);
+        int row = Tlhealth.evFeatText(feats, epages, et, gl, fnt, mk, wd, ln, 0, 0, 0, 1200);
+        return Evidence.feGet(feats, row, Evidence.xtTrust());
+    }
+    public static void testGlyphsNamedByTheFontsDifferencesAreAsMappedAsThoseOfAnEncoding() {
+        // P12.6 (R5): a TeX Type 1 font (`t1xtt`) with no ToUnicode map names its glyphs in /Differences (`glyphname`): its text layer is consistently decoded, so its font must not score as an unmapped one
+        emon.Testport.assertEq(ttTrustOf(Evidence.ghTounicode()), 1000, "ToUnicode");
+        emon.Testport.assertEq(ttTrustOf(Evidence.ghEncoding()), 1000, "an encoding");
+        emon.Testport.assertEq(ttTrustOf(Evidence.ghGlyphname()), 1000, "glyph names");
+        emon.Testport.assertEq(ttTrustOf(Evidence.ghUnknown()), 0, "a guess is not a mapping");
+    }
+    public static void testOcrWordsKeptOutOfAScannedPagesWordsAreLedgerRows() {
+        // P12.6: garbage and a table's rule read as characters are `ocr-ghost` and `rule-ghost` rows, a run on one OCR line one row, with the engine's text and src ocr
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        emon.Port.Cells tt = emon.Port.newCells();
+        emon.Port.cellsPush(et, 126);
+        emon.Port.cellsPush(et, 124);
+        emon.Port.cellsPush(et, 71);
+        emon.Port.cellsPush(et, 124);
+        Evidence.owNew(owords, 1, 100, 0, 200, 100, 100, 100, 200, 100, 0, 0, 0, 1, 5, 120, -1);
+        Evidence.owNew(owords, 1, 300, 0, 400, 100, 300, 100, 400, 100, 0, 0, 1, 1, 5, 120, -1);
+        Evidence.owNew(owords, 1, 500, 0, 600, 100, 500, 100, 600, 100, 0, 0, 2, 1, 5, 900, -1);
+        Evidence.owNew(owords, 1, 700, 0, 710, 100, 700, 100, 710, 100, 0, 0, 3, 1, 6, 800, -1);
+        Evidence.owSet(owords, 0, Evidence.owfFlags(), Evidence.oeGarbage());
+        Evidence.owSet(owords, 1, Evidence.owfFlags(), Evidence.oeGarbage());
+        Evidence.owSet(owords, 3, Evidence.owfFlags(), Evidence.oeRuleGhost());
+        emon.Testport.assertEq(Tlhealth.thWriteOcr(owords, et, ledger, text, tmp, tt), 2, "two rows: the two garbage words of line 5 are one, the rule's ghost another, the kept word none");
+        emon.Testport.assertEq(Model.ledgerCount(ledger), 2, "in the ledger");
+        emon.Testport.assertEq(Model.ledgerReason(ledger, 0), Model.drOcrGhost(), "ocr-ghost");
+        emon.Testport.assertEq(Model.ledgerReason(ledger, 1), Model.drRuleGhost(), "rule-ghost");
+        emon.Testport.assertEq(Model.ledgerTextLen(ledger, 0), 3, "the two words joined by a space");
+    }
 }

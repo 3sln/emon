@@ -5,8 +5,9 @@ namespace emon;
 
 
 public static class Scriptchecktest {
-    internal static int SkAnswer(emon.Port.Cells ans, int id, int n, int script, int sconf, int lang, int lang0) {
-        // An OCR answer of `n` words, one a line, each read in the language cell `lang` (the first in `lang0`), whose page OSD says is in `script` at the confidence `sconf`.
+    internal static int SkAnswer(emon.Port.Cells ans, int id, int n, int script, int sconf, int lang, int lang0, int dflags) {
+        // An OCR answer of `n` words, one a line, each read in the language cell `lang` (the first in `lang0`), whose page OSD says is in `script` at the confidence `sconf`;
+        // `dflags` 1 says the engine's dictionary knows the words, 0 not.
         int at = Plan.AnOcr(ans, id);
         int k = 0;
         int word = 0;
@@ -26,19 +27,22 @@ public static class Scriptchecktest {
         k = 0;
         while (k < n) {
             if (k == 0) {
-                Ocr.OxWord(ans, 0, lang0, -1, 0);
+                Ocr.OxWord(ans, 0, lang0, -1, dflags);
             } else {
-                Ocr.OxWord(ans, 0, lang, -1, 0);
+                Ocr.OxWord(ans, 0, lang, -1, dflags);
             }
             k += 1;
         }
         Plan.AnOcrEnd(ans, at);
         return at;
     }
-    internal static int UnreadOf(int n, int script, int sconf, int lang, int lang0) {
+    internal static int UnreadOfD(int n, int script, int sconf, int lang, int lang0, int dflags) {
         emon.Port.Cells ans = emon.Port.NewCells();
-        int at = SkAnswer(ans, 272, n, script, sconf, lang, lang0);
+        int at = SkAnswer(ans, 272, n, script, sconf, lang, lang0, dflags);
         return Scriptcheck.SkUnread(ans, at, emon.Port.NewCells());
+    }
+    internal static int UnreadOf(int n, int script, int sconf, int lang, int lang0) {
+        return UnreadOfD(n, script, sconf, lang, lang0, 0);
     }
     [Xunit.Fact]
     public static void TestALanguageCellUnpacksToItsLetters() {
@@ -61,9 +65,11 @@ public static class Scriptchecktest {
     [Xunit.Fact]
     public static void TestAPageTheEngineCanReadOrOsdIsUnsureOfIsNotFlagged() {
         emon.Testport.AssertEq(UnreadOf(5, 1281455214, 629, 1701734144, 1701734144), 0, "a Latin page");
-        emon.Testport.AssertEq(UnreadOf(5, 1147500129, 100, 1701734144, 1701734144), 0, "OSD unsure (confidence 10: a Latin page reads that)");
-        emon.Testport.AssertEq(UnreadOf(5, 1147500129, Scriptcheck.SkMinConf() - 1, 1701734144, 1701734144), 0, "just under the bound");
-        emon.Testport.AssertEq(UnreadOf(5, 1147500129, Scriptcheck.SkMinConf(), 1701734144, 1701734144), 1, "at it");
+        emon.Testport.AssertEq(UnreadOfD(5, 1147500129, 100, 1701734144, 1701734144, 1), 0, "OSD unsure (confidence 10: a Latin page reads that) and the engine's dictionary knows the words: Latin");
+        emon.Testport.AssertEq(UnreadOfD(5, 1147500129, Scriptcheck.SkMinConf() - 1, 1701734144, 1701734144, 1), 0, "just under the bound, the words known");
+        emon.Testport.AssertEq(UnreadOfD(5, 1147500129, Scriptcheck.SkMinConf(), 1701734144, 1701734144, 1), 1, "at it: believed whatever the dictionary says (the page of the smoke review)");
+        emon.Testport.AssertEq(UnreadOf(5, 1147500129, Scriptcheck.SkWeakConf(), 1701734144, 1701734144), 1, "R2: OSD at 5.0 and none of the words known (Urdu, Han, Ethiopic in a Latin model): unread");
+        emon.Testport.AssertEq(UnreadOf(5, 1147500129, Scriptcheck.SkWeakConf() - 1, 1701734144, 1701734144), 0, "under 5.0: OSD says nothing");
         emon.Testport.AssertEq(UnreadOf(2, 1147500129, 629, 1701734144, 1701734144), 0, "two words: the engine read nothing of it to speak of");
         emon.Testport.AssertEq(UnreadOf(5, 0, 629, 1701734144, 1701734144), 0, "no script");
     }

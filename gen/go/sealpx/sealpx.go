@@ -24,6 +24,11 @@ func SxStripH() int32 {
 	return 112
 }
 
+func SxSolid() int32 {
+	// P12.6: a rectangle, ellipse or curve whose ink fills this much of it (per mille) is a block of colour, not a stamp's outline.
+	return 800
+}
+
 func SxROut() int32 {
 	// `seal-band-out`: the annulus' outer edge, per mille of the radius (the ring's own line is a little inside it).
 	return 1020
@@ -717,6 +722,7 @@ func sxConsider(r int32, views *port.Cells, srcview int32, prims *port.Cells, in
 	var cx int32 = evidence.PmGet(prims, r, evidence.PmfCx())
 	var cy int32 = evidence.PmGet(prims, r, evidence.PmfCy())
 	var fl int32 = evidence.PmGet(prims, r, evidence.PmfFlags())
+	var fill int32 = evidence.PmGet(prims, r, evidence.PmfFill())
 	var role int32 = 0
 	var rad int32 = 0
 	var mx int32 = 0
@@ -751,6 +757,10 @@ func sxConsider(r int32, views *port.Cells, srcview int32, prims *port.Cells, in
 				return 0
 			}
 			if (kind != evidence.PmCurve()) && (kind != evidence.PmEllipse()) {
+				return 0
+			}
+			// P12.6: a solid block of colour (its ink fills the primitive: a table's header band, a highlighted cell, the ground of a heading) is no stamp: a stamp is an outline, and the text on a band is the document's
+			if fill >= SxSolid() {
 				return 0
 			}
 			if ((2 * mn) < 1000) || (mx > (8 * mn)) {
@@ -791,6 +801,10 @@ func sxConsider(r int32, views *port.Cells, srcview int32, prims *port.Cells, in
 		}
 		// D583: a rectangle that is most of the page's width is a colour band (a heading's ground, a table's header band), not a stamp: a stamp is a mark that is a small part of the page
 		if (20 * rx) > (6 * pw) {
+			return 0
+		}
+		// P12.6: and a solid one of any width is a block of colour (a header cell), not an outline
+		if fill >= SxSolid() {
 			return 0
 		}
 		return sxAdd(cand, 2, r, cxp, cyp, sxAbs(rxp), sxAbs(ryp), evidence.PmGet(prims, r, evidence.PmfRot()), rgb, evidence.PmGet(prims, r, evidence.PmfX0()), evidence.PmGet(prims, r, evidence.PmfY0()), evidence.PmGet(prims, r, evidence.PmfX1()), evidence.PmGet(prims, r, evidence.PmfY1()), evidence.PmGet(prims, r, evidence.PmfConf()))

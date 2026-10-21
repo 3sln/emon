@@ -6,7 +6,7 @@
       "width": 612,
       "height": 792,
       "flags": ["text-layer", "raster"],
-      "dpi": 15000
+      "dpi": 150
     }
   ],
   "views": [
@@ -15,7 +15,7 @@
       "kind": "render",
       "request": 7,
       "px": [1275, 1650],
-      "dpi": 15000,
+      "dpi": 150,
       "a": 3145728,
       "d": 3145728,
       "ia": 1365,
@@ -27,7 +27,7 @@
       "request": 7,
       "parent": 0,
       "px": [640, 480],
-      "dpi": 30000,
+      "dpi": 300,
       "turns": 1,
       "deskew": 0.85,
       "crop": [1, 2],

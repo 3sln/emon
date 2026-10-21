@@ -282,3 +282,61 @@ fn test_healthy_documents_are_trusted() {
     crate::testport::assert_eq(tt_health(&crate::testport::test_file("corpus/synth/pdf/bank-statement.pdf")[..], 0), tt_health(&crate::testport::test_file("corpus/synth/pdf/bank-statement.pdf")[..], 1), "bank statement");
     crate::testport::assert_eq(tt_health(&crate::testport::test_file("vis/visible.pdf")[..], 0), tt_health(&crate::testport::test_file("vis/visible.pdf")[..], 1), "visible");
 }
+pub(crate) fn tt_trust_of(how: i32) -> i32 {
+    // The `xt-trust` (share of glyphs mapped, per mille) of a word of two glyphs whose Unicode was obtained `how`.
+    let epages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fnt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    ep_new(epages, 1, 61200, 79200);
+    gl_new(gl, 1, 1000, 1000, 1500, 2200, 72, -1, 0, 0);
+    gl_new(gl, 1, 1500, 1000, 2000, 2200, 105, -1, 0, 0);
+    gl_set(gl, 0, gf_how(), how);
+    gl_set(gl, 1, gf_how(), how);
+    gl_set(gl, 0, gf_font(), -1);
+    gl_set(gl, 1, gf_font(), -1);
+    wd_new(wd, 1, 1000, 1000, 2000, 2200, 1000, 2200, 2000, 2200, 0, 0, -1, 0, 0, -1, -1);
+    wd_set(wd, 0, wf_gfirst(), 0);
+    wd_set(wd, 0, wf_gcount(), 2);
+    ln_new(ln, 1, 1000, 1000, 2000, 2200, 1000, 2200, 2000, 2200, 0, 0, 0, 1);
+    let row: i32 = ev_feat_text(feats, epages, et, gl, fnt, mk, wd, ln, 0, 0, 0, 1200);
+    return fe_get(feats, row, xt_trust());
+}
+#[test]
+fn test_glyphs_named_by_the_fonts_differences_are_as_mapped_as_those_of_an_encoding() {
+    // P12.6 (R5): a TeX Type 1 font (`t1xtt`) with no ToUnicode map names its glyphs in /Differences (`glyphname`): its text layer is consistently decoded, so its font must not score as an unmapped one
+    crate::testport::assert_eq(tt_trust_of(gh_tounicode()), 1000, "ToUnicode");
+    crate::testport::assert_eq(tt_trust_of(gh_encoding()), 1000, "an encoding");
+    crate::testport::assert_eq(tt_trust_of(gh_glyphname()), 1000, "glyph names");
+    crate::testport::assert_eq(tt_trust_of(gh_unknown()), 0, "a guess is not a mapping");
+}
+#[test]
+fn test_ocr_words_kept_out_of_a_scanned_pages_words_are_ledger_rows() {
+    // P12.6: garbage and a table's rule read as characters are `ocr-ghost` and `rule-ghost` rows, a run on one OCR line one row, with the engine's text and src ocr
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::port::cells_push(et, 126);
+    crate::port::cells_push(et, 124);
+    crate::port::cells_push(et, 71);
+    crate::port::cells_push(et, 124);
+    ow_new(owords, 1, 100, 0, 200, 100, 100, 100, 200, 100, 0, 0, 0, 1, 5, 120, -1);
+    ow_new(owords, 1, 300, 0, 400, 100, 300, 100, 400, 100, 0, 0, 1, 1, 5, 120, -1);
+    ow_new(owords, 1, 500, 0, 600, 100, 500, 100, 600, 100, 0, 0, 2, 1, 5, 900, -1);
+    ow_new(owords, 1, 700, 0, 710, 100, 700, 100, 710, 100, 0, 0, 3, 1, 6, 800, -1);
+    ow_set(owords, 0, owf_flags(), oe_garbage());
+    ow_set(owords, 1, owf_flags(), oe_garbage());
+    ow_set(owords, 3, owf_flags(), oe_rule_ghost());
+    crate::testport::assert_eq(th_write_ocr(owords, et, ledger, text, tmp, tt), 2, "two rows: the two garbage words of line 5 are one, the rule's ghost another, the kept word none");
+    crate::testport::assert_eq(ledger_count(ledger), 2, "in the ledger");
+    crate::testport::assert_eq(ledger_reason(ledger, 0), dr_ocr_ghost(), "ocr-ghost");
+    crate::testport::assert_eq(ledger_reason(ledger, 1), dr_rule_ghost(), "rule-ghost");
+    crate::testport::assert_eq(ledger_text_len(ledger, 0), 3, "the two words joined by a space");
+}

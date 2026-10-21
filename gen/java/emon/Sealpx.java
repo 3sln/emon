@@ -13,6 +13,10 @@ public final class Sealpx {
         // The strip's height in pixels: the annulus from `sx-r-out` to `sx-r-in` of the radius.
         return 112;
     }
+    public static int sxSolid() {
+        // P12.6: a rectangle, ellipse or curve whose ink fills this much of it (per mille) is a block of colour, not a stamp's outline.
+        return 800;
+    }
     public static int sxROut() {
         // `seal-band-out`: the annulus' outer edge, per mille of the radius (the ring's own line is a little inside it).
         return 1020;
@@ -661,6 +665,7 @@ public final class Sealpx {
         int cx = Evidence.pmGet(prims, r, Evidence.pmfCx());
         int cy = Evidence.pmGet(prims, r, Evidence.pmfCy());
         int fl = Evidence.pmGet(prims, r, Evidence.pmfFlags());
+        int fill = Evidence.pmGet(prims, r, Evidence.pmfFill());
         int role = 0;
         int rad = 0;
         int mx = 0;
@@ -695,6 +700,10 @@ public final class Sealpx {
                     return 0;
                 }
                 if ((kind != Evidence.pmCurve()) && (kind != Evidence.pmEllipse())) {
+                    return 0;
+                }
+                // P12.6: a solid block of colour (its ink fills the primitive: a table's header band, a highlighted cell, the ground of a heading) is no stamp: a stamp is an outline, and the text on a band is the document's
+                if (fill >= sxSolid()) {
                     return 0;
                 }
                 if (((2 * mn) < 1000) || (mx > (8 * mn))) {
@@ -735,6 +744,10 @@ public final class Sealpx {
             }
             // D583: a rectangle that is most of the page's width is a colour band (a heading's ground, a table's header band), not a stamp: a stamp is a mark that is a small part of the page
             if ((20 * rx) > (6 * pw)) {
+                return 0;
+            }
+            // P12.6: and a solid one of any width is a block of colour (a header cell), not an outline
+            if (fill >= sxSolid()) {
                 return 0;
             }
             return sxAdd(cand, 2, r, cxp, cyp, sxAbs(rxp), sxAbs(ryp), Evidence.pmGet(prims, r, Evidence.pmfRot()), rgb, Evidence.pmGet(prims, r, Evidence.pmfX0()), Evidence.pmGet(prims, r, Evidence.pmfY0()), Evidence.pmGet(prims, r, Evidence.pmfX1()), Evidence.pmGet(prims, r, Evidence.pmfY1()), Evidence.pmGet(prims, r, Evidence.pmfConf()));

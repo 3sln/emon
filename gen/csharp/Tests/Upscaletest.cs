@@ -37,6 +37,44 @@ public static class Upscaletest {
         int at = UtAnswer(ans, 272, nlines, xh, 200, osd, oconf);
         return Upscale.UpFactor(ans, at, pxw, pxh, emon.Port.NewCells());
     }
+    internal static int UtFactorC(int nlines, int xh, int conf) {
+        // `up-factor` of a first pass of `nlines` one-word lines of this x-height and word confidence (no OSD), on a 765 x 990 raster.
+        emon.Port.Cells ans = emon.Port.NewCells();
+        int at = Plan.AnOcr(ans, 272);
+        int k = 0;
+        int word = 0;
+        while (k < nlines) {
+            word = Plan.AnOcrWord(ans, at, 10, 20 + (k * 60), 200, 40, conf, k, 0);
+            Plan.AnOcrCp(ans, word, 72);
+            Plan.AnOcrCp(ans, word, 105);
+            k += 1;
+        }
+        Ocr.OxBegin(ans, 0, 0, 0, 0, -1, 1281455214, 100, -1, nlines, 1, 0, 0, 0);
+        k = 0;
+        while (k < nlines) {
+            Ocr.OxLine(ans, 10, 20 + (k * 60), 200, 40, 10, 55 + (k * 60), 210, 55 + (k * 60), 0, 0, 0, xh, 14, 6);
+            k += 1;
+        }
+        Ocr.OxBlock(ans, 10, 20, 200, nlines * 60, 0, 0, 0);
+        k = 0;
+        while (k < nlines) {
+            Ocr.OxWord(ans, 0, 0, -1, 0);
+            k += 1;
+        }
+        Plan.AnOcrEnd(ans, at);
+        return Upscale.UpFactor(ans, at, 765, 990, emon.Port.NewCells());
+    }
+    [Xunit.Fact]
+    public static void TestTextALittleOverTheTriggerThatTheEngineReadBadlyIsReadAgainEnlarged() {
+        // P12.6 (R4): the 9 pixel trigger missed degraded typewriter scans at 100 to 130 dpi (x-height 10 to 13) that an external 3x enlargement recovers; a well read page of that size stays as it was
+        emon.Testport.AssertEq(UtFactorC(30, 10, 500), 2, "x-height 10, 30 words at a mean confidence of 500: enlarged twice");
+        emon.Testport.AssertEq(UtFactorC(30, 12, 500), 2, "x-height 12: 31 / 12 is 2");
+        emon.Testport.AssertEq(UtFactorC(30, 10, 900), 1, "read well: not at all (the recorded 150 dpi scans)");
+        emon.Testport.AssertEq(UtFactorC(30, 10, 650), 1, "at the limit of `up-weak-conf`: well enough");
+        emon.Testport.AssertEq(UtFactorC(10, 10, 400), 1, "ten words say nothing of a page: not at all");
+        emon.Testport.AssertEq(UtFactorC(30, 14, 500), 1, "an x-height of 14 is a 200 dpi page: not at all");
+        emon.Testport.AssertEq(UtFactorC(30, 8, 500), 3, "under the trigger it is as it was");
+    }
     [Xunit.Fact]
     public static void TestTheEffectiveResolutionIsWhatTenPointTypeAtThatXHeightHas() {
         emon.Testport.AssertEq(Upscale.UpEffDpi100(21), 30240, "an x-height of 21 pixels is ten point type at 302 dpi");

@@ -378,7 +378,7 @@ public static class Pageunit {
                 if (esc >= 0) {
                     run = esc;
                 }
-                asked = Retarget.RtPlan(i, input, 1, 0, rid, PuDpi(), loc, ans, bms, Pageink.PnKText(), emon.Port.BmsGet(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr);
+                asked = Retarget.RtPlan(i, input, 1, 0, rid, PuDpi(), loc, ans, bms, Pageink.PnKText(), emon.Port.BmsGet(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr, comps, inks);
                 // the seals and stamps in the text-free render's pixels (P8.2): the strips and crops that are read, asked in the same round as the targeted passes
                 if (PuPx(bms, nid, fuse) == 1) {
                     pgrow = Evidence.EvPageRow(epages, i + 1);
@@ -528,7 +528,7 @@ public static class Pageunit {
         nw = Evidence.OwCount(owords) - w0;
         Pageink.PnFeatures(i + 1, bms, Pageink.PnKText(), emon.Port.BmsGet(bms, rid), roid, w0, nw, ws, comps, owords, feats, scr);
         Retarget.RtPrep(rtp);
-        asked = Retarget.RtPlan(i, input, 0, 0, rid, hint, loc, ans, bms, Pageink.PnKText(), emon.Port.BmsGet(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr);
+        asked = Retarget.RtPlan(i, input, 0, 0, rid, hint, loc, ans, bms, Pageink.PnKText(), emon.Port.BmsGet(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr, comps, inks);
         // the seals and stamps in the page's pixels (P8.2): their strips and crops are asked in the same round as the targeted passes
         if (seals == 1) {
             Sealpx.SxFind(i + 1, views, vdec, prims, inks, pw, ph, s1);
@@ -545,7 +545,7 @@ public static class Pageunit {
             Sigpx.SpFind(i + 1, views, vdec, rules, owords, etext, emon.Port.BmsGet(bms, rid), pw, s5, s6);
             Sigpx.SpRecord(i, s5, cg);
         }
-        nsel = Retarget.RtAdopt(rtp, oruns, run, olines, owords, scr);
+        nsel = Retarget.RtAdopt(rtp, oruns, run, olines, owords, etext, scr);
         if (seals == 1) {
             nsel = Sealpx.SxDropLines(scr, nsel, olines, owords, s1);
             nsel = Sigpx.SpDropLines(scr, nsel, olines, owords, s5);
@@ -553,7 +553,7 @@ public static class Pageunit {
         Retarget.RtUpright(rtp, run, epages, i + 1);
         nl = Evidence.OrGet(oruns, run, Evidence.OrfLcount());
         rotmed = Evidence.EvRotMedian(olines, l0, nl);
-        Scan.ScEmitSel(olines, owords, osyms, nsel, i + 1, rotmed, scr, words, lines);
+        Scan.ScEmitSel(olines, owords, osyms, nsel, i + 1, rotmed, scr, words, lines, etext, rules, comps, inks);
         emon.Port.CellsSet(mask, i, mv);
         return Plan.UsDone();
     }

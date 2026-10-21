@@ -5,8 +5,9 @@ use crate::emon::ocr::*;
 use crate::emon::plan::*;
 use crate::emon::scriptcheck::*;
 
-pub(crate) fn sk_answer(mut ans: &mut crate::port::Cells, id: i32, n: i32, script: i32, sconf: i32, lang: i32, lang0: i32) -> i32 {
-    // An OCR answer of `n` words, one a line, each read in the language cell `lang` (the first in `lang0`), whose page OSD says is in `script` at the confidence `sconf`.
+pub(crate) fn sk_answer(mut ans: &mut crate::port::Cells, id: i32, n: i32, script: i32, sconf: i32, lang: i32, lang0: i32, dflags: i32) -> i32 {
+    // An OCR answer of `n` words, one a line, each read in the language cell `lang` (the first in `lang0`), whose page OSD says is in `script` at the confidence `sconf`;
+    // `dflags` 1 says the engine's dictionary knows the words, 0 not.
     let at: i32 = an_ocr(ans, id);
     let mut k: i32 = 0;
     let mut word: i32 = 0;
@@ -26,19 +27,22 @@ pub(crate) fn sk_answer(mut ans: &mut crate::port::Cells, id: i32, n: i32, scrip
     k = 0;
     while k < n {
         if k == 0 {
-            ox_word(ans, 0, lang0, -1, 0);
+            ox_word(ans, 0, lang0, -1, dflags);
         } else {
-            ox_word(ans, 0, lang, -1, 0);
+            ox_word(ans, 0, lang, -1, dflags);
         }
         k += 1;
     }
     an_ocr_end(ans, at);
     return at;
 }
-pub(crate) fn unread_of(n: i32, script: i32, sconf: i32, lang: i32, lang0: i32) -> i32 {
+pub(crate) fn unread_of_d(n: i32, script: i32, sconf: i32, lang: i32, lang0: i32, dflags: i32) -> i32 {
     let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let at: i32 = sk_answer(ans, 272, n, script, sconf, lang, lang0);
+    let at: i32 = sk_answer(ans, 272, n, script, sconf, lang, lang0, dflags);
     return sk_unread(ans, at, &mut crate::port::Cells::new());
+}
+pub(crate) fn unread_of(n: i32, script: i32, sconf: i32, lang: i32, lang0: i32) -> i32 {
+    return unread_of_d(n, script, sconf, lang, lang0, 0);
 }
 #[test]
 fn test_a_language_cell_unpacks_to_its_letters() {
@@ -61,9 +65,11 @@ fn test_a_script_no_model_read_is_unread() {
 #[test]
 fn test_a_page_the_engine_can_read_or_osd_is_unsure_of_is_not_flagged() {
     crate::testport::assert_eq(unread_of(5, 1281455214, 629, 1701734144, 1701734144), 0, "a Latin page");
-    crate::testport::assert_eq(unread_of(5, 1147500129, 100, 1701734144, 1701734144), 0, "OSD unsure (confidence 10: a Latin page reads that)");
-    crate::testport::assert_eq(unread_of(5, 1147500129, sk_min_conf() - 1, 1701734144, 1701734144), 0, "just under the bound");
-    crate::testport::assert_eq(unread_of(5, 1147500129, sk_min_conf(), 1701734144, 1701734144), 1, "at it");
+    crate::testport::assert_eq(unread_of_d(5, 1147500129, 100, 1701734144, 1701734144, 1), 0, "OSD unsure (confidence 10: a Latin page reads that) and the engine's dictionary knows the words: Latin");
+    crate::testport::assert_eq(unread_of_d(5, 1147500129, sk_min_conf() - 1, 1701734144, 1701734144, 1), 0, "just under the bound, the words known");
+    crate::testport::assert_eq(unread_of_d(5, 1147500129, sk_min_conf(), 1701734144, 1701734144, 1), 1, "at it: believed whatever the dictionary says (the page of the smoke review)");
+    crate::testport::assert_eq(unread_of(5, 1147500129, sk_weak_conf(), 1701734144, 1701734144), 1, "R2: OSD at 5.0 and none of the words known (Urdu, Han, Ethiopic in a Latin model): unread");
+    crate::testport::assert_eq(unread_of(5, 1147500129, sk_weak_conf() - 1, 1701734144, 1701734144), 0, "under 5.0: OSD says nothing");
     crate::testport::assert_eq(unread_of(2, 1147500129, 629, 1701734144, 1701734144), 0, "two words: the engine read nothing of it to speak of");
     crate::testport::assert_eq(unread_of(5, 0, 629, 1701734144, 1701734144), 0, "no script");
 }

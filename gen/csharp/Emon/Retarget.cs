@@ -93,6 +93,30 @@ public static class Retarget {
         // The pixels added around a line's box when it is re-read alone.
         return 3;
     }
+    public static int RtEmptyH() {
+        // P12.6: a first-pass line with no word is re-read alone when its box is at least this high (centipoints: 6 pt)...
+        return 600;
+    }
+    public static int RtEmptyHMax() {
+        // ...and at most this high (60 pt)...
+        return 6000;
+    }
+    public static int RtEmptyW() {
+        // ...and at least this wide (25 pt)...
+        return 2500;
+    }
+    public static int RtEmptyAspect() {
+        // ...and no more than this many times as wide as high (a ruled line is 60 times, a line of text 10): the engine finds a line where there is text and reads nothing when the text meets a rule.
+        return 40;
+    }
+    public static int RtEmptyWords() {
+        // A re-reading takes the place of a line the first pass read as nothing when it has at least this many words...
+        return 2;
+    }
+    public static int RtEmptyConf() {
+        // ...of a mean confidence (per mille) of at least this: it has no first pass to be compared with, so it must be sure.
+        return 700;
+    }
     public static int RiBody() {
         return 17;
     }
@@ -175,6 +199,10 @@ public static class Retarget {
     public static int RtpXs() {
         // scratch: the column borders a line crosses (8 cells)
         return 200;
+    }
+    public static int RtpBands() {
+        // P12.6: the bands of colour with light text in them that the body-ink view turned inside out (`rt-invert-bands`)
+        return 248;
     }
     public static int RtpPrimary() {
         // the run the pipeline reads from: the first pass or a turned page's reading
@@ -474,6 +502,25 @@ public static class Retarget {
         }
         return q;
     }
+    public static int RtEmptyArea(emon.Port.Cells olines, int l) {
+        // P12.6: when first-pass line `l` is a line with no word and the size of a line of text (`rt-empty-h`..), its area in square points (0 otherwise): the engine saw a line of text there and
+        // read nothing of it, which is what happens to text that meets a rule (`RUNNING FOR (CHECK ONE):` before its blank).
+        int h = Evidence.OlGet(olines, l, Evidence.LhY1()) - Evidence.OlGet(olines, l, Evidence.LhY0());
+        int w = Evidence.OlGet(olines, l, Evidence.LhX1()) - Evidence.OlGet(olines, l, Evidence.LhX0());
+        if (Evidence.OlGet(olines, l, Evidence.LhCount()) > 0) {
+            return 0;
+        }
+        if ((h < RtEmptyH()) || (h > RtEmptyHMax())) {
+            return 0;
+        }
+        if (w < RtEmptyW()) {
+            return 0;
+        }
+        if (w > (h * RtEmptyAspect())) {
+            return 0;
+        }
+        return (w / 100) * (h / 100);
+    }
     public static int RtDecide(int born, int q, int touched, emon.Port.Cells oruns, int run, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells rules, int page1, int dpi, emon.Port.Cells rtp) {
         // What the first pass (run `run`) calls for, written to `rtp`: the quarter turns (`q`, from `rt-turns`), whether the body-ink pass is wanted (the
         // page is upright and `touched` first-pass lines have foreign ink under them, `rt-measure`), the table cells and the first-pass lines to re-read alone
@@ -494,7 +541,7 @@ public static class Retarget {
         int n = 0;
         emon.Port.CellsSet(rtp, RtpQ(), q);
         if (q == 0) {
-            if ((touched > 0) || (emon.Port.CellsAt(rtp, RtpErased()) >= RtEraseMin())) {
+            if ((touched > 0) || ((emon.Port.CellsAt(rtp, RtpBands()) > 0) || (emon.Port.CellsAt(rtp, RtpErased()) >= RtEraseMin()))) {
                 emon.Port.CellsSet(rtp, RtpBody(), 1);
             }
         }
@@ -525,6 +572,38 @@ public static class Retarget {
                                 best = l;
                                 bestc = c;
                             }
+                        }
+                    }
+                    l += 1;
+                }
+                if (best < 0) {
+                    it = room;
+                } else {
+                    emon.Port.CellsSet(rtp, RtpLine0() + (n * 2), best);
+                    n += 1;
+                }
+            }
+            // P12.6: what the budget leaves goes to the lines the engine found and read as nothing (text next to a rule is where it fails), the biggest first
+            it = n;
+            while (it < room) {
+                it += 1;
+                best = -1;
+                bestc = 0;
+                l = l0;
+                while (l < (l0 + ln)) {
+                    c = RtEmptyArea(olines, l);
+                    if (c > bestc) {
+                        dup = 0;
+                        j = 0;
+                        while (j < n) {
+                            if (emon.Port.CellsAt(rtp, RtpLine0() + (j * 2)) == l) {
+                                dup = 1;
+                            }
+                            j += 1;
+                        }
+                        if (dup == 0) {
+                            best = l;
+                            bestc = c;
                         }
                     }
                     l += 1;
@@ -605,6 +684,125 @@ public static class Retarget {
         }
         return 0;
     }
+    public static int RtBandH() {
+        // P12.6: a band of colour that holds light text (`rt-invert-bands`) is at least this many pixels high per 100 dpi (rounded up)...
+        return 5;
+    }
+    public static int RtBandAspect() {
+        // ...at least this many times as wide as high...
+        return 3;
+    }
+    public static int RtBandFill() {
+        // ...of ink that fills at least this much (per mille) of its box...
+        return 600;
+    }
+    public static int RtBandHoles() {
+        // ...with at least this many holes in it (the letters)...
+        return 4;
+    }
+    public static int RtBandGray() {
+        // ...and its colour darker than this gray: a light band holds dark text, which the engine reads as it is.
+        return 181;
+    }
+    public static int RtBandMax() {
+        // At most this many bands of a page are turned inside out.
+        return 8;
+    }
+    internal static int RtBandLike(emon.Port.Cells comps, emon.Port.Cells inks, int r, int page1, int dpi) {
+        // 1 when component `r` of page `page1` is a BAND of colour with light text in it: of a layer that is not the body's (a colour, light or background one), sure, of a ground
+        // darker than `rt-band-gray`, solid (`rt-band-fill`), with holes (`rt-band-holes`: the letters), wide (`rt-band-aspect`) and at least `rt-band-h` pixels per 100 dpi high.
+        int ink = Evidence.CoGet(comps, r, Evidence.CfInk());
+        int h = Evidence.CoGet(comps, r, Evidence.CfPxh());
+        int w = Evidence.CoGet(comps, r, Evidence.CfPxw());
+        int role = 0;
+        if (Evidence.CoGet(comps, r, Evidence.CfPage()) != page1) {
+            return 0;
+        }
+        if (Evidence.CoGet(comps, r, Evidence.CfConf()) < 500) {
+            return 0;
+        }
+        if (ink < 0) {
+            return 0;
+        }
+        role = Evidence.IkGet(inks, ink, Evidence.IkfRole());
+        if (role == Evidence.IrBody()) {
+            return 0;
+        }
+        if (Evidence.CoGet(comps, r, Evidence.CfGray()) > RtBandGray()) {
+            return 0;
+        }
+        if (Evidence.CoGet(comps, r, Evidence.CfFill()) < RtBandFill()) {
+            return 0;
+        }
+        if (Evidence.CoGet(comps, r, Evidence.CfHoles()) < RtBandHoles()) {
+            return 0;
+        }
+        if ((h * 100) < (RtBandH() * dpi)) {
+            return 0;
+        }
+        if (w < (h * RtBandAspect())) {
+            return 0;
+        }
+        return 1;
+    }
+    public static int RtInvertBands(emon.Port.Bitmap dst, emon.Port.Bitmap gray, emon.Port.Bitmap bodym, emon.Port.Cells comps, emon.Port.Cells inks, int page1, int dpi, int paper) {
+        // P12.6 (issue 14): the white-on-blue header of a statement is a BAND of colour (`rt-band-like`) with light text in it, and the body-ink view painted both the ground and the text
+        // the paper's: the text was never read. Inside each such band's box the view now shows the light text as ink (a pixel brighter than half way between the band's gray and white
+        // is black), the band's ground as paper, and what is body ink (dark text on the band) as it was. Answers how many bands (`rt-band-max` at most).
+        int nc = Evidence.CoCount(comps);
+        int w = emon.Port.BitmapW(dst);
+        int h = emon.Port.BitmapH(dst);
+        int r = 0;
+        int n = 0;
+        int x0 = 0;
+        int y0 = 0;
+        int x1 = 0;
+        int y1 = 0;
+        int x = 0;
+        int y = 0;
+        int g = 0;
+        int mid = 0;
+        while ((r < nc) && (n < RtBandMax())) {
+            if (RtBandLike(comps, inks, r, page1, dpi) == 1) {
+                x0 = Evidence.CoGet(comps, r, Evidence.CfPxx());
+                y0 = Evidence.CoGet(comps, r, Evidence.CfPxy());
+                x1 = x0 + Evidence.CoGet(comps, r, Evidence.CfPxw());
+                y1 = y0 + Evidence.CoGet(comps, r, Evidence.CfPxh());
+                if (x0 < 0) {
+                    x0 = 0;
+                }
+                if (y0 < 0) {
+                    y0 = 0;
+                }
+                if (x1 > w) {
+                    x1 = w;
+                }
+                if (y1 > h) {
+                    y1 = h;
+                }
+                mid = (Evidence.CoGet(comps, r, Evidence.CfGray()) + 255) / 2;
+                y = y0;
+                while (y < y1) {
+                    x = x0;
+                    while (x < x1) {
+                        g = emon.Port.BitmapU8(gray, x, y, 0);
+                        if (emon.Port.BitmapU8(bodym, x, y, 0) != 0) {
+                            emon.Port.BitmapSetU8(dst, x, y, 0, g);
+                        } else if (g >= mid) {
+                            emon.Port.BitmapSetU8(dst, x, y, 0, 0);
+                        } else {
+                            emon.Port.BitmapSetU8(dst, x, y, 0, paper);
+                        }
+                        x += 1;
+                    }
+                    y += 1;
+                }
+                n += 1;
+            }
+            r += 1;
+        }
+        return n;
+    }
     public static int RtCap(int n) {
         // `n` lines, but at most `sc-sel-max` (D523): the per-line regions of `scr` (`sc-share-base`, `sc-aux-base`, `sc-partner-base`, `sc-bonly-base`) are
         // that long and the last ends the scratch, so a page of more lines than that wrote the next region's cells, and past the last, off the end.
@@ -618,7 +816,7 @@ public static class Retarget {
         // on Go, Java and C# and was an overflow panic on Rust. `d` is positive.
         return (int) ((((long) n) * 1000) / ((long) d));
     }
-    public static int RtMeasure(int page, emon.Port.BitmapSet bms, int k0, emon.Port.Bitmap src, emon.Port.Cells ws, int dpi, emon.Port.Cells oruns, int run, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells scr, emon.Port.Cells rtp) {
+    public static int RtMeasure(int page, emon.Port.BitmapSet bms, int k0, emon.Port.Bitmap src, emon.Port.Cells ws, int dpi, emon.Port.Cells oruns, int run, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells scr, emon.Port.Cells rtp, emon.Port.Cells comps, emon.Port.Cells inks) {
         // Make the BODY-INK VIEW of the raster `src` the first pass read (`rt-erase-into`; the kin-made bitmaps `rv-erased`, `rv-mask`, `rv-body-mask`, `rv-emap`
         // of page `page`, 0-based, from the page's view ids) and measure, of every line of the first pass `run`, the share (per mille) of its ink that the view paints
         // over: the ink under its words' pixel boxes on the binary view `emon.pageink` made (`k0` its id group) that is in the view's `emap`. Written to `scr` at
@@ -644,6 +842,7 @@ public static class Retarget {
         int both = 0;
         int touched = 0;
         RtEraseInto(src, emon.Port.BmsGet(bms, Plan.PuViewId(page, k0)), ws, mask, bodym, dpi, emap, erased);
+        emon.Port.CellsSet(rtp, RtpBands(), RtInvertBands(erased, emon.Port.BmsGet(bms, Plan.PuViewId(page, k0)), bodym, comps, inks, page + 1, dpi, Norm.NmPaperGray(ws)));
         while (k < ln) {
             f = Evidence.OlGet(olines, l0 + k, Evidence.LhFirst());
             c = Evidence.OlGet(olines, l0 + k, Evidence.LhCount());
@@ -775,7 +974,7 @@ public static class Retarget {
         }
         return 1;
     }
-    public static int RtPlan(int page, int input, int born, int wanttext, int rid, int dpi, emon.Port.Cells loc, emon.Port.Cells ans, emon.Port.BitmapSet bms, int k0, emon.Port.Bitmap src, emon.Port.Cells ws, emon.Port.Cells oruns, int run, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells rules, emon.Port.Cells tlines, emon.Port.Cells rtp, emon.Port.Cells rq, emon.Port.Cells scr) {
+    public static int RtPlan(int page, int input, int born, int wanttext, int rid, int dpi, emon.Port.Cells loc, emon.Port.Cells ans, emon.Port.BitmapSet bms, int k0, emon.Port.Bitmap src, emon.Port.Cells ws, emon.Port.Cells oruns, int run, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells rules, emon.Port.Cells tlines, emon.Port.Cells rtp, emon.Port.Cells rq, emon.Port.Cells scr, emon.Port.Cells comps, emon.Port.Cells inks) {
         // Decide and ask what is not yet answered, in the brief's order: the table cells and the lines, the text-only render and its OCR, the body-ink view,
         // the quarter-turned view. `page` is 0-based (ids), `rid` the request id of the raster `src` that the first pass read at `dpi`, `k0` the id group
         // `emon.pageink` normalized it under, `ws` its layer workspace, `scr` the unit's scratch (`sc-prep`: the measure of every first-pass line is left in it).
@@ -786,7 +985,7 @@ public static class Retarget {
         int touched = 0;
         int asked = 0;
         if (q == 0) {
-            touched = RtMeasure(page, bms, k0, src, ws, dpi, oruns, run, olines, owords, scr, rtp);
+            touched = RtMeasure(page, bms, k0, src, ws, dpi, oruns, run, olines, owords, scr, rtp, comps, inks);
         }
         RtDecide(born, q, touched, oruns, run, olines, owords, rules, page + 1, dpi, rtp);
         asked += RtAskCells(page, rid, dpi, loc, ans, rtp, rq);
@@ -1014,6 +1213,24 @@ public static class Retarget {
         int b = -1;
         int back = -1;
         if (c <= 0) {
+            // P12.6: a line the first pass found and read as nothing (`rt-empty-area`), re-read alone: its words are the page's when there are some and they are sure (`rt-empty-words`, `rt-empty-conf`)
+            j = 0;
+            while (j < nl) {
+                if (emon.Port.CellsAt(rtp, RtpLine0() + (j * 2)) == l) {
+                    t = j;
+                }
+                j += 1;
+            }
+            if (t >= 0) {
+                tr = emon.Port.CellsAt(rtp, RtpLine0() + ((t * 2) + 1));
+                if (tr >= 0) {
+                    if (Evidence.OrGet(oruns, tr, Evidence.OrfWcount()) >= RtEmptyWords()) {
+                        if (RtRunMean(oruns, owords, tr) >= RtEmptyConf()) {
+                            return 5;
+                        }
+                    }
+                }
+            }
             return 0;
         }
         // the line was cut into cells: read again cell by cell, when every cell was, no text is lost and they are surer
@@ -1128,7 +1345,7 @@ public static class Retarget {
         }
         return best;
     }
-    public static int RtAdopt(emon.Port.Cells rtp, emon.Port.Cells oruns, int fr, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells scr) {
+    public static int RtAdopt(emon.Port.Cells rtp, emon.Port.Cells oruns, int fr, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Cells scr) {
         // The lines a SCANNED page's pipeline reads, in the order it reads them, written to the selection of `scr` (`sc-sel-set`); answers how
         // many. `fr` is the first pass's run. A page that was turned (`rtp-q`) is read from its turned view's run when that scores `rt-turn-gain`
         // per cent of the first pass's; an upright page is read from the first pass, each of its lines kept, replaced or dropped by `rt-line-state` (which wants
@@ -1165,6 +1382,13 @@ public static class Retarget {
             }
         }
         emon.Port.CellsSet(rtp, RtpPrimary(), primary);
+        // P12.6: the words of a body-ink line that a first-pass line stays with (`sc-xtra-base`): none yet
+        emon.Port.CellsSet(scr, Scan.ScXtraBase(), fl0);
+        while (k < nk) {
+            emon.Port.CellsSet(scr, Scan.ScXtraBase() + (k + 1), 0);
+            k += 1;
+        }
+        k = 0;
         if (primary != fr) {
             pl0 = Evidence.OrGet(oruns, primary, Evidence.OrfLfirst());
             pn = Evidence.OrGet(oruns, primary, Evidence.OrfLcount());
@@ -1217,6 +1441,19 @@ public static class Retarget {
                     }
                 }
             }
+            // P12.6: a line that stays, with a body-ink line that is its partner both ways and reads words that lie over none of its own (a column the first pass stopped before)
+            if ((s == 0) && (brun >= 0)) {
+                if (Evidence.OlGet(olines, l, Evidence.LhCount()) > 0) {
+                    b = RtBestOver(olines, l, bl0, Evidence.OrGet(oruns, brun, Evidence.OrfLcount()));
+                    if (b >= 0) {
+                        if (RtBestOver(olines, b, fl0, fnl) == l) {
+                            if (Scan.ScXtraCount(olines, owords, etext, l, b) > 0) {
+                                emon.Port.CellsSet(scr, Scan.ScXtraBase() + (k + 1), b + 1);
+                            }
+                        }
+                    }
+                }
+            }
             if (s == 0) {
                 if (Evidence.OlGet(olines, l, Evidence.LhCount()) > 0) {
                     n = RtSelAdd(scr, n, l);
@@ -1225,7 +1462,7 @@ public static class Retarget {
             if (s == 1) {
                 n = RtSelAdd(scr, n, emon.Port.CellsAt(scr, Scan.ScPartnerBase() + k));
             }
-            if (s == 3) {
+            if ((s == 3) || (s == 5)) {
                 j = 0;
                 while (j < emon.Port.CellsAt(rtp, RtpNl())) {
                     if (emon.Port.CellsAt(rtp, RtpLine0() + (j * 2)) == l) {

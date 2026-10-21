@@ -5,8 +5,9 @@ package emon;
 
 
 public final class Scriptchecktest {
-    public static int skAnswer(emon.Port.Cells ans, int id, int n, int script, int sconf, int lang, int lang0) {
-        // An OCR answer of `n` words, one a line, each read in the language cell `lang` (the first in `lang0`), whose page OSD says is in `script` at the confidence `sconf`.
+    public static int skAnswer(emon.Port.Cells ans, int id, int n, int script, int sconf, int lang, int lang0, int dflags) {
+        // An OCR answer of `n` words, one a line, each read in the language cell `lang` (the first in `lang0`), whose page OSD says is in `script` at the confidence `sconf`;
+        // `dflags` 1 says the engine's dictionary knows the words, 0 not.
         int at = Plan.anOcr(ans, id);
         int k = 0;
         int word = 0;
@@ -26,19 +27,22 @@ public final class Scriptchecktest {
         k = 0;
         while (k < n) {
             if (k == 0) {
-                Ocr.oxWord(ans, 0, lang0, -1, 0);
+                Ocr.oxWord(ans, 0, lang0, -1, dflags);
             } else {
-                Ocr.oxWord(ans, 0, lang, -1, 0);
+                Ocr.oxWord(ans, 0, lang, -1, dflags);
             }
             k += 1;
         }
         Plan.anOcrEnd(ans, at);
         return at;
     }
-    public static int unreadOf(int n, int script, int sconf, int lang, int lang0) {
+    public static int unreadOfD(int n, int script, int sconf, int lang, int lang0, int dflags) {
         emon.Port.Cells ans = emon.Port.newCells();
-        int at = skAnswer(ans, 272, n, script, sconf, lang, lang0);
+        int at = skAnswer(ans, 272, n, script, sconf, lang, lang0, dflags);
         return Scriptcheck.skUnread(ans, at, emon.Port.newCells());
+    }
+    public static int unreadOf(int n, int script, int sconf, int lang, int lang0) {
+        return unreadOfD(n, script, sconf, lang, lang0, 0);
     }
     public static void testALanguageCellUnpacksToItsLetters() {
         emon.Port.Cells out = emon.Port.newCells();
@@ -58,9 +62,11 @@ public final class Scriptchecktest {
     }
     public static void testAPageTheEngineCanReadOrOsdIsUnsureOfIsNotFlagged() {
         emon.Testport.assertEq(unreadOf(5, 1281455214, 629, 1701734144, 1701734144), 0, "a Latin page");
-        emon.Testport.assertEq(unreadOf(5, 1147500129, 100, 1701734144, 1701734144), 0, "OSD unsure (confidence 10: a Latin page reads that)");
-        emon.Testport.assertEq(unreadOf(5, 1147500129, Scriptcheck.skMinConf() - 1, 1701734144, 1701734144), 0, "just under the bound");
-        emon.Testport.assertEq(unreadOf(5, 1147500129, Scriptcheck.skMinConf(), 1701734144, 1701734144), 1, "at it");
+        emon.Testport.assertEq(unreadOfD(5, 1147500129, 100, 1701734144, 1701734144, 1), 0, "OSD unsure (confidence 10: a Latin page reads that) and the engine's dictionary knows the words: Latin");
+        emon.Testport.assertEq(unreadOfD(5, 1147500129, Scriptcheck.skMinConf() - 1, 1701734144, 1701734144, 1), 0, "just under the bound, the words known");
+        emon.Testport.assertEq(unreadOfD(5, 1147500129, Scriptcheck.skMinConf(), 1701734144, 1701734144, 1), 1, "at it: believed whatever the dictionary says (the page of the smoke review)");
+        emon.Testport.assertEq(unreadOf(5, 1147500129, Scriptcheck.skWeakConf(), 1701734144, 1701734144), 1, "R2: OSD at 5.0 and none of the words known (Urdu, Han, Ethiopic in a Latin model): unread");
+        emon.Testport.assertEq(unreadOf(5, 1147500129, Scriptcheck.skWeakConf() - 1, 1701734144, 1701734144), 0, "under 5.0: OSD says nothing");
         emon.Testport.assertEq(unreadOf(2, 1147500129, 629, 1701734144, 1701734144), 0, "two words: the engine read nothing of it to speak of");
         emon.Testport.assertEq(unreadOf(5, 0, 629, 1701734144, 1701734144), 0, "no script");
     }

@@ -210,7 +210,7 @@ public final class Tlhealth {
         // Stage 1 features of text-layer word w, of line l (SPEC 8.4.5): a new `feats` row (answered; the caller points the flow's copy of the
         // word at it: the interpreter's own `words` are the evidence and stay as they were, D242), columns
         // 2-9, 16, 17, 19-21, 28, 29 (18 is -1 until P4.2's size inventory; 10-15, 22-27 are later stages'; 13 is `th-health`'s).
-        // 2 glyphs mapped by ToUnicode or an encoding; 3 glyphs that are PUA, control, U+FFFD or have no code point; 4 the worst overlap
+        // 2 glyphs mapped by ToUnicode, an encoding or glyph names of /Differences; 3 glyphs that are PUA, control, U+FFFD or have no code point; 4 the worst overlap
         // of neighbouring glyph boxes (a combining mark is not a neighbour); 5 the worst gap between a glyph's advance and the next origin,
         // over the font's space width (capped, `th-gap-cap`); 6 the worst `vis`; 7 the render mode class of the first glyph; 8 the lowest
         // alpha of the ink the mode paints; 9 the lowest contrast of the fill against white paper (|255 - luminance| per mille; -1 when no
@@ -250,7 +250,8 @@ public final class Tlhealth {
             while (g < (g0 + gn)) {
                 cp0 = thGlyphCp(et, gl, g);
                 v = Evidence.glGet(gl, g, Evidence.gfHow());
-                if ((v == 1) || (v == 2)) {
+                // P12.6 (R5): a glyph named in the font's /Differences (`glyphname`: the AGL's name, a TeX Type 1 font's `parenleft`) is as decoded as one the base encoding names: the text layer's own decoding is consistent there
+                if ((v == 1) || ((v == 2) || (v == 3))) {
                     mapped += 1;
                 }
                 bad += thBadCp(cp0);
@@ -802,6 +803,83 @@ public final class Tlhealth {
             Normalize.nzNfc(tt, 0, emon.Port.cellsLen(tt), text, tmp, Normalize.nzFlagLigatures() + Normalize.nzFlagRadicals());
             Model.ledgerSetText(ledger, lr, t0, emon.Port.cellsLen(text) - t0);
             rows += 1;
+            i = j;
+        }
+        return rows;
+    }
+    public static int thOcrReason(emon.Port.Cells owords, int i) {
+        // The ledger reason of OCR word row `i` when the scan stage kept it out of the page's words (P12.6, `sc-fates`): a rule read as a character is a `rule-ghost`, garbage and a dot leader
+        // an `ocr-ghost`; 0 for a word that was kept.
+        int fl = Evidence.owGet(owords, i, Evidence.owfFlags());
+        if ((fl & Evidence.oeRuleGhost()) != 0) {
+            return Model.drRuleGhost();
+        }
+        if ((fl & Evidence.oeGarbage()) != 0) {
+            return Model.drOcrGhost();
+        }
+        return 0;
+    }
+    public static int thWriteOcr(emon.Port.Cells owords, emon.Port.Cells et, emon.Port.Cells ledger, emon.Port.Cells text, emon.Port.Cells tmp, emon.Port.Cells tt) {
+        // The OCR words the scan stage kept out of a scanned page's words (`oe-garbage`, `oe-rule-ghost`: paper texture, handwriting, ruled lines read as characters, dot leaders, a table's rules)
+        // as ledger rows, so that nothing is dropped silently: a run of consecutive such words of one reason on one OCR line is ONE row, its box the union of theirs, its text the words
+        // joined by a space (NFC, ligatures folded, as every ledger text), confidence 700 (an engine's reading), src `ocr`. Answers the rows written.
+        int n = Evidence.owCount(owords);
+        int i = 0;
+        int j = 0;
+        int k = 0;
+        int s = 0;
+        int e = 0;
+        int x0 = 0;
+        int y0 = 0;
+        int x1 = 0;
+        int y1 = 0;
+        int reason = 0;
+        int lr = 0;
+        int t0 = 0;
+        int rows = 0;
+        while (i < n) {
+            reason = thOcrReason(owords, i);
+            j = i + 1;
+            if (reason > 0) {
+                while ((j < n) && ((thOcrReason(owords, j) == reason) && ((Evidence.owGet(owords, j, Evidence.hdPage()) == Evidence.owGet(owords, i, Evidence.hdPage())) && (Evidence.owGet(owords, j, Evidence.hdLine()) == Evidence.owGet(owords, i, Evidence.hdLine()))))) {
+                    j += 1;
+                }
+                x0 = Evidence.owGet(owords, i, Evidence.hdX0());
+                y0 = Evidence.owGet(owords, i, Evidence.hdY0());
+                x1 = Evidence.owGet(owords, i, Evidence.hdX1());
+                y1 = Evidence.owGet(owords, i, Evidence.hdY1());
+                emon.Port.cellsDrop(tt, 0);
+                k = i;
+                while (k < j) {
+                    if (k > i) {
+                        emon.Port.cellsPush(tt, 32);
+                    }
+                    if (Evidence.owGet(owords, k, Evidence.hdX0()) < x0) {
+                        x0 = Evidence.owGet(owords, k, Evidence.hdX0());
+                    }
+                    if (Evidence.owGet(owords, k, Evidence.hdY0()) < y0) {
+                        y0 = Evidence.owGet(owords, k, Evidence.hdY0());
+                    }
+                    if (Evidence.owGet(owords, k, Evidence.hdX1()) > x1) {
+                        x1 = Evidence.owGet(owords, k, Evidence.hdX1());
+                    }
+                    if (Evidence.owGet(owords, k, Evidence.hdY1()) > y1) {
+                        y1 = Evidence.owGet(owords, k, Evidence.hdY1());
+                    }
+                    s = Evidence.owGet(owords, k, Evidence.hdTstart());
+                    e = s + Evidence.owGet(owords, k, Evidence.hdTlen());
+                    while (s < e) {
+                        emon.Port.cellsPush(tt, emon.Port.cellsAt(et, s));
+                        s += 1;
+                    }
+                    k += 1;
+                }
+                lr = Model.ledgerAdd(ledger, reason, Evidence.owGet(owords, i, Evidence.hdPage()), x0, y0, x1, y1, 700, Model.srOcr());
+                t0 = emon.Port.cellsLen(text);
+                Normalize.nzNfc(tt, 0, emon.Port.cellsLen(tt), text, tmp, Normalize.nzFlagLigatures() + Normalize.nzFlagRadicals());
+                Model.ledgerSetText(ledger, lr, t0, emon.Port.cellsLen(text) - t0);
+                rows += 1;
+            }
             i = j;
         }
         return rows;

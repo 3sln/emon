@@ -6,12 +6,13 @@
             [emon.port :refer [cells-at]]
             [emon.plan :refer [an-ocr an-ocr-word an-ocr-cp an-ocr-end]]
             [emon.ocr :refer [ox-begin ox-line ox-block ox-word]]
-            [emon.scriptcheck :refer [sk-unread sk-unpack sk-min-conf]]
+            [emon.scriptcheck :refer [sk-unread sk-unpack sk-min-conf sk-weak-conf]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
 
-(defn ^I32 sk-answer [^:mut ^Cells ans ^I32 id ^I32 n ^I32 script ^I32 sconf ^I32 lang ^I32 lang0]
-  (comment "An OCR answer of `n` words, one a line, each read in the language cell `lang` (the first in `lang0`), whose page OSD says is in `script` at the confidence `sconf`.")
+(defn ^I32 sk-answer [^:mut ^Cells ans ^I32 id ^I32 n ^I32 script ^I32 sconf ^I32 lang ^I32 lang0 ^I32 dflags]
+  (comment "An OCR answer of `n` words, one a line, each read in the language cell `lang` (the first in `lang0`), whose page OSD says is in `script` at the confidence `sconf`;")
+  (comment "`dflags` 1 says the engine's dictionary knows the words, 0 not.")
   (let [^I32 at (an-ocr ans id)
         ^:mut ^I32 k 0
         ^:mut ^I32 word 0]
@@ -28,15 +29,18 @@
     (ox-block ans 10 20 60 (* n 60) 0 0 0)
     (set k 0)
     (while (< k n)
-      (do (if (== k 0) (ox-word ans 0 lang0 -1 0) (ox-word ans 0 lang -1 0))
+      (do (if (== k 0) (ox-word ans 0 lang0 -1 dflags) (ox-word ans 0 lang -1 dflags))
           (set k (+ k 1))))
     (an-ocr-end ans at)
     (return at)))
 
-(defn ^I32 unread-of [^I32 n ^I32 script ^I32 sconf ^I32 lang ^I32 lang0]
+(defn ^I32 unread-of-d [^I32 n ^I32 script ^I32 sconf ^I32 lang ^I32 lang0 ^I32 dflags]
   (let [^Cells ans (new-cells)
-        ^I32 at (sk-answer ans 272 n script sconf lang lang0)]
+        ^I32 at (sk-answer ans 272 n script sconf lang lang0 dflags)]
     (return (sk-unread ans at (new-cells)))))
+
+(defn ^I32 unread-of [^I32 n ^I32 script ^I32 sconf ^I32 lang ^I32 lang0]
+  (return (unread-of-d n script sconf lang lang0 0)))
 
 (deftest test-a-language-cell-unpacks-to-its-letters
   (let [^Cells out (new-cells)]
@@ -56,9 +60,11 @@
 
 (deftest test-a-page-the-engine-can-read-or-osd-is-unsure-of-is-not-flagged
   (assert-eq (unread-of 5 1281455214 629 1701734144 1701734144) 0 "a Latin page")
-  (assert-eq (unread-of 5 1147500129 100 1701734144 1701734144) 0 "OSD unsure (confidence 10: a Latin page reads that)")
-  (assert-eq (unread-of 5 1147500129 (- (sk-min-conf) 1) 1701734144 1701734144) 0 "just under the bound")
-  (assert-eq (unread-of 5 1147500129 (sk-min-conf) 1701734144 1701734144) 1 "at it")
+  (assert-eq (unread-of-d 5 1147500129 100 1701734144 1701734144 1) 0 "OSD unsure (confidence 10: a Latin page reads that) and the engine's dictionary knows the words: Latin")
+  (assert-eq (unread-of-d 5 1147500129 (- (sk-min-conf) 1) 1701734144 1701734144 1) 0 "just under the bound, the words known")
+  (assert-eq (unread-of-d 5 1147500129 (sk-min-conf) 1701734144 1701734144 1) 1 "at it: believed whatever the dictionary says (the page of the smoke review)")
+  (assert-eq (unread-of 5 1147500129 (sk-weak-conf) 1701734144 1701734144) 1 "R2: OSD at 5.0 and none of the words known (Urdu, Han, Ethiopic in a Latin model): unread")
+  (assert-eq (unread-of 5 1147500129 (- (sk-weak-conf) 1) 1701734144 1701734144) 0 "under 5.0: OSD says nothing")
   (assert-eq (unread-of 2 1147500129 629 1701734144 1701734144) 0 "two words: the engine read nothing of it to speak of")
   (assert-eq (unread-of 5 0 629 1701734144 1701734144) 0 "no script"))
 

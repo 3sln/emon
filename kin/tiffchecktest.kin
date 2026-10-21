@@ -13,7 +13,7 @@
             [emon.tiffcheck :refer [tc-check tc-exif tr-status tr-frames tr-w tr-h tr-ow tr-oh tr-ch tr-dpi tr-bilevel tr-orient
                                     tr-limit tr-eo tr-ex tr-ey tr-spp tr-bps tr-comp tr-kind tr-nc tr-alpha tr-predictor
                                     tr-planar tr-fill2 tr-le tr-tiled tr-cw tr-band tr-across tr-down tr-hs tr-vs tr-planes
-                                    tr-nchunks tr-cmap-at tr-offs-at tr-lens-at]]
+                                    tr-nchunks tr-cmap-at tr-offs-at tr-lens-at tr-t4]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem]]))
 
@@ -97,8 +97,9 @@
     (t-tiff (test-t) (hex-blob "49492a000e0000000a141e28323c090000010300010000000300000001010300010000000200000002010300010000000800000003010300010000000200000006010300010000000100000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000000000000") 0 1 2 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 "CCITT RLE")
     (t-tiff (test-t) (hex-blob "49492a000e0000000a141e28323c090000010300010000000300000001010300010000000200000002010300010000000800000003010300010000000400000006010300010000000100000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000000000000") 0 1 1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 "CCITT of 8 bits")
     (t-tiff (test-t) (hex-blob "49492a000e0000000a141e28323c090000010300010000000300000001010300010000000200000002010300010000000100000003010300010000000300000006010300010000000000000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000000000000") 0 1 0 -1 -1 -1 -1 -1 -1 -1 -1 1 (tr-comp) 3 (tr-kind) 0 -1 -1 "Group 3, plain")
-    (t-tiff (test-t) (hex-blob "49492a000e0000000a141e28323c0a0000010300010000000300000001010300010000000200000002010300010000000100000003010300010000000300000006010300010000000000000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000024010400010000000100000000000000") 0 1 2 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 "Group 3, two-dimensional")
-    (t-tiff (test-t) (hex-blob "49492a000e0000000a141e28323c0a0000010300010000000300000001010300010000000200000002010300010000000100000003010300010000000300000006010300010000000000000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000024010400010000000400000000000000") 0 1 2 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 "Group 3, fill bits")
+    (t-tiff (test-t) (hex-blob "49492a000e0000000a141e28323c0a0000010300010000000300000001010300010000000200000002010300010000000100000003010300010000000300000006010300010000000000000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000024010400010000000100000000000000") 0 1 0 -1 -1 -1 -1 -1 -1 -1 -1 1 (tr-comp) 3 (tr-t4) 1 -1 -1 "Group 3, two-dimensional")
+    (t-tiff (test-t) (hex-blob "49492a000e0000000a141e28323c0a0000010300010000000300000001010300010000000200000002010300010000000100000003010300010000000300000006010300010000000000000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000024010400010000000400000000000000") 0 1 0 -1 -1 -1 -1 -1 -1 -1 -1 1 (tr-comp) 3 (tr-t4) 4 -1 -1 "Group 3, fill bits")
+    (t-tiff (test-t) (hex-blob "49492a000e0000000a141e28323c0a0000010300010000000300000001010300010000000200000002010300010000000100000003010300010000000300000006010300010000000000000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000024010400010000000200000000000000") 0 1 2 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 "Group 3, uncompressed mode is still not read")
     (t-tiff (test-t) (hex-blob "49492a000e0000000a141e28323c080000010300010000000300000001010300010000000200000002010300010000000100000003010300010000000400000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000000000000") 0 1 0 -1 -1 -1 -1 -1 -1 -1 -1 1 (tr-kind) 0 -1 -1 -1 -1 "Group 4 with no photometric tag is min-is-white")
     (t-tiff (test-t) (hex-blob "49492a000e0000000a141e28323c0a000001030001000000030000000101030001000000020000000201030001000000080000000301030001000000010000000601030001000000010000001101040001000000080000001501030001000000010000001601030001000000020000001701040001000000060000003d010300010000000300000000000000") 0 1 2 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 "predictor 3")
     (t-tiff (test-t) (hex-blob "49492a000e0000000a141e28323c0a000001030001000000030000000101030001000000020000000201030001000000080000000301030001000000010000000601030001000000010000001101040001000000080000001501030001000000010000001601030001000000020000001701040001000000060000003d010300010000000200000000000000") 0 1 0 -1 -1 -1 -1 -1 -1 -1 -1 -1 (tr-predictor) 2 -1 -1 -1 -1 "predictor 2 on bytes")
@@ -147,8 +148,8 @@
 
 (deftest test-tiff-fixtures
   (comment "Every TIFF fixture, every frame: the size after the orientation, channels, resolution, bilevel; or the refusal's name.")
-    (t-tiff (test-t) (test-file "image/tiff-bilevel-g3-2d.tif") 0 1 2 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 "tiff-bilevel-g3-2d.tif")
-    (t-tiff (test-t) (test-file "image/tiff-bilevel-g3-fill.tif") 0 1 2 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 "tiff-bilevel-g3-fill.tif")
+    (t-tiff (test-t) (test-file "image/tiff-bilevel-g3-2d.tif") 0 1 0 1 -1 -1 48 36 1 0 -1 1 -1 -1 -1 -1 -1 -1 "tiff-bilevel-g3-2d.tif frame 0")
+    (t-tiff (test-t) (test-file "image/tiff-bilevel-g3-fill.tif") 0 1 0 1 -1 -1 48 36 1 0 -1 1 -1 -1 -1 -1 -1 -1 "tiff-bilevel-g3-fill.tif frame 0")
     (t-tiff (test-t) (test-file "image/tiff-bilevel-g3.tif") 0 1 0 1 -1 -1 48 36 1 0 -1 1 -1 -1 -1 -1 -1 -1 "tiff-bilevel-g3.tif frame 0")
     (t-tiff (test-t) (test-file "image/tiff-bilevel-g4.tif") 0 1 0 1 -1 -1 48 36 1 0 -1 1 -1 -1 -1 -1 -1 -1 "tiff-bilevel-g4.tif frame 0")
     (t-tiff (test-t) (test-file "image/tiff-bilevel-lzw.tif") 0 1 0 1 -1 -1 48 36 1 0 -1 1 -1 -1 -1 -1 -1 -1 "tiff-bilevel-lzw.tif frame 0")
@@ -263,9 +264,22 @@
           (set i (+ i 1))))
     (return 0)))
 
-(deftest test-ccitt-reads-what-the-validator-refuses
+(deftest test-ccitt-reads-the-strips-of-the-fax-fixtures
+  (comment "(The validator refused these two until P12.6: D189. It reads them now, and says in `tr-t4` which options the host's `emon.ccitt` call is to be made with.)")
   (t-raw-strip (test-t) (test-file "image/tiff-bilevel-g3-2d.tif") 8 1 (test-file "image/tiff-bilevel-none.tif") "Group 3, two-dimensional")
   (t-raw-strip (test-t) (test-file "image/tiff-bilevel-g3-fill.tif") 8 0 (test-file "image/tiff-bilevel-none.tif") "Group 3 with fill bits before the EOLs"))
+
+(deftest test-a-fax-tiff-of-group-3-two-dimensional-is-read-and-its-options-reach-the-report
+  (comment "P12.6 (R6): libtiff's fax2d.tif was refused (exit 4) for T4Options bit 0, though the decoder reads it; bit 0 is two-dimensional (k 4), bit 2 fill bits")
+  (let [^Cells r (new-cells)]
+    (assert-eq (tc-check (test-file "image/tiff-bilevel-g3-2d.tif") 0 1 r) 0 "the two-dimensional file is read")
+    (assert-eq (cells-at r (tr-t4)) 1 "its option: two-dimensional")
+    (assert-eq (tc-check (test-file "image/tiff-bilevel-g3-fill.tif") 0 1 r) 0 "the fill-bits file is read")
+    (assert-eq (cells-at r (tr-t4)) 4 "its option: fill bits")
+    (assert-eq (tc-check (test-file "image/tiff-bilevel-g3.tif") 0 1 r) 0 "the plain Group 3 file is read")
+    (assert-eq (cells-at r (tr-t4)) 0 "with no option")
+    (assert-eq (tc-check (test-file "image/tiff-bilevel-g4.tif") 0 1 r) 0 "Group 4 is read")
+    (assert-eq (cells-at r (tr-t4)) 0 "and has none")))
 
 (deftest test-exif-reader
   (comment "The first directory of an EXIF blob: orientation 1..8 and the two resolutions; anything else says (1, 0, 0).")

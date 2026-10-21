@@ -298,6 +298,30 @@ func TestAColourBandAcrossThePageIsNoStamp(emonT *testing.T) {
 	port.AssertEq(emonT, sealpx.SxFind(1, views, 0, prims, inks, 61200, 79200, cand), 1, "a 100 pt rectangle is a stamp")
 }
 
+func TestASolidBlockOfColourIsNoStampAndAnOutlineOfTheSameSizeIs(emonT *testing.T) {
+	var views *port.Cells = port.NewCells()
+	var prims *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	var cand *port.Cells = port.NewCells()
+	// P12.6 (smoke A2, D13): the header band of a bank statement, a light blue block with its title's text in it, was a stamp named `Txn Date Value Date`; an outline 100 pt wide is one,
+	// a block of ink that fills it (coverage 1000) is a header cell, a highlighted cell or the ground of a heading: the text on it is the document's
+	evidence.VwNew(views, 1, evidence.VkRender(), -1, -1, 3000, 3000, 7200, 0, -1, 0, 0, 0, 0, 0)
+	sptInk(inks, evidence.IrBody())
+	sptInk(inks, evidence.IrLight())
+	sptInk(inks, evidence.IrColor())
+	// an oblong curve on the colour layer, solid
+	var r int32 = sptPrim(prims, evidence.PmCurve(), 40000, 60000, 3000, 4500, 2, 2047903, 0, 200)
+	evidence.PmSet(prims, r, evidence.PmfFill(), 1000)
+	port.AssertEq(emonT, sealpx.SxFind(1, views, 0, prims, inks, 61200, 79200, cand), 0, "a solid oblong curve is a block of colour: no candidate")
+	evidence.PmSet(prims, r, evidence.PmfFill(), 150)
+	port.AssertEq(emonT, sealpx.SxFind(1, views, 0, prims, inks, 61200, 79200, cand), 1, "the same curve, an outline (coverage 150): a stamp")
+	// a rectangle of the same size as a stamp, solid
+	sptPrim(prims, evidence.PmRect(), 30000, 20000, 5000, 2000, 2, 12591135, 1, 200)
+	var rect int32 = sptPrim(prims, evidence.PmRect(), 30000, 25000, 5000, 2000, 2, 12591135, 1, 200)
+	evidence.PmSet(prims, rect, evidence.PmfFill(), 950)
+	port.AssertEq(emonT, sealpx.SxFind(1, views, 0, prims, inks, 61200, 79200, cand), 2, "a solid 100 pt rectangle is no stamp; the outlined one is, with the curve: two")
+}
+
 func sptOword(ow *port.Cells, x int32, y int32) int32 {
 	return evidence.OwNew(ow, 1, x-300, y-200, x+300, y+200, x-300, y+200, x+300, y+200, 0, 0, 0, 1, 0, 800, -1)
 }

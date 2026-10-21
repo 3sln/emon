@@ -11948,8 +11948,8 @@
         :conf-brier-furniture-ocr 0.291041
         :conf-brier-heading 0.34
         :conf-brier-heading-ocr 0.34
-        :conf-brier-paragraph 0.403414
-        :conf-brier-paragraph-ocr 0.403414
+        :conf-brier-paragraph 0.412502
+        :conf-brier-paragraph-ocr 0.412502
         :conf-brier-row 0.965699
         :conf-brier-row-infer 0.965699
         :conf-brier-rowgroup 0.736081
@@ -11969,8 +11969,8 @@
         :conf-ece-furniture-ocr 0.262333
         :conf-ece-heading 0.3
         :conf-ece-heading-ocr 0.3
-        :conf-ece-paragraph 0.425667
-        :conf-ece-paragraph-ocr 0.425667
+        :conf-ece-paragraph 0.443211
+        :conf-ece-paragraph-ocr 0.443211
         :conf-ece-row 0.978304
         :conf-ece-row-infer 0.978304
         :conf-ece-rowgroup 0.759
@@ -12034,8 +12034,8 @@
         :conf-brier-furniture-ocr 0.291041
         :conf-brier-heading 0.44
         :conf-brier-heading-ocr 0.44
-        :conf-brier-paragraph 0.428081
-        :conf-brier-paragraph-ocr 0.428081
+        :conf-brier-paragraph 0.437948
+        :conf-brier-paragraph-ocr 0.437948
         :conf-brier-row 0.965699
         :conf-brier-row-infer 0.965699
         :conf-brier-rowgroup 0.736081
@@ -12053,8 +12053,8 @@
         :conf-ece-furniture-ocr 0.262333
         :conf-ece-heading 0.466667
         :conf-ece-heading-ocr 0.466667
-        :conf-ece-paragraph 0.473286
-        :conf-ece-paragraph-ocr 0.473286
+        :conf-ece-paragraph 0.492333
+        :conf-ece-paragraph-ocr 0.492333
         :conf-ece-row 0.978304
         :conf-ece-row-infer 0.978304
         :conf-ece-rowgroup 0.759

@@ -41,6 +41,15 @@ pub(crate) fn rtt_line(mut olines: &mut crate::port::Cells, mut owords: &mut cra
     ol_set(olines, l, olf_ph(), 100);
     return l;
 }
+pub(crate) fn rtt_adopt(mut rtp: &mut crate::port::Cells, oruns: &mut crate::port::Cells, fr: i32, olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, mut scr: &mut crate::port::Cells) -> i32 {
+    // `rt-adopt` with a text of four digits, which every word of `rtt-word` spells (it starts at 0 and is 4 long).
+    let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::port::cells_push(c, 49);
+    crate::port::cells_push(c, 50);
+    crate::port::cells_push(c, 51);
+    crate::port::cells_push(c, 52);
+    return rt_adopt(rtp, oruns, fr, olines, owords, c, scr);
+}
 pub(crate) fn rtt_run(mut oruns: &mut crate::port::Cells, olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, l0: i32, w0: i32) -> i32 {
     // A run over the lines [l0, now) and the words [w0, now).
     let r: i32 = or_new(oruns, 1, 0);
@@ -181,12 +190,203 @@ fn test_the_body_ink_run_replaces_a_line_over_foreign_ink_and_a_ghost_is_dropped
     crate::testport::assert_eq(crate::port::cells_at(scr, sc_partner_base() + 1), 4, "that line");
     crate::testport::assert_eq(rt_line_state(oruns, olines, owords, rtp, scr, 2, 2, br, 0, 4), 0, "a line with a little foreign ink under it stays");
     crate::testport::assert_eq(rt_line_state(oruns, olines, owords, rtp, scr, 3, 3, br, 0, 4), 2, "a line mostly foreign ink that the body-ink run did not read is a ghost");
-    crate::testport::assert_eq(rt_adopt(rtp, oruns, fr, olines, owords, scr), 4, "four lines: the first, the second's reading, the third, and the line the first pass did not read; the ghost is dropped");
+    crate::testport::assert_eq(rtt_adopt(rtp, oruns, fr, olines, owords, scr), 4, "four lines: the first, the second's reading, the third, and the line the first pass did not read; the ghost is dropped");
     crate::testport::assert_eq(crate::port::cells_at(scr, sc_sel_base()), 0, "the first pass's first line");
     crate::testport::assert_eq(crate::port::cells_at(scr, sc_sel_base() + 1), 4, "then the body-ink run's line where the second was");
     crate::testport::assert_eq(crate::port::cells_at(scr, sc_sel_base() + 2), 2, "then the third, in the first pass's order");
     crate::testport::assert_eq(crate::port::cells_at(scr, sc_sel_base() + 3), 5, "and the body-ink run's line over nothing, below them where it lies");
     crate::testport::assert_eq(crate::port::cells_at(rtp, rtp_primary()), fr, "the first pass is the page's reading");
+}
+pub(crate) fn rtt_line3(mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, y0: i32, c1: i32, c2: i32, c3: i32) -> i32 {
+    // A line of three words at height y0: 100-600, 700-1200 and 1300-1700 (a right-aligned column), with these confidences; answers its row.
+    let first: i32 = ow_count(owords);
+    let l: i32 = ol_count(olines);
+    rtt_word(owords, feats, 100, y0, 600, y0 + 100, c1, l);
+    rtt_word(owords, feats, 700, y0, 1200, y0 + 100, c2, l);
+    rtt_word(owords, feats, 1300, y0, 1700, y0 + 100, c3, l);
+    ol_new(olines, 1, 100, y0, 1700, y0 + 100, 100, y0 + 100, 1700, y0 + 100, 0, 0, first, 3);
+    ol_set(olines, l, olf_px(), 100);
+    ol_set(olines, l, olf_py(), y0);
+    ol_set(olines, l, olf_pw(), 1600);
+    ol_set(olines, l, olf_ph(), 100);
+    return l;
+}
+#[test]
+fn test_a_second_pass_that_reads_a_column_the_first_missed_has_that_column_read_with_the_line() {
+    // P12.6, the thermal receipt: the first pass stopped before the right-aligned amount column; the body-ink pass read the line as far as the amounts
+    let oruns: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rtp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    sc_prep(scr);
+    crate::port::cells_push(etext, 49);
+    crate::port::cells_push(etext, 50);
+    crate::port::cells_push(etext, 51);
+    crate::port::cells_push(etext, 52);
+    rtt_line(olines, owords, feats, 0, 900);
+    let fr: i32 = rtt_run(oruns, olines, owords, 0, 0);
+    let l1: i32 = ol_count(olines);
+    let w1: i32 = ow_count(owords);
+    rtt_line3(olines, owords, feats, 0, 900, 900, 800);
+    let br: i32 = rtt_run(oruns, olines, owords, l1, w1);
+    rt_prep(rtp);
+    crate::port::cells_set(rtp, rtp_brun(), br);
+    crate::port::cells_set(scr, sc_share_base(), 0);
+    crate::testport::assert_eq(rt_adopt(rtp, oruns, fr, olines, owords, etext, scr), 1, "one line: the first pass's, which stays: no foreign ink under it");
+    crate::testport::assert_eq(crate::port::cells_at(scr, sc_xtra_base() + 1), l1 + 1, "and the body-ink line over it, whose third word lies over none of its own, is read with it");
+    crate::testport::assert_eq(sc_emit_sel(olines, owords, &mut crate::port::Cells::new(), 1, 1, 0, scr, words, lines, etext, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 1, "one line is emitted");
+    crate::testport::assert_eq(wd_count(words), 3, "of three words: the two the first pass read, and the column it did not");
+    crate::testport::assert_eq(wd_get(words, 0, hd_x0()), 100, "the first");
+    crate::testport::assert_eq(wd_get(words, 1, hd_x0()), 700, "the second");
+    crate::testport::assert_eq(wd_get(words, 2, hd_x0()), 1300, "and the column, after them");
+    crate::testport::assert_eq(wd_get(words, 1, wf_gap()), 100, "the gap of the second is to the column");
+    crate::testport::assert_eq(ln_get(lines, 0, lh_x1()), 1700, "the line is as long as the column");
+    crate::testport::assert_eq(ln_get(lines, 0, lh_count()), 3, "of three words");
+}
+pub(crate) fn rtt_empty(mut olines: &mut crate::port::Cells, y0: i32) -> i32 {
+    // A first-pass line with no word, 40 pt wide and 15 pt high from height y0 (centipoints): what the engine finds where text meets a rule and reads as nothing; answers its row.
+    let l: i32 = ol_count(olines);
+    ol_new(olines, 1, 100, y0, 4100, y0 + 1500, 100, y0 + 1500, 4100, y0 + 1500, 0, 0, 0, 0);
+    ol_set(olines, l, olf_px(), 100);
+    ol_set(olines, l, olf_py(), y0);
+    ol_set(olines, l, olf_pw(), 4000);
+    ol_set(olines, l, olf_ph(), 1500);
+    return l;
+}
+pub(crate) fn rtt_fill1(b: &crate::port::Bitmap, x0: i32, y0: i32, x1: i32, y1: i32, v: i32) -> i32 {
+    let mut y: i32 = y0;
+    let mut x: i32 = 0;
+    while y < y1 {
+        x = x0;
+        while x < x1 {
+            crate::port::bitmap_set_u8(b, x, y, 0, v);
+            x += 1;
+        }
+        y += 1;
+    }
+    return 0;
+}
+pub(crate) fn rtt_band_scene(emon_t: i32, bandgray: i32, pxh: i32) -> i32 {
+    // A 40 x 20 gray page (paper 240) with a band of gray `bandgray` from (5,5) 30 pixels wide and `pxh` high, white text at (10..13, 8..12) in it and one black pixel of body ink at (30, 10);
+    // the band as the tracer found it (a component of a colour layer, solid, six holes). Answers how many bands `rt-invert-bands` turned, leaving the view in the caller's `dst` (cells of the test).
+    let gray: &crate::port::Bitmap = &crate::port::bitmap_new(40, 20, 1);
+    let bodym: &crate::port::Bitmap = &crate::port::bitmap_new(40, 20, 1);
+    let dst: &crate::port::Bitmap = &crate::port::bitmap_new(40, 20, 1);
+    let comps: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    rtt_fill1(gray, 0, 0, 40, 20, 240);
+    rtt_fill1(gray, 5, 5, 35, 5 + pxh, bandgray);
+    rtt_fill1(gray, 10, 8, 14, 13, 255);
+    crate::port::bitmap_set_u8(gray, 30, 10, 0, 0);
+    rtt_fill1(bodym, 0, 0, 40, 20, 0);
+    crate::port::bitmap_set_u8(bodym, 30, 10, 0, 255);
+    rtt_fill1(dst, 0, 0, 40, 20, 240);
+    let ink: i32 = ik_new(inks, 1, 0);
+    let c: i32 = co_new(comps, 1, 0, 0, 3000, 1000, 0);
+    ik_set(inks, ink, ikf_role(), ir_color());
+    co_set(comps, c, cf_ink(), ink);
+    co_set(comps, c, cf_conf(), 700);
+    co_set(comps, c, cf_pxx(), 5);
+    co_set(comps, c, cf_pxy(), 5);
+    co_set(comps, c, cf_pxw(), 30);
+    co_set(comps, c, cf_pxh(), pxh);
+    co_set(comps, c, cf_fill(), 900);
+    co_set(comps, c, cf_holes(), 6);
+    co_set(comps, c, cf_gray(), bandgray);
+    let n: i32 = rt_invert_bands(dst, gray, bodym, comps, inks, 1, 72, 240);
+    if n == 1 {
+        crate::testport::assert_eq(crate::port::bitmap_u8(dst, 11, 10, 0), 0, "the light text is ink");
+        crate::testport::assert_eq(crate::port::bitmap_u8(dst, 20, 7, 0), 240, "the band's ground is paper");
+        crate::testport::assert_eq(crate::port::bitmap_u8(dst, 30, 10, 0), 0, "a pixel of body ink is as it was");
+        crate::testport::assert_eq(crate::port::bitmap_u8(dst, 2, 2, 0), 240, "and outside the band nothing is touched");
+    }
+    return n;
+}
+#[test]
+fn test_a_band_of_colour_with_light_text_is_turned_inside_out_and_a_light_band_is_not() {
+    // P12.6 (issue 14, E09's white-on-blue header): the view the body-ink pass reads showed the band and its text as paper, and the text was never read
+    crate::testport::assert_eq(rtt_band_scene(0, 149, 10), 1, "a band of gray 149, white text in it");
+    crate::testport::assert_eq(rtt_band_scene(0, 220, 10), 0, "a light band holds dark text: the engine reads it as it is");
+    crate::testport::assert_eq(rtt_band_scene(0, 149, 3), 0, "a band 3 pixels high at 72 dpi is a rule, not a header");
+}
+#[test]
+fn test_a_line_the_engine_found_and_read_as_nothing_is_read_alone_and_its_words_are_the_pages_when_sure() {
+    // P12.6, `RUNNING FOR (CHECK ONE):` before its blank: the page read as a page finds the line and no word in it; read as a line it is text
+    let oruns: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rtp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    sc_prep(scr);
+    rtt_line(olines, owords, feats, 0, 900);
+    rtt_empty(olines, 300);
+    rtt_line(olines, owords, feats, 2000, 900);
+    let fr: i32 = rtt_run(oruns, olines, owords, 0, 0);
+    let l1: i32 = ol_count(olines);
+    let w1: i32 = ow_count(owords);
+    rt_prep(rtp);
+    crate::testport::assert_eq(rt_empty_area(olines, 1), 600, "the empty line: 40 x 15 square points");
+    crate::testport::assert_eq(rt_empty_area(olines, 0), 0, "a line with words is not one");
+    crate::testport::assert_eq(rt_decide(0, 0, 0, oruns, fr, olines, owords, &mut crate::port::Cells::new(), 1, 130, rtp), 1, "the lines are sure, so the budget goes to the one line that has no word");
+    crate::testport::assert_eq(crate::port::cells_at(rtp, rtp_line0()), 1, "that line");
+    // its re-reading: a line of three words, sure
+    rtt_line3(olines, owords, feats, 300, 900, 900, 900);
+    let tr: i32 = rtt_run(oruns, olines, owords, l1, w1);
+    crate::port::cells_set(rtp, rtp_line0() + 1, tr);
+    crate::testport::assert_eq(rt_line_state(oruns, olines, owords, rtp, scr, 1, 1, -1, 0, 3), 5, "the re-reading is the page's");
+    crate::testport::assert_eq(rt_line_state(oruns, olines, owords, rtp, scr, 0, 0, -1, 0, 3), 0, "and the lines with words stay");
+    crate::testport::assert_eq(rtt_adopt(rtp, oruns, fr, olines, owords, scr), 3, "three lines: the first, the re-reading of the empty one, the third");
+    crate::testport::assert_eq(crate::port::cells_at(scr, sc_sel_base()), 0, "the first");
+    crate::testport::assert_eq(crate::port::cells_at(scr, sc_sel_base() + 1), l1, "then the line read in place of the empty one");
+    crate::testport::assert_eq(crate::port::cells_at(scr, sc_sel_base() + 2), 2, "then the third");
+}
+#[test]
+fn test_a_line_read_as_nothing_and_re_read_as_unsure_words_stays_nothing() {
+    let oruns: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rtp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    sc_prep(scr);
+    rtt_line(olines, owords, feats, 0, 900);
+    rtt_empty(olines, 300);
+    let fr: i32 = rtt_run(oruns, olines, owords, 0, 0);
+    let l1: i32 = ol_count(olines);
+    let w1: i32 = ow_count(owords);
+    rt_prep(rtp);
+    rt_decide(0, 0, 0, oruns, fr, olines, owords, &mut crate::port::Cells::new(), 1, 130, rtp);
+    rtt_line3(olines, owords, feats, 300, 400, 500, 300);
+    let tr: i32 = rtt_run(oruns, olines, owords, l1, w1);
+    crate::port::cells_set(rtp, rtp_line0() + 1, tr);
+    crate::testport::assert_eq(rt_line_state(oruns, olines, owords, rtp, scr, 1, 1, -1, 0, 2), 0, "words of a mean confidence of 400 are not taken for a line nothing was read of: it has no first pass to be compared with");
+}
+#[test]
+fn test_a_second_pass_word_that_is_unsure_or_lies_over_a_word_of_the_first_pass_is_not_added() {
+    let oruns: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rtp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    sc_prep(scr);
+    rtt_line(olines, owords, feats, 0, 900);
+    let fr: i32 = rtt_run(oruns, olines, owords, 0, 0);
+    let l1: i32 = ol_count(olines);
+    let w1: i32 = ow_count(owords);
+    rtt_line3(olines, owords, feats, 0, 900, 900, 300);
+    let br: i32 = rtt_run(oruns, olines, owords, l1, w1);
+    rt_prep(rtp);
+    crate::port::cells_set(rtp, rtp_brun(), br);
+    crate::port::cells_set(scr, sc_share_base(), 0);
+    crate::testport::assert_eq(rtt_adopt(rtp, oruns, fr, olines, owords, scr), 1, "the first pass's line");
+    crate::testport::assert_eq(crate::port::cells_at(scr, sc_xtra_base() + 1), 0, "the column read at a confidence of 300 is not added: the first two words lie over the first pass's own");
 }
 #[test]
 fn test_a_line_is_read_again_by_its_cells_only_when_no_text_is_lost_and_they_are_surer() {
@@ -246,7 +446,7 @@ fn test_a_body_ink_run_of_more_lines_than_the_scratch_holds_is_cut_not_read_past
     crate::port::cells_set(rtp, rtp_brun(), br);
     crate::testport::assert_eq(rt_cap(1600), sc_sel_max(), "a count over the region is the region's");
     crate::testport::assert_eq(rt_cap(7), 7, "and one under it is its own");
-    let n: i32 = rt_adopt(rtp, oruns, fr, olines, owords, scr);
+    let n: i32 = rtt_adopt(rtp, oruns, fr, olines, owords, scr);
     crate::testport::assert_that(n <= sc_sel_max(), "the selection holds no more than the scratch has room for");
     crate::testport::assert_that(n > 1400, "and the 1500 lines it counts are read, bar the few that lie over the first pass's line");
 }

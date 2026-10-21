@@ -45,6 +45,45 @@ func utFactor(nlines int32, xh int32, pxw int32, pxh int32, osd int32, oconf int
 	return upscale.UpFactor(ans, at, pxw, pxh, port.NewCells())
 }
 
+func utFactorC(nlines int32, xh int32, conf int32) int32 {
+	// `up-factor` of a first pass of `nlines` one-word lines of this x-height and word confidence (no OSD), on a 765 x 990 raster.
+	var ans *port.Cells = port.NewCells()
+	var at int32 = plan.AnOcr(ans, 272)
+	var k int32 = 0
+	var word int32 = 0
+	for k < nlines {
+		word = plan.AnOcrWord(ans, at, 10, 20+(k*60), 200, 40, conf, k, 0)
+		plan.AnOcrCp(ans, word, 72)
+		plan.AnOcrCp(ans, word, 105)
+		k += 1
+	}
+	ocr.OxBegin(ans, 0, 0, 0, 0, -1, 1281455214, 100, -1, nlines, 1, 0, 0, 0)
+	k = 0
+	for k < nlines {
+		ocr.OxLine(ans, 10, 20+(k*60), 200, 40, 10, 55+(k*60), 210, 55+(k*60), 0, 0, 0, xh, 14, 6)
+		k += 1
+	}
+	ocr.OxBlock(ans, 10, 20, 200, nlines*60, 0, 0, 0)
+	k = 0
+	for k < nlines {
+		ocr.OxWord(ans, 0, 0, -1, 0)
+		k += 1
+	}
+	plan.AnOcrEnd(ans, at)
+	return upscale.UpFactor(ans, at, 765, 990, port.NewCells())
+}
+
+func TestTextALittleOverTheTriggerThatTheEngineReadBadlyIsReadAgainEnlarged(emonT *testing.T) {
+	// P12.6 (R4): the 9 pixel trigger missed degraded typewriter scans at 100 to 130 dpi (x-height 10 to 13) that an external 3x enlargement recovers; a well read page of that size stays as it was
+	port.AssertEq(emonT, utFactorC(30, 10, 500), 2, "x-height 10, 30 words at a mean confidence of 500: enlarged twice")
+	port.AssertEq(emonT, utFactorC(30, 12, 500), 2, "x-height 12: 31 / 12 is 2")
+	port.AssertEq(emonT, utFactorC(30, 10, 900), 1, "read well: not at all (the recorded 150 dpi scans)")
+	port.AssertEq(emonT, utFactorC(30, 10, 650), 1, "at the limit of `up-weak-conf`: well enough")
+	port.AssertEq(emonT, utFactorC(10, 10, 400), 1, "ten words say nothing of a page: not at all")
+	port.AssertEq(emonT, utFactorC(30, 14, 500), 1, "an x-height of 14 is a 200 dpi page: not at all")
+	port.AssertEq(emonT, utFactorC(30, 8, 500), 3, "under the trigger it is as it was")
+}
+
 func TestTheEffectiveResolutionIsWhatTenPointTypeAtThatXHeightHas(emonT *testing.T) {
 	port.AssertEq(emonT, upscale.UpEffDpi100(21), 30240, "an x-height of 21 pixels is ten point type at 302 dpi")
 	port.AssertEq(emonT, upscale.UpEffDpi100(6), 8640, "6 pixels: 86 dpi, the 90 dpi page of the smoke review")

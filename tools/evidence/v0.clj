@@ -201,7 +201,8 @@
                    a (subvec (vec oalts) af (+ af ac))]
                (obj "sym" (str off) "cp" (str (first (text-cps (get a "text")))) "conf" (when (contains? a "conf") (num-str (get a "conf")))))
         view (nth (get ev "views") (get run-row "view" 0))
-        dpi100 (get view "dpi" 7200)
+        ;; the dump kept dots per inch x 100 until P12.6 (D611) and prints dots per inch since: a value over 2400 is the old one
+        dpi100 (let [d (get view "dpi" 72)] (if (> d 2400) d (* 100 d)))
         ->px (fn [c] (Math/round (/ (* c dpi100) 720000.0)))
         [lbx0 lby0 lbx1 lby1] (when ext? (map (comp ->px cpt) (get (nth olines lrow) "baseline")))
         [pxx _ pxw _] (get w "px" [0 0 0 0])

@@ -47,6 +47,9 @@ public static class Tiffcheck {
     public static int TrEy() {
         return 13;
     }
+    public static int TrT4() {
+        return 14;
+    }
     public static int TrSpp() {
         return 16;
     }
@@ -127,6 +130,7 @@ public static class Tiffcheck {
     internal const int REo = 11;
     internal const int REx = 12;
     internal const int REy = 13;
+    internal const int RT4 = 14;
     internal const int RSpp = 16;
     internal const int RBps = 17;
     internal const int RComp = 18;
@@ -602,9 +606,10 @@ public static class Tiffcheck {
             if (TcBad(r) != 0) {
                 return TcBad(r);
             }
-            if ((v & 7) != 0) {
+            if ((v & 2) != 0) {
                 return TcRet(r, Imgcheck.IcUnsupported());
             }
+            emon.Port.CellsSet(r, RT4, v & 5);
         }
         v = TcInt(t, r, 284, 1);
         if (TcBad(r) != 0) {

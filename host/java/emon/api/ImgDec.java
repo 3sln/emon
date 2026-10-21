@@ -823,7 +823,7 @@ public final class ImgDec {
                         case 8:
                         case 32946: raw = inflate(data, expect); break;
                         case 4: raw = ccitt(data, -1, cw, crows, 0, ws); break;
-                        default: raw = ccitt(data, 0, cw, crows, 0, ws); break;
+                        default: raw = ccitt(data, (g(rep, Tiffcheck.trT4()) & 1) != 0 ? 4 : 0, cw, crows, 0, ws); break;  // Group 3: k 4 when T4Options says two-dimensional (P12.6)
                     }
                     if (raw.length < expect) {
                         raw = Arrays.copyOf(raw, expect);

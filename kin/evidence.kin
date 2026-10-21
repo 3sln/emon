@@ -160,10 +160,17 @@
    [vg-nonaffine 2 "nonaffine"]
    [vg-engine-binary 4 "engine-binary"]])
 
+;; What the engine said of a word (1 2 4), and what emon did with it afterwards (8 16 32, P12.6): `garbage` a word of very low confidence
+;; and implausible characters (or a dot leader) kept out of the page's words and written to the dropped ledger as an `ocr-ghost`;
+;; `rule-ghost` a table rule read as a character (kept out and ledgered as a `rule-ghost`); `corrected` its text in the page's words is
+;; not the engine's (a currency sign, a thousands comma, a rule's stroke at its end): the row keeps the engine's own text.
 (defenum ^:pub oe
   [[oe-dictionary 1 "dictionary"]
    [oe-numeric 2 "numeric"]
-   [oe-fallback 4 "fallback"]])
+   [oe-fallback 4 "fallback"]
+   [oe-garbage 8 "garbage"]
+   [oe-rule-ghost 16 "rule-ghost"]
+   [oe-corrected 32 "corrected"]])
 
 (defenum ^:pub os
   [[os-superscript 1 "superscript"]
@@ -674,6 +681,7 @@
 ;; lines (stride 16), head line
 (defn ^:pub ^I32 lf-src [] (return 13))
 (defn ^:pub ^I32 lf-order [] (return 14))
+(defn ^:pub ^I32 ls-revised [] (comment "Source metadata bit: OCR line composed or recovered after the first reading; no independent heading evidence.") (return 256))
 
 ;; marks (stride 24)
 (defn ^:pub ^I32 mkf-page [] (return 0))
@@ -940,6 +948,7 @@
 (defn ^:pub ^I32 tlf-conf [] (return 16))
 
 ;; THE DUMP'S FIELD TABLE: one row per printed field, [arena first-cell kind key default arg], arenas in `ea` order.
+;; (A resolution is kept as dots per inch x 100 -- `dpi100` -- and is printed as kind 2, so that 300 dpi is `300`, not `30000`: P12.6.)
 ;; kind 1 int, 2 centi-units as points, 3 box (4 cells), 4 segment (4 cells, `[x0,y0,x1,y1]` in points), 5 colour,
 ;; 6 text run (2 cells), 7 run `[first,count]`, 8 enum (arg: the `ev-fenum` table), 9 bit set (arg: the `ev-fbits` table),
 ;; 10 pixel box `[x,y,w,h]`, 11 packed ASCII, 12 two ints, 13 two centi-unit values in points.
@@ -953,13 +962,13 @@
          1 2 2 74 0 0
          1 3 1 75 0 0
          1 4 9 28 0 7
-         1 5 1 76 0 0
+         1 5 2 76 0 0
          2 0 1 9 -2147483648 0
          2 1 8 31 0 19
          2 2 1 77 -1 0
          2 3 1 48 -1 0
          2 4 12 36 0 0
-         2 6 1 76 0 0
+         2 6 2 76 0 0
          2 7 1 38 0 0
          2 8 1 78 -1 0
          2 9 1 75 0 0

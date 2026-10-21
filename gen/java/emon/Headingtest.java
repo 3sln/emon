@@ -1146,4 +1146,57 @@ public final class Headingtest {
         emon.Testport.assertEq(htGolden(emon.Testport.testFile("corpus/synth/pdf/lists-basic.pdf"), t8, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, mst, sf, sc, hc, ws, tmp2, pr, ptxt), 0, "lists-basic runs");
         emon.Testport.assertTextSpan(t8, emon.Testport.testFile("heading/lists-basic.json"), 0, Mscript.jtEnd(emon.Testport.testFile("heading/lists-basic.json")), "lists-basic", 0);
     }
+    public static void testRecoveredOcrTextDoesNotSupplyHeadingEvidence() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells sf = emon.Port.newCells();
+        emon.Port.Cells sc = emon.Port.newCells();
+        emon.Port.Cells hc = emon.Port.newCells();
+        emon.Port.Cells ws = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        emon.Port.Cells pr = emon.Port.newCells();
+        emon.Port.Cells ptxt = emon.Port.newCells();
+        htOutlineDoc(wd, ln, et);
+        Evidence.lnSet(ln, 4, Evidence.lfSrc(), 4 + Evidence.lsRevised());
+        emon.Testport.assertEq(htRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 4, "recovered words stay in the text, but cannot open a section");
+        emon.Testport.assertEq(Heading.hdLevel(hc, 4), 0, "the recovered line is body text");
+        emon.Testport.assertEq(Heading.hdLevel(hc, 0), 1, "the first reading still supplies the document title");
+    }
+    public static void testAScannedRowWithSeparatedColumnsIsNotAHeading() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells sf = emon.Port.newCells();
+        emon.Port.Cells sc = emon.Port.newCells();
+        emon.Port.Cells hc = emon.Port.newCells();
+        emon.Port.Cells ws = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        emon.Port.Cells pr = emon.Port.newCells();
+        emon.Port.Cells ptxt = emon.Port.newCells();
+        htHeading(wd, ln, et, emon.Testport.textBlob("Account Transfer Summary"), 5000, 2100, 1);
+        htBody(wd, ln, et, 1, 9000, 6);
+        Evidence.lnSet(ln, 0, Evidence.lfSrc(), 4);
+        Evidence.wdSet(wd, 0, Evidence.wfGap(), 10000);
+        Evidence.wdSet(wd, 1, Evidence.wfGap(), 10000);
+        emon.Testport.assertEq(htRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 0, "a scanned row's gaps do not establish a section");
+        emon.Testport.assertEq(Heading.hdLevel(hc, 0), 0, "the row is body text");
+    }
+    public static void testAScannedTransactionTimeIsNotASectionNumber() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells sf = emon.Port.newCells();
+        emon.Port.Cells sc = emon.Port.newCells();
+        emon.Port.Cells hc = emon.Port.newCells();
+        emon.Port.Cells ws = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        emon.Port.Cells pr = emon.Port.newCells();
+        emon.Port.Cells ptxt = emon.Port.newCells();
+        htHeading(wd, ln, et, emon.Testport.textBlob("12:34:56 Transfer"), 5000, 2100, 1);
+        htBody(wd, ln, et, 1, 9000, 6);
+        Evidence.lnSet(ln, 0, Evidence.lfSrc(), 4);
+        emon.Testport.assertEq(htRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 0, "a transaction continuation is no section");
+        emon.Testport.assertEq(Heading.hdLevel(hc, 0), 0, "the time-prefixed row is body text");
+    }
 }

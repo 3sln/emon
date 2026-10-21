@@ -37,6 +37,44 @@ pub(crate) fn ut_factor(nlines: i32, xh: i32, pxw: i32, pxh: i32, osd: i32, ocon
     let at: i32 = ut_answer(ans, 272, nlines, xh, 200, osd, oconf);
     return up_factor(ans, at, pxw, pxh, &mut crate::port::Cells::new());
 }
+pub(crate) fn ut_factor_c(nlines: i32, xh: i32, conf: i32) -> i32 {
+    // `up-factor` of a first pass of `nlines` one-word lines of this x-height and word confidence (no OSD), on a 765 x 990 raster.
+    let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let at: i32 = an_ocr(ans, 272);
+    let mut k: i32 = 0;
+    let mut word: i32 = 0;
+    while k < nlines {
+        word = an_ocr_word(ans, at, 10, 20 + (k * 60), 200, 40, conf, k, 0);
+        an_ocr_cp(ans, word, 72);
+        an_ocr_cp(ans, word, 105);
+        k += 1;
+    }
+    ox_begin(ans, 0, 0, 0, 0, -1, 1281455214, 100, -1, nlines, 1, 0, 0, 0);
+    k = 0;
+    while k < nlines {
+        ox_line(ans, 10, 20 + (k * 60), 200, 40, 10, 55 + (k * 60), 210, 55 + (k * 60), 0, 0, 0, xh, 14, 6);
+        k += 1;
+    }
+    ox_block(ans, 10, 20, 200, nlines * 60, 0, 0, 0);
+    k = 0;
+    while k < nlines {
+        ox_word(ans, 0, 0, -1, 0);
+        k += 1;
+    }
+    an_ocr_end(ans, at);
+    return up_factor(ans, at, 765, 990, &mut crate::port::Cells::new());
+}
+#[test]
+fn test_text_a_little_over_the_trigger_that_the_engine_read_badly_is_read_again_enlarged() {
+    // P12.6 (R4): the 9 pixel trigger missed degraded typewriter scans at 100 to 130 dpi (x-height 10 to 13) that an external 3x enlargement recovers; a well read page of that size stays as it was
+    crate::testport::assert_eq(ut_factor_c(30, 10, 500), 2, "x-height 10, 30 words at a mean confidence of 500: enlarged twice");
+    crate::testport::assert_eq(ut_factor_c(30, 12, 500), 2, "x-height 12: 31 / 12 is 2");
+    crate::testport::assert_eq(ut_factor_c(30, 10, 900), 1, "read well: not at all (the recorded 150 dpi scans)");
+    crate::testport::assert_eq(ut_factor_c(30, 10, 650), 1, "at the limit of `up-weak-conf`: well enough");
+    crate::testport::assert_eq(ut_factor_c(10, 10, 400), 1, "ten words say nothing of a page: not at all");
+    crate::testport::assert_eq(ut_factor_c(30, 14, 500), 1, "an x-height of 14 is a 200 dpi page: not at all");
+    crate::testport::assert_eq(ut_factor_c(30, 8, 500), 3, "under the trigger it is as it was");
+}
 #[test]
 fn test_the_effective_resolution_is_what_ten_point_type_at_that_x_height_has() {
     crate::testport::assert_eq(up_eff_dpi100(21), 30240, "an x-height of 21 pixels is ten point type at 302 dpi");

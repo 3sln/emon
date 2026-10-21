@@ -498,6 +498,15 @@ pub fn oe_numeric() -> i32 {
 pub fn oe_fallback() -> i32 {
     return 4;
 }
+pub fn oe_garbage() -> i32 {
+    return 8;
+}
+pub fn oe_rule_ghost() -> i32 {
+    return 16;
+}
+pub fn oe_corrected() -> i32 {
+    return 32;
+}
 pub fn oe_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "dictionary");
@@ -509,6 +518,18 @@ pub fn oe_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 4 {
         crate::port::text_ascii(t, "fallback");
+        return 1;
+    }
+    if code == 8 {
+        crate::port::text_ascii(t, "garbage");
+        return 1;
+    }
+    if code == 16 {
+        crate::port::text_ascii(t, "rule-ghost");
+        return 1;
+    }
+    if code == 32 {
+        crate::port::text_ascii(t, "corrected");
         return 1;
     }
     return 0;
@@ -3098,6 +3119,10 @@ pub fn lf_src() -> i32 {
 pub fn lf_order() -> i32 {
     return 14;
 }
+pub fn ls_revised() -> i32 {
+    // Source metadata bit: OCR line composed or recovered after the first reading; no independent heading evidence.
+    return 256;
+}
 pub fn mkf_page() -> i32 {
     return 0;
 }
@@ -3806,13 +3831,13 @@ pub static EV_FD: [i32; 1680] = [
     1, 2, 2, 74, 0, 0,
     1, 3, 1, 75, 0, 0,
     1, 4, 9, 28, 0, 7,
-    1, 5, 1, 76, 0, 0,
+    1, 5, 2, 76, 0, 0,
     2, 0, 1, 9, -2147483648, 0,
     2, 1, 8, 31, 0, 19,
     2, 2, 1, 77, -1, 0,
     2, 3, 1, 48, -1, 0,
     2, 4, 12, 36, 0, 0,
-    2, 6, 1, 76, 0, 0,
+    2, 6, 2, 76, 0, 0,
     2, 7, 1, 38, 0, 0,
     2, 8, 1, 78, -1, 0,
     2, 9, 1, 75, 0, 0,

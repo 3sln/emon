@@ -36,6 +36,7 @@
                                bitmap-hash bitmap-quarter-into bitmap-lut-into]]
             [emon.plan :refer [rq-render an-find an-ok an-arg pu-id pu-view-id pi-ocr pi-render-text-only lay-text-only]]
             [emon.evidence :refer [ik-get ikf-count ikf-role ir-body ir-light ir-color ir-background
+                                   co-count co-get cf-page cf-pxx cf-pxy cf-pxw cf-pxh cf-fill cf-holes cf-gray cf-ink cf-conf
                                    ol-get ow-get ow-count ol-count or-get or-set or-count fe-get xo-body-share rl-count rl-get rlf-page rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1
                                    olf-px olf-py olf-pw olf-ph owf-px owf-py owf-pw owf-ph lh-first lh-count lh-x0 lh-y0 lh-x1 lh-y1 hd-x0 hd-y0 hd-x1 hd-y1 hd-conf hd-tlen hd-feat
                                    orf-pass orf-round orf-psm orf-rx orf-ry orf-rw orf-rh orf-osd orf-oconf orf-lfirst orf-lcount
@@ -45,7 +46,8 @@
                                    vw-new vw-get vwf-kind vwf-pxw vwf-pxh vwf-dpi vwf-layer vwf-deskew vwf-cropx vwf-cropy ev-overlap-small vk-render tl-count tl-get]]
             [emon.norm :refer [nm-orient nm-osd-conf nm-paper-gray nm-ws-assign nm-ws-lut nm-layer-get nm-role-mask-into nm-box-ink nm-box-both]]
             [emon.player :refer [cg-get cg-set cgf-x0 cgf-y0 cgf-x1 cgf-y1 cgf-flags plg-bink plg-bink-absent]]
-            [emon.scan :refer [sc-request sc-request-at sc-request-view sc-answer sc-lang sc-sel-set sc-sel-max sc-aux-base sc-share-base sc-partner-base sc-bonly-base]]
+            [emon.scan :refer [sc-request sc-request-at sc-request-view sc-answer sc-lang sc-sel-set sc-sel-max sc-aux-base sc-share-base sc-partner-base sc-bonly-base
+                               sc-xtra-base sc-xtra-count]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem]]))
 
@@ -73,6 +75,12 @@
 (defn ^:pub ^I32 rt-lattice-v [] (comment "A page has a table's lattice when it has at least this many long vertical rules...") (return 3))
 (defn ^:pub ^I32 rt-lattice-h [] (comment "...and at least this many long horizontal ones.") (return 2))
 (defn ^:pub ^I32 rt-pad [] (comment "The pixels added around a line's box when it is re-read alone.") (return 3))
+(defn ^:pub ^I32 rt-empty-h [] (comment "P12.6: a first-pass line with no word is re-read alone when its box is at least this high (centipoints: 6 pt)...") (return 600))
+(defn ^:pub ^I32 rt-empty-h-max [] (comment "...and at most this high (60 pt)...") (return 6000))
+(defn ^:pub ^I32 rt-empty-w [] (comment "...and at least this wide (25 pt)...") (return 2500))
+(defn ^:pub ^I32 rt-empty-aspect [] (comment "...and no more than this many times as wide as high (a ruled line is 60 times, a line of text 10): the engine finds a line where there is text and reads nothing when the text meets a rule.") (return 40))
+(defn ^:pub ^I32 rt-empty-words [] (comment "A re-reading takes the place of a line the first pass read as nothing when it has at least this many words...") (return 2))
+(defn ^:pub ^I32 rt-empty-conf [] (comment "...of a mean confidence (per mille) of at least this: it has no first pass to be compared with, so it must be sure.") (return 700))
 
 ;; ids (page-local `k`, `pu-id`): 16-127 are OCR (`pi-ocr`'s range), 128 and up crops and later kinds
 (defn ^:pub ^I32 ri-body [] (return 17))
@@ -101,7 +109,8 @@
 (defn ^:pub ^I32 rtp-line0 [] (comment "line j: `olines` row, `oruns` row of its re-reading (-1 none): two cells each") (return 8))
 (defn ^:pub ^I32 rtp-cell0 [] (comment "cell c: pixel box x y w h, first-pass line row, run row: six cells each (`rt-cells` of them)") (return 40))
 (defn ^:pub ^I32 rtp-xs [] (comment "scratch: the column borders a line crosses (8 cells)") (return 200))
-(defn ^:pub ^I32 rtp-primary [] (comment "the run the pipeline reads from: the first pass or a turned page's reading") (return 91))
+(defn ^:pub ^I32 rtp-bands [] (comment "P12.6: the bands of colour with light text in them that the body-ink view turned inside out (`rt-invert-bands`)") (return 248))
+(defn ^:pub ^I32 rtp-primary [](comment "the run the pipeline reads from: the first pass or a turned page's reading") (return 91))
 (defn ^:pub ^I32 rtp-erased [] (comment "the share (per mille) of the whole page's area that the body-ink view paints over") (return 92))
 (defn ^:pub ^I32 rtp-hash [] (comment "two cells the pixel hash is written to") (return 254))
 (defn ^:pub ^I32 rtp-size [] (return 256))
@@ -330,6 +339,17 @@
     (if (> q 0) (set q (- 4 q)))
     (return q)))
 
+(defn ^:pub ^I32 rt-empty-area [^Cells olines ^I32 l]
+  (comment "P12.6: when first-pass line `l` is a line with no word and the size of a line of text (`rt-empty-h`..), its area in square points (0 otherwise): the engine saw a line of text there and")
+  (comment "read nothing of it, which is what happens to text that meets a rule (`RUNNING FOR (CHECK ONE):` before its blank).")
+  (let [^I32 h (- (ol-get olines l (lh-y1)) (ol-get olines l (lh-y0)))
+        ^I32 w (- (ol-get olines l (lh-x1)) (ol-get olines l (lh-x0)))]
+    (if (> (ol-get olines l (lh-count)) 0) (return 0))
+    (if (or (< h (rt-empty-h)) (> h (rt-empty-h-max))) (return 0))
+    (if (< w (rt-empty-w)) (return 0))
+    (if (> w (* h (rt-empty-aspect))) (return 0))
+    (return (* (quot w 100) (quot h 100)))))
+
 (defn ^:pub ^I32 rt-decide [^I32 born ^I32 q ^I32 touched ^Cells oruns ^I32 run ^Cells olines ^Cells owords ^Cells rules ^I32 page1 ^I32 dpi
                             ^:mut ^Cells rtp]
   (comment "What the first pass (run `run`) calls for, written to `rtp`: the quarter turns (`q`, from `rt-turns`), whether the body-ink pass is wanted (the")
@@ -351,7 +371,7 @@
         ^:mut ^I32 n 0]
     (cells-set rtp (rtp-q) q)
     (if (== q 0)
-      (if (or (> touched 0) (>= (cells-at rtp (rtp-erased)) (rt-erase-min)))
+      (if (or (> touched 0) (or (> (cells-at rtp (rtp-bands)) 0) (>= (cells-at rtp (rtp-erased)) (rt-erase-min))))
         (cells-set rtp (rtp-body) 1)))
     (if (and (== q 0) (== born 0))
       (do (set nc (rt-decide-cells oruns run olines rules page1 dpi (- (rt-max) (rt-reserved)) rtp))
@@ -375,6 +395,29 @@
                                 (do (set best l)
                                     (set bestc c))))))
                       (set l (+ l 1))))
+                (if (< best 0)
+                  (set it room)
+                  (do (cells-set rtp (+ (rtp-line0) (* n 2)) best)
+                      (set n (+ n 1))))))
+          (comment "P12.6: what the budget leaves goes to the lines the engine found and read as nothing (text next to a rule is where it fails), the biggest first")
+          (set it n)
+          (while (< it room)
+            (do (set it (+ it 1))
+                (set best -1)
+                (set bestc 0)
+                (set l l0)
+                (while (< l (+ l0 ln))
+                  (do (set c (rt-empty-area olines l))
+                      (if (> c bestc)
+                        (do (set dup 0)
+                            (set j 0)
+                            (while (< j n)
+                              (do (if (== (cells-at rtp (+ (rtp-line0) (* j 2))) l) (set dup 1))
+                                  (set j (+ j 1))))
+                            (if (== dup 0)
+                              (do (set best l)
+                                  (set bestc c)))))
+                    (set l (+ l 1))))
                 (if (< best 0)
                   (set it room)
                   (do (cells-set rtp (+ (rtp-line0) (* n 2)) best)
@@ -435,6 +478,76 @@
           (set y (+ y 1))))
     (return 0)))
 
+(defn ^:pub ^I32 rt-band-h [] (comment "P12.6: a band of colour that holds light text (`rt-invert-bands`) is at least this many pixels high per 100 dpi (rounded up)...") (return 5))
+(defn ^:pub ^I32 rt-band-aspect [] (comment "...at least this many times as wide as high...") (return 3))
+(defn ^:pub ^I32 rt-band-fill [] (comment "...of ink that fills at least this much (per mille) of its box...") (return 600))
+(defn ^:pub ^I32 rt-band-holes [] (comment "...with at least this many holes in it (the letters)...") (return 4))
+(defn ^:pub ^I32 rt-band-gray [] (comment "...and its colour darker than this gray: a light band holds dark text, which the engine reads as it is.") (return 181))
+(defn ^:pub ^I32 rt-band-max [] (comment "At most this many bands of a page are turned inside out.") (return 8))
+
+(defn ^I32 rt-band-like [^Cells comps ^Cells inks ^I32 r ^I32 page1 ^I32 dpi]
+  (comment "1 when component `r` of page `page1` is a BAND of colour with light text in it: of a layer that is not the body's (a colour, light or background one), sure, of a ground")
+  (comment "darker than `rt-band-gray`, solid (`rt-band-fill`), with holes (`rt-band-holes`: the letters), wide (`rt-band-aspect`) and at least `rt-band-h` pixels per 100 dpi high.")
+  (let [^I32 ink (co-get comps r (cf-ink))
+        ^I32 h (co-get comps r (cf-pxh))
+        ^I32 w (co-get comps r (cf-pxw))
+        ^:mut ^I32 role 0]
+    (if (!= (co-get comps r (cf-page)) page1) (return 0))
+    (if (< (co-get comps r (cf-conf)) 500) (return 0))
+    (if (< ink 0) (return 0))
+    (set role (ik-get inks ink (ikf-role)))
+    (if (== role (ir-body)) (return 0))
+    (if (> (co-get comps r (cf-gray)) (rt-band-gray)) (return 0))
+    (if (< (co-get comps r (cf-fill)) (rt-band-fill)) (return 0))
+    (if (< (co-get comps r (cf-holes)) (rt-band-holes)) (return 0))
+    (if (< (* h 100) (* (rt-band-h) dpi)) (return 0))
+    (if (< w (* h (rt-band-aspect))) (return 0))
+    (return 1)))
+
+(defn ^:pub ^I32 rt-invert-bands [^Bitmap dst ^Bitmap gray ^Bitmap bodym ^Cells comps ^Cells inks ^I32 page1 ^I32 dpi ^I32 paper]
+  (comment "P12.6 (issue 14): the white-on-blue header of a statement is a BAND of colour (`rt-band-like`) with light text in it, and the body-ink view painted both the ground and the text")
+  (comment "the paper's: the text was never read. Inside each such band's box the view now shows the light text as ink (a pixel brighter than half way between the band's gray and white")
+  (comment "is black), the band's ground as paper, and what is body ink (dark text on the band) as it was. Answers how many bands (`rt-band-max` at most).")
+  (let [^I32 nc (co-count comps)
+        ^I32 w (bitmap-w dst)
+        ^I32 h (bitmap-h dst)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 g 0
+        ^:mut ^I32 mid 0]
+    (while (and (< r nc) (< n (rt-band-max)))
+      (do (if (== (rt-band-like comps inks r page1 dpi) 1)
+            (do (set x0 (co-get comps r (cf-pxx)))
+                (set y0 (co-get comps r (cf-pxy)))
+                (set x1 (+ x0 (co-get comps r (cf-pxw))))
+                (set y1 (+ y0 (co-get comps r (cf-pxh))))
+                (if (< x0 0) (set x0 0))
+                (if (< y0 0) (set y0 0))
+                (if (> x1 w) (set x1 w))
+                (if (> y1 h) (set y1 h))
+                (set mid (quot (+ (co-get comps r (cf-gray)) 255) 2))
+                (set y y0)
+                (while (< y y1)
+                  (do (set x x0)
+                      (while (< x x1)
+                        (do (set g (bitmap-u8 gray x y 0))
+                            (if (!= (bitmap-u8 bodym x y 0) 0)
+                              (bitmap-set-u8 dst x y 0 g)
+                              (if (>= g mid)
+                                (bitmap-set-u8 dst x y 0 0)
+                                (bitmap-set-u8 dst x y 0 paper)))
+                            (set x (+ x 1))))
+                      (set y (+ y 1))))
+                (set n (+ n 1))))
+          (set r (+ r 1))))
+    (return n)))
+
 (defn ^:pub ^I32 rt-cap [^I32 n]
   (comment "`n` lines, but at most `sc-sel-max` (D523): the per-line regions of `scr` (`sc-share-base`, `sc-aux-base`, `sc-partner-base`, `sc-bonly-base`) are")
   (comment "that long and the last ends the scratch, so a page of more lines than that wrote the next region's cells, and past the last, off the end.")
@@ -447,7 +560,7 @@
   (return (i32 (quot (* (i64 n) 1000) (i64 d)))))
 
 (defn ^:pub ^I32 rt-measure [^I32 page ^BitmapSet bms ^I32 k0 ^Bitmap src ^:mut ^Cells ws ^I32 dpi
-                             ^Cells oruns ^I32 run ^Cells olines ^Cells owords ^:mut ^Cells scr ^:mut ^Cells rtp]
+                             ^Cells oruns ^I32 run ^Cells olines ^Cells owords ^:mut ^Cells scr ^:mut ^Cells rtp ^Cells comps ^Cells inks]
   (comment "Make the BODY-INK VIEW of the raster `src` the first pass read (`rt-erase-into`; the kin-made bitmaps `rv-erased`, `rv-mask`, `rv-body-mask`, `rv-emap`")
   (comment "of page `page`, 0-based, from the page's view ids) and measure, of every line of the first pass `run`, the share (per mille) of its ink that the view paints")
   (comment "over: the ink under its words' pixel boxes on the binary view `emon.pageink` made (`k0` its id group) that is in the view's `emap`. Written to `scr` at")
@@ -473,6 +586,7 @@
         ^:mut ^I32 both 0
         ^:mut ^I32 touched 0]
     (rt-erase-into src (bms-get bms (pu-view-id page k0)) ws mask bodym dpi emap erased)
+    (cells-set rtp (rtp-bands) (rt-invert-bands erased (bms-get bms (pu-view-id page k0)) bodym comps inks (+ page 1) dpi (nm-paper-gray ws)))
     (while (< k ln)
       (do (set f (ol-get olines (+ l0 k) (lh-first)))
           (set c (ol-get olines (+ l0 k) (lh-count)))
@@ -585,7 +699,7 @@
 
 (defn ^:pub ^I32 rt-plan [^I32 page ^I32 input ^I32 born ^I32 wanttext ^I32 rid ^I32 dpi ^Cells loc ^Cells ans ^BitmapSet bms ^I32 k0
                           ^Bitmap src ^:mut ^Cells ws ^Cells oruns ^I32 run ^Cells olines ^Cells owords ^Cells rules ^Cells tlines
-                          ^:mut ^Cells rtp ^:mut ^Cells rq ^:mut ^Cells scr]
+                          ^:mut ^Cells rtp ^:mut ^Cells rq ^:mut ^Cells scr ^Cells comps ^Cells inks]
   (comment "Decide and ask what is not yet answered, in the brief's order: the table cells and the lines, the text-only render and its OCR, the body-ink view,")
   (comment "the quarter-turned view. `page` is 0-based (ids), `rid` the request id of the raster `src` that the first pass read at `dpi`, `k0` the id group")
   (comment "`emon.pageink` normalized it under, `ws` its layer workspace, `scr` the unit's scratch (`sc-prep`: the measure of every first-pass line is left in it).")
@@ -596,7 +710,7 @@
         ^:mut ^I32 touched 0
         ^:mut ^I32 asked 0]
     (if (== q 0)
-      (set touched (rt-measure page bms k0 src ws dpi oruns run olines owords scr rtp)))
+      (set touched (rt-measure page bms k0 src ws dpi oruns run olines owords scr rtp comps inks)))
     (rt-decide born q touched oruns run olines owords rules (+ page 1) dpi rtp)
     (set asked (+ asked (rt-ask-cells page rid dpi loc ans rtp rq)))
     (set asked (+ asked (rt-ask-lines page rid dpi loc ans src olines rtp rq)))
@@ -800,7 +914,19 @@
         ^:mut ^I32 cc 0
         ^:mut ^I32 b -1
         ^:mut ^I32 back -1]
-    (if (<= c 0) (return 0))
+    (if (<= c 0)
+      (do (comment "P12.6: a line the first pass found and read as nothing (`rt-empty-area`), re-read alone: its words are the page's when there are some and they are sure (`rt-empty-words`, `rt-empty-conf`)")
+          (set j 0)
+          (while (< j nl)
+            (do (if (== (cells-at rtp (+ (rtp-line0) (* j 2))) l) (set t j))
+                (set j (+ j 1))))
+          (if (>= t 0)
+            (do (set tr (cells-at rtp (+ (rtp-line0) (+ (* t 2) 1))))
+                (if (>= tr 0)
+                  (if (>= (or-get oruns tr (orf-wcount)) (rt-empty-words))
+                    (if (>= (rt-run-mean oruns owords tr) (rt-empty-conf))
+                      (return 5))))))
+          (return 0)))
     (comment "the line was cut into cells: read again cell by cell, when every cell was, no text is lost and they are surer")
     (if (> (rt-line-cells rtp l) 0)
       (do (set allcells 1)
@@ -877,7 +1003,7 @@
           (set b (+ b 1))))
     (return best)))
 
-(defn ^:pub ^I32 rt-adopt [^:mut ^Cells rtp ^Cells oruns ^I32 fr ^Cells olines ^Cells owords ^:mut ^Cells scr]
+(defn ^:pub ^I32 rt-adopt [^:mut ^Cells rtp ^Cells oruns ^I32 fr ^Cells olines ^Cells owords ^Cells etext ^:mut ^Cells scr]
   (comment "The lines a SCANNED page's pipeline reads, in the order it reads them, written to the selection of `scr` (`sc-sel-set`); answers how")
   (comment "many. `fr` is the first pass's run. A page that was turned (`rtp-q`) is read from its turned view's run when that scores `rt-turn-gain`")
   (comment "per cent of the first pass's; an upright page is read from the first pass, each of its lines kept, replaced or dropped by `rt-line-state` (which wants")
@@ -912,6 +1038,12 @@
           (if (>= (* sr 100) (* sf (rt-turn-gain)))
             (set primary rrun))))
     (cells-set rtp (rtp-primary) primary)
+    (comment "P12.6: the words of a body-ink line that a first-pass line stays with (`sc-xtra-base`): none yet")
+    (cells-set scr (sc-xtra-base) fl0)
+    (while (< k nk)
+      (do (cells-set scr (+ (sc-xtra-base) (+ k 1)) 0)
+          (set k (+ k 1))))
+    (set k 0)
     (if (!= primary fr)
       (do (set pl0 (or-get oruns primary (orf-lfirst)))
           (set pn (or-get oruns primary (orf-lcount)))
@@ -951,12 +1083,20 @@
                     (do (set n (rt-sel-add scr n (+ bl0 b)))
                         (cells-set scr (+ (sc-bonly-base) b) 2)
                         (set b (rt-next-bonly olines scr bl0 bn ly)))))))
+          (comment "P12.6: a line that stays, with a body-ink line that is its partner both ways and reads words that lie over none of its own (a column the first pass stopped before)")
+          (if (and (== s 0) (>= brun 0))
+            (if (> (ol-get olines l (lh-count)) 0)
+              (do (set b (rt-best-over olines l bl0 (or-get oruns brun (orf-lcount))))
+                  (if (>= b 0)
+                    (if (== (rt-best-over olines b fl0 fnl) l)
+                      (if (> (sc-xtra-count olines owords etext l b) 0)
+                        (cells-set scr (+ (sc-xtra-base) (+ k 1)) (+ b 1))))))))
           (if (== s 0)
             (if (> (ol-get olines l (lh-count)) 0)
               (set n (rt-sel-add scr n l))))
           (if (== s 1)
             (set n (rt-sel-add scr n (cells-at scr (+ (sc-partner-base) k)))))
-          (if (== s 3)
+          (if (or (== s 3) (== s 5))
             (do (set j 0)
                 (while (< j (cells-at rtp (rtp-nl)))
                   (do (if (== (cells-at rtp (+ (rtp-line0) (* j 2))) l)

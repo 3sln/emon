@@ -45,6 +45,9 @@ pub fn tr_ex() -> i32 {
 pub fn tr_ey() -> i32 {
     return 13;
 }
+pub fn tr_t4() -> i32 {
+    return 14;
+}
 pub fn tr_spp() -> i32 {
     return 16;
 }
@@ -125,6 +128,7 @@ pub(crate) const R_LIMIT: i32 = 10;
 pub(crate) const R_EO: i32 = 11;
 pub(crate) const R_EX: i32 = 12;
 pub(crate) const R_EY: i32 = 13;
+pub(crate) const R_T4: i32 = 14;
 pub(crate) const R_SPP: i32 = 16;
 pub(crate) const R_BPS: i32 = 17;
 pub(crate) const R_COMP: i32 = 18;
@@ -600,9 +604,10 @@ pub(crate) fn tc_frame(t: &[u8], mut r: &mut crate::port::Cells, deep: i32) -> i
         if tc_bad(r) != 0 {
             return tc_bad(r);
         }
-        if (v & 7) != 0 {
+        if (v & 2) != 0 {
             return tc_ret(r, ic_unsupported());
         }
+        crate::port::cells_set(r, R_T4, v & 5);
     }
     v = tc_int(t, r, 284, 1);
     if tc_bad(r) != 0 {

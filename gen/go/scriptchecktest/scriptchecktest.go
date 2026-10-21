@@ -11,8 +11,9 @@ import (
 	"testing"
 )
 
-func skAnswer(ans *port.Cells, id int32, n int32, script int32, sconf int32, lang int32, lang0 int32) int32 {
-	// An OCR answer of `n` words, one a line, each read in the language cell `lang` (the first in `lang0`), whose page OSD says is in `script` at the confidence `sconf`.
+func skAnswer(ans *port.Cells, id int32, n int32, script int32, sconf int32, lang int32, lang0 int32, dflags int32) int32 {
+	// An OCR answer of `n` words, one a line, each read in the language cell `lang` (the first in `lang0`), whose page OSD says is in `script` at the confidence `sconf`;
+	// `dflags` 1 says the engine's dictionary knows the words, 0 not.
 	var at int32 = plan.AnOcr(ans, id)
 	var k int32 = 0
 	var word int32 = 0
@@ -32,9 +33,9 @@ func skAnswer(ans *port.Cells, id int32, n int32, script int32, sconf int32, lan
 	k = 0
 	for k < n {
 		if k == 0 {
-			ocr.OxWord(ans, 0, lang0, -1, 0)
+			ocr.OxWord(ans, 0, lang0, -1, dflags)
 		} else {
-			ocr.OxWord(ans, 0, lang, -1, 0)
+			ocr.OxWord(ans, 0, lang, -1, dflags)
 		}
 		k += 1
 	}
@@ -42,10 +43,14 @@ func skAnswer(ans *port.Cells, id int32, n int32, script int32, sconf int32, lan
 	return at
 }
 
-func unreadOf(n int32, script int32, sconf int32, lang int32, lang0 int32) int32 {
+func unreadOfD(n int32, script int32, sconf int32, lang int32, lang0 int32, dflags int32) int32 {
 	var ans *port.Cells = port.NewCells()
-	var at int32 = skAnswer(ans, 272, n, script, sconf, lang, lang0)
+	var at int32 = skAnswer(ans, 272, n, script, sconf, lang, lang0, dflags)
 	return scriptcheck.SkUnread(ans, at, port.NewCells())
+}
+
+func unreadOf(n int32, script int32, sconf int32, lang int32, lang0 int32) int32 {
+	return unreadOfD(n, script, sconf, lang, lang0, 0)
 }
 
 func TestALanguageCellUnpacksToItsLetters(emonT *testing.T) {
@@ -68,9 +73,11 @@ func TestAScriptNoModelReadIsUnread(emonT *testing.T) {
 
 func TestAPageTheEngineCanReadOrOsdIsUnsureOfIsNotFlagged(emonT *testing.T) {
 	port.AssertEq(emonT, unreadOf(5, 1281455214, 629, 1701734144, 1701734144), 0, "a Latin page")
-	port.AssertEq(emonT, unreadOf(5, 1147500129, 100, 1701734144, 1701734144), 0, "OSD unsure (confidence 10: a Latin page reads that)")
-	port.AssertEq(emonT, unreadOf(5, 1147500129, scriptcheck.SkMinConf()-1, 1701734144, 1701734144), 0, "just under the bound")
-	port.AssertEq(emonT, unreadOf(5, 1147500129, scriptcheck.SkMinConf(), 1701734144, 1701734144), 1, "at it")
+	port.AssertEq(emonT, unreadOfD(5, 1147500129, 100, 1701734144, 1701734144, 1), 0, "OSD unsure (confidence 10: a Latin page reads that) and the engine's dictionary knows the words: Latin")
+	port.AssertEq(emonT, unreadOfD(5, 1147500129, scriptcheck.SkMinConf()-1, 1701734144, 1701734144, 1), 0, "just under the bound, the words known")
+	port.AssertEq(emonT, unreadOfD(5, 1147500129, scriptcheck.SkMinConf(), 1701734144, 1701734144, 1), 1, "at it: believed whatever the dictionary says (the page of the smoke review)")
+	port.AssertEq(emonT, unreadOf(5, 1147500129, scriptcheck.SkWeakConf(), 1701734144, 1701734144), 1, "R2: OSD at 5.0 and none of the words known (Urdu, Han, Ethiopic in a Latin model): unread")
+	port.AssertEq(emonT, unreadOf(5, 1147500129, scriptcheck.SkWeakConf()-1, 1701734144, 1701734144), 0, "under 5.0: OSD says nothing")
 	port.AssertEq(emonT, unreadOf(2, 1147500129, 629, 1701734144, 1701734144), 0, "two words: the engine read nothing of it to speak of")
 	port.AssertEq(emonT, unreadOf(5, 0, 629, 1701734144, 1701734144), 0, "no script")
 }

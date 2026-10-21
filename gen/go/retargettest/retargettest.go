@@ -50,6 +50,16 @@ func rttLine(olines *port.Cells, owords *port.Cells, feats *port.Cells, y0 int32
 	return l
 }
 
+func rttAdopt(rtp *port.Cells, oruns *port.Cells, fr int32, olines *port.Cells, owords *port.Cells, scr *port.Cells) int32 {
+	// `rt-adopt` with a text of four digits, which every word of `rtt-word` spells (it starts at 0 and is 4 long).
+	var c *port.Cells = port.NewCells()
+	port.CellsPush(c, 49)
+	port.CellsPush(c, 50)
+	port.CellsPush(c, 51)
+	port.CellsPush(c, 52)
+	return retarget.RtAdopt(rtp, oruns, fr, olines, owords, c, scr)
+}
+
 func rttRun(oruns *port.Cells, olines *port.Cells, owords *port.Cells, l0 int32, w0 int32) int32 {
 	// A run over the lines [l0, now) and the words [w0, now).
 	var r int32 = evidence.OrNew(oruns, 1, 0)
@@ -190,12 +200,207 @@ func TestTheBodyInkRunReplacesALineOverForeignInkAndAGhostIsDropped(emonT *testi
 	port.AssertEq(emonT, port.CellsAt(scr, scan.ScPartnerBase()+1), 4, "that line")
 	port.AssertEq(emonT, retarget.RtLineState(oruns, olines, owords, rtp, scr, 2, 2, br, 0, 4), 0, "a line with a little foreign ink under it stays")
 	port.AssertEq(emonT, retarget.RtLineState(oruns, olines, owords, rtp, scr, 3, 3, br, 0, 4), 2, "a line mostly foreign ink that the body-ink run did not read is a ghost")
-	port.AssertEq(emonT, retarget.RtAdopt(rtp, oruns, fr, olines, owords, scr), 4, "four lines: the first, the second's reading, the third, and the line the first pass did not read; the ghost is dropped")
+	port.AssertEq(emonT, rttAdopt(rtp, oruns, fr, olines, owords, scr), 4, "four lines: the first, the second's reading, the third, and the line the first pass did not read; the ghost is dropped")
 	port.AssertEq(emonT, port.CellsAt(scr, scan.ScSelBase()), 0, "the first pass's first line")
 	port.AssertEq(emonT, port.CellsAt(scr, scan.ScSelBase()+1), 4, "then the body-ink run's line where the second was")
 	port.AssertEq(emonT, port.CellsAt(scr, scan.ScSelBase()+2), 2, "then the third, in the first pass's order")
 	port.AssertEq(emonT, port.CellsAt(scr, scan.ScSelBase()+3), 5, "and the body-ink run's line over nothing, below them where it lies")
 	port.AssertEq(emonT, port.CellsAt(rtp, retarget.RtpPrimary()), fr, "the first pass is the page's reading")
+}
+
+func rttLine3(olines *port.Cells, owords *port.Cells, feats *port.Cells, y0 int32, c1 int32, c2 int32, c3 int32) int32 {
+	// A line of three words at height y0: 100-600, 700-1200 and 1300-1700 (a right-aligned column), with these confidences; answers its row.
+	var first int32 = evidence.OwCount(owords)
+	var l int32 = evidence.OlCount(olines)
+	rttWord(owords, feats, 100, y0, 600, y0+100, c1, l)
+	rttWord(owords, feats, 700, y0, 1200, y0+100, c2, l)
+	rttWord(owords, feats, 1300, y0, 1700, y0+100, c3, l)
+	evidence.OlNew(olines, 1, 100, y0, 1700, y0+100, 100, y0+100, 1700, y0+100, 0, 0, first, 3)
+	evidence.OlSet(olines, l, evidence.OlfPx(), 100)
+	evidence.OlSet(olines, l, evidence.OlfPy(), y0)
+	evidence.OlSet(olines, l, evidence.OlfPw(), 1600)
+	evidence.OlSet(olines, l, evidence.OlfPh(), 100)
+	return l
+}
+
+func TestASecondPassThatReadsAColumnTheFirstMissedHasThatColumnReadWithTheLine(emonT *testing.T) {
+	// P12.6, the thermal receipt: the first pass stopped before the right-aligned amount column; the body-ink pass read the line as far as the amounts
+	var oruns *port.Cells = port.NewCells()
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var rtp *port.Cells = port.NewCells()
+	var scr *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	var etext *port.Cells = port.NewCells()
+	scan.ScPrep(scr)
+	port.CellsPush(etext, 49)
+	port.CellsPush(etext, 50)
+	port.CellsPush(etext, 51)
+	port.CellsPush(etext, 52)
+	rttLine(olines, owords, feats, 0, 900)
+	var fr int32 = rttRun(oruns, olines, owords, 0, 0)
+	var l1 int32 = evidence.OlCount(olines)
+	var w1 int32 = evidence.OwCount(owords)
+	rttLine3(olines, owords, feats, 0, 900, 900, 800)
+	var br int32 = rttRun(oruns, olines, owords, l1, w1)
+	retarget.RtPrep(rtp)
+	port.CellsSet(rtp, retarget.RtpBrun(), br)
+	port.CellsSet(scr, scan.ScShareBase(), 0)
+	port.AssertEq(emonT, retarget.RtAdopt(rtp, oruns, fr, olines, owords, etext, scr), 1, "one line: the first pass's, which stays: no foreign ink under it")
+	port.AssertEq(emonT, port.CellsAt(scr, scan.ScXtraBase()+1), l1+1, "and the body-ink line over it, whose third word lies over none of its own, is read with it")
+	port.AssertEq(emonT, scan.ScEmitSel(olines, owords, port.NewCells(), 1, 1, 0, scr, words, lines, etext, port.NewCells(), port.NewCells(), port.NewCells()), 1, "one line is emitted")
+	port.AssertEq(emonT, evidence.WdCount(words), 3, "of three words: the two the first pass read, and the column it did not")
+	port.AssertEq(emonT, evidence.WdGet(words, 0, evidence.HdX0()), 100, "the first")
+	port.AssertEq(emonT, evidence.WdGet(words, 1, evidence.HdX0()), 700, "the second")
+	port.AssertEq(emonT, evidence.WdGet(words, 2, evidence.HdX0()), 1300, "and the column, after them")
+	port.AssertEq(emonT, evidence.WdGet(words, 1, evidence.WfGap()), 100, "the gap of the second is to the column")
+	port.AssertEq(emonT, evidence.LnGet(lines, 0, evidence.LhX1()), 1700, "the line is as long as the column")
+	port.AssertEq(emonT, evidence.LnGet(lines, 0, evidence.LhCount()), 3, "of three words")
+}
+
+func rttEmpty(olines *port.Cells, y0 int32) int32 {
+	// A first-pass line with no word, 40 pt wide and 15 pt high from height y0 (centipoints): what the engine finds where text meets a rule and reads as nothing; answers its row.
+	var l int32 = evidence.OlCount(olines)
+	evidence.OlNew(olines, 1, 100, y0, 4100, y0+1500, 100, y0+1500, 4100, y0+1500, 0, 0, 0, 0)
+	evidence.OlSet(olines, l, evidence.OlfPx(), 100)
+	evidence.OlSet(olines, l, evidence.OlfPy(), y0)
+	evidence.OlSet(olines, l, evidence.OlfPw(), 4000)
+	evidence.OlSet(olines, l, evidence.OlfPh(), 1500)
+	return l
+}
+
+func rttFill1(b *port.Bitmap, x0 int32, y0 int32, x1 int32, y1 int32, v int32) int32 {
+	var y int32 = y0
+	var x int32 = 0
+	for y < y1 {
+		x = x0
+		for x < x1 {
+			port.BitmapSetU8(b, x, y, 0, v)
+			x += 1
+		}
+		y += 1
+	}
+	return 0
+}
+
+func rttBandScene(emonT *testing.T, bandgray int32, pxh int32) int32 {
+	// A 40 x 20 gray page (paper 240) with a band of gray `bandgray` from (5,5) 30 pixels wide and `pxh` high, white text at (10..13, 8..12) in it and one black pixel of body ink at (30, 10);
+	// the band as the tracer found it (a component of a colour layer, solid, six holes). Answers how many bands `rt-invert-bands` turned, leaving the view in the caller's `dst` (cells of the test).
+	var gray *port.Bitmap = port.BitmapNew(40, 20, 1)
+	var bodym *port.Bitmap = port.BitmapNew(40, 20, 1)
+	var dst *port.Bitmap = port.BitmapNew(40, 20, 1)
+	var comps *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	rttFill1(gray, 0, 0, 40, 20, 240)
+	rttFill1(gray, 5, 5, 35, 5+pxh, bandgray)
+	rttFill1(gray, 10, 8, 14, 13, 255)
+	port.BitmapSetU8(gray, 30, 10, 0, 0)
+	rttFill1(bodym, 0, 0, 40, 20, 0)
+	port.BitmapSetU8(bodym, 30, 10, 0, 255)
+	rttFill1(dst, 0, 0, 40, 20, 240)
+	var ink int32 = evidence.IkNew(inks, 1, 0)
+	var c int32 = evidence.CoNew(comps, 1, 0, 0, 3000, 1000, 0)
+	evidence.IkSet(inks, ink, evidence.IkfRole(), evidence.IrColor())
+	evidence.CoSet(comps, c, evidence.CfInk(), ink)
+	evidence.CoSet(comps, c, evidence.CfConf(), 700)
+	evidence.CoSet(comps, c, evidence.CfPxx(), 5)
+	evidence.CoSet(comps, c, evidence.CfPxy(), 5)
+	evidence.CoSet(comps, c, evidence.CfPxw(), 30)
+	evidence.CoSet(comps, c, evidence.CfPxh(), pxh)
+	evidence.CoSet(comps, c, evidence.CfFill(), 900)
+	evidence.CoSet(comps, c, evidence.CfHoles(), 6)
+	evidence.CoSet(comps, c, evidence.CfGray(), bandgray)
+	var n int32 = retarget.RtInvertBands(dst, gray, bodym, comps, inks, 1, 72, 240)
+	if n == 1 {
+		port.AssertEq(emonT, port.BitmapU8(dst, 11, 10, 0), 0, "the light text is ink")
+		port.AssertEq(emonT, port.BitmapU8(dst, 20, 7, 0), 240, "the band's ground is paper")
+		port.AssertEq(emonT, port.BitmapU8(dst, 30, 10, 0), 0, "a pixel of body ink is as it was")
+		port.AssertEq(emonT, port.BitmapU8(dst, 2, 2, 0), 240, "and outside the band nothing is touched")
+	}
+	return n
+}
+
+func TestABandOfColourWithLightTextIsTurnedInsideOutAndALightBandIsNot(emonT *testing.T) {
+	// P12.6 (issue 14, E09's white-on-blue header): the view the body-ink pass reads showed the band and its text as paper, and the text was never read
+	port.AssertEq(emonT, rttBandScene(emonT, 149, 10), 1, "a band of gray 149, white text in it")
+	port.AssertEq(emonT, rttBandScene(emonT, 220, 10), 0, "a light band holds dark text: the engine reads it as it is")
+	port.AssertEq(emonT, rttBandScene(emonT, 149, 3), 0, "a band 3 pixels high at 72 dpi is a rule, not a header")
+}
+
+func TestALineTheEngineFoundAndReadAsNothingIsReadAloneAndItsWordsAreThePagesWhenSure(emonT *testing.T) {
+	// P12.6, `RUNNING FOR (CHECK ONE):` before its blank: the page read as a page finds the line and no word in it; read as a line it is text
+	var oruns *port.Cells = port.NewCells()
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var rtp *port.Cells = port.NewCells()
+	var scr *port.Cells = port.NewCells()
+	scan.ScPrep(scr)
+	rttLine(olines, owords, feats, 0, 900)
+	rttEmpty(olines, 300)
+	rttLine(olines, owords, feats, 2000, 900)
+	var fr int32 = rttRun(oruns, olines, owords, 0, 0)
+	var l1 int32 = evidence.OlCount(olines)
+	var w1 int32 = evidence.OwCount(owords)
+	retarget.RtPrep(rtp)
+	port.AssertEq(emonT, retarget.RtEmptyArea(olines, 1), 600, "the empty line: 40 x 15 square points")
+	port.AssertEq(emonT, retarget.RtEmptyArea(olines, 0), 0, "a line with words is not one")
+	port.AssertEq(emonT, retarget.RtDecide(0, 0, 0, oruns, fr, olines, owords, port.NewCells(), 1, 130, rtp), 1, "the lines are sure, so the budget goes to the one line that has no word")
+	port.AssertEq(emonT, port.CellsAt(rtp, retarget.RtpLine0()), 1, "that line")
+	// its re-reading: a line of three words, sure
+	rttLine3(olines, owords, feats, 300, 900, 900, 900)
+	var tr int32 = rttRun(oruns, olines, owords, l1, w1)
+	port.CellsSet(rtp, retarget.RtpLine0()+1, tr)
+	port.AssertEq(emonT, retarget.RtLineState(oruns, olines, owords, rtp, scr, 1, 1, -1, 0, 3), 5, "the re-reading is the page's")
+	port.AssertEq(emonT, retarget.RtLineState(oruns, olines, owords, rtp, scr, 0, 0, -1, 0, 3), 0, "and the lines with words stay")
+	port.AssertEq(emonT, rttAdopt(rtp, oruns, fr, olines, owords, scr), 3, "three lines: the first, the re-reading of the empty one, the third")
+	port.AssertEq(emonT, port.CellsAt(scr, scan.ScSelBase()), 0, "the first")
+	port.AssertEq(emonT, port.CellsAt(scr, scan.ScSelBase()+1), l1, "then the line read in place of the empty one")
+	port.AssertEq(emonT, port.CellsAt(scr, scan.ScSelBase()+2), 2, "then the third")
+}
+
+func TestALineReadAsNothingAndReReadAsUnsureWordsStaysNothing(emonT *testing.T) {
+	var oruns *port.Cells = port.NewCells()
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var rtp *port.Cells = port.NewCells()
+	var scr *port.Cells = port.NewCells()
+	scan.ScPrep(scr)
+	rttLine(olines, owords, feats, 0, 900)
+	rttEmpty(olines, 300)
+	var fr int32 = rttRun(oruns, olines, owords, 0, 0)
+	var l1 int32 = evidence.OlCount(olines)
+	var w1 int32 = evidence.OwCount(owords)
+	retarget.RtPrep(rtp)
+	retarget.RtDecide(0, 0, 0, oruns, fr, olines, owords, port.NewCells(), 1, 130, rtp)
+	rttLine3(olines, owords, feats, 300, 400, 500, 300)
+	var tr int32 = rttRun(oruns, olines, owords, l1, w1)
+	port.CellsSet(rtp, retarget.RtpLine0()+1, tr)
+	port.AssertEq(emonT, retarget.RtLineState(oruns, olines, owords, rtp, scr, 1, 1, -1, 0, 2), 0, "words of a mean confidence of 400 are not taken for a line nothing was read of: it has no first pass to be compared with")
+}
+
+func TestASecondPassWordThatIsUnsureOrLiesOverAWordOfTheFirstPassIsNotAdded(emonT *testing.T) {
+	var oruns *port.Cells = port.NewCells()
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var rtp *port.Cells = port.NewCells()
+	var scr *port.Cells = port.NewCells()
+	scan.ScPrep(scr)
+	rttLine(olines, owords, feats, 0, 900)
+	var fr int32 = rttRun(oruns, olines, owords, 0, 0)
+	var l1 int32 = evidence.OlCount(olines)
+	var w1 int32 = evidence.OwCount(owords)
+	rttLine3(olines, owords, feats, 0, 900, 900, 300)
+	var br int32 = rttRun(oruns, olines, owords, l1, w1)
+	retarget.RtPrep(rtp)
+	port.CellsSet(rtp, retarget.RtpBrun(), br)
+	port.CellsSet(scr, scan.ScShareBase(), 0)
+	port.AssertEq(emonT, rttAdopt(rtp, oruns, fr, olines, owords, scr), 1, "the first pass's line")
+	port.AssertEq(emonT, port.CellsAt(scr, scan.ScXtraBase()+1), 0, "the column read at a confidence of 300 is not added: the first two words lie over the first pass's own")
 }
 
 func TestALineIsReadAgainByItsCellsOnlyWhenNoTextIsLostAndTheyAreSurer(emonT *testing.T) {
@@ -255,7 +460,7 @@ func TestABodyInkRunOfMoreLinesThanTheScratchHoldsIsCutNotReadPastIt(emonT *test
 	port.CellsSet(rtp, retarget.RtpBrun(), br)
 	port.AssertEq(emonT, retarget.RtCap(1600), scan.ScSelMax(), "a count over the region is the region's")
 	port.AssertEq(emonT, retarget.RtCap(7), 7, "and one under it is its own")
-	var n int32 = retarget.RtAdopt(rtp, oruns, fr, olines, owords, scr)
+	var n int32 = rttAdopt(rtp, oruns, fr, olines, owords, scr)
 	port.AssertThat(emonT, n <= scan.ScSelMax(), "the selection holds no more than the scratch has room for")
 	port.AssertThat(emonT, n > 1400, "and the 1500 lines it counts are read, bar the few that lie over the first pass's line")
 }

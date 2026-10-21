@@ -976,9 +976,59 @@ func hdPutHead(sf *port.Cells, l int32, h int32, p int32) int32 {
 	return 0
 }
 
+func hdOcrRow(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32) int32 {
+	// A scanned row can be one OCR line: separated columns are not a heading's word spacing.
+	if (evidence.LnGet(ln, l, evidence.LfSrc()) & 4) == 0 {
+		return 0
+	}
+	var first int32 = evidence.LnGet(ln, l, evidence.LhFirst())
+	var count int32 = evidence.LnGet(ln, l, evidence.LhCount())
+	var i int32 = 0
+	var gaps int32 = 0
+	var numbers int32 = 0
+	var w int32 = 0
+	var cp int32 = 0
+	var colons int32 = 0
+	if count > 0 {
+		for i < evidence.WdGet(wd, first, evidence.HdTlen()) {
+			if port.CellsAt(et, evidence.WdGet(wd, first, evidence.HdTstart())+i) == 58 {
+				colons += 1
+			}
+			i += 1
+		}
+		if (colons >= 2) && (hdFigureWord(wd, et, first) == 1) {
+			return 1
+		}
+		i = 0
+	}
+	for i < count {
+		w = first + i
+		if ((i + 1) < count) && (evidence.WdGet(wd, w, evidence.WfGap()) > (3 * evidence.WdGet(wd, w, evidence.WfSize()))) {
+			gaps += 1
+		}
+		if evidence.WdGet(wd, w, evidence.HdTlen()) > 0 {
+			cp = port.CellsAt(et, evidence.WdGet(wd, w, evidence.HdTstart()))
+			if (cp >= 48) && (cp <= 57) {
+				numbers += 1
+			}
+		}
+		i += 1
+	}
+	if (gaps >= 2) || ((gaps >= 1) && (numbers >= 2)) {
+		return 1
+	}
+	return 0
+}
+
 func hdHeadish(wd *port.Cells, ln *port.Cells, et *port.Cells, sf *port.Cells, sc *port.Cells, ws *port.Cells, l int32) int32 {
 	// Can line l be (part of) a heading: sets its `head` field (1) and `points` (the style points).
 	hdPutHead(sf, l, 0, 0)
+	if hdOcrRow(wd, ln, et, l) == 1 {
+		return 0
+	}
+	if (evidence.LnGet(ln, l, evidence.LfSrc()) & evidence.LsRevised()) != 0 {
+		return 0
+	}
 	if style.StGet(sf, l, style.SfkUpright()) != 1 {
 		return 0
 	}
@@ -1003,7 +1053,7 @@ func hdHeadish(wd *port.Cells, ln *port.Cells, et *port.Cells, sf *port.Cells, s
 	if pq < 0 {
 		// beside something that is not a column of body text: a table cell, a label and its value
 		// (a headline set a fifth bigger than the body is not a table cell, whatever is beside it: a column's)
-		if (nsib > style.StGet(sf, l, style.SfkNcol())) && ((style.StGet(sf, l, style.SfkSize()) * 100) < (style.StHget(sf, style.SfhSize()) * 120)) {
+		if (nsib > style.StGet(sf, l, style.SfkNcol())) && (((evidence.LnGet(ln, l, evidence.LfSrc()) & 4) != 0) || ((style.StGet(sf, l, style.SfkSize()) * 100) < (style.StHget(sf, style.SfhSize()) * 120))) {
 			return 0
 		}
 		// an initial: one or two code points with anything beside it; a divider has nothing on its row

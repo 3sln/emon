@@ -15,14 +15,16 @@
 (ns emon.tlhealthtest
   (:require [emon.lang :refer [I32 Blob Src Cells]]
             [emon.test :refer [deftest assert-eq assert-eq-at assert-that assert-that-at new-cells test-file TestT test-t Str]]
-            [emon.port :refer [cells-len cells-at cells-drop src-of-blob]]
-            [emon.model :refer [sr-hidden-text ledger-count ledger-reason ledger-text-len dr-clipped dr-offpage dr-invisible dr-watermark]]
+            [emon.port :refer [cells-len cells-at cells-drop cells-push src-of-blob]]
+            [emon.model :refer [sr-hidden-text ledger-count ledger-reason ledger-text-len dr-clipped dr-offpage dr-invisible dr-watermark dr-ocr-ghost dr-rule-ghost]]
             [emon.pdfdoc :refer [pd-open pd-pg-count]]
             [emon.pdfcontent :refer [pc-document]]
             [emon.evidence :refer [gl-get wd-get wd-count ln-count ln-get fe-get ep-get ep-count
-                                   wf-gfirst gf-vis xt-vis xt-length epf-width epf-height vz-occluded]]
+                                   wf-gfirst gf-vis xt-vis xt-length epf-width epf-height vz-occluded
+                                   ep-new gl-new gl-set gf-how gf-font wd-new wd-set wf-gcount ln-new xt-trust ow-new ow-set owf-flags
+                                   oe-garbage oe-rule-ghost gh-tounicode gh-encoding gh-glyphname gh-unknown]]
             [emon.player :refer [fw-count fl-count fa-count fa-get hl-count hl-get hlf-score hlf-mapped hlf-garbage pl-check]]
-            [emon.tlhealth :refer [th-run th-write th-append th-score th-trusted th-auto-health]]
+            [emon.tlhealth :refer [th-run th-write th-append th-score th-trusted th-auto-health ev-feat-text th-write-ocr]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem bit-and]]))
 
@@ -264,3 +266,59 @@
   (assert-eq (tt-health (test-file "corpus/synth/pdf/align-rtl.pdf") 0) (tt-health (test-file "corpus/synth/pdf/align-rtl.pdf") 1) "rtl")
   (assert-eq (tt-health (test-file "corpus/synth/pdf/bank-statement.pdf") 0) (tt-health (test-file "corpus/synth/pdf/bank-statement.pdf") 1) "bank statement")
   (assert-eq (tt-health (test-file "vis/visible.pdf") 0) (tt-health (test-file "vis/visible.pdf") 1) "visible"))
+
+(defn ^I32 tt-trust-of [^I32 how]
+  (comment "The `xt-trust` (share of glyphs mapped, per mille) of a word of two glyphs whose Unicode was obtained `how`.")
+  (let [^Cells epages (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells et (new-cells)
+        ^Cells gl (new-cells)
+        ^Cells fnt (new-cells)
+        ^Cells mk (new-cells)
+        ^Cells wd (new-cells)
+        ^Cells ln (new-cells)]
+    (ep-new epages 1 61200 79200)
+    (gl-new gl 1 1000 1000 1500 2200 72 -1 0 0)
+    (gl-new gl 1 1500 1000 2000 2200 105 -1 0 0)
+    (gl-set gl 0 (gf-how) how)
+    (gl-set gl 1 (gf-how) how)
+    (gl-set gl 0 (gf-font) -1)
+    (gl-set gl 1 (gf-font) -1)
+    (wd-new wd 1 1000 1000 2000 2200 1000 2200 2000 2200 0 0 -1 0 0 -1 -1)
+    (wd-set wd 0 (wf-gfirst) 0)
+    (wd-set wd 0 (wf-gcount) 2)
+    (ln-new ln 1 1000 1000 2000 2200 1000 2200 2000 2200 0 0 0 1)
+    (let [^I32 row (ev-feat-text feats epages et gl fnt mk wd ln 0 0 0 1200)]
+      (return (fe-get feats row (xt-trust))))))
+
+(deftest test-glyphs-named-by-the-fonts-differences-are-as-mapped-as-those-of-an-encoding
+  (comment "P12.6 (R5): a TeX Type 1 font (`t1xtt`) with no ToUnicode map names its glyphs in /Differences (`glyphname`): its text layer is consistently decoded, so its font must not score as an unmapped one")
+  (assert-eq (tt-trust-of (gh-tounicode)) 1000 "ToUnicode")
+  (assert-eq (tt-trust-of (gh-encoding)) 1000 "an encoding")
+  (assert-eq (tt-trust-of (gh-glyphname)) 1000 "glyph names")
+  (assert-eq (tt-trust-of (gh-unknown)) 0 "a guess is not a mapping"))
+
+(deftest test-ocr-words-kept-out-of-a-scanned-pages-words-are-ledger-rows
+  (comment "P12.6: garbage and a table's rule read as characters are `ocr-ghost` and `rule-ghost` rows, a run on one OCR line one row, with the engine's text and src ocr")
+  (let [^Cells owords (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells text (new-cells)
+        ^Cells tmp (new-cells)
+        ^Cells tt (new-cells)]
+    (cells-push et 126)
+    (cells-push et 124)
+    (cells-push et 71)
+    (cells-push et 124)
+    (ow-new owords 1 100 0 200 100 100 100 200 100 0 0 0 1 5 120 -1)
+    (ow-new owords 1 300 0 400 100 300 100 400 100 0 0 1 1 5 120 -1)
+    (ow-new owords 1 500 0 600 100 500 100 600 100 0 0 2 1 5 900 -1)
+    (ow-new owords 1 700 0 710 100 700 100 710 100 0 0 3 1 6 800 -1)
+    (ow-set owords 0 (owf-flags) (oe-garbage))
+    (ow-set owords 1 (owf-flags) (oe-garbage))
+    (ow-set owords 3 (owf-flags) (oe-rule-ghost))
+    (assert-eq (th-write-ocr owords et ledger text tmp tt) 2 "two rows: the two garbage words of line 5 are one, the rule's ghost another, the kept word none")
+    (assert-eq (ledger-count ledger) 2 "in the ledger")
+    (assert-eq (ledger-reason ledger 0) (dr-ocr-ghost) "ocr-ghost")
+    (assert-eq (ledger-reason ledger 1) (dr-rule-ghost) "rule-ghost")
+    (assert-eq (ledger-text-len ledger 0) 3 "the two words joined by a space")))

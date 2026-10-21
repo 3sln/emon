@@ -1182,3 +1182,59 @@ fn test_real_documents_make_the_golden_models() {
     crate::testport::assert_eq(ht_golden(&crate::testport::test_file("corpus/synth/pdf/lists-basic.pdf")[..], t8, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, mst, sf, sc, hc, ws, tmp2, pr, ptxt), 0, "lists-basic runs");
     crate::testport::assert_text_span(t8, &crate::testport::test_file("heading/lists-basic.json")[..], 0, jt_end(&crate::testport::test_file("heading/lists-basic.json")[..]), "lists-basic", 0);
 }
+#[test]
+fn test_recovered_ocr_text_does_not_supply_heading_evidence() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ptxt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    ht_outline_doc(wd, ln, et);
+    ln_set(ln, 4, lf_src(), 4 + ls_revised());
+    crate::testport::assert_eq(ht_run(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 4, "recovered words stay in the text, but cannot open a section");
+    crate::testport::assert_eq(hd_level(hc, 4), 0, "the recovered line is body text");
+    crate::testport::assert_eq(hd_level(hc, 0), 1, "the first reading still supplies the document title");
+}
+#[test]
+fn test_a_scanned_row_with_separated_columns_is_not_a_heading() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ptxt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    ht_heading(wd, ln, et, &crate::testport::text_blob("Account Transfer Summary")[..], 5000, 2100, 1);
+    ht_body(wd, ln, et, 1, 9000, 6);
+    ln_set(ln, 0, lf_src(), 4);
+    wd_set(wd, 0, wf_gap(), 10000);
+    wd_set(wd, 1, wf_gap(), 10000);
+    crate::testport::assert_eq(ht_run(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 0, "a scanned row's gaps do not establish a section");
+    crate::testport::assert_eq(hd_level(hc, 0), 0, "the row is body text");
+}
+#[test]
+fn test_a_scanned_transaction_time_is_not_a_section_number() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ptxt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    ht_heading(wd, ln, et, &crate::testport::text_blob("12:34:56 Transfer")[..], 5000, 2100, 1);
+    ht_body(wd, ln, et, 1, 9000, 6);
+    ln_set(ln, 0, lf_src(), 4);
+    crate::testport::assert_eq(ht_run(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 0, "a transaction continuation is no section");
+    crate::testport::assert_eq(hd_level(hc, 0), 0, "the time-prefixed row is body text");
+}

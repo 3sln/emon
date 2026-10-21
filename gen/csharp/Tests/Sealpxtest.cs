@@ -285,6 +285,30 @@ public static class Sealpxtest {
         SptPrim(prims, Evidence.PmRect(), 30000, 40000, 5000, 2000, 2, 12591135, 1, 200);
         emon.Testport.AssertEq(Sealpx.SxFind(1, views, 0, prims, inks, 61200, 79200, cand), 1, "a 100 pt rectangle is a stamp");
     }
+    [Xunit.Fact]
+    public static void TestASolidBlockOfColourIsNoStampAndAnOutlineOfTheSameSizeIs() {
+        emon.Port.Cells views = emon.Port.NewCells();
+        emon.Port.Cells prims = emon.Port.NewCells();
+        emon.Port.Cells inks = emon.Port.NewCells();
+        emon.Port.Cells cand = emon.Port.NewCells();
+        // P12.6 (smoke A2, D13): the header band of a bank statement, a light blue block with its title's text in it, was a stamp named `Txn Date Value Date`; an outline 100 pt wide is one,
+        // a block of ink that fills it (coverage 1000) is a header cell, a highlighted cell or the ground of a heading: the text on it is the document's
+        Evidence.VwNew(views, 1, Evidence.VkRender(), -1, -1, 3000, 3000, 7200, 0, -1, 0, 0, 0, 0, 0);
+        SptInk(inks, Evidence.IrBody());
+        SptInk(inks, Evidence.IrLight());
+        SptInk(inks, Evidence.IrColor());
+        // an oblong curve on the colour layer, solid
+        int r = SptPrim(prims, Evidence.PmCurve(), 40000, 60000, 3000, 4500, 2, 2047903, 0, 200);
+        Evidence.PmSet(prims, r, Evidence.PmfFill(), 1000);
+        emon.Testport.AssertEq(Sealpx.SxFind(1, views, 0, prims, inks, 61200, 79200, cand), 0, "a solid oblong curve is a block of colour: no candidate");
+        Evidence.PmSet(prims, r, Evidence.PmfFill(), 150);
+        emon.Testport.AssertEq(Sealpx.SxFind(1, views, 0, prims, inks, 61200, 79200, cand), 1, "the same curve, an outline (coverage 150): a stamp");
+        // a rectangle of the same size as a stamp, solid
+        SptPrim(prims, Evidence.PmRect(), 30000, 20000, 5000, 2000, 2, 12591135, 1, 200);
+        int rect = SptPrim(prims, Evidence.PmRect(), 30000, 25000, 5000, 2000, 2, 12591135, 1, 200);
+        Evidence.PmSet(prims, rect, Evidence.PmfFill(), 950);
+        emon.Testport.AssertEq(Sealpx.SxFind(1, views, 0, prims, inks, 61200, 79200, cand), 2, "a solid 100 pt rectangle is no stamp; the outlined one is, with the curve: two");
+    }
     internal static int SptOword(emon.Port.Cells ow, int x, int y) {
         return Evidence.OwNew(ow, 1, x - 300, y - 200, x + 300, y + 200, x - 300, y + 200, x + 300, y + 200, 0, 0, 0, 1, 0, 800, -1);
     }

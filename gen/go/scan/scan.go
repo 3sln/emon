@@ -836,11 +836,26 @@ func ScBonlyBase() int32 {
 	return 8300
 }
 
+func ScXtraBase() int32 {
+	// ...and another (P12.6): the first cell is the row of the first-pass run's first line, and the cell after it for line k of that run is 0, or 1 + the row of the body-ink line whose words that lie over none of the first-pass line's are read with it (`rt-adopt`, `sc-line-words`).
+	return 9800
+}
+
+func ScFateBase() int32 {
+	// ...and the last (P12.6): four regions of `sc-fate-max` cells for the words one line is emitted with: their `owords` rows, what becomes of each (`sc-fates`), and the start and length of the text of a corrected one.
+	return 11301
+}
+
+func ScFateMax() int32 {
+	// The most words of a line `sc-line-words` lists; a line of more is emitted as it is.
+	return 400
+}
+
 func ScPrep(scr *port.Cells) int32 {
 	// The scratch of `sc-sample` and `sc-cluster`: 242 cells (two for the metrics and 240 samples), three for each of the first
 	// `sc-cap` lines of a page (its ascender line, its descender depth, whether clustered), and `sc-cap` more for sorting a
 	// cluster's members; made once.
-	for port.CellsLen(scr) < (ScBonlyBase() + ScSelMax()) {
+	for port.CellsLen(scr) < (ScFateBase() + ((4 * ScFateMax()) + 2)) {
 		port.CellsPush(scr, 0)
 	}
 	return 0
@@ -1133,6 +1148,1044 @@ func scFit(scr *port.Cells, n int32) int32 {
 	return r
 }
 
+func scLoConf() int32 {
+	// `ocr-garbage-conf`: a word of at most this confidence (per mille) is a candidate for being no text.
+	return 300
+}
+
+func scXtraTextConf() int32 {
+	// A newly recovered alphabetic word needs stronger evidence than an amount: weak readings of overlay strokes must not become prose.
+	return 600
+}
+
+func scXtraTextLetters() int32 {
+	// Fewer letters can be fragments of overlay strokes, even at a high engine confidence.
+	return 3
+}
+
+func scXtraSmallConf() int32 {
+	// A later-pass word under half the height of every partner word needs this confidence: an unsure speck must not create a column.
+	return 700
+}
+
+func scXtraConf() int32 {
+	// A body-ink word that lies over none of the first-pass line's words is read with it only when its confidence (per mille) is at least this.
+	return 400
+}
+
+func scRuleSlack() int32 {
+	// A character is on a rule when its centre is within this many centipoints (and the rule's half thickness) of the rule's centre line.
+	return 150
+}
+
+func scMn(a int32, b int32) int32 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func scMx(a int32, b int32) int32 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func scCpClass(c int32) int32 {
+	// What a code point is to a word's plausibility: 1 a digit, 0 a letter (ASCII, Latin-1 and Latin Extended, and every script above them up to the private use area), 2 an ODD glyph
+	// (one an engine invents over ink that is no text: the vertical bar, tilde, caret, grave, backslash, angle brackets, braces and square brackets, the section sign, copyright and registered
+	// signs and the like of Latin-1, daggers, arrows and shapes, the private use area, the replacement character), 3 any other punctuation, currency sign or mark.
+	if (c >= 48) && (c <= 57) {
+		return 1
+	}
+	if (c >= 65) && (c <= 90) {
+		return 0
+	}
+	if (c >= 97) && (c <= 122) {
+		return 0
+	}
+	if c == 124 {
+		return 2
+	}
+	if c == 126 {
+		return 2
+	}
+	if c == 94 {
+		return 2
+	}
+	if c == 96 {
+		return 2
+	}
+	if c == 92 {
+		return 2
+	}
+	if (c == 60) || (c == 62) {
+		return 2
+	}
+	if (c == 123) || (c == 125) {
+		return 2
+	}
+	if (c == 91) || (c == 93) {
+		return 2
+	}
+	if c < 128 {
+		return 3
+	}
+	if c < 192 {
+		if (c == 170) || ((c == 181) || (c == 186)) {
+			return 0
+		}
+		if (c == 161) || ((c == 164) || ((c == 166) || ((c == 167) || ((c == 168) || ((c == 169) || (c == 172)))))) {
+			return 2
+		}
+		if (c == 174) || ((c == 175) || ((c == 180) || ((c == 182) || ((c == 184) || (c == 191))))) {
+			return 2
+		}
+		return 3
+	}
+	if c < 880 {
+		if (c == 215) || (c == 247) {
+			return 3
+		}
+		return 0
+	}
+	if c < 8192 {
+		return 0
+	}
+	if c < 8224 {
+		return 3
+	}
+	if c < 8352 {
+		if (c == 8226) || ((c == 8230) || (c == 8240)) {
+			return 3
+		}
+		return 2
+	}
+	if c < 8400 {
+		return 3
+	}
+	if c < 11264 {
+		return 2
+	}
+	if c < 57344 {
+		return 0
+	}
+	if c < 63744 {
+		return 2
+	}
+	if c == 65533 {
+		return 2
+	}
+	return 0
+}
+
+func scCountClass(etext *port.Cells, ts int32, n int32, cls int32) int32 {
+	// How many of the word's `n` code points (from `ts` in the shared text) are of the class `cls` (`sc-cp-class`).
+	var i int32 = 0
+	var k int32 = 0
+	for i < n {
+		if scCpClass(port.CellsAt(etext, ts+i)) == cls {
+			k += 1
+		}
+		i += 1
+	}
+	return k
+}
+
+func scDistinct(etext *port.Cells, ts int32, n int32) int32 {
+	// How many different code points there are among the first 40 of the word's.
+	var m int32 = n
+	var i int32 = 0
+	var j int32 = 0
+	var d int32 = 0
+	var seen int32 = 0
+	if m > 40 {
+		m = 40
+	}
+	for i < m {
+		seen = 0
+		j = 0
+		for j < i {
+			if port.CellsAt(etext, ts+j) == port.CellsAt(etext, ts+i) {
+				seen = 1
+			}
+			j += 1
+		}
+		if seen == 0 {
+			d += 1
+		}
+		i += 1
+	}
+	return d
+}
+
+func ScImplausible(etext *port.Cells, ts int32, n int32) int32 {
+	// 1 when a word's characters are not those of a word: a single glyph that is no letter or digit; two odd glyphs (`sc-cp-class`); letters, digits and an odd glyph together; an odd glyph among five characters or more;
+	// four or more characters and not one a letter or a digit; eight or more of which a quarter or fewer differ (`Petetetdedtededededet`). Else 0.
+	var nl int32 = scCountClass(etext, ts, n, 0)
+	var nd int32 = scCountClass(etext, ts, n, 1)
+	var no int32 = scCountClass(etext, ts, n, 2)
+	if n <= 0 {
+		return 0
+	}
+	if (n == 1) && ((nl + nd) == 0) {
+		return 1
+	}
+	if no >= 2 {
+		return 1
+	}
+	if (no > 0) && ((nd > 0) && (nl > 0)) {
+		return 1
+	}
+	if (no > 0) && (n >= 5) {
+		return 1
+	}
+	if (n >= 4) && ((nl + nd) == 0) {
+		return 1
+	}
+	if (n >= 8) && ((4 * scDistinct(etext, ts, n)) <= n) {
+		return 1
+	}
+	return 0
+}
+
+func ScLeader(etext *port.Cells, ts int32, n int32) int32 {
+	// 1 for a dot leader the engine read as characters: three or more dots and commas and nothing else, or dots and commas with one digit repeated four or more times (`22.2222`)
+	// that is no amount (an amount ends in a separator and two digits). Else 0.
+	var i int32 = 0
+	var dots int32 = 0
+	var digs int32 = 0
+	var other int32 = 0
+	var d0 int32 = -1
+	var same int32 = 1
+	var c int32 = 0
+	for i < n {
+		c = port.CellsAt(etext, ts+i)
+		if (c == 46) || (c == 44) {
+			dots += 1
+		} else if (c >= 48) && (c <= 57) {
+			digs += 1
+			if d0 < 0 {
+				d0 = c
+			}
+			if c != d0 {
+				same = 0
+			}
+		} else {
+			other += 1
+		}
+		i += 1
+	}
+	if other > 0 {
+		return 0
+	}
+	if (digs == 0) && (dots >= 3) {
+		return 1
+	}
+	if (digs >= 4) && ((same == 1) && (dots >= 1)) {
+		if n >= 4 {
+			if ((port.CellsAt(etext, ts+(n-3)) == 46) || (port.CellsAt(etext, ts+(n-3)) == 44)) && ((port.CellsAt(etext, ts+(n-2)) >= 48) && ((port.CellsAt(etext, ts+(n-2)) <= 57) && ((port.CellsAt(etext, ts+(n-1)) >= 48) && (port.CellsAt(etext, ts+(n-1)) <= 57)))) {
+				return 0
+			}
+		}
+		return 1
+	}
+	return 0
+}
+
+func scCents(etext *port.Cells, ts int32, n int32) int32 {
+	// 1 when the word ends in a separator and two digits (the cents of an amount).
+	if n < 4 {
+		return 0
+	}
+	if ((port.CellsAt(etext, ts+(n-3)) == 46) || (port.CellsAt(etext, ts+(n-3)) == 44)) && ((port.CellsAt(etext, ts+(n-2)) >= 48) && ((port.CellsAt(etext, ts+(n-2)) <= 57) && ((port.CellsAt(etext, ts+(n-1)) >= 48) && (port.CellsAt(etext, ts+(n-1)) <= 57)))) {
+		return 1
+	}
+	return 0
+}
+
+func ScAmountLike(etext *port.Cells, ts int32, n int32) int32 {
+	// 1 for a word that reads as an amount: digits with dots or commas among them, at least one of each, starting with a digit and ending in one, between an opening
+	// and a closing parenthesis or after a minus if it has them. Else 0.
+	var i int32 = 0
+	var nd int32 = 0
+	var ns int32 = 0
+	var c int32 = 0
+	var a int32 = 0
+	var b int32 = n
+	if n < 3 {
+		return 0
+	}
+	if (port.CellsAt(etext, ts) == 40) || (port.CellsAt(etext, ts) == 45) {
+		a = 1
+	}
+	if port.CellsAt(etext, ts+(n-1)) == 41 {
+		b = n - 1
+	}
+	i = a
+	for i < b {
+		c = port.CellsAt(etext, ts+i)
+		if (c >= 48) && (c <= 57) {
+			nd += 1
+		} else if (c == 46) || (c == 44) {
+			ns += 1
+		} else {
+			return 0
+		}
+		i += 1
+	}
+	if (nd == 0) || (ns == 0) {
+		return 0
+	}
+	c = port.CellsAt(etext, ts+(b-1))
+	if (c >= 48) && (c <= 57) {
+		return 1
+	}
+	return 0
+}
+
+func ScGroupsFix(etext *port.Cells, ts int32, n int32) int32 {
+	// 1 when a word is an amount whose thousands were read with periods: digits and at least two periods, a first group of one to three digits, then groups of exactly three, and
+	// the last group of one or two (the decimals): `4.985.9` is `4,985.9`, and `1.234.567` (a last group of three) is a European whole number and left alone.
+	var i int32 = 0
+	var dots int32 = 0
+	var run int32 = 0
+	var groups int32 = 0
+	var c int32 = 0
+	var ok int32 = 1
+	if n < 5 {
+		return 0
+	}
+	for i < n {
+		c = port.CellsAt(etext, ts+i)
+		if (c >= 48) && (c <= 57) {
+			run += 1
+		} else if c == 46 {
+			if run == 0 {
+				ok = 0
+			}
+			if (groups == 0) && (run > 3) {
+				ok = 0
+			}
+			if (groups > 0) && (run != 3) {
+				ok = 0
+			}
+			groups += 1
+			dots += 1
+			run = 0
+		} else {
+			ok = 0
+		}
+		i += 1
+	}
+	if ok == 0 {
+		return 0
+	}
+	if dots < 2 {
+		return 0
+	}
+	if (run >= 1) && (run <= 2) {
+		return 1
+	}
+	return 0
+}
+
+func ScOnVrule(rules *port.Cells, page int32, cx int32, cy int32, slack int32) int32 {
+	// 1 when the point (`cx`, `cy`) centipoints of page `page` lies on one of the tracer's vertical rules: at least 8 pt long and eight times as long as wide, covering `cy`, with
+	// its centre line within `slack` and half its thickness of `cx`.
+	var n int32 = evidence.RlCount(rules)
+	var r int32 = 0
+	var xa int32 = 0
+	var xb int32 = 0
+	var ya int32 = 0
+	var yb int32 = 0
+	var dx int32 = 0
+	var dy int32 = 0
+	var d int32 = 0
+	var t int32 = 0
+	for r < n {
+		if evidence.RlGet(rules, r, evidence.RlfPage()) == page {
+			xa = evidence.RlGet(rules, r, evidence.RlfLx0())
+			xb = evidence.RlGet(rules, r, evidence.RlfLx1())
+			ya = evidence.RlGet(rules, r, evidence.RlfLy0())
+			yb = evidence.RlGet(rules, r, evidence.RlfLy1())
+			if yb < ya {
+				t = ya
+				ya = yb
+				yb = t
+			}
+			dx = xb - xa
+			if dx < 0 {
+				dx = 0 - dx
+			}
+			dy = yb - ya
+			if (dy >= 800) && ((dx * 8) <= dy) {
+				if (cy >= ya) && (cy <= yb) {
+					d = cx - ((xa + xb) / 2)
+					if d < 0 {
+						d = 0 - d
+					}
+					if d <= (slack + (evidence.RlGet(rules, r, evidence.RlfThick()) / 2)) {
+						return 1
+					}
+				}
+			}
+		}
+		r += 1
+	}
+	return 0
+}
+
+func ScXtraOk(owords *port.Cells, etext *port.Cells, w0 int32, cnt int32, xw int32) int32 {
+	// Does the body-ink word `xw` lie over none of the `cnt` first-pass words from `w0` (no more than a quarter of the narrower of two shares their extent along the line),
+	// is it sure enough (`sc-xtra-conf`) to be read with the line, and are its characters those of a word (`sc-implausible`: a lone `§` is not)? 1 or 0.
+	var xa int32 = evidence.OwGet(owords, xw, evidence.HdX0())
+	var xb int32 = evidence.OwGet(owords, xw, evidence.HdX1())
+	var j int32 = 0
+	var pa int32 = 0
+	var pb int32 = 0
+	var ov int32 = 0
+	var nar int32 = 0
+	var yo int32 = 0
+	var yh int32 = 0
+	var mh int32 = 0
+	var hh int32 = 0
+	var edge int32 = 0
+	if evidence.OwGet(owords, xw, evidence.HdConf()) < scXtraConf() {
+		return 0
+	}
+	var letters int32 = scCountClass(etext, evidence.OwGet(owords, xw, evidence.HdTstart()), evidence.OwGet(owords, xw, evidence.HdTlen()), 0)
+	if letters > 0 {
+		if (letters < scXtraTextLetters()) || (evidence.OwGet(owords, xw, evidence.HdConf()) < scXtraTextConf()) {
+			return 0
+		}
+	}
+	if ScImplausible(etext, evidence.OwGet(owords, xw, evidence.HdTstart()), evidence.OwGet(owords, xw, evidence.HdTlen())) == 1 {
+		return 0
+	}
+	for j < cnt {
+		hh = evidence.OwGet(owords, w0+j, evidence.HdY1()) - evidence.OwGet(owords, w0+j, evidence.HdY0())
+		if hh > 0 {
+			if (mh == 0) || (hh < mh) {
+				mh = hh
+			}
+		}
+		pa = evidence.OwGet(owords, w0+j, evidence.HdX0())
+		pb = evidence.OwGet(owords, w0+j, evidence.HdX1())
+		if pb > edge {
+			edge = pb
+		}
+		ov = scMn(xb, pb) - scMx(xa, pa)
+		nar = scMn(xb-xa, pb-pa)
+		if ov > 0 {
+			if (ov * 4) > nar {
+				return 0
+			}
+		}
+		j += 1
+	}
+	if (cnt > 0) && (xb <= edge) {
+		return 0
+	}
+	if (mh > 0) && ((2 * (evidence.OwGet(owords, xw, evidence.HdY1()) - evidence.OwGet(owords, xw, evidence.HdY0()))) < mh) {
+		if evidence.OwGet(owords, xw, evidence.HdConf()) < scXtraSmallConf() {
+			return 0
+		}
+	}
+	// A different first-pass line can already hold this ink (a table row split at its last column). Check the entire first-pass run in two dimensions, not just the partner line.
+	if (cnt > 0) && (evidence.OwGet(owords, w0, evidence.OwfRun()) != evidence.OwGet(owords, xw, evidence.OwfRun())) {
+		j = 0
+		for j < evidence.OwCount(owords) {
+			if evidence.OwGet(owords, j, evidence.OwfRun()) == evidence.OwGet(owords, w0, evidence.OwfRun()) {
+				if evidence.OwGet(owords, j, evidence.HdPage()) == evidence.OwGet(owords, xw, evidence.HdPage()) {
+					yo = scMn(evidence.OwGet(owords, j, evidence.HdY1()), evidence.OwGet(owords, xw, evidence.HdY1())) - scMx(evidence.OwGet(owords, j, evidence.HdY0()), evidence.OwGet(owords, xw, evidence.HdY0()))
+					yh = scMn(evidence.OwGet(owords, j, evidence.HdY1())-evidence.OwGet(owords, j, evidence.HdY0()), evidence.OwGet(owords, xw, evidence.HdY1())-evidence.OwGet(owords, xw, evidence.HdY0()))
+					if (yo > 0) && ((yo * 2) > yh) {
+						pa = evidence.OwGet(owords, j, evidence.HdX0())
+						pb = evidence.OwGet(owords, j, evidence.HdX1())
+						ov = scMn(xb, pb) - scMx(xa, pa)
+						nar = scMn(xb-xa, pb-pa)
+						if (ov > 0) && ((ov * 4) > nar) {
+							return 0
+						}
+					}
+				}
+			}
+			j += 1
+		}
+	}
+	return 1
+}
+
+func ScXtraCount(olines *port.Cells, owords *port.Cells, etext *port.Cells, l int32, xl int32) int32 {
+	// How many words of the body-ink line `xl` are read with the first-pass line `l` (`sc-xtra-ok`).
+	var w0 int32 = evidence.OlGet(olines, l, evidence.LhFirst())
+	var cnt int32 = evidence.OlGet(olines, l, evidence.LhCount())
+	var x0 int32 = evidence.OlGet(olines, xl, evidence.LhFirst())
+	var xn int32 = evidence.OlGet(olines, xl, evidence.LhCount())
+	var j int32 = 0
+	var k int32 = 0
+	for j < xn {
+		if ScXtraOk(owords, etext, w0, cnt, x0+j) == 1 {
+			k += 1
+		}
+		j += 1
+	}
+	return k
+}
+
+func scLineWords(olines *port.Cells, owords *port.Cells, etext *port.Cells, l int32, xl int32, scr *port.Cells) int32 {
+	// The words line `l` is emitted with, in the order along it, written to `scr` from `sc-fate-base`: its own, and with them those of the body-ink line `xl` (-1 none) that
+	// lie over none of its own (`sc-xtra-ok`). Answers how many; 0 when they are more than the scratch holds (the line is then emitted as it is, with nothing added).
+	var fb int32 = ScFateBase()
+	var w0 int32 = evidence.OlGet(olines, l, evidence.LhFirst())
+	var cnt int32 = evidence.OlGet(olines, l, evidence.LhCount())
+	var x0 int32 = 0
+	var xn int32 = 0
+	var i int32 = 0
+	var j int32 = 0
+	var n int32 = 0
+	if cnt > ScFateMax() {
+		return 0
+	}
+	if xl >= 0 {
+		x0 = evidence.OlGet(olines, xl, evidence.LhFirst())
+		xn = evidence.OlGet(olines, xl, evidence.LhCount())
+	}
+	for (j < xn) && (ScXtraOk(owords, etext, w0, cnt, x0+j) == 0) {
+		j += 1
+	}
+	for (i < cnt) || (j < xn) {
+		if n >= ScFateMax() {
+			return 0
+		}
+		if (i < cnt) && ((j >= xn) || (evidence.OwGet(owords, w0+i, evidence.HdX0()) <= evidence.OwGet(owords, x0+j, evidence.HdX0()))) {
+			port.CellsSet(scr, fb+n, w0+i)
+			i += 1
+		} else {
+			port.CellsSet(scr, fb+n, x0+j)
+			j += 1
+			for (j < xn) && (ScXtraOk(owords, etext, w0, cnt, x0+j) == 0) {
+				j += 1
+			}
+		}
+		n += 1
+	}
+	return n
+}
+
+func scTailOnVrule(owords *port.Cells, osyms *port.Cells, rules *port.Cells, page int32, w int32) int32 {
+	// 1 when the last symbol of word `w` is a vertical bar that lies on one of the page's vertical rules.
+	var sn int32 = evidence.OwGet(owords, w, evidence.OwfScount())
+	var s int32 = (evidence.OwGet(owords, w, evidence.OwfSfirst()) + sn) - 1
+	if sn < 2 {
+		return 0
+	}
+	if evidence.OsGet(osyms, s, evidence.ChCp()) != 124 {
+		return 0
+	}
+	return ScOnVrule(rules, page, (evidence.OsGet(osyms, s, evidence.ChX0())+evidence.OsGet(osyms, s, evidence.ChX1()))/2, (evidence.OsGet(osyms, s, evidence.ChY0())+evidence.OsGet(osyms, s, evidence.ChY1()))/2, scRuleSlack())
+}
+
+func scBodyComp(comps *port.Cells, inks *port.Cells, r int32, page int32) int32 {
+	// 1 when component `r` is of page `page`, of the body layer (`ir-body`) and sure (confidence at least 500).
+	var ink int32 = evidence.CoGet(comps, r, evidence.CfInk())
+	if evidence.CoGet(comps, r, evidence.CfPage()) != page {
+		return 0
+	}
+	if evidence.CoGet(comps, r, evidence.CfConf()) < 500 {
+		return 0
+	}
+	if ink < 0 {
+		return 0
+	}
+	if evidence.IkGet(inks, ink, evidence.IkfRole()) != evidence.IrBody() {
+		return 0
+	}
+	return 1
+}
+
+func scDotLike(comps *port.Cells, inks *port.Cells, page int32, r int32, wy0 int32, wy1 int32, hh int32) int32 {
+	// 1 when body component `r` looks like a dot of a word whose box is from `wy0` to `wy1` (`hh` high): sure, at most 0.45 and at least 0.08 of the height each way, its bottom
+	// in the lowest quarter of the box and not more than 0.15 of the height below it.
+	var w int32 = evidence.CoGet(comps, r, evidence.CfX1()) - evidence.CoGet(comps, r, evidence.CfX0())
+	var h int32 = evidence.CoGet(comps, r, evidence.CfY1()) - evidence.CoGet(comps, r, evidence.CfY0())
+	var dy1 int32 = evidence.CoGet(comps, r, evidence.CfY1())
+	if scBodyComp(comps, inks, r, page) == 0 {
+		return 0
+	}
+	if ((w * 100) > (hh * 45)) || ((h * 100) > (hh * 45)) {
+		return 0
+	}
+	if ((w * 100) < (hh * 8)) || ((h * 100) < (hh * 8)) {
+		return 0
+	}
+	if ((dy1 - wy0) * 100) < (hh * 75) {
+		return 0
+	}
+	if ((dy1 - wy1) * 100) > (hh * 15) {
+		return 0
+	}
+	return 1
+}
+
+func scDotBetween(osyms *port.Cells, s0 int32, sn int32, cx int32) int32 {
+	// The index i of the symbol such that the x `cx` lies between the centres of symbols i and i + 1 of the word that starts at symbol `s0`, or -1.
+	var i int32 = 0
+	for (i + 1) < sn {
+		if ((2 * cx) > (evidence.OsGet(osyms, s0+i, evidence.ChX0()) + evidence.OsGet(osyms, s0+i, evidence.ChX1()))) && ((2 * cx) < (evidence.OsGet(osyms, s0+(i+1), evidence.ChX0()) + evidence.OsGet(osyms, s0+(i+1), evidence.ChX1()))) {
+			return i
+		}
+		i += 1
+	}
+	return -1
+}
+
+func scDotClear(comps *port.Cells, inks *port.Cells, page int32, r int32, wy0 int32, hh int32) int32 {
+	// 1 when no body ink lies above component `r` in its column, between the top of the word (`wy0`) and a fifth of the word's height above the component: a stroke of a broken digit would.
+	var nc int32 = evidence.CoCount(comps)
+	var dx0 int32 = evidence.CoGet(comps, r, evidence.CfX0())
+	var dx1 int32 = evidence.CoGet(comps, r, evidence.CfX1())
+	var dy0 int32 = evidence.CoGet(comps, r, evidence.CfY0())
+	var q int32 = 0
+	for q < nc {
+		if q != r {
+			if scBodyComp(comps, inks, q, page) == 1 {
+				if (evidence.CoGet(comps, q, evidence.CfX0()) < dx1) && (evidence.CoGet(comps, q, evidence.CfX1()) > dx0) {
+					if (evidence.CoGet(comps, q, evidence.CfY1()) > wy0) && (evidence.CoGet(comps, q, evidence.CfY0()) < (dy0 - ((hh * 20) / 100))) {
+						return 0
+					}
+				}
+			}
+		}
+		q += 1
+	}
+	return 1
+}
+
+func ScDotAfter(owords *port.Cells, osyms *port.Cells, comps *port.Cells, inks *port.Cells, page int32, w int32) int32 {
+	// The decimal point the engine lost, when the page's pixels show it: the index of the symbol of word `w` after which a point goes, or -1. The word must be digits and nothing else
+	// (three to nine symbols, as many as its characters), one of them at least a quarter wider than the narrowest digit that is not a 1 (the engine's box for the digit before a
+	// point it did not read takes the point in), and there must be a dot between two digits: a component of the body layer that is sure, no more than 0.45 of the word's height
+	// each way, on its baseline, whose centre lies between the centres of two neighbouring symbols, with no body ink above it in its column (a stroke of a broken digit has some).
+	// One or two digits must follow the point and one at least precede it. NO DIGIT IS GUESSED: the point is a thing the page shows.
+	var sn int32 = evidence.OwGet(owords, w, evidence.OwfScount())
+	var s0 int32 = evidence.OwGet(owords, w, evidence.OwfSfirst())
+	var wy0 int32 = evidence.OwGet(owords, w, evidence.HdY0())
+	var wy1 int32 = evidence.OwGet(owords, w, evidence.HdY1())
+	var hh int32 = wy1 - wy0
+	var nc int32 = evidence.CoCount(comps)
+	var i int32 = 0
+	var c int32 = 0
+	var wd int32 = 0
+	var ref int32 = -1
+	var wide int32 = 0
+	var r int32 = 0
+	var cx int32 = 0
+	var at int32 = -1
+	if (sn < 3) || (sn > 9) {
+		return -1
+	}
+	if evidence.OwGet(owords, w, evidence.HdTlen()) != sn {
+		return -1
+	}
+	if hh <= 0 {
+		return -1
+	}
+	if nc == 0 {
+		return -1
+	}
+	for i < sn {
+		c = evidence.OsGet(osyms, s0+i, evidence.ChCp())
+		if (c < 48) || (c > 57) {
+			return -1
+		}
+		wd = evidence.OsGet(osyms, s0+i, evidence.ChX1()) - evidence.OsGet(osyms, s0+i, evidence.ChX0())
+		if c != 49 {
+			if (ref < 0) || (wd < ref) {
+				ref = wd
+			}
+		}
+		i += 1
+	}
+	if ref <= 0 {
+		return -1
+	}
+	i = 0
+	for i < sn {
+		c = evidence.OsGet(osyms, s0+i, evidence.ChCp())
+		wd = evidence.OsGet(osyms, s0+i, evidence.ChX1()) - evidence.OsGet(osyms, s0+i, evidence.ChX0())
+		if c != 49 {
+			if (wd * 100) >= (ref * 125) {
+				wide = 1
+			}
+		}
+		i += 1
+	}
+	if wide == 0 {
+		return -1
+	}
+	// a dot: small, on the baseline, between the centres of two neighbouring symbols
+	r = 0
+	for (r < nc) && (at < 0) {
+		if scDotLike(comps, inks, page, r, wy0, wy1, hh) == 1 {
+			cx = (evidence.CoGet(comps, r, evidence.CfX0()) + evidence.CoGet(comps, r, evidence.CfX1())) / 2
+			at = scDotBetween(osyms, s0, sn, cx)
+			if at >= 0 {
+				if scDotClear(comps, inks, page, r, wy0, hh) == 0 {
+					at = -1
+				}
+			}
+		}
+		r += 1
+	}
+	if at < 0 {
+		return -1
+	}
+	// the digits that follow: one or two
+	wd = sn - (at + 1)
+	if (wd < 1) || (wd > 2) {
+		return -1
+	}
+	return at
+}
+
+func scIsdig(c int32) int32 {
+	if (c >= 48) && (c <= 57) {
+		return 1
+	}
+	return 0
+}
+
+func scDigitsBefore(etext *port.Cells, ts int32, i int32) int32 {
+	// How many digits end just before index `i` of the word that starts at `ts`.
+	var j int32 = i - 1
+	var k int32 = 0
+	for (j >= 0) && (scIsdig(port.CellsAt(etext, ts+j)) == 1) {
+		k += 1
+		j -= 1
+	}
+	return k
+}
+
+func scDigitsAfter(etext *port.Cells, ts int32, n int32, i int32) int32 {
+	// How many digits start just after index `i` of the word of `n` characters that starts at `ts`.
+	var j int32 = i + 1
+	var k int32 = 0
+	for (j < n) && (scIsdig(port.CellsAt(etext, ts+j)) == 1) {
+		k += 1
+		j += 1
+	}
+	return k
+}
+
+func ScThousandsComma(etext *port.Cells, ts int32, n int32) int32 {
+	// 1 when the word has a thousands comma: one with one to three digits before it and exactly three after it (`459,088`). The page's own convention, when a page has some.
+	var i int32 = 0
+	var b int32 = 0
+	for i < n {
+		if port.CellsAt(etext, ts+i) == 44 {
+			b = scDigitsBefore(etext, ts, i)
+			if (b >= 1) && (b <= 3) {
+				if scDigitsAfter(etext, ts, n, i) == 3 {
+					return 1
+				}
+			}
+		}
+		i += 1
+	}
+	return 0
+}
+
+func ScDollarWord(etext *port.Cells, ts int32, n int32) int32 {
+	// 1 for a word that is a dollar sign, or one that starts with it (after an opening parenthesis or a minus) and goes on with a digit: the page's own way of writing an amount.
+	var a int32 = 0
+	if n <= 0 {
+		return 0
+	}
+	if (n == 1) && (port.CellsAt(etext, ts) == 36) {
+		return 1
+	}
+	if (port.CellsAt(etext, ts) == 40) || (port.CellsAt(etext, ts) == 45) {
+		a = 1
+	}
+	if (a + 1) < n {
+		if (port.CellsAt(etext, ts+a) == 36) && (scIsdig(port.CellsAt(etext, ts+(a+1))) == 1) {
+			return 1
+		}
+	}
+	return 0
+}
+
+func ScPeriodThousands(etext *port.Cells, ts int32, n int32, sign int32) int32 {
+	// The index of the period of a word of the shape `(331.279)`: after any opening parenthesis, minus or dollar sign (and, when `sign` is 1, an S or a section sign read for one), one to three digits
+	// that do not start with 0, one period and exactly three digits, then at most a closing parenthesis. A thousands comma read as a period (the page's own, see `sc-fates`); else -1.
+	var a int32 = 0
+	var b int32 = n
+	var d int32 = 0
+	for (a < 3) && ((a < n) && ((port.CellsAt(etext, ts+a) == 40) || ((port.CellsAt(etext, ts+a) == 45) || (port.CellsAt(etext, ts+a) == 36)))) {
+		a += 1
+	}
+	if (sign == 1) && (a < n) {
+		if (port.CellsAt(etext, ts+a) == 167) || (port.CellsAt(etext, ts+a) == 83) {
+			a += 1
+		}
+	}
+	if a >= n {
+		return -1
+	}
+	if port.CellsAt(etext, ts+(n-1)) == 41 {
+		b = n - 1
+	}
+	d = scDigitsAfter(etext, ts, b, a-1)
+	if (d < 1) || (d > 3) {
+		return -1
+	}
+	if port.CellsAt(etext, ts+a) == 48 {
+		return -1
+	}
+	if port.CellsAt(etext, ts+(a+d)) != 46 {
+		return -1
+	}
+	if scDigitsAfter(etext, ts, b, a+d) != 3 {
+		return -1
+	}
+	if (a + (d + 4)) != b {
+		return -1
+	}
+	return a + d
+}
+
+func scFlag(owords *port.Cells, w int32, bit int32) int32 {
+	// Set `bit` among the engine flags of word row `w`.
+	var v int32 = evidence.OwGet(owords, w, evidence.OwfFlags()) | bit
+	evidence.OwSet(owords, w, evidence.OwfFlags(), v)
+	return 0
+}
+
+func scFates(owords *port.Cells, etext *port.Cells, osyms *port.Cells, rules *port.Cells, comps *port.Cells, inks *port.Cells, page int32, m int32, scr *port.Cells) int32 {
+	// What becomes of each of the `m` words of a line (listed at `sc-fate-base`): 0 it stays, 1 it is garbage (confidence at most `sc-lo-conf` and implausible characters (`sc-implausible`) on a line of
+	// two words or fewer or of a mean confidence of 450 or less; or a word of a line of three or more whose mean is at most `sc-lo-conf`, best at most 450 and words of four characters or fewer on average: texture), 2 it is the ghost of a rule (a lone bar, `I`, `l` or `!`
+	// on a vertical rule), 3 it is a dot leader (`sc-leader`), 4 its text is corrected (the cells at +2 and +3 regions say how). The words with a fate of 1 to 3 are flagged in `owords` (`oe-garbage`, `oe-rule-ghost`, one corrected: `oe-corrected`)
+	// and taken out of the list; the corrected text is appended to `etext`. Answers how many words are left.
+	var fb int32 = ScFateBase()
+	var fm int32 = ScFateMax()
+	var commas int32 = port.CellsAt(scr, ScFateBase()+(4*ScFateMax()))
+	var dollars int32 = port.CellsAt(scr, ScFateBase()+((4*ScFateMax())+1))
+	var gl int32 = 0
+	var pd int32 = -1
+	var i int32 = 0
+	var w int32 = 0
+	var w2 int32 = 0
+	var ts int32 = 0
+	var n int32 = 0
+	var ts2 int32 = 0
+	var n2 int32 = 0
+	var conf int32 = 0
+	var sum int32 = 0
+	var tch int32 = 0
+	var mx int32 = 0
+	var lmean int32 = 0
+	var f int32 = 0
+	var c int32 = 0
+	var hh int32 = 0
+	var h2 int32 = 0
+	var gp int32 = 0
+	var nt int32 = 0
+	var k int32 = 0
+	var last int32 = 0
+	var kept int32 = 0
+	var changed int32 = 0
+	for i < m {
+		w = port.CellsAt(scr, fb+i)
+		conf = evidence.OwGet(owords, w, evidence.HdConf())
+		sum += conf
+		tch += evidence.OwGet(owords, w, evidence.HdTlen())
+		if conf > mx {
+			mx = conf
+		}
+		i += 1
+	}
+	lmean = sum / m
+	i = 0
+	for i < m {
+		w = port.CellsAt(scr, fb+i)
+		ts = evidence.OwGet(owords, w, evidence.HdTstart())
+		n = evidence.OwGet(owords, w, evidence.HdTlen())
+		conf = evidence.OwGet(owords, w, evidence.HdConf())
+		f = 0
+		port.CellsSet(scr, fb+((2*fm)+i), -1)
+		port.CellsSet(scr, fb+((3*fm)+i), 0)
+		// a dot leader
+		if ScLeader(etext, ts, n) == 1 {
+			f = 3
+		}
+		// texture: a line of three words or more, all of them unsure
+		if f == 0 {
+			if (m >= 3) && ((lmean <= scLoConf()) && ((mx <= 450) && (tch <= (4 * m)))) {
+				f = 1
+			}
+		}
+		// very unsure and no word, alone or among such words
+		if f == 0 {
+			if conf <= scLoConf() {
+				if ScImplausible(etext, ts, n) == 1 {
+					if (m <= 2) || (lmean <= 450) {
+						f = 1
+					}
+				}
+			}
+		}
+		// a rule read as a character
+		if (f == 0) && (n == 1) {
+			c = port.CellsAt(etext, ts)
+			if (c == 124) || ((c == 73) || ((c == 108) || (c == 33))) {
+				if ScOnVrule(rules, page, (evidence.OwGet(owords, w, evidence.HdX0())+evidence.OwGet(owords, w, evidence.HdX1()))/2, (evidence.OwGet(owords, w, evidence.HdY0())+evidence.OwGet(owords, w, evidence.HdY1()))/2, scRuleSlack()) == 1 {
+					f = 2
+				}
+			}
+		}
+		// a rule's stroke glued to the end of a word
+		if (f == 0) && (n >= 2) {
+			if port.CellsAt(etext, ts+(n-1)) == 124 {
+				if scTailOnVrule(owords, osyms, rules, page, w) == 1 {
+					port.CellsSet(scr, fb+((2*fm)+i), ts)
+					port.CellsSet(scr, fb+((3*fm)+i), n-1)
+					f = 4
+				}
+			}
+		}
+		// thousands read with periods
+		if (f == 0) && (ScGroupsFix(etext, ts, n) == 1) {
+			nt = evidence.EtxLen(etext)
+			last = n - 1
+			for (last > 0) && (port.CellsAt(etext, ts+last) != 46) {
+				last -= 1
+			}
+			k = 0
+			for k < n {
+				c = port.CellsAt(etext, ts+k)
+				if (c == 46) && (k != last) {
+					c = 44
+				}
+				evidence.EtxAppendCp(etext, c)
+				k += 1
+			}
+			port.CellsSet(scr, fb+((2*fm)+i), nt)
+			port.CellsSet(scr, fb+((3*fm)+i), n)
+			f = 4
+		}
+		// the page's own conventions: a thousands comma read as a period on a page that writes them with commas (two words at least), and a dollar sign glued to an amount and read as an S or a section sign on a page that writes its amounts with dollar signs (two words at least)
+		if (f == 0) && (n >= 4) {
+			gl = 0
+			c = port.CellsAt(etext, ts)
+			if dollars >= 2 {
+				if (c == 167) || (c == 83) {
+					if ScAmountLike(etext, ts+1, n-1) == 1 {
+						gl = 1
+					}
+				}
+			}
+			pd = -1
+			if commas >= 2 {
+				pd = ScPeriodThousands(etext, ts, n, gl)
+			}
+			if (gl == 1) || (pd >= 0) {
+				nt = evidence.EtxLen(etext)
+				k = 0
+				for k < n {
+					c = port.CellsAt(etext, ts+k)
+					if (gl == 1) && (k == 0) {
+						c = 36
+					}
+					if k == pd {
+						c = 44
+					}
+					evidence.EtxAppendCp(etext, c)
+					k += 1
+				}
+				port.CellsSet(scr, fb+((2*fm)+i), nt)
+				port.CellsSet(scr, fb+((3*fm)+i), n)
+				f = 4
+			}
+		}
+		// a decimal point the engine lost and the page shows (`sc-dot-after`)
+		if (f == 0) && (n >= 3) {
+			k = ScDotAfter(owords, osyms, comps, inks, page, w)
+			if k >= 0 {
+				nt = evidence.EtxLen(etext)
+				c = 0
+				for c < n {
+					last = port.CellsAt(etext, ts+c)
+					evidence.EtxAppendCp(etext, last)
+					if c == k {
+						evidence.EtxAppendCp(etext, 46)
+					}
+					c += 1
+				}
+				port.CellsSet(scr, fb+((2*fm)+i), nt)
+				port.CellsSet(scr, fb+((3*fm)+i), n+1)
+				f = 4
+			}
+		}
+		// a currency sign read as an S or a section sign, alone just before an amount of the same height
+		if (f == 0) && (n == 1) {
+			c = port.CellsAt(etext, ts)
+			if ((i + 1) < m) && ((c == 83) || ((c == 167) || (c == 115))) {
+				w2 = port.CellsAt(scr, fb+(i+1))
+				ts2 = evidence.OwGet(owords, w2, evidence.HdTstart())
+				n2 = evidence.OwGet(owords, w2, evidence.HdTlen())
+				hh = evidence.OwGet(owords, w, evidence.HdY1()) - evidence.OwGet(owords, w, evidence.HdY0())
+				h2 = evidence.OwGet(owords, w2, evidence.HdY1()) - evidence.OwGet(owords, w2, evidence.HdY0())
+				gp = evidence.OwGet(owords, w2, evidence.HdX0()) - evidence.OwGet(owords, w, evidence.HdX1())
+				if (ScAmountLike(etext, ts2, n2) == 1) && ((gp >= 0) && (gp <= (2 * hh))) {
+					if ((hh * 100) >= (60 * h2)) && ((hh * 100) <= (160 * h2)) {
+						if (c == 167) || ((scCents(etext, ts2, n2) == 1) || (dollars >= 2)) {
+							nt = evidence.EtxLen(etext)
+							evidence.EtxAppendCp(etext, 36)
+							port.CellsSet(scr, fb+((2*fm)+i), nt)
+							port.CellsSet(scr, fb+((3*fm)+i), 1)
+							f = 4
+						}
+					}
+				}
+			}
+		}
+		port.CellsSet(scr, fb+(fm+i), f)
+		if (f == 1) || (f == 3) {
+			scFlag(owords, w, evidence.OeGarbage())
+			changed = 1
+		}
+		if f == 2 {
+			scFlag(owords, w, evidence.OeRuleGhost())
+			changed = 1
+		}
+		if f == 4 {
+			scFlag(owords, w, evidence.OeCorrected())
+			changed = 1
+		}
+		i += 1
+	}
+	if changed == 0 {
+		return m
+	}
+	// the words that stay, packed to the front
+	i = 0
+	for i < m {
+		f = port.CellsAt(scr, fb+(fm+i))
+		if (f == 0) || (f == 4) {
+			port.CellsSet(scr, fb+kept, port.CellsAt(scr, fb+i))
+			port.CellsSet(scr, fb+(fm+kept), f)
+			port.CellsSet(scr, fb+((2*fm)+kept), port.CellsAt(scr, fb+((2*fm)+i)))
+			port.CellsSet(scr, fb+((3*fm)+kept), port.CellsAt(scr, fb+((3*fm)+i)))
+			kept += 1
+		}
+		i += 1
+	}
+	return kept
+}
+
 func scEmitCore(olines *port.Cells, owords *port.Cells, osyms *port.Cells, l0 int32, nl int32, page int32, rotmed int32, scr *port.Cells, words *port.Cells, lines *port.Cells, usesel int32) int32 {
 	var k int32 = 0
 	var made int32 = 0
@@ -1269,6 +2322,227 @@ func scEmitCore(olines *port.Cells, owords *port.Cells, osyms *port.Cells, l0 in
 	return made
 }
 
+func ScEmitVetted(olines *port.Cells, owords *port.Cells, osyms *port.Cells, nsel int32, page int32, rotmed int32, scr *port.Cells, words *port.Cells, lines *port.Cells, etext *port.Cells, rules *port.Cells, comps *port.Cells, inks *port.Cells) int32 {
+	// `sc-emit-core` over the selection of `scr`, as `sc-emit-sel` does it, and with what becomes of the words of the lines (P12.6): the words a body-ink line adds to a
+	// first-pass line (`sc-xtra-base`, `sc-line-words`), the words that are no text kept out and flagged in `owords`, the safe corrections made (`sc-fates`). A line of which every
+	// word is kept out is not a line. The line's box and baseline are widened to the words that were added, and are otherwise the line's own, so that a page where nothing was added,
+	// dropped or corrected is emitted as it always was. Answers the lines made.
+	var fb int32 = ScFateBase()
+	var fm int32 = ScFateMax()
+	var k int32 = 0
+	var made int32 = 0
+	var l int32 = 0
+	var cnt int32 = 0
+	var revised int32 = 0
+	var mc int32 = 0
+	var mg int32 = 0
+	var xl int32 = 0
+	var kk int32 = 0
+	var w0 int32 = 0
+	var wi int32 = 0
+	var wn int32 = 0
+	var ts int32 = 0
+	var tl int32 = 0
+	var j int32 = 0
+	var r int32 = 0
+	var lnx int32 = 0
+	var lx0 int32 = 0
+	var ly0 int32 = 0
+	var lx1 int32 = 0
+	var ly1 int32 = 0
+	var bx0 int32 = 0
+	var by0 int32 = 0
+	var bx1 int32 = 0
+	var by1 int32 = 0
+	var ymid int32 = 0
+	var asc int32 = 0
+	var dsc int32 = 0
+	var size int32 = 0
+	var rot int32 = 0
+	var dir int32 = 0
+	var gap int32 = 0
+	var first int32 = 0
+	var ox int32 = 0
+	var ox1 int32 = 0
+	var nx0 int32 = 0
+	var xm int32 = 0
+	var commas int32 = 0
+	var dollars int32 = 0
+	var nx1 int32 = 0
+	// Pass 1: every line's metrics, then their sizes clustered over the page.
+	for k < nsel {
+		if k < scCap() {
+			l = port.CellsAt(scr, ScSelBase()+k)
+			port.CellsSet(scr, 244+(4*k), 0)
+			port.CellsSet(scr, 242+(4*k), -1)
+			port.CellsSet(scr, 243+(4*k), -1)
+			port.CellsSet(scr, 245+(4*k), -1)
+			if evidence.OlGet(olines, l, evidence.LhCount()) > 0 {
+				xm = scMetrics(olines, owords, osyms, l, scr)
+				port.CellsSet(scr, 245+(4*k), xm)
+				port.CellsSet(scr, 242+(4*k), port.CellsAt(scr, 0))
+				port.CellsSet(scr, 243+(4*k), port.CellsAt(scr, 1))
+			}
+		}
+		k += 1
+	}
+	if nsel < scCap() {
+		scFit(scr, nsel)
+	} else {
+		scFit(scr, scCap())
+	}
+	// the page's own conventions, counted over its words: how many write a thousands comma, how many a dollar sign
+	commas = 0
+	dollars = 0
+	k = 0
+	for k < nsel {
+		l = port.CellsAt(scr, ScSelBase()+k)
+		cnt = evidence.OlGet(olines, l, evidence.LhCount())
+		w0 = evidence.OlGet(olines, l, evidence.LhFirst())
+		j = 0
+		for j < cnt {
+			wi = w0 + j
+			if ScThousandsComma(etext, evidence.OwGet(owords, wi, evidence.HdTstart()), evidence.OwGet(owords, wi, evidence.HdTlen())) == 1 {
+				commas += 1
+			}
+			if ScDollarWord(etext, evidence.OwGet(owords, wi, evidence.HdTstart()), evidence.OwGet(owords, wi, evidence.HdTlen())) == 1 {
+				dollars += 1
+			}
+			j += 1
+		}
+		k += 1
+	}
+	port.CellsSet(scr, fb+(4*fm), commas)
+	port.CellsSet(scr, fb+((4*fm)+1), dollars)
+	k = 0
+	for k < nsel {
+		l = port.CellsAt(scr, ScSelBase()+k)
+		cnt = evidence.OlGet(olines, l, evidence.LhCount())
+		if cnt > 0 {
+			w0 = evidence.OlGet(olines, l, evidence.LhFirst())
+			lx0 = evidence.OlGet(olines, l, evidence.LhX0())
+			ly0 = evidence.OlGet(olines, l, evidence.LhY0())
+			lx1 = evidence.OlGet(olines, l, evidence.LhX1())
+			ly1 = evidence.OlGet(olines, l, evidence.LhY1())
+			bx0 = evidence.OlGet(olines, l, evidence.LhBx0())
+			by0 = evidence.OlGet(olines, l, evidence.LhBy0())
+			bx1 = evidence.OlGet(olines, l, evidence.LhBx1())
+			by1 = evidence.OlGet(olines, l, evidence.LhBy1())
+			dir = evidence.OlGet(olines, l, evidence.LhDir())
+			if k < scCap() {
+				asc = port.CellsAt(scr, 242+(4*k))
+				dsc = port.CellsAt(scr, 243+(4*k))
+			} else {
+				scMetrics(olines, owords, osyms, l, scr)
+				asc = port.CellsAt(scr, 0)
+				dsc = port.CellsAt(scr, 1)
+				if dsc < 0 {
+					dsc = (asc * 27) / 100
+				}
+			}
+			// the words the line is emitted with: its own and the body-ink line's that lie over none of them, less the ones that are no text
+			xl = -1
+			kk = l - port.CellsAt(scr, ScXtraBase())
+			if (kk >= 0) && (kk < ScSelMax()) {
+				xl = port.CellsAt(scr, ScXtraBase()+(kk+1)) - 1
+			}
+			if dir != 0 {
+				xl = -1
+			}
+			revised = 0
+			if evidence.OlGet(olines, l, evidence.OlfRun()) != evidence.OlGet(olines, port.CellsAt(scr, ScXtraBase()), evidence.OlfRun()) {
+				revised = 1
+			}
+			mg = 0
+			mc = cnt
+			j = scLineWords(olines, owords, etext, l, xl, scr)
+			if j > 0 {
+				mg = 1
+				mc = scFates(owords, etext, osyms, rules, comps, inks, page, j, scr)
+				if (j > cnt) || (mc < j) {
+					revised = 1
+				}
+			}
+			if (mg == 1) && (mc > 0) {
+				if j > cnt {
+					wi = port.CellsAt(scr, fb)
+					wn = port.CellsAt(scr, fb+(mc-1))
+					bx0 = evidence.OwGet(owords, wi, evidence.HdBx0())
+					by0 = evidence.OwGet(owords, wi, evidence.HdBy0())
+					bx1 = evidence.OwGet(owords, wn, evidence.HdBx1())
+					by1 = evidence.OwGet(owords, wn, evidence.HdBy1())
+					lx0 = scMn(lx0, evidence.OwGet(owords, wi, evidence.HdX0()))
+					lx1 = scMx(lx1, evidence.OwGet(owords, wn, evidence.HdX1()))
+				}
+			}
+			ymid = (by0 + by1) / 2
+			if asc > 0 {
+				size = (asc * 137) / 100
+				ly0 = ymid - asc
+				ly1 = ymid + dsc
+			} else {
+				size = ((ly1 - ly0) * 108) / 100
+			}
+			if size < 1 {
+				size = 1
+			}
+			rot = ((evidence.EvAngle(bx1-bx0, by1-by0) - rotmed) + 36000) % 36000
+			lnx = evidence.LnCount(lines)
+			first = evidence.WdCount(words)
+			j = 0
+			for j < mc {
+				wi = w0 + j
+				wn = w0 + (j + 1)
+				ts = 0
+				tl = 0
+				if mg == 1 {
+					wi = port.CellsAt(scr, fb+j)
+					wn = port.CellsAt(scr, fb+(j+1))
+				}
+				ts = evidence.OwGet(owords, wi, evidence.HdTstart())
+				tl = evidence.OwGet(owords, wi, evidence.HdTlen())
+				if mg == 1 {
+					if port.CellsAt(scr, fb+((2*fm)+j)) >= 0 {
+						ts = port.CellsAt(scr, fb+((2*fm)+j))
+						tl = port.CellsAt(scr, fb+((3*fm)+j))
+					}
+				}
+				gap = -1
+				if (j + 1) < mc {
+					ox = evidence.OwGet(owords, wi, evidence.HdX0())
+					ox1 = evidence.OwGet(owords, wi, evidence.HdX1())
+					nx0 = evidence.OwGet(owords, wn, evidence.HdX0())
+					nx1 = evidence.OwGet(owords, wn, evidence.HdX1())
+					if dir == 1 {
+						gap = ox - nx1
+					} else {
+						gap = nx0 - ox1
+					}
+				}
+				r = evidence.WdNew(words, page, evidence.OwGet(owords, wi, evidence.HdX0()), evidence.OwGet(owords, wi, evidence.HdY0()), evidence.OwGet(owords, wi, evidence.HdX1()), evidence.OwGet(owords, wi, evidence.HdY1()), evidence.OwGet(owords, wi, evidence.HdBx0()), evidence.OwGet(owords, wi, evidence.HdBy0()), evidence.OwGet(owords, wi, evidence.HdBx1()), evidence.OwGet(owords, wi, evidence.HdBy1()), rot, dir, ts, tl, lnx, evidence.OwGet(owords, wi, evidence.HdConf()), -1)
+				evidence.WdSet(words, r, evidence.WfStyle(), evidence.OwGet(owords, wi, evidence.OwfStyle()))
+				evidence.WdSet(words, r, evidence.WfSize(), size)
+				evidence.WdSet(words, r, evidence.WfFont(), -1)
+				evidence.WdSet(words, r, evidence.WfGap(), gap)
+				evidence.WdSet(words, r, evidence.WfWbreak(), evidence.WbSpace())
+				if (j + 1) == mc {
+					evidence.WdSet(words, r, evidence.WfWbreak(), evidence.WbLineEnd())
+				}
+				evidence.WdSet(words, r, evidence.WfSrc(), model.SrOcr())
+				j += 1
+			}
+			if mc > 0 {
+				r = evidence.LnNew(lines, page, lx0, ly0, lx1, ly1, bx0, by0, bx1, by1, rot, dir, first, mc)
+				evidence.LnSet(lines, r, evidence.LfSrc(), model.SrOcr()+(revised*evidence.LsRevised()))
+				evidence.LnSet(lines, r, evidence.LfOrder(), r)
+				made += 1
+			}
+		}
+		k += 1
+	}
+	return made
+}
+
 func ScEmitLines(olines *port.Cells, owords *port.Cells, osyms *port.Cells, l0 int32, nl int32, page int32, rotmed int32, scr *port.Cells, words *port.Cells, lines *port.Cells) int32 {
 	// Every OCR line of the run [l0, l0 + nl) that has words as a `lines` row, and its words as `words` rows, in the arenas
 	// the text layer fills (D213: size, box and rotation are the line's, see the head of this file). The words' text is
@@ -1276,11 +2550,12 @@ func ScEmitLines(olines *port.Cells, owords *port.Cells, osyms *port.Cells, l0 i
 	return scEmitCore(olines, owords, osyms, l0, nl, page, rotmed, scr, words, lines, 0)
 }
 
-func ScEmitSel(olines *port.Cells, owords *port.Cells, osyms *port.Cells, nsel int32, page int32, rotmed int32, scr *port.Cells, words *port.Cells, lines *port.Cells) int32 {
+func ScEmitSel(olines *port.Cells, owords *port.Cells, osyms *port.Cells, nsel int32, page int32, rotmed int32, scr *port.Cells, words *port.Cells, lines *port.Cells, etext *port.Cells, rules *port.Cells, comps *port.Cells, inks *port.Cells) int32 {
 	// `sc-emit-lines` over the OCR lines the scratch names (P7.4): `nsel` `olines` rows, in the order to emit them, at `scr`
 	// cells `sc-sel-base` and up (`sc-sel-set`; `sc-prep` makes room for `sc-sel-max` of them): the lines of several runs chosen
-	// line by line, their size clustered over the chosen lines. Answers the lines made.
-	return scEmitCore(olines, owords, osyms, 0, nsel, page, rotmed, scr, words, lines, 1)
+	// line by line, their size clustered over the chosen lines; and (P12.6, `sc-emit-vetted`) with the words a body-ink line adds, the words that
+	// are no text left out and the safe corrections made, `rules`, `comps` and `inks` being the tracer's rules, components and ink layers. Answers the lines made.
+	return ScEmitVetted(olines, owords, osyms, nsel, page, rotmed, scr, words, lines, etext, rules, comps, inks)
 }
 
 func ScSelSet(scr *port.Cells, k int32, row int32) int32 {
@@ -1385,6 +2660,55 @@ func ScTagUnread(nodes *port.Cells, regions *port.Cells, mask *port.Cells) int32
 	return held
 }
 
+func ScWriteBare(nodes *port.Cells, regions *port.Cells, pages *port.Cells, im *port.Cells, ledger *port.Cells) int32 {
+	// P12.6 (R1): a page of the Model with no node on it and an image of at least a tenth of its area (the biggest such image) gets a ledger row, `background`, for that image, so that a page
+	// that comes out empty never has nothing dropped: the image is what it held and was not read, not drawn as a figure and not kept. Answers the rows written.
+	var np int32 = model.PageCount(pages)
+	var nn int32 = model.NodeCount(nodes)
+	var ni int32 = evidence.ImCount(im)
+	var p int32 = 0
+	var j int32 = 0
+	var n int32 = 0
+	var best int32 = -1
+	var has int32 = 0
+	var rows int32 = 0
+	var area int64 = int64(0)
+	var bestarea int64 = int64(0)
+	for p < np {
+		best = -1
+		bestarea = int64(0)
+		j = 0
+		for j < ni {
+			if evidence.ImGet(im, j, evidence.MfPage()) == (p + 1) {
+				area = int64(evidence.ImGet(im, j, evidence.MfX1())-evidence.ImGet(im, j, evidence.MfX0())) * int64(evidence.ImGet(im, j, evidence.MfY1())-evidence.ImGet(im, j, evidence.MfY0()))
+				if (area * int64(10)) >= (int64(model.PageW(pages, p)) * int64(model.PageH(pages, p))) {
+					if area > bestarea {
+						best = j
+						bestarea = area
+					}
+				}
+			}
+			j += 1
+		}
+		if best >= 0 {
+			has = 0
+			n = 1
+			for (n < nn) && (has == 0) {
+				if scNodePage(nodes, regions, n) == (p + 1) {
+					has = 1
+				}
+				n += 1
+			}
+			if has == 0 {
+				model.LedgerAdd(ledger, model.DrBackground(), p+1, evidence.ImGet(im, best, evidence.MfX0()), evidence.ImGet(im, best, evidence.MfY0()), evidence.ImGet(im, best, evidence.MfX1()), evidence.ImGet(im, best, evidence.MfY1()), 600, model.SrVector())
+				rows += 1
+			}
+		}
+		p += 1
+	}
+	return rows
+}
+
 func ScTag(nodes *port.Cells, attrs *port.Cells, text *port.Cells, regions *port.Cells, pages *port.Cells, mask *port.Cells, policy int32) int32 {
 	// The provenance of OCR text, after the paragraphs are built. `mask` has one cell a page: 0 none, 1 an image page was
 	// OCR'd, 2 a PDF page was (its kind becomes `scanned`, SPEC 3.4), plus `sc-mask-unread` for a page in a script the engine cannot read (`sc-tag-unread`).
@@ -1453,6 +2777,57 @@ func ScTag(nodes *port.Cells, attrs *port.Cells, text *port.Cells, regions *port
 	return 1
 }
 
+func scNativeJpeg(src *port.Src, start int32, n int32) int32 {
+	// The JPEG subset every ImageDecode host reads for scans: SOF0/1/2, 8-bit, one or three components. Other frames need page rendering; native libraries differ on arithmetic JPEG.
+	var i int32 = 2
+	var m int32 = 0
+	var size int32 = 0
+	var comps int32 = 0
+	if n < 4 {
+		return 0
+	}
+	if (pdfsrc.PsU8(src, start) != 255) || (pdfsrc.PsU8(src, start+1) != 216) {
+		return 0
+	}
+	for (i + 4) <= n {
+		if pdfsrc.PsU8(src, start+i) != 255 {
+			return 0
+		}
+		m = pdfsrc.PsU8(src, start+(i+1))
+		if m == 255 {
+			i += 1
+		} else if (m == 216) || ((m == 1) || ((m >= 208) && (m <= 215))) {
+			i += 2
+		} else {
+			if (m == 217) || (m == 218) {
+				return 0
+			}
+			size = (256 * pdfsrc.PsU8(src, start+(i+2))) + pdfsrc.PsU8(src, start+(i+3))
+			if (size < 2) || (size > (n - (i + 2))) {
+				return 0
+			}
+			if (m >= 192) && ((m <= 207) && ((m != 196) && ((m != 200) && (m != 204)))) {
+				if (m < 192) || (m > 194) {
+					return 0
+				}
+				if size < 8 {
+					return 0
+				}
+				if pdfsrc.PsU8(src, start+(i+4)) != 8 {
+					return 0
+				}
+				comps = pdfsrc.PsU8(src, start+(i+9))
+				if (comps == 1) || (comps == 3) {
+					return 1
+				}
+				return 0
+			}
+			i += size + 2
+		}
+	}
+	return 0
+}
+
 func ScDctSpan(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, obj int32, sp *port.Cells) int32 {
 	// Is object `obj` a stream whose whole filter chain is one DCT stage, in a file that is not encrypted? Then 1 and `sp`
 	// holds [start, length] of its bytes in the file: a JPEG stream is a JPEG file, and the host's `ImageDecode` reads it in
@@ -1496,15 +2871,27 @@ func ScDctSpan(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *
 	if pdflex.PlIntValue(ar, kt) != 0 {
 		return 0
 	}
+	if scNativeJpeg(src, pdflex.PlStreamStart(ar, h), pdflex.PlStreamLen(ar, h)) == 0 {
+		return 0
+	}
+	if pdfsrc.PsMissed(src) {
+		return 0
+	}
 	port.CellsDrop(sp, 0)
 	port.CellsPush(sp, pdflex.PlStreamStart(ar, h))
 	port.CellsPush(sp, pdflex.PlStreamLen(ar, h))
 	return 1
 }
 
+func ScCoverMin() int32 {
+	// P12.6 (R1): the share of a page's area (per mille) that the image of a page with no text at all must cover to be read as the page: a quarter. It was a half, and a 96 dpi book page on an A4 page covers 49.5 per cent of it: the page was dropped, body and ledger empty.
+	return 250
+}
+
 func ScEligible(im *port.Cells, j int32, pw int32, ph int32) int32 {
 	// Can image placement `j` be OCR'd as the page? Upright and not skewed, a real XObject (not inline, not a stencil
-	// mask), at least 16 pixels each way, and covering at least half the page (`pw` x `ph` centipoints) by area.
+	// mask), at least 16 pixels each way, and covering at least `sc-cover-min` of the page (`pw` x `ph` centipoints) by area. The caller has already seen that the page has no text at all, so the
+	// image is what the page holds (the biggest of them, when it has more).
 	if evidence.ImGet(im, j, evidence.MfObj()) <= 0 {
 		return 0
 	}
@@ -1525,7 +2912,7 @@ func ScEligible(im *port.Cells, j int32, pw int32, ph int32) int32 {
 	}
 	var area int64 = int64(evidence.ImGet(im, j, evidence.MfX1())-evidence.ImGet(im, j, evidence.MfX0())) * int64(evidence.ImGet(im, j, evidence.MfY1())-evidence.ImGet(im, j, evidence.MfY0()))
 	var whole int64 = int64(pw) * int64(ph)
-	if (area * int64(2)) < whole {
+	if (area * int64(1000)) < (whole * int64(ScCoverMin())) {
 		return 0
 	}
 	if whole <= int64(0) {

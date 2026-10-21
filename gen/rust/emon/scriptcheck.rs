@@ -9,6 +9,14 @@ pub fn sk_min_conf() -> i32 {
     // `script-conf`: OSD's script confidence (x10) from which kin believes the script it names (a Latin page reads 10 to 20, the Hindi page of the smoke review 63).
     return 150;
 }
+pub fn sk_weak_conf() -> i32 {
+    // `script-weak-conf` (R2): from this OSD script confidence (x10) kin believes a script OSD names, when the engine's dictionary also knows few of the words (`sk-dict-share`): the gate of 15 missed Urdu, Han, Ethiopic.
+    return 50;
+}
+pub fn sk_dict_share() -> i32 {
+    // `script-dict-share` (R2): ...few is under this share (per mille) of the words read from the engine's dictionary.
+    return 250;
+}
 pub fn sk_min_words() -> i32 {
     // A page of fewer OCR words than this is not flagged: the engine read nothing of it that could be junk.
     return 3;
@@ -28,6 +36,20 @@ pub fn sk_unpack(lang: i32, mut out: &mut crate::port::Cells) -> i32 {
         d = d / 256;
     }
     return n;
+}
+pub(crate) fn sk_dict(nw: i32, an: &mut crate::port::Cells, ext: i32) -> i32 {
+    // How many of the answer's `nw` words the engine read from its dictionary.
+    let mut w: i32 = ox_first_word(an, ext);
+    let mut i: i32 = 0;
+    let mut k: i32 = 0;
+    while i < nw {
+        if (ox_wdflags(an, w) & ocw_dict()) != 0 {
+            k += 1;
+        }
+        w = ox_word_next(an, w);
+        i += 1;
+    }
+    return k;
 }
 pub fn sk_unread(an: &mut crate::port::Cells, at: i32, mut scr: &mut crate::port::Cells) -> i32 {
     // 1 when the page the OCR answer at `at` read is in a script the engine had no model for (see the head of this file), else 0. `scr` is scratch.
@@ -51,11 +73,18 @@ pub fn sk_unread(an: &mut crate::port::Cells, at: i32, mut scr: &mut crate::port
     if script == sc_latf() {
         return 0;
     }
-    if ox_sconf(an, ext) < sk_min_conf() {
+    if ox_sconf(an, ext) < sk_weak_conf() {
         return 0;
     }
     if nw < sk_min_words() {
         return 0;
+    }
+    // P12.6 (R2): OSD names the script of an Urdu, a Han photo or an Ethiopic page in a legacy font at a confidence under `sk-min-conf`; its word is then believed only when the
+    // reading backs it: a page whose words the engine's dictionary knows (`sk-dict-share` or more of them) is Latin, whatever OSD says; a page it knows few words of is junk in a script it cannot read.
+    if ox_sconf(an, ext) < sk_min_conf() {
+        if (sk_dict(nw, an, ext) * 1000) >= (nw * sk_dict_share()) {
+            return 0;
+        }
     }
     w = ox_first_word(an, ext);
     while i < nw {

@@ -105,8 +105,9 @@ func TestTiffRules(emonT *testing.T) {
 	tTiff(emonT, port.HexBlob("49492a000e0000000a141e28323c090000010300010000000300000001010300010000000200000002010300010000000800000003010300010000000200000006010300010000000100000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000000000000"), 0, 1, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, "CCITT RLE")
 	tTiff(emonT, port.HexBlob("49492a000e0000000a141e28323c090000010300010000000300000001010300010000000200000002010300010000000800000003010300010000000400000006010300010000000100000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000000000000"), 0, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, "CCITT of 8 bits")
 	tTiff(emonT, port.HexBlob("49492a000e0000000a141e28323c090000010300010000000300000001010300010000000200000002010300010000000100000003010300010000000300000006010300010000000000000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000000000000"), 0, 1, 0, -1, -1, -1, -1, -1, -1, -1, -1, 1, tiffcheck.TrComp(), 3, tiffcheck.TrKind(), 0, -1, -1, "Group 3, plain")
-	tTiff(emonT, port.HexBlob("49492a000e0000000a141e28323c0a0000010300010000000300000001010300010000000200000002010300010000000100000003010300010000000300000006010300010000000000000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000024010400010000000100000000000000"), 0, 1, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, "Group 3, two-dimensional")
-	tTiff(emonT, port.HexBlob("49492a000e0000000a141e28323c0a0000010300010000000300000001010300010000000200000002010300010000000100000003010300010000000300000006010300010000000000000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000024010400010000000400000000000000"), 0, 1, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, "Group 3, fill bits")
+	tTiff(emonT, port.HexBlob("49492a000e0000000a141e28323c0a0000010300010000000300000001010300010000000200000002010300010000000100000003010300010000000300000006010300010000000000000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000024010400010000000100000000000000"), 0, 1, 0, -1, -1, -1, -1, -1, -1, -1, -1, 1, tiffcheck.TrComp(), 3, tiffcheck.TrT4(), 1, -1, -1, "Group 3, two-dimensional")
+	tTiff(emonT, port.HexBlob("49492a000e0000000a141e28323c0a0000010300010000000300000001010300010000000200000002010300010000000100000003010300010000000300000006010300010000000000000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000024010400010000000400000000000000"), 0, 1, 0, -1, -1, -1, -1, -1, -1, -1, -1, 1, tiffcheck.TrComp(), 3, tiffcheck.TrT4(), 4, -1, -1, "Group 3, fill bits")
+	tTiff(emonT, port.HexBlob("49492a000e0000000a141e28323c0a0000010300010000000300000001010300010000000200000002010300010000000100000003010300010000000300000006010300010000000000000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000024010400010000000200000000000000"), 0, 1, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, "Group 3, uncompressed mode is still not read")
 	tTiff(emonT, port.HexBlob("49492a000e0000000a141e28323c080000010300010000000300000001010300010000000200000002010300010000000100000003010300010000000400000011010400010000000800000015010300010000000100000016010300010000000200000017010400010000000600000000000000"), 0, 1, 0, -1, -1, -1, -1, -1, -1, -1, -1, 1, tiffcheck.TrKind(), 0, -1, -1, -1, -1, "Group 4 with no photometric tag is min-is-white")
 	tTiff(emonT, port.HexBlob("49492a000e0000000a141e28323c0a000001030001000000030000000101030001000000020000000201030001000000080000000301030001000000010000000601030001000000010000001101040001000000080000001501030001000000010000001601030001000000020000001701040001000000060000003d010300010000000300000000000000"), 0, 1, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, "predictor 3")
 	tTiff(emonT, port.HexBlob("49492a000e0000000a141e28323c0a000001030001000000030000000101030001000000020000000201030001000000080000000301030001000000010000000601030001000000010000001101040001000000080000001501030001000000010000001601030001000000020000001701040001000000060000003d010300010000000200000000000000"), 0, 1, 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, tiffcheck.TrPredictor(), 2, -1, -1, -1, -1, "predictor 2 on bytes")
@@ -156,8 +157,8 @@ func TestTiffRules(emonT *testing.T) {
 
 func TestTiffFixtures(emonT *testing.T) {
 	// Every TIFF fixture, every frame: the size after the orientation, channels, resolution, bilevel; or the refusal's name.
-	tTiff(emonT, port.TestFile("image/tiff-bilevel-g3-2d.tif"), 0, 1, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, "tiff-bilevel-g3-2d.tif")
-	tTiff(emonT, port.TestFile("image/tiff-bilevel-g3-fill.tif"), 0, 1, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, "tiff-bilevel-g3-fill.tif")
+	tTiff(emonT, port.TestFile("image/tiff-bilevel-g3-2d.tif"), 0, 1, 0, 1, -1, -1, 48, 36, 1, 0, -1, 1, -1, -1, -1, -1, -1, -1, "tiff-bilevel-g3-2d.tif frame 0")
+	tTiff(emonT, port.TestFile("image/tiff-bilevel-g3-fill.tif"), 0, 1, 0, 1, -1, -1, 48, 36, 1, 0, -1, 1, -1, -1, -1, -1, -1, -1, "tiff-bilevel-g3-fill.tif frame 0")
 	tTiff(emonT, port.TestFile("image/tiff-bilevel-g3.tif"), 0, 1, 0, 1, -1, -1, 48, 36, 1, 0, -1, 1, -1, -1, -1, -1, -1, -1, "tiff-bilevel-g3.tif frame 0")
 	tTiff(emonT, port.TestFile("image/tiff-bilevel-g4.tif"), 0, 1, 0, 1, -1, -1, 48, 36, 1, 0, -1, 1, -1, -1, -1, -1, -1, -1, "tiff-bilevel-g4.tif frame 0")
 	tTiff(emonT, port.TestFile("image/tiff-bilevel-lzw.tif"), 0, 1, 0, 1, -1, -1, 48, 36, 1, 0, -1, 1, -1, -1, -1, -1, -1, -1, "tiff-bilevel-lzw.tif frame 0")
@@ -279,9 +280,23 @@ func tRawStrip(emonT *testing.T, t []byte, off int32, k int32, none []byte, msg 
 	return 0
 }
 
-func TestCcittReadsWhatTheValidatorRefuses(emonT *testing.T) {
+func TestCcittReadsTheStripsOfTheFaxFixtures(emonT *testing.T) {
+	// (The validator refused these two until P12.6: D189. It reads them now, and says in `tr-t4` which options the host's `emon.ccitt` call is to be made with.)
 	tRawStrip(emonT, port.TestFile("image/tiff-bilevel-g3-2d.tif"), 8, 1, port.TestFile("image/tiff-bilevel-none.tif"), "Group 3, two-dimensional")
 	tRawStrip(emonT, port.TestFile("image/tiff-bilevel-g3-fill.tif"), 8, 0, port.TestFile("image/tiff-bilevel-none.tif"), "Group 3 with fill bits before the EOLs")
+}
+
+func TestAFaxTiffOfGroup3TwoDimensionalIsReadAndItsOptionsReachTheReport(emonT *testing.T) {
+	// P12.6 (R6): libtiff's fax2d.tif was refused (exit 4) for T4Options bit 0, though the decoder reads it; bit 0 is two-dimensional (k 4), bit 2 fill bits
+	var r *port.Cells = port.NewCells()
+	port.AssertEq(emonT, tiffcheck.TcCheck(port.TestFile("image/tiff-bilevel-g3-2d.tif"), 0, 1, r), 0, "the two-dimensional file is read")
+	port.AssertEq(emonT, port.CellsAt(r, tiffcheck.TrT4()), 1, "its option: two-dimensional")
+	port.AssertEq(emonT, tiffcheck.TcCheck(port.TestFile("image/tiff-bilevel-g3-fill.tif"), 0, 1, r), 0, "the fill-bits file is read")
+	port.AssertEq(emonT, port.CellsAt(r, tiffcheck.TrT4()), 4, "its option: fill bits")
+	port.AssertEq(emonT, tiffcheck.TcCheck(port.TestFile("image/tiff-bilevel-g3.tif"), 0, 1, r), 0, "the plain Group 3 file is read")
+	port.AssertEq(emonT, port.CellsAt(r, tiffcheck.TrT4()), 0, "with no option")
+	port.AssertEq(emonT, tiffcheck.TcCheck(port.TestFile("image/tiff-bilevel-g4.tif"), 0, 1, r), 0, "Group 4 is read")
+	port.AssertEq(emonT, port.CellsAt(r, tiffcheck.TrT4()), 0, "and has none")
 }
 
 func TestExifReader(emonT *testing.T) {

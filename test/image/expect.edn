@@ -41,8 +41,8 @@
  "png-rgba16.png" {:ch 3, :bilevel 0, :dpi100 0, :tol 1, :frames 1, :px [{:w 48, :h 36, :fnv "d7ee53350afd0e21"}]}
  "png-rgba8.png" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "06c02da2b443e10e"}]}
  "png-truncated.png" {:refuse "undecodable"}
- "tiff-bilevel-g3-2d.tif" {:refuse "unsupported-image"}
- "tiff-bilevel-g3-fill.tif" {:refuse "unsupported-image"}
+ "tiff-bilevel-g3-2d.tif" {:ch 1, :bilevel 1, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "ffca0541128ba7c8"}]}
+ "tiff-bilevel-g3-fill.tif" {:ch 1, :bilevel 1, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "ffca0541128ba7c8"}]}
  "tiff-bilevel-g3.tif" {:ch 1, :bilevel 1, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "ffca0541128ba7c8"}]}
  "tiff-bilevel-g4.tif" {:ch 1, :bilevel 1, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "ffca0541128ba7c8"}]}
  "tiff-bilevel-lzw.tif" {:ch 1, :bilevel 1, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "ffca0541128ba7c8"}]}

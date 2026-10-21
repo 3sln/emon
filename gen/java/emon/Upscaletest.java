@@ -37,6 +37,43 @@ public final class Upscaletest {
         int at = utAnswer(ans, 272, nlines, xh, 200, osd, oconf);
         return Upscale.upFactor(ans, at, pxw, pxh, emon.Port.newCells());
     }
+    public static int utFactorC(int nlines, int xh, int conf) {
+        // `up-factor` of a first pass of `nlines` one-word lines of this x-height and word confidence (no OSD), on a 765 x 990 raster.
+        emon.Port.Cells ans = emon.Port.newCells();
+        int at = Plan.anOcr(ans, 272);
+        int k = 0;
+        int word = 0;
+        while (k < nlines) {
+            word = Plan.anOcrWord(ans, at, 10, 20 + (k * 60), 200, 40, conf, k, 0);
+            Plan.anOcrCp(ans, word, 72);
+            Plan.anOcrCp(ans, word, 105);
+            k += 1;
+        }
+        Ocr.oxBegin(ans, 0, 0, 0, 0, -1, 1281455214, 100, -1, nlines, 1, 0, 0, 0);
+        k = 0;
+        while (k < nlines) {
+            Ocr.oxLine(ans, 10, 20 + (k * 60), 200, 40, 10, 55 + (k * 60), 210, 55 + (k * 60), 0, 0, 0, xh, 14, 6);
+            k += 1;
+        }
+        Ocr.oxBlock(ans, 10, 20, 200, nlines * 60, 0, 0, 0);
+        k = 0;
+        while (k < nlines) {
+            Ocr.oxWord(ans, 0, 0, -1, 0);
+            k += 1;
+        }
+        Plan.anOcrEnd(ans, at);
+        return Upscale.upFactor(ans, at, 765, 990, emon.Port.newCells());
+    }
+    public static void testTextALittleOverTheTriggerThatTheEngineReadBadlyIsReadAgainEnlarged() {
+        // P12.6 (R4): the 9 pixel trigger missed degraded typewriter scans at 100 to 130 dpi (x-height 10 to 13) that an external 3x enlargement recovers; a well read page of that size stays as it was
+        emon.Testport.assertEq(utFactorC(30, 10, 500), 2, "x-height 10, 30 words at a mean confidence of 500: enlarged twice");
+        emon.Testport.assertEq(utFactorC(30, 12, 500), 2, "x-height 12: 31 / 12 is 2");
+        emon.Testport.assertEq(utFactorC(30, 10, 900), 1, "read well: not at all (the recorded 150 dpi scans)");
+        emon.Testport.assertEq(utFactorC(30, 10, 650), 1, "at the limit of `up-weak-conf`: well enough");
+        emon.Testport.assertEq(utFactorC(10, 10, 400), 1, "ten words say nothing of a page: not at all");
+        emon.Testport.assertEq(utFactorC(30, 14, 500), 1, "an x-height of 14 is a 200 dpi page: not at all");
+        emon.Testport.assertEq(utFactorC(30, 8, 500), 3, "under the trigger it is as it was");
+    }
     public static void testTheEffectiveResolutionIsWhatTenPointTypeAtThatXHeightHas() {
         emon.Testport.assertEq(Upscale.upEffDpi100(21), 30240, "an x-height of 21 pixels is ten point type at 302 dpi");
         emon.Testport.assertEq(Upscale.upEffDpi100(6), 8640, "6 pixels: 86 dpi, the 90 dpi page of the smoke review");

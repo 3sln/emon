@@ -914,7 +914,7 @@ public static partial class ImgDec {
                         case 8:
                         case 32946: raw = InflateStrip(data, expect); break;
                         case 4: raw = CcittRows(data, -1, cw, crows, 0, ws); break;
-                        default: raw = CcittRows(data, 0, cw, crows, 0, ws); break;
+                        default: raw = CcittRows(data, (G(rep, emon.Tiffcheck.TrT4()) & 1) != 0 ? 4 : 0, cw, crows, 0, ws); break;  // Group 3: k 4 when T4Options says two-dimensional (P12.6)
                     }
                     if (raw.Length != expect) {
                         Array.Resize(ref raw, expect);

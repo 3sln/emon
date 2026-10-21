@@ -9,6 +9,18 @@ pub fn up_xh_trigger() -> i32 {
     // `up-xh-trigger`: a page whose text has a median x-height under this many pixels is read again enlarged (9 px is ten point type at 130 dpi: a 150 dpi scan, x-height 10, reads well and is left alone; a 100 dpi one does not).
     return 9;
 }
+pub fn up_xh_weak() -> i32 {
+    // `up-xh-weak` (R4): a page whose text has an x-height under this many pixels (13: a 150 dpi scan is 10) and was read badly is read again enlarged, whatever `up-xh-trigger` says.
+    return 14;
+}
+pub fn up_weak_conf() -> i32 {
+    // `up-weak-conf` (R4): ...read badly is a mean word confidence (per mille) under this.
+    return 650;
+}
+pub fn up_weak_words() -> i32 {
+    // `up-weak-words` (R4): ...of a first pass of at least this many words (a mean of a few says nothing).
+    return 20;
+}
 pub fn up_xh_target() -> i32 {
     // `up-xh-target`: the x-height, in pixels, the enlargement aims at (ten point type at 300 dpi).
     return 20;
@@ -122,6 +134,22 @@ pub fn up_score(an: &mut crate::port::Cells, at: i32) -> i32 {
     }
     return sum;
 }
+pub fn up_mean_conf(an: &mut crate::port::Cells, at: i32) -> i32 {
+    // The mean confidence (per mille) of the words of the OCR answer at `at`; -1 for none.
+    let n: i32 = an_ocr_count(an, at);
+    let mut w: i32 = an_ocr_first(an, at);
+    let mut i: i32 = 0;
+    let mut sum: i32 = 0;
+    if n <= 0 {
+        return -1;
+    }
+    while i < n {
+        sum += aw_get(an, w, aw_conf());
+        w = aw_next(an, w);
+        i += 1;
+    }
+    return sum / n;
+}
 pub fn up_hint(an: &mut crate::port::Cells, at: i32, k: i32, dpi100: i32, mut hist: &mut crate::port::Cells) -> i32 {
     // The resolution, in dots per inch, the engine is told an enlargement by `k` has: the resolution the first pass's text says the raster has (`up-eff-dpi100`; `dpi100`,
     // the resolution it was taken at, when no line was measured) times `k`: a hint of its size heuristics, at least 70 and at most 1200.
@@ -174,6 +202,19 @@ pub fn up_factor(an: &mut crate::port::Cells, at: i32, pxw: i32, pxh: i32, mut h
             }
             if k > up_max() {
                 k = up_max();
+            }
+        }
+        // P12.6 (R4): a page of type between that and `up-xh-weak` that the engine read badly (a mean confidence under `up-weak-conf`: a degraded typewriter scan, 100 to 130 dpi) is read enlarged too;
+        // one of that size it reads well is left alone, so the recorded transcripts of 150 dpi scans are not asked again
+        if (k == 1) && ((xh > 0) && (xh < up_xh_weak())) {
+            if (words >= up_weak_words()) && (up_mean_conf(an, at) < up_weak_conf()) {
+                k = (up_xh_target() + (xh - 1)) / xh;
+                if k < 2 {
+                    k = 2;
+                }
+                if k > up_max() {
+                    k = up_max();
+                }
             }
         }
     }

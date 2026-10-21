@@ -3,6 +3,7 @@
 ;; (DEVLOG P2.6, D095). NOT a gate: it needs Tesseract (brew: tesseract, leptonica),
 ;; poppler's `pdfimages` and ImageMagick, and is what produced test/ocr/<id>/.
 ;;
+;;     bb tools/ocr/record.clj --digests [ID]  replay the committed transcript to refresh only its dump
 ;;     bb tools/ocr/record.clj [ID]        default h-keyword; the scan is test/corpus/synth/scan/ID.pdf
 ;;
 ;; The scan PDFs are one embedded JPEG per page (150 dpi). There is no PDF renderer
@@ -15,7 +16,8 @@
          '[babashka.process :refer [shell sh]]
          '[clojure.string :as str])
 
-(def id (or (first *command-line-args*) "h-keyword"))
+(def digests-only? (some #{"--digests"} *command-line-args*))
+(def id (or (first (remove #{"--digests"} *command-line-args*)) "h-keyword"))
 (def pdf (str "test/corpus/synth/scan/" id ".pdf"))
 (def out (str "test/ocr/" id))
 (def work (str (fs/create-temp-dir {:prefix "emon-ocrrec."})))
@@ -29,13 +31,20 @@
       (apply str (for [f (sort (map fs/file-name (fs/glob "gen/rust/emon" "*.rs")))]
                    (str "pub mod " (str/replace f #"\.rs$" "") ";\n"))))
 (fs/copy "test/ocr/rust/main.rs" (str work "/main.rs"))
-(shell {:dir work} "rustc" "--edition" "2021" "-O" "-A" "warnings" "--cfg" "live"
-       "-L" "/opt/homebrew/lib" "-o" "prog" "main.rs")
+(apply shell {:dir work} (concat ["rustc" "--edition" "2021" "-O" "-A" "warnings"]
+                                  (when-not digests-only? ["--cfg" "live" "-L" "/opt/homebrew/lib"])
+                                  ["-o" "prog" "main.rs"]))
 
-(shell "pdfimages" "-all" pdf (str work "/pg"))
-(shell "magick" (str work "/pg-000.jpg") "-colorspace" "Gray" (str work "/pg.pgm"))
-(fs/delete-tree out)
-(let [r (sh {:err :inherit} (str work "/prog") "record" out pdf (str work "/pg.pgm") "150")]
-  (when-not (zero? (:exit r)) (System/exit (:exit r)))
-  (spit (str out ".dump") (:out r)))
-(println "recorded" out "and" (str out ".dump"))
+(if digests-only?
+  (let [r (sh {:err :inherit} (str work "/prog") "replay" (str (fs/absolutize out)) (str (fs/absolutize pdf)))]
+    (when-not (zero? (:exit r)) (System/exit (:exit r)))
+    (spit (str out ".dump") (:out r))
+    (println "re-derived" (str out ".dump") "from the committed transcript; no live engine"))
+  (do
+    (shell "pdfimages" "-all" pdf (str work "/pg"))
+    (shell "magick" (str work "/pg-000.jpg") "-colorspace" "Gray" (str work "/pg.pgm"))
+    (fs/delete-tree out)
+    (let [r (sh {:err :inherit} (str work "/prog") "record" out pdf (str work "/pg.pgm") "150")]
+      (when-not (zero? (:exit r)) (System/exit (:exit r)))
+      (spit (str out ".dump") (:out r)))
+    (println "recorded" out "and" (str out ".dump"))))

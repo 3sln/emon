@@ -39,6 +39,15 @@ public final class Retargettest {
         Evidence.olSet(olines, l, Evidence.olfPh(), 100);
         return l;
     }
+    public static int rttAdopt(emon.Port.Cells rtp, emon.Port.Cells oruns, int fr, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells scr) {
+        // `rt-adopt` with a text of four digits, which every word of `rtt-word` spells (it starts at 0 and is 4 long).
+        emon.Port.Cells c = emon.Port.newCells();
+        emon.Port.cellsPush(c, 49);
+        emon.Port.cellsPush(c, 50);
+        emon.Port.cellsPush(c, 51);
+        emon.Port.cellsPush(c, 52);
+        return Retarget.rtAdopt(rtp, oruns, fr, olines, owords, c, scr);
+    }
     public static int rttRun(emon.Port.Cells oruns, emon.Port.Cells olines, emon.Port.Cells owords, int l0, int w0) {
         // A run over the lines [l0, now) and the words [w0, now).
         int r = Evidence.orNew(oruns, 1, 0);
@@ -175,12 +184,198 @@ public final class Retargettest {
         emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scPartnerBase() + 1), 4, "that line");
         emon.Testport.assertEq(Retarget.rtLineState(oruns, olines, owords, rtp, scr, 2, 2, br, 0, 4), 0, "a line with a little foreign ink under it stays");
         emon.Testport.assertEq(Retarget.rtLineState(oruns, olines, owords, rtp, scr, 3, 3, br, 0, 4), 2, "a line mostly foreign ink that the body-ink run did not read is a ghost");
-        emon.Testport.assertEq(Retarget.rtAdopt(rtp, oruns, fr, olines, owords, scr), 4, "four lines: the first, the second's reading, the third, and the line the first pass did not read; the ghost is dropped");
+        emon.Testport.assertEq(rttAdopt(rtp, oruns, fr, olines, owords, scr), 4, "four lines: the first, the second's reading, the third, and the line the first pass did not read; the ghost is dropped");
         emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scSelBase()), 0, "the first pass's first line");
         emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scSelBase() + 1), 4, "then the body-ink run's line where the second was");
         emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scSelBase() + 2), 2, "then the third, in the first pass's order");
         emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scSelBase() + 3), 5, "and the body-ink run's line over nothing, below them where it lies");
         emon.Testport.assertEq(emon.Port.cellsAt(rtp, Retarget.rtpPrimary()), fr, "the first pass is the page's reading");
+    }
+    public static int rttLine3(emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells feats, int y0, int c1, int c2, int c3) {
+        // A line of three words at height y0: 100-600, 700-1200 and 1300-1700 (a right-aligned column), with these confidences; answers its row.
+        int first = Evidence.owCount(owords);
+        int l = Evidence.olCount(olines);
+        rttWord(owords, feats, 100, y0, 600, y0 + 100, c1, l);
+        rttWord(owords, feats, 700, y0, 1200, y0 + 100, c2, l);
+        rttWord(owords, feats, 1300, y0, 1700, y0 + 100, c3, l);
+        Evidence.olNew(olines, 1, 100, y0, 1700, y0 + 100, 100, y0 + 100, 1700, y0 + 100, 0, 0, first, 3);
+        Evidence.olSet(olines, l, Evidence.olfPx(), 100);
+        Evidence.olSet(olines, l, Evidence.olfPy(), y0);
+        Evidence.olSet(olines, l, Evidence.olfPw(), 1600);
+        Evidence.olSet(olines, l, Evidence.olfPh(), 100);
+        return l;
+    }
+    public static void testASecondPassThatReadsAColumnTheFirstMissedHasThatColumnReadWithTheLine() {
+        // P12.6, the thermal receipt: the first pass stopped before the right-aligned amount column; the body-ink pass read the line as far as the amounts
+        emon.Port.Cells oruns = emon.Port.newCells();
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells rtp = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells etext = emon.Port.newCells();
+        Scan.scPrep(scr);
+        emon.Port.cellsPush(etext, 49);
+        emon.Port.cellsPush(etext, 50);
+        emon.Port.cellsPush(etext, 51);
+        emon.Port.cellsPush(etext, 52);
+        rttLine(olines, owords, feats, 0, 900);
+        int fr = rttRun(oruns, olines, owords, 0, 0);
+        int l1 = Evidence.olCount(olines);
+        int w1 = Evidence.owCount(owords);
+        rttLine3(olines, owords, feats, 0, 900, 900, 800);
+        int br = rttRun(oruns, olines, owords, l1, w1);
+        Retarget.rtPrep(rtp);
+        emon.Port.cellsSet(rtp, Retarget.rtpBrun(), br);
+        emon.Port.cellsSet(scr, Scan.scShareBase(), 0);
+        emon.Testport.assertEq(Retarget.rtAdopt(rtp, oruns, fr, olines, owords, etext, scr), 1, "one line: the first pass's, which stays: no foreign ink under it");
+        emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scXtraBase() + 1), l1 + 1, "and the body-ink line over it, whose third word lies over none of its own, is read with it");
+        emon.Testport.assertEq(Scan.scEmitSel(olines, owords, emon.Port.newCells(), 1, 1, 0, scr, words, lines, etext, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 1, "one line is emitted");
+        emon.Testport.assertEq(Evidence.wdCount(words), 3, "of three words: the two the first pass read, and the column it did not");
+        emon.Testport.assertEq(Evidence.wdGet(words, 0, Evidence.hdX0()), 100, "the first");
+        emon.Testport.assertEq(Evidence.wdGet(words, 1, Evidence.hdX0()), 700, "the second");
+        emon.Testport.assertEq(Evidence.wdGet(words, 2, Evidence.hdX0()), 1300, "and the column, after them");
+        emon.Testport.assertEq(Evidence.wdGet(words, 1, Evidence.wfGap()), 100, "the gap of the second is to the column");
+        emon.Testport.assertEq(Evidence.lnGet(lines, 0, Evidence.lhX1()), 1700, "the line is as long as the column");
+        emon.Testport.assertEq(Evidence.lnGet(lines, 0, Evidence.lhCount()), 3, "of three words");
+    }
+    public static int rttEmpty(emon.Port.Cells olines, int y0) {
+        // A first-pass line with no word, 40 pt wide and 15 pt high from height y0 (centipoints): what the engine finds where text meets a rule and reads as nothing; answers its row.
+        int l = Evidence.olCount(olines);
+        Evidence.olNew(olines, 1, 100, y0, 4100, y0 + 1500, 100, y0 + 1500, 4100, y0 + 1500, 0, 0, 0, 0);
+        Evidence.olSet(olines, l, Evidence.olfPx(), 100);
+        Evidence.olSet(olines, l, Evidence.olfPy(), y0);
+        Evidence.olSet(olines, l, Evidence.olfPw(), 4000);
+        Evidence.olSet(olines, l, Evidence.olfPh(), 1500);
+        return l;
+    }
+    public static int rttFill1(emon.Port.Bitmap b, int x0, int y0, int x1, int y1, int v) {
+        int y = y0;
+        int x = 0;
+        while (y < y1) {
+            x = x0;
+            while (x < x1) {
+                emon.Port.bitmapSetU8(b, x, y, 0, v);
+                x += 1;
+            }
+            y += 1;
+        }
+        return 0;
+    }
+    public static int rttBandScene(int emonT, int bandgray, int pxh) {
+        // A 40 x 20 gray page (paper 240) with a band of gray `bandgray` from (5,5) 30 pixels wide and `pxh` high, white text at (10..13, 8..12) in it and one black pixel of body ink at (30, 10);
+        // the band as the tracer found it (a component of a colour layer, solid, six holes). Answers how many bands `rt-invert-bands` turned, leaving the view in the caller's `dst` (cells of the test).
+        emon.Port.Bitmap gray = emon.Port.bitmapNew(40, 20, 1);
+        emon.Port.Bitmap bodym = emon.Port.bitmapNew(40, 20, 1);
+        emon.Port.Bitmap dst = emon.Port.bitmapNew(40, 20, 1);
+        emon.Port.Cells comps = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
+        rttFill1(gray, 0, 0, 40, 20, 240);
+        rttFill1(gray, 5, 5, 35, 5 + pxh, bandgray);
+        rttFill1(gray, 10, 8, 14, 13, 255);
+        emon.Port.bitmapSetU8(gray, 30, 10, 0, 0);
+        rttFill1(bodym, 0, 0, 40, 20, 0);
+        emon.Port.bitmapSetU8(bodym, 30, 10, 0, 255);
+        rttFill1(dst, 0, 0, 40, 20, 240);
+        int ink = Evidence.ikNew(inks, 1, 0);
+        int c = Evidence.coNew(comps, 1, 0, 0, 3000, 1000, 0);
+        Evidence.ikSet(inks, ink, Evidence.ikfRole(), Evidence.irColor());
+        Evidence.coSet(comps, c, Evidence.cfInk(), ink);
+        Evidence.coSet(comps, c, Evidence.cfConf(), 700);
+        Evidence.coSet(comps, c, Evidence.cfPxx(), 5);
+        Evidence.coSet(comps, c, Evidence.cfPxy(), 5);
+        Evidence.coSet(comps, c, Evidence.cfPxw(), 30);
+        Evidence.coSet(comps, c, Evidence.cfPxh(), pxh);
+        Evidence.coSet(comps, c, Evidence.cfFill(), 900);
+        Evidence.coSet(comps, c, Evidence.cfHoles(), 6);
+        Evidence.coSet(comps, c, Evidence.cfGray(), bandgray);
+        int n = Retarget.rtInvertBands(dst, gray, bodym, comps, inks, 1, 72, 240);
+        if (n == 1) {
+            emon.Testport.assertEq(emon.Port.bitmapU8(dst, 11, 10, 0), 0, "the light text is ink");
+            emon.Testport.assertEq(emon.Port.bitmapU8(dst, 20, 7, 0), 240, "the band's ground is paper");
+            emon.Testport.assertEq(emon.Port.bitmapU8(dst, 30, 10, 0), 0, "a pixel of body ink is as it was");
+            emon.Testport.assertEq(emon.Port.bitmapU8(dst, 2, 2, 0), 240, "and outside the band nothing is touched");
+        }
+        return n;
+    }
+    public static void testABandOfColourWithLightTextIsTurnedInsideOutAndALightBandIsNot() {
+        // P12.6 (issue 14, E09's white-on-blue header): the view the body-ink pass reads showed the band and its text as paper, and the text was never read
+        emon.Testport.assertEq(rttBandScene(0, 149, 10), 1, "a band of gray 149, white text in it");
+        emon.Testport.assertEq(rttBandScene(0, 220, 10), 0, "a light band holds dark text: the engine reads it as it is");
+        emon.Testport.assertEq(rttBandScene(0, 149, 3), 0, "a band 3 pixels high at 72 dpi is a rule, not a header");
+    }
+    public static void testALineTheEngineFoundAndReadAsNothingIsReadAloneAndItsWordsAreThePagesWhenSure() {
+        // P12.6, `RUNNING FOR (CHECK ONE):` before its blank: the page read as a page finds the line and no word in it; read as a line it is text
+        emon.Port.Cells oruns = emon.Port.newCells();
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells rtp = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        Scan.scPrep(scr);
+        rttLine(olines, owords, feats, 0, 900);
+        rttEmpty(olines, 300);
+        rttLine(olines, owords, feats, 2000, 900);
+        int fr = rttRun(oruns, olines, owords, 0, 0);
+        int l1 = Evidence.olCount(olines);
+        int w1 = Evidence.owCount(owords);
+        Retarget.rtPrep(rtp);
+        emon.Testport.assertEq(Retarget.rtEmptyArea(olines, 1), 600, "the empty line: 40 x 15 square points");
+        emon.Testport.assertEq(Retarget.rtEmptyArea(olines, 0), 0, "a line with words is not one");
+        emon.Testport.assertEq(Retarget.rtDecide(0, 0, 0, oruns, fr, olines, owords, emon.Port.newCells(), 1, 130, rtp), 1, "the lines are sure, so the budget goes to the one line that has no word");
+        emon.Testport.assertEq(emon.Port.cellsAt(rtp, Retarget.rtpLine0()), 1, "that line");
+        // its re-reading: a line of three words, sure
+        rttLine3(olines, owords, feats, 300, 900, 900, 900);
+        int tr = rttRun(oruns, olines, owords, l1, w1);
+        emon.Port.cellsSet(rtp, Retarget.rtpLine0() + 1, tr);
+        emon.Testport.assertEq(Retarget.rtLineState(oruns, olines, owords, rtp, scr, 1, 1, -1, 0, 3), 5, "the re-reading is the page's");
+        emon.Testport.assertEq(Retarget.rtLineState(oruns, olines, owords, rtp, scr, 0, 0, -1, 0, 3), 0, "and the lines with words stay");
+        emon.Testport.assertEq(rttAdopt(rtp, oruns, fr, olines, owords, scr), 3, "three lines: the first, the re-reading of the empty one, the third");
+        emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scSelBase()), 0, "the first");
+        emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scSelBase() + 1), l1, "then the line read in place of the empty one");
+        emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scSelBase() + 2), 2, "then the third");
+    }
+    public static void testALineReadAsNothingAndReReadAsUnsureWordsStaysNothing() {
+        emon.Port.Cells oruns = emon.Port.newCells();
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells rtp = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        Scan.scPrep(scr);
+        rttLine(olines, owords, feats, 0, 900);
+        rttEmpty(olines, 300);
+        int fr = rttRun(oruns, olines, owords, 0, 0);
+        int l1 = Evidence.olCount(olines);
+        int w1 = Evidence.owCount(owords);
+        Retarget.rtPrep(rtp);
+        Retarget.rtDecide(0, 0, 0, oruns, fr, olines, owords, emon.Port.newCells(), 1, 130, rtp);
+        rttLine3(olines, owords, feats, 300, 400, 500, 300);
+        int tr = rttRun(oruns, olines, owords, l1, w1);
+        emon.Port.cellsSet(rtp, Retarget.rtpLine0() + 1, tr);
+        emon.Testport.assertEq(Retarget.rtLineState(oruns, olines, owords, rtp, scr, 1, 1, -1, 0, 2), 0, "words of a mean confidence of 400 are not taken for a line nothing was read of: it has no first pass to be compared with");
+    }
+    public static void testASecondPassWordThatIsUnsureOrLiesOverAWordOfTheFirstPassIsNotAdded() {
+        emon.Port.Cells oruns = emon.Port.newCells();
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells rtp = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        Scan.scPrep(scr);
+        rttLine(olines, owords, feats, 0, 900);
+        int fr = rttRun(oruns, olines, owords, 0, 0);
+        int l1 = Evidence.olCount(olines);
+        int w1 = Evidence.owCount(owords);
+        rttLine3(olines, owords, feats, 0, 900, 900, 300);
+        int br = rttRun(oruns, olines, owords, l1, w1);
+        Retarget.rtPrep(rtp);
+        emon.Port.cellsSet(rtp, Retarget.rtpBrun(), br);
+        emon.Port.cellsSet(scr, Scan.scShareBase(), 0);
+        emon.Testport.assertEq(rttAdopt(rtp, oruns, fr, olines, owords, scr), 1, "the first pass's line");
+        emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scXtraBase() + 1), 0, "the column read at a confidence of 300 is not added: the first two words lie over the first pass's own");
     }
     public static void testALineIsReadAgainByItsCellsOnlyWhenNoTextIsLostAndTheyAreSurer() {
         emon.Port.Cells oruns = emon.Port.newCells();
@@ -237,7 +432,7 @@ public final class Retargettest {
         emon.Port.cellsSet(rtp, Retarget.rtpBrun(), br);
         emon.Testport.assertEq(Retarget.rtCap(1600), Scan.scSelMax(), "a count over the region is the region's");
         emon.Testport.assertEq(Retarget.rtCap(7), 7, "and one under it is its own");
-        int n = Retarget.rtAdopt(rtp, oruns, fr, olines, owords, scr);
+        int n = rttAdopt(rtp, oruns, fr, olines, owords, scr);
         emon.Testport.assertThat(n <= Scan.scSelMax(), "the selection holds no more than the scratch has room for");
         emon.Testport.assertThat(n > 1400, "and the 1500 lines it counts are read, bar the few that lie over the first pass's line");
     }

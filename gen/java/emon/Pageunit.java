@@ -378,7 +378,7 @@ public final class Pageunit {
                 if (esc >= 0) {
                     run = esc;
                 }
-                asked = Retarget.rtPlan(i, input, 1, 0, rid, puDpi(), loc, ans, bms, Pageink.pnKText(), emon.Port.bmsGet(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr);
+                asked = Retarget.rtPlan(i, input, 1, 0, rid, puDpi(), loc, ans, bms, Pageink.pnKText(), emon.Port.bmsGet(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr, comps, inks);
                 // the seals and stamps in the text-free render's pixels (P8.2): the strips and crops that are read, asked in the same round as the targeted passes
                 if (puPx(bms, nid, fuse) == 1) {
                     pgrow = Evidence.evPageRow(epages, i + 1);
@@ -528,7 +528,7 @@ public final class Pageunit {
         nw = Evidence.owCount(owords) - w0;
         Pageink.pnFeatures(i + 1, bms, Pageink.pnKText(), emon.Port.bmsGet(bms, rid), roid, w0, nw, ws, comps, owords, feats, scr);
         Retarget.rtPrep(rtp);
-        asked = Retarget.rtPlan(i, input, 0, 0, rid, hint, loc, ans, bms, Pageink.pnKText(), emon.Port.bmsGet(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr);
+        asked = Retarget.rtPlan(i, input, 0, 0, rid, hint, loc, ans, bms, Pageink.pnKText(), emon.Port.bmsGet(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr, comps, inks);
         // the seals and stamps in the page's pixels (P8.2): their strips and crops are asked in the same round as the targeted passes
         if (seals == 1) {
             Sealpx.sxFind(i + 1, views, vdec, prims, inks, pw, ph, s1);
@@ -545,7 +545,7 @@ public final class Pageunit {
             Sigpx.spFind(i + 1, views, vdec, rules, owords, etext, emon.Port.bmsGet(bms, rid), pw, s5, s6);
             Sigpx.spRecord(i, s5, cg);
         }
-        nsel = Retarget.rtAdopt(rtp, oruns, run, olines, owords, scr);
+        nsel = Retarget.rtAdopt(rtp, oruns, run, olines, owords, etext, scr);
         if (seals == 1) {
             nsel = Sealpx.sxDropLines(scr, nsel, olines, owords, s1);
             nsel = Sigpx.spDropLines(scr, nsel, olines, owords, s5);
@@ -553,7 +553,7 @@ public final class Pageunit {
         Retarget.rtUpright(rtp, run, epages, i + 1);
         nl = Evidence.orGet(oruns, run, Evidence.orfLcount());
         rotmed = Evidence.evRotMedian(olines, l0, nl);
-        Scan.scEmitSel(olines, owords, osyms, nsel, i + 1, rotmed, scr, words, lines);
+        Scan.scEmitSel(olines, owords, osyms, nsel, i + 1, rotmed, scr, words, lines, etext, rules, comps, inks);
         emon.Port.cellsSet(mask, i, mv);
         return Plan.usDone();
     }

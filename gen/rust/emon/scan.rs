@@ -810,11 +810,23 @@ pub fn sc_bonly_base() -> i32 {
     // ...and another: one cell for each line of the body-ink run (1 a line no first-pass line covers, to be taken; 2 taken).
     return 8300;
 }
+pub fn sc_xtra_base() -> i32 {
+    // ...and another (P12.6): the first cell is the row of the first-pass run's first line, and the cell after it for line k of that run is 0, or 1 + the row of the body-ink line whose words that lie over none of the first-pass line's are read with it (`rt-adopt`, `sc-line-words`).
+    return 9800;
+}
+pub fn sc_fate_base() -> i32 {
+    // ...and the last (P12.6): four regions of `sc-fate-max` cells for the words one line is emitted with: their `owords` rows, what becomes of each (`sc-fates`), and the start and length of the text of a corrected one.
+    return 11301;
+}
+pub fn sc_fate_max() -> i32 {
+    // The most words of a line `sc-line-words` lists; a line of more is emitted as it is.
+    return 400;
+}
 pub fn sc_prep(mut scr: &mut crate::port::Cells) -> i32 {
     // The scratch of `sc-sample` and `sc-cluster`: 242 cells (two for the metrics and 240 samples), three for each of the first
     // `sc-cap` lines of a page (its ascender line, its descender depth, whether clustered), and `sc-cap` more for sorting a
     // cluster's members; made once.
-    while crate::port::cells_len(scr) < (sc_bonly_base() + sc_sel_max()) {
+    while crate::port::cells_len(scr) < (sc_fate_base() + ((4 * sc_fate_max()) + 2)) {
         crate::port::cells_push(scr, 0);
     }
     return 0;
@@ -1099,6 +1111,1010 @@ pub(crate) fn sc_fit(mut scr: &mut crate::port::Cells, n: i32) -> i32 {
     sc_cluster(scr, n);
     return r;
 }
+pub(crate) fn sc_lo_conf() -> i32 {
+    // `ocr-garbage-conf`: a word of at most this confidence (per mille) is a candidate for being no text.
+    return 300;
+}
+pub(crate) fn sc_xtra_text_conf() -> i32 {
+    // A newly recovered alphabetic word needs stronger evidence than an amount: weak readings of overlay strokes must not become prose.
+    return 600;
+}
+pub(crate) fn sc_xtra_text_letters() -> i32 {
+    // Fewer letters can be fragments of overlay strokes, even at a high engine confidence.
+    return 3;
+}
+pub(crate) fn sc_xtra_small_conf() -> i32 {
+    // A later-pass word under half the height of every partner word needs this confidence: an unsure speck must not create a column.
+    return 700;
+}
+pub(crate) fn sc_xtra_conf() -> i32 {
+    // A body-ink word that lies over none of the first-pass line's words is read with it only when its confidence (per mille) is at least this.
+    return 400;
+}
+pub(crate) fn sc_rule_slack() -> i32 {
+    // A character is on a rule when its centre is within this many centipoints (and the rule's half thickness) of the rule's centre line.
+    return 150;
+}
+pub(crate) fn sc_mn(a: i32, b: i32) -> i32 {
+    if a < b {
+        return a;
+    }
+    return b;
+}
+pub(crate) fn sc_mx(a: i32, b: i32) -> i32 {
+    if a > b {
+        return a;
+    }
+    return b;
+}
+pub(crate) fn sc_cp_class(c: i32) -> i32 {
+    // What a code point is to a word's plausibility: 1 a digit, 0 a letter (ASCII, Latin-1 and Latin Extended, and every script above them up to the private use area), 2 an ODD glyph
+    // (one an engine invents over ink that is no text: the vertical bar, tilde, caret, grave, backslash, angle brackets, braces and square brackets, the section sign, copyright and registered
+    // signs and the like of Latin-1, daggers, arrows and shapes, the private use area, the replacement character), 3 any other punctuation, currency sign or mark.
+    if (c >= 48) && (c <= 57) {
+        return 1;
+    }
+    if (c >= 65) && (c <= 90) {
+        return 0;
+    }
+    if (c >= 97) && (c <= 122) {
+        return 0;
+    }
+    if c == 124 {
+        return 2;
+    }
+    if c == 126 {
+        return 2;
+    }
+    if c == 94 {
+        return 2;
+    }
+    if c == 96 {
+        return 2;
+    }
+    if c == 92 {
+        return 2;
+    }
+    if (c == 60) || (c == 62) {
+        return 2;
+    }
+    if (c == 123) || (c == 125) {
+        return 2;
+    }
+    if (c == 91) || (c == 93) {
+        return 2;
+    }
+    if c < 128 {
+        return 3;
+    }
+    if c < 192 {
+        if (c == 170) || ((c == 181) || (c == 186)) {
+            return 0;
+        }
+        if (c == 161) || ((c == 164) || ((c == 166) || ((c == 167) || ((c == 168) || ((c == 169) || (c == 172)))))) {
+            return 2;
+        }
+        if (c == 174) || ((c == 175) || ((c == 180) || ((c == 182) || ((c == 184) || (c == 191))))) {
+            return 2;
+        }
+        return 3;
+    }
+    if c < 880 {
+        if (c == 215) || (c == 247) {
+            return 3;
+        }
+        return 0;
+    }
+    if c < 8192 {
+        return 0;
+    }
+    if c < 8224 {
+        return 3;
+    }
+    if c < 8352 {
+        if (c == 8226) || ((c == 8230) || (c == 8240)) {
+            return 3;
+        }
+        return 2;
+    }
+    if c < 8400 {
+        return 3;
+    }
+    if c < 11264 {
+        return 2;
+    }
+    if c < 57344 {
+        return 0;
+    }
+    if c < 63744 {
+        return 2;
+    }
+    if c == 65533 {
+        return 2;
+    }
+    return 0;
+}
+pub(crate) fn sc_count_class(etext: &mut crate::port::Cells, ts: i32, n: i32, cls: i32) -> i32 {
+    // How many of the word's `n` code points (from `ts` in the shared text) are of the class `cls` (`sc-cp-class`).
+    let mut i: i32 = 0;
+    let mut k: i32 = 0;
+    while i < n {
+        if sc_cp_class(crate::port::cells_at(etext, ts + i)) == cls {
+            k += 1;
+        }
+        i += 1;
+    }
+    return k;
+}
+pub(crate) fn sc_distinct(etext: &mut crate::port::Cells, ts: i32, n: i32) -> i32 {
+    // How many different code points there are among the first 40 of the word's.
+    let mut m: i32 = n;
+    let mut i: i32 = 0;
+    let mut j: i32 = 0;
+    let mut d: i32 = 0;
+    let mut seen: i32 = 0;
+    if m > 40 {
+        m = 40;
+    }
+    while i < m {
+        seen = 0;
+        j = 0;
+        while j < i {
+            if crate::port::cells_at(etext, ts + j) == crate::port::cells_at(etext, ts + i) {
+                seen = 1;
+            }
+            j += 1;
+        }
+        if seen == 0 {
+            d += 1;
+        }
+        i += 1;
+    }
+    return d;
+}
+pub fn sc_implausible(etext: &mut crate::port::Cells, ts: i32, n: i32) -> i32 {
+    // 1 when a word's characters are not those of a word: a single glyph that is no letter or digit; two odd glyphs (`sc-cp-class`); letters, digits and an odd glyph together; an odd glyph among five characters or more;
+    // four or more characters and not one a letter or a digit; eight or more of which a quarter or fewer differ (`Petetetdedtededededet`). Else 0.
+    let nl: i32 = sc_count_class(etext, ts, n, 0);
+    let nd: i32 = sc_count_class(etext, ts, n, 1);
+    let no: i32 = sc_count_class(etext, ts, n, 2);
+    if n <= 0 {
+        return 0;
+    }
+    if (n == 1) && ((nl + nd) == 0) {
+        return 1;
+    }
+    if no >= 2 {
+        return 1;
+    }
+    if (no > 0) && ((nd > 0) && (nl > 0)) {
+        return 1;
+    }
+    if (no > 0) && (n >= 5) {
+        return 1;
+    }
+    if (n >= 4) && ((nl + nd) == 0) {
+        return 1;
+    }
+    if (n >= 8) && ((4 * sc_distinct(etext, ts, n)) <= n) {
+        return 1;
+    }
+    return 0;
+}
+pub fn sc_leader(etext: &mut crate::port::Cells, ts: i32, n: i32) -> i32 {
+    // 1 for a dot leader the engine read as characters: three or more dots and commas and nothing else, or dots and commas with one digit repeated four or more times (`22.2222`)
+    // that is no amount (an amount ends in a separator and two digits). Else 0.
+    let mut i: i32 = 0;
+    let mut dots: i32 = 0;
+    let mut digs: i32 = 0;
+    let mut other: i32 = 0;
+    let mut d0: i32 = -1;
+    let mut same: i32 = 1;
+    let mut c: i32 = 0;
+    while i < n {
+        c = crate::port::cells_at(etext, ts + i);
+        if (c == 46) || (c == 44) {
+            dots += 1;
+        } else if (c >= 48) && (c <= 57) {
+            digs += 1;
+            if d0 < 0 {
+                d0 = c;
+            }
+            if c != d0 {
+                same = 0;
+            }
+        } else {
+            other += 1;
+        }
+        i += 1;
+    }
+    if other > 0 {
+        return 0;
+    }
+    if (digs == 0) && (dots >= 3) {
+        return 1;
+    }
+    if (digs >= 4) && ((same == 1) && (dots >= 1)) {
+        if n >= 4 {
+            if ((crate::port::cells_at(etext, ts + (n - 3)) == 46) || (crate::port::cells_at(etext, ts + (n - 3)) == 44)) && ((crate::port::cells_at(etext, ts + (n - 2)) >= 48) && ((crate::port::cells_at(etext, ts + (n - 2)) <= 57) && ((crate::port::cells_at(etext, ts + (n - 1)) >= 48) && (crate::port::cells_at(etext, ts + (n - 1)) <= 57)))) {
+                return 0;
+            }
+        }
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn sc_cents(etext: &mut crate::port::Cells, ts: i32, n: i32) -> i32 {
+    // 1 when the word ends in a separator and two digits (the cents of an amount).
+    if n < 4 {
+        return 0;
+    }
+    if ((crate::port::cells_at(etext, ts + (n - 3)) == 46) || (crate::port::cells_at(etext, ts + (n - 3)) == 44)) && ((crate::port::cells_at(etext, ts + (n - 2)) >= 48) && ((crate::port::cells_at(etext, ts + (n - 2)) <= 57) && ((crate::port::cells_at(etext, ts + (n - 1)) >= 48) && (crate::port::cells_at(etext, ts + (n - 1)) <= 57)))) {
+        return 1;
+    }
+    return 0;
+}
+pub fn sc_amount_like(etext: &mut crate::port::Cells, ts: i32, n: i32) -> i32 {
+    // 1 for a word that reads as an amount: digits with dots or commas among them, at least one of each, starting with a digit and ending in one, between an opening
+    // and a closing parenthesis or after a minus if it has them. Else 0.
+    let mut i: i32 = 0;
+    let mut nd: i32 = 0;
+    let mut ns: i32 = 0;
+    let mut c: i32 = 0;
+    let mut a: i32 = 0;
+    let mut b: i32 = n;
+    if n < 3 {
+        return 0;
+    }
+    if (crate::port::cells_at(etext, ts) == 40) || (crate::port::cells_at(etext, ts) == 45) {
+        a = 1;
+    }
+    if crate::port::cells_at(etext, ts + (n - 1)) == 41 {
+        b = n - 1;
+    }
+    i = a;
+    while i < b {
+        c = crate::port::cells_at(etext, ts + i);
+        if (c >= 48) && (c <= 57) {
+            nd += 1;
+        } else if (c == 46) || (c == 44) {
+            ns += 1;
+        } else {
+            return 0;
+        }
+        i += 1;
+    }
+    if (nd == 0) || (ns == 0) {
+        return 0;
+    }
+    c = crate::port::cells_at(etext, ts + (b - 1));
+    if (c >= 48) && (c <= 57) {
+        return 1;
+    }
+    return 0;
+}
+pub fn sc_groups_fix(etext: &mut crate::port::Cells, ts: i32, n: i32) -> i32 {
+    // 1 when a word is an amount whose thousands were read with periods: digits and at least two periods, a first group of one to three digits, then groups of exactly three, and
+    // the last group of one or two (the decimals): `4.985.9` is `4,985.9`, and `1.234.567` (a last group of three) is a European whole number and left alone.
+    let mut i: i32 = 0;
+    let mut dots: i32 = 0;
+    let mut run: i32 = 0;
+    let mut groups: i32 = 0;
+    let mut c: i32 = 0;
+    let mut ok: i32 = 1;
+    if n < 5 {
+        return 0;
+    }
+    while i < n {
+        c = crate::port::cells_at(etext, ts + i);
+        if (c >= 48) && (c <= 57) {
+            run += 1;
+        } else if c == 46 {
+            if run == 0 {
+                ok = 0;
+            }
+            if (groups == 0) && (run > 3) {
+                ok = 0;
+            }
+            if (groups > 0) && (run != 3) {
+                ok = 0;
+            }
+            groups += 1;
+            dots += 1;
+            run = 0;
+        } else {
+            ok = 0;
+        }
+        i += 1;
+    }
+    if ok == 0 {
+        return 0;
+    }
+    if dots < 2 {
+        return 0;
+    }
+    if (run >= 1) && (run <= 2) {
+        return 1;
+    }
+    return 0;
+}
+pub fn sc_on_vrule(rules: &mut crate::port::Cells, page: i32, cx: i32, cy: i32, slack: i32) -> i32 {
+    // 1 when the point (`cx`, `cy`) centipoints of page `page` lies on one of the tracer's vertical rules: at least 8 pt long and eight times as long as wide, covering `cy`, with
+    // its centre line within `slack` and half its thickness of `cx`.
+    let n: i32 = rl_count(rules);
+    let mut r: i32 = 0;
+    let mut xa: i32 = 0;
+    let mut xb: i32 = 0;
+    let mut ya: i32 = 0;
+    let mut yb: i32 = 0;
+    let mut dx: i32 = 0;
+    let mut dy: i32 = 0;
+    let mut d: i32 = 0;
+    let mut t: i32 = 0;
+    while r < n {
+        if rl_get(rules, r, rlf_page()) == page {
+            xa = rl_get(rules, r, rlf_lx0());
+            xb = rl_get(rules, r, rlf_lx1());
+            ya = rl_get(rules, r, rlf_ly0());
+            yb = rl_get(rules, r, rlf_ly1());
+            if yb < ya {
+                t = ya;
+                ya = yb;
+                yb = t;
+            }
+            dx = xb - xa;
+            if dx < 0 {
+                dx = 0 - dx;
+            }
+            dy = yb - ya;
+            if (dy >= 800) && ((dx * 8) <= dy) {
+                if (cy >= ya) && (cy <= yb) {
+                    d = cx - ((xa + xb) / 2);
+                    if d < 0 {
+                        d = 0 - d;
+                    }
+                    if d <= (slack + (rl_get(rules, r, rlf_thick()) / 2)) {
+                        return 1;
+                    }
+                }
+            }
+        }
+        r += 1;
+    }
+    return 0;
+}
+pub fn sc_xtra_ok(owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, w0: i32, cnt: i32, xw: i32) -> i32 {
+    // Does the body-ink word `xw` lie over none of the `cnt` first-pass words from `w0` (no more than a quarter of the narrower of two shares their extent along the line),
+    // is it sure enough (`sc-xtra-conf`) to be read with the line, and are its characters those of a word (`sc-implausible`: a lone `§` is not)? 1 or 0.
+    let xa: i32 = ow_get(owords, xw, hd_x0());
+    let xb: i32 = ow_get(owords, xw, hd_x1());
+    let mut j: i32 = 0;
+    let mut pa: i32 = 0;
+    let mut pb: i32 = 0;
+    let mut ov: i32 = 0;
+    let mut nar: i32 = 0;
+    let mut yo: i32 = 0;
+    let mut yh: i32 = 0;
+    let mut mh: i32 = 0;
+    let mut hh: i32 = 0;
+    let mut edge: i32 = 0;
+    if ow_get(owords, xw, hd_conf()) < sc_xtra_conf() {
+        return 0;
+    }
+    let letters: i32 = sc_count_class(etext, ow_get(owords, xw, hd_tstart()), ow_get(owords, xw, hd_tlen()), 0);
+    if letters > 0 {
+        if (letters < sc_xtra_text_letters()) || (ow_get(owords, xw, hd_conf()) < sc_xtra_text_conf()) {
+            return 0;
+        }
+    }
+    if sc_implausible(etext, ow_get(owords, xw, hd_tstart()), ow_get(owords, xw, hd_tlen())) == 1 {
+        return 0;
+    }
+    while j < cnt {
+        hh = ow_get(owords, w0 + j, hd_y1()) - ow_get(owords, w0 + j, hd_y0());
+        if hh > 0 {
+            if (mh == 0) || (hh < mh) {
+                mh = hh;
+            }
+        }
+        pa = ow_get(owords, w0 + j, hd_x0());
+        pb = ow_get(owords, w0 + j, hd_x1());
+        if pb > edge {
+            edge = pb;
+        }
+        ov = sc_mn(xb, pb) - sc_mx(xa, pa);
+        nar = sc_mn(xb - xa, pb - pa);
+        if ov > 0 {
+            if (ov * 4) > nar {
+                return 0;
+            }
+        }
+        j += 1;
+    }
+    if (cnt > 0) && (xb <= edge) {
+        return 0;
+    }
+    if (mh > 0) && ((2 * (ow_get(owords, xw, hd_y1()) - ow_get(owords, xw, hd_y0()))) < mh) {
+        if ow_get(owords, xw, hd_conf()) < sc_xtra_small_conf() {
+            return 0;
+        }
+    }
+    // A different first-pass line can already hold this ink (a table row split at its last column). Check the entire first-pass run in two dimensions, not just the partner line.
+    if (cnt > 0) && (ow_get(owords, w0, owf_run()) != ow_get(owords, xw, owf_run())) {
+        j = 0;
+        while j < ow_count(owords) {
+            if ow_get(owords, j, owf_run()) == ow_get(owords, w0, owf_run()) {
+                if ow_get(owords, j, hd_page()) == ow_get(owords, xw, hd_page()) {
+                    yo = sc_mn(ow_get(owords, j, hd_y1()), ow_get(owords, xw, hd_y1())) - sc_mx(ow_get(owords, j, hd_y0()), ow_get(owords, xw, hd_y0()));
+                    yh = sc_mn(ow_get(owords, j, hd_y1()) - ow_get(owords, j, hd_y0()), ow_get(owords, xw, hd_y1()) - ow_get(owords, xw, hd_y0()));
+                    if (yo > 0) && ((yo * 2) > yh) {
+                        pa = ow_get(owords, j, hd_x0());
+                        pb = ow_get(owords, j, hd_x1());
+                        ov = sc_mn(xb, pb) - sc_mx(xa, pa);
+                        nar = sc_mn(xb - xa, pb - pa);
+                        if (ov > 0) && ((ov * 4) > nar) {
+                            return 0;
+                        }
+                    }
+                }
+            }
+            j += 1;
+        }
+    }
+    return 1;
+}
+pub fn sc_xtra_count(olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, l: i32, xl: i32) -> i32 {
+    // How many words of the body-ink line `xl` are read with the first-pass line `l` (`sc-xtra-ok`).
+    let w0: i32 = ol_get(olines, l, lh_first());
+    let cnt: i32 = ol_get(olines, l, lh_count());
+    let x0: i32 = ol_get(olines, xl, lh_first());
+    let xn: i32 = ol_get(olines, xl, lh_count());
+    let mut j: i32 = 0;
+    let mut k: i32 = 0;
+    while j < xn {
+        if sc_xtra_ok(owords, etext, w0, cnt, x0 + j) == 1 {
+            k += 1;
+        }
+        j += 1;
+    }
+    return k;
+}
+pub(crate) fn sc_line_words(olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, l: i32, xl: i32, mut scr: &mut crate::port::Cells) -> i32 {
+    // The words line `l` is emitted with, in the order along it, written to `scr` from `sc-fate-base`: its own, and with them those of the body-ink line `xl` (-1 none) that
+    // lie over none of its own (`sc-xtra-ok`). Answers how many; 0 when they are more than the scratch holds (the line is then emitted as it is, with nothing added).
+    let fb: i32 = sc_fate_base();
+    let w0: i32 = ol_get(olines, l, lh_first());
+    let cnt: i32 = ol_get(olines, l, lh_count());
+    let mut x0: i32 = 0;
+    let mut xn: i32 = 0;
+    let mut i: i32 = 0;
+    let mut j: i32 = 0;
+    let mut n: i32 = 0;
+    if cnt > sc_fate_max() {
+        return 0;
+    }
+    if xl >= 0 {
+        x0 = ol_get(olines, xl, lh_first());
+        xn = ol_get(olines, xl, lh_count());
+    }
+    while (j < xn) && (sc_xtra_ok(owords, etext, w0, cnt, x0 + j) == 0) {
+        j += 1;
+    }
+    while (i < cnt) || (j < xn) {
+        if n >= sc_fate_max() {
+            return 0;
+        }
+        if (i < cnt) && ((j >= xn) || (ow_get(owords, w0 + i, hd_x0()) <= ow_get(owords, x0 + j, hd_x0()))) {
+            crate::port::cells_set(scr, fb + n, w0 + i);
+            i += 1;
+        } else {
+            crate::port::cells_set(scr, fb + n, x0 + j);
+            j += 1;
+            while (j < xn) && (sc_xtra_ok(owords, etext, w0, cnt, x0 + j) == 0) {
+                j += 1;
+            }
+        }
+        n += 1;
+    }
+    return n;
+}
+pub(crate) fn sc_tail_on_vrule(owords: &mut crate::port::Cells, osyms: &mut crate::port::Cells, rules: &mut crate::port::Cells, page: i32, w: i32) -> i32 {
+    // 1 when the last symbol of word `w` is a vertical bar that lies on one of the page's vertical rules.
+    let sn: i32 = ow_get(owords, w, owf_scount());
+    let s: i32 = (ow_get(owords, w, owf_sfirst()) + sn) - 1;
+    if sn < 2 {
+        return 0;
+    }
+    if os_get(osyms, s, ch_cp()) != 124 {
+        return 0;
+    }
+    return sc_on_vrule(rules, page, (os_get(osyms, s, ch_x0()) + os_get(osyms, s, ch_x1())) / 2, (os_get(osyms, s, ch_y0()) + os_get(osyms, s, ch_y1())) / 2, sc_rule_slack());
+}
+pub(crate) fn sc_body_comp(comps: &mut crate::port::Cells, inks: &mut crate::port::Cells, r: i32, page: i32) -> i32 {
+    // 1 when component `r` is of page `page`, of the body layer (`ir-body`) and sure (confidence at least 500).
+    let ink: i32 = co_get(comps, r, cf_ink());
+    if co_get(comps, r, cf_page()) != page {
+        return 0;
+    }
+    if co_get(comps, r, cf_conf()) < 500 {
+        return 0;
+    }
+    if ink < 0 {
+        return 0;
+    }
+    if ik_get(inks, ink, ikf_role()) != ir_body() {
+        return 0;
+    }
+    return 1;
+}
+pub(crate) fn sc_dot_like(comps: &mut crate::port::Cells, inks: &mut crate::port::Cells, page: i32, r: i32, wy0: i32, wy1: i32, hh: i32) -> i32 {
+    // 1 when body component `r` looks like a dot of a word whose box is from `wy0` to `wy1` (`hh` high): sure, at most 0.45 and at least 0.08 of the height each way, its bottom
+    // in the lowest quarter of the box and not more than 0.15 of the height below it.
+    let w: i32 = co_get(comps, r, cf_x1()) - co_get(comps, r, cf_x0());
+    let h: i32 = co_get(comps, r, cf_y1()) - co_get(comps, r, cf_y0());
+    let dy1: i32 = co_get(comps, r, cf_y1());
+    if sc_body_comp(comps, inks, r, page) == 0 {
+        return 0;
+    }
+    if ((w * 100) > (hh * 45)) || ((h * 100) > (hh * 45)) {
+        return 0;
+    }
+    if ((w * 100) < (hh * 8)) || ((h * 100) < (hh * 8)) {
+        return 0;
+    }
+    if ((dy1 - wy0) * 100) < (hh * 75) {
+        return 0;
+    }
+    if ((dy1 - wy1) * 100) > (hh * 15) {
+        return 0;
+    }
+    return 1;
+}
+pub(crate) fn sc_dot_between(osyms: &mut crate::port::Cells, s0: i32, sn: i32, cx: i32) -> i32 {
+    // The index i of the symbol such that the x `cx` lies between the centres of symbols i and i + 1 of the word that starts at symbol `s0`, or -1.
+    let mut i: i32 = 0;
+    while (i + 1) < sn {
+        if ((2 * cx) > (os_get(osyms, s0 + i, ch_x0()) + os_get(osyms, s0 + i, ch_x1()))) && ((2 * cx) < (os_get(osyms, s0 + (i + 1), ch_x0()) + os_get(osyms, s0 + (i + 1), ch_x1()))) {
+            return i;
+        }
+        i += 1;
+    }
+    return -1;
+}
+pub(crate) fn sc_dot_clear(comps: &mut crate::port::Cells, inks: &mut crate::port::Cells, page: i32, r: i32, wy0: i32, hh: i32) -> i32 {
+    // 1 when no body ink lies above component `r` in its column, between the top of the word (`wy0`) and a fifth of the word's height above the component: a stroke of a broken digit would.
+    let nc: i32 = co_count(comps);
+    let dx0: i32 = co_get(comps, r, cf_x0());
+    let dx1: i32 = co_get(comps, r, cf_x1());
+    let dy0: i32 = co_get(comps, r, cf_y0());
+    let mut q: i32 = 0;
+    while q < nc {
+        if q != r {
+            if sc_body_comp(comps, inks, q, page) == 1 {
+                if (co_get(comps, q, cf_x0()) < dx1) && (co_get(comps, q, cf_x1()) > dx0) {
+                    if (co_get(comps, q, cf_y1()) > wy0) && (co_get(comps, q, cf_y0()) < (dy0 - ((hh * 20) / 100))) {
+                        return 0;
+                    }
+                }
+            }
+        }
+        q += 1;
+    }
+    return 1;
+}
+pub fn sc_dot_after(owords: &mut crate::port::Cells, osyms: &mut crate::port::Cells, comps: &mut crate::port::Cells, inks: &mut crate::port::Cells, page: i32, w: i32) -> i32 {
+    // The decimal point the engine lost, when the page's pixels show it: the index of the symbol of word `w` after which a point goes, or -1. The word must be digits and nothing else
+    // (three to nine symbols, as many as its characters), one of them at least a quarter wider than the narrowest digit that is not a 1 (the engine's box for the digit before a
+    // point it did not read takes the point in), and there must be a dot between two digits: a component of the body layer that is sure, no more than 0.45 of the word's height
+    // each way, on its baseline, whose centre lies between the centres of two neighbouring symbols, with no body ink above it in its column (a stroke of a broken digit has some).
+    // One or two digits must follow the point and one at least precede it. NO DIGIT IS GUESSED: the point is a thing the page shows.
+    let sn: i32 = ow_get(owords, w, owf_scount());
+    let s0: i32 = ow_get(owords, w, owf_sfirst());
+    let wy0: i32 = ow_get(owords, w, hd_y0());
+    let wy1: i32 = ow_get(owords, w, hd_y1());
+    let hh: i32 = wy1 - wy0;
+    let nc: i32 = co_count(comps);
+    let mut i: i32 = 0;
+    let mut c: i32 = 0;
+    let mut wd: i32 = 0;
+    let mut r#ref: i32 = -1;
+    let mut wide: i32 = 0;
+    let mut r: i32 = 0;
+    let mut cx: i32 = 0;
+    let mut at: i32 = -1;
+    if (sn < 3) || (sn > 9) {
+        return -1;
+    }
+    if ow_get(owords, w, hd_tlen()) != sn {
+        return -1;
+    }
+    if hh <= 0 {
+        return -1;
+    }
+    if nc == 0 {
+        return -1;
+    }
+    while i < sn {
+        c = os_get(osyms, s0 + i, ch_cp());
+        if (c < 48) || (c > 57) {
+            return -1;
+        }
+        wd = os_get(osyms, s0 + i, ch_x1()) - os_get(osyms, s0 + i, ch_x0());
+        if c != 49 {
+            if (r#ref < 0) || (wd < r#ref) {
+                r#ref = wd;
+            }
+        }
+        i += 1;
+    }
+    if r#ref <= 0 {
+        return -1;
+    }
+    i = 0;
+    while i < sn {
+        c = os_get(osyms, s0 + i, ch_cp());
+        wd = os_get(osyms, s0 + i, ch_x1()) - os_get(osyms, s0 + i, ch_x0());
+        if c != 49 {
+            if (wd * 100) >= (r#ref * 125) {
+                wide = 1;
+            }
+        }
+        i += 1;
+    }
+    if wide == 0 {
+        return -1;
+    }
+    // a dot: small, on the baseline, between the centres of two neighbouring symbols
+    r = 0;
+    while (r < nc) && (at < 0) {
+        if sc_dot_like(comps, inks, page, r, wy0, wy1, hh) == 1 {
+            cx = (co_get(comps, r, cf_x0()) + co_get(comps, r, cf_x1())) / 2;
+            at = sc_dot_between(osyms, s0, sn, cx);
+            if at >= 0 {
+                if sc_dot_clear(comps, inks, page, r, wy0, hh) == 0 {
+                    at = -1;
+                }
+            }
+        }
+        r += 1;
+    }
+    if at < 0 {
+        return -1;
+    }
+    // the digits that follow: one or two
+    wd = sn - (at + 1);
+    if (wd < 1) || (wd > 2) {
+        return -1;
+    }
+    return at;
+}
+pub(crate) fn sc_isdig(c: i32) -> i32 {
+    if (c >= 48) && (c <= 57) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn sc_digits_before(etext: &mut crate::port::Cells, ts: i32, i: i32) -> i32 {
+    // How many digits end just before index `i` of the word that starts at `ts`.
+    let mut j: i32 = i - 1;
+    let mut k: i32 = 0;
+    while (j >= 0) && (sc_isdig(crate::port::cells_at(etext, ts + j)) == 1) {
+        k += 1;
+        j -= 1;
+    }
+    return k;
+}
+pub(crate) fn sc_digits_after(etext: &mut crate::port::Cells, ts: i32, n: i32, i: i32) -> i32 {
+    // How many digits start just after index `i` of the word of `n` characters that starts at `ts`.
+    let mut j: i32 = i + 1;
+    let mut k: i32 = 0;
+    while (j < n) && (sc_isdig(crate::port::cells_at(etext, ts + j)) == 1) {
+        k += 1;
+        j += 1;
+    }
+    return k;
+}
+pub fn sc_thousands_comma(etext: &mut crate::port::Cells, ts: i32, n: i32) -> i32 {
+    // 1 when the word has a thousands comma: one with one to three digits before it and exactly three after it (`459,088`). The page's own convention, when a page has some.
+    let mut i: i32 = 0;
+    let mut b: i32 = 0;
+    while i < n {
+        if crate::port::cells_at(etext, ts + i) == 44 {
+            b = sc_digits_before(etext, ts, i);
+            if (b >= 1) && (b <= 3) {
+                if sc_digits_after(etext, ts, n, i) == 3 {
+                    return 1;
+                }
+            }
+        }
+        i += 1;
+    }
+    return 0;
+}
+pub fn sc_dollar_word(etext: &mut crate::port::Cells, ts: i32, n: i32) -> i32 {
+    // 1 for a word that is a dollar sign, or one that starts with it (after an opening parenthesis or a minus) and goes on with a digit: the page's own way of writing an amount.
+    let mut a: i32 = 0;
+    if n <= 0 {
+        return 0;
+    }
+    if (n == 1) && (crate::port::cells_at(etext, ts) == 36) {
+        return 1;
+    }
+    if (crate::port::cells_at(etext, ts) == 40) || (crate::port::cells_at(etext, ts) == 45) {
+        a = 1;
+    }
+    if (a + 1) < n {
+        if (crate::port::cells_at(etext, ts + a) == 36) && (sc_isdig(crate::port::cells_at(etext, ts + (a + 1))) == 1) {
+            return 1;
+        }
+    }
+    return 0;
+}
+pub fn sc_period_thousands(etext: &mut crate::port::Cells, ts: i32, n: i32, sign: i32) -> i32 {
+    // The index of the period of a word of the shape `(331.279)`: after any opening parenthesis, minus or dollar sign (and, when `sign` is 1, an S or a section sign read for one), one to three digits
+    // that do not start with 0, one period and exactly three digits, then at most a closing parenthesis. A thousands comma read as a period (the page's own, see `sc-fates`); else -1.
+    let mut a: i32 = 0;
+    let mut b: i32 = n;
+    let mut d: i32 = 0;
+    while (a < 3) && ((a < n) && ((crate::port::cells_at(etext, ts + a) == 40) || ((crate::port::cells_at(etext, ts + a) == 45) || (crate::port::cells_at(etext, ts + a) == 36)))) {
+        a += 1;
+    }
+    if (sign == 1) && (a < n) {
+        if (crate::port::cells_at(etext, ts + a) == 167) || (crate::port::cells_at(etext, ts + a) == 83) {
+            a += 1;
+        }
+    }
+    if a >= n {
+        return -1;
+    }
+    if crate::port::cells_at(etext, ts + (n - 1)) == 41 {
+        b = n - 1;
+    }
+    d = sc_digits_after(etext, ts, b, a - 1);
+    if (d < 1) || (d > 3) {
+        return -1;
+    }
+    if crate::port::cells_at(etext, ts + a) == 48 {
+        return -1;
+    }
+    if crate::port::cells_at(etext, ts + (a + d)) != 46 {
+        return -1;
+    }
+    if sc_digits_after(etext, ts, b, a + d) != 3 {
+        return -1;
+    }
+    if (a + (d + 4)) != b {
+        return -1;
+    }
+    return a + d;
+}
+pub(crate) fn sc_flag(mut owords: &mut crate::port::Cells, w: i32, bit: i32) -> i32 {
+    // Set `bit` among the engine flags of word row `w`.
+    let v: i32 = ow_get(owords, w, owf_flags()) | bit;
+    ow_set(owords, w, owf_flags(), v);
+    return 0;
+}
+pub(crate) fn sc_fates(mut owords: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, osyms: &mut crate::port::Cells, rules: &mut crate::port::Cells, comps: &mut crate::port::Cells, inks: &mut crate::port::Cells, page: i32, m: i32, mut scr: &mut crate::port::Cells) -> i32 {
+    // What becomes of each of the `m` words of a line (listed at `sc-fate-base`): 0 it stays, 1 it is garbage (confidence at most `sc-lo-conf` and implausible characters (`sc-implausible`) on a line of
+    // two words or fewer or of a mean confidence of 450 or less; or a word of a line of three or more whose mean is at most `sc-lo-conf`, best at most 450 and words of four characters or fewer on average: texture), 2 it is the ghost of a rule (a lone bar, `I`, `l` or `!`
+    // on a vertical rule), 3 it is a dot leader (`sc-leader`), 4 its text is corrected (the cells at +2 and +3 regions say how). The words with a fate of 1 to 3 are flagged in `owords` (`oe-garbage`, `oe-rule-ghost`, one corrected: `oe-corrected`)
+    // and taken out of the list; the corrected text is appended to `etext`. Answers how many words are left.
+    let fb: i32 = sc_fate_base();
+    let fm: i32 = sc_fate_max();
+    let commas: i32 = crate::port::cells_at(scr, sc_fate_base() + (4 * sc_fate_max()));
+    let dollars: i32 = crate::port::cells_at(scr, sc_fate_base() + ((4 * sc_fate_max()) + 1));
+    let mut gl: i32 = 0;
+    let mut pd: i32 = -1;
+    let mut i: i32 = 0;
+    let mut w: i32 = 0;
+    let mut w2: i32 = 0;
+    let mut ts: i32 = 0;
+    let mut n: i32 = 0;
+    let mut ts2: i32 = 0;
+    let mut n2: i32 = 0;
+    let mut conf: i32 = 0;
+    let mut sum: i32 = 0;
+    let mut tch: i32 = 0;
+    let mut mx: i32 = 0;
+    let mut lmean: i32 = 0;
+    let mut f: i32 = 0;
+    let mut c: i32 = 0;
+    let mut hh: i32 = 0;
+    let mut h2: i32 = 0;
+    let mut gp: i32 = 0;
+    let mut nt: i32 = 0;
+    let mut k: i32 = 0;
+    let mut last: i32 = 0;
+    let mut kept: i32 = 0;
+    let mut changed: i32 = 0;
+    while i < m {
+        w = crate::port::cells_at(scr, fb + i);
+        conf = ow_get(owords, w, hd_conf());
+        sum += conf;
+        tch += ow_get(owords, w, hd_tlen());
+        if conf > mx {
+            mx = conf;
+        }
+        i += 1;
+    }
+    lmean = sum / m;
+    i = 0;
+    while i < m {
+        w = crate::port::cells_at(scr, fb + i);
+        ts = ow_get(owords, w, hd_tstart());
+        n = ow_get(owords, w, hd_tlen());
+        conf = ow_get(owords, w, hd_conf());
+        f = 0;
+        crate::port::cells_set(scr, fb + ((2 * fm) + i), -1);
+        crate::port::cells_set(scr, fb + ((3 * fm) + i), 0);
+        // a dot leader
+        if sc_leader(etext, ts, n) == 1 {
+            f = 3;
+        }
+        // texture: a line of three words or more, all of them unsure
+        if f == 0 {
+            if (m >= 3) && ((lmean <= sc_lo_conf()) && ((mx <= 450) && (tch <= (4 * m)))) {
+                f = 1;
+            }
+        }
+        // very unsure and no word, alone or among such words
+        if f == 0 {
+            if conf <= sc_lo_conf() {
+                if sc_implausible(etext, ts, n) == 1 {
+                    if (m <= 2) || (lmean <= 450) {
+                        f = 1;
+                    }
+                }
+            }
+        }
+        // a rule read as a character
+        if (f == 0) && (n == 1) {
+            c = crate::port::cells_at(etext, ts);
+            if (c == 124) || ((c == 73) || ((c == 108) || (c == 33))) {
+                if sc_on_vrule(rules, page, (ow_get(owords, w, hd_x0()) + ow_get(owords, w, hd_x1())) / 2, (ow_get(owords, w, hd_y0()) + ow_get(owords, w, hd_y1())) / 2, sc_rule_slack()) == 1 {
+                    f = 2;
+                }
+            }
+        }
+        // a rule's stroke glued to the end of a word
+        if (f == 0) && (n >= 2) {
+            if crate::port::cells_at(etext, ts + (n - 1)) == 124 {
+                if sc_tail_on_vrule(owords, osyms, rules, page, w) == 1 {
+                    crate::port::cells_set(scr, fb + ((2 * fm) + i), ts);
+                    crate::port::cells_set(scr, fb + ((3 * fm) + i), n - 1);
+                    f = 4;
+                }
+            }
+        }
+        // thousands read with periods
+        if (f == 0) && (sc_groups_fix(etext, ts, n) == 1) {
+            nt = etx_len(etext);
+            last = n - 1;
+            while (last > 0) && (crate::port::cells_at(etext, ts + last) != 46) {
+                last -= 1;
+            }
+            k = 0;
+            while k < n {
+                c = crate::port::cells_at(etext, ts + k);
+                if (c == 46) && (k != last) {
+                    c = 44;
+                }
+                etx_append_cp(etext, c);
+                k += 1;
+            }
+            crate::port::cells_set(scr, fb + ((2 * fm) + i), nt);
+            crate::port::cells_set(scr, fb + ((3 * fm) + i), n);
+            f = 4;
+        }
+        // the page's own conventions: a thousands comma read as a period on a page that writes them with commas (two words at least), and a dollar sign glued to an amount and read as an S or a section sign on a page that writes its amounts with dollar signs (two words at least)
+        if (f == 0) && (n >= 4) {
+            gl = 0;
+            c = crate::port::cells_at(etext, ts);
+            if dollars >= 2 {
+                if (c == 167) || (c == 83) {
+                    if sc_amount_like(etext, ts + 1, n - 1) == 1 {
+                        gl = 1;
+                    }
+                }
+            }
+            pd = -1;
+            if commas >= 2 {
+                pd = sc_period_thousands(etext, ts, n, gl);
+            }
+            if (gl == 1) || (pd >= 0) {
+                nt = etx_len(etext);
+                k = 0;
+                while k < n {
+                    c = crate::port::cells_at(etext, ts + k);
+                    if (gl == 1) && (k == 0) {
+                        c = 36;
+                    }
+                    if k == pd {
+                        c = 44;
+                    }
+                    etx_append_cp(etext, c);
+                    k += 1;
+                }
+                crate::port::cells_set(scr, fb + ((2 * fm) + i), nt);
+                crate::port::cells_set(scr, fb + ((3 * fm) + i), n);
+                f = 4;
+            }
+        }
+        // a decimal point the engine lost and the page shows (`sc-dot-after`)
+        if (f == 0) && (n >= 3) {
+            k = sc_dot_after(owords, osyms, comps, inks, page, w);
+            if k >= 0 {
+                nt = etx_len(etext);
+                c = 0;
+                while c < n {
+                    last = crate::port::cells_at(etext, ts + c);
+                    etx_append_cp(etext, last);
+                    if c == k {
+                        etx_append_cp(etext, 46);
+                    }
+                    c += 1;
+                }
+                crate::port::cells_set(scr, fb + ((2 * fm) + i), nt);
+                crate::port::cells_set(scr, fb + ((3 * fm) + i), n + 1);
+                f = 4;
+            }
+        }
+        // a currency sign read as an S or a section sign, alone just before an amount of the same height
+        if (f == 0) && (n == 1) {
+            c = crate::port::cells_at(etext, ts);
+            if ((i + 1) < m) && ((c == 83) || ((c == 167) || (c == 115))) {
+                w2 = crate::port::cells_at(scr, fb + (i + 1));
+                ts2 = ow_get(owords, w2, hd_tstart());
+                n2 = ow_get(owords, w2, hd_tlen());
+                hh = ow_get(owords, w, hd_y1()) - ow_get(owords, w, hd_y0());
+                h2 = ow_get(owords, w2, hd_y1()) - ow_get(owords, w2, hd_y0());
+                gp = ow_get(owords, w2, hd_x0()) - ow_get(owords, w, hd_x1());
+                if (sc_amount_like(etext, ts2, n2) == 1) && ((gp >= 0) && (gp <= (2 * hh))) {
+                    if ((hh * 100) >= (60 * h2)) && ((hh * 100) <= (160 * h2)) {
+                        if (c == 167) || ((sc_cents(etext, ts2, n2) == 1) || (dollars >= 2)) {
+                            nt = etx_len(etext);
+                            etx_append_cp(etext, 36);
+                            crate::port::cells_set(scr, fb + ((2 * fm) + i), nt);
+                            crate::port::cells_set(scr, fb + ((3 * fm) + i), 1);
+                            f = 4;
+                        }
+                    }
+                }
+            }
+        }
+        crate::port::cells_set(scr, fb + (fm + i), f);
+        if (f == 1) || (f == 3) {
+            sc_flag(owords, w, oe_garbage());
+            changed = 1;
+        }
+        if f == 2 {
+            sc_flag(owords, w, oe_rule_ghost());
+            changed = 1;
+        }
+        if f == 4 {
+            sc_flag(owords, w, oe_corrected());
+            changed = 1;
+        }
+        i += 1;
+    }
+    if changed == 0 {
+        return m;
+    }
+    // the words that stay, packed to the front
+    i = 0;
+    while i < m {
+        f = crate::port::cells_at(scr, fb + (fm + i));
+        if (f == 0) || (f == 4) {
+            crate::port::cells_set(scr, fb + kept, crate::port::cells_at(scr, fb + i));
+            crate::port::cells_set(scr, fb + (fm + kept), f);
+            crate::port::cells_set(scr, fb + ((2 * fm) + kept), crate::port::cells_at(scr, fb + ((2 * fm) + i)));
+            crate::port::cells_set(scr, fb + ((3 * fm) + kept), crate::port::cells_at(scr, fb + ((3 * fm) + i)));
+            kept += 1;
+        }
+        i += 1;
+    }
+    return kept;
+}
 pub(crate) fn sc_emit_core(olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, osyms: &mut crate::port::Cells, l0: i32, nl: i32, page: i32, rotmed: i32, mut scr: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, usesel: i32) -> i32 {
     let mut k: i32 = 0;
     let mut made: i32 = 0;
@@ -1234,17 +2250,238 @@ pub(crate) fn sc_emit_core(olines: &mut crate::port::Cells, owords: &mut crate::
     }
     return made;
 }
+pub fn sc_emit_vetted(olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, osyms: &mut crate::port::Cells, nsel: i32, page: i32, rotmed: i32, mut scr: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, rules: &mut crate::port::Cells, comps: &mut crate::port::Cells, inks: &mut crate::port::Cells) -> i32 {
+    // `sc-emit-core` over the selection of `scr`, as `sc-emit-sel` does it, and with what becomes of the words of the lines (P12.6): the words a body-ink line adds to a
+    // first-pass line (`sc-xtra-base`, `sc-line-words`), the words that are no text kept out and flagged in `owords`, the safe corrections made (`sc-fates`). A line of which every
+    // word is kept out is not a line. The line's box and baseline are widened to the words that were added, and are otherwise the line's own, so that a page where nothing was added,
+    // dropped or corrected is emitted as it always was. Answers the lines made.
+    let fb: i32 = sc_fate_base();
+    let fm: i32 = sc_fate_max();
+    let mut k: i32 = 0;
+    let mut made: i32 = 0;
+    let mut l: i32 = 0;
+    let mut cnt: i32 = 0;
+    let mut revised: i32 = 0;
+    let mut mc: i32 = 0;
+    let mut mg: i32 = 0;
+    let mut xl: i32 = 0;
+    let mut kk: i32 = 0;
+    let mut w0: i32 = 0;
+    let mut wi: i32 = 0;
+    let mut wn: i32 = 0;
+    let mut ts: i32 = 0;
+    let mut tl: i32 = 0;
+    let mut j: i32 = 0;
+    let mut r: i32 = 0;
+    let mut lnx: i32 = 0;
+    let mut lx0: i32 = 0;
+    let mut ly0: i32 = 0;
+    let mut lx1: i32 = 0;
+    let mut ly1: i32 = 0;
+    let mut bx0: i32 = 0;
+    let mut by0: i32 = 0;
+    let mut bx1: i32 = 0;
+    let mut by1: i32 = 0;
+    let mut ymid: i32 = 0;
+    let mut asc: i32 = 0;
+    let mut dsc: i32 = 0;
+    let mut size: i32 = 0;
+    let mut rot: i32 = 0;
+    let mut dir: i32 = 0;
+    let mut gap: i32 = 0;
+    let mut first: i32 = 0;
+    let mut ox: i32 = 0;
+    let mut ox1: i32 = 0;
+    let mut nx0: i32 = 0;
+    let mut xm: i32 = 0;
+    let mut commas: i32 = 0;
+    let mut dollars: i32 = 0;
+    let mut nx1: i32 = 0;
+    // Pass 1: every line's metrics, then their sizes clustered over the page.
+    while k < nsel {
+        if k < sc_cap() {
+            l = crate::port::cells_at(scr, sc_sel_base() + k);
+            crate::port::cells_set(scr, 244 + (4 * k), 0);
+            crate::port::cells_set(scr, 242 + (4 * k), -1);
+            crate::port::cells_set(scr, 243 + (4 * k), -1);
+            crate::port::cells_set(scr, 245 + (4 * k), -1);
+            if ol_get(olines, l, lh_count()) > 0 {
+                xm = sc_metrics(olines, owords, osyms, l, scr);
+                crate::port::cells_set(scr, 245 + (4 * k), xm);
+                crate::port::cells_set(scr, 242 + (4 * k), crate::port::cells_at(scr, 0));
+                crate::port::cells_set(scr, 243 + (4 * k), crate::port::cells_at(scr, 1));
+            }
+        }
+        k += 1;
+    }
+    if nsel < sc_cap() {
+        sc_fit(scr, nsel);
+    } else {
+        sc_fit(scr, sc_cap());
+    }
+    // the page's own conventions, counted over its words: how many write a thousands comma, how many a dollar sign
+    commas = 0;
+    dollars = 0;
+    k = 0;
+    while k < nsel {
+        l = crate::port::cells_at(scr, sc_sel_base() + k);
+        cnt = ol_get(olines, l, lh_count());
+        w0 = ol_get(olines, l, lh_first());
+        j = 0;
+        while j < cnt {
+            wi = w0 + j;
+            if sc_thousands_comma(etext, ow_get(owords, wi, hd_tstart()), ow_get(owords, wi, hd_tlen())) == 1 {
+                commas += 1;
+            }
+            if sc_dollar_word(etext, ow_get(owords, wi, hd_tstart()), ow_get(owords, wi, hd_tlen())) == 1 {
+                dollars += 1;
+            }
+            j += 1;
+        }
+        k += 1;
+    }
+    crate::port::cells_set(scr, fb + (4 * fm), commas);
+    crate::port::cells_set(scr, fb + ((4 * fm) + 1), dollars);
+    k = 0;
+    while k < nsel {
+        l = crate::port::cells_at(scr, sc_sel_base() + k);
+        cnt = ol_get(olines, l, lh_count());
+        if cnt > 0 {
+            w0 = ol_get(olines, l, lh_first());
+            lx0 = ol_get(olines, l, lh_x0());
+            ly0 = ol_get(olines, l, lh_y0());
+            lx1 = ol_get(olines, l, lh_x1());
+            ly1 = ol_get(olines, l, lh_y1());
+            bx0 = ol_get(olines, l, lh_bx0());
+            by0 = ol_get(olines, l, lh_by0());
+            bx1 = ol_get(olines, l, lh_bx1());
+            by1 = ol_get(olines, l, lh_by1());
+            dir = ol_get(olines, l, lh_dir());
+            if k < sc_cap() {
+                asc = crate::port::cells_at(scr, 242 + (4 * k));
+                dsc = crate::port::cells_at(scr, 243 + (4 * k));
+            } else {
+                sc_metrics(olines, owords, osyms, l, scr);
+                asc = crate::port::cells_at(scr, 0);
+                dsc = crate::port::cells_at(scr, 1);
+                if dsc < 0 {
+                    dsc = (asc * 27) / 100;
+                }
+            }
+            // the words the line is emitted with: its own and the body-ink line's that lie over none of them, less the ones that are no text
+            xl = -1;
+            kk = l - crate::port::cells_at(scr, sc_xtra_base());
+            if (kk >= 0) && (kk < sc_sel_max()) {
+                xl = crate::port::cells_at(scr, sc_xtra_base() + (kk + 1)) - 1;
+            }
+            if dir != 0 {
+                xl = -1;
+            }
+            revised = 0;
+            if ol_get(olines, l, olf_run()) != ol_get(olines, crate::port::cells_at(scr, sc_xtra_base()), olf_run()) {
+                revised = 1;
+            }
+            mg = 0;
+            mc = cnt;
+            j = sc_line_words(olines, owords, etext, l, xl, scr);
+            if j > 0 {
+                mg = 1;
+                mc = sc_fates(owords, etext, osyms, rules, comps, inks, page, j, scr);
+                if (j > cnt) || (mc < j) {
+                    revised = 1;
+                }
+            }
+            if (mg == 1) && (mc > 0) {
+                if j > cnt {
+                    wi = crate::port::cells_at(scr, fb);
+                    wn = crate::port::cells_at(scr, fb + (mc - 1));
+                    bx0 = ow_get(owords, wi, hd_bx0());
+                    by0 = ow_get(owords, wi, hd_by0());
+                    bx1 = ow_get(owords, wn, hd_bx1());
+                    by1 = ow_get(owords, wn, hd_by1());
+                    lx0 = sc_mn(lx0, ow_get(owords, wi, hd_x0()));
+                    lx1 = sc_mx(lx1, ow_get(owords, wn, hd_x1()));
+                }
+            }
+            ymid = (by0 + by1) / 2;
+            if asc > 0 {
+                size = (asc * 137) / 100;
+                ly0 = ymid - asc;
+                ly1 = ymid + dsc;
+            } else {
+                size = ((ly1 - ly0) * 108) / 100;
+            }
+            if size < 1 {
+                size = 1;
+            }
+            rot = ((ev_angle(bx1 - bx0, by1 - by0) - rotmed) + 36000) % 36000;
+            lnx = ln_count(lines);
+            first = wd_count(words);
+            j = 0;
+            while j < mc {
+                wi = w0 + j;
+                wn = w0 + (j + 1);
+                ts = 0;
+                tl = 0;
+                if mg == 1 {
+                    wi = crate::port::cells_at(scr, fb + j);
+                    wn = crate::port::cells_at(scr, fb + (j + 1));
+                }
+                ts = ow_get(owords, wi, hd_tstart());
+                tl = ow_get(owords, wi, hd_tlen());
+                if mg == 1 {
+                    if crate::port::cells_at(scr, fb + ((2 * fm) + j)) >= 0 {
+                        ts = crate::port::cells_at(scr, fb + ((2 * fm) + j));
+                        tl = crate::port::cells_at(scr, fb + ((3 * fm) + j));
+                    }
+                }
+                gap = -1;
+                if (j + 1) < mc {
+                    ox = ow_get(owords, wi, hd_x0());
+                    ox1 = ow_get(owords, wi, hd_x1());
+                    nx0 = ow_get(owords, wn, hd_x0());
+                    nx1 = ow_get(owords, wn, hd_x1());
+                    if dir == 1 {
+                        gap = ox - nx1;
+                    } else {
+                        gap = nx0 - ox1;
+                    }
+                }
+                r = wd_new(words, page, ow_get(owords, wi, hd_x0()), ow_get(owords, wi, hd_y0()), ow_get(owords, wi, hd_x1()), ow_get(owords, wi, hd_y1()), ow_get(owords, wi, hd_bx0()), ow_get(owords, wi, hd_by0()), ow_get(owords, wi, hd_bx1()), ow_get(owords, wi, hd_by1()), rot, dir, ts, tl, lnx, ow_get(owords, wi, hd_conf()), -1);
+                wd_set(words, r, wf_style(), ow_get(owords, wi, owf_style()));
+                wd_set(words, r, wf_size(), size);
+                wd_set(words, r, wf_font(), -1);
+                wd_set(words, r, wf_gap(), gap);
+                wd_set(words, r, wf_wbreak(), wb_space());
+                if (j + 1) == mc {
+                    wd_set(words, r, wf_wbreak(), wb_line_end());
+                }
+                wd_set(words, r, wf_src(), sr_ocr());
+                j += 1;
+            }
+            if mc > 0 {
+                r = ln_new(lines, page, lx0, ly0, lx1, ly1, bx0, by0, bx1, by1, rot, dir, first, mc);
+                ln_set(lines, r, lf_src(), sr_ocr() + (revised * ls_revised()));
+                ln_set(lines, r, lf_order(), r);
+                made += 1;
+            }
+        }
+        k += 1;
+    }
+    return made;
+}
 pub fn sc_emit_lines(olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, osyms: &mut crate::port::Cells, l0: i32, nl: i32, page: i32, rotmed: i32, mut scr: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells) -> i32 {
     // Every OCR line of the run [l0, l0 + nl) that has words as a `lines` row, and its words as `words` rows, in the arenas
     // the text layer fills (D213: size, box and rotation are the line's, see the head of this file). The words' text is
     // the shared `etext`'s: `hd-tstart` and `hd-tlen` of an OCR word are read as they are. Answers the lines made.
     return sc_emit_core(olines, owords, osyms, l0, nl, page, rotmed, scr, words, lines, 0);
 }
-pub fn sc_emit_sel(olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, osyms: &mut crate::port::Cells, nsel: i32, page: i32, rotmed: i32, mut scr: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells) -> i32 {
+pub fn sc_emit_sel(olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, osyms: &mut crate::port::Cells, nsel: i32, page: i32, rotmed: i32, mut scr: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, rules: &mut crate::port::Cells, comps: &mut crate::port::Cells, inks: &mut crate::port::Cells) -> i32 {
     // `sc-emit-lines` over the OCR lines the scratch names (P7.4): `nsel` `olines` rows, in the order to emit them, at `scr`
     // cells `sc-sel-base` and up (`sc-sel-set`; `sc-prep` makes room for `sc-sel-max` of them): the lines of several runs chosen
-    // line by line, their size clustered over the chosen lines. Answers the lines made.
-    return sc_emit_core(olines, owords, osyms, 0, nsel, page, rotmed, scr, words, lines, 1);
+    // line by line, their size clustered over the chosen lines; and (P12.6, `sc-emit-vetted`) with the words a body-ink line adds, the words that
+    // are no text left out and the safe corrections made, `rules`, `comps` and `inks` being the tracer's rules, components and ink layers. Answers the lines made.
+    return sc_emit_vetted(olines, owords, osyms, nsel, page, rotmed, scr, words, lines, etext, rules, comps, inks);
 }
 pub fn sc_sel_set(mut scr: &mut crate::port::Cells, k: i32, row: i32) -> i32 {
     crate::port::cells_set(scr, sc_sel_base() + k, row);
@@ -1340,6 +2577,54 @@ pub fn sc_tag_unread(mut nodes: &mut crate::port::Cells, regions: &mut crate::po
     }
     return held;
 }
+pub fn sc_write_bare(nodes: &mut crate::port::Cells, regions: &mut crate::port::Cells, pages: &mut crate::port::Cells, im: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells) -> i32 {
+    // P12.6 (R1): a page of the Model with no node on it and an image of at least a tenth of its area (the biggest such image) gets a ledger row, `background`, for that image, so that a page
+    // that comes out empty never has nothing dropped: the image is what it held and was not read, not drawn as a figure and not kept. Answers the rows written.
+    let np: i32 = page_count(pages);
+    let nn: i32 = node_count(nodes);
+    let ni: i32 = im_count(im);
+    let mut p: i32 = 0;
+    let mut j: i32 = 0;
+    let mut n: i32 = 0;
+    let mut best: i32 = -1;
+    let mut has: i32 = 0;
+    let mut rows: i32 = 0;
+    let mut area: i64 = 0 as i64;
+    let mut bestarea: i64 = 0 as i64;
+    while p < np {
+        best = -1;
+        bestarea = 0 as i64;
+        j = 0;
+        while j < ni {
+            if im_get(im, j, mf_page()) == (p + 1) {
+                area = ((im_get(im, j, mf_x1()) - im_get(im, j, mf_x0())) as i64).wrapping_mul((im_get(im, j, mf_y1()) - im_get(im, j, mf_y0())) as i64);
+                if (area).wrapping_mul(10 as i64) >= (page_w(pages, p) as i64).wrapping_mul(page_h(pages, p) as i64) {
+                    if area > bestarea {
+                        best = j;
+                        bestarea = area;
+                    }
+                }
+            }
+            j += 1;
+        }
+        if best >= 0 {
+            has = 0;
+            n = 1;
+            while (n < nn) && (has == 0) {
+                if sc_node_page(nodes, regions, n) == (p + 1) {
+                    has = 1;
+                }
+                n += 1;
+            }
+            if has == 0 {
+                ledger_add(ledger, dr_background(), p + 1, im_get(im, best, mf_x0()), im_get(im, best, mf_y0()), im_get(im, best, mf_x1()), im_get(im, best, mf_y1()), 600, sr_vector());
+                rows += 1;
+            }
+        }
+        p += 1;
+    }
+    return rows;
+}
 pub fn sc_tag(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut text: &mut crate::port::Cells, regions: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, mask: &mut crate::port::Cells, policy: i32) -> i32 {
     // The provenance of OCR text, after the paragraphs are built. `mask` has one cell a page: 0 none, 1 an image page was
     // OCR'd, 2 a PDF page was (its kind becomes `scanned`, SPEC 3.4), plus `sc-mask-unread` for a page in a script the engine cannot read (`sc-tag-unread`).
@@ -1407,6 +2692,56 @@ pub fn sc_tag(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::C
     }
     return 1;
 }
+pub(crate) fn sc_native_jpeg(src: &crate::port::Src, start: i32, n: i32) -> i32 {
+    // The JPEG subset every ImageDecode host reads for scans: SOF0/1/2, 8-bit, one or three components. Other frames need page rendering; native libraries differ on arithmetic JPEG.
+    let mut i: i32 = 2;
+    let mut m: i32 = 0;
+    let mut size: i32 = 0;
+    let mut comps: i32 = 0;
+    if n < 4 {
+        return 0;
+    }
+    if (ps_u8(src, start) != 255) || (ps_u8(src, start + 1) != 216) {
+        return 0;
+    }
+    while (i + 4) <= n {
+        if ps_u8(src, start + i) != 255 {
+            return 0;
+        }
+        m = ps_u8(src, start + (i + 1));
+        if m == 255 {
+            i += 1;
+        } else if (m == 216) || ((m == 1) || ((m >= 208) && (m <= 215))) {
+            i += 2;
+        } else {
+            if (m == 217) || (m == 218) {
+                return 0;
+            }
+            size = (256 * ps_u8(src, start + (i + 2))) + ps_u8(src, start + (i + 3));
+            if (size < 2) || (size > (n - (i + 2))) {
+                return 0;
+            }
+            if (m >= 192) && ((m <= 207) && ((m != 196) && ((m != 200) && (m != 204)))) {
+                if (m < 192) || (m > 194) {
+                    return 0;
+                }
+                if size < 8 {
+                    return 0;
+                }
+                if ps_u8(src, start + (i + 4)) != 8 {
+                    return 0;
+                }
+                comps = ps_u8(src, start + (i + 9));
+                if (comps == 1) || (comps == 3) {
+                    return 1;
+                }
+                return 0;
+            }
+            i += size + 2;
+        }
+    }
+    return 0;
+}
 pub fn sc_dct_span(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, obj: i32, mut sp: &mut crate::port::Cells) -> i32 {
     // Is object `obj` a stream whose whole filter chain is one DCT stage, in a file that is not encrypted? Then 1 and `sp`
     // holds [start, length] of its bytes in the file: a JPEG stream is a JPEG file, and the host's `ImageDecode` reads it in
@@ -1450,14 +2785,25 @@ pub fn sc_dct_span(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut 
     if pl_int_value(ar, kt) != 0 {
         return 0;
     }
+    if sc_native_jpeg(src, pl_stream_start(ar, h), pl_stream_len(ar, h)) == 0 {
+        return 0;
+    }
+    if ps_missed(src) {
+        return 0;
+    }
     crate::port::cells_drop(sp, 0);
     crate::port::cells_push(sp, pl_stream_start(ar, h));
     crate::port::cells_push(sp, pl_stream_len(ar, h));
     return 1;
 }
+pub fn sc_cover_min() -> i32 {
+    // P12.6 (R1): the share of a page's area (per mille) that the image of a page with no text at all must cover to be read as the page: a quarter. It was a half, and a 96 dpi book page on an A4 page covers 49.5 per cent of it: the page was dropped, body and ledger empty.
+    return 250;
+}
 pub fn sc_eligible(im: &mut crate::port::Cells, j: i32, pw: i32, ph: i32) -> i32 {
     // Can image placement `j` be OCR'd as the page? Upright and not skewed, a real XObject (not inline, not a stencil
-    // mask), at least 16 pixels each way, and covering at least half the page (`pw` x `ph` centipoints) by area.
+    // mask), at least 16 pixels each way, and covering at least `sc-cover-min` of the page (`pw` x `ph` centipoints) by area. The caller has already seen that the page has no text at all, so the
+    // image is what the page holds (the biggest of them, when it has more).
     if im_get(im, j, mf_obj()) <= 0 {
         return 0;
     }
@@ -1478,7 +2824,7 @@ pub fn sc_eligible(im: &mut crate::port::Cells, j: i32, pw: i32, ph: i32) -> i32
     }
     let area: i64 = ((im_get(im, j, mf_x1()) - im_get(im, j, mf_x0())) as i64).wrapping_mul((im_get(im, j, mf_y1()) - im_get(im, j, mf_y0())) as i64);
     let whole: i64 = (pw as i64).wrapping_mul(ph as i64);
-    if (area).wrapping_mul(2 as i64) < whole {
+    if (area).wrapping_mul(1000 as i64) < (whole).wrapping_mul(sc_cover_min() as i64) {
         return 0;
     }
     if whole <= (0 as i64) {

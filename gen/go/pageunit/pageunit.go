@@ -409,7 +409,7 @@ func puRunBorn(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells
 			if esc >= 0 {
 				run = esc
 			}
-			asked = retarget.RtPlan(i, input, 1, 0, rid, PuDpi(), loc, ans, bms, pageink.PnKText(), port.BmsGet(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr)
+			asked = retarget.RtPlan(i, input, 1, 0, rid, PuDpi(), loc, ans, bms, pageink.PnKText(), port.BmsGet(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr, comps, inks)
 			// the seals and stamps in the text-free render's pixels (P8.2): the strips and crops that are read, asked in the same round as the targeted passes
 			if puPx(bms, nid, fuse) == 1 {
 				pgrow = evidence.EvPageRow(epages, i+1)
@@ -561,7 +561,7 @@ func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 in
 	nw = evidence.OwCount(owords) - w0
 	pageink.PnFeatures(i+1, bms, pageink.PnKText(), port.BmsGet(bms, rid), roid, w0, nw, ws, comps, owords, feats, scr)
 	retarget.RtPrep(rtp)
-	asked = retarget.RtPlan(i, input, 0, 0, rid, hint, loc, ans, bms, pageink.PnKText(), port.BmsGet(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr)
+	asked = retarget.RtPlan(i, input, 0, 0, rid, hint, loc, ans, bms, pageink.PnKText(), port.BmsGet(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr, comps, inks)
 	// the seals and stamps in the page's pixels (P8.2): their strips and crops are asked in the same round as the targeted passes
 	if seals == 1 {
 		sealpx.SxFind(i+1, views, vdec, prims, inks, pw, ph, s1)
@@ -578,7 +578,7 @@ func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 in
 		sigpx.SpFind(i+1, views, vdec, rules, owords, etext, port.BmsGet(bms, rid), pw, s5, s6)
 		sigpx.SpRecord(i, s5, cg)
 	}
-	nsel = retarget.RtAdopt(rtp, oruns, run, olines, owords, scr)
+	nsel = retarget.RtAdopt(rtp, oruns, run, olines, owords, etext, scr)
 	if seals == 1 {
 		nsel = sealpx.SxDropLines(scr, nsel, olines, owords, s1)
 		nsel = sigpx.SpDropLines(scr, nsel, olines, owords, s5)
@@ -586,7 +586,7 @@ func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 in
 	retarget.RtUpright(rtp, run, epages, i+1)
 	nl = evidence.OrGet(oruns, run, evidence.OrfLcount())
 	rotmed = evidence.EvRotMedian(olines, l0, nl)
-	scan.ScEmitSel(olines, owords, osyms, nsel, i+1, rotmed, scr, words, lines)
+	scan.ScEmitSel(olines, owords, osyms, nsel, i+1, rotmed, scr, words, lines, etext, rules, comps, inks)
 	port.CellsSet(mask, i, mv)
 	return plan.UsDone()
 }
