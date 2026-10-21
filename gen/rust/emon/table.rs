@@ -755,7 +755,7 @@ pub(crate) fn tb_lattice(rm: &mut crate::port::Cells, root: i32, xs: &mut crate:
                 cs = 1;
                 ok = 1;
                 while (ok == 1) && ((c + cs) < nc) {
-                    if (crate::port::cells_at(gm, ((r * nc) + c) + cs) == -1) && !(tb_open_band(bd, crate::port::cells_at(ys, r), crate::port::cells_at(ys, r + 1)) || tb_closed(rm, root, 1, crate::port::cells_at(xs, c + cs), crate::port::cells_at(ys, r), crate::port::cells_at(ys, r + 1))) {
+                    if (crate::port::cells_at(gm, ((r * nc) + c) + cs) == -1) && !((tb_open_band(bd, crate::port::cells_at(ys, r), crate::port::cells_at(ys, r + 1)) && !tb_crossed(wd, w0, w1, crate::port::cells_at(xs, c + cs), crate::port::cells_at(ys, r), crate::port::cells_at(ys, r + 1))) || tb_closed(rm, root, 1, crate::port::cells_at(xs, c + cs), crate::port::cells_at(ys, r), crate::port::cells_at(ys, r + 1))) {
                         cs += 1;
                     } else {
                         ok = 0;
@@ -1872,7 +1872,7 @@ pub(crate) fn tb_rows(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, 
         crate::port::cells_push(rw, 0);
         k = i + 1;
         while k <= j {
-            if (k == j) || (((wd_get(wd, crate::port::cells_at(wl, k), hd_x0()) - cmax) > thr) && !tb_glued(wd, et, crate::port::cells_at(wl, k - 1), crate::port::cells_at(wl, k), sty)) {
+            if (k == j) || ((sty == 1) && ((((k + 1) < j) && tb_currency_lead(wd, et, crate::port::cells_at(wl, k), crate::port::cells_at(wl, k + 1))) && tb_word_digit(wd, et, crate::port::cells_at(wl, k - 1)))) || (((wd_get(wd, crate::port::cells_at(wl, k), hd_x0()) - cmax) > thr) && !tb_glued(wd, et, crate::port::cells_at(wl, k - 1), crate::port::cells_at(wl, k), sty)) {
                 crate::port::cells_push(sg, ri);
                 crate::port::cells_push(sg, wd_get(wd, crate::port::cells_at(wl, cstart), hd_x0()));
                 crate::port::cells_push(sg, cmax);
@@ -2232,8 +2232,8 @@ pub(crate) fn tb_crossed(wd: &mut crate::port::Cells, w0: i32, w1: i32, x: i32, 
 }
 pub(crate) fn tb_split_rows(rm: &mut crate::port::Cells, root: i32, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w0: i32, w1: i32, xs: &mut crate::port::Cells, mut ys: &mut crate::port::Cells, mut wl: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut ch: &mut crate::port::Cells, mut occ: &mut crate::port::Cells, mut rmap: &mut crate::port::Cells, mut so: &mut crate::port::Cells, mut bd: &mut crate::port::Cells) -> i32 {
     // P12.2 (smoke review, issue 2: BLS, BEA, a 10-K): the rows of a lattice with fewer row cuts than its text has rows. A band between two
-    // rules that are drawn across every column, with a rule between every two columns or no word across the place where there is none (a header's
-    // column edges run down the page of the BEA's tables, undrawn), holds the rows of a table when the baselines of its words, told into table rows as an unruled table's
+    // rules that are drawn across every column, with no word crossing an undrawn outer boundary, holds the rows of a table when the baselines of its words, told into table rows as an unruled table's
+    // D1733: words may cross undrawn interior boundaries: those labels span columns in their own row, rather than blocking every row cut in the band. The baseline rows, told as an unruled table's
     // are (`tb-row-map`, the lattice's column boundaries the columns: a wrapped cell's tight lines are one row), make at least `TB_SPLIT_MIN` rows, three in
     // four of the baselines have words in two columns or more, and three in four have a digit (a header of two-line cells has none, or few: it is the
     // band's own). The cut between two such rows is at the middle of their baselines; the cuts are added to `ys` (kept in order) and listed in `so`
@@ -2271,8 +2271,10 @@ pub(crate) fn tb_split_rows(rm: &mut crate::port::Cells, root: i32, wd: &mut cra
         c = 0;
         while (c <= nc) && (closed == 1) {
             if !tb_closed(rm, root, 1, crate::port::cells_at(xs, c), crate::port::cells_at(ys, r), crate::port::cells_at(ys, r + 1)) {
-                if tb_crossed(wd, w0, w1, crate::port::cells_at(xs, c), crate::port::cells_at(ys, r), crate::port::cells_at(ys, r + 1)) {
-                    closed = 0;
+                if (c == 0) || (c == nc) {
+                    if tb_crossed(wd, w0, w1, crate::port::cells_at(xs, c), crate::port::cells_at(ys, r), crate::port::cells_at(ys, r + 1)) {
+                        closed = 0;
+                    }
                 }
             }
             c += 1;
@@ -3271,10 +3273,29 @@ pub(crate) fn tb_lowc(c: i32) -> i32 {
     }
     return 0;
 }
+pub(crate) fn tb_mostly_text(wd: &mut crate::port::Cells, tc: &mut crate::port::Cells, tw: &mut crate::port::Cells, cfirst: i32, cend: i32) -> bool {
+    // D1731: stable born-digital word boxes support the categorical grid; an OCR-only grid still needs the pre-existing table evidence.
+    let mut c: i32 = cfirst;
+    let mut j: i32 = 0;
+    let mut n: i32 = 0;
+    let mut textwords: i32 = 0;
+    while c < cend {
+        j = 0;
+        while j < crate::port::cells_at(tc, (c * TCS) + 9) {
+            n += 1;
+            if (wd_get(wd, crate::port::cells_at(tw, crate::port::cells_at(tc, (c * TCS) + 8) + j), wf_src()) & sr_text()) != 0 {
+                textwords += 1;
+            }
+            j += 1;
+        }
+        c += 1;
+    }
+    return (n > 0) && ((textwords * 4) >= (n * 3));
+}
 pub(crate) fn tb_score(tb: &mut crate::port::Cells, k: i32, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, tc: &mut crate::port::Cells, tw: &mut crate::port::Cells) -> i32 {
     // The score (0 to 1000, 0 = not a table) of text-based candidate k of its profile (SPEC 10.5): prose in
     // columns is not a table, so cells that are long, or that end like sentences, refuse it. The whitespace
-    // profile has no rules or fills to vouch for it and asks for more: three columns or a numeric column, and a header.
+    // profile has no rules or fills to vouch for it and asks for more: numeric columns, a header, or a dense grid of at least four short categorical columns.
     let b: i32 = k * TBS;
     let prof: i32 = crate::port::cells_at(tb, b + 5);
     let ncols: i32 = crate::port::cells_at(tb, b + 8);
@@ -3346,7 +3367,7 @@ pub(crate) fn tb_score(tb: &mut crate::port::Cells, k: i32, wd: &mut crate::port
         if ncols >= 3 {
             score += 100;
         }
-        if tb_num_cols(tb, k, 1, wd, et, tc, tw) >= 1 {
+        if tb_max(tb_num_cols(tb, k, 1, wd, et, tc, tw), tb_num_cols(tb, k, 0, wd, et, tc, tw)) >= 1 {
             score += 100;
         }
         if tb_head_rows(tb, k, wd, et, tc, tw) >= 1 {
@@ -3355,7 +3376,12 @@ pub(crate) fn tb_score(tb: &mut crate::port::Cells, k: i32, wd: &mut crate::port
         if nrows >= 4 {
             score += 50;
         }
-        if (ncols == 2) && ((nrows >= 3) && ((tb_num_cols(tb, k, 1, wd, et, tc, tw) == 1) && ((nw * 10) <= (ne * 25)))) {
+        // D1731: a dense grid of at least four short categorical columns needs neither a numeric column nor a bold heading; the prose checks above still apply.
+        if (score < 600) && ((ncols >= 4) && ((nrows >= 4) && (((ne * 5) >= ((nrows * ncols) * 4)) && tb_mostly_text(wd, tc, tw, cfirst, cend)))) {
+            score = 600;
+        }
+        // D1732: a three-row summary has no header: count its first amount as well as the other two, without changing a headed table's numeric-column test.
+        if (ncols == 2) && ((nrows >= 3) && ((tb_max(tb_num_cols(tb, k, 1, wd, et, tc, tw), tb_num_cols(tb, k, 0, wd, et, tc, tw)) == 1) && ((nw * 10) <= (ne * 25)))) {
             score += 100;
         }
         if score < 600 {

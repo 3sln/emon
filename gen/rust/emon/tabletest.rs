@@ -1789,6 +1789,110 @@ fn test_the_total_under_a_double_rule_is_a_row_of_the_table() {
     crate::testport::assert_eq(tt_run(wd, ln, et, pa, t2), 0, "block: well formed");
     crate::testport::assert_text(t2, "T3p;Gh;R;Ch[];Cc2he[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cs[Cash and equivalents];Ce[$ 33,672];Ce[$ 32,260];R;Cs[Short-term investments];Ce[129,619];Ce[92,774];R;Cs[Fixed maturity securities];Ce[23,758];Ce[25,128];R;Cs[Equity securities];Ce[353,842];Ce[308,793];R;Cs[Other];Ce[19,568];Ce[19,657];P[Total due];P[259,419];P[251,300];", "a block of totals that does not begin in the first column is not the table's, whatever its rule");
 }
+#[test]
+fn test_a_dense_four_column_table_needs_no_purely_numeric_column() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    let mut r: i32 = 0;
+    // E14: salary bands are categorical values (currency ranges, 'or less', 'Greater than'), not pure numbers. Four aligned, dense columns of short cells are a table without a numeric column or bold header.
+    while r < 5 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("Band")[..], 7200, 10000 + (r * 1600), 0, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("Low")[..], 18000, 10000 + (r * 1600), 0, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("Medium")[..], 28000, 10000 + (r * 1600), 0, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("High")[..], 40000, 10000 + (r * 1600), 0, 0);
+        r += 1;
+    }
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "categorical table: well formed");
+    crate::testport::assert_text(t, "T4w;Gb;R;C[Band];C[Low];C[Medium];C[High];R;C[Band];C[Low];C[Medium];C[High];R;C[Band];C[Low];C[Medium];C[High];R;C[Band];C[Low];C[Medium];C[High];R;C[Band];C[Low];C[Medium];C[High];", "a dense grid of four short categorical columns is a table");
+}
+#[test]
+fn test_three_label_and_amount_rows_are_a_summary_table() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    tt_at(wd, ln, et, &crate::testport::text_blob("Subtotal")[..], 7200, 10000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("100.00")[..], 30000, 10000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Tax")[..], 7200, 11600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("15.00")[..], 30000, 11600, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Total")[..], 7200, 13200, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("115.00")[..], 30000, 13200, 1, 1);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "summary: well formed");
+    crate::testport::assert_text(t, "T2w;Gb;R;Cs[Subtotal];C[100.00];R;Cs[Tax];C[15.00];Gf;R;Cws[Total];Cw[115.00];", "three numeric rows need no separate header to qualify as a summary table");
+}
+#[test]
+fn test_an_ocr_only_categorical_grid_needs_its_own_table_evidence() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    let mut r: i32 = 0;
+    while r < 5 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("Band")[..], 7200, 10000 + (r * 1600), 0, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("Low")[..], 18000, 10000 + (r * 1600), 0, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("Medium")[..], 28000, 10000 + (r * 1600), 0, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("High")[..], 40000, 10000 + (r * 1600), 0, 0);
+        r += 1;
+    }
+    r = 0;
+    while r < wd_count(wd) {
+        wd_set(wd, r, wf_src(), 4);
+        r += 1;
+    }
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "OCR-only grid: well formed");
+    crate::testport::assert_text(t, "P[Band];P[Low];P[Medium];P[High];P[Band];P[Low];P[Medium];P[High];P[Band];P[Low];P[Medium];P[High];P[Band];P[Low];P[Medium];P[High];P[Band];P[Low];P[Medium];P[High];", "the born-digital categorical rule does not relax an OCR-only grid's evidence threshold");
+}
+#[test]
+fn test_an_unruled_body_can_span_the_headers_columns() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    let mut r: i32 = 0;
+    // E13: the ruled header has finer columns than the labels in the unruled body. A label crossing one undrawn boundary must span those columns without preventing the body's row cuts.
+    tt_rule(pa, 7200, 9950, 37200, 10050);
+    tt_rule(pa, 7200, 11950, 37200, 12050);
+    tt_rule(pa, 7200, 17950, 37200, 18050);
+    tt_rule(pa, 7150, 10000, 7250, 18000);
+    tt_rule(pa, 37150, 10000, 37250, 18000);
+    tt_rule(pa, 17150, 10000, 17250, 12000);
+    tt_rule(pa, 27150, 10000, 27250, 12000);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Group")[..], 7600, 10600, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Label")[..], 17600, 10600, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Value")[..], 27600, 10600, 1, 0);
+    while r < 3 {
+        tt_word(wd, ln, et, &crate::testport::text_blob("Category")[..], 7600, 12600 + (r * 1600), 22000, 13400 + (r * 1600), 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("12.50")[..], 27600, 12600 + (r * 1600), 0, 0);
+        r += 1;
+    }
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "spanning unruled body: well formed");
+    crate::testport::assert_text(t, "T3r;Gh;R;Ch[Group];Ch[Label];Ch[Value];Gb;R;Cc2[Category];C[12.50];R;Cc2[Category];C[12.50];R;Cc2[Category];C[12.50];", "body rows survive a label spanning the header's first two columns");
+}
+#[test]
+fn test_a_prefix_currency_sign_starts_the_next_amount_even_with_a_small_gap() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    // D28: the next year's dollar sign is close to the preceding negative amount, but the sign is a prefix of its own amount, not the end of a chunk spanning both years.
+    tt_stmt_head(wd, ln, et, pa);
+    tt_amt(wd, ln, et, 12800, 0, &crate::testport::text_blob("Income")[..], &crate::testport::text_blob("(22,759)")[..], &crate::testport::text_blob("89,937")[..]);
+    tt_at(wd, ln, et, &crate::testport::text_blob("$")[..], 19800, 12800, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("$")[..], 26100, 12800, 0, 0);
+    tt_amt(wd, ln, et, 14400, 0, &crate::testport::text_blob("Investments")[..], &crate::testport::text_blob("129,619")[..], &crate::testport::text_blob("92,774")[..]);
+    tt_amt(wd, ln, et, 16000, 0, &crate::testport::text_blob("Securities")[..], &crate::testport::text_blob("23,758")[..], &crate::testport::text_blob("25,128")[..]);
+    tt_amt(wd, ln, et, 17600, 0, &crate::testport::text_blob("Equity")[..], &crate::testport::text_blob("353,842")[..], &crate::testport::text_blob("308,793")[..]);
+    tt_amt(wd, ln, et, 19200, 0, &crate::testport::text_blob("Other")[..], &crate::testport::text_blob("19,568")[..], &crate::testport::text_blob("19,657")[..]);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "prefix signs: well formed");
+    crate::testport::assert_text(t, "T3w;Gh;R;Ch[];Cc2he[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cs[Income];Ce[$ (22,759)];Ce[$ 89,937];R;Cs[Investments];Ce[129,619];Ce[92,774];R;Cs[Securities];Ce[23,758];Ce[25,128];R;Cs[Equity];Ce[353,842];Ce[308,793];R;Cs[Other];Ce[19,568];Ce[19,657];", "a close prefix sign does not merge the two years into a spanning cell");
+}
 pub(crate) fn tt_golden(pdf: &[u8], mut t: &mut String, mut tvt: &mut String) -> i32 {
     // PDF -> content -> tables -> paragraphs -> Model -> pretty JSON; answer 0 when every step answered 0, else a
     // code naming the step (1 open, 2 content, 3 the Model's check). The JSON is `t`. The tagged tree is read and joined (P5.5), and the

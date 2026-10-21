@@ -751,7 +751,7 @@ public static class Table {
                     cs = 1;
                     ok = 1;
                     while ((ok == 1) && ((c + cs) < nc)) {
-                        if ((emon.Port.CellsAt(gm, ((r * nc) + c) + cs) == -1) && !(TbOpenBand(bd, emon.Port.CellsAt(ys, r), emon.Port.CellsAt(ys, r + 1)) || TbClosed(rm, root, 1, emon.Port.CellsAt(xs, c + cs), emon.Port.CellsAt(ys, r), emon.Port.CellsAt(ys, r + 1)))) {
+                        if ((emon.Port.CellsAt(gm, ((r * nc) + c) + cs) == -1) && !((TbOpenBand(bd, emon.Port.CellsAt(ys, r), emon.Port.CellsAt(ys, r + 1)) && !TbCrossed(wd, w0, w1, emon.Port.CellsAt(xs, c + cs), emon.Port.CellsAt(ys, r), emon.Port.CellsAt(ys, r + 1))) || TbClosed(rm, root, 1, emon.Port.CellsAt(xs, c + cs), emon.Port.CellsAt(ys, r), emon.Port.CellsAt(ys, r + 1)))) {
                             cs += 1;
                         } else {
                             ok = 0;
@@ -1868,7 +1868,7 @@ public static class Table {
             emon.Port.CellsPush(rw, 0);
             k = i + 1;
             while (k <= j) {
-                if ((k == j) || (((Evidence.WdGet(wd, emon.Port.CellsAt(wl, k), Evidence.HdX0()) - cmax) > thr) && !TbGlued(wd, et, emon.Port.CellsAt(wl, k - 1), emon.Port.CellsAt(wl, k), sty))) {
+                if ((k == j) || ((sty == 1) && ((((k + 1) < j) && TbCurrencyLead(wd, et, emon.Port.CellsAt(wl, k), emon.Port.CellsAt(wl, k + 1))) && TbWordDigit(wd, et, emon.Port.CellsAt(wl, k - 1)))) || (((Evidence.WdGet(wd, emon.Port.CellsAt(wl, k), Evidence.HdX0()) - cmax) > thr) && !TbGlued(wd, et, emon.Port.CellsAt(wl, k - 1), emon.Port.CellsAt(wl, k), sty))) {
                     emon.Port.CellsPush(sg, ri);
                     emon.Port.CellsPush(sg, Evidence.WdGet(wd, emon.Port.CellsAt(wl, cstart), Evidence.HdX0()));
                     emon.Port.CellsPush(sg, cmax);
@@ -2228,8 +2228,8 @@ public static class Table {
     }
     internal static int TbSplitRows(emon.Port.Cells rm, int root, emon.Port.Cells wd, emon.Port.Cells et, int w0, int w1, emon.Port.Cells xs, emon.Port.Cells ys, emon.Port.Cells wl, emon.Port.Cells rw, emon.Port.Cells sg, emon.Port.Cells ch, emon.Port.Cells occ, emon.Port.Cells rmap, emon.Port.Cells so, emon.Port.Cells bd) {
         // P12.2 (smoke review, issue 2: BLS, BEA, a 10-K): the rows of a lattice with fewer row cuts than its text has rows. A band between two
-        // rules that are drawn across every column, with a rule between every two columns or no word across the place where there is none (a header's
-        // column edges run down the page of the BEA's tables, undrawn), holds the rows of a table when the baselines of its words, told into table rows as an unruled table's
+        // rules that are drawn across every column, with no word crossing an undrawn outer boundary, holds the rows of a table when the baselines of its words, told into table rows as an unruled table's
+        // D1733: words may cross undrawn interior boundaries: those labels span columns in their own row, rather than blocking every row cut in the band. The baseline rows, told as an unruled table's
         // are (`tb-row-map`, the lattice's column boundaries the columns: a wrapped cell's tight lines are one row), make at least `TB_SPLIT_MIN` rows, three in
         // four of the baselines have words in two columns or more, and three in four have a digit (a header of two-line cells has none, or few: it is the
         // band's own). The cut between two such rows is at the middle of their baselines; the cuts are added to `ys` (kept in order) and listed in `so`
@@ -2267,8 +2267,10 @@ public static class Table {
             c = 0;
             while ((c <= nc) && (closed == 1)) {
                 if (!TbClosed(rm, root, 1, emon.Port.CellsAt(xs, c), emon.Port.CellsAt(ys, r), emon.Port.CellsAt(ys, r + 1))) {
-                    if (TbCrossed(wd, w0, w1, emon.Port.CellsAt(xs, c), emon.Port.CellsAt(ys, r), emon.Port.CellsAt(ys, r + 1))) {
-                        closed = 0;
+                    if ((c == 0) || (c == nc)) {
+                        if (TbCrossed(wd, w0, w1, emon.Port.CellsAt(xs, c), emon.Port.CellsAt(ys, r), emon.Port.CellsAt(ys, r + 1))) {
+                            closed = 0;
+                        }
                     }
                 }
                 c += 1;
@@ -3267,10 +3269,29 @@ public static class Table {
         }
         return 0;
     }
+    internal static bool TbMostlyText(emon.Port.Cells wd, emon.Port.Cells tc, emon.Port.Cells tw, int cfirst, int cend) {
+        // D1731: stable born-digital word boxes support the categorical grid; an OCR-only grid still needs the pre-existing table evidence.
+        int c = cfirst;
+        int j = 0;
+        int n = 0;
+        int textwords = 0;
+        while (c < cend) {
+            j = 0;
+            while (j < emon.Port.CellsAt(tc, (c * Tcs) + 9)) {
+                n += 1;
+                if ((Evidence.WdGet(wd, emon.Port.CellsAt(tw, emon.Port.CellsAt(tc, (c * Tcs) + 8) + j), Evidence.WfSrc()) & Model.SrText()) != 0) {
+                    textwords += 1;
+                }
+                j += 1;
+            }
+            c += 1;
+        }
+        return (n > 0) && ((textwords * 4) >= (n * 3));
+    }
     internal static int TbScore(emon.Port.Cells tb, int k, emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells tc, emon.Port.Cells tw) {
         // The score (0 to 1000, 0 = not a table) of text-based candidate k of its profile (SPEC 10.5): prose in
         // columns is not a table, so cells that are long, or that end like sentences, refuse it. The whitespace
-        // profile has no rules or fills to vouch for it and asks for more: three columns or a numeric column, and a header.
+        // profile has no rules or fills to vouch for it and asks for more: numeric columns, a header, or a dense grid of at least four short categorical columns.
         int b = k * Tbs;
         int prof = emon.Port.CellsAt(tb, b + 5);
         int ncols = emon.Port.CellsAt(tb, b + 8);
@@ -3342,7 +3363,7 @@ public static class Table {
             if (ncols >= 3) {
                 score += 100;
             }
-            if (TbNumCols(tb, k, 1, wd, et, tc, tw) >= 1) {
+            if (TbMax(TbNumCols(tb, k, 1, wd, et, tc, tw), TbNumCols(tb, k, 0, wd, et, tc, tw)) >= 1) {
                 score += 100;
             }
             if (TbHeadRows(tb, k, wd, et, tc, tw) >= 1) {
@@ -3351,7 +3372,12 @@ public static class Table {
             if (nrows >= 4) {
                 score += 50;
             }
-            if ((ncols == 2) && ((nrows >= 3) && ((TbNumCols(tb, k, 1, wd, et, tc, tw) == 1) && ((nw * 10) <= (ne * 25))))) {
+            // D1731: a dense grid of at least four short categorical columns needs neither a numeric column nor a bold heading; the prose checks above still apply.
+            if ((score < 600) && ((ncols >= 4) && ((nrows >= 4) && (((ne * 5) >= ((nrows * ncols) * 4)) && TbMostlyText(wd, tc, tw, cfirst, cend))))) {
+                score = 600;
+            }
+            // D1732: a three-row summary has no header: count its first amount as well as the other two, without changing a headed table's numeric-column test.
+            if ((ncols == 2) && ((nrows >= 3) && ((TbMax(TbNumCols(tb, k, 1, wd, et, tc, tw), TbNumCols(tb, k, 0, wd, et, tc, tw)) == 1) && ((nw * 10) <= (ne * 25))))) {
                 score += 100;
             }
             if (score < 600) {

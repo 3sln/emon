@@ -835,7 +835,7 @@ func tbLattice(rm *port.Cells, root int32, xs *port.Cells, ys *port.Cells, page 
 				cs = 1
 				ok = 1
 				for (ok == 1) && ((c + cs) < nc) {
-					if (port.CellsAt(gm, ((r*nc)+c)+cs) == -1) && !(tbOpenBand(bd, port.CellsAt(ys, r), port.CellsAt(ys, r+1)) || tbClosed(rm, root, 1, port.CellsAt(xs, c+cs), port.CellsAt(ys, r), port.CellsAt(ys, r+1))) {
+					if (port.CellsAt(gm, ((r*nc)+c)+cs) == -1) && !((tbOpenBand(bd, port.CellsAt(ys, r), port.CellsAt(ys, r+1)) && !tbCrossed(wd, w0, w1, port.CellsAt(xs, c+cs), port.CellsAt(ys, r), port.CellsAt(ys, r+1))) || tbClosed(rm, root, 1, port.CellsAt(xs, c+cs), port.CellsAt(ys, r), port.CellsAt(ys, r+1))) {
 						cs += 1
 					} else {
 						ok = 0
@@ -1994,7 +1994,7 @@ func tbRows(wd *port.Cells, et *port.Cells, w0 int32, w1 int32, rx0 int32, ry0 i
 		port.CellsPush(rw, 0)
 		k = i + 1
 		for k <= j {
-			if (k == j) || (((evidence.WdGet(wd, port.CellsAt(wl, k), evidence.HdX0()) - cmax) > thr) && !tbGlued(wd, et, port.CellsAt(wl, k-1), port.CellsAt(wl, k), sty)) {
+			if (k == j) || ((sty == 1) && ((((k + 1) < j) && tbCurrencyLead(wd, et, port.CellsAt(wl, k), port.CellsAt(wl, k+1))) && tbWordDigit(wd, et, port.CellsAt(wl, k-1)))) || (((evidence.WdGet(wd, port.CellsAt(wl, k), evidence.HdX0()) - cmax) > thr) && !tbGlued(wd, et, port.CellsAt(wl, k-1), port.CellsAt(wl, k), sty)) {
 				port.CellsPush(sg, ri)
 				port.CellsPush(sg, evidence.WdGet(wd, port.CellsAt(wl, cstart), evidence.HdX0()))
 				port.CellsPush(sg, cmax)
@@ -2367,8 +2367,8 @@ func tbCrossed(wd *port.Cells, w0 int32, w1 int32, x int32, ya int32, yb int32) 
 
 func tbSplitRows(rm *port.Cells, root int32, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, xs *port.Cells, ys *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, occ *port.Cells, rmap *port.Cells, so *port.Cells, bd *port.Cells) int32 {
 	// P12.2 (smoke review, issue 2: BLS, BEA, a 10-K): the rows of a lattice with fewer row cuts than its text has rows. A band between two
-	// rules that are drawn across every column, with a rule between every two columns or no word across the place where there is none (a header's
-	// column edges run down the page of the BEA's tables, undrawn), holds the rows of a table when the baselines of its words, told into table rows as an unruled table's
+	// rules that are drawn across every column, with no word crossing an undrawn outer boundary, holds the rows of a table when the baselines of its words, told into table rows as an unruled table's
+	// D1733: words may cross undrawn interior boundaries: those labels span columns in their own row, rather than blocking every row cut in the band. The baseline rows, told as an unruled table's
 	// are (`tb-row-map`, the lattice's column boundaries the columns: a wrapped cell's tight lines are one row), make at least `TB_SPLIT_MIN` rows, three in
 	// four of the baselines have words in two columns or more, and three in four have a digit (a header of two-line cells has none, or few: it is the
 	// band's own). The cut between two such rows is at the middle of their baselines; the cuts are added to `ys` (kept in order) and listed in `so`
@@ -2406,8 +2406,10 @@ func tbSplitRows(rm *port.Cells, root int32, wd *port.Cells, et *port.Cells, w0 
 		c = 0
 		for (c <= nc) && (closed == 1) {
 			if !tbClosed(rm, root, 1, port.CellsAt(xs, c), port.CellsAt(ys, r), port.CellsAt(ys, r+1)) {
-				if tbCrossed(wd, w0, w1, port.CellsAt(xs, c), port.CellsAt(ys, r), port.CellsAt(ys, r+1)) {
-					closed = 0
+				if (c == 0) || (c == nc) {
+					if tbCrossed(wd, w0, w1, port.CellsAt(xs, c), port.CellsAt(ys, r), port.CellsAt(ys, r+1)) {
+						closed = 0
+					}
 				}
 			}
 			c += 1
@@ -3434,10 +3436,30 @@ func tbLowc(c int32) int32 {
 	return 0
 }
 
+func tbMostlyText(wd *port.Cells, tc *port.Cells, tw *port.Cells, cfirst int32, cend int32) bool {
+	// D1731: stable born-digital word boxes support the categorical grid; an OCR-only grid still needs the pre-existing table evidence.
+	var c int32 = cfirst
+	var j int32 = 0
+	var n int32 = 0
+	var textwords int32 = 0
+	for c < cend {
+		j = 0
+		for j < port.CellsAt(tc, (c*tcs)+9) {
+			n += 1
+			if (evidence.WdGet(wd, port.CellsAt(tw, port.CellsAt(tc, (c*tcs)+8)+j), evidence.WfSrc()) & model.SrText()) != 0 {
+				textwords += 1
+			}
+			j += 1
+		}
+		c += 1
+	}
+	return (n > 0) && ((textwords * 4) >= (n * 3))
+}
+
 func tbScore(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc *port.Cells, tw *port.Cells) int32 {
 	// The score (0 to 1000, 0 = not a table) of text-based candidate k of its profile (SPEC 10.5): prose in
 	// columns is not a table, so cells that are long, or that end like sentences, refuse it. The whitespace
-	// profile has no rules or fills to vouch for it and asks for more: three columns or a numeric column, and a header.
+	// profile has no rules or fills to vouch for it and asks for more: numeric columns, a header, or a dense grid of at least four short categorical columns.
 	var b int32 = k * tbs
 	var prof int32 = port.CellsAt(tb, b+5)
 	var ncols int32 = port.CellsAt(tb, b+8)
@@ -3509,7 +3531,7 @@ func tbScore(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc *port.C
 		if ncols >= 3 {
 			score += 100
 		}
-		if tbNumCols(tb, k, 1, wd, et, tc, tw) >= 1 {
+		if tbMax(tbNumCols(tb, k, 1, wd, et, tc, tw), tbNumCols(tb, k, 0, wd, et, tc, tw)) >= 1 {
 			score += 100
 		}
 		if tbHeadRows(tb, k, wd, et, tc, tw) >= 1 {
@@ -3518,7 +3540,12 @@ func tbScore(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc *port.C
 		if nrows >= 4 {
 			score += 50
 		}
-		if (ncols == 2) && ((nrows >= 3) && ((tbNumCols(tb, k, 1, wd, et, tc, tw) == 1) && ((nw * 10) <= (ne * 25)))) {
+		// D1731: a dense grid of at least four short categorical columns needs neither a numeric column nor a bold heading; the prose checks above still apply.
+		if (score < 600) && ((ncols >= 4) && ((nrows >= 4) && (((ne * 5) >= ((nrows * ncols) * 4)) && tbMostlyText(wd, tc, tw, cfirst, cend)))) {
+			score = 600
+		}
+		// D1732: a three-row summary has no header: count its first amount as well as the other two, without changing a headed table's numeric-column test.
+		if (ncols == 2) && ((nrows >= 3) && ((tbMax(tbNumCols(tb, k, 1, wd, et, tc, tw), tbNumCols(tb, k, 0, wd, et, tc, tw)) == 1) && ((nw * 10) <= (ne * 25)))) {
 			score += 100
 		}
 		if score < 600 {

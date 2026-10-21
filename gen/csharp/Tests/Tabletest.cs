@@ -1775,6 +1775,110 @@ public static class Tabletest {
         emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t2), 0, "block: well formed");
         emon.Testport.AssertText(t2, "T3p;Gh;R;Ch[];Cc2he[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cs[Cash and equivalents];Ce[$ 33,672];Ce[$ 32,260];R;Cs[Short-term investments];Ce[129,619];Ce[92,774];R;Cs[Fixed maturity securities];Ce[23,758];Ce[25,128];R;Cs[Equity securities];Ce[353,842];Ce[308,793];R;Cs[Other];Ce[19,568];Ce[19,657];P[Total due];P[259,419];P[251,300];", "a block of totals that does not begin in the first column is not the table's, whatever its rule");
     }
+    [Xunit.Fact]
+    public static void TestADenseFourColumnTableNeedsNoPurelyNumericColumn() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        int r = 0;
+        // E14: salary bands are categorical values (currency ranges, 'or less', 'Greater than'), not pure numbers. Four aligned, dense columns of short cells are a table without a numeric column or bold header.
+        while (r < 5) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Band"), 7200, 10000 + (r * 1600), 0, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Low"), 18000, 10000 + (r * 1600), 0, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Medium"), 28000, 10000 + (r * 1600), 0, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("High"), 40000, 10000 + (r * 1600), 0, 0);
+            r += 1;
+        }
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "categorical table: well formed");
+        emon.Testport.AssertText(t, "T4w;Gb;R;C[Band];C[Low];C[Medium];C[High];R;C[Band];C[Low];C[Medium];C[High];R;C[Band];C[Low];C[Medium];C[High];R;C[Band];C[Low];C[Medium];C[High];R;C[Band];C[Low];C[Medium];C[High];", "a dense grid of four short categorical columns is a table");
+    }
+    [Xunit.Fact]
+    public static void TestThreeLabelAndAmountRowsAreASummaryTable() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Subtotal"), 7200, 10000, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("100.00"), 30000, 10000, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Tax"), 7200, 11600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("15.00"), 30000, 11600, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Total"), 7200, 13200, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("115.00"), 30000, 13200, 1, 1);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "summary: well formed");
+        emon.Testport.AssertText(t, "T2w;Gb;R;Cs[Subtotal];C[100.00];R;Cs[Tax];C[15.00];Gf;R;Cws[Total];Cw[115.00];", "three numeric rows need no separate header to qualify as a summary table");
+    }
+    [Xunit.Fact]
+    public static void TestAnOcrOnlyCategoricalGridNeedsItsOwnTableEvidence() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        int r = 0;
+        while (r < 5) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Band"), 7200, 10000 + (r * 1600), 0, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Low"), 18000, 10000 + (r * 1600), 0, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Medium"), 28000, 10000 + (r * 1600), 0, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("High"), 40000, 10000 + (r * 1600), 0, 0);
+            r += 1;
+        }
+        r = 0;
+        while (r < Evidence.WdCount(wd)) {
+            Evidence.WdSet(wd, r, Evidence.WfSrc(), 4);
+            r += 1;
+        }
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "OCR-only grid: well formed");
+        emon.Testport.AssertText(t, "P[Band];P[Low];P[Medium];P[High];P[Band];P[Low];P[Medium];P[High];P[Band];P[Low];P[Medium];P[High];P[Band];P[Low];P[Medium];P[High];P[Band];P[Low];P[Medium];P[High];", "the born-digital categorical rule does not relax an OCR-only grid's evidence threshold");
+    }
+    [Xunit.Fact]
+    public static void TestAnUnruledBodyCanSpanTheHeadersColumns() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        int r = 0;
+        // E13: the ruled header has finer columns than the labels in the unruled body. A label crossing one undrawn boundary must span those columns without preventing the body's row cuts.
+        TtRule(pa, 7200, 9950, 37200, 10050);
+        TtRule(pa, 7200, 11950, 37200, 12050);
+        TtRule(pa, 7200, 17950, 37200, 18050);
+        TtRule(pa, 7150, 10000, 7250, 18000);
+        TtRule(pa, 37150, 10000, 37250, 18000);
+        TtRule(pa, 17150, 10000, 17250, 12000);
+        TtRule(pa, 27150, 10000, 27250, 12000);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Group"), 7600, 10600, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Label"), 17600, 10600, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Value"), 27600, 10600, 1, 0);
+        while (r < 3) {
+            TtWord(wd, ln, et, emon.Testport.TextBlob("Category"), 7600, 12600 + (r * 1600), 22000, 13400 + (r * 1600), 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("12.50"), 27600, 12600 + (r * 1600), 0, 0);
+            r += 1;
+        }
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "spanning unruled body: well formed");
+        emon.Testport.AssertText(t, "T3r;Gh;R;Ch[Group];Ch[Label];Ch[Value];Gb;R;Cc2[Category];C[12.50];R;Cc2[Category];C[12.50];R;Cc2[Category];C[12.50];", "body rows survive a label spanning the header's first two columns");
+    }
+    [Xunit.Fact]
+    public static void TestAPrefixCurrencySignStartsTheNextAmountEvenWithASmallGap() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        // D28: the next year's dollar sign is close to the preceding negative amount, but the sign is a prefix of its own amount, not the end of a chunk spanning both years.
+        TtStmtHead(wd, ln, et, pa);
+        TtAmt(wd, ln, et, 12800, 0, emon.Testport.TextBlob("Income"), emon.Testport.TextBlob("(22,759)"), emon.Testport.TextBlob("89,937"));
+        TtAt(wd, ln, et, emon.Testport.TextBlob("$"), 19800, 12800, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("$"), 26100, 12800, 0, 0);
+        TtAmt(wd, ln, et, 14400, 0, emon.Testport.TextBlob("Investments"), emon.Testport.TextBlob("129,619"), emon.Testport.TextBlob("92,774"));
+        TtAmt(wd, ln, et, 16000, 0, emon.Testport.TextBlob("Securities"), emon.Testport.TextBlob("23,758"), emon.Testport.TextBlob("25,128"));
+        TtAmt(wd, ln, et, 17600, 0, emon.Testport.TextBlob("Equity"), emon.Testport.TextBlob("353,842"), emon.Testport.TextBlob("308,793"));
+        TtAmt(wd, ln, et, 19200, 0, emon.Testport.TextBlob("Other"), emon.Testport.TextBlob("19,568"), emon.Testport.TextBlob("19,657"));
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "prefix signs: well formed");
+        emon.Testport.AssertText(t, "T3w;Gh;R;Ch[];Cc2he[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cs[Income];Ce[$ (22,759)];Ce[$ 89,937];R;Cs[Investments];Ce[129,619];Ce[92,774];R;Cs[Securities];Ce[23,758];Ce[25,128];R;Cs[Equity];Ce[353,842];Ce[308,793];R;Cs[Other];Ce[19,568];Ce[19,657];", "a close prefix sign does not merge the two years into a spanning cell");
+    }
     internal static int TtGolden(byte[] pdf, System.Text.StringBuilder t, System.Text.StringBuilder tvt) {
         // PDF -> content -> tables -> paragraphs -> Model -> pretty JSON; answer 0 when every step answered 0, else a
         // code naming the step (1 open, 2 content, 3 the Model's check). The JSON is `t`. The tagged tree is read and joined (P5.5), and the

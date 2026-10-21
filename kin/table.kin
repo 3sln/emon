@@ -34,7 +34,7 @@
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
             [emon.evidence :refer [wd-get wd-count ln-get ln-set ln-count wf-gfirst
                                    hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-bx0 hd-bx1 hd-by0 hd-by1 hd-rot hd-tstart hd-tlen hd-line
-                                   wf-style wf-size
+                                   wf-style wf-size wf-src
                                    lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-by0 lh-first lh-count
                                    ]]
             [emon.pdfstruct :refer [tg-trust]]
@@ -57,6 +57,7 @@
 (declarefn tb-head-reach)
 (declarefn tb-trim-end)
 (declarefn tb-word-same)
+(declarefn tb-crossed)
 
 ;; strides
 ;; Cell 15 of a line the tables hold is TB_HELD + the table's index (D178; D186): a bit of its own, so that the initials' codes
@@ -708,7 +709,8 @@
                       (set ok 1)
                       (while (and (== ok 1) (< (+ c cs) nc))
                         (do (if (and (== (cells-at gm (+ (+ (* r nc) c) cs)) -1)
-                                     (not (or (tb-open-band bd (cells-at ys r) (cells-at ys (+ r 1)))
+                                     (not (or (and (tb-open-band bd (cells-at ys r) (cells-at ys (+ r 1)))
+                                                   (not (tb-crossed wd w0 w1 (cells-at xs (+ c cs)) (cells-at ys r) (cells-at ys (+ r 1)))))
                                               (tb-closed rm root 1 (cells-at xs (+ c cs)) (cells-at ys r) (cells-at ys (+ r 1))))))
                               (set cs (+ cs 1))
                               (set ok 0))))
@@ -1625,7 +1627,10 @@
                 (cells-push rw 0)
                 (set k (+ i 1))
                 (while (<= k j)
-                  (do (if (or (== k j) (and (> (- (wd-get wd (cells-at wl k) (hd-x0)) cmax) thr)
+                  (do (if (or (== k j)
+                              (and (== sty 1) (and (and (< (+ k 1) j) (tb-currency-lead wd et (cells-at wl k) (cells-at wl (+ k 1))))
+                                                   (tb-word-digit wd et (cells-at wl (- k 1)))))
+                              (and (> (- (wd-get wd (cells-at wl k) (hd-x0)) cmax) thr)
                                             (not (tb-glued wd et (cells-at wl (- k 1)) (cells-at wl k) sty))))
                         (do (cells-push sg ri)
                             (cells-push sg (wd-get wd (cells-at wl cstart) (hd-x0)))
@@ -1916,8 +1921,8 @@
 (defn ^I32 tb-split-rows [^Cells rm ^I32 root ^Cells wd ^Cells et ^I32 w0 ^I32 w1 ^Cells xs ^:mut ^Cells ys
                           ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg ^:mut ^Cells ch ^:mut ^Cells occ ^:mut ^Cells rmap ^:mut ^Cells so ^:mut ^Cells bd]
   (comment "P12.2 (smoke review, issue 2: BLS, BEA, a 10-K): the rows of a lattice with fewer row cuts than its text has rows. A band between two")
-  (comment "rules that are drawn across every column, with a rule between every two columns or no word across the place where there is none (a header's")
-  (comment "column edges run down the page of the BEA's tables, undrawn), holds the rows of a table when the baselines of its words, told into table rows as an unruled table's")
+  (comment "rules that are drawn across every column, with no word crossing an undrawn outer boundary, holds the rows of a table when the baselines of its words, told into table rows as an unruled table's")
+  (comment "D1733: words may cross undrawn interior boundaries: those labels span columns in their own row, rather than blocking every row cut in the band. The baseline rows, told as an unruled table's")
   (comment "are (`tb-row-map`, the lattice's column boundaries the columns: a wrapped cell's tight lines are one row), make at least `TB_SPLIT_MIN` rows, three in")
   (comment "four of the baselines have words in two columns or more, and three in four have a digit (a header of two-line cells has none, or few: it is the")
   (comment "band's own). The cut between two such rows is at the middle of their baselines; the cuts are added to `ys` (kept in order) and listed in `so`")
@@ -1950,7 +1955,8 @@
           (set c 0)
           (while (and (<= c nc) (== closed 1))
             (do (if (not (tb-closed rm root 1 (cells-at xs c) (cells-at ys r) (cells-at ys (+ r 1))))
-                  (if (tb-crossed wd w0 w1 (cells-at xs c) (cells-at ys r) (cells-at ys (+ r 1))) (set closed 0)))
+                  (if (or (== c 0) (== c nc))
+                    (if (tb-crossed wd w0 w1 (cells-at xs c) (cells-at ys r) (cells-at ys (+ r 1))) (set closed 0))))
                 (set c (+ c 1))))
           (if (== closed 1)
             (do (set nb (tb-rows wd et w0 w1 (cells-at xs 0) (cells-at ys r) (cells-at xs nc) (cells-at ys (+ r 1)) wl rw sg))
@@ -2702,10 +2708,26 @@
   (if (and (>= c 1072) (<= c 1103)) (return 1))
   (return 0))
 
+(defn ^Bool tb-mostly-text [^Cells wd ^Cells tc ^Cells tw ^I32 cfirst ^I32 cend]
+  (comment "D1731: stable born-digital word boxes support the categorical grid; an OCR-only grid still needs the pre-existing table evidence.")
+  (let [^:mut ^I32 c cfirst
+        ^:mut ^I32 j 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 textwords 0]
+    (while (< c cend)
+      (do (set j 0)
+          (while (< j (cells-at tc (+ (* c TCS) 9)))
+            (do (set n (+ n 1))
+                (if (!= (bit-and (wd-get wd (cells-at tw (+ (cells-at tc (+ (* c TCS) 8)) j)) (wf-src)) (sr-text)) 0)
+                  (set textwords (+ textwords 1)))
+                (set j (+ j 1))))
+          (set c (+ c 1))))
+    (return (and (> n 0) (>= (* textwords 4) (* n 3))))))
+
 (defn ^I32 tb-score [^Cells tb ^I32 k ^Cells wd ^Cells et ^Cells tc ^Cells tw]
   (comment "The score (0 to 1000, 0 = not a table) of text-based candidate k of its profile (SPEC 10.5): prose in")
   (comment "columns is not a table, so cells that are long, or that end like sentences, refuse it. The whitespace")
-  (comment "profile has no rules or fills to vouch for it and asks for more: three columns or a numeric column, and a header.")
+  (comment "profile has no rules or fills to vouch for it and asks for more: numeric columns, a header, or a dense grid of at least four short categorical columns.")
   (let [^I32 b (* k TBS)
         ^I32 prof (cells-at tb (+ b 5))
         ^I32 ncols (cells-at tb (+ b 8))
@@ -2749,10 +2771,15 @@
       (do (if (> (* nw 10) (* ne 40)) (return 0))
           (set score 400)
           (if (>= ncols 3) (set score (+ score 100)))
-          (if (>= (tb-num-cols tb k 1 wd et tc tw) 1) (set score (+ score 100)))
+          (if (>= (tb-max (tb-num-cols tb k 1 wd et tc tw) (tb-num-cols tb k 0 wd et tc tw)) 1) (set score (+ score 100)))
           (if (>= (tb-head-rows tb k wd et tc tw) 1) (set score (+ score 100)))
           (if (>= nrows 4) (set score (+ score 50)))
-          (if (and (== ncols 2) (and (>= nrows 3) (and (== (tb-num-cols tb k 1 wd et tc tw) 1) (<= (* nw 10) (* ne 25)))))
+          (comment "D1731: a dense grid of at least four short categorical columns needs neither a numeric column nor a bold heading; the prose checks above still apply.")
+          (if (and (< score 600) (and (>= ncols 4) (and (>= nrows 4) (and (>= (* ne 5) (* (* nrows ncols) 4))
+                                                                 (tb-mostly-text wd tc tw cfirst cend)))))
+            (set score 600))
+          (comment "D1732: a three-row summary has no header: count its first amount as well as the other two, without changing a headed table's numeric-column test.")
+          (if (and (== ncols 2) (and (>= nrows 3) (and (== (tb-max (tb-num-cols tb k 1 wd et tc tw) (tb-num-cols tb k 0 wd et tc tw)) 1) (<= (* nw 10) (* ne 25)))))
             (set score (+ score 100)))
           (if (< score 600) (return 0))
           (return score)))

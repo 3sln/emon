@@ -33,6 +33,7 @@ This is a port of the Python scorer and is written to give identical numbers:
 strings are code-point sequences, the sequence matcher is difflib's algorithm
 (autojunk off), and float sums are CPython's compensated `sum`."
   (:require [accuracy.graphics :as G]
+            [accuracy.teds :as TED]
             [clojure.set]
             [clojure.string :as str]
             [nfc]
@@ -460,9 +461,67 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
                (let [a (cells g wt) b (cells p wt)]
                  [name (- 1.0 (div (lev a b) (max (count a) (count b) 1)))])))))
 
+(defn- table-inline-tokens [n]
+  (let [kind (get n "kind")
+        children (get n "children")
+        tags (case kind
+               "link" ["a"] "ref" [(if (some? (get n "target")) "a" "span")] "linebreak" ["br"]
+               "break" ["span"] "initial" ["span"] "field" ["span"] [])
+        tags (if (= kind "span")
+               (keep (fn [[style tag]] (when (contains? (set (get n "style")) style) tag))
+                     [["bold" "b"] ["italic" "i"] ["underline" "u"] ["strike" "s"]
+                      ["sub" "sub"] ["sup" "sup"] ["mono" "code"] ["smallcaps" "span"]]) tags)
+        tags (if (and (= kind "span") (empty? tags)) ["span"] tags)
+        content (cond
+                  (contains? #{"break" "linebreak"} kind) []
+                  (and (= kind "field") (contains? #{"checkbox" "radio"} (get n "type"))) []
+                  (and (= kind "field") (contains? n "value")) (cps (get n "value" ""))
+                  (seq children) (mapcat table-inline-tokens children)
+                  :else (cps (get n "text" (if (= kind "ref") (get n "marker" "") ""))))]
+    (concat (map #(str "<" % ">") tags)
+            content
+            (map #(str "</" % ">") (reverse tags)))))
+
+(defn table-html-tree
+  "The Model's canonical table HTML tree; captions and presentation attributes
+  do not enter TEDS. Cells are leaves, with their text used as the rename cost."
+  [n]
+  (let [k (get n "kind")
+        tag (case k "table" "table" "row" "tr"
+                  "rowgroup" (get {"head" "thead" "foot" "tfoot"} (get n "role") "tbody")
+                  "cell" (if (get n "header") "th" "td"))]
+    [[tag (get n "rowspan" 1) (get n "colspan" 1)
+      (if (= k "cell")
+        (vec (if (seq (get n "inlines")) (mapcat table-inline-tokens (get n "inlines"))
+                 (cps (get n "text" "")))) [])]
+     (if (= k "cell") []
+         (mapv table-html-tree (filter #(contains? #{"rowgroup" "row" "cell"} (get % "kind"))
+                                      (get n "children" []))))]))
+
+(defn table-teds [g p]
+  (let [a (table-html-tree g) b (table-html-tree p)
+        html-size (fn html-size [[[_ _ _ tokens] children]]
+                    (+ 1 (count (filter #(and (string? %) (str/starts-with? % "<")
+                                             (not (str/starts-with? % "</"))) tokens))
+                       (reduce + 0 (map html-size children))))
+        size (max (dec (html-size a)) (dec (html-size b)) 1)]
+    (into {} (for [[name text?] [["teds" true] ["teds-struct" false]]]
+               (let [shape (fn shape [[label children]]
+                             [(assoc label 3 "") (mapv shape children)])
+                     a (if text? a (shape a)) b (if text? b (shape b))
+                     rename (fn [[at ar ac ax] [bt br bc bx]]
+                              (cond (not= [at ar ac] [bt br bc]) 1.0
+                                    (and text? (contains? #{"td" "th"} at))
+                                    (- 1.0 (sim ax bx))
+                                    :else 0.0))
+                     {:keys [distance]} (if (= a b) {:distance 0.0}
+                                                (TED/distance a b rename))]
+                 ;; PubTabNet normalizes by descendants of <table>, excluding
+                 ;; the table root itself (src/metric.py, TEDS.evaluate).
+                 [name (max 0.0 (- 1.0 (/ distance size)))])))))
+
 (def STUBS
-  ["table.teds: real TEDS (tree edit distance over table HTML) not implemented; table-teds-lite is a cell-sequence stand-in"
-   "heading.hierarchy-teds: hierarchy TEDS not implemented (heading detection and level accuracy are)"
+  ["heading.hierarchy-teds: hierarchy TEDS not implemented (heading detection and level accuracy are)"
    "seals.name-cer: seal name/text CER is not split out of block text"
    "gold has no geometry: the IoU >= 0.5 rule is implemented and unit-tested but unexercised on the synthetic corpus"])
 
@@ -897,8 +956,11 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
         (let [ng (count (filter #(= "table" (get % "kind")) g))]
           (when (pos? ng)
             (let [tp_ (filter (fn [[i j]] (and (= (gk i) "table") (= "table" (pk j)))) pairs)
-                  s (mapv (fn [[i j]] (table-teds-lite (g i) (p j))) tp_)]
+                  s (mapv (fn [[i j]] (table-teds-lite (g i) (p j))) tp_)
+                  real (mapv (fn [[i j]] (table-teds (g i) (p j))) tp_)]
               (add "table.n" ng)
+              (add "table.teds-sum" (psum (map #(get % "teds") real)))
+              (add "table.teds-struct-sum" (psum (map #(get % "teds-struct") real)))
               (add "table.teds-lite-sum" (psum (map #(get % "teds") s)))
               (add "table.teds-struct-lite-sum" (psum (map #(get % "teds-struct") s)))
               (when (contains? (set (get attrs "table")) "continued")
@@ -982,6 +1044,8 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
         m (reduce (fn [m k] (prf m c (str "figure.kind." k) (str "figure-kind-" k))) m FIGURE-KINDS)
         m (if (pos? (get c "table.n" 0))
             (let [m (-> m
+                        (set* "table-teds" (div (c "table.teds-sum") (c "table.n")))
+                        (set* "table-teds-struct" (div (c "table.teds-struct-sum") (c "table.n")))
                         (set* "table-teds-lite" (div (c "table.teds-lite-sum") (c "table.n")))
                         (set* "table-teds-struct-lite" (div (c "table.teds-struct-lite-sum") (c "table.n"))))]
               (if (pos? (get c "table.continued.n" 0))

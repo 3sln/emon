@@ -1839,6 +1839,110 @@ func TestTheTotalUnderADoubleRuleIsARowOfTheTable(emonT *testing.T) {
 	port.AssertText(emonT, t2, "T3p;Gh;R;Ch[];Cc2he[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cs[Cash and equivalents];Ce[$ 33,672];Ce[$ 32,260];R;Cs[Short-term investments];Ce[129,619];Ce[92,774];R;Cs[Fixed maturity securities];Ce[23,758];Ce[25,128];R;Cs[Equity securities];Ce[353,842];Ce[308,793];R;Cs[Other];Ce[19,568];Ce[19,657];P[Total due];P[259,419];P[251,300];", "a block of totals that does not begin in the first column is not the table's, whatever its rule")
 }
 
+func TestADenseFourColumnTableNeedsNoPurelyNumericColumn(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	var r int32 = 0
+	// E14: salary bands are categorical values (currency ranges, 'or less', 'Greater than'), not pure numbers. Four aligned, dense columns of short cells are a table without a numeric column or bold header.
+	for r < 5 {
+		ttAt(wd, ln, et, port.TextBlob("Band"), 7200, 10000+(r*1600), 0, 0)
+		ttAt(wd, ln, et, port.TextBlob("Low"), 18000, 10000+(r*1600), 0, 0)
+		ttAt(wd, ln, et, port.TextBlob("Medium"), 28000, 10000+(r*1600), 0, 0)
+		ttAt(wd, ln, et, port.TextBlob("High"), 40000, 10000+(r*1600), 0, 0)
+		r += 1
+	}
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "categorical table: well formed")
+	port.AssertText(emonT, t, "T4w;Gb;R;C[Band];C[Low];C[Medium];C[High];R;C[Band];C[Low];C[Medium];C[High];R;C[Band];C[Low];C[Medium];C[High];R;C[Band];C[Low];C[Medium];C[High];R;C[Band];C[Low];C[Medium];C[High];", "a dense grid of four short categorical columns is a table")
+}
+
+func TestThreeLabelAndAmountRowsAreASummaryTable(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	ttAt(wd, ln, et, port.TextBlob("Subtotal"), 7200, 10000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("100.00"), 30000, 10000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Tax"), 7200, 11600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("15.00"), 30000, 11600, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Total"), 7200, 13200, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("115.00"), 30000, 13200, 1, 1)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "summary: well formed")
+	port.AssertText(emonT, t, "T2w;Gb;R;Cs[Subtotal];C[100.00];R;Cs[Tax];C[15.00];Gf;R;Cws[Total];Cw[115.00];", "three numeric rows need no separate header to qualify as a summary table")
+}
+
+func TestAnOcrOnlyCategoricalGridNeedsItsOwnTableEvidence(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	var r int32 = 0
+	for r < 5 {
+		ttAt(wd, ln, et, port.TextBlob("Band"), 7200, 10000+(r*1600), 0, 0)
+		ttAt(wd, ln, et, port.TextBlob("Low"), 18000, 10000+(r*1600), 0, 0)
+		ttAt(wd, ln, et, port.TextBlob("Medium"), 28000, 10000+(r*1600), 0, 0)
+		ttAt(wd, ln, et, port.TextBlob("High"), 40000, 10000+(r*1600), 0, 0)
+		r += 1
+	}
+	r = 0
+	for r < evidence.WdCount(wd) {
+		evidence.WdSet(wd, r, evidence.WfSrc(), 4)
+		r += 1
+	}
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "OCR-only grid: well formed")
+	port.AssertText(emonT, t, "P[Band];P[Low];P[Medium];P[High];P[Band];P[Low];P[Medium];P[High];P[Band];P[Low];P[Medium];P[High];P[Band];P[Low];P[Medium];P[High];P[Band];P[Low];P[Medium];P[High];", "the born-digital categorical rule does not relax an OCR-only grid's evidence threshold")
+}
+
+func TestAnUnruledBodyCanSpanTheHeadersColumns(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	var r int32 = 0
+	// E13: the ruled header has finer columns than the labels in the unruled body. A label crossing one undrawn boundary must span those columns without preventing the body's row cuts.
+	ttRule(pa, 7200, 9950, 37200, 10050)
+	ttRule(pa, 7200, 11950, 37200, 12050)
+	ttRule(pa, 7200, 17950, 37200, 18050)
+	ttRule(pa, 7150, 10000, 7250, 18000)
+	ttRule(pa, 37150, 10000, 37250, 18000)
+	ttRule(pa, 17150, 10000, 17250, 12000)
+	ttRule(pa, 27150, 10000, 27250, 12000)
+	ttAt(wd, ln, et, port.TextBlob("Group"), 7600, 10600, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Label"), 17600, 10600, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Value"), 27600, 10600, 1, 0)
+	for r < 3 {
+		ttWord(wd, ln, et, port.TextBlob("Category"), 7600, 12600+(r*1600), 22000, 13400+(r*1600), 0)
+		ttAt(wd, ln, et, port.TextBlob("12.50"), 27600, 12600+(r*1600), 0, 0)
+		r += 1
+	}
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "spanning unruled body: well formed")
+	port.AssertText(emonT, t, "T3r;Gh;R;Ch[Group];Ch[Label];Ch[Value];Gb;R;Cc2[Category];C[12.50];R;Cc2[Category];C[12.50];R;Cc2[Category];C[12.50];", "body rows survive a label spanning the header's first two columns")
+}
+
+func TestAPrefixCurrencySignStartsTheNextAmountEvenWithASmallGap(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	// D28: the next year's dollar sign is close to the preceding negative amount, but the sign is a prefix of its own amount, not the end of a chunk spanning both years.
+	ttStmtHead(wd, ln, et, pa)
+	ttAmt(wd, ln, et, 12800, 0, port.TextBlob("Income"), port.TextBlob("(22,759)"), port.TextBlob("89,937"))
+	ttAt(wd, ln, et, port.TextBlob("$"), 19800, 12800, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("$"), 26100, 12800, 0, 0)
+	ttAmt(wd, ln, et, 14400, 0, port.TextBlob("Investments"), port.TextBlob("129,619"), port.TextBlob("92,774"))
+	ttAmt(wd, ln, et, 16000, 0, port.TextBlob("Securities"), port.TextBlob("23,758"), port.TextBlob("25,128"))
+	ttAmt(wd, ln, et, 17600, 0, port.TextBlob("Equity"), port.TextBlob("353,842"), port.TextBlob("308,793"))
+	ttAmt(wd, ln, et, 19200, 0, port.TextBlob("Other"), port.TextBlob("19,568"), port.TextBlob("19,657"))
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "prefix signs: well formed")
+	port.AssertText(emonT, t, "T3w;Gh;R;Ch[];Cc2he[December 31,];R;Ch[];Che[2023];Che[2022];Gb;R;Cs[Income];Ce[$ (22,759)];Ce[$ 89,937];R;Cs[Investments];Ce[129,619];Ce[92,774];R;Cs[Securities];Ce[23,758];Ce[25,128];R;Cs[Equity];Ce[353,842];Ce[308,793];R;Cs[Other];Ce[19,568];Ce[19,657];", "a close prefix sign does not merge the two years into a spanning cell")
+}
+
 func ttGolden(pdf []byte, t *strings.Builder, tvt *strings.Builder) int32 {
 	// PDF -> content -> tables -> paragraphs -> Model -> pretty JSON; answer 0 when every step answered 0, else a
 	// code naming the step (1 open, 2 content, 3 the Model's check). The JSON is `t`. The tagged tree is read and joined (P5.5), and the
