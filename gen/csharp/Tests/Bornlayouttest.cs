@@ -271,4 +271,56 @@ public static class Bornlayouttest {
         BlModel(wd, ln, et, 2, nodes, attrs, regions, text, pages);
         emon.Testport.AssertEq(BlYes(BlFind(nodes, Model.NkCaption(), 1)), 1, "both body captions survive");
     }
+    [Xunit.Fact]
+    public static void TestAReferenceMarkerIsNoColumnOfItsOwn() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        int i = 0;
+        int w0 = 0;
+        int empty = 0;
+        int items = 0;
+        while (i < 12) {
+            BlLine(wd, ln, et, emon.Testport.TextBlob("ordinary body words continue across the left column here"), 1, 5000, 10000 + (i * 1000), 800);
+            w0 = Evidence.WdCount(wd);
+            if ((i % 3) == 0) {
+                if (i == 0) {
+                    BlLine(wd, ln, et, emon.Testport.TextBlob("[28] Alpha Beta a reference with several words"), 1, 30886, 10000 + (i * 1000), 800);
+                }
+                if (i == 3) {
+                    BlLine(wd, ln, et, emon.Testport.TextBlob("[29] Gamma Delta a reference with several words"), 1, 30886, 10000 + (i * 1000), 800);
+                }
+                if (i == 6) {
+                    BlLine(wd, ln, et, emon.Testport.TextBlob("[30] Epsilon Zeta a reference with several words"), 1, 30886, 10000 + (i * 1000), 800);
+                }
+                if (i == 9) {
+                    BlLine(wd, ln, et, emon.Testport.TextBlob("[31] Eta Theta a reference with several words"), 1, 30886, 10000 + (i * 1000), 800);
+                }
+            } else {
+                BlLine(wd, ln, et, emon.Testport.TextBlob("wrapped reference text continues in this column here"), 1, 32922, 10000 + (i * 1000), 800);
+            }
+            if ((i % 3) == 0) {
+                Evidence.WdSet(wd, w0, Evidence.HdX1(), 31886);
+            }
+            i += 1;
+        }
+        BlModel(wd, ln, et, 1, nodes, attrs, regions, text, pages);
+        i = 0;
+        while (i < Model.NodeCount(nodes)) {
+            if (Model.NodeKind(nodes, i) == Model.NkItem()) {
+                items += 1;
+                if ((Model.NodeTextLen(nodes, i) == 0) && (Model.NodeFirstChild(nodes, i) < 0)) {
+                    empty += 1;
+                }
+            }
+            i += 1;
+        }
+        emon.Testport.AssertEq(items, 4, "one item per reference entry");
+        emon.Testport.AssertEq(empty, 0, "the gutter leaves no empty marker items apart from their text");
+    }
 }

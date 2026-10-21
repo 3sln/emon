@@ -465,6 +465,39 @@ public final class Paratest {
         ptBrief(t2, nodes, regions, text);
         emon.Testport.assertText(t2, "P1:alpha beta gamma delta epsilon zeta eta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega;", "lines of one size are one paragraph");
     }
+    public static void testAPageMilestonePrecedesItsQueuedTurnedLines() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells ord = emon.Port.newCells();
+        emon.Port.Cells raw = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        emon.Port.Cells fr = emon.Port.newCells();
+        emon.Port.Cells gp = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        StringBuilder only = emon.Testport.newText();
+        StringBuilder mixed = emon.Testport.newText();
+        // A page containing only non-upright lines must keep its milestone before those lines.
+        ptLine(wd, ln, et, emon.Testport.textBlob("First page."), 1, 7200, 10000, 30000, 11200, 0, 0, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("Turned label"), 2, 3000, 8000, 4200, 19000, 9000, 0, 1000);
+        emon.Testport.assertEq(ptRun(wd, ln, et, 2, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "turned page: well formed");
+        ptBrief(only, nodes, regions, text);
+        emon.Testport.assertText(only, "P1:First page.;B2;P1:Turned label;", "the page starts before its queued lines");
+        ptClear(wd, ln, et);
+        ptLine(wd, ln, et, emon.Testport.textBlob("First page."), 1, 7200, 10000, 30000, 11200, 0, 0, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("Turned label"), 2, 3000, 8000, 4200, 19000, 9000, 0, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("Second page."), 2, 7200, 10000, 30000, 11200, 0, 0, 1000);
+        emon.Testport.assertEq(ptRun(wd, ln, et, 2, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "mixed page: well formed");
+        ptBrief(mixed, nodes, regions, text);
+        emon.Testport.assertText(mixed, "P1:First page.;B2;P1:Turned label;P1:Second page.;", "a top side label follows the milestone and precedes the body");
+    }
     public static void testALabelTurnedAQuarterStandsWhereItsTopIsAndNotAtThePagesEnd() {
         emon.Port.Cells wd = emon.Port.newCells();
         emon.Port.Cells ln = emon.Port.newCells();

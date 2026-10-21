@@ -247,7 +247,7 @@ public static class Columns {
         }
         return 1;
     }
-    internal static int LcSplit(emon.Port.Cells wd, emon.Port.Cells lt, emon.Port.Cells ls, int l, int gx0, int gx1) {
+    internal static int LcSplit(emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells lt, emon.Port.Cells ls, int l, int gx0, int gx1) {
         // Split line l at the gutter [gx0, gx1] when its words are on both sides of it, each side's together
         // (left to right or right to left): l keeps the first run, a new line (appended to `lt` and `ls`) the
         // second. Answers 1 when it split.
@@ -276,6 +276,22 @@ public static class Columns {
         }
         if (flips != 1) {
             return 0;
+        }
+        // A list marker belongs to the text that follows it even when a gutter's continuation crosses the marker's hanging indent. Keep its word and line identity, but use the text's edge to assign the intact item to its column.
+        if (cut == 1) {
+            int ts = Evidence.WdGet(wd, w0, Evidence.HdTstart());
+            if ((ts >= 0) && (Evidence.WdGet(wd, w0, Evidence.HdTlen()) > 0)) {
+                if (emon.Port.CellsAt(et, ts) == Lists.LsSItem()) {
+                    if (Evidence.LnGet(lt, l, Evidence.LhDir()) == 0) {
+                        emon.Port.CellsSet(lt, (l * 16) + Evidence.LhX0(), Evidence.WdGet(wd, w0 + 1, Evidence.HdX0()));
+                        emon.Port.CellsSet(lt, (l * 16) + Evidence.LhBx0(), Evidence.WdGet(wd, w0 + 1, Evidence.HdBx0()));
+                    } else {
+                        emon.Port.CellsSet(lt, (l * 16) + Evidence.LhX1(), Evidence.WdGet(wd, w0 + 1, Evidence.HdX1()));
+                        emon.Port.CellsSet(lt, (l * 16) + Evidence.LhBx1(), Evidence.WdGet(wd, w0 + 1, Evidence.HdBx1()));
+                    }
+                    return 0;
+                }
+            }
         }
         while (f < 16) {
             v = emon.Port.CellsAt(lt, (l * 16) + f);
@@ -1146,7 +1162,7 @@ public static class Columns {
         }
         return 0;
     }
-    internal static int LcSplitAll(emon.Port.Cells wd, emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells gu) {
+    internal static int LcSplitAll(emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells gu) {
         // SPLIT (step 2): every line inside a gutter's extent whose words are on both sides of it.
         int ng = emon.Port.CellsLen(gu) / GuStride;
         int g = 0;
@@ -1162,7 +1178,7 @@ public static class Columns {
                 int l = emon.Port.CellsAt(ls, i);
                 int ym = LcYm2(lt, l);
                 if ((ym >= top2) && (ym <= bot2)) {
-                    LcSplit(wd, lt, ls, l, gx0, gx1);
+                    LcSplit(wd, et, lt, ls, l, gx0, gx1);
                 }
                 i += 1;
             }
@@ -1882,7 +1898,7 @@ public static class Columns {
         LcSweep(wd, lt, ls, dom, it, io, rw, gu, ac, tm);
         LcMerge(gu, dom);
         LcSortGu(gu);
-        LcSplitAll(wd, lt, ls, gu);
+        LcSplitAll(wd, et, lt, ls, gu);
         LcSortLines(lt, ls, 0, emon.Port.CellsLen(ls));
         LcExtendUp(wd, lt, ls, gu, dom);
         LcTree(lt, ls, gu, ac, tm, rw, cf, lo, pr, page);

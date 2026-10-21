@@ -476,6 +476,56 @@ func spRuledInk(mask *port.Cells, zw int32, zh int32, wpx int32, ink int32) int3
 	return 0
 }
 
+func spMixedInks(src *port.Bitmap, zx0 int32, zy0 int32, mask *port.Cells, zw int32, zh int32, ink int32) int32 {
+	// Distinct strongly chromatic inks in a rule's zone are chart curves, not one pen. Ignore neutral ink and antialiasing; each of two dominant channels must have at least the minimum pen ink and five per cent of the zone's ink.
+	var x int32 = 0
+	var y int32 = 0
+	var nr int32 = 0
+	var ng int32 = 0
+	var nb int32 = 0
+	var r int32 = 0
+	var g int32 = 0
+	var b int32 = 0
+	var have int32 = 0
+	if port.BitmapChannels(src) < 3 {
+		return 0
+	}
+	for y < zh {
+		x = 0
+		for x < zw {
+			if port.CellsAt(mask, (y*zw)+x) == 1 {
+				r = port.BitmapU8(src, zx0+x, zy0+y, 0)
+				g = port.BitmapU8(src, zx0+x, zy0+y, 1)
+				b = port.BitmapU8(src, zx0+x, zy0+y, 2)
+				if ((r - g) > SpSpread()) && ((r - b) > SpSpread()) {
+					nr += 1
+				}
+				if ((g - r) > SpSpread()) && ((g - b) > SpSpread()) {
+					ng += 1
+				}
+				if ((b - r) > SpSpread()) && ((b - g) > SpSpread()) {
+					nb += 1
+				}
+			}
+			x += 1
+		}
+		y += 1
+	}
+	if (nr >= SpMinInk()) && ((nr * 20) >= ink) {
+		have += 1
+	}
+	if (ng >= SpMinInk()) && ((ng * 20) >= ink) {
+		have += 1
+	}
+	if (nb >= SpMinInk()) && ((nb * 20) >= ink) {
+		have += 1
+	}
+	if have >= 2 {
+		return 1
+	}
+	return 0
+}
+
 func spJudge(page1 int32, views *port.Cells, srcview int32, owords *port.Cells, etext *port.Cells, src *port.Bitmap, rules *port.Cells, row int32, zx0 int32, zy0 int32, mask *port.Cells, n int32, zw int32, zh int32, cand *port.Cells) int32 {
 	// Is the ink of a zone (statistics at mask[n...]) a pen's? Add a candidate when it is: the box, the stroke width, the loops of the path, the coverage, no legible word, then the size says
 	// signature or initials. Answers 1 when added.
@@ -551,6 +601,9 @@ func spJudge(page1 int32, views *port.Cells, srcview int32, owords *port.Cells, 
 		kind = 3
 	}
 	if kind == 0 {
+		return 0
+	}
+	if spMixedInks(src, zx0, zy0, mask, zw, zh, ink) == 1 {
 		return 0
 	}
 	conf = 600

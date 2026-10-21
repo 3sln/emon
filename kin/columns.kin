@@ -40,6 +40,7 @@
             [emon.evidence :refer [wd-get ln-get ln-count lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-bx0 lh-by0 lh-bx1
                                    lh-by1 lh-rot lh-dir lh-first lh-count hd-x0 hd-x1 hd-y0 hd-y1 hd-bx0 hd-by0
                                    hd-bx1 hd-by1 hd-tstart hd-tlen hd-line wf-size]]
+            [emon.lists :refer [ls-s-item]]
             [emon.model :refer [rl-body rl-margin rl-sidebar page-w]]
             [emon.glayer :refer [gfl-count gfl-get gff-page gff-x0 gff-y0 gff-x1 gff-y1 gff-colour]]
             [kin.lang :refer [defn defconst return let set while if do comment
@@ -271,7 +272,7 @@
   (if (< (+ (wd-get wd w (hd-x0)) (wd-get wd w (hd-x1))) gm2) (return 0))
   (return 1))
 
-(defn ^I32 lc-split [^Cells wd ^:mut ^Cells lt ^:mut ^Cells ls ^I32 l ^I32 gx0 ^I32 gx1]
+(defn ^I32 lc-split [^Cells wd ^Cells et ^:mut ^Cells lt ^:mut ^Cells ls ^I32 l ^I32 gx0 ^I32 gx1]
   (comment "Split line l at the gutter [gx0, gx1] when its words are on both sides of it, each side's together")
   (comment "(left to right or right to left): l keeps the first run, a new line (appended to `lt` and `ls`) the")
   (comment "second. Answers 1 when it split.")
@@ -295,6 +296,17 @@
                 (set prev s)))
           (set k (+ k 1))))
     (if (!= flips 1) (return 0))
+    (comment "A list marker belongs to the text that follows it even when a gutter's continuation crosses the marker's hanging indent. Keep its word and line identity, but use the text's edge to assign the intact item to its column.")
+    (if (== cut 1)
+      (do (let [^I32 ts (wd-get wd w0 (hd-tstart))]
+            (if (and (>= ts 0) (> (wd-get wd w0 (hd-tlen)) 0))
+              (if (== (cells-at et ts) (ls-s-item))
+                (do (if (== (ln-get lt l (lh-dir)) 0)
+                      (do (cells-set lt (+ (* l 16) (lh-x0)) (wd-get wd (+ w0 1) (hd-x0)))
+                          (cells-set lt (+ (* l 16) (lh-bx0)) (wd-get wd (+ w0 1) (hd-bx0))))
+                      (do (cells-set lt (+ (* l 16) (lh-x1)) (wd-get wd (+ w0 1) (hd-x1)))
+                          (cells-set lt (+ (* l 16) (lh-bx1)) (wd-get wd (+ w0 1) (hd-bx1)))))
+                    (return 0)))))))
     (while (< f 16)
       (do (set v (cells-at lt (+ (* l 16) f)))
           (cells-push lt v)
@@ -1016,7 +1028,7 @@
           (set i (+ i 1))))
     (return 0)))
 
-(defn ^I32 lc-split-all [^Cells wd ^:mut ^Cells lt ^:mut ^Cells ls ^Cells gu]
+(defn ^I32 lc-split-all [^Cells wd ^Cells et ^:mut ^Cells lt ^:mut ^Cells ls ^Cells gu]
   (comment "SPLIT (step 2): every line inside a gutter's extent whose words are on both sides of it.")
   (let [^I32 ng (quot (cells-len gu) GU_STRIDE)
         ^:mut ^I32 g 0
@@ -1032,7 +1044,7 @@
               (do (let [^I32 l (cells-at ls i)
                         ^I32 ym (lc-ym2 lt l)]
                     (if (and (>= ym top2) (<= ym bot2))
-                      (lc-split wd lt ls l gx0 gx1)))
+                      (lc-split wd et lt ls l gx0 gx1)))
                   (set i (+ i 1)))))
           (set g (+ g 1))))
     (return 0)))
@@ -1655,7 +1667,7 @@
     (lc-sweep wd lt ls dom it io rw gu ac tm)
     (lc-merge gu dom)
     (lc-sort-gu gu)
-    (lc-split-all wd lt ls gu)
+    (lc-split-all wd et lt ls gu)
     (lc-sort-lines lt ls 0 (cells-len ls))
     (lc-extend-up wd lt ls gu dom)
     (lc-tree lt ls gu ac tm rw cf lo pr page)

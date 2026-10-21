@@ -249,9 +249,11 @@ public static class Fields {
         return 0;
     }
     internal static int FlLeft(emon.Port.Cells bt, int nb, int page, int x0, int y0, int y1, emon.Port.Cells @out, int at) {
-        // The label to the left on the box's line (rule 2): its block row, and the gap, into out[at], out[at + 1]; -1 when there is none that is near enough or joined by a leader.
+        // The left label on the box's line: a label's own explicit leaders beat a nearby bare row number; otherwise retain the nearest-label and separate-bridge rules.
         int best = -1;
         int bestgap = 2000000000;
+        int bestlink = 0;
+        int link = 0;
         int b = 0;
         int o = 0;
         int gap = 0;
@@ -259,15 +261,17 @@ public static class Fields {
             o = b * FlB;
             if ((emon.Port.CellsAt(bt, o + 1) == page) && ((emon.Port.CellsAt(bt, o + 6) % 2) == 1)) {
                 gap = x0 - emon.Port.CellsAt(bt, o + 4);
-                if ((gap >= (0 - FlTol)) && (gap < bestgap) && (FlSameLine(bt, b, y0, y1) == 1)) {
+                link = emon.Port.CellsAt(bt, o + 7);
+                if ((gap >= (0 - FlTol)) && (FlSameLine(bt, b, y0, y1) == 1) && ((best < 0) || ((link > bestlink) || ((link == bestlink) && (gap < bestgap))))) {
                     best = b;
                     bestgap = gap;
+                    bestlink = link;
                 }
             }
             b += 1;
         }
         if (best >= 0) {
-            if (emon.Port.CellsAt(bt, (best * FlB) + 7) == 1) {
+            if (bestlink == 1) {
                 bestgap = 0;
             } else if (bestgap > FlNearL) {
                 if (FlBridged(bt, nb, page, y0, y1, best, x0) == 0) {
@@ -747,6 +751,68 @@ public static class Fields {
         }
         return 0;
     }
+    internal static int FlUnattachedDots(emon.Port.Cells on, emon.Port.Cells orr, emon.Port.Cells text, emon.Port.Cells fc, int n) {
+        // Printing-dot paragraphs on forms are omitted unless they bridge an actual field and its label. Keep an unspaced ellipsis and any inline content; orphan fields are emitted separately from their omitted anchor.
+        if ((Model.NodeKind(on, n) != Model.NkParagraph()) || (Model.NodeFirstChild(on, n) >= 0)) {
+            return 0;
+        }
+        int ts = Model.NodeTextStart(on, n);
+        int tlen = Model.NodeTextLen(on, n);
+        int nf = emon.Port.CellsLen(fc) / FlW;
+        int j = 0;
+        int dots = 0;
+        int spaces = 0;
+        int r = 0;
+        int f = 0;
+        int o = 0;
+        int lr = 0;
+        int ov = 0;
+        int sm = 0;
+        if ((ts < 0) || (tlen <= 0)) {
+            return 0;
+        }
+        while (j < tlen) {
+            int c = emon.Port.CellsAt(text, ts + j);
+            if ((c == 46) || (c == 183)) {
+                dots += 1;
+            } else if ((c == 32) || (c == 160)) {
+                spaces += 1;
+            } else {
+                return 0;
+            }
+            j += 1;
+        }
+        if ((dots == 0) || ((dots > 1) && (spaces == 0))) {
+            return 0;
+        }
+        r = Model.NodeRegionHead(on, n);
+        while (r >= 0) {
+            f = 0;
+            while (f < nf) {
+                o = f * FlW;
+                if ((emon.Port.CellsAt(fc, o + 7) <= 1) && (emon.Port.CellsAt(fc, o + 1) == Model.RegionPage(orr, r)) && (emon.Port.CellsAt(fc, o + 2) >= (Model.RegionX1(orr, r) - FlTol)) && (FlHasWords(on, text, emon.Port.CellsAt(fc, o + 6)) == 1)) {
+                    ov = FlMin(emon.Port.CellsAt(fc, o + 5), Model.RegionY1(orr, r)) - FlMax(emon.Port.CellsAt(fc, o + 3), Model.RegionY0(orr, r));
+                    sm = FlMin(emon.Port.CellsAt(fc, o + 5) - emon.Port.CellsAt(fc, o + 3), Model.RegionY1(orr, r) - Model.RegionY0(orr, r));
+                    if ((ov > 0) && ((ov * 2) >= sm)) {
+                        lr = Model.NodeRegionHead(on, emon.Port.CellsAt(fc, o + 6));
+                        while (lr >= 0) {
+                            if ((Model.RegionPage(orr, lr) == Model.RegionPage(orr, r)) && (Model.RegionX1(orr, lr) <= (Model.RegionX0(orr, r) + FlTol))) {
+                                ov = FlMin(Model.RegionY1(orr, lr), Model.RegionY1(orr, r)) - FlMax(Model.RegionY0(orr, lr), Model.RegionY0(orr, r));
+                                sm = FlMin(Model.RegionY1(orr, lr) - Model.RegionY0(orr, lr), Model.RegionY1(orr, r) - Model.RegionY0(orr, r));
+                                if ((ov > 0) && ((ov * 2) >= sm)) {
+                                    return 0;
+                                }
+                            }
+                            lr = Model.RegionNext(orr, lr);
+                        }
+                    }
+                }
+                f += 1;
+            }
+            r = Model.RegionNext(orr, r);
+        }
+        return 1;
+    }
     internal static int FlTree(emon.Port.Cells on, emon.Port.Cells oa, emon.Port.Cells orr, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells nm, emon.Port.Cells an, emon.Port.Cells txt, emon.Port.Cells fc, emon.Port.Cells fh, int n, int np) {
         // Copy old node n and its subtree as the last child of new node np (-1: a new root), with the fields that go in it: those before its text first, then its
         // children (a block that was plain text gets a `text` inline for its words), the fields after its text before its first block child, and the paragraph of the
@@ -761,6 +827,12 @@ public static class Fields {
         int t = 0;
         if ((hp >= 0) && (np >= 0)) {
             FlOrphans(an, txt, fc, hp, nodes, attrs, regions, text, np);
+        }
+        if ((hb < 0) && (ha < 0) && (FlUnattachedDots(on, orr, text, fc, n) == 1)) {
+            if ((ho >= 0) && (np >= 0)) {
+                FlOrphans(an, txt, fc, ho, nodes, attrs, regions, text, np);
+            }
+            return -1;
         }
         nn = Restruct.RsNode(on, oa, orr, nodes, attrs, regions, nm, n, np);
         if (nn < 0) {

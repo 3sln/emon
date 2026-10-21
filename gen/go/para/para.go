@@ -634,6 +634,59 @@ func paLeaderOnly(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32) bool 
 	return dots >= 3
 }
 
+func paFormMarker(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32) int32 {
+	// An unpunctuated form-row marker: up to three digits and an optional lower-case letter (1), or a single lower-case letter (2).
+	var w int32 = evidence.LnGet(ln, l, evidence.LhFirst())
+	var ts int32 = evidence.WdGet(wd, w, evidence.HdTstart())
+	var n int32 = evidence.WdGet(wd, w, evidence.HdTlen())
+	var j int32 = 0
+	if (ts < 0) || ((n < 1) || (n > 4)) {
+		return 0
+	}
+	if (n == 1) && ((port.CellsAt(et, ts) >= 97) && (port.CellsAt(et, ts) <= 122)) {
+		return 2
+	}
+	for (j < n) && ((port.CellsAt(et, ts+j) >= 48) && (port.CellsAt(et, ts+j) <= 57)) {
+		j += 1
+	}
+	if (j == 0) || (j > 3) {
+		return 0
+	}
+	if j == n {
+		return 1
+	}
+	if (j == (n - 1)) && ((port.CellsAt(et, ts+j) >= 97) && (port.CellsAt(et, ts+j) <= 122)) {
+		return 1
+	}
+	return 0
+}
+
+func paLineLeaderTail(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32) bool {
+	var first int32 = evidence.LnGet(ln, l, evidence.LhFirst())
+	var w int32 = (first + evidence.LnGet(ln, l, evidence.LhCount())) - 1
+	var dots int32 = 0
+	var j int32 = 0
+	for w >= first {
+		var ts int32 = evidence.WdGet(wd, w, evidence.HdTstart())
+		var n int32 = evidence.WdGet(wd, w, evidence.HdTlen())
+		if ts < 0 {
+			return dots >= 3
+		}
+		j = n - 1
+		for j >= 0 {
+			var c int32 = port.CellsAt(et, ts+j)
+			if (c == 46) || ((c == 8230) || (c == 183)) {
+				dots += 1
+			} else {
+				return dots >= 3
+			}
+			j -= 1
+		}
+		w -= 1
+	}
+	return dots >= 3
+}
+
 func paBigLeadin(wd *port.Cells, ln *port.Cells, l int32) bool {
 	// P12.7 (smoke B side effect): does line l begin with a run-in head set larger than the rest of the line: at least two words, each over 4 per cent bigger than the line's dominant size, followed by at least three words
 	// of the dominant size. The Russian declaration's clauses, `принимая во внимание, что ...`, each begin so: with no gap and no indent between them, the lead-in is the only sign that a clause is a paragraph (the heading
@@ -726,6 +779,17 @@ func paNewPar(wd *port.Cells, ln *port.Cells, et *port.Cells, a int32, b int32, 
 	}
 	if evidence.LnGet(ln, a, evidence.LhDir()) != evidence.LnGet(ln, b, evidence.LhDir()) {
 		return 1 == 1
+	}
+	// Dotted form rows retain their explicit label boundaries; a separate numeric marker column retains the same rows. Unmarked wrapped prose continues normally.
+	var ma int32 = paFormMarker(wd, ln, et, a)
+	var mb int32 = paFormMarker(wd, ln, et, b)
+	if (ma > 0) && (mb > 0) {
+		if paLineLeaderTail(wd, ln, et, a) {
+			return 1 == 1
+		}
+		if (ma == 1) && ((mb == 1) && ((evidence.LnGet(ln, a, evidence.LhCount()) == 1) && (evidence.LnGet(ln, b, evidence.LhCount()) == 1))) {
+			return 1 == 1
+		}
 	}
 	if !paBelow(ln, a, b) {
 		return 1 == 1
@@ -1908,7 +1972,7 @@ func paNotes(wd *port.Cells, ln *port.Cells, et *port.Cells, nodes *port.Cells, 
 	return pend
 }
 
-func paClose(wd *port.Cells, ln *port.Cells, et *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, al *port.Cells, ii *port.Cells, cf *port.Cells, lo *port.Cells, dq *port.Cells, med int32, from int32, cur int32, ty int32, hc *port.Cells) int32 {
+func paClose(wd *port.Cells, ln *port.Cells, et *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, al *port.Cells, ii *port.Cells, cf *port.Cells, lo *port.Cells, dq *port.Cells, med int32, from int32, cur int32, ty int32, beforePage int32, hc *port.Cells) int32 {
 	// Close the open paragraph, then write the side fragments that were read to (`pa-notes`), then make a
 	// paragraph of each line queued in `dq` (the lines that are not upright, D136) and empty the queue.
 	// Answers the first side row not written yet.
@@ -1934,6 +1998,10 @@ func paClose(wd *port.Cells, ln *port.Cells, et *port.Cells, nodes *port.Cells, 
 			if (pg == port.CellsAt(cf, (cur*cfStride)+cfPage)) && (evidence.LnGet(ln, l, evidence.LhY0()) <= ty) {
 				now = 1
 			}
+		}
+		// The next page cannot emit queued lines until its page milestone has been written.
+		if (beforePage > 0) && (pg >= beforePage) {
+			now = 0
 		}
 		if now == 1 {
 			paFragOpen(fr, ln, pg, l, 0)
@@ -2089,6 +2157,7 @@ func PaBuild(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, la
 	var tcur int32 = 0
 	var k0 int32 = 0
 	var opn int32 = 0
+	var beforePage int32 = 0
 	var score int32 = 0
 	initial.InRetire(lt, ii)
 	paColumns(wd, et, npages, pages, layout, lt, ord, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr)
@@ -2122,12 +2191,13 @@ func PaBuild(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, la
 			r1 += 1
 		}
 		if r == r1 {
-			pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, hc)
+			pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, p, hc)
 			open = 0
 			prev = -1
 			if p > 1 {
 				paMilestone(nodes, p, hc)
 			}
+			pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, 0, hc)
 			tcur = paTables(tb, tcur, p, paAll, -1, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc)
 		} else {
 			i = r
@@ -2164,9 +2234,16 @@ func PaBuild(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, la
 					}
 					if cont == 0 {
 						ty = evidence.LnGet(lt, b, evidence.LhY0())
-						pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, i, ty, hc)
+						beforePage = 0
+						if i == r {
+							beforePage = p
+						}
+						pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, i, ty, beforePage, hc)
 						if (i == r) && (p > 1) {
 							paMilestone(nodes, p, hc)
+						}
+						if i == r {
+							pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, i, ty, 0, hc)
 						}
 						tcur = paTables(tb, tcur, p, paYmid2(lt, b), b, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc)
 						paFragOpen(fr, lt, p, b, 0)
@@ -2187,7 +2264,7 @@ func PaBuild(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, la
 						if table.TbClaimed(lt, b) == 0 {
 							if (initial.InRow(lt, b) >= 0) || (paNewPar(wd, lt, et, prev, b, med, mg, hc) || table.TbDueFor(tb, tcur, p, paYmid2(lt, b), lt, b)) {
 								ty = evidence.LnGet(lt, b, evidence.LhY0())
-								pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, i, ty, hc)
+								pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, i, ty, 0, hc)
 								tcur = paTables(tb, tcur, p, paYmid2(lt, b), b, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc)
 								paFragOpen(fr, lt, p, b, 0)
 								paIniStart(wd, lt, et, raw, fr, ii, b)
@@ -2205,7 +2282,7 @@ func PaBuild(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, la
 				i += 1
 			}
 			if table.TbDue(tb, tcur, p, paAll) {
-				pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, hc)
+				pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, 0, hc)
 				open = 0
 				prev = -1
 				tcur = paTables(tb, tcur, p, paAll, -1, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc)
@@ -2213,7 +2290,7 @@ func PaBuild(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, la
 		}
 		p += 1
 	}
-	paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, hc)
+	paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, 0, hc)
 	align.AlPass(nodes, attrs, al, tm)
 	return 0
 }

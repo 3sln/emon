@@ -556,6 +556,57 @@ pub(crate) fn pa_leader_only(wd: &mut crate::port::Cells, ln: &mut crate::port::
     }
     return dots >= 3;
 }
+pub(crate) fn pa_form_marker(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, l: i32) -> i32 {
+    // An unpunctuated form-row marker: up to three digits and an optional lower-case letter (1), or a single lower-case letter (2).
+    let w: i32 = ln_get(ln, l, lh_first());
+    let ts: i32 = wd_get(wd, w, hd_tstart());
+    let n: i32 = wd_get(wd, w, hd_tlen());
+    let mut j: i32 = 0;
+    if (ts < 0) || ((n < 1) || (n > 4)) {
+        return 0;
+    }
+    if (n == 1) && ((crate::port::cells_at(et, ts) >= 97) && (crate::port::cells_at(et, ts) <= 122)) {
+        return 2;
+    }
+    while (j < n) && ((crate::port::cells_at(et, ts + j) >= 48) && (crate::port::cells_at(et, ts + j) <= 57)) {
+        j += 1;
+    }
+    if (j == 0) || (j > 3) {
+        return 0;
+    }
+    if j == n {
+        return 1;
+    }
+    if (j == (n - 1)) && ((crate::port::cells_at(et, ts + j) >= 97) && (crate::port::cells_at(et, ts + j) <= 122)) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn pa_line_leader_tail(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, l: i32) -> bool {
+    let first: i32 = ln_get(ln, l, lh_first());
+    let mut w: i32 = (first + ln_get(ln, l, lh_count())) - 1;
+    let mut dots: i32 = 0;
+    let mut j: i32 = 0;
+    while w >= first {
+        let ts: i32 = wd_get(wd, w, hd_tstart());
+        let n: i32 = wd_get(wd, w, hd_tlen());
+        if ts < 0 {
+            return dots >= 3;
+        }
+        j = n - 1;
+        while j >= 0 {
+            let c: i32 = crate::port::cells_at(et, ts + j);
+            if (c == 46) || ((c == 8230) || (c == 183)) {
+                dots += 1;
+            } else {
+                return dots >= 3;
+            }
+            j -= 1;
+        }
+        w -= 1;
+    }
+    return dots >= 3;
+}
 pub(crate) fn pa_big_leadin(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, l: i32) -> bool {
     // P12.7 (smoke B side effect): does line l begin with a run-in head set larger than the rest of the line: at least two words, each over 4 per cent bigger than the line's dominant size, followed by at least three words
     // of the dominant size. The Russian declaration's clauses, `принимая во внимание, что ...`, each begin so: with no gap and no indent between them, the lead-in is the only sign that a clause is a paragraph (the heading
@@ -646,6 +697,17 @@ pub(crate) fn pa_new_par(wd: &mut crate::port::Cells, ln: &mut crate::port::Cell
     }
     if ln_get(ln, a, lh_dir()) != ln_get(ln, b, lh_dir()) {
         return 1 == 1;
+    }
+    // Dotted form rows retain their explicit label boundaries; a separate numeric marker column retains the same rows. Unmarked wrapped prose continues normally.
+    let ma: i32 = pa_form_marker(wd, ln, et, a);
+    let mb: i32 = pa_form_marker(wd, ln, et, b);
+    if (ma > 0) && (mb > 0) {
+        if pa_line_leader_tail(wd, ln, et, a) {
+            return 1 == 1;
+        }
+        if (ma == 1) && ((mb == 1) && ((ln_get(ln, a, lh_count()) == 1) && (ln_get(ln, b, lh_count()) == 1))) {
+            return 1 == 1;
+        }
     }
     if !pa_below(ln, a, b) {
         return 1 == 1;
@@ -1790,7 +1852,7 @@ pub(crate) fn pa_notes(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells,
     }
     return pend;
 }
-pub(crate) fn pa_close(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut fr: &mut crate::port::Cells, mut al: &mut crate::port::Cells, ii: &mut crate::port::Cells, mut cf: &mut crate::port::Cells, lo: &mut crate::port::Cells, mut dq: &mut crate::port::Cells, med: i32, from: i32, cur: i32, ty: i32, mut hc: &mut crate::port::Cells) -> i32 {
+pub(crate) fn pa_close(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut fr: &mut crate::port::Cells, mut al: &mut crate::port::Cells, ii: &mut crate::port::Cells, mut cf: &mut crate::port::Cells, lo: &mut crate::port::Cells, mut dq: &mut crate::port::Cells, med: i32, from: i32, cur: i32, ty: i32, before_page: i32, mut hc: &mut crate::port::Cells) -> i32 {
     // Close the open paragraph, then write the side fragments that were read to (`pa-notes`), then make a
     // paragraph of each line queued in `dq` (the lines that are not upright, D136) and empty the queue.
     // Answers the first side row not written yet.
@@ -1816,6 +1878,10 @@ pub(crate) fn pa_close(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells,
             if (pg == crate::port::cells_at(cf, (cur * CF_STRIDE) + CF_PAGE)) && (ln_get(ln, l, lh_y0()) <= ty) {
                 now = 1;
             }
+        }
+        // The next page cannot emit queued lines until its page milestone has been written.
+        if (before_page > 0) && (pg >= before_page) {
+            now = 0;
         }
         if now == 1 {
             pa_frag_open(fr, ln, pg, l, 0);
@@ -1966,6 +2032,7 @@ pub fn pa_build(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, npages
     let mut tcur: i32 = 0;
     let mut k0: i32 = 0;
     let mut opn: i32 = 0;
+    let mut before_page: i32 = 0;
     let mut score: i32 = 0;
     in_retire(lt, ii);
     pa_columns(wd, et, npages, pages, layout, lt, ord, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr);
@@ -1999,12 +2066,13 @@ pub fn pa_build(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, npages
             r1 += 1;
         }
         if r == r1 {
-            pend = pa_close(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, hc);
+            pend = pa_close(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, p, hc);
             open = 0;
             prev = -1;
             if p > 1 {
                 pa_milestone(nodes, p, hc);
             }
+            pend = pa_close(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, 0, hc);
             tcur = pa_tables(tb, tcur, p, PA_ALL, -1, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
         } else {
             i = r;
@@ -2041,9 +2109,16 @@ pub fn pa_build(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, npages
                     }
                     if cont == 0 {
                         ty = ln_get(lt, b, lh_y0());
-                        pend = pa_close(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, i, ty, hc);
+                        before_page = 0;
+                        if i == r {
+                            before_page = p;
+                        }
+                        pend = pa_close(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, i, ty, before_page, hc);
                         if (i == r) && (p > 1) {
                             pa_milestone(nodes, p, hc);
+                        }
+                        if i == r {
+                            pend = pa_close(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, i, ty, 0, hc);
                         }
                         tcur = pa_tables(tb, tcur, p, pa_ymid2(lt, b), b, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
                         pa_frag_open(fr, lt, p, b, 0);
@@ -2064,7 +2139,7 @@ pub fn pa_build(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, npages
                         if tb_claimed(lt, b) == 0 {
                             if (in_row(lt, b) >= 0) || (pa_new_par(wd, lt, et, prev, b, med, mg, hc) || tb_due_for(tb, tcur, p, pa_ymid2(lt, b), lt, b)) {
                                 ty = ln_get(lt, b, lh_y0());
-                                pend = pa_close(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, i, ty, hc);
+                                pend = pa_close(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, i, ty, 0, hc);
                                 tcur = pa_tables(tb, tcur, p, pa_ymid2(lt, b), b, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
                                 pa_frag_open(fr, lt, p, b, 0);
                                 pa_ini_start(wd, lt, et, raw, fr, ii, b);
@@ -2082,7 +2157,7 @@ pub fn pa_build(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, npages
                 i += 1;
             }
             if tb_due(tb, tcur, p, PA_ALL) {
-                pend = pa_close(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, hc);
+                pend = pa_close(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, 0, hc);
                 open = 0;
                 prev = -1;
                 tcur = pa_tables(tb, tcur, p, PA_ALL, -1, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
@@ -2090,7 +2165,7 @@ pub fn pa_build(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, npages
         }
         p += 1;
     }
-    pa_close(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, hc);
+    pa_close(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, 0, hc);
     al_pass(nodes, attrs, al, tm);
     return 0;
 }

@@ -288,3 +288,55 @@ func TestRepeatedCaptionsInTheBodyAreNotRunningHeaders(emonT *testing.T) {
 	blModel(wd, ln, et, 2, nodes, attrs, regions, text, pages)
 	port.AssertEq(emonT, blYes(blFind(nodes, model.NkCaption(), 1)), 1, "both body captions survive")
 }
+
+func TestAReferenceMarkerIsNoColumnOfItsOwn(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var i int32 = 0
+	var w0 int32 = 0
+	var empty int32 = 0
+	var items int32 = 0
+	for i < 12 {
+		blLine(wd, ln, et, port.TextBlob("ordinary body words continue across the left column here"), 1, 5000, 10000+(i*1000), 800)
+		w0 = evidence.WdCount(wd)
+		if (i % 3) == 0 {
+			if i == 0 {
+				blLine(wd, ln, et, port.TextBlob("[28] Alpha Beta a reference with several words"), 1, 30886, 10000+(i*1000), 800)
+			}
+			if i == 3 {
+				blLine(wd, ln, et, port.TextBlob("[29] Gamma Delta a reference with several words"), 1, 30886, 10000+(i*1000), 800)
+			}
+			if i == 6 {
+				blLine(wd, ln, et, port.TextBlob("[30] Epsilon Zeta a reference with several words"), 1, 30886, 10000+(i*1000), 800)
+			}
+			if i == 9 {
+				blLine(wd, ln, et, port.TextBlob("[31] Eta Theta a reference with several words"), 1, 30886, 10000+(i*1000), 800)
+			}
+		} else {
+			blLine(wd, ln, et, port.TextBlob("wrapped reference text continues in this column here"), 1, 32922, 10000+(i*1000), 800)
+		}
+		if (i % 3) == 0 {
+			evidence.WdSet(wd, w0, evidence.HdX1(), 31886)
+		}
+		i += 1
+	}
+	blModel(wd, ln, et, 1, nodes, attrs, regions, text, pages)
+	i = 0
+	for i < model.NodeCount(nodes) {
+		if model.NodeKind(nodes, i) == model.NkItem() {
+			items += 1
+			if (model.NodeTextLen(nodes, i) == 0) && (model.NodeFirstChild(nodes, i) < 0) {
+				empty += 1
+			}
+		}
+		i += 1
+	}
+	port.AssertEq(emonT, items, 4, "one item per reference entry")
+	port.AssertEq(emonT, empty, 0, "the gutter leaves no empty marker items apart from their text")
+}

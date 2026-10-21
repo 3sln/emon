@@ -335,6 +335,31 @@
     (if (>= (* heavy 100) (* ink 70)) (return 1))
     (return 0)))
 
+(defn ^I32 sp-mixed-inks [^Bitmap src ^I32 zx0 ^I32 zy0 ^Cells mask ^I32 zw ^I32 zh ^I32 ink]
+  (comment "Distinct strongly chromatic inks in a rule's zone are chart curves, not one pen. Ignore neutral ink and antialiasing; each of two dominant channels must have at least the minimum pen ink and five per cent of the zone's ink.")
+  (let [^:mut ^I32 x 0 ^:mut ^I32 y 0
+        ^:mut ^I32 nr 0 ^:mut ^I32 ng 0 ^:mut ^I32 nb 0
+        ^:mut ^I32 r 0 ^:mut ^I32 g 0 ^:mut ^I32 b 0
+        ^:mut ^I32 have 0]
+    (if (< (bitmap-channels src) 3) (return 0))
+    (while (< y zh)
+      (do (set x 0)
+          (while (< x zw)
+            (do (if (== (cells-at mask (+ (* y zw) x)) 1)
+                  (do (set r (bitmap-u8 src (+ zx0 x) (+ zy0 y) 0))
+                      (set g (bitmap-u8 src (+ zx0 x) (+ zy0 y) 1))
+                      (set b (bitmap-u8 src (+ zx0 x) (+ zy0 y) 2))
+                      (if (and (> (- r g) (sp-spread)) (> (- r b) (sp-spread))) (set nr (+ nr 1)))
+                      (if (and (> (- g r) (sp-spread)) (> (- g b) (sp-spread))) (set ng (+ ng 1)))
+                      (if (and (> (- b r) (sp-spread)) (> (- b g) (sp-spread))) (set nb (+ nb 1)))))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (if (and (>= nr (sp-min-ink)) (>= (* nr 20) ink)) (set have (+ have 1)))
+    (if (and (>= ng (sp-min-ink)) (>= (* ng 20) ink)) (set have (+ have 1)))
+    (if (and (>= nb (sp-min-ink)) (>= (* nb 20) ink)) (set have (+ have 1)))
+    (if (>= have 2) (return 1))
+    (return 0)))
+
 (defn ^I32 sp-judge [^I32 page1 ^Cells views ^I32 srcview ^Cells owords ^Cells etext ^Bitmap src ^Cells rules ^I32 row ^I32 zx0 ^I32 zy0 ^Cells mask ^I32 n ^I32 zw ^I32 zh ^:mut ^Cells cand]
   (comment "Is the ink of a zone (statistics at mask[n...]) a pen's? Add a candidate when it is: the box, the stroke width, the loops of the path, the coverage, no legible word, then the size says")
   (comment "signature or initials. Answers 1 when added.")
@@ -384,6 +409,7 @@
     (if (and (<= w (sg-ini-w)) (<= h (sg-ini-h))) (set kind 4))
     (if (and (== kind 0) (and (>= w (sg-sig-min-w)) (>= (* w 2) (* h 3)))) (set kind 3))
     (if (== kind 0) (return 0))
+    (if (== (sp-mixed-inks src zx0 zy0 mask zw zh ink) 1) (return 0))
     (set conf 600)
     (if (== kind 4) (set conf 550))
     (set r (quot (cells-at mask (+ n 133)) ink))

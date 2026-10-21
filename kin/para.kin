@@ -519,6 +519,40 @@
           (set k (+ k 1))))
     (return (>= dots 3))))
 
+(defn ^I32 pa-form-marker [^Cells wd ^Cells ln ^Cells et ^I32 l]
+  (comment "An unpunctuated form-row marker: up to three digits and an optional lower-case letter (1), or a single lower-case letter (2).")
+  (let [^I32 w (ln-get ln l (lh-first))
+        ^I32 ts (wd-get wd w (hd-tstart))
+        ^I32 n (wd-get wd w (hd-tlen))
+        ^:mut ^I32 j 0]
+    (if (or (< ts 0) (or (< n 1) (> n 4))) (return 0))
+    (if (and (== n 1) (and (>= (cells-at et ts) 97) (<= (cells-at et ts) 122))) (return 2))
+    (while (and (< j n) (and (>= (cells-at et (+ ts j)) 48) (<= (cells-at et (+ ts j)) 57)))
+      (set j (+ j 1)))
+    (if (or (== j 0) (> j 3)) (return 0))
+    (if (== j n) (return 1))
+    (if (and (== j (- n 1)) (and (>= (cells-at et (+ ts j)) 97) (<= (cells-at et (+ ts j)) 122))) (return 1))
+    (return 0)))
+
+(defn ^Bool pa-line-leader-tail [^Cells wd ^Cells ln ^Cells et ^I32 l]
+  (let [^I32 first (ln-get ln l (lh-first))
+        ^:mut ^I32 w (- (+ first (ln-get ln l (lh-count))) 1)
+        ^:mut ^I32 dots 0
+        ^:mut ^I32 j 0]
+    (while (>= w first)
+      (do (let [^I32 ts (wd-get wd w (hd-tstart))
+                ^I32 n (wd-get wd w (hd-tlen))]
+            (if (< ts 0) (return (>= dots 3)))
+            (set j (- n 1))
+            (while (>= j 0)
+              (do (let [^I32 c (cells-at et (+ ts j))]
+                    (if (or (== c 46) (or (== c 8230) (== c 183)))
+                      (set dots (+ dots 1))
+                      (return (>= dots 3))))
+                  (set j (- j 1)))))
+          (set w (- w 1))))
+    (return (>= dots 3))))
+
 (defn ^Bool pa-big-leadin [^Cells wd ^Cells ln ^I32 l]
   (comment "P12.7 (smoke B side effect): does line l begin with a run-in head set larger than the rest of the line: at least two words, each over 4 per cent bigger than the line's dominant size, followed by at least three words")
   (comment "of the dominant size. The Russian declaration's clauses, `принимая во внимание, что ...`, each begin so: with no gap and no indent between them, the lead-in is the only sign that a clause is a paragraph (the heading")
@@ -578,6 +612,13 @@
   (if (not (pa-upright ln a)) (return (== 1 1)))
   (if (not (pa-upright ln b)) (return (== 1 1)))
   (if (!= (ln-get ln a (lh-dir)) (ln-get ln b (lh-dir))) (return (== 1 1)))
+  (comment "Dotted form rows retain their explicit label boundaries; a separate numeric marker column retains the same rows. Unmarked wrapped prose continues normally.")
+  (let [^I32 ma (pa-form-marker wd ln et a)
+        ^I32 mb (pa-form-marker wd ln et b)]
+    (if (and (> ma 0) (> mb 0))
+      (do (if (pa-line-leader-tail wd ln et a) (return (== 1 1)))
+          (if (and (== ma 1) (and (== mb 1) (and (== (ln-get ln a (lh-count)) 1) (== (ln-get ln b (lh-count)) 1))))
+            (return (== 1 1))))))
   (if (not (pa-below ln a b)) (return (== 1 1)))
   (if (not (pa-overlaps ln a b)) (return (== 1 1)))
   (let [^I32 g (pa-gap ln a b)
@@ -1462,7 +1503,7 @@
 (defn ^I32 pa-close [^Cells wd ^Cells ln ^Cells et
                      ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
                      ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells al ^Cells ii
-                     ^:mut ^Cells cf ^Cells lo ^:mut ^Cells dq ^I32 med ^I32 from ^I32 cur ^I32 ty ^:mut ^Cells hc]
+                     ^:mut ^Cells cf ^Cells lo ^:mut ^Cells dq ^I32 med ^I32 from ^I32 cur ^I32 ty ^I32 before-page ^:mut ^Cells hc]
   (comment "Close the open paragraph, then write the side fragments that were read to (`pa-notes`), then make a")
   (comment "paragraph of each line queued in `dq` (the lines that are not upright, D136) and empty the queue.")
   (comment "Answers the first side row not written yet.")
@@ -1484,6 +1525,8 @@
               (do (set now 0)
                   (if (< pg (cells-at cf (+ (* cur CF_STRIDE) CF_PAGE))) (set now 1))
                   (if (and (== pg (cells-at cf (+ (* cur CF_STRIDE) CF_PAGE))) (<= (ln-get ln l (lh-y0)) ty)) (set now 1))))
+            (comment "The next page cannot emit queued lines until its page milestone has been written.")
+            (if (and (> before-page 0) (>= pg before-page)) (set now 0))
             (if (== now 1)
               (do (pa-frag-open fr ln pg l 0)
                   (pa-add-line wd ln et raw l hc fr)
@@ -1624,6 +1667,7 @@
         ^:mut ^I32 tcur 0
         ^:mut ^I32 k0 0
         ^:mut ^I32 opn 0
+        ^:mut ^I32 before-page 0
         ^:mut ^I32 score 0]
     (in-retire lt ii)
     (pa-columns wd et npages pages layout lt ord ls sd it io rw gu ac tm cf lo pr)
@@ -1654,10 +1698,11 @@
                       (== (cells-at cf (+ (* r1 CF_STRIDE) CF_ROLE)) (rl-body)))
             (set r1 (+ r1 1)))
           (if (== r r1)
-            (do (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend nf 1000000000 hc))
+            (do (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend nf 1000000000 p hc))
                 (set open 0)
                 (set prev -1)
                 (if (> p 1) (pa-milestone nodes p hc))
+                (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend nf 1000000000 0 hc))
                 (set tcur (pa-tables tb tcur p PA_ALL -1 wd lt et tc tw tq nodes attrs regions text raw tmp ledger hc)))
             (do (set i r)
                 (while (< i r1)
@@ -1694,8 +1739,12 @@
                       (if (>= (in-row lt b) 0) (set cont 0))
                       (if (== cont 0)
                         (do (set ty (ln-get lt b (lh-y0)))
-                            (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend i ty hc))
+                            (set before-page 0)
+                            (if (== i r) (set before-page p))
+                            (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend i ty before-page hc))
                             (if (and (== i r) (> p 1)) (pa-milestone nodes p hc))
+                            (if (== i r)
+                              (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend i ty 0 hc)))
                             (set tcur (pa-tables tb tcur p (pa-ymid2 lt b) b wd lt et tc tw tq nodes attrs regions text raw tmp ledger hc))
                             (pa-frag-open fr lt p b 0)
                             (pa-ini-start wd lt et raw fr ii b))
@@ -1713,7 +1762,7 @@
                             (if (== (tb-claimed lt b) 0)
                               (do (if (or (>= (in-row lt b) 0) (or (pa-new-par wd lt et prev b med mg hc) (tb-due-for tb tcur p (pa-ymid2 lt b) lt b)))
                                     (do (set ty (ln-get lt b (lh-y0)))
-                                        (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend i ty hc))
+                                        (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend i ty 0 hc))
                                         (set tcur (pa-tables tb tcur p (pa-ymid2 lt b) b wd lt et tc tw tq nodes attrs regions text raw tmp ledger hc))
                                         (pa-frag-open fr lt p b 0)
                                         (pa-ini-start wd lt et raw fr ii b))
@@ -1725,12 +1774,12 @@
                             (set cont (+ cont 1))))))
                       (set i (+ i 1))))
                 (if (tb-due tb tcur p PA_ALL)
-                  (do (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend nf 1000000000 hc))
+                  (do (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend nf 1000000000 0 hc))
                       (set open 0)
                       (set prev -1)
                       (set tcur (pa-tables tb tcur p PA_ALL -1 wd lt et tc tw tq nodes attrs regions text raw tmp ledger hc))))))
           (set p (+ p 1))))
-    (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend nf 1000000000 hc)
+    (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend nf 1000000000 0 hc)
     (al-pass nodes attrs al tm)
     (return 0)))
 

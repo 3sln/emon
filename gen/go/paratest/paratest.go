@@ -498,6 +498,40 @@ func TestARunInHeadSetLargerBeginsAParagraph(emonT *testing.T) {
 	port.AssertText(emonT, t2, "P1:alpha beta gamma delta epsilon zeta eta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega;", "lines of one size are one paragraph")
 }
 
+func TestAPageMilestonePrecedesItsQueuedTurnedLines(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var ord *port.Cells = port.NewCells()
+	var raw *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var fr *port.Cells = port.NewCells()
+	var gp *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	var only *strings.Builder = port.NewText()
+	var mixed *strings.Builder = port.NewText()
+	// A page containing only non-upright lines must keep its milestone before those lines.
+	ptLine(wd, ln, et, port.TextBlob("First page."), 1, 7200, 10000, 30000, 11200, 0, 0, 1000)
+	ptLine(wd, ln, et, port.TextBlob("Turned label"), 2, 3000, 8000, 4200, 19000, 9000, 0, 1000)
+	port.AssertEq(emonT, ptRun(wd, ln, et, 2, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "turned page: well formed")
+	ptBrief(only, nodes, regions, text)
+	port.AssertText(emonT, only, "P1:First page.;B2;P1:Turned label;", "the page starts before its queued lines")
+	ptClear(wd, ln, et)
+	ptLine(wd, ln, et, port.TextBlob("First page."), 1, 7200, 10000, 30000, 11200, 0, 0, 1000)
+	ptLine(wd, ln, et, port.TextBlob("Turned label"), 2, 3000, 8000, 4200, 19000, 9000, 0, 1000)
+	ptLine(wd, ln, et, port.TextBlob("Second page."), 2, 7200, 10000, 30000, 11200, 0, 0, 1000)
+	port.AssertEq(emonT, ptRun(wd, ln, et, 2, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "mixed page: well formed")
+	ptBrief(mixed, nodes, regions, text)
+	port.AssertText(emonT, mixed, "P1:First page.;B2;P1:Turned label;P1:Second page.;", "a top side label follows the milestone and precedes the body")
+}
+
 func TestALabelTurnedAQuarterStandsWhereItsTopIsAndNotAtThePagesEnd(emonT *testing.T) {
 	var wd *port.Cells = port.NewCells()
 	var ln *port.Cells = port.NewCells()

@@ -92,6 +92,25 @@ pub(crate) fn spx_find(rules: &mut crate::port::Cells, ow: &mut crate::port::Cel
     return sp_find(1, views, 0, rules, ow, et, b, 61200, cand, mask);
 }
 #[test]
+fn test_raster_curves_of_two_inks_are_no_signature() {
+    let b: &crate::port::Bitmap = &crate::port::bitmap_new(300, 120, 3);
+    let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    spx_paper(b);
+    spx_line(b, 20, 280, 100);
+    spx_zig(b, 40, 98, 70, 24, 36, 20, 40, 120);
+    spx_zig(b, 120, 98, 70, 24, 36, 180, 30, 20);
+    spx_rule(rules, 20, 280, 100);
+    crate::testport::assert_eq(spx_find(rules, ow, et, b, cand), 0, "two strongly coloured curves on one rule are a chart");
+    spx_paper(b);
+    spx_line(b, 20, 280, 100);
+    spx_zig(b, 40, 98, 70, 24, 36, 20, 40, 120);
+    spx_zig(b, 120, 98, 70, 24, 36, 20, 40, 120);
+    crate::testport::assert_eq(spx_find(rules, ow, et, b, cand), 1, "the same geometry in one ink remains a signature");
+}
+#[test]
 fn test_a_pen_over_a_line_is_a_signature() {
     let b: &crate::port::Bitmap = &crate::port::bitmap_new(300, 120, 3);
     let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();

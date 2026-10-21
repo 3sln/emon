@@ -7,8 +7,8 @@
             [emon.test :refer [deftest assert-eq new-cells text-blob]]
             [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-set cells-push cells-drop]]
             [emon.model :refer [model-init model-check page-new pk-vector node-count node-kind node-sub node-parent node-first-child node-next
-                                node-text-start node-text-len text-append-utf8 nk-paragraph nk-note nk-heading nk-caption]]
-            [emon.evidence :refer [wd-new wd-set wd-count ln-new ln-count ln-get lh-by0 lh-by1 wf-size wf-font]]
+                                node-text-start node-text-len text-append-utf8 nk-paragraph nk-note nk-heading nk-caption nk-item]]
+            [emon.evidence :refer [wd-new wd-set wd-count ln-new ln-count ln-get lh-by0 lh-by1 wf-size wf-font hd-x1]]
             [emon.table :refer [tb-add tb-due-for]]
             [emon.columns :refer [lc-copy]]
             [emon.heading :refer [hd-analyze]]
@@ -195,3 +195,28 @@
     (bl-line wd ln et (text-blob "Table 1 Summary of results") 2 7200 30000 800)
     (bl-model wd ln et 2 nodes attrs regions text pages)
     (assert-eq (bl-yes (bl-find nodes (nk-caption) 1)) 1 "both body captions survive")))
+
+(deftest test-a-reference-marker-is-no-column-of-its-own
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells) ^Cells pages (new-cells)
+        ^:mut ^I32 i 0 ^:mut ^I32 w0 0 ^:mut ^I32 empty 0 ^:mut ^I32 items 0]
+    (while (< i 12)
+      (do (bl-line wd ln et (text-blob "ordinary body words continue across the left column here") 1 5000 (+ 10000 (* i 1000)) 800)
+          (set w0 (wd-count wd))
+          (if (== (rem i 3) 0)
+            (do (if (== i 0) (bl-line wd ln et (text-blob "[28] Alpha Beta a reference with several words") 1 30886 (+ 10000 (* i 1000)) 800))
+                (if (== i 3) (bl-line wd ln et (text-blob "[29] Gamma Delta a reference with several words") 1 30886 (+ 10000 (* i 1000)) 800))
+                (if (== i 6) (bl-line wd ln et (text-blob "[30] Epsilon Zeta a reference with several words") 1 30886 (+ 10000 (* i 1000)) 800))
+                (if (== i 9) (bl-line wd ln et (text-blob "[31] Eta Theta a reference with several words") 1 30886 (+ 10000 (* i 1000)) 800)))
+            (bl-line wd ln et (text-blob "wrapped reference text continues in this column here") 1 32922 (+ 10000 (* i 1000)) 800))
+          (if (== (rem i 3) 0) (wd-set wd w0 (hd-x1) 31886))
+          (set i (+ i 1))))
+    (bl-model wd ln et 1 nodes attrs regions text pages)
+    (set i 0)
+    (while (< i (node-count nodes))
+      (do (if (== (node-kind nodes i) (nk-item))
+            (do (set items (+ items 1))
+                (if (and (== (node-text-len nodes i) 0) (< (node-first-child nodes i) 0)) (set empty (+ empty 1)))))
+          (set i (+ i 1))))
+    (assert-eq items 4 "one item per reference entry")
+    (assert-eq empty 0 "the gutter leaves no empty marker items apart from their text")))

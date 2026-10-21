@@ -91,6 +91,25 @@ public static class Sigpxtest {
         return Sigpx.SpFind(1, views, 0, rules, ow, et, b, 61200, cand, mask);
     }
     [Xunit.Fact]
+    public static void TestRasterCurvesOfTwoInksAreNoSignature() {
+        emon.Port.Bitmap b = emon.Port.BitmapNew(300, 120, 3);
+        emon.Port.Cells rules = emon.Port.NewCells();
+        emon.Port.Cells ow = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells cand = emon.Port.NewCells();
+        SpxPaper(b);
+        SpxLine(b, 20, 280, 100);
+        SpxZig(b, 40, 98, 70, 24, 36, 20, 40, 120);
+        SpxZig(b, 120, 98, 70, 24, 36, 180, 30, 20);
+        SpxRule(rules, 20, 280, 100);
+        emon.Testport.AssertEq(SpxFind(rules, ow, et, b, cand), 0, "two strongly coloured curves on one rule are a chart");
+        SpxPaper(b);
+        SpxLine(b, 20, 280, 100);
+        SpxZig(b, 40, 98, 70, 24, 36, 20, 40, 120);
+        SpxZig(b, 120, 98, 70, 24, 36, 20, 40, 120);
+        emon.Testport.AssertEq(SpxFind(rules, ow, et, b, cand), 1, "the same geometry in one ink remains a signature");
+    }
+    [Xunit.Fact]
     public static void TestAPenOverALineIsASignature() {
         emon.Port.Bitmap b = emon.Port.BitmapNew(300, 120, 3);
         emon.Port.Cells rules = emon.Port.NewCells();

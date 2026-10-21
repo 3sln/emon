@@ -372,6 +372,27 @@
     (pt-brief t2 nodes regions text)
     (assert-text t2 "P1:alpha beta gamma delta epsilon zeta eta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega;" "lines of one size are one paragraph")))
 
+(deftest test-a-page-milestone-precedes-its-queued-turned-lines
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp (new-cells) ^Cells fr (new-cells)
+        ^Cells gp (new-cells) ^Cells st (new-cells)
+        ^Text only (new-text) ^Text mixed (new-text)]
+    (comment "A page containing only non-upright lines must keep its milestone before those lines.")
+    (pt-line wd ln et (text-blob "First page.") 1 7200 10000 30000 11200 0 0 1000)
+    (pt-line wd ln et (text-blob "Turned label") 2 3000 8000 4200 19000 9000 0 1000)
+    (assert-eq (pt-run wd ln et 2 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "turned page: well formed")
+    (pt-brief only nodes regions text)
+    (assert-text only "P1:First page.;B2;P1:Turned label;" "the page starts before its queued lines")
+    (pt-clear wd ln et)
+    (pt-line wd ln et (text-blob "First page.") 1 7200 10000 30000 11200 0 0 1000)
+    (pt-line wd ln et (text-blob "Turned label") 2 3000 8000 4200 19000 9000 0 1000)
+    (pt-line wd ln et (text-blob "Second page.") 2 7200 10000 30000 11200 0 0 1000)
+    (assert-eq (pt-run wd ln et 2 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "mixed page: well formed")
+    (pt-brief mixed nodes regions text)
+    (assert-text mixed "P1:First page.;B2;P1:Turned label;P1:Second page.;" "a top side label follows the milestone and precedes the body")))
+
 (deftest test-a-label-turned-a-quarter-stands-where-its-top-is-and-not-at-the-pages-end
   (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
         ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)

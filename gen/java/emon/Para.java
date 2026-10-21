@@ -548,6 +548,57 @@ public final class Para {
         }
         return dots >= 3;
     }
+    public static int paFormMarker(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l) {
+        // An unpunctuated form-row marker: up to three digits and an optional lower-case letter (1), or a single lower-case letter (2).
+        int w = Evidence.lnGet(ln, l, Evidence.lhFirst());
+        int ts = Evidence.wdGet(wd, w, Evidence.hdTstart());
+        int n = Evidence.wdGet(wd, w, Evidence.hdTlen());
+        int j = 0;
+        if ((ts < 0) || ((n < 1) || (n > 4))) {
+            return 0;
+        }
+        if ((n == 1) && ((emon.Port.cellsAt(et, ts) >= 97) && (emon.Port.cellsAt(et, ts) <= 122))) {
+            return 2;
+        }
+        while ((j < n) && ((emon.Port.cellsAt(et, ts + j) >= 48) && (emon.Port.cellsAt(et, ts + j) <= 57))) {
+            j += 1;
+        }
+        if ((j == 0) || (j > 3)) {
+            return 0;
+        }
+        if (j == n) {
+            return 1;
+        }
+        if ((j == (n - 1)) && ((emon.Port.cellsAt(et, ts + j) >= 97) && (emon.Port.cellsAt(et, ts + j) <= 122))) {
+            return 1;
+        }
+        return 0;
+    }
+    public static boolean paLineLeaderTail(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l) {
+        int first = Evidence.lnGet(ln, l, Evidence.lhFirst());
+        int w = (first + Evidence.lnGet(ln, l, Evidence.lhCount())) - 1;
+        int dots = 0;
+        int j = 0;
+        while (w >= first) {
+            int ts = Evidence.wdGet(wd, w, Evidence.hdTstart());
+            int n = Evidence.wdGet(wd, w, Evidence.hdTlen());
+            if (ts < 0) {
+                return dots >= 3;
+            }
+            j = n - 1;
+            while (j >= 0) {
+                int c = emon.Port.cellsAt(et, ts + j);
+                if ((c == 46) || ((c == 8230) || (c == 183))) {
+                    dots += 1;
+                } else {
+                    return dots >= 3;
+                }
+                j -= 1;
+            }
+            w -= 1;
+        }
+        return dots >= 3;
+    }
     public static boolean paBigLeadin(emon.Port.Cells wd, emon.Port.Cells ln, int l) {
         // P12.7 (smoke B side effect): does line l begin with a run-in head set larger than the rest of the line: at least two words, each over 4 per cent bigger than the line's dominant size, followed by at least three words
         // of the dominant size. The Russian declaration's clauses, `принимая во внимание, что ...`, each begin so: with no gap and no indent between them, the lead-in is the only sign that a clause is a paragraph (the heading
@@ -638,6 +689,17 @@ public final class Para {
         }
         if (Evidence.lnGet(ln, a, Evidence.lhDir()) != Evidence.lnGet(ln, b, Evidence.lhDir())) {
             return 1 == 1;
+        }
+        // Dotted form rows retain their explicit label boundaries; a separate numeric marker column retains the same rows. Unmarked wrapped prose continues normally.
+        int ma = paFormMarker(wd, ln, et, a);
+        int mb = paFormMarker(wd, ln, et, b);
+        if ((ma > 0) && (mb > 0)) {
+            if (paLineLeaderTail(wd, ln, et, a)) {
+                return 1 == 1;
+            }
+            if ((ma == 1) && ((mb == 1) && ((Evidence.lnGet(ln, a, Evidence.lhCount()) == 1) && (Evidence.lnGet(ln, b, Evidence.lhCount()) == 1)))) {
+                return 1 == 1;
+            }
         }
         if (!paBelow(ln, a, b)) {
             return 1 == 1;
@@ -1782,7 +1844,7 @@ public final class Para {
         }
         return pend;
     }
-    public static int paClose(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells al, emon.Port.Cells ii, emon.Port.Cells cf, emon.Port.Cells lo, emon.Port.Cells dq, int med, int from, int cur, int ty, emon.Port.Cells hc) {
+    public static int paClose(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells al, emon.Port.Cells ii, emon.Port.Cells cf, emon.Port.Cells lo, emon.Port.Cells dq, int med, int from, int cur, int ty, int beforePage, emon.Port.Cells hc) {
         // Close the open paragraph, then write the side fragments that were read to (`pa-notes`), then make a
         // paragraph of each line queued in `dq` (the lines that are not upright, D136) and empty the queue.
         // Answers the first side row not written yet.
@@ -1808,6 +1870,10 @@ public final class Para {
                 if ((pg == emon.Port.cellsAt(cf, (cur * CF_STRIDE) + CF_PAGE)) && (Evidence.lnGet(ln, l, Evidence.lhY0()) <= ty)) {
                     now = 1;
                 }
+            }
+            // The next page cannot emit queued lines until its page milestone has been written.
+            if ((beforePage > 0) && (pg >= beforePage)) {
+                now = 0;
             }
             if (now == 1) {
                 paFragOpen(fr, ln, pg, l, 0);
@@ -1958,6 +2024,7 @@ public final class Para {
         int tcur = 0;
         int k0 = 0;
         int opn = 0;
+        int beforePage = 0;
         int score = 0;
         Initial.inRetire(lt, ii);
         paColumns(wd, et, npages, pages, layout, lt, ord, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr);
@@ -1991,12 +2058,13 @@ public final class Para {
                 r1 += 1;
             }
             if (r == r1) {
-                pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, hc);
+                pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, p, hc);
                 open = 0;
                 prev = -1;
                 if (p > 1) {
                     paMilestone(nodes, p, hc);
                 }
+                pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, 0, hc);
                 tcur = paTables(tb, tcur, p, PA_ALL, -1, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
             } else {
                 i = r;
@@ -2033,9 +2101,16 @@ public final class Para {
                         }
                         if (cont == 0) {
                             ty = Evidence.lnGet(lt, b, Evidence.lhY0());
-                            pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, i, ty, hc);
+                            beforePage = 0;
+                            if (i == r) {
+                                beforePage = p;
+                            }
+                            pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, i, ty, beforePage, hc);
                             if ((i == r) && (p > 1)) {
                                 paMilestone(nodes, p, hc);
+                            }
+                            if (i == r) {
+                                pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, i, ty, 0, hc);
                             }
                             tcur = paTables(tb, tcur, p, paYmid2(lt, b), b, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
                             paFragOpen(fr, lt, p, b, 0);
@@ -2056,7 +2131,7 @@ public final class Para {
                             if (Table.tbClaimed(lt, b) == 0) {
                                 if ((Initial.inRow(lt, b) >= 0) || (paNewPar(wd, lt, et, prev, b, med, mg, hc) || Table.tbDueFor(tb, tcur, p, paYmid2(lt, b), lt, b))) {
                                     ty = Evidence.lnGet(lt, b, Evidence.lhY0());
-                                    pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, i, ty, hc);
+                                    pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, i, ty, 0, hc);
                                     tcur = paTables(tb, tcur, p, paYmid2(lt, b), b, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
                                     paFragOpen(fr, lt, p, b, 0);
                                     paIniStart(wd, lt, et, raw, fr, ii, b);
@@ -2074,7 +2149,7 @@ public final class Para {
                     i += 1;
                 }
                 if (Table.tbDue(tb, tcur, p, PA_ALL)) {
-                    pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, hc);
+                    pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, 0, hc);
                     open = 0;
                     prev = -1;
                     tcur = paTables(tb, tcur, p, PA_ALL, -1, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
@@ -2082,7 +2157,7 @@ public final class Para {
             }
             p += 1;
         }
-        paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, hc);
+        paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, 0, hc);
         Align.alPass(nodes, attrs, al, tm);
         return 0;
     }

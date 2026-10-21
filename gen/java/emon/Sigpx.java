@@ -441,6 +441,55 @@ public final class Sigpx {
         }
         return 0;
     }
+    public static int spMixedInks(emon.Port.Bitmap src, int zx0, int zy0, emon.Port.Cells mask, int zw, int zh, int ink) {
+        // Distinct strongly chromatic inks in a rule's zone are chart curves, not one pen. Ignore neutral ink and antialiasing; each of two dominant channels must have at least the minimum pen ink and five per cent of the zone's ink.
+        int x = 0;
+        int y = 0;
+        int nr = 0;
+        int ng = 0;
+        int nb = 0;
+        int r = 0;
+        int g = 0;
+        int b = 0;
+        int have = 0;
+        if (emon.Port.bitmapChannels(src) < 3) {
+            return 0;
+        }
+        while (y < zh) {
+            x = 0;
+            while (x < zw) {
+                if (emon.Port.cellsAt(mask, (y * zw) + x) == 1) {
+                    r = emon.Port.bitmapU8(src, zx0 + x, zy0 + y, 0);
+                    g = emon.Port.bitmapU8(src, zx0 + x, zy0 + y, 1);
+                    b = emon.Port.bitmapU8(src, zx0 + x, zy0 + y, 2);
+                    if (((r - g) > spSpread()) && ((r - b) > spSpread())) {
+                        nr += 1;
+                    }
+                    if (((g - r) > spSpread()) && ((g - b) > spSpread())) {
+                        ng += 1;
+                    }
+                    if (((b - r) > spSpread()) && ((b - g) > spSpread())) {
+                        nb += 1;
+                    }
+                }
+                x += 1;
+            }
+            y += 1;
+        }
+        if ((nr >= spMinInk()) && ((nr * 20) >= ink)) {
+            have += 1;
+        }
+        if ((ng >= spMinInk()) && ((ng * 20) >= ink)) {
+            have += 1;
+        }
+        if ((nb >= spMinInk()) && ((nb * 20) >= ink)) {
+            have += 1;
+        }
+        if (have >= 2) {
+            return 1;
+        }
+        return 0;
+    }
     public static int spJudge(int page1, emon.Port.Cells views, int srcview, emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Bitmap src, emon.Port.Cells rules, int row, int zx0, int zy0, emon.Port.Cells mask, int n, int zw, int zh, emon.Port.Cells cand) {
         // Is the ink of a zone (statistics at mask[n...]) a pen's? Add a candidate when it is: the box, the stroke width, the loops of the path, the coverage, no legible word, then the size says
         // signature or initials. Answers 1 when added.
@@ -516,6 +565,9 @@ public final class Sigpx {
             kind = 3;
         }
         if (kind == 0) {
+            return 0;
+        }
+        if (spMixedInks(src, zx0, zy0, mask, zw, zh, ink) == 1) {
             return 0;
         }
         conf = 600;

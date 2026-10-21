@@ -276,3 +276,55 @@ fn test_repeated_captions_in_the_body_are_not_running_headers() {
     bl_model(wd, ln, et, 2, nodes, attrs, regions, text, pages);
     crate::testport::assert_eq(bl_yes(bl_find(nodes, nk_caption(), 1)), 1, "both body captions survive");
 }
+#[test]
+fn test_a_reference_marker_is_no_column_of_its_own() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut i: i32 = 0;
+    let mut w0: i32 = 0;
+    let mut empty: i32 = 0;
+    let mut items: i32 = 0;
+    while i < 12 {
+        bl_line(wd, ln, et, &crate::testport::text_blob("ordinary body words continue across the left column here")[..], 1, 5000, 10000 + (i * 1000), 800);
+        w0 = wd_count(wd);
+        if (i % 3) == 0 {
+            if i == 0 {
+                bl_line(wd, ln, et, &crate::testport::text_blob("[28] Alpha Beta a reference with several words")[..], 1, 30886, 10000 + (i * 1000), 800);
+            }
+            if i == 3 {
+                bl_line(wd, ln, et, &crate::testport::text_blob("[29] Gamma Delta a reference with several words")[..], 1, 30886, 10000 + (i * 1000), 800);
+            }
+            if i == 6 {
+                bl_line(wd, ln, et, &crate::testport::text_blob("[30] Epsilon Zeta a reference with several words")[..], 1, 30886, 10000 + (i * 1000), 800);
+            }
+            if i == 9 {
+                bl_line(wd, ln, et, &crate::testport::text_blob("[31] Eta Theta a reference with several words")[..], 1, 30886, 10000 + (i * 1000), 800);
+            }
+        } else {
+            bl_line(wd, ln, et, &crate::testport::text_blob("wrapped reference text continues in this column here")[..], 1, 32922, 10000 + (i * 1000), 800);
+        }
+        if (i % 3) == 0 {
+            wd_set(wd, w0, hd_x1(), 31886);
+        }
+        i += 1;
+    }
+    bl_model(wd, ln, et, 1, nodes, attrs, regions, text, pages);
+    i = 0;
+    while i < node_count(nodes) {
+        if node_kind(nodes, i) == nk_item() {
+            items += 1;
+            if (node_text_len(nodes, i) == 0) && (node_first_child(nodes, i) < 0) {
+                empty += 1;
+            }
+        }
+        i += 1;
+    }
+    crate::testport::assert_eq(items, 4, "one item per reference entry");
+    crate::testport::assert_eq(empty, 0, "the gutter leaves no empty marker items apart from their text");
+}

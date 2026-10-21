@@ -222,22 +222,25 @@
     (return 0)))
 
 (defn ^I32 fl-left [^Cells bt ^I32 nb ^I32 page ^I32 x0 ^I32 y0 ^I32 y1 ^:mut ^Cells out ^I32 at]
-  (comment "The label to the left on the box's line (rule 2): its block row, and the gap, into out[at], out[at + 1]; -1 when there is none that is near enough or joined by a leader.")
+  (comment "The left label on the box's line: a label's own explicit leaders beat a nearby bare row number; otherwise retain the nearest-label and separate-bridge rules.")
   (let [^:mut ^I32 best -1
         ^:mut ^I32 bestgap 2000000000
-        ^:mut ^I32 b 0
-        ^:mut ^I32 o 0
-        ^:mut ^I32 gap 0]
+        ^:mut ^I32 bestlink 0
+        ^:mut ^I32 link 0
+        ^:mut ^I32 b 0 ^:mut ^I32 o 0 ^:mut ^I32 gap 0]
     (while (< b nb)
       (do (set o (* b FL_B))
           (if (and (== (cells-at bt (+ o 1)) page) (== (rem (cells-at bt (+ o 6)) 2) 1))
             (do (set gap (- x0 (cells-at bt (+ o 4))))
-                (if (and (>= gap (- 0 FL_TOL)) (< gap bestgap) (== (fl-same-line bt b y0 y1) 1))
+                (set link (cells-at bt (+ o 7)))
+                (if (and (>= gap (- 0 FL_TOL)) (== (fl-same-line bt b y0 y1) 1)
+                         (or (< best 0) (or (> link bestlink) (and (== link bestlink) (< gap bestgap)))))
                   (do (set best b)
-                      (set bestgap gap)))))
+                      (set bestgap gap)
+                      (set bestlink link)))))
           (set b (+ b 1))))
     (if (>= best 0)
-      (if (== (cells-at bt (+ (* best FL_B) 7)) 1)
+      (if (== bestlink 1)
         (set bestgap 0)
         (if (> bestgap FL_NEAR_L)
           (if (== (fl-bridged bt nb page y0 y1 best x0) 0) (set best -1)))))
@@ -626,6 +629,44 @@
           (set c (node-next on c))))
     (return 0)))
 
+(defn ^I32 fl-unattached-dots [^Cells on ^Cells orr ^Cells text ^Cells fc ^I32 n]
+  (comment "Printing-dot paragraphs on forms are omitted unless they bridge an actual field and its label. Keep an unspaced ellipsis and any inline content; orphan fields are emitted separately from their omitted anchor.")
+  (if (or (!= (node-kind on n) (nk-paragraph)) (>= (node-first-child on n) 0)) (return 0))
+  (let [^I32 ts (node-text-start on n) ^I32 tlen (node-text-len on n)
+        ^I32 nf (quot (cells-len fc) FL_W)
+        ^:mut ^I32 j 0 ^:mut ^I32 dots 0 ^:mut ^I32 spaces 0
+        ^:mut ^I32 r 0 ^:mut ^I32 f 0 ^:mut ^I32 o 0 ^:mut ^I32 lr 0
+        ^:mut ^I32 ov 0 ^:mut ^I32 sm 0]
+    (if (or (< ts 0) (<= tlen 0)) (return 0))
+    (while (< j tlen)
+      (do (let [^I32 c (cells-at text (+ ts j))]
+            (if (or (== c 46) (== c 183)) (set dots (+ dots 1))
+              (if (or (== c 32) (== c 160)) (set spaces (+ spaces 1)) (return 0))))
+          (set j (+ j 1))))
+    (if (or (== dots 0) (and (> dots 1) (== spaces 0))) (return 0))
+    (set r (node-region-head on n))
+    (while (>= r 0)
+      (do (set f 0)
+          (while (< f nf)
+            (do (set o (* f FL_W))
+                (if (and (<= (cells-at fc (+ o 7)) 1) (== (cells-at fc (+ o 1)) (region-page orr r))
+                         (>= (cells-at fc (+ o 2)) (- (region-x1 orr r) FL_TOL))
+                         (== (fl-has-words on text (cells-at fc (+ o 6))) 1))
+                  (do (set ov (- (fl-min (cells-at fc (+ o 5)) (region-y1 orr r)) (fl-max (cells-at fc (+ o 3)) (region-y0 orr r))))
+                      (set sm (fl-min (- (cells-at fc (+ o 5)) (cells-at fc (+ o 3))) (- (region-y1 orr r) (region-y0 orr r))))
+                      (if (and (> ov 0) (>= (* ov 2) sm))
+                        (do (set lr (node-region-head on (cells-at fc (+ o 6))))
+                            (while (>= lr 0)
+                              (do (if (and (== (region-page orr lr) (region-page orr r))
+                                           (<= (region-x1 orr lr) (+ (region-x0 orr r) FL_TOL)))
+                                    (do (set ov (- (fl-min (region-y1 orr lr) (region-y1 orr r)) (fl-max (region-y0 orr lr) (region-y0 orr r))))
+                                        (set sm (fl-min (- (region-y1 orr lr) (region-y0 orr lr)) (- (region-y1 orr r) (region-y0 orr r))))
+                                        (if (and (> ov 0) (>= (* ov 2) sm)) (return 0))))
+                                  (set lr (region-next orr lr))))))))
+                (set f (+ f 1))))
+          (set r (region-next orr r))))
+    (return 1)))
+
 (defn ^I32 fl-tree [^Cells on ^Cells oa ^Cells orr ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
                     ^:mut ^Cells nm ^Cells an ^Cells txt ^Cells fc ^Cells fh ^I32 n ^I32 np]
   (comment "Copy old node n and its subtree as the last child of new node np (-1: a new root), with the fields that go in it: those before its text first, then its")
@@ -641,6 +682,9 @@
         ^:mut ^I32 t 0]
     (if (and (>= hp 0) (>= np 0))
       (fl-orphans an txt fc hp nodes attrs regions text np))
+    (if (and (< hb 0) (< ha 0) (== (fl-unattached-dots on orr text fc n) 1))
+      (do (if (and (>= ho 0) (>= np 0)) (fl-orphans an txt fc ho nodes attrs regions text np))
+          (return -1)))
     (set nn (rs-node on oa orr nodes attrs regions nm n np))
     (if (< nn 0) (return -1))
     (if (and (== (node-kind on n) (nk-cell)) (or (>= hb 0) (>= ha 0)))

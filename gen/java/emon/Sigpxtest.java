@@ -90,6 +90,24 @@ public final class Sigpxtest {
         Evidence.vwNew(views, 1, Evidence.vkRender(), -1, -1, emon.Port.bitmapW(b), emon.Port.bitmapH(b), 7200, 0, -1, 0, 0, 0, 0, 0);
         return Sigpx.spFind(1, views, 0, rules, ow, et, b, 61200, cand, mask);
     }
+    public static void testRasterCurvesOfTwoInksAreNoSignature() {
+        emon.Port.Bitmap b = emon.Port.bitmapNew(300, 120, 3);
+        emon.Port.Cells rules = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells cand = emon.Port.newCells();
+        spxPaper(b);
+        spxLine(b, 20, 280, 100);
+        spxZig(b, 40, 98, 70, 24, 36, 20, 40, 120);
+        spxZig(b, 120, 98, 70, 24, 36, 180, 30, 20);
+        spxRule(rules, 20, 280, 100);
+        emon.Testport.assertEq(spxFind(rules, ow, et, b, cand), 0, "two strongly coloured curves on one rule are a chart");
+        spxPaper(b);
+        spxLine(b, 20, 280, 100);
+        spxZig(b, 40, 98, 70, 24, 36, 20, 40, 120);
+        spxZig(b, 120, 98, 70, 24, 36, 20, 40, 120);
+        emon.Testport.assertEq(spxFind(rules, ow, et, b, cand), 1, "the same geometry in one ink remains a signature");
+    }
     public static void testAPenOverALineIsASignature() {
         emon.Port.Bitmap b = emon.Port.bitmapNew(300, 120, 3);
         emon.Port.Cells rules = emon.Port.newCells();

@@ -480,6 +480,40 @@ fn test_a_run_in_head_set_larger_begins_a_paragraph() {
     crate::testport::assert_text(t2, "P1:alpha beta gamma delta epsilon zeta eta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega;", "lines of one size are one paragraph");
 }
 #[test]
+fn test_a_page_milestone_precedes_its_queued_turned_lines() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ord: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let raw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let only: &mut String = &mut crate::port::new_text();
+    let mixed: &mut String = &mut crate::port::new_text();
+    // A page containing only non-upright lines must keep its milestone before those lines.
+    pt_line(wd, ln, et, &crate::testport::text_blob("First page.")[..], 1, 7200, 10000, 30000, 11200, 0, 0, 1000);
+    pt_line(wd, ln, et, &crate::testport::text_blob("Turned label")[..], 2, 3000, 8000, 4200, 19000, 9000, 0, 1000);
+    crate::testport::assert_eq(pt_run(wd, ln, et, 2, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "turned page: well formed");
+    pt_brief(only, nodes, regions, text);
+    crate::testport::assert_text(only, "P1:First page.;B2;P1:Turned label;", "the page starts before its queued lines");
+    pt_clear(wd, ln, et);
+    pt_line(wd, ln, et, &crate::testport::text_blob("First page.")[..], 1, 7200, 10000, 30000, 11200, 0, 0, 1000);
+    pt_line(wd, ln, et, &crate::testport::text_blob("Turned label")[..], 2, 3000, 8000, 4200, 19000, 9000, 0, 1000);
+    pt_line(wd, ln, et, &crate::testport::text_blob("Second page.")[..], 2, 7200, 10000, 30000, 11200, 0, 0, 1000);
+    crate::testport::assert_eq(pt_run(wd, ln, et, 2, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "mixed page: well formed");
+    pt_brief(mixed, nodes, regions, text);
+    crate::testport::assert_text(mixed, "P1:First page.;B2;P1:Turned label;P1:Second page.;", "a top side label follows the milestone and precedes the body");
+}
+#[test]
 fn test_a_label_turned_a_quarter_stands_where_its_top_is_and_not_at_the_pages_end() {
     let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();

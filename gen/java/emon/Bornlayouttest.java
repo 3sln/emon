@@ -266,4 +266,55 @@ public final class Bornlayouttest {
         blModel(wd, ln, et, 2, nodes, attrs, regions, text, pages);
         emon.Testport.assertEq(blYes(blFind(nodes, Model.nkCaption(), 1)), 1, "both body captions survive");
     }
+    public static void testAReferenceMarkerIsNoColumnOfItsOwn() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        int i = 0;
+        int w0 = 0;
+        int empty = 0;
+        int items = 0;
+        while (i < 12) {
+            blLine(wd, ln, et, emon.Testport.textBlob("ordinary body words continue across the left column here"), 1, 5000, 10000 + (i * 1000), 800);
+            w0 = Evidence.wdCount(wd);
+            if ((i % 3) == 0) {
+                if (i == 0) {
+                    blLine(wd, ln, et, emon.Testport.textBlob("[28] Alpha Beta a reference with several words"), 1, 30886, 10000 + (i * 1000), 800);
+                }
+                if (i == 3) {
+                    blLine(wd, ln, et, emon.Testport.textBlob("[29] Gamma Delta a reference with several words"), 1, 30886, 10000 + (i * 1000), 800);
+                }
+                if (i == 6) {
+                    blLine(wd, ln, et, emon.Testport.textBlob("[30] Epsilon Zeta a reference with several words"), 1, 30886, 10000 + (i * 1000), 800);
+                }
+                if (i == 9) {
+                    blLine(wd, ln, et, emon.Testport.textBlob("[31] Eta Theta a reference with several words"), 1, 30886, 10000 + (i * 1000), 800);
+                }
+            } else {
+                blLine(wd, ln, et, emon.Testport.textBlob("wrapped reference text continues in this column here"), 1, 32922, 10000 + (i * 1000), 800);
+            }
+            if ((i % 3) == 0) {
+                Evidence.wdSet(wd, w0, Evidence.hdX1(), 31886);
+            }
+            i += 1;
+        }
+        blModel(wd, ln, et, 1, nodes, attrs, regions, text, pages);
+        i = 0;
+        while (i < Model.nodeCount(nodes)) {
+            if (Model.nodeKind(nodes, i) == Model.nkItem()) {
+                items += 1;
+                if ((Model.nodeTextLen(nodes, i) == 0) && (Model.nodeFirstChild(nodes, i) < 0)) {
+                    empty += 1;
+                }
+            }
+            i += 1;
+        }
+        emon.Testport.assertEq(items, 4, "one item per reference entry");
+        emon.Testport.assertEq(empty, 0, "the gutter leaves no empty marker items apart from their text");
+    }
 }
