@@ -1,4 +1,4 @@
-;; Laws for the born-digital layout defects of the second smoke sweep (P12.7, D1670-), on every target: the stages are run on lines and words written by hand (centipoints, a page is
+;; Laws for the born-digital layout defects of the second smoke sweep (P12.7, D594-), on every target: the stages are run on lines and words written by hand (centipoints, a page is
 ;; Letter), through the paragraph builder as the Engine makes it (the heading analysis, the notes stage, the list stage, the paragraphs), and the Model is read.
 ;;
 ;;   * a FOOTNOTE's paragraph goes on only in small type: the first line of the next page's body is not its continuation;
