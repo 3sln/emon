@@ -10,7 +10,7 @@
 #   crates npm nuget maven go   one job each, independent (one failing does not stop or undo the others), each in the `release` environment (required reviewer; the
 #           registry secrets live there), each = `bb package --host H` then `bb publish H`: it SKIPS a version the registry already has, so a re-run publishes only
 #           what is missing. All use GITHUB_TOKEN plus the registry's own secret; no other credential exists.
-#   pages   the demo, by calling pages.yml with the verified commit (after the same approval).
+#   Pages deploys independently on push to main (D1760); a release must never roll back the site.
 #   summary one report of what happened, and the failing exit code if any registry did not succeed: a partial publish is named, not silent.
 #
 # Needs (docs/releasing.md has the order): the environment `release` with @raystubbs as required reviewer; these secrets (repository level is fine, a job in the environment
@@ -206,6 +206,15 @@ jobs:
     outputs:
       outcome: ${{ steps.publish.outputs.outcome }}
     steps:
+      - name: Check NuGet profile variable
+        working-directory: .
+        env:
+          NUGET_USER: ${{ vars.NUGET_USER }}
+        run: |
+          if [[ -z "${NUGET_USER//[[:space:]]/}" ]]; then
+            echo "::error::NUGET_USER is empty. Grant the organization Actions variable repository access to emon, or create a repository Actions variable NUGET_USER containing your nuget.org profile name."
+            exit 1
+          fi
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: 3sln/emon
@@ -294,30 +303,9 @@ jobs:
         name: bb publish go (a tag-only commit holding go/, and the tag go/vX.Y.Z)
         run: bb publish go ${DRY_FLAG}
 
-  # the demo waits for the same approval as the registries (the reusable workflow cannot name an environment itself)
-  approve:
-    if: github.event_name == 'release'
-    needs: verify
-    environment: release
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - run: echo "approved in the release environment"
-        working-directory: .
-
-  pages:
-    needs: [verify, approve]
-    uses: ./.github/workflows/pages.yml
-    with:
-      ref: ${{ needs.verify.outputs.sha }}
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-
   summary:
     if: always()
-    needs: [verify, assets, crates, npm, nuget, maven, go, pages]
+    needs: [verify, assets, crates, npm, nuget, maven, go]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -332,5 +320,5 @@ jobs:
       - name: The report (fails if any registry did not succeed)
         env:
           RESULTS: >-
-            verify=${{ needs.verify.result }},assets=${{ needs.assets.result }}:${{ needs.assets.outputs.outcome }},crates=${{ needs.crates.result }}:${{ needs.crates.outputs.outcome }},npm=${{ needs.npm.result }}:${{ needs.npm.outputs.outcome }},nuget=${{ needs.nuget.result }}:${{ needs.nuget.outputs.outcome }},maven=${{ needs.maven.result }}:${{ needs.maven.outputs.outcome }},go=${{ needs.go.result }}:${{ needs.go.outputs.outcome }},pages=${{ needs.pages.result }}
+            verify=${{ needs.verify.result }},assets=${{ needs.assets.result }}:${{ needs.assets.outputs.outcome }},crates=${{ needs.crates.result }}:${{ needs.crates.outputs.outcome }},npm=${{ needs.npm.result }}:${{ needs.npm.outputs.outcome }},nuget=${{ needs.nuget.result }}:${{ needs.nuget.outputs.outcome }},maven=${{ needs.maven.result }}:${{ needs.maven.outputs.outcome }},go=${{ needs.go.result }}:${{ needs.go.outputs.outcome }}
         run: bb release-ops summary --tag "$TAG" --results "$RESULTS" ${DRY_FLAG}
