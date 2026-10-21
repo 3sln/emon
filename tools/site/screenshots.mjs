@@ -13,7 +13,12 @@ try{
  browser=await launch();
  for(const [name,width,dark,url] of [
   ['landing-light',1440,false,'/'],['landing-dark',1440,true,'/'],['landing-mobile',390,false,'/'],
-  ['demo-light',1440,false,'/demo/'],['demo-dark',1440,true,'/demo/'],['demo-mobile',390,false,'/demo/']]){
+  ['demo-light',1440,false,'/demo/'],['demo-dark',1440,true,'/demo/'],['demo-mobile',390,false,'/demo/'],
+  ['landing-tablet',768,false,'/'],['landing-tablet-wide',1024,false,'/'],
+  ['samples-mobile',390,false,'/samples/'],['compare-mobile',390,false,'/samples/table-spans/'],
+  ['docs-mobile',390,false,'/docs/cli/'],['404-mobile',390,false,'/404.html'],
+  ['samples-dark',1440,true,'/samples/'],['compare-dark',1440,true,'/samples/table-spans/'],
+  ['docs-dark',1440,true,'/docs/cli/'],['404-dark',390,true,'/404.html']]){
   const page=await browser.newPage();
   await page.setViewport({width,height:1000,deviceScaleFactor:1});
   await page.emulateMediaFeatures([{name:'prefers-color-scheme',value:dark?'dark':'light'}]);

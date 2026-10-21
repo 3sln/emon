@@ -11,8 +11,8 @@ export default function renderDemo(site = {}) {
 <title>${esc(t("emon demo"))}</title>
 <meta name="description" content="${esc(t("emon turns PDFs and images into semantic HTML, in your browser. Nothing is uploaded."))}">
 <link rel="icon" href="${esc(site.assets?.mark || 'data:,')}">
-${site.assets?.css ? `<link rel="stylesheet" href="${esc(site.assets.css)}">` : ''}
 <link rel="stylesheet" href="${base}style.css">
+${site.assets?.css ? `<link rel="stylesheet" href="${esc(site.assets.css)}">` : ''}
 ${site.assets?.js ? `<script type="module" src="${esc(site.assets.js)}"></script>` : ''}
 <script type="module" src="${base}app.js"></script>
 <link rel="canonical" href="${esc(site.canonical || 'https://emon.3sln.com/demo/')}">
@@ -81,7 +81,7 @@ ${site.header || ''}
 
   <section aria-labelledby="notes">
     <h2 id="notes">${esc(t("Good to know"))}</h2>
-    <ul>
+    <ul class="good-to-know">
       <li>${esc(t("It loads what the document needs. A PDF with a healthy text layer never loads pdfium (5 MiB of WebAssembly, for drawing pages) or Tesseract (10 MiB, for reading pictures of text)."))}</li>
       <li>${esc(t("Fonts. pdfium draws a font that a PDF names but does not embed from its own built-in set, not from your system's fonts, so the lettering inside a figure may differ a little from a desktop viewer's. The text of the HTML is the PDF's own and does not depend on it."))}</li>
       <li>${esc(t("Browsers. emon's module needs WebAssembly's standardised exception handling: Chrome 137, Firefox 131, Safari 18.4 or newer. Large pages are limited to 64 megapixels when drawn."))}</li>

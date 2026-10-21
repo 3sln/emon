@@ -1,10 +1,10 @@
 :root {
-  --bg: #fafafa;
-  --fg: #1f2328;
-  --muted: #59636e;
-  --line: #d0d7de;
+  --bg: #fbfaf7;
+  --fg: #1a1c20;
+  --muted: #5b616b;
+  --line: #e3e0d8;
   --panel: #ffffff;
-  --accent: #0b5cad;
+  --accent: #2b50d6;
   --accent-fg: #ffffff;
   --error: #b42318;
   --over: #e8f1fb;
@@ -12,13 +12,13 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #14171a;
-    --fg: #e6e9ec;
-    --muted: #97a1ab;
-    --line: #353b42;
-    --panel: #1c2024;
-    --accent: #5aa7f0;
-    --accent-fg: #0b1620;
+    --bg: #0f1115;
+    --fg: #e8e6e1;
+    --muted: #a2a8b3;
+    --line: #2a2f3a;
+    --panel: #171a21;
+    --accent: #8ea8ff;
+    --accent-fg: #0b1020;
     --error: #ff8a80;
     --over: #1d2a38;
   }
@@ -78,5 +78,30 @@ li { margin: 0.4rem 0; }
 .skip-link:focus { inset-block-start:1rem; }
 :focus-visible { outline:3px solid #5478f5; outline-offset:3px; }
 :lang(ja), :lang(zh-Hans), :lang(ko) { line-height:1.8; }
-/* The site chrome wraps the independent converter when built by bb site. */
-body:has(.site-header){padding:0 0 48px}.site-header{max-width:none}.site-header~header,.site-header~main{width:min(72rem,calc(100% - 2rem))}.site-header~header{padding-block:1.5rem}.site-header~header h1{font-size:2rem}.site-header~main>section{padding-block:1.5rem;border-block-end:1px solid var(--line)}.site-footer{max-width:72rem}.site-footer p{font-size:.8rem}.site-footer .wordmark{color:var(--fg)}
+/* Converter components share the landing page's spacing and surfaces. */
+body:has(.site-header){padding:0}
+.site-header{max-width:none}
+.site-header~header,.site-header~main{width:min(72rem,calc(100% - 2rem))}
+.site-header~header{padding-block:4rem 2rem}
+.site-header~header h1{font-size:clamp(2.25rem,5.2vw,3.75rem);margin:0 0 1.5rem}
+.site-header~header .lede{max-width:70ch;line-height:1.65}
+.site-header~main>section{padding-block:2.5rem;border-block-end:1px solid var(--line)}
+.site-header~main>section:last-child{border-block-end:0}
+.site-header~main h2{font-size:1.75rem;margin:0 0 1.25rem}
+.site-header~main h3{font-size:1rem}
+#drop{border:1px dashed var(--accent);border-radius:.75rem;min-height:13rem;gap:.6rem;padding:2rem}
+#drop:focus-visible{outline:3px solid var(--accent);outline-offset:4px}
+.row{gap:.75rem;margin-block:1.5rem}
+.samples{gap:.5rem}
+.samples button{border-radius:2rem;font-size:.85rem;padding:.55rem 1rem}
+button{font-weight:550}
+.options{padding:1rem;border:1px solid var(--line);border-radius:.5rem;background:var(--panel)}
+#status{font-size:.9rem;color:var(--muted);margin-block-start:1.25rem;overflow-wrap:anywhere}
+#status.error{color:var(--error)}
+.good-to-know{list-style:none;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}
+.good-to-know li{margin:0;padding:1.5rem;border:1px solid var(--line);border-radius:.5rem;background:var(--panel);font-size:.9rem;line-height:1.7;overflow-wrap:anywhere}
+.downloads{flex-wrap:wrap}
+.frame dl{grid-template-columns:minmax(0,max-content) minmax(0,1fr)}
+.site-footer{max-width:72rem}
+.site-footer .wordmark{color:var(--fg)}
+@media(max-width:699px){.good-to-know{grid-template-columns:minmax(0,1fr)}.site-header~header{padding-block:3rem 1rem}.site-header~main>section{padding-block:2rem}.downloads{margin-left:0}.good-to-know li{padding:1.25rem}}
