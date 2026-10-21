@@ -111,7 +111,7 @@ Nothing else is needed: the Go module, the draft, the statuses and the assets us
   rule the publish jobs are refused).
 * **`github-pages`** (GitHub created it when Pages was first deployed, or create it). Allow the `main` branch; release tags need no access.
 
-**Pages.** D1760 supersedes D547/D550: publish does not call Pages. Pushes to `main` deploy the current site independently, preventing an older release from reverting it and avoiding tag environment restrictions. The site documents the release version in its source. Settings > Pages > *Source*: **GitHub Actions**. The custom domain `emon.3sln.com` is set (a DNS CNAME to `3sln.github.io`; tick *Enforce HTTPS* once the
+**Pages.** D630 supersedes D547/D550: publish does not call Pages. Pushes to `main` deploy the current site independently, preventing an older release from reverting it and avoiding tag environment restrictions. The site documents the release version in its source. Settings > Pages > *Source*: **GitHub Actions**. The custom domain `emon.3sln.com` is set (a DNS CNAME to `3sln.github.io`; tick *Enforce HTTPS* once the
 certificate is issued). A deployment from Actions keeps the domain; no `CNAME` file is needed. The root is the website;
 the browser demo lives under `/demo/`. `pages.yml` installs both npm lockfiles, fetches the pinned pdfium WebAssembly build, and runs
 `bb site --out _site --check` before uploading the artifact. This checks the translated pages, documentation and samples as well as converting

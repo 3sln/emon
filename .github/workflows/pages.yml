@@ -3,7 +3,7 @@
 # Settings > Pages > Source must be "GitHub Actions"; the custom domain remains a repository setting.
 name: pages
 
-# D1760: deploy main independently of releases, so old release tags cannot roll back the site.
+# D630: deploy main independently of releases, so old release tags cannot roll back the site.
 on:
   push:
     branches: [main]

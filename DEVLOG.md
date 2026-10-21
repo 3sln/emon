@@ -11793,7 +11793,7 @@ The ResNet page-9 live comparison still merged references [28] onward after the 
 **Checks and deployment.** Fast core builds the website without the demo or pdfium renders, checks catalogues, local links and fragments, HTML, assets, sizes and contrast, and plants failures in its self-test. Full `bb site --check` also exercises the demo in Chrome. The existing Pages workflow installs the website lockfile and builds the complete site; it is not triggered as part of implementation. The coordinator commits and deploys after review.
 - [ ] **Signed off** (maintainer)
 
-### D1760 — First publication: Go workflow tree, npm config, independent Pages and NuGet preflight
+### D630 — First publication: Go workflow tree, npm config, independent Pages and NuGet preflight
 
 Supersedes the affected release-flow parts of D547/D550. Go's tag-only commit retains the release as sole parent, overlays the default branch workflows and assembled go/ in an isolated index, and never moves HEAD. GitHub documents the same-path/same-contents exception for workflows already on another branch (https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps); matching default-branch contents uses that exception, rather than assuming a parent diff or adding a second parent. The local test checks tree equality, unrelated release content, parent, checkout isolation and legacy shape; GitHub enforcement requires the next real publish. The coordinator manually pushed go/v0.1.0 from a local checkout (parent 2e87e026); existing tags with that parent and only go/ changes remain idempotent.
 

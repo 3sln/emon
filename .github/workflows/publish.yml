@@ -10,7 +10,7 @@
 #   crates npm nuget maven go   one job each, independent (one failing does not stop or undo the others), each in the `release` environment (required reviewer; the
 #           registry secrets live there), each = `bb package --host H` then `bb publish H`: it SKIPS a version the registry already has, so a re-run publishes only
 #           what is missing. All use GITHUB_TOKEN plus the registry's own secret; no other credential exists.
-#   Pages deploys independently on push to main (D1760); a release must never roll back the site.
+#   Pages deploys independently on push to main (D630); a release must never roll back the site.
 #   summary one report of what happened, and the failing exit code if any registry did not succeed: a partial publish is named, not silent.
 #
 # Needs (docs/releasing.md has the order): the environment `release` with @raystubbs as required reviewer; these secrets (repository level is fine, a job in the environment
