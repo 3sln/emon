@@ -132,13 +132,17 @@
           :when (not= n "emon")]
       [n v])))
 
+(def npm-lockfiles ["host/js/package-lock.json" "site/package-lock.json"])
+
 (defn- npm-packages [root]
-  (when-let [s (rd root "host/js/package-lock.json")]
-    (for [[k v] (:packages (json/parse-string s true))
-          :let [nm (subs (str k) 1)]
-          :when (seq nm)
-          :let [pkg (last (str/split nm #"node_modules/"))]]
-      [pkg (:version v)])))
+  (for [lock npm-lockfiles
+        :let [s (rd root lock)]
+        :when s
+        [k v] (:packages (json/parse-string s true))
+        :let [nm (subs (str k) 1)]
+        :when (seq nm)
+        :let [pkg (last (str/split nm #"node_modules/"))]]
+    [pkg (:version v) lock]))
 
 (defn- heredoc-deps
   "Names under a [dependencies] table in the Cargo.toml heredocs of the build scripts."
@@ -276,16 +280,18 @@
           ;; coverage: npm
           (let [b (n-before)
                 pk (npm-packages root)
-                want (set (map (fn [[n v]] (str "npm/" n "@" v)) pk))
+                want (set (map (fn [[n v _]] (str "npm/" n "@" v)) pk))
                 have (set (map :id (filter #(= :npm (:kind %)) comps)))
                 names (set (map :name (filter #(= :npm (:kind %)) comps)))]
-            (when (nil? pk) (fail! "host/js/package-lock.json is missing"))
-            (doseq [id (sort (remove have want))] (fail! id " is in host/js/package-lock.json and not in " inventory-path))
-            (doseq [id (sort (remove want have))] (fail! id " is in " inventory-path " and not in host/js/package-lock.json (stale)"))
-            (when-let [s (rd root "host/js/package.json")]
+            (doseq [lock npm-lockfiles :when (nil? (rd root lock))] (fail! lock " is missing"))
+            (doseq [[n v lock] pk :let [id (str "npm/" n "@" v)] :when (not (have id))]
+              (fail! id " is in " lock " and not in " inventory-path))
+            (doseq [id (sort (remove want have))] (fail! id " is in " inventory-path " and not in host/js/package-lock.json or site/package-lock.json (stale)"))
+            (doseq [manifest ["host/js/package.json" "site/package.json"]
+                    :let [s (rd root manifest)] :when s]
               (let [p (json/parse-string s true)]
                 (doseq [n (map #(subs (str %) 1) (keys (merge (:dependencies p) (:devDependencies p))))]
-                  (when-not (names n) (fail! "npm `" n "` (host/js/package.json) is not in " inventory-path)))))
+                  (when-not (names n) (fail! "npm `" n "` (" manifest ") is not in " inventory-path)))))
             (when (= b (n-before)) (ok! (str "every npm package (" (count pk) ") is in the inventory"))))
           ;; Go
           (when-let [s (rd root "kin/scripts/emon-go-build")]
@@ -426,7 +432,7 @@
   [[:crate "Rust crates" "Compiled into the Rust, C, pod and WASM artifacts (host/rust/Cargo.lock)."]
    [:native "Native libraries" "Not carried by the Rust, Go, Java and C# library packages (they load pdfium and Tesseract from the user's system at run time); carried by the per-platform CLI, the C library and pod archives (D552), the npm package @3sln/pdfium-wasm (pdfium's WebAssembly build, D553) and the browser demo."]
    [:data "Data the generated code embeds" "Tables built into every artifact by kin's generators from these sources."]
-   [:npm "npm packages" "Development dependencies of host/js (the browser test harness and the Tesseract.js adapter); `files` is `src` only, so none is in the npm package. The browser demo ships tesseract.js, tesseract.js-core, the English model's package and what tesseract.js bundles (`bb demo` copies their dist files)."]])
+   [:npm "npm packages" "Build dependencies of site and development dependencies of host/js (the browser test harness and the Tesseract.js adapter); `files` is `src` only, so none is in the npm package. The browser demo ships bab, tesseract.js, tesseract.js-core, the English model's package and what tesseract.js bundles (`bb demo` copies their dist files)."]])
 
 (defn notices
   "THIRD_PARTY_NOTICES.md for the inventory, with licence texts read from `root`'s release/licenses/."
@@ -526,7 +532,7 @@
 
 ;; ------------------------------------------------------------------------------------------------ the self-test
 
-(def copy-roots ["LICENSE" "THIRD_PARTY_NOTICES.md" "release" "host" "kin/scripts" "tools/demo" "tools/native"])
+(def copy-roots ["LICENSE" "THIRD_PARTY_NOTICES.md" "release" "host" "site" "kin/scripts" "tools/demo" "tools/native"])
 
 (defn- copy-tree! [from to]
   (doseq [r copy-roots
@@ -587,6 +593,8 @@
              #(edit! inventory-path (fn [s] (str/replace s #"(?m)^\s*\{:id \"npm/ws@8\.22\.0\".*\n" ""))))
       (case! "a new devDependency missing from the inventory" #"npm `left-pad` \(host/js/package.json\)"
              #(edit! "host/js/package.json" (fn [s] (str/replace s "\"devDependencies\": {" "\"devDependencies\": {\n    \"left-pad\": \"1.3.0\","))))
+      (case! "a site-lock package missing from the inventory" #"npm/marked@18.1.1 is in site/package-lock.json and not in"
+             #(edit! inventory-path (fn [s] (str/replace s #"(?m)^\s*\{:id \"npm/marked@18\.1\.1\".*\n" ""))))
       ;; 3. licences
       (case! "a licence outside the allowlist" #"licence \"Proprietary\" is outside the allowlist"
              #(edit! inventory-path (fn [s] (str/replace-first s "\"MIT\" :url \"https://crates.io/crates/simd-adler32\"" "\"Proprietary\" :url \"https://crates.io/crates/simd-adler32\""))))
@@ -632,6 +640,9 @@
              #(edit! "tools/demo/build.clj" (fn [s] (str s "\n(copy! \"x\" (str out \"/vendor/bogus/x.js\"))\n"))))
       (case! "a demo component that the demo does not carry" #":demo-files vendor/pdfium/: native/pdfium-llvm-libc is not carried by the browser demo"
              #(edit! inventory-path (fn [s] (str/replace-first s "\"native/pdfium-simdutf\"" "\"native/pdfium-llvm-libc\" \"native/pdfium-simdutf\""))))
+      (case! "an unlisted vendor/bab file" #"tools/demo/build.clj vendors `vendor/bab/index.js`"
+             #(do (edit! inventory-path (fn [s] (str/replace s "\"vendor/bab/\" [\"npm/@3sln/bab@0.2.0\"]" "")))
+                  (edit! "tools/demo/build.clj" (fn [s] (str s "\n(copy! \"x\" (str out \"/vendor/bab/index.js\"))\n")))))
       ;; 6. fonts and ICC
       (case! "a font under host/" #"host/js/src/bogus.ttf: a font or ICC profile"
              #(spit (path tmp "host/js/src/bogus.ttf") "x"))

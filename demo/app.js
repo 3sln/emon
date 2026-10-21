@@ -3,18 +3,19 @@
 //
 // No framework and no bundler: this is an ES module and the SDK is `./sdk/` (host/js/src, copied by `bb demo`). `window.__demo` is the page's own door, the
 // one the UI uses, so `bb demo --check` drives the page the way a person does.
+import { tr } from './i18n.js';
 import { tesseractPort } from './sdk/tesseract.js';
 
 const $ = (id) => document.getElementById(id);
 const el = { drop: $('drop'), file: $('file'), status: $('status'), out: $('out'), source: $('source'), html: $('html'), json: $('json'), stats: $('stats'), tabs: [...document.querySelectorAll('[role=tab]')], panes: [...document.querySelectorAll('[role=tabpanel]')], dlHtml: $('dl-html'), dlJson: $('dl-json'), ocr: $('ocr'), figures: $('figures'), samples: $('samples'), notice: $('notice'), busy: $('busy') };
 
 const SAMPLES = [
-  { file: 'invoice.pdf', label: 'Invoice', note: 'born-digital: its own text, no pdfium and no OCR' },
-  { file: 'bank-statement.pdf', label: 'Bank statement', note: 'three pages, tables' },
-  { file: 'columns-two.pdf', label: 'Two columns', note: 'reading order down each column' },
-  { file: 'table-multipage.pdf', label: 'Table over four pages', note: 'a table that continues, header and all' },
-  { file: 'figures-charts.pdf', label: 'Charts and figures', note: 'figures become images: pdfium renders them', figures: true },
-  { file: 'scan-plain.pdf', label: 'Scanned page', note: 'a picture of text: Tesseract reads it (a PNG or JPEG of a page works too: drop one in)' },
+  { file: 'invoice.pdf', label: tr("Invoice"), note: tr("born-digital: its own text, no pdfium and no OCR") },
+  { file: 'bank-statement.pdf', label: tr("Bank statement"), note: tr("three pages, tables") },
+  { file: 'columns-two.pdf', label: tr("Two columns"), note: tr("reading order down each column") },
+  { file: 'table-multipage.pdf', label: tr("Table over four pages"), note: tr("a table that continues, header and all") },
+  { file: 'figures-charts.pdf', label: tr("Charts and figures"), note: tr("figures become images: pdfium renders them"), figures: true },
+  { file: 'scan-plain.pdf', label: tr("Scanned page"), note: tr("a picture of text: Tesseract reads it (a PNG or JPEG of a page works too: drop one in)") },
 ];
 
 // the iframe that shows emon's HTML gets a few lines of styling, spliced in here only (the Model's HTML is unstyled)
@@ -30,6 +31,14 @@ const styled = (html) => {
 // emon's module uses WebAssembly's standardised exception handling (`try_table`): Chrome 137, Firefox 131, Safari 18.4. A module with one tells.
 const TRY_TABLE = new Uint8Array([0, 0x61, 0x73, 0x6d, 1, 0, 0, 0, 1, 4, 1, 0x60, 0, 0, 3, 2, 1, 0, 0x0a, 0x0e, 1, 0x0c, 0, 0x02, 0x40, 0x1f, 0x40, 1, 2, 0, 1, 0x0b, 0x0b, 0x0b]);
 const supported = typeof WebAssembly === 'object' && typeof Worker === 'function' && WebAssembly.validate(TRY_TABLE);
+
+function stageText(m) {
+  if (m.text === 'loading emon') return tr('Loading emon');
+  if (m.text === 'converting') return tr('Converting');
+  if (m.text === 'rendering') return tr('Rendering pages with pdfium (first use: loading it)');
+  if (m.text === 'recognising') return String(tr('Reading text with Tesseract ({#} pages and regions)', { count: m.count }).singular('Reading text with Tesseract ({#} page or region)')) + (m.onPage ? tr(' (on the page thread)') : '');
+  return tr('Working');
+}
 
 // ---------------------------------------------------------------------------------------------------------------- the worker
 let worker = null;
@@ -63,8 +72,8 @@ function start() {
     // `?ocr-main` is passed on: it makes the Worker behave as one that cannot start Workers (the page-thread OCR path)
     worker = new Worker(new URL('./worker.js', import.meta.url).href + location.search, { type: 'module' });
     worker.onerror = (e) => {
-      reject(new Error(e.message || 'the worker failed to start'));
-      for (const j of jobs.values()) j.reject(new Error(e.message || 'the worker failed'));
+      reject(new Error(e.message || tr("the worker failed to start")));
+      for (const j of jobs.values()) j.reject(new Error(e.message || tr("the worker failed")));
       jobs.clear();
     };
     worker.onmessage = (ev) => {
@@ -72,7 +81,7 @@ function start() {
       if (m.type === 'ready') {
         nested = m.nested;
         resolve();
-      } else if (m.type === 'stage') jobs.get(m.id)?.stage?.(m.text);
+      } else if (m.type === 'stage') jobs.get(m.id)?.stage?.(stageText(m));
       else if (m.type === 'ocr') answerOcr(m);
       else if (m.type === 'done' || m.type === 'error') {
         const j = jobs.get(m.id);
@@ -109,12 +118,26 @@ const blobUrl = (data, type) => {
 };
 
 function select(tab) {
-  for (const t of el.tabs) t.setAttribute('aria-selected', String(t === tab));
+  for (const t of el.tabs) {
+    t.setAttribute('aria-selected', String(t === tab));
+    t.tabIndex = t === tab ? 0 : -1;
+  }
   for (const p of el.panes) p.hidden = p.getAttribute('aria-labelledby') !== tab.id;
 }
-for (const t of el.tabs) t.addEventListener('click', () => select(t));
+for (const t of el.tabs) {
+  t.addEventListener('click', () => select(t));
+  t.addEventListener('keydown', (event) => {
+    const index = el.tabs.indexOf(t);
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? el.tabs.length - 1 : event.key === 'ArrowRight' ? (index + 1) % el.tabs.length : event.key === 'ArrowLeft' ? (index + el.tabs.length - 1) % el.tabs.length : -1;
+    if (next < 0) return;
+    event.preventDefault();
+    select(el.tabs[next]);
+    el.tabs[next].focus();
+  });
+}
+select(el.tabs[0]);
 
-const fmt = (n) => (n >= 1024 * 1024 ? (n / 1024 / 1024).toFixed(1) + ' MiB' : n >= 1024 ? (n / 1024).toFixed(1) + ' KiB' : n + ' bytes');
+const fmt = (n) => (n >= 1024 * 1024 ? (n / 1024 / 1024).toFixed(1) + ' MiB' : n >= 1024 ? (n / 1024).toFixed(1) + ' KiB' : tr('{#} bytes', { count: n }).singular('{#} byte'));
 
 function show(file, name, r) {
   forget();
@@ -122,12 +145,13 @@ function show(file, name, r) {
   el.source.replaceChildren();
   if (isPdf) {
     const f = document.createElement('iframe');
-    f.title = `the document: ${name}`;
+    f.title = tr('The document: {name}', { name });
     f.src = blobUrl(file, 'application/pdf');
     el.source.append(f);
   } else {
     const i = document.createElement('img');
-    i.alt = `the document: ${name}`;
+    i.alt = tr('The document: {name}', { name });
+    i.addEventListener('load', () => { i.width = i.naturalWidth; i.height = i.naturalHeight; }, { once: true });
     i.src = blobUrl(file, file.type || 'image/png');
     el.source.append(i);
   }
@@ -135,14 +159,14 @@ function show(file, name, r) {
   el.json.textContent = r.json;
   const s = r.stats;
   const rows = [
-    ['document', `${name} (${fmt(file.size)})`],
-    ['time', `${(s.ms / 1000).toFixed(2)} s, in your browser`],
-    ['read from the file', `${fmt(s.bytesRead)} in ${s.reads} reads`],
-    ['conversion attempts', `${s.attempts} (a unit that missed bytes is run again), ${s.fetchRounds} fetch rounds`],
-    ['pdfium', s.pdfiumLoaded ? 'used: pages rendered for figures or for reading' : 'not loaded: nothing here needed a render'],
-    ['Tesseract', s.ocrRequests ? `${s.ocrRequests} recognitions${s.ocrOnPageThread ? ' (on the page thread: this browser has no nested Workers)' : ''}` : 'not loaded: nothing here needed OCR'],
-    ['figure images', String(s.assets)],
-    ['notes', s.notes && s.notes.length ? s.notes.join('; ') : 'none'],
+    [tr("document"), `${name} (${fmt(file.size)})`],
+    [tr("time"), tr('{seconds} s, in your browser', { seconds: (s.ms / 1000).toFixed(2) })],
+    [tr("read from the file"), tr('{size} in {#} reads', { size: fmt(s.bytesRead), count: s.reads }).singular('{size} in {#} read')],
+    [tr("conversion attempts"), tr('{attempts} (a unit that missed bytes is run again), {rounds} fetch rounds', { attempts: s.attempts, rounds: s.fetchRounds })],
+    [tr("pdfium"), s.pdfiumLoaded ? tr("used: pages rendered for figures or for reading") : tr("not loaded: nothing here needed a render")],
+    [tr("Tesseract"), s.ocrRequests ? String(tr('{#} recognitions', { count: s.ocrRequests }).singular('{#} recognition')) + (s.ocrOnPageThread ? tr(' (on the page thread: this browser has no nested Workers)') : '') : tr("not loaded: nothing here needed OCR")],
+    [tr("figure images"), String(s.assets)],
+    [tr("notes"), s.notes && s.notes.length ? s.notes.join('; ') : tr("none")],
   ];
   el.stats.replaceChildren(...rows.flatMap(([k, v]) => {
     const dt = document.createElement('dt');
@@ -167,15 +191,15 @@ async function run(file, name) {
   el.busy.hidden = false;
   el.out.hidden = true;
   el.status.className = '';
-  el.status.textContent = `Reading ${name}`;
+  el.status.textContent = tr('Reading {name}', { name });
   try {
     const r = await convert(file, { ocr: el.ocr.value, figures: el.figures.checked }, (t) => (el.status.textContent = `${name}: ${t}`));
     show(file, name, r);
-    el.status.textContent = `${name}: done in ${(r.stats.ms / 1000).toFixed(1)} s. Everything ran in this page; nothing was uploaded.`;
+    el.status.textContent = tr('{name}: done in {seconds} s. Everything ran in this page; nothing was uploaded.', { name, seconds: (r.stats.ms / 1000).toFixed(1) });
     return r;
   } catch (e) {
     el.status.className = 'error';
-    el.status.textContent = e.code === 'unsupported-browser' ? unsupportedText : `${name}: ${e.code ? e.code + ': ' : ''}${e.message}`;
+    el.status.textContent = e.code === 'unsupported-browser' ? unsupportedText : tr('{name}: {error}', { name, error: (e.code ? e.code + ': ' : '') + e.message });
     throw e;
   } finally {
     busy = false;
@@ -191,7 +215,7 @@ async function sample(s) {
   return run(file, s.file);
 }
 
-const unsupportedText = 'This browser cannot run emon: its WebAssembly module uses the standardised exception handling that Chrome 137, Firefox 131 and Safari 18.4 (and newer) have. Update the browser and try again.';
+const unsupportedText = tr('This browser cannot run emon: its WebAssembly module uses the standardised exception handling that Chrome 137, Firefox 131 and Safari 18.4 (and newer) have. Update the browser and try again.');
 
 for (const s of SAMPLES) {
   const b = document.createElement('button');

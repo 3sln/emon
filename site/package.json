@@ -1,0 +1,12 @@
+{
+  "name": "emon-site",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "dependencies": {
+    "@3sln/bab": "0.2.0",
+    "@3sln/bab-extract": "0.2.0",
+    "marked": "18.1.1",
+    "highlight.js": "11.12.0"
+  }
+}

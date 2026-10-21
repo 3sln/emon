@@ -64,7 +64,13 @@
 (spit (str out "/.nojekyll") "")
 
 ;; the page
-(doseq [f ["index.html" "style.css" "app.js" "worker.js"]] (copy! (str "demo/" f) (str out "/" f)))
+(doseq [f ["style.css" "app.js" "worker.js" "i18n.js"]] (copy! (str "demo/" f) (str out "/" f)))
+(when-not (fs/exists? "site/node_modules/@3sln/bab/index.js")
+  (shell {:inherit true} "npm" "ci" "--prefix" "site"))
+(shell {:inherit true} "node" "tools/demo/render.mjs" (str out "/index.html"))
+;; bab's public export is its single index.js; retain its MIT licence beside it.
+(copy! "site/node_modules/@3sln/bab/index.js" (str out "/vendor/bab/index.js"))
+(copy! "site/node_modules/@3sln/bab/LICENSE" (str out "/vendor/bab/LICENSE"))
 ;; the SDK, by relative path
 (doseq [f (fs/glob "host/js/src" "*.js")] (copy! (str f) (str out "/sdk/" (fs/file-name f))))
 (copy! wasm (str out "/emon.wasm"))
@@ -92,7 +98,7 @@
 (def all (for [f (files-under out)] (let [abs (str (fs/absolutize f))] {:path (rel abs) :file f :size (fs/size f)})))
 (defn group [pred] (reduce + (map :size (filter pred all))))
 (def sizes
-  {:first (group #(not (or (str/starts-with? (:path %) "vendor/") (str/starts-with? (:path %) "samples/"))))
+  {:first (group #(not (or (str/starts-with? (:path %) "vendor/pdfium/") (str/starts-with? (:path %) "vendor/tesseract/") (str/starts-with? (:path %) "samples/"))))
    :pdfium (group #(str/starts-with? (:path %) "vendor/pdfium/"))
    :tesseract (group #(str/starts-with? (:path %) "vendor/tesseract/"))
    :samples (group #(str/starts-with? (:path %) "samples/"))

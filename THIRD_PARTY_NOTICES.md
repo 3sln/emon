@@ -10,43 +10,43 @@ Compiled into the Rust, C, pod and WASM artifacts (host/rust/Cargo.lock).
 
 - **adler2** 2.0.1 - 0BSD OR MIT OR Apache-2.0 (used under MIT) - https://crates.io/crates/adler2
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [32](#licence-text-32).
+  Licence text: [33](#licence-text-33).
 
 - **autocfg** 1.5.1 - Apache-2.0 OR MIT (used under MIT) - https://crates.io/crates/autocfg
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [37](#licence-text-37).
+  Licence text: [38](#licence-text-38).
 
 - **bitflags** 2.13.2 - MIT OR Apache-2.0 (used under MIT) - https://crates.io/crates/bitflags
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [23](#licence-text-23).
+  Licence text: [24](#licence-text-24).
 
 - **bytemuck** 1.25.2 - Zlib OR Apache-2.0 OR MIT (used under MIT) - https://crates.io/crates/bytemuck
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [20](#licence-text-20).
+  Licence text: [21](#licence-text-21).
 
 - **byteorder-lite** 0.1.0 - Unlicense OR MIT (used under MIT) - https://crates.io/crates/byteorder-lite
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [17](#licence-text-17).
+  Licence text: [18](#licence-text-18).
 
 - **cfg-if** 1.0.5 - MIT OR Apache-2.0 (used under MIT) - https://crates.io/crates/cfg-if
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [38](#licence-text-38).
+  Licence text: [39](#licence-text-39).
 
 - **crc32fast** 1.5.2 - MIT OR Apache-2.0 (used under MIT) - https://crates.io/crates/crc32fast
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [19](#licence-text-19).
+  Licence text: [20](#licence-text-20).
 
 - **fdeflate** 0.3.7 - MIT OR Apache-2.0 (used under MIT) - https://crates.io/crates/fdeflate
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [34](#licence-text-34).
+  Licence text: [35](#licence-text-35).
 
 - **flate2** 1.1.10 - MIT OR Apache-2.0 (used under MIT) - https://crates.io/crates/flate2
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [28](#licence-text-28).
+  Licence text: [29](#licence-text-29).
 
 - **image** 0.25.10 - MIT OR Apache-2.0 (used under MIT) - https://crates.io/crates/image
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [34](#licence-text-34).
+  Licence text: [35](#licence-text-35).
 
 - **miniz_oxide** 0.8.9 - MIT OR Zlib OR Apache-2.0 (used under MIT) - https://crates.io/crates/miniz_oxide
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
@@ -62,11 +62,11 @@ Compiled into the Rust, C, pod and WASM artifacts (host/rust/Cargo.lock).
 
 - **num-traits** 0.2.19 - MIT OR Apache-2.0 (used under MIT) - https://crates.io/crates/num-traits
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [23](#licence-text-23).
+  Licence text: [24](#licence-text-24).
 
 - **png** 0.18.1 - MIT OR Apache-2.0 (used under MIT) - https://crates.io/crates/png
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [47](#licence-text-47).
+  Licence text: [48](#licence-text-48).
 
 - **pxfm** 0.1.30 - BSD-3-Clause OR Apache-2.0 (used under BSD-3-Clause) - https://crates.io/crates/pxfm
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
@@ -82,11 +82,11 @@ Compiled into the Rust, C, pod and WASM artifacts (host/rust/Cargo.lock).
 
 - **zune-core** 0.5.3 - MIT OR Apache-2.0 OR Zlib (used under MIT) - https://crates.io/crates/zune-core
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [44](#licence-text-44).
+  Licence text: [45](#licence-text-45).
 
 - **zune-jpeg** 0.5.15 - MIT OR Apache-2.0 OR Zlib (used under MIT) - https://crates.io/crates/zune-jpeg
   carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
-  Licence text: [44](#licence-text-44).
+  Licence text: [45](#licence-text-45).
 
 
 ## Native libraries
@@ -95,35 +95,35 @@ Not carried by the Rust, Go, Java and C# library packages (they load pdfium and 
 
 - **pdfium** chromium/8076 (156.0.8076.0) - Apache-2.0 - https://pdfium.googlesource.com/pdfium/
   carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the browser demo page (P11.4c), the npm package @3sln/pdfium-wasm (pdfium's WebAssembly build, D553); loaded at run time (not carried) by the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon. Pinned in tools/pdfium/pdfium.edn. The Go, Java and C# hosts, the C library and the pod load it from the user's system and do not carry it. The browser demo carries the pinned WebAssembly build (pdfium-wasm.tgz of the same release: vendor/pdfium/pdfium.wasm and the loader pdfium.mjs made of its pdfium.js); the text is the archive's licenses/pdfium.txt.
-  Licence text: [46](#licence-text-46).
+  Licence text: [47](#licence-text-47).
 
 - **pdfium-binaries (the build scripts and packaging)** chromium/8076 - MIT - https://github.com/bblanchon/pdfium-binaries
   carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the browser demo page (P11.4c), the npm package @3sln/pdfium-wasm (pdfium's WebAssembly build, D553). Copyright 2014-2025 Benoit Blanchon; its LICENSE ships in each archive, the wasm archive's (pdfium-wasm.tgz) included: the browser demo's loader is made from that archive's lib/pdfium.js, unchanged (tools/pdfium/fetch.clj).
-  Licence text: [41](#licence-text-41).
+  Licence text: [42](#licence-text-42).
 
 - **abseil-cpp (in pdfium)** bundled in pdfium chromium/8076 - Apache-2.0 - https://abseil.io/
   carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the browser demo page (P11.4c), the npm package @3sln/pdfium-wasm (pdfium's WebAssembly build, D553). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); Re-verified at P11.5 (D540): the licenses/ directory of all six chromium/8076 archives (five platforms and wasm; wasm has no llvm-libc) lists it.
-  Licence text: [24](#licence-text-24).
+  Licence text: [25](#licence-text-25).
 
 - **Anti-Grain Geometry 2.3 (in pdfium)** bundled in pdfium chromium/8076 - LicenseRef-AGG-2.3 - https://github.com/google/pdfium/tree/main/third_party/agg23
   carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the browser demo page (P11.4c), the npm package @3sln/pdfium-wasm (pdfium's WebAssembly build, D553). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); Re-verified at P11.5 (D540): the licenses/ directory of all six chromium/8076 archives (five platforms and wasm; wasm has no llvm-libc) lists it. Permissive notice-retention terms of Maxim Shemanarev, not an SPDX-listed licence.
-  Licence text: [27](#licence-text-27).
+  Licence text: [28](#licence-text-28).
 
 - **fast_float (in pdfium)** bundled in pdfium chromium/8076 - Apache-2.0 OR MIT (used under MIT) - https://github.com/fastfloat/fast_float
   carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the browser demo page (P11.4c), the npm package @3sln/pdfium-wasm (pdfium's WebAssembly build, D553). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); Re-verified at P11.5 (D540): the licenses/ directory of all six chromium/8076 archives (five platforms and wasm; wasm has no llvm-libc) lists it.
-  Licence text: [29](#licence-text-29).
+  Licence text: [30](#licence-text-30).
 
 - **FreeType (in pdfium)** bundled in pdfium chromium/8076 - FTL - https://freetype.org/
   carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the browser demo page (P11.4c), the npm package @3sln/pdfium-wasm (pdfium's WebAssembly build, D553). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); Re-verified at P11.5 (D540): the licenses/ directory of all six chromium/8076 archives (five platforms and wasm; wasm has no llvm-libc) lists it. Used under the FreeType Project License; its credit clause is met by this notice.
-  Licence text: [31](#licence-text-31).
+  Licence text: [32](#licence-text-32).
 
 - **ICU (in pdfium)** bundled in pdfium chromium/8076 - Unicode-3.0 - https://icu.unicode.org/
   carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the browser demo page (P11.4c), the npm package @3sln/pdfium-wasm (pdfium's WebAssembly build, D553). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); Re-verified at P11.5 (D540): the licenses/ directory of all six chromium/8076 archives (five platforms and wasm; wasm has no llvm-libc) lists it.
-  Licence text: [30](#licence-text-30).
+  Licence text: [31](#licence-text-31).
 
 - **Little CMS 2 (in pdfium)** bundled in pdfium chromium/8076 - MIT - https://www.littlecms.com/
   carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the browser demo page (P11.4c), the npm package @3sln/pdfium-wasm (pdfium's WebAssembly build, D553). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); Re-verified at P11.5 (D540): the licenses/ directory of all six chromium/8076 archives (five platforms and wasm; wasm has no llvm-libc) lists it.
-  Licence text: [22](#licence-text-22).
+  Licence text: [23](#licence-text-23).
 
 - **libjpeg-turbo (in pdfium)** bundled in pdfium chromium/8076 - IJG AND BSD-3-Clause AND Zlib - https://libjpeg-turbo.org/
   carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the browser demo page (P11.4c), the npm package @3sln/pdfium-wasm (pdfium's WebAssembly build, D553). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); Re-verified at P11.5 (D540): the licenses/ directory of all six chromium/8076 archives (five platforms and wasm; wasm has no llvm-libc) lists it.
@@ -131,7 +131,7 @@ Not carried by the Rust, Go, Java and C# library packages (they load pdfium and 
 
 - **OpenJPEG (in pdfium)** bundled in pdfium chromium/8076 - BSD-2-Clause - https://www.openjpeg.org/
   carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the browser demo page (P11.4c), the npm package @3sln/pdfium-wasm (pdfium's WebAssembly build, D553). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); Re-verified at P11.5 (D540): the licenses/ directory of all six chromium/8076 archives (five platforms and wasm; wasm has no llvm-libc) lists it.
-  Licence text: [35](#licence-text-35).
+  Licence text: [36](#licence-text-36).
 
 - **libpng (in pdfium)** bundled in pdfium chromium/8076 - libpng-2.0 - http://www.libpng.org/pub/png/libpng.html
   carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the browser demo page (P11.4c), the npm package @3sln/pdfium-wasm (pdfium's WebAssembly build, D553). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); Re-verified at P11.5 (D540): the licenses/ directory of all six chromium/8076 archives (five platforms and wasm; wasm has no llvm-libc) lists it.
@@ -139,23 +139,23 @@ Not carried by the Rust, Go, Java and C# library packages (they load pdfium and 
 
 - **LLVM libc (in pdfium)** bundled in pdfium chromium/8076 - Apache-2.0 WITH LLVM-exception - https://libc.llvm.org/
   carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552). Bundled inside the pinned native pdfium builds; the wasm archive's licenses/ directory (the browser demo's) does not list it (P11.4c re-checked), so the demo does not carry it. P11.5 re-verifies the list per platform.
-  Licence text: [43](#licence-text-43).
+  Licence text: [44](#licence-text-44).
 
 - **simdutf (in pdfium)** bundled in pdfium chromium/8076 - Apache-2.0 OR MIT (used under MIT) - https://github.com/simdutf/simdutf
   carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the browser demo page (P11.4c), the npm package @3sln/pdfium-wasm (pdfium's WebAssembly build, D553). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); Re-verified at P11.5 (D540): the licenses/ directory of all six chromium/8076 archives (five platforms and wasm; wasm has no llvm-libc) lists it.
-  Licence text: [40](#licence-text-40).
+  Licence text: [41](#licence-text-41).
 
 - **zlib (in pdfium)** bundled in pdfium chromium/8076 - Zlib - https://zlib.net/
   carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the browser demo page (P11.4c), the npm package @3sln/pdfium-wasm (pdfium's WebAssembly build, D553). Bundled inside the pinned pdfium build (bblanchon/pdfium-binaries chromium/8076, its licenses/ directory); Re-verified at P11.5 (D540): the licenses/ directory of all six chromium/8076 archives (five platforms and wasm; wasm has no llvm-libc) lists it.
-  Licence text: [21](#licence-text-21).
+  Licence text: [22](#licence-text-22).
 
 - **Tesseract** 5.5.3 - Apache-2.0 - https://github.com/tesseract-ocr/tesseract
   carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552); loaded at run time (not carried) by the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon. The version recorded by the committed transcripts (test/ocr/PRODUCER.json); Built by `bb native` (tools/native/native.edn) as a static library without libarchive, libcurl, its own libtiff, OpenMP, ICU or ScrollView (D540).
-  Licence text: [33](#licence-text-33).
+  Licence text: [34](#licence-text-34).
 
 - **Leptonica** 1.87.0 - BSD-2-Clause - http://www.leptonica.org/
   carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552); loaded at run time (not carried) by the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon. Leptonica's own licence is a two-clause BSD text. Static in the CLI; built with libpng, libjpeg-turbo, libtiff, zlib, giflib and libwebp, and without OpenJPEG (JPX stays unsupported, D524) or any JBIG codec (D540).
-  Licence text: [16](#licence-text-16).
+  Licence text: [17](#licence-text-17).
 
 - **libpng (Leptonica's PNG codec)** 1.6.58 - libpng-2.0 - http://www.libpng.org/pub/png/libpng.html
   carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552).
@@ -167,7 +167,7 @@ Not carried by the Rust, Go, Java and C# library packages (they load pdfium and 
 
 - **libtiff (Leptonica's TIFF codec)** 4.7.2 - libtiff - https://libtiff.gitlab.io/libtiff/
   carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552). A permissive BSD-style notice, not in the SPEC allowlist; listed so a maintainer decides (D526).
-  Licence text: [18](#licence-text-18).
+  Licence text: [19](#licence-text-19).
 
 - **zlib (Leptonica's Flate codec)** 1.3.1 - Zlib - https://zlib.net/
   carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552).
@@ -175,7 +175,7 @@ Not carried by the Rust, Go, Java and C# library packages (they load pdfium and 
 
 - **giflib (Leptonica's GIF codec)** 6.1.3 - MIT - https://giflib.sourceforge.net/
   carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552).
-  Licence text: [50](#licence-text-50).
+  Licence text: [51](#licence-text-51).
 
 - **libwebp (Leptonica's WebP codec)** 1.6.0 - BSD-3-Clause - https://chromium.googlesource.com/webm/libwebp
   carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552).
@@ -183,19 +183,19 @@ Not carried by the Rust, Go, Java and C# library packages (they load pdfium and 
 
 - **Tesseract eng.traineddata** tessdata_fast 4.1.0, 4113088 bytes, sha256 7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2 - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_fast
   carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552).
-  Licence text: [45](#licence-text-45).
+  Licence text: [46](#licence-text-46).
 
 - **Tesseract osd.traineddata** tessdata_fast 4.1.0, sha256 9cf5d576fcc47564f11265841e5ca839001e7e6f38ff7f7aacf46d15a96b00ff - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_fast
   carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552).
-  Licence text: [45](#licence-text-45).
+  Licence text: [46](#licence-text-46).
 
 - **Tesseract eng.traineddata (tessdata_best, integer model)** 4.0.0_best_int, 2952873 bytes gzipped (from @tesseract.js-data/eng 1.0.0) - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_best
   carried by the browser demo page (P11.4c). The browser demo's English model (vendor/tesseract/lang/eng.traineddata.gz). The CLI's model is the tessdata_fast one above.
-  Licence text: [45](#licence-text-45).
+  Licence text: [46](#licence-text-46).
 
 - **Tesseract (as built into tesseract.js-core 7.0.0)** the version string inside the build is 5.1.0-288-g2a9c1 - Apache-2.0 - https://github.com/tesseract-ocr/tesseract
   carried by the browser demo page (P11.4c). Inside the two SIMD LSTM cores the browser demo ships (vendor/tesseract/core/); tesseract.js-core's package states no more than that.
-  Licence text: [45](#licence-text-45).
+  Licence text: [46](#licence-text-46).
 
 - **Leptonica (as built into tesseract.js-core 7.0.0)** not stated by the package - BSD-2-Clause - http://www.leptonica.org/
   carried by the browser demo page (P11.4c). Inside the cores the browser demo ships (vendor/tesseract/core/). Leptonica's licence text is TODO: not shipped by tesseract.js-core.
@@ -223,7 +223,7 @@ Not carried by the Rust, Go, Java and C# library packages (they load pdfium and 
 
 - **zlib (Leptonica's and libpng's Flate codec, inside tesseract.js-core)** not stated by the package - Zlib - https://zlib.net/
   carried by the browser demo page (P11.4c). Found in the core's strings (inflate messages); the text quoted is zlib's, as pdfium bundles it.
-  Licence text: [21](#licence-text-21).
+  Licence text: [22](#licence-text-22).
 
 - **buffer (the node.js Buffer for the browser, bundled in tesseract.js's worker.min.js)** named by the file's banner, no version - MIT - https://github.com/feross/buffer
   carried by the browser demo page (P11.4c). JavaScript bundled by tesseract.js's build, not an npm dependency of this repository; its banner is in vendor/tesseract/worker.min.js.LICENSE.txt, which the demo ships.
@@ -240,19 +240,19 @@ Tables built into every artifact by kin's generators from these sources.
 
 - **Unicode Character Database (UnicodeData, BidiBrackets, BidiMirroring, CJKRadicals, DerivedNormalizationProps)** 18.0.0 - Unicode-3.0 - https://www.unicode.org/license.txt
   carried by the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon, the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c). In kin/bidiclass.kin, kin/nftable.kin, kin/radicals.kin (test/normalize/, test/bidi/).
-  Licence text: [25](#licence-text-25).
+  Licence text: [26](#licence-text-26).
 
 - **Adobe Glyph List, AGLFN and ZapfDingbats names** 2.0 (glyphlist.txt) - BSD-3-Clause - https://github.com/adobe-type-tools/agl-aglfn
   carried by the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon, the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c). In kin/agl.kin (test/fonts/glyphlist.txt, aglfn.txt, zapfdingbats.txt).
-  Licence text: [49](#licence-text-49).
+  Licence text: [50](#licence-text-50).
 
 - **Adobe cmap-resources (the predefined CMaps and cid2code tables)** commit f5cf3bca7fdfeaceb77aa82847e974f2306c20b4 - BSD-3-Clause - https://github.com/adobe-type-tools/cmap-resources
   carried by the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon, the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c). In kin/cmapjp.kin, cmapgb.kin, cmapcns.kin, cmapkr.kin, cjk.kin (fetched by kin/scripts/cjkfetch.clj).
-  Licence text: [42](#licence-text-42).
+  Licence text: [43](#licence-text-43).
 
 - **pdf.js font encoding and charset tables (encodings.js, charsets.js, cff_parser.js, fonts.js)** commit 81525fd446779f0a29003cf06e3ba33751954826 - Apache-2.0 - https://github.com/mozilla/pdf.js
   carried by the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon, the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c). Copyright Mozilla Foundation. In kin/fontextra.kin (CFF standard strings and predefined charsets, MacExpertEncoding, the TrueType Macintosh glyph order).
-  Licence text: [45](#licence-text-45).
+  Licence text: [46](#licence-text-46).
 
 - **Adobe Core 14 font metrics (AFM)** 4.1 (1997) - LicenseRef-Adobe-Core14-AFM - https://www.adobe.com/devnet/font/pdfs/Core14_AFMs.zip
   carried by the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon, the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c). Widths and encodings derived into kin/encodings.kin (test/fonts/*.afm). Adobe permits copying and distribution for any purpose provided its copyright notices stay; the exact text is TODO, a maintainer decides (D526).
@@ -261,7 +261,43 @@ Tables built into every artifact by kin's generators from these sources.
 
 ## npm packages
 
-Development dependencies of host/js (the browser test harness and the Tesseract.js adapter); `files` is `src` only, so none is in the npm package. The browser demo ships tesseract.js, tesseract.js-core, the English model's package and what tesseract.js bundles (`bb demo` copies their dist files).
+Build dependencies of site and development dependencies of host/js (the browser test harness and the Tesseract.js adapter); `files` is `src` only, so none is in the npm package. The browser demo ships bab, tesseract.js, tesseract.js-core, the English model's package and what tesseract.js bundles (`bb demo` copies their dist files).
+
+- **@3sln/bab** 0.2.0 - MIT - https://www.npmjs.com/package/@3sln/bab
+  carried by the browser demo page (P11.4c).
+  Licence text: [14](#licence-text-14).
+
+- **@3sln/bab-extract** 0.2.0 - MIT - https://www.npmjs.com/package/@3sln/bab-extract
+  carried by no release artifact.
+  Licence text: not carried by any artifact; the upstream package holds it.
+
+- **acorn** 8.19.0 - MIT - https://www.npmjs.com/package/acorn
+  carried by no release artifact.
+  Licence text: not carried by any artifact; the upstream package holds it.
+
+- **acorn-jsx** 5.3.2 - MIT - https://www.npmjs.com/package/acorn-jsx
+  carried by no release artifact.
+  Licence text: not carried by any artifact; the upstream package holds it.
+
+- **fdir** 6.5.0 - MIT - https://www.npmjs.com/package/fdir
+  carried by no release artifact.
+  Licence text: not carried by any artifact; the upstream package holds it.
+
+- **highlight.js** 11.12.0 - BSD-3-Clause - https://www.npmjs.com/package/highlight.js
+  carried by no release artifact.
+  Licence text: not carried by any artifact; the upstream package holds it.
+
+- **marked** 18.1.1 - MIT - https://www.npmjs.com/package/marked
+  carried by no release artifact.
+  Licence text: not carried by any artifact; the upstream package holds it.
+
+- **picomatch** 4.0.7 - MIT - https://www.npmjs.com/package/picomatch
+  carried by no release artifact.
+  Licence text: not carried by any artifact; the upstream package holds it.
+
+- **tinyglobby** 0.2.17 - MIT - https://www.npmjs.com/package/tinyglobby
+  carried by no release artifact.
+  Licence text: not carried by any artifact; the upstream package holds it.
 
 - **yargs-parser** 22.0.0 - ISC - https://www.npmjs.com/package/yargs-parser
   carried by no release artifact.
@@ -269,7 +305,7 @@ Development dependencies of host/js (the browser test harness and the Tesseract.
 
 - **wasm-feature-detect** 1.9.0 - Apache-2.0 - https://www.npmjs.com/package/wasm-feature-detect
   carried by the browser demo page (P11.4c). Bundled into tesseract.js's dist files, which the browser demo ships (vendor/tesseract/).
-  Licence text: [36](#licence-text-36).
+  Licence text: [37](#licence-text-37).
 
 - **tesseract.js** 7.0.0 - Apache-2.0 - https://www.npmjs.com/package/tesseract.js
   carried by the browser demo page (P11.4c). The browser demo ships its dist/tesseract.esm.min.js and dist/worker.min.js (vendor/tesseract/); the npm package @3sln/emon does not (host/js/package.json `files` is src only, and tesseract.js is a devDependency the embedder installs).
@@ -277,7 +313,7 @@ Development dependencies of host/js (the browser test harness and the Tesseract.
 
 - **bmp-js** 0.1.0 - MIT - https://www.npmjs.com/package/bmp-js
   carried by the browser demo page (P11.4c). Bundled into tesseract.js's dist files, which the browser demo ships (vendor/tesseract/).
-  Licence text: [14](#licence-text-14).
+  Licence text: [15](#licence-text-15).
 
 - **strip-ansi** 7.2.0 - MIT - https://www.npmjs.com/package/strip-ansi
   carried by no release artifact.
@@ -309,7 +345,7 @@ Development dependencies of host/js (the browser test harness and the Tesseract.
 
 - **regenerator-runtime** 0.13.11 - MIT - https://www.npmjs.com/package/regenerator-runtime
   carried by the browser demo page (P11.4c). Bundled into tesseract.js's dist files (their banner names it), which the browser demo ships (vendor/tesseract/).
-  Licence text: [15](#licence-text-15).
+  Licence text: [16](#licence-text-16).
 
 - **whatwg-url** 5.0.0 - MIT - https://www.npmjs.com/package/whatwg-url
   carried by no release artifact.
@@ -349,7 +385,7 @@ Development dependencies of host/js (the browser test harness and the Tesseract.
 
 - **tesseract.js-core** 7.0.0 - Apache-2.0 - https://www.npmjs.com/package/tesseract.js-core
   carried by the browser demo page (P11.4c). The browser demo ships its tesseract-core-relaxedsimd-lstm.wasm.js and tesseract-core-simd-lstm.wasm.js (vendor/tesseract/core/): Tesseract with Leptonica and the image codecs listed under native/tjs-core-*, built to WebAssembly.
-  Licence text: [39](#licence-text-39).
+  Licence text: [40](#licence-text-40).
 
 - **is-url** 1.2.4 - MIT - https://www.npmjs.com/package/is-url
   carried by the browser demo page (P11.4c). Bundled into tesseract.js's dist files, which the browser demo ships (vendor/tesseract/).
@@ -365,7 +401,7 @@ Development dependencies of host/js (the browser test harness and the Tesseract.
 
 - **idb-keyval** 6.3.0 - Apache-2.0 - https://www.npmjs.com/package/idb-keyval
   carried by the browser demo page (P11.4c). Bundled into tesseract.js's dist files, which the browser demo ships (vendor/tesseract/).
-  Licence text: [26](#licence-text-26).
+  Licence text: [27](#licence-text-27).
 
 - **node-fetch** 2.7.0 - MIT - https://www.npmjs.com/package/node-fetch
   carried by no release artifact.
@@ -385,7 +421,7 @@ Development dependencies of host/js (the browser test harness and the Tesseract.
 
 - **zlibjs** 0.3.1 - MIT - https://www.npmjs.com/package/zlibjs
   carried by the browser demo page (P11.4c). Bundled into tesseract.js's dist/worker.min.js (its banner names it), which the browser demo ships (vendor/tesseract/).
-  Licence text: [48](#licence-text-48).
+  Licence text: [49](#licence-text-49).
 
 - **wrap-ansi** 9.0.2 - MIT - https://www.npmjs.com/package/wrap-ansi
   carried by no release artifact.
@@ -1570,6 +1606,34 @@ POSSIBILITY OF SUCH DAMAGE.
 
 ### Licence text 14
 
+Used by: @3sln/bab 0.2.0.
+
+````text
+MIT License
+
+Copyright (c) 2024 Ray Stubbs
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+````
+
+### Licence text 15
+
 Used by: bmp-js 0.1.0.
 
 ````text
@@ -1596,7 +1660,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### Licence text 15
+### Licence text 16
 
 Used by: regenerator-runtime 0.13.11.
 
@@ -1624,7 +1688,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### Licence text 16
+### Licence text 17
 
 Used by: Leptonica 1.87.0.
 
@@ -1656,7 +1720,7 @@ Used by: Leptonica 1.87.0.
  *====================================================================*/
 ````
 
-### Licence text 17
+### Licence text 18
 
 Used by: byteorder-lite 0.1.0.
 
@@ -1684,7 +1748,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ````
 
-### Licence text 18
+### Licence text 19
 
 Used by: libtiff (Leptonica's TIFF codec) 4.7.2.
 
@@ -1740,7 +1804,7 @@ IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
 WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 ````
 
-### Licence text 19
+### Licence text 20
 
 Used by: crc32fast 1.5.2.
 
@@ -1768,7 +1832,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### Licence text 20
+### Licence text 21
 
 Used by: bytemuck 1.25.2.
 
@@ -1784,7 +1848,7 @@ The above copyright notice and this permission notice (including the next paragr
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ````
 
-### Licence text 21
+### Licence text 22
 
 Used by: zlib (in pdfium) bundled in pdfium chromium/8076, zlib (Leptonica's and libpng's Flate codec, inside tesseract.js-core) not stated by the package.
 
@@ -1820,7 +1884,7 @@ Used by: zlib (in pdfium) bundled in pdfium chromium/8076, zlib (Leptonica's and
 */
 ````
 
-### Licence text 22
+### Licence text 23
 
 Used by: Little CMS 2 (in pdfium) bundled in pdfium chromium/8076.
 
@@ -1854,7 +1918,7 @@ Used by: Little CMS 2 (in pdfium) bundled in pdfium chromium/8076.
 //
 ````
 
-### Licence text 23
+### Licence text 24
 
 Used by: bitflags 2.13.2, num-traits 0.2.19.
 
@@ -1886,7 +1950,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### Licence text 24
+### Licence text 25
 
 Used by: abseil-cpp (in pdfium) bundled in pdfium chromium/8076.
 
@@ -2095,7 +2159,7 @@ Used by: abseil-cpp (in pdfium) bundled in pdfium chromium/8076.
    limitations under the License.
 ````
 
-### Licence text 25
+### Licence text 26
 
 Used by: Unicode Character Database (UnicodeData, BidiBrackets, BidiMirroring, CJKRadicals, DerivedNormalizationProps) 18.0.0.
 
@@ -2143,7 +2207,7 @@ authorization of the copyright holder.
 SPDX-License-Identifier: Unicode-3.0
 ````
 
-### Licence text 26
+### Licence text 27
 
 Used by: idb-keyval 6.3.0.
 
@@ -2163,7 +2227,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ````
 
-### Licence text 27
+### Licence text 28
 
 Used by: Anti-Grain Geometry 2.3 (in pdfium) bundled in pdfium chromium/8076.
 
@@ -2184,7 +2248,7 @@ Used by: Anti-Grain Geometry 2.3 (in pdfium) bundled in pdfium chromium/8076.
 //----------------------------------------------------------------------------
 ````
 
-### Licence text 28
+### Licence text 29
 
 Used by: flate2 1.1.10.
 
@@ -2216,7 +2280,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### Licence text 29
+### Licence text 30
 
 Used by: fast_float (in pdfium) bundled in pdfium chromium/8076.
 
@@ -2250,7 +2314,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### Licence text 30
+### Licence text 31
 
 Used by: ICU (in pdfium) bundled in pdfium chromium/8076.
 
@@ -2825,7 +2889,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### Licence text 31
+### Licence text 32
 
 Used by: FreeType (in pdfium) bundled in pdfium chromium/8076.
 
@@ -3001,7 +3065,7 @@ Legal Terms
 --- end of FTL.TXT ---
 ````
 
-### Licence text 32
+### Licence text 33
 
 Used by: adler2 2.0.1.
 
@@ -3031,7 +3095,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### Licence text 33
+### Licence text 34
 
 Used by: Tesseract 5.5.3.
 
@@ -3240,7 +3304,7 @@ Used by: Tesseract 5.5.3.
    limitations under the License.
 ````
 
-### Licence text 34
+### Licence text 35
 
 Used by: fdeflate 0.3.7, image 0.25.10.
 
@@ -3272,7 +3336,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### Licence text 35
+### Licence text 36
 
 Used by: OpenJPEG (in pdfium) bundled in pdfium chromium/8076.
 
@@ -3311,7 +3375,7 @@ Used by: OpenJPEG (in pdfium) bundled in pdfium chromium/8076.
  */
 ````
 
-### Licence text 36
+### Licence text 37
 
 Used by: wasm-feature-detect 1.9.0.
 
@@ -3520,7 +3584,7 @@ Used by: wasm-feature-detect 1.9.0.
    limitations under the License.
 ````
 
-### Licence text 37
+### Licence text 38
 
 Used by: autocfg 1.5.1.
 
@@ -3552,7 +3616,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### Licence text 38
+### Licence text 39
 
 Used by: cfg-if 1.0.5.
 
@@ -3584,7 +3648,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### Licence text 39
+### Licence text 40
 
 Used by: tesseract.js-core 7.0.0.
 
@@ -3792,7 +3856,7 @@ Used by: tesseract.js-core 7.0.0.
    limitations under the License.
 ````
 
-### Licence text 40
+### Licence text 41
 
 Used by: simdutf (in pdfium) bundled in pdfium chromium/8076.
 
@@ -3817,7 +3881,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ````
 
-### Licence text 41
+### Licence text 42
 
 Used by: pdfium-binaries (the build scripts and packaging) chromium/8076.
 
@@ -3833,7 +3897,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 This package also includes third-party software. See the licenses/ directory for their respective licenses.
 ````
 
-### Licence text 42
+### Licence text 43
 
 Used by: Adobe cmap-resources (the predefined CMaps and cid2code tables) commit f5cf3bca7fdfeaceb77aa82847e974f2306c20b4.
 
@@ -3868,7 +3932,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ````
 
-### Licence text 43
+### Licence text 44
 
 Used by: LLVM libc (in pdfium) bundled in pdfium chromium/8076.
 
@@ -4153,7 +4217,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS WITH THE
 SOFTWARE.
 ````
 
-### Licence text 44
+### Licence text 45
 
 Used by: zune-core 0.5.3, zune-jpeg 0.5.15.
 
@@ -4181,7 +4245,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### Licence text 45
+### Licence text 46
 
 Used by: Tesseract eng.traineddata tessdata_fast 4.1.0, 4113088 bytes, sha256 7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2, Tesseract osd.traineddata tessdata_fast 4.1.0, sha256 9cf5d576fcc47564f11265841e5ca839001e7e6f38ff7f7aacf46d15a96b00ff, Tesseract eng.traineddata (tessdata_best, integer model) 4.0.0_best_int, 2952873 bytes gzipped (from @tesseract.js-data/eng 1.0.0), Tesseract (as built into tesseract.js-core 7.0.0) the version string inside the build is 5.1.0-288-g2a9c1, pdf.js font encoding and charset tables (encodings.js, charsets.js, cff_parser.js, fonts.js) commit 81525fd446779f0a29003cf06e3ba33751954826.
 
@@ -4389,7 +4453,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ````
 
-### Licence text 46
+### Licence text 47
 
 Used by: pdfium chromium/8076 (156.0.8076.0).
 
@@ -4626,7 +4690,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    limitations under the License.
 ````
 
-### Licence text 47
+### Licence text 48
 
 Used by: png 0.18.1.
 
@@ -4658,7 +4722,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### Licence text 48
+### Licence text 49
 
 Used by: zlibjs 0.3.1.
 
@@ -4693,7 +4757,7 @@ Used by: zlibjs 0.3.1.
  */
 ````
 
-### Licence text 49
+### Licence text 50
 
 Used by: Adobe Glyph List, AGLFN and ZapfDingbats names 2.0 (glyphlist.txt).
 
@@ -4732,7 +4796,7 @@ OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ````
 
-### Licence text 50
+### Licence text 51
 
 Used by: giflib (Leptonica's GIF codec) 6.1.3.
 

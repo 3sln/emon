@@ -11,8 +11,10 @@ import path from 'node:path';
 import { serve } from './serve.mjs';
 import { launch } from '../../test/driver/wasm/browser.mjs';
 
-const arg = (k) => process.argv[process.argv.indexOf(k) + 1];
+const arg = (k) => { const i = process.argv.indexOf(k); return i < 0 ? undefined : process.argv[i + 1]; };
 const site = path.resolve(arg('--site'));
+const demoPath = arg('--path') || '/';
+const assetPath = demoPath.endsWith('/') ? demoPath : demoPath + '/';
 let fails = 0;
 const ok = (...x) => console.log('  ok   ' + x.join(''));
 const bad = (...x) => {
@@ -22,14 +24,14 @@ const bad = (...x) => {
 const check = (c, ...m) => (c ? ok(...m) : bad(...m));
 
 const server = await serve(site);
-const browser = await launch();
+let browser;
 
-async function open(query = '') {
+async function open(query = '', pathname = assetPath) {
   const page = await browser.newPage();
   page.errors = [];
   page.on('pageerror', (e) => page.errors.push(String(e)));
   page.on('console', (m) => m.type() === 'error' && page.errors.push(m.text()));
-  await page.goto(server.origin + '/' + query, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await page.goto(server.origin + pathname + query, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await page.waitForFunction('window.__demo !== undefined', { timeout: 30000 });
   const supported = await page.evaluate(() => window.__demo.supported);
   if (!supported) throw new Error('the page says this Chrome cannot run emon (no exception handling): a Chrome 137 or newer is needed');
@@ -49,6 +51,7 @@ async function sample(page, file) {
 }
 
 try {
+  browser = await launch();
   const { page, info } = await open();
   ok('the page loads, the module and the Worker start (nested Workers: ' + info.nested + ')');
 
@@ -57,12 +60,12 @@ try {
   check(!inv.stats.pdfiumLoaded && inv.stats.ocrRequests === 0, 'invoice.pdf: a born-digital document loads neither pdfium nor Tesseract');
   check(inv.shown && inv.frame > 1000 && inv.sandbox === '', 'invoice.pdf: the result is shown in a sandboxed frame without allow-scripts (sandbox="' + inv.sandbox + '")');
   const requested = server.requests.map(([p]) => p);
-  check(!requested.some((p) => p.startsWith('/vendor/')), 'invoice.pdf: nothing under /vendor/ was fetched (' + requested.length + ' files: the page, the SDK, emon.wasm, the sample)');
+  check(!requested.some((p) => p.startsWith(assetPath + 'vendor/') && !p.startsWith(assetPath + 'vendor/bab/')), 'invoice.pdf: neither pdfium nor Tesseract was fetched (' + requested.length + ' files: the page, the SDK, emon.wasm, the sample)');
 
   const fig = await sample(page, 'figures-charts.pdf');
   const imgs = (fig.html.match(/<img src="data:image\/png;base64,/g) || []).length;
   check(fig.html.includes('Sales Dashboard') && imgs >= 1 && fig.stats.pdfiumLoaded && fig.stats.assets === imgs, 'figures-charts.pdf: pdfium (in the Worker) drew ' + imgs + ' figures as inline PNG images, ' + fig.stats.assets + ' assets, in ' + fig.ms + ' ms');
-  check(server.requests.some(([p]) => p === '/vendor/pdfium/pdfium.wasm') && !server.requests.some(([p]) => p.startsWith('/vendor/tesseract/')), 'figures-charts.pdf: pdfium.wasm was fetched when the first render was asked, Tesseract was not');
+  check(server.requests.some(([p]) => p === assetPath + 'vendor/pdfium/pdfium.wasm') && !server.requests.some(([p]) => p.startsWith(assetPath + 'vendor/tesseract/')), 'figures-charts.pdf: pdfium.wasm was fetched when the first render was asked, Tesseract was not');
 
   const scan = await sample(page, 'scan-plain.pdf');
   check(/Sampling/i.test(scan.html) && scan.stats.ocrRequests > 0 && !scan.stats.ocrOnPageThread, 'scan-plain.pdf: Tesseract read the scan in the Worker\'s nested Worker (' + scan.stats.ocrRequests + ' recognitions, "Adaptive Sampling" found) in ' + scan.ms + ' ms');
@@ -76,10 +79,24 @@ try {
   check(/Sampling/i.test(scan2.html) && scan2.stats.ocrRequests > 0 && scan2.stats.ocrOnPageThread, 'scan-plain.pdf, OCR on the page\'s thread: the same words ("Adaptive Sampling" found), ' + scan2.stats.ocrRequests + ' recognitions, in ' + scan2.ms + ' ms');
   check(m.page.errors.length === 0, 'no error on the page' + (m.page.errors.length ? ': ' + m.page.errors.slice(0, 3).join(' | ') : ''));
   await m.page.close();
+
+  if (assetPath === '/demo/') {
+    const spanish = await open('', '/es/demo/');
+    check(await spanish.page.evaluate(() => document.documentElement.lang === 'es' && document.getElementById('status').textContent === 'Elijan un archivo para comenzar.'), 'Spanish demo: language and translated initial status');
+    const result = await sample(spanish.page, 'invoice.pdf');
+    const expectedStatus = await spanish.page.evaluate((stats) => {
+      const messages = JSON.parse(document.getElementById('i18n').textContent);
+      return messages.demo['{name}: done in {seconds} s. Everything ran in this page; nothing was uploaded.'].replace('{name}', 'invoice.pdf').replace('{seconds}', (stats.ms / 1000).toFixed(1));
+    }, result.stats);
+    check(result.html.includes('INV-2026-0417') && result.status === expectedStatus, 'Spanish demo: born-digital sample converts with translated status');
+    check(!server.requests.some(([, status]) => status === 404), 'Spanish demo: every requested asset exists');
+    check(spanish.page.errors.length === 0, 'Spanish demo: no browser errors');
+    await spanish.page.close();
+  }
 } catch (e) {
   bad(String((e && e.stack) || e));
 } finally {
-  await browser.close();
+  await browser?.close();
   await server.close();
 }
 if (fails) {
