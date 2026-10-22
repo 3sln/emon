@@ -233,3 +233,14 @@
       (set at (node-new nodes (nk-section) at)))
     (assert-eq (html-emit compact 0 0 nodes attrs regions text pages ledger layout (new-cells) (new-cells) (new-buf) (new-cells)) 0 "compact")
     (assert-eq (html-emit pretty 16 0 nodes attrs regions text pages ledger layout (new-cells) (new-cells) (new-buf) (new-cells)) 0 "pretty")))
+
+(deftest test-rtl-document-emits-direction-and-an-unknown-language
+  (let [^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells)
+        ^Cells text (new-cells) ^Cells pages (new-cells) ^Cells ledger (new-cells)
+        ^Cells layout (new-cells) ^Text out (new-text)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (let [^I32 p (node-new nodes (nk-paragraph) 0)]
+      (ht-set nodes text p (text-blob "שלום")))
+    (html-emit out 0 0 nodes attrs regions text pages ledger layout (new-cells) (new-cells) (new-buf) (new-cells))
+    (assert-text out "<!doctype html><html lang=\"und\" dir=\"rtl\"><head><meta charset=\"utf-8\"><title></title></head><body><main><p>שלום</p></main></body></html>"
+                 "unknown language is explicit, and RTL direction is inherited by blocks")))

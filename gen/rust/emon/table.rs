@@ -1234,15 +1234,38 @@ pub(crate) fn tb_put_profile(mut text: &mut crate::port::Cells, prof: i32) -> i3
     }
     return 0;
 }
-pub(crate) fn tb_words_raw(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, tw: &mut crate::port::Cells, from: i32, num: i32, mut raw: &mut crate::port::Cells) -> i32 {
+pub fn tb_words_raw(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, tw: &mut crate::port::Cells, from: i32, num: i32, mut raw: &mut crate::port::Cells, mut order: &mut crate::port::Cells) -> i32 {
     // The words tw[first..first+count) as code points into `raw`: a space between two words, none after a
     // soft hyphen (which goes). `raw` is emptied first.
     let mut k: i32 = 0;
     let mut j: i32 = 0;
     let mut started: i32 = 0;
+    let mut v: i32 = 0;
+    let mut line: i32 = -1;
+    // D1830: table fitting sorts by baseline and x. Within each contiguous parser line, word ids are already bidi-logical. Restore that order in scratch once, without reversing characters or rows. Unknown line ids keep their supplied order.
+    crate::port::cells_drop(order, 0);
+    while k < num {
+        crate::port::cells_push(order, crate::port::cells_at(tw, from + k));
+        k += 1;
+    }
+    k = 1;
+    while k < num {
+        v = crate::port::cells_at(order, k);
+        line = wd_get(wd, v, hd_line());
+        j = k;
+        if line >= 0 {
+            while (j > 0) && (crate::port::cells_at(order, j - 1) > v) && (wd_get(wd, crate::port::cells_at(order, j - 1), hd_line()) == line) {
+                crate::port::cells_set(order, j, crate::port::cells_at(order, j - 1));
+                j -= 1;
+            }
+        }
+        crate::port::cells_set(order, j, v);
+        k += 1;
+    }
+    k = 0;
     crate::port::cells_drop(raw, 0);
     while k < num {
-        let w: i32 = crate::port::cells_at(tw, from + k);
+        let w: i32 = crate::port::cells_at(order, k);
         let ts: i32 = wd_get(wd, w, hd_tstart());
         let tl: i32 = wd_get(wd, w, hd_tlen());
         if (ts >= 0) && (tl > 0) {
@@ -1289,7 +1312,7 @@ pub(crate) fn tb_emit_cell(tb: &mut crate::port::Cells, k: i32, c: i32, row: i32
     if wc == 0 {
         node_set_aux(nodes, n, 1);
     } else {
-        tb_words_raw(wd, et, tw, crate::port::cells_at(tc, cb + 8), wc, raw);
+        tb_words_raw(wd, et, tw, crate::port::cells_at(tc, cb + 8), wc, raw, tmp);
         let t0: i32 = crate::port::cells_len(text);
         nz_nfc(raw, 0, crate::port::cells_len(raw), text, tmp, nz_flag_ligatures() + nz_flag_radicals());
         node_set_text(nodes, n, t0, crate::port::cells_len(text) - t0);
@@ -1467,7 +1490,7 @@ pub(crate) fn tb_emit_dropped(tb: &mut crate::port::Cells, f: i32, r: i32, wd: &
                     text_append_cp(text, 32);
                 }
                 any = 1;
-                tb_words_raw(wd, et, tw, crate::port::cells_at(tc, (c * TCS) + 8), crate::port::cells_at(tc, (c * TCS) + 9), raw);
+                tb_words_raw(wd, et, tw, crate::port::cells_at(tc, (c * TCS) + 8), crate::port::cells_at(tc, (c * TCS) + 9), raw, tmp);
                 nz_nfc(raw, 0, crate::port::cells_len(raw), text, tmp, nz_flag_ligatures() + nz_flag_radicals());
             }
         }
@@ -3191,7 +3214,25 @@ pub(crate) fn tb_line_label(wd: &mut crate::port::Cells, et: &mut crate::port::C
     }
     return tb_is_label_word(wd, et, w0) && tb_is_label_number(wd, et, w0 + 1);
 }
-pub(crate) fn tb_caption(mut tb: &mut crate::port::Cells, k: i32, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, l0: i32, l1: i32, mut tq: &mut crate::port::Cells) -> i32 {
+pub(crate) fn tb_caption_for_next(tb: &mut crate::port::Cells, k: i32, ln: &mut crate::port::Cells, l: i32, distance: i32) -> bool {
+    // D1834: caption ownership is decided against all selected tables, before a preceding table claims a below-caption. Prefer the following table when its above-caption is at least as close.
+    let mut q: i32 = 0;
+    let mut b: i32 = 0;
+    let mut d: i32 = 0;
+    let h: i32 = ln_get(ln, l, lh_y1()) - ln_get(ln, l, lh_y0());
+    while q < tb_rows_of(tb, TBS) {
+        b = q * TBS;
+        if (q != k) && (crate::port::cells_at(tb, b) == crate::port::cells_at(tb, k * TBS)) && (ln_get(ln, l, lh_x0()) < crate::port::cells_at(tb, b + 3)) && (ln_get(ln, l, lh_x1()) > crate::port::cells_at(tb, b + 1)) {
+            d = crate::port::cells_at(tb, b + 2) - ln_get(ln, l, lh_y1());
+            if (d >= -300) && ((d * 2) <= (h * 5)) && (tb_abs(d) <= distance) {
+                return 1 == 1;
+            }
+        }
+        q += 1;
+    }
+    return 1 == 0;
+}
+pub fn tb_caption(mut tb: &mut crate::port::Cells, k: i32, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, l0: i32, l1: i32, mut tq: &mut crate::port::Cells) -> i32 {
     // Find the caption of table k among the unclaimed lines l0..l1: a line that starts with a table keyword
     // and a number, over the table or under it within two and a half line heights, preferring the one over it;
     // the lines on its baseline to its right and the lines under it that continue it are part of it. They are
@@ -3219,7 +3260,7 @@ pub(crate) fn tb_caption(mut tb: &mut crate::port::Cells, k: i32, wd: &mut crate
                             above = 1;
                         }
                     }
-                    if (db >= -300) && (((db * 2) <= (lht * 5)) && (above == 0)) {
+                    if (db >= -300) && (((db * 2) <= (lht * 5)) && (above == 0)) && !tb_caption_for_next(tb, k, ln, l, tb_abs(db)) {
                         if tb_abs(db) < bestd {
                             best = l;
                             bestd = tb_abs(db);

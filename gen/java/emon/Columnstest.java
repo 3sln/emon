@@ -120,4 +120,32 @@ public final class Columnstest {
         ctLine(wd2, ln2, et2, emon.Testport.textBlob("Time UTC+3"), 33000, 15600);
         emon.Testport.assertEq(ctPage(wd2, et2, ln2, gfl, 1), 20 + Model.rlSidebar(), "the box: the body and a sidebar");
     }
+    public static void testStaggeredNarrowOcrColumnsUseLineGutters() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells gfl = emon.Port.newCells();
+        int i = 0;
+        int c = 0;
+        while (c < 3) {
+            i = 0;
+            while (i < 8) {
+                ctLine(wd, ln, et, emon.Testport.textBlob("prose words"), 1000 + (c * 6400), 10000 + ((i * 1500) + (c * 400)));
+                int l = Evidence.lnCount(ln) - 1;
+                Evidence.lnSet(ln, l, Evidence.lfSrc(), 4);
+                i += 1;
+            }
+            c += 1;
+        }
+        emon.Testport.assertEq(ctPage(wd, et, ln, gfl, 0), 30 + Model.rlBody(), "three OCR line columns with narrow gutters, despite staggered baselines");
+        Evidence.lnSet(ln, 0, Evidence.lfSrc(), 5);
+        emon.Testport.assertEq(ctPage(wd, et, ln, gfl, 0), 10 + Model.rlBody(), "text-layer pages with OCR support keep the existing column analysis");
+        Evidence.lnSet(ln, 0, Evidence.lfSrc(), 4);
+        i = 0;
+        while (i < Evidence.lnCount(ln)) {
+            Evidence.lnSet(ln, i, 15, 1073741824);
+            i += 1;
+        }
+        emon.Testport.assertEq(ctPage(wd, et, ln, gfl, 0), 10 + Model.rlBody(), "claimed table cells do not vote as prose columns");
+    }
 }

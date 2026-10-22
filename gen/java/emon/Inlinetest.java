@@ -517,4 +517,34 @@ public final class Inlinetest {
         emon.Testport.assertEq(itFind(nodes, Model.nkLink(), 4), -1, "and the bare URL under the first link is not made a link again");
         emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "in document order");
     }
+    public static void testRtlLinksFollowTheLogicalCharacterNotThePaintedIndex() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells gl = emon.Port.newCells();
+        emon.Port.Cells ift = emon.Port.newCells();
+        emon.Port.Cells an = emon.Port.newCells();
+        emon.Port.Cells txt = emon.Port.newCells();
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        itBody(wd, ln, et, emon.Testport.textBlob("אב"));
+        itFonts(ift);
+        itGlyph(gl, 7200, 8400, 1489, 6, 1100, 7400);
+        itGlyph(gl, 8400, 9600, 1488, 6, 1100, 7400);
+        Evidence.wdSet(wd, 6, Evidence.wfGfirst(), 0);
+        Evidence.wdSet(wd, 6, Evidence.wfGcount(), 2);
+        Evidence.wdSet(wd, 6, Evidence.hdDir(), 1);
+        itTxt(txt, emon.Testport.textBlob("https://example.org/x"));
+        itLinkRow(an, 8401, 6400, 9600, 7600, 1, 0, 21);
+        emon.Testport.assertEq(itBuild(wd, ln, et, gl, ift, an, txt, nodes, attrs, regions, text, pages, ledger, layout), 1, "one link");
+        int link = itFind(nodes, Model.nkLink(), 0);
+        int child = Model.nodeFirstChild(nodes, link);
+        emon.Testport.assertEq(Model.nodeTextLen(nodes, child), 1, "one linked character");
+        emon.Testport.assertEq(emon.Port.cellsAt(text, Model.nodeTextStart(nodes, child)), 1488, "alef at the right is the linked logical first character");
+    }
 }

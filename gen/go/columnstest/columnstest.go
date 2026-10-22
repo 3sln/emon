@@ -130,3 +130,32 @@ func TestAShadedBoxBesideTheBodyIsARegionOfItsOwn(emonT *testing.T) {
 	ctLine(wd2, ln2, et2, port.TextBlob("Time UTC+3"), 33000, 15600)
 	port.AssertEq(emonT, ctPage(wd2, et2, ln2, gfl, 1), 20+model.RlSidebar(), "the box: the body and a sidebar")
 }
+
+func TestStaggeredNarrowOcrColumnsUseLineGutters(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var gfl *port.Cells = port.NewCells()
+	var i int32 = 0
+	var c int32 = 0
+	for c < 3 {
+		i = 0
+		for i < 8 {
+			ctLine(wd, ln, et, port.TextBlob("prose words"), 1000+(c*6400), 10000+((i*1500)+(c*400)))
+			var l int32 = evidence.LnCount(ln) - 1
+			evidence.LnSet(ln, l, evidence.LfSrc(), 4)
+			i += 1
+		}
+		c += 1
+	}
+	port.AssertEq(emonT, ctPage(wd, et, ln, gfl, 0), 30+model.RlBody(), "three OCR line columns with narrow gutters, despite staggered baselines")
+	evidence.LnSet(ln, 0, evidence.LfSrc(), 5)
+	port.AssertEq(emonT, ctPage(wd, et, ln, gfl, 0), 10+model.RlBody(), "text-layer pages with OCR support keep the existing column analysis")
+	evidence.LnSet(ln, 0, evidence.LfSrc(), 4)
+	i = 0
+	for i < evidence.LnCount(ln) {
+		evidence.LnSet(ln, i, 15, 1073741824)
+		i += 1
+	}
+	port.AssertEq(emonT, ctPage(wd, et, ln, gfl, 0), 10+model.RlBody(), "claimed table cells do not vote as prose columns")
+}

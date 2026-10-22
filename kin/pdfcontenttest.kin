@@ -873,3 +873,12 @@
   (assert-eq (pc-pua 65) 65 "a letter is itself")
   (assert-eq (pc-pua -1) -1 "no value stays none")
   (assert-eq (pc-pua 57344) 57344 "a private-use code point of anyone else's is not touched"))
+
+(deftest test-a-combining-mark-does-not-open-a-word-gap
+  (let [^Cells gl (new-cells) ^Cells et (new-cells) ^Cells wd (new-cells) ^Cells ln (new-cells)]
+    (ct-gw gl 1000 0 1488)
+    (let [^I32 mark (ct-gw gl 1200 600 1456)]
+      (gl-set gl mark (gf-by0) 1400) (gl-set gl mark (gf-by1) 1400))
+    (ct-gw gl 1500 0 1489)
+    (ct-group gl et wd ln)
+    (assert-eq (wd-count wd) 1 "niqqud belongs to its base despite its displaced baseline")))

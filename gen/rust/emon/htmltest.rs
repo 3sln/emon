@@ -216,3 +216,19 @@ fn test_the_deepest_tree_emits() {
     crate::testport::assert_eq(html_emit(compact, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Buf::new(), &mut crate::port::Cells::new()), 0, "compact");
     crate::testport::assert_eq(html_emit(pretty, 16, 0, nodes, attrs, regions, text, pages, ledger, layout, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Buf::new(), &mut crate::port::Cells::new()), 0, "pretty");
 }
+#[test]
+fn test_rtl_document_emits_direction_and_an_unknown_language() {
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut String = &mut crate::port::new_text();
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    let p: i32 = node_new(nodes, nk_paragraph(), 0);
+    ht_set(nodes, text, p, &crate::testport::text_blob("שלום")[..]);
+    html_emit(out, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Buf::new(), &mut crate::port::Cells::new());
+    crate::testport::assert_text(out, "<!doctype html><html lang=\"und\" dir=\"rtl\"><head><meta charset=\"utf-8\"><title></title></head><body><main><p>שלום</p></main></body></html>", "unknown language is explicit, and RTL direction is inherited by blocks");
+}

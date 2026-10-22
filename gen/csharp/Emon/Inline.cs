@@ -673,15 +673,30 @@ public static class Inline {
         int st = 0;
         int j = 0;
         int g = 0;
+        int order = -1;
+        int data0 = d0;
         if ((ts < 0) || (tl <= 0)) {
             return 0;
         }
         if ((tl == gn) && (gn > 0) && (gn <= IlMaxg) && (g0 >= 0) && (IlGrouped(wd, et, w) == 0)) {
             eq = 1;
         }
+        // D1832: the text is logical but the glyph arena stays in painted order. Use the parser's bidi permutation for per-character styles and link hits.
+        if ((eq == 1) && (Evidence.WdGet(wd, w, Evidence.HdDir()) == 1) && (Evidence.GlGet(gl, g0 + (gn - 1), Evidence.HdX0()) >= Evidence.GlGet(gl, g0, Evidence.HdX0()))) {
+            while (j < gn) {
+                emon.Port.CellsPush(hc, Evidence.GlGet(gl, g0 + j, Evidence.ChCp()));
+                j += 1;
+            }
+            order = Bidi.BdOrderOf(hc, d0, gn);
+            data0 = emon.Port.CellsLen(hc);
+            j = 0;
+        }
         if (eq == 1) {
             while (j < tl) {
                 g = g0 + j;
+                if (order >= 0) {
+                    g = g0 + emon.Port.CellsAt(hc, order + j);
+                }
                 st = IlGlyphBits(gl, ift, g, sz0, @base, upright);
                 st += 256 * IlLinkOf(sw, ncand, lo, hi, text, txt, (Evidence.GlGet(gl, g, Evidence.HdX0()) + Evidence.GlGet(gl, g, Evidence.HdX1())) / 2, (Evidence.GlGet(gl, g, Evidence.HdY0()) + Evidence.GlGet(gl, g, Evidence.HdY1())) / 2);
                 emon.Port.CellsPush(hc, st);
@@ -706,6 +721,14 @@ public static class Inline {
             if (st != 0) {
                 nz = 1;
             }
+        }
+        if (order >= 0) {
+            j = 0;
+            while (j < tl) {
+                emon.Port.CellsSet(hc, d0 + j, emon.Port.CellsAt(hc, data0 + j));
+                j += 1;
+            }
+            emon.Port.CellsDrop(hc, d0 + tl);
         }
         if (nz == 0) {
             emon.Port.CellsDrop(hc, d0);

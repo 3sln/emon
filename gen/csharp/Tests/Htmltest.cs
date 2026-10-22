@@ -216,4 +216,20 @@ public static class Htmltest {
         emon.Testport.AssertEq(Html.HtmlEmit(compact, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewBuf(), emon.Port.NewCells()), 0, "compact");
         emon.Testport.AssertEq(Html.HtmlEmit(pretty, 16, 0, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewBuf(), emon.Port.NewCells()), 0, "pretty");
     }
+    [Xunit.Fact]
+    public static void TestRtlDocumentEmitsDirectionAndAnUnknownLanguage() {
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        System.Text.StringBuilder @out = emon.Testport.NewText();
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        int p = Model.NodeNew(nodes, Model.NkParagraph(), 0);
+        HtSet(nodes, text, p, emon.Testport.TextBlob("שלום"));
+        Html.HtmlEmit(@out, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewBuf(), emon.Port.NewCells());
+        emon.Testport.AssertText(@out, "<!doctype html><html lang=\"und\" dir=\"rtl\"><head><meta charset=\"utf-8\"><title></title></head><body><main><p>שלום</p></main></body></html>", "unknown language is explicit, and RTL direction is inherited by blocks");
+    }
 }

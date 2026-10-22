@@ -1074,6 +1074,118 @@ pub(crate) fn lc_sweep(wd: &mut crate::port::Cells, lt: &mut crate::port::Cells,
     lc_close_all(gu, ac);
     return crate::port::cells_len(gu) / GU_STRIDE;
 }
+pub(crate) fn lc_ocr_line_gutters(wd: &mut crate::port::Cells, lt: &mut crate::port::Cells, ls: &mut crate::port::Cells, dom: i32, mut gu: &mut crate::port::Cells) -> i32 {
+    // D1835: OCR lines already delimit runs of text. A vacant strip between their boxes, supported by six body lines on either side, is a gutter even when the baselines are staggered. Spanning lines bound its vertical band. A wide space inside a line is never evidence.
+    let n: i32 = crate::port::cells_len(ls);
+    let mut i: i32 = 0;
+    let mut j: i32 = 0;
+    let mut l: i32 = 0;
+    let mut seed: i32 = 0;
+    let mut cut: i32 = 0;
+    let mut cy: i32 = 0;
+    let mut top: i32 = 0;
+    let mut bot: i32 = 0;
+    let mut gx0: i32 = 0;
+    let mut gx1: i32 = 0;
+    let mut nl: i32 = 0;
+    let mut nr: i32 = 0;
+    let mut ly0: i32 = 0;
+    let mut ly1: i32 = 0;
+    let mut ry0: i32 = 0;
+    let mut ry1: i32 = 0;
+    let mut dup: i32 = 0;
+    let mut b: i32 = 0;
+    let mut added: i32 = 0;
+    if (n < 12) || (n > 2000) || (dom <= 0) {
+        return 0;
+    }
+    // Mixed text-layer/OCR pages keep the existing word-based analysis: OCR-supported figure labels are not evidence that the whole page is a scan.
+    while i < n {
+        if (ln_get(lt, crate::port::cells_at(ls, i), lf_src()) & 3) != 0 {
+            return 0;
+        }
+        i += 1;
+    }
+    i = 0;
+    while i < n {
+        seed = crate::port::cells_at(ls, i);
+        if (crate::port::cells_at(lt, (seed * 16) + 15) < LC_HELD) && ((ln_get(lt, seed, lf_src()) & 4) != 0) && (ln_get(lt, seed, lh_count()) >= 2) && lc_is_class(lc_size(wd, lt, seed), dom) {
+            cut = ln_get(lt, seed, lh_x1()) + ((dom * 3) / 5);
+            cy = lc_ym2(lt, seed);
+            top = -1000000000;
+            bot = 1000000000;
+            j = 0;
+            while j < n {
+                l = crate::port::cells_at(ls, j);
+                if (crate::port::cells_at(lt, (l * 16) + 15) >= LC_HELD) || ((ln_get(lt, l, lh_x0()) < cut) && (ln_get(lt, l, lh_x1()) > cut)) {
+                    if lc_ym2(lt, l) < cy {
+                        top = lc_max(top, ln_get(lt, l, lh_y1()));
+                    } else {
+                        bot = lc_min(bot, ln_get(lt, l, lh_y0()));
+                    }
+                }
+                j += 1;
+            }
+            nl = 0;
+            nr = 0;
+            gx0 = -1000000000;
+            gx1 = 1000000000;
+            ly0 = 1000000000;
+            ly1 = -1000000000;
+            ry0 = 1000000000;
+            ry1 = -1000000000;
+            j = 0;
+            while j < n {
+                l = crate::port::cells_at(ls, j);
+                if (crate::port::cells_at(lt, (l * 16) + 15) < LC_HELD) && ((ln_get(lt, l, lf_src()) & 4) != 0) && (ln_get(lt, l, lh_count()) >= 2) && lc_is_class(lc_size(wd, lt, l), dom) && (ln_get(lt, l, lh_y0()) >= top) && (ln_get(lt, l, lh_y1()) <= bot) {
+                    if ln_get(lt, l, lh_x1()) <= cut {
+                        nl += 1;
+                        gx0 = lc_max(gx0, ln_get(lt, l, lh_x1()));
+                        ly0 = lc_min(ly0, ln_get(lt, l, lh_y0()));
+                        ly1 = lc_max(ly1, ln_get(lt, l, lh_y1()));
+                    }
+                    if ln_get(lt, l, lh_x0()) >= cut {
+                        nr += 1;
+                        gx1 = lc_min(gx1, ln_get(lt, l, lh_x0()));
+                        ry0 = lc_min(ry0, ln_get(lt, l, lh_y0()));
+                        ry1 = lc_max(ry1, ln_get(lt, l, lh_y1()));
+                    }
+                }
+                j += 1;
+            }
+            if (nl >= 6) && (nr >= 6) && (((gx1 - gx0) * 5) >= (dom * 3)) && ((lc_min(ly1, ry1) - lc_max(ly0, ry0)) >= (dom * 5)) {
+                top = lc_min(ly0, ry0);
+                bot = lc_max(ly1, ry1);
+                dup = 0;
+                j = 0;
+                while j < (crate::port::cells_len(gu) / GU_STRIDE) {
+                    b = j * GU_STRIDE;
+                    if (crate::port::cells_at(gu, b) < gx1) && (crate::port::cells_at(gu, b + 1) > gx0) && (crate::port::cells_at(gu, b + GU_TOP) <= (top + dom)) && (crate::port::cells_at(gu, b + GU_BOT) >= (bot - dom)) {
+                        dup = 1;
+                    }
+                    j += 1;
+                }
+                if dup == 0 {
+                    crate::port::cells_push(gu, gx0);
+                    crate::port::cells_push(gu, gx1);
+                    crate::port::cells_push(gu, top);
+                    crate::port::cells_push(gu, bot);
+                    crate::port::cells_push(gu, lc_min(nl, nr));
+                    crate::port::cells_push(gu, nl);
+                    crate::port::cells_push(gu, nr);
+                    crate::port::cells_push(gu, nl * 2);
+                    crate::port::cells_push(gu, nr * 2);
+                    crate::port::cells_push(gu, 0);
+                    crate::port::cells_push(gu, bot);
+                    crate::port::cells_push(gu, 0);
+                    added += 1;
+                }
+            }
+        }
+        i += 1;
+    }
+    return added;
+}
 pub(crate) fn lc_merge(mut gu: &mut crate::port::Cells, dom: i32) -> i32 {
     // Gutters of one column gap that the sweep saw in pieces (a figure in one column, a heading) are one:
     // their x-intervals overlap by half of the narrower and their extents are within `hole` sizes.
@@ -1897,6 +2009,7 @@ pub fn lc_page(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, mut lt:
     lc_asides(lt, ls, sd);
     lc_side(wd, et, lt, ls, sd, pr, dom);
     lc_sweep(wd, lt, ls, dom, it, io, rw, gu, ac, tm);
+    lc_ocr_line_gutters(wd, lt, ls, dom, gu);
     lc_merge(gu, dom);
     lc_sort_gu(gu);
     lc_split_all(wd, et, lt, ls, gu);

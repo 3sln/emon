@@ -39,12 +39,12 @@
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
             [emon.evidence :refer [wd-get ln-get ln-count lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-bx0 lh-by0 lh-bx1
                                    lh-by1 lh-rot lh-dir lh-first lh-count hd-x0 hd-x1 hd-y0 hd-y1 hd-bx0 hd-by0
-                                   hd-bx1 hd-by1 hd-tstart hd-tlen hd-line wf-size]]
+                                   hd-bx1 hd-by1 hd-tstart hd-tlen hd-line wf-size lf-src]]
             [emon.lists :refer [ls-s-item]]
             [emon.model :refer [rl-body rl-margin rl-sidebar page-w]]
             [emon.glayer :refer [gfl-count gfl-get gff-page gff-x0 gff-y0 gff-x1 gff-y1 gff-colour]]
             [kin.lang :refer [defn defconst return let set while if do comment
-                              + - * < > <= >= == != and or not quot rem]]))
+                              + - * < > <= >= == != and or not quot rem bit-and]]))
 
 ;; the named settings (SPEC 10.1.1, 13): constants until the Engine has a settings table
 (defconst ^I32 LC_ROWS 3)          ;; gutter-rows: rows a gutter must persist
@@ -949,6 +949,70 @@
     (lc-close-all gu ac)
     (return (quot (cells-len gu) GU_STRIDE))))
 
+(defn ^I32 lc-ocr-line-gutters [^Cells wd ^Cells lt ^Cells ls ^I32 dom ^:mut ^Cells gu]
+  (comment "D1835: OCR lines already delimit runs of text. A vacant strip between their boxes, supported by six body lines on either side, is a gutter even when the baselines are staggered. Spanning lines bound its vertical band. A wide space inside a line is never evidence.")
+  (let [^I32 n (cells-len ls)
+        ^:mut ^I32 i 0 ^:mut ^I32 j 0 ^:mut ^I32 l 0 ^:mut ^I32 seed 0
+        ^:mut ^I32 cut 0 ^:mut ^I32 cy 0 ^:mut ^I32 top 0 ^:mut ^I32 bot 0
+        ^:mut ^I32 gx0 0 ^:mut ^I32 gx1 0 ^:mut ^I32 nl 0 ^:mut ^I32 nr 0
+        ^:mut ^I32 ly0 0 ^:mut ^I32 ly1 0 ^:mut ^I32 ry0 0 ^:mut ^I32 ry1 0
+        ^:mut ^I32 dup 0 ^:mut ^I32 b 0 ^:mut ^I32 added 0]
+    (if (or (< n 12) (> n 2000) (<= dom 0)) (return 0))
+    (comment "Mixed text-layer/OCR pages keep the existing word-based analysis: OCR-supported figure labels are not evidence that the whole page is a scan.")
+    (while (< i n)
+      (do (if (!= (bit-and (ln-get lt (cells-at ls i) (lf-src)) 3) 0) (return 0))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i n)
+      (do (set seed (cells-at ls i))
+          (if (and (< (cells-at lt (+ (* seed 16) 15)) LC_HELD)
+                   (!= (bit-and (ln-get lt seed (lf-src)) 4) 0)
+                   (>= (ln-get lt seed (lh-count)) 2) (lc-is-class (lc-size wd lt seed) dom))
+            (do (set cut (+ (ln-get lt seed (lh-x1)) (quot (* dom 3) 5)))
+                (set cy (lc-ym2 lt seed)) (set top -1000000000) (set bot 1000000000)
+                (set j 0)
+                (while (< j n)
+                  (do (set l (cells-at ls j))
+                      (if (or (>= (cells-at lt (+ (* l 16) 15)) LC_HELD)
+                              (and (< (ln-get lt l (lh-x0)) cut) (> (ln-get lt l (lh-x1)) cut)))
+                        (if (< (lc-ym2 lt l) cy)
+                          (set top (lc-max top (ln-get lt l (lh-y1))))
+                          (set bot (lc-min bot (ln-get lt l (lh-y0))))))
+                      (set j (+ j 1))))
+                (set nl 0) (set nr 0) (set gx0 -1000000000) (set gx1 1000000000)
+                (set ly0 1000000000) (set ly1 -1000000000)
+                (set ry0 1000000000) (set ry1 -1000000000) (set j 0)
+                (while (< j n)
+                  (do (set l (cells-at ls j))
+                      (if (and (< (cells-at lt (+ (* l 16) 15)) LC_HELD)
+                               (!= (bit-and (ln-get lt l (lf-src)) 4) 0)
+                               (>= (ln-get lt l (lh-count)) 2) (lc-is-class (lc-size wd lt l) dom)
+                               (>= (ln-get lt l (lh-y0)) top) (<= (ln-get lt l (lh-y1)) bot))
+                        (do (if (<= (ln-get lt l (lh-x1)) cut)
+                              (do (set nl (+ nl 1)) (set gx0 (lc-max gx0 (ln-get lt l (lh-x1))))
+                                  (set ly0 (lc-min ly0 (ln-get lt l (lh-y0)))) (set ly1 (lc-max ly1 (ln-get lt l (lh-y1))))))
+                            (if (>= (ln-get lt l (lh-x0)) cut)
+                              (do (set nr (+ nr 1)) (set gx1 (lc-min gx1 (ln-get lt l (lh-x0))))
+                                  (set ry0 (lc-min ry0 (ln-get lt l (lh-y0)))) (set ry1 (lc-max ry1 (ln-get lt l (lh-y1))))))))
+                      (set j (+ j 1))))
+                (if (and (>= nl 6) (>= nr 6) (>= (* (- gx1 gx0) 5) (* dom 3))
+                         (>= (- (lc-min ly1 ry1) (lc-max ly0 ry0)) (* dom 5)))
+                  (do (set top (lc-min ly0 ry0)) (set bot (lc-max ly1 ry1))
+                      (set dup 0) (set j 0)
+                      (while (< j (quot (cells-len gu) GU_STRIDE))
+                        (do (set b (* j GU_STRIDE))
+                            (if (and (< (cells-at gu b) gx1) (> (cells-at gu (+ b 1)) gx0)
+                                     (<= (cells-at gu (+ b GU_TOP)) (+ top dom))
+                                     (>= (cells-at gu (+ b GU_BOT)) (- bot dom))) (set dup 1))
+                            (set j (+ j 1))))
+                      (if (== dup 0)
+                        (do (cells-push gu gx0) (cells-push gu gx1) (cells-push gu top) (cells-push gu bot)
+                            (cells-push gu (lc-min nl nr)) (cells-push gu nl) (cells-push gu nr)
+                            (cells-push gu (* nl 2)) (cells-push gu (* nr 2)) (cells-push gu 0)
+                            (cells-push gu bot) (cells-push gu 0) (set added (+ added 1))))))))
+          (set i (+ i 1))))
+    (return added)))
+
 ;; ------------------------------------------------------- merge, split, extend
 
 (defn ^I32 lc-merge [^:mut ^Cells gu ^I32 dom]
@@ -1665,6 +1729,7 @@
     (lc-asides lt ls sd)
     (lc-side wd et lt ls sd pr dom)
     (lc-sweep wd lt ls dom it io rw gu ac tm)
+    (lc-ocr-line-gutters wd lt ls dom gu)
     (lc-merge gu dom)
     (lc-sort-gu gu)
     (lc-split-all wd et lt ls gu)

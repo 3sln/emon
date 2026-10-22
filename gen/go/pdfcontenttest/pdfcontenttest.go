@@ -936,3 +936,17 @@ func TestAdobesSymbolPrivateUseIsTheDelimiterPiecesUnicodeNames(emonT *testing.T
 	port.AssertEq(emonT, pdfcontent.PcPua(-1), -1, "no value stays none")
 	port.AssertEq(emonT, pdfcontent.PcPua(57344), 57344, "a private-use code point of anyone else's is not touched")
 }
+
+func TestACombiningMarkDoesNotOpenAWordGap(emonT *testing.T) {
+	var gl *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	ctGw(gl, 1000, 0, 1488)
+	var mark int32 = ctGw(gl, 1200, 600, 1456)
+	evidence.GlSet(gl, mark, evidence.GfBy0(), 1400)
+	evidence.GlSet(gl, mark, evidence.GfBy1(), 1400)
+	ctGw(gl, 1500, 0, 1489)
+	ctGroup(gl, et, wd, ln)
+	port.AssertEq(emonT, evidence.WdCount(wd), 1, "niqqud belongs to its base despite its displaced baseline")
+}

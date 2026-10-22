@@ -1327,15 +1327,38 @@ func tbPutProfile(text *port.Cells, prof int32) int32 {
 	return 0
 }
 
-func tbWordsRaw(wd *port.Cells, et *port.Cells, tw *port.Cells, from int32, num int32, raw *port.Cells) int32 {
+func TbWordsRaw(wd *port.Cells, et *port.Cells, tw *port.Cells, from int32, num int32, raw *port.Cells, order *port.Cells) int32 {
 	// The words tw[first..first+count) as code points into `raw`: a space between two words, none after a
 	// soft hyphen (which goes). `raw` is emptied first.
 	var k int32 = 0
 	var j int32 = 0
 	var started int32 = 0
+	var v int32 = 0
+	var line int32 = -1
+	// D1830: table fitting sorts by baseline and x. Within each contiguous parser line, word ids are already bidi-logical. Restore that order in scratch once, without reversing characters or rows. Unknown line ids keep their supplied order.
+	port.CellsDrop(order, 0)
+	for k < num {
+		port.CellsPush(order, port.CellsAt(tw, from+k))
+		k += 1
+	}
+	k = 1
+	for k < num {
+		v = port.CellsAt(order, k)
+		line = evidence.WdGet(wd, v, evidence.HdLine())
+		j = k
+		if line >= 0 {
+			for (j > 0) && (port.CellsAt(order, j-1) > v) && (evidence.WdGet(wd, port.CellsAt(order, j-1), evidence.HdLine()) == line) {
+				port.CellsSet(order, j, port.CellsAt(order, j-1))
+				j -= 1
+			}
+		}
+		port.CellsSet(order, j, v)
+		k += 1
+	}
+	k = 0
 	port.CellsDrop(raw, 0)
 	for k < num {
-		var w int32 = port.CellsAt(tw, from+k)
+		var w int32 = port.CellsAt(order, k)
 		var ts int32 = evidence.WdGet(wd, w, evidence.HdTstart())
 		var tl int32 = evidence.WdGet(wd, w, evidence.HdTlen())
 		if (ts >= 0) && (tl > 0) {
@@ -1383,7 +1406,7 @@ func tbEmitCell(tb *port.Cells, k int32, c int32, row int32, wd *port.Cells, et 
 	if wc == 0 {
 		model.NodeSetAux(nodes, n, 1)
 	} else {
-		tbWordsRaw(wd, et, tw, port.CellsAt(tc, cb+8), wc, raw)
+		TbWordsRaw(wd, et, tw, port.CellsAt(tc, cb+8), wc, raw, tmp)
 		var t0 int32 = port.CellsLen(text)
 		normalize.NzNfc(raw, 0, port.CellsLen(raw), text, tmp, normalize.NzFlagLigatures()+normalize.NzFlagRadicals())
 		model.NodeSetText(nodes, n, t0, port.CellsLen(text)-t0)
@@ -1571,7 +1594,7 @@ func tbEmitDropped(tb *port.Cells, f int32, r int32, wd *port.Cells, et *port.Ce
 					model.TextAppendCp(text, 32)
 				}
 				any = 1
-				tbWordsRaw(wd, et, tw, port.CellsAt(tc, (c*tcs)+8), port.CellsAt(tc, (c*tcs)+9), raw)
+				TbWordsRaw(wd, et, tw, port.CellsAt(tc, (c*tcs)+8), port.CellsAt(tc, (c*tcs)+9), raw, tmp)
 				normalize.NzNfc(raw, 0, port.CellsLen(raw), text, tmp, normalize.NzFlagLigatures()+normalize.NzFlagRadicals())
 			}
 		}
@@ -3350,7 +3373,26 @@ func tbLineLabel(wd *port.Cells, et *port.Cells, ln *port.Cells, l int32) bool {
 	return tbIsLabelWord(wd, et, w0) && tbIsLabelNumber(wd, et, w0+1)
 }
 
-func tbCaption(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, ln *port.Cells, l0 int32, l1 int32, tq *port.Cells) int32 {
+func tbCaptionForNext(tb *port.Cells, k int32, ln *port.Cells, l int32, distance int32) bool {
+	// D1834: caption ownership is decided against all selected tables, before a preceding table claims a below-caption. Prefer the following table when its above-caption is at least as close.
+	var q int32 = 0
+	var b int32 = 0
+	var d int32 = 0
+	var h int32 = evidence.LnGet(ln, l, evidence.LhY1()) - evidence.LnGet(ln, l, evidence.LhY0())
+	for q < tbRowsOf(tb, tagtable.Tbs) {
+		b = q * tagtable.Tbs
+		if (q != k) && (port.CellsAt(tb, b) == port.CellsAt(tb, k*tagtable.Tbs)) && (evidence.LnGet(ln, l, evidence.LhX0()) < port.CellsAt(tb, b+3)) && (evidence.LnGet(ln, l, evidence.LhX1()) > port.CellsAt(tb, b+1)) {
+			d = port.CellsAt(tb, b+2) - evidence.LnGet(ln, l, evidence.LhY1())
+			if (d >= -300) && ((d * 2) <= (h * 5)) && (tbAbs(d) <= distance) {
+				return 1 == 1
+			}
+		}
+		q += 1
+	}
+	return 1 == 0
+}
+
+func TbCaption(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, ln *port.Cells, l0 int32, l1 int32, tq *port.Cells) int32 {
 	// Find the caption of table k among the unclaimed lines l0..l1: a line that starts with a table keyword
 	// and a number, over the table or under it within two and a half line heights, preferring the one over it;
 	// the lines on its baseline to its right and the lines under it that continue it are part of it. They are
@@ -3378,7 +3420,7 @@ func tbCaption(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, ln *port
 							above = 1
 						}
 					}
-					if (db >= -300) && (((db * 2) <= (lht * 5)) && (above == 0)) {
+					if (db >= -300) && (((db * 2) <= (lht * 5)) && (above == 0)) && !tbCaptionForNext(tb, k, ln, l, tbAbs(db)) {
 						if tbAbs(db) < bestd {
 							best = l
 							bestd = tbAbs(db)
@@ -6469,7 +6511,7 @@ func tbFinish(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc *port.
 	tbSectionSpans(tb, k, wd, et, tc, tw)
 	tbTagRest(tb, k, tg, ta, wo, w0, tc, tw, ws)
 	tbAligns(tb, k, wd, tc, tw)
-	tbCaption(tb, k, wd, et, ln, l0, l1, tq)
+	TbCaption(tb, k, wd, et, ln, l0, l1, tq)
 	return 0
 }
 

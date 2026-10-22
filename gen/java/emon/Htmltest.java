@@ -204,4 +204,19 @@ public final class Htmltest {
         emon.Testport.assertEq(Html.htmlEmit(compact, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newBuf(), emon.Port.newCells()), 0, "compact");
         emon.Testport.assertEq(Html.htmlEmit(pretty, 16, 0, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newBuf(), emon.Port.newCells()), 0, "pretty");
     }
+    public static void testRtlDocumentEmitsDirectionAndAnUnknownLanguage() {
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        StringBuilder out = emon.Testport.newText();
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        int p = Model.nodeNew(nodes, Model.nkParagraph(), 0);
+        htSet(nodes, text, p, emon.Testport.textBlob("שלום"));
+        Html.htmlEmit(out, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newBuf(), emon.Port.newCells());
+        emon.Testport.assertText(out, "<!doctype html><html lang=\"und\" dir=\"rtl\"><head><meta charset=\"utf-8\"><title></title></head><body><main><p>שלום</p></main></body></html>", "unknown language is explicit, and RTL direction is inherited by blocks");
+    }
 }

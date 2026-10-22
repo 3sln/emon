@@ -4083,6 +4083,7 @@ Work for the release after 0.1.0 (ids from D559; the coordinator renumbers at th
   Rust and on Go. The scoreboard: nothing of `emon` regresses; the `emon-replay-px` ratchet's scan-ovl paragraph and boundary rows (one invoice address line, a false heading
   once, a paragraph now) are lowered by hand and its 38 improvements (scan headings p 0.60 to 0.75) recorded.
 - [x] P12.9 born-digital tables and forms — batch complete with explicit deferrals (D631–D639): real TEDS, dense born-digital categorical tables, headerless numeric summaries, unruled body spans and adjacent currency prefixes. E14 and D28 improve live; remaining header/total ownership, page linking, debit/credit, forms and false headings remain proposals D636–D638. All 29 samples are unchanged; Rust and Go each pass 1,083 laws. The coordinator commits; drift and CI core therefore report only uncommitted generated output.
+- [x] P12.12 layout and RTL — six fixes (D1830–D1835), with explicit region, furniture, paragraph, heading and figure proposals D1836–D1841. Rust and Go each pass 1,116 laws; all 29 samples run, protected samples unchanged; scoreboard unchanged. Required gates pass except drift/CI core flagging intentionally uncommitted generated output. The coordinator commits; verification and coverage limits are in the batch 10 report.
 - [ ] P12.10 table model increments 1–2 — increments 1 and 2a are gate-green (D645–D648); 2b records ownership/context (D649), fits selected rows (D650), attaches model-fit tails (D652) and preserves body claims while claiming fully owned bound rows (D654). Header reconstruction (D651), partial-interval merging/summary reconstruction (D653) and E10 fragmentation remain.
 - [x] P12.7 smoke batch 6: regressions and born-digital layout. DONE (D594–D609; validation and smoke comparisons pending).
 - [x] P12.8 scan quality: raster graphics and seals, checked language packs, script retries, OCR paragraph jitter and specks (D640–D644). Normalization residuals and demo language hosting explicitly deferred in D641/D642; validation is recorded in the batch report.
@@ -11913,4 +11914,85 @@ A failing-first law established two selected ledger fragments across eight conti
 ### D654 — Preserve body box claims and claim fully owned bound rows (P12.10 2b.5)
 Activate `tb-own-claim` after recording the retained-cell owners and explicit drops. It invokes the original box claim for every profile without any ownership threshold: no partially owned line inside the body can be released. For text profiles only, an additional outside-box claim requires every word on the line to belong to the same kept table (or its explicit drops), and at least one word to be in an explicitly bound header or attached foot row. Ruled and structural tables retain their original box behavior. Empty evidence excluded by `tb-rows` is now explicitly dropped like separators and rotated overlays. Two laws failed first: the empty evidence had owner 0 instead of a drop; a fully owned attached tail with an imprecise line box remained unclaimed. A one-of-four-owned body-line control proves the old claim survives. The independent body-word audit runs through every table fixture entry path, including the PDF/tagged goldens, direct column-model law and ownership helper: an eligible body word must occur in exactly one retained cell, or have an explicit row-builder exclusion reason. All 79 table/tagged laws and existing goldens pass. All 29 samples and six table/row controls hold byte for byte. Accuracy passes 3,383 metrics under D648 and 224 byte-identical cross-host Models. The born control is checked first: zero lost/gained words. All seven live Models are byte-identical to the accepted D652 tail checkpoint, retaining every word. Hosts and rederivation registration pass. The final sequential gate sweep is recorded in the task report. P12.10 remains open: external header reconstruction (D651) and live partial-interval merging/summary reconstruction (D653) were rejected and reverted. No commits or scoreboard changes.
 Final validation: Rust and Go each pass 1,110 laws; all 79 table/tagged laws and old goldens pass, including the audit across every fixture entry path. All requested final gates pass except the expected committed generated-output drift comparison; re-emission is unchanged and CI core’s other 16 checks pass with the requested npm cache. Accuracy holds 3,383 metrics and 224 cross-host Models; all 29 samples and historical scoreboard values are unchanged, all seven word controls lose/gain zero, and source hashes stay fixed throughout the sequential sweep. Browser arms skip without host/js/node_modules; local C/pod packages lack bundled native engines. Full evidence and limitations are recorded in .claude/coord/tm4-report.md and /private/tmp/tm4-final-results.json. P12.10 remains unchecked; no commits.
+- [ ] **Signed off** (maintainer)
+
+
+### D1830 — Table cells retain the parser's logical word order
+
+**Cause.** Table fitting orders words by baseline and x, undoing the logical word order already established by the parser's bidi paragraph pass. **Decision.** At cell emission, restore word-id order within each contiguous slice of a parser line. Rows and the characters inside words keep their order; no second character-level bidi pass is applied. Words without a line id retain their supplied order. Law: `tabletest/test-cell-text-keeps-the-logical-order-of-each-rtl-line` (failed first with the Arabic words reversed).
+
+- [ ] **Signed off** (maintainer)
+
+### D1831 — HTML inherits an explicit RTL document direction
+
+**Decision.** Count strong characters in node content, excluding document metadata. A document with a strict RTL majority emits `dir="rtl"` on `html`; preserve the document's existing language, and emit `lang="und"` if no language was supplied. Script alone cannot distinguish Arabic from Persian or Hebrew from Yiddish, so do not guess a language. Numbers and combining marks do not vote. Law: `htmltest/test-rtl-document-emits-direction-and-an-unknown-language`, red before the change. Mixed-direction sub-block overrides remain a follow-up.
+
+- [ ] **Signed off** (maintainer)
+
+### D1832 — Inline annotations follow the bidi character permutation
+
+**Cause.** `il-word` used painted glyph index j for logical character j even after `pc-bidi-text` reordered the word. **Decision.** For words the parser reordered, use that same bidi permutation when looking up glyph style and link rectangles. Keep the permutation in scratch after the heading arena, then compact the output states back to their original position. No word-wide link snapping: a link legitimately covering part of a word remains partial. Law: `inlinetest/test-rtl-links-follow-the-logical-character-not-the-painted-index`, failed first by linking bet instead of alef.
+
+- [ ] **Signed off** (maintainer)
+
+### D1833 — Combining marks do not supply word-gap geometry
+
+**Cause.** A nonspacing mark's displaced baseline and small advance can terminate a word before and after the mark. **Decision.** An upright nonspacing mark whose centre overlaps its base attaches within one size of its baseline. Measure the following glyph's gap from that base, bounded by the current word's first glyph and a 16-glyph lookback. Visibility and rotation checks still apply. Law: `pdfcontenttest/test-a-combining-mark-does-not-open-a-word-gap`, failed first with three words instead of one.
+
+- [ ] **Signed off** (maintainer)
+
+### D1834 — Adjacent tables compete for caption ownership
+
+**Cause.** A table finishing first could claim a below-caption that is the next table's above-caption. **Decision.** Before claiming a below-caption, compare all selected tables on that page. If a horizontally overlapping following table has an above-caption at least as close, leave the line for it. Keep isolated below-captions. Law: `tabletest/test-a-caption-between-tables-belongs-to-the-following-table`, failed first when the preceding table claimed the caption.
+
+- [ ] **Signed off** (maintainer)
+
+### D1835 — Gutters between complete OCR line boxes
+
+**Cause.** The word-row sweep requires baselines that overlap enough to accumulate three words per side, or an absolute 60 pt gutter. Narrow OCR newspaper columns can have neither. **Decision.** On pages whose layout text is entirely OCR (no text-layer or hidden-text source), derive additional gutters from complete OCR line boxes, with six body lines on each side, a shared vertical reach of five sizes, and no line crossing the strip within that band. Spanning lines and table-held lines bound the band; table-held lines never supply gutter support. A space inside a line supplies no evidence. Bound the scan to 2,000 lines per page. Law: `columnstest/test-staggered-narrow-ocr-columns-use-line-gutters`, including a mixed text/OCR negative assertion that failed before the scope guard. A live review caught G07 gaining spurious regions when fused text-layer lines voted as OCR; mixed pages now retain the existing analysis. Sample review also caught table-held OCR rows changing an invoice's paragraph scope; the claimed-cell negative assertion failed first and the detector now excludes these rows and stops at their band.
+
+**Live.** G15 now has three body columns and 27 paragraphs, versus two body columns and 88 paragraphs at the baseline, with the same non-whitespace body-character multiset.
+
+**Upstream dependency.** n13's live evidence has upright boxes but line rotations around 90 degrees. `pa-upright-count` therefore excludes its lines before columns run. Correcting those rotations belongs to batch 9's orientation work; do not hide the inconsistency by treating all rotated text as upright here.
+
+- [ ] **Signed off** (maintainer)
+
+### D1836 — Proposal: mirrored glyph provenance and RTL paragraph boundaries
+
+**Deferred design.** T1 cannot safely be fixed by removing L4 mirroring globally: a PDF's ToUnicode character and the visible mirrored glyph are different evidence, and existing bidi conformance laws require mirroring when reconstructing from visible glyph identities. Preserve character-map provenance in the glyph evidence, and mirror only identities derived from glyph appearance. Proposed fixture: identical displayed parentheses encoded once with logical ToUnicode characters and once with visual glyph identities, both yielding the same logical bracketed Hebrew text.
+
+T3 needs a live-derived paragraph-boundary fixture rather than a global ban on short RTL lines being paragraphs. `pa-start` already mirrors the start edge and the existing RTL alignment laws cover short lines. Separate a short last line that has a stable right margin and ordinary leading from a new RTL paragraph with an indent or extra leading; test both in the column/paragraph pipeline. This boundary change is deferred.
+
+- [ ] **Signed off** (maintainer)
+
+### D1837 — Proposal: region ownership before tables and column classes
+
+**Evidence.** n12's fused fills are short header bands, not the full infobox ground. `lc-mark-asides` requires a non-white fill at least `LC_ASIDE_H` tall, and `lc-mark-box` ignores table-held lines. It cannot recover an infobox after false table claims. **Proposal.** Build candidate enclosures from joined rules and header fills before table discovery; jointly choose aside versus table ownership, then fit the body around the enclosure. Require independent body lines beside it and preserve actual tables inside an aside. Fixtures must cover a white boxed infobox, a header-band-only infobox and a real narrow table beside prose; compare n12, G01 and d16 live.
+
+F02's title/TOC and Get forms/What's New need the same region-first layout: the present column sweep uses dominant body-size classes, so large title lines and small boxed content do not consistently extend the body gutter. Proposed fixture: a two-column cover with a large title, TOC and lower boxed callout; serialize each region once in its column, without joining across the gutter. Deferred rather than globally widening type-size tolerance and turning justified prose spaces into gutters.
+
+- [ ] **Signed off** (maintainer)
+
+### D1838 — Proposal: fuzzy running-furniture groups with positional evidence
+
+**Cause.** Furniture template grouping uses exact normalized template keys before recurrence scoring. OCR variants of a running header fall into different groups; multi-line chaining only extends groups that already qualify, for three passes. Mastheads need region context as well as a top-band location. **Proposal.** Cluster bounded-length OCR candidates using edit distance, position and font size before group statistics, keep original per-page text, and run adjacency propagation to a fixed point bounded by candidate count. Never discard a confidentiality notice: emit it once as furniture. Fixtures: four-line grey headers, one-character OCR substitutions on repeated headers, a repeated confidentiality notice and changing table-unit labels in the top band. Deferred pending those positive and negative fixtures and G09/d06/G12 live checks.
+
+- [ ] **Signed off** (maintainer)
+
+### D1839 — Proposal: paragraph continuity across hanging indents, floats and pages
+
+**Cause.** Paragraph boundaries combine inferred size, start edge, heading/list decisions and cross-fragment join scores. OCR size tolerance is restricted to lines of at least four words on both sides; a short continuation loses it. Cross-fragment edge evidence uses physical right edges even for RTL. Hanging numbered definitions additionally depend on list/heading interpretation. **Proposal.** Carry a paragraph's logical start/end margins and continuation style across fragments, with a separate hanging-indent state established by the marker and second line. Do not treat a single large sentence gap as a column. Fixtures must pair each continuation with a real new paragraph (including short final OCR lines, two-sentence typewriter prose, a numbered definition, a float and a page break). Deferred: loosening size/indent thresholds without these controls would merge independent paragraphs and table notes.
+
+- [ ] **Signed off** (maintainer)
+
+### D1840 — Proposal: contextual heading and figure-label ownership
+
+**Cause.** Heading style scoring can promote isolated first OCR lines, bold lead-ins and detached table/figure labels before their structural owner is known. Caption attachment, TOC interpretation, author/front-matter roles and table-title lists are distinct contexts. **Proposal.** Supply the heading stage with established region/owner roles and suppress heading candidacy for owned captions, TOC entries, unit notes, footer regions and run-in leads; keep actual Abstract sections as headings at the document's appropriate level. Fixtures: a figure caption versus a real section mentioning a figure, a TOC versus numbered sections, an author block versus title, bracketed units and a merchant row. Includes G07's Figure 34 and Format line, E10's `(d)` note and merchant names. Deferred rather than adding a keyword blacklist or stripping meaningful brackets.
+
+- [ ] **Signed off** (maintainer)
+
+### D1841 — Proposal: mutually exclusive figure, stamp and signature interpretations
+
+**Cause.** Graphics-region classification and seal/signature interpretation can claim raster text independently of figure/diagram ownership; outlined display text can be interpreted as watermark ink. A logo, poster or checkbox row needs negative evidence against a stamp/signature, not just a different label after its words have been removed. **Proposal.** Score competing interpretations before claims, using region area, repeated display lettering, checkbox structure and neighboring labels. Assign diagram labels to a figure region and emit the figure even when there is no single raster image. Fixtures: a full-page poster versus a genuine stamp, a BEA-style logo versus initials, checkbox row versus signature, outlined title versus repeated watermark, and vector/raster figures with labels. Deferred; do not change the scan/health/OCR hosts owned by batch 9 or suppress seal nodes solely by a word blacklist.
+
 - [ ] **Signed off** (maintainer)

@@ -529,4 +529,35 @@ public static class Inlinetest {
         emon.Testport.AssertEq(ItFind(nodes, Model.NkLink(), 4), -1, "and the bare URL under the first link is not made a link again");
         emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "in document order");
     }
+    [Xunit.Fact]
+    public static void TestRtlLinksFollowTheLogicalCharacterNotThePaintedIndex() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells gl = emon.Port.NewCells();
+        emon.Port.Cells ift = emon.Port.NewCells();
+        emon.Port.Cells an = emon.Port.NewCells();
+        emon.Port.Cells txt = emon.Port.NewCells();
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        ItBody(wd, ln, et, emon.Testport.TextBlob("אב"));
+        ItFonts(ift);
+        ItGlyph(gl, 7200, 8400, 1489, 6, 1100, 7400);
+        ItGlyph(gl, 8400, 9600, 1488, 6, 1100, 7400);
+        Evidence.WdSet(wd, 6, Evidence.WfGfirst(), 0);
+        Evidence.WdSet(wd, 6, Evidence.WfGcount(), 2);
+        Evidence.WdSet(wd, 6, Evidence.HdDir(), 1);
+        ItTxt(txt, emon.Testport.TextBlob("https://example.org/x"));
+        ItLinkRow(an, 8401, 6400, 9600, 7600, 1, 0, 21);
+        emon.Testport.AssertEq(ItBuild(wd, ln, et, gl, ift, an, txt, nodes, attrs, regions, text, pages, ledger, layout), 1, "one link");
+        int link = ItFind(nodes, Model.NkLink(), 0);
+        int child = Model.NodeFirstChild(nodes, link);
+        emon.Testport.AssertEq(Model.NodeTextLen(nodes, child), 1, "one linked character");
+        emon.Testport.AssertEq(emon.Port.CellsAt(text, Model.NodeTextStart(nodes, child)), 1488, "alef at the right is the linked logical first character");
+    }
 }

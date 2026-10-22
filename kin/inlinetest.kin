@@ -18,7 +18,7 @@
                                 nk-section nk-heading nk-paragraph nk-text nk-span nk-link
                                 fk-href fk-target]]
             [emon.evidence :refer [wd-new wd-set wd-count wd-get ln-new ln-count gl-new gl-set fo-new fo-set
-                                   wf-size wf-font wf-gfirst wf-gcount gf-font gf-size gf-by0 fnf-style fnf-tstart fnf-tlen]]
+                                   hd-dir wf-size wf-font wf-gfirst wf-gcount gf-font gf-size gf-by0 fnf-style fnf-tstart fnf-tlen]]
             [emon.columns :refer [lc-copy]]
             [emon.heading :refer [hd-analyze]]
             [emon.para :refer [pa-pages pa-build]]
@@ -447,3 +447,22 @@
     (assert-eq (node-attr-int-or nodes attrs 12 (fk-target) -1) 16 "a point on page 2 names the block there")
     (assert-eq (it-find nodes (nk-link) 4) -1 "and the bare URL under the first link is not made a link again")
     (assert-eq (model-check nodes attrs regions text pages ledger layout st) 0 "in document order")))
+
+(deftest test-rtl-links-follow-the-logical-character-not-the-painted-index
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells gl (new-cells) ^Cells ift (new-cells)
+        ^Cells an (new-cells) ^Cells txt (new-cells) ^Cells nodes (new-cells) ^Cells attrs (new-cells)
+        ^Cells regions (new-cells) ^Cells text (new-cells) ^Cells pages (new-cells) ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)]
+    (it-body wd ln et (text-blob "אב"))
+    (it-fonts ift)
+    (it-glyph gl 7200 8400 1489 6 1100 7400)
+    (it-glyph gl 8400 9600 1488 6 1100 7400)
+    (wd-set wd 6 (wf-gfirst) 0) (wd-set wd 6 (wf-gcount) 2)
+    (wd-set wd 6 (hd-dir) 1)
+    (it-txt txt (text-blob "https://example.org/x"))
+    (it-link-row an 8401 6400 9600 7600 1 0 21)
+    (assert-eq (it-build wd ln et gl ift an txt nodes attrs regions text pages ledger layout) 1 "one link")
+    (let [^I32 link (it-find nodes (nk-link) 0)
+          ^I32 child (node-first-child nodes link)]
+      (assert-eq (node-text-len nodes child) 1 "one linked character")
+      (assert-eq (cells-at text (node-text-start nodes child)) 1488 "alef at the right is the linked logical first character"))))

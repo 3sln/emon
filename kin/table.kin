@@ -1110,15 +1110,28 @@
         (text-append-cp text 101)))
   (return 0))
 
-(defn ^I32 tb-words-raw [^Cells wd ^Cells et ^Cells tw ^I32 from ^I32 num ^:mut ^Cells raw]
+(defn ^:pub ^I32 tb-words-raw [^Cells wd ^Cells et ^Cells tw ^I32 from ^I32 num ^:mut ^Cells raw ^:mut ^Cells order]
   (comment "The words tw[first..first+count) as code points into `raw`: a space between two words, none after a")
   (comment "soft hyphen (which goes). `raw` is emptied first.")
   (let [^:mut ^I32 k 0
         ^:mut ^I32 j 0
-        ^:mut ^I32 started 0]
+        ^:mut ^I32 started 0 ^:mut ^I32 v 0 ^:mut ^I32 line -1]
+    (comment "D1830: table fitting sorts by baseline and x. Within each contiguous parser line, word ids are already bidi-logical. Restore that order in scratch once, without reversing characters or rows. Unknown line ids keep their supplied order.")
+    (cells-drop order 0)
+    (while (< k num)
+      (do (cells-push order (cells-at tw (+ from k))) (set k (+ k 1))))
+    (set k 1)
+    (while (< k num)
+      (do (set v (cells-at order k)) (set line (wd-get wd v (hd-line))) (set j k)
+          (if (>= line 0)
+            (while (and (> j 0) (> (cells-at order (- j 1)) v)
+                        (== (wd-get wd (cells-at order (- j 1)) (hd-line)) line))
+              (do (cells-set order j (cells-at order (- j 1))) (set j (- j 1)))))
+          (cells-set order j v) (set k (+ k 1))))
+    (set k 0)
     (cells-drop raw 0)
     (while (< k num)
-      (do (let [^I32 w (cells-at tw (+ from k))
+      (do (let [^I32 w (cells-at order k)
                 ^I32 ts (wd-get wd w (hd-tstart))
                 ^I32 tl (wd-get wd w (hd-tlen))]
             (if (and (>= ts 0) (> tl 0))
@@ -1153,7 +1166,7 @@
                      (cells-at tc (+ cb 6)) (cells-at tc (+ cb 7)))
     (if (== wc 0)
       (node-set-aux nodes n 1)
-      (do (tb-words-raw wd et tw (cells-at tc (+ cb 8)) wc raw)
+      (do (tb-words-raw wd et tw (cells-at tc (+ cb 8)) wc raw tmp)
           (let [^I32 t0 (cells-len text)]
             (nz-nfc raw 0 (cells-len raw) text tmp (+ (nz-flag-ligatures) (nz-flag-radicals)))
             (node-set-text nodes n t0 (- (cells-len text) t0)))))
@@ -1289,7 +1302,7 @@
                 (if (> (cells-at tc (+ (* c TCS) 9)) 0)
                   (do (if (== any 1) (text-append-cp text 32))
                       (set any 1)
-                      (tb-words-raw wd et tw (cells-at tc (+ (* c TCS) 8)) (cells-at tc (+ (* c TCS) 9)) raw)
+                      (tb-words-raw wd et tw (cells-at tc (+ (* c TCS) 8)) (cells-at tc (+ (* c TCS) 9)) raw tmp)
                       (nz-nfc raw 0 (cells-len raw) text tmp (+ (nz-flag-ligatures) (nz-flag-radicals)))))))
           (set c (+ c 1))))
     (let [^I32 l (ledger-add ledger (dr-duplicate-header-row) (cells-at tb b) x0 y0 x1 y1 700 (+ (sr-text) (sr-infer)))]
@@ -2652,7 +2665,22 @@
     (if (< (ln-get ln l (lh-count)) 2) (return (== 0 1)))
     (return (and (tb-is-label-word wd et w0) (tb-is-label-number wd et (+ w0 1))))))
 
-(defn ^I32 tb-caption [^:mut ^Cells tb ^I32 k ^Cells wd ^Cells et ^:mut ^Cells ln ^I32 l0 ^I32 l1 ^:mut ^Cells tq]
+(defn ^Bool tb-caption-for-next [^Cells tb ^I32 k ^Cells ln ^I32 l ^I32 distance]
+  (comment "D1834: caption ownership is decided against all selected tables, before a preceding table claims a below-caption. Prefer the following table when its above-caption is at least as close.")
+  (let [^:mut ^I32 q 0 ^:mut ^I32 b 0 ^:mut ^I32 d 0
+        ^I32 h (- (ln-get ln l (lh-y1)) (ln-get ln l (lh-y0)))]
+    (while (< q (tb-rows-of tb TBS))
+      (do (set b (* q TBS))
+          (if (and (!= q k) (== (cells-at tb b) (cells-at tb (* k TBS)))
+                   (< (ln-get ln l (lh-x0)) (cells-at tb (+ b 3)))
+                   (> (ln-get ln l (lh-x1)) (cells-at tb (+ b 1))))
+            (do (set d (- (cells-at tb (+ b 2)) (ln-get ln l (lh-y1))))
+                (if (and (>= d -300) (<= (* d 2) (* h 5)) (<= (tb-abs d) distance))
+                  (return (== 1 1)))))
+          (set q (+ q 1))))
+    (return (== 1 0))))
+
+(defn ^:pub ^I32 tb-caption [^:mut ^Cells tb ^I32 k ^Cells wd ^Cells et ^:mut ^Cells ln ^I32 l0 ^I32 l1 ^:mut ^Cells tq]
   (comment "Find the caption of table k among the unclaimed lines l0..l1: a line that starts with a table keyword")
   (comment "and a number, over the table or under it within two and a half line heights, preferring the one over it;")
   (comment "the lines on its baseline to its right and the lines under it that continue it are part of it. They are")
@@ -2676,7 +2704,8 @@
                       (if (and (>= da -300) (<= (* da 2) (* lht 5)))
                         (if (< (tb-abs da) bestd)
                           (do (set best l) (set bestd (tb-abs da)) (set above 1))))
-                      (if (and (>= db -300) (and (<= (* db 2) (* lht 5)) (== above 0)))
+                      (if (and (>= db -300) (and (<= (* db 2) (* lht 5)) (== above 0))
+                               (not (tb-caption-for-next tb k ln l (tb-abs db))))
                         (if (< (tb-abs db) bestd)
                           (do (set best l) (set bestd (tb-abs db))))))))))
           (set l (+ l 1))))

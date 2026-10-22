@@ -4,6 +4,7 @@
 package inline
 
 import (
+	"emon/bidi"
 	"emon/evidence"
 	"emon/heading"
 	"emon/lists"
@@ -725,15 +726,30 @@ func ilWord(wd *port.Cells, et *port.Cells, gl *port.Cells, ift *port.Cells, sw 
 	var st int32 = 0
 	var j int32 = 0
 	var g int32 = 0
+	var order int32 = -1
+	var data0 int32 = d0
 	if (ts < 0) || (tl <= 0) {
 		return 0
 	}
 	if (tl == gn) && (gn > 0) && (gn <= ilMaxg) && (g0 >= 0) && (ilGrouped(wd, et, w) == 0) {
 		eq = 1
 	}
+	// D1832: the text is logical but the glyph arena stays in painted order. Use the parser's bidi permutation for per-character styles and link hits.
+	if (eq == 1) && (evidence.WdGet(wd, w, evidence.HdDir()) == 1) && (evidence.GlGet(gl, g0+(gn-1), evidence.HdX0()) >= evidence.GlGet(gl, g0, evidence.HdX0())) {
+		for j < gn {
+			port.CellsPush(hc, evidence.GlGet(gl, g0+j, evidence.ChCp()))
+			j += 1
+		}
+		order = bidi.BdOrderOf(hc, d0, gn)
+		data0 = port.CellsLen(hc)
+		j = 0
+	}
 	if eq == 1 {
 		for j < tl {
 			g = g0 + j
+			if order >= 0 {
+				g = g0 + port.CellsAt(hc, order+j)
+			}
 			st = ilGlyphBits(gl, ift, g, sz0, base, upright)
 			st += 256 * ilLinkOf(sw, ncand, lo, hi, text, txt, (evidence.GlGet(gl, g, evidence.HdX0())+evidence.GlGet(gl, g, evidence.HdX1()))/2, (evidence.GlGet(gl, g, evidence.HdY0())+evidence.GlGet(gl, g, evidence.HdY1()))/2)
 			port.CellsPush(hc, st)
@@ -758,6 +774,14 @@ func ilWord(wd *port.Cells, et *port.Cells, gl *port.Cells, ift *port.Cells, sw 
 		if st != 0 {
 			nz = 1
 		}
+	}
+	if order >= 0 {
+		j = 0
+		for j < tl {
+			port.CellsSet(hc, d0+j, port.CellsAt(hc, data0+j))
+			j += 1
+		}
+		port.CellsDrop(hc, d0+tl)
 	}
 	if nz == 0 {
 		port.CellsDrop(hc, d0)

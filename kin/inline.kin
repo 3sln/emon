@@ -40,10 +40,11 @@
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
             [emon.evidence :refer [wd-count wd-get ln-count ln-get gl-get fo-count fo-get
                                    lh-page lh-first lh-count lh-by0 lh-rot hd-page hd-x0 hd-y0 hd-x1 hd-y1
-                                   hd-tstart hd-tlen wf-gfirst wf-gcount wf-font gf-font gf-size gf-by0
+                                   hd-dir ch-cp hd-tstart hd-tlen wf-gfirst wf-gcount wf-font gf-font gf-size gf-by0
                                    fnf-obj fnf-style fnf-tstart fnf-tlen]]
             [emon.lists :refer [ls-cap ls-line-size ls-s-item ls-s-end ls-s-note ls-s-cap ls-s-ref]]
             [emon.heading :refer [hd-rows-end]]
+            [emon.bidi :refer [bd-order-of]]
             [emon.model :refer [text-append-cp page-w page-h]]
             [emon.pdfdoc :refer [pd-get pd-dget pd-resolve pd-pg-crop]]
             [emon.pdflex :refer [pl-kind-of pl-first pl-num-cp]]
@@ -548,12 +549,21 @@
         ^:mut ^I32 first 0
         ^:mut ^I32 st 0
         ^:mut ^I32 j 0
-        ^:mut ^I32 g 0]
+        ^:mut ^I32 g 0
+        ^:mut ^I32 order -1 ^:mut ^I32 data0 d0]
     (if (or (< ts 0) (<= tl 0)) (return 0))
     (if (and (== tl gn) (> gn 0) (<= gn IL_MAXG) (>= g0 0) (== (il-grouped wd et w) 0)) (set eq 1))
+    (comment "D1832: the text is logical but the glyph arena stays in painted order. Use the parser's bidi permutation for per-character styles and link hits.")
+    (if (and (== eq 1) (== (wd-get wd w (hd-dir)) 1)
+             (>= (gl-get gl (+ g0 (- gn 1)) (hd-x0)) (gl-get gl g0 (hd-x0))))
+      (do (while (< j gn)
+            (do (cells-push hc (gl-get gl (+ g0 j) (ch-cp))) (set j (+ j 1))))
+          (set order (bd-order-of hc d0 gn))
+          (set data0 (cells-len hc)) (set j 0)))
     (if (== eq 1)
       (while (< j tl)
         (do (set g (+ g0 j))
+            (if (>= order 0) (set g (+ g0 (cells-at hc (+ order j)))))
             (set st (il-glyph-bits gl ift g sz0 base upright))
             (set st (+ st (* 256 (il-link-of sw ncand lo hi text txt
                                              (quot (+ (gl-get gl g (hd-x0)) (gl-get gl g (hd-x1))) 2)
@@ -570,6 +580,11 @@
                                              (quot (+ (wd-get wd w (hd-y0)) (wd-get wd w (hd-y1))) 2)))))
             (cells-push hc st)
             (if (!= st 0) (set nz 1)))))
+    (if (>= order 0)
+      (do (set j 0)
+          (while (< j tl)
+            (do (cells-set hc (+ d0 j) (cells-at hc (+ data0 j))) (set j (+ j 1))))
+          (cells-drop hc (+ d0 tl))))
     (if (== nz 0)
       (do (cells-drop hc d0)
           (return 0)))

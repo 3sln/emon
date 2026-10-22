@@ -1230,15 +1230,38 @@ public static class Table {
         }
         return 0;
     }
-    internal static int TbWordsRaw(emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells tw, int from, int num, emon.Port.Cells raw) {
+    public static int TbWordsRaw(emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells tw, int from, int num, emon.Port.Cells raw, emon.Port.Cells order) {
         // The words tw[first..first+count) as code points into `raw`: a space between two words, none after a
         // soft hyphen (which goes). `raw` is emptied first.
         int k = 0;
         int j = 0;
         int started = 0;
+        int v = 0;
+        int line = -1;
+        // D1830: table fitting sorts by baseline and x. Within each contiguous parser line, word ids are already bidi-logical. Restore that order in scratch once, without reversing characters or rows. Unknown line ids keep their supplied order.
+        emon.Port.CellsDrop(order, 0);
+        while (k < num) {
+            emon.Port.CellsPush(order, emon.Port.CellsAt(tw, from + k));
+            k += 1;
+        }
+        k = 1;
+        while (k < num) {
+            v = emon.Port.CellsAt(order, k);
+            line = Evidence.WdGet(wd, v, Evidence.HdLine());
+            j = k;
+            if (line >= 0) {
+                while ((j > 0) && (emon.Port.CellsAt(order, j - 1) > v) && (Evidence.WdGet(wd, emon.Port.CellsAt(order, j - 1), Evidence.HdLine()) == line)) {
+                    emon.Port.CellsSet(order, j, emon.Port.CellsAt(order, j - 1));
+                    j -= 1;
+                }
+            }
+            emon.Port.CellsSet(order, j, v);
+            k += 1;
+        }
+        k = 0;
         emon.Port.CellsDrop(raw, 0);
         while (k < num) {
-            int w = emon.Port.CellsAt(tw, from + k);
+            int w = emon.Port.CellsAt(order, k);
             int ts = Evidence.WdGet(wd, w, Evidence.HdTstart());
             int tl = Evidence.WdGet(wd, w, Evidence.HdTlen());
             if ((ts >= 0) && (tl > 0)) {
@@ -1285,7 +1308,7 @@ public static class Table {
         if (wc == 0) {
             Model.NodeSetAux(nodes, n, 1);
         } else {
-            TbWordsRaw(wd, et, tw, emon.Port.CellsAt(tc, cb + 8), wc, raw);
+            TbWordsRaw(wd, et, tw, emon.Port.CellsAt(tc, cb + 8), wc, raw, tmp);
             int t0 = emon.Port.CellsLen(text);
             Normalize.NzNfc(raw, 0, emon.Port.CellsLen(raw), text, tmp, Normalize.NzFlagLigatures() + Normalize.NzFlagRadicals());
             Model.NodeSetText(nodes, n, t0, emon.Port.CellsLen(text) - t0);
@@ -1463,7 +1486,7 @@ public static class Table {
                         Model.TextAppendCp(text, 32);
                     }
                     any = 1;
-                    TbWordsRaw(wd, et, tw, emon.Port.CellsAt(tc, (c * Tcs) + 8), emon.Port.CellsAt(tc, (c * Tcs) + 9), raw);
+                    TbWordsRaw(wd, et, tw, emon.Port.CellsAt(tc, (c * Tcs) + 8), emon.Port.CellsAt(tc, (c * Tcs) + 9), raw, tmp);
                     Normalize.NzNfc(raw, 0, emon.Port.CellsLen(raw), text, tmp, Normalize.NzFlagLigatures() + Normalize.NzFlagRadicals());
                 }
             }
@@ -3187,7 +3210,25 @@ public static class Table {
         }
         return TbIsLabelWord(wd, et, w0) && TbIsLabelNumber(wd, et, w0 + 1);
     }
-    internal static int TbCaption(emon.Port.Cells tb, int k, emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells ln, int l0, int l1, emon.Port.Cells tq) {
+    internal static bool TbCaptionForNext(emon.Port.Cells tb, int k, emon.Port.Cells ln, int l, int distance) {
+        // D1834: caption ownership is decided against all selected tables, before a preceding table claims a below-caption. Prefer the following table when its above-caption is at least as close.
+        int q = 0;
+        int b = 0;
+        int d = 0;
+        int h = Evidence.LnGet(ln, l, Evidence.LhY1()) - Evidence.LnGet(ln, l, Evidence.LhY0());
+        while (q < TbRowsOf(tb, Tagtable.Tbs)) {
+            b = q * Tagtable.Tbs;
+            if ((q != k) && (emon.Port.CellsAt(tb, b) == emon.Port.CellsAt(tb, k * Tagtable.Tbs)) && (Evidence.LnGet(ln, l, Evidence.LhX0()) < emon.Port.CellsAt(tb, b + 3)) && (Evidence.LnGet(ln, l, Evidence.LhX1()) > emon.Port.CellsAt(tb, b + 1))) {
+                d = emon.Port.CellsAt(tb, b + 2) - Evidence.LnGet(ln, l, Evidence.LhY1());
+                if ((d >= -300) && ((d * 2) <= (h * 5)) && (TbAbs(d) <= distance)) {
+                    return 1 == 1;
+                }
+            }
+            q += 1;
+        }
+        return 1 == 0;
+    }
+    public static int TbCaption(emon.Port.Cells tb, int k, emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells ln, int l0, int l1, emon.Port.Cells tq) {
         // Find the caption of table k among the unclaimed lines l0..l1: a line that starts with a table keyword
         // and a number, over the table or under it within two and a half line heights, preferring the one over it;
         // the lines on its baseline to its right and the lines under it that continue it are part of it. They are
@@ -3215,7 +3256,7 @@ public static class Table {
                                 above = 1;
                             }
                         }
-                        if ((db >= -300) && (((db * 2) <= (lht * 5)) && (above == 0))) {
+                        if ((db >= -300) && (((db * 2) <= (lht * 5)) && (above == 0)) && !TbCaptionForNext(tb, k, ln, l, TbAbs(db))) {
                             if (TbAbs(db) < bestd) {
                                 best = l;
                                 bestd = TbAbs(db);

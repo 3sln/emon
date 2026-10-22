@@ -4289,7 +4289,7 @@ func pcAccentPair(gl *port.Cells, j int32, glst int32) int32 {
 	return pcAccentOver(gl, j, j+1)
 }
 
-func pcContinues(gl *port.Cells, p int32, g int32) int32 {
+func pcContinues(gl *port.Cells, p int32, g int32, first int32) int32 {
 	// 1 when glyph g continues the word glyph p is in: the same rotation, on the
 	// same baseline (to 45 percent of the size: sub- and superscripts stay), and
 	// the gap along the axis neither a word space nor a step back.
@@ -4300,6 +4300,7 @@ func pcContinues(gl *port.Cells, p int32, g int32) int32 {
 	var sz int32 = size
 	var gap int32 = 0
 	var off int32 = 0
+	var basep int32 = p
 	if pcRotSame(rot, evidence.GlGet(gl, g, evidence.GfRot())) == 0 {
 		return 0
 	}
@@ -4315,6 +4316,20 @@ func pcContinues(gl *port.Cells, p int32, g int32) int32 {
 	if pcAccentOver(gl, p, g) > 0 {
 		return 1
 	}
+	// D1833: a nonspacing mark has a displaced baseline and often zero advance. It attaches to the overlapping base; the following letter measures its gap from that base, rather than from the mark.
+	if axis == 0 {
+		for (basep > first) && (bidi.BdClass(evidence.GlGet(gl, basep, evidence.ChCp())) == 10) && ((p - basep) < 16) {
+			basep -= 1
+		}
+		if (evidence.GlGet(gl, basep, evidence.GfVis()) != evidence.GlGet(gl, p, evidence.GfVis())) || (pcRotSame(evidence.GlGet(gl, basep, evidence.GfRot()), rot) == 0) {
+			basep = p
+		}
+		if bidi.BdClass(evidence.GlGet(gl, g, evidence.ChCp())) == 10 {
+			if ((evidence.GlGet(gl, g, evidence.ChX0()) + evidence.GlGet(gl, g, evidence.ChX1())) >= (2 * evidence.GlGet(gl, basep, evidence.ChX0()))) && ((evidence.GlGet(gl, g, evidence.ChX0()) + evidence.GlGet(gl, g, evidence.ChX1())) <= (2 * evidence.GlGet(gl, basep, evidence.ChX1()))) && (pcPairOff(gl, basep, g, axis) <= sz) {
+				return 1
+			}
+		}
+	}
 	if sizep > sz {
 		sz = sizep
 	}
@@ -4324,11 +4339,11 @@ func pcContinues(gl *port.Cells, p int32, g int32) int32 {
 	if sz < (0 - 200000) {
 		sz = 0 - 200000
 	}
-	off = pcCl(pcPairOff(gl, p, g, axis))
+	off = pcCl(pcPairOff(gl, basep, g, axis))
 	if (off * 1000) > (sz * offsetPm) {
 		return 0
 	}
-	gap = pcCl(pcPairGap(gl, p, g, axis, sz))
+	gap = pcCl(pcPairGap(gl, basep, g, axis, sz))
 	if (gap * 1000) > (sz * wordGapPm) {
 		return 0
 	}
@@ -5001,7 +5016,7 @@ func PcGroup(gl *port.Cells, et *port.Cells, wd *port.Cells, ln *port.Cells, fnt
 			}
 		} else {
 			if cur >= 0 {
-				if pcContinues(gl, i-1, i) == 0 {
+				if pcContinues(gl, i-1, i, cur) == 0 {
 					pcEmitWord(gl, et, wd, fnt, page, cur, i-1, evidence.WbGap())
 					cur = -1
 				}
