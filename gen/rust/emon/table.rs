@@ -4725,6 +4725,142 @@ pub(crate) fn tb_part_fits(wd: &mut crate::port::Cells, et: &mut crate::port::Ce
     }
     return 1;
 }
+pub(crate) fn tb_row_content(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w: i32) -> bool {
+    // A repeated dash or leader is a row boundary, not wrapped description text.
+    let ts: i32 = wd_get(wd, w, hd_tstart());
+    let n: i32 = wd_get(wd, w, hd_tlen());
+    let mut i: i32 = 0;
+    while i < n {
+        let cp: i32 = crate::port::cells_at(et, ts + i);
+        if !((cp == 46) || ((cp == 58) || ((cp == 45) || ((cp == 95) || ((cp == 8211) || (cp == 8212)))))) {
+            return 1 == 1;
+        }
+        i += 1;
+    }
+    return 0 == 1;
+}
+pub(crate) fn tb_row_fit(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, wl: &mut crate::port::Cells, rw: &mut crate::port::Cells, sg: &mut crate::port::Cells, r: i32, tbk: &mut crate::port::Cells, first: i32, n: i32, size: i32) -> i32 {
+    let sf: i32 = crate::port::cells_at(rw, (r * RWS) + 8);
+    let count: i32 = crate::port::cells_at(rw, (r * RWS) + 9);
+    let mut q: i32 = 0;
+    let mut anchor: i32 = 0;
+    let mut wi: i32 = 0;
+    let mut content: i32 = 0;
+    if (crate::port::cells_at(rw, (r * RWS) + 3) * 100) >= (size * TB_GAP_SIZE) {
+        return 0;
+    }
+    if count == 1 {
+        let s: i32 = sf * SGS;
+        let w: i32 = crate::port::cells_at(wl, crate::port::cells_at(sg, (sf * SGS) + 3));
+        let ts: i32 = wd_get(wd, crate::port::cells_at(wl, (crate::port::cells_at(sg, (sf * SGS) + 3) + crate::port::cells_at(sg, (sf * SGS) + 4)) - 1), hd_tstart());
+        let tl: i32 = wd_get(wd, crate::port::cells_at(wl, (crate::port::cells_at(sg, (sf * SGS) + 3) + crate::port::cells_at(sg, (sf * SGS) + 4)) - 1), hd_tlen());
+        if (tb_abs(crate::port::cells_at(sg, s + 1) - crate::port::cells_at(tbk, (first * KS) + 2)) <= TB_HEAD_TOL) && (((wd_get(wd, w, wf_style()) & sy_bold()) > 0) || (((tl > 0) && (crate::port::cells_at(et, (ts + tl) - 1) == 58)) || (crate::port::cells_at(sg, s + 2) > crate::port::cells_at(tbk, (first * KS) + 1)))) {
+            return 3;
+        }
+    }
+    while q < count {
+        let s: i32 = (sf + q) * SGS;
+        let wf: i32 = crate::port::cells_at(sg, s + 3);
+        let nw: i32 = crate::port::cells_at(sg, s + 4);
+        let c: i32 = tb_part_band(tbk, first, n, tb_first_cx(wd, et, wl, wf, wf + nw));
+        let last: i32 = tb_part_band(tbk, first, n, crate::port::cells_at(sg, s + 2) - 1);
+        wi = 0;
+        while wi < nw {
+            if tb_row_content(wd, et, crate::port::cells_at(wl, wf + wi)) {
+                content = 1;
+            }
+            wi += 1;
+        }
+        if (c < 0) || (last < c) {
+            return 0;
+        }
+        let kind: i32 = crate::port::cells_at(tbk, ((first + c) * KS) + 5);
+        if (kind >= 2) && (kind <= 4) {
+            if (kind == 4) || (tb_part_number(wd, et, wl, wf, nw) == 1) {
+                anchor = 1;
+            } else {
+                return 0;
+            }
+        } else if (kind != 1) || (last > c) {
+            return 0;
+        }
+        q += 1;
+    }
+    if content == 0 {
+        return 0;
+    }
+    if anchor == 1 {
+        return 1;
+    }
+    return 2;
+}
+pub(crate) fn tb_own_rows(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, wl: &mut crate::port::Cells, rw: &mut crate::port::Cells, sg: &mut crate::port::Cells, a: i32, b: i32, head: i32, tbk: &mut crate::port::Cells, first: i32, n: i32, size: i32, mut rmap: &mut crate::port::Cells, mut fits: &mut crate::port::Cells) -> i32 {
+    let mut r: i32 = a;
+    let mut rows: i32 = -1;
+    let mut prev: i32 = -1;
+    let mut next: i32 = -1;
+    let mut j: i32 = 0;
+    let mut lastmode: i32 = 0;
+    let mut cls: i32 = 0;
+    let mut anchors: i32 = 0;
+    let mut conts: i32 = 0;
+    crate::port::cells_drop(fits, 0);
+    while r < b {
+        cls = tb_row_fit(wd, et, wl, rw, sg, r, tbk, first, n, size);
+        crate::port::cells_push(fits, cls);
+        if r >= (a + head) {
+            if cls == 0 {
+                return 0;
+            }
+            if cls == 1 {
+                anchors += 1;
+            }
+            if cls == 2 {
+                conts += 1;
+            }
+        }
+        r += 1;
+    }
+    if (anchors < 2) || (conts == 0) {
+        return 0;
+    }
+    if ((a + head) < b) && (crate::port::cells_at(fits, head) == 2) {
+        lastmode = 1;
+    }
+    crate::port::cells_drop(rmap, 0);
+    r = a;
+    while r < b {
+        cls = crate::port::cells_at(fits, r - a);
+        if (r < (a + head)) || (cls != 2) {
+            rows += 1;
+            crate::port::cells_push(rmap, rows);
+            if cls == 1 {
+                prev = r;
+            } else {
+                prev = -1;
+            }
+        } else {
+            next = r + 1;
+            while (next < b) && (crate::port::cells_at(fits, next - a) == 2) {
+                next += 1;
+            }
+            j = r;
+            while (j < next) && ((j + 1) < b) && (((crate::port::cells_at(rw, ((j + 1) * RWS) + 2) - crate::port::cells_at(rw, (j * RWS) + 2)) * 10) <= (size * 16)) {
+                j += 1;
+            }
+            if (next < b) && ((j >= next) && (crate::port::cells_at(fits, next - a) == 1)) && ((lastmode == 1) || ((prev < (a + head)) || ((crate::port::cells_at(rw, (next * RWS) + 2) - crate::port::cells_at(rw, (r * RWS) + 2)) < (crate::port::cells_at(rw, (r * RWS) + 2) - crate::port::cells_at(rw, (prev * RWS) + 2))))) {
+                crate::port::cells_push(rmap, rows + 1);
+            } else if (prev >= (a + head)) && (((crate::port::cells_at(rw, (r * RWS) + 2) - crate::port::cells_at(rw, ((r - 1) * RWS) + 2)) * 10) <= (size * 16)) {
+                crate::port::cells_push(rmap, rows);
+            } else {
+                rows += 1;
+                crate::port::cells_push(rmap, rows);
+            }
+        }
+        r += 1;
+    }
+    return rows + 1;
+}
 pub(crate) fn tb_part_header_over(rw: &mut crate::port::Cells, sg: &mut crate::port::Cells, a: i32, b: i32) -> i32 {
     let na: i32 = crate::port::cells_at(rw, (a * RWS) + 9);
     let nb: i32 = crate::port::cells_at(rw, (b * RWS) + 9);
@@ -6173,6 +6309,125 @@ pub(crate) fn tb_ctx(mut tb: &mut crate::port::Cells, k: i32, wd: &mut crate::po
     }
     return 0;
 }
+pub(crate) fn tb_fit_kept(page: i32, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w0: i32, w1: i32, rm: &mut crate::port::Cells, an: &mut crate::port::Cells, mut kc: &mut crate::port::Cells, mut tbk: &mut crate::port::Cells, mut marks: &mut crate::port::Cells, mut wl: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut ch: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut en: &mut crate::port::Cells, mut rmap: &mut crate::port::Cells, mut gm: &mut crate::port::Cells, mut gs: &mut crate::port::Cells, mut ry: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut so: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, k: i32, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tx: &mut crate::port::Cells) -> i32 {
+    // Row ownership follows selection. The selected box, cuts, score and word multiset must survive unchanged.
+    let b: i32 = k * TBS;
+    let profile: i32 = crate::port::cells_at(tb, b + 5);
+    let count: i32 = crate::port::cells_at(tb, b + 10);
+    let first: i32 = crate::port::cells_at(tb, b + 9);
+    let head: i32 = tb_head_rows(tb, k, wd, et, tc, tw);
+    let nt: i32 = tb_rows_of(tb, TBS);
+    let c0: i32 = tb_rows_of(tc, TCS);
+    let wlen: i32 = crate::port::cells_len(tw);
+    let xlen: i32 = crate::port::cells_len(tx);
+    let k0: i32 = crate::port::cells_len(tbk);
+    let mut c: i32 = first;
+    let mut i: i32 = 0;
+    let mut w: i32 = 0;
+    let mut r: i32 = 0;
+    let mut headend: i32 = -2000000000;
+    let mut rawhead: i32 = 0;
+    let mut size: i32 = 0;
+    let mut fit: i32 = 0;
+    let mut same: i32 = 1;
+    if (profile == PF_RULED) || ((profile == PF_STRUCT) || (crate::port::cells_at(tb, b + 25) >= 0)) {
+        return 0;
+    }
+    if tb_field_cells(tc, first, first + count, an, page) > 0 {
+        return 0;
+    }
+    let nr: i32 = tb_rows(wd, et, w0, w1, crate::port::cells_at(tb, b + 1), crate::port::cells_at(tb, b + 2), crate::port::cells_at(tb, b + 3), crate::port::cells_at(tb, b + 4), wl, rw, sg);
+    if nr < 2 {
+        return 0;
+    }
+    crate::port::cells_drop(marks, 0);
+    w = w0;
+    while w < w1 {
+        crate::port::cells_push(marks, 0);
+        w += 1;
+    }
+    while c < (first + count) {
+        if crate::port::cells_at(tc, c * TCS) < head {
+            headend = tb_max(headend, crate::port::cells_at(tc, (c * TCS) + 7));
+        }
+        i = 0;
+        while i < crate::port::cells_at(tc, (c * TCS) + 9) {
+            w = crate::port::cells_at(tw, crate::port::cells_at(tc, (c * TCS) + 8) + i);
+            if (w >= w0) && (w < w1) {
+                crate::port::cells_set(marks, w - w0, crate::port::cells_at(marks, w - w0) + 1);
+            }
+            i += 1;
+        }
+        c += 1;
+    }
+    while (rawhead < nr) && (crate::port::cells_at(rw, (rawhead * RWS) + 2) < headend) {
+        rawhead += 1;
+    }
+    if rawhead != head {
+        return 0;
+    }
+    crate::port::cells_set(tb, b + 11, head);
+    tb_model(tb, k, wd, et, tc, tw, tx, tbk, so);
+    crate::port::cells_drop(st, 0);
+    while r < nr {
+        crate::port::cells_push(st, crate::port::cells_at(rw, (r * RWS) + 3));
+        r += 1;
+    }
+    tb_sort_nums(st);
+    size = crate::port::cells_at(st, crate::port::cells_len(st) / 2);
+    fit = tb_own_rows(wd, et, wl, rw, sg, 0, nr, head, tbk, crate::port::cells_at(tb, b + 28), crate::port::cells_at(tb, b + 29), size, rmap, en);
+    crate::port::cells_drop(tbk, k0);
+    if (fit <= 0) || (fit >= crate::port::cells_at(tb, b + 7)) {
+        return 0;
+    }
+    let t: i32 = tb_text_grid(wd, et, wl, rw, sg, rm, kc, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, page, 0, nr, profile, crate::port::cells_at(tb, b + 6), 1, crate::port::cells_at(tb, b + 1), crate::port::cells_at(tb, b + 2), crate::port::cells_at(tb, b + 3), crate::port::cells_at(tb, b + 4));
+    if t < 0 {
+        return 0;
+    }
+    if crate::port::cells_at(tb, (t * TBS) + 8) != crate::port::cells_at(tb, b + 8) {
+        same = 0;
+    }
+    i = 0;
+    while (same == 1) && (i < crate::port::cells_at(tb, b + 17)) {
+        if crate::port::cells_at(tx, crate::port::cells_at(tb, b + 16) + i) != crate::port::cells_at(tx, crate::port::cells_at(tb, (t * TBS) + 16) + i) {
+            same = 0;
+        }
+        i += 1;
+    }
+    c = crate::port::cells_at(tb, (t * TBS) + 9);
+    while c < (crate::port::cells_at(tb, (t * TBS) + 9) + crate::port::cells_at(tb, (t * TBS) + 10)) {
+        i = 0;
+        while i < crate::port::cells_at(tc, (c * TCS) + 9) {
+            w = crate::port::cells_at(tw, crate::port::cells_at(tc, (c * TCS) + 8) + i);
+            if (w >= w0) && (w < w1) {
+                if crate::port::cells_at(marks, w - w0) <= 0 {
+                    same = 0;
+                }
+                crate::port::cells_set(marks, w - w0, crate::port::cells_at(marks, w - w0) - 1);
+            } else {
+                same = 0;
+            }
+            i += 1;
+        }
+        c += 1;
+    }
+    w = w0;
+    while w < w1 {
+        if crate::port::cells_at(marks, w - w0) != 0 {
+            same = 0;
+        }
+        w += 1;
+    }
+    if same == 0 {
+        tb_reject(tb, tc, tw, tx, nt, c0, wlen, xlen);
+    } else {
+        crate::port::cells_set(tb, b + 7, crate::port::cells_at(tb, (t * TBS) + 7));
+        crate::port::cells_set(tb, b + 9, crate::port::cells_at(tb, (t * TBS) + 9));
+        crate::port::cells_set(tb, b + 10, crate::port::cells_at(tb, (t * TBS) + 10));
+        crate::port::cells_drop(tb, nt * TBS);
+    }
+    return 0;
+}
 pub fn tb_build(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et: &mut crate::port::Cells, grl: &mut crate::port::Cells, gfl: &mut crate::port::Cells, np: i32, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tq: &mut crate::port::Cells, mut tx: &mut crate::port::Cells, mut tbk: &mut crate::port::Cells, mut tbo: &mut crate::port::Cells, mut s0: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells, mut s4: &mut crate::port::Cells, mut s5: &mut crate::port::Cells, mut s6: &mut crate::port::Cells, mut s7: &mut crate::port::Cells, mut s8: &mut crate::port::Cells, mut s9: &mut crate::port::Cells, mut s10: &mut crate::port::Cells, mut s11: &mut crate::port::Cells, mut s12: &mut crate::port::Cells, mut s13: &mut crate::port::Cells, mut s14: &mut crate::port::Cells, mut s15: &mut crate::port::Cells, mut s16: &mut crate::port::Cells, mut s17: &mut crate::port::Cells, mut s18: &mut crate::port::Cells, pages: &mut crate::port::Cells, gl: &mut crate::port::Cells, mk: &mut crate::port::Cells, se: &mut crate::port::Cells, sc: &mut crate::port::Cells, ss: &mut crate::port::Cells, grg: &mut crate::port::Cells, mut g0: &mut crate::port::Cells, mut g1: &mut crate::port::Cells, mut g2: &mut crate::port::Cells, mut g3: &mut crate::port::Cells, mut g4: &mut crate::port::Cells, mut g5: &mut crate::port::Cells, mut tv: &mut crate::port::Cells, an: &mut crate::port::Cells) -> i32 {
     // Find the tables of every page and claim their lines. `tb tc tw tq tx` are emptied first; s0..s18 are
     // scratch: rules, merged rules, fills, a sort order, x and y boundaries, the grid, word pairs, a copy of tb
@@ -6263,6 +6518,7 @@ pub fn tb_build(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et
             }
             k = t0;
             while k < tb_rows_of(tb, TBS) {
+                tb_fit_kept(p, wd, et, wi, wj, s1, an, tbo, tbk, s0, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, k, tc, tw, tx);
                 tb_finish(tb, k, wd, et, tc, tw, ln, li, lj, tq, g1, g2, g3, wi, g4);
                 tb_model(tb, k, wd, et, tc, tw, tx, tbk, g4);
                 k += 1;

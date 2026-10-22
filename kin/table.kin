@@ -54,6 +54,8 @@
                               + - * < > <= >= == != and or not quot rem
                               bit-and bit-or]]))
 
+(declarefn tb-model)
+(declarefn tb-own-rows)
 (declarefn tb-split-rows)
 (declarefn tb-head-reach)
 (declarefn tb-trim-end)
@@ -3834,6 +3836,96 @@
           (set q (+ q 1))))
     (return 1)))
 
+(defn ^Bool tb-row-content [^Cells wd ^Cells et ^I32 w]
+  (comment "A repeated dash or leader is a row boundary, not wrapped description text.")
+  (let [^I32 ts (wd-get wd w (hd-tstart)) ^I32 n (wd-get wd w (hd-tlen)) ^:mut ^I32 i 0]
+    (while (< i n)
+      (do (let [^I32 cp (cells-at et (+ ts i))]
+            (if (not (or (== cp 46) (or (== cp 58) (or (== cp 45) (or (== cp 95) (or (== cp 8211) (== cp 8212)))))))
+              (return (== 1 1))))
+          (set i (+ i 1))))
+    (return (== 0 1))))
+
+;; Row fit classes: 0 FOREIGN, 1 ANCHOR, 2 CONT, 3 SECTION.
+(defn ^I32 tb-row-fit [^Cells wd ^Cells et ^Cells wl ^Cells rw ^Cells sg ^I32 r
+                      ^Cells tbk ^I32 first ^I32 n ^I32 size]
+  (let [^I32 sf (cells-at rw (+ (* r RWS) 8))
+        ^I32 count (cells-at rw (+ (* r RWS) 9))
+        ^:mut ^I32 q 0 ^:mut ^I32 anchor 0 ^:mut ^I32 wi 0 ^:mut ^I32 content 0]
+    (if (>= (* (cells-at rw (+ (* r RWS) 3)) 100) (* size TB_GAP_SIZE)) (return 0))
+    (if (== count 1)
+      (let [^I32 s (* sf SGS) ^I32 w (cells-at wl (cells-at sg (+ (* sf SGS) 3)))
+            ^I32 ts (wd-get wd (cells-at wl (- (+ (cells-at sg (+ (* sf SGS) 3)) (cells-at sg (+ (* sf SGS) 4))) 1)) (hd-tstart))
+            ^I32 tl (wd-get wd (cells-at wl (- (+ (cells-at sg (+ (* sf SGS) 3)) (cells-at sg (+ (* sf SGS) 4))) 1)) (hd-tlen))]
+        (if (and (<= (tb-abs (- (cells-at sg (+ s 1)) (cells-at tbk (+ (* first KS) 2)))) TB_HEAD_TOL)
+                 (or (> (bit-and (wd-get wd w (wf-style)) (sy-bold)) 0)
+                     (or (and (> tl 0) (== (cells-at et (- (+ ts tl) 1)) 58))
+                         (> (cells-at sg (+ s 2)) (cells-at tbk (+ (* first KS) 1))))))
+          (return 3))))
+    (while (< q count)
+      (do (let [^I32 s (* (+ sf q) SGS)
+                ^I32 wf (cells-at sg (+ s 3)) ^I32 nw (cells-at sg (+ s 4))
+                ^I32 c (tb-part-band tbk first n (tb-first-cx wd et wl wf (+ wf nw)))
+                ^I32 last (tb-part-band tbk first n (- (cells-at sg (+ s 2)) 1))]
+            (set wi 0)
+            (while (< wi nw)
+              (do (if (tb-row-content wd et (cells-at wl (+ wf wi))) (set content 1))
+                  (set wi (+ wi 1))))
+            (if (or (< c 0) (< last c)) (return 0))
+            (let [^I32 kind (cells-at tbk (+ (* (+ first c) KS) 5))]
+              (if (and (>= kind 2) (<= kind 4))
+                (if (or (== kind 4) (== (tb-part-number wd et wl wf nw) 1))
+                  (set anchor 1)
+                  (return 0))
+                (if (or (!= kind 1) (> last c)) (return 0)))))
+          (set q (+ q 1))))
+    (if (== content 0) (return 0))
+    (if (== anchor 1) (return 1))
+    (return 2)))
+
+(defn ^I32 tb-own-rows [^Cells wd ^Cells et ^Cells wl ^Cells rw ^Cells sg ^I32 a ^I32 b ^I32 head
+                       ^Cells tbk ^I32 first ^I32 n ^I32 size ^:mut ^Cells rmap ^:mut ^Cells fits]
+  (let [^:mut ^I32 r a ^:mut ^I32 rows -1 ^:mut ^I32 prev -1 ^:mut ^I32 next -1
+        ^:mut ^I32 j 0 ^:mut ^I32 lastmode 0 ^:mut ^I32 cls 0
+        ^:mut ^I32 anchors 0 ^:mut ^I32 conts 0]
+    (cells-drop fits 0)
+    (while (< r b)
+      (do (set cls (tb-row-fit wd et wl rw sg r tbk first n size))
+          (cells-push fits cls)
+          (if (>= r (+ a head))
+            (do (if (== cls 0) (return 0))
+                (if (== cls 1) (set anchors (+ anchors 1)))
+                (if (== cls 2) (set conts (+ conts 1)))))
+          (set r (+ r 1))))
+    (if (or (< anchors 2) (== conts 0)) (return 0))
+    (if (and (< (+ a head) b) (== (cells-at fits head) 2)) (set lastmode 1))
+    (cells-drop rmap 0)
+    (set r a)
+    (while (< r b)
+      (do (set cls (cells-at fits (- r a)))
+          (if (or (< r (+ a head)) (!= cls 2))
+            (do (set rows (+ rows 1)) (cells-push rmap rows)
+                (if (== cls 1) (set prev r) (set prev -1)))
+            (do (set next (+ r 1))
+                (while (and (< next b) (== (cells-at fits (- next a)) 2)) (set next (+ next 1)))
+                (set j r)
+                ;; Every intervening baseline must remain within 1.6 sizes.
+                (while (and (< j next) (< (+ j 1) b)
+                            (<= (* (- (cells-at rw (+ (* (+ j 1) RWS) 2)) (cells-at rw (+ (* j RWS) 2))) 10) (* size 16)))
+                  (set j (+ j 1)))
+                (if (and (< next b) (and (>= j next) (== (cells-at fits (- next a)) 1))
+                         (or (== lastmode 1)
+                             (or (< prev (+ a head))
+                                 (< (- (cells-at rw (+ (* next RWS) 2)) (cells-at rw (+ (* r RWS) 2)))
+                                    (- (cells-at rw (+ (* r RWS) 2)) (cells-at rw (+ (* prev RWS) 2)))))))
+                  (cells-push rmap (+ rows 1))
+                  (if (and (>= prev (+ a head))
+                           (<= (* (- (cells-at rw (+ (* r RWS) 2)) (cells-at rw (+ (* (- r 1) RWS) 2))) 10) (* size 16)))
+                    (cells-push rmap rows)
+                    (do (set rows (+ rows 1)) (cells-push rmap rows))))))
+          (set r (+ r 1))))
+    (return (+ rows 1))))
+
 (defn ^I32 tb-part-header-over [^Cells rw ^Cells sg ^I32 a ^I32 b]
   (let [^I32 na (cells-at rw (+ (* a RWS) 9))
         ^I32 nb (cells-at rw (+ (* b RWS) 9))
@@ -4933,6 +5025,77 @@
           (if (< between 2) (cells-set tb (+ (* k TBS) 30) best))))
     (return 0)))
 
+(defn ^I32 tb-fit-kept [^I32 page ^Cells wd ^Cells et ^I32 w0 ^I32 w1 ^Cells rm ^Cells an ^:mut ^Cells kc ^:mut ^Cells tbk ^:mut ^Cells marks
+                       ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg ^:mut ^Cells ch ^:mut ^Cells st ^:mut ^Cells en ^:mut ^Cells rmap
+                       ^:mut ^Cells gm ^:mut ^Cells gs ^:mut ^Cells ry ^:mut ^Cells pr ^:mut ^Cells so
+                       ^:mut ^Cells tb ^I32 k ^:mut ^Cells tc ^:mut ^Cells tw ^:mut ^Cells tx]
+  (comment "Row ownership follows selection. The selected box, cuts, score and word multiset must survive unchanged.")
+  (let [^I32 b (* k TBS) ^I32 profile (cells-at tb (+ b 5))
+        ^I32 count (cells-at tb (+ b 10)) ^I32 first (cells-at tb (+ b 9))
+        ^I32 head (tb-head-rows tb k wd et tc tw)
+        ^I32 nt (tb-rows-of tb TBS) ^I32 c0 (tb-rows-of tc TCS) ^I32 wlen (cells-len tw) ^I32 xlen (cells-len tx)
+        ^I32 k0 (cells-len tbk)
+        ^:mut ^I32 c first ^:mut ^I32 i 0 ^:mut ^I32 w 0 ^:mut ^I32 r 0
+        ^:mut ^I32 headend -2000000000 ^:mut ^I32 rawhead 0 ^:mut ^I32 size 0
+        ^:mut ^I32 fit 0 ^:mut ^I32 same 1]
+    (if (or (== profile PF_RULED) (or (== profile PF_STRUCT) (>= (cells-at tb (+ b 25)) 0))) (return 0))
+    (if (> (tb-field-cells tc first (+ first count) an page) 0) (return 0))
+    (let [^I32 nr (tb-rows wd et w0 w1 (cells-at tb (+ b 1)) (cells-at tb (+ b 2)) (cells-at tb (+ b 3)) (cells-at tb (+ b 4)) wl rw sg)]
+      (if (< nr 2) (return 0))
+      (cells-drop marks 0)
+      (set w w0)
+      (while (< w w1) (do (cells-push marks 0) (set w (+ w 1))))
+      (while (< c (+ first count))
+        (do (if (< (cells-at tc (* c TCS)) head) (set headend (tb-max headend (cells-at tc (+ (* c TCS) 7)))))
+            (set i 0)
+            (while (< i (cells-at tc (+ (* c TCS) 9)))
+              (do (set w (cells-at tw (+ (cells-at tc (+ (* c TCS) 8)) i)))
+                  (if (and (>= w w0) (< w w1)) (cells-set marks (- w w0) (+ (cells-at marks (- w w0)) 1)))
+                  (set i (+ i 1))))
+            (set c (+ c 1))))
+      (while (and (< rawhead nr) (< (cells-at rw (+ (* rawhead RWS) 2)) headend)) (set rawhead (+ rawhead 1)))
+      ;; Preserve a wrapped header's existing row map; binding it is a separate sub-step.
+      (if (!= rawhead head) (return 0))
+      (cells-set tb (+ b 11) head)
+      (tb-model tb k wd et tc tw tx tbk so)
+      (cells-drop st 0)
+      (while (< r nr) (do (cells-push st (cells-at rw (+ (* r RWS) 3))) (set r (+ r 1))))
+      (tb-sort-nums st)
+      (set size (cells-at st (quot (cells-len st) 2)))
+      (set fit (tb-own-rows wd et wl rw sg 0 nr head tbk (cells-at tb (+ b 28)) (cells-at tb (+ b 29)) size rmap en))
+      (cells-drop tbk k0)
+      (if (or (<= fit 0) (>= fit (cells-at tb (+ b 7)))) (return 0))
+      (let [^I32 t (tb-text-grid wd et wl rw sg rm kc ch st en rmap gm gs ry pr so tb tc tw tx
+                                page 0 nr profile (cells-at tb (+ b 6)) 1
+                                (cells-at tb (+ b 1)) (cells-at tb (+ b 2)) (cells-at tb (+ b 3)) (cells-at tb (+ b 4)))]
+        (if (< t 0) (return 0))
+        (if (!= (cells-at tb (+ (* t TBS) 8)) (cells-at tb (+ b 8))) (set same 0))
+        (set i 0)
+        (while (and (== same 1) (< i (cells-at tb (+ b 17))))
+          (do (if (!= (cells-at tx (+ (cells-at tb (+ b 16)) i)) (cells-at tx (+ (cells-at tb (+ (* t TBS) 16)) i))) (set same 0))
+              (set i (+ i 1))))
+        (set c (cells-at tb (+ (* t TBS) 9)))
+        (while (< c (+ (cells-at tb (+ (* t TBS) 9)) (cells-at tb (+ (* t TBS) 10))))
+          (do (set i 0)
+              (while (< i (cells-at tc (+ (* c TCS) 9)))
+                (do (set w (cells-at tw (+ (cells-at tc (+ (* c TCS) 8)) i)))
+                    (if (and (>= w w0) (< w w1))
+                      (do (if (<= (cells-at marks (- w w0)) 0) (set same 0))
+                          (cells-set marks (- w w0) (- (cells-at marks (- w w0)) 1)))
+                      (set same 0))
+                    (set i (+ i 1))))
+              (set c (+ c 1))))
+        (set w w0)
+        (while (< w w1)
+          (do (if (!= (cells-at marks (- w w0)) 0) (set same 0)) (set w (+ w 1))))
+        (if (== same 0)
+          (tb-reject tb tc tw tx nt c0 wlen xlen)
+          (do (cells-set tb (+ b 7) (cells-at tb (+ (* t TBS) 7)))
+              (cells-set tb (+ b 9) (cells-at tb (+ (* t TBS) 9)))
+              (cells-set tb (+ b 10) (cells-at tb (+ (* t TBS) 10)))
+              (cells-drop tb (* nt TBS))))))
+    (return 0)))
+
 (defn ^:pub ^I32 tb-build [^Cells wd ^:mut ^Cells ln ^Cells et ^Cells grl ^Cells gfl ^I32 np
                            ^:mut ^Cells tb ^:mut ^Cells tc ^:mut ^Cells tw ^:mut ^Cells tq ^:mut ^Cells tx
                            ^:mut ^Cells tbk ^:mut ^Cells tbo
@@ -5017,7 +5180,8 @@
                 (if (> (tb-rows-of tb TBS) nk) (tb-select tb t0 s3 s9 s8 grg tc))
                 (set k t0)
                 (while (< k (tb-rows-of tb TBS))
-                  (do (tb-finish tb k wd et tc tw ln li lj tq g1 g2 g3 wi g4)
+                  (do (tb-fit-kept p wd et wi wj s1 an tbo tbk s0 s10 s11 s12 s13 s14 s15 s16 s6 s17 s18 s7 s3 tb k tc tw tx)
+                      (tb-finish tb k wd et tc tw ln li lj tq g1 g2 g3 wi g4)
                       (tb-model tb k wd et tc tw tx tbk g4)
                       (set k (+ k 1))))
                 (tb-claim tb t0 ln li lj)

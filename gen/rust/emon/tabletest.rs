@@ -2362,3 +2362,120 @@ fn test_rotated_overlay_words_inside_a_table_stay_explicitly_dropped() {
     crate::testport::assert_eq(tt_own_build(wd, ln, et, tb, tc, tw, tbo), 1, "the rotated overlay is no table cell");
     crate::testport::assert_eq(crate::port::cells_at(tbo, 12), -1, "a rotated overlay rejected by the row builder stays explicitly dropped");
 }
+#[test]
+fn test_wrapped_descriptions_are_lines_of_their_transaction_cell_amounts_first() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    tt_at(wd, ln, et, &crate::testport::text_blob("Date")[..], 7600, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Details")[..], 15000, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Amount")[..], 43000, 10000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Purchase")[..], 15000, 11600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Reference")[..], 15000, 13000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Settled")[..], 15000, 14400, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("01Jan")[..], 7600, 11600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("1.00")[..], 43000, 11600, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Purchase")[..], 15000, 17200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Reference")[..], 15000, 18600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Settled")[..], 15000, 20000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("02Jan")[..], 7600, 17200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("2.00")[..], 43000, 17200, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Purchase")[..], 15000, 22800, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("03Jan")[..], 7600, 22800, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("3.00")[..], 43000, 22800, 0, 1);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "model-owned wrapped rows are well formed");
+    crate::testport::assert_text(t, "T3w;Gh;R;Ch[Date];Ch[Details];Ch[Amount];Gb;R;C[01Jan];C[Purchase Reference Settled];C[1.00];R;C[02Jan];C[Purchase Reference Settled];C[2.00];R;C[03Jan];C[Purchase];C[3.00];", "each description joins its own transaction at 1.4 sizes pitch");
+}
+#[test]
+fn test_wrapped_descriptions_are_lines_of_their_transaction_cell_amounts_last() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    tt_at(wd, ln, et, &crate::testport::text_blob("Date")[..], 7600, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Details")[..], 15000, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Amount")[..], 43000, 10000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Purchase")[..], 15000, 11600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Reference")[..], 15000, 13000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Settled")[..], 15000, 14400, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("01Jan")[..], 7600, 14400, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("1.00")[..], 43000, 14400, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Purchase")[..], 15000, 17200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Reference")[..], 15000, 18600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Settled")[..], 15000, 20000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("02Jan")[..], 7600, 20000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("2.00")[..], 43000, 20000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Purchase")[..], 15000, 22800, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Reference")[..], 15000, 24200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Settled")[..], 15000, 25600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("03Jan")[..], 7600, 25600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("3.00")[..], 43000, 25600, 0, 1);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "model-owned wrapped rows are well formed");
+    crate::testport::assert_text(t, "T3w;Gh;R;Ch[Date];Ch[Details];Ch[Amount];Gb;R;C[01Jan];C[Purchase Reference Settled];C[1.00];R;C[02Jan];C[Purchase Reference Settled];C[2.00];R;C[03Jan];C[Purchase Reference Settled];C[3.00];", "each description joins its own transaction at 1.4 sizes pitch");
+}
+#[test]
+fn test_model_owned_wrapped_descriptions_have_no_six_line_cap() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    tt_at(wd, ln, et, &crate::testport::text_blob("Date")[..], 7600, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Details")[..], 15000, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Amount")[..], 43000, 10000, 1, 1);
+    tt_rule(pa, 7000, 10900, 44000, 10950);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Detail")[..], 15000, 11600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Detail")[..], 15000, 12400, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Detail")[..], 15000, 13200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Detail")[..], 15000, 14000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Detail")[..], 15000, 14800, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Detail")[..], 15000, 15600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Detail")[..], 15000, 16400, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Detail")[..], 15000, 17200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Detail")[..], 15000, 18000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("01Jan")[..], 7600, 18000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("1.00")[..], 43000, 18000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Detail")[..], 15000, 20400, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Detail")[..], 15000, 21200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Detail")[..], 15000, 22000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Detail")[..], 15000, 22800, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Detail")[..], 15000, 23600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Detail")[..], 15000, 24400, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Detail")[..], 15000, 25200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Detail")[..], 15000, 26000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Detail")[..], 15000, 26800, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("02Jan")[..], 7600, 26800, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("2.00")[..], 43000, 26800, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Detail")[..], 15000, 29200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Detail")[..], 15000, 30000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Detail")[..], 15000, 30800, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Detail")[..], 15000, 31600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Detail")[..], 15000, 32400, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Detail")[..], 15000, 33200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Detail")[..], 15000, 34000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Detail")[..], 15000, 34800, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Detail")[..], 15000, 35600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("03Jan")[..], 7600, 35600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("3.00")[..], 43000, 35600, 0, 1);
+    tt_rule(pa, 7000, 36400, 44000, 36450);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "long wrapped rows are well formed");
+    crate::testport::assert_text(t, "T3p;Gh;R;Ch[Date];Ch[Details];Ch[Amount];Gb;R;C[01Jan];C[Detail Detail Detail Detail Detail Detail Detail Detail Detail];C[1.00];R;C[02Jan];C[Detail Detail Detail Detail Detail Detail Detail Detail Detail];C[2.00];R;C[03Jan];C[Detail Detail Detail Detail Detail Detail Detail Detail Detail];C[3.00];", "nine description lines join the anchor below without a cap");
+}
+#[test]
+fn test_a_separator_and_footnote_are_not_a_wrapped_description() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tbo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    tt_part_ledger(wd, ln, et, 10000);
+    tt_at(wd, ln, et, &crate::testport::text_blob("——————")[..], 15000, 16000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("* Not meaningful.")[..], 15000, 17200, 0, 0);
+    crate::testport::assert_eq(tt_own_build(wd, ln, et, tb, tc, tw, tbo), 1, "one original candidate");
+    crate::testport::assert_eq(crate::port::cells_at(tb, 7), 6, "the separator and footnote keep their own rows");
+}

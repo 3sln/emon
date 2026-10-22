@@ -4926,6 +4926,145 @@ func tbPartFits(wd *port.Cells, et *port.Cells, wl *port.Cells, rw *port.Cells, 
 	return 1
 }
 
+func tbRowContent(wd *port.Cells, et *port.Cells, w int32) bool {
+	// A repeated dash or leader is a row boundary, not wrapped description text.
+	var ts int32 = evidence.WdGet(wd, w, evidence.HdTstart())
+	var n int32 = evidence.WdGet(wd, w, evidence.HdTlen())
+	var i int32 = 0
+	for i < n {
+		var cp int32 = port.CellsAt(et, ts+i)
+		if !((cp == 46) || ((cp == 58) || ((cp == 45) || ((cp == 95) || ((cp == 8211) || (cp == 8212)))))) {
+			return 1 == 1
+		}
+		i += 1
+	}
+	return 0 == 1
+}
+
+func tbRowFit(wd *port.Cells, et *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, r int32, tbk *port.Cells, first int32, n int32, size int32) int32 {
+	var sf int32 = port.CellsAt(rw, (r*rws)+8)
+	var count int32 = port.CellsAt(rw, (r*rws)+9)
+	var q int32 = 0
+	var anchor int32 = 0
+	var wi int32 = 0
+	var content int32 = 0
+	if (port.CellsAt(rw, (r*rws)+3) * 100) >= (size * tbGapSize) {
+		return 0
+	}
+	if count == 1 {
+		var s int32 = sf * sgs
+		var w int32 = port.CellsAt(wl, port.CellsAt(sg, (sf*sgs)+3))
+		var ts int32 = evidence.WdGet(wd, port.CellsAt(wl, (port.CellsAt(sg, (sf*sgs)+3)+port.CellsAt(sg, (sf*sgs)+4))-1), evidence.HdTstart())
+		var tl int32 = evidence.WdGet(wd, port.CellsAt(wl, (port.CellsAt(sg, (sf*sgs)+3)+port.CellsAt(sg, (sf*sgs)+4))-1), evidence.HdTlen())
+		if (tbAbs(port.CellsAt(sg, s+1)-port.CellsAt(tbk, (first*ks)+2)) <= tbHeadTol) && (((evidence.WdGet(wd, w, evidence.WfStyle()) & model.SyBold()) > 0) || (((tl > 0) && (port.CellsAt(et, (ts+tl)-1) == 58)) || (port.CellsAt(sg, s+2) > port.CellsAt(tbk, (first*ks)+1)))) {
+			return 3
+		}
+	}
+	for q < count {
+		var s int32 = (sf + q) * sgs
+		var wf int32 = port.CellsAt(sg, s+3)
+		var nw int32 = port.CellsAt(sg, s+4)
+		var c int32 = tbPartBand(tbk, first, n, tbFirstCx(wd, et, wl, wf, wf+nw))
+		var last int32 = tbPartBand(tbk, first, n, port.CellsAt(sg, s+2)-1)
+		wi = 0
+		for wi < nw {
+			if tbRowContent(wd, et, port.CellsAt(wl, wf+wi)) {
+				content = 1
+			}
+			wi += 1
+		}
+		if (c < 0) || (last < c) {
+			return 0
+		}
+		var kind int32 = port.CellsAt(tbk, ((first+c)*ks)+5)
+		if (kind >= 2) && (kind <= 4) {
+			if (kind == 4) || (tbPartNumber(wd, et, wl, wf, nw) == 1) {
+				anchor = 1
+			} else {
+				return 0
+			}
+		} else if (kind != 1) || (last > c) {
+			return 0
+		}
+		q += 1
+	}
+	if content == 0 {
+		return 0
+	}
+	if anchor == 1 {
+		return 1
+	}
+	return 2
+}
+
+func tbOwnRows(wd *port.Cells, et *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, a int32, b int32, head int32, tbk *port.Cells, first int32, n int32, size int32, rmap *port.Cells, fits *port.Cells) int32 {
+	var r int32 = a
+	var rows int32 = -1
+	var prev int32 = -1
+	var next int32 = -1
+	var j int32 = 0
+	var lastmode int32 = 0
+	var cls int32 = 0
+	var anchors int32 = 0
+	var conts int32 = 0
+	port.CellsDrop(fits, 0)
+	for r < b {
+		cls = tbRowFit(wd, et, wl, rw, sg, r, tbk, first, n, size)
+		port.CellsPush(fits, cls)
+		if r >= (a + head) {
+			if cls == 0 {
+				return 0
+			}
+			if cls == 1 {
+				anchors += 1
+			}
+			if cls == 2 {
+				conts += 1
+			}
+		}
+		r += 1
+	}
+	if (anchors < 2) || (conts == 0) {
+		return 0
+	}
+	if ((a + head) < b) && (port.CellsAt(fits, head) == 2) {
+		lastmode = 1
+	}
+	port.CellsDrop(rmap, 0)
+	r = a
+	for r < b {
+		cls = port.CellsAt(fits, r-a)
+		if (r < (a + head)) || (cls != 2) {
+			rows += 1
+			port.CellsPush(rmap, rows)
+			if cls == 1 {
+				prev = r
+			} else {
+				prev = -1
+			}
+		} else {
+			next = r + 1
+			for (next < b) && (port.CellsAt(fits, next-a) == 2) {
+				next += 1
+			}
+			j = r
+			for (j < next) && ((j + 1) < b) && (((port.CellsAt(rw, ((j+1)*rws)+2) - port.CellsAt(rw, (j*rws)+2)) * 10) <= (size * 16)) {
+				j += 1
+			}
+			if (next < b) && ((j >= next) && (port.CellsAt(fits, next-a) == 1)) && ((lastmode == 1) || ((prev < (a + head)) || ((port.CellsAt(rw, (next*rws)+2) - port.CellsAt(rw, (r*rws)+2)) < (port.CellsAt(rw, (r*rws)+2) - port.CellsAt(rw, (prev*rws)+2))))) {
+				port.CellsPush(rmap, rows+1)
+			} else if (prev >= (a + head)) && (((port.CellsAt(rw, (r*rws)+2) - port.CellsAt(rw, ((r-1)*rws)+2)) * 10) <= (size * 16)) {
+				port.CellsPush(rmap, rows)
+			} else {
+				rows += 1
+				port.CellsPush(rmap, rows)
+			}
+		}
+		r += 1
+	}
+	return rows + 1
+}
+
 func tbPartHeaderOver(rw *port.Cells, sg *port.Cells, a int32, b int32) int32 {
 	var na int32 = port.CellsAt(rw, (a*rws)+9)
 	var nb int32 = port.CellsAt(rw, (b*rws)+9)
@@ -6411,6 +6550,126 @@ func tbCtx(tb *port.Cells, k int32, wd *port.Cells, ln *port.Cells, l0 int32, l1
 	return 0
 }
 
+func tbFitKept(page int32, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, rm *port.Cells, an *port.Cells, kc *port.Cells, tbk *port.Cells, marks *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, k int32, tc *port.Cells, tw *port.Cells, tx *port.Cells) int32 {
+	// Row ownership follows selection. The selected box, cuts, score and word multiset must survive unchanged.
+	var b int32 = k * tagtable.Tbs
+	var profile int32 = port.CellsAt(tb, b+5)
+	var count int32 = port.CellsAt(tb, b+10)
+	var first int32 = port.CellsAt(tb, b+9)
+	var head int32 = tbHeadRows(tb, k, wd, et, tc, tw)
+	var nt int32 = tbRowsOf(tb, tagtable.Tbs)
+	var c0 int32 = tbRowsOf(tc, tcs)
+	var wlen int32 = port.CellsLen(tw)
+	var xlen int32 = port.CellsLen(tx)
+	var k0 int32 = port.CellsLen(tbk)
+	var c int32 = first
+	var i int32 = 0
+	var w int32 = 0
+	var r int32 = 0
+	var headend int32 = -2000000000
+	var rawhead int32 = 0
+	var size int32 = 0
+	var fit int32 = 0
+	var same int32 = 1
+	if (profile == pfRuled) || ((profile == pfStruct) || (port.CellsAt(tb, b+25) >= 0)) {
+		return 0
+	}
+	if tbFieldCells(tc, first, first+count, an, page) > 0 {
+		return 0
+	}
+	var nr int32 = tbRows(wd, et, w0, w1, port.CellsAt(tb, b+1), port.CellsAt(tb, b+2), port.CellsAt(tb, b+3), port.CellsAt(tb, b+4), wl, rw, sg)
+	if nr < 2 {
+		return 0
+	}
+	port.CellsDrop(marks, 0)
+	w = w0
+	for w < w1 {
+		port.CellsPush(marks, 0)
+		w += 1
+	}
+	for c < (first + count) {
+		if port.CellsAt(tc, c*tcs) < head {
+			headend = tbMax(headend, port.CellsAt(tc, (c*tcs)+7))
+		}
+		i = 0
+		for i < port.CellsAt(tc, (c*tcs)+9) {
+			w = port.CellsAt(tw, port.CellsAt(tc, (c*tcs)+8)+i)
+			if (w >= w0) && (w < w1) {
+				port.CellsSet(marks, w-w0, port.CellsAt(marks, w-w0)+1)
+			}
+			i += 1
+		}
+		c += 1
+	}
+	for (rawhead < nr) && (port.CellsAt(rw, (rawhead*rws)+2) < headend) {
+		rawhead += 1
+	}
+	if rawhead != head {
+		return 0
+	}
+	port.CellsSet(tb, b+11, head)
+	tbModel(tb, k, wd, et, tc, tw, tx, tbk, so)
+	port.CellsDrop(st, 0)
+	for r < nr {
+		port.CellsPush(st, port.CellsAt(rw, (r*rws)+3))
+		r += 1
+	}
+	tbSortNums(st)
+	size = port.CellsAt(st, port.CellsLen(st)/2)
+	fit = tbOwnRows(wd, et, wl, rw, sg, 0, nr, head, tbk, port.CellsAt(tb, b+28), port.CellsAt(tb, b+29), size, rmap, en)
+	port.CellsDrop(tbk, k0)
+	if (fit <= 0) || (fit >= port.CellsAt(tb, b+7)) {
+		return 0
+	}
+	var t int32 = tbTextGrid(wd, et, wl, rw, sg, rm, kc, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, page, 0, nr, profile, port.CellsAt(tb, b+6), 1, port.CellsAt(tb, b+1), port.CellsAt(tb, b+2), port.CellsAt(tb, b+3), port.CellsAt(tb, b+4))
+	if t < 0 {
+		return 0
+	}
+	if port.CellsAt(tb, (t*tagtable.Tbs)+8) != port.CellsAt(tb, b+8) {
+		same = 0
+	}
+	i = 0
+	for (same == 1) && (i < port.CellsAt(tb, b+17)) {
+		if port.CellsAt(tx, port.CellsAt(tb, b+16)+i) != port.CellsAt(tx, port.CellsAt(tb, (t*tagtable.Tbs)+16)+i) {
+			same = 0
+		}
+		i += 1
+	}
+	c = port.CellsAt(tb, (t*tagtable.Tbs)+9)
+	for c < (port.CellsAt(tb, (t*tagtable.Tbs)+9) + port.CellsAt(tb, (t*tagtable.Tbs)+10)) {
+		i = 0
+		for i < port.CellsAt(tc, (c*tcs)+9) {
+			w = port.CellsAt(tw, port.CellsAt(tc, (c*tcs)+8)+i)
+			if (w >= w0) && (w < w1) {
+				if port.CellsAt(marks, w-w0) <= 0 {
+					same = 0
+				}
+				port.CellsSet(marks, w-w0, port.CellsAt(marks, w-w0)-1)
+			} else {
+				same = 0
+			}
+			i += 1
+		}
+		c += 1
+	}
+	w = w0
+	for w < w1 {
+		if port.CellsAt(marks, w-w0) != 0 {
+			same = 0
+		}
+		w += 1
+	}
+	if same == 0 {
+		tbReject(tb, tc, tw, tx, nt, c0, wlen, xlen)
+	} else {
+		port.CellsSet(tb, b+7, port.CellsAt(tb, (t*tagtable.Tbs)+7))
+		port.CellsSet(tb, b+9, port.CellsAt(tb, (t*tagtable.Tbs)+9))
+		port.CellsSet(tb, b+10, port.CellsAt(tb, (t*tagtable.Tbs)+10))
+		port.CellsDrop(tb, nt*tagtable.Tbs)
+	}
+	return 0
+}
+
 func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gfl *port.Cells, np int32, tb *port.Cells, tc *port.Cells, tw *port.Cells, tq *port.Cells, tx *port.Cells, tbk *port.Cells, tbo *port.Cells, s0 *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells, s7 *port.Cells, s8 *port.Cells, s9 *port.Cells, s10 *port.Cells, s11 *port.Cells, s12 *port.Cells, s13 *port.Cells, s14 *port.Cells, s15 *port.Cells, s16 *port.Cells, s17 *port.Cells, s18 *port.Cells, pages *port.Cells, gl *port.Cells, mk *port.Cells, se *port.Cells, sc *port.Cells, ss *port.Cells, grg *port.Cells, g0 *port.Cells, g1 *port.Cells, g2 *port.Cells, g3 *port.Cells, g4 *port.Cells, g5 *port.Cells, tv *port.Cells, an *port.Cells) int32 {
 	// Find the tables of every page and claim their lines. `tb tc tw tq tx` are emptied first; s0..s18 are
 	// scratch: rules, merged rules, fills, a sort order, x and y boundaries, the grid, word pairs, a copy of tb
@@ -6501,6 +6760,7 @@ func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gf
 			}
 			k = t0
 			for k < tbRowsOf(tb, tagtable.Tbs) {
+				tbFitKept(p, wd, et, wi, wj, s1, an, tbo, tbk, s0, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, k, tc, tw, tx)
 				tbFinish(tb, k, wd, et, tc, tw, ln, li, lj, tq, g1, g2, g3, wi, g4)
 				tbModel(tb, k, wd, et, tc, tw, tx, tbk, g4)
 				k += 1
