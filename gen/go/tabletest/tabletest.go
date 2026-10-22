@@ -2346,3 +2346,74 @@ func TestEmptyDateMarkersDoNotSplitALedger(emonT *testing.T) {
 	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "empty date markers preserve all rows")
 	port.AssertText(emonT, t, "T3w;Gh;R;Chs[Date];Chs[Details];Ch[Amount];Gb;R;Cs[01Jan];Cs[Rent];Ce[1.00];R;Cs[02Jan];Cs[Electricity];Ce[20.00];R;Cs[03Jan];Cs[Service fee];Ce[300.00];R;Cs[–];Cs[Pending];Ce[4.00];R;Cs[–];Cs[Unspecified];Ce[5.00];", "punctuation placeholders are not a different date-column model")
 }
+
+func ttOwnBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tbo *port.Cells) int32 {
+	var pages *port.Cells = port.NewCells()
+	model.PageNew(pages, 1, 61200, 79200, 0, model.PkVector())
+	return table.TbBuild(wd, ln, et, port.NewCells(), port.NewCells(), 1, tb, tc, tw, port.NewCells(), port.NewCells(), port.NewCells(), tbo, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), pages, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
+}
+
+func TestEveryWordInATableBodyHasOneOwner(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var tbo *port.Cells = port.NewCells()
+	var w int32 = 0
+	var c int32 = 0
+	var i int32 = 0
+	var count int32 = 0
+	ttPartLedger(wd, ln, et, 10000)
+	port.AssertEq(emonT, ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one retained ledger")
+	port.AssertEq(emonT, port.CellsLen(tbo), evidence.WdCount(wd), "the page ownership arena has a slot per word")
+	if port.CellsLen(tbo) == evidence.WdCount(wd) {
+		for w < evidence.WdCount(wd) {
+			count = 0
+			c = port.CellsAt(tb, 9)
+			for c < (port.CellsAt(tb, 9) + port.CellsAt(tb, 10)) {
+				i = 0
+				for i < port.CellsAt(tc, (c*16)+9) {
+					if port.CellsAt(tw, port.CellsAt(tc, (c*16)+8)+i) == w {
+						count += 1
+						port.AssertEq(emonT, port.CellsAt(tbo, w), c+1, "ownership names the emitting cell")
+					}
+					i += 1
+				}
+				c += 1
+			}
+			port.AssertEq(emonT, count, 1, "each ledger word occurs in exactly one retained cell")
+			w += 1
+		}
+	}
+}
+
+func TestAnUnownedAccountLabelIsTableContext(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var tbo *port.Cells = port.NewCells()
+	ttAt(wd, ln, et, port.TextBlob("USD Savings Account"), 7600, 8400, 0, 0)
+	ttPartLedger(wd, ln, et, 10000)
+	port.AssertEq(emonT, ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one ledger below an account label")
+	port.AssertEq(emonT, port.CellsAt(tb, 30), 0, "the nearest unowned label is recorded by line index")
+}
+
+func TestRotatedOverlayWordsInsideATableStayExplicitlyDropped(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var tbo *port.Cells = port.NewCells()
+	ttPartLedger(wd, ln, et, 10000)
+	ttAt(wd, ln, et, port.TextBlob("Overlay"), 20000, 14000, 0, 0)
+	evidence.WdSet(wd, 12, evidence.HdRot(), 4500)
+	port.AssertEq(emonT, ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "the rotated overlay is no table cell")
+	port.AssertEq(emonT, port.CellsAt(tbo, 12), -1, "a rotated overlay rejected by the row builder stays explicitly dropped")
+}

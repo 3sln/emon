@@ -4879,6 +4879,60 @@
     (tb-caption tb k wd et ln l0 l1 tq)
     (return 0)))
 
+;; P12.10: record retained-cell ownership. Line claiming keeps its fallback until
+;; model-fit rows, headers and tails make the whole-body invariant safe (D1784).
+(defn ^I32 tb-own-claim [^Cells tb ^I32 t0 ^Cells tc ^Cells tw ^Cells wd ^Cells et
+                        ^I32 w0 ^I32 w1 ^:mut ^Cells tbo]
+  (let [^:mut ^I32 w w0 ^:mut ^I32 k t0 ^:mut ^I32 c 0 ^:mut ^I32 i 0]
+    (cells-drop tbo 0)
+    (while (< w w1) (do (cells-push tbo 0) (set w (+ w 1))))
+    (while (< k (tb-rows-of tb TBS))
+      (do (set c (cells-at tb (+ (* k TBS) 9)))
+          (while (< c (+ (cells-at tb (+ (* k TBS) 9)) (cells-at tb (+ (* k TBS) 10))))
+            (do (set i 0)
+                (while (< i (cells-at tc (+ (* c TCS) 9)))
+                  (do (set w (cells-at tw (+ (cells-at tc (+ (* c TCS) 8)) i)))
+                      (if (and (>= w w0) (< w w1)) (cells-set tbo (- w w0) (+ c 1)))
+                      (set i (+ i 1))))
+                (set c (+ c 1))))
+          (set k (+ k 1))))
+    (set k t0)
+    (while (< k (tb-rows-of tb TBS))
+      (do (if (and (!= (cells-at tb (+ (* k TBS) 5)) PF_RULED)
+                   (!= (cells-at tb (+ (* k TBS) 5)) PF_STRUCT))
+            (do (set w w0)
+                (while (< w w1)
+                  (do (if (and (== (cells-at tbo (- w w0)) 0)
+                            (or (tb-separator wd et w) (not (tb-upright wd w))))
+                        (let [^I32 x (quot (+ (wd-get wd w (hd-x0)) (wd-get wd w (hd-x1))) 2)
+                              ^I32 y (quot (+ (wd-get wd w (hd-y0)) (wd-get wd w (hd-y1))) 2)]
+                          (if (and (and (>= x (cells-at tb (+ (* k TBS) 1))) (<= x (cells-at tb (+ (* k TBS) 3))))
+                                   (and (>= y (cells-at tb (+ (* k TBS) 2))) (<= y (cells-at tb (+ (* k TBS) 4)))))
+                            (cells-set tbo (- w w0) (- 0 (+ k 1))))))
+                      (set w (+ w 1))))))
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^I32 tb-ctx [^:mut ^Cells tb ^I32 k ^Cells wd ^Cells ln ^I32 l0 ^I32 l1]
+  (let [^I32 top (cells-at tb (+ (* k TBS) 2))
+        ^:mut ^I32 l l0 ^:mut ^I32 best -1 ^:mut ^I32 y -2000000000
+        ^:mut ^I32 between 0]
+    (while (< l l1)
+      (do (if (and (== (ln-get ln l 15) 0) (> (ln-get ln l (lh-count)) 0))
+            (let [^I32 bottom (ln-get ln l (lh-y1))
+                  ^I32 size (wd-get wd (ln-get ln l (lh-first)) (wf-size))]
+              (if (and (<= bottom top) (and (>= bottom y) (<= (- top bottom) (* size 3))))
+                (do (set best l) (set y bottom)))))
+          (set l (+ l 1))))
+    (if (>= best 0)
+      (do (set l l0)
+          (while (< l l1)
+            (do (if (and (> (ln-get ln l (lh-y1)) y) (< (ln-get ln l (lh-y1)) top))
+                  (set between (+ between 1)))
+                (set l (+ l 1))))
+          (if (< between 2) (cells-set tb (+ (* k TBS) 30) best))))
+    (return 0)))
+
 (defn ^:pub ^I32 tb-build [^Cells wd ^:mut ^Cells ln ^Cells et ^Cells grl ^Cells gfl ^I32 np
                            ^:mut ^Cells tb ^:mut ^Cells tc ^:mut ^Cells tw ^:mut ^Cells tq ^:mut ^Cells tx
                            ^:mut ^Cells tbk ^:mut ^Cells tbo
@@ -4966,7 +5020,11 @@
                   (do (tb-finish tb k wd et tc tw ln li lj tq g1 g2 g3 wi g4)
                       (tb-model tb k wd et tc tw tx tbk g4)
                       (set k (+ k 1))))
-                (tb-claim tb t0 ln li lj)))
+                (tb-claim tb t0 ln li lj)
+                (tb-own-claim tb t0 tc tw wd et wi wj tbo)
+                (set k t0)
+                (while (< k (tb-rows-of tb TBS))
+                  (do (tb-ctx tb k wd ln li lj) (set k (+ k 1))))))
           (set wi wj)
           (set li lj)
           (set qi qj)

@@ -6334,6 +6334,83 @@ func tbFinish(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc *port.
 	return 0
 }
 
+func tbOwnClaim(tb *port.Cells, t0 int32, tc *port.Cells, tw *port.Cells, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, tbo *port.Cells) int32 {
+	var w int32 = w0
+	var k int32 = t0
+	var c int32 = 0
+	var i int32 = 0
+	port.CellsDrop(tbo, 0)
+	for w < w1 {
+		port.CellsPush(tbo, 0)
+		w += 1
+	}
+	for k < tbRowsOf(tb, tagtable.Tbs) {
+		c = port.CellsAt(tb, (k*tagtable.Tbs)+9)
+		for c < (port.CellsAt(tb, (k*tagtable.Tbs)+9) + port.CellsAt(tb, (k*tagtable.Tbs)+10)) {
+			i = 0
+			for i < port.CellsAt(tc, (c*tcs)+9) {
+				w = port.CellsAt(tw, port.CellsAt(tc, (c*tcs)+8)+i)
+				if (w >= w0) && (w < w1) {
+					port.CellsSet(tbo, w-w0, c+1)
+				}
+				i += 1
+			}
+			c += 1
+		}
+		k += 1
+	}
+	k = t0
+	for k < tbRowsOf(tb, tagtable.Tbs) {
+		if (port.CellsAt(tb, (k*tagtable.Tbs)+5) != pfRuled) && (port.CellsAt(tb, (k*tagtable.Tbs)+5) != pfStruct) {
+			w = w0
+			for w < w1 {
+				if (port.CellsAt(tbo, w-w0) == 0) && (tbSeparator(wd, et, w) || !tbUpright(wd, w)) {
+					var x int32 = (evidence.WdGet(wd, w, evidence.HdX0()) + evidence.WdGet(wd, w, evidence.HdX1())) / 2
+					var y int32 = (evidence.WdGet(wd, w, evidence.HdY0()) + evidence.WdGet(wd, w, evidence.HdY1())) / 2
+					if ((x >= port.CellsAt(tb, (k*tagtable.Tbs)+1)) && (x <= port.CellsAt(tb, (k*tagtable.Tbs)+3))) && ((y >= port.CellsAt(tb, (k*tagtable.Tbs)+2)) && (y <= port.CellsAt(tb, (k*tagtable.Tbs)+4))) {
+						port.CellsSet(tbo, w-w0, 0-(k+1))
+					}
+				}
+				w += 1
+			}
+		}
+		k += 1
+	}
+	return 0
+}
+
+func tbCtx(tb *port.Cells, k int32, wd *port.Cells, ln *port.Cells, l0 int32, l1 int32) int32 {
+	var top int32 = port.CellsAt(tb, (k*tagtable.Tbs)+2)
+	var l int32 = l0
+	var best int32 = -1
+	var y int32 = -2000000000
+	var between int32 = 0
+	for l < l1 {
+		if (evidence.LnGet(ln, l, 15) == 0) && (evidence.LnGet(ln, l, evidence.LhCount()) > 0) {
+			var bottom int32 = evidence.LnGet(ln, l, evidence.LhY1())
+			var size int32 = evidence.WdGet(wd, evidence.LnGet(ln, l, evidence.LhFirst()), evidence.WfSize())
+			if (bottom <= top) && ((bottom >= y) && ((top - bottom) <= (size * 3))) {
+				best = l
+				y = bottom
+			}
+		}
+		l += 1
+	}
+	if best >= 0 {
+		l = l0
+		for l < l1 {
+			if (evidence.LnGet(ln, l, evidence.LhY1()) > y) && (evidence.LnGet(ln, l, evidence.LhY1()) < top) {
+				between += 1
+			}
+			l += 1
+		}
+		if between < 2 {
+			port.CellsSet(tb, (k*tagtable.Tbs)+30, best)
+		}
+	}
+	return 0
+}
+
 func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gfl *port.Cells, np int32, tb *port.Cells, tc *port.Cells, tw *port.Cells, tq *port.Cells, tx *port.Cells, tbk *port.Cells, tbo *port.Cells, s0 *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells, s7 *port.Cells, s8 *port.Cells, s9 *port.Cells, s10 *port.Cells, s11 *port.Cells, s12 *port.Cells, s13 *port.Cells, s14 *port.Cells, s15 *port.Cells, s16 *port.Cells, s17 *port.Cells, s18 *port.Cells, pages *port.Cells, gl *port.Cells, mk *port.Cells, se *port.Cells, sc *port.Cells, ss *port.Cells, grg *port.Cells, g0 *port.Cells, g1 *port.Cells, g2 *port.Cells, g3 *port.Cells, g4 *port.Cells, g5 *port.Cells, tv *port.Cells, an *port.Cells) int32 {
 	// Find the tables of every page and claim their lines. `tb tc tw tq tx` are emptied first; s0..s18 are
 	// scratch: rules, merged rules, fills, a sort order, x and y boundaries, the grid, word pairs, a copy of tb
@@ -6429,6 +6506,12 @@ func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gf
 				k += 1
 			}
 			tbClaim(tb, t0, ln, li, lj)
+			tbOwnClaim(tb, t0, tc, tw, wd, et, wi, wj, tbo)
+			k = t0
+			for k < tbRowsOf(tb, tagtable.Tbs) {
+				tbCtx(tb, k, wd, ln, li, lj)
+				k += 1
+			}
 		}
 		wi = wj
 		li = lj

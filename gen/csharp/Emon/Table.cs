@@ -6094,6 +6094,81 @@ public static class Table {
         TbCaption(tb, k, wd, et, ln, l0, l1, tq);
         return 0;
     }
+    internal static int TbOwnClaim(emon.Port.Cells tb, int t0, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells wd, emon.Port.Cells et, int w0, int w1, emon.Port.Cells tbo) {
+        int w = w0;
+        int k = t0;
+        int c = 0;
+        int i = 0;
+        emon.Port.CellsDrop(tbo, 0);
+        while (w < w1) {
+            emon.Port.CellsPush(tbo, 0);
+            w += 1;
+        }
+        while (k < TbRowsOf(tb, Tagtable.Tbs)) {
+            c = emon.Port.CellsAt(tb, (k * Tagtable.Tbs) + 9);
+            while (c < (emon.Port.CellsAt(tb, (k * Tagtable.Tbs) + 9) + emon.Port.CellsAt(tb, (k * Tagtable.Tbs) + 10))) {
+                i = 0;
+                while (i < emon.Port.CellsAt(tc, (c * Tcs) + 9)) {
+                    w = emon.Port.CellsAt(tw, emon.Port.CellsAt(tc, (c * Tcs) + 8) + i);
+                    if ((w >= w0) && (w < w1)) {
+                        emon.Port.CellsSet(tbo, w - w0, c + 1);
+                    }
+                    i += 1;
+                }
+                c += 1;
+            }
+            k += 1;
+        }
+        k = t0;
+        while (k < TbRowsOf(tb, Tagtable.Tbs)) {
+            if ((emon.Port.CellsAt(tb, (k * Tagtable.Tbs) + 5) != PfRuled) && (emon.Port.CellsAt(tb, (k * Tagtable.Tbs) + 5) != PfStruct)) {
+                w = w0;
+                while (w < w1) {
+                    if ((emon.Port.CellsAt(tbo, w - w0) == 0) && (TbSeparator(wd, et, w) || !TbUpright(wd, w))) {
+                        int x = (Evidence.WdGet(wd, w, Evidence.HdX0()) + Evidence.WdGet(wd, w, Evidence.HdX1())) / 2;
+                        int y = (Evidence.WdGet(wd, w, Evidence.HdY0()) + Evidence.WdGet(wd, w, Evidence.HdY1())) / 2;
+                        if (((x >= emon.Port.CellsAt(tb, (k * Tagtable.Tbs) + 1)) && (x <= emon.Port.CellsAt(tb, (k * Tagtable.Tbs) + 3))) && ((y >= emon.Port.CellsAt(tb, (k * Tagtable.Tbs) + 2)) && (y <= emon.Port.CellsAt(tb, (k * Tagtable.Tbs) + 4)))) {
+                            emon.Port.CellsSet(tbo, w - w0, 0 - (k + 1));
+                        }
+                    }
+                    w += 1;
+                }
+            }
+            k += 1;
+        }
+        return 0;
+    }
+    internal static int TbCtx(emon.Port.Cells tb, int k, emon.Port.Cells wd, emon.Port.Cells ln, int l0, int l1) {
+        int top = emon.Port.CellsAt(tb, (k * Tagtable.Tbs) + 2);
+        int l = l0;
+        int best = -1;
+        int y = -2000000000;
+        int between = 0;
+        while (l < l1) {
+            if ((Evidence.LnGet(ln, l, 15) == 0) && (Evidence.LnGet(ln, l, Evidence.LhCount()) > 0)) {
+                int bottom = Evidence.LnGet(ln, l, Evidence.LhY1());
+                int size = Evidence.WdGet(wd, Evidence.LnGet(ln, l, Evidence.LhFirst()), Evidence.WfSize());
+                if ((bottom <= top) && ((bottom >= y) && ((top - bottom) <= (size * 3)))) {
+                    best = l;
+                    y = bottom;
+                }
+            }
+            l += 1;
+        }
+        if (best >= 0) {
+            l = l0;
+            while (l < l1) {
+                if ((Evidence.LnGet(ln, l, Evidence.LhY1()) > y) && (Evidence.LnGet(ln, l, Evidence.LhY1()) < top)) {
+                    between += 1;
+                }
+                l += 1;
+            }
+            if (between < 2) {
+                emon.Port.CellsSet(tb, (k * Tagtable.Tbs) + 30, best);
+            }
+        }
+        return 0;
+    }
     public static int TbBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells grl, emon.Port.Cells gfl, int np, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells tx, emon.Port.Cells tbk, emon.Port.Cells tbo, emon.Port.Cells s0, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6, emon.Port.Cells s7, emon.Port.Cells s8, emon.Port.Cells s9, emon.Port.Cells s10, emon.Port.Cells s11, emon.Port.Cells s12, emon.Port.Cells s13, emon.Port.Cells s14, emon.Port.Cells s15, emon.Port.Cells s16, emon.Port.Cells s17, emon.Port.Cells s18, emon.Port.Cells pages, emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells se, emon.Port.Cells sc, emon.Port.Cells ss, emon.Port.Cells grg, emon.Port.Cells g0, emon.Port.Cells g1, emon.Port.Cells g2, emon.Port.Cells g3, emon.Port.Cells g4, emon.Port.Cells g5, emon.Port.Cells tv, emon.Port.Cells an) {
         // Find the tables of every page and claim their lines. `tb tc tw tq tx` are emptied first; s0..s18 are
         // scratch: rules, merged rules, fills, a sort order, x and y boundaries, the grid, word pairs, a copy of tb
@@ -6189,6 +6264,12 @@ public static class Table {
                     k += 1;
                 }
                 TbClaim(tb, t0, ln, li, lj);
+                TbOwnClaim(tb, t0, tc, tw, wd, et, wi, wj, tbo);
+                k = t0;
+                while (k < TbRowsOf(tb, Tagtable.Tbs)) {
+                    TbCtx(tb, k, wd, ln, li, lj);
+                    k += 1;
+                }
             }
             wi = wj;
             li = lj;

@@ -126,7 +126,7 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
              "fig" "figures"})
 
 ;; P12.10: these new reconstruction fixtures have their own cohort. All remain
-;; in the global pool; the historical table calibration population stays fixed.
+;; in the global structural pool; historical calibration populations stay fixed.
 (def TABLE-MODEL-FIXTURES
   #{"table-ledger-sparse" "table-summary-and-ledger" "table-ledger-two-currency"})
 
@@ -324,7 +324,11 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
               pools {}, per-doc (array-map)]
          (if-let [[[doc-id variant c] & more] (seq rs)]
            (recur more
-                  (reduce (fn [p cat] (update p (str variant "/" cat) (fnil conj []) c))
+                  (reduce (fn [p cat]
+                            (let [counts (if (and (= cat "all") (contains? TABLE-MODEL-FIXTURES doc-id))
+                                           (into {} (remove (fn [[k _]] (str/starts-with? k "conf.")) c))
+                                           c)]
+                              (update p (str variant "/" cat) (fnil conj []) counts)))
                           pools ["all" (category doc-id)])
                   (assoc per-doc (str variant "/" doc-id) (merge (S/metrics c) (CAL/metrics c))))
        [(apply array-map

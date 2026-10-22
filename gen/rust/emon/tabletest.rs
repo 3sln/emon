@@ -2292,3 +2292,73 @@ fn test_empty_date_markers_do_not_split_a_ledger() {
     crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "empty date markers preserve all rows");
     crate::testport::assert_text(t, "T3w;Gh;R;Chs[Date];Chs[Details];Ch[Amount];Gb;R;Cs[01Jan];Cs[Rent];Ce[1.00];R;Cs[02Jan];Cs[Electricity];Ce[20.00];R;Cs[03Jan];Cs[Service fee];Ce[300.00];R;Cs[–];Cs[Pending];Ce[4.00];R;Cs[–];Cs[Unspecified];Ce[5.00];", "punctuation placeholders are not a different date-column model");
 }
+pub(crate) fn tt_own_build(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tbo: &mut crate::port::Cells) -> i32 {
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    page_new(pages, 1, 61200, 79200, 0, pk_vector());
+    return tb_build(wd, ln, et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), 1, tb, tc, tw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), tbo, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+}
+#[test]
+fn test_every_word_in_a_table_body_has_one_owner() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tbo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut w: i32 = 0;
+    let mut c: i32 = 0;
+    let mut i: i32 = 0;
+    let mut count: i32 = 0;
+    tt_part_ledger(wd, ln, et, 10000);
+    crate::testport::assert_eq(tt_own_build(wd, ln, et, tb, tc, tw, tbo), 1, "one retained ledger");
+    crate::testport::assert_eq(crate::port::cells_len(tbo), wd_count(wd), "the page ownership arena has a slot per word");
+    if crate::port::cells_len(tbo) == wd_count(wd) {
+        while w < wd_count(wd) {
+            count = 0;
+            c = crate::port::cells_at(tb, 9);
+            while c < (crate::port::cells_at(tb, 9) + crate::port::cells_at(tb, 10)) {
+                i = 0;
+                while i < crate::port::cells_at(tc, (c * 16) + 9) {
+                    if crate::port::cells_at(tw, crate::port::cells_at(tc, (c * 16) + 8) + i) == w {
+                        count += 1;
+                        crate::testport::assert_eq(crate::port::cells_at(tbo, w), c + 1, "ownership names the emitting cell");
+                    }
+                    i += 1;
+                }
+                c += 1;
+            }
+            crate::testport::assert_eq(count, 1, "each ledger word occurs in exactly one retained cell");
+            w += 1;
+        }
+    }
+}
+#[test]
+fn test_an_unowned_account_label_is_table_context() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tbo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    tt_at(wd, ln, et, &crate::testport::text_blob("USD Savings Account")[..], 7600, 8400, 0, 0);
+    tt_part_ledger(wd, ln, et, 10000);
+    crate::testport::assert_eq(tt_own_build(wd, ln, et, tb, tc, tw, tbo), 1, "one ledger below an account label");
+    crate::testport::assert_eq(crate::port::cells_at(tb, 30), 0, "the nearest unowned label is recorded by line index");
+}
+#[test]
+fn test_rotated_overlay_words_inside_a_table_stay_explicitly_dropped() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tbo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    tt_part_ledger(wd, ln, et, 10000);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Overlay")[..], 20000, 14000, 0, 0);
+    wd_set(wd, 12, hd_rot(), 4500);
+    crate::testport::assert_eq(tt_own_build(wd, ln, et, tb, tc, tw, tbo), 1, "the rotated overlay is no table cell");
+    crate::testport::assert_eq(crate::port::cells_at(tbo, 12), -1, "a rotated overlay rejected by the row builder stays explicitly dropped");
+}

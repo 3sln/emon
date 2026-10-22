@@ -4130,7 +4130,7 @@
         :conf-brier-section-infer 0.002209
         :conf-brier-table 0.004489
         :conf-brier-table-text 0.004489
-        :conf-ece-all 0.008475
+        :conf-ece-all 0.011
         :conf-ece-cell 0.003
         :conf-ece-cell-text 0.003
         :conf-ece-heading 0.052

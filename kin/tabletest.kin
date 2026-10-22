@@ -26,7 +26,7 @@
                                 nk-paragraph nk-note nk-table nk-rowgroup nk-row nk-cell nk-caption
                                 fk-rowspan fk-colspan fk-columns fk-profile fk-label fk-align]]
             [emon.json :refer [js-emit]]
-            [emon.evidence :refer [wd-new wd-set wd-count ln-new ln-count wf-size wf-font wf-style wf-src hd-line
+            [emon.evidence :refer [wd-new wd-set wd-count ln-new ln-count wf-size wf-font wf-style wf-src hd-line hd-rot
                                    pa-new pa-set pa-rect pf-flags pf-fill pf-falpha pg-filled]]
             [emon.pdfdoc :refer [pd-open]]
             [emon.pdfannot :refer [an-field]]
@@ -1901,3 +1901,54 @@
     (tt-at wd ln et (text-blob "5.00") 43000 18000 0 1)
     (assert-eq (tt-run wd ln et pa t) 0 "empty date markers preserve all rows")
     (assert-text t "T3w;Gh;R;Chs[Date];Chs[Details];Ch[Amount];Gb;R;Cs[01Jan];Cs[Rent];Ce[1.00];R;Cs[02Jan];Cs[Electricity];Ce[20.00];R;Cs[03Jan];Cs[Service fee];Ce[300.00];R;Cs[–];Cs[Pending];Ce[4.00];R;Cs[–];Cs[Unspecified];Ce[5.00];" "punctuation placeholders are not a different date-column model")))
+
+;; P12.10 ownership: inspect the same retained cells used by Model emission.
+(defn ^I32 tt-own-build [^Cells wd ^:mut ^Cells ln ^Cells et ^:mut ^Cells tb ^:mut ^Cells tc ^:mut ^Cells tw ^:mut ^Cells tbo]
+  (let [^Cells pages (new-cells)]
+    (page-new pages 1 61200 79200 0 (pk-vector))
+    (return (tb-build wd ln et (new-cells) (new-cells) 1 tb tc tw (new-cells) (new-cells) (new-cells) tbo
+                        (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                        (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                        (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                        (new-cells) (new-cells) (new-cells) (new-cells)
+                        pages (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                        (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                        (new-cells) (new-cells)))))
+
+(deftest test-every-word-in-a-table-body-has-one-owner
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^Cells tbo (new-cells)
+        ^:mut ^I32 w 0 ^:mut ^I32 c 0 ^:mut ^I32 i 0 ^:mut ^I32 count 0]
+    (tt-part-ledger wd ln et 10000)
+    (assert-eq (tt-own-build wd ln et tb tc tw tbo) 1 "one retained ledger")
+    (assert-eq (cells-len tbo) (wd-count wd) "the page ownership arena has a slot per word")
+    (if (== (cells-len tbo) (wd-count wd))
+      (while (< w (wd-count wd))
+        (do (set count 0) (set c (cells-at tb 9))
+            (while (< c (+ (cells-at tb 9) (cells-at tb 10)))
+              (do (set i 0)
+                  (while (< i (cells-at tc (+ (* c 16) 9)))
+                    (do (if (== (cells-at tw (+ (cells-at tc (+ (* c 16) 8)) i)) w)
+                          (do (set count (+ count 1))
+                              (assert-eq (cells-at tbo w) (+ c 1) "ownership names the emitting cell")))
+                        (set i (+ i 1))))
+                  (set c (+ c 1))))
+            (assert-eq count 1 "each ledger word occurs in exactly one retained cell")
+            (set w (+ w 1)))))))
+
+(deftest test-an-unowned-account-label-is-table-context
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^Cells tbo (new-cells)]
+    (tt-at wd ln et (text-blob "USD Savings Account") 7600 8400 0 0)
+    (tt-part-ledger wd ln et 10000)
+    (assert-eq (tt-own-build wd ln et tb tc tw tbo) 1 "one ledger below an account label")
+    (assert-eq (cells-at tb 30) 0 "the nearest unowned label is recorded by line index")))
+
+(deftest test-rotated-overlay-words-inside-a-table-stay-explicitly-dropped
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^Cells tbo (new-cells)]
+    (tt-part-ledger wd ln et 10000)
+    (tt-at wd ln et (text-blob "Overlay") 20000 14000 0 0)
+    (wd-set wd 12 (hd-rot) 4500)
+    (assert-eq (tt-own-build wd ln et tb tc tw tbo) 1 "the rotated overlay is no table cell")
+    (assert-eq (cells-at tbo 12) -1 "a rotated overlay rejected by the row builder stays explicitly dropped")))

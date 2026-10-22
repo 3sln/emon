@@ -2220,4 +2220,71 @@ public final class Tabletest {
         emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "empty date markers preserve all rows");
         emon.Testport.assertText(t, "T3w;Gh;R;Chs[Date];Chs[Details];Ch[Amount];Gb;R;Cs[01Jan];Cs[Rent];Ce[1.00];R;Cs[02Jan];Cs[Electricity];Ce[20.00];R;Cs[03Jan];Cs[Service fee];Ce[300.00];R;Cs[–];Cs[Pending];Ce[4.00];R;Cs[–];Cs[Unspecified];Ce[5.00];", "punctuation placeholders are not a different date-column model");
     }
+    public static int ttOwnBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tbo) {
+        emon.Port.Cells pages = emon.Port.newCells();
+        Model.pageNew(pages, 1, 61200, 79200, 0, Model.pkVector());
+        return Table.tbBuild(wd, ln, et, emon.Port.newCells(), emon.Port.newCells(), 1, tb, tc, tw, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), tbo, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), pages, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells());
+    }
+    public static void testEveryWordInATableBodyHasOneOwner() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells tbo = emon.Port.newCells();
+        int w = 0;
+        int c = 0;
+        int i = 0;
+        int count = 0;
+        ttPartLedger(wd, ln, et, 10000);
+        emon.Testport.assertEq(ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one retained ledger");
+        emon.Testport.assertEq(emon.Port.cellsLen(tbo), Evidence.wdCount(wd), "the page ownership arena has a slot per word");
+        if (emon.Port.cellsLen(tbo) == Evidence.wdCount(wd)) {
+            while (w < Evidence.wdCount(wd)) {
+                count = 0;
+                c = emon.Port.cellsAt(tb, 9);
+                while (c < (emon.Port.cellsAt(tb, 9) + emon.Port.cellsAt(tb, 10))) {
+                    i = 0;
+                    while (i < emon.Port.cellsAt(tc, (c * 16) + 9)) {
+                        if (emon.Port.cellsAt(tw, emon.Port.cellsAt(tc, (c * 16) + 8) + i) == w) {
+                            count += 1;
+                            emon.Testport.assertEq(emon.Port.cellsAt(tbo, w), c + 1, "ownership names the emitting cell");
+                        }
+                        i += 1;
+                    }
+                    c += 1;
+                }
+                emon.Testport.assertEq(count, 1, "each ledger word occurs in exactly one retained cell");
+                w += 1;
+            }
+        }
+    }
+    public static void testAnUnownedAccountLabelIsTableContext() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells tbo = emon.Port.newCells();
+        ttAt(wd, ln, et, emon.Testport.textBlob("USD Savings Account"), 7600, 8400, 0, 0);
+        ttPartLedger(wd, ln, et, 10000);
+        emon.Testport.assertEq(ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one ledger below an account label");
+        emon.Testport.assertEq(emon.Port.cellsAt(tb, 30), 0, "the nearest unowned label is recorded by line index");
+    }
+    public static void testRotatedOverlayWordsInsideATableStayExplicitlyDropped() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells tbo = emon.Port.newCells();
+        ttPartLedger(wd, ln, et, 10000);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Overlay"), 20000, 14000, 0, 0);
+        Evidence.wdSet(wd, 12, Evidence.hdRot(), 4500);
+        emon.Testport.assertEq(ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "the rotated overlay is no table cell");
+        emon.Testport.assertEq(emon.Port.cellsAt(tbo, 12), -1, "a rotated overlay rejected by the row builder stays explicitly dropped");
+    }
 }
