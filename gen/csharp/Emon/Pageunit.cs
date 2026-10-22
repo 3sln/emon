@@ -539,6 +539,8 @@ public static class Pageunit {
         l0 = Evidence.OlCount(olines);
         w0 = Evidence.OwCount(owords);
         run = Scan.ScPageEvidence(ans, ao, i + 1, roid, vdec, rdpi, Scan.ScLang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+        // D676: retry placeholders are not OCR orientation votes; keep the first pass's original line span for its dominant angle.
+        nl = Evidence.OrGet(oruns, run, Evidence.OrfLcount());
         if (rid == uvid) {
             Retarget.RtRunMeta(oruns, run, Evidence.OpUpscaled(), 3, 3, 0, 0, 0, 0);
         }
@@ -568,9 +570,11 @@ public static class Pageunit {
             nsel = Sigpx.SpDropLines(scr, nsel, olines, owords, s5);
         }
         Retarget.RtUpright(rtp, run, epages, i + 1);
-        nl = Evidence.OrGet(oruns, run, Evidence.OrfLcount());
         rotmed = Evidence.EvRotMedian(olines, l0, nl);
         Scan.ScEmitSel(olines, owords, osyms, nsel, i + 1, rotmed, scr, words, lines, etext, rules, comps, inks);
+        if ((emon.Port.CellsAt(rtp, Retarget.RtpPrimary()) != run) && (emon.Port.CellsAt(rtp, Retarget.RtpQ()) != 0)) {
+            mv += 8;
+        }
         emon.Port.CellsSet(mask, i, mv);
         return Plan.UsDone();
     }

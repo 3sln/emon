@@ -602,7 +602,7 @@ pub(crate) fn op_has(out: &mut crate::port::Cells, base: i32, v: i32) -> i32 {
 pub fn op_models(req: &mut crate::port::Cells, inst: &mut crate::port::Cells, mut out: &mut crate::port::Cells) -> i32 {
     // Which installed models read the request, as indices into `inst` (code-point Cells separated by 0), appended to `out`;
     // answers how many. A script (`Cyrl`) is every installed model that reads it, once; a language is its model; a language
-    // with no model is dropped; none left is EVERY installed model (D038). 0 only when nothing is installed.
+    // with no model is dropped; none left is one discovery model (D672). 0 only when nothing is installed.
     let base: i32 = crate::port::cells_len(out);
     let end: i32 = crate::port::cells_len(req) - 3;
     let n: i32 = op_entry_count(inst);
@@ -635,10 +635,12 @@ pub fn op_models(req: &mut crate::port::Cells, inst: &mut crate::port::Cells, mu
         k += 1;
     }
     if crate::port::cells_len(out) == base {
-        i = 0;
-        while i < n {
+        i = op_model_index(inst, 1701734144);
+        if i < 0 {
+            i = 0;
+        }
+        if n > 0 {
             crate::port::cells_push(out, i);
-            i += 1;
         }
     }
     return crate::port::cells_len(out) - base;
@@ -951,4 +953,25 @@ pub fn ox_flat(v: &mut crate::port::Cells, id: i32, mut c: &mut crate::port::Cel
     }
     an_ocr_end(c, at);
     return 0;
+}
+pub fn op_models_configured(req: &mut crate::port::Cells, inst: &mut crate::port::Cells, configured: i32, mut out: &mut crate::port::Cells) -> i32 {
+    // D678: an explicit provider model set is authoritative when the request has no language hint. An unfiltered inventory uses discovery; a named request still wins.
+    if configured == 0 {
+        return op_models(req, inst, out);
+    }
+    let base: i32 = crate::port::cells_len(out);
+    let end: i32 = crate::port::cells_len(req) - 3;
+    let mut k: i32 = op_lang_first(req);
+    let mut i: i32 = 0;
+    while k < end {
+        if rq_arg(req, 0, k) != 0 {
+            return op_models(req, inst, out);
+        }
+        k += 1;
+    }
+    while i < op_entry_count(inst) {
+        crate::port::cells_push(out, i);
+        i += 1;
+    }
+    return crate::port::cells_len(out) - base;
 }

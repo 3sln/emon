@@ -256,8 +256,8 @@ func ScLang(loc *port.Cells) int32 {
 	// code packed `a * 65536 + b * 256 + c`; 0 when there is no hint or it is not one we can name, and then the
 	// port reads with whatever it has (D038: no language is assumed). Chinese is `chs` or `cht` by its script (`Hant`) or
 	// its region (TW, HK, MO): the port maps them to its simplified and traditional models. A three-letter primary
-	// subtag is taken as it is (`deu`, `fra`, `chi`). NO LOCALE ASSUMES ENGLISH: a document with no hint is read with
-	// every model the port has.
+	// subtag is taken as it is (`deu`, `fra`, `chi`). With no locale the hint remains absent: D672 lets the port select
+	// one installed discovery model (English when installed), rather than combining all scripts.
 	var n int32 = port.CellsLen(loc)
 	var i int32 = 0
 	var plen int32 = 0
@@ -1520,7 +1520,7 @@ func ScOnVrule(rules *port.Cells, page int32, cx int32, cy int32, slack int32) i
 				dx = 0 - dx
 			}
 			dy = yb - ya
-			if (dy >= 800) && ((dx * 8) <= dy) {
+			if (dy > 0) && ((dx * 8) <= dy) {
 				if (cy >= ya) && (cy <= yb) {
 					d = cx - ((xa + xb) / 2)
 					if d < 0 {
@@ -2651,7 +2651,7 @@ func ScTagUnread(nodes *port.Cells, regions *port.Cells, mask *port.Cells) int32
 	for n < nn {
 		pg = scNodePage(nodes, regions, n)
 		if (pg >= 1) && (pg <= port.CellsLen(mask)) {
-			if (port.CellsAt(mask, pg-1) / 4) >= 1 {
+			if (port.CellsAt(mask, pg-1) & ScMaskUnread()) != 0 {
 				if (model.NodeSrc(nodes, n) & model.SrOcr()) == model.SrOcr() {
 					if model.NkIsInline(model.NodeKind(nodes, n)) == 0 {
 						model.NodeAddFlag(nodes, n, model.FlScriptUnread())
@@ -2753,6 +2753,9 @@ func ScTag(nodes *port.Cells, attrs *port.Cells, text *port.Cells, regions *port
 		}
 		if (m % 4) >= 1 {
 			s = model.NodeSrc(nodes, n)
+			if (m & 8) != 0 {
+				model.NodeAddFlag(nodes, n, model.FlRotated())
+			}
 			if (s & model.SrText()) == model.SrText() {
 				model.NodeSetSrc(nodes, n, (s-model.SrText())+model.SrOcr())
 				if model.NkIsInline(model.NodeKind(nodes, n)) == 0 {
@@ -2928,4 +2931,257 @@ func ScEligible(im *port.Cells, j int32, pw int32, ph int32) int32 {
 		return 0
 	}
 	return 1
+}
+
+func ScWordAgreement(ow *port.Cells, et *port.Cells, w int32) int32 {
+	// D667: overlapping words from different passes must agree on their text. Ambiguous splits are left alone; a near-identical word box with a different reading reduces trust.
+	var j int32 = 0
+	var k int32 = 0
+	var same int32 = 0
+	var n int32 = evidence.OwGet(ow, w, evidence.HdTlen())
+	for j < evidence.OwCount(ow) {
+		if (evidence.OwGet(ow, j, evidence.OwfRun()) != evidence.OwGet(ow, w, evidence.OwfRun())) && ((evidence.OwGet(ow, j, evidence.HdPage()) == evidence.OwGet(ow, w, evidence.HdPage())) && (evidence.EvOverlapSmall(evidence.OwGet(ow, w, evidence.HdX0()), evidence.OwGet(ow, w, evidence.HdY0()), evidence.OwGet(ow, w, evidence.HdX1()), evidence.OwGet(ow, w, evidence.HdY1()), evidence.OwGet(ow, j, evidence.HdX0()), evidence.OwGet(ow, j, evidence.HdY0()), evidence.OwGet(ow, j, evidence.HdX1()), evidence.OwGet(ow, j, evidence.HdY1())) >= 800)) {
+			if evidence.OwGet(ow, j, evidence.HdTlen()) == n {
+				k = 0
+				same = 1
+				for k < n {
+					if port.CellsAt(et, evidence.OwGet(ow, w, evidence.HdTstart())+k) != port.CellsAt(et, evidence.OwGet(ow, j, evidence.HdTstart())+k) {
+						same = 0
+					}
+					k += 1
+				}
+				if same == 0 {
+					return 700
+				}
+			}
+		}
+		j += 1
+	}
+	return 1000
+}
+
+func scWordBase(owords *port.Cells, etext *port.Cells, w int32) int32 {
+	var ts int32 = evidence.OwGet(owords, w, evidence.HdTstart())
+	var n int32 = evidence.OwGet(owords, w, evidence.HdTlen())
+	var flags int32 = evidence.OwGet(owords, w, evidence.OwfFlags())
+	var score int32 = evidence.OwGet(owords, w, evidence.HdConf())
+	var i int32 = 0
+	var latin int32 = 0
+	var rejected int32 = 0
+	var cp int32 = 0
+	if score < 0 {
+		score = 0
+	}
+	if score > 1000 {
+		score = 1000
+	}
+	for i < n {
+		cp = port.CellsAt(etext, ts+i)
+		if ((cp >= 65) && (cp <= 90)) || ((cp >= 97) && (cp <= 122)) {
+			latin += 1
+		}
+		if (cp == 65533) || (scCpClass(cp) == 2) {
+			rejected += 1
+		}
+		i += 1
+	}
+	if (latin >= 3) && ((flags & 3) == 0) {
+		score -= 180
+	}
+	if ScImplausible(etext, ts, n) == 1 {
+		score -= 400
+	}
+	if n > 0 {
+		score -= (rejected * 600) / n
+	}
+	if (flags & evidence.OeGarbage()) != 0 {
+		if score > 200 {
+			score = 200
+		}
+	}
+	if score < 0 {
+		score = 0
+	}
+	return score
+}
+
+func ScWordTrust(owords *port.Cells, etext *port.Cells, w int32) int32 {
+	return (scWordBase(owords, etext, w) * ScWordAgreement(owords, etext, w)) / 1000
+}
+
+func scRotatedPage(oruns *port.Cells, page int32) int32 {
+	var r int32 = 0
+	for r < evidence.OrCount(oruns) {
+		if (evidence.OrGet(oruns, r, 0) == page) && (evidence.OrGet(oruns, r, evidence.OrfPass()) == evidence.OpReRotated()) {
+			return 1
+		}
+		r += 1
+	}
+	return 0
+}
+
+func ScTrust(nodes *port.Cells, regions *port.Cells, owords *port.Cells, etext *port.Cells, oruns *port.Cells) int32 {
+	// D667: pure OCR nodes carry character-weighted word evidence, rather than paragraph/heading constants. Rejected words in their region also lower trust.
+	var n int32 = 1
+	var r int32 = 0
+	var w int32 = 0
+	var cx int32 = 0
+	var cy int32 = 0
+	var sum int32 = 0
+	var count int32 = 0
+	var weight int32 = 0
+	var score int32 = 0
+	var tagged int32 = 0
+	var rotated int32 = 0
+	var run int32 = 0
+	var eligible int32 = 0
+	var trust int32 = 0
+	for n < model.NodeCount(nodes) {
+		if ((model.NodeSrc(nodes, n) & model.SrOcr()) != 0) && ((model.NodeSrc(nodes, n) & model.SrText()) == 0) {
+			sum = 0
+			count = 0
+			r = model.NodeRegionHead(nodes, n)
+			for r >= 0 {
+				rotated = 0
+				if (model.NodeFlags(nodes, n) & model.FlRotated()) != 0 {
+					rotated = scRotatedPage(oruns, model.RegionPage(regions, r))
+				}
+				w = 0
+				for w < evidence.OwCount(owords) {
+					cx = (evidence.OwGet(owords, w, evidence.HdX0()) + evidence.OwGet(owords, w, evidence.HdX1())) / 2
+					cy = (evidence.OwGet(owords, w, evidence.HdY0()) + evidence.OwGet(owords, w, evidence.HdY1())) / 2
+					eligible = 1
+					if rotated == 1 {
+						run = evidence.OwGet(owords, w, evidence.OwfRun())
+						eligible = 0
+						if (run >= 0) && (run < evidence.OrCount(oruns)) {
+							if evidence.OrGet(oruns, run, evidence.OrfPass()) == evidence.OpReRotated() {
+								eligible = 1
+							}
+						}
+					}
+					if ((eligible == 1) && (evidence.OwGet(owords, w, evidence.HdPage()) == model.RegionPage(regions, r))) && (((cx >= model.RegionX0(regions, r)) && (cx <= model.RegionX1(regions, r))) && ((cy >= model.RegionY0(regions, r)) && (cy <= model.RegionY1(regions, r)))) {
+						weight = evidence.OwGet(owords, w, evidence.HdTlen())
+						if weight > 40 {
+							weight = 40
+						}
+						if rotated == 1 {
+							trust = scWordBase(owords, etext, w)
+						} else {
+							trust = ScWordTrust(owords, etext, w)
+						}
+						sum += weight * trust
+						count += weight
+					}
+					w += 1
+				}
+				r = model.RegionNext(regions, r)
+			}
+			if count > 0 {
+				score = sum / count
+				model.NodeSetConf(nodes, n, score)
+				if score < 500 {
+					model.NodeAddFlag(nodes, n, model.FlLowConf())
+				}
+				tagged += 1
+			}
+		}
+		n += 1
+	}
+	return tagged
+}
+
+func ScFormatControl(cp int32) int32 {
+	if (cp == 1564) || ((cp == 8206) || (cp == 8207)) {
+		return 1
+	}
+	if ((cp >= 8234) && (cp <= 8238)) || ((cp >= 8294) && (cp <= 8297)) {
+		return 1
+	}
+	return 0
+}
+
+func ScUnspaced(cp int32) int32 {
+	if ((cp >= 12352) && (cp <= 12543)) || (((cp >= 13312) && (cp <= 40959)) || ((cp >= 131072) && (cp <= 195103))) {
+		return 1
+	}
+	return 0
+}
+
+func ScCleanText(nodes *port.Cells, text *port.Cells) int32 {
+	// D669: OCR formatting controls and separators between adjacent Han/Kana characters are not content. Repoint only changed OCR text runs.
+	var n int32 = 1
+	var ts int32 = 0
+	var ncp int32 = 0
+	var i int32 = 0
+	var cp int32 = 0
+	var start int32 = 0
+	var skip int32 = 0
+	var changed int32 = 0
+	var any int32 = 0
+	for n < model.NodeCount(nodes) {
+		if (model.NodeSrc(nodes, n) & model.SrOcr()) != 0 {
+			ts = model.NodeTextStart(nodes, n)
+			ncp = model.NodeTextLen(nodes, n)
+			start = port.CellsLen(text)
+			i = 0
+			changed = 0
+			for i < ncp {
+				cp = port.CellsAt(text, ts+i)
+				skip = ScFormatControl(cp)
+				if (cp == 32) && ((i > 0) && ((i + 1) < ncp)) {
+					if (ScUnspaced(port.CellsAt(text, ts+(i-1))) == 1) && (ScUnspaced(port.CellsAt(text, ts+(i+1))) == 1) {
+						skip = 1
+					}
+				}
+				if skip == 0 {
+					model.TextAppendCp(text, cp)
+				} else {
+					changed = 1
+				}
+				i += 1
+			}
+			if changed == 1 {
+				model.NodeSetText(nodes, n, start, port.CellsLen(text)-start)
+				any += 1
+			} else {
+				port.CellsDrop(text, start)
+			}
+		}
+		n += 1
+	}
+	return any
+}
+
+func ScWriteEmptyRegions(olines *port.Cells, nodes *port.Cells, regions *port.Cells, ledger *port.Cells) int32 {
+	// D670: a represented ink gap with no Model region over it gets a ledger row, including unread crops and crops held out by the body-ink owner.
+	var l int32 = 0
+	var n int32 = 0
+	var r int32 = 0
+	var found int32 = 0
+	var rows int32 = 0
+	for l < evidence.OlCount(olines) {
+		if evidence.OlGet(olines, l, evidence.OlfRetryGap()) == 1 {
+			found = 0
+			n = 1
+			for (n < model.NodeCount(nodes)) && (found == 0) {
+				r = model.NodeRegionHead(nodes, n)
+				for (r >= 0) && (found == 0) {
+					if model.RegionPage(regions, r) == evidence.OlGet(olines, l, evidence.HdPage()) {
+						if evidence.EvOverlapSmall(model.RegionX0(regions, r), model.RegionY0(regions, r), model.RegionX1(regions, r), model.RegionY1(regions, r), evidence.OlGet(olines, l, evidence.LhX0()), evidence.OlGet(olines, l, evidence.LhY0()), evidence.OlGet(olines, l, evidence.LhX1()), evidence.OlGet(olines, l, evidence.LhY1())) > 100 {
+							found = 1
+						}
+					}
+					r = model.RegionNext(regions, r)
+				}
+				n += 1
+			}
+			if found == 0 {
+				model.LedgerAdd(ledger, model.DrOcrGhost(), evidence.OlGet(olines, l, evidence.HdPage()), evidence.OlGet(olines, l, evidence.LhX0()), evidence.OlGet(olines, l, evidence.LhY0()), evidence.OlGet(olines, l, evidence.LhX1()), evidence.OlGet(olines, l, evidence.LhY1()), 0, model.SrOcr())
+				rows += 1
+			}
+		}
+		l += 1
+	}
+	return rows
 }

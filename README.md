@@ -233,7 +233,7 @@ The pdfium that emon is tested with is `chromium/8076` of
 bundle `eng` and `osd`.
 
 Fetch additional pinned, SHA-256 checked Apache-2.0 language models with
-`bb tessdata-fetch` (all 20 supported models), or `bb tessdata-fetch --langs eng,osd,spa,fra`.
+`bb tessdata-fetch` (all 21 supported models), or `bb tessdata-fetch --langs eng,osd,spa,fra`.
 Use the downloaded directory with `emon convert scan.pdf --tessdata .cache/tessdata --lang spa+eng`.
 
 The live Rust test driver accepts `--tessdata=.cache/tessdata --lang=spa+eng`.

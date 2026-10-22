@@ -229,8 +229,8 @@ func TestALanguageIsItsModelAndTheChineseScriptsNameTheirs(emonT *testing.T) {
 	tCase1(emonT, 2, 99, 104, 116, 0, 1, 1, -1, "cht is chi_tra")
 }
 
-func TestAModelThatIsNotInstalledIsDroppedAndNoneLeftIsAll(emonT *testing.T) {
-	tCase1(emonT, 0, 102, 114, 97, 0, 2, 0, 1, "fra alone: every installed model (D038)")
+func TestAModelThatIsNotInstalledIsDroppedAndNoneLeftIsOne(emonT *testing.T) {
+	tCase1(emonT, 0, 102, 114, 97, 0, 1, 0, -1, "fra alone: one discovery model (D672)")
 	tGone1(emonT, 0, 102, 114, 97, 0, 4, 0, 102, "fra is dropped, its name and a 0")
 	tCase2(emonT, 0, 101, 110, 103, 0, 102, 114, 97, 0, 1, 0, -1, "eng and fra: eng")
 	tGone1(emonT, 0, 99, 104, 115, 0, 8, 4, 115, "chs with no chi_sim installed is named chi_sim")
@@ -508,4 +508,28 @@ func TestAFlatFormWithAHeaderCutShortIsRefused(emonT *testing.T) {
 	tP4(v, 0, 0, 2, 0)
 	port.AssertEq(emonT, ocrport.OxFlat(v, 9, got), -1, "a header cut short")
 	port.AssertEq(emonT, port.CellsLen(got), 0, "and nothing is written")
+}
+
+func TestAnAutomaticFirstPassUsesOneModelInsteadOfAllInstalledScripts(emonT *testing.T) {
+	var r *port.Cells = port.NewCells()
+	var inst *port.Cells = port.NewCells()
+	tReq1(r, 0, 0, 0, 0)
+	tInstEngRus(inst)
+	tModels(emonT, r, inst, 1, 0, -1, "one Latin discovery pass, no multi-script soup")
+}
+
+func TestExplicitProviderLanguagesAreNotReplacedByDiscovery(emonT *testing.T) {
+	var r *port.Cells = port.NewCells()
+	var inst *port.Cells = port.NewCells()
+	var out *port.Cells = port.NewCells()
+	tReq1(r, 0, 0, 0, 0)
+	tInstEngJpn(inst)
+	port.AssertEq(emonT, ocrport.OpModelsConfigured(r, inst, 1, out), 2, "explicit jpn+eng stays jpn+eng")
+	port.AssertEq(emonT, port.CellsAt(out, 1), 1, "the Japanese model is retained")
+	var auto *port.Cells = port.NewCells()
+	port.AssertEq(emonT, ocrport.OpModelsConfigured(r, inst, 0, auto), 1, "an unconfigured inventory still uses one discovery model")
+	var named *port.Cells = port.NewCells()
+	var picked *port.Cells = port.NewCells()
+	tReq1(named, 101, 110, 103, 0)
+	port.AssertEq(emonT, ocrport.OpModelsConfigured(named, inst, 1, picked), 1, "a named request wins over provider defaults")
 }

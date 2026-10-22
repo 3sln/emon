@@ -248,8 +248,8 @@ pub fn sc_lang(loc: &mut crate::port::Cells) -> i32 {
     // code packed `a * 65536 + b * 256 + c`; 0 when there is no hint or it is not one we can name, and then the
     // port reads with whatever it has (D038: no language is assumed). Chinese is `chs` or `cht` by its script (`Hant`) or
     // its region (TW, HK, MO): the port maps them to its simplified and traditional models. A three-letter primary
-    // subtag is taken as it is (`deu`, `fra`, `chi`). NO LOCALE ASSUMES ENGLISH: a document with no hint is read with
-    // every model the port has.
+    // subtag is taken as it is (`deu`, `fra`, `chi`). With no locale the hint remains absent: D672 lets the port select
+    // one installed discovery model (English when installed), rather than combining all scripts.
     let n: i32 = crate::port::cells_len(loc);
     let mut i: i32 = 0;
     let mut plen: i32 = 0;
@@ -1467,7 +1467,7 @@ pub fn sc_on_vrule(rules: &mut crate::port::Cells, page: i32, cx: i32, cy: i32, 
                 dx = 0 - dx;
             }
             dy = yb - ya;
-            if (dy >= 800) && ((dx * 8) <= dy) {
+            if (dy > 0) && ((dx * 8) <= dy) {
                 if (cy >= ya) && (cy <= yb) {
                     d = cx - ((xa + xb) / 2);
                     if d < 0 {
@@ -2569,7 +2569,7 @@ pub fn sc_tag_unread(mut nodes: &mut crate::port::Cells, regions: &mut crate::po
     while n < nn {
         pg = sc_node_page(nodes, regions, n);
         if (pg >= 1) && (pg <= crate::port::cells_len(mask)) {
-            if (crate::port::cells_at(mask, pg - 1) / 4) >= 1 {
+            if (crate::port::cells_at(mask, pg - 1) & sc_mask_unread()) != 0 {
                 if (node_src(nodes, n) & sr_ocr()) == sr_ocr() {
                     if nk_is_inline(node_kind(nodes, n)) == 0 {
                         node_add_flag(nodes, n, fl_script_unread());
@@ -2669,6 +2669,9 @@ pub fn sc_tag(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::C
         }
         if (m % 4) >= 1 {
             s = node_src(nodes, n);
+            if (m & 8) != 0 {
+                node_add_flag(nodes, n, fl_rotated());
+            }
             if (s & sr_text()) == sr_text() {
                 node_set_src(nodes, n, (s - sr_text()) + sr_ocr());
                 if nk_is_inline(node_kind(nodes, n)) == 0 {
@@ -2840,4 +2843,248 @@ pub fn sc_eligible(im: &mut crate::port::Cells, j: i32, pw: i32, ph: i32) -> i32
         return 0;
     }
     return 1;
+}
+pub fn sc_word_agreement(ow: &mut crate::port::Cells, et: &mut crate::port::Cells, w: i32) -> i32 {
+    // D667: overlapping words from different passes must agree on their text. Ambiguous splits are left alone; a near-identical word box with a different reading reduces trust.
+    let mut j: i32 = 0;
+    let mut k: i32 = 0;
+    let mut same: i32 = 0;
+    let n: i32 = ow_get(ow, w, hd_tlen());
+    while j < ow_count(ow) {
+        if (ow_get(ow, j, owf_run()) != ow_get(ow, w, owf_run())) && ((ow_get(ow, j, hd_page()) == ow_get(ow, w, hd_page())) && (ev_overlap_small(ow_get(ow, w, hd_x0()), ow_get(ow, w, hd_y0()), ow_get(ow, w, hd_x1()), ow_get(ow, w, hd_y1()), ow_get(ow, j, hd_x0()), ow_get(ow, j, hd_y0()), ow_get(ow, j, hd_x1()), ow_get(ow, j, hd_y1())) >= 800)) {
+            if ow_get(ow, j, hd_tlen()) == n {
+                k = 0;
+                same = 1;
+                while k < n {
+                    if crate::port::cells_at(et, ow_get(ow, w, hd_tstart()) + k) != crate::port::cells_at(et, ow_get(ow, j, hd_tstart()) + k) {
+                        same = 0;
+                    }
+                    k += 1;
+                }
+                if same == 0 {
+                    return 700;
+                }
+            }
+        }
+        j += 1;
+    }
+    return 1000;
+}
+pub(crate) fn sc_word_base(owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, w: i32) -> i32 {
+    let ts: i32 = ow_get(owords, w, hd_tstart());
+    let n: i32 = ow_get(owords, w, hd_tlen());
+    let flags: i32 = ow_get(owords, w, owf_flags());
+    let mut score: i32 = ow_get(owords, w, hd_conf());
+    let mut i: i32 = 0;
+    let mut latin: i32 = 0;
+    let mut rejected: i32 = 0;
+    let mut cp: i32 = 0;
+    if score < 0 {
+        score = 0;
+    }
+    if score > 1000 {
+        score = 1000;
+    }
+    while i < n {
+        cp = crate::port::cells_at(etext, ts + i);
+        if ((cp >= 65) && (cp <= 90)) || ((cp >= 97) && (cp <= 122)) {
+            latin += 1;
+        }
+        if (cp == 65533) || (sc_cp_class(cp) == 2) {
+            rejected += 1;
+        }
+        i += 1;
+    }
+    if (latin >= 3) && ((flags & 3) == 0) {
+        score -= 180;
+    }
+    if sc_implausible(etext, ts, n) == 1 {
+        score -= 400;
+    }
+    if n > 0 {
+        score -= (rejected * 600) / n;
+    }
+    if (flags & oe_garbage()) != 0 {
+        if score > 200 {
+            score = 200;
+        }
+    }
+    if score < 0 {
+        score = 0;
+    }
+    return score;
+}
+pub fn sc_word_trust(owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, w: i32) -> i32 {
+    return (sc_word_base(owords, etext, w) * sc_word_agreement(owords, etext, w)) / 1000;
+}
+pub(crate) fn sc_rotated_page(oruns: &mut crate::port::Cells, page: i32) -> i32 {
+    let mut r: i32 = 0;
+    while r < or_count(oruns) {
+        if (or_get(oruns, r, 0) == page) && (or_get(oruns, r, orf_pass()) == op_re_rotated()) {
+            return 1;
+        }
+        r += 1;
+    }
+    return 0;
+}
+pub fn sc_trust(mut nodes: &mut crate::port::Cells, regions: &mut crate::port::Cells, owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, oruns: &mut crate::port::Cells) -> i32 {
+    // D667: pure OCR nodes carry character-weighted word evidence, rather than paragraph/heading constants. Rejected words in their region also lower trust.
+    let mut n: i32 = 1;
+    let mut r: i32 = 0;
+    let mut w: i32 = 0;
+    let mut cx: i32 = 0;
+    let mut cy: i32 = 0;
+    let mut sum: i32 = 0;
+    let mut count: i32 = 0;
+    let mut weight: i32 = 0;
+    let mut score: i32 = 0;
+    let mut tagged: i32 = 0;
+    let mut rotated: i32 = 0;
+    let mut run: i32 = 0;
+    let mut eligible: i32 = 0;
+    let mut trust: i32 = 0;
+    while n < node_count(nodes) {
+        if ((node_src(nodes, n) & sr_ocr()) != 0) && ((node_src(nodes, n) & sr_text()) == 0) {
+            sum = 0;
+            count = 0;
+            r = node_region_head(nodes, n);
+            while r >= 0 {
+                rotated = 0;
+                if (node_flags(nodes, n) & fl_rotated()) != 0 {
+                    rotated = sc_rotated_page(oruns, region_page(regions, r));
+                }
+                w = 0;
+                while w < ow_count(owords) {
+                    cx = (ow_get(owords, w, hd_x0()) + ow_get(owords, w, hd_x1())) / 2;
+                    cy = (ow_get(owords, w, hd_y0()) + ow_get(owords, w, hd_y1())) / 2;
+                    eligible = 1;
+                    if rotated == 1 {
+                        run = ow_get(owords, w, owf_run());
+                        eligible = 0;
+                        if (run >= 0) && (run < or_count(oruns)) {
+                            if or_get(oruns, run, orf_pass()) == op_re_rotated() {
+                                eligible = 1;
+                            }
+                        }
+                    }
+                    if ((eligible == 1) && (ow_get(owords, w, hd_page()) == region_page(regions, r))) && (((cx >= region_x0(regions, r)) && (cx <= region_x1(regions, r))) && ((cy >= region_y0(regions, r)) && (cy <= region_y1(regions, r)))) {
+                        weight = ow_get(owords, w, hd_tlen());
+                        if weight > 40 {
+                            weight = 40;
+                        }
+                        if rotated == 1 {
+                            trust = sc_word_base(owords, etext, w);
+                        } else {
+                            trust = sc_word_trust(owords, etext, w);
+                        }
+                        sum += weight * trust;
+                        count += weight;
+                    }
+                    w += 1;
+                }
+                r = region_next(regions, r);
+            }
+            if count > 0 {
+                score = sum / count;
+                node_set_conf(nodes, n, score);
+                if score < 500 {
+                    node_add_flag(nodes, n, fl_low_conf());
+                }
+                tagged += 1;
+            }
+        }
+        n += 1;
+    }
+    return tagged;
+}
+pub fn sc_format_control(cp: i32) -> i32 {
+    if (cp == 1564) || ((cp == 8206) || (cp == 8207)) {
+        return 1;
+    }
+    if ((cp >= 8234) && (cp <= 8238)) || ((cp >= 8294) && (cp <= 8297)) {
+        return 1;
+    }
+    return 0;
+}
+pub fn sc_unspaced(cp: i32) -> i32 {
+    if ((cp >= 12352) && (cp <= 12543)) || (((cp >= 13312) && (cp <= 40959)) || ((cp >= 131072) && (cp <= 195103))) {
+        return 1;
+    }
+    return 0;
+}
+pub fn sc_clean_text(mut nodes: &mut crate::port::Cells, mut text: &mut crate::port::Cells) -> i32 {
+    // D669: OCR formatting controls and separators between adjacent Han/Kana characters are not content. Repoint only changed OCR text runs.
+    let mut n: i32 = 1;
+    let mut ts: i32 = 0;
+    let mut ncp: i32 = 0;
+    let mut i: i32 = 0;
+    let mut cp: i32 = 0;
+    let mut start: i32 = 0;
+    let mut skip: i32 = 0;
+    let mut changed: i32 = 0;
+    let mut any: i32 = 0;
+    while n < node_count(nodes) {
+        if (node_src(nodes, n) & sr_ocr()) != 0 {
+            ts = node_text_start(nodes, n);
+            ncp = node_text_len(nodes, n);
+            start = crate::port::cells_len(text);
+            i = 0;
+            changed = 0;
+            while i < ncp {
+                cp = crate::port::cells_at(text, ts + i);
+                skip = sc_format_control(cp);
+                if (cp == 32) && ((i > 0) && ((i + 1) < ncp)) {
+                    if (sc_unspaced(crate::port::cells_at(text, ts + (i - 1))) == 1) && (sc_unspaced(crate::port::cells_at(text, ts + (i + 1))) == 1) {
+                        skip = 1;
+                    }
+                }
+                if skip == 0 {
+                    text_append_cp(text, cp);
+                } else {
+                    changed = 1;
+                }
+                i += 1;
+            }
+            if changed == 1 {
+                node_set_text(nodes, n, start, crate::port::cells_len(text) - start);
+                any += 1;
+            } else {
+                crate::port::cells_drop(text, start);
+            }
+        }
+        n += 1;
+    }
+    return any;
+}
+pub fn sc_write_empty_regions(olines: &mut crate::port::Cells, nodes: &mut crate::port::Cells, regions: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells) -> i32 {
+    // D670: a represented ink gap with no Model region over it gets a ledger row, including unread crops and crops held out by the body-ink owner.
+    let mut l: i32 = 0;
+    let mut n: i32 = 0;
+    let mut r: i32 = 0;
+    let mut found: i32 = 0;
+    let mut rows: i32 = 0;
+    while l < ol_count(olines) {
+        if ol_get(olines, l, olf_retry_gap()) == 1 {
+            found = 0;
+            n = 1;
+            while (n < node_count(nodes)) && (found == 0) {
+                r = node_region_head(nodes, n);
+                while (r >= 0) && (found == 0) {
+                    if region_page(regions, r) == ol_get(olines, l, hd_page()) {
+                        if ev_overlap_small(region_x0(regions, r), region_y0(regions, r), region_x1(regions, r), region_y1(regions, r), ol_get(olines, l, lh_x0()), ol_get(olines, l, lh_y0()), ol_get(olines, l, lh_x1()), ol_get(olines, l, lh_y1())) > 100 {
+                            found = 1;
+                        }
+                    }
+                    r = region_next(regions, r);
+                }
+                n += 1;
+            }
+            if found == 0 {
+                ledger_add(ledger, dr_ocr_ghost(), ol_get(olines, l, hd_page()), ol_get(olines, l, lh_x0()), ol_get(olines, l, lh_y0()), ol_get(olines, l, lh_x1()), ol_get(olines, l, lh_y1()), 0, sr_ocr());
+                rows += 1;
+            }
+        }
+        l += 1;
+    }
+    return rows;
 }

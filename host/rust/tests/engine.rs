@@ -459,8 +459,15 @@ fn a_scanned_pdf_page_is_ocred_and_a_born_digital_one_keeps_its_text_layer() {
     let scan = read("test/corpus/synth/scan/h-keyword.pdf");
     let o = Options::default();
     let (m, t) = with_ocr().record(Input::bytes(scan.clone()), &o).unwrap();
-    // the stream's own bytes (filter DCT, kind 2), then OCR of that bitmap (kind 3): two rounds
-    assert_eq!(t.entries.iter().map(|x| (x.round, x.req[1])).collect::<Vec<_>>(), vec![(0, 2), (1, 3)]);
+    // Decode, then the discovery pass. The fake OCR reads only Hello, so traced
+    // ink elsewhere on this real scan now asks for bounded line crops (D670).
+    let kinds: Vec<_> = t.entries.iter().map(|x| (x.round, x.req[1])).collect();
+    assert_eq!(&kinds[..2], &[(0, 2), (1, 3)]);
+    assert!(kinds.len() <= 18, "at most sixteen missing-line retries");
+    for entry in &t.entries[2..] {
+        assert_eq!((entry.round, entry.req[1], entry.req[4]), (2, 3, 7));
+        assert!(entry.req[8] > 0 && entry.req[9] > 0, "a nonempty crop");
+    }
     assert_eq!(t.entries[0].req[6], 1, "the DCT filter");
     assert!(t.entries[0].bitmap.is_some(), "an engine will read the pixels, so the transcript keeps them");
     let j = json(&m);

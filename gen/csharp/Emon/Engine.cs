@@ -343,9 +343,7 @@ public static class Engine {
         }
         Scan.ScTag(m.Nodes, m.Attrs, m.Text, m.Regions, m.Pages, d.Mask, c.Ocr);
         Tlhealth.ThWriteOcr(ev.Owords, d.Et, m.Ledger, m.Text, s.Tmp, s.Ttx);
-        if (kind == 0) {
-            Scan.ScWriteBare(m.Nodes, m.Regions, m.Pages, d.Im, m.Ledger);
-        }
+        Scan.ScWriteBare(m.Nodes, m.Regions, m.Pages, d.Im, m.Ledger);
         Rasterplan.RpSettings(m.Nodes, m.Attrs, m.Text, c.Scope);
         if (d.Fused == 1) {
             Arbiter.ArWrite(s.Afa, ev.Owords, d.Et, m.Ledger, m.Text, s.Tmp, s.Ttx);
@@ -359,7 +357,10 @@ public static class Engine {
                 emon.Port.CellsSwap(m.Regions, s.Sr);
             }
         }
+        Scan.ScTrust(m.Nodes, m.Regions, ev.Owords, d.Et, ev.Oruns);
         Scan.ScTagUnread(m.Nodes, m.Regions, d.Mask);
+        Scan.ScCleanText(m.Nodes, m.Text);
+        Scan.ScWriteEmptyRegions(ev.Olines, m.Nodes, m.Regions, m.Ledger);
         if (kind == 0) {
             EnFields(m, s, d);
         }

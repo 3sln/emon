@@ -10,8 +10,8 @@
 ;;              `view-base`). `op-models` answers which of the engine's INSTALLED models read the request: a language cell is an
 ;;              ISO 639-3 code (`chs` and `cht` name the Chinese models `chi_sim` and `chi_tra`) or, when it starts with an
 ;;              uppercase letter, an ISO 15924 script (`Cyrl` is every installed model that reads Cyrillic; `Hani` is the Han models
-;;              and Japanese). A language with no model installed is dropped (`op-dropped` names it); none left means EVERY
-;;              installed model (D038). Installed models arrive as code-point Cells separated by 0 (tessdata names exceed
+;;              and Japanese). A language with no model installed is dropped (`op-dropped` names it); none left means ONE
+;;              discovery model (English when installed, otherwise the first model; D672). Installed models arrive as code-point Cells separated by 0 (tessdata names exceed
 ;;              pack4's four chars) and are answered as indices into that list.
 ;;   ANSWER.    `op-word-lang` (the language the engine read a word in, as a request names it), `op-osd-script` (the OSD's script
 ;;              name as ISO 15924), `op-block-type` (the engine's block type as the line's `bt`), and `ox-flat`, the flat integer
@@ -322,7 +322,7 @@
 (defn ^:pub ^I32 op-models [^Cells req ^Cells inst ^:mut ^Cells out]
   (comment "Which installed models read the request, as indices into `inst` (code-point Cells separated by 0), appended to `out`;")
   (comment "answers how many. A script (`Cyrl`) is every installed model that reads it, once; a language is its model; a language")
-  (comment "with no model is dropped; none left is EVERY installed model (D038). 0 only when nothing is installed.")
+  (comment "with no model is dropped; none left is one discovery model (D672). 0 only when nothing is installed.")
   (let [^I32 base (cells-len out)
         ^I32 end (- (cells-len req) 3)
         ^I32 n (op-entry-count inst)
@@ -346,10 +346,9 @@
                 (if (>= i 0) (cells-push out i))))
           (set k (+ k 1))))
     (if (== (cells-len out) base)
-      (do (set i 0)
-          (while (< i n)
-            (do (cells-push out i)
-                (set i (+ i 1))))))
+      (do (set i (op-model-index inst 1701734144))
+          (if (< i 0) (set i 0))
+          (if (> n 0) (cells-push out i))))
     (return (- (cells-len out) base))))
 
 (defn ^I32 op-push-model-name [^I32 p ^:mut ^Cells out]
@@ -583,3 +582,17 @@
           (set i (+ i 1))))
     (an-ocr-end c at)
     (return 0)))
+
+(defn ^:pub ^I32 op-models-configured [^Cells req ^Cells inst ^I32 configured ^:mut ^Cells out]
+  (comment "D678: an explicit provider model set is authoritative when the request has no language hint. An unfiltered inventory uses discovery; a named request still wins.")
+  (if (== configured 0) (return (op-models req inst out)))
+  (let [^I32 base (cells-len out)
+        ^I32 end (- (cells-len req) 3)
+        ^:mut ^I32 k (op-lang-first req)
+        ^:mut ^I32 i 0]
+    (while (< k end)
+      (do (if (!= (rq-arg req 0 k) 0) (return (op-models req inst out)))
+          (set k (+ k 1))))
+    (while (< i (op-entry-count inst))
+      (do (cells-push out i) (set i (+ i 1))))
+    (return (- (cells-len out) base))))

@@ -151,7 +151,7 @@ type tessWord struct {
 	syms              []tessSym
 }
 type tessLine struct {
-	bx, base           [4]int32
+	bx, base          [4]int32
 	block, par, btype int32
 }
 type tessBlock struct {
@@ -283,8 +283,8 @@ func (t *tess) fulfil(req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool
 	wantSyms := flags&1 != 0
 	rx, ry, rw, rh := req.Field(plan.OcX()), req.Field(plan.OcY()), req.Field(plan.OcW()), req.Field(plan.OcH())
 	installed := t.installed()
-	// which installed models read the request is kin's (`op-models`: languages, scripts, the ones not installed dropped, none left is
-	// every model); the models go in as code points separated by 0
+	// which installed models read the request is kin's (`op-models`: languages, scripts, the ones not installed dropped, unconfigured fallback is
+	// one discovery model); the models go in as code points separated by 0
 	reqc := cellsOf(req.Rec)
 	inst := port.NewCells()
 	for i, m := range installed {
@@ -296,7 +296,7 @@ func (t *tess) fulfil(req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool
 		}
 	}
 	picked := port.NewCells()
-	ocrport.OpModels(reqc, inst, picked)
+	ocrport.OpModelsConfigured(reqc, inst, 0, picked)
 	gone := port.NewCells()
 	ocrport.OpDropped(reqc, inst, gone)
 	var dropped []rune

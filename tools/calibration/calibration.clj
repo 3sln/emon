@@ -99,9 +99,12 @@ documents (by a hash of the id) left out and applied to it; `ece-cv` and `brier-
 (defn- fit-points
   "Isotonic steps [[raw-lo cal n] ...] of rows (maps) -> the smoothed per mille accuracy per pooled run of raw values."
   [rows]
-  (let [pts (for [[raw rs] (sort-by key (group-by :conf rows))] [raw (count rs) (reduce + 0 (map :y rs))])]
-    (vec (for [[lo _hi n sy] (C/pav pts)]
-           [lo (smoothed n sy) n]))))
+  (let [pts (for [[raw rs] (sort-by key (group-by :conf rows))] [raw (count rs) (reduce + 0 (map :y rs))])
+        ;; Laplace shrinkage depends on bucket size and can reverse two PAV
+        ;; steps. Pool those smoothed steps once more, with their sample weights.
+        shrunk (for [[lo _hi n sy] (C/pav pts)] [lo n (* n (smoothed n sy))])]
+    (vec (for [[lo _hi n sy] (C/pav shrunk)]
+           [lo (long (Math/round (/ (double sy) n))) n]))))
 
 (defn fit-base
   "{[kind class] steps}: the per (kind, class) fit, a class with too few rows taking its kind's pooled fit under the

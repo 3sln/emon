@@ -35,7 +35,7 @@ func CalLookup(kind int32, cls int32, raw int32) int32 {
 	if raw < 0 {
 		return raw
 	}
-	var n int32 = 19
+	var n int32 = 30
 	var i int32 = 0
 	var hitC int32 = -1
 	var firstC int32 = -1
@@ -97,7 +97,7 @@ func CalNodeConf(nodes *port.Cells, n int32) int32 {
 		return cf
 	}
 	for a >= 0 {
-		if (model.NodeFlags(nodes, a) & model.FlScriptUnread()) != 0 {
+		if (model.NodeFlags(nodes, a) & (model.FlScriptUnread() | model.FlLowConf())) != 0 {
 			return raw
 		}
 		a = model.NodeParent(nodes, a)

@@ -291,8 +291,9 @@ public static class Rasterintest {
         emon.Testport.AssertEq(emon.Port.CellsAt(mask, 0), 0, "an attempt that asks writes nothing: the page is not yet read");
         // the turned view read: the page is done, and the evidence says the turned view was read
         FakeLines(ans, 274, 5, 1, 6, -1, -1);
+        FakeLines(ans, Plan.PuId(0, Retarget.RiOpposite()), 1, 1, 6, -1, -1);
         emon.Testport.AssertEq(PagePx(ans, rq2, bms2, 0, mask, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), oruns, olines, owords), Plan.UsDone(), "done");
-        emon.Testport.AssertEq(emon.Port.CellsAt(mask, 0), 1, "the page was OCR'd");
+        emon.Testport.AssertEq(emon.Port.CellsAt(mask, 0), 9, "the page was OCR'd and rotated");
         emon.Testport.AssertEq(Evidence.OrCount(oruns), 2, "the first pass and the turned view's reading");
         emon.Testport.AssertEq(Evidence.OrGet(oruns, 1, Evidence.OrfPass()), Evidence.OpReRotated(), "the second run is the re-rotated pass");
     }

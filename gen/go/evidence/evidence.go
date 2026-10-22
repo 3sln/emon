@@ -3833,6 +3833,11 @@ func OlfPh() int32 {
 	return 22
 }
 
+func OlfRetryGap() int32 {
+	// D670: traced ink missing from the first OCR pass; internal retry/ledger marker.
+	return 23
+}
+
 func OwfStyle() int32 {
 	return 16
 }

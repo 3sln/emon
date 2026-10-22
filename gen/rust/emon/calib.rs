@@ -28,7 +28,7 @@ pub fn cal_lookup(kind: i32, cls: i32, raw: i32) -> i32 {
     if raw < 0 {
         return raw;
     }
-    let n: i32 = 19;
+    let n: i32 = 30;
     let mut i: i32 = 0;
     let mut hit_c: i32 = -1;
     let mut first_c: i32 = -1;
@@ -88,7 +88,7 @@ pub fn cal_node_conf(nodes: &mut crate::port::Cells, n: i32) -> i32 {
         return cf;
     }
     while a >= 0 {
-        if (node_flags(nodes, a) & fl_script_unread()) != 0 {
+        if (node_flags(nodes, a) & (fl_script_unread() | fl_low_conf())) != 0 {
             return raw;
         }
         a = node_parent(nodes, a);

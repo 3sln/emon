@@ -295,8 +295,9 @@ fn test_a_frame_fed_sideways_is_read_from_its_turned_view() {
     crate::testport::assert_eq(crate::port::cells_at(mask, 0), 0, "an attempt that asks writes nothing: the page is not yet read");
     // the turned view read: the page is done, and the evidence says the turned view was read
     fake_lines(ans, 274, 5, 1, 6, -1, -1);
+    fake_lines(ans, pu_id(0, ri_opposite()), 1, 1, 6, -1, -1);
     crate::testport::assert_eq(page_px(ans, rq2, bms2, 0, mask, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), oruns, olines, owords), us_done(), "done");
-    crate::testport::assert_eq(crate::port::cells_at(mask, 0), 1, "the page was OCR'd");
+    crate::testport::assert_eq(crate::port::cells_at(mask, 0), 9, "the page was OCR'd and rotated");
     crate::testport::assert_eq(or_count(oruns), 2, "the first pass and the turned view's reading");
     crate::testport::assert_eq(or_get(oruns, 1, orf_pass()), op_re_rotated(), "the second run is the re-rotated pass");
 }

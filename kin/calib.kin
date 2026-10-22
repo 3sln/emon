@@ -23,7 +23,7 @@
 (ns emon.calib
   (:require [emon.lang :refer [I32 Cells]]
             [emon.calibdata :refer [cd-count cd-at]]
-            [emon.model :refer [sr-text sr-hidden-text sr-ocr node-conf node-src node-kind node-flags node-parent fl-script-unread]]
+            [emon.model :refer [sr-text sr-hidden-text sr-ocr node-conf node-src node-kind node-flags node-parent fl-script-unread fl-low-conf]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or bit-and bit-or]]))
 
@@ -77,6 +77,6 @@
     (if (< raw 0) (return cf))
     (if (<= cf raw) (return cf))
     (while (>= a 0)
-      (do (if (!= (bit-and (node-flags nodes a) (fl-script-unread)) 0) (return raw))
+      (do (if (!= (bit-and (node-flags nodes a) (bit-or (fl-script-unread) (fl-low-conf))) 0) (return raw))
           (set a (node-parent nodes a))))
     (return cf)))

@@ -7,7 +7,7 @@
             [emon.pdfdoc :refer [pd-open]]
             [emon.plan :refer [rec-kind rec-id rq-arg rq-nargs an-ocr an-ocr-word an-ocr-cp an-ocr-end pk-ocr]]
             [emon.ocr :refer [ox-begin ox-line ox-block ox-word ox-sym ox-sym-cp ocf-dpi]]
-            [emon.evidence :refer [ol-new ow-new ow-set os-new rl-new rl-set rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1 rlf-thick owf-sfirst owf-scount
+            [emon.evidence :refer [or-new or-set orf-pass op-re-rotated ol-set ol-new ow-new ow-set os-new rl-new rl-set rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1 rlf-thick olf-retry-gap owf-sfirst owf-scount
                                    co-new co-set cf-conf cf-ink ik-new ik-set ikf-role ir-body im-new
                                    oe-garbage oe-rule-ghost oe-corrected
                                    wd-count wd-get ln-count ln-get ol-count ol-get ow-count ow-get or-count or-get
@@ -18,13 +18,14 @@
                                    orf-bview orf-lang orf-langlen orf-osd orf-script orf-view
                                    obf-orient obf-wdir obf-btype vwf-kind vk-engine-binary wb-space wb-line-end
                                    epf-page epf-flags eg-raster ep-count]]
-            [emon.scan :refer [sc-lang sc-request sc-page sc-tag sc-tag-unread sc-mask-unread sc-unread-conf sc-eligible sc-write-bare sc-dct-span
+            [emon.scan :refer [sc-trust sc-write-empty-regions sc-on-vrule sc-clean-text sc-word-agreement sc-format-control sc-unspaced sc-word-trust sc-lang sc-request sc-page sc-tag sc-tag-unread sc-mask-unread sc-unread-conf sc-eligible sc-write-bare sc-dct-span
                                sc-emit-sel sc-prep sc-sel-base sc-xtra-ok sc-implausible sc-leader sc-amount-like sc-groups-fix]]
-            [emon.model :refer [model-init node-new node-add-src node-set-conf node-src node-conf node-flags
-                                node-add-region node-set-text node-attr attr-len page-new page-kind
-                                nk-paragraph nk-text nk-document sr-text sr-ocr sr-infer fl-ocr-only fl-low-conf fl-script-unread pk-vector pk-scanned
+            [emon.calib :refer [cal-node-conf]]
+            [emon.model :refer [model-init node-new node-add-flag node-add-src node-set-conf node-src node-conf node-flags
+                                node-text-start node-text-len node-add-region node-set-text node-attr attr-len page-new page-kind
+                                nk-paragraph nk-text nk-document sr-text sr-ocr sr-infer fl-rotated fl-ocr-only fl-low-conf fl-script-unread pk-vector pk-scanned
                                 ledger-count ledger-page ledger-reason ledger-x1 dr-background
-                                pk-image fk-ocr]]
+                                dr-ocr-ghost pk-image fk-ocr]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot bit-and]]))
 
@@ -67,7 +68,7 @@
   (assert-eq (lang-of 122 104 111 0 0 0 0 0 0 0) 6514803 "zho is chs"))
 
 (deftest test-no-hint-or-no-name-is-no-language
-  (assert-eq (lang-of 0 0 0 0 0 0 0 0 0 0) 0 "no hint: the port reads with every model it has (D038)")
+  (assert-eq (lang-of 0 0 0 0 0 0 0 0 0 0) 0 "no hint: discovery model selection belongs to the port (D672)")
   (assert-eq (lang-of 120 0 0 0 0 0 0 0 0 0) 0 "one letter says nothing")
   (assert-eq (lang-of 113 113 0 0 0 0 0 0 0 0) 0 "an unknown two-letter code")
   (assert-eq (lang-of 49 50 51 0 0 0 0 0 0 0) 0 "digits are no language")
@@ -960,3 +961,86 @@
     (st-line olines 100 200 0 1)
     (assert-eq (st-emit olines owords words lines et (new-cells) 1) 0 "a one-point dot alone is no paragraph even at high engine confidence")
     (assert-eq (bit-and (ow-get owords 0 (owf-flags)) (oe-garbage)) (oe-garbage) "the evidence retains it for the garbage ledger")))
+
+(deftest test-ocr-trust-separates-clean-words-from-junk
+  (let [^Cells ow (new-cells)
+        ^Cells et (new-cells)]
+    (cells-push et 84) (cells-push et 111) (cells-push et 116) (cells-push et 97) (cells-push et 108)
+    (cells-push et 65533) (cells-push et 124) (cells-push et 65533)
+    (ow-new ow 1 0 0 500 100 0 100 500 100 0 0 0 5 0 960 -1)
+    (ow-new ow 1 0 200 500 300 0 300 500 300 0 0 5 3 1 120 -1)
+    (ow-set ow 0 (owf-flags) 1)
+    (assert-that (>= (sc-word-trust ow et 0) 850) "clean dictionary OCR stays high")
+    (assert-that (<= (sc-word-trust ow et 1) 200) "rejected characters at low engine confidence stay low")
+    (assert-that (>= (- (sc-word-trust ow et 0) (sc-word-trust ow et 1)) 600) "scrapers can separate clean text and junk")))
+
+(deftest test-ocr-format-controls-and-unspaced-scripts
+  (assert-eq (sc-format-control 8206) 1 "OCR LRM is stripped")
+  (assert-eq (sc-format-control 8207) 1 "OCR RLM is stripped")
+  (assert-eq (sc-format-control 8295) 1 "OCR direction isolates are stripped")
+  (assert-eq (sc-format-control 1575) 0 "Arabic letters are kept")
+  (assert-eq (sc-unspaced 21407) 1 "Han words have no separator")
+  (assert-eq (sc-unspaced 12363) 1 "Kana words have no separator")
+  (assert-eq (sc-unspaced 44032) 0 "Hangul word spaces are kept")
+  (assert-eq (sc-unspaced 65) 0 "Latin word spaces are kept"))
+
+(deftest test-ocr-pass-disagreement-reduces-trust
+  (let [^Cells ow (new-cells) ^Cells et (new-cells)]
+    (cells-push et 65) (cells-push et 66)
+    (ow-new ow 1 0 0 500 100 0 100 500 100 0 0 0 1 0 900 -1)
+    (ow-new ow 1 0 0 500 100 0 100 500 100 0 0 1 1 1 900 -1)
+    (ow-set ow 0 (owf-run) 0) (ow-set ow 1 (owf-run) 1)
+    (assert-that (< (sc-word-agreement ow et 0) 1000) "two readings of the same ink disagree")
+    (ow-set ow 1 (hd-tstart) 0)
+    (assert-eq (sc-word-agreement ow et 0) 1000 "the same reading agrees")))
+
+(deftest test-a-short-detected-rule-is-not-an-ocr-word
+  (let [^Cells rules (new-cells)]
+    (st-rule rules 1000 0 500)
+    (assert-eq (sc-on-vrule rules 1 1000 250 20) 1 "a detected five-point rule also rejects a bar")))
+
+(deftest test-ocr-text-cleaning-removes-controls-and-han-separators
+  (let [^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells)
+        ^Cells text (new-cells) ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (let [^I32 t (node-new nodes (nk-text) 0) ^I32 start (cells-len text)]
+      (node-add-src nodes t (sr-ocr))
+      (cells-push text 21407) (cells-push text 32) (cells-push text 20135) (cells-push text 8206)
+      (node-set-text nodes t start 4)
+      (assert-eq (sc-clean-text nodes text) 1 "one corrected OCR text run")
+      (assert-eq (node-text-len nodes t) 2 "two adjacent Han characters")
+      (assert-eq (cells-at text (node-text-start nodes t)) 21407 "the first character stays")
+      (assert-eq (sc-clean-text nodes text) 0 "cleaning is idempotent"))))
+
+(deftest test-an-ink-region-that-retries-read-as-nothing-has-a-ledger-row
+  (let [^Cells ol (new-cells) ^Cells nodes (new-cells) ^Cells regions (new-cells) ^Cells ledger (new-cells)
+        ^Cells attrs (new-cells) ^Cells text (new-cells) ^Cells pages (new-cells) ^Cells layout (new-cells)
+        ^I32 l (ol-new ol 1 1000 2000 9000 2400 1000 2400 9000 2400 0 0 0 0)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (ol-set ol l (olf-retry-gap) 1)
+    (assert-eq (sc-write-empty-regions ol nodes regions ledger) 1 "ink without Model text is accounted for")
+    (assert-eq (ledger-reason ledger 0) (dr-ocr-ghost) "not a silent lost region")
+    (assert-eq (ledger-x1 ledger 0) 9000 "the region's own extent")
+    (let [^I32 p (node-new nodes (nk-paragraph) 0)]
+      (node-add-region nodes regions p 1 2000 2000 5000 2400))
+    (assert-eq (sc-write-empty-regions ol nodes regions ledger) 0 "a region represented in the Model is not empty")))
+
+(deftest test-rotated-ocr-trust-uses-only-the-selected-coordinate-frame
+  (let [^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells)
+        ^Cells text (new-cells) ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells ow (new-cells) ^Cells et (new-cells) ^Cells runs (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (cells-push et 65533) (cells-push et 65533) (cells-push et 65533) (cells-push et 65533) (cells-push et 65533)
+    (cells-push et 84) (cells-push et 111) (cells-push et 116) (cells-push et 97) (cells-push et 108)
+    (or-new runs 1 0)
+    (let [^I32 selected (or-new runs 1 1)] (or-set runs selected (orf-pass) (op-re-rotated)))
+    (ow-new ow 1 0 0 500 100 0 100 500 100 0 0 0 5 0 0 -1)
+    (ow-set ow 0 (owf-run) 0)
+    (ow-new ow 1 0 0 500 100 0 100 500 100 0 0 5 5 1 960 -1)
+    (ow-set ow 1 (owf-run) 1) (ow-set ow 1 (owf-flags) 1)
+    (let [^I32 p (node-new nodes (nk-paragraph) 0)]
+      (node-add-src nodes p (sr-ocr)) (node-add-flag nodes p (fl-rotated))
+      (node-add-region nodes regions p 1 0 0 500 100)
+      (sc-trust nodes regions ow et runs)
+      (assert-that (>= (node-conf nodes p) 850) "old upside-down coordinates cannot lower clean selected OCR")
+      (assert-that (>= (cal-node-conf nodes p) 750) "the scraper sees high calibrated confidence too"))))

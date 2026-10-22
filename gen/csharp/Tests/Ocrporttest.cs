@@ -205,8 +205,8 @@ public static class Ocrporttest {
         TCase1(0, 2, 99, 104, 116, 0, 1, 1, -1, "cht is chi_tra");
     }
     [Xunit.Fact]
-    public static void TestAModelThatIsNotInstalledIsDroppedAndNoneLeftIsAll() {
-        TCase1(0, 0, 102, 114, 97, 0, 2, 0, 1, "fra alone: every installed model (D038)");
+    public static void TestAModelThatIsNotInstalledIsDroppedAndNoneLeftIsOne() {
+        TCase1(0, 0, 102, 114, 97, 0, 1, 0, -1, "fra alone: one discovery model (D672)");
         TGone1(0, 0, 102, 114, 97, 0, 4, 0, 102, "fra is dropped, its name and a 0");
         TCase2(0, 0, 101, 110, 103, 0, 102, 114, 97, 0, 1, 0, -1, "eng and fra: eng");
         TGone1(0, 0, 99, 104, 115, 0, 8, 4, 115, "chs with no chi_sim installed is named chi_sim");
@@ -472,5 +472,29 @@ public static class Ocrporttest {
         TP4(v, 0, 0, 2, 0);
         emon.Testport.AssertEq(Ocrport.OxFlat(v, 9, got), -1, "a header cut short");
         emon.Testport.AssertEq(emon.Port.CellsLen(got), 0, "and nothing is written");
+    }
+    [Xunit.Fact]
+    public static void TestAnAutomaticFirstPassUsesOneModelInsteadOfAllInstalledScripts() {
+        emon.Port.Cells r = emon.Port.NewCells();
+        emon.Port.Cells inst = emon.Port.NewCells();
+        TReq1(r, 0, 0, 0, 0);
+        TInstEngRus(inst);
+        TModels(0, r, inst, 1, 0, -1, "one Latin discovery pass, no multi-script soup");
+    }
+    [Xunit.Fact]
+    public static void TestExplicitProviderLanguagesAreNotReplacedByDiscovery() {
+        emon.Port.Cells r = emon.Port.NewCells();
+        emon.Port.Cells inst = emon.Port.NewCells();
+        emon.Port.Cells @out = emon.Port.NewCells();
+        TReq1(r, 0, 0, 0, 0);
+        TInstEngJpn(inst);
+        emon.Testport.AssertEq(Ocrport.OpModelsConfigured(r, inst, 1, @out), 2, "explicit jpn+eng stays jpn+eng");
+        emon.Testport.AssertEq(emon.Port.CellsAt(@out, 1), 1, "the Japanese model is retained");
+        emon.Port.Cells auto = emon.Port.NewCells();
+        emon.Testport.AssertEq(Ocrport.OpModelsConfigured(r, inst, 0, auto), 1, "an unconfigured inventory still uses one discovery model");
+        emon.Port.Cells named = emon.Port.NewCells();
+        emon.Port.Cells picked = emon.Port.NewCells();
+        TReq1(named, 101, 110, 103, 0);
+        emon.Testport.AssertEq(Ocrport.OpModelsConfigured(named, inst, 1, picked), 1, "a named request wins over provider defaults");
     }
 }

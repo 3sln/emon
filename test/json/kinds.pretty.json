@@ -155,7 +155,7 @@
             ],
             "at": [[1, -0.05, 0, 72.5, 0.12], [2, 0.1, 1, 12.34, -1.5]],
             "src": ["text", "ocr"],
-            "conf": 793,
+            "conf": 0,
             "flags": ["low-conf", "rotated"]
           },
           {
@@ -359,7 +359,7 @@
             "text": "extremes",
             "at": [[4, -21474836.48, 21474836.47, 1, -1]],
             "src": ["text", "hidden-text", "ocr", "trace", "vector", "struct", "annot", "outline", "infer"],
-            "conf": 793,
+            "conf": 789,
             "flags": ["low-conf", "ocr-only", "text-layer-suspect", "reconstructed", "dpi-unknown", "rotated", "vertical", "script-unread"]
           },
           {
@@ -447,7 +447,7 @@
                   }
                 ],
                 "src": ["ocr", "infer"],
-                "conf": 955,
+                "conf": 400,
                 "flags": ["low-conf"]
               },
               {

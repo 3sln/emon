@@ -48,7 +48,7 @@
             "text": "Introduction",
             "at": [[1, 72, 90.5, 540, 110.25]],
             "src": ["text", "ocr", "infer"],
-            "conf": 948
+            "conf": 947
           },
           {
             "id": 3,
@@ -76,7 +76,7 @@
             ],
             "at": [[1, 72, 120, 540, 188]],
             "src": ["text", "ocr", "infer"],
-            "conf": 793
+            "conf": 789
           }
         ]
       }

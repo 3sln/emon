@@ -329,8 +329,8 @@ impl Tess {
         let want_syms = flags & 1 != 0;
         let (rx, ry, rw, rh) = (req.field(emon::plan::oc_x()), req.field(emon::plan::oc_y()), req.field(emon::plan::oc_w()), req.field(emon::plan::oc_h()));
         let installed = self.installed();
-        // which installed models read the request is kin's (`op-models`: languages, scripts, the ones not installed dropped, none left
-        // is every model); the models go in as code points separated by 0
+        // Kin selects the models. Pass whether this is the caller's explicit filtered set (--lang), not an unfiltered inventory.
+        // Model names are code points separated by 0.
         let mut reqc = cells_of(req.rec.iter().copied());
         let mut inst = Cells::new();
         for (i, m) in installed.iter().enumerate() {
@@ -342,7 +342,7 @@ impl Tess {
             }
         }
         let mut picked = Cells::new();
-        emon::ocrport::op_models(&mut reqc, &mut inst, &mut picked);
+        emon::ocrport::op_models_configured(&mut reqc, &mut inst, self.only.is_some() as i32, &mut picked);
         let mut gone = Cells::new();
         emon::ocrport::op_dropped(&mut reqc, &mut inst, &mut gone);
         let mut name = String::new();

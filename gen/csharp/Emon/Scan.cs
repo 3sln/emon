@@ -244,8 +244,8 @@ public static class Scan {
         // code packed `a * 65536 + b * 256 + c`; 0 when there is no hint or it is not one we can name, and then the
         // port reads with whatever it has (D038: no language is assumed). Chinese is `chs` or `cht` by its script (`Hant`) or
         // its region (TW, HK, MO): the port maps them to its simplified and traditional models. A three-letter primary
-        // subtag is taken as it is (`deu`, `fra`, `chi`). NO LOCALE ASSUMES ENGLISH: a document with no hint is read with
-        // every model the port has.
+        // subtag is taken as it is (`deu`, `fra`, `chi`). With no locale the hint remains absent: D672 lets the port select
+        // one installed discovery model (English when installed), rather than combining all scripts.
         int n = emon.Port.CellsLen(loc);
         int i = 0;
         int plen = 0;
@@ -1463,7 +1463,7 @@ public static class Scan {
                     dx = 0 - dx;
                 }
                 dy = yb - ya;
-                if ((dy >= 800) && ((dx * 8) <= dy)) {
+                if ((dy > 0) && ((dx * 8) <= dy)) {
                     if ((cy >= ya) && (cy <= yb)) {
                         d = cx - ((xa + xb) / 2);
                         if (d < 0) {
@@ -2565,7 +2565,7 @@ public static class Scan {
         while (n < nn) {
             pg = ScNodePage(nodes, regions, n);
             if ((pg >= 1) && (pg <= emon.Port.CellsLen(mask))) {
-                if ((emon.Port.CellsAt(mask, pg - 1) / 4) >= 1) {
+                if ((emon.Port.CellsAt(mask, pg - 1) & ScMaskUnread()) != 0) {
                     if ((Model.NodeSrc(nodes, n) & Model.SrOcr()) == Model.SrOcr()) {
                         if (Model.NkIsInline(Model.NodeKind(nodes, n)) == 0) {
                             Model.NodeAddFlag(nodes, n, Model.FlScriptUnread());
@@ -2665,6 +2665,9 @@ public static class Scan {
             }
             if ((m % 4) >= 1) {
                 s = Model.NodeSrc(nodes, n);
+                if ((m & 8) != 0) {
+                    Model.NodeAddFlag(nodes, n, Model.FlRotated());
+                }
                 if ((s & Model.SrText()) == Model.SrText()) {
                     Model.NodeSetSrc(nodes, n, (s - Model.SrText()) + Model.SrOcr());
                     if (Model.NkIsInline(Model.NodeKind(nodes, n)) == 0) {
@@ -2836,5 +2839,249 @@ public static class Scan {
             return 0;
         }
         return 1;
+    }
+    public static int ScWordAgreement(emon.Port.Cells ow, emon.Port.Cells et, int w) {
+        // D667: overlapping words from different passes must agree on their text. Ambiguous splits are left alone; a near-identical word box with a different reading reduces trust.
+        int j = 0;
+        int k = 0;
+        int same = 0;
+        int n = Evidence.OwGet(ow, w, Evidence.HdTlen());
+        while (j < Evidence.OwCount(ow)) {
+            if ((Evidence.OwGet(ow, j, Evidence.OwfRun()) != Evidence.OwGet(ow, w, Evidence.OwfRun())) && ((Evidence.OwGet(ow, j, Evidence.HdPage()) == Evidence.OwGet(ow, w, Evidence.HdPage())) && (Evidence.EvOverlapSmall(Evidence.OwGet(ow, w, Evidence.HdX0()), Evidence.OwGet(ow, w, Evidence.HdY0()), Evidence.OwGet(ow, w, Evidence.HdX1()), Evidence.OwGet(ow, w, Evidence.HdY1()), Evidence.OwGet(ow, j, Evidence.HdX0()), Evidence.OwGet(ow, j, Evidence.HdY0()), Evidence.OwGet(ow, j, Evidence.HdX1()), Evidence.OwGet(ow, j, Evidence.HdY1())) >= 800))) {
+                if (Evidence.OwGet(ow, j, Evidence.HdTlen()) == n) {
+                    k = 0;
+                    same = 1;
+                    while (k < n) {
+                        if (emon.Port.CellsAt(et, Evidence.OwGet(ow, w, Evidence.HdTstart()) + k) != emon.Port.CellsAt(et, Evidence.OwGet(ow, j, Evidence.HdTstart()) + k)) {
+                            same = 0;
+                        }
+                        k += 1;
+                    }
+                    if (same == 0) {
+                        return 700;
+                    }
+                }
+            }
+            j += 1;
+        }
+        return 1000;
+    }
+    internal static int ScWordBase(emon.Port.Cells owords, emon.Port.Cells etext, int w) {
+        int ts = Evidence.OwGet(owords, w, Evidence.HdTstart());
+        int n = Evidence.OwGet(owords, w, Evidence.HdTlen());
+        int flags = Evidence.OwGet(owords, w, Evidence.OwfFlags());
+        int score = Evidence.OwGet(owords, w, Evidence.HdConf());
+        int i = 0;
+        int latin = 0;
+        int rejected = 0;
+        int cp = 0;
+        if (score < 0) {
+            score = 0;
+        }
+        if (score > 1000) {
+            score = 1000;
+        }
+        while (i < n) {
+            cp = emon.Port.CellsAt(etext, ts + i);
+            if (((cp >= 65) && (cp <= 90)) || ((cp >= 97) && (cp <= 122))) {
+                latin += 1;
+            }
+            if ((cp == 65533) || (ScCpClass(cp) == 2)) {
+                rejected += 1;
+            }
+            i += 1;
+        }
+        if ((latin >= 3) && ((flags & 3) == 0)) {
+            score -= 180;
+        }
+        if (ScImplausible(etext, ts, n) == 1) {
+            score -= 400;
+        }
+        if (n > 0) {
+            score -= (rejected * 600) / n;
+        }
+        if ((flags & Evidence.OeGarbage()) != 0) {
+            if (score > 200) {
+                score = 200;
+            }
+        }
+        if (score < 0) {
+            score = 0;
+        }
+        return score;
+    }
+    public static int ScWordTrust(emon.Port.Cells owords, emon.Port.Cells etext, int w) {
+        return (ScWordBase(owords, etext, w) * ScWordAgreement(owords, etext, w)) / 1000;
+    }
+    internal static int ScRotatedPage(emon.Port.Cells oruns, int page) {
+        int r = 0;
+        while (r < Evidence.OrCount(oruns)) {
+            if ((Evidence.OrGet(oruns, r, 0) == page) && (Evidence.OrGet(oruns, r, Evidence.OrfPass()) == Evidence.OpReRotated())) {
+                return 1;
+            }
+            r += 1;
+        }
+        return 0;
+    }
+    public static int ScTrust(emon.Port.Cells nodes, emon.Port.Cells regions, emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Cells oruns) {
+        // D667: pure OCR nodes carry character-weighted word evidence, rather than paragraph/heading constants. Rejected words in their region also lower trust.
+        int n = 1;
+        int r = 0;
+        int w = 0;
+        int cx = 0;
+        int cy = 0;
+        int sum = 0;
+        int count = 0;
+        int weight = 0;
+        int score = 0;
+        int tagged = 0;
+        int rotated = 0;
+        int run = 0;
+        int eligible = 0;
+        int trust = 0;
+        while (n < Model.NodeCount(nodes)) {
+            if (((Model.NodeSrc(nodes, n) & Model.SrOcr()) != 0) && ((Model.NodeSrc(nodes, n) & Model.SrText()) == 0)) {
+                sum = 0;
+                count = 0;
+                r = Model.NodeRegionHead(nodes, n);
+                while (r >= 0) {
+                    rotated = 0;
+                    if ((Model.NodeFlags(nodes, n) & Model.FlRotated()) != 0) {
+                        rotated = ScRotatedPage(oruns, Model.RegionPage(regions, r));
+                    }
+                    w = 0;
+                    while (w < Evidence.OwCount(owords)) {
+                        cx = (Evidence.OwGet(owords, w, Evidence.HdX0()) + Evidence.OwGet(owords, w, Evidence.HdX1())) / 2;
+                        cy = (Evidence.OwGet(owords, w, Evidence.HdY0()) + Evidence.OwGet(owords, w, Evidence.HdY1())) / 2;
+                        eligible = 1;
+                        if (rotated == 1) {
+                            run = Evidence.OwGet(owords, w, Evidence.OwfRun());
+                            eligible = 0;
+                            if ((run >= 0) && (run < Evidence.OrCount(oruns))) {
+                                if (Evidence.OrGet(oruns, run, Evidence.OrfPass()) == Evidence.OpReRotated()) {
+                                    eligible = 1;
+                                }
+                            }
+                        }
+                        if (((eligible == 1) && (Evidence.OwGet(owords, w, Evidence.HdPage()) == Model.RegionPage(regions, r))) && (((cx >= Model.RegionX0(regions, r)) && (cx <= Model.RegionX1(regions, r))) && ((cy >= Model.RegionY0(regions, r)) && (cy <= Model.RegionY1(regions, r))))) {
+                            weight = Evidence.OwGet(owords, w, Evidence.HdTlen());
+                            if (weight > 40) {
+                                weight = 40;
+                            }
+                            if (rotated == 1) {
+                                trust = ScWordBase(owords, etext, w);
+                            } else {
+                                trust = ScWordTrust(owords, etext, w);
+                            }
+                            sum += weight * trust;
+                            count += weight;
+                        }
+                        w += 1;
+                    }
+                    r = Model.RegionNext(regions, r);
+                }
+                if (count > 0) {
+                    score = sum / count;
+                    Model.NodeSetConf(nodes, n, score);
+                    if (score < 500) {
+                        Model.NodeAddFlag(nodes, n, Model.FlLowConf());
+                    }
+                    tagged += 1;
+                }
+            }
+            n += 1;
+        }
+        return tagged;
+    }
+    public static int ScFormatControl(int cp) {
+        if ((cp == 1564) || ((cp == 8206) || (cp == 8207))) {
+            return 1;
+        }
+        if (((cp >= 8234) && (cp <= 8238)) || ((cp >= 8294) && (cp <= 8297))) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int ScUnspaced(int cp) {
+        if (((cp >= 12352) && (cp <= 12543)) || (((cp >= 13312) && (cp <= 40959)) || ((cp >= 131072) && (cp <= 195103)))) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int ScCleanText(emon.Port.Cells nodes, emon.Port.Cells text) {
+        // D669: OCR formatting controls and separators between adjacent Han/Kana characters are not content. Repoint only changed OCR text runs.
+        int n = 1;
+        int ts = 0;
+        int ncp = 0;
+        int i = 0;
+        int cp = 0;
+        int start = 0;
+        int skip = 0;
+        int changed = 0;
+        int any = 0;
+        while (n < Model.NodeCount(nodes)) {
+            if ((Model.NodeSrc(nodes, n) & Model.SrOcr()) != 0) {
+                ts = Model.NodeTextStart(nodes, n);
+                ncp = Model.NodeTextLen(nodes, n);
+                start = emon.Port.CellsLen(text);
+                i = 0;
+                changed = 0;
+                while (i < ncp) {
+                    cp = emon.Port.CellsAt(text, ts + i);
+                    skip = ScFormatControl(cp);
+                    if ((cp == 32) && ((i > 0) && ((i + 1) < ncp))) {
+                        if ((ScUnspaced(emon.Port.CellsAt(text, ts + (i - 1))) == 1) && (ScUnspaced(emon.Port.CellsAt(text, ts + (i + 1))) == 1)) {
+                            skip = 1;
+                        }
+                    }
+                    if (skip == 0) {
+                        Model.TextAppendCp(text, cp);
+                    } else {
+                        changed = 1;
+                    }
+                    i += 1;
+                }
+                if (changed == 1) {
+                    Model.NodeSetText(nodes, n, start, emon.Port.CellsLen(text) - start);
+                    any += 1;
+                } else {
+                    emon.Port.CellsDrop(text, start);
+                }
+            }
+            n += 1;
+        }
+        return any;
+    }
+    public static int ScWriteEmptyRegions(emon.Port.Cells olines, emon.Port.Cells nodes, emon.Port.Cells regions, emon.Port.Cells ledger) {
+        // D670: a represented ink gap with no Model region over it gets a ledger row, including unread crops and crops held out by the body-ink owner.
+        int l = 0;
+        int n = 0;
+        int r = 0;
+        int found = 0;
+        int rows = 0;
+        while (l < Evidence.OlCount(olines)) {
+            if (Evidence.OlGet(olines, l, Evidence.OlfRetryGap()) == 1) {
+                found = 0;
+                n = 1;
+                while ((n < Model.NodeCount(nodes)) && (found == 0)) {
+                    r = Model.NodeRegionHead(nodes, n);
+                    while ((r >= 0) && (found == 0)) {
+                        if (Model.RegionPage(regions, r) == Evidence.OlGet(olines, l, Evidence.HdPage())) {
+                            if (Evidence.EvOverlapSmall(Model.RegionX0(regions, r), Model.RegionY0(regions, r), Model.RegionX1(regions, r), Model.RegionY1(regions, r), Evidence.OlGet(olines, l, Evidence.LhX0()), Evidence.OlGet(olines, l, Evidence.LhY0()), Evidence.OlGet(olines, l, Evidence.LhX1()), Evidence.OlGet(olines, l, Evidence.LhY1())) > 100) {
+                                found = 1;
+                            }
+                        }
+                        r = Model.RegionNext(regions, r);
+                    }
+                    n += 1;
+                }
+                if (found == 0) {
+                    Model.LedgerAdd(ledger, Model.DrOcrGhost(), Evidence.OlGet(olines, l, Evidence.HdPage()), Evidence.OlGet(olines, l, Evidence.LhX0()), Evidence.OlGet(olines, l, Evidence.LhY0()), Evidence.OlGet(olines, l, Evidence.LhX1()), Evidence.OlGet(olines, l, Evidence.LhY1()), 0, Model.SrOcr());
+                    rows += 1;
+                }
+            }
+            l += 1;
+        }
+        return rows;
     }
 }
