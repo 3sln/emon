@@ -4972,7 +4972,7 @@
     (return 0)))
 
 ;; P12.10: retain every original body box claim; only fully owned bound headers
-;; and attached tails can add a claim outside the box (D1793).
+;; and attached tails can add a claim outside the box (D654).
 (defn ^I32 tb-own-claim [^Cells tb ^I32 t0 ^Cells tc ^Cells tw ^Cells wd ^Cells et
                         ^I32 w0 ^I32 w1 ^:mut ^Cells tbo ^:mut ^Cells ln ^I32 l0 ^I32 l1]
   (let [^:mut ^I32 w w0 ^:mut ^I32 k t0 ^:mut ^I32 c 0 ^:mut ^I32 i 0
@@ -5055,7 +5055,7 @@
           (if (< between 2) (cells-set tb (+ (* k TBS) 30) best))))
     (return 0)))
 
-;; D1791: model-aligned foot rows following selection.
+;; D652: model-aligned foot rows following selection.
 (defn ^I32 tb-model-tail [^Cells wd ^Cells et ^I32 w0 ^I32 w1 ^:mut ^Cells tb ^I32 k
                           ^:mut ^Cells tc ^:mut ^Cells tw ^Cells tx ^Cells tbk
                           ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg ^:mut ^Cells pr ^:mut ^Cells so]
