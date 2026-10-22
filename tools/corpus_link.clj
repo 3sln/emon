@@ -12,7 +12,8 @@
 (ns corpus-link
   (:require [babashka.fs :as fs]
             [clojure.string :as str]
-            [corpus :as c]))
+            [corpus :as c]
+            [babashka.process :as process]))
 
 (def link-path (str (fs/path c/repo-root "corpus")))
 
@@ -172,6 +173,12 @@
 
 (defn -main [& args]
   (let [args (vec args)
+        _ (when (some #{"--guard"} args)
+            (guard!)
+            (when-let [task (second (drop-while #(not= % "--task") args))]
+              (apply process/shell "python3" "tools/shards/corpus.py" "require" task
+                     (drop 2 (drop-while #(not= % "--task") args))))
+            (System/exit 0))
         opt (second (drop-while #(not= % "--dir") args))]
     (when (and (some #{"--dir"} args) (not (seq opt))) (die "--dir needs a path"))
     (doseq [a args :when (and (str/starts-with? a "--") (not (#{"--check" "--guard" "--dir"} a)))]

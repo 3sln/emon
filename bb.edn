@@ -14,14 +14,16 @@
          :task (shell "kin/scripts/check")}
   unit  {:doc "Do the laws hold as native tests on every target (the C# arm needs a .NET 8+ SDK: without one it SKIPS loudly, `EMON_SKIP_CSHARP=1` leaves it out, P9.2)?  bb unit [go|rust|java|csharp|red [ARM]]"
          :depends [corpus-guard]
-         :task (apply shell "kin/scripts/unit" *command-line-args*)}
+         :task (do (apply shell "bb" "tools/corpus_link.clj" "--guard" "--task" "unit" *command-line-args*)
+                   (apply shell "kin/scripts/unit" *command-line-args*))}
   plan {:doc "The plan/fulfil protocol: a transcript recorded on Rust, replayed on Go, identical evidence (P2.5)."
         :task (shell "kin/scripts/plan")}
   slice {:doc "The first vertical slice on the Rust host, the Go host (P2.1), the Java host when a JDK 22+ is there (P9.1; EMON_SKIP_JAVA=1 leaves it out) AND the C# host when a .NET 8+ SDK is there (P9.2; EMON_SKIP_CSHARP=1 leaves it out), and in a headless browser (the WASM binding and JS SDK, P9.3) when the toolchain is there: the Engine API's native tests, then born-digital PDFs through the driver to JSON and HTML, in memory and from a 512-byte async source, against the goldens (P1.10); in the browser through each of SPEC 13.1's byte-source adapters; the C binding (a C test program and the C driver, when a C compiler is there; EMON_SKIP_C=1 leaves it out, P9.4) and the babashka pod (loaded by babashka and driven through its driver; EMON_SKIP_POD=1 leaves it out, P9.4).  bb slice [--update]"
          :task (apply shell "bb" "kin/scripts/slice" *command-line-args*)}
   identity {:doc "Every driver arm over the corpus of (input, transcript) pairs gives byte-identical JSON, HTML, evidence and refusals: Rust and Go, four byte-source adapters each, a 512-byte async source, and the transcript recorded on one host replayed on the other (P2.2, SPEC 14.1.5); plus the Java host's four arms and its record/replay trip when a JDK 22+ is there (P9.1; EMON_SKIP_JAVA=1 leaves it out); plus the C# host's four arms and its record/replay trip when a .NET 8+ SDK is there (P9.2; EMON_SKIP_CSHARP=1 leaves it out); plus the browser (the Rust host built for wasm32, driven by the JS SDK in headless Chrome; five byte-source adapters, record and replay across hosts, the asset fixtures; P9.3) when the toolchain is there (EMON_SKIP_WASM=1 leaves it out); plus the C binding's five arms (the one-shot over bytes, a lazy pread source and a spooled stream, the step API, the step API over 512-byte chunks) and its record/replay trip when a C compiler is there (P9.4; EMON_SKIP_C=1 leaves it out); plus the babashka pod's two arms (a path, base64 bytes) (P9.4; EMON_SKIP_POD=1 leaves it out).  bb identity [--full] [--only S] [--corpus [--limit N] [--sample K]]"
             :depends [corpus-guard]
-            :task (apply shell "bb" "kin/scripts/identity" *command-line-args*)}
+            :task (do (apply shell "bb" "tools/corpus_link.clj" "--guard" "--task" "identity" *command-line-args*)
+                   (apply shell "bb" "kin/scripts/identity" *command-line-args*))}
   wasm {:doc "The browser checks beyond identity (P9.3): the wasm module imports nothing; a URL fixture is read by Range and fetches measurably less than its length; the source's faults are named; asset.bytes() and asset.blob(); tesseract.js through plan/fulfil, its transcript replayed natively; the JS heap at the 32 MiB assets-bytes default, in inline and external modes. NOT a gate (needs a browser; `bb slice` and `bb identity` carry the browser arm and skip it loudly).  bb wasm"
         :task (shell "kin/scripts/wasm")}
   c {:doc "The C binding (P9.4, D471-D476): the Rust host behind host/c/include/emon.h, built as libemon (cdylib, staticlib) and driven by a C test program and a C driver compiled with the system C compiler: the one-shot calls over bytes and a lazy source, the step API, errors by category and name, kin's option text, assets, record/replay, free, a panic that does not cross, a small caller stack; the header held to the library. Skips LOUDLY without a C compiler (EMON_SKIP_C=1 leaves it out). NOT a gate on its own: `bb slice` runs the same test and the C driver's sections, `bb identity` the C arms.  bb c"
@@ -30,24 +32,28 @@
        :task (shell "bb" "kin/scripts/pod")}
   image {:doc "The ImageDecode port (P6.1, D187-D190): every image fixture of test/image decoded by Rust, Go, Java and C# (and converted alike by the C binding and the pod, P9.5), PNG and TIFF to exactly the pixels ImageMagick says, JPEG within a stated tolerance, refusals by name, the same through a source that misses.  bb image [--corpus]"
          :depends [corpus-guard]
-         :task (apply shell "bb" "kin/scripts/image" *command-line-args*)}
+         :task (do (apply shell "bb" "tools/corpus_link.clj" "--guard" "--task" "image" *command-line-args*)
+                   (apply shell "bb" "kin/scripts/image" *command-line-args*))}
   embedders {:doc "The Rust and Go public API surfaces (names, arities) compared with each other and with SPEC 3.9/13, the Java and C# surfaces held to SPEC 3.9/13's names (P9.1, P9.2), the C binding's header and ABI against the Rust file, the browser's exports and SPEC 13 and the pod's described vars against its arms (P9.4), and no filesystem in any host library or generated module (P2.3, D058)."
              :task (shell "bb" "kin/scripts/embedders")}
   limits {:doc "Every bound: its name, default and range (read from kin/limits.kin), what happens at it (breach, budget, reserved), where kin and the hosts read it, which scenario or test exercises it, and the flags (a limit nothing reads or nothing tests); the inventory of hard-coded bounds counted by class (P10.4, D477, nome's `bb limits`). A REPORT, not a gate. --inventory lists every bound; --run also puts each scenario of test/limits/scenarios.edn through every host's driver (the bound set low gives the named error or a different bundle, the same on all four hosts, and the default said aloud is the unset run).  bb limits [--inventory] [--run [--hosts H,..] [--only ID,..]]"
           :task (apply shell "bb" "tools/limits/limits.clj" *command-line-args*)}
   repeat {:doc "Run vs run, serial vs eight conversions at once, and the document with its objects in reverse file order: byte-identical, on Rust and Go and, where their toolchains are, Java, C#, the C binding and the pod (P2.4, SPEC 12.2; P9.5).  bb repeat [--full] [--only S] [--corpus [--limit N] [--sample K]]"
           :depends [corpus-guard]
-          :task (apply shell "bb" "kin/scripts/repeat" *command-line-args*)}
+          :task (do (apply shell "bb" "tools/corpus_link.clj" "--guard" "--task" "repeat" *command-line-args*)
+                   (apply shell "bb" "kin/scripts/repeat" *command-line-args*))}
   fuzz {:doc "Mutate PDFs (blind and object-level: keys, values, counts, deep nesting, cycles, filters, streams, content, CMaps, fonts, image dictionaries) and PNG/JPEG/TIFF images (chunks, segments, directories), from the fixtures and generated hostile seeds; run every mutant through Rust, Go, Java and C# (the kin probe) and the whole conversion as each host's driver (memory and a 512-byte async source; Java, C#, the C binding and the pod on a sample of the files, `--extra-every`), the browser too when its toolchain is there (it is a normal arm since P9.5, D495): no panic, no hang, peak resident set under a bound, hosts agree on the error name or the output byte for byte, async = memory (P2.12, P10.5). No args: the fixed-seed small budget plus every committed regression fixture (a gate).  bb fuzz [--seed S] [--cases N] [--hosts all] [--engine-every K] [--only I --dump F] [--replay FILE...]"
         :task (apply shell "bb" "tools/fuzz/fuzz.clj" *command-line-args*)}
   fuzz-long {:doc "The large fuzz run (P10.5): NOT a gate. 20000 cases by default, or until --budget-s seconds; prints how many inputs ran and every distinct failure (each minimised and saved under test/fuzz/crashers/).  bb fuzz-long [N] [--budget-s S] [--seed S] [--engine-every K] [--limits default --rss-mb M]"
              :task (apply shell "bb" "tools/fuzz/fuzz.clj" "--long" *command-line-args*)}
   ocr  {:doc "Real Tesseract transcripts replayed on Rust and Go (P2.6, P6.5): the spike's page to one evidence dump and a CER, and the committed scans (test/ocr/scan/) through the whole Engine (and the Java Engine, P9.1, when a JDK 22+ is there, and the C# Engine, P9.2, when a .NET 8+ SDK is there) to one Model, JSON and HTML, with the accuracy ratchet of `emon-replay`; no engine runs. Recording is tools/ocr/record.clj and record-scan.clj (live, not gates)."
         :task (apply shell "kin/scripts/ocr" *command-line-args*)}
-  receipts {:doc "Live receipt measurement (non-gate). bb receipts [--n N] [--set sroie|cord] [--report]"
-            :task (apply shell "bb" "-cp" "tools:tools/lib" "tools/receipts/receipts.clj" *command-line-args*)}
+  receipts {:doc "Live receipt measurement (non-gate). bb receipts [--n N] [--set sroie,cord,expressexpense-srd] [--report]"
+            :task (do (apply shell "bb" "tools/corpus_link.clj" "--guard" "--task" "receipts" *command-line-args*)
+                   (apply shell "bb" "-cp" "tools:tools/lib" "tools/receipts/receipts.clj" *command-line-args*))}
   ocr-live {:doc "RUST ONLY by design (a live recorder, P9.5): LIVE Tesseract over the 55 synthetic scans (the scoreboard's emon-live, ratcheted) and a sample of FUNSD, SROIE and CORD gold: NOT a gate (needs Tesseract, takes minutes; P6.5, D216).  bb ocr-live [--update] [--no-gold] [--gold-n N]"
-            :task (apply shell "bb" "tools/ocr/live.clj" *command-line-args*)}
+            :task (do (apply shell "bb" "tools/corpus_link.clj" "--guard" "--task" "ocr-live" *command-line-args*)
+                   (apply shell "bb" "tools/ocr/live.clj" *command-line-args*))}
   render {:doc "A real pdfium transcript (pages, layers, crops, failures) replayed on Rust and Go (and Java and C#, P9.5): identical dump and pixels; layers and crops held to what they are (P6.2, D127). Recording it is `bb render-record` (live, not a gate)."
           :task (apply shell "kin/scripts/render" *command-line-args*)}
   render-record {:doc "RUST (and Go) ONLY by design (a live recorder, P9.5): record the render cases LIVE with the pinned pdfium and measure: --go (Rust vs Go pixels), --compare-build (a year-older pdfium), --scratch (do not overwrite the committed transcript). NOT a gate (P6.2, D127).  bb render-record [--go] [--compare-build] [--scratch]"
@@ -64,13 +70,15 @@
                       :task (apply shell "bb" "tools/pdfium_wasm/record.clj" *command-line-args*)}
   png-check {:doc "Do independent decoders (ImageMagick, java.util.zip) read emon's canonical PNGs to the same pixels; size against zlib level 6 (P3.11, D117).  bb png-check [--update-digests]"
              :depends [corpus-guard]
-             :task (apply shell "kin/scripts/png-check" *command-line-args*)}
+             :task (do (apply shell "bb" "tools/corpus_link.clj" "--guard" "--task" "png-check" *command-line-args*)
+                   (apply shell "kin/scripts/png-check" *command-line-args*))}
   tessdata-fetch {:doc "Fetch pinned, SHA-256 checked Apache-2.0 OCR models into .cache/tessdata. bb tessdata-fetch [--langs eng,spa,...]"
                   :task (apply shell "bb" "tools/tessdata/fetch.clj" *command-line-args*)}
   ink {:doc "How well do kin's ink layers separate body ink from stamps, seals, signatures and watermarks, and how close is the deskew, on P6.6's colour and overlay scans of known truth (P6.3, D197). NOT a gate; needs poppler, ImageMagick and corpus/.  bb ink [--go] [--limit N] [--rebuild]"
        :task (apply shell "bb" "kin/scripts/ink" *command-line-args*)}
   trace {:doc "How well does kin's tracer find rules, tints, text lines (watermarks too), rings and rects: against the vector paths of the no-text renders, the text layer's lines, the PDF's own watermark matrix, and (live) mapo80's labelled stamps; counts and time per page, Rust and Go (P6.4, D252-D258). NOT a gate; needs poppler, ghostscript, qpdf, ImageMagick.  bb trace [--go] [--limit N] [--only STEM] [--rebuild] [--mapo N]"
-         :task (apply shell "bb" "kin/scripts/trace" *command-line-args*)}
+         :task (do (apply shell "bb" "tools/corpus_link.clj" "--guard" "--task" "trace" *command-line-args*)
+                   (apply shell "bb" "kin/scripts/trace" *command-line-args*))}
   asset {:doc "Are the opt-in assets (assets=images, figures) right, by what is not kin: both drivers over P3.12's fixtures give the same JSON, HTML in three modes and asset files; every sha256 and byte count is its file's; every PNG decodes (ImageMagick) to the generator's pixels, every JPEG is poppler's extraction; the goldens (P3.13, D117); a codec image replays the transcript `bb asset-record` made on both hosts and every decode is held to poppler and the generator (P6.1a); and at figures the committed pdfium transcripts replay to identical JSON, HTML and asset files on both hosts, every crop is its computed rectangle and the host's pixels, within a bound of pdftoppm (P8.5, D351).  bb asset"
          :task (shell "kin/scripts/asset-check")}
   asset-record {:doc "Record the codec images of the asset fixtures LIVE (DCT, CCITT, and JPX through OpenJPEG, JBIG2 through jbig2dec) into test/assets/transcripts/, which `bb asset` and `bb identity` replay on Rust and Go. NOT a gate: needs libopenjp2 and libjbig2dec (P6.1a, D117, D336).  bb asset-record [--lib=DIR] [--only STEM]"
@@ -80,9 +88,11 @@
   rederive {:doc "Re-derive every committed digest and golden that a change of outputs (a calibration refit, a conf value, a node change) moves, REPLAY ONLY (no pdfium, no Tesseract, nothing live): emit, the json/html/para/heading/table goldens, `slice --update`, the digests of fusion, artifacts, seals, sealpx, sigs, retarget and the figures, and the calibration rows of the scoreboard entries the replay gates hold; then lists what changed (git diff --stat over test/ and gen/). NOT a gate; a tree that is consistent gives no diff. --check: every replay gate has a re-derivation registered (also run by `bb ci coverage`). D488.  bb rederive [--check | --list | --only ID,..]"
             :task (apply shell "bb" "tools/rederive.clj" *command-line-args*)}
   png-bench {:doc "ms per target to write a real scanned page and a photo as PNG, and whether the four write the same file (NOT a gate; needs corpus/).  bb png-bench [N]"
-             :task (apply shell "kin/scripts/png-bench" *command-line-args*)}
+             :task (do (apply shell "bb" "tools/corpus_link.clj" "--guard" "--task" "png-bench" *command-line-args*)
+                   (apply shell "kin/scripts/png-bench" *command-line-args*))}
   perf {:doc "One comparator per bet (P10.3, D409, SPEC 12.3, D092's 2x rule): kin-generated Rust against flate2/fdeflate/png and hand-written natives (inflate, deflate, PNG filters, LZW, Otsu/Sauvola/union-find, the tracer's runs, the content interpreter against pdftotext) on fixed inputs, median of N interleaved runs, the ratio, answers checked, machine load recorded. A REPORT, not a gate, wired into nothing. --check is an OPTIONAL regression check against tools/perf/baseline.edn (quick inputs, generous margin).  bb perf [--quick] [--reps N] [--only BET,..] [--no-pdf] [--checked] [--update] | bb perf --check [--margin M]"
-        :task (apply shell "bb" "tools/perf/perf.clj" *command-line-args*)}
+        :task (do (apply shell "bb" "tools/corpus_link.clj" "--guard" "--task" "perf" *command-line-args*)
+                   (apply shell "bb" "tools/perf/perf.clj" *command-line-args*))}
   samples {:doc "Regenerate the comparison samples: every source in samples/ converted LIVE by the Rust driver (pinned pdfium, Tesseract, default options) into NAME.html, NAME.json (and NAME.assets.html for the figures document), and samples/index.html rebuilt, one conversion at a time. NOT a gate (needs the pinned pdfium and Tesseract; minutes; samples/README.md).  bb samples [NAME ...]"
            :task (apply shell "bb" "tools/samples.clj" *command-line-args*)}
   drift {:doc "Is the committed generated code what the sources say?"
@@ -94,7 +104,8 @@
   calibration {:doc "How well do the Model's confidences say how often they are right: reliability (ten bins), ECE and Brier per node kind, source class, corpus category and run, over the committed synthetic corpus as the real pipeline converts it (the committed OCR and fusion replays included). A report, not a gate (the gate is the conf-ece-*/conf-brier-* rows of `bb accuracy`). --write: the committed data (test/calibration/); --fit: fit the per-kind isotonic map of SPEC 9.6 from RAW confidences and write kin/calibdata.kin; --refit: the whole recalibration (identity table, bb emit, collect, fit, bb emit) (P10.1, D370-D374).  bb calibration [--write | --fit | --refit]"
                :task (apply shell "bb" "tools/calibration/calibration.clj" *command-line-args*)}
   baselines {:doc "The field's numbers (P2.10, SPEC 14.4, D339-D342): pinned pdfplumber, pymupdf4llm, docling and Tesseract run offline over the scored corpus, scored by the same scorer, recorded as reference lines under test/scoreboard.edn :references. NOT a gate, never in bb gates (needs the Python environments of tools/oracle/; minutes to an hour).  bb baselines [--setup | --extract | --score | --report] [--force] [TOOL...]"
-             :task (apply shell "bb" "tools/accuracy/baselines.clj" *command-line-args*)}
+             :task (do (apply shell "bb" "tools/corpus_link.clj" "--guard" "--task" "baselines" *command-line-args*)
+                   (apply shell "bb" "tools/accuracy/baselines.clj" *command-line-args*))}
   fusion {:doc "Fusion on real renders and a real OCR engine's reading of BORN-DIGITAL pages, replayed from transcripts: recorded on Rust (pdfium and Tesseract) through the whole Engine with its default settings (born-digital pages OCR'd under `always`, P7.S), replayed on Rust and Go (and the Java Engine when a JDK 22+ is there, P9.1, and the C# Engine when a .NET 8+ SDK is there, P9.2) to the identical bundle; the born-digital contract per document (a healthy font is never replaced by OCR: CER at most the no-engine run's + 0.0005, tl-override 0), the graphics contract per document (the tables of an image-free document are the vector source's, cell for cell, D222), the broken-mapping documents where OCR now wins, win rates, the `emon-fusion` ratchet (P7.3, D285-D290; P7.S, D200-D201). Recording is `bb fusion-record` (live, not a gate)."
           :task (apply shell "bb" "kin/scripts/fusion" *command-line-args*)}
   fusion-record {:doc "Record the fusion replay set LIVE: the whole Engine with pdfium and Tesseract and its default settings (recorded `--no-retarget`: slim transcripts), into test/fusion/replay/. NOT a gate (needs the pinned pdfium and Tesseract; P7.3).  bb fusion-record [--artifacts | --digests] [ID...]   (--artifacts: the watermark fixtures of test/artifacts, P7.5; --digests: replay the committed transcripts and rewrite DIGESTS.edn, no live engine)"
@@ -110,7 +121,8 @@
   sigs-record {:doc "Record the signature fixtures LIVE, with the bitmaps the page units read, into test/signatures/replay/. NOT a gate (needs Tesseract, and the pinned pdfium for a born-digital fixture; P8.3).  bb sigs-record [ID...]"
                :task (apply shell "bb" "tools/sigs/record.clj" *command-line-args*)}
   stamp-ghost {:doc "mapo80's `stamp-ghost` LIVE (P8.2, D209, D418): the share of OCR words inside a labelled stamp that reach the body, over a deterministic sample wrapped as scan PDFs. NOT a gate (needs corpus/seals/mapo80-stamps, ImageMagick and Tesseract; nothing of the set is committed).  bb stamp-ghost [--n N] [--bin PATH] [--set val|test]"
-               :task (apply shell "bb" "tools/seals/stamp_ghost.clj" *command-line-args*)}
+               :task (do (apply shell "bb" "tools/corpus_link.clj" "--guard" "--task" "stamp-ghost" *command-line-args*)
+                   (apply shell "bb" "tools/seals/stamp_ghost.clj" *command-line-args*))}
   sealpx-record {:doc "Record the seals-from-pixels fixtures LIVE, with the bitmaps the page units read, into test/sealpx/replay/. NOT a gate (needs Tesseract, and the pinned pdfium for a born-digital fixture; P8.2).  bb sealpx-record [ID...]"
                  :task (apply shell "bb" "tools/sealpx/record.clj" *command-line-args*)}
   gfuse {:doc "Graphics fusion (P7.G, SPEC 9.9, 9.3, D221-D224, D325-D331, D512-D519): ruled, unruled, zebra, tinted, soft-masked and hidden-rule tables, a table in an image and scans of them, replayed from transcripts of real pdfium renders and Tesseract readings WITH the pixels the tracer reads, on Rust and Go (and on Java, C# and the C binding where their toolchains are) to the identical bundle; the `emon-gfuse` ratchet (rule and fill P/R by length and area, table-adj F1, TEDS-lite, ghost-rate) over them; the fused rules and fills against the vector source alone and against the truth, the rule ghosts, and the gfuse stage within 5 ms a page (RunStats). Recording is `bb gfuse-record` (live, not a gate)."
@@ -118,7 +130,8 @@
   gfuse-measure {:doc "The graphics-fusion measures of P7.G (D512-D519): rule and fill P/R by length and area of the vector source alone, the tracer alone and the fused run; TEDS-lite and ICDAR adjacency before and after (--before BIN: a driver built with graphics fusion off); twin-gap; rule ghosts; the document unit's time a page (--live: the fused run's, with pdfium and Tesseract). A report, not a gate (reads the committed transcripts of test/fusion/graphics/).  bb gfuse-measure [--before BIN] [--per-doc] [--live]"
                  :task (apply shell "bb" "-cp" "tools:tools/lib" "tools/fusion/gfuse_measure.clj" *command-line-args*)}
   gfuse-icdar {:doc "ICDAR 2013 tables LIVE against graphics fusion (P7.G, D512-D519; D182): --record DIR converts each document with pdfium and Tesseract and records the answers with their pixels; --score DIR replays them through the plain driver (and --driver=LABEL=BIN: another build, e.g. one with gf-fuse skipped) and scores block-table P/R, table-teds-lite and table-adj-f1; --vector scores the vector source alone. NOT a gate (needs corpus/ and the live engines; minutes).  bb gfuse-icdar --record DIR | --score DIR [--driver=L=BIN] [--per-doc] | --vector"
-                :task (apply shell "bb" "-cp" "tools:tools/lib" "tools/fusion/icdar_live.clj" *command-line-args*)}
+                :task (do (apply shell "bb" "tools/corpus_link.clj" "--guard" "--task" "gfuse-icdar" *command-line-args*)
+                   (apply shell "bb" "-cp" "tools:tools/lib" "tools/fusion/icdar_live.clj" *command-line-args*))}
   gfuse-record {:doc "Record the graphics-fusion fixtures LIVE, with the bitmaps the page units read (cut down to what a replay reads), into test/fusion/graphics/. NOT a gate (needs Tesseract and the pinned pdfium; P7.G).  bb gfuse-record [ID...] | bb gfuse-record --digests  (--digests: NO live engine; replay the committed transcripts and rewrite DIGESTS.edn)"
                 :task (apply shell "bb" "tools/fusion/record-graphics.clj" *command-line-args*)}
   retarget {:doc "Targeted re-OCR rounds (P7.4, SPEC 8.3, 7.3, D196, D207, D343-D349): scanned and born-digital documents whose first OCR pass calls for the body-ink view, the quarter-turned view, the lines and the table cells read again, replayed from transcripts WITH the pixels the page units read, on Rust and Go (and on Java, C# and the C binding where their toolchains are, P9.5) to the identical bundle; at most 5 rounds and 24 targeted requests a page, every kin-made view named with its pixel hash, the body no worse than the run with the hidden setting `no-retarget`, and a replay of one other pixel is `transcript-miss`. Recording is `bb retarget-record` (live, not a gate)."
@@ -128,7 +141,8 @@
   fusion-bench {:doc "What OCR costs, by stage, and what each `ocr-scope` gives for it: per page the render, OCR (first pass and targeted), page-unit kin, document-unit time, requests and rounds, peak memory, and `full` against `witness` in time and accuracy (P7.4, P7.S, D200, D210; SPEC 12.3). NOT a gate (needs Tesseract and the pinned pdfium).  bb fusion-bench [--born --scopes] [--scans[=VARIANT,...]] [--born] [--no-retarget] [--ocr-scope=S] [ID...]"
                 :task (apply shell "bb" "tools/fusion/bench.clj" *command-line-args*)}
   parbench {:doc "What `parallel=N` buys on a real document (P10.2, D510; SPEC 12.1): the live Rust, Go, Java and C# drivers (Tesseract, and pdfium where the driver has it) run a 6-page scan and a 152-page born-digital PDF of the public corpus at N = 1, 2, 4, 8, one run at a time, N interleaved within a repetition: wall time, peak resident set, the machine's load beside each figure, and the SHA-256 of the output, which must be N=1's. NOT a gate (needs corpus/, Tesseract, the pinned pdfium and the live drivers; see the head of the file).  bb parbench [--docs scan,born,fusion] [--hosts rust,go,java,csharp] [--n 1,2,4,8] [--reps 3] [--out FILE]"
-            :task (apply shell "bb" "tools/parbench/parbench.clj" *command-line-args*)}
+            :task (do (apply shell "bb" "tools/corpus_link.clj" "--guard" "--task" "parbench" *command-line-args*)
+                   (apply shell "bb" "tools/parbench/parbench.clj" *command-line-args*))}
   align {:doc "Cross-source alignment (P7.1, D278-D280): six fusion documents rendered at 300 dpi with their text and read by Tesseract, replayed on Rust and Go (and Java and C#, P9.5) to identical correspondence groups; coverage, precision, the broken-mapping signature and the time held. Recording is `bb align-record` (live, not a gate)."
          :task (apply shell "bb" "kin/scripts/align" *command-line-args*)}
   align-record {:doc "Record the alignment fixtures LIVE: pdfium renders and Tesseract's reading, on the Rust host, into test/fusion/align/. NOT a gate (needs the pinned pdfium and Tesseract; P7.1).  bb align-record [ID...]"
@@ -138,22 +152,26 @@
   fusion-report {:doc "What fusion did, from evidence dumps (version 2): per-source win rates, per-rule and per-defence counts, per document and pooled (P6.6, D206). NOT a gate.  bb fusion-report DUMP... | --self-test"
                  :task (apply shell "bb" "-cp" "tools:tools/lib" "tools/accuracy/fusion_report.clj" *command-line-args*)}
   fusion-live {:doc "The live fusion runs: `emon-live` with the policy switched on (born-digital pages OCR'd and fused) over every pdf, pdf-tagged, scan, scan-color and scan-ovl document, D201's born-digital contract against `emon`, recorded in the scoreboard with --update (P7.S); and the live sets (SROIE derived, mapo80 val; never committed, tools/fusion/live-sets.edn): `stamp-ghost` from evidence dumps (P6.6, D209). NOT a gate (needs pdfium and Tesseract; minutes).  bb fusion-live [--update] [--scope full|witness] | --stamps [--dumps DIR] | --self-test"
-               :task (apply shell "bb" "-cp" "tools:tools/lib" "tools/fusion/fusion_live.clj" *command-line-args*)}
+               :task (do (apply shell "bb" "tools/corpus_link.clj" "--guard" "--task" "fusion-live" *command-line-args*)
+                   (apply shell "bb" "-cp" "tools:tools/lib" "tools/fusion/fusion_live.clj" *command-line-args*))}
   ghost-health {:doc "Do the OCR blocks over a watermark, seal, signature or blank paper score under the blocks of the page's text? On P6.6's overlay scans of known truth, kin's own ink layers and `hl-page` (P7.2, D282). NOT a gate; needs Tesseract, rustc, poppler, ImageMagick and the rasters `bb ink` builds.  bb ghost-health [--limit N] [--reocr] [--verbose]"
                 :task (apply shell "bb" "tools/fusion/ghost_health.clj" *command-line-args*)}
   import {:doc "Run every public-dataset importer into corpus/_gold/, validate, report counts (NOT a gate: the corpus is not in git).  bb import [--limit N] [name ...]"
           :task (apply shell "bb" "tools/import/import_all.clj" *command-line-args*)}
   gates {:doc "Run every gate; fail if one exits non-zero or prints no score.  bb gates [GATE...] runs only those (CI shards, D266)."
          :depends [corpus-guard]
-         :task (apply shell "kin/scripts/gates" *command-line-args*)}
+         :task (do (apply shell "bb" "tools/corpus_link.clj" "--guard" "--task" "gates" *command-line-args*)
+                   (apply shell "kin/scripts/gates" *command-line-args*))}
+  corpus {:doc "Shard status, fetch and safe prune. bb corpus status | fetch [ids|--needed] | prune [--dry-run|--yes]"
+          :task (apply shell "python3" "tools/shards/corpus.py" *command-line-args*)}
   corpus-push {:doc "Zip each corpus category and push to S3-compatible storage (.env).  bb corpus-push [--dry-run] [category...]"
                :task (apply shell "bb" "tools/corpus.clj" "push" *command-line-args*)}
   corpus-pull {:doc "Pull changed archives from S3-compatible storage into corpus/.  bb corpus-pull [--dry-run] [--force] [category...]"
                :task (apply shell "bb" "tools/corpus.clj" "pull" *command-line-args*)}
   corpus-link {:doc "Keep the corpus on another volume: make corpus/ a symlink to :corpus-dir of the gitignored local.edn (or --dir). Refuses a real corpus/ directory; never moves data. --check: it resolves, the volume is mounted, the index is consistent.  bb corpus-link [--check] [--dir PATH]"
                :task (apply shell "bb" "tools/corpus_link.clj" *command-line-args*)}
-  corpus-guard {:doc "Fail fast, readably, when corpus/ is a dangling symlink (the external drive is unplugged). Silent otherwise. The corpus-reading gates depend on it."
-                :task (shell "bb" "tools/corpus_link.clj" "--guard")}
+  corpus-guard {:doc "Fail fast, readably, when corpus/ is a dangling symlink (the external drive is unplugged). Silent otherwise. --task TASK also checks its declared shards and names a fetch command."
+                :task (apply shell "bb" "tools/corpus_link.clj" "--guard" *command-line-args*)}
   corpus-index-sha {:doc "Print the SHA-256 of the remote index.json (the CI corpus cache key, D266). NOT a gate."
                     :task (shell "bb" "tools/corpus.clj" "index-sha")}
   ci {:doc "CI helpers (D266, P11.7, D528): bb ci coverage (every gate is in a shard of ci/gate-map.edn and a workflow runs the shards; the map covers every tracked file) | map-coverage [--self-test] | plan --base REF [--head REF] [--format edn|json] [--all] (the gates a change calls for; fails on an unmapped path; a version-only diff plans nothing, D550) | shards | verify-plan --head SHA [--mode scoped|full] (what verify.yml runs on main: the newest verified ancestor as base, the plan since it, whether the release archives are rebuilt) | core (the fast core, timed) | laws-record ARM LOG DIR | laws-compare DIR. NOT a gate."

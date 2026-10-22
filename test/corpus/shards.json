@@ -1,0 +1,1186 @@
+{
+  "version": 1,
+  "digest_format": "sha256(sorted(path + NUL + file_sha256_hex + LF)); corpus-relative UTF-8 paths; ignore ._* everywhere",
+  "default": [
+    "agami-indian-bank-statements",
+    "arxiv-papers",
+    "bank-statement-benchmark",
+    "berkshire-annual-report",
+    "cuad-contracts",
+    "derived-formats-degradations",
+    "doclaynet-test",
+    "gov-reports-layout",
+    "gov-reports-tables",
+    "icdar2013-table-competition",
+    "irs-forms",
+    "pdfa-eng-wds-shard0",
+    "sroie2019",
+    "udhr-and-wiki-multiscript"
+  ],
+  "consumers": {
+    "baselines": [],
+    "bench/mknorm.clj": [],
+    "bench/mkpage.clj": [
+      "derived-formats-degradations",
+      "local-unregistered"
+    ],
+    "content-goldens": [],
+    "fusion-live": [
+      "derived-formats-degradations",
+      "mapo80-stamps"
+    ],
+    "gates": [
+      "agami-indian-bank-statements",
+      "arxiv-papers",
+      "bank-statement-benchmark",
+      "berkshire-annual-report",
+      "cuad-contracts",
+      "derived-formats-degradations",
+      "doclaynet-test",
+      "gov-reports-layout",
+      "gov-reports-tables",
+      "icdar2013-table-competition",
+      "irs-forms",
+      "pdfa-eng-wds-shard0",
+      "sroie2019",
+      "udhr-and-wiki-multiscript"
+    ],
+    "gfuse-icdar": [
+      "icdar2013-table-competition"
+    ],
+    "identity": [],
+    "identity:corpus": [
+      "doclaynet-test",
+      "doclaynet-val",
+      "gov-reports-tables",
+      "agami-indian-bank-statements",
+      "bank-statement-benchmark",
+      "irs-forms",
+      "berkshire-annual-report",
+      "gov-reports-layout",
+      "arxiv-papers",
+      "cuad-contracts",
+      "pdfa-eng-wds-shard0",
+      "udhr-and-wiki-multiscript",
+      "derived-formats-degradations"
+    ],
+    "image": [],
+    "image:corpus": [
+      "libtiff-pics",
+      "derived-formats-degradations"
+    ],
+    "kin/headingtest.kin": [],
+    "kin/healthfusiontest.kin": [],
+    "kin/pageunittest.kin": [],
+    "kin/paratest.kin": [],
+    "kin/pdfcontenttest.kin": [],
+    "kin/pdfdoctest.kin": [],
+    "kin/pdffonttest.kin": [],
+    "kin/pdfstructtest.kin": [],
+    "kin/rasterplantest.kin": [],
+    "kin/scripts/align": [],
+    "kin/scripts/asset-check": [],
+    "kin/scripts/asset-record": [],
+    "kin/scripts/c": [],
+    "kin/scripts/content-check": [],
+    "kin/scripts/content-goldens": [],
+    "kin/scripts/font-corpus.py": [
+      "katanaml-invoices",
+      "sroie2019",
+      "cord-v2",
+      "funsd",
+      "doclaynet-test",
+      "doclaynet-val",
+      "fintabnet-otsl",
+      "ctdar-train",
+      "ctdar-test",
+      "ctdar-samples",
+      "icdar2013-table-competition",
+      "gov-reports-tables",
+      "agami-indian-bank-statements",
+      "bank-statement-benchmark",
+      "irs-forms",
+      "berkshire-annual-report",
+      "gov-reports-layout",
+      "arxiv-papers",
+      "cuad-contracts",
+      "pdfa-eng-wds-shard0",
+      "xfund",
+      "udhr-and-wiki-multiscript",
+      "rvl-cdip-small",
+      "chartqa-test-400",
+      "libtiff-pics",
+      "derived-formats-degradations",
+      "mapo80-stamps",
+      "expressexpense-srd"
+    ],
+    "kin/scripts/fusion": [],
+    "kin/scripts/gold-check.py": [],
+    "kin/scripts/heading-check": [],
+    "kin/scripts/heading-goldens": [],
+    "kin/scripts/identity": [],
+    "kin/scripts/image": [],
+    "kin/scripts/ink": [],
+    "kin/scripts/ocr": [],
+    "kin/scripts/para-check": [],
+    "kin/scripts/para-goldens": [],
+    "kin/scripts/pdf-catalog": [
+      "irs-forms"
+    ],
+    "kin/scripts/pdf-catalog-compare": [],
+    "kin/scripts/pdf-compare": [
+      "katanaml-invoices",
+      "sroie2019",
+      "cord-v2",
+      "funsd",
+      "doclaynet-test",
+      "doclaynet-val",
+      "fintabnet-otsl",
+      "ctdar-train",
+      "ctdar-test",
+      "ctdar-samples",
+      "icdar2013-table-competition",
+      "gov-reports-tables",
+      "agami-indian-bank-statements",
+      "bank-statement-benchmark",
+      "irs-forms",
+      "berkshire-annual-report",
+      "gov-reports-layout",
+      "arxiv-papers",
+      "cuad-contracts",
+      "pdfa-eng-wds-shard0",
+      "xfund",
+      "udhr-and-wiki-multiscript",
+      "rvl-cdip-small",
+      "chartqa-test-400",
+      "libtiff-pics",
+      "derived-formats-degradations",
+      "mapo80-stamps",
+      "expressexpense-srd"
+    ],
+    "kin/scripts/pdf-corpus.py": [
+      "katanaml-invoices",
+      "sroie2019",
+      "cord-v2",
+      "funsd",
+      "doclaynet-test",
+      "doclaynet-val",
+      "fintabnet-otsl",
+      "ctdar-train",
+      "ctdar-test",
+      "ctdar-samples",
+      "icdar2013-table-competition",
+      "gov-reports-tables",
+      "agami-indian-bank-statements",
+      "bank-statement-benchmark",
+      "irs-forms",
+      "berkshire-annual-report",
+      "gov-reports-layout",
+      "arxiv-papers",
+      "cuad-contracts",
+      "pdfa-eng-wds-shard0",
+      "xfund",
+      "udhr-and-wiki-multiscript",
+      "rvl-cdip-small",
+      "chartqa-test-400",
+      "libtiff-pics",
+      "derived-formats-degradations",
+      "mapo80-stamps",
+      "expressexpense-srd"
+    ],
+    "kin/scripts/png-bench": [
+      "sroie2019",
+      "derived-formats-degradations"
+    ],
+    "kin/scripts/png-check": [
+      "sroie2019",
+      "derived-formats-degradations"
+    ],
+    "kin/scripts/pod": [],
+    "kin/scripts/retarget": [],
+    "kin/scripts/sealpx": [],
+    "kin/scripts/seals": [],
+    "kin/scripts/slice": [],
+    "kin/scripts/struct-goldens": [],
+    "kin/scripts/struct-sweep": [
+      "irs-forms"
+    ],
+    "kin/scripts/table-goldens": [],
+    "kin/scripts/trace": [
+      "mapo80-stamps"
+    ],
+    "kin/scripts/unit": [],
+    "kin/tabletest.kin": [],
+    "kin/tlhealthtest.kin": [],
+    "ocr-live": [
+      "sroie2019",
+      "cord-v2",
+      "funsd"
+    ],
+    "parbench": [
+      "agami-indian-bank-statements",
+      "arxiv-papers",
+      "berkshire-annual-report"
+    ],
+    "perf": [],
+    "png-bench": [
+      "sroie2019",
+      "derived-formats-degradations"
+    ],
+    "png-check": [
+      "sroie2019",
+      "derived-formats-degradations"
+    ],
+    "receipts": [
+      "sroie2019",
+      "cord-v2",
+      "expressexpense-srd"
+    ],
+    "repeat": [],
+    "repeat:corpus": [
+      "doclaynet-test",
+      "doclaynet-val",
+      "gov-reports-tables",
+      "agami-indian-bank-statements",
+      "bank-statement-benchmark",
+      "irs-forms",
+      "berkshire-annual-report",
+      "gov-reports-layout",
+      "arxiv-papers",
+      "cuad-contracts",
+      "pdfa-eng-wds-shard0",
+      "udhr-and-wiki-multiscript",
+      "derived-formats-degradations"
+    ],
+    "stamp-ghost": [
+      "mapo80-stamps"
+    ],
+    "struct-goldens": [],
+    "test/asset/figures/DIGESTS.edn": [],
+    "test/content/real.txt": [
+      "doclaynet-test",
+      "doclaynet-val",
+      "icdar2013-table-competition",
+      "gov-reports-tables",
+      "agami-indian-bank-statements",
+      "bank-statement-benchmark",
+      "irs-forms",
+      "berkshire-annual-report",
+      "gov-reports-layout",
+      "arxiv-papers",
+      "cuad-contracts",
+      "pdfa-eng-wds-shard0",
+      "udhr-and-wiki-multiscript",
+      "derived-formats-degradations"
+    ],
+    "test/content/synth.txt": [],
+    "test/content/tagged.txt": [],
+    "test/corpus/DATASETS.md": [
+      "expressexpense-srd",
+      "local-unregistered"
+    ],
+    "test/driver/csharp/EngineTest.cs": [],
+    "test/driver/java/EngineTest.java": [],
+    "test/driver/wasm/check.mjs": [],
+    "test/fonts/real.txt": [
+      "agami-indian-bank-statements",
+      "bank-statement-benchmark",
+      "irs-forms",
+      "berkshire-annual-report",
+      "arxiv-papers",
+      "cuad-contracts",
+      "derived-formats-degradations"
+    ],
+    "test/fusion/graphics/FIXTURES.edn": [],
+    "test/fuzz/crashers/cmap-number-overflow-s41-i1146.edn": [],
+    "test/fuzz/crashers/content-size-overflow-s1-i76.edn": [],
+    "test/fuzz/crashers/font-ascent-overflow-s51-i6609.edn": [],
+    "test/fuzz/crashers/furniture-gap-overflow-s3-i816.edn": [],
+    "test/fuzz/crashers/pdffont-w-start-overflow-s2-i319.edn": [],
+    "test/fuzz/crashers/tlhealth-space-width-overflow-s2-i2698.edn": [],
+    "test/limits/scenarios.edn": [],
+    "test/ocr/PRODUCER.json": [],
+    "test/pdf/catalog-corpus.txt": [
+      "doclaynet-test",
+      "doclaynet-val",
+      "irs-forms",
+      "berkshire-annual-report",
+      "gov-reports-layout",
+      "arxiv-papers",
+      "cuad-contracts",
+      "pdfa-eng-wds-shard0"
+    ],
+    "test/pdf/corpus.txt": [
+      "doclaynet-test",
+      "doclaynet-val",
+      "icdar2013-table-competition",
+      "gov-reports-tables",
+      "agami-indian-bank-statements",
+      "bank-statement-benchmark",
+      "irs-forms",
+      "berkshire-annual-report",
+      "gov-reports-layout",
+      "arxiv-papers",
+      "cuad-contracts",
+      "pdfa-eng-wds-shard0",
+      "udhr-and-wiki-multiscript",
+      "derived-formats-degradations"
+    ],
+    "test/pdf/tagged.txt": [],
+    "test/pdfium-wasm/DIGESTS.edn": [],
+    "test/pdfium-wasm/FIXTURES.edn": [],
+    "test/render/cases.edn": [],
+    "test/retarget/FIXTURES.edn": [],
+    "test/sealpx/FIXTURES.edn": [],
+    "tools/asset/record.clj": [],
+    "tools/corpus.clj": [],
+    "tools/corpus_link.clj": [],
+    "tools/fusion/bench.clj": [],
+    "tools/fusion/compare.clj": [],
+    "tools/fusion/explain.clj": [],
+    "tools/fusion/fusion_live.clj": [
+      "local-unregistered"
+    ],
+    "tools/fusion/gfuse_lib.clj": [],
+    "tools/fusion/ghost_health.clj": [],
+    "tools/fusion/icdar_live.clj": [
+      "icdar2013-table-competition"
+    ],
+    "tools/fusion/live-sets.edn": [
+      "sroie2019",
+      "derived-formats-degradations",
+      "mapo80-stamps",
+      "local-unregistered"
+    ],
+    "tools/fusion/record-align.clj": [],
+    "tools/fusion/record-graphics.clj": [],
+    "tools/fusion/record-replay.clj": [],
+    "tools/fusion/record_health.clj": [],
+    "tools/fuzz/gen.clj": [],
+    "tools/import/common.clj": [],
+    "tools/import/ctdar.clj": [
+      "ctdar-train",
+      "ctdar-test",
+      "ctdar-samples"
+    ],
+    "tools/import/doclaynet.clj": [],
+    "tools/import/icdar2013.clj": [],
+    "tools/import/import_all.clj": [
+      "local-unregistered"
+    ],
+    "tools/import/pdfa_eng_wds.clj": [],
+    "tools/import/spotcheck.clj": [],
+    "tools/import/stamps.clj": [
+      "local-unregistered"
+    ],
+    "tools/ocr/gold_sample.clj": [],
+    "tools/ocr/live.clj": [],
+    "tools/ocr/record-scan.clj": [],
+    "tools/ocr/record.clj": [],
+    "tools/ocr/redump.clj": [],
+    "tools/oracle/baselines.py": [],
+    "tools/oracle/content-corpus.py": [
+      "katanaml-invoices",
+      "sroie2019",
+      "cord-v2",
+      "funsd",
+      "doclaynet-test",
+      "doclaynet-val",
+      "fintabnet-otsl",
+      "ctdar-train",
+      "ctdar-test",
+      "ctdar-samples",
+      "icdar2013-table-competition",
+      "gov-reports-tables",
+      "agami-indian-bank-statements",
+      "bank-statement-benchmark",
+      "irs-forms",
+      "berkshire-annual-report",
+      "gov-reports-layout",
+      "arxiv-papers",
+      "cuad-contracts",
+      "pdfa-eng-wds-shard0",
+      "xfund",
+      "udhr-and-wiki-multiscript",
+      "rvl-cdip-small",
+      "chartqa-test-400",
+      "libtiff-pics",
+      "derived-formats-degradations",
+      "mapo80-stamps",
+      "expressexpense-srd"
+    ],
+    "tools/oracle/rules.py": [],
+    "tools/oracle/tagged-check.py": [],
+    "tools/parbench/parbench.clj": [
+      "agami-indian-bank-statements",
+      "berkshire-annual-report",
+      "arxiv-papers"
+    ],
+    "tools/pdfinfo.clj": [],
+    "tools/perf/perf.clj": [],
+    "tools/receipts/receipts.py": [],
+    "tools/samples.clj": [],
+    "tools/seals/stamp_ghost.clj": [
+      "mapo80-stamps",
+      "local-unregistered"
+    ],
+    "tools/synth/assets.clj": [],
+    "tools/synth/build.clj": [],
+    "tools/synth/degrade.clj": [],
+    "tools/synth/degrade_fusion.clj": [],
+    "tools/synth/degrade_graphics.clj": [],
+    "tools/synth/gfx_pdf.clj": [],
+    "tools/synth/html2gold.clj": [],
+    "tools/synth/make_html.clj": [],
+    "tools/synth/mixed.clj": [],
+    "tools/synth/print.sh": [],
+    "tools/synth/raster_fixtures.clj": [],
+    "tools/synth/receipts.clj": [],
+    "tools/synth/table_model.clj": [],
+    "tools/synth/tagged_tables.clj": [],
+    "tools/synth/wm_pdf.clj": [],
+    "tools/vis/corpus-vis.clj": [
+      "katanaml-invoices",
+      "sroie2019",
+      "cord-v2",
+      "funsd",
+      "doclaynet-test",
+      "doclaynet-val",
+      "fintabnet-otsl",
+      "ctdar-train",
+      "ctdar-test",
+      "ctdar-samples",
+      "icdar2013-table-competition",
+      "gov-reports-tables",
+      "agami-indian-bank-statements",
+      "bank-statement-benchmark",
+      "irs-forms",
+      "berkshire-annual-report",
+      "gov-reports-layout",
+      "arxiv-papers",
+      "cuad-contracts",
+      "pdfa-eng-wds-shard0",
+      "xfund",
+      "udhr-and-wiki-multiscript",
+      "rvl-cdip-small",
+      "chartqa-test-400",
+      "libtiff-pics",
+      "derived-formats-degradations",
+      "mapo80-stamps",
+      "expressexpense-srd"
+    ],
+    "trace": [
+      "mapo80-stamps"
+    ],
+    "unit": [
+      "agami-indian-bank-statements",
+      "arxiv-papers",
+      "bank-statement-benchmark",
+      "berkshire-annual-report",
+      "cuad-contracts",
+      "derived-formats-degradations",
+      "doclaynet-test",
+      "gov-reports-layout",
+      "gov-reports-tables",
+      "icdar2013-table-competition",
+      "irs-forms",
+      "pdfa-eng-wds-shard0",
+      "sroie2019",
+      "udhr-and-wiki-multiscript"
+    ]
+  },
+  "shards": [
+    {
+      "id": "katanaml-invoices",
+      "source": "katanaml-invoices",
+      "paths": [
+        "financial/katanaml-invoices"
+      ],
+      "fetch": [
+        [
+          "python3",
+          "tools/shards/fetch.py",
+          "invoices_katanaml"
+        ]
+      ],
+      "keep": false,
+      "reason": "",
+      "regeneratable": true,
+      "digest": "ebe11c04aa81aa1640c0397c8984cab453768fea03040923d9fd651af258c362",
+      "size": 123754316,
+      "files": 452
+    },
+    {
+      "id": "sroie2019",
+      "source": "sroie2019",
+      "paths": [
+        "financial/sroie2019",
+        "_gold/sroie/*.gold.json"
+      ],
+      "fetch": [
+        [
+          "python3",
+          "tools/shards/fetch.py",
+          "sroie"
+        ],
+        [
+          "bb",
+          "import",
+          "sroie"
+        ]
+      ],
+      "keep": false,
+      "reason": "",
+      "regeneratable": true,
+      "digest": "294d55d0763508df93696b4a642fec57fece190999693d99700a49f4091bcb3e",
+      "size": 365891742,
+      "files": 1984
+    },
+    {
+      "id": "cord-v2",
+      "source": "cord-v2",
+      "paths": [
+        "financial/cord-v2",
+        "_gold/cord/*.gold.json"
+      ],
+      "fetch": [
+        [
+          "python3",
+          "tools/shards/fetch.py",
+          "cord"
+        ],
+        [
+          "bb",
+          "import",
+          "cord"
+        ]
+      ],
+      "keep": false,
+      "reason": "",
+      "regeneratable": true,
+      "digest": "73de57eac7c8e3bf1e78808652f435beafe8170a64ccf3c2d60d05eb50a30134",
+      "size": 478145936,
+      "files": 600
+    },
+    {
+      "id": "funsd",
+      "source": "funsd",
+      "paths": [
+        "forms/funsd",
+        "_gold/funsd/*.gold.json"
+      ],
+      "fetch": [
+        [
+          "python3",
+          "tools/shards/fetch.py",
+          "funsd"
+        ],
+        [
+          "bb",
+          "import",
+          "funsd"
+        ]
+      ],
+      "keep": false,
+      "reason": "",
+      "regeneratable": true,
+      "digest": "7769389753cd300b7ed72f785e6e0129703ea261d949a5e9cb8d092fa2731230",
+      "size": 29138493,
+      "files": 597
+    },
+    {
+      "id": "doclaynet-test",
+      "source": "doclaynet-v1.2-shards",
+      "paths": [
+        "layout/doclaynet-v1.2/test-shard4",
+        "_gold/doclaynet/doclaynet-test-*.gold.json"
+      ],
+      "fetch": [
+        [
+          "python3",
+          "tools/shards/fetch.py",
+          "doclaynet-test"
+        ],
+        [
+          "bb",
+          "import",
+          "doclaynet"
+        ]
+      ],
+      "keep": false,
+      "reason": "",
+      "regeneratable": true,
+      "digest": "21d798d0e0d186b850483d5ccdf585cf4b8481668f7b0e277454368a69ca00fb",
+      "size": 287456342,
+      "files": 3332
+    },
+    {
+      "id": "doclaynet-val",
+      "source": "doclaynet-v1.2-shards",
+      "paths": [
+        "layout/doclaynet-v1.2/val-shard4",
+        "_gold/doclaynet/doclaynet-val-*.gold.json"
+      ],
+      "fetch": [
+        [
+          "python3",
+          "tools/shards/fetch.py",
+          "doclaynet-val"
+        ],
+        [
+          "bb",
+          "import",
+          "doclaynet"
+        ]
+      ],
+      "keep": false,
+      "reason": "",
+      "regeneratable": true,
+      "digest": "70c74af90a6043ca83c841cbd893306143609665fe38a954504421a522736c88",
+      "size": 350921517,
+      "files": 3708
+    },
+    {
+      "id": "fintabnet-otsl",
+      "source": "fintabnet-otsl",
+      "paths": [
+        "tables/fintabnet-otsl",
+        "_gold/fintabnet_otsl/*.gold.json"
+      ],
+      "fetch": [
+        [
+          "python3",
+          "tools/shards/fetch.py",
+          "fintabnet"
+        ],
+        [
+          "bb",
+          "import",
+          "fintabnet_otsl"
+        ]
+      ],
+      "keep": false,
+      "reason": "",
+      "regeneratable": true,
+      "digest": "a99f2c1c4eb98a6676b3a4e46bd3090556c5f03874ee75e0e8ec0301091cec53",
+      "size": 254401645,
+      "files": 15597
+    },
+    {
+      "id": "ctdar-train",
+      "source": "icdar2019-ctdar",
+      "paths": [
+        "tables/icdar2019-ctdar/training",
+        "_gold/ctdar/cTDaR-train-*.gold.json"
+      ],
+      "fetch": [
+        [
+          "python3",
+          "tools/shards/fetch.py",
+          "ctdar-train"
+        ],
+        [
+          "bb",
+          "import",
+          "ctdar"
+        ]
+      ],
+      "keep": false,
+      "reason": "",
+      "regeneratable": true,
+      "digest": "ebdef1b2ebf6b73eb2b8ace258b4f7050c605f045355b901fc52477ea5055170",
+      "size": 4292852773,
+      "files": 4803
+    },
+    {
+      "id": "ctdar-test",
+      "source": "icdar2019-ctdar",
+      "paths": [
+        "tables/icdar2019-ctdar/test",
+        "tables/icdar2019-ctdar/test_ground_truth",
+        "_gold/ctdar/cTDaR-test-*.gold.json"
+      ],
+      "fetch": [
+        [
+          "python3",
+          "tools/shards/fetch.py",
+          "ctdar-test"
+        ],
+        [
+          "bb",
+          "import",
+          "ctdar"
+        ]
+      ],
+      "keep": false,
+      "reason": "",
+      "regeneratable": true,
+      "digest": "141f181fbfcf2b2596ba74fc1de635d3c28c9e069991a5ac54933dc143c59fad",
+      "size": 1965775373,
+      "files": 2560
+    },
+    {
+      "id": "ctdar-samples",
+      "source": "icdar2019-ctdar",
+      "paths": [
+        "tables/icdar2019-ctdar/samples",
+        "tables/icdar2019-ctdar/README.md"
+      ],
+      "fetch": [
+        [
+          "python3",
+          "tools/shards/fetch.py",
+          "ctdar-samples"
+        ]
+      ],
+      "keep": false,
+      "reason": "",
+      "regeneratable": true,
+      "digest": "801256d3b3d603614b6d66f01a6985b04d96ca2689378a2c4004c751847dc279",
+      "size": 88541557,
+      "files": 26
+    },
+    {
+      "id": "icdar2013-table-competition",
+      "source": "icdar2013-table-competition",
+      "paths": [
+        "tables/icdar2013",
+        "_gold/icdar2013/*.gold.json"
+      ],
+      "fetch": [
+        [
+          "python3",
+          "tools/shards/fetch.py",
+          "icdar2013"
+        ],
+        [
+          "bb",
+          "import",
+          "icdar2013"
+        ]
+      ],
+      "keep": false,
+      "reason": "",
+      "regeneratable": true,
+      "digest": "c0ed8547f00ebf6b0e1bc47a8ec600e6c29749ca7354a9629a11d16adf1b0a25",
+      "size": 16353754,
+      "files": 342
+    },
+    {
+      "id": "gov-reports-tables",
+      "source": "gov-reports-tables",
+      "paths": [
+        "tables/gov-reports"
+      ],
+      "fetch": [
+        [
+          "python3",
+          "tools/shards/fetch.py",
+          "gov"
+        ]
+      ],
+      "keep": true,
+      "reason": "mutable upstream URLs or locally derived data; exact historical bytes not guaranteed",
+      "regeneratable": false,
+      "digest": "5b17ee24cb3623c4b0b3cc4109d0f32d69d1f7ec54bd3aa783cc0ef720ec286c",
+      "size": 11986147,
+      "files": 6
+    },
+    {
+      "id": "agami-indian-bank-statements",
+      "source": "agami-indian-bank-statements",
+      "paths": [
+        "financial/agami-indian-bank-statements"
+      ],
+      "fetch": [
+        [
+          "python3",
+          "tools/shards/fetch.py",
+          "agami_bank"
+        ]
+      ],
+      "keep": true,
+      "reason": "mutable upstream URLs or locally derived data; exact historical bytes not guaranteed",
+      "regeneratable": false,
+      "digest": "0e3e793f3b8e14a3827bcd36204e6606b1a541ae94b7ec2d28cee019257c644f",
+      "size": 1369410508,
+      "files": 802
+    },
+    {
+      "id": "bank-statement-benchmark",
+      "source": "bank-statement-benchmark",
+      "paths": [
+        "financial/bank-statement-benchmark"
+      ],
+      "fetch": [
+        [
+          "python3",
+          "tools/shards/fetch.py",
+          "bsb"
+        ]
+      ],
+      "keep": true,
+      "reason": "mutable upstream URLs or locally derived data; exact historical bytes not guaranteed",
+      "regeneratable": false,
+      "digest": "085215e0ed5e7ab0f088b337c041184af7001d3f19a1fe96d43b25cf5caa6796",
+      "size": 418363,
+      "files": 50
+    },
+    {
+      "id": "irs-forms",
+      "source": "irs-forms",
+      "paths": [
+        "forms/irs"
+      ],
+      "fetch": [
+        [
+          "python3",
+          "tools/shards/fetch.py",
+          "irs"
+        ]
+      ],
+      "keep": true,
+      "reason": "mutable upstream URLs or locally derived data; exact historical bytes not guaranteed",
+      "regeneratable": false,
+      "digest": "e8f8ea61501ff447b5e4c8be421596dbb5cdd48a80d6d05d3d5ccbacd9415311",
+      "size": 9920188,
+      "files": 13
+    },
+    {
+      "id": "berkshire-annual-report",
+      "source": "berkshire-annual-report",
+      "paths": [
+        "financial/annual-reports"
+      ],
+      "fetch": [
+        [
+          "python3",
+          "tools/shards/fetch.py",
+          "gov"
+        ]
+      ],
+      "keep": true,
+      "reason": "mutable upstream URLs or locally derived data; exact historical bytes not guaranteed",
+      "regeneratable": false,
+      "digest": "29afc5552c95476b5e95d4c58cd9b0e993967ff3b459e7f19696a7ce10e28271",
+      "size": 3003110,
+      "files": 1
+    },
+    {
+      "id": "gov-reports-layout",
+      "source": "gov-reports-layout",
+      "paths": [
+        "layout/gov-reports"
+      ],
+      "fetch": [
+        [
+          "python3",
+          "tools/shards/fetch.py",
+          "gov"
+        ]
+      ],
+      "keep": true,
+      "reason": "mutable upstream URLs or locally derived data; exact historical bytes not guaranteed",
+      "regeneratable": false,
+      "digest": "a491217aaf07baf16debe619fe67cf1e55b5a5327e8c5f7323df93e068904412",
+      "size": 2973890,
+      "files": 3
+    },
+    {
+      "id": "arxiv-papers",
+      "source": "arxiv-papers",
+      "paths": [
+        "layout/arxiv"
+      ],
+      "fetch": [
+        [
+          "python3",
+          "tools/shards/fetch.py",
+          "arxiv"
+        ]
+      ],
+      "keep": true,
+      "reason": "mutable upstream URLs or locally derived data; exact historical bytes not guaranteed",
+      "regeneratable": false,
+      "digest": "dc9b7c2ef782f16f7e92f16fe0a948f81667b3583e250044c95a86bb3090a0b4",
+      "size": 25645980,
+      "files": 8
+    },
+    {
+      "id": "cuad-contracts",
+      "source": "cuad-contracts",
+      "paths": [
+        "layout/cuad"
+      ],
+      "fetch": [
+        [
+          "python3",
+          "tools/shards/fetch.py",
+          "cuad"
+        ]
+      ],
+      "keep": false,
+      "reason": "",
+      "regeneratable": true,
+      "digest": "88647e5c5fc037197a38ea33545580b73dca7c05366a9391770b4a5ae28082dc",
+      "size": 173700384,
+      "files": 1051
+    },
+    {
+      "id": "pdfa-eng-wds-shard0",
+      "source": "pdfa-eng-wds-shard0",
+      "paths": [
+        "layout/pdfa-eng-wds",
+        "_gold/pdfa_eng_wds/*.gold.json"
+      ],
+      "fetch": [
+        [
+          "python3",
+          "tools/shards/fetch.py",
+          "pdfa"
+        ],
+        [
+          "bb",
+          "import",
+          "pdfa_eng_wds"
+        ]
+      ],
+      "keep": false,
+      "reason": "",
+      "regeneratable": true,
+      "digest": "9a326f7a4eacddaad925aa3994d1e70989228c34c8942888081720fcdd177ad2",
+      "size": 913626521,
+      "files": 3584
+    },
+    {
+      "id": "xfund",
+      "source": "xfund",
+      "paths": [
+        "multilingual/xfund",
+        "_gold/xfund/*.gold.json"
+      ],
+      "fetch": [
+        [
+          "python3",
+          "tools/shards/fetch.py",
+          "xfund"
+        ],
+        [
+          "bb",
+          "import",
+          "xfund"
+        ]
+      ],
+      "keep": false,
+      "reason": "",
+      "regeneratable": true,
+      "digest": "f08c6fc3a2a18ccb46821aa011be7a357341cc65e7dd64a69cc94e0a7cac3dc5",
+      "size": 1421109968,
+      "files": 2800
+    },
+    {
+      "id": "udhr-and-wiki-multiscript",
+      "source": "udhr-and-wiki-multiscript",
+      "paths": [
+        "multilingual/udhr"
+      ],
+      "fetch": [
+        [
+          "python3",
+          "tools/shards/fetch.py",
+          "udhr"
+        ]
+      ],
+      "keep": true,
+      "reason": "mutable upstream URLs or locally derived data; exact historical bytes not guaranteed",
+      "regeneratable": false,
+      "digest": "04d5164e097c76fb8424a2078d899c40890cc52a535928b55d54a7b38cb5bf28",
+      "size": 29085472,
+      "files": 20
+    },
+    {
+      "id": "rvl-cdip-small",
+      "source": "rvl-cdip-small",
+      "paths": [
+        "scanned/rvl-cdip-small"
+      ],
+      "fetch": [
+        [
+          "python3",
+          "tools/shards/fetch.py",
+          "rvlsmall"
+        ]
+      ],
+      "keep": true,
+      "reason": "mutable upstream URLs or locally derived data; exact historical bytes not guaranteed",
+      "regeneratable": false,
+      "digest": "256cf0262e014398df7ef435b0f752c92d1bc7ae9861198fc7153d7b739fa29f",
+      "size": 387295321,
+      "files": 3202
+    },
+    {
+      "id": "chartqa-test-400",
+      "source": "chartqa-test-400",
+      "paths": [
+        "graphics/chartqa-test"
+      ],
+      "fetch": [
+        [
+          "python3",
+          "tools/shards/fetch.py",
+          "chartqa"
+        ]
+      ],
+      "keep": false,
+      "reason": "",
+      "regeneratable": true,
+      "digest": "2b16931225be54ea1ca367f92751083dabedbe2c4699fdbaa4a32ef11e9d9833",
+      "size": 14039643,
+      "files": 800
+    },
+    {
+      "id": "libtiff-pics",
+      "source": "libtiff-pics",
+      "paths": [
+        "formats/libtiff-pics"
+      ],
+      "fetch": [
+        [
+          "python3",
+          "tools/shards/fetch.py",
+          "libtiff"
+        ]
+      ],
+      "keep": false,
+      "reason": "",
+      "regeneratable": true,
+      "digest": "9ca5e7ae2781ad1f0f89b9f46f2c7759c91a362129dd6fa2222b9ca081dcf893",
+      "size": 5500408,
+      "files": 72
+    },
+    {
+      "id": "derived-formats-degradations",
+      "source": "derived-formats-degradations",
+      "paths": [
+        "formats/derived"
+      ],
+      "fetch": [
+        [
+          "python3",
+          "tools/shards/fetch.py",
+          "derived"
+        ]
+      ],
+      "keep": true,
+      "reason": "mutable upstream URLs or locally derived data; exact historical bytes not guaranteed",
+      "regeneratable": false,
+      "digest": "53a3ae3a93fa1d72dd5a26d7369782ccc36d0f7c1c6b2d55ed59896bafe5ad2e",
+      "size": 25727440,
+      "files": 36
+    },
+    {
+      "id": "mapo80-stamps",
+      "source": "mapo80-stamps",
+      "paths": [
+        "seals/mapo80-stamps",
+        "_gold/stamps/*.gold.json"
+      ],
+      "fetch": [
+        [
+          "python3",
+          "tools/shards/fetch.py",
+          "stamps"
+        ],
+        [
+          "bb",
+          "import",
+          "stamps"
+        ]
+      ],
+      "keep": false,
+      "reason": "",
+      "regeneratable": true,
+      "digest": "b18abeff826d994eca79437ab49ac16a75a8dd0e8fe25a25d173b1bad694d337",
+      "size": 188620755,
+      "files": 4715
+    },
+    {
+      "id": "expressexpense-srd",
+      "source": "expressexpense-srd",
+      "paths": [
+        "financial/expressexpense-srd",
+        "_gold/expressexpense-srd/*.gold.json"
+      ],
+      "fetch": [],
+      "keep": true,
+      "reason": "locally fetched image set; pinned exact fetch recipe unavailable",
+      "regeneratable": false,
+      "digest": "a555c23ed38da372b37648f873afdef78903a6fba2b1979fe19153b416a666dc",
+      "size": 19414988,
+      "files": 396
+    },
+    {
+      "id": "local-unregistered",
+      "source": "local",
+      "paths": [
+        "MANIFEST.md",
+        "_gold/_spotcheck/_tmp.png",
+        "_gold/_spotcheck/cTDaR-train-t00000-p1.png",
+        "_gold/_spotcheck/cord-cord_00000-p1.png",
+        "_gold/_spotcheck/cord-test-cord_00000-p1.png",
+        "_gold/_spotcheck/doclaynet-test-dln_00000-p1.png",
+        "_gold/_spotcheck/fintabnet-test-ftn_00000-p1.png",
+        "_gold/_spotcheck/funsd-82092117-p1.png",
+        "_gold/_spotcheck/icdar2013-eu-001-p1.png",
+        "_gold/_spotcheck/icdar2013-eu-001-p2.png",
+        "_gold/_spotcheck/icdar2013-eu-001-p3.png",
+        "_gold/_spotcheck/icdar2013-us-001-p1.png",
+        "_gold/_spotcheck/icdar2013-us-001-p3.png",
+        "_gold/_spotcheck/pdfa-0009795-p1.png",
+        "_gold/_spotcheck/pdfa-0009795-p10.png",
+        "_gold/_spotcheck/pdfa-0009795-p11.png",
+        "_gold/_spotcheck/pdfa-0009795-p12.png",
+        "_gold/_spotcheck/pdfa-0009795-p13.png",
+        "_gold/_spotcheck/pdfa-0009795-p14.png",
+        "_gold/_spotcheck/pdfa-0009795-p15.png",
+        "_gold/_spotcheck/pdfa-0009795-p16.png",
+        "_gold/_spotcheck/pdfa-0009795-p2.png",
+        "_gold/_spotcheck/pdfa-0009795-p3.png",
+        "_gold/_spotcheck/pdfa-0009795-p4.png",
+        "_gold/_spotcheck/pdfa-0009795-p5.png",
+        "_gold/_spotcheck/pdfa-0009795-p6.png",
+        "_gold/_spotcheck/pdfa-0009795-p7.png",
+        "_gold/_spotcheck/pdfa-0009795-p9.png",
+        "_gold/_spotcheck/sroie-sroie_00000-p1.png",
+        "_gold/_spotcheck/sroie-train-sroie_00000-p1.png",
+        "_gold/_spotcheck/stamps-test-stamp_detectation_marcos_000125-p1.png",
+        "_gold/_spotcheck/xfund-de_val_0-p1.png",
+        "_gold/cord/_summary.json",
+        "_gold/ctdar/_summary.json",
+        "_gold/doclaynet/_summary.json",
+        "_gold/expressexpense-srd/_summary.json",
+        "_gold/fintabnet_otsl/_summary.json",
+        "_gold/funsd/_summary.json",
+        "_gold/icdar2013/_summary.json",
+        "_gold/pdfa_eng_wds/_summary.json",
+        "_gold/sroie/_summary.json",
+        "_gold/stamps/_summary.json",
+        "_gold/xfund/_summary.json",
+        "fetch.sh",
+        "manifest.json",
+        "tools/common.sh",
+        "tools/extract_parquet.py",
+        "tools/fetch_extra.sh",
+        "tools/make_derived.py",
+        "tools/make_manifest.py"
+      ],
+      "fetch": [],
+      "keep": true,
+      "reason": "unmanifested/curated files, metadata and importer summaries",
+      "regeneratable": false,
+      "digest": "51608679c872955ea877e8db974cab3fe499c3b602ffe8299ffae8a85872daae",
+      "size": 8076726,
+      "files": 50
+    }
+  ]
+}

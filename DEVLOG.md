@@ -12115,3 +12115,17 @@ upstream image licensing; restrictive/ambiguous HF re-uploads are not fetched.
 Trivial tooling fixes: importer cleanup and gold validation ignore AppleDouble
 sidecars on exFAT (deleting a real file can auto-remove its sidecar).
 - [ ] **Signed off** (maintainer)
+
+### D683 — Source shards with verified, opt-in pruning
+
+Record the external corpus as source shards in `test/corpus/shards.json`, including
+source gold, byte sizes, content digests, fetch/import recipes and consumer
+requirements. Split cTDaR by train/test/samples and DocLayNet by upstream parquet
+partition. `local.edn :corpus-shards` overrides the default gate selections.
+`bb corpus status`, `fetch` and `prune` are non-gates. Prune defaults to a dry run,
+requires `--yes` to delete, and retains curated/mutable sources and every digest
+mismatch. Ignore AppleDouble files at every depth. Extend corpus-guard with task
+requirements so absent data gives a concrete fetch command before expensive work.
+No corpus data was deleted while implementing this decision.
+
+- [ ] **Signed off** (maintainer)

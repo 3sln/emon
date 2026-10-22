@@ -173,7 +173,7 @@
   {:glob "tools/{api_diff,release_audit,version,rederive,ci}.clj" :gates [] :why "release and CI tooling: the fast core runs each (api-diff, release-audit, version --check, ci coverage)"}
   {:glob "tools/release/**" :gates [] :why "the release tools (P11.9, P11.10, D547, D550): `bb release-notes`, `release-verify`, `release-ops` and `publish`, run by bump.yml, verify.yml, draft.yml and publish.yml; not gates. The fast core runs each one's --self-test (pure logic over synthetic data; nothing is published or pushed)"}
   {:glob "tools/cli.clj" :gates [] :why "`bb cli` (P11.4b, D541): builds and packs the `emon` command and `--check`s the archive (needs bb native, pdfium and cargo; prints SKIP without them); not a gate yet, it joins `bb package` (P11.4)"}
-  {:glob "tools/{corpus,corpus_link,corpus_test,corpus_roundtrip,samples,pdfinfo}.clj" :gates [] :why "corpus transport, the corpus-link/corpus-guard symlink tool and live tools: not gates (corpus-test is its own non-gate)"}
+  {:glob "tools/{corpus.clj,corpus_link.clj,corpus_test.clj,corpus_roundtrip.clj,samples.clj,pdfinfo.clj,shards/**}" :gates [] :why "corpus transport, the corpus-link/corpus-guard symlink tool and live tools: not gates (corpus-test is its own non-gate)"}
   {:glob "tools/{transcript_manifest,crypto-constants,pdfsnames,pdfxnames}.clj" :gates ["unit"] :why "tables and manifests `bb unit` checks"}
   {:glob "tools/image-fixtures.clj" :gates ["unit" "image"] :why "the image fixtures' generator"}
   {:glob "tools/accuracy/**" :gates ["unit" "accuracy" "ocr" "fusion" "gfuse" "sealpx" "sigs" "asset"] :why "the scorer and the predictors: the accuracy gate and every replay gate's ratchet run through it"}
@@ -238,7 +238,7 @@
   {:glob "test/{bidi,inflate,normalize,evidence,transcript}/**" :gates ["unit"] :why "data the laws read"}
   {:glob "test/calibration/**" :gates ["accuracy" "unit"] :why "the calibration data and fit"}
   {:glob "test/content/**" :gates ["unit" "slice"] :why "content-interpreter fixtures and their goldens"}
-  {:glob "test/corpus/DATASETS.md" :gates [] :why "documentation of the public datasets"}
+  {:glob "test/corpus/{DATASETS.md,shards.json,shards-fetch/**}" :gates [] :why "public dataset documentation, external shard registry and fetch recipes"}
   {:glob "test/corpus/synth/**" :gates ["unit" "slice" "identity" "repeat" "accuracy" "ocr" "fusion"] :why "the synthetic corpus: the scoreboard's documents and the conversions every gate holds"}
   {:glob "test/driver/**" :gates ["slice" "identity"] :why "the browser driver and the host driver stubs"}
   {:glob "test/driver/go/live_*.go" :gates ["slice" "identity" "render"] :hosts ["go"] :why "the Go driver's live `--pdfium` flag (live_pdfium.go, tag pdfium) and its no-op stub (live_none.go), which every gate build compiles"}

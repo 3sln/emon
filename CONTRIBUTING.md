@@ -128,3 +128,38 @@ and commit the result.
 emon is MIT ([LICENSE](LICENSE)). By contributing you agree to license your work under it. A new dependency or a vendored file needs
 an entry in `release/third-party.edn` with an allowed licence (`bb release-audit` explains what is allowed); jbig2dec and any GPL-family
 component are never allowed.
+
+### Corpus shards
+
+The committed `test/corpus/shards.json` inventories public source shards, their gold,
+byte sizes, consumers and SHA-256 content digests. `bb corpus status` hashes the
+files and reports present, absent or modified shards. AppleDouble `._*` files are
+ignored at every depth. The digest hashes sorted corpus-relative UTF-8 paths,
+each followed by NUL, its lowercase file SHA-256 and LF.
+
+Set `:corpus-shards ["sroie2019" "cord-v2" "expressexpense-srd"]` in the gitignored
+`local.edn` alongside `:corpus-dir` to choose the locally wanted set. Unset uses
+the default gate selections recorded in the registry; an empty vector wants none.
+`bb corpus fetch --needed` fetches that set; explicit ids fetch individual shards.
+Fetch runs the source recipe and importer, then requires the registered digest.
+It refuses modified or partial shards: preserve and move those aside first.
+Some sources need Python `pyarrow`, `huggingface_hub`, and the importer's image
+and PDF utilities. Exact historical bytes at changing upstream URLs cannot be
+promised; these sources and unregistered local files are marked `keep`.
+
+`bb corpus prune` and `bb corpus prune --dry-run` only report candidates and byte
+savings. Deletion requires `bb corpus prune --yes`. Only verified unwanted shards
+are eligible; `keep` and digest mismatches are retained. Empty directories and
+AppleDouble files may remain. Stop corpus readers before a real prune; pruning
+and fetching do not lock other processes. Task guards name missing or incomplete
+shards and the corresponding `bb corpus fetch` command before running engines.
+Consumer declarations include direct tools, smoke selections, baselines and perf
+readers. Optional `--corpus` modes declare the sources containing their input formats.
+
+cTDaR fetches training, test (images plus truth), and samples separately with Git
+sparse checkout at a pinned commit. DocLayNet fetches test-shard4 and val-shard4
+separately; FinTabNet already contains just upstream test-shard0. Gold records
+belong to their source partition; shared importer summaries are retained as local
+metadata. Fetch support lives under `test/corpus/shards-fetch/` so a pruned corpus
+still has its recipes. `tools/shards/snapshot.py` is an explicit maintainer-only
+registry creation operation; normal lifecycle commands never rewrite digests.
