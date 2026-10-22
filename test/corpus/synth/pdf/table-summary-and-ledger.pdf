@@ -1,0 +1,58 @@
+%PDF-1.7
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 8 0 R /F2 9 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<<  /Length 760 >>
+stream
+BT /F1 18 Tf 40 750 Td (Summary and ledger) Tj ET
+BT /F1 10 Tf 76 690 Td (Subtotal) Tj ET
+BT /F1 10 Tf 404.98 690 Td (31.00) Tj ET
+BT /F1 10 Tf 76 674 Td (Tax) Tj ET
+BT /F1 10 Tf 410.54 674 Td (6.20) Tj ET
+BT /F1 10 Tf 76 658 Td (Total) Tj ET
+BT /F1 10 Tf 404.98 658 Td (37.20) Tj ET
+BT /F2 10 Tf 76 642 Td (Date) Tj ET
+BT /F2 10 Tf 150 642 Td (Details) Tj ET
+BT /F2 10 Tf 392.23 642 Td (Amount) Tj ET
+BT /F1 10 Tf 76 626 Td (01Jan) Tj ET
+BT /F1 10 Tf 150 626 Td (Rent) Tj ET
+BT /F1 10 Tf 410.54 626 Td (1.00) Tj ET
+BT /F1 10 Tf 76 610 Td (02Jan) Tj ET
+BT /F1 10 Tf 150 610 Td (Electricity) Tj ET
+BT /F1 10 Tf 404.98 610 Td (20.00) Tj ET
+BT /F1 10 Tf 76 594 Td (03Jan) Tj ET
+BT /F1 10 Tf 150 594 Td (Service fee) Tj ET
+BT /F1 10 Tf 399.42 594 Td (300.00) Tj ET
+endstream
+endobj
+8 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+9 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 10
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000257 00000 n 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000001069 00000 n 
+0000001166 00000 n 
+trailer
+<< /Size 10 /Root 1 0 R >>
+startxref
+1268
+%%EOF

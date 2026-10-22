@@ -235,26 +235,8 @@ fn test_intersection_over_union() {
     crate::testport::assert_eq(tt_iou(0, 0, 61200, 79200, 0, 0, 61200, 79200), 1000, "a page of centipoints does not overflow");
 }
 pub(crate) fn ttt_tb(mut tb: &mut crate::port::Cells, x0: i32, y0: i32, x1: i32, y1: i32, profile: i32, score: i32, nrows: i32, ncols: i32, cfirst: i32, ncells: i32) -> i32 {
-    // A candidate row of `tb` (stride 28): page 1, the box, the profile (1 ruled .. 5 struct), the score, the grid, its cells.
-    let mut i: i32 = 0;
-    crate::port::cells_push(tb, 1);
-    crate::port::cells_push(tb, x0);
-    crate::port::cells_push(tb, y0);
-    crate::port::cells_push(tb, x1);
-    crate::port::cells_push(tb, y1);
-    crate::port::cells_push(tb, profile);
-    crate::port::cells_push(tb, score);
-    crate::port::cells_push(tb, nrows);
-    crate::port::cells_push(tb, ncols);
-    crate::port::cells_push(tb, cfirst);
-    crate::port::cells_push(tb, ncells);
-    while i < 17 {
-        crate::port::cells_push(tb, 0);
-        i += 1;
-    }
-    crate::port::cells_set(tb, crate::port::cells_len(tb) - 10, 1);
-    crate::port::cells_set(tb, crate::port::cells_len(tb) - 3, -1);
-    return (crate::port::cells_len(tb) / 28) - 1;
+    // A candidate row using the stage's shared table record constructor.
+    return tb_add(tb, 1, x0, y0, x1, y1, profile, score, nrows, ncols, cfirst, ncells);
 }
 pub(crate) fn ttt_tc(mut tc: &mut crate::port::Cells, row: i32, col: i32, words: i32) -> i32 {
     // A cell of `tc` (stride 16) at a place on a lattice of 3000 x 1500: 1 x 1, `words` words (words 0 is an empty cell).
@@ -331,10 +313,10 @@ fn test_ocr_table_hints_break_ties_and_only_ties() {
     crate::testport::assert_that(tb_hint_iou(tb, 1, grg) < 1000, "and only nearly the second's");
     crate::testport::assert_eq(tb_tie_bonus(tb, 0, 0, 2, grg), 26, "the first candidate wins the tie: a bonus over the 25 the scores may differ by");
     crate::testport::assert_eq(tb_tie_bonus(tb, 1, 0, 2, grg), 0, "the second does not");
-    crate::port::cells_set(tb, 28 + 6, 900);
+    crate::port::cells_set(tb, TBS + 6, 900);
     crate::testport::assert_eq(tb_tie_bonus(tb, 0, 0, 2, grg), 0, "a candidate 200 better is no tie: OCR does not override the score");
     crate::port::cells_set(grg, 5, 2);
-    crate::port::cells_set(tb, 28 + 6, 720);
+    crate::port::cells_set(tb, TBS + 6, 720);
     crate::testport::assert_eq(tb_tie_bonus(tb, 0, 0, 2, grg), 0, "a region that is not a table hint is not read");
 }
 #[test]
@@ -381,7 +363,7 @@ pub(crate) fn ttt_multi(mut tg: &mut crate::port::Cells, mut ta: &mut crate::por
     crate::port::cells_push(wo, 0 + r0);
     crate::port::cells_push(wo, 0 + r1);
     crate::port::cells_push(wo, 0 + r2);
-    ttt_zeros(tb, 28);
+    ttt_zeros(tb, TBS);
     crate::port::cells_set(tb, 7, 3);
     crate::port::cells_set(tb, 8, 1);
     crate::port::cells_set(tb, 9, 0);

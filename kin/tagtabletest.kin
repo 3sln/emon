@@ -8,8 +8,8 @@
   (:require [emon.lang :refer [I32 Cells Text]]
             [emon.test :refer [deftest assert-eq assert-text assert-that new-cells new-text]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
-            [emon.tagtable :refer [tt-geo-map tt-grids tt-checks tt-score tt-iou tt-emit tt-record tt-get tt-set tt-cget tt-pm]]
-            [emon.table :refer [tb-tag-span tb-tie-bonus tb-hint-iou]]
+            [emon.tagtable :refer [TBS tt-geo-map tt-grids tt-checks tt-score tt-iou tt-emit tt-record tt-get tt-set tt-cget tt-pm]]
+            [emon.table :refer [tb-add tb-tag-span tb-tie-bonus tb-hint-iou]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem]]))
 
@@ -216,25 +216,8 @@
 ;; ------------------------------------------------------------------ what a table does with the tags
 
 (defn ^I32 ttt-tb [^:mut ^Cells tb ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 profile ^I32 score ^I32 nrows ^I32 ncols ^I32 cfirst ^I32 ncells]
-  (comment "A candidate row of `tb` (stride 28): page 1, the box, the profile (1 ruled .. 5 struct), the score, the grid, its cells.")
-  (let [^:mut ^I32 i 0]
-    (cells-push tb 1)
-    (cells-push tb x0)
-    (cells-push tb y0)
-    (cells-push tb x1)
-    (cells-push tb y1)
-    (cells-push tb profile)
-    (cells-push tb score)
-    (cells-push tb nrows)
-    (cells-push tb ncols)
-    (cells-push tb cfirst)
-    (cells-push tb ncells)
-    (while (< i 17)
-      (do (cells-push tb 0)
-          (set i (+ i 1))))
-    (cells-set tb (- (cells-len tb) 10) 1)
-    (cells-set tb (- (cells-len tb) 3) -1)
-    (return (- (quot (cells-len tb) 28) 1))))
+  (comment "A candidate row using the stage's shared table record constructor.")
+  (return (tb-add tb 1 x0 y0 x1 y1 profile score nrows ncols cfirst ncells)))
 
 (defn ^I32 ttt-tc [^:mut ^Cells tc ^I32 row ^I32 col ^I32 words]
   (comment "A cell of `tc` (stride 16) at a place on a lattice of 3000 x 1500: 1 x 1, `words` words (words 0 is an empty cell).")
@@ -304,10 +287,10 @@
     (assert-that (< (tb-hint-iou tb 1 grg) 1000) "and only nearly the second's")
     (assert-eq (tb-tie-bonus tb 0 0 2 grg) 26 "the first candidate wins the tie: a bonus over the 25 the scores may differ by")
     (assert-eq (tb-tie-bonus tb 1 0 2 grg) 0 "the second does not")
-    (cells-set tb (+ 28 6) 900)
+    (cells-set tb (+ TBS 6) 900)
     (assert-eq (tb-tie-bonus tb 0 0 2 grg) 0 "a candidate 200 better is no tie: OCR does not override the score")
     (cells-set grg 5 2)
-    (cells-set tb (+ 28 6) 720)
+    (cells-set tb (+ TBS 6) 720)
     (assert-eq (tb-tie-bonus tb 0 0 2 grg) 0 "a region that is not a table hint is not read")))
 
 ;; ------------------------------------------------------------------ the dump
@@ -351,7 +334,7 @@
   (cells-push wo (+ 0 r0))
   (cells-push wo (+ 0 r1))
   (cells-push wo (+ 0 r2))
-  (ttt-zeros tb 28)
+  (ttt-zeros tb TBS)
   (cells-set tb 7 3)
   (cells-set tb 8 1)
   (cells-set tb 9 0)

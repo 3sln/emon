@@ -1,0 +1,313 @@
+{
+ "emon-gold": "1.0",
+ "id": "table-summary-and-ledger",
+ "provenance": {
+  "html": "html/table-summary-and-ledger.html",
+  "pdf": "pdf/table-summary-and-ledger.pdf",
+  "producer": "emon synth.pdfw summary-and-ledger v1"
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Summary and ledger"
+      },
+      {
+       "id": 3,
+       "kind": "table",
+       "profile": "whitespace",
+       "columns": 2,
+       "children": [
+        {
+         "id": 4,
+         "kind": "rowgroup",
+         "role": "body",
+         "children": [
+          {
+           "id": 5,
+           "kind": "row",
+           "children": [
+            {
+             "id": 6,
+             "kind": "cell",
+             "text": "Subtotal"
+            },
+            {
+             "id": 7,
+             "kind": "cell",
+             "text": "31.00"
+            }
+           ]
+          },
+          {
+           "id": 8,
+           "kind": "row",
+           "children": [
+            {
+             "id": 9,
+             "kind": "cell",
+             "text": "Tax"
+            },
+            {
+             "id": 10,
+             "kind": "cell",
+             "text": "6.20"
+            }
+           ]
+          },
+          {
+           "id": 11,
+           "kind": "row",
+           "children": [
+            {
+             "id": 12,
+             "kind": "cell",
+             "text": "Total"
+            },
+            {
+             "id": 13,
+             "kind": "cell",
+             "text": "37.20"
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": 14,
+       "kind": "table",
+       "profile": "whitespace",
+       "columns": 3,
+       "children": [
+        {
+         "id": 15,
+         "kind": "rowgroup",
+         "role": "head",
+         "children": [
+          {
+           "id": 16,
+           "kind": "row",
+           "children": [
+            {
+             "id": 17,
+             "kind": "cell",
+             "header": "col",
+             "text": "Date"
+            },
+            {
+             "id": 18,
+             "kind": "cell",
+             "header": "col",
+             "text": "Details"
+            },
+            {
+             "id": 19,
+             "kind": "cell",
+             "header": "col",
+             "text": "Amount"
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "id": 20,
+         "kind": "rowgroup",
+         "role": "body",
+         "children": [
+          {
+           "id": 21,
+           "kind": "row",
+           "children": [
+            {
+             "id": 22,
+             "kind": "cell",
+             "text": "01Jan"
+            },
+            {
+             "id": 23,
+             "kind": "cell",
+             "text": "Rent"
+            },
+            {
+             "id": 24,
+             "kind": "cell",
+             "text": "1.00"
+            }
+           ]
+          },
+          {
+           "id": 25,
+           "kind": "row",
+           "children": [
+            {
+             "id": 26,
+             "kind": "cell",
+             "text": "02Jan"
+            },
+            {
+             "id": 27,
+             "kind": "cell",
+             "text": "Electricity"
+            },
+            {
+             "id": 28,
+             "kind": "cell",
+             "text": "20.00"
+            }
+           ]
+          },
+          {
+           "id": 29,
+           "kind": "row",
+           "children": [
+            {
+             "id": 30,
+             "kind": "cell",
+             "text": "03Jan"
+            },
+            {
+             "id": 31,
+             "kind": "cell",
+             "text": "Service fee"
+            },
+            {
+             "id": 32,
+             "kind": "cell",
+             "text": "300.00"
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Summary and ledger"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 1,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

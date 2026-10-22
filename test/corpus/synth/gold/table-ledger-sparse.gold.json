@@ -1,0 +1,455 @@
+{
+ "emon-gold": "1.0",
+ "id": "table-ledger-sparse",
+ "provenance": {
+  "html": "html/table-ledger-sparse.html",
+  "pdf": "pdf/table-ledger-sparse.pdf",
+  "producer": "emon synth.pdfw sparse-ledger v1"
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Sparse ledger"
+      },
+      {
+       "id": 3,
+       "kind": "table",
+       "profile": "whitespace",
+       "columns": 5,
+       "children": [
+        {
+         "id": 4,
+         "kind": "rowgroup",
+         "role": "head",
+         "children": [
+          {
+           "id": 5,
+           "kind": "row",
+           "children": [
+            {
+             "id": 6,
+             "kind": "cell",
+             "header": "col",
+             "text": "Date"
+            },
+            {
+             "id": 7,
+             "kind": "cell",
+             "header": "col",
+             "text": "Details"
+            },
+            {
+             "id": 8,
+             "kind": "cell",
+             "header": "col",
+             "text": "Deposit"
+            },
+            {
+             "id": 9,
+             "kind": "cell",
+             "header": "col",
+             "text": "Withdrawal"
+            },
+            {
+             "id": 10,
+             "kind": "cell",
+             "header": "col",
+             "text": "Balance"
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "id": 11,
+         "kind": "rowgroup",
+         "role": "body",
+         "children": [
+          {
+           "id": 12,
+           "kind": "row",
+           "children": [
+            {
+             "id": 13,
+             "kind": "cell",
+             "text": "1 Sep"
+            },
+            {
+             "id": 14,
+             "kind": "cell",
+             "text": "Transfer"
+            },
+            {
+             "id": 15,
+             "kind": "cell",
+             "empty": true,
+             "text": ""
+            },
+            {
+             "id": 16,
+             "kind": "cell",
+             "text": "181.04"
+            },
+            {
+             "id": 17,
+             "kind": "cell",
+             "text": "149,818.96"
+            }
+           ]
+          },
+          {
+           "id": 18,
+           "kind": "row",
+           "children": [
+            {
+             "id": 19,
+             "kind": "cell",
+             "text": "2 Sep"
+            },
+            {
+             "id": 20,
+             "kind": "cell",
+             "text": "Electronic transfer"
+            },
+            {
+             "id": 21,
+             "kind": "cell",
+             "empty": true,
+             "text": ""
+            },
+            {
+             "id": 22,
+             "kind": "cell",
+             "text": "1.00"
+            },
+            {
+             "id": 23,
+             "kind": "cell",
+             "text": "999.99"
+            }
+           ]
+          },
+          {
+           "id": 24,
+           "kind": "row",
+           "children": [
+            {
+             "id": 25,
+             "kind": "cell",
+             "text": "3 Sep"
+            },
+            {
+             "id": 26,
+             "kind": "cell",
+             "text": "Transfer"
+            },
+            {
+             "id": 27,
+             "kind": "cell",
+             "empty": true,
+             "text": ""
+            },
+            {
+             "id": 28,
+             "kind": "cell",
+             "text": "181.04"
+            },
+            {
+             "id": 29,
+             "kind": "cell",
+             "text": "149,818.96"
+            }
+           ]
+          },
+          {
+           "id": 30,
+           "kind": "row",
+           "children": [
+            {
+             "id": 31,
+             "kind": "cell",
+             "text": "4 Sep"
+            },
+            {
+             "id": 32,
+             "kind": "cell",
+             "text": "Electronic transfer"
+            },
+            {
+             "id": 33,
+             "kind": "cell",
+             "empty": true,
+             "text": ""
+            },
+            {
+             "id": 34,
+             "kind": "cell",
+             "text": "1.00"
+            },
+            {
+             "id": 35,
+             "kind": "cell",
+             "text": "999.99"
+            }
+           ]
+          },
+          {
+           "id": 36,
+           "kind": "row",
+           "children": [
+            {
+             "id": 37,
+             "kind": "cell",
+             "text": "5 Sep"
+            },
+            {
+             "id": 38,
+             "kind": "cell",
+             "text": "Transfer"
+            },
+            {
+             "id": 39,
+             "kind": "cell",
+             "empty": true,
+             "text": ""
+            },
+            {
+             "id": 40,
+             "kind": "cell",
+             "text": "181.04"
+            },
+            {
+             "id": 41,
+             "kind": "cell",
+             "text": "149,818.96"
+            }
+           ]
+          },
+          {
+           "id": 42,
+           "kind": "row",
+           "children": [
+            {
+             "id": 43,
+             "kind": "cell",
+             "text": "6 Sep"
+            },
+            {
+             "id": 44,
+             "kind": "cell",
+             "text": "Electronic transfer"
+            },
+            {
+             "id": 45,
+             "kind": "cell",
+             "empty": true,
+             "text": ""
+            },
+            {
+             "id": 46,
+             "kind": "cell",
+             "text": "1.00"
+            },
+            {
+             "id": 47,
+             "kind": "cell",
+             "text": "999.99"
+            }
+           ]
+          },
+          {
+           "id": 48,
+           "kind": "row",
+           "children": [
+            {
+             "id": 49,
+             "kind": "cell",
+             "text": "7 Sep"
+            },
+            {
+             "id": 50,
+             "kind": "cell",
+             "text": "Transfer"
+            },
+            {
+             "id": 51,
+             "kind": "cell",
+             "empty": true,
+             "text": ""
+            },
+            {
+             "id": 52,
+             "kind": "cell",
+             "text": "181.04"
+            },
+            {
+             "id": 53,
+             "kind": "cell",
+             "text": "149,818.96"
+            }
+           ]
+          },
+          {
+           "id": 54,
+           "kind": "row",
+           "children": [
+            {
+             "id": 55,
+             "kind": "cell",
+             "text": "8 Sep"
+            },
+            {
+             "id": 56,
+             "kind": "cell",
+             "text": "Electronic transfer"
+            },
+            {
+             "id": 57,
+             "kind": "cell",
+             "empty": true,
+             "text": ""
+            },
+            {
+             "id": 58,
+             "kind": "cell",
+             "text": "1.00"
+            },
+            {
+             "id": 59,
+             "kind": "cell",
+             "text": "999.99"
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Sparse ledger"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 1,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

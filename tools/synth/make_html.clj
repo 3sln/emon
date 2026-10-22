@@ -1138,11 +1138,42 @@ h1{font:bold 20pt %s} h2{font:bold 14pt %s}" SERIF SANS SANS SANS)
          "<svg width=\"100%\" height=\"100%\" style=\"position:absolute;left:0;top:0\" viewBox=\"0 0 100 100\" preserveAspectRatio=\"none\"><line x1=\"0\" y1=\"0\" x2=\"100\" y2=\"100\" stroke=\"#000\" stroke-width=\"1\" vector-effect=\"non-scaling-stroke\"/></svg>")
     @docs))
 
+(defn build-table-model
+  "P12.10: sparse ledger columns retain an empty deposit band."
+  []
+  {"table-ledger-sparse"
+   (doc "Sparse ledger"
+        (str "<h1>Sparse ledger</h1><table data-profile=\"whitespace\"><thead>"
+             (tr ["Date" "Details" "Deposit" "Withdrawal" "Balance"] "th" #{2 3 4})
+             "</thead><tbody>"
+             (apply str (for [r (range 8)]
+                          (tr [(str (inc r) " Sep")
+                               (if (even? r) "Transfer" "Electronic transfer") ""
+                               (if (even? r) "181.04" "1.00")
+                               (if (even? r) "149,818.96" "999.99")] "td" #{2 3 4})))
+             "</tbody></table>")
+        {:css "table{width:100%}th,td{padding:4px 10px}th:nth-child(2),td:nth-child(2){width:35%}"})
+   "table-summary-and-ledger"
+   (doc "Summary and ledger"
+        (str "<h1>Summary and ledger</h1>"
+             "<table data-profile=\"whitespace\"><tbody>"
+             (tr ["Subtotal" "31.00"] "td" #{1})
+             (tr ["Tax" "6.20"] "td" #{1})
+             (tr ["Total" "37.20"] "td" #{1})
+             "</tbody></table><table data-profile=\"whitespace\"><thead>"
+             (tr ["Date" "Details" "Amount"] "th" #{2})
+             "</thead><tbody>"
+             (tr ["01Jan" "Rent" "1.00"] "td" #{2})
+             (tr ["02Jan" "Electricity" "20.00"] "td" #{2})
+             (tr ["03Jan" "Service fee" "300.00"] "td" #{2})
+             "</tbody></table>")
+        {:css "table{width:100%;margin:0}th,td{padding:4px 10px}"})})
+
 (defn build
   "Every document: the 36 of P2.8, the 19 of P2.13 (D114) and the 12 of P6.6 (D209), as {name html}."
   []
   (let [p28 (build-p28)]
-    (merge p28 (build-d114) (build-fusion p28) (build-graphics))))
+    (merge p28 (build-d114) (build-fusion p28) (build-graphics) (build-table-model))))
 
 (defn -main [& args]
   (let [out (or (first args) "test/corpus/synth/html")

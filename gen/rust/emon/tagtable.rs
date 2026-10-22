@@ -4,6 +4,7 @@
 use crate::emon::evidence::*;
 use crate::emon::glayer::*;
 
+pub const TBS: i32 = 32;
 pub(crate) const TB_TAG_TRUST: i32 = 300;
 pub(crate) const TB_STRUCT_OK: i32 = 800;
 pub(crate) const TB_STRUCT_BAD: i32 = 500;
@@ -600,7 +601,7 @@ pub(crate) fn tt_mode(ws: &mut crate::port::Cells, at0: i32, n: i32, m: i32, i: 
     return best;
 }
 pub fn tt_geo_map(tg: &mut crate::port::Cells, k: i32, ta: &mut crate::port::Cells, wo: &mut crate::port::Cells, w0: i32, tb: &mut crate::port::Cells, t: i32, tc: &mut crate::port::Cells, tw: &mut crate::port::Cells, mut ws: &mut crate::port::Cells) -> i32 {
-    // The majority mapping of table k's rows and columns onto candidate t of `tb` (stride 28, cells of stride 16): ws[0..nrows) is the
+    // The majority mapping of table k's rows and columns onto candidate t of `tb` (stride TBS, cells of stride 16): ws[0..nrows) is the
     // candidate row of each tagged row, ws[nrows..nrows+ncols) the candidate column of each tagged column (-1 none). Answers the words
     // that agree: the tagged row and column map one-to-one and a word's candidate cell is the one they name; -2 when the matrices
     // would not fit (more than a million cells), and the arena is left as the maps. The words' cells are in `ws` after the maps.
@@ -609,7 +610,7 @@ pub fn tt_geo_map(tg: &mut crate::port::Cells, k: i32, ta: &mut crate::port::Cel
     let ce: i32 = cf + crate::port::cells_at(tg, b + 5);
     let nr: i32 = crate::port::cells_at(tg, b + 2);
     let nc: i32 = crate::port::cells_at(tg, b + 3);
-    let tb0: i32 = t * 28;
+    let tb0: i32 = t * TBS;
     let gnr: i32 = crate::port::cells_at(tb, tb0 + 7);
     let gnc: i32 = crate::port::cells_at(tb, tb0 + 8);
     let gcf: i32 = crate::port::cells_at(tb, tb0 + 9);
@@ -809,8 +810,8 @@ pub fn tt_geo_tb(tg: &mut crate::port::Cells, k: i32, tb: &mut crate::port::Cell
         return -1;
     }
     while t < t1 {
-        if crate::port::cells_at(tb, (t * 28) + 5) != 5 {
-            v = tt_iou(crate::port::cells_at(tg, b + 6), crate::port::cells_at(tg, b + 7), crate::port::cells_at(tg, b + 8), crate::port::cells_at(tg, b + 9), crate::port::cells_at(tb, (t * 28) + 1), crate::port::cells_at(tb, (t * 28) + 2), crate::port::cells_at(tb, (t * 28) + 3), crate::port::cells_at(tb, (t * 28) + 4));
+        if crate::port::cells_at(tb, (t * TBS) + 5) != 5 {
+            v = tt_iou(crate::port::cells_at(tg, b + 6), crate::port::cells_at(tg, b + 7), crate::port::cells_at(tg, b + 8), crate::port::cells_at(tg, b + 9), crate::port::cells_at(tb, (t * TBS) + 1), crate::port::cells_at(tb, (t * TBS) + 2), crate::port::cells_at(tb, (t * TBS) + 3), crate::port::cells_at(tb, (t * TBS) + 4));
             if v > bv {
                 bv = v;
                 best = t;

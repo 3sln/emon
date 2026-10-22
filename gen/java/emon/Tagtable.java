@@ -5,6 +5,7 @@ package emon;
 
 
 public final class Tagtable {
+    public static final int TBS = 32;
     public static final int TB_TAG_TRUST = 300;
     public static final int TB_STRUCT_OK = 800;
     public static final int TB_STRUCT_BAD = 500;
@@ -601,7 +602,7 @@ public final class Tagtable {
         return best;
     }
     public static int ttGeoMap(emon.Port.Cells tg, int k, emon.Port.Cells ta, emon.Port.Cells wo, int w0, emon.Port.Cells tb, int t, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells ws) {
-        // The majority mapping of table k's rows and columns onto candidate t of `tb` (stride 28, cells of stride 16): ws[0..nrows) is the
+        // The majority mapping of table k's rows and columns onto candidate t of `tb` (stride TBS, cells of stride 16): ws[0..nrows) is the
         // candidate row of each tagged row, ws[nrows..nrows+ncols) the candidate column of each tagged column (-1 none). Answers the words
         // that agree: the tagged row and column map one-to-one and a word's candidate cell is the one they name; -2 when the matrices
         // would not fit (more than a million cells), and the arena is left as the maps. The words' cells are in `ws` after the maps.
@@ -610,7 +611,7 @@ public final class Tagtable {
         int ce = cf + emon.Port.cellsAt(tg, b + 5);
         int nr = emon.Port.cellsAt(tg, b + 2);
         int nc = emon.Port.cellsAt(tg, b + 3);
-        int tb0 = t * 28;
+        int tb0 = t * TBS;
         int gnr = emon.Port.cellsAt(tb, tb0 + 7);
         int gnc = emon.Port.cellsAt(tb, tb0 + 8);
         int gcf = emon.Port.cellsAt(tb, tb0 + 9);
@@ -810,8 +811,8 @@ public final class Tagtable {
             return -1;
         }
         while (t < t1) {
-            if (emon.Port.cellsAt(tb, (t * 28) + 5) != 5) {
-                v = ttIou(emon.Port.cellsAt(tg, b + 6), emon.Port.cellsAt(tg, b + 7), emon.Port.cellsAt(tg, b + 8), emon.Port.cellsAt(tg, b + 9), emon.Port.cellsAt(tb, (t * 28) + 1), emon.Port.cellsAt(tb, (t * 28) + 2), emon.Port.cellsAt(tb, (t * 28) + 3), emon.Port.cellsAt(tb, (t * 28) + 4));
+            if (emon.Port.cellsAt(tb, (t * TBS) + 5) != 5) {
+                v = ttIou(emon.Port.cellsAt(tg, b + 6), emon.Port.cellsAt(tg, b + 7), emon.Port.cellsAt(tg, b + 8), emon.Port.cellsAt(tg, b + 9), emon.Port.cellsAt(tb, (t * TBS) + 1), emon.Port.cellsAt(tb, (t * TBS) + 2), emon.Port.cellsAt(tb, (t * TBS) + 3), emon.Port.cellsAt(tb, (t * TBS) + 4));
                 if (v > bv) {
                     bv = v;
                     best = t;

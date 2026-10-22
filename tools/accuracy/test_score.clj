@@ -12,6 +12,8 @@ the same, the stream is not Python's.)"
             [accuracy.predict-oracle :as O]
             [clojure.string :as str]
             [accuracy.score :as S]
+            [accuracy.confrows :as CR]
+            [accuracy.calib :as CAL]
             [clojure.test :refer [deftest is run-tests]]
             [pyjson]))
 
@@ -674,6 +676,36 @@ the same, the stream is not Python's.)"
     (is (= 0.0 (d "frag-col-acc")))            ; no layout
     (is (= 0.0 (d "join-r")))                  ; the multi-fragment paragraph is cut
     (is (> (d "cer") 0.0))))
+
+(deftest table-model-fixtures-still-count-in-all
+  (let [t {"kind" "table" "children"
+           [{"kind" "rowgroup" "role" "body" "children"
+             [{"kind" "row" "children" [{"kind" "cell" "text" "x"}]}]}]}
+        truth (gold [t])
+        predictor (fn [id _ _ _] (if (= id "table-whitespace") (pred [t]) (pred [])))]
+    (with-redefs [A/corpus (fn [] [["table-whitespace" "pdf" "input" "gold"]
+                                  ["table-ledger-sparse" "pdf" "input" "gold"]])
+                  A/doc-graphics (fn [_] {})
+                  pyjson/parse-file (fn [_] truth)]
+      (let [[entry _] (A/evaluate predictor)]
+        ;; Missing the entire new table still lowers the global score: 1 TP, 1 FN.
+        (is (= 0.666667 (get-in entry ["pdf/all" ":block-table-f1"])))
+        (is (= 1.0 (get-in entry ["pdf/tables" ":block-table-f1"])))
+        (is (= 0.0 (get-in entry ["pdf/table-model" ":block-table-f1"])))))))
+
+(deftest new-fixtures-preserve-historical-calibration-populations
+  (let [truth (gold [])
+        predictor (fn [id _ _ _] {"id" id})]
+    (with-redefs [A/corpus (fn [] [["table-whitespace" "pdf" "input" "gold"]
+                                  ["table-ledger-sparse" "pdf" "input" "gold"]])
+                  A/doc-graphics (fn [_] {})
+                  pyjson/parse-file (fn [_] truth)
+                  CR/counts (fn [p _] (CAL/row-counts
+                                      [["table" "text" (if (= "table-whitespace" (get p "id")) 1000 0) 1000]]))]
+      (let [[entry _] (A/evaluate predictor)]
+        (doseq [unit ["all" "table" "table-text"] metric ["ece" "brier"]]
+          (is (= 0.0 (get-in entry ["pdf/all" (str ":conf-" metric "-" unit)])))
+          (is (= 1.0 (get-in entry ["pdf/table-model" (str ":conf-" metric "-" unit)]))))))))
 
 ;; --------------------------------------------------------------- Ratchet ----
 

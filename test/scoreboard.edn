@@ -4106,6 +4106,69 @@
         :table-teds-struct-lite 1.0
         :tl-override 0.0
         :wer 0.041993}
+      "pdf/table-model" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 1.0
+        :bow-p 1.0
+        :bow-r 1.0
+        :cer 0.0
+        :conf-brier-all 0.000249
+        :conf-brier-cell 9e-06
+        :conf-brier-cell-text 9e-06
+        :conf-brier-heading 0.002704
+        :conf-brier-heading-text 0.002704
+        :conf-brier-row 0.000169
+        :conf-brier-row-infer 0.000169
+        :conf-brier-rowgroup 0.001681
+        :conf-brier-rowgroup-infer 0.001681
+        :conf-brier-section 0.002209
+        :conf-brier-section-infer 0.002209
+        :conf-brier-table 0.004489
+        :conf-brier-table-text 0.004489
+        :conf-ece-all 0.011
+        :conf-ece-cell 0.003
+        :conf-ece-cell-text 0.003
+        :conf-ece-heading 0.052
+        :conf-ece-heading-text 0.052
+        :conf-ece-row 0.013
+        :conf-ece-row-infer 0.013
+        :conf-ece-rowgroup 0.041
+        :conf-ece-rowgroup-infer 0.041
+        :conf-ece-section 0.047
+        :conf-ece-section-infer 0.047
+        :conf-ece-table 0.067
+        :conf-ece-table-text 0.067
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :src-ocr-share 0.0
+        :table-adj-f1 1.0
+        :table-adj-p 1.0
+        :table-adj-r 1.0
+        :table-continued-acc 1.0
+        :table-teds 1.0
+        :table-teds-lite 1.0
+        :table-teds-struct 1.0
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :wer 0.0}
       "pdf/tables" {
         :block-caption-f1 1.0
         :block-caption-p 1.0
