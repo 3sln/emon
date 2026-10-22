@@ -4083,7 +4083,7 @@ Work for the release after 0.1.0 (ids from D559; the coordinator renumbers at th
   Rust and on Go. The scoreboard: nothing of `emon` regresses; the `emon-replay-px` ratchet's scan-ovl paragraph and boundary rows (one invoice address line, a false heading
   once, a paragraph now) are lowered by hand and its 38 improvements (scan headings p 0.60 to 0.75) recorded.
 - [x] P12.9 born-digital tables and forms — batch complete with explicit deferrals (D631–D639): real TEDS, dense born-digital categorical tables, headerless numeric summaries, unruled body spans and adjacent currency prefixes. E14 and D28 improve live; remaining header/total ownership, page linking, debit/credit, forms and false headings remain proposals D636–D638. All 29 samples are unchanged; Rust and Go each pass 1,083 laws. The coordinator commits; drift and CI core therefore report only uncommitted generated output.
-- [x] P12.12 layout and RTL — six fixes (D655–D660), with explicit region, furniture, paragraph, heading and figure proposals D661 and D1837–D1841. Rust and Go each pass 1,116 laws; all 29 samples run, protected samples unchanged; scoreboard unchanged. Required gates pass except drift/CI core flagging intentionally uncommitted generated output. The coordinator commits; verification and coverage limits are in the batch 10 report.
+- [x] P12.12 layout and RTL — six fixes (D655–D660), with explicit region, furniture, paragraph, heading and figure proposals D661 and D662–D666. Rust and Go each pass 1,116 laws; all 29 samples run, protected samples unchanged; scoreboard unchanged. Required gates pass except drift/CI core flagging intentionally uncommitted generated output. The coordinator commits; verification and coverage limits are in the batch 10 report.
 - [ ] P12.10 table model increments 1–2 — increments 1 and 2a are gate-green (D645–D648); 2b records ownership/context (D649), fits selected rows (D650), attaches model-fit tails (D652) and preserves body claims while claiming fully owned bound rows (D654). Header reconstruction (D651), partial-interval merging/summary reconstruction (D653) and E10 fragmentation remain.
 - [x] P12.7 smoke batch 6: regressions and born-digital layout. DONE (D594–D609; validation and smoke comparisons pending).
 - [x] P12.8 scan quality: raster graphics and seals, checked language packs, script retries, OCR paragraph jitter and specks (D640–D644). Normalization residuals and demo language hosting explicitly deferred in D641/D642; validation is recorded in the batch report.
@@ -11965,7 +11965,7 @@ T3 needs a live-derived paragraph-boundary fixture rather than a global ban on s
 
 - [ ] **Signed off** (maintainer)
 
-### D1837 — Proposal: region ownership before tables and column classes
+### D662 — Proposal: region ownership before tables and column classes
 
 **Evidence.** n12's fused fills are short header bands, not the full infobox ground. `lc-mark-asides` requires a non-white fill at least `LC_ASIDE_H` tall, and `lc-mark-box` ignores table-held lines. It cannot recover an infobox after false table claims. **Proposal.** Build candidate enclosures from joined rules and header fills before table discovery; jointly choose aside versus table ownership, then fit the body around the enclosure. Require independent body lines beside it and preserve actual tables inside an aside. Fixtures must cover a white boxed infobox, a header-band-only infobox and a real narrow table beside prose; compare n12, G01 and d16 live.
 
@@ -11973,25 +11973,25 @@ F02's title/TOC and Get forms/What's New need the same region-first layout: the 
 
 - [ ] **Signed off** (maintainer)
 
-### D1838 — Proposal: fuzzy running-furniture groups with positional evidence
+### D663 — Proposal: fuzzy running-furniture groups with positional evidence
 
 **Cause.** Furniture template grouping uses exact normalized template keys before recurrence scoring. OCR variants of a running header fall into different groups; multi-line chaining only extends groups that already qualify, for three passes. Mastheads need region context as well as a top-band location. **Proposal.** Cluster bounded-length OCR candidates using edit distance, position and font size before group statistics, keep original per-page text, and run adjacency propagation to a fixed point bounded by candidate count. Never discard a confidentiality notice: emit it once as furniture. Fixtures: four-line grey headers, one-character OCR substitutions on repeated headers, a repeated confidentiality notice and changing table-unit labels in the top band. Deferred pending those positive and negative fixtures and G09/d06/G12 live checks.
 
 - [ ] **Signed off** (maintainer)
 
-### D1839 — Proposal: paragraph continuity across hanging indents, floats and pages
+### D664 — Proposal: paragraph continuity across hanging indents, floats and pages
 
 **Cause.** Paragraph boundaries combine inferred size, start edge, heading/list decisions and cross-fragment join scores. OCR size tolerance is restricted to lines of at least four words on both sides; a short continuation loses it. Cross-fragment edge evidence uses physical right edges even for RTL. Hanging numbered definitions additionally depend on list/heading interpretation. **Proposal.** Carry a paragraph's logical start/end margins and continuation style across fragments, with a separate hanging-indent state established by the marker and second line. Do not treat a single large sentence gap as a column. Fixtures must pair each continuation with a real new paragraph (including short final OCR lines, two-sentence typewriter prose, a numbered definition, a float and a page break). Deferred: loosening size/indent thresholds without these controls would merge independent paragraphs and table notes.
 
 - [ ] **Signed off** (maintainer)
 
-### D1840 — Proposal: contextual heading and figure-label ownership
+### D665 — Proposal: contextual heading and figure-label ownership
 
 **Cause.** Heading style scoring can promote isolated first OCR lines, bold lead-ins and detached table/figure labels before their structural owner is known. Caption attachment, TOC interpretation, author/front-matter roles and table-title lists are distinct contexts. **Proposal.** Supply the heading stage with established region/owner roles and suppress heading candidacy for owned captions, TOC entries, unit notes, footer regions and run-in leads; keep actual Abstract sections as headings at the document's appropriate level. Fixtures: a figure caption versus a real section mentioning a figure, a TOC versus numbered sections, an author block versus title, bracketed units and a merchant row. Includes G07's Figure 34 and Format line, E10's `(d)` note and merchant names. Deferred rather than adding a keyword blacklist or stripping meaningful brackets.
 
 - [ ] **Signed off** (maintainer)
 
-### D1841 — Proposal: mutually exclusive figure, stamp and signature interpretations
+### D666 — Proposal: mutually exclusive figure, stamp and signature interpretations
 
 **Cause.** Graphics-region classification and seal/signature interpretation can claim raster text independently of figure/diagram ownership; outlined display text can be interpreted as watermark ink. A logo, poster or checkbox row needs negative evidence against a stamp/signature, not just a different label after its words have been removed. **Proposal.** Score competing interpretations before claims, using region area, repeated display lettering, checkbox structure and neighboring labels. Assign diagram labels to a figure region and emit the figure even when there is no single raster image. Fixtures: a full-page poster versus a genuine stamp, a BEA-style logo versus initials, checkbox row versus signature, outlined title versus repeated watermark, and vector/raster figures with labels. Deferred; do not change the scan/health/OCR hosts owned by batch 9 or suppress seal nodes solely by a word blacklist.
 
