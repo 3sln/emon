@@ -206,6 +206,63 @@ pub(crate) fn tt_brief(mut t: &mut String, nodes: &mut crate::port::Cells, attrs
     }
     return 0;
 }
+pub(crate) fn tt_body_audit(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, tb: &mut crate::port::Cells, tc: &mut crate::port::Cells, tw: &mut crate::port::Cells) -> i32 {
+    let mut w: i32 = 0;
+    let mut k: i32 = 0;
+    let mut c: i32 = 0;
+    let mut j: i32 = 0;
+    let mut inside: i32 = 0;
+    let mut owned: i32 = 0;
+    let mut drop: i32 = 0;
+    while w < wd_count(wd) {
+        inside = 0;
+        owned = 0;
+        drop = 0;
+        k = 0;
+        let x: i32 = (wd_get(wd, w, hd_x0()) + wd_get(wd, w, hd_x1())) / 2;
+        let y: i32 = (wd_get(wd, w, hd_y0()) + wd_get(wd, w, hd_y1())) / 2;
+        let rot: i32 = wd_get(wd, w, hd_rot());
+        let wordlen: i32 = wd_get(wd, w, hd_tlen());
+        if (wordlen == 0) || ((rot >= 100) && (rot <= 35900)) {
+            drop = 1;
+        }
+        if wordlen == 1 {
+            let cp: i32 = crate::port::cells_at(et, wd_get(wd, w, hd_tstart()));
+            if (cp == 46) || ((cp == 58) || ((cp == 45) || ((cp == 8211) || (cp == 8212)))) {
+                drop = 1;
+            }
+        }
+        while k < (crate::port::cells_len(tb) / 32) {
+            let b: i32 = k * 32;
+            if (wd_get(wd, w, hd_page()) == crate::port::cells_at(tb, b)) && ((x >= crate::port::cells_at(tb, b + 1)) && ((x <= crate::port::cells_at(tb, b + 3)) && ((y >= crate::port::cells_at(tb, b + 2)) && (y <= crate::port::cells_at(tb, b + 4))))) {
+                if (crate::port::cells_at(tb, b + 5) != 1) && (crate::port::cells_at(tb, b + 5) != 5) {
+                    inside = 1;
+                }
+            }
+            c = crate::port::cells_at(tb, b + 9);
+            while c < (crate::port::cells_at(tb, b + 9) + crate::port::cells_at(tb, b + 10)) {
+                j = 0;
+                while j < crate::port::cells_at(tc, (c * 16) + 9) {
+                    if crate::port::cells_at(tw, crate::port::cells_at(tc, (c * 16) + 8) + j) == w {
+                        owned += 1;
+                    }
+                    j += 1;
+                }
+                c += 1;
+            }
+            k += 1;
+        }
+        if inside == 1 {
+            if owned > 1 {
+                return 5;
+            } else if (owned == 0) && (drop == 0) {
+                return 6;
+            }
+        }
+        w += 1;
+    }
+    return 0;
+}
 pub(crate) fn tt_run_an(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, pa: &mut crate::port::Cells, mut t: &mut String, np: i32, an: &mut crate::port::Cells) -> i32 {
     // `tt-run-n` over a document whose annotations (rows of `an`, `AN_STRIDE` cells) are `an`: the form fields' widgets (D583).
     let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -287,6 +344,9 @@ pub(crate) fn tt_run_an(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells
     }
     gf_doc(pa, gpts, gmk, gim, np, gfx_mode(), grl, gfl, cand, &mut crate::port::Cells::new());
     tb_build(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
+    if tt_body_audit(wd, et, tb, tc, tw) != 0 {
+        return 7;
+    }
     lc_copy(ln, lt);
     pa_build(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
     tt_brief(t, nodes, attrs, text);
@@ -2032,6 +2092,9 @@ pub(crate) fn tt_golden(pdf: &[u8], mut t: &mut String, mut tvt: &mut String) ->
     let np: i32 = crate::port::cells_len(pages) / 16;
     gf_doc(pa, pts, mk, im, np, gfx_mode(), grl, gfl, cand, &mut crate::port::Cells::new());
     tb_build(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, &mut crate::port::Cells::new());
+    if tt_body_audit(wd, et, tb, tc, tw) != 0 {
+        return 7;
+    }
     tt_emit(tvt, t12e);
     lc_copy(ln, lt);
     in_detect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii);
@@ -2192,6 +2255,8 @@ fn test_right_aligned_amounts_make_one_numeric_column() {
     let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let tbk: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     page_new(pages, 1, 61200, 79200, 0, pk_vector());
@@ -2207,7 +2272,8 @@ fn test_right_aligned_amounts_make_one_numeric_column() {
     tt_at(wd, ln, et, &crate::testport::text_blob("100.00")[..], 40500, 16400, 0, 1);
     tt_at(wd, ln, et, &crate::testport::text_blob("Total")[..], 7600, 18000, 1, 0);
     tt_at(wd, ln, et, &crate::testport::text_blob("1,111.00")[..], 40500, 18000, 1, 1);
-    crate::testport::assert_eq(tb_build(wd, ln, et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), 1, tb, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), tbk, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 1, "the amounts make one table");
+    crate::testport::assert_eq(tb_build(wd, ln, et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), 1, tb, tc, tw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), tbk, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 1, "the amounts make one table");
+    crate::testport::assert_eq(tt_body_audit(wd, et, tb, tc, tw), 0, "the numeric-model fixture has unique body ownership");
     crate::testport::assert_eq(tb_model_col(tb, tbk, 0, 1, 3), 40500, "varying widths share their right anchor");
     crate::testport::assert_eq(tb_model_col(tb, tbk, 0, 1, 5), 3, "the numeric column is an amount column");
     crate::testport::assert_eq(tb_model_col(tb, tbk, 0, 1, 9), 4, "all four body rows support the anchor");
@@ -2295,7 +2361,11 @@ fn test_empty_date_markers_do_not_split_a_ledger() {
 pub(crate) fn tt_own_build(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tbo: &mut crate::port::Cells) -> i32 {
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     page_new(pages, 1, 61200, 79200, 0, pk_vector());
-    return tb_build(wd, ln, et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), 1, tb, tc, tw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), tbo, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+    tb_build(wd, ln, et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), 1, tb, tc, tw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), tbo, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+    if tt_body_audit(wd, et, tb, tc, tw) != 0 {
+        return -7;
+    }
+    return crate::port::cells_len(tb) / 32;
 }
 #[test]
 fn test_every_word_in_a_table_body_has_one_owner() {
@@ -2478,4 +2548,87 @@ fn test_a_separator_and_footnote_are_not_a_wrapped_description() {
     tt_at(wd, ln, et, &crate::testport::text_blob("* Not meaningful.")[..], 15000, 17200, 0, 0);
     crate::testport::assert_eq(tt_own_build(wd, ln, et, tb, tc, tw, tbo), 1, "one original candidate");
     crate::testport::assert_eq(crate::port::cells_at(tb, 7), 6, "the separator and footnote keep their own rows");
+}
+#[test]
+fn test_a_total_a_blank_line_below_the_body_is_its_foot() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tbo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    tt_at(wd, ln, et, &crate::testport::text_blob("Item")[..], 7600, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Amount")[..], 43000, 10000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Goods")[..], 7600, 11600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("10.00")[..], 43000, 11600, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Goods")[..], 7600, 13200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("10.00")[..], 43000, 13200, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Goods")[..], 7600, 14800, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("10.00")[..], 43000, 14800, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Goods")[..], 7600, 16400, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("10.00")[..], 43000, 16400, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Total")[..], 7600, 19600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("40.00")[..], 43000, 19600, 0, 1);
+    crate::testport::assert_eq(tt_own_build(wd, ln, et, tb, tc, tw, tbo), 1, "one ledger with a separated total");
+    crate::testport::assert_eq(crate::port::cells_at(tb, 7), 6, "the separated total is attached");
+    crate::testport::assert_eq(crate::port::cells_at(tb, 12), 1, "an aligned total after a blank pitch is a foot");
+}
+#[test]
+fn test_an_empty_word_inside_the_body_is_explicitly_dropped() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tbo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    tt_part_ledger(wd, ln, et, 10000);
+    tt_at(wd, ln, et, &crate::testport::text_blob("")[..], 15000, 13000, 0, 0);
+    crate::testport::assert_eq(tt_own_build(wd, ln, et, tb, tc, tw, tbo), 1, "the empty token does not change the ledger");
+    crate::testport::assert_eq(crate::port::cells_at(tbo, 12), -1, "row-builder-excluded empty evidence is explicitly dropped");
+}
+#[test]
+fn test_a_partially_owned_body_line_keeps_its_box_claim() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tbo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    tt_part_ledger(wd, ln, et, 10000);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Outside")[..], 50000, 5000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Outside")[..], 50000, 6500, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Outside")[..], 50000, 8000, 0, 0);
+    ln_set(ln, 11, 12, 4);
+    crate::testport::assert_eq(tt_own_build(wd, ln, et, tb, tc, tw, tbo), 1, "one retained table");
+    crate::testport::assert_eq(ln_get(ln, 11, 15), 1073741824, "one owned word of four still keeps the original body box claim");
+    crate::testport::assert_eq(crate::port::cells_at(tbo, 12), 0, "outside-body evidence stays unowned");
+}
+#[test]
+fn test_an_attached_tail_with_an_imprecise_line_box_is_claimed() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tbo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    tt_at(wd, ln, et, &crate::testport::text_blob("Item")[..], 7600, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Amount")[..], 43000, 10000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Goods")[..], 7600, 11600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("10.00")[..], 43000, 11600, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Goods")[..], 7600, 13200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("10.00")[..], 43000, 13200, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Goods")[..], 7600, 14800, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("10.00")[..], 43000, 14800, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Goods")[..], 7600, 16400, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("10.00")[..], 43000, 16400, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Total")[..], 7600, 19600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("40.00")[..], 43000, 19600, 0, 1);
+    ln_set(ln, 10, 3, 100000);
+    crate::testport::assert_eq(tt_own_build(wd, ln, et, tb, tc, tw, tbo), 1, "one ledger with a separated total");
+    crate::testport::assert_eq(crate::port::cells_at(tb, 7), 6, "the separated total is attached");
+    crate::testport::assert_eq(ln_get(ln, 10, 15), 1073741824, "a fully owned attached tail is claimed outside the old line box");
 }

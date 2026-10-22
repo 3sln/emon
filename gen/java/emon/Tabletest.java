@@ -192,6 +192,63 @@ public final class Tabletest {
         }
         return 0;
     }
+    public static int ttBodyAudit(emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw) {
+        int w = 0;
+        int k = 0;
+        int c = 0;
+        int j = 0;
+        int inside = 0;
+        int owned = 0;
+        int drop = 0;
+        while (w < Evidence.wdCount(wd)) {
+            inside = 0;
+            owned = 0;
+            drop = 0;
+            k = 0;
+            int x = (Evidence.wdGet(wd, w, Evidence.hdX0()) + Evidence.wdGet(wd, w, Evidence.hdX1())) / 2;
+            int y = (Evidence.wdGet(wd, w, Evidence.hdY0()) + Evidence.wdGet(wd, w, Evidence.hdY1())) / 2;
+            int rot = Evidence.wdGet(wd, w, Evidence.hdRot());
+            int wordlen = Evidence.wdGet(wd, w, Evidence.hdTlen());
+            if ((wordlen == 0) || ((rot >= 100) && (rot <= 35900))) {
+                drop = 1;
+            }
+            if (wordlen == 1) {
+                int cp = emon.Port.cellsAt(et, Evidence.wdGet(wd, w, Evidence.hdTstart()));
+                if ((cp == 46) || ((cp == 58) || ((cp == 45) || ((cp == 8211) || (cp == 8212))))) {
+                    drop = 1;
+                }
+            }
+            while (k < (emon.Port.cellsLen(tb) / 32)) {
+                int b = k * 32;
+                if ((Evidence.wdGet(wd, w, Evidence.hdPage()) == emon.Port.cellsAt(tb, b)) && ((x >= emon.Port.cellsAt(tb, b + 1)) && ((x <= emon.Port.cellsAt(tb, b + 3)) && ((y >= emon.Port.cellsAt(tb, b + 2)) && (y <= emon.Port.cellsAt(tb, b + 4)))))) {
+                    if ((emon.Port.cellsAt(tb, b + 5) != 1) && (emon.Port.cellsAt(tb, b + 5) != 5)) {
+                        inside = 1;
+                    }
+                }
+                c = emon.Port.cellsAt(tb, b + 9);
+                while (c < (emon.Port.cellsAt(tb, b + 9) + emon.Port.cellsAt(tb, b + 10))) {
+                    j = 0;
+                    while (j < emon.Port.cellsAt(tc, (c * 16) + 9)) {
+                        if (emon.Port.cellsAt(tw, emon.Port.cellsAt(tc, (c * 16) + 8) + j) == w) {
+                            owned += 1;
+                        }
+                        j += 1;
+                    }
+                    c += 1;
+                }
+                k += 1;
+            }
+            if (inside == 1) {
+                if (owned > 1) {
+                    return 5;
+                } else if ((owned == 0) && (drop == 0)) {
+                    return 6;
+                }
+            }
+            w += 1;
+        }
+        return 0;
+    }
     public static int ttRunAn(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa, StringBuilder t, int np, emon.Port.Cells an) {
         // `tt-run-n` over a document whose annotations (rows of `an`, `AN_STRIDE` cells) are `an`: the form fields' widgets (D583).
         emon.Port.Cells nodes = emon.Port.newCells();
@@ -273,6 +330,9 @@ public final class Tabletest {
         }
         Gfuse.gfDoc(pa, gpts, gmk, gim, np, Gfuse.gfxMode(), grl, gfl, cand, emon.Port.newCells());
         Table.tbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, emon.Port.newCells(), emon.Port.newCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
+        if (ttBodyAudit(wd, et, tb, tc, tw) != 0) {
+            return 7;
+        }
         Columns.lcCopy(ln, lt);
         Para.paBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
         ttBrief(t, nodes, attrs, text);
@@ -1971,6 +2031,9 @@ public final class Tabletest {
         int np = emon.Port.cellsLen(pages) / 16;
         Gfuse.gfDoc(pa, pts, mk, im, np, Gfuse.gfxMode(), grl, gfl, cand, emon.Port.newCells());
         Table.tbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, emon.Port.newCells(), emon.Port.newCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, emon.Port.newCells());
+        if (ttBodyAudit(wd, et, tb, tc, tw) != 0) {
+            return 7;
+        }
         Tagtable.ttEmit(tvt, t12e);
         Columns.lcCopy(ln, lt);
         Initial.inDetect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii);
@@ -2124,6 +2187,8 @@ public final class Tabletest {
         emon.Port.Cells ln = emon.Port.newCells();
         emon.Port.Cells et = emon.Port.newCells();
         emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
         emon.Port.Cells tbk = emon.Port.newCells();
         emon.Port.Cells pages = emon.Port.newCells();
         Model.pageNew(pages, 1, 61200, 79200, 0, Model.pkVector());
@@ -2139,7 +2204,8 @@ public final class Tabletest {
         ttAt(wd, ln, et, emon.Testport.textBlob("100.00"), 40500, 16400, 0, 1);
         ttAt(wd, ln, et, emon.Testport.textBlob("Total"), 7600, 18000, 1, 0);
         ttAt(wd, ln, et, emon.Testport.textBlob("1,111.00"), 40500, 18000, 1, 1);
-        emon.Testport.assertEq(Table.tbBuild(wd, ln, et, emon.Port.newCells(), emon.Port.newCells(), 1, tb, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), tbk, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), pages, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 1, "the amounts make one table");
+        emon.Testport.assertEq(Table.tbBuild(wd, ln, et, emon.Port.newCells(), emon.Port.newCells(), 1, tb, tc, tw, emon.Port.newCells(), emon.Port.newCells(), tbk, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), pages, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 1, "the amounts make one table");
+        emon.Testport.assertEq(ttBodyAudit(wd, et, tb, tc, tw), 0, "the numeric-model fixture has unique body ownership");
         emon.Testport.assertEq(Table.tbModelCol(tb, tbk, 0, 1, 3), 40500, "varying widths share their right anchor");
         emon.Testport.assertEq(Table.tbModelCol(tb, tbk, 0, 1, 5), 3, "the numeric column is an amount column");
         emon.Testport.assertEq(Table.tbModelCol(tb, tbk, 0, 1, 9), 4, "all four body rows support the anchor");
@@ -2223,7 +2289,11 @@ public final class Tabletest {
     public static int ttOwnBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tbo) {
         emon.Port.Cells pages = emon.Port.newCells();
         Model.pageNew(pages, 1, 61200, 79200, 0, Model.pkVector());
-        return Table.tbBuild(wd, ln, et, emon.Port.newCells(), emon.Port.newCells(), 1, tb, tc, tw, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), tbo, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), pages, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells());
+        Table.tbBuild(wd, ln, et, emon.Port.newCells(), emon.Port.newCells(), 1, tb, tc, tw, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), tbo, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), pages, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells());
+        if (ttBodyAudit(wd, et, tb, tc, tw) != 0) {
+            return -7;
+        }
+        return emon.Port.cellsLen(tb) / 32;
     }
     public static void testEveryWordInATableBodyHasOneOwner() {
         emon.Port.Cells wd = emon.Port.newCells();
@@ -2399,5 +2469,84 @@ public final class Tabletest {
         ttAt(wd, ln, et, emon.Testport.textBlob("* Not meaningful."), 15000, 17200, 0, 0);
         emon.Testport.assertEq(ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one original candidate");
         emon.Testport.assertEq(emon.Port.cellsAt(tb, 7), 6, "the separator and footnote keep their own rows");
+    }
+    public static void testATotalABlankLineBelowTheBodyIsItsFoot() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells tbo = emon.Port.newCells();
+        ttAt(wd, ln, et, emon.Testport.textBlob("Item"), 7600, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Amount"), 43000, 10000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Goods"), 7600, 11600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("10.00"), 43000, 11600, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Goods"), 7600, 13200, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("10.00"), 43000, 13200, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Goods"), 7600, 14800, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("10.00"), 43000, 14800, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Goods"), 7600, 16400, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("10.00"), 43000, 16400, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Total"), 7600, 19600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("40.00"), 43000, 19600, 0, 1);
+        emon.Testport.assertEq(ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one ledger with a separated total");
+        emon.Testport.assertEq(emon.Port.cellsAt(tb, 7), 6, "the separated total is attached");
+        emon.Testport.assertEq(emon.Port.cellsAt(tb, 12), 1, "an aligned total after a blank pitch is a foot");
+    }
+    public static void testAnEmptyWordInsideTheBodyIsExplicitlyDropped() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells tbo = emon.Port.newCells();
+        ttPartLedger(wd, ln, et, 10000);
+        ttAt(wd, ln, et, emon.Testport.textBlob(""), 15000, 13000, 0, 0);
+        emon.Testport.assertEq(ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "the empty token does not change the ledger");
+        emon.Testport.assertEq(emon.Port.cellsAt(tbo, 12), -1, "row-builder-excluded empty evidence is explicitly dropped");
+    }
+    public static void testAPartiallyOwnedBodyLineKeepsItsBoxClaim() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells tbo = emon.Port.newCells();
+        ttPartLedger(wd, ln, et, 10000);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Outside"), 50000, 5000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Outside"), 50000, 6500, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Outside"), 50000, 8000, 0, 0);
+        Evidence.lnSet(ln, 11, 12, 4);
+        emon.Testport.assertEq(ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one retained table");
+        emon.Testport.assertEq(Evidence.lnGet(ln, 11, 15), 1073741824, "one owned word of four still keeps the original body box claim");
+        emon.Testport.assertEq(emon.Port.cellsAt(tbo, 12), 0, "outside-body evidence stays unowned");
+    }
+    public static void testAnAttachedTailWithAnImpreciseLineBoxIsClaimed() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells tbo = emon.Port.newCells();
+        ttAt(wd, ln, et, emon.Testport.textBlob("Item"), 7600, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Amount"), 43000, 10000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Goods"), 7600, 11600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("10.00"), 43000, 11600, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Goods"), 7600, 13200, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("10.00"), 43000, 13200, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Goods"), 7600, 14800, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("10.00"), 43000, 14800, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Goods"), 7600, 16400, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("10.00"), 43000, 16400, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Total"), 7600, 19600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("40.00"), 43000, 19600, 0, 1);
+        Evidence.lnSet(ln, 10, 3, 100000);
+        emon.Testport.assertEq(ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one ledger with a separated total");
+        emon.Testport.assertEq(emon.Port.cellsAt(tb, 7), 6, "the separated total is attached");
+        emon.Testport.assertEq(Evidence.lnGet(ln, 10, 15), 1073741824, "a fully owned attached tail is claimed outside the old line box");
     }
 }

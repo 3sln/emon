@@ -6473,11 +6473,15 @@ func tbFinish(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc *port.
 	return 0
 }
 
-func tbOwnClaim(tb *port.Cells, t0 int32, tc *port.Cells, tw *port.Cells, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, tbo *port.Cells) int32 {
+func tbOwnClaim(tb *port.Cells, t0 int32, tc *port.Cells, tw *port.Cells, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, tbo *port.Cells, ln *port.Cells, l0 int32, l1 int32) int32 {
 	var w int32 = w0
 	var k int32 = t0
 	var c int32 = 0
 	var i int32 = 0
+	var l int32 = l0
+	var owner int32 = 0
+	var allowed int32 = 0
+	var bound int32 = 0
 	port.CellsDrop(tbo, 0)
 	for w < w1 {
 		port.CellsPush(tbo, 0)
@@ -6503,7 +6507,7 @@ func tbOwnClaim(tb *port.Cells, t0 int32, tc *port.Cells, tw *port.Cells, wd *po
 		if (port.CellsAt(tb, (k*tagtable.Tbs)+5) != pfRuled) && (port.CellsAt(tb, (k*tagtable.Tbs)+5) != pfStruct) {
 			w = w0
 			for w < w1 {
-				if (port.CellsAt(tbo, w-w0) == 0) && (tbSeparator(wd, et, w) || !tbUpright(wd, w)) {
+				if (port.CellsAt(tbo, w-w0) == 0) && ((evidence.WdGet(wd, w, evidence.HdTlen()) == 0) || (tbSeparator(wd, et, w) || !tbUpright(wd, w))) {
 					var x int32 = (evidence.WdGet(wd, w, evidence.HdX0()) + evidence.WdGet(wd, w, evidence.HdX1())) / 2
 					var y int32 = (evidence.WdGet(wd, w, evidence.HdY0()) + evidence.WdGet(wd, w, evidence.HdY1())) / 2
 					if ((x >= port.CellsAt(tb, (k*tagtable.Tbs)+1)) && (x <= port.CellsAt(tb, (k*tagtable.Tbs)+3))) && ((y >= port.CellsAt(tb, (k*tagtable.Tbs)+2)) && (y <= port.CellsAt(tb, (k*tagtable.Tbs)+4))) {
@@ -6511,6 +6515,49 @@ func tbOwnClaim(tb *port.Cells, t0 int32, tc *port.Cells, tw *port.Cells, wd *po
 					}
 				}
 				w += 1
+			}
+		}
+		k += 1
+	}
+	tbClaim(tb, t0, ln, l0, l1)
+	k = t0
+	for k < tbRowsOf(tb, tagtable.Tbs) {
+		if (port.CellsAt(tb, (k*tagtable.Tbs)+5) != pfRuled) && (port.CellsAt(tb, (k*tagtable.Tbs)+5) != pfStruct) {
+			l = l0
+			for l < l1 {
+				if (evidence.LnGet(ln, l, 15) == 0) && (evidence.LnGet(ln, l, evidence.LhCount()) > 0) {
+					allowed = 1
+					bound = 0
+					i = 0
+					for i < evidence.LnGet(ln, l, evidence.LhCount()) {
+						w = evidence.LnGet(ln, l, evidence.LhFirst()) + i
+						if (w >= w0) && (w < w1) {
+							owner = port.CellsAt(tbo, w-w0)
+							if owner > 0 {
+								c = owner - 1
+								if (c >= port.CellsAt(tb, (k*tagtable.Tbs)+9)) && (c < (port.CellsAt(tb, (k*tagtable.Tbs)+9) + port.CellsAt(tb, (k*tagtable.Tbs)+10))) {
+									if (port.CellsAt(tc, c*tcs) < port.CellsAt(tb, (k*tagtable.Tbs)+11)) && ((port.CellsAt(tb, (k*tagtable.Tbs)+31) & 1) != 0) {
+										bound = 1
+									}
+									if (port.CellsAt(tc, c*tcs) >= (port.CellsAt(tb, (k*tagtable.Tbs)+7) - port.CellsAt(tb, (k*tagtable.Tbs)+12))) && ((port.CellsAt(tb, (k*tagtable.Tbs)+31) & 2) != 0) {
+										bound = 1
+									}
+								} else {
+									allowed = 0
+								}
+							} else if owner != (0 - (k + 1)) {
+								allowed = 0
+							}
+						} else {
+							allowed = 0
+						}
+						i += 1
+					}
+					if (allowed == 1) && (bound == 1) {
+						evidence.LnSet(ln, l, 15, tbHeld+k)
+					}
+				}
+				l += 1
 			}
 		}
 		k += 1
@@ -6548,6 +6595,126 @@ func tbCtx(tb *port.Cells, k int32, wd *port.Cells, ln *port.Cells, l0 int32, l1
 		}
 	}
 	return 0
+}
+
+func tbModelTail(wd *port.Cells, et *port.Cells, w0 int32, w1 int32, tb *port.Cells, k int32, tc *port.Cells, tw *port.Cells, tx *port.Cells, tbk *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, pr *port.Cells, so *port.Cells) int32 {
+	var b int32 = k * tagtable.Tbs
+	var bottom int32 = port.CellsAt(tb, b+4)
+	var first int32 = port.CellsAt(tb, b+9)
+	var count int32 = port.CellsAt(tb, b+10)
+	var ncols int32 = port.CellsAt(tb, b+8)
+	var nrows int32 = port.CellsAt(tb, b+7)
+	var model int32 = port.CellsAt(tb, b+28)
+	var cuts int32 = port.CellsAt(tb, b+16)
+	var size int32 = 1000
+	var r int32 = 0
+	var q int32 = 0
+	var j int32 = 0
+	var col int32 = 0
+	var c int32 = 0
+	var field int32 = 0
+	var other int32 = 0
+	var tails int32 = 0
+	var ok int32 = 1
+	var prev int32 = bottom
+	if (port.CellsAt(tb, b+5) == pfRuled) || ((port.CellsAt(tb, b+5) == pfStruct) || (port.CellsAt(tb, b+25) >= 0)) {
+		return 0
+	}
+	c = first
+	for c < (first + count) {
+		if port.CellsAt(tc, (c*tcs)+9) > 0 {
+			size = evidence.WdGet(wd, port.CellsAt(tw, port.CellsAt(tc, (c*tcs)+8)), evidence.WfSize())
+		}
+		c += 1
+	}
+	var nr int32 = tbRows(wd, et, w0, w1, port.CellsAt(tb, b+1), bottom+1, port.CellsAt(tb, b+3), bottom+(size*7), wl, rw, sg)
+	for (r < nr) && ((tails < 3) && (ok == 1)) {
+		if (port.CellsAt(rw, (r*rws)+6) - prev) > ((size * 32) / 10) {
+			ok = 0
+		}
+		if tbRowFit(wd, et, wl, rw, sg, r, tbk, model, ncols, size) != 1 {
+			ok = 0
+		}
+		other = 0
+		for other < tbRowsOf(tb, tagtable.Tbs) {
+			if other != k {
+				if (port.CellsAt(rw, (r*rws)+2) >= port.CellsAt(tb, (other*tagtable.Tbs)+2)) && (port.CellsAt(rw, (r*rws)+2) <= port.CellsAt(tb, (other*tagtable.Tbs)+4)) {
+					ok = 0
+				}
+			}
+			other += 1
+		}
+		q = 0
+		for q < port.CellsAt(rw, (r*rws)+9) {
+			var sb int32 = (port.CellsAt(rw, (r*rws)+8) + q) * sgs
+			var from int32 = port.CellsAt(sg, sb+3)
+			var n int32 = port.CellsAt(sg, sb+4)
+			col = tbPartBand(tbk, model, ncols, tbFirstCx(wd, et, wl, from, from+n))
+			if col < 0 {
+				ok = 0
+			} else if tbPartNumber(wd, et, wl, from, n) == 1 {
+				if tbAbs(port.CellsAt(sg, sb+2)-port.CellsAt(tbk, ((model+col)*ks)+3)) > tbHeadTol {
+					ok = 0
+				}
+			} else if ((col * 5) >= (ncols * 2)) || (tbAbs(port.CellsAt(sg, sb+1)-port.CellsAt(tbk, ((model+col)*ks)+2)) > tbHeadTol) {
+				ok = 0
+			}
+			q += 1
+		}
+		if ok == 1 {
+			tails += 1
+			prev = port.CellsAt(rw, (r*rws)+7)
+		}
+		r += 1
+	}
+	if tails == 0 {
+		return 0
+	}
+	var newfirst int32 = tbRowsOf(tc, tcs)
+	c = first
+	for c < (first + count) {
+		field = 0
+		for field < tcs {
+			port.CellsPush(tc, port.CellsAt(tc, (c*tcs)+field))
+			field += 1
+		}
+		c += 1
+	}
+	port.CellsDrop(pr, 0)
+	r = 0
+	for r < tails {
+		col = 0
+		for col < ncols {
+			c = tbCellAdd(tc, nrows+r, col, 1, 1, port.CellsAt(tx, cuts+col), port.CellsAt(rw, (r*rws)+6), port.CellsAt(tx, (cuts+col)+1), port.CellsAt(rw, (r*rws)+7))
+			port.CellsSet(tc, (c*tcs)+10, 2)
+			port.CellsSet(tc, (c*tcs)+11, port.CellsAt(tbk, ((model+col)*ks)+4))
+			port.CellsSet(tc, (c*tcs)+15, col)
+			col += 1
+		}
+		q = 0
+		for q < port.CellsAt(rw, (r*rws)+9) {
+			var sb int32 = (port.CellsAt(rw, (r*rws)+8) + q) * sgs
+			var from int32 = port.CellsAt(sg, sb+3)
+			var n int32 = port.CellsAt(sg, sb+4)
+			col = tbPartBand(tbk, model, ncols, tbFirstCx(wd, et, wl, from, from+n))
+			c = (newfirst + count) + ((r * ncols) + col)
+			j = 0
+			for j < n {
+				tbPairAdd(pr, wd, c, port.CellsAt(wl, from+j))
+				j += 1
+			}
+			q += 1
+		}
+		r += 1
+	}
+	tbFlushPairs(pr, so, wd, tc, tw)
+	port.CellsSet(tb, b+9, newfirst)
+	port.CellsSet(tb, b+10, count+(tails*ncols))
+	port.CellsSet(tb, b+7, nrows+tails)
+	port.CellsSet(tb, b+12, port.CellsAt(tb, b+12)+tails)
+	port.CellsSet(tb, b+4, port.CellsAt(rw, ((tails-1)*rws)+7))
+	port.CellsSet(tb, b+31, port.CellsAt(tb, b+31)|2)
+	return tails
 }
 
 func tbFitKept(page int32, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, rm *port.Cells, an *port.Cells, kc *port.Cells, tbk *port.Cells, marks *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, k int32, tc *port.Cells, tw *port.Cells, tx *port.Cells) int32 {
@@ -6763,10 +6930,10 @@ func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gf
 				tbFitKept(p, wd, et, wi, wj, s1, an, tbo, tbk, s0, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, k, tc, tw, tx)
 				tbFinish(tb, k, wd, et, tc, tw, ln, li, lj, tq, g1, g2, g3, wi, g4)
 				tbModel(tb, k, wd, et, tc, tw, tx, tbk, g4)
+				tbModelTail(wd, et, wi, wj, tb, k, tc, tw, tx, tbk, s10, s11, s12, s7, s3)
 				k += 1
 			}
-			tbClaim(tb, t0, ln, li, lj)
-			tbOwnClaim(tb, t0, tc, tw, wd, et, wi, wj, tbo)
+			tbOwnClaim(tb, t0, tc, tw, wd, et, wi, wj, tbo, ln, li, lj)
 			k = t0
 			for k < tbRowsOf(tb, tagtable.Tbs) {
 				tbCtx(tb, k, wd, ln, li, lj)

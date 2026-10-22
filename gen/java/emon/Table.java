@@ -6230,11 +6230,15 @@ public final class Table {
         tbCaption(tb, k, wd, et, ln, l0, l1, tq);
         return 0;
     }
-    public static int tbOwnClaim(emon.Port.Cells tb, int t0, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells wd, emon.Port.Cells et, int w0, int w1, emon.Port.Cells tbo) {
+    public static int tbOwnClaim(emon.Port.Cells tb, int t0, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells wd, emon.Port.Cells et, int w0, int w1, emon.Port.Cells tbo, emon.Port.Cells ln, int l0, int l1) {
         int w = w0;
         int k = t0;
         int c = 0;
         int i = 0;
+        int l = l0;
+        int owner = 0;
+        int allowed = 0;
+        int bound = 0;
         emon.Port.cellsDrop(tbo, 0);
         while (w < w1) {
             emon.Port.cellsPush(tbo, 0);
@@ -6260,7 +6264,7 @@ public final class Table {
             if ((emon.Port.cellsAt(tb, (k * Tagtable.TBS) + 5) != PF_RULED) && (emon.Port.cellsAt(tb, (k * Tagtable.TBS) + 5) != PF_STRUCT)) {
                 w = w0;
                 while (w < w1) {
-                    if ((emon.Port.cellsAt(tbo, w - w0) == 0) && (tbSeparator(wd, et, w) || !tbUpright(wd, w))) {
+                    if ((emon.Port.cellsAt(tbo, w - w0) == 0) && ((Evidence.wdGet(wd, w, Evidence.hdTlen()) == 0) || (tbSeparator(wd, et, w) || !tbUpright(wd, w)))) {
                         int x = (Evidence.wdGet(wd, w, Evidence.hdX0()) + Evidence.wdGet(wd, w, Evidence.hdX1())) / 2;
                         int y = (Evidence.wdGet(wd, w, Evidence.hdY0()) + Evidence.wdGet(wd, w, Evidence.hdY1())) / 2;
                         if (((x >= emon.Port.cellsAt(tb, (k * Tagtable.TBS) + 1)) && (x <= emon.Port.cellsAt(tb, (k * Tagtable.TBS) + 3))) && ((y >= emon.Port.cellsAt(tb, (k * Tagtable.TBS) + 2)) && (y <= emon.Port.cellsAt(tb, (k * Tagtable.TBS) + 4)))) {
@@ -6268,6 +6272,49 @@ public final class Table {
                         }
                     }
                     w += 1;
+                }
+            }
+            k += 1;
+        }
+        tbClaim(tb, t0, ln, l0, l1);
+        k = t0;
+        while (k < tbRowsOf(tb, Tagtable.TBS)) {
+            if ((emon.Port.cellsAt(tb, (k * Tagtable.TBS) + 5) != PF_RULED) && (emon.Port.cellsAt(tb, (k * Tagtable.TBS) + 5) != PF_STRUCT)) {
+                l = l0;
+                while (l < l1) {
+                    if ((Evidence.lnGet(ln, l, 15) == 0) && (Evidence.lnGet(ln, l, Evidence.lhCount()) > 0)) {
+                        allowed = 1;
+                        bound = 0;
+                        i = 0;
+                        while (i < Evidence.lnGet(ln, l, Evidence.lhCount())) {
+                            w = Evidence.lnGet(ln, l, Evidence.lhFirst()) + i;
+                            if ((w >= w0) && (w < w1)) {
+                                owner = emon.Port.cellsAt(tbo, w - w0);
+                                if (owner > 0) {
+                                    c = owner - 1;
+                                    if ((c >= emon.Port.cellsAt(tb, (k * Tagtable.TBS) + 9)) && (c < (emon.Port.cellsAt(tb, (k * Tagtable.TBS) + 9) + emon.Port.cellsAt(tb, (k * Tagtable.TBS) + 10)))) {
+                                        if ((emon.Port.cellsAt(tc, c * TCS) < emon.Port.cellsAt(tb, (k * Tagtable.TBS) + 11)) && ((emon.Port.cellsAt(tb, (k * Tagtable.TBS) + 31) & 1) != 0)) {
+                                            bound = 1;
+                                        }
+                                        if ((emon.Port.cellsAt(tc, c * TCS) >= (emon.Port.cellsAt(tb, (k * Tagtable.TBS) + 7) - emon.Port.cellsAt(tb, (k * Tagtable.TBS) + 12))) && ((emon.Port.cellsAt(tb, (k * Tagtable.TBS) + 31) & 2) != 0)) {
+                                            bound = 1;
+                                        }
+                                    } else {
+                                        allowed = 0;
+                                    }
+                                } else if (owner != (0 - (k + 1))) {
+                                    allowed = 0;
+                                }
+                            } else {
+                                allowed = 0;
+                            }
+                            i += 1;
+                        }
+                        if ((allowed == 1) && (bound == 1)) {
+                            Evidence.lnSet(ln, l, 15, TB_HELD + k);
+                        }
+                    }
+                    l += 1;
                 }
             }
             k += 1;
@@ -6304,6 +6351,125 @@ public final class Table {
             }
         }
         return 0;
+    }
+    public static int tbModelTail(emon.Port.Cells wd, emon.Port.Cells et, int w0, int w1, emon.Port.Cells tb, int k, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tx, emon.Port.Cells tbk, emon.Port.Cells wl, emon.Port.Cells rw, emon.Port.Cells sg, emon.Port.Cells pr, emon.Port.Cells so) {
+        int b = k * Tagtable.TBS;
+        int bottom = emon.Port.cellsAt(tb, b + 4);
+        int first = emon.Port.cellsAt(tb, b + 9);
+        int count = emon.Port.cellsAt(tb, b + 10);
+        int ncols = emon.Port.cellsAt(tb, b + 8);
+        int nrows = emon.Port.cellsAt(tb, b + 7);
+        int model = emon.Port.cellsAt(tb, b + 28);
+        int cuts = emon.Port.cellsAt(tb, b + 16);
+        int size = 1000;
+        int r = 0;
+        int q = 0;
+        int j = 0;
+        int col = 0;
+        int c = 0;
+        int field = 0;
+        int other = 0;
+        int tails = 0;
+        int ok = 1;
+        int prev = bottom;
+        if ((emon.Port.cellsAt(tb, b + 5) == PF_RULED) || ((emon.Port.cellsAt(tb, b + 5) == PF_STRUCT) || (emon.Port.cellsAt(tb, b + 25) >= 0))) {
+            return 0;
+        }
+        c = first;
+        while (c < (first + count)) {
+            if (emon.Port.cellsAt(tc, (c * TCS) + 9) > 0) {
+                size = Evidence.wdGet(wd, emon.Port.cellsAt(tw, emon.Port.cellsAt(tc, (c * TCS) + 8)), Evidence.wfSize());
+            }
+            c += 1;
+        }
+        int nr = tbRows(wd, et, w0, w1, emon.Port.cellsAt(tb, b + 1), bottom + 1, emon.Port.cellsAt(tb, b + 3), bottom + (size * 7), wl, rw, sg);
+        while ((r < nr) && ((tails < 3) && (ok == 1))) {
+            if ((emon.Port.cellsAt(rw, (r * RWS) + 6) - prev) > ((size * 32) / 10)) {
+                ok = 0;
+            }
+            if (tbRowFit(wd, et, wl, rw, sg, r, tbk, model, ncols, size) != 1) {
+                ok = 0;
+            }
+            other = 0;
+            while (other < tbRowsOf(tb, Tagtable.TBS)) {
+                if (other != k) {
+                    if ((emon.Port.cellsAt(rw, (r * RWS) + 2) >= emon.Port.cellsAt(tb, (other * Tagtable.TBS) + 2)) && (emon.Port.cellsAt(rw, (r * RWS) + 2) <= emon.Port.cellsAt(tb, (other * Tagtable.TBS) + 4))) {
+                        ok = 0;
+                    }
+                }
+                other += 1;
+            }
+            q = 0;
+            while (q < emon.Port.cellsAt(rw, (r * RWS) + 9)) {
+                int sb = (emon.Port.cellsAt(rw, (r * RWS) + 8) + q) * SGS;
+                int from = emon.Port.cellsAt(sg, sb + 3);
+                int n = emon.Port.cellsAt(sg, sb + 4);
+                col = tbPartBand(tbk, model, ncols, tbFirstCx(wd, et, wl, from, from + n));
+                if (col < 0) {
+                    ok = 0;
+                } else if (tbPartNumber(wd, et, wl, from, n) == 1) {
+                    if (tbAbs(emon.Port.cellsAt(sg, sb + 2) - emon.Port.cellsAt(tbk, ((model + col) * KS) + 3)) > TB_HEAD_TOL) {
+                        ok = 0;
+                    }
+                } else if (((col * 5) >= (ncols * 2)) || (tbAbs(emon.Port.cellsAt(sg, sb + 1) - emon.Port.cellsAt(tbk, ((model + col) * KS) + 2)) > TB_HEAD_TOL)) {
+                    ok = 0;
+                }
+                q += 1;
+            }
+            if (ok == 1) {
+                tails += 1;
+                prev = emon.Port.cellsAt(rw, (r * RWS) + 7);
+            }
+            r += 1;
+        }
+        if (tails == 0) {
+            return 0;
+        }
+        int newfirst = tbRowsOf(tc, TCS);
+        c = first;
+        while (c < (first + count)) {
+            field = 0;
+            while (field < TCS) {
+                emon.Port.cellsPush(tc, emon.Port.cellsAt(tc, (c * TCS) + field));
+                field += 1;
+            }
+            c += 1;
+        }
+        emon.Port.cellsDrop(pr, 0);
+        r = 0;
+        while (r < tails) {
+            col = 0;
+            while (col < ncols) {
+                c = tbCellAdd(tc, nrows + r, col, 1, 1, emon.Port.cellsAt(tx, cuts + col), emon.Port.cellsAt(rw, (r * RWS) + 6), emon.Port.cellsAt(tx, (cuts + col) + 1), emon.Port.cellsAt(rw, (r * RWS) + 7));
+                emon.Port.cellsSet(tc, (c * TCS) + 10, 2);
+                emon.Port.cellsSet(tc, (c * TCS) + 11, emon.Port.cellsAt(tbk, ((model + col) * KS) + 4));
+                emon.Port.cellsSet(tc, (c * TCS) + 15, col);
+                col += 1;
+            }
+            q = 0;
+            while (q < emon.Port.cellsAt(rw, (r * RWS) + 9)) {
+                int sb = (emon.Port.cellsAt(rw, (r * RWS) + 8) + q) * SGS;
+                int from = emon.Port.cellsAt(sg, sb + 3);
+                int n = emon.Port.cellsAt(sg, sb + 4);
+                col = tbPartBand(tbk, model, ncols, tbFirstCx(wd, et, wl, from, from + n));
+                c = (newfirst + count) + ((r * ncols) + col);
+                j = 0;
+                while (j < n) {
+                    tbPairAdd(pr, wd, c, emon.Port.cellsAt(wl, from + j));
+                    j += 1;
+                }
+                q += 1;
+            }
+            r += 1;
+        }
+        tbFlushPairs(pr, so, wd, tc, tw);
+        emon.Port.cellsSet(tb, b + 9, newfirst);
+        emon.Port.cellsSet(tb, b + 10, count + (tails * ncols));
+        emon.Port.cellsSet(tb, b + 7, nrows + tails);
+        emon.Port.cellsSet(tb, b + 12, emon.Port.cellsAt(tb, b + 12) + tails);
+        emon.Port.cellsSet(tb, b + 4, emon.Port.cellsAt(rw, ((tails - 1) * RWS) + 7));
+        emon.Port.cellsSet(tb, b + 31, emon.Port.cellsAt(tb, b + 31) | 2);
+        return tails;
     }
     public static int tbFitKept(int page, emon.Port.Cells wd, emon.Port.Cells et, int w0, int w1, emon.Port.Cells rm, emon.Port.Cells an, emon.Port.Cells kc, emon.Port.Cells tbk, emon.Port.Cells marks, emon.Port.Cells wl, emon.Port.Cells rw, emon.Port.Cells sg, emon.Port.Cells ch, emon.Port.Cells st, emon.Port.Cells en, emon.Port.Cells rmap, emon.Port.Cells gm, emon.Port.Cells gs, emon.Port.Cells ry, emon.Port.Cells pr, emon.Port.Cells so, emon.Port.Cells tb, int k, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tx) {
         // Row ownership follows selection. The selected box, cuts, score and word multiset must survive unchanged.
@@ -6517,10 +6683,10 @@ public final class Table {
                     tbFitKept(p, wd, et, wi, wj, s1, an, tbo, tbk, s0, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, k, tc, tw, tx);
                     tbFinish(tb, k, wd, et, tc, tw, ln, li, lj, tq, g1, g2, g3, wi, g4);
                     tbModel(tb, k, wd, et, tc, tw, tx, tbk, g4);
+                    tbModelTail(wd, et, wi, wj, tb, k, tc, tw, tx, tbk, s10, s11, s12, s7, s3);
                     k += 1;
                 }
-                tbClaim(tb, t0, ln, li, lj);
-                tbOwnClaim(tb, t0, tc, tw, wd, et, wi, wj, tbo);
+                tbOwnClaim(tb, t0, tc, tw, wd, et, wi, wj, tbo, ln, li, lj);
                 k = t0;
                 while (k < tbRowsOf(tb, Tagtable.TBS)) {
                     tbCtx(tb, k, wd, ln, li, lj);
