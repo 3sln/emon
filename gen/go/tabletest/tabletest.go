@@ -2738,3 +2738,201 @@ func TestACaptionBetweenTablesBelongsToTheFollowingTable(emonT *testing.T) {
 	port.AssertEq(emonT, table.TbCaption(tb, 0, wd, et, ln, 0, 1, tq), 0, "a preceding table cannot steal the next table's top caption")
 	port.AssertEq(emonT, table.TbCaption(tb, 1, wd, et, ln, 0, 1, tq), 1, "the following table owns the caption")
 }
+
+func TestAnIndentedThreeLineStubDoesNotEndANumericTable(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	ttAt(wd, ln, et, port.TextBlob("Industry"), 7600, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("2023"), 32000, 10000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("2024"), 43000, 10000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("Mining"), 7600, 12000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("10.0"), 32000, 12000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("11.0"), 43000, 12000, 0, 1)
+	ttLine3(wd, ln, et, port.TextBlob("Manufacturing"), port.TextBlob("and"), port.TextBlob("reproducing"), 8400, 14000)
+	ttLine3(wd, ln, et, port.TextBlob("magnetic"), port.TextBlob("and"), port.TextBlob("optical"), 8400, 15000)
+	ttAt(wd, ln, et, port.TextBlob("media"), 9200, 16000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("20.0"), 32000, 16000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("21.0"), 43000, 16000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Construction"), 7600, 18000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("30.0"), 32000, 18000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("31.0"), 43000, 18000, 0, 1)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "wrapped stub is well formed")
+	port.AssertText(emonT, t, "T3w;Gh;R;Ch[Industry];Ch[2023];Ch[2024];Gb;R;C[Mining];C[10.0];C[11.0];R;C[Manufacturing and reproducing magnetic and optical media];C[20.0];C[21.0];R;C[Construction];C[30.0];C[31.0];", "a wrapped stub joins the following numeric anchor")
+}
+
+func TestWrappedStubsKeepTheExistingWrappedHeader(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	ttAt(wd, ln, et, port.TextBlob("Industry"), 7600, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("2023"), 32000, 10000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("2024"), 43000, 10000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("Year"), 43000, 10900, 1, 1)
+	ttRule(pa, 7200, 9500, 43500, 9600)
+	ttRule(pa, 7200, 11800, 43500, 11900)
+	ttAt(wd, ln, et, port.TextBlob("Mining"), 7600, 12000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("10.0"), 32000, 12000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("11.0"), 43000, 12000, 0, 1)
+	ttLine3(wd, ln, et, port.TextBlob("Manufacturing"), port.TextBlob("and"), port.TextBlob("reproducing"), 8400, 14000)
+	ttLine3(wd, ln, et, port.TextBlob("magnetic"), port.TextBlob("and"), port.TextBlob("optical"), 8400, 15000)
+	ttAt(wd, ln, et, port.TextBlob("media"), 9200, 16000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("20.0"), 32000, 16000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("21.0"), 43000, 16000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Construction"), 7600, 18000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("30.0"), 32000, 18000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("31.0"), 43000, 18000, 0, 1)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "wrapped stub is well formed")
+	port.AssertText(emonT, t, "T3w;Gh;R;Ch[Industry];Ch[2023];Ch[2024 Year];Gb;R;C[Mining];C[10.0];C[11.0];R;C[Manufacturing and reproducing magnetic and optical media];C[20.0];C[21.0];R;C[Construction];C[30.0];C[31.0];", "a wrapped stub joins the following numeric anchor")
+}
+
+func TestALongWrappedStubKeepsTheNumericRunAlive(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	ttAt(wd, ln, et, port.TextBlob("Industry"), 7600, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("2023"), 32000, 10000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("2024"), 43000, 10000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("Mining"), 7600, 12000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("10.0"), 32000, 12000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("11.0"), 43000, 12000, 0, 1)
+	ttLine3(wd, ln, et, port.TextBlob("Mining"), port.TextBlob("and"), port.TextBlob("ore"), 8400, 14000)
+	ttLine3(wd, ln, et, port.TextBlob("and"), port.TextBlob("gas"), port.TextBlob("and"), 15900, 14000)
+	ttAt(wd, ln, et, port.TextBlob("oil"), 21900, 14000, 0, 0)
+	ttLine3(wd, ln, et, port.TextBlob("magnetic"), port.TextBlob("and"), port.TextBlob("optical"), 8400, 15000)
+	ttAt(wd, ln, et, port.TextBlob("media"), 9200, 16000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("20.0"), 32000, 16000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("21.0"), 43000, 16000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Construction"), 7600, 18000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("30.0"), 32000, 18000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("31.0"), 43000, 18000, 0, 1)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "wrapped stub is well formed")
+	port.AssertText(emonT, t, "T3w;Gh;R;Ch[Industry];Ch[2023];Ch[2024];Gb;R;C[Mining];C[10.0];C[11.0];R;C[Mining and ore and gas and oil magnetic and optical media];C[20.0];C[21.0];R;C[Construction];C[30.0];C[31.0];", "a wrapped stub joins the following numeric anchor")
+}
+
+func ttRuledBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells) int32 {
+	var pages *port.Cells = port.NewCells()
+	var grl *port.Cells = port.NewCells()
+	var gfl *port.Cells = port.NewCells()
+	model.PageNew(pages, 1, 61200, 79200, 0, model.PkVector())
+	gfuse.GfDoc(pa, port.NewCells(), port.NewCells(), port.NewCells(), 1, gfuse.GfxMode(), grl, gfl, port.NewCells(), port.NewCells())
+	table.TbBuild(wd, ln, et, grl, gfl, 1, tb, tc, tw, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), pages, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
+	if ttBodyAudit(wd, et, tb, tc, tw) != 0 {
+		return -7
+	}
+	return port.CellsLen(tb) / 32
+}
+
+func TestEquivalentFullCandidatesDoNotLetTheHeaderHideTheBody(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var r int32 = 0
+	var q int32 = 0
+	var x int32 = 0
+	var w int32 = 0
+	ttRule(pa, 3592, 6625, 57473, 6685)
+	ttRule(pa, 3592, 6705, 57473, 6765)
+	ttRule(pa, 21376, 7877, 57473, 7937)
+	ttRule(pa, 3592, 9848, 57473, 9908)
+	ttRule(pa, 3592, 19400, 57473, 19460)
+	ttAt(wd, ln, et, port.TextBlob("Not adjusted"), 22000, 6953, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Adjusted"), 39000, 6953, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Status"), 10000, 8076, 1, 0)
+	for q < 9 {
+		ttAt(wd, ln, et, port.TextBlob("Aug."), 25119+(q*4020), 8076, 1, 1)
+		ttAt(wd, ln, et, port.TextBlob("2024"), 25119+(q*4020), 8924, 0, 1)
+		q += 1
+	}
+	ttAt(wd, ln, et, port.TextBlob("Sector"), 4490, 10190, 1, 0)
+	for r < 8 {
+		x = 4490
+		if r == 0 {
+			x = 3792
+		}
+		ttAt(wd, ln, et, port.TextBlob("Workers.........................."), x, 11150+(r*963), 0, 0)
+		q = 0
+		for q < 9 {
+			ttAt(wd, ln, et, port.TextBlob("19,408"), 25119+(q*4020), 11150+(r*963), 0, 1)
+			q += 1
+		}
+		r += 1
+	}
+	for w < evidence.WdCount(wd) {
+		evidence.WdSet(wd, w, evidence.WfSize(), 699)
+		w += 1
+	}
+	port.AssertEq(emonT, ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 1, "one complete table is selected")
+	port.AssertThat(emonT, port.CellsAt(tb, 7) >= 11, "the three-row header cannot hide any of the eight numeric rows")
+}
+
+func TestAnUnlabeledNumericSubtotalDoesNotHideTheRestOfAZebra(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var r int32 = 0
+	ttFill(pa, 7200, 11600, 43500, 13200, 15000000)
+	ttFill(pa, 7200, 14800, 43500, 16400, 15000000)
+	ttFill(pa, 7200, 18000, 43500, 19600, 15000000)
+	ttFill(pa, 7200, 24400, 43500, 26000, 15000000)
+	ttFill(pa, 7200, 27600, 43500, 29200, 15000000)
+	ttFill(pa, 7200, 30800, 43500, 32400, 15000000)
+	ttAt(wd, ln, et, port.TextBlob("Label"), 7600, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Unit"), 20000, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("2023"), 32000, 10000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("2024"), 43000, 10000, 1, 1)
+	for r < 14 {
+		if r != 6 {
+			ttAt(wd, ln, et, port.TextBlob("Liability"), 7600, 12000+(r*1600), 0, 0)
+		}
+		ttAt(wd, ln, et, port.TextBlob("12.5"), 32000, 12000+(r*1600), 0, 1)
+		ttAt(wd, ln, et, port.TextBlob("9.25"), 43000, 12000+(r*1600), 0, 1)
+		r += 1
+	}
+	port.AssertEq(emonT, ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 1, "a numeric-only subtotal is no indented invoice summary")
+	port.AssertEq(emonT, port.CellsAt(tb, 7), 15, "both shaded stacks and all intervening rows survive")
+}
+
+func TestNarrowNumericGridsDoNotTakeWordsFromCrossingProse(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var r int32 = 0
+	ttRule(pa, 30000, 9500, 43500, 9560)
+	ttRule(pa, 30000, 15800, 43500, 15860)
+	ttRule(pa, 30000, 20500, 43500, 20560)
+	ttRule(pa, 30000, 29000, 43500, 29060)
+	for r < 4 {
+		ttAt(wd, ln, et, port.TextBlob("10.0"), 33000, 10000+(r*1600), 0, 1)
+		ttAt(wd, ln, et, port.TextBlob("20.0"), 43000, 10000+(r*1600), 0, 1)
+		r += 1
+	}
+	ttLine3(wd, ln, et, port.TextBlob("Pensionplanstatement"), port.TextBlob("continuesintheprose"), port.TextBlob("OutsideTableContent"), 7600, 17500)
+	r = 0
+	for r < 5 {
+		if r != 1 {
+			ttAt(wd, ln, et, port.TextBlob("30.0"), 33000, 21200+(r*1600), 0, 1)
+		}
+		ttAt(wd, ln, et, port.TextBlob("40.0"), 43000, 21200+(r*1600), 0, 1)
+		r += 1
+	}
+	port.AssertEq(emonT, ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 2, "prose across two narrow numeric grids is not their shared table body")
+}

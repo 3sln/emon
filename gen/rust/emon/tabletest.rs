@@ -2682,3 +2682,200 @@ fn test_a_caption_between_tables_belongs_to_the_following_table() {
     crate::testport::assert_eq(tb_caption(tb, 0, wd, et, ln, 0, 1, tq), 0, "a preceding table cannot steal the next table's top caption");
     crate::testport::assert_eq(tb_caption(tb, 1, wd, et, ln, 0, 1, tq), 1, "the following table owns the caption");
 }
+#[test]
+fn test_an_indented_three_line_stub_does_not_end_a_numeric_table() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    tt_at(wd, ln, et, &crate::testport::text_blob("Industry")[..], 7600, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("2023")[..], 32000, 10000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("2024")[..], 43000, 10000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Mining")[..], 7600, 12000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("10.0")[..], 32000, 12000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("11.0")[..], 43000, 12000, 0, 1);
+    tt_line3(wd, ln, et, &crate::testport::text_blob("Manufacturing")[..], &crate::testport::text_blob("and")[..], &crate::testport::text_blob("reproducing")[..], 8400, 14000);
+    tt_line3(wd, ln, et, &crate::testport::text_blob("magnetic")[..], &crate::testport::text_blob("and")[..], &crate::testport::text_blob("optical")[..], 8400, 15000);
+    tt_at(wd, ln, et, &crate::testport::text_blob("media")[..], 9200, 16000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("20.0")[..], 32000, 16000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("21.0")[..], 43000, 16000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Construction")[..], 7600, 18000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("30.0")[..], 32000, 18000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("31.0")[..], 43000, 18000, 0, 1);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "wrapped stub is well formed");
+    crate::testport::assert_text(t, "T3w;Gh;R;Ch[Industry];Ch[2023];Ch[2024];Gb;R;C[Mining];C[10.0];C[11.0];R;C[Manufacturing and reproducing magnetic and optical media];C[20.0];C[21.0];R;C[Construction];C[30.0];C[31.0];", "a wrapped stub joins the following numeric anchor");
+}
+#[test]
+fn test_wrapped_stubs_keep_the_existing_wrapped_header() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    tt_at(wd, ln, et, &crate::testport::text_blob("Industry")[..], 7600, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("2023")[..], 32000, 10000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("2024")[..], 43000, 10000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Year")[..], 43000, 10900, 1, 1);
+    tt_rule(pa, 7200, 9500, 43500, 9600);
+    tt_rule(pa, 7200, 11800, 43500, 11900);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Mining")[..], 7600, 12000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("10.0")[..], 32000, 12000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("11.0")[..], 43000, 12000, 0, 1);
+    tt_line3(wd, ln, et, &crate::testport::text_blob("Manufacturing")[..], &crate::testport::text_blob("and")[..], &crate::testport::text_blob("reproducing")[..], 8400, 14000);
+    tt_line3(wd, ln, et, &crate::testport::text_blob("magnetic")[..], &crate::testport::text_blob("and")[..], &crate::testport::text_blob("optical")[..], 8400, 15000);
+    tt_at(wd, ln, et, &crate::testport::text_blob("media")[..], 9200, 16000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("20.0")[..], 32000, 16000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("21.0")[..], 43000, 16000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Construction")[..], 7600, 18000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("30.0")[..], 32000, 18000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("31.0")[..], 43000, 18000, 0, 1);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "wrapped stub is well formed");
+    crate::testport::assert_text(t, "T3w;Gh;R;Ch[Industry];Ch[2023];Ch[2024 Year];Gb;R;C[Mining];C[10.0];C[11.0];R;C[Manufacturing and reproducing magnetic and optical media];C[20.0];C[21.0];R;C[Construction];C[30.0];C[31.0];", "a wrapped stub joins the following numeric anchor");
+}
+#[test]
+fn test_a_long_wrapped_stub_keeps_the_numeric_run_alive() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    tt_at(wd, ln, et, &crate::testport::text_blob("Industry")[..], 7600, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("2023")[..], 32000, 10000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("2024")[..], 43000, 10000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Mining")[..], 7600, 12000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("10.0")[..], 32000, 12000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("11.0")[..], 43000, 12000, 0, 1);
+    tt_line3(wd, ln, et, &crate::testport::text_blob("Mining")[..], &crate::testport::text_blob("and")[..], &crate::testport::text_blob("ore")[..], 8400, 14000);
+    tt_line3(wd, ln, et, &crate::testport::text_blob("and")[..], &crate::testport::text_blob("gas")[..], &crate::testport::text_blob("and")[..], 15900, 14000);
+    tt_at(wd, ln, et, &crate::testport::text_blob("oil")[..], 21900, 14000, 0, 0);
+    tt_line3(wd, ln, et, &crate::testport::text_blob("magnetic")[..], &crate::testport::text_blob("and")[..], &crate::testport::text_blob("optical")[..], 8400, 15000);
+    tt_at(wd, ln, et, &crate::testport::text_blob("media")[..], 9200, 16000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("20.0")[..], 32000, 16000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("21.0")[..], 43000, 16000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Construction")[..], 7600, 18000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("30.0")[..], 32000, 18000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("31.0")[..], 43000, 18000, 0, 1);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "wrapped stub is well formed");
+    crate::testport::assert_text(t, "T3w;Gh;R;Ch[Industry];Ch[2023];Ch[2024];Gb;R;C[Mining];C[10.0];C[11.0];R;C[Mining and ore and gas and oil magnetic and optical media];C[20.0];C[21.0];R;C[Construction];C[30.0];C[31.0];", "a wrapped stub joins the following numeric anchor");
+}
+pub(crate) fn tt_ruled_build(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et: &mut crate::port::Cells, pa: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells) -> i32 {
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gfl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    page_new(pages, 1, 61200, 79200, 0, pk_vector());
+    gf_doc(pa, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), 1, gfx_mode(), grl, gfl, &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+    tb_build(wd, ln, et, grl, gfl, 1, tb, tc, tw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+    if tt_body_audit(wd, et, tb, tc, tw) != 0 {
+        return -7;
+    }
+    return crate::port::cells_len(tb) / 32;
+}
+#[test]
+fn test_equivalent_full_candidates_do_not_let_the_header_hide_the_body() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut r: i32 = 0;
+    let mut q: i32 = 0;
+    let mut x: i32 = 0;
+    let mut w: i32 = 0;
+    tt_rule(pa, 3592, 6625, 57473, 6685);
+    tt_rule(pa, 3592, 6705, 57473, 6765);
+    tt_rule(pa, 21376, 7877, 57473, 7937);
+    tt_rule(pa, 3592, 9848, 57473, 9908);
+    tt_rule(pa, 3592, 19400, 57473, 19460);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Not adjusted")[..], 22000, 6953, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Adjusted")[..], 39000, 6953, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Status")[..], 10000, 8076, 1, 0);
+    while q < 9 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("Aug.")[..], 25119 + (q * 4020), 8076, 1, 1);
+        tt_at(wd, ln, et, &crate::testport::text_blob("2024")[..], 25119 + (q * 4020), 8924, 0, 1);
+        q += 1;
+    }
+    tt_at(wd, ln, et, &crate::testport::text_blob("Sector")[..], 4490, 10190, 1, 0);
+    while r < 8 {
+        x = 4490;
+        if r == 0 {
+            x = 3792;
+        }
+        tt_at(wd, ln, et, &crate::testport::text_blob("Workers..........................")[..], x, 11150 + (r * 963), 0, 0);
+        q = 0;
+        while q < 9 {
+            tt_at(wd, ln, et, &crate::testport::text_blob("19,408")[..], 25119 + (q * 4020), 11150 + (r * 963), 0, 1);
+            q += 1;
+        }
+        r += 1;
+    }
+    while w < wd_count(wd) {
+        wd_set(wd, w, wf_size(), 699);
+        w += 1;
+    }
+    crate::testport::assert_eq(tt_ruled_build(wd, ln, et, pa, tb, tc, tw), 1, "one complete table is selected");
+    crate::testport::assert_that(crate::port::cells_at(tb, 7) >= 11, "the three-row header cannot hide any of the eight numeric rows");
+}
+#[test]
+fn test_an_unlabeled_numeric_subtotal_does_not_hide_the_rest_of_a_zebra() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut r: i32 = 0;
+    tt_fill(pa, 7200, 11600, 43500, 13200, 15000000);
+    tt_fill(pa, 7200, 14800, 43500, 16400, 15000000);
+    tt_fill(pa, 7200, 18000, 43500, 19600, 15000000);
+    tt_fill(pa, 7200, 24400, 43500, 26000, 15000000);
+    tt_fill(pa, 7200, 27600, 43500, 29200, 15000000);
+    tt_fill(pa, 7200, 30800, 43500, 32400, 15000000);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Label")[..], 7600, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Unit")[..], 20000, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("2023")[..], 32000, 10000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("2024")[..], 43000, 10000, 1, 1);
+    while r < 14 {
+        if r != 6 {
+            tt_at(wd, ln, et, &crate::testport::text_blob("Liability")[..], 7600, 12000 + (r * 1600), 0, 0);
+        }
+        tt_at(wd, ln, et, &crate::testport::text_blob("12.5")[..], 32000, 12000 + (r * 1600), 0, 1);
+        tt_at(wd, ln, et, &crate::testport::text_blob("9.25")[..], 43000, 12000 + (r * 1600), 0, 1);
+        r += 1;
+    }
+    crate::testport::assert_eq(tt_ruled_build(wd, ln, et, pa, tb, tc, tw), 1, "a numeric-only subtotal is no indented invoice summary");
+    crate::testport::assert_eq(crate::port::cells_at(tb, 7), 15, "both shaded stacks and all intervening rows survive");
+}
+#[test]
+fn test_narrow_numeric_grids_do_not_take_words_from_crossing_prose() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut r: i32 = 0;
+    tt_rule(pa, 30000, 9500, 43500, 9560);
+    tt_rule(pa, 30000, 15800, 43500, 15860);
+    tt_rule(pa, 30000, 20500, 43500, 20560);
+    tt_rule(pa, 30000, 29000, 43500, 29060);
+    while r < 4 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("10.0")[..], 33000, 10000 + (r * 1600), 0, 1);
+        tt_at(wd, ln, et, &crate::testport::text_blob("20.0")[..], 43000, 10000 + (r * 1600), 0, 1);
+        r += 1;
+    }
+    tt_line3(wd, ln, et, &crate::testport::text_blob("Pensionplanstatement")[..], &crate::testport::text_blob("continuesintheprose")[..], &crate::testport::text_blob("OutsideTableContent")[..], 7600, 17500);
+    r = 0;
+    while r < 5 {
+        if r != 1 {
+            tt_at(wd, ln, et, &crate::testport::text_blob("30.0")[..], 33000, 21200 + (r * 1600), 0, 1);
+        }
+        tt_at(wd, ln, et, &crate::testport::text_blob("40.0")[..], 43000, 21200 + (r * 1600), 0, 1);
+        r += 1;
+    }
+    crate::testport::assert_eq(tt_ruled_build(wd, ln, et, pa, tb, tc, tw), 2, "prose across two narrow numeric grids is not their shared table body");
+}

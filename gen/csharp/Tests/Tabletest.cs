@@ -2668,4 +2668,201 @@ public static class Tabletest {
         emon.Testport.AssertEq(Table.TbCaption(tb, 0, wd, et, ln, 0, 1, tq), 0, "a preceding table cannot steal the next table's top caption");
         emon.Testport.AssertEq(Table.TbCaption(tb, 1, wd, et, ln, 0, 1, tq), 1, "the following table owns the caption");
     }
+    [Xunit.Fact]
+    public static void TestAnIndentedThreeLineStubDoesNotEndANumericTable() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Industry"), 7600, 10000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("2023"), 32000, 10000, 1, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("2024"), 43000, 10000, 1, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Mining"), 7600, 12000, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("10.0"), 32000, 12000, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("11.0"), 43000, 12000, 0, 1);
+        TtLine3(wd, ln, et, emon.Testport.TextBlob("Manufacturing"), emon.Testport.TextBlob("and"), emon.Testport.TextBlob("reproducing"), 8400, 14000);
+        TtLine3(wd, ln, et, emon.Testport.TextBlob("magnetic"), emon.Testport.TextBlob("and"), emon.Testport.TextBlob("optical"), 8400, 15000);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("media"), 9200, 16000, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("20.0"), 32000, 16000, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("21.0"), 43000, 16000, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Construction"), 7600, 18000, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("30.0"), 32000, 18000, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("31.0"), 43000, 18000, 0, 1);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "wrapped stub is well formed");
+        emon.Testport.AssertText(t, "T3w;Gh;R;Ch[Industry];Ch[2023];Ch[2024];Gb;R;C[Mining];C[10.0];C[11.0];R;C[Manufacturing and reproducing magnetic and optical media];C[20.0];C[21.0];R;C[Construction];C[30.0];C[31.0];", "a wrapped stub joins the following numeric anchor");
+    }
+    [Xunit.Fact]
+    public static void TestWrappedStubsKeepTheExistingWrappedHeader() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Industry"), 7600, 10000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("2023"), 32000, 10000, 1, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("2024"), 43000, 10000, 1, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Year"), 43000, 10900, 1, 1);
+        TtRule(pa, 7200, 9500, 43500, 9600);
+        TtRule(pa, 7200, 11800, 43500, 11900);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Mining"), 7600, 12000, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("10.0"), 32000, 12000, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("11.0"), 43000, 12000, 0, 1);
+        TtLine3(wd, ln, et, emon.Testport.TextBlob("Manufacturing"), emon.Testport.TextBlob("and"), emon.Testport.TextBlob("reproducing"), 8400, 14000);
+        TtLine3(wd, ln, et, emon.Testport.TextBlob("magnetic"), emon.Testport.TextBlob("and"), emon.Testport.TextBlob("optical"), 8400, 15000);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("media"), 9200, 16000, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("20.0"), 32000, 16000, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("21.0"), 43000, 16000, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Construction"), 7600, 18000, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("30.0"), 32000, 18000, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("31.0"), 43000, 18000, 0, 1);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "wrapped stub is well formed");
+        emon.Testport.AssertText(t, "T3w;Gh;R;Ch[Industry];Ch[2023];Ch[2024 Year];Gb;R;C[Mining];C[10.0];C[11.0];R;C[Manufacturing and reproducing magnetic and optical media];C[20.0];C[21.0];R;C[Construction];C[30.0];C[31.0];", "a wrapped stub joins the following numeric anchor");
+    }
+    [Xunit.Fact]
+    public static void TestALongWrappedStubKeepsTheNumericRunAlive() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Industry"), 7600, 10000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("2023"), 32000, 10000, 1, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("2024"), 43000, 10000, 1, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Mining"), 7600, 12000, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("10.0"), 32000, 12000, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("11.0"), 43000, 12000, 0, 1);
+        TtLine3(wd, ln, et, emon.Testport.TextBlob("Mining"), emon.Testport.TextBlob("and"), emon.Testport.TextBlob("ore"), 8400, 14000);
+        TtLine3(wd, ln, et, emon.Testport.TextBlob("and"), emon.Testport.TextBlob("gas"), emon.Testport.TextBlob("and"), 15900, 14000);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("oil"), 21900, 14000, 0, 0);
+        TtLine3(wd, ln, et, emon.Testport.TextBlob("magnetic"), emon.Testport.TextBlob("and"), emon.Testport.TextBlob("optical"), 8400, 15000);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("media"), 9200, 16000, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("20.0"), 32000, 16000, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("21.0"), 43000, 16000, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Construction"), 7600, 18000, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("30.0"), 32000, 18000, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("31.0"), 43000, 18000, 0, 1);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "wrapped stub is well formed");
+        emon.Testport.AssertText(t, "T3w;Gh;R;Ch[Industry];Ch[2023];Ch[2024];Gb;R;C[Mining];C[10.0];C[11.0];R;C[Mining and ore and gas and oil magnetic and optical media];C[20.0];C[21.0];R;C[Construction];C[30.0];C[31.0];", "a wrapped stub joins the following numeric anchor");
+    }
+    internal static int TtRuledBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw) {
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells grl = emon.Port.NewCells();
+        emon.Port.Cells gfl = emon.Port.NewCells();
+        Model.PageNew(pages, 1, 61200, 79200, 0, Model.PkVector());
+        Gfuse.GfDoc(pa, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), 1, Gfuse.GfxMode(), grl, gfl, emon.Port.NewCells(), emon.Port.NewCells());
+        Table.TbBuild(wd, ln, et, grl, gfl, 1, tb, tc, tw, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), pages, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells());
+        if (TtBodyAudit(wd, et, tb, tc, tw) != 0) {
+            return -7;
+        }
+        return emon.Port.CellsLen(tb) / 32;
+    }
+    [Xunit.Fact]
+    public static void TestEquivalentFullCandidatesDoNotLetTheHeaderHideTheBody() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        int r = 0;
+        int q = 0;
+        int x = 0;
+        int w = 0;
+        TtRule(pa, 3592, 6625, 57473, 6685);
+        TtRule(pa, 3592, 6705, 57473, 6765);
+        TtRule(pa, 21376, 7877, 57473, 7937);
+        TtRule(pa, 3592, 9848, 57473, 9908);
+        TtRule(pa, 3592, 19400, 57473, 19460);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Not adjusted"), 22000, 6953, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Adjusted"), 39000, 6953, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Status"), 10000, 8076, 1, 0);
+        while (q < 9) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Aug."), 25119 + (q * 4020), 8076, 1, 1);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("2024"), 25119 + (q * 4020), 8924, 0, 1);
+            q += 1;
+        }
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Sector"), 4490, 10190, 1, 0);
+        while (r < 8) {
+            x = 4490;
+            if (r == 0) {
+                x = 3792;
+            }
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Workers.........................."), x, 11150 + (r * 963), 0, 0);
+            q = 0;
+            while (q < 9) {
+                TtAt(wd, ln, et, emon.Testport.TextBlob("19,408"), 25119 + (q * 4020), 11150 + (r * 963), 0, 1);
+                q += 1;
+            }
+            r += 1;
+        }
+        while (w < Evidence.WdCount(wd)) {
+            Evidence.WdSet(wd, w, Evidence.WfSize(), 699);
+            w += 1;
+        }
+        emon.Testport.AssertEq(TtRuledBuild(wd, ln, et, pa, tb, tc, tw), 1, "one complete table is selected");
+        emon.Testport.AssertThat(emon.Port.CellsAt(tb, 7) >= 11, "the three-row header cannot hide any of the eight numeric rows");
+    }
+    [Xunit.Fact]
+    public static void TestAnUnlabeledNumericSubtotalDoesNotHideTheRestOfAZebra() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        int r = 0;
+        TtFill(pa, 7200, 11600, 43500, 13200, 15000000);
+        TtFill(pa, 7200, 14800, 43500, 16400, 15000000);
+        TtFill(pa, 7200, 18000, 43500, 19600, 15000000);
+        TtFill(pa, 7200, 24400, 43500, 26000, 15000000);
+        TtFill(pa, 7200, 27600, 43500, 29200, 15000000);
+        TtFill(pa, 7200, 30800, 43500, 32400, 15000000);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Label"), 7600, 10000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Unit"), 20000, 10000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("2023"), 32000, 10000, 1, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("2024"), 43000, 10000, 1, 1);
+        while (r < 14) {
+            if (r != 6) {
+                TtAt(wd, ln, et, emon.Testport.TextBlob("Liability"), 7600, 12000 + (r * 1600), 0, 0);
+            }
+            TtAt(wd, ln, et, emon.Testport.TextBlob("12.5"), 32000, 12000 + (r * 1600), 0, 1);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("9.25"), 43000, 12000 + (r * 1600), 0, 1);
+            r += 1;
+        }
+        emon.Testport.AssertEq(TtRuledBuild(wd, ln, et, pa, tb, tc, tw), 1, "a numeric-only subtotal is no indented invoice summary");
+        emon.Testport.AssertEq(emon.Port.CellsAt(tb, 7), 15, "both shaded stacks and all intervening rows survive");
+    }
+    [Xunit.Fact]
+    public static void TestNarrowNumericGridsDoNotTakeWordsFromCrossingProse() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        int r = 0;
+        TtRule(pa, 30000, 9500, 43500, 9560);
+        TtRule(pa, 30000, 15800, 43500, 15860);
+        TtRule(pa, 30000, 20500, 43500, 20560);
+        TtRule(pa, 30000, 29000, 43500, 29060);
+        while (r < 4) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("10.0"), 33000, 10000 + (r * 1600), 0, 1);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("20.0"), 43000, 10000 + (r * 1600), 0, 1);
+            r += 1;
+        }
+        TtLine3(wd, ln, et, emon.Testport.TextBlob("Pensionplanstatement"), emon.Testport.TextBlob("continuesintheprose"), emon.Testport.TextBlob("OutsideTableContent"), 7600, 17500);
+        r = 0;
+        while (r < 5) {
+            if (r != 1) {
+                TtAt(wd, ln, et, emon.Testport.TextBlob("30.0"), 33000, 21200 + (r * 1600), 0, 1);
+            }
+            TtAt(wd, ln, et, emon.Testport.TextBlob("40.0"), 43000, 21200 + (r * 1600), 0, 1);
+            r += 1;
+        }
+        emon.Testport.AssertEq(TtRuledBuild(wd, ln, et, pa, tb, tc, tw), 2, "prose across two narrow numeric grids is not their shared table body");
+    }
 }

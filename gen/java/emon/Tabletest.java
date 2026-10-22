@@ -2597,4 +2597,195 @@ public final class Tabletest {
         emon.Testport.assertEq(Table.tbCaption(tb, 0, wd, et, ln, 0, 1, tq), 0, "a preceding table cannot steal the next table's top caption");
         emon.Testport.assertEq(Table.tbCaption(tb, 1, wd, et, ln, 0, 1, tq), 1, "the following table owns the caption");
     }
+    public static void testAnIndentedThreeLineStubDoesNotEndANumericTable() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        ttAt(wd, ln, et, emon.Testport.textBlob("Industry"), 7600, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("2023"), 32000, 10000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("2024"), 43000, 10000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Mining"), 7600, 12000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("10.0"), 32000, 12000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("11.0"), 43000, 12000, 0, 1);
+        ttLine3(wd, ln, et, emon.Testport.textBlob("Manufacturing"), emon.Testport.textBlob("and"), emon.Testport.textBlob("reproducing"), 8400, 14000);
+        ttLine3(wd, ln, et, emon.Testport.textBlob("magnetic"), emon.Testport.textBlob("and"), emon.Testport.textBlob("optical"), 8400, 15000);
+        ttAt(wd, ln, et, emon.Testport.textBlob("media"), 9200, 16000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("20.0"), 32000, 16000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("21.0"), 43000, 16000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Construction"), 7600, 18000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("30.0"), 32000, 18000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("31.0"), 43000, 18000, 0, 1);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "wrapped stub is well formed");
+        emon.Testport.assertText(t, "T3w;Gh;R;Ch[Industry];Ch[2023];Ch[2024];Gb;R;C[Mining];C[10.0];C[11.0];R;C[Manufacturing and reproducing magnetic and optical media];C[20.0];C[21.0];R;C[Construction];C[30.0];C[31.0];", "a wrapped stub joins the following numeric anchor");
+    }
+    public static void testWrappedStubsKeepTheExistingWrappedHeader() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        ttAt(wd, ln, et, emon.Testport.textBlob("Industry"), 7600, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("2023"), 32000, 10000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("2024"), 43000, 10000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Year"), 43000, 10900, 1, 1);
+        ttRule(pa, 7200, 9500, 43500, 9600);
+        ttRule(pa, 7200, 11800, 43500, 11900);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Mining"), 7600, 12000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("10.0"), 32000, 12000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("11.0"), 43000, 12000, 0, 1);
+        ttLine3(wd, ln, et, emon.Testport.textBlob("Manufacturing"), emon.Testport.textBlob("and"), emon.Testport.textBlob("reproducing"), 8400, 14000);
+        ttLine3(wd, ln, et, emon.Testport.textBlob("magnetic"), emon.Testport.textBlob("and"), emon.Testport.textBlob("optical"), 8400, 15000);
+        ttAt(wd, ln, et, emon.Testport.textBlob("media"), 9200, 16000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("20.0"), 32000, 16000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("21.0"), 43000, 16000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Construction"), 7600, 18000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("30.0"), 32000, 18000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("31.0"), 43000, 18000, 0, 1);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "wrapped stub is well formed");
+        emon.Testport.assertText(t, "T3w;Gh;R;Ch[Industry];Ch[2023];Ch[2024 Year];Gb;R;C[Mining];C[10.0];C[11.0];R;C[Manufacturing and reproducing magnetic and optical media];C[20.0];C[21.0];R;C[Construction];C[30.0];C[31.0];", "a wrapped stub joins the following numeric anchor");
+    }
+    public static void testALongWrappedStubKeepsTheNumericRunAlive() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        ttAt(wd, ln, et, emon.Testport.textBlob("Industry"), 7600, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("2023"), 32000, 10000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("2024"), 43000, 10000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Mining"), 7600, 12000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("10.0"), 32000, 12000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("11.0"), 43000, 12000, 0, 1);
+        ttLine3(wd, ln, et, emon.Testport.textBlob("Mining"), emon.Testport.textBlob("and"), emon.Testport.textBlob("ore"), 8400, 14000);
+        ttLine3(wd, ln, et, emon.Testport.textBlob("and"), emon.Testport.textBlob("gas"), emon.Testport.textBlob("and"), 15900, 14000);
+        ttAt(wd, ln, et, emon.Testport.textBlob("oil"), 21900, 14000, 0, 0);
+        ttLine3(wd, ln, et, emon.Testport.textBlob("magnetic"), emon.Testport.textBlob("and"), emon.Testport.textBlob("optical"), 8400, 15000);
+        ttAt(wd, ln, et, emon.Testport.textBlob("media"), 9200, 16000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("20.0"), 32000, 16000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("21.0"), 43000, 16000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Construction"), 7600, 18000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("30.0"), 32000, 18000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("31.0"), 43000, 18000, 0, 1);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "wrapped stub is well formed");
+        emon.Testport.assertText(t, "T3w;Gh;R;Ch[Industry];Ch[2023];Ch[2024];Gb;R;C[Mining];C[10.0];C[11.0];R;C[Mining and ore and gas and oil magnetic and optical media];C[20.0];C[21.0];R;C[Construction];C[30.0];C[31.0];", "a wrapped stub joins the following numeric anchor");
+    }
+    public static int ttRuledBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw) {
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells grl = emon.Port.newCells();
+        emon.Port.Cells gfl = emon.Port.newCells();
+        Model.pageNew(pages, 1, 61200, 79200, 0, Model.pkVector());
+        Gfuse.gfDoc(pa, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), 1, Gfuse.gfxMode(), grl, gfl, emon.Port.newCells(), emon.Port.newCells());
+        Table.tbBuild(wd, ln, et, grl, gfl, 1, tb, tc, tw, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), pages, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells());
+        if (ttBodyAudit(wd, et, tb, tc, tw) != 0) {
+            return -7;
+        }
+        return emon.Port.cellsLen(tb) / 32;
+    }
+    public static void testEquivalentFullCandidatesDoNotLetTheHeaderHideTheBody() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        int r = 0;
+        int q = 0;
+        int x = 0;
+        int w = 0;
+        ttRule(pa, 3592, 6625, 57473, 6685);
+        ttRule(pa, 3592, 6705, 57473, 6765);
+        ttRule(pa, 21376, 7877, 57473, 7937);
+        ttRule(pa, 3592, 9848, 57473, 9908);
+        ttRule(pa, 3592, 19400, 57473, 19460);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Not adjusted"), 22000, 6953, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Adjusted"), 39000, 6953, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Status"), 10000, 8076, 1, 0);
+        while (q < 9) {
+            ttAt(wd, ln, et, emon.Testport.textBlob("Aug."), 25119 + (q * 4020), 8076, 1, 1);
+            ttAt(wd, ln, et, emon.Testport.textBlob("2024"), 25119 + (q * 4020), 8924, 0, 1);
+            q += 1;
+        }
+        ttAt(wd, ln, et, emon.Testport.textBlob("Sector"), 4490, 10190, 1, 0);
+        while (r < 8) {
+            x = 4490;
+            if (r == 0) {
+                x = 3792;
+            }
+            ttAt(wd, ln, et, emon.Testport.textBlob("Workers.........................."), x, 11150 + (r * 963), 0, 0);
+            q = 0;
+            while (q < 9) {
+                ttAt(wd, ln, et, emon.Testport.textBlob("19,408"), 25119 + (q * 4020), 11150 + (r * 963), 0, 1);
+                q += 1;
+            }
+            r += 1;
+        }
+        while (w < Evidence.wdCount(wd)) {
+            Evidence.wdSet(wd, w, Evidence.wfSize(), 699);
+            w += 1;
+        }
+        emon.Testport.assertEq(ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 1, "one complete table is selected");
+        emon.Testport.assertThat(emon.Port.cellsAt(tb, 7) >= 11, "the three-row header cannot hide any of the eight numeric rows");
+    }
+    public static void testAnUnlabeledNumericSubtotalDoesNotHideTheRestOfAZebra() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        int r = 0;
+        ttFill(pa, 7200, 11600, 43500, 13200, 15000000);
+        ttFill(pa, 7200, 14800, 43500, 16400, 15000000);
+        ttFill(pa, 7200, 18000, 43500, 19600, 15000000);
+        ttFill(pa, 7200, 24400, 43500, 26000, 15000000);
+        ttFill(pa, 7200, 27600, 43500, 29200, 15000000);
+        ttFill(pa, 7200, 30800, 43500, 32400, 15000000);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Label"), 7600, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Unit"), 20000, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("2023"), 32000, 10000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("2024"), 43000, 10000, 1, 1);
+        while (r < 14) {
+            if (r != 6) {
+                ttAt(wd, ln, et, emon.Testport.textBlob("Liability"), 7600, 12000 + (r * 1600), 0, 0);
+            }
+            ttAt(wd, ln, et, emon.Testport.textBlob("12.5"), 32000, 12000 + (r * 1600), 0, 1);
+            ttAt(wd, ln, et, emon.Testport.textBlob("9.25"), 43000, 12000 + (r * 1600), 0, 1);
+            r += 1;
+        }
+        emon.Testport.assertEq(ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 1, "a numeric-only subtotal is no indented invoice summary");
+        emon.Testport.assertEq(emon.Port.cellsAt(tb, 7), 15, "both shaded stacks and all intervening rows survive");
+    }
+    public static void testNarrowNumericGridsDoNotTakeWordsFromCrossingProse() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        int r = 0;
+        ttRule(pa, 30000, 9500, 43500, 9560);
+        ttRule(pa, 30000, 15800, 43500, 15860);
+        ttRule(pa, 30000, 20500, 43500, 20560);
+        ttRule(pa, 30000, 29000, 43500, 29060);
+        while (r < 4) {
+            ttAt(wd, ln, et, emon.Testport.textBlob("10.0"), 33000, 10000 + (r * 1600), 0, 1);
+            ttAt(wd, ln, et, emon.Testport.textBlob("20.0"), 43000, 10000 + (r * 1600), 0, 1);
+            r += 1;
+        }
+        ttLine3(wd, ln, et, emon.Testport.textBlob("Pensionplanstatement"), emon.Testport.textBlob("continuesintheprose"), emon.Testport.textBlob("OutsideTableContent"), 7600, 17500);
+        r = 0;
+        while (r < 5) {
+            if (r != 1) {
+                ttAt(wd, ln, et, emon.Testport.textBlob("30.0"), 33000, 21200 + (r * 1600), 0, 1);
+            }
+            ttAt(wd, ln, et, emon.Testport.textBlob("40.0"), 43000, 21200 + (r * 1600), 0, 1);
+            r += 1;
+        }
+        emon.Testport.assertEq(ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 2, "prose across two narrow numeric grids is not their shared table body");
+    }
 }

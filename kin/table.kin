@@ -56,6 +56,9 @@
 
 (declarefn tb-model)
 (declarefn tb-own-rows)
+(declarefn tb-stub-tail)
+(declarefn tb-part-number)
+(declarefn tb-cell-numeric)
 (declarefn tb-split-rows)
 (declarefn tb-head-reach)
 (declarefn tb-trim-end)
@@ -930,7 +933,16 @@
     (return (and (>= (* 4 (- (tb-min ax1 bx1) (tb-max ax0 bx0))) (* 3 (- ax1 ax0)))
                  (and (<= ay0 (+ by0 1500)) (and (> ay1 (+ by0 300)) (<= ay1 by1)))))))
 
-(defn ^Bool tb-block-below [^Cells tb ^I32 i ^I32 ybot ^Cells tc]
+(defn ^Bool tb-cell-value-only [^Cells wd ^Cells et ^Cells tc ^Cells tw ^I32 c]
+  (if (== (tb-cell-numeric wd et tw tc c) 1) (return (== 1 1)))
+  (if (!= (cells-at tc (+ (* c TCS) 9)) 1) (return (== 0 1)))
+  (let [^I32 w (cells-at tw (cells-at tc (+ (* c TCS) 8)))]
+    (if (!= (wd-get wd w (hd-tlen)) 1) (return (== 0 1)))
+    (let [^I32 cp (cells-at et (wd-get wd w (hd-tstart)))]
+      (return (or (== cp 36) (or (== cp 8364) (or (== cp 163) (or (== cp 165)
+                  (or (== cp 45) (or (== cp 8211) (== cp 8212)))))))))))
+
+(defn ^Bool tb-block-below [^Cells tb ^I32 i ^I32 ybot ^Cells tc ^Cells wd ^Cells et ^Cells tw]
   (comment "P12.2: has candidate i, below y `ybot`, a row that begins two in five of its columns from the first or further: a block of totals in the last columns")
   (comment "(an invoice's, D559: the table of the rules ends over it, and the whitespace reading that has it in is the worse for it).")
   (let [^I32 cfirst (cells-at tb (+ (* i TBS) 9))
@@ -945,13 +957,13 @@
                 (set row (cells-at tc (* c TCS)))
                 (set first -1)))
           (if (and (>= (cells-at tc (+ (* c TCS) 5)) (- ybot 100))
-                   (and (> (cells-at tc (+ (* c TCS) 9)) 0) (< first 0)))
+                   (and (> (cells-at tc (+ (* c TCS) 9)) 0) (and (< first 0) (or (< ncols 3) (not (tb-cell-value-only wd et tc tw c))))))
             (set first (cells-at tc (+ (* c TCS) 1))))
           (set c (+ c 1))))
     (if (and (>= first 0) (>= (* 5 first) (* 2 ncols))) (return (== 1 1)))
     (return (== 0 1))))
 
-(defn ^Bool tb-part [^Cells tb ^I32 j ^I32 i ^Cells tc]
+(defn ^Bool tb-part [^Cells tb ^I32 j ^I32 i ^Cells tc ^Cells wd ^Cells et ^Cells tw]
   (comment "P12.2: is candidate j only a part of what candidate i reads: it lies in i's box or is its head (`tb-within`, `tb-head-of`) and is no more than three")
   (comment "in four of its height (a reading of the same rows beside it is no part), i has the columns (or two fewer: the rules of a header put a column between")
   (comment "the years that the text does not have; or any number when it has twice the rows: four rows of a long table are cut into more columns than the table")
@@ -959,14 +971,43 @@
   (let [^I32 a (* j TBS)
         ^I32 b (* i TBS)]
     (return (and (or (tb-within tb j i) (tb-head-of tb j i))
-                 (and (not (tb-block-below tb i (cells-at tb (+ a 4)) tc))
+                 (and (not (tb-block-below tb i (cells-at tb (+ a 4)) tc wd et tw))
                  (and (<= (* 4 (- (cells-at tb (+ a 4)) (cells-at tb (+ a 2)))) (* 3 (- (cells-at tb (+ b 4)) (cells-at tb (+ b 2)))))
                       (and (>= (cells-at tb (+ b 7)) (+ (cells-at tb (+ a 7)) TB_ROWS_MORE))
                            (and (or (>= (+ (cells-at tb (+ b 8)) 2) (cells-at tb (+ a 8)))
                                     (>= (cells-at tb (+ b 7)) (* 2 (cells-at tb (+ a 7)))))
                                 (>= (+ (cells-at tb (+ b 6)) TB_ROWS_SLACK) (cells-at tb (+ a 6)))))))))))
 
-(defn ^Bool tb-takes [^Cells tb ^I32 i ^I32 t0 ^I32 n ^Cells tc]
+;; Equal readings can differ only in the nearby border used to enclose them.
+(defn ^Bool tb-grid-peer [^Cells tb ^I32 a ^I32 b ^Cells tc ^Cells tw]
+  (let [^I32 ab (* a TBS) ^I32 bb (* b TBS)
+        ^I32 af (cells-at tb (+ ab 9)) ^I32 bf (cells-at tb (+ bb 9))
+        ^I32 n (cells-at tb (+ ab 10))
+        ^:mut ^I32 c 0 ^:mut ^I32 f 0 ^:mut ^I32 w 0]
+    (if (or (!= (cells-at tb ab) (cells-at tb bb))
+            (or (!= (cells-at tb (+ ab 5)) (cells-at tb (+ bb 5)))
+                (or (!= (cells-at tb (+ ab 7)) (cells-at tb (+ bb 7)))
+                    (or (!= (cells-at tb (+ ab 8)) (cells-at tb (+ bb 8)))
+                        (!= n (cells-at tb (+ bb 10))))))) (return (== 0 1)))
+    (while (< c n)
+      (do (let [^I32 ac (* (+ af c) TCS) ^I32 bc (* (+ bf c) TCS)
+                ^I32 nw (cells-at tc (+ ac 9))]
+            (if (!= nw (cells-at tc (+ bc 9))) (return (== 0 1)))
+            (set f 0)
+            (while (< f 4)
+              (do (if (!= (cells-at tc (+ ac f)) (cells-at tc (+ bc f))) (return (== 0 1)))
+                  (set f (+ f 1))))
+            (while (< f 8)
+              (do (if (> (tb-abs (- (cells-at tc (+ ac f)) (cells-at tc (+ bc f)))) TB_HEAD_TOL) (return (== 0 1)))
+                  (set f (+ f 1))))
+            (set w 0)
+            (while (< w nw)
+              (do (if (!= (cells-at tw (+ (cells-at tc (+ ac 8)) w)) (cells-at tw (+ (cells-at tc (+ bc 8)) w))) (return (== 0 1)))
+                  (set w (+ w 1)))))
+          (set c (+ c 1))))
+    (return (== 1 1))))
+
+(defn ^Bool tb-takes [^Cells tb ^I32 i ^I32 t0 ^I32 n ^Cells tc ^Cells wd ^Cells et ^Cells tw]
   (comment "P12.2: does candidate i take in the candidates that overlap it and score as well: there is one, and each is only a part of what i reads.")
   (let [^I32 b (* i TBS)
         ^:mut ^I32 j t0
@@ -974,13 +1015,17 @@
     (while (< j n)
       (do (if (!= j i)
             (if (and (tb-overlap tb i j) (>= (cells-at tb (+ (* j TBS) 6)) (cells-at tb (+ b 6))))
-              (if (tb-part tb j i tc)
-                (set any 1)
-                (return (== 0 1)))))
+              ;; Only the first of tied, identical readings can promote itself.
+              (if (not (and (> j i)
+                            (and (== (cells-at tb (+ (* j TBS) 6)) (cells-at tb (+ b 6)))
+                                 (tb-grid-peer tb j i tc tw))))
+                (if (tb-part tb j i tc wd et tw)
+                  (set any 1)
+                  (return (== 0 1))))))
           (set j (+ j 1))))
     (return (== any 1))))
 
-(defn ^I32 tb-promote [^Cells tb ^I32 t0 ^I32 n ^Cells tc ^:mut ^Cells vals]
+(defn ^I32 tb-promote [^Cells tb ^I32 t0 ^I32 n ^Cells tc ^Cells wd ^Cells et ^Cells tw ^:mut ^Cells vals]
   (comment "P12.2 (smoke review, issue 2): the reading that yields the real row count wins. `vals` holds a pair (the negated key, the candidate) for each candidate")
   (comment "t0..n, in order; a candidate that takes in the others it overlaps and that score as well (`tb-takes`: a table's header, ruled, beside the whitespace")
   (comment "reading of the whole of it, whose rows the rules do not draw; the stripes of a zebra that stop, two stacks of fills, beside the reading of the rows")
@@ -995,7 +1040,7 @@
           (set rounds (+ rounds 1))
           (set i t0)
           (while (< i n)
-            (do (if (tb-takes tb i t0 n tc)
+            (do (if (tb-takes tb i t0 n tc wd et tw)
                   (do (set j t0)
                       (while (< j n)
                         (do (if (!= j i)
@@ -1008,7 +1053,7 @@
                 (set i (+ i 1))))))
     (return 0)))
 
-(defn ^I32 tb-select [^:mut ^Cells tb ^I32 t0 ^:mut ^Cells so ^:mut ^Cells vals ^:mut ^Cells sa ^Cells grg ^Cells tc]
+(defn ^I32 tb-select [^:mut ^Cells tb ^I32 t0 ^:mut ^Cells so ^:mut ^Cells vals ^:mut ^Cells sa ^Cells grg ^Cells tc ^Cells wd ^Cells et ^Cells tw]
   (comment "Of the candidates t0.. of one page keep, best score first, those that overlap no better one, and")
   (comment "leave them in tb in the order of their tops. Answers how many are kept.")
   (let [^I32 n (tb-rows-of tb TBS)
@@ -1023,7 +1068,7 @@
           (cells-push vals (- 0 (+ (cells-at tb (+ (* i TBS) 6)) (tb-tie-bonus tb i t0 n grg))))
           (cells-push vals i)
           (set i (+ i 1))))
-    (tb-promote tb t0 n tc vals)
+    (tb-promote tb t0 n tc wd et tw vals)
     (tb-sort-idx so vals 2 0 1)
     (set i 0)
     (while (< i (cells-len so))
@@ -2088,7 +2133,7 @@
                          ^I32 page ^I32 ra ^I32 rb ^I32 profile ^I32 score ^I32 ext
                          ^I32 bx0 ^I32 by0 ^I32 bx1 ^I32 by1]
   (comment "The cells of the rows ra..rb (see the head of this section) as a candidate table of this profile:")
-  (comment "ext 1 means `rmap` already says which table row each baseline row is (shaded: the fills' bands). The box")
+  (comment "ext 1 means `rmap` already says which table row each baseline row is (shaded: the fills' bands); ext 2 is a selected model fit. The box")
   (comment "bx0..by1 widens the box of the words (the rules, the fills): 2000000000 2000000000 -2000000000 -2000000000")
   (comment "for none. `rm` are the page's merged rules (empty for none): a vertical one that runs along most of the rows between two words is")
   (comment "a column cut, whatever the profile (D559). Answers the")
@@ -2185,6 +2230,11 @@
                             (set a (tb-numeric-col wd et wl ks kx kc ch a))
                             (set b (tb-col-of ch (tb-word-cx wd (cells-at wl (- kx 1)))))
                             (set b (tb-numeric-col wd et wl ks kx kc ch b))
+                            ;; A fitted text stub may enter an ignored whitespace gutter,
+                            ;; but it cannot span the numeric cell beyond that gutter.
+                            (if (and (== ext 2) (== (tb-part-number wd et wl ks (- kx ks)) 0))
+                              (while (and (> b a) (< (wd-get wd (cells-at wl (- kx 1)) (hd-x1)) (cells-at ch (+ (* (- b 1) 2) 1))))
+                                (set b (- b 1))))
                             (if (== (cells-at gm (+ (* tr ncols) a)) -1)
                               (do (let [^:mut ^I32 free 1
                                         ^:mut ^I32 kf a]
@@ -3759,7 +3809,7 @@
           (set t jj)))
     (return t)))
 
-(defn ^I32 tb-run-tail [^Cells rw ^Cells sg ^I32 nr ^I32 k]
+(defn ^I32 tb-run-tail [^Cells wd ^Cells et ^Cells wl ^Cells rw ^Cells sg ^I32 nr ^I32 k]
   (comment "P12.2 (smoke review, issue 6): the rows of one chunk from row k on that a whitespace run takes in, answered as the row of two chunks or more that")
   (comment "follows them, -1 when the run ends before them. They are the continuation lines of a cell that wraps when each is tight under the row before")
   (comment "it (at most 1.35 sizes: up to six of them) and stands under a chunk of the row k - 1 (`tb-under`), the label of a section and its sub-label when they")
@@ -3775,6 +3825,7 @@
               (set stop 1)
               (do (if (or (> (* pitch 20) (* size 27)) (not (tb-under rw sg (- k 1) m))) (set tight 0))
                   (set m (+ m 1)))))))
+    (if (and (== stop 0) (< m nr) (== (tb-stub-tail wd et wl rw sg k m) 1)) (return m))
     (if (and (== stop 0) (< m nr))
       (do (if (and (== tight 1) (<= (- m k) 6)) (return m))
           (comment "A label is short (six words at most): a paragraph between two tables is no label of either.")
@@ -3803,6 +3854,28 @@
           (set i (+ i 1))))
     (if (> digits 0) (return 1))
     (return 0)))
+
+;; Numeric anchors on both sides vouch for long, indented wrapped stubs.
+(defn ^I32 tb-stub-tail [^Cells wd ^Cells et ^Cells wl ^Cells rw ^Cells sg ^I32 a ^I32 b]
+  (let [^I32 prev (- a 1) ^I32 n (cells-at rw (+ (* b RWS) 9))
+        ^I32 pf (cells-at rw (+ (* prev RWS) 8)) ^I32 bf (cells-at rw (+ (* b RWS) 8))
+        ^I32 size (cells-at rw (+ (* b RWS) 3))
+        ^:mut ^I32 q 1 ^:mut ^I32 r a]
+    (if (or (< n 3) (!= n (cells-at rw (+ (* prev RWS) 9)))) (return 0))
+    (while (< q n)
+      (do (let [^I32 ps (* (+ pf q) SGS) ^I32 bs (* (+ bf q) SGS)]
+            (if (or (> (tb-abs (- (cells-at sg (+ ps 2)) (cells-at sg (+ bs 2)))) TB_HEAD_TOL)
+                    (or (== (tb-part-number wd et wl (cells-at sg (+ ps 3)) (cells-at sg (+ ps 4))) 0)
+                        (== (tb-part-number wd et wl (cells-at sg (+ bs 3)) (cells-at sg (+ bs 4))) 0))) (return 0)))
+          (set q (+ q 1))))
+    (while (< r b)
+      (do (let [^I32 sf (* (cells-at rw (+ (* r RWS) 8)) SGS)]
+            (if (or (< (cells-at sg (+ sf 1)) (- (tb-min (cells-at sg (+ (* pf SGS) 1)) (cells-at sg (+ (* bf SGS) 1))) (* size 3)))
+                    (or (>= (cells-at sg (+ sf 2)) (tb-min (cells-at sg (+ (* (+ pf 1) SGS) 1)) (cells-at sg (+ (* (+ bf 1) SGS) 1))))
+                        (or (> (* (- (cells-at rw (+ (* (+ r 1) RWS) 2)) (cells-at rw (+ (* r RWS) 2))) 10) (* size 16))
+                            (> (* (cells-at rw (+ (* r RWS) 3)) 100) (* size TB_GAP_SIZE))))) (return 0)))
+          (set r (+ r 1))))
+    (return 1)))
 
 (defn ^I32 tb-part-head [^Cells wd ^Cells et ^Cells wl ^Cells rw ^I32 r]
   (let [^I32 first (cells-at rw (* r RWS))
@@ -3880,7 +3953,8 @@
                       ^Cells tbk ^I32 first ^I32 n ^I32 size]
   (let [^I32 sf (cells-at rw (+ (* r RWS) 8))
         ^I32 count (cells-at rw (+ (* r RWS) 9))
-        ^:mut ^I32 q 0 ^:mut ^I32 anchor 0 ^:mut ^I32 wi 0 ^:mut ^I32 content 0]
+        ^:mut ^I32 q 0 ^:mut ^I32 anchor 0 ^:mut ^I32 wi 0 ^:mut ^I32 content 0 ^:mut ^I32 sectionx (cells-at tbk (+ (* first KS) 1))]
+    (if (> n 1) (set sectionx (cells-at tbk (+ (* (+ first 1) KS) 2))))
     (if (>= (* (cells-at rw (+ (* r RWS) 3)) 100) (* size TB_GAP_SIZE)) (return 0))
     (if (== count 1)
       (let [^I32 s (* sf SGS) ^I32 w (cells-at wl (cells-at sg (+ (* sf SGS) 3)))
@@ -3889,24 +3963,30 @@
         (if (and (<= (tb-abs (- (cells-at sg (+ s 1)) (cells-at tbk (+ (* first KS) 2)))) TB_HEAD_TOL)
                  (or (> (bit-and (wd-get wd w (wf-style)) (sy-bold)) 0)
                      (or (and (> tl 0) (== (cells-at et (- (+ ts tl) 1)) 58))
-                         (> (cells-at sg (+ s 2)) (cells-at tbk (+ (* first KS) 1))))))
+                         (> (cells-at sg (+ s 2)) sectionx))))
           (return 3))))
     (while (< q count)
       (do (let [^I32 s (* (+ sf q) SGS)
                 ^I32 wf (cells-at sg (+ s 3)) ^I32 nw (cells-at sg (+ s 4))
-                ^I32 c (tb-part-band tbk first n (tb-first-cx wd et wl wf (+ wf nw)))
+                ^:mut ^I32 c (tb-part-band tbk first n (tb-first-cx wd et wl wf (+ wf nw)))
                 ^I32 last (tb-part-band tbk first n (- (cells-at sg (+ s 2)) 1))]
             (set wi 0)
             (while (< wi nw)
               (do (if (tb-row-content wd et (cells-at wl (+ wf wi))) (set content 1))
                   (set wi (+ wi 1))))
             (if (or (< c 0) (< last c)) (return 0))
+            ;; A spanning stub can begin in a band empty throughout the body.
+            (while (and (< c last) (== (cells-at tbk (+ (* (+ first c) KS) 5)) 0)) (set c (+ c 1)))
             (let [^I32 kind (cells-at tbk (+ (* (+ first c) KS) 5))]
               (if (and (>= kind 2) (<= kind 4))
                 (if (or (== kind 4) (== (tb-part-number wd et wl wf nw) 1))
                   (set anchor 1)
                   (return 0))
-                (if (or (!= kind 1) (> last c)) (return 0)))))
+                (if (or (!= kind 1)
+                        (and (> last c)
+                             (or (!= last (+ c 1))
+                                 (or (< (cells-at tbk (+ (* (+ first last) KS) 5)) 2)
+                                     (>= (cells-at sg (+ s 2)) (cells-at tbk (+ (* (+ first last) KS) 2))))))) (return 0)))))
           (set q (+ q 1))))
     (if (== content 0) (return 0))
     (if (== anchor 1) (return 1))
@@ -3915,7 +3995,7 @@
 (defn ^I32 tb-own-rows [^Cells wd ^Cells et ^Cells wl ^Cells rw ^Cells sg ^I32 a ^I32 b ^I32 head
                        ^Cells tbk ^I32 first ^I32 n ^I32 size ^:mut ^Cells rmap ^:mut ^Cells fits]
   (let [^:mut ^I32 r a ^:mut ^I32 rows -1 ^:mut ^I32 prev -1 ^:mut ^I32 next -1
-        ^:mut ^I32 j 0 ^:mut ^I32 lastmode 0 ^:mut ^I32 cls 0
+        ^:mut ^I32 j 0 ^:mut ^I32 start 0 ^:mut ^I32 lastmode 0 ^:mut ^I32 cls 0
         ^:mut ^I32 anchors 0 ^:mut ^I32 conts 0]
     (cells-drop fits 0)
     (while (< r b)
@@ -3935,7 +4015,9 @@
           (if (or (< r (+ a head)) (!= cls 2))
             (do (set rows (+ rows 1)) (cells-push rmap rows)
                 (if (== cls 1) (set prev r) (set prev -1)))
-            (do (set next (+ r 1))
+            (do (set start r)
+                (while (and (> start (+ a head)) (== (cells-at fits (- (- start 1) a)) 2)) (set start (- start 1)))
+                (set next (+ r 1))
                 (while (and (< next b) (== (cells-at fits (- next a)) 2)) (set next (+ next 1)))
                 (set j r)
                 ;; Every intervening baseline must remain within 1.6 sizes.
@@ -3945,8 +4027,8 @@
                 (if (and (< next b) (and (>= j next) (== (cells-at fits (- next a)) 1))
                          (or (== lastmode 1)
                              (or (< prev (+ a head))
-                                 (< (- (cells-at rw (+ (* next RWS) 2)) (cells-at rw (+ (* r RWS) 2)))
-                                    (- (cells-at rw (+ (* r RWS) 2)) (cells-at rw (+ (* prev RWS) 2)))))))
+                                 (< (- (cells-at rw (+ (* next RWS) 2)) (cells-at rw (+ (* (- next 1) RWS) 2)))
+                                    (- (cells-at rw (+ (* start RWS) 2)) (cells-at rw (+ (* prev RWS) 2)))))))
                   (cells-push rmap (+ rows 1))
                   (if (and (>= prev (+ a head))
                            (<= (* (- (cells-at rw (+ (* r RWS) 2)) (cells-at rw (+ (* (- r 1) RWS) 2))) 10) (* size 16)))
@@ -4132,7 +4214,7 @@
                                 (if (>= (cells-at rw (+ (* k RWS) 9)) 2)
                                   (do (set j k)
                                       (set ntab (+ ntab 1)))
-                                  (let [^I32 m (tb-run-tail rw sg nr k)]
+                                  (let [^I32 m (tb-run-tail wd et wl rw sg nr k)]
                                     (if (< m 0)
                                       (set more 0)
                                       (set j (- m 1)))))))))))
@@ -5193,19 +5275,27 @@
                   (set i (+ i 1))))
             (set c (+ c 1))))
       (while (and (< rawhead nr) (< (cells-at rw (+ (* rawhead RWS) 2)) headend)) (set rawhead (+ rawhead 1)))
-      ;; Preserve a wrapped header's existing row map; binding it is a separate sub-step.
-      (if (!= rawhead head) (return 0))
+      ;; A wrapped header keeps its original cells; only its body is refitted.
+      (if (< rawhead head) (return 0))
       (cells-set tb (+ b 11) head)
       (tb-model tb k wd et tc tw tx tbk so)
       (cells-drop st 0)
       (while (< r nr) (do (cells-push st (cells-at rw (+ (* r RWS) 3))) (set r (+ r 1))))
       (tb-sort-nums st)
       (set size (cells-at st (quot (cells-len st) 2)))
-      (set fit (tb-own-rows wd et wl rw sg 0 nr head tbk (cells-at tb (+ b 28)) (cells-at tb (+ b 29)) size rmap en))
+      (set fit (tb-own-rows wd et wl rw sg 0 nr rawhead tbk (cells-at tb (+ b 28)) (cells-at tb (+ b 29)) size rmap en))
+      (if (and (> fit 0) (> rawhead head))
+        (do (set fit (+ (- fit rawhead) head))
+            (set r 0)
+            (while (< r nr)
+              (do (if (< r rawhead)
+                    (cells-set rmap r (tb-min r (- head 1)))
+                    (cells-set rmap r (+ (- (cells-at rmap r) rawhead) head)))
+                  (set r (+ r 1))))))
       (cells-drop tbk k0)
       (if (or (<= fit 0) (>= fit (cells-at tb (+ b 7)))) (return 0))
       (let [^I32 t (tb-text-grid wd et wl rw sg rm kc ch st en rmap gm gs ry pr so tb tc tw tx
-                                page 0 nr profile (cells-at tb (+ b 6)) 1
+                                page 0 nr profile (cells-at tb (+ b 6)) 2
                                 (cells-at tb (+ b 1)) (cells-at tb (+ b 2)) (cells-at tb (+ b 3)) (cells-at tb (+ b 4)))]
         (if (< t 0) (return 0))
         (if (!= (cells-at tb (+ (* t TBS) 8)) (cells-at tb (+ b 8))) (set same 0))
@@ -5213,6 +5303,26 @@
         (while (and (== same 1) (< i (cells-at tb (+ b 17))))
           (do (if (!= (cells-at tx (+ (cells-at tb (+ b 16)) i)) (cells-at tx (+ (cells-at tb (+ (* t TBS) 16)) i))) (set same 0))
               (set i (+ i 1))))
+        (if (and (== same 1) (> rawhead head))
+          (let [^I32 newfirst (tb-rows-of tc TCS)
+                ^I32 bodyfirst (cells-at tb (+ (* t TBS) 9))
+                ^I32 bodyend (+ bodyfirst (cells-at tb (+ (* t TBS) 10)))]
+            ;; The temporary header was only needed to recover the same cuts.
+            ;; Copy every original header record verbatim, followed by the fitted body.
+            (set c first)
+            (while (< c (+ first count))
+              (do (if (< (cells-at tc (* c TCS)) head)
+                    (do (set i 0)
+                        (while (< i TCS) (do (cells-push tc (cells-at tc (+ (* c TCS) i))) (set i (+ i 1))))))
+                  (set c (+ c 1))))
+            (set c bodyfirst)
+            (while (< c bodyend)
+              (do (if (>= (cells-at tc (* c TCS)) head)
+                    (do (set i 0)
+                        (while (< i TCS) (do (cells-push tc (cells-at tc (+ (* c TCS) i))) (set i (+ i 1))))))
+                  (set c (+ c 1))))
+            (cells-set tb (+ (* t TBS) 9) newfirst)
+            (cells-set tb (+ (* t TBS) 10) (- (tb-rows-of tc TCS) newfirst))))
         (set c (cells-at tb (+ (* t TBS) 9)))
         (while (< c (+ (cells-at tb (+ (* t TBS) 9)) (cells-at tb (+ (* t TBS) 10))))
           (do (set i 0)
@@ -5312,11 +5422,11 @@
                   (tb-shaded-page s2 p wd et wi wj s1 tbo s8 s9 s10 s11 s12 s13 s14 s15 s16 s6 s17 s18 s7 s3 tb tc tw tx))
                 (tb-whitespace-page p wd et wi wj s1 tbo tbk s0 s10 s11 s12 s13 s14 s15 s16 s6 s17 s18 s7 s3 tb tc tw tx)
                 (if (>= (tg-trust ss) TB_TAG_VETO_TRUST) (tb-veto tb t0 wd tc tw se sc gl mk g0))
-                (tb-select tb t0 s3 s9 s8 grg tc)
+                (tb-select tb t0 s3 s9 s8 grg tc wd et tw)
                 ;; the tags are checked against the candidates that were kept (a table of the tags alone joins them and is selected with them)
                 (set nk (tb-rows-of tb TBS))
                 (tb-tags wd et p wi wj grl qi qj se sc ss gl mk g0 g1 g2 g3 g4 g5 tv tb t0 tc tw tx s7 s3)
-                (if (> (tb-rows-of tb TBS) nk) (tb-select tb t0 s3 s9 s8 grg tc))
+                (if (> (tb-rows-of tb TBS) nk) (tb-select tb t0 s3 s9 s8 grg tc wd et tw))
                 (set k t0)
                 (while (< k (tb-rows-of tb TBS))
                   (do (tb-fit-kept p wd et wi wj s1 an tbo tbk s0 s10 s11 s12 s13 s14 s15 s16 s6 s17 s18 s7 s3 tb k tc tw tx)
