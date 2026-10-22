@@ -13,12 +13,14 @@
   check {:doc "Generate, compile and run every target; require one answer."
          :task (shell "kin/scripts/check")}
   unit  {:doc "Do the laws hold as native tests on every target (the C# arm needs a .NET 8+ SDK: without one it SKIPS loudly, `EMON_SKIP_CSHARP=1` leaves it out, P9.2)?  bb unit [go|rust|java|csharp|red [ARM]]"
+         :depends [corpus-guard]
          :task (apply shell "kin/scripts/unit" *command-line-args*)}
   plan {:doc "The plan/fulfil protocol: a transcript recorded on Rust, replayed on Go, identical evidence (P2.5)."
         :task (shell "kin/scripts/plan")}
   slice {:doc "The first vertical slice on the Rust host, the Go host (P2.1), the Java host when a JDK 22+ is there (P9.1; EMON_SKIP_JAVA=1 leaves it out) AND the C# host when a .NET 8+ SDK is there (P9.2; EMON_SKIP_CSHARP=1 leaves it out), and in a headless browser (the WASM binding and JS SDK, P9.3) when the toolchain is there: the Engine API's native tests, then born-digital PDFs through the driver to JSON and HTML, in memory and from a 512-byte async source, against the goldens (P1.10); in the browser through each of SPEC 13.1's byte-source adapters; the C binding (a C test program and the C driver, when a C compiler is there; EMON_SKIP_C=1 leaves it out, P9.4) and the babashka pod (loaded by babashka and driven through its driver; EMON_SKIP_POD=1 leaves it out, P9.4).  bb slice [--update]"
          :task (apply shell "bb" "kin/scripts/slice" *command-line-args*)}
   identity {:doc "Every driver arm over the corpus of (input, transcript) pairs gives byte-identical JSON, HTML, evidence and refusals: Rust and Go, four byte-source adapters each, a 512-byte async source, and the transcript recorded on one host replayed on the other (P2.2, SPEC 14.1.5); plus the Java host's four arms and its record/replay trip when a JDK 22+ is there (P9.1; EMON_SKIP_JAVA=1 leaves it out); plus the C# host's four arms and its record/replay trip when a .NET 8+ SDK is there (P9.2; EMON_SKIP_CSHARP=1 leaves it out); plus the browser (the Rust host built for wasm32, driven by the JS SDK in headless Chrome; five byte-source adapters, record and replay across hosts, the asset fixtures; P9.3) when the toolchain is there (EMON_SKIP_WASM=1 leaves it out); plus the C binding's five arms (the one-shot over bytes, a lazy pread source and a spooled stream, the step API, the step API over 512-byte chunks) and its record/replay trip when a C compiler is there (P9.4; EMON_SKIP_C=1 leaves it out); plus the babashka pod's two arms (a path, base64 bytes) (P9.4; EMON_SKIP_POD=1 leaves it out).  bb identity [--full] [--only S] [--corpus [--limit N] [--sample K]]"
+            :depends [corpus-guard]
             :task (apply shell "bb" "kin/scripts/identity" *command-line-args*)}
   wasm {:doc "The browser checks beyond identity (P9.3): the wasm module imports nothing; a URL fixture is read by Range and fetches measurably less than its length; the source's faults are named; asset.bytes() and asset.blob(); tesseract.js through plan/fulfil, its transcript replayed natively; the JS heap at the 32 MiB assets-bytes default, in inline and external modes. NOT a gate (needs a browser; `bb slice` and `bb identity` carry the browser arm and skip it loudly).  bb wasm"
         :task (shell "kin/scripts/wasm")}
@@ -27,12 +29,14 @@
   pod {:doc "The babashka pod (P9.4, D474, D475): emon/convert and its ops behind the pod protocol, a Rust binary over the Rust host, loaded by this babashka: the slice's seven fixtures by path and by bytes to the goldens (JSON, EDN, HTML), errors by name, passwords, assets, evidence. EMON_SKIP_POD=1 leaves it out. NOT a gate on its own: `bb slice` runs it and the pod driver's sections, `bb identity` the pod arms.  bb pod"
        :task (shell "bb" "kin/scripts/pod")}
   image {:doc "The ImageDecode port (P6.1, D187-D190): every image fixture of test/image decoded by Rust, Go, Java and C# (and converted alike by the C binding and the pod, P9.5), PNG and TIFF to exactly the pixels ImageMagick says, JPEG within a stated tolerance, refusals by name, the same through a source that misses.  bb image [--corpus]"
+         :depends [corpus-guard]
          :task (apply shell "bb" "kin/scripts/image" *command-line-args*)}
   embedders {:doc "The Rust and Go public API surfaces (names, arities) compared with each other and with SPEC 3.9/13, the Java and C# surfaces held to SPEC 3.9/13's names (P9.1, P9.2), the C binding's header and ABI against the Rust file, the browser's exports and SPEC 13 and the pod's described vars against its arms (P9.4), and no filesystem in any host library or generated module (P2.3, D058)."
              :task (shell "bb" "kin/scripts/embedders")}
   limits {:doc "Every bound: its name, default and range (read from kin/limits.kin), what happens at it (breach, budget, reserved), where kin and the hosts read it, which scenario or test exercises it, and the flags (a limit nothing reads or nothing tests); the inventory of hard-coded bounds counted by class (P10.4, D477, nome's `bb limits`). A REPORT, not a gate. --inventory lists every bound; --run also puts each scenario of test/limits/scenarios.edn through every host's driver (the bound set low gives the named error or a different bundle, the same on all four hosts, and the default said aloud is the unset run).  bb limits [--inventory] [--run [--hosts H,..] [--only ID,..]]"
           :task (apply shell "bb" "tools/limits/limits.clj" *command-line-args*)}
   repeat {:doc "Run vs run, serial vs eight conversions at once, and the document with its objects in reverse file order: byte-identical, on Rust and Go and, where their toolchains are, Java, C#, the C binding and the pod (P2.4, SPEC 12.2; P9.5).  bb repeat [--full] [--only S] [--corpus [--limit N] [--sample K]]"
+          :depends [corpus-guard]
           :task (apply shell "bb" "kin/scripts/repeat" *command-line-args*)}
   fuzz {:doc "Mutate PDFs (blind and object-level: keys, values, counts, deep nesting, cycles, filters, streams, content, CMaps, fonts, image dictionaries) and PNG/JPEG/TIFF images (chunks, segments, directories), from the fixtures and generated hostile seeds; run every mutant through Rust, Go, Java and C# (the kin probe) and the whole conversion as each host's driver (memory and a 512-byte async source; Java, C#, the C binding and the pod on a sample of the files, `--extra-every`), the browser too when its toolchain is there (it is a normal arm since P9.5, D495): no panic, no hang, peak resident set under a bound, hosts agree on the error name or the output byte for byte, async = memory (P2.12, P10.5). No args: the fixed-seed small budget plus every committed regression fixture (a gate).  bb fuzz [--seed S] [--cases N] [--hosts all] [--engine-every K] [--only I --dump F] [--replay FILE...]"
         :task (apply shell "bb" "tools/fuzz/fuzz.clj" *command-line-args*)}
@@ -57,6 +61,7 @@
   pdfium-wasm-record {:doc "Record the pdfium-wasm gate's transcripts LIVE (pdfium's WebAssembly build through the JS SDK in Node) into test/pdfium-wasm/replay/ with RENDERS.edn, and DIGESTS.edn from replaying them on Rust and Go. NOT a gate (P11.4c).  bb pdfium-wasm-record [STEM ...] | bb pdfium-wasm-record --digests  (--digests: NO pdfium, no Node: replay the committed transcripts and rewrite DIGESTS.edn; D488)"
                       :task (apply shell "bb" "tools/pdfium_wasm/record.clj" *command-line-args*)}
   png-check {:doc "Do independent decoders (ImageMagick, java.util.zip) read emon's canonical PNGs to the same pixels; size against zlib level 6 (P3.11, D117).  bb png-check [--update-digests]"
+             :depends [corpus-guard]
              :task (apply shell "kin/scripts/png-check" *command-line-args*)}
   tessdata-fetch {:doc "Fetch pinned, SHA-256 checked Apache-2.0 OCR models into .cache/tessdata. bb tessdata-fetch [--langs eng,spa,...]"
                   :task (apply shell "bb" "tools/tessdata/fetch.clj" *command-line-args*)}
@@ -137,11 +142,16 @@
   import {:doc "Run every public-dataset importer into corpus/_gold/, validate, report counts (NOT a gate: the corpus is not in git).  bb import [--limit N] [name ...]"
           :task (apply shell "bb" "tools/import/import_all.clj" *command-line-args*)}
   gates {:doc "Run every gate; fail if one exits non-zero or prints no score.  bb gates [GATE...] runs only those (CI shards, D266)."
+         :depends [corpus-guard]
          :task (apply shell "kin/scripts/gates" *command-line-args*)}
   corpus-push {:doc "Zip each corpus category and push to S3-compatible storage (.env).  bb corpus-push [--dry-run] [category...]"
                :task (apply shell "bb" "tools/corpus.clj" "push" *command-line-args*)}
   corpus-pull {:doc "Pull changed archives from S3-compatible storage into corpus/.  bb corpus-pull [--dry-run] [--force] [category...]"
                :task (apply shell "bb" "tools/corpus.clj" "pull" *command-line-args*)}
+  corpus-link {:doc "Keep the corpus on another volume: make corpus/ a symlink to :corpus-dir of the gitignored local.edn (or --dir). Refuses a real corpus/ directory; never moves data. --check: it resolves, the volume is mounted, the index is consistent.  bb corpus-link [--check] [--dir PATH]"
+               :task (apply shell "bb" "tools/corpus_link.clj" *command-line-args*)}
+  corpus-guard {:doc "Fail fast, readably, when corpus/ is a dangling symlink (the external drive is unplugged). Silent otherwise. The corpus-reading gates depend on it."
+                :task (shell "bb" "tools/corpus_link.clj" "--guard")}
   corpus-index-sha {:doc "Print the SHA-256 of the remote index.json (the CI corpus cache key, D266). NOT a gate."
                     :task (shell "bb" "tools/corpus.clj" "index-sha")}
   ci {:doc "CI helpers (D266, P11.7, D528): bb ci coverage (every gate is in a shard of ci/gate-map.edn and a workflow runs the shards; the map covers every tracked file) | map-coverage [--self-test] | plan --base REF [--head REF] [--format edn|json] [--all] (the gates a change calls for; fails on an unmapped path; a version-only diff plans nothing, D550) | shards | verify-plan --head SHA [--mode scoped|full] (what verify.yml runs on main: the newest verified ancestor as base, the plan since it, whether the release archives are rebuilt) | core (the fast core, timed) | laws-record ARM LOG DIR | laws-compare DIR. NOT a gate."

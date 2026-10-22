@@ -1,0 +1,11 @@
+;; Copy to local.edn (gitignored) and edit. Settings of THIS checkout only; nothing here is a project fact.
+;; Read by tools/corpus.clj (bb corpus-pull / corpus-push) and tools/corpus_link.clj (bb corpus-link).
+;; See CONTRIBUTING.md, "Corpus on an external drive".
+{;; Where the corpus really lives: an absolute path (a leading ~/ is fine for corpus-link).
+ ;; `bb corpus-link` makes the repo's corpus/ a symlink to it; `bb corpus-pull` pulls into it.
+ ;; The directory must already exist (a drive that is not mounted is an error, never a new directory).
+ :corpus-dir "/Volumes/EXTERNAL/emon-corpus"
+
+ ;; Room for more per-checkout locations, e.g. a build cache on the big drive (not read yet):
+ ;; :cache-dir "/Volumes/EXTERNAL/emon-cache"
+ }

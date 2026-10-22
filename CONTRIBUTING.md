@@ -36,6 +36,33 @@ toolchain is used when it is there and **skipped, loudly,** when it is not (`EMO
 
 The sample corpus (`corpus/`, 12 GB) is not in git and the gates do not need it (SPEC 15.2 says how to share it).
 
+## Corpus on an external drive
+
+The corpus is 12 GB. To keep it off the internal disk, keep the data on another volume and make `corpus/` a symlink to it. Every
+gate and tool reads the repo-relative `corpus/` and follows links, so nothing else changes.
+
+1. Copy `local.edn.example` to `local.edn` (gitignored; per checkout) and set `:corpus-dir` to the absolute path of the directory
+   on the drive, e.g. `{:corpus-dir "/Volumes/SSK SSD/emon-corpus"}`. The directory must exist.
+2. Move the data yourself, in this order: copy (`rsync -a corpus/ "/Volumes/SSK SSD/emon-corpus/"`), verify
+   (`rsync -anc corpus/ "/Volumes/SSK SSD/emon-corpus/"` prints nothing when it is complete), then `mv corpus corpus.old` and, when
+   all is well, delete it. Or start empty and `bb corpus-pull` into the drive.
+3. `bb corpus-link` creates (or updates) the symlink `corpus -> <:corpus-dir>`. It **refuses** while `corpus/` is a real directory
+   and never moves, copies or deletes data. `bb corpus-link --dir PATH` links to PATH without `local.edn`.
+4. `bb corpus-link --check` verifies that `corpus` resolves, that the volume is mounted, and that the pulled categories are all
+   there (and, when `.env` is set up, that they match the remote index). `bb corpus-pull` pulls into `:corpus-dir`; it never
+   replaces the link.
+
+With the drive unplugged the link dangles. `unit`, `identity`, `image`, `repeat`, `png-check` and `bb gates` then stop at once
+with a message naming the missing target and volume (they would otherwise skip the corpus laws as if `corpus/` were absent).
+`rm corpus` removes only the link.
+
+The drive's format matters: **exFAT** is case-insensitive, has no symlinks and has no unix permissions (the executable bit of a
+`.sh` file is lost). That is why the link lives in the checkout and only the data on the drive. The corpus has no case
+collisions (no two paths differ only in case), so a case-insensitive volume holds all of it. APFS and ext4 need no care.
+
+A new worktree symlinks its `corpus` to the main checkout's `corpus`, so it follows the main checkout's link automatically; do
+not run `bb corpus-link` in a worktree.
+
 ## The tasks
 
 `bb tasks` lists them all with their documentation. The ones you will use:

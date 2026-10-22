@@ -100,6 +100,7 @@
   {:glob "api/**" :gates [] :why "the frozen surface; the fast core's api-diff holds it"}
   {:glob "version.edn" :gates [] :why "the fast core's `version --check` holds every manifest to it"}
   {:glob ".gitignore" :gates [] :why "no gate reads it"}
+  {:glob "local.edn.example" :gates [] :why "a template of the untracked local.edn (where this checkout keeps the corpus); only tools/corpus.clj and tools/corpus_link.clj read the real one"}
   {:glob ".env.example" :gates [] :why "a template of the corpus credentials; nothing reads it"}
   {:glob ".github/**" :gates [] :why "workflows and the setup action: the fast core's `ci coverage` reads every workflow (tasks exist, shards run, the plan is called)"}
   {:glob "ci/**" :gates [] :why "this map: the fast core's `ci coverage` runs map-coverage over it"}
@@ -172,7 +173,7 @@
   {:glob "tools/{api_diff,release_audit,version,rederive,ci}.clj" :gates [] :why "release and CI tooling: the fast core runs each (api-diff, release-audit, version --check, ci coverage)"}
   {:glob "tools/release/**" :gates [] :why "the release tools (P11.9, P11.10, D547, D550): `bb release-notes`, `release-verify`, `release-ops` and `publish`, run by bump.yml, verify.yml, draft.yml and publish.yml; not gates. The fast core runs each one's --self-test (pure logic over synthetic data; nothing is published or pushed)"}
   {:glob "tools/cli.clj" :gates [] :why "`bb cli` (P11.4b, D541): builds and packs the `emon` command and `--check`s the archive (needs bb native, pdfium and cargo; prints SKIP without them); not a gate yet, it joins `bb package` (P11.4)"}
-  {:glob "tools/{corpus,corpus_test,corpus_roundtrip,samples,pdfinfo}.clj" :gates [] :why "corpus transport and live tools: not gates (corpus-test is its own non-gate)"}
+  {:glob "tools/{corpus,corpus_link,corpus_test,corpus_roundtrip,samples,pdfinfo}.clj" :gates [] :why "corpus transport, the corpus-link/corpus-guard symlink tool and live tools: not gates (corpus-test is its own non-gate)"}
   {:glob "tools/{transcript_manifest,crypto-constants,pdfsnames,pdfxnames}.clj" :gates ["unit"] :why "tables and manifests `bb unit` checks"}
   {:glob "tools/image-fixtures.clj" :gates ["unit" "image"] :why "the image fixtures' generator"}
   {:glob "tools/accuracy/**" :gates ["unit" "accuracy" "ocr" "fusion" "gfuse" "sealpx" "sigs" "asset"] :why "the scorer and the predictors: the accuracy gate and every replay gate's ratchet run through it"}
