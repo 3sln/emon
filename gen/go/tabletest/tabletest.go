@@ -223,6 +223,64 @@ func ttBrief(t *strings.Builder, nodes *port.Cells, attrs *port.Cells, text *por
 	return 0
 }
 
+func ttBodyAudit(wd *port.Cells, et *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells) int32 {
+	var w int32 = 0
+	var k int32 = 0
+	var c int32 = 0
+	var j int32 = 0
+	var inside int32 = 0
+	var owned int32 = 0
+	var drop int32 = 0
+	for w < evidence.WdCount(wd) {
+		inside = 0
+		owned = 0
+		drop = 0
+		k = 0
+		var x int32 = (evidence.WdGet(wd, w, evidence.HdX0()) + evidence.WdGet(wd, w, evidence.HdX1())) / 2
+		var y int32 = (evidence.WdGet(wd, w, evidence.HdY0()) + evidence.WdGet(wd, w, evidence.HdY1())) / 2
+		var rot int32 = evidence.WdGet(wd, w, evidence.HdRot())
+		var wordlen int32 = evidence.WdGet(wd, w, evidence.HdTlen())
+		if (wordlen == 0) || ((rot >= 100) && (rot <= 35900)) {
+			drop = 1
+		}
+		if wordlen == 1 {
+			var cp int32 = port.CellsAt(et, evidence.WdGet(wd, w, evidence.HdTstart()))
+			if (cp == 46) || ((cp == 58) || ((cp == 45) || ((cp == 8211) || (cp == 8212)))) {
+				drop = 1
+			}
+		}
+		for k < (port.CellsLen(tb) / 32) {
+			var b int32 = k * 32
+			if (evidence.WdGet(wd, w, evidence.HdPage()) == port.CellsAt(tb, b)) && ((x >= port.CellsAt(tb, b+1)) && ((x <= port.CellsAt(tb, b+3)) && ((y >= port.CellsAt(tb, b+2)) && (y <= port.CellsAt(tb, b+4))))) {
+				if (port.CellsAt(tb, b+5) != 1) && (port.CellsAt(tb, b+5) != 5) {
+					inside = 1
+				}
+			}
+			c = port.CellsAt(tb, b+9)
+			for c < (port.CellsAt(tb, b+9) + port.CellsAt(tb, b+10)) {
+				j = 0
+				for j < port.CellsAt(tc, (c*16)+9) {
+					if port.CellsAt(tw, port.CellsAt(tc, (c*16)+8)+j) == w {
+						owned += 1
+					}
+					j += 1
+				}
+				c += 1
+			}
+			k += 1
+		}
+		if inside == 1 {
+			if owned > 1 {
+				return 5
+			} else if (owned == 0) && (drop == 0) {
+				return 6
+			}
+		}
+		w += 1
+	}
+	return 0
+}
+
 func ttRunAn(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *strings.Builder, np int32, an *port.Cells) int32 {
 	// `tt-run-n` over a document whose annotations (rows of `an`, `AN_STRIDE` cells) are `an`: the form fields' widgets (D583).
 	var nodes *port.Cells = port.NewCells()
@@ -304,6 +362,9 @@ func ttRunAn(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *
 	}
 	gfuse.GfDoc(pa, gpts, gmk, gim, np, gfuse.GfxMode(), grl, gfl, cand, port.NewCells())
 	table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, port.NewCells(), port.NewCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an)
+	if ttBodyAudit(wd, et, tb, tc, tw) != 0 {
+		return 7
+	}
 	columns.LcCopy(ln, lt)
 	para.PaBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al)
 	ttBrief(t, nodes, attrs, text)
@@ -2082,6 +2143,9 @@ func ttGolden(pdf []byte, t *strings.Builder, tvt *strings.Builder) int32 {
 	var np int32 = port.CellsLen(pages) / 16
 	gfuse.GfDoc(pa, pts, mk, im, np, gfuse.GfxMode(), grl, gfl, cand, port.NewCells())
 	table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, port.NewCells(), port.NewCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, port.NewCells())
+	if ttBodyAudit(wd, et, tb, tc, tw) != 0 {
+		return 7
+	}
 	tagtable.TtEmit(tvt, t12e)
 	columns.LcCopy(ln, lt)
 	initial.InDetect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii)
@@ -2244,6 +2308,8 @@ func TestRightAlignedAmountsMakeOneNumericColumn(emonT *testing.T) {
 	var ln *port.Cells = port.NewCells()
 	var et *port.Cells = port.NewCells()
 	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
 	var tbk *port.Cells = port.NewCells()
 	var pages *port.Cells = port.NewCells()
 	model.PageNew(pages, 1, 61200, 79200, 0, model.PkVector())
@@ -2259,7 +2325,8 @@ func TestRightAlignedAmountsMakeOneNumericColumn(emonT *testing.T) {
 	ttAt(wd, ln, et, port.TextBlob("100.00"), 40500, 16400, 0, 1)
 	ttAt(wd, ln, et, port.TextBlob("Total"), 7600, 18000, 1, 0)
 	ttAt(wd, ln, et, port.TextBlob("1,111.00"), 40500, 18000, 1, 1)
-	port.AssertEq(emonT, table.TbBuild(wd, ln, et, port.NewCells(), port.NewCells(), 1, tb, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), tbk, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), pages, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), 1, "the amounts make one table")
+	port.AssertEq(emonT, table.TbBuild(wd, ln, et, port.NewCells(), port.NewCells(), 1, tb, tc, tw, port.NewCells(), port.NewCells(), tbk, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), pages, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), 1, "the amounts make one table")
+	port.AssertEq(emonT, ttBodyAudit(wd, et, tb, tc, tw), 0, "the numeric-model fixture has unique body ownership")
 	port.AssertEq(emonT, table.TbModelCol(tb, tbk, 0, 1, 3), 40500, "varying widths share their right anchor")
 	port.AssertEq(emonT, table.TbModelCol(tb, tbk, 0, 1, 5), 3, "the numeric column is an amount column")
 	port.AssertEq(emonT, table.TbModelCol(tb, tbk, 0, 1, 9), 4, "all four body rows support the anchor")
@@ -2350,7 +2417,11 @@ func TestEmptyDateMarkersDoNotSplitALedger(emonT *testing.T) {
 func ttOwnBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tbo *port.Cells) int32 {
 	var pages *port.Cells = port.NewCells()
 	model.PageNew(pages, 1, 61200, 79200, 0, model.PkVector())
-	return table.TbBuild(wd, ln, et, port.NewCells(), port.NewCells(), 1, tb, tc, tw, port.NewCells(), port.NewCells(), port.NewCells(), tbo, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), pages, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
+	table.TbBuild(wd, ln, et, port.NewCells(), port.NewCells(), 1, tb, tc, tw, port.NewCells(), port.NewCells(), port.NewCells(), tbo, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), pages, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
+	if ttBodyAudit(wd, et, tb, tc, tw) != 0 {
+		return -7
+	}
+	return port.CellsLen(tb) / 32
 }
 
 func TestEveryWordInATableBodyHasOneOwner(emonT *testing.T) {
@@ -2533,4 +2604,87 @@ func TestASeparatorAndFootnoteAreNotAWrappedDescription(emonT *testing.T) {
 	ttAt(wd, ln, et, port.TextBlob("* Not meaningful."), 15000, 17200, 0, 0)
 	port.AssertEq(emonT, ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one original candidate")
 	port.AssertEq(emonT, port.CellsAt(tb, 7), 6, "the separator and footnote keep their own rows")
+}
+
+func TestATotalABlankLineBelowTheBodyIsItsFoot(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var tbo *port.Cells = port.NewCells()
+	ttAt(wd, ln, et, port.TextBlob("Item"), 7600, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Amount"), 43000, 10000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("Goods"), 7600, 11600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("10.00"), 43000, 11600, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Goods"), 7600, 13200, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("10.00"), 43000, 13200, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Goods"), 7600, 14800, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("10.00"), 43000, 14800, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Goods"), 7600, 16400, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("10.00"), 43000, 16400, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Total"), 7600, 19600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("40.00"), 43000, 19600, 0, 1)
+	port.AssertEq(emonT, ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one ledger with a separated total")
+	port.AssertEq(emonT, port.CellsAt(tb, 7), 6, "the separated total is attached")
+	port.AssertEq(emonT, port.CellsAt(tb, 12), 1, "an aligned total after a blank pitch is a foot")
+}
+
+func TestAnEmptyWordInsideTheBodyIsExplicitlyDropped(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var tbo *port.Cells = port.NewCells()
+	ttPartLedger(wd, ln, et, 10000)
+	ttAt(wd, ln, et, port.TextBlob(""), 15000, 13000, 0, 0)
+	port.AssertEq(emonT, ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "the empty token does not change the ledger")
+	port.AssertEq(emonT, port.CellsAt(tbo, 12), -1, "row-builder-excluded empty evidence is explicitly dropped")
+}
+
+func TestAPartiallyOwnedBodyLineKeepsItsBoxClaim(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var tbo *port.Cells = port.NewCells()
+	ttPartLedger(wd, ln, et, 10000)
+	ttAt(wd, ln, et, port.TextBlob("Outside"), 50000, 5000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Outside"), 50000, 6500, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Outside"), 50000, 8000, 0, 0)
+	evidence.LnSet(ln, 11, 12, 4)
+	port.AssertEq(emonT, ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one retained table")
+	port.AssertEq(emonT, evidence.LnGet(ln, 11, 15), 1073741824, "one owned word of four still keeps the original body box claim")
+	port.AssertEq(emonT, port.CellsAt(tbo, 12), 0, "outside-body evidence stays unowned")
+}
+
+func TestAnAttachedTailWithAnImpreciseLineBoxIsClaimed(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var tbo *port.Cells = port.NewCells()
+	ttAt(wd, ln, et, port.TextBlob("Item"), 7600, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Amount"), 43000, 10000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("Goods"), 7600, 11600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("10.00"), 43000, 11600, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Goods"), 7600, 13200, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("10.00"), 43000, 13200, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Goods"), 7600, 14800, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("10.00"), 43000, 14800, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Goods"), 7600, 16400, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("10.00"), 43000, 16400, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Total"), 7600, 19600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("40.00"), 43000, 19600, 0, 1)
+	evidence.LnSet(ln, 10, 3, 100000)
+	port.AssertEq(emonT, ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one ledger with a separated total")
+	port.AssertEq(emonT, port.CellsAt(tb, 7), 6, "the separated total is attached")
+	port.AssertEq(emonT, evidence.LnGet(ln, 10, 15), 1073741824, "a fully owned attached tail is claimed outside the old line box")
 }

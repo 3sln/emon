@@ -4971,11 +4971,12 @@
     (tb-caption tb k wd et ln l0 l1 tq)
     (return 0)))
 
-;; P12.10: record retained-cell ownership. Line claiming keeps its fallback until
-;; model-fit rows, headers and tails make the whole-body invariant safe (D649).
+;; P12.10: retain every original body box claim; only fully owned bound headers
+;; and attached tails can add a claim outside the box (D1793).
 (defn ^I32 tb-own-claim [^Cells tb ^I32 t0 ^Cells tc ^Cells tw ^Cells wd ^Cells et
-                        ^I32 w0 ^I32 w1 ^:mut ^Cells tbo]
-  (let [^:mut ^I32 w w0 ^:mut ^I32 k t0 ^:mut ^I32 c 0 ^:mut ^I32 i 0]
+                        ^I32 w0 ^I32 w1 ^:mut ^Cells tbo ^:mut ^Cells ln ^I32 l0 ^I32 l1]
+  (let [^:mut ^I32 w w0 ^:mut ^I32 k t0 ^:mut ^I32 c 0 ^:mut ^I32 i 0
+        ^:mut ^I32 l l0 ^:mut ^I32 owner 0 ^:mut ^I32 allowed 0 ^:mut ^I32 bound 0]
     (cells-drop tbo 0)
     (while (< w w1) (do (cells-push tbo 0) (set w (+ w 1))))
     (while (< k (tb-rows-of tb TBS))
@@ -4995,13 +4996,42 @@
             (do (set w w0)
                 (while (< w w1)
                   (do (if (and (== (cells-at tbo (- w w0)) 0)
-                            (or (tb-separator wd et w) (not (tb-upright wd w))))
+                            (or (== (wd-get wd w (hd-tlen)) 0) (or (tb-separator wd et w) (not (tb-upright wd w)))))
                         (let [^I32 x (quot (+ (wd-get wd w (hd-x0)) (wd-get wd w (hd-x1))) 2)
                               ^I32 y (quot (+ (wd-get wd w (hd-y0)) (wd-get wd w (hd-y1))) 2)]
                           (if (and (and (>= x (cells-at tb (+ (* k TBS) 1))) (<= x (cells-at tb (+ (* k TBS) 3))))
                                    (and (>= y (cells-at tb (+ (* k TBS) 2))) (<= y (cells-at tb (+ (* k TBS) 4)))))
                             (cells-set tbo (- w w0) (- 0 (+ k 1))))))
                       (set w (+ w 1))))))
+          (set k (+ k 1))))
+    ;; All existing inside-body claims are unconditional, including partial lines.
+    (tb-claim tb t0 ln l0 l1)
+    (set k t0)
+    (while (< k (tb-rows-of tb TBS))
+      (do (if (and (!= (cells-at tb (+ (* k TBS) 5)) PF_RULED)
+                   (!= (cells-at tb (+ (* k TBS) 5)) PF_STRUCT))
+            (do (set l l0)
+                (while (< l l1)
+                  (do (if (and (== (ln-get ln l 15) 0) (> (ln-get ln l (lh-count)) 0))
+                        (do (set allowed 1) (set bound 0) (set i 0)
+                            (while (< i (ln-get ln l (lh-count)))
+                              (do (set w (+ (ln-get ln l (lh-first)) i))
+                                  (if (and (>= w w0) (< w w1))
+                                    (do (set owner (cells-at tbo (- w w0)))
+                                        (if (> owner 0)
+                                          (do (set c (- owner 1))
+                                              (if (and (>= c (cells-at tb (+ (* k TBS) 9)))
+                                                       (< c (+ (cells-at tb (+ (* k TBS) 9)) (cells-at tb (+ (* k TBS) 10)))))
+                                                (do (if (and (< (cells-at tc (* c TCS)) (cells-at tb (+ (* k TBS) 11)))
+                                                             (!= (bit-and (cells-at tb (+ (* k TBS) 31)) 1) 0)) (set bound 1))
+                                                    (if (and (>= (cells-at tc (* c TCS)) (- (cells-at tb (+ (* k TBS) 7)) (cells-at tb (+ (* k TBS) 12))))
+                                                             (!= (bit-and (cells-at tb (+ (* k TBS) 31)) 2) 0)) (set bound 1)))
+                                                (set allowed 0)))
+                                          (if (!= owner (- 0 (+ k 1))) (set allowed 0))))
+                                    (set allowed 0))
+                                  (set i (+ i 1))))
+                            (if (and (== allowed 1) (== bound 1)) (ln-set ln l 15 (+ TB_HELD k)))))
+                      (set l (+ l 1))))))
           (set k (+ k 1))))
     (return 0)))
 
@@ -5024,6 +5054,86 @@
                 (set l (+ l 1))))
           (if (< between 2) (cells-set tb (+ (* k TBS) 30) best))))
     (return 0)))
+
+;; D1791: model-aligned foot rows following selection.
+(defn ^I32 tb-model-tail [^Cells wd ^Cells et ^I32 w0 ^I32 w1 ^:mut ^Cells tb ^I32 k
+                          ^:mut ^Cells tc ^:mut ^Cells tw ^Cells tx ^Cells tbk
+                          ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg ^:mut ^Cells pr ^:mut ^Cells so]
+  (let [^I32 b (* k TBS) ^I32 bottom (cells-at tb (+ b 4))
+        ^I32 first (cells-at tb (+ b 9)) ^I32 count (cells-at tb (+ b 10))
+        ^I32 ncols (cells-at tb (+ b 8)) ^I32 nrows (cells-at tb (+ b 7))
+        ^I32 model (cells-at tb (+ b 28)) ^I32 cuts (cells-at tb (+ b 16))
+        ^:mut ^I32 size 1000 ^:mut ^I32 r 0 ^:mut ^I32 q 0 ^:mut ^I32 j 0
+        ^:mut ^I32 col 0 ^:mut ^I32 c 0 ^:mut ^I32 field 0 ^:mut ^I32 other 0
+        ^:mut ^I32 tails 0 ^:mut ^I32 ok 1 ^:mut ^I32 prev bottom]
+    (if (or (== (cells-at tb (+ b 5)) PF_RULED) (or (== (cells-at tb (+ b 5)) PF_STRUCT) (>= (cells-at tb (+ b 25)) 0))) (return 0))
+    (set c first)
+    (while (< c (+ first count))
+      (do (if (> (cells-at tc (+ (* c TCS) 9)) 0)
+            (set size (wd-get wd (cells-at tw (cells-at tc (+ (* c TCS) 8))) (wf-size))))
+          (set c (+ c 1))))
+    (let [^I32 nr (tb-rows wd et w0 w1 (cells-at tb (+ b 1)) (+ bottom 1) (cells-at tb (+ b 3)) (+ bottom (* size 7)) wl rw sg)]
+      (while (and (< r nr) (and (< tails 3) (== ok 1)))
+        (do (if (> (- (cells-at rw (+ (* r RWS) 6)) prev) (quot (* size 32) 10)) (set ok 0))
+            (if (!= (tb-row-fit wd et wl rw sg r tbk model ncols size) 1) (set ok 0))
+            (set other 0)
+            (while (< other (tb-rows-of tb TBS))
+              (do (if (!= other k)
+                    (if (and (>= (cells-at rw (+ (* r RWS) 2)) (cells-at tb (+ (* other TBS) 2)))
+                             (<= (cells-at rw (+ (* r RWS) 2)) (cells-at tb (+ (* other TBS) 4)))) (set ok 0)))
+                  (set other (+ other 1))))
+            (set q 0)
+            (while (< q (cells-at rw (+ (* r RWS) 9)))
+              (do (let [^I32 sb (* (+ (cells-at rw (+ (* r RWS) 8)) q) SGS)
+                        ^I32 from (cells-at sg (+ sb 3)) ^I32 n (cells-at sg (+ sb 4))]
+                    (set col (tb-part-band tbk model ncols (tb-first-cx wd et wl from (+ from n))))
+                    (if (< col 0) (set ok 0)
+                      (if (== (tb-part-number wd et wl from n) 1)
+                        (if (> (tb-abs (- (cells-at sg (+ sb 2)) (cells-at tbk (+ (* (+ model col) KS) 3)))) TB_HEAD_TOL) (set ok 0))
+                        (if (or (>= (* col 5) (* ncols 2))
+                                (> (tb-abs (- (cells-at sg (+ sb 1)) (cells-at tbk (+ (* (+ model col) KS) 2)))) TB_HEAD_TOL)) (set ok 0)))))
+                  (set q (+ q 1))))
+            (if (== ok 1)
+              (do (set tails (+ tails 1)) (set prev (cells-at rw (+ (* r RWS) 7)))))
+            (set r (+ r 1))))
+      (if (== tails 0) (return 0))
+      (let [^I32 newfirst (tb-rows-of tc TCS)]
+        (set c first)
+        (while (< c (+ first count))
+          (do (set field 0)
+              (while (< field TCS)
+                (do (cells-push tc (cells-at tc (+ (* c TCS) field))) (set field (+ field 1))))
+              (set c (+ c 1))))
+        (cells-drop pr 0)
+        (set r 0)
+        (while (< r tails)
+          (do (set col 0)
+              (while (< col ncols)
+                (do (set c (tb-cell-add tc (+ nrows r) col 1 1 (cells-at tx (+ cuts col)) (cells-at rw (+ (* r RWS) 6))
+                                      (cells-at tx (+ (+ cuts col) 1)) (cells-at rw (+ (* r RWS) 7))))
+                    (cells-set tc (+ (* c TCS) 10) 2)
+                    (cells-set tc (+ (* c TCS) 11) (cells-at tbk (+ (* (+ model col) KS) 4)))
+                    (cells-set tc (+ (* c TCS) 15) col)
+                    (set col (+ col 1))))
+              (set q 0)
+              (while (< q (cells-at rw (+ (* r RWS) 9)))
+                (do (let [^I32 sb (* (+ (cells-at rw (+ (* r RWS) 8)) q) SGS)
+                          ^I32 from (cells-at sg (+ sb 3)) ^I32 n (cells-at sg (+ sb 4))]
+                      (set col (tb-part-band tbk model ncols (tb-first-cx wd et wl from (+ from n))))
+                      (set c (+ (+ newfirst count) (+ (* r ncols) col)))
+                      (set j 0)
+                      (while (< j n)
+                        (do (tb-pair-add pr wd c (cells-at wl (+ from j))) (set j (+ j 1)))))
+                    (set q (+ q 1))))
+              (set r (+ r 1))))
+        (tb-flush-pairs pr so wd tc tw)
+        (cells-set tb (+ b 9) newfirst)
+        (cells-set tb (+ b 10) (+ count (* tails ncols)))
+        (cells-set tb (+ b 7) (+ nrows tails))
+        (cells-set tb (+ b 12) (+ (cells-at tb (+ b 12)) tails))
+        (cells-set tb (+ b 4) (cells-at rw (+ (* (- tails 1) RWS) 7)))
+        (cells-set tb (+ b 31) (bit-or (cells-at tb (+ b 31)) 2))))
+    (return tails)))
 
 (defn ^I32 tb-fit-kept [^I32 page ^Cells wd ^Cells et ^I32 w0 ^I32 w1 ^Cells rm ^Cells an ^:mut ^Cells kc ^:mut ^Cells tbk ^:mut ^Cells marks
                        ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg ^:mut ^Cells ch ^:mut ^Cells st ^:mut ^Cells en ^:mut ^Cells rmap
@@ -5183,9 +5293,9 @@
                   (do (tb-fit-kept p wd et wi wj s1 an tbo tbk s0 s10 s11 s12 s13 s14 s15 s16 s6 s17 s18 s7 s3 tb k tc tw tx)
                       (tb-finish tb k wd et tc tw ln li lj tq g1 g2 g3 wi g4)
                       (tb-model tb k wd et tc tw tx tbk g4)
+                      (tb-model-tail wd et wi wj tb k tc tw tx tbk s10 s11 s12 s7 s3)
                       (set k (+ k 1))))
-                (tb-claim tb t0 ln li lj)
-                (tb-own-claim tb t0 tc tw wd et wi wj tbo)
+                (tb-own-claim tb t0 tc tw wd et wi wj tbo ln li lj)
                 (set k t0)
                 (while (< k (tb-rows-of tb TBS))
                   (do (tb-ctx tb k wd ln li lj) (set k (+ k 1))))))

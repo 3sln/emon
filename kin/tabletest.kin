@@ -26,7 +26,7 @@
                                 nk-paragraph nk-note nk-table nk-rowgroup nk-row nk-cell nk-caption
                                 fk-rowspan fk-colspan fk-columns fk-profile fk-label fk-align]]
             [emon.json :refer [js-emit]]
-            [emon.evidence :refer [wd-new wd-set wd-count ln-new ln-count wf-size wf-font wf-style wf-src hd-line hd-rot
+            [emon.evidence :refer [wd-new wd-set wd-count ln-new ln-count ln-set ln-get wd-get hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-tstart hd-tlen wf-size wf-font wf-style wf-src hd-line hd-rot
                                    pa-new pa-set pa-rect pf-flags pf-fill pf-falpha pg-filled]]
             [emon.pdfdoc :refer [pd-open]]
             [emon.pdfannot :refer [an-field]]
@@ -189,6 +189,39 @@
           (set i (+ i 1))))
     (return 0)))
 
+;; Audit all retained text fixtures, independently of the page-local tbo arena.
+(defn ^I32 tt-body-audit [^Cells wd ^Cells et ^Cells tb ^Cells tc ^Cells tw]
+  (let [^:mut ^I32 w 0 ^:mut ^I32 k 0 ^:mut ^I32 c 0 ^:mut ^I32 j 0
+        ^:mut ^I32 inside 0 ^:mut ^I32 owned 0 ^:mut ^I32 drop 0]
+    (while (< w (wd-count wd))
+      (do (set inside 0) (set owned 0) (set drop 0) (set k 0)
+          (let [^I32 x (quot (+ (wd-get wd w (hd-x0)) (wd-get wd w (hd-x1))) 2)
+                ^I32 y (quot (+ (wd-get wd w (hd-y0)) (wd-get wd w (hd-y1))) 2)
+                ^I32 rot (wd-get wd w (hd-rot)) ^I32 wordlen (wd-get wd w (hd-tlen))]
+            (if (or (== wordlen 0) (and (>= rot 100) (<= rot 35900))) (set drop 1))
+            (if (== wordlen 1)
+              (let [^I32 cp (cells-at et (wd-get wd w (hd-tstart)))]
+                (if (or (== cp 46) (or (== cp 58) (or (== cp 45) (or (== cp 8211) (== cp 8212))))) (set drop 1))))
+            (while (< k (quot (cells-len tb) 32))
+              (do (let [^I32 b (* k 32)]
+                    (if (and (== (wd-get wd w (hd-page)) (cells-at tb b))
+                             (and (>= x (cells-at tb (+ b 1))) (and (<= x (cells-at tb (+ b 3)))
+                                  (and (>= y (cells-at tb (+ b 2))) (<= y (cells-at tb (+ b 4)))))))
+                      (if (and (!= (cells-at tb (+ b 5)) 1) (!= (cells-at tb (+ b 5)) 5)) (set inside 1)))
+                    (set c (cells-at tb (+ b 9)))
+                    (while (< c (+ (cells-at tb (+ b 9)) (cells-at tb (+ b 10))))
+                      (do (set j 0)
+                          (while (< j (cells-at tc (+ (* c 16) 9)))
+                            (do (if (== (cells-at tw (+ (cells-at tc (+ (* c 16) 8)) j)) w) (set owned (+ owned 1)))
+                                (set j (+ j 1))))
+                          (set c (+ c 1)))))
+                  (set k (+ k 1)))))
+          (if (== inside 1)
+            (if (> owned 1) (return 5)
+              (if (and (== owned 0) (== drop 0)) (return 6))))
+          (set w (+ w 1))))
+    (return 0)))
+
 (defn ^I32 tt-run-an [^Cells wd ^Cells ln ^Cells et ^Cells pa ^:mut ^Text t ^I32 np ^Cells an]
   (comment "`tt-run-n` over a document whose annotations (rows of `an`, `AN_STRIDE` cells) are `an`: the form fields' widgets (D583).")
   (let [^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
@@ -209,6 +242,7 @@
     (if (== np 2) (page-new pages 2 61200 79200 0 (pk-vector)))
     (gf-doc pa gpts gmk gim np (gfx-mode) grl gfl cand (new-cells))
     (tb-build wd ln et grl gfl np tb tc tw tq tx (new-cells) (new-cells) s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 pages t0e t1e t2e t3e t4e t5e t6e t7e t8e t9e t10e t11e t12e an)
+    (if (!= (tt-body-audit wd et tb tc tw) 0) (return 7))
     (lc-copy ln lt)
     (pa-build wd et np pages layout nodes attrs regions text ord raw tmp fr gp lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al)
     (tt-brief t nodes attrs text)
@@ -1697,6 +1731,7 @@
     (let [^I32 np (quot (cells-len pages) 16)]
       (gf-doc pa pts mk im np (gfx-mode) grl gfl cand (new-cells))
       (tb-build wd ln et grl gfl np tb tc tw tq tx (new-cells) (new-cells) s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 pages gl mk se2 sc2 ss2 t5e t6e t7e t8e t9e t10e t11e t12e (new-cells))
+      (if (!= (tt-body-audit wd et tb tc tw) 0) (return 7))
       (tt-emit tvt t12e)
       (lc-copy ln lt)
       (in-detect wd gl fnt et np loc lt ls lo tm ii)
@@ -1814,7 +1849,7 @@
 
 (deftest test-right-aligned-amounts-make-one-numeric-column
   (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
-        ^Cells tb (new-cells) ^Cells tbk (new-cells) ^Cells pages (new-cells)]
+        ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^Cells tbk (new-cells) ^Cells pages (new-cells)]
     (page-new pages 1 61200 79200 0 (pk-vector))
     (tt-at wd ln et (text-blob "Item") 7600 10000 1 0)
     (tt-at wd ln et (text-blob "Amount") 40500 10000 1 1)
@@ -1829,7 +1864,7 @@
     (tt-at wd ln et (text-blob "Total") 7600 18000 1 0)
     (tt-at wd ln et (text-blob "1,111.00") 40500 18000 1 1)
     (assert-eq (tb-build wd ln et (new-cells) (new-cells) 1
-                        tb (new-cells) (new-cells) (new-cells) (new-cells) tbk (new-cells)
+                        tb tc tw (new-cells) (new-cells) tbk (new-cells)
                         (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
                         (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
                         (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
@@ -1837,6 +1872,7 @@
                         pages (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
                         (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
                         (new-cells) (new-cells)) 1 "the amounts make one table")
+    (assert-eq (tt-body-audit wd et tb tc tw) 0 "the numeric-model fixture has unique body ownership")
     (assert-eq (tb-model-col tb tbk 0 1 3) 40500 "varying widths share their right anchor")
     (assert-eq (tb-model-col tb tbk 0 1 5) 3 "the numeric column is an amount column")
     (assert-eq (tb-model-col tb tbk 0 1 9) 4 "all four body rows support the anchor")))
@@ -1906,14 +1942,16 @@
 (defn ^I32 tt-own-build [^Cells wd ^:mut ^Cells ln ^Cells et ^:mut ^Cells tb ^:mut ^Cells tc ^:mut ^Cells tw ^:mut ^Cells tbo]
   (let [^Cells pages (new-cells)]
     (page-new pages 1 61200 79200 0 (pk-vector))
-    (return (tb-build wd ln et (new-cells) (new-cells) 1 tb tc tw (new-cells) (new-cells) (new-cells) tbo
+    (tb-build wd ln et (new-cells) (new-cells) 1 tb tc tw (new-cells) (new-cells) (new-cells) tbo
                         (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
                         (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
                         (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
                         (new-cells) (new-cells) (new-cells) (new-cells)
                         pages (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
                         (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
-                        (new-cells) (new-cells)))))
+                        (new-cells) (new-cells))
+    (if (!= (tt-body-audit wd et tb tc tw) 0) (return -7))
+    (return (quot (cells-len tb) 32))))
 
 (deftest test-every-word-in-a-table-body-has-one-owner
   (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
@@ -2049,3 +2087,61 @@
     (tt-at wd ln et (text-blob "* Not meaningful.") 15000 17200 0 0)
     (assert-eq (tt-own-build wd ln et tb tc tw tbo) 1 "one original candidate")
     (assert-eq (cells-at tb 7) 6 "the separator and footnote keep their own rows")))
+
+(deftest test-a-total-a-blank-line-below-the-body-is-its-foot
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^Cells tbo (new-cells)]
+    (tt-at wd ln et (text-blob "Item") 7600 10000 1 0)
+    (tt-at wd ln et (text-blob "Amount") 43000 10000 1 1)
+    (tt-at wd ln et (text-blob "Goods") 7600 11600 0 0)
+    (tt-at wd ln et (text-blob "10.00") 43000 11600 0 1)
+    (tt-at wd ln et (text-blob "Goods") 7600 13200 0 0)
+    (tt-at wd ln et (text-blob "10.00") 43000 13200 0 1)
+    (tt-at wd ln et (text-blob "Goods") 7600 14800 0 0)
+    (tt-at wd ln et (text-blob "10.00") 43000 14800 0 1)
+    (tt-at wd ln et (text-blob "Goods") 7600 16400 0 0)
+    (tt-at wd ln et (text-blob "10.00") 43000 16400 0 1)
+    (tt-at wd ln et (text-blob "Total") 7600 19600 0 0)
+    (tt-at wd ln et (text-blob "40.00") 43000 19600 0 1)
+    (assert-eq (tt-own-build wd ln et tb tc tw tbo) 1 "one ledger with a separated total")
+    (assert-eq (cells-at tb 7) 6 "the separated total is attached")
+    (assert-eq (cells-at tb 12) 1 "an aligned total after a blank pitch is a foot")))
+
+(deftest test-an-empty-word-inside-the-body-is-explicitly-dropped
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^Cells tbo (new-cells)]
+    (tt-part-ledger wd ln et 10000)
+    (tt-at wd ln et (text-blob "") 15000 13000 0 0)
+    (assert-eq (tt-own-build wd ln et tb tc tw tbo) 1 "the empty token does not change the ledger")
+    (assert-eq (cells-at tbo 12) -1 "row-builder-excluded empty evidence is explicitly dropped")))
+
+(deftest test-a-partially-owned-body-line-keeps-its-box-claim
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^Cells tbo (new-cells)]
+    (tt-part-ledger wd ln et 10000)
+    (tt-at wd ln et (text-blob "Outside") 50000 5000 0 0)
+    (tt-at wd ln et (text-blob "Outside") 50000 6500 0 0)
+    (tt-at wd ln et (text-blob "Outside") 50000 8000 0 0)
+    (ln-set ln 11 12 4)
+    (assert-eq (tt-own-build wd ln et tb tc tw tbo) 1 "one retained table")
+    (assert-eq (ln-get ln 11 15) 1073741824 "one owned word of four still keeps the original body box claim")
+    (assert-eq (cells-at tbo 12) 0 "outside-body evidence stays unowned")))
+(deftest test-an-attached-tail-with-an-imprecise-line-box-is-claimed
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^Cells tbo (new-cells)]
+    (tt-at wd ln et (text-blob "Item") 7600 10000 1 0)
+    (tt-at wd ln et (text-blob "Amount") 43000 10000 1 1)
+    (tt-at wd ln et (text-blob "Goods") 7600 11600 0 0)
+    (tt-at wd ln et (text-blob "10.00") 43000 11600 0 1)
+    (tt-at wd ln et (text-blob "Goods") 7600 13200 0 0)
+    (tt-at wd ln et (text-blob "10.00") 43000 13200 0 1)
+    (tt-at wd ln et (text-blob "Goods") 7600 14800 0 0)
+    (tt-at wd ln et (text-blob "10.00") 43000 14800 0 1)
+    (tt-at wd ln et (text-blob "Goods") 7600 16400 0 0)
+    (tt-at wd ln et (text-blob "10.00") 43000 16400 0 1)
+    (tt-at wd ln et (text-blob "Total") 7600 19600 0 0)
+    (tt-at wd ln et (text-blob "40.00") 43000 19600 0 1)
+    (ln-set ln 10 3 100000)
+    (assert-eq (tt-own-build wd ln et tb tc tw tbo) 1 "one ledger with a separated total")
+    (assert-eq (cells-at tb 7) 6 "the separated total is attached")
+    (assert-eq (ln-get ln 10 15) 1073741824 "a fully owned attached tail is claimed outside the old line box")))
