@@ -1399,7 +1399,7 @@ pub(crate) fn gf_emit_trace_units(ctx: &mut crate::port::Cells, un: &mut crate::
                 crate::port::cells_set(gv, 108, kind);
                 score = gf_region_score(hl, page, rg);
                 crate::port::cells_set(gv, 109, score);
-                // Long, thin, straight light rules have geometric evidence independent of short letter strokes spoiling region skew (D1700).
+                // Long, thin, straight light rules have geometric evidence independent of short letter strokes spoiling region skew (D640).
                 if (kind == 2) && ((tconf >= 900) && ((gf_light_neutral(unat(un, u, 7)) == 1) && (((unat(un, u, 4) - unat(un, u, 3)) >= 5669) && (unat(un, u, 6) <= 200)))) {
                     crate::port::cells_set(gv, 119, 1);
                 }

@@ -1395,7 +1395,7 @@ public static class Gfuse {
                     emon.Port.CellsSet(gv, 108, kind);
                     score = GfRegionScore(hl, page, rg);
                     emon.Port.CellsSet(gv, 109, score);
-                    // Long, thin, straight light rules have geometric evidence independent of short letter strokes spoiling region skew (D1700).
+                    // Long, thin, straight light rules have geometric evidence independent of short letter strokes spoiling region skew (D640).
                     if ((kind == 2) && ((tconf >= 900) && ((GfLightNeutral(Unat(un, u, 7)) == 1) && (((Unat(un, u, 4) - Unat(un, u, 3)) >= 5669) && (Unat(un, u, 6) <= 200))))) {
                         emon.Port.CellsSet(gv, 119, 1);
                     }

@@ -250,7 +250,7 @@ public final class Ocrporttest {
     }
     public static int tRows(int emonT) {
         // Every row of the name table: a known kind and a value that is an ISO 15924 code (or a request name of a Chinese model).
-        // D1702 adds the chs/cht word-language aliases as Han model rows: 76 rows, including these two intended aliases.
+        // D642 adds the chs/cht word-language aliases as Han model rows: 76 rows, including these two intended aliases.
         int n = 639;
         int i = 0;
         int j = 0;
