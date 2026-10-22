@@ -12088,3 +12088,30 @@ P12.11 full validation exposed stale test assumptions: the independent JSON gold
 **Alternatives.** An `EMON_CORPUS_DIR` everywhere (every script and the Python oracles would need to learn it); moving the data from `corpus-link` (a 12 GB irreversible step does not belong in a convenience task); a guard inside each script (six copies). exFAT has no symlinks, no unix permissions and is case-insensitive: the corpus has no case collisions, the link lives on the internal disk and only the data on the drive, and the `.sh` executable bit is lost there (nothing in the corpus is run from it).
 
 - [ ] **Signed off** (maintainer)
+
+### D681 — Receipt measurements stay live and outside the gates
+
+RC1 adds `bb receipts [--n N] [--set sroie|cord] [--report]`, registered as
+not_gate. Deterministic split/length stratification measures multiset word
+recall/precision, strict ordered entities within a node/row, CORD item joins,
+exact numeric tokens, empty Models and lexical silent loss. Original source
+annotations supply entities absent from imported gold. CORD's incomplete
+transcription makes precision an annotated-token diagnostic. Raw OCR evidence
+separates OCR misses from downstream losses; skew/rotation diagnostics do not
+claim human-labelled orientation truth. External bundles retain the evidence;
+the small baseline contains IDs and numbers only. No pipeline changes.
+- [ ] **Signed off** (maintainer)
+
+### D682 — Receipt coverage uses exact synthetic truth and MIT image-only SRD
+
+Eight deterministic `synth.pdfw` receipts use HTML-derived gold and join the
+receipt accuracy cohort; its new population is scored separately from historical
+`all` pools, whose membership and ratchets remain fixed. The family
+covers narrow mono/proportional, aligned prices/leaders, modifiers, multiply,
+financial totals, barcode/card slip, long roll and two columns. ExpressExpense
+SRD adds 200 MIT restaurant images outside git; its importer annotates pages
+only, never fabricated OCR truth. WildReceipt is recommended conditional on
+upstream image licensing; restrictive/ambiguous HF re-uploads are not fetched.
+Trivial tooling fixes: importer cleanup and gold validation ignore AppleDouble
+sidecars on exFAT (deleting a real file can auto-remove its sidecar).
+- [ ] **Signed off** (maintainer)

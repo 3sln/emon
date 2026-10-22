@@ -127,3 +127,36 @@ research-only terms; it labels stamps only, so signatures and logos on an image 
 Signatures remain a gap: `tech4humans/signature-detection` (Apache-2.0, 2819 images, on HF) is a
 candidate, not fetched. Stamps are also synthesized in `tools/synth` (seal overlays), which stays the only
 source with exact seal text, name and date.
+
+### RC1 receipt coverage (2026-10-22)
+
+Imported **ExpressExpense SRD** to `corpus/financial/expressexpense-srd`: 200
+restaurant receipt JPEGs (19,263,584 uncompressed bytes). The publisher grants
+[MIT use](https://expressexpense.com/blog/free-receipt-images-ocr-machine-learning-dataset/).
+The downloaded ZIP's MD5 is `c8eb0f2d286da5ab742e7a5b59f15147`, matching the publisher.
+`bb import expressexpense-srd` writes page-only gold under
+`corpus/_gold/expressexpense-srd` (195 valid page annotations; five EXIF-oriented
+images are retained but skipped rather than guessing their annotation frame). There is **no text or entity gold** in this set;
+no transcription was inferred or manufactured. Use it for coverage and future
+manual annotation, not an OCR accuracy claim. Nothing downloaded belongs in git.
+
+Survey (publisher/repository metadata, checked 2026-10-22):
+
+| Dataset | Size | Licence | Native gold / recommendation |
+|---|---|---|---|
+| [ExpressExpense SRD](https://expressexpense.com/blog/free-receipt-images-ocr-machine-learning-dataset/) | 200 images; publisher ZIP 19.2 MB | MIT | Images only. Imported; US restaurant/card-slip coverage, needs transcription. |
+| [WildReceipt](https://github.com/open-mmlab/mmocr/blob/main/configs/kie/sdmgr/README.md) | 1,739 receipts, 25 templates; 1,267 train / 472 test | Upstream [licence unresolved](https://github.com/open-mmlab/mmocr/issues/777); MMOCR lists N/A | JSONL word quads, text, 26 class labels. Strong US/European grocery coverage; defer import pending licence clarification. Repository code licence does not license images. |
+| [HF Theivaprakasham/wildreceipt](https://huggingface.co/datasets/Theivaprakasham/wildreceipt) | 1.74k rows | Card says Apache-2.0, conflicts with unresolved upstream | words, bboxes, ner_tags, image paths. Do not fetch this re-upload as a licence workaround. |
+| [HF mychen76/wildreceipts_ocr_train](https://huggingface.co/datasets/mychen76/wildreceipts_ocr_train) | 1.27k rows | Defers to constituent licences | Image + text containing OCR XML / parsed receipt fields. Derivative WildReceipt; same blocker. |
+| [HF UniqueData/ocr-receipts-text-detection](https://huggingface.co/datasets/UniqueData/ocr-receipts-text-detection) | 54.6 MB; image count not stated on card | CC-BY-NC-ND-4.0 | XML boxes/text for item, store, date_time, total. Excluded by RC1's licence rule. |
+| [HF mankind1023/receipt-dataset-standardized](https://huggingface.co/datasets/mankind1023/receipt-dataset-standardized) | Card viewer 1.19k text rows; archive name claims 2,780 | Card says other; viewer includes a licence document | Packaging/provenance ambiguous. No fetch; verify original image rights and annotation quality first. |
+
+Recommendation: keep SRD for a small manually transcribed US/card-slip set;
+seek WildReceipt's image licence before importing its richer labels. Neither is
+born-digital email receipt coverage. Eight exact synthetic receipts now cover
+80 mm mono/proportional pages, leaders/right price columns, multiplication and
+modifiers, subtotal/tax/tip/total, barcode/card slip, three-page thermal roll,
+European decimal comma/minus, and a two-column restaurant bill. Generate via
+`bb -cp tools:tools/lib tools/synth/receipts.clj`. The receipt cohort joins the
+accuracy scoreboard as `pdf/receipts`, separately from the fixed historical
+`all` populations, without lowering any historical ratchet.

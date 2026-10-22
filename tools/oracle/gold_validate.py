@@ -64,7 +64,7 @@ def main(files):
     paths = []
     for a in files:
         if os.path.isdir(a):
-            paths += [os.path.join(a, f) for f in sorted(os.listdir(a)) if f.endswith(".gold.json")]
+            paths += [os.path.join(a, f) for f in sorted(os.listdir(a)) if f.endswith(".gold.json") and not f.startswith("._")]
         else:
             paths.append(a)
     for path in paths:

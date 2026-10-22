@@ -3931,6 +3931,73 @@
         :table-adj-r 1.0
         :tl-override 0.0
         :wer 0.0}
+      "pdf/receipts" {
+        :block-figure-f1 0.0
+        :block-figure-p 0.0
+        :block-figure-r 0.0
+        :block-paragraph-f1 0.442804
+        :block-paragraph-p 0.483871
+        :block-paragraph-r 0.408163
+        :block-table-f1 0.0
+        :block-table-p 0.0
+        :block-table-r 0.0
+        :bow-f1 0.980995
+        :bow-p 1.0
+        :bow-r 0.9627
+        :cer 0.077942
+        :conf-brier-all 0.840517
+        :conf-brier-cell 0.996004
+        :conf-brier-cell-text 0.996004
+        :conf-brier-dropped 0.968256
+        :conf-brier-dropped-text 0.968256
+        :conf-brier-figure 0.851929
+        :conf-brier-figure-infer 0.851929
+        :conf-brier-furniture 0.863041
+        :conf-brier-furniture-text 0.863041
+        :conf-brier-paragraph 0.632025
+        :conf-brier-paragraph-text 0.632025
+        :conf-brier-row 0.976144
+        :conf-brier-row-infer 0.976144
+        :conf-brier-rowgroup 0.923521
+        :conf-brier-rowgroup-infer 0.923521
+        :conf-brier-table 0.866761
+        :conf-brier-table-text 0.866761
+        :conf-brier-text 0.349225
+        :conf-brier-text-text 0.349225
+        :conf-ece-all 0.907997
+        :conf-ece-cell 0.998
+        :conf-ece-cell-text 0.998
+        :conf-ece-dropped 0.984
+        :conf-ece-dropped-text 0.984
+        :conf-ece-figure 0.923
+        :conf-ece-figure-infer 0.923
+        :conf-ece-furniture 0.929
+        :conf-ece-furniture-text 0.929
+        :conf-ece-paragraph 0.795
+        :conf-ece-paragraph-text 0.795
+        :conf-ece-row 0.988
+        :conf-ece-row-infer 0.988
+        :conf-ece-rowgroup 0.961
+        :conf-ece-rowgroup-infer 0.961
+        :conf-ece-table 0.931
+        :conf-ece-table-text 0.931
+        :conf-ece-text 0.315
+        :conf-ece-text-text 0.315
+        :furniture-f1 0.0
+        :furniture-p 0.0
+        :furniture-r 0.0
+        :ghost-rate 0.0
+        :order-tau 1.0
+        :page-label-acc 0.7
+        :para-boundary-f1 0.460938
+        :para-boundary-p 0.504274
+        :para-boundary-r 0.42446
+        :src-ocr-share 0.0
+        :table-adj-f1 0.0
+        :table-adj-p 0.0
+        :table-adj-r 0.0
+        :tl-override 0.0
+        :wer 0.058615}
       "pdf/scripts" {
         :block-heading-f1 0.933333
         :block-heading-p 0.933333

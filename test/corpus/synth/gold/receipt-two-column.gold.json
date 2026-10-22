@@ -1,0 +1,178 @@
+{
+ "emon-gold": "1.0",
+ "id": "receipt-two-column",
+ "provenance": {
+  "html": "html/receipt-two-column.html",
+  "pdf": "pdf/receipt-two-column.pdf",
+  "producer": "emon synth.pdfw receipts v1"
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 650,
+    "n": 1,
+    "rot": 0,
+    "w": 454
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "paragraph",
+     "text": "Receipt two-column page 1"
+    },
+    {
+     "id": 2,
+     "kind": "paragraph",
+     "text": "Market Kitchen"
+    },
+    {
+     "id": 3,
+     "kind": "paragraph",
+     "text": "2026-10-22"
+    },
+    {
+     "id": 4,
+     "kind": "paragraph",
+     "text": "Bread 1 x 3.00 3.00"
+    },
+    {
+     "id": 5,
+     "kind": "paragraph",
+     "text": "Soup 2 × 4.00 8.00"
+    },
+    {
+     "id": 6,
+     "kind": "paragraph",
+     "text": "Discount -1.00"
+    },
+    {
+     "id": 7,
+     "kind": "paragraph",
+     "text": "Subtotal 10.00"
+    },
+    {
+     "id": 8,
+     "kind": "paragraph",
+     "text": "Tax 0.80"
+    },
+    {
+     "id": 9,
+     "kind": "paragraph",
+     "text": "Tip 2.00"
+    },
+    {
+     "id": 10,
+     "kind": "paragraph",
+     "text": "Total $12.80"
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "receipt-two-column"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 1,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

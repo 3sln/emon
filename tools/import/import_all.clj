@@ -13,12 +13,13 @@
             [clojure.string :as str]
             [import.common :as C]
             [pyjson :as pj]
-            [import.funsd] [import.xfund] [import.sroie] [import.cord] [import.doclaynet]
+            [import.expressexpense-srd] [import.funsd] [import.xfund] [import.sroie] [import.cord] [import.doclaynet]
             [import.icdar2013] [import.ctdar] [import.fintabnet-otsl] [import.pdfa-eng-wds] [import.stamps]))
 
 ;; name, the importer's entry point, the path (under corpus/) that must exist
 (def importers
-  [["funsd" import.funsd/import! "forms/funsd/dataset"]
+  [["expressexpense-srd" import.expressexpense-srd/import! "financial/expressexpense-srd"]
+   ["funsd" import.funsd/import! "forms/funsd/dataset"]
    ["xfund" import.xfund/import! "multilingual/xfund"]
    ["sroie" import.sroie/import! "financial/sroie2019"]
    ["cord" import.cord/import! "financial/cord-v2"]
@@ -36,7 +37,7 @@
           :else (recur (rest a) limit (conj names (first a))))))
 
 (def usage
-  "usage: bb import [--limit N] [name ...]\n  names: funsd xfund sroie cord doclaynet icdar2013 ctdar fintabnet_otsl pdfa_eng_wds stamps (default: all)\n  -h, --help  print this and exit")
+  "usage: bb import [--limit N] [name ...]\n  names: expressexpense-srd funsd xfund sroie cord doclaynet icdar2013 ctdar fintabnet_otsl pdfa_eng_wds stamps (default: all)\n  -h, --help  print this and exit")
 
 (defn -main [& argv]
   (when (some #{"--help" "-h"} argv)

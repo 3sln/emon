@@ -123,7 +123,7 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
              ;; the graphics corpus (P6.8, D227)
              "gfx" "graphics" "mixed" "graphics" "ttab" "graphics"
              ;; the figures fixtures (P8.4)
-             "fig" "figures"})
+             "receipt" "receipts" "fig" "figures"})
 
 ;; P12.10: these new reconstruction fixtures have their own cohort. All remain
 ;; in the global structural pool; historical calibration populations stay fixed.
@@ -329,7 +329,10 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
                                            (into {} (remove (fn [[k _]] (str/starts-with? k "conf.")) c))
                                            c)]
                               (update p (str variant "/" cat) (fnil conj []) counts)))
-                          pools ["all" (category doc-id)])
+                          ;; New receipt truth is its own ratcheted population. Keep the
+                          ;; historical all population fixed rather than weakening its baseline.
+                          pools (if (str/starts-with? doc-id "receipt-")
+                                  [(category doc-id)] ["all" (category doc-id)]))
                   (assoc per-doc (str variant "/" doc-id) (merge (S/metrics c) (CAL/metrics c))))
        [(apply array-map
                (mapcat (fn [[k cs]]
