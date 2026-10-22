@@ -225,3 +225,19 @@ func TestTheDeepestTreeEmits(emonT *testing.T) {
 	port.AssertEq(emonT, html.HtmlEmit(compact, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells(), port.NewBuf(), port.NewCells()), 0, "compact")
 	port.AssertEq(emonT, html.HtmlEmit(pretty, 16, 0, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells(), port.NewBuf(), port.NewCells()), 0, "pretty")
 }
+
+func TestRtlDocumentEmitsDirectionAndAnUnknownLanguage(emonT *testing.T) {
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var out *strings.Builder = port.NewText()
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	var p int32 = model.NodeNew(nodes, model.NkParagraph(), 0)
+	htSet(nodes, text, p, port.TextBlob("שלום"))
+	html.HtmlEmit(out, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells(), port.NewBuf(), port.NewCells())
+	port.AssertText(emonT, out, "<!doctype html><html lang=\"und\" dir=\"rtl\"><head><meta charset=\"utf-8\"><title></title></head><body><main><p>שלום</p></main></body></html>", "unknown language is explicit, and RTL direction is inherited by blocks")
+}

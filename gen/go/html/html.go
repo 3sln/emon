@@ -4,6 +4,7 @@
 package html
 
 import (
+	"emon/bidi"
 	"emon/calib"
 	"emon/json"
 	"emon/model"
@@ -1497,6 +1498,33 @@ func hMeta(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, te
 	return 1
 }
 
+func hDocRtl(nodes *port.Cells, text *port.Cells) int32 {
+	// D1831: direction comes from strong characters of node content, excluding document metadata. Digits and marks do not vote; a tie keeps the default direction.
+	var n int32 = 1
+	var j int32 = 0
+	var r int32 = 0
+	var l int32 = 0
+	var d int32 = 0
+	for n < model.NodeCount(nodes) {
+		j = 0
+		for j < model.NodeTextLen(nodes, n) {
+			d = bidi.BdStrong(port.CellsAt(text, model.NodeTextStart(nodes, n)+j))
+			if d == 1 {
+				r += 1
+			}
+			if d == 2 {
+				l += 1
+			}
+			j += 1
+		}
+		n += 1
+	}
+	if r > l {
+		return 1
+	}
+	return 0
+}
+
 func HtmlEmit(t *strings.Builder, opts int32, confBelow int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, layout *port.Cells, assets *port.Cells, uses *port.Cells, abytes *port.Buf, prefix *port.Cells) int32 {
 	// Write the Model as HTML (SPEC 5). `opts` is an OR of `ho-*`;
 	// `conf-below` is the threshold for `ho-confidence` (nodes with a
@@ -1505,6 +1533,7 @@ func HtmlEmit(t *strings.Builder, opts int32, confBelow int32, nodes *port.Cells
 	// Answers 0.
 	var o int32 = (opts & 4095) + (confBelow * 4096)
 	var nn int32 = model.NodeCount(nodes)
+	var rtl int32 = hDocRtl(nodes, text)
 	var nl int32 = model.LedgerCount(ledger)
 	var a int32 = -1
 	var i int32 = 0
@@ -1516,6 +1545,12 @@ func HtmlEmit(t *strings.Builder, opts int32, confBelow int32, nodes *port.Cells
 		port.TextAscii(t, " lang=\"")
 		hRun(t, text, model.AttrValue(attrs, a), model.AttrLen(attrs, a))
 		port.TextAscii(t, "\"")
+	}
+	if rtl == 1 {
+		if a < 0 {
+			port.TextAscii(t, " lang=\"und\"")
+		}
+		port.TextAscii(t, " dir=\"rtl\"")
 	}
 	port.TextAscii(t, ">")
 	hNl(t, o, 1)

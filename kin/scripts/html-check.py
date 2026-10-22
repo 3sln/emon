@@ -29,6 +29,7 @@ import json
 import os
 import subprocess
 import sys
+import unicodedata
 from decimal import Decimal
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -434,8 +435,30 @@ def render(doc, bits, cb):
     src, meta = doc.get("source", {}), doc.get("meta", {})
     nl = r.nl
     out = "<!doctype html>" + nl(0) + "<html"
+    def strong_counts(nodes):
+        rtl = ltr = 0
+        for n in nodes:
+            if isinstance(n, str):
+                cr, cl = strong_counts([{"text": n}])
+                rtl += cr
+                ltr += cl
+                continue
+            for cp in n.get("text", ""):
+                direction = unicodedata.bidirectional(cp)
+                rtl += direction in ("R", "AL")
+                ltr += direction == "L"
+            for key in ("children", "inlines"):
+                cr, cl = strong_counts(n.get(key, []))
+                rtl += cr
+                ltr += cl
+        return rtl, ltr
+    rtl, ltr = strong_counts([doc["body"]] + doc.get("furniture", []))
     if "lang" in src:
         out += ' lang="%s"' % esc(src["lang"])
+    elif rtl > ltr:
+        out += ' lang="und"'
+    if rtl > ltr:
+        out += ' dir="rtl"'
     out += ">" + nl(1) + "<head>" + nl(2) + '<meta charset="utf-8">' + nl(2)
     out += "<title>%s</title>" % esc(meta.get("title", ""))
     for name, val in (("generator", doc.get("generator")),) + tuple(

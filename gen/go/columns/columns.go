@@ -1177,6 +1177,119 @@ func lcSweep(wd *port.Cells, lt *port.Cells, ls *port.Cells, dom int32, it *port
 	return port.CellsLen(gu) / guStride
 }
 
+func lcOcrLineGutters(wd *port.Cells, lt *port.Cells, ls *port.Cells, dom int32, gu *port.Cells) int32 {
+	// D1835: OCR lines already delimit runs of text. A vacant strip between their boxes, supported by six body lines on either side, is a gutter even when the baselines are staggered. Spanning lines bound its vertical band. A wide space inside a line is never evidence.
+	var n int32 = port.CellsLen(ls)
+	var i int32 = 0
+	var j int32 = 0
+	var l int32 = 0
+	var seed int32 = 0
+	var cut int32 = 0
+	var cy int32 = 0
+	var top int32 = 0
+	var bot int32 = 0
+	var gx0 int32 = 0
+	var gx1 int32 = 0
+	var nl int32 = 0
+	var nr int32 = 0
+	var ly0 int32 = 0
+	var ly1 int32 = 0
+	var ry0 int32 = 0
+	var ry1 int32 = 0
+	var dup int32 = 0
+	var b int32 = 0
+	var added int32 = 0
+	if (n < 12) || (n > 2000) || (dom <= 0) {
+		return 0
+	}
+	// Mixed text-layer/OCR pages keep the existing word-based analysis: OCR-supported figure labels are not evidence that the whole page is a scan.
+	for i < n {
+		if (evidence.LnGet(lt, port.CellsAt(ls, i), evidence.LfSrc()) & 3) != 0 {
+			return 0
+		}
+		i += 1
+	}
+	i = 0
+	for i < n {
+		seed = port.CellsAt(ls, i)
+		if (port.CellsAt(lt, (seed*16)+15) < lcHeld) && ((evidence.LnGet(lt, seed, evidence.LfSrc()) & 4) != 0) && (evidence.LnGet(lt, seed, evidence.LhCount()) >= 2) && lcIsClass(lcSize(wd, lt, seed), dom) {
+			cut = evidence.LnGet(lt, seed, evidence.LhX1()) + ((dom * 3) / 5)
+			cy = lcYm2(lt, seed)
+			top = -1000000000
+			bot = 1000000000
+			j = 0
+			for j < n {
+				l = port.CellsAt(ls, j)
+				if (port.CellsAt(lt, (l*16)+15) >= lcHeld) || ((evidence.LnGet(lt, l, evidence.LhX0()) < cut) && (evidence.LnGet(lt, l, evidence.LhX1()) > cut)) {
+					if lcYm2(lt, l) < cy {
+						top = lcMax(top, evidence.LnGet(lt, l, evidence.LhY1()))
+					} else {
+						bot = lcMin(bot, evidence.LnGet(lt, l, evidence.LhY0()))
+					}
+				}
+				j += 1
+			}
+			nl = 0
+			nr = 0
+			gx0 = -1000000000
+			gx1 = 1000000000
+			ly0 = 1000000000
+			ly1 = -1000000000
+			ry0 = 1000000000
+			ry1 = -1000000000
+			j = 0
+			for j < n {
+				l = port.CellsAt(ls, j)
+				if (port.CellsAt(lt, (l*16)+15) < lcHeld) && ((evidence.LnGet(lt, l, evidence.LfSrc()) & 4) != 0) && (evidence.LnGet(lt, l, evidence.LhCount()) >= 2) && lcIsClass(lcSize(wd, lt, l), dom) && (evidence.LnGet(lt, l, evidence.LhY0()) >= top) && (evidence.LnGet(lt, l, evidence.LhY1()) <= bot) {
+					if evidence.LnGet(lt, l, evidence.LhX1()) <= cut {
+						nl += 1
+						gx0 = lcMax(gx0, evidence.LnGet(lt, l, evidence.LhX1()))
+						ly0 = lcMin(ly0, evidence.LnGet(lt, l, evidence.LhY0()))
+						ly1 = lcMax(ly1, evidence.LnGet(lt, l, evidence.LhY1()))
+					}
+					if evidence.LnGet(lt, l, evidence.LhX0()) >= cut {
+						nr += 1
+						gx1 = lcMin(gx1, evidence.LnGet(lt, l, evidence.LhX0()))
+						ry0 = lcMin(ry0, evidence.LnGet(lt, l, evidence.LhY0()))
+						ry1 = lcMax(ry1, evidence.LnGet(lt, l, evidence.LhY1()))
+					}
+				}
+				j += 1
+			}
+			if (nl >= 6) && (nr >= 6) && (((gx1 - gx0) * 5) >= (dom * 3)) && ((lcMin(ly1, ry1) - lcMax(ly0, ry0)) >= (dom * 5)) {
+				top = lcMin(ly0, ry0)
+				bot = lcMax(ly1, ry1)
+				dup = 0
+				j = 0
+				for j < (port.CellsLen(gu) / guStride) {
+					b = j * guStride
+					if (port.CellsAt(gu, b) < gx1) && (port.CellsAt(gu, b+1) > gx0) && (port.CellsAt(gu, b+guTop) <= (top + dom)) && (port.CellsAt(gu, b+guBot) >= (bot - dom)) {
+						dup = 1
+					}
+					j += 1
+				}
+				if dup == 0 {
+					port.CellsPush(gu, gx0)
+					port.CellsPush(gu, gx1)
+					port.CellsPush(gu, top)
+					port.CellsPush(gu, bot)
+					port.CellsPush(gu, lcMin(nl, nr))
+					port.CellsPush(gu, nl)
+					port.CellsPush(gu, nr)
+					port.CellsPush(gu, nl*2)
+					port.CellsPush(gu, nr*2)
+					port.CellsPush(gu, 0)
+					port.CellsPush(gu, bot)
+					port.CellsPush(gu, 0)
+					added += 1
+				}
+			}
+		}
+		i += 1
+	}
+	return added
+}
+
 func lcMerge(gu *port.Cells, dom int32) int32 {
 	// Gutters of one column gap that the sweep saw in pieces (a figure in one column, a heading) are one:
 	// their x-intervals overlap by half of the narrower and their extents are within `hole` sizes.
@@ -2035,6 +2148,7 @@ func LcPage(wd *port.Cells, et *port.Cells, lt *port.Cells, page int32, ls *port
 	lcAsides(lt, ls, sd)
 	lcSide(wd, et, lt, ls, sd, pr, dom)
 	lcSweep(wd, lt, ls, dom, it, io, rw, gu, ac, tm)
+	lcOcrLineGutters(wd, lt, ls, dom, gu)
 	lcMerge(gu, dom)
 	lcSortGu(gu)
 	lcSplitAll(wd, et, lt, ls, gu)

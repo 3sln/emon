@@ -44,6 +44,7 @@
   (:require [emon.lang :refer [I32 Cells Text Buf emit-ascii shl32]]
             [emon.port :refer [cells-at cells-len text-cp text-i32 buf-at]]
             [emon.json :refer [js-cpt]]
+            [emon.bidi :refer [bd-strong]]
             [emon.calib :refer [cal-node-conf]]
             [emon.model :refer [node-count node-kind node-parent node-first-child
                                 node-next node-text-start node-text-len
@@ -1157,6 +1158,20 @@
     (emit-ascii t "\">")
     (return 1)))
 
+(defn ^I32 h-doc-rtl [^Cells nodes ^Cells text]
+  (comment "D1831: direction comes from strong characters of node content, excluding document metadata. Digits and marks do not vote; a tie keeps the default direction.")
+  (let [^:mut ^I32 n 1 ^:mut ^I32 j 0 ^:mut ^I32 r 0 ^:mut ^I32 l 0 ^:mut ^I32 d 0]
+    (while (< n (node-count nodes))
+      (do (set j 0)
+          (while (< j (node-text-len nodes n))
+            (do (set d (bd-strong (cells-at text (+ (node-text-start nodes n) j))))
+                (if (== d 1) (set r (+ r 1)))
+                (if (== d 2) (set l (+ l 1)))
+                (set j (+ j 1))))
+          (set n (+ n 1))))
+    (if (> r l) (return 1))
+    (return 0)))
+
 (defn ^:pub ^I32 html-emit [^:mut ^Text t ^I32 opts ^I32 conf-below ^Cells nodes
                             ^Cells attrs ^Cells regions ^Cells text
                             ^Cells pages ^Cells ledger ^Cells layout
@@ -1168,6 +1183,7 @@
   (comment "Answers 0.")
   (let [^I32 o (+ (bit-and opts 4095) (* conf-below 4096))
         ^I32 nn (node-count nodes)
+        ^I32 rtl (h-doc-rtl nodes text)
         ^I32 nl (ledger-count ledger)
         ^:mut ^I32 a -1
         ^:mut ^I32 i 0]
@@ -1179,6 +1195,9 @@
       (do (emit-ascii t " lang=\"")
           (h-run t text (attr-value attrs a) (attr-len attrs a))
           (emit-ascii t "\"")))
+    (if (== rtl 1)
+      (do (if (< a 0) (emit-ascii t " lang=\"und\""))
+          (emit-ascii t " dir=\"rtl\"")))
     (emit-ascii t ">")
     (h-nl t o 1)
     (emit-ascii t "<head>")

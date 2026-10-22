@@ -1073,6 +1073,118 @@ public static class Columns {
         LcCloseAll(gu, ac);
         return emon.Port.CellsLen(gu) / GuStride;
     }
+    internal static int LcOcrLineGutters(emon.Port.Cells wd, emon.Port.Cells lt, emon.Port.Cells ls, int dom, emon.Port.Cells gu) {
+        // D1835: OCR lines already delimit runs of text. A vacant strip between their boxes, supported by six body lines on either side, is a gutter even when the baselines are staggered. Spanning lines bound its vertical band. A wide space inside a line is never evidence.
+        int n = emon.Port.CellsLen(ls);
+        int i = 0;
+        int j = 0;
+        int l = 0;
+        int seed = 0;
+        int cut = 0;
+        int cy = 0;
+        int top = 0;
+        int bot = 0;
+        int gx0 = 0;
+        int gx1 = 0;
+        int nl = 0;
+        int nr = 0;
+        int ly0 = 0;
+        int ly1 = 0;
+        int ry0 = 0;
+        int ry1 = 0;
+        int dup = 0;
+        int b = 0;
+        int added = 0;
+        if ((n < 12) || (n > 2000) || (dom <= 0)) {
+            return 0;
+        }
+        // Mixed text-layer/OCR pages keep the existing word-based analysis: OCR-supported figure labels are not evidence that the whole page is a scan.
+        while (i < n) {
+            if ((Evidence.LnGet(lt, emon.Port.CellsAt(ls, i), Evidence.LfSrc()) & 3) != 0) {
+                return 0;
+            }
+            i += 1;
+        }
+        i = 0;
+        while (i < n) {
+            seed = emon.Port.CellsAt(ls, i);
+            if ((emon.Port.CellsAt(lt, (seed * 16) + 15) < LcHeld) && ((Evidence.LnGet(lt, seed, Evidence.LfSrc()) & 4) != 0) && (Evidence.LnGet(lt, seed, Evidence.LhCount()) >= 2) && LcIsClass(LcSize(wd, lt, seed), dom)) {
+                cut = Evidence.LnGet(lt, seed, Evidence.LhX1()) + ((dom * 3) / 5);
+                cy = LcYm2(lt, seed);
+                top = -1000000000;
+                bot = 1000000000;
+                j = 0;
+                while (j < n) {
+                    l = emon.Port.CellsAt(ls, j);
+                    if ((emon.Port.CellsAt(lt, (l * 16) + 15) >= LcHeld) || ((Evidence.LnGet(lt, l, Evidence.LhX0()) < cut) && (Evidence.LnGet(lt, l, Evidence.LhX1()) > cut))) {
+                        if (LcYm2(lt, l) < cy) {
+                            top = LcMax(top, Evidence.LnGet(lt, l, Evidence.LhY1()));
+                        } else {
+                            bot = LcMin(bot, Evidence.LnGet(lt, l, Evidence.LhY0()));
+                        }
+                    }
+                    j += 1;
+                }
+                nl = 0;
+                nr = 0;
+                gx0 = -1000000000;
+                gx1 = 1000000000;
+                ly0 = 1000000000;
+                ly1 = -1000000000;
+                ry0 = 1000000000;
+                ry1 = -1000000000;
+                j = 0;
+                while (j < n) {
+                    l = emon.Port.CellsAt(ls, j);
+                    if ((emon.Port.CellsAt(lt, (l * 16) + 15) < LcHeld) && ((Evidence.LnGet(lt, l, Evidence.LfSrc()) & 4) != 0) && (Evidence.LnGet(lt, l, Evidence.LhCount()) >= 2) && LcIsClass(LcSize(wd, lt, l), dom) && (Evidence.LnGet(lt, l, Evidence.LhY0()) >= top) && (Evidence.LnGet(lt, l, Evidence.LhY1()) <= bot)) {
+                        if (Evidence.LnGet(lt, l, Evidence.LhX1()) <= cut) {
+                            nl += 1;
+                            gx0 = LcMax(gx0, Evidence.LnGet(lt, l, Evidence.LhX1()));
+                            ly0 = LcMin(ly0, Evidence.LnGet(lt, l, Evidence.LhY0()));
+                            ly1 = LcMax(ly1, Evidence.LnGet(lt, l, Evidence.LhY1()));
+                        }
+                        if (Evidence.LnGet(lt, l, Evidence.LhX0()) >= cut) {
+                            nr += 1;
+                            gx1 = LcMin(gx1, Evidence.LnGet(lt, l, Evidence.LhX0()));
+                            ry0 = LcMin(ry0, Evidence.LnGet(lt, l, Evidence.LhY0()));
+                            ry1 = LcMax(ry1, Evidence.LnGet(lt, l, Evidence.LhY1()));
+                        }
+                    }
+                    j += 1;
+                }
+                if ((nl >= 6) && (nr >= 6) && (((gx1 - gx0) * 5) >= (dom * 3)) && ((LcMin(ly1, ry1) - LcMax(ly0, ry0)) >= (dom * 5))) {
+                    top = LcMin(ly0, ry0);
+                    bot = LcMax(ly1, ry1);
+                    dup = 0;
+                    j = 0;
+                    while (j < (emon.Port.CellsLen(gu) / GuStride)) {
+                        b = j * GuStride;
+                        if ((emon.Port.CellsAt(gu, b) < gx1) && (emon.Port.CellsAt(gu, b + 1) > gx0) && (emon.Port.CellsAt(gu, b + GuTop) <= (top + dom)) && (emon.Port.CellsAt(gu, b + GuBot) >= (bot - dom))) {
+                            dup = 1;
+                        }
+                        j += 1;
+                    }
+                    if (dup == 0) {
+                        emon.Port.CellsPush(gu, gx0);
+                        emon.Port.CellsPush(gu, gx1);
+                        emon.Port.CellsPush(gu, top);
+                        emon.Port.CellsPush(gu, bot);
+                        emon.Port.CellsPush(gu, LcMin(nl, nr));
+                        emon.Port.CellsPush(gu, nl);
+                        emon.Port.CellsPush(gu, nr);
+                        emon.Port.CellsPush(gu, nl * 2);
+                        emon.Port.CellsPush(gu, nr * 2);
+                        emon.Port.CellsPush(gu, 0);
+                        emon.Port.CellsPush(gu, bot);
+                        emon.Port.CellsPush(gu, 0);
+                        added += 1;
+                    }
+                }
+            }
+            i += 1;
+        }
+        return added;
+    }
     internal static int LcMerge(emon.Port.Cells gu, int dom) {
         // Gutters of one column gap that the sweep saw in pieces (a figure in one column, a heading) are one:
         // their x-intervals overlap by half of the narrower and their extents are within `hole` sizes.
@@ -1896,6 +2008,7 @@ public static class Columns {
         LcAsides(lt, ls, sd);
         LcSide(wd, et, lt, ls, sd, pr, dom);
         LcSweep(wd, lt, ls, dom, it, io, rw, gu, ac, tm);
+        LcOcrLineGutters(wd, lt, ls, dom, gu);
         LcMerge(gu, dom);
         LcSortGu(gu);
         LcSplitAll(wd, et, lt, ls, gu);

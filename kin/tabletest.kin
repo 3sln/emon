@@ -38,7 +38,7 @@
             [emon.para :refer [pa-pages pa-build]]
             [emon.columns :refer [lc-copy]]
             [emon.initial :refer [in-detect]]
-            [emon.table :refer [tb-build tb-count tb-model-col]]
+            [emon.table :refer [tb-build tb-count tb-model-col tb-words-raw tb-caption]]
             [emon.gfuse :refer [gf-doc gfx-mode]]
             [emon.heading :refer [hd-analyze]]
             [kin.lang :refer [defn return let set while if do comment
@@ -2145,3 +2145,30 @@
     (assert-eq (tt-own-build wd ln et tb tc tw tbo) 1 "one ledger with a separated total")
     (assert-eq (cells-at tb 7) 6 "the separated total is attached")
     (assert-eq (ln-get ln 10 15) 1073741824 "a fully owned attached tail is claimed outside the old line box")))
+
+(deftest test-cell-text-keeps-the-logical-order-of-each-rtl-line
+  (let [^Cells wd (new-cells) ^Cells et (new-cells) ^Cells tw (new-cells)
+        ^Cells raw (new-cells) ^Text out (new-text) ^:mut ^I32 i 0]
+    (tt-w wd et (text-blob "عدد") 5000 1000 7000 1800 0)
+    (tt-w wd et (text-blob "الصفحات") 1000 1000 4500 1800 0)
+    (tt-w wd et (text-blob "2026") 1000 2200 3000 3000 0)
+    (wd-set wd 0 (hd-line) 0)
+    (wd-set wd 1 (hd-line) 0)
+    (wd-set wd 2 (hd-line) 1)
+    (cells-push tw 1) (cells-push tw 0) (cells-push tw 2)
+    (tb-words-raw wd et tw 0 3 raw (new-cells))
+    (while (< i (cells-len raw))
+      (do (text-cp out (cells-at raw i)) (set i (+ i 1))))
+    (assert-text out "عدد الصفحات 2026" "cell words follow logical line order without reversing letters or rows")))
+
+(deftest test-a-caption-between-tables-belongs-to-the-following-table
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells tb (new-cells) ^Cells tq (new-cells) ^:mut ^I32 i 0]
+    (while (< i 64) (do (cells-push tb 0) (set i (+ i 1))))
+    (cells-set tb 0 1) (cells-set tb 1 1000) (cells-set tb 2 10000)
+    (cells-set tb 3 15000) (cells-set tb 4 16000)
+    (cells-set tb 32 1) (cells-set tb 33 1000) (cells-set tb 34 18000)
+    (cells-set tb 35 15000) (cells-set tb 36 24000)
+    (tt-line3 wd ln et (text-blob "Table") (text-blob "2") (text-blob "Results") 1000 16800)
+    (assert-eq (tb-caption tb 0 wd et ln 0 1 tq) 0 "a preceding table cannot steal the next table's top caption")
+    (assert-eq (tb-caption tb 1 wd et ln 0 1 tq) 1 "the following table owns the caption")))

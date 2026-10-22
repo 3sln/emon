@@ -534,3 +534,34 @@ fn test_an_internal_link_finds_the_block_it_names() {
     crate::testport::assert_eq(it_find(nodes, nk_link(), 4), -1, "and the bare URL under the first link is not made a link again");
     crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "in document order");
 }
+#[test]
+fn test_rtl_links_follow_the_logical_character_not_the_painted_index() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ift: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let an: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let txt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    it_body(wd, ln, et, &crate::testport::text_blob("אב")[..]);
+    it_fonts(ift);
+    it_glyph(gl, 7200, 8400, 1489, 6, 1100, 7400);
+    it_glyph(gl, 8400, 9600, 1488, 6, 1100, 7400);
+    wd_set(wd, 6, wf_gfirst(), 0);
+    wd_set(wd, 6, wf_gcount(), 2);
+    wd_set(wd, 6, hd_dir(), 1);
+    it_txt(txt, &crate::testport::text_blob("https://example.org/x")[..]);
+    it_link_row(an, 8401, 6400, 9600, 7600, 1, 0, 21);
+    crate::testport::assert_eq(it_build(wd, ln, et, gl, ift, an, txt, nodes, attrs, regions, text, pages, ledger, layout), 1, "one link");
+    let link: i32 = it_find(nodes, nk_link(), 0);
+    let child: i32 = node_first_child(nodes, link);
+    crate::testport::assert_eq(node_text_len(nodes, child), 1, "one linked character");
+    crate::testport::assert_eq(crate::port::cells_at(text, node_text_start(nodes, child)), 1488, "alef at the right is the linked logical first character");
+}

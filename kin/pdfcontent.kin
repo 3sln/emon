@@ -3134,7 +3134,7 @@
   (if (>= j glst) (return 0))
   (return (pc-accent-over gl j (+ j 1))))
 
-(defn ^I32 pc-continues [^Cells gl ^I32 p ^I32 g]
+(defn ^I32 pc-continues [^Cells gl ^I32 p ^I32 g ^I32 first]
   (comment "1 when glyph g continues the word glyph p is in: the same rotation, on the")
   (comment "same baseline (to 45 percent of the size: sub- and superscripts stay), and")
   (comment "the gap along the axis neither a word space nor a step back.")
@@ -3144,7 +3144,8 @@
         ^I32 sizep (gl-get gl p (gf-size))
         ^:mut ^I32 sz size
         ^:mut ^I32 gap 0
-        ^:mut ^I32 off 0]
+        ^:mut ^I32 off 0
+        ^:mut ^I32 basep p]
     (if (== (pc-rot-same rot (gl-get gl g (gf-rot))) 0) (return 0))
     (comment "A word is one thing to see: a glyph of another visibility, or one that is hidden (mode 3, 7) where the other")
     (comment "is not, starts a new word (P3.6).")
@@ -3152,12 +3153,25 @@
     (if (!= (pc-hidden-mode (gl-get gl p (gf-mode))) (pc-hidden-mode (gl-get gl g (gf-mode)))) (return 0))
     (comment "A spacing diacritic over the letter drawn right after it is part of that letter's word (D580).")
     (if (> (pc-accent-over gl p g) 0) (return 1))
+    (comment "D1833: a nonspacing mark has a displaced baseline and often zero advance. It attaches to the overlapping base; the following letter measures its gap from that base, rather than from the mark.")
+    (if (== axis 0)
+      (do (while (and (> basep first) (== (bd-class (gl-get gl basep (ch-cp))) 10)
+                      (< (- p basep) 16))
+            (set basep (- basep 1)))
+          (if (or (!= (gl-get gl basep (gf-vis)) (gl-get gl p (gf-vis)))
+                  (== (pc-rot-same (gl-get gl basep (gf-rot)) rot) 0))
+            (set basep p))
+          (if (== (bd-class (gl-get gl g (ch-cp))) 10)
+            (if (and (>= (+ (gl-get gl g (ch-x0)) (gl-get gl g (ch-x1))) (* 2 (gl-get gl basep (ch-x0))))
+                     (<= (+ (gl-get gl g (ch-x0)) (gl-get gl g (ch-x1))) (* 2 (gl-get gl basep (ch-x1))))
+                     (<= (pc-pair-off gl basep g axis) sz))
+              (return 1)))))
     (if (> sizep sz) (set sz sizep))
     (if (> sz 200000) (set sz 200000))
     (if (< sz (- 0 200000)) (set sz (- 0 200000)))
-    (set off (pc-cl (pc-pair-off gl p g axis)))
+    (set off (pc-cl (pc-pair-off gl basep g axis)))
     (if (> (* off 1000) (* sz OFFSET_PM)) (return 0))
-    (set gap (pc-cl (pc-pair-gap gl p g axis sz)))
+    (set gap (pc-cl (pc-pair-gap gl basep g axis sz)))
     (if (> (* gap 1000) (* sz WORD_GAP_PM)) (return 0))
     (if (< (* gap 1000) (- 0 (* sz WORD_BACK_PM))) (return 0))
     (return 1)))
@@ -3642,7 +3656,7 @@
                   (do (pc-emit-word gl et wd fnt page cur (- i 1) (wb-space))
                       (set cur -1))))
             (do (if (>= cur 0)
-                  (if (== (pc-continues gl (- i 1) i) 0)
+                  (if (== (pc-continues gl (- i 1) i cur) 0)
                     (do (pc-emit-word gl et wd fnt page cur (- i 1) (wb-gap))
                         (set cur -1))))
                 (if (< cur 0) (set cur i))))

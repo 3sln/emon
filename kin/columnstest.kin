@@ -8,7 +8,7 @@
             [emon.test :refer [deftest assert-eq new-cells text-blob]]
             [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-push]]
             [emon.model :refer [page-new pk-vector text-append-utf8 rl-body rl-sidebar]]
-            [emon.evidence :refer [wd-new wd-set wd-count ln-new ln-count wf-size wf-font]]
+            [emon.evidence :refer [wd-new wd-set wd-count ln-new ln-count ln-set lf-src wf-size wf-font]]
             [emon.glayer :refer [gfl-new]]
             [emon.columns :refer [lc-copy lc-page lc-mark-asides lc-cf-stride]]
             [kin.lang :refer [defn return let set while if do comment
@@ -105,3 +105,22 @@
     (ct-line wd2 ln2 et2 (text-blob "theta iota kappa lambda mu nu xi") 7200 15600)
     (ct-line wd2 ln2 et2 (text-blob "Time UTC+3") 33000 15600)
     (assert-eq (ct-page wd2 et2 ln2 gfl 1) (+ 20 (rl-sidebar)) "the box: the body and a sidebar")))
+
+(deftest test-staggered-narrow-ocr-columns-use-line-gutters
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells gfl (new-cells)
+        ^:mut ^I32 i 0 ^:mut ^I32 c 0]
+    (while (< c 3)
+      (do (set i 0)
+          (while (< i 8)
+            (do (ct-line wd ln et (text-blob "prose words") (+ 1000 (* c 6400)) (+ 10000 (+ (* i 1500) (* c 400))))
+                (let [^I32 l (- (ln-count ln) 1)] (ln-set ln l (lf-src) 4))
+                (set i (+ i 1))))
+          (set c (+ c 1))))
+    (assert-eq (ct-page wd et ln gfl 0) (+ 30 (rl-body)) "three OCR line columns with narrow gutters, despite staggered baselines")
+    (ln-set ln 0 (lf-src) 5)
+    (assert-eq (ct-page wd et ln gfl 0) (+ 10 (rl-body)) "text-layer pages with OCR support keep the existing column analysis")
+    (ln-set ln 0 (lf-src) 4)
+    (set i 0)
+    (while (< i (ln-count ln))
+      (do (ln-set ln i 15 1073741824) (set i (+ i 1))))
+    (assert-eq (ct-page wd et ln gfl 0) (+ 10 (rl-body)) "claimed table cells do not vote as prose columns")))

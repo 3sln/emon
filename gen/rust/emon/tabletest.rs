@@ -2632,3 +2632,53 @@ fn test_an_attached_tail_with_an_imprecise_line_box_is_claimed() {
     crate::testport::assert_eq(crate::port::cells_at(tb, 7), 6, "the separated total is attached");
     crate::testport::assert_eq(ln_get(ln, 10, 15), 1073741824, "a fully owned attached tail is claimed outside the old line box");
 }
+#[test]
+fn test_cell_text_keeps_the_logical_order_of_each_rtl_line() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let raw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut String = &mut crate::port::new_text();
+    let mut i: i32 = 0;
+    tt_w(wd, et, &crate::testport::text_blob("عدد")[..], 5000, 1000, 7000, 1800, 0);
+    tt_w(wd, et, &crate::testport::text_blob("الصفحات")[..], 1000, 1000, 4500, 1800, 0);
+    tt_w(wd, et, &crate::testport::text_blob("2026")[..], 1000, 2200, 3000, 3000, 0);
+    wd_set(wd, 0, hd_line(), 0);
+    wd_set(wd, 1, hd_line(), 0);
+    wd_set(wd, 2, hd_line(), 1);
+    crate::port::cells_push(tw, 1);
+    crate::port::cells_push(tw, 0);
+    crate::port::cells_push(tw, 2);
+    tb_words_raw(wd, et, tw, 0, 3, raw, &mut crate::port::Cells::new());
+    while i < crate::port::cells_len(raw) {
+        crate::port::text_cp(out, crate::port::cells_at(raw, i));
+        i += 1;
+    }
+    crate::testport::assert_text(out, "عدد الصفحات 2026", "cell words follow logical line order without reversing letters or rows");
+}
+#[test]
+fn test_a_caption_between_tables_belongs_to_the_following_table() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tq: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut i: i32 = 0;
+    while i < 64 {
+        crate::port::cells_push(tb, 0);
+        i += 1;
+    }
+    crate::port::cells_set(tb, 0, 1);
+    crate::port::cells_set(tb, 1, 1000);
+    crate::port::cells_set(tb, 2, 10000);
+    crate::port::cells_set(tb, 3, 15000);
+    crate::port::cells_set(tb, 4, 16000);
+    crate::port::cells_set(tb, 32, 1);
+    crate::port::cells_set(tb, 33, 1000);
+    crate::port::cells_set(tb, 34, 18000);
+    crate::port::cells_set(tb, 35, 15000);
+    crate::port::cells_set(tb, 36, 24000);
+    tt_line3(wd, ln, et, &crate::testport::text_blob("Table")[..], &crate::testport::text_blob("2")[..], &crate::testport::text_blob("Results")[..], 1000, 16800);
+    crate::testport::assert_eq(tb_caption(tb, 0, wd, et, ln, 0, 1, tq), 0, "a preceding table cannot steal the next table's top caption");
+    crate::testport::assert_eq(tb_caption(tb, 1, wd, et, ln, 0, 1, tq), 1, "the following table owns the caption");
+}

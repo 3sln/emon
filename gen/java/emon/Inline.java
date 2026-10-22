@@ -673,15 +673,30 @@ public final class Inline {
         int st = 0;
         int j = 0;
         int g = 0;
+        int order = -1;
+        int data0 = d0;
         if ((ts < 0) || (tl <= 0)) {
             return 0;
         }
         if ((tl == gn) && (gn > 0) && (gn <= IL_MAXG) && (g0 >= 0) && (ilGrouped(wd, et, w) == 0)) {
             eq = 1;
         }
+        // D1832: the text is logical but the glyph arena stays in painted order. Use the parser's bidi permutation for per-character styles and link hits.
+        if ((eq == 1) && (Evidence.wdGet(wd, w, Evidence.hdDir()) == 1) && (Evidence.glGet(gl, g0 + (gn - 1), Evidence.hdX0()) >= Evidence.glGet(gl, g0, Evidence.hdX0()))) {
+            while (j < gn) {
+                emon.Port.cellsPush(hc, Evidence.glGet(gl, g0 + j, Evidence.chCp()));
+                j += 1;
+            }
+            order = Bidi.bdOrderOf(hc, d0, gn);
+            data0 = emon.Port.cellsLen(hc);
+            j = 0;
+        }
         if (eq == 1) {
             while (j < tl) {
                 g = g0 + j;
+                if (order >= 0) {
+                    g = g0 + emon.Port.cellsAt(hc, order + j);
+                }
                 st = ilGlyphBits(gl, ift, g, sz0, base, upright);
                 st += 256 * ilLinkOf(sw, ncand, lo, hi, text, txt, (Evidence.glGet(gl, g, Evidence.hdX0()) + Evidence.glGet(gl, g, Evidence.hdX1())) / 2, (Evidence.glGet(gl, g, Evidence.hdY0()) + Evidence.glGet(gl, g, Evidence.hdY1())) / 2);
                 emon.Port.cellsPush(hc, st);
@@ -706,6 +721,14 @@ public final class Inline {
             if (st != 0) {
                 nz = 1;
             }
+        }
+        if (order >= 0) {
+            j = 0;
+            while (j < tl) {
+                emon.Port.cellsSet(hc, d0 + j, emon.Port.cellsAt(hc, data0 + j));
+                j += 1;
+            }
+            emon.Port.cellsDrop(hc, d0 + tl);
         }
         if (nz == 0) {
             emon.Port.cellsDrop(hc, d0);

@@ -3945,7 +3945,7 @@ public static class Pdfcontent {
         }
         return PcAccentOver(gl, j, j + 1);
     }
-    internal static int PcContinues(emon.Port.Cells gl, int p, int g) {
+    internal static int PcContinues(emon.Port.Cells gl, int p, int g, int first) {
         // 1 when glyph g continues the word glyph p is in: the same rotation, on the
         // same baseline (to 45 percent of the size: sub- and superscripts stay), and
         // the gap along the axis neither a word space nor a step back.
@@ -3956,6 +3956,7 @@ public static class Pdfcontent {
         int sz = size;
         int gap = 0;
         int off = 0;
+        int basep = p;
         if (PcRotSame(rot, Evidence.GlGet(gl, g, Evidence.GfRot())) == 0) {
             return 0;
         }
@@ -3971,6 +3972,20 @@ public static class Pdfcontent {
         if (PcAccentOver(gl, p, g) > 0) {
             return 1;
         }
+        // D1833: a nonspacing mark has a displaced baseline and often zero advance. It attaches to the overlapping base; the following letter measures its gap from that base, rather than from the mark.
+        if (axis == 0) {
+            while ((basep > first) && (Bidi.BdClass(Evidence.GlGet(gl, basep, Evidence.ChCp())) == 10) && ((p - basep) < 16)) {
+                basep -= 1;
+            }
+            if ((Evidence.GlGet(gl, basep, Evidence.GfVis()) != Evidence.GlGet(gl, p, Evidence.GfVis())) || (PcRotSame(Evidence.GlGet(gl, basep, Evidence.GfRot()), rot) == 0)) {
+                basep = p;
+            }
+            if (Bidi.BdClass(Evidence.GlGet(gl, g, Evidence.ChCp())) == 10) {
+                if (((Evidence.GlGet(gl, g, Evidence.ChX0()) + Evidence.GlGet(gl, g, Evidence.ChX1())) >= (2 * Evidence.GlGet(gl, basep, Evidence.ChX0()))) && ((Evidence.GlGet(gl, g, Evidence.ChX0()) + Evidence.GlGet(gl, g, Evidence.ChX1())) <= (2 * Evidence.GlGet(gl, basep, Evidence.ChX1()))) && (PcPairOff(gl, basep, g, axis) <= sz)) {
+                    return 1;
+                }
+            }
+        }
         if (sizep > sz) {
             sz = sizep;
         }
@@ -3980,11 +3995,11 @@ public static class Pdfcontent {
         if (sz < (0 - 200000)) {
             sz = 0 - 200000;
         }
-        off = PcCl(PcPairOff(gl, p, g, axis));
+        off = PcCl(PcPairOff(gl, basep, g, axis));
         if ((off * 1000) > (sz * OffsetPm)) {
             return 0;
         }
-        gap = PcCl(PcPairGap(gl, p, g, axis, sz));
+        gap = PcCl(PcPairGap(gl, basep, g, axis, sz));
         if ((gap * 1000) > (sz * WordGapPm)) {
             return 0;
         }
@@ -4640,7 +4655,7 @@ public static class Pdfcontent {
                 }
             } else {
                 if (cur >= 0) {
-                    if (PcContinues(gl, i - 1, i) == 0) {
+                    if (PcContinues(gl, i - 1, i, cur) == 0) {
                         PcEmitWord(gl, et, wd, fnt, page, cur, i - 1, Evidence.WbGap());
                         cur = -1;
                     }

@@ -123,3 +123,32 @@ fn test_a_shaded_box_beside_the_body_is_a_region_of_its_own() {
     ct_line(wd2, ln2, et2, &crate::testport::text_blob("Time UTC+3")[..], 33000, 15600);
     crate::testport::assert_eq(ct_page(wd2, et2, ln2, gfl, 1), 20 + rl_sidebar(), "the box: the body and a sidebar");
 }
+#[test]
+fn test_staggered_narrow_ocr_columns_use_line_gutters() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gfl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut i: i32 = 0;
+    let mut c: i32 = 0;
+    while c < 3 {
+        i = 0;
+        while i < 8 {
+            ct_line(wd, ln, et, &crate::testport::text_blob("prose words")[..], 1000 + (c * 6400), 10000 + ((i * 1500) + (c * 400)));
+            let l: i32 = ln_count(ln) - 1;
+            ln_set(ln, l, lf_src(), 4);
+            i += 1;
+        }
+        c += 1;
+    }
+    crate::testport::assert_eq(ct_page(wd, et, ln, gfl, 0), 30 + rl_body(), "three OCR line columns with narrow gutters, despite staggered baselines");
+    ln_set(ln, 0, lf_src(), 5);
+    crate::testport::assert_eq(ct_page(wd, et, ln, gfl, 0), 10 + rl_body(), "text-layer pages with OCR support keep the existing column analysis");
+    ln_set(ln, 0, lf_src(), 4);
+    i = 0;
+    while i < ln_count(ln) {
+        ln_set(ln, i, 15, 1073741824);
+        i += 1;
+    }
+    crate::testport::assert_eq(ct_page(wd, et, ln, gfl, 0), 10 + rl_body(), "claimed table cells do not vote as prose columns");
+}

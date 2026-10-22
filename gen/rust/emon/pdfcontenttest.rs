@@ -904,3 +904,17 @@ fn test_adobes_symbol_private_use_is_the_delimiter_pieces_unicode_names() {
     crate::testport::assert_eq(pc_pua(-1), -1, "no value stays none");
     crate::testport::assert_eq(pc_pua(57344), 57344, "a private-use code point of anyone else's is not touched");
 }
+#[test]
+fn test_a_combining_mark_does_not_open_a_word_gap() {
+    let gl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    ct_gw(gl, 1000, 0, 1488);
+    let mark: i32 = ct_gw(gl, 1200, 600, 1456);
+    gl_set(gl, mark, gf_by0(), 1400);
+    gl_set(gl, mark, gf_by1(), 1400);
+    ct_gw(gl, 1500, 0, 1489);
+    ct_group(gl, et, wd, ln);
+    crate::testport::assert_eq(wd_count(wd), 1, "niqqud belongs to its base despite its displaced baseline");
+}

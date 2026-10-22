@@ -1230,15 +1230,38 @@ public final class Table {
         }
         return 0;
     }
-    public static int tbWordsRaw(emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells tw, int from, int num, emon.Port.Cells raw) {
+    public static int tbWordsRaw(emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells tw, int from, int num, emon.Port.Cells raw, emon.Port.Cells order) {
         // The words tw[first..first+count) as code points into `raw`: a space between two words, none after a
         // soft hyphen (which goes). `raw` is emptied first.
         int k = 0;
         int j = 0;
         int started = 0;
+        int v = 0;
+        int line = -1;
+        // D1830: table fitting sorts by baseline and x. Within each contiguous parser line, word ids are already bidi-logical. Restore that order in scratch once, without reversing characters or rows. Unknown line ids keep their supplied order.
+        emon.Port.cellsDrop(order, 0);
+        while (k < num) {
+            emon.Port.cellsPush(order, emon.Port.cellsAt(tw, from + k));
+            k += 1;
+        }
+        k = 1;
+        while (k < num) {
+            v = emon.Port.cellsAt(order, k);
+            line = Evidence.wdGet(wd, v, Evidence.hdLine());
+            j = k;
+            if (line >= 0) {
+                while ((j > 0) && (emon.Port.cellsAt(order, j - 1) > v) && (Evidence.wdGet(wd, emon.Port.cellsAt(order, j - 1), Evidence.hdLine()) == line)) {
+                    emon.Port.cellsSet(order, j, emon.Port.cellsAt(order, j - 1));
+                    j -= 1;
+                }
+            }
+            emon.Port.cellsSet(order, j, v);
+            k += 1;
+        }
+        k = 0;
         emon.Port.cellsDrop(raw, 0);
         while (k < num) {
-            int w = emon.Port.cellsAt(tw, from + k);
+            int w = emon.Port.cellsAt(order, k);
             int ts = Evidence.wdGet(wd, w, Evidence.hdTstart());
             int tl = Evidence.wdGet(wd, w, Evidence.hdTlen());
             if ((ts >= 0) && (tl > 0)) {
@@ -1285,7 +1308,7 @@ public final class Table {
         if (wc == 0) {
             Model.nodeSetAux(nodes, n, 1);
         } else {
-            tbWordsRaw(wd, et, tw, emon.Port.cellsAt(tc, cb + 8), wc, raw);
+            tbWordsRaw(wd, et, tw, emon.Port.cellsAt(tc, cb + 8), wc, raw, tmp);
             int t0 = emon.Port.cellsLen(text);
             Normalize.nzNfc(raw, 0, emon.Port.cellsLen(raw), text, tmp, Normalize.nzFlagLigatures() + Normalize.nzFlagRadicals());
             Model.nodeSetText(nodes, n, t0, emon.Port.cellsLen(text) - t0);
@@ -1463,7 +1486,7 @@ public final class Table {
                         Model.textAppendCp(text, 32);
                     }
                     any = 1;
-                    tbWordsRaw(wd, et, tw, emon.Port.cellsAt(tc, (c * TCS) + 8), emon.Port.cellsAt(tc, (c * TCS) + 9), raw);
+                    tbWordsRaw(wd, et, tw, emon.Port.cellsAt(tc, (c * TCS) + 8), emon.Port.cellsAt(tc, (c * TCS) + 9), raw, tmp);
                     Normalize.nzNfc(raw, 0, emon.Port.cellsLen(raw), text, tmp, Normalize.nzFlagLigatures() + Normalize.nzFlagRadicals());
                 }
             }
@@ -3187,6 +3210,24 @@ public final class Table {
         }
         return tbIsLabelWord(wd, et, w0) && tbIsLabelNumber(wd, et, w0 + 1);
     }
+    public static boolean tbCaptionForNext(emon.Port.Cells tb, int k, emon.Port.Cells ln, int l, int distance) {
+        // D1834: caption ownership is decided against all selected tables, before a preceding table claims a below-caption. Prefer the following table when its above-caption is at least as close.
+        int q = 0;
+        int b = 0;
+        int d = 0;
+        int h = Evidence.lnGet(ln, l, Evidence.lhY1()) - Evidence.lnGet(ln, l, Evidence.lhY0());
+        while (q < tbRowsOf(tb, Tagtable.TBS)) {
+            b = q * Tagtable.TBS;
+            if ((q != k) && (emon.Port.cellsAt(tb, b) == emon.Port.cellsAt(tb, k * Tagtable.TBS)) && (Evidence.lnGet(ln, l, Evidence.lhX0()) < emon.Port.cellsAt(tb, b + 3)) && (Evidence.lnGet(ln, l, Evidence.lhX1()) > emon.Port.cellsAt(tb, b + 1))) {
+                d = emon.Port.cellsAt(tb, b + 2) - Evidence.lnGet(ln, l, Evidence.lhY1());
+                if ((d >= -300) && ((d * 2) <= (h * 5)) && (tbAbs(d) <= distance)) {
+                    return 1 == 1;
+                }
+            }
+            q += 1;
+        }
+        return 1 == 0;
+    }
     public static int tbCaption(emon.Port.Cells tb, int k, emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells ln, int l0, int l1, emon.Port.Cells tq) {
         // Find the caption of table k among the unclaimed lines l0..l1: a line that starts with a table keyword
         // and a number, over the table or under it within two and a half line heights, preferring the one over it;
@@ -3215,7 +3256,7 @@ public final class Table {
                                 above = 1;
                             }
                         }
-                        if ((db >= -300) && (((db * 2) <= (lht * 5)) && (above == 0))) {
+                        if ((db >= -300) && (((db * 2) <= (lht * 5)) && (above == 0)) && !tbCaptionForNext(tb, k, ln, l, tbAbs(db))) {
                             if (tbAbs(db) < bestd) {
                                 best = l;
                                 bestd = tbAbs(db);

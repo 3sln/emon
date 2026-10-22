@@ -3956,7 +3956,7 @@ pub(crate) fn pc_accent_pair(gl: &mut crate::port::Cells, j: i32, glst: i32) -> 
     }
     return pc_accent_over(gl, j, j + 1);
 }
-pub(crate) fn pc_continues(gl: &mut crate::port::Cells, p: i32, g: i32) -> i32 {
+pub(crate) fn pc_continues(gl: &mut crate::port::Cells, p: i32, g: i32, first: i32) -> i32 {
     // 1 when glyph g continues the word glyph p is in: the same rotation, on the
     // same baseline (to 45 percent of the size: sub- and superscripts stay), and
     // the gap along the axis neither a word space nor a step back.
@@ -3967,6 +3967,7 @@ pub(crate) fn pc_continues(gl: &mut crate::port::Cells, p: i32, g: i32) -> i32 {
     let mut sz: i32 = size;
     let mut gap: i32 = 0;
     let mut off: i32 = 0;
+    let mut basep: i32 = p;
     if pc_rot_same(rot, gl_get(gl, g, gf_rot())) == 0 {
         return 0;
     }
@@ -3982,6 +3983,20 @@ pub(crate) fn pc_continues(gl: &mut crate::port::Cells, p: i32, g: i32) -> i32 {
     if pc_accent_over(gl, p, g) > 0 {
         return 1;
     }
+    // D1833: a nonspacing mark has a displaced baseline and often zero advance. It attaches to the overlapping base; the following letter measures its gap from that base, rather than from the mark.
+    if axis == 0 {
+        while (basep > first) && (bd_class(gl_get(gl, basep, ch_cp())) == 10) && ((p - basep) < 16) {
+            basep -= 1;
+        }
+        if (gl_get(gl, basep, gf_vis()) != gl_get(gl, p, gf_vis())) || (pc_rot_same(gl_get(gl, basep, gf_rot()), rot) == 0) {
+            basep = p;
+        }
+        if bd_class(gl_get(gl, g, ch_cp())) == 10 {
+            if ((gl_get(gl, g, ch_x0()) + gl_get(gl, g, ch_x1())) >= (2 * gl_get(gl, basep, ch_x0()))) && ((gl_get(gl, g, ch_x0()) + gl_get(gl, g, ch_x1())) <= (2 * gl_get(gl, basep, ch_x1()))) && (pc_pair_off(gl, basep, g, axis) <= sz) {
+                return 1;
+            }
+        }
+    }
     if sizep > sz {
         sz = sizep;
     }
@@ -3991,11 +4006,11 @@ pub(crate) fn pc_continues(gl: &mut crate::port::Cells, p: i32, g: i32) -> i32 {
     if sz < (0 - 200000) {
         sz = 0 - 200000;
     }
-    off = pc_cl(pc_pair_off(gl, p, g, axis));
+    off = pc_cl(pc_pair_off(gl, basep, g, axis));
     if (off * 1000) > (sz * OFFSET_PM) {
         return 0;
     }
-    gap = pc_cl(pc_pair_gap(gl, p, g, axis, sz));
+    gap = pc_cl(pc_pair_gap(gl, basep, g, axis, sz));
     if (gap * 1000) > (sz * WORD_GAP_PM) {
         return 0;
     }
@@ -4651,7 +4666,7 @@ pub fn pc_group(mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells
             }
         } else {
             if cur >= 0 {
-                if pc_continues(gl, i - 1, i) == 0 {
+                if pc_continues(gl, i - 1, i, cur) == 0 {
                     pc_emit_word(gl, et, wd, fnt, page, cur, i - 1, wb_gap());
                     cur = -1;
                 }

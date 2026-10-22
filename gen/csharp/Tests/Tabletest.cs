@@ -2618,4 +2618,54 @@ public static class Tabletest {
         emon.Testport.AssertEq(emon.Port.CellsAt(tb, 7), 6, "the separated total is attached");
         emon.Testport.AssertEq(Evidence.LnGet(ln, 10, 15), 1073741824, "a fully owned attached tail is claimed outside the old line box");
     }
+    [Xunit.Fact]
+    public static void TestCellTextKeepsTheLogicalOrderOfEachRtlLine() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        emon.Port.Cells raw = emon.Port.NewCells();
+        System.Text.StringBuilder @out = emon.Testport.NewText();
+        int i = 0;
+        TtW(wd, et, emon.Testport.TextBlob("عدد"), 5000, 1000, 7000, 1800, 0);
+        TtW(wd, et, emon.Testport.TextBlob("الصفحات"), 1000, 1000, 4500, 1800, 0);
+        TtW(wd, et, emon.Testport.TextBlob("2026"), 1000, 2200, 3000, 3000, 0);
+        Evidence.WdSet(wd, 0, Evidence.HdLine(), 0);
+        Evidence.WdSet(wd, 1, Evidence.HdLine(), 0);
+        Evidence.WdSet(wd, 2, Evidence.HdLine(), 1);
+        emon.Port.CellsPush(tw, 1);
+        emon.Port.CellsPush(tw, 0);
+        emon.Port.CellsPush(tw, 2);
+        Table.TbWordsRaw(wd, et, tw, 0, 3, raw, emon.Port.NewCells());
+        while (i < emon.Port.CellsLen(raw)) {
+            emon.Port.TextCp(@out, emon.Port.CellsAt(raw, i));
+            i += 1;
+        }
+        emon.Testport.AssertText(@out, "عدد الصفحات 2026", "cell words follow logical line order without reversing letters or rows");
+    }
+    [Xunit.Fact]
+    public static void TestACaptionBetweenTablesBelongsToTheFollowingTable() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tq = emon.Port.NewCells();
+        int i = 0;
+        while (i < 64) {
+            emon.Port.CellsPush(tb, 0);
+            i += 1;
+        }
+        emon.Port.CellsSet(tb, 0, 1);
+        emon.Port.CellsSet(tb, 1, 1000);
+        emon.Port.CellsSet(tb, 2, 10000);
+        emon.Port.CellsSet(tb, 3, 15000);
+        emon.Port.CellsSet(tb, 4, 16000);
+        emon.Port.CellsSet(tb, 32, 1);
+        emon.Port.CellsSet(tb, 33, 1000);
+        emon.Port.CellsSet(tb, 34, 18000);
+        emon.Port.CellsSet(tb, 35, 15000);
+        emon.Port.CellsSet(tb, 36, 24000);
+        TtLine3(wd, ln, et, emon.Testport.TextBlob("Table"), emon.Testport.TextBlob("2"), emon.Testport.TextBlob("Results"), 1000, 16800);
+        emon.Testport.AssertEq(Table.TbCaption(tb, 0, wd, et, ln, 0, 1, tq), 0, "a preceding table cannot steal the next table's top caption");
+        emon.Testport.AssertEq(Table.TbCaption(tb, 1, wd, et, ln, 0, 1, tq), 1, "the following table owns the caption");
+    }
 }

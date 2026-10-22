@@ -2688,3 +2688,53 @@ func TestAnAttachedTailWithAnImpreciseLineBoxIsClaimed(emonT *testing.T) {
 	port.AssertEq(emonT, port.CellsAt(tb, 7), 6, "the separated total is attached")
 	port.AssertEq(emonT, evidence.LnGet(ln, 10, 15), 1073741824, "a fully owned attached tail is claimed outside the old line box")
 }
+
+func TestCellTextKeepsTheLogicalOrderOfEachRtlLine(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var raw *port.Cells = port.NewCells()
+	var out *strings.Builder = port.NewText()
+	var i int32 = 0
+	ttW(wd, et, port.TextBlob("عدد"), 5000, 1000, 7000, 1800, 0)
+	ttW(wd, et, port.TextBlob("الصفحات"), 1000, 1000, 4500, 1800, 0)
+	ttW(wd, et, port.TextBlob("2026"), 1000, 2200, 3000, 3000, 0)
+	evidence.WdSet(wd, 0, evidence.HdLine(), 0)
+	evidence.WdSet(wd, 1, evidence.HdLine(), 0)
+	evidence.WdSet(wd, 2, evidence.HdLine(), 1)
+	port.CellsPush(tw, 1)
+	port.CellsPush(tw, 0)
+	port.CellsPush(tw, 2)
+	table.TbWordsRaw(wd, et, tw, 0, 3, raw, port.NewCells())
+	for i < port.CellsLen(raw) {
+		port.TextCp(out, port.CellsAt(raw, i))
+		i += 1
+	}
+	port.AssertText(emonT, out, "عدد الصفحات 2026", "cell words follow logical line order without reversing letters or rows")
+}
+
+func TestACaptionBetweenTablesBelongsToTheFollowingTable(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tq *port.Cells = port.NewCells()
+	var i int32 = 0
+	for i < 64 {
+		port.CellsPush(tb, 0)
+		i += 1
+	}
+	port.CellsSet(tb, 0, 1)
+	port.CellsSet(tb, 1, 1000)
+	port.CellsSet(tb, 2, 10000)
+	port.CellsSet(tb, 3, 15000)
+	port.CellsSet(tb, 4, 16000)
+	port.CellsSet(tb, 32, 1)
+	port.CellsSet(tb, 33, 1000)
+	port.CellsSet(tb, 34, 18000)
+	port.CellsSet(tb, 35, 15000)
+	port.CellsSet(tb, 36, 24000)
+	ttLine3(wd, ln, et, port.TextBlob("Table"), port.TextBlob("2"), port.TextBlob("Results"), 1000, 16800)
+	port.AssertEq(emonT, table.TbCaption(tb, 0, wd, et, ln, 0, 1, tq), 0, "a preceding table cannot steal the next table's top caption")
+	port.AssertEq(emonT, table.TbCaption(tb, 1, wd, et, ln, 0, 1, tq), 1, "the following table owns the caption")
+}

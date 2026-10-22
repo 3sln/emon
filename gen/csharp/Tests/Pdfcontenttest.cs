@@ -901,4 +901,18 @@ public static class Pdfcontenttest {
         emon.Testport.AssertEq(Pdfcontent.PcPua(-1), -1, "no value stays none");
         emon.Testport.AssertEq(Pdfcontent.PcPua(57344), 57344, "a private-use code point of anyone else's is not touched");
     }
+    [Xunit.Fact]
+    public static void TestACombiningMarkDoesNotOpenAWordGap() {
+        emon.Port.Cells gl = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        CtGw(gl, 1000, 0, 1488);
+        int mark = CtGw(gl, 1200, 600, 1456);
+        Evidence.GlSet(gl, mark, Evidence.GfBy0(), 1400);
+        Evidence.GlSet(gl, mark, Evidence.GfBy1(), 1400);
+        CtGw(gl, 1500, 0, 1489);
+        CtGroup(gl, et, wd, ln);
+        emon.Testport.AssertEq(Evidence.WdCount(wd), 1, "niqqud belongs to its base despite its displaced baseline");
+    }
 }

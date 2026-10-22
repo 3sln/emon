@@ -881,4 +881,17 @@ public final class Pdfcontenttest {
         emon.Testport.assertEq(Pdfcontent.pcPua(-1), -1, "no value stays none");
         emon.Testport.assertEq(Pdfcontent.pcPua(57344), 57344, "a private-use code point of anyone else's is not touched");
     }
+    public static void testACombiningMarkDoesNotOpenAWordGap() {
+        emon.Port.Cells gl = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        ctGw(gl, 1000, 0, 1488);
+        int mark = ctGw(gl, 1200, 600, 1456);
+        Evidence.glSet(gl, mark, Evidence.gfBy0(), 1400);
+        Evidence.glSet(gl, mark, Evidence.gfBy1(), 1400);
+        ctGw(gl, 1500, 0, 1489);
+        ctGroup(gl, et, wd, ln);
+        emon.Testport.assertEq(Evidence.wdCount(wd), 1, "niqqud belongs to its base despite its displaced baseline");
+    }
 }

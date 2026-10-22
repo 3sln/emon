@@ -2549,4 +2549,52 @@ public final class Tabletest {
         emon.Testport.assertEq(emon.Port.cellsAt(tb, 7), 6, "the separated total is attached");
         emon.Testport.assertEq(Evidence.lnGet(ln, 10, 15), 1073741824, "a fully owned attached tail is claimed outside the old line box");
     }
+    public static void testCellTextKeepsTheLogicalOrderOfEachRtlLine() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells raw = emon.Port.newCells();
+        StringBuilder out = emon.Testport.newText();
+        int i = 0;
+        ttW(wd, et, emon.Testport.textBlob("عدد"), 5000, 1000, 7000, 1800, 0);
+        ttW(wd, et, emon.Testport.textBlob("الصفحات"), 1000, 1000, 4500, 1800, 0);
+        ttW(wd, et, emon.Testport.textBlob("2026"), 1000, 2200, 3000, 3000, 0);
+        Evidence.wdSet(wd, 0, Evidence.hdLine(), 0);
+        Evidence.wdSet(wd, 1, Evidence.hdLine(), 0);
+        Evidence.wdSet(wd, 2, Evidence.hdLine(), 1);
+        emon.Port.cellsPush(tw, 1);
+        emon.Port.cellsPush(tw, 0);
+        emon.Port.cellsPush(tw, 2);
+        Table.tbWordsRaw(wd, et, tw, 0, 3, raw, emon.Port.newCells());
+        while (i < emon.Port.cellsLen(raw)) {
+            emon.Port.textCp(out, emon.Port.cellsAt(raw, i));
+            i += 1;
+        }
+        emon.Testport.assertText(out, "عدد الصفحات 2026", "cell words follow logical line order without reversing letters or rows");
+    }
+    public static void testACaptionBetweenTablesBelongsToTheFollowingTable() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tq = emon.Port.newCells();
+        int i = 0;
+        while (i < 64) {
+            emon.Port.cellsPush(tb, 0);
+            i += 1;
+        }
+        emon.Port.cellsSet(tb, 0, 1);
+        emon.Port.cellsSet(tb, 1, 1000);
+        emon.Port.cellsSet(tb, 2, 10000);
+        emon.Port.cellsSet(tb, 3, 15000);
+        emon.Port.cellsSet(tb, 4, 16000);
+        emon.Port.cellsSet(tb, 32, 1);
+        emon.Port.cellsSet(tb, 33, 1000);
+        emon.Port.cellsSet(tb, 34, 18000);
+        emon.Port.cellsSet(tb, 35, 15000);
+        emon.Port.cellsSet(tb, 36, 24000);
+        ttLine3(wd, ln, et, emon.Testport.textBlob("Table"), emon.Testport.textBlob("2"), emon.Testport.textBlob("Results"), 1000, 16800);
+        emon.Testport.assertEq(Table.tbCaption(tb, 0, wd, et, ln, 0, 1, tq), 0, "a preceding table cannot steal the next table's top caption");
+        emon.Testport.assertEq(Table.tbCaption(tb, 1, wd, et, ln, 0, 1, tq), 1, "the following table owns the caption");
+    }
 }

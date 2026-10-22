@@ -3945,7 +3945,7 @@ public final class Pdfcontent {
         }
         return pcAccentOver(gl, j, j + 1);
     }
-    public static int pcContinues(emon.Port.Cells gl, int p, int g) {
+    public static int pcContinues(emon.Port.Cells gl, int p, int g, int first) {
         // 1 when glyph g continues the word glyph p is in: the same rotation, on the
         // same baseline (to 45 percent of the size: sub- and superscripts stay), and
         // the gap along the axis neither a word space nor a step back.
@@ -3956,6 +3956,7 @@ public final class Pdfcontent {
         int sz = size;
         int gap = 0;
         int off = 0;
+        int basep = p;
         if (pcRotSame(rot, Evidence.glGet(gl, g, Evidence.gfRot())) == 0) {
             return 0;
         }
@@ -3971,6 +3972,20 @@ public final class Pdfcontent {
         if (pcAccentOver(gl, p, g) > 0) {
             return 1;
         }
+        // D1833: a nonspacing mark has a displaced baseline and often zero advance. It attaches to the overlapping base; the following letter measures its gap from that base, rather than from the mark.
+        if (axis == 0) {
+            while ((basep > first) && (Bidi.bdClass(Evidence.glGet(gl, basep, Evidence.chCp())) == 10) && ((p - basep) < 16)) {
+                basep -= 1;
+            }
+            if ((Evidence.glGet(gl, basep, Evidence.gfVis()) != Evidence.glGet(gl, p, Evidence.gfVis())) || (pcRotSame(Evidence.glGet(gl, basep, Evidence.gfRot()), rot) == 0)) {
+                basep = p;
+            }
+            if (Bidi.bdClass(Evidence.glGet(gl, g, Evidence.chCp())) == 10) {
+                if (((Evidence.glGet(gl, g, Evidence.chX0()) + Evidence.glGet(gl, g, Evidence.chX1())) >= (2 * Evidence.glGet(gl, basep, Evidence.chX0()))) && ((Evidence.glGet(gl, g, Evidence.chX0()) + Evidence.glGet(gl, g, Evidence.chX1())) <= (2 * Evidence.glGet(gl, basep, Evidence.chX1()))) && (pcPairOff(gl, basep, g, axis) <= sz)) {
+                    return 1;
+                }
+            }
+        }
         if (sizep > sz) {
             sz = sizep;
         }
@@ -3980,11 +3995,11 @@ public final class Pdfcontent {
         if (sz < (0 - 200000)) {
             sz = 0 - 200000;
         }
-        off = pcCl(pcPairOff(gl, p, g, axis));
+        off = pcCl(pcPairOff(gl, basep, g, axis));
         if ((off * 1000) > (sz * OFFSET_PM)) {
             return 0;
         }
-        gap = pcCl(pcPairGap(gl, p, g, axis, sz));
+        gap = pcCl(pcPairGap(gl, basep, g, axis, sz));
         if ((gap * 1000) > (sz * WORD_GAP_PM)) {
             return 0;
         }
@@ -4640,7 +4655,7 @@ public final class Pdfcontent {
                 }
             } else {
                 if (cur >= 0) {
-                    if (pcContinues(gl, i - 1, i) == 0) {
+                    if (pcContinues(gl, i - 1, i, cur) == 0) {
                         pcEmitWord(gl, et, wd, fnt, page, cur, i - 1, Evidence.wbGap());
                         cur = -1;
                     }

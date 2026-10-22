@@ -1440,6 +1440,32 @@ public static class Html {
         emon.Port.TextAscii(t, "\">");
         return 1;
     }
+    internal static int HDocRtl(emon.Port.Cells nodes, emon.Port.Cells text) {
+        // D1831: direction comes from strong characters of node content, excluding document metadata. Digits and marks do not vote; a tie keeps the default direction.
+        int n = 1;
+        int j = 0;
+        int r = 0;
+        int l = 0;
+        int d = 0;
+        while (n < Model.NodeCount(nodes)) {
+            j = 0;
+            while (j < Model.NodeTextLen(nodes, n)) {
+                d = Bidi.BdStrong(emon.Port.CellsAt(text, Model.NodeTextStart(nodes, n) + j));
+                if (d == 1) {
+                    r += 1;
+                }
+                if (d == 2) {
+                    l += 1;
+                }
+                j += 1;
+            }
+            n += 1;
+        }
+        if (r > l) {
+            return 1;
+        }
+        return 0;
+    }
     public static int HtmlEmit(System.Text.StringBuilder t, int opts, int confBelow, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout, emon.Port.Cells assets, emon.Port.Cells uses, emon.Port.Buf abytes, emon.Port.Cells prefix) {
         // Write the Model as HTML (SPEC 5). `opts` is an OR of `ho-*`;
         // `conf-below` is the threshold for `ho-confidence` (nodes with a
@@ -1448,6 +1474,7 @@ public static class Html {
         // Answers 0.
         int o = (opts & 4095) + (confBelow * 4096);
         int nn = Model.NodeCount(nodes);
+        int rtl = HDocRtl(nodes, text);
         int nl = Model.LedgerCount(ledger);
         int a = -1;
         int i = 0;
@@ -1459,6 +1486,12 @@ public static class Html {
             emon.Port.TextAscii(t, " lang=\"");
             HRun(t, text, Model.AttrValue(attrs, a), Model.AttrLen(attrs, a));
             emon.Port.TextAscii(t, "\"");
+        }
+        if (rtl == 1) {
+            if (a < 0) {
+                emon.Port.TextAscii(t, " lang=\"und\"");
+            }
+            emon.Port.TextAscii(t, " dir=\"rtl\"");
         }
         emon.Port.TextAscii(t, ">");
         HNl(t, o, 1);
