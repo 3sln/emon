@@ -1159,7 +1159,7 @@
     (return 1)))
 
 (defn ^I32 h-doc-rtl [^Cells nodes ^Cells text]
-  (comment "D1831: direction comes from strong characters of node content, excluding document metadata. Digits and marks do not vote; a tie keeps the default direction.")
+  (comment "D656: direction comes from strong characters of node content, excluding document metadata. Digits and marks do not vote; a tie keeps the default direction.")
   (let [^:mut ^I32 n 1 ^:mut ^I32 j 0 ^:mut ^I32 r 0 ^:mut ^I32 l 0 ^:mut ^I32 d 0]
     (while (< n (node-count nodes))
       (do (set j 0)

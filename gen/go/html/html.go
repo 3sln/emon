@@ -1499,7 +1499,7 @@ func hMeta(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, te
 }
 
 func hDocRtl(nodes *port.Cells, text *port.Cells) int32 {
-	// D1831: direction comes from strong characters of node content, excluding document metadata. Digits and marks do not vote; a tie keeps the default direction.
+	// D656: direction comes from strong characters of node content, excluding document metadata. Digits and marks do not vote; a tie keeps the default direction.
 	var n int32 = 1
 	var j int32 = 0
 	var r int32 = 0

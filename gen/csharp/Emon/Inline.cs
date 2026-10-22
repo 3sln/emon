@@ -681,7 +681,7 @@ public static class Inline {
         if ((tl == gn) && (gn > 0) && (gn <= IlMaxg) && (g0 >= 0) && (IlGrouped(wd, et, w) == 0)) {
             eq = 1;
         }
-        // D1832: the text is logical but the glyph arena stays in painted order. Use the parser's bidi permutation for per-character styles and link hits.
+        // D657: the text is logical but the glyph arena stays in painted order. Use the parser's bidi permutation for per-character styles and link hits.
         if ((eq == 1) && (Evidence.WdGet(wd, w, Evidence.HdDir()) == 1) && (Evidence.GlGet(gl, g0 + (gn - 1), Evidence.HdX0()) >= Evidence.GlGet(gl, g0, Evidence.HdX0()))) {
             while (j < gn) {
                 emon.Port.CellsPush(hc, Evidence.GlGet(gl, g0 + j, Evidence.ChCp()));

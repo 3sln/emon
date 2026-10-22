@@ -950,7 +950,7 @@
     (return (quot (cells-len gu) GU_STRIDE))))
 
 (defn ^I32 lc-ocr-line-gutters [^Cells wd ^Cells lt ^Cells ls ^I32 dom ^:mut ^Cells gu]
-  (comment "D1835: OCR lines already delimit runs of text. A vacant strip between their boxes, supported by six body lines on either side, is a gutter even when the baselines are staggered. Spanning lines bound its vertical band. A wide space inside a line is never evidence.")
+  (comment "D660: OCR lines already delimit runs of text. A vacant strip between their boxes, supported by six body lines on either side, is a gutter even when the baselines are staggered. Spanning lines bound its vertical band. A wide space inside a line is never evidence.")
   (let [^I32 n (cells-len ls)
         ^:mut ^I32 i 0 ^:mut ^I32 j 0 ^:mut ^I32 l 0 ^:mut ^I32 seed 0
         ^:mut ^I32 cut 0 ^:mut ^I32 cy 0 ^:mut ^I32 top 0 ^:mut ^I32 bot 0

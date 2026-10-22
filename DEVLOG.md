@@ -4083,7 +4083,7 @@ Work for the release after 0.1.0 (ids from D559; the coordinator renumbers at th
   Rust and on Go. The scoreboard: nothing of `emon` regresses; the `emon-replay-px` ratchet's scan-ovl paragraph and boundary rows (one invoice address line, a false heading
   once, a paragraph now) are lowered by hand and its 38 improvements (scan headings p 0.60 to 0.75) recorded.
 - [x] P12.9 born-digital tables and forms — batch complete with explicit deferrals (D631–D639): real TEDS, dense born-digital categorical tables, headerless numeric summaries, unruled body spans and adjacent currency prefixes. E14 and D28 improve live; remaining header/total ownership, page linking, debit/credit, forms and false headings remain proposals D636–D638. All 29 samples are unchanged; Rust and Go each pass 1,083 laws. The coordinator commits; drift and CI core therefore report only uncommitted generated output.
-- [x] P12.12 layout and RTL — six fixes (D1830–D1835), with explicit region, furniture, paragraph, heading and figure proposals D1836–D1841. Rust and Go each pass 1,116 laws; all 29 samples run, protected samples unchanged; scoreboard unchanged. Required gates pass except drift/CI core flagging intentionally uncommitted generated output. The coordinator commits; verification and coverage limits are in the batch 10 report.
+- [x] P12.12 layout and RTL — six fixes (D655–D660), with explicit region, furniture, paragraph, heading and figure proposals D661 and D1837–D1841. Rust and Go each pass 1,116 laws; all 29 samples run, protected samples unchanged; scoreboard unchanged. Required gates pass except drift/CI core flagging intentionally uncommitted generated output. The coordinator commits; verification and coverage limits are in the batch 10 report.
 - [ ] P12.10 table model increments 1–2 — increments 1 and 2a are gate-green (D645–D648); 2b records ownership/context (D649), fits selected rows (D650), attaches model-fit tails (D652) and preserves body claims while claiming fully owned bound rows (D654). Header reconstruction (D651), partial-interval merging/summary reconstruction (D653) and E10 fragmentation remain.
 - [x] P12.7 smoke batch 6: regressions and born-digital layout. DONE (D594–D609; validation and smoke comparisons pending).
 - [x] P12.8 scan quality: raster graphics and seals, checked language packs, script retries, OCR paragraph jitter and specks (D640–D644). Normalization residuals and demo language hosting explicitly deferred in D641/D642; validation is recorded in the batch report.
@@ -11917,37 +11917,37 @@ Final validation: Rust and Go each pass 1,110 laws; all 79 table/tagged laws and
 - [ ] **Signed off** (maintainer)
 
 
-### D1830 — Table cells retain the parser's logical word order
+### D655 — Table cells retain the parser's logical word order
 
 **Cause.** Table fitting orders words by baseline and x, undoing the logical word order already established by the parser's bidi paragraph pass. **Decision.** At cell emission, restore word-id order within each contiguous slice of a parser line. Rows and the characters inside words keep their order; no second character-level bidi pass is applied. Words without a line id retain their supplied order. Law: `tabletest/test-cell-text-keeps-the-logical-order-of-each-rtl-line` (failed first with the Arabic words reversed).
 
 - [ ] **Signed off** (maintainer)
 
-### D1831 — HTML inherits an explicit RTL document direction
+### D656 — HTML inherits an explicit RTL document direction
 
 **Decision.** Count strong characters in node content, excluding document metadata. A document with a strict RTL majority emits `dir="rtl"` on `html`; preserve the document's existing language, and emit `lang="und"` if no language was supplied. Script alone cannot distinguish Arabic from Persian or Hebrew from Yiddish, so do not guess a language. Numbers and combining marks do not vote. Law: `htmltest/test-rtl-document-emits-direction-and-an-unknown-language`, red before the change. Mixed-direction sub-block overrides remain a follow-up.
 
 - [ ] **Signed off** (maintainer)
 
-### D1832 — Inline annotations follow the bidi character permutation
+### D657 — Inline annotations follow the bidi character permutation
 
 **Cause.** `il-word` used painted glyph index j for logical character j even after `pc-bidi-text` reordered the word. **Decision.** For words the parser reordered, use that same bidi permutation when looking up glyph style and link rectangles. Keep the permutation in scratch after the heading arena, then compact the output states back to their original position. No word-wide link snapping: a link legitimately covering part of a word remains partial. Law: `inlinetest/test-rtl-links-follow-the-logical-character-not-the-painted-index`, failed first by linking bet instead of alef.
 
 - [ ] **Signed off** (maintainer)
 
-### D1833 — Combining marks do not supply word-gap geometry
+### D658 — Combining marks do not supply word-gap geometry
 
 **Cause.** A nonspacing mark's displaced baseline and small advance can terminate a word before and after the mark. **Decision.** An upright nonspacing mark whose centre overlaps its base attaches within one size of its baseline. Measure the following glyph's gap from that base, bounded by the current word's first glyph and a 16-glyph lookback. Visibility and rotation checks still apply. Law: `pdfcontenttest/test-a-combining-mark-does-not-open-a-word-gap`, failed first with three words instead of one.
 
 - [ ] **Signed off** (maintainer)
 
-### D1834 — Adjacent tables compete for caption ownership
+### D659 — Adjacent tables compete for caption ownership
 
 **Cause.** A table finishing first could claim a below-caption that is the next table's above-caption. **Decision.** Before claiming a below-caption, compare all selected tables on that page. If a horizontally overlapping following table has an above-caption at least as close, leave the line for it. Keep isolated below-captions. Law: `tabletest/test-a-caption-between-tables-belongs-to-the-following-table`, failed first when the preceding table claimed the caption.
 
 - [ ] **Signed off** (maintainer)
 
-### D1835 — Gutters between complete OCR line boxes
+### D660 — Gutters between complete OCR line boxes
 
 **Cause.** The word-row sweep requires baselines that overlap enough to accumulate three words per side, or an absolute 60 pt gutter. Narrow OCR newspaper columns can have neither. **Decision.** On pages whose layout text is entirely OCR (no text-layer or hidden-text source), derive additional gutters from complete OCR line boxes, with six body lines on each side, a shared vertical reach of five sizes, and no line crossing the strip within that band. Spanning lines and table-held lines bound the band; table-held lines never supply gutter support. A space inside a line supplies no evidence. Bound the scan to 2,000 lines per page. Law: `columnstest/test-staggered-narrow-ocr-columns-use-line-gutters`, including a mixed text/OCR negative assertion that failed before the scope guard. A live review caught G07 gaining spurious regions when fused text-layer lines voted as OCR; mixed pages now retain the existing analysis. Sample review also caught table-held OCR rows changing an invoice's paragraph scope; the claimed-cell negative assertion failed first and the detector now excludes these rows and stops at their band.
 
@@ -11957,7 +11957,7 @@ Final validation: Rust and Go each pass 1,110 laws; all 79 table/tagged laws and
 
 - [ ] **Signed off** (maintainer)
 
-### D1836 — Proposal: mirrored glyph provenance and RTL paragraph boundaries
+### D661 — Proposal: mirrored glyph provenance and RTL paragraph boundaries
 
 **Deferred design.** T1 cannot safely be fixed by removing L4 mirroring globally: a PDF's ToUnicode character and the visible mirrored glyph are different evidence, and existing bidi conformance laws require mirroring when reconstructing from visible glyph identities. Preserve character-map provenance in the glyph evidence, and mirror only identities derived from glyph appearance. Proposed fixture: identical displayed parentheses encoded once with logical ToUnicode characters and once with visual glyph identities, both yielding the same logical bracketed Hebrew text.
 

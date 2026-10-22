@@ -1442,7 +1442,7 @@ pub(crate) fn h_meta(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells,
     return 1;
 }
 pub(crate) fn h_doc_rtl(nodes: &mut crate::port::Cells, text: &mut crate::port::Cells) -> i32 {
-    // D1831: direction comes from strong characters of node content, excluding document metadata. Digits and marks do not vote; a tie keeps the default direction.
+    // D656: direction comes from strong characters of node content, excluding document metadata. Digits and marks do not vote; a tie keeps the default direction.
     let mut n: i32 = 1;
     let mut j: i32 = 0;
     let mut r: i32 = 0;

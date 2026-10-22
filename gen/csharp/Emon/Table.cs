@@ -1238,7 +1238,7 @@ public static class Table {
         int started = 0;
         int v = 0;
         int line = -1;
-        // D1830: table fitting sorts by baseline and x. Within each contiguous parser line, word ids are already bidi-logical. Restore that order in scratch once, without reversing characters or rows. Unknown line ids keep their supplied order.
+        // D655: table fitting sorts by baseline and x. Within each contiguous parser line, word ids are already bidi-logical. Restore that order in scratch once, without reversing characters or rows. Unknown line ids keep their supplied order.
         emon.Port.CellsDrop(order, 0);
         while (k < num) {
             emon.Port.CellsPush(order, emon.Port.CellsAt(tw, from + k));
@@ -3211,7 +3211,7 @@ public static class Table {
         return TbIsLabelWord(wd, et, w0) && TbIsLabelNumber(wd, et, w0 + 1);
     }
     internal static bool TbCaptionForNext(emon.Port.Cells tb, int k, emon.Port.Cells ln, int l, int distance) {
-        // D1834: caption ownership is decided against all selected tables, before a preceding table claims a below-caption. Prefer the following table when its above-caption is at least as close.
+        // D659: caption ownership is decided against all selected tables, before a preceding table claims a below-caption. Prefer the following table when its above-caption is at least as close.
         int q = 0;
         int b = 0;
         int d = 0;

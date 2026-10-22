@@ -3972,7 +3972,7 @@ public static class Pdfcontent {
         if (PcAccentOver(gl, p, g) > 0) {
             return 1;
         }
-        // D1833: a nonspacing mark has a displaced baseline and often zero advance. It attaches to the overlapping base; the following letter measures its gap from that base, rather than from the mark.
+        // D658: a nonspacing mark has a displaced baseline and often zero advance. It attaches to the overlapping base; the following letter measures its gap from that base, rather than from the mark.
         if (axis == 0) {
             while ((basep > first) && (Bidi.BdClass(Evidence.GlGet(gl, basep, Evidence.ChCp())) == 10) && ((p - basep) < 16)) {
                 basep -= 1;

@@ -1116,7 +1116,7 @@
   (let [^:mut ^I32 k 0
         ^:mut ^I32 j 0
         ^:mut ^I32 started 0 ^:mut ^I32 v 0 ^:mut ^I32 line -1]
-    (comment "D1830: table fitting sorts by baseline and x. Within each contiguous parser line, word ids are already bidi-logical. Restore that order in scratch once, without reversing characters or rows. Unknown line ids keep their supplied order.")
+    (comment "D655: table fitting sorts by baseline and x. Within each contiguous parser line, word ids are already bidi-logical. Restore that order in scratch once, without reversing characters or rows. Unknown line ids keep their supplied order.")
     (cells-drop order 0)
     (while (< k num)
       (do (cells-push order (cells-at tw (+ from k))) (set k (+ k 1))))
@@ -2666,7 +2666,7 @@
     (return (and (tb-is-label-word wd et w0) (tb-is-label-number wd et (+ w0 1))))))
 
 (defn ^Bool tb-caption-for-next [^Cells tb ^I32 k ^Cells ln ^I32 l ^I32 distance]
-  (comment "D1834: caption ownership is decided against all selected tables, before a preceding table claims a below-caption. Prefer the following table when its above-caption is at least as close.")
+  (comment "D659: caption ownership is decided against all selected tables, before a preceding table claims a below-caption. Prefer the following table when its above-caption is at least as close.")
   (let [^:mut ^I32 q 0 ^:mut ^I32 b 0 ^:mut ^I32 d 0
         ^I32 h (- (ln-get ln l (lh-y1)) (ln-get ln l (lh-y0)))]
     (while (< q (tb-rows-of tb TBS))

@@ -1178,7 +1178,7 @@ func lcSweep(wd *port.Cells, lt *port.Cells, ls *port.Cells, dom int32, it *port
 }
 
 func lcOcrLineGutters(wd *port.Cells, lt *port.Cells, ls *port.Cells, dom int32, gu *port.Cells) int32 {
-	// D1835: OCR lines already delimit runs of text. A vacant strip between their boxes, supported by six body lines on either side, is a gutter even when the baselines are staggered. Spanning lines bound its vertical band. A wide space inside a line is never evidence.
+	// D660: OCR lines already delimit runs of text. A vacant strip between their boxes, supported by six body lines on either side, is a gutter even when the baselines are staggered. Spanning lines bound its vertical band. A wide space inside a line is never evidence.
 	var n int32 = port.CellsLen(ls)
 	var i int32 = 0
 	var j int32 = 0

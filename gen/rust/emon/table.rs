@@ -1242,7 +1242,7 @@ pub fn tb_words_raw(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, tw
     let mut started: i32 = 0;
     let mut v: i32 = 0;
     let mut line: i32 = -1;
-    // D1830: table fitting sorts by baseline and x. Within each contiguous parser line, word ids are already bidi-logical. Restore that order in scratch once, without reversing characters or rows. Unknown line ids keep their supplied order.
+    // D655: table fitting sorts by baseline and x. Within each contiguous parser line, word ids are already bidi-logical. Restore that order in scratch once, without reversing characters or rows. Unknown line ids keep their supplied order.
     crate::port::cells_drop(order, 0);
     while k < num {
         crate::port::cells_push(order, crate::port::cells_at(tw, from + k));
@@ -3215,7 +3215,7 @@ pub(crate) fn tb_line_label(wd: &mut crate::port::Cells, et: &mut crate::port::C
     return tb_is_label_word(wd, et, w0) && tb_is_label_number(wd, et, w0 + 1);
 }
 pub(crate) fn tb_caption_for_next(tb: &mut crate::port::Cells, k: i32, ln: &mut crate::port::Cells, l: i32, distance: i32) -> bool {
-    // D1834: caption ownership is decided against all selected tables, before a preceding table claims a below-caption. Prefer the following table when its above-caption is at least as close.
+    // D659: caption ownership is decided against all selected tables, before a preceding table claims a below-caption. Prefer the following table when its above-caption is at least as close.
     let mut q: i32 = 0;
     let mut b: i32 = 0;
     let mut d: i32 = 0;

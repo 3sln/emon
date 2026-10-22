@@ -1075,7 +1075,7 @@ pub(crate) fn lc_sweep(wd: &mut crate::port::Cells, lt: &mut crate::port::Cells,
     return crate::port::cells_len(gu) / GU_STRIDE;
 }
 pub(crate) fn lc_ocr_line_gutters(wd: &mut crate::port::Cells, lt: &mut crate::port::Cells, ls: &mut crate::port::Cells, dom: i32, mut gu: &mut crate::port::Cells) -> i32 {
-    // D1835: OCR lines already delimit runs of text. A vacant strip between their boxes, supported by six body lines on either side, is a gutter even when the baselines are staggered. Spanning lines bound its vertical band. A wide space inside a line is never evidence.
+    // D660: OCR lines already delimit runs of text. A vacant strip between their boxes, supported by six body lines on either side, is a gutter even when the baselines are staggered. Spanning lines bound its vertical band. A wide space inside a line is never evidence.
     let n: i32 = crate::port::cells_len(ls);
     let mut i: i32 = 0;
     let mut j: i32 = 0;

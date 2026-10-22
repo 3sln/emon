@@ -688,7 +688,7 @@ pub(crate) fn il_word(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, 
     if (tl == gn) && (gn > 0) && (gn <= IL_MAXG) && (g0 >= 0) && (il_grouped(wd, et, w) == 0) {
         eq = 1;
     }
-    // D1832: the text is logical but the glyph arena stays in painted order. Use the parser's bidi permutation for per-character styles and link hits.
+    // D657: the text is logical but the glyph arena stays in painted order. Use the parser's bidi permutation for per-character styles and link hits.
     if (eq == 1) && (wd_get(wd, w, hd_dir()) == 1) && (gl_get(gl, g0 + (gn - 1), hd_x0()) >= gl_get(gl, g0, hd_x0())) {
         while j < gn {
             crate::port::cells_push(hc, gl_get(gl, g0 + j, ch_cp()));

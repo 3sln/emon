@@ -3153,7 +3153,7 @@
     (if (!= (pc-hidden-mode (gl-get gl p (gf-mode))) (pc-hidden-mode (gl-get gl g (gf-mode)))) (return 0))
     (comment "A spacing diacritic over the letter drawn right after it is part of that letter's word (D580).")
     (if (> (pc-accent-over gl p g) 0) (return 1))
-    (comment "D1833: a nonspacing mark has a displaced baseline and often zero advance. It attaches to the overlapping base; the following letter measures its gap from that base, rather than from the mark.")
+    (comment "D658: a nonspacing mark has a displaced baseline and often zero advance. It attaches to the overlapping base; the following letter measures its gap from that base, rather than from the mark.")
     (if (== axis 0)
       (do (while (and (> basep first) (== (bd-class (gl-get gl basep (ch-cp))) 10)
                       (< (- p basep) 16))

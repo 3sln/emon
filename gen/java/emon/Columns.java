@@ -1074,7 +1074,7 @@ public final class Columns {
         return emon.Port.cellsLen(gu) / GU_STRIDE;
     }
     public static int lcOcrLineGutters(emon.Port.Cells wd, emon.Port.Cells lt, emon.Port.Cells ls, int dom, emon.Port.Cells gu) {
-        // D1835: OCR lines already delimit runs of text. A vacant strip between their boxes, supported by six body lines on either side, is a gutter even when the baselines are staggered. Spanning lines bound its vertical band. A wide space inside a line is never evidence.
+        // D660: OCR lines already delimit runs of text. A vacant strip between their boxes, supported by six body lines on either side, is a gutter even when the baselines are staggered. Spanning lines bound its vertical band. A wide space inside a line is never evidence.
         int n = emon.Port.cellsLen(ls);
         int i = 0;
         int j = 0;

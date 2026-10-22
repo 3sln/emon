@@ -1335,7 +1335,7 @@ func TbWordsRaw(wd *port.Cells, et *port.Cells, tw *port.Cells, from int32, num 
 	var started int32 = 0
 	var v int32 = 0
 	var line int32 = -1
-	// D1830: table fitting sorts by baseline and x. Within each contiguous parser line, word ids are already bidi-logical. Restore that order in scratch once, without reversing characters or rows. Unknown line ids keep their supplied order.
+	// D655: table fitting sorts by baseline and x. Within each contiguous parser line, word ids are already bidi-logical. Restore that order in scratch once, without reversing characters or rows. Unknown line ids keep their supplied order.
 	port.CellsDrop(order, 0)
 	for k < num {
 		port.CellsPush(order, port.CellsAt(tw, from+k))
@@ -3374,7 +3374,7 @@ func tbLineLabel(wd *port.Cells, et *port.Cells, ln *port.Cells, l int32) bool {
 }
 
 func tbCaptionForNext(tb *port.Cells, k int32, ln *port.Cells, l int32, distance int32) bool {
-	// D1834: caption ownership is decided against all selected tables, before a preceding table claims a below-caption. Prefer the following table when its above-caption is at least as close.
+	// D659: caption ownership is decided against all selected tables, before a preceding table claims a below-caption. Prefer the following table when its above-caption is at least as close.
 	var q int32 = 0
 	var b int32 = 0
 	var d int32 = 0

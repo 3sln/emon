@@ -553,7 +553,7 @@
         ^:mut ^I32 order -1 ^:mut ^I32 data0 d0]
     (if (or (< ts 0) (<= tl 0)) (return 0))
     (if (and (== tl gn) (> gn 0) (<= gn IL_MAXG) (>= g0 0) (== (il-grouped wd et w) 0)) (set eq 1))
-    (comment "D1832: the text is logical but the glyph arena stays in painted order. Use the parser's bidi permutation for per-character styles and link hits.")
+    (comment "D657: the text is logical but the glyph arena stays in painted order. Use the parser's bidi permutation for per-character styles and link hits.")
     (if (and (== eq 1) (== (wd-get wd w (hd-dir)) 1)
              (>= (gl-get gl (+ g0 (- gn 1)) (hd-x0)) (gl-get gl g0 (hd-x0))))
       (do (while (< j gn)

@@ -1441,7 +1441,7 @@ public final class Html {
         return 1;
     }
     public static int hDocRtl(emon.Port.Cells nodes, emon.Port.Cells text) {
-        // D1831: direction comes from strong characters of node content, excluding document metadata. Digits and marks do not vote; a tie keeps the default direction.
+        // D656: direction comes from strong characters of node content, excluding document metadata. Digits and marks do not vote; a tie keeps the default direction.
         int n = 1;
         int j = 0;
         int r = 0;

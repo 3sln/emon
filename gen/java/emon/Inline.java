@@ -681,7 +681,7 @@ public final class Inline {
         if ((tl == gn) && (gn > 0) && (gn <= IL_MAXG) && (g0 >= 0) && (ilGrouped(wd, et, w) == 0)) {
             eq = 1;
         }
-        // D1832: the text is logical but the glyph arena stays in painted order. Use the parser's bidi permutation for per-character styles and link hits.
+        // D657: the text is logical but the glyph arena stays in painted order. Use the parser's bidi permutation for per-character styles and link hits.
         if ((eq == 1) && (Evidence.wdGet(wd, w, Evidence.hdDir()) == 1) && (Evidence.glGet(gl, g0 + (gn - 1), Evidence.hdX0()) >= Evidence.glGet(gl, g0, Evidence.hdX0()))) {
             while (j < gn) {
                 emon.Port.cellsPush(hc, Evidence.glGet(gl, g0 + j, Evidence.chCp()));
