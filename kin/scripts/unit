@@ -172,6 +172,7 @@ bb -cp tools:tools/lib -m synth.degrade-fusion --check
 # twins' facts are what the seeds say, and the graphics metrics' own laws hold (hand-computed, then the oracle perfect on every
 # document of the GRAPHICS set).
 bb -cp tools:tools/lib tools/synth/gfx_pdf.clj --check
+bb -cp tools:tools/lib tools/synth/table_model.clj --check
 bb -cp tools:tools/lib tools/synth/tagged_tables.clj --check
 bb -cp tools:tools/lib tools/synth/mixed.clj --check
 bb -cp tools:tools/lib -m synth.degrade-graphics --check

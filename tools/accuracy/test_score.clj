@@ -675,6 +675,22 @@ the same, the stream is not Python's.)"
     (is (= 0.0 (d "join-r")))                  ; the multi-fragment paragraph is cut
     (is (> (d "cer") 0.0))))
 
+(deftest table-model-fixtures-still-count-in-all
+  (let [t {"kind" "table" "children"
+           [{"kind" "rowgroup" "role" "body" "children"
+             [{"kind" "row" "children" [{"kind" "cell" "text" "x"}]}]}]}
+        truth (gold [t])
+        predictor (fn [id _ _ _] (if (= id "table-whitespace") (pred [t]) (pred [])))]
+    (with-redefs [A/corpus (fn [] [["table-whitespace" "pdf" "input" "gold"]
+                                  ["table-ledger-sparse" "pdf" "input" "gold"]])
+                  A/doc-graphics (fn [_] {})
+                  pyjson/parse-file (fn [_] truth)]
+      (let [[entry _] (A/evaluate predictor)]
+        ;; Missing the entire new table still lowers the global score: 1 TP, 1 FN.
+        (is (= 0.666667 (get-in entry ["pdf/all" ":block-table-f1"])))
+        (is (= 1.0 (get-in entry ["pdf/tables" ":block-table-f1"])))
+        (is (= 0.0 (get-in entry ["pdf/table-model" ":block-table-f1"])))))))
+
 ;; --------------------------------------------------------------- Ratchet ----
 
 (deftest edn-round-trip

@@ -272,7 +272,7 @@ public final class Tabletest {
             Model.pageNew(pages, 2, 61200, 79200, 0, Model.pkVector());
         }
         Gfuse.gfDoc(pa, gpts, gmk, gim, np, Gfuse.gfxMode(), grl, gfl, cand, emon.Port.newCells());
-        Table.tbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
+        Table.tbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, emon.Port.newCells(), emon.Port.newCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
         Columns.lcCopy(ln, lt);
         Para.paBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
         ttBrief(t, nodes, attrs, text);
@@ -1970,7 +1970,7 @@ public final class Tabletest {
         Para.paPages(pg, pages);
         int np = emon.Port.cellsLen(pages) / 16;
         Gfuse.gfDoc(pa, pts, mk, im, np, Gfuse.gfxMode(), grl, gfl, cand, emon.Port.newCells());
-        Table.tbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, emon.Port.newCells());
+        Table.tbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, emon.Port.newCells(), emon.Port.newCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, emon.Port.newCells());
         Tagtable.ttEmit(tvt, t12e);
         Columns.lcCopy(ln, lt);
         Initial.inDetect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii);
@@ -2061,5 +2061,163 @@ public final class Tabletest {
         // A document of paragraphs and two columns has no table (the stage's other half: it must not make one).
         emon.Testport.assertEq(ttGolden(emon.Testport.testFile("corpus/synth/pdf/h-plain.pdf"), t6, emon.Testport.newText()), 0, "h-plain runs");
         emon.Testport.assertTextSpan(t6, emon.Testport.testFile("para/h-plain.json"), 0, Mscript.jtEnd(emon.Testport.testFile("para/h-plain.json")), "h-plain makes no table", 0);
+    }
+    public static int ttSparseLedger(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int credit) {
+        ttAt(wd, ln, et, emon.Testport.textBlob("Date"), 4000, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Details"), 8122, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Deposit"), 33100, 10000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Withdrawal"), 40500, 10000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Balance"), 54928, 10000, 1, 1);
+        int r = 0;
+        int x = 40500;
+        if (credit == 1) {
+            x = 33100;
+        }
+        while (r < 8) {
+            int y = 11600 + (r * 1600);
+            ttAt(wd, ln, et, emon.Testport.textBlob("20 Sep"), 4000, y, 0, 0);
+            if ((r % 2) == 0) {
+                ttAt(wd, ln, et, emon.Testport.textBlob("Transfer"), 8122, y, 0, 0);
+                ttAt(wd, ln, et, emon.Testport.textBlob("181.04"), x, y, 0, 1);
+                ttAt(wd, ln, et, emon.Testport.textBlob("149,818.96"), 54928, y, 0, 1);
+            } else {
+                ttAt(wd, ln, et, emon.Testport.textBlob("Electronic transfer"), 8122, y, 0, 0);
+                ttAt(wd, ln, et, emon.Testport.textBlob("1.00"), x, y, 0, 1);
+                ttAt(wd, ln, et, emon.Testport.textBlob("999.99"), 54928, y, 0, 1);
+            }
+            r += 1;
+        }
+        return 0;
+    }
+    public static void testADebitOnlyRowKeepsItsEmptyCreditCell() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        ttSparseLedger(wd, ln, et, 0);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "sparse ledger is well formed");
+        emon.Testport.assertText(t, "T5w;Gh;R;Ch[Date];Chs[Details];Ch[Deposit];Ch[Withdrawal];Che[Balance];Gb;R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];", "the empty band retains its header and every amount stays at its geometric anchor");
+    }
+    public static void testACreditOnlyRowKeepsItsEmptyDebitCell() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        ttSparseLedger(wd, ln, et, 1);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "sparse ledger is well formed");
+        emon.Testport.assertText(t, "T5w;Gh;R;Ch[Date];Chs[Details];Ch[Deposit];Ch[Withdrawal];Che[Balance];Gb;R;C[20 Sep];Cs[Transfer];Ce[181.04];C[];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];Ce[1.00];C[];Ce[999.99];R;C[20 Sep];Cs[Transfer];Ce[181.04];C[];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];Ce[1.00];C[];Ce[999.99];R;C[20 Sep];Cs[Transfer];Ce[181.04];C[];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];Ce[1.00];C[];Ce[999.99];R;C[20 Sep];Cs[Transfer];Ce[181.04];C[];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];Ce[1.00];C[];Ce[999.99];", "the empty band retains its header and every amount stays at its geometric anchor");
+    }
+    public static void testAHeaderAnchorsAColumnNoBodyRowFills() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        ttSparseLedger(wd, ln, et, 0);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "sparse ledger is well formed");
+        emon.Testport.assertText(t, "T5w;Gh;R;Ch[Date];Chs[Details];Ch[Deposit];Ch[Withdrawal];Che[Balance];Gb;R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];", "the empty band retains its header and every amount stays at its geometric anchor");
+    }
+    public static void testRightAlignedAmountsMakeOneNumericColumn() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tbk = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        Model.pageNew(pages, 1, 61200, 79200, 0, Model.pkVector());
+        ttAt(wd, ln, et, emon.Testport.textBlob("Item"), 7600, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Amount"), 40500, 10000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("One"), 7600, 11600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("1.00"), 40500, 11600, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Ten"), 7600, 13200, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("10.00"), 40500, 13200, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Thousand"), 7600, 14800, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("1,000.00"), 40500, 14800, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Hundred"), 7600, 16400, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("100.00"), 40500, 16400, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Total"), 7600, 18000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("1,111.00"), 40500, 18000, 1, 1);
+        emon.Testport.assertEq(Table.tbBuild(wd, ln, et, emon.Port.newCells(), emon.Port.newCells(), 1, tb, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), tbk, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), pages, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 1, "the amounts make one table");
+        emon.Testport.assertEq(Table.tbModelCol(tb, tbk, 0, 1, 3), 40500, "varying widths share their right anchor");
+        emon.Testport.assertEq(Table.tbModelCol(tb, tbk, 0, 1, 5), 3, "the numeric column is an amount column");
+        emon.Testport.assertEq(Table.tbModelCol(tb, tbk, 0, 1, 9), 4, "all four body rows support the anchor");
+    }
+    public static int ttPartLedger(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int y) {
+        ttAt(wd, ln, et, emon.Testport.textBlob("Date"), 7600, y, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Details"), 15000, y, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Amount"), 43000, y, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("01Jan"), 7600, y + 1600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Rent"), 15000, y + 1600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("1.00"), 43000, y + 1600, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("02Jan"), 7600, y + 3200, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Electricity"), 15000, y + 3200, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("20.00"), 43000, y + 3200, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("03Jan"), 7600, y + 4800, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Service fee"), 15000, y + 4800, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("300.00"), 43000, y + 4800, 0, 1);
+        return 0;
+    }
+    public static int ttPartSummary(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int y) {
+        ttAt(wd, ln, et, emon.Testport.textBlob("Subtotal"), 7600, y, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("31.00"), 43000, y, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Tax"), 7600, y + 1600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("6.20"), 43000, y + 1600, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Total"), 7600, y + 3200, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("37.20"), 43000, y + 3200, 0, 1);
+        return 0;
+    }
+    public static void testASummaryBelowALedgerIsItsOwnTable() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        ttPartLedger(wd, ln, et, 10000);
+        ttPartSummary(wd, ln, et, 16400);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "partitioned tables are well formed");
+        emon.Testport.assertText(t, "T3w;Gh;R;Ch[Date];Chs[Details];Ch[Amount];Gb;R;C[01Jan];Cs[Rent];Ce[1.00];R;C[02Jan];Cs[Electricity];Ce[20.00];R;C[03Jan];Cs[Service fee];Ce[300.00];T2w;Gb;R;Cs[Subtotal];C[31.00];R;Cs[Tax];C[6.20];R;Cs[Total];C[37.20];", "the two column models have disjoint intervals and preserve every row");
+    }
+    public static void testTheFirstTransactionAfterASummaryBelongsToTheLedger() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        ttPartSummary(wd, ln, et, 10000);
+        ttPartLedger(wd, ln, et, 14800);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "partitioned tables are well formed");
+        emon.Testport.assertText(t, "T2w;Gb;R;Cs[Subtotal];C[31.00];R;Cs[Tax];C[6.20];R;Cs[Total];C[37.20];T3w;Gh;R;Ch[Date];Chs[Details];Ch[Amount];Gb;R;C[01Jan];Cs[Rent];Ce[1.00];R;C[02Jan];Cs[Electricity];Ce[20.00];R;C[03Jan];Cs[Service fee];Ce[300.00];", "the two column models have disjoint intervals and preserve every row");
+    }
+    public static void testAHeadingBetweenTwoTablesIsOwnedByNeither() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        ttPartLedger(wd, ln, et, 10000);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Between tables"), 7600, 16400, 1, 0);
+        int headingWord = Evidence.wdCount(wd) - 1;
+        Evidence.wdSet(wd, headingWord, Evidence.wfSize(), 1800);
+        ttPartLedger(wd, ln, et, 18000);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "a foreign heading is well formed outside both tables");
+        emon.Testport.assertText(t, "T3w;Gh;R;Ch[Date];Chs[Details];Ch[Amount];Gb;R;C[01Jan];Cs[Rent];Ce[1.00];R;C[02Jan];Cs[Electricity];Ce[20.00];R;C[03Jan];Cs[Service fee];Ce[300.00];P[Between tables];T3w;Gh;R;Ch[Date];Chs[Details];Ch[Amount];Gb;R;C[01Jan];Cs[Rent];Ce[1.00];R;C[02Jan];Cs[Electricity];Ce[20.00];R;C[03Jan];Cs[Service fee];Ce[300.00];", "a heading-size line is owned by neither neighboring table");
+    }
+    public static void testEmptyDateMarkersDoNotSplitALedger() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        ttPartLedger(wd, ln, et, 10000);
+        ttAt(wd, ln, et, emon.Testport.textBlob("–"), 7600, 16400, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Pending"), 15000, 16400, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("4.00"), 43000, 16400, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("–"), 7600, 18000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Unspecified"), 15000, 18000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("5.00"), 43000, 18000, 0, 1);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "empty date markers preserve all rows");
+        emon.Testport.assertText(t, "T3w;Gh;R;Chs[Date];Chs[Details];Ch[Amount];Gb;R;Cs[01Jan];Cs[Rent];Ce[1.00];R;Cs[02Jan];Cs[Electricity];Ce[20.00];R;Cs[03Jan];Cs[Service fee];Ce[300.00];R;Cs[–];Cs[Pending];Ce[4.00];R;Cs[–];Cs[Unspecified];Ce[5.00];", "punctuation placeholders are not a different date-column model");
     }
 }

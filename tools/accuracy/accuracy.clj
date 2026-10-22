@@ -125,8 +125,15 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
              ;; the figures fixtures (P8.4)
              "fig" "figures"})
 
+;; P12.10: these new reconstruction fixtures have their own cohort. All remain
+;; in the global pool; the historical table calibration population stays fixed.
+(def TABLE-MODEL-FIXTURES
+  #{"table-ledger-sparse" "table-summary-and-ledger" "table-ledger-two-currency"})
+
 (defn category [doc-id]
-  (get FAMILY (first (str/split doc-id #"-" 2)) "other"))
+  (if (contains? TABLE-MODEL-FIXTURES doc-id)
+    "table-model"
+    (get FAMILY (first (str/split doc-id #"-" 2)) "other")))
 
 ;; --------------------------------------------------------- python number text ----
 

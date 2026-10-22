@@ -18,8 +18,6 @@ const tbHeld int32 = 1073741824
 
 const anStride int32 = 38
 
-const tbs int32 = 28
-
 const tcs int32 = 16
 
 const rls int32 = 8
@@ -515,7 +513,7 @@ func tbOpenBand(bd *port.Cells, ya int32, yb int32) bool {
 
 func TbAdd(tb *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32, profile int32, score int32, nrows int32, ncols int32, cfirst int32, ncells int32) int32 {
 	// Append a candidate table; answers its index.
-	var k int32 = tbRowsOf(tb, tbs)
+	var k int32 = tbRowsOf(tb, tagtable.Tbs)
 	port.CellsPush(tb, page)
 	port.CellsPush(tb, x0)
 	port.CellsPush(tb, y0)
@@ -543,6 +541,10 @@ func TbAdd(tb *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32, p
 	port.CellsPush(tb, 0)
 	port.CellsPush(tb, -1)
 	port.CellsPush(tb, 0)
+	port.CellsPush(tb, 0)
+	port.CellsPush(tb, 0)
+	port.CellsPush(tb, 0)
+	port.CellsPush(tb, -1)
 	port.CellsPush(tb, 0)
 	return k
 }
@@ -947,8 +949,8 @@ func tbLattice(rm *port.Cells, root int32, xs *port.Cells, ys *port.Cells, page 
 	}
 	var t int32 = TbAdd(tb, page, port.CellsAt(xs, 0), port.CellsAt(ys, 0), port.CellsAt(xs, nc), port.CellsAt(ys, nr), pfRuled, 900, nr, nc, cfirst, total)
 	var i int32 = 0
-	port.CellsSet(tb, (t*tbs)+16, port.CellsLen(tx))
-	port.CellsSet(tb, (t*tbs)+17, nc+1)
+	port.CellsSet(tb, (t*tagtable.Tbs)+16, port.CellsLen(tx))
+	port.CellsSet(tb, (t*tagtable.Tbs)+17, nc+1)
 	for i <= nc {
 		port.CellsPush(tx, port.CellsAt(xs, i))
 		i += 1
@@ -1003,21 +1005,21 @@ func tbRuledPage(rm *port.Cells, page int32, xs *port.Cells, ys *port.Cells, gm 
 
 func tbOverlap(tb *port.Cells, a int32, b int32) bool {
 	// Do the boxes of candidates a and b overlap by more than a rule's width both ways.
-	var ax0 int32 = port.CellsAt(tb, (a*tbs)+1)
-	var ay0 int32 = port.CellsAt(tb, (a*tbs)+2)
-	var ax1 int32 = port.CellsAt(tb, (a*tbs)+3)
-	var ay1 int32 = port.CellsAt(tb, (a*tbs)+4)
-	var bx0 int32 = port.CellsAt(tb, (b*tbs)+1)
-	var by0 int32 = port.CellsAt(tb, (b*tbs)+2)
-	var bx1 int32 = port.CellsAt(tb, (b*tbs)+3)
-	var by1 int32 = port.CellsAt(tb, (b*tbs)+4)
+	var ax0 int32 = port.CellsAt(tb, (a*tagtable.Tbs)+1)
+	var ay0 int32 = port.CellsAt(tb, (a*tagtable.Tbs)+2)
+	var ax1 int32 = port.CellsAt(tb, (a*tagtable.Tbs)+3)
+	var ay1 int32 = port.CellsAt(tb, (a*tagtable.Tbs)+4)
+	var bx0 int32 = port.CellsAt(tb, (b*tagtable.Tbs)+1)
+	var by0 int32 = port.CellsAt(tb, (b*tagtable.Tbs)+2)
+	var bx1 int32 = port.CellsAt(tb, (b*tagtable.Tbs)+3)
+	var by1 int32 = port.CellsAt(tb, (b*tagtable.Tbs)+4)
 	return ((tbMin(ax1, bx1) - tbMax(ax0, bx0)) > posTol) && ((tbMin(ay1, by1) - tbMax(ay0, by0)) > posTol)
 }
 
 func TbHintIou(tb *port.Cells, i int32, grg *port.Cells) int32 {
 	// The best IoU, per mille, of candidate i's box with an OCR `table-hint` region of its page (`grg` kind 3, D228); 0 when none.
 	var n int32 = glayer.GrgCount(grg)
-	var b int32 = i * tbs
+	var b int32 = i * tagtable.Tbs
 	var r int32 = 0
 	var best int32 = 0
 	var v int32 = 0
@@ -1044,7 +1046,7 @@ func TbTieBonus(tb *port.Cells, i int32, t0 int32, n int32, grg *port.Cells) int
 	for j < n {
 		if j != i {
 			if tbOverlap(tb, i, j) {
-				d = tbAbs(port.CellsAt(tb, (i*tbs)+6) - port.CellsAt(tb, (j*tbs)+6))
+				d = tbAbs(port.CellsAt(tb, (i*tagtable.Tbs)+6) - port.CellsAt(tb, (j*tagtable.Tbs)+6))
 				if d <= tbTie {
 					if TbHintIou(tb, i, grg) > TbHintIou(tb, j, grg) {
 						return tbTie + 1
@@ -1060,14 +1062,14 @@ func TbTieBonus(tb *port.Cells, i int32, t0 int32, n int32, grg *port.Cells) int
 func tbWithin(tb *port.Cells, a int32, b int32) bool {
 	// P12.2: does candidate a lie in the box of candidate b: three in four of a's width and of its height are over b (a rule is wider than the text
 	// it frames and a header's rule is a few points above the first line of a whitespace reading of the same table).
-	var ax0 int32 = port.CellsAt(tb, (a*tbs)+1)
-	var ay0 int32 = port.CellsAt(tb, (a*tbs)+2)
-	var ax1 int32 = port.CellsAt(tb, (a*tbs)+3)
-	var ay1 int32 = port.CellsAt(tb, (a*tbs)+4)
-	var bx0 int32 = port.CellsAt(tb, (b*tbs)+1)
-	var by0 int32 = port.CellsAt(tb, (b*tbs)+2)
-	var bx1 int32 = port.CellsAt(tb, (b*tbs)+3)
-	var by1 int32 = port.CellsAt(tb, (b*tbs)+4)
+	var ax0 int32 = port.CellsAt(tb, (a*tagtable.Tbs)+1)
+	var ay0 int32 = port.CellsAt(tb, (a*tagtable.Tbs)+2)
+	var ax1 int32 = port.CellsAt(tb, (a*tagtable.Tbs)+3)
+	var ay1 int32 = port.CellsAt(tb, (a*tagtable.Tbs)+4)
+	var bx0 int32 = port.CellsAt(tb, (b*tagtable.Tbs)+1)
+	var by0 int32 = port.CellsAt(tb, (b*tagtable.Tbs)+2)
+	var bx1 int32 = port.CellsAt(tb, (b*tagtable.Tbs)+3)
+	var by1 int32 = port.CellsAt(tb, (b*tagtable.Tbs)+4)
 	return ((4 * (tbMin(ax1, bx1) - tbMax(ax0, bx0))) >= (3 * (ax1 - ax0))) && ((4 * (tbMin(ay1, by1) - tbMax(ay0, by0))) >= (3 * (ay1 - ay0)))
 }
 
@@ -1075,23 +1077,23 @@ func tbHeadOf(tb *port.Cells, a int32, b int32) bool {
 	// P12.2: is candidate a the head of candidate b: three in four of a's width is over b, it begins at or above b's top (by at most 15 pt: a title, a
 	// rule) and ends in b's box, below b's top (the whitespace reading of a statement begins at the line of its header, the reading by the rule that
 	// underlines it at the title above).
-	var ax0 int32 = port.CellsAt(tb, (a*tbs)+1)
-	var ay0 int32 = port.CellsAt(tb, (a*tbs)+2)
-	var ax1 int32 = port.CellsAt(tb, (a*tbs)+3)
-	var ay1 int32 = port.CellsAt(tb, (a*tbs)+4)
-	var bx0 int32 = port.CellsAt(tb, (b*tbs)+1)
-	var by0 int32 = port.CellsAt(tb, (b*tbs)+2)
-	var bx1 int32 = port.CellsAt(tb, (b*tbs)+3)
-	var by1 int32 = port.CellsAt(tb, (b*tbs)+4)
+	var ax0 int32 = port.CellsAt(tb, (a*tagtable.Tbs)+1)
+	var ay0 int32 = port.CellsAt(tb, (a*tagtable.Tbs)+2)
+	var ax1 int32 = port.CellsAt(tb, (a*tagtable.Tbs)+3)
+	var ay1 int32 = port.CellsAt(tb, (a*tagtable.Tbs)+4)
+	var bx0 int32 = port.CellsAt(tb, (b*tagtable.Tbs)+1)
+	var by0 int32 = port.CellsAt(tb, (b*tagtable.Tbs)+2)
+	var bx1 int32 = port.CellsAt(tb, (b*tagtable.Tbs)+3)
+	var by1 int32 = port.CellsAt(tb, (b*tagtable.Tbs)+4)
 	return ((4 * (tbMin(ax1, bx1) - tbMax(ax0, bx0))) >= (3 * (ax1 - ax0))) && ((ay0 <= (by0 + 1500)) && ((ay1 > (by0 + 300)) && (ay1 <= by1)))
 }
 
 func tbBlockBelow(tb *port.Cells, i int32, ybot int32, tc *port.Cells) bool {
 	// P12.2: has candidate i, below y `ybot`, a row that begins two in five of its columns from the first or further: a block of totals in the last columns
 	// (an invoice's, D559: the table of the rules ends over it, and the whitespace reading that has it in is the worse for it).
-	var cfirst int32 = port.CellsAt(tb, (i*tbs)+9)
-	var cend int32 = cfirst + port.CellsAt(tb, (i*tbs)+10)
-	var ncols int32 = port.CellsAt(tb, (i*tbs)+8)
+	var cfirst int32 = port.CellsAt(tb, (i*tagtable.Tbs)+9)
+	var cend int32 = cfirst + port.CellsAt(tb, (i*tagtable.Tbs)+10)
+	var ncols int32 = port.CellsAt(tb, (i*tagtable.Tbs)+8)
 	var c int32 = cfirst
 	var row int32 = -1
 	var first int32 = -1
@@ -1119,19 +1121,19 @@ func tbPart(tb *port.Cells, j int32, i int32, tc *port.Cells) bool {
 	// in four of its height (a reading of the same rows beside it is no part), i has the columns (or two fewer: the rules of a header put a column between
 	// the years that the text does not have; or any number when it has twice the rows: four rows of a long table are cut into more columns than the table
 	// has) and `TB_ROWS_MORE` rows more, and a score no more than `TB_ROWS_SLACK` under j's.
-	var a int32 = j * tbs
-	var b int32 = i * tbs
+	var a int32 = j * tagtable.Tbs
+	var b int32 = i * tagtable.Tbs
 	return (tbWithin(tb, j, i) || tbHeadOf(tb, j, i)) && (!tbBlockBelow(tb, i, port.CellsAt(tb, a+4), tc) && (((4 * (port.CellsAt(tb, a+4) - port.CellsAt(tb, a+2))) <= (3 * (port.CellsAt(tb, b+4) - port.CellsAt(tb, b+2)))) && ((port.CellsAt(tb, b+7) >= (port.CellsAt(tb, a+7) + tbRowsMore)) && ((((port.CellsAt(tb, b+8) + 2) >= port.CellsAt(tb, a+8)) || (port.CellsAt(tb, b+7) >= (2 * port.CellsAt(tb, a+7)))) && ((port.CellsAt(tb, b+6) + tbRowsSlack) >= port.CellsAt(tb, a+6))))))
 }
 
 func tbTakes(tb *port.Cells, i int32, t0 int32, n int32, tc *port.Cells) bool {
 	// P12.2: does candidate i take in the candidates that overlap it and score as well: there is one, and each is only a part of what i reads.
-	var b int32 = i * tbs
+	var b int32 = i * tagtable.Tbs
 	var j int32 = t0
 	var any int32 = 0
 	for j < n {
 		if j != i {
-			if tbOverlap(tb, i, j) && (port.CellsAt(tb, (j*tbs)+6) >= port.CellsAt(tb, b+6)) {
+			if tbOverlap(tb, i, j) && (port.CellsAt(tb, (j*tagtable.Tbs)+6) >= port.CellsAt(tb, b+6)) {
 				if tbPart(tb, j, i, tc) {
 					any = 1
 				} else {
@@ -1163,7 +1165,7 @@ func tbPromote(tb *port.Cells, t0 int32, n int32, tc *port.Cells, vals *port.Cel
 				j = t0
 				for j < n {
 					if j != i {
-						if tbOverlap(tb, i, j) && (port.CellsAt(tb, (j*tbs)+6) >= port.CellsAt(tb, (i*tbs)+6)) {
+						if tbOverlap(tb, i, j) && (port.CellsAt(tb, (j*tagtable.Tbs)+6) >= port.CellsAt(tb, (i*tagtable.Tbs)+6)) {
 							want = 0 - ((0 - port.CellsAt(vals, (j-t0)*2)) + 1)
 							if want < port.CellsAt(vals, (i-t0)*2) {
 								port.CellsSet(vals, (i-t0)*2, want)
@@ -1183,7 +1185,7 @@ func tbPromote(tb *port.Cells, t0 int32, n int32, tc *port.Cells, vals *port.Cel
 func tbSelect(tb *port.Cells, t0 int32, so *port.Cells, vals *port.Cells, sa *port.Cells, grg *port.Cells, tc *port.Cells) int32 {
 	// Of the candidates t0.. of one page keep, best score first, those that overlap no better one, and
 	// leave them in tb in the order of their tops. Answers how many are kept.
-	var n int32 = tbRowsOf(tb, tbs)
+	var n int32 = tbRowsOf(tb, tagtable.Tbs)
 	var i int32 = t0
 	var j int32 = 0
 	var kept int32 = 0
@@ -1192,7 +1194,7 @@ func tbSelect(tb *port.Cells, t0 int32, so *port.Cells, vals *port.Cells, sa *po
 	port.CellsDrop(vals, 0)
 	for i < n {
 		port.CellsPush(so, i-t0)
-		port.CellsPush(vals, 0-(port.CellsAt(tb, (i*tbs)+6)+TbTieBonus(tb, i, t0, n, grg)))
+		port.CellsPush(vals, 0-(port.CellsAt(tb, (i*tagtable.Tbs)+6)+TbTieBonus(tb, i, t0, n, grg)))
 		port.CellsPush(vals, i)
 		i += 1
 	}
@@ -1205,7 +1207,7 @@ func tbSelect(tb *port.Cells, t0 int32, so *port.Cells, vals *port.Cells, sa *po
 		j = 0
 		for j < i {
 			var o int32 = t0 + port.CellsAt(so, j)
-			if port.CellsAt(tb, (o*tbs)+13) == 1 {
+			if port.CellsAt(tb, (o*tagtable.Tbs)+13) == 1 {
 				if tbOverlap(tb, c, o) {
 					hit = 1
 				}
@@ -1213,10 +1215,10 @@ func tbSelect(tb *port.Cells, t0 int32, so *port.Cells, vals *port.Cells, sa *po
 			j += 1
 		}
 		if hit == 0 {
-			port.CellsSet(tb, (c*tbs)+13, 1)
+			port.CellsSet(tb, (c*tagtable.Tbs)+13, 1)
 			kept += 1
 		} else {
-			port.CellsSet(tb, (c*tbs)+13, 2)
+			port.CellsSet(tb, (c*tagtable.Tbs)+13, 2)
 		}
 		i += 1
 	}
@@ -1224,9 +1226,9 @@ func tbSelect(tb *port.Cells, t0 int32, so *port.Cells, vals *port.Cells, sa *po
 	port.CellsDrop(vals, 0)
 	i = t0
 	for i < n {
-		if port.CellsAt(tb, (i*tbs)+13) == 1 {
+		if port.CellsAt(tb, (i*tagtable.Tbs)+13) == 1 {
 			port.CellsPush(so, port.CellsLen(vals)/2)
-			port.CellsPush(vals, port.CellsAt(tb, (i*tbs)+2))
+			port.CellsPush(vals, port.CellsAt(tb, (i*tagtable.Tbs)+2))
 			port.CellsPush(vals, i)
 		}
 		i += 1
@@ -1237,13 +1239,13 @@ func tbSelect(tb *port.Cells, t0 int32, so *port.Cells, vals *port.Cells, sa *po
 	for i < port.CellsLen(so) {
 		var src int32 = port.CellsAt(vals, (port.CellsAt(so, i)*2)+1)
 		var f int32 = 0
-		for f < tbs {
-			port.CellsPush(sa, port.CellsAt(tb, (src*tbs)+f))
+		for f < tagtable.Tbs {
+			port.CellsPush(sa, port.CellsAt(tb, (src*tagtable.Tbs)+f))
 			f += 1
 		}
 		i += 1
 	}
-	port.CellsDrop(tb, t0*tbs)
+	port.CellsDrop(tb, t0*tagtable.Tbs)
 	i = 0
 	for i < port.CellsLen(sa) {
 		port.CellsPush(tb, port.CellsAt(sa, i))
@@ -1254,7 +1256,7 @@ func tbSelect(tb *port.Cells, t0 int32, so *port.Cells, vals *port.Cells, sa *po
 
 func tbClaim(tb *port.Cells, t0 int32, ln *port.Cells, l0 int32, l1 int32) int32 {
 	// Mark the lines of l0..l1 whose centre is in a kept table (t0.. of tb) with the table's index + 1.
-	var n int32 = tbRowsOf(tb, tbs)
+	var n int32 = tbRowsOf(tb, tagtable.Tbs)
 	var k int32 = t0
 	var l int32 = 0
 	for k < n {
@@ -1262,8 +1264,8 @@ func tbClaim(tb *port.Cells, t0 int32, ln *port.Cells, l0 int32, l1 int32) int32
 		for l < l1 {
 			var cx int32 = (evidence.LnGet(ln, l, evidence.LhX0()) + evidence.LnGet(ln, l, evidence.LhX1())) / 2
 			var cy int32 = (evidence.LnGet(ln, l, evidence.LhY0()) + evidence.LnGet(ln, l, evidence.LhY1())) / 2
-			if (cx >= port.CellsAt(tb, (k*tbs)+1)) && (cx <= port.CellsAt(tb, (k*tbs)+3)) {
-				if (cy >= port.CellsAt(tb, (k*tbs)+2)) && (cy <= port.CellsAt(tb, (k*tbs)+4)) {
+			if (cx >= port.CellsAt(tb, (k*tagtable.Tbs)+1)) && (cx <= port.CellsAt(tb, (k*tagtable.Tbs)+3)) {
+				if (cy >= port.CellsAt(tb, (k*tagtable.Tbs)+2)) && (cy <= port.CellsAt(tb, (k*tagtable.Tbs)+4)) {
 					if evidence.LnGet(ln, l, 15) == 0 {
 						evidence.LnSet(ln, l, 15, tbHeld+k)
 					}
@@ -1359,7 +1361,7 @@ func tbWordsRaw(wd *port.Cells, et *port.Cells, tw *port.Cells, from int32, num 
 
 func tbEmitCell(tb *port.Cells, k int32, c int32, row int32, wd *port.Cells, et *port.Cells, tc *port.Cells, tw *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells) int32 {
 	var cb int32 = c * tcs
-	var page int32 = port.CellsAt(tb, k*tbs)
+	var page int32 = port.CellsAt(tb, k*tagtable.Tbs)
 	var n int32 = model.NodeNew(nodes, model.NkCell(), row)
 	var wc int32 = port.CellsAt(tc, cb+9)
 	model.NodeSetConf(nodes, n, 600)
@@ -1417,7 +1419,7 @@ func tbSeparator(wd *port.Cells, et *port.Cells, w int32) bool {
 
 func tbEmitCaption(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, ln *port.Cells, tq *port.Cells, t int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells) int32 {
 	// The caption of table k as the table's first child: `label` (the keyword and the number), the rest as its text.
-	var b int32 = k * tbs
+	var b int32 = k * tagtable.Tbs
 	var qn int32 = port.CellsAt(tb, b+15)
 	var qf int32 = port.CellsAt(tb, b+14)
 	if qn == 0 {
@@ -1490,26 +1492,26 @@ func tbEmitCaption(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, ln *
 }
 
 func TbCount(tb *port.Cells) int32 {
-	return tbRowsOf(tb, tbs)
+	return tbRowsOf(tb, tagtable.Tbs)
 }
 
 func TbPage(tb *port.Cells, k int32) int32 {
-	return port.CellsAt(tb, k*tbs)
+	return port.CellsAt(tb, k*tagtable.Tbs)
 }
 
 func TbTop(tb *port.Cells, k int32) int32 {
-	return port.CellsAt(tb, (k*tbs)+2)
+	return port.CellsAt(tb, (k*tagtable.Tbs)+2)
 }
 
 func TbDue(tb *port.Cells, k int32, page int32, ymid2 int32) bool {
 	// Is table k on this page, and its top at or above twice-the-y `ymid2` (a line's baseline sum).
-	if k >= tbRowsOf(tb, tbs) {
+	if k >= tbRowsOf(tb, tagtable.Tbs) {
 		return 0 == 1
 	}
-	if port.CellsAt(tb, k*tbs) != page {
+	if port.CellsAt(tb, k*tagtable.Tbs) != page {
 		return 0 == 1
 	}
-	return (2 * port.CellsAt(tb, (k*tbs)+2)) <= ymid2
+	return (2 * port.CellsAt(tb, (k*tagtable.Tbs)+2)) <= ymid2
 }
 
 func TbDueFor(tb *port.Cells, k int32, page int32, ymid2 int32, ln *port.Cells, l int32) bool {
@@ -1521,7 +1523,7 @@ func TbDueFor(tb *port.Cells, k int32, page int32, ymid2 int32, ln *port.Cells, 
 	if l < 0 {
 		return 1 == 1
 	}
-	var b int32 = k * tbs
+	var b int32 = k * tagtable.Tbs
 	if (evidence.LnGet(ln, l, evidence.LhX1()) <= (port.CellsAt(tb, b+1) + 600)) && ((evidence.LnGet(ln, l, evidence.LhY0()) >= (port.CellsAt(tb, b+2) - 100)) && (evidence.LnGet(ln, l, evidence.LhY0()) <= port.CellsAt(tb, b+4))) {
 		return 0 == 1
 	}
@@ -1531,7 +1533,7 @@ func TbDueFor(tb *port.Cells, k int32, page int32, ymid2 int32, ln *port.Cells, 
 func TbSkip(tb *port.Cells, k int32, page int32) int32 {
 	// The first table at or after k that is on a page at or after `page`.
 	var i int32 = k
-	for (i < tbRowsOf(tb, tbs)) && (port.CellsAt(tb, i*tbs) < page) {
+	for (i < tbRowsOf(tb, tagtable.Tbs)) && (port.CellsAt(tb, i*tagtable.Tbs) < page) {
 		i += 1
 	}
 	return i
@@ -1540,7 +1542,7 @@ func TbSkip(tb *port.Cells, k int32, page int32) int32 {
 func tbEmitDropped(tb *port.Cells, f int32, r int32, wd *port.Cells, et *port.Cells, tc *port.Cells, tw *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, ledger *port.Cells) int32 {
 	// A header row of fragment f that repeats the first fragment's (P5.4): into the ledger as `duplicate-header-row`,
 	// its box, and its cells' text joined by a space.
-	var b int32 = f * tbs
+	var b int32 = f * tagtable.Tbs
 	var cfirst int32 = port.CellsAt(tb, b+9)
 	var cend int32 = cfirst + port.CellsAt(tb, b+10)
 	var c int32 = cfirst
@@ -1588,7 +1590,7 @@ func tbEmitGap(tb *port.Cells, f int32, row int32, x int32, y0 int32, y1 int32, 
 	model.NodeAddSrc(nodes, n, model.SrText())
 	model.NodeAddSrc(nodes, n, model.SrInfer())
 	model.NodeSetAux(nodes, n, 1)
-	model.NodeAddRegion(nodes, regions, n, port.CellsAt(tb, f*tbs), x, y0, x, y1)
+	model.NodeAddRegion(nodes, regions, n, port.CellsAt(tb, f*tagtable.Tbs), x, y0, x, y1)
 	return 0
 }
 
@@ -1597,10 +1599,10 @@ func TbEmit(tb *port.Cells, k int32, parent int32, wd *port.Cells, et *port.Cell
 	// and cells, in document order; the fragments that follow it on later pages (`tb-link`) are its rows too, and
 	// their repeated header rows go to the ledger. A table that is a later fragment of another is not written
 	// (answers -1). Answers the table's node.
-	if port.CellsAt(tb, (k*tbs)+21) != 0 {
+	if port.CellsAt(tb, (k*tagtable.Tbs)+21) != 0 {
 		return -1
 	}
-	var b int32 = k * tbs
+	var b int32 = k * tagtable.Tbs
 	var prof int32 = port.CellsAt(tb, b+5)
 	var nhead int32 = port.CellsAt(tb, b+11)
 	var t int32 = model.NodeNew(nodes, model.NkTable(), parent)
@@ -1639,7 +1641,7 @@ func TbEmit(tb *port.Cells, k int32, parent int32, wd *port.Cells, et *port.Cell
 	}
 	tbEmitCaption(tb, k, wd, et, ln, tq, t, nodes, attrs, regions, text, raw, tmp)
 	for f >= 0 {
-		var fb int32 = f * tbs
+		var fb int32 = f * tagtable.Tbs
 		var nrows int32 = port.CellsAt(tb, fb+7)
 		var cfirst int32 = port.CellsAt(tb, fb+9)
 		var cend int32 = cfirst + port.CellsAt(tb, fb+10)
@@ -2474,7 +2476,91 @@ func tbSplitRows(rm *port.Cells, root int32, wd *port.Cells, et *port.Cells, w0 
 	return port.CellsLen(so)
 }
 
-func tbTextGrid(wd *port.Cells, et *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, rm *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, page int32, ra int32, rb int32, profile int32, score int32, ext int32, bx0 int32, by0 int32, bx1 int32, by1 int32) int32 {
+func tbNumChar(cp int32) bool {
+	// A character a number may hold besides digits: separators, signs, currency, percent, brackets.
+	return (cp == 44) || ((cp == 46) || ((cp == 45) || ((cp == 43) || ((cp == 37) || ((cp == 36) || ((cp == 8364) || ((cp == 163) || ((cp == 165) || ((cp == 40) || ((cp == 41) || ((cp == 47) || ((cp == 58) || ((cp == 8722) || ((cp == 8211) || ((cp == 160) || ((cp == 8201) || (cp == 8239)))))))))))))))))
+}
+
+func tbForcedCuts(wd *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ra int32, rb int32, nch int32, minx int32, kc *port.Cells) int32 {
+	// Header-anchored bands missing from the body channels. kc records are cut-before, header-left, header-right.
+	port.CellsDrop(kc, 0)
+	var r int32 = ra * rws
+	var n int32 = port.CellsAt(rw, r+9)
+	var first int32 = port.CellsAt(rw, r+8)
+	var i int32 = 0
+	var cut int32 = minx
+	if (n <= (nch + 1)) || ((n < 3) || (n > 40)) {
+		return 0
+	}
+	for i < port.CellsAt(rw, r+1) {
+		var w int32 = port.CellsAt(wl, port.CellsAt(rw, r)+i)
+		if (evidence.WdGet(wd, w, evidence.WfStyle()) & model.SyBold()) == 0 {
+			return 0
+		}
+		i += 1
+	}
+	i = 0
+	for i < n {
+		var s int32 = (first + i) * sgs
+		var left int32 = port.CellsAt(sg, s+1)
+		var right int32 = port.CellsAt(sg, s+2)
+		if i > 0 {
+			cut = (left + port.CellsAt(sg, ((first+(i-1))*sgs)+2)) / 2
+		}
+		port.CellsPush(kc, cut)
+		port.CellsPush(kc, left)
+		port.CellsPush(kc, right)
+		i += 1
+	}
+	return n
+}
+
+func tbNumericCol(wd *port.Cells, et *port.Cells, wl *port.Cells, ks int32, ke int32, kc *port.Cells, ch *port.Cells, fallback int32) int32 {
+	var k int32 = ks
+	var j int32 = 0
+	var digits int32 = 0
+	var edge int32 = -2000000000
+	var best int32 = -1
+	var dist int32 = (2 * tbHeadTol) + 1
+	if (port.CellsLen(kc) == 0) || ((port.CellsLen(kc) / 3) != ((port.CellsLen(ch) / 2) + 1)) {
+		return fallback
+	}
+	for k < ke {
+		var w int32 = port.CellsAt(wl, k)
+		var ts int32 = evidence.WdGet(wd, w, evidence.HdTstart())
+		var tl int32 = evidence.WdGet(wd, w, evidence.HdTlen())
+		edge = tbMax(edge, evidence.WdGet(wd, w, evidence.HdX1()))
+		j = 0
+		for j < tl {
+			var cp int32 = port.CellsAt(et, ts+j)
+			if (cp >= 48) && (cp <= 57) {
+				digits += 1
+			} else if !tbNumChar(cp) {
+				return fallback
+			}
+			j += 1
+		}
+		k += 1
+	}
+	if digits == 0 {
+		return fallback
+	}
+	k = 0
+	for k < (port.CellsLen(kc) / 3) {
+		var d int32 = tbAbs(edge - port.CellsAt(kc, (k*3)+2))
+		if d < dist {
+			dist = d
+			best = k
+		}
+		k += 1
+	}
+	if best >= 0 {
+		return best
+	}
+	return fallback
+}
+
+func tbTextGrid(wd *port.Cells, et *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, rm *port.Cells, kc *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, page int32, ra int32, rb int32, profile int32, score int32, ext int32, bx0 int32, by0 int32, bx1 int32, by1 int32) int32 {
 	// The cells of the rows ra..rb (see the head of this section) as a candidate table of this profile:
 	// ext 1 means `rmap` already says which table row each baseline row is (shaded: the fills' bands). The box
 	// bx0..by1 widens the box of the words (the rules, the fills): 2000000000 2000000000 -2000000000 -2000000000
@@ -2523,6 +2609,16 @@ func tbTextGrid(wd *port.Cells, et *port.Cells, wl *port.Cells, rw *port.Cells, 
 		return -1
 	}
 	nch = tbChannels(wd, et, wl, rw, sg, ra, rb, ntab/6, int32(((sumsz/int64(rb-ra))*int64(segNum))/int64(segDen)), ch, st, en)
+	if tbForcedCuts(wd, wl, rw, sg, ra, rb, nch, minx, kc) > 0 {
+		port.CellsDrop(ch, 0)
+		c = 1
+		for c < (port.CellsLen(kc) / 3) {
+			port.CellsPush(ch, port.CellsAt(kc, c*3))
+			port.CellsPush(ch, port.CellsAt(kc, c*3))
+			c += 1
+		}
+		nch = port.CellsLen(ch) / 2
+	}
 	// D559: a vertical rule along most of the rows between two words is a boundary of its own (a channel of no width) where the whitespace has none.
 	if tbCutList(wd, wl, rw, rm, ra, rb, minx, maxx, st) > 0 {
 		c = 0
@@ -2591,7 +2687,9 @@ func tbTextGrid(wd *port.Cells, et *port.Cells, wl *port.Cells, rw *port.Cells, 
 				for ks < ke {
 					kx = tbSubEnd(wd, wl, st, ks, ke, (port.CellsAt(rw, (r*rws)+6)+port.CellsAt(rw, (r*rws)+7))/2)
 					a = tbColOf(ch, tbFirstCx(wd, et, wl, ks, kx))
+					a = tbNumericCol(wd, et, wl, ks, kx, kc, ch, a)
 					b = tbColOf(ch, tbWordCx(wd, port.CellsAt(wl, kx-1)))
+					b = tbNumericCol(wd, et, wl, ks, kx, kc, ch, b)
 					if port.CellsAt(gm, (tr*ncols)+a) == -1 {
 						var free int32 = 1
 						var kf int32 = a
@@ -2653,6 +2751,7 @@ func tbTextGrid(wd *port.Cells, et *port.Cells, wl *port.Cells, rw *port.Cells, 
 				for ks < ke {
 					kx = tbSubEnd(wd, wl, st, ks, ke, (port.CellsAt(rw, (r*rws)+6)+port.CellsAt(rw, (r*rws)+7))/2)
 					a = tbColOf(ch, tbFirstCx(wd, et, wl, ks, kx))
+					a = tbNumericCol(wd, et, wl, ks, kx, kc, ch, a)
 					var cell int32 = port.CellsAt(en, (tr*ncols)+a)
 					var kw int32 = ks
 					for kw < kx {
@@ -2685,18 +2784,16 @@ func tbTextGrid(wd *port.Cells, et *port.Cells, wl *port.Cells, rw *port.Cells, 
 	}
 	var t int32 = TbAdd(tb, page, x0, y0, x1, y1, profile, score, nrows, ncols, cfirst, tbRowsOf(tc, tcs)-cfirst)
 	var k int32 = 0
-	port.CellsSet(tb, (t*tbs)+16, port.CellsLen(tx))
-	port.CellsSet(tb, (t*tbs)+17, ncols+1)
+	if port.CellsLen(kc) > 0 {
+		port.CellsSet(tb, (t*tagtable.Tbs)+31, 1)
+	}
+	port.CellsSet(tb, (t*tagtable.Tbs)+16, port.CellsLen(tx))
+	port.CellsSet(tb, (t*tagtable.Tbs)+17, ncols+1)
 	for k <= ncols {
 		port.CellsPush(tx, tbCut(ch, k, minx, maxx))
 		k += 1
 	}
 	return t
-}
-
-func tbNumChar(cp int32) bool {
-	// A character a number may hold besides digits: separators, signs, currency, percent, brackets.
-	return (cp == 44) || ((cp == 46) || ((cp == 45) || ((cp == 43) || ((cp == 37) || ((cp == 36) || ((cp == 8364) || ((cp == 163) || ((cp == 165) || ((cp == 40) || ((cp == 41) || ((cp == 47) || ((cp == 58) || ((cp == 8722) || ((cp == 8211) || ((cp == 160) || ((cp == 8201) || (cp == 8239)))))))))))))))))
 }
 
 func tbCellNumeric(wd *port.Cells, et *port.Cells, tw *port.Cells, tc *port.Cells, c int32) int32 {
@@ -2844,7 +2941,7 @@ func tbRowBold(tc *port.Cells, cfirst int32, cend int32, r int32, wd *port.Cells
 
 func tbNumCols(tb *port.Cells, k int32, r0 int32, wd *port.Cells, et *port.Cells, tc *port.Cells, tw *port.Cells) int32 {
 	// How many columns, over the rows from r0 on, have at least 3 cells of which 4/5 are numeric.
-	var b int32 = k * tbs
+	var b int32 = k * tagtable.Tbs
 	var ncols int32 = port.CellsAt(tb, b+8)
 	var cfirst int32 = port.CellsAt(tb, b+9)
 	var cend int32 = cfirst + port.CellsAt(tb, b+10)
@@ -2879,7 +2976,7 @@ func tbNumCols(tb *port.Cells, k int32, r0 int32, wd *port.Cells, et *port.Cells
 func tbLabelRow(tb *port.Cells, k int32, r int32, tc *port.Cells) bool {
 	// P12.2: is row r of table k a section's label and no header: one cell with text, in the leftmost column that has any, that spans none (a
 	// header that is one cell, `December 31,` over the year columns, is over them).
-	var b int32 = k * tbs
+	var b int32 = k * tagtable.Tbs
 	var cfirst int32 = port.CellsAt(tb, b+9)
 	var cend int32 = cfirst + port.CellsAt(tb, b+10)
 	var c int32 = cfirst
@@ -2955,7 +3052,7 @@ func tbHeadRows(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc *por
 	// else the bold ones (a table of bold rows has none, and a header is
 	// at most half of the rows); else, when the first row has no number and a column below it is numeric,
 	// that one row.
-	var b int32 = k * tbs
+	var b int32 = k * tagtable.Tbs
 	var nrows int32 = port.CellsAt(tb, b+7)
 	var cfirst int32 = port.CellsAt(tb, b+9)
 	var cend int32 = cfirst + port.CellsAt(tb, b+10)
@@ -2992,7 +3089,7 @@ func tbHeadRows(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc *por
 
 func tbFootRows(tb *port.Cells, k int32, nhead int32, wd *port.Cells, et *port.Cells, tc *port.Cells, tw *port.Cells) int32 {
 	// 1 when the last row is bold and the row above it is not, with at least two body rows; else 0.
-	var b int32 = k * tbs
+	var b int32 = k * tagtable.Tbs
 	var nrows int32 = port.CellsAt(tb, b+7)
 	var cfirst int32 = port.CellsAt(tb, b+9)
 	var cend int32 = cfirst + port.CellsAt(tb, b+10)
@@ -3019,7 +3116,7 @@ func tbColAlign(tb *port.Cells, k int32, col int32, r0 int32, r1 int32, wd *port
 	// decided together against their text extent (SPEC 10.10): start when every start gap is within t (a
 	// quarter of the size) and the end gaps vary by more than 2t, end the other way round, center when the
 	// two gaps agree within t on every cell and the start gap varies.
-	var b int32 = k * tbs
+	var b int32 = k * tagtable.Tbs
 	var cfirst int32 = port.CellsAt(tb, b+9)
 	var cend int32 = cfirst + port.CellsAt(tb, b+10)
 	var c int32 = cfirst
@@ -3091,7 +3188,7 @@ func tbHeadAlign(tb *port.Cells, k int32, c int32, colal int32, wd *port.Cells, 
 	// The alignment of header cell c: against its cell box in a ruled table (and when it spans columns),
 	// else against the extent of its column's BODY text (the header is not its own measure): centre or end when
 	// the text is clear of the body's edges by 4t, start when it is flush and the column's body is start.
-	var b int32 = k * tbs
+	var b int32 = k * tagtable.Tbs
 	var cfirst int32 = port.CellsAt(tb, b+9)
 	var cend int32 = cfirst + port.CellsAt(tb, b+10)
 	var cb int32 = c * tcs
@@ -3138,7 +3235,7 @@ func tbHeadAlign(tb *port.Cells, k int32, c int32, colal int32, wd *port.Cells, 
 func tbAligns(tb *port.Cells, k int32, wd *port.Cells, tc *port.Cells, tw *port.Cells) int32 {
 	// Set the `align` of every cell of table k: the body columns together, the header cells each, the foot
 	// cells as their column.
-	var b int32 = k * tbs
+	var b int32 = k * tagtable.Tbs
 	var nrows int32 = port.CellsAt(tb, b+7)
 	var ncols int32 = port.CellsAt(tb, b+8)
 	var cfirst int32 = port.CellsAt(tb, b+9)
@@ -3258,7 +3355,7 @@ func tbCaption(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, ln *port
 	// and a number, over the table or under it within two and a half line heights, preferring the one over it;
 	// the lines on its baseline to its right and the lines under it that continue it are part of it. They are
 	// claimed and their numbers pushed on `tq` (qfirst, qcount in the table's cells 14 and 15).
-	var b int32 = k * tbs
+	var b int32 = k * tagtable.Tbs
 	var tx0 int32 = port.CellsAt(tb, b+1)
 	var ty0 int32 = port.CellsAt(tb, b+2)
 	var tx1 int32 = port.CellsAt(tb, b+3)
@@ -3351,7 +3448,7 @@ func tbCaption(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, ln *port
 
 func tbReject(tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, nt int32, c0 int32, w0 int32, x0 int32) int32 {
 	// Forget the candidate that was just built: every arena goes back to the length it had.
-	port.CellsDrop(tb, nt*tbs)
+	port.CellsDrop(tb, nt*tagtable.Tbs)
 	port.CellsDrop(tc, c0*tcs)
 	port.CellsDrop(tw, w0)
 	port.CellsDrop(tx, x0)
@@ -3360,7 +3457,7 @@ func tbReject(tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, nt
 
 func tbTabularRows(tb *port.Cells, k int32, tc *port.Cells) int32 {
 	// How many rows of table k have two cells or more with text.
-	var b int32 = k * tbs
+	var b int32 = k * tagtable.Tbs
 	var cfirst int32 = port.CellsAt(tb, b+9)
 	var cend int32 = cfirst + port.CellsAt(tb, b+10)
 	var c int32 = cfirst
@@ -3389,7 +3486,7 @@ func tbTabularRows(tb *port.Cells, k int32, tc *port.Cells) int32 {
 func tbLeadSingle(tb *port.Cells, k int32, tc *port.Cells) int32 {
 	// P12.2: how many rows at the top of table k (at most two) have one cell with text: a spanning header (`December 31,` over the year columns, taken
 	// in by `tb-head-reach`), a row that is no less a row of the table for not having two cells. `tb-score` leaves them out of the count of its rows.
-	var b int32 = k * tbs
+	var b int32 = k * tagtable.Tbs
 	var cfirst int32 = port.CellsAt(tb, b+9)
 	var cend int32 = cfirst + port.CellsAt(tb, b+10)
 	var c int32 = cfirst
@@ -3460,7 +3557,7 @@ func tbScore(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc *port.C
 	// The score (0 to 1000, 0 = not a table) of text-based candidate k of its profile (SPEC 10.5): prose in
 	// columns is not a table, so cells that are long, or that end like sentences, refuse it. The whitespace
 	// profile has no rules or fills to vouch for it and asks for more: numeric columns, a header, or a dense grid of at least four short categorical columns.
-	var b int32 = k * tbs
+	var b int32 = k * tagtable.Tbs
 	var prof int32 = port.CellsAt(tb, b+5)
 	var ncols int32 = port.CellsAt(tb, b+8)
 	var nrows int32 = port.CellsAt(tb, b+7)
@@ -3511,7 +3608,7 @@ func tbScore(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc *port.C
 	if (nprose * 10) > (ne * 3) {
 		return 0
 	}
-	if (prof == pfWhitespace) && ((ne * 100) < ((nrows * ncols) * 55)) {
+	if (prof == pfWhitespace) && (((port.CellsAt(tb, b+31) & 1) == 0) && ((ne * 100) < ((nrows * ncols) * 55))) {
 		return 0
 	}
 	if (ne * 100) < ((nrows * ncols) * 35) {
@@ -3828,27 +3925,27 @@ func tbExtend(wd *port.Cells, w0 int32, w1 int32, rw *port.Cells, sg *port.Cells
 	return dir * reach
 }
 
-func tbPartialBuild(wd *port.Cells, et *port.Cells, w0 int32, w1 int32, page int32, ex0 int32, ex1 int32, ya int32, yb int32, align int32, rm *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells) int32 {
+func tbPartialBuild(wd *port.Cells, et *port.Cells, w0 int32, w1 int32, page int32, ex0 int32, ex1 int32, ya int32, yb int32, align int32, rm *port.Cells, kc *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells) int32 {
 	// One partial candidate over the extent ex0..ex1: the words between the rules at ya and yb (and the rows directly above ya, the header),
 	// columns from their channels; kept when it scores. The rows are left in `wl rw sg`. Answers the candidate, or -1 (nothing is left of it).
 	var nr int32 = tbRows(wd, et, w0, w1, ex0-posTol, ya-9000, ex1+posTol, yb, wl, rw, sg)
 	var ra int32 = tbFirstRow(rm, rw, sg, nr, ya, align)
-	var nt int32 = tbRowsOf(tb, tbs)
+	var nt int32 = tbRowsOf(tb, tagtable.Tbs)
 	var c0 int32 = tbRowsOf(tc, tcs)
 	var wl0 int32 = port.CellsLen(tw)
 	var xl0 int32 = port.CellsLen(tx)
 	if (nr - ra) >= 3 {
-		var t int32 = tbTextGrid(wd, et, wl, rw, sg, rm, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, page, ra, nr, pfPartial, 850, 0, ex0, ya, ex1, yb)
+		var t int32 = tbTextGrid(wd, et, wl, rw, sg, rm, kc, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, page, ra, nr, pfPartial, 850, 0, ex0, ya, ex1, yb)
 		if t >= 0 {
 			var sc int32 = tbScore(tb, t, wd, et, tc, tw)
 			var rb int32 = tbBodyRow(rw, nr, ya)
 			if sc == 0 {
 				tbReject(tb, tc, tw, tx, nt, c0, wl0, xl0)
 			} else {
-				port.CellsSet(tb, (t*tbs)+6, sc)
+				port.CellsSet(tb, (t*tagtable.Tbs)+6, sc)
 				// Rows taken for the header by alignment alone are the header (the table rows they make: a wrapped label is one).
 				if (ra < rb) && (tbFirstForced(rw, nr, ya, ra) == 1) {
-					port.CellsSet(tb, (t*tbs)+22, port.CellsAt(rmap, (rb-1)-ra)+1)
+					port.CellsSet(tb, (t*tagtable.Tbs)+22, port.CellsAt(rmap, (rb-1)-ra)+1)
 				}
 				return t
 			}
@@ -3857,12 +3954,12 @@ func tbPartialBuild(wd *port.Cells, et *port.Cells, w0 int32, w1 int32, page int
 	return -1
 }
 
-func tbPartialTry(wd *port.Cells, et *port.Cells, w0 int32, w1 int32, page int32, ex0 int32, ex1 int32, ya int32, yb int32, ychain int32, rm *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells) int32 {
+func tbPartialTry(wd *port.Cells, et *port.Cells, w0 int32, w1 int32, page int32, ex0 int32, ex1 int32, ya int32, yb int32, ychain int32, rm *port.Cells, kc *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells) int32 {
 	// One partial candidate: the words between the rules at ya and yb (and the tabular rows directly above ya),
 	// columns from their channels; kept when it scores. D557: when the rows go on past the ends of the rules (`tb-extend`), the
 	// candidate is built again over the wider extent, and kept if it scores; if not the narrower one stands. `ychain` is the top rule of the
 	// whole chain: only when ya is it can a header be sought by alignment (above any other rule lie the table's own rows).
-	var nt int32 = tbRowsOf(tb, tbs)
+	var nt int32 = tbRowsOf(tb, tagtable.Tbs)
 	var c0 int32 = tbRowsOf(tc, tcs)
 	var wl0 int32 = port.CellsLen(tw)
 	var xl0 int32 = port.CellsLen(tx)
@@ -3870,7 +3967,7 @@ func tbPartialTry(wd *port.Cells, et *port.Cells, w0 int32, w1 int32, page int32
 	if ya <= (ychain + posTol) {
 		align = 1
 	}
-	var t int32 = tbPartialBuild(wd, et, w0, w1, page, ex0, ex1, ya, yb, align, rm, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx)
+	var t int32 = tbPartialBuild(wd, et, w0, w1, page, ex0, ex1, ya, yb, align, rm, kc, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx)
 	if t >= 0 {
 		var nr int32 = tbRowsOf(rw, rws)
 		var ra int32 = tbFirstRow(rm, rw, sg, nr, ya, align)
@@ -3878,8 +3975,8 @@ func tbPartialTry(wd *port.Cells, et *port.Cells, w0 int32, w1 int32, page int32
 		var nx0 int32 = tbExtend(wd, w0, w1, rw, sg, ra, nr, ex0, -1, rm, pr, ry)
 		if (nx1 > ex1) || (nx0 < ex0) {
 			tbReject(tb, tc, tw, tx, nt, c0, wl0, xl0)
-			if tbPartialBuild(wd, et, w0, w1, page, nx0, nx1, ya, yb, align, rm, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx) < 0 {
-				tbPartialBuild(wd, et, w0, w1, page, ex0, ex1, ya, yb, align, rm, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx)
+			if tbPartialBuild(wd, et, w0, w1, page, nx0, nx1, ya, yb, align, rm, kc, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx) < 0 {
+				tbPartialBuild(wd, et, w0, w1, page, ex0, ex1, ya, yb, align, rm, kc, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx)
 			}
 		}
 	}
@@ -3986,7 +4083,7 @@ func tbTailEnd(wd *port.Cells, et *port.Cells, w0 int32, w1 int32, ex0 int32, ex
 	return res
 }
 
-func tbPartialPage(rm *port.Cells, page int32, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, used *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells) int32 {
+func tbPartialPage(rm *port.Cells, kc *port.Cells, page int32, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, used *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells) int32 {
 	// Chains of horizontal rules of one extent (booktabs: top, mid, bottom) are partial candidates: the
 	// words between the first and the last rule, columns from the channels of their text. D559: a chain ends where a gap holds what is not
 	// the table's (`tb-gap-foreign`: a heading, another grid, a band of white), and takes the rows under its last rule that are (`tb-tail-end`).
@@ -4048,11 +4145,11 @@ func tbPartialPage(rm *port.Cells, page int32, wd *port.Cells, et *port.Cells, w
 			}
 			if cnt >= 2 {
 				ytail = tbTailEnd(wd, et, w0, w1, ex0, ex1, port.CellsAt(rm, (i*rls)+1), last, wl, rw, sg)
-				tbPartialTry(wd, et, w0, w1, page, ex0, ex1, port.CellsAt(rm, (i*rls)+1), ytail, port.CellsAt(rm, (i*rls)+1), rm, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx)
+				tbPartialTry(wd, et, w0, w1, page, ex0, ex1, port.CellsAt(rm, (i*rls)+1), ytail, port.CellsAt(rm, (i*rls)+1), rm, kc, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx)
 				if cnt >= 3 {
 					m = nh
 					for (m + 1) < port.CellsLen(used) {
-						tbPartialTry(wd, et, w0, w1, page, ex0, ex1, port.CellsAt(used, m), port.CellsAt(used, m+1), port.CellsAt(rm, (i*rls)+1), rm, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx)
+						tbPartialTry(wd, et, w0, w1, page, ex0, ex1, port.CellsAt(used, m), port.CellsAt(used, m+1), port.CellsAt(rm, (i*rls)+1), rm, kc, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx)
 						m += 1
 					}
 				}
@@ -4134,7 +4231,7 @@ func tbBandHeader(wd *port.Cells, et *port.Cells, w0 int32, w1 int32, sx0 int32,
 	return y0
 }
 
-func tbShadedPage(fl *port.Cells, page int32, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, rm *port.Cells, bd *port.Cells, used *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells) int32 {
+func tbShadedPage(fl *port.Cells, page int32, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, rm *port.Cells, kc *port.Cells, bd *port.Cells, used *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells) int32 {
 	// Stacks of three or more bands of one extent, each starting where the one before ended or one row
 	// later, with two colours or a gap (zebra), are shaded candidates: a band is a row (several baselines may
 	// be in one), a baseline row that is in no band is a row of its own, columns from the channels.
@@ -4189,7 +4286,7 @@ func tbShadedPage(fl *port.Cells, page int32, wd *port.Cells, et *port.Cells, w0
 				var y0 int32 = tbBandHeader(wd, et, w0, w1, sx0, sx1, port.CellsAt(bd, i*6), gap1, wl, rw, sg)
 				var y1 int32 = port.CellsAt(bd, (last*6)+1)
 				var nr int32 = tbRows(wd, et, w0, w1, sx0, y0, sx1, y1, wl, rw, sg)
-				var nt int32 = tbRowsOf(tb, tbs)
+				var nt int32 = tbRowsOf(tb, tagtable.Tbs)
 				var c0 int32 = tbRowsOf(tc, tcs)
 				var wl0 int32 = port.CellsLen(tw)
 				var xl0 int32 = port.CellsLen(tx)
@@ -4211,13 +4308,13 @@ func tbShadedPage(fl *port.Cells, page int32, wd *port.Cells, et *port.Cells, w0
 						port.CellsPush(rmap, trow)
 						r += 1
 					}
-					var t int32 = tbTextGrid(wd, et, wl, rw, sg, rm, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, page, 0, nr, pfShaded, 800, 1, sx0, y0, sx1, y1)
+					var t int32 = tbTextGrid(wd, et, wl, rw, sg, rm, kc, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, page, 0, nr, pfShaded, 800, 1, sx0, y0, sx1, y1)
 					if t >= 0 {
 						var sc int32 = tbScore(tb, t, wd, et, tc, tw)
 						if sc == 0 {
 							tbReject(tb, tc, tw, tx, nt, c0, wl0, xl0)
 						} else {
-							port.CellsSet(tb, (t*tbs)+6, sc)
+							port.CellsSet(tb, (t*tagtable.Tbs)+6, sc)
 						}
 					}
 				}
@@ -4263,59 +4360,38 @@ func tbMedianPitch(rw *port.Cells, ra int32, rb int32, scratch *port.Cells) int3
 	return port.CellsAt(scratch, port.CellsLen(scratch)/2)
 }
 
-func tbProseEdge(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc *port.Cells, tw *port.Cells) int32 {
-	// 1 when the first row of table k is a line of prose, 2 when the last is, 3 when both are: the line of a paragraph beside
-	// or under a table that its row would have taken (D459). A line of prose is a row with one cell holding nine words or more, or
-	// a row of which every cell has two words or more and begins with a lowercase letter (text set in chunks).
-	var b int32 = k * tbs
-	var nrows int32 = port.CellsAt(tb, b+7)
-	var cfirst int32 = port.CellsAt(tb, b+9)
-	var cend int32 = cfirst + port.CellsAt(tb, b+10)
-	var c int32 = cfirst
-	var filled0 int32 = 0
-	var words0 int32 = 0
-	var low0 int32 = 0
-	var filled1 int32 = 0
-	var words1 int32 = 0
-	var low1 int32 = 0
-	var res int32 = 0
-	for c < cend {
+func tbProseRow(tb *port.Cells, k int32, row int32, wd *port.Cells, et *port.Cells, tc *port.Cells, tw *port.Cells) int32 {
+	var first int32 = port.CellsAt(tb, (k*tagtable.Tbs)+9)
+	var end int32 = first + port.CellsAt(tb, (k*tagtable.Tbs)+10)
+	var c int32 = first
+	var filled int32 = 0
+	var words int32 = 0
+	var low int32 = 0
+	for c < end {
 		var cb int32 = c * tcs
 		var cn int32 = port.CellsAt(tc, cb+9)
-		if cn > 0 {
-			var fw int32 = port.CellsAt(tw, port.CellsAt(tc, cb+8))
-			var c0 int32 = port.CellsAt(et, evidence.WdGet(wd, fw, evidence.HdTstart()))
-			var low int32 = 0
-			if (cn >= 2) && (tbLowc(c0) == 1) {
-				low = 1
-			}
-			if port.CellsAt(tc, cb) == 0 {
-				filled0 += 1
-				low0 += low
-				if cn > words0 {
-					words0 = cn
-				}
-			}
-			if port.CellsAt(tc, cb) == (nrows - 1) {
-				filled1 += 1
-				low1 += low
-				if cn > words1 {
-					words1 = cn
-				}
+		if (port.CellsAt(tc, cb) == row) && (cn > 0) {
+			filled += 1
+			words = tbMax(words, cn)
+			if (cn >= 2) && (tbLowc(port.CellsAt(et, evidence.WdGet(wd, port.CellsAt(tw, port.CellsAt(tc, cb+8)), evidence.HdTstart()))) == 1) {
+				low += 1
 			}
 		}
 		c += 1
 	}
+	if ((filled == 1) && (words >= 9)) || ((filled >= 2) && (low == filled)) {
+		return 1
+	}
+	return 0
+}
+
+func tbProseEdge(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc *port.Cells, tw *port.Cells) int32 {
+	// D459: 1 for prose at the first row, 2 at the last, 3 at both. The row predicate is also used by bounded trimming.
+	var nrows int32 = port.CellsAt(tb, (k*tagtable.Tbs)+7)
 	if nrows < 4 {
 		return 0
 	}
-	if ((filled0 == 1) && (words0 >= 9)) || ((filled0 >= 2) && (low0 == filled0)) {
-		res = 1
-	}
-	if ((filled1 == 1) && (words1 >= 9)) || ((filled1 >= 2) && (low1 == filled1)) {
-		res += 2
-	}
-	return res
+	return tbProseRow(tb, k, 0, wd, et, tc, tw) + (2 * tbProseRow(tb, k, nrows-1, wd, et, tc, tw))
 }
 
 func tbHeadReach(rm *port.Cells, rw *port.Cells, sg *port.Cells, a int32, b int32) int32 {
@@ -4378,35 +4454,260 @@ func tbHeadReach(rm *port.Cells, rw *port.Cells, sg *port.Cells, a int32, b int3
 	return r
 }
 
-func tbWhitespaceRun(page int32, wd *port.Cells, et *port.Cells, rm *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, ra int32, rb int32) int32 {
+var tbColkw [630]int32 = [630]int32{
+	1, 4, 100, 97, 116, 101, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	1, 5, 100, 97, 116, 117, 109, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	1, 5, 102, 101, 99, 104, 97, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	1, 4, 100, 97, 116, 97, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	2, 11, 100, 101, 115, 99, 114, 105, 112, 116, 105, 111, 110, 0, 0, 0, 0, 0,
+	2, 7, 100, 101, 116, 97, 105, 108, 115, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	2, 11, 100, 101, 115, 99, 114, 105, 112, 99, 105, 111, 110, 0, 0, 0, 0, 0,
+	2, 7, 108, 105, 98, 101, 108, 108, 101, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	3, 5, 100, 101, 98, 105, 116, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	3, 10, 119, 105, 116, 104, 100, 114, 97, 119, 97, 108, 0, 0, 0, 0, 0, 0,
+	3, 11, 119, 105, 116, 104, 100, 114, 97, 119, 97, 108, 115, 0, 0, 0, 0, 0,
+	3, 7, 114, 101, 116, 114, 97, 105, 116, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	3, 5, 99, 97, 114, 103, 111, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	4, 6, 99, 114, 101, 100, 105, 116, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	4, 7, 100, 101, 112, 111, 115, 105, 116, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	4, 8, 100, 101, 112, 111, 115, 105, 116, 115, 0, 0, 0, 0, 0, 0, 0, 0,
+	4, 5, 100, 101, 112, 111, 116, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	4, 5, 97, 98, 111, 110, 111, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	5, 7, 98, 97, 108, 97, 110, 99, 101, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	5, 5, 115, 111, 108, 100, 101, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	5, 5, 115, 97, 108, 100, 111, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	6, 6, 97, 109, 111, 117, 110, 116, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	6, 7, 109, 111, 110, 116, 97, 110, 116, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	6, 7, 105, 109, 112, 111, 114, 116, 101, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	6, 6, 98, 101, 116, 114, 97, 103, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	7, 3, 113, 116, 121, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	7, 8, 113, 117, 97, 110, 116, 105, 116, 121, 0, 0, 0, 0, 0, 0, 0, 0,
+	7, 8, 113, 117, 97, 110, 116, 105, 116, 101, 0, 0, 0, 0, 0, 0, 0, 0,
+	7, 8, 99, 97, 110, 116, 105, 100, 97, 100, 0, 0, 0, 0, 0, 0, 0, 0,
+	8, 3, 114, 101, 102, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	8, 9, 114, 101, 102, 101, 114, 101, 110, 99, 101, 0, 0, 0, 0, 0, 0, 0,
+	8, 10, 114, 101, 102, 101, 114, 101, 110, 99, 105, 97, 0, 0, 0, 0, 0, 0,
+	9, 8, 99, 117, 114, 114, 101, 110, 99, 121, 0, 0, 0, 0, 0, 0, 0, 0,
+	9, 6, 100, 101, 118, 105, 115, 101, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	9, 6, 109, 111, 110, 101, 100, 97, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+}
+
+func tbColSem(wd *port.Cells, et *port.Cells, w int32) int32 {
+	if w < 0 {
+		return 0
+	}
+	var ts int32 = evidence.WdGet(wd, w, evidence.HdTstart())
+	var n int32 = evidence.WdGet(wd, w, evidence.HdTlen())
+	var r int32 = 0
+	var j int32 = 0
+	var same int32 = 0
+	for r < 35 {
+		if n == tbColkw[r*18+1] {
+			same = 1
+			j = 0
+			for j < n {
+				if tbLower(port.CellsAt(et, ts+j)) != tbColkw[r*18+(j+2)] {
+					same = 0
+				}
+				j += 1
+			}
+			if same == 1 {
+				return tbColkw[r*18+0]
+			}
+		}
+		r += 1
+	}
+	return 0
+}
+
+const ks int32 = 12
+
+func TbModelCol(tb *port.Cells, tbk *port.Cells, k int32, col int32, field int32) int32 {
+	if (k < 0) || (k >= tbRowsOf(tb, tagtable.Tbs)) {
+		return -1
+	}
+	if (col < 0) || (col >= port.CellsAt(tb, (k*tagtable.Tbs)+29)) {
+		return -1
+	}
+	if (field < 0) || (field >= ks) {
+		return -1
+	}
+	return port.CellsAt(tbk, ((port.CellsAt(tb, (k*tagtable.Tbs)+28)+col)*ks)+field)
+}
+
+func tbModelAnchor(tc *port.Cells, first int32, end int32, col int32, nhead int32, bodyend int32, field int32, fallback int32, ws *port.Cells) int32 {
+	port.CellsDrop(ws, 0)
+	var c int32 = first
+	for c < end {
+		var b int32 = c * tcs
+		if ((port.CellsAt(tc, b) >= nhead) && (port.CellsAt(tc, b) < bodyend)) && ((port.CellsAt(tc, b+1) == col) && ((port.CellsAt(tc, b+3) == 1) && (port.CellsAt(tc, b+9) > 0))) {
+			port.CellsPush(ws, port.CellsAt(tc, b+field))
+		}
+		c += 1
+	}
+	if port.CellsLen(ws) == 0 {
+		return fallback
+	}
+	tbSortNums(ws)
+	return port.CellsAt(ws, port.CellsLen(ws)/2)
+}
+
+func tbModel(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, tbk *port.Cells, ws *port.Cells) int32 {
+	var b int32 = k * tagtable.Tbs
+	var first int32 = port.CellsAt(tb, b+9)
+	var end int32 = first + port.CellsAt(tb, b+10)
+	var ncols int32 = port.CellsAt(tb, b+8)
+	var nrows int32 = port.CellsAt(tb, b+7)
+	var bodyend int32 = nrows - port.CellsAt(tb, b+12)
+	var nhead int32 = port.CellsAt(tb, b+11)
+	var xfirst int32 = port.CellsAt(tb, b+16)
+	var kfirst int32 = port.CellsLen(tbk) / ks
+	var col int32 = 0
+	port.CellsSet(tb, b+28, kfirst)
+	port.CellsSet(tb, b+29, ncols)
+	for col < ncols {
+		var x0 int32 = port.CellsAt(tx, xfirst+col)
+		var x1 int32 = port.CellsAt(tx, (xfirst+col)+1)
+		var left int32 = tbModelAnchor(tc, first, end, col, nhead, bodyend, 13, x0, ws)
+		var right int32 = tbModelAnchor(tc, first, end, col, nhead, bodyend, 14, x1, ws)
+		var c int32 = first
+		var occ int32 = 0
+		var nums int32 = 0
+		var amounts int32 = 0
+		var hfirst int32 = -1
+		var hcount int32 = 0
+		var hleft int32 = x0
+		var hright int32 = x1
+		var lo int32 = 2000000000
+		var hi int32 = -2000000000
+		var evidence int32 = 0
+		var kind int32 = 0
+		for c < end {
+			var cb int32 = c * tcs
+			var row int32 = port.CellsAt(tc, c*tcs)
+			if port.CellsAt(tc, cb+1) == col {
+				port.CellsSet(tc, cb+15, kfirst+col)
+				if (port.CellsAt(tc, cb+3) == 1) && (port.CellsAt(tc, cb+9) > 0) {
+					if row < nhead {
+						if hfirst < 0 {
+							hfirst = port.CellsAt(tw, port.CellsAt(tc, cb+8))
+							hleft = port.CellsAt(tc, cb+13)
+							hright = port.CellsAt(tc, cb+14)
+						}
+						hcount += port.CellsAt(tc, cb+9)
+					}
+					if (row >= nhead) && (row < bodyend) {
+						occ += 1
+						if tbCellNumeric(wd, et, tw, tc, c) == 1 {
+							nums += 1
+							if tbCellSig(wd, et, tw, tc, c) > 0 {
+								amounts += 1
+							}
+							lo = tbMin(lo, port.CellsAt(tc, cb+14))
+							hi = tbMax(hi, port.CellsAt(tc, cb+14))
+						}
+					}
+				}
+			}
+			c += 1
+		}
+		if occ > 0 {
+			kind = 1
+		}
+		if (nums > 0) && (nums == occ) {
+			kind = 2
+			if amounts > 0 {
+				kind = 3
+			}
+		}
+		var sem int32 = tbColSem(wd, et, hfirst)
+		if sem == 1 {
+			kind = 4
+		}
+		if sem == 8 {
+			kind = 5
+		}
+		if occ == 0 {
+			if (sem == 3) || ((sem == 4) || ((sem == 5) || (sem == 6))) {
+				kind = 3
+			}
+			if sem == 7 {
+				kind = 2
+			}
+		}
+		if port.CellsAt(tb, b+5) == pfRuled {
+			evidence = 1
+		}
+		if hcount > 0 {
+			evidence |= 2
+		}
+		if (nums >= 2) && (((hi - lo) <= 200) && ((nums >= 3) || (nrows <= 4))) {
+			evidence |= 4
+		}
+		port.CellsPush(tbk, x0)
+		port.CellsPush(tbk, x1)
+		if occ > 0 {
+			port.CellsPush(tbk, left)
+			port.CellsPush(tbk, right)
+		} else {
+			port.CellsPush(tbk, hleft)
+			port.CellsPush(tbk, hright)
+		}
+		port.CellsPush(tbk, tbColAlign(tb, k, col, nhead, bodyend, wd, tc, tw))
+		port.CellsPush(tbk, kind)
+		port.CellsPush(tbk, tbColSem(wd, et, hfirst))
+		port.CellsPush(tbk, hfirst)
+		port.CellsPush(tbk, hcount)
+		port.CellsPush(tbk, occ)
+		port.CellsPush(tbk, evidence)
+		port.CellsPush(tbk, -1)
+		col += 1
+	}
+	return 0
+}
+
+func tbWhitespaceRun(page int32, wd *port.Cells, et *port.Cells, rm *port.Cells, kc *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, ra int32, rb int32, lower int32, dropfirst int32, droplast int32, seeds *port.Cells) int32 {
 	// The rows ra..rb (inclusive) as a whitespace candidate: its rows of one chunk at either end are not in it, and a
 	// run that is refused as a whole is tried again without its last row (the lines that follow a table, set in two
 	// chunks like a label and its text, join the run once the rows are right; D459). Three rows cut in two chunks at least.
-	var a int32 = ra
-	var jj int32 = rb
+	var a int32 = ra + dropfirst
+	var jj int32 = rb - droplast
 	var again int32 = 0
+	port.CellsSet(seeds, 2, -1)
+	port.CellsSet(seeds, 3, -1)
 	for (a < jj) && (port.CellsAt(rw, (a*rws)+9) < 2) {
 		a += 1
 	}
 	jj = tbTrimEnd(rw, sg, a, jj)
-	if tbTabularBaselineRows(rw, a, jj+1) >= 3 {
+	if (tbTabularBaselineRows(rw, a, jj+1) >= 3) && (((dropfirst + droplast) == 0) || (((rb - jj) + (a - ra)) <= ((jj - a) + 1))) {
 		again = 1
 	}
-	for again == 1 {
+	for (again == 1) && (port.CellsAt(seeds, 0) < port.CellsAt(seeds, 1)) {
+		port.CellsSet(seeds, 0, port.CellsAt(seeds, 0)+1)
 		again = 0
-		var nt int32 = tbRowsOf(tb, tbs)
+		var nt int32 = tbRowsOf(tb, tagtable.Tbs)
 		var c0 int32 = tbRowsOf(tc, tcs)
 		var wl0 int32 = port.CellsLen(tw)
 		var xl0 int32 = port.CellsLen(tx)
-		var h int32 = tbHeadReach(rm, rw, sg, a, jj)
-		var t int32 = tbTextGrid(wd, et, wl, rw, sg, rm, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, page, h, jj+1, pfWhitespace, 0, 0, 2000000000, 2000000000, -2000000000, -2000000000)
+		var h0 int32 = tbHeadReach(rm, rw, sg, a, jj)
+		var h int32 = tbMax(h0, lower)
+		var t int32 = tbTextGrid(wd, et, wl, rw, sg, rm, kc, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, page, h, jj+1, pfWhitespace, 0, 0, 2000000000, 2000000000, -2000000000, -2000000000)
 		if t >= 0 {
 			var sc int32 = tbScore(tb, t, wd, et, tc, tw)
 			var pe int32 = tbProseEdge(tb, t, wd, et, tc, tw)
 			if (sc == 0) || (pe > 0) {
 				tbReject(tb, tc, tw, tx, nt, c0, wl0, xl0)
 				if (sc == 0) || (pe >= 2) {
-					jj -= 1
+					if pe >= 2 {
+						var lastrow int32 = port.CellsAt(rmap, jj-h)
+						var tail int32 = jj - h
+						for (tail >= 0) && (port.CellsAt(rmap, tail) == lastrow) {
+							tail -= 1
+						}
+						jj = h + tail
+					} else {
+						jj -= 1
+					}
 				}
 				if (pe == 1) || (pe == 3) {
 					a += 1
@@ -4421,7 +4722,9 @@ func tbWhitespaceRun(page int32, wd *port.Cells, et *port.Cells, rm *port.Cells,
 					again = 1
 				}
 			} else {
-				port.CellsSet(tb, (t*tbs)+6, sc)
+				port.CellsSet(tb, (t*tagtable.Tbs)+6, sc)
+				port.CellsSet(seeds, 2, h)
+				port.CellsSet(seeds, 3, jj)
 			}
 		}
 	}
@@ -4506,7 +4809,365 @@ func tbRunTail(rw *port.Cells, sg *port.Cells, nr int32, k int32) int32 {
 	return -1
 }
 
-func tbWhitespacePage(page int32, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, rm *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells) int32 {
+func tbPartNumber(wd *port.Cells, et *port.Cells, wl *port.Cells, first int32, n int32) int32 {
+	var i int32 = 0
+	var j int32 = 0
+	var digits int32 = 0
+	for i < n {
+		var w int32 = port.CellsAt(wl, first+i)
+		var ts int32 = evidence.WdGet(wd, w, evidence.HdTstart())
+		var tl int32 = evidence.WdGet(wd, w, evidence.HdTlen())
+		j = 0
+		for j < tl {
+			var cp int32 = port.CellsAt(et, ts+j)
+			if (cp >= 48) && (cp <= 57) {
+				digits += 1
+			} else if !tbNumChar(cp) {
+				return 0
+			}
+			j += 1
+		}
+		i += 1
+	}
+	if digits > 0 {
+		return 1
+	}
+	return 0
+}
+
+func tbPartHead(wd *port.Cells, et *port.Cells, wl *port.Cells, rw *port.Cells, r int32) int32 {
+	var first int32 = port.CellsAt(rw, r*rws)
+	var n int32 = port.CellsAt(rw, (r*rws)+1)
+	var i int32 = 0
+	var j int32 = 0
+	if port.CellsAt(rw, (r*rws)+9) < 2 {
+		return 0
+	}
+	var known int32 = 0
+	for i < n {
+		if tbColSem(wd, et, port.CellsAt(wl, first+i)) > 0 {
+			known += 1
+		}
+		i += 1
+	}
+	if known < 2 {
+		return 0
+	}
+	i = 0
+	for i < n {
+		var w int32 = port.CellsAt(wl, first+i)
+		if (evidence.WdGet(wd, w, evidence.WfStyle()) & model.SyBold()) == 0 {
+			return 0
+		}
+		if tbWordDigit(wd, et, w) && (tbPartNumber(wd, et, wl, first+i, 1) == 1) {
+			var ts int32 = evidence.WdGet(wd, w, evidence.HdTstart())
+			var tl int32 = evidence.WdGet(wd, w, evidence.HdTlen())
+			j = 0
+			for j < tl {
+				var cp int32 = port.CellsAt(et, ts+j)
+				if (cp == 46) || ((cp == 44) || ((cp == 36) || ((cp == 8364) || (cp == 163)))) {
+					return 0
+				}
+				j += 1
+			}
+		}
+		i += 1
+	}
+	return 1
+}
+
+func tbPartBand(tbk *port.Cells, first int32, n int32, x int32) int32 {
+	var c int32 = 0
+	for c < n {
+		if (x >= port.CellsAt(tbk, (first+c)*ks)) && (x <= port.CellsAt(tbk, ((first+c)*ks)+1)) {
+			return c
+		}
+		c += 1
+	}
+	return -1
+}
+
+func tbPartFits(wd *port.Cells, et *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, r int32, tbk *port.Cells, first int32, n int32, seen *port.Cells) int32 {
+	var qfirst int32 = port.CellsAt(rw, (r*rws)+8)
+	var count int32 = port.CellsAt(rw, (r*rws)+9)
+	var q int32 = 0
+	var c int32 = 0
+	var j int32 = 0
+	var digit int32 = 0
+	port.CellsDrop(seen, 0)
+	for q < count {
+		var s int32 = (qfirst + q) * sgs
+		var wfirst int32 = port.CellsAt(sg, s+3)
+		var nw int32 = port.CellsAt(sg, s+4)
+		var cx int32 = tbFirstCx(wd, et, wl, wfirst, wfirst+nw)
+		var endcol int32 = tbPartBand(tbk, first, n, port.CellsAt(sg, s+2)-1)
+		c = tbPartBand(tbk, first, n, cx)
+		if c < 0 {
+			return 0
+		}
+		port.CellsPush(seen, c)
+		if (port.CellsAt(tbk, ((first+c)*ks)+5) == 4) && (endcol <= c) {
+			digit = 0
+			j = 0
+			for j < nw {
+				if tbWordDigit(wd, et, port.CellsAt(wl, wfirst+j)) || tbSeparator(wd, et, port.CellsAt(wl, wfirst+j)) {
+					digit = 1
+				}
+				j += 1
+			}
+			if (digit == 0) && (tbColSem(wd, et, port.CellsAt(wl, wfirst)) != 1) {
+				if (count != 1) || ((evidence.WdGet(wd, port.CellsAt(wl, wfirst), evidence.WfStyle()) & model.SyBold()) == 0) {
+					return 0
+				}
+			}
+		}
+		q += 1
+	}
+	return 1
+}
+
+func tbPartHeaderOver(rw *port.Cells, sg *port.Cells, a int32, b int32) int32 {
+	var na int32 = port.CellsAt(rw, (a*rws)+9)
+	var nb int32 = port.CellsAt(rw, (b*rws)+9)
+	var af int32 = port.CellsAt(rw, (a*rws)+8)
+	var bf int32 = port.CellsAt(rw, (b*rws)+8)
+	var i int32 = 0
+	var j int32 = 0
+	var hit int32 = 0
+	for j < nb {
+		i = 0
+		for i < na {
+			if (tbAbs(port.CellsAt(sg, ((af+i)*sgs)+1)-port.CellsAt(sg, ((bf+j)*sgs)+1)) <= tbHeadTol) || (tbAbs(port.CellsAt(sg, ((af+i)*sgs)+2)-port.CellsAt(sg, ((bf+j)*sgs)+2)) <= tbHeadTol) {
+				hit += 1
+				i = na
+			}
+			i += 1
+		}
+		j += 1
+	}
+	if (hit >= 2) && ((hit * 2) >= na) {
+		return 1
+	}
+	return 0
+}
+
+func tbPartEnqueue(rw *port.Cells, seeds *port.Cells, a int32, b int32, split int32) int32 {
+	if (a <= b) && (tbTabularBaselineRows(rw, a, b+1) >= 3) {
+		port.CellsPush(seeds, a)
+		port.CellsPush(seeds, b)
+		port.CellsPush(seeds, split)
+	}
+	return 0
+}
+
+func tbPartFinal(page int32, wd *port.Cells, et *port.Cells, rm *port.Cells, kc *port.Cells, seeds *port.Cells, idx int32, a int32, b int32, part int32, retry int32, dropfirst int32, droplast int32, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells) int32 {
+	var end int32 = tbTrimEnd(rw, sg, a, b)
+	var j int32 = 4
+	if tbTabularBaselineRows(rw, a, end+1) < 3 {
+		return 0
+	}
+	for j < idx {
+		if (port.CellsAt(seeds, j+2) >= 2) && ((a <= port.CellsAt(seeds, j+1)) && (end >= port.CellsAt(seeds, j))) {
+			return 0
+		}
+		j += 3
+	}
+	if port.CellsAt(seeds, 0) >= port.CellsAt(seeds, 1) {
+		return 0
+	}
+	var nt int32 = tbRowsOf(tb, tagtable.Tbs)
+	var c0 int32 = tbRowsOf(tc, tcs)
+	var w0 int32 = port.CellsLen(tw)
+	var x0 int32 = port.CellsLen(tx)
+	if retry == 0 {
+		port.CellsSet(seeds, 0, port.CellsAt(seeds, 0)+1)
+		var t int32 = tbTextGrid(wd, et, wl, rw, sg, rm, kc, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, page, a, end+1, pfWhitespace, 0, 0, 2000000000, 2000000000, -2000000000, -2000000000)
+		if t >= 0 {
+			var sc int32 = tbScore(tb, t, wd, et, tc, tw)
+			if (sc == 0) || (tbProseEdge(tb, t, wd, et, tc, tw) > 0) {
+				tbReject(tb, tc, tw, tx, nt, c0, w0, x0)
+			} else {
+				port.CellsSet(tb, (t*tagtable.Tbs)+6, sc)
+				if part > 0 {
+					port.CellsSet(tb, (t*tagtable.Tbs)+31, port.CellsAt(tb, (t*tagtable.Tbs)+31)|4)
+				}
+				port.CellsSet(seeds, idx, a)
+				port.CellsSet(seeds, idx+1, end)
+				port.CellsSet(seeds, idx+2, part+2)
+				if end < b {
+					tbPartEnqueue(rw, seeds, end+1, b, 1)
+				}
+				return 1
+			}
+		}
+	}
+	var limit int32 = port.CellsAt(seeds, 1)
+	var remaining int32 = tbMax(0, (((limit-4)/2)-((idx-4)/3))-1)
+	port.CellsSet(seeds, 1, limit-(remaining*2))
+	tbWhitespaceRun(page, wd, et, rm, kc, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, a, end, a, dropfirst, droplast, seeds)
+	port.CellsSet(seeds, 1, limit)
+	if tbRowsOf(tb, tagtable.Tbs) > nt {
+		var fa int32 = port.CellsAt(seeds, 2)
+		var fb int32 = port.CellsAt(seeds, 3)
+		port.CellsSet(tb, (nt*tagtable.Tbs)+31, port.CellsAt(tb, (nt*tagtable.Tbs)+31)|4)
+		port.CellsSet(seeds, idx, fa)
+		port.CellsSet(seeds, idx+1, fb)
+		port.CellsSet(seeds, idx+2, 3)
+		if fa > a {
+			tbPartEnqueue(rw, seeds, a, fa-1, 1)
+		}
+		if fb < b {
+			tbPartEnqueue(rw, seeds, fb+1, b, 1)
+		}
+		return 1
+	}
+	return 0
+}
+
+func tbPartitionPage(page int32, wd *port.Cells, et *port.Cells, rm *port.Cells, kc *port.Cells, tbk *port.Cells, seeds *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells) int32 {
+	var k0 int32 = port.CellsLen(tbk)
+	var initial int32 = (port.CellsLen(seeds) - 4) / 3
+	var i int32 = 4
+	port.CellsSet(seeds, 0, 0)
+	port.CellsSet(seeds, 1, (initial*2)+4)
+	for (i < port.CellsLen(seeds)) && ((port.CellsAt(seeds, 0) + 1) < port.CellsAt(seeds, 1)) {
+		var ra int32 = port.CellsAt(seeds, i)
+		var rb int32 = port.CellsAt(seeds, i+1)
+		var part int32 = port.CellsAt(seeds, i+2)
+		var nt int32 = tbRowsOf(tb, tagtable.Tbs)
+		var c0 int32 = tbRowsOf(tc, tcs)
+		var w0 int32 = port.CellsLen(tw)
+		var x0 int32 = port.CellsLen(tx)
+		var a int32 = ra
+		var b int32 = rb
+		var cut int32 = -1
+		var skip int32 = 0
+		var bad int32 = -1
+		var size int32 = 0
+		var r int32 = 0
+		var mark int32 = part
+		var head int32 = 0
+		var retry int32 = 0
+		var foot int32 = 0
+		var dropfirst int32 = 0
+		var droplast int32 = 0
+		var edge int32 = 0
+		for (a < b) && (port.CellsAt(rw, (a*rws)+9) < 2) {
+			a += 1
+		}
+		b = tbTrimEnd(rw, sg, a, b)
+		if tbTabularBaselineRows(rw, a, b+1) >= 3 {
+			a = tbHeadReach(rm, rw, sg, a, b)
+			if (part > 0) && (a < ra) {
+				a = ra
+			}
+			port.CellsSet(seeds, 0, port.CellsAt(seeds, 0)+1)
+			var t int32 = tbTextGrid(wd, et, wl, rw, sg, rm, kc, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, page, a, b+1, pfWhitespace, 0, 0, 2000000000, 2000000000, -2000000000, -2000000000)
+			if t >= 0 {
+				var sc int32 = tbScore(tb, t, wd, et, tc, tw)
+				var pe int32 = tbProseEdge(tb, t, wd, et, tc, tw)
+				if (sc == 0) || (pe >= 2) {
+					retry = 1
+				}
+				if (pe == 1) || (pe == 3) {
+					retry |= 2
+				}
+				if (retry & 1) > 0 {
+					droplast = 1
+					if pe >= 2 {
+						edge = port.CellsAt(tb, (t*tagtable.Tbs)+7) - 1
+						for (edge >= 0) && (tbProseRow(tb, t, edge, wd, et, tc, tw) == 1) {
+							edge -= 1
+						}
+						r = b - a
+						for (r >= 0) && (port.CellsAt(rmap, r) > edge) {
+							r -= 1
+						}
+						droplast = (b - a) - r
+					}
+				}
+				if (retry & 2) > 0 {
+					edge = 0
+					for (edge < port.CellsAt(tb, (t*tagtable.Tbs)+7)) && (tbProseRow(tb, t, edge, wd, et, tc, tw) == 1) {
+						edge += 1
+					}
+					r = 0
+					for (r <= (b - a)) && (port.CellsAt(rmap, r) < edge) {
+						r += 1
+					}
+					dropfirst = r
+				}
+				head = tbHeadRows(tb, t, wd, et, tc, tw)
+				if (head == 0) && (tbPartHead(wd, et, wl, rw, a) == 1) {
+					head = 1
+				}
+				port.CellsSet(tb, (t*tagtable.Tbs)+11, head)
+				foot = tbFootRows(tb, t, head, wd, et, tc, tw)
+				port.CellsSet(tb, (t*tagtable.Tbs)+12, foot)
+				tbModel(tb, t, wd, et, tc, tw, tx, tbk, so)
+				var mf int32 = port.CellsAt(tb, (t*tagtable.Tbs)+28)
+				var nc int32 = port.CellsAt(tb, (t*tagtable.Tbs)+29)
+				port.CellsDrop(st, 0)
+				r = a
+				for r <= b {
+					port.CellsPush(st, port.CellsAt(rw, (r*rws)+3))
+					r += 1
+				}
+				tbSortNums(st)
+				size = port.CellsAt(st, port.CellsLen(st)/2)
+				tbReject(tb, tc, tw, tx, nt, c0, w0, x0)
+				if a > ra {
+					tbPartEnqueue(rw, seeds, ra, a-1, 1)
+					mark = 1
+				}
+				if b < rb {
+					tbPartEnqueue(rw, seeds, b+1, rb, 1)
+					mark = 1
+				}
+				r = a
+				for (retry == 0) && ((r <= b) && (cut < 0)) {
+					if (port.CellsAt(rw, (r*rws)+9) == 1) && ((port.CellsAt(rw, (r*rws)+3) * 100) >= (size * tbGapSize)) {
+						cut = r
+						skip = 1
+					} else if (head == 0) && ((r > a) && (r < b)) {
+						if (tbPartHead(wd, et, wl, rw, r) == 1) && (tbPartHeaderOver(rw, sg, r, r+1) == 1) {
+							cut = r
+						}
+					}
+					if (cut < 0) && (tbPartFits(wd, et, wl, rw, sg, r, tbk, mf, nc, en) == 0) {
+						if bad < 0 {
+							bad = r
+						}
+						if r == (bad + 1) {
+							cut = bad
+						}
+					} else {
+						bad = -1
+					}
+					r += 1
+				}
+				if (cut == a) && (skip == 0) {
+					cut = a + 2
+				}
+				if (cut >= a) && (cut <= b) {
+					if cut > a {
+						tbPartFinal(page, wd, et, rm, kc, seeds, i, a, cut-1, 1, 0, 0, 0, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx)
+					}
+					if (cut + skip) > a {
+						tbPartEnqueue(rw, seeds, cut+skip, b, 1)
+					}
+				} else {
+					tbPartFinal(page, wd, et, rm, kc, seeds, i, a, b, mark, retry, dropfirst, droplast, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx)
+				}
+			}
+		}
+		i += 3
+	}
+	port.CellsDrop(tbk, k0)
+	return 0
+}
+
+func tbWhitespacePage(page int32, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, rm *port.Cells, kc *port.Cells, tbk *port.Cells, seeds *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells) int32 {
 	// The rows of the whole page, in runs of rows that are cut in two or more chunks (a row of one chunk
 	// goes in a run when a row of two follows it, and so do two, P12.2: a section's label and its sub-label, `ASSETS` and `Insurance and Other:`),
 	// each run of three such rows or more a whitespace candidate.
@@ -4516,6 +5177,11 @@ func tbWhitespacePage(page int32, wd *port.Cells, et *port.Cells, w0 int32, w1 i
 	var k int32 = 0
 	var ntab int32 = 0
 	var more int32 = 1
+	port.CellsDrop(seeds, 0)
+	port.CellsPush(seeds, 0)
+	port.CellsPush(seeds, 0)
+	port.CellsPush(seeds, -1)
+	port.CellsPush(seeds, -1)
 	for i < nr {
 		if port.CellsAt(rw, (i*rws)+9) >= 2 {
 			j = i
@@ -4559,13 +5225,20 @@ func tbWhitespacePage(page int32, wd *port.Cells, et *port.Cells, w0 int32, w1 i
 						e -= 1
 					}
 				}
-				tbWhitespaceRun(page, wd, et, rm, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, a, e)
+				tbPartEnqueue(rw, seeds, a, e, 0)
+				if a > i {
+					tbPartEnqueue(rw, seeds, i, a-1, 1)
+				}
+				if e < j {
+					tbPartEnqueue(rw, seeds, e+1, j, 1)
+				}
 			}
 		} else {
 			j = i
 		}
 		i = j + 1
 	}
+	tbPartitionPage(page, wd, et, rm, kc, tbk, seeds, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx)
 	return 0
 }
 
@@ -4610,10 +5283,10 @@ func tbBodyLineOutside(ln *port.Cells, wd *port.Cells, et *port.Cells, page int3
 
 func tbSameColumns(tb *port.Cells, a int32, b int32, tx *port.Cells) bool {
 	// The same number of columns, every boundary of b within 1/60 of the width of a's (at least 5 pt) of a's.
-	var na int32 = port.CellsAt(tb, (a*tbs)+17)
-	var nb int32 = port.CellsAt(tb, (b*tbs)+17)
-	var xa int32 = port.CellsAt(tb, (a*tbs)+16)
-	var xb int32 = port.CellsAt(tb, (b*tbs)+16)
+	var na int32 = port.CellsAt(tb, (a*tagtable.Tbs)+17)
+	var nb int32 = port.CellsAt(tb, (b*tagtable.Tbs)+17)
+	var xa int32 = port.CellsAt(tb, (a*tagtable.Tbs)+16)
+	var xb int32 = port.CellsAt(tb, (b*tagtable.Tbs)+16)
 	var i int32 = 0
 	if na != nb {
 		return 0 == 1
@@ -4650,10 +5323,10 @@ func tbWordSame(wd *port.Cells, et *port.Cells, a int32, b int32) bool {
 
 func tbRowSame(tb *port.Cells, a int32, ra int32, b int32, rb int32, tc *port.Cells, tw *port.Cells, wd *port.Cells, et *port.Cells) bool {
 	// Does row ra of table a say, cell for cell and word for word, what row rb of table b says.
-	var ca0 int32 = port.CellsAt(tb, (a*tbs)+9)
-	var ca1 int32 = ca0 + port.CellsAt(tb, (a*tbs)+10)
-	var cb0 int32 = port.CellsAt(tb, (b*tbs)+9)
-	var cb1 int32 = cb0 + port.CellsAt(tb, (b*tbs)+10)
+	var ca0 int32 = port.CellsAt(tb, (a*tagtable.Tbs)+9)
+	var ca1 int32 = ca0 + port.CellsAt(tb, (a*tagtable.Tbs)+10)
+	var cb0 int32 = port.CellsAt(tb, (b*tagtable.Tbs)+9)
+	var cb1 int32 = cb0 + port.CellsAt(tb, (b*tagtable.Tbs)+10)
 	var i int32 = ca0
 	var j int32 = cb0
 	var k int32 = 0
@@ -4682,18 +5355,18 @@ func tbRowSame(tb *port.Cells, a int32, ra int32, b int32, rb int32, tc *port.Ce
 
 func tbCaptionAgain(tb *port.Cells, a int32, b int32, wd *port.Cells, et *port.Cells, ln *port.Cells, tq *port.Cells) bool {
 	// Does table b have a caption, and is it the label (keyword and number) of table a's?
-	var qa int32 = port.CellsAt(tb, (a*tbs)+15)
+	var qa int32 = port.CellsAt(tb, (a*tagtable.Tbs)+15)
 	if qa == 0 {
 		return 0 == 1
 	}
-	var wa int32 = evidence.LnGet(ln, port.CellsAt(tq, port.CellsAt(tb, (a*tbs)+14)), evidence.LhFirst())
-	var wb int32 = evidence.LnGet(ln, port.CellsAt(tq, port.CellsAt(tb, (b*tbs)+14)), evidence.LhFirst())
+	var wa int32 = evidence.LnGet(ln, port.CellsAt(tq, port.CellsAt(tb, (a*tagtable.Tbs)+14)), evidence.LhFirst())
+	var wb int32 = evidence.LnGet(ln, port.CellsAt(tq, port.CellsAt(tb, (b*tagtable.Tbs)+14)), evidence.LhFirst())
 	return tbWordSame(wd, et, wa, wb) && tbWordSame(wd, et, wa+1, wb+1)
 }
 
 func tbUnfoot(tb *port.Cells, a int32, tc *port.Cells) int32 {
 	// A table that goes on has no foot on this page: its bold last row is a row.
-	var b int32 = a * tbs
+	var b int32 = a * tagtable.Tbs
 	var nrows int32 = port.CellsAt(tb, b+7)
 	var nfoot int32 = port.CellsAt(tb, b+12)
 	var cfirst int32 = port.CellsAt(tb, b+9)
@@ -4712,11 +5385,11 @@ func tbUnfoot(tb *port.Cells, a int32, tc *port.Cells) int32 {
 func tbRespects(tb *port.Cells, n int32, w int32, tx *port.Cells, tc *port.Cells) bool {
 	// P12.2 (smoke review, issue 7): do the body cells of table n keep to the columns of table w: no text of one lies across a boundary of w's
 	// columns (by more than 2 pt: the words of a column a page has none for are in the columns either side of the gap the wider page has)?
-	var cfirst int32 = port.CellsAt(tb, (n*tbs)+9)
-	var cend int32 = cfirst + port.CellsAt(tb, (n*tbs)+10)
-	var nhead int32 = port.CellsAt(tb, (n*tbs)+11)
-	var xw int32 = port.CellsAt(tb, (w*tbs)+16)
-	var nw int32 = port.CellsAt(tb, (w*tbs)+8)
+	var cfirst int32 = port.CellsAt(tb, (n*tagtable.Tbs)+9)
+	var cend int32 = cfirst + port.CellsAt(tb, (n*tagtable.Tbs)+10)
+	var nhead int32 = port.CellsAt(tb, (n*tagtable.Tbs)+11)
+	var xw int32 = port.CellsAt(tb, (w*tagtable.Tbs)+16)
+	var nw int32 = port.CellsAt(tb, (w*tagtable.Tbs)+8)
 	var c int32 = cfirst
 	var j int32 = 0
 	for c < cend {
@@ -4742,10 +5415,10 @@ func tbFitColumns(tb *port.Cells, a int32, b int32, tx *port.Cells, tc *port.Cel
 	if tbSameColumns(tb, a, b, tx) {
 		return 1
 	}
-	var na int32 = port.CellsAt(tb, (a*tbs)+8)
-	var nb int32 = port.CellsAt(tb, (b*tbs)+8)
-	var xa int32 = port.CellsAt(tb, (a*tbs)+16)
-	var xb int32 = port.CellsAt(tb, (b*tbs)+16)
+	var na int32 = port.CellsAt(tb, (a*tagtable.Tbs)+8)
+	var nb int32 = port.CellsAt(tb, (b*tagtable.Tbs)+8)
+	var xa int32 = port.CellsAt(tb, (a*tagtable.Tbs)+16)
+	var xb int32 = port.CellsAt(tb, (b*tagtable.Tbs)+16)
 	if (na < 3) || (nb < 3) {
 		return 0
 	}
@@ -4770,8 +5443,8 @@ func tbFitColumns(tb *port.Cells, a int32, b int32, tx *port.Cells, tc *port.Cel
 
 func tbColIn(tb *port.Cells, w int32, tx *port.Cells, x int32) int32 {
 	// The column of table w whose boundaries hold x: the last whose left boundary is at or before it (the first column for an x before them all).
-	var xw int32 = port.CellsAt(tb, (w*tbs)+16)
-	var ncols int32 = port.CellsAt(tb, (w*tbs)+8)
+	var xw int32 = port.CellsAt(tb, (w*tagtable.Tbs)+16)
+	var ncols int32 = port.CellsAt(tb, (w*tagtable.Tbs)+8)
 	var c int32 = 0
 	var res int32 = 0
 	for c < ncols {
@@ -4785,8 +5458,8 @@ func tbColIn(tb *port.Cells, w int32, tx *port.Cells, x int32) int32 {
 
 func tbNoSpansDown(tb *port.Cells, n int32, tc *port.Cells) bool {
 	// Has no cell of table n a row span: its rows and columns can be put on another grid (`tb-widen`).
-	var cfirst int32 = port.CellsAt(tb, (n*tbs)+9)
-	var cend int32 = cfirst + port.CellsAt(tb, (n*tbs)+10)
+	var cfirst int32 = port.CellsAt(tb, (n*tagtable.Tbs)+9)
+	var cend int32 = cfirst + port.CellsAt(tb, (n*tagtable.Tbs)+10)
 	var c int32 = cfirst
 	for c < cend {
 		if port.CellsAt(tc, (c*tcs)+2) > 1 {
@@ -4801,10 +5474,10 @@ func tbWiden(tb *port.Cells, n int32, w int32, tc *port.Cells, tx *port.Cells) i
 	// P12.2: table n, whose body keeps to the columns of table w (`tb-fit-columns`, `tb-respects`), onto w's grid: each cell goes to the columns of w that
 	// the extent of its text is over (its box's middle for a cell with none, one column), after the cell before it in its row, n has w's columns and
 	// boundaries, and its rows have an empty cell where w has a column and n has no cell (flag 23: `tb-emit` writes them).
-	var cfirst int32 = port.CellsAt(tb, (n*tbs)+9)
-	var cend int32 = cfirst + port.CellsAt(tb, (n*tbs)+10)
-	var xw int32 = port.CellsAt(tb, (w*tbs)+16)
-	var nw int32 = port.CellsAt(tb, (w*tbs)+8)
+	var cfirst int32 = port.CellsAt(tb, (n*tagtable.Tbs)+9)
+	var cend int32 = cfirst + port.CellsAt(tb, (n*tagtable.Tbs)+10)
+	var xw int32 = port.CellsAt(tb, (w*tagtable.Tbs)+16)
+	var nw int32 = port.CellsAt(tb, (w*tagtable.Tbs)+8)
 	var c int32 = cfirst
 	var lo int32 = 0
 	var hi int32 = 0
@@ -4840,17 +5513,17 @@ func tbWiden(tb *port.Cells, n int32, w int32, tc *port.Cells, tx *port.Cells) i
 		next = hi + 1
 		c += 1
 	}
-	port.CellsSet(tb, (n*tbs)+8, nw)
-	port.CellsSet(tb, (n*tbs)+16, xw)
-	port.CellsSet(tb, (n*tbs)+17, port.CellsAt(tb, (w*tbs)+17))
-	port.CellsSet(tb, (n*tbs)+23, 1)
+	port.CellsSet(tb, (n*tagtable.Tbs)+8, nw)
+	port.CellsSet(tb, (n*tagtable.Tbs)+16, xw)
+	port.CellsSet(tb, (n*tagtable.Tbs)+17, port.CellsAt(tb, (w*tagtable.Tbs)+17))
+	port.CellsSet(tb, (n*tagtable.Tbs)+23, 1)
 	return 0
 }
 
 func tbRowWord(tb *port.Cells, a int32, ra int32, k int32, tc *port.Cells, tw *port.Cells) int32 {
 	// The k-th word (an index into `wd`) of row ra of table a, its cells in order: -1 when the row has no more.
-	var ca0 int32 = port.CellsAt(tb, (a*tbs)+9)
-	var ca1 int32 = ca0 + port.CellsAt(tb, (a*tbs)+10)
+	var ca0 int32 = port.CellsAt(tb, (a*tagtable.Tbs)+9)
+	var ca1 int32 = ca0 + port.CellsAt(tb, (a*tagtable.Tbs)+10)
 	var i int32 = ca0
 	var left int32 = k
 	for i < ca1 {
@@ -4898,7 +5571,7 @@ func tbChainPlain(tb *port.Cells, head int32, a int32, tc *port.Cells) bool {
 		if f == a {
 			return 1 == 1
 		}
-		f = port.CellsAt(tb, (f*tbs)+19) - 1
+		f = port.CellsAt(tb, (f*tagtable.Tbs)+19) - 1
 	}
 	return 1 == 1
 }
@@ -4908,20 +5581,20 @@ func tbChainWiden(tb *port.Cells, head int32, a int32, w int32, tc *port.Cells, 
 	var f int32 = head
 	var stop int32 = 0
 	for (f >= 0) && (stop == 0) {
-		if port.CellsAt(tb, (f*tbs)+8) < port.CellsAt(tb, (w*tbs)+8) {
+		if port.CellsAt(tb, (f*tagtable.Tbs)+8) < port.CellsAt(tb, (w*tagtable.Tbs)+8) {
 			tbWiden(tb, f, w, tc, tx)
 		}
 		if f == a {
 			stop = 1
 		}
-		f = port.CellsAt(tb, (f*tbs)+19) - 1
+		f = port.CellsAt(tb, (f*tagtable.Tbs)+19) - 1
 	}
 	return 0
 }
 
 func tbLink(tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, tq *port.Cells, wd *port.Cells, et *port.Cells, ln *port.Cells, pages *port.Cells) int32 {
 	// Link the fragments of tables that go on across a page break (see the head of this section).
-	var n int32 = tbRowsOf(tb, tbs)
+	var n int32 = tbRowsOf(tb, tagtable.Tbs)
 	var fit int32 = 0
 	var j int32 = 1
 	var a int32 = 0
@@ -4934,10 +5607,10 @@ func tbLink(tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, tq *
 	for j < n {
 		a = j - 1
 		head = a
-		if port.CellsAt(tb, (a*tbs)+21) != 0 {
-			head = port.CellsAt(tb, (a*tbs)+21) - 1
+		if port.CellsAt(tb, (a*tagtable.Tbs)+21) != 0 {
+			head = port.CellsAt(tb, (a*tagtable.Tbs)+21) - 1
 		}
-		if (port.CellsAt(tb, (a*tbs)+0) == (port.CellsAt(tb, j*tbs) - 1)) && (port.CellsAt(tb, (a*tbs)+19) == 0) {
+		if (port.CellsAt(tb, (a*tagtable.Tbs)+0) == (port.CellsAt(tb, j*tagtable.Tbs) - 1)) && (port.CellsAt(tb, (a*tagtable.Tbs)+19) == 0) {
 			ok = 1
 			fit = tbFitColumns(tb, a, j, tx, tc)
 			if fit == 0 {
@@ -4950,26 +5623,26 @@ func tbLink(tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, tq *
 				ok = 0
 			}
 			if ok == 1 {
-				var pg0 int32 = port.CellsAt(tb, a*tbs)
-				var pj int32 = port.CellsAt(tb, j*tbs)
+				var pg0 int32 = port.CellsAt(tb, a*tagtable.Tbs)
+				var pj int32 = port.CellsAt(tb, j*tagtable.Tbs)
 				var hpa int32 = model.PageH(pages, pg0-1)
 				var hpj int32 = model.PageH(pages, pj-1)
-				if tbBodyLineOutside(ln, wd, et, pg0, port.CellsAt(tb, (a*tbs)+4), hpa, (hpa*8)/100, (hpa*92)/100, 0) {
+				if tbBodyLineOutside(ln, wd, et, pg0, port.CellsAt(tb, (a*tagtable.Tbs)+4), hpa, (hpa*8)/100, (hpa*92)/100, 0) {
 					ok = 0
 				}
-				if tbBodyLineOutside(ln, wd, et, pj, 0, port.CellsAt(tb, (j*tbs)+2), (hpj*8)/100, (hpj*92)/100, pg0) {
+				if tbBodyLineOutside(ln, wd, et, pj, 0, port.CellsAt(tb, (j*tagtable.Tbs)+2), (hpj*8)/100, (hpj*92)/100, pg0) {
 					ok = 0
 				}
 			}
-			if (ok == 1) && (port.CellsAt(tb, (j*tbs)+15) > 0) {
+			if (ok == 1) && (port.CellsAt(tb, (j*tagtable.Tbs)+15) > 0) {
 				if !tbCaptionAgain(tb, head, j, wd, et, ln, tq) {
 					ok = 0
 				}
 			}
 			skip = 0
-			if (ok == 1) && (port.CellsAt(tb, (j*tbs)+11) > 0) {
-				h = port.CellsAt(tb, (head*tbs)+11)
-				if h != port.CellsAt(tb, (j*tbs)+11) {
+			if (ok == 1) && (port.CellsAt(tb, (j*tagtable.Tbs)+11) > 0) {
+				h = port.CellsAt(tb, (head*tagtable.Tbs)+11)
+				if h != port.CellsAt(tb, (j*tagtable.Tbs)+11) {
 					ok = 0
 				} else {
 					r = 0
@@ -4993,11 +5666,11 @@ func tbLink(tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, tq *
 				if fit == 3 {
 					tbChainWiden(tb, head, a, j, tc, tx)
 				}
-				port.CellsSet(tb, (a*tbs)+19, j+1)
-				port.CellsSet(tb, (j*tbs)+20, skip)
-				port.CellsSet(tb, (j*tbs)+21, head+1)
-				span = (port.CellsAt(tb, j*tbs) - port.CellsAt(tb, head*tbs)) + 1
-				port.CellsSet(tb, (head*tbs)+18, span)
+				port.CellsSet(tb, (a*tagtable.Tbs)+19, j+1)
+				port.CellsSet(tb, (j*tagtable.Tbs)+20, skip)
+				port.CellsSet(tb, (j*tagtable.Tbs)+21, head+1)
+				span = (port.CellsAt(tb, j*tagtable.Tbs) - port.CellsAt(tb, head*tagtable.Tbs)) + 1
+				port.CellsSet(tb, (head*tagtable.Tbs)+18, span)
 				tbUnfoot(tb, a, tc)
 			}
 		}
@@ -5027,7 +5700,7 @@ func tbHeaderSpans(tb *port.Cells, k int32, tc *port.Cells) int32 {
 	// Text-based tables have no rules to say where a header cell spans: a header cell whose cell below it is
 	// empty spans down (the empty cell is absorbed: flag 1), and a header cell followed by empty cells over cells
 	// with text spans across them. Only header rows with a header row below them are looked at.
-	var b int32 = k * tbs
+	var b int32 = k * tagtable.Tbs
 	var nhead int32 = port.CellsAt(tb, b+11)
 	var ncols int32 = port.CellsAt(tb, b+8)
 	var cfirst int32 = port.CellsAt(tb, b+9)
@@ -5095,7 +5768,7 @@ func tbProseRole(role int32) int32 {
 func tbVeto(tb *port.Cells, t0 int32, wd *port.Cells, tc *port.Cells, tw *port.Cells, se *port.Cells, sc *port.Cells, gl *port.Cells, mk *port.Cells, mi *port.Cells) int32 {
 	// D225 case 6: a tree trusted to `tb-tag-veto-trust` that gives every word of a whitespace candidate to a P, L, LI or H element
 	// says it is not a table: the candidate's score goes down by `tb-tag-veto`. Only whitespace: it alone has no rule or fill to vouch for it.
-	var n int32 = tbRowsOf(tb, tbs)
+	var n int32 = tbRowsOf(tb, tagtable.Tbs)
 	var t int32 = t0
 	var c int32 = 0
 	var j int32 = 0
@@ -5103,11 +5776,11 @@ func tbVeto(tb *port.Cells, t0 int32, wd *port.Cells, tc *port.Cells, tw *port.C
 	var words int32 = 0
 	var s int32 = 0
 	for t < n {
-		if port.CellsAt(tb, (t*tbs)+5) == pfWhitespace {
+		if port.CellsAt(tb, (t*tagtable.Tbs)+5) == pfWhitespace {
 			ok = 1
 			words = 0
-			c = port.CellsAt(tb, (t*tbs)+9)
-			for (ok == 1) && (c < (port.CellsAt(tb, (t*tbs)+9) + port.CellsAt(tb, (t*tbs)+10))) {
+			c = port.CellsAt(tb, (t*tagtable.Tbs)+9)
+			for (ok == 1) && (c < (port.CellsAt(tb, (t*tagtable.Tbs)+9) + port.CellsAt(tb, (t*tagtable.Tbs)+10))) {
 				j = 0
 				for (ok == 1) && (j < port.CellsAt(tc, (c*tcs)+9)) {
 					s = tagtable.TtOwnerEl(sc, gl, mk, mi, evidence.WdGet(wd, port.CellsAt(tw, port.CellsAt(tc, (c*tcs)+8)+j), evidence.WfGfirst()))
@@ -5122,7 +5795,7 @@ func tbVeto(tb *port.Cells, t0 int32, wd *port.Cells, tc *port.Cells, tw *port.C
 				c += 1
 			}
 			if (ok == 1) && (words > 0) {
-				port.CellsSet(tb, (t*tbs)+6, tbMax(0, port.CellsAt(tb, (t*tbs)+6)-tbTagVeto))
+				port.CellsSet(tb, (t*tagtable.Tbs)+6, tbMax(0, port.CellsAt(tb, (t*tagtable.Tbs)+6)-tbTagVeto))
 			}
 		}
 		t += 1
@@ -5143,7 +5816,7 @@ func tbStructCand(wd *port.Cells, et *port.Cells, p int32, w0 int32, w1 int32, t
 	var by0 int32 = tagtable.TtGet(tg, k, 7)
 	var bx1 int32 = tagtable.TtGet(tg, k, 8)
 	var by1 int32 = tagtable.TtGet(tg, k, 9)
-	var nt int32 = tbRowsOf(tb, tbs)
+	var nt int32 = tbRowsOf(tb, tagtable.Tbs)
 	var c0 int32 = tbRowsOf(tc, tcs)
 	var wl0 int32 = port.CellsLen(tw)
 	var xl0 int32 = port.CellsLen(tx)
@@ -5224,8 +5897,8 @@ func tbStructCand(wd *port.Cells, et *port.Cells, p int32, w0 int32, w1 int32, t
 		}
 		return -1
 	}
-	port.CellsSet(tb, (t*tbs)+16, port.CellsLen(tx))
-	port.CellsSet(tb, (t*tbs)+17, nc+1)
+	port.CellsSet(tb, (t*tagtable.Tbs)+16, port.CellsLen(tx))
+	port.CellsSet(tb, (t*tagtable.Tbs)+17, nc+1)
 	port.CellsPush(tx, bx0)
 	i = 1
 	for i < nc {
@@ -5233,10 +5906,10 @@ func tbStructCand(wd *port.Cells, et *port.Cells, p int32, w0 int32, w1 int32, t
 		i += 1
 	}
 	port.CellsPush(tx, tbMax(bx1, port.CellsAt(tx, port.CellsLen(tx)-1)))
-	port.CellsSet(tb, (t*tbs)+24, 1)
-	port.CellsSet(tb, (t*tbs)+25, k)
-	port.CellsSet(tb, (t*tbs)+26, tagtable.TtGet(tg, k, 10))
-	port.CellsSet(tb, (t*tbs)+27, tagtable.TtGet(tg, k, 11))
+	port.CellsSet(tb, (t*tagtable.Tbs)+24, 1)
+	port.CellsSet(tb, (t*tagtable.Tbs)+25, k)
+	port.CellsSet(tb, (t*tagtable.Tbs)+26, tagtable.TtGet(tg, k, 10))
+	port.CellsSet(tb, (t*tagtable.Tbs)+27, tagtable.TtGet(tg, k, 11))
 	return t
 }
 
@@ -5271,7 +5944,7 @@ func tbTags(wd *port.Cells, et *port.Cells, p int32, w0 int32, w1 int32, grl *po
 	var trust int32 = pdfstruct.TgTrust(ss)
 	var use int32 = 0
 	var ttrust int32 = 0
-	var nt0 int32 = tbRowsOf(tb, tbs)
+	var nt0 int32 = tbRowsOf(tb, tagtable.Tbs)
 	var nt int32 = 0
 	var k int32 = 0
 	var g int32 = 0
@@ -5294,7 +5967,7 @@ func tbTags(wd *port.Cells, et *port.Cells, p int32, w0 int32, w1 int32, grl *po
 		owned = tagtable.TtGet(tg, k, 14)
 		g = tagtable.TtGeoTb(tg, k, tb, t0, nt0)
 		if g >= 0 {
-			tagtable.TtFold(tg, (k*24)+6, port.CellsAt(tb, (g*tbs)+1), port.CellsAt(tb, (g*tbs)+2), port.CellsAt(tb, (g*tbs)+3), port.CellsAt(tb, (g*tbs)+4))
+			tagtable.TtFold(tg, (k*24)+6, port.CellsAt(tb, (g*tagtable.Tbs)+1), port.CellsAt(tb, (g*tagtable.Tbs)+2), port.CellsAt(tb, (g*tagtable.Tbs)+3), port.CellsAt(tb, (g*tagtable.Tbs)+4))
 		}
 		tagtable.TtChecks(tg, k, ta, wd, w0, w1, wo, grl, q0, q1, ws)
 		geo = -1
@@ -5337,12 +6010,12 @@ func tbTags(wd *port.Cells, et *port.Cells, p int32, w0 int32, w1 int32, grl *po
 		}
 		if (use == 1) && ((v == 1) && ((g >= 0) && ((geo >= 0) && (geo < tbGeoAgree)))) {
 			tagtable.TtSet(tg, k, 10, 2)
-			port.CellsSet(tb, (g*tbs)+24, port.CellsAt(tb, (g*tbs)+24)|4)
+			port.CellsSet(tb, (g*tagtable.Tbs)+24, port.CellsAt(tb, (g*tagtable.Tbs)+24)|4)
 		}
 		if (use == 1) && (g >= 0) {
-			port.CellsSet(tb, (g*tbs)+25, k)
-			port.CellsSet(tb, (g*tbs)+26, tagtable.TtGet(tg, k, 10))
-			port.CellsSet(tb, (g*tbs)+27, tagtable.TtGet(tg, k, 11))
+			port.CellsSet(tb, (g*tagtable.Tbs)+25, k)
+			port.CellsSet(tb, (g*tagtable.Tbs)+26, tagtable.TtGet(tg, k, 10))
+			port.CellsSet(tb, (g*tagtable.Tbs)+27, tagtable.TtGet(tg, k, 11))
 		}
 		tagtable.TtRecord(tg, k, trust, tv)
 		k += 1
@@ -5353,7 +6026,7 @@ func tbTags(wd *port.Cells, et *port.Cells, p int32, w0 int32, w1 int32, grl *po
 func tbTagMap(tb *port.Cells, k int32, tg *port.Cells, ta *port.Cells, wo *port.Cells, w0 int32, tc *port.Cells, tw *port.Cells, ws *port.Cells) int32 {
 	// Fill ws with the maps of candidate k's tagged table onto it (`tt-geo-map`: a candidate row for each tagged row, then a column for each
 	// tagged column); for a table made of the tags the identity. Answers 1 when ws holds them, 0 when it does not.
-	var b int32 = k * tbs
+	var b int32 = k * tagtable.Tbs
 	var tgi int32 = port.CellsAt(tb, b+25)
 	var i int32 = 0
 	if tgi < 0 {
@@ -5381,7 +6054,7 @@ func tbTagMap(tb *port.Cells, k int32, tg *port.Cells, ta *port.Cells, wo *port.
 func tbTagHead(tb *port.Cells, k int32, tg *port.Cells, ta *port.Cells, wo *port.Cells, w0 int32, tc *port.Cells, tw *port.Cells, ws *port.Cells) int32 {
 	// The head rows the tags give candidate k: the tagged head when the tags are confirmed and map the candidate's first rows one to one,
 	// or when they are partial and have as many rows as the candidate (case 4); a table made of the tags has its own. 0 when not.
-	var b int32 = k * tbs
+	var b int32 = k * tagtable.Tbs
 	var tgi int32 = port.CellsAt(tb, b+25)
 	var nrows int32 = port.CellsAt(tb, b+7)
 	var r int32 = 0
@@ -5427,7 +6100,7 @@ func TbTagSpan(tb *port.Cells, k int32, tc *port.Cells, cfirst int32, cend int32
 	// A tagged cell that spans rs rows and cs columns, at the candidate's cell (gr, gc). A ruled table keeps its lattice's spans: when a
 	// cell of the block is another cell than the one at its corner a rule closes the edge, and the table is flagged (`tag-span-conflict`).
 	// Any other profile takes the tagged span when every other slot of the block is a plain, empty cell: they are absorbed.
-	var b int32 = k * tbs
+	var b int32 = k * tagtable.Tbs
 	var e int32 = tbCellAt(tc, cfirst, cend, gr, gc)
 	var rr int32 = 0
 	var cc int32 = 0
@@ -5503,7 +6176,7 @@ func TbTagSpan(tb *port.Cells, k int32, tc *port.Cells, cfirst int32, cend int32
 func tbTagRest(tb *port.Cells, k int32, tg *port.Cells, ta *port.Cells, wo *port.Cells, w0 int32, tc *port.Cells, tw *port.Cells, ws *port.Cells) int32 {
 	// What else the confirmed tags give candidate k (cases 1 and 2, and a table made of the tags): the tagged spans (`tb-tag-span`) and the
 	// cells of `TH` with Scope Row, which are row headers.
-	var b int32 = k * tbs
+	var b int32 = k * tagtable.Tbs
 	var tgi int32 = port.CellsAt(tb, b+25)
 	var cfirst int32 = port.CellsAt(tb, b+9)
 	var cend int32 = cfirst + port.CellsAt(tb, b+10)
@@ -5560,7 +6233,7 @@ func tbSectionSpans(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc 
 	// text (partial, shaded, whitespace) with one cell with text that has no digit (no amount) and is bold or ends with a colon (`Insurance and Other:`,
 	// `ASSETS`) has that cell span the columns from its own to the last, and the empty cells it covers are absorbed (flag 1), as a header cell's are
 	// (`tb-header-spans`).
-	var b int32 = k * tbs
+	var b int32 = k * tagtable.Tbs
 	var nrows int32 = port.CellsAt(tb, b+7)
 	var ncols int32 = port.CellsAt(tb, b+8)
 	var cfirst int32 = port.CellsAt(tb, b+9)
@@ -5625,7 +6298,7 @@ func tbFinish(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc *port.
 	// What the cells of table k say once they are placed (SPEC 10.5, 10.10): the header rows (the tags', when they are confirmed and agree,
 	// D225), the footer, which cells are header cells (`col` in the header, `row` in the footer and for the tags' row headers), the tagged
 	// spans, each cell's alignment, the caption.
-	var b int32 = k * tbs
+	var b int32 = k * tagtable.Tbs
 	var nrows int32 = port.CellsAt(tb, b+7)
 	var cfirst int32 = port.CellsAt(tb, b+9)
 	var cend int32 = cfirst + port.CellsAt(tb, b+10)
@@ -5661,7 +6334,7 @@ func tbFinish(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc *port.
 	return 0
 }
 
-func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gfl *port.Cells, np int32, tb *port.Cells, tc *port.Cells, tw *port.Cells, tq *port.Cells, tx *port.Cells, s0 *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells, s7 *port.Cells, s8 *port.Cells, s9 *port.Cells, s10 *port.Cells, s11 *port.Cells, s12 *port.Cells, s13 *port.Cells, s14 *port.Cells, s15 *port.Cells, s16 *port.Cells, s17 *port.Cells, s18 *port.Cells, pages *port.Cells, gl *port.Cells, mk *port.Cells, se *port.Cells, sc *port.Cells, ss *port.Cells, grg *port.Cells, g0 *port.Cells, g1 *port.Cells, g2 *port.Cells, g3 *port.Cells, g4 *port.Cells, g5 *port.Cells, tv *port.Cells, an *port.Cells) int32 {
+func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gfl *port.Cells, np int32, tb *port.Cells, tc *port.Cells, tw *port.Cells, tq *port.Cells, tx *port.Cells, tbk *port.Cells, tbo *port.Cells, s0 *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells, s7 *port.Cells, s8 *port.Cells, s9 *port.Cells, s10 *port.Cells, s11 *port.Cells, s12 *port.Cells, s13 *port.Cells, s14 *port.Cells, s15 *port.Cells, s16 *port.Cells, s17 *port.Cells, s18 *port.Cells, pages *port.Cells, gl *port.Cells, mk *port.Cells, se *port.Cells, sc *port.Cells, ss *port.Cells, grg *port.Cells, g0 *port.Cells, g1 *port.Cells, g2 *port.Cells, g3 *port.Cells, g4 *port.Cells, g5 *port.Cells, tv *port.Cells, an *port.Cells) int32 {
 	// Find the tables of every page and claim their lines. `tb tc tw tq tx` are emptied first; s0..s18 are
 	// scratch: rules, merged rules, fills, a sort order, x and y boundaries, the grid, word pairs, a copy of tb
 	// rows, flags, the page's words, rows and chunks, channels, two coordinate lists, the row map, spans and
@@ -5688,6 +6361,8 @@ func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gf
 	var k int32 = 0
 	port.CellsDrop(tb, 0)
 	port.CellsDrop(tv, 0)
+	port.CellsDrop(tbk, 0)
+	port.CellsDrop(tbo, 0)
 	if port.CellsLen(se) > 0 {
 		tagtable.TtIndex(mk, sc, g0)
 	}
@@ -5724,32 +6399,33 @@ func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gf
 		for (uj < nu) && (glayer.GflGet(gfl, uj, glayer.GffPage()) == p) {
 			uj += 1
 		}
-		t0 = tbRowsOf(tb, tbs)
+		t0 = tbRowsOf(tb, tagtable.Tbs)
 		if (wj - wi) > 0 {
 			tbCollect(grl, qi, qj, gfl, ui, uj, model.PageH(pages, p-1), s0, s2)
 			if tbRowsOf(s0, rls) <= maxRules {
 				tbMergeRules(s0, s1, s3, s9)
 				tbRuledPage(s1, p, s4, s5, s6, tb, tc, wd, et, wi, wj, s7, s3, tw, tx, s10, s11, s12, s13, s14, s16, s15, an, model.PageW(pages, p-1), model.PageH(pages, p-1))
-				tbPartialPage(s1, p, wd, et, wi, wj, s9, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx)
+				tbPartialPage(s1, tbo, p, wd, et, wi, wj, s9, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx)
 			} else {
 				port.CellsDrop(s1, 0)
 			}
 			if tbRowsOf(s2, 6) <= maxRules {
-				tbShadedPage(s2, p, wd, et, wi, wj, s1, s8, s9, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx)
+				tbShadedPage(s2, p, wd, et, wi, wj, s1, tbo, s8, s9, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx)
 			}
-			tbWhitespacePage(p, wd, et, wi, wj, s1, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx)
+			tbWhitespacePage(p, wd, et, wi, wj, s1, tbo, tbk, s0, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx)
 			if pdfstruct.TgTrust(ss) >= tbTagVetoTrust {
 				tbVeto(tb, t0, wd, tc, tw, se, sc, gl, mk, g0)
 			}
 			tbSelect(tb, t0, s3, s9, s8, grg, tc)
-			nk = tbRowsOf(tb, tbs)
+			nk = tbRowsOf(tb, tagtable.Tbs)
 			tbTags(wd, et, p, wi, wj, grl, qi, qj, se, sc, ss, gl, mk, g0, g1, g2, g3, g4, g5, tv, tb, t0, tc, tw, tx, s7, s3)
-			if tbRowsOf(tb, tbs) > nk {
+			if tbRowsOf(tb, tagtable.Tbs) > nk {
 				tbSelect(tb, t0, s3, s9, s8, grg, tc)
 			}
 			k = t0
-			for k < tbRowsOf(tb, tbs) {
+			for k < tbRowsOf(tb, tagtable.Tbs) {
 				tbFinish(tb, k, wd, et, tc, tw, ln, li, lj, tq, g1, g2, g3, wi, g4)
+				tbModel(tb, k, wd, et, tc, tw, tx, tbk, g4)
 				k += 1
 			}
 			tbClaim(tb, t0, ln, li, lj)
@@ -5761,5 +6437,5 @@ func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gf
 		p += 1
 	}
 	tbLink(tb, tc, tw, tx, tq, wd, et, ln, pages)
-	return tbRowsOf(tb, tbs)
+	return tbRowsOf(tb, tagtable.Tbs)
 }

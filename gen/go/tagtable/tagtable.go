@@ -10,6 +10,8 @@ import (
 	"strings"
 )
 
+const Tbs int32 = 32
+
 const tbTagTrust int32 = 300
 
 const tbStructOk int32 = 800
@@ -658,7 +660,7 @@ func ttMode(ws *port.Cells, at0 int32, n int32, m int32, i int32) int32 {
 }
 
 func TtGeoMap(tg *port.Cells, k int32, ta *port.Cells, wo *port.Cells, w0 int32, tb *port.Cells, t int32, tc *port.Cells, tw *port.Cells, ws *port.Cells) int32 {
-	// The majority mapping of table k's rows and columns onto candidate t of `tb` (stride 28, cells of stride 16): ws[0..nrows) is the
+	// The majority mapping of table k's rows and columns onto candidate t of `tb` (stride TBS, cells of stride 16): ws[0..nrows) is the
 	// candidate row of each tagged row, ws[nrows..nrows+ncols) the candidate column of each tagged column (-1 none). Answers the words
 	// that agree: the tagged row and column map one-to-one and a word's candidate cell is the one they name; -2 when the matrices
 	// would not fit (more than a million cells), and the arena is left as the maps. The words' cells are in `ws` after the maps.
@@ -667,7 +669,7 @@ func TtGeoMap(tg *port.Cells, k int32, ta *port.Cells, wo *port.Cells, w0 int32,
 	var ce int32 = cf + port.CellsAt(tg, b+5)
 	var nr int32 = port.CellsAt(tg, b+2)
 	var nc int32 = port.CellsAt(tg, b+3)
-	var tb0 int32 = t * 28
+	var tb0 int32 = t * Tbs
 	var gnr int32 = port.CellsAt(tb, tb0+7)
 	var gnc int32 = port.CellsAt(tb, tb0+8)
 	var gcf int32 = port.CellsAt(tb, tb0+9)
@@ -868,8 +870,8 @@ func TtGeoTb(tg *port.Cells, k int32, tb *port.Cells, t0 int32, t1 int32) int32 
 		return -1
 	}
 	for t < t1 {
-		if port.CellsAt(tb, (t*28)+5) != 5 {
-			v = TtIou(port.CellsAt(tg, b+6), port.CellsAt(tg, b+7), port.CellsAt(tg, b+8), port.CellsAt(tg, b+9), port.CellsAt(tb, (t*28)+1), port.CellsAt(tb, (t*28)+2), port.CellsAt(tb, (t*28)+3), port.CellsAt(tb, (t*28)+4))
+		if port.CellsAt(tb, (t*Tbs)+5) != 5 {
+			v = TtIou(port.CellsAt(tg, b+6), port.CellsAt(tg, b+7), port.CellsAt(tg, b+8), port.CellsAt(tg, b+9), port.CellsAt(tb, (t*Tbs)+1), port.CellsAt(tb, (t*Tbs)+2), port.CellsAt(tb, (t*Tbs)+3), port.CellsAt(tb, (t*Tbs)+4))
 			if v > bv {
 				bv = v
 				best = t

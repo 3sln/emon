@@ -286,7 +286,7 @@ pub(crate) fn tt_run_an(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells
         page_new(pages, 2, 61200, 79200, 0, pk_vector());
     }
     gf_doc(pa, gpts, gmk, gim, np, gfx_mode(), grl, gfl, cand, &mut crate::port::Cells::new());
-    tb_build(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
+    tb_build(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
     lc_copy(ln, lt);
     pa_build(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
     tt_brief(t, nodes, attrs, text);
@@ -2031,7 +2031,7 @@ pub(crate) fn tt_golden(pdf: &[u8], mut t: &mut String, mut tvt: &mut String) ->
     pa_pages(pg, pages);
     let np: i32 = crate::port::cells_len(pages) / 16;
     gf_doc(pa, pts, mk, im, np, gfx_mode(), grl, gfl, cand, &mut crate::port::Cells::new());
-    tb_build(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, &mut crate::port::Cells::new());
+    tb_build(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, &mut crate::port::Cells::new());
     tt_emit(tvt, t12e);
     lc_copy(ln, lt);
     in_detect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii);
@@ -2125,4 +2125,170 @@ fn test_real_documents_make_the_golden_models() {
     // A document of paragraphs and two columns has no table (the stage's other half: it must not make one).
     crate::testport::assert_eq(tt_golden(&crate::testport::test_file("corpus/synth/pdf/h-plain.pdf")[..], t6, &mut crate::port::new_text()), 0, "h-plain runs");
     crate::testport::assert_text_span(t6, &crate::testport::test_file("para/h-plain.json")[..], 0, jt_end(&crate::testport::test_file("para/h-plain.json")[..]), "h-plain makes no table", 0);
+}
+pub(crate) fn tt_sparse_ledger(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, credit: i32) -> i32 {
+    tt_at(wd, ln, et, &crate::testport::text_blob("Date")[..], 4000, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Details")[..], 8122, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Deposit")[..], 33100, 10000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Withdrawal")[..], 40500, 10000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Balance")[..], 54928, 10000, 1, 1);
+    let mut r: i32 = 0;
+    let mut x: i32 = 40500;
+    if credit == 1 {
+        x = 33100;
+    }
+    while r < 8 {
+        let y: i32 = 11600 + (r * 1600);
+        tt_at(wd, ln, et, &crate::testport::text_blob("20 Sep")[..], 4000, y, 0, 0);
+        if (r % 2) == 0 {
+            tt_at(wd, ln, et, &crate::testport::text_blob("Transfer")[..], 8122, y, 0, 0);
+            tt_at(wd, ln, et, &crate::testport::text_blob("181.04")[..], x, y, 0, 1);
+            tt_at(wd, ln, et, &crate::testport::text_blob("149,818.96")[..], 54928, y, 0, 1);
+        } else {
+            tt_at(wd, ln, et, &crate::testport::text_blob("Electronic transfer")[..], 8122, y, 0, 0);
+            tt_at(wd, ln, et, &crate::testport::text_blob("1.00")[..], x, y, 0, 1);
+            tt_at(wd, ln, et, &crate::testport::text_blob("999.99")[..], 54928, y, 0, 1);
+        }
+        r += 1;
+    }
+    return 0;
+}
+#[test]
+fn test_a_debit_only_row_keeps_its_empty_credit_cell() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    tt_sparse_ledger(wd, ln, et, 0);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "sparse ledger is well formed");
+    crate::testport::assert_text(t, "T5w;Gh;R;Ch[Date];Chs[Details];Ch[Deposit];Ch[Withdrawal];Che[Balance];Gb;R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];", "the empty band retains its header and every amount stays at its geometric anchor");
+}
+#[test]
+fn test_a_credit_only_row_keeps_its_empty_debit_cell() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    tt_sparse_ledger(wd, ln, et, 1);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "sparse ledger is well formed");
+    crate::testport::assert_text(t, "T5w;Gh;R;Ch[Date];Chs[Details];Ch[Deposit];Ch[Withdrawal];Che[Balance];Gb;R;C[20 Sep];Cs[Transfer];Ce[181.04];C[];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];Ce[1.00];C[];Ce[999.99];R;C[20 Sep];Cs[Transfer];Ce[181.04];C[];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];Ce[1.00];C[];Ce[999.99];R;C[20 Sep];Cs[Transfer];Ce[181.04];C[];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];Ce[1.00];C[];Ce[999.99];R;C[20 Sep];Cs[Transfer];Ce[181.04];C[];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];Ce[1.00];C[];Ce[999.99];", "the empty band retains its header and every amount stays at its geometric anchor");
+}
+#[test]
+fn test_a_header_anchors_a_column_no_body_row_fills() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    tt_sparse_ledger(wd, ln, et, 0);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "sparse ledger is well formed");
+    crate::testport::assert_text(t, "T5w;Gh;R;Ch[Date];Chs[Details];Ch[Deposit];Ch[Withdrawal];Che[Balance];Gb;R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];", "the empty band retains its header and every amount stays at its geometric anchor");
+}
+#[test]
+fn test_right_aligned_amounts_make_one_numeric_column() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tbk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    page_new(pages, 1, 61200, 79200, 0, pk_vector());
+    tt_at(wd, ln, et, &crate::testport::text_blob("Item")[..], 7600, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Amount")[..], 40500, 10000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("One")[..], 7600, 11600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("1.00")[..], 40500, 11600, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Ten")[..], 7600, 13200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("10.00")[..], 40500, 13200, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Thousand")[..], 7600, 14800, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("1,000.00")[..], 40500, 14800, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Hundred")[..], 7600, 16400, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("100.00")[..], 40500, 16400, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Total")[..], 7600, 18000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("1,111.00")[..], 40500, 18000, 1, 1);
+    crate::testport::assert_eq(tb_build(wd, ln, et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), 1, tb, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), tbk, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 1, "the amounts make one table");
+    crate::testport::assert_eq(tb_model_col(tb, tbk, 0, 1, 3), 40500, "varying widths share their right anchor");
+    crate::testport::assert_eq(tb_model_col(tb, tbk, 0, 1, 5), 3, "the numeric column is an amount column");
+    crate::testport::assert_eq(tb_model_col(tb, tbk, 0, 1, 9), 4, "all four body rows support the anchor");
+}
+pub(crate) fn tt_part_ledger(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, y: i32) -> i32 {
+    tt_at(wd, ln, et, &crate::testport::text_blob("Date")[..], 7600, y, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Details")[..], 15000, y, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Amount")[..], 43000, y, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("01Jan")[..], 7600, y + 1600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Rent")[..], 15000, y + 1600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("1.00")[..], 43000, y + 1600, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("02Jan")[..], 7600, y + 3200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Electricity")[..], 15000, y + 3200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("20.00")[..], 43000, y + 3200, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("03Jan")[..], 7600, y + 4800, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Service fee")[..], 15000, y + 4800, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("300.00")[..], 43000, y + 4800, 0, 1);
+    return 0;
+}
+pub(crate) fn tt_part_summary(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, y: i32) -> i32 {
+    tt_at(wd, ln, et, &crate::testport::text_blob("Subtotal")[..], 7600, y, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("31.00")[..], 43000, y, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Tax")[..], 7600, y + 1600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("6.20")[..], 43000, y + 1600, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Total")[..], 7600, y + 3200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("37.20")[..], 43000, y + 3200, 0, 1);
+    return 0;
+}
+#[test]
+fn test_a_summary_below_a_ledger_is_its_own_table() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    tt_part_ledger(wd, ln, et, 10000);
+    tt_part_summary(wd, ln, et, 16400);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "partitioned tables are well formed");
+    crate::testport::assert_text(t, "T3w;Gh;R;Ch[Date];Chs[Details];Ch[Amount];Gb;R;C[01Jan];Cs[Rent];Ce[1.00];R;C[02Jan];Cs[Electricity];Ce[20.00];R;C[03Jan];Cs[Service fee];Ce[300.00];T2w;Gb;R;Cs[Subtotal];C[31.00];R;Cs[Tax];C[6.20];R;Cs[Total];C[37.20];", "the two column models have disjoint intervals and preserve every row");
+}
+#[test]
+fn test_the_first_transaction_after_a_summary_belongs_to_the_ledger() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    tt_part_summary(wd, ln, et, 10000);
+    tt_part_ledger(wd, ln, et, 14800);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "partitioned tables are well formed");
+    crate::testport::assert_text(t, "T2w;Gb;R;Cs[Subtotal];C[31.00];R;Cs[Tax];C[6.20];R;Cs[Total];C[37.20];T3w;Gh;R;Ch[Date];Chs[Details];Ch[Amount];Gb;R;C[01Jan];Cs[Rent];Ce[1.00];R;C[02Jan];Cs[Electricity];Ce[20.00];R;C[03Jan];Cs[Service fee];Ce[300.00];", "the two column models have disjoint intervals and preserve every row");
+}
+#[test]
+fn test_a_heading_between_two_tables_is_owned_by_neither() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    tt_part_ledger(wd, ln, et, 10000);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Between tables")[..], 7600, 16400, 1, 0);
+    let heading_word: i32 = wd_count(wd) - 1;
+    wd_set(wd, heading_word, wf_size(), 1800);
+    tt_part_ledger(wd, ln, et, 18000);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "a foreign heading is well formed outside both tables");
+    crate::testport::assert_text(t, "T3w;Gh;R;Ch[Date];Chs[Details];Ch[Amount];Gb;R;C[01Jan];Cs[Rent];Ce[1.00];R;C[02Jan];Cs[Electricity];Ce[20.00];R;C[03Jan];Cs[Service fee];Ce[300.00];P[Between tables];T3w;Gh;R;Ch[Date];Chs[Details];Ch[Amount];Gb;R;C[01Jan];Cs[Rent];Ce[1.00];R;C[02Jan];Cs[Electricity];Ce[20.00];R;C[03Jan];Cs[Service fee];Ce[300.00];", "a heading-size line is owned by neither neighboring table");
+}
+#[test]
+fn test_empty_date_markers_do_not_split_a_ledger() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    tt_part_ledger(wd, ln, et, 10000);
+    tt_at(wd, ln, et, &crate::testport::text_blob("–")[..], 7600, 16400, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Pending")[..], 15000, 16400, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("4.00")[..], 43000, 16400, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("–")[..], 7600, 18000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Unspecified")[..], 15000, 18000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("5.00")[..], 43000, 18000, 0, 1);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "empty date markers preserve all rows");
+    crate::testport::assert_text(t, "T3w;Gh;R;Chs[Date];Chs[Details];Ch[Amount];Gb;R;Cs[01Jan];Cs[Rent];Ce[1.00];R;Cs[02Jan];Cs[Electricity];Ce[20.00];R;Cs[03Jan];Cs[Service fee];Ce[300.00];R;Cs[–];Cs[Pending];Ce[4.00];R;Cs[–];Cs[Unspecified];Ce[5.00];", "punctuation placeholders are not a different date-column model");
 }

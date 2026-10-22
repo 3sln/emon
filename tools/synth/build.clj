@@ -24,6 +24,9 @@
   (:import (java.security MessageDigest)))
 
 (def CORPUS "test/corpus/synth")
+(def TABLE-MODEL-PRODUCERS
+  {"table-ledger-sparse" "emon synth.pdfw sparse-ledger v1"
+   "table-summary-and-ledger" "emon synth.pdfw summary-and-ledger v1"})
 
 (defn sha [path]
   (let [md (MessageDigest/getInstance "SHA-256")]
@@ -394,6 +397,7 @@
             pp (str CORPUS "/pdf/" stem ".pdf")
             html (slurp hp :encoding "UTF-8")
             [sizes prod] (page-sizes pp)
+            prod (or (get TABLE-MODEL-PRODUCERS stem) prod)
             rp (row-pages html pp (count sizes))
             facts (cond-> (om "pages" sizes) (seq rp) (assoc "rows" rp))
             extra (extra-facts html pp stem facts)
@@ -422,7 +426,7 @@
             entry (om "files" (apply om (mapcat (fn [[k v]] [k (om "path" v "sha256" (sha (str CORPUS "/" v))
                                                                   "bytes" (.length (io/file CORPUS v)))]) files))
                       "pdf-producer" prod "facts" manifest-facts)
-            prov (om "html" (files "html") "pdf" (files "pdf") "producer" (str (get producer "version") "; " prod))
+            prov (om "html" (files "html") "pdf" (files "pdf") "producer" (if (contains? TABLE-MODEL-PRODUCERS stem) prod (str (get producer "version") "; " prod)))
             variants (into (om) (filter (fn [[k _]] (#{"pdf-tagged" "scan" "scan-color"} k)) files))
             prov (if (seq variants) (assoc prov "variants" variants) prov)
             gold (h2g/convert html (pj/parse (pj/dumps facts)) stem prov)]

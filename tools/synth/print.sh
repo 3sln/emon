@@ -26,7 +26,7 @@ set -e
 cd "$(dirname "$0")/../.."
 corpus=test/corpus/synth
 TAGGED="h-inverted table-simple-ruled lists-basic"
-HAND="hidden-older-ocr"          # made by wm_pdf.clj, not printed by Chrome
+HAND="hidden-older-ocr table-ledger-sparse table-summary-and-ledger"          # made by wm_pdf.clj, not printed by Chrome
 # (P6.8, D227) the hand-made graphics PDFs (gfx_pdf.clj, tagged_tables.clj) are not printed either; the mixed documents are
 # printed AFTER mixed.clj has made their images from the tables printed here
 for h in gfx-onepath-grid gfx-hidden-rules gfx-shading-bands gfx-pattern-bands gfx-curve-lines gfx-image-rules gfx-softmask-rule \
@@ -77,6 +77,7 @@ done
 [ -z "$PRINT_ONLY" ] || exit 0       # PRINT_ONLY=1: stop after Chrome (to look at the pages)
 # (P6.8) rule truth of the sources, then the mixed documents' images and HTML, their print, the hand-made PDFs
 bb -cp tools:tools/lib tools/synth/gfx_pdf.clj
+bb -cp tools:tools/lib tools/synth/table_model.clj
 bb -cp tools:tools/lib tools/synth/tagged_tables.clj
 python3 tools/oracle/rules.py table-simple-ruled table-zebra
 bb -cp tools:tools/lib tools/synth/mixed.clj image

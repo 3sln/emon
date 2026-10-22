@@ -38,7 +38,7 @@
             [emon.para :refer [pa-pages pa-build]]
             [emon.columns :refer [lc-copy]]
             [emon.initial :refer [in-detect]]
-            [emon.table :refer [tb-build tb-count]]
+            [emon.table :refer [tb-build tb-count tb-model-col]]
             [emon.gfuse :refer [gf-doc gfx-mode]]
             [emon.heading :refer [hd-analyze]]
             [kin.lang :refer [defn return let set while if do comment
@@ -208,7 +208,7 @@
     (page-new pages 1 61200 79200 0 (pk-vector))
     (if (== np 2) (page-new pages 2 61200 79200 0 (pk-vector)))
     (gf-doc pa gpts gmk gim np (gfx-mode) grl gfl cand (new-cells))
-    (tb-build wd ln et grl gfl np tb tc tw tq tx s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 pages t0e t1e t2e t3e t4e t5e t6e t7e t8e t9e t10e t11e t12e an)
+    (tb-build wd ln et grl gfl np tb tc tw tq tx (new-cells) (new-cells) s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 pages t0e t1e t2e t3e t4e t5e t6e t7e t8e t9e t10e t11e t12e an)
     (lc-copy ln lt)
     (pa-build wd et np pages layout nodes attrs regions text ord raw tmp fr gp lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al)
     (tt-brief t nodes attrs text)
@@ -1696,7 +1696,7 @@
     (pa-pages pg pages)
     (let [^I32 np (quot (cells-len pages) 16)]
       (gf-doc pa pts mk im np (gfx-mode) grl gfl cand (new-cells))
-      (tb-build wd ln et grl gfl np tb tc tw tq tx s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 pages gl mk se2 sc2 ss2 t5e t6e t7e t8e t9e t10e t11e t12e (new-cells))
+      (tb-build wd ln et grl gfl np tb tc tw tq tx (new-cells) (new-cells) s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 pages gl mk se2 sc2 ss2 t5e t6e t7e t8e t9e t10e t11e t12e (new-cells))
       (tt-emit tvt t12e)
       (lc-copy ln lt)
       (in-detect wd gl fnt et np loc lt ls lo tm ii)
@@ -1771,3 +1771,133 @@
     (comment "A document of paragraphs and two columns has no table (the stage's other half: it must not make one).")
     (assert-eq (tt-golden (test-file "corpus/synth/pdf/h-plain.pdf") t6 (new-text)) 0 "h-plain runs")
     (assert-text-span t6 (test-file "para/h-plain.json") 0 (jt-end (test-file "para/h-plain.json")) "h-plain makes no table" 0)))
+
+;; P12.10: D16's five bands, with one numeric band empty throughout the body.
+(defn ^I32 tt-sparse-ledger [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^I32 credit]
+  (tt-at wd ln et (text-blob "Date") 4000 10000 1 0)
+  (tt-at wd ln et (text-blob "Details") 8122 10000 1 0)
+  (tt-at wd ln et (text-blob "Deposit") 33100 10000 1 1)
+  (tt-at wd ln et (text-blob "Withdrawal") 40500 10000 1 1)
+  (tt-at wd ln et (text-blob "Balance") 54928 10000 1 1)
+  (let [^:mut ^I32 r 0 ^:mut ^I32 x 40500]
+    (if (== credit 1) (set x 33100))
+    (while (< r 8)
+      (do (let [^I32 y (+ 11600 (* r 1600))]
+            (tt-at wd ln et (text-blob "20 Sep") 4000 y 0 0)
+            (if (== (rem r 2) 0)
+              (do (tt-at wd ln et (text-blob "Transfer") 8122 y 0 0)
+                  (tt-at wd ln et (text-blob "181.04") x y 0 1)
+                  (tt-at wd ln et (text-blob "149,818.96") 54928 y 0 1))
+              (do (tt-at wd ln et (text-blob "Electronic transfer") 8122 y 0 0)
+                  (tt-at wd ln et (text-blob "1.00") x y 0 1)
+                  (tt-at wd ln et (text-blob "999.99") 54928 y 0 1))))
+          (set r (+ r 1))))
+    (return 0)))
+
+(deftest test-a-debit-only-row-keeps-its-empty-credit-cell
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells) ^Text t (new-text)]
+    (tt-sparse-ledger wd ln et 0)
+    (assert-eq (tt-run wd ln et pa t) 0 "sparse ledger is well formed")
+    (assert-text t "T5w;Gh;R;Ch[Date];Chs[Details];Ch[Deposit];Ch[Withdrawal];Che[Balance];Gb;R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];" "the empty band retains its header and every amount stays at its geometric anchor")))
+
+(deftest test-a-credit-only-row-keeps-its-empty-debit-cell
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells) ^Text t (new-text)]
+    (tt-sparse-ledger wd ln et 1)
+    (assert-eq (tt-run wd ln et pa t) 0 "sparse ledger is well formed")
+    (assert-text t "T5w;Gh;R;Ch[Date];Chs[Details];Ch[Deposit];Ch[Withdrawal];Che[Balance];Gb;R;C[20 Sep];Cs[Transfer];Ce[181.04];C[];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];Ce[1.00];C[];Ce[999.99];R;C[20 Sep];Cs[Transfer];Ce[181.04];C[];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];Ce[1.00];C[];Ce[999.99];R;C[20 Sep];Cs[Transfer];Ce[181.04];C[];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];Ce[1.00];C[];Ce[999.99];R;C[20 Sep];Cs[Transfer];Ce[181.04];C[];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];Ce[1.00];C[];Ce[999.99];" "the empty band retains its header and every amount stays at its geometric anchor")))
+
+(deftest test-a-header-anchors-a-column-no-body-row-fills
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells) ^Text t (new-text)]
+    (tt-sparse-ledger wd ln et 0)
+    (assert-eq (tt-run wd ln et pa t) 0 "sparse ledger is well formed")
+    (assert-text t "T5w;Gh;R;Ch[Date];Chs[Details];Ch[Deposit];Ch[Withdrawal];Che[Balance];Gb;R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];" "the empty band retains its header and every amount stays at its geometric anchor")))
+
+(deftest test-right-aligned-amounts-make-one-numeric-column
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells tb (new-cells) ^Cells tbk (new-cells) ^Cells pages (new-cells)]
+    (page-new pages 1 61200 79200 0 (pk-vector))
+    (tt-at wd ln et (text-blob "Item") 7600 10000 1 0)
+    (tt-at wd ln et (text-blob "Amount") 40500 10000 1 1)
+    (tt-at wd ln et (text-blob "One") 7600 11600 0 0)
+    (tt-at wd ln et (text-blob "1.00") 40500 11600 0 1)
+    (tt-at wd ln et (text-blob "Ten") 7600 13200 0 0)
+    (tt-at wd ln et (text-blob "10.00") 40500 13200 0 1)
+    (tt-at wd ln et (text-blob "Thousand") 7600 14800 0 0)
+    (tt-at wd ln et (text-blob "1,000.00") 40500 14800 0 1)
+    (tt-at wd ln et (text-blob "Hundred") 7600 16400 0 0)
+    (tt-at wd ln et (text-blob "100.00") 40500 16400 0 1)
+    (tt-at wd ln et (text-blob "Total") 7600 18000 1 0)
+    (tt-at wd ln et (text-blob "1,111.00") 40500 18000 1 1)
+    (assert-eq (tb-build wd ln et (new-cells) (new-cells) 1
+                        tb (new-cells) (new-cells) (new-cells) (new-cells) tbk (new-cells)
+                        (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                        (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                        (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                        (new-cells) (new-cells) (new-cells) (new-cells)
+                        pages (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                        (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                        (new-cells) (new-cells)) 1 "the amounts make one table")
+    (assert-eq (tb-model-col tb tbk 0 1 3) 40500 "varying widths share their right anchor")
+    (assert-eq (tb-model-col tb tbk 0 1 5) 3 "the numeric column is an amount column")
+    (assert-eq (tb-model-col tb tbk 0 1 9) 4 "all four body rows support the anchor")))
+
+;; P12.10 partition controls: the same ledger and summary in both orders.
+(defn ^I32 tt-part-ledger [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^I32 y]
+  (tt-at wd ln et (text-blob "Date") 7600 y 1 0)
+  (tt-at wd ln et (text-blob "Details") 15000 y 1 0)
+  (tt-at wd ln et (text-blob "Amount") 43000 y 1 1)
+  (tt-at wd ln et (text-blob "01Jan") 7600 (+ y 1600) 0 0)
+  (tt-at wd ln et (text-blob "Rent") 15000 (+ y 1600) 0 0)
+  (tt-at wd ln et (text-blob "1.00") 43000 (+ y 1600) 0 1)
+  (tt-at wd ln et (text-blob "02Jan") 7600 (+ y 3200) 0 0)
+  (tt-at wd ln et (text-blob "Electricity") 15000 (+ y 3200) 0 0)
+  (tt-at wd ln et (text-blob "20.00") 43000 (+ y 3200) 0 1)
+  (tt-at wd ln et (text-blob "03Jan") 7600 (+ y 4800) 0 0)
+  (tt-at wd ln et (text-blob "Service fee") 15000 (+ y 4800) 0 0)
+  (tt-at wd ln et (text-blob "300.00") 43000 (+ y 4800) 0 1)
+  (return 0))
+
+(defn ^I32 tt-part-summary [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^I32 y]
+  (tt-at wd ln et (text-blob "Subtotal") 7600 y 0 0)
+  (tt-at wd ln et (text-blob "31.00") 43000 y 0 1)
+  (tt-at wd ln et (text-blob "Tax") 7600 (+ y 1600) 0 0)
+  (tt-at wd ln et (text-blob "6.20") 43000 (+ y 1600) 0 1)
+  (tt-at wd ln et (text-blob "Total") 7600 (+ y 3200) 0 0)
+  (tt-at wd ln et (text-blob "37.20") 43000 (+ y 3200) 0 1)
+  (return 0))
+
+(deftest test-a-summary-below-a-ledger-is-its-own-table
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells) ^Text t (new-text)]
+    (tt-part-ledger wd ln et 10000)
+    (tt-part-summary wd ln et 16400)
+    (assert-eq (tt-run wd ln et pa t) 0 "partitioned tables are well formed")
+    (assert-text t "T3w;Gh;R;Ch[Date];Chs[Details];Ch[Amount];Gb;R;C[01Jan];Cs[Rent];Ce[1.00];R;C[02Jan];Cs[Electricity];Ce[20.00];R;C[03Jan];Cs[Service fee];Ce[300.00];T2w;Gb;R;Cs[Subtotal];C[31.00];R;Cs[Tax];C[6.20];R;Cs[Total];C[37.20];" "the two column models have disjoint intervals and preserve every row")))
+
+(deftest test-the-first-transaction-after-a-summary-belongs-to-the-ledger
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells) ^Text t (new-text)]
+    (tt-part-summary wd ln et 10000)
+    (tt-part-ledger wd ln et 14800)
+    (assert-eq (tt-run wd ln et pa t) 0 "partitioned tables are well formed")
+    (assert-text t "T2w;Gb;R;Cs[Subtotal];C[31.00];R;Cs[Tax];C[6.20];R;Cs[Total];C[37.20];T3w;Gh;R;Ch[Date];Chs[Details];Ch[Amount];Gb;R;C[01Jan];Cs[Rent];Ce[1.00];R;C[02Jan];Cs[Electricity];Ce[20.00];R;C[03Jan];Cs[Service fee];Ce[300.00];" "the two column models have disjoint intervals and preserve every row")))
+
+(deftest test-a-heading-between-two-tables-is-owned-by-neither
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells) ^Text t (new-text)]
+    (tt-part-ledger wd ln et 10000)
+    (tt-at wd ln et (text-blob "Between tables") 7600 16400 1 0)
+    (let [^I32 heading-word (- (wd-count wd) 1)]
+      (wd-set wd heading-word (wf-size) 1800))
+    (tt-part-ledger wd ln et 18000)
+    (assert-eq (tt-run wd ln et pa t) 0 "a foreign heading is well formed outside both tables")
+    (assert-text t "T3w;Gh;R;Ch[Date];Chs[Details];Ch[Amount];Gb;R;C[01Jan];Cs[Rent];Ce[1.00];R;C[02Jan];Cs[Electricity];Ce[20.00];R;C[03Jan];Cs[Service fee];Ce[300.00];P[Between tables];T3w;Gh;R;Ch[Date];Chs[Details];Ch[Amount];Gb;R;C[01Jan];Cs[Rent];Ce[1.00];R;C[02Jan];Cs[Electricity];Ce[20.00];R;C[03Jan];Cs[Service fee];Ce[300.00];" "a heading-size line is owned by neither neighboring table")))
+
+(deftest test-empty-date-markers-do-not-split-a-ledger
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells) ^Text t (new-text)]
+    (tt-part-ledger wd ln et 10000)
+    (tt-at wd ln et (text-blob "–") 7600 16400 0 0)
+    (tt-at wd ln et (text-blob "Pending") 15000 16400 0 0)
+    (tt-at wd ln et (text-blob "4.00") 43000 16400 0 1)
+    (tt-at wd ln et (text-blob "–") 7600 18000 0 0)
+    (tt-at wd ln et (text-blob "Unspecified") 15000 18000 0 0)
+    (tt-at wd ln et (text-blob "5.00") 43000 18000 0 1)
+    (assert-eq (tt-run wd ln et pa t) 0 "empty date markers preserve all rows")
+    (assert-text t "T3w;Gh;R;Chs[Date];Chs[Details];Ch[Amount];Gb;R;Cs[01Jan];Cs[Rent];Ce[1.00];R;Cs[02Jan];Cs[Electricity];Ce[20.00];R;Cs[03Jan];Cs[Service fee];Ce[300.00];R;Cs[–];Cs[Pending];Ce[4.00];R;Cs[–];Cs[Unspecified];Ce[5.00];" "punctuation placeholders are not a different date-column model")))

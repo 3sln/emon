@@ -230,26 +230,8 @@ public final class Tagtabletest {
         emon.Testport.assertEq(Tagtable.ttIou(0, 0, 61200, 79200, 0, 0, 61200, 79200), 1000, "a page of centipoints does not overflow");
     }
     public static int tttTb(emon.Port.Cells tb, int x0, int y0, int x1, int y1, int profile, int score, int nrows, int ncols, int cfirst, int ncells) {
-        // A candidate row of `tb` (stride 28): page 1, the box, the profile (1 ruled .. 5 struct), the score, the grid, its cells.
-        int i = 0;
-        emon.Port.cellsPush(tb, 1);
-        emon.Port.cellsPush(tb, x0);
-        emon.Port.cellsPush(tb, y0);
-        emon.Port.cellsPush(tb, x1);
-        emon.Port.cellsPush(tb, y1);
-        emon.Port.cellsPush(tb, profile);
-        emon.Port.cellsPush(tb, score);
-        emon.Port.cellsPush(tb, nrows);
-        emon.Port.cellsPush(tb, ncols);
-        emon.Port.cellsPush(tb, cfirst);
-        emon.Port.cellsPush(tb, ncells);
-        while (i < 17) {
-            emon.Port.cellsPush(tb, 0);
-            i += 1;
-        }
-        emon.Port.cellsSet(tb, emon.Port.cellsLen(tb) - 10, 1);
-        emon.Port.cellsSet(tb, emon.Port.cellsLen(tb) - 3, -1);
-        return (emon.Port.cellsLen(tb) / 28) - 1;
+        // A candidate row using the stage's shared table record constructor.
+        return Table.tbAdd(tb, 1, x0, y0, x1, y1, profile, score, nrows, ncols, cfirst, ncells);
     }
     public static int tttTc(emon.Port.Cells tc, int row, int col, int words) {
         // A cell of `tc` (stride 16) at a place on a lattice of 3000 x 1500: 1 x 1, `words` words (words 0 is an empty cell).
@@ -324,10 +306,10 @@ public final class Tagtabletest {
         emon.Testport.assertThat(Table.tbHintIou(tb, 1, grg) < 1000, "and only nearly the second's");
         emon.Testport.assertEq(Table.tbTieBonus(tb, 0, 0, 2, grg), 26, "the first candidate wins the tie: a bonus over the 25 the scores may differ by");
         emon.Testport.assertEq(Table.tbTieBonus(tb, 1, 0, 2, grg), 0, "the second does not");
-        emon.Port.cellsSet(tb, 28 + 6, 900);
+        emon.Port.cellsSet(tb, Tagtable.TBS + 6, 900);
         emon.Testport.assertEq(Table.tbTieBonus(tb, 0, 0, 2, grg), 0, "a candidate 200 better is no tie: OCR does not override the score");
         emon.Port.cellsSet(grg, 5, 2);
-        emon.Port.cellsSet(tb, 28 + 6, 720);
+        emon.Port.cellsSet(tb, Tagtable.TBS + 6, 720);
         emon.Testport.assertEq(Table.tbTieBonus(tb, 0, 0, 2, grg), 0, "a region that is not a table hint is not read");
     }
     public static void testTheVerdictsAreTheDumpsTb() {
@@ -373,7 +355,7 @@ public final class Tagtabletest {
         emon.Port.cellsPush(wo, 0 + r0);
         emon.Port.cellsPush(wo, 0 + r1);
         emon.Port.cellsPush(wo, 0 + r2);
-        tttZeros(tb, 28);
+        tttZeros(tb, Tagtable.TBS);
         emon.Port.cellsSet(tb, 7, 3);
         emon.Port.cellsSet(tb, 8, 1);
         emon.Port.cellsSet(tb, 9, 0);

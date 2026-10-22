@@ -272,7 +272,7 @@ public static class Tabletest {
             Model.PageNew(pages, 2, 61200, 79200, 0, Model.PkVector());
         }
         Gfuse.GfDoc(pa, gpts, gmk, gim, np, Gfuse.GfxMode(), grl, gfl, cand, emon.Port.NewCells());
-        Table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
+        Table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, emon.Port.NewCells(), emon.Port.NewCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
         Columns.LcCopy(ln, lt);
         Para.PaBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
         TtBrief(t, nodes, attrs, text);
@@ -2017,7 +2017,7 @@ public static class Tabletest {
         Para.PaPages(pg, pages);
         int np = emon.Port.CellsLen(pages) / 16;
         Gfuse.GfDoc(pa, pts, mk, im, np, Gfuse.GfxMode(), grl, gfl, cand, emon.Port.NewCells());
-        Table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, emon.Port.NewCells());
+        Table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, emon.Port.NewCells(), emon.Port.NewCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, emon.Port.NewCells());
         Tagtable.TtEmit(tvt, t12e);
         Columns.LcCopy(ln, lt);
         Initial.InDetect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii);
@@ -2111,5 +2111,171 @@ public static class Tabletest {
         // A document of paragraphs and two columns has no table (the stage's other half: it must not make one).
         emon.Testport.AssertEq(TtGolden(emon.Testport.TestFile("corpus/synth/pdf/h-plain.pdf"), t6, emon.Testport.NewText()), 0, "h-plain runs");
         emon.Testport.AssertTextSpan(t6, emon.Testport.TestFile("para/h-plain.json"), 0, Mscript.JtEnd(emon.Testport.TestFile("para/h-plain.json")), "h-plain makes no table", 0);
+    }
+    internal static int TtSparseLedger(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int credit) {
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Date"), 4000, 10000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Details"), 8122, 10000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Deposit"), 33100, 10000, 1, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Withdrawal"), 40500, 10000, 1, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Balance"), 54928, 10000, 1, 1);
+        int r = 0;
+        int x = 40500;
+        if (credit == 1) {
+            x = 33100;
+        }
+        while (r < 8) {
+            int y = 11600 + (r * 1600);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("20 Sep"), 4000, y, 0, 0);
+            if ((r % 2) == 0) {
+                TtAt(wd, ln, et, emon.Testport.TextBlob("Transfer"), 8122, y, 0, 0);
+                TtAt(wd, ln, et, emon.Testport.TextBlob("181.04"), x, y, 0, 1);
+                TtAt(wd, ln, et, emon.Testport.TextBlob("149,818.96"), 54928, y, 0, 1);
+            } else {
+                TtAt(wd, ln, et, emon.Testport.TextBlob("Electronic transfer"), 8122, y, 0, 0);
+                TtAt(wd, ln, et, emon.Testport.TextBlob("1.00"), x, y, 0, 1);
+                TtAt(wd, ln, et, emon.Testport.TextBlob("999.99"), 54928, y, 0, 1);
+            }
+            r += 1;
+        }
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestADebitOnlyRowKeepsItsEmptyCreditCell() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        TtSparseLedger(wd, ln, et, 0);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "sparse ledger is well formed");
+        emon.Testport.AssertText(t, "T5w;Gh;R;Ch[Date];Chs[Details];Ch[Deposit];Ch[Withdrawal];Che[Balance];Gb;R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];", "the empty band retains its header and every amount stays at its geometric anchor");
+    }
+    [Xunit.Fact]
+    public static void TestACreditOnlyRowKeepsItsEmptyDebitCell() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        TtSparseLedger(wd, ln, et, 1);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "sparse ledger is well formed");
+        emon.Testport.AssertText(t, "T5w;Gh;R;Ch[Date];Chs[Details];Ch[Deposit];Ch[Withdrawal];Che[Balance];Gb;R;C[20 Sep];Cs[Transfer];Ce[181.04];C[];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];Ce[1.00];C[];Ce[999.99];R;C[20 Sep];Cs[Transfer];Ce[181.04];C[];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];Ce[1.00];C[];Ce[999.99];R;C[20 Sep];Cs[Transfer];Ce[181.04];C[];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];Ce[1.00];C[];Ce[999.99];R;C[20 Sep];Cs[Transfer];Ce[181.04];C[];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];Ce[1.00];C[];Ce[999.99];", "the empty band retains its header and every amount stays at its geometric anchor");
+    }
+    [Xunit.Fact]
+    public static void TestAHeaderAnchorsAColumnNoBodyRowFills() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        TtSparseLedger(wd, ln, et, 0);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "sparse ledger is well formed");
+        emon.Testport.AssertText(t, "T5w;Gh;R;Ch[Date];Chs[Details];Ch[Deposit];Ch[Withdrawal];Che[Balance];Gb;R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];", "the empty band retains its header and every amount stays at its geometric anchor");
+    }
+    [Xunit.Fact]
+    public static void TestRightAlignedAmountsMakeOneNumericColumn() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tbk = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        Model.PageNew(pages, 1, 61200, 79200, 0, Model.PkVector());
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Item"), 7600, 10000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Amount"), 40500, 10000, 1, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("One"), 7600, 11600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("1.00"), 40500, 11600, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Ten"), 7600, 13200, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("10.00"), 40500, 13200, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Thousand"), 7600, 14800, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("1,000.00"), 40500, 14800, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Hundred"), 7600, 16400, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("100.00"), 40500, 16400, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Total"), 7600, 18000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("1,111.00"), 40500, 18000, 1, 1);
+        emon.Testport.AssertEq(Table.TbBuild(wd, ln, et, emon.Port.NewCells(), emon.Port.NewCells(), 1, tb, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), tbk, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), pages, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), 1, "the amounts make one table");
+        emon.Testport.AssertEq(Table.TbModelCol(tb, tbk, 0, 1, 3), 40500, "varying widths share their right anchor");
+        emon.Testport.AssertEq(Table.TbModelCol(tb, tbk, 0, 1, 5), 3, "the numeric column is an amount column");
+        emon.Testport.AssertEq(Table.TbModelCol(tb, tbk, 0, 1, 9), 4, "all four body rows support the anchor");
+    }
+    internal static int TtPartLedger(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int y) {
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Date"), 7600, y, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Details"), 15000, y, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Amount"), 43000, y, 1, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("01Jan"), 7600, y + 1600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Rent"), 15000, y + 1600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("1.00"), 43000, y + 1600, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("02Jan"), 7600, y + 3200, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Electricity"), 15000, y + 3200, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("20.00"), 43000, y + 3200, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("03Jan"), 7600, y + 4800, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Service fee"), 15000, y + 4800, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("300.00"), 43000, y + 4800, 0, 1);
+        return 0;
+    }
+    internal static int TtPartSummary(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int y) {
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Subtotal"), 7600, y, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("31.00"), 43000, y, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Tax"), 7600, y + 1600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("6.20"), 43000, y + 1600, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Total"), 7600, y + 3200, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("37.20"), 43000, y + 3200, 0, 1);
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestASummaryBelowALedgerIsItsOwnTable() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        TtPartLedger(wd, ln, et, 10000);
+        TtPartSummary(wd, ln, et, 16400);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "partitioned tables are well formed");
+        emon.Testport.AssertText(t, "T3w;Gh;R;Ch[Date];Chs[Details];Ch[Amount];Gb;R;C[01Jan];Cs[Rent];Ce[1.00];R;C[02Jan];Cs[Electricity];Ce[20.00];R;C[03Jan];Cs[Service fee];Ce[300.00];T2w;Gb;R;Cs[Subtotal];C[31.00];R;Cs[Tax];C[6.20];R;Cs[Total];C[37.20];", "the two column models have disjoint intervals and preserve every row");
+    }
+    [Xunit.Fact]
+    public static void TestTheFirstTransactionAfterASummaryBelongsToTheLedger() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        TtPartSummary(wd, ln, et, 10000);
+        TtPartLedger(wd, ln, et, 14800);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "partitioned tables are well formed");
+        emon.Testport.AssertText(t, "T2w;Gb;R;Cs[Subtotal];C[31.00];R;Cs[Tax];C[6.20];R;Cs[Total];C[37.20];T3w;Gh;R;Ch[Date];Chs[Details];Ch[Amount];Gb;R;C[01Jan];Cs[Rent];Ce[1.00];R;C[02Jan];Cs[Electricity];Ce[20.00];R;C[03Jan];Cs[Service fee];Ce[300.00];", "the two column models have disjoint intervals and preserve every row");
+    }
+    [Xunit.Fact]
+    public static void TestAHeadingBetweenTwoTablesIsOwnedByNeither() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        TtPartLedger(wd, ln, et, 10000);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Between tables"), 7600, 16400, 1, 0);
+        int headingWord = Evidence.WdCount(wd) - 1;
+        Evidence.WdSet(wd, headingWord, Evidence.WfSize(), 1800);
+        TtPartLedger(wd, ln, et, 18000);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "a foreign heading is well formed outside both tables");
+        emon.Testport.AssertText(t, "T3w;Gh;R;Ch[Date];Chs[Details];Ch[Amount];Gb;R;C[01Jan];Cs[Rent];Ce[1.00];R;C[02Jan];Cs[Electricity];Ce[20.00];R;C[03Jan];Cs[Service fee];Ce[300.00];P[Between tables];T3w;Gh;R;Ch[Date];Chs[Details];Ch[Amount];Gb;R;C[01Jan];Cs[Rent];Ce[1.00];R;C[02Jan];Cs[Electricity];Ce[20.00];R;C[03Jan];Cs[Service fee];Ce[300.00];", "a heading-size line is owned by neither neighboring table");
+    }
+    [Xunit.Fact]
+    public static void TestEmptyDateMarkersDoNotSplitALedger() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        TtPartLedger(wd, ln, et, 10000);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("–"), 7600, 16400, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Pending"), 15000, 16400, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("4.00"), 43000, 16400, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("–"), 7600, 18000, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Unspecified"), 15000, 18000, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("5.00"), 43000, 18000, 0, 1);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "empty date markers preserve all rows");
+        emon.Testport.AssertText(t, "T3w;Gh;R;Chs[Date];Chs[Details];Ch[Amount];Gb;R;Cs[01Jan];Cs[Rent];Ce[1.00];R;Cs[02Jan];Cs[Electricity];Ce[20.00];R;Cs[03Jan];Cs[Service fee];Ce[300.00];R;Cs[–];Cs[Pending];Ce[4.00];R;Cs[–];Cs[Unspecified];Ce[5.00];", "punctuation placeholders are not a different date-column model");
     }
 }

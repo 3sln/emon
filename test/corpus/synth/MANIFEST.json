@@ -6162,6 +6162,52 @@
     },
     "bleed": false
    }
+  },
+  "table-ledger-sparse": {
+   "files": {
+    "html": {
+     "path": "html/table-ledger-sparse.html",
+     "sha256": "521f78280a334e0d5dc2e7a8eefd00d7902e57e8fb9536d23f0ceae9e9cd17e0",
+     "bytes": 1905
+    },
+    "pdf": {
+     "path": "pdf/table-ledger-sparse.pdf",
+     "sha256": "d6df0bf6e0238fb3be347a34d63ffe735bf896d427068eca81263fcfbb770a2d",
+     "bytes": 2653
+    }
+   },
+   "pdf-producer": "emon synth.pdfw sparse-ledger v1",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ]
+    ]
+   }
+  },
+  "table-summary-and-ledger": {
+   "files": {
+    "html": {
+     "path": "html/table-summary-and-ledger.html",
+     "sha256": "e19dae4fc82d97cddabf6e6bf7526ae559fe8e9c1f1779891ad57884663a4e15",
+     "bytes": 1293
+    },
+    "pdf": {
+     "path": "pdf/table-summary-and-ledger.pdf",
+     "sha256": "4687f966393efe22edfd503569ac5f68de07ee81de86d96f4a3619d9c699213f",
+     "bytes": 1534
+    }
+   },
+   "pdf-producer": "emon synth.pdfw summary-and-ledger v1",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ]
+    ]
+   }
   }
  }
 }

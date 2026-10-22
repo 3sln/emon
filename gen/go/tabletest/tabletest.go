@@ -303,7 +303,7 @@ func ttRunAn(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *
 		model.PageNew(pages, 2, 61200, 79200, 0, model.PkVector())
 	}
 	gfuse.GfDoc(pa, gpts, gmk, gim, np, gfuse.GfxMode(), grl, gfl, cand, port.NewCells())
-	table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an)
+	table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, port.NewCells(), port.NewCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an)
 	columns.LcCopy(ln, lt)
 	para.PaBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al)
 	ttBrief(t, nodes, attrs, text)
@@ -2081,7 +2081,7 @@ func ttGolden(pdf []byte, t *strings.Builder, tvt *strings.Builder) int32 {
 	para.PaPages(pg, pages)
 	var np int32 = port.CellsLen(pages) / 16
 	gfuse.GfDoc(pa, pts, mk, im, np, gfuse.GfxMode(), grl, gfl, cand, port.NewCells())
-	table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, port.NewCells())
+	table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, port.NewCells(), port.NewCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, port.NewCells())
 	tagtable.TtEmit(tvt, t12e)
 	columns.LcCopy(ln, lt)
 	initial.InDetect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii)
@@ -2176,4 +2176,173 @@ func TestRealDocumentsMakeTheGoldenModels(emonT *testing.T) {
 	// A document of paragraphs and two columns has no table (the stage's other half: it must not make one).
 	port.AssertEq(emonT, ttGolden(port.TestFile("corpus/synth/pdf/h-plain.pdf"), t6, port.NewText()), 0, "h-plain runs")
 	port.AssertTextSpan(emonT, t6, port.TestFile("para/h-plain.json"), 0, mscript.JtEnd(port.TestFile("para/h-plain.json")), "h-plain makes no table", 0)
+}
+
+func ttSparseLedger(wd *port.Cells, ln *port.Cells, et *port.Cells, credit int32) int32 {
+	ttAt(wd, ln, et, port.TextBlob("Date"), 4000, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Details"), 8122, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Deposit"), 33100, 10000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("Withdrawal"), 40500, 10000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("Balance"), 54928, 10000, 1, 1)
+	var r int32 = 0
+	var x int32 = 40500
+	if credit == 1 {
+		x = 33100
+	}
+	for r < 8 {
+		var y int32 = 11600 + (r * 1600)
+		ttAt(wd, ln, et, port.TextBlob("20 Sep"), 4000, y, 0, 0)
+		if (r % 2) == 0 {
+			ttAt(wd, ln, et, port.TextBlob("Transfer"), 8122, y, 0, 0)
+			ttAt(wd, ln, et, port.TextBlob("181.04"), x, y, 0, 1)
+			ttAt(wd, ln, et, port.TextBlob("149,818.96"), 54928, y, 0, 1)
+		} else {
+			ttAt(wd, ln, et, port.TextBlob("Electronic transfer"), 8122, y, 0, 0)
+			ttAt(wd, ln, et, port.TextBlob("1.00"), x, y, 0, 1)
+			ttAt(wd, ln, et, port.TextBlob("999.99"), 54928, y, 0, 1)
+		}
+		r += 1
+	}
+	return 0
+}
+
+func TestADebitOnlyRowKeepsItsEmptyCreditCell(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	ttSparseLedger(wd, ln, et, 0)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "sparse ledger is well formed")
+	port.AssertText(emonT, t, "T5w;Gh;R;Ch[Date];Chs[Details];Ch[Deposit];Ch[Withdrawal];Che[Balance];Gb;R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];", "the empty band retains its header and every amount stays at its geometric anchor")
+}
+
+func TestACreditOnlyRowKeepsItsEmptyDebitCell(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	ttSparseLedger(wd, ln, et, 1)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "sparse ledger is well formed")
+	port.AssertText(emonT, t, "T5w;Gh;R;Ch[Date];Chs[Details];Ch[Deposit];Ch[Withdrawal];Che[Balance];Gb;R;C[20 Sep];Cs[Transfer];Ce[181.04];C[];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];Ce[1.00];C[];Ce[999.99];R;C[20 Sep];Cs[Transfer];Ce[181.04];C[];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];Ce[1.00];C[];Ce[999.99];R;C[20 Sep];Cs[Transfer];Ce[181.04];C[];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];Ce[1.00];C[];Ce[999.99];R;C[20 Sep];Cs[Transfer];Ce[181.04];C[];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];Ce[1.00];C[];Ce[999.99];", "the empty band retains its header and every amount stays at its geometric anchor")
+}
+
+func TestAHeaderAnchorsAColumnNoBodyRowFills(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	ttSparseLedger(wd, ln, et, 0)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "sparse ledger is well formed")
+	port.AssertText(emonT, t, "T5w;Gh;R;Ch[Date];Chs[Details];Ch[Deposit];Ch[Withdrawal];Che[Balance];Gb;R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];R;C[20 Sep];Cs[Transfer];C[];Ce[181.04];Ce[149,818.96];R;C[20 Sep];Cs[Electronic transfer];C[];Ce[1.00];Ce[999.99];", "the empty band retains its header and every amount stays at its geometric anchor")
+}
+
+func TestRightAlignedAmountsMakeOneNumericColumn(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tbk *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	model.PageNew(pages, 1, 61200, 79200, 0, model.PkVector())
+	ttAt(wd, ln, et, port.TextBlob("Item"), 7600, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Amount"), 40500, 10000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("One"), 7600, 11600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("1.00"), 40500, 11600, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Ten"), 7600, 13200, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("10.00"), 40500, 13200, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Thousand"), 7600, 14800, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("1,000.00"), 40500, 14800, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Hundred"), 7600, 16400, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("100.00"), 40500, 16400, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Total"), 7600, 18000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("1,111.00"), 40500, 18000, 1, 1)
+	port.AssertEq(emonT, table.TbBuild(wd, ln, et, port.NewCells(), port.NewCells(), 1, tb, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), tbk, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), pages, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), 1, "the amounts make one table")
+	port.AssertEq(emonT, table.TbModelCol(tb, tbk, 0, 1, 3), 40500, "varying widths share their right anchor")
+	port.AssertEq(emonT, table.TbModelCol(tb, tbk, 0, 1, 5), 3, "the numeric column is an amount column")
+	port.AssertEq(emonT, table.TbModelCol(tb, tbk, 0, 1, 9), 4, "all four body rows support the anchor")
+}
+
+func ttPartLedger(wd *port.Cells, ln *port.Cells, et *port.Cells, y int32) int32 {
+	ttAt(wd, ln, et, port.TextBlob("Date"), 7600, y, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Details"), 15000, y, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Amount"), 43000, y, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("01Jan"), 7600, y+1600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Rent"), 15000, y+1600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("1.00"), 43000, y+1600, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("02Jan"), 7600, y+3200, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Electricity"), 15000, y+3200, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("20.00"), 43000, y+3200, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("03Jan"), 7600, y+4800, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Service fee"), 15000, y+4800, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("300.00"), 43000, y+4800, 0, 1)
+	return 0
+}
+
+func ttPartSummary(wd *port.Cells, ln *port.Cells, et *port.Cells, y int32) int32 {
+	ttAt(wd, ln, et, port.TextBlob("Subtotal"), 7600, y, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("31.00"), 43000, y, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Tax"), 7600, y+1600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("6.20"), 43000, y+1600, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Total"), 7600, y+3200, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("37.20"), 43000, y+3200, 0, 1)
+	return 0
+}
+
+func TestASummaryBelowALedgerIsItsOwnTable(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	ttPartLedger(wd, ln, et, 10000)
+	ttPartSummary(wd, ln, et, 16400)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "partitioned tables are well formed")
+	port.AssertText(emonT, t, "T3w;Gh;R;Ch[Date];Chs[Details];Ch[Amount];Gb;R;C[01Jan];Cs[Rent];Ce[1.00];R;C[02Jan];Cs[Electricity];Ce[20.00];R;C[03Jan];Cs[Service fee];Ce[300.00];T2w;Gb;R;Cs[Subtotal];C[31.00];R;Cs[Tax];C[6.20];R;Cs[Total];C[37.20];", "the two column models have disjoint intervals and preserve every row")
+}
+
+func TestTheFirstTransactionAfterASummaryBelongsToTheLedger(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	ttPartSummary(wd, ln, et, 10000)
+	ttPartLedger(wd, ln, et, 14800)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "partitioned tables are well formed")
+	port.AssertText(emonT, t, "T2w;Gb;R;Cs[Subtotal];C[31.00];R;Cs[Tax];C[6.20];R;Cs[Total];C[37.20];T3w;Gh;R;Ch[Date];Chs[Details];Ch[Amount];Gb;R;C[01Jan];Cs[Rent];Ce[1.00];R;C[02Jan];Cs[Electricity];Ce[20.00];R;C[03Jan];Cs[Service fee];Ce[300.00];", "the two column models have disjoint intervals and preserve every row")
+}
+
+func TestAHeadingBetweenTwoTablesIsOwnedByNeither(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	ttPartLedger(wd, ln, et, 10000)
+	ttAt(wd, ln, et, port.TextBlob("Between tables"), 7600, 16400, 1, 0)
+	var headingWord int32 = evidence.WdCount(wd) - 1
+	evidence.WdSet(wd, headingWord, evidence.WfSize(), 1800)
+	ttPartLedger(wd, ln, et, 18000)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "a foreign heading is well formed outside both tables")
+	port.AssertText(emonT, t, "T3w;Gh;R;Ch[Date];Chs[Details];Ch[Amount];Gb;R;C[01Jan];Cs[Rent];Ce[1.00];R;C[02Jan];Cs[Electricity];Ce[20.00];R;C[03Jan];Cs[Service fee];Ce[300.00];P[Between tables];T3w;Gh;R;Ch[Date];Chs[Details];Ch[Amount];Gb;R;C[01Jan];Cs[Rent];Ce[1.00];R;C[02Jan];Cs[Electricity];Ce[20.00];R;C[03Jan];Cs[Service fee];Ce[300.00];", "a heading-size line is owned by neither neighboring table")
+}
+
+func TestEmptyDateMarkersDoNotSplitALedger(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	ttPartLedger(wd, ln, et, 10000)
+	ttAt(wd, ln, et, port.TextBlob("–"), 7600, 16400, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Pending"), 15000, 16400, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("4.00"), 43000, 16400, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("–"), 7600, 18000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Unspecified"), 15000, 18000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("5.00"), 43000, 18000, 0, 1)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "empty date markers preserve all rows")
+	port.AssertText(emonT, t, "T3w;Gh;R;Chs[Date];Chs[Details];Ch[Amount];Gb;R;Cs[01Jan];Cs[Rent];Ce[1.00];R;Cs[02Jan];Cs[Electricity];Ce[20.00];R;Cs[03Jan];Cs[Service fee];Ce[300.00];R;Cs[–];Cs[Pending];Ce[4.00];R;Cs[–];Cs[Unspecified];Ce[5.00];", "punctuation placeholders are not a different date-column model")
 }

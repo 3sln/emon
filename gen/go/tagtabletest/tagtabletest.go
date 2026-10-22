@@ -247,26 +247,8 @@ func TestIntersectionOverUnion(emonT *testing.T) {
 }
 
 func tttTb(tb *port.Cells, x0 int32, y0 int32, x1 int32, y1 int32, profile int32, score int32, nrows int32, ncols int32, cfirst int32, ncells int32) int32 {
-	// A candidate row of `tb` (stride 28): page 1, the box, the profile (1 ruled .. 5 struct), the score, the grid, its cells.
-	var i int32 = 0
-	port.CellsPush(tb, 1)
-	port.CellsPush(tb, x0)
-	port.CellsPush(tb, y0)
-	port.CellsPush(tb, x1)
-	port.CellsPush(tb, y1)
-	port.CellsPush(tb, profile)
-	port.CellsPush(tb, score)
-	port.CellsPush(tb, nrows)
-	port.CellsPush(tb, ncols)
-	port.CellsPush(tb, cfirst)
-	port.CellsPush(tb, ncells)
-	for i < 17 {
-		port.CellsPush(tb, 0)
-		i += 1
-	}
-	port.CellsSet(tb, port.CellsLen(tb)-10, 1)
-	port.CellsSet(tb, port.CellsLen(tb)-3, -1)
-	return (port.CellsLen(tb) / 28) - 1
+	// A candidate row using the stage's shared table record constructor.
+	return table.TbAdd(tb, 1, x0, y0, x1, y1, profile, score, nrows, ncols, cfirst, ncells)
 }
 
 func tttTc(tc *port.Cells, row int32, col int32, words int32) int32 {
@@ -344,10 +326,10 @@ func TestOcrTableHintsBreakTiesAndOnlyTies(emonT *testing.T) {
 	port.AssertThat(emonT, table.TbHintIou(tb, 1, grg) < 1000, "and only nearly the second's")
 	port.AssertEq(emonT, table.TbTieBonus(tb, 0, 0, 2, grg), 26, "the first candidate wins the tie: a bonus over the 25 the scores may differ by")
 	port.AssertEq(emonT, table.TbTieBonus(tb, 1, 0, 2, grg), 0, "the second does not")
-	port.CellsSet(tb, 28+6, 900)
+	port.CellsSet(tb, tagtable.Tbs+6, 900)
 	port.AssertEq(emonT, table.TbTieBonus(tb, 0, 0, 2, grg), 0, "a candidate 200 better is no tie: OCR does not override the score")
 	port.CellsSet(grg, 5, 2)
-	port.CellsSet(tb, 28+6, 720)
+	port.CellsSet(tb, tagtable.Tbs+6, 720)
 	port.AssertEq(emonT, table.TbTieBonus(tb, 0, 0, 2, grg), 0, "a region that is not a table hint is not read")
 }
 
@@ -396,7 +378,7 @@ func tttMulti(tg *port.Cells, ta *port.Cells, wo *port.Cells, tb *port.Cells, tc
 	port.CellsPush(wo, 0+r0)
 	port.CellsPush(wo, 0+r1)
 	port.CellsPush(wo, 0+r2)
-	tttZeros(tb, 28)
+	tttZeros(tb, tagtable.Tbs)
 	port.CellsSet(tb, 7, 3)
 	port.CellsSet(tb, 8, 1)
 	port.CellsSet(tb, 9, 0)
