@@ -123,8 +123,8 @@ func RtPad() int32 {
 }
 
 func RtEmptyH() int32 {
-	// P12.6: a first-pass line with no word is re-read alone when its box is at least this high (centipoints: 6 pt)...
-	return 600
+	// P12.6: a first-pass line with no word is re-read alone when its box is at least this high (centipoints: 3 pt)...
+	return 300
 }
 
 func RtEmptyHMax() int32 {
@@ -152,12 +152,25 @@ func RtEmptyConf() int32 {
 	return 700
 }
 
+func rtNativeEmptyPriority() int32 {
+	// Existing OCR empty-line crops precede traced gaps: this bonus exceeds the largest admitted empty-line area (144000 square points).
+	return 1000000
+}
+
 func RiBody() int32 {
 	return 17
 }
 
 func RiRotated() int32 {
 	return 18
+}
+
+func RiOpposite() int32 {
+	return 29
+}
+
+func RvOpposite() int32 {
+	return 39
 }
 
 func RiTextOnly() int32 {
@@ -668,6 +681,9 @@ func RtDecide(born int32, q int32, touched int32, oruns *port.Cells, run int32, 
 			l = l0
 			for l < (l0 + ln) {
 				c = RtEmptyArea(olines, l)
+				if (c > 0) && (evidence.OlGet(olines, l, evidence.OlfRetryGap()) == 0) {
+					c += rtNativeEmptyPriority()
+				}
 				if c > bestc {
 					dup = 0
 					j = 0
@@ -1067,7 +1083,91 @@ func rtAskRotated(page int32, dpi int32, loc *port.Cells, ans *port.Cells, bms *
 		port.BitmapQuarterInto(src, turned, q)
 		RtAskView(rq, id, plan.PuViewId(page, RvRotated()), turned, dpi, loc, rtp)
 	}
-	return 1
+	if plan.AnFind(ans, plan.PuId(page, RiOpposite())) < 0 {
+		var other int32 = (q + 2) % 4
+		var opposite *port.Bitmap = port.BmsPut(bms, plan.PuViewId(page, RvOpposite()), rtOddDim(w, h, q), rtOddDim(h, w, q), port.BitmapChannels(src))
+		port.BitmapQuarterInto(src, opposite, other)
+		RtAskView(rq, plan.PuId(page, RiOpposite()), plan.PuViewId(page, RvOpposite()), opposite, dpi, loc, rtp)
+	}
+	return 2
+}
+
+func RtGapLines(page int32, dpi int32, tlines *port.Cells, oruns *port.Cells, run int32, olines *port.Cells, owords *port.Cells, inks *port.Cells) int32 {
+	// D1803: traced horizontal text with no overlapping OCR words is an empty OCR line, so the existing bounded crop planner retries it. Only append to the current last run.
+	var l0 int32 = evidence.OrGet(oruns, run, evidence.OrfLfirst())
+	var t int32 = 0
+	var l int32 = 0
+	var overlap int32 = 0
+	var made int32 = 0
+	var x0 int32 = 0
+	var y0 int32 = 0
+	var x1 int32 = 0
+	var y1 int32 = 0
+	var row int32 = 0
+	if (l0 + evidence.OrGet(oruns, run, evidence.OrfLcount())) != evidence.OlCount(olines) {
+		return 0
+	}
+	for (t < evidence.TlCount(tlines)) && (made < RtLines()) {
+		if (evidence.TlGet(tlines, t, 0) == page) && (((evidence.TlGet(tlines, t, evidence.TlfConf()) >= 600) && (evidence.TlGet(tlines, t, 12) >= 3)) && ((evidence.IkCount(inks) == 0) || ((evidence.TlGet(tlines, t, evidence.TlfInk()) >= 0) && ((evidence.TlGet(tlines, t, evidence.TlfInk()) < evidence.IkCount(inks)) && (evidence.IkGet(inks, evidence.TlGet(tlines, t, evidence.TlfInk()), evidence.IkfRole()) == evidence.IrBody()))))) {
+			x0 = evidence.TlGet(tlines, t, 1)
+			y0 = evidence.TlGet(tlines, t, 2)
+			x1 = evidence.TlGet(tlines, t, 3)
+			y1 = evidence.TlGet(tlines, t, 4)
+			overlap = 0
+			l = l0
+			for l < evidence.OlCount(olines) {
+				if evidence.EvOverlapSmall(x0, y0, x1, y1, evidence.OlGet(olines, l, evidence.LhX0()), evidence.OlGet(olines, l, evidence.LhY0()), evidence.OlGet(olines, l, evidence.LhX1()), evidence.OlGet(olines, l, evidence.LhY1())) > 100 {
+					if (evidence.OlGet(olines, l, evidence.LhCount()) > 0) || (RtEmptyArea(olines, l) > 0) {
+						overlap = 1
+					}
+				}
+				l += 1
+			}
+			if (overlap == 0) && (((y1 - y0) >= RtEmptyH()) && ((y1 - y0) <= RtEmptyHMax())) {
+				if ((x1 - x0) >= RtEmptyW()) && (((x1 - x0) > (y1 - y0)) && ((x1 - x0) <= (RtEmptyAspect() * (y1 - y0)))) {
+					row = evidence.OlNew(olines, page, x0, y0, x1, y1, x0, y1, x1, y1, 0, 0, evidence.OwCount(owords), 0)
+					evidence.OlSet(olines, row, evidence.OlfRetryGap(), 1)
+					evidence.OlSet(olines, row, evidence.OlfRun(), run)
+					evidence.OlSet(olines, row, evidence.OlfPx(), (x0*dpi)/7200)
+					evidence.OlSet(olines, row, evidence.OlfPy(), (y0*dpi)/7200)
+					evidence.OlSet(olines, row, evidence.OlfPw(), ((x1-x0)*dpi)/7200)
+					evidence.OlSet(olines, row, evidence.OlfPh(), ((y1-y0)*dpi)/7200)
+					made += 1
+				}
+			}
+		}
+		t += 1
+	}
+	evidence.OrSet(oruns, run, evidence.OrfLcount(), evidence.OlCount(olines)-l0)
+	return made
+}
+
+func RtAnswerScore(ans *port.Cells, at int32) int32 {
+	// D1804: upright trial quality is recognized text area times word confidence; narrow vertical strips do not vote. Accumulate scaled area to bound sums.
+	var w int32 = plan.AnOcrFirst(ans, at)
+	var i int32 = 0
+	var score int32 = 0
+	var area int32 = 0
+	var width int32 = 0
+	var height int32 = 0
+	var conf int32 = 0
+	for i < plan.AnOcrCount(ans, at) {
+		width = plan.AwGet(ans, w, plan.AwW())
+		height = plan.AwGet(ans, w, plan.AwH())
+		conf = plan.AwGet(ans, w, plan.AwConf())
+		if (width > 0) && ((height > 0) && (width >= height)) {
+			area = (width * height) / 100
+			if area > 10000 {
+				area = 10000
+			}
+			if conf > 0 {
+				score += (area * conf) / 1000
+			}
+		}
+		w = plan.AwNext(ans, w)
+		i += 1
+	}
+	return score
 }
 
 func RtPlan(page int32, input int32, born int32, wanttext int32, rid int32, dpi int32, loc *port.Cells, ans *port.Cells, bms *port.BitmapSet, k0 int32, src *port.Bitmap, ws *port.Cells, oruns *port.Cells, run int32, olines *port.Cells, owords *port.Cells, rules *port.Cells, tlines *port.Cells, rtp *port.Cells, rq *port.Cells, scr *port.Cells, comps *port.Cells, inks *port.Cells) int32 {
@@ -1080,6 +1180,9 @@ func RtPlan(page int32, input int32, born int32, wanttext int32, rid int32, dpi 
 	var q int32 = RtTurns(born, oruns, run, tlines, page+1)
 	var touched int32 = 0
 	var asked int32 = 0
+	if (q == 0) && (born == 0) {
+		RtGapLines(page+1, dpi, tlines, oruns, run, olines, owords, inks)
+	}
 	if q == 0 {
 		touched = RtMeasure(page, bms, k0, src, ws, dpi, oruns, run, olines, owords, scr, rtp, comps, inks)
 	}
@@ -1194,6 +1297,16 @@ func RtRecord(page int32, srcview int32, dpi100 int32, loc *port.Cells, ans *por
 	if q != 0 {
 		id = plan.PuId(page, RiRotated())
 		a = plan.AnFind(ans, id)
+		var other int32 = plan.AnFind(ans, plan.PuId(page, RiOpposite()))
+		if other >= 0 {
+			if plan.AnOk(ans, other) == 1 {
+				if (a < 0) || (RtAnswerScore(ans, other) > RtAnswerScore(ans, a)) {
+					id = plan.PuId(page, RiOpposite())
+					a = other
+					port.CellsSet(rtp, RtpQ(), (q+2)%4)
+				}
+			}
+		}
 		if a >= 0 {
 			if plan.AnOk(ans, a) == 1 {
 				run = scan.ScAnswer(ans, a, pg, rviews, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
@@ -1317,6 +1430,12 @@ func RtLineState(oruns *port.Cells, olines *port.Cells, owords *port.Cells, rtp 
 	var cc int32 = 0
 	var b int32 = -1
 	var back int32 = -1
+	// A body-ink reading owns recovery on a page with foreign ink. New gap crops remain evidence there; mixing their polarity with that reading duplicates or invents fragments.
+	if (evidence.OlGet(olines, l, evidence.OlfRetryGap()) == 1) && (brun >= 0) {
+		if evidence.OrGet(oruns, brun, evidence.OrfWcount()) > 0 {
+			return 0
+		}
+	}
 	if c <= 0 {
 		// P12.6: a line the first pass found and read as nothing (`rt-empty-area`), re-read alone: its words are the page's when there are some and they are sure (`rt-empty-words`, `rt-empty-conf`)
 		j = 0
@@ -1616,6 +1735,20 @@ func RtAdopt(rtp *port.Cells, oruns *port.Cells, fr int32, olines *port.Cells, o
 			n = rtSelAdd(scr, n, bl0+b)
 			port.CellsSet(scr, scan.ScBonlyBase()+b, 2)
 			b = rtNextBonly(olines, scr, bl0, bn, 1000000000)
+		}
+	}
+	// D1801: only an otherwise empty reading needs the uncertain body-ink fallback. Preserve normal adoption decisions when they already read text.
+	if (n == 0) && ((brun >= 0) && (evidence.OrGet(oruns, fr, evidence.OrfWcount()) == 0)) {
+		b = evidence.OrGet(oruns, brun, evidence.OrfLfirst())
+		bn = b + evidence.OrGet(oruns, brun, evidence.OrfLcount())
+		for b < bn {
+			if evidence.OlGet(olines, b, evidence.LhCount()) > 0 {
+				n = rtSelAdd(scr, n, b)
+			}
+			b += 1
+		}
+		if n > 0 {
+			port.CellsSet(rtp, RtpPrimary(), brun)
 		}
 	}
 	return n

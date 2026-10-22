@@ -404,7 +404,7 @@ public final class Tess implements Ocr {
         boolean wantSyms = (flags & 1) != 0;
         int rx = req.field(Plan.ocX()), ry = req.field(Plan.ocY()), rw = req.field(Plan.ocW()), rh = req.field(Plan.ocH());
         List<String> installed = installedIn(tessdata);
-        // which installed models read the request is kin's (`op-models`: languages, scripts, the ones not installed dropped, none left is every model);
+        // which installed models read the request is kin's (`op-models`: languages, scripts, the ones not installed dropped, unconfigured fallback is one discovery model);
         // the models go in as code points separated by 0
         Port.Cells reqc = cellsOf(req.rec);
         Port.Cells inst = Port.newCells();
@@ -415,7 +415,7 @@ public final class Tess implements Ocr {
             installed.get(i).codePoints().forEach(cp -> Port.cellsPush(inst, cp));
         }
         Port.Cells picked = Port.newCells();
-        Ocrport.opModels(reqc, inst, picked);
+        Ocrport.opModelsConfigured(reqc, inst, 0, picked);
         Port.Cells gone = Port.newCells();
         Ocrport.opDropped(reqc, inst, gone);
         StringBuilder dropped = new StringBuilder();

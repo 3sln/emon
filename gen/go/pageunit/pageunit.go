@@ -572,6 +572,8 @@ func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 in
 	l0 = evidence.OlCount(olines)
 	w0 = evidence.OwCount(owords)
 	run = scan.ScPageEvidence(ans, ao, i+1, roid, vdec, rdpi, scan.ScLang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
+	// D1809: retry placeholders are not OCR orientation votes; keep the first pass's original line span for its dominant angle.
+	nl = evidence.OrGet(oruns, run, evidence.OrfLcount())
 	if rid == uvid {
 		retarget.RtRunMeta(oruns, run, evidence.OpUpscaled(), 3, 3, 0, 0, 0, 0)
 	}
@@ -601,9 +603,11 @@ func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 in
 		nsel = sigpx.SpDropLines(scr, nsel, olines, owords, s5)
 	}
 	retarget.RtUpright(rtp, run, epages, i+1)
-	nl = evidence.OrGet(oruns, run, evidence.OrfLcount())
 	rotmed = evidence.EvRotMedian(olines, l0, nl)
 	scan.ScEmitSel(olines, owords, osyms, nsel, i+1, rotmed, scr, words, lines, etext, rules, comps, inks)
+	if (port.CellsAt(rtp, retarget.RtpPrimary()) != run) && (port.CellsAt(rtp, retarget.RtpQ()) != 0) {
+		mv += 8
+	}
 	port.CellsSet(mask, i, mv)
 	return plan.UsDone()
 }

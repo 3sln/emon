@@ -2,7 +2,7 @@
 ;;
 ;;   THE REQUEST. Where its languages are (cells 7.., or 9.. for a kin-made view, D196: the cells between are a pixel hash, which a
 ;;   host that reads cell 7 takes for languages); a script (`Cyrl`) is the installed models that read it; `Hani` reads Japanese too;
-;;   a language with no model is dropped and none left means every model.
+;;   a language with no model is dropped and none left means one discovery model (D1805).
 ;;   THE ANSWER. A model's request name, the OSD's script in ISO 15924, a block's type, and the flat form of the browser's adapter
 ;;   turned into the very record the builders write (and refused when its counts run past it).
 (ns emon.ocrporttest
@@ -14,7 +14,7 @@
                               ox-begin ox-line ox-block ox-word ox-sym ox-sym-cp ox-alt ox-alt-cp]]
             [emon.ocrport :refer [sc-latn sc-latf sc-cyrl sc-hani sc-jpan sc-cans sc-emit-name zh-chs zh-cht zh-emit-name
                                   pb-table pb-noise pb-flowing-text pb-heading-image pb-horz-line pb-equation
-                                  op-lang-first op-lang-count op-lang-at op-models op-dropped op-find op-names-count op-names-at
+                                  op-lang-first op-lang-count op-lang-at op-models op-models-configured op-dropped op-find op-names-count op-names-at
                                   op-word-lang op-osd-script op-block-type op-is-script op-pack-cells ox-flat]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem]]))
@@ -151,8 +151,8 @@
   (t-case1 (test-t) 2 99 104 115 0 1 0 -1 "chs is chi_sim")
   (t-case1 (test-t) 2 99 104 116 0 1 1 -1 "cht is chi_tra"))
 
-(deftest test-a-model-that-is-not-installed-is-dropped-and-none-left-is-all
-  (t-case1 (test-t) 0 102 114 97 0 2 0 1 "fra alone: every installed model (D038)")
+(deftest test-a-model-that-is-not-installed-is-dropped-and-none-left-is-one
+  (t-case1 (test-t) 0 102 114 97 0 1 0 -1 "fra alone: one discovery model (D1805)")
   (t-gone1 (test-t) 0 102 114 97 0 4 0 102 "fra is dropped, its name and a 0")
   (t-case2 (test-t) 0 101 110 103 0 102 114 97 0 1 0 -1 "eng and fra: eng")
   (t-gone1 (test-t) 0 99 104 115 0 8 4 115 "chs with no chi_sim installed is named chi_sim")
@@ -391,3 +391,21 @@
     (assert-eq (ox-flat v 9 got) -1 "a header cut short")
     (assert-eq (cells-len got) 0 "and nothing is written")))
 
+
+(deftest test-an-automatic-first-pass-uses-one-model-instead-of-all-installed-scripts
+  (let [^Cells r (new-cells) ^Cells inst (new-cells)]
+    (t-req1 r 0 0 0 0)
+    (t-inst-eng-rus inst)
+    (t-models (test-t) r inst 1 0 -1 "one Latin discovery pass, no multi-script soup")))
+
+(deftest test-explicit-provider-languages-are-not-replaced-by-discovery
+  (let [^Cells r (new-cells) ^Cells inst (new-cells) ^Cells out (new-cells)]
+    (t-req1 r 0 0 0 0)
+    (t-inst-eng-jpn inst)
+    (assert-eq (op-models-configured r inst 1 out) 2 "explicit jpn+eng stays jpn+eng")
+    (assert-eq (cells-at out 1) 1 "the Japanese model is retained")
+    (let [^Cells auto (new-cells)]
+      (assert-eq (op-models-configured r inst 0 auto) 1 "an unconfigured inventory still uses one discovery model"))
+    (let [^Cells named (new-cells) ^Cells picked (new-cells)]
+      (t-req1 named 101 110 103 0)
+      (assert-eq (op-models-configured named inst 1 picked) 1 "a named request wins over provider defaults"))))

@@ -205,8 +205,8 @@ fn test_a_language_is_its_model_and_the_chinese_scripts_name_theirs() {
     t_case1(0, 2, 99, 104, 116, 0, 1, 1, -1, "cht is chi_tra");
 }
 #[test]
-fn test_a_model_that_is_not_installed_is_dropped_and_none_left_is_all() {
-    t_case1(0, 0, 102, 114, 97, 0, 2, 0, 1, "fra alone: every installed model (D038)");
+fn test_a_model_that_is_not_installed_is_dropped_and_none_left_is_one() {
+    t_case1(0, 0, 102, 114, 97, 0, 1, 0, -1, "fra alone: one discovery model (D1805)");
     t_gone1(0, 0, 102, 114, 97, 0, 4, 0, 102, "fra is dropped, its name and a 0");
     t_case2(0, 0, 101, 110, 103, 0, 102, 114, 97, 0, 1, 0, -1, "eng and fra: eng");
     t_gone1(0, 0, 99, 104, 115, 0, 8, 4, 115, "chs with no chi_sim installed is named chi_sim");
@@ -472,4 +472,28 @@ fn test_a_flat_form_with_a_header_cut_short_is_refused() {
     t_p4(v, 0, 0, 2, 0);
     crate::testport::assert_eq(ox_flat(v, 9, got), -1, "a header cut short");
     crate::testport::assert_eq(crate::port::cells_len(got), 0, "and nothing is written");
+}
+#[test]
+fn test_an_automatic_first_pass_uses_one_model_instead_of_all_installed_scripts() {
+    let r: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inst: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    t_req1(r, 0, 0, 0, 0);
+    t_inst_eng_rus(inst);
+    t_models(0, r, inst, 1, 0, -1, "one Latin discovery pass, no multi-script soup");
+}
+#[test]
+fn test_explicit_provider_languages_are_not_replaced_by_discovery() {
+    let r: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inst: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    t_req1(r, 0, 0, 0, 0);
+    t_inst_eng_jpn(inst);
+    crate::testport::assert_eq(op_models_configured(r, inst, 1, out), 2, "explicit jpn+eng stays jpn+eng");
+    crate::testport::assert_eq(crate::port::cells_at(out, 1), 1, "the Japanese model is retained");
+    let auto: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::testport::assert_eq(op_models_configured(r, inst, 0, auto), 1, "an unconfigured inventory still uses one discovery model");
+    let named: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let picked: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    t_req1(named, 101, 110, 103, 0);
+    crate::testport::assert_eq(op_models_configured(named, inst, 1, picked), 1, "a named request wins over provider defaults");
 }

@@ -10,7 +10,7 @@
                                    lh-first lh-count lh-rot lh-y0 lh-y1 orf-pass op-upscaled op-re-rotated]]
             [emon.plan :refer [pu-id pu-view-id pi-decode pi-ocr rec-id rec-kind rec-find rq-arg rq-nargs an-decode an-fail ps-failed ps-unsupported
                                us-requests us-done pk-decode pk-ocr flt-none an-ocr an-ocr-word an-ocr-cp an-ocr-end]]
-            [emon.retarget :refer [ri-rotated rv-rotated]]
+            [emon.retarget :refer [ri-rotated rv-rotated ri-opposite]]
             [emon.upscale :refer [ri-upscale rv-upscaled]]
             [emon.model :refer [model-init node-flags node-attr-int-or page-count page-number page-w page-h
                                 page-kind page-dpi page-px-w page-px-h pk-image fl-dpi-unknown fk-pages]]
@@ -305,8 +305,9 @@
     (assert-eq (cells-at mask 0) 0 "an attempt that asks writes nothing: the page is not yet read")
     (comment "the turned view read: the page is done, and the evidence says the turned view was read")
     (fake-lines ans 274 5 1 6 -1 -1)
+    (fake-lines ans (pu-id 0 (ri-opposite)) 1 1 6 -1 -1)
     (assert-eq (page-px ans rq2 bms2 0 mask (new-cells) (new-cells) (new-cells) oruns olines owords) (us-done) "done")
-    (assert-eq (cells-at mask 0) 1 "the page was OCR'd")
+    (assert-eq (cells-at mask 0) 9 "the page was OCR'd and rotated")
     (assert-eq (or-count oruns) 2 "the first pass and the turned view's reading")
     (assert-eq (or-get oruns 1 (orf-pass)) (op-re-rotated) "the second run is the re-rotated pass")))
 

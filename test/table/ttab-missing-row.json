@@ -49,7 +49,7 @@
             "text": "Supplies Ledger",
             "at": [[1, 72, 59.08, 212.04, 75.73]],
             "src": ["text", "infer"],
-            "conf": 948
+            "conf": 947
           },
           {
             "id": 3,
@@ -57,7 +57,7 @@
             "text": "The table below was extracted from the supplies ledger. Figures are totals for the quarter.",
             "at": [[1, 72, 94.1, 344.06, 118.28]],
             "src": ["text", "infer"],
-            "conf": 793
+            "conf": 795
           },
           {
             "id": 4,
@@ -81,7 +81,7 @@
                         "text": "Item",
                         "at": [[1, 72, 192, 182, 214]],
                         "src": ["text", "infer"],
-                        "conf": 997
+                        "conf": 998
                       },
                       {
                         "id": 8,
@@ -90,7 +90,7 @@
                         "text": "Qty",
                         "at": [[1, 182, 192, 292, 214]],
                         "src": ["text", "infer"],
-                        "conf": 997
+                        "conf": 998
                       },
                       {
                         "id": 9,
@@ -99,7 +99,7 @@
                         "text": "Price",
                         "at": [[1, 292, 192, 402, 214]],
                         "src": ["text", "infer"],
-                        "conf": 997
+                        "conf": 998
                       },
                       {
                         "id": 10,
@@ -108,15 +108,15 @@
                         "text": "Stock",
                         "at": [[1, 402, 192, 512, 214]],
                         "src": ["text", "infer"],
-                        "conf": 997
+                        "conf": 998
                       }
                     ],
                     "src": ["infer"],
-                    "conf": 987
+                    "conf": 988
                   }
                 ],
                 "src": ["infer"],
-                "conf": 959
+                "conf": 961
               },
               {
                 "id": 11,
@@ -134,7 +134,7 @@
                         "text": "Pens",
                         "at": [[1, 72, 214, 182, 236]],
                         "src": ["text", "infer"],
-                        "conf": 997
+                        "conf": 998
                       },
                       {
                         "id": 14,
@@ -143,7 +143,7 @@
                         "text": "12",
                         "at": [[1, 182, 214, 292, 236]],
                         "src": ["text", "infer"],
-                        "conf": 997
+                        "conf": 998
                       },
                       {
                         "id": 15,
@@ -151,7 +151,7 @@
                         "text": "3.40",
                         "at": [[1, 292, 214, 402, 236]],
                         "src": ["text", "infer"],
-                        "conf": 997
+                        "conf": 998
                       },
                       {
                         "id": 16,
@@ -159,11 +159,11 @@
                         "text": "yes",
                         "at": [[1, 402, 214, 512, 236]],
                         "src": ["text", "infer"],
-                        "conf": 997
+                        "conf": 998
                       }
                     ],
                     "src": ["infer"],
-                    "conf": 987
+                    "conf": 988
                   },
                   {
                     "id": 17,
@@ -176,7 +176,7 @@
                         "text": "Paper",
                         "at": [[1, 72, 236, 182, 258]],
                         "src": ["text", "infer"],
-                        "conf": 997
+                        "conf": 998
                       },
                       {
                         "id": 19,
@@ -185,7 +185,7 @@
                         "text": "4",
                         "at": [[1, 182, 236, 292, 258]],
                         "src": ["text", "infer"],
-                        "conf": 997
+                        "conf": 998
                       },
                       {
                         "id": 20,
@@ -193,7 +193,7 @@
                         "text": "7.25",
                         "at": [[1, 292, 236, 402, 258]],
                         "src": ["text", "infer"],
-                        "conf": 997
+                        "conf": 998
                       },
                       {
                         "id": 21,
@@ -201,11 +201,11 @@
                         "text": "no",
                         "at": [[1, 402, 236, 512, 258]],
                         "src": ["text", "infer"],
-                        "conf": 997
+                        "conf": 998
                       }
                     ],
                     "src": ["infer"],
-                    "conf": 987
+                    "conf": 988
                   },
                   {
                     "id": 22,
@@ -218,7 +218,7 @@
                         "text": "Tape",
                         "at": [[1, 72, 258, 182, 280]],
                         "src": ["text", "infer"],
-                        "conf": 997
+                        "conf": 998
                       },
                       {
                         "id": 24,
@@ -227,7 +227,7 @@
                         "text": "9",
                         "at": [[1, 182, 258, 292, 280]],
                         "src": ["text", "infer"],
-                        "conf": 997
+                        "conf": 998
                       },
                       {
                         "id": 25,
@@ -235,7 +235,7 @@
                         "text": "2.10",
                         "at": [[1, 292, 258, 402, 280]],
                         "src": ["text", "infer"],
-                        "conf": 997
+                        "conf": 998
                       },
                       {
                         "id": 26,
@@ -243,11 +243,11 @@
                         "text": "yes",
                         "at": [[1, 402, 258, 512, 280]],
                         "src": ["text", "infer"],
-                        "conf": 997
+                        "conf": 998
                       }
                     ],
                     "src": ["infer"],
-                    "conf": 987
+                    "conf": 988
                   },
                   {
                     "id": 27,
@@ -260,7 +260,7 @@
                         "text": "Glue",
                         "at": [[1, 72, 280, 182, 302]],
                         "src": ["text", "infer"],
-                        "conf": 997
+                        "conf": 998
                       },
                       {
                         "id": 29,
@@ -269,7 +269,7 @@
                         "text": "3",
                         "at": [[1, 182, 280, 292, 302]],
                         "src": ["text", "infer"],
-                        "conf": 997
+                        "conf": 998
                       },
                       {
                         "id": 30,
@@ -277,7 +277,7 @@
                         "text": "4.80",
                         "at": [[1, 292, 280, 402, 302]],
                         "src": ["text", "infer"],
-                        "conf": 997
+                        "conf": 998
                       },
                       {
                         "id": 31,
@@ -285,20 +285,20 @@
                         "text": "no",
                         "at": [[1, 402, 280, 512, 302]],
                         "src": ["text", "infer"],
-                        "conf": 997
+                        "conf": 998
                       }
                     ],
                     "src": ["infer"],
-                    "conf": 987
+                    "conf": 988
                   }
                 ],
                 "src": ["infer"],
-                "conf": 959
+                "conf": 961
               }
             ],
             "at": [[1, 72, 192, 512, 302]],
             "src": ["text", "vector", "infer"],
-            "conf": 933
+            "conf": 931
           },
           {
             "id": 32,
@@ -307,7 +307,7 @@
             "text": "Questions go to the purchasing office.",
             "at": [[1, 72, 322.1, 256.66, 332.28]],
             "src": ["text", "infer"],
-            "conf": 793
+            "conf": 795
           }
         ],
         "src": ["infer"],

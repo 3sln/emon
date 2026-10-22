@@ -4,6 +4,7 @@
 package scantest
 
 import (
+	"emon/calib"
 	"emon/evidence"
 	"emon/model"
 	"emon/ocr"
@@ -74,7 +75,7 @@ func TestChineseIsSimplifiedOrTraditionalByScriptOrRegion(emonT *testing.T) {
 }
 
 func TestNoHintOrNoNameIsNoLanguage(emonT *testing.T) {
-	port.AssertEq(emonT, langOf(0, 0, 0, 0, 0, 0, 0, 0, 0, 0), 0, "no hint: the port reads with every model it has (D038)")
+	port.AssertEq(emonT, langOf(0, 0, 0, 0, 0, 0, 0, 0, 0, 0), 0, "no hint: discovery model selection belongs to the port (D1805)")
 	port.AssertEq(emonT, langOf(120, 0, 0, 0, 0, 0, 0, 0, 0, 0), 0, "one letter says nothing")
 	port.AssertEq(emonT, langOf(113, 113, 0, 0, 0, 0, 0, 0, 0, 0), 0, "an unknown two-letter code")
 	port.AssertEq(emonT, langOf(49, 50, 51, 0, 0, 0, 0, 0, 0, 0), 0, "digits are no language")
@@ -1043,4 +1044,136 @@ func TestAConfidentIsolatedDotSpeckIsKeptOutOfTheBody(emonT *testing.T) {
 	stLine(olines, 100, 200, 0, 1)
 	port.AssertEq(emonT, stEmit(olines, owords, words, lines, et, port.NewCells(), 1), 0, "a one-point dot alone is no paragraph even at high engine confidence")
 	port.AssertEq(emonT, evidence.OwGet(owords, 0, evidence.OwfFlags())&evidence.OeGarbage(), evidence.OeGarbage(), "the evidence retains it for the garbage ledger")
+}
+
+func TestOcrTrustSeparatesCleanWordsFromJunk(emonT *testing.T) {
+	var ow *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	port.CellsPush(et, 84)
+	port.CellsPush(et, 111)
+	port.CellsPush(et, 116)
+	port.CellsPush(et, 97)
+	port.CellsPush(et, 108)
+	port.CellsPush(et, 65533)
+	port.CellsPush(et, 124)
+	port.CellsPush(et, 65533)
+	evidence.OwNew(ow, 1, 0, 0, 500, 100, 0, 100, 500, 100, 0, 0, 0, 5, 0, 960, -1)
+	evidence.OwNew(ow, 1, 0, 200, 500, 300, 0, 300, 500, 300, 0, 0, 5, 3, 1, 120, -1)
+	evidence.OwSet(ow, 0, evidence.OwfFlags(), 1)
+	port.AssertThat(emonT, scan.ScWordTrust(ow, et, 0) >= 850, "clean dictionary OCR stays high")
+	port.AssertThat(emonT, scan.ScWordTrust(ow, et, 1) <= 200, "rejected characters at low engine confidence stay low")
+	port.AssertThat(emonT, (scan.ScWordTrust(ow, et, 0)-scan.ScWordTrust(ow, et, 1)) >= 600, "scrapers can separate clean text and junk")
+}
+
+func TestOcrFormatControlsAndUnspacedScripts(emonT *testing.T) {
+	port.AssertEq(emonT, scan.ScFormatControl(8206), 1, "OCR LRM is stripped")
+	port.AssertEq(emonT, scan.ScFormatControl(8207), 1, "OCR RLM is stripped")
+	port.AssertEq(emonT, scan.ScFormatControl(8295), 1, "OCR direction isolates are stripped")
+	port.AssertEq(emonT, scan.ScFormatControl(1575), 0, "Arabic letters are kept")
+	port.AssertEq(emonT, scan.ScUnspaced(21407), 1, "Han words have no separator")
+	port.AssertEq(emonT, scan.ScUnspaced(12363), 1, "Kana words have no separator")
+	port.AssertEq(emonT, scan.ScUnspaced(44032), 0, "Hangul word spaces are kept")
+	port.AssertEq(emonT, scan.ScUnspaced(65), 0, "Latin word spaces are kept")
+}
+
+func TestOcrPassDisagreementReducesTrust(emonT *testing.T) {
+	var ow *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	port.CellsPush(et, 65)
+	port.CellsPush(et, 66)
+	evidence.OwNew(ow, 1, 0, 0, 500, 100, 0, 100, 500, 100, 0, 0, 0, 1, 0, 900, -1)
+	evidence.OwNew(ow, 1, 0, 0, 500, 100, 0, 100, 500, 100, 0, 0, 1, 1, 1, 900, -1)
+	evidence.OwSet(ow, 0, evidence.OwfRun(), 0)
+	evidence.OwSet(ow, 1, evidence.OwfRun(), 1)
+	port.AssertThat(emonT, scan.ScWordAgreement(ow, et, 0) < 1000, "two readings of the same ink disagree")
+	evidence.OwSet(ow, 1, evidence.HdTstart(), 0)
+	port.AssertEq(emonT, scan.ScWordAgreement(ow, et, 0), 1000, "the same reading agrees")
+}
+
+func TestAShortDetectedRuleIsNotAnOcrWord(emonT *testing.T) {
+	var rules *port.Cells = port.NewCells()
+	stRule(rules, 1000, 0, 500)
+	port.AssertEq(emonT, scan.ScOnVrule(rules, 1, 1000, 250, 20), 1, "a detected five-point rule also rejects a bar")
+}
+
+func TestOcrTextCleaningRemovesControlsAndHanSeparators(emonT *testing.T) {
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	var t int32 = model.NodeNew(nodes, model.NkText(), 0)
+	var start int32 = port.CellsLen(text)
+	model.NodeAddSrc(nodes, t, model.SrOcr())
+	port.CellsPush(text, 21407)
+	port.CellsPush(text, 32)
+	port.CellsPush(text, 20135)
+	port.CellsPush(text, 8206)
+	model.NodeSetText(nodes, t, start, 4)
+	port.AssertEq(emonT, scan.ScCleanText(nodes, text), 1, "one corrected OCR text run")
+	port.AssertEq(emonT, model.NodeTextLen(nodes, t), 2, "two adjacent Han characters")
+	port.AssertEq(emonT, port.CellsAt(text, model.NodeTextStart(nodes, t)), 21407, "the first character stays")
+	port.AssertEq(emonT, scan.ScCleanText(nodes, text), 0, "cleaning is idempotent")
+}
+
+func TestAnInkRegionThatRetriesReadAsNothingHasALedgerRow(emonT *testing.T) {
+	var ol *port.Cells = port.NewCells()
+	var nodes *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var l int32 = evidence.OlNew(ol, 1, 1000, 2000, 9000, 2400, 1000, 2400, 9000, 2400, 0, 0, 0, 0)
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	evidence.OlSet(ol, l, evidence.OlfRetryGap(), 1)
+	port.AssertEq(emonT, scan.ScWriteEmptyRegions(ol, nodes, regions, ledger), 1, "ink without Model text is accounted for")
+	port.AssertEq(emonT, model.LedgerReason(ledger, 0), model.DrOcrGhost(), "not a silent lost region")
+	port.AssertEq(emonT, model.LedgerX1(ledger, 0), 9000, "the region's own extent")
+	var p int32 = model.NodeNew(nodes, model.NkParagraph(), 0)
+	model.NodeAddRegion(nodes, regions, p, 1, 2000, 2000, 5000, 2400)
+	port.AssertEq(emonT, scan.ScWriteEmptyRegions(ol, nodes, regions, ledger), 0, "a region represented in the Model is not empty")
+}
+
+func TestRotatedOcrTrustUsesOnlyTheSelectedCoordinateFrame(emonT *testing.T) {
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var runs *port.Cells = port.NewCells()
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	port.CellsPush(et, 65533)
+	port.CellsPush(et, 65533)
+	port.CellsPush(et, 65533)
+	port.CellsPush(et, 65533)
+	port.CellsPush(et, 65533)
+	port.CellsPush(et, 84)
+	port.CellsPush(et, 111)
+	port.CellsPush(et, 116)
+	port.CellsPush(et, 97)
+	port.CellsPush(et, 108)
+	evidence.OrNew(runs, 1, 0)
+	var selected int32 = evidence.OrNew(runs, 1, 1)
+	evidence.OrSet(runs, selected, evidence.OrfPass(), evidence.OpReRotated())
+	evidence.OwNew(ow, 1, 0, 0, 500, 100, 0, 100, 500, 100, 0, 0, 0, 5, 0, 0, -1)
+	evidence.OwSet(ow, 0, evidence.OwfRun(), 0)
+	evidence.OwNew(ow, 1, 0, 0, 500, 100, 0, 100, 500, 100, 0, 0, 5, 5, 1, 960, -1)
+	evidence.OwSet(ow, 1, evidence.OwfRun(), 1)
+	evidence.OwSet(ow, 1, evidence.OwfFlags(), 1)
+	var p int32 = model.NodeNew(nodes, model.NkParagraph(), 0)
+	model.NodeAddSrc(nodes, p, model.SrOcr())
+	model.NodeAddFlag(nodes, p, model.FlRotated())
+	model.NodeAddRegion(nodes, regions, p, 1, 0, 0, 500, 100)
+	scan.ScTrust(nodes, regions, ow, et, runs)
+	port.AssertThat(emonT, model.NodeConf(nodes, p) >= 850, "old upside-down coordinates cannot lower clean selected OCR")
+	port.AssertThat(emonT, calib.CalNodeConf(nodes, p) >= 750, "the scraper sees high calibrated confidence too")
 }

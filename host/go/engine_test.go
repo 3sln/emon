@@ -706,9 +706,15 @@ func TestAScannedPDFPageIsOcredAndABornDigitalOneKeepsItsTextLayer(t *testing.T)
 	o := DefaultOptions()
 	m, tr, err := withOcr().Record(one(BytesInput(scan)), o)
 	m = must(t, m, err)
-	// the stream's own bytes (filter DCT, kind 2), then OCR of that bitmap (kind 3): two rounds
-	if k := kinds(tr); len(k) != 2 || k[0] != 2 || k[1] != 3 || tr.Entries[0].Round != 0 || tr.Entries[1].Round != 1 {
+	// Decode, discovery, then bounded missing-line crops: fake OCR reads only
+	// Hello, leaving the real scan's other traced lines uncovered (D1803).
+	if k := kinds(tr); len(k) < 2 || len(k) > 18 || k[0] != 2 || k[1] != 3 || tr.Entries[0].Round != 0 || tr.Entries[1].Round != 1 {
 		t.Fatalf("kinds %v", k)
+	}
+	for _, entry := range tr.Entries[2:] {
+		if entry.Round != 2 || entry.Req[1] != 3 || entry.Req[4] != 7 || entry.Req[8] <= 0 || entry.Req[9] <= 0 {
+			t.Fatalf("invalid missing-line crop: %v", entry.Req)
+		}
 	}
 	if tr.Entries[0].Req[6] != 1 || tr.Entries[0].Bitmap == nil {
 		t.Error("the DCT filter, with the pixels an engine will read")

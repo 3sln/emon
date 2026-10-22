@@ -47,11 +47,11 @@
                               ox-sym-alts ox-alt-next ox-word-next ox-nlines ox-nblocks ox-orient ox-wdir
                               ox-tlorder ox-deskew ox-osd ox-script ox-sconf ox-oconf ox-binary ox-bw ox-bh]]
             [emon.evidence :refer [ep-new ep-set vw-new vw-get vwf-cropx vwf-cropy vw-px-to-cpt vw-box-to-cpt im-new im-get im-count
-                                   or-new or-set or-count ob-new ob-set ob-get ob-count
+                                   or-new or-get or-set or-count op-re-rotated ob-new ob-set ob-get ob-count
                                    ol-new ol-set ol-get ol-count ow-new ow-set ow-get ow-count
                                    os-new os-set os-get os-count oa-add oa-count wd-new wd-set wd-get wd-count
                                    ln-new ln-set ln-count etx-append-cp etx-len ev-angle ev-baseline-at
-                                   ev-rot-median ev-feat-ocr
+                                   ev-overlap-small ev-rot-median ev-feat-ocr
                                    hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-bx0 hd-by0 hd-bx1 hd-by1 hd-rot hd-dir
                                    hd-tstart hd-tlen hd-conf
                                    lh-first lh-count lh-x0 lh-y0 lh-x1 lh-y1 lh-bx0 lh-by0 lh-bx1 lh-by1
@@ -64,7 +64,7 @@
                                    orf-osd orf-script orf-sconf orf-oconf orf-flags orf-bfirst orf-bcount orf-bview
                                    orf-lfirst orf-lcount orf-wfirst orf-wcount orf-lang orf-langlen
                                    obf-btype obf-orient obf-wdir obf-first obf-count obf-x0 obf-y0 obf-x1 obf-y1
-                                   olf-par olf-run olf-xheight olf-asc olf-desc olf-px olf-py olf-pw olf-ph
+                                   olf-retry-gap olf-par olf-run olf-xheight olf-asc olf-desc olf-px olf-py olf-pw olf-ph
                                    owf-style owf-run owf-sfirst owf-scount owf-lang owf-flags owf-psize
                                    owf-px owf-py owf-pw owf-ph
                                    osf-conf osf-afirst osf-acount osf-px osf-py osf-pw osf-ph
@@ -76,10 +76,10 @@
             [emon.pdflex :refer [pl-kind-of pl-first pl-next pl-int-value pl-stream-start pl-stream-len]]
             [emon.pdfdoc :refer [pd-get pd-stream-plan pd-pg-count pd-pg-crop pd-pg-rotate]]
             [emon.model :refer [sr-ocr sr-text node-count node-kind node-parent node-region-head node-region-count
-                                node-src node-conf node-set-src node-set-conf node-add-flag nk-is-inline
-                                region-page fl-ocr-only fl-low-conf fl-script-unread page-count page-set-kind pk-scanned
-                                ledger-add dr-background sr-vector page-w page-h
-                                node-set-attr-text text-append-cp fk-ocr]]
+                                node-src node-flags node-conf node-set-src node-set-conf node-add-flag nk-is-inline
+                                region-page region-next region-x0 region-y0 region-x1 region-y1 fl-rotated fl-ocr-only fl-low-conf fl-script-unread page-count page-set-kind pk-scanned
+                                ledger-add dr-ocr-ghost dr-background sr-vector page-w page-h
+                                node-text-start node-text-len node-set-text node-set-attr-text text-append-cp fk-ocr]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem bit-and bit-or]]))
 
@@ -176,8 +176,8 @@
   (comment "code packed `a * 65536 + b * 256 + c`; 0 when there is no hint or it is not one we can name, and then the")
   (comment "port reads with whatever it has (D038: no language is assumed). Chinese is `chs` or `cht` by its script (`Hant`) or")
   (comment "its region (TW, HK, MO): the port maps them to its simplified and traditional models. A three-letter primary")
-  (comment "subtag is taken as it is (`deu`, `fra`, `chi`). NO LOCALE ASSUMES ENGLISH: a document with no hint is read with")
-  (comment "every model the port has.")
+  (comment "subtag is taken as it is (`deu`, `fra`, `chi`). With no locale the hint remains absent: D1805 lets the port select")
+  (comment "one installed discovery model (English when installed), rather than combining all scripts.")
   (let [^I32 n (cells-len loc)
         ^:mut ^I32 i 0
         ^:mut ^I32 plen 0
@@ -1088,7 +1088,7 @@
                 (set dx (- xb xa))
                 (if (< dx 0) (set dx (- 0 dx)))
                 (set dy (- yb ya))
-                (if (and (>= dy 800) (<= (* dx 8) dy))
+                (if (and (> dy 0) (<= (* dx 8) dy))
                   (if (and (>= cy ya) (<= cy yb))
                     (do (set d (- cx (quot (+ xa xb) 2)))
                         (if (< d 0) (set d (- 0 d)))
@@ -1945,7 +1945,7 @@
     (while (< n nn)
       (do (set pg (sc-node-page nodes regions n))
           (if (and (>= pg 1) (<= pg (cells-len mask)))
-            (if (>= (quot (cells-at mask (- pg 1)) 4) 1)
+            (if (!= (bit-and (cells-at mask (- pg 1)) (sc-mask-unread)) 0)
               (if (== (bit-and (node-src nodes n) (sr-ocr)) (sr-ocr))
                 (do (if (== (nk-is-inline (node-kind nodes n)) 0)
                       (do (node-add-flag nodes n (fl-script-unread))
@@ -2024,6 +2024,7 @@
             (set m (cells-at mask (- pg 1))))
           (if (>= (rem m 4) 1)
             (do (set s (node-src nodes n))
+                (if (!= (bit-and m 8) 0) (node-add-flag nodes n (fl-rotated)))
                 (if (== (bit-and s (sr-text)) (sr-text))
                   (do (node-set-src nodes n (+ (- s (sr-text)) (sr-ocr)))
                       (if (== (nk-is-inline (node-kind nodes n)) 0)
@@ -2125,3 +2126,150 @@
     (if (< (mul64 area (i64 1000)) (mul64 whole (i64 (sc-cover-min)))) (return 0))
     (if (<= whole (i64 0)) (return 0))
     (return 1)))
+
+(defn ^:pub ^I32 sc-word-agreement [^Cells ow ^Cells et ^I32 w]
+  (comment "D1800: overlapping words from different passes must agree on their text. Ambiguous splits are left alone; a near-identical word box with a different reading reduces trust.")
+  (let [^:mut ^I32 j 0 ^:mut ^I32 k 0 ^:mut ^I32 same 0 ^I32 n (ow-get ow w (hd-tlen))]
+    (while (< j (ow-count ow))
+      (do (if (and (!= (ow-get ow j (owf-run)) (ow-get ow w (owf-run)))
+                   (and (== (ow-get ow j (hd-page)) (ow-get ow w (hd-page)))
+                        (>= (ev-overlap-small (ow-get ow w (hd-x0)) (ow-get ow w (hd-y0)) (ow-get ow w (hd-x1)) (ow-get ow w (hd-y1))
+                                               (ow-get ow j (hd-x0)) (ow-get ow j (hd-y0)) (ow-get ow j (hd-x1)) (ow-get ow j (hd-y1))) 800)))
+            (if (== (ow-get ow j (hd-tlen)) n)
+              (do (set k 0) (set same 1)
+                  (while (< k n)
+                    (do (if (!= (cells-at et (+ (ow-get ow w (hd-tstart)) k)) (cells-at et (+ (ow-get ow j (hd-tstart)) k))) (set same 0))
+                        (set k (+ k 1))))
+                  (if (== same 0) (return 700)))))
+          (set j (+ j 1))))
+    (return 1000)))
+
+(defn ^I32 sc-word-base [^Cells owords ^Cells etext ^I32 w]
+  (let [^I32 ts (ow-get owords w (hd-tstart))
+        ^I32 n (ow-get owords w (hd-tlen))
+        ^I32 flags (ow-get owords w (owf-flags))
+        ^:mut ^I32 score (ow-get owords w (hd-conf))
+        ^:mut ^I32 i 0
+        ^:mut ^I32 latin 0
+        ^:mut ^I32 rejected 0
+        ^:mut ^I32 cp 0]
+    (if (< score 0) (set score 0))
+    (if (> score 1000) (set score 1000))
+    (while (< i n)
+      (do (set cp (cells-at etext (+ ts i)))
+          (if (or (and (>= cp 65) (<= cp 90)) (and (>= cp 97) (<= cp 122))) (set latin (+ latin 1)))
+          (if (or (== cp 65533) (== (sc-cp-class cp) 2)) (set rejected (+ rejected 1)))
+          (set i (+ i 1))))
+    (if (and (>= latin 3) (== (bit-and flags 3) 0)) (set score (- score 180)))
+    (if (== (sc-implausible etext ts n) 1) (set score (- score 400)))
+    (if (> n 0) (set score (- score (quot (* rejected 600) n))))
+    (if (!= (bit-and flags (oe-garbage)) 0) (if (> score 200) (set score 200)))
+    (if (< score 0) (set score 0))
+    (return score)))
+
+(defn ^:pub ^I32 sc-word-trust [^Cells owords ^Cells etext ^I32 w]
+  (return (quot (* (sc-word-base owords etext w) (sc-word-agreement owords etext w)) 1000)))
+
+(defn ^I32 sc-rotated-page [^Cells oruns ^I32 page]
+  (let [^:mut ^I32 r 0]
+    (while (< r (or-count oruns))
+      (do (if (and (== (or-get oruns r 0) page) (== (or-get oruns r (orf-pass)) (op-re-rotated))) (return 1))
+          (set r (+ r 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 sc-trust [^:mut ^Cells nodes ^Cells regions ^Cells owords ^Cells etext ^Cells oruns]
+  (comment "D1800: pure OCR nodes carry character-weighted word evidence, rather than paragraph/heading constants. Rejected words in their region also lower trust.")
+  (let [^:mut ^I32 n 1 ^:mut ^I32 r 0 ^:mut ^I32 w 0 ^:mut ^I32 cx 0 ^:mut ^I32 cy 0
+        ^:mut ^I32 sum 0 ^:mut ^I32 count 0 ^:mut ^I32 weight 0 ^:mut ^I32 score 0 ^:mut ^I32 tagged 0
+        ^:mut ^I32 rotated 0 ^:mut ^I32 run 0 ^:mut ^I32 eligible 0 ^:mut ^I32 trust 0]
+    (while (< n (node-count nodes))
+      (do (if (and (!= (bit-and (node-src nodes n) (sr-ocr)) 0) (== (bit-and (node-src nodes n) (sr-text)) 0))
+            (do (set sum 0) (set count 0)
+                (set r (node-region-head nodes n))
+                (while (>= r 0)
+                  (do (set rotated 0)
+                      (if (!= (bit-and (node-flags nodes n) (fl-rotated)) 0)
+                        (set rotated (sc-rotated-page oruns (region-page regions r))))
+                      (set w 0)
+                      (while (< w (ow-count owords))
+                        (do (set cx (quot (+ (ow-get owords w (hd-x0)) (ow-get owords w (hd-x1))) 2))
+                            (set cy (quot (+ (ow-get owords w (hd-y0)) (ow-get owords w (hd-y1))) 2))
+                            (set eligible 1)
+                            (if (== rotated 1)
+                              (do (set run (ow-get owords w (owf-run)))
+                                  (set eligible 0)
+                                  (if (and (>= run 0) (< run (or-count oruns)))
+                                    (if (== (or-get oruns run (orf-pass)) (op-re-rotated)) (set eligible 1)))))
+                            (if (and (and (== eligible 1) (== (ow-get owords w (hd-page)) (region-page regions r)))
+                                     (and (and (>= cx (region-x0 regions r)) (<= cx (region-x1 regions r)))
+                                          (and (>= cy (region-y0 regions r)) (<= cy (region-y1 regions r)))))
+                              (do (set weight (ow-get owords w (hd-tlen)))
+                                  (if (> weight 40) (set weight 40))
+                                  (if (== rotated 1)
+                                    (set trust (sc-word-base owords etext w))
+                                    (set trust (sc-word-trust owords etext w)))
+                                  (set sum (+ sum (* weight trust)))
+                                  (set count (+ count weight))))
+                            (set w (+ w 1))))
+                      (set r (region-next regions r))))
+                (if (> count 0)
+                  (do (set score (quot sum count))
+                      (node-set-conf nodes n score)
+                      (if (< score 500) (node-add-flag nodes n (fl-low-conf)))
+                      (set tagged (+ tagged 1))))))
+          (set n (+ n 1))))
+    (return tagged)))
+
+(defn ^:pub ^I32 sc-format-control [^I32 cp]
+  (if (or (== cp 1564) (or (== cp 8206) (== cp 8207))) (return 1))
+  (if (or (and (>= cp 8234) (<= cp 8238)) (and (>= cp 8294) (<= cp 8297))) (return 1))
+  (return 0))
+(defn ^:pub ^I32 sc-unspaced [^I32 cp]
+  (if (or (and (>= cp 12352) (<= cp 12543))
+          (or (and (>= cp 13312) (<= cp 40959)) (and (>= cp 131072) (<= cp 195103)))) (return 1))
+  (return 0))
+
+(defn ^:pub ^I32 sc-clean-text [^:mut ^Cells nodes ^:mut ^Cells text]
+  (comment "D1802: OCR formatting controls and separators between adjacent Han/Kana characters are not content. Repoint only changed OCR text runs.")
+  (let [^:mut ^I32 n 1 ^:mut ^I32 ts 0 ^:mut ^I32 ncp 0 ^:mut ^I32 i 0 ^:mut ^I32 cp 0
+        ^:mut ^I32 start 0 ^:mut ^I32 skip 0 ^:mut ^I32 changed 0 ^:mut ^I32 any 0]
+    (while (< n (node-count nodes))
+      (do (if (!= (bit-and (node-src nodes n) (sr-ocr)) 0)
+            (do (set ts (node-text-start nodes n)) (set ncp (node-text-len nodes n))
+                (set start (cells-len text)) (set i 0) (set changed 0)
+                (while (< i ncp)
+                  (do (set cp (cells-at text (+ ts i))) (set skip (sc-format-control cp))
+                      (if (and (== cp 32) (and (> i 0) (< (+ i 1) ncp)))
+                        (if (and (== (sc-unspaced (cells-at text (+ ts (- i 1)))) 1)
+                                 (== (sc-unspaced (cells-at text (+ ts (+ i 1)))) 1)) (set skip 1)))
+                      (if (== skip 0) (text-append-cp text cp) (set changed 1))
+                      (set i (+ i 1))))
+                (if (== changed 1)
+                  (do (node-set-text nodes n start (- (cells-len text) start)) (set any (+ any 1)))
+                  (cells-drop text start))))
+          (set n (+ n 1))))
+    (return any)))
+
+(defn ^:pub ^I32 sc-write-empty-regions [^Cells olines ^Cells nodes ^Cells regions ^:mut ^Cells ledger]
+  (comment "D1803: a represented ink gap with no Model region over it gets a ledger row, including unread crops and crops held out by the body-ink owner.")
+  (let [^:mut ^I32 l 0 ^:mut ^I32 n 0 ^:mut ^I32 r 0 ^:mut ^I32 found 0 ^:mut ^I32 rows 0]
+    (while (< l (ol-count olines))
+      (do (if (== (ol-get olines l (olf-retry-gap)) 1)
+            (do (set found 0) (set n 1)
+                (while (and (< n (node-count nodes)) (== found 0))
+                  (do (set r (node-region-head nodes n))
+                      (while (and (>= r 0) (== found 0))
+                        (do (if (== (region-page regions r) (ol-get olines l (hd-page)))
+                              (if (> (ev-overlap-small (region-x0 regions r) (region-y0 regions r) (region-x1 regions r) (region-y1 regions r)
+                                                      (ol-get olines l (lh-x0)) (ol-get olines l (lh-y0))
+                                                      (ol-get olines l (lh-x1)) (ol-get olines l (lh-y1))) 100)
+                                (set found 1)))
+                            (set r (region-next regions r))))
+                      (set n (+ n 1))))
+                (if (== found 0)
+                  (do (ledger-add ledger (dr-ocr-ghost) (ol-get olines l (hd-page))
+                                  (ol-get olines l (lh-x0)) (ol-get olines l (lh-y0))
+                                  (ol-get olines l (lh-x1)) (ol-get olines l (lh-y1)) 0 (sr-ocr))
+                      (set rows (+ rows 1))))))
+          (set l (+ l 1))))
+    (return rows)))

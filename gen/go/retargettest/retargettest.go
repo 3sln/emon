@@ -464,3 +464,85 @@ func TestABodyInkRunOfMoreLinesThanTheScratchHoldsIsCutNotReadPastIt(emonT *test
 	port.AssertThat(emonT, n <= scan.ScSelMax(), "the selection holds no more than the scratch has room for")
 	port.AssertThat(emonT, n > 1400, "and the 1500 lines it counts are read, bar the few that lie over the first pass's line")
 }
+
+func TestAnEmptyFirstPassKeepsTheBodyInkReadingEvenWhenUnsure(emonT *testing.T) {
+	var oruns *port.Cells = port.NewCells()
+	var olines *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var rtp *port.Cells = port.NewCells()
+	var scr *port.Cells = port.NewCells()
+	scan.ScPrep(scr)
+	rttEmpty(olines, 0)
+	var fr int32 = rttRun(oruns, olines, ow, 0, 0)
+	rttLine(olines, ow, feats, 300, 450)
+	var br int32 = rttRun(oruns, olines, ow, 1, 0)
+	retarget.RtPrep(rtp)
+	port.CellsSet(rtp, retarget.RtpBrun(), br)
+	port.AssertEq(emonT, rttAdopt(rtp, oruns, fr, olines, ow, scr), 1, "a weak recovered line is evidence, not silent total loss")
+	port.AssertEq(emonT, port.CellsAt(scr, scan.ScSelBase()), 1, "the recovered line reaches scan vetting")
+}
+
+func TestTracedInkWithNoOcrWordGetsACroppedRetry(emonT *testing.T) {
+	var runs *port.Cells = port.NewCells()
+	var ol *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var tl *port.Cells = port.NewCells()
+	var run int32 = rttRun(runs, ol, ow, 0, 0)
+	var t int32 = evidence.TlNew(tl, 1, 1000, 3000, 9000, 4000, 1000, 4000, 9000, 4000, 0, 0, -1, 12)
+	evidence.TlSet(tl, t, evidence.TlfConf(), 950)
+	port.AssertEq(emonT, retarget.RtGapLines(1, 300, tl, runs, run, ol, ow, port.NewCells()), 1, "ink absent from OCR is an empty retry line")
+	port.AssertEq(emonT, evidence.OlCount(ol), 1, "the region is represented in evidence")
+	port.AssertEq(emonT, evidence.OrGet(runs, run, evidence.OrfLcount()), 1, "the retry planner sees it")
+	port.AssertEq(emonT, retarget.RtGapLines(1, 300, tl, runs, run, ol, ow, port.NewCells()), 0, "a repeated plan does not duplicate its region")
+}
+
+func TestOrientationVotesUseTextAreaRatherThanAConfidentMarginNumber(emonT *testing.T) {
+	var ans *port.Cells = port.NewCells()
+	var a int32 = plan.AnOcr(ans, 1)
+	var wa int32 = plan.AnOcrWord(ans, a, 0, 0, 10, 500, 990, 0, 0)
+	plan.AnOcrCp(ans, wa, 49)
+	plan.AnOcrCp(ans, wa, 50)
+	plan.AnOcrEnd(ans, a)
+	var b int32 = plan.AnOcr(ans, 2)
+	var wb int32 = plan.AnOcrWord(ans, b, 50, 50, 500, 40, 900, 0, 0)
+	plan.AnOcrCp(ans, wb, 84)
+	plan.AnOcrCp(ans, wb, 101)
+	plan.AnOcrCp(ans, wb, 120)
+	plan.AnOcrCp(ans, wb, 116)
+	plan.AnOcrEnd(ans, b)
+	port.AssertThat(emonT, retarget.RtAnswerScore(ans, b) > retarget.RtAnswerScore(ans, a), "body text beats a narrow Bates strip")
+}
+
+func TestSmallTracedTextIsStillRetried(emonT *testing.T) {
+	var runs *port.Cells = port.NewCells()
+	var ol *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var tl *port.Cells = port.NewCells()
+	var rtp *port.Cells = port.NewCells()
+	var run int32 = rttRun(runs, ol, ow, 0, 0)
+	var t int32 = evidence.TlNew(tl, 1, 1000, 3000, 9000, 3400, 1000, 3400, 9000, 3400, 0, 0, -1, 12)
+	evidence.TlSet(tl, t, evidence.TlfConf(), 950)
+	port.AssertEq(emonT, retarget.RtGapLines(1, 300, tl, runs, run, ol, ow, port.NewCells()), 1, "four-point ink is text even when the first pass missed it")
+	retarget.RtPrep(rtp)
+	retarget.RtDecide(0, 0, 0, runs, run, ol, ow, port.NewCells(), 1, 300, rtp)
+	port.AssertEq(emonT, port.CellsAt(rtp, retarget.RtpNl()), 1, "the small region reaches the crop request planner")
+}
+
+func TestTheEmptyPageFallbackDoesNotDiluteAnExistingReading(emonT *testing.T) {
+	var runs *port.Cells = port.NewCells()
+	var ol *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var rtp *port.Cells = port.NewCells()
+	var scr *port.Cells = port.NewCells()
+	scan.ScPrep(scr)
+	rttEmpty(ol, 0)
+	var fr int32 = rttRun(runs, ol, ow, 0, 0)
+	rttLine(ol, ow, feats, 300, 900)
+	rttLine(ol, ow, feats, 600, 450)
+	var br int32 = rttRun(runs, ol, ow, 1, 0)
+	retarget.RtPrep(rtp)
+	port.CellsSet(rtp, retarget.RtpBrun(), br)
+	port.AssertEq(emonT, rttAdopt(rtp, runs, fr, ol, ow, scr), 1, "normal recovery already read text, so keep its quality decisions")
+}

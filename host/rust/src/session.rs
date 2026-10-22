@@ -449,12 +449,12 @@ pub fn ocr_lang_first(req: &[i32]) -> i32 {
 }
 
 // The installed models that read the request: `installed` holds their names as code points separated by 0; the indices into that list
-// (see `op-models`), and how many.
+// (see `op-models-configured`), and how many. The browser provider supplies its configured model list.
 pub fn ocr_models(req: &[i32], installed: &[i32]) -> (i32, Vec<i32>) {
     let mut req = cells_of(req);
     let mut inst = cells_of(installed);
     let mut out = Cells::new();
-    let n = emon::ocrport::op_models(&mut req, &mut inst, &mut out);
+    let n = emon::ocrport::op_models_configured(&mut req, &mut inst, 1, &mut out);
     (n, cells_vec(&out))
 }
 

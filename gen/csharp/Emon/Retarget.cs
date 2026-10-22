@@ -94,8 +94,8 @@ public static class Retarget {
         return 3;
     }
     public static int RtEmptyH() {
-        // P12.6: a first-pass line with no word is re-read alone when its box is at least this high (centipoints: 6 pt)...
-        return 600;
+        // P12.6: a first-pass line with no word is re-read alone when its box is at least this high (centipoints: 3 pt)...
+        return 300;
     }
     public static int RtEmptyHMax() {
         // ...and at most this high (60 pt)...
@@ -117,11 +117,21 @@ public static class Retarget {
         // ...of a mean confidence (per mille) of at least this: it has no first pass to be compared with, so it must be sure.
         return 700;
     }
+    internal static int RtNativeEmptyPriority() {
+        // Existing OCR empty-line crops precede traced gaps: this bonus exceeds the largest admitted empty-line area (144000 square points).
+        return 1000000;
+    }
     public static int RiBody() {
         return 17;
     }
     public static int RiRotated() {
         return 18;
+    }
+    public static int RiOpposite() {
+        return 29;
+    }
+    public static int RvOpposite() {
+        return 39;
     }
     public static int RiTextOnly() {
         return 19;
@@ -592,6 +602,9 @@ public static class Retarget {
                 l = l0;
                 while (l < (l0 + ln)) {
                     c = RtEmptyArea(olines, l);
+                    if ((c > 0) && (Evidence.OlGet(olines, l, Evidence.OlfRetryGap()) == 0)) {
+                        c += RtNativeEmptyPriority();
+                    }
                     if (c > bestc) {
                         dup = 0;
                         j = 0;
@@ -972,7 +985,89 @@ public static class Retarget {
             emon.Port.BitmapQuarterInto(src, turned, q);
             RtAskView(rq, id, Plan.PuViewId(page, RvRotated()), turned, dpi, loc, rtp);
         }
-        return 1;
+        if (Plan.AnFind(ans, Plan.PuId(page, RiOpposite())) < 0) {
+            int other = (q + 2) % 4;
+            emon.Port.Bitmap opposite = emon.Port.BmsPut(bms, Plan.PuViewId(page, RvOpposite()), RtOddDim(w, h, q), RtOddDim(h, w, q), emon.Port.BitmapChannels(src));
+            emon.Port.BitmapQuarterInto(src, opposite, other);
+            RtAskView(rq, Plan.PuId(page, RiOpposite()), Plan.PuViewId(page, RvOpposite()), opposite, dpi, loc, rtp);
+        }
+        return 2;
+    }
+    public static int RtGapLines(int page, int dpi, emon.Port.Cells tlines, emon.Port.Cells oruns, int run, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells inks) {
+        // D1803: traced horizontal text with no overlapping OCR words is an empty OCR line, so the existing bounded crop planner retries it. Only append to the current last run.
+        int l0 = Evidence.OrGet(oruns, run, Evidence.OrfLfirst());
+        int t = 0;
+        int l = 0;
+        int overlap = 0;
+        int made = 0;
+        int x0 = 0;
+        int y0 = 0;
+        int x1 = 0;
+        int y1 = 0;
+        int row = 0;
+        if ((l0 + Evidence.OrGet(oruns, run, Evidence.OrfLcount())) != Evidence.OlCount(olines)) {
+            return 0;
+        }
+        while ((t < Evidence.TlCount(tlines)) && (made < RtLines())) {
+            if ((Evidence.TlGet(tlines, t, 0) == page) && (((Evidence.TlGet(tlines, t, Evidence.TlfConf()) >= 600) && (Evidence.TlGet(tlines, t, 12) >= 3)) && ((Evidence.IkCount(inks) == 0) || ((Evidence.TlGet(tlines, t, Evidence.TlfInk()) >= 0) && ((Evidence.TlGet(tlines, t, Evidence.TlfInk()) < Evidence.IkCount(inks)) && (Evidence.IkGet(inks, Evidence.TlGet(tlines, t, Evidence.TlfInk()), Evidence.IkfRole()) == Evidence.IrBody())))))) {
+                x0 = Evidence.TlGet(tlines, t, 1);
+                y0 = Evidence.TlGet(tlines, t, 2);
+                x1 = Evidence.TlGet(tlines, t, 3);
+                y1 = Evidence.TlGet(tlines, t, 4);
+                overlap = 0;
+                l = l0;
+                while (l < Evidence.OlCount(olines)) {
+                    if (Evidence.EvOverlapSmall(x0, y0, x1, y1, Evidence.OlGet(olines, l, Evidence.LhX0()), Evidence.OlGet(olines, l, Evidence.LhY0()), Evidence.OlGet(olines, l, Evidence.LhX1()), Evidence.OlGet(olines, l, Evidence.LhY1())) > 100) {
+                        if ((Evidence.OlGet(olines, l, Evidence.LhCount()) > 0) || (RtEmptyArea(olines, l) > 0)) {
+                            overlap = 1;
+                        }
+                    }
+                    l += 1;
+                }
+                if ((overlap == 0) && (((y1 - y0) >= RtEmptyH()) && ((y1 - y0) <= RtEmptyHMax()))) {
+                    if (((x1 - x0) >= RtEmptyW()) && (((x1 - x0) > (y1 - y0)) && ((x1 - x0) <= (RtEmptyAspect() * (y1 - y0))))) {
+                        row = Evidence.OlNew(olines, page, x0, y0, x1, y1, x0, y1, x1, y1, 0, 0, Evidence.OwCount(owords), 0);
+                        Evidence.OlSet(olines, row, Evidence.OlfRetryGap(), 1);
+                        Evidence.OlSet(olines, row, Evidence.OlfRun(), run);
+                        Evidence.OlSet(olines, row, Evidence.OlfPx(), (x0 * dpi) / 7200);
+                        Evidence.OlSet(olines, row, Evidence.OlfPy(), (y0 * dpi) / 7200);
+                        Evidence.OlSet(olines, row, Evidence.OlfPw(), ((x1 - x0) * dpi) / 7200);
+                        Evidence.OlSet(olines, row, Evidence.OlfPh(), ((y1 - y0) * dpi) / 7200);
+                        made += 1;
+                    }
+                }
+            }
+            t += 1;
+        }
+        Evidence.OrSet(oruns, run, Evidence.OrfLcount(), Evidence.OlCount(olines) - l0);
+        return made;
+    }
+    public static int RtAnswerScore(emon.Port.Cells ans, int at) {
+        // D1804: upright trial quality is recognized text area times word confidence; narrow vertical strips do not vote. Accumulate scaled area to bound sums.
+        int w = Plan.AnOcrFirst(ans, at);
+        int i = 0;
+        int score = 0;
+        int area = 0;
+        int width = 0;
+        int height = 0;
+        int conf = 0;
+        while (i < Plan.AnOcrCount(ans, at)) {
+            width = Plan.AwGet(ans, w, Plan.AwW());
+            height = Plan.AwGet(ans, w, Plan.AwH());
+            conf = Plan.AwGet(ans, w, Plan.AwConf());
+            if ((width > 0) && ((height > 0) && (width >= height))) {
+                area = (width * height) / 100;
+                if (area > 10000) {
+                    area = 10000;
+                }
+                if (conf > 0) {
+                    score += (area * conf) / 1000;
+                }
+            }
+            w = Plan.AwNext(ans, w);
+            i += 1;
+        }
+        return score;
     }
     public static int RtPlan(int page, int input, int born, int wanttext, int rid, int dpi, emon.Port.Cells loc, emon.Port.Cells ans, emon.Port.BitmapSet bms, int k0, emon.Port.Bitmap src, emon.Port.Cells ws, emon.Port.Cells oruns, int run, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells rules, emon.Port.Cells tlines, emon.Port.Cells rtp, emon.Port.Cells rq, emon.Port.Cells scr, emon.Port.Cells comps, emon.Port.Cells inks) {
         // Decide and ask what is not yet answered, in the brief's order: the table cells and the lines, the text-only render and its OCR, the body-ink view,
@@ -984,6 +1079,9 @@ public static class Retarget {
         int q = RtTurns(born, oruns, run, tlines, page + 1);
         int touched = 0;
         int asked = 0;
+        if ((q == 0) && (born == 0)) {
+            RtGapLines(page + 1, dpi, tlines, oruns, run, olines, owords, inks);
+        }
         if (q == 0) {
             touched = RtMeasure(page, bms, k0, src, ws, dpi, oruns, run, olines, owords, scr, rtp, comps, inks);
         }
@@ -1096,6 +1194,16 @@ public static class Retarget {
         if (q != 0) {
             id = Plan.PuId(page, RiRotated());
             a = Plan.AnFind(ans, id);
+            int other = Plan.AnFind(ans, Plan.PuId(page, RiOpposite()));
+            if (other >= 0) {
+                if (Plan.AnOk(ans, other) == 1) {
+                    if ((a < 0) || (RtAnswerScore(ans, other) > RtAnswerScore(ans, a))) {
+                        id = Plan.PuId(page, RiOpposite());
+                        a = other;
+                        emon.Port.CellsSet(rtp, RtpQ(), (q + 2) % 4);
+                    }
+                }
+            }
             if (a >= 0) {
                 if (Plan.AnOk(ans, a) == 1) {
                     run = Scan.ScAnswer(ans, a, pg, rviews, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
@@ -1212,6 +1320,12 @@ public static class Retarget {
         int cc = 0;
         int b = -1;
         int back = -1;
+        // A body-ink reading owns recovery on a page with foreign ink. New gap crops remain evidence there; mixing their polarity with that reading duplicates or invents fragments.
+        if ((Evidence.OlGet(olines, l, Evidence.OlfRetryGap()) == 1) && (brun >= 0)) {
+            if (Evidence.OrGet(oruns, brun, Evidence.OrfWcount()) > 0) {
+                return 0;
+            }
+        }
         if (c <= 0) {
             // P12.6: a line the first pass found and read as nothing (`rt-empty-area`), re-read alone: its words are the page's when there are some and they are sure (`rt-empty-words`, `rt-empty-conf`)
             j = 0;
@@ -1507,6 +1621,20 @@ public static class Retarget {
                 n = RtSelAdd(scr, n, bl0 + b);
                 emon.Port.CellsSet(scr, Scan.ScBonlyBase() + b, 2);
                 b = RtNextBonly(olines, scr, bl0, bn, 1000000000);
+            }
+        }
+        // D1801: only an otherwise empty reading needs the uncertain body-ink fallback. Preserve normal adoption decisions when they already read text.
+        if ((n == 0) && ((brun >= 0) && (Evidence.OrGet(oruns, fr, Evidence.OrfWcount()) == 0))) {
+            b = Evidence.OrGet(oruns, brun, Evidence.OrfLfirst());
+            bn = b + Evidence.OrGet(oruns, brun, Evidence.OrfLcount());
+            while (b < bn) {
+                if (Evidence.OlGet(olines, b, Evidence.LhCount()) > 0) {
+                    n = RtSelAdd(scr, n, b);
+                }
+                b += 1;
+            }
+            if (n > 0) {
+                emon.Port.CellsSet(rtp, RtpPrimary(), brun);
             }
         }
         return n;

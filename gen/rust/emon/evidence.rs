@@ -3528,6 +3528,10 @@ pub fn olf_pw() -> i32 {
 pub fn olf_ph() -> i32 {
     return 22;
 }
+pub fn olf_retry_gap() -> i32 {
+    // D1803: traced ink missing from the first OCR pass; internal retry/ledger marker.
+    return 23;
+}
 pub fn owf_style() -> i32 {
     return 16;
 }

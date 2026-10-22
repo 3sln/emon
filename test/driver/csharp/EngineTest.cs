@@ -546,7 +546,11 @@ public static class EngineTest {
         byte[] scan = Read("test/corpus/synth/scan/h-keyword.pdf");
         Engine.Converted sr = WithOcr().Record(One(Input.Bytes(scan)), o);
         List<emon.Planrun.Entry> es = sr.Transcript.Entries;
-        Check(Kinds(sr.Transcript).SequenceEqual(new[] { 2, 3 }) && es[0].Round == 0 && es[1].Round == 1, "scan kinds " + Show(Kinds(sr.Transcript)));
+        // Decode, discovery, then bounded missing-line crops (D1803).
+        Check(es.Count >= 2 && es.Count <= 18 && es[0].Req[1] == 2 && es[1].Req[1] == 3 && es[0].Round == 0 && es[1].Round == 1, "scan kinds " + Show(Kinds(sr.Transcript)));
+        foreach (emon.Planrun.Entry en in es.Skip(2)) {
+            Check(en.Round == 2 && en.Req[1] == 3 && en.Req[4] == 7 && en.Req[8] > 0 && en.Req[9] > 0, "invalid missing-line crop");
+        }
         Check(es[0].Req[6] == 1 && es[0].Bitmap != null, "the DCT filter, with the pixels an engine will read");
         string sj = Js(sr.Model);
         Check(sj.Contains("\"kind\": \"scanned\"") && sj.Contains("Hello"), "scanned");

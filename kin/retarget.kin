@@ -34,10 +34,10 @@
   (:require [emon.lang :refer [I32 Cells Bitmap BitmapSet i64 i32]]
             [emon.port :refer [cells-len cells-at cells-set cells-push bms-put bms-get bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8
                                bitmap-hash bitmap-quarter-into bitmap-lut-into]]
-            [emon.plan :refer [rq-render an-find an-ok an-arg pu-id pu-view-id pi-ocr pi-render-text-only lay-text-only]]
-            [emon.evidence :refer [ik-get ikf-count ikf-role ir-body ir-light ir-color ir-background
+            [emon.plan :refer [an-ocr-count an-ocr-first aw-next aw-get aw-w aw-h aw-conf rq-render an-find an-ok an-arg pu-id pu-view-id pi-ocr pi-render-text-only lay-text-only]]
+            [emon.evidence :refer [ik-count ik-get ikf-count ikf-role ir-body ir-light ir-color ir-background
                                    co-count co-get cf-page cf-pxx cf-pxy cf-pxw cf-pxh cf-fill cf-holes cf-gray cf-ink cf-conf
-                                   ol-get ow-get ow-count ol-count or-get or-set or-count fe-get xo-body-share rl-count rl-get rlf-page rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1
+                                   ol-new ol-set olf-run olf-retry-gap tlf-ink tlf-conf ol-get ow-get ow-count ol-count or-get or-set or-count fe-get xo-body-share rl-count rl-get rlf-page rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1
                                    olf-px olf-py olf-pw olf-ph owf-px owf-py owf-pw owf-ph lh-first lh-count lh-x0 lh-y0 lh-x1 lh-y1 hd-x0 hd-y0 hd-x1 hd-y1 hd-conf hd-tlen hd-feat
                                    orf-pass orf-round orf-psm orf-rx orf-ry orf-rw orf-rh orf-osd orf-oconf orf-lfirst orf-lcount
                                    orf-wfirst orf-wcount orf-orient
@@ -75,16 +75,19 @@
 (defn ^:pub ^I32 rt-lattice-v [] (comment "A page has a table's lattice when it has at least this many long vertical rules...") (return 3))
 (defn ^:pub ^I32 rt-lattice-h [] (comment "...and at least this many long horizontal ones.") (return 2))
 (defn ^:pub ^I32 rt-pad [] (comment "The pixels added around a line's box when it is re-read alone.") (return 3))
-(defn ^:pub ^I32 rt-empty-h [] (comment "P12.6: a first-pass line with no word is re-read alone when its box is at least this high (centipoints: 6 pt)...") (return 600))
+(defn ^:pub ^I32 rt-empty-h [] (comment "P12.6: a first-pass line with no word is re-read alone when its box is at least this high (centipoints: 3 pt)...") (return 300))
 (defn ^:pub ^I32 rt-empty-h-max [] (comment "...and at most this high (60 pt)...") (return 6000))
 (defn ^:pub ^I32 rt-empty-w [] (comment "...and at least this wide (25 pt)...") (return 2500))
 (defn ^:pub ^I32 rt-empty-aspect [] (comment "...and no more than this many times as wide as high (a ruled line is 60 times, a line of text 10): the engine finds a line where there is text and reads nothing when the text meets a rule.") (return 40))
 (defn ^:pub ^I32 rt-empty-words [] (comment "A re-reading takes the place of a line the first pass read as nothing when it has at least this many words...") (return 2))
 (defn ^:pub ^I32 rt-empty-conf [] (comment "...of a mean confidence (per mille) of at least this: it has no first pass to be compared with, so it must be sure.") (return 700))
+(defn ^I32 rt-native-empty-priority [] (comment "Existing OCR empty-line crops precede traced gaps: this bonus exceeds the largest admitted empty-line area (144000 square points).") (return 1000000))
 
 ;; ids (page-local `k`, `pu-id`): 16-127 are OCR (`pi-ocr`'s range), 128 and up crops and later kinds
 (defn ^:pub ^I32 ri-body [] (return 17))
 (defn ^:pub ^I32 ri-rotated [] (return 18))
+(defn ^:pub ^I32 ri-opposite [] (return 29))
+(defn ^:pub ^I32 rv-opposite [] (return 39))
 (defn ^:pub ^I32 ri-text-only [] (return 19))
 (defn ^:pub ^I32 ri-line [] (comment "line j is `ri-line` + j (j < `rt-lines`).") (return 32))
 (defn ^:pub ^I32 ri-cell [] (comment "cell c is `ri-cell` + c (c < `rt-cells`).") (return 64))
@@ -408,6 +411,7 @@
                 (set l l0)
                 (while (< l (+ l0 ln))
                   (do (set c (rt-empty-area olines l))
+                      (if (and (> c 0) (== (ol-get olines l (olf-retry-gap)) 0)) (set c (+ c (rt-native-empty-priority))))
                       (if (> c bestc)
                         (do (set dup 0)
                             (set j 0)
@@ -695,10 +699,63 @@
       (let [^Bitmap turned (bms-put bms (pu-view-id page (rv-rotated)) (rt-odd-dim w h q) (rt-odd-dim h w q) (bitmap-channels src))]
         (bitmap-quarter-into src turned q)
         (rt-ask-view rq id (pu-view-id page (rv-rotated)) turned dpi loc rtp)))
-    (return 1)))
+    (if (< (an-find ans (pu-id page (ri-opposite))) 0)
+      (let [^I32 other (rem (+ q 2) 4)
+            ^Bitmap opposite (bms-put bms (pu-view-id page (rv-opposite)) (rt-odd-dim w h q) (rt-odd-dim h w q) (bitmap-channels src))]
+        (bitmap-quarter-into src opposite other)
+        (rt-ask-view rq (pu-id page (ri-opposite)) (pu-view-id page (rv-opposite)) opposite dpi loc rtp)))
+    (return 2)))
+
+(defn ^:pub ^I32 rt-gap-lines [^I32 page ^I32 dpi ^Cells tlines ^:mut ^Cells oruns ^I32 run ^:mut ^Cells olines ^Cells owords ^Cells inks]
+  (comment "D1803: traced horizontal text with no overlapping OCR words is an empty OCR line, so the existing bounded crop planner retries it. Only append to the current last run.")
+  (let [^I32 l0 (or-get oruns run (orf-lfirst))
+        ^:mut ^I32 t 0 ^:mut ^I32 l 0 ^:mut ^I32 overlap 0 ^:mut ^I32 made 0
+        ^:mut ^I32 x0 0 ^:mut ^I32 y0 0 ^:mut ^I32 x1 0 ^:mut ^I32 y1 0 ^:mut ^I32 row 0]
+    (if (!= (+ l0 (or-get oruns run (orf-lcount))) (ol-count olines)) (return 0))
+    (while (and (< t (tl-count tlines)) (< made (rt-lines)))
+      (do (if (and (== (tl-get tlines t 0) page) (and (and (>= (tl-get tlines t (tlf-conf)) 600) (>= (tl-get tlines t 12) 3))
+                        (or (== (ik-count inks) 0)
+                            (and (>= (tl-get tlines t (tlf-ink)) 0)
+                                 (and (< (tl-get tlines t (tlf-ink)) (ik-count inks))
+                                      (== (ik-get inks (tl-get tlines t (tlf-ink)) (ikf-role)) (ir-body)))))))
+            (do (set x0 (tl-get tlines t 1)) (set y0 (tl-get tlines t 2))
+                (set x1 (tl-get tlines t 3)) (set y1 (tl-get tlines t 4))
+                (set overlap 0) (set l l0)
+                (while (< l (ol-count olines))
+                  (do (if (> (ev-overlap-small x0 y0 x1 y1 (ol-get olines l (lh-x0)) (ol-get olines l (lh-y0))
+                                              (ol-get olines l (lh-x1)) (ol-get olines l (lh-y1))) 100)
+                        (if (or (> (ol-get olines l (lh-count)) 0) (> (rt-empty-area olines l) 0))
+                          (set overlap 1)))
+                      (set l (+ l 1))))
+                (if (and (== overlap 0) (and (>= (- y1 y0) (rt-empty-h)) (<= (- y1 y0) (rt-empty-h-max))))
+                  (if (and (>= (- x1 x0) (rt-empty-w)) (and (> (- x1 x0) (- y1 y0)) (<= (- x1 x0) (* (rt-empty-aspect) (- y1 y0)))))
+                    (do (set row (ol-new olines page x0 y0 x1 y1 x0 y1 x1 y1 0 0 (ow-count owords) 0))
+                        (ol-set olines row (olf-retry-gap) 1)
+                        (ol-set olines row (olf-run) run)
+                        (ol-set olines row (olf-px) (quot (* x0 dpi) 7200))
+                        (ol-set olines row (olf-py) (quot (* y0 dpi) 7200))
+                        (ol-set olines row (olf-pw) (quot (* (- x1 x0) dpi) 7200))
+                        (ol-set olines row (olf-ph) (quot (* (- y1 y0) dpi) 7200))
+                        (set made (+ made 1)))))))
+          (set t (+ t 1))))
+    (or-set oruns run (orf-lcount) (- (ol-count olines) l0))
+    (return made)))
+(defn ^:pub ^I32 rt-answer-score [^Cells ans ^I32 at]
+  (comment "D1804: upright trial quality is recognized text area times word confidence; narrow vertical strips do not vote. Accumulate scaled area to bound sums.")
+  (let [^:mut ^I32 w (an-ocr-first ans at) ^:mut ^I32 i 0 ^:mut ^I32 score 0 ^:mut ^I32 area 0
+        ^:mut ^I32 width 0 ^:mut ^I32 height 0 ^:mut ^I32 conf 0]
+    (while (< i (an-ocr-count ans at))
+      (do (set width (aw-get ans w (aw-w))) (set height (aw-get ans w (aw-h)))
+          (set conf (aw-get ans w (aw-conf)))
+          (if (and (> width 0) (and (> height 0) (>= width height)))
+            (do (set area (quot (* width height) 100))
+                (if (> area 10000) (set area 10000))
+                (if (> conf 0) (set score (+ score (quot (* area conf) 1000))))))
+          (set w (aw-next ans w)) (set i (+ i 1))))
+    (return score)))
 
 (defn ^:pub ^I32 rt-plan [^I32 page ^I32 input ^I32 born ^I32 wanttext ^I32 rid ^I32 dpi ^Cells loc ^Cells ans ^BitmapSet bms ^I32 k0
-                          ^Bitmap src ^:mut ^Cells ws ^Cells oruns ^I32 run ^Cells olines ^Cells owords ^Cells rules ^Cells tlines
+                          ^Bitmap src ^:mut ^Cells ws ^:mut ^Cells oruns ^I32 run ^:mut ^Cells olines ^Cells owords ^Cells rules ^Cells tlines
                           ^:mut ^Cells rtp ^:mut ^Cells rq ^:mut ^Cells scr ^Cells comps ^Cells inks]
   (comment "Decide and ask what is not yet answered, in the brief's order: the table cells and the lines, the text-only render and its OCR, the body-ink view,")
   (comment "the quarter-turned view. `page` is 0-based (ids), `rid` the request id of the raster `src` that the first pass read at `dpi`, `k0` the id group")
@@ -709,6 +766,7 @@
         ^I32 q (rt-turns born oruns run tlines (+ page 1))
         ^:mut ^I32 touched 0
         ^:mut ^I32 asked 0]
+    (if (and (== q 0) (== born 0)) (rt-gap-lines (+ page 1) dpi tlines oruns run olines owords inks))
     (if (== q 0)
       (set touched (rt-measure page bms k0 src ws dpi oruns run olines owords scr rtp comps inks)))
     (rt-decide born q touched oruns run olines owords rules (+ page 1) dpi rtp)
@@ -810,6 +868,12 @@
     (if (!= q 0)
       (do (set id (pu-id page (ri-rotated)))
           (set a (an-find ans id))
+          (let [^I32 other (an-find ans (pu-id page (ri-opposite)))]
+            (if (>= other 0)
+              (if (== (an-ok ans other) 1)
+                (if (or (< a 0) (> (rt-answer-score ans other) (rt-answer-score ans a)))
+                  (do (set id (pu-id page (ri-opposite))) (set a other)
+                      (cells-set rtp (rtp-q) (rem (+ q 2) 4)))))))
           (if (>= a 0)
             (if (== (an-ok ans a) 1)
               (do (set run (sc-answer ans a pg rviews id lang views epages etext oruns oblocks olines owords osyms oalts feats))
@@ -914,6 +978,9 @@
         ^:mut ^I32 cc 0
         ^:mut ^I32 b -1
         ^:mut ^I32 back -1]
+    (comment "A body-ink reading owns recovery on a page with foreign ink. New gap crops remain evidence there; mixing their polarity with that reading duplicates or invents fragments.")
+    (if (and (== (ol-get olines l (olf-retry-gap)) 1) (>= brun 0))
+      (if (> (or-get oruns brun (orf-wcount)) 0) (return 0)))
     (if (<= c 0)
       (do (comment "P12.6: a line the first pass found and read as nothing (`rt-empty-area`), re-read alone: its words are the page's when there are some and they are sure (`rt-empty-words`, `rt-empty-conf`)")
           (set j 0)
@@ -1130,6 +1197,14 @@
             (do (set n (rt-sel-add scr n (+ bl0 b)))
                 (cells-set scr (+ (sc-bonly-base) b) 2)
                 (set b (rt-next-bonly olines scr bl0 bn 1000000000))))))
+    (comment "D1801: only an otherwise empty reading needs the uncertain body-ink fallback. Preserve normal adoption decisions when they already read text.")
+    (if (and (== n 0) (and (>= brun 0) (== (or-get oruns fr (orf-wcount)) 0)))
+      (do (set b (or-get oruns brun (orf-lfirst)))
+          (set bn (+ b (or-get oruns brun (orf-lcount))))
+          (while (< b bn)
+            (do (if (> (ol-get olines b (lh-count)) 0) (set n (rt-sel-add scr n b)))
+                (set b (+ b 1))))
+          (if (> n 0) (cells-set rtp (rtp-primary) brun))))
     (return n)))
 
 (defn ^:pub ^I32 rt-upright [^Cells rtp ^I32 fr ^:mut ^Cells epages ^I32 page1]

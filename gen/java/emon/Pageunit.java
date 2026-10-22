@@ -539,6 +539,8 @@ public final class Pageunit {
         l0 = Evidence.olCount(olines);
         w0 = Evidence.owCount(owords);
         run = Scan.scPageEvidence(ans, ao, i + 1, roid, vdec, rdpi, Scan.scLang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+        // D1809: retry placeholders are not OCR orientation votes; keep the first pass's original line span for its dominant angle.
+        nl = Evidence.orGet(oruns, run, Evidence.orfLcount());
         if (rid == uvid) {
             Retarget.rtRunMeta(oruns, run, Evidence.opUpscaled(), 3, 3, 0, 0, 0, 0);
         }
@@ -568,9 +570,11 @@ public final class Pageunit {
             nsel = Sigpx.spDropLines(scr, nsel, olines, owords, s5);
         }
         Retarget.rtUpright(rtp, run, epages, i + 1);
-        nl = Evidence.orGet(oruns, run, Evidence.orfLcount());
         rotmed = Evidence.evRotMedian(olines, l0, nl);
         Scan.scEmitSel(olines, owords, osyms, nsel, i + 1, rotmed, scr, words, lines, etext, rules, comps, inks);
+        if ((emon.Port.cellsAt(rtp, Retarget.rtpPrimary()) != run) && (emon.Port.cellsAt(rtp, Retarget.rtpQ()) != 0)) {
+            mv += 8;
+        }
         emon.Port.cellsSet(mask, i, mv);
         return Plan.usDone();
     }

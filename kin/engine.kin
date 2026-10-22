@@ -53,7 +53,7 @@
             [emon.restruct :refer [rs-run]]
             [emon.fields :refer [fl-run]]
             [emon.figclass :refer [fc-stage fc-images]]
-            [emon.scan :refer [sc-tag sc-tag-unread sc-write-bare]]
+            [emon.scan :refer [sc-write-empty-regions sc-clean-text sc-trust sc-tag sc-tag-unread sc-write-bare]]
             [emon.rasterplan :refer [rp-settings]]
             [emon.asset :refer [as-settings as-run as-page-cands as-collect as-run-figures]]
             [kin.lang :refer [defn return let set while if do comment + - * < > >= == != and or quot]]))
@@ -399,8 +399,7 @@
     ;; the OCR words the scan stage kept out of a scanned page's words (garbage, leaders, a table's rules read as characters, P12.6): ledger rows, never silently dropped
     (th-write-ocr (fd ev owords) (fd d et) (fd m ledger) (fd m text) (fd s tmp) (fd s ttx))
     ;; a page that comes out with no body and held an image is never dropped silently (R1, P12.6): its biggest image is a `background` row of the ledger
-    (if (== kind 0)
-      (sc-write-bare (fd m nodes) (fd m regions) (fd m pages) (fd d im) (fd m ledger)))
+    (sc-write-bare (fd m nodes) (fd m regions) (fd m pages) (fd d im) (fd m ledger))
     (rp-settings (fd m nodes) (fd m attrs) (fd m text) (fd c scope))
     ;; fusion's own: the OCR groups dropped as ghosts become ledger rows, and the Model says where each block's words came from (P7.3)
     (if (== (fd d fused) 1)
@@ -415,7 +414,10 @@
               (cells-swap (fd m regions) (fd s sr))))))
     ;; a page in a script the engine has no model for (D564, `emon.scriptcheck`): what OCR won of it is flagged `script-unread` and held at a low confidence,
     ;; after the provenance stages above (the scan's and fusion's) have said what is OCR's
+    (sc-trust (fd m nodes) (fd m regions) (fd ev owords) (fd d et) (fd ev oruns))
     (sc-tag-unread (fd m nodes) (fd m regions) (fd d mask))
+    (sc-clean-text (fd m nodes) (fd m text))
+    (sc-write-empty-regions (fd ev olines) (fd m nodes) (fd m regions) (fd m ledger))
     ;; the form fields (P11.x3, D548): in the block that holds each one's label, once the body is as it will stay (a PDF's; an image has no widgets)
     (if (== kind 0)
       (en-fields m s d))

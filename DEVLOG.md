@@ -4084,6 +4084,7 @@ Work for the release after 0.1.0 (ids from D559; the coordinator renumbers at th
   once, a paragraph now) are lowered by hand and its 38 improvements (scan headings p 0.60 to 0.75) recorded.
 - [x] P12.9 born-digital tables and forms — batch complete with explicit deferrals (D631–D639): real TEDS, dense born-digital categorical tables, headerless numeric summaries, unruled body spans and adjacent currency prefixes. E14 and D28 improve live; remaining header/total ownership, page linking, debit/credit, forms and false headings remain proposals D636–D638. All 29 samples are unchanged; Rust and Go each pass 1,083 laws. The coordinator commits; drift and CI core therefore report only uncommitted generated output.
 - [ ] P12.10 table model increments 1–2 — increments 1 and 2a are gate-green (D645–D648); 2b records ownership/context (D649), fits selected rows (D650), attaches model-fit tails (D652) and preserves body claims while claiming fully owned bound rows (D654). Header reconstruction (D651), partial-interval merging/summary reconstruction (D653) and E10 fragmentation remain.
+- [x] P12.11 OCR trust — batch 9 complete with explicit deferrals (D1800–D1812): evidence-based confidence and refit, empty receipt recovery, traced-region retries/ledger, orientation trials and flags, OCR text cleanup and checked Khmer data. Rust/Go each pass 1,124 laws; non-calibration baselines are unchanged. Remaining language arbitration, untraced/small-crop recovery, inverted-band ownership and numeric sign rereads are deferred in D1807–D1808 and the batch report.
 - [x] P12.7 smoke batch 6: regressions and born-digital layout. DONE (D594–D609; validation and smoke comparisons pending).
 - [x] P12.8 scan quality: raster graphics and seals, checked language packs, script retries, OCR paragraph jitter and specks (D640–D644). Normalization residuals and demo language hosting explicitly deferred in D641/D642; validation is recorded in the batch report.
 - [x] P12.5 smoke batch 4: layout, figures, furniture, forms, lists. DONE (D583-D593): the layout defects of smoke reviews A
@@ -11913,4 +11914,86 @@ A failing-first law established two selected ledger fragments across eight conti
 ### D654 — Preserve body box claims and claim fully owned bound rows (P12.10 2b.5)
 Activate `tb-own-claim` after recording the retained-cell owners and explicit drops. It invokes the original box claim for every profile without any ownership threshold: no partially owned line inside the body can be released. For text profiles only, an additional outside-box claim requires every word on the line to belong to the same kept table (or its explicit drops), and at least one word to be in an explicitly bound header or attached foot row. Ruled and structural tables retain their original box behavior. Empty evidence excluded by `tb-rows` is now explicitly dropped like separators and rotated overlays. Two laws failed first: the empty evidence had owner 0 instead of a drop; a fully owned attached tail with an imprecise line box remained unclaimed. A one-of-four-owned body-line control proves the old claim survives. The independent body-word audit runs through every table fixture entry path, including the PDF/tagged goldens, direct column-model law and ownership helper: an eligible body word must occur in exactly one retained cell, or have an explicit row-builder exclusion reason. All 79 table/tagged laws and existing goldens pass. All 29 samples and six table/row controls hold byte for byte. Accuracy passes 3,383 metrics under D648 and 224 byte-identical cross-host Models. The born control is checked first: zero lost/gained words. All seven live Models are byte-identical to the accepted D652 tail checkpoint, retaining every word. Hosts and rederivation registration pass. The final sequential gate sweep is recorded in the task report. P12.10 remains open: external header reconstruction (D651) and live partial-interval merging/summary reconstruction (D653) were rejected and reverted. No commits or scoreboard changes.
 Final validation: Rust and Go each pass 1,110 laws; all 79 table/tagged laws and old goldens pass, including the audit across every fixture entry path. All requested final gates pass except the expected committed generated-output drift comparison; re-emission is unchanged and CI core’s other 16 checks pass with the requested npm cache. Accuracy holds 3,383 metrics and 224 cross-host Models; all 29 samples and historical scoreboard values are unchanged, all seven word controls lose/gain zero, and source hashes stay fixed throughout the sequential sweep. Browser arms skip without host/js/node_modules; local C/pod packages lack bundled native engines. Full evidence and limitations are recorded in .claude/coord/tm4-report.md and /private/tmp/tm4-final-results.json. P12.10 remains unchecked; no commits.
+- [ ] **Signed off** (maintainer)
+
+### D1800 — OCR confidence follows word evidence
+
+P12.11: scan provenance used to retain paragraph and heading rule constants, so the fitted confidence was 759/800 regardless of OCR quality. Pure OCR nodes now use character-weighted engine word confidences, dictionary/numeric evidence, character plausibility, rejected characters and disagreement between overlapping readings from different passes. A score below 500 adds `low-conf`; `cal-node-conf` does not raise that flagged score through the lowest calibration bucket. The clean/junk and inter-pass disagreement laws failed before implementation. Calibration is rebaselined only by the documented `bb calibration --refit`, with before/after results in the batch 9 report.
+
+- [ ] **Signed off** (maintainer)
+
+### D1801 — An empty first pass does not veto recovered receipt text
+
+P12.11: F12's first pass has no words; its body-ink pass has 52, but every usable line is below the 700 threshold for adding lines to an existing reading. When the first pass read nothing, adopt the body-ink reading and pass its words through normal scan vetting. This keeps uncertain evidence with its confidence. Empty image inputs also use the existing background ledger fallback, previously called only for PDF inputs. The synthetic empty-first-pass recovery law failed before implementation.
+
+- [ ] **Signed off** (maintainer)
+
+### D1802 — OCR formatting controls and Han/Kana separators
+
+P12.11: after provenance, clean OCR text runs by removing bidi formatting controls and spaces between adjacent Han/Kana characters. Repoint changed runs into the text arena; preserve Latin and Hangul word spaces. No bidi, paragraph, or HTML writer changes. The character classification law failed first; the text-run law holds normalization and idempotence. Short detected vertical-rule segments also reject bar/I/l/! OCR ghosts: the tracer has already established that the segment is a rule, so a second eight-point length threshold was inappropriate. The short-rule law failed first.
+
+- [ ] **Signed off** (maintainer)
+
+### D1803 — Retry traced text that OCR did not represent
+
+P12.11: confident horizontal traced text regions with no OCR words become empty-line evidence of the current scan run. The bounded targeted-pass planner retries them as padded psm 7 crops. Regions represented by a retry line are not added twice. The synthetic traced-ink law failed first. Per-region upscaling and complete failed-region ledger coverage remain deferred; the existing whole-page upscale remains in use.
+
+- [ ] **Signed off** (maintainer)
+
+### D1804 — Compare both possible upright readings
+
+P12.11: a low-confidence OSD direction could turn F04 upside down while reading the Bates number correctly. A rotation request now also asks for the opposite reading; choose by recognized horizontal word area weighted by engine confidence, excluding narrow vertical strips. Keep the existing first-pass adoption safeguard. Scan mask bit 8 propagates `rotated`, independently of unread-script bit 4. The body-area/Bates-strip law failed before implementation.
+
+- [ ] **Signed off** (maintainer)
+
+### D1805 — A single discovery model and a checked Khmer model
+
+P12.11: when no requested model is available, the OCR port chooses one discovery model (English if installed, otherwise the first model), rather than combining all installed scripts. Explicit language and script requests retain their semantics. The synthetic multi-script fallback law failed first. This supersedes D038's all-installed-model fallback. Pin Khmer at the existing immutable tessdata_fast revision: 1,446,926 bytes, SHA-256 `47f110575341b322052f3becbefee61a3ecf1ef549352b5d4d33d28afe30d099`. Per-page script/language trials, word arbitration for explicit `xxx+eng`, legacy Khmer font detection, and within-Latin language choice remain deferred.
+
+- [ ] **Signed off** (maintainer)
+
+### D1806 — Laplace smoothing must preserve isotonic order
+
+P12.11's variable OCR scores exposed a fitter defect hidden by constant scores: smoothing a large nearly perfect bucket and a single perfect observation after PAV produced descending steps (941, 667). Pool the smoothed steps again with sample weights, without applying smoothing twice. A synthetic fitter regression failed first and passes after the fix (`bb tools/calibration/fit-test.clj`). Refit through `bb calibration --refit`; do not edit fitted rows by hand.
+
+- [ ] **Signed off** (maintainer)
+
+### D1807 — Remaining script and language arbitration
+
+P12.11 explicit deferral: one discovery model prevents the all-installed multi-script combination, but is not language selection. The next increment should use OSD as a candidate-script prior, run bounded per-page crops in the installed compatible models, compare dictionary/common-word rates and script plausibility, and read the page with the winning model. Latin needs language-specific common-word tables rather than confidence alone. Explicit mixed requests need word/ink arbitration so plausible Latin names survive while short English hallucinations on a non-Latin page do not. Legacy Khmer requires diagnosing non-Unicode font mappings (G18 uses Limon fonts), not trusting an unrelated OSD script or an Amharic model. Merely installing Khmer does not implement that diagnosis. These items are not claimed fixed by D1805.
+
+- [ ] **Signed off** (maintainer)
+
+### D1808 — Remaining region-ledger, polarity and numeric work
+
+P12.11 explicit deferral: D1803 represents confident traced horizontal regions and uses the existing crop retry; it does not yet upscale each small crop or ledger every ink-bearing failed region. Region retries need their own scale/view mapping and a terminal ledger fate, including regions below the tracer's confidence/size thresholds. Normal and inverted header views need one word/ink owner across views, with negative controls for distinct words in the same band. Missing minus signs need numeric rereads corroborated by a short horizontal component adjacent to the numeral; treating every rule fragment as a sign would invent negatives. These remain separate increments, not threshold changes disguised as completed fixes.
+
+- [ ] **Signed off** (maintainer)
+
+### D1809 — Audit failed retry regions and preserve existing recovery
+
+P12.11: E04's missing receipt lines include traced bands below six points, so missing-line crops now admit text down to three points (a four-point synthetic law failed first). Mark traced retry regions in olines' previously spare cell 23, `olf-retry-gap`. If the final Model has no region over such a gap, write its own `ocr-ghost` ledger row, including unread crops and crops held out by body-ink ownership. The empty-region ledger law failed first. Regions below the tracer's confidence/geometry criteria and per-crop enlargement remain D1808 work.
+
+The first sealpx accuracy check rejected 24 non-calibration regressions from adding duplicate/weak recovered text. Preserve normal body-ink recovery whenever it already emits text; use the uncertain fallback only when normal adoption emits nothing and the first pass has no words. A new negative control holds that distinction. Existing OCR empty-line crops keep priority over new traced gaps (the priority bonus exceeds the largest admitted line area), known non-body ink is excluded, overlapping existing empty-line regions are not duplicated, and a page with a body-ink reading keeps that stage in charge of recovery: gap crops remain evidence there. Retry placeholders also must not vote in the page's dominant-angle median; the page unit preserves the first OCR pass's original line span for that median. The affected scan transcripts are refreshed again and the accuracy ratchet is checked without lowering a non-calibration row.
+
+- [ ] **Signed off** (maintainer)
+
+### D1810 — OCR confidence compares readings in one coordinate frame
+
+P12.11 live validation exposed a confidence error on corrected rotations: the node's upright region was averaging original, wrongly oriented words at numerically similar coordinates. Those boxes do not describe the same ink. On a page read from a re-rotated run, score only that selected upright run, without comparing it to the original frame. Other pages keep same-frame pass disagreement. The synthetic rotated-frame law failed first, and checks both raw and calibrated confidence of clean OCR. No text or structure changes. Refit through `bb calibration --refit` and rederive confidence outputs again after this correction.
+
+- [ ] **Signed off** (maintainer)
+
+### D1811 — Explicit OCR model choices take precedence over discovery
+
+P12.11 live validation caught a regression in D1805: the Rust port's `--lang=chi_sim+eng` / `jpn+eng` filter was being treated as an unconfigured inventory, so discovery picked English and lost every CJK character. The apparent separator reduction was not a valid cleanup result. Kin now receives the fact that a provider model set is explicitly configured. With no request language, that set stays authoritative; unconfigured inventories still use discovery, and a named request still wins. Hosts only forward that fact (the Rust port's existing `only` state; the browser provider's supplied model list; unconfigured native inventories pass zero). No public API or request-record layout changes.
+
+The explicit-provider law failed first (one model instead of two), then all 19 OCR-port laws passed. Corrected live G03/G04 retain 271/229 CJK characters respectively, and their text differs from baseline only by the intended Han/Kana space removal. Default English fixtures and all replay requests/answers are unchanged; the D1810 refit remains applicable. Full regeneration and the requested gates are rerun after the host field plumbing.
+
+- [ ] **Signed off** (maintainer)
+
+### D1812 — Hold independent goldens and host tests to OCR trust semantics
+
+P12.11 full validation exposed stale test assumptions: the independent JSON golden writer still allowed a fitted score to raise a `low-conf` node (or its child), and the raster rotation law supplied only one of the two newly requested upright trials. The reference writer now caps low-conf/script-unread scores through ancestors, matching the documented Model semantics; rederive its JSON/HTML confidence goldens. Supply both orientation answers and assert the rotated flag. Java and C# native tests, like Rust and Go, validate bounded padded psm 7 crops instead of assuming exactly two scan requests. These are test/reference corrections; production behavior and the D1810 calibration fit are unchanged.
+
 - [ ] **Signed off** (maintainer)

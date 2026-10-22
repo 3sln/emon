@@ -603,7 +603,7 @@ public static class Ocrport {
     public static int OpModels(emon.Port.Cells req, emon.Port.Cells inst, emon.Port.Cells @out) {
         // Which installed models read the request, as indices into `inst` (code-point Cells separated by 0), appended to `out`;
         // answers how many. A script (`Cyrl`) is every installed model that reads it, once; a language is its model; a language
-        // with no model is dropped; none left is EVERY installed model (D038). 0 only when nothing is installed.
+        // with no model is dropped; none left is one discovery model (D1805). 0 only when nothing is installed.
         int @base = emon.Port.CellsLen(@out);
         int end = emon.Port.CellsLen(req) - 3;
         int n = OpEntryCount(inst);
@@ -636,10 +636,12 @@ public static class Ocrport {
             k += 1;
         }
         if (emon.Port.CellsLen(@out) == @base) {
-            i = 0;
-            while (i < n) {
+            i = OpModelIndex(inst, 1701734144);
+            if (i < 0) {
+                i = 0;
+            }
+            if (n > 0) {
                 emon.Port.CellsPush(@out, i);
-                i += 1;
             }
         }
         return emon.Port.CellsLen(@out) - @base;
@@ -952,5 +954,26 @@ public static class Ocrport {
         }
         Plan.AnOcrEnd(c, at);
         return 0;
+    }
+    public static int OpModelsConfigured(emon.Port.Cells req, emon.Port.Cells inst, int configured, emon.Port.Cells @out) {
+        // D1811: an explicit provider model set is authoritative when the request has no language hint. An unfiltered inventory uses discovery; a named request still wins.
+        if (configured == 0) {
+            return OpModels(req, inst, @out);
+        }
+        int @base = emon.Port.CellsLen(@out);
+        int end = emon.Port.CellsLen(req) - 3;
+        int k = OpLangFirst(req);
+        int i = 0;
+        while (k < end) {
+            if (Plan.RqArg(req, 0, k) != 0) {
+                return OpModels(req, inst, @out);
+            }
+            k += 1;
+        }
+        while (i < OpEntryCount(inst)) {
+            emon.Port.CellsPush(@out, i);
+            i += 1;
+        }
+        return emon.Port.CellsLen(@out) - @base;
     }
 }

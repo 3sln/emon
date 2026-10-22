@@ -5,7 +5,7 @@
 ;; and the numbers are test/calibration/*) and committed.  A row is [kind class raw-lo calibrated]: for the node
 ;; kind (`nk`, 100 the dropped ledger), the class of its source (0 text layer, 1 OCR, 2 both, 3 inferred, -1 any)
 ;; and the step of raw confidences from raw-lo up (to the next row's), the calibrated confidence, per mille.
-;; 19 rows.  Sorted by kind, class, raw-lo.  `emon.calib` reads it.
+;; 30 rows.  Sorted by kind, class, raw-lo.  `emon.calib` reads it.
 (ns emon.calibdata
   (:require [emon.lang :refer [I32]]
             [kin.lang :refer [defdata]]))
@@ -14,17 +14,28 @@
   :emitter kin.lang/flat-array
   :stride 4
   :data [2 -1 500 953
-         3 -1 500 948
-         3 1 500 800
-         4 -1 500 793
-         4 1 500 759
+         3 -1 500 947
+         3 1 508 500
+         3 1 765 571
+         3 1 947 778
+         3 1 962 840
+         4 -1 500 791
+         4 -1 921 858
+         4 0 500 795
+         4 1 766 500
+         4 1 861 680
+         4 1 921 858
+         4 2 500 789
          5 -1 500 923
          6 -1 500 969
-         7 -1 600 933
-         8 -1 600 959
-         9 -1 600 987
-         10 -1 600 997
-         10 1 600 919
+         7 -1 600 931
+         8 -1 600 961
+         9 -1 600 988
+         10 -1 551 250
+         10 -1 600 998
+         10 0 600 998
+         10 1 551 250
+         10 1 821 971
          11 -1 500 938
          12 -1 520 923
          17 -1 500 944

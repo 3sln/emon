@@ -96,8 +96,8 @@ pub fn rt_pad() -> i32 {
     return 3;
 }
 pub fn rt_empty_h() -> i32 {
-    // P12.6: a first-pass line with no word is re-read alone when its box is at least this high (centipoints: 6 pt)...
-    return 600;
+    // P12.6: a first-pass line with no word is re-read alone when its box is at least this high (centipoints: 3 pt)...
+    return 300;
 }
 pub fn rt_empty_h_max() -> i32 {
     // ...and at most this high (60 pt)...
@@ -119,11 +119,21 @@ pub fn rt_empty_conf() -> i32 {
     // ...of a mean confidence (per mille) of at least this: it has no first pass to be compared with, so it must be sure.
     return 700;
 }
+pub(crate) fn rt_native_empty_priority() -> i32 {
+    // Existing OCR empty-line crops precede traced gaps: this bonus exceeds the largest admitted empty-line area (144000 square points).
+    return 1000000;
+}
 pub fn ri_body() -> i32 {
     return 17;
 }
 pub fn ri_rotated() -> i32 {
     return 18;
+}
+pub fn ri_opposite() -> i32 {
+    return 29;
+}
+pub fn rv_opposite() -> i32 {
+    return 39;
 }
 pub fn ri_text_only() -> i32 {
     return 19;
@@ -594,6 +604,9 @@ pub fn rt_decide(born: i32, q: i32, touched: i32, oruns: &mut crate::port::Cells
             l = l0;
             while l < (l0 + ln) {
                 c = rt_empty_area(olines, l);
+                if (c > 0) && (ol_get(olines, l, olf_retry_gap()) == 0) {
+                    c += rt_native_empty_priority();
+                }
                 if c > bestc {
                     dup = 0;
                     j = 0;
@@ -974,9 +987,91 @@ pub(crate) fn rt_ask_rotated(page: i32, dpi: i32, loc: &mut crate::port::Cells, 
         crate::port::bitmap_quarter_into(src, turned, q);
         rt_ask_view(rq, id, pu_view_id(page, rv_rotated()), turned, dpi, loc, rtp);
     }
-    return 1;
+    if an_find(ans, pu_id(page, ri_opposite())) < 0 {
+        let other: i32 = (q + 2) % 4;
+        let opposite: &crate::port::Bitmap = crate::port::bms_put(bms, pu_view_id(page, rv_opposite()), rt_odd_dim(w, h, q), rt_odd_dim(h, w, q), crate::port::bitmap_channels(src));
+        crate::port::bitmap_quarter_into(src, opposite, other);
+        rt_ask_view(rq, pu_id(page, ri_opposite()), pu_view_id(page, rv_opposite()), opposite, dpi, loc, rtp);
+    }
+    return 2;
 }
-pub fn rt_plan(page: i32, input: i32, born: i32, wanttext: i32, rid: i32, dpi: i32, loc: &mut crate::port::Cells, ans: &mut crate::port::Cells, bms: &crate::port::BitmapSet, k0: i32, src: &crate::port::Bitmap, mut ws: &mut crate::port::Cells, oruns: &mut crate::port::Cells, run: i32, olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, rules: &mut crate::port::Cells, tlines: &mut crate::port::Cells, mut rtp: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, comps: &mut crate::port::Cells, inks: &mut crate::port::Cells) -> i32 {
+pub fn rt_gap_lines(page: i32, dpi: i32, tlines: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, run: i32, mut olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, inks: &mut crate::port::Cells) -> i32 {
+    // D1803: traced horizontal text with no overlapping OCR words is an empty OCR line, so the existing bounded crop planner retries it. Only append to the current last run.
+    let l0: i32 = or_get(oruns, run, orf_lfirst());
+    let mut t: i32 = 0;
+    let mut l: i32 = 0;
+    let mut overlap: i32 = 0;
+    let mut made: i32 = 0;
+    let mut x0: i32 = 0;
+    let mut y0: i32 = 0;
+    let mut x1: i32 = 0;
+    let mut y1: i32 = 0;
+    let mut row: i32 = 0;
+    if (l0 + or_get(oruns, run, orf_lcount())) != ol_count(olines) {
+        return 0;
+    }
+    while (t < tl_count(tlines)) && (made < rt_lines()) {
+        if (tl_get(tlines, t, 0) == page) && (((tl_get(tlines, t, tlf_conf()) >= 600) && (tl_get(tlines, t, 12) >= 3)) && ((ik_count(inks) == 0) || ((tl_get(tlines, t, tlf_ink()) >= 0) && ((tl_get(tlines, t, tlf_ink()) < ik_count(inks)) && (ik_get(inks, tl_get(tlines, t, tlf_ink()), ikf_role()) == ir_body()))))) {
+            x0 = tl_get(tlines, t, 1);
+            y0 = tl_get(tlines, t, 2);
+            x1 = tl_get(tlines, t, 3);
+            y1 = tl_get(tlines, t, 4);
+            overlap = 0;
+            l = l0;
+            while l < ol_count(olines) {
+                if ev_overlap_small(x0, y0, x1, y1, ol_get(olines, l, lh_x0()), ol_get(olines, l, lh_y0()), ol_get(olines, l, lh_x1()), ol_get(olines, l, lh_y1())) > 100 {
+                    if (ol_get(olines, l, lh_count()) > 0) || (rt_empty_area(olines, l) > 0) {
+                        overlap = 1;
+                    }
+                }
+                l += 1;
+            }
+            if (overlap == 0) && (((y1 - y0) >= rt_empty_h()) && ((y1 - y0) <= rt_empty_h_max())) {
+                if ((x1 - x0) >= rt_empty_w()) && (((x1 - x0) > (y1 - y0)) && ((x1 - x0) <= (rt_empty_aspect() * (y1 - y0)))) {
+                    row = ol_new(olines, page, x0, y0, x1, y1, x0, y1, x1, y1, 0, 0, ow_count(owords), 0);
+                    ol_set(olines, row, olf_retry_gap(), 1);
+                    ol_set(olines, row, olf_run(), run);
+                    ol_set(olines, row, olf_px(), (x0 * dpi) / 7200);
+                    ol_set(olines, row, olf_py(), (y0 * dpi) / 7200);
+                    ol_set(olines, row, olf_pw(), ((x1 - x0) * dpi) / 7200);
+                    ol_set(olines, row, olf_ph(), ((y1 - y0) * dpi) / 7200);
+                    made += 1;
+                }
+            }
+        }
+        t += 1;
+    }
+    or_set(oruns, run, orf_lcount(), ol_count(olines) - l0);
+    return made;
+}
+pub fn rt_answer_score(ans: &mut crate::port::Cells, at: i32) -> i32 {
+    // D1804: upright trial quality is recognized text area times word confidence; narrow vertical strips do not vote. Accumulate scaled area to bound sums.
+    let mut w: i32 = an_ocr_first(ans, at);
+    let mut i: i32 = 0;
+    let mut score: i32 = 0;
+    let mut area: i32 = 0;
+    let mut width: i32 = 0;
+    let mut height: i32 = 0;
+    let mut conf: i32 = 0;
+    while i < an_ocr_count(ans, at) {
+        width = aw_get(ans, w, aw_w());
+        height = aw_get(ans, w, aw_h());
+        conf = aw_get(ans, w, aw_conf());
+        if (width > 0) && ((height > 0) && (width >= height)) {
+            area = (width * height) / 100;
+            if area > 10000 {
+                area = 10000;
+            }
+            if conf > 0 {
+                score += (area * conf) / 1000;
+            }
+        }
+        w = aw_next(ans, w);
+        i += 1;
+    }
+    return score;
+}
+pub fn rt_plan(page: i32, input: i32, born: i32, wanttext: i32, rid: i32, dpi: i32, loc: &mut crate::port::Cells, ans: &mut crate::port::Cells, bms: &crate::port::BitmapSet, k0: i32, src: &crate::port::Bitmap, mut ws: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, run: i32, mut olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, rules: &mut crate::port::Cells, tlines: &mut crate::port::Cells, mut rtp: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, comps: &mut crate::port::Cells, inks: &mut crate::port::Cells) -> i32 {
     // Decide and ask what is not yet answered, in the brief's order: the table cells and the lines, the text-only render and its OCR, the body-ink view,
     // the quarter-turned view. `page` is 0-based (ids), `rid` the request id of the raster `src` that the first pass read at `dpi`, `k0` the id group
     // `emon.pageink` normalized it under, `ws` its layer workspace, `scr` the unit's scratch (`sc-prep`: the measure of every first-pass line is left in it).
@@ -986,6 +1081,9 @@ pub fn rt_plan(page: i32, input: i32, born: i32, wanttext: i32, rid: i32, dpi: i
     let q: i32 = rt_turns(born, oruns, run, tlines, page + 1);
     let mut touched: i32 = 0;
     let mut asked: i32 = 0;
+    if (q == 0) && (born == 0) {
+        rt_gap_lines(page + 1, dpi, tlines, oruns, run, olines, owords, inks);
+    }
     if q == 0 {
         touched = rt_measure(page, bms, k0, src, ws, dpi, oruns, run, olines, owords, scr, rtp, comps, inks);
     }
@@ -1098,6 +1196,16 @@ pub fn rt_record(page: i32, srcview: i32, dpi100: i32, loc: &mut crate::port::Ce
     if q != 0 {
         id = pu_id(page, ri_rotated());
         a = an_find(ans, id);
+        let other: i32 = an_find(ans, pu_id(page, ri_opposite()));
+        if other >= 0 {
+            if an_ok(ans, other) == 1 {
+                if (a < 0) || (rt_answer_score(ans, other) > rt_answer_score(ans, a)) {
+                    id = pu_id(page, ri_opposite());
+                    a = other;
+                    crate::port::cells_set(rtp, rtp_q(), (q + 2) % 4);
+                }
+            }
+        }
         if a >= 0 {
             if an_ok(ans, a) == 1 {
                 run = sc_answer(ans, a, pg, rviews, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
@@ -1214,6 +1322,12 @@ pub fn rt_line_state(oruns: &mut crate::port::Cells, olines: &mut crate::port::C
     let mut cc: i32 = 0;
     let mut b: i32 = -1;
     let mut back: i32 = -1;
+    // A body-ink reading owns recovery on a page with foreign ink. New gap crops remain evidence there; mixing their polarity with that reading duplicates or invents fragments.
+    if (ol_get(olines, l, olf_retry_gap()) == 1) && (brun >= 0) {
+        if or_get(oruns, brun, orf_wcount()) > 0 {
+            return 0;
+        }
+    }
     if c <= 0 {
         // P12.6: a line the first pass found and read as nothing (`rt-empty-area`), re-read alone: its words are the page's when there are some and they are sure (`rt-empty-words`, `rt-empty-conf`)
         j = 0;
@@ -1509,6 +1623,20 @@ pub fn rt_adopt(mut rtp: &mut crate::port::Cells, oruns: &mut crate::port::Cells
             n = rt_sel_add(scr, n, bl0 + b);
             crate::port::cells_set(scr, sc_bonly_base() + b, 2);
             b = rt_next_bonly(olines, scr, bl0, bn, 1000000000);
+        }
+    }
+    // D1801: only an otherwise empty reading needs the uncertain body-ink fallback. Preserve normal adoption decisions when they already read text.
+    if (n == 0) && ((brun >= 0) && (or_get(oruns, fr, orf_wcount()) == 0)) {
+        b = or_get(oruns, brun, orf_lfirst());
+        bn = b + or_get(oruns, brun, orf_lcount());
+        while b < bn {
+            if ol_get(olines, b, lh_count()) > 0 {
+                n = rt_sel_add(scr, n, b);
+            }
+            b += 1;
+        }
+        if n > 0 {
+            crate::port::cells_set(rtp, rtp_primary(), brun);
         }
     }
     return n;

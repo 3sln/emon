@@ -197,8 +197,8 @@ public final class Ocrporttest {
         tCase1(0, 2, 99, 104, 115, 0, 1, 0, -1, "chs is chi_sim");
         tCase1(0, 2, 99, 104, 116, 0, 1, 1, -1, "cht is chi_tra");
     }
-    public static void testAModelThatIsNotInstalledIsDroppedAndNoneLeftIsAll() {
-        tCase1(0, 0, 102, 114, 97, 0, 2, 0, 1, "fra alone: every installed model (D038)");
+    public static void testAModelThatIsNotInstalledIsDroppedAndNoneLeftIsOne() {
+        tCase1(0, 0, 102, 114, 97, 0, 1, 0, -1, "fra alone: one discovery model (D1805)");
         tGone1(0, 0, 102, 114, 97, 0, 4, 0, 102, "fra is dropped, its name and a 0");
         tCase2(0, 0, 101, 110, 103, 0, 102, 114, 97, 0, 1, 0, -1, "eng and fra: eng");
         tGone1(0, 0, 99, 104, 115, 0, 8, 4, 115, "chs with no chi_sim installed is named chi_sim");
@@ -455,5 +455,27 @@ public final class Ocrporttest {
         tP4(v, 0, 0, 2, 0);
         emon.Testport.assertEq(Ocrport.oxFlat(v, 9, got), -1, "a header cut short");
         emon.Testport.assertEq(emon.Port.cellsLen(got), 0, "and nothing is written");
+    }
+    public static void testAnAutomaticFirstPassUsesOneModelInsteadOfAllInstalledScripts() {
+        emon.Port.Cells r = emon.Port.newCells();
+        emon.Port.Cells inst = emon.Port.newCells();
+        tReq1(r, 0, 0, 0, 0);
+        tInstEngRus(inst);
+        tModels(0, r, inst, 1, 0, -1, "one Latin discovery pass, no multi-script soup");
+    }
+    public static void testExplicitProviderLanguagesAreNotReplacedByDiscovery() {
+        emon.Port.Cells r = emon.Port.newCells();
+        emon.Port.Cells inst = emon.Port.newCells();
+        emon.Port.Cells out = emon.Port.newCells();
+        tReq1(r, 0, 0, 0, 0);
+        tInstEngJpn(inst);
+        emon.Testport.assertEq(Ocrport.opModelsConfigured(r, inst, 1, out), 2, "explicit jpn+eng stays jpn+eng");
+        emon.Testport.assertEq(emon.Port.cellsAt(out, 1), 1, "the Japanese model is retained");
+        emon.Port.Cells auto = emon.Port.newCells();
+        emon.Testport.assertEq(Ocrport.opModelsConfigured(r, inst, 0, auto), 1, "an unconfigured inventory still uses one discovery model");
+        emon.Port.Cells named = emon.Port.newCells();
+        emon.Port.Cells picked = emon.Port.newCells();
+        tReq1(named, 101, 110, 103, 0);
+        emon.Testport.assertEq(Ocrport.opModelsConfigured(named, inst, 1, picked), 1, "a named request wins over provider defaults");
     }
 }

@@ -436,4 +436,81 @@ public final class Retargettest {
         emon.Testport.assertThat(n <= Scan.scSelMax(), "the selection holds no more than the scratch has room for");
         emon.Testport.assertThat(n > 1400, "and the 1500 lines it counts are read, bar the few that lie over the first pass's line");
     }
+    public static void testAnEmptyFirstPassKeepsTheBodyInkReadingEvenWhenUnsure() {
+        emon.Port.Cells oruns = emon.Port.newCells();
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells rtp = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        Scan.scPrep(scr);
+        rttEmpty(olines, 0);
+        int fr = rttRun(oruns, olines, ow, 0, 0);
+        rttLine(olines, ow, feats, 300, 450);
+        int br = rttRun(oruns, olines, ow, 1, 0);
+        Retarget.rtPrep(rtp);
+        emon.Port.cellsSet(rtp, Retarget.rtpBrun(), br);
+        emon.Testport.assertEq(rttAdopt(rtp, oruns, fr, olines, ow, scr), 1, "a weak recovered line is evidence, not silent total loss");
+        emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scSelBase()), 1, "the recovered line reaches scan vetting");
+    }
+    public static void testTracedInkWithNoOcrWordGetsACroppedRetry() {
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells ol = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells tl = emon.Port.newCells();
+        int run = rttRun(runs, ol, ow, 0, 0);
+        int t = Evidence.tlNew(tl, 1, 1000, 3000, 9000, 4000, 1000, 4000, 9000, 4000, 0, 0, -1, 12);
+        Evidence.tlSet(tl, t, Evidence.tlfConf(), 950);
+        emon.Testport.assertEq(Retarget.rtGapLines(1, 300, tl, runs, run, ol, ow, emon.Port.newCells()), 1, "ink absent from OCR is an empty retry line");
+        emon.Testport.assertEq(Evidence.olCount(ol), 1, "the region is represented in evidence");
+        emon.Testport.assertEq(Evidence.orGet(runs, run, Evidence.orfLcount()), 1, "the retry planner sees it");
+        emon.Testport.assertEq(Retarget.rtGapLines(1, 300, tl, runs, run, ol, ow, emon.Port.newCells()), 0, "a repeated plan does not duplicate its region");
+    }
+    public static void testOrientationVotesUseTextAreaRatherThanAConfidentMarginNumber() {
+        emon.Port.Cells ans = emon.Port.newCells();
+        int a = Plan.anOcr(ans, 1);
+        int wa = Plan.anOcrWord(ans, a, 0, 0, 10, 500, 990, 0, 0);
+        Plan.anOcrCp(ans, wa, 49);
+        Plan.anOcrCp(ans, wa, 50);
+        Plan.anOcrEnd(ans, a);
+        int b = Plan.anOcr(ans, 2);
+        int wb = Plan.anOcrWord(ans, b, 50, 50, 500, 40, 900, 0, 0);
+        Plan.anOcrCp(ans, wb, 84);
+        Plan.anOcrCp(ans, wb, 101);
+        Plan.anOcrCp(ans, wb, 120);
+        Plan.anOcrCp(ans, wb, 116);
+        Plan.anOcrEnd(ans, b);
+        emon.Testport.assertThat(Retarget.rtAnswerScore(ans, b) > Retarget.rtAnswerScore(ans, a), "body text beats a narrow Bates strip");
+    }
+    public static void testSmallTracedTextIsStillRetried() {
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells ol = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells tl = emon.Port.newCells();
+        emon.Port.Cells rtp = emon.Port.newCells();
+        int run = rttRun(runs, ol, ow, 0, 0);
+        int t = Evidence.tlNew(tl, 1, 1000, 3000, 9000, 3400, 1000, 3400, 9000, 3400, 0, 0, -1, 12);
+        Evidence.tlSet(tl, t, Evidence.tlfConf(), 950);
+        emon.Testport.assertEq(Retarget.rtGapLines(1, 300, tl, runs, run, ol, ow, emon.Port.newCells()), 1, "four-point ink is text even when the first pass missed it");
+        Retarget.rtPrep(rtp);
+        Retarget.rtDecide(0, 0, 0, runs, run, ol, ow, emon.Port.newCells(), 1, 300, rtp);
+        emon.Testport.assertEq(emon.Port.cellsAt(rtp, Retarget.rtpNl()), 1, "the small region reaches the crop request planner");
+    }
+    public static void testTheEmptyPageFallbackDoesNotDiluteAnExistingReading() {
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells ol = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells rtp = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        Scan.scPrep(scr);
+        rttEmpty(ol, 0);
+        int fr = rttRun(runs, ol, ow, 0, 0);
+        rttLine(ol, ow, feats, 300, 900);
+        rttLine(ol, ow, feats, 600, 450);
+        int br = rttRun(runs, ol, ow, 1, 0);
+        Retarget.rtPrep(rtp);
+        emon.Port.cellsSet(rtp, Retarget.rtpBrun(), br);
+        emon.Testport.assertEq(rttAdopt(rtp, runs, fr, ol, ow, scr), 1, "normal recovery already read text, so keep its quality decisions");
+    }
 }

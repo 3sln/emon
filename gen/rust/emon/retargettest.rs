@@ -450,3 +450,85 @@ fn test_a_body_ink_run_of_more_lines_than_the_scratch_holds_is_cut_not_read_past
     crate::testport::assert_that(n <= sc_sel_max(), "the selection holds no more than the scratch has room for");
     crate::testport::assert_that(n > 1400, "and the 1500 lines it counts are read, bar the few that lie over the first pass's line");
 }
+#[test]
+fn test_an_empty_first_pass_keeps_the_body_ink_reading_even_when_unsure() {
+    let oruns: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rtp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    sc_prep(scr);
+    rtt_empty(olines, 0);
+    let fr: i32 = rtt_run(oruns, olines, ow, 0, 0);
+    rtt_line(olines, ow, feats, 300, 450);
+    let br: i32 = rtt_run(oruns, olines, ow, 1, 0);
+    rt_prep(rtp);
+    crate::port::cells_set(rtp, rtp_brun(), br);
+    crate::testport::assert_eq(rtt_adopt(rtp, oruns, fr, olines, ow, scr), 1, "a weak recovered line is evidence, not silent total loss");
+    crate::testport::assert_eq(crate::port::cells_at(scr, sc_sel_base()), 1, "the recovered line reaches scan vetting");
+}
+#[test]
+fn test_traced_ink_with_no_ocr_word_gets_a_cropped_retry() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ol: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let run: i32 = rtt_run(runs, ol, ow, 0, 0);
+    let t: i32 = tl_new(tl, 1, 1000, 3000, 9000, 4000, 1000, 4000, 9000, 4000, 0, 0, -1, 12);
+    tl_set(tl, t, tlf_conf(), 950);
+    crate::testport::assert_eq(rt_gap_lines(1, 300, tl, runs, run, ol, ow, &mut crate::port::Cells::new()), 1, "ink absent from OCR is an empty retry line");
+    crate::testport::assert_eq(ol_count(ol), 1, "the region is represented in evidence");
+    crate::testport::assert_eq(or_get(runs, run, orf_lcount()), 1, "the retry planner sees it");
+    crate::testport::assert_eq(rt_gap_lines(1, 300, tl, runs, run, ol, ow, &mut crate::port::Cells::new()), 0, "a repeated plan does not duplicate its region");
+}
+#[test]
+fn test_orientation_votes_use_text_area_rather_than_a_confident_margin_number() {
+    let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let a: i32 = an_ocr(ans, 1);
+    let wa: i32 = an_ocr_word(ans, a, 0, 0, 10, 500, 990, 0, 0);
+    an_ocr_cp(ans, wa, 49);
+    an_ocr_cp(ans, wa, 50);
+    an_ocr_end(ans, a);
+    let b: i32 = an_ocr(ans, 2);
+    let wb: i32 = an_ocr_word(ans, b, 50, 50, 500, 40, 900, 0, 0);
+    an_ocr_cp(ans, wb, 84);
+    an_ocr_cp(ans, wb, 101);
+    an_ocr_cp(ans, wb, 120);
+    an_ocr_cp(ans, wb, 116);
+    an_ocr_end(ans, b);
+    crate::testport::assert_that(rt_answer_score(ans, b) > rt_answer_score(ans, a), "body text beats a narrow Bates strip");
+}
+#[test]
+fn test_small_traced_text_is_still_retried() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ol: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rtp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let run: i32 = rtt_run(runs, ol, ow, 0, 0);
+    let t: i32 = tl_new(tl, 1, 1000, 3000, 9000, 3400, 1000, 3400, 9000, 3400, 0, 0, -1, 12);
+    tl_set(tl, t, tlf_conf(), 950);
+    crate::testport::assert_eq(rt_gap_lines(1, 300, tl, runs, run, ol, ow, &mut crate::port::Cells::new()), 1, "four-point ink is text even when the first pass missed it");
+    rt_prep(rtp);
+    rt_decide(0, 0, 0, runs, run, ol, ow, &mut crate::port::Cells::new(), 1, 300, rtp);
+    crate::testport::assert_eq(crate::port::cells_at(rtp, rtp_nl()), 1, "the small region reaches the crop request planner");
+}
+#[test]
+fn test_the_empty_page_fallback_does_not_dilute_an_existing_reading() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ol: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rtp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    sc_prep(scr);
+    rtt_empty(ol, 0);
+    let fr: i32 = rtt_run(runs, ol, ow, 0, 0);
+    rtt_line(ol, ow, feats, 300, 900);
+    rtt_line(ol, ow, feats, 600, 450);
+    let br: i32 = rtt_run(runs, ol, ow, 1, 0);
+    rt_prep(rtp);
+    crate::port::cells_set(rtp, rtp_brun(), br);
+    crate::testport::assert_eq(rtt_adopt(rtp, runs, fr, ol, ow, scr), 1, "normal recovery already read text, so keep its quality decisions");
+}

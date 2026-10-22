@@ -384,13 +384,20 @@ def kind_fields(d, node, kind):
             d["lines"] = node.aux
 
 
-def tail(d, node):
+def tail(d, node, nodes):
     if node.regions:
         d["at"] = [[r[0]] + [Cpt(x) for x in r[1:]] for r in node.regions]
     if node.src:
         d["src"] = names(node.src, SRC)
     if node.conf >= 0:
-        d["conf"] = calibrated(KINDS[node.kind], node.src, node.conf)
+        score = calibrated(KINDS[node.kind], node.src, node.conf)
+        ancestor = node
+        while ancestor is not None:
+            if ancestor.flags & (1 | 1024):  # low-conf / script-unread
+                score = min(score, node.conf)
+                break
+            ancestor = nodes[ancestor.parent] if ancestor.parent is not None and ancestor.parent >= 0 else None
+        d["conf"] = score
     if node.flags:
         d["flags"] = names(node.flags, FLAGS)
 
@@ -451,7 +458,7 @@ def node_json(nodes, n):
     blocks = kids if inline else [c for c in kids if not is_inline(nodes, c)]
     if blocks:
         d["children"] = [node_json(nodes, c) for c in blocks]
-    tail(d, node)
+    tail(d, node, nodes)
     return d
 
 
@@ -511,7 +518,7 @@ def model_json(nodes, pages, ledger):
                 d["pages"] = attr_all(n, "pages")
             if n.children:
                 d["children"] = [node_json(nodes, c) for c in n.children]
-            tail(d, n)
+            tail(d, n, nodes)
             fl.append(d)
     out["furniture"] = fl
     dl = []

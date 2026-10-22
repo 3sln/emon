@@ -65,7 +65,7 @@ public static class Scantest {
     }
     [Xunit.Fact]
     public static void TestNoHintOrNoNameIsNoLanguage() {
-        emon.Testport.AssertEq(LangOf(0, 0, 0, 0, 0, 0, 0, 0, 0, 0), 0, "no hint: the port reads with every model it has (D038)");
+        emon.Testport.AssertEq(LangOf(0, 0, 0, 0, 0, 0, 0, 0, 0, 0), 0, "no hint: discovery model selection belongs to the port (D1805)");
         emon.Testport.AssertEq(LangOf(120, 0, 0, 0, 0, 0, 0, 0, 0, 0), 0, "one letter says nothing");
         emon.Testport.AssertEq(LangOf(113, 113, 0, 0, 0, 0, 0, 0, 0, 0), 0, "an unknown two-letter code");
         emon.Testport.AssertEq(LangOf(49, 50, 51, 0, 0, 0, 0, 0, 0, 0), 0, "digits are no language");
@@ -1016,5 +1016,137 @@ public static class Scantest {
         StLine(olines, 100, 200, 0, 1);
         emon.Testport.AssertEq(StEmit(olines, owords, words, lines, et, emon.Port.NewCells(), 1), 0, "a one-point dot alone is no paragraph even at high engine confidence");
         emon.Testport.AssertEq(Evidence.OwGet(owords, 0, Evidence.OwfFlags()) & Evidence.OeGarbage(), Evidence.OeGarbage(), "the evidence retains it for the garbage ledger");
+    }
+    [Xunit.Fact]
+    public static void TestOcrTrustSeparatesCleanWordsFromJunk() {
+        emon.Port.Cells ow = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.CellsPush(et, 84);
+        emon.Port.CellsPush(et, 111);
+        emon.Port.CellsPush(et, 116);
+        emon.Port.CellsPush(et, 97);
+        emon.Port.CellsPush(et, 108);
+        emon.Port.CellsPush(et, 65533);
+        emon.Port.CellsPush(et, 124);
+        emon.Port.CellsPush(et, 65533);
+        Evidence.OwNew(ow, 1, 0, 0, 500, 100, 0, 100, 500, 100, 0, 0, 0, 5, 0, 960, -1);
+        Evidence.OwNew(ow, 1, 0, 200, 500, 300, 0, 300, 500, 300, 0, 0, 5, 3, 1, 120, -1);
+        Evidence.OwSet(ow, 0, Evidence.OwfFlags(), 1);
+        emon.Testport.AssertThat(Scan.ScWordTrust(ow, et, 0) >= 850, "clean dictionary OCR stays high");
+        emon.Testport.AssertThat(Scan.ScWordTrust(ow, et, 1) <= 200, "rejected characters at low engine confidence stay low");
+        emon.Testport.AssertThat((Scan.ScWordTrust(ow, et, 0) - Scan.ScWordTrust(ow, et, 1)) >= 600, "scrapers can separate clean text and junk");
+    }
+    [Xunit.Fact]
+    public static void TestOcrFormatControlsAndUnspacedScripts() {
+        emon.Testport.AssertEq(Scan.ScFormatControl(8206), 1, "OCR LRM is stripped");
+        emon.Testport.AssertEq(Scan.ScFormatControl(8207), 1, "OCR RLM is stripped");
+        emon.Testport.AssertEq(Scan.ScFormatControl(8295), 1, "OCR direction isolates are stripped");
+        emon.Testport.AssertEq(Scan.ScFormatControl(1575), 0, "Arabic letters are kept");
+        emon.Testport.AssertEq(Scan.ScUnspaced(21407), 1, "Han words have no separator");
+        emon.Testport.AssertEq(Scan.ScUnspaced(12363), 1, "Kana words have no separator");
+        emon.Testport.AssertEq(Scan.ScUnspaced(44032), 0, "Hangul word spaces are kept");
+        emon.Testport.AssertEq(Scan.ScUnspaced(65), 0, "Latin word spaces are kept");
+    }
+    [Xunit.Fact]
+    public static void TestOcrPassDisagreementReducesTrust() {
+        emon.Port.Cells ow = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.CellsPush(et, 65);
+        emon.Port.CellsPush(et, 66);
+        Evidence.OwNew(ow, 1, 0, 0, 500, 100, 0, 100, 500, 100, 0, 0, 0, 1, 0, 900, -1);
+        Evidence.OwNew(ow, 1, 0, 0, 500, 100, 0, 100, 500, 100, 0, 0, 1, 1, 1, 900, -1);
+        Evidence.OwSet(ow, 0, Evidence.OwfRun(), 0);
+        Evidence.OwSet(ow, 1, Evidence.OwfRun(), 1);
+        emon.Testport.AssertThat(Scan.ScWordAgreement(ow, et, 0) < 1000, "two readings of the same ink disagree");
+        Evidence.OwSet(ow, 1, Evidence.HdTstart(), 0);
+        emon.Testport.AssertEq(Scan.ScWordAgreement(ow, et, 0), 1000, "the same reading agrees");
+    }
+    [Xunit.Fact]
+    public static void TestAShortDetectedRuleIsNotAnOcrWord() {
+        emon.Port.Cells rules = emon.Port.NewCells();
+        StRule(rules, 1000, 0, 500);
+        emon.Testport.AssertEq(Scan.ScOnVrule(rules, 1, 1000, 250, 20), 1, "a detected five-point rule also rejects a bar");
+    }
+    [Xunit.Fact]
+    public static void TestOcrTextCleaningRemovesControlsAndHanSeparators() {
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        int t = Model.NodeNew(nodes, Model.NkText(), 0);
+        int start = emon.Port.CellsLen(text);
+        Model.NodeAddSrc(nodes, t, Model.SrOcr());
+        emon.Port.CellsPush(text, 21407);
+        emon.Port.CellsPush(text, 32);
+        emon.Port.CellsPush(text, 20135);
+        emon.Port.CellsPush(text, 8206);
+        Model.NodeSetText(nodes, t, start, 4);
+        emon.Testport.AssertEq(Scan.ScCleanText(nodes, text), 1, "one corrected OCR text run");
+        emon.Testport.AssertEq(Model.NodeTextLen(nodes, t), 2, "two adjacent Han characters");
+        emon.Testport.AssertEq(emon.Port.CellsAt(text, Model.NodeTextStart(nodes, t)), 21407, "the first character stays");
+        emon.Testport.AssertEq(Scan.ScCleanText(nodes, text), 0, "cleaning is idempotent");
+    }
+    [Xunit.Fact]
+    public static void TestAnInkRegionThatRetriesReadAsNothingHasALedgerRow() {
+        emon.Port.Cells ol = emon.Port.NewCells();
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        int l = Evidence.OlNew(ol, 1, 1000, 2000, 9000, 2400, 1000, 2400, 9000, 2400, 0, 0, 0, 0);
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Evidence.OlSet(ol, l, Evidence.OlfRetryGap(), 1);
+        emon.Testport.AssertEq(Scan.ScWriteEmptyRegions(ol, nodes, regions, ledger), 1, "ink without Model text is accounted for");
+        emon.Testport.AssertEq(Model.LedgerReason(ledger, 0), Model.DrOcrGhost(), "not a silent lost region");
+        emon.Testport.AssertEq(Model.LedgerX1(ledger, 0), 9000, "the region's own extent");
+        int p = Model.NodeNew(nodes, Model.NkParagraph(), 0);
+        Model.NodeAddRegion(nodes, regions, p, 1, 2000, 2000, 5000, 2400);
+        emon.Testport.AssertEq(Scan.ScWriteEmptyRegions(ol, nodes, regions, ledger), 0, "a region represented in the Model is not empty");
+    }
+    [Xunit.Fact]
+    public static void TestRotatedOcrTrustUsesOnlyTheSelectedCoordinateFrame() {
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells ow = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells runs = emon.Port.NewCells();
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        emon.Port.CellsPush(et, 65533);
+        emon.Port.CellsPush(et, 65533);
+        emon.Port.CellsPush(et, 65533);
+        emon.Port.CellsPush(et, 65533);
+        emon.Port.CellsPush(et, 65533);
+        emon.Port.CellsPush(et, 84);
+        emon.Port.CellsPush(et, 111);
+        emon.Port.CellsPush(et, 116);
+        emon.Port.CellsPush(et, 97);
+        emon.Port.CellsPush(et, 108);
+        Evidence.OrNew(runs, 1, 0);
+        int selected = Evidence.OrNew(runs, 1, 1);
+        Evidence.OrSet(runs, selected, Evidence.OrfPass(), Evidence.OpReRotated());
+        Evidence.OwNew(ow, 1, 0, 0, 500, 100, 0, 100, 500, 100, 0, 0, 0, 5, 0, 0, -1);
+        Evidence.OwSet(ow, 0, Evidence.OwfRun(), 0);
+        Evidence.OwNew(ow, 1, 0, 0, 500, 100, 0, 100, 500, 100, 0, 0, 5, 5, 1, 960, -1);
+        Evidence.OwSet(ow, 1, Evidence.OwfRun(), 1);
+        Evidence.OwSet(ow, 1, Evidence.OwfFlags(), 1);
+        int p = Model.NodeNew(nodes, Model.NkParagraph(), 0);
+        Model.NodeAddSrc(nodes, p, Model.SrOcr());
+        Model.NodeAddFlag(nodes, p, Model.FlRotated());
+        Model.NodeAddRegion(nodes, regions, p, 1, 0, 0, 500, 100);
+        Scan.ScTrust(nodes, regions, ow, et, runs);
+        emon.Testport.AssertThat(Model.NodeConf(nodes, p) >= 850, "old upside-down coordinates cannot lower clean selected OCR");
+        emon.Testport.AssertThat(Calib.CalNodeConf(nodes, p) >= 750, "the scraper sees high calibrated confidence too");
     }
 }
