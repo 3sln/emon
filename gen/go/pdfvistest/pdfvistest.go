@@ -7,6 +7,7 @@ import (
 	"emon/evidence"
 	"emon/pdfcontent"
 	"emon/pdfdoc"
+	"emon/pdfvis"
 	"emon/port"
 	"testing"
 )
@@ -376,4 +377,186 @@ func TestEveryVisibilityFixtureIsClassifiedAsWritten(emonT *testing.T) {
 	// The files of test/vis: white on white and the same colour as the background, clipped, off the page, tiny, painted
 	// over, optional content, alpha, hidden OCR layers and a page as a crawler is fed it, and the colour spaces.
 	port.AssertThat(emonT, vtRows(emonT, port.TestFile("vis/rows.txt")) > 150, "the rows were read")
+}
+
+func vtOldBackdrop(pa *port.Cells, im *port.Cells, mk *port.Cells, x0 int32, y0 int32, x1 int32, y1 int32, gz int32, jp int32, ji int32, p0 int32, i0 int32, me int32, lim int32) int32 {
+	// The colour behind a glyph cell with this box and paint number: 0xRRGGBB, or -2 when it cannot be told. Paths
+	// are searched backwards from row jp (the first with a later z), images from row ji. `me` is the path row being
+	// classified (-1 for a glyph): an earlier rectangle that this path, itself an exactly known opaque rectangle,
+	// covers completely is not what it is painted on, it is painted OVER (a rule drawn twice is one rule: of two paints
+	// of the same colour on the same box the later is the ink and the earlier the one it hides, never both hidden).
+	var r int32 = jp - 1
+	var steps int32 = 0
+	var zp int32 = -1
+	var res int32 = 16777215
+	var fl int32 = 0
+	var rx0 int32 = 0
+	var ry0 int32 = 0
+	var rx1 int32 = 0
+	var ry1 int32 = 0
+	var zi int32 = -1
+	var found int32 = 0
+	for (r >= p0) && ((steps < lim) && (found == 0)) {
+		fl = evidence.PaGet(pa, r, evidence.PfFlags())
+		if ((fl & evidence.PgClip()) == 0) && ((fl & evidence.PgFilled()) != 0) {
+			rx0 = pdfvis.PvPathK(pa, r, 0)
+			ry0 = pdfvis.PvPathK(pa, r, 1)
+			rx1 = pdfvis.PvPathK(pa, r, 2)
+			ry1 = pdfvis.PvPathK(pa, r, 3)
+			if (me >= 0) && (pdfvis.PvOpaqueRect(pa, mk, me) == 1) {
+				if pdfvis.PvCovers(pdfvis.PvPathK(pa, me, 0), pdfvis.PvPathK(pa, me, 1), pdfvis.PvPathK(pa, me, 2), pdfvis.PvPathK(pa, me, 3), pdfvis.PvFullK(pa, r, 0), pdfvis.PvFullK(pa, r, 1), pdfvis.PvFullK(pa, r, 2), pdfvis.PvFullK(pa, r, 3)) == 1 {
+					rx1 = rx0 - 1
+				}
+			}
+			if pdfvis.PvHit(x0, y0, x1, y1, rx0, ry0, rx1, ry1) == 1 {
+				found = 1
+				zp = evidence.PaGet(pa, r, evidence.PfZ())
+				if (pdfvis.PvOpaqueRect(pa, mk, r) == 1) && (pdfvis.PvCovers(rx0, ry0, rx1, ry1, x0, y0, x1, y1) == 1) {
+					res = evidence.PaGet(pa, r, evidence.PfFill())
+				} else {
+					res = -2
+				}
+			}
+		}
+		r -= 1
+		steps += 1
+	}
+	// The nearest earlier image that touches the cell.
+	r = ji - 1
+	steps = 0
+	found = 0
+	for (r >= i0) && ((steps < lim) && (found == 0)) {
+		rx0 = pdfvis.PvImgK(im, pa, r, 0)
+		ry0 = pdfvis.PvImgK(im, pa, r, 1)
+		rx1 = pdfvis.PvImgK(im, pa, r, 2)
+		ry1 = pdfvis.PvImgK(im, pa, r, 3)
+		if pdfvis.PvHit(x0, y0, x1, y1, rx0, ry0, rx1, ry1) == 1 {
+			found = 1
+			zi = evidence.ImGet(im, r, evidence.MfZ())
+		}
+		r -= 1
+		steps += 1
+	}
+	if zi > zp {
+		return -2
+	}
+	return res
+}
+
+func vtOldOccluder(pa *port.Cells, im *port.Cells, mk *port.Cells, x0 int32, y0 int32, x1 int32, y1 int32, jp int32, ji int32, p1 int32, i1 int32, lim int32) int32 {
+	// The `z` of the first later paint that is opaque, exactly known and covers the whole box, else -1. Paths
+	// are searched forwards from row jp to p1, images from ji to i1.
+	var r int32 = jp
+	var steps int32 = 0
+	var zp int32 = -1
+	var zi int32 = -1
+	for (r < p1) && ((steps < lim) && (zp < 0)) {
+		if pdfvis.PvOpaqueRect(pa, mk, r) == 1 {
+			if pdfvis.PvCovers(pdfvis.PvPathK(pa, r, 0), pdfvis.PvPathK(pa, r, 1), pdfvis.PvPathK(pa, r, 2), pdfvis.PvPathK(pa, r, 3), x0, y0, x1, y1) == 1 {
+				zp = evidence.PaGet(pa, r, evidence.PfZ())
+			}
+		}
+		r += 1
+		steps += 1
+	}
+	r = ji
+	steps = 0
+	for (r < i1) && ((steps < lim) && (zi < 0)) {
+		if pdfvis.PvOpaqueImg(im, mk, r) == 1 {
+			if pdfvis.PvCovers(pdfvis.PvImgK(im, pa, r, 0), pdfvis.PvImgK(im, pa, r, 1), pdfvis.PvImgK(im, pa, r, 2), pdfvis.PvImgK(im, pa, r, 3), x0, y0, x1, y1) == 1 {
+				zi = evidence.ImGet(im, r, evidence.MfZ())
+			}
+		}
+		r += 1
+		steps += 1
+	}
+	if (zp >= 0) && (zi >= 0) {
+		if zp < zi {
+			return zp
+		}
+		return zi
+	}
+	if zp >= 0 {
+		return zp
+	}
+	return zi
+}
+
+func TestIndexPreservesRowBoundsAndUncertainBackdrops(emonT *testing.T) {
+	var pa *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var ix *port.Cells = port.NewCells()
+	var r int32 = 0
+	var m int32 = 0
+	var j int32 = 0
+	var lim int32 = 0
+	var me int32 = -1
+	m = evidence.MkNew(mk, 1, evidence.MkOptionalContent(), 0, 0, -1, 0)
+	evidence.MkSet(mk, m, evidence.MkfOcgdef(), 0)
+	for j < 4200 {
+		r = evidence.PaNew(pa, 1, evidence.PaRect(), 0, 0, 1000, 1000)
+		evidence.PaSet(pa, r, evidence.PfZ(), j)
+		evidence.PaSet(pa, r, evidence.PfFlags(), evidence.PgStroked())
+		evidence.PaSet(pa, r, evidence.PfWidth(), 3)
+		if (j % 7) == 0 {
+			evidence.PaSet(pa, r, evidence.PfFlags(), evidence.PgFilled())
+			evidence.PaSet(pa, r, evidence.PfFill(), 123)
+		}
+		if (j % 11) == 0 {
+			evidence.PaSet(pa, r, evidence.PfMark(), m)
+		}
+		if (j % 13) == 0 {
+			evidence.PaSet(pa, r, evidence.PfFalpha(), 500)
+		}
+		if (j % 17) == 0 {
+			evidence.PaSet(pa, r, evidence.PfFlags(), evidence.PgFilled()+evidence.PgBlend())
+		}
+		if (j % 19) == 0 {
+			evidence.PaSet(pa, r, evidence.PfFlags(), evidence.PgClip())
+			evidence.PaSet(pa, r, evidence.PfX1(), 100)
+			evidence.PaSet(pa, r, evidence.PfY1(), 100)
+		}
+		if j > 0 {
+			evidence.PaSet(pa, r, evidence.PfClip(), j-1)
+		}
+		j += 1
+	}
+	pdfvis.PvIndex(pa, mk, ix, 0, 4200)
+	j = 0
+	for j < 4200 {
+		lim = 1
+		for lim <= 4096 {
+			port.AssertEq(emonT, pdfvis.PvOccluder(pa, im, mk, ix, 200, 200, 800, 800, j, 0, 4200, 0, lim), vtOldOccluder(pa, im, mk, 200, 200, 800, 800, j, 0, 4200, 0, lim), "first occluder at the same row bound")
+			me = -1
+			for me < 2 {
+				port.AssertEq(emonT, pdfvis.PvBackdrop(pa, im, mk, ix, 200, 200, 800, 800, j, j, 0, 0, 0, me, lim), vtOldBackdrop(pa, im, mk, 200, 200, 800, 800, j, j, 0, 0, 0, me, lim), "backdrop includes uncertain paint and self-cover")
+				me += 1
+			}
+			lim *= 8
+		}
+		j += 61
+	}
+}
+
+func TestIndexKeepsExclusiveForwardAndInclusiveBackwardBound(emonT *testing.T) {
+	var pa *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var ix *port.Cells = port.NewCells()
+	var r int32 = 0
+	var j int32 = 0
+	for j < 4100 {
+		r = evidence.PaNew(pa, 1, evidence.PaRect(), 0, 0, 1000, 1000)
+		evidence.PaSet(pa, r, evidence.PfZ(), j)
+		evidence.PaSet(pa, r, evidence.PfFill(), 123)
+		evidence.PaSet(pa, r, evidence.PfFlags(), evidence.PgStroked())
+		j += 1
+	}
+	evidence.PaSet(pa, 4097, evidence.PfFlags(), evidence.PgFilled())
+	pdfvis.PvIndex(pa, mk, ix, 1, 4100)
+	port.AssertEq(emonT, pdfvis.PvOccluder(pa, im, mk, ix, 200, 200, 800, 800, 1, 0, 4100, 0, 4096), -1, "row jp+lim is excluded")
+	port.AssertEq(emonT, pdfvis.PvOccluder(pa, im, mk, ix, 200, 200, 800, 800, 2, 0, 4100, 0, 4096), 4097, "row jp+lim-1 is included")
+	port.AssertEq(emonT, pdfvis.PvBackdrop(pa, im, mk, ix, 200, 200, 800, 800, 4098, 4098, 0, 1, 0, -1, 1), 123, "row jp-lim is included")
+	port.AssertEq(emonT, pdfvis.PvBackdrop(pa, im, mk, ix, 200, 200, 800, 800, 4099, 4099, 0, 1, 0, -1, 1), 16777215, "earlier than jp-lim is excluded")
 }

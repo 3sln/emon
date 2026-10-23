@@ -141,7 +141,7 @@ public final class Paratest {
         emon.Port.Cells tw = emon.Port.newCells();
         emon.Port.Cells tq = emon.Port.newCells();
         emon.Port.Cells ledger = emon.Port.newCells();
-        return Para.paBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
+        return Para.paBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.newCells());
     }
     public static int ptDump(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, StringBuilder t) {
         // `pa-build` over the evidence on a fresh Model and the stage's debug lines (`pa-dump`) in t.
@@ -186,7 +186,7 @@ public final class Paratest {
             p += 1;
         }
         ptPrep(wd, ln, et, npages, g0, f0, lt, ii);
-        Para.paBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
+        Para.paBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.newCells());
         Para.paDump(t, cf, dbg);
         return 0;
     }

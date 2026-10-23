@@ -5,6 +5,7 @@ package trace
 
 import (
 	"emon/evidence"
+	"emon/pagebounds"
 	"emon/port"
 )
 
@@ -4090,10 +4091,10 @@ func TrTlines(views *port.Cells, page int32, view int32, dpi100 int32, h int32, 
 	return rows
 }
 
-func trTextCentred(comps *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32) int32 {
+func trTextCentred(comps *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32, c0 int32, c1 int32) int32 {
 	// How many text-like components of `page` have their centre in the box (centipoints).
-	var n int32 = evidence.CoCount(comps)
-	var r int32 = 0
+	var n int32 = c1
+	var r int32 = c0
 	var cnt int32 = 0
 	var cx int32 = 0
 	var cy int32 = 0
@@ -4110,17 +4111,17 @@ func trTextCentred(comps *port.Cells, page int32, x0 int32, y0 int32, x1 int32, 
 	return cnt
 }
 
-func TrFeatOcr(feats *port.Cells, frow int32, comps *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32, sb *port.Cells, nsym int32) int32 {
+func TrFeatOcrRange(feats *port.Cells, frow int32, comps *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32, sb *port.Cells, nsym int32, c0 int32, c1 int32) int32 {
 	// `xo` columns 14 (text-like components centred in the word's box) and 15 (per mille of its `nsym` symbols, whose boxes are the
 	// centipoint quadruples of `sb`, that have a text-like component centred in them; -1 with no symbols).
 	var s int32 = 0
 	var hit int32 = 0
-	evidence.FeSet(feats, frow, evidence.XoComponents(), trTextCentred(comps, page, x0, y0, x1, y1))
+	evidence.FeSet(feats, frow, evidence.XoComponents(), trTextCentred(comps, page, x0, y0, x1, y1, c0, c1))
 	if nsym <= 0 {
 		evidence.FeSet(feats, frow, evidence.XoCompRatio(), -1)
 	} else {
 		for s < nsym {
-			if trTextCentred(comps, page, port.CellsAt(sb, s*4), port.CellsAt(sb, (s*4)+1), port.CellsAt(sb, (s*4)+2), port.CellsAt(sb, (s*4)+3)) > 0 {
+			if trTextCentred(comps, page, port.CellsAt(sb, s*4), port.CellsAt(sb, (s*4)+1), port.CellsAt(sb, (s*4)+2), port.CellsAt(sb, (s*4)+3), c0, c1) > 0 {
 				hit += 1
 			}
 			s += 1
@@ -4130,11 +4131,17 @@ func TrFeatOcr(feats *port.Cells, frow int32, comps *port.Cells, page int32, x0 
 	return 0
 }
 
+func TrFeatOcr(feats *port.Cells, frow int32, comps *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32, sb *port.Cells, nsym int32) int32 {
+	var c0 int32 = pagebounds.PbFirst(comps, 24, page)
+	var c1 int32 = pagebounds.PbAfter(comps, 24, page)
+	return TrFeatOcrRange(feats, frow, comps, page, x0, y0, x1, y1, sb, nsym, c0, c1)
+}
+
 func TrFeatText(feats *port.Cells, frow int32, comps *port.Cells, tlines *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32, rot int32, sb *port.Cells, nsym int32) int32 {
 	// `xt` columns 14 and 15 (as `tr-feat-ocr`, over the glyph boxes) and 23: the largest overlap (`ev-overlap-small`, per mille) of the
 	// word's box with a `tlines` row of the page whose angle differs from the word's `rot` by more than 3 degrees (mod 180).
-	var n int32 = evidence.TlCount(tlines)
-	var r int32 = 0
+	var n int32 = pagebounds.PbAfter(tlines, 20, page)
+	var r int32 = pagebounds.PbFirst(tlines, 20, page)
 	var d int32 = 0
 	var best int32 = 0
 	var o int32 = 0

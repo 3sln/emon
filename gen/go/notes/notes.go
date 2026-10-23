@@ -8,6 +8,7 @@ import (
 	"emon/heading"
 	"emon/lists"
 	"emon/model"
+	"emon/pagebounds"
 	"emon/port"
 	"emon/style"
 )
@@ -354,13 +355,15 @@ func ntMarginLine(ln *port.Cells, pages *port.Cells, l int32) int32 {
 	return 0
 }
 
-func ntRunningLabel(wd *port.Cells, ln *port.Cells, et *port.Cells, hc *port.Cells, pages *port.Cells, l int32) int32 {
+func ntRunningLabel(wd *port.Cells, ln *port.Cells, et *port.Cells, hc *port.Cells, pages *port.Cells, l int32, labels *port.Cells) int32 {
 	// P12.7 (smoke A N1): 1 when caption candidate l begins with the same four words as another candidate on another page: `Schedule 1 (Form 1040) 2025` at the foot of one page and at the head of the next is a running
 	// header or footer and no caption (the caption of a figure or a table has its number, which is its own; a label that recurs is the document's). Candidates are the lines flagged 8, and 64 (let go as an entry of a list).
-	var n int32 = evidence.LnCount(ln)
+	var n int32 = port.CellsLen(labels)
 	var pg int32 = evidence.LnGet(ln, l, evidence.LhPage())
+	var j int32 = 0
 	var m int32 = 0
-	for m < n {
+	for j < n {
+		m = port.CellsAt(labels, j)
 		if (m != l) && (evidence.LnGet(ln, m, evidence.LhPage()) != pg) && ((ntMarginLine(ln, pages, m) == 1) || (ntMarginLine(ln, pages, l) == 1)) {
 			var fl int32 = lists.LsGet(hc, m, lists.LsKFlags())
 			if (fl == lists.LsFCap()) || (fl == 64) {
@@ -369,7 +372,7 @@ func ntRunningLabel(wd *port.Cells, ln *port.Cells, et *port.Cells, hc *port.Cel
 				}
 			}
 		}
-		m += 1
+		j += 1
 	}
 	return 0
 }
@@ -890,11 +893,11 @@ func ntSmallToEnd(ln *port.Cells, sf *port.Cells, l int32, bsz int32) int32 {
 	// D583 (smoke review B issue 9): 1 when no line on line l's page, upright and at or below its top, is set in the body's size (over 96 per cent of `bsz`): everything from l to
 	// the foot of the page is small type, the shape of a footnote block (the rule above it and the body above that are what the notes stage cannot see).
 	// And there is body type ABOVE it on the page (a page of nothing but small type is a list of references, not a page with a footnote at its foot).
-	var n int32 = evidence.LnCount(ln)
 	var p int32 = evidence.LnGet(ln, l, evidence.LhPage())
+	var n int32 = pagebounds.PbAfter(ln, 16, p)
 	var y int32 = evidence.LnGet(ln, l, evidence.LhY0())
 	var above int32 = 0
-	var q int32 = 0
+	var q int32 = pagebounds.PbFirst(ln, 16, p)
 	if bsz <= 0 {
 		return 0
 	}
@@ -961,28 +964,117 @@ func ntSameShape(wd *port.Cells, ln *port.Cells, et *port.Cells, a int32, b int3
 	return 1
 }
 
-func ntRepeats(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32) int32 {
+func ntShapeKey(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32) int32 {
+	var n int32 = evidence.LnGet(ln, l, evidence.LhCount())
+	var first int32 = evidence.LnGet(ln, l, evidence.LhFirst())
+	var h int32 = n % 65521
+	var i int32 = 0
+	var j int32 = 0
+	var c int32 = 0
+	for i < n {
+		h = ((h * 31) + lists.LsWl(wd, first+i)) % 65521
+		j = 0
+		for j < lists.LsWl(wd, first+i) {
+			c = lists.LsWc(wd, et, first+i, j)
+			if lists.LsDigit(c) >= 0 {
+				c = 48
+			}
+			h = ((h * 31) + c) % 65521
+			j += 1
+		}
+		i += 1
+	}
+	return h
+}
+
+func ntRepeatIndex(wd *port.Cells, ln *port.Cells, et *port.Cells, ix *port.Cells) int32 {
+	var l int32 = 0
+	var n int32 = 0
+	var h int32 = 1
+	var i int32 = 0
+	var j int32 = 0
+	var key int32 = 0
+	var row int32 = 0
+	var pk int32 = 0
+	var pr int32 = 0
+	var more int32 = 0
+	port.CellsDrop(ix, 0)
+	for l < evidence.LnCount(ln) {
+		if evidence.LnGet(ln, l, evidence.LhCount()) >= 2 {
+			port.CellsPush(ix, ntShapeKey(wd, ln, et, l))
+			port.CellsPush(ix, l)
+		}
+		l += 1
+	}
+	n = port.CellsLen(ix) / 2
+	for h < (n / 3) {
+		h = (h * 3) + 1
+	}
+	for h >= 1 {
+		i = h
+		for i < n {
+			key = port.CellsAt(ix, i*2)
+			row = port.CellsAt(ix, (i*2)+1)
+			j = i
+			more = 1
+			for (j >= h) && (more == 1) {
+				pk = port.CellsAt(ix, (j-h)*2)
+				pr = port.CellsAt(ix, ((j-h)*2)+1)
+				if (key < pk) || ((key == pk) && (row < pr)) {
+					port.CellsSet(ix, j*2, pk)
+					port.CellsSet(ix, (j*2)+1, pr)
+					j -= h
+				} else {
+					more = 0
+				}
+			}
+			port.CellsSet(ix, j*2, key)
+			port.CellsSet(ix, (j*2)+1, row)
+			i += 1
+		}
+		h = (h - 1) / 3
+	}
+	return 0
+}
+
+func ntRepeats(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32, ix *port.Cells) int32 {
 	// P12.7 (smoke B N4): 1 when line l has a twin on another page: the same words (digits alike), the same type size and the same height within 15 pt. A line that recurs at the foot of every page is furniture
 	// (an address, a motto), never a note: notes do not repeat.
-	var n int32 = evidence.LnCount(ln)
-	var pg int32 = evidence.LnGet(ln, l, evidence.LhPage())
-	var y int32 = evidence.LnGet(ln, l, evidence.LhY0())
-	var m int32 = 0
 	if evidence.LnGet(ln, l, evidence.LhCount()) < 2 {
 		return 0
 	}
-	for m < n {
+	if port.CellsLen(ix) == 0 {
+		ntRepeatIndex(wd, ln, et, ix)
+	}
+	var n int32 = port.CellsLen(ix) / 2
+	var key int32 = ntShapeKey(wd, ln, et, l)
+	var pg int32 = evidence.LnGet(ln, l, evidence.LhPage())
+	var y int32 = evidence.LnGet(ln, l, evidence.LhY0())
+	var m int32 = 0
+	var lo int32 = 0
+	var hi int32 = n
+	var mid int32 = 0
+	for lo < hi {
+		mid = lo + ((hi - lo) / 2)
+		if port.CellsAt(ix, mid*2) < key {
+			lo = mid + 1
+		} else {
+			hi = mid
+		}
+	}
+	for (lo < n) && (port.CellsAt(ix, lo*2) == key) {
+		m = port.CellsAt(ix, (lo*2)+1)
 		if (evidence.LnGet(ln, m, evidence.LhPage()) != pg) && (lists.LsAbs(evidence.LnGet(ln, m, evidence.LhY0())-y) <= 1500) {
 			if ntSameShape(wd, ln, et, l, m) == 1 {
 				return 1
 			}
 		}
-		m += 1
+		lo += 1
 	}
 	return 0
 }
 
-func ntFoot(wd *port.Cells, et *port.Cells, ln *port.Cells, sf *port.Cells, rf *port.Cells, nb *port.Cells, mk *port.Cells, i int32) int32 {
+func ntFoot(wd *port.Cells, et *port.Cells, ln *port.Cells, sf *port.Cells, rf *port.Cells, nb *port.Cells, mk *port.Cells, ix *port.Cells, i int32) int32 {
 	// Is note body candidate i a footnote? In the lower half of the page (the band) and small or marked in superscript,
 	// with a reference on its page; or small, with a reference on the page before (a note a column or a page break pushed
 	// on); or marked in superscript, small and in the band, with no reference at all. Marks the candidate (state 1) and the
@@ -1017,7 +1109,7 @@ func ntFoot(wd *port.Cells, et *port.Cells, ln *port.Cells, sf *port.Cells, rf *
 		var bsz int32 = style.StHget(sf, style.SfhSize())
 		var w int32 = port.CellsAt(nb, b+2)
 		// P12.7 (smoke B N4): a note's number has at most two digits (302 is a street number), and a line that recurs on other pages is no note
-		if (lists.LsWc(wd, et, w, 0) != 91) && ((ntPlainPeers(nb, i) <= 5) && ((port.CellsAt(nb, b+6) <= 2) && (ntRepeats(wd, ln, et, port.CellsAt(nb, b)) == 0))) {
+		if (lists.LsWc(wd, et, w, 0) != 91) && ((ntPlainPeers(nb, i) <= 5) && ((port.CellsAt(nb, b+6) <= 2) && (ntRepeats(wd, ln, et, port.CellsAt(nb, b), ix) == 0))) {
 			if ntSmallToEnd(ln, sf, port.CellsAt(nb, b), bsz) == 1 {
 				port.CellsSet(nb, b+7, 1)
 				return 1
@@ -1027,7 +1119,7 @@ func ntFoot(wd *port.Cells, et *port.Cells, ln *port.Cells, sf *port.Cells, rf *
 	return 0
 }
 
-func ntMatch(wd *port.Cells, et *port.Cells, ln *port.Cells, sf *port.Cells, rf *port.Cells, nb *port.Cells, mk *port.Cells, nhl int32) int32 {
+func ntMatch(wd *port.Cells, et *port.Cells, ln *port.Cells, sf *port.Cells, rf *port.Cells, nb *port.Cells, mk *port.Cells, ix *port.Cells, nhl int32) int32 {
 	// Decide which candidates are notes. State 1: a footnote (a body in the lower half of the page, set smaller than
 	// the body text or marked in superscript, with a reference on its page; a superscript marker alone is enough when
 	// the line is also smaller). State 2: an endnote (a reference earlier in the document: for a superscript marker
@@ -1037,7 +1129,7 @@ func ntMatch(wd *port.Cells, et *port.Cells, ln *port.Cells, sf *port.Cells, rf 
 	var r int32 = 0
 	var tent int32 = 0
 	for i < nn {
-		ntFoot(wd, et, ln, sf, rf, nb, mk, i)
+		ntFoot(wd, et, ln, sf, rf, nb, mk, ix, i)
 		i += 1
 	}
 	// endnotes: a superscript marker with an earlier reference at once, a plain number when there are two
@@ -1416,7 +1508,7 @@ func ntApplyRefs(wd *port.Cells, et *port.Cells, gl *port.Cells, rf *port.Cells,
 	return 0
 }
 
-func NtAnalyze(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, sf *port.Cells, sc *port.Cells, pages *port.Cells, hc *port.Cells, rf *port.Cells, nb *port.Cells, mk *port.Cells, tw *port.Cells) int32 {
+func NtAnalyze(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, sf *port.Cells, sc *port.Cells, pages *port.Cells, hc *port.Cells, rf *port.Cells, nb *port.Cells, mk *port.Cells, tw *port.Cells, ix *port.Cells) int32 {
 	// Find the captions, the note bodies and the references that point at them, and mark them (see the module's head).
 	// `rf`, `nb`, `mk` are scratch. Answers the number of captions plus note bodies.
 	if lists.LsOpen(hc) == 0 {
@@ -1435,10 +1527,18 @@ func NtAnalyze(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, s
 		}
 		l += 1
 	}
+	port.CellsDrop(rf, 0)
+	l = 0
+	for l < n {
+		if (lists.LsGet(hc, l, lists.LsKFlags()) == lists.LsFCap()) || (lists.LsGet(hc, l, lists.LsKFlags()) == 64) {
+			port.CellsPush(rf, l)
+		}
+		l += 1
+	}
 	l = 0
 	for l < n {
 		if lists.LsGet(hc, l, lists.LsKFlags()) == lists.LsFCap() {
-			if (ntInRun(sf, ln, hc, l) == 1) || ((ntTocLike(wd, ln, et, sf, l) == 1) || ((ntInProse(ln, sf, sc, l) == 1) || (ntRunningLabel(wd, ln, et, hc, pages, l) == 1))) {
+			if (ntInRun(sf, ln, hc, l) == 1) || ((ntTocLike(wd, ln, et, sf, l) == 1) || ((ntInProse(ln, sf, sc, l) == 1) || (ntRunningLabel(wd, ln, et, hc, pages, l, rf) == 1))) {
 				lists.LsPut(hc, l, lists.LsKFlags(), 64)
 			}
 		}
@@ -1457,7 +1557,8 @@ func NtAnalyze(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, s
 	}
 	ntScan(wd, ln, et, gl, sf, pages, hc, rf, nb, mk)
 	nhl = ntFirstNotesHeading(wd, ln, et, hc, rf)
-	ntMatch(wd, et, ln, sf, rf, nb, mk, nhl)
+	port.CellsDrop(ix, 0)
+	ntMatch(wd, et, ln, sf, rf, nb, mk, ix, nhl)
 	ntMarkerless(wd, et, ln, sf, hc, rf, mk)
 	l = 0
 	for l < (port.CellsLen(nb) / ntNb) {

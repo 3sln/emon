@@ -3,6 +3,7 @@
 
 use crate::emon::evidence::*;
 use crate::emon::norm::*;
+use crate::emon::pagebounds::*;
 use crate::emon::plan::*;
 use crate::emon::trace::*;
 
@@ -139,6 +140,8 @@ pub fn pn_features(page: i32, bms: &crate::port::BitmapSet, k0: i32, src: &crate
     let eng: &crate::port::Bitmap = crate::port::bms_get(bms, engid);
     let mut has: i32 = 0;
     let paper: i32 = nm_paper_gray(ws);
+    let c0: i32 = pb_first(comps, 24, page);
+    let c1: i32 = pb_after(comps, 24, page);
     let mut i: i32 = w0;
     let mut f: i32 = 0;
     let mut x0: i32 = 0;
@@ -152,7 +155,7 @@ pub fn pn_features(page: i32, bms: &crate::port::BitmapSet, k0: i32, src: &crate
         x0 = ow_get(owords, i, owf_px());
         y0 = ow_get(owords, i, owf_py());
         nm_feat_ocr(feats, f, x0, y0, x0 + ow_get(owords, i, owf_pw()), y0 + ow_get(owords, i, owf_ph()), binary, eng, has, body, gray, paper);
-        tr_feat_ocr(feats, f, comps, page, ow_get(owords, i, hd_x0()), ow_get(owords, i, hd_y0()), ow_get(owords, i, hd_x1()), ow_get(owords, i, hd_y1()), scr, 0);
+        tr_feat_ocr_range(feats, f, comps, page, ow_get(owords, i, hd_x0()), ow_get(owords, i, hd_y0()), ow_get(owords, i, hd_x1()), ow_get(owords, i, hd_y1()), scr, 0, c0, c1);
         i += 1;
     }
     return nw;

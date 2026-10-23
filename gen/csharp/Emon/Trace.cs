@@ -3921,10 +3921,10 @@ public static class Trace {
         }
         return rows;
     }
-    internal static int TrTextCentred(emon.Port.Cells comps, int page, int x0, int y0, int x1, int y1) {
+    internal static int TrTextCentred(emon.Port.Cells comps, int page, int x0, int y0, int x1, int y1, int c0, int c1) {
         // How many text-like components of `page` have their centre in the box (centipoints).
-        int n = Evidence.CoCount(comps);
-        int r = 0;
+        int n = c1;
+        int r = c0;
         int cnt = 0;
         int cx = 0;
         int cy = 0;
@@ -3940,17 +3940,17 @@ public static class Trace {
         }
         return cnt;
     }
-    public static int TrFeatOcr(emon.Port.Cells feats, int frow, emon.Port.Cells comps, int page, int x0, int y0, int x1, int y1, emon.Port.Cells sb, int nsym) {
+    public static int TrFeatOcrRange(emon.Port.Cells feats, int frow, emon.Port.Cells comps, int page, int x0, int y0, int x1, int y1, emon.Port.Cells sb, int nsym, int c0, int c1) {
         // `xo` columns 14 (text-like components centred in the word's box) and 15 (per mille of its `nsym` symbols, whose boxes are the
         // centipoint quadruples of `sb`, that have a text-like component centred in them; -1 with no symbols).
         int s = 0;
         int hit = 0;
-        Evidence.FeSet(feats, frow, Evidence.XoComponents(), TrTextCentred(comps, page, x0, y0, x1, y1));
+        Evidence.FeSet(feats, frow, Evidence.XoComponents(), TrTextCentred(comps, page, x0, y0, x1, y1, c0, c1));
         if (nsym <= 0) {
             Evidence.FeSet(feats, frow, Evidence.XoCompRatio(), -1);
         } else {
             while (s < nsym) {
-                if (TrTextCentred(comps, page, emon.Port.CellsAt(sb, s * 4), emon.Port.CellsAt(sb, (s * 4) + 1), emon.Port.CellsAt(sb, (s * 4) + 2), emon.Port.CellsAt(sb, (s * 4) + 3)) > 0) {
+                if (TrTextCentred(comps, page, emon.Port.CellsAt(sb, s * 4), emon.Port.CellsAt(sb, (s * 4) + 1), emon.Port.CellsAt(sb, (s * 4) + 2), emon.Port.CellsAt(sb, (s * 4) + 3), c0, c1) > 0) {
                     hit += 1;
                 }
                 s += 1;
@@ -3959,11 +3959,16 @@ public static class Trace {
         }
         return 0;
     }
+    public static int TrFeatOcr(emon.Port.Cells feats, int frow, emon.Port.Cells comps, int page, int x0, int y0, int x1, int y1, emon.Port.Cells sb, int nsym) {
+        int c0 = Pagebounds.PbFirst(comps, 24, page);
+        int c1 = Pagebounds.PbAfter(comps, 24, page);
+        return TrFeatOcrRange(feats, frow, comps, page, x0, y0, x1, y1, sb, nsym, c0, c1);
+    }
     public static int TrFeatText(emon.Port.Cells feats, int frow, emon.Port.Cells comps, emon.Port.Cells tlines, int page, int x0, int y0, int x1, int y1, int rot, emon.Port.Cells sb, int nsym) {
         // `xt` columns 14 and 15 (as `tr-feat-ocr`, over the glyph boxes) and 23: the largest overlap (`ev-overlap-small`, per mille) of the
         // word's box with a `tlines` row of the page whose angle differs from the word's `rot` by more than 3 degrees (mod 180).
-        int n = Evidence.TlCount(tlines);
-        int r = 0;
+        int n = Pagebounds.PbAfter(tlines, 20, page);
+        int r = Pagebounds.PbFirst(tlines, 20, page);
         int d = 0;
         int best = 0;
         int o = 0;

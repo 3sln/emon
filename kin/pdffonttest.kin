@@ -29,7 +29,8 @@
                                cells-push cells-drop text-cp text-i32 src-of-blob]]
             [emon.evidence :refer [gh-tounicode gh-encoding gh-glyphname gh-cid
                                    gh-unknown]]
-            [emon.pdfdoc :refer [pd-open pd-get]]
+            [emon.pdfdoc :refer [pd-open pd-get pd-total-used]]
+            [emon.pdfcontent :refer [pc-init pc-f-cached]]
             [emon.pdfsrc :refer [ps-missed]]
             [emon.pdflex :refer [pl-init pl-seek pl-parse pl-kind-of pl-k-name]]
             [emon.fontprog :refer [fp-simple fp-name-cps]]
@@ -925,3 +926,38 @@
 
 (deftest test-every-program-font-is-the-same-through-an-async-source-of-512-byte-chunks
   (assert-eq (ft-async-fonts 512) 0 "every font of progs.pdf through 512-byte chunks"))
+
+
+(deftest test-document-cache-restores-exact-font-cells-after-eviction
+  (let [^Src src (src-of-blob (test-file "fonts/fonts.pdf"))
+        ^Cells ar (new-cells) ^Cells dc (new-cells) ^Cells a (new-cells) ^Cells b (new-cells)
+        ^Cells st (new-cells) ^Cells cx (new-cells) ^Cells ox (new-cells) ^Cells out (new-cells)
+        ^Cells loaded (new-cells) ^Cells cached (new-cells)
+        ^:mut ^I32 object 1 ^:mut ^I32 fh 0 ^:mut ^I32 j 0
+        ^:mut ^I32 before 0 ^:mut ^I32 charge 0]
+    (assert-eq (pd-open src ar dc a b st) 0 "font fixture opens")
+    (pc-init cx ox)
+    (while (<= object 8)
+      (do (set fh (pd-get src ar dc a b st object))
+          (assert-eq (pc-f-cached src ar dc a b st cx cached out object fh) 0 "fill more than four slots")
+          (set object (+ object 1))
+          (if (or (== object 3) (== object 5)) (set object (+ object 1)))))
+    (set object 1)
+    (while (<= object 8)
+      (do (set fh (pd-get src ar dc a b st object))
+          (set before (pd-total-used dc))
+          (assert-eq (pfn-load src ar dc a b st loaded out fh) 0 "fresh reference load")
+          (set charge (- (pd-total-used dc) before))
+          (cells-drop cached 0)
+          (set before (pd-total-used dc))
+          (assert-eq (pc-f-cached src ar dc a b st cx cached out object fh) 0 "reload after slot eviction")
+          (assert-eq (- (pd-total-used dc) before) charge "cached loads charge the same decoded-byte budget")
+          (assert-eq (cells-len cached) (cells-len loaded) "same parsed size")
+          (set j 0)
+          (while (< j (cells-len loaded))
+            (do (assert-eq (cells-at cached j) (cells-at loaded j) "every parsed cell is identical")
+                (set j (+ j 1))))
+          (assert-eq (pfn-map cached 65) (pfn-map loaded 65) "same mapping after restoration")
+          (assert-eq (pfn-width cached 65) (pfn-width loaded 65) "same width after restoration")
+          (set object (+ object 1))
+          (if (or (== object 3) (== object 5)) (set object (+ object 1)))))))

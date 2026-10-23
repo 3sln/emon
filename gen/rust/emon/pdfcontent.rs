@@ -866,17 +866,65 @@ pub(crate) fn pc_res_entry(src: &crate::port::Src, mut ar: &mut crate::port::Cel
     }
     return pc_dict_lookup(ar, sub, ox, ns, nl);
 }
-pub(crate) fn pc_f_load(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, slot: i32, fh: i32) -> i32 {
+pub(crate) const FCACHE_CELLS: i32 = 1048576;
+pub fn pc_f_cached(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut f: &mut crate::port::Cells, mut out: &mut crate::port::Cells, object: i32, fh: i32) -> i32 {
+    // Parsed fonts after C_SIZE in cx: object number, resolved handle, length, decoded-byte charge, then loader cells.
+    // Only complete successful loads of indirect fonts are admitted. Direct fonts and a full cache use the normal loader.
+    let before: i32 = pd_total_used(dc);
+    let mut r: i32 = C_SIZE;
+    let mut n: i32 = 0;
+    let mut j: i32 = 0;
+    let mut v: i32 = 0;
+    let mut status: i32 = 0;
+    let mut charge: i32 = 0;
+    if object > 0 {
+        while r < crate::port::cells_len(cx) {
+            n = crate::port::cells_at(cx, r + 2);
+            if (crate::port::cells_at(cx, r) == object) && (crate::port::cells_at(cx, r + 1) == fh) {
+                charge = crate::port::cells_at(cx, r + 3);
+                // Near the limit, run the original loader so the first breaching stream and reported byte count stay exact.
+                if !ps_missed(src) && (charge <= (crate::port::limit_of(2) - before)) {
+                    pd_total_add(dc, charge);
+                    crate::port::cells_drop(f, 0);
+                    while j < n {
+                        crate::port::cells_push(f, crate::port::cells_at(cx, (r + 4) + j));
+                        j += 1;
+                    }
+                    return 0;
+                }
+            }
+            r += 4 + n;
+        }
+    }
+    status = pfn_load(src, ar, dc, a, b, st, f, out, fh);
+    n = crate::port::cells_len(f);
+    if (object > 0) && ((status == 0) && (!ps_missed(src) && ((crate::port::cells_len(cx) + (4 + n)) <= (C_SIZE + FCACHE_CELLS)))) {
+        crate::port::cells_push(cx, object);
+        crate::port::cells_push(cx, fh);
+        crate::port::cells_push(cx, n);
+        charge = pd_total_used(dc) - before;
+        crate::port::cells_push(cx, charge);
+        j = 0;
+        while j < n {
+            v = crate::port::cells_at(f, j);
+            crate::port::cells_push(cx, v);
+            j += 1;
+        }
+    }
+    return status;
+}
+pub(crate) fn pc_f_load(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, slot: i32, fh: i32) -> i32 {
+    let object: i32 = crate::port::cells_at(cx, C_CUR + G_FOBJ);
     if slot == 0 {
-        return pfn_load(src, ar, dc, a, b, st, f0, out, fh);
+        return pc_f_cached(src, ar, dc, a, b, st, cx, f0, out, object, fh);
     }
     if slot == 1 {
-        return pfn_load(src, ar, dc, a, b, st, f1, out, fh);
+        return pc_f_cached(src, ar, dc, a, b, st, cx, f1, out, object, fh);
     }
     if slot == 2 {
-        return pfn_load(src, ar, dc, a, b, st, f2, out, fh);
+        return pc_f_cached(src, ar, dc, a, b, st, cx, f2, out, object, fh);
     }
-    return pfn_load(src, ar, dc, a, b, st, f3, out, fh);
+    return pc_f_cached(src, ar, dc, a, b, st, cx, f3, out, object, fh);
 }
 pub(crate) fn pc_f_q(f0: &mut crate::port::Cells, f1: &mut crate::port::Cells, f2: &mut crate::port::Cells, f3: &mut crate::port::Cells, slot: i32, which: i32) -> i32 {
     // A font's metric: which 0 ascent, 1 descent, 2 vertical, 3 DW2 v, 4 DW2 w.
@@ -1209,7 +1257,7 @@ pub(crate) fn pc_ensure_font(src: &crate::port::Src, mut ar: &mut crate::port::C
         i += 1;
     }
     at = C_SLOTS + (pick * SLOT_STRIDE);
-    status = pc_f_load(src, ar, dc, a, b, st, out, f0, f1, f2, f3, pick, key);
+    status = pc_f_load(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3, pick, key);
     if ps_missed(src) {
         crate::port::cells_set(cx, C_ABORT, 1);
         crate::port::cells_set(cx, at + S_KEY, 0);
@@ -4854,7 +4902,7 @@ pub fn pc_page(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: 
     }
     // The path in progress when the page ended never painted: its points are dropped.
     crate::port::cells_drop(pts, crate::port::cells_at(cx, C_PPTS) * 3);
-    pv_page(gl, mk, pa, im, crate::port::cells_at(cx, C_PW), crate::port::cells_at(cx, C_PH), g0, p0, i0);
+    pv_page(gl, mk, pa, im, out, crate::port::cells_at(cx, C_PW), crate::port::cells_at(cx, C_PH), g0, p0, i0);
     pc_group(gl, et, wd, ln, fnt, page, g0, w0);
     return 0;
 }

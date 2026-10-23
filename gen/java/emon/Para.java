@@ -337,12 +337,32 @@ public final class Para {
         }
         return 0;
     }
-    public static int paCollect(emon.Port.Cells ord, emon.Port.Cells ln, int page) {
-        // The page's lines in reading order, as indices into `ln`.
-        int n = Evidence.lnCount(ln);
-        int l = 0;
+    public static int paIndex(emon.Port.Cells ln, int base, int npages, emon.Port.Cells ix) {
+        // Original lines have immutable page ranges; each page's column pieces get a separate range as they are appended.
+        Pagebounds.pbBuildRanges(ln, 16, 0, base, npages, ix);
+        int p = 0;
+        while (p <= npages) {
+            emon.Port.cellsPush(ix, base);
+            emon.Port.cellsPush(ix, base);
+            p += 1;
+        }
+        return 0;
+    }
+    public static int paCollect(emon.Port.Cells ord, emon.Port.Cells ln, int page, emon.Port.Cells ix, int off) {
+        // Visit original lines, then appended pieces, in exactly the original arena order before the reading-order sort.
+        int b = page * 2;
+        int end = emon.Port.cellsAt(ix, b + 1);
+        int l = emon.Port.cellsAt(ix, b);
         emon.Port.cellsDrop(ord, 0);
-        while (l < n) {
+        while (l < end) {
+            if (Evidence.lnGet(ln, l, Evidence.lhPage()) == page) {
+                emon.Port.cellsPush(ord, l);
+            }
+            l += 1;
+        }
+        end = emon.Port.cellsAt(ix, off + (b + 1));
+        l = emon.Port.cellsAt(ix, off + b);
+        while (l < end) {
             if (Evidence.lnGet(ln, l, Evidence.lhPage()) == page) {
                 emon.Port.cellsPush(ord, l);
             }
@@ -1957,7 +1977,7 @@ public final class Para {
         }
         return 0;
     }
-    public static int paColumns(emon.Port.Cells wd, emon.Port.Cells et, int npages, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells lt, emon.Port.Cells ord, emon.Port.Cells ls, emon.Port.Cells sd, emon.Port.Cells it, emon.Port.Cells io, emon.Port.Cells rw, emon.Port.Cells gu, emon.Port.Cells ac, emon.Port.Cells tm, emon.Port.Cells cf, emon.Port.Cells lo, emon.Port.Cells pr) {
+    public static int paColumns(emon.Port.Cells wd, emon.Port.Cells et, int npages, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells lt, emon.Port.Cells ord, emon.Port.Cells ls, emon.Port.Cells sd, emon.Port.Cells it, emon.Port.Cells io, emon.Port.Cells rw, emon.Port.Cells gu, emon.Port.Cells ac, emon.Port.Cells tm, emon.Port.Cells cf, emon.Port.Cells lo, emon.Port.Cells pr, emon.Port.Cells ix, int off) {
         // Phase one: every page's column fragments (`emon.columns`), and the page `layout` (D111) from them.
         int p = 1;
         int i = 0;
@@ -1965,7 +1985,9 @@ public final class Para {
         emon.Port.cellsDrop(cf, 0);
         emon.Port.cellsDrop(lo, 0);
         while (p <= npages) {
-            paCollect(ord, lt, p);
+            emon.Port.cellsSet(ix, off + (p * 2), Evidence.lnCount(lt));
+            emon.Port.cellsSet(ix, off + ((p * 2) + 1), Evidence.lnCount(lt));
+            paCollect(ord, lt, p, ix, off);
             nu = paUprightCount(lt, ord);
             emon.Port.cellsDrop(ls, 0);
             i = 0;
@@ -1976,6 +1998,7 @@ public final class Para {
             int r0 = emon.Port.cellsLen(cf) / CF_STRIDE;
             Columns.lcPage(wd, et, lt, p, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr);
             paLayout(cf, r0, emon.Port.cellsLen(cf) / CF_STRIDE, p, pages, layout);
+            emon.Port.cellsSet(ix, off + ((p * 2) + 1), Evidence.lnCount(lt));
             p += 1;
         }
         return 0;
@@ -1992,7 +2015,7 @@ public final class Para {
         emon.Port.cellsDrop(raw, 0);
         return k;
     }
-    public static int paBuild(emon.Port.Cells wd, emon.Port.Cells et, int npages, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells sd, emon.Port.Cells it, emon.Port.Cells io, emon.Port.Cells rw, emon.Port.Cells gu, emon.Port.Cells ac, emon.Port.Cells tm, emon.Port.Cells cf, emon.Port.Cells lo, emon.Port.Cells pr, emon.Port.Cells dbg, emon.Port.Cells hc, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells ledger, emon.Port.Cells ii, emon.Port.Cells al) {
+    public static int paBuild(emon.Port.Cells wd, emon.Port.Cells et, int npages, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells sd, emon.Port.Cells it, emon.Port.Cells io, emon.Port.Cells rw, emon.Port.Cells gu, emon.Port.Cells ac, emon.Port.Cells tm, emon.Port.Cells cf, emon.Port.Cells lo, emon.Port.Cells pr, emon.Port.Cells dbg, emon.Port.Cells hc, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells ledger, emon.Port.Cells ii, emon.Port.Cells al, emon.Port.Cells ix) {
         // Tables (`tb tc tw tq`, `emon.table`) are placed between the paragraphs by their tops; a line a table
         // holds is not in the reading order at all.
         // Append every page's lines to the Model as paragraphs under the document root (node 0, made by
@@ -2006,6 +2029,8 @@ public final class Para {
         // `lt` is PREPARED by the caller: the lines copied (`lc-copy`), the initials found in the copy (`in-detect`, P4.10:
         // before the style and heading analysis reads the lines, so a big first letter is never a heading), and `hc` made from
         // it; `ii` is the initials' table, `al` the open paragraph's alignment rows (P4.11). Answers 0.
+        int base = Evidence.lnCount(lt);
+        int off = (npages + 1) * 2;
         int med = 0;
         int indents = 0;
         int p = 1;
@@ -2032,7 +2057,8 @@ public final class Para {
         int beforePage = 0;
         int score = 0;
         Initial.inRetire(lt, ii);
-        paColumns(wd, et, npages, pages, layout, lt, ord, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr);
+        paIndex(lt, base, npages, ix);
+        paColumns(wd, et, npages, pages, layout, lt, ord, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, ix, off);
         nf = emon.Port.cellsLen(cf) / CF_STRIDE;
         med = paMedian(lt, cf, lo, gp);
         if (paIndents(wd, lt, cf, lo) >= PA_INDENT_USE) {
@@ -2044,7 +2070,7 @@ public final class Para {
         emon.Port.cellsDrop(al, 0);
         emon.Port.cellsDrop(dbg, 0);
         while (p <= npages) {
-            paCollect(ord, lt, p);
+            paCollect(ord, lt, p, ix, off);
             n = emon.Port.cellsLen(ord);
             nu = paUprightCount(lt, ord);
             i = nu;

@@ -359,4 +359,182 @@ public final class Pdfvistest {
         // over, optional content, alpha, hidden OCR layers and a page as a crawler is fed it, and the colour spaces.
         emon.Testport.assertThat(vtRows(0, emon.Testport.testFile("vis/rows.txt")) > 150, "the rows were read");
     }
+    public static int vtOldBackdrop(emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells mk, int x0, int y0, int x1, int y1, int gz, int jp, int ji, int p0, int i0, int me, int lim) {
+        // The colour behind a glyph cell with this box and paint number: 0xRRGGBB, or -2 when it cannot be told. Paths
+        // are searched backwards from row jp (the first with a later z), images from row ji. `me` is the path row being
+        // classified (-1 for a glyph): an earlier rectangle that this path, itself an exactly known opaque rectangle,
+        // covers completely is not what it is painted on, it is painted OVER (a rule drawn twice is one rule: of two paints
+        // of the same colour on the same box the later is the ink and the earlier the one it hides, never both hidden).
+        int r = jp - 1;
+        int steps = 0;
+        int zp = -1;
+        int res = 16777215;
+        int fl = 0;
+        int rx0 = 0;
+        int ry0 = 0;
+        int rx1 = 0;
+        int ry1 = 0;
+        int zi = -1;
+        int found = 0;
+        while ((r >= p0) && ((steps < lim) && (found == 0))) {
+            fl = Evidence.paGet(pa, r, Evidence.pfFlags());
+            if (((fl & Evidence.pgClip()) == 0) && ((fl & Evidence.pgFilled()) != 0)) {
+                rx0 = Pdfvis.pvPathK(pa, r, 0);
+                ry0 = Pdfvis.pvPathK(pa, r, 1);
+                rx1 = Pdfvis.pvPathK(pa, r, 2);
+                ry1 = Pdfvis.pvPathK(pa, r, 3);
+                if ((me >= 0) && (Pdfvis.pvOpaqueRect(pa, mk, me) == 1)) {
+                    if (Pdfvis.pvCovers(Pdfvis.pvPathK(pa, me, 0), Pdfvis.pvPathK(pa, me, 1), Pdfvis.pvPathK(pa, me, 2), Pdfvis.pvPathK(pa, me, 3), Pdfvis.pvFullK(pa, r, 0), Pdfvis.pvFullK(pa, r, 1), Pdfvis.pvFullK(pa, r, 2), Pdfvis.pvFullK(pa, r, 3)) == 1) {
+                        rx1 = rx0 - 1;
+                    }
+                }
+                if (Pdfvis.pvHit(x0, y0, x1, y1, rx0, ry0, rx1, ry1) == 1) {
+                    found = 1;
+                    zp = Evidence.paGet(pa, r, Evidence.pfZ());
+                    if ((Pdfvis.pvOpaqueRect(pa, mk, r) == 1) && (Pdfvis.pvCovers(rx0, ry0, rx1, ry1, x0, y0, x1, y1) == 1)) {
+                        res = Evidence.paGet(pa, r, Evidence.pfFill());
+                    } else {
+                        res = -2;
+                    }
+                }
+            }
+            r -= 1;
+            steps += 1;
+        }
+        // The nearest earlier image that touches the cell.
+        r = ji - 1;
+        steps = 0;
+        found = 0;
+        while ((r >= i0) && ((steps < lim) && (found == 0))) {
+            rx0 = Pdfvis.pvImgK(im, pa, r, 0);
+            ry0 = Pdfvis.pvImgK(im, pa, r, 1);
+            rx1 = Pdfvis.pvImgK(im, pa, r, 2);
+            ry1 = Pdfvis.pvImgK(im, pa, r, 3);
+            if (Pdfvis.pvHit(x0, y0, x1, y1, rx0, ry0, rx1, ry1) == 1) {
+                found = 1;
+                zi = Evidence.imGet(im, r, Evidence.mfZ());
+            }
+            r -= 1;
+            steps += 1;
+        }
+        if (zi > zp) {
+            return -2;
+        }
+        return res;
+    }
+    public static int vtOldOccluder(emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells mk, int x0, int y0, int x1, int y1, int jp, int ji, int p1, int i1, int lim) {
+        // The `z` of the first later paint that is opaque, exactly known and covers the whole box, else -1. Paths
+        // are searched forwards from row jp to p1, images from ji to i1.
+        int r = jp;
+        int steps = 0;
+        int zp = -1;
+        int zi = -1;
+        while ((r < p1) && ((steps < lim) && (zp < 0))) {
+            if (Pdfvis.pvOpaqueRect(pa, mk, r) == 1) {
+                if (Pdfvis.pvCovers(Pdfvis.pvPathK(pa, r, 0), Pdfvis.pvPathK(pa, r, 1), Pdfvis.pvPathK(pa, r, 2), Pdfvis.pvPathK(pa, r, 3), x0, y0, x1, y1) == 1) {
+                    zp = Evidence.paGet(pa, r, Evidence.pfZ());
+                }
+            }
+            r += 1;
+            steps += 1;
+        }
+        r = ji;
+        steps = 0;
+        while ((r < i1) && ((steps < lim) && (zi < 0))) {
+            if (Pdfvis.pvOpaqueImg(im, mk, r) == 1) {
+                if (Pdfvis.pvCovers(Pdfvis.pvImgK(im, pa, r, 0), Pdfvis.pvImgK(im, pa, r, 1), Pdfvis.pvImgK(im, pa, r, 2), Pdfvis.pvImgK(im, pa, r, 3), x0, y0, x1, y1) == 1) {
+                    zi = Evidence.imGet(im, r, Evidence.mfZ());
+                }
+            }
+            r += 1;
+            steps += 1;
+        }
+        if ((zp >= 0) && (zi >= 0)) {
+            if (zp < zi) {
+                return zp;
+            }
+            return zi;
+        }
+        if (zp >= 0) {
+            return zp;
+        }
+        return zi;
+    }
+    public static void testIndexPreservesRowBoundsAndUncertainBackdrops() {
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells im = emon.Port.newCells();
+        emon.Port.Cells mk = emon.Port.newCells();
+        emon.Port.Cells ix = emon.Port.newCells();
+        int r = 0;
+        int m = 0;
+        int j = 0;
+        int lim = 0;
+        int me = -1;
+        m = Evidence.mkNew(mk, 1, Evidence.mkOptionalContent(), 0, 0, -1, 0);
+        Evidence.mkSet(mk, m, Evidence.mkfOcgdef(), 0);
+        while (j < 4200) {
+            r = Evidence.paNew(pa, 1, Evidence.paRect(), 0, 0, 1000, 1000);
+            Evidence.paSet(pa, r, Evidence.pfZ(), j);
+            Evidence.paSet(pa, r, Evidence.pfFlags(), Evidence.pgStroked());
+            Evidence.paSet(pa, r, Evidence.pfWidth(), 3);
+            if ((j % 7) == 0) {
+                Evidence.paSet(pa, r, Evidence.pfFlags(), Evidence.pgFilled());
+                Evidence.paSet(pa, r, Evidence.pfFill(), 123);
+            }
+            if ((j % 11) == 0) {
+                Evidence.paSet(pa, r, Evidence.pfMark(), m);
+            }
+            if ((j % 13) == 0) {
+                Evidence.paSet(pa, r, Evidence.pfFalpha(), 500);
+            }
+            if ((j % 17) == 0) {
+                Evidence.paSet(pa, r, Evidence.pfFlags(), Evidence.pgFilled() + Evidence.pgBlend());
+            }
+            if ((j % 19) == 0) {
+                Evidence.paSet(pa, r, Evidence.pfFlags(), Evidence.pgClip());
+                Evidence.paSet(pa, r, Evidence.pfX1(), 100);
+                Evidence.paSet(pa, r, Evidence.pfY1(), 100);
+            }
+            if (j > 0) {
+                Evidence.paSet(pa, r, Evidence.pfClip(), j - 1);
+            }
+            j += 1;
+        }
+        Pdfvis.pvIndex(pa, mk, ix, 0, 4200);
+        j = 0;
+        while (j < 4200) {
+            lim = 1;
+            while (lim <= 4096) {
+                emon.Testport.assertEq(Pdfvis.pvOccluder(pa, im, mk, ix, 200, 200, 800, 800, j, 0, 4200, 0, lim), vtOldOccluder(pa, im, mk, 200, 200, 800, 800, j, 0, 4200, 0, lim), "first occluder at the same row bound");
+                me = -1;
+                while (me < 2) {
+                    emon.Testport.assertEq(Pdfvis.pvBackdrop(pa, im, mk, ix, 200, 200, 800, 800, j, j, 0, 0, 0, me, lim), vtOldBackdrop(pa, im, mk, 200, 200, 800, 800, j, j, 0, 0, 0, me, lim), "backdrop includes uncertain paint and self-cover");
+                    me += 1;
+                }
+                lim *= 8;
+            }
+            j += 61;
+        }
+    }
+    public static void testIndexKeepsExclusiveForwardAndInclusiveBackwardBound() {
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells im = emon.Port.newCells();
+        emon.Port.Cells mk = emon.Port.newCells();
+        emon.Port.Cells ix = emon.Port.newCells();
+        int r = 0;
+        int j = 0;
+        while (j < 4100) {
+            r = Evidence.paNew(pa, 1, Evidence.paRect(), 0, 0, 1000, 1000);
+            Evidence.paSet(pa, r, Evidence.pfZ(), j);
+            Evidence.paSet(pa, r, Evidence.pfFill(), 123);
+            Evidence.paSet(pa, r, Evidence.pfFlags(), Evidence.pgStroked());
+            j += 1;
+        }
+        Evidence.paSet(pa, 4097, Evidence.pfFlags(), Evidence.pgFilled());
+        Pdfvis.pvIndex(pa, mk, ix, 1, 4100);
+        emon.Testport.assertEq(Pdfvis.pvOccluder(pa, im, mk, ix, 200, 200, 800, 800, 1, 0, 4100, 0, 4096), -1, "row jp+lim is excluded");
+        emon.Testport.assertEq(Pdfvis.pvOccluder(pa, im, mk, ix, 200, 200, 800, 800, 2, 0, 4100, 0, 4096), 4097, "row jp+lim-1 is included");
+        emon.Testport.assertEq(Pdfvis.pvBackdrop(pa, im, mk, ix, 200, 200, 800, 800, 4098, 4098, 0, 1, 0, -1, 1), 123, "row jp-lim is included");
+        emon.Testport.assertEq(Pdfvis.pvBackdrop(pa, im, mk, ix, 200, 200, 800, 800, 4099, 4099, 0, 1, 0, -1, 1), 16777215, "earlier than jp-lim is excluded");
+    }
 }

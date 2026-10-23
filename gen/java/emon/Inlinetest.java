@@ -196,7 +196,7 @@ public final class Inlinetest {
         Heading.hdAnalyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt);
         Lists.lsAnalyze(wd, ln, et, sf, pa, hc, cd, pi, lws, tw);
         Inline.ilAnalyze(wd, ln, et, gl, ift, sf, an, txt, pg, pages, 1, text, hc, sw);
-        Para.paBuild(wd, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp2, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr2, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
+        Para.paBuild(wd, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp2, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr2, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.newCells());
         return Inline.ilLinks(hc);
     }
     public static int itFind(emon.Port.Cells nodes, int kind, int nth) {

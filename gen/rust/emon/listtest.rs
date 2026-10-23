@@ -338,7 +338,8 @@ pub(crate) fn lt_notes(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells,
     let mk: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
     hd_analyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt);
-    return nt_analyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw);
+    let nix: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    return nt_analyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw, nix);
 }
 #[test]
 fn test_a_line_of_running_text_that_begins_fig_4_is_no_caption() {
@@ -397,7 +398,8 @@ pub(crate) fn lt_notes_pages(wd: &mut crate::port::Cells, ln: &mut crate::port::
     let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
     page_new(pages, 1, 61200, 79200, 0, pk_vector());
     hd_analyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt);
-    return nt_analyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw);
+    let nix: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    return nt_analyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw, nix);
 }
 pub(crate) fn lt_notes_glyphs(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, gl: &mut crate::port::Cells, mut sf: &mut crate::port::Cells, mut sc: &mut crate::port::Cells, mut hc: &mut crate::port::Cells) -> i32 {
     // `lt-notes-pages` over the glyphs `gl`.
@@ -412,7 +414,8 @@ pub(crate) fn lt_notes_glyphs(wd: &mut crate::port::Cells, ln: &mut crate::port:
     let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
     page_new(pages, 1, 61200, 79200, 0, pk_vector());
     hd_analyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt);
-    return nt_analyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw);
+    let nix: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    return nt_analyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw, nix);
 }
 #[test]
 fn test_a_footnotes_raised_marker_glued_to_its_word_is_a_marker() {

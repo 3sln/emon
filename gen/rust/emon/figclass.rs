@@ -5,6 +5,7 @@ use crate::emon::asset::*;
 use crate::emon::evidence::*;
 use crate::emon::glayer::*;
 use crate::emon::model::*;
+use crate::emon::pagebounds::*;
 use crate::emon::pdfdoc::*;
 use crate::emon::pdfimage::*;
 use crate::emon::pdfsrc::*;
@@ -968,6 +969,7 @@ pub fn fc_measure(pa: &mut crate::port::Cells, grl: &mut crate::port::Cells, fw:
     // budget of rows (`FC_WORK`) is spent and the region was left unmeasured.
     let work: i32 = crate::port::cells_at(ws, FT_WORK);
     let n: i32 = crate::port::cells_len(pa) / 24;
+    let pend: i32 = pb_after(pa, 24, page);
     let ng: i32 = grl_count(grl);
     let rw: i32 = rx1 - rx0;
     let rh: i32 = ry1 - ry0;
@@ -984,8 +986,8 @@ pub fn fc_measure(pa: &mut crate::port::Cells, grl: &mut crate::port::Cells, fw:
         return 1;
     }
     crate::port::cells_set(ws, FT_WORK, work + (n + (ng + (wd_count(fw) + ln_count(fl)))));
-    i = 0;
-    while i < n {
+    i = pb_first(pa, 24, page);
+    while i < pend {
         if (pa_get(pa, i, pf_page()) == page) && ((pa_get(pa, i, pf_vis()) == 0) && ((pa_get(pa, i, pf_flags()) & pg_clip()) == 0)) {
             cx = (pa_get(pa, i, pf_x0()) + pa_get(pa, i, pf_x1())) / 2;
             cy = (pa_get(pa, i, pf_y0()) + pa_get(pa, i, pf_y1())) / 2;
@@ -1075,7 +1077,8 @@ pub(crate) fn fc_sign_vector(pa: &mut crate::port::Cells, mut fcand: &mut crate:
     let w: i32 = crate::port::cells_at(fcand, b + (CR_VX + 2)) - x0;
     let h: i32 = crate::port::cells_at(fcand, b + (CR_VX + 3)) - y0;
     let n: i32 = crate::port::cells_len(pa) / 24;
-    let mut i: i32 = 0;
+    let pend: i32 = pb_after(pa, 24, page);
+    let mut i: i32 = pb_first(pa, 24, page);
     let mut np: i32 = 0;
     let mut mask: i32 = 0;
     let mut cx: i32 = 0;
@@ -1086,7 +1089,7 @@ pub(crate) fn fc_sign_vector(pa: &mut crate::port::Cells, mut fcand: &mut crate:
     if (w <= 0) || (h <= 0) {
         return 0;
     }
-    while i < n {
+    while i < pend {
         if (pa_get(pa, i, pf_page()) == page) && ((pa_get(pa, i, pf_vis()) == 0) && ((pa_get(pa, i, pf_flags()) & pg_clip()) == 0)) {
             cx = (pa_get(pa, i, pf_x0()) + pa_get(pa, i, pf_x1())) / 2;
             cy = (pa_get(pa, i, pf_y0()) + pa_get(pa, i, pf_y1())) / 2;
@@ -1461,8 +1464,8 @@ pub fn fc_claimed(fl: &mut crate::port::Cells, page: i32, x0: i32, y0: i32, x1: 
     // 1 when a table has claimed the text of the region (D557): of the lines on the page whose centre is in it, at least one and at least
     // half are a table's (cell 15 of a line a table holds is `FC_HELD` and up, `emon.table`'s TB_HELD). A shaded header cell with its words and
     // a rule under it, or a table's fills and rules, look like a diagram's boxes and a connector; the words are the table's, and so is the drawing.
-    let n: i32 = ln_count(fl);
-    let mut l: i32 = 0;
+    let n: i32 = pb_after(fl, 16, page);
+    let mut l: i32 = pb_first(fl, 16, page);
     let mut total: i32 = 0;
     let mut held: i32 = 0;
     let mut cx: i32 = 0;

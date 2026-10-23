@@ -1014,4 +1014,56 @@ public static class Pdffonttest {
     public static void TestEveryProgramFontIsTheSameThroughAnAsyncSourceOf512ByteChunks() {
         emon.Testport.AssertEq(FtAsyncFonts(512), 0, "every font of progs.pdf through 512-byte chunks");
     }
+    [Xunit.Fact]
+    public static void TestDocumentCacheRestoresExactFontCellsAfterEviction() {
+        emon.Port.Src src = emon.Port.SrcOfBlob(emon.Testport.TestFile("fonts/fonts.pdf"));
+        emon.Port.Cells ar = emon.Port.NewCells();
+        emon.Port.Cells dc = emon.Port.NewCells();
+        emon.Port.Cells a = emon.Port.NewCells();
+        emon.Port.Cells b = emon.Port.NewCells();
+        emon.Port.Cells st = emon.Port.NewCells();
+        emon.Port.Cells cx = emon.Port.NewCells();
+        emon.Port.Cells ox = emon.Port.NewCells();
+        emon.Port.Cells @out = emon.Port.NewCells();
+        emon.Port.Cells loaded = emon.Port.NewCells();
+        emon.Port.Cells cached = emon.Port.NewCells();
+        int @object = 1;
+        int fh = 0;
+        int j = 0;
+        int before = 0;
+        int charge = 0;
+        emon.Testport.AssertEq(Pdfdoc.PdOpen(src, ar, dc, a, b, st), 0, "font fixture opens");
+        Pdfcontent.PcInit(cx, ox);
+        while (@object <= 8) {
+            fh = Pdfdoc.PdGet(src, ar, dc, a, b, st, @object);
+            emon.Testport.AssertEq(Pdfcontent.PcFCached(src, ar, dc, a, b, st, cx, cached, @out, @object, fh), 0, "fill more than four slots");
+            @object += 1;
+            if ((@object == 3) || (@object == 5)) {
+                @object += 1;
+            }
+        }
+        @object = 1;
+        while (@object <= 8) {
+            fh = Pdfdoc.PdGet(src, ar, dc, a, b, st, @object);
+            before = Pdfdoc.PdTotalUsed(dc);
+            emon.Testport.AssertEq(Pdffont.PfnLoad(src, ar, dc, a, b, st, loaded, @out, fh), 0, "fresh reference load");
+            charge = Pdfdoc.PdTotalUsed(dc) - before;
+            emon.Port.CellsDrop(cached, 0);
+            before = Pdfdoc.PdTotalUsed(dc);
+            emon.Testport.AssertEq(Pdfcontent.PcFCached(src, ar, dc, a, b, st, cx, cached, @out, @object, fh), 0, "reload after slot eviction");
+            emon.Testport.AssertEq(Pdfdoc.PdTotalUsed(dc) - before, charge, "cached loads charge the same decoded-byte budget");
+            emon.Testport.AssertEq(emon.Port.CellsLen(cached), emon.Port.CellsLen(loaded), "same parsed size");
+            j = 0;
+            while (j < emon.Port.CellsLen(loaded)) {
+                emon.Testport.AssertEq(emon.Port.CellsAt(cached, j), emon.Port.CellsAt(loaded, j), "every parsed cell is identical");
+                j += 1;
+            }
+            emon.Testport.AssertEq(Pdffont.PfnMap(cached, 65), Pdffont.PfnMap(loaded, 65), "same mapping after restoration");
+            emon.Testport.AssertEq(Pdffont.PfnWidth(cached, 65), Pdffont.PfnWidth(loaded, 65), "same width after restoration");
+            @object += 1;
+            if ((@object == 3) || (@object == 5)) {
+                @object += 1;
+            }
+        }
+    }
 }

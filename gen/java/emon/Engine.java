@@ -323,12 +323,12 @@ public final class Engine {
         Initial.inDetect(d.fw, d.gl, d.fnt, d.et, np, s.iloc, s.lt, s.ls, s.lo, s.tm, s.ii);
         Heading.hdPriorOutline(d.ol, d.txt, s.hpr, s.hptxt);
         Heading.hdAnalyze(d.fw, s.lt, d.et, d.gl, s.sf, s.hsc, s.hc, s.ws, s.htmp, s.hpr, s.hptxt);
-        Notes.ntAnalyze(d.fw, s.lt, d.et, d.gl, s.sf, s.hsc, m.pages, s.hc, s.nrf, s.nnb, s.nmk, s.tw);
+        Notes.ntAnalyze(d.fw, s.lt, d.et, d.gl, s.sf, s.hsc, m.pages, s.hc, s.nrf, s.nnb, s.nmk, s.tw, s.nix);
         Lists.lsAnalyze(d.fw, s.lt, d.et, s.sf, d.pa, s.hc, s.lcd, s.lpi, s.lws, s.tw);
         if (kind == 0) {
             Inline.ilAnalyze(d.fw, s.lt, d.et, d.gl, d.ift, s.sf, d.an, d.txt, d.pg, m.pages, np, m.text, s.hc, s.isw);
         }
-        Para.paBuild(d.fw, d.et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, s.ord, s.raw, s.tmp, s.fr, s.gp, s.lt, s.ls, s.sd, s.it, s.io, s.rw, s.gu, s.ac, s.tm, s.cf, s.lo, s.pr, s.dbg, s.hc, s.tb, s.tc, s.tw, s.tq, m.ledger, s.ii, s.al);
+        Para.paBuild(d.fw, d.et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, s.ord, s.raw, s.tmp, s.fr, s.gp, s.lt, s.ls, s.sd, s.it, s.io, s.rw, s.gu, s.ac, s.tm, s.cf, s.lo, s.pr, s.dbg, s.hc, s.tb, s.tc, s.tw, s.tq, m.ledger, s.ii, s.al, s.pix);
         if (kind == 0) {
             enFigures(m, s, d, c.level);
         }

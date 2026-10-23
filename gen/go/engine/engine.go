@@ -386,12 +386,12 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 	initial.InDetect(d.Fw, d.Gl, d.Fnt, d.Et, np, s.Iloc, s.Lt, s.Ls, s.Lo, s.Tm, s.Ii)
 	heading.HdPriorOutline(d.Ol, d.Txt, s.Hpr, s.Hptxt)
 	heading.HdAnalyze(d.Fw, s.Lt, d.Et, d.Gl, s.Sf, s.Hsc, s.Hc, s.Ws, s.Htmp, s.Hpr, s.Hptxt)
-	notes.NtAnalyze(d.Fw, s.Lt, d.Et, d.Gl, s.Sf, s.Hsc, m.Pages, s.Hc, s.Nrf, s.Nnb, s.Nmk, s.Tw)
+	notes.NtAnalyze(d.Fw, s.Lt, d.Et, d.Gl, s.Sf, s.Hsc, m.Pages, s.Hc, s.Nrf, s.Nnb, s.Nmk, s.Tw, s.Nix)
 	lists.LsAnalyze(d.Fw, s.Lt, d.Et, s.Sf, d.Pa, s.Hc, s.Lcd, s.Lpi, s.Lws, s.Tw)
 	if kind == 0 {
 		inline.IlAnalyze(d.Fw, s.Lt, d.Et, d.Gl, d.Ift, s.Sf, d.An, d.Txt, d.Pg, m.Pages, np, m.Text, s.Hc, s.Isw)
 	}
-	para.PaBuild(d.Fw, d.Et, np, m.Pages, m.Layout, m.Nodes, m.Attrs, m.Regions, m.Text, s.Ord, s.Raw, s.Tmp, s.Fr, s.Gp, s.Lt, s.Ls, s.Sd, s.It, s.Io, s.Rw, s.Gu, s.Ac, s.Tm, s.Cf, s.Lo, s.Pr, s.Dbg, s.Hc, s.Tb, s.Tc, s.Tw, s.Tq, m.Ledger, s.Ii, s.Al)
+	para.PaBuild(d.Fw, d.Et, np, m.Pages, m.Layout, m.Nodes, m.Attrs, m.Regions, m.Text, s.Ord, s.Raw, s.Tmp, s.Fr, s.Gp, s.Lt, s.Ls, s.Sd, s.It, s.Io, s.Rw, s.Gu, s.Ac, s.Tm, s.Cf, s.Lo, s.Pr, s.Dbg, s.Hc, s.Tb, s.Tc, s.Tw, s.Tq, m.Ledger, s.Ii, s.Al, s.Pix)
 	if kind == 0 {
 		enFigures(m, s, d, c.Level)
 	}

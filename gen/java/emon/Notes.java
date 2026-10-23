@@ -328,13 +328,15 @@ public final class Notes {
         }
         return 0;
     }
-    public static int ntRunningLabel(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells hc, emon.Port.Cells pages, int l) {
+    public static int ntRunningLabel(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells hc, emon.Port.Cells pages, int l, emon.Port.Cells labels) {
         // P12.7 (smoke A N1): 1 when caption candidate l begins with the same four words as another candidate on another page: `Schedule 1 (Form 1040) 2025` at the foot of one page and at the head of the next is a running
         // header or footer and no caption (the caption of a figure or a table has its number, which is its own; a label that recurs is the document's). Candidates are the lines flagged 8, and 64 (let go as an entry of a list).
-        int n = Evidence.lnCount(ln);
+        int n = emon.Port.cellsLen(labels);
         int pg = Evidence.lnGet(ln, l, Evidence.lhPage());
+        int j = 0;
         int m = 0;
-        while (m < n) {
+        while (j < n) {
+            m = emon.Port.cellsAt(labels, j);
             if ((m != l) && (Evidence.lnGet(ln, m, Evidence.lhPage()) != pg) && ((ntMarginLine(ln, pages, m) == 1) || (ntMarginLine(ln, pages, l) == 1))) {
                 int fl = Lists.lsGet(hc, m, Lists.lsKFlags());
                 if ((fl == Lists.lsFCap()) || (fl == 64)) {
@@ -343,7 +345,7 @@ public final class Notes {
                     }
                 }
             }
-            m += 1;
+            j += 1;
         }
         return 0;
     }
@@ -843,11 +845,11 @@ public final class Notes {
         // D583 (smoke review B issue 9): 1 when no line on line l's page, upright and at or below its top, is set in the body's size (over 96 per cent of `bsz`): everything from l to
         // the foot of the page is small type, the shape of a footnote block (the rule above it and the body above that are what the notes stage cannot see).
         // And there is body type ABOVE it on the page (a page of nothing but small type is a list of references, not a page with a footnote at its foot).
-        int n = Evidence.lnCount(ln);
         int p = Evidence.lnGet(ln, l, Evidence.lhPage());
+        int n = Pagebounds.pbAfter(ln, 16, p);
         int y = Evidence.lnGet(ln, l, Evidence.lhY0());
         int above = 0;
-        int q = 0;
+        int q = Pagebounds.pbFirst(ln, 16, p);
         if (bsz <= 0) {
             return 0;
         }
@@ -911,27 +913,114 @@ public final class Notes {
         }
         return 1;
     }
-    public static int ntRepeats(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l) {
+    public static int ntShapeKey(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l) {
+        int n = Evidence.lnGet(ln, l, Evidence.lhCount());
+        int first = Evidence.lnGet(ln, l, Evidence.lhFirst());
+        int h = n % 65521;
+        int i = 0;
+        int j = 0;
+        int c = 0;
+        while (i < n) {
+            h = ((h * 31) + Lists.lsWl(wd, first + i)) % 65521;
+            j = 0;
+            while (j < Lists.lsWl(wd, first + i)) {
+                c = Lists.lsWc(wd, et, first + i, j);
+                if (Lists.lsDigit(c) >= 0) {
+                    c = 48;
+                }
+                h = ((h * 31) + c) % 65521;
+                j += 1;
+            }
+            i += 1;
+        }
+        return h;
+    }
+    public static int ntRepeatIndex(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells ix) {
+        int l = 0;
+        int n = 0;
+        int h = 1;
+        int i = 0;
+        int j = 0;
+        int key = 0;
+        int row = 0;
+        int pk = 0;
+        int pr = 0;
+        int more = 0;
+        emon.Port.cellsDrop(ix, 0);
+        while (l < Evidence.lnCount(ln)) {
+            if (Evidence.lnGet(ln, l, Evidence.lhCount()) >= 2) {
+                emon.Port.cellsPush(ix, ntShapeKey(wd, ln, et, l));
+                emon.Port.cellsPush(ix, l);
+            }
+            l += 1;
+        }
+        n = emon.Port.cellsLen(ix) / 2;
+        while (h < (n / 3)) {
+            h = (h * 3) + 1;
+        }
+        while (h >= 1) {
+            i = h;
+            while (i < n) {
+                key = emon.Port.cellsAt(ix, i * 2);
+                row = emon.Port.cellsAt(ix, (i * 2) + 1);
+                j = i;
+                more = 1;
+                while ((j >= h) && (more == 1)) {
+                    pk = emon.Port.cellsAt(ix, (j - h) * 2);
+                    pr = emon.Port.cellsAt(ix, ((j - h) * 2) + 1);
+                    if ((key < pk) || ((key == pk) && (row < pr))) {
+                        emon.Port.cellsSet(ix, j * 2, pk);
+                        emon.Port.cellsSet(ix, (j * 2) + 1, pr);
+                        j -= h;
+                    } else {
+                        more = 0;
+                    }
+                }
+                emon.Port.cellsSet(ix, j * 2, key);
+                emon.Port.cellsSet(ix, (j * 2) + 1, row);
+                i += 1;
+            }
+            h = (h - 1) / 3;
+        }
+        return 0;
+    }
+    public static int ntRepeats(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l, emon.Port.Cells ix) {
         // P12.7 (smoke B N4): 1 when line l has a twin on another page: the same words (digits alike), the same type size and the same height within 15 pt. A line that recurs at the foot of every page is furniture
         // (an address, a motto), never a note: notes do not repeat.
-        int n = Evidence.lnCount(ln);
-        int pg = Evidence.lnGet(ln, l, Evidence.lhPage());
-        int y = Evidence.lnGet(ln, l, Evidence.lhY0());
-        int m = 0;
         if (Evidence.lnGet(ln, l, Evidence.lhCount()) < 2) {
             return 0;
         }
-        while (m < n) {
+        if (emon.Port.cellsLen(ix) == 0) {
+            ntRepeatIndex(wd, ln, et, ix);
+        }
+        int n = emon.Port.cellsLen(ix) / 2;
+        int key = ntShapeKey(wd, ln, et, l);
+        int pg = Evidence.lnGet(ln, l, Evidence.lhPage());
+        int y = Evidence.lnGet(ln, l, Evidence.lhY0());
+        int m = 0;
+        int lo = 0;
+        int hi = n;
+        int mid = 0;
+        while (lo < hi) {
+            mid = lo + ((hi - lo) / 2);
+            if (emon.Port.cellsAt(ix, mid * 2) < key) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+        while ((lo < n) && (emon.Port.cellsAt(ix, lo * 2) == key)) {
+            m = emon.Port.cellsAt(ix, (lo * 2) + 1);
             if ((Evidence.lnGet(ln, m, Evidence.lhPage()) != pg) && (Lists.lsAbs(Evidence.lnGet(ln, m, Evidence.lhY0()) - y) <= 1500)) {
                 if (ntSameShape(wd, ln, et, l, m) == 1) {
                     return 1;
                 }
             }
-            m += 1;
+            lo += 1;
         }
         return 0;
     }
-    public static int ntFoot(emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells ln, emon.Port.Cells sf, emon.Port.Cells rf, emon.Port.Cells nb, emon.Port.Cells mk, int i) {
+    public static int ntFoot(emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells ln, emon.Port.Cells sf, emon.Port.Cells rf, emon.Port.Cells nb, emon.Port.Cells mk, emon.Port.Cells ix, int i) {
         // Is note body candidate i a footnote? In the lower half of the page (the band) and small or marked in superscript,
         // with a reference on its page; or small, with a reference on the page before (a note a column or a page break pushed
         // on); or marked in superscript, small and in the band, with no reference at all. Marks the candidate (state 1) and the
@@ -966,7 +1055,7 @@ public final class Notes {
             int bsz = Style.stHget(sf, Style.sfhSize());
             int w = emon.Port.cellsAt(nb, b + 2);
             // P12.7 (smoke B N4): a note's number has at most two digits (302 is a street number), and a line that recurs on other pages is no note
-            if ((Lists.lsWc(wd, et, w, 0) != 91) && ((ntPlainPeers(nb, i) <= 5) && ((emon.Port.cellsAt(nb, b + 6) <= 2) && (ntRepeats(wd, ln, et, emon.Port.cellsAt(nb, b)) == 0)))) {
+            if ((Lists.lsWc(wd, et, w, 0) != 91) && ((ntPlainPeers(nb, i) <= 5) && ((emon.Port.cellsAt(nb, b + 6) <= 2) && (ntRepeats(wd, ln, et, emon.Port.cellsAt(nb, b), ix) == 0)))) {
                 if (ntSmallToEnd(ln, sf, emon.Port.cellsAt(nb, b), bsz) == 1) {
                     emon.Port.cellsSet(nb, b + 7, 1);
                     return 1;
@@ -975,7 +1064,7 @@ public final class Notes {
         }
         return 0;
     }
-    public static int ntMatch(emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells ln, emon.Port.Cells sf, emon.Port.Cells rf, emon.Port.Cells nb, emon.Port.Cells mk, int nhl) {
+    public static int ntMatch(emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells ln, emon.Port.Cells sf, emon.Port.Cells rf, emon.Port.Cells nb, emon.Port.Cells mk, emon.Port.Cells ix, int nhl) {
         // Decide which candidates are notes. State 1: a footnote (a body in the lower half of the page, set smaller than
         // the body text or marked in superscript, with a reference on its page; a superscript marker alone is enough when
         // the line is also smaller). State 2: an endnote (a reference earlier in the document: for a superscript marker
@@ -985,7 +1074,7 @@ public final class Notes {
         int r = 0;
         int tent = 0;
         while (i < nn) {
-            ntFoot(wd, et, ln, sf, rf, nb, mk, i);
+            ntFoot(wd, et, ln, sf, rf, nb, mk, ix, i);
             i += 1;
         }
         // endnotes: a superscript marker with an earlier reference at once, a plain number when there are two
@@ -1348,7 +1437,7 @@ public final class Notes {
         }
         return 0;
     }
-    public static int ntAnalyze(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells gl, emon.Port.Cells sf, emon.Port.Cells sc, emon.Port.Cells pages, emon.Port.Cells hc, emon.Port.Cells rf, emon.Port.Cells nb, emon.Port.Cells mk, emon.Port.Cells tw) {
+    public static int ntAnalyze(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells gl, emon.Port.Cells sf, emon.Port.Cells sc, emon.Port.Cells pages, emon.Port.Cells hc, emon.Port.Cells rf, emon.Port.Cells nb, emon.Port.Cells mk, emon.Port.Cells tw, emon.Port.Cells ix) {
         // Find the captions, the note bodies and the references that point at them, and mark them (see the module's head).
         // `rf`, `nb`, `mk` are scratch. Answers the number of captions plus note bodies.
         if (Lists.lsOpen(hc) == 0) {
@@ -1367,10 +1456,18 @@ public final class Notes {
             }
             l += 1;
         }
+        emon.Port.cellsDrop(rf, 0);
+        l = 0;
+        while (l < n) {
+            if ((Lists.lsGet(hc, l, Lists.lsKFlags()) == Lists.lsFCap()) || (Lists.lsGet(hc, l, Lists.lsKFlags()) == 64)) {
+                emon.Port.cellsPush(rf, l);
+            }
+            l += 1;
+        }
         l = 0;
         while (l < n) {
             if (Lists.lsGet(hc, l, Lists.lsKFlags()) == Lists.lsFCap()) {
-                if ((ntInRun(sf, ln, hc, l) == 1) || ((ntTocLike(wd, ln, et, sf, l) == 1) || ((ntInProse(ln, sf, sc, l) == 1) || (ntRunningLabel(wd, ln, et, hc, pages, l) == 1)))) {
+                if ((ntInRun(sf, ln, hc, l) == 1) || ((ntTocLike(wd, ln, et, sf, l) == 1) || ((ntInProse(ln, sf, sc, l) == 1) || (ntRunningLabel(wd, ln, et, hc, pages, l, rf) == 1)))) {
                     Lists.lsPut(hc, l, Lists.lsKFlags(), 64);
                 }
             }
@@ -1389,7 +1486,8 @@ public final class Notes {
         }
         ntScan(wd, ln, et, gl, sf, pages, hc, rf, nb, mk);
         nhl = ntFirstNotesHeading(wd, ln, et, hc, rf);
-        ntMatch(wd, et, ln, sf, rf, nb, mk, nhl);
+        emon.Port.cellsDrop(ix, 0);
+        ntMatch(wd, et, ln, sf, rf, nb, mk, ix, nhl);
         ntMarkerless(wd, et, ln, sf, hc, rf, mk);
         l = 0;
         while (l < (emon.Port.cellsLen(nb) / NT_NB)) {

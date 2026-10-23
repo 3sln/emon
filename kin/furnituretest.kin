@@ -204,7 +204,7 @@
         ^Cells ii (new-cells) ^Cells al (new-cells)]
     (lc-copy ln lt)
     (return (pa-build wd et npages pages layout nodes attrs regions text ord raw tmp fr gp
-                      lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al))))
+                      lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al (new-cells)))))
 
 (defn ^I32 fl-run-size [^Cells wd ^Cells ln0 ^Cells et ^I32 npages ^I32 pw ^I32 ph ^:mut ^Text t]
   (comment "`fl-run` (no tree, the policy setting) over pages `pw` x `ph` centipoints: a small page for the margin zones' floor (D583).")

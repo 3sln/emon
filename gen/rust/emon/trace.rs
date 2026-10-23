@@ -2,6 +2,7 @@
 // source: emon.trace
 
 use crate::emon::evidence::*;
+use crate::emon::pagebounds::*;
 
 pub fn tr_max_runs() -> i32 {
     // Row runs a traced bitmap may hold; the rest of the page is not traced (`ri`'s truncated flag).
@@ -3919,10 +3920,10 @@ pub fn tr_tlines(views: &mut crate::port::Cells, page: i32, view: i32, dpi100: i
     }
     return rows;
 }
-pub(crate) fn tr_text_centred(comps: &mut crate::port::Cells, page: i32, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
+pub(crate) fn tr_text_centred(comps: &mut crate::port::Cells, page: i32, x0: i32, y0: i32, x1: i32, y1: i32, c0: i32, c1: i32) -> i32 {
     // How many text-like components of `page` have their centre in the box (centipoints).
-    let n: i32 = co_count(comps);
-    let mut r: i32 = 0;
+    let n: i32 = c1;
+    let mut r: i32 = c0;
     let mut cnt: i32 = 0;
     let mut cx: i32 = 0;
     let mut cy: i32 = 0;
@@ -3938,17 +3939,17 @@ pub(crate) fn tr_text_centred(comps: &mut crate::port::Cells, page: i32, x0: i32
     }
     return cnt;
 }
-pub fn tr_feat_ocr(mut feats: &mut crate::port::Cells, frow: i32, comps: &mut crate::port::Cells, page: i32, x0: i32, y0: i32, x1: i32, y1: i32, sb: &mut crate::port::Cells, nsym: i32) -> i32 {
+pub fn tr_feat_ocr_range(mut feats: &mut crate::port::Cells, frow: i32, comps: &mut crate::port::Cells, page: i32, x0: i32, y0: i32, x1: i32, y1: i32, sb: &mut crate::port::Cells, nsym: i32, c0: i32, c1: i32) -> i32 {
     // `xo` columns 14 (text-like components centred in the word's box) and 15 (per mille of its `nsym` symbols, whose boxes are the
     // centipoint quadruples of `sb`, that have a text-like component centred in them; -1 with no symbols).
     let mut s: i32 = 0;
     let mut hit: i32 = 0;
-    fe_set(feats, frow, xo_components(), tr_text_centred(comps, page, x0, y0, x1, y1));
+    fe_set(feats, frow, xo_components(), tr_text_centred(comps, page, x0, y0, x1, y1, c0, c1));
     if nsym <= 0 {
         fe_set(feats, frow, xo_comp_ratio(), -1);
     } else {
         while s < nsym {
-            if tr_text_centred(comps, page, crate::port::cells_at(sb, s * 4), crate::port::cells_at(sb, (s * 4) + 1), crate::port::cells_at(sb, (s * 4) + 2), crate::port::cells_at(sb, (s * 4) + 3)) > 0 {
+            if tr_text_centred(comps, page, crate::port::cells_at(sb, s * 4), crate::port::cells_at(sb, (s * 4) + 1), crate::port::cells_at(sb, (s * 4) + 2), crate::port::cells_at(sb, (s * 4) + 3), c0, c1) > 0 {
                 hit += 1;
             }
             s += 1;
@@ -3957,11 +3958,16 @@ pub fn tr_feat_ocr(mut feats: &mut crate::port::Cells, frow: i32, comps: &mut cr
     }
     return 0;
 }
+pub fn tr_feat_ocr(mut feats: &mut crate::port::Cells, frow: i32, comps: &mut crate::port::Cells, page: i32, x0: i32, y0: i32, x1: i32, y1: i32, sb: &mut crate::port::Cells, nsym: i32) -> i32 {
+    let c0: i32 = pb_first(comps, 24, page);
+    let c1: i32 = pb_after(comps, 24, page);
+    return tr_feat_ocr_range(feats, frow, comps, page, x0, y0, x1, y1, sb, nsym, c0, c1);
+}
 pub fn tr_feat_text(mut feats: &mut crate::port::Cells, frow: i32, comps: &mut crate::port::Cells, tlines: &mut crate::port::Cells, page: i32, x0: i32, y0: i32, x1: i32, y1: i32, rot: i32, sb: &mut crate::port::Cells, nsym: i32) -> i32 {
     // `xt` columns 14 and 15 (as `tr-feat-ocr`, over the glyph boxes) and 23: the largest overlap (`ev-overlap-small`, per mille) of the
     // word's box with a `tlines` row of the page whose angle differs from the word's `rot` by more than 3 degrees (mod 180).
-    let n: i32 = tl_count(tlines);
-    let mut r: i32 = 0;
+    let n: i32 = pb_after(tlines, 20, page);
+    let mut r: i32 = pb_first(tlines, 20, page);
     let mut d: i32 = 0;
     let mut best: i32 = 0;
     let mut o: i32 = 0;

@@ -31,7 +31,8 @@
 ;; A TABLE'S LINES ARE CLAIMED: the spare cell of a claimed line holds its table's index + 1 (`tb-claimed`), and
 ;; `emon.para` leaves such lines out of its paragraphs and calls `tb-emit` where the table belongs.
 (ns emon.table
-  (:require [emon.lang :refer [I32 I64 Bool Cells i64 i32 add64 mul64]]
+  (:require [emon.pagebounds :refer [pb-first pb-after]]
+            [emon.lang :refer [I32 I64 Bool Cells i64 i32 add64 mul64]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
             [emon.evidence :refer [wd-get wd-count ln-get ln-set ln-count wf-gfirst
                                    hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-bx0 hd-bx1 hd-by0 hd-by1 hd-rot hd-tstart hd-tlen hd-line
@@ -4440,10 +4441,10 @@
 (defn ^Bool tb-line-repeated [^Cells ln ^Cells wd ^Cells et ^I32 l ^I32 other]
   (comment "P12.2: is line l on page `other` too: a line there with the same words (the first and the last, and as many) at the same place, within 3 pt:")
   (comment "a running header (a bank's name and address over every page) that the furniture stage will take out, and no body of the page.")
-  (let [^I32 n (ln-count ln)
+  (let [^I32 n (pb-after ln 16 other)
         ^I32 lc (ln-get ln l (lh-count))
         ^I32 lf (ln-get ln l (lh-first))
-        ^:mut ^I32 m 0]
+        ^:mut ^I32 m (pb-first ln 16 other)]
     (while (< m n)
       (do (if (and (== (ln-get ln m (lh-page)) other) (== (ln-get ln m (lh-count)) lc))
             (if (and (<= (tb-abs (- (ln-get ln m (lh-y0)) (ln-get ln l (lh-y0)))) 300) (<= (tb-abs (- (ln-get ln m (lh-x0)) (ln-get ln l (lh-x0)))) 300))
@@ -4456,8 +4457,8 @@
 (defn ^Bool tb-body-line-outside [^Cells ln ^Cells wd ^Cells et ^I32 page ^I32 y0 ^I32 y1 ^I32 zlo ^I32 zhi ^I32 other]
   (comment "Is there a line, not claimed by a table, on `page` whose centre is in y0..y1 and outside the furniture")
   (comment "zones (above zlo, below zhi), and is not one that page `other` has too (`tb-line-repeated`; 0 for none)?")
-  (let [^I32 n (ln-count ln)
-        ^:mut ^I32 l 0]
+  (let [^I32 n (pb-after ln 16 page)
+        ^:mut ^I32 l (pb-first ln 16 page)]
     (while (< l n)
       (do (if (and (== (ln-get ln l (lh-page)) page) (== (ln-get ln l 15) 0))
             (do (let [^I32 cy (quot (+ (ln-get ln l (lh-y0)) (ln-get ln l (lh-y1))) 2)]

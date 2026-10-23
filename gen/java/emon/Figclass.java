@@ -963,6 +963,7 @@ public final class Figclass {
         // budget of rows (`FC_WORK`) is spent and the region was left unmeasured.
         int work = emon.Port.cellsAt(ws, FT_WORK);
         int n = emon.Port.cellsLen(pa) / 24;
+        int pend = Pagebounds.pbAfter(pa, 24, page);
         int ng = Glayer.grlCount(grl);
         int rw = rx1 - rx0;
         int rh = ry1 - ry0;
@@ -979,8 +980,8 @@ public final class Figclass {
             return 1;
         }
         emon.Port.cellsSet(ws, FT_WORK, work + (n + (ng + (Evidence.wdCount(fw) + Evidence.lnCount(fl)))));
-        i = 0;
-        while (i < n) {
+        i = Pagebounds.pbFirst(pa, 24, page);
+        while (i < pend) {
             if ((Evidence.paGet(pa, i, Evidence.pfPage()) == page) && ((Evidence.paGet(pa, i, Evidence.pfVis()) == 0) && ((Evidence.paGet(pa, i, Evidence.pfFlags()) & Evidence.pgClip()) == 0))) {
                 cx = (Evidence.paGet(pa, i, Evidence.pfX0()) + Evidence.paGet(pa, i, Evidence.pfX1())) / 2;
                 cy = (Evidence.paGet(pa, i, Evidence.pfY0()) + Evidence.paGet(pa, i, Evidence.pfY1())) / 2;
@@ -1070,7 +1071,8 @@ public final class Figclass {
         int w = emon.Port.cellsAt(fcand, b + (CR_VX + 2)) - x0;
         int h = emon.Port.cellsAt(fcand, b + (CR_VX + 3)) - y0;
         int n = emon.Port.cellsLen(pa) / 24;
-        int i = 0;
+        int pend = Pagebounds.pbAfter(pa, 24, page);
+        int i = Pagebounds.pbFirst(pa, 24, page);
         int np = 0;
         int mask = 0;
         int cx = 0;
@@ -1081,7 +1083,7 @@ public final class Figclass {
         if ((w <= 0) || (h <= 0)) {
             return 0;
         }
-        while (i < n) {
+        while (i < pend) {
             if ((Evidence.paGet(pa, i, Evidence.pfPage()) == page) && ((Evidence.paGet(pa, i, Evidence.pfVis()) == 0) && ((Evidence.paGet(pa, i, Evidence.pfFlags()) & Evidence.pgClip()) == 0))) {
                 cx = (Evidence.paGet(pa, i, Evidence.pfX0()) + Evidence.paGet(pa, i, Evidence.pfX1())) / 2;
                 cy = (Evidence.paGet(pa, i, Evidence.pfY0()) + Evidence.paGet(pa, i, Evidence.pfY1())) / 2;
@@ -1456,8 +1458,8 @@ public final class Figclass {
         // 1 when a table has claimed the text of the region (D557): of the lines on the page whose centre is in it, at least one and at least
         // half are a table's (cell 15 of a line a table holds is `FC_HELD` and up, `emon.table`'s TB_HELD). A shaded header cell with its words and
         // a rule under it, or a table's fills and rules, look like a diagram's boxes and a connector; the words are the table's, and so is the drawing.
-        int n = Evidence.lnCount(fl);
-        int l = 0;
+        int n = Pagebounds.pbAfter(fl, 16, page);
+        int l = Pagebounds.pbFirst(fl, 16, page);
         int total = 0;
         int held = 0;
         int cx = 0;

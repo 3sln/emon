@@ -1104,17 +1104,67 @@ func pcResEntry(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b 
 	return pcDictLookup(ar, sub, ox, ns, nl)
 }
 
-func pcFLoad(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, slot int32, fh int32) int32 {
+const fcacheCells int32 = 1048576
+
+func PcFCached(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, f *port.Cells, out *port.Cells, object int32, fh int32) int32 {
+	// Parsed fonts after C_SIZE in cx: object number, resolved handle, length, decoded-byte charge, then loader cells.
+	// Only complete successful loads of indirect fonts are admitted. Direct fonts and a full cache use the normal loader.
+	var before int32 = pdfdoc.PdTotalUsed(dc)
+	var r int32 = cSize
+	var n int32 = 0
+	var j int32 = 0
+	var v int32 = 0
+	var status int32 = 0
+	var charge int32 = 0
+	if object > 0 {
+		for r < port.CellsLen(cx) {
+			n = port.CellsAt(cx, r+2)
+			if (port.CellsAt(cx, r) == object) && (port.CellsAt(cx, r+1) == fh) {
+				charge = port.CellsAt(cx, r+3)
+				// Near the limit, run the original loader so the first breaching stream and reported byte count stay exact.
+				if !pdfsrc.PsMissed(src) && (charge <= (port.LimitOf(2) - before)) {
+					pdfdoc.PdTotalAdd(dc, charge)
+					port.CellsDrop(f, 0)
+					for j < n {
+						port.CellsPush(f, port.CellsAt(cx, (r+4)+j))
+						j += 1
+					}
+					return 0
+				}
+			}
+			r += 4 + n
+		}
+	}
+	status = pdffont.PfnLoad(src, ar, dc, a, b, st, f, out, fh)
+	n = port.CellsLen(f)
+	if (object > 0) && ((status == 0) && (!pdfsrc.PsMissed(src) && ((port.CellsLen(cx) + (4 + n)) <= (cSize + fcacheCells)))) {
+		port.CellsPush(cx, object)
+		port.CellsPush(cx, fh)
+		port.CellsPush(cx, n)
+		charge = pdfdoc.PdTotalUsed(dc) - before
+		port.CellsPush(cx, charge)
+		j = 0
+		for j < n {
+			v = port.CellsAt(f, j)
+			port.CellsPush(cx, v)
+			j += 1
+		}
+	}
+	return status
+}
+
+func pcFLoad(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, slot int32, fh int32) int32 {
+	var object int32 = port.CellsAt(cx, cCur+gFobj)
 	if slot == 0 {
-		return pdffont.PfnLoad(src, ar, dc, a, b, st, f0, out, fh)
+		return PcFCached(src, ar, dc, a, b, st, cx, f0, out, object, fh)
 	}
 	if slot == 1 {
-		return pdffont.PfnLoad(src, ar, dc, a, b, st, f1, out, fh)
+		return PcFCached(src, ar, dc, a, b, st, cx, f1, out, object, fh)
 	}
 	if slot == 2 {
-		return pdffont.PfnLoad(src, ar, dc, a, b, st, f2, out, fh)
+		return PcFCached(src, ar, dc, a, b, st, cx, f2, out, object, fh)
 	}
-	return pdffont.PfnLoad(src, ar, dc, a, b, st, f3, out, fh)
+	return PcFCached(src, ar, dc, a, b, st, cx, f3, out, object, fh)
 }
 
 func pcFQ(f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, slot int32, which int32) int32 {
@@ -1458,7 +1508,7 @@ func pcEnsureFont(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, 
 		i += 1
 	}
 	at = cSlots + (pick * slotStride)
-	status = pcFLoad(src, ar, dc, a, b, st, out, f0, f1, f2, f3, pick, key)
+	status = pcFLoad(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3, pick, key)
 	if pdfsrc.PsMissed(src) {
 		port.CellsSet(cx, cAbort, 1)
 		port.CellsSet(cx, at+sKey, 0)
@@ -5206,7 +5256,7 @@ func PcPage(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *por
 	}
 	// The path in progress when the page ended never painted: its points are dropped.
 	port.CellsDrop(pts, port.CellsAt(cx, cPpts)*3)
-	pdfvis.PvPage(gl, mk, pa, im, port.CellsAt(cx, cPw), port.CellsAt(cx, cPh), g0, p0, i0)
+	pdfvis.PvPage(gl, mk, pa, im, out, port.CellsAt(cx, cPw), port.CellsAt(cx, cPh), g0, p0, i0)
 	PcGroup(gl, et, wd, ln, fnt, page, g0, w0)
 	return 0
 }

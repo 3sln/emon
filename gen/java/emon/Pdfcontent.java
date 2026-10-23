@@ -855,17 +855,65 @@ public final class Pdfcontent {
         }
         return pcDictLookup(ar, sub, ox, ns, nl);
     }
-    public static int pcFLoad(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, int slot, int fh) {
+    public static final int FCACHE_CELLS = 1048576;
+    public static int pcFCached(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells f, emon.Port.Cells out, int object, int fh) {
+        // Parsed fonts after C_SIZE in cx: object number, resolved handle, length, decoded-byte charge, then loader cells.
+        // Only complete successful loads of indirect fonts are admitted. Direct fonts and a full cache use the normal loader.
+        int before = Pdfdoc.pdTotalUsed(dc);
+        int r = C_SIZE;
+        int n = 0;
+        int j = 0;
+        int v = 0;
+        int status = 0;
+        int charge = 0;
+        if (object > 0) {
+            while (r < emon.Port.cellsLen(cx)) {
+                n = emon.Port.cellsAt(cx, r + 2);
+                if ((emon.Port.cellsAt(cx, r) == object) && (emon.Port.cellsAt(cx, r + 1) == fh)) {
+                    charge = emon.Port.cellsAt(cx, r + 3);
+                    // Near the limit, run the original loader so the first breaching stream and reported byte count stay exact.
+                    if (!Pdfsrc.psMissed(src) && (charge <= (emon.Port.limitOf(2) - before))) {
+                        Pdfdoc.pdTotalAdd(dc, charge);
+                        emon.Port.cellsDrop(f, 0);
+                        while (j < n) {
+                            emon.Port.cellsPush(f, emon.Port.cellsAt(cx, (r + 4) + j));
+                            j += 1;
+                        }
+                        return 0;
+                    }
+                }
+                r += 4 + n;
+            }
+        }
+        status = Pdffont.pfnLoad(src, ar, dc, a, b, st, f, out, fh);
+        n = emon.Port.cellsLen(f);
+        if ((object > 0) && ((status == 0) && (!Pdfsrc.psMissed(src) && ((emon.Port.cellsLen(cx) + (4 + n)) <= (C_SIZE + FCACHE_CELLS))))) {
+            emon.Port.cellsPush(cx, object);
+            emon.Port.cellsPush(cx, fh);
+            emon.Port.cellsPush(cx, n);
+            charge = Pdfdoc.pdTotalUsed(dc) - before;
+            emon.Port.cellsPush(cx, charge);
+            j = 0;
+            while (j < n) {
+                v = emon.Port.cellsAt(f, j);
+                emon.Port.cellsPush(cx, v);
+                j += 1;
+            }
+        }
+        return status;
+    }
+    public static int pcFLoad(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, int slot, int fh) {
+        int object = emon.Port.cellsAt(cx, C_CUR + G_FOBJ);
         if (slot == 0) {
-            return Pdffont.pfnLoad(src, ar, dc, a, b, st, f0, out, fh);
+            return pcFCached(src, ar, dc, a, b, st, cx, f0, out, object, fh);
         }
         if (slot == 1) {
-            return Pdffont.pfnLoad(src, ar, dc, a, b, st, f1, out, fh);
+            return pcFCached(src, ar, dc, a, b, st, cx, f1, out, object, fh);
         }
         if (slot == 2) {
-            return Pdffont.pfnLoad(src, ar, dc, a, b, st, f2, out, fh);
+            return pcFCached(src, ar, dc, a, b, st, cx, f2, out, object, fh);
         }
-        return Pdffont.pfnLoad(src, ar, dc, a, b, st, f3, out, fh);
+        return pcFCached(src, ar, dc, a, b, st, cx, f3, out, object, fh);
     }
     public static int pcFQ(emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, int slot, int which) {
         // A font's metric: which 0 ascent, 1 descent, 2 vertical, 3 DW2 v, 4 DW2 w.
@@ -1198,7 +1246,7 @@ public final class Pdfcontent {
             i += 1;
         }
         at = C_SLOTS + (pick * SLOT_STRIDE);
-        status = pcFLoad(src, ar, dc, a, b, st, out, f0, f1, f2, f3, pick, key);
+        status = pcFLoad(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3, pick, key);
         if (Pdfsrc.psMissed(src)) {
             emon.Port.cellsSet(cx, C_ABORT, 1);
             emon.Port.cellsSet(cx, at + S_KEY, 0);
@@ -4843,7 +4891,7 @@ public final class Pdfcontent {
         }
         // The path in progress when the page ended never painted: its points are dropped.
         emon.Port.cellsDrop(pts, emon.Port.cellsAt(cx, C_PPTS) * 3);
-        Pdfvis.pvPage(gl, mk, pa, im, emon.Port.cellsAt(cx, C_PW), emon.Port.cellsAt(cx, C_PH), g0, p0, i0);
+        Pdfvis.pvPage(gl, mk, pa, im, out, emon.Port.cellsAt(cx, C_PW), emon.Port.cellsAt(cx, C_PH), g0, p0, i0);
         pcGroup(gl, et, wd, ln, fnt, page, g0, w0);
         return 0;
     }

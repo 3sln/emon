@@ -4,6 +4,7 @@
 use crate::emon::cjk::*;
 use crate::emon::evidence::*;
 use crate::emon::fontprog::*;
+use crate::emon::pdfcontent::*;
 use crate::emon::pdfdoc::*;
 use crate::emon::pdffont::*;
 use crate::emon::pdflex::*;
@@ -1017,4 +1018,56 @@ fn test_every_program_font_is_the_same_through_an_async_source_of_64_byte_chunks
 #[test]
 fn test_every_program_font_is_the_same_through_an_async_source_of_512_byte_chunks() {
     crate::testport::assert_eq(ft_async_fonts(512), 0, "every font of progs.pdf through 512-byte chunks");
+}
+#[test]
+fn test_document_cache_restores_exact_font_cells_after_eviction() {
+    let src: &crate::port::Src = &crate::port::src_of_blob(&crate::testport::test_file("fonts/fonts.pdf")[..]);
+    let ar: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let dc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let a: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let b: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cx: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ox: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let loaded: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cached: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut object: i32 = 1;
+    let mut fh: i32 = 0;
+    let mut j: i32 = 0;
+    let mut before: i32 = 0;
+    let mut charge: i32 = 0;
+    crate::testport::assert_eq(pd_open(src, ar, dc, a, b, st), 0, "font fixture opens");
+    pc_init(cx, ox);
+    while object <= 8 {
+        fh = pd_get(src, ar, dc, a, b, st, object);
+        crate::testport::assert_eq(pc_f_cached(src, ar, dc, a, b, st, cx, cached, out, object, fh), 0, "fill more than four slots");
+        object += 1;
+        if (object == 3) || (object == 5) {
+            object += 1;
+        }
+    }
+    object = 1;
+    while object <= 8 {
+        fh = pd_get(src, ar, dc, a, b, st, object);
+        before = pd_total_used(dc);
+        crate::testport::assert_eq(pfn_load(src, ar, dc, a, b, st, loaded, out, fh), 0, "fresh reference load");
+        charge = pd_total_used(dc) - before;
+        crate::port::cells_drop(cached, 0);
+        before = pd_total_used(dc);
+        crate::testport::assert_eq(pc_f_cached(src, ar, dc, a, b, st, cx, cached, out, object, fh), 0, "reload after slot eviction");
+        crate::testport::assert_eq(pd_total_used(dc) - before, charge, "cached loads charge the same decoded-byte budget");
+        crate::testport::assert_eq(crate::port::cells_len(cached), crate::port::cells_len(loaded), "same parsed size");
+        j = 0;
+        while j < crate::port::cells_len(loaded) {
+            crate::testport::assert_eq(crate::port::cells_at(cached, j), crate::port::cells_at(loaded, j), "every parsed cell is identical");
+            j += 1;
+        }
+        crate::testport::assert_eq(pfn_map(cached, 65), pfn_map(loaded, 65), "same mapping after restoration");
+        crate::testport::assert_eq(pfn_width(cached, 65), pfn_width(loaded, 65), "same width after restoration");
+        object += 1;
+        if (object == 3) || (object == 5) {
+            object += 1;
+        }
+    }
 }

@@ -8,6 +8,7 @@ import (
 	"emon/glayer"
 	"emon/model"
 	"emon/normalize"
+	"emon/pagebounds"
 	"emon/pdfannot"
 	"emon/pdfstruct"
 	"emon/port"
@@ -5853,10 +5854,10 @@ func tbWhitespacePage(page int32, wd *port.Cells, et *port.Cells, w0 int32, w1 i
 func tbLineRepeated(ln *port.Cells, wd *port.Cells, et *port.Cells, l int32, other int32) bool {
 	// P12.2: is line l on page `other` too: a line there with the same words (the first and the last, and as many) at the same place, within 3 pt:
 	// a running header (a bank's name and address over every page) that the furniture stage will take out, and no body of the page.
-	var n int32 = evidence.LnCount(ln)
+	var n int32 = pagebounds.PbAfter(ln, 16, other)
 	var lc int32 = evidence.LnGet(ln, l, evidence.LhCount())
 	var lf int32 = evidence.LnGet(ln, l, evidence.LhFirst())
-	var m int32 = 0
+	var m int32 = pagebounds.PbFirst(ln, 16, other)
 	for m < n {
 		if (evidence.LnGet(ln, m, evidence.LhPage()) == other) && (evidence.LnGet(ln, m, evidence.LhCount()) == lc) {
 			if (tbAbs(evidence.LnGet(ln, m, evidence.LhY0())-evidence.LnGet(ln, l, evidence.LhY0())) <= 300) && (tbAbs(evidence.LnGet(ln, m, evidence.LhX0())-evidence.LnGet(ln, l, evidence.LhX0())) <= 300) {
@@ -5873,8 +5874,8 @@ func tbLineRepeated(ln *port.Cells, wd *port.Cells, et *port.Cells, l int32, oth
 func tbBodyLineOutside(ln *port.Cells, wd *port.Cells, et *port.Cells, page int32, y0 int32, y1 int32, zlo int32, zhi int32, other int32) bool {
 	// Is there a line, not claimed by a table, on `page` whose centre is in y0..y1 and outside the furniture
 	// zones (above zlo, below zhi), and is not one that page `other` has too (`tb-line-repeated`; 0 for none)?
-	var n int32 = evidence.LnCount(ln)
-	var l int32 = 0
+	var n int32 = pagebounds.PbAfter(ln, 16, page)
+	var l int32 = pagebounds.PbFirst(ln, 16, page)
 	for l < n {
 		if (evidence.LnGet(ln, l, evidence.LhPage()) == page) && (evidence.LnGet(ln, l, 15) == 0) {
 			var cy int32 = (evidence.LnGet(ln, l, evidence.LhY0()) + evidence.LnGet(ln, l, evidence.LhY1())) / 2

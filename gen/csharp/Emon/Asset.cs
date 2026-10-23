@@ -1109,6 +1109,36 @@ public static class Asset {
         }
         return 0;
     }
+    internal static int AsFigureBefore(emon.Port.Cells cand, int a, int b) {
+        int ap = AsGet(cand, a, AcPage);
+        int bp = AsGet(cand, b, AcPage);
+        int ay = AsGet(cand, a, AcVx0 + 1);
+        int by = AsGet(cand, b, AcVx0 + 1);
+        int ax = AsGet(cand, a, AcVx0);
+        int bx = AsGet(cand, b, AcVx0);
+        if (ap != bp) {
+            if (ap < bp) {
+                return 1;
+            }
+            return 0;
+        }
+        if (ay != by) {
+            if (ay < by) {
+                return 1;
+            }
+            return 0;
+        }
+        if (ax != bx) {
+            if (ax < bx) {
+                return 1;
+            }
+            return 0;
+        }
+        if (a < b) {
+            return 1;
+        }
+        return 0;
+    }
     public static int AsFigureRows(emon.Port.Cells cand, emon.Port.Cells pages, emon.Port.Cells nodes, emon.Port.Cells regions, int level, emon.Port.Cells fg) {
         // The candidates that are provisional `figure`s (SPEC 10.6, until P8.1): not page-sized (under 800 per mille of its
         // page) and both sides of the visible box at least 18 pt. At `figures` (`level` 2) the region candidates (vector art, a
@@ -1121,7 +1151,10 @@ public static class Asset {
         int ph = 0;
         int pgi = 0;
         int cnt = 0;
-        int ins = 0;
+        int h = 1;
+        int v = 0;
+        int u = 0;
+        int more = 0;
         int x0 = 0;
         int y0 = 0;
         int x1 = 0;
@@ -1138,27 +1171,34 @@ public static class Asset {
                 pw = Model.PageW(pages, pgi);
                 ph = Model.PageH(pages, pgi);
                 if (((x1 - x0) >= AsFigureSide) && ((y1 - y0) >= AsFigureSide) && (AsGe(AsIa(x0, y0, x1, y1, 0, 0, pw, ph), AsArea(0, 0, pw, ph), AsBig) == 0) && ((AsGet(cand, r, AcKori) != AsRegion) || ((level == 2) && (AsInTable(nodes, regions, AsGet(cand, r, AcPage), x0, y0, x1, y1) == 0)))) {
-                    // insert in order of (page, top, left, row)
-                    ins = cnt + 1;
-                    j = 1;
-                    while (j <= cnt) {
-                        int q = emon.Port.CellsAt(fg, j);
-                        if ((ins == (cnt + 1)) && ((AsGet(cand, q, AcPage) > AsGet(cand, r, AcPage)) || ((AsGet(cand, q, AcPage) == AsGet(cand, r, AcPage)) && ((AsGet(cand, q, AcVx0 + 1) > y0) || ((AsGet(cand, q, AcVx0 + 1) == y0) && (AsGet(cand, q, AcVx0) > x0)))))) {
-                            ins = j;
-                        }
-                        j += 1;
-                    }
-                    emon.Port.CellsPush(fg, 0);
-                    j = cnt + 1;
-                    while (j > ins) {
-                        emon.Port.CellsSet(fg, j, emon.Port.CellsAt(fg, j - 1));
-                        j -= 1;
-                    }
-                    emon.Port.CellsSet(fg, ins, r);
+                    emon.Port.CellsPush(fg, r);
                     cnt += 1;
                 }
             }
             r += 1;
+        }
+        while (h < (cnt / 3)) {
+            h = (h * 3) + 1;
+        }
+        while (h >= 1) {
+            r = h + 1;
+            while (r <= cnt) {
+                v = emon.Port.CellsAt(fg, r);
+                j = r;
+                more = 1;
+                while ((j > h) && (more == 1)) {
+                    u = emon.Port.CellsAt(fg, j - h);
+                    if (AsFigureBefore(cand, v, u) == 1) {
+                        emon.Port.CellsSet(fg, j, u);
+                        j -= h;
+                    } else {
+                        more = 0;
+                    }
+                }
+                emon.Port.CellsSet(fg, j, v);
+                r += 1;
+            }
+            h = (h - 1) / 3;
         }
         return cnt;
     }

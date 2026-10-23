@@ -44,7 +44,8 @@
 ;; has `src` {text, infer} and `conf` 500 (its structure is inferred; Phase 10 calibrates), every text
 ;; inline `src` {text} and `conf` 1000 (a glyph's own text); the milestone `src` {infer} and 500.
 (ns emon.para
-  (:require [emon.lang :refer [I32 Bool Cells Text emit-ascii]]
+  (:require [emon.pagebounds :refer [pb-build-ranges]]
+            [emon.lang :refer [I32 Bool Cells Text emit-ascii]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop text-i32 text-cp]]
             [emon.evidence :refer [wd-get ln-get ln-count lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-by0 lh-by1
                                    lh-rot lh-dir lf-src lh-first lh-count hd-tstart hd-tlen wf-font wf-size wf-style]]
@@ -356,14 +357,27 @@
           (set h (quot (- h 1) 3))))
     (return 0)))
 
-(defn ^I32 pa-collect [^:mut ^Cells ord ^Cells ln ^I32 page]
-  (comment "The page's lines in reading order, as indices into `ln`.")
-  (let [^I32 n (ln-count ln)
-        ^:mut ^I32 l 0]
+(defn ^I32 pa-index [^Cells ln ^I32 base ^I32 npages ^:mut ^Cells ix]
+  (comment "Original lines have immutable page ranges; each page's column pieces get a separate range as they are appended.")
+  (pb-build-ranges ln 16 0 base npages ix)
+  (let [^:mut ^I32 p 0]
+    (while (<= p npages)
+      (do (cells-push ix base) (cells-push ix base) (set p (+ p 1))))
+    (return 0)))
+
+(defn ^I32 pa-collect [^:mut ^Cells ord ^Cells ln ^I32 page ^Cells ix ^I32 off]
+  (comment "Visit original lines, then appended pieces, in exactly the original arena order before the reading-order sort.")
+  (let [^I32 b (* page 2)
+        ^:mut ^I32 end (cells-at ix (+ b 1))
+        ^:mut ^I32 l (cells-at ix b)]
     (cells-drop ord 0)
-    (while (< l n)
-      (do (if (== (ln-get ln l (lh-page)) page)
-            (cells-push ord l))
+    (while (< l end)
+      (do (if (== (ln-get ln l (lh-page)) page) (cells-push ord l))
+          (set l (+ l 1))))
+    (set end (cells-at ix (+ off (+ b 1))))
+    (set l (cells-at ix (+ off b)))
+    (while (< l end)
+      (do (if (== (ln-get ln l (lh-page)) page) (cells-push ord l))
           (set l (+ l 1))))
     (pa-sort-lines ord ln)
     (return 0)))
@@ -1594,7 +1608,7 @@
 (defn ^I32 pa-columns [^Cells wd ^Cells et ^I32 npages ^:mut ^Cells pages ^:mut ^Cells layout
                        ^:mut ^Cells lt ^:mut ^Cells ord ^:mut ^Cells ls ^:mut ^Cells sd
                        ^:mut ^Cells it ^:mut ^Cells io ^:mut ^Cells rw ^:mut ^Cells gu ^:mut ^Cells ac
-                       ^:mut ^Cells tm ^:mut ^Cells cf ^:mut ^Cells lo ^:mut ^Cells pr]
+                       ^:mut ^Cells tm ^:mut ^Cells cf ^:mut ^Cells lo ^:mut ^Cells pr ^:mut ^Cells ix ^I32 off]
   (comment "Phase one: every page's column fragments (`emon.columns`), and the page `layout` (D111) from them.")
   (let [^:mut ^I32 p 1
         ^:mut ^I32 i 0
@@ -1602,7 +1616,9 @@
     (cells-drop cf 0)
     (cells-drop lo 0)
     (while (<= p npages)
-      (do (pa-collect ord lt p)
+      (do (cells-set ix (+ off (* p 2)) (ln-count lt))
+          (cells-set ix (+ off (+ (* p 2) 1)) (ln-count lt))
+          (pa-collect ord lt p ix off)
           (set nu (pa-upright-count lt ord))
           (cells-drop ls 0)
           (set i 0)
@@ -1612,6 +1628,7 @@
           (let [^I32 r0 (quot (cells-len cf) CF_STRIDE)]
             (lc-page wd et lt p ls sd it io rw gu ac tm cf lo pr)
             (pa-layout cf r0 (quot (cells-len cf) CF_STRIDE) p pages layout))
+          (cells-set ix (+ off (+ (* p 2) 1)) (ln-count lt))
           (set p (+ p 1))))
     (return 0)))
 
@@ -1635,7 +1652,7 @@
                            ^:mut ^Cells lt ^:mut ^Cells ls ^:mut ^Cells sd ^:mut ^Cells it ^:mut ^Cells io
                            ^:mut ^Cells rw ^:mut ^Cells gu ^:mut ^Cells ac ^:mut ^Cells tm
                            ^:mut ^Cells cf ^:mut ^Cells lo ^:mut ^Cells pr ^:mut ^Cells dbg ^:mut ^Cells hc
-                           ^Cells tb ^Cells tc ^Cells tw ^Cells tq ^:mut ^Cells ledger ^:mut ^Cells ii ^:mut ^Cells al]
+                           ^Cells tb ^Cells tc ^Cells tw ^Cells tq ^:mut ^Cells ledger ^:mut ^Cells ii ^:mut ^Cells al ^:mut ^Cells ix]
   (comment "Tables (`tb tc tw tq`, `emon.table`) are placed between the paragraphs by their tops; a line a table")
   (comment "holds is not in the reading order at all.")
   (comment "Append every page's lines to the Model as paragraphs under the document root (node 0, made by")
@@ -1649,7 +1666,9 @@
   (comment "`lt` is PREPARED by the caller: the lines copied (`lc-copy`), the initials found in the copy (`in-detect`, P4.10:")
   (comment "before the style and heading analysis reads the lines, so a big first letter is never a heading), and `hc` made from")
   (comment "it; `ii` is the initials' table, `al` the open paragraph's alignment rows (P4.11). Answers 0.")
-  (let [^:mut ^I32 med 0
+  (let [^I32 base (ln-count lt)
+        ^I32 off (* (+ npages 1) 2)
+        ^:mut ^I32 med 0
         ^:mut ^I32 indents 0
         ^:mut ^I32 p 1
         ^:mut ^I32 i 0
@@ -1675,7 +1694,8 @@
         ^:mut ^I32 before-page 0
         ^:mut ^I32 score 0]
     (in-retire lt ii)
-    (pa-columns wd et npages pages layout lt ord ls sd it io rw gu ac tm cf lo pr)
+    (pa-index lt base npages ix)
+    (pa-columns wd et npages pages layout lt ord ls sd it io rw gu ac tm cf lo pr ix off)
     (set nf (quot (cells-len cf) CF_STRIDE))
     (set med (pa-median lt cf lo gp))
     (if (>= (pa-indents wd lt cf lo) PA_INDENT_USE) (set indents 1))
@@ -1685,7 +1705,7 @@
     (cells-drop al 0)
     (cells-drop dbg 0)
     (while (<= p npages)
-      (do (pa-collect ord lt p)
+      (do (pa-collect ord lt p ix off)
           (set n (cells-len ord))
           (set nu (pa-upright-count lt ord))
           ;; the lines that are not upright stand alone (D136), each written before the first paragraph that starts at or below its top (P12.7, `pa-close`): queued as the page begins

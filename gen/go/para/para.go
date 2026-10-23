@@ -13,6 +13,7 @@ import (
 	"emon/lists"
 	"emon/model"
 	"emon/normalize"
+	"emon/pagebounds"
 	"emon/pdfdoc"
 	"emon/port"
 	"emon/table"
@@ -410,12 +411,33 @@ func paSortNums(c *port.Cells) int32 {
 	return 0
 }
 
-func paCollect(ord *port.Cells, ln *port.Cells, page int32) int32 {
-	// The page's lines in reading order, as indices into `ln`.
-	var n int32 = evidence.LnCount(ln)
-	var l int32 = 0
+func paIndex(ln *port.Cells, base int32, npages int32, ix *port.Cells) int32 {
+	// Original lines have immutable page ranges; each page's column pieces get a separate range as they are appended.
+	pagebounds.PbBuildRanges(ln, 16, 0, base, npages, ix)
+	var p int32 = 0
+	for p <= npages {
+		port.CellsPush(ix, base)
+		port.CellsPush(ix, base)
+		p += 1
+	}
+	return 0
+}
+
+func paCollect(ord *port.Cells, ln *port.Cells, page int32, ix *port.Cells, off int32) int32 {
+	// Visit original lines, then appended pieces, in exactly the original arena order before the reading-order sort.
+	var b int32 = page * 2
+	var end int32 = port.CellsAt(ix, b+1)
+	var l int32 = port.CellsAt(ix, b)
 	port.CellsDrop(ord, 0)
-	for l < n {
+	for l < end {
+		if evidence.LnGet(ln, l, evidence.LhPage()) == page {
+			port.CellsPush(ord, l)
+		}
+		l += 1
+	}
+	end = port.CellsAt(ix, off+(b+1))
+	l = port.CellsAt(ix, off+b)
+	for l < end {
 		if evidence.LnGet(ln, l, evidence.LhPage()) == page {
 			port.CellsPush(ord, l)
 		}
@@ -2088,7 +2110,7 @@ func paLayout(cf *port.Cells, r0 int32, r1 int32, page int32, pages *port.Cells,
 	return 0
 }
 
-func paColumns(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, layout *port.Cells, lt *port.Cells, ord *port.Cells, ls *port.Cells, sd *port.Cells, it *port.Cells, io *port.Cells, rw *port.Cells, gu *port.Cells, ac *port.Cells, tm *port.Cells, cf *port.Cells, lo *port.Cells, pr *port.Cells) int32 {
+func paColumns(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, layout *port.Cells, lt *port.Cells, ord *port.Cells, ls *port.Cells, sd *port.Cells, it *port.Cells, io *port.Cells, rw *port.Cells, gu *port.Cells, ac *port.Cells, tm *port.Cells, cf *port.Cells, lo *port.Cells, pr *port.Cells, ix *port.Cells, off int32) int32 {
 	// Phase one: every page's column fragments (`emon.columns`), and the page `layout` (D111) from them.
 	var p int32 = 1
 	var i int32 = 0
@@ -2096,7 +2118,9 @@ func paColumns(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, 
 	port.CellsDrop(cf, 0)
 	port.CellsDrop(lo, 0)
 	for p <= npages {
-		paCollect(ord, lt, p)
+		port.CellsSet(ix, off+(p*2), evidence.LnCount(lt))
+		port.CellsSet(ix, off+((p*2)+1), evidence.LnCount(lt))
+		paCollect(ord, lt, p, ix, off)
 		nu = paUprightCount(lt, ord)
 		port.CellsDrop(ls, 0)
 		i = 0
@@ -2107,6 +2131,7 @@ func paColumns(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, 
 		var r0 int32 = port.CellsLen(cf) / cfStride
 		columns.LcPage(wd, et, lt, p, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr)
 		paLayout(cf, r0, port.CellsLen(cf)/cfStride, p, pages, layout)
+		port.CellsSet(ix, off+((p*2)+1), evidence.LnCount(lt))
 		p += 1
 	}
 	return 0
@@ -2125,7 +2150,7 @@ func paTables(tb *port.Cells, tcur int32, p int32, ymid2 int32, lb int32, wd *po
 	return k
 }
 
-func PaBuild(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, layout *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells, lt *port.Cells, ls *port.Cells, sd *port.Cells, it *port.Cells, io *port.Cells, rw *port.Cells, gu *port.Cells, ac *port.Cells, tm *port.Cells, cf *port.Cells, lo *port.Cells, pr *port.Cells, dbg *port.Cells, hc *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tq *port.Cells, ledger *port.Cells, ii *port.Cells, al *port.Cells) int32 {
+func PaBuild(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, layout *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells, lt *port.Cells, ls *port.Cells, sd *port.Cells, it *port.Cells, io *port.Cells, rw *port.Cells, gu *port.Cells, ac *port.Cells, tm *port.Cells, cf *port.Cells, lo *port.Cells, pr *port.Cells, dbg *port.Cells, hc *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tq *port.Cells, ledger *port.Cells, ii *port.Cells, al *port.Cells, ix *port.Cells) int32 {
 	// Tables (`tb tc tw tq`, `emon.table`) are placed between the paragraphs by their tops; a line a table
 	// holds is not in the reading order at all.
 	// Append every page's lines to the Model as paragraphs under the document root (node 0, made by
@@ -2139,6 +2164,8 @@ func PaBuild(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, la
 	// `lt` is PREPARED by the caller: the lines copied (`lc-copy`), the initials found in the copy (`in-detect`, P4.10:
 	// before the style and heading analysis reads the lines, so a big first letter is never a heading), and `hc` made from
 	// it; `ii` is the initials' table, `al` the open paragraph's alignment rows (P4.11). Answers 0.
+	var base int32 = evidence.LnCount(lt)
+	var off int32 = (npages + 1) * 2
 	var med int32 = 0
 	var indents int32 = 0
 	var p int32 = 1
@@ -2165,7 +2192,8 @@ func PaBuild(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, la
 	var beforePage int32 = 0
 	var score int32 = 0
 	initial.InRetire(lt, ii)
-	paColumns(wd, et, npages, pages, layout, lt, ord, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr)
+	paIndex(lt, base, npages, ix)
+	paColumns(wd, et, npages, pages, layout, lt, ord, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, ix, off)
 	nf = port.CellsLen(cf) / cfStride
 	med = paMedian(lt, cf, lo, gp)
 	if paIndents(wd, lt, cf, lo) >= paIndentUse {
@@ -2177,7 +2205,7 @@ func PaBuild(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, la
 	port.CellsDrop(al, 0)
 	port.CellsDrop(dbg, 0)
 	for p <= npages {
-		paCollect(ord, lt, p)
+		paCollect(ord, lt, p, ix, off)
 		n = port.CellsLen(ord)
 		nu = paUprightCount(lt, ord)
 		i = nu

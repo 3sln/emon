@@ -138,6 +138,8 @@ public static class Pageink {
         emon.Port.Bitmap eng = emon.Port.BmsGet(bms, engid);
         int has = 0;
         int paper = Norm.NmPaperGray(ws);
+        int c0 = Pagebounds.PbFirst(comps, 24, page);
+        int c1 = Pagebounds.PbAfter(comps, 24, page);
         int i = w0;
         int f = 0;
         int x0 = 0;
@@ -151,7 +153,7 @@ public static class Pageink {
             x0 = Evidence.OwGet(owords, i, Evidence.OwfPx());
             y0 = Evidence.OwGet(owords, i, Evidence.OwfPy());
             Norm.NmFeatOcr(feats, f, x0, y0, x0 + Evidence.OwGet(owords, i, Evidence.OwfPw()), y0 + Evidence.OwGet(owords, i, Evidence.OwfPh()), binary, eng, has, body, gray, paper);
-            Trace.TrFeatOcr(feats, f, comps, page, Evidence.OwGet(owords, i, Evidence.HdX0()), Evidence.OwGet(owords, i, Evidence.HdY0()), Evidence.OwGet(owords, i, Evidence.HdX1()), Evidence.OwGet(owords, i, Evidence.HdY1()), scr, 0);
+            Trace.TrFeatOcrRange(feats, f, comps, page, Evidence.OwGet(owords, i, Evidence.HdX0()), Evidence.OwGet(owords, i, Evidence.HdY0()), Evidence.OwGet(owords, i, Evidence.HdX1()), Evidence.OwGet(owords, i, Evidence.HdY1()), scr, 0, c0, c1);
             i += 1;
         }
         return nw;

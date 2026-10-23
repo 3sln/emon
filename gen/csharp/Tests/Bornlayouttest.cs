@@ -89,9 +89,10 @@ public static class Bornlayouttest {
             p += 1;
         }
         Heading.HdAnalyze(wd, lt, et, gl, sf, sc, hc, ws, tmp, pr, ptxt);
-        Notes.NtAnalyze(wd, lt, et, gl, sf, sc, pages, hc, rf, nb, mk, tw);
+        emon.Port.Cells nix = emon.Port.NewCells();
+        Notes.NtAnalyze(wd, lt, et, gl, sf, sc, pages, hc, rf, nb, mk, tw, nix);
         Lists.LsAnalyze(wd, lt, et, sf, pa, hc, cd, pi, lws, tw);
-        Para.PaBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp2, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr2, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
+        Para.PaBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp2, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr2, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.NewCells());
         return 0;
     }
     internal static int BlFind(emon.Port.Cells nodes, int kind, int nth) {

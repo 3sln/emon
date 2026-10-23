@@ -41,7 +41,8 @@
 ;; of the TARGET line's row of `lt` (the line's spare cell) is `(row of ii + 1) * 2`, plus 1 for a raised initial (whose first
 ;; word does not vote on its line's size and style, `pa-dom`); a row made later by the column stage's splitting clears it.
 (ns emon.initial
-  (:require [emon.lang :refer [I32 Bool Cells]]
+  (:require [emon.pagebounds :refer [pb-first pb-after]]
+            [emon.lang :refer [I32 Bool Cells]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
             [emon.evidence :refer [wd-get ln-get ln-count gl-get fo-get lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-by0 lh-by1
                                    lh-rot lh-dir lh-first lh-count hd-x0 hd-y0 hd-x1 hd-y1 hd-by0 hd-tstart hd-tlen
@@ -274,8 +275,8 @@
 (defn ^I32 in-collect [^Cells wd ^Cells lt ^I32 page ^:mut ^Cells sc ^:mut ^Cells tm]
   (comment "The page's upright lines that have words into `sc` (rows of `lt`, as far as `ln-count` of the lines")
   (comment "that existed when detection began: the caller passes it as `n`), their sizes into `tm`.")
-  (let [^I32 n (quot (cells-len lt) 16)
-        ^:mut ^I32 l 0]
+  (let [^I32 n (pb-after lt 16 page)
+        ^:mut ^I32 l (pb-first lt 16 page)]
     (cells-drop sc 0)
     (cells-drop tm 0)
     (while (< l n)

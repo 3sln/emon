@@ -1105,7 +1105,11 @@ func PdRunPlan(src *port.Src, ar *port.Cells, plan int32, sh int32, b *port.Cell
 	return status
 }
 
-func pdTotalAdd(dc *port.Cells, n int32) int32 {
+func PdTotalUsed(dc *port.Cells) int32 {
+	return port.CellsAt(dc, dTotb)
+}
+
+func PdTotalAdd(dc *port.Cells, n int32) int32 {
 	// The `total-bytes` limit (SPEC 7.4, the zip-bomb bound): the decoded bytes of every stream this unit has read through `pd-stream-data`,
 	// summed. A sum past the limit is a breach (never returns); the count is saturated at 2^31 - 1 so that the sum itself cannot overflow.
 	var have int32 = port.CellsAt(dc, dTotb)
@@ -1126,7 +1130,7 @@ func PdStreamData(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, 
 	// `st` (they are overwritten); answers a `pf-status`, the first error.
 	var plan int32 = PdStreamPlan(src, ar, dc, a, b, st, sh)
 	var status int32 = PdRunPlan(src, ar, plan, sh, b, st, out)
-	pdTotalAdd(dc, port.CellsLen(out))
+	PdTotalAdd(dc, port.CellsLen(out))
 	return status
 }
 

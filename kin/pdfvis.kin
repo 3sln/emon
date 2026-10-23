@@ -1,7 +1,7 @@
 ;; Visibility classification (P3.6; SPEC 8.1, 8.4.3; D152, D155-D157).
 ;; emon's own module (D039).
 ;;
-;;   (pv-page gl mk pa im pw ph g0 p0 i0)   after a page's content has been read
+;;   (pv-page gl mk pa im ix pw ph g0 p0 i0)   after a page's content has been read
 ;;
 ;; WHAT IT DECIDES. For every glyph and every image the page painted (the rows from g0, i0 on) it fills the
 ;; evidence's `vis` (why it is not visible: `clipped`, `offpage`, `white-on-white`, `zero-size`, `occluded`,
@@ -52,7 +52,7 @@
 ;; page of a million paths costs a bounded amount: past that the answer is "cannot tell" (visible).
 (ns emon.pdfvis
   (:require [emon.lang :refer [I32 Cells]]
-            [emon.port :refer [cells-at cells-set]]
+            [emon.port :refer [cells-at cells-set cells-push cells-drop]]
             [emon.evidence :refer [gl-count gl-get gl-set mk-get pa-count pa-get pa-set im-count im-get im-set
                                    ch-x0 ch-y0 ch-x1 ch-y1
                                    gf-size gf-mode gf-fill gf-stroke gf-falpha gf-salpha gf-z gf-clip gf-mark
@@ -81,12 +81,12 @@
 
 ;; ------------------------------------------------------------------ geometry
 
-(defn ^I32 pv-hit [^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 bx0 ^I32 by0 ^I32 bx1 ^I32 by1]
+(defn ^:pub ^I32 pv-hit [^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 bx0 ^I32 by0 ^I32 bx1 ^I32 by1]
   (comment "1 when two boxes overlap with a positive area.")
   (if (and (< x0 bx1) (and (< bx0 x1) (and (< y0 by1) (< by0 y1)))) (return 1))
   (return 0))
 
-(defn ^I32 pv-covers [^I32 ox0 ^I32 oy0 ^I32 ox1 ^I32 oy1 ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+(defn ^:pub ^I32 pv-covers [^I32 ox0 ^I32 oy0 ^I32 ox1 ^I32 oy1 ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
   (comment "1 when the outer box contains the inner, within COVER_SLACK.")
   (if (and (<= ox0 (+ x0 COVER_SLACK)) (and (<= oy0 (+ y0 COVER_SLACK))
            (and (>= ox1 (- x1 COVER_SLACK)) (>= oy1 (- y1 COVER_SLACK)))))
@@ -140,7 +140,7 @@
 
 ;; --------------------------------------------------------- the paints' regions
 
-(defn ^I32 pv-path-k [^:mut ^Cells pa ^I32 r ^I32 k]
+(defn ^:pub ^I32 pv-path-k [^:mut ^Cells pa ^I32 r ^I32 k]
   (comment "Component k of the region path row r paints, for a rectangle fill: its box (shrunk by half its stroke")
   (comment "width when it is also stroked) intersected with the box of its clip.")
   (let [^I32 fl (pa-get pa r (pf-flags))
@@ -158,7 +158,7 @@
     (if (< k 2) (return (pv-max v cv)))
     (return (pv-min v cv))))
 
-(defn ^I32 pv-img-k [^:mut ^Cells im ^:mut ^Cells pa ^I32 r ^I32 k]
+(defn ^:pub ^I32 pv-img-k [^:mut ^Cells im ^:mut ^Cells pa ^I32 r ^I32 k]
   (comment "Component k of the region image row r paints: its box intersected with the box of its clip.")
   (let [^I32 cl (im-get im r (mf-clip))
         ^:mut ^I32 v 0
@@ -171,7 +171,7 @@
     (if (< k 2) (return (pv-max v cv)))
     (return (pv-min v cv))))
 
-(defn ^I32 pv-opaque-rect [^:mut ^Cells pa ^:mut ^Cells mk ^I32 r]
+(defn ^:pub ^I32 pv-opaque-rect [^:mut ^Cells pa ^:mut ^Cells mk ^I32 r]
   (comment "1 when path row r is a fill we know completely: not a clip, a rectangle, filled with a known colour at alpha")
   (comment "1 under no blend mode, no soft mask, no pattern and no shading, and not hidden by optional content.")
   (let [^I32 fl (pa-get pa r (pf-flags))]
@@ -184,7 +184,7 @@
     (if (== (pv-chain-off mk (pa-get pa r (pf-mark))) 1) (return 0))
     (return 1)))
 
-(defn ^I32 pv-opaque-img [^:mut ^Cells im ^:mut ^Cells mk ^I32 r]
+(defn ^:pub ^I32 pv-opaque-img [^:mut ^Cells im ^:mut ^Cells mk ^I32 r]
   (comment "1 when image row r covers its region completely: no stencil mask, no /SMask, no /Mask, alpha 1, no blend,")
   (comment "no soft mask, an axis-aligned placement, and not hidden by optional content.")
   (let [^I32 fl (im-get im r (mf-flags))
@@ -208,7 +208,7 @@
   (if (or (== mode 1) (or (== mode 2) (or (== mode 5) (== mode 6)))) (return 1))
   (return 0))
 
-(defn ^I32 pv-full-k [^:mut ^Cells pa ^I32 r ^I32 k]
+(defn ^:pub ^I32 pv-full-k [^:mut ^Cells pa ^I32 r ^I32 k]
   (comment "Component k of the region path row r paints in full: its box (the stroke included) intersected with its clip.")
   (let [^I32 cl (pa-get pa r (pf-clip))
         ^I32 cv (pv-clip-k pa cl k)
@@ -220,14 +220,47 @@
     (if (< k 2) (return (pv-max v cv)))
     (return (pv-min v cv))))
 
-(defn ^I32 pv-backdrop [^:mut ^Cells pa ^:mut ^Cells im ^:mut ^Cells mk
+;; D701: eleven cells per page path: clipped fill box, full paint box,
+;; opaque-known bit, next opaque row (inclusive), previous filled row (inclusive).
+;; The links skip work, never rows in the PV_SCAN budget. Non-opaque fills
+;; remain in the backdrop chain because they can make the colour unknown.
+(defn ^I32 pv-ix [^Cells ix ^I32 r ^I32 f]
+  (return (cells-at ix (+ 1 (+ (* (- r (cells-at ix 0)) 11) f)))))
+
+(defn ^:pub ^I32 pv-index [^:mut ^Cells pa ^:mut ^Cells mk ^:mut ^Cells ix ^I32 p0 ^I32 p1]
+  (let [^:mut ^I32 r p0 ^:mut ^I32 k 0 ^:mut ^I32 prev -1
+        ^:mut ^I32 next p1 ^:mut ^I32 fl 0]
+    (cells-drop ix 0)
+    (cells-push ix p0)
+    (while (< r p1)
+      (do (set k 0)
+          (while (< k 4)
+            (do (cells-push ix (pv-path-k pa r k)) (set k (+ k 1))))
+          (set k 0)
+          (while (< k 4)
+            (do (cells-push ix (pv-full-k pa r k)) (set k (+ k 1))))
+          (cells-push ix (pv-opaque-rect pa mk r))
+          (cells-push ix p1)
+          (set fl (pa-get pa r (pf-flags)))
+          (if (and (== (bit-and fl (pg-clip)) 0) (!= (bit-and fl (pg-filled)) 0))
+            (set prev r))
+          (cells-push ix prev)
+          (set r (+ r 1))))
+    (set r (- p1 1))
+    (while (>= r p0)
+      (do (if (== (pv-ix ix r 8) 1) (set next r))
+          (cells-set ix (+ 10 (* (- r p0) 11)) next)
+          (set r (- r 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 pv-backdrop [^:mut ^Cells pa ^:mut ^Cells im ^:mut ^Cells mk ^:mut ^Cells ix
                         ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 gz ^I32 jp ^I32 ji ^I32 p0 ^I32 i0 ^I32 me ^I32 lim]
   (comment "The colour behind a glyph cell with this box and paint number: 0xRRGGBB, or -2 when it cannot be told. Paths")
   (comment "are searched backwards from row jp (the first with a later z), images from row ji. `me` is the path row being")
   (comment "classified (-1 for a glyph): an earlier rectangle that this path, itself an exactly known opaque rectangle,")
   (comment "covers completely is not what it is painted on, it is painted OVER (a rule drawn twice is one rule: of two paints")
   (comment "of the same colour on the same box the later is the ink and the earlier the one it hides, never both hidden).")
-  (let [^:mut ^I32 r (- jp 1)
+  (let [^:mut ^I32 r -1
         ^:mut ^I32 steps 0
         ^:mut ^I32 zp -1
         ^:mut ^I32 res 16777215
@@ -238,25 +271,25 @@
         ^:mut ^I32 ry1 0
         ^:mut ^I32 zi -1
         ^:mut ^I32 found 0]
-    (while (and (>= r p0) (and (< steps lim) (== found 0)))
+    (if (> jp p0) (set r (pv-ix ix (- jp 1) 10)))
+    (while (and (>= r p0) (and (>= r (- jp lim)) (== found 0)))
       (do (set fl (pa-get pa r (pf-flags)))
           (if (and (== (bit-and fl (pg-clip)) 0) (!= (bit-and fl (pg-filled)) 0))
-            (do (set rx0 (pv-path-k pa r 0))
-                (set ry0 (pv-path-k pa r 1))
-                (set rx1 (pv-path-k pa r 2))
-                (set ry1 (pv-path-k pa r 3))
-                (if (and (>= me 0) (== (pv-opaque-rect pa mk me) 1))
-                  (if (== (pv-covers (pv-path-k pa me 0) (pv-path-k pa me 1) (pv-path-k pa me 2) (pv-path-k pa me 3)
-                                     (pv-full-k pa r 0) (pv-full-k pa r 1) (pv-full-k pa r 2) (pv-full-k pa r 3)) 1)
+            (do (set rx0 (pv-ix ix r 0))
+                (set ry0 (pv-ix ix r 1))
+                (set rx1 (pv-ix ix r 2))
+                (set ry1 (pv-ix ix r 3))
+                (if (and (>= me 0) (== (pv-ix ix me 8) 1))
+                  (if (== (pv-covers (pv-ix ix me 0) (pv-ix ix me 1) (pv-ix ix me 2) (pv-ix ix me 3)
+                                     (pv-ix ix r 4) (pv-ix ix r 5) (pv-ix ix r 6) (pv-ix ix r 7)) 1)
                     (set rx1 (- rx0 1))))
                 (if (== (pv-hit x0 y0 x1 y1 rx0 ry0 rx1 ry1) 1)
                   (do (set found 1)
                       (set zp (pa-get pa r (pf-z)))
-                      (if (and (== (pv-opaque-rect pa mk r) 1) (== (pv-covers rx0 ry0 rx1 ry1 x0 y0 x1 y1) 1))
+                      (if (and (== (pv-ix ix r 8) 1) (== (pv-covers rx0 ry0 rx1 ry1 x0 y0 x1 y1) 1))
                         (set res (pa-get pa r (pf-fill)))
                         (set res -2))))))
-          (set r (- r 1))
-          (set steps (+ steps 1))))
+          (if (> r p0) (set r (pv-ix ix (- r 1) 10)) (set r -1))))
     (comment "The nearest earlier image that touches the cell.")
     (set r (- ji 1))
     (set steps 0)
@@ -274,7 +307,7 @@
     (if (> zi zp) (return -2))
     (return res)))
 
-(defn ^I32 pv-occluder [^:mut ^Cells pa ^:mut ^Cells im ^:mut ^Cells mk
+(defn ^:pub ^I32 pv-occluder [^:mut ^Cells pa ^:mut ^Cells im ^:mut ^Cells mk ^:mut ^Cells ix
                         ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 jp ^I32 ji ^I32 p1 ^I32 i1 ^I32 lim]
   (comment "The `z` of the first later paint that is opaque, exactly known and covers the whole box, else -1. Paths")
   (comment "are searched forwards from row jp to p1, images from ji to i1.")
@@ -282,12 +315,13 @@
         ^:mut ^I32 steps 0
         ^:mut ^I32 zp -1
         ^:mut ^I32 zi -1]
-    (while (and (< r p1) (and (< steps lim) (< zp 0)))
-      (do (if (== (pv-opaque-rect pa mk r) 1)
-            (if (== (pv-covers (pv-path-k pa r 0) (pv-path-k pa r 1) (pv-path-k pa r 2) (pv-path-k pa r 3) x0 y0 x1 y1) 1)
+    (if (< r p1) (set r (pv-ix ix r 9)))
+    (while (and (< r p1) (and (< r (+ jp lim)) (< zp 0)))
+      (do (if (== (pv-ix ix r 8) 1)
+            (if (== (pv-covers (pv-ix ix r 0) (pv-ix ix r 1) (pv-ix ix r 2) (pv-ix ix r 3) x0 y0 x1 y1) 1)
               (set zp (pa-get pa r (pf-z)))))
           (set r (+ r 1))
-          (set steps (+ steps 1))))
+          (if (< r p1) (set r (pv-ix ix r 9)))))
     (set r ji)
     (set steps 0)
     (while (and (< r i1) (and (< steps lim) (< zi 0)))
@@ -307,7 +341,7 @@
   (if (!= (bit-and chk bt) 0) (return chk))
   (return (+ chk bt)))
 
-(defn ^I32 pv-glyph [^:mut ^Cells gl ^:mut ^Cells mk ^:mut ^Cells pa ^:mut ^Cells im
+(defn ^I32 pv-glyph [^:mut ^Cells gl ^:mut ^Cells mk ^:mut ^Cells pa ^:mut ^Cells im ^:mut ^Cells ix
                      ^I32 pw ^I32 ph ^I32 g ^I32 jp ^I32 ji ^I32 p0 ^I32 i0 ^I32 p1 ^I32 i1]
   (comment "Classify glyph g: see the header. jp and ji are the first path and image rows painted after it.")
   (let [^I32 gx0 (gl-get gl g (ch-x0))
@@ -352,7 +386,7 @@
     (comment "3. the ink against what is behind it (only for glyphs that paint).")
     (if (and (== vis 0) (or (== (pv-painted mode 0) 1) (== (pv-painted mode 1) 1)))
       (do (set chk (pv-bit chk (vc-white)))
-          (set back (pv-backdrop pa im mk vx0 vy0 vx1 vy1 gz jp ji p0 i0 -1 PV_SCAN))
+          (set back (pv-backdrop pa im mk ix vx0 vy0 vx1 vy1 gz jp ji p0 i0 -1 PV_SCAN))
           (if (>= back 0)
             (do (set npaint 0)
                 (set nsame 0)
@@ -375,7 +409,7 @@
     (if (and (== vis 0) (or (== (pv-painted mode 0) 1) (== (pv-painted mode 1) 1)))
       (do (set chk (pv-bit chk (vc-occlusion)))
           (if (and (< vx0 vx1) (< vy0 vy1))
-            (do (set occ (pv-occluder pa im mk vx0 vy0 vx1 vy1 jp ji p1 i1 PV_SCAN))
+            (do (set occ (pv-occluder pa im mk ix vx0 vy0 vx1 vy1 jp ji p1 i1 PV_SCAN))
                 (if (>= occ 0)
                   (do (set vis (vz-occluded))
                       (set vby occ)))))))
@@ -404,7 +438,7 @@
 
 ;; ----------------------------------------------------------------- the images
 
-(defn ^I32 pv-image [^:mut ^Cells mk ^:mut ^Cells pa ^:mut ^Cells im
+(defn ^I32 pv-image [^:mut ^Cells mk ^:mut ^Cells pa ^:mut ^Cells im ^:mut ^Cells ix
                      ^I32 pw ^I32 ph ^I32 r ^I32 jp ^I32 ji ^I32 p1 ^I32 i1]
   (comment "Classify image row r by the same checks that apply to a thing that is painted whole: clip, offpage, empty")
   (comment "(a box with no area, the image's zero-size), a later opaque cover, optional content, alpha 0.")
@@ -445,7 +479,7 @@
     (if (== vis 0)
       (do (set chk (pv-bit chk (vc-occlusion)))
           (if (and (< vx0 vx1) (< vy0 vy1))
-            (do (set occ (pv-occluder pa im mk vx0 vy0 vx1 vy1 jp ji p1 i1 PV_SCAN))
+            (do (set occ (pv-occluder pa im mk ix vx0 vy0 vx1 vy1 jp ji p1 i1 PV_SCAN))
                 (if (>= occ 0)
                   (do (set vis (vz-occluded))
                       (set vby occ)))))))
@@ -476,7 +510,7 @@
   (if (and (<= x0 bx1) (and (<= bx0 x1) (and (<= y0 by1) (<= by0 y1)))) (return 1))
   (return 0))
 
-(defn ^I32 pv-path [^:mut ^Cells mk ^:mut ^Cells pa ^:mut ^Cells im
+(defn ^I32 pv-path [^:mut ^Cells mk ^:mut ^Cells pa ^:mut ^Cells im ^:mut ^Cells ix
                     ^I32 pw ^I32 ph ^I32 r ^I32 ji ^I32 p0 ^I32 i0 ^I32 p1 ^I32 i1]
   (comment "Classify path row r (see the section header). ji is the first image row painted after it.")
   (let [^I32 fl (pa-get pa r (pf-flags))
@@ -531,7 +565,7 @@
     (if (<= vy1 vy0) (set gy 1))
     (if (== vis 0)
       (do (set chk (pv-bit chk (vc-white)))
-          (set back (pv-backdrop pa im mk (- vx0 gx) (- vy0 gy) (+ vx1 gx) (+ vy1 gy) z r ji p0 i0 r lim))
+          (set back (pv-backdrop pa im mk ix (- vx0 gx) (- vy0 gy) (+ vx1 gx) (+ vy1 gy) z r ji p0 i0 r lim))
           (if (>= back 0)
             (do (set bout back)
                 (if (== filled 1)
@@ -553,7 +587,7 @@
     (comment "5. a later opaque paint over the whole region.")
     (if (== vis 0)
       (do (set chk (pv-bit chk (vc-occlusion)))
-          (set occ (pv-occluder pa im mk vx0 vy0 vx1 vy1 (+ r 1) ji p1 i1 lim))
+          (set occ (pv-occluder pa im mk ix vx0 vy0 vx1 vy1 (+ r 1) ji p1 i1 lim))
           (if (>= occ 0)
             (do (set vis (vz-occluded))
                 (set vby occ)))))
@@ -583,7 +617,7 @@
 
 ;; ------------------------------------------------------------------- the page
 
-(defn ^:pub ^I32 pv-page [^:mut ^Cells gl ^:mut ^Cells mk ^:mut ^Cells pa ^:mut ^Cells im
+(defn ^:pub ^I32 pv-page [^:mut ^Cells gl ^:mut ^Cells mk ^:mut ^Cells pa ^:mut ^Cells im ^:mut ^Cells ix
                           ^I32 pw ^I32 ph ^I32 g0 ^I32 p0 ^I32 i0]
   (comment "Classify the glyphs from row g0, and the images from row i0, of the page whose paths start at row p0 and")
   (comment "whose size (the crop box in page space) is pw by ph centipoints. Rows are in paint order, so for each")
@@ -598,13 +632,14 @@
         ^:mut ^I32 ig i0
         ^:mut ^I32 rp p0
         ^:mut ^I32 fl 0]
+    (pv-index pa mk ix p0 p1)
     (while (< g g1)
       (do (set gz (gl-get gl g (gf-z)))
           (while (and (< jp p1) (or (< (pa-get pa jp (pf-z)) 0) (< (pa-get pa jp (pf-z)) gz)))
             (set jp (+ jp 1)))
           (while (and (< ji i1) (< (im-get im ji (mf-z)) gz))
             (set ji (+ ji 1)))
-          (pv-glyph gl mk pa im pw ph g jp ji p0 i0 p1 i1)
+          (pv-glyph gl mk pa im ix pw ph g jp ji p0 i0 p1 i1)
           (set g (+ g 1))))
     (set jp p0)
     (while (< ig i1)
@@ -612,7 +647,7 @@
           (while (and (< jp p1) (or (< (pa-get pa jp (pf-z)) 0) (< (pa-get pa jp (pf-z)) gz)))
             (set jp (+ jp 1)))
           (set ji (+ ig 1))
-          (pv-image mk pa im pw ph ig jp ji p1 i1)
+          (pv-image mk pa im ix pw ph ig jp ji p1 i1)
           (set ig (+ ig 1))))
     (comment "The paths: a clip and a shading are not classified (their `vchk` stays 0).")
     (set ji i0)
@@ -622,6 +657,6 @@
             (do (set gz (pa-get pa rp (pf-z)))
                 (while (and (< ji i1) (< (im-get im ji (mf-z)) gz))
                   (set ji (+ ji 1)))
-                (pv-path mk pa im pw ph rp ji p0 i0 p1 i1)))
+                (pv-path mk pa im ix pw ph rp ji p0 i0 p1 i1)))
           (set rp (+ rp 1))))
     (return 0)))

@@ -4,6 +4,7 @@
 use crate::emon::evidence::*;
 use crate::emon::pdfcontent::*;
 use crate::emon::pdfdoc::*;
+use crate::emon::pdfvis::*;
 
 pub(crate) fn vt_nl(b: &[u8], i: i32) -> i32 {
     let mut k: i32 = i;
@@ -359,4 +360,184 @@ fn test_every_visibility_fixture_is_classified_as_written() {
     // The files of test/vis: white on white and the same colour as the background, clipped, off the page, tiny, painted
     // over, optional content, alpha, hidden OCR layers and a page as a crawler is fed it, and the colour spaces.
     crate::testport::assert_that(vt_rows(0, &crate::testport::test_file("vis/rows.txt")[..]) > 150, "the rows were read");
+}
+pub(crate) fn vt_old_backdrop(mut pa: &mut crate::port::Cells, mut im: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, x0: i32, y0: i32, x1: i32, y1: i32, gz: i32, jp: i32, ji: i32, p0: i32, i0: i32, me: i32, lim: i32) -> i32 {
+    // The colour behind a glyph cell with this box and paint number: 0xRRGGBB, or -2 when it cannot be told. Paths
+    // are searched backwards from row jp (the first with a later z), images from row ji. `me` is the path row being
+    // classified (-1 for a glyph): an earlier rectangle that this path, itself an exactly known opaque rectangle,
+    // covers completely is not what it is painted on, it is painted OVER (a rule drawn twice is one rule: of two paints
+    // of the same colour on the same box the later is the ink and the earlier the one it hides, never both hidden).
+    let mut r: i32 = jp - 1;
+    let mut steps: i32 = 0;
+    let mut zp: i32 = -1;
+    let mut res: i32 = 16777215;
+    let mut fl: i32 = 0;
+    let mut rx0: i32 = 0;
+    let mut ry0: i32 = 0;
+    let mut rx1: i32 = 0;
+    let mut ry1: i32 = 0;
+    let mut zi: i32 = -1;
+    let mut found: i32 = 0;
+    while (r >= p0) && ((steps < lim) && (found == 0)) {
+        fl = pa_get(pa, r, pf_flags());
+        if ((fl & pg_clip()) == 0) && ((fl & pg_filled()) != 0) {
+            rx0 = pv_path_k(pa, r, 0);
+            ry0 = pv_path_k(pa, r, 1);
+            rx1 = pv_path_k(pa, r, 2);
+            ry1 = pv_path_k(pa, r, 3);
+            if (me >= 0) && (pv_opaque_rect(pa, mk, me) == 1) {
+                if pv_covers(pv_path_k(pa, me, 0), pv_path_k(pa, me, 1), pv_path_k(pa, me, 2), pv_path_k(pa, me, 3), pv_full_k(pa, r, 0), pv_full_k(pa, r, 1), pv_full_k(pa, r, 2), pv_full_k(pa, r, 3)) == 1 {
+                    rx1 = rx0 - 1;
+                }
+            }
+            if pv_hit(x0, y0, x1, y1, rx0, ry0, rx1, ry1) == 1 {
+                found = 1;
+                zp = pa_get(pa, r, pf_z());
+                if (pv_opaque_rect(pa, mk, r) == 1) && (pv_covers(rx0, ry0, rx1, ry1, x0, y0, x1, y1) == 1) {
+                    res = pa_get(pa, r, pf_fill());
+                } else {
+                    res = -2;
+                }
+            }
+        }
+        r -= 1;
+        steps += 1;
+    }
+    // The nearest earlier image that touches the cell.
+    r = ji - 1;
+    steps = 0;
+    found = 0;
+    while (r >= i0) && ((steps < lim) && (found == 0)) {
+        rx0 = pv_img_k(im, pa, r, 0);
+        ry0 = pv_img_k(im, pa, r, 1);
+        rx1 = pv_img_k(im, pa, r, 2);
+        ry1 = pv_img_k(im, pa, r, 3);
+        if pv_hit(x0, y0, x1, y1, rx0, ry0, rx1, ry1) == 1 {
+            found = 1;
+            zi = im_get(im, r, mf_z());
+        }
+        r -= 1;
+        steps += 1;
+    }
+    if zi > zp {
+        return -2;
+    }
+    return res;
+}
+pub(crate) fn vt_old_occluder(mut pa: &mut crate::port::Cells, mut im: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, x0: i32, y0: i32, x1: i32, y1: i32, jp: i32, ji: i32, p1: i32, i1: i32, lim: i32) -> i32 {
+    // The `z` of the first later paint that is opaque, exactly known and covers the whole box, else -1. Paths
+    // are searched forwards from row jp to p1, images from ji to i1.
+    let mut r: i32 = jp;
+    let mut steps: i32 = 0;
+    let mut zp: i32 = -1;
+    let mut zi: i32 = -1;
+    while (r < p1) && ((steps < lim) && (zp < 0)) {
+        if pv_opaque_rect(pa, mk, r) == 1 {
+            if pv_covers(pv_path_k(pa, r, 0), pv_path_k(pa, r, 1), pv_path_k(pa, r, 2), pv_path_k(pa, r, 3), x0, y0, x1, y1) == 1 {
+                zp = pa_get(pa, r, pf_z());
+            }
+        }
+        r += 1;
+        steps += 1;
+    }
+    r = ji;
+    steps = 0;
+    while (r < i1) && ((steps < lim) && (zi < 0)) {
+        if pv_opaque_img(im, mk, r) == 1 {
+            if pv_covers(pv_img_k(im, pa, r, 0), pv_img_k(im, pa, r, 1), pv_img_k(im, pa, r, 2), pv_img_k(im, pa, r, 3), x0, y0, x1, y1) == 1 {
+                zi = im_get(im, r, mf_z());
+            }
+        }
+        r += 1;
+        steps += 1;
+    }
+    if (zp >= 0) && (zi >= 0) {
+        if zp < zi {
+            return zp;
+        }
+        return zi;
+    }
+    if zp >= 0 {
+        return zp;
+    }
+    return zi;
+}
+#[test]
+fn test_index_preserves_row_bounds_and_uncertain_backdrops() {
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ix: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut r: i32 = 0;
+    let mut m: i32 = 0;
+    let mut j: i32 = 0;
+    let mut lim: i32 = 0;
+    let mut me: i32 = -1;
+    m = mk_new(mk, 1, mk_optional_content(), 0, 0, -1, 0);
+    mk_set(mk, m, mkf_ocgdef(), 0);
+    while j < 4200 {
+        r = pa_new(pa, 1, pa_rect(), 0, 0, 1000, 1000);
+        pa_set(pa, r, pf_z(), j);
+        pa_set(pa, r, pf_flags(), pg_stroked());
+        pa_set(pa, r, pf_width(), 3);
+        if (j % 7) == 0 {
+            pa_set(pa, r, pf_flags(), pg_filled());
+            pa_set(pa, r, pf_fill(), 123);
+        }
+        if (j % 11) == 0 {
+            pa_set(pa, r, pf_mark(), m);
+        }
+        if (j % 13) == 0 {
+            pa_set(pa, r, pf_falpha(), 500);
+        }
+        if (j % 17) == 0 {
+            pa_set(pa, r, pf_flags(), pg_filled() + pg_blend());
+        }
+        if (j % 19) == 0 {
+            pa_set(pa, r, pf_flags(), pg_clip());
+            pa_set(pa, r, pf_x1(), 100);
+            pa_set(pa, r, pf_y1(), 100);
+        }
+        if j > 0 {
+            pa_set(pa, r, pf_clip(), j - 1);
+        }
+        j += 1;
+    }
+    pv_index(pa, mk, ix, 0, 4200);
+    j = 0;
+    while j < 4200 {
+        lim = 1;
+        while lim <= 4096 {
+            crate::testport::assert_eq(pv_occluder(pa, im, mk, ix, 200, 200, 800, 800, j, 0, 4200, 0, lim), vt_old_occluder(pa, im, mk, 200, 200, 800, 800, j, 0, 4200, 0, lim), "first occluder at the same row bound");
+            me = -1;
+            while me < 2 {
+                crate::testport::assert_eq(pv_backdrop(pa, im, mk, ix, 200, 200, 800, 800, j, j, 0, 0, 0, me, lim), vt_old_backdrop(pa, im, mk, 200, 200, 800, 800, j, j, 0, 0, 0, me, lim), "backdrop includes uncertain paint and self-cover");
+                me += 1;
+            }
+            lim *= 8;
+        }
+        j += 61;
+    }
+}
+#[test]
+fn test_index_keeps_exclusive_forward_and_inclusive_backward_bound() {
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ix: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut r: i32 = 0;
+    let mut j: i32 = 0;
+    while j < 4100 {
+        r = pa_new(pa, 1, pa_rect(), 0, 0, 1000, 1000);
+        pa_set(pa, r, pf_z(), j);
+        pa_set(pa, r, pf_fill(), 123);
+        pa_set(pa, r, pf_flags(), pg_stroked());
+        j += 1;
+    }
+    pa_set(pa, 4097, pf_flags(), pg_filled());
+    pv_index(pa, mk, ix, 1, 4100);
+    crate::testport::assert_eq(pv_occluder(pa, im, mk, ix, 200, 200, 800, 800, 1, 0, 4100, 0, 4096), -1, "row jp+lim is excluded");
+    crate::testport::assert_eq(pv_occluder(pa, im, mk, ix, 200, 200, 800, 800, 2, 0, 4100, 0, 4096), 4097, "row jp+lim-1 is included");
+    crate::testport::assert_eq(pv_backdrop(pa, im, mk, ix, 200, 200, 800, 800, 4098, 4098, 0, 1, 0, -1, 1), 123, "row jp-lim is included");
+    crate::testport::assert_eq(pv_backdrop(pa, im, mk, ix, 200, 200, 800, 800, 4099, 4099, 0, 1, 0, -1, 1), 16777215, "earlier than jp-lim is excluded");
 }

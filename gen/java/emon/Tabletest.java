@@ -334,7 +334,7 @@ public final class Tabletest {
             return 7;
         }
         Columns.lcCopy(ln, lt);
-        Para.paBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
+        Para.paBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.newCells());
         ttBrief(t, nodes, attrs, text);
         return Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st);
     }
@@ -2038,7 +2038,7 @@ public final class Tabletest {
         Columns.lcCopy(ln, lt);
         Initial.inDetect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii);
         Heading.hdAnalyze(wd, lt, et, gl, sf, sc, hc, ws, htmp, hpr, hptxt);
-        Para.paBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
+        Para.paBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.newCells());
         if (Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st) != 0) {
             return 3;
         }

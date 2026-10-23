@@ -18,13 +18,14 @@
 ;; body mask), k0 = `pn-k-text` (8) for the raster the OCR read and `pn-k-clean` (16) for the born-digital page's text-free render; `emon.retarget`
 ;; takes 32 and up.
 (ns emon.pageink
-  (:require [emon.lang :refer [I32 Cells Bitmap BitmapSet]]
+  (:require [emon.pagebounds :refer [pb-first pb-after]]
+            [emon.lang :refer [I32 Cells Bitmap BitmapSet]]
             [emon.port :refer [cells-len cells-at cells-set cells-drop cells-push bms-put bms-get bms-has bitmap-w bitmap-h]]
             [emon.plan :refer [pu-view-id]]
             [emon.evidence :refer [ik-count ik-get ikf-role ikf-mask ir-body ir-light ir-background vw-count vw-get vwf-deskew
                                    ow-get ow-count owf-px owf-py owf-pw owf-ph hd-feat hd-x0 hd-y0 hd-x1 hd-y1]]
             [emon.norm :refer [nm-reskew nm-view nm-label-into nm-binary-view nm-gray-view nm-paper-gray nm-mask-into nm-role-mask-into nm-feat-ocr]]
-            [emon.trace :refer [tr-trace tr-tints tr-lightfills tr-feat-ocr]]
+            [emon.trace :refer [tr-trace tr-tints tr-lightfills tr-feat-ocr-range]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
 
@@ -164,6 +165,8 @@
         ^Bitmap eng (bms-get bms engid)
         ^:mut ^I32 has 0
         ^I32 paper (nm-paper-gray ws)
+        ^I32 c0 (pb-first comps 24 page)
+        ^I32 c1 (pb-after comps 24 page)
         ^:mut ^I32 i w0
         ^:mut ^I32 f 0
         ^:mut ^I32 x0 0
@@ -175,6 +178,6 @@
           (set x0 (ow-get owords i (owf-px)))
           (set y0 (ow-get owords i (owf-py)))
           (nm-feat-ocr feats f x0 y0 (+ x0 (ow-get owords i (owf-pw))) (+ y0 (ow-get owords i (owf-ph))) binary eng has body gray paper)
-          (tr-feat-ocr feats f comps page (ow-get owords i (hd-x0)) (ow-get owords i (hd-y0)) (ow-get owords i (hd-x1)) (ow-get owords i (hd-y1)) scr 0)
+          (tr-feat-ocr-range feats f comps page (ow-get owords i (hd-x0)) (ow-get owords i (hd-y0)) (ow-get owords i (hd-x1)) (ow-get owords i (hd-y1)) scr 0 c0 c1)
           (set i (+ i 1))))
     (return nw)))

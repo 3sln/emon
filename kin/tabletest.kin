@@ -244,7 +244,7 @@
     (tb-build wd ln et grl gfl np tb tc tw tq tx (new-cells) (new-cells) s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 pages t0e t1e t2e t3e t4e t5e t6e t7e t8e t9e t10e t11e t12e an)
     (if (!= (tt-body-audit wd et tb tc tw) 0) (return 7))
     (lc-copy ln lt)
-    (pa-build wd et np pages layout nodes attrs regions text ord raw tmp fr gp lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al)
+    (pa-build wd et np pages layout nodes attrs regions text ord raw tmp fr gp lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al (new-cells))
     (tt-brief t nodes attrs text)
     (return (model-check nodes attrs regions text pages ledger layout st))))
 
@@ -1736,7 +1736,7 @@
       (lc-copy ln lt)
       (in-detect wd gl fnt et np loc lt ls lo tm ii)
       (hd-analyze wd lt et gl sf sc hc ws htmp hpr hptxt)
-      (pa-build wd et np pages layout nodes attrs regions text ord raw tmp fr gp lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al))
+      (pa-build wd et np pages layout nodes attrs regions text ord raw tmp fr gp lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al (new-cells)))
     (if (!= (model-check nodes attrs regions text pages ledger layout st) 0) (return 3))
     (js-emit t 1 nodes attrs regions text pages ledger layout (new-cells) (new-cells))
     (return 0)))

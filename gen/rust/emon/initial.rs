@@ -3,6 +3,7 @@
 
 use crate::emon::evidence::*;
 use crate::emon::model::*;
+use crate::emon::pagebounds::*;
 
 pub(crate) const IN_HELD: i32 = 1073741824;
 pub(crate) const IN_MIN: i32 = 20;
@@ -284,8 +285,8 @@ pub(crate) fn in_word_ok(wd: &mut crate::port::Cells, et: &mut crate::port::Cell
 pub(crate) fn in_collect(wd: &mut crate::port::Cells, lt: &mut crate::port::Cells, page: i32, mut sc: &mut crate::port::Cells, mut tm: &mut crate::port::Cells) -> i32 {
     // The page's upright lines that have words into `sc` (rows of `lt`, as far as `ln-count` of the lines
     // that existed when detection began: the caller passes it as `n`), their sizes into `tm`.
-    let n: i32 = crate::port::cells_len(lt) / 16;
-    let mut l: i32 = 0;
+    let n: i32 = pb_after(lt, 16, page);
+    let mut l: i32 = pb_first(lt, 16, page);
     crate::port::cells_drop(sc, 0);
     crate::port::cells_drop(tm, 0);
     while l < n {
