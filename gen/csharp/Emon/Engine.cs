@@ -360,6 +360,7 @@ public static class Engine {
         Scan.ScTrust(m.Nodes, m.Regions, ev.Owords, d.Et, ev.Oruns);
         Scan.ScTagUnread(m.Nodes, m.Regions, d.Mask);
         Scan.ScCleanText(m.Nodes, m.Text);
+        Scan.ScWriteEmptyOcr(ev.Oruns, m.Pages, m.Ledger);
         Scan.ScWriteEmptyRegions(ev.Olines, m.Nodes, m.Regions, m.Ledger);
         if (kind == 0) {
             EnFields(m, s, d);
@@ -373,6 +374,7 @@ public static class Engine {
             }
             Model.NodeSetAttrText(m.Nodes, m.Attrs, 0, Model.FkLocale(), w, emon.Port.CellsLen(m.Text) - w);
         }
+        Ocrledger.OcAccount(ev.Oruns, ev.Owords, d.Et, m.Nodes, m.Regions, d.Mask, m.Ledger, m.Text, s.S0, s.S1, s.S2, s.S3, s.S4, s.S5);
         if (kind == 0) {
             if (c.Level == 2) {
                 pending = 1;

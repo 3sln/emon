@@ -94,9 +94,14 @@ def main():
     p.add_argument('--report',action='store_true')
     p.add_argument('--bin',default=os.environ.get('EMON_RECEIPTS_BIN','/private/tmp/emon-rc/live/release/emon-rs'))
     p.add_argument('--rescore',action='store_true')
+    transcripts=p.add_mutually_exclusive_group()
+    transcripts.add_argument('--record-transcripts',action='store_true')
+    transcripts.add_argument('--replay-transcripts',action='store_true')
     p.add_argument('--save',default=str(SCRATCH/'baseline.json'))
     a=p.parse_args()
     if a.n<1: p.error('--n must be positive')
+    if a.rescore and (a.record_transcripts or a.replay_transcripts):
+        p.error('--rescore cannot record or replay transcripts')
     if a.report:
         print(pathlib.Path(a.save).read_text()); return
     SCRATCH.mkdir(parents=True,exist_ok=True); report={}
@@ -107,7 +112,12 @@ def main():
         rows={}
         for f in sample(files,a.n):
             g=json.loads(f.read_text()); image,entities,items=annotations(g)
-            r=(subprocess.CompletedProcess([],0,(SCRATCH/(g['id']+'.bundle')).read_text(),'') if a.rescore else subprocess.run([a.bin,'--tesseract','--out=bundle',str(image)],capture_output=True,text=True,timeout=180))
+            transcript=SCRATCH/(g['id']+'.replay')
+            extra=([f'--record={transcript}'] if a.record_transcripts else
+                   [f'--replay={transcript}'] if a.replay_transcripts else [])
+            if a.replay_transcripts and not (transcript/'transcript.edn').is_file():
+                raise RuntimeError('missing receipt replay: '+str(transcript))
+            r=(subprocess.CompletedProcess([],0,(SCRATCH/(g['id']+'.bundle')).read_text(),'') if a.rescore else subprocess.run([a.bin,'--tesseract','--out=bundle',*extra,str(image)],capture_output=True,text=True,timeout=180))
             if not a.rescore: (SCRATCH/(g['id']+'.bundle')).write_text(r.stdout)
             if r.returncode: raise RuntimeError(g['id']+': '+r.stderr[-1000:])
             sections=dict(re.findall(r'== ([^\n]+)\n(.*?)(?=\n== |\Z)',r.stdout,re.S))

@@ -130,7 +130,7 @@
   {:glob "kin/{gfuse*,gvec*,glayer*,trace*,pdfgfx}.kin" :gates ["unit" "gfuse" "sealpx"] :why "graphics fusion and the tracer: the gfuse digests; the seals-from-pixels set reads the tracer's ink"}
   {:glob "kin/{sealfield*,sealmark*,sealpx*,sigmark*,sigpx*}.kin" :gates ["unit" "seals" "sealpx" "sigs"] :why "seals, stamps and signatures: their three replay gates"}
   {:glob "kin/{artifact,align*,xalign*,arbiter*,fuserules}.kin" :gates ["unit" "align" "fusion" "artifacts" "seals"] :why "alignment, arbitration and the fusion rules (and the watermark defence): their replay gates"}
-  {:glob "kin/{ocr,ocrtest,scan,scantest,raster*,rasterin*,rasterplan*,upscale*,scriptcheck*}.kin" :gates ["unit" "ocr" "retarget" "sealpx" "sigs"] :why "OCR intake, scans and the raster stage: the committed OCR transcripts, and the pixel replays that read the same views"}
+  {:glob "kin/{ocr,ocrtest,ocrledger*,scan,scantest,raster*,rasterin*,rasterplan*,upscale*,scriptcheck*}.kin" :gates ["unit" "ocr" "retarget" "sealpx" "sigs"] :why "OCR intake, scans and the raster stage: the committed OCR transcripts, and the pixel replays that read the same views"}
   {:glob "kin/{asset*,figclass*,png,pngtest,pngcheck,pngchecktest}.kin" :gates ["unit" "asset" "identity" "png-check" "image"] :why "assets, figures and the PNG writer/validator: the asset gate, the writers' identity, the PNG digests"}
 
   ;; ---- kin/scripts: the gate scripts, the builders, the generators ----------------------------------------------------------------------------------
@@ -187,6 +187,7 @@
   {:glob "tools/fuzz/**" :gates ["fuzz"] :why "the fuzzer"}
   {:glob "tools/receipts/**" :gates [] :why "live receipt measurement, not a gate"}
   {:glob "test/receipts/**" :gates [] :why "numerical live receipt baselines and metric documentation"}
+  {:glob "test/controls/**" :gates [] :why "named live control selections (corpus paths only); read by tools/shards to keep their shards"}
   {:glob "tools/import/**" :gates [] :why "public-dataset importers: the corpus is not in git, nothing here is a gate"}
   {:glob "tools/lib/**" :gates ["repeat" "fuzz" "accuracy" "@replay"] :why "libraries: extra_hosts (every replay gate's other hosts), pdfreverse (repeat), nfc and the python formatters (the synthetic corpus)"}
   {:glob "tools/limits/**" :gates [] :why "`bb limits` is a report, not a gate"}

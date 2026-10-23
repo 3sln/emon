@@ -386,7 +386,7 @@ The Model has three top-level collections besides the tree:
 * **`furniture`**: running headers/footers retained once, as templates.
 * **`dropped`**: the ledger — every suppressed element with `reason`
   (`watermark`, `background`, `page-number`, `running-title`, `bleed-through`,
-  `duplicate-header-row`, `ocr-ghost`, `clipped`, `offpage`, `invisible`, `rule-ghost`, `unwitnessed-uncertain-paint`),
+  `duplicate-header-row`, `ocr-ghost`, `clipped`, `offpage`, `invisible`, `rule-ghost`, `unwitnessed-uncertain-paint`, `ocr-empty`, `ocr-unrepresented`),
   its region, its text if any, and the confidence of the decision.
 * **`assets`** (only when the `assets` setting is not `none`, §10.11): the
   table of pixel assets — id, file name, media type, origin, byte size,
@@ -3709,3 +3709,7 @@ in one conversion; D058).
    crops, ≤ 3 MB; the rest is measured live from the corpus store.)
 7. [x] **Tags without geometry** (D225 case 3) — *coordinator (2026-10-01), per the maintainer's drive-it mandate; sign-off via the cited decision*: a confirmed tagged table that no geometry found MAY be emitted on the tags alone, only if the tag trust is high (`tg-trust` ≥ 700) AND the text layer has text in the tagged cells, with provenance `source: tags`. Tags NEVER override disagreeing geometry: on disagreement the verdict is partial, geometry decides cell boundaries, and tags may contribute header/scope (verify-not-obey, D034).
 8. [x] **Unseen vector paint** (D222 row 513) — *coordinator (2026-10-01), per the maintainer's drive-it mandate; sign-off via the cited decision*: a vector rule whose paint cannot be modelled exactly and that the render does not show is dropped from the fused set but recorded in the ledger with a reason (`unwitnessed-uncertain-paint`); it is never silently deleted.
+
+**D698: empty OCR.** An upright scanned page whose first pass and normal body-ink recovery return no words gets one separate contrast-enhanced PSM 6 retry. Its stable request ID and pixel hash bound replay and retry count. It cannot replace a nonempty normal recovery. An emergency reading below mean engine confidence 300 stays evidence; otherwise the existing 700-confidence line rule is preferred before whole-page adoption. If all recorded OCR runs on a page remain empty, a full-page `ocr-empty` dropped entry explicitly diagnoses the unread region without invented text.
+
+**D699: OCR occurrence accounting.** After scanned-page reconstruction, each OCR attempt is compared by normalized word occurrences against page-local Model text and pre-existing dropped text. Unrepresented readings retain their OCR text, box, source and engine confidence in `ocr-unrepresented` dropped entries; they are not promoted to body text. One occurrence budget spans every attempt on the page, so rejected alternative copies are explicitly retained too. This records alternatives as well as losses and does not assert that a rejected reading is correct.

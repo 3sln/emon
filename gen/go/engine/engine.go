@@ -20,6 +20,7 @@ import (
 	"emon/lists"
 	"emon/model"
 	"emon/notes"
+	"emon/ocrledger"
 	"emon/pageunit"
 	"emon/para"
 	"emon/pdfannot"
@@ -423,6 +424,7 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 	scan.ScTrust(m.Nodes, m.Regions, ev.Owords, d.Et, ev.Oruns)
 	scan.ScTagUnread(m.Nodes, m.Regions, d.Mask)
 	scan.ScCleanText(m.Nodes, m.Text)
+	scan.ScWriteEmptyOcr(ev.Oruns, m.Pages, m.Ledger)
 	scan.ScWriteEmptyRegions(ev.Olines, m.Nodes, m.Regions, m.Ledger)
 	if kind == 0 {
 		enFields(m, s, d)
@@ -436,6 +438,7 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 		}
 		model.NodeSetAttrText(m.Nodes, m.Attrs, 0, model.FkLocale(), w, port.CellsLen(m.Text)-w)
 	}
+	ocrledger.OcAccount(ev.Oruns, ev.Owords, d.Et, m.Nodes, m.Regions, d.Mask, m.Ledger, m.Text, s.S0, s.S1, s.S2, s.S3, s.S4, s.S5)
 	if kind == 0 {
 		if c.Level == 2 {
 			pending = 1

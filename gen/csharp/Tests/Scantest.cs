@@ -1149,4 +1149,17 @@ public static class Scantest {
         emon.Testport.AssertThat(Model.NodeConf(nodes, p) >= 850, "old upside-down coordinates cannot lower clean selected OCR");
         emon.Testport.AssertThat(Calib.CalNodeConf(nodes, p) >= 750, "the scraper sees high calibrated confidence too");
     }
+    [Xunit.Fact]
+    public static void TestEmptyOcrIsExplicitlyLedgered() {
+        emon.Port.Cells runs = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        Model.PageNew(pages, 1, 10000, 20000, 0, Model.PkImage());
+        Evidence.OrNew(runs, 1, 0);
+        Evidence.OrNew(runs, 1, 0);
+        emon.Testport.AssertEq(Scan.ScWriteEmptyOcr(runs, pages, ledger), 1, "one region after two empty attempts");
+        emon.Testport.AssertEq(Model.LedgerReason(ledger, 0), Model.DrOcrEmpty(), "explicit diagnostic");
+        Evidence.OrSet(runs, 1, Evidence.OrfWcount(), 1);
+        emon.Testport.AssertEq(Scan.ScWriteEmptyOcr(runs, pages, ledger), 0, "successful retry is not diagnosed empty");
+    }
 }

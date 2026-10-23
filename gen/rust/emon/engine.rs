@@ -16,6 +16,7 @@ use crate::emon::inline::*;
 use crate::emon::lists::*;
 use crate::emon::model::*;
 use crate::emon::notes::*;
+use crate::emon::ocrledger::*;
 use crate::emon::pageunit::*;
 use crate::emon::para::*;
 use crate::emon::pdfannot::*;
@@ -391,6 +392,7 @@ pub(crate) fn en_stage3(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::en
     sc_trust(&mut m.nodes, &mut m.regions, &mut ev.owords, &mut d.et, &mut ev.oruns);
     sc_tag_unread(&mut m.nodes, &mut m.regions, &mut d.mask);
     sc_clean_text(&mut m.nodes, &mut m.text);
+    sc_write_empty_ocr(&mut ev.oruns, &mut m.pages, &mut m.ledger);
     sc_write_empty_regions(&mut ev.olines, &mut m.nodes, &mut m.regions, &mut m.ledger);
     if kind == 0 {
         en_fields(m, s, d);
@@ -404,6 +406,7 @@ pub(crate) fn en_stage3(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::en
         }
         node_set_attr_text(&mut m.nodes, &mut m.attrs, 0, fk_locale(), w, crate::port::cells_len(&mut m.text) - w);
     }
+    oc_account(&mut ev.oruns, &mut ev.owords, &mut d.et, &mut m.nodes, &mut m.regions, &mut d.mask, &mut m.ledger, &mut m.text, &mut s.s0, &mut s.s1, &mut s.s2, &mut s.s3, &mut s.s4, &mut s.s5);
     if kind == 0 {
         if c.level == 2 {
             pending = 1;

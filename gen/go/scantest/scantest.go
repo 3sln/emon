@@ -1177,3 +1177,16 @@ func TestRotatedOcrTrustUsesOnlyTheSelectedCoordinateFrame(emonT *testing.T) {
 	port.AssertThat(emonT, model.NodeConf(nodes, p) >= 850, "old upside-down coordinates cannot lower clean selected OCR")
 	port.AssertThat(emonT, calib.CalNodeConf(nodes, p) >= 750, "the scraper sees high calibrated confidence too")
 }
+
+func TestEmptyOcrIsExplicitlyLedgered(emonT *testing.T) {
+	var runs *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	model.PageNew(pages, 1, 10000, 20000, 0, model.PkImage())
+	evidence.OrNew(runs, 1, 0)
+	evidence.OrNew(runs, 1, 0)
+	port.AssertEq(emonT, scan.ScWriteEmptyOcr(runs, pages, ledger), 1, "one region after two empty attempts")
+	port.AssertEq(emonT, model.LedgerReason(ledger, 0), model.DrOcrEmpty(), "explicit diagnostic")
+	evidence.OrSet(runs, 1, evidence.OrfWcount(), 1)
+	port.AssertEq(emonT, scan.ScWriteEmptyOcr(runs, pages, ledger), 0, "successful retry is not diagnosed empty")
+}

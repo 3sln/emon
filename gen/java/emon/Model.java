@@ -1430,6 +1430,12 @@ public final class Model {
     public static int drUnwitnessedUncertainPaint() {
         return 12;
     }
+    public static int drOcrEmpty() {
+        return 13;
+    }
+    public static int drOcrUnrepresented() {
+        return 14;
+    }
     public static int drEmitName(StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.textAscii(t, "watermark");
@@ -1477,6 +1483,14 @@ public final class Model {
         }
         if (code == 12) {
             emon.Port.textAscii(t, "unwitnessed-uncertain-paint");
+            return 1;
+        }
+        if (code == 13) {
+            emon.Port.textAscii(t, "ocr-empty");
+            return 1;
+        }
+        if (code == 14) {
+            emon.Port.textAscii(t, "ocr-unrepresented");
             return 1;
         }
         return 0;

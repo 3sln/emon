@@ -1,0 +1,134 @@
+;; Residual OCR accounting after reconstruction. Corpus-free, page-local, occurrence-aware.
+(ns emon.ocrledger
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.port :refer [cells-len cells-at cells-push cells-set cells-drop]]
+            [emon.model :refer [node-count node-kind node-is-inline node-has-text node-first-child node-next nk-furniture nk-linebreak node-text-start node-text-len node-region-head node-parent region-page
+                                ledger-count ledger-page ledger-text-start ledger-text-len ledger-add ledger-set-text sr-ocr dr-ocr-unrepresented]]
+            [emon.normalize :refer [nz-nfc nz-flag-ligatures nz-flag-radicals]]
+            [emon.evidence :refer [or-count or-get orf-wfirst orf-wcount ow-get hd-page hd-tstart hd-tlen hd-x0 hd-y0 hd-x1 hd-y1 hd-conf]]
+            [kin.lang :refer [defn return let set while if do comment + - * < > <= >= == != and or quot bit-and]]))
+
+(defn ^I32 oc-space [^I32 c]
+  (if (or (<= c 32) (or (== c 160) (or (== c 8239) (and (>= c 8192) (<= c 8202))))) (return 1))
+  (return 0))
+
+(defn ^I32 oc-fold [^I32 c]
+  (if (and (>= c 65) (<= c 90)) (return (+ c 32)))
+  (return c))
+
+(defn ^I32 oc-tokens [^Cells src ^I32 start ^I32 spanlen ^:mut ^Cells bag ^:mut ^Cells tokens]
+  (let [^:mut ^I32 i start ^I32 end (+ start spanlen) ^:mut ^I32 s 0 ^:mut ^I32 n 0]
+    (while (< i end)
+      (do (while (and (< i end) (== (oc-space (cells-at src i)) 1)) (set i (+ i 1)))
+          (set s (cells-len bag)) (set n 0)
+          (while (and (< i end) (== (oc-space (cells-at src i)) 0))
+            (do (cells-push bag (oc-fold (cells-at src i))) (set n (+ n 1)) (set i (+ i 1))))
+          (if (> n 0) (do (cells-push tokens s) (cells-push tokens n) (cells-push tokens 0)))))
+    (return 0)))
+
+(defn ^I32 oc-page [^Cells nodes ^Cells regions ^I32 n]
+  (let [^:mut ^I32 k n ^:mut ^I32 r -1]
+    (while (> k 0)
+      (do (set r (node-region-head nodes k))
+          (if (>= r 0) (return (region-page regions r)))
+          (set k (node-parent nodes k))))
+    (return 0)))
+
+(defn ^I32 oc-inline [^Cells nodes ^Cells text ^I32 n ^:mut ^Cells plain]
+  (let [^:mut ^I32 c (node-first-child nodes n) ^:mut ^I32 i 0 ^:mut ^I32 end 0]
+    (while (>= c 0)
+      (do (if (== (node-kind nodes c) (nk-linebreak)) (cells-push plain 10))
+          (if (== (node-is-inline nodes c) 1)
+            (do (if (== (node-has-text nodes c) 1)
+                  (do (set i (node-text-start nodes c)) (set end (+ i (node-text-len nodes c)))
+                      (while (< i end) (do (cells-push plain (cells-at text i)) (set i (+ i 1))))))
+                (if (>= (node-first-child nodes c) 0) (oc-inline nodes text c plain))))
+          (set c (node-next nodes c))))
+    (return 0)))
+
+(defn ^I32 oc-flow [^Cells nodes ^Cells regions ^Cells text ^I32 n ^I32 pg
+                    ^:mut ^Cells bag ^:mut ^Cells tokens ^:mut ^Cells plain]
+  (comment "Only serialized flow: furniture templates are metadata, detached roots are not body, and inline-derived text is counted once.")
+  (let [^:mut ^I32 c (node-first-child nodes n) ^:mut ^I32 hasin 0]
+    (if (== (node-kind nodes n) (nk-furniture))
+      (do (while (>= c 0)
+            (do (oc-flow nodes regions text c pg bag tokens plain) (set c (node-next nodes c))))
+          (return 0)))
+    (if (== (node-has-text nodes n) 1)
+      (do (if (== (oc-page nodes regions n) pg)
+            (oc-tokens text (node-text-start nodes n) (node-text-len nodes n) bag tokens))
+          (return 0)))
+    (while (>= c 0)
+      (do (if (== (node-is-inline nodes c) 1) (set hasin 1)) (set c (node-next nodes c))))
+    (if (== hasin 1)
+      (do (if (== (oc-page nodes regions n) pg)
+            (do (cells-drop plain 0) (oc-inline nodes text n plain)
+                (oc-tokens plain 0 (cells-len plain) bag tokens)))
+          (return 0)))
+    (set c (node-first-child nodes n))
+    (while (>= c 0)
+      (do (oc-flow nodes regions text c pg bag tokens plain) (set c (node-next nodes c))))
+    (return 0)))
+
+(defn ^I32 oc-word [^Cells owords ^I32 w ^Cells et ^:mut ^Cells ledger ^:mut ^Cells text
+                    ^Cells bag ^:mut ^Cells tokens ^:mut ^Cells norm ^:mut ^Cells tmp ^:mut ^Cells raw ^:mut ^Cells rt]
+  (let [^:mut ^I32 i 0 ^:mut ^I32 j 0 ^:mut ^I32 k 0 ^:mut ^I32 a 0 ^:mut ^I32 b 0
+        ^:mut ^I32 found 0 ^:mut ^I32 missing 0 ^:mut ^I32 same 0 ^:mut ^I32 count 0
+        ^:mut ^I32 lr 0 ^:mut ^I32 ts 0]
+    (cells-drop norm 0) (cells-drop raw 0) (cells-drop rt 0)
+    (nz-nfc et (ow-get owords w (hd-tstart)) (+ (ow-get owords w (hd-tstart)) (ow-get owords w (hd-tlen))) norm tmp (+ (nz-flag-ligatures) (nz-flag-radicals)))
+    (oc-tokens norm 0 (cells-len norm) raw rt)
+    (while (< i (cells-len rt))
+      (do (set a (cells-at rt i)) (set count (cells-at rt (+ i 1)))
+          (set j 0) (set found 0)
+          (while (and (< j (cells-len tokens)) (== found 0))
+            (do (if (and (== (cells-at tokens (+ j 2)) 0) (== (cells-at tokens (+ j 1)) count))
+                  (do (set b (cells-at tokens j)) (set k 0) (set same 1)
+                      (while (and (< k count) (== same 1))
+                        (do (if (!= (cells-at raw (+ a k)) (cells-at bag (+ b k))) (set same 0))
+                            (set k (+ k 1))))
+                      (if (== same 1) (do (set found 1) (cells-set tokens (+ j 2) 1)))))
+                (set j (+ j 3))))
+          (if (== found 0) (set missing 1))
+          (set i (+ i 3))))
+    (if (== missing 0) (return 0))
+    (set lr (ledger-add ledger (dr-ocr-unrepresented) (ow-get owords w (hd-page))
+                       (ow-get owords w (hd-x0)) (ow-get owords w (hd-y0))
+                       (ow-get owords w (hd-x1)) (ow-get owords w (hd-y1)) (ow-get owords w (hd-conf)) (sr-ocr)))
+    (set ts (cells-len text)) (set i 0)
+    (while (< i (cells-len norm))
+      (do (cells-push text (cells-at norm i)) (set i (+ i 1))))
+    (ledger-set-text ledger lr ts (- (cells-len text) ts))
+    (return 1)))
+
+(defn ^:pub ^I32 oc-account [^Cells runs ^Cells owords ^Cells et ^Cells nodes ^Cells regions ^Cells mask
+                            ^:mut ^Cells ledger ^:mut ^Cells text ^:mut ^Cells bag ^:mut ^Cells tokens
+                            ^:mut ^Cells norm ^:mut ^Cells tmp ^:mut ^Cells raw ^:mut ^Cells rt]
+  (comment "D699: one page-local occurrence budget against final Model and pre-existing dropped text. It spans all attempts: identical rejected alternatives have a fate too. New entries never replenish their own budget; no OCR reading is promoted to body text.")
+  (let [^I32 oldrows (ledger-count ledger)
+        ^:mut ^I32 pg 1 ^:mut ^I32 r 0 ^:mut ^I32 n 0 ^:mut ^I32 w 0 ^:mut ^I32 end 0 ^:mut ^I32 rows 0]
+    (while (<= pg (cells-len mask))
+      (do (if (!= (bit-and (cells-at mask (- pg 1)) 3) 0)
+            (do (cells-drop bag 0) (cells-drop tokens 0)
+                (if (> (node-count nodes) 0) (oc-flow nodes regions text 0 pg bag tokens norm))
+                (set n 1)
+                (while (< n (node-count nodes))
+                  (do (if (and (== (node-kind nodes n) (nk-furniture)) (== (node-parent nodes n) -1))
+                        (oc-flow nodes regions text n pg bag tokens norm))
+                      (set n (+ n 1))))
+                (set n 0)
+                (while (< n oldrows)
+                  (do (if (== (ledger-page ledger n) pg)
+                        (oc-tokens text (ledger-text-start ledger n) (ledger-text-len ledger n) bag tokens))
+                      (set n (+ n 1))))
+                (set r 0)
+                (while (< r (or-count runs))
+                  (do (if (== (or-get runs r 0) pg)
+                        (do (set w (or-get runs r (orf-wfirst)))
+                            (set end (+ w (or-get runs r (orf-wcount))))
+                            (while (< w end)
+                              (do (set rows (+ rows (oc-word owords w et ledger text bag tokens norm tmp raw rt)))
+                                  (set w (+ w 1))))))
+                      (set r (+ r 1))))))
+          (set pg (+ pg 1))))
+    (return rows)))

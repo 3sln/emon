@@ -252,7 +252,7 @@ OCR also read, a page number, a row that repeated a header: if it is not in the 
 | `at` | yes | region `[page, x0, y0, x1, y1]` |  | Its region `[page, x0, y0, x1, y1]`. |
 | `conf` |  | integer 0..1000 |  | How sure the pipeline was. |
 | `page` | yes | integer >= 1 |  | The page it was on. |
-| `reason` | yes | one of | `watermark`, `background`, `page-number`, `running-title`, `bleed-through`, `duplicate-header-row`, `ocr-ghost`, `clipped`, `offpage`, `invisible`, `rule-ghost`, `unwitnessed-uncertain-paint` | Why it was left out: `watermark`, `background`, `page-number`, `running-title`, `bleed-through`, `duplicate-header-row`, `ocr-ghost`, `clipped`, `offpage`, `invisible`, `rule-ghost`, `unwitnessed-uncertain-paint`. |
+| `reason` | yes | one of | `watermark`, `background`, `page-number`, `running-title`, `bleed-through`, `duplicate-header-row`, `ocr-ghost`, `clipped`, `offpage`, `invisible`, `rule-ghost`, `unwitnessed-uncertain-paint`, `ocr-empty`, `ocr-unrepresented` | Why it was left out: `watermark`, `background`, `page-number`, `running-title`, `bleed-through`, `duplicate-header-row`, `ocr-ghost`, `clipped`, `offpage`, `invisible`, `rule-ghost`, `unwitnessed-uncertain-paint`, `ocr-empty`, `ocr-unrepresented`. |
 | `src` |  | list of sources |  | As for a block. |
 | `text` |  | string |  | Its text, when it had any. |
 <!-- bb docs:end model-dropped -->

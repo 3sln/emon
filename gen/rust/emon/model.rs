@@ -1427,6 +1427,12 @@ pub fn dr_rule_ghost() -> i32 {
 pub fn dr_unwitnessed_uncertain_paint() -> i32 {
     return 12;
 }
+pub fn dr_ocr_empty() -> i32 {
+    return 13;
+}
+pub fn dr_ocr_unrepresented() -> i32 {
+    return 14;
+}
 pub fn dr_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "watermark");
@@ -1474,6 +1480,14 @@ pub fn dr_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 12 {
         crate::port::text_ascii(t, "unwitnessed-uncertain-paint");
+        return 1;
+    }
+    if code == 13 {
+        crate::port::text_ascii(t, "ocr-empty");
+        return 1;
+    }
+    if code == 14 {
+        crate::port::text_ascii(t, "ocr-unrepresented");
         return 1;
     }
     return 0;

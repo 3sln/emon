@@ -530,4 +530,51 @@ public static class Retargettest {
         emon.Port.CellsSet(rtp, Retarget.RtpBrun(), br);
         emon.Testport.AssertEq(RttAdopt(rtp, runs, fr, ol, ow, scr), 1, "normal recovery already read text, so keep its quality decisions");
     }
+    [Xunit.Fact]
+    public static void TestThermalContrastBounded() {
+        emon.Port.Bitmap src = emon.Port.BitmapNew(3, 1, 1);
+        emon.Port.Bitmap dst = emon.Port.BitmapNew(3, 1, 1);
+        emon.Port.BitmapSetU8(src, 0, 0, 0, 240);
+        emon.Port.BitmapSetU8(src, 1, 0, 0, 210);
+        emon.Port.BitmapSetU8(src, 2, 0, 0, 20);
+        Retarget.RtThermalInto(src, dst, 240);
+        emon.Testport.AssertEq(emon.Port.BitmapU8(dst, 0, 0, 0), 255, "paper stays white");
+        emon.Testport.AssertEq(emon.Port.BitmapU8(dst, 1, 0, 0), 165, "faint ink gains contrast");
+        emon.Testport.AssertEq(emon.Port.BitmapU8(dst, 2, 0, 0), 0, "dark ink saturates safely");
+    }
+    [Xunit.Fact]
+    public static void TestAThermalReadingOfTextureIsNotAWholePageRecovery() {
+        emon.Port.Cells runs = emon.Port.NewCells();
+        emon.Port.Cells ol = emon.Port.NewCells();
+        emon.Port.Cells ow = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells rtp = emon.Port.NewCells();
+        emon.Port.Cells scr = emon.Port.NewCells();
+        Scan.ScPrep(scr);
+        int fr = RttRun(runs, ol, ow, 0, 0);
+        RttLine(ol, ow, feats, 300, 250);
+        int tr = RttRun(runs, ol, ow, 0, 0);
+        Retarget.RtPrep(rtp);
+        emon.Port.CellsSet(rtp, Retarget.RtpFrun(), tr);
+        emon.Testport.AssertEq(RttAdopt(rtp, runs, fr, ol, ow, scr), 0, "near-unread emergency text stays evidence");
+    }
+    [Xunit.Fact]
+    public static void TestAThermalReadingDoesNotReplaceNormalRecovery() {
+        emon.Port.Cells runs = emon.Port.NewCells();
+        emon.Port.Cells ol = emon.Port.NewCells();
+        emon.Port.Cells ow = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells rtp = emon.Port.NewCells();
+        emon.Port.Cells scr = emon.Port.NewCells();
+        Scan.ScPrep(scr);
+        int fr = RttRun(runs, ol, ow, 0, 0);
+        RttLine(ol, ow, feats, 300, 900);
+        int br = RttRun(runs, ol, ow, 0, 0);
+        RttLine(ol, ow, feats, 600, 900);
+        int tr = RttRun(runs, ol, ow, 1, 2);
+        Retarget.RtPrep(rtp);
+        emon.Port.CellsSet(rtp, Retarget.RtpBrun(), br);
+        emon.Port.CellsSet(rtp, Retarget.RtpFrun(), tr);
+        emon.Testport.AssertEq(RttAdopt(rtp, runs, fr, ol, ow, scr), 1, "normal recovery has priority over emergency text");
+    }
 }

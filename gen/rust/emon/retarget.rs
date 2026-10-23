@@ -123,6 +123,16 @@ pub(crate) fn rt_native_empty_priority() -> i32 {
     // Existing OCR empty-line crops precede traced gaps: this bonus exceeds the largest admitted empty-line area (144000 square points).
     return 1000000;
 }
+pub fn ri_thermal() -> i32 {
+    return 30;
+}
+pub fn rv_thermal() -> i32 {
+    return 40;
+}
+pub fn rt_thermal_min() -> i32 {
+    // D698: an emergency page reading below 300 mean confidence is held as evidence, not promoted wholesale.
+    return 300;
+}
 pub fn ri_body() -> i32 {
     return 17;
 }
@@ -224,6 +234,10 @@ pub fn rtp_erased() -> i32 {
     // the share (per mille) of the whole page's area that the body-ink view paints over
     return 92;
 }
+pub fn rtp_frun() -> i32 {
+    // D698: the one faint-thermal retry, separate from normal body-ink recovery.
+    return 250;
+}
 pub fn rtp_hash() -> i32 {
     // two cells the pixel hash is written to
     return 254;
@@ -241,6 +255,7 @@ pub fn rt_prep(mut rtp: &mut crate::port::Cells) -> i32 {
         crate::port::cells_set(rtp, i, 0);
         i += 1;
     }
+    crate::port::cells_set(rtp, rtp_frun(), -1);
     crate::port::cells_set(rtp, rtp_brun(), -1);
     crate::port::cells_set(rtp, rtp_rrun(), -1);
     crate::port::cells_set(rtp, rtp_trun(), -1);
@@ -1071,6 +1086,39 @@ pub fn rt_answer_score(ans: &mut crate::port::Cells, at: i32) -> i32 {
     }
     return score;
 }
+pub fn rt_thermal_into(gray: &crate::port::Bitmap, dst: &crate::port::Bitmap, paper: i32) -> i32 {
+    // D698: bounded contrast gain around the measured paper level; one raster pass, preserving grayscale edges.
+    let mut y: i32 = 0;
+    let mut x: i32 = 0;
+    let mut v: i32 = 0;
+    while y < crate::port::bitmap_h(gray) {
+        x = 0;
+        while x < crate::port::bitmap_w(gray) {
+            v = 255 - (3 * (paper - crate::port::bitmap_u8(gray, x, y, 0)));
+            if v < 0 {
+                v = 0;
+            }
+            if v > 255 {
+                v = 255;
+            }
+            crate::port::bitmap_set_u8(dst, x, y, 0, v);
+            x += 1;
+        }
+        y += 1;
+    }
+    return 0;
+}
+pub(crate) fn rt_ask_thermal(page: i32, dpi: i32, loc: &mut crate::port::Cells, ans: &mut crate::port::Cells, bms: &crate::port::BitmapSet, gray: &crate::port::Bitmap, paper: i32, mut rtp: &mut crate::port::Cells, mut rq: &mut crate::port::Cells) -> i32 {
+    let id: i32 = pu_id(page, ri_thermal());
+    let vid: i32 = pu_view_id(page, rv_thermal());
+    let v: &crate::port::Bitmap = crate::port::bms_put(bms, vid, crate::port::bitmap_w(gray), crate::port::bitmap_h(gray), 1);
+    rt_thermal_into(gray, v, paper);
+    crate::port::bitmap_hash(v, rtp, rtp_hash());
+    if an_find(ans, id) < 0 {
+        sc_request_view_psm(rq, id, vid, crate::port::cells_at(rtp, rtp_hash()), crate::port::cells_at(rtp, rtp_hash() + 1), 6, dpi, loc);
+    }
+    return 1;
+}
 pub fn rt_plan(page: i32, input: i32, born: i32, wanttext: i32, rid: i32, dpi: i32, loc: &mut crate::port::Cells, ans: &mut crate::port::Cells, bms: &crate::port::BitmapSet, k0: i32, src: &crate::port::Bitmap, mut ws: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, run: i32, mut olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, rules: &mut crate::port::Cells, tlines: &mut crate::port::Cells, mut rtp: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, comps: &mut crate::port::Cells, inks: &mut crate::port::Cells) -> i32 {
     // Decide and ask what is not yet answered, in the brief's order: the table cells and the lines, the text-only render and its OCR, the body-ink view,
     // the quarter-turned view. `page` is 0-based (ids), `rid` the request id of the raster `src` that the first pass read at `dpi`, `k0` the id group
@@ -1095,6 +1143,12 @@ pub fn rt_plan(page: i32, input: i32, born: i32, wanttext: i32, rid: i32, dpi: i
     }
     if crate::port::cells_at(rtp, rtp_body()) == 1 {
         asked += rt_ask_body(page, dpi, loc, ans, bms, rtp, rq);
+    }
+    if (born == 0) && ((q == 0) && (or_get(oruns, run, orf_wcount()) == 0)) {
+        let ba: i32 = an_find(ans, pu_id(page, ri_body()));
+        if (crate::port::cells_at(rtp, rtp_body()) == 0) || ((ba >= 0) && ((an_ok(ans, ba) == 1) && (an_ocr_count(ans, ba) == 0))) {
+            asked += rt_ask_thermal(page, dpi, loc, ans, bms, crate::port::bms_get(bms, pu_view_id(page, k0)), nm_paper_gray(ws), rtp, rq);
+        }
     }
     if q != 0 {
         asked += rt_ask_rotated(page, dpi, loc, ans, bms, src, q, rtp, rq);
@@ -1190,6 +1244,16 @@ pub fn rt_record(page: i32, srcview: i32, dpi100: i32, loc: &mut crate::port::Ce
             run = sc_answer(ans, a, pg, srcview, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
             rt_run_meta(oruns, run, op_body_ink(), 3, 3, 0, 0, 0, 0);
             crate::port::cells_set(rtp, rtp_brun(), run);
+            made += 1;
+        }
+    }
+    id = pu_id(page, ri_thermal());
+    a = an_find(ans, id);
+    if a >= 0 {
+        if an_ok(ans, a) == 1 {
+            run = sc_answer(ans, a, pg, srcview, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+            rt_run_meta(oruns, run, op_body_ink(), 3 + crate::port::cells_at(rtp, rtp_body()), 6, 0, 0, 0, 0);
+            crate::port::cells_set(rtp, rtp_frun(), run);
             made += 1;
         }
     }
@@ -1637,6 +1701,31 @@ pub fn rt_adopt(mut rtp: &mut crate::port::Cells, oruns: &mut crate::port::Cells
         }
         if n > 0 {
             crate::port::cells_set(rtp, rtp_primary(), brun);
+        }
+    }
+    if (n == 0) && (crate::port::cells_at(rtp, rtp_frun()) >= 0) {
+        tr = crate::port::cells_at(rtp, rtp_frun());
+        if rt_run_mean(oruns, owords, tr) >= rt_thermal_min() {
+            b = or_get(oruns, tr, orf_lfirst());
+            bn = b + or_get(oruns, tr, orf_lcount());
+            while b < bn {
+                if (ol_get(olines, b, lh_count()) >= rt_empty_words()) && (rt_line_mean(olines, owords, b) >= rt_empty_conf()) {
+                    n = rt_sel_add(scr, n, b);
+                }
+                b += 1;
+            }
+            if n == 0 {
+                b = or_get(oruns, tr, orf_lfirst());
+                while b < bn {
+                    if ol_get(olines, b, lh_count()) > 0 {
+                        n = rt_sel_add(scr, n, b);
+                    }
+                    b += 1;
+                }
+            }
+            if n > 0 {
+                crate::port::cells_set(rtp, rtp_primary(), tr);
+            }
         }
     }
     return n;

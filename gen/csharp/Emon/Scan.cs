@@ -3084,4 +3084,30 @@ public static class Scan {
         }
         return rows;
     }
+    public static int ScWriteEmptyOcr(emon.Port.Cells oruns, emon.Port.Cells pages, emon.Port.Cells ledger) {
+        // D698: an explicit ocr-empty diagnostic and dropped region after every attempt on a page returned no words. No text is invented.
+        int p = 0;
+        int r = 0;
+        int seen = 0;
+        int words = 0;
+        int rows = 0;
+        while (p < Model.PageCount(pages)) {
+            r = 0;
+            seen = 0;
+            words = 0;
+            while (r < Evidence.OrCount(oruns)) {
+                if (Evidence.OrGet(oruns, r, 0) == (p + 1)) {
+                    seen = 1;
+                    words += Evidence.OrGet(oruns, r, Evidence.OrfWcount());
+                }
+                r += 1;
+            }
+            if ((seen == 1) && (words == 0)) {
+                Model.LedgerAdd(ledger, Model.DrOcrEmpty(), p + 1, 0, 0, Model.PageW(pages, p), Model.PageH(pages, p), 1000, Model.SrOcr());
+                rows += 1;
+            }
+            p += 1;
+        }
+        return rows;
+    }
 }

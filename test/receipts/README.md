@@ -44,3 +44,10 @@ The compact baseline has a shared column list; absent counters are zero.
 The automatic build refreshes generated/host sources before each live run.
 The scorer's tests run with
 `python3 -m unittest discover -s tools/receipts -p 'test_*.py'`.
+
+`--record-transcripts` keeps live plan/answer transcripts under
+`EMON_RECEIPTS_OUT/<id>.replay`; `--replay-transcripts` runs those same port
+answers through a new driver without calling OCR. Missing transcripts fail
+explicitly. Keep these recordings outside git: they contain receipt pixels
+and text. Replay is suitable for changes after OCR planning; a planner change
+can require a fresh live recording.

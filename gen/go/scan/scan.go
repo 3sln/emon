@@ -3185,3 +3185,30 @@ func ScWriteEmptyRegions(olines *port.Cells, nodes *port.Cells, regions *port.Ce
 	}
 	return rows
 }
+
+func ScWriteEmptyOcr(oruns *port.Cells, pages *port.Cells, ledger *port.Cells) int32 {
+	// D698: an explicit ocr-empty diagnostic and dropped region after every attempt on a page returned no words. No text is invented.
+	var p int32 = 0
+	var r int32 = 0
+	var seen int32 = 0
+	var words int32 = 0
+	var rows int32 = 0
+	for p < model.PageCount(pages) {
+		r = 0
+		seen = 0
+		words = 0
+		for r < evidence.OrCount(oruns) {
+			if evidence.OrGet(oruns, r, 0) == (p + 1) {
+				seen = 1
+				words += evidence.OrGet(oruns, r, evidence.OrfWcount())
+			}
+			r += 1
+		}
+		if (seen == 1) && (words == 0) {
+			model.LedgerAdd(ledger, model.DrOcrEmpty(), p+1, 0, 0, model.PageW(pages, p), model.PageH(pages, p), 1000, model.SrOcr())
+			rows += 1
+		}
+		p += 1
+	}
+	return rows
+}

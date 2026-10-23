@@ -1430,6 +1430,12 @@ public static class Model {
     public static int DrUnwitnessedUncertainPaint() {
         return 12;
     }
+    public static int DrOcrEmpty() {
+        return 13;
+    }
+    public static int DrOcrUnrepresented() {
+        return 14;
+    }
     public static int DrEmitName(System.Text.StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.TextAscii(t, "watermark");
@@ -1477,6 +1483,14 @@ public static class Model {
         }
         if (code == 12) {
             emon.Port.TextAscii(t, "unwitnessed-uncertain-paint");
+            return 1;
+        }
+        if (code == 13) {
+            emon.Port.TextAscii(t, "ocr-empty");
+            return 1;
+        }
+        if (code == 14) {
+            emon.Port.TextAscii(t, "ocr-unrepresented");
             return 1;
         }
         return 0;

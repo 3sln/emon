@@ -1104,4 +1104,16 @@ public final class Scantest {
         emon.Testport.assertThat(Model.nodeConf(nodes, p) >= 850, "old upside-down coordinates cannot lower clean selected OCR");
         emon.Testport.assertThat(Calib.calNodeConf(nodes, p) >= 750, "the scraper sees high calibrated confidence too");
     }
+    public static void testEmptyOcrIsExplicitlyLedgered() {
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        Model.pageNew(pages, 1, 10000, 20000, 0, Model.pkImage());
+        Evidence.orNew(runs, 1, 0);
+        Evidence.orNew(runs, 1, 0);
+        emon.Testport.assertEq(Scan.scWriteEmptyOcr(runs, pages, ledger), 1, "one region after two empty attempts");
+        emon.Testport.assertEq(Model.ledgerReason(ledger, 0), Model.drOcrEmpty(), "explicit diagnostic");
+        Evidence.orSet(runs, 1, Evidence.orfWcount(), 1);
+        emon.Testport.assertEq(Scan.scWriteEmptyOcr(runs, pages, ledger), 0, "successful retry is not diagnosed empty");
+    }
 }

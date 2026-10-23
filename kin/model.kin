@@ -309,7 +309,9 @@
    [dr-offpage 9 "offpage"]
    [dr-invisible 10 "invisible"]
    [dr-rule-ghost 11 "rule-ghost"]
-   [dr-unwitnessed-uncertain-paint 12 "unwitnessed-uncertain-paint"]])
+   [dr-unwitnessed-uncertain-paint 12 "unwitnessed-uncertain-paint"]
+   [dr-ocr-empty 13 "ocr-empty"]
+   [dr-ocr-unrepresented 14 "ocr-unrepresented"]])
 
 ;; ASSETS (P3.13, D117, SPEC 10.11). Codes assigned once, never reused (D050).
 ;; An asset's origin: what its pixels are.
