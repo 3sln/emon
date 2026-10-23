@@ -99,7 +99,7 @@
           :let [d (str base "/" shard)]
           :when (fs/directory? d)
           fname (sort (map #(str (fs/file-name %)) (fs/list-dir d)))
-          :when (str/ends-with? fname ".json")]
+          :when (and (str/ends-with? fname ".json") (not (str/starts-with? fname "._")))]
       (let [j (pj/parse-file (str d "/" fname))
             stem (subs fname 0 (- (count fname) 5))
             gid (str "doclaynet-" (first (str/split shard #"-" 2)) "-" stem)]

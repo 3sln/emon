@@ -18,12 +18,14 @@ def run(*args, **kw):
     subprocess.run(args, check=True, **kw)
 
 kind = sys.argv[1]
+touched = []
 if kind.startswith('doclaynet-'):
     split = kind.removeprefix('doclaynet-')
     remote = {'test': 'test-00004-of-00006.parquet', 'val': 'validation-00004-of-00007.parquet'}[split]
     with tempfile.TemporaryDirectory(prefix='emon-shard-', dir=ROOT) as temp:
         parquet = Path(temp) / remote
         urllib.request.urlretrieve('https://huggingface.co/datasets/ds4sd/DocLayNet-v1.2/resolve/main/data/' + remote, parquet)
+        touched.append(ROOT / 'layout/doclaynet-v1.2')
         run(PY, str(SUPPORT / 'tools/extract_parquet.py'), str(parquet), str(ROOT / 'layout/doclaynet-v1.2' / (split + '-shard4')), 'dln_')
 elif kind.startswith('ctdar-'):
     split = kind.removeprefix('ctdar-')
@@ -34,6 +36,7 @@ elif kind.startswith('ctdar-'):
         run('git', '-C', str(checkout), 'sparse-checkout', 'set', '--no-cone', *['/' + x for x in paths])
         run('git', '-C', str(checkout), 'checkout', '171934db38a9e230e23b87a5afe86f8c83edaa95')
         dest = ROOT / 'tables/icdar2019-ctdar'
+        touched.append(dest)
         dest.mkdir(parents=True, exist_ok=True)
         for path in paths:
             src = checkout / path
@@ -50,7 +53,15 @@ else:
             if entry.name == '_dl' or entry.name.startswith('._'):
                 continue
             dest = ROOT / entry.name
+            touched.append(dest)
             if entry.is_dir():
                 shutil.copytree(entry, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns('._*'))
             else:
                 shutil.copy2(entry, dest)
+
+# Copies onto exFAT leave AppleDouble ._* sidecars that importers would parse; remove them
+# from what this fetch wrote (a whole-corpus walk on exFAT takes minutes).
+for top in touched:
+    for sidecar in (top.rglob('._*') if top.is_dir() else []):
+        if sidecar.is_file():
+            sidecar.unlink()
