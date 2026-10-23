@@ -187,6 +187,7 @@
   {:glob "tools/fuzz/**" :gates ["fuzz"] :why "the fuzzer"}
   {:glob "tools/receipts/**" :gates [] :why "live receipt measurement, not a gate"}
   {:glob "test/receipts/**" :gates [] :why "numerical live receipt baselines and metric documentation"}
+  {:glob "test/controls/**" :gates [] :why "named live control selections (corpus paths only); read by tools/shards to keep their shards"}
   {:glob "tools/import/**" :gates [] :why "public-dataset importers: the corpus is not in git, nothing here is a gate"}
   {:glob "tools/lib/**" :gates ["repeat" "fuzz" "accuracy" "@replay"] :why "libraries: extra_hosts (every replay gate's other hosts), pdfreverse (repeat), nfc and the python formatters (the synthetic corpus)"}
   {:glob "tools/limits/**" :gates [] :why "`bb limits` is a report, not a gate"}
