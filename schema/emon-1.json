@@ -490,7 +490,9 @@
             "offpage",
             "invisible",
             "rule-ghost",
-            "unwitnessed-uncertain-paint"
+            "unwitnessed-uncertain-paint",
+            "ocr-empty",
+            "ocr-unrepresented"
           ]
         },
         "page": {
