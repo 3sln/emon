@@ -10,6 +10,9 @@ import urllib.request
 REPO = Path(__file__).resolve().parents[2]
 ROOT = (REPO / 'corpus').resolve()
 SUPPORT = REPO / 'test/corpus/shards-fetch'
+# Parquet extraction needs pyarrow: use the repo's .cache/corpus-py venv when it exists.
+VENV_PY = REPO / '.cache/corpus-py/bin/python'
+PY = os.environ.get('PY') or (str(VENV_PY) if VENV_PY.exists() else 'python3')
 
 def run(*args, **kw):
     subprocess.run(args, check=True, **kw)
@@ -21,7 +24,7 @@ if kind.startswith('doclaynet-'):
     with tempfile.TemporaryDirectory(prefix='emon-shard-', dir=ROOT) as temp:
         parquet = Path(temp) / remote
         urllib.request.urlretrieve('https://huggingface.co/datasets/ds4sd/DocLayNet-v1.2/resolve/main/data/' + remote, parquet)
-        run('python3', str(SUPPORT / 'tools/extract_parquet.py'), str(parquet), str(ROOT / 'layout/doclaynet-v1.2' / (split + '-shard4')), 'dln_')
+        run(PY, str(SUPPORT / 'tools/extract_parquet.py'), str(parquet), str(ROOT / 'layout/doclaynet-v1.2' / (split + '-shard4')), 'dln_')
 elif kind.startswith('ctdar-'):
     split = kind.removeprefix('ctdar-')
     paths = {'train': ['training'], 'test': ['test', 'test_ground_truth'], 'samples': ['samples', 'README.md']}[split]
@@ -42,7 +45,7 @@ else:
     # Fetch into a clean staging root: upstream recipes skip existing directories,
     # while a safe prune deliberately leaves empty directories/AppleDouble behind.
     with tempfile.TemporaryDirectory(prefix='emon-shard-', dir=ROOT) as temp:
-        run('bash', str(SUPPORT / 'fetch.sh'), kind, env={**os.environ, 'EMON_CORPUS': temp})
+        run('bash', str(SUPPORT / 'fetch.sh'), kind, env={**os.environ, 'EMON_CORPUS': temp, 'PY': PY})
         for entry in Path(temp).iterdir():
             if entry.name == '_dl' or entry.name.startswith('._'):
                 continue

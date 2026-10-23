@@ -144,7 +144,8 @@ the default gate selections recorded in the registry; an empty vector wants none
 Fetch runs the source recipe and importer, then requires the registered digest.
 It refuses modified or partial shards: preserve and move those aside first.
 Some sources need Python `pyarrow`, `huggingface_hub`, and the importer's image
-and PDF utilities. Exact historical bytes at changing upstream URLs cannot be
+and PDF utilities. `bb corpus fetch` uses `.cache/corpus-py/bin/python` when it exists
+(`python3 -m venv .cache/corpus-py && .cache/corpus-py/bin/pip install pyarrow`), else `$PY`, else `python3`. Exact historical bytes at changing upstream URLs cannot be
 promised; these sources and unregistered local files are marked `keep`.
 
 `bb corpus prune` and `bb corpus prune --dry-run` only report candidates and byte
