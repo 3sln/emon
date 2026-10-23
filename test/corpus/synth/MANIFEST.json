@@ -6259,8 +6259,8 @@
    "files": {
     "html": {
      "path": "html/receipt-leaders.html",
-     "sha256": "1c47be7674fcb8cfe2f125d0a4f89925aa9a78430736417f92aa7e70c9d078e2",
-     "bytes": 336
+     "sha256": "62a7f038cdf11698be5122a2ed365b4730f094e4982c1e9b66f24f772f12b7a2",
+     "bytes": 320
     },
     "pdf": {
      "path": "pdf/receipt-leaders.pdf",

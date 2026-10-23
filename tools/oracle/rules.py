@@ -221,7 +221,7 @@ def truth(stem):
     pages = []
     with tempfile.TemporaryDirectory(prefix="emon-rules-") as tmp:
         subprocess.run(["pdftoppm", "-r", str(DPI), "-png", pdf, os.path.join(tmp, "p")], check=True)
-        pngs = sorted(f for f in os.listdir(tmp) if f.endswith(".png"))
+        pngs = sorted(f for f in os.listdir(tmp) if f.startswith("p-") and f.endswith(".png"))
         with pdfplumber.open(pdf) as doc:
             for i, pg in enumerate(doc.pages):
                 page = Page(Image.open(os.path.join(tmp, pngs[i])), pg.width, pg.height)
