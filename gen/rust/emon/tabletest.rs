@@ -1700,7 +1700,7 @@ fn test_the_dots_of_a_leader_are_no_cells() {
     tt_leader(wd, ln, et, 16400, &crate::testport::text_blob("Gross profit")[..], &crate::testport::text_blob("3")[..], &crate::testport::text_blob("720")[..]);
     tt_leader(wd, ln, et, 18000, &crate::testport::text_blob("Dividends")[..], &crate::testport::text_blob("4")[..], &crate::testport::text_blob("15")[..]);
     crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "leader: well formed");
-    crate::testport::assert_text(t, "T3w;Gh;R;Ch[Item];Ch[Line];Ch[Amount];Gb;R;C[Gross receipts . . . . . .];C[1a];Ce[1,200];R;C[Returns . . . . . .];C[1b];Ce[30];R;C[Cost of goods sold . . . . . .];C[2];Ce[450];R;C[Gross profit . . . . . .];C[3];Ce[720];R;C[Dividends . . . . . .];C[4];Ce[15];", "the leader is the end of the label's cell: three columns (before: nine, the six full stops the cells of six of them)");
+    crate::testport::assert_text(t, "T3w;Gh;R;Ch[Item];Ch[Line];Ch[Amount];Gb;R;C[Gross receipts];C[1a];Ce[1,200];R;C[Returns];C[1b];Ce[30];R;C[Cost of goods sold];C[2];Ce[450];R;C[Gross profit];C[3];Ce[720];R;C[Dividends];C[4];Ce[15];", "the leader is the end of the label's cell: three columns (before: nine, the six full stops the cells of six of them)");
 }
 #[test]
 fn test_a_row_span_does_not_cross_into_the_foot() {
@@ -2649,7 +2649,7 @@ fn test_cell_text_keeps_the_logical_order_of_each_rtl_line() {
     crate::port::cells_push(tw, 1);
     crate::port::cells_push(tw, 0);
     crate::port::cells_push(tw, 2);
-    tb_words_raw(wd, et, tw, 0, 3, raw, &mut crate::port::Cells::new());
+    tb_words_raw(wd, et, tw, 0, 3, raw, &mut crate::port::Cells::new(), 0);
     while i < crate::port::cells_len(raw) {
         crate::port::text_cp(out, crate::port::cells_at(raw, i));
         i += 1;
@@ -2849,6 +2849,81 @@ fn test_an_unlabeled_numeric_subtotal_does_not_hide_the_rest_of_a_zebra() {
     crate::testport::assert_eq(tt_ruled_build(wd, ln, et, pa, tb, tc, tw), 1, "a numeric-only subtotal is no indented invoice summary");
     crate::testport::assert_eq(crate::port::cells_at(tb, 7), 15, "both shaded stacks and all intervening rows survive");
 }
+pub(crate) fn tt_short_gutter_invoice(emon_t: i32, rows: i32) -> i32 {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut r: i32 = 0;
+    tt_rule(pa, 7200, 9500, 37800, 9560);
+    tt_rule(pa, 7200, 14000 + ((rows - 1) * 1600), 37800, 14060 + ((rows - 1) * 1600));
+    tt_at(wd, ln, et, &crate::testport::text_blob("Item")[..], 7600, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Price")[..], 32000, 10000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Worth")[..], 35400, 10000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("VAT")[..], 37300, 10000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Unit")[..], 32000, 11000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Sum")[..], 35400, 11000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Tax")[..], 37300, 11000, 1, 1);
+    while r < rows {
+        tt_at(wd, ln, et, &crate::testport::text_blob("Product")[..], 7600, 13000 + (r * 1600), 0, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("23,99")[..], 32000, 13000 + (r * 1600), 0, 1);
+        tt_at(wd, ln, et, &crate::testport::text_blob("119,95")[..], 35400, 13000 + (r * 1600), 0, 1);
+        tt_at(wd, ln, et, &crate::testport::text_blob("10%")[..], 37300, 13000 + (r * 1600), 0, 1);
+        r += 1;
+    }
+    crate::testport::assert_eq(tt_ruled_build(wd, ln, et, pa, tb, tc, tw), 1, "one invoice table");
+    if crate::port::cells_len(tb) == 0 {
+        return 1;
+    }
+    crate::testport::assert_eq(crate::port::cells_at(tb, 8), 4, "price, worth and VAT keep separate data and header columns");
+    return 0;
+}
+#[test]
+fn test_a_one_item_invoice_keeps_short_numeric_gutters() {
+    tt_short_gutter_invoice(0, 1);
+}
+#[test]
+fn test_a_five_item_invoice_keeps_the_same_short_numeric_gutters() {
+    tt_short_gutter_invoice(0, 5);
+}
+#[test]
+fn test_numeric_data_cuts_preserve_a_genuine_three_column_spanner() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut r: i32 = 0;
+    let mut q: i32 = 0;
+    tt_rule(pa, 7200, 9500, 44800, 9560);
+    tt_rule(pa, 7200, 32000, 44800, 32060);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Name")[..], 7600, 10000, 1, 0);
+    tt_line3(wd, ln, et, &crate::testport::text_blob("Not")[..], &crate::testport::text_blob("fully")[..], &crate::testport::text_blob("adjusted")[..], 23000, 10000);
+    tt_line3(wd, ln, et, &crate::testport::text_blob("Not")[..], &crate::testport::text_blob("fully")[..], &crate::testport::text_blob("adjusted")[..], 35000, 10000);
+    while q < 6 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("2024")[..], 24000 + (q * 4000), 11000, 1, 1);
+        q += 1;
+    }
+    while r < 12 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("Workers")[..], 7600, 13000 + (r * 1500), 0, 0);
+        q = 0;
+        while q < 6 {
+            tt_at(wd, ln, et, &crate::testport::text_blob("1.00")[..], 24000 + (q * 4000), 13000 + (r * 1500), 0, 1);
+            q += 1;
+        }
+        r += 1;
+    }
+    crate::testport::assert_eq(tt_ruled_build(wd, ln, et, pa, tb, tc, tw), 1, "one grouped table");
+    if crate::port::cells_len(tb) > 0 {
+        crate::testport::assert_eq(crate::port::cells_at(tb, 8), 7, "the six numeric columns keep their identities");
+        crate::testport::assert_eq(crate::port::cells_at(tc, ((crate::port::cells_at(tb, 9) + 1) * 16) + 3), 3, "the first group remains one three-column header");
+    }
+}
 #[test]
 fn test_narrow_numeric_grids_do_not_take_words_from_crossing_prose() {
     let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -2878,4 +2953,157 @@ fn test_narrow_numeric_grids_do_not_take_words_from_crossing_prose() {
         r += 1;
     }
     crate::testport::assert_eq(tt_ruled_build(wd, ln, et, pa, tb, tc, tw), 2, "prose across two narrow numeric grids is not their shared table body");
+}
+pub(crate) fn tt_header_body(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells) -> i32 {
+    let mut r: i32 = 0;
+    while r < 4 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("Assets")[..], 7600, 14500 + (r * 2200), 0, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("100.00")[..], 32000, 14500 + (r * 2200), 0, 1);
+        tt_at(wd, ln, et, &crate::testport::text_blob("200.00")[..], 43000, 14500 + (r * 2200), 0, 1);
+        r += 1;
+    }
+    return 0;
+}
+#[test]
+fn test_two_short_header_rows_inside_model_bands_are_in_thead() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tbo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    tt_at(wd, ln, et, &crate::testport::text_blob("2023")[..], 28500, 10000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("2024")[..], 39500, 10000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Period")[..], 28500, 11200, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Period")[..], 39500, 11200, 0, 1);
+    tt_header_body(wd, ln, et);
+    crate::testport::assert_eq(tt_own_build(wd, ln, et, tb, tc, tw, tbo), 1, "one numeric table");
+    crate::testport::assert_eq(crate::port::cells_at(tb, 22), 2, "both short aligned header rows bind");
+    crate::testport::assert_eq(crate::port::cells_at(tb, 11), 2, "both bound rows are thead");
+}
+#[test]
+fn test_an_account_code_is_not_a_column_header() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tbo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    tt_at(wd, ln, et, &crate::testport::text_blob("USD Savings Account")[..], 7600, 11200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("817-001")[..], 39500, 11200, 0, 1);
+    tt_header_body(wd, ln, et);
+    crate::testport::assert_eq(tt_own_build(wd, ln, et, tb, tc, tw, tbo), 1, "one ledger, with external context");
+    crate::testport::assert_eq(crate::port::cells_at(tb, 22), 0, "an account code cannot bind as a short year header");
+}
+#[test]
+fn test_a_short_title_is_not_a_column_header() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tbo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    tt_at(wd, ln, et, &crate::testport::text_blob("Summary of Assets")[..], 7600, 11200, 0, 0);
+    tt_header_body(wd, ln, et);
+    crate::testport::assert_eq(tt_own_build(wd, ln, et, tb, tc, tw, tbo), 1, "one table below its title");
+    crate::testport::assert_eq(crate::port::cells_at(tb, 22), 0, "one short title is not a row of column labels");
+}
+#[test]
+fn test_a_partial_parser_line_cannot_bind_as_a_header() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tbo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut w: i32 = 0;
+    tt_w(wd, et, &crate::testport::text_blob("Kind")[..], 7600, 11200, 9600, 12000, 0);
+    tt_w(wd, et, &crate::testport::text_blob("2023")[..], 30000, 11200, 32000, 12000, 0);
+    tt_w(wd, et, &crate::testport::text_blob("2024")[..], 41000, 11200, 43000, 12000, 0);
+    tt_w(wd, et, &crate::testport::text_blob("Extra")[..], 50000, 11200, 52500, 12000, 0);
+    ln_new(ln, 1, 7600, 11200, 52500, 12000, 7600, 11800, 52500, 11800, 0, 0, 0, 4);
+    while w < 4 {
+        wd_set(wd, w, hd_line(), 0);
+        w += 1;
+    }
+    tt_header_body(wd, ln, et);
+    crate::testport::assert_eq(tt_own_build(wd, ln, et, tb, tc, tw, tbo), 1, "one table beside a wide parser line");
+    crate::testport::assert_eq(crate::port::cells_at(tb, 22), 0, "binding cannot silently discard the rest of a parser line");
+}
+#[test]
+fn test_two_separately_boxed_grids_are_two_tables() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut r: i32 = 0;
+    tt_rule(pa, 7200, 9500, 44000, 9560);
+    tt_rule(pa, 7200, 17500, 44000, 17560);
+    tt_rule(pa, 7200, 9500, 7260, 17560);
+    tt_rule(pa, 43940, 9500, 44000, 17560);
+    tt_rule(pa, 7200, 19000, 44000, 19060);
+    tt_rule(pa, 7200, 27000, 44000, 27060);
+    tt_rule(pa, 7200, 19000, 7260, 27060);
+    tt_rule(pa, 43940, 19000, 44000, 27060);
+    while r < 10 {
+        let mut y: i32 = 10000 + (r * 1500);
+        if r >= 5 {
+            y = 19500 + ((r - 5) * 1500);
+        }
+        tt_at(wd, ln, et, &crate::testport::text_blob("Transfer")[..], 7600, y, 0, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("10.00")[..], 29000, y, 0, 1);
+        tt_at(wd, ln, et, &crate::testport::text_blob("100.00")[..], 43000, y, 0, 1);
+        r += 1;
+    }
+    crate::testport::assert_eq(tt_ruled_build(wd, ln, et, pa, tb, tc, tw), 2, "independent closed boxes cannot become one partial table");
+}
+#[test]
+fn test_dot_leaders_leave_the_cell_label_and_real_ellipsis_intact() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let raw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let order: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut String = &mut crate::port::new_text();
+    tt_at(wd, ln, et, &crate::testport::text_blob("Assets . . . . .")[..], 7600, 10000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Wait...")[..], 7600, 12000, 0, 0);
+    crate::port::cells_push(tw, 0);
+    crate::port::cells_push(tw, 1);
+    tb_words_raw(wd, et, tw, 0, 2, raw, order, 0);
+    let mut i: i32 = 0;
+    while i < crate::port::cells_len(raw) {
+        crate::port::text_cp(text, crate::port::cells_at(raw, i));
+        i += 1;
+    }
+    crate::testport::assert_text(text, "Assets Wait...", "leader runs are removed while a three-dot ellipsis stays");
+}
+#[test]
+fn test_widget_pages_keep_the_leaders_needed_for_field_placement() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    let an: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    // The 1120's lines (D17, D18, D20): a label, a leader of full stops a gap apart, the line number, the amount. Each full stop is a chunk of its own to the
+    // rows' words and the six of a row, in the same places in every row, are columns of the table (before: a table of nine columns, the dots cells).
+    tt_at(wd, ln, et, &crate::testport::text_blob("Item")[..], 7600, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Line")[..], 33000, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Amount")[..], 43000, 10000, 1, 1);
+    tt_leader(wd, ln, et, 11600, &crate::testport::text_blob("Gross receipts")[..], &crate::testport::text_blob("1a")[..], &crate::testport::text_blob("1,200")[..]);
+    tt_leader(wd, ln, et, 13200, &crate::testport::text_blob("Returns")[..], &crate::testport::text_blob("1b")[..], &crate::testport::text_blob("30")[..]);
+    tt_leader(wd, ln, et, 14800, &crate::testport::text_blob("Cost of goods sold")[..], &crate::testport::text_blob("2")[..], &crate::testport::text_blob("450")[..]);
+    tt_leader(wd, ln, et, 16400, &crate::testport::text_blob("Gross profit")[..], &crate::testport::text_blob("3")[..], &crate::testport::text_blob("720")[..]);
+    tt_leader(wd, ln, et, 18000, &crate::testport::text_blob("Dividends")[..], &crate::testport::text_blob("4")[..], &crate::testport::text_blob("15")[..]);
+    tt_widget(an, 55000, 50000, 56000, 51000);
+    crate::testport::assert_eq(tt_run_an(wd, ln, et, pa, t, 1, an), 0, "leader: well formed");
+    crate::testport::assert_text(t, "T3w;Gh;R;Ch[Item];Ch[Line];Ch[Amount];Gb;R;C[Gross receipts . . . . . .];C[1a];Ce[1,200];R;C[Returns . . . . . .];C[1b];Ce[30];R;C[Cost of goods sold . . . . . .];C[2];Ce[450];R;C[Gross profit . . . . . .];C[3];Ce[720];R;C[Dividends . . . . . .];C[4];Ce[15];", "the leader is the end of the label's cell: three columns (before: nine, the six full stops the cells of six of them)");
 }

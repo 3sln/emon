@@ -1650,7 +1650,7 @@ public final class Tabletest {
         ttLeader(wd, ln, et, 16400, emon.Testport.textBlob("Gross profit"), emon.Testport.textBlob("3"), emon.Testport.textBlob("720"));
         ttLeader(wd, ln, et, 18000, emon.Testport.textBlob("Dividends"), emon.Testport.textBlob("4"), emon.Testport.textBlob("15"));
         emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "leader: well formed");
-        emon.Testport.assertText(t, "T3w;Gh;R;Ch[Item];Ch[Line];Ch[Amount];Gb;R;C[Gross receipts . . . . . .];C[1a];Ce[1,200];R;C[Returns . . . . . .];C[1b];Ce[30];R;C[Cost of goods sold . . . . . .];C[2];Ce[450];R;C[Gross profit . . . . . .];C[3];Ce[720];R;C[Dividends . . . . . .];C[4];Ce[15];", "the leader is the end of the label's cell: three columns (before: nine, the six full stops the cells of six of them)");
+        emon.Testport.assertText(t, "T3w;Gh;R;Ch[Item];Ch[Line];Ch[Amount];Gb;R;C[Gross receipts];C[1a];Ce[1,200];R;C[Returns];C[1b];Ce[30];R;C[Cost of goods sold];C[2];Ce[450];R;C[Gross profit];C[3];Ce[720];R;C[Dividends];C[4];Ce[15];", "the leader is the end of the label's cell: three columns (before: nine, the six full stops the cells of six of them)");
     }
     public static void testARowSpanDoesNotCrossIntoTheFoot() {
         emon.Port.Cells wd = emon.Port.newCells();
@@ -2565,7 +2565,7 @@ public final class Tabletest {
         emon.Port.cellsPush(tw, 1);
         emon.Port.cellsPush(tw, 0);
         emon.Port.cellsPush(tw, 2);
-        Table.tbWordsRaw(wd, et, tw, 0, 3, raw, emon.Port.newCells());
+        Table.tbWordsRaw(wd, et, tw, 0, 3, raw, emon.Port.newCells(), 0);
         while (i < emon.Port.cellsLen(raw)) {
             emon.Port.textCp(out, emon.Port.cellsAt(raw, i));
             i += 1;
@@ -2759,6 +2759,78 @@ public final class Tabletest {
         emon.Testport.assertEq(ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 1, "a numeric-only subtotal is no indented invoice summary");
         emon.Testport.assertEq(emon.Port.cellsAt(tb, 7), 15, "both shaded stacks and all intervening rows survive");
     }
+    public static int ttShortGutterInvoice(int emonT, int rows) {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        int r = 0;
+        ttRule(pa, 7200, 9500, 37800, 9560);
+        ttRule(pa, 7200, 14000 + ((rows - 1) * 1600), 37800, 14060 + ((rows - 1) * 1600));
+        ttAt(wd, ln, et, emon.Testport.textBlob("Item"), 7600, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Price"), 32000, 10000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Worth"), 35400, 10000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("VAT"), 37300, 10000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Unit"), 32000, 11000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Sum"), 35400, 11000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Tax"), 37300, 11000, 1, 1);
+        while (r < rows) {
+            ttAt(wd, ln, et, emon.Testport.textBlob("Product"), 7600, 13000 + (r * 1600), 0, 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("23,99"), 32000, 13000 + (r * 1600), 0, 1);
+            ttAt(wd, ln, et, emon.Testport.textBlob("119,95"), 35400, 13000 + (r * 1600), 0, 1);
+            ttAt(wd, ln, et, emon.Testport.textBlob("10%"), 37300, 13000 + (r * 1600), 0, 1);
+            r += 1;
+        }
+        emon.Testport.assertEq(ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 1, "one invoice table");
+        if (emon.Port.cellsLen(tb) == 0) {
+            return 1;
+        }
+        emon.Testport.assertEq(emon.Port.cellsAt(tb, 8), 4, "price, worth and VAT keep separate data and header columns");
+        return 0;
+    }
+    public static void testAOneItemInvoiceKeepsShortNumericGutters() {
+        ttShortGutterInvoice(0, 1);
+    }
+    public static void testAFiveItemInvoiceKeepsTheSameShortNumericGutters() {
+        ttShortGutterInvoice(0, 5);
+    }
+    public static void testNumericDataCutsPreserveAGenuineThreeColumnSpanner() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        int r = 0;
+        int q = 0;
+        ttRule(pa, 7200, 9500, 44800, 9560);
+        ttRule(pa, 7200, 32000, 44800, 32060);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Name"), 7600, 10000, 1, 0);
+        ttLine3(wd, ln, et, emon.Testport.textBlob("Not"), emon.Testport.textBlob("fully"), emon.Testport.textBlob("adjusted"), 23000, 10000);
+        ttLine3(wd, ln, et, emon.Testport.textBlob("Not"), emon.Testport.textBlob("fully"), emon.Testport.textBlob("adjusted"), 35000, 10000);
+        while (q < 6) {
+            ttAt(wd, ln, et, emon.Testport.textBlob("2024"), 24000 + (q * 4000), 11000, 1, 1);
+            q += 1;
+        }
+        while (r < 12) {
+            ttAt(wd, ln, et, emon.Testport.textBlob("Workers"), 7600, 13000 + (r * 1500), 0, 0);
+            q = 0;
+            while (q < 6) {
+                ttAt(wd, ln, et, emon.Testport.textBlob("1.00"), 24000 + (q * 4000), 13000 + (r * 1500), 0, 1);
+                q += 1;
+            }
+            r += 1;
+        }
+        emon.Testport.assertEq(ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 1, "one grouped table");
+        if (emon.Port.cellsLen(tb) > 0) {
+            emon.Testport.assertEq(emon.Port.cellsAt(tb, 8), 7, "the six numeric columns keep their identities");
+            emon.Testport.assertEq(emon.Port.cellsAt(tc, ((emon.Port.cellsAt(tb, 9) + 1) * 16) + 3), 3, "the first group remains one three-column header");
+        }
+    }
     public static void testNarrowNumericGridsDoNotTakeWordsFromCrossingProse() {
         emon.Port.Cells wd = emon.Port.newCells();
         emon.Port.Cells ln = emon.Port.newCells();
@@ -2787,5 +2859,151 @@ public final class Tabletest {
             r += 1;
         }
         emon.Testport.assertEq(ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 2, "prose across two narrow numeric grids is not their shared table body");
+    }
+    public static int ttHeaderBody(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et) {
+        int r = 0;
+        while (r < 4) {
+            ttAt(wd, ln, et, emon.Testport.textBlob("Assets"), 7600, 14500 + (r * 2200), 0, 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("100.00"), 32000, 14500 + (r * 2200), 0, 1);
+            ttAt(wd, ln, et, emon.Testport.textBlob("200.00"), 43000, 14500 + (r * 2200), 0, 1);
+            r += 1;
+        }
+        return 0;
+    }
+    public static void testTwoShortHeaderRowsInsideModelBandsAreInThead() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells tbo = emon.Port.newCells();
+        ttAt(wd, ln, et, emon.Testport.textBlob("2023"), 28500, 10000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("2024"), 39500, 10000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Period"), 28500, 11200, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Period"), 39500, 11200, 0, 1);
+        ttHeaderBody(wd, ln, et);
+        emon.Testport.assertEq(ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one numeric table");
+        emon.Testport.assertEq(emon.Port.cellsAt(tb, 22), 2, "both short aligned header rows bind");
+        emon.Testport.assertEq(emon.Port.cellsAt(tb, 11), 2, "both bound rows are thead");
+    }
+    public static void testAnAccountCodeIsNotAColumnHeader() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells tbo = emon.Port.newCells();
+        ttAt(wd, ln, et, emon.Testport.textBlob("USD Savings Account"), 7600, 11200, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("817-001"), 39500, 11200, 0, 1);
+        ttHeaderBody(wd, ln, et);
+        emon.Testport.assertEq(ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one ledger, with external context");
+        emon.Testport.assertEq(emon.Port.cellsAt(tb, 22), 0, "an account code cannot bind as a short year header");
+    }
+    public static void testAShortTitleIsNotAColumnHeader() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells tbo = emon.Port.newCells();
+        ttAt(wd, ln, et, emon.Testport.textBlob("Summary of Assets"), 7600, 11200, 0, 0);
+        ttHeaderBody(wd, ln, et);
+        emon.Testport.assertEq(ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one table below its title");
+        emon.Testport.assertEq(emon.Port.cellsAt(tb, 22), 0, "one short title is not a row of column labels");
+    }
+    public static void testAPartialParserLineCannotBindAsAHeader() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells tbo = emon.Port.newCells();
+        int w = 0;
+        ttW(wd, et, emon.Testport.textBlob("Kind"), 7600, 11200, 9600, 12000, 0);
+        ttW(wd, et, emon.Testport.textBlob("2023"), 30000, 11200, 32000, 12000, 0);
+        ttW(wd, et, emon.Testport.textBlob("2024"), 41000, 11200, 43000, 12000, 0);
+        ttW(wd, et, emon.Testport.textBlob("Extra"), 50000, 11200, 52500, 12000, 0);
+        Evidence.lnNew(ln, 1, 7600, 11200, 52500, 12000, 7600, 11800, 52500, 11800, 0, 0, 0, 4);
+        while (w < 4) {
+            Evidence.wdSet(wd, w, Evidence.hdLine(), 0);
+            w += 1;
+        }
+        ttHeaderBody(wd, ln, et);
+        emon.Testport.assertEq(ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one table beside a wide parser line");
+        emon.Testport.assertEq(emon.Port.cellsAt(tb, 22), 0, "binding cannot silently discard the rest of a parser line");
+    }
+    public static void testTwoSeparatelyBoxedGridsAreTwoTables() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        int r = 0;
+        ttRule(pa, 7200, 9500, 44000, 9560);
+        ttRule(pa, 7200, 17500, 44000, 17560);
+        ttRule(pa, 7200, 9500, 7260, 17560);
+        ttRule(pa, 43940, 9500, 44000, 17560);
+        ttRule(pa, 7200, 19000, 44000, 19060);
+        ttRule(pa, 7200, 27000, 44000, 27060);
+        ttRule(pa, 7200, 19000, 7260, 27060);
+        ttRule(pa, 43940, 19000, 44000, 27060);
+        while (r < 10) {
+            int y = 10000 + (r * 1500);
+            if (r >= 5) {
+                y = 19500 + ((r - 5) * 1500);
+            }
+            ttAt(wd, ln, et, emon.Testport.textBlob("Transfer"), 7600, y, 0, 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("10.00"), 29000, y, 0, 1);
+            ttAt(wd, ln, et, emon.Testport.textBlob("100.00"), 43000, y, 0, 1);
+            r += 1;
+        }
+        emon.Testport.assertEq(ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 2, "independent closed boxes cannot become one partial table");
+    }
+    public static void testDotLeadersLeaveTheCellLabelAndRealEllipsisIntact() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells raw = emon.Port.newCells();
+        emon.Port.Cells order = emon.Port.newCells();
+        StringBuilder text = emon.Testport.newText();
+        ttAt(wd, ln, et, emon.Testport.textBlob("Assets . . . . ."), 7600, 10000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Wait..."), 7600, 12000, 0, 0);
+        emon.Port.cellsPush(tw, 0);
+        emon.Port.cellsPush(tw, 1);
+        Table.tbWordsRaw(wd, et, tw, 0, 2, raw, order, 0);
+        int i = 0;
+        while (i < emon.Port.cellsLen(raw)) {
+            emon.Port.textCp(text, emon.Port.cellsAt(raw, i));
+            i += 1;
+        }
+        emon.Testport.assertText(text, "Assets Wait...", "leader runs are removed while a three-dot ellipsis stays");
+    }
+    public static void testWidgetPagesKeepTheLeadersNeededForFieldPlacement() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        emon.Port.Cells an = emon.Port.newCells();
+        // The 1120's lines (D17, D18, D20): a label, a leader of full stops a gap apart, the line number, the amount. Each full stop is a chunk of its own to the
+        // rows' words and the six of a row, in the same places in every row, are columns of the table (before: a table of nine columns, the dots cells).
+        ttAt(wd, ln, et, emon.Testport.textBlob("Item"), 7600, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Line"), 33000, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Amount"), 43000, 10000, 1, 1);
+        ttLeader(wd, ln, et, 11600, emon.Testport.textBlob("Gross receipts"), emon.Testport.textBlob("1a"), emon.Testport.textBlob("1,200"));
+        ttLeader(wd, ln, et, 13200, emon.Testport.textBlob("Returns"), emon.Testport.textBlob("1b"), emon.Testport.textBlob("30"));
+        ttLeader(wd, ln, et, 14800, emon.Testport.textBlob("Cost of goods sold"), emon.Testport.textBlob("2"), emon.Testport.textBlob("450"));
+        ttLeader(wd, ln, et, 16400, emon.Testport.textBlob("Gross profit"), emon.Testport.textBlob("3"), emon.Testport.textBlob("720"));
+        ttLeader(wd, ln, et, 18000, emon.Testport.textBlob("Dividends"), emon.Testport.textBlob("4"), emon.Testport.textBlob("15"));
+        ttWidget(an, 55000, 50000, 56000, 51000);
+        emon.Testport.assertEq(ttRunAn(wd, ln, et, pa, t, 1, an), 0, "leader: well formed");
+        emon.Testport.assertText(t, "T3w;Gh;R;Ch[Item];Ch[Line];Ch[Amount];Gb;R;C[Gross receipts . . . . . .];C[1a];Ce[1,200];R;C[Returns . . . . . .];C[1b];Ce[30];R;C[Cost of goods sold . . . . . .];C[2];Ce[450];R;C[Gross profit . . . . . .];C[3];Ce[720];R;C[Dividends . . . . . .];C[4];Ce[15];", "the leader is the end of the label's cell: three columns (before: nine, the six full stops the cells of six of them)");
     }
 }

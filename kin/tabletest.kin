@@ -1470,7 +1470,7 @@
     (tt-leader wd ln et 16400 (text-blob "Gross profit") (text-blob "3") (text-blob "720"))
     (tt-leader wd ln et 18000 (text-blob "Dividends") (text-blob "4") (text-blob "15"))
     (assert-eq (tt-run wd ln et pa t) 0 "leader: well formed")
-    (assert-text t "T3w;Gh;R;Ch[Item];Ch[Line];Ch[Amount];Gb;R;C[Gross receipts . . . . . .];C[1a];Ce[1,200];R;C[Returns . . . . . .];C[1b];Ce[30];R;C[Cost of goods sold . . . . . .];C[2];Ce[450];R;C[Gross profit . . . . . .];C[3];Ce[720];R;C[Dividends . . . . . .];C[4];Ce[15];"
+    (assert-text t "T3w;Gh;R;Ch[Item];Ch[Line];Ch[Amount];Gb;R;C[Gross receipts];C[1a];Ce[1,200];R;C[Returns];C[1b];Ce[30];R;C[Cost of goods sold];C[2];Ce[450];R;C[Gross profit];C[3];Ce[720];R;C[Dividends];C[4];Ce[15];"
                  "the leader is the end of the label's cell: three columns (before: nine, the six full stops the cells of six of them)")))
 
 (deftest test-a-row-span-does-not-cross-into-the-foot
@@ -2156,7 +2156,7 @@
     (wd-set wd 1 (hd-line) 0)
     (wd-set wd 2 (hd-line) 1)
     (cells-push tw 1) (cells-push tw 0) (cells-push tw 2)
-    (tb-words-raw wd et tw 0 3 raw (new-cells))
+    (tb-words-raw wd et tw 0 3 raw (new-cells) 0)
     (while (< i (cells-len raw))
       (do (text-cp out (cells-at raw i)) (set i (+ i 1))))
     (assert-text out "عدد الصفحات 2026" "cell words follow logical line order without reversing letters or rows")))
@@ -2299,6 +2299,59 @@
     (assert-eq (tt-ruled-build wd ln et pa tb tc tw) 1 "a numeric-only subtotal is no indented invoice summary")
     (assert-eq (cells-at tb 7) 15 "both shaded stacks and all intervening rows survive")))
 
+(defn ^I32 tt-short-gutter-invoice [^TestT emon-t ^I32 rows]
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^:mut ^I32 r 0]
+    (tt-rule pa 7200 9500 37800 9560)
+    (tt-rule pa 7200 (+ 14000 (* (- rows 1) 1600)) 37800 (+ 14060 (* (- rows 1) 1600)))
+    (tt-at wd ln et (text-blob "Item") 7600 10000 1 0)
+    (tt-at wd ln et (text-blob "Price") 32000 10000 1 1)
+    (tt-at wd ln et (text-blob "Worth") 35400 10000 1 1)
+    (tt-at wd ln et (text-blob "VAT") 37300 10000 1 1)
+    (tt-at wd ln et (text-blob "Unit") 32000 11000 1 1)
+    (tt-at wd ln et (text-blob "Sum") 35400 11000 1 1)
+    (tt-at wd ln et (text-blob "Tax") 37300 11000 1 1)
+    (while (< r rows)
+      (do (tt-at wd ln et (text-blob "Product") 7600 (+ 13000 (* r 1600)) 0 0)
+          (tt-at wd ln et (text-blob "23,99") 32000 (+ 13000 (* r 1600)) 0 1)
+          (tt-at wd ln et (text-blob "119,95") 35400 (+ 13000 (* r 1600)) 0 1)
+          (tt-at wd ln et (text-blob "10%") 37300 (+ 13000 (* r 1600)) 0 1)
+          (set r (+ r 1))))
+    (assert-eq (tt-ruled-build wd ln et pa tb tc tw) 1 "one invoice table")
+    (if (== (cells-len tb) 0) (return 1))
+    (assert-eq (cells-at tb 8) 4 "price, worth and VAT keep separate data and header columns")
+    (return 0)))
+
+(deftest test-a-one-item-invoice-keeps-short-numeric-gutters
+  (tt-short-gutter-invoice (test-t) 1))
+
+(deftest test-a-five-item-invoice-keeps-the-same-short-numeric-gutters
+  (tt-short-gutter-invoice (test-t) 5))
+
+(deftest test-numeric-data-cuts-preserve-a-genuine-three-column-spanner
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells)
+        ^:mut ^I32 r 0 ^:mut ^I32 q 0]
+    (tt-rule pa 7200 9500 44800 9560)
+    (tt-rule pa 7200 32000 44800 32060)
+    (tt-at wd ln et (text-blob "Name") 7600 10000 1 0)
+    (tt-line3 wd ln et (text-blob "Not") (text-blob "fully") (text-blob "adjusted") 23000 10000)
+    (tt-line3 wd ln et (text-blob "Not") (text-blob "fully") (text-blob "adjusted") 35000 10000)
+    (while (< q 6)
+      (do (tt-at wd ln et (text-blob "2024") (+ 24000 (* q 4000)) 11000 1 1)
+          (set q (+ q 1))))
+    (while (< r 12)
+      (do (tt-at wd ln et (text-blob "Workers") 7600 (+ 13000 (* r 1500)) 0 0)
+          (set q 0)
+          (while (< q 6)
+            (do (tt-at wd ln et (text-blob "1.00") (+ 24000 (* q 4000)) (+ 13000 (* r 1500)) 0 1)
+                (set q (+ q 1))))
+          (set r (+ r 1))))
+    (assert-eq (tt-ruled-build wd ln et pa tb tc tw) 1 "one grouped table")
+    (if (> (cells-len tb) 0)
+      (do (assert-eq (cells-at tb 8) 7 "the six numeric columns keep their identities")
+    (assert-eq (cells-at tc (+ (* (+ (cells-at tb 9) 1) 16) 3)) 3 "the first group remains one three-column header")))))
+
 (deftest test-narrow-numeric-grids-do-not-take-words-from-crossing-prose
   (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
         ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^:mut ^I32 r 0]
@@ -2317,3 +2370,104 @@
           (tt-at wd ln et (text-blob "40.0") 43000 (+ 21200 (* r 1600)) 0 1)
           (set r (+ r 1))))
     (assert-eq (tt-ruled-build wd ln et pa tb tc tw) 2 "prose across two narrow numeric grids is not their shared table body")))
+
+(defn ^I32 tt-header-body [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et]
+  (let [^:mut ^I32 r 0]
+    (while (< r 4)
+      (do (tt-at wd ln et (text-blob "Assets") 7600 (+ 14500 (* r 2200)) 0 0)
+          (tt-at wd ln et (text-blob "100.00") 32000 (+ 14500 (* r 2200)) 0 1)
+          (tt-at wd ln et (text-blob "200.00") 43000 (+ 14500 (* r 2200)) 0 1)
+          (set r (+ r 1))))
+    (return 0)))
+
+(deftest test-two-short-header-rows-inside-model-bands-are-in-thead
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^Cells tbo (new-cells)]
+    (tt-at wd ln et (text-blob "2023") 28500 10000 0 1)
+    (tt-at wd ln et (text-blob "2024") 39500 10000 0 1)
+    (tt-at wd ln et (text-blob "Period") 28500 11200 0 1)
+    (tt-at wd ln et (text-blob "Period") 39500 11200 0 1)
+    (tt-header-body wd ln et)
+    (assert-eq (tt-own-build wd ln et tb tc tw tbo) 1 "one numeric table")
+    (assert-eq (cells-at tb 22) 2 "both short aligned header rows bind")
+    (assert-eq (cells-at tb 11) 2 "both bound rows are thead")))
+
+(deftest test-an-account-code-is-not-a-column-header
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^Cells tbo (new-cells)]
+    (tt-at wd ln et (text-blob "USD Savings Account") 7600 11200 0 0)
+    (tt-at wd ln et (text-blob "817-001") 39500 11200 0 1)
+    (tt-header-body wd ln et)
+    (assert-eq (tt-own-build wd ln et tb tc tw tbo) 1 "one ledger, with external context")
+    (assert-eq (cells-at tb 22) 0 "an account code cannot bind as a short year header")))
+
+(deftest test-a-short-title-is-not-a-column-header
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^Cells tbo (new-cells)]
+    (tt-at wd ln et (text-blob "Summary of Assets") 7600 11200 0 0)
+    (tt-header-body wd ln et)
+    (assert-eq (tt-own-build wd ln et tb tc tw tbo) 1 "one table below its title")
+    (assert-eq (cells-at tb 22) 0 "one short title is not a row of column labels")))
+
+(deftest test-a-partial-parser-line-cannot-bind-as-a-header
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^Cells tbo (new-cells)
+        ^:mut ^I32 w 0]
+    (tt-w wd et (text-blob "Kind") 7600 11200 9600 12000 0)
+    (tt-w wd et (text-blob "2023") 30000 11200 32000 12000 0)
+    (tt-w wd et (text-blob "2024") 41000 11200 43000 12000 0)
+    (tt-w wd et (text-blob "Extra") 50000 11200 52500 12000 0)
+    (ln-new ln 1 7600 11200 52500 12000 7600 11800 52500 11800 0 0 0 4)
+    (while (< w 4) (do (wd-set wd w (hd-line) 0) (set w (+ w 1))))
+    (tt-header-body wd ln et)
+    (assert-eq (tt-own-build wd ln et tb tc tw tbo) 1 "one table beside a wide parser line")
+    (assert-eq (cells-at tb 22) 0 "binding cannot silently discard the rest of a parser line")))
+
+(deftest test-two-separately-boxed-grids-are-two-tables
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^:mut ^I32 r 0]
+    (tt-rule pa 7200 9500 44000 9560)
+    (tt-rule pa 7200 17500 44000 17560)
+    (tt-rule pa 7200 9500 7260 17560)
+    (tt-rule pa 43940 9500 44000 17560)
+    (tt-rule pa 7200 19000 44000 19060)
+    (tt-rule pa 7200 27000 44000 27060)
+    (tt-rule pa 7200 19000 7260 27060)
+    (tt-rule pa 43940 19000 44000 27060)
+    (while (< r 10)
+      (do (let [^:mut ^I32 y (+ 10000 (* r 1500))]
+            (if (>= r 5) (set y (+ 19500 (* (- r 5) 1500))))
+            (tt-at wd ln et (text-blob "Transfer") 7600 y 0 0)
+            (tt-at wd ln et (text-blob "10.00") 29000 y 0 1)
+            (tt-at wd ln et (text-blob "100.00") 43000 y 0 1))
+          (set r (+ r 1))))
+    (assert-eq (tt-ruled-build wd ln et pa tb tc tw) 2 "independent closed boxes cannot become one partial table")))
+
+(deftest test-dot-leaders-leave-the-cell-label-and-real-ellipsis-intact
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells tw (new-cells) ^Cells raw (new-cells) ^Cells order (new-cells) ^Text text (new-text)]
+    (tt-at wd ln et (text-blob "Assets . . . . .") 7600 10000 0 0)
+    (tt-at wd ln et (text-blob "Wait...") 7600 12000 0 0)
+    (cells-push tw 0) (cells-push tw 1)
+    (tb-words-raw wd et tw 0 2 raw order 0)
+    (let [^:mut ^I32 i 0]
+      (while (< i (cells-len raw)) (do (text-cp text (cells-at raw i)) (set i (+ i 1)))))
+    (assert-text text "Assets Wait..." "leader runs are removed while a three-dot ellipsis stays")))
+
+(deftest test-widget-pages-keep-the-leaders-needed-for-field-placement
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text) ^Cells an (new-cells)]
+    (comment "The 1120's lines (D17, D18, D20): a label, a leader of full stops a gap apart, the line number, the amount. Each full stop is a chunk of its own to the")
+    (comment "rows' words and the six of a row, in the same places in every row, are columns of the table (before: a table of nine columns, the dots cells).")
+    (tt-at wd ln et (text-blob "Item") 7600 10000 1 0)
+    (tt-at wd ln et (text-blob "Line") 33000 10000 1 0)
+    (tt-at wd ln et (text-blob "Amount") 43000 10000 1 1)
+    (tt-leader wd ln et 11600 (text-blob "Gross receipts") (text-blob "1a") (text-blob "1,200"))
+    (tt-leader wd ln et 13200 (text-blob "Returns") (text-blob "1b") (text-blob "30"))
+    (tt-leader wd ln et 14800 (text-blob "Cost of goods sold") (text-blob "2") (text-blob "450"))
+    (tt-leader wd ln et 16400 (text-blob "Gross profit") (text-blob "3") (text-blob "720"))
+    (tt-leader wd ln et 18000 (text-blob "Dividends") (text-blob "4") (text-blob "15"))
+    (tt-widget an 55000 50000 56000 51000)
+    (assert-eq (tt-run-an wd ln et pa t 1 an) 0 "leader: well formed")
+    (assert-text t "T3w;Gh;R;Ch[Item];Ch[Line];Ch[Amount];Gb;R;C[Gross receipts . . . . . .];C[1a];Ce[1,200];R;C[Returns . . . . . .];C[1b];Ce[30];R;C[Cost of goods sold . . . . . .];C[2];Ce[450];R;C[Gross profit . . . . . .];C[3];Ce[720];R;C[Dividends . . . . . .];C[4];Ce[15];"
+                 "the leader is the end of the label's cell: three columns (before: nine, the six full stops the cells of six of them)")))

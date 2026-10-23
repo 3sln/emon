@@ -1750,7 +1750,7 @@ func TestTheDotsOfALeaderAreNoCells(emonT *testing.T) {
 	ttLeader(wd, ln, et, 16400, port.TextBlob("Gross profit"), port.TextBlob("3"), port.TextBlob("720"))
 	ttLeader(wd, ln, et, 18000, port.TextBlob("Dividends"), port.TextBlob("4"), port.TextBlob("15"))
 	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "leader: well formed")
-	port.AssertText(emonT, t, "T3w;Gh;R;Ch[Item];Ch[Line];Ch[Amount];Gb;R;C[Gross receipts . . . . . .];C[1a];Ce[1,200];R;C[Returns . . . . . .];C[1b];Ce[30];R;C[Cost of goods sold . . . . . .];C[2];Ce[450];R;C[Gross profit . . . . . .];C[3];Ce[720];R;C[Dividends . . . . . .];C[4];Ce[15];", "the leader is the end of the label's cell: three columns (before: nine, the six full stops the cells of six of them)")
+	port.AssertText(emonT, t, "T3w;Gh;R;Ch[Item];Ch[Line];Ch[Amount];Gb;R;C[Gross receipts];C[1a];Ce[1,200];R;C[Returns];C[1b];Ce[30];R;C[Cost of goods sold];C[2];Ce[450];R;C[Gross profit];C[3];Ce[720];R;C[Dividends];C[4];Ce[15];", "the leader is the end of the label's cell: three columns (before: nine, the six full stops the cells of six of them)")
 }
 
 func TestARowSpanDoesNotCrossIntoTheFoot(emonT *testing.T) {
@@ -2705,7 +2705,7 @@ func TestCellTextKeepsTheLogicalOrderOfEachRtlLine(emonT *testing.T) {
 	port.CellsPush(tw, 1)
 	port.CellsPush(tw, 0)
 	port.CellsPush(tw, 2)
-	table.TbWordsRaw(wd, et, tw, 0, 3, raw, port.NewCells())
+	table.TbWordsRaw(wd, et, tw, 0, 3, raw, port.NewCells(), 0)
 	for i < port.CellsLen(raw) {
 		port.TextCp(out, port.CellsAt(raw, i))
 		i += 1
@@ -2907,6 +2907,82 @@ func TestAnUnlabeledNumericSubtotalDoesNotHideTheRestOfAZebra(emonT *testing.T) 
 	port.AssertEq(emonT, port.CellsAt(tb, 7), 15, "both shaded stacks and all intervening rows survive")
 }
 
+func ttShortGutterInvoice(emonT *testing.T, rows int32) int32 {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var r int32 = 0
+	ttRule(pa, 7200, 9500, 37800, 9560)
+	ttRule(pa, 7200, 14000+((rows-1)*1600), 37800, 14060+((rows-1)*1600))
+	ttAt(wd, ln, et, port.TextBlob("Item"), 7600, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Price"), 32000, 10000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("Worth"), 35400, 10000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("VAT"), 37300, 10000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("Unit"), 32000, 11000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("Sum"), 35400, 11000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("Tax"), 37300, 11000, 1, 1)
+	for r < rows {
+		ttAt(wd, ln, et, port.TextBlob("Product"), 7600, 13000+(r*1600), 0, 0)
+		ttAt(wd, ln, et, port.TextBlob("23,99"), 32000, 13000+(r*1600), 0, 1)
+		ttAt(wd, ln, et, port.TextBlob("119,95"), 35400, 13000+(r*1600), 0, 1)
+		ttAt(wd, ln, et, port.TextBlob("10%"), 37300, 13000+(r*1600), 0, 1)
+		r += 1
+	}
+	port.AssertEq(emonT, ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 1, "one invoice table")
+	if port.CellsLen(tb) == 0 {
+		return 1
+	}
+	port.AssertEq(emonT, port.CellsAt(tb, 8), 4, "price, worth and VAT keep separate data and header columns")
+	return 0
+}
+
+func TestAOneItemInvoiceKeepsShortNumericGutters(emonT *testing.T) {
+	ttShortGutterInvoice(emonT, 1)
+}
+
+func TestAFiveItemInvoiceKeepsTheSameShortNumericGutters(emonT *testing.T) {
+	ttShortGutterInvoice(emonT, 5)
+}
+
+func TestNumericDataCutsPreserveAGenuineThreeColumnSpanner(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var r int32 = 0
+	var q int32 = 0
+	ttRule(pa, 7200, 9500, 44800, 9560)
+	ttRule(pa, 7200, 32000, 44800, 32060)
+	ttAt(wd, ln, et, port.TextBlob("Name"), 7600, 10000, 1, 0)
+	ttLine3(wd, ln, et, port.TextBlob("Not"), port.TextBlob("fully"), port.TextBlob("adjusted"), 23000, 10000)
+	ttLine3(wd, ln, et, port.TextBlob("Not"), port.TextBlob("fully"), port.TextBlob("adjusted"), 35000, 10000)
+	for q < 6 {
+		ttAt(wd, ln, et, port.TextBlob("2024"), 24000+(q*4000), 11000, 1, 1)
+		q += 1
+	}
+	for r < 12 {
+		ttAt(wd, ln, et, port.TextBlob("Workers"), 7600, 13000+(r*1500), 0, 0)
+		q = 0
+		for q < 6 {
+			ttAt(wd, ln, et, port.TextBlob("1.00"), 24000+(q*4000), 13000+(r*1500), 0, 1)
+			q += 1
+		}
+		r += 1
+	}
+	port.AssertEq(emonT, ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 1, "one grouped table")
+	if port.CellsLen(tb) > 0 {
+		port.AssertEq(emonT, port.CellsAt(tb, 8), 7, "the six numeric columns keep their identities")
+		port.AssertEq(emonT, port.CellsAt(tc, ((port.CellsAt(tb, 9)+1)*16)+3), 3, "the first group remains one three-column header")
+	}
+}
+
 func TestNarrowNumericGridsDoNotTakeWordsFromCrossingProse(emonT *testing.T) {
 	var wd *port.Cells = port.NewCells()
 	var ln *port.Cells = port.NewCells()
@@ -2935,4 +3011,158 @@ func TestNarrowNumericGridsDoNotTakeWordsFromCrossingProse(emonT *testing.T) {
 		r += 1
 	}
 	port.AssertEq(emonT, ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 2, "prose across two narrow numeric grids is not their shared table body")
+}
+
+func ttHeaderBody(wd *port.Cells, ln *port.Cells, et *port.Cells) int32 {
+	var r int32 = 0
+	for r < 4 {
+		ttAt(wd, ln, et, port.TextBlob("Assets"), 7600, 14500+(r*2200), 0, 0)
+		ttAt(wd, ln, et, port.TextBlob("100.00"), 32000, 14500+(r*2200), 0, 1)
+		ttAt(wd, ln, et, port.TextBlob("200.00"), 43000, 14500+(r*2200), 0, 1)
+		r += 1
+	}
+	return 0
+}
+
+func TestTwoShortHeaderRowsInsideModelBandsAreInThead(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var tbo *port.Cells = port.NewCells()
+	ttAt(wd, ln, et, port.TextBlob("2023"), 28500, 10000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("2024"), 39500, 10000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Period"), 28500, 11200, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Period"), 39500, 11200, 0, 1)
+	ttHeaderBody(wd, ln, et)
+	port.AssertEq(emonT, ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one numeric table")
+	port.AssertEq(emonT, port.CellsAt(tb, 22), 2, "both short aligned header rows bind")
+	port.AssertEq(emonT, port.CellsAt(tb, 11), 2, "both bound rows are thead")
+}
+
+func TestAnAccountCodeIsNotAColumnHeader(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var tbo *port.Cells = port.NewCells()
+	ttAt(wd, ln, et, port.TextBlob("USD Savings Account"), 7600, 11200, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("817-001"), 39500, 11200, 0, 1)
+	ttHeaderBody(wd, ln, et)
+	port.AssertEq(emonT, ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one ledger, with external context")
+	port.AssertEq(emonT, port.CellsAt(tb, 22), 0, "an account code cannot bind as a short year header")
+}
+
+func TestAShortTitleIsNotAColumnHeader(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var tbo *port.Cells = port.NewCells()
+	ttAt(wd, ln, et, port.TextBlob("Summary of Assets"), 7600, 11200, 0, 0)
+	ttHeaderBody(wd, ln, et)
+	port.AssertEq(emonT, ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one table below its title")
+	port.AssertEq(emonT, port.CellsAt(tb, 22), 0, "one short title is not a row of column labels")
+}
+
+func TestAPartialParserLineCannotBindAsAHeader(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var tbo *port.Cells = port.NewCells()
+	var w int32 = 0
+	ttW(wd, et, port.TextBlob("Kind"), 7600, 11200, 9600, 12000, 0)
+	ttW(wd, et, port.TextBlob("2023"), 30000, 11200, 32000, 12000, 0)
+	ttW(wd, et, port.TextBlob("2024"), 41000, 11200, 43000, 12000, 0)
+	ttW(wd, et, port.TextBlob("Extra"), 50000, 11200, 52500, 12000, 0)
+	evidence.LnNew(ln, 1, 7600, 11200, 52500, 12000, 7600, 11800, 52500, 11800, 0, 0, 0, 4)
+	for w < 4 {
+		evidence.WdSet(wd, w, evidence.HdLine(), 0)
+		w += 1
+	}
+	ttHeaderBody(wd, ln, et)
+	port.AssertEq(emonT, ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one table beside a wide parser line")
+	port.AssertEq(emonT, port.CellsAt(tb, 22), 0, "binding cannot silently discard the rest of a parser line")
+}
+
+func TestTwoSeparatelyBoxedGridsAreTwoTables(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var r int32 = 0
+	ttRule(pa, 7200, 9500, 44000, 9560)
+	ttRule(pa, 7200, 17500, 44000, 17560)
+	ttRule(pa, 7200, 9500, 7260, 17560)
+	ttRule(pa, 43940, 9500, 44000, 17560)
+	ttRule(pa, 7200, 19000, 44000, 19060)
+	ttRule(pa, 7200, 27000, 44000, 27060)
+	ttRule(pa, 7200, 19000, 7260, 27060)
+	ttRule(pa, 43940, 19000, 44000, 27060)
+	for r < 10 {
+		var y int32 = 10000 + (r * 1500)
+		if r >= 5 {
+			y = 19500 + ((r - 5) * 1500)
+		}
+		ttAt(wd, ln, et, port.TextBlob("Transfer"), 7600, y, 0, 0)
+		ttAt(wd, ln, et, port.TextBlob("10.00"), 29000, y, 0, 1)
+		ttAt(wd, ln, et, port.TextBlob("100.00"), 43000, y, 0, 1)
+		r += 1
+	}
+	port.AssertEq(emonT, ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 2, "independent closed boxes cannot become one partial table")
+}
+
+func TestDotLeadersLeaveTheCellLabelAndRealEllipsisIntact(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var raw *port.Cells = port.NewCells()
+	var order *port.Cells = port.NewCells()
+	var text *strings.Builder = port.NewText()
+	ttAt(wd, ln, et, port.TextBlob("Assets . . . . ."), 7600, 10000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Wait..."), 7600, 12000, 0, 0)
+	port.CellsPush(tw, 0)
+	port.CellsPush(tw, 1)
+	table.TbWordsRaw(wd, et, tw, 0, 2, raw, order, 0)
+	var i int32 = 0
+	for i < port.CellsLen(raw) {
+		port.TextCp(text, port.CellsAt(raw, i))
+		i += 1
+	}
+	port.AssertText(emonT, text, "Assets Wait...", "leader runs are removed while a three-dot ellipsis stays")
+}
+
+func TestWidgetPagesKeepTheLeadersNeededForFieldPlacement(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	var an *port.Cells = port.NewCells()
+	// The 1120's lines (D17, D18, D20): a label, a leader of full stops a gap apart, the line number, the amount. Each full stop is a chunk of its own to the
+	// rows' words and the six of a row, in the same places in every row, are columns of the table (before: a table of nine columns, the dots cells).
+	ttAt(wd, ln, et, port.TextBlob("Item"), 7600, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Line"), 33000, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Amount"), 43000, 10000, 1, 1)
+	ttLeader(wd, ln, et, 11600, port.TextBlob("Gross receipts"), port.TextBlob("1a"), port.TextBlob("1,200"))
+	ttLeader(wd, ln, et, 13200, port.TextBlob("Returns"), port.TextBlob("1b"), port.TextBlob("30"))
+	ttLeader(wd, ln, et, 14800, port.TextBlob("Cost of goods sold"), port.TextBlob("2"), port.TextBlob("450"))
+	ttLeader(wd, ln, et, 16400, port.TextBlob("Gross profit"), port.TextBlob("3"), port.TextBlob("720"))
+	ttLeader(wd, ln, et, 18000, port.TextBlob("Dividends"), port.TextBlob("4"), port.TextBlob("15"))
+	ttWidget(an, 55000, 50000, 56000, 51000)
+	port.AssertEq(emonT, ttRunAn(wd, ln, et, pa, t, 1, an), 0, "leader: well formed")
+	port.AssertText(emonT, t, "T3w;Gh;R;Ch[Item];Ch[Line];Ch[Amount];Gb;R;C[Gross receipts . . . . . .];C[1a];Ce[1,200];R;C[Returns . . . . . .];C[1b];Ce[30];R;C[Cost of goods sold . . . . . .];C[2];Ce[450];R;C[Gross profit . . . . . .];C[3];Ce[720];R;C[Dividends . . . . . .];C[4];Ce[15];", "the leader is the end of the label's cell: three columns (before: nine, the six full stops the cells of six of them)")
 }

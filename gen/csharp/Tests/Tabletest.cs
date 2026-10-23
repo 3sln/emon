@@ -1686,7 +1686,7 @@ public static class Tabletest {
         TtLeader(wd, ln, et, 16400, emon.Testport.TextBlob("Gross profit"), emon.Testport.TextBlob("3"), emon.Testport.TextBlob("720"));
         TtLeader(wd, ln, et, 18000, emon.Testport.TextBlob("Dividends"), emon.Testport.TextBlob("4"), emon.Testport.TextBlob("15"));
         emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "leader: well formed");
-        emon.Testport.AssertText(t, "T3w;Gh;R;Ch[Item];Ch[Line];Ch[Amount];Gb;R;C[Gross receipts . . . . . .];C[1a];Ce[1,200];R;C[Returns . . . . . .];C[1b];Ce[30];R;C[Cost of goods sold . . . . . .];C[2];Ce[450];R;C[Gross profit . . . . . .];C[3];Ce[720];R;C[Dividends . . . . . .];C[4];Ce[15];", "the leader is the end of the label's cell: three columns (before: nine, the six full stops the cells of six of them)");
+        emon.Testport.AssertText(t, "T3w;Gh;R;Ch[Item];Ch[Line];Ch[Amount];Gb;R;C[Gross receipts];C[1a];Ce[1,200];R;C[Returns];C[1b];Ce[30];R;C[Cost of goods sold];C[2];Ce[450];R;C[Gross profit];C[3];Ce[720];R;C[Dividends];C[4];Ce[15];", "the leader is the end of the label's cell: three columns (before: nine, the six full stops the cells of six of them)");
     }
     [Xunit.Fact]
     public static void TestARowSpanDoesNotCrossIntoTheFoot() {
@@ -2635,7 +2635,7 @@ public static class Tabletest {
         emon.Port.CellsPush(tw, 1);
         emon.Port.CellsPush(tw, 0);
         emon.Port.CellsPush(tw, 2);
-        Table.TbWordsRaw(wd, et, tw, 0, 3, raw, emon.Port.NewCells());
+        Table.TbWordsRaw(wd, et, tw, 0, 3, raw, emon.Port.NewCells(), 0);
         while (i < emon.Port.CellsLen(raw)) {
             emon.Port.TextCp(@out, emon.Port.CellsAt(raw, i));
             i += 1;
@@ -2835,6 +2835,81 @@ public static class Tabletest {
         emon.Testport.AssertEq(TtRuledBuild(wd, ln, et, pa, tb, tc, tw), 1, "a numeric-only subtotal is no indented invoice summary");
         emon.Testport.AssertEq(emon.Port.CellsAt(tb, 7), 15, "both shaded stacks and all intervening rows survive");
     }
+    internal static int TtShortGutterInvoice(int emonT, int rows) {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        int r = 0;
+        TtRule(pa, 7200, 9500, 37800, 9560);
+        TtRule(pa, 7200, 14000 + ((rows - 1) * 1600), 37800, 14060 + ((rows - 1) * 1600));
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Item"), 7600, 10000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Price"), 32000, 10000, 1, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Worth"), 35400, 10000, 1, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("VAT"), 37300, 10000, 1, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Unit"), 32000, 11000, 1, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Sum"), 35400, 11000, 1, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Tax"), 37300, 11000, 1, 1);
+        while (r < rows) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Product"), 7600, 13000 + (r * 1600), 0, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("23,99"), 32000, 13000 + (r * 1600), 0, 1);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("119,95"), 35400, 13000 + (r * 1600), 0, 1);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("10%"), 37300, 13000 + (r * 1600), 0, 1);
+            r += 1;
+        }
+        emon.Testport.AssertEq(TtRuledBuild(wd, ln, et, pa, tb, tc, tw), 1, "one invoice table");
+        if (emon.Port.CellsLen(tb) == 0) {
+            return 1;
+        }
+        emon.Testport.AssertEq(emon.Port.CellsAt(tb, 8), 4, "price, worth and VAT keep separate data and header columns");
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestAOneItemInvoiceKeepsShortNumericGutters() {
+        TtShortGutterInvoice(0, 1);
+    }
+    [Xunit.Fact]
+    public static void TestAFiveItemInvoiceKeepsTheSameShortNumericGutters() {
+        TtShortGutterInvoice(0, 5);
+    }
+    [Xunit.Fact]
+    public static void TestNumericDataCutsPreserveAGenuineThreeColumnSpanner() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        int r = 0;
+        int q = 0;
+        TtRule(pa, 7200, 9500, 44800, 9560);
+        TtRule(pa, 7200, 32000, 44800, 32060);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Name"), 7600, 10000, 1, 0);
+        TtLine3(wd, ln, et, emon.Testport.TextBlob("Not"), emon.Testport.TextBlob("fully"), emon.Testport.TextBlob("adjusted"), 23000, 10000);
+        TtLine3(wd, ln, et, emon.Testport.TextBlob("Not"), emon.Testport.TextBlob("fully"), emon.Testport.TextBlob("adjusted"), 35000, 10000);
+        while (q < 6) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("2024"), 24000 + (q * 4000), 11000, 1, 1);
+            q += 1;
+        }
+        while (r < 12) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Workers"), 7600, 13000 + (r * 1500), 0, 0);
+            q = 0;
+            while (q < 6) {
+                TtAt(wd, ln, et, emon.Testport.TextBlob("1.00"), 24000 + (q * 4000), 13000 + (r * 1500), 0, 1);
+                q += 1;
+            }
+            r += 1;
+        }
+        emon.Testport.AssertEq(TtRuledBuild(wd, ln, et, pa, tb, tc, tw), 1, "one grouped table");
+        if (emon.Port.CellsLen(tb) > 0) {
+            emon.Testport.AssertEq(emon.Port.CellsAt(tb, 8), 7, "the six numeric columns keep their identities");
+            emon.Testport.AssertEq(emon.Port.CellsAt(tc, ((emon.Port.CellsAt(tb, 9) + 1) * 16) + 3), 3, "the first group remains one three-column header");
+        }
+    }
     [Xunit.Fact]
     public static void TestNarrowNumericGridsDoNotTakeWordsFromCrossingProse() {
         emon.Port.Cells wd = emon.Port.NewCells();
@@ -2864,5 +2939,158 @@ public static class Tabletest {
             r += 1;
         }
         emon.Testport.AssertEq(TtRuledBuild(wd, ln, et, pa, tb, tc, tw), 2, "prose across two narrow numeric grids is not their shared table body");
+    }
+    internal static int TtHeaderBody(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et) {
+        int r = 0;
+        while (r < 4) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Assets"), 7600, 14500 + (r * 2200), 0, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("100.00"), 32000, 14500 + (r * 2200), 0, 1);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("200.00"), 43000, 14500 + (r * 2200), 0, 1);
+            r += 1;
+        }
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestTwoShortHeaderRowsInsideModelBandsAreInThead() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        emon.Port.Cells tbo = emon.Port.NewCells();
+        TtAt(wd, ln, et, emon.Testport.TextBlob("2023"), 28500, 10000, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("2024"), 39500, 10000, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Period"), 28500, 11200, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Period"), 39500, 11200, 0, 1);
+        TtHeaderBody(wd, ln, et);
+        emon.Testport.AssertEq(TtOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one numeric table");
+        emon.Testport.AssertEq(emon.Port.CellsAt(tb, 22), 2, "both short aligned header rows bind");
+        emon.Testport.AssertEq(emon.Port.CellsAt(tb, 11), 2, "both bound rows are thead");
+    }
+    [Xunit.Fact]
+    public static void TestAnAccountCodeIsNotAColumnHeader() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        emon.Port.Cells tbo = emon.Port.NewCells();
+        TtAt(wd, ln, et, emon.Testport.TextBlob("USD Savings Account"), 7600, 11200, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("817-001"), 39500, 11200, 0, 1);
+        TtHeaderBody(wd, ln, et);
+        emon.Testport.AssertEq(TtOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one ledger, with external context");
+        emon.Testport.AssertEq(emon.Port.CellsAt(tb, 22), 0, "an account code cannot bind as a short year header");
+    }
+    [Xunit.Fact]
+    public static void TestAShortTitleIsNotAColumnHeader() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        emon.Port.Cells tbo = emon.Port.NewCells();
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Summary of Assets"), 7600, 11200, 0, 0);
+        TtHeaderBody(wd, ln, et);
+        emon.Testport.AssertEq(TtOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one table below its title");
+        emon.Testport.AssertEq(emon.Port.CellsAt(tb, 22), 0, "one short title is not a row of column labels");
+    }
+    [Xunit.Fact]
+    public static void TestAPartialParserLineCannotBindAsAHeader() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        emon.Port.Cells tbo = emon.Port.NewCells();
+        int w = 0;
+        TtW(wd, et, emon.Testport.TextBlob("Kind"), 7600, 11200, 9600, 12000, 0);
+        TtW(wd, et, emon.Testport.TextBlob("2023"), 30000, 11200, 32000, 12000, 0);
+        TtW(wd, et, emon.Testport.TextBlob("2024"), 41000, 11200, 43000, 12000, 0);
+        TtW(wd, et, emon.Testport.TextBlob("Extra"), 50000, 11200, 52500, 12000, 0);
+        Evidence.LnNew(ln, 1, 7600, 11200, 52500, 12000, 7600, 11800, 52500, 11800, 0, 0, 0, 4);
+        while (w < 4) {
+            Evidence.WdSet(wd, w, Evidence.HdLine(), 0);
+            w += 1;
+        }
+        TtHeaderBody(wd, ln, et);
+        emon.Testport.AssertEq(TtOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one table beside a wide parser line");
+        emon.Testport.AssertEq(emon.Port.CellsAt(tb, 22), 0, "binding cannot silently discard the rest of a parser line");
+    }
+    [Xunit.Fact]
+    public static void TestTwoSeparatelyBoxedGridsAreTwoTables() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        int r = 0;
+        TtRule(pa, 7200, 9500, 44000, 9560);
+        TtRule(pa, 7200, 17500, 44000, 17560);
+        TtRule(pa, 7200, 9500, 7260, 17560);
+        TtRule(pa, 43940, 9500, 44000, 17560);
+        TtRule(pa, 7200, 19000, 44000, 19060);
+        TtRule(pa, 7200, 27000, 44000, 27060);
+        TtRule(pa, 7200, 19000, 7260, 27060);
+        TtRule(pa, 43940, 19000, 44000, 27060);
+        while (r < 10) {
+            int y = 10000 + (r * 1500);
+            if (r >= 5) {
+                y = 19500 + ((r - 5) * 1500);
+            }
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Transfer"), 7600, y, 0, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("10.00"), 29000, y, 0, 1);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("100.00"), 43000, y, 0, 1);
+            r += 1;
+        }
+        emon.Testport.AssertEq(TtRuledBuild(wd, ln, et, pa, tb, tc, tw), 2, "independent closed boxes cannot become one partial table");
+    }
+    [Xunit.Fact]
+    public static void TestDotLeadersLeaveTheCellLabelAndRealEllipsisIntact() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        emon.Port.Cells raw = emon.Port.NewCells();
+        emon.Port.Cells order = emon.Port.NewCells();
+        System.Text.StringBuilder text = emon.Testport.NewText();
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Assets . . . . ."), 7600, 10000, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Wait..."), 7600, 12000, 0, 0);
+        emon.Port.CellsPush(tw, 0);
+        emon.Port.CellsPush(tw, 1);
+        Table.TbWordsRaw(wd, et, tw, 0, 2, raw, order, 0);
+        int i = 0;
+        while (i < emon.Port.CellsLen(raw)) {
+            emon.Port.TextCp(text, emon.Port.CellsAt(raw, i));
+            i += 1;
+        }
+        emon.Testport.AssertText(text, "Assets Wait...", "leader runs are removed while a three-dot ellipsis stays");
+    }
+    [Xunit.Fact]
+    public static void TestWidgetPagesKeepTheLeadersNeededForFieldPlacement() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        emon.Port.Cells an = emon.Port.NewCells();
+        // The 1120's lines (D17, D18, D20): a label, a leader of full stops a gap apart, the line number, the amount. Each full stop is a chunk of its own to the
+        // rows' words and the six of a row, in the same places in every row, are columns of the table (before: a table of nine columns, the dots cells).
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Item"), 7600, 10000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Line"), 33000, 10000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Amount"), 43000, 10000, 1, 1);
+        TtLeader(wd, ln, et, 11600, emon.Testport.TextBlob("Gross receipts"), emon.Testport.TextBlob("1a"), emon.Testport.TextBlob("1,200"));
+        TtLeader(wd, ln, et, 13200, emon.Testport.TextBlob("Returns"), emon.Testport.TextBlob("1b"), emon.Testport.TextBlob("30"));
+        TtLeader(wd, ln, et, 14800, emon.Testport.TextBlob("Cost of goods sold"), emon.Testport.TextBlob("2"), emon.Testport.TextBlob("450"));
+        TtLeader(wd, ln, et, 16400, emon.Testport.TextBlob("Gross profit"), emon.Testport.TextBlob("3"), emon.Testport.TextBlob("720"));
+        TtLeader(wd, ln, et, 18000, emon.Testport.TextBlob("Dividends"), emon.Testport.TextBlob("4"), emon.Testport.TextBlob("15"));
+        TtWidget(an, 55000, 50000, 56000, 51000);
+        emon.Testport.AssertEq(TtRunAn(wd, ln, et, pa, t, 1, an), 0, "leader: well formed");
+        emon.Testport.AssertText(t, "T3w;Gh;R;Ch[Item];Ch[Line];Ch[Amount];Gb;R;C[Gross receipts . . . . . .];C[1a];Ce[1,200];R;C[Returns . . . . . .];C[1b];Ce[30];R;C[Cost of goods sold . . . . . .];C[2];Ce[450];R;C[Gross profit . . . . . .];C[3];Ce[720];R;C[Dividends . . . . . .];C[4];Ce[15];", "the leader is the end of the label's cell: three columns (before: nine, the six full stops the cells of six of them)");
     }
 }
