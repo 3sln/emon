@@ -75,7 +75,8 @@ def declare(task, ids): consumers[task]=ids
 def source_ids(*names): return [s['id'] for s in shards if s['source'] in names]
 # Default gates use committed selection files that name real corpus fixtures.
 default=set()
-for p in list((REPO/'test/pdf').glob('*.txt'))+list((REPO/'test').glob('**/*corpus*.edn')):
+# Every committed test list (test/pdf, test/content, test/fonts, ...) counts: unit laws read them.
+for p in [q for q in (REPO/'test').glob('**/*.txt') if 'test/corpus/' not in str(q)]+list((REPO/'test').glob('**/*corpus*.edn')):
     text=p.read_text()
     for s in shards:
         if any(path in text for path in s['paths'] if '*' not in path): default.add(s['id'])
