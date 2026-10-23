@@ -29,7 +29,8 @@
     (let [stem (str "receipt-" v) np (if (= v "long") 3 1) w (if (= v "two-column") 454 226.77) h 650
           pages (mapv #(lines v %) (range 1 (inc np)))
           html (str "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>" stem "</title></head><body>"
-                    (str/join "" (for [ls pages t ls] (str "<p>" t "</p>"))) "</body></html>\n")
+                    ;; Dot leaders are drawn but are not text (D691): the semantic gold omits them.
+                    (str/join "" (for [ls pages t ls] (str "<p>" (str/replace t #"(?: ?\.){4,} ?" " ") "</p>"))) "</body></html>\n")
           objects (into {1 "<< /Type /Catalog /Pages 2 0 R >>"
                          2 (str "<< /Type /Pages /Kids [" (str/join " " (for [i (range np)] (str (+ 3 (* i 2)) " 0 R"))) "] /Count " np " >>")
                          100 (str "<< /Type /Font /Subtype /Type1 /BaseFont /" (if (= v "mono") "Courier" "Helvetica") " /Encoding /WinAnsiEncoding >>")}

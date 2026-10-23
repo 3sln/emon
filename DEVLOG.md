@@ -12055,6 +12055,7 @@ A new law fails first: two independently closed grids become one partial table. 
 The new leader law fails first. Strip runs of at least four dots, allowing intervening spaces, after logical word ordering; preserve decimal punctuation and a real three-dot ellipsis. Update the older leader law's expected text while retaining its three-column assertion. Live F13 loses all 154 cell leader runs and F01 loses 38 of 41 body leader runs; F01/F13/F08 all retain every word.
 
 A separate bold demographic-label law fails first because the age vetoes its colspan. Testing the whole label for numeric content instead of any digit passes the synthetic fixture, but live F13 still merges “Men, 16 years and over” into the following stub; the ownership map needs to split that row first. Revert this function change and its synthetic-only law. No demographic grouping, phantom empty-column deletion or F13 spanner-width refinement is claimed; sparse header-anchored columns remain protected. Leader-only focused laws/goldens and final combined gates are required. Evidence: external `b11/item7-*`.
+*2026-10-22, at merge:* the receipt cohort's `receipt-leaders` gold kept the leader run ("Bread ............... 3.00"); `tools/synth/receipts.clj` now omits leader runs from the semantic HTML (the PDF still draws them), so that fixture's gold follows this decision. No ratchet was lowered.
 - [ ] **Signed off** (maintainer)
 
 ### D692 — Reject a lattice-only form profile that does not recover F8949 (P12.13, item 8)
