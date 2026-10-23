@@ -121,6 +121,16 @@ public final class Retarget {
         // Existing OCR empty-line crops precede traced gaps: this bonus exceeds the largest admitted empty-line area (144000 square points).
         return 1000000;
     }
+    public static int riThermal() {
+        return 30;
+    }
+    public static int rvThermal() {
+        return 40;
+    }
+    public static int rtThermalMin() {
+        // D698: an emergency page reading below 300 mean confidence is held as evidence, not promoted wholesale.
+        return 300;
+    }
     public static int riBody() {
         return 17;
     }
@@ -222,6 +232,10 @@ public final class Retarget {
         // the share (per mille) of the whole page's area that the body-ink view paints over
         return 92;
     }
+    public static int rtpFrun() {
+        // D698: the one faint-thermal retry, separate from normal body-ink recovery.
+        return 250;
+    }
     public static int rtpHash() {
         // two cells the pixel hash is written to
         return 254;
@@ -239,6 +253,7 @@ public final class Retarget {
             emon.Port.cellsSet(rtp, i, 0);
             i += 1;
         }
+        emon.Port.cellsSet(rtp, rtpFrun(), -1);
         emon.Port.cellsSet(rtp, rtpBrun(), -1);
         emon.Port.cellsSet(rtp, rtpRrun(), -1);
         emon.Port.cellsSet(rtp, rtpTrun(), -1);
@@ -1069,6 +1084,39 @@ public final class Retarget {
         }
         return score;
     }
+    public static int rtThermalInto(emon.Port.Bitmap gray, emon.Port.Bitmap dst, int paper) {
+        // D698: bounded contrast gain around the measured paper level; one raster pass, preserving grayscale edges.
+        int y = 0;
+        int x = 0;
+        int v = 0;
+        while (y < emon.Port.bitmapH(gray)) {
+            x = 0;
+            while (x < emon.Port.bitmapW(gray)) {
+                v = 255 - (3 * (paper - emon.Port.bitmapU8(gray, x, y, 0)));
+                if (v < 0) {
+                    v = 0;
+                }
+                if (v > 255) {
+                    v = 255;
+                }
+                emon.Port.bitmapSetU8(dst, x, y, 0, v);
+                x += 1;
+            }
+            y += 1;
+        }
+        return 0;
+    }
+    public static int rtAskThermal(int page, int dpi, emon.Port.Cells loc, emon.Port.Cells ans, emon.Port.BitmapSet bms, emon.Port.Bitmap gray, int paper, emon.Port.Cells rtp, emon.Port.Cells rq) {
+        int id = Plan.puId(page, riThermal());
+        int vid = Plan.puViewId(page, rvThermal());
+        emon.Port.Bitmap v = emon.Port.bmsPut(bms, vid, emon.Port.bitmapW(gray), emon.Port.bitmapH(gray), 1);
+        rtThermalInto(gray, v, paper);
+        emon.Port.bitmapHash(v, rtp, rtpHash());
+        if (Plan.anFind(ans, id) < 0) {
+            Scan.scRequestViewPsm(rq, id, vid, emon.Port.cellsAt(rtp, rtpHash()), emon.Port.cellsAt(rtp, rtpHash() + 1), 6, dpi, loc);
+        }
+        return 1;
+    }
     public static int rtPlan(int page, int input, int born, int wanttext, int rid, int dpi, emon.Port.Cells loc, emon.Port.Cells ans, emon.Port.BitmapSet bms, int k0, emon.Port.Bitmap src, emon.Port.Cells ws, emon.Port.Cells oruns, int run, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells rules, emon.Port.Cells tlines, emon.Port.Cells rtp, emon.Port.Cells rq, emon.Port.Cells scr, emon.Port.Cells comps, emon.Port.Cells inks) {
         // Decide and ask what is not yet answered, in the brief's order: the table cells and the lines, the text-only render and its OCR, the body-ink view,
         // the quarter-turned view. `page` is 0-based (ids), `rid` the request id of the raster `src` that the first pass read at `dpi`, `k0` the id group
@@ -1093,6 +1141,12 @@ public final class Retarget {
         }
         if (emon.Port.cellsAt(rtp, rtpBody()) == 1) {
             asked += rtAskBody(page, dpi, loc, ans, bms, rtp, rq);
+        }
+        if ((born == 0) && ((q == 0) && (Evidence.orGet(oruns, run, Evidence.orfWcount()) == 0))) {
+            int ba = Plan.anFind(ans, Plan.puId(page, riBody()));
+            if ((emon.Port.cellsAt(rtp, rtpBody()) == 0) || ((ba >= 0) && ((Plan.anOk(ans, ba) == 1) && (Plan.anOcrCount(ans, ba) == 0)))) {
+                asked += rtAskThermal(page, dpi, loc, ans, bms, emon.Port.bmsGet(bms, Plan.puViewId(page, k0)), Norm.nmPaperGray(ws), rtp, rq);
+            }
         }
         if (q != 0) {
             asked += rtAskRotated(page, dpi, loc, ans, bms, src, q, rtp, rq);
@@ -1188,6 +1242,16 @@ public final class Retarget {
                 run = Scan.scAnswer(ans, a, pg, srcview, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
                 rtRunMeta(oruns, run, Evidence.opBodyInk(), 3, 3, 0, 0, 0, 0);
                 emon.Port.cellsSet(rtp, rtpBrun(), run);
+                made += 1;
+            }
+        }
+        id = Plan.puId(page, riThermal());
+        a = Plan.anFind(ans, id);
+        if (a >= 0) {
+            if (Plan.anOk(ans, a) == 1) {
+                run = Scan.scAnswer(ans, a, pg, srcview, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+                rtRunMeta(oruns, run, Evidence.opBodyInk(), 3 + emon.Port.cellsAt(rtp, rtpBody()), 6, 0, 0, 0, 0);
+                emon.Port.cellsSet(rtp, rtpFrun(), run);
                 made += 1;
             }
         }
@@ -1635,6 +1699,31 @@ public final class Retarget {
             }
             if (n > 0) {
                 emon.Port.cellsSet(rtp, rtpPrimary(), brun);
+            }
+        }
+        if ((n == 0) && (emon.Port.cellsAt(rtp, rtpFrun()) >= 0)) {
+            tr = emon.Port.cellsAt(rtp, rtpFrun());
+            if (rtRunMean(oruns, owords, tr) >= rtThermalMin()) {
+                b = Evidence.orGet(oruns, tr, Evidence.orfLfirst());
+                bn = b + Evidence.orGet(oruns, tr, Evidence.orfLcount());
+                while (b < bn) {
+                    if ((Evidence.olGet(olines, b, Evidence.lhCount()) >= rtEmptyWords()) && (rtLineMean(olines, owords, b) >= rtEmptyConf())) {
+                        n = rtSelAdd(scr, n, b);
+                    }
+                    b += 1;
+                }
+                if (n == 0) {
+                    b = Evidence.orGet(oruns, tr, Evidence.orfLfirst());
+                    while (b < bn) {
+                        if (Evidence.olGet(olines, b, Evidence.lhCount()) > 0) {
+                            n = rtSelAdd(scr, n, b);
+                        }
+                        b += 1;
+                    }
+                }
+                if (n > 0) {
+                    emon.Port.cellsSet(rtp, rtpPrimary(), tr);
+                }
             }
         }
         return n;

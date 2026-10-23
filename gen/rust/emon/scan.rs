@@ -3088,3 +3088,29 @@ pub fn sc_write_empty_regions(olines: &mut crate::port::Cells, nodes: &mut crate
     }
     return rows;
 }
+pub fn sc_write_empty_ocr(oruns: &mut crate::port::Cells, pages: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells) -> i32 {
+    // D698: an explicit ocr-empty diagnostic and dropped region after every attempt on a page returned no words. No text is invented.
+    let mut p: i32 = 0;
+    let mut r: i32 = 0;
+    let mut seen: i32 = 0;
+    let mut words: i32 = 0;
+    let mut rows: i32 = 0;
+    while p < page_count(pages) {
+        r = 0;
+        seen = 0;
+        words = 0;
+        while r < or_count(oruns) {
+            if or_get(oruns, r, 0) == (p + 1) {
+                seen = 1;
+                words += or_get(oruns, r, orf_wcount());
+            }
+            r += 1;
+        }
+        if (seen == 1) && (words == 0) {
+            ledger_add(ledger, dr_ocr_empty(), p + 1, 0, 0, page_w(pages, p), page_h(pages, p), 1000, sr_ocr());
+            rows += 1;
+        }
+        p += 1;
+    }
+    return rows;
+}

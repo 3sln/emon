@@ -360,6 +360,7 @@ public final class Engine {
         Scan.scTrust(m.nodes, m.regions, ev.owords, d.et, ev.oruns);
         Scan.scTagUnread(m.nodes, m.regions, d.mask);
         Scan.scCleanText(m.nodes, m.text);
+        Scan.scWriteEmptyOcr(ev.oruns, m.pages, m.ledger);
         Scan.scWriteEmptyRegions(ev.olines, m.nodes, m.regions, m.ledger);
         if (kind == 0) {
             enFields(m, s, d);
@@ -373,6 +374,7 @@ public final class Engine {
             }
             Model.nodeSetAttrText(m.nodes, m.attrs, 0, Model.fkLocale(), w, emon.Port.cellsLen(m.text) - w);
         }
+        Ocrledger.ocAccount(ev.oruns, ev.owords, d.et, m.nodes, m.regions, d.mask, m.ledger, m.text, s.s0, s.s1, s.s2, s.s3, s.s4, s.s5);
         if (kind == 0) {
             if (c.level == 2) {
                 pending = 1;

@@ -532,3 +532,50 @@ fn test_the_empty_page_fallback_does_not_dilute_an_existing_reading() {
     crate::port::cells_set(rtp, rtp_brun(), br);
     crate::testport::assert_eq(rtt_adopt(rtp, runs, fr, ol, ow, scr), 1, "normal recovery already read text, so keep its quality decisions");
 }
+#[test]
+fn test_thermal_contrast_bounded() {
+    let src: &crate::port::Bitmap = &crate::port::bitmap_new(3, 1, 1);
+    let dst: &crate::port::Bitmap = &crate::port::bitmap_new(3, 1, 1);
+    crate::port::bitmap_set_u8(src, 0, 0, 0, 240);
+    crate::port::bitmap_set_u8(src, 1, 0, 0, 210);
+    crate::port::bitmap_set_u8(src, 2, 0, 0, 20);
+    rt_thermal_into(src, dst, 240);
+    crate::testport::assert_eq(crate::port::bitmap_u8(dst, 0, 0, 0), 255, "paper stays white");
+    crate::testport::assert_eq(crate::port::bitmap_u8(dst, 1, 0, 0), 165, "faint ink gains contrast");
+    crate::testport::assert_eq(crate::port::bitmap_u8(dst, 2, 0, 0), 0, "dark ink saturates safely");
+}
+#[test]
+fn test_a_thermal_reading_of_texture_is_not_a_whole_page_recovery() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ol: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rtp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    sc_prep(scr);
+    let fr: i32 = rtt_run(runs, ol, ow, 0, 0);
+    rtt_line(ol, ow, feats, 300, 250);
+    let tr: i32 = rtt_run(runs, ol, ow, 0, 0);
+    rt_prep(rtp);
+    crate::port::cells_set(rtp, rtp_frun(), tr);
+    crate::testport::assert_eq(rtt_adopt(rtp, runs, fr, ol, ow, scr), 0, "near-unread emergency text stays evidence");
+}
+#[test]
+fn test_a_thermal_reading_does_not_replace_normal_recovery() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ol: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rtp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    sc_prep(scr);
+    let fr: i32 = rtt_run(runs, ol, ow, 0, 0);
+    rtt_line(ol, ow, feats, 300, 900);
+    let br: i32 = rtt_run(runs, ol, ow, 0, 0);
+    rtt_line(ol, ow, feats, 600, 900);
+    let tr: i32 = rtt_run(runs, ol, ow, 1, 2);
+    rt_prep(rtp);
+    crate::port::cells_set(rtp, rtp_brun(), br);
+    crate::port::cells_set(rtp, rtp_frun(), tr);
+    crate::testport::assert_eq(rtt_adopt(rtp, runs, fr, ol, ow, scr), 1, "normal recovery has priority over emergency text");
+}

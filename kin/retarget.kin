@@ -46,7 +46,7 @@
                                    vw-new vw-get vwf-kind vwf-pxw vwf-pxh vwf-dpi vwf-layer vwf-deskew vwf-cropx vwf-cropy ev-overlap-small vk-render tl-count tl-get]]
             [emon.norm :refer [nm-orient nm-osd-conf nm-paper-gray nm-ws-assign nm-ws-lut nm-layer-get nm-role-mask-into nm-box-ink nm-box-both]]
             [emon.player :refer [cg-get cg-set cgf-x0 cgf-y0 cgf-x1 cgf-y1 cgf-flags plg-bink plg-bink-absent]]
-            [emon.scan :refer [sc-request sc-request-at sc-request-view sc-answer sc-lang sc-sel-set sc-sel-max sc-aux-base sc-share-base sc-partner-base sc-bonly-base
+            [emon.scan :refer [sc-request sc-request-at sc-request-view sc-request-view-psm sc-answer sc-lang sc-sel-set sc-sel-max sc-aux-base sc-share-base sc-partner-base sc-bonly-base
                                sc-xtra-base sc-xtra-count]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem]]))
@@ -84,6 +84,9 @@
 (defn ^I32 rt-native-empty-priority [] (comment "Existing OCR empty-line crops precede traced gaps: this bonus exceeds the largest admitted empty-line area (144000 square points).") (return 1000000))
 
 ;; ids (page-local `k`, `pu-id`): 16-127 are OCR (`pi-ocr`'s range), 128 and up crops and later kinds
+(defn ^:pub ^I32 ri-thermal [] (return 30))
+(defn ^:pub ^I32 rv-thermal [] (return 40))
+(defn ^:pub ^I32 rt-thermal-min [] (comment "D698: an emergency page reading below 300 mean confidence is held as evidence, not promoted wholesale.") (return 300))
 (defn ^:pub ^I32 ri-body [] (return 17))
 (defn ^:pub ^I32 ri-rotated [] (return 18))
 (defn ^:pub ^I32 ri-opposite [] (return 29))
@@ -115,6 +118,7 @@
 (defn ^:pub ^I32 rtp-bands [] (comment "P12.6: the bands of colour with light text in them that the body-ink view turned inside out (`rt-invert-bands`)") (return 248))
 (defn ^:pub ^I32 rtp-primary [](comment "the run the pipeline reads from: the first pass or a turned page's reading") (return 91))
 (defn ^:pub ^I32 rtp-erased [] (comment "the share (per mille) of the whole page's area that the body-ink view paints over") (return 92))
+(defn ^:pub ^I32 rtp-frun [] (comment "D698: the one faint-thermal retry, separate from normal body-ink recovery.") (return 250))
 (defn ^:pub ^I32 rtp-hash [] (comment "two cells the pixel hash is written to") (return 254))
 (defn ^:pub ^I32 rtp-size [] (return 256))
 
@@ -126,6 +130,7 @@
     (while (< i (rtp-size))
       (do (cells-set rtp i 0)
           (set i (+ i 1))))
+    (cells-set rtp (rtp-frun) -1)
     (cells-set rtp (rtp-brun) -1)
     (cells-set rtp (rtp-rrun) -1)
     (cells-set rtp (rtp-trun) -1)
@@ -754,6 +759,31 @@
           (set w (aw-next ans w)) (set i (+ i 1))))
     (return score)))
 
+(defn ^:pub ^I32 rt-thermal-into [^Bitmap gray ^Bitmap dst ^I32 paper]
+  (comment "D698: bounded contrast gain around the measured paper level; one raster pass, preserving grayscale edges.")
+  (let [^:mut ^I32 y 0 ^:mut ^I32 x 0 ^:mut ^I32 v 0]
+    (while (< y (bitmap-h gray))
+      (do (set x 0)
+          (while (< x (bitmap-w gray))
+            (do (set v (- 255 (* 3 (- paper (bitmap-u8 gray x y 0)))))
+                (if (< v 0) (set v 0))
+                (if (> v 255) (set v 255))
+                (bitmap-set-u8 dst x y 0 v)
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(defn ^I32 rt-ask-thermal [^I32 page ^I32 dpi ^Cells loc ^Cells ans ^BitmapSet bms ^Bitmap gray ^I32 paper
+                             ^:mut ^Cells rtp ^:mut ^Cells rq]
+  (let [^I32 id (pu-id page (ri-thermal))
+        ^I32 vid (pu-view-id page (rv-thermal))
+        ^Bitmap v (bms-put bms vid (bitmap-w gray) (bitmap-h gray) 1)]
+    (rt-thermal-into gray v paper)
+    (bitmap-hash v rtp (rtp-hash))
+    (if (< (an-find ans id) 0)
+      (sc-request-view-psm rq id vid (cells-at rtp (rtp-hash)) (cells-at rtp (+ (rtp-hash) 1)) 6 dpi loc))
+    (return 1)))
+
 (defn ^:pub ^I32 rt-plan [^I32 page ^I32 input ^I32 born ^I32 wanttext ^I32 rid ^I32 dpi ^Cells loc ^Cells ans ^BitmapSet bms ^I32 k0
                           ^Bitmap src ^:mut ^Cells ws ^:mut ^Cells oruns ^I32 run ^:mut ^Cells olines ^Cells owords ^Cells rules ^Cells tlines
                           ^:mut ^Cells rtp ^:mut ^Cells rq ^:mut ^Cells scr ^Cells comps ^Cells inks]
@@ -776,6 +806,11 @@
       (set asked (+ asked (rt-ask-text page input dpi loc ans rq))))
     (if (== (cells-at rtp (rtp-body)) 1)
       (set asked (+ asked (rt-ask-body page dpi loc ans bms rtp rq))))
+    (if (and (== born 0) (and (== q 0) (== (or-get oruns run (orf-wcount)) 0)))
+      (let [^I32 ba (an-find ans (pu-id page (ri-body)))]
+        (if (or (== (cells-at rtp (rtp-body)) 0)
+                (and (>= ba 0) (and (== (an-ok ans ba) 1) (== (an-ocr-count ans ba) 0))))
+          (set asked (+ asked (rt-ask-thermal page dpi loc ans bms (bms-get bms (pu-view-id page k0)) (nm-paper-gray ws) rtp rq))))))
     (if (!= q 0)
       (set asked (+ asked (rt-ask-rotated page dpi loc ans bms src q rtp rq))))
     (cells-set rtp (rtp-asked) asked)
@@ -864,6 +899,14 @@
         (do (set run (sc-answer ans a pg srcview id lang views epages etext oruns oblocks olines owords osyms oalts feats))
             (rt-run-meta oruns run (op-body-ink) 3 3 0 0 0 0)
             (cells-set rtp (rtp-brun) run)
+            (set made (+ made 1)))))
+    (set id (pu-id page (ri-thermal)))
+    (set a (an-find ans id))
+    (if (>= a 0)
+      (if (== (an-ok ans a) 1)
+        (do (set run (sc-answer ans a pg srcview id lang views epages etext oruns oblocks olines owords osyms oalts feats))
+            (rt-run-meta oruns run (op-body-ink) (+ 3 (cells-at rtp (rtp-body))) 6 0 0 0 0)
+            (cells-set rtp (rtp-frun) run)
             (set made (+ made 1)))))
     (if (!= q 0)
       (do (set id (pu-id page (ri-rotated)))
@@ -1205,6 +1248,22 @@
             (do (if (> (ol-get olines b (lh-count)) 0) (set n (rt-sel-add scr n b)))
                 (set b (+ b 1))))
           (if (> n 0) (cells-set rtp (rtp-primary) brun))))
+    (if (and (== n 0) (>= (cells-at rtp (rtp-frun)) 0))
+      (do (set tr (cells-at rtp (rtp-frun)))
+          (if (>= (rt-run-mean oruns owords tr) (rt-thermal-min))
+            (do (set b (or-get oruns tr (orf-lfirst)))
+                (set bn (+ b (or-get oruns tr (orf-lcount))))
+                (while (< b bn)
+                  (do (if (and (>= (ol-get olines b (lh-count)) (rt-empty-words))
+                               (>= (rt-line-mean olines owords b) (rt-empty-conf)))
+                        (set n (rt-sel-add scr n b)))
+                      (set b (+ b 1))))
+                (if (== n 0)
+                  (do (set b (or-get oruns tr (orf-lfirst)))
+                      (while (< b bn)
+                        (do (if (> (ol-get olines b (lh-count)) 0) (set n (rt-sel-add scr n b)))
+                            (set b (+ b 1))))))
+                (if (> n 0) (cells-set rtp (rtp-primary) tr))))))
     (return n)))
 
 (defn ^:pub ^I32 rt-upright [^Cells rtp ^I32 fr ^:mut ^Cells epages ^I32 page1]

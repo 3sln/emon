@@ -546,3 +546,50 @@ func TestTheEmptyPageFallbackDoesNotDiluteAnExistingReading(emonT *testing.T) {
 	port.CellsSet(rtp, retarget.RtpBrun(), br)
 	port.AssertEq(emonT, rttAdopt(rtp, runs, fr, ol, ow, scr), 1, "normal recovery already read text, so keep its quality decisions")
 }
+
+func TestThermalContrastBounded(emonT *testing.T) {
+	var src *port.Bitmap = port.BitmapNew(3, 1, 1)
+	var dst *port.Bitmap = port.BitmapNew(3, 1, 1)
+	port.BitmapSetU8(src, 0, 0, 0, 240)
+	port.BitmapSetU8(src, 1, 0, 0, 210)
+	port.BitmapSetU8(src, 2, 0, 0, 20)
+	retarget.RtThermalInto(src, dst, 240)
+	port.AssertEq(emonT, port.BitmapU8(dst, 0, 0, 0), 255, "paper stays white")
+	port.AssertEq(emonT, port.BitmapU8(dst, 1, 0, 0), 165, "faint ink gains contrast")
+	port.AssertEq(emonT, port.BitmapU8(dst, 2, 0, 0), 0, "dark ink saturates safely")
+}
+
+func TestAThermalReadingOfTextureIsNotAWholePageRecovery(emonT *testing.T) {
+	var runs *port.Cells = port.NewCells()
+	var ol *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var rtp *port.Cells = port.NewCells()
+	var scr *port.Cells = port.NewCells()
+	scan.ScPrep(scr)
+	var fr int32 = rttRun(runs, ol, ow, 0, 0)
+	rttLine(ol, ow, feats, 300, 250)
+	var tr int32 = rttRun(runs, ol, ow, 0, 0)
+	retarget.RtPrep(rtp)
+	port.CellsSet(rtp, retarget.RtpFrun(), tr)
+	port.AssertEq(emonT, rttAdopt(rtp, runs, fr, ol, ow, scr), 0, "near-unread emergency text stays evidence")
+}
+
+func TestAThermalReadingDoesNotReplaceNormalRecovery(emonT *testing.T) {
+	var runs *port.Cells = port.NewCells()
+	var ol *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var rtp *port.Cells = port.NewCells()
+	var scr *port.Cells = port.NewCells()
+	scan.ScPrep(scr)
+	var fr int32 = rttRun(runs, ol, ow, 0, 0)
+	rttLine(ol, ow, feats, 300, 900)
+	var br int32 = rttRun(runs, ol, ow, 0, 0)
+	rttLine(ol, ow, feats, 600, 900)
+	var tr int32 = rttRun(runs, ol, ow, 1, 2)
+	retarget.RtPrep(rtp)
+	port.CellsSet(rtp, retarget.RtpBrun(), br)
+	port.CellsSet(rtp, retarget.RtpFrun(), tr)
+	port.AssertEq(emonT, rttAdopt(rtp, runs, fr, ol, ow, scr), 1, "normal recovery has priority over emergency text")
+}

@@ -78,7 +78,7 @@
             [emon.model :refer [sr-ocr sr-text node-count node-kind node-parent node-region-head node-region-count
                                 node-src node-flags node-conf node-set-src node-set-conf node-add-flag nk-is-inline
                                 region-page region-next region-x0 region-y0 region-x1 region-y1 fl-rotated fl-ocr-only fl-low-conf fl-script-unread page-count page-set-kind pk-scanned
-                                ledger-add dr-ocr-ghost dr-background sr-vector page-w page-h
+                                ledger-add dr-ocr-empty dr-ocr-ghost dr-background sr-vector page-w page-h
                                 node-text-start node-text-len node-set-text node-set-attr-text text-append-cp fk-ocr]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem bit-and bit-or]]))
@@ -2272,4 +2272,19 @@
                                   (ol-get olines l (lh-x1)) (ol-get olines l (lh-y1)) 0 (sr-ocr))
                       (set rows (+ rows 1))))))
           (set l (+ l 1))))
+    (return rows)))
+
+(defn ^:pub ^I32 sc-write-empty-ocr [^Cells oruns ^Cells pages ^:mut ^Cells ledger]
+  (comment "D698: an explicit ocr-empty diagnostic and dropped region after every attempt on a page returned no words. No text is invented.")
+  (let [^:mut ^I32 p 0 ^:mut ^I32 r 0 ^:mut ^I32 seen 0 ^:mut ^I32 words 0 ^:mut ^I32 rows 0]
+    (while (< p (page-count pages))
+      (do (set r 0) (set seen 0) (set words 0)
+          (while (< r (or-count oruns))
+            (do (if (== (or-get oruns r 0) (+ p 1))
+                  (do (set seen 1) (set words (+ words (or-get oruns r (orf-wcount))))))
+                (set r (+ r 1))))
+          (if (and (== seen 1) (== words 0))
+            (do (ledger-add ledger (dr-ocr-empty) (+ p 1) 0 0 (page-w pages p) (page-h pages p) 1000 (sr-ocr))
+                (set rows (+ rows 1))))
+          (set p (+ p 1))))
     (return rows)))

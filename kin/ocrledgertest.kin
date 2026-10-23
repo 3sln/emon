@@ -1,0 +1,141 @@
+(ns emon.ocrledgertest
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.test :refer [deftest assert-eq new-cells]]
+            [emon.port :refer [cells-push]]
+            [emon.model :refer [model-init node-new node-set-text node-add-region nk-paragraph nk-text nk-furniture ledger-count ledger-text-len]]
+            [emon.evidence :refer [or-new or-set orf-wfirst orf-wcount ow-new]]
+            [emon.ocrledger :refer [oc-account]]
+            [kin.lang :refer [defn return let comment]]))
+
+(deftest test-unselected-attempt-word-is-accounted
+  (let [^Cells runs (new-cells) ^Cells words (new-cells) ^Cells et (new-cells)
+        ^Cells nodes (new-cells) ^Cells regions (new-cells) ^Cells mask (new-cells)
+        ^Cells ledger (new-cells) ^Cells text (new-cells) ^Cells bag (new-cells) ^Cells tokens (new-cells)
+        ^Cells norm (new-cells) ^Cells tmp (new-cells) ^Cells raw (new-cells) ^Cells rt (new-cells)]
+    (cells-push mask 1)
+    (cells-push et 65)
+    (or-new runs 1 0)
+    (or-set runs 0 (orf-wfirst) 0)
+    (or-set runs 0 (orf-wcount) 1)
+    (ow-new words 1 0 0 100 100 0 100 100 100 0 0 0 1 0 900 -1)
+    (assert-eq (oc-account runs words et nodes regions mask ledger text bag tokens norm tmp raw rt) 1 "unselected attempt must have an explicit fate")
+    (assert-eq (ledger-count ledger) 1 "residual becomes a ledger entry")
+    (assert-eq (ledger-text-len ledger 0) 1 "original OCR text retained")))
+
+(deftest test-accepted-word-lost-during-reconstruction-is-accounted
+  (let [^Cells runs (new-cells) ^Cells words (new-cells) ^Cells et (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells mask (new-cells)
+        ^Cells ledger (new-cells) ^Cells text (new-cells) ^Cells pages (new-cells) ^Cells layout (new-cells) ^Cells bag (new-cells) ^Cells tokens (new-cells)
+        ^Cells norm (new-cells) ^Cells tmp (new-cells) ^Cells raw (new-cells) ^Cells rt (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (cells-push mask 1)
+    (cells-push et 65)
+    (cells-push et 65)
+    (cells-push text 65)
+    (let [^I32 n (node-new nodes (nk-paragraph) 0)]
+      (node-set-text nodes n 0 1)
+      (node-add-region nodes regions n 1 0 0 100 100))
+    (or-new runs 1 0)
+    (or-set runs 0 (orf-wfirst) 0)
+    (or-set runs 0 (orf-wcount) 2)
+    (ow-new words 1 0 0 100 100 0 100 100 100 0 0 0 1 0 900 -1)
+    (ow-new words 1 100 0 200 100 100 100 200 100 0 0 1 1 0 900 -1)
+    (assert-eq (oc-account runs words et nodes regions mask ledger text bag tokens norm tmp raw rt) 1 "one of two identical accepted words vanished")
+    (assert-eq (ledger-count ledger) 1 "multiset occurrence, not a set membership check")))
+
+(deftest test-identical-rejected-alternatives-have-an-explicit-fate
+  (let [^Cells runs (new-cells) ^Cells words (new-cells) ^Cells et (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells mask (new-cells)
+        ^Cells ledger (new-cells) ^Cells text (new-cells) ^Cells pages (new-cells) ^Cells layout (new-cells) ^Cells bag (new-cells) ^Cells tokens (new-cells)
+        ^Cells norm (new-cells) ^Cells tmp (new-cells) ^Cells raw (new-cells) ^Cells rt (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (cells-push mask 1)
+    (cells-push et 65)
+    (cells-push et 65)
+    (cells-push text 65)
+    (let [^I32 n (node-new nodes (nk-paragraph) 0)]
+      (node-set-text nodes n 0 1)
+      (node-add-region nodes regions n 1 0 0 100 100))
+    (or-new runs 1 0)
+    (or-set runs 0 (orf-wfirst) 0)
+    (or-set runs 0 (orf-wcount) 1)
+    (or-new runs 1 0)
+    (or-set runs 1 (orf-wfirst) 1)
+    (or-set runs 1 (orf-wcount) 1)
+    (ow-new words 1 0 0 100 100 0 100 100 100 0 0 0 1 0 900 -1)
+    (ow-new words 1 100 0 200 100 100 100 200 100 0 0 1 1 0 900 -1)
+    (assert-eq (oc-account runs words et nodes regions mask ledger text bag tokens norm tmp raw rt) 1 "the second attempt is an explicit rejected alternative")
+    (assert-eq (ledger-count ledger) 1 "one Model occurrence cannot silently absorb every attempt")))
+
+(deftest test-inline-text-does-not-double-the-model-word-budget
+  (let [^Cells runs (new-cells) ^Cells words (new-cells) ^Cells et (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells mask (new-cells)
+        ^Cells ledger (new-cells) ^Cells text (new-cells) ^Cells pages (new-cells) ^Cells layout (new-cells) ^Cells bag (new-cells) ^Cells tokens (new-cells)
+        ^Cells norm (new-cells) ^Cells tmp (new-cells) ^Cells raw (new-cells) ^Cells rt (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (cells-push mask 1)
+    (cells-push et 65)
+    (cells-push et 65)
+    (cells-push text 65)
+    (let [^I32 n (node-new nodes (nk-paragraph) 0)]
+      (node-set-text nodes n 0 1)
+      (node-add-region nodes regions n 1 0 0 100 100)
+      (let [^I32 child (node-new nodes (nk-text) n)] (node-set-text nodes child 0 1)))
+    (or-new runs 1 0)
+    (or-set runs 0 (orf-wfirst) 0)
+    (or-set runs 0 (orf-wcount) 2)
+    (ow-new words 1 0 0 100 100 0 100 100 100 0 0 0 1 0 900 -1)
+    (ow-new words 1 100 0 200 100 100 100 200 100 0 0 1 1 0 900 -1)
+    (assert-eq (oc-account runs words et nodes regions mask ledger text bag tokens norm tmp raw rt) 1 "inline metadata is not another occurrence")
+    (assert-eq (ledger-count ledger) 1 "multiset occurrence, not a set membership check")))
+
+
+(deftest test-detached-text-and-furniture-templates-are-not-model-flow
+  (let [^Cells runs (new-cells) ^Cells words (new-cells) ^Cells et (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells mask (new-cells)
+        ^Cells ledger (new-cells) ^Cells text (new-cells) ^Cells pages (new-cells) ^Cells layout (new-cells) ^Cells bag (new-cells) ^Cells tokens (new-cells)
+        ^Cells norm (new-cells) ^Cells tmp (new-cells) ^Cells raw (new-cells) ^Cells rt (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (cells-push mask 1)
+    (cells-push et 65)
+    (cells-push et 65)
+    (cells-push text 65)
+    (let [^I32 n (node-new nodes (nk-paragraph) -1)
+          ^I32 furniture (node-new nodes (nk-furniture) -1)]
+      (node-set-text nodes furniture 0 1)
+      (node-add-region nodes regions furniture 1 0 0 100 100)
+      (node-set-text nodes n 0 1)
+      (node-add-region nodes regions n 1 0 0 100 100))
+    (or-new runs 1 0)
+    (or-set runs 0 (orf-wfirst) 0)
+    (or-set runs 0 (orf-wcount) 1)
+    (ow-new words 1 0 0 100 100 0 100 100 100 0 0 0 1 0 900 -1)
+    (ow-new words 1 100 0 200 100 100 100 200 100 0 0 1 1 0 900 -1)
+    (assert-eq (oc-account runs words et nodes regions mask ledger text bag tokens norm tmp raw rt) 1 "metadata cannot hide an omitted body word")
+    (assert-eq (ledger-count ledger) 1 "multiset occurrence, not a set membership check")))
+
+
+(deftest test-inline-derived-words-remain-whole
+  (let [^Cells runs (new-cells) ^Cells words (new-cells) ^Cells et (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells mask (new-cells)
+        ^Cells ledger (new-cells) ^Cells text (new-cells) ^Cells pages (new-cells) ^Cells layout (new-cells) ^Cells bag (new-cells) ^Cells tokens (new-cells)
+        ^Cells norm (new-cells) ^Cells tmp (new-cells) ^Cells raw (new-cells) ^Cells rt (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (cells-push mask 1)
+    (cells-push et 65)
+    (cells-push et 66)
+    (cells-push text 65)
+    (cells-push text 66)
+    (let [^I32 n (node-new nodes (nk-paragraph) 0)]
+      (let [^I32 left (node-new nodes (nk-text) n)
+            ^I32 right (node-new nodes (nk-text) n)]
+        (node-set-text nodes left 0 1) (node-set-text nodes right 1 1))
+      (node-add-region nodes regions n 1 0 0 100 100))
+    (or-new runs 1 0)
+    (or-set runs 0 (orf-wfirst) 0)
+    (or-set runs 0 (orf-wcount) 1)
+    (ow-new words 1 0 0 100 100 0 100 100 100 0 0 0 2 0 900 -1)
+    (ow-new words 1 100 0 200 100 100 100 200 100 0 0 1 1 0 900 -1)
+    (assert-eq (oc-account runs words et nodes regions mask ledger text bag tokens norm tmp raw rt) 0 "serialized AB spans two inline text runs")
+    (assert-eq (ledger-count ledger) 0 "the represented word is not falsely ledgered")))
+

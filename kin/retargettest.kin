@@ -12,8 +12,8 @@
                                    fe-new fe-set ea-owords xo-body-share wd-count wd-get ln-get hd-x0 wf-gap lh-x1]]
             [emon.norm :refer [nm-view nm-paper-gray]]
             [emon.scan :refer [sc-prep sc-sel-base sc-sel-max sc-aux-base sc-share-base sc-partner-base sc-xtra-base sc-emit-sel]]
-            [emon.retarget :refer [rt-gap-lines rt-answer-score rt-prep rt-decide rt-turns rt-erase-into rt-ask-view rt-adopt rt-line-state
-                                   rtp-q rtp-body rtp-erased rtp-nl rtp-nc rtp-cell0 rtp-line0 rtp-brun rtp-primary rtp-hash rt-lines rt-line-conf rt-max rt-cap rt-permille rt-empty-area rt-invert-bands]]
+            [emon.retarget :refer [rt-thermal-into rt-gap-lines rt-answer-score rt-prep rt-decide rt-turns rt-erase-into rt-ask-view rt-adopt rt-line-state
+                                   rtp-frun rtp-q rtp-body rtp-erased rtp-nl rtp-nc rtp-cell0 rtp-line0 rtp-brun rtp-primary rtp-hash rt-lines rt-line-conf rt-max rt-cap rt-permille rt-empty-area rt-invert-bands]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
 
@@ -499,3 +499,36 @@
       (let [^I32 br (rtt-run runs ol ow 1 0)]
         (rt-prep rtp) (cells-set rtp (rtp-brun) br)
         (assert-eq (rtt-adopt rtp runs fr ol ow scr) 1 "normal recovery already read text, so keep its quality decisions")))))
+
+(deftest test-thermal-contrast-bounded
+  (let [^Bitmap src (bitmap-new 3 1 1)
+        ^Bitmap dst (bitmap-new 3 1 1)]
+    (bitmap-set-u8 src 0 0 0 240)
+    (bitmap-set-u8 src 1 0 0 210)
+    (bitmap-set-u8 src 2 0 0 20)
+    (rt-thermal-into src dst 240)
+    (assert-eq (bitmap-u8 dst 0 0 0) 255 "paper stays white")
+    (assert-eq (bitmap-u8 dst 1 0 0) 165 "faint ink gains contrast")
+    (assert-eq (bitmap-u8 dst 2 0 0) 0 "dark ink saturates safely")))
+
+(deftest test-a-thermal-reading-of-texture-is-not-a-whole-page-recovery
+  (let [^Cells runs (new-cells) ^Cells ol (new-cells) ^Cells ow (new-cells)
+        ^Cells feats (new-cells) ^Cells rtp (new-cells) ^Cells scr (new-cells)]
+    (sc-prep scr)
+    (let [^I32 fr (rtt-run runs ol ow 0 0)]
+      (rtt-line ol ow feats 300 250)
+      (let [^I32 tr (rtt-run runs ol ow 0 0)]
+        (rt-prep rtp) (cells-set rtp (rtp-frun) tr)
+        (assert-eq (rtt-adopt rtp runs fr ol ow scr) 0 "near-unread emergency text stays evidence")))))
+
+(deftest test-a-thermal-reading-does-not-replace-normal-recovery
+  (let [^Cells runs (new-cells) ^Cells ol (new-cells) ^Cells ow (new-cells)
+        ^Cells feats (new-cells) ^Cells rtp (new-cells) ^Cells scr (new-cells)]
+    (sc-prep scr)
+    (let [^I32 fr (rtt-run runs ol ow 0 0)]
+      (rtt-line ol ow feats 300 900)
+      (let [^I32 br (rtt-run runs ol ow 0 0)]
+        (rtt-line ol ow feats 600 900)
+        (let [^I32 tr (rtt-run runs ol ow 1 2)]
+          (rt-prep rtp) (cells-set rtp (rtp-brun) br) (cells-set rtp (rtp-frun) tr)
+          (assert-eq (rtt-adopt rtp runs fr ol ow scr) 1 "normal recovery has priority over emergency text"))))))

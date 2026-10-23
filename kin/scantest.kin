@@ -7,7 +7,7 @@
             [emon.pdfdoc :refer [pd-open]]
             [emon.plan :refer [rec-kind rec-id rq-arg rq-nargs an-ocr an-ocr-word an-ocr-cp an-ocr-end pk-ocr]]
             [emon.ocr :refer [ox-begin ox-line ox-block ox-word ox-sym ox-sym-cp ocf-dpi]]
-            [emon.evidence :refer [or-new or-set orf-pass op-re-rotated ol-set ol-new ow-new ow-set os-new rl-new rl-set rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1 rlf-thick olf-retry-gap owf-sfirst owf-scount
+            [emon.evidence :refer [or-new or-set orf-wcount orf-pass op-re-rotated ol-set ol-new ow-new ow-set os-new rl-new rl-set rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1 rlf-thick olf-retry-gap owf-sfirst owf-scount
                                    co-new co-set cf-conf cf-ink ik-new ik-set ikf-role ir-body im-new
                                    oe-garbage oe-rule-ghost oe-corrected
                                    wd-count wd-get ln-count ln-get ol-count ol-get ow-count ow-get or-count or-get
@@ -18,14 +18,14 @@
                                    orf-bview orf-lang orf-langlen orf-osd orf-script orf-view
                                    obf-orient obf-wdir obf-btype vwf-kind vk-engine-binary wb-space wb-line-end
                                    epf-page epf-flags eg-raster ep-count]]
-            [emon.scan :refer [sc-trust sc-write-empty-regions sc-on-vrule sc-clean-text sc-word-agreement sc-format-control sc-unspaced sc-word-trust sc-lang sc-request sc-page sc-tag sc-tag-unread sc-mask-unread sc-unread-conf sc-eligible sc-write-bare sc-dct-span
+            [emon.scan :refer [sc-write-empty-ocr sc-trust sc-write-empty-regions sc-on-vrule sc-clean-text sc-word-agreement sc-format-control sc-unspaced sc-word-trust sc-lang sc-request sc-page sc-tag sc-tag-unread sc-mask-unread sc-unread-conf sc-eligible sc-write-bare sc-dct-span
                                sc-emit-sel sc-prep sc-sel-base sc-xtra-ok sc-implausible sc-leader sc-amount-like sc-groups-fix]]
             [emon.calib :refer [cal-node-conf]]
             [emon.model :refer [model-init node-new node-add-flag node-add-src node-set-conf node-src node-conf node-flags
                                 node-text-start node-text-len node-add-region node-set-text node-attr attr-len page-new page-kind
                                 nk-paragraph nk-text nk-document sr-text sr-ocr sr-infer fl-rotated fl-ocr-only fl-low-conf fl-script-unread pk-vector pk-scanned
                                 ledger-count ledger-page ledger-reason ledger-x1 dr-background
-                                dr-ocr-ghost pk-image fk-ocr]]
+                                dr-ocr-empty dr-ocr-ghost pk-image fk-ocr]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot bit-and]]))
 
@@ -1044,3 +1044,13 @@
       (sc-trust nodes regions ow et runs)
       (assert-that (>= (node-conf nodes p) 850) "old upside-down coordinates cannot lower clean selected OCR")
       (assert-that (>= (cal-node-conf nodes p) 750) "the scraper sees high calibrated confidence too"))))
+
+(deftest test-empty-ocr-is-explicitly-ledgered
+  (let [^Cells runs (new-cells) ^Cells pages (new-cells) ^Cells ledger (new-cells)]
+    (page-new pages 1 10000 20000 0 (pk-image))
+    (or-new runs 1 0)
+    (or-new runs 1 0)
+    (assert-eq (sc-write-empty-ocr runs pages ledger) 1 "one region after two empty attempts")
+    (assert-eq (ledger-reason ledger 0) (dr-ocr-empty) "explicit diagnostic")
+    (or-set runs 1 (orf-wcount) 1)
+    (assert-eq (sc-write-empty-ocr runs pages ledger) 0 "successful retry is not diagnosed empty")))

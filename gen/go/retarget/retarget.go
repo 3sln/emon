@@ -157,6 +157,19 @@ func rtNativeEmptyPriority() int32 {
 	return 1000000
 }
 
+func RiThermal() int32 {
+	return 30
+}
+
+func RvThermal() int32 {
+	return 40
+}
+
+func RtThermalMin() int32 {
+	// D698: an emergency page reading below 300 mean confidence is held as evidence, not promoted wholesale.
+	return 300
+}
+
 func RiBody() int32 {
 	return 17
 }
@@ -286,6 +299,11 @@ func RtpErased() int32 {
 	return 92
 }
 
+func RtpFrun() int32 {
+	// D698: the one faint-thermal retry, separate from normal body-ink recovery.
+	return 250
+}
+
 func RtpHash() int32 {
 	// two cells the pixel hash is written to
 	return 254
@@ -305,6 +323,7 @@ func RtPrep(rtp *port.Cells) int32 {
 		port.CellsSet(rtp, i, 0)
 		i += 1
 	}
+	port.CellsSet(rtp, RtpFrun(), -1)
 	port.CellsSet(rtp, RtpBrun(), -1)
 	port.CellsSet(rtp, RtpRrun(), -1)
 	port.CellsSet(rtp, RtpTrun(), -1)
@@ -1170,6 +1189,41 @@ func RtAnswerScore(ans *port.Cells, at int32) int32 {
 	return score
 }
 
+func RtThermalInto(gray *port.Bitmap, dst *port.Bitmap, paper int32) int32 {
+	// D698: bounded contrast gain around the measured paper level; one raster pass, preserving grayscale edges.
+	var y int32 = 0
+	var x int32 = 0
+	var v int32 = 0
+	for y < port.BitmapH(gray) {
+		x = 0
+		for x < port.BitmapW(gray) {
+			v = 255 - (3 * (paper - port.BitmapU8(gray, x, y, 0)))
+			if v < 0 {
+				v = 0
+			}
+			if v > 255 {
+				v = 255
+			}
+			port.BitmapSetU8(dst, x, y, 0, v)
+			x += 1
+		}
+		y += 1
+	}
+	return 0
+}
+
+func rtAskThermal(page int32, dpi int32, loc *port.Cells, ans *port.Cells, bms *port.BitmapSet, gray *port.Bitmap, paper int32, rtp *port.Cells, rq *port.Cells) int32 {
+	var id int32 = plan.PuId(page, RiThermal())
+	var vid int32 = plan.PuViewId(page, RvThermal())
+	var v *port.Bitmap = port.BmsPut(bms, vid, port.BitmapW(gray), port.BitmapH(gray), 1)
+	RtThermalInto(gray, v, paper)
+	port.BitmapHash(v, rtp, RtpHash())
+	if plan.AnFind(ans, id) < 0 {
+		scan.ScRequestViewPsm(rq, id, vid, port.CellsAt(rtp, RtpHash()), port.CellsAt(rtp, RtpHash()+1), 6, dpi, loc)
+	}
+	return 1
+}
+
 func RtPlan(page int32, input int32, born int32, wanttext int32, rid int32, dpi int32, loc *port.Cells, ans *port.Cells, bms *port.BitmapSet, k0 int32, src *port.Bitmap, ws *port.Cells, oruns *port.Cells, run int32, olines *port.Cells, owords *port.Cells, rules *port.Cells, tlines *port.Cells, rtp *port.Cells, rq *port.Cells, scr *port.Cells, comps *port.Cells, inks *port.Cells) int32 {
 	// Decide and ask what is not yet answered, in the brief's order: the table cells and the lines, the text-only render and its OCR, the body-ink view,
 	// the quarter-turned view. `page` is 0-based (ids), `rid` the request id of the raster `src` that the first pass read at `dpi`, `k0` the id group
@@ -1194,6 +1248,12 @@ func RtPlan(page int32, input int32, born int32, wanttext int32, rid int32, dpi 
 	}
 	if port.CellsAt(rtp, RtpBody()) == 1 {
 		asked += rtAskBody(page, dpi, loc, ans, bms, rtp, rq)
+	}
+	if (born == 0) && ((q == 0) && (evidence.OrGet(oruns, run, evidence.OrfWcount()) == 0)) {
+		var ba int32 = plan.AnFind(ans, plan.PuId(page, RiBody()))
+		if (port.CellsAt(rtp, RtpBody()) == 0) || ((ba >= 0) && ((plan.AnOk(ans, ba) == 1) && (plan.AnOcrCount(ans, ba) == 0))) {
+			asked += rtAskThermal(page, dpi, loc, ans, bms, port.BmsGet(bms, plan.PuViewId(page, k0)), norm.NmPaperGray(ws), rtp, rq)
+		}
 	}
 	if q != 0 {
 		asked += rtAskRotated(page, dpi, loc, ans, bms, src, q, rtp, rq)
@@ -1291,6 +1351,16 @@ func RtRecord(page int32, srcview int32, dpi100 int32, loc *port.Cells, ans *por
 			run = scan.ScAnswer(ans, a, pg, srcview, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
 			RtRunMeta(oruns, run, evidence.OpBodyInk(), 3, 3, 0, 0, 0, 0)
 			port.CellsSet(rtp, RtpBrun(), run)
+			made += 1
+		}
+	}
+	id = plan.PuId(page, RiThermal())
+	a = plan.AnFind(ans, id)
+	if a >= 0 {
+		if plan.AnOk(ans, a) == 1 {
+			run = scan.ScAnswer(ans, a, pg, srcview, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
+			RtRunMeta(oruns, run, evidence.OpBodyInk(), 3+port.CellsAt(rtp, RtpBody()), 6, 0, 0, 0, 0)
+			port.CellsSet(rtp, RtpFrun(), run)
 			made += 1
 		}
 	}
@@ -1749,6 +1819,31 @@ func RtAdopt(rtp *port.Cells, oruns *port.Cells, fr int32, olines *port.Cells, o
 		}
 		if n > 0 {
 			port.CellsSet(rtp, RtpPrimary(), brun)
+		}
+	}
+	if (n == 0) && (port.CellsAt(rtp, RtpFrun()) >= 0) {
+		tr = port.CellsAt(rtp, RtpFrun())
+		if rtRunMean(oruns, owords, tr) >= RtThermalMin() {
+			b = evidence.OrGet(oruns, tr, evidence.OrfLfirst())
+			bn = b + evidence.OrGet(oruns, tr, evidence.OrfLcount())
+			for b < bn {
+				if (evidence.OlGet(olines, b, evidence.LhCount()) >= RtEmptyWords()) && (RtLineMean(olines, owords, b) >= RtEmptyConf()) {
+					n = rtSelAdd(scr, n, b)
+				}
+				b += 1
+			}
+			if n == 0 {
+				b = evidence.OrGet(oruns, tr, evidence.OrfLfirst())
+				for b < bn {
+					if evidence.OlGet(olines, b, evidence.LhCount()) > 0 {
+						n = rtSelAdd(scr, n, b)
+					}
+					b += 1
+				}
+			}
+			if n > 0 {
+				port.CellsSet(rtp, RtpPrimary(), tr)
+			}
 		}
 	}
 	return n

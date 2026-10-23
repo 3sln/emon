@@ -1153,3 +1153,16 @@ fn test_rotated_ocr_trust_uses_only_the_selected_coordinate_frame() {
     crate::testport::assert_that(node_conf(nodes, p) >= 850, "old upside-down coordinates cannot lower clean selected OCR");
     crate::testport::assert_that(cal_node_conf(nodes, p) >= 750, "the scraper sees high calibrated confidence too");
 }
+#[test]
+fn test_empty_ocr_is_explicitly_ledgered() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    page_new(pages, 1, 10000, 20000, 0, pk_image());
+    or_new(runs, 1, 0);
+    or_new(runs, 1, 0);
+    crate::testport::assert_eq(sc_write_empty_ocr(runs, pages, ledger), 1, "one region after two empty attempts");
+    crate::testport::assert_eq(ledger_reason(ledger, 0), dr_ocr_empty(), "explicit diagnostic");
+    or_set(runs, 1, orf_wcount(), 1);
+    crate::testport::assert_eq(sc_write_empty_ocr(runs, pages, ledger), 0, "successful retry is not diagnosed empty");
+}

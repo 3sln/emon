@@ -12231,3 +12231,29 @@ requirements so absent data gives a concrete fetch command before expensive work
 No corpus data was deleted while implementing this decision.
 
 - [ ] **Signed off** (maintainer)
+
+### D698 — One bounded faint-thermal retry and an empty-OCR diagnostic
+
+RC2 adds a separate contrast-enhanced PSM 6 view for an upright scan only after its first pass and normal body-ink recovery read no words. Stable request 30 and view 40 prevent repeated retries; the normal recovery remains authoritative. Near-unread emergency runs below mean engine confidence 300 stay evidence. The existing 700-confidence line preference precedes emergency whole-page adoption. This is an adoption policy, not a calibration refit.
+
+A first trial reused the body pass and admitted texture: CORD precision fell to 24.96%. That trial was rejected. The refined fixed 60+60 live sample has SROIE empty Models 2→0, recall 69.39→69.97%, precision 67.857→67.861%; CORD empty Models 6→2, recall 38.07→41.99%, precision 34.94→36.66%. Numeric recall improves on both sets. All-empty OCR runs get a full-page `ocr-empty` dropped diagnostic without invented text. Laws cover contrast bounds, empty-run accounting, texture refusal and priority of normal recovery.
+
+- [ ] **Signed off** (maintainer)
+
+### D699 — Account for residual OCR occurrences, including rejected alternatives
+
+After scanned-page reconstruction, audit every OCR occurrence against a page-local budget of final Model text and pre-existing dropped text. One budget spans all attempts: a single Model occurrence cannot silently absorb every identical alternative. New audit entries do not replenish their own budget. Unrepresented readings retain their normalized text, box, OCR source and engine confidence under `ocr-unrepresented`; they never enter the body. The ledger records alternatives as well as reconstruction losses, not a claim that each row is a distinct correctly recognized physical word.
+
+Corpus-free boundary laws failed before the fix for an unselected attempt and a duplicate accepted word lost during reconstruction. A third law protects identical rejected alternatives. Three additional boundary laws fail against the previous collector and pass when coverage follows serialized flow: detached roots and furniture templates are excluded, inline metadata cannot double a word, and inline-derived words remain whole. An initial per-attempt budget reduced SROIE OCR-present silent words to 357 but missed the target; sharing the budget across attempts corrects that omission. The two added closed Model reason values are deliberately recorded in `api/surface.edn` with `bb api-diff --allow-additions --write` under D527; no public entry is removed or changed. The new namespace is included in the OCR CI gate mapping. Receipt tooling can keep port transcripts externally and replay the same answers through a new pipeline, with an explicit failure for missing transcripts. The final fixed sample reduces OCR-present silent words 463→219 on SROIE and 149→37 on CORD, with precision above RC1 on both. Every per-document non-ledger receipt measurement is identical before and after the audit. The residual diagnostic is an upper bound over repeated gold/raw occurrences, not a disjoint physical-loss count. No corpus text or pixels are committed, and no calibration map is refitted.
+
+- [ ] **Signed off** (maintainer)
+
+### D700 — Receipt reconstruction limits and control scope remain explicit
+
+No speculative row/field concatenation is retained. On the fresh original sample only 39/151 CORD item groups have all words anywhere in raw OCR. A conservative unique-baseline numeric-attachment prototype makes ten joins but increases intact evidence groups only 13→15/151; it establishes neither the requested 40% Model integrity nor the required protection against joining different items. Raw exact numeric recovery is bounded at 1405/2343 SROIE and 232/608 CORD before further OCR recovery. Complete raw-word sets exist for only 36/60 companies, 19/60 addresses and 16/57 CORD totals. Faint-pass gains are retained, but the larger numeric, item and strict-field targets remain unmet.
+
+The synthetic long receipt prints page numbers that its gold does not label. Its existing furniture, paragraph and two-column deficiencies remain measured; neither truth nor ratchets are rewritten to improve the score. Labelled rotated/skewed variants remain a stretch deferral. Historical accuracy populations and scoreboard values remain fixed.
+
+Three initially absent shards were reported immediately: `katanaml-invoices` (F03/F15), `fintabnet-otsl` (F08), and `ctdar-test` (F19). They became available in the shared corpus during the run; this task fetched and pruned nothing. All 15 named word controls, using the established batch 11 excerpts, and the full 152-page Berkshire control pass with zero words lost or gained and identical body/furniture text. All final gates pass, with 1,156 laws on each of Rust, Go, Java and C#. The final RC2 report records the full scope, metrics and local packaging limitations. The coordinator commits; this worktree makes no commits.
+
+- [ ] **Signed off** (maintainer)

@@ -1447,6 +1447,12 @@ func DrRuleGhost() int32 {
 func DrUnwitnessedUncertainPaint() int32 {
 	return 12
 }
+func DrOcrEmpty() int32 {
+	return 13
+}
+func DrOcrUnrepresented() int32 {
+	return 14
+}
 func DrEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "watermark")
@@ -1494,6 +1500,14 @@ func DrEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 12 {
 		port.TextAscii(t, "unwitnessed-uncertain-paint")
+		return 1
+	}
+	if code == 13 {
+		port.TextAscii(t, "ocr-empty")
+		return 1
+	}
+	if code == 14 {
+		port.TextAscii(t, "ocr-unrepresented")
 		return 1
 	}
 	return 0
