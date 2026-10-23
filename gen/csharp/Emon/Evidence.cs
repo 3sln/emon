@@ -3528,6 +3528,10 @@ public static class Evidence {
     public static int OlfPh() {
         return 22;
     }
+    public static int OlfRetryGap() {
+        // D670: traced ink missing from the first OCR pass; internal retry/ledger marker.
+        return 23;
+    }
     public static int OwfStyle() {
         return 16;
     }

@@ -8,11 +8,13 @@
 ;; for loose top-level files), an `index.json` beside them. See DEVLOG D085.
 ;;
 ;; Options (besides the EMON_S3_* keys in the gitignored `.env`):
-;;   --corpus DIR   corpus location; else $EMON_CORPUS_DIR; else <repo>/corpus
+;;   --corpus DIR   corpus location; else $EMON_CORPUS_DIR; else :corpus-dir of the gitignored `local.edn`
+;;                  (bb corpus-link makes `corpus/` a symlink to it); else <repo>/corpus
 ;;   --part-mb N    multipart part size in MiB (default 64; S3 minimum is 5)
 ;;   $EMON_ENV_FILE alternative .env path;  $EMON_TMP scratch dir for zips
 (ns corpus
   (:require [babashka.fs :as fs]
+            [clojure.edn]
             [babashka.http-client :as http]
             [babashka.process :as proc]
             [cheshire.core :as json]
@@ -234,8 +236,29 @@
 (def ^:private fixed-time (LocalDateTime/of 1980 1 1 0 0 0))
 (def ^:private no-attrs (make-array java.nio.file.attribute.FileAttribute 0))
 
-(defn corpus-dir [opts]
-  (str (fs/absolutize (or (:corpus opts) (System/getenv "EMON_CORPUS_DIR") (str (fs/path repo-root "corpus"))))))
+(defn local-config
+  "The gitignored, per-checkout `local.edn` (see local.edn.example): {} when absent."
+  []
+  (let [f (str (fs/path repo-root "local.edn"))]
+    (if (fs/exists? f)
+      (try (let [m (clojure.edn/read-string (slurp f))]
+             (if (map? m) m (die f " must hold one map, e.g. {:corpus-dir \"/Volumes/X/emon-corpus\"}")))
+           (catch Exception e (die "cannot read " f ": " (ex-message e))))
+      {})))
+
+(defn corpus-dir
+  "--corpus, else $EMON_CORPUS_DIR, else :corpus-dir of local.edn, else <repo>/corpus. The path is absolutized, never
+   canonicalized, so a `corpus` symlink stays a symlink (and is never replaced). A dir that local.edn names must already
+   exist: an unmounted drive must not make us create a directory under /Volumes on the internal disk."
+  [opts]
+  (let [explicit (or (:corpus opts) (System/getenv "EMON_CORPUS_DIR"))
+        local (when-not explicit (let [d (:corpus-dir (local-config))] (when (seq d) d)))
+        dir (str (fs/absolutize (or explicit local (str (fs/path repo-root "corpus")))))]
+    (when (and local (not (fs/directory? dir)))
+      (die ":corpus-dir of local.edn is " dir ", which is not there (is the external drive plugged in?)"))
+    (when (and (fs/sym-link? dir) (not (fs/exists? dir)))
+      (die dir " is a symlink to a path that is not there (is the external drive plugged in? `bb corpus-link --check` says more)"))
+    dir))
 
 (defn categories
   "Archive names present locally: each top-level dir, plus _root if loose files exist.

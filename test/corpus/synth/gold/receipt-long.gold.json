@@ -1,0 +1,495 @@
+{
+ "emon-gold": "1.0",
+ "id": "receipt-long",
+ "provenance": {
+  "html": "html/receipt-long.html",
+  "pdf": "pdf/receipt-long.pdf",
+  "producer": "emon synth.pdfw receipts v1"
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 650,
+    "n": 1,
+    "rot": 0,
+    "w": 226.77
+   },
+   {
+    "h": 650,
+    "n": 2,
+    "rot": 0,
+    "w": 226.77
+   },
+   {
+    "h": 650,
+    "n": 3,
+    "rot": 0,
+    "w": 226.77
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "paragraph",
+     "text": "Receipt long page 1"
+    },
+    {
+     "id": 2,
+     "kind": "paragraph",
+     "text": "Market Kitchen"
+    },
+    {
+     "id": 3,
+     "kind": "paragraph",
+     "text": "2026-10-22"
+    },
+    {
+     "id": 4,
+     "kind": "paragraph",
+     "text": "Item 00 1 x 2.00 2.00"
+    },
+    {
+     "id": 5,
+     "kind": "paragraph",
+     "text": "Item 01 1 x 2.00 2.00"
+    },
+    {
+     "id": 6,
+     "kind": "paragraph",
+     "text": "Item 02 1 x 2.00 2.00"
+    },
+    {
+     "id": 7,
+     "kind": "paragraph",
+     "text": "Item 03 1 x 2.00 2.00"
+    },
+    {
+     "id": 8,
+     "kind": "paragraph",
+     "text": "Item 04 1 x 2.00 2.00"
+    },
+    {
+     "id": 9,
+     "kind": "paragraph",
+     "text": "Item 05 1 x 2.00 2.00"
+    },
+    {
+     "id": 10,
+     "kind": "paragraph",
+     "text": "Item 06 1 x 2.00 2.00"
+    },
+    {
+     "id": 11,
+     "kind": "paragraph",
+     "text": "Item 07 1 x 2.00 2.00"
+    },
+    {
+     "id": 12,
+     "kind": "paragraph",
+     "text": "Item 08 1 x 2.00 2.00"
+    },
+    {
+     "id": 13,
+     "kind": "paragraph",
+     "text": "Item 09 1 x 2.00 2.00"
+    },
+    {
+     "id": 14,
+     "kind": "paragraph",
+     "text": "Item 10 1 x 2.00 2.00"
+    },
+    {
+     "id": 15,
+     "kind": "paragraph",
+     "text": "Item 11 1 x 2.00 2.00"
+    },
+    {
+     "id": 16,
+     "kind": "paragraph",
+     "text": "Item 12 1 x 2.00 2.00"
+    },
+    {
+     "id": 17,
+     "kind": "paragraph",
+     "text": "Item 13 1 x 2.00 2.00"
+    },
+    {
+     "id": 18,
+     "kind": "paragraph",
+     "text": "Item 14 1 x 2.00 2.00"
+    },
+    {
+     "id": 19,
+     "kind": "paragraph",
+     "text": "Item 15 1 x 2.00 2.00"
+    },
+    {
+     "id": 20,
+     "kind": "paragraph",
+     "text": "Item 16 1 x 2.00 2.00"
+    },
+    {
+     "id": 21,
+     "kind": "paragraph",
+     "text": "Item 17 1 x 2.00 2.00"
+    },
+    {
+     "id": 22,
+     "kind": "paragraph",
+     "text": "Receipt long page 2"
+    },
+    {
+     "id": 23,
+     "kind": "paragraph",
+     "text": "Market Kitchen"
+    },
+    {
+     "id": 24,
+     "kind": "paragraph",
+     "text": "2026-10-22"
+    },
+    {
+     "id": 25,
+     "kind": "paragraph",
+     "text": "Item 18 1 x 2.00 2.00"
+    },
+    {
+     "id": 26,
+     "kind": "paragraph",
+     "text": "Item 19 1 x 2.00 2.00"
+    },
+    {
+     "id": 27,
+     "kind": "paragraph",
+     "text": "Item 20 1 x 2.00 2.00"
+    },
+    {
+     "id": 28,
+     "kind": "paragraph",
+     "text": "Item 21 1 x 2.00 2.00"
+    },
+    {
+     "id": 29,
+     "kind": "paragraph",
+     "text": "Item 22 1 x 2.00 2.00"
+    },
+    {
+     "id": 30,
+     "kind": "paragraph",
+     "text": "Item 23 1 x 2.00 2.00"
+    },
+    {
+     "id": 31,
+     "kind": "paragraph",
+     "text": "Item 24 1 x 2.00 2.00"
+    },
+    {
+     "id": 32,
+     "kind": "paragraph",
+     "text": "Item 25 1 x 2.00 2.00"
+    },
+    {
+     "id": 33,
+     "kind": "paragraph",
+     "text": "Item 26 1 x 2.00 2.00"
+    },
+    {
+     "id": 34,
+     "kind": "paragraph",
+     "text": "Item 27 1 x 2.00 2.00"
+    },
+    {
+     "id": 35,
+     "kind": "paragraph",
+     "text": "Item 28 1 x 2.00 2.00"
+    },
+    {
+     "id": 36,
+     "kind": "paragraph",
+     "text": "Item 29 1 x 2.00 2.00"
+    },
+    {
+     "id": 37,
+     "kind": "paragraph",
+     "text": "Item 30 1 x 2.00 2.00"
+    },
+    {
+     "id": 38,
+     "kind": "paragraph",
+     "text": "Item 31 1 x 2.00 2.00"
+    },
+    {
+     "id": 39,
+     "kind": "paragraph",
+     "text": "Item 32 1 x 2.00 2.00"
+    },
+    {
+     "id": 40,
+     "kind": "paragraph",
+     "text": "Item 33 1 x 2.00 2.00"
+    },
+    {
+     "id": 41,
+     "kind": "paragraph",
+     "text": "Item 34 1 x 2.00 2.00"
+    },
+    {
+     "id": 42,
+     "kind": "paragraph",
+     "text": "Item 35 1 x 2.00 2.00"
+    },
+    {
+     "id": 43,
+     "kind": "paragraph",
+     "text": "Receipt long page 3"
+    },
+    {
+     "id": 44,
+     "kind": "paragraph",
+     "text": "Market Kitchen"
+    },
+    {
+     "id": 45,
+     "kind": "paragraph",
+     "text": "2026-10-22"
+    },
+    {
+     "id": 46,
+     "kind": "paragraph",
+     "text": "Item 36 1 x 2.00 2.00"
+    },
+    {
+     "id": 47,
+     "kind": "paragraph",
+     "text": "Item 37 1 x 2.00 2.00"
+    },
+    {
+     "id": 48,
+     "kind": "paragraph",
+     "text": "Item 38 1 x 2.00 2.00"
+    },
+    {
+     "id": 49,
+     "kind": "paragraph",
+     "text": "Item 39 1 x 2.00 2.00"
+    },
+    {
+     "id": 50,
+     "kind": "paragraph",
+     "text": "Item 40 1 x 2.00 2.00"
+    },
+    {
+     "id": 51,
+     "kind": "paragraph",
+     "text": "Item 41 1 x 2.00 2.00"
+    },
+    {
+     "id": 52,
+     "kind": "paragraph",
+     "text": "Item 42 1 x 2.00 2.00"
+    },
+    {
+     "id": 53,
+     "kind": "paragraph",
+     "text": "Item 43 1 x 2.00 2.00"
+    },
+    {
+     "id": 54,
+     "kind": "paragraph",
+     "text": "Item 44 1 x 2.00 2.00"
+    },
+    {
+     "id": 55,
+     "kind": "paragraph",
+     "text": "Item 45 1 x 2.00 2.00"
+    },
+    {
+     "id": 56,
+     "kind": "paragraph",
+     "text": "Item 46 1 x 2.00 2.00"
+    },
+    {
+     "id": 57,
+     "kind": "paragraph",
+     "text": "Item 47 1 x 2.00 2.00"
+    },
+    {
+     "id": 58,
+     "kind": "paragraph",
+     "text": "Item 48 1 x 2.00 2.00"
+    },
+    {
+     "id": 59,
+     "kind": "paragraph",
+     "text": "Item 49 1 x 2.00 2.00"
+    },
+    {
+     "id": 60,
+     "kind": "paragraph",
+     "text": "Item 50 1 x 2.00 2.00"
+    },
+    {
+     "id": 61,
+     "kind": "paragraph",
+     "text": "Item 51 1 x 2.00 2.00"
+    },
+    {
+     "id": 62,
+     "kind": "paragraph",
+     "text": "Item 52 1 x 2.00 2.00"
+    },
+    {
+     "id": 63,
+     "kind": "paragraph",
+     "text": "Item 53 1 x 2.00 2.00"
+    },
+    {
+     "id": 64,
+     "kind": "paragraph",
+     "text": "Discount -1.00"
+    },
+    {
+     "id": 65,
+     "kind": "paragraph",
+     "text": "Subtotal 107.00"
+    },
+    {
+     "id": 66,
+     "kind": "paragraph",
+     "text": "Tax 8.56"
+    },
+    {
+     "id": 67,
+     "kind": "paragraph",
+     "text": "Tip 2.00"
+    },
+    {
+     "id": 68,
+     "kind": "paragraph",
+     "text": "Total $117.56"
+    },
+    {
+     "id": 69,
+     "kind": "paragraph",
+     "text": "VISA **** 1234"
+    },
+    {
+     "id": 70,
+     "kind": "paragraph",
+     "text": "APPROVED"
+    },
+    {
+     "id": 71,
+     "kind": "paragraph",
+     "text": "Signature __________"
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "receipt-long"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 3,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

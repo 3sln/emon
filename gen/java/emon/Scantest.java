@@ -62,7 +62,7 @@ public final class Scantest {
         emon.Testport.assertEq(langOf(122, 104, 111, 0, 0, 0, 0, 0, 0, 0), 6514803, "zho is chs");
     }
     public static void testNoHintOrNoNameIsNoLanguage() {
-        emon.Testport.assertEq(langOf(0, 0, 0, 0, 0, 0, 0, 0, 0, 0), 0, "no hint: the port reads with every model it has (D038)");
+        emon.Testport.assertEq(langOf(0, 0, 0, 0, 0, 0, 0, 0, 0, 0), 0, "no hint: discovery model selection belongs to the port (D672)");
         emon.Testport.assertEq(langOf(120, 0, 0, 0, 0, 0, 0, 0, 0, 0), 0, "one letter says nothing");
         emon.Testport.assertEq(langOf(113, 113, 0, 0, 0, 0, 0, 0, 0, 0), 0, "an unknown two-letter code");
         emon.Testport.assertEq(langOf(49, 50, 51, 0, 0, 0, 0, 0, 0, 0), 0, "digits are no language");
@@ -978,5 +978,130 @@ public final class Scantest {
         stLine(olines, 100, 200, 0, 1);
         emon.Testport.assertEq(stEmit(olines, owords, words, lines, et, emon.Port.newCells(), 1), 0, "a one-point dot alone is no paragraph even at high engine confidence");
         emon.Testport.assertEq(Evidence.owGet(owords, 0, Evidence.owfFlags()) & Evidence.oeGarbage(), Evidence.oeGarbage(), "the evidence retains it for the garbage ledger");
+    }
+    public static void testOcrTrustSeparatesCleanWordsFromJunk() {
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.cellsPush(et, 84);
+        emon.Port.cellsPush(et, 111);
+        emon.Port.cellsPush(et, 116);
+        emon.Port.cellsPush(et, 97);
+        emon.Port.cellsPush(et, 108);
+        emon.Port.cellsPush(et, 65533);
+        emon.Port.cellsPush(et, 124);
+        emon.Port.cellsPush(et, 65533);
+        Evidence.owNew(ow, 1, 0, 0, 500, 100, 0, 100, 500, 100, 0, 0, 0, 5, 0, 960, -1);
+        Evidence.owNew(ow, 1, 0, 200, 500, 300, 0, 300, 500, 300, 0, 0, 5, 3, 1, 120, -1);
+        Evidence.owSet(ow, 0, Evidence.owfFlags(), 1);
+        emon.Testport.assertThat(Scan.scWordTrust(ow, et, 0) >= 850, "clean dictionary OCR stays high");
+        emon.Testport.assertThat(Scan.scWordTrust(ow, et, 1) <= 200, "rejected characters at low engine confidence stay low");
+        emon.Testport.assertThat((Scan.scWordTrust(ow, et, 0) - Scan.scWordTrust(ow, et, 1)) >= 600, "scrapers can separate clean text and junk");
+    }
+    public static void testOcrFormatControlsAndUnspacedScripts() {
+        emon.Testport.assertEq(Scan.scFormatControl(8206), 1, "OCR LRM is stripped");
+        emon.Testport.assertEq(Scan.scFormatControl(8207), 1, "OCR RLM is stripped");
+        emon.Testport.assertEq(Scan.scFormatControl(8295), 1, "OCR direction isolates are stripped");
+        emon.Testport.assertEq(Scan.scFormatControl(1575), 0, "Arabic letters are kept");
+        emon.Testport.assertEq(Scan.scUnspaced(21407), 1, "Han words have no separator");
+        emon.Testport.assertEq(Scan.scUnspaced(12363), 1, "Kana words have no separator");
+        emon.Testport.assertEq(Scan.scUnspaced(44032), 0, "Hangul word spaces are kept");
+        emon.Testport.assertEq(Scan.scUnspaced(65), 0, "Latin word spaces are kept");
+    }
+    public static void testOcrPassDisagreementReducesTrust() {
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.cellsPush(et, 65);
+        emon.Port.cellsPush(et, 66);
+        Evidence.owNew(ow, 1, 0, 0, 500, 100, 0, 100, 500, 100, 0, 0, 0, 1, 0, 900, -1);
+        Evidence.owNew(ow, 1, 0, 0, 500, 100, 0, 100, 500, 100, 0, 0, 1, 1, 1, 900, -1);
+        Evidence.owSet(ow, 0, Evidence.owfRun(), 0);
+        Evidence.owSet(ow, 1, Evidence.owfRun(), 1);
+        emon.Testport.assertThat(Scan.scWordAgreement(ow, et, 0) < 1000, "two readings of the same ink disagree");
+        Evidence.owSet(ow, 1, Evidence.hdTstart(), 0);
+        emon.Testport.assertEq(Scan.scWordAgreement(ow, et, 0), 1000, "the same reading agrees");
+    }
+    public static void testAShortDetectedRuleIsNotAnOcrWord() {
+        emon.Port.Cells rules = emon.Port.newCells();
+        stRule(rules, 1000, 0, 500);
+        emon.Testport.assertEq(Scan.scOnVrule(rules, 1, 1000, 250, 20), 1, "a detected five-point rule also rejects a bar");
+    }
+    public static void testOcrTextCleaningRemovesControlsAndHanSeparators() {
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        int t = Model.nodeNew(nodes, Model.nkText(), 0);
+        int start = emon.Port.cellsLen(text);
+        Model.nodeAddSrc(nodes, t, Model.srOcr());
+        emon.Port.cellsPush(text, 21407);
+        emon.Port.cellsPush(text, 32);
+        emon.Port.cellsPush(text, 20135);
+        emon.Port.cellsPush(text, 8206);
+        Model.nodeSetText(nodes, t, start, 4);
+        emon.Testport.assertEq(Scan.scCleanText(nodes, text), 1, "one corrected OCR text run");
+        emon.Testport.assertEq(Model.nodeTextLen(nodes, t), 2, "two adjacent Han characters");
+        emon.Testport.assertEq(emon.Port.cellsAt(text, Model.nodeTextStart(nodes, t)), 21407, "the first character stays");
+        emon.Testport.assertEq(Scan.scCleanText(nodes, text), 0, "cleaning is idempotent");
+    }
+    public static void testAnInkRegionThatRetriesReadAsNothingHasALedgerRow() {
+        emon.Port.Cells ol = emon.Port.newCells();
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        int l = Evidence.olNew(ol, 1, 1000, 2000, 9000, 2400, 1000, 2400, 9000, 2400, 0, 0, 0, 0);
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Evidence.olSet(ol, l, Evidence.olfRetryGap(), 1);
+        emon.Testport.assertEq(Scan.scWriteEmptyRegions(ol, nodes, regions, ledger), 1, "ink without Model text is accounted for");
+        emon.Testport.assertEq(Model.ledgerReason(ledger, 0), Model.drOcrGhost(), "not a silent lost region");
+        emon.Testport.assertEq(Model.ledgerX1(ledger, 0), 9000, "the region's own extent");
+        int p = Model.nodeNew(nodes, Model.nkParagraph(), 0);
+        Model.nodeAddRegion(nodes, regions, p, 1, 2000, 2000, 5000, 2400);
+        emon.Testport.assertEq(Scan.scWriteEmptyRegions(ol, nodes, regions, ledger), 0, "a region represented in the Model is not empty");
+    }
+    public static void testRotatedOcrTrustUsesOnlyTheSelectedCoordinateFrame() {
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells runs = emon.Port.newCells();
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        emon.Port.cellsPush(et, 65533);
+        emon.Port.cellsPush(et, 65533);
+        emon.Port.cellsPush(et, 65533);
+        emon.Port.cellsPush(et, 65533);
+        emon.Port.cellsPush(et, 65533);
+        emon.Port.cellsPush(et, 84);
+        emon.Port.cellsPush(et, 111);
+        emon.Port.cellsPush(et, 116);
+        emon.Port.cellsPush(et, 97);
+        emon.Port.cellsPush(et, 108);
+        Evidence.orNew(runs, 1, 0);
+        int selected = Evidence.orNew(runs, 1, 1);
+        Evidence.orSet(runs, selected, Evidence.orfPass(), Evidence.opReRotated());
+        Evidence.owNew(ow, 1, 0, 0, 500, 100, 0, 100, 500, 100, 0, 0, 0, 5, 0, 0, -1);
+        Evidence.owSet(ow, 0, Evidence.owfRun(), 0);
+        Evidence.owNew(ow, 1, 0, 0, 500, 100, 0, 100, 500, 100, 0, 0, 5, 5, 1, 960, -1);
+        Evidence.owSet(ow, 1, Evidence.owfRun(), 1);
+        Evidence.owSet(ow, 1, Evidence.owfFlags(), 1);
+        int p = Model.nodeNew(nodes, Model.nkParagraph(), 0);
+        Model.nodeAddSrc(nodes, p, Model.srOcr());
+        Model.nodeAddFlag(nodes, p, Model.flRotated());
+        Model.nodeAddRegion(nodes, regions, p, 1, 0, 0, 500, 100);
+        Scan.scTrust(nodes, regions, ow, et, runs);
+        emon.Testport.assertThat(Model.nodeConf(nodes, p) >= 850, "old upside-down coordinates cannot lower clean selected OCR");
+        emon.Testport.assertThat(Calib.calNodeConf(nodes, p) >= 750, "the scraper sees high calibrated confidence too");
     }
 }

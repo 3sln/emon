@@ -551,6 +551,8 @@ pub fn pu_scan_core(i: i32, input: i32, fuse: i32, did: i32, ad: i32, dpi100: i3
     l0 = ol_count(olines);
     w0 = ow_count(owords);
     run = sc_page_evidence(ans, ao, i + 1, roid, vdec, rdpi, sc_lang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+    // D676: retry placeholders are not OCR orientation votes; keep the first pass's original line span for its dominant angle.
+    nl = or_get(oruns, run, orf_lcount());
     if rid == uvid {
         rt_run_meta(oruns, run, op_upscaled(), 3, 3, 0, 0, 0, 0);
     }
@@ -580,9 +582,11 @@ pub fn pu_scan_core(i: i32, input: i32, fuse: i32, did: i32, ad: i32, dpi100: i3
         nsel = sp_drop_lines(scr, nsel, olines, owords, s5);
     }
     rt_upright(rtp, run, epages, i + 1);
-    nl = or_get(oruns, run, orf_lcount());
     rotmed = ev_rot_median(olines, l0, nl);
     sc_emit_sel(olines, owords, osyms, nsel, i + 1, rotmed, scr, words, lines, etext, rules, comps, inks);
+    if (crate::port::cells_at(rtp, rtp_primary()) != run) && (crate::port::cells_at(rtp, rtp_q()) != 0) {
+        mv += 8;
+    }
     crate::port::cells_set(mask, i, mv);
     return us_done();
 }

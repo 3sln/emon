@@ -306,8 +306,9 @@ func TestAFrameFedSidewaysIsReadFromItsTurnedView(emonT *testing.T) {
 	port.AssertEq(emonT, port.CellsAt(mask, 0), 0, "an attempt that asks writes nothing: the page is not yet read")
 	// the turned view read: the page is done, and the evidence says the turned view was read
 	fakeLines(ans, 274, 5, 1, 6, -1, -1)
+	fakeLines(ans, plan.PuId(0, retarget.RiOpposite()), 1, 1, 6, -1, -1)
 	port.AssertEq(emonT, pagePx(ans, rq2, bms2, 0, mask, port.NewCells(), port.NewCells(), port.NewCells(), oruns, olines, owords), plan.UsDone(), "done")
-	port.AssertEq(emonT, port.CellsAt(mask, 0), 1, "the page was OCR'd")
+	port.AssertEq(emonT, port.CellsAt(mask, 0), 9, "the page was OCR'd and rotated")
 	port.AssertEq(emonT, evidence.OrCount(oruns), 2, "the first pass and the turned view's reading")
 	port.AssertEq(emonT, evidence.OrGet(oruns, 1, evidence.OrfPass()), evidence.OpReRotated(), "the second run is the re-rotated pass")
 }

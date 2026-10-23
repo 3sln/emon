@@ -411,7 +411,7 @@ public sealed unsafe class Tess : emon.Api.IOcr {
         bool wantSyms = (flags & 1) != 0;
         int rx = req.Field(emon.Plan.OcX()), ry = req.Field(emon.Plan.OcY()), rw = req.Field(emon.Plan.OcW()), rh = req.Field(emon.Plan.OcH());
         List<string> installed = InstalledIn(tessdata);
-        // which installed models read the request is kin's (`op-models`: languages, scripts, the ones not installed dropped, none left is every model);
+        // which installed models read the request is kin's (`op-models`: languages, scripts, the ones not installed dropped, unconfigured fallback is one discovery model);
         // the models go in as code points separated by 0
         Port.Cells reqc = CellsOf(req.Rec);
         Port.Cells inst = Port.NewCells();
@@ -424,7 +424,7 @@ public sealed unsafe class Tess : emon.Api.IOcr {
             }
         }
         Port.Cells picked = Port.NewCells();
-        emon.Ocrport.OpModels(reqc, inst, picked);
+        emon.Ocrport.OpModelsConfigured(reqc, inst, 0, picked);
         Port.Cells gone = Port.NewCells();
         emon.Ocrport.OpDropped(reqc, inst, gone);
         var dropped = new System.Text.StringBuilder();

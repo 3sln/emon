@@ -39,7 +39,7 @@ fn test_a_kind_with_no_row_goes_through_as_it_is() {
 fn test_the_table_is_sorted_and_monotone_in_the_raw_score() {
     // Rows are [kind class raw-lo calibrated], sorted by kind, class, raw-lo; within one kind and class the raw-lo rises strictly
     // and the calibrated value never falls (isotonic), and a value is a confidence.
-    let n: i32 = 19;
+    let n: i32 = 30;
     let mut i: i32 = 1;
     crate::testport::assert_that(n > 0, "the table has a row (the identity table has one that no node matches)");
     while i < n {
@@ -61,7 +61,7 @@ fn test_every_step_of_the_table_answers_with_its_own_value() {
     // At a step's raw-lo (and one above it, if that is still below the next step) the lookup is the step's value,
     // for the class the row names (an `any` row is read through a class that has no row of its own: a class code
     // the table never names, 9, falls back to `any`).
-    let n: i32 = 19;
+    let n: i32 = 30;
     let mut i: i32 = 0;
     while i < n {
         if CD_ROWS[(i * 4 + 1) as usize] == -1 {
@@ -73,7 +73,7 @@ fn test_every_step_of_the_table_answers_with_its_own_value() {
 #[test]
 fn test_the_lookup_clamps_at_both_ends_of_a_step_function() {
     // Below a row's first step the first step's value; above the last the last's (no extrapolation).
-    let n: i32 = 19;
+    let n: i32 = 30;
     let mut i: i32 = 0;
     while i < n {
         if CD_ROWS[(i * 4 + 1) as usize] == -1 {

@@ -6208,6 +6208,198 @@
      ]
     ]
    }
+  },
+  "receipt-mono": {
+   "files": {
+    "html": {
+     "path": "html/receipt-mono.html",
+     "sha256": "13f4ef1b6af55974f0e3c079b32dcbbdf0e5099ee243ed966c69980cd2f3e177",
+     "bytes": 325
+    },
+    "pdf": {
+     "path": "pdf/receipt-mono.pdf",
+     "sha256": "5251a94c6ecf12fb764c70eb7c0f7fb2a398fad44a82da1880a8116f3e19eccc",
+     "bytes": 3944
+    }
+   },
+   "pdf-producer": "emon synth.pdfw receipts v1",
+   "facts": {
+    "pages": [
+     [
+      226.77,
+      650
+     ]
+    ]
+   }
+  },
+  "receipt-proportional": {
+   "files": {
+    "html": {
+     "path": "html/receipt-proportional.html",
+     "sha256": "f76dad76d203548dc06eb406783bc9adc50a89e1443dbf79049ef149014d68de",
+     "bytes": 341
+    },
+    "pdf": {
+     "path": "pdf/receipt-proportional.pdf",
+     "sha256": "526261a73cd24641ca1683402497f27d89d99a7a7d174749721075bb234bb1dd",
+     "bytes": 3965
+    }
+   },
+   "pdf-producer": "emon synth.pdfw receipts v1",
+   "facts": {
+    "pages": [
+     [
+      226.77,
+      650
+     ]
+    ]
+   }
+  },
+  "receipt-leaders": {
+   "files": {
+    "html": {
+     "path": "html/receipt-leaders.html",
+     "sha256": "1c47be7674fcb8cfe2f125d0a4f89925aa9a78430736417f92aa7e70c9d078e2",
+     "bytes": 336
+    },
+    "pdf": {
+     "path": "pdf/receipt-leaders.pdf",
+     "sha256": "6f03ce1e371c9ab60de99d511a8b8da712cef0e7fc43a57b6f668cdb616c3f00",
+     "bytes": 3965
+    }
+   },
+   "pdf-producer": "emon synth.pdfw receipts v1",
+   "facts": {
+    "pages": [
+     [
+      226.77,
+      650
+     ]
+    ]
+   }
+  },
+  "receipt-modifiers": {
+   "files": {
+    "html": {
+     "path": "html/receipt-modifiers.html",
+     "sha256": "0ddc07ccfce901bc11e3bacc5b1846071711c797823a1f8f11b1471a3c794151",
+     "bytes": 361
+    },
+    "pdf": {
+     "path": "pdf/receipt-modifiers.pdf",
+     "sha256": "1535b7ff630a98c6b10047ebac9bfa4a92c1e596641082e39ff2cbcd0b841b3f",
+     "bytes": 4047
+    }
+   },
+   "pdf-producer": "emon synth.pdfw receipts v1",
+   "facts": {
+    "pages": [
+     [
+      226.77,
+      650
+     ]
+    ]
+   }
+  },
+  "receipt-card": {
+   "files": {
+    "html": {
+     "path": "html/receipt-card.html",
+     "sha256": "de5858ae6800deefb4641bf1ca6c9a3d61937e05d57e6cff109ef5908884ff30",
+     "bytes": 388
+    },
+    "pdf": {
+     "path": "pdf/receipt-card.pdf",
+     "sha256": "30a3c05a4bb741c3fc78e78628e68c909df2e791887d54f8f934aca9f91312dd",
+     "bytes": 4092
+    }
+   },
+   "pdf-producer": "emon synth.pdfw receipts v1",
+   "facts": {
+    "pages": [
+     [
+      226.77,
+      650
+     ]
+    ]
+   }
+  },
+  "receipt-long": {
+   "files": {
+    "html": {
+     "path": "html/receipt-long.html",
+     "sha256": "983c4fa53bef9f2f101610d30210fc2108bb6901a6dce394c1b67fa475cb3362",
+     "bytes": 2082
+    },
+    "pdf": {
+     "path": "pdf/receipt-long.pdf",
+     "sha256": "7fec78988ed547d95bad3e96df285fa36927a5c04f5c89be9490d2589a714e91",
+     "bytes": 10919
+    }
+   },
+   "pdf-producer": "emon synth.pdfw receipts v1",
+   "facts": {
+    "pages": [
+     [
+      226.77,
+      650
+     ],
+     [
+      226.77,
+      650
+     ],
+     [
+      226.77,
+      650
+     ]
+    ]
+   }
+  },
+  "receipt-two-column": {
+   "files": {
+    "html": {
+     "path": "html/receipt-two-column.html",
+     "sha256": "62977418d112da886a7dbfa2eb006bb5d9093918892583d7cfaa457adda95308",
+     "bytes": 337
+    },
+    "pdf": {
+     "path": "pdf/receipt-two-column.pdf",
+     "sha256": "e659a8fd3fd57595343e2862da1b24b0c441f062e63f852d169fcc3ee869c97f",
+     "bytes": 3963
+    }
+   },
+   "pdf-producer": "emon synth.pdfw receipts v1",
+   "facts": {
+    "pages": [
+     [
+      454,
+      650
+     ]
+    ]
+   }
+  },
+  "receipt-europe": {
+   "files": {
+    "html": {
+     "path": "html/receipt-europe.html",
+     "sha256": "76d96f5ac9a899df6eee91e7a802d4566d37d53fd5688d1ce707abbeffedc124",
+     "bytes": 363
+    },
+    "pdf": {
+     "path": "pdf/receipt-europe.pdf",
+     "sha256": "570c2488873dca5f4e3733414aacdebdecb1dbdf7884155a75ba6e69e6372a03",
+     "bytes": 4111
+    }
+   },
+   "pdf-producer": "emon synth.pdfw receipts v1",
+   "facts": {
+    "pages": [
+     [
+      226.77,
+      650
+     ]
+    ]
+   }
   }
  }
 }

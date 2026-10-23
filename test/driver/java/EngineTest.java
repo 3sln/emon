@@ -590,7 +590,11 @@ public class EngineTest {
         byte[] scan = read("test/corpus/synth/scan/h-keyword.pdf");
         Engine.Converted sr = withOcr().record(one(Input.bytes(scan)), o);
         List<Planrun.Entry> es = sr.transcript.entries;
-        check(kinds(sr.transcript).equals(List.of(2, 3)) && es.get(0).round == 0 && es.get(1).round == 1, "scan kinds " + kinds(sr.transcript));
+        // Decode, discovery, then bounded missing-line crops (D670).
+        check(es.size() >= 2 && es.size() <= 18 && es.get(0).req[1] == 2 && es.get(1).req[1] == 3 && es.get(0).round == 0 && es.get(1).round == 1, "scan kinds " + kinds(sr.transcript));
+        for (Planrun.Entry en : es.subList(2, es.size())) {
+            check(en.round == 2 && en.req[1] == 3 && en.req[4] == 7 && en.req[8] > 0 && en.req[9] > 0, "invalid missing-line crop");
+        }
         check(es.get(0).req[6] == 1 && es.get(0).bitmap != null, "the DCT filter, with the pixels an engine will read");
         String sj = js(sr.model);
         check(sj.contains("\"kind\": \"scanned\"") && sj.contains("Hello"), "scanned");

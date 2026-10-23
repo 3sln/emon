@@ -49,7 +49,7 @@
             "text": "Committee Notes",
             "at": [[1, 72, 59.08, 220.01, 75.73]],
             "src": ["text", "infer"],
-            "conf": 948
+            "conf": 947
           },
           {
             "id": 3,
@@ -58,7 +58,7 @@
             "text": "Two columns of notes follow. The committee met on Tuesday to review the plan for the new building. Members agreed that the schedule is tight but that the budget leaves room for the changes requested in March. A second round of drawings will be ready by the end of May and the contractors will be invited to comment on them before any contract is signed. Minutes follow on Friday.",
             "at": [[1, 72, 94.1, 213.22, 104.28], [1, 72, 184.1, 226.67, 264.28], [1, 330, 184.1, 481.62, 264.28]],
             "src": ["text", "infer"],
-            "conf": 793
+            "conf": 795
           }
         ],
         "src": ["infer"],

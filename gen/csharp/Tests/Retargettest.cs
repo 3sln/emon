@@ -448,4 +448,86 @@ public static class Retargettest {
         emon.Testport.AssertThat(n <= Scan.ScSelMax(), "the selection holds no more than the scratch has room for");
         emon.Testport.AssertThat(n > 1400, "and the 1500 lines it counts are read, bar the few that lie over the first pass's line");
     }
+    [Xunit.Fact]
+    public static void TestAnEmptyFirstPassKeepsTheBodyInkReadingEvenWhenUnsure() {
+        emon.Port.Cells oruns = emon.Port.NewCells();
+        emon.Port.Cells olines = emon.Port.NewCells();
+        emon.Port.Cells ow = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells rtp = emon.Port.NewCells();
+        emon.Port.Cells scr = emon.Port.NewCells();
+        Scan.ScPrep(scr);
+        RttEmpty(olines, 0);
+        int fr = RttRun(oruns, olines, ow, 0, 0);
+        RttLine(olines, ow, feats, 300, 450);
+        int br = RttRun(oruns, olines, ow, 1, 0);
+        Retarget.RtPrep(rtp);
+        emon.Port.CellsSet(rtp, Retarget.RtpBrun(), br);
+        emon.Testport.AssertEq(RttAdopt(rtp, oruns, fr, olines, ow, scr), 1, "a weak recovered line is evidence, not silent total loss");
+        emon.Testport.AssertEq(emon.Port.CellsAt(scr, Scan.ScSelBase()), 1, "the recovered line reaches scan vetting");
+    }
+    [Xunit.Fact]
+    public static void TestTracedInkWithNoOcrWordGetsACroppedRetry() {
+        emon.Port.Cells runs = emon.Port.NewCells();
+        emon.Port.Cells ol = emon.Port.NewCells();
+        emon.Port.Cells ow = emon.Port.NewCells();
+        emon.Port.Cells tl = emon.Port.NewCells();
+        int run = RttRun(runs, ol, ow, 0, 0);
+        int t = Evidence.TlNew(tl, 1, 1000, 3000, 9000, 4000, 1000, 4000, 9000, 4000, 0, 0, -1, 12);
+        Evidence.TlSet(tl, t, Evidence.TlfConf(), 950);
+        emon.Testport.AssertEq(Retarget.RtGapLines(1, 300, tl, runs, run, ol, ow, emon.Port.NewCells()), 1, "ink absent from OCR is an empty retry line");
+        emon.Testport.AssertEq(Evidence.OlCount(ol), 1, "the region is represented in evidence");
+        emon.Testport.AssertEq(Evidence.OrGet(runs, run, Evidence.OrfLcount()), 1, "the retry planner sees it");
+        emon.Testport.AssertEq(Retarget.RtGapLines(1, 300, tl, runs, run, ol, ow, emon.Port.NewCells()), 0, "a repeated plan does not duplicate its region");
+    }
+    [Xunit.Fact]
+    public static void TestOrientationVotesUseTextAreaRatherThanAConfidentMarginNumber() {
+        emon.Port.Cells ans = emon.Port.NewCells();
+        int a = Plan.AnOcr(ans, 1);
+        int wa = Plan.AnOcrWord(ans, a, 0, 0, 10, 500, 990, 0, 0);
+        Plan.AnOcrCp(ans, wa, 49);
+        Plan.AnOcrCp(ans, wa, 50);
+        Plan.AnOcrEnd(ans, a);
+        int b = Plan.AnOcr(ans, 2);
+        int wb = Plan.AnOcrWord(ans, b, 50, 50, 500, 40, 900, 0, 0);
+        Plan.AnOcrCp(ans, wb, 84);
+        Plan.AnOcrCp(ans, wb, 101);
+        Plan.AnOcrCp(ans, wb, 120);
+        Plan.AnOcrCp(ans, wb, 116);
+        Plan.AnOcrEnd(ans, b);
+        emon.Testport.AssertThat(Retarget.RtAnswerScore(ans, b) > Retarget.RtAnswerScore(ans, a), "body text beats a narrow Bates strip");
+    }
+    [Xunit.Fact]
+    public static void TestSmallTracedTextIsStillRetried() {
+        emon.Port.Cells runs = emon.Port.NewCells();
+        emon.Port.Cells ol = emon.Port.NewCells();
+        emon.Port.Cells ow = emon.Port.NewCells();
+        emon.Port.Cells tl = emon.Port.NewCells();
+        emon.Port.Cells rtp = emon.Port.NewCells();
+        int run = RttRun(runs, ol, ow, 0, 0);
+        int t = Evidence.TlNew(tl, 1, 1000, 3000, 9000, 3400, 1000, 3400, 9000, 3400, 0, 0, -1, 12);
+        Evidence.TlSet(tl, t, Evidence.TlfConf(), 950);
+        emon.Testport.AssertEq(Retarget.RtGapLines(1, 300, tl, runs, run, ol, ow, emon.Port.NewCells()), 1, "four-point ink is text even when the first pass missed it");
+        Retarget.RtPrep(rtp);
+        Retarget.RtDecide(0, 0, 0, runs, run, ol, ow, emon.Port.NewCells(), 1, 300, rtp);
+        emon.Testport.AssertEq(emon.Port.CellsAt(rtp, Retarget.RtpNl()), 1, "the small region reaches the crop request planner");
+    }
+    [Xunit.Fact]
+    public static void TestTheEmptyPageFallbackDoesNotDiluteAnExistingReading() {
+        emon.Port.Cells runs = emon.Port.NewCells();
+        emon.Port.Cells ol = emon.Port.NewCells();
+        emon.Port.Cells ow = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells rtp = emon.Port.NewCells();
+        emon.Port.Cells scr = emon.Port.NewCells();
+        Scan.ScPrep(scr);
+        RttEmpty(ol, 0);
+        int fr = RttRun(runs, ol, ow, 0, 0);
+        RttLine(ol, ow, feats, 300, 900);
+        RttLine(ol, ow, feats, 600, 450);
+        int br = RttRun(runs, ol, ow, 1, 0);
+        Retarget.RtPrep(rtp);
+        emon.Port.CellsSet(rtp, Retarget.RtpBrun(), br);
+        emon.Testport.AssertEq(RttAdopt(rtp, runs, fr, ol, ow, scr), 1, "normal recovery already read text, so keep its quality decisions");
+    }
 }

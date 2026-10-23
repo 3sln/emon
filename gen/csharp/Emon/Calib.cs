@@ -29,7 +29,7 @@ public static class Calib {
         if (raw < 0) {
             return raw;
         }
-        int n = 19;
+        int n = 30;
         int i = 0;
         int hitC = -1;
         int firstC = -1;
@@ -89,7 +89,7 @@ public static class Calib {
             return cf;
         }
         while (a >= 0) {
-            if ((Model.NodeFlags(nodes, a) & Model.FlScriptUnread()) != 0) {
+            if ((Model.NodeFlags(nodes, a) & (Model.FlScriptUnread() | Model.FlLowConf())) != 0) {
                 return raw;
             }
             a = Model.NodeParent(nodes, a);

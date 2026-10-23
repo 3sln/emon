@@ -299,7 +299,11 @@
   (let [corpus (or corpus corpus-dir)
         out (str (or out out-dir) "/" name)
         _ (fs/create-dirs out)
-        _ (doseq [f (fs/list-dir out)] (when (str/ends-with? (str f) ".gold.json") (fs/delete f)))
+        ;; exFAT removes a sidecar with its real file; never iterate/delete it twice.
+        _ (doseq [f (fs/list-dir out)
+                  :when (and (str/ends-with? (str f) ".gold.json")
+                             (not (str/starts-with? (str (fs/file-name f)) "._")))]
+            (fs/delete f))
         st (new-stats)
         seen (volatile! #{})
         nodes-of (atom {})                                  ; id -> node count, for the oracle's rejects

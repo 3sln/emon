@@ -343,9 +343,7 @@ public final class Engine {
         }
         Scan.scTag(m.nodes, m.attrs, m.text, m.regions, m.pages, d.mask, c.ocr);
         Tlhealth.thWriteOcr(ev.owords, d.et, m.ledger, m.text, s.tmp, s.ttx);
-        if (kind == 0) {
-            Scan.scWriteBare(m.nodes, m.regions, m.pages, d.im, m.ledger);
-        }
+        Scan.scWriteBare(m.nodes, m.regions, m.pages, d.im, m.ledger);
         Rasterplan.rpSettings(m.nodes, m.attrs, m.text, c.scope);
         if (d.fused == 1) {
             Arbiter.arWrite(s.afa, ev.owords, d.et, m.ledger, m.text, s.tmp, s.ttx);
@@ -359,7 +357,10 @@ public final class Engine {
                 emon.Port.cellsSwap(m.regions, s.sr);
             }
         }
+        Scan.scTrust(m.nodes, m.regions, ev.owords, d.et, ev.oruns);
         Scan.scTagUnread(m.nodes, m.regions, d.mask);
+        Scan.scCleanText(m.nodes, m.text);
+        Scan.scWriteEmptyRegions(ev.olines, m.nodes, m.regions, m.ledger);
         if (kind == 0) {
             enFields(m, s, d);
         }

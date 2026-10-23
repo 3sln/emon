@@ -24,6 +24,9 @@ __pycache__/
 # The downloaded public-dataset corpus and importer output (DEVLOG D086): never committed.
 /corpus
 
+# This checkout's own settings (bb corpus-link; see local.edn.example): never committed.
+/local.edn
+
 # bb perf --checked builds a second copy of the comparators (P10.3).
 tools/perf/target-checked/
 /dist/

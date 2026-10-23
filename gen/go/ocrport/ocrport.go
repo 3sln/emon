@@ -626,7 +626,7 @@ func opHas(out *port.Cells, base int32, v int32) int32 {
 func OpModels(req *port.Cells, inst *port.Cells, out *port.Cells) int32 {
 	// Which installed models read the request, as indices into `inst` (code-point Cells separated by 0), appended to `out`;
 	// answers how many. A script (`Cyrl`) is every installed model that reads it, once; a language is its model; a language
-	// with no model is dropped; none left is EVERY installed model (D038). 0 only when nothing is installed.
+	// with no model is dropped; none left is one discovery model (D672). 0 only when nothing is installed.
 	var base int32 = port.CellsLen(out)
 	var end int32 = port.CellsLen(req) - 3
 	var n int32 = OpEntryCount(inst)
@@ -659,10 +659,12 @@ func OpModels(req *port.Cells, inst *port.Cells, out *port.Cells) int32 {
 		k += 1
 	}
 	if port.CellsLen(out) == base {
-		i = 0
-		for i < n {
+		i = OpModelIndex(inst, 1701734144)
+		if i < 0 {
+			i = 0
+		}
+		if n > 0 {
 			port.CellsPush(out, i)
-			i += 1
 		}
 	}
 	return port.CellsLen(out) - base
@@ -985,4 +987,26 @@ func OxFlat(v *port.Cells, id int32, c *port.Cells) int32 {
 	}
 	plan.AnOcrEnd(c, at)
 	return 0
+}
+
+func OpModelsConfigured(req *port.Cells, inst *port.Cells, configured int32, out *port.Cells) int32 {
+	// D678: an explicit provider model set is authoritative when the request has no language hint. An unfiltered inventory uses discovery; a named request still wins.
+	if configured == 0 {
+		return OpModels(req, inst, out)
+	}
+	var base int32 = port.CellsLen(out)
+	var end int32 = port.CellsLen(req) - 3
+	var k int32 = OpLangFirst(req)
+	var i int32 = 0
+	for k < end {
+		if plan.RqArg(req, 0, k) != 0 {
+			return OpModels(req, inst, out)
+		}
+		k += 1
+	}
+	for i < OpEntryCount(inst) {
+		port.CellsPush(out, i)
+		i += 1
+	}
+	return port.CellsLen(out) - base
 }

@@ -4,15 +4,15 @@
   (:require [emon.lang :refer [I32 Bitmap Cells BitmapSet]]
             [emon.test :refer [deftest assert-eq assert-that new-cells new-bitmap-set test-t TestT]]
             [emon.port :refer [bitmap-new bitmap-w bitmap-h bitmap-u8 bitmap-set-u8 bitmap-hash bms-put bms-get cells-len cells-at cells-set cells-push]]
-            [emon.plan :refer [rec-id rec-kind rq-arg rq-nargs pk-ocr view-base pu-view-id rec-count]]
-            [emon.evidence :refer [co-new co-set cf-pxx cf-pxy cf-pxw cf-pxh cf-fill cf-holes cf-gray cf-ink cf-conf ik-new ik-set ikf-role ir-color
+            [emon.plan :refer [rec-id rec-kind rq-arg rq-nargs pk-ocr view-base pu-view-id rec-count an-ocr an-ocr-word an-ocr-cp an-ocr-end]]
+            [emon.evidence :refer [tl-new tl-set tlf-conf co-new co-set cf-pxx cf-pxy cf-pxw cf-pxh cf-fill cf-holes cf-gray cf-ink cf-conf ik-new ik-set ikf-role ir-color
                                    vw-new vk-render
                                    or-new or-set or-get orf-lfirst orf-lcount orf-wfirst orf-wcount orf-osd orf-oconf
                                    ol-new ol-set ol-get ow-new ow-count ol-count olf-px olf-py olf-pw olf-ph lh-first lh-count
                                    fe-new fe-set ea-owords xo-body-share wd-count wd-get ln-get hd-x0 wf-gap lh-x1]]
             [emon.norm :refer [nm-view nm-paper-gray]]
             [emon.scan :refer [sc-prep sc-sel-base sc-sel-max sc-aux-base sc-share-base sc-partner-base sc-xtra-base sc-emit-sel]]
-            [emon.retarget :refer [rt-prep rt-decide rt-turns rt-erase-into rt-ask-view rt-adopt rt-line-state
+            [emon.retarget :refer [rt-gap-lines rt-answer-score rt-prep rt-decide rt-turns rt-erase-into rt-ask-view rt-adopt rt-line-state
                                    rtp-q rtp-body rtp-erased rtp-nl rtp-nc rtp-cell0 rtp-line0 rtp-brun rtp-primary rtp-hash rt-lines rt-line-conf rt-max rt-cap rt-permille rt-empty-area rt-invert-bands]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
@@ -441,3 +441,61 @@
         (let [^I32 n (rtt-adopt rtp oruns fr olines owords scr)]
           (assert-that (<= n (sc-sel-max)) "the selection holds no more than the scratch has room for")
           (assert-that (> n 1400) "and the 1500 lines it counts are read, bar the few that lie over the first pass's line"))))))
+
+(deftest test-an-empty-first-pass-keeps-the-body-ink-reading-even-when-unsure
+  (let [^Cells oruns (new-cells) ^Cells olines (new-cells) ^Cells ow (new-cells)
+        ^Cells feats (new-cells) ^Cells rtp (new-cells) ^Cells scr (new-cells)]
+    (sc-prep scr)
+    (rtt-empty olines 0)
+    (let [^I32 fr (rtt-run oruns olines ow 0 0)]
+      (rtt-line olines ow feats 300 450)
+      (let [^I32 br (rtt-run oruns olines ow 1 0)]
+        (rt-prep rtp)
+        (cells-set rtp (rtp-brun) br)
+        (assert-eq (rtt-adopt rtp oruns fr olines ow scr) 1 "a weak recovered line is evidence, not silent total loss")
+        (assert-eq (cells-at scr (sc-sel-base)) 1 "the recovered line reaches scan vetting")))))
+
+(deftest test-traced-ink-with-no-ocr-word-gets-a-cropped-retry
+  (let [^Cells runs (new-cells) ^Cells ol (new-cells) ^Cells ow (new-cells) ^Cells tl (new-cells)]
+    (let [^I32 run (rtt-run runs ol ow 0 0)
+          ^I32 t (tl-new tl 1 1000 3000 9000 4000 1000 4000 9000 4000 0 0 -1 12)]
+      (tl-set tl t (tlf-conf) 950)
+      (assert-eq (rt-gap-lines 1 300 tl runs run ol ow (new-cells)) 1 "ink absent from OCR is an empty retry line")
+      (assert-eq (ol-count ol) 1 "the region is represented in evidence")
+      (assert-eq (or-get runs run (orf-lcount)) 1 "the retry planner sees it")
+      (assert-eq (rt-gap-lines 1 300 tl runs run ol ow (new-cells)) 0 "a repeated plan does not duplicate its region"))))
+
+(deftest test-orientation-votes-use-text-area-rather-than-a-confident-margin-number
+  (let [^Cells ans (new-cells)
+        ^I32 a (an-ocr ans 1)]
+    (let [^I32 wa (an-ocr-word ans a 0 0 10 500 990 0 0)]
+      (an-ocr-cp ans wa 49) (an-ocr-cp ans wa 50))
+    (an-ocr-end ans a)
+    (let [^I32 b (an-ocr ans 2)]
+      (let [^I32 wb (an-ocr-word ans b 50 50 500 40 900 0 0)]
+        (an-ocr-cp ans wb 84) (an-ocr-cp ans wb 101) (an-ocr-cp ans wb 120) (an-ocr-cp ans wb 116))
+      (an-ocr-end ans b)
+      (assert-that (> (rt-answer-score ans b) (rt-answer-score ans a)) "body text beats a narrow Bates strip"))))
+
+(deftest test-small-traced-text-is-still-retried
+  (let [^Cells runs (new-cells) ^Cells ol (new-cells) ^Cells ow (new-cells) ^Cells tl (new-cells)
+        ^Cells rtp (new-cells)]
+    (let [^I32 run (rtt-run runs ol ow 0 0)
+          ^I32 t (tl-new tl 1 1000 3000 9000 3400 1000 3400 9000 3400 0 0 -1 12)]
+      (tl-set tl t (tlf-conf) 950)
+      (assert-eq (rt-gap-lines 1 300 tl runs run ol ow (new-cells)) 1 "four-point ink is text even when the first pass missed it")
+      (rt-prep rtp)
+      (rt-decide 0 0 0 runs run ol ow (new-cells) 1 300 rtp)
+      (assert-eq (cells-at rtp (rtp-nl)) 1 "the small region reaches the crop request planner"))))
+
+(deftest test-the-empty-page-fallback-does-not-dilute-an-existing-reading
+  (let [^Cells runs (new-cells) ^Cells ol (new-cells) ^Cells ow (new-cells)
+        ^Cells feats (new-cells) ^Cells rtp (new-cells) ^Cells scr (new-cells)]
+    (sc-prep scr)
+    (rtt-empty ol 0)
+    (let [^I32 fr (rtt-run runs ol ow 0 0)]
+      (rtt-line ol ow feats 300 900)
+      (rtt-line ol ow feats 600 450)
+      (let [^I32 br (rtt-run runs ol ow 1 0)]
+        (rt-prep rtp) (cells-set rtp (rtp-brun) br)
+        (assert-eq (rtt-adopt rtp runs fr ol ow scr) 1 "normal recovery already read text, so keep its quality decisions")))))

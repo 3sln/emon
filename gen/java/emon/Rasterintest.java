@@ -278,8 +278,9 @@ public final class Rasterintest {
         emon.Testport.assertEq(emon.Port.cellsAt(mask, 0), 0, "an attempt that asks writes nothing: the page is not yet read");
         // the turned view read: the page is done, and the evidence says the turned view was read
         fakeLines(ans, 274, 5, 1, 6, -1, -1);
+        fakeLines(ans, Plan.puId(0, Retarget.riOpposite()), 1, 1, 6, -1, -1);
         emon.Testport.assertEq(pagePx(ans, rq2, bms2, 0, mask, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), oruns, olines, owords), Plan.usDone(), "done");
-        emon.Testport.assertEq(emon.Port.cellsAt(mask, 0), 1, "the page was OCR'd");
+        emon.Testport.assertEq(emon.Port.cellsAt(mask, 0), 9, "the page was OCR'd and rotated");
         emon.Testport.assertEq(Evidence.orCount(oruns), 2, "the first pass and the turned view's reading");
         emon.Testport.assertEq(Evidence.orGet(oruns, 1, Evidence.orfPass()), Evidence.opReRotated(), "the second run is the re-rotated pass");
     }
