@@ -45,7 +45,7 @@
                                 av-int av-text av-node av-bool text-append-cp
                                 nk-list nk-item nk-caption nk-figure nk-table nk-note nk-ref nk-link nk-text nk-break
                                 nk-paragraph nk-heading nk-quote nk-cell nk-section nk-document fk-image fk-labels fk-page
-                                fk-scheme fk-start fk-value fk-box fk-marker fk-label fk-target fk-href
+                                fk-number fk-numbering fk-scheme fk-start fk-value fk-box fk-marker fk-label fk-target fk-href
                                 sr-text sr-infer fg-unknown fg-logo fg-barcode fg-qr]]
             [emon.links :refer [lk-find]]
             [emon.asset :refer [as-get]]
@@ -759,13 +759,16 @@
 ;; where its top edge falls among the children of the document or of a section (a table, a list or a note never takes one).
 
 (defn ^I32 rf-node [^Cells on ^Cells oa ^Cells orr ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions
-                    ^:mut ^Cells nm ^I32 n ^I32 np]
+                    ^:mut ^Cells nm ^I32 n ^I32 np ^I32 caption]
   (comment "`rs-node`, but every attribute is kept (the item's private `fk-box` too: `rs-run` reads it).")
-  (let [^:mut ^I32 nn (node-new nodes (node-kind on n) np)]
-    (if (< nn 0) (set nn (node-new nodes (node-kind on n) 0)))
+  (let [^:mut ^I32 kind (node-kind on n)]
+    (if (== caption 1) (set kind (nk-caption)))
+  (let [^:mut ^I32 nn (node-new nodes kind np)]
+    (if (< nn 0) (set nn (node-new nodes kind 0)))
     (if (< nn 0) (return -1))
     (node-set-sub nodes nn (node-sub on n))
     (node-set-aux nodes nn (node-aux on n))
+    (if (== caption 1) (do (node-set-aux nodes nn 1) (node-set-sub nodes nn 0)))
     (node-set-src nodes nn (node-src on n))
     (node-set-conf nodes nn (node-conf on n))
     (node-set-flags nodes nn (node-flags on n))
@@ -773,11 +776,14 @@
       (node-set-text nodes nn (node-text-start on n) (node-text-len on n)))
     (let [^:mut ^I32 a (node-attr-head on n)]
       (while (>= a 0)
-        (do (let [^I32 k (attr-key oa a)
+        (do (let [^:mut ^I32 k (attr-key oa a)
                   ^I32 vk (attr-vkind oa a)
                   ^I32 v (attr-value oa a)
                   ^I32 l (attr-len oa a)]
-              (if (== vk (av-text)) (node-add-attr-text nodes attrs nn k v l))
+              (if (== caption 1)
+                (do (if (== k (fk-number)) (set k (fk-label)))
+                    (if (== k (fk-numbering)) (set k -1))))
+              (if (and (>= k 0) (== vk (av-text))) (node-add-attr-text nodes attrs nn k v l))
               (if (== vk (av-int)) (node-add-attr-int nodes attrs nn k v))
               (if (== vk (av-node)) (node-set-attr-node nodes attrs nn k v))
               (if (== vk (av-bool)) (node-set-attr-bool nodes attrs nn k v)))
@@ -788,7 +794,7 @@
                              (region-x1 orr r) (region-y1 orr r))
             (set r (region-next orr r)))))
     (cells-set nm n nn)
-    (return nn)))
+    (return nn))))
 
 (defn ^I32 rf-region [^Cells on ^I32 c]
   (comment "The first region row of node c, or of its first descendant that has one; -1 when there is none.")
@@ -1054,7 +1060,7 @@
           (set row (+ row 1))))
     (return 0)))
 
-(defn ^I32 rf-anchor [^Cells on ^Cells orr ^Cells cand ^:mut ^Cells fg ^:mut ^Cells fd]
+(defn ^I32 rf-anchor [^Cells on ^Cells oa ^Cells orr ^Cells cand ^:mut ^Cells fg ^:mut ^Cells fd]
   (comment "Each figure that has a figure caption (`caption`, kind 1) among the blocks of the document or a section just below it, within")
   (comment "`RF_CAPGAP`, and overlapping it in x, is anchored to the nearest one: `fd` cell 4 is that caption, and the figure leaves `fg`")
   (comment "(it goes in before its caption, `rf-flush-anchor`).")
@@ -1074,7 +1080,9 @@
           (set bestgap 1000000)
           (set c 0)
           (while (< c n)
-            (do (if (and (== (node-kind on c) (nk-caption)) (== (node-aux on c) 1))
+            (do (if (or (and (== (node-kind on c) (nk-caption)) (== (node-aux on c) 1))
+                     (and (== (as-get cand row 30) 4)
+                          (and (== (node-kind on c) (nk-heading)) (>= (node-attr on oa c (fk-number)) 0))))
                   (do (set p (node-parent on c))
                       (set r (node-region-head on c))
                       (if (and (>= p 0) (>= r 0))
@@ -1106,7 +1114,7 @@
         ^:mut ^I32 pg2 0
         ^:mut ^I32 y2 0
         ^:mut ^I32 bp 0
-        ^:mut ^I32 nn 0]
+        ^:mut ^I32 nn 0 ^:mut ^I32 caption 0 ^:mut ^I32 ri 0]
     (while (>= c 0)
       (do (if (or (== (cells-len ab) 0) (< (cells-at ab c) 0))
             (do (if (and (== flush 1) (== (node-kind on c) (nk-break)))
@@ -1116,9 +1124,13 @@
                   (do (set r (rf-region on c))
                       (if (>= r 0)
                         (rf-flush on ab cand fg fd nodes attrs regions np (region-page orr r) (region-y0 orr r)))))
-                (if (and (== flush 1) (and (> (cells-len fd) 0) (== (node-kind on c) (nk-caption))))
+                (set caption 0) (set ri 0)
+                (while (< ri (quot (cells-len fd) RF_FD))
+                  (do (if (and (== (cells-at fd (+ (* ri RF_FD) 4)) c) (== (as-get cand ri 30) 4)) (set caption 1))
+                      (set ri (+ ri 1))))
+                (if (and (== flush 1) (and (> (cells-len fd) 0) (or (== (node-kind on c) (nk-caption)) (== caption 1))))
                   (rf-flush-anchor on ab cand fd nodes attrs regions np c))
-                (set nn (rf-node on oa orr nodes attrs regions nm c np))
+                (set nn (rf-node on oa orr nodes attrs regions nm c np caption))
                 (if (>= nn 0)
                   (do (if (and (== flush 1) (== (node-kind on c) (nk-section)))
                         (do (set r2 (rf-next-region on c))
@@ -1159,11 +1171,11 @@
             (do (if (and (< (node-parent on r) 0) (== (node-kind on r) (nk-document)))
                   (rf-absorb on orr text cand fg fd ab r))
                 (set r (+ r 1))))
-          (rf-anchor on orr cand fg fd)
+          (rf-anchor on oa orr cand fg fd)
           (set r 0)))
     (while (< r n)
       (do (if (< (node-parent on r) 0)
-            (do (set nr (rf-node on oa orr nodes attrs regions nm r -1))
+            (do (set nr (rf-node on oa orr nodes attrs regions nm r -1 0))
                 (if (>= nr 0)
                   (do (if (== (node-kind on r) (nk-document))
                         (rf-children on oa orr nodes attrs regions nm cand fg fd ab r nr 1 -1 -1)

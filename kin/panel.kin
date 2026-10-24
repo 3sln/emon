@@ -1,0 +1,90 @@
+(ns emon.panel
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.port :refer [cells-at cells-len cells-push cells-drop]]
+            [emon.pagebounds :refer [pb-first pb-after]]
+            [emon.evidence :refer [wd-get hd-x0 hd-y0 hd-tstart hd-tlen]]
+            [emon.glayer :refer [grl-get go-h go-v]]
+            [kin.lang :refer [defn return let set while if do + - * quot < > <= >= == != and or]]))
+(defn ^I32 pn-min [^I32 a ^I32 b] (if (< a b) (return a)) (return b))
+(defn ^I32 pn-max [^I32 a ^I32 b] (if (> a b) (return a)) (return b))
+(defn ^I32 pn-abs [^I32 a] (if (< a 0) (return (- 0 a))) (return a))
+(defn ^I32 pn-caption [^Cells wd ^Cells et ^I32 w]
+  (let [^I32 s (wd-get wd w (hd-tstart))]
+    (if (!= (wd-get wd w (hd-tlen)) 6) (return 0))
+    (if (and (or (== (cells-at et s) 70) (== (cells-at et s) 102))
+             (and (== (cells-at et (+ s 1)) 105)
+                  (and (== (cells-at et (+ s 2)) 103)
+                       (and (== (cells-at et (+ s 3)) 117)
+                            (and (== (cells-at et (+ s 4)) 114) (== (cells-at et (+ s 5)) 101)))))) (return 1))
+    (return 0)))
+(defn ^I32 pn-number [^Cells wd ^Cells et ^I32 w]
+  (let [^I32 n (wd-get wd w (hd-tlen)) ^I32 s (wd-get wd w (hd-tstart)) ^:mut ^I32 i 0]
+    (if (== n 0) (return 0))
+    (while (and (< i n) (and (>= (cells-at et (+ s i)) 48) (<= (cells-at et (+ s i)) 57))) (set i (+ i 1)))
+    (if (and (> i 0) (or (== i n) (and (== (+ i 1) n) (== (cells-at et (+ s i)) 46)))) (return 1))
+    (return 0)))
+;; D726: disconnected demonstration panels under one numbered figure caption.
+;; Their closed borders must not be reinterpreted as independent text tables.
+(defn ^:pub ^I32 pn-owner [^Cells wd ^Cells et ^Cells grl ^I32 page ^:mut ^Cells boxes ^:mut ^Cells owner]
+  (let [^I32 first (pb-first grl 24 page) ^I32 end (pb-after grl 24 page)
+        ^I32 wf (pb-first wd 24 page) ^I32 we (pb-after wd 24 page)
+        ^:mut ^I32 w wf ^:mut ^I32 captionword -1 ^:mut ^I32 i first ^:mut ^I32 j first
+        ^:mut ^I32 k first ^:mut ^I32 left 0 ^:mut ^I32 right 0
+        ^:mut ^I32 x0 2000000000 ^:mut ^I32 y0 2000000000
+        ^:mut ^I32 x1 0 ^:mut ^I32 y1 0 ^:mut ^I32 n 0 ^:mut ^I32 ok 1]
+    (cells-drop boxes 0) (cells-drop owner 0)
+    ;; Bound all geometric work and require a numbered figure caption first.
+    (if (> (- end first) 128) (return 0))
+    (while (< (+ w 1) we)
+      (do (if (and (== (pn-caption wd et w) 1) (> (pn-number wd et (+ w 1)) 0))
+            (do (if (>= captionword 0) (return 0)) (set captionword w)))
+          (set w (+ w 1))))
+    (if (< captionword 0) (return 0))
+    (while (< i end)
+      (do (if (== (grl-get grl i 10) (go-h))
+            (do (set j (+ i 1))
+                (while (< j end)
+                  (do (if (and (== (grl-get grl j 10) (go-h))
+                               (and (<= (pn-abs (- (grl-get grl i 5) (grl-get grl j 5))) 100)
+                                    (<= (pn-abs (- (grl-get grl i 7) (grl-get grl j 7))) 100)))
+                        (let [^I32 ax (grl-get grl i 5) ^I32 bx (grl-get grl i 7)
+                              ^I32 ay (pn-min (grl-get grl i 6) (grl-get grl j 6))
+                              ^I32 by (pn-max (grl-get grl i 6) (grl-get grl j 6))]
+                          (if (and (>= (- bx ax) 2000) (and (>= (- by ay) 2000)
+                                   (and (<= by (wd-get wd captionword (hd-y0)))
+                                        (<= (- (wd-get wd captionword (hd-y0)) ay) 40000))))
+                            (do (set left 0) (set right 0) (set k first)
+                                (while (< k end)
+                                  (do (if (and (== (grl-get grl k 10) (go-v))
+                                               (and (<= (pn-abs (- (grl-get grl k 6) ay)) 100)
+                                                    (<= (pn-abs (- (grl-get grl k 8) by)) 100)))
+                                        (do (if (<= (pn-abs (- (grl-get grl k 5) ax)) 100) (set left 1))
+                                            (if (<= (pn-abs (- (grl-get grl k 5) bx)) 100) (set right 1))))
+                                      (set k (+ k 1))))
+                                (if (and (== left 1) (== right 1))
+                                  (do (cells-push boxes ax) (cells-push boxes ay) (cells-push boxes bx) (cells-push boxes by)))))))
+                      (set j (+ j 1))))))
+          (set i (+ i 1))))
+    (set n (quot (cells-len boxes) 4))
+    (if (< n 4) (return 0))
+    ;; A lattice shares edges; demonstration panels have positive gutters.
+    (set i 0)
+    (while (< i n)
+      (do (set x0 (pn-min x0 (cells-at boxes (* i 4))))
+          (set y0 (pn-min y0 (cells-at boxes (+ (* i 4) 1))))
+          (set x1 (pn-max x1 (cells-at boxes (+ (* i 4) 2))))
+          (set y1 (pn-max y1 (cells-at boxes (+ (* i 4) 3))))
+          (set j (+ i 1))
+          (while (< j n)
+            (do (if (and (<= (pn-max (cells-at boxes (* i 4)) (cells-at boxes (* j 4)))
+                             (+ (pn-min (cells-at boxes (+ (* i 4) 2)) (cells-at boxes (+ (* j 4) 2))) 100))
+                         (<= (pn-max (cells-at boxes (+ (* i 4) 1)) (cells-at boxes (+ (* j 4) 1)))
+                             (+ (pn-min (cells-at boxes (+ (* i 4) 3)) (cells-at boxes (+ (* j 4) 3))) 100)))
+                  (set ok 0))
+                (set j (+ j 1))))
+          (set i (+ i 1))))
+    (if (or (== ok 0) (or (> (- (wd-get wd captionword (hd-y0)) y1) 4000)
+                                         (> (pn-abs (- (wd-get wd captionword (hd-x0)) x0)) 2000))) (return 0))
+    (cells-push owner x0) (cells-push owner y0) (cells-push owner x1) (cells-push owner y1)
+    (cells-push owner captionword)
+    (return n)))

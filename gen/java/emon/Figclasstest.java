@@ -725,4 +725,48 @@ public final class Figclasstest {
         ftSignaturePrefix(0, 400);
         ftSignaturePrefix(0, 1600);
     }
+    public static void testACaptionedPanelGroupOwnsANumberedHeadingAsItsCaption() {
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells nn = emon.Port.newCells();
+        emon.Port.Cells na = emon.Port.newCells();
+        emon.Port.Cells nr = emon.Port.newCells();
+        emon.Port.Cells nm = emon.Port.newCells();
+        emon.Port.Cells cand = emon.Port.newCells();
+        emon.Port.Cells fg = emon.Port.newCells();
+        emon.Port.Cells fd = emon.Port.newCells();
+        emon.Port.Cells ab = emon.Port.newCells();
+        int c = 0;
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Model.pageNew(pages, 1, 61200, 79200, 0, Model.pkVector());
+        ftPara(nodes, regions, text, Model.nkParagraph(), 12, 12000, 12000, 18000, 13000);
+        c = ftPara(nodes, regions, text, Model.nkHeading(), 20, 10000, 32500, 30000, 33500);
+        Model.nodeAddAttrText(nodes, attrs, c, Model.fkNumber(), 0, 9);
+        ftCand(cand, 1, 10000, 10000, 30000, 30000);
+        emon.Port.cellsSet(cand, 30, 4);
+        ftFd(fd, Model.fgDiagram(), 700);
+        emon.Port.cellsPush(fg, 0);
+        emon.Port.cellsPush(fg, 0);
+        Restruct.rsFigures(nodes, attrs, regions, text, nn, na, nr, nm, cand, fg, fd, ab);
+        emon.Testport.assertEq(Model.nodeCount(nn), 3, "the document, one figure with labels, and its caption");
+        emon.Testport.assertEq(Model.nodeKind(nn, 1), Model.nkFigure(), "one diagram owner");
+        emon.Testport.assertThat(Model.nodeAttr(nn, na, 1, Model.fkLabels()) >= 0, "the diagram owns its labels");
+        emon.Testport.assertEq(Model.nodeKind(nn, 2), Model.nkCaption(), "the numbered heading becomes the diagram caption");
+        emon.Testport.assertThat(Model.nodeAttr(nn, na, 2, Model.fkLabel()) >= 0, "the caption keeps its figure number");
+        emon.Testport.assertEq(Model.nodeAttr(nn, na, 2, Model.fkNumber()), -1, "heading-only number metadata is removed");
+    }
+    public static void testAnExistingVectorRegionAndItsPanelsHaveOneOwner() {
+        emon.Port.Cells cand = emon.Port.newCells();
+        ftCand(cand, 1, 9900, 9900, 31500, 30100);
+        emon.Port.cellsSet(cand, 27, -2);
+        emon.Testport.assertEq(Figclass.fcPanelRow(cand, 1, 10000, 10000, 30000, 30000), 0, "the existing graphic owns the disconnected panels");
+        emon.Testport.assertEq(emon.Port.cellsLen(cand), 32, "one graphic candidate, never an overlapping second owner");
+        emon.Testport.assertEq(emon.Port.cellsAt(cand, 30), 4, "the existing region becomes the captioned panel owner");
+        emon.Testport.assertEq(emon.Port.cellsAt(cand, 7), 31500, "retain all of its original vector ink bounds");
+    }
 }

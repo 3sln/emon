@@ -746,3 +746,49 @@ fn test_signature_budget_prefix_invariance_at_one_four_and_sixteen() {
     ft_signature_prefix(0, 400);
     ft_signature_prefix(0, 1600);
 }
+#[test]
+fn test_a_captioned_panel_group_owns_a_numbered_heading_as_its_caption() {
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nn: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let na: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nm: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ab: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut c: i32 = 0;
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    page_new(pages, 1, 61200, 79200, 0, pk_vector());
+    ft_para(nodes, regions, text, nk_paragraph(), 12, 12000, 12000, 18000, 13000);
+    c = ft_para(nodes, regions, text, nk_heading(), 20, 10000, 32500, 30000, 33500);
+    node_add_attr_text(nodes, attrs, c, fk_number(), 0, 9);
+    ft_cand(cand, 1, 10000, 10000, 30000, 30000);
+    crate::port::cells_set(cand, 30, 4);
+    ft_fd(fd, fg_diagram(), 700);
+    crate::port::cells_push(fg, 0);
+    crate::port::cells_push(fg, 0);
+    rs_figures(nodes, attrs, regions, text, nn, na, nr, nm, cand, fg, fd, ab);
+    crate::testport::assert_eq(node_count(nn), 3, "the document, one figure with labels, and its caption");
+    crate::testport::assert_eq(node_kind(nn, 1), nk_figure(), "one diagram owner");
+    crate::testport::assert_that(node_attr(nn, na, 1, fk_labels()) >= 0, "the diagram owns its labels");
+    crate::testport::assert_eq(node_kind(nn, 2), nk_caption(), "the numbered heading becomes the diagram caption");
+    crate::testport::assert_that(node_attr(nn, na, 2, fk_label()) >= 0, "the caption keeps its figure number");
+    crate::testport::assert_eq(node_attr(nn, na, 2, fk_number()), -1, "heading-only number metadata is removed");
+}
+#[test]
+fn test_an_existing_vector_region_and_its_panels_have_one_owner() {
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    ft_cand(cand, 1, 9900, 9900, 31500, 30100);
+    crate::port::cells_set(cand, 27, -2);
+    crate::testport::assert_eq(fc_panel_row(cand, 1, 10000, 10000, 30000, 30000), 0, "the existing graphic owns the disconnected panels");
+    crate::testport::assert_eq(crate::port::cells_len(cand), 32, "one graphic candidate, never an overlapping second owner");
+    crate::testport::assert_eq(crate::port::cells_at(cand, 30), 4, "the existing region becomes the captioned panel owner");
+    crate::testport::assert_eq(crate::port::cells_at(cand, 7), 31500, "retain all of its original vector ink bounds");
+}

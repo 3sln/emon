@@ -26,7 +26,8 @@
 ;; A region that is covered with lines of prose (a text box, a sidebar, a background), that is a seal (rings drawn one in another), or a lattice of
 ;; rules with no axes (a table) is NOT a figure. A region with no caption is a figure only when what it is is clear (confidence at least 500).
 (ns emon.figclass
-  (:require [emon.pagebounds :refer [pb-first pb-after]]
+  (:require [emon.panel :refer [pn-owner]]
+            [emon.pagebounds :refer [pb-first pb-after]]
             [emon.lang :refer [I32 I64 Src Cells Text emit-ascii i64 i32 mul64 add64]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop text-i32]]
             [emon.model :refer [node-count node-kind node-aux node-region-head node-region-count region-page region-x0 region-y0 region-x1 region-y1
@@ -43,8 +44,9 @@
             [emon.pdfsrc :refer [ps-missed ps-len ps-u8]]
             [emon.pdfimage :refer [pi-info pi-get pi-f-w pi-f-h pi-f-bpc pi-f-class pi-f-ncomp pi-f-codec pi-f-slen pi-f-sstart pi-f-hival pi-f-mkind]]
             [emon.restruct :refer [rs-figures]]
-            [kin.lang :refer [defn defconst return let set while if do comment
+            [kin.lang :refer [defn defconst declarefn return let set while if do comment
                               + - * < > <= >= == != and or quot rem bit-and bit-or]]))
+
 
 ;; ------------------------------------------------------------------------------------------------ the settings
 
@@ -391,6 +393,23 @@
     (cells-set cand (+ (* r CR_STRIDE) CR_SRC) srcs)
     (cells-set cand (+ (* r CR_STRIDE) CR_ORG) org)
     (return r)))
+
+(defn ^:pub ^I32 fc-panel-row [^:mut ^Cells cand ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (let [^:mut ^I32 row 0]
+    (while (< row (as-count cand))
+      (do (let [^I32 b (* row CR_STRIDE)]
+            (if (and (== (cells-at cand b) page) (== (cells-at cand (+ b CR_KORI)) -2))
+              (if (and (>= (cells-at cand (+ b CR_VX)) (- x0 FC_ZONE))
+                       (and (<= (cells-at cand (+ b CR_VX)) (+ x0 100))
+                            (and (>= (cells-at cand (+ b (+ CR_VX 1))) (- y0 FC_ZONE))
+                                 (and (<= (cells-at cand (+ b (+ CR_VX 1))) (+ y0 100))
+                                      (and (>= (cells-at cand (+ b (+ CR_VX 2))) (- x1 100))
+                                           (and (<= (cells-at cand (+ b (+ CR_VX 2))) (+ x1 FC_ZONE))
+                                                (and (>= (cells-at cand (+ b (+ CR_VX 3))) (- y1 100))
+                                                     (<= (cells-at cand (+ b (+ CR_VX 3))) (+ y1 FC_ZONE)))))))))
+                (do (cells-set cand (+ b CR_ORG) 4) (return row)))))
+          (set row (+ row 1))))
+    (return (fc-new-row cand page x0 y0 x1 y1 x0 y0 x1 y1 -1 -2 -1 (sr-vector) 4))))
 
 (defn ^I32 fc-image-rows [^Cells im ^Cells pa ^Cells pg ^:mut ^Cells cand]
   (comment "A candidate row for every image placement that passed P3.6's checks and has a visible box (`emon.asset`'s `as-collect` makes the")
@@ -1337,6 +1356,11 @@
     (as-vector-regions pa pg fcand cl)
     (fc-shading-regions pa pages fcand)
     (fc-grg-regions grg pages fcand)
+    (set page 1)
+    (while (<= page (page-count pages))
+      (do (if (> (pn-owner fw et grl page ab cl) 0)
+            (fc-panel-row fcand page (cells-at cl 0) (cells-at cl 1) (cells-at cl 2) (cells-at cl 3)))
+          (set page (+ page 1))))
     (as-figure-rows fcand pages nodes regions 2 fg)
     (fc-sign-rows fi pa fcand cl)
     (set nr (as-count fcand))
@@ -1381,6 +1405,20 @@
             (set pk (fc-vector-kind ws x0 y0 x1 y1 pageh recur)))
           (set kind (quot pk 1024))
           (set conf (rem pk 1024))
+          (if (and (== (cells-at fcand (+ b CR_ORG)) 4)
+                   (and (== status 0) (and (== (fc-signature-over sl page x0 y0 x1 y1) 0)
+                                          (== (fc-claimed fl page x0 y0 x1 y1) 0))))
+            (do (set rej 0) (set kind (fg-diagram)) (set conf 700)))
+          (set k 0)
+          (while (< k nr)
+            (do (let [^I32 ob (* k CR_STRIDE)]
+                  (if (and (!= k row) (and (== (cells-at fcand (+ ob CR_ORG)) 4)
+                       (and (== (cells-at fcand ob) page)
+                            (and (>= x0 (- (cells-at fcand (+ ob CR_VX)) FC_ZONE))
+                                 (and (>= y0 (- (cells-at fcand (+ ob (+ CR_VX 1))) FC_ZONE))
+                                      (and (<= x1 (+ (cells-at fcand (+ ob (+ CR_VX 2))) FC_ZONE))
+                                           (<= y1 (+ (cells-at fcand (+ ob (+ CR_VX 3))) FC_ZONE)))))))) (set rej 1)))
+                (set k (+ k 1))))
           (set capt (fc-captioned nodes regions fcand row page x0 y0 x1 y1))
           (if (and (== rej 0) (or (>= conf FC_EMIT) (== capt 1)))
             (do (if (< conf FC_EMIT)
