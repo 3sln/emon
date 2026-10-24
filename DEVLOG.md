@@ -12445,3 +12445,59 @@ report. These checks are not release certification. No commits or corpus
 fetch/prune; the coordinator commits. Evidence is external under rc4/.
 
 - [ ] **Signed off** (maintainer)
+
+### D716 — RC5 receipt control interpretation
+
+The coordinator's RC5 task authorizes controls 07 (CORD 00081), 10 (SROIE 00168), and 11 (SROIE 00188) to change through adoption or recorded-reading fusion, provided no gold words are lost and every gained word is gold or verbatim from a recorded reading. All other named controls and Berkshire must retain byte-identical Model words, with zero lost and gained. This is the RC3 treatment; it does not authorize control-specific exclusions, lower accuracy ratchets, changed historical populations, or weaker precision floors. The coordinator commits; this worktree makes no commit.
+
+- [ ] **Signed off** (maintainer)
+
+### D717 — RC5 alignment and verbatim-copy foundation, partial
+
+Laws were written before their implementations. `emon.ofuse` supplies integer half-smaller-box overlap alignment, transitive slot membership, the 25-times-median box exclusion, and an internal source-row copy primitive. Invalid boxes cannot bridge slots. Source copies retain the original text span, box, confidence and engine metadata, and retain the source row for later accounting; reserved oword cell 27 holds the source index in these copies. The original row is never changed. Adversarial laws cover giant and empty boxes, page separation, reversed equal-box input, and unchanged recorded text spans.
+
+This is preparatory code only: no production caller, synthetic `fused` run, printed `from` field, or `ofuse` evidence arena has been connected. The alignment currently compares pairs rather than using the proposed sweep. The design's full forced-keep integration acceptance is not claimed. In particular, component membership under permutation is tested; deterministic *decisions* under permutation still need the candidate aggregation and fixed run-order tie-break. One-reading end-to-end no-op remains to be implemented and tested.
+
+- [ ] **Signed off** (maintainer)
+
+### D718 — RC5 numeric grammar and guarded policy primitive, partial
+
+`emon.ofmt` validates recorded code-point spans without regex or character repair: plain/grouped amounts and supported currency prefixes, quantities, dates, times, and percentages. Decimal digits use the Nd ranges from the vendored UnicodeData.txt; punctuation and currency spellings match the receipt grammar. It checks span bounds before addition, including adversarial overflowing lengths. `of-rule` implements the recommendation's exact 300-per-mille margin, 700 insertion confidence, dictionary-or-agreement alpha check, format-only numeric candidates, protection of format-valid incumbents, and strictly greater agreement votes for replacement. No zero-vote candidate can delete an incumbent. Settings also name the four-incumbent slot bound.
+
+An independent Go probe compared the emitted validator against the design prototype on 44,696 fixed synthetic strings, including Unicode decimal digits: zero mismatches. Metadata is in `/Volumes/SSK SSD/emon-scratch/rc5/grammar-check.json`.
+
+These primitives are not enabled in page reconstruction. Distinct-reading de-duplication, split/merge sequence comparison, confidence aggregation, deterministic tie-breaking, the slot-size decision wrapper, selection rebuilding, and actual receipt acceptance remain outstanding. No receipt target or production gain is claimed, and the receipt baseline is not refreshed on the strength of an offline prototype.
+
+- [ ] **Signed off** (maintainer)
+
+### D719 — RC5 stacked keyword gate foundation and recorded negative census
+
+`of-active` requires image scope, a photo or thermal detector trigger, and a keyword. `of-keyword` implements the prototype's exact case-folded keyword spellings and punctuation variants, including subtotal/sub-total and item(s), with boundary laws. The original detector and `rt-receipt-active` are unchanged. The gate is not connected to production.
+
+A metadata-only external check joins RC3's saved full detector census (RVL 160, XFUND 40) to every triggered page's final recorded OCR bundle, and re-runs the design's keyword-plus-guarded-X300 policy. RVL has 7 detector triggers and XFUND 1; zero pass the keyword gate, zero fuse, and zero lose or gain words. The other 192 pages fail the detector gate. This is a check of saved recordings and the offline design implementation, not a fresh production sweep or proof that the new kin primitives match the integrated policy. Evidence is `/Volumes/SSK SSD/emon-scratch/rc5/nonreceipt-pool.json`. Fresh full-pool production validation and receipt activation-count acceptance remain outstanding.
+
+- [ ] **Signed off** (maintainer)
+
+### D720 — RC5 evidence and D699 integration deferred; unsafe policies rejected
+
+No fusion is activated without a decision row for every considered slot and D699 accounting for every rejected original alternative. Synthetic runs must be skipped by `oc-account` because their words are copies; the original attempts must still consume the shared occurrence budget. Those integrations and `receipts.py` per-page fusion metadata remain outstanding. Neither evidence API entries nor ledger accounting are changed by this preparatory work.
+
+The design study rejects per-line confidence choice (SROIE loses words on 40 documents), pure-majority deletion, format-only choice without scope/precision guards, the price-site-count gate (too much CORD coverage lost), and replacement of format-valid numeric incumbents (negative gold-token yield). The study records 415 SROIE and 475 CORD pure-majority deletions; ungated format selection drops CORD precision to 0.2573; the price-site gate at five retains only 22 of 56 triggered CORD pages; replacing format-valid numeric incumbents yields net gold changes of −52 SROIE and −10 CORD. The retained decision primitive implements none of these rejected alternatives. RC3 precision floors remain SROIE 0.678611 and CORD 0.397989; D648 historical populations and all accuracy ratchets remain fixed.
+
+- [ ] **Signed off** (maintainer)
+
+### D721 — RC5 grouping remains the next reconstruction lever
+
+Item and total grouping is outside this fusion task. The design's offline selected CORD item completeness improves 25 to 37, while Model line-item integrity improves only 17 to 20 of 151. The remaining numeric and line-item targets call for row grouping over a validated fused layer. The slot oracle's 298 numeric matches and 51 selected item completions motivate later segmentation-aware work, not unguarded cross-slot edits in RC5. These are design-study figures, not measurements of this worktree's production pipeline.
+
+- [ ] **Signed off** (maintainer)
+
+### D722 — Retain only dormant RC5 foundations after validation
+
+The RC5 receipt-gain targets are not met: the new word-fusion path is not activated. Retain the tested grammar, policy, keyword, overlap and source-copy primitives as partial work without changing reconstruction. Activating an incomplete path before its per-slot evidence, D699 accounting, candidate aggregation and selection rewrite would not satisfy this task's audit requirements. Those integrations remain explicit outstanding work; no gain is claimed from the design prototype and no receipt baseline is refreshed.
+
+Final validation: 1,218 native laws on each of Go, Rust, Java and C# (30 new laws). C#'s NuGet TLS failure was resolved by rerunning its arm with the already-cached packages as a local RestoreSources feed, without changing dependencies or skipping tests. Drift and core pass with a disposable index containing the new generated files; the real index remains unchanged. Re-derivation, accuracy (3,449 metrics, 232 byte-identical cross-host Models), samples, OCR/fusion/retarget/seals/sealpx/signature replay and package consumer checks pass. Package staging uses internal APFS; the task-local npm cache avoids home-cache permission errors. C/pod packages use the normal check build without optional native OCR/render libraries.
+
+Both fresh 60-document receipt sets match every frozen baseline total and row. All 120 fresh Models are byte-identical to their RC4 recordings; all 120 live/replay bundles, scores, bounds and non-CPU metadata are identical. OCR request counts remain 466 SROIE and 605 CORD. OCR-present-but-silent words remain 214 and 20. Fresh controls 07, 10 and 11, measured with matching OCR/asset options, are byte-identical Models: zero lost/gained words and zero gold loss. Other named controls and Berkshire have unchanged runtime source and no activated new path; no fresh full control sweep is claimed. No historical ratchet, golden, sample or existing runtime source changed.
+
+- [ ] **Signed off** (maintainer)

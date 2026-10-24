@@ -1,0 +1,650 @@
+;; RC5 policy laws precede implementation. No corpus inputs or OCR requests.
+(ns emon.ofusetest
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.test :refer [deftest assert-eq new-cells]]
+            [emon.port :refer [cells-push cells-at cells-len]]
+            [emon.evidence :refer [ow-new ow-get ow-count hd-tstart hd-tlen hd-conf hd-x0 hd-line owf-run]]
+            [emon.ofmt :refer [ofmt-valid]]
+            [emon.ofuse :refer [of-active of-rule of-margin of-insert-conf of-slot-max of-copy of-from of-align of-root of-keyword]]
+            [kin.lang :refer [defn return let]]))
+
+(defn ^I32 oft-447-0 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 49)
+    (cells-push c 50)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-592-1 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 49)
+    (cells-push c 50)
+    (cells-push c 51)
+    (cells-push c 52)
+    (cells-push c 53)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-803-2 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 49)
+    (cells-push c 50)
+    (cells-push c 46)
+    (cells-push c 53)
+    (cells-push c 48)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-1014-3 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 49)
+    (cells-push c 44)
+    (cells-push c 50)
+    (cells-push c 51)
+    (cells-push c 52)
+    (cells-push c 46)
+    (cells-push c 53)
+    (cells-push c 54)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-1292-4 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 49)
+    (cells-push c 50)
+    (cells-push c 46)
+    (cells-push c 48)
+    (cells-push c 48)
+    (cells-push c 48)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-1526-5 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 82)
+    (cells-push c 112)
+    (cells-push c 49)
+    (cells-push c 50)
+    (cells-push c 46)
+    (cells-push c 48)
+    (cells-push c 48)
+    (cells-push c 48)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-1805-6 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 82)
+    (cells-push c 77)
+    (cells-push c 49)
+    (cells-push c 50)
+    (cells-push c 51)
+    (cells-push c 46)
+    (cells-push c 52)
+    (cells-push c 53)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-2083-7 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 36)
+    (cells-push c 49)
+    (cells-push c 50)
+    (cells-push c 46)
+    (cells-push c 48)
+    (cells-push c 48)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-2317-8 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 8364)
+    (cells-push c 49)
+    (cells-push c 50)
+    (cells-push c 44)
+    (cells-push c 48)
+    (cells-push c 48)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-2553-9 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 163)
+    (cells-push c 49)
+    (cells-push c 46)
+    (cells-push c 48)
+    (cells-push c 48)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-2766-10 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 8722)
+    (cells-push c 49)
+    (cells-push c 50)
+    (cells-push c 46)
+    (cells-push c 53)
+    (cells-push c 48)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-3003-11 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 45)
+    (cells-push c 49)
+    (cells-push c 50)
+    (cells-push c 46)
+    (cells-push c 53)
+    (cells-push c 48)
+    (cells-push c 45)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(deftest test-format-prices
+  (assert-eq (oft-447-0) 1 "format sample 1")
+  (assert-eq (oft-592-1) 1 "format sample 2")
+  (assert-eq (oft-803-2) 1 "format sample 3")
+  (assert-eq (oft-1014-3) 1 "format sample 4")
+  (assert-eq (oft-1292-4) 1 "format sample 5")
+  (assert-eq (oft-1526-5) 1 "format sample 6")
+  (assert-eq (oft-1805-6) 1 "format sample 7")
+  (assert-eq (oft-2083-7) 1 "format sample 8")
+  (assert-eq (oft-2317-8) 1 "format sample 9")
+  (assert-eq (oft-2553-9) 1 "format sample 10")
+  (assert-eq (oft-2766-10) 1 "format sample 11")
+  (assert-eq (oft-3003-11) 1 "format sample 12")
+)
+
+(defn ^I32 oft-3857-0 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 120)
+    (cells-push c 50)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-4004-1 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 50)
+    (cells-push c 120)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-4151-2 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 120)
+    (cells-push c 49)
+    (cells-push c 50)
+    (cells-push c 120)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-4343-3 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 57)
+    (cells-push c 57)
+    (cells-push c 57)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(deftest test-format-quantities
+  (assert-eq (oft-3857-0) 1 "format sample 1")
+  (assert-eq (oft-4004-1) 1 "format sample 2")
+  (assert-eq (oft-4151-2) 1 "format sample 3")
+  (assert-eq (oft-4343-3) 1 "format sample 4")
+)
+
+(defn ^I32 oft-4734-0 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 49)
+    (cells-push c 47)
+    (cells-push c 50)
+    (cells-push c 47)
+    (cells-push c 50)
+    (cells-push c 52)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-4968-1 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 48)
+    (cells-push c 49)
+    (cells-push c 45)
+    (cells-push c 48)
+    (cells-push c 50)
+    (cells-push c 45)
+    (cells-push c 50)
+    (cells-push c 48)
+    (cells-push c 50)
+    (cells-push c 52)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-5290-2 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 50)
+    (cells-push c 48)
+    (cells-push c 50)
+    (cells-push c 52)
+    (cells-push c 46)
+    (cells-push c 49)
+    (cells-push c 46)
+    (cells-push c 50)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-5568-3 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 49)
+    (cells-push c 47)
+    (cells-push c 50)
+    (cells-push c 45)
+    (cells-push c 50)
+    (cells-push c 52)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(deftest test-format-dates
+  (assert-eq (oft-4734-0) 1 "format sample 1")
+  (assert-eq (oft-4968-1) 1 "format sample 2")
+  (assert-eq (oft-5290-2) 1 "format sample 3")
+  (assert-eq (oft-5568-3) 1 "format sample 4")
+)
+
+(defn ^I32 oft-6020-0 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 49)
+    (cells-push c 58)
+    (cells-push c 48)
+    (cells-push c 50)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-6210-1 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 50)
+    (cells-push c 51)
+    (cells-push c 58)
+    (cells-push c 53)
+    (cells-push c 57)
+    (cells-push c 58)
+    (cells-push c 53)
+    (cells-push c 57)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(deftest test-format-times
+  (assert-eq (oft-6020-0) 1 "format sample 1")
+  (assert-eq (oft-6210-1) 1 "format sample 2")
+)
+
+(defn ^I32 oft-6612-0 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 49)
+    (cells-push c 37)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-6758-1 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 49)
+    (cells-push c 50)
+    (cells-push c 46)
+    (cells-push c 53)
+    (cells-push c 48)
+    (cells-push c 37)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-6992-2 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 57)
+    (cells-push c 57)
+    (cells-push c 57)
+    (cells-push c 44)
+    (cells-push c 57)
+    (cells-push c 37)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(deftest test-format-percentages
+  (assert-eq (oft-6612-0) 1 "format sample 1")
+  (assert-eq (oft-6758-1) 1 "format sample 2")
+  (assert-eq (oft-6992-2) 1 "format sample 3")
+)
+
+(defn ^I32 oft-7403-0 []
+  (let [^Cells c (new-cells)]
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-7505-1 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 49)
+    (cells-push c 50)
+    (cells-push c 46)
+    (cells-push c 79)
+    (cells-push c 79)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-7717-2 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 49)
+    (cells-push c 44)
+    (cells-push c 50)
+    (cells-push c 51)
+    (cells-push c 44)
+    (cells-push c 52)
+    (cells-push c 53)
+    (cells-push c 54)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-7995-3 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 49)
+    (cells-push c 50)
+    (cells-push c 51)
+    (cells-push c 52)
+    (cells-push c 37)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-8207-4 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 49)
+    (cells-push c 50)
+    (cells-push c 58)
+    (cells-push c 51)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-8397-5 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 49)
+    (cells-push c 47)
+    (cells-push c 50)
+    (cells-push c 47)
+    (cells-push c 51)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-8609-6 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 50)
+    (cells-push c 48)
+    (cells-push c 50)
+    (cells-push c 52)
+    (cells-push c 47)
+    (cells-push c 49)
+    (cells-push c 50)
+    (cells-push c 51)
+    (cells-push c 47)
+    (cells-push c 49)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-8931-7 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 49)
+    (cells-push c 50)
+    (cells-push c 46)
+    (cells-push c 51)
+    (cells-push c 52)
+    (cells-push c 53)
+    (cells-push c 54)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-9187-8 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 114)
+    (cells-push c 109)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-9335-9 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 120)
+    (cells-push c 49)
+    (cells-push c 50)
+    (cells-push c 51)
+    (cells-push c 52)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-9548-10 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 43)
+    (cells-push c 49)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-9695-11 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 49)
+    (cells-push c 32)
+    (cells-push c 50)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-9864-12 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 49)
+    (cells-push c 50)
+    (cells-push c 46)
+    (cells-push c 37)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-10055-13 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 78)
+    (cells-push c 97)
+    (cells-push c 78)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-10225-14 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 49)
+    (cells-push c 101)
+    (cells-push c 52)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(defn ^I32 oft-10396-15 []
+  (let [^Cells c (new-cells)]
+    (cells-push c 49)
+    (cells-push c 50)
+    (cells-push c 46)
+    (cells-push c 48)
+    (cells-push c 48)
+    (cells-push c 45)
+    (cells-push c 45)
+    (return (ofmt-valid c 0 (cells-len c)))))
+
+(deftest test-format-malformed
+  (assert-eq (oft-7403-0) 0 "format sample 1")
+  (assert-eq (oft-7505-1) 0 "format sample 2")
+  (assert-eq (oft-7717-2) 0 "format sample 3")
+  (assert-eq (oft-7995-3) 0 "format sample 4")
+  (assert-eq (oft-8207-4) 0 "format sample 5")
+  (assert-eq (oft-8397-5) 0 "format sample 6")
+  (assert-eq (oft-8609-6) 0 "format sample 7")
+  (assert-eq (oft-8931-7) 0 "format sample 8")
+  (assert-eq (oft-9187-8) 0 "format sample 9")
+  (assert-eq (oft-9335-9) 0 "format sample 10")
+  (assert-eq (oft-9548-10) 0 "format sample 11")
+  (assert-eq (oft-9695-11) 0 "format sample 12")
+  (assert-eq (oft-9864-12) 0 "format sample 13")
+  (assert-eq (oft-10055-13) 0 "format sample 14")
+  (assert-eq (oft-10225-14) 0 "format sample 15")
+  (assert-eq (oft-10396-15) 0 "format sample 16")
+)
+
+(deftest test-policy-settings
+  (assert-eq (of-margin) 300 "margin is per mille")
+  (assert-eq (of-insert-conf) 700 "insertion confidence")
+  (assert-eq (of-slot-max) 4 "chained incumbent bound"))
+
+(deftest test-no-fusion-outside-triggered-image-pages
+  (assert-eq (of-active 0 1 1) 0 "PDF and born digital never fuse")
+  (assert-eq (of-active 1 0 1) 0 "untriggered image never fuses")
+  (assert-eq (of-active 1 1 0) 0 "keyword gate is stacked")
+  (assert-eq (of-active 1 1 1) 1 "photo lane")
+  (assert-eq (of-active 1 2 1) 1 "thermal lane"))
+
+(deftest test-valid-numeric-incumbent-is-protected
+  (assert-eq (of-rule 1 1 1 1 1 3 0 1000 0) 4 "even unanimous perfect alternate cannot replace a valid number"))
+
+(deftest test-numeric-candidates-must-be-format-valid
+  (assert-eq (of-rule 1 1 0 0 1 3 0 1000 0) 4 "confidence and votes cannot admit malformed numbers"))
+
+(deftest test-alpha-candidates-need-dictionary-or-agreement
+  (assert-eq (of-rule 1 0 0 0 0 1 0 1000 0) 5 "unflagged high confidence is insufficient")
+  (assert-eq (of-rule 1 0 0 0 1 1 0 900 600) 2 "dictionary permits exact margin")
+  (assert-eq (of-rule 1 0 0 0 0 2 0 500 900) 1 "agreement can replace despite negative margin"))
+
+(deftest test-agreement-must-beat-incumbent-votes
+  (assert-eq (of-rule 1 0 0 0 0 2 2 700 700) 0 "vote tie keeps incumbent")
+  (assert-eq (of-rule 1 0 0 0 0 2 1 700 700) 1 "strictly more agreeing readings"))
+
+(deftest test-single-reading-replacement-needs-margin-300
+  (assert-eq (of-rule 1 1 0 1 0 1 0 899 600) 0 "299 keeps")
+  (assert-eq (of-rule 1 1 0 1 0 1 0 900 600) 2 "300 replaces"))
+
+(deftest test-insertion-needs-confidence-700
+  (assert-eq (of-rule 0 0 0 0 0 2 0 699 0) 0 "agreement does not bypass insertion floor")
+  (assert-eq (of-rule 0 0 0 0 0 2 0 700 0) 3 "700 inserts")
+  (assert-eq (of-rule 0 0 0 0 1 1 0 700 0) 3 "dictionary permits single-reading alpha insertion")
+  (assert-eq (of-rule 0 1 0 1 0 1 0 700 0) 3 "format permits single-reading numeric insertion"))
+
+(deftest test-no-deletion-even-when-all-other-readings-are-null
+  (assert-eq (of-rule 1 0 0 0 1 0 0 1000 0) 0 "zero candidate votes keeps the selected words"))
+
+;; These laws cover raw source copies and adversarial overlap chains before integration.
+(deftest test-fused-copy-cannot-invent-characters
+  (let [^Cells words (new-cells)
+        ^I32 source (ow-new words 1 10 20 110 40 10 40 110 40 0 0 123 7 2 876 -1)
+        ^I32 copied (of-copy words source 9 8)]
+    (assert-eq (ow-get words copied (hd-tstart)) 123 "same recorded text span")
+    (assert-eq (ow-get words copied (hd-tlen)) 7 "same recorded character count")
+    (assert-eq (ow-get words copied (hd-conf)) 876 "same source confidence")
+    (assert-eq (ow-get words copied (hd-x0)) 10 "same source box")
+    (assert-eq (ow-get words copied (of-from)) source "source row is explicit")
+    (assert-eq (ow-get words copied (owf-run)) 9 "synthetic run")
+    (assert-eq (ow-get words copied (hd-line)) 8 "synthetic line")
+    (assert-eq (ow-count words) 2 "original remains for D699")
+    (assert-eq (ow-get words source (hd-line)) 2 "source row remains unchanged")))
+
+(deftest test-slots-use-half-of-the-smaller-box-and-transitive-links
+  (let [^Cells words (new-cells) ^Cells rows (new-cells) ^Cells parents (new-cells) ^Cells sorted (new-cells)]
+    (ow-new words 1 0 0 100 100 0 0 0 0 0 0 0 1 0 900 -1)
+    (ow-new words 1 50 0 150 100 0 0 0 0 0 0 0 1 0 900 -1)
+    (ow-new words 1 100 0 200 100 0 0 0 0 0 0 0 1 0 900 -1)
+    (ow-new words 1 151 0 251 100 0 0 0 0 0 0 0 1 0 900 -1)
+    (cells-push rows 0) (cells-push rows 1) (cells-push rows 2) (cells-push rows 3)
+    (of-align words rows parents sorted)
+    (assert-eq (of-root parents 0) (of-root parents 2) "half-overlap chain is one slot")
+    (assert-eq (of-root parents 3) 3 "49 percent overlap stays separate")))
+
+(deftest test-slots-never-link-different-pages
+  (let [^Cells words (new-cells) ^Cells rows (new-cells) ^Cells parents (new-cells) ^Cells sorted (new-cells)]
+    (ow-new words 1 0 0 100 100 0 0 0 0 0 0 0 1 0 900 -1)
+    (ow-new words 2 0 0 100 100 0 0 0 0 0 0 0 1 0 900 -1)
+    (cells-push rows 0) (cells-push rows 1)
+    (of-align words rows parents sorted)
+    (assert-eq (of-root parents 0) 0 "page one")
+    (assert-eq (of-root parents 1) 1 "page two")))
+
+(deftest test-oversized-and-empty-boxes-do-not-chain-slots
+  (let [^Cells words (new-cells) ^Cells rows (new-cells) ^Cells parents (new-cells) ^Cells sorted (new-cells)]
+    (ow-new words 1 0 0 100 100 0 0 0 0 0 0 0 1 0 900 -1)
+    (ow-new words 1 200 0 300 100 0 0 0 0 0 0 0 1 0 900 -1)
+    (ow-new words 1 0 0 10000 10000 0 0 0 0 0 0 0 1 0 900 -1)
+    (ow-new words 1 0 0 0 100 0 0 0 0 0 0 0 1 0 900 -1)
+    (cells-push rows 0) (cells-push rows 1) (cells-push rows 2) (cells-push rows 3)
+    (of-align words rows parents sorted)
+    (assert-eq (of-root parents 0) 0 "first word stays independent")
+    (assert-eq (of-root parents 1) 1 "second word stays independent")
+    (assert-eq (of-root parents 2) -1 "giant box cannot bridge words")
+    (assert-eq (of-root parents 3) -1 "empty box is excluded")))
+
+(deftest test-equal-box-permutation-does-not-change-slot-membership
+  (let [^Cells words (new-cells) ^Cells rows (new-cells) ^Cells parents (new-cells) ^Cells sorted (new-cells)]
+    (ow-new words 1 0 0 100 100 0 0 0 0 0 0 0 1 0 900 -1)
+    (ow-new words 1 0 0 100 100 0 0 0 0 0 0 0 1 0 900 -1)
+    (cells-push rows 1) (cells-push rows 0)
+    (of-align words rows parents sorted)
+    (assert-eq (of-root parents 0) (of-root parents 1) "reverse source order links the same source rows")))
+
+(deftest test-keyword-sample-0
+  (let [^Cells text (new-cells)]
+    (cells-push text 84)
+    (cells-push text 79)
+    (cells-push text 84)
+    (cells-push text 65)
+    (cells-push text 76)
+    (cells-push text 58)
+    (assert-eq (of-keyword text 0 (cells-len text)) 1 "exact keyword boundary")))
+
+(deftest test-keyword-sample-1
+  (let [^Cells text (new-cells)]
+    (cells-push text 115)
+    (cells-push text 117)
+    (cells-push text 98)
+    (cells-push text 45)
+    (cells-push text 116)
+    (cells-push text 111)
+    (cells-push text 116)
+    (cells-push text 97)
+    (cells-push text 108)
+    (assert-eq (of-keyword text 0 (cells-len text)) 1 "exact keyword boundary")))
+
+(deftest test-keyword-sample-2
+  (let [^Cells text (new-cells)]
+    (cells-push text 105)
+    (cells-push text 116)
+    (cells-push text 101)
+    (cells-push text 109)
+    (cells-push text 40)
+    (cells-push text 115)
+    (cells-push text 41)
+    (assert-eq (of-keyword text 0 (cells-len text)) 1 "exact keyword boundary")))
+
+(deftest test-keyword-sample-3
+  (let [^Cells text (new-cells)]
+    (cells-push text 107)
+    (cells-push text 101)
+    (cells-push text 109)
+    (cells-push text 98)
+    (cells-push text 97)
+    (cells-push text 108)
+    (cells-push text 105)
+    (cells-push text 97)
+    (cells-push text 110)
+    (cells-push text 46)
+    (assert-eq (of-keyword text 0 (cells-len text)) 1 "exact keyword boundary")))
+
+(deftest test-keyword-sample-4
+  (let [^Cells text (new-cells)]
+    (cells-push text 116)
+    (cells-push text 111)
+    (cells-push text 116)
+    (cells-push text 97)
+    (cells-push text 108)
+    (cells-push text 108)
+    (cells-push text 121)
+    (assert-eq (of-keyword text 0 (cells-len text)) 0 "exact keyword boundary")))
+
+(deftest test-keyword-sample-5
+  (let [^Cells text (new-cells)]
+    (cells-push text 32)
+    (cells-push text 116)
+    (cells-push text 97)
+    (cells-push text 120)
+    (assert-eq (of-keyword text 0 (cells-len text)) 0 "exact keyword boundary")))
+
+(deftest test-keyword-sample-6
+  (let [^Cells text (new-cells)]
+    (cells-push text 49)
+    (cells-push text 116)
+    (cells-push text 111)
+    (cells-push text 116)
+    (cells-push text 97)
+    (cells-push text 108)
+    (assert-eq (of-keyword text 0 (cells-len text)) 0 "exact keyword boundary")))
+
+(deftest test-keyword-sample-7
+  (let [^Cells text (new-cells)]
+    (assert-eq (of-keyword text 0 (cells-len text)) 0 "exact keyword boundary")))
+
+(deftest test-format-span-bounds-do-not-overflow-or-read-outside-recorded-text
+  (let [^Cells text (new-cells)]
+    (cells-push text 49)
+    (assert-eq (ofmt-valid text -1 1) 0 "negative start")
+    (assert-eq (ofmt-valid text 0 2) 0 "long span")
+    (assert-eq (ofmt-valid text 2147483647 2147483647) 0 "hostile overflowing span")
+    (assert-eq (ofmt-valid text 0 1) 1 "recorded digit")))
+
+(deftest test-numeric-grammar-uses-unicode-decimal-digits
+  (let [^Cells arabic (new-cells)]
+    (cells-push arabic 1633)
+    (cells-push arabic 1634)
+    (cells-push arabic 46)
+    (cells-push arabic 1637)
+    (cells-push arabic 1632)
+    (assert-eq (ofmt-valid arabic 0 (cells-len arabic)) 1 "Unicode decimal sample 1"))
+  (let [^Cells devanagari (new-cells)]
+    (cells-push devanagari 2407)
+    (cells-push devanagari 2408)
+    (assert-eq (ofmt-valid devanagari 0 (cells-len devanagari)) 1 "Unicode decimal sample 2"))
+  (let [^Cells fullwidth (new-cells)]
+    (cells-push fullwidth 65297)
+    (cells-push fullwidth 65298)
+    (assert-eq (ofmt-valid fullwidth 0 (cells-len fullwidth)) 1 "Unicode decimal sample 3"))
+  (let [^Cells superscript (new-cells)]
+    (cells-push superscript 178)
+    (assert-eq (ofmt-valid superscript 0 (cells-len superscript)) 0 "Unicode decimal sample 4"))
+)

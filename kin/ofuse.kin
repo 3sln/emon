@@ -1,0 +1,181 @@
+;; RC5 guarded decision primitive. The caller supplies distinct-reading votes,
+;; maximum reading confidence per candidate and format/dictionary facts.
+;; Rule codes: keep0 agree1 margin2 insert3 blocked-format4 blocked-lexicon5 blocked-slot6.
+(ns emon.ofuse
+  (:require [emon.lang :refer [I32 I64 Cells i64 i32]]
+            [emon.port :refer [cells-at cells-len cells-push cells-set cells-drop]]
+            [emon.evidence :refer [ow-count ow-stride ow-get ow-set hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-line owf-run ev-overlap-small]]
+            [kin.lang :refer [defdata defn return let set while if do comment and or >= <= > < == != + - * quot]]))
+
+(defn ^:pub ^I32 of-margin [] (return 300))
+(defn ^:pub ^I32 of-insert-conf [] (return 700))
+(defn ^:pub ^I32 of-slot-max [] (return 4))
+(defn ^:pub ^I32 of-box-max [] (return 25))
+
+(defn ^:pub ^I32 of-active [^I32 image ^I32 trigger ^I32 keyword]
+  (if (and (== image 1) (and (or (== trigger 1) (== trigger 2)) (== keyword 1))) (return 1))
+  (return 0))
+
+(defn ^:pub ^I32 of-rule [^I32 incumbent ^I32 numeric ^I32 incumbent-valid ^I32 candidate-valid
+                         ^I32 dictionary ^I32 votes ^I32 incumbent-votes ^I32 confidence ^I32 incumbent-confidence]
+  (if (== votes 0) (return 0))
+  (if (and (== incumbent 1) (== incumbent-valid 1)) (return 4))
+  (if (and (== numeric 1) (== candidate-valid 0)) (return 4))
+  (if (and (== numeric 0) (and (== dictionary 0) (> 2 votes))) (return 5))
+  (if (== incumbent 0)
+    (if (>= confidence (of-insert-conf)) (return 3) (return 0)))
+  (if (and (>= votes 2) (> votes incumbent-votes)) (return 1))
+  (if (>= (- confidence incumbent-confidence) (of-margin)) (return 2))
+  (return 0))
+
+(defn ^:pub ^I32 of-from [] (return 27))
+(defn ^:pub ^I32 of-copy [^:mut ^Cells words ^I32 source ^I32 run ^I32 line]
+  (comment "Reserved oword cell27 holds the source row. The etext span, box, flags and confidence are copied verbatim; no character is emitted here.")
+  (let [^I32 row (ow-count words) ^:mut ^I32 f 0 ^:mut ^I32 value 0]
+    (while (< f (ow-stride))
+      (do (set value (ow-get words source f)) (cells-push words value) (set f (+ f 1))))
+    (ow-set words row (of-from) source)
+    (ow-set words row (owf-run) run)
+    (ow-set words row (hd-line) line)
+    (return row)))
+
+(defn ^I64 of-area [^Cells words ^I32 row]
+  (let [^I64 w (- (i64 (ow-get words row (hd-x1))) (i64 (ow-get words row (hd-x0))))
+        ^I64 h (- (i64 (ow-get words row (hd-y1))) (i64 (ow-get words row (hd-y0))))]
+    (if (or (<= w 0) (<= h 0)) (return (i64 0)))
+    (return (* w h))))
+
+(defn ^:pub ^I32 of-root [^Cells parents ^I32 node]
+  (let [^:mut ^I32 p node]
+    (if (< (cells-at parents p) 0) (return -1))
+    (while (!= (cells-at parents p) p) (set p (cells-at parents p)))
+    (return p)))
+
+(defn ^:pub ^I32 of-align [^Cells words ^Cells rows ^:mut ^Cells parents ^:mut ^Cells sorted]
+  (comment "rows names eligible source and incumbent words. The caller filters pass, garbage and non-alphanumeric words before alignment. Invalid or oversized boxes have parent -1. Labels are canonical minima; rows are never mutated.")
+  (let [^I32 n (cells-len rows) ^:mut ^I32 i 0 ^:mut ^I32 j 0 ^:mut ^I32 a 0 ^:mut ^I32 b 0
+        ^:mut ^I32 pa 0 ^:mut ^I32 pb 0 ^:mut ^I64 median (i64 1)]
+    (cells-drop parents 0) (cells-drop sorted 0)
+    (while (< i n)
+      (do (cells-push parents i)
+          (if (> (of-area words (cells-at rows i)) 0)
+            (do (set j (cells-len sorted)) (cells-push sorted i)
+                (while (and (> j 0) (> (of-area words (cells-at rows (cells-at sorted (- j 1))))
+                                       (of-area words (cells-at rows i))))
+                  (do (cells-set sorted j (cells-at sorted (- j 1))) (set j (- j 1))))
+                (cells-set sorted j i)))
+          (set i (+ i 1))))
+    (if (> (cells-len sorted) 0)
+      (set median (of-area words (cells-at rows (cells-at sorted (quot (cells-len sorted) 2))))))
+    (set i 0)
+    (while (< i n)
+      (do (set a (cells-at rows i))
+          (if (or (<= (of-area words a) 0) (> (of-area words a) (* median (i64 (of-box-max)))))
+            (cells-set parents i -1))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i n)
+      (do (if (>= (cells-at parents i) 0)
+            (do (set a (cells-at rows i)) (set j 0)
+                (while (< j i)
+                  (do (if (>= (cells-at parents j) 0)
+                        (do (set b (cells-at rows j))
+                            (if (== (ow-get words a (hd-page)) (ow-get words b (hd-page)))
+                              (if (>= (ev-overlap-small (ow-get words a (hd-x0)) (ow-get words a (hd-y0)) (ow-get words a (hd-x1)) (ow-get words a (hd-y1))
+                                                       (ow-get words b (hd-x0)) (ow-get words b (hd-y0)) (ow-get words b (hd-x1)) (ow-get words b (hd-y1))) 500)
+                                (do (set pa (of-root parents i)) (set pb (of-root parents j))
+                                    (if (< pa pb) (cells-set parents pb pa) (cells-set parents pa pb)))))))
+                      (set j (+ j 1))))))
+          (set i (+ i 1))))
+    (return n)))
+
+;; Exact keyword spellings from the design prototype, with ASCII case folding.
+(defdata of-keywords
+  :emitter kin.lang/flat-array
+  :stride 11
+  :data [6 97 109 111 117 110 116 0 0 0 0
+         7 97 109 111 117 110 116 46 0 0 0
+         7 97 109 111 117 110 116 58 0 0 0
+         4 99 97 115 104 0 0 0 0 0 0
+         5 99 97 115 104 46 0 0 0 0 0
+         5 99 97 115 104 58 0 0 0 0 0
+         6 99 104 97 110 103 101 0 0 0 0
+         7 99 104 97 110 103 101 46 0 0 0
+         7 99 104 97 110 103 101 58 0 0 0
+         3 103 115 116 0 0 0 0 0 0 0
+         4 103 115 116 46 0 0 0 0 0 0
+         4 103 115 116 58 0 0 0 0 0 0
+         5 104 97 114 103 97 0 0 0 0 0
+         6 104 97 114 103 97 46 0 0 0 0
+         6 104 97 114 103 97 58 0 0 0 0
+         4 105 116 101 109 0 0 0 0 0 0
+         5 105 116 101 109 40 0 0 0 0 0
+         6 105 116 101 109 40 41 0 0 0 0
+         7 105 116 101 109 40 41 46 0 0 0
+         7 105 116 101 109 40 41 58 0 0 0
+         6 105 116 101 109 40 46 0 0 0 0
+         6 105 116 101 109 40 58 0 0 0 0
+         6 105 116 101 109 40 115 0 0 0 0
+         7 105 116 101 109 40 115 41 0 0 0
+         8 105 116 101 109 40 115 41 46 0 0
+         8 105 116 101 109 40 115 41 58 0 0
+         7 105 116 101 109 40 115 46 0 0 0
+         7 105 116 101 109 40 115 58 0 0 0
+         5 105 116 101 109 41 0 0 0 0 0
+         6 105 116 101 109 41 46 0 0 0 0
+         6 105 116 101 109 41 58 0 0 0 0
+         5 105 116 101 109 46 0 0 0 0 0
+         5 105 116 101 109 58 0 0 0 0 0
+         5 105 116 101 109 115 0 0 0 0 0
+         6 105 116 101 109 115 41 0 0 0 0
+         7 105 116 101 109 115 41 46 0 0 0
+         7 105 116 101 109 115 41 58 0 0 0
+         6 105 116 101 109 115 46 0 0 0 0
+         6 105 116 101 109 115 58 0 0 0 0
+         6 106 117 109 108 97 104 0 0 0 0
+         7 106 117 109 108 97 104 46 0 0 0
+         7 106 117 109 108 97 104 58 0 0 0
+         7 107 101 109 98 97 108 105 0 0 0
+         8 107 101 109 98 97 108 105 46 0 0
+         8 107 101 109 98 97 108 105 58 0 0
+         9 107 101 109 98 97 108 105 97 110 0
+         10 107 101 109 98 97 108 105 97 110 46
+         10 107 101 109 98 97 108 105 97 110 58
+         3 113 116 121 0 0 0 0 0 0 0
+         4 113 116 121 46 0 0 0 0 0 0
+         4 113 116 121 58 0 0 0 0 0 0
+         8 114 111 117 110 100 105 110 103 0 0
+         9 114 111 117 110 100 105 110 103 46 0
+         9 114 111 117 110 100 105 110 103 58 0
+         9 115 117 98 45 116 111 116 97 108 0
+         10 115 117 98 45 116 111 116 97 108 46
+         10 115 117 98 45 116 111 116 97 108 58
+         8 115 117 98 116 111 116 97 108 0 0
+         9 115 117 98 116 111 116 97 108 46 0
+         9 115 117 98 116 111 116 97 108 58 0
+         3 116 97 120 0 0 0 0 0 0 0
+         4 116 97 120 46 0 0 0 0 0 0
+         4 116 97 120 58 0 0 0 0 0 0
+         5 116 111 116 97 108 0 0 0 0 0
+         6 116 111 116 97 108 46 0 0 0 0
+         6 116 111 116 97 108 58 0 0 0 0
+         5 116 117 110 97 105 0 0 0 0 0
+         6 116 117 110 97 105 46 0 0 0 0
+         6 116 117 110 97 105 58 0 0 0 0]
+  :accessors {^I32 of-kw-count [^I32 ignored]
+              ^I32 of-kw-at [^I32 ignored ^I32 row ^I32 field]})
+
+(defn ^:pub ^I32 of-keyword [^Cells text ^I32 start ^I32 count]
+  (let [^:mut ^I32 r 0 ^:mut ^I32 i 0 ^:mut ^I32 cp 0 ^:mut ^I32 same 0]
+    (if (or (< start 0) (or (<= count 0) (> count (- (cells-len text) start)))) (return 0))
+    (while (< r (of-kw-count 0))
+      (do (if (== count (of-kw-at 0 r 0))
+            (do (set i 0) (set same 1)
+                (while (and (< i count) (== same 1))
+                  (do (set cp (cells-at text (+ start i)))
+                      (if (and (>= cp 65) (<= cp 90)) (set cp (+ cp 32)))
+                      (if (!= cp (of-kw-at 0 r (+ i 1))) (set same 0))
+                      (set i (+ i 1))))
+                (if (== same 1) (return 1))))
+          (set r (+ r 1))))
+    (return 0)))
