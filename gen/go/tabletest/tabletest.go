@@ -366,7 +366,7 @@ func ttRunAn(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *
 		return 7
 	}
 	columns.LcCopy(ln, lt)
-	para.PaBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al)
+	para.PaBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, port.NewCells())
 	ttBrief(t, nodes, attrs, text)
 	return model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st)
 }
@@ -2150,7 +2150,7 @@ func ttGolden(pdf []byte, t *strings.Builder, tvt *strings.Builder) int32 {
 	columns.LcCopy(ln, lt)
 	initial.InDetect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii)
 	heading.HdAnalyze(wd, lt, et, gl, sf, sc, hc, ws, htmp, hpr, hptxt)
-	para.PaBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al)
+	para.PaBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, port.NewCells())
 	if model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st) != 0 {
 		return 3
 	}

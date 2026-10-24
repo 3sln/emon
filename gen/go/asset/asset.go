@@ -1186,6 +1186,37 @@ func asInTable(nodes *port.Cells, regions *port.Cells, page int32, x0 int32, y0 
 	return 0
 }
 
+func asFigureBefore(cand *port.Cells, a int32, b int32) int32 {
+	var ap int32 = AsGet(cand, a, acPage)
+	var bp int32 = AsGet(cand, b, acPage)
+	var ay int32 = AsGet(cand, a, acVx0+1)
+	var by int32 = AsGet(cand, b, acVx0+1)
+	var ax int32 = AsGet(cand, a, acVx0)
+	var bx int32 = AsGet(cand, b, acVx0)
+	if ap != bp {
+		if ap < bp {
+			return 1
+		}
+		return 0
+	}
+	if ay != by {
+		if ay < by {
+			return 1
+		}
+		return 0
+	}
+	if ax != bx {
+		if ax < bx {
+			return 1
+		}
+		return 0
+	}
+	if a < b {
+		return 1
+	}
+	return 0
+}
+
 func AsFigureRows(cand *port.Cells, pages *port.Cells, nodes *port.Cells, regions *port.Cells, level int32, fg *port.Cells) int32 {
 	// The candidates that are provisional `figure`s (SPEC 10.6, until P8.1): not page-sized (under 800 per mille of its
 	// page) and both sides of the visible box at least 18 pt. At `figures` (`level` 2) the region candidates (vector art, a
@@ -1198,7 +1229,10 @@ func AsFigureRows(cand *port.Cells, pages *port.Cells, nodes *port.Cells, region
 	var ph int32 = 0
 	var pgi int32 = 0
 	var cnt int32 = 0
-	var ins int32 = 0
+	var h int32 = 1
+	var v int32 = 0
+	var u int32 = 0
+	var more int32 = 0
 	var x0 int32 = 0
 	var y0 int32 = 0
 	var x1 int32 = 0
@@ -1215,27 +1249,34 @@ func AsFigureRows(cand *port.Cells, pages *port.Cells, nodes *port.Cells, region
 			pw = model.PageW(pages, pgi)
 			ph = model.PageH(pages, pgi)
 			if ((x1 - x0) >= asFigureSide) && ((y1 - y0) >= asFigureSide) && (asGe(asIa(x0, y0, x1, y1, 0, 0, pw, ph), asArea(0, 0, pw, ph), asBig) == 0) && ((AsGet(cand, r, acKori) != asRegion) || ((level == 2) && (asInTable(nodes, regions, AsGet(cand, r, acPage), x0, y0, x1, y1) == 0))) {
-				// insert in order of (page, top, left, row)
-				ins = cnt + 1
-				j = 1
-				for j <= cnt {
-					var q int32 = port.CellsAt(fg, j)
-					if (ins == (cnt + 1)) && ((AsGet(cand, q, acPage) > AsGet(cand, r, acPage)) || ((AsGet(cand, q, acPage) == AsGet(cand, r, acPage)) && ((AsGet(cand, q, acVx0+1) > y0) || ((AsGet(cand, q, acVx0+1) == y0) && (AsGet(cand, q, acVx0) > x0))))) {
-						ins = j
-					}
-					j += 1
-				}
-				port.CellsPush(fg, 0)
-				j = cnt + 1
-				for j > ins {
-					port.CellsSet(fg, j, port.CellsAt(fg, j-1))
-					j -= 1
-				}
-				port.CellsSet(fg, ins, r)
+				port.CellsPush(fg, r)
 				cnt += 1
 			}
 		}
 		r += 1
+	}
+	for h < (cnt / 3) {
+		h = (h * 3) + 1
+	}
+	for h >= 1 {
+		r = h + 1
+		for r <= cnt {
+			v = port.CellsAt(fg, r)
+			j = r
+			more = 1
+			for (j > h) && (more == 1) {
+				u = port.CellsAt(fg, j-h)
+				if asFigureBefore(cand, v, u) == 1 {
+					port.CellsSet(fg, j, u)
+					j -= h
+				} else {
+					more = 0
+				}
+			}
+			port.CellsSet(fg, j, v)
+			r += 1
+		}
+		h = (h - 1) / 3
 	}
 	return cnt
 }

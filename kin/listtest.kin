@@ -312,7 +312,7 @@
   (let [^Cells gl (new-cells) ^Cells ws (new-cells) ^Cells tmp (new-cells) ^Cells pr (new-cells) ^Cells ptxt (new-cells)
         ^Cells pages (new-cells) ^Cells rf (new-cells) ^Cells nb (new-cells) ^Cells mk (new-cells) ^Cells tw (new-cells)]
     (hd-analyze wd ln et gl sf sc hc ws tmp pr ptxt)
-    (return (nt-analyze wd ln et gl sf sc pages hc rf nb mk tw))))
+    (let [^Cells nix (new-cells)] (return (nt-analyze wd ln et gl sf sc pages hc rf nb mk tw nix)))))
 
 (deftest test-a-line-of-running-text-that-begins-fig-4-is-no-caption
   (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
@@ -353,7 +353,7 @@
         ^Cells pages (new-cells) ^Cells rf (new-cells) ^Cells nb (new-cells) ^Cells mk (new-cells) ^Cells tw (new-cells)]
     (page-new pages 1 61200 79200 0 (pk-vector))
     (hd-analyze wd ln et gl sf sc hc ws tmp pr ptxt)
-    (return (nt-analyze wd ln et gl sf sc pages hc rf nb mk tw))))
+    (let [^Cells nix (new-cells)] (return (nt-analyze wd ln et gl sf sc pages hc rf nb mk tw nix)))))
 
 (defn ^I32 lt-notes-glyphs [^Cells wd ^Cells ln ^Cells et ^Cells gl ^:mut ^Cells sf ^:mut ^Cells sc ^:mut ^Cells hc]
   (comment "`lt-notes-pages` over the glyphs `gl`.")
@@ -361,7 +361,7 @@
         ^Cells pages (new-cells) ^Cells rf (new-cells) ^Cells nb (new-cells) ^Cells mk (new-cells) ^Cells tw (new-cells)]
     (page-new pages 1 61200 79200 0 (pk-vector))
     (hd-analyze wd ln et gl sf sc hc ws tmp pr ptxt)
-    (return (nt-analyze wd ln et gl sf sc pages hc rf nb mk tw))))
+    (let [^Cells nix (new-cells)] (return (nt-analyze wd ln et gl sf sc pages hc rf nb mk tw nix)))))
 
 (deftest test-a-footnotes-raised-marker-glued-to-its-word-is-a-marker
   (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells gl (new-cells)

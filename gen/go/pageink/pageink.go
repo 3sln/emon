@@ -6,6 +6,7 @@ package pageink
 import (
 	"emon/evidence"
 	"emon/norm"
+	"emon/pagebounds"
 	"emon/plan"
 	"emon/port"
 	"emon/trace"
@@ -326,6 +327,8 @@ func PnFeatures(page int32, bms *port.BitmapSet, k0 int32, src *port.Bitmap, eng
 	var eng *port.Bitmap = port.BmsGet(bms, engid)
 	var has int32 = 0
 	var paper int32 = norm.NmPaperGray(ws)
+	var c0 int32 = pagebounds.PbFirst(comps, 24, page)
+	var c1 int32 = pagebounds.PbAfter(comps, 24, page)
 	var i int32 = w0
 	var f int32 = 0
 	var x0 int32 = 0
@@ -339,7 +342,7 @@ func PnFeatures(page int32, bms *port.BitmapSet, k0 int32, src *port.Bitmap, eng
 		x0 = evidence.OwGet(owords, i, evidence.OwfPx())
 		y0 = evidence.OwGet(owords, i, evidence.OwfPy())
 		norm.NmFeatOcr(feats, f, x0, y0, x0+evidence.OwGet(owords, i, evidence.OwfPw()), y0+evidence.OwGet(owords, i, evidence.OwfPh()), binary, eng, has, body, gray, paper)
-		trace.TrFeatOcr(feats, f, comps, page, evidence.OwGet(owords, i, evidence.HdX0()), evidence.OwGet(owords, i, evidence.HdY0()), evidence.OwGet(owords, i, evidence.HdX1()), evidence.OwGet(owords, i, evidence.HdY1()), scr, 0)
+		trace.TrFeatOcrRange(feats, f, comps, page, evidence.OwGet(owords, i, evidence.HdX0()), evidence.OwGet(owords, i, evidence.HdY0()), evidence.OwGet(owords, i, evidence.HdX1()), evidence.OwGet(owords, i, evidence.HdY1()), scr, 0, c0, c1)
 		i += 1
 	}
 	return nw

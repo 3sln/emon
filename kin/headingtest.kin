@@ -95,7 +95,7 @@
     (comment "The lines' copy, and no initials in it: these laws read hand-made evidence and the heading analysis has run on `ln`.")
     (lc-copy ln lt)
     (return (pa-build wd et npages pages layout nodes attrs regions text ord raw tmp fr gp
-                      lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al))))
+                      lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al (new-cells)))))
 
 (defn ^I32 ht-model [^Cells wd ^Cells ln ^Cells et ^I32 npages
                      ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text

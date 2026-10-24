@@ -5,6 +5,7 @@ use crate::emon::evidence::*;
 use crate::emon::glayer::*;
 use crate::emon::model::*;
 use crate::emon::normalize::*;
+use crate::emon::pagebounds::*;
 use crate::emon::pdfannot::*;
 use crate::emon::pdfstruct::*;
 use crate::emon::tagtable::*;
@@ -5634,10 +5635,10 @@ pub(crate) fn tb_whitespace_page(page: i32, wd: &mut crate::port::Cells, et: &mu
 pub(crate) fn tb_line_repeated(ln: &mut crate::port::Cells, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, l: i32, other: i32) -> bool {
     // P12.2: is line l on page `other` too: a line there with the same words (the first and the last, and as many) at the same place, within 3 pt:
     // a running header (a bank's name and address over every page) that the furniture stage will take out, and no body of the page.
-    let n: i32 = ln_count(ln);
+    let n: i32 = pb_after(ln, 16, other);
     let lc: i32 = ln_get(ln, l, lh_count());
     let lf: i32 = ln_get(ln, l, lh_first());
-    let mut m: i32 = 0;
+    let mut m: i32 = pb_first(ln, 16, other);
     while m < n {
         if (ln_get(ln, m, lh_page()) == other) && (ln_get(ln, m, lh_count()) == lc) {
             if (tb_abs(ln_get(ln, m, lh_y0()) - ln_get(ln, l, lh_y0())) <= 300) && (tb_abs(ln_get(ln, m, lh_x0()) - ln_get(ln, l, lh_x0())) <= 300) {
@@ -5653,8 +5654,8 @@ pub(crate) fn tb_line_repeated(ln: &mut crate::port::Cells, wd: &mut crate::port
 pub(crate) fn tb_body_line_outside(ln: &mut crate::port::Cells, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, page: i32, y0: i32, y1: i32, zlo: i32, zhi: i32, other: i32) -> bool {
     // Is there a line, not claimed by a table, on `page` whose centre is in y0..y1 and outside the furniture
     // zones (above zlo, below zhi), and is not one that page `other` has too (`tb-line-repeated`; 0 for none)?
-    let n: i32 = ln_count(ln);
-    let mut l: i32 = 0;
+    let n: i32 = pb_after(ln, 16, page);
+    let mut l: i32 = pb_first(ln, 16, page);
     while l < n {
         if (ln_get(ln, l, lh_page()) == page) && (ln_get(ln, l, 15) == 0) {
             let cy: i32 = (ln_get(ln, l, lh_y0()) + ln_get(ln, l, lh_y1())) / 2;

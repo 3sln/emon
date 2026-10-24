@@ -310,6 +310,8 @@ public final class Pageink {
         emon.Port.Bitmap eng = emon.Port.bmsGet(bms, engid);
         int has = 0;
         int paper = Norm.nmPaperGray(ws);
+        int c0 = Pagebounds.pbFirst(comps, 24, page);
+        int c1 = Pagebounds.pbAfter(comps, 24, page);
         int i = w0;
         int f = 0;
         int x0 = 0;
@@ -323,7 +325,7 @@ public final class Pageink {
             x0 = Evidence.owGet(owords, i, Evidence.owfPx());
             y0 = Evidence.owGet(owords, i, Evidence.owfPy());
             Norm.nmFeatOcr(feats, f, x0, y0, x0 + Evidence.owGet(owords, i, Evidence.owfPw()), y0 + Evidence.owGet(owords, i, Evidence.owfPh()), binary, eng, has, body, gray, paper);
-            Trace.trFeatOcr(feats, f, comps, page, Evidence.owGet(owords, i, Evidence.hdX0()), Evidence.owGet(owords, i, Evidence.hdY0()), Evidence.owGet(owords, i, Evidence.hdX1()), Evidence.owGet(owords, i, Evidence.hdY1()), scr, 0);
+            Trace.trFeatOcrRange(feats, f, comps, page, Evidence.owGet(owords, i, Evidence.hdX0()), Evidence.owGet(owords, i, Evidence.hdY0()), Evidence.owGet(owords, i, Evidence.hdX1()), Evidence.owGet(owords, i, Evidence.hdY1()), scr, 0, c0, c1);
             i += 1;
         }
         return nw;

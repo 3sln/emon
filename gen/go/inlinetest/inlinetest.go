@@ -218,7 +218,7 @@ func itBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, ift
 	heading.HdAnalyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt)
 	lists.LsAnalyze(wd, ln, et, sf, pa, hc, cd, pi, lws, tw)
 	inline.IlAnalyze(wd, ln, et, gl, ift, sf, an, txt, pg, pages, 1, text, hc, sw)
-	para.PaBuild(wd, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp2, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr2, dbg, hc, tb, tc, tw, tq, ledger, ii, al)
+	para.PaBuild(wd, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp2, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr2, dbg, hc, tb, tc, tw, tq, ledger, ii, al, port.NewCells())
 	return inline.IlLinks(hc)
 }
 

@@ -246,7 +246,7 @@ func flBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages
 	var ii *port.Cells = port.NewCells()
 	var al *port.Cells = port.NewCells()
 	columns.LcCopy(ln, lt)
-	return para.PaBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al)
+	return para.PaBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, port.NewCells())
 }
 
 func flRunSize(wd *port.Cells, ln0 *port.Cells, et *port.Cells, npages int32, pw int32, ph int32, t *strings.Builder) int32 {

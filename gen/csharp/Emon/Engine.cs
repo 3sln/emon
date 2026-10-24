@@ -323,12 +323,12 @@ public static class Engine {
         Initial.InDetect(d.Fw, d.Gl, d.Fnt, d.Et, np, s.Iloc, s.Lt, s.Ls, s.Lo, s.Tm, s.Ii);
         Heading.HdPriorOutline(d.Ol, d.Txt, s.Hpr, s.Hptxt);
         Heading.HdAnalyze(d.Fw, s.Lt, d.Et, d.Gl, s.Sf, s.Hsc, s.Hc, s.Ws, s.Htmp, s.Hpr, s.Hptxt);
-        Notes.NtAnalyze(d.Fw, s.Lt, d.Et, d.Gl, s.Sf, s.Hsc, m.Pages, s.Hc, s.Nrf, s.Nnb, s.Nmk, s.Tw);
+        Notes.NtAnalyze(d.Fw, s.Lt, d.Et, d.Gl, s.Sf, s.Hsc, m.Pages, s.Hc, s.Nrf, s.Nnb, s.Nmk, s.Tw, s.Nix);
         Lists.LsAnalyze(d.Fw, s.Lt, d.Et, s.Sf, d.Pa, s.Hc, s.Lcd, s.Lpi, s.Lws, s.Tw);
         if (kind == 0) {
             Inline.IlAnalyze(d.Fw, s.Lt, d.Et, d.Gl, d.Ift, s.Sf, d.An, d.Txt, d.Pg, m.Pages, np, m.Text, s.Hc, s.Isw);
         }
-        Para.PaBuild(d.Fw, d.Et, np, m.Pages, m.Layout, m.Nodes, m.Attrs, m.Regions, m.Text, s.Ord, s.Raw, s.Tmp, s.Fr, s.Gp, s.Lt, s.Ls, s.Sd, s.It, s.Io, s.Rw, s.Gu, s.Ac, s.Tm, s.Cf, s.Lo, s.Pr, s.Dbg, s.Hc, s.Tb, s.Tc, s.Tw, s.Tq, m.Ledger, s.Ii, s.Al);
+        Para.PaBuild(d.Fw, d.Et, np, m.Pages, m.Layout, m.Nodes, m.Attrs, m.Regions, m.Text, s.Ord, s.Raw, s.Tmp, s.Fr, s.Gp, s.Lt, s.Ls, s.Sd, s.It, s.Io, s.Rw, s.Gu, s.Ac, s.Tm, s.Cf, s.Lo, s.Pr, s.Dbg, s.Hc, s.Tb, s.Tc, s.Tw, s.Tq, m.Ledger, s.Ii, s.Al, s.Pix);
         if (kind == 0) {
             EnFigures(m, s, d, c.Level);
         }

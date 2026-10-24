@@ -229,13 +229,54 @@ public final class Pdfvis {
         }
         return pvMin(v, cv);
     }
-    public static int pvBackdrop(emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells mk, int x0, int y0, int x1, int y1, int gz, int jp, int ji, int p0, int i0, int me, int lim) {
+    public static int pvIx(emon.Port.Cells ix, int r, int f) {
+        return emon.Port.cellsAt(ix, 1 + (((r - emon.Port.cellsAt(ix, 0)) * 11) + f));
+    }
+    public static int pvIndex(emon.Port.Cells pa, emon.Port.Cells mk, emon.Port.Cells ix, int p0, int p1) {
+        int r = p0;
+        int k = 0;
+        int prev = -1;
+        int next = p1;
+        int fl = 0;
+        emon.Port.cellsDrop(ix, 0);
+        emon.Port.cellsPush(ix, p0);
+        while (r < p1) {
+            k = 0;
+            while (k < 4) {
+                emon.Port.cellsPush(ix, pvPathK(pa, r, k));
+                k += 1;
+            }
+            k = 0;
+            while (k < 4) {
+                emon.Port.cellsPush(ix, pvFullK(pa, r, k));
+                k += 1;
+            }
+            emon.Port.cellsPush(ix, pvOpaqueRect(pa, mk, r));
+            emon.Port.cellsPush(ix, p1);
+            fl = Evidence.paGet(pa, r, Evidence.pfFlags());
+            if (((fl & Evidence.pgClip()) == 0) && ((fl & Evidence.pgFilled()) != 0)) {
+                prev = r;
+            }
+            emon.Port.cellsPush(ix, prev);
+            r += 1;
+        }
+        r = p1 - 1;
+        while (r >= p0) {
+            if (pvIx(ix, r, 8) == 1) {
+                next = r;
+            }
+            emon.Port.cellsSet(ix, 10 + ((r - p0) * 11), next);
+            r -= 1;
+        }
+        return 0;
+    }
+    public static int pvBackdrop(emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells mk, emon.Port.Cells ix, int x0, int y0, int x1, int y1, int gz, int jp, int ji, int p0, int i0, int me, int lim) {
         // The colour behind a glyph cell with this box and paint number: 0xRRGGBB, or -2 when it cannot be told. Paths
         // are searched backwards from row jp (the first with a later z), images from row ji. `me` is the path row being
         // classified (-1 for a glyph): an earlier rectangle that this path, itself an exactly known opaque rectangle,
         // covers completely is not what it is painted on, it is painted OVER (a rule drawn twice is one rule: of two paints
         // of the same colour on the same box the later is the ink and the earlier the one it hides, never both hidden).
-        int r = jp - 1;
+        int r = -1;
         int steps = 0;
         int zp = -1;
         int res = 16777215;
@@ -246,30 +287,36 @@ public final class Pdfvis {
         int ry1 = 0;
         int zi = -1;
         int found = 0;
-        while ((r >= p0) && ((steps < lim) && (found == 0))) {
+        if (jp > p0) {
+            r = pvIx(ix, jp - 1, 10);
+        }
+        while ((r >= p0) && ((r >= (jp - lim)) && (found == 0))) {
             fl = Evidence.paGet(pa, r, Evidence.pfFlags());
             if (((fl & Evidence.pgClip()) == 0) && ((fl & Evidence.pgFilled()) != 0)) {
-                rx0 = pvPathK(pa, r, 0);
-                ry0 = pvPathK(pa, r, 1);
-                rx1 = pvPathK(pa, r, 2);
-                ry1 = pvPathK(pa, r, 3);
-                if ((me >= 0) && (pvOpaqueRect(pa, mk, me) == 1)) {
-                    if (pvCovers(pvPathK(pa, me, 0), pvPathK(pa, me, 1), pvPathK(pa, me, 2), pvPathK(pa, me, 3), pvFullK(pa, r, 0), pvFullK(pa, r, 1), pvFullK(pa, r, 2), pvFullK(pa, r, 3)) == 1) {
+                rx0 = pvIx(ix, r, 0);
+                ry0 = pvIx(ix, r, 1);
+                rx1 = pvIx(ix, r, 2);
+                ry1 = pvIx(ix, r, 3);
+                if ((me >= 0) && (pvIx(ix, me, 8) == 1)) {
+                    if (pvCovers(pvIx(ix, me, 0), pvIx(ix, me, 1), pvIx(ix, me, 2), pvIx(ix, me, 3), pvIx(ix, r, 4), pvIx(ix, r, 5), pvIx(ix, r, 6), pvIx(ix, r, 7)) == 1) {
                         rx1 = rx0 - 1;
                     }
                 }
                 if (pvHit(x0, y0, x1, y1, rx0, ry0, rx1, ry1) == 1) {
                     found = 1;
                     zp = Evidence.paGet(pa, r, Evidence.pfZ());
-                    if ((pvOpaqueRect(pa, mk, r) == 1) && (pvCovers(rx0, ry0, rx1, ry1, x0, y0, x1, y1) == 1)) {
+                    if ((pvIx(ix, r, 8) == 1) && (pvCovers(rx0, ry0, rx1, ry1, x0, y0, x1, y1) == 1)) {
                         res = Evidence.paGet(pa, r, Evidence.pfFill());
                     } else {
                         res = -2;
                     }
                 }
             }
-            r -= 1;
-            steps += 1;
+            if (r > p0) {
+                r = pvIx(ix, r - 1, 10);
+            } else {
+                r = -1;
+            }
         }
         // The nearest earlier image that touches the cell.
         r = ji - 1;
@@ -292,21 +339,26 @@ public final class Pdfvis {
         }
         return res;
     }
-    public static int pvOccluder(emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells mk, int x0, int y0, int x1, int y1, int jp, int ji, int p1, int i1, int lim) {
+    public static int pvOccluder(emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells mk, emon.Port.Cells ix, int x0, int y0, int x1, int y1, int jp, int ji, int p1, int i1, int lim) {
         // The `z` of the first later paint that is opaque, exactly known and covers the whole box, else -1. Paths
         // are searched forwards from row jp to p1, images from ji to i1.
         int r = jp;
         int steps = 0;
         int zp = -1;
         int zi = -1;
-        while ((r < p1) && ((steps < lim) && (zp < 0))) {
-            if (pvOpaqueRect(pa, mk, r) == 1) {
-                if (pvCovers(pvPathK(pa, r, 0), pvPathK(pa, r, 1), pvPathK(pa, r, 2), pvPathK(pa, r, 3), x0, y0, x1, y1) == 1) {
+        if (r < p1) {
+            r = pvIx(ix, r, 9);
+        }
+        while ((r < p1) && ((r < (jp + lim)) && (zp < 0))) {
+            if (pvIx(ix, r, 8) == 1) {
+                if (pvCovers(pvIx(ix, r, 0), pvIx(ix, r, 1), pvIx(ix, r, 2), pvIx(ix, r, 3), x0, y0, x1, y1) == 1) {
                     zp = Evidence.paGet(pa, r, Evidence.pfZ());
                 }
             }
             r += 1;
-            steps += 1;
+            if (r < p1) {
+                r = pvIx(ix, r, 9);
+            }
         }
         r = ji;
         steps = 0;
@@ -337,7 +389,7 @@ public final class Pdfvis {
         }
         return chk + bt;
     }
-    public static int pvGlyph(emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells pa, emon.Port.Cells im, int pw, int ph, int g, int jp, int ji, int p0, int i0, int p1, int i1) {
+    public static int pvGlyph(emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells ix, int pw, int ph, int g, int jp, int ji, int p0, int i0, int p1, int i1) {
         // Classify glyph g: see the header. jp and ji are the first path and image rows painted after it.
         int gx0 = Evidence.glGet(gl, g, Evidence.chX0());
         int gy0 = Evidence.glGet(gl, g, Evidence.chY0());
@@ -385,7 +437,7 @@ public final class Pdfvis {
         // 3. the ink against what is behind it (only for glyphs that paint).
         if ((vis == 0) && ((pvPainted(mode, 0) == 1) || (pvPainted(mode, 1) == 1))) {
             chk = pvBit(chk, Evidence.vcWhite());
-            back = pvBackdrop(pa, im, mk, vx0, vy0, vx1, vy1, gz, jp, ji, p0, i0, -1, PV_SCAN);
+            back = pvBackdrop(pa, im, mk, ix, vx0, vy0, vx1, vy1, gz, jp, ji, p0, i0, -1, PV_SCAN);
             if (back >= 0) {
                 npaint = 0;
                 nsame = 0;
@@ -419,7 +471,7 @@ public final class Pdfvis {
         if ((vis == 0) && ((pvPainted(mode, 0) == 1) || (pvPainted(mode, 1) == 1))) {
             chk = pvBit(chk, Evidence.vcOcclusion());
             if ((vx0 < vx1) && (vy0 < vy1)) {
-                occ = pvOccluder(pa, im, mk, vx0, vy0, vx1, vy1, jp, ji, p1, i1, PV_SCAN);
+                occ = pvOccluder(pa, im, mk, ix, vx0, vy0, vx1, vy1, jp, ji, p1, i1, PV_SCAN);
                 if (occ >= 0) {
                     vis = Evidence.vzOccluded();
                     vby = occ;
@@ -459,7 +511,7 @@ public final class Pdfvis {
         Evidence.glSet(gl, g, Evidence.gfVchk(), chk);
         return 0;
     }
-    public static int pvImage(emon.Port.Cells mk, emon.Port.Cells pa, emon.Port.Cells im, int pw, int ph, int r, int jp, int ji, int p1, int i1) {
+    public static int pvImage(emon.Port.Cells mk, emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells ix, int pw, int ph, int r, int jp, int ji, int p1, int i1) {
         // Classify image row r by the same checks that apply to a thing that is painted whole: clip, offpage, empty
         // (a box with no area, the image's zero-size), a later opaque cover, optional content, alpha 0.
         int x0 = Evidence.imGet(im, r, Evidence.mfX0());
@@ -505,7 +557,7 @@ public final class Pdfvis {
         if (vis == 0) {
             chk = pvBit(chk, Evidence.vcOcclusion());
             if ((vx0 < vx1) && (vy0 < vy1)) {
-                occ = pvOccluder(pa, im, mk, vx0, vy0, vx1, vy1, jp, ji, p1, i1, PV_SCAN);
+                occ = pvOccluder(pa, im, mk, ix, vx0, vy0, vx1, vy1, jp, ji, p1, i1, PV_SCAN);
                 if (occ >= 0) {
                     vis = Evidence.vzOccluded();
                     vby = occ;
@@ -539,7 +591,7 @@ public final class Pdfvis {
         }
         return 0;
     }
-    public static int pvPath(emon.Port.Cells mk, emon.Port.Cells pa, emon.Port.Cells im, int pw, int ph, int r, int ji, int p0, int i0, int p1, int i1) {
+    public static int pvPath(emon.Port.Cells mk, emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells ix, int pw, int ph, int r, int ji, int p0, int i0, int p1, int i1) {
         // Classify path row r (see the section header). ji is the first image row painted after it.
         int fl = Evidence.paGet(pa, r, Evidence.pfFlags());
         int x0 = Evidence.paGet(pa, r, Evidence.pfX0());
@@ -608,7 +660,7 @@ public final class Pdfvis {
         }
         if (vis == 0) {
             chk = pvBit(chk, Evidence.vcWhite());
-            back = pvBackdrop(pa, im, mk, vx0 - gx, vy0 - gy, vx1 + gx, vy1 + gy, z, r, ji, p0, i0, r, lim);
+            back = pvBackdrop(pa, im, mk, ix, vx0 - gx, vy0 - gy, vx1 + gx, vy1 + gy, z, r, ji, p0, i0, r, lim);
             if (back >= 0) {
                 bout = back;
                 if (filled == 1) {
@@ -644,7 +696,7 @@ public final class Pdfvis {
         // 5. a later opaque paint over the whole region.
         if (vis == 0) {
             chk = pvBit(chk, Evidence.vcOcclusion());
-            occ = pvOccluder(pa, im, mk, vx0, vy0, vx1, vy1, r + 1, ji, p1, i1, lim);
+            occ = pvOccluder(pa, im, mk, ix, vx0, vy0, vx1, vy1, r + 1, ji, p1, i1, lim);
             if (occ >= 0) {
                 vis = Evidence.vzOccluded();
                 vby = occ;
@@ -684,7 +736,7 @@ public final class Pdfvis {
         Evidence.paSet(pa, r, Evidence.pfBackdrop(), bout);
         return 0;
     }
-    public static int pvPage(emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells pa, emon.Port.Cells im, int pw, int ph, int g0, int p0, int i0) {
+    public static int pvPage(emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells ix, int pw, int ph, int g0, int p0, int i0) {
         // Classify the glyphs from row g0, and the images from row i0, of the page whose paths start at row p0 and
         // whose size (the crop box in page space) is pw by ph centipoints. Rows are in paint order, so for each
         // object the first path and image row painted after it only moves forward.
@@ -698,6 +750,7 @@ public final class Pdfvis {
         int ig = i0;
         int rp = p0;
         int fl = 0;
+        pvIndex(pa, mk, ix, p0, p1);
         while (g < g1) {
             gz = Evidence.glGet(gl, g, Evidence.gfZ());
             while ((jp < p1) && ((Evidence.paGet(pa, jp, Evidence.pfZ()) < 0) || (Evidence.paGet(pa, jp, Evidence.pfZ()) < gz))) {
@@ -706,7 +759,7 @@ public final class Pdfvis {
             while ((ji < i1) && (Evidence.imGet(im, ji, Evidence.mfZ()) < gz)) {
                 ji += 1;
             }
-            pvGlyph(gl, mk, pa, im, pw, ph, g, jp, ji, p0, i0, p1, i1);
+            pvGlyph(gl, mk, pa, im, ix, pw, ph, g, jp, ji, p0, i0, p1, i1);
             g += 1;
         }
         jp = p0;
@@ -716,7 +769,7 @@ public final class Pdfvis {
                 jp += 1;
             }
             ji = ig + 1;
-            pvImage(mk, pa, im, pw, ph, ig, jp, ji, p1, i1);
+            pvImage(mk, pa, im, ix, pw, ph, ig, jp, ji, p1, i1);
             ig += 1;
         }
         // The paths: a clip and a shading are not classified (their `vchk` stays 0).
@@ -728,7 +781,7 @@ public final class Pdfvis {
                 while ((ji < i1) && (Evidence.imGet(im, ji, Evidence.mfZ()) < gz)) {
                     ji += 1;
                 }
-                pvPath(mk, pa, im, pw, ph, rp, ji, p0, i0, p1, i1);
+                pvPath(mk, pa, im, ix, pw, ph, rp, ji, p0, i0, p1, i1);
             }
             rp += 1;
         }

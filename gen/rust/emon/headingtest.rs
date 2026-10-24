@@ -82,7 +82,7 @@ pub(crate) fn ht_pa(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et
     let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
     // The lines' copy, and no initials in it: these laws read hand-made evidence and the heading analysis has run on `ln`.
     lc_copy(ln, lt);
-    return pa_build(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
+    return pa_build(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, &mut crate::port::Cells::new());
 }
 pub(crate) fn ht_model(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, npages: i32, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells, mut layout: &mut crate::port::Cells, mut hc: &mut crate::port::Cells, mut ord: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut fr: &mut crate::port::Cells, mut gp: &mut crate::port::Cells, mut st: &mut crate::port::Cells) -> i32 {
     // The Model of the evidence with the heading analysis in `hc`; answers `model-check`'s verdict.

@@ -202,7 +202,7 @@ public static class Inlinetest {
         Heading.HdAnalyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt);
         Lists.LsAnalyze(wd, ln, et, sf, pa, hc, cd, pi, lws, tw);
         Inline.IlAnalyze(wd, ln, et, gl, ift, sf, an, txt, pg, pages, 1, text, hc, sw);
-        Para.PaBuild(wd, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp2, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr2, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
+        Para.PaBuild(wd, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp2, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr2, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.NewCells());
         return Inline.IlLinks(hc);
     }
     internal static int ItFind(emon.Port.Cells nodes, int kind, int nth) {

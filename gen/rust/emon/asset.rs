@@ -1114,6 +1114,36 @@ pub(crate) fn as_in_table(nodes: &mut crate::port::Cells, regions: &mut crate::p
     }
     return 0;
 }
+pub(crate) fn as_figure_before(cand: &mut crate::port::Cells, a: i32, b: i32) -> i32 {
+    let ap: i32 = as_get(cand, a, AC_PAGE);
+    let bp: i32 = as_get(cand, b, AC_PAGE);
+    let ay: i32 = as_get(cand, a, AC_VX0 + 1);
+    let by: i32 = as_get(cand, b, AC_VX0 + 1);
+    let ax: i32 = as_get(cand, a, AC_VX0);
+    let bx: i32 = as_get(cand, b, AC_VX0);
+    if ap != bp {
+        if ap < bp {
+            return 1;
+        }
+        return 0;
+    }
+    if ay != by {
+        if ay < by {
+            return 1;
+        }
+        return 0;
+    }
+    if ax != bx {
+        if ax < bx {
+            return 1;
+        }
+        return 0;
+    }
+    if a < b {
+        return 1;
+    }
+    return 0;
+}
 pub fn as_figure_rows(cand: &mut crate::port::Cells, pages: &mut crate::port::Cells, nodes: &mut crate::port::Cells, regions: &mut crate::port::Cells, level: i32, mut fg: &mut crate::port::Cells) -> i32 {
     // The candidates that are provisional `figure`s (SPEC 10.6, until P8.1): not page-sized (under 800 per mille of its
     // page) and both sides of the visible box at least 18 pt. At `figures` (`level` 2) the region candidates (vector art, a
@@ -1126,7 +1156,10 @@ pub fn as_figure_rows(cand: &mut crate::port::Cells, pages: &mut crate::port::Ce
     let mut ph: i32 = 0;
     let mut pgi: i32 = 0;
     let mut cnt: i32 = 0;
-    let mut ins: i32 = 0;
+    let mut h: i32 = 1;
+    let mut v: i32 = 0;
+    let mut u: i32 = 0;
+    let mut more: i32 = 0;
     let mut x0: i32 = 0;
     let mut y0: i32 = 0;
     let mut x1: i32 = 0;
@@ -1143,27 +1176,34 @@ pub fn as_figure_rows(cand: &mut crate::port::Cells, pages: &mut crate::port::Ce
             pw = page_w(pages, pgi);
             ph = page_h(pages, pgi);
             if ((x1 - x0) >= AS_FIGURE_SIDE) && ((y1 - y0) >= AS_FIGURE_SIDE) && (as_ge(as_ia(x0, y0, x1, y1, 0, 0, pw, ph), as_area(0, 0, pw, ph), AS_BIG) == 0) && ((as_get(cand, r, AC_KORI) != AS_REGION) || ((level == 2) && (as_in_table(nodes, regions, as_get(cand, r, AC_PAGE), x0, y0, x1, y1) == 0))) {
-                // insert in order of (page, top, left, row)
-                ins = cnt + 1;
-                j = 1;
-                while j <= cnt {
-                    let q: i32 = crate::port::cells_at(fg, j);
-                    if (ins == (cnt + 1)) && ((as_get(cand, q, AC_PAGE) > as_get(cand, r, AC_PAGE)) || ((as_get(cand, q, AC_PAGE) == as_get(cand, r, AC_PAGE)) && ((as_get(cand, q, AC_VX0 + 1) > y0) || ((as_get(cand, q, AC_VX0 + 1) == y0) && (as_get(cand, q, AC_VX0) > x0))))) {
-                        ins = j;
-                    }
-                    j += 1;
-                }
-                crate::port::cells_push(fg, 0);
-                j = cnt + 1;
-                while j > ins {
-                    crate::port::cells_set(fg, j, crate::port::cells_at(fg, j - 1));
-                    j -= 1;
-                }
-                crate::port::cells_set(fg, ins, r);
+                crate::port::cells_push(fg, r);
                 cnt += 1;
             }
         }
         r += 1;
+    }
+    while h < (cnt / 3) {
+        h = (h * 3) + 1;
+    }
+    while h >= 1 {
+        r = h + 1;
+        while r <= cnt {
+            v = crate::port::cells_at(fg, r);
+            j = r;
+            more = 1;
+            while (j > h) && (more == 1) {
+                u = crate::port::cells_at(fg, j - h);
+                if as_figure_before(cand, v, u) == 1 {
+                    crate::port::cells_set(fg, j, u);
+                    j -= h;
+                } else {
+                    more = 0;
+                }
+            }
+            crate::port::cells_set(fg, j, v);
+            r += 1;
+        }
+        h = (h - 1) / 3;
     }
     return cnt;
 }

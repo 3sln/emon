@@ -156,7 +156,7 @@
         ^Cells al (new-cells)
         ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^Cells tq (new-cells) ^Cells ledger (new-cells)]
     (return (pa-build wd et npages pages layout nodes attrs regions text ord raw tmp fr gp
-                      lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al))))
+                      lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al (new-cells)))))
 
 (defn ^I32 pt-dump [^Cells wd ^Cells ln ^Cells et ^I32 npages ^:mut ^Text t]
   (comment "`pa-build` over the evidence on a fresh Model and the stage's debug lines (`pa-dump`) in t.")
@@ -175,7 +175,7 @@
           (set p (+ p 1))))
     (pt-prep wd ln et npages g0 f0 lt ii)
     (pa-build wd et npages pages layout nodes attrs regions text ord raw tmp fr gp
-              lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al)
+              lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al (new-cells))
     (pa-dump t cf dbg)
     (return 0)))
 

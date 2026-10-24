@@ -855,17 +855,65 @@ public static class Pdfcontent {
         }
         return PcDictLookup(ar, sub, ox, ns, nl);
     }
-    internal static int PcFLoad(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells @out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, int slot, int fh) {
+    internal const int FcacheCells = 1048576;
+    public static int PcFCached(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells f, emon.Port.Cells @out, int @object, int fh) {
+        // Parsed fonts after C_SIZE in cx: object number, resolved handle, length, decoded-byte charge, then loader cells.
+        // Only complete successful loads of indirect fonts are admitted. Direct fonts and a full cache use the normal loader.
+        int before = Pdfdoc.PdTotalUsed(dc);
+        int r = CSize;
+        int n = 0;
+        int j = 0;
+        int v = 0;
+        int status = 0;
+        int charge = 0;
+        if (@object > 0) {
+            while (r < emon.Port.CellsLen(cx)) {
+                n = emon.Port.CellsAt(cx, r + 2);
+                if ((emon.Port.CellsAt(cx, r) == @object) && (emon.Port.CellsAt(cx, r + 1) == fh)) {
+                    charge = emon.Port.CellsAt(cx, r + 3);
+                    // Near the limit, run the original loader so the first breaching stream and reported byte count stay exact.
+                    if (!Pdfsrc.PsMissed(src) && (charge <= (emon.Port.LimitOf(2) - before))) {
+                        Pdfdoc.PdTotalAdd(dc, charge);
+                        emon.Port.CellsDrop(f, 0);
+                        while (j < n) {
+                            emon.Port.CellsPush(f, emon.Port.CellsAt(cx, (r + 4) + j));
+                            j += 1;
+                        }
+                        return 0;
+                    }
+                }
+                r += 4 + n;
+            }
+        }
+        status = Pdffont.PfnLoad(src, ar, dc, a, b, st, f, @out, fh);
+        n = emon.Port.CellsLen(f);
+        if ((@object > 0) && ((status == 0) && (!Pdfsrc.PsMissed(src) && ((emon.Port.CellsLen(cx) + (4 + n)) <= (CSize + FcacheCells))))) {
+            emon.Port.CellsPush(cx, @object);
+            emon.Port.CellsPush(cx, fh);
+            emon.Port.CellsPush(cx, n);
+            charge = Pdfdoc.PdTotalUsed(dc) - before;
+            emon.Port.CellsPush(cx, charge);
+            j = 0;
+            while (j < n) {
+                v = emon.Port.CellsAt(f, j);
+                emon.Port.CellsPush(cx, v);
+                j += 1;
+            }
+        }
+        return status;
+    }
+    internal static int PcFLoad(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells @out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, int slot, int fh) {
+        int @object = emon.Port.CellsAt(cx, CCur + GFobj);
         if (slot == 0) {
-            return Pdffont.PfnLoad(src, ar, dc, a, b, st, f0, @out, fh);
+            return PcFCached(src, ar, dc, a, b, st, cx, f0, @out, @object, fh);
         }
         if (slot == 1) {
-            return Pdffont.PfnLoad(src, ar, dc, a, b, st, f1, @out, fh);
+            return PcFCached(src, ar, dc, a, b, st, cx, f1, @out, @object, fh);
         }
         if (slot == 2) {
-            return Pdffont.PfnLoad(src, ar, dc, a, b, st, f2, @out, fh);
+            return PcFCached(src, ar, dc, a, b, st, cx, f2, @out, @object, fh);
         }
-        return Pdffont.PfnLoad(src, ar, dc, a, b, st, f3, @out, fh);
+        return PcFCached(src, ar, dc, a, b, st, cx, f3, @out, @object, fh);
     }
     internal static int PcFQ(emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, int slot, int which) {
         // A font's metric: which 0 ascent, 1 descent, 2 vertical, 3 DW2 v, 4 DW2 w.
@@ -1198,7 +1246,7 @@ public static class Pdfcontent {
             i += 1;
         }
         at = CSlots + (pick * SlotStride);
-        status = PcFLoad(src, ar, dc, a, b, st, @out, f0, f1, f2, f3, pick, key);
+        status = PcFLoad(src, ar, dc, a, b, st, cx, @out, f0, f1, f2, f3, pick, key);
         if (Pdfsrc.PsMissed(src)) {
             emon.Port.CellsSet(cx, CAbort, 1);
             emon.Port.CellsSet(cx, at + SKey, 0);
@@ -4843,7 +4891,7 @@ public static class Pdfcontent {
         }
         // The path in progress when the page ended never painted: its points are dropped.
         emon.Port.CellsDrop(pts, emon.Port.CellsAt(cx, CPpts) * 3);
-        Pdfvis.PvPage(gl, mk, pa, im, emon.Port.CellsAt(cx, CPw), emon.Port.CellsAt(cx, CPh), g0, p0, i0);
+        Pdfvis.PvPage(gl, mk, pa, im, @out, emon.Port.CellsAt(cx, CPw), emon.Port.CellsAt(cx, CPh), g0, p0, i0);
         PcGroup(gl, et, wd, ln, fnt, page, g0, w0);
         return 0;
     }

@@ -149,7 +149,7 @@ pub(crate) fn pt_build(wd: &mut crate::port::Cells, et: &mut crate::port::Cells,
     let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let tq: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    return pa_build(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
+    return pa_build(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, &mut crate::port::Cells::new());
 }
 pub(crate) fn pt_dump(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, npages: i32, mut t: &mut String) -> i32 {
     // `pa-build` over the evidence on a fresh Model and the stage's debug lines (`pa-dump`) in t.
@@ -194,7 +194,7 @@ pub(crate) fn pt_dump(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, 
         p += 1;
     }
     pt_prep(wd, ln, et, npages, g0, f0, lt, ii);
-    pa_build(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
+    pa_build(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, &mut crate::port::Cells::new());
     pa_dump(t, cf, dbg);
     return 0;
 }

@@ -285,8 +285,8 @@ public static class Initial {
     internal static int InCollect(emon.Port.Cells wd, emon.Port.Cells lt, int page, emon.Port.Cells sc, emon.Port.Cells tm) {
         // The page's upright lines that have words into `sc` (rows of `lt`, as far as `ln-count` of the lines
         // that existed when detection began: the caller passes it as `n`), their sizes into `tm`.
-        int n = emon.Port.CellsLen(lt) / 16;
-        int l = 0;
+        int n = Pagebounds.PbAfter(lt, 16, page);
+        int l = Pagebounds.PbFirst(lt, 16, page);
         emon.Port.CellsDrop(sc, 0);
         emon.Port.CellsDrop(tm, 0);
         while (l < n) {

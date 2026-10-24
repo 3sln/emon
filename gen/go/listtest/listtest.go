@@ -355,7 +355,8 @@ func ltNotes(wd *port.Cells, ln *port.Cells, et *port.Cells, sf *port.Cells, sc 
 	var mk *port.Cells = port.NewCells()
 	var tw *port.Cells = port.NewCells()
 	heading.HdAnalyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt)
-	return notes.NtAnalyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw)
+	var nix *port.Cells = port.NewCells()
+	return notes.NtAnalyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw, nix)
 }
 
 func TestALineOfRunningTextThatBeginsFig4IsNoCaption(emonT *testing.T) {
@@ -416,7 +417,8 @@ func ltNotesPages(wd *port.Cells, ln *port.Cells, et *port.Cells, sf *port.Cells
 	var tw *port.Cells = port.NewCells()
 	model.PageNew(pages, 1, 61200, 79200, 0, model.PkVector())
 	heading.HdAnalyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt)
-	return notes.NtAnalyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw)
+	var nix *port.Cells = port.NewCells()
+	return notes.NtAnalyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw, nix)
 }
 
 func ltNotesGlyphs(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, sf *port.Cells, sc *port.Cells, hc *port.Cells) int32 {
@@ -432,7 +434,8 @@ func ltNotesGlyphs(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cell
 	var tw *port.Cells = port.NewCells()
 	model.PageNew(pages, 1, 61200, 79200, 0, model.PkVector())
 	heading.HdAnalyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt)
-	return notes.NtAnalyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw)
+	var nix *port.Cells = port.NewCells()
+	return notes.NtAnalyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw, nix)
 }
 
 func TestAFootnotesRaisedMarkerGluedToItsWordIsAMarker(emonT *testing.T) {

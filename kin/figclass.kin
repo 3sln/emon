@@ -26,7 +26,8 @@
 ;; A region that is covered with lines of prose (a text box, a sidebar, a background), that is a seal (rings drawn one in another), or a lattice of
 ;; rules with no axes (a table) is NOT a figure. A region with no caption is a figure only when what it is is clear (confidence at least 500).
 (ns emon.figclass
-  (:require [emon.lang :refer [I32 I64 Src Cells i64 i32 mul64 add64]]
+  (:require [emon.pagebounds :refer [pb-first pb-after]]
+            [emon.lang :refer [I32 I64 Src Cells i64 i32 mul64 add64]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
             [emon.model :refer [node-count node-kind node-aux node-region-head node-region-count region-page region-x0 region-y0 region-x1 region-y1
                                 region-next page-count page-w page-h nk-caption fg-chart fg-diagram fg-photo fg-logo fg-map fg-illustration
@@ -844,6 +845,7 @@
   (comment "budget of rows (`FC_WORK`) is spent and the region was left unmeasured.")
   (let [^I32 work (cells-at ws FT_WORK)
         ^I32 n (quot (cells-len pa) 24)
+        ^I32 pend (pb-after pa 24 page)
         ^I32 ng (grl-count grl)
         ^I32 rw (- rx1 rx0)
         ^I32 rh (- ry1 ry0)
@@ -857,8 +859,8 @@
     (cells-set ws FT_WORK work)
     (if (> work FC_WORK) (return 1))
     (cells-set ws FT_WORK (+ work (+ n (+ ng (+ (wd-count fw) (ln-count fl))))))
-    (set i 0)
-    (while (< i n)
+    (set i (pb-first pa 24 page))
+    (while (< i pend)
       (do (if (and (== (pa-get pa i (pf-page)) page) (and (== (pa-get pa i (pf-vis)) 0)
                    (== (bit-and (pa-get pa i (pf-flags)) (pg-clip)) 0)))
             (do (set cx (quot (+ (pa-get pa i (pf-x0)) (pa-get pa i (pf-x1))) 2))
@@ -932,7 +934,8 @@
         ^I32 w (- (cells-at fcand (+ b (+ CR_VX 2))) x0)
         ^I32 h (- (cells-at fcand (+ b (+ CR_VX 3))) y0)
         ^I32 n (quot (cells-len pa) 24)
-        ^:mut ^I32 i 0
+        ^I32 pend (pb-after pa 24 page)
+        ^:mut ^I32 i (pb-first pa 24 page)
         ^:mut ^I32 np 0
         ^:mut ^I32 mask 0
         ^:mut ^I32 cx 0
@@ -941,7 +944,7 @@
         ^:mut ^I32 gy 0
         ^:mut ^I32 bit 0]
     (if (or (<= w 0) (<= h 0)) (return 0))
-    (while (< i n)
+    (while (< i pend)
       (do (if (and (== (pa-get pa i (pf-page)) page) (and (== (pa-get pa i (pf-vis)) 0)
                    (== (bit-and (pa-get pa i (pf-flags)) (pg-clip)) 0)))
             (do (set cx (quot (+ (pa-get pa i (pf-x0)) (pa-get pa i (pf-x1))) 2))
@@ -1223,8 +1226,8 @@
   (comment "1 when a table has claimed the text of the region (D557): of the lines on the page whose centre is in it, at least one and at least")
   (comment "half are a table's (cell 15 of a line a table holds is `FC_HELD` and up, `emon.table`'s TB_HELD). A shaded header cell with its words and")
   (comment "a rule under it, or a table's fills and rules, look like a diagram's boxes and a connector; the words are the table's, and so is the drawing.")
-  (let [^I32 n (ln-count fl)
-        ^:mut ^I32 l 0
+  (let [^I32 n (pb-after fl 16 page)
+        ^:mut ^I32 l (pb-first fl 16 page)
         ^:mut ^I32 total 0
         ^:mut ^I32 held 0
         ^:mut ^I32 cx 0

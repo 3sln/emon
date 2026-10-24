@@ -852,7 +852,10 @@
     (if (ps-missed src) (return 12))
     (return status)))
 
-(defn ^I32 pd-total-add [^:mut ^Cells dc ^I32 n]
+(defn ^:pub ^I32 pd-total-used [^Cells dc]
+  (return (cells-at dc D_TOTB)))
+
+(defn ^:pub ^I32 pd-total-add [^:mut ^Cells dc ^I32 n]
   (comment "The `total-bytes` limit (SPEC 7.4, the zip-bomb bound): the decoded bytes of every stream this unit has read through `pd-stream-data`,")
   (comment "summed. A sum past the limit is a breach (never returns); the count is saturated at 2^31 - 1 so that the sum itself cannot overflow.")
   (let [^I32 have (cells-at dc D_TOTB)

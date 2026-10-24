@@ -12256,6 +12256,24 @@ The synthetic long receipt prints page numbers that its gold does not label. Its
 
 Three initially absent shards were reported immediately: `katanaml-invoices` (F03/F15), `fintabnet-otsl` (F08), and `ctdar-test` (F19). They became available in the shared corpus during the run; this task fetched and pruned nothing. All 15 named word controls, using the established batch 11 excerpts, and the full 152-page Berkshire control pass with zero words lost or gained and identical body/furniture text. All final gates pass, with 1,156 laws on each of Rust, Go, Java and C#. The final RC2 report records the full scope, metrics and local packaging limitations. The coordinator commits; this worktree makes no commits.
 
+### D701 — Cache path geometry and visibility scan links per page
+
+`pdfvis` computes each path's clipped fill box, full paint box and opaque-known-rectangle bit once into the content interpreter's decoded-stream scratch after interpretation finishes. Forward links visit only opaque rectangles; backward links visit filled non-clip paints, including uncertain paints that can make a backdrop unknown. Both retain the original row bounds and first-hit order. The index is page-local and is rebuilt before classifying glyphs, images and paths. Two laws compare against the original scans and check the exclusive forward and inclusive backward bounds explicitly.
+
+- [ ] **Signed off** (maintainer)
+
+### D702 — Retain bounded parsed fonts across slot evictions
+
+The content interpreter keeps successful indirect-font parse results after its fixed workspace, keyed by font object number with the resolved dictionary handle checked as well. The four working slots and their LRU policy remain intact. A cache hit restores every loader cell; direct fonts, failures, incomplete reads and fonts beyond the 1,048,576-cell (4 MiB) cache cap use the ordinary loader. `pc-init` clears the cache for a new document. Hits retain the original decoded-byte budget charge; near that limit they use the original loader so its first breaching stream and reported count stay identical. A law loads six distinct fonts through a single working buffer, then compares every restored cell, mapping and width against fresh loads.
+
+- [ ] **Signed off** (maintainer)
+
+### D703 — Restrict arena scans to page ranges and matching note rows
+
+Page bounds over the ordered evidence arenas skip the `-7`/`0` tombstones left by furniture and initials while retaining the original page predicate and row order. Paragraph collection precomputes original-line ranges and records separate column-piece ranges as they are appended. Initial collection, traced-text features, figure path measurement/signatures and claimed lines, note size checks and continued-table line checks use these ranges. OCR feature extraction computes a page's component offsets once and shares them across its words. Caption suppression visits only candidate rows, and note repetition lazily builds a digit-normalized shape index, ordered by hash then original row; every hit still runs the original exact comparison. Figure candidates are collected once and Shell-sorted by the original total key `(page, top, left, row)`.
+
+The figure budgets are unchanged: `fc-measure` still charges whole-arena lengths, and `fc-sign-vector` returns the original whole-arena work charge. FC_MAXREG, FC_WORK and the signature budget retain their existing admission cliffs. Four page-index laws cover holes, empty ranges, missing pages, zero-based trace fixtures, unordered fixture rows and column pieces appended after the original lines.
+
 - [ ] **Signed off** (maintainer)
 
 ### D704 — Receipt classification uses pixels of the original decode

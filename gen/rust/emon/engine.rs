@@ -355,12 +355,12 @@ pub(crate) fn en_stage3(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::en
     in_detect(&mut d.fw, &mut d.gl, &mut d.fnt, &mut d.et, np, &mut s.iloc, &mut s.lt, &mut s.ls, &mut s.lo, &mut s.tm, &mut s.ii);
     hd_prior_outline(&mut d.ol, &mut d.txt, &mut s.hpr, &mut s.hptxt);
     hd_analyze(&mut d.fw, &mut s.lt, &mut d.et, &mut d.gl, &mut s.sf, &mut s.hsc, &mut s.hc, &mut s.ws, &mut s.htmp, &mut s.hpr, &mut s.hptxt);
-    nt_analyze(&mut d.fw, &mut s.lt, &mut d.et, &mut d.gl, &mut s.sf, &mut s.hsc, &mut m.pages, &mut s.hc, &mut s.nrf, &mut s.nnb, &mut s.nmk, &mut s.tw);
+    nt_analyze(&mut d.fw, &mut s.lt, &mut d.et, &mut d.gl, &mut s.sf, &mut s.hsc, &mut m.pages, &mut s.hc, &mut s.nrf, &mut s.nnb, &mut s.nmk, &mut s.tw, &mut s.nix);
     ls_analyze(&mut d.fw, &mut s.lt, &mut d.et, &mut s.sf, &mut d.pa, &mut s.hc, &mut s.lcd, &mut s.lpi, &mut s.lws, &mut s.tw);
     if kind == 0 {
         il_analyze(&mut d.fw, &mut s.lt, &mut d.et, &mut d.gl, &mut d.ift, &mut s.sf, &mut d.an, &mut d.txt, &mut d.pg, &mut m.pages, np, &mut m.text, &mut s.hc, &mut s.isw);
     }
-    pa_build(&mut d.fw, &mut d.et, np, &mut m.pages, &mut m.layout, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut s.ord, &mut s.raw, &mut s.tmp, &mut s.fr, &mut s.gp, &mut s.lt, &mut s.ls, &mut s.sd, &mut s.it, &mut s.io, &mut s.rw, &mut s.gu, &mut s.ac, &mut s.tm, &mut s.cf, &mut s.lo, &mut s.pr, &mut s.dbg, &mut s.hc, &mut s.tb, &mut s.tc, &mut s.tw, &mut s.tq, &mut m.ledger, &mut s.ii, &mut s.al);
+    pa_build(&mut d.fw, &mut d.et, np, &mut m.pages, &mut m.layout, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut s.ord, &mut s.raw, &mut s.tmp, &mut s.fr, &mut s.gp, &mut s.lt, &mut s.ls, &mut s.sd, &mut s.it, &mut s.io, &mut s.rw, &mut s.gu, &mut s.ac, &mut s.tm, &mut s.cf, &mut s.lo, &mut s.pr, &mut s.dbg, &mut s.hc, &mut s.tb, &mut s.tc, &mut s.tw, &mut s.tq, &mut m.ledger, &mut s.ii, &mut s.al, &mut s.pix);
     if kind == 0 {
         en_figures(m, s, d, c.level);
     }

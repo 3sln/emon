@@ -348,7 +348,7 @@ pub(crate) fn tt_run_an(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells
         return 7;
     }
     lc_copy(ln, lt);
-    pa_build(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
+    pa_build(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, &mut crate::port::Cells::new());
     tt_brief(t, nodes, attrs, text);
     return model_check(nodes, attrs, regions, text, pages, ledger, layout, st);
 }
@@ -2099,7 +2099,7 @@ pub(crate) fn tt_golden(pdf: &[u8], mut t: &mut String, mut tvt: &mut String) ->
     lc_copy(ln, lt);
     in_detect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii);
     hd_analyze(wd, lt, et, gl, sf, sc, hc, ws, htmp, hpr, hptxt);
-    pa_build(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
+    pa_build(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, &mut crate::port::Cells::new());
     if model_check(nodes, attrs, regions, text, pages, ledger, layout, st) != 0 {
         return 3;
     }

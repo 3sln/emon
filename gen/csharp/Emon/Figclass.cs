@@ -963,6 +963,7 @@ public static class Figclass {
         // budget of rows (`FC_WORK`) is spent and the region was left unmeasured.
         int work = emon.Port.CellsAt(ws, FtWork);
         int n = emon.Port.CellsLen(pa) / 24;
+        int pend = Pagebounds.PbAfter(pa, 24, page);
         int ng = Glayer.GrlCount(grl);
         int rw = rx1 - rx0;
         int rh = ry1 - ry0;
@@ -979,8 +980,8 @@ public static class Figclass {
             return 1;
         }
         emon.Port.CellsSet(ws, FtWork, work + (n + (ng + (Evidence.WdCount(fw) + Evidence.LnCount(fl)))));
-        i = 0;
-        while (i < n) {
+        i = Pagebounds.PbFirst(pa, 24, page);
+        while (i < pend) {
             if ((Evidence.PaGet(pa, i, Evidence.PfPage()) == page) && ((Evidence.PaGet(pa, i, Evidence.PfVis()) == 0) && ((Evidence.PaGet(pa, i, Evidence.PfFlags()) & Evidence.PgClip()) == 0))) {
                 cx = (Evidence.PaGet(pa, i, Evidence.PfX0()) + Evidence.PaGet(pa, i, Evidence.PfX1())) / 2;
                 cy = (Evidence.PaGet(pa, i, Evidence.PfY0()) + Evidence.PaGet(pa, i, Evidence.PfY1())) / 2;
@@ -1070,7 +1071,8 @@ public static class Figclass {
         int w = emon.Port.CellsAt(fcand, b + (CrVx + 2)) - x0;
         int h = emon.Port.CellsAt(fcand, b + (CrVx + 3)) - y0;
         int n = emon.Port.CellsLen(pa) / 24;
-        int i = 0;
+        int pend = Pagebounds.PbAfter(pa, 24, page);
+        int i = Pagebounds.PbFirst(pa, 24, page);
         int np = 0;
         int mask = 0;
         int cx = 0;
@@ -1081,7 +1083,7 @@ public static class Figclass {
         if ((w <= 0) || (h <= 0)) {
             return 0;
         }
-        while (i < n) {
+        while (i < pend) {
             if ((Evidence.PaGet(pa, i, Evidence.PfPage()) == page) && ((Evidence.PaGet(pa, i, Evidence.PfVis()) == 0) && ((Evidence.PaGet(pa, i, Evidence.PfFlags()) & Evidence.PgClip()) == 0))) {
                 cx = (Evidence.PaGet(pa, i, Evidence.PfX0()) + Evidence.PaGet(pa, i, Evidence.PfX1())) / 2;
                 cy = (Evidence.PaGet(pa, i, Evidence.PfY0()) + Evidence.PaGet(pa, i, Evidence.PfY1())) / 2;
@@ -1456,8 +1458,8 @@ public static class Figclass {
         // 1 when a table has claimed the text of the region (D557): of the lines on the page whose centre is in it, at least one and at least
         // half are a table's (cell 15 of a line a table holds is `FC_HELD` and up, `emon.table`'s TB_HELD). A shaded header cell with its words and
         // a rule under it, or a table's fills and rules, look like a diagram's boxes and a connector; the words are the table's, and so is the drawing.
-        int n = Evidence.LnCount(fl);
-        int l = 0;
+        int n = Pagebounds.PbAfter(fl, 16, page);
+        int l = Pagebounds.PbFirst(fl, 16, page);
         int total = 0;
         int held = 0;
         int cx = 0;

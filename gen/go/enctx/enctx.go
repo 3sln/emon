@@ -699,6 +699,8 @@ type Scratch struct {
 	Nrf      *port.Cells
 	Nnb      *port.Cells
 	Nmk      *port.Cells
+	Nix      *port.Cells
+	Pix      *port.Cells
 	Lcd      *port.Cells
 	Lpi      *port.Cells
 	Lws      *port.Cells
@@ -839,6 +841,8 @@ func NewScratch() *Scratch {
 		Nrf:      port.NewCells(),
 		Nnb:      port.NewCells(),
 		Nmk:      port.NewCells(),
+		Nix:      port.NewCells(),
+		Pix:      port.NewCells(),
 		Lcd:      port.NewCells(),
 		Lpi:      port.NewCells(),
 		Lws:      port.NewCells(),
@@ -979,6 +983,8 @@ func (d *Scratch) Clone() *Scratch {
 	port.CellsCopyInto(c.Nrf, d.Nrf)
 	port.CellsCopyInto(c.Nnb, d.Nnb)
 	port.CellsCopyInto(c.Nmk, d.Nmk)
+	port.CellsCopyInto(c.Nix, d.Nix)
+	port.CellsCopyInto(c.Pix, d.Pix)
 	port.CellsCopyInto(c.Lcd, d.Lcd)
 	port.CellsCopyInto(c.Lpi, d.Lpi)
 	port.CellsCopyInto(c.Lws, d.Lws)

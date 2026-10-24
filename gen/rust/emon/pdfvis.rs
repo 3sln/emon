@@ -10,14 +10,14 @@ pub(crate) const PV_TOL: i32 = 4;
 pub(crate) const ZERO_SIZE_CPT: i32 = 100;
 pub(crate) const COVER_SLACK: i32 = 2;
 pub(crate) const PV_BIG: i32 = 2000000000;
-pub(crate) fn pv_hit(x0: i32, y0: i32, x1: i32, y1: i32, bx0: i32, by0: i32, bx1: i32, by1: i32) -> i32 {
+pub fn pv_hit(x0: i32, y0: i32, x1: i32, y1: i32, bx0: i32, by0: i32, bx1: i32, by1: i32) -> i32 {
     // 1 when two boxes overlap with a positive area.
     if (x0 < bx1) && ((bx0 < x1) && ((y0 < by1) && (by0 < y1))) {
         return 1;
     }
     return 0;
 }
-pub(crate) fn pv_covers(ox0: i32, oy0: i32, ox1: i32, oy1: i32, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
+pub fn pv_covers(ox0: i32, oy0: i32, ox1: i32, oy1: i32, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
     // 1 when the outer box contains the inner, within COVER_SLACK.
     if (ox0 <= (x0 + COVER_SLACK)) && ((oy0 <= (y0 + COVER_SLACK)) && ((ox1 >= (x1 - COVER_SLACK)) && (oy1 >= (y1 - COVER_SLACK)))) {
         return 1;
@@ -87,7 +87,7 @@ pub(crate) fn pv_close(p: i32, q: i32) -> i32 {
     }
     return 0;
 }
-pub(crate) fn pv_path_k(mut pa: &mut crate::port::Cells, r: i32, k: i32) -> i32 {
+pub fn pv_path_k(mut pa: &mut crate::port::Cells, r: i32, k: i32) -> i32 {
     // Component k of the region path row r paints, for a rectangle fill: its box (shrunk by half its stroke
     // width when it is also stroked) intersected with the box of its clip.
     let fl: i32 = pa_get(pa, r, pf_flags());
@@ -116,7 +116,7 @@ pub(crate) fn pv_path_k(mut pa: &mut crate::port::Cells, r: i32, k: i32) -> i32 
     }
     return pv_min(v, cv);
 }
-pub(crate) fn pv_img_k(mut im: &mut crate::port::Cells, mut pa: &mut crate::port::Cells, r: i32, k: i32) -> i32 {
+pub fn pv_img_k(mut im: &mut crate::port::Cells, mut pa: &mut crate::port::Cells, r: i32, k: i32) -> i32 {
     // Component k of the region image row r paints: its box intersected with the box of its clip.
     let cl: i32 = im_get(im, r, mf_clip());
     let mut v: i32 = 0;
@@ -139,7 +139,7 @@ pub(crate) fn pv_img_k(mut im: &mut crate::port::Cells, mut pa: &mut crate::port
     }
     return pv_min(v, cv);
 }
-pub(crate) fn pv_opaque_rect(mut pa: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, r: i32) -> i32 {
+pub fn pv_opaque_rect(mut pa: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, r: i32) -> i32 {
     // 1 when path row r is a fill we know completely: not a clip, a rectangle, filled with a known colour at alpha
     // 1 under no blend mode, no soft mask, no pattern and no shading, and not hidden by optional content.
     let fl: i32 = pa_get(pa, r, pf_flags());
@@ -166,7 +166,7 @@ pub(crate) fn pv_opaque_rect(mut pa: &mut crate::port::Cells, mut mk: &mut crate
     }
     return 1;
 }
-pub(crate) fn pv_opaque_img(mut im: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, r: i32) -> i32 {
+pub fn pv_opaque_img(mut im: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, r: i32) -> i32 {
     // 1 when image row r covers its region completely: no stencil mask, no /SMask, no /Mask, alpha 1, no blend,
     // no soft mask, an axis-aligned placement, and not hidden by optional content.
     let fl: i32 = im_get(im, r, mf_flags());
@@ -205,7 +205,7 @@ pub(crate) fn pv_painted(mode: i32, comp: i32) -> i32 {
     }
     return 0;
 }
-pub(crate) fn pv_full_k(mut pa: &mut crate::port::Cells, r: i32, k: i32) -> i32 {
+pub fn pv_full_k(mut pa: &mut crate::port::Cells, r: i32, k: i32) -> i32 {
     // Component k of the region path row r paints in full: its box (the stroke included) intersected with its clip.
     let cl: i32 = pa_get(pa, r, pf_clip());
     let cv: i32 = pv_clip_k(pa, cl, k);
@@ -227,13 +227,54 @@ pub(crate) fn pv_full_k(mut pa: &mut crate::port::Cells, r: i32, k: i32) -> i32 
     }
     return pv_min(v, cv);
 }
-pub(crate) fn pv_backdrop(mut pa: &mut crate::port::Cells, mut im: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, x0: i32, y0: i32, x1: i32, y1: i32, gz: i32, jp: i32, ji: i32, p0: i32, i0: i32, me: i32, lim: i32) -> i32 {
+pub(crate) fn pv_ix(ix: &mut crate::port::Cells, r: i32, f: i32) -> i32 {
+    return crate::port::cells_at(ix, 1 + (((r - crate::port::cells_at(ix, 0)) * 11) + f));
+}
+pub fn pv_index(mut pa: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut ix: &mut crate::port::Cells, p0: i32, p1: i32) -> i32 {
+    let mut r: i32 = p0;
+    let mut k: i32 = 0;
+    let mut prev: i32 = -1;
+    let mut next: i32 = p1;
+    let mut fl: i32 = 0;
+    crate::port::cells_drop(ix, 0);
+    crate::port::cells_push(ix, p0);
+    while r < p1 {
+        k = 0;
+        while k < 4 {
+            crate::port::cells_push(ix, pv_path_k(pa, r, k));
+            k += 1;
+        }
+        k = 0;
+        while k < 4 {
+            crate::port::cells_push(ix, pv_full_k(pa, r, k));
+            k += 1;
+        }
+        crate::port::cells_push(ix, pv_opaque_rect(pa, mk, r));
+        crate::port::cells_push(ix, p1);
+        fl = pa_get(pa, r, pf_flags());
+        if ((fl & pg_clip()) == 0) && ((fl & pg_filled()) != 0) {
+            prev = r;
+        }
+        crate::port::cells_push(ix, prev);
+        r += 1;
+    }
+    r = p1 - 1;
+    while r >= p0 {
+        if pv_ix(ix, r, 8) == 1 {
+            next = r;
+        }
+        crate::port::cells_set(ix, 10 + ((r - p0) * 11), next);
+        r -= 1;
+    }
+    return 0;
+}
+pub fn pv_backdrop(mut pa: &mut crate::port::Cells, mut im: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut ix: &mut crate::port::Cells, x0: i32, y0: i32, x1: i32, y1: i32, gz: i32, jp: i32, ji: i32, p0: i32, i0: i32, me: i32, lim: i32) -> i32 {
     // The colour behind a glyph cell with this box and paint number: 0xRRGGBB, or -2 when it cannot be told. Paths
     // are searched backwards from row jp (the first with a later z), images from row ji. `me` is the path row being
     // classified (-1 for a glyph): an earlier rectangle that this path, itself an exactly known opaque rectangle,
     // covers completely is not what it is painted on, it is painted OVER (a rule drawn twice is one rule: of two paints
     // of the same colour on the same box the later is the ink and the earlier the one it hides, never both hidden).
-    let mut r: i32 = jp - 1;
+    let mut r: i32 = -1;
     let mut steps: i32 = 0;
     let mut zp: i32 = -1;
     let mut res: i32 = 16777215;
@@ -244,30 +285,36 @@ pub(crate) fn pv_backdrop(mut pa: &mut crate::port::Cells, mut im: &mut crate::p
     let mut ry1: i32 = 0;
     let mut zi: i32 = -1;
     let mut found: i32 = 0;
-    while (r >= p0) && ((steps < lim) && (found == 0)) {
+    if jp > p0 {
+        r = pv_ix(ix, jp - 1, 10);
+    }
+    while (r >= p0) && ((r >= (jp - lim)) && (found == 0)) {
         fl = pa_get(pa, r, pf_flags());
         if ((fl & pg_clip()) == 0) && ((fl & pg_filled()) != 0) {
-            rx0 = pv_path_k(pa, r, 0);
-            ry0 = pv_path_k(pa, r, 1);
-            rx1 = pv_path_k(pa, r, 2);
-            ry1 = pv_path_k(pa, r, 3);
-            if (me >= 0) && (pv_opaque_rect(pa, mk, me) == 1) {
-                if pv_covers(pv_path_k(pa, me, 0), pv_path_k(pa, me, 1), pv_path_k(pa, me, 2), pv_path_k(pa, me, 3), pv_full_k(pa, r, 0), pv_full_k(pa, r, 1), pv_full_k(pa, r, 2), pv_full_k(pa, r, 3)) == 1 {
+            rx0 = pv_ix(ix, r, 0);
+            ry0 = pv_ix(ix, r, 1);
+            rx1 = pv_ix(ix, r, 2);
+            ry1 = pv_ix(ix, r, 3);
+            if (me >= 0) && (pv_ix(ix, me, 8) == 1) {
+                if pv_covers(pv_ix(ix, me, 0), pv_ix(ix, me, 1), pv_ix(ix, me, 2), pv_ix(ix, me, 3), pv_ix(ix, r, 4), pv_ix(ix, r, 5), pv_ix(ix, r, 6), pv_ix(ix, r, 7)) == 1 {
                     rx1 = rx0 - 1;
                 }
             }
             if pv_hit(x0, y0, x1, y1, rx0, ry0, rx1, ry1) == 1 {
                 found = 1;
                 zp = pa_get(pa, r, pf_z());
-                if (pv_opaque_rect(pa, mk, r) == 1) && (pv_covers(rx0, ry0, rx1, ry1, x0, y0, x1, y1) == 1) {
+                if (pv_ix(ix, r, 8) == 1) && (pv_covers(rx0, ry0, rx1, ry1, x0, y0, x1, y1) == 1) {
                     res = pa_get(pa, r, pf_fill());
                 } else {
                     res = -2;
                 }
             }
         }
-        r -= 1;
-        steps += 1;
+        if r > p0 {
+            r = pv_ix(ix, r - 1, 10);
+        } else {
+            r = -1;
+        }
     }
     // The nearest earlier image that touches the cell.
     r = ji - 1;
@@ -290,21 +337,26 @@ pub(crate) fn pv_backdrop(mut pa: &mut crate::port::Cells, mut im: &mut crate::p
     }
     return res;
 }
-pub(crate) fn pv_occluder(mut pa: &mut crate::port::Cells, mut im: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, x0: i32, y0: i32, x1: i32, y1: i32, jp: i32, ji: i32, p1: i32, i1: i32, lim: i32) -> i32 {
+pub fn pv_occluder(mut pa: &mut crate::port::Cells, mut im: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut ix: &mut crate::port::Cells, x0: i32, y0: i32, x1: i32, y1: i32, jp: i32, ji: i32, p1: i32, i1: i32, lim: i32) -> i32 {
     // The `z` of the first later paint that is opaque, exactly known and covers the whole box, else -1. Paths
     // are searched forwards from row jp to p1, images from ji to i1.
     let mut r: i32 = jp;
     let mut steps: i32 = 0;
     let mut zp: i32 = -1;
     let mut zi: i32 = -1;
-    while (r < p1) && ((steps < lim) && (zp < 0)) {
-        if pv_opaque_rect(pa, mk, r) == 1 {
-            if pv_covers(pv_path_k(pa, r, 0), pv_path_k(pa, r, 1), pv_path_k(pa, r, 2), pv_path_k(pa, r, 3), x0, y0, x1, y1) == 1 {
+    if r < p1 {
+        r = pv_ix(ix, r, 9);
+    }
+    while (r < p1) && ((r < (jp + lim)) && (zp < 0)) {
+        if pv_ix(ix, r, 8) == 1 {
+            if pv_covers(pv_ix(ix, r, 0), pv_ix(ix, r, 1), pv_ix(ix, r, 2), pv_ix(ix, r, 3), x0, y0, x1, y1) == 1 {
                 zp = pa_get(pa, r, pf_z());
             }
         }
         r += 1;
-        steps += 1;
+        if r < p1 {
+            r = pv_ix(ix, r, 9);
+        }
     }
     r = ji;
     steps = 0;
@@ -335,7 +387,7 @@ pub(crate) fn pv_bit(chk: i32, bt: i32) -> i32 {
     }
     return chk + bt;
 }
-pub(crate) fn pv_glyph(mut gl: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut pa: &mut crate::port::Cells, mut im: &mut crate::port::Cells, pw: i32, ph: i32, g: i32, jp: i32, ji: i32, p0: i32, i0: i32, p1: i32, i1: i32) -> i32 {
+pub(crate) fn pv_glyph(mut gl: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut pa: &mut crate::port::Cells, mut im: &mut crate::port::Cells, mut ix: &mut crate::port::Cells, pw: i32, ph: i32, g: i32, jp: i32, ji: i32, p0: i32, i0: i32, p1: i32, i1: i32) -> i32 {
     // Classify glyph g: see the header. jp and ji are the first path and image rows painted after it.
     let gx0: i32 = gl_get(gl, g, ch_x0());
     let gy0: i32 = gl_get(gl, g, ch_y0());
@@ -383,7 +435,7 @@ pub(crate) fn pv_glyph(mut gl: &mut crate::port::Cells, mut mk: &mut crate::port
     // 3. the ink against what is behind it (only for glyphs that paint).
     if (vis == 0) && ((pv_painted(mode, 0) == 1) || (pv_painted(mode, 1) == 1)) {
         chk = pv_bit(chk, vc_white());
-        back = pv_backdrop(pa, im, mk, vx0, vy0, vx1, vy1, gz, jp, ji, p0, i0, -1, PV_SCAN);
+        back = pv_backdrop(pa, im, mk, ix, vx0, vy0, vx1, vy1, gz, jp, ji, p0, i0, -1, PV_SCAN);
         if back >= 0 {
             npaint = 0;
             nsame = 0;
@@ -417,7 +469,7 @@ pub(crate) fn pv_glyph(mut gl: &mut crate::port::Cells, mut mk: &mut crate::port
     if (vis == 0) && ((pv_painted(mode, 0) == 1) || (pv_painted(mode, 1) == 1)) {
         chk = pv_bit(chk, vc_occlusion());
         if (vx0 < vx1) && (vy0 < vy1) {
-            occ = pv_occluder(pa, im, mk, vx0, vy0, vx1, vy1, jp, ji, p1, i1, PV_SCAN);
+            occ = pv_occluder(pa, im, mk, ix, vx0, vy0, vx1, vy1, jp, ji, p1, i1, PV_SCAN);
             if occ >= 0 {
                 vis = vz_occluded();
                 vby = occ;
@@ -457,7 +509,7 @@ pub(crate) fn pv_glyph(mut gl: &mut crate::port::Cells, mut mk: &mut crate::port
     gl_set(gl, g, gf_vchk(), chk);
     return 0;
 }
-pub(crate) fn pv_image(mut mk: &mut crate::port::Cells, mut pa: &mut crate::port::Cells, mut im: &mut crate::port::Cells, pw: i32, ph: i32, r: i32, jp: i32, ji: i32, p1: i32, i1: i32) -> i32 {
+pub(crate) fn pv_image(mut mk: &mut crate::port::Cells, mut pa: &mut crate::port::Cells, mut im: &mut crate::port::Cells, mut ix: &mut crate::port::Cells, pw: i32, ph: i32, r: i32, jp: i32, ji: i32, p1: i32, i1: i32) -> i32 {
     // Classify image row r by the same checks that apply to a thing that is painted whole: clip, offpage, empty
     // (a box with no area, the image's zero-size), a later opaque cover, optional content, alpha 0.
     let x0: i32 = im_get(im, r, mf_x0());
@@ -503,7 +555,7 @@ pub(crate) fn pv_image(mut mk: &mut crate::port::Cells, mut pa: &mut crate::port
     if vis == 0 {
         chk = pv_bit(chk, vc_occlusion());
         if (vx0 < vx1) && (vy0 < vy1) {
-            occ = pv_occluder(pa, im, mk, vx0, vy0, vx1, vy1, jp, ji, p1, i1, PV_SCAN);
+            occ = pv_occluder(pa, im, mk, ix, vx0, vy0, vx1, vy1, jp, ji, p1, i1, PV_SCAN);
             if occ >= 0 {
                 vis = vz_occluded();
                 vby = occ;
@@ -537,7 +589,7 @@ pub(crate) fn pv_touch(x0: i32, y0: i32, x1: i32, y1: i32, bx0: i32, by0: i32, b
     }
     return 0;
 }
-pub(crate) fn pv_path(mut mk: &mut crate::port::Cells, mut pa: &mut crate::port::Cells, mut im: &mut crate::port::Cells, pw: i32, ph: i32, r: i32, ji: i32, p0: i32, i0: i32, p1: i32, i1: i32) -> i32 {
+pub(crate) fn pv_path(mut mk: &mut crate::port::Cells, mut pa: &mut crate::port::Cells, mut im: &mut crate::port::Cells, mut ix: &mut crate::port::Cells, pw: i32, ph: i32, r: i32, ji: i32, p0: i32, i0: i32, p1: i32, i1: i32) -> i32 {
     // Classify path row r (see the section header). ji is the first image row painted after it.
     let fl: i32 = pa_get(pa, r, pf_flags());
     let x0: i32 = pa_get(pa, r, pf_x0());
@@ -606,7 +658,7 @@ pub(crate) fn pv_path(mut mk: &mut crate::port::Cells, mut pa: &mut crate::port:
     }
     if vis == 0 {
         chk = pv_bit(chk, vc_white());
-        back = pv_backdrop(pa, im, mk, vx0 - gx, vy0 - gy, vx1 + gx, vy1 + gy, z, r, ji, p0, i0, r, lim);
+        back = pv_backdrop(pa, im, mk, ix, vx0 - gx, vy0 - gy, vx1 + gx, vy1 + gy, z, r, ji, p0, i0, r, lim);
         if back >= 0 {
             bout = back;
             if filled == 1 {
@@ -642,7 +694,7 @@ pub(crate) fn pv_path(mut mk: &mut crate::port::Cells, mut pa: &mut crate::port:
     // 5. a later opaque paint over the whole region.
     if vis == 0 {
         chk = pv_bit(chk, vc_occlusion());
-        occ = pv_occluder(pa, im, mk, vx0, vy0, vx1, vy1, r + 1, ji, p1, i1, lim);
+        occ = pv_occluder(pa, im, mk, ix, vx0, vy0, vx1, vy1, r + 1, ji, p1, i1, lim);
         if occ >= 0 {
             vis = vz_occluded();
             vby = occ;
@@ -682,7 +734,7 @@ pub(crate) fn pv_path(mut mk: &mut crate::port::Cells, mut pa: &mut crate::port:
     pa_set(pa, r, pf_backdrop(), bout);
     return 0;
 }
-pub fn pv_page(mut gl: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut pa: &mut crate::port::Cells, mut im: &mut crate::port::Cells, pw: i32, ph: i32, g0: i32, p0: i32, i0: i32) -> i32 {
+pub fn pv_page(mut gl: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut pa: &mut crate::port::Cells, mut im: &mut crate::port::Cells, mut ix: &mut crate::port::Cells, pw: i32, ph: i32, g0: i32, p0: i32, i0: i32) -> i32 {
     // Classify the glyphs from row g0, and the images from row i0, of the page whose paths start at row p0 and
     // whose size (the crop box in page space) is pw by ph centipoints. Rows are in paint order, so for each
     // object the first path and image row painted after it only moves forward.
@@ -696,6 +748,7 @@ pub fn pv_page(mut gl: &mut crate::port::Cells, mut mk: &mut crate::port::Cells,
     let mut ig: i32 = i0;
     let mut rp: i32 = p0;
     let mut fl: i32 = 0;
+    pv_index(pa, mk, ix, p0, p1);
     while g < g1 {
         gz = gl_get(gl, g, gf_z());
         while (jp < p1) && ((pa_get(pa, jp, pf_z()) < 0) || (pa_get(pa, jp, pf_z()) < gz)) {
@@ -704,7 +757,7 @@ pub fn pv_page(mut gl: &mut crate::port::Cells, mut mk: &mut crate::port::Cells,
         while (ji < i1) && (im_get(im, ji, mf_z()) < gz) {
             ji += 1;
         }
-        pv_glyph(gl, mk, pa, im, pw, ph, g, jp, ji, p0, i0, p1, i1);
+        pv_glyph(gl, mk, pa, im, ix, pw, ph, g, jp, ji, p0, i0, p1, i1);
         g += 1;
     }
     jp = p0;
@@ -714,7 +767,7 @@ pub fn pv_page(mut gl: &mut crate::port::Cells, mut mk: &mut crate::port::Cells,
             jp += 1;
         }
         ji = ig + 1;
-        pv_image(mk, pa, im, pw, ph, ig, jp, ji, p1, i1);
+        pv_image(mk, pa, im, ix, pw, ph, ig, jp, ji, p1, i1);
         ig += 1;
     }
     // The paths: a clip and a shading are not classified (their `vchk` stays 0).
@@ -726,7 +779,7 @@ pub fn pv_page(mut gl: &mut crate::port::Cells, mut mk: &mut crate::port::Cells,
             while (ji < i1) && (im_get(im, ji, mf_z()) < gz) {
                 ji += 1;
             }
-            pv_path(mk, pa, im, pw, ph, rp, ji, p0, i0, p1, i1);
+            pv_path(mk, pa, im, ix, pw, ph, rp, ji, p0, i0, p1, i1);
         }
         rp += 1;
     }

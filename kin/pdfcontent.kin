@@ -11,14 +11,14 @@
 ;;
 ;;   src ar dc a b st       the file and the document layer's workspace (`emon.pdfdoc`)
 ;;   cx                     the interpreter: one `Cells` of scalars, the graphics-state
-;;                          stack, the font slots (layout below)
+;;                          stack, the font slots and bounded parsed-font cache (layout below)
 ;;   ox                     the operands of the operator being read
 ;;   cs                     the decoded content bytes, one cell each: the page's
 ;;                          streams, then each Form XObject being run, on top
 ;;   out                    scratch for a decoded stream and for `pfn-load`
 ;;   f0 f1 f2 f3            FOUR FONT SLOTS (`emon.pdffont` keeps a font in one
 ;;                          `Cells`); least-recently-used replacement, so a page
-;;                          that alternates among more than four fonts reloads them
+;;                          that alternates among more than four fonts restores cached parses when available
 ;;   gl et mk fnt           the evidence's `glyphs`, `etext`, `marks` (D101's spans, folded in by D127) and `fonts`
 ;;                          (a row the first time the document shows a font; its index is its id) (SPEC 8.4.3)
 ;;
@@ -104,7 +104,7 @@
             [emon.pdflex :refer [pl-kind-of pl-first pl-next pl-count pl-int-value
                                  pl-name-is pl-name-len pl-name-byte pl-str-len
                                  pl-str-byte pl-stream-dict pl-dict-get pl-num-cp pl-ref-gen]]
-            [emon.pdfdoc :refer [pd-resolve pd-dget pd-dint pd-get pd-stream-data pd-pg-count
+            [emon.pdfdoc :refer [pd-resolve pd-dget pd-dint pd-get pd-stream-data pd-total-used pd-total-add pd-pg-count
                                  pd-pg-crop pd-pg-rotate pd-pg-resources
                                  pd-pg-contents pd-pages]]
             [emon.pdffont :refer [pfn-init pfn-load pfn-map pfn-cp pfn-how-of
@@ -146,7 +146,7 @@
                              fx-abs fx-one fx-hypot fx-atan2 fx-cos fx-sin fx-get fx-put fx-push fx-join
                              fx-clamp fx-hi fx-lo mx-set mx-ident mx-mul mx-x mx-y mx-translate mx-copy]]
             [kin.lang :refer [defn defconst defdata declarefn return let set while if do comment
-                              + - * < > <= >= == != and or quot rem bit-and bit-or]]))
+                              + - * < > <= >= == != and or not quot rem bit-and bit-or]]))
 
 ;; `pc-do` runs a form's stream, which `pc-run` reads, and `pc-op` calls `pc-do`.
 (declarefn pc-run)
@@ -900,14 +900,53 @@
 
 ;; ---------------------------------------------------------------------- fonts
 
+(defconst ^I32 FCACHE_CELLS 1048576) ;; at most 4 MiB of parsed fonts per document
+
+(defn ^:pub ^I32 pc-f-cached [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                            ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells cx
+                            ^:mut ^Cells f ^:mut ^Cells out ^I32 object ^I32 fh]
+  (comment "Parsed fonts after C_SIZE in cx: object number, resolved handle, length, decoded-byte charge, then loader cells.")
+  (comment "Only complete successful loads of indirect fonts are admitted. Direct fonts and a full cache use the normal loader.")
+  (let [^I32 before (pd-total-used dc)
+        ^:mut ^I32 r C_SIZE ^:mut ^I32 n 0 ^:mut ^I32 j 0 ^:mut ^I32 v 0 ^:mut ^I32 status 0
+        ^:mut ^I32 charge 0]
+    (if (> object 0)
+      (while (< r (cells-len cx))
+        (do (set n (cells-at cx (+ r 2)))
+            (if (and (== (cells-at cx r) object) (== (cells-at cx (+ r 1)) fh))
+              (do (set charge (cells-at cx (+ r 3)))
+                  (comment "Near the limit, run the original loader so the first breaching stream and reported byte count stay exact.")
+                  (if (and (not (ps-missed src)) (<= charge (- (limit-of 2) before)))
+                    (do (pd-total-add dc charge)
+                        (cells-drop f 0)
+                        (while (< j n)
+                          (do (cells-push f (cells-at cx (+ (+ r 4) j)))
+                              (set j (+ j 1))))
+                        (return 0)))))
+            (set r (+ r (+ 4 n))))))
+    (set status (pfn-load src ar dc a b st f out fh))
+    (set n (cells-len f))
+    (if (and (> object 0) (and (== status 0) (and (not (ps-missed src))
+             (<= (+ (cells-len cx) (+ 4 n)) (+ C_SIZE FCACHE_CELLS)))))
+      (do (cells-push cx object)
+          (cells-push cx fh)
+          (cells-push cx n)
+          (set charge (- (pd-total-used dc) before))
+          (cells-push cx charge)
+          (set j 0)
+          (while (< j n)
+            (do (set v (cells-at f j)) (cells-push cx v) (set j (+ j 1))))))
+    (return status)))
+
 (defn ^I32 pc-f-load [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
-                      ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells out
+                      ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells cx ^:mut ^Cells out
                       ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
                       ^I32 slot ^I32 fh]
-  (if (== slot 0) (return (pfn-load src ar dc a b st f0 out fh)))
-  (if (== slot 1) (return (pfn-load src ar dc a b st f1 out fh)))
-  (if (== slot 2) (return (pfn-load src ar dc a b st f2 out fh)))
-  (return (pfn-load src ar dc a b st f3 out fh)))
+  (let [^I32 object (cells-at cx (+ C_CUR G_FOBJ))]
+  (if (== slot 0) (return (pc-f-cached src ar dc a b st cx f0 out object fh)))
+  (if (== slot 1) (return (pc-f-cached src ar dc a b st cx f1 out object fh)))
+  (if (== slot 2) (return (pc-f-cached src ar dc a b st cx f2 out object fh)))
+  (return (pc-f-cached src ar dc a b st cx f3 out object fh))))
 
 (defn ^I32 pc-f-q [^Cells f0 ^Cells f1 ^Cells f2 ^Cells f3 ^I32 slot ^I32 which]
   (comment "A font's metric: which 0 ascent, 1 descent, 2 vertical, 3 DW2 v, 4 DW2 w.")
@@ -1106,7 +1145,7 @@
                 (set pick i)))
           (set i (+ i 1))))
     (set at (+ C_SLOTS (* pick SLOT_STRIDE)))
-    (set status (pc-f-load src ar dc a b st out f0 f1 f2 f3 pick key))
+    (set status (pc-f-load src ar dc a b st cx out f0 f1 f2 f3 pick key))
     (if (ps-missed src)
       (do (cells-set cx C_ABORT 1)
           (cells-set cx (+ at S_KEY) 0)
@@ -3815,7 +3854,7 @@
     (if (ps-missed src) (return 7))
     (comment "The path in progress when the page ended never painted: its points are dropped.")
     (cells-drop pts (* (cells-at cx C_PPTS) 3))
-    (pv-page gl mk pa im (cells-at cx C_PW) (cells-at cx C_PH) g0 p0 i0)
+    (pv-page gl mk pa im out (cells-at cx C_PW) (cells-at cx C_PH) g0 p0 i0)
     (pc-group gl et wd ln fnt page g0 w0)
     (return 0)))
 

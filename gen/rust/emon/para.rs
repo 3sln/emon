@@ -10,6 +10,7 @@ use crate::emon::inline::*;
 use crate::emon::lists::*;
 use crate::emon::model::*;
 use crate::emon::normalize::*;
+use crate::emon::pagebounds::*;
 use crate::emon::pdfdoc::*;
 use crate::emon::table::*;
 
@@ -345,12 +346,32 @@ pub(crate) fn pa_sort_nums(mut c: &mut crate::port::Cells) -> i32 {
     }
     return 0;
 }
-pub(crate) fn pa_collect(mut ord: &mut crate::port::Cells, ln: &mut crate::port::Cells, page: i32) -> i32 {
-    // The page's lines in reading order, as indices into `ln`.
-    let n: i32 = ln_count(ln);
-    let mut l: i32 = 0;
+pub(crate) fn pa_index(ln: &mut crate::port::Cells, base: i32, npages: i32, mut ix: &mut crate::port::Cells) -> i32 {
+    // Original lines have immutable page ranges; each page's column pieces get a separate range as they are appended.
+    pb_build_ranges(ln, 16, 0, base, npages, ix);
+    let mut p: i32 = 0;
+    while p <= npages {
+        crate::port::cells_push(ix, base);
+        crate::port::cells_push(ix, base);
+        p += 1;
+    }
+    return 0;
+}
+pub(crate) fn pa_collect(mut ord: &mut crate::port::Cells, ln: &mut crate::port::Cells, page: i32, ix: &mut crate::port::Cells, off: i32) -> i32 {
+    // Visit original lines, then appended pieces, in exactly the original arena order before the reading-order sort.
+    let b: i32 = page * 2;
+    let mut end: i32 = crate::port::cells_at(ix, b + 1);
+    let mut l: i32 = crate::port::cells_at(ix, b);
     crate::port::cells_drop(ord, 0);
-    while l < n {
+    while l < end {
+        if ln_get(ln, l, lh_page()) == page {
+            crate::port::cells_push(ord, l);
+        }
+        l += 1;
+    }
+    end = crate::port::cells_at(ix, off + (b + 1));
+    l = crate::port::cells_at(ix, off + b);
+    while l < end {
         if ln_get(ln, l, lh_page()) == page {
             crate::port::cells_push(ord, l);
         }
@@ -1965,7 +1986,7 @@ pub(crate) fn pa_layout(cf: &mut crate::port::Cells, r0: i32, r1: i32, page: i32
     }
     return 0;
 }
-pub(crate) fn pa_columns(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, npages: i32, mut pages: &mut crate::port::Cells, mut layout: &mut crate::port::Cells, mut lt: &mut crate::port::Cells, mut ord: &mut crate::port::Cells, mut ls: &mut crate::port::Cells, mut sd: &mut crate::port::Cells, mut it: &mut crate::port::Cells, mut io: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut gu: &mut crate::port::Cells, mut ac: &mut crate::port::Cells, mut tm: &mut crate::port::Cells, mut cf: &mut crate::port::Cells, mut lo: &mut crate::port::Cells, mut pr: &mut crate::port::Cells) -> i32 {
+pub(crate) fn pa_columns(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, npages: i32, mut pages: &mut crate::port::Cells, mut layout: &mut crate::port::Cells, mut lt: &mut crate::port::Cells, mut ord: &mut crate::port::Cells, mut ls: &mut crate::port::Cells, mut sd: &mut crate::port::Cells, mut it: &mut crate::port::Cells, mut io: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut gu: &mut crate::port::Cells, mut ac: &mut crate::port::Cells, mut tm: &mut crate::port::Cells, mut cf: &mut crate::port::Cells, mut lo: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut ix: &mut crate::port::Cells, off: i32) -> i32 {
     // Phase one: every page's column fragments (`emon.columns`), and the page `layout` (D111) from them.
     let mut p: i32 = 1;
     let mut i: i32 = 0;
@@ -1973,7 +1994,9 @@ pub(crate) fn pa_columns(wd: &mut crate::port::Cells, et: &mut crate::port::Cell
     crate::port::cells_drop(cf, 0);
     crate::port::cells_drop(lo, 0);
     while p <= npages {
-        pa_collect(ord, lt, p);
+        crate::port::cells_set(ix, off + (p * 2), ln_count(lt));
+        crate::port::cells_set(ix, off + ((p * 2) + 1), ln_count(lt));
+        pa_collect(ord, lt, p, ix, off);
         nu = pa_upright_count(lt, ord);
         crate::port::cells_drop(ls, 0);
         i = 0;
@@ -1984,6 +2007,7 @@ pub(crate) fn pa_columns(wd: &mut crate::port::Cells, et: &mut crate::port::Cell
         let r0: i32 = crate::port::cells_len(cf) / CF_STRIDE;
         lc_page(wd, et, lt, p, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr);
         pa_layout(cf, r0, crate::port::cells_len(cf) / CF_STRIDE, p, pages, layout);
+        crate::port::cells_set(ix, off + ((p * 2) + 1), ln_count(lt));
         p += 1;
     }
     return 0;
@@ -2000,7 +2024,7 @@ pub(crate) fn pa_tables(tb: &mut crate::port::Cells, tcur: i32, p: i32, ymid2: i
     crate::port::cells_drop(raw, 0);
     return k;
 }
-pub fn pa_build(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, npages: i32, mut pages: &mut crate::port::Cells, mut layout: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut ord: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut fr: &mut crate::port::Cells, mut gp: &mut crate::port::Cells, mut lt: &mut crate::port::Cells, mut ls: &mut crate::port::Cells, mut sd: &mut crate::port::Cells, mut it: &mut crate::port::Cells, mut io: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut gu: &mut crate::port::Cells, mut ac: &mut crate::port::Cells, mut tm: &mut crate::port::Cells, mut cf: &mut crate::port::Cells, mut lo: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut dbg: &mut crate::port::Cells, mut hc: &mut crate::port::Cells, tb: &mut crate::port::Cells, tc: &mut crate::port::Cells, tw: &mut crate::port::Cells, tq: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells, mut ii: &mut crate::port::Cells, mut al: &mut crate::port::Cells) -> i32 {
+pub fn pa_build(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, npages: i32, mut pages: &mut crate::port::Cells, mut layout: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut ord: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut fr: &mut crate::port::Cells, mut gp: &mut crate::port::Cells, mut lt: &mut crate::port::Cells, mut ls: &mut crate::port::Cells, mut sd: &mut crate::port::Cells, mut it: &mut crate::port::Cells, mut io: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut gu: &mut crate::port::Cells, mut ac: &mut crate::port::Cells, mut tm: &mut crate::port::Cells, mut cf: &mut crate::port::Cells, mut lo: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut dbg: &mut crate::port::Cells, mut hc: &mut crate::port::Cells, tb: &mut crate::port::Cells, tc: &mut crate::port::Cells, tw: &mut crate::port::Cells, tq: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells, mut ii: &mut crate::port::Cells, mut al: &mut crate::port::Cells, mut ix: &mut crate::port::Cells) -> i32 {
     // Tables (`tb tc tw tq`, `emon.table`) are placed between the paragraphs by their tops; a line a table
     // holds is not in the reading order at all.
     // Append every page's lines to the Model as paragraphs under the document root (node 0, made by
@@ -2014,6 +2038,8 @@ pub fn pa_build(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, npages
     // `lt` is PREPARED by the caller: the lines copied (`lc-copy`), the initials found in the copy (`in-detect`, P4.10:
     // before the style and heading analysis reads the lines, so a big first letter is never a heading), and `hc` made from
     // it; `ii` is the initials' table, `al` the open paragraph's alignment rows (P4.11). Answers 0.
+    let base: i32 = ln_count(lt);
+    let off: i32 = (npages + 1) * 2;
     let mut med: i32 = 0;
     let mut indents: i32 = 0;
     let mut p: i32 = 1;
@@ -2040,7 +2066,8 @@ pub fn pa_build(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, npages
     let mut before_page: i32 = 0;
     let mut score: i32 = 0;
     in_retire(lt, ii);
-    pa_columns(wd, et, npages, pages, layout, lt, ord, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr);
+    pa_index(lt, base, npages, ix);
+    pa_columns(wd, et, npages, pages, layout, lt, ord, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, ix, off);
     nf = crate::port::cells_len(cf) / CF_STRIDE;
     med = pa_median(lt, cf, lo, gp);
     if pa_indents(wd, lt, cf, lo) >= PA_INDENT_USE {
@@ -2052,7 +2079,7 @@ pub fn pa_build(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, npages
     crate::port::cells_drop(al, 0);
     crate::port::cells_drop(dbg, 0);
     while p <= npages {
-        pa_collect(ord, lt, p);
+        pa_collect(ord, lt, p, ix, off);
         n = crate::port::cells_len(ord);
         nu = pa_upright_count(lt, ord);
         i = nu;

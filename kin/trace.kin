@@ -29,7 +29,8 @@
 ;; THE SETTINGS are the zero- and one-argument functions below (the way `nm-ink-merge` is); `dpi100` is the view's resolution x100
 ;; and every length in points scales with it.
 (ns emon.trace
-  (:require [emon.lang :refer [I32 I64 Bitmap Cells i64 i32 add64 mul64 shr64 shl32 sar32]]
+  (:require [emon.pagebounds :refer [pb-first pb-after]]
+            [emon.lang :refer [I32 I64 Bitmap Cells i64 i32 add64 mul64 shr64 shl32 sar32]]
             [emon.port :refer [bitmap-w bitmap-h bitmap-u8 bitmap-set-u8 bitmap-next-nonzero
                                cells-len cells-at cells-set cells-push cells-drop cells-grow]]
             [emon.evidence :refer [vw-get vw-px-to-cpt vw-cpt-to-px vw-box-to-cpt ik-get fe-set
@@ -3169,10 +3170,10 @@
 
 ;; ---------------------------------------------------------------- features (SPEC 8.4.5, columns 14, 15, 23)
 
-(defn ^I32 tr-text-centred [^Cells comps ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+(defn ^I32 tr-text-centred [^Cells comps ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 c0 ^I32 c1]
   (comment "How many text-like components of `page` have their centre in the box (centipoints).")
-  (let [^I32 n (co-count comps)
-        ^:mut ^I32 r 0
+  (let [^I32 n c1
+        ^:mut ^I32 r c0
         ^:mut ^I32 cnt 0
         ^:mut ^I32 cx 0
         ^:mut ^I32 cy 0]
@@ -3184,26 +3185,31 @@
           (set r (+ r 1))))
     (return cnt)))
 
-(defn ^:pub ^I32 tr-feat-ocr [^:mut ^Cells feats ^I32 frow ^Cells comps ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^Cells sb ^I32 nsym]
+(defn ^:pub ^I32 tr-feat-ocr-range [^:mut ^Cells feats ^I32 frow ^Cells comps ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^Cells sb ^I32 nsym ^I32 c0 ^I32 c1]
   (comment "`xo` columns 14 (text-like components centred in the word's box) and 15 (per mille of its `nsym` symbols, whose boxes are the")
   (comment "centipoint quadruples of `sb`, that have a text-like component centred in them; -1 with no symbols).")
   (let [^:mut ^I32 s 0
         ^:mut ^I32 hit 0]
-    (fe-set feats frow (xo-components) (tr-text-centred comps page x0 y0 x1 y1))
+    (fe-set feats frow (xo-components) (tr-text-centred comps page x0 y0 x1 y1 c0 c1))
     (if (<= nsym 0)
       (fe-set feats frow (xo-comp-ratio) -1)
       (do (while (< s nsym)
-            (do (if (> (tr-text-centred comps page (cells-at sb (* s 4)) (cells-at sb (+ (* s 4) 1)) (cells-at sb (+ (* s 4) 2)) (cells-at sb (+ (* s 4) 3))) 0)
+            (do (if (> (tr-text-centred comps page (cells-at sb (* s 4)) (cells-at sb (+ (* s 4) 1)) (cells-at sb (+ (* s 4) 2)) (cells-at sb (+ (* s 4) 3)) c0 c1) 0)
                   (set hit (+ hit 1)))
                 (set s (+ s 1))))
           (fe-set feats frow (xo-comp-ratio) (tr-permille hit nsym))))
     (return 0)))
 
+(defn ^:pub ^I32 tr-feat-ocr [^:mut ^Cells feats ^I32 frow ^Cells comps ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^Cells sb ^I32 nsym]
+  (let [^I32 c0 (pb-first comps 24 page)
+        ^I32 c1 (pb-after comps 24 page)]
+    (return (tr-feat-ocr-range feats frow comps page x0 y0 x1 y1 sb nsym c0 c1))))
+
 (defn ^:pub ^I32 tr-feat-text [^:mut ^Cells feats ^I32 frow ^Cells comps ^Cells tlines ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 rot ^Cells sb ^I32 nsym]
   (comment "`xt` columns 14 and 15 (as `tr-feat-ocr`, over the glyph boxes) and 23: the largest overlap (`ev-overlap-small`, per mille) of the")
   (comment "word's box with a `tlines` row of the page whose angle differs from the word's `rot` by more than 3 degrees (mod 180).")
-  (let [^I32 n (tl-count tlines)
-        ^:mut ^I32 r 0
+  (let [^I32 n (pb-after tlines 20 page)
+        ^:mut ^I32 r (pb-first tlines 20 page)
         ^:mut ^I32 d 0
         ^:mut ^I32 best 0
         ^:mut ^I32 o 0]

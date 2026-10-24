@@ -67,10 +67,10 @@
       (do (page-new pages p 61200 79200 0 (pk-vector))
           (set p (+ p 1))))
     (hd-analyze wd lt et gl sf sc hc ws tmp pr ptxt)
-    (nt-analyze wd lt et gl sf sc pages hc rf nb mk tw)
+    (let [^Cells nix (new-cells)] (nt-analyze wd lt et gl sf sc pages hc rf nb mk tw nix))
     (ls-analyze wd lt et sf pa hc cd pi lws tw)
     (pa-build wd et npages pages layout nodes attrs regions text ord raw tmp2 fr gp
-              lt ls sd it io rw gu ac tm cf lo pr2 dbg hc tb tc tw tq ledger ii al)
+              lt ls sd it io rw gu ac tm cf lo pr2 dbg hc tb tc tw tq ledger ii al (new-cells))
     (return 0)))
 
 (defn ^I32 bl-find [^Cells nodes ^I32 kind ^I32 nth]

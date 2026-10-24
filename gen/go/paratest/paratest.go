@@ -163,7 +163,7 @@ func ptBuild(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, la
 	var tw *port.Cells = port.NewCells()
 	var tq *port.Cells = port.NewCells()
 	var ledger *port.Cells = port.NewCells()
-	return para.PaBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al)
+	return para.PaBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, port.NewCells())
 }
 
 func ptDump(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, t *strings.Builder) int32 {
@@ -209,7 +209,7 @@ func ptDump(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, t *str
 		p += 1
 	}
 	ptPrep(wd, ln, et, npages, g0, f0, lt, ii)
-	para.PaBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al)
+	para.PaBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, port.NewCells())
 	para.PaDump(t, cf, dbg)
 	return 0
 }

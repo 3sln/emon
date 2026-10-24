@@ -5630,10 +5630,10 @@ public final class Table {
     public static boolean tbLineRepeated(emon.Port.Cells ln, emon.Port.Cells wd, emon.Port.Cells et, int l, int other) {
         // P12.2: is line l on page `other` too: a line there with the same words (the first and the last, and as many) at the same place, within 3 pt:
         // a running header (a bank's name and address over every page) that the furniture stage will take out, and no body of the page.
-        int n = Evidence.lnCount(ln);
+        int n = Pagebounds.pbAfter(ln, 16, other);
         int lc = Evidence.lnGet(ln, l, Evidence.lhCount());
         int lf = Evidence.lnGet(ln, l, Evidence.lhFirst());
-        int m = 0;
+        int m = Pagebounds.pbFirst(ln, 16, other);
         while (m < n) {
             if ((Evidence.lnGet(ln, m, Evidence.lhPage()) == other) && (Evidence.lnGet(ln, m, Evidence.lhCount()) == lc)) {
                 if ((tbAbs(Evidence.lnGet(ln, m, Evidence.lhY0()) - Evidence.lnGet(ln, l, Evidence.lhY0())) <= 300) && (tbAbs(Evidence.lnGet(ln, m, Evidence.lhX0()) - Evidence.lnGet(ln, l, Evidence.lhX0())) <= 300)) {
@@ -5649,8 +5649,8 @@ public final class Table {
     public static boolean tbBodyLineOutside(emon.Port.Cells ln, emon.Port.Cells wd, emon.Port.Cells et, int page, int y0, int y1, int zlo, int zhi, int other) {
         // Is there a line, not claimed by a table, on `page` whose centre is in y0..y1 and outside the furniture
         // zones (above zlo, below zhi), and is not one that page `other` has too (`tb-line-repeated`; 0 for none)?
-        int n = Evidence.lnCount(ln);
-        int l = 0;
+        int n = Pagebounds.pbAfter(ln, 16, page);
+        int l = Pagebounds.pbFirst(ln, 16, page);
         while (l < n) {
             if ((Evidence.lnGet(ln, l, Evidence.lhPage()) == page) && (Evidence.lnGet(ln, l, 15) == 0)) {
                 int cy = (Evidence.lnGet(ln, l, Evidence.lhY0()) + Evidence.lnGet(ln, l, Evidence.lhY1())) / 2;

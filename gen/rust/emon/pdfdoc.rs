@@ -1041,7 +1041,10 @@ pub fn pd_run_plan(src: &crate::port::Src, mut ar: &mut crate::port::Cells, plan
     }
     return status;
 }
-pub(crate) fn pd_total_add(mut dc: &mut crate::port::Cells, n: i32) -> i32 {
+pub fn pd_total_used(dc: &mut crate::port::Cells) -> i32 {
+    return crate::port::cells_at(dc, D_TOTB);
+}
+pub fn pd_total_add(mut dc: &mut crate::port::Cells, n: i32) -> i32 {
     // The `total-bytes` limit (SPEC 7.4, the zip-bomb bound): the decoded bytes of every stream this unit has read through `pd-stream-data`,
     // summed. A sum past the limit is a breach (never returns); the count is saturated at 2^31 - 1 so that the sum itself cannot overflow.
     let have: i32 = crate::port::cells_at(dc, D_TOTB);

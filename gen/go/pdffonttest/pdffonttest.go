@@ -7,6 +7,7 @@ import (
 	"emon/cjk"
 	"emon/evidence"
 	"emon/fontprog"
+	"emon/pdfcontent"
 	"emon/pdfdoc"
 	"emon/pdffont"
 	"emon/pdflex"
@@ -1054,4 +1055,56 @@ func TestEveryProgramFontIsTheSameThroughAnAsyncSourceOf64ByteChunks(emonT *test
 
 func TestEveryProgramFontIsTheSameThroughAnAsyncSourceOf512ByteChunks(emonT *testing.T) {
 	port.AssertEq(emonT, ftAsyncFonts(512), 0, "every font of progs.pdf through 512-byte chunks")
+}
+
+func TestDocumentCacheRestoresExactFontCellsAfterEviction(emonT *testing.T) {
+	var src *port.Src = port.SrcOfBlob(port.TestFile("fonts/fonts.pdf"))
+	var ar *port.Cells = port.NewCells()
+	var dc *port.Cells = port.NewCells()
+	var a *port.Cells = port.NewCells()
+	var b *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	var cx *port.Cells = port.NewCells()
+	var ox *port.Cells = port.NewCells()
+	var out *port.Cells = port.NewCells()
+	var loaded *port.Cells = port.NewCells()
+	var cached *port.Cells = port.NewCells()
+	var object int32 = 1
+	var fh int32 = 0
+	var j int32 = 0
+	var before int32 = 0
+	var charge int32 = 0
+	port.AssertEq(emonT, pdfdoc.PdOpen(src, ar, dc, a, b, st), 0, "font fixture opens")
+	pdfcontent.PcInit(cx, ox)
+	for object <= 8 {
+		fh = pdfdoc.PdGet(src, ar, dc, a, b, st, object)
+		port.AssertEq(emonT, pdfcontent.PcFCached(src, ar, dc, a, b, st, cx, cached, out, object, fh), 0, "fill more than four slots")
+		object += 1
+		if (object == 3) || (object == 5) {
+			object += 1
+		}
+	}
+	object = 1
+	for object <= 8 {
+		fh = pdfdoc.PdGet(src, ar, dc, a, b, st, object)
+		before = pdfdoc.PdTotalUsed(dc)
+		port.AssertEq(emonT, pdffont.PfnLoad(src, ar, dc, a, b, st, loaded, out, fh), 0, "fresh reference load")
+		charge = pdfdoc.PdTotalUsed(dc) - before
+		port.CellsDrop(cached, 0)
+		before = pdfdoc.PdTotalUsed(dc)
+		port.AssertEq(emonT, pdfcontent.PcFCached(src, ar, dc, a, b, st, cx, cached, out, object, fh), 0, "reload after slot eviction")
+		port.AssertEq(emonT, pdfdoc.PdTotalUsed(dc)-before, charge, "cached loads charge the same decoded-byte budget")
+		port.AssertEq(emonT, port.CellsLen(cached), port.CellsLen(loaded), "same parsed size")
+		j = 0
+		for j < port.CellsLen(loaded) {
+			port.AssertEq(emonT, port.CellsAt(cached, j), port.CellsAt(loaded, j), "every parsed cell is identical")
+			j += 1
+		}
+		port.AssertEq(emonT, pdffont.PfnMap(cached, 65), pdffont.PfnMap(loaded, 65), "same mapping after restoration")
+		port.AssertEq(emonT, pdffont.PfnWidth(cached, 65), pdffont.PfnWidth(loaded, 65), "same width after restoration")
+		object += 1
+		if (object == 3) || (object == 5) {
+			object += 1
+		}
+	}
 }

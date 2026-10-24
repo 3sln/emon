@@ -1,0 +1,46 @@
+;; D703: bounds in page-ordered evidence arenas. Deleted lines (page <= 0)
+;; are holes, not sorting keys. Retain the caller's page predicate inside the range.
+(ns emon.pagebounds
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.port :refer [cells-at cells-len cells-drop cells-push cells-set]]
+            [kin.lang :refer [defn return let set while if do comment + - * < > <= >= and quot]]))
+
+(defn ^:pub ^I32 pb-first-span [^Cells rows ^I32 stride ^I32 page ^I32 first ^I32 end]
+  (comment "First row on or after a positive page. Positive pages must be nondecreasing; tombstones may occur anywhere.")
+  (let [^:mut ^I32 lo first ^:mut ^I32 hi end
+        ^:mut ^I32 mid 0 ^:mut ^I32 k 0 ^:mut ^I32 p 0]
+    (if (<= page 0) (return first))
+    (while (< lo hi)
+      (do (set mid (+ lo (quot (- hi lo) 2)))
+          (set k mid)
+          (while (and (>= k lo) (<= (cells-at rows (* k stride)) 0))
+            (set k (- k 1)))
+          (set p 0)
+          (if (>= k lo) (set p (cells-at rows (* k stride))))
+          (if (< p page) (set lo (+ mid 1)) (set hi mid))))
+    (return lo)))
+
+(defn ^:pub ^I32 pb-first [^Cells rows ^I32 stride ^I32 page]
+  (let [^I32 end (quot (cells-len rows) stride)]
+    (return (pb-first-span rows stride page 0 end))))
+
+(defn ^:pub ^I32 pb-after [^Cells rows ^I32 stride ^I32 page]
+  (comment "End of the page's range; queries for deleted page numbers conservatively scan everything.")
+  (if (< page 0) (return (quot (cells-len rows) stride)))
+  (return (pb-first rows stride (+ page 1))))
+
+
+(defn ^:pub ^I32 pb-build-ranges [^Cells rows ^I32 stride ^I32 first ^I32 end ^I32 npages ^:mut ^Cells ix]
+  (comment "Two offsets per page: first and one past last matching row. Retaining the page filter also handles unordered fixtures.")
+  (let [^:mut ^I32 p 0 ^:mut ^I32 r first ^:mut ^I32 b 0]
+    (cells-drop ix 0)
+    (while (<= p npages)
+      (do (cells-push ix end) (cells-push ix end) (set p (+ p 1))))
+    (while (< r end)
+      (do (set p (cells-at rows (* r stride)))
+          (if (and (>= p 0) (<= p npages))
+            (do (set b (* p 2))
+                (if (< r (cells-at ix b)) (cells-set ix b r))
+                (cells-set ix (+ b 1) (+ r 1))))
+          (set r (+ r 1))))
+    (return 0)))

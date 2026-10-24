@@ -334,7 +334,8 @@ public static class Listtest {
         emon.Port.Cells mk = emon.Port.NewCells();
         emon.Port.Cells tw = emon.Port.NewCells();
         Heading.HdAnalyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt);
-        return Notes.NtAnalyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw);
+        emon.Port.Cells nix = emon.Port.NewCells();
+        return Notes.NtAnalyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw, nix);
     }
     [Xunit.Fact]
     public static void TestALineOfRunningTextThatBeginsFig4IsNoCaption() {
@@ -393,7 +394,8 @@ public static class Listtest {
         emon.Port.Cells tw = emon.Port.NewCells();
         Model.PageNew(pages, 1, 61200, 79200, 0, Model.PkVector());
         Heading.HdAnalyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt);
-        return Notes.NtAnalyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw);
+        emon.Port.Cells nix = emon.Port.NewCells();
+        return Notes.NtAnalyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw, nix);
     }
     internal static int LtNotesGlyphs(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells gl, emon.Port.Cells sf, emon.Port.Cells sc, emon.Port.Cells hc) {
         // `lt-notes-pages` over the glyphs `gl`.
@@ -408,7 +410,8 @@ public static class Listtest {
         emon.Port.Cells tw = emon.Port.NewCells();
         Model.PageNew(pages, 1, 61200, 79200, 0, Model.PkVector());
         Heading.HdAnalyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt);
-        return Notes.NtAnalyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw);
+        emon.Port.Cells nix = emon.Port.NewCells();
+        return Notes.NtAnalyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw, nix);
     }
     [Xunit.Fact]
     public static void TestAFootnotesRaisedMarkerGluedToItsWordIsAMarker() {

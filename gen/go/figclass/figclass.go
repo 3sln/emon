@@ -8,6 +8,7 @@ import (
 	"emon/evidence"
 	"emon/glayer"
 	"emon/model"
+	"emon/pagebounds"
 	"emon/pdfdoc"
 	"emon/pdfimage"
 	"emon/pdfsrc"
@@ -1091,6 +1092,7 @@ func FcMeasure(pa *port.Cells, grl *port.Cells, fw *port.Cells, fl *port.Cells, 
 	// budget of rows (`FC_WORK`) is spent and the region was left unmeasured.
 	var work int32 = port.CellsAt(ws, ftWork)
 	var n int32 = port.CellsLen(pa) / 24
+	var pend int32 = pagebounds.PbAfter(pa, 24, page)
 	var ng int32 = glayer.GrlCount(grl)
 	var rw int32 = rx1 - rx0
 	var rh int32 = ry1 - ry0
@@ -1107,8 +1109,8 @@ func FcMeasure(pa *port.Cells, grl *port.Cells, fw *port.Cells, fl *port.Cells, 
 		return 1
 	}
 	port.CellsSet(ws, ftWork, work+(n+(ng+(evidence.WdCount(fw)+evidence.LnCount(fl)))))
-	i = 0
-	for i < n {
+	i = pagebounds.PbFirst(pa, 24, page)
+	for i < pend {
 		if (evidence.PaGet(pa, i, evidence.PfPage()) == page) && ((evidence.PaGet(pa, i, evidence.PfVis()) == 0) && ((evidence.PaGet(pa, i, evidence.PfFlags()) & evidence.PgClip()) == 0)) {
 			cx = (evidence.PaGet(pa, i, evidence.PfX0()) + evidence.PaGet(pa, i, evidence.PfX1())) / 2
 			cy = (evidence.PaGet(pa, i, evidence.PfY0()) + evidence.PaGet(pa, i, evidence.PfY1())) / 2
@@ -1202,7 +1204,8 @@ func fcSignVector(pa *port.Cells, fcand *port.Cells, row int32) int32 {
 	var w int32 = port.CellsAt(fcand, b+(crVx+2)) - x0
 	var h int32 = port.CellsAt(fcand, b+(crVx+3)) - y0
 	var n int32 = port.CellsLen(pa) / 24
-	var i int32 = 0
+	var pend int32 = pagebounds.PbAfter(pa, 24, page)
+	var i int32 = pagebounds.PbFirst(pa, 24, page)
 	var np int32 = 0
 	var mask int32 = 0
 	var cx int32 = 0
@@ -1213,7 +1216,7 @@ func fcSignVector(pa *port.Cells, fcand *port.Cells, row int32) int32 {
 	if (w <= 0) || (h <= 0) {
 		return 0
 	}
-	for i < n {
+	for i < pend {
 		if (evidence.PaGet(pa, i, evidence.PfPage()) == page) && ((evidence.PaGet(pa, i, evidence.PfVis()) == 0) && ((evidence.PaGet(pa, i, evidence.PfFlags()) & evidence.PgClip()) == 0)) {
 			cx = (evidence.PaGet(pa, i, evidence.PfX0()) + evidence.PaGet(pa, i, evidence.PfX1())) / 2
 			cy = (evidence.PaGet(pa, i, evidence.PfY0()) + evidence.PaGet(pa, i, evidence.PfY1())) / 2
@@ -1600,8 +1603,8 @@ func FcClaimed(fl *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int3
 	// 1 when a table has claimed the text of the region (D557): of the lines on the page whose centre is in it, at least one and at least
 	// half are a table's (cell 15 of a line a table holds is `FC_HELD` and up, `emon.table`'s TB_HELD). A shaded header cell with its words and
 	// a rule under it, or a table's fills and rules, look like a diagram's boxes and a connector; the words are the table's, and so is the drawing.
-	var n int32 = evidence.LnCount(fl)
-	var l int32 = 0
+	var n int32 = pagebounds.PbAfter(fl, 16, page)
+	var l int32 = pagebounds.PbFirst(fl, 16, page)
 	var total int32 = 0
 	var held int32 = 0
 	var cx int32 = 0

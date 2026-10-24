@@ -6,6 +6,7 @@ package initial
 import (
 	"emon/evidence"
 	"emon/model"
+	"emon/pagebounds"
 	"emon/port"
 )
 
@@ -344,8 +345,8 @@ func inWordOk(wd *port.Cells, et *port.Cells, w int32) bool {
 func inCollect(wd *port.Cells, lt *port.Cells, page int32, sc *port.Cells, tm *port.Cells) int32 {
 	// The page's upright lines that have words into `sc` (rows of `lt`, as far as `ln-count` of the lines
 	// that existed when detection began: the caller passes it as `n`), their sizes into `tm`.
-	var n int32 = port.CellsLen(lt) / 16
-	var l int32 = 0
+	var n int32 = pagebounds.PbAfter(lt, 16, page)
+	var l int32 = pagebounds.PbFirst(lt, 16, page)
 	port.CellsDrop(sc, 0)
 	port.CellsDrop(tm, 0)
 	for l < n {

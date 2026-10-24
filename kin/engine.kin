@@ -370,7 +370,7 @@
     (hd-prior-outline (fd d ol) (fd d txt) (fd s hpr) (fd s hptxt))
     (hd-analyze (fd d fw) (fd s lt) (fd d et) (fd d gl) (fd s sf) (fd s hsc) (fd s hc) (fd s ws) (fd s htmp) (fd s hpr) (fd s hptxt))
     ;; captions, note bodies and their references (kin/notes.kin, P4.6), then lists (kin/lists.kin, P4.5)
-    (nt-analyze (fd d fw) (fd s lt) (fd d et) (fd d gl) (fd s sf) (fd s hsc) (fd m pages) (fd s hc) (fd s nrf) (fd s nnb) (fd s nmk) (fd s tw))
+    (nt-analyze (fd d fw) (fd s lt) (fd d et) (fd d gl) (fd s sf) (fd s hsc) (fd m pages) (fd s hc) (fd s nrf) (fd s nnb) (fd s nmk) (fd s tw) (fd s nix))
     (ls-analyze (fd d fw) (fd s lt) (fd d et) (fd s sf) (fd d pa) (fd s hc) (fd s lcd) (fd s lpi) (fd s lws) (fd s tw))
     ;; the style and the link of every character (kin/inline.kin, P4.7): a PDF's; an image has no font and no link annotation
     (if (== kind 0)
@@ -379,7 +379,7 @@
  (fd s isw))))
     (pa-build (fd d fw) (fd d et) np (fd m pages) (fd m layout) (fd m nodes) (fd m attrs) (fd m regions) (fd m text) (fd s ord) (fd s raw) (fd s tmp)
          (fd s fr) (fd s gp) (fd s lt) (fd s ls) (fd s sd) (fd s it) (fd s io) (fd s rw) (fd s gu) (fd s ac) (fd s tm) (fd s cf) (fd s lo) (fd s pr)
-         (fd s dbg) (fd s hc) (fd s tb) (fd s tc) (fd s tw) (fd s tq) (fd m ledger) (fd s ii) (fd s al))
+         (fd s dbg) (fd s hc) (fd s tb) (fd s tc) (fd s tw) (fd s tq) (fd m ledger) (fd s ii) (fd s al) (fd s pix))
     ;; the figures (P8.1, SPEC 10.6): at every level of `assets`, before the restructuring, which pairs a caption with the figure beside it
     (if (== kind 0)
       (en-figures m s d (fd c level)))

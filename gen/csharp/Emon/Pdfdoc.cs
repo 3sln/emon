@@ -1039,7 +1039,10 @@ public static class Pdfdoc {
         }
         return status;
     }
-    internal static int PdTotalAdd(emon.Port.Cells dc, int n) {
+    public static int PdTotalUsed(emon.Port.Cells dc) {
+        return emon.Port.CellsAt(dc, DTotb);
+    }
+    public static int PdTotalAdd(emon.Port.Cells dc, int n) {
         // The `total-bytes` limit (SPEC 7.4, the zip-bomb bound): the decoded bytes of every stream this unit has read through `pd-stream-data`,
         // summed. A sum past the limit is a breach (never returns); the count is saturated at 2^31 - 1 so that the sum itself cannot overflow.
         int have = emon.Port.CellsAt(dc, DTotb);

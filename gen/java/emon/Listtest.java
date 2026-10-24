@@ -325,7 +325,8 @@ public final class Listtest {
         emon.Port.Cells mk = emon.Port.newCells();
         emon.Port.Cells tw = emon.Port.newCells();
         Heading.hdAnalyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt);
-        return Notes.ntAnalyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw);
+        emon.Port.Cells nix = emon.Port.newCells();
+        return Notes.ntAnalyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw, nix);
     }
     public static void testALineOfRunningTextThatBeginsFig4IsNoCaption() {
         emon.Port.Cells wd = emon.Port.newCells();
@@ -383,7 +384,8 @@ public final class Listtest {
         emon.Port.Cells tw = emon.Port.newCells();
         Model.pageNew(pages, 1, 61200, 79200, 0, Model.pkVector());
         Heading.hdAnalyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt);
-        return Notes.ntAnalyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw);
+        emon.Port.Cells nix = emon.Port.newCells();
+        return Notes.ntAnalyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw, nix);
     }
     public static int ltNotesGlyphs(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells gl, emon.Port.Cells sf, emon.Port.Cells sc, emon.Port.Cells hc) {
         // `lt-notes-pages` over the glyphs `gl`.
@@ -398,7 +400,8 @@ public final class Listtest {
         emon.Port.Cells tw = emon.Port.newCells();
         Model.pageNew(pages, 1, 61200, 79200, 0, Model.pkVector());
         Heading.hdAnalyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt);
-        return Notes.ntAnalyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw);
+        emon.Port.Cells nix = emon.Port.newCells();
+        return Notes.ntAnalyze(wd, ln, et, gl, sf, sc, pages, hc, rf, nb, mk, tw, nix);
     }
     public static void testAFootnotesRaisedMarkerGluedToItsWordIsAMarker() {
         emon.Port.Cells wd = emon.Port.newCells();
