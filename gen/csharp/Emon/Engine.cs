@@ -275,6 +275,7 @@ public static class Engine {
         // P8.1 (SPEC 10.6): the figures, before `rs-run` (a caption next to one finds it as its object): every output has them, at every level of
         // `assets` (which only decides whether they get pixels, and tells the asset stage's candidate rows `cand` what P8.1 found).
         Figclass.FcStage(m.Nodes, m.Attrs, m.Regions, m.Text, m.Pages, s.Fnodes, s.Fattrs, s.Fregions, s.Fnm, d.Pa, d.Im, d.Fi, s.Grg, d.Grl, d.Fw, d.Fl, d.Et, d.Pg, s.Sm, d.Cand, level, s.Fcand, s.Fcl, s.Fg, s.Ffd, s.Fab, s.Fws);
+        Figclass.FcWrite(s.Fcand, s.Ffd, m.Ledger);
         emon.Port.CellsSwap(m.Nodes, s.Fnodes);
         emon.Port.CellsSwap(m.Attrs, s.Fattrs);
         emon.Port.CellsSwap(m.Regions, s.Fregions);
@@ -315,7 +316,6 @@ public static class Engine {
                 emon.Port.TextAscii(d.Evidence, ",\"tb\":");
                 Tagtable.TtEmit(d.Evidence, s.Tv);
             }
-            emon.Port.TextAscii(d.Evidence, "}");
         }
         emon.Port.CellsCopyInto(s.Iloc, c.Lcl);
         Columns.LcCopy(d.Fl, s.Lt);
@@ -331,6 +331,12 @@ public static class Engine {
         Para.PaBuild(d.Fw, d.Et, np, m.Pages, m.Layout, m.Nodes, m.Attrs, m.Regions, m.Text, s.Ord, s.Raw, s.Tmp, s.Fr, s.Gp, s.Lt, s.Ls, s.Sd, s.It, s.Io, s.Rw, s.Gu, s.Ac, s.Tm, s.Cf, s.Lo, s.Pr, s.Dbg, s.Hc, s.Tb, s.Tc, s.Tw, s.Tq, m.Ledger, s.Ii, s.Al, s.Pix);
         if (kind == 0) {
             EnFigures(m, s, d, c.Level);
+        }
+        if (c.Keep != 0) {
+            if (kind == 0) {
+                Figclass.FcEmitBudget(s.Fcand, s.Ffd, d.Evidence);
+            }
+            emon.Port.TextAscii(d.Evidence, "}");
         }
         Restruct.RsRun(m.Nodes, m.Attrs, m.Regions, m.Text, s.Rn, s.Ra, s.Rr, s.Rnm, s.Rstk, s.Rused, s.Rout, m.Layout);
         emon.Port.CellsSwap(m.Nodes, s.Rn);

@@ -1433,6 +1433,12 @@ pub fn dr_ocr_empty() -> i32 {
 pub fn dr_ocr_unrepresented() -> i32 {
     return 14;
 }
+pub fn dr_figure_unmeasured() -> i32 {
+    return 15;
+}
+pub fn dr_figure_signature_unmeasured() -> i32 {
+    return 16;
+}
 pub fn dr_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "watermark");
@@ -1488,6 +1494,14 @@ pub fn dr_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 14 {
         crate::port::text_ascii(t, "ocr-unrepresented");
+        return 1;
+    }
+    if code == 15 {
+        crate::port::text_ascii(t, "figure-unmeasured");
+        return 1;
+    }
+    if code == 16 {
+        crate::port::text_ascii(t, "figure-signature-unmeasured");
         return 1;
     }
     return 0;

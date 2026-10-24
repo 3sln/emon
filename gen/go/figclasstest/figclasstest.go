@@ -9,6 +9,7 @@ import (
 	"emon/model"
 	"emon/port"
 	"emon/restruct"
+	"strings"
 	"testing"
 )
 
@@ -535,6 +536,7 @@ func ftPages(pages *port.Cells, n int32) int32 {
 
 func TestARasterOnOtherPagesIsARecurringLogoByItsObjectOrItsDigest(emonT *testing.T) {
 	var fi *port.Cells = port.NewCells()
+	var counts *port.Cells = port.NewCells()
 	var pa *port.Cells = port.NewCells()
 	var pages *port.Cells = port.NewCells()
 	var cand *port.Cells = port.NewCells()
@@ -550,19 +552,20 @@ func TestARasterOnOtherPagesIsARecurringLogoByItsObjectOrItsDigest(emonT *testin
 	ftImgCand(cand, 3, 5000, 5000, 9000, 7000, 7, 0)
 	ftImgCand(cand, 4, 5000, 5000, 9000, 7000, 11, 3)
 	ftImgCand(cand, 1, 20000, 5000, 24000, 7000, 7, 0)
-	figclass.FcSignRows(fi, pa, cand)
+	figclass.FcSignRows(fi, pa, cand, counts)
 	port.AssertEq(emonT, figclass.FcRecur(cand, pages, 1), 160, "the raster of page 2 is on two other pages (its digest equals the others', wherever it stands)")
 	port.AssertEq(emonT, figclass.FcRecur(cand, pages, 0), 160, "the one of page 1: pages 2 (digest) and 3 (object); its second use on page 1 does not count")
 	port.AssertEq(emonT, figclass.FcRecur(cand, pages, 3), 0, "a raster with another digest and object recurs nowhere")
 	// the same digest with another pixel size is another raster
 	ftImgCand(cand, 3, 5000, 5000, 9000, 7000, 12, 2)
-	figclass.FcSignRows(fi, pa, cand)
+	figclass.FcSignRows(fi, pa, cand, counts)
 	port.AssertEq(emonT, figclass.FcRecur(cand, pages, 5), 0, "the same digest of another size is no recurrence")
 	port.AssertEq(emonT, figclass.FcRecur(cand, pages, 3), 0, "and it is not on the others' count")
 }
 
 func TestVectorArtRecursAtTheSamePlaceWhateverItsScale(emonT *testing.T) {
 	var fi *port.Cells = port.NewCells()
+	var counts *port.Cells = port.NewCells()
 	var pa *port.Cells = port.NewCells()
 	var pages *port.Cells = port.NewCells()
 	var cand *port.Cells = port.NewCells()
@@ -583,7 +586,7 @@ func TestVectorArtRecursAtTheSamePlaceWhateverItsScale(emonT *testing.T) {
 	ftPath(pa, 4, 3, 7300, 7300, 13300, 13300, 43639, -1, 9)
 	ftPath(pa, 4, 2, 9700, 9700, 10900, 10900, 16777215, -1, 8)
 	ftVecCand(cand, 4, 7300, 7300, 13300, 13300)
-	figclass.FcSignRows(fi, pa, cand)
+	figclass.FcSignRows(fi, pa, cand, counts)
 	port.AssertEq(emonT, figclass.FcRecur(cand, pages, 0), 100, "page 1's mark recurs on page 2 only: page 3 is another place and page 4 another scale")
 	port.AssertEq(emonT, figclass.FcRecur(cand, pages, 1), 100, "and page 2's on page 1")
 	port.AssertEq(emonT, figclass.FcRecur(cand, pages, 2), 0, "the same drawing mid-page recurs nowhere")
@@ -596,4 +599,173 @@ func TestARecurringRasterIsALogoWhereverItStandsAndALoneOneIsNot(emonT *testing.
 	port.AssertEq(emonT, figclass.FcImageKind(fi, 0, 4000, 4000, 30000, 34000, 79200, 0)/1024, model.FgUnknown(), "a small flat raster mid-page, seen once")
 	port.AssertEq(emonT, figclass.FcImageKind(fi, 0, 4000, 4000, 30000, 34000, 79200, 100)/1024, model.FgLogo(), "the same on another page too: a logo")
 	port.AssertEq(emonT, figclass.FcImageKind(fi, 0, 4000, 4000, 30000, 34000, 79200, 220)%1024, 800, "and surer for each page it is on")
+}
+
+func TestMeasureChargesOnlyThePagePrefixVisited(emonT *testing.T) {
+	var pa *port.Cells = port.NewCells()
+	var fw *port.Cells = port.NewCells()
+	var fl *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var grl *port.Cells = port.NewCells()
+	var ws *port.Cells = port.NewCells()
+	var p int32 = 2
+	ftPath(pa, 1, 2, 10000, 10000, 30000, 20000, -1, -1, 72)
+	ftWs(ws)
+	port.AssertEq(emonT, figclass.FcMeasure(pa, grl, fw, fl, et, 1, 10000, 10000, 30000, 20000, ws), 0, "prefix measured")
+	port.AssertEq(emonT, port.CellsAt(ws, 127), 1, "one indexed path visited")
+	for p <= 16 {
+		ftPath(pa, p, 2, 10000, 10000, 30000, 20000, -1, -1, 72)
+		p += 1
+	}
+	port.CellsSet(ws, 127, 0)
+	port.AssertEq(emonT, figclass.FcMeasure(pa, grl, fw, fl, et, 1, 10000, 10000, 30000, 20000, ws), 0, "extended prefix measured")
+	port.AssertEq(emonT, port.CellsAt(ws, 127), 1, "later pages cost no visits")
+	port.AssertEq(emonT, port.CellsAt(ws, 20), 1, "same shaded fill decision")
+}
+
+func TestDocumentWorkCapRefusesBeforeVisitingAndClearsFeatures(emonT *testing.T) {
+	var pa *port.Cells = port.NewCells()
+	var fw *port.Cells = port.NewCells()
+	var fl *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var grl *port.Cells = port.NewCells()
+	var ws *port.Cells = port.NewCells()
+	ftPath(pa, 1, 2, 10000, 10000, 30000, 20000, -1, -1, 72)
+	ftWs(ws)
+	port.CellsSet(ws, 127, 400000000)
+	port.CellsSet(ws, 20, 1)
+	port.AssertEq(emonT, figclass.FcMeasure(pa, grl, fw, fl, et, 1, 10000, 10000, 30000, 20000, ws), 2, "explicit document resource refusal")
+	port.AssertEq(emonT, port.CellsAt(ws, 127), 400000000, "no visits beyond cap")
+	port.AssertEq(emonT, port.CellsAt(ws, 20), 0, "no previous candidate's features")
+}
+
+func TestPageWorkCannotStarveTheFollowingPage(emonT *testing.T) {
+	var pa *port.Cells = port.NewCells()
+	var fw *port.Cells = port.NewCells()
+	var fl *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var grl *port.Cells = port.NewCells()
+	var ws *port.Cells = port.NewCells()
+	ftPath(pa, 1, 2, 10000, 10000, 30000, 20000, -1, -1, 72)
+	ftPath(pa, 2, 2, 10000, 10000, 30000, 20000, -1, -1, 72)
+	ftWs(ws)
+	port.CellsSet(ws, 125, 1)
+	port.CellsSet(ws, 126, 40000000)
+	port.AssertEq(emonT, figclass.FcMeasure(pa, grl, fw, fl, et, 1, 10000, 10000, 30000, 20000, ws), 1, "page allowance exhausted")
+	port.AssertEq(emonT, figclass.FcMeasure(pa, grl, fw, fl, et, 2, 10000, 10000, 30000, 20000, ws), 0, "next page has its own allowance")
+	port.AssertEq(emonT, port.CellsAt(ws, 20), 1, "next page measured")
+}
+
+func ftBudgetPages(emonT *testing.T, n int32) int32 {
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var grg *port.Cells = port.NewCells()
+	var fnodes *port.Cells = port.NewCells()
+	var fattrs *port.Cells = port.NewCells()
+	var fregions *port.Cells = port.NewCells()
+	var fnm *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var fi *port.Cells = port.NewCells()
+	var grl *port.Cells = port.NewCells()
+	var fw *port.Cells = port.NewCells()
+	var fl *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pg *port.Cells = port.NewCells()
+	var sl *port.Cells = port.NewCells()
+	var cand *port.Cells = port.NewCells()
+	var fcand *port.Cells = port.NewCells()
+	var cl *port.Cells = port.NewCells()
+	var fg *port.Cells = port.NewCells()
+	var fd *port.Cells = port.NewCells()
+	var ab *port.Cells = port.NewCells()
+	var ws *port.Cells = port.NewCells()
+	var p int32 = 1
+	var i int32 = 0
+	var x int32 = 0
+	var y int32 = 0
+	var count int32 = 0
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	for p <= n {
+		model.PageNew(pages, p, 500000, 792000, 0, model.PkVector())
+		i = 0
+		for i < 129 {
+			x = 1000 + ((i % 20) * 20000)
+			y = 1000 + ((i / 20) * 10000)
+			ftPath(pa, p, 2, x, y, x+16000, y+8000, -1, -1, 72)
+			i += 1
+		}
+		p += 1
+	}
+	count = figclass.FcStage(nodes, attrs, regions, text, pages, fnodes, fattrs, fregions, fnm, pa, im, fi, grg, grl, fw, fl, et, pg, sl, cand, 0, fcand, cl, fg, fd, ab, ws)
+	port.AssertEq(emonT, count, n*128, "each page gets 128 measurements regardless of document length")
+	i = 0
+	count = 0
+	for i < (port.CellsLen(fd) / 8) {
+		if port.CellsAt(fd, (i*8)+5) == 3 {
+			count += 1
+		}
+		i += 1
+	}
+	port.AssertEq(emonT, count, n, "every over-limit region has explicit evidence")
+	figclass.FcWrite(fcand, fd, ledger)
+	port.AssertEq(emonT, model.LedgerCount(ledger), n, "every unmeasured box reaches the dropped ledger")
+	port.AssertEq(emonT, model.LedgerReason(ledger, 0), model.DrFigureUnmeasured(), "the ledger names the resource refusal")
+	return count
+}
+
+func TestPageCandidatePrefixInvarianceAtOneFourAndSixteen(emonT *testing.T) {
+	port.AssertEq(emonT, ftBudgetPages(emonT, 1), 1, "one page")
+	port.AssertEq(emonT, ftBudgetPages(emonT, 4), 4, "four pages")
+	port.AssertEq(emonT, ftBudgetPages(emonT, 16), 16, "sixteen pages")
+}
+
+func TestUnmeasuredDocumentRegionIsExplicitInEvidenceAndLedger(emonT *testing.T) {
+	var cand *port.Cells = port.NewCells()
+	var fd *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	ftCand(cand, 1, 10000, 20000, 30000, 40000)
+	ftFd(fd, 0, 0)
+	port.CellsSet(fd, 5, 2)
+	port.CellsSet(cand, 31, 2)
+	port.AssertEq(emonT, figclass.FcEmitBudget(cand, fd, t), 1, "one explicit resource record")
+	port.AssertText(emonT, t, ",\"fc-unmeasured\":[[1,10000,20000,30000,40000,2,2]]", "document refusals retain both statuses and the exact box")
+	figclass.FcWrite(cand, fd, ledger)
+	port.AssertEq(emonT, model.LedgerCount(ledger), 2, "measurement and signature refusal both represented")
+	port.AssertEq(emonT, model.LedgerReason(ledger, 0), model.DrFigureUnmeasured(), "unmeasured is distinct from measured rejection")
+}
+
+func ftSignaturePrefix(emonT *testing.T, npages int32) int32 {
+	var pa *port.Cells = port.NewCells()
+	var cand *port.Cells = port.NewCells()
+	var fi *port.Cells = port.NewCells()
+	var counts *port.Cells = port.NewCells()
+	var p int32 = 1
+	var r int32 = 0
+	for p <= npages {
+		ftPath(pa, p, 3, 7300, 7300, 10300, 10300, 43639, -1, 9)
+		ftPath(pa, p, 2, 8500, 8500, 9100, 9100, 16777215, -1, 8)
+		p += 1
+	}
+	for r < 6300 {
+		ftVecCand(cand, 1, 7300, 7300, 10300, 10300)
+		r += 1
+	}
+	figclass.FcSignRows(fi, pa, cand, counts)
+	port.AssertEq(emonT, port.CellsAt(cand, (6299*32)+13), 2, "the last first-page signature survives appended pages")
+	port.AssertEq(emonT, port.CellsAt(cand, (6299*32)+14), 2, "the unchanged drawing has two paths")
+	port.AssertEq(emonT, port.CellsAt(cand, (6299*32)+31), 0, "appended pages spend no first-page resource allowance")
+	return 0
+}
+
+func TestSignatureBudgetPrefixInvarianceAtOneFourAndSixteen(emonT *testing.T) {
+	ftSignaturePrefix(emonT, 100)
+	ftSignaturePrefix(emonT, 400)
+	ftSignaturePrefix(emonT, 1600)
 }

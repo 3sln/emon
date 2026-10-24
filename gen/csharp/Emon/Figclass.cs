@@ -8,6 +8,7 @@ public static class Figclass {
     internal const int FcMaximg = 4096;
     internal const int FcMaxreg = 128;
     internal const int FcWork = 40000000;
+    internal const int FcDocwork = 400000000;
     internal const int FcZone = 1800;
     internal const int FcPhotoBpp = 130;
     internal const int FcSmall = 15000;
@@ -18,6 +19,7 @@ public static class Figclass {
     internal const int FiStride = 12;
     internal const int FcDigestN = 4096;
     internal const int FcRwork = 20000000;
+    internal const int FcRdocwork = 200000000;
     internal const int FcRpos = 40;
     internal const int FcRscaleLo = 750;
     internal const int FcRscaleHi = 1330;
@@ -66,6 +68,8 @@ public static class Figclass {
     internal const int FtSlant = 42;
     internal const int FtRings = 48;
     internal const int FtCols = 96;
+    internal const int FtPage = 125;
+    internal const int FtPwork = 126;
     internal const int FtWork = 127;
     internal const int FtSize = 128;
     internal const int RgMax = 16;
@@ -789,15 +793,32 @@ public static class Figclass {
         }
         return 0;
     }
+    internal static int FcCharge(emon.Port.Cells ws, int visits) {
+        // Admit one complete indexed loop, then charge its exact row visits. Never overrun either cap.
+        if (visits > (FcDocwork - emon.Port.CellsAt(ws, FtWork))) {
+            return 2;
+        }
+        if (visits > (FcWork - emon.Port.CellsAt(ws, FtPwork))) {
+            return 1;
+        }
+        emon.Port.CellsSet(ws, FtWork, emon.Port.CellsAt(ws, FtWork) + visits);
+        emon.Port.CellsSet(ws, FtPwork, emon.Port.CellsAt(ws, FtPwork) + visits);
+        return 0;
+    }
     internal static int FcTicks(emon.Port.Cells pa, int page, int rx0, int ry0, int rx1, int ry1, emon.Port.Cells ws) {
         // Short rules (1.5 to 11 pt) that cross or touch an axis, along it: its ticks.
-        int n = emon.Port.CellsLen(pa) / 24;
-        int i = 0;
+        int n = Pagebounds.PbAfter(pa, 24, page);
+        int first = Pagebounds.PbFirst(pa, 24, page);
+        int status = FcCharge(ws, n - first);
+        int i = first;
         int x0 = 0;
         int y0 = 0;
         int x1 = 0;
         int y1 = 0;
         int kind = 0;
+        if (status != 0) {
+            return status;
+        }
         while (i < n) {
             if ((Evidence.PaGet(pa, i, Evidence.PfPage()) == page) && ((Evidence.PaGet(pa, i, Evidence.PfVis()) == 0) && ((Evidence.PaGet(pa, i, Evidence.PfFlags()) & Evidence.PgClip()) == 0))) {
                 kind = Evidence.PaGet(pa, i, Evidence.PfKind());
@@ -875,8 +896,10 @@ public static class Figclass {
     internal static int FcWords(emon.Port.Cells fw, emon.Port.Cells et, int page, int rx0, int ry0, int rx1, int ry1, emon.Port.Cells ws) {
         // The words in the region and within `FC_ZONE` of it: how many, how many are numbers, how many lie in it; the words inside each
         // box; the small squares with a word at their right.
-        int n = Evidence.WdCount(fw);
-        int i = 0;
+        int n = Pagebounds.PbAfter(fw, 24, page);
+        int first = Pagebounds.PbFirst(fw, 24, page);
+        int status = FcCharge(ws, n - first);
+        int i = first;
         int x0 = 0;
         int y0 = 0;
         int x1 = 0;
@@ -887,6 +910,9 @@ public static class Figclass {
         int p = 0;
         int nb = FcMin(emon.Port.CellsAt(ws, FtBoxes), BxMax);
         int ns = FcMin(emon.Port.CellsAt(ws, FtNsw), SwMax);
+        if (status != 0) {
+            return status;
+        }
         while (i < n) {
             if (Evidence.WdGet(fw, i, Evidence.HdPage()) == page) {
                 x0 = Evidence.WdGet(fw, i, Evidence.HdX0());
@@ -938,14 +964,19 @@ public static class Figclass {
             }
             k += 1;
         }
-        return n;
+        return 0;
     }
     internal static int FcLines(emon.Port.Cells fl, int page, int rx0, int ry0, int rx1, int ry1, emon.Port.Cells ws) {
         // Lines of five words or more whose centre is in the region: prose. A region with some is a text box, a sidebar or a background.
-        int n = Evidence.LnCount(fl);
-        int i = 0;
+        int n = Pagebounds.PbAfter(fl, 16, page);
+        int first = Pagebounds.PbFirst(fl, 16, page);
+        int status = FcCharge(ws, n - first);
+        int i = first;
         int cx = 0;
         int cy = 0;
+        if (status != 0) {
+            return status;
+        }
         while (i < n) {
             if ((Evidence.LnGet(fl, i, Evidence.LhPage()) == page) && (Evidence.LnGet(fl, i, Evidence.LhCount()) >= 5)) {
                 cx = (Evidence.LnGet(fl, i, Evidence.LhX0()) + Evidence.LnGet(fl, i, Evidence.LhX1())) / 2;
@@ -956,15 +987,19 @@ public static class Figclass {
             }
             i += 1;
         }
-        return n;
+        return 0;
     }
     public static int FcMeasure(emon.Port.Cells pa, emon.Port.Cells grl, emon.Port.Cells fw, emon.Port.Cells fl, emon.Port.Cells et, int page, int rx0, int ry0, int rx1, int ry1, emon.Port.Cells ws) {
         // Measure the region: `ft`'s slots of `ws`, the boxes, the small squares and the bars. Answers 0, or 1 when the document's
-        // budget of rows (`FC_WORK`) is spent and the region was left unmeasured.
+        // page budget of rows (`FC_WORK`) is spent, or 2 for the document cap (`FC_DOCWORK`). No failed measurement is classified.
         int work = emon.Port.CellsAt(ws, FtWork);
-        int n = emon.Port.CellsLen(pa) / 24;
+        int first = Pagebounds.PbFirst(pa, 24, page);
+        int oldpage = emon.Port.CellsAt(ws, FtPage);
+        int oldwork = emon.Port.CellsAt(ws, FtPwork);
         int pend = Pagebounds.PbAfter(pa, 24, page);
-        int ng = Glayer.GrlCount(grl);
+        int ng = Pagebounds.PbAfter(grl, 24, page);
+        int gfirst = Pagebounds.PbFirst(grl, 24, page);
+        int status = 0;
         int rw = rx1 - rx0;
         int rh = ry1 - ry0;
         int i = 0;
@@ -976,10 +1011,14 @@ public static class Figclass {
             i += 1;
         }
         emon.Port.CellsSet(ws, FtWork, work);
-        if (work > FcWork) {
-            return 1;
+        emon.Port.CellsSet(ws, FtPage, page);
+        if (oldpage == page) {
+            emon.Port.CellsSet(ws, FtPwork, oldwork);
         }
-        emon.Port.CellsSet(ws, FtWork, work + (n + (ng + (Evidence.WdCount(fw) + Evidence.LnCount(fl)))));
+        status = FcCharge(ws, pend - first);
+        if (status != 0) {
+            return status;
+        }
         i = Pagebounds.PbFirst(pa, 24, page);
         while (i < pend) {
             if ((Evidence.PaGet(pa, i, Evidence.PfPage()) == page) && ((Evidence.PaGet(pa, i, Evidence.PfVis()) == 0) && ((Evidence.PaGet(pa, i, Evidence.PfFlags()) & Evidence.PgClip()) == 0))) {
@@ -992,7 +1031,11 @@ public static class Figclass {
             i += 1;
         }
         if (emon.Port.CellsAt(ws, FtNp) == 0) {
-            i = 0;
+            status = FcCharge(ws, ng - gfirst);
+            if (status != 0) {
+                return status;
+            }
+            i = gfirst;
             while (i < ng) {
                 if (Glayer.GrlGet(grl, i, 0) == page) {
                     cx = (Glayer.GrlGet(grl, i, 1) + Glayer.GrlGet(grl, i, 3)) / 2;
@@ -1029,12 +1072,21 @@ public static class Figclass {
         }
         FcAxes(ws);
         if (emon.Port.CellsAt(ws, FtAxes) == 1) {
-            FcTicks(pa, page, rx0, ry0, rx1, ry1, ws);
+            status = FcTicks(pa, page, rx0, ry0, rx1, ry1, ws);
+            if (status != 0) {
+                return status;
+            }
         }
         FcBarRun(ws, 0);
         FcBarRun(ws, 1);
-        FcWords(fw, et, page, rx0, ry0, rx1, ry1, ws);
-        FcLines(fl, page, rx0, ry0, rx1, ry1, ws);
+        status = FcWords(fw, et, page, rx0, ry0, rx1, ry1, ws);
+        if (status != 0) {
+            return status;
+        }
+        status = FcLines(fl, page, rx0, ry0, rx1, ry1, ws);
+        if (status != 0) {
+            return status;
+        }
         return 0;
     }
     internal static int FcPack(int kind, int conf) {
@@ -1070,7 +1122,6 @@ public static class Figclass {
         int y0 = emon.Port.CellsAt(fcand, b + (CrVx + 1));
         int w = emon.Port.CellsAt(fcand, b + (CrVx + 2)) - x0;
         int h = emon.Port.CellsAt(fcand, b + (CrVx + 3)) - y0;
-        int n = emon.Port.CellsLen(pa) / 24;
         int pend = Pagebounds.PbAfter(pa, 24, page);
         int i = Pagebounds.PbFirst(pa, 24, page);
         int np = 0;
@@ -1104,18 +1155,35 @@ public static class Figclass {
             emon.Port.CellsSet(fcand, b + (CrSig + 1), np);
             emon.Port.CellsSet(fcand, b + (CrSig + 2), mask);
         }
-        return n;
+        return pend - Pagebounds.PbFirst(pa, 24, page);
     }
-    public static int FcSignRows(emon.Port.Cells fi, emon.Port.Cells pa, emon.Port.Cells fcand) {
+    public static int FcSignRows(emon.Port.Cells fi, emon.Port.Cells pa, emon.Port.Cells fcand, emon.Port.Cells counts) {
         // P8.4: the recurrence signature (`CR_SIG`) of every candidate row that could be a logo: an image placement (its object and its stream's
-        // digest, `fc-digest`) and a small vector region (`fc-sign-vector`). Rows of regions beyond the document's budget (`FC_RWORK`) have none.
+        // digest, `fc-digest`) and a small vector region (`fc-sign-vector`). Rows beyond page (`FC_RWORK`) or document (`FC_RDOCWORK`) budgets are explicitly marked in cell 31.
         int n = emon.Port.CellsLen(fcand) / CrStride;
         int r = 0;
         int b = 0;
         int fb = 0;
         int work = 0;
+        int page = 0;
+        int visits = 0;
+        int maxpage = 0;
+        while (r < n) {
+            maxpage = FcMax(maxpage, emon.Port.CellsAt(fcand, r * CrStride));
+            r += 1;
+        }
+        emon.Port.CellsDrop(counts, 0);
+        r = 0;
+        while (r <= maxpage) {
+            emon.Port.CellsPush(counts, 0);
+            r += 1;
+        }
+        r = 0;
         while (r < n) {
             b = r * CrStride;
+            emon.Port.CellsSet(fcand, b + 31, 0);
+            page = emon.Port.CellsAt(fcand, b);
+            visits = Pagebounds.PbAfter(pa, 24, page) - Pagebounds.PbFirst(pa, 24, page);
             if (emon.Port.CellsAt(fcand, b + CrKori) == -1) {
                 fb = emon.Port.CellsAt(fcand, b + CrRow) * FiStride;
                 if ((fb >= 0) && (((fb + FiStride) <= emon.Port.CellsLen(fi)) && (emon.Port.CellsAt(fi, fb) == 1))) {
@@ -1125,9 +1193,17 @@ public static class Figclass {
                     emon.Port.CellsSet(fcand, b + (CrSig + 3), emon.Port.CellsAt(fi, fb + 5));
                     emon.Port.CellsSet(fcand, b + (CrSig + 4), emon.Port.CellsAt(fi, fb + 6));
                 }
-            } else if ((emon.Port.CellsAt(fcand, b + CrKori) == -2) && (work < FcRwork)) {
+            } else if (emon.Port.CellsAt(fcand, b + CrKori) == -2) {
                 if (((emon.Port.CellsAt(fcand, b + (CrVx + 2)) - emon.Port.CellsAt(fcand, b + CrVx)) <= FcSmall) && ((emon.Port.CellsAt(fcand, b + (CrVx + 3)) - emon.Port.CellsAt(fcand, b + (CrVx + 1))) <= FcSmall)) {
-                    work += FcSignVector(pa, fcand, r);
+                    if (visits > (FcRdocwork - work)) {
+                        emon.Port.CellsSet(fcand, b + 31, 2);
+                    } else if (visits > (FcRwork - emon.Port.CellsAt(counts, page))) {
+                        emon.Port.CellsSet(fcand, b + 31, 1);
+                    } else {
+                        visits = FcSignVector(pa, fcand, r);
+                        work += visits;
+                        emon.Port.CellsSet(counts, page, emon.Port.CellsAt(counts, page) + visits);
+                    }
                 }
             }
             r += 1;
@@ -1504,7 +1580,7 @@ public static class Figclass {
         int capt = 0;
         int rej = 0;
         int @out = 1;
-        int measured = 0;
+        int status = 0;
         int pageh = 0;
         int recur = 0;
         int srcs = 0;
@@ -1522,7 +1598,7 @@ public static class Figclass {
         FcShadingRegions(pa, pages, fcand);
         FcGrgRegions(grg, pages, fcand);
         Asset.AsFigureRows(fcand, pages, nodes, regions, 2, fg);
-        FcSignRows(fi, pa, fcand);
+        FcSignRows(fi, pa, fcand, cl);
         nr = Asset.AsCount(fcand);
         i = 0;
         while (i < (nr * FdStride)) {
@@ -1533,6 +1609,12 @@ public static class Figclass {
         while (i < nr) {
             emon.Port.CellsSet(fd, (i * FdStride) + 3, -1);
             emon.Port.CellsSet(fd, (i * FdStride) + 4, -1);
+            i += 1;
+        }
+        emon.Port.CellsDrop(cl, 0);
+        i = 0;
+        while (i <= Model.PageCount(pages)) {
+            emon.Port.CellsPush(cl, 0);
             i += 1;
         }
         i = 1;
@@ -1547,13 +1629,16 @@ public static class Figclass {
             pageh = Model.PageH(pages, page - 1);
             recur = FcRecur(fcand, pages, row);
             rej = 1;
-            if (measured < FcMaxreg) {
-                measured += 1;
-                rej = 0;
-                if (FcMeasure(pa, grl, fw, fl, et, page, x0, y0, x1, y1, ws) == 0) {
+            status = 3;
+            if (emon.Port.CellsAt(cl, page) < FcMaxreg) {
+                emon.Port.CellsSet(cl, page, emon.Port.CellsAt(cl, page) + 1);
+                status = FcMeasure(pa, grl, fw, fl, et, page, x0, y0, x1, y1, ws);
+                if (status == 0) {
                     rej = FcReject(ws);
                 }
             }
+            emon.Port.CellsSet(fd, (row * FdStride) + 5, status);
+            emon.Port.CellsSet(fd, (row * FdStride) + 6, emon.Port.CellsAt(fcand, b + 31));
             if (FcSignatureOver(sl, page, x0, y0, x1, y1) == 1) {
                 rej = 1;
             }
@@ -1599,5 +1684,57 @@ public static class Figclass {
         emon.Port.CellsDrop(fg, @out);
         Restruct.RsFigures(nodes, attrs, regions, text, fnodes, fattrs, fregions, fnm, fcand, fg, fd, ab);
         return @out - 1;
+    }
+    public static int FcWrite(emon.Port.Cells fcand, emon.Port.Cells fd, emon.Port.Cells ledger) {
+        // Budget evidence: fd slot 5 is measurement status, slot 6 signature status. Preserve each unmeasured box in the dropped ledger.
+        int n = emon.Port.CellsLen(fd) / FdStride;
+        int r = 0;
+        int b = 0;
+        while (r < n) {
+            b = r * CrStride;
+            if (emon.Port.CellsAt(fd, (r * FdStride) + 5) > 0) {
+                Model.LedgerAdd(ledger, Model.DrFigureUnmeasured(), emon.Port.CellsAt(fcand, b), emon.Port.CellsAt(fcand, b + 5), emon.Port.CellsAt(fcand, b + 6), emon.Port.CellsAt(fcand, b + 7), emon.Port.CellsAt(fcand, b + 8), -1, emon.Port.CellsAt(fcand, b + CrSrc));
+            }
+            if (emon.Port.CellsAt(fcand, b + 31) > 0) {
+                Model.LedgerAdd(ledger, Model.DrFigureSignatureUnmeasured(), emon.Port.CellsAt(fcand, b), emon.Port.CellsAt(fcand, b + 5), emon.Port.CellsAt(fcand, b + 6), emon.Port.CellsAt(fcand, b + 7), emon.Port.CellsAt(fcand, b + 8), -1, emon.Port.CellsAt(fcand, b + CrSrc));
+            }
+            r += 1;
+        }
+        return 0;
+    }
+    public static int FcEmitBudget(emon.Port.Cells fcand, emon.Port.Cells fd, System.Text.StringBuilder t) {
+        // Optional evidence member: [page,x0,y0,x1,y1,measurement-status,signature-status]. 1 page work, 2 document work, 3 page candidate count.
+        int n = emon.Port.CellsLen(fd) / FdStride;
+        int r = 0;
+        int k = 0;
+        int @out = 0;
+        while (r < n) {
+            if ((emon.Port.CellsAt(fd, (r * FdStride) + 5) > 0) || (emon.Port.CellsAt(fcand, (r * CrStride) + 31) > 0)) {
+                if (@out == 0) {
+                    emon.Port.TextAscii(t, ",\"fc-unmeasured\":[");
+                } else {
+                    emon.Port.TextAscii(t, ",");
+                }
+                emon.Port.TextAscii(t, "[");
+                emon.Port.TextI32(t, emon.Port.CellsAt(fcand, r * CrStride));
+                k = 5;
+                while (k < 9) {
+                    emon.Port.TextAscii(t, ",");
+                    emon.Port.TextI32(t, emon.Port.CellsAt(fcand, (r * CrStride) + k));
+                    k += 1;
+                }
+                emon.Port.TextAscii(t, ",");
+                emon.Port.TextI32(t, emon.Port.CellsAt(fd, (r * FdStride) + 5));
+                emon.Port.TextAscii(t, ",");
+                emon.Port.TextI32(t, emon.Port.CellsAt(fcand, (r * CrStride) + 31));
+                emon.Port.TextAscii(t, "]");
+                @out += 1;
+            }
+            r += 1;
+        }
+        if (@out > 0) {
+            emon.Port.TextAscii(t, "]");
+        }
+        return @out;
     }
 }

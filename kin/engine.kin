@@ -52,7 +52,7 @@
             [emon.inline :refer [il-analyze il-fonts]]
             [emon.restruct :refer [rs-run]]
             [emon.fields :refer [fl-run]]
-            [emon.figclass :refer [fc-stage fc-images]]
+            [emon.figclass :refer [fc-emit-budget fc-write fc-stage fc-images]]
             [emon.scan :refer [sc-write-rejected-ocr sc-write-empty-ocr sc-write-empty-regions sc-clean-text sc-trust sc-tag sc-tag-unread sc-write-bare]]
             [emon.ocrledger :refer [oc-account]]
             [emon.rasterplan :refer [rp-settings]]
@@ -312,6 +312,7 @@
   (fc-stage (fd m nodes) (fd m attrs) (fd m regions) (fd m text) (fd m pages) (fd s fnodes) (fd s fattrs) (fd s fregions) (fd s fnm)
             (fd d pa) (fd d im) (fd d fi) (fd s grg) (fd d grl) (fd d fw) (fd d fl) (fd d et) (fd d pg) (fd s sm) (fd d cand) level
             (fd s fcand) (fd s fcl) (fd s fg) (fd s ffd) (fd s fab) (fd s fws))
+  (fc-write (fd s fcand) (fd s ffd) (fd m ledger))
   (cells-swap (fd m nodes) (fd s fnodes))
   (cells-swap (fd m attrs) (fd s fattrs))
   (cells-swap (fd m regions) (fd s fregions))
@@ -359,8 +360,7 @@
     (if (!= (fd c keep) 0)
       (do (if (and (== kind 0) (> (cells-len (fd s tv)) 0))
             (do (emit-ascii (fd d evidence) ",\"tb\":")
-                (tt-emit (fd d evidence) (fd s tv))))
-          (emit-ascii (fd d evidence) "}")))
+                (tt-emit (fd d evidence) (fd s tv))))))
     ;; the initials (kin/initial.kin, P4.10) read the glyphs and fonts, and the locale tag as code points; found in the copy of the lines BEFORE the heading analysis reads it
     (cells-copy-into (fd s iloc) (fd c lcl))
     (lc-copy (fd d fl) (fd s lt))
@@ -383,6 +383,9 @@
     ;; the figures (P8.1, SPEC 10.6): at every level of `assets`, before the restructuring, which pairs a caption with the figure beside it
     (if (== kind 0)
       (en-figures m s d (fd c level)))
+    (if (!= (fd c keep) 0)
+      (do (if (== kind 0) (fc-emit-budget (fd s fcand) (fd s ffd) (fd d evidence)))
+          (emit-ascii (fd d evidence) "}")))
     ;; restructuring (kin/restruct.kin, P4.5, P4.6): the body is copied into new arenas, in document order, and they replace the old ones
       (rs-run (fd m nodes) (fd m attrs) (fd m regions) (fd m text) (fd s rn) (fd s ra) (fd s rr) (fd s rnm) (fd s rstk) (fd s rused) (fd s rout)
              (fd m layout))

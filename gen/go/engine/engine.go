@@ -336,6 +336,7 @@ func enFigures(m *enctx.Arenas, s *enctx.Scratch, d *enctx.Doc, level int32) int
 	// P8.1 (SPEC 10.6): the figures, before `rs-run` (a caption next to one finds it as its object): every output has them, at every level of
 	// `assets` (which only decides whether they get pixels, and tells the asset stage's candidate rows `cand` what P8.1 found).
 	figclass.FcStage(m.Nodes, m.Attrs, m.Regions, m.Text, m.Pages, s.Fnodes, s.Fattrs, s.Fregions, s.Fnm, d.Pa, d.Im, d.Fi, s.Grg, d.Grl, d.Fw, d.Fl, d.Et, d.Pg, s.Sm, d.Cand, level, s.Fcand, s.Fcl, s.Fg, s.Ffd, s.Fab, s.Fws)
+	figclass.FcWrite(s.Fcand, s.Ffd, m.Ledger)
 	port.CellsSwap(m.Nodes, s.Fnodes)
 	port.CellsSwap(m.Attrs, s.Fattrs)
 	port.CellsSwap(m.Regions, s.Fregions)
@@ -379,7 +380,6 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 			port.TextAscii(d.Evidence, ",\"tb\":")
 			tagtable.TtEmit(d.Evidence, s.Tv)
 		}
-		port.TextAscii(d.Evidence, "}")
 	}
 	port.CellsCopyInto(s.Iloc, c.Lcl)
 	columns.LcCopy(d.Fl, s.Lt)
@@ -395,6 +395,12 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 	para.PaBuild(d.Fw, d.Et, np, m.Pages, m.Layout, m.Nodes, m.Attrs, m.Regions, m.Text, s.Ord, s.Raw, s.Tmp, s.Fr, s.Gp, s.Lt, s.Ls, s.Sd, s.It, s.Io, s.Rw, s.Gu, s.Ac, s.Tm, s.Cf, s.Lo, s.Pr, s.Dbg, s.Hc, s.Tb, s.Tc, s.Tw, s.Tq, m.Ledger, s.Ii, s.Al, s.Pix)
 	if kind == 0 {
 		enFigures(m, s, d, c.Level)
+	}
+	if c.Keep != 0 {
+		if kind == 0 {
+			figclass.FcEmitBudget(s.Fcand, s.Ffd, d.Evidence)
+		}
+		port.TextAscii(d.Evidence, "}")
 	}
 	restruct.RsRun(m.Nodes, m.Attrs, m.Regions, m.Text, s.Rn, s.Ra, s.Rr, s.Rnm, s.Rstk, s.Rused, s.Rout, m.Layout)
 	port.CellsSwap(m.Nodes, s.Rn)

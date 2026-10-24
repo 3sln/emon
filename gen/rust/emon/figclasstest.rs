@@ -515,6 +515,7 @@ pub(crate) fn ft_pages(mut pages: &mut crate::port::Cells, n: i32) -> i32 {
 #[test]
 fn test_a_raster_on_other_pages_is_a_recurring_logo_by_its_object_or_its_digest() {
     let fi: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let counts: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -530,19 +531,20 @@ fn test_a_raster_on_other_pages_is_a_recurring_logo_by_its_object_or_its_digest(
     ft_img_cand(cand, 3, 5000, 5000, 9000, 7000, 7, 0);
     ft_img_cand(cand, 4, 5000, 5000, 9000, 7000, 11, 3);
     ft_img_cand(cand, 1, 20000, 5000, 24000, 7000, 7, 0);
-    fc_sign_rows(fi, pa, cand);
+    fc_sign_rows(fi, pa, cand, counts);
     crate::testport::assert_eq(fc_recur(cand, pages, 1), 160, "the raster of page 2 is on two other pages (its digest equals the others', wherever it stands)");
     crate::testport::assert_eq(fc_recur(cand, pages, 0), 160, "the one of page 1: pages 2 (digest) and 3 (object); its second use on page 1 does not count");
     crate::testport::assert_eq(fc_recur(cand, pages, 3), 0, "a raster with another digest and object recurs nowhere");
     // the same digest with another pixel size is another raster
     ft_img_cand(cand, 3, 5000, 5000, 9000, 7000, 12, 2);
-    fc_sign_rows(fi, pa, cand);
+    fc_sign_rows(fi, pa, cand, counts);
     crate::testport::assert_eq(fc_recur(cand, pages, 5), 0, "the same digest of another size is no recurrence");
     crate::testport::assert_eq(fc_recur(cand, pages, 3), 0, "and it is not on the others' count");
 }
 #[test]
 fn test_vector_art_recurs_at_the_same_place_whatever_its_scale() {
     let fi: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let counts: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -563,7 +565,7 @@ fn test_vector_art_recurs_at_the_same_place_whatever_its_scale() {
     ft_path(pa, 4, 3, 7300, 7300, 13300, 13300, 43639, -1, 9);
     ft_path(pa, 4, 2, 9700, 9700, 10900, 10900, 16777215, -1, 8);
     ft_vec_cand(cand, 4, 7300, 7300, 13300, 13300);
-    fc_sign_rows(fi, pa, cand);
+    fc_sign_rows(fi, pa, cand, counts);
     crate::testport::assert_eq(fc_recur(cand, pages, 0), 100, "page 1's mark recurs on page 2 only: page 3 is another place and page 4 another scale");
     crate::testport::assert_eq(fc_recur(cand, pages, 1), 100, "and page 2's on page 1");
     crate::testport::assert_eq(fc_recur(cand, pages, 2), 0, "the same drawing mid-page recurs nowhere");
@@ -576,4 +578,171 @@ fn test_a_recurring_raster_is_a_logo_wherever_it_stands_and_a_lone_one_is_not() 
     crate::testport::assert_eq(fc_image_kind(fi, 0, 4000, 4000, 30000, 34000, 79200, 0) / 1024, fg_unknown(), "a small flat raster mid-page, seen once");
     crate::testport::assert_eq(fc_image_kind(fi, 0, 4000, 4000, 30000, 34000, 79200, 100) / 1024, fg_logo(), "the same on another page too: a logo");
     crate::testport::assert_eq(fc_image_kind(fi, 0, 4000, 4000, 30000, 34000, 79200, 220) % 1024, 800, "and surer for each page it is on");
+}
+#[test]
+fn test_measure_charges_only_the_page_prefix_visited() {
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut p: i32 = 2;
+    ft_path(pa, 1, 2, 10000, 10000, 30000, 20000, -1, -1, 72);
+    ft_ws(ws);
+    crate::testport::assert_eq(fc_measure(pa, grl, fw, fl, et, 1, 10000, 10000, 30000, 20000, ws), 0, "prefix measured");
+    crate::testport::assert_eq(crate::port::cells_at(ws, 127), 1, "one indexed path visited");
+    while p <= 16 {
+        ft_path(pa, p, 2, 10000, 10000, 30000, 20000, -1, -1, 72);
+        p += 1;
+    }
+    crate::port::cells_set(ws, 127, 0);
+    crate::testport::assert_eq(fc_measure(pa, grl, fw, fl, et, 1, 10000, 10000, 30000, 20000, ws), 0, "extended prefix measured");
+    crate::testport::assert_eq(crate::port::cells_at(ws, 127), 1, "later pages cost no visits");
+    crate::testport::assert_eq(crate::port::cells_at(ws, 20), 1, "same shaded fill decision");
+}
+#[test]
+fn test_document_work_cap_refuses_before_visiting_and_clears_features() {
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    ft_path(pa, 1, 2, 10000, 10000, 30000, 20000, -1, -1, 72);
+    ft_ws(ws);
+    crate::port::cells_set(ws, 127, 400000000);
+    crate::port::cells_set(ws, 20, 1);
+    crate::testport::assert_eq(fc_measure(pa, grl, fw, fl, et, 1, 10000, 10000, 30000, 20000, ws), 2, "explicit document resource refusal");
+    crate::testport::assert_eq(crate::port::cells_at(ws, 127), 400000000, "no visits beyond cap");
+    crate::testport::assert_eq(crate::port::cells_at(ws, 20), 0, "no previous candidate's features");
+}
+#[test]
+fn test_page_work_cannot_starve_the_following_page() {
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    ft_path(pa, 1, 2, 10000, 10000, 30000, 20000, -1, -1, 72);
+    ft_path(pa, 2, 2, 10000, 10000, 30000, 20000, -1, -1, 72);
+    ft_ws(ws);
+    crate::port::cells_set(ws, 125, 1);
+    crate::port::cells_set(ws, 126, 40000000);
+    crate::testport::assert_eq(fc_measure(pa, grl, fw, fl, et, 1, 10000, 10000, 30000, 20000, ws), 1, "page allowance exhausted");
+    crate::testport::assert_eq(fc_measure(pa, grl, fw, fl, et, 2, 10000, 10000, 30000, 20000, ws), 0, "next page has its own allowance");
+    crate::testport::assert_eq(crate::port::cells_at(ws, 20), 1, "next page measured");
+}
+pub(crate) fn ft_budget_pages(emon_t: i32, n: i32) -> i32 {
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fnodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fattrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fregions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fnm: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fi: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fcand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ab: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut p: i32 = 1;
+    let mut i: i32 = 0;
+    let mut x: i32 = 0;
+    let mut y: i32 = 0;
+    let mut count: i32 = 0;
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    while p <= n {
+        page_new(pages, p, 500000, 792000, 0, pk_vector());
+        i = 0;
+        while i < 129 {
+            x = 1000 + ((i % 20) * 20000);
+            y = 1000 + ((i / 20) * 10000);
+            ft_path(pa, p, 2, x, y, x + 16000, y + 8000, -1, -1, 72);
+            i += 1;
+        }
+        p += 1;
+    }
+    count = fc_stage(nodes, attrs, regions, text, pages, fnodes, fattrs, fregions, fnm, pa, im, fi, grg, grl, fw, fl, et, pg, sl, cand, 0, fcand, cl, fg, fd, ab, ws);
+    crate::testport::assert_eq(count, n * 128, "each page gets 128 measurements regardless of document length");
+    i = 0;
+    count = 0;
+    while i < (crate::port::cells_len(fd) / 8) {
+        if crate::port::cells_at(fd, (i * 8) + 5) == 3 {
+            count += 1;
+        }
+        i += 1;
+    }
+    crate::testport::assert_eq(count, n, "every over-limit region has explicit evidence");
+    fc_write(fcand, fd, ledger);
+    crate::testport::assert_eq(ledger_count(ledger), n, "every unmeasured box reaches the dropped ledger");
+    crate::testport::assert_eq(ledger_reason(ledger, 0), dr_figure_unmeasured(), "the ledger names the resource refusal");
+    return count;
+}
+#[test]
+fn test_page_candidate_prefix_invariance_at_one_four_and_sixteen() {
+    crate::testport::assert_eq(ft_budget_pages(0, 1), 1, "one page");
+    crate::testport::assert_eq(ft_budget_pages(0, 4), 4, "four pages");
+    crate::testport::assert_eq(ft_budget_pages(0, 16), 16, "sixteen pages");
+}
+#[test]
+fn test_unmeasured_document_region_is_explicit_in_evidence_and_ledger() {
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    ft_cand(cand, 1, 10000, 20000, 30000, 40000);
+    ft_fd(fd, 0, 0);
+    crate::port::cells_set(fd, 5, 2);
+    crate::port::cells_set(cand, 31, 2);
+    crate::testport::assert_eq(fc_emit_budget(cand, fd, t), 1, "one explicit resource record");
+    crate::testport::assert_text(t, ",\"fc-unmeasured\":[[1,10000,20000,30000,40000,2,2]]", "document refusals retain both statuses and the exact box");
+    fc_write(cand, fd, ledger);
+    crate::testport::assert_eq(ledger_count(ledger), 2, "measurement and signature refusal both represented");
+    crate::testport::assert_eq(ledger_reason(ledger, 0), dr_figure_unmeasured(), "unmeasured is distinct from measured rejection");
+}
+pub(crate) fn ft_signature_prefix(emon_t: i32, npages: i32) -> i32 {
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fi: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let counts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut p: i32 = 1;
+    let mut r: i32 = 0;
+    while p <= npages {
+        ft_path(pa, p, 3, 7300, 7300, 10300, 10300, 43639, -1, 9);
+        ft_path(pa, p, 2, 8500, 8500, 9100, 9100, 16777215, -1, 8);
+        p += 1;
+    }
+    while r < 6300 {
+        ft_vec_cand(cand, 1, 7300, 7300, 10300, 10300);
+        r += 1;
+    }
+    fc_sign_rows(fi, pa, cand, counts);
+    crate::testport::assert_eq(crate::port::cells_at(cand, (6299 * 32) + 13), 2, "the last first-page signature survives appended pages");
+    crate::testport::assert_eq(crate::port::cells_at(cand, (6299 * 32) + 14), 2, "the unchanged drawing has two paths");
+    crate::testport::assert_eq(crate::port::cells_at(cand, (6299 * 32) + 31), 0, "appended pages spend no first-page resource allowance");
+    return 0;
+}
+#[test]
+fn test_signature_budget_prefix_invariance_at_one_four_and_sixteen() {
+    ft_signature_prefix(0, 100);
+    ft_signature_prefix(0, 400);
+    ft_signature_prefix(0, 1600);
 }

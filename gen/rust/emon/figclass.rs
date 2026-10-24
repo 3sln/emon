@@ -14,6 +14,7 @@ use crate::emon::restruct::*;
 pub(crate) const FC_MAXIMG: i32 = 4096;
 pub(crate) const FC_MAXREG: i32 = 128;
 pub(crate) const FC_WORK: i32 = 40000000;
+pub(crate) const FC_DOCWORK: i32 = 400000000;
 pub(crate) const FC_ZONE: i32 = 1800;
 pub(crate) const FC_PHOTO_BPP: i32 = 130;
 pub(crate) const FC_SMALL: i32 = 15000;
@@ -24,6 +25,7 @@ pub(crate) const FC_CAPGAP: i32 = 4000;
 pub(crate) const FI_STRIDE: i32 = 12;
 pub(crate) const FC_DIGEST_N: i32 = 4096;
 pub(crate) const FC_RWORK: i32 = 20000000;
+pub(crate) const FC_RDOCWORK: i32 = 200000000;
 pub(crate) const FC_RPOS: i32 = 40;
 pub(crate) const FC_RSCALE_LO: i32 = 750;
 pub(crate) const FC_RSCALE_HI: i32 = 1330;
@@ -72,6 +74,8 @@ pub(crate) const FT_ALIGNED: i32 = 41;
 pub(crate) const FT_SLANT: i32 = 42;
 pub(crate) const FT_RINGS: i32 = 48;
 pub(crate) const FT_COLS: i32 = 96;
+pub(crate) const FT_PAGE: i32 = 125;
+pub(crate) const FT_PWORK: i32 = 126;
 pub(crate) const FT_WORK: i32 = 127;
 pub(crate) const FT_SIZE: i32 = 128;
 pub(crate) const RG_MAX: i32 = 16;
@@ -795,15 +799,32 @@ pub(crate) fn fc_axes(mut ws: &mut crate::port::Cells) -> i32 {
     }
     return 0;
 }
+pub(crate) fn fc_charge(mut ws: &mut crate::port::Cells, visits: i32) -> i32 {
+    // Admit one complete indexed loop, then charge its exact row visits. Never overrun either cap.
+    if visits > (FC_DOCWORK - crate::port::cells_at(ws, FT_WORK)) {
+        return 2;
+    }
+    if visits > (FC_WORK - crate::port::cells_at(ws, FT_PWORK)) {
+        return 1;
+    }
+    crate::port::cells_set(ws, FT_WORK, crate::port::cells_at(ws, FT_WORK) + visits);
+    crate::port::cells_set(ws, FT_PWORK, crate::port::cells_at(ws, FT_PWORK) + visits);
+    return 0;
+}
 pub(crate) fn fc_ticks(pa: &mut crate::port::Cells, page: i32, rx0: i32, ry0: i32, rx1: i32, ry1: i32, mut ws: &mut crate::port::Cells) -> i32 {
     // Short rules (1.5 to 11 pt) that cross or touch an axis, along it: its ticks.
-    let n: i32 = crate::port::cells_len(pa) / 24;
-    let mut i: i32 = 0;
+    let n: i32 = pb_after(pa, 24, page);
+    let first: i32 = pb_first(pa, 24, page);
+    let status: i32 = fc_charge(ws, n - first);
+    let mut i: i32 = first;
     let mut x0: i32 = 0;
     let mut y0: i32 = 0;
     let mut x1: i32 = 0;
     let mut y1: i32 = 0;
     let mut kind: i32 = 0;
+    if status != 0 {
+        return status;
+    }
     while i < n {
         if (pa_get(pa, i, pf_page()) == page) && ((pa_get(pa, i, pf_vis()) == 0) && ((pa_get(pa, i, pf_flags()) & pg_clip()) == 0)) {
             kind = pa_get(pa, i, pf_kind());
@@ -881,8 +902,10 @@ pub(crate) fn fc_bar_run(mut ws: &mut crate::port::Cells, dir: i32) -> i32 {
 pub(crate) fn fc_words(fw: &mut crate::port::Cells, et: &mut crate::port::Cells, page: i32, rx0: i32, ry0: i32, rx1: i32, ry1: i32, mut ws: &mut crate::port::Cells) -> i32 {
     // The words in the region and within `FC_ZONE` of it: how many, how many are numbers, how many lie in it; the words inside each
     // box; the small squares with a word at their right.
-    let n: i32 = wd_count(fw);
-    let mut i: i32 = 0;
+    let n: i32 = pb_after(fw, 24, page);
+    let first: i32 = pb_first(fw, 24, page);
+    let status: i32 = fc_charge(ws, n - first);
+    let mut i: i32 = first;
     let mut x0: i32 = 0;
     let mut y0: i32 = 0;
     let mut x1: i32 = 0;
@@ -893,6 +916,9 @@ pub(crate) fn fc_words(fw: &mut crate::port::Cells, et: &mut crate::port::Cells,
     let mut p: i32 = 0;
     let nb: i32 = fc_min(crate::port::cells_at(ws, FT_BOXES), BX_MAX);
     let ns: i32 = fc_min(crate::port::cells_at(ws, FT_NSW), SW_MAX);
+    if status != 0 {
+        return status;
+    }
     while i < n {
         if wd_get(fw, i, hd_page()) == page {
             x0 = wd_get(fw, i, hd_x0());
@@ -944,14 +970,19 @@ pub(crate) fn fc_words(fw: &mut crate::port::Cells, et: &mut crate::port::Cells,
         }
         k += 1;
     }
-    return n;
+    return 0;
 }
 pub(crate) fn fc_lines(fl: &mut crate::port::Cells, page: i32, rx0: i32, ry0: i32, rx1: i32, ry1: i32, mut ws: &mut crate::port::Cells) -> i32 {
     // Lines of five words or more whose centre is in the region: prose. A region with some is a text box, a sidebar or a background.
-    let n: i32 = ln_count(fl);
-    let mut i: i32 = 0;
+    let n: i32 = pb_after(fl, 16, page);
+    let first: i32 = pb_first(fl, 16, page);
+    let status: i32 = fc_charge(ws, n - first);
+    let mut i: i32 = first;
     let mut cx: i32 = 0;
     let mut cy: i32 = 0;
+    if status != 0 {
+        return status;
+    }
     while i < n {
         if (ln_get(fl, i, lh_page()) == page) && (ln_get(fl, i, lh_count()) >= 5) {
             cx = (ln_get(fl, i, lh_x0()) + ln_get(fl, i, lh_x1())) / 2;
@@ -962,15 +993,19 @@ pub(crate) fn fc_lines(fl: &mut crate::port::Cells, page: i32, rx0: i32, ry0: i3
         }
         i += 1;
     }
-    return n;
+    return 0;
 }
 pub fn fc_measure(pa: &mut crate::port::Cells, grl: &mut crate::port::Cells, fw: &mut crate::port::Cells, fl: &mut crate::port::Cells, et: &mut crate::port::Cells, page: i32, rx0: i32, ry0: i32, rx1: i32, ry1: i32, mut ws: &mut crate::port::Cells) -> i32 {
     // Measure the region: `ft`'s slots of `ws`, the boxes, the small squares and the bars. Answers 0, or 1 when the document's
-    // budget of rows (`FC_WORK`) is spent and the region was left unmeasured.
+    // page budget of rows (`FC_WORK`) is spent, or 2 for the document cap (`FC_DOCWORK`). No failed measurement is classified.
     let work: i32 = crate::port::cells_at(ws, FT_WORK);
-    let n: i32 = crate::port::cells_len(pa) / 24;
+    let first: i32 = pb_first(pa, 24, page);
+    let oldpage: i32 = crate::port::cells_at(ws, FT_PAGE);
+    let oldwork: i32 = crate::port::cells_at(ws, FT_PWORK);
     let pend: i32 = pb_after(pa, 24, page);
-    let ng: i32 = grl_count(grl);
+    let ng: i32 = pb_after(grl, 24, page);
+    let gfirst: i32 = pb_first(grl, 24, page);
+    let mut status: i32 = 0;
     let rw: i32 = rx1 - rx0;
     let rh: i32 = ry1 - ry0;
     let mut i: i32 = 0;
@@ -982,10 +1017,14 @@ pub fn fc_measure(pa: &mut crate::port::Cells, grl: &mut crate::port::Cells, fw:
         i += 1;
     }
     crate::port::cells_set(ws, FT_WORK, work);
-    if work > FC_WORK {
-        return 1;
+    crate::port::cells_set(ws, FT_PAGE, page);
+    if oldpage == page {
+        crate::port::cells_set(ws, FT_PWORK, oldwork);
     }
-    crate::port::cells_set(ws, FT_WORK, work + (n + (ng + (wd_count(fw) + ln_count(fl)))));
+    status = fc_charge(ws, pend - first);
+    if status != 0 {
+        return status;
+    }
     i = pb_first(pa, 24, page);
     while i < pend {
         if (pa_get(pa, i, pf_page()) == page) && ((pa_get(pa, i, pf_vis()) == 0) && ((pa_get(pa, i, pf_flags()) & pg_clip()) == 0)) {
@@ -998,7 +1037,11 @@ pub fn fc_measure(pa: &mut crate::port::Cells, grl: &mut crate::port::Cells, fw:
         i += 1;
     }
     if crate::port::cells_at(ws, FT_NP) == 0 {
-        i = 0;
+        status = fc_charge(ws, ng - gfirst);
+        if status != 0 {
+            return status;
+        }
+        i = gfirst;
         while i < ng {
             if grl_get(grl, i, 0) == page {
                 cx = (grl_get(grl, i, 1) + grl_get(grl, i, 3)) / 2;
@@ -1035,12 +1078,21 @@ pub fn fc_measure(pa: &mut crate::port::Cells, grl: &mut crate::port::Cells, fw:
     }
     fc_axes(ws);
     if crate::port::cells_at(ws, FT_AXES) == 1 {
-        fc_ticks(pa, page, rx0, ry0, rx1, ry1, ws);
+        status = fc_ticks(pa, page, rx0, ry0, rx1, ry1, ws);
+        if status != 0 {
+            return status;
+        }
     }
     fc_bar_run(ws, 0);
     fc_bar_run(ws, 1);
-    fc_words(fw, et, page, rx0, ry0, rx1, ry1, ws);
-    fc_lines(fl, page, rx0, ry0, rx1, ry1, ws);
+    status = fc_words(fw, et, page, rx0, ry0, rx1, ry1, ws);
+    if status != 0 {
+        return status;
+    }
+    status = fc_lines(fl, page, rx0, ry0, rx1, ry1, ws);
+    if status != 0 {
+        return status;
+    }
     return 0;
 }
 pub(crate) fn fc_pack(kind: i32, conf: i32) -> i32 {
@@ -1076,7 +1128,6 @@ pub(crate) fn fc_sign_vector(pa: &mut crate::port::Cells, mut fcand: &mut crate:
     let y0: i32 = crate::port::cells_at(fcand, b + (CR_VX + 1));
     let w: i32 = crate::port::cells_at(fcand, b + (CR_VX + 2)) - x0;
     let h: i32 = crate::port::cells_at(fcand, b + (CR_VX + 3)) - y0;
-    let n: i32 = crate::port::cells_len(pa) / 24;
     let pend: i32 = pb_after(pa, 24, page);
     let mut i: i32 = pb_first(pa, 24, page);
     let mut np: i32 = 0;
@@ -1110,18 +1161,35 @@ pub(crate) fn fc_sign_vector(pa: &mut crate::port::Cells, mut fcand: &mut crate:
         crate::port::cells_set(fcand, b + (CR_SIG + 1), np);
         crate::port::cells_set(fcand, b + (CR_SIG + 2), mask);
     }
-    return n;
+    return pend - pb_first(pa, 24, page);
 }
-pub fn fc_sign_rows(fi: &mut crate::port::Cells, pa: &mut crate::port::Cells, mut fcand: &mut crate::port::Cells) -> i32 {
+pub fn fc_sign_rows(fi: &mut crate::port::Cells, pa: &mut crate::port::Cells, mut fcand: &mut crate::port::Cells, mut counts: &mut crate::port::Cells) -> i32 {
     // P8.4: the recurrence signature (`CR_SIG`) of every candidate row that could be a logo: an image placement (its object and its stream's
-    // digest, `fc-digest`) and a small vector region (`fc-sign-vector`). Rows of regions beyond the document's budget (`FC_RWORK`) have none.
+    // digest, `fc-digest`) and a small vector region (`fc-sign-vector`). Rows beyond page (`FC_RWORK`) or document (`FC_RDOCWORK`) budgets are explicitly marked in cell 31.
     let n: i32 = crate::port::cells_len(fcand) / CR_STRIDE;
     let mut r: i32 = 0;
     let mut b: i32 = 0;
     let mut fb: i32 = 0;
     let mut work: i32 = 0;
+    let mut page: i32 = 0;
+    let mut visits: i32 = 0;
+    let mut maxpage: i32 = 0;
+    while r < n {
+        maxpage = fc_max(maxpage, crate::port::cells_at(fcand, r * CR_STRIDE));
+        r += 1;
+    }
+    crate::port::cells_drop(counts, 0);
+    r = 0;
+    while r <= maxpage {
+        crate::port::cells_push(counts, 0);
+        r += 1;
+    }
+    r = 0;
     while r < n {
         b = r * CR_STRIDE;
+        crate::port::cells_set(fcand, b + 31, 0);
+        page = crate::port::cells_at(fcand, b);
+        visits = pb_after(pa, 24, page) - pb_first(pa, 24, page);
         if crate::port::cells_at(fcand, b + CR_KORI) == -1 {
             fb = crate::port::cells_at(fcand, b + CR_ROW) * FI_STRIDE;
             if (fb >= 0) && (((fb + FI_STRIDE) <= crate::port::cells_len(fi)) && (crate::port::cells_at(fi, fb) == 1)) {
@@ -1131,9 +1199,17 @@ pub fn fc_sign_rows(fi: &mut crate::port::Cells, pa: &mut crate::port::Cells, mu
                 crate::port::cells_set(fcand, b + (CR_SIG + 3), crate::port::cells_at(fi, fb + 5));
                 crate::port::cells_set(fcand, b + (CR_SIG + 4), crate::port::cells_at(fi, fb + 6));
             }
-        } else if (crate::port::cells_at(fcand, b + CR_KORI) == -2) && (work < FC_RWORK) {
+        } else if crate::port::cells_at(fcand, b + CR_KORI) == -2 {
             if ((crate::port::cells_at(fcand, b + (CR_VX + 2)) - crate::port::cells_at(fcand, b + CR_VX)) <= FC_SMALL) && ((crate::port::cells_at(fcand, b + (CR_VX + 3)) - crate::port::cells_at(fcand, b + (CR_VX + 1))) <= FC_SMALL) {
-                work += fc_sign_vector(pa, fcand, r);
+                if visits > (FC_RDOCWORK - work) {
+                    crate::port::cells_set(fcand, b + 31, 2);
+                } else if visits > (FC_RWORK - crate::port::cells_at(counts, page)) {
+                    crate::port::cells_set(fcand, b + 31, 1);
+                } else {
+                    visits = fc_sign_vector(pa, fcand, r);
+                    work += visits;
+                    crate::port::cells_set(counts, page, crate::port::cells_at(counts, page) + visits);
+                }
             }
         }
         r += 1;
@@ -1510,7 +1586,7 @@ pub fn fc_stage(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, 
     let mut capt: i32 = 0;
     let mut rej: i32 = 0;
     let mut out: i32 = 1;
-    let mut measured: i32 = 0;
+    let mut status: i32 = 0;
     let mut pageh: i32 = 0;
     let mut recur: i32 = 0;
     let mut srcs: i32 = 0;
@@ -1528,7 +1604,7 @@ pub fn fc_stage(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, 
     fc_shading_regions(pa, pages, fcand);
     fc_grg_regions(grg, pages, fcand);
     as_figure_rows(fcand, pages, nodes, regions, 2, fg);
-    fc_sign_rows(fi, pa, fcand);
+    fc_sign_rows(fi, pa, fcand, cl);
     nr = as_count(fcand);
     i = 0;
     while i < (nr * FD_STRIDE) {
@@ -1539,6 +1615,12 @@ pub fn fc_stage(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, 
     while i < nr {
         crate::port::cells_set(fd, (i * FD_STRIDE) + 3, -1);
         crate::port::cells_set(fd, (i * FD_STRIDE) + 4, -1);
+        i += 1;
+    }
+    crate::port::cells_drop(cl, 0);
+    i = 0;
+    while i <= page_count(pages) {
+        crate::port::cells_push(cl, 0);
         i += 1;
     }
     i = 1;
@@ -1553,13 +1635,16 @@ pub fn fc_stage(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, 
         pageh = page_h(pages, page - 1);
         recur = fc_recur(fcand, pages, row);
         rej = 1;
-        if measured < FC_MAXREG {
-            measured += 1;
-            rej = 0;
-            if fc_measure(pa, grl, fw, fl, et, page, x0, y0, x1, y1, ws) == 0 {
+        status = 3;
+        if crate::port::cells_at(cl, page) < FC_MAXREG {
+            crate::port::cells_set(cl, page, crate::port::cells_at(cl, page) + 1);
+            status = fc_measure(pa, grl, fw, fl, et, page, x0, y0, x1, y1, ws);
+            if status == 0 {
                 rej = fc_reject(ws);
             }
         }
+        crate::port::cells_set(fd, (row * FD_STRIDE) + 5, status);
+        crate::port::cells_set(fd, (row * FD_STRIDE) + 6, crate::port::cells_at(fcand, b + 31));
         if fc_signature_over(sl, page, x0, y0, x1, y1) == 1 {
             rej = 1;
         }
@@ -1605,4 +1690,56 @@ pub fn fc_stage(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, 
     crate::port::cells_drop(fg, out);
     rs_figures(nodes, attrs, regions, text, fnodes, fattrs, fregions, fnm, fcand, fg, fd, ab);
     return out - 1;
+}
+pub fn fc_write(fcand: &mut crate::port::Cells, fd: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells) -> i32 {
+    // Budget evidence: fd slot 5 is measurement status, slot 6 signature status. Preserve each unmeasured box in the dropped ledger.
+    let n: i32 = crate::port::cells_len(fd) / FD_STRIDE;
+    let mut r: i32 = 0;
+    let mut b: i32 = 0;
+    while r < n {
+        b = r * CR_STRIDE;
+        if crate::port::cells_at(fd, (r * FD_STRIDE) + 5) > 0 {
+            ledger_add(ledger, dr_figure_unmeasured(), crate::port::cells_at(fcand, b), crate::port::cells_at(fcand, b + 5), crate::port::cells_at(fcand, b + 6), crate::port::cells_at(fcand, b + 7), crate::port::cells_at(fcand, b + 8), -1, crate::port::cells_at(fcand, b + CR_SRC));
+        }
+        if crate::port::cells_at(fcand, b + 31) > 0 {
+            ledger_add(ledger, dr_figure_signature_unmeasured(), crate::port::cells_at(fcand, b), crate::port::cells_at(fcand, b + 5), crate::port::cells_at(fcand, b + 6), crate::port::cells_at(fcand, b + 7), crate::port::cells_at(fcand, b + 8), -1, crate::port::cells_at(fcand, b + CR_SRC));
+        }
+        r += 1;
+    }
+    return 0;
+}
+pub fn fc_emit_budget(fcand: &mut crate::port::Cells, fd: &mut crate::port::Cells, mut t: &mut String) -> i32 {
+    // Optional evidence member: [page,x0,y0,x1,y1,measurement-status,signature-status]. 1 page work, 2 document work, 3 page candidate count.
+    let n: i32 = crate::port::cells_len(fd) / FD_STRIDE;
+    let mut r: i32 = 0;
+    let mut k: i32 = 0;
+    let mut out: i32 = 0;
+    while r < n {
+        if (crate::port::cells_at(fd, (r * FD_STRIDE) + 5) > 0) || (crate::port::cells_at(fcand, (r * CR_STRIDE) + 31) > 0) {
+            if out == 0 {
+                crate::port::text_ascii(t, ",\"fc-unmeasured\":[");
+            } else {
+                crate::port::text_ascii(t, ",");
+            }
+            crate::port::text_ascii(t, "[");
+            crate::port::text_i32(t, crate::port::cells_at(fcand, r * CR_STRIDE));
+            k = 5;
+            while k < 9 {
+                crate::port::text_ascii(t, ",");
+                crate::port::text_i32(t, crate::port::cells_at(fcand, (r * CR_STRIDE) + k));
+                k += 1;
+            }
+            crate::port::text_ascii(t, ",");
+            crate::port::text_i32(t, crate::port::cells_at(fd, (r * FD_STRIDE) + 5));
+            crate::port::text_ascii(t, ",");
+            crate::port::text_i32(t, crate::port::cells_at(fcand, (r * CR_STRIDE) + 31));
+            crate::port::text_ascii(t, "]");
+            out += 1;
+        }
+        r += 1;
+    }
+    if out > 0 {
+        crate::port::text_ascii(t, "]");
+    }
+    return out;
 }
