@@ -1,7 +1,56 @@
 """Measurement-contract tests; no corpus and no OCR required."""
 import unittest
-from receipts import intact, overlap, words, units, score, angle, input_views, baseline_comparison
+from receipts import intact, overlap, words, units, score, angle, input_views, baseline_comparison, completeness_bounds, menu_items
 class Contracts(unittest.TestCase):
+    def test_completeness_is_an_occurrence_bound_not_an_order_claim(self):
+        g={'model':{'body':{'text':'Soup Soup 12.50'}}}
+        ev={'owords':[{'text':'Soup','line':0,'run':0},
+                       {'text':'12','line':0,'run':0},
+                       {'text':'.','line':0,'run':0},
+                       {'text':'50','line':0,'run':0}],
+            'words':[{'text':'Soup'}]}
+        b=completeness_bounds(g,ev,[('company','Soup Soup')],[['Soup','12.50']])
+        self.assertEqual(b['raw']['words_present'],1)
+        self.assertEqual(b['raw']['entity_company_complete'],0)
+        self.assertEqual(b['raw']['items_complete'],0)
+        self.assertEqual(b['raw']['numeric_present'],0)
+        self.assertEqual(b['raw']['numeric_join_oracle'],1)
+        self.assertEqual(b['raw']['items_numeric_join_complete'],1)
+        self.assertEqual(b['selected']['words_present'],1)
+        # Entity annotations need not be a subset of the body transcription.
+        g={'model':{'body':{'text':'Soup'}}}
+        b=completeness_bounds(g,ev,[('total','12.50')],[])
+        self.assertEqual(b['raw']['entity_total_numeric_join_complete'],1)
+    def test_join_oracle_never_bridges_reads_lines_or_partial_tokens(self):
+        g={'model':{'body':{'text':'12.50'}}}
+        for tail in ({'line':1,'run':0},{'line':0,'run':1},{'line':-1,'run':0},{'line':0}):
+            ev={'owords':[{'text':'12.','line':0,'run':0},dict(text='50',**tail)]}
+            self.assertEqual(completeness_bounds(g,ev,[],[])['raw']['numeric_join_oracle'],0)
+        ev={'owords':[{'text':'x12.50','line':0,'run':0}]}
+        self.assertEqual(completeness_bounds(g,ev,[],[])['raw']['numeric_join_oracle'],0)
+    def test_join_oracle_counts_intervals_and_preserves_characters(self):
+        g={'model':{'body':{'text':'12.50 12.50'}}}
+        ev={'owords':[{'text':'12','line':0,'run':0},
+                       {'text':'.','line':0,'run':0},
+                       {'text':'50','line':0,'run':0}]}
+        self.assertEqual(completeness_bounds(g,ev,[],[])['raw']['numeric_join_oracle'],1)
+        for tokens in (('12','50'),('12',',','50'),('-','12','.','50')):
+            ev={'owords':[{'text':t,'line':0,'run':0} for t in tokens]}
+            target='-12.50' if tokens[0]=='-' else '12.50'
+            g={'model':{'body':{'text':target}}}
+            self.assertEqual(completeness_bounds(g,ev,[],[])['raw']['numeric_join_oracle'],int(tokens[0]=='-'))
+    def test_native_item_groups_and_subgroups_stay_separate(self):
+        def line(cat,value,group,sub=0):
+            return {'category':cat,'group_id':group,'sub_group_id':sub,
+                    'words':[{'text':value,'row_id':0,
+                              'quad':{**{'x'+str(i):0 for i in range(1,5)},
+                                      **{'y'+str(i):0 for i in range(1,5)}}}]}
+        gt={'valid_line':[line('menu.nm','Soup',1),line('menu.price','8.00',2),
+                          line('menu.nm','Bread',2),line('menu.price','9.00',1),
+                          line('menu.sub.nm','Extra',1,1),line('menu.sub.price','1.00',1,1),
+                          line('menu.sub.nm','Other',1,2)]}
+        self.assertEqual(menu_items(gt),[['Soup','9.00'],['8.00','Bread']])
+        self.assertEqual(menu_items(gt,'menu.sub.'),[['Extra','1.00']])
     def test_baseline_comparison_preserves_the_population(self):
         baseline={'sets':{'cord':{'documents':2,'rows':[['a',1],['b',2]],
                                 'totals':{'word_recall':.4,'word_precision':.37,'numeric_recall':.3,'empty':2}}}}

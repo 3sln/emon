@@ -48,7 +48,7 @@
              :task (apply shell "bb" "tools/fuzz/fuzz.clj" "--long" *command-line-args*)}
   ocr  {:doc "Real Tesseract transcripts replayed on Rust and Go (P2.6, P6.5): the spike's page to one evidence dump and a CER, and the committed scans (test/ocr/scan/) through the whole Engine (and the Java Engine, P9.1, when a JDK 22+ is there, and the C# Engine, P9.2, when a .NET 8+ SDK is there) to one Model, JSON and HTML, with the accuracy ratchet of `emon-replay`; no engine runs. Recording is tools/ocr/record.clj and record-scan.clj (live, not gates)."
         :task (apply shell "kin/scripts/ocr" *command-line-args*)}
-  receipts {:doc "Live receipt measurement (non-gate), including input views, OCR reads, child CPU and same-population baseline deltas. bb receipts [--n N] [--set sroie,cord] [--baseline FILE] [--replay-transcripts | --rescore] [--report]"
+  receipts {:doc "Live receipt measurement (non-gate), including input views, OCR reads, child CPU and same-population baseline deltas. bb receipts [--n N] [--set sroie,cord] [--baseline FILE] [--replay-transcripts | --rescore] [--bounds] [--report]"
             :task (do (apply shell "bb" "tools/corpus_link.clj" "--guard" "--task" "receipts" *command-line-args*)
                    (apply shell "bb" "-cp" "tools:tools/lib" "tools/receipts/receipts.clj" *command-line-args*))}
   ocr-live {:doc "RUST ONLY by design (a live recorder, P9.5): LIVE Tesseract over the 55 synthetic scans (the scoreboard's emon-live, ratcheted) and a sample of FUNSD, SROIE and CORD gold: NOT a gate (needs Tesseract, takes minutes; P6.5, D216).  bb ocr-live [--update] [--no-gold] [--gold-n N]"

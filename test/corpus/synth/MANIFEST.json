@@ -6328,8 +6328,8 @@
    "files": {
     "html": {
      "path": "html/receipt-long.html",
-     "sha256": "983c4fa53bef9f2f101610d30210fc2108bb6901a6dce394c1b67fa475cb3362",
-     "bytes": 2082
+     "sha256": "c2b896213c7a59f4f6e6c12ac2f839fd4568f5792273479d4bc417a6f489655b",
+     "bytes": 2172
     },
     "pdf": {
      "path": "pdf/receipt-long.pdf",

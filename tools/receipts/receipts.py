@@ -47,19 +47,82 @@ def annotations(g):
         for line in gt.get('valid_line',[]):
             cat=line.get('category',''); t=' '.join(w['text'] for w in line['words'])
             if cat.startswith(('menu.','total.','sub_total.')): entities.append((cat,t))
-        groups=collections.defaultdict(list)
-        for line in gt.get('valid_line',[]):
-            if line.get('category') in ('menu.nm','menu.cnt','menu.unitprice','menu.price'):
-                groups[(line.get('group_id'),line.get('sub_group_id',0))].append(line)
-        for lines in groups.values():
-            cats={line['category'] for line in lines}
-            if 'menu.nm' not in cats or not cats.intersection(('menu.price','menu.unitprice')): continue
-            rows=collections.defaultdict(list)
-            for line in lines:
-                for w in line['words']: rows[w['row_id']].append(w)
-            ordered=sorted(rows.values(),key=lambda ws:min(min(w['quad']['y'+str(i)] for i in range(1,5)) for w in ws))
-            items.append([w['text'] for ws in ordered for w in sorted(ws,key=lambda w:min(w['quad']['x'+str(i)] for i in range(1,5)))])
+        items=menu_items(gt)
     return image,entities,items
+def menu_items(gt, prefix='menu.'):
+    """Keep native group/sub-group identities; sub-items are a separate cohort."""
+    groups=collections.defaultdict(list)
+    for line in gt.get('valid_line',[]):
+        if line.get('category') in tuple(prefix+k for k in ('nm','cnt','unitprice','price')):
+            groups[(line.get('group_id'),line.get('sub_group_id',0))].append(line)
+    items=[]
+    for lines in groups.values():
+        cats={line['category'] for line in lines}
+        if prefix+'nm' not in cats or not cats.intersection((prefix+'price',prefix+'unitprice')): continue
+        rows=collections.defaultdict(list)
+        for line in lines:
+            for w in line['words']: rows[w['row_id']].append(w)
+        ordered=sorted(rows.values(),key=lambda ws:min(min(w['quad']['y'+str(i)] for i in range(1,5)) for w in ws))
+        items.append([w['text'] for ws in ordered for w in sorted(ws,key=lambda w:min(w['quad']['x'+str(i)] for i in range(1,5)))])
+    return items
+
+def completeness_bounds(g, ev, entities, items):
+    """Optimistic lexical ceilings, never geometric grouping or adoption claims.
+
+    Raw pools all OCR attempts, including losing reads; evidence is the selected
+    word layer. Repeated exact words consume an occurrence budget. The numeric
+    join oracle admits any adjacent whole-token concatenation in one raw line,
+    without changing characters, and deliberately ignores gaps and competition
+    between overlapping joins. Each candidate interval is counted once. It is
+    an upper bound within existing OCR lines, not a safe reconstruction
+    algorithm or a global bound for cross-line baseline repair.
+    """
+    expected=words(text(g['model']['body']))
+    result={}
+    for name,key in (('raw','owords'),('selected','words')):
+        ws=ev.get(key,[])
+        available=collections.Counter(words(' '.join(w.get('text','') for w in ws)))
+        complete=lambda value:not (collections.Counter(words(value))-available)
+        row={'words':len(expected),'words_present':overlap(expected,list(available.elements())),
+             'items':len(items),'items_complete':sum(complete(' '.join(item)) for item in items)}
+        for kind,value in entities:
+            row['entity_'+kind]=row.get('entity_'+kind,0)+1
+            row['entity_'+kind+'_complete']=row.get('entity_'+kind+'_complete',0)+int(complete(value))
+        for kind,pattern in (('numeric',r'\d'),('decimal',r'\d[.,]\d')):
+            target=[w for w in expected if re.search(pattern,w)]
+            row[kind]=len(target)
+            row[kind+'_present']=overlap(target,list(available.elements()))
+        result[name]=row
+    for name,key in (('raw','owords'),('selected','words')):
+        lines=collections.defaultdict(list)
+        for w in ev.get(key,[]):
+            # Unknown line identities cannot authorize a join.
+            if w.get('line',-1)>=0 and (key=='words' or w.get('run',-1)>=0):
+                lines[(w.get('page'),w.get('run'),w['line'])].append(w)
+        candidates=collections.Counter()
+        targets=expected+[w for _,value in entities for w in words(value)]+[w for item in items for value in item for w in words(value)]
+        max_length=max((len(w) for w in targets if re.search(r"\d",w)),default=0)
+        for ws in lines.values():
+            # OCR word order is the logical line order; never bridge separate reads.
+            tokens=[t for w in ws for t in words(w.get('text',''))]
+            for i in range(len(tokens)):
+                joined=''
+                for token in tokens[i:]:
+                    joined+=token
+                    if len(joined)>max_length: break
+                    candidates[joined]+=1
+        available=collections.Counter(words(' '.join(w.get('text','') for w in ev.get(key,[]))))
+        joined_available=available|collections.Counter({token:n for token,n in candidates.items() if re.search(r'\d',token)})
+        complete=lambda value:not (collections.Counter(words(value))-joined_available)
+        result[name]['items_numeric_join_complete']=sum(complete(' '.join(item)) for item in items)
+        for kind,value in entities:
+            counter='entity_'+kind+'_numeric_join_complete'
+            result[name][counter]=result[name].get(counter,0)+int(complete(value))
+        for kind,pattern in (('numeric',r'\d'),('decimal',r'\d[.,]\d')):
+            target=[w for w in expected if re.search(pattern,w)]
+            result[name][kind+'_join_oracle']=sum((collections.Counter(target)&(candidates|available)).values())
+    return result
+
 def score(g,model,ev,entities,items):
     us=units(model); expected=words(text(g['model']['body'])); actual=words(' '.join(text(root) for root in [model.get('body',{})]+model.get('furniture',[])))
     dropped=words(' '.join(text(x) for x in model.get('dropped',[])))
@@ -135,6 +198,7 @@ def main():
     p.add_argument('--baseline',default=str(ROOT/'test/receipts/baseline.json'),help='compare only when document IDs match this baseline')
     p.add_argument('--bin',default=os.environ.get('EMON_RECEIPTS_BIN',str(ROOT/'.cache/emon-rs-live/target/release/emon-rs')))
     p.add_argument('--rescore',action='store_true')
+    p.add_argument('--bounds',action='store_true',help='report optimistic raw/selected word completeness ceilings')
     transcripts=p.add_mutually_exclusive_group()
     transcripts.add_argument('--record-transcripts',action='store_true',help='record external transcripts and count OCR reads (default for live runs)')
     transcripts.add_argument('--replay-transcripts',action='store_true')
@@ -156,7 +220,7 @@ def main():
         if dataset not in ('sroie','cord'): p.error('supported sets: sroie,cord')
         files=[f for f in (ROOT/'corpus/_gold'/dataset).glob('*.gold.json') if not f.name.startswith('._') and (dataset!='sroie' or '-test-' in f.name)]
         if not files: raise RuntimeError('missing corpus gold: '+dataset)
-        rows={}; measurements={}
+        rows={}; measurements={}; bounds={}; subitems={}
         for f in sample(files,a.n):
             g=json.loads(f.read_text()); image,entities,items=annotations(g)
             transcript=transcript_dir/(g['id']+'.replay')
@@ -177,11 +241,31 @@ def main():
             if not a.rescore:
                 measurements[g['id']]['cpu_seconds']=(cpu_after.ru_utime+cpu_after.ru_stime-cpu_before.ru_utime-cpu_before.ru_stime)
             rows[g['id']]=score(g,model,ev,entities,items)
+            if a.bounds:
+                bounds[g['id']]=completeness_bounds(g,ev,entities,items)
+                if dataset=='cord':
+                    native=json.loads(image.with_suffix('.json').read_text())
+                    gt=native['ground_truth']; gt=json.loads(gt) if isinstance(gt,str) else gt
+                    subs=menu_items(gt,'menu.sub.')
+                    subitems[g['id']]={
+                        'score':{k:v for k,v in score(g,model,ev,[],subs).items() if k in ('items','items_ok','line_items_ok')},
+                        'bounds':{source:{k:v for k,v in values.items() if k in ('items','items_complete','items_numeric_join_complete')}
+                                  for source,values in completeness_bounds(g,ev,[],subs).items()}}
             print(dataset,len(rows),'/',min(a.n,len(files)),g['id'],flush=True)
         totals=dict(sum((collections.Counter(v) for v in rows.values()),collections.Counter()))
         for k,num,den in [('word_recall','matched','gold_words'),('word_precision','matched','model_words'),('entity_recall','entities_ok','entities'),('item_integrity','items_ok','items'),('numeric_recall','numeric_ok','numeric'),('line_item_integrity','line_items_ok','items')]:
             totals[k]=totals.get(num,0)/totals[den] if totals.get(den) else None
         report[dataset]={'documents':len(rows),'totals':totals,'rows':rows,'input_views':measurements,'baseline_comparison':baseline_comparison(dataset,rows,totals,baseline)}
+        if a.bounds:
+            report[dataset]['completeness_bounds']={
+                'rows':bounds,
+                'totals':{source:dict(sum((collections.Counter(v[source]) for v in bounds.values()),collections.Counter())) for source in ('raw','selected')}}
+        if subitems:
+            report[dataset]['sub_items']={
+                'rows':subitems,
+                'totals':dict(sum((collections.Counter(v['score']) for v in subitems.values()),collections.Counter())),
+                'completeness_bounds':{source:dict(sum((collections.Counter(v['bounds'][source]) for v in subitems.values()),collections.Counter()))
+                                       for source in ('raw','selected')}}
         pathlib.Path(a.save).write_text(json.dumps(report,indent=2)+'\n')
         print(json.dumps(totals),flush=True)
         print(json.dumps(report[dataset]['baseline_comparison']),flush=True)

@@ -12335,3 +12335,113 @@ Final acceptance: all 54 sweep3 documents, 817 pages and 351,098 baseline words 
 All requested final gates pass, with 1,181 laws on each of Rust, Go, Java and C#. OCR, fusion, retarget, seals, sealpx, signatures and graphics-fusion replay gates also pass. Packaging uses cached local SDK packages after the host's NuGet TLS failure; native C/pod packages lack optional bundled OCR/render libraries and Maven artifacts are unsigned. Update the receipt baseline from its older RC1 snapshot to the accepted RC3 scores with the same columns, row order and two 60-document populations. The historical accuracy scoreboard is byte-identical, no calibration changes or PF1-owned source edits are made, and the coordinator commits.
 
 - [ ] **Signed off** (maintainer)
+
+### D710 — RC4 reconstruction ceilings distinguish selected readings from alternative OCR
+
+RC4 starts from b530ab2e. The fresh fixed 60+60 live receipt measurement
+exactly matches every tracked baseline row and total; all 120 bundles byte-match
+RC3 final bundles. The tracked receipt baseline is therefore unchanged.
+`bb receipts --bounds` now exposes occurrence-based raw-word completeness for
+entities and native menu groups, separately for the selected word layer and
+all OCR attempts. The latter includes rejected views and cannot be treated as
+an adoptable reading. Adjacent-token numeric oracles preserve characters and
+page/run/line identity; they deliberately relax gap and overlapping-join safety.
+These are optimistic diagnostic ceilings, not reconstruction gains. Existing
+score columns and historical populations remain fixed. Contract tests cover
+occurrence accounting, native group/subgroup separation and forbidden joins
+across lines/reads or inside tokens. Separate menu.sub diagnostics preserve the
+existing parent-item denominator.
+
+- [ ] **Signed off** (maintainer)
+
+### D711 — RC4 line-item grouping and numeric joins remain unaccepted
+
+The RC3 reference bundles give selected-word completeness of 25/151 CORD
+parent items (16.56%); pooling every raw OCR attempt gives 53/151 (35.10%).
+Allowing the optimistic numeric-join oracle raises these to 27/151 selected
+(17.88%) and 56/151 all-attempt (37.09%). Thus the selected reading cannot
+reach 0.30 by grouping whole tokens. The numeric-join figures are conditional
+on existing OCR line identities: they do not bound repairs across separate OCR
+lines sharing a physical baseline. The exact-token all-attempt ceiling misses
+0.40; neither pooled bound establishes safe adoption. Geometry alone does not certify native
+group identity on arbitrary adversarial receipts. No new grouping path is
+retained, and no native-group safety law for a new production path is claimed.
+An external one-paragraph-per-existing-OCR-line trial raises CORD line-item
+integrity only 17→19/151, below acceptance, while regressing SROIE fields and
+precision (D712). It is rejected. Existing shared table column/row fitting
+remains unchanged.
+
+Even the optimistic selected-reading adjacent-token oracle gives at most
+1368/2343 SROIE numeric tokens (58.39%), 239/608 CORD numeric tokens (39.31%)
+and 131/354 CORD decimals (37.01%). All three miss acceptance within the
+existing-line scope; these are not global bounds for cross-line baseline repair. All-attempt
+numeric ceilings are higher because they include rejected reads. An external same-line, tight-gap, confidence-500 candidate adds two SROIE
+and eight CORD exact numeric/decimal tokens, without improving line-item
+integrity. On the six-page scanned bank-statement control it changes seven
+existing words into three joined words, violating the mandatory zero-loss/zero-gain
+control. A second non-receipt image control also changes two words into one;
+the full 54-control trial totals nine words lost and four gained. The candidate
+is rejected. No numeric
+rewriting, punctuation invention, or production join is retained. These are
+rejected implementation directions on the present readings, not accepted
+items; unchanged numeric recall is the preserved result.
+
+- [ ] **Signed off** (maintainer)
+
+### D712 — RC4 whole-field targets require both better readings and structure
+
+The RC3 reference bundles contain complete SROIE company words in 35/60
+selected readings (36/60 across all attempts), and address words in 19/60 in
+either pool. Requested 38/60 and 25/60 cannot be attained by keeping existing
+words whole. CORD total amounts are complete in 15/57 selected readings and
+21/57 across all attempts (22/57 allowing optimistic numeric joins), compared
+with 10/57 intact Model fields. The selected bound remains 15/57 after joins. The lexical
+bound does not establish that the missing complete fields can be safely joined.
+The external line-preserving projection raises CORD totals only 10→11/57,
+reduces SROIE company integrity 32→31/60 and address integrity 14→3/60, and
+reduces SROIE precision 0.678611→0.675727, below its floor. CORD precision also
+decreases (0.397989→0.397196). It is rejected; no whole-field reconstruction
+change is retained, and this item remains below its measured bound. The report records fresh measurements and final verification.
+
+- [ ] **Signed off** (maintainer)
+
+### D713 — Printed long-roll page labels belong in the synthetic truth
+
+The long receipt prints “page 1”, “page 2” and “page 3” in its running titles.
+The existing html2gold convention accepts `labels: arabic` and
+`label-pages: all`; the receipt generator now supplies that hint for the long
+variant. Regeneration adds only those three page labels to its gold, the HTML
+hint and that HTML file's manifest checksum/length. PDF bytes, body text,
+paragraph truth and historical accuracy populations stay unchanged. This is a
+truth correction, not a reconstruction improvement. Receipt-only page-label
+accuracy is measured against the corrected truth; text and paragraph targets
+remain separate acceptance requirements.
+
+- [ ] **Signed off** (maintainer)
+
+### D714 — RC4 final verification and retained scope
+
+The retained work is receipt measurement diagnostics and the long-roll page-label
+truth correction. Both external reconstruction trials are rejected (D711–D712).
+Only the synthetic page-label target is met; the other quality targets remain
+below acceptance. No production runtime, generated module, receipt baseline,
+historical scoreboard, calibration, or figclass source is changed.
+
+All final gates pass: gates drift; all 17 ci core steps; rederive --check and
+all 25 rederive steps (zero calibration rows changed, no unexplained diff);
+accuracy (3,449 metrics, no regression, 232 Models equal across hosts); samples
+(29/29); OCR, fusion, retarget, seals, sealpx and signatures replays; unit on
+Go/Rust/Java/C# (1,188 laws each); and package --check (seven clean consumers
+produce identical 3,653-byte HTML). All 17 Python receipt contracts pass.
+The 54 live controls cover 817 pages and 351,098 words, including Berkshire's
+152 pages and the full 74-page Arabic booklet: zero words lost or gained.
+
+C# validation uses a task-local feed of cached packages after the NuGet TLS
+restore failure, with the same declared dependency ranges and no disabled
+certificate checks. npm uses a task-local writable cache after default-cache
+permission failures. Java's package consumer uses javac/java because Maven is
+absent; C/pod packages omit optional native OCR/render engines, as the checks
+report. These checks are not release certification. No commits or corpus
+fetch/prune; the coordinator commits. Evidence is external under rc4/.
+
+- [ ] **Signed off** (maintainer)
