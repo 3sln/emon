@@ -82,7 +82,7 @@
   :accessors {^I32 fmt-decimal-count [^I32 ignored]
               ^I32 fmt-decimal-at [^I32 ignored ^I32 row ^I32 field]})
 
-(defn ^I32 fmt-digit [^I32 cp]
+(defn ^:pub ^I32 fmt-digit [^I32 cp]
   (if (and (>= cp 48) (<= cp 57)) (return 1))
   (if (< cp 128) (return 0))
   (let [^:mut ^I32 r 0]

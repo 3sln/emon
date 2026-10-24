@@ -74,7 +74,7 @@ pub(crate) static FMT_DECIMAL: [i32; 142] = [
     125264, 125273,
     130032, 130041
 ];
-pub(crate) fn fmt_digit(cp: i32) -> i32 {
+pub fn fmt_digit(cp: i32) -> i32 {
     if (cp >= 48) && (cp <= 57) {
         return 1;
     }

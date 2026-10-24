@@ -2,11 +2,11 @@
 (ns emon.ofusetest
   (:require [emon.lang :refer [I32 Cells]]
             [emon.test :refer [deftest assert-eq new-cells]]
-            [emon.port :refer [cells-push cells-at cells-len]]
-            [emon.evidence :refer [ow-new ow-get ow-count hd-tstart hd-tlen hd-conf hd-x0 hd-line owf-run]]
+            [emon.port :refer [cells-push cells-at cells-len cells-set]]
+            [emon.evidence :refer [ow-new ow-get ow-count hd-tstart hd-tlen hd-conf hd-x0 hd-line owf-run ow-set owf-flags or-new or-set orf-pass orf-wfirst orf-wcount]]
             [emon.ofmt :refer [ofmt-valid]]
-            [emon.ofuse :refer [of-active of-rule of-margin of-insert-conf of-slot-max of-copy of-from of-align of-root of-keyword]]
-            [kin.lang :refer [defn return let]]))
+            [emon.ofuse :refer [of-active of-rule of-margin of-insert-conf of-slot-max of-copy of-from of-align of-root of-keyword of-readings of-candidates of-choice of-cget of-cstride of-null-votes of-eligible]]
+            [kin.lang :refer [defn return let + *]]))
 
 (defn ^I32 oft-447-0 []
   (let [^Cells c (new-cells)]
@@ -648,3 +648,164 @@
     (cells-push superscript 178)
     (assert-eq (ofmt-valid superscript 0 (cells-len superscript)) 0 "Unicode decimal sample 4"))
 )
+
+;; D723: candidate laws written before the implementation. The candidate
+;; table owns no text; each sequence is a range of verbatim source-row refs.
+(defn ^I32 oft-word [^:mut ^Cells words ^I32 start ^I32 spanlen ^I32 run ^I32 conf ^I32 flags]
+  (let [^I32 w (ow-new words 1 0 0 100 100 0 0 0 0 0 0 start spanlen 0 conf -1)]
+    (ow-set words w (owf-run) run)
+    (ow-set words w (owf-flags) flags)
+    (return w)))
+
+(defn ^I32 oft-run [^:mut ^Cells runs ^I32 first ^I32 count ^I32 pass]
+  (let [^I32 r (or-new runs 1 0)]
+    (or-set runs r (orf-pass) pass)
+    (or-set runs r (orf-wfirst) first)
+    (or-set runs r (orf-wcount) count)
+    (return r)))
+
+(deftest test-distinct-readings-ignore-confidence-only-duplicates-and-excluded-passes
+  (let [^Cells words (new-cells) ^Cells runs (new-cells) ^Cells text (new-cells)
+        ^Cells reads (new-cells) ^Cells refs (new-cells)]
+    (cells-push text 65)
+    (oft-word words 0 1 0 300 1)
+    (oft-word words 0 1 1 950 1)
+    (oft-word words 0 1 2 990 1)
+    (oft-run runs 0 1 1)
+    (oft-run runs 1 1 10)
+    (oft-run runs 2 1 8)
+    (assert-eq (of-readings runs words text 1 reads refs) 1 "identical reading is one vote; re-rotated pass excluded")
+    (assert-eq (cells-at reads 0) 0 "first recorded reading supplies verbatim source")
+    (assert-eq (cells-len refs) 1 "duplicate words are not alignment nodes")))
+
+(deftest test-reading-dedup-is-case-sensitive-and-box-sensitive
+  (let [^Cells words (new-cells) ^Cells runs (new-cells) ^Cells text (new-cells)
+        ^Cells reads (new-cells) ^Cells refs (new-cells)]
+    (cells-push text 65) (cells-push text 97)
+    (oft-word words 0 1 0 900 1)
+    (oft-word words 1 1 1 900 1)
+    (oft-word words 0 1 2 900 1)
+    (ow-set words 2 (hd-x0) 20)
+    (oft-run runs 0 1 1) (oft-run runs 1 1 10) (oft-run runs 2 1 9)
+    (assert-eq (of-readings runs words text 1 reads refs) 3 "distinct source text or geometry remains distinct")))
+
+(deftest test-slot-aggregates-split-sequences-and-keeps-verbatim-best-source
+  (let [^Cells words (new-cells) ^Cells text (new-cells) ^Cells reads (new-cells)
+        ^Cells rows (new-cells) ^Cells parents (new-cells) ^Cells selected (new-cells)
+        ^Cells candidates (new-cells) ^Cells refs (new-cells) ^Cells seq (new-cells)]
+    ;; incumbent malformed 12.OO; two readings agree on split 12 .00.
+    (cells-push text 49) (cells-push text 50) (cells-push text 46) (cells-push text 79) (cells-push text 79)
+    (cells-push text 46) (cells-push text 48) (cells-push text 48)
+    (oft-word words 0 5 0 400 0)
+    (oft-word words 0 2 1 800 2) (oft-word words 5 3 1 800 2)
+    (oft-word words 0 2 2 900 2) (oft-word words 5 3 2 900 2)
+    (cells-push selected 0)
+    (cells-push rows 0) (cells-push rows 1) (cells-push rows 2) (cells-push rows 3) (cells-push rows 4)
+    (cells-push parents 0) (cells-push parents 0) (cells-push parents 0) (cells-push parents 0) (cells-push parents 0)
+    ;; Deliberately reverse the reading table as well as retaining source order.
+    (cells-push reads 2) (cells-push reads 2) (cells-push reads 2)
+    (cells-push reads 1) (cells-push reads 0) (cells-push reads 2)
+    (assert-eq (of-candidates words text rows parents 0 selected reads candidates refs seq) 2 "incumbent and one aggregated split sequence")
+    (assert-eq (of-cget candidates 1 3) 2 "distinct readings agree")
+    (assert-eq (of-cget candidates 1 4) 900 "maximum reading mean confidence")
+    (assert-eq (of-cget candidates 1 0) 1 "earliest reading retains source sequence")
+    (assert-eq (of-cget candidates 1 2) 2 "split source rows retained")
+    (assert-eq (cells-at refs (of-cget candidates 1 1)) 1 "verbatim first word")
+    (assert-eq (cells-at refs (+ (of-cget candidates 1 1) 1)) 2 "verbatim second word")
+    ;; Each split word must independently be valid, as in the prototype.
+    (assert-eq (of-choice candidates 1) -1 "malformed split decimal is blocked, never repaired")))
+
+(deftest test-candidate-selection-never-replaces-valid-incumbent-or-deletes
+  (let [^Cells c (new-cells)]
+    ;; run first count votes confidence dictionary valid numeric
+    (cells-push c -1) (cells-push c 0) (cells-push c 1) (cells-push c 1)
+    (cells-push c 100) (cells-push c 0) (cells-push c 1) (cells-push c 1)
+    (cells-push c 0) (cells-push c 1) (cells-push c 1) (cells-push c 9)
+    (cells-push c 1000) (cells-push c 1) (cells-push c 1) (cells-push c 1)
+    (assert-eq (of-choice c 1) -1 "format-valid incumbent protected even at huge vote margin")
+    (assert-eq (of-choice c 5) -1 "oversized incumbent chain blocked")))
+
+(deftest test-choice-ties-use-votes-then-confidence-then-run-order
+  (let [^Cells c (new-cells)]
+    ;; empty incumbent, two eligible alpha insertions, later run stored first
+    (cells-push c -1) (cells-push c 0) (cells-push c 0) (cells-push c 0)
+    (cells-push c 0) (cells-push c 0) (cells-push c 0) (cells-push c 0)
+    (cells-push c 9) (cells-push c 0) (cells-push c 1) (cells-push c 2)
+    (cells-push c 800) (cells-push c 1) (cells-push c 0) (cells-push c 0)
+    (cells-push c 3) (cells-push c 1) (cells-push c 1) (cells-push c 2)
+    (cells-push c 800) (cells-push c 1) (cells-push c 0) (cells-push c 0)
+    (assert-eq (of-choice c 0) 2 "run order breaks exact tie independent of candidate table order")
+    (cells-set c (+ (* 1 (of-cstride)) 4) 801)
+    (assert-eq (of-choice c 0) 1 "confidence breaks equal votes")
+    (cells-set c (+ (* 2 (of-cstride)) 3) 3)
+    (assert-eq (of-choice c 0) 2 "votes outrank confidence")
+    (cells-set c (+ (* 1 (of-cstride)) 4) 699)
+    (cells-set c (+ (* 2 (of-cstride)) 4) 699)
+    (assert-eq (of-choice c 0) -1 "no low-confidence insertion")))
+
+(deftest test-null-votes-count-only-absent-full-readings
+  (let [^Cells runs (new-cells) ^Cells reads (new-cells) ^Cells rows (new-cells)
+        ^Cells parents (new-cells) ^Cells words (new-cells)]
+    (oft-run runs 0 1 1) (oft-run runs 1 1 10) (oft-run runs 2 1 3)
+    (oft-word words 0 1 0 900 1)
+    (cells-push reads 0) (cells-push reads 0) (cells-push reads 1)
+    (cells-push reads 1) (cells-push reads 1) (cells-push reads 1)
+    (cells-push reads 2) (cells-push reads 2) (cells-push reads 1)
+    (cells-push rows 0) (cells-push parents 0)
+    (assert-eq (of-null-votes runs words reads rows parents 0) 1 "absent crop is not a deletion vote")))
+
+(deftest test-merged-reading-can-replace-malformed-split-without-joining-text
+  (let [^Cells words (new-cells) ^Cells text (new-cells) ^Cells reads (new-cells)
+        ^Cells rows (new-cells) ^Cells parents (new-cells) ^Cells selected (new-cells)
+        ^Cells candidates (new-cells) ^Cells refs (new-cells) ^Cells seq (new-cells)]
+    (cells-push text 49) (cells-push text 50) (cells-push text 46) (cells-push text 48) (cells-push text 48) (cells-push text 48)
+    (oft-word words 0 2 0 400 2) (oft-word words 2 4 0 400 2)
+    (oft-word words 0 6 1 900 2)
+    (cells-push selected 0) (cells-push selected 1)
+    ;; Reverse alignment arena order, including duplicate selected/source nodes.
+    (cells-push rows 2) (cells-push rows 1) (cells-push rows 0) (cells-push rows 2)
+    (cells-push parents 0) (cells-push parents 0) (cells-push parents 0) (cells-push parents 0)
+    (cells-push reads 0) (cells-push reads 0) (cells-push reads 2)
+    (cells-push reads 1) (cells-push reads 2) (cells-push reads 1)
+    (assert-eq (of-candidates words text rows parents 0 selected reads candidates refs seq) 2 "merged token competes with split incumbent")
+    (assert-eq (of-cget candidates 0 3) 1 "incumbent reading casts exactly one vote")
+    (assert-eq (of-cget candidates 1 3) 1 "duplicate alignment node is not another vote")
+    (assert-eq (of-cget candidates 1 2) 1 "merged output is exactly one source word")
+    (assert-eq (cells-at refs (of-cget candidates 1 1)) 2 "merged text points to recorded source row")
+    (assert-eq (of-choice candidates 2) 1 "malformed split yields to valid merged source at margin")
+    (assert-eq (of-choice candidates 5) -1 "oversized chain remains unchanged")))
+
+(deftest test-valid-split-sequence-can-replace-malformed-merged-incumbent
+  (let [^Cells words (new-cells) ^Cells text (new-cells) ^Cells reads (new-cells)
+        ^Cells rows (new-cells) ^Cells parents (new-cells) ^Cells selected (new-cells)
+        ^Cells candidates (new-cells) ^Cells refs (new-cells) ^Cells seq (new-cells)]
+    (cells-push text 49) (cells-push text 50) (cells-push text 79) (cells-push text 48) (cells-push text 48)
+    (oft-word words 0 5 0 400 0)
+    (oft-word words 0 2 1 800 2) (oft-word words 3 2 1 800 2)
+    (cells-push selected 0)
+    (cells-push rows 2) (cells-push rows 0) (cells-push rows 1)
+    (cells-push parents 0) (cells-push parents 0) (cells-push parents 0)
+    (cells-push reads 0) (cells-push reads 0) (cells-push reads 1)
+    (cells-push reads 1) (cells-push reads 1) (cells-push reads 2)
+    (assert-eq (of-candidates words text rows parents 0 selected reads candidates refs seq) 2 "split tokens form one candidate")
+    (assert-eq (of-choice candidates 1) 1 "valid split wins at sufficient margin")
+    (assert-eq (cells-at refs (of-cget candidates 1 1)) 1 "OCR order independent of alignment row order")
+    (assert-eq (cells-at refs (+ (of-cget candidates 1 1) 1)) 2 "second source row retained, no synthetic word")))
+
+(deftest test-unicode-letters-and-numbers-are-eligible-but-symbols-and-garbage-are-not
+  (let [^Cells words (new-cells) ^Cells text (new-cells)]
+    (cells-push text 20013) (cells-push text 1633) (cells-push text 9733)
+    (oft-word words 0 1 0 900 0) (oft-word words 1 1 0 900 0)
+    (oft-word words 2 1 0 900 0) (oft-word words 0 1 0 900 8)
+    (assert-eq (of-eligible words text 0) 1 "CJK letter")
+    (assert-eq (of-eligible words text 1) 1 "Arabic decimal digit")
+    (assert-eq (of-eligible words text 2) 0 "star is not a word")
+    (assert-eq (of-eligible words text 3) 0 "garbage flag excludes otherwise valid text")
+    (ow-set words 0 (hd-tstart) 2147483647)
+    (ow-set words 0 (hd-tlen) 2147483647)
+    (assert-eq (of-eligible words text 0) 0 "hostile span never reads outside recorded text")))
+
+(deftest test-zero-candidates-cannot-delete-or-read-an-absent-incumbent
+  (let [^Cells c (new-cells)]
+    (assert-eq (of-choice c 0) -1 "empty table is a no-op")
+    (assert-eq (of-choice c 4) -1 "missing table never deletes selected words")))

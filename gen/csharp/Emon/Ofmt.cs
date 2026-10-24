@@ -77,7 +77,7 @@ public static class Ofmt {
         125264, 125273,
         130032, 130041
     };
-    internal static int FmtDigit(int cp) {
+    public static int FmtDigit(int cp) {
         if ((cp >= 48) && (cp <= 57)) {
             return 1;
         }

@@ -12511,3 +12511,19 @@ Final validation: 1,218 native laws on each of Go, Rust, Java and C# (30 new law
 Both fresh 60-document receipt sets match every frozen baseline total and row. All 120 fresh Models are byte-identical to their RC4 recordings; all 120 live/replay bundles, scores, bounds and non-CPU metadata are identical. OCR request counts remain 466 SROIE and 605 CORD. OCR-present-but-silent words remain 214 and 20. Fresh controls 07, 10 and 11, measured with matching OCR/asset options, are byte-identical Models: zero lost/gained words and zero gold loss. Other named controls and Berkshire have unchanged runtime source and no activated new path; no fresh full control sweep is claimed. No historical ratchet, golden, sample or existing runtime source changed.
 
 - [ ] **Signed off** (maintainer)
+
+### D723 — RC5b distinct readings and guarded split/merge candidate selection, partial
+
+The dormant fusion module now filters eligible original runs, excludes garbage and punctuation-only observations, and deduplicates readings by exact recorded text and tenth-point geometry. Confidence-only duplicates do not cast independent votes. Each overlap component has an incumbent sequence and one sequence per distinct reading; equal ASCII-folded token sequences aggregate distinct-reading votes and maximum mean confidence while retaining the earliest reading's verbatim source-row references. Selected and source alignment nodes cannot double a reading's vote. Missing full-page readings cast null votes; absent crops do not.
+
+Selection handles both a split incumbent against a merged source and a merged incumbent against a split source without joining, correcting or generating text. It preserves a valid numeric incumbent, refuses deletion and oversized incumbent chains, and applies the existing 300 margin and 700 insertion floor. Eligible alternatives rank by votes, confidence and original run order. Reading-table and alignment-node permutations do not reorder a source's words or change the retained earliest source. Laws were written before these implementations, including adversarial duplicate nodes, reversed reading and alignment tables, invalid split decimals, empty candidate tables, Unicode words and hostile text spans.
+
+This completes candidate primitives, not production activation. There is still no production caller, `ofuse` arena, synthetic `fused` run, printed `from`, selection rebuild, D699 integration or receipt fusion metadata. D720 still forbids activating the path before those integrations exist. Receipt targets and fresh D716 controls/pool acceptance are not established by these laws, and no baseline or ratchet is refreshed.
+
+- [ ] **Signed off** (maintainer)
+
+### D724 — Check RC5 Unicode eligibility against the vendored data
+
+Receipt reading eligibility uses Unicode letter/number ranges generated from the repository's UnicodeData.txt rather than an ASCII approximation or host-specific character library. `kin/scripts/ofuse-data.py --check` verifies those ranges during `bb unit`; its regeneration mode writes only the delimited table. Numeric format classification reuses the existing decimal-digit validator. The new generator has gate coverage. All four language trees are regenerated from the same kin sources; native and gate outcomes are recorded in the RC5b report and scratch logs.
+
+- [ ] **Signed off** (maintainer)

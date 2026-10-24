@@ -81,7 +81,7 @@ var fmtDecimal [142]int32 = [142]int32{
 	130032, 130041,
 }
 
-func fmtDigit(cp int32) int32 {
+func FmtDigit(cp int32) int32 {
 	if (cp >= 48) && (cp <= 57) {
 		return 1
 	}
@@ -125,7 +125,7 @@ func fmtDateSep(cp int32) int32 {
 func fmtDigits(text *port.Cells, start int32, end int32) int32 {
 	var i int32 = start
 	for i < end {
-		if fmtDigit(port.CellsAt(text, i)) == 0 {
+		if FmtDigit(port.CellsAt(text, i)) == 0 {
 			return i
 		}
 		i += 1

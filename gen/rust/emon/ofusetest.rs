@@ -688,3 +688,290 @@ fn test_numeric_grammar_uses_unicode_decimal_digits() {
     crate::port::cells_push(superscript, 178);
     crate::testport::assert_eq(ofmt_valid(superscript, 0, crate::port::cells_len(superscript)), 0, "Unicode decimal sample 4");
 }
+pub(crate) fn oft_word(mut words: &mut crate::port::Cells, start: i32, spanlen: i32, run: i32, conf: i32, flags: i32) -> i32 {
+    let w: i32 = ow_new(words, 1, 0, 0, 100, 100, 0, 0, 0, 0, 0, 0, start, spanlen, 0, conf, -1);
+    ow_set(words, w, owf_run(), run);
+    ow_set(words, w, owf_flags(), flags);
+    return w;
+}
+pub(crate) fn oft_run(mut runs: &mut crate::port::Cells, first: i32, count: i32, pass: i32) -> i32 {
+    let r: i32 = or_new(runs, 1, 0);
+    or_set(runs, r, orf_pass(), pass);
+    or_set(runs, r, orf_wfirst(), first);
+    or_set(runs, r, orf_wcount(), count);
+    return r;
+}
+#[test]
+fn test_distinct_readings_ignore_confidence_only_duplicates_and_excluded_passes() {
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let reads: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::port::cells_push(text, 65);
+    oft_word(words, 0, 1, 0, 300, 1);
+    oft_word(words, 0, 1, 1, 950, 1);
+    oft_word(words, 0, 1, 2, 990, 1);
+    oft_run(runs, 0, 1, 1);
+    oft_run(runs, 1, 1, 10);
+    oft_run(runs, 2, 1, 8);
+    crate::testport::assert_eq(of_readings(runs, words, text, 1, reads, refs), 1, "identical reading is one vote; re-rotated pass excluded");
+    crate::testport::assert_eq(crate::port::cells_at(reads, 0), 0, "first recorded reading supplies verbatim source");
+    crate::testport::assert_eq(crate::port::cells_len(refs), 1, "duplicate words are not alignment nodes");
+}
+#[test]
+fn test_reading_dedup_is_case_sensitive_and_box_sensitive() {
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let reads: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::port::cells_push(text, 65);
+    crate::port::cells_push(text, 97);
+    oft_word(words, 0, 1, 0, 900, 1);
+    oft_word(words, 1, 1, 1, 900, 1);
+    oft_word(words, 0, 1, 2, 900, 1);
+    ow_set(words, 2, hd_x0(), 20);
+    oft_run(runs, 0, 1, 1);
+    oft_run(runs, 1, 1, 10);
+    oft_run(runs, 2, 1, 9);
+    crate::testport::assert_eq(of_readings(runs, words, text, 1, reads, refs), 3, "distinct source text or geometry remains distinct");
+}
+#[test]
+fn test_slot_aggregates_split_sequences_and_keeps_verbatim_best_source() {
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let reads: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rows: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let parents: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let selected: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let candidates: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let seq: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::port::cells_push(text, 49);
+    crate::port::cells_push(text, 50);
+    crate::port::cells_push(text, 46);
+    crate::port::cells_push(text, 79);
+    crate::port::cells_push(text, 79);
+    crate::port::cells_push(text, 46);
+    crate::port::cells_push(text, 48);
+    crate::port::cells_push(text, 48);
+    oft_word(words, 0, 5, 0, 400, 0);
+    oft_word(words, 0, 2, 1, 800, 2);
+    oft_word(words, 5, 3, 1, 800, 2);
+    oft_word(words, 0, 2, 2, 900, 2);
+    oft_word(words, 5, 3, 2, 900, 2);
+    crate::port::cells_push(selected, 0);
+    crate::port::cells_push(rows, 0);
+    crate::port::cells_push(rows, 1);
+    crate::port::cells_push(rows, 2);
+    crate::port::cells_push(rows, 3);
+    crate::port::cells_push(rows, 4);
+    crate::port::cells_push(parents, 0);
+    crate::port::cells_push(parents, 0);
+    crate::port::cells_push(parents, 0);
+    crate::port::cells_push(parents, 0);
+    crate::port::cells_push(parents, 0);
+    crate::port::cells_push(reads, 2);
+    crate::port::cells_push(reads, 2);
+    crate::port::cells_push(reads, 2);
+    crate::port::cells_push(reads, 1);
+    crate::port::cells_push(reads, 0);
+    crate::port::cells_push(reads, 2);
+    crate::testport::assert_eq(of_candidates(words, text, rows, parents, 0, selected, reads, candidates, refs, seq), 2, "incumbent and one aggregated split sequence");
+    crate::testport::assert_eq(of_cget(candidates, 1, 3), 2, "distinct readings agree");
+    crate::testport::assert_eq(of_cget(candidates, 1, 4), 900, "maximum reading mean confidence");
+    crate::testport::assert_eq(of_cget(candidates, 1, 0), 1, "earliest reading retains source sequence");
+    crate::testport::assert_eq(of_cget(candidates, 1, 2), 2, "split source rows retained");
+    crate::testport::assert_eq(crate::port::cells_at(refs, of_cget(candidates, 1, 1)), 1, "verbatim first word");
+    crate::testport::assert_eq(crate::port::cells_at(refs, of_cget(candidates, 1, 1) + 1), 2, "verbatim second word");
+    crate::testport::assert_eq(of_choice(candidates, 1), -1, "malformed split decimal is blocked, never repaired");
+}
+#[test]
+fn test_candidate_selection_never_replaces_valid_incumbent_or_deletes() {
+    let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::port::cells_push(c, -1);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 100);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 9);
+    crate::port::cells_push(c, 1000);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 1);
+    crate::testport::assert_eq(of_choice(c, 1), -1, "format-valid incumbent protected even at huge vote margin");
+    crate::testport::assert_eq(of_choice(c, 5), -1, "oversized incumbent chain blocked");
+}
+#[test]
+fn test_choice_ties_use_votes_then_confidence_then_run_order() {
+    let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::port::cells_push(c, -1);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 9);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 2);
+    crate::port::cells_push(c, 800);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 3);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 2);
+    crate::port::cells_push(c, 800);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::testport::assert_eq(of_choice(c, 0), 2, "run order breaks exact tie independent of candidate table order");
+    crate::port::cells_set(c, (1 * of_cstride()) + 4, 801);
+    crate::testport::assert_eq(of_choice(c, 0), 1, "confidence breaks equal votes");
+    crate::port::cells_set(c, (2 * of_cstride()) + 3, 3);
+    crate::testport::assert_eq(of_choice(c, 0), 2, "votes outrank confidence");
+    crate::port::cells_set(c, (1 * of_cstride()) + 4, 699);
+    crate::port::cells_set(c, (2 * of_cstride()) + 4, 699);
+    crate::testport::assert_eq(of_choice(c, 0), -1, "no low-confidence insertion");
+}
+#[test]
+fn test_null_votes_count_only_absent_full_readings() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let reads: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rows: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let parents: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    oft_run(runs, 0, 1, 1);
+    oft_run(runs, 1, 1, 10);
+    oft_run(runs, 2, 1, 3);
+    oft_word(words, 0, 1, 0, 900, 1);
+    crate::port::cells_push(reads, 0);
+    crate::port::cells_push(reads, 0);
+    crate::port::cells_push(reads, 1);
+    crate::port::cells_push(reads, 1);
+    crate::port::cells_push(reads, 1);
+    crate::port::cells_push(reads, 1);
+    crate::port::cells_push(reads, 2);
+    crate::port::cells_push(reads, 2);
+    crate::port::cells_push(reads, 1);
+    crate::port::cells_push(rows, 0);
+    crate::port::cells_push(parents, 0);
+    crate::testport::assert_eq(of_null_votes(runs, words, reads, rows, parents, 0), 1, "absent crop is not a deletion vote");
+}
+#[test]
+fn test_merged_reading_can_replace_malformed_split_without_joining_text() {
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let reads: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rows: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let parents: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let selected: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let candidates: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let seq: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::port::cells_push(text, 49);
+    crate::port::cells_push(text, 50);
+    crate::port::cells_push(text, 46);
+    crate::port::cells_push(text, 48);
+    crate::port::cells_push(text, 48);
+    crate::port::cells_push(text, 48);
+    oft_word(words, 0, 2, 0, 400, 2);
+    oft_word(words, 2, 4, 0, 400, 2);
+    oft_word(words, 0, 6, 1, 900, 2);
+    crate::port::cells_push(selected, 0);
+    crate::port::cells_push(selected, 1);
+    crate::port::cells_push(rows, 2);
+    crate::port::cells_push(rows, 1);
+    crate::port::cells_push(rows, 0);
+    crate::port::cells_push(rows, 2);
+    crate::port::cells_push(parents, 0);
+    crate::port::cells_push(parents, 0);
+    crate::port::cells_push(parents, 0);
+    crate::port::cells_push(parents, 0);
+    crate::port::cells_push(reads, 0);
+    crate::port::cells_push(reads, 0);
+    crate::port::cells_push(reads, 2);
+    crate::port::cells_push(reads, 1);
+    crate::port::cells_push(reads, 2);
+    crate::port::cells_push(reads, 1);
+    crate::testport::assert_eq(of_candidates(words, text, rows, parents, 0, selected, reads, candidates, refs, seq), 2, "merged token competes with split incumbent");
+    crate::testport::assert_eq(of_cget(candidates, 0, 3), 1, "incumbent reading casts exactly one vote");
+    crate::testport::assert_eq(of_cget(candidates, 1, 3), 1, "duplicate alignment node is not another vote");
+    crate::testport::assert_eq(of_cget(candidates, 1, 2), 1, "merged output is exactly one source word");
+    crate::testport::assert_eq(crate::port::cells_at(refs, of_cget(candidates, 1, 1)), 2, "merged text points to recorded source row");
+    crate::testport::assert_eq(of_choice(candidates, 2), 1, "malformed split yields to valid merged source at margin");
+    crate::testport::assert_eq(of_choice(candidates, 5), -1, "oversized chain remains unchanged");
+}
+#[test]
+fn test_valid_split_sequence_can_replace_malformed_merged_incumbent() {
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let reads: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rows: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let parents: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let selected: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let candidates: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let seq: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::port::cells_push(text, 49);
+    crate::port::cells_push(text, 50);
+    crate::port::cells_push(text, 79);
+    crate::port::cells_push(text, 48);
+    crate::port::cells_push(text, 48);
+    oft_word(words, 0, 5, 0, 400, 0);
+    oft_word(words, 0, 2, 1, 800, 2);
+    oft_word(words, 3, 2, 1, 800, 2);
+    crate::port::cells_push(selected, 0);
+    crate::port::cells_push(rows, 2);
+    crate::port::cells_push(rows, 0);
+    crate::port::cells_push(rows, 1);
+    crate::port::cells_push(parents, 0);
+    crate::port::cells_push(parents, 0);
+    crate::port::cells_push(parents, 0);
+    crate::port::cells_push(reads, 0);
+    crate::port::cells_push(reads, 0);
+    crate::port::cells_push(reads, 1);
+    crate::port::cells_push(reads, 1);
+    crate::port::cells_push(reads, 1);
+    crate::port::cells_push(reads, 2);
+    crate::testport::assert_eq(of_candidates(words, text, rows, parents, 0, selected, reads, candidates, refs, seq), 2, "split tokens form one candidate");
+    crate::testport::assert_eq(of_choice(candidates, 1), 1, "valid split wins at sufficient margin");
+    crate::testport::assert_eq(crate::port::cells_at(refs, of_cget(candidates, 1, 1)), 1, "OCR order independent of alignment row order");
+    crate::testport::assert_eq(crate::port::cells_at(refs, of_cget(candidates, 1, 1) + 1), 2, "second source row retained, no synthetic word");
+}
+#[test]
+fn test_unicode_letters_and_numbers_are_eligible_but_symbols_and_garbage_are_not() {
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::port::cells_push(text, 20013);
+    crate::port::cells_push(text, 1633);
+    crate::port::cells_push(text, 9733);
+    oft_word(words, 0, 1, 0, 900, 0);
+    oft_word(words, 1, 1, 0, 900, 0);
+    oft_word(words, 2, 1, 0, 900, 0);
+    oft_word(words, 0, 1, 0, 900, 8);
+    crate::testport::assert_eq(of_eligible(words, text, 0), 1, "CJK letter");
+    crate::testport::assert_eq(of_eligible(words, text, 1), 1, "Arabic decimal digit");
+    crate::testport::assert_eq(of_eligible(words, text, 2), 0, "star is not a word");
+    crate::testport::assert_eq(of_eligible(words, text, 3), 0, "garbage flag excludes otherwise valid text");
+    ow_set(words, 0, hd_tstart(), 2147483647);
+    ow_set(words, 0, hd_tlen(), 2147483647);
+    crate::testport::assert_eq(of_eligible(words, text, 0), 0, "hostile span never reads outside recorded text");
+}
+#[test]
+fn test_zero_candidates_cannot_delete_or_read_an_absent_incumbent() {
+    let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::testport::assert_eq(of_choice(c, 0), -1, "empty table is a no-op");
+    crate::testport::assert_eq(of_choice(c, 4), -1, "missing table never deletes selected words");
+}

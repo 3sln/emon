@@ -688,4 +688,291 @@ public static class Ofusetest {
         emon.Port.CellsPush(superscript, 178);
         emon.Testport.AssertEq(Ofmt.OfmtValid(superscript, 0, emon.Port.CellsLen(superscript)), 0, "Unicode decimal sample 4");
     }
+    internal static int OftWord(emon.Port.Cells words, int start, int spanlen, int run, int conf, int flags) {
+        int w = Evidence.OwNew(words, 1, 0, 0, 100, 100, 0, 0, 0, 0, 0, 0, start, spanlen, 0, conf, -1);
+        Evidence.OwSet(words, w, Evidence.OwfRun(), run);
+        Evidence.OwSet(words, w, Evidence.OwfFlags(), flags);
+        return w;
+    }
+    internal static int OftRun(emon.Port.Cells runs, int first, int count, int pass) {
+        int r = Evidence.OrNew(runs, 1, 0);
+        Evidence.OrSet(runs, r, Evidence.OrfPass(), pass);
+        Evidence.OrSet(runs, r, Evidence.OrfWfirst(), first);
+        Evidence.OrSet(runs, r, Evidence.OrfWcount(), count);
+        return r;
+    }
+    [Xunit.Fact]
+    public static void TestDistinctReadingsIgnoreConfidenceOnlyDuplicatesAndExcludedPasses() {
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells runs = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells reads = emon.Port.NewCells();
+        emon.Port.Cells refs = emon.Port.NewCells();
+        emon.Port.CellsPush(text, 65);
+        OftWord(words, 0, 1, 0, 300, 1);
+        OftWord(words, 0, 1, 1, 950, 1);
+        OftWord(words, 0, 1, 2, 990, 1);
+        OftRun(runs, 0, 1, 1);
+        OftRun(runs, 1, 1, 10);
+        OftRun(runs, 2, 1, 8);
+        emon.Testport.AssertEq(Ofuse.OfReadings(runs, words, text, 1, reads, refs), 1, "identical reading is one vote; re-rotated pass excluded");
+        emon.Testport.AssertEq(emon.Port.CellsAt(reads, 0), 0, "first recorded reading supplies verbatim source");
+        emon.Testport.AssertEq(emon.Port.CellsLen(refs), 1, "duplicate words are not alignment nodes");
+    }
+    [Xunit.Fact]
+    public static void TestReadingDedupIsCaseSensitiveAndBoxSensitive() {
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells runs = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells reads = emon.Port.NewCells();
+        emon.Port.Cells refs = emon.Port.NewCells();
+        emon.Port.CellsPush(text, 65);
+        emon.Port.CellsPush(text, 97);
+        OftWord(words, 0, 1, 0, 900, 1);
+        OftWord(words, 1, 1, 1, 900, 1);
+        OftWord(words, 0, 1, 2, 900, 1);
+        Evidence.OwSet(words, 2, Evidence.HdX0(), 20);
+        OftRun(runs, 0, 1, 1);
+        OftRun(runs, 1, 1, 10);
+        OftRun(runs, 2, 1, 9);
+        emon.Testport.AssertEq(Ofuse.OfReadings(runs, words, text, 1, reads, refs), 3, "distinct source text or geometry remains distinct");
+    }
+    [Xunit.Fact]
+    public static void TestSlotAggregatesSplitSequencesAndKeepsVerbatimBestSource() {
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells reads = emon.Port.NewCells();
+        emon.Port.Cells rows = emon.Port.NewCells();
+        emon.Port.Cells parents = emon.Port.NewCells();
+        emon.Port.Cells selected = emon.Port.NewCells();
+        emon.Port.Cells candidates = emon.Port.NewCells();
+        emon.Port.Cells refs = emon.Port.NewCells();
+        emon.Port.Cells seq = emon.Port.NewCells();
+        emon.Port.CellsPush(text, 49);
+        emon.Port.CellsPush(text, 50);
+        emon.Port.CellsPush(text, 46);
+        emon.Port.CellsPush(text, 79);
+        emon.Port.CellsPush(text, 79);
+        emon.Port.CellsPush(text, 46);
+        emon.Port.CellsPush(text, 48);
+        emon.Port.CellsPush(text, 48);
+        OftWord(words, 0, 5, 0, 400, 0);
+        OftWord(words, 0, 2, 1, 800, 2);
+        OftWord(words, 5, 3, 1, 800, 2);
+        OftWord(words, 0, 2, 2, 900, 2);
+        OftWord(words, 5, 3, 2, 900, 2);
+        emon.Port.CellsPush(selected, 0);
+        emon.Port.CellsPush(rows, 0);
+        emon.Port.CellsPush(rows, 1);
+        emon.Port.CellsPush(rows, 2);
+        emon.Port.CellsPush(rows, 3);
+        emon.Port.CellsPush(rows, 4);
+        emon.Port.CellsPush(parents, 0);
+        emon.Port.CellsPush(parents, 0);
+        emon.Port.CellsPush(parents, 0);
+        emon.Port.CellsPush(parents, 0);
+        emon.Port.CellsPush(parents, 0);
+        emon.Port.CellsPush(reads, 2);
+        emon.Port.CellsPush(reads, 2);
+        emon.Port.CellsPush(reads, 2);
+        emon.Port.CellsPush(reads, 1);
+        emon.Port.CellsPush(reads, 0);
+        emon.Port.CellsPush(reads, 2);
+        emon.Testport.AssertEq(Ofuse.OfCandidates(words, text, rows, parents, 0, selected, reads, candidates, refs, seq), 2, "incumbent and one aggregated split sequence");
+        emon.Testport.AssertEq(Ofuse.OfCget(candidates, 1, 3), 2, "distinct readings agree");
+        emon.Testport.AssertEq(Ofuse.OfCget(candidates, 1, 4), 900, "maximum reading mean confidence");
+        emon.Testport.AssertEq(Ofuse.OfCget(candidates, 1, 0), 1, "earliest reading retains source sequence");
+        emon.Testport.AssertEq(Ofuse.OfCget(candidates, 1, 2), 2, "split source rows retained");
+        emon.Testport.AssertEq(emon.Port.CellsAt(refs, Ofuse.OfCget(candidates, 1, 1)), 1, "verbatim first word");
+        emon.Testport.AssertEq(emon.Port.CellsAt(refs, Ofuse.OfCget(candidates, 1, 1) + 1), 2, "verbatim second word");
+        emon.Testport.AssertEq(Ofuse.OfChoice(candidates, 1), -1, "malformed split decimal is blocked, never repaired");
+    }
+    [Xunit.Fact]
+    public static void TestCandidateSelectionNeverReplacesValidIncumbentOrDeletes() {
+        emon.Port.Cells c = emon.Port.NewCells();
+        emon.Port.CellsPush(c, -1);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 100);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 9);
+        emon.Port.CellsPush(c, 1000);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 1);
+        emon.Testport.AssertEq(Ofuse.OfChoice(c, 1), -1, "format-valid incumbent protected even at huge vote margin");
+        emon.Testport.AssertEq(Ofuse.OfChoice(c, 5), -1, "oversized incumbent chain blocked");
+    }
+    [Xunit.Fact]
+    public static void TestChoiceTiesUseVotesThenConfidenceThenRunOrder() {
+        emon.Port.Cells c = emon.Port.NewCells();
+        emon.Port.CellsPush(c, -1);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 9);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 2);
+        emon.Port.CellsPush(c, 800);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 3);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 2);
+        emon.Port.CellsPush(c, 800);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Testport.AssertEq(Ofuse.OfChoice(c, 0), 2, "run order breaks exact tie independent of candidate table order");
+        emon.Port.CellsSet(c, (1 * Ofuse.OfCstride()) + 4, 801);
+        emon.Testport.AssertEq(Ofuse.OfChoice(c, 0), 1, "confidence breaks equal votes");
+        emon.Port.CellsSet(c, (2 * Ofuse.OfCstride()) + 3, 3);
+        emon.Testport.AssertEq(Ofuse.OfChoice(c, 0), 2, "votes outrank confidence");
+        emon.Port.CellsSet(c, (1 * Ofuse.OfCstride()) + 4, 699);
+        emon.Port.CellsSet(c, (2 * Ofuse.OfCstride()) + 4, 699);
+        emon.Testport.AssertEq(Ofuse.OfChoice(c, 0), -1, "no low-confidence insertion");
+    }
+    [Xunit.Fact]
+    public static void TestNullVotesCountOnlyAbsentFullReadings() {
+        emon.Port.Cells runs = emon.Port.NewCells();
+        emon.Port.Cells reads = emon.Port.NewCells();
+        emon.Port.Cells rows = emon.Port.NewCells();
+        emon.Port.Cells parents = emon.Port.NewCells();
+        emon.Port.Cells words = emon.Port.NewCells();
+        OftRun(runs, 0, 1, 1);
+        OftRun(runs, 1, 1, 10);
+        OftRun(runs, 2, 1, 3);
+        OftWord(words, 0, 1, 0, 900, 1);
+        emon.Port.CellsPush(reads, 0);
+        emon.Port.CellsPush(reads, 0);
+        emon.Port.CellsPush(reads, 1);
+        emon.Port.CellsPush(reads, 1);
+        emon.Port.CellsPush(reads, 1);
+        emon.Port.CellsPush(reads, 1);
+        emon.Port.CellsPush(reads, 2);
+        emon.Port.CellsPush(reads, 2);
+        emon.Port.CellsPush(reads, 1);
+        emon.Port.CellsPush(rows, 0);
+        emon.Port.CellsPush(parents, 0);
+        emon.Testport.AssertEq(Ofuse.OfNullVotes(runs, words, reads, rows, parents, 0), 1, "absent crop is not a deletion vote");
+    }
+    [Xunit.Fact]
+    public static void TestMergedReadingCanReplaceMalformedSplitWithoutJoiningText() {
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells reads = emon.Port.NewCells();
+        emon.Port.Cells rows = emon.Port.NewCells();
+        emon.Port.Cells parents = emon.Port.NewCells();
+        emon.Port.Cells selected = emon.Port.NewCells();
+        emon.Port.Cells candidates = emon.Port.NewCells();
+        emon.Port.Cells refs = emon.Port.NewCells();
+        emon.Port.Cells seq = emon.Port.NewCells();
+        emon.Port.CellsPush(text, 49);
+        emon.Port.CellsPush(text, 50);
+        emon.Port.CellsPush(text, 46);
+        emon.Port.CellsPush(text, 48);
+        emon.Port.CellsPush(text, 48);
+        emon.Port.CellsPush(text, 48);
+        OftWord(words, 0, 2, 0, 400, 2);
+        OftWord(words, 2, 4, 0, 400, 2);
+        OftWord(words, 0, 6, 1, 900, 2);
+        emon.Port.CellsPush(selected, 0);
+        emon.Port.CellsPush(selected, 1);
+        emon.Port.CellsPush(rows, 2);
+        emon.Port.CellsPush(rows, 1);
+        emon.Port.CellsPush(rows, 0);
+        emon.Port.CellsPush(rows, 2);
+        emon.Port.CellsPush(parents, 0);
+        emon.Port.CellsPush(parents, 0);
+        emon.Port.CellsPush(parents, 0);
+        emon.Port.CellsPush(parents, 0);
+        emon.Port.CellsPush(reads, 0);
+        emon.Port.CellsPush(reads, 0);
+        emon.Port.CellsPush(reads, 2);
+        emon.Port.CellsPush(reads, 1);
+        emon.Port.CellsPush(reads, 2);
+        emon.Port.CellsPush(reads, 1);
+        emon.Testport.AssertEq(Ofuse.OfCandidates(words, text, rows, parents, 0, selected, reads, candidates, refs, seq), 2, "merged token competes with split incumbent");
+        emon.Testport.AssertEq(Ofuse.OfCget(candidates, 0, 3), 1, "incumbent reading casts exactly one vote");
+        emon.Testport.AssertEq(Ofuse.OfCget(candidates, 1, 3), 1, "duplicate alignment node is not another vote");
+        emon.Testport.AssertEq(Ofuse.OfCget(candidates, 1, 2), 1, "merged output is exactly one source word");
+        emon.Testport.AssertEq(emon.Port.CellsAt(refs, Ofuse.OfCget(candidates, 1, 1)), 2, "merged text points to recorded source row");
+        emon.Testport.AssertEq(Ofuse.OfChoice(candidates, 2), 1, "malformed split yields to valid merged source at margin");
+        emon.Testport.AssertEq(Ofuse.OfChoice(candidates, 5), -1, "oversized chain remains unchanged");
+    }
+    [Xunit.Fact]
+    public static void TestValidSplitSequenceCanReplaceMalformedMergedIncumbent() {
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells reads = emon.Port.NewCells();
+        emon.Port.Cells rows = emon.Port.NewCells();
+        emon.Port.Cells parents = emon.Port.NewCells();
+        emon.Port.Cells selected = emon.Port.NewCells();
+        emon.Port.Cells candidates = emon.Port.NewCells();
+        emon.Port.Cells refs = emon.Port.NewCells();
+        emon.Port.Cells seq = emon.Port.NewCells();
+        emon.Port.CellsPush(text, 49);
+        emon.Port.CellsPush(text, 50);
+        emon.Port.CellsPush(text, 79);
+        emon.Port.CellsPush(text, 48);
+        emon.Port.CellsPush(text, 48);
+        OftWord(words, 0, 5, 0, 400, 0);
+        OftWord(words, 0, 2, 1, 800, 2);
+        OftWord(words, 3, 2, 1, 800, 2);
+        emon.Port.CellsPush(selected, 0);
+        emon.Port.CellsPush(rows, 2);
+        emon.Port.CellsPush(rows, 0);
+        emon.Port.CellsPush(rows, 1);
+        emon.Port.CellsPush(parents, 0);
+        emon.Port.CellsPush(parents, 0);
+        emon.Port.CellsPush(parents, 0);
+        emon.Port.CellsPush(reads, 0);
+        emon.Port.CellsPush(reads, 0);
+        emon.Port.CellsPush(reads, 1);
+        emon.Port.CellsPush(reads, 1);
+        emon.Port.CellsPush(reads, 1);
+        emon.Port.CellsPush(reads, 2);
+        emon.Testport.AssertEq(Ofuse.OfCandidates(words, text, rows, parents, 0, selected, reads, candidates, refs, seq), 2, "split tokens form one candidate");
+        emon.Testport.AssertEq(Ofuse.OfChoice(candidates, 1), 1, "valid split wins at sufficient margin");
+        emon.Testport.AssertEq(emon.Port.CellsAt(refs, Ofuse.OfCget(candidates, 1, 1)), 1, "OCR order independent of alignment row order");
+        emon.Testport.AssertEq(emon.Port.CellsAt(refs, Ofuse.OfCget(candidates, 1, 1) + 1), 2, "second source row retained, no synthetic word");
+    }
+    [Xunit.Fact]
+    public static void TestUnicodeLettersAndNumbersAreEligibleButSymbolsAndGarbageAreNot() {
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.CellsPush(text, 20013);
+        emon.Port.CellsPush(text, 1633);
+        emon.Port.CellsPush(text, 9733);
+        OftWord(words, 0, 1, 0, 900, 0);
+        OftWord(words, 1, 1, 0, 900, 0);
+        OftWord(words, 2, 1, 0, 900, 0);
+        OftWord(words, 0, 1, 0, 900, 8);
+        emon.Testport.AssertEq(Ofuse.OfEligible(words, text, 0), 1, "CJK letter");
+        emon.Testport.AssertEq(Ofuse.OfEligible(words, text, 1), 1, "Arabic decimal digit");
+        emon.Testport.AssertEq(Ofuse.OfEligible(words, text, 2), 0, "star is not a word");
+        emon.Testport.AssertEq(Ofuse.OfEligible(words, text, 3), 0, "garbage flag excludes otherwise valid text");
+        Evidence.OwSet(words, 0, Evidence.HdTstart(), 2147483647);
+        Evidence.OwSet(words, 0, Evidence.HdTlen(), 2147483647);
+        emon.Testport.AssertEq(Ofuse.OfEligible(words, text, 0), 0, "hostile span never reads outside recorded text");
+    }
+    [Xunit.Fact]
+    public static void TestZeroCandidatesCannotDeleteOrReadAnAbsentIncumbent() {
+        emon.Port.Cells c = emon.Port.NewCells();
+        emon.Testport.AssertEq(Ofuse.OfChoice(c, 0), -1, "empty table is a no-op");
+        emon.Testport.AssertEq(Ofuse.OfChoice(c, 4), -1, "missing table never deletes selected words");
+    }
 }
