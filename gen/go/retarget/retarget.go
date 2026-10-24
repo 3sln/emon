@@ -10,6 +10,7 @@ import (
 	"emon/player"
 	"emon/port"
 	"emon/scan"
+	"emon/upscale"
 )
 
 func RtMax() int32 {
@@ -155,6 +156,56 @@ func RtEmptyConf() int32 {
 func rtNativeEmptyPriority() int32 {
 	// Existing OCR empty-line crops precede traced gaps: this bonus exceeds the largest admitted empty-line area (144000 square points).
 	return 1000000
+}
+
+func RiReceipt() int32 {
+	return 31
+}
+
+func RvReceipt() int32 {
+	return 41
+}
+
+func RtpReceipt() int32 {
+	return 251
+}
+
+func RtpReceiptWin() int32 {
+	return 252
+}
+
+func RtpReceiptView() int32 {
+	return 258
+}
+
+func RtReceiptMin() int32 {
+	// D705/D707: only receipt words at conf30 or above are admitted to body reconstruction.
+	return 300
+}
+
+func rtReceiptFlags(trigger int32) int32 {
+	if trigger == 1 {
+		return evidence.VgReceiptPhoto()
+	}
+	if trigger == 2 {
+		return evidence.VgReceiptThermal()
+	}
+	return 0
+}
+
+func RtReceiptMode(trigger int32) int32 {
+	// D706: the thermal candidate regressed a non-receipt control; only the photo lane is retained.
+	if trigger == 1 {
+		return 1
+	}
+	return 0
+}
+
+func RtReceiptWins(base int32, candidate int32) int32 {
+	if candidate > base {
+		return 1
+	}
+	return 0
 }
 
 func RiThermal() int32 {
@@ -309,8 +360,33 @@ func RtpHash() int32 {
 	return 254
 }
 
-func RtpSize() int32 {
+func RtpFactor() int32 {
 	return 256
+}
+
+func RtpTrigger() int32 {
+	return 257
+}
+
+func rtpSourceDeferred() int32 {
+	return 259
+}
+
+func RtReceiptSource(rtp *port.Cells, sourceMask int32) int32 {
+	// D705: PDF scans retain baseline empty recovery; source bit2 is set by pu-scan, image inputs carry bit1.
+	port.CellsSet(rtp, rtpSourceDeferred(), (sourceMask&2)/2)
+	return port.CellsAt(rtp, rtpSourceDeferred())
+}
+
+func RtReceiptActive(rtp *port.Cells) int32 {
+	if port.CellsAt(rtp, rtpSourceDeferred()) != 0 {
+		return 0
+	}
+	return RtReceiptMode(port.CellsAt(rtp, RtpTrigger()))
+}
+
+func RtpSize() int32 {
+	return 260
 }
 
 func RtPrep(rtp *port.Cells) int32 {
@@ -324,6 +400,8 @@ func RtPrep(rtp *port.Cells) int32 {
 		i += 1
 	}
 	port.CellsSet(rtp, RtpFrun(), -1)
+	port.CellsSet(rtp, RtpReceipt(), -1)
+	port.CellsSet(rtp, RtpReceiptView(), -1)
 	port.CellsSet(rtp, RtpBrun(), -1)
 	port.CellsSet(rtp, RtpRrun(), -1)
 	port.CellsSet(rtp, RtpTrun(), -1)
@@ -1212,19 +1290,96 @@ func RtThermalInto(gray *port.Bitmap, dst *port.Bitmap, paper int32) int32 {
 	return 0
 }
 
-func rtAskThermal(page int32, dpi int32, loc *port.Cells, ans *port.Cells, bms *port.BitmapSet, gray *port.Bitmap, paper int32, rtp *port.Cells, rq *port.Cells) int32 {
+func RtFaintInto(gray *port.Bitmap, dst *port.Bitmap, dpi int32, pixels *port.Cells) int32 {
+	norm.NmSauvola(gray, dst, norm.NmSauvolaR(dpi*100), norm.NmSauvolaKFaint(), pixels)
+	var x int32 = 0
+	var y int32 = 0
+	for y < port.BitmapH(dst) {
+		x = 0
+		for x < port.BitmapW(dst) {
+			port.BitmapSetU8(dst, x, y, 0, 255-port.BitmapU8(dst, x, y, 0))
+			x += 1
+		}
+		y += 1
+	}
+	return 0
+}
+
+func RtEmptyReceipt(trigger int32, ans *port.Cells, at int32) int32 {
+	if RtReceiptMode(trigger) == 0 {
+		return 1
+	}
+	if at < 0 {
+		return 0
+	}
+	if plan.AnOk(ans, at) != 1 {
+		return 1
+	}
+	if plan.AnOcrCount(ans, at) == 0 {
+		return 1
+	}
+	return 0
+}
+
+func rtAskThermal(page int32, dpi int32, loc *port.Cells, ans *port.Cells, bms *port.BitmapSet, gray *port.Bitmap, paper int32, rtp *port.Cells, rq *port.Cells, trigger int32, pixels *port.Cells) int32 {
 	var id int32 = plan.PuId(page, RiThermal())
 	var vid int32 = plan.PuViewId(page, RvThermal())
+	var psm int32 = 6
+	if trigger == 1 {
+		var photo int32 = plan.PuViewId(page, RvReceipt())
+		var faint *port.Bitmap = port.BmsGet(bms, photo)
+		port.BitmapHash(faint, rtp, RtpHash())
+		if plan.AnFind(ans, id) < 0 {
+			scan.ScRequestViewPsm(rq, id, photo, port.CellsAt(rtp, RtpHash()), port.CellsAt(rtp, RtpHash()+1), 11, 300, loc)
+		}
+		return 1
+	}
 	var v *port.Bitmap = port.BmsPut(bms, vid, port.BitmapW(gray), port.BitmapH(gray), 1)
 	RtThermalInto(gray, v, paper)
 	port.BitmapHash(v, rtp, RtpHash())
 	if plan.AnFind(ans, id) < 0 {
-		scan.ScRequestViewPsm(rq, id, vid, port.CellsAt(rtp, RtpHash()), port.CellsAt(rtp, RtpHash()+1), 6, dpi, loc)
+		scan.ScRequestViewPsm(rq, id, vid, port.CellsAt(rtp, RtpHash()), port.CellsAt(rtp, RtpHash()+1), psm, dpi, loc)
 	}
 	return 1
 }
 
-func RtPlan(page int32, input int32, born int32, wanttext int32, rid int32, dpi int32, loc *port.Cells, ans *port.Cells, bms *port.BitmapSet, k0 int32, src *port.Bitmap, ws *port.Cells, oruns *port.Cells, run int32, olines *port.Cells, owords *port.Cells, rules *port.Cells, tlines *port.Cells, rtp *port.Cells, rq *port.Cells, scr *port.Cells, comps *port.Cells, inks *port.Cells) int32 {
+func rtAskReceipt(page int32, dpi int32, k0 int32, loc *port.Cells, ans *port.Cells, bms *port.BitmapSet, ws *port.Cells, rtp *port.Cells, rq *port.Cells, scr *port.Cells, run int32, oruns *port.Cells) int32 {
+	var id int32 = plan.PuId(page, RiReceipt())
+	var vid int32 = plan.PuViewId(page, RvReceipt())
+	var gray *port.Bitmap = port.BmsGet(bms, plan.PuViewId(page, k0))
+	var original *port.Bitmap = port.BmsGet(bms, plan.PuId(page, plan.PiDecode()))
+	var a int32 = plan.AnFind(ans, id)
+	var first int32 = plan.AnFind(ans, evidence.OrGet(oruns, run, evidence.OrfRequest()))
+	var factor int32 = 1
+	var w int32 = port.BitmapW(gray)
+	var h int32 = port.BitmapH(gray)
+	// Binarise a photo at its decoded size, even when the baseline reading was enlarged.
+	if (port.BitmapW(original) > 0) && (w > port.BitmapW(original)) {
+		factor = 0 - (w / port.BitmapW(original))
+	}
+	port.CellsSet(rtp, RtpFactor(), factor)
+	if factor < 0 {
+		w = port.BitmapW(original)
+		h = port.BitmapH(original)
+	}
+	var v *port.Bitmap = port.BmsPut(bms, vid, w, h, 1)
+	if factor < 0 {
+		var decodedGray *port.Bitmap = port.BmsPut(bms, plan.PuViewId(page, 42), w, h, 1)
+		port.BitmapGrayInto(original, decodedGray)
+		RtFaintInto(decodedGray, v, 300, scr)
+	} else {
+		RtFaintInto(gray, v, dpi, scr)
+	}
+	port.BitmapHash(v, rtp, RtpHash())
+	if a < 0 {
+		scan.ScRequestViewPsm(rq, id, vid, port.CellsAt(rtp, RtpHash()), port.CellsAt(rtp, RtpHash()+1), 3, 300, loc)
+	} else if (plan.AnOk(ans, a) == 1) && (first >= 0) {
+		port.CellsSet(rtp, RtpReceiptWin(), RtReceiptWins(upscale.UpReceiptScore(ans, first), upscale.UpReceiptScore(ans, a)))
+	}
+	return 1
+}
+
+func RtPlan(page int32, input int32, born int32, wanttext int32, rid int32, dpi int32, loc *port.Cells, ans *port.Cells, bms *port.BitmapSet, k0 int32, src *port.Bitmap, ws *port.Cells, oruns *port.Cells, run int32, olines *port.Cells, owords *port.Cells, rules *port.Cells, tlines *port.Cells, rtp *port.Cells, rq *port.Cells, scr *port.Cells, comps *port.Cells, inks *port.Cells, pixels *port.Cells) int32 {
 	// Decide and ask what is not yet answered, in the brief's order: the table cells and the lines, the text-only render and its OCR, the body-ink view,
 	// the quarter-turned view. `page` is 0-based (ids), `rid` the request id of the raster `src` that the first pass read at `dpi`, `k0` the id group
 	// `emon.pageink` normalized it under, `ws` its layer workspace, `scr` the unit's scratch (`sc-prep`: the measure of every first-pass line is left in it).
@@ -1234,6 +1389,12 @@ func RtPlan(page int32, input int32, born int32, wanttext int32, rid int32, dpi 
 	var q int32 = RtTurns(born, oruns, run, tlines, page+1)
 	var touched int32 = 0
 	var asked int32 = 0
+	if born == 0 {
+		port.CellsSet(rtp, RtpTrigger(), port.CellsAt(ws, 12906))
+	}
+	if (born == 0) && ((q == 0) && (RtReceiptActive(rtp) == 1)) {
+		asked += rtAskReceipt(page, dpi, k0, loc, ans, bms, ws, rtp, rq, pixels, run, oruns)
+	}
 	if (q == 0) && (born == 0) {
 		RtGapLines(page+1, dpi, tlines, oruns, run, olines, owords, inks)
 	}
@@ -1251,8 +1412,10 @@ func RtPlan(page int32, input int32, born int32, wanttext int32, rid int32, dpi 
 	}
 	if (born == 0) && ((q == 0) && (evidence.OrGet(oruns, run, evidence.OrfWcount()) == 0)) {
 		var ba int32 = plan.AnFind(ans, plan.PuId(page, RiBody()))
-		if (port.CellsAt(rtp, RtpBody()) == 0) || ((ba >= 0) && ((plan.AnOk(ans, ba) == 1) && (plan.AnOcrCount(ans, ba) == 0))) {
-			asked += rtAskThermal(page, dpi, loc, ans, bms, port.BmsGet(bms, plan.PuViewId(page, k0)), norm.NmPaperGray(ws), rtp, rq)
+		var receipt int32 = plan.AnFind(ans, plan.PuId(page, RiReceipt()))
+		var receiptMode int32 = RtReceiptActive(rtp)
+		if (RtEmptyReceipt(RtReceiptActive(rtp), ans, receipt) == 1) && ((port.CellsAt(rtp, RtpBody()) == 0) || ((ba >= 0) && ((plan.AnOk(ans, ba) == 1) && (plan.AnOcrCount(ans, ba) == 0)))) {
+			asked += rtAskThermal(page, dpi, loc, ans, bms, port.BmsGet(bms, plan.PuViewId(page, k0)), norm.NmPaperGray(ws), rtp, rq, receiptMode, pixels)
 		}
 	}
 	if q != 0 {
@@ -1277,6 +1440,45 @@ func RtRunMeta(oruns *port.Cells, run int32, op int32, round int32, psm int32, x
 	return run
 }
 
+func RtReceiptView(views *port.Cells, pg int32, srcview int32, dpi100 int32, rtp *port.Cells) int32 {
+	var factor int32 = port.CellsAt(rtp, RtpFactor())
+	var layer int32 = evidence.VwGet(views, srcview, evidence.VwfLayer())
+	var cropx int32 = evidence.VwGet(views, srcview, evidence.VwfCropx())
+	var cropy int32 = evidence.VwGet(views, srcview, evidence.VwfCropy())
+	var w int32 = evidence.VwGet(views, srcview, evidence.VwfPxw())
+	var h int32 = evidence.VwGet(views, srcview, evidence.VwfPxh())
+	var dpi int32 = dpi100
+	var kind int32 = evidence.VkBinary()
+	if port.CellsAt(rtp, RtpTrigger()) == 2 {
+		kind = evidence.VkGray()
+	}
+	if factor > 1 {
+		w *= factor
+		h *= factor
+		dpi *= factor
+	}
+	if factor < 0 {
+		w = (w + ((0 - factor) - 1)) / (0 - factor)
+		h = (h + ((0 - factor) - 1)) / (0 - factor)
+		dpi = dpi / (0 - factor)
+	}
+	return evidence.VwNew(views, pg, kind, -1, srcview, w, h, dpi, layer, -1, 0, 0, cropx, cropy, rtReceiptFlags(port.CellsAt(rtp, RtpTrigger())))
+}
+
+func RtMarkTrigger(views *port.Cells, srcview int32, rtp *port.Cells) int32 {
+	var trigger int32 = port.CellsAt(rtp, RtpTrigger())
+	var flags int32 = 0
+	if trigger == 0 {
+		return 0
+	}
+	flags = evidence.VwGet(views, srcview, evidence.VwfFlags()) | rtReceiptFlags(trigger)
+	if (port.CellsAt(rtp, RtpQ()) != 0) || (RtReceiptActive(rtp) == 0) {
+		flags |= evidence.VgReceiptDeferred()
+	}
+	evidence.VwSet(views, srcview, evidence.VwfFlags(), flags)
+	return 1
+}
+
 func RtRecord(page int32, srcview int32, dpi100 int32, loc *port.Cells, ans *port.Cells, rtp *port.Cells, views *port.Cells, epages *port.Cells, etext *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, feats *port.Cells) int32 {
 	// Write every targeted answer that is in and ok as an OCR run (`sc-answer`) of page `page` (0-based), mapped through the view it
 	// was read off: `srcview` (the raster the first pass read) for a line, a cell and the body-ink view (the same raster, as it is), the quarter-turned view
@@ -1291,6 +1493,7 @@ func RtRecord(page int32, srcview int32, dpi100 int32, loc *port.Cells, ans *por
 	var run int32 = 0
 	var made int32 = 0
 	var rviews int32 = -1
+	RtMarkTrigger(views, srcview, rtp)
 	for j < nline {
 		id = plan.PuId(page, RiLine()+j)
 		a = plan.AnFind(ans, id)
@@ -1354,12 +1557,35 @@ func RtRecord(page int32, srcview int32, dpi100 int32, loc *port.Cells, ans *por
 			made += 1
 		}
 	}
+	id = plan.PuId(page, RiReceipt())
+	a = plan.AnFind(ans, id)
+	if a >= 0 {
+		var rv int32 = RtReceiptView(views, pg, srcview, dpi100, rtp)
+		port.CellsSet(rtp, RtpReceiptView(), rv)
+		if plan.AnOk(ans, a) == 1 {
+			run = scan.ScAnswer(ans, a, pg, rv, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
+			RtRunMeta(oruns, run, evidence.OpReceipt(), 3, 3, 0, 0, 0, 0)
+			port.CellsSet(rtp, RtpReceipt(), run)
+			made += 1
+		}
+	}
 	id = plan.PuId(page, RiThermal())
 	a = plan.AnFind(ans, id)
 	if a >= 0 {
 		if plan.AnOk(ans, a) == 1 {
-			run = scan.ScAnswer(ans, a, pg, srcview, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
-			RtRunMeta(oruns, run, evidence.OpBodyInk(), 3+port.CellsAt(rtp, RtpBody()), 6, 0, 0, 0, 0)
+			var selectedView int32 = srcview
+			var psm int32 = 6
+			var pass int32 = evidence.OpBodyInk()
+			var trigger int32 = RtReceiptActive(rtp)
+			if trigger > 0 {
+				psm = 11
+				pass = evidence.OpReceiptRescue()
+			}
+			if (trigger == 1) && (port.CellsAt(rtp, RtpReceiptView()) >= 0) {
+				selectedView = port.CellsAt(rtp, RtpReceiptView())
+			}
+			run = scan.ScAnswer(ans, a, pg, selectedView, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
+			RtRunMeta(oruns, run, pass, 3+port.CellsAt(rtp, RtpBody()), psm, 0, 0, 0, 0)
 			port.CellsSet(rtp, RtpFrun(), run)
 			made += 1
 		}
@@ -1643,6 +1869,122 @@ func rtNextBonly(olines *port.Cells, scr *port.Cells, bl0 int32, bn int32, limit
 	return best
 }
 
+func rtReceiptFold(cp int32) int32 {
+	if (cp >= 65) && (cp <= 90) {
+		return cp + 32
+	}
+	return cp
+}
+
+func rtReceiptWordEqual(ow *port.Cells, et *port.Cells, a int32, b int32) int32 {
+	var n int32 = evidence.OwGet(ow, a, evidence.HdTlen())
+	var sa int32 = evidence.OwGet(ow, a, evidence.HdTstart())
+	var sb int32 = evidence.OwGet(ow, b, evidence.HdTstart())
+	var j int32 = 0
+	if n != evidence.OwGet(ow, b, evidence.HdTlen()) {
+		return 0
+	}
+	for j < n {
+		if rtReceiptFold(port.CellsAt(et, sa+j)) != rtReceiptFold(port.CellsAt(et, sb+j)) {
+			return 0
+		}
+		j += 1
+	}
+	return 1
+}
+
+func rtReceiptWordAlpha(ow *port.Cells, et *port.Cells, w int32) int32 {
+	var s int32 = evidence.OwGet(ow, w, evidence.HdTstart())
+	var n int32 = evidence.OwGet(ow, w, evidence.HdTlen())
+	var j int32 = 0
+	for j < n {
+		if upscale.UpReceiptAlpha(port.CellsAt(et, s+j)) == 1 {
+			return 1
+		}
+		j += 1
+	}
+	return 0
+}
+
+func rtReceiptProtectConf() int32 {
+	return 900
+}
+
+func rtReceiptProtected(ow *port.Cells, et *port.Cells, w int32) int32 {
+	if (evidence.OwGet(ow, w, evidence.HdConf()) >= rtReceiptProtectConf()) && (evidence.OwGet(ow, w, evidence.HdTlen()) >= 2) {
+		return rtReceiptWordAlpha(ow, et, w)
+	}
+	return 0
+}
+
+func rtReceiptWordValue(ow *port.Cells, et *port.Cells, w int32) int32 {
+	return upscale.UpReceiptValue(evidence.OwGet(ow, w, evidence.HdConf()), evidence.OwGet(ow, w, evidence.HdTlen()), rtReceiptWordAlpha(ow, et, w))
+}
+
+func rtReceiptSelectedCount(ol *port.Cells, ow *port.Cells, et *port.Cells, scr *port.Cells, n int32, word int32, first int32) int32 {
+	var k int32 = 0
+	var w int32 = 0
+	var end int32 = 0
+	var count int32 = 0
+	var line int32 = 0
+	for k < n {
+		line = port.CellsAt(scr, scan.ScSelBase()+k)
+		w = evidence.OlGet(ol, line, evidence.LhFirst())
+		end = w + evidence.OlGet(ol, line, evidence.LhCount())
+		for w < end {
+			if (evidence.OlGet(ol, line, evidence.OlfRun()) != first) && ((rtReceiptProtected(ow, et, w) == 1) && (rtReceiptWordEqual(ow, et, w, word) == 1)) {
+				count += 1
+			}
+			w += 1
+		}
+		k += 1
+	}
+	return count
+}
+
+func rtReceiptSafe(runs *port.Cells, ol *port.Cells, ow *port.Cells, et *port.Cells, scr *port.Cells, n int32, candidate int32, first int32) int32 {
+	// D705: compare against the completed baseline selection, including its body-ink recovery. A better global score must preserve very confident token occurrences from the selected targeted recovery lines; the initial reading retains its declared score policy.
+	var c0 int32 = evidence.OrGet(runs, candidate, evidence.OrfWfirst())
+	var cn int32 = c0 + evidence.OrGet(runs, candidate, evidence.OrfWcount())
+	var k int32 = 0
+	var line int32 = 0
+	var w int32 = 0
+	var end int32 = 0
+	var c int32 = 0
+	var count int32 = 0
+	var base int32 = 0
+	var quality int32 = 0
+	for k < n {
+		line = port.CellsAt(scr, scan.ScSelBase()+k)
+		w = evidence.OlGet(ol, line, evidence.LhFirst())
+		end = w + evidence.OlGet(ol, line, evidence.LhCount())
+		for w < end {
+			base += rtReceiptWordValue(ow, et, w)
+			if (evidence.OlGet(ol, line, evidence.OlfRun()) != first) && (rtReceiptProtected(ow, et, w) == 1) {
+				c = c0
+				count = 0
+				for c < cn {
+					if (evidence.OwGet(ow, c, evidence.HdConf()) >= RtReceiptMin()) && (rtReceiptWordEqual(ow, et, w, c) == 1) {
+						count += 1
+					}
+					c += 1
+				}
+				if count < rtReceiptSelectedCount(ol, ow, et, scr, n, w, first) {
+					return 0
+				}
+			}
+			w += 1
+		}
+		k += 1
+	}
+	c = c0
+	for c < cn {
+		quality += rtReceiptWordValue(ow, et, c)
+		c += 1
+	}
+	return RtReceiptWins(base, quality)
+}
+
 func RtAdopt(rtp *port.Cells, oruns *port.Cells, fr int32, olines *port.Cells, owords *port.Cells, etext *port.Cells, scr *port.Cells) int32 {
 	// The lines a SCANNED page's pipeline reads, in the order it reads them, written to the selection of `scr` (`sc-sel-set`); answers how
 	// many. `fr` is the first pass's run. A page that was turned (`rtp-q`) is read from its turned view's run when that scores `rt-turn-gain`
@@ -1672,6 +2014,7 @@ func RtAdopt(rtp *port.Cells, oruns *port.Cells, fr int32, olines *port.Cells, o
 	var bn int32 = 0
 	var ly int32 = 0
 	var mono int32 = 0
+	port.CellsSet(scr, scan.ScAdmitFloor(), 0)
 	if (q != 0) && (rrun >= 0) {
 		sf = RtRunScore(oruns, olines, owords, fr)
 		sr = RtRunScore(oruns, olines, owords, rrun)
@@ -1843,10 +2186,93 @@ func RtAdopt(rtp *port.Cells, oruns *port.Cells, fr int32, olines *port.Cells, o
 			}
 			if n > 0 {
 				port.CellsSet(rtp, RtpPrimary(), tr)
+				if RtReceiptActive(rtp) == 1 {
+					port.CellsSet(scr, scan.ScAdmitFloor(), RtReceiptMin())
+				}
+			}
+		}
+	}
+	if (port.CellsAt(rtp, RtpReceiptWin()) == 1) && (port.CellsAt(rtp, RtpReceipt()) >= 0) {
+		var receipt int32 = port.CellsAt(rtp, RtpReceipt())
+		if rtReceiptSafe(oruns, olines, owords, etext, scr, n, receipt, fr) == 1 {
+			port.CellsSet(rtp, RtpPrimary(), receipt)
+			port.CellsSet(scr, scan.ScAdmitFloor(), RtReceiptMin())
+			k = 0
+			for k < scan.ScSelMax() {
+				port.CellsSet(scr, scan.ScXtraBase()+(k+1), 0)
+				k += 1
+			}
+			n = 0
+			k = evidence.OrGet(oruns, receipt, evidence.OrfLfirst())
+			pn = k + evidence.OrGet(oruns, receipt, evidence.OrfLcount())
+			for k < pn {
+				if evidence.OlGet(olines, k, evidence.LhCount()) > 0 {
+					n = rtSelAdd(scr, n, k)
+				}
+				k += 1
 			}
 		}
 	}
 	return n
+}
+
+func RtReceiptIgnored(rtp *port.Cells, runs *port.Cells, which int32) int32 {
+	// D705: the new main/rescue runs are adjacent. Unadopted words stay evidence but cannot change the baseline signature mask. which0 first word, which1 count.
+	var chosen int32 = port.CellsAt(rtp, RtpPrimary())
+	var k int32 = 0
+	var run int32 = 0
+	var pass int32 = 0
+	var start int32 = 0
+	var end int32 = 0
+	var lo int32 = -1
+	var hi int32 = 0
+	for k < 2 {
+		run = port.CellsAt(rtp, RtpReceipt())
+		if k == 1 {
+			run = port.CellsAt(rtp, RtpFrun())
+		}
+		if (run >= 0) && (run != chosen) {
+			pass = evidence.OrGet(runs, run, evidence.OrfPass())
+			if (pass == evidence.OpReceipt()) || (pass == evidence.OpReceiptRescue()) {
+				start = evidence.OrGet(runs, run, evidence.OrfWfirst())
+				end = start + evidence.OrGet(runs, run, evidence.OrfWcount())
+				if end > start {
+					if (lo < 0) || (start < lo) {
+						lo = start
+					}
+					if end > hi {
+						hi = end
+					}
+				}
+			}
+		}
+		k += 1
+	}
+	if lo < 0 {
+		return 0
+	}
+	if which == 0 {
+		return lo
+	}
+	return hi - lo
+}
+
+func RtMarkAdopted(views *port.Cells, oruns *port.Cells, rtp *port.Cells) int32 {
+	var run int32 = port.CellsAt(rtp, RtpPrimary())
+	var pass int32 = 0
+	var view int32 = 0
+	var flags int32 = 0
+	if run < 0 {
+		return 0
+	}
+	pass = evidence.OrGet(oruns, run, evidence.OrfPass())
+	if (pass != evidence.OpReceipt()) && (pass != evidence.OpReceiptRescue()) {
+		return 0
+	}
+	view = evidence.OrGet(oruns, run, evidence.OrfView())
+	flags = evidence.VwGet(views, view, evidence.VwfFlags())
+	evidence.VwSet(views, view, evidence.VwfFlags(), flags|evidence.VgReceiptAdopted())
+	return 1
 }
 
 func RtUpright(rtp *port.Cells, fr int32, epages *port.Cells, page1 int32) int32 {

@@ -127,6 +127,23 @@ func ocFlow(nodes *port.Cells, regions *port.Cells, text *port.Cells, n int32, p
 	return 0
 }
 
+func OcPageText(nodes *port.Cells, regions *port.Cells, text *port.Cells, pg int32, bag *port.Cells, tokens *port.Cells, plain *port.Cells) int32 {
+	// D707: count the serialized body and furniture tokens of one page, using the audit's exact projection.
+	var n int32 = 1
+	port.CellsDrop(bag, 0)
+	port.CellsDrop(tokens, 0)
+	if model.NodeCount(nodes) > 0 {
+		ocFlow(nodes, regions, text, 0, pg, bag, tokens, plain)
+	}
+	for n < model.NodeCount(nodes) {
+		if (model.NodeKind(nodes, n) == model.NkFurniture()) && (model.NodeParent(nodes, n) == -1) {
+			ocFlow(nodes, regions, text, n, pg, bag, tokens, plain)
+		}
+		n += 1
+	}
+	return port.CellsLen(tokens) / 3
+}
+
 func ocWord(owords *port.Cells, w int32, et *port.Cells, ledger *port.Cells, text *port.Cells, bag *port.Cells, tokens *port.Cells, norm *port.Cells, tmp *port.Cells, raw *port.Cells, rt *port.Cells) int32 {
 	var i int32 = 0
 	var j int32 = 0

@@ -782,6 +782,16 @@ public final class Scan {
     public static int scCap() {
         return 400;
     }
+    public static int scAdmitFloor() {
+        // D707: optional per-page word-confidence floor, before the selection region.
+        return 2299;
+    }
+    public static int scAdmitWord(int confidence, int floor) {
+        if ((floor > 0) && (confidence < floor)) {
+            return 0;
+        }
+        return 1;
+    }
     public static int scSelBase() {
         // Where `sc-emit-sel`'s selection starts in the scratch.
         return 2300;
@@ -825,6 +835,7 @@ public final class Scan {
         while (emon.Port.cellsLen(scr) < (scFateBase() + ((4 * scFateMax()) + 2))) {
             emon.Port.cellsPush(scr, 0);
         }
+        emon.Port.cellsSet(scr, scAdmitFloor(), 0);
         return 0;
     }
     public static int scIsort(emon.Port.Cells c, int from, int n) {
@@ -1941,6 +1952,9 @@ public final class Scan {
             n = Evidence.owGet(owords, w, Evidence.hdTlen());
             conf = Evidence.owGet(owords, w, Evidence.hdConf());
             f = 0;
+            if (scAdmitWord(conf, emon.Port.cellsAt(scr, scAdmitFloor())) == 0) {
+                f = 1;
+            }
             emon.Port.cellsSet(scr, fb + ((2 * fm) + i), -1);
             emon.Port.cellsSet(scr, fb + ((3 * fm) + i), 0);
             // a dot leader
@@ -3105,6 +3119,31 @@ public final class Scan {
             if ((seen == 1) && (words == 0)) {
                 Model.ledgerAdd(ledger, Model.drOcrEmpty(), p + 1, 0, 0, Model.pageW(pages, p), Model.pageH(pages, p), 1000, Model.srOcr());
                 rows += 1;
+            }
+            p += 1;
+        }
+        return rows;
+    }
+    public static int scWriteRejectedOcr(emon.Port.Cells oruns, emon.Port.Cells pages, emon.Port.Cells nodes, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ledger, emon.Port.Cells bag, emon.Port.Cells tokens, emon.Port.Cells plain) {
+        // D707: nonempty OCR evidence can still yield no admitted Model text. Keep the page's ocr-empty diagnostic as well as the occurrence ledger.
+        int p = 0;
+        int r = 0;
+        int words = 0;
+        int rows = 0;
+        while (p < Model.pageCount(pages)) {
+            r = 0;
+            words = 0;
+            while (r < Evidence.orCount(oruns)) {
+                if (Evidence.orGet(oruns, r, 0) == (p + 1)) {
+                    words += Evidence.orGet(oruns, r, Evidence.orfWcount());
+                }
+                r += 1;
+            }
+            if (words > 0) {
+                if (Ocrledger.ocPageText(nodes, regions, text, p + 1, bag, tokens, plain) == 0) {
+                    Model.ledgerAdd(ledger, Model.drOcrEmpty(), p + 1, 0, 0, Model.pageW(pages, p), Model.pageH(pages, p), 1000, Model.srOcr());
+                    rows += 1;
+                }
             }
             p += 1;
         }

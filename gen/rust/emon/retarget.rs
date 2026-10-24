@@ -6,6 +6,7 @@ use crate::emon::norm::*;
 use crate::emon::plan::*;
 use crate::emon::player::*;
 use crate::emon::scan::*;
+use crate::emon::upscale::*;
 
 pub fn rt_max() -> i32 {
     // `rt-max`: the most targeted requests a page asks.
@@ -122,6 +123,47 @@ pub fn rt_empty_conf() -> i32 {
 pub(crate) fn rt_native_empty_priority() -> i32 {
     // Existing OCR empty-line crops precede traced gaps: this bonus exceeds the largest admitted empty-line area (144000 square points).
     return 1000000;
+}
+pub fn ri_receipt() -> i32 {
+    return 31;
+}
+pub fn rv_receipt() -> i32 {
+    return 41;
+}
+pub fn rtp_receipt() -> i32 {
+    return 251;
+}
+pub fn rtp_receipt_win() -> i32 {
+    return 252;
+}
+pub fn rtp_receipt_view() -> i32 {
+    return 258;
+}
+pub fn rt_receipt_min() -> i32 {
+    // D705/D707: only receipt words at conf30 or above are admitted to body reconstruction.
+    return 300;
+}
+pub(crate) fn rt_receipt_flags(trigger: i32) -> i32 {
+    if trigger == 1 {
+        return vg_receipt_photo();
+    }
+    if trigger == 2 {
+        return vg_receipt_thermal();
+    }
+    return 0;
+}
+pub fn rt_receipt_mode(trigger: i32) -> i32 {
+    // D706: the thermal candidate regressed a non-receipt control; only the photo lane is retained.
+    if trigger == 1 {
+        return 1;
+    }
+    return 0;
+}
+pub fn rt_receipt_wins(base: i32, candidate: i32) -> i32 {
+    if candidate > base {
+        return 1;
+    }
+    return 0;
 }
 pub fn ri_thermal() -> i32 {
     return 30;
@@ -242,8 +284,28 @@ pub fn rtp_hash() -> i32 {
     // two cells the pixel hash is written to
     return 254;
 }
-pub fn rtp_size() -> i32 {
+pub fn rtp_factor() -> i32 {
     return 256;
+}
+pub fn rtp_trigger() -> i32 {
+    return 257;
+}
+pub(crate) fn rtp_source_deferred() -> i32 {
+    return 259;
+}
+pub fn rt_receipt_source(mut rtp: &mut crate::port::Cells, source_mask: i32) -> i32 {
+    // D705: PDF scans retain baseline empty recovery; source bit2 is set by pu-scan, image inputs carry bit1.
+    crate::port::cells_set(rtp, rtp_source_deferred(), (source_mask & 2) / 2);
+    return crate::port::cells_at(rtp, rtp_source_deferred());
+}
+pub fn rt_receipt_active(rtp: &mut crate::port::Cells) -> i32 {
+    if crate::port::cells_at(rtp, rtp_source_deferred()) != 0 {
+        return 0;
+    }
+    return rt_receipt_mode(crate::port::cells_at(rtp, rtp_trigger()));
+}
+pub fn rtp_size() -> i32 {
+    return 260;
 }
 pub fn rt_prep(mut rtp: &mut crate::port::Cells) -> i32 {
     // Make the scratch (`rtp-size` cells) and clear it: every run row -1, every count 0.
@@ -256,6 +318,8 @@ pub fn rt_prep(mut rtp: &mut crate::port::Cells) -> i32 {
         i += 1;
     }
     crate::port::cells_set(rtp, rtp_frun(), -1);
+    crate::port::cells_set(rtp, rtp_receipt(), -1);
+    crate::port::cells_set(rtp, rtp_receipt_view(), -1);
     crate::port::cells_set(rtp, rtp_brun(), -1);
     crate::port::cells_set(rtp, rtp_rrun(), -1);
     crate::port::cells_set(rtp, rtp_trun(), -1);
@@ -1108,18 +1172,92 @@ pub fn rt_thermal_into(gray: &crate::port::Bitmap, dst: &crate::port::Bitmap, pa
     }
     return 0;
 }
-pub(crate) fn rt_ask_thermal(page: i32, dpi: i32, loc: &mut crate::port::Cells, ans: &mut crate::port::Cells, bms: &crate::port::BitmapSet, gray: &crate::port::Bitmap, paper: i32, mut rtp: &mut crate::port::Cells, mut rq: &mut crate::port::Cells) -> i32 {
+pub fn rt_faint_into(gray: &crate::port::Bitmap, dst: &crate::port::Bitmap, dpi: i32, mut pixels: &mut crate::port::Cells) -> i32 {
+    nm_sauvola(gray, dst, nm_sauvola_r(dpi * 100), nm_sauvola_k_faint(), pixels);
+    let mut x: i32 = 0;
+    let mut y: i32 = 0;
+    while y < crate::port::bitmap_h(dst) {
+        x = 0;
+        while x < crate::port::bitmap_w(dst) {
+            crate::port::bitmap_set_u8(dst, x, y, 0, 255 - crate::port::bitmap_u8(dst, x, y, 0));
+            x += 1;
+        }
+        y += 1;
+    }
+    return 0;
+}
+pub fn rt_empty_receipt(trigger: i32, ans: &mut crate::port::Cells, at: i32) -> i32 {
+    if rt_receipt_mode(trigger) == 0 {
+        return 1;
+    }
+    if at < 0 {
+        return 0;
+    }
+    if an_ok(ans, at) != 1 {
+        return 1;
+    }
+    if an_ocr_count(ans, at) == 0 {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn rt_ask_thermal(page: i32, dpi: i32, loc: &mut crate::port::Cells, ans: &mut crate::port::Cells, bms: &crate::port::BitmapSet, gray: &crate::port::Bitmap, paper: i32, mut rtp: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, trigger: i32, mut pixels: &mut crate::port::Cells) -> i32 {
     let id: i32 = pu_id(page, ri_thermal());
     let vid: i32 = pu_view_id(page, rv_thermal());
+    let mut psm: i32 = 6;
+    if trigger == 1 {
+        let photo: i32 = pu_view_id(page, rv_receipt());
+        let faint: &crate::port::Bitmap = crate::port::bms_get(bms, photo);
+        crate::port::bitmap_hash(faint, rtp, rtp_hash());
+        if an_find(ans, id) < 0 {
+            sc_request_view_psm(rq, id, photo, crate::port::cells_at(rtp, rtp_hash()), crate::port::cells_at(rtp, rtp_hash() + 1), 11, 300, loc);
+        }
+        return 1;
+    }
     let v: &crate::port::Bitmap = crate::port::bms_put(bms, vid, crate::port::bitmap_w(gray), crate::port::bitmap_h(gray), 1);
     rt_thermal_into(gray, v, paper);
     crate::port::bitmap_hash(v, rtp, rtp_hash());
     if an_find(ans, id) < 0 {
-        sc_request_view_psm(rq, id, vid, crate::port::cells_at(rtp, rtp_hash()), crate::port::cells_at(rtp, rtp_hash() + 1), 6, dpi, loc);
+        sc_request_view_psm(rq, id, vid, crate::port::cells_at(rtp, rtp_hash()), crate::port::cells_at(rtp, rtp_hash() + 1), psm, dpi, loc);
     }
     return 1;
 }
-pub fn rt_plan(page: i32, input: i32, born: i32, wanttext: i32, rid: i32, dpi: i32, loc: &mut crate::port::Cells, ans: &mut crate::port::Cells, bms: &crate::port::BitmapSet, k0: i32, src: &crate::port::Bitmap, mut ws: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, run: i32, mut olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, rules: &mut crate::port::Cells, tlines: &mut crate::port::Cells, mut rtp: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, comps: &mut crate::port::Cells, inks: &mut crate::port::Cells) -> i32 {
+pub(crate) fn rt_ask_receipt(page: i32, dpi: i32, k0: i32, loc: &mut crate::port::Cells, ans: &mut crate::port::Cells, bms: &crate::port::BitmapSet, ws: &mut crate::port::Cells, mut rtp: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, run: i32, oruns: &mut crate::port::Cells) -> i32 {
+    let id: i32 = pu_id(page, ri_receipt());
+    let vid: i32 = pu_view_id(page, rv_receipt());
+    let gray: &crate::port::Bitmap = crate::port::bms_get(bms, pu_view_id(page, k0));
+    let original: &crate::port::Bitmap = crate::port::bms_get(bms, pu_id(page, pi_decode()));
+    let a: i32 = an_find(ans, id);
+    let first: i32 = an_find(ans, or_get(oruns, run, orf_request()));
+    let mut factor: i32 = 1;
+    let mut w: i32 = crate::port::bitmap_w(gray);
+    let mut h: i32 = crate::port::bitmap_h(gray);
+    // Binarise a photo at its decoded size, even when the baseline reading was enlarged.
+    if (crate::port::bitmap_w(original) > 0) && (w > crate::port::bitmap_w(original)) {
+        factor = 0 - (w / crate::port::bitmap_w(original));
+    }
+    crate::port::cells_set(rtp, rtp_factor(), factor);
+    if factor < 0 {
+        w = crate::port::bitmap_w(original);
+        h = crate::port::bitmap_h(original);
+    }
+    let v: &crate::port::Bitmap = crate::port::bms_put(bms, vid, w, h, 1);
+    if factor < 0 {
+        let decoded_gray: &crate::port::Bitmap = crate::port::bms_put(bms, pu_view_id(page, 42), w, h, 1);
+        crate::port::bitmap_gray_into(original, decoded_gray);
+        rt_faint_into(decoded_gray, v, 300, scr);
+    } else {
+        rt_faint_into(gray, v, dpi, scr);
+    }
+    crate::port::bitmap_hash(v, rtp, rtp_hash());
+    if a < 0 {
+        sc_request_view_psm(rq, id, vid, crate::port::cells_at(rtp, rtp_hash()), crate::port::cells_at(rtp, rtp_hash() + 1), 3, 300, loc);
+    } else if (an_ok(ans, a) == 1) && (first >= 0) {
+        crate::port::cells_set(rtp, rtp_receipt_win(), rt_receipt_wins(up_receipt_score(ans, first), up_receipt_score(ans, a)));
+    }
+    return 1;
+}
+pub fn rt_plan(page: i32, input: i32, born: i32, wanttext: i32, rid: i32, dpi: i32, loc: &mut crate::port::Cells, ans: &mut crate::port::Cells, bms: &crate::port::BitmapSet, k0: i32, src: &crate::port::Bitmap, mut ws: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, run: i32, mut olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, rules: &mut crate::port::Cells, tlines: &mut crate::port::Cells, mut rtp: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, comps: &mut crate::port::Cells, inks: &mut crate::port::Cells, mut pixels: &mut crate::port::Cells) -> i32 {
     // Decide and ask what is not yet answered, in the brief's order: the table cells and the lines, the text-only render and its OCR, the body-ink view,
     // the quarter-turned view. `page` is 0-based (ids), `rid` the request id of the raster `src` that the first pass read at `dpi`, `k0` the id group
     // `emon.pageink` normalized it under, `ws` its layer workspace, `scr` the unit's scratch (`sc-prep`: the measure of every first-pass line is left in it).
@@ -1129,6 +1267,12 @@ pub fn rt_plan(page: i32, input: i32, born: i32, wanttext: i32, rid: i32, dpi: i
     let q: i32 = rt_turns(born, oruns, run, tlines, page + 1);
     let mut touched: i32 = 0;
     let mut asked: i32 = 0;
+    if born == 0 {
+        crate::port::cells_set(rtp, rtp_trigger(), crate::port::cells_at(ws, 12906));
+    }
+    if (born == 0) && ((q == 0) && (rt_receipt_active(rtp) == 1)) {
+        asked += rt_ask_receipt(page, dpi, k0, loc, ans, bms, ws, rtp, rq, pixels, run, oruns);
+    }
     if (q == 0) && (born == 0) {
         rt_gap_lines(page + 1, dpi, tlines, oruns, run, olines, owords, inks);
     }
@@ -1146,8 +1290,10 @@ pub fn rt_plan(page: i32, input: i32, born: i32, wanttext: i32, rid: i32, dpi: i
     }
     if (born == 0) && ((q == 0) && (or_get(oruns, run, orf_wcount()) == 0)) {
         let ba: i32 = an_find(ans, pu_id(page, ri_body()));
-        if (crate::port::cells_at(rtp, rtp_body()) == 0) || ((ba >= 0) && ((an_ok(ans, ba) == 1) && (an_ocr_count(ans, ba) == 0))) {
-            asked += rt_ask_thermal(page, dpi, loc, ans, bms, crate::port::bms_get(bms, pu_view_id(page, k0)), nm_paper_gray(ws), rtp, rq);
+        let receipt: i32 = an_find(ans, pu_id(page, ri_receipt()));
+        let receipt_mode: i32 = rt_receipt_active(rtp);
+        if (rt_empty_receipt(rt_receipt_active(rtp), ans, receipt) == 1) && ((crate::port::cells_at(rtp, rtp_body()) == 0) || ((ba >= 0) && ((an_ok(ans, ba) == 1) && (an_ocr_count(ans, ba) == 0)))) {
+            asked += rt_ask_thermal(page, dpi, loc, ans, bms, crate::port::bms_get(bms, pu_view_id(page, k0)), nm_paper_gray(ws), rtp, rq, receipt_mode, pixels);
         }
     }
     if q != 0 {
@@ -1170,6 +1316,43 @@ pub fn rt_run_meta(mut oruns: &mut crate::port::Cells, run: i32, op: i32, round:
     or_set(oruns, run, orf_rh(), h);
     return run;
 }
+pub fn rt_receipt_view(mut views: &mut crate::port::Cells, pg: i32, srcview: i32, dpi100: i32, rtp: &mut crate::port::Cells) -> i32 {
+    let factor: i32 = crate::port::cells_at(rtp, rtp_factor());
+    let layer: i32 = vw_get(views, srcview, vwf_layer());
+    let cropx: i32 = vw_get(views, srcview, vwf_cropx());
+    let cropy: i32 = vw_get(views, srcview, vwf_cropy());
+    let mut w: i32 = vw_get(views, srcview, vwf_pxw());
+    let mut h: i32 = vw_get(views, srcview, vwf_pxh());
+    let mut dpi: i32 = dpi100;
+    let mut kind: i32 = vk_binary();
+    if crate::port::cells_at(rtp, rtp_trigger()) == 2 {
+        kind = vk_gray();
+    }
+    if factor > 1 {
+        w *= factor;
+        h *= factor;
+        dpi *= factor;
+    }
+    if factor < 0 {
+        w = (w + ((0 - factor) - 1)) / (0 - factor);
+        h = (h + ((0 - factor) - 1)) / (0 - factor);
+        dpi = dpi / (0 - factor);
+    }
+    return vw_new(views, pg, kind, -1, srcview, w, h, dpi, layer, -1, 0, 0, cropx, cropy, rt_receipt_flags(crate::port::cells_at(rtp, rtp_trigger())));
+}
+pub fn rt_mark_trigger(mut views: &mut crate::port::Cells, srcview: i32, rtp: &mut crate::port::Cells) -> i32 {
+    let trigger: i32 = crate::port::cells_at(rtp, rtp_trigger());
+    let mut flags: i32 = 0;
+    if trigger == 0 {
+        return 0;
+    }
+    flags = vw_get(views, srcview, vwf_flags()) | rt_receipt_flags(trigger);
+    if (crate::port::cells_at(rtp, rtp_q()) != 0) || (rt_receipt_active(rtp) == 0) {
+        flags |= vg_receipt_deferred();
+    }
+    vw_set(views, srcview, vwf_flags(), flags);
+    return 1;
+}
 pub fn rt_record(page: i32, srcview: i32, dpi100: i32, loc: &mut crate::port::Cells, ans: &mut crate::port::Cells, mut rtp: &mut crate::port::Cells, mut views: &mut crate::port::Cells, epages: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut feats: &mut crate::port::Cells) -> i32 {
     // Write every targeted answer that is in and ok as an OCR run (`sc-answer`) of page `page` (0-based), mapped through the view it
     // was read off: `srcview` (the raster the first pass read) for a line, a cell and the body-ink view (the same raster, as it is), the quarter-turned view
@@ -1184,6 +1367,7 @@ pub fn rt_record(page: i32, srcview: i32, dpi100: i32, loc: &mut crate::port::Ce
     let mut run: i32 = 0;
     let mut made: i32 = 0;
     let mut rviews: i32 = -1;
+    rt_mark_trigger(views, srcview, rtp);
     while j < nline {
         id = pu_id(page, ri_line() + j);
         a = an_find(ans, id);
@@ -1247,12 +1431,35 @@ pub fn rt_record(page: i32, srcview: i32, dpi100: i32, loc: &mut crate::port::Ce
             made += 1;
         }
     }
+    id = pu_id(page, ri_receipt());
+    a = an_find(ans, id);
+    if a >= 0 {
+        let rv: i32 = rt_receipt_view(views, pg, srcview, dpi100, rtp);
+        crate::port::cells_set(rtp, rtp_receipt_view(), rv);
+        if an_ok(ans, a) == 1 {
+            run = sc_answer(ans, a, pg, rv, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+            rt_run_meta(oruns, run, op_receipt(), 3, 3, 0, 0, 0, 0);
+            crate::port::cells_set(rtp, rtp_receipt(), run);
+            made += 1;
+        }
+    }
     id = pu_id(page, ri_thermal());
     a = an_find(ans, id);
     if a >= 0 {
         if an_ok(ans, a) == 1 {
-            run = sc_answer(ans, a, pg, srcview, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
-            rt_run_meta(oruns, run, op_body_ink(), 3 + crate::port::cells_at(rtp, rtp_body()), 6, 0, 0, 0, 0);
+            let mut selected_view: i32 = srcview;
+            let mut psm: i32 = 6;
+            let mut pass: i32 = op_body_ink();
+            let trigger: i32 = rt_receipt_active(rtp);
+            if trigger > 0 {
+                psm = 11;
+                pass = op_receipt_rescue();
+            }
+            if (trigger == 1) && (crate::port::cells_at(rtp, rtp_receipt_view()) >= 0) {
+                selected_view = crate::port::cells_at(rtp, rtp_receipt_view());
+            }
+            run = sc_answer(ans, a, pg, selected_view, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+            rt_run_meta(oruns, run, pass, 3 + crate::port::cells_at(rtp, rtp_body()), psm, 0, 0, 0, 0);
             crate::port::cells_set(rtp, rtp_frun(), run);
             made += 1;
         }
@@ -1525,6 +1732,114 @@ pub(crate) fn rt_next_bonly(olines: &mut crate::port::Cells, scr: &mut crate::po
     }
     return best;
 }
+pub(crate) fn rt_receipt_fold(cp: i32) -> i32 {
+    if (cp >= 65) && (cp <= 90) {
+        return cp + 32;
+    }
+    return cp;
+}
+pub(crate) fn rt_receipt_word_equal(ow: &mut crate::port::Cells, et: &mut crate::port::Cells, a: i32, b: i32) -> i32 {
+    let n: i32 = ow_get(ow, a, hd_tlen());
+    let sa: i32 = ow_get(ow, a, hd_tstart());
+    let sb: i32 = ow_get(ow, b, hd_tstart());
+    let mut j: i32 = 0;
+    if n != ow_get(ow, b, hd_tlen()) {
+        return 0;
+    }
+    while j < n {
+        if rt_receipt_fold(crate::port::cells_at(et, sa + j)) != rt_receipt_fold(crate::port::cells_at(et, sb + j)) {
+            return 0;
+        }
+        j += 1;
+    }
+    return 1;
+}
+pub(crate) fn rt_receipt_word_alpha(ow: &mut crate::port::Cells, et: &mut crate::port::Cells, w: i32) -> i32 {
+    let s: i32 = ow_get(ow, w, hd_tstart());
+    let n: i32 = ow_get(ow, w, hd_tlen());
+    let mut j: i32 = 0;
+    while j < n {
+        if up_receipt_alpha(crate::port::cells_at(et, s + j)) == 1 {
+            return 1;
+        }
+        j += 1;
+    }
+    return 0;
+}
+pub(crate) fn rt_receipt_protect_conf() -> i32 {
+    return 900;
+}
+pub(crate) fn rt_receipt_protected(ow: &mut crate::port::Cells, et: &mut crate::port::Cells, w: i32) -> i32 {
+    if (ow_get(ow, w, hd_conf()) >= rt_receipt_protect_conf()) && (ow_get(ow, w, hd_tlen()) >= 2) {
+        return rt_receipt_word_alpha(ow, et, w);
+    }
+    return 0;
+}
+pub(crate) fn rt_receipt_word_value(ow: &mut crate::port::Cells, et: &mut crate::port::Cells, w: i32) -> i32 {
+    return up_receipt_value(ow_get(ow, w, hd_conf()), ow_get(ow, w, hd_tlen()), rt_receipt_word_alpha(ow, et, w));
+}
+pub(crate) fn rt_receipt_selected_count(ol: &mut crate::port::Cells, ow: &mut crate::port::Cells, et: &mut crate::port::Cells, scr: &mut crate::port::Cells, n: i32, word: i32, first: i32) -> i32 {
+    let mut k: i32 = 0;
+    let mut w: i32 = 0;
+    let mut end: i32 = 0;
+    let mut count: i32 = 0;
+    let mut line: i32 = 0;
+    while k < n {
+        line = crate::port::cells_at(scr, sc_sel_base() + k);
+        w = ol_get(ol, line, lh_first());
+        end = w + ol_get(ol, line, lh_count());
+        while w < end {
+            if (ol_get(ol, line, olf_run()) != first) && ((rt_receipt_protected(ow, et, w) == 1) && (rt_receipt_word_equal(ow, et, w, word) == 1)) {
+                count += 1;
+            }
+            w += 1;
+        }
+        k += 1;
+    }
+    return count;
+}
+pub(crate) fn rt_receipt_safe(runs: &mut crate::port::Cells, ol: &mut crate::port::Cells, ow: &mut crate::port::Cells, et: &mut crate::port::Cells, scr: &mut crate::port::Cells, n: i32, candidate: i32, first: i32) -> i32 {
+    // D705: compare against the completed baseline selection, including its body-ink recovery. A better global score must preserve very confident token occurrences from the selected targeted recovery lines; the initial reading retains its declared score policy.
+    let c0: i32 = or_get(runs, candidate, orf_wfirst());
+    let cn: i32 = c0 + or_get(runs, candidate, orf_wcount());
+    let mut k: i32 = 0;
+    let mut line: i32 = 0;
+    let mut w: i32 = 0;
+    let mut end: i32 = 0;
+    let mut c: i32 = 0;
+    let mut count: i32 = 0;
+    let mut base: i32 = 0;
+    let mut quality: i32 = 0;
+    while k < n {
+        line = crate::port::cells_at(scr, sc_sel_base() + k);
+        w = ol_get(ol, line, lh_first());
+        end = w + ol_get(ol, line, lh_count());
+        while w < end {
+            base += rt_receipt_word_value(ow, et, w);
+            if (ol_get(ol, line, olf_run()) != first) && (rt_receipt_protected(ow, et, w) == 1) {
+                c = c0;
+                count = 0;
+                while c < cn {
+                    if (ow_get(ow, c, hd_conf()) >= rt_receipt_min()) && (rt_receipt_word_equal(ow, et, w, c) == 1) {
+                        count += 1;
+                    }
+                    c += 1;
+                }
+                if count < rt_receipt_selected_count(ol, ow, et, scr, n, w, first) {
+                    return 0;
+                }
+            }
+            w += 1;
+        }
+        k += 1;
+    }
+    c = c0;
+    while c < cn {
+        quality += rt_receipt_word_value(ow, et, c);
+        c += 1;
+    }
+    return rt_receipt_wins(base, quality);
+}
 pub fn rt_adopt(mut rtp: &mut crate::port::Cells, oruns: &mut crate::port::Cells, fr: i32, olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, mut scr: &mut crate::port::Cells) -> i32 {
     // The lines a SCANNED page's pipeline reads, in the order it reads them, written to the selection of `scr` (`sc-sel-set`); answers how
     // many. `fr` is the first pass's run. A page that was turned (`rtp-q`) is read from its turned view's run when that scores `rt-turn-gain`
@@ -1554,6 +1869,7 @@ pub fn rt_adopt(mut rtp: &mut crate::port::Cells, oruns: &mut crate::port::Cells
     let mut bn: i32 = 0;
     let mut ly: i32 = 0;
     let mut mono: i32 = 0;
+    crate::port::cells_set(scr, sc_admit_floor(), 0);
     if (q != 0) && (rrun >= 0) {
         sf = rt_run_score(oruns, olines, owords, fr);
         sr = rt_run_score(oruns, olines, owords, rrun);
@@ -1725,10 +2041,91 @@ pub fn rt_adopt(mut rtp: &mut crate::port::Cells, oruns: &mut crate::port::Cells
             }
             if n > 0 {
                 crate::port::cells_set(rtp, rtp_primary(), tr);
+                if rt_receipt_active(rtp) == 1 {
+                    crate::port::cells_set(scr, sc_admit_floor(), rt_receipt_min());
+                }
+            }
+        }
+    }
+    if (crate::port::cells_at(rtp, rtp_receipt_win()) == 1) && (crate::port::cells_at(rtp, rtp_receipt()) >= 0) {
+        let receipt: i32 = crate::port::cells_at(rtp, rtp_receipt());
+        if rt_receipt_safe(oruns, olines, owords, etext, scr, n, receipt, fr) == 1 {
+            crate::port::cells_set(rtp, rtp_primary(), receipt);
+            crate::port::cells_set(scr, sc_admit_floor(), rt_receipt_min());
+            k = 0;
+            while k < sc_sel_max() {
+                crate::port::cells_set(scr, sc_xtra_base() + (k + 1), 0);
+                k += 1;
+            }
+            n = 0;
+            k = or_get(oruns, receipt, orf_lfirst());
+            pn = k + or_get(oruns, receipt, orf_lcount());
+            while k < pn {
+                if ol_get(olines, k, lh_count()) > 0 {
+                    n = rt_sel_add(scr, n, k);
+                }
+                k += 1;
             }
         }
     }
     return n;
+}
+pub fn rt_receipt_ignored(rtp: &mut crate::port::Cells, runs: &mut crate::port::Cells, which: i32) -> i32 {
+    // D705: the new main/rescue runs are adjacent. Unadopted words stay evidence but cannot change the baseline signature mask. which0 first word, which1 count.
+    let chosen: i32 = crate::port::cells_at(rtp, rtp_primary());
+    let mut k: i32 = 0;
+    let mut run: i32 = 0;
+    let mut pass: i32 = 0;
+    let mut start: i32 = 0;
+    let mut end: i32 = 0;
+    let mut lo: i32 = -1;
+    let mut hi: i32 = 0;
+    while k < 2 {
+        run = crate::port::cells_at(rtp, rtp_receipt());
+        if k == 1 {
+            run = crate::port::cells_at(rtp, rtp_frun());
+        }
+        if (run >= 0) && (run != chosen) {
+            pass = or_get(runs, run, orf_pass());
+            if (pass == op_receipt()) || (pass == op_receipt_rescue()) {
+                start = or_get(runs, run, orf_wfirst());
+                end = start + or_get(runs, run, orf_wcount());
+                if end > start {
+                    if (lo < 0) || (start < lo) {
+                        lo = start;
+                    }
+                    if end > hi {
+                        hi = end;
+                    }
+                }
+            }
+        }
+        k += 1;
+    }
+    if lo < 0 {
+        return 0;
+    }
+    if which == 0 {
+        return lo;
+    }
+    return hi - lo;
+}
+pub fn rt_mark_adopted(mut views: &mut crate::port::Cells, oruns: &mut crate::port::Cells, rtp: &mut crate::port::Cells) -> i32 {
+    let run: i32 = crate::port::cells_at(rtp, rtp_primary());
+    let mut pass: i32 = 0;
+    let mut view: i32 = 0;
+    let mut flags: i32 = 0;
+    if run < 0 {
+        return 0;
+    }
+    pass = or_get(oruns, run, orf_pass());
+    if (pass != op_receipt()) && (pass != op_receipt_rescue()) {
+        return 0;
+    }
+    view = or_get(oruns, run, orf_view());
+    flags = vw_get(views, view, vwf_flags());
+    vw_set(views, view, vwf_flags(), flags | vg_receipt_adopted());
+    return 1;
 }
 pub fn rt_upright(rtp: &mut crate::port::Cells, fr: i32, mut epages: &mut crate::port::Cells, page1: i32) -> i32 {
     // A page that is read from its turned view (`rtp-primary` is not the first pass) by a quarter turn has the width and height of its upright self: the

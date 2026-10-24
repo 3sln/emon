@@ -123,7 +123,7 @@
 
 (when (and rdrv gdrv (seq ids))
   (doseq [id ids]
-    (let [{:keys [passes leak gold-leak]} (get fixtures id)
+    (let [{:keys [passes leak gold-leak receipt-view]} (get fixtures id)
           pdf (pdf-of id)
           rep (abs (str "test/retarget/replay/" id))
           flags (flags-of id)
@@ -154,6 +154,9 @@
                (count es) " requests over " (count per-page) " pages)")
         (check (every? (fn [[_ _ req]] (and (>= (nth req 3) VIEW-BASE) (>= (count req) 12))) views)
                id ": the " (count views) " requests that name a kin-made view carry its pixel hash (two cells after the pixel box)")
+        (when receipt-view
+          (check (some #(some #{receipt-view} (get % "flags")) (get dump "views"))
+                 id ": receipt classification is present in replay evidence"))
         (check (every? #(contains? got %) passes)
                id ": the dump names the passes the runs were: " (pr-str got) " (wanted " (pr-str (sort passes)) ")"))
       ;; 3 ---------------------------------------------------------------------------------------------------------------------------

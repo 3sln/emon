@@ -18,7 +18,7 @@
                                    orf-bview orf-lang orf-langlen orf-osd orf-script orf-view
                                    obf-orient obf-wdir obf-btype vwf-kind vk-engine-binary wb-space wb-line-end
                                    epf-page epf-flags eg-raster ep-count]]
-            [emon.scan :refer [sc-write-empty-ocr sc-trust sc-write-empty-regions sc-on-vrule sc-clean-text sc-word-agreement sc-format-control sc-unspaced sc-word-trust sc-lang sc-request sc-page sc-tag sc-tag-unread sc-mask-unread sc-unread-conf sc-eligible sc-write-bare sc-dct-span
+            [emon.scan :refer [sc-write-rejected-ocr sc-admit-floor sc-admit-word sc-write-empty-ocr sc-trust sc-write-empty-regions sc-on-vrule sc-clean-text sc-word-agreement sc-format-control sc-unspaced sc-word-trust sc-lang sc-request sc-page sc-tag sc-tag-unread sc-mask-unread sc-unread-conf sc-eligible sc-write-bare sc-dct-span
                                sc-emit-sel sc-prep sc-sel-base sc-xtra-ok sc-implausible sc-leader sc-amount-like sc-groups-fix]]
             [emon.calib :refer [cal-node-conf]]
             [emon.model :refer [model-init node-new node-add-flag node-add-src node-set-conf node-src node-conf node-flags
@@ -1054,3 +1054,42 @@
     (assert-eq (ledger-reason ledger 0) (dr-ocr-empty) "explicit diagnostic")
     (or-set runs 1 (orf-wcount) 1)
     (assert-eq (sc-write-empty-ocr runs pages ledger) 0 "successful retry is not diagnosed empty")))
+
+(deftest test-receipt-word-admission-floor-is-inclusive-and-resets-between-pages
+  (let [^Cells scr (new-cells)]
+    (sc-prep scr)
+    (assert-eq (sc-admit-word 299 300) 0 "below conf30 stays evidence")
+    (assert-eq (sc-admit-word 300 300) 1 "conf30 is admitted")
+    (assert-eq (sc-admit-word 301 300) 1 "above conf30 is admitted")
+    (assert-eq (sc-admit-word -1 0) 1 "disabled floor preserves the existing policy")
+    (cells-set scr (sc-admit-floor) 300)
+    (sc-prep scr)
+    (assert-eq (cells-at scr (sc-admit-floor)) 0 "a new page never inherits a receipt floor")))
+
+(deftest test-rejected-ocr-with-no-admitted-text-keeps-empty-ledger-entry
+  (let [^Cells runs (new-cells) ^Cells pages (new-cells) ^Cells ledger (new-cells)
+        ^Cells nodes (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells bag (new-cells) ^Cells tokens (new-cells) ^Cells plain (new-cells)]
+    (page-new pages 1 10000 20000 0 (pk-image))
+    (node-new nodes (nk-document) -1)
+    (or-new runs 1 0) (or-set runs 0 (orf-wcount) 1)
+    (assert-eq (sc-write-rejected-ocr runs pages nodes regions text ledger bag tokens plain) 1 "raw words refused by health/admission do not hide an empty Model")
+    (assert-eq (ledger-reason ledger 0) (dr-ocr-empty) "explicit empty diagnostic")
+    (let [^I32 p (node-new nodes (nk-paragraph) 0)]
+      (cells-push text 65) (node-set-text nodes p 0 1) (node-add-region nodes regions p 1 0 0 100 100))
+    (assert-eq (sc-write-rejected-ocr runs pages nodes regions text ledger bag tokens plain) 0 "admitted text is not empty")
+    (or-set runs 0 (orf-wcount) 0)
+    (assert-eq (sc-write-rejected-ocr runs pages nodes regions text ledger bag tokens plain) 0 "raw-empty diagnostics remain owned by the existing path")))
+
+(deftest test-receipt-admission-floor-filters-body-words-and-preserves-raw-evidence
+  (let [^Cells ol (new-cells) ^Cells ow (new-cells) ^Cells words (new-cells) ^Cells lines (new-cells)
+        ^Cells et (new-cells) ^Cells scr (new-cells)]
+    (st-word ow et 0 100 299 0 72 105 0 0 0 0 0 0)
+    (st-word ow et 200 300 300 0 72 105 0 0 0 0 0 0)
+    (st-line ol 0 300 0 2)
+    (sc-prep scr) (cells-set scr (sc-sel-base) 0) (cells-set scr (sc-admit-floor) 300)
+    (assert-eq (sc-emit-sel ol ow (new-cells) 1 1 0 scr words lines et (new-cells) (new-cells) (new-cells)) 1 "one admitted line")
+    (assert-eq (wd-count words) 1 "only the conf30 word enters body reconstruction")
+    (assert-eq (wd-get words 0 (hd-conf)) 300 "the threshold word is retained")
+    (assert-eq (ow-count ow) 2 "both raw OCR occurrences remain evidence")
+    (assert-eq (bit-and (ow-get ow 0 (owf-flags)) (oe-garbage)) (oe-garbage) "the refused occurrence has a ledger fate")))

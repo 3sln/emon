@@ -195,3 +195,21 @@ fn test_an_enlarged_raster_keeps_flat_ink_and_edges() {
     crate::testport::assert_eq(crate::port::bitmap_u8(big, 0, 0, 0), 0, "black at the left");
     crate::testport::assert_eq(crate::port::bitmap_u8(big, 11, 0, 0), 255, "white at the right");
 }
+#[test]
+fn test_receipt_quality_uses_confident_alphanumeric_bearing_token_length() {
+    let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let at: i32 = an_ocr(ans, 31);
+    let low: i32 = an_ocr_word(ans, at, 0, 0, 10, 10, 499, 0, 0);
+    an_ocr_cp(ans, low, 65);
+    let edge: i32 = an_ocr_word(ans, at, 10, 0, 10, 10, 500, 0, 0);
+    an_ocr_cp(ans, edge, 57);
+    let dots: i32 = an_ocr_word(ans, at, 20, 0, 10, 10, 999, 0, 0);
+    an_ocr_cp(ans, dots, 46);
+    an_ocr_cp(ans, dots, 46);
+    an_ocr_cp(ans, dots, 46);
+    let token: i32 = an_ocr_word(ans, at, 30, 0, 10, 10, 800, 0, 0);
+    an_ocr_cp(ans, token, 36);
+    an_ocr_cp(ans, token, 65);
+    an_ocr_end(ans, at);
+    crate::testport::assert_eq(up_receipt_score(ans, at), 131, "conf49 is ignored, conf50 is included, punctuation alone cannot vote; the full alphanumeric-bearing token contributes");
+}

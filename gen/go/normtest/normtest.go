@@ -6,6 +6,8 @@ package normtest
 import (
 	"emon/evidence"
 	"emon/norm"
+	"emon/pageink"
+	"emon/plan"
 	"emon/port"
 	"emon/raster"
 	"emon/splitmix"
@@ -960,4 +962,108 @@ func TestAPageOfARuledTableAndNoTextIsNotSkewed(emonT *testing.T) {
 		k += 1
 	}
 	port.AssertEq(emonT, norm.NmDeskew(b, pts, prof), 0, "rules are not lines of text: a table alone has no skew to find")
+}
+
+func TestReceiptTriggerBoundariesAndBornDigitalExclusion(emonT *testing.T) {
+	port.AssertEq(emonT, norm.NmReceiptTrigger(1, 500, 20, 200), 0, "born digital never triggers")
+	port.AssertEq(emonT, norm.NmReceiptTrigger(0, 80, 0, 0), 1, "paper lower boundary is inclusive")
+	port.AssertEq(emonT, norm.NmReceiptTrigger(0, 920, 0, 0), 1, "paper upper boundary is inclusive")
+	port.AssertEq(emonT, norm.NmReceiptTrigger(0, 79, 46, 150), 0, "outside both receipt features")
+	port.AssertEq(emonT, norm.NmReceiptTrigger(0, 921, 45, 150), 2, "narrow thermal boundary is inclusive")
+	port.AssertEq(emonT, norm.NmReceiptTrigger(0, 1000, 45, 149), 0, "a wide text block is not thermal")
+	port.AssertEq(emonT, norm.NmReceiptTrigger(0, 1000, 0, 200), 0, "missing glyph height is not narrow")
+}
+
+func TestReceiptPaperRegionQuarterSampleAndComponentShare(emonT *testing.T) {
+	var src *port.Bitmap = port.BitmapNew(20, 20, 3)
+	var gray *port.Bitmap = port.BitmapNew(20, 20, 1)
+	var binary *port.Bitmap = port.BitmapNew(20, 20, 1)
+	var bms *port.BitmapSet = port.NewBitmapSet()
+	var views *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	var comps *port.Cells = port.NewCells()
+	var ws *port.Cells = port.NewCells()
+	var sv *port.Cells = port.NewCells()
+	var aux *port.Cells = port.NewCells()
+	var rn *port.Cells = port.NewCells()
+	var ri *port.Cells = port.NewCells()
+	var cs *port.Cells = port.NewCells()
+	var s1 *port.Cells = port.NewCells()
+	var s2 *port.Cells = port.NewCells()
+	var s3 *port.Cells = port.NewCells()
+	var v int32 = evidence.VwNew(views, 1, evidence.VkRender(), -1, -1, 20, 20, 30000, 0, -1, 0, 0, 0, 0, 0)
+	ntRect(src, 4, 4, 16, 16, 255, 255, 255)
+	ntRect(src, 8, 8, 12, 12, 0, 0, 0)
+	norm.NmView(views, inks, 1, v, src, gray, binary, ws, sv, aux)
+	port.BmsPut(bms, plan.PuViewId(0, 11), 20, 20, 1)
+	port.AssertEq(emonT, pageink.PnReceipt(1, norm.NmBinaryView(ws), bms, 8, src, gray, port.BmsGet(bms, plan.PuViewId(0, 11)), comps, ws, rn, ri, cs, s1, s2, s3), 1, "one paper island triggers photo")
+	port.AssertEq(emonT, port.CellsAt(ws, 12907), 360, "outer paper area is nine quarter pixels, including its text-shaped hole")
+	port.AssertEq(emonT, port.CellsAt(ws, 12908), 0, "no glyphs means no narrow-column estimate")
+}
+
+func TestPaperClosingFillsStrokeHolesWithoutExpandingPaper(emonT *testing.T) {
+	var mask *port.Bitmap = port.BitmapNew(9, 9, 1)
+	var a *port.Bitmap = port.BitmapNew(9, 9, 1)
+	var b *port.Bitmap = port.BitmapNew(9, 9, 1)
+	var expected *port.Bitmap = port.BitmapNew(9, 9, 1)
+	ntRect(mask, 2, 2, 7, 7, 255, 0, 0)
+	ntRect(mask, 4, 4, 5, 5, 0, 0, 0)
+	ntRect(expected, 2, 2, 7, 7, 255, 0, 0)
+	norm.NmPaperClose(mask, a, b, 1)
+	port.AssertEq(emonT, ntSame(mask, expected), 1, "close fills the one pixel text hole and keeps outer paper boundary")
+}
+
+func TestAnalysisReductionSamplesSourceCoordinatesExactly(emonT *testing.T) {
+	var src *port.Bitmap = port.BitmapNew(7, 5, 1)
+	var dst *port.Bitmap = port.BitmapNew(3, 2, 1)
+	var x int32 = 0
+	var y int32 = 0
+	for y < 5 {
+		x = 0
+		for x < 7 {
+			port.BitmapSetU8(src, x, y, 0, x+(10*y))
+			x += 1
+		}
+		y += 1
+	}
+	norm.NmAnalysisInto(src, dst)
+	port.AssertEq(emonT, port.BitmapU8(dst, 0, 0, 0), 0, "origin")
+	port.AssertEq(emonT, port.BitmapU8(dst, 1, 0, 0), 2, "middle column")
+	port.AssertEq(emonT, port.BitmapU8(dst, 2, 0, 0), 4, "last column")
+	port.AssertEq(emonT, port.BitmapU8(dst, 0, 1, 0), 20, "second row")
+	port.AssertEq(emonT, port.BitmapU8(dst, 1, 1, 0), 22, "second row middle")
+	port.AssertEq(emonT, port.BitmapU8(dst, 2, 1, 0), 24, "second row last")
+}
+
+func TestReceiptPaperBoundsCompareExactRatiosBeforeQuantisation(emonT *testing.T) {
+	port.AssertEq(emonT, norm.NmPaperReceipt(920, 1000), 1, "exact upper bound included")
+	port.AssertEq(emonT, norm.NmPaperReceipt(9201, 10000), 0, "92.01 percent must not truncate into 92 percent")
+	port.AssertEq(emonT, norm.NmPaperReceipt(799, 10000), 0, "7.99 percent is below the lower bound")
+	port.AssertEq(emonT, norm.NmPaperReceipt(800, 10000), 1, "exact lower bound included")
+	port.AssertEq(emonT, norm.NmPaperReceipt(3000000, 4000000), 1, "cross products use 64 bits")
+	port.AssertEq(emonT, norm.NmPaperReceipt(0, 0), 0, "no raster is no receipt")
+}
+
+func TestReceiptTriggerUsesOriginalDecodeWhenOcrSelectedAnEnlargement(emonT *testing.T) {
+	var bms *port.BitmapSet = port.NewBitmapSet()
+	var original *port.Bitmap = port.BmsPut(bms, plan.PuId(0, plan.PiDecode()), 20, 20, 3)
+	var enlarged *port.Bitmap = port.BitmapNew(40, 40, 3)
+	var gray *port.Bitmap = port.BitmapNew(40, 40, 1)
+	var mask *port.Bitmap = port.BitmapNew(40, 40, 1)
+	var comps *port.Cells = port.NewCells()
+	var ws *port.Cells = port.NewCells()
+	var aux *port.Cells = port.NewCells()
+	var rn *port.Cells = port.NewCells()
+	var ri *port.Cells = port.NewCells()
+	var cs *port.Cells = port.NewCells()
+	var s1 *port.Cells = port.NewCells()
+	var s2 *port.Cells = port.NewCells()
+	var s3 *port.Cells = port.NewCells()
+	ntRect(original, 4, 4, 16, 16, 255, 255, 255)
+	norm.NmWsInit(ws)
+	port.CellsSet(ws, 12901, 123)
+	port.AssertEq(emonT, pageink.PnReceiptSource(1, 0, bms, 8, enlarged, gray, mask, comps, ws, aux, rn, ri, cs, s1, s2, s3), 1, "original paper island decides, not the selected enlargement")
+	port.AssertEq(emonT, port.CellsAt(ws, 12911), 9, "original quarter-scale paper pixels")
+	port.AssertEq(emonT, port.CellsAt(ws, 12912), 25, "original quarter-scale raster pixels")
+	port.AssertEq(emonT, port.CellsAt(ws, 12901), 123, "the selected raster's paper level remains intact")
 }

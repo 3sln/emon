@@ -375,3 +375,42 @@ func UpMake(bms *port.BitmapSet, vid int32, tid int32, src *port.Bitmap, k int32
 	}
 	return 0
 }
+
+func UpReceiptAlpha(cp int32) int32 {
+	if ((cp >= 48) && (cp <= 57)) || (((cp >= 65) && (cp <= 90)) || ((cp >= 97) && (cp <= 122))) {
+		return 1
+	}
+	return 0
+}
+
+func UpReceiptValue(conf int32, spanlen int32, alpha int32) int32 {
+	if (alpha == 1) && (conf >= 500) {
+		return (conf * spanlen) / 16
+	}
+	return 0
+}
+
+func UpReceiptScore(an *port.Cells, at int32) int32 {
+	var n int32 = plan.AnOcrCount(an, at)
+	var w int32 = plan.AnOcrFirst(an, at)
+	var i int32 = 0
+	var j int32 = 0
+	var cp int32 = 0
+	var alpha int32 = 0
+	var sum int32 = 0
+	for i < n {
+		alpha = 0
+		j = 0
+		for j < plan.AwGet(an, w, plan.AwLen()) {
+			cp = plan.AwCp(an, w, j)
+			if UpReceiptAlpha(cp) == 1 {
+				alpha = 1
+			}
+			j += 1
+		}
+		sum += UpReceiptValue(plan.AwGet(an, w, plan.AwConf()), plan.AwGet(an, w, plan.AwLen()), alpha)
+		w = plan.AwNext(an, w)
+		i += 1
+	}
+	return sum
+}

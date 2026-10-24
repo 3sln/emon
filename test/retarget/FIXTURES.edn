@@ -29,4 +29,10 @@
  ;; body-ink pass (no `:miss`: no request of it names a kin-made view), so it holds only what the Engine must do: convert, identically on every host.
  ;; `:gold :none`: no body text to score.
  "born-icdar-us-034"     {:pdf "test/retarget/pdf/icdar-us-034.pdf" :gold :none :kind :born
-                          :passes ["first"]}}
+                          :passes ["first"]}
+ ;; D709: synthetic photo view and all-empty PSM11 rescue; historical accuracy populations stay fixed.
+ "receipt-photo" {:pdf "test/raster/receipt-photo.png" :gold "h-plain" :kind :scan
+                  :passes ["receipt"] :receipt-view "receipt-photo" :miss [100 100]}
+ "receipt-empty" {:pdf "test/raster/receipt-empty.png" :gold :none :kind :scan
+                  :passes ["receipt" "receipt-rescue"] :receipt-view "receipt-photo" :miss [100 100]}
+}

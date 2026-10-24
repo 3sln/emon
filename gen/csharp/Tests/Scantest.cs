@@ -1162,4 +1162,61 @@ public static class Scantest {
         Evidence.OrSet(runs, 1, Evidence.OrfWcount(), 1);
         emon.Testport.AssertEq(Scan.ScWriteEmptyOcr(runs, pages, ledger), 0, "successful retry is not diagnosed empty");
     }
+    [Xunit.Fact]
+    public static void TestReceiptWordAdmissionFloorIsInclusiveAndResetsBetweenPages() {
+        emon.Port.Cells scr = emon.Port.NewCells();
+        Scan.ScPrep(scr);
+        emon.Testport.AssertEq(Scan.ScAdmitWord(299, 300), 0, "below conf30 stays evidence");
+        emon.Testport.AssertEq(Scan.ScAdmitWord(300, 300), 1, "conf30 is admitted");
+        emon.Testport.AssertEq(Scan.ScAdmitWord(301, 300), 1, "above conf30 is admitted");
+        emon.Testport.AssertEq(Scan.ScAdmitWord(-1, 0), 1, "disabled floor preserves the existing policy");
+        emon.Port.CellsSet(scr, Scan.ScAdmitFloor(), 300);
+        Scan.ScPrep(scr);
+        emon.Testport.AssertEq(emon.Port.CellsAt(scr, Scan.ScAdmitFloor()), 0, "a new page never inherits a receipt floor");
+    }
+    [Xunit.Fact]
+    public static void TestRejectedOcrWithNoAdmittedTextKeepsEmptyLedgerEntry() {
+        emon.Port.Cells runs = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells bag = emon.Port.NewCells();
+        emon.Port.Cells tokens = emon.Port.NewCells();
+        emon.Port.Cells plain = emon.Port.NewCells();
+        Model.PageNew(pages, 1, 10000, 20000, 0, Model.PkImage());
+        Model.NodeNew(nodes, Model.NkDocument(), -1);
+        Evidence.OrNew(runs, 1, 0);
+        Evidence.OrSet(runs, 0, Evidence.OrfWcount(), 1);
+        emon.Testport.AssertEq(Scan.ScWriteRejectedOcr(runs, pages, nodes, regions, text, ledger, bag, tokens, plain), 1, "raw words refused by health/admission do not hide an empty Model");
+        emon.Testport.AssertEq(Model.LedgerReason(ledger, 0), Model.DrOcrEmpty(), "explicit empty diagnostic");
+        int p = Model.NodeNew(nodes, Model.NkParagraph(), 0);
+        emon.Port.CellsPush(text, 65);
+        Model.NodeSetText(nodes, p, 0, 1);
+        Model.NodeAddRegion(nodes, regions, p, 1, 0, 0, 100, 100);
+        emon.Testport.AssertEq(Scan.ScWriteRejectedOcr(runs, pages, nodes, regions, text, ledger, bag, tokens, plain), 0, "admitted text is not empty");
+        Evidence.OrSet(runs, 0, Evidence.OrfWcount(), 0);
+        emon.Testport.AssertEq(Scan.ScWriteRejectedOcr(runs, pages, nodes, regions, text, ledger, bag, tokens, plain), 0, "raw-empty diagnostics remain owned by the existing path");
+    }
+    [Xunit.Fact]
+    public static void TestReceiptAdmissionFloorFiltersBodyWordsAndPreservesRawEvidence() {
+        emon.Port.Cells ol = emon.Port.NewCells();
+        emon.Port.Cells ow = emon.Port.NewCells();
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells lines = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells scr = emon.Port.NewCells();
+        StWord(ow, et, 0, 100, 299, 0, 72, 105, 0, 0, 0, 0, 0, 0);
+        StWord(ow, et, 200, 300, 300, 0, 72, 105, 0, 0, 0, 0, 0, 0);
+        StLine(ol, 0, 300, 0, 2);
+        Scan.ScPrep(scr);
+        emon.Port.CellsSet(scr, Scan.ScSelBase(), 0);
+        emon.Port.CellsSet(scr, Scan.ScAdmitFloor(), 300);
+        emon.Testport.AssertEq(Scan.ScEmitSel(ol, ow, emon.Port.NewCells(), 1, 1, 0, scr, words, lines, et, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), 1, "one admitted line");
+        emon.Testport.AssertEq(Evidence.WdCount(words), 1, "only the conf30 word enters body reconstruction");
+        emon.Testport.AssertEq(Evidence.WdGet(words, 0, Evidence.HdConf()), 300, "the threshold word is retained");
+        emon.Testport.AssertEq(Evidence.OwCount(ow), 2, "both raw OCR occurrences remain evidence");
+        emon.Testport.AssertEq(Evidence.OwGet(ow, 0, Evidence.OwfFlags()) & Evidence.OeGarbage(), Evidence.OeGarbage(), "the refused occurrence has a ledger fate");
+    }
 }

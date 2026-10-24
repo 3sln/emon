@@ -1116,4 +1116,58 @@ public final class Scantest {
         Evidence.orSet(runs, 1, Evidence.orfWcount(), 1);
         emon.Testport.assertEq(Scan.scWriteEmptyOcr(runs, pages, ledger), 0, "successful retry is not diagnosed empty");
     }
+    public static void testReceiptWordAdmissionFloorIsInclusiveAndResetsBetweenPages() {
+        emon.Port.Cells scr = emon.Port.newCells();
+        Scan.scPrep(scr);
+        emon.Testport.assertEq(Scan.scAdmitWord(299, 300), 0, "below conf30 stays evidence");
+        emon.Testport.assertEq(Scan.scAdmitWord(300, 300), 1, "conf30 is admitted");
+        emon.Testport.assertEq(Scan.scAdmitWord(301, 300), 1, "above conf30 is admitted");
+        emon.Testport.assertEq(Scan.scAdmitWord(-1, 0), 1, "disabled floor preserves the existing policy");
+        emon.Port.cellsSet(scr, Scan.scAdmitFloor(), 300);
+        Scan.scPrep(scr);
+        emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scAdmitFloor()), 0, "a new page never inherits a receipt floor");
+    }
+    public static void testRejectedOcrWithNoAdmittedTextKeepsEmptyLedgerEntry() {
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells bag = emon.Port.newCells();
+        emon.Port.Cells tokens = emon.Port.newCells();
+        emon.Port.Cells plain = emon.Port.newCells();
+        Model.pageNew(pages, 1, 10000, 20000, 0, Model.pkImage());
+        Model.nodeNew(nodes, Model.nkDocument(), -1);
+        Evidence.orNew(runs, 1, 0);
+        Evidence.orSet(runs, 0, Evidence.orfWcount(), 1);
+        emon.Testport.assertEq(Scan.scWriteRejectedOcr(runs, pages, nodes, regions, text, ledger, bag, tokens, plain), 1, "raw words refused by health/admission do not hide an empty Model");
+        emon.Testport.assertEq(Model.ledgerReason(ledger, 0), Model.drOcrEmpty(), "explicit empty diagnostic");
+        int p = Model.nodeNew(nodes, Model.nkParagraph(), 0);
+        emon.Port.cellsPush(text, 65);
+        Model.nodeSetText(nodes, p, 0, 1);
+        Model.nodeAddRegion(nodes, regions, p, 1, 0, 0, 100, 100);
+        emon.Testport.assertEq(Scan.scWriteRejectedOcr(runs, pages, nodes, regions, text, ledger, bag, tokens, plain), 0, "admitted text is not empty");
+        Evidence.orSet(runs, 0, Evidence.orfWcount(), 0);
+        emon.Testport.assertEq(Scan.scWriteRejectedOcr(runs, pages, nodes, regions, text, ledger, bag, tokens, plain), 0, "raw-empty diagnostics remain owned by the existing path");
+    }
+    public static void testReceiptAdmissionFloorFiltersBodyWordsAndPreservesRawEvidence() {
+        emon.Port.Cells ol = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        stWord(ow, et, 0, 100, 299, 0, 72, 105, 0, 0, 0, 0, 0, 0);
+        stWord(ow, et, 200, 300, 300, 0, 72, 105, 0, 0, 0, 0, 0, 0);
+        stLine(ol, 0, 300, 0, 2);
+        Scan.scPrep(scr);
+        emon.Port.cellsSet(scr, Scan.scSelBase(), 0);
+        emon.Port.cellsSet(scr, Scan.scAdmitFloor(), 300);
+        emon.Testport.assertEq(Scan.scEmitSel(ol, ow, emon.Port.newCells(), 1, 1, 0, scr, words, lines, et, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 1, "one admitted line");
+        emon.Testport.assertEq(Evidence.wdCount(words), 1, "only the conf30 word enters body reconstruction");
+        emon.Testport.assertEq(Evidence.wdGet(words, 0, Evidence.hdConf()), 300, "the threshold word is retained");
+        emon.Testport.assertEq(Evidence.owCount(ow), 2, "both raw OCR occurrences remain evidence");
+        emon.Testport.assertEq(Evidence.owGet(ow, 0, Evidence.owfFlags()) & Evidence.oeGarbage(), Evidence.oeGarbage(), "the refused occurrence has a ledger fate");
+    }
 }

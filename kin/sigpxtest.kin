@@ -9,9 +9,9 @@
             [emon.test :refer [deftest assert-eq assert-that new-cells]]
             [emon.port :refer [bitmap-new bitmap-w bitmap-h bitmap-set-u8 cells-len cells-at cells-set cells-push cells-drop]]
             [emon.scan :refer [sc-sel-base]]
-            [emon.evidence :refer [rl-new ow-new ol-new vw-new vk-render]]
+            [emon.evidence :refer [rl-new ow-new ow-get ow-count hd-conf ol-new vw-new vk-render]]
             [emon.player :refer [cg-count cg-get cgf-flags cgf-rot cgf-ocount cgf-page cgf-x0 cgf-y0 cgf-x1 cgf-y1 plg-in-seal plg-seal-px plg-seal-sig plg-seal-init]]
-            [emon.sigpx :refer [sp-find sp-record sp-drop-lines sp-w]]
+            [emon.sigpx :refer [sp-find-without sp-find sp-record sp-drop-lines sp-w]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem]]))
 
@@ -264,3 +264,17 @@
     (assert-eq (sp-drop-lines scr 3 ol ow cand) 2 "the strokes' line is out; the typed name the engine is sure of and the line elsewhere stay")
     (assert-eq (cells-at scr (sc-sel-base)) 1 "the typed name first")
     (assert-eq (cells-at scr (+ (sc-sel-base) 1)) 2 "then the other")))
+
+(deftest test-unadopted-receipt-words-cannot-mask-the-baseline-signature-pixels
+  (let [^Bitmap b (bitmap-new 300 120 3) ^Cells rules (new-cells) ^Cells ow (new-cells)
+        ^Cells et (new-cells) ^Cells cand (new-cells) ^Cells views (new-cells) ^Cells mask (new-cells)]
+    (spx-paper b) (spx-line b 20 280 100) (spx-zig b 40 98 150 24 36 20 40 120)
+    (spx-rule rules 20 280 100)
+    (vw-new views 1 (vk-render) -1 -1 300 120 7200 0 -1 0 0 0 0 0)
+    (cells-push et 83) (cells-push et 105) (cells-push et 103)
+    (ow-new ow 1 3000 5500 21000 10500 3000 10500 21000 10500 0 0 0 3 0 900 -1)
+    (assert-eq (sp-find 1 views 0 rules ow et b 61200 cand mask) 0 "an admitted confident reading still masks text")
+    (assert-eq (sp-find-without 1 views 0 rules ow et b 61200 0 1 cand mask) 1 "an unadopted reading cannot erase a signature and restore its rejected text")
+    (assert-eq (sp-find-without 1 views 0 rules ow et b 61200 1 1 cand mask) 0 "the interval is half open; other readings still mask text")
+    (assert-eq (ow-count ow) 1 "the raw alternative remains evidence")
+    (assert-eq (ow-get ow 0 (hd-conf)) 900 "raw confidence is unchanged")))

@@ -557,4 +557,273 @@ public final class Retargettest {
         emon.Port.cellsSet(rtp, Retarget.rtpFrun(), tr);
         emon.Testport.assertEq(rttAdopt(rtp, runs, fr, ol, ow, scr), 1, "normal recovery has priority over emergency text");
     }
+    public static void testLosingReceiptViewKeepsOriginalReading() {
+        emon.Testport.assertEq(Retarget.rtReceiptWins(100, 99), 0, "a losing view cannot replace Model text");
+        emon.Testport.assertEq(Retarget.rtReceiptWins(100, 100), 0, "ties keep the original");
+        emon.Testport.assertEq(Retarget.rtReceiptWins(100, 101), 1, "strictly greater confident characters adopt");
+    }
+    public static void testUnselectedReceiptReadingDoesNotEnterThePageSelection() {
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells ol = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells rtp = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        Scan.scPrep(scr);
+        rttLine(ol, ow, feats, 0, 900);
+        int first = rttRun(runs, ol, ow, 0, 0);
+        int l0 = Evidence.olCount(ol);
+        int w0 = Evidence.owCount(ow);
+        rttLine(ol, ow, feats, 60, 400);
+        int candidate = rttRun(runs, ol, ow, l0, w0);
+        Retarget.rtPrep(rtp);
+        emon.Port.cellsSet(rtp, Retarget.rtpReceipt(), candidate);
+        emon.Port.cellsSet(rtp, Retarget.rtpReceiptWin(), 0);
+        emon.Port.cellsSet(scr, Scan.scAdmitFloor(), 300);
+        emon.Port.cellsSet(scr, Scan.scShareBase(), 0);
+        emon.Testport.assertEq(rttAdopt(rtp, runs, first, ol, ow, scr), 1, "only the original line is selected");
+        emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scSelBase()), 0, "losing receipt text cannot enter the Model");
+        emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scAdmitFloor()), 0, "a losing view cannot leak its confidence floor to the baseline");
+        emon.Testport.assertEq(emon.Port.cellsAt(rtp, Retarget.rtpPrimary()), first, "the original reading remains primary");
+    }
+    public static void testFaintViewIsBlackInkOnWhitePaper() {
+        emon.Port.Bitmap gray = emon.Port.bitmapNew(5, 5, 1);
+        emon.Port.Bitmap image = emon.Port.bitmapNew(5, 5, 1);
+        emon.Port.Cells pixels = emon.Port.newCells();
+        int x = 0;
+        int y = 0;
+        while (y < 5) {
+            x = 0;
+            while (x < 5) {
+                emon.Port.bitmapSetU8(gray, x, y, 0, 230);
+                x += 1;
+            }
+            y += 1;
+        }
+        emon.Port.bitmapSetU8(gray, 2, 2, 0, 100);
+        Retarget.rtFaintInto(gray, image, 300, pixels);
+        y = 0;
+        while (y < 5) {
+            x = 0;
+            while (x < 5) {
+                if ((x == 2) && (y == 2)) {
+                    emon.Testport.assertEq(emon.Port.bitmapU8(image, x, y, 0), 0, "faint ink is black");
+                } else {
+                    emon.Testport.assertEq(emon.Port.bitmapU8(image, x, y, 0), 255, "paper is white");
+                }
+                x += 1;
+            }
+            y += 1;
+        }
+    }
+    public static void testEmptyReceiptRescueWaitsForTheViewAndDoesNotRereadSuccess() {
+        emon.Port.Cells ans = emon.Port.newCells();
+        int empty = Plan.anOcr(ans, 31);
+        Plan.anOcrEnd(ans, empty);
+        emon.Testport.assertEq(Retarget.rtEmptyReceipt(1, ans, -1), 0, "wait for the extra view before the all-empty rescue");
+        emon.Testport.assertEq(Retarget.rtEmptyReceipt(1, ans, empty), 1, "an empty view permits the rescue");
+        emon.Testport.assertEq(Retarget.rtEmptyReceipt(0, ans, -1), 1, "non-receipts retain the existing fallback");
+        int full = Plan.anOcr(ans, 32);
+        int word = Plan.anOcrWord(ans, full, 0, 0, 10, 10, 900, 0, 0);
+        Plan.anOcrCp(ans, word, 72);
+        Plan.anOcrCp(ans, word, 105);
+        Plan.anOcrEnd(ans, full);
+        emon.Testport.assertEq(Retarget.rtEmptyReceipt(1, ans, full), 0, "a successful photo view needs no further full-page read");
+        emon.Testport.assertEq(Retarget.rtEmptyReceipt(2, ans, full), 1, "the rejected thermal lane retains the original emergency planner");
+    }
+    public static void testReceiptViewGeometryDoesNotDependOnOcrSuccess() {
+        emon.Port.Cells views = emon.Port.newCells();
+        emon.Port.Cells rtp = emon.Port.newCells();
+        int source = Evidence.vwNew(views, 1, Evidence.vkRender(), 4, -1, 40, 60, 60000, 0, -1, 0, 0, 100, 200, 0);
+        Retarget.rtPrep(rtp);
+        emon.Port.cellsSet(rtp, Retarget.rtpFactor(), -2);
+        emon.Port.cellsSet(rtp, Retarget.rtpTrigger(), 1);
+        int view = Retarget.rtReceiptView(views, 1, source, 60000, rtp);
+        emon.Testport.assertEq(Evidence.vwGet(views, view, Evidence.vwfPxw()), 20, "original photo width");
+        emon.Testport.assertEq(Evidence.vwGet(views, view, Evidence.vwfPxh()), 30, "original photo height");
+        emon.Testport.assertEq(Evidence.vwGet(views, view, Evidence.vwfDpi()), 30000, "pixel scale maps to the source page");
+        emon.Testport.assertEq(Evidence.vwGet(views, view, Evidence.vwfCropx()), 100, "inset image x origin is inherited");
+        emon.Testport.assertEq(Evidence.vwGet(views, view, Evidence.vwfCropy()), 200, "inset image y origin is inherited");
+    }
+    public static void testTriggerEvidenceRetainsOrientationDeferralsWithoutInventingARead() {
+        emon.Port.Cells views = emon.Port.newCells();
+        emon.Port.Cells rtp = emon.Port.newCells();
+        int source = Evidence.vwNew(views, 1, Evidence.vkRender(), 4, -1, 40, 60, 30000, 0, -1, 0, 0, 0, 0, 0);
+        Retarget.rtPrep(rtp);
+        emon.Port.cellsSet(rtp, Retarget.rtpTrigger(), 2);
+        emon.Port.cellsSet(rtp, Retarget.rtpQ(), 2);
+        emon.Testport.assertEq(Retarget.rtMarkTrigger(views, source, rtp), 1, "the classifier fired even when the read was deferred");
+        emon.Testport.assertEq(Evidence.vwGet(views, source, Evidence.vwfFlags()), Evidence.vgReceiptThermal() + Evidence.vgReceiptDeferred(), "class and deferral are deterministic evidence");
+    }
+    public static void testThermalViewRollbackIsAPolicyNotADocumentException() {
+        emon.Testport.assertEq(Retarget.rtReceiptMode(0), 0, "non-receipts");
+        emon.Testport.assertEq(Retarget.rtReceiptMode(1), 1, "photo view retained");
+        emon.Testport.assertEq(Retarget.rtReceiptMode(2), 0, "thermal view reverted for every input");
+    }
+    public static void testWinningReceiptReplacesTheWholeReadingWithItsAdmissionFloor() {
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells ol = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells rtp = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        Scan.scPrep(scr);
+        rttLine(ol, ow, feats, 0, 400);
+        int first = rttRun(runs, ol, ow, 0, 0);
+        int l0 = Evidence.olCount(ol);
+        int w0 = Evidence.owCount(ow);
+        rttLine(ol, ow, feats, 60, 900);
+        int candidate = rttRun(runs, ol, ow, l0, w0);
+        Retarget.rtPrep(rtp);
+        emon.Port.cellsSet(rtp, Retarget.rtpReceipt(), candidate);
+        emon.Port.cellsSet(rtp, Retarget.rtpReceiptWin(), 1);
+        emon.Testport.assertEq(rttAdopt(rtp, runs, first, ol, ow, scr), 1, "the winning reading supplies the selection");
+        emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scSelBase()), l0, "candidate line, rather than the baseline line");
+        emon.Testport.assertEq(emon.Port.cellsAt(rtp, Retarget.rtpPrimary()), candidate, "the primary run follows the selected view");
+        emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scAdmitFloor()), 300, "the word floor accompanies adoption");
+    }
+    public static void testReceiptScoreCannotEraseAVeryConfidentRecoveredWord() {
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells ol = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells rtp = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        int first = rttRun(runs, ol, ow, 0, 0);
+        emon.Port.cellsPush(et, 49);
+        emon.Port.cellsPush(et, 50);
+        emon.Port.cellsPush(et, 51);
+        emon.Port.cellsPush(et, 52);
+        emon.Port.cellsPush(et, 53);
+        emon.Port.cellsPush(et, 54);
+        emon.Port.cellsPush(et, 55);
+        emon.Port.cellsPush(et, 56);
+        Scan.scPrep(scr);
+        rttLine(ol, ow, feats, 0, 900);
+        int body = rttRun(runs, ol, ow, 0, 0);
+        int l0 = Evidence.olCount(ol);
+        int w0 = Evidence.owCount(ow);
+        Evidence.olSet(ol, 0, Evidence.olfRun(), body);
+        rttLine(ol, ow, feats, 60, 990);
+        Evidence.owSet(ow, w0, Evidence.hdTstart(), 4);
+        Evidence.owSet(ow, w0 + 1, Evidence.hdTstart(), 4);
+        int candidate = rttRun(runs, ol, ow, l0, w0);
+        Retarget.rtPrep(rtp);
+        emon.Port.cellsSet(rtp, Retarget.rtpBrun(), body);
+        emon.Port.cellsSet(rtp, Retarget.rtpReceipt(), candidate);
+        emon.Port.cellsSet(rtp, Retarget.rtpReceiptWin(), 1);
+        Retarget.rtAdopt(rtp, runs, first, ol, ow, et, scr);
+        emon.Testport.assertThat(emon.Port.cellsAt(rtp, Retarget.rtpPrimary()) != candidate, "a higher global score cannot wash away a confident recovered word");
+        emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scSelBase()), 0, "the baseline recovery remains selected");
+        emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scAdmitFloor()), 0, "no receipt word floor on the retained baseline");
+    }
+    public static void testReceiptRecoveryProtectionCountsOccurrencesAndAllowsAFaithfulBetterReading() {
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells ol = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells rtp = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        int first = rttRun(runs, ol, ow, 0, 0);
+        emon.Port.cellsPush(et, 49);
+        emon.Port.cellsPush(et, 50);
+        emon.Port.cellsPush(et, 51);
+        emon.Port.cellsPush(et, 52);
+        emon.Port.cellsPush(et, 53);
+        emon.Port.cellsPush(et, 54);
+        emon.Port.cellsPush(et, 55);
+        emon.Port.cellsPush(et, 56);
+        Scan.scPrep(scr);
+        rttLine(ol, ow, feats, 0, 950);
+        int body = rttRun(runs, ol, ow, 0, 0);
+        int l0 = Evidence.olCount(ol);
+        int w0 = Evidence.owCount(ow);
+        Evidence.olSet(ol, 0, Evidence.olfRun(), body);
+        rttLine(ol, ow, feats, 60, 990);
+        Evidence.owSet(ow, w0 + 1, Evidence.hdTstart(), 4);
+        int candidate = rttRun(runs, ol, ow, l0, w0);
+        Retarget.rtPrep(rtp);
+        emon.Port.cellsSet(rtp, Retarget.rtpBrun(), body);
+        emon.Port.cellsSet(rtp, Retarget.rtpReceipt(), candidate);
+        emon.Port.cellsSet(rtp, Retarget.rtpReceiptWin(), 1);
+        Retarget.rtAdopt(rtp, runs, first, ol, ow, et, scr);
+        emon.Testport.assertThat(emon.Port.cellsAt(rtp, Retarget.rtpPrimary()) != candidate, "one candidate occurrence cannot cover two confident recovered occurrences");
+        Evidence.owSet(ow, w0 + 1, Evidence.hdTstart(), 0);
+        Retarget.rtAdopt(rtp, runs, first, ol, ow, et, scr);
+        emon.Testport.assertEq(emon.Port.cellsAt(rtp, Retarget.rtpPrimary()), candidate, "a faithful reading with a greater score may replace the recovered baseline");
+        emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scAdmitFloor()), 300, "adoption still carries the word floor");
+    }
+    public static void testInitialReadingRetainsTheDeclaredScorePolicy() {
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells ol = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells rtp = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.cellsPush(et, 49);
+        emon.Port.cellsPush(et, 50);
+        emon.Port.cellsPush(et, 51);
+        emon.Port.cellsPush(et, 52);
+        emon.Port.cellsPush(et, 53);
+        emon.Port.cellsPush(et, 54);
+        emon.Port.cellsPush(et, 55);
+        emon.Port.cellsPush(et, 56);
+        Scan.scPrep(scr);
+        rttLine(ol, ow, feats, 0, 950);
+        int first = rttRun(runs, ol, ow, 0, 0);
+        int l0 = Evidence.olCount(ol);
+        int w0 = Evidence.owCount(ow);
+        Evidence.olSet(ol, 0, Evidence.olfRun(), first);
+        rttLine(ol, ow, feats, 60, 990);
+        Evidence.owSet(ow, w0, Evidence.hdTstart(), 4);
+        Evidence.owSet(ow, w0 + 1, Evidence.hdTstart(), 4);
+        int candidate = rttRun(runs, ol, ow, l0, w0);
+        Retarget.rtPrep(rtp);
+        emon.Port.cellsSet(rtp, Retarget.rtpReceipt(), candidate);
+        emon.Port.cellsSet(rtp, Retarget.rtpReceiptWin(), 1);
+        Retarget.rtAdopt(rtp, runs, first, ol, ow, et, scr);
+        emon.Testport.assertEq(emon.Port.cellsAt(rtp, Retarget.rtpPrimary()), candidate, "a better initial full-page reading is allowed; targeted recovery is protected separately");
+    }
+    public static void testOnlyUnadoptedNewReceiptRunsAreExcludedFromTheSignatureMask() {
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells rtp = emon.Port.newCells();
+        int first = Evidence.orNew(runs, 1, 0);
+        int receipt = Evidence.orNew(runs, 1, 1);
+        int rescue = Evidence.orNew(runs, 1, 2);
+        Evidence.orSet(runs, receipt, Evidence.orfPass(), Evidence.opReceipt());
+        Evidence.orSet(runs, receipt, Evidence.orfWfirst(), 5);
+        Evidence.orSet(runs, receipt, Evidence.orfWcount(), 3);
+        Evidence.orSet(runs, rescue, Evidence.orfPass(), Evidence.opBodyInk());
+        Evidence.orSet(runs, rescue, Evidence.orfWfirst(), 8);
+        Evidence.orSet(runs, rescue, Evidence.orfWcount(), 2);
+        Retarget.rtPrep(rtp);
+        emon.Port.cellsSet(rtp, Retarget.rtpReceipt(), receipt);
+        emon.Port.cellsSet(rtp, Retarget.rtpFrun(), rescue);
+        emon.Port.cellsSet(rtp, Retarget.rtpPrimary(), first);
+        emon.Testport.assertEq(Retarget.rtReceiptIgnored(rtp, runs, 0), 5, "unadopted receipt word interval");
+        emon.Testport.assertEq(Retarget.rtReceiptIgnored(rtp, runs, 1), 3, "the legacy emergency reading is not excluded");
+        emon.Port.cellsSet(rtp, Retarget.rtpPrimary(), receipt);
+        emon.Testport.assertEq(Retarget.rtReceiptIgnored(rtp, runs, 1), 0, "the chosen receipt reading remains authoritative");
+        Evidence.orSet(runs, rescue, Evidence.orfPass(), Evidence.opReceiptRescue());
+        emon.Port.cellsSet(rtp, Retarget.rtpPrimary(), first);
+        emon.Testport.assertEq(Retarget.rtReceiptIgnored(rtp, runs, 1), 5, "the adjacent main and rescue alternatives may both be excluded");
+    }
+    public static void testPdfScanPhotosDeferWithoutDisablingImagePhotos() {
+        emon.Port.Cells rtp = emon.Port.newCells();
+        Retarget.rtPrep(rtp);
+        emon.Port.cellsSet(rtp, Retarget.rtpTrigger(), 1);
+        Retarget.rtReceiptSource(rtp, 1);
+        emon.Testport.assertEq(Retarget.rtReceiptActive(rtp), 1, "image photo keeps its extra view");
+        Retarget.rtReceiptSource(rtp, 2);
+        emon.Testport.assertEq(Retarget.rtReceiptActive(rtp), 0, "PDF scan keeps baseline recovery");
+        Retarget.rtReceiptSource(rtp, 6);
+        emon.Testport.assertEq(Retarget.rtReceiptActive(rtp), 0, "script flags do not enable a PDF photo");
+        Retarget.rtReceiptSource(rtp, 5);
+        emon.Testport.assertEq(Retarget.rtReceiptActive(rtp), 1, "script flags preserve image origin");
+        emon.Port.cellsSet(rtp, Retarget.rtpTrigger(), 2);
+        emon.Testport.assertEq(Retarget.rtReceiptActive(rtp), 0, "thermal lane remains reverted");
+    }
 }

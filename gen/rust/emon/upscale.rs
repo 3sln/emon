@@ -345,3 +345,39 @@ pub fn up_make(bms: &crate::port::BitmapSet, vid: i32, tid: i32, src: &crate::po
     }
     return 0;
 }
+pub fn up_receipt_alpha(cp: i32) -> i32 {
+    if ((cp >= 48) && (cp <= 57)) || (((cp >= 65) && (cp <= 90)) || ((cp >= 97) && (cp <= 122))) {
+        return 1;
+    }
+    return 0;
+}
+pub fn up_receipt_value(conf: i32, spanlen: i32, alpha: i32) -> i32 {
+    if (alpha == 1) && (conf >= 500) {
+        return (conf * spanlen) / 16;
+    }
+    return 0;
+}
+pub fn up_receipt_score(an: &mut crate::port::Cells, at: i32) -> i32 {
+    let n: i32 = an_ocr_count(an, at);
+    let mut w: i32 = an_ocr_first(an, at);
+    let mut i: i32 = 0;
+    let mut j: i32 = 0;
+    let mut cp: i32 = 0;
+    let mut alpha: i32 = 0;
+    let mut sum: i32 = 0;
+    while i < n {
+        alpha = 0;
+        j = 0;
+        while j < aw_get(an, w, aw_len()) {
+            cp = aw_cp(an, w, j);
+            if up_receipt_alpha(cp) == 1 {
+                alpha = 1;
+            }
+            j += 1;
+        }
+        sum += up_receipt_value(aw_get(an, w, aw_conf()), aw_get(an, w, aw_len()), alpha);
+        w = aw_next(an, w);
+        i += 1;
+    }
+    return sum;
+}

@@ -36,7 +36,7 @@
             [emon.evidence :refer [im-get im-count wd-get wd-count hd-page mf-page mf-x0 mf-y0 mf-x1 mf-y1 mf-obj vw-new vk-render ol-count ow-count ev-rot-median or-get orf-lcount
                                    ev-page-row ep-get epf-width epf-height
                                    or-count op-region op-first op-upscaled]]
-            [emon.retarget :refer [rt-prep rt-plan rt-record rt-adopt rt-upright rt-witness rt-run-meta rt-pad rtp-q rtp-primary rtp-hash]]
+            [emon.retarget :refer [rt-receipt-source rt-receipt-ignored rt-mark-adopted rt-prep rt-plan rt-record rt-adopt rt-upright rt-witness rt-run-meta rt-pad rtp-q rtp-primary rtp-hash]]
             [emon.rasterplan :refer [rp-w rp-f-ask rp-f-wat rp-f-wn rp-f-scripts rp-ww rp-ask-none rp-ask-full rp-ask-witness rp-plan rp-request rp-weak
                                      ri-escalate ri-witness ri-none]]
             [emon.player :refer [cg-count]]
@@ -44,7 +44,7 @@
             [emon.scan :refer [sc-eligible sc-dct-span sc-mask-unread sc-request sc-request-view sc-page sc-page-view sc-page-evidence sc-emit-sel sc-prep sc-lang sc-answer]]
             [emon.pageink :refer [pn-has pn-mark pn-undo pn-ink pn-features pn-k-text pn-k-clean]]
             [emon.sealpx :refer [sx-find sx-plan sx-record sx-drop-lines]]
-            [emon.sigpx :refer [sp-find sp-record sp-drop-lines]]
+            [emon.sigpx :refer [sp-find-without sp-find sp-record sp-drop-lines]]
             [emon.xalign :refer [xa-page]]
             [emon.health :refer [hl-page-fw]]
             [kin.lang :refer [defn return let set while if do comment
@@ -358,7 +358,7 @@
           (rt-prep rtp)
           (if (or (== ask (rp-ask-full)) (>= esc 0))
             (do (if (>= esc 0) (set run esc))
-                (set asked (rt-plan i input 1 0 rid (pu-dpi) loc ans bms (pn-k-text) (bms-get bms rid) ws oruns run olines owords rules tlines rtp rq scr comps inks))
+                (set asked (rt-plan i input 1 0 rid (pu-dpi) loc ans bms (pn-k-text) (bms-get bms rid) ws oruns run olines owords rules tlines rtp rq scr comps inks s6))
                 (comment "the seals and stamps in the text-free render's pixels (P8.2): the strips and crops that are read, asked in the same round as the targeted passes")
                 (if (== (pu-px bms nid fuse) 1)
                   (do (set pgrow (ev-page-row epages (+ i 1)))
@@ -498,7 +498,8 @@
     (set nw (- (ow-count owords) w0))
     (pn-features (+ i 1) bms (pn-k-text) (bms-get bms rid) roid w0 nw ws comps owords feats scr)
     (rt-prep rtp)
-    (set asked (rt-plan i input 0 0 rid hint loc ans bms (pn-k-text) (bms-get bms rid) ws oruns run olines owords rules tlines rtp rq scr comps inks))
+    (rt-receipt-source rtp maskv)
+    (set asked (rt-plan i input 0 0 rid hint loc ans bms (pn-k-text) (bms-get bms rid) ws oruns run olines owords rules tlines rtp rq scr comps inks s6))
     (comment "the seals and stamps in the page's pixels (P8.2): their strips and crops are asked in the same round as the targeted passes")
     (if (== seals 1)
       (do (sx-find (+ i 1) views vdec prims inks pw ph s1)
@@ -509,10 +510,13 @@
     (rt-record i vdec rdpi loc ans rtp views epages etext oruns oblocks olines owords osyms oalts feats)
     (if (== seals 1)
       (do (sx-record i vdec rdpi loc ans s1 views epages etext oruns oblocks olines owords osyms oalts feats refs cg s4)
+          (set nsel (rt-adopt rtp oruns run olines owords etext scr))
           (comment "the pen strokes over a signature line of the scan (P8.3): the lines the first pass made of them are not the page's text")
-          (sp-find (+ i 1) views vdec rules owords etext (bms-get bms rid) pw s5 s6)
+          (sp-find-without (+ i 1) views vdec rules owords etext (bms-get bms rid) pw
+                           (rt-receipt-ignored rtp oruns 0) (rt-receipt-ignored rtp oruns 1) s5 s6)
           (sp-record i s5 cg)))
-    (set nsel (rt-adopt rtp oruns run olines owords etext scr))
+    (if (== seals 0) (set nsel (rt-adopt rtp oruns run olines owords etext scr)))
+    (rt-mark-adopted views oruns rtp)
     (if (== seals 1)
       (do (set nsel (sx-drop-lines scr nsel olines owords s1))
           (set nsel (sp-drop-lines scr nsel olines owords s5))))

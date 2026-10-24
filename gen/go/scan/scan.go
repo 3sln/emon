@@ -7,6 +7,7 @@ import (
 	"emon/evidence"
 	"emon/model"
 	"emon/ocr"
+	"emon/ocrledger"
 	"emon/pdfdoc"
 	"emon/pdflex"
 	"emon/pdfsrc"
@@ -806,6 +807,18 @@ func scCap() int32 {
 	return 400
 }
 
+func ScAdmitFloor() int32 {
+	// D707: optional per-page word-confidence floor, before the selection region.
+	return 2299
+}
+
+func ScAdmitWord(confidence int32, floor int32) int32 {
+	if (floor > 0) && (confidence < floor) {
+		return 0
+	}
+	return 1
+}
+
 func ScSelBase() int32 {
 	// Where `sc-emit-sel`'s selection starts in the scratch.
 	return 2300
@@ -858,6 +871,7 @@ func ScPrep(scr *port.Cells) int32 {
 	for port.CellsLen(scr) < (ScFateBase() + ((4 * ScFateMax()) + 2)) {
 		port.CellsPush(scr, 0)
 	}
+	port.CellsSet(scr, ScAdmitFloor(), 0)
 	return 0
 }
 
@@ -2015,6 +2029,9 @@ func scFates(owords *port.Cells, etext *port.Cells, osyms *port.Cells, rules *po
 		n = evidence.OwGet(owords, w, evidence.HdTlen())
 		conf = evidence.OwGet(owords, w, evidence.HdConf())
 		f = 0
+		if ScAdmitWord(conf, port.CellsAt(scr, ScAdmitFloor())) == 0 {
+			f = 1
+		}
 		port.CellsSet(scr, fb+((2*fm)+i), -1)
 		port.CellsSet(scr, fb+((3*fm)+i), 0)
 		// a dot leader
@@ -3207,6 +3224,32 @@ func ScWriteEmptyOcr(oruns *port.Cells, pages *port.Cells, ledger *port.Cells) i
 		if (seen == 1) && (words == 0) {
 			model.LedgerAdd(ledger, model.DrOcrEmpty(), p+1, 0, 0, model.PageW(pages, p), model.PageH(pages, p), 1000, model.SrOcr())
 			rows += 1
+		}
+		p += 1
+	}
+	return rows
+}
+
+func ScWriteRejectedOcr(oruns *port.Cells, pages *port.Cells, nodes *port.Cells, regions *port.Cells, text *port.Cells, ledger *port.Cells, bag *port.Cells, tokens *port.Cells, plain *port.Cells) int32 {
+	// D707: nonempty OCR evidence can still yield no admitted Model text. Keep the page's ocr-empty diagnostic as well as the occurrence ledger.
+	var p int32 = 0
+	var r int32 = 0
+	var words int32 = 0
+	var rows int32 = 0
+	for p < model.PageCount(pages) {
+		r = 0
+		words = 0
+		for r < evidence.OrCount(oruns) {
+			if evidence.OrGet(oruns, r, 0) == (p + 1) {
+				words += evidence.OrGet(oruns, r, evidence.OrfWcount())
+			}
+			r += 1
+		}
+		if words > 0 {
+			if ocrledger.OcPageText(nodes, regions, text, p+1, bag, tokens, plain) == 0 {
+				model.LedgerAdd(ledger, model.DrOcrEmpty(), p+1, 0, 0, model.PageW(pages, p), model.PageH(pages, p), 1000, model.SrOcr())
+				rows += 1
+			}
 		}
 		p += 1
 	}

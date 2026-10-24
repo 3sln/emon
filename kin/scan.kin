@@ -80,6 +80,7 @@
                                 region-page region-next region-x0 region-y0 region-x1 region-y1 fl-rotated fl-ocr-only fl-low-conf fl-script-unread page-count page-set-kind pk-scanned
                                 ledger-add dr-ocr-empty dr-ocr-ghost dr-background sr-vector page-w page-h
                                 node-text-start node-text-len node-set-text node-set-attr-text text-append-cp fk-ocr]]
+            [emon.ocrledger :refer [oc-page-text]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem bit-and bit-or]]))
 
@@ -630,6 +631,11 @@
 
 (defn ^I32 sc-cap [] (return 400))   ;; the lines of a page whose size is clustered; later ones keep their own
 
+(defn ^:pub ^I32 sc-admit-floor [] (comment "D707: optional per-page word-confidence floor, before the selection region.") (return 2299))
+(defn ^:pub ^I32 sc-admit-word [^I32 confidence ^I32 floor]
+  (if (and (> floor 0) (< confidence floor)) (return 0))
+  (return 1))
+
 (defn ^:pub ^I32 sc-sel-base [] (comment "Where `sc-emit-sel`'s selection starts in the scratch.") (return 2300))
 (defn ^:pub ^I32 sc-sel-max [] (comment "The most lines a selection holds.") (return 1500))
 (defn ^:pub ^I32 sc-aux-base [] (comment "A scratch region after the selection (P7.4: one cell for each line of the first pass: what becomes of it).") (return 3800))
@@ -646,6 +652,7 @@
   (comment "cluster's members; made once.")
   (while (< (cells-len scr) (+ (sc-fate-base) (+ (* 4 (sc-fate-max)) 2)))
     (cells-push scr 0))
+  (cells-set scr (sc-admit-floor) 0)
   (return 0))
 
 (defn ^I32 sc-isort [^:mut ^Cells c ^I32 from ^I32 n]
@@ -1423,6 +1430,7 @@
           (set n (ow-get owords w (hd-tlen)))
           (set conf (ow-get owords w (hd-conf)))
           (set f 0)
+          (if (== (sc-admit-word conf (cells-at scr (sc-admit-floor))) 0) (set f 1))
           (cells-set scr (+ fb (+ (* 2 fm) i)) -1)
           (cells-set scr (+ fb (+ (* 3 fm) i)) 0)
           (comment "a dot leader")
@@ -2286,5 +2294,21 @@
           (if (and (== seen 1) (== words 0))
             (do (ledger-add ledger (dr-ocr-empty) (+ p 1) 0 0 (page-w pages p) (page-h pages p) 1000 (sr-ocr))
                 (set rows (+ rows 1))))
+          (set p (+ p 1))))
+    (return rows)))
+
+(defn ^:pub ^I32 sc-write-rejected-ocr [^Cells oruns ^Cells pages ^Cells nodes ^Cells regions ^Cells text
+                                        ^:mut ^Cells ledger ^:mut ^Cells bag ^:mut ^Cells tokens ^:mut ^Cells plain]
+  (comment "D707: nonempty OCR evidence can still yield no admitted Model text. Keep the page's ocr-empty diagnostic as well as the occurrence ledger.")
+  (let [^:mut ^I32 p 0 ^:mut ^I32 r 0 ^:mut ^I32 words 0 ^:mut ^I32 rows 0]
+    (while (< p (page-count pages))
+      (do (set r 0) (set words 0)
+          (while (< r (or-count oruns))
+            (do (if (== (or-get oruns r 0) (+ p 1)) (set words (+ words (or-get oruns r (orf-wcount)))))
+                (set r (+ r 1))))
+          (if (> words 0)
+            (if (== (oc-page-text nodes regions text (+ p 1) bag tokens plain) 0)
+              (do (ledger-add ledger (dr-ocr-empty) (+ p 1) 0 0 (page-w pages p) (page-h pages p) 1000 (sr-ocr))
+                  (set rows (+ rows 1)))))
           (set p (+ p 1))))
     (return rows)))

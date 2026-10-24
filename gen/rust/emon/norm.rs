@@ -1378,3 +1378,107 @@ pub fn nm_view(mut views: &mut crate::port::Cells, mut inks: &mut crate::port::C
     }
     return nl;
 }
+pub fn nm_paper_min() -> i32 {
+    return 80;
+}
+pub fn nm_paper_max() -> i32 {
+    return 920;
+}
+pub fn nm_narrow_chars() -> i32 {
+    return 45;
+}
+pub fn nm_narrow_aspect() -> i32 {
+    return 150;
+}
+pub fn nm_sauvola_k_faint() -> i32 {
+    return 26;
+}
+pub fn nm_receipt_trigger(born: i32, paper: i32, chars: i32, aspect: i32) -> i32 {
+    if born != 0 {
+        return 0;
+    }
+    if (paper >= nm_paper_min()) && (paper <= nm_paper_max()) {
+        return 1;
+    }
+    if (chars > 0) && ((chars <= nm_narrow_chars()) && (aspect >= nm_narrow_aspect())) {
+        return 2;
+    }
+    return 0;
+}
+pub(crate) fn nm_morph_axis(src: &crate::port::Bitmap, dst: &crate::port::Bitmap, r: i32, axis: i32, dilate: i32) -> i32 {
+    let mut x: i32 = 0;
+    let mut y: i32 = 0;
+    let mut k: i32 = 0;
+    let mut xx: i32 = 0;
+    let mut yy: i32 = 0;
+    let mut value: i32 = 0;
+    let mut pixel: i32 = 0;
+    while y < crate::port::bitmap_h(src) {
+        x = 0;
+        while x < crate::port::bitmap_w(src) {
+            value = 255;
+            if dilate == 1 {
+                value = 0;
+            }
+            k = 0 - r;
+            while k <= r {
+                xx = x;
+                yy = y;
+                if axis == 0 {
+                    xx = x + k;
+                } else {
+                    yy = y + k;
+                }
+                if ((xx >= 0) && (xx < crate::port::bitmap_w(src))) && ((yy >= 0) && (yy < crate::port::bitmap_h(src))) {
+                    pixel = crate::port::bitmap_u8(src, xx, yy, 0);
+                    if dilate == 1 {
+                        if pixel > value {
+                            value = pixel;
+                        }
+                    } else if pixel < value {
+                        value = pixel;
+                    }
+                }
+                k += 1;
+            }
+            crate::port::bitmap_set_u8(dst, x, y, 0, value);
+            x += 1;
+        }
+        y += 1;
+    }
+    return 0;
+}
+pub fn nm_paper_close(mask: &crate::port::Bitmap, a: &crate::port::Bitmap, b: &crate::port::Bitmap, r: i32) -> i32 {
+    nm_morph_axis(mask, a, r, 0, 1);
+    nm_morph_axis(a, b, r, 1, 1);
+    nm_morph_axis(b, a, r, 0, 0);
+    nm_morph_axis(a, mask, r, 1, 0);
+    return 0;
+}
+pub fn nm_analysis_into(src: &crate::port::Bitmap, dst: &crate::port::Bitmap) -> i32 {
+    // D704: nearest source sample on an integer rational grid, analysis only.
+    let mut x: i32 = 0;
+    let mut y: i32 = 0;
+    let mut sx: i32 = 0;
+    let mut sy: i32 = 0;
+    while y < crate::port::bitmap_h(dst) {
+        sy = (((y as i64) * (crate::port::bitmap_h(src) as i64)) / (crate::port::bitmap_h(dst) as i64)) as i32;
+        x = 0;
+        while x < crate::port::bitmap_w(dst) {
+            sx = (((x as i64) * (crate::port::bitmap_w(src) as i64)) / (crate::port::bitmap_w(dst) as i64)) as i32;
+            crate::port::bitmap_set_u8(dst, x, y, 0, crate::port::bitmap_u8(src, sx, sy, 0));
+            x += 1;
+        }
+        y += 1;
+    }
+    return 0;
+}
+pub fn nm_paper_receipt(pixels: i32, total: i32) -> i32 {
+    if total <= 0 {
+        return 0;
+    }
+    if (((pixels as i64) * 1000) >= ((total as i64) * (nm_paper_min() as i64))) && (((pixels as i64) * 1000) <= ((total as i64) * (nm_paper_max() as i64))) {
+        return 1;
+    }
+    return 0;
+}

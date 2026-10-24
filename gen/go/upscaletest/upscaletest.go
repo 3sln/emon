@@ -203,3 +203,21 @@ func TestAnEnlargedRasterKeepsFlatInkAndEdges(emonT *testing.T) {
 	port.AssertEq(emonT, port.BitmapU8(big, 0, 0, 0), 0, "black at the left")
 	port.AssertEq(emonT, port.BitmapU8(big, 11, 0, 0), 255, "white at the right")
 }
+
+func TestReceiptQualityUsesConfidentAlphanumericBearingTokenLength(emonT *testing.T) {
+	var ans *port.Cells = port.NewCells()
+	var at int32 = plan.AnOcr(ans, 31)
+	var low int32 = plan.AnOcrWord(ans, at, 0, 0, 10, 10, 499, 0, 0)
+	plan.AnOcrCp(ans, low, 65)
+	var edge int32 = plan.AnOcrWord(ans, at, 10, 0, 10, 10, 500, 0, 0)
+	plan.AnOcrCp(ans, edge, 57)
+	var dots int32 = plan.AnOcrWord(ans, at, 20, 0, 10, 10, 999, 0, 0)
+	plan.AnOcrCp(ans, dots, 46)
+	plan.AnOcrCp(ans, dots, 46)
+	plan.AnOcrCp(ans, dots, 46)
+	var token int32 = plan.AnOcrWord(ans, at, 30, 0, 10, 10, 800, 0, 0)
+	plan.AnOcrCp(ans, token, 36)
+	plan.AnOcrCp(ans, token, 65)
+	plan.AnOcrEnd(ans, at)
+	port.AssertEq(emonT, upscale.UpReceiptScore(ans, at), 131, "conf49 is ignored, conf50 is included, punctuation alone cannot vote; the full alphanumeric-bearing token contributes")
+}

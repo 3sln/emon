@@ -195,4 +195,22 @@ public static class Upscaletest {
         emon.Testport.AssertEq(emon.Port.BitmapU8(big, 0, 0, 0), 0, "black at the left");
         emon.Testport.AssertEq(emon.Port.BitmapU8(big, 11, 0, 0), 255, "white at the right");
     }
+    [Xunit.Fact]
+    public static void TestReceiptQualityUsesConfidentAlphanumericBearingTokenLength() {
+        emon.Port.Cells ans = emon.Port.NewCells();
+        int at = Plan.AnOcr(ans, 31);
+        int low = Plan.AnOcrWord(ans, at, 0, 0, 10, 10, 499, 0, 0);
+        Plan.AnOcrCp(ans, low, 65);
+        int edge = Plan.AnOcrWord(ans, at, 10, 0, 10, 10, 500, 0, 0);
+        Plan.AnOcrCp(ans, edge, 57);
+        int dots = Plan.AnOcrWord(ans, at, 20, 0, 10, 10, 999, 0, 0);
+        Plan.AnOcrCp(ans, dots, 46);
+        Plan.AnOcrCp(ans, dots, 46);
+        Plan.AnOcrCp(ans, dots, 46);
+        int token = Plan.AnOcrWord(ans, at, 30, 0, 10, 10, 800, 0, 0);
+        Plan.AnOcrCp(ans, token, 36);
+        Plan.AnOcrCp(ans, token, 65);
+        Plan.AnOcrEnd(ans, at);
+        emon.Testport.AssertEq(Upscale.UpReceiptScore(ans, at), 131, "conf49 is ignored, conf50 is included, punctuation alone cannot vote; the full alphanumeric-bearing token contributes");
+    }
 }

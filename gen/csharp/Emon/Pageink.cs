@@ -91,6 +91,175 @@ public static class Pageink {
         }
         return 0;
     }
+    internal static int PnPercentile(emon.Port.Cells hist, int off, int n, int count, int pct) {
+        int i = 0;
+        int acc = 0;
+        while (i < n) {
+            acc += emon.Port.CellsAt(hist, off + i);
+            if ((acc * 100) >= (count * pct)) {
+                return i;
+            }
+            i += 1;
+        }
+        return 0;
+    }
+    public static int PnReceipt(int page, int view, emon.Port.BitmapSet bms, int k0, emon.Port.Bitmap src, emon.Port.Bitmap gray, emon.Port.Bitmap mask, emon.Port.Cells comps, emon.Port.Cells ws, emon.Port.Cells rn, emon.Port.Cells ri, emon.Port.Cells cs, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3) {
+        // Receipt features only: paper's largest 8-connected region at quarter scale and the central 96 percent of glyph centres.
+        int w = emon.Port.BitmapW(src);
+        int h = emon.Port.BitmapH(src);
+        int side = w;
+        int step = 4;
+        int qw = 0;
+        int qh = 0;
+        int radius = 0;
+        int x = 0;
+        int y = 0;
+        int nc = 0;
+        int biggest = 0;
+        int left = 0;
+        int top = 0;
+        int right = 0;
+        int bottom = 0;
+        int c = 0;
+        int ch = 0;
+        int cw = 0;
+        int cx = 0;
+        int cy = 0;
+        int paper = 0;
+        int n = 0;
+        int gh = 0;
+        int span = 0;
+        int chars = 0;
+        int aspect = 0;
+        if (h > side) {
+            side = h;
+        }
+        if (side > 3200) {
+            step = (side + 799) / 800;
+        }
+        qw = (w + (step - 1)) / step;
+        qh = (h + (step - 1)) / step;
+        radius = (((side / step) * 7) + 799) / 800;
+        if ((qw < 32) || (qh < 32)) {
+            radius = 0;
+        }
+        emon.Port.Bitmap small = emon.Port.BmsPut(bms, Plan.PuViewId(page - 1, k0 + 5), qw, qh, 1);
+        emon.Port.Bitmap a = emon.Port.BmsPut(bms, Plan.PuViewId(page - 1, k0 + 6), qw, qh, 1);
+        emon.Port.Bitmap b = emon.Port.BmsPut(bms, Plan.PuViewId(page - 1, k0 + 7), qw, qh, 1);
+        Norm.NmMaskInto(src, ws, 0, mask);
+        while (y < qh) {
+            x = 0;
+            while (x < qw) {
+                emon.Port.BitmapSetU8(small, x, y, 0, emon.Port.BitmapU8(mask, x * step, y * step, 0));
+                x += 1;
+            }
+            y += 1;
+        }
+        Norm.NmPaperClose(small, a, b, radius);
+        Trace.TrRuns(small, rn, ri);
+        Trace.TrUnify(rn, ri, qh);
+        nc = Trace.TrLabel(rn, ri, qh, cs, s1, s2, s3);
+        while (c < nc) {
+            if (emon.Port.CellsAt(cs, (c * 24) + 4) > biggest) {
+                biggest = emon.Port.CellsAt(cs, (c * 24) + 4);
+                top = emon.Port.CellsAt(cs, c * 24);
+                left = emon.Port.CellsAt(cs, (c * 24) + 1);
+                right = emon.Port.CellsAt(cs, (c * 24) + 2);
+                bottom = emon.Port.CellsAt(cs, (c * 24) + 3);
+            }
+            c += 1;
+        }
+        // Outer paper area includes enclosed text holes. The complement's border component is not paper.
+        emon.Port.BitmapThresholdInto(small, 127, small);
+        Trace.TrRuns(small, rn, ri);
+        Trace.TrUnify(rn, ri, qh);
+        nc = Trace.TrLabel(rn, ri, qh, cs, s1, s2, s3);
+        c = 0;
+        while (c < nc) {
+            if (((emon.Port.CellsAt(cs, c * 24) > top) && (emon.Port.CellsAt(cs, (c * 24) + 1) > left)) && ((emon.Port.CellsAt(cs, (c * 24) + 2) < right) && (emon.Port.CellsAt(cs, (c * 24) + 3) < bottom))) {
+                biggest += emon.Port.CellsAt(cs, (c * 24) + 4);
+            }
+            c += 1;
+        }
+        // The experiment's glyph population is measured at long side <=1600, with r31/k.20; full-resolution tracer fragments are a different population.
+        int aw = w;
+        int ah = h;
+        if (side > 1600) {
+            aw = (int) ((((long) w) * 1600) / ((long) side));
+            ah = (int) ((((long) h) * 1600) / ((long) side));
+        }
+        if (aw < 1) {
+            aw = 1;
+        }
+        if (ah < 1) {
+            ah = 1;
+        }
+        emon.Port.Bitmap analysis = emon.Port.BmsPut(bms, Plan.PuViewId(page - 1, 112), aw, ah, 1);
+        emon.Port.Bitmap binary = emon.Port.BmsPut(bms, Plan.PuViewId(page - 1, 113), aw, ah, 1);
+        Norm.NmAnalysisInto(gray, analysis);
+        Norm.NmSauvola(analysis, binary, 31, 51, s1);
+        Trace.TrRuns(binary, rn, ri);
+        Trace.TrUnify(rn, ri, ah);
+        nc = Trace.TrLabel(rn, ri, ah, cs, s1, s2, s3);
+        emon.Port.CellsDrop(s1, 0);
+        emon.Port.CellsGrow(s1, aw + (ah * 2), 0);
+        c = 0;
+        while (c < nc) {
+            ch = emon.Port.CellsAt(cs, (c * 24) + 3) - emon.Port.CellsAt(cs, c * 24);
+            cw = emon.Port.CellsAt(cs, (c * 24) + 2) - emon.Port.CellsAt(cs, (c * 24) + 1);
+            if (((ch >= 4) && (ch <= (ah / 15))) && ((cw >= 2) && (cw <= (ch * 3)))) {
+                cx = emon.Port.CellsAt(cs, (c * 24) + 1) + (cw / 2);
+                cy = emon.Port.CellsAt(cs, c * 24) + (ch / 2);
+                emon.Port.CellsSet(s1, cx, emon.Port.CellsAt(s1, cx) + 1);
+                emon.Port.CellsSet(s1, aw + cy, emon.Port.CellsAt(s1, aw + cy) + 1);
+                emon.Port.CellsSet(s1, (aw + ah) + ch, emon.Port.CellsAt(s1, (aw + ah) + ch) + 1);
+                n += 1;
+            }
+            c += 1;
+        }
+        if (n >= 30) {
+            gh = PnPercentile(s1, aw + ah, ah, n, 50);
+            span = PnPercentile(s1, 0, aw, n, 98) - PnPercentile(s1, 0, aw, n, 2);
+            if ((gh > 0) && (span > 0)) {
+                chars = (span + (gh - 1)) / gh;
+                aspect = ((PnPercentile(s1, aw, ah, n, 98) - PnPercentile(s1, aw, ah, n, 2)) * 100) / span;
+            }
+        }
+        gh = (gh * h) / ah;
+        paper = Norm.NmPermille(biggest, qw * qh);
+        if (Norm.NmPaperReceipt(biggest, qw * qh) == 0) {
+            paper = 0;
+        }
+        emon.Port.CellsSet(ws, 12906, Norm.NmReceiptTrigger(0, paper, chars, aspect));
+        emon.Port.CellsSet(ws, 12907, Norm.NmPermille(biggest, qw * qh));
+        emon.Port.CellsSet(ws, 12908, chars);
+        emon.Port.CellsSet(ws, 12909, aspect);
+        emon.Port.CellsSet(ws, 12910, gh);
+        emon.Port.CellsSet(ws, 12911, biggest);
+        emon.Port.CellsSet(ws, 12912, qw * qh);
+        return emon.Port.CellsAt(ws, 12906);
+    }
+    public static int PnReceiptSource(int page, int view, emon.Port.BitmapSet bms, int k0, emon.Port.Bitmap src, emon.Port.Bitmap gray, emon.Port.Bitmap mask, emon.Port.Cells comps, emon.Port.Cells ws, emon.Port.Cells aux, emon.Port.Cells rn, emon.Port.Cells ri, emon.Port.Cells cs, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3) {
+        // Receipt features always describe the original decoded pixels, independently of OCR-driven enlargement adoption.
+        emon.Port.Bitmap original = emon.Port.BmsGet(bms, Plan.PuId(page - 1, Plan.PiDecode()));
+        int k = 12906;
+        if ((emon.Port.BitmapW(original) > 0) && ((emon.Port.BitmapW(original) != emon.Port.BitmapW(src)) || (emon.Port.BitmapH(original) != emon.Port.BitmapH(src)))) {
+            emon.Port.Bitmap originalGray = emon.Port.BmsPut(bms, Plan.PuViewId(page - 1, 114), emon.Port.BitmapW(original), emon.Port.BitmapH(original), 1);
+            emon.Port.Bitmap originalMask = emon.Port.BmsPut(bms, Plan.PuViewId(page - 1, 115), emon.Port.BitmapW(original), emon.Port.BitmapH(original), 1);
+            emon.Port.BitmapGrayInto(original, originalGray);
+            Norm.NmWsInit(aux);
+            emon.Port.BitmapHistRgb(original, aux, Norm.NmWsHist());
+            Norm.NmLayers(aux, Norm.NmInkMerge(), Norm.NmInkPaper(), Norm.NmInkMin(), Norm.NmInkSpike());
+            PnReceipt(page, view, bms, k0, original, originalGray, originalMask, comps, aux, rn, ri, cs, s1, s2, s3);
+            while (k < 12913) {
+                emon.Port.CellsSet(ws, k, emon.Port.CellsAt(aux, k));
+                k += 1;
+            }
+        } else {
+            PnReceipt(page, view, bms, k0, src, gray, mask, comps, ws, rn, ri, cs, s1, s2, s3);
+        }
+        return emon.Port.CellsAt(ws, 12906);
+    }
     public static int PnInk(int page, int srcview, emon.Port.BitmapSet bms, int k0, emon.Port.Bitmap src, int dpi100, int traced, emon.Port.Cells views, emon.Port.Cells inks, emon.Port.Cells comps, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tpts, emon.Port.Cells tlines, emon.Port.Cells refs, emon.Port.Cells ws, emon.Port.Cells sv, emon.Port.Cells aux, emon.Port.Cells rn, emon.Port.Cells ri, emon.Port.Cells cs, emon.Port.Cells vr, emon.Port.Cells pc, emon.Port.Cells sg, emon.Port.Cells mem, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6) {
         // Normalize the raster `src` (the bitmap of `views` row `srcview`, of `page`, at `dpi100`): its gray and binary views, its ink
         // layers and a mask a layer (`nm-view`), and with `traced` 1 trace it as P6.4's harness does: the binary view with the majority
@@ -125,6 +294,9 @@ public static class Pageink {
                 k += 1;
             }
             Trace.TrLightfills(views, page, Norm.NmGrayView(ws), dpi100, gray, Norm.NmPaperGray(ws), mask, inks, prims, refs, s1, s2);
+            if (Evidence.VwGet(views, srcview, Evidence.VwfKind()) == Evidence.VkDecode()) {
+                PnReceiptSource(page, Norm.NmBinaryView(ws), bms, k0, src, gray, mask, comps, ws, aux, rn, ri, cs, s1, s2, s3);
+            }
         }
         return nl;
     }

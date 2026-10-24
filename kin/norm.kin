@@ -1117,3 +1117,62 @@
           (ik-set inks (+ irow k) (ikf-mask) mrow)
           (set k (+ k 1))))
     (return nl)))
+
+;; D704: receipt features are integer ratios; 1 photo, 2 narrow scan, 0 neither.
+(defn ^:pub ^I32 nm-paper-min [] (return 80))
+(defn ^:pub ^I32 nm-paper-max [] (return 920))
+(defn ^:pub ^I32 nm-narrow-chars [] (return 45))
+(defn ^:pub ^I32 nm-narrow-aspect [] (return 150))
+(defn ^:pub ^I32 nm-sauvola-k-faint [] (return 26))
+(defn ^:pub ^I32 nm-receipt-trigger [^I32 born ^I32 paper ^I32 chars ^I32 aspect]
+  (if (!= born 0) (return 0))
+  (if (and (>= paper (nm-paper-min)) (<= paper (nm-paper-max))) (return 1))
+  (if (and (> chars 0) (and (<= chars (nm-narrow-chars)) (>= aspect (nm-narrow-aspect)))) (return 2))
+  (return 0))
+
+
+(defn ^I32 nm-morph-axis [^Bitmap src ^Bitmap dst ^I32 r ^I32 axis ^I32 dilate]
+  (let [^:mut ^I32 x 0 ^:mut ^I32 y 0 ^:mut ^I32 k 0 ^:mut ^I32 xx 0 ^:mut ^I32 yy 0
+        ^:mut ^I32 value 0 ^:mut ^I32 pixel 0]
+    (while (< y (bitmap-h src))
+      (do (set x 0)
+          (while (< x (bitmap-w src))
+            (do (set value 255) (if (== dilate 1) (set value 0))
+                (set k (- 0 r))
+                (while (<= k r)
+                  (do (set xx x) (set yy y)
+                      (if (== axis 0) (set xx (+ x k)) (set yy (+ y k)))
+                      (if (and (and (>= xx 0) (< xx (bitmap-w src))) (and (>= yy 0) (< yy (bitmap-h src))))
+                        (do (set pixel (bitmap-u8 src xx yy 0))
+                            (if (== dilate 1)
+                              (if (> pixel value) (set value pixel))
+                              (if (< pixel value) (set value pixel)))))
+                      (set k (+ k 1))))
+                (bitmap-set-u8 dst x y 0 value) (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 nm-paper-close [^Bitmap mask ^Bitmap a ^Bitmap b ^I32 r]
+  (nm-morph-axis mask a r 0 1)
+  (nm-morph-axis a b r 1 1)
+  (nm-morph-axis b a r 0 0)
+  (nm-morph-axis a mask r 1 0)
+  (return 0))
+
+(defn ^:pub ^I32 nm-analysis-into [^Bitmap src ^Bitmap dst]
+  (comment "D704: nearest source sample on an integer rational grid, analysis only.")
+  (let [^:mut ^I32 x 0 ^:mut ^I32 y 0 ^:mut ^I32 sx 0 ^:mut ^I32 sy 0]
+    (while (< y (bitmap-h dst))
+      (do (set sy (i32 (quot (* (i64 y) (i64 (bitmap-h src))) (i64 (bitmap-h dst)))))
+          (set x 0)
+          (while (< x (bitmap-w dst))
+            (do (set sx (i32 (quot (* (i64 x) (i64 (bitmap-w src))) (i64 (bitmap-w dst)))))
+                (bitmap-set-u8 dst x y 0 (bitmap-u8 src sx sy 0)) (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 nm-paper-receipt [^I32 pixels ^I32 total]
+  (if (<= total 0) (return 0))
+  (if (and (>= (* (i64 pixels) 1000) (* (i64 total) (i64 (nm-paper-min))))
+           (<= (* (i64 pixels) 1000) (* (i64 total) (i64 (nm-paper-max))))) (return 1))
+  (return 0))

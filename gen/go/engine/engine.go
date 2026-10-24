@@ -438,6 +438,7 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 		}
 		model.NodeSetAttrText(m.Nodes, m.Attrs, 0, model.FkLocale(), w, port.CellsLen(m.Text)-w)
 	}
+	scan.ScWriteRejectedOcr(ev.Oruns, m.Pages, m.Nodes, m.Regions, m.Text, m.Ledger, s.S0, s.S1, s.S2)
 	ocrledger.OcAccount(ev.Oruns, ev.Owords, d.Et, m.Nodes, m.Regions, d.Mask, m.Ledger, m.Text, s.S0, s.S1, s.S2, s.S3, s.S4, s.S5)
 	if kind == 0 {
 		if c.Level == 2 {

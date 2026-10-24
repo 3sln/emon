@@ -70,6 +70,18 @@
       (do (oc-flow nodes regions text c pg bag tokens plain) (set c (node-next nodes c))))
     (return 0)))
 
+(defn ^:pub ^I32 oc-page-text [^Cells nodes ^Cells regions ^Cells text ^I32 pg
+                                ^:mut ^Cells bag ^:mut ^Cells tokens ^:mut ^Cells plain]
+  (comment "D707: count the serialized body and furniture tokens of one page, using the audit's exact projection.")
+  (let [^:mut ^I32 n 1]
+    (cells-drop bag 0) (cells-drop tokens 0)
+    (if (> (node-count nodes) 0) (oc-flow nodes regions text 0 pg bag tokens plain))
+    (while (< n (node-count nodes))
+      (do (if (and (== (node-kind nodes n) (nk-furniture)) (== (node-parent nodes n) -1))
+            (oc-flow nodes regions text n pg bag tokens plain))
+          (set n (+ n 1))))
+    (return (quot (cells-len tokens) 3))))
+
 (defn ^I32 oc-word [^Cells owords ^I32 w ^Cells et ^:mut ^Cells ledger ^:mut ^Cells text
                     ^Cells bag ^:mut ^Cells tokens ^:mut ^Cells norm ^:mut ^Cells tmp ^:mut ^Cells raw ^:mut ^Cells rt]
   (let [^:mut ^I32 i 0 ^:mut ^I32 j 0 ^:mut ^I32 k 0 ^:mut ^I32 a 0 ^:mut ^I32 b 0

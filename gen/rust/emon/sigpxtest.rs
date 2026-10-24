@@ -288,3 +288,27 @@ fn test_the_lines_the_strokes_made_are_not_the_pages_text() {
     crate::testport::assert_eq(crate::port::cells_at(scr, sc_sel_base()), 1, "the typed name first");
     crate::testport::assert_eq(crate::port::cells_at(scr, sc_sel_base() + 1), 2, "then the other");
 }
+#[test]
+fn test_unadopted_receipt_words_cannot_mask_the_baseline_signature_pixels() {
+    let b: &crate::port::Bitmap = &crate::port::bitmap_new(300, 120, 3);
+    let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let views: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mask: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    spx_paper(b);
+    spx_line(b, 20, 280, 100);
+    spx_zig(b, 40, 98, 150, 24, 36, 20, 40, 120);
+    spx_rule(rules, 20, 280, 100);
+    vw_new(views, 1, vk_render(), -1, -1, 300, 120, 7200, 0, -1, 0, 0, 0, 0, 0);
+    crate::port::cells_push(et, 83);
+    crate::port::cells_push(et, 105);
+    crate::port::cells_push(et, 103);
+    ow_new(ow, 1, 3000, 5500, 21000, 10500, 3000, 10500, 21000, 10500, 0, 0, 0, 3, 0, 900, -1);
+    crate::testport::assert_eq(sp_find(1, views, 0, rules, ow, et, b, 61200, cand, mask), 0, "an admitted confident reading still masks text");
+    crate::testport::assert_eq(sp_find_without(1, views, 0, rules, ow, et, b, 61200, 0, 1, cand, mask), 1, "an unadopted reading cannot erase a signature and restore its rejected text");
+    crate::testport::assert_eq(sp_find_without(1, views, 0, rules, ow, et, b, 61200, 1, 1, cand, mask), 0, "the interval is half open; other readings still mask text");
+    crate::testport::assert_eq(ow_count(ow), 1, "the raw alternative remains evidence");
+    crate::testport::assert_eq(ow_get(ow, 0, hd_conf()), 900, "raw confidence is unchanged");
+}

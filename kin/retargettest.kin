@@ -6,14 +6,14 @@
             [emon.port :refer [bitmap-new bitmap-w bitmap-h bitmap-u8 bitmap-set-u8 bitmap-hash bms-put bms-get cells-len cells-at cells-set cells-push]]
             [emon.plan :refer [rec-id rec-kind rq-arg rq-nargs pk-ocr view-base pu-view-id rec-count an-ocr an-ocr-word an-ocr-cp an-ocr-end]]
             [emon.evidence :refer [tl-new tl-set tlf-conf co-new co-set cf-pxx cf-pxy cf-pxw cf-pxh cf-fill cf-holes cf-gray cf-ink cf-conf ik-new ik-set ikf-role ir-color
-                                   vw-new vk-render
-                                   or-new or-set or-get orf-lfirst orf-lcount orf-wfirst orf-wcount orf-osd orf-oconf
-                                   ol-new ol-set ol-get ow-new ow-count ol-count olf-px olf-py olf-pw olf-ph lh-first lh-count
-                                   fe-new fe-set ea-owords xo-body-share wd-count wd-get ln-get hd-x0 wf-gap lh-x1]]
+                                   vw-new vw-get vwf-flags vwf-pxw vwf-pxh vwf-dpi vwf-cropx vwf-cropy vg-receipt-thermal vg-receipt-deferred vk-render
+                                   op-receipt op-receipt-rescue op-body-ink or-new or-set or-get orf-pass orf-lfirst orf-lcount orf-wfirst orf-wcount orf-osd orf-oconf
+                                   ol-new ol-set ol-get ow-new ow-set ow-count ol-count olf-run olf-px olf-py olf-pw olf-ph lh-first lh-count
+                                   fe-new fe-set ea-owords xo-body-share wd-count wd-get ln-get hd-tstart hd-x0 wf-gap lh-x1]]
             [emon.norm :refer [nm-view nm-paper-gray]]
-            [emon.scan :refer [sc-prep sc-sel-base sc-sel-max sc-aux-base sc-share-base sc-partner-base sc-xtra-base sc-emit-sel]]
-            [emon.retarget :refer [rt-thermal-into rt-gap-lines rt-answer-score rt-prep rt-decide rt-turns rt-erase-into rt-ask-view rt-adopt rt-line-state
-                                   rtp-frun rtp-q rtp-body rtp-erased rtp-nl rtp-nc rtp-cell0 rtp-line0 rtp-brun rtp-primary rtp-hash rt-lines rt-line-conf rt-max rt-cap rt-permille rt-empty-area rt-invert-bands]]
+            [emon.scan :refer [sc-admit-floor sc-prep sc-sel-base sc-sel-max sc-aux-base sc-share-base sc-partner-base sc-xtra-base sc-emit-sel]]
+            [emon.retarget :refer [rt-receipt-source rt-receipt-active rt-receipt-ignored rt-receipt-mode rt-receipt-view rt-mark-trigger rtp-factor rtp-trigger rt-faint-into rt-empty-receipt rt-receipt-wins rt-thermal-into rt-gap-lines rt-answer-score rt-prep rt-decide rt-turns rt-erase-into rt-ask-view rt-adopt rt-line-state
+                                   rtp-receipt rtp-receipt-win rtp-frun rtp-q rtp-body rtp-erased rtp-nl rtp-nc rtp-cell0 rtp-line0 rtp-brun rtp-primary rtp-hash rt-lines rt-line-conf rt-max rt-cap rt-permille rt-empty-area rt-invert-bands]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
 
@@ -532,3 +532,172 @@
         (let [^I32 tr (rtt-run runs ol ow 1 2)]
           (rt-prep rtp) (cells-set rtp (rtp-brun) br) (cells-set rtp (rtp-frun) tr)
           (assert-eq (rtt-adopt rtp runs fr ol ow scr) 1 "normal recovery has priority over emergency text"))))))
+
+(deftest test-losing-receipt-view-keeps-original-reading
+  (assert-eq (rt-receipt-wins 100 99) 0 "a losing view cannot replace Model text")
+  (assert-eq (rt-receipt-wins 100 100) 0 "ties keep the original")
+  (assert-eq (rt-receipt-wins 100 101) 1 "strictly greater confident characters adopt"))
+
+(deftest test-unselected-receipt-reading-does-not-enter-the-page-selection
+  (let [^Cells runs (new-cells) ^Cells ol (new-cells) ^Cells ow (new-cells) ^Cells feats (new-cells)
+        ^Cells rtp (new-cells) ^Cells scr (new-cells)]
+    (sc-prep scr)
+    (rtt-line ol ow feats 0 900)
+    (let [^I32 first (rtt-run runs ol ow 0 0) ^I32 l0 (ol-count ol) ^I32 w0 (ow-count ow)]
+      (rtt-line ol ow feats 60 400)
+      (let [^I32 candidate (rtt-run runs ol ow l0 w0)]
+        (rt-prep rtp) (cells-set rtp (rtp-receipt) candidate)
+        (cells-set rtp (rtp-receipt-win) 0)
+        (cells-set scr (sc-admit-floor) 300)
+        (cells-set scr (sc-share-base) 0)
+        (assert-eq (rtt-adopt rtp runs first ol ow scr) 1 "only the original line is selected")
+        (assert-eq (cells-at scr (sc-sel-base)) 0 "losing receipt text cannot enter the Model")
+        (assert-eq (cells-at scr (sc-admit-floor)) 0 "a losing view cannot leak its confidence floor to the baseline")
+        (assert-eq (cells-at rtp (rtp-primary)) first "the original reading remains primary")))))
+
+(deftest test-faint-view-is-black-ink-on-white-paper
+  (let [^Bitmap gray (bitmap-new 5 5 1) ^Bitmap image (bitmap-new 5 5 1) ^Cells pixels (new-cells)
+        ^:mut ^I32 x 0 ^:mut ^I32 y 0]
+    (while (< y 5)
+      (do (set x 0) (while (< x 5) (do (bitmap-set-u8 gray x y 0 230) (set x (+ x 1)))) (set y (+ y 1))))
+    (bitmap-set-u8 gray 2 2 0 100)
+    (rt-faint-into gray image 300 pixels)
+    (set y 0)
+    (while (< y 5)
+      (do (set x 0)
+          (while (< x 5)
+            (do (if (and (== x 2) (== y 2))
+                  (assert-eq (bitmap-u8 image x y 0) 0 "faint ink is black")
+                  (assert-eq (bitmap-u8 image x y 0) 255 "paper is white"))
+                (set x (+ x 1))))
+          (set y (+ y 1))))))
+
+(deftest test-empty-receipt-rescue-waits-for-the-view-and-does-not-reread-success
+  (let [^Cells ans (new-cells) ^I32 empty (an-ocr ans 31)]
+    (an-ocr-end ans empty)
+    (assert-eq (rt-empty-receipt 1 ans -1) 0 "wait for the extra view before the all-empty rescue")
+    (assert-eq (rt-empty-receipt 1 ans empty) 1 "an empty view permits the rescue")
+    (assert-eq (rt-empty-receipt 0 ans -1) 1 "non-receipts retain the existing fallback")
+    (let [^I32 full (an-ocr ans 32) ^I32 word (an-ocr-word ans full 0 0 10 10 900 0 0)]
+      (an-ocr-cp ans word 72) (an-ocr-cp ans word 105) (an-ocr-end ans full)
+      (assert-eq (rt-empty-receipt 1 ans full) 0 "a successful photo view needs no further full-page read")
+      (assert-eq (rt-empty-receipt 2 ans full) 1 "the rejected thermal lane retains the original emergency planner"))))
+
+(deftest test-receipt-view-geometry-does-not-depend-on-ocr-success
+  (let [^Cells views (new-cells) ^Cells rtp (new-cells)
+        ^I32 source (vw-new views 1 (vk-render) 4 -1 40 60 60000 0 -1 0 0 100 200 0)]
+    (rt-prep rtp) (cells-set rtp (rtp-factor) -2) (cells-set rtp (rtp-trigger) 1)
+    (let [^I32 view (rt-receipt-view views 1 source 60000 rtp)]
+      (assert-eq (vw-get views view (vwf-pxw)) 20 "original photo width")
+      (assert-eq (vw-get views view (vwf-pxh)) 30 "original photo height")
+      (assert-eq (vw-get views view (vwf-dpi)) 30000 "pixel scale maps to the source page")
+      (assert-eq (vw-get views view (vwf-cropx)) 100 "inset image x origin is inherited")
+      (assert-eq (vw-get views view (vwf-cropy)) 200 "inset image y origin is inherited"))))
+
+(deftest test-trigger-evidence-retains-orientation-deferrals-without-inventing-a-read
+  (let [^Cells views (new-cells) ^Cells rtp (new-cells)
+        ^I32 source (vw-new views 1 (vk-render) 4 -1 40 60 30000 0 -1 0 0 0 0 0)]
+    (rt-prep rtp) (cells-set rtp (rtp-trigger) 2) (cells-set rtp (rtp-q) 2)
+    (assert-eq (rt-mark-trigger views source rtp) 1 "the classifier fired even when the read was deferred")
+    (assert-eq (vw-get views source (vwf-flags)) (+ (vg-receipt-thermal) (vg-receipt-deferred)) "class and deferral are deterministic evidence")))
+
+(deftest test-thermal-view-rollback-is-a-policy-not-a-document-exception
+  (assert-eq (rt-receipt-mode 0) 0 "non-receipts")
+  (assert-eq (rt-receipt-mode 1) 1 "photo view retained")
+  (assert-eq (rt-receipt-mode 2) 0 "thermal view reverted for every input"))
+
+(deftest test-winning-receipt-replaces-the-whole-reading-with-its-admission-floor
+  (let [^Cells runs (new-cells) ^Cells ol (new-cells) ^Cells ow (new-cells) ^Cells feats (new-cells)
+        ^Cells rtp (new-cells) ^Cells scr (new-cells)]
+    (sc-prep scr)
+    (rtt-line ol ow feats 0 400)
+    (let [^I32 first (rtt-run runs ol ow 0 0) ^I32 l0 (ol-count ol) ^I32 w0 (ow-count ow)]
+      (rtt-line ol ow feats 60 900)
+      (let [^I32 candidate (rtt-run runs ol ow l0 w0)]
+        (rt-prep rtp) (cells-set rtp (rtp-receipt) candidate)
+        (cells-set rtp (rtp-receipt-win) 1)
+        (assert-eq (rtt-adopt rtp runs first ol ow scr) 1 "the winning reading supplies the selection")
+        (assert-eq (cells-at scr (sc-sel-base)) l0 "candidate line, rather than the baseline line")
+        (assert-eq (cells-at rtp (rtp-primary)) candidate "the primary run follows the selected view")
+        (assert-eq (cells-at scr (sc-admit-floor)) 300 "the word floor accompanies adoption")))))
+
+
+(deftest test-receipt-score-cannot-erase-a-very-confident-recovered-word
+  (let [^Cells runs (new-cells) ^Cells ol (new-cells) ^Cells ow (new-cells) ^Cells feats (new-cells)
+        ^Cells rtp (new-cells) ^Cells scr (new-cells) ^Cells et (new-cells) ^I32 first (rtt-run runs ol ow 0 0)]
+    (cells-push et 49) (cells-push et 50) (cells-push et 51) (cells-push et 52)
+    (cells-push et 53) (cells-push et 54) (cells-push et 55) (cells-push et 56)
+    (sc-prep scr) (rtt-line ol ow feats 0 900)
+    (let [^I32 body (rtt-run runs ol ow 0 0) ^I32 l0 (ol-count ol) ^I32 w0 (ow-count ow)]
+      (ol-set ol 0 (olf-run) body)
+      (rtt-line ol ow feats 60 990)
+      (ow-set ow w0 (hd-tstart) 4) (ow-set ow (+ w0 1) (hd-tstart) 4)
+      (let [^I32 candidate (rtt-run runs ol ow l0 w0)]
+        (rt-prep rtp) (cells-set rtp (rtp-brun) body)
+        (cells-set rtp (rtp-receipt) candidate) (cells-set rtp (rtp-receipt-win) 1)
+        (rt-adopt rtp runs first ol ow et scr)
+        (assert-that (!= (cells-at rtp (rtp-primary)) candidate) "a higher global score cannot wash away a confident recovered word")
+        (assert-eq (cells-at scr (sc-sel-base)) 0 "the baseline recovery remains selected")
+        (assert-eq (cells-at scr (sc-admit-floor)) 0 "no receipt word floor on the retained baseline")))))
+
+(deftest test-receipt-recovery-protection-counts-occurrences-and-allows-a-faithful-better-reading
+  (let [^Cells runs (new-cells) ^Cells ol (new-cells) ^Cells ow (new-cells) ^Cells feats (new-cells)
+        ^Cells rtp (new-cells) ^Cells scr (new-cells) ^Cells et (new-cells) ^I32 first (rtt-run runs ol ow 0 0)]
+    (cells-push et 49) (cells-push et 50) (cells-push et 51) (cells-push et 52)
+    (cells-push et 53) (cells-push et 54) (cells-push et 55) (cells-push et 56)
+    (sc-prep scr) (rtt-line ol ow feats 0 950)
+    (let [^I32 body (rtt-run runs ol ow 0 0) ^I32 l0 (ol-count ol) ^I32 w0 (ow-count ow)]
+      (ol-set ol 0 (olf-run) body)
+      (rtt-line ol ow feats 60 990) (ow-set ow (+ w0 1) (hd-tstart) 4)
+      (let [^I32 candidate (rtt-run runs ol ow l0 w0)]
+        (rt-prep rtp) (cells-set rtp (rtp-brun) body)
+        (cells-set rtp (rtp-receipt) candidate) (cells-set rtp (rtp-receipt-win) 1)
+        (rt-adopt rtp runs first ol ow et scr)
+        (assert-that (!= (cells-at rtp (rtp-primary)) candidate) "one candidate occurrence cannot cover two confident recovered occurrences")
+        (ow-set ow (+ w0 1) (hd-tstart) 0)
+        (rt-adopt rtp runs first ol ow et scr)
+        (assert-eq (cells-at rtp (rtp-primary)) candidate "a faithful reading with a greater score may replace the recovered baseline")
+        (assert-eq (cells-at scr (sc-admit-floor)) 300 "adoption still carries the word floor")))))
+
+(deftest test-initial-reading-retains-the-declared-score-policy
+  (let [^Cells runs (new-cells) ^Cells ol (new-cells) ^Cells ow (new-cells) ^Cells feats (new-cells)
+        ^Cells rtp (new-cells) ^Cells scr (new-cells) ^Cells et (new-cells)]
+    (cells-push et 49) (cells-push et 50) (cells-push et 51) (cells-push et 52)
+    (cells-push et 53) (cells-push et 54) (cells-push et 55) (cells-push et 56)
+    (sc-prep scr) (rtt-line ol ow feats 0 950)
+    (let [^I32 first (rtt-run runs ol ow 0 0) ^I32 l0 (ol-count ol) ^I32 w0 (ow-count ow)]
+      (ol-set ol 0 (olf-run) first)
+      (rtt-line ol ow feats 60 990)
+      (ow-set ow w0 (hd-tstart) 4) (ow-set ow (+ w0 1) (hd-tstart) 4)
+      (let [^I32 candidate (rtt-run runs ol ow l0 w0)]
+        (rt-prep rtp) (cells-set rtp (rtp-receipt) candidate) (cells-set rtp (rtp-receipt-win) 1)
+        (rt-adopt rtp runs first ol ow et scr)
+        (assert-eq (cells-at rtp (rtp-primary)) candidate "a better initial full-page reading is allowed; targeted recovery is protected separately")))))
+
+(deftest test-only-unadopted-new-receipt-runs-are-excluded-from-the-signature-mask
+  (let [^Cells runs (new-cells) ^Cells rtp (new-cells) ^I32 first (or-new runs 1 0)
+        ^I32 receipt (or-new runs 1 1) ^I32 rescue (or-new runs 1 2)]
+    (or-set runs receipt (orf-pass) (op-receipt)) (or-set runs receipt (orf-wfirst) 5) (or-set runs receipt (orf-wcount) 3)
+    (or-set runs rescue (orf-pass) (op-body-ink)) (or-set runs rescue (orf-wfirst) 8) (or-set runs rescue (orf-wcount) 2)
+    (rt-prep rtp) (cells-set rtp (rtp-receipt) receipt) (cells-set rtp (rtp-frun) rescue) (cells-set rtp (rtp-primary) first)
+    (assert-eq (rt-receipt-ignored rtp runs 0) 5 "unadopted receipt word interval")
+    (assert-eq (rt-receipt-ignored rtp runs 1) 3 "the legacy emergency reading is not excluded")
+    (cells-set rtp (rtp-primary) receipt)
+    (assert-eq (rt-receipt-ignored rtp runs 1) 0 "the chosen receipt reading remains authoritative")
+    (or-set runs rescue (orf-pass) (op-receipt-rescue)) (cells-set rtp (rtp-primary) first)
+    (assert-eq (rt-receipt-ignored rtp runs 1) 5 "the adjacent main and rescue alternatives may both be excluded")))
+
+(deftest test-pdf-scan-photos-defer-without-disabling-image-photos
+  (let [^Cells rtp (new-cells)]
+    (rt-prep rtp)
+    (cells-set rtp (rtp-trigger) 1)
+    (rt-receipt-source rtp 1)
+    (assert-eq (rt-receipt-active rtp) 1 "image photo keeps its extra view")
+    (rt-receipt-source rtp 2)
+    (assert-eq (rt-receipt-active rtp) 0 "PDF scan keeps baseline recovery")
+    (rt-receipt-source rtp 6)
+    (assert-eq (rt-receipt-active rtp) 0 "script flags do not enable a PDF photo")
+    (rt-receipt-source rtp 5)
+    (assert-eq (rt-receipt-active rtp) 1 "script flags preserve image origin")
+    (cells-set rtp (rtp-trigger) 2)
+    (assert-eq (rt-receipt-active rtp) 0 "thermal lane remains reverted")))

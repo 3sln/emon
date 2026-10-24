@@ -1466,3 +1466,117 @@ func NmView(views *port.Cells, inks *port.Cells, page int32, srcview int32, src 
 	}
 	return nl
 }
+
+func NmPaperMin() int32 {
+	return 80
+}
+
+func NmPaperMax() int32 {
+	return 920
+}
+
+func NmNarrowChars() int32 {
+	return 45
+}
+
+func NmNarrowAspect() int32 {
+	return 150
+}
+
+func NmSauvolaKFaint() int32 {
+	return 26
+}
+
+func NmReceiptTrigger(born int32, paper int32, chars int32, aspect int32) int32 {
+	if born != 0 {
+		return 0
+	}
+	if (paper >= NmPaperMin()) && (paper <= NmPaperMax()) {
+		return 1
+	}
+	if (chars > 0) && ((chars <= NmNarrowChars()) && (aspect >= NmNarrowAspect())) {
+		return 2
+	}
+	return 0
+}
+
+func nmMorphAxis(src *port.Bitmap, dst *port.Bitmap, r int32, axis int32, dilate int32) int32 {
+	var x int32 = 0
+	var y int32 = 0
+	var k int32 = 0
+	var xx int32 = 0
+	var yy int32 = 0
+	var value int32 = 0
+	var pixel int32 = 0
+	for y < port.BitmapH(src) {
+		x = 0
+		for x < port.BitmapW(src) {
+			value = 255
+			if dilate == 1 {
+				value = 0
+			}
+			k = 0 - r
+			for k <= r {
+				xx = x
+				yy = y
+				if axis == 0 {
+					xx = x + k
+				} else {
+					yy = y + k
+				}
+				if ((xx >= 0) && (xx < port.BitmapW(src))) && ((yy >= 0) && (yy < port.BitmapH(src))) {
+					pixel = port.BitmapU8(src, xx, yy, 0)
+					if dilate == 1 {
+						if pixel > value {
+							value = pixel
+						}
+					} else if pixel < value {
+						value = pixel
+					}
+				}
+				k += 1
+			}
+			port.BitmapSetU8(dst, x, y, 0, value)
+			x += 1
+		}
+		y += 1
+	}
+	return 0
+}
+
+func NmPaperClose(mask *port.Bitmap, a *port.Bitmap, b *port.Bitmap, r int32) int32 {
+	nmMorphAxis(mask, a, r, 0, 1)
+	nmMorphAxis(a, b, r, 1, 1)
+	nmMorphAxis(b, a, r, 0, 0)
+	nmMorphAxis(a, mask, r, 1, 0)
+	return 0
+}
+
+func NmAnalysisInto(src *port.Bitmap, dst *port.Bitmap) int32 {
+	// D704: nearest source sample on an integer rational grid, analysis only.
+	var x int32 = 0
+	var y int32 = 0
+	var sx int32 = 0
+	var sy int32 = 0
+	for y < port.BitmapH(dst) {
+		sy = int32((int64(y) * int64(port.BitmapH(src))) / int64(port.BitmapH(dst)))
+		x = 0
+		for x < port.BitmapW(dst) {
+			sx = int32((int64(x) * int64(port.BitmapW(src))) / int64(port.BitmapW(dst)))
+			port.BitmapSetU8(dst, x, y, 0, port.BitmapU8(src, sx, sy, 0))
+			x += 1
+		}
+		y += 1
+	}
+	return 0
+}
+
+func NmPaperReceipt(pixels int32, total int32) int32 {
+	if total <= 0 {
+		return 0
+	}
+	if ((int64(pixels) * 1000) >= (int64(total) * int64(NmPaperMin()))) && ((int64(pixels) * 1000) <= (int64(total) * int64(NmPaperMax()))) {
+		return 1
+	}
+	return 0
+}

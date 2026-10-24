@@ -23,7 +23,7 @@
 (ns emon.upscale
   (:require [emon.lang :refer [I32 Cells Bitmap BitmapSet]]
             [emon.port :refer [cells-len cells-at cells-set cells-drop cells-push bms-put bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8]]
-            [emon.plan :refer [an-ocr-count an-ocr-first aw-next aw-get aw-conf aw-len]]
+            [emon.plan :refer [an-ocr-count an-ocr-first aw-next aw-get aw-conf aw-len aw-cp]]
             [emon.ocr :refer [ox-find ox-nlines ox-line-at ox-osd ox-oconf]]
             [emon.norm :refer [nm-orient nm-osd-conf]]
             [kin.lang :refer [defn return let set while if do comment
@@ -261,3 +261,24 @@
                 (set y (+ y 1))))
           (set c (+ c 1))))
     (return 0)))
+
+;; D705: do not change the historical up-score policy for ordinary upscaling.
+(defn ^:pub ^I32 up-receipt-alpha [^I32 cp]
+  (if (or (and (>= cp 48) (<= cp 57)) (or (and (>= cp 65) (<= cp 90)) (and (>= cp 97) (<= cp 122)))) (return 1))
+  (return 0))
+(defn ^:pub ^I32 up-receipt-value [^I32 conf ^I32 spanlen ^I32 alpha]
+  (if (and (== alpha 1) (>= conf 500)) (return (quot (* conf spanlen) 16)))
+  (return 0))
+
+(defn ^:pub ^I32 up-receipt-score [^Cells an ^I32 at]
+  (let [^I32 n (an-ocr-count an at) ^:mut ^I32 w (an-ocr-first an at)
+        ^:mut ^I32 i 0 ^:mut ^I32 j 0 ^:mut ^I32 cp 0 ^:mut ^I32 alpha 0 ^:mut ^I32 sum 0]
+    (while (< i n)
+      (do (set alpha 0) (set j 0)
+          (while (< j (aw-get an w (aw-len)))
+            (do (set cp (aw-cp an w j))
+                (if (== (up-receipt-alpha cp) 1) (set alpha 1))
+                (set j (+ j 1))))
+          (set sum (+ sum (up-receipt-value (aw-get an w (aw-conf)) (aw-get an w (aw-len)) alpha)))
+          (set w (aw-next an w)) (set i (+ i 1))))
+    (return sum)))

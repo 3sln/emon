@@ -185,4 +185,21 @@ public final class Upscaletest {
         emon.Testport.assertEq(emon.Port.bitmapU8(big, 0, 0, 0), 0, "black at the left");
         emon.Testport.assertEq(emon.Port.bitmapU8(big, 11, 0, 0), 255, "white at the right");
     }
+    public static void testReceiptQualityUsesConfidentAlphanumericBearingTokenLength() {
+        emon.Port.Cells ans = emon.Port.newCells();
+        int at = Plan.anOcr(ans, 31);
+        int low = Plan.anOcrWord(ans, at, 0, 0, 10, 10, 499, 0, 0);
+        Plan.anOcrCp(ans, low, 65);
+        int edge = Plan.anOcrWord(ans, at, 10, 0, 10, 10, 500, 0, 0);
+        Plan.anOcrCp(ans, edge, 57);
+        int dots = Plan.anOcrWord(ans, at, 20, 0, 10, 10, 999, 0, 0);
+        Plan.anOcrCp(ans, dots, 46);
+        Plan.anOcrCp(ans, dots, 46);
+        Plan.anOcrCp(ans, dots, 46);
+        int token = Plan.anOcrWord(ans, at, 30, 0, 10, 10, 800, 0, 0);
+        Plan.anOcrCp(ans, token, 36);
+        Plan.anOcrCp(ans, token, 65);
+        Plan.anOcrEnd(ans, at);
+        emon.Testport.assertEq(Upscale.upReceiptScore(ans, at), 131, "conf49 is ignored, conf50 is included, punctuation alone cannot vote; the full alphanumeric-bearing token contributes");
+    }
 }

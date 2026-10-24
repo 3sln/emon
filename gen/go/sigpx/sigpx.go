@@ -226,7 +226,7 @@ func spFramed(page1 int32, rules *port.Cells, r int32, pw int32) int32 {
 	return 0
 }
 
-func spMaskWords(page1 int32, owords *port.Cells, etext *port.Cells, views *port.Cells, srcview int32, zx0 int32, zy0 int32, zw int32, zh int32, mask *port.Cells) int32 {
+func spMaskWords(page1 int32, owords *port.Cells, etext *port.Cells, views *port.Cells, srcview int32, zx0 int32, zy0 int32, zw int32, zh int32, skipfirst int32, skipcount int32, mask *port.Cells) int32 {
 	// Paper over (mask 0) the boxes of the OCR words of the page that the engine was sure of and that hold at least two letters or digits (D466; a lone digit is a stroke's), inside the zone (px zx0, zy0, zw x zh). Answers the words.
 	var n int32 = evidence.OwCount(owords)
 	var i int32 = 0
@@ -242,7 +242,7 @@ func spMaskWords(page1 int32, owords *port.Cells, etext *port.Cells, views *port
 	var x int32 = 0
 	var y int32 = 0
 	for i < n {
-		if evidence.OwGet(owords, i, evidence.HdPage()) == page1 {
+		if (evidence.OwGet(owords, i, evidence.HdPage()) == page1) && ((i < skipfirst) || (i >= (skipfirst + skipcount))) {
 			if evidence.OwGet(owords, i, evidence.HdConf()) >= SpConf() {
 				ts = evidence.OwGet(owords, i, evidence.HdTstart())
 				tl = evidence.OwGet(owords, i, evidence.HdTlen())
@@ -621,7 +621,7 @@ func spJudge(page1 int32, views *port.Cells, srcview int32, owords *port.Cells, 
 	return spAdd(cand, kind, row, x0, y0, x1, y1, ink, rgb, swc, conf)
 }
 
-func spZone(page1 int32, views *port.Cells, srcview int32, owords *port.Cells, etext *port.Cells, src *port.Bitmap, rules *port.Cells, r int32, cand *port.Cells, mask *port.Cells) int32 {
+func spZone(page1 int32, views *port.Cells, srcview int32, owords *port.Cells, etext *port.Cells, src *port.Bitmap, rules *port.Cells, r int32, skipfirst int32, skipcount int32, cand *port.Cells, mask *port.Cells) int32 {
 	// Measure the zone of rules row r and, when its ink is a pen's, append a candidate to `cand` (see the head of this file). `mask` is the zone's ink map (one cell a pixel) and the
 	// statistics after it. Answers 1 when a candidate was added.
 	var rx0 int32 = evidence.RlGet(rules, r, evidence.RlfX0()) - SpSide()
@@ -668,7 +668,7 @@ func spZone(page1 int32, views *port.Cells, srcview int32, owords *port.Cells, e
 	if ink < SpMinInk() {
 		return 0
 	}
-	spMaskWords(page1, owords, etext, views, srcview, zx0, zy0, zw, zh, mask)
+	spMaskWords(page1, owords, etext, views, srcview, zx0, zy0, zw, zh, skipfirst, skipcount, mask)
 	ink = spStats(src, zx0, zy0, zw, zh, mask, zw*zh)
 	if ink < SpMinInk() {
 		return 0
@@ -676,7 +676,7 @@ func spZone(page1 int32, views *port.Cells, srcview int32, owords *port.Cells, e
 	return spJudge(page1, views, srcview, owords, etext, src, rules, r, zx0, zy0, mask, zw*zh, zw, zh, cand)
 }
 
-func SpFind(page1 int32, views *port.Cells, srcview int32, rules *port.Cells, owords *port.Cells, etext *port.Cells, src *port.Bitmap, pw int32, cand *port.Cells, mask *port.Cells) int32 {
+func SpFindWithout(page1 int32, views *port.Cells, srcview int32, rules *port.Cells, owords *port.Cells, etext *port.Cells, src *port.Bitmap, pw int32, skipfirst int32, skipcount int32, cand *port.Cells, mask *port.Cells) int32 {
 	// The candidates of page `page1` (1-based) from the tracer's rules of the raster `srcview` (a `views` row; `src` its pixels): see the head of this file; written to `cand` (cleared
 	// first). `mask` is scratch. Answers how many.
 	var n int32 = evidence.RlCount(rules)
@@ -687,12 +687,16 @@ func SpFind(page1 int32, views *port.Cells, srcview int32, rules *port.Cells, ow
 		if evidence.RlGet(rules, r, evidence.RlfPage()) == page1 {
 			if (looked < SpMax()) && ((spIsRule(rules, r, pw) == 1) && (spFramed(page1, rules, r, pw) == 0)) {
 				looked += 1
-				spZone(page1, views, srcview, owords, etext, src, rules, r, cand, mask)
+				spZone(page1, views, srcview, owords, etext, src, rules, r, skipfirst, skipcount, cand, mask)
 			}
 		}
 		r += 1
 	}
 	return port.CellsLen(cand) / SpW()
+}
+
+func SpFind(page1 int32, views *port.Cells, srcview int32, rules *port.Cells, owords *port.Cells, etext *port.Cells, src *port.Bitmap, pw int32, cand *port.Cells, mask *port.Cells) int32 {
+	return SpFindWithout(page1, views, srcview, rules, owords, etext, src, pw, 0, 0, cand, mask)
 }
 
 func SpRecord(page0 int32, cand *port.Cells, cg *port.Cells) int32 {

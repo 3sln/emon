@@ -345,4 +345,40 @@ public final class Upscale {
         }
         return 0;
     }
+    public static int upReceiptAlpha(int cp) {
+        if (((cp >= 48) && (cp <= 57)) || (((cp >= 65) && (cp <= 90)) || ((cp >= 97) && (cp <= 122)))) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int upReceiptValue(int conf, int spanlen, int alpha) {
+        if ((alpha == 1) && (conf >= 500)) {
+            return (conf * spanlen) / 16;
+        }
+        return 0;
+    }
+    public static int upReceiptScore(emon.Port.Cells an, int at) {
+        int n = Plan.anOcrCount(an, at);
+        int w = Plan.anOcrFirst(an, at);
+        int i = 0;
+        int j = 0;
+        int cp = 0;
+        int alpha = 0;
+        int sum = 0;
+        while (i < n) {
+            alpha = 0;
+            j = 0;
+            while (j < Plan.awGet(an, w, Plan.awLen())) {
+                cp = Plan.awCp(an, w, j);
+                if (upReceiptAlpha(cp) == 1) {
+                    alpha = 1;
+                }
+                j += 1;
+            }
+            sum += upReceiptValue(Plan.awGet(an, w, Plan.awConf()), Plan.awGet(an, w, Plan.awLen()), alpha);
+            w = Plan.awNext(an, w);
+            i += 1;
+        }
+        return sum;
+    }
 }

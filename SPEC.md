@@ -1109,6 +1109,22 @@ then:
    regions (which cross-check OCR — a word OCR reports where no ink exists is
    a ghost).
 
+**Receipt input views (D704–D707).** Raster views tagged `decode`, including
+the scanned-PDF path, are classified. Image inputs use their original decode
+even when first-pass OCR used an enlarged raster. Bounded nearest-sampled analysis views estimate paper extent and glyph
+geometry; they do not change the main tracer. Exact integer area comparisons
+hold the inclusive 8–92% paper bounds. PDF scan pages retain classification but defer RC3 photo reads and rescues, preserving baseline empty recovery. An upright photo-like image input gets one
+original-size Sauvola k=26/256 (about 0.10) view at PSM 3; strict page-level confident-character
+score improvement against the first pass and the completed baseline selection
+permits adoption, with individual word confidence >=300. Very confident token occurrences in selected targeted recovery lines (>=900, length >=2, ASCII alphanumeric-bearing) must survive
+in the candidate at that floor, folding ASCII case while keeping punctuation.
+When both full-page readings are empty the same view may be read once at PSM 11.
+Its raw words remain evidence even when refused. Classification, deferred reads,
+view ancestry and adoption are explicit evidence flags. The thermal extra-view
+experiment was reverted; its classifier remains measurable and its existing
+D698 emergency contrast path is unchanged. Born-digital page renders never enter this
+classifier or these receipt reads. All pixels and hashes are computed in kin.
+
 For a **born-digital** PDF the tracer's job shrinks: rules and fills are
 already present as vector paths (source `vector`), which are exact. The tracer
 still runs on the rendered page to see what the vector list cannot express

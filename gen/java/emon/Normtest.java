@@ -902,4 +902,102 @@ public final class Normtest {
         }
         emon.Testport.assertEq(Norm.nmDeskew(b, pts, prof), 0, "rules are not lines of text: a table alone has no skew to find");
     }
+    public static void testReceiptTriggerBoundariesAndBornDigitalExclusion() {
+        emon.Testport.assertEq(Norm.nmReceiptTrigger(1, 500, 20, 200), 0, "born digital never triggers");
+        emon.Testport.assertEq(Norm.nmReceiptTrigger(0, 80, 0, 0), 1, "paper lower boundary is inclusive");
+        emon.Testport.assertEq(Norm.nmReceiptTrigger(0, 920, 0, 0), 1, "paper upper boundary is inclusive");
+        emon.Testport.assertEq(Norm.nmReceiptTrigger(0, 79, 46, 150), 0, "outside both receipt features");
+        emon.Testport.assertEq(Norm.nmReceiptTrigger(0, 921, 45, 150), 2, "narrow thermal boundary is inclusive");
+        emon.Testport.assertEq(Norm.nmReceiptTrigger(0, 1000, 45, 149), 0, "a wide text block is not thermal");
+        emon.Testport.assertEq(Norm.nmReceiptTrigger(0, 1000, 0, 200), 0, "missing glyph height is not narrow");
+    }
+    public static void testReceiptPaperRegionQuarterSampleAndComponentShare() {
+        emon.Port.Bitmap src = emon.Port.bitmapNew(20, 20, 3);
+        emon.Port.Bitmap gray = emon.Port.bitmapNew(20, 20, 1);
+        emon.Port.Bitmap binary = emon.Port.bitmapNew(20, 20, 1);
+        emon.Port.BitmapSet bms = emon.Port.newBitmapSet();
+        emon.Port.Cells views = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
+        emon.Port.Cells comps = emon.Port.newCells();
+        emon.Port.Cells ws = emon.Port.newCells();
+        emon.Port.Cells sv = emon.Port.newCells();
+        emon.Port.Cells aux = emon.Port.newCells();
+        emon.Port.Cells rn = emon.Port.newCells();
+        emon.Port.Cells ri = emon.Port.newCells();
+        emon.Port.Cells cs = emon.Port.newCells();
+        emon.Port.Cells s1 = emon.Port.newCells();
+        emon.Port.Cells s2 = emon.Port.newCells();
+        emon.Port.Cells s3 = emon.Port.newCells();
+        int v = Evidence.vwNew(views, 1, Evidence.vkRender(), -1, -1, 20, 20, 30000, 0, -1, 0, 0, 0, 0, 0);
+        ntRect(src, 4, 4, 16, 16, 255, 255, 255);
+        ntRect(src, 8, 8, 12, 12, 0, 0, 0);
+        Norm.nmView(views, inks, 1, v, src, gray, binary, ws, sv, aux);
+        emon.Port.bmsPut(bms, Plan.puViewId(0, 11), 20, 20, 1);
+        emon.Testport.assertEq(Pageink.pnReceipt(1, Norm.nmBinaryView(ws), bms, 8, src, gray, emon.Port.bmsGet(bms, Plan.puViewId(0, 11)), comps, ws, rn, ri, cs, s1, s2, s3), 1, "one paper island triggers photo");
+        emon.Testport.assertEq(emon.Port.cellsAt(ws, 12907), 360, "outer paper area is nine quarter pixels, including its text-shaped hole");
+        emon.Testport.assertEq(emon.Port.cellsAt(ws, 12908), 0, "no glyphs means no narrow-column estimate");
+    }
+    public static void testPaperClosingFillsStrokeHolesWithoutExpandingPaper() {
+        emon.Port.Bitmap mask = emon.Port.bitmapNew(9, 9, 1);
+        emon.Port.Bitmap a = emon.Port.bitmapNew(9, 9, 1);
+        emon.Port.Bitmap b = emon.Port.bitmapNew(9, 9, 1);
+        emon.Port.Bitmap expected = emon.Port.bitmapNew(9, 9, 1);
+        ntRect(mask, 2, 2, 7, 7, 255, 0, 0);
+        ntRect(mask, 4, 4, 5, 5, 0, 0, 0);
+        ntRect(expected, 2, 2, 7, 7, 255, 0, 0);
+        Norm.nmPaperClose(mask, a, b, 1);
+        emon.Testport.assertEq(ntSame(mask, expected), 1, "close fills the one pixel text hole and keeps outer paper boundary");
+    }
+    public static void testAnalysisReductionSamplesSourceCoordinatesExactly() {
+        emon.Port.Bitmap src = emon.Port.bitmapNew(7, 5, 1);
+        emon.Port.Bitmap dst = emon.Port.bitmapNew(3, 2, 1);
+        int x = 0;
+        int y = 0;
+        while (y < 5) {
+            x = 0;
+            while (x < 7) {
+                emon.Port.bitmapSetU8(src, x, y, 0, x + (10 * y));
+                x += 1;
+            }
+            y += 1;
+        }
+        Norm.nmAnalysisInto(src, dst);
+        emon.Testport.assertEq(emon.Port.bitmapU8(dst, 0, 0, 0), 0, "origin");
+        emon.Testport.assertEq(emon.Port.bitmapU8(dst, 1, 0, 0), 2, "middle column");
+        emon.Testport.assertEq(emon.Port.bitmapU8(dst, 2, 0, 0), 4, "last column");
+        emon.Testport.assertEq(emon.Port.bitmapU8(dst, 0, 1, 0), 20, "second row");
+        emon.Testport.assertEq(emon.Port.bitmapU8(dst, 1, 1, 0), 22, "second row middle");
+        emon.Testport.assertEq(emon.Port.bitmapU8(dst, 2, 1, 0), 24, "second row last");
+    }
+    public static void testReceiptPaperBoundsCompareExactRatiosBeforeQuantisation() {
+        emon.Testport.assertEq(Norm.nmPaperReceipt(920, 1000), 1, "exact upper bound included");
+        emon.Testport.assertEq(Norm.nmPaperReceipt(9201, 10000), 0, "92.01 percent must not truncate into 92 percent");
+        emon.Testport.assertEq(Norm.nmPaperReceipt(799, 10000), 0, "7.99 percent is below the lower bound");
+        emon.Testport.assertEq(Norm.nmPaperReceipt(800, 10000), 1, "exact lower bound included");
+        emon.Testport.assertEq(Norm.nmPaperReceipt(3000000, 4000000), 1, "cross products use 64 bits");
+        emon.Testport.assertEq(Norm.nmPaperReceipt(0, 0), 0, "no raster is no receipt");
+    }
+    public static void testReceiptTriggerUsesOriginalDecodeWhenOcrSelectedAnEnlargement() {
+        emon.Port.BitmapSet bms = emon.Port.newBitmapSet();
+        emon.Port.Bitmap original = emon.Port.bmsPut(bms, Plan.puId(0, Plan.piDecode()), 20, 20, 3);
+        emon.Port.Bitmap enlarged = emon.Port.bitmapNew(40, 40, 3);
+        emon.Port.Bitmap gray = emon.Port.bitmapNew(40, 40, 1);
+        emon.Port.Bitmap mask = emon.Port.bitmapNew(40, 40, 1);
+        emon.Port.Cells comps = emon.Port.newCells();
+        emon.Port.Cells ws = emon.Port.newCells();
+        emon.Port.Cells aux = emon.Port.newCells();
+        emon.Port.Cells rn = emon.Port.newCells();
+        emon.Port.Cells ri = emon.Port.newCells();
+        emon.Port.Cells cs = emon.Port.newCells();
+        emon.Port.Cells s1 = emon.Port.newCells();
+        emon.Port.Cells s2 = emon.Port.newCells();
+        emon.Port.Cells s3 = emon.Port.newCells();
+        ntRect(original, 4, 4, 16, 16, 255, 255, 255);
+        Norm.nmWsInit(ws);
+        emon.Port.cellsSet(ws, 12901, 123);
+        emon.Testport.assertEq(Pageink.pnReceiptSource(1, 0, bms, 8, enlarged, gray, mask, comps, ws, aux, rn, ri, cs, s1, s2, s3), 1, "original paper island decides, not the selected enlargement");
+        emon.Testport.assertEq(emon.Port.cellsAt(ws, 12911), 9, "original quarter-scale paper pixels");
+        emon.Testport.assertEq(emon.Port.cellsAt(ws, 12912), 25, "original quarter-scale raster pixels");
+        emon.Testport.assertEq(emon.Port.cellsAt(ws, 12901), 123, "the selected raster's paper level remains intact");
+    }
 }

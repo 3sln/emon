@@ -406,6 +406,7 @@ pub(crate) fn en_stage3(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::en
         }
         node_set_attr_text(&mut m.nodes, &mut m.attrs, 0, fk_locale(), w, crate::port::cells_len(&mut m.text) - w);
     }
+    sc_write_rejected_ocr(&mut ev.oruns, &mut m.pages, &mut m.nodes, &mut m.regions, &mut m.text, &mut m.ledger, &mut s.s0, &mut s.s1, &mut s.s2);
     oc_account(&mut ev.oruns, &mut ev.owords, &mut d.et, &mut m.nodes, &mut m.regions, &mut d.mask, &mut m.ledger, &mut m.text, &mut s.s0, &mut s.s1, &mut s.s2, &mut s.s3, &mut s.s4, &mut s.s5);
     if kind == 0 {
         if c.level == 2 {

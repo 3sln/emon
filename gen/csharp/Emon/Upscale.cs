@@ -345,4 +345,40 @@ public static class Upscale {
         }
         return 0;
     }
+    public static int UpReceiptAlpha(int cp) {
+        if (((cp >= 48) && (cp <= 57)) || (((cp >= 65) && (cp <= 90)) || ((cp >= 97) && (cp <= 122)))) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int UpReceiptValue(int conf, int spanlen, int alpha) {
+        if ((alpha == 1) && (conf >= 500)) {
+            return (conf * spanlen) / 16;
+        }
+        return 0;
+    }
+    public static int UpReceiptScore(emon.Port.Cells an, int at) {
+        int n = Plan.AnOcrCount(an, at);
+        int w = Plan.AnOcrFirst(an, at);
+        int i = 0;
+        int j = 0;
+        int cp = 0;
+        int alpha = 0;
+        int sum = 0;
+        while (i < n) {
+            alpha = 0;
+            j = 0;
+            while (j < Plan.AwGet(an, w, Plan.AwLen())) {
+                cp = Plan.AwCp(an, w, j);
+                if (UpReceiptAlpha(cp) == 1) {
+                    alpha = 1;
+                }
+                j += 1;
+            }
+            sum += UpReceiptValue(Plan.AwGet(an, w, Plan.AwConf()), Plan.AwGet(an, w, Plan.AwLen()), alpha);
+            w = Plan.AwNext(an, w);
+            i += 1;
+        }
+        return sum;
+    }
 }

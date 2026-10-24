@@ -218,3 +218,32 @@ fn test_inline_derived_words_remain_whole() {
     crate::testport::assert_eq(oc_account(runs, words, et, nodes, regions, mask, ledger, text, bag, tokens, norm, tmp, raw, rt), 0, "serialized AB spans two inline text runs");
     crate::testport::assert_eq(ledger_count(ledger), 0, "the represented word is not falsely ledgered");
 }
+#[test]
+fn test_empty_diagnostic_counts_only_serialized_page_text() {
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let bag: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tokens: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let plain: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    crate::port::cells_push(text, 65);
+    crate::testport::assert_eq(oc_page_text(nodes, regions, text, 1, bag, tokens, plain), 0, "an empty body has no words");
+    let detached: i32 = node_new(nodes, nk_paragraph(), -1);
+    node_set_text(nodes, detached, 0, 1);
+    node_add_region(nodes, regions, detached, 1, 0, 0, 100, 100);
+    crate::testport::assert_eq(oc_page_text(nodes, regions, text, 1, bag, tokens, plain), 0, "a detached root is not serialized");
+    let furniture: i32 = node_new(nodes, nk_furniture(), -1);
+    node_set_text(nodes, furniture, 0, 1);
+    node_add_region(nodes, regions, furniture, 1, 0, 0, 100, 100);
+    crate::testport::assert_eq(oc_page_text(nodes, regions, text, 1, bag, tokens, plain), 0, "template metadata is not page text");
+    let p: i32 = node_new(nodes, nk_paragraph(), furniture);
+    node_set_text(nodes, p, 0, 1);
+    node_add_region(nodes, regions, p, 1, 0, 0, 100, 100);
+    crate::testport::assert_eq(oc_page_text(nodes, regions, text, 1, bag, tokens, plain), 1, "actual furniture text prevents an empty diagnostic");
+    crate::testport::assert_eq(oc_page_text(nodes, regions, text, 2, bag, tokens, plain), 0, "another page has its own text population");
+}

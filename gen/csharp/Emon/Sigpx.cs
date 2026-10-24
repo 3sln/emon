@@ -197,7 +197,7 @@ public static class Sigpx {
         }
         return 0;
     }
-    internal static int SpMaskWords(int page1, emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Cells views, int srcview, int zx0, int zy0, int zw, int zh, emon.Port.Cells mask) {
+    internal static int SpMaskWords(int page1, emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Cells views, int srcview, int zx0, int zy0, int zw, int zh, int skipfirst, int skipcount, emon.Port.Cells mask) {
         // Paper over (mask 0) the boxes of the OCR words of the page that the engine was sure of and that hold at least two letters or digits (D466; a lone digit is a stroke's), inside the zone (px zx0, zy0, zw x zh). Answers the words.
         int n = Evidence.OwCount(owords);
         int i = 0;
@@ -213,7 +213,7 @@ public static class Sigpx {
         int x = 0;
         int y = 0;
         while (i < n) {
-            if (Evidence.OwGet(owords, i, Evidence.HdPage()) == page1) {
+            if ((Evidence.OwGet(owords, i, Evidence.HdPage()) == page1) && ((i < skipfirst) || (i >= (skipfirst + skipcount)))) {
                 if (Evidence.OwGet(owords, i, Evidence.HdConf()) >= SpConf()) {
                     ts = Evidence.OwGet(owords, i, Evidence.HdTstart());
                     tl = Evidence.OwGet(owords, i, Evidence.HdTlen());
@@ -584,7 +584,7 @@ public static class Sigpx {
         rgb = ((r * 65536) + (g * 256)) + b;
         return SpAdd(cand, kind, row, x0, y0, x1, y1, ink, rgb, swc, conf);
     }
-    internal static int SpZone(int page1, emon.Port.Cells views, int srcview, emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Bitmap src, emon.Port.Cells rules, int r, emon.Port.Cells cand, emon.Port.Cells mask) {
+    internal static int SpZone(int page1, emon.Port.Cells views, int srcview, emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Bitmap src, emon.Port.Cells rules, int r, int skipfirst, int skipcount, emon.Port.Cells cand, emon.Port.Cells mask) {
         // Measure the zone of rules row r and, when its ink is a pen's, append a candidate to `cand` (see the head of this file). `mask` is the zone's ink map (one cell a pixel) and the
         // statistics after it. Answers 1 when a candidate was added.
         int rx0 = Evidence.RlGet(rules, r, Evidence.RlfX0()) - SpSide();
@@ -631,14 +631,14 @@ public static class Sigpx {
         if (ink < SpMinInk()) {
             return 0;
         }
-        SpMaskWords(page1, owords, etext, views, srcview, zx0, zy0, zw, zh, mask);
+        SpMaskWords(page1, owords, etext, views, srcview, zx0, zy0, zw, zh, skipfirst, skipcount, mask);
         ink = SpStats(src, zx0, zy0, zw, zh, mask, zw * zh);
         if (ink < SpMinInk()) {
             return 0;
         }
         return SpJudge(page1, views, srcview, owords, etext, src, rules, r, zx0, zy0, mask, zw * zh, zw, zh, cand);
     }
-    public static int SpFind(int page1, emon.Port.Cells views, int srcview, emon.Port.Cells rules, emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Bitmap src, int pw, emon.Port.Cells cand, emon.Port.Cells mask) {
+    public static int SpFindWithout(int page1, emon.Port.Cells views, int srcview, emon.Port.Cells rules, emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Bitmap src, int pw, int skipfirst, int skipcount, emon.Port.Cells cand, emon.Port.Cells mask) {
         // The candidates of page `page1` (1-based) from the tracer's rules of the raster `srcview` (a `views` row; `src` its pixels): see the head of this file; written to `cand` (cleared
         // first). `mask` is scratch. Answers how many.
         int n = Evidence.RlCount(rules);
@@ -649,12 +649,15 @@ public static class Sigpx {
             if (Evidence.RlGet(rules, r, Evidence.RlfPage()) == page1) {
                 if ((looked < SpMax()) && ((SpIsRule(rules, r, pw) == 1) && (SpFramed(page1, rules, r, pw) == 0))) {
                     looked += 1;
-                    SpZone(page1, views, srcview, owords, etext, src, rules, r, cand, mask);
+                    SpZone(page1, views, srcview, owords, etext, src, rules, r, skipfirst, skipcount, cand, mask);
                 }
             }
             r += 1;
         }
         return emon.Port.CellsLen(cand) / SpW();
+    }
+    public static int SpFind(int page1, emon.Port.Cells views, int srcview, emon.Port.Cells rules, emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Bitmap src, int pw, emon.Port.Cells cand, emon.Port.Cells mask) {
+        return SpFindWithout(page1, views, srcview, rules, owords, etext, src, pw, 0, 0, cand, mask);
     }
     public static int SpRecord(int page0, emon.Port.Cells cand, emon.Port.Cells cg) {
         // One correspondence group a candidate: no word, its box the ink's, its colour code (`sm-hue`) in `rot`, flagged `in-seal`, `seal-px` and `seal-sig` or `seal-init`. Answers the groups written.

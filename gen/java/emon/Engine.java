@@ -374,6 +374,7 @@ public final class Engine {
             }
             Model.nodeSetAttrText(m.nodes, m.attrs, 0, Model.fkLocale(), w, emon.Port.cellsLen(m.text) - w);
         }
+        Scan.scWriteRejectedOcr(ev.oruns, m.pages, m.nodes, m.regions, m.text, m.ledger, s.s0, s.s1, s.s2);
         Ocrledger.ocAccount(ev.oruns, ev.owords, d.et, m.nodes, m.regions, d.mask, m.ledger, m.text, s.s0, s.s1, s.s2, s.s3, s.s4, s.s5);
         if (kind == 0) {
             if (c.level == 2) {

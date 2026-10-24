@@ -1380,4 +1380,108 @@ public static class Norm {
         }
         return nl;
     }
+    public static int NmPaperMin() {
+        return 80;
+    }
+    public static int NmPaperMax() {
+        return 920;
+    }
+    public static int NmNarrowChars() {
+        return 45;
+    }
+    public static int NmNarrowAspect() {
+        return 150;
+    }
+    public static int NmSauvolaKFaint() {
+        return 26;
+    }
+    public static int NmReceiptTrigger(int born, int paper, int chars, int aspect) {
+        if (born != 0) {
+            return 0;
+        }
+        if ((paper >= NmPaperMin()) && (paper <= NmPaperMax())) {
+            return 1;
+        }
+        if ((chars > 0) && ((chars <= NmNarrowChars()) && (aspect >= NmNarrowAspect()))) {
+            return 2;
+        }
+        return 0;
+    }
+    internal static int NmMorphAxis(emon.Port.Bitmap src, emon.Port.Bitmap dst, int r, int axis, int dilate) {
+        int x = 0;
+        int y = 0;
+        int k = 0;
+        int xx = 0;
+        int yy = 0;
+        int value = 0;
+        int pixel = 0;
+        while (y < emon.Port.BitmapH(src)) {
+            x = 0;
+            while (x < emon.Port.BitmapW(src)) {
+                value = 255;
+                if (dilate == 1) {
+                    value = 0;
+                }
+                k = 0 - r;
+                while (k <= r) {
+                    xx = x;
+                    yy = y;
+                    if (axis == 0) {
+                        xx = x + k;
+                    } else {
+                        yy = y + k;
+                    }
+                    if (((xx >= 0) && (xx < emon.Port.BitmapW(src))) && ((yy >= 0) && (yy < emon.Port.BitmapH(src)))) {
+                        pixel = emon.Port.BitmapU8(src, xx, yy, 0);
+                        if (dilate == 1) {
+                            if (pixel > value) {
+                                value = pixel;
+                            }
+                        } else if (pixel < value) {
+                            value = pixel;
+                        }
+                    }
+                    k += 1;
+                }
+                emon.Port.BitmapSetU8(dst, x, y, 0, value);
+                x += 1;
+            }
+            y += 1;
+        }
+        return 0;
+    }
+    public static int NmPaperClose(emon.Port.Bitmap mask, emon.Port.Bitmap a, emon.Port.Bitmap b, int r) {
+        NmMorphAxis(mask, a, r, 0, 1);
+        NmMorphAxis(a, b, r, 1, 1);
+        NmMorphAxis(b, a, r, 0, 0);
+        NmMorphAxis(a, mask, r, 1, 0);
+        return 0;
+    }
+    public static int NmAnalysisInto(emon.Port.Bitmap src, emon.Port.Bitmap dst) {
+        // D704: nearest source sample on an integer rational grid, analysis only.
+        int x = 0;
+        int y = 0;
+        int sx = 0;
+        int sy = 0;
+        while (y < emon.Port.BitmapH(dst)) {
+            sy = (int) ((((long) y) * ((long) emon.Port.BitmapH(src))) / ((long) emon.Port.BitmapH(dst)));
+            x = 0;
+            while (x < emon.Port.BitmapW(dst)) {
+                sx = (int) ((((long) x) * ((long) emon.Port.BitmapW(src))) / ((long) emon.Port.BitmapW(dst)));
+                emon.Port.BitmapSetU8(dst, x, y, 0, emon.Port.BitmapU8(src, sx, sy, 0));
+                x += 1;
+            }
+            y += 1;
+        }
+        return 0;
+    }
+    public static int NmPaperReceipt(int pixels, int total) {
+        if (total <= 0) {
+            return 0;
+        }
+        if (((((long) pixels) * 1000) >= (((long) total) * ((long) NmPaperMin()))) && ((((long) pixels) * 1000) <= (((long) total) * ((long) NmPaperMax())))) {
+            return 1;
+        }
+        return 0;
+    }
 }

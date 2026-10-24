@@ -212,4 +212,32 @@ public final class Ocrledgertest {
         emon.Testport.assertEq(Ocrledger.ocAccount(runs, words, et, nodes, regions, mask, ledger, text, bag, tokens, norm, tmp, raw, rt), 0, "serialized AB spans two inline text runs");
         emon.Testport.assertEq(Model.ledgerCount(ledger), 0, "the represented word is not falsely ledgered");
     }
+    public static void testEmptyDiagnosticCountsOnlySerializedPageText() {
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells bag = emon.Port.newCells();
+        emon.Port.Cells tokens = emon.Port.newCells();
+        emon.Port.Cells plain = emon.Port.newCells();
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        emon.Port.cellsPush(text, 65);
+        emon.Testport.assertEq(Ocrledger.ocPageText(nodes, regions, text, 1, bag, tokens, plain), 0, "an empty body has no words");
+        int detached = Model.nodeNew(nodes, Model.nkParagraph(), -1);
+        Model.nodeSetText(nodes, detached, 0, 1);
+        Model.nodeAddRegion(nodes, regions, detached, 1, 0, 0, 100, 100);
+        emon.Testport.assertEq(Ocrledger.ocPageText(nodes, regions, text, 1, bag, tokens, plain), 0, "a detached root is not serialized");
+        int furniture = Model.nodeNew(nodes, Model.nkFurniture(), -1);
+        Model.nodeSetText(nodes, furniture, 0, 1);
+        Model.nodeAddRegion(nodes, regions, furniture, 1, 0, 0, 100, 100);
+        emon.Testport.assertEq(Ocrledger.ocPageText(nodes, regions, text, 1, bag, tokens, plain), 0, "template metadata is not page text");
+        int p = Model.nodeNew(nodes, Model.nkParagraph(), furniture);
+        Model.nodeSetText(nodes, p, 0, 1);
+        Model.nodeAddRegion(nodes, regions, p, 1, 0, 0, 100, 100);
+        emon.Testport.assertEq(Ocrledger.ocPageText(nodes, regions, text, 1, bag, tokens, plain), 1, "actual furniture text prevents an empty diagnostic");
+        emon.Testport.assertEq(Ocrledger.ocPageText(nodes, regions, text, 2, bag, tokens, plain), 0, "another page has its own text population");
+    }
 }

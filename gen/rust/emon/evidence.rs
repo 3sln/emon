@@ -474,6 +474,18 @@ pub fn vg_nonaffine() -> i32 {
 pub fn vg_engine_binary() -> i32 {
     return 4;
 }
+pub fn vg_receipt_photo() -> i32 {
+    return 8;
+}
+pub fn vg_receipt_thermal() -> i32 {
+    return 16;
+}
+pub fn vg_receipt_adopted() -> i32 {
+    return 32;
+}
+pub fn vg_receipt_deferred() -> i32 {
+    return 64;
+}
 pub fn vg_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "bilevel");
@@ -485,6 +497,22 @@ pub fn vg_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 4 {
         crate::port::text_ascii(t, "engine-binary");
+        return 1;
+    }
+    if code == 8 {
+        crate::port::text_ascii(t, "receipt-photo");
+        return 1;
+    }
+    if code == 16 {
+        crate::port::text_ascii(t, "receipt-thermal");
+        return 1;
+    }
+    if code == 32 {
+        crate::port::text_ascii(t, "receipt-adopted");
+        return 1;
+    }
+    if code == 64 {
+        crate::port::text_ascii(t, "receipt-deferred");
         return 1;
     }
     return 0;
@@ -1050,6 +1078,12 @@ pub fn op_re_rotated() -> i32 {
 pub fn op_upscaled() -> i32 {
     return 9;
 }
+pub fn op_receipt() -> i32 {
+    return 10;
+}
+pub fn op_receipt_rescue() -> i32 {
+    return 11;
+}
 pub fn op_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "first");
@@ -1085,6 +1119,14 @@ pub fn op_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 9 {
         crate::port::text_ascii(t, "upscaled");
+        return 1;
+    }
+    if code == 10 {
+        crate::port::text_ascii(t, "receipt");
+        return 1;
+    }
+    if code == 11 {
+        crate::port::text_ascii(t, "receipt-rescue");
         return 1;
     }
     return 0;

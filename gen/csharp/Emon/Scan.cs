@@ -782,6 +782,16 @@ public static class Scan {
     internal static int ScCap() {
         return 400;
     }
+    public static int ScAdmitFloor() {
+        // D707: optional per-page word-confidence floor, before the selection region.
+        return 2299;
+    }
+    public static int ScAdmitWord(int confidence, int floor) {
+        if ((floor > 0) && (confidence < floor)) {
+            return 0;
+        }
+        return 1;
+    }
     public static int ScSelBase() {
         // Where `sc-emit-sel`'s selection starts in the scratch.
         return 2300;
@@ -825,6 +835,7 @@ public static class Scan {
         while (emon.Port.CellsLen(scr) < (ScFateBase() + ((4 * ScFateMax()) + 2))) {
             emon.Port.CellsPush(scr, 0);
         }
+        emon.Port.CellsSet(scr, ScAdmitFloor(), 0);
         return 0;
     }
     internal static int ScIsort(emon.Port.Cells c, int from, int n) {
@@ -1941,6 +1952,9 @@ public static class Scan {
             n = Evidence.OwGet(owords, w, Evidence.HdTlen());
             conf = Evidence.OwGet(owords, w, Evidence.HdConf());
             f = 0;
+            if (ScAdmitWord(conf, emon.Port.CellsAt(scr, ScAdmitFloor())) == 0) {
+                f = 1;
+            }
             emon.Port.CellsSet(scr, fb + ((2 * fm) + i), -1);
             emon.Port.CellsSet(scr, fb + ((3 * fm) + i), 0);
             // a dot leader
@@ -3105,6 +3119,31 @@ public static class Scan {
             if ((seen == 1) && (words == 0)) {
                 Model.LedgerAdd(ledger, Model.DrOcrEmpty(), p + 1, 0, 0, Model.PageW(pages, p), Model.PageH(pages, p), 1000, Model.SrOcr());
                 rows += 1;
+            }
+            p += 1;
+        }
+        return rows;
+    }
+    public static int ScWriteRejectedOcr(emon.Port.Cells oruns, emon.Port.Cells pages, emon.Port.Cells nodes, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ledger, emon.Port.Cells bag, emon.Port.Cells tokens, emon.Port.Cells plain) {
+        // D707: nonempty OCR evidence can still yield no admitted Model text. Keep the page's ocr-empty diagnostic as well as the occurrence ledger.
+        int p = 0;
+        int r = 0;
+        int words = 0;
+        int rows = 0;
+        while (p < Model.PageCount(pages)) {
+            r = 0;
+            words = 0;
+            while (r < Evidence.OrCount(oruns)) {
+                if (Evidence.OrGet(oruns, r, 0) == (p + 1)) {
+                    words += Evidence.OrGet(oruns, r, Evidence.OrfWcount());
+                }
+                r += 1;
+            }
+            if (words > 0) {
+                if (Ocrledger.OcPageText(nodes, regions, text, p + 1, bag, tokens, plain) == 0) {
+                    Model.LedgerAdd(ledger, Model.DrOcrEmpty(), p + 1, 0, 0, Model.PageW(pages, p), Model.PageH(pages, p), 1000, Model.SrOcr());
+                    rows += 1;
+                }
             }
             p += 1;
         }

@@ -418,7 +418,7 @@ func puRunBorn(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells
 			if esc >= 0 {
 				run = esc
 			}
-			asked = retarget.RtPlan(i, input, 1, 0, rid, PuDpi(), loc, ans, bms, pageink.PnKText(), port.BmsGet(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr, comps, inks)
+			asked = retarget.RtPlan(i, input, 1, 0, rid, PuDpi(), loc, ans, bms, pageink.PnKText(), port.BmsGet(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr, comps, inks, s6)
 			// the seals and stamps in the text-free render's pixels (P8.2): the strips and crops that are read, asked in the same round as the targeted passes
 			if puPx(bms, nid, fuse) == 1 {
 				pgrow = evidence.EvPageRow(epages, i+1)
@@ -580,7 +580,8 @@ func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 in
 	nw = evidence.OwCount(owords) - w0
 	pageink.PnFeatures(i+1, bms, pageink.PnKText(), port.BmsGet(bms, rid), roid, w0, nw, ws, comps, owords, feats, scr)
 	retarget.RtPrep(rtp)
-	asked = retarget.RtPlan(i, input, 0, 0, rid, hint, loc, ans, bms, pageink.PnKText(), port.BmsGet(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr, comps, inks)
+	retarget.RtReceiptSource(rtp, maskv)
+	asked = retarget.RtPlan(i, input, 0, 0, rid, hint, loc, ans, bms, pageink.PnKText(), port.BmsGet(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr, comps, inks, s6)
 	// the seals and stamps in the page's pixels (P8.2): their strips and crops are asked in the same round as the targeted passes
 	if seals == 1 {
 		sealpx.SxFind(i+1, views, vdec, prims, inks, pw, ph, s1)
@@ -593,11 +594,15 @@ func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 in
 	retarget.RtRecord(i, vdec, rdpi, loc, ans, rtp, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
 	if seals == 1 {
 		sealpx.SxRecord(i, vdec, rdpi, loc, ans, s1, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats, refs, cg, s4)
+		nsel = retarget.RtAdopt(rtp, oruns, run, olines, owords, etext, scr)
 		// the pen strokes over a signature line of the scan (P8.3): the lines the first pass made of them are not the page's text
-		sigpx.SpFind(i+1, views, vdec, rules, owords, etext, port.BmsGet(bms, rid), pw, s5, s6)
+		sigpx.SpFindWithout(i+1, views, vdec, rules, owords, etext, port.BmsGet(bms, rid), pw, retarget.RtReceiptIgnored(rtp, oruns, 0), retarget.RtReceiptIgnored(rtp, oruns, 1), s5, s6)
 		sigpx.SpRecord(i, s5, cg)
 	}
-	nsel = retarget.RtAdopt(rtp, oruns, run, olines, owords, etext, scr)
+	if seals == 0 {
+		nsel = retarget.RtAdopt(rtp, oruns, run, olines, owords, etext, scr)
+	}
+	retarget.RtMarkAdopted(views, oruns, rtp)
 	if seals == 1 {
 		nsel = sealpx.SxDropLines(scr, nsel, olines, owords, s1)
 		nsel = sigpx.SpDropLines(scr, nsel, olines, owords, s5)

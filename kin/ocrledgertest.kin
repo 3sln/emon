@@ -4,7 +4,7 @@
             [emon.port :refer [cells-push]]
             [emon.model :refer [model-init node-new node-set-text node-add-region nk-paragraph nk-text nk-furniture ledger-count ledger-text-len]]
             [emon.evidence :refer [or-new or-set orf-wfirst orf-wcount ow-new]]
-            [emon.ocrledger :refer [oc-account]]
+            [emon.ocrledger :refer [oc-account oc-page-text]]
             [kin.lang :refer [defn return let comment]]))
 
 (deftest test-unselected-attempt-word-is-accounted
@@ -139,3 +139,21 @@
     (assert-eq (oc-account runs words et nodes regions mask ledger text bag tokens norm tmp raw rt) 0 "serialized AB spans two inline text runs")
     (assert-eq (ledger-count ledger) 0 "the represented word is not falsely ledgered")))
 
+
+(deftest test-empty-diagnostic-counts-only-serialized-page-text
+  (let [^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells)
+        ^Cells ledger (new-cells) ^Cells text (new-cells) ^Cells pages (new-cells) ^Cells layout (new-cells)
+        ^Cells bag (new-cells) ^Cells tokens (new-cells) ^Cells plain (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (cells-push text 65)
+    (assert-eq (oc-page-text nodes regions text 1 bag tokens plain) 0 "an empty body has no words")
+    (let [^I32 detached (node-new nodes (nk-paragraph) -1)]
+      (node-set-text nodes detached 0 1) (node-add-region nodes regions detached 1 0 0 100 100))
+    (assert-eq (oc-page-text nodes regions text 1 bag tokens plain) 0 "a detached root is not serialized")
+    (let [^I32 furniture (node-new nodes (nk-furniture) -1)]
+      (node-set-text nodes furniture 0 1) (node-add-region nodes regions furniture 1 0 0 100 100)
+      (assert-eq (oc-page-text nodes regions text 1 bag tokens plain) 0 "template metadata is not page text")
+      (let [^I32 p (node-new nodes (nk-paragraph) furniture)]
+        (node-set-text nodes p 0 1) (node-add-region nodes regions p 1 0 0 100 100)))
+    (assert-eq (oc-page-text nodes regions text 1 bag tokens plain) 1 "actual furniture text prevents an empty diagnostic")
+    (assert-eq (oc-page-text nodes regions text 2 bag tokens plain) 0 "another page has its own text population")))

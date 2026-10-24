@@ -33,23 +33,24 @@
 (ns emon.retarget
   (:require [emon.lang :refer [I32 Cells Bitmap BitmapSet i64 i32]]
             [emon.port :refer [cells-len cells-at cells-set cells-push bms-put bms-get bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8
-                               bitmap-hash bitmap-quarter-into bitmap-lut-into]]
-            [emon.plan :refer [an-ocr-count an-ocr-first aw-next aw-get aw-w aw-h aw-conf rq-render an-find an-ok an-arg pu-id pu-view-id pi-ocr pi-render-text-only lay-text-only]]
+                               bitmap-gray-into bitmap-hash bitmap-quarter-into bitmap-lut-into]]
+            [emon.plan :refer [an-ocr-count an-ocr-first aw-next aw-get aw-w aw-h aw-conf rq-render an-find an-ok an-arg pu-id pu-view-id pi-decode pi-ocr pi-render-text-only lay-text-only]]
             [emon.evidence :refer [ik-count ik-get ikf-count ikf-role ir-body ir-light ir-color ir-background
                                    co-count co-get cf-page cf-pxx cf-pxy cf-pxw cf-pxh cf-fill cf-holes cf-gray cf-ink cf-conf
                                    ol-new ol-set olf-run olf-retry-gap tlf-ink tlf-conf ol-get ow-get ow-count ol-count or-get or-set or-count fe-get xo-body-share rl-count rl-get rlf-page rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1
-                                   olf-px olf-py olf-pw olf-ph owf-px owf-py owf-pw owf-ph lh-first lh-count lh-x0 lh-y0 lh-x1 lh-y1 hd-x0 hd-y0 hd-x1 hd-y1 hd-conf hd-tlen hd-feat
-                                   orf-pass orf-round orf-psm orf-rx orf-ry orf-rw orf-rh orf-osd orf-oconf orf-lfirst orf-lcount
+                                   olf-px olf-py olf-pw olf-ph owf-px owf-py owf-pw owf-ph lh-first lh-count lh-x0 lh-y0 lh-x1 lh-y1 hd-x0 hd-y0 hd-x1 hd-y1 hd-conf hd-tstart hd-tlen hd-feat
+                                   orf-view orf-request orf-pass orf-round orf-psm orf-rx orf-ry orf-rw orf-rh orf-osd orf-oconf orf-lfirst orf-lcount
                                    orf-wfirst orf-wcount orf-orient
-                                   op-line op-cell op-body-ink op-text-only op-re-rotated
+                                   op-receipt-rescue op-receipt op-line op-cell op-body-ink op-text-only op-re-rotated
                                    ev-page-row ep-get ep-set epf-width epf-height
-                                   vw-new vw-get vwf-kind vwf-pxw vwf-pxh vwf-dpi vwf-layer vwf-deskew vwf-cropx vwf-cropy ev-overlap-small vk-render tl-count tl-get]]
-            [emon.norm :refer [nm-orient nm-osd-conf nm-paper-gray nm-ws-assign nm-ws-lut nm-layer-get nm-role-mask-into nm-box-ink nm-box-both]]
+                                   vg-receipt-photo vg-receipt-thermal vg-receipt-adopted vg-receipt-deferred vw-new vw-get vw-set vwf-flags vwf-kind vwf-pxw vwf-pxh vwf-dpi vwf-layer vwf-deskew vwf-cropx vwf-cropy ev-overlap-small vk-gray vk-binary vk-render tl-count tl-get]]
+            [emon.norm :refer [nm-sauvola nm-sauvola-r nm-sauvola-k-faint nm-orient nm-osd-conf nm-paper-gray nm-ws-assign nm-ws-lut nm-layer-get nm-role-mask-into nm-box-ink nm-box-both]]
+            [emon.upscale :refer [up-receipt-alpha up-receipt-value up-receipt-score]]
             [emon.player :refer [cg-get cg-set cgf-x0 cgf-y0 cgf-x1 cgf-y1 cgf-flags plg-bink plg-bink-absent]]
-            [emon.scan :refer [sc-request sc-request-at sc-request-view sc-request-view-psm sc-answer sc-lang sc-sel-set sc-sel-max sc-aux-base sc-share-base sc-partner-base sc-bonly-base
+            [emon.scan :refer [sc-sel-base sc-admit-floor sc-request sc-request-at sc-request-view sc-request-view-psm sc-answer sc-lang sc-sel-set sc-sel-max sc-aux-base sc-share-base sc-partner-base sc-bonly-base
                                sc-xtra-base sc-xtra-count]]
             [kin.lang :refer [defn return let set while if do comment
-                              + - * < > <= >= == != and or quot rem]]))
+                              + - * < > <= >= == != and or quot rem bit-and bit-or]]))
 
 ;; ------------------------------------------------------------- the settings (SPEC 9.4: named, first values, P10.1 calibrates)
 
@@ -84,6 +85,24 @@
 (defn ^I32 rt-native-empty-priority [] (comment "Existing OCR empty-line crops precede traced gaps: this bonus exceeds the largest admitted empty-line area (144000 square points).") (return 1000000))
 
 ;; ids (page-local `k`, `pu-id`): 16-127 are OCR (`pi-ocr`'s range), 128 and up crops and later kinds
+(defn ^:pub ^I32 ri-receipt [] (return 31))
+(defn ^:pub ^I32 rv-receipt [] (return 41))
+(defn ^:pub ^I32 rtp-receipt [] (return 251))
+(defn ^:pub ^I32 rtp-receipt-win [] (return 252))
+(defn ^:pub ^I32 rtp-receipt-view [] (return 258))
+(defn ^:pub ^I32 rt-receipt-min [] (comment "D705/D707: only receipt words at conf30 or above are admitted to body reconstruction.") (return 300))
+(defn ^I32 rt-receipt-flags [^I32 trigger]
+  (if (== trigger 1) (return (vg-receipt-photo)))
+  (if (== trigger 2) (return (vg-receipt-thermal)))
+  (return 0))
+(defn ^:pub ^I32 rt-receipt-mode [^I32 trigger]
+  (comment "D706: the thermal candidate regressed a non-receipt control; only the photo lane is retained.")
+  (if (== trigger 1) (return 1))
+  (return 0))
+(defn ^:pub ^I32 rt-receipt-wins [^I32 base ^I32 candidate]
+  (if (> candidate base) (return 1))
+  (return 0))
+
 (defn ^:pub ^I32 ri-thermal [] (return 30))
 (defn ^:pub ^I32 rv-thermal [] (return 40))
 (defn ^:pub ^I32 rt-thermal-min [] (comment "D698: an emergency page reading below 300 mean confidence is held as evidence, not promoted wholesale.") (return 300))
@@ -120,7 +139,17 @@
 (defn ^:pub ^I32 rtp-erased [] (comment "the share (per mille) of the whole page's area that the body-ink view paints over") (return 92))
 (defn ^:pub ^I32 rtp-frun [] (comment "D698: the one faint-thermal retry, separate from normal body-ink recovery.") (return 250))
 (defn ^:pub ^I32 rtp-hash [] (comment "two cells the pixel hash is written to") (return 254))
-(defn ^:pub ^I32 rtp-size [] (return 256))
+(defn ^:pub ^I32 rtp-factor [] (return 256))
+(defn ^:pub ^I32 rtp-trigger [] (return 257))
+(defn ^I32 rtp-source-deferred [] (return 259))
+(defn ^:pub ^I32 rt-receipt-source [^:mut ^Cells rtp ^I32 source-mask]
+  (comment "D705: PDF scans retain baseline empty recovery; source bit2 is set by pu-scan, image inputs carry bit1.")
+  (cells-set rtp (rtp-source-deferred) (quot (bit-and source-mask 2) 2))
+  (return (cells-at rtp (rtp-source-deferred))))
+(defn ^:pub ^I32 rt-receipt-active [^Cells rtp]
+  (if (!= (cells-at rtp (rtp-source-deferred)) 0) (return 0))
+  (return (rt-receipt-mode (cells-at rtp (rtp-trigger)))))
+(defn ^:pub ^I32 rtp-size [] (return 260))
 
 (defn ^:pub ^I32 rt-prep [^:mut ^Cells rtp]
   (comment "Make the scratch (`rtp-size` cells) and clear it: every run row -1, every count 0.")
@@ -131,6 +160,8 @@
       (do (cells-set rtp i 0)
           (set i (+ i 1))))
     (cells-set rtp (rtp-frun) -1)
+    (cells-set rtp (rtp-receipt) -1)
+    (cells-set rtp (rtp-receipt-view) -1)
     (cells-set rtp (rtp-brun) -1)
     (cells-set rtp (rtp-rrun) -1)
     (cells-set rtp (rtp-trun) -1)
@@ -773,20 +804,67 @@
           (set y (+ y 1))))
     (return 0)))
 
+(defn ^:pub ^I32 rt-faint-into [^Bitmap gray ^Bitmap dst ^I32 dpi ^:mut ^Cells pixels]
+  (nm-sauvola gray dst (nm-sauvola-r (* dpi 100)) (nm-sauvola-k-faint) pixels)
+  (let [^:mut ^I32 x 0 ^:mut ^I32 y 0]
+    (while (< y (bitmap-h dst))
+      (do (set x 0)
+          (while (< x (bitmap-w dst))
+            (do (bitmap-set-u8 dst x y 0 (- 255 (bitmap-u8 dst x y 0))) (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 rt-empty-receipt [^I32 trigger ^Cells ans ^I32 at]
+  (if (== (rt-receipt-mode trigger) 0) (return 1))
+  (if (< at 0) (return 0))
+  (if (!= (an-ok ans at) 1) (return 1))
+  (if (== (an-ocr-count ans at) 0) (return 1))
+  (return 0))
+
 (defn ^I32 rt-ask-thermal [^I32 page ^I32 dpi ^Cells loc ^Cells ans ^BitmapSet bms ^Bitmap gray ^I32 paper
-                             ^:mut ^Cells rtp ^:mut ^Cells rq]
-  (let [^I32 id (pu-id page (ri-thermal))
-        ^I32 vid (pu-view-id page (rv-thermal))
-        ^Bitmap v (bms-put bms vid (bitmap-w gray) (bitmap-h gray) 1)]
-    (rt-thermal-into gray v paper)
-    (bitmap-hash v rtp (rtp-hash))
+                             ^:mut ^Cells rtp ^:mut ^Cells rq ^I32 trigger ^:mut ^Cells pixels]
+  (let [^I32 id (pu-id page (ri-thermal)) ^I32 vid (pu-view-id page (rv-thermal)) ^:mut ^I32 psm 6]
+    (if (== trigger 1)
+      (let [^I32 photo (pu-view-id page (rv-receipt)) ^Bitmap faint (bms-get bms photo)]
+        (bitmap-hash faint rtp (rtp-hash))
+        (if (< (an-find ans id) 0)
+          (sc-request-view-psm rq id photo (cells-at rtp (rtp-hash)) (cells-at rtp (+ (rtp-hash) 1)) 11 300 loc))
+        (return 1)))
+    (let [^Bitmap v (bms-put bms vid (bitmap-w gray) (bitmap-h gray) 1)]
+      (rt-thermal-into gray v paper)
+      (bitmap-hash v rtp (rtp-hash)))
     (if (< (an-find ans id) 0)
-      (sc-request-view-psm rq id vid (cells-at rtp (rtp-hash)) (cells-at rtp (+ (rtp-hash) 1)) 6 dpi loc))
+      (sc-request-view-psm rq id vid (cells-at rtp (rtp-hash)) (cells-at rtp (+ (rtp-hash) 1)) psm dpi loc))
+    (return 1)))
+
+(defn ^I32 rt-ask-receipt [^I32 page ^I32 dpi ^I32 k0 ^Cells loc ^Cells ans ^BitmapSet bms ^Cells ws
+                            ^:mut ^Cells rtp ^:mut ^Cells rq ^:mut ^Cells scr ^I32 run ^Cells oruns]
+  (let [^I32 id (pu-id page (ri-receipt)) ^I32 vid (pu-view-id page (rv-receipt))
+        ^Bitmap gray (bms-get bms (pu-view-id page k0))
+        ^Bitmap original (bms-get bms (pu-id page (pi-decode)))
+        ^I32 a (an-find ans id) ^I32 first (an-find ans (or-get oruns run (orf-request)))
+        ^:mut ^I32 factor 1 ^:mut ^I32 w (bitmap-w gray) ^:mut ^I32 h (bitmap-h gray)]
+    (comment "Binarise a photo at its decoded size, even when the baseline reading was enlarged.")
+    (if (and (> (bitmap-w original) 0) (> w (bitmap-w original)))
+      (set factor (- 0 (quot w (bitmap-w original)))))
+    (cells-set rtp (rtp-factor) factor)
+    (if (< factor 0) (do (set w (bitmap-w original)) (set h (bitmap-h original))))
+    (let [^Bitmap v (bms-put bms vid w h 1)]
+      (if (< factor 0)
+        (let [^Bitmap decoded-gray (bms-put bms (pu-view-id page 42) w h 1)]
+          (bitmap-gray-into original decoded-gray)
+          (rt-faint-into decoded-gray v 300 scr))
+        (rt-faint-into gray v dpi scr))
+      (bitmap-hash v rtp (rtp-hash)))
+    (if (< a 0)
+      (sc-request-view-psm rq id vid (cells-at rtp (rtp-hash)) (cells-at rtp (+ (rtp-hash) 1)) 3 300 loc)
+      (if (and (== (an-ok ans a) 1) (>= first 0))
+        (cells-set rtp (rtp-receipt-win) (rt-receipt-wins (up-receipt-score ans first) (up-receipt-score ans a)))))
     (return 1)))
 
 (defn ^:pub ^I32 rt-plan [^I32 page ^I32 input ^I32 born ^I32 wanttext ^I32 rid ^I32 dpi ^Cells loc ^Cells ans ^BitmapSet bms ^I32 k0
                           ^Bitmap src ^:mut ^Cells ws ^:mut ^Cells oruns ^I32 run ^:mut ^Cells olines ^Cells owords ^Cells rules ^Cells tlines
-                          ^:mut ^Cells rtp ^:mut ^Cells rq ^:mut ^Cells scr ^Cells comps ^Cells inks]
+                          ^:mut ^Cells rtp ^:mut ^Cells rq ^:mut ^Cells scr ^Cells comps ^Cells inks ^:mut ^Cells pixels]
   (comment "Decide and ask what is not yet answered, in the brief's order: the table cells and the lines, the text-only render and its OCR, the body-ink view,")
   (comment "the quarter-turned view. `page` is 0-based (ids), `rid` the request id of the raster `src` that the first pass read at `dpi`, `k0` the id group")
   (comment "`emon.pageink` normalized it under, `ws` its layer workspace, `scr` the unit's scratch (`sc-prep`: the measure of every first-pass line is left in it).")
@@ -796,6 +874,9 @@
         ^I32 q (rt-turns born oruns run tlines (+ page 1))
         ^:mut ^I32 touched 0
         ^:mut ^I32 asked 0]
+    (if (== born 0) (cells-set rtp (rtp-trigger) (cells-at ws 12906)))
+    (if (and (== born 0) (and (== q 0) (== (rt-receipt-active rtp) 1)))
+      (set asked (+ asked (rt-ask-receipt page dpi k0 loc ans bms ws rtp rq pixels run oruns))))
     (if (and (== q 0) (== born 0)) (rt-gap-lines (+ page 1) dpi tlines oruns run olines owords inks))
     (if (== q 0)
       (set touched (rt-measure page bms k0 src ws dpi oruns run olines owords scr rtp comps inks)))
@@ -807,10 +888,12 @@
     (if (== (cells-at rtp (rtp-body)) 1)
       (set asked (+ asked (rt-ask-body page dpi loc ans bms rtp rq))))
     (if (and (== born 0) (and (== q 0) (== (or-get oruns run (orf-wcount)) 0)))
-      (let [^I32 ba (an-find ans (pu-id page (ri-body)))]
-        (if (or (== (cells-at rtp (rtp-body)) 0)
-                (and (>= ba 0) (and (== (an-ok ans ba) 1) (== (an-ocr-count ans ba) 0))))
-          (set asked (+ asked (rt-ask-thermal page dpi loc ans bms (bms-get bms (pu-view-id page k0)) (nm-paper-gray ws) rtp rq))))))
+      (let [^I32 ba (an-find ans (pu-id page (ri-body))) ^I32 receipt (an-find ans (pu-id page (ri-receipt))) ^I32 receipt-mode (rt-receipt-active rtp)]
+        (if (and (== (rt-empty-receipt (rt-receipt-active rtp) ans receipt) 1)
+                 (or (== (cells-at rtp (rtp-body)) 0)
+                     (and (>= ba 0) (and (== (an-ok ans ba) 1) (== (an-ocr-count ans ba) 0)))))
+          (set asked (+ asked (rt-ask-thermal page dpi loc ans bms (bms-get bms (pu-view-id page k0)) (nm-paper-gray ws) rtp rq
+                                            receipt-mode pixels))))))
     (if (!= q 0)
       (set asked (+ asked (rt-ask-rotated page dpi loc ans bms src q rtp rq))))
     (cells-set rtp (rtp-asked) asked)
@@ -830,6 +913,27 @@
   (or-set oruns run (orf-rh) h)
   (return run))
 
+(defn ^:pub ^I32 rt-receipt-view [^:mut ^Cells views ^I32 pg ^I32 srcview ^I32 dpi100 ^Cells rtp]
+  (let [^I32 factor (cells-at rtp (rtp-factor))
+        ^I32 layer (vw-get views srcview (vwf-layer))
+        ^I32 cropx (vw-get views srcview (vwf-cropx)) ^I32 cropy (vw-get views srcview (vwf-cropy))
+        ^:mut ^I32 w (vw-get views srcview (vwf-pxw)) ^:mut ^I32 h (vw-get views srcview (vwf-pxh))
+        ^:mut ^I32 dpi dpi100 ^:mut ^I32 kind (vk-binary)]
+    (if (== (cells-at rtp (rtp-trigger)) 2) (set kind (vk-gray)))
+    (if (> factor 1) (do (set w (* w factor)) (set h (* h factor)) (set dpi (* dpi factor))))
+    (if (< factor 0)
+      (do (set w (quot (+ w (- (- 0 factor) 1)) (- 0 factor)))
+          (set h (quot (+ h (- (- 0 factor) 1)) (- 0 factor))) (set dpi (quot dpi (- 0 factor)))))
+    (return (vw-new views pg kind -1 srcview w h dpi layer -1 0 0 cropx cropy (rt-receipt-flags (cells-at rtp (rtp-trigger)))))))
+
+(defn ^:pub ^I32 rt-mark-trigger [^:mut ^Cells views ^I32 srcview ^Cells rtp]
+  (let [^I32 trigger (cells-at rtp (rtp-trigger)) ^:mut ^I32 flags 0]
+    (if (== trigger 0) (return 0))
+    (set flags (bit-or (vw-get views srcview (vwf-flags)) (rt-receipt-flags trigger)))
+    (if (or (!= (cells-at rtp (rtp-q)) 0) (== (rt-receipt-active rtp) 0)) (set flags (bit-or flags (vg-receipt-deferred))))
+    (vw-set views srcview (vwf-flags) flags)
+    (return 1)))
+
 (defn ^:pub ^I32 rt-record [^I32 page ^I32 srcview ^I32 dpi100 ^Cells loc ^Cells ans
                             ^:mut ^Cells rtp ^:mut ^Cells views ^Cells epages ^:mut ^Cells etext ^:mut ^Cells oruns
                             ^:mut ^Cells oblocks ^:mut ^Cells olines ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
@@ -847,6 +951,7 @@
         ^:mut ^I32 run 0
         ^:mut ^I32 made 0
         ^:mut ^I32 rviews -1]
+    (rt-mark-trigger views srcview rtp)
     (while (< j nline)
       (do (set id (pu-id page (+ (ri-line) j)))
           (set a (an-find ans id))
@@ -900,14 +1005,29 @@
             (rt-run-meta oruns run (op-body-ink) 3 3 0 0 0 0)
             (cells-set rtp (rtp-brun) run)
             (set made (+ made 1)))))
+    (set id (pu-id page (ri-receipt)))
+    (set a (an-find ans id))
+    (if (>= a 0)
+      (let [^I32 rv (rt-receipt-view views pg srcview dpi100 rtp)]
+        (cells-set rtp (rtp-receipt-view) rv)
+        (if (== (an-ok ans a) 1)
+          (do (set run (sc-answer ans a pg rv id lang views epages etext oruns oblocks olines owords osyms oalts feats))
+              (rt-run-meta oruns run (op-receipt) 3 3 0 0 0 0)
+              (cells-set rtp (rtp-receipt) run)
+              (set made (+ made 1))))))
     (set id (pu-id page (ri-thermal)))
     (set a (an-find ans id))
     (if (>= a 0)
       (if (== (an-ok ans a) 1)
-        (do (set run (sc-answer ans a pg srcview id lang views epages etext oruns oblocks olines owords osyms oalts feats))
-            (rt-run-meta oruns run (op-body-ink) (+ 3 (cells-at rtp (rtp-body))) 6 0 0 0 0)
-            (cells-set rtp (rtp-frun) run)
-            (set made (+ made 1)))))
+        (let [^:mut ^I32 selected-view srcview ^:mut ^I32 psm 6 ^:mut ^I32 pass (op-body-ink)
+              ^I32 trigger (rt-receipt-active rtp)]
+          (if (> trigger 0) (do (set psm 11) (set pass (op-receipt-rescue))))
+          (if (and (== trigger 1) (>= (cells-at rtp (rtp-receipt-view)) 0))
+            (set selected-view (cells-at rtp (rtp-receipt-view))))
+          (set run (sc-answer ans a pg selected-view id lang views epages etext oruns oblocks olines owords osyms oalts feats))
+          (rt-run-meta oruns run pass (+ 3 (cells-at rtp (rtp-body))) psm 0 0 0 0)
+          (cells-set rtp (rtp-frun) run)
+          (set made (+ made 1)))))
     (if (!= q 0)
       (do (set id (pu-id page (ri-rotated)))
           (set a (an-find ans id))
@@ -1113,6 +1233,59 @@
           (set b (+ b 1))))
     (return best)))
 
+(defn ^I32 rt-receipt-fold [^I32 cp]
+  (if (and (>= cp 65) (<= cp 90)) (return (+ cp 32)))
+  (return cp))
+(defn ^I32 rt-receipt-word-equal [^Cells ow ^Cells et ^I32 a ^I32 b]
+  (let [^I32 n (ow-get ow a (hd-tlen)) ^I32 sa (ow-get ow a (hd-tstart)) ^I32 sb (ow-get ow b (hd-tstart)) ^:mut ^I32 j 0]
+    (if (!= n (ow-get ow b (hd-tlen))) (return 0))
+    (while (< j n)
+      (do (if (!= (rt-receipt-fold (cells-at et (+ sa j))) (rt-receipt-fold (cells-at et (+ sb j)))) (return 0))
+          (set j (+ j 1))))
+    (return 1)))
+(defn ^I32 rt-receipt-word-alpha [^Cells ow ^Cells et ^I32 w]
+  (let [^I32 s (ow-get ow w (hd-tstart)) ^I32 n (ow-get ow w (hd-tlen)) ^:mut ^I32 j 0]
+    (while (< j n)
+      (do (if (== (up-receipt-alpha (cells-at et (+ s j))) 1) (return 1)) (set j (+ j 1))))
+    (return 0)))
+(defn ^I32 rt-receipt-protect-conf [] (return 900))
+(defn ^I32 rt-receipt-protected [^Cells ow ^Cells et ^I32 w]
+  (if (and (>= (ow-get ow w (hd-conf)) (rt-receipt-protect-conf)) (>= (ow-get ow w (hd-tlen)) 2)) (return (rt-receipt-word-alpha ow et w)))
+  (return 0))
+(defn ^I32 rt-receipt-word-value [^Cells ow ^Cells et ^I32 w]
+  (return (up-receipt-value (ow-get ow w (hd-conf)) (ow-get ow w (hd-tlen)) (rt-receipt-word-alpha ow et w))))
+(defn ^I32 rt-receipt-selected-count [^Cells ol ^Cells ow ^Cells et ^Cells scr ^I32 n ^I32 word ^I32 first]
+  (let [^:mut ^I32 k 0 ^:mut ^I32 w 0 ^:mut ^I32 end 0 ^:mut ^I32 count 0 ^:mut ^I32 line 0]
+    (while (< k n)
+      (do (set line (cells-at scr (+ (sc-sel-base) k)))
+          (set w (ol-get ol line (lh-first))) (set end (+ w (ol-get ol line (lh-count))))
+          (while (< w end)
+            (do (if (and (!= (ol-get ol line (olf-run)) first) (and (== (rt-receipt-protected ow et w) 1) (== (rt-receipt-word-equal ow et w word) 1))) (set count (+ count 1)))
+                (set w (+ w 1))))
+          (set k (+ k 1))))
+    (return count)))
+(defn ^I32 rt-receipt-safe [^Cells runs ^Cells ol ^Cells ow ^Cells et ^Cells scr ^I32 n ^I32 candidate ^I32 first]
+  (comment "D705: compare against the completed baseline selection, including its body-ink recovery. A better global score must preserve very confident token occurrences from the selected targeted recovery lines; the initial reading retains its declared score policy.")
+  (let [^I32 c0 (or-get runs candidate (orf-wfirst)) ^I32 cn (+ c0 (or-get runs candidate (orf-wcount)))
+        ^:mut ^I32 k 0 ^:mut ^I32 line 0 ^:mut ^I32 w 0 ^:mut ^I32 end 0
+        ^:mut ^I32 c 0 ^:mut ^I32 count 0 ^:mut ^I32 base 0 ^:mut ^I32 quality 0]
+    (while (< k n)
+      (do (set line (cells-at scr (+ (sc-sel-base) k)))
+          (set w (ol-get ol line (lh-first))) (set end (+ w (ol-get ol line (lh-count))))
+          (while (< w end)
+            (do (set base (+ base (rt-receipt-word-value ow et w)))
+                (if (and (!= (ol-get ol line (olf-run)) first) (== (rt-receipt-protected ow et w) 1))
+                  (do (set c c0) (set count 0)
+                      (while (< c cn)
+                        (do (if (and (>= (ow-get ow c (hd-conf)) (rt-receipt-min)) (== (rt-receipt-word-equal ow et w c) 1)) (set count (+ count 1)))
+                            (set c (+ c 1))))
+                      (if (< count (rt-receipt-selected-count ol ow et scr n w first)) (return 0))))
+                (set w (+ w 1))))
+          (set k (+ k 1))))
+    (set c c0)
+    (while (< c cn) (do (set quality (+ quality (rt-receipt-word-value ow et c))) (set c (+ c 1))))
+    (return (rt-receipt-wins base quality))))
+
 (defn ^:pub ^I32 rt-adopt [^:mut ^Cells rtp ^Cells oruns ^I32 fr ^Cells olines ^Cells owords ^Cells etext ^:mut ^Cells scr]
   (comment "The lines a SCANNED page's pipeline reads, in the order it reads them, written to the selection of `scr` (`sc-sel-set`); answers how")
   (comment "many. `fr` is the first pass's run. A page that was turned (`rtp-q`) is read from its turned view's run when that scores `rt-turn-gain`")
@@ -1142,6 +1315,7 @@
         ^:mut ^I32 bn 0
         ^:mut ^I32 ly 0
         ^:mut ^I32 mono 0]
+    (cells-set scr (sc-admit-floor) 0)
     (if (and (!= q 0) (>= rrun 0))
       (do (set sf (rt-run-score oruns olines owords fr))
           (set sr (rt-run-score oruns olines owords rrun))
@@ -1263,8 +1437,46 @@
                       (while (< b bn)
                         (do (if (> (ol-get olines b (lh-count)) 0) (set n (rt-sel-add scr n b)))
                             (set b (+ b 1))))))
-                (if (> n 0) (cells-set rtp (rtp-primary) tr))))))
+                (if (> n 0)
+                  (do (cells-set rtp (rtp-primary) tr)
+                      (if (== (rt-receipt-active rtp) 1) (cells-set scr (sc-admit-floor) (rt-receipt-min)))))))))
+    (if (and (== (cells-at rtp (rtp-receipt-win)) 1) (>= (cells-at rtp (rtp-receipt)) 0))
+      (let [^I32 receipt (cells-at rtp (rtp-receipt))]
+        (if (== (rt-receipt-safe oruns olines owords etext scr n receipt fr) 1)
+          (do (cells-set rtp (rtp-primary) receipt) (cells-set scr (sc-admit-floor) (rt-receipt-min))
+              (set k 0)
+              (while (< k (sc-sel-max)) (do (cells-set scr (+ (sc-xtra-base) (+ k 1)) 0) (set k (+ k 1))))
+              (set n 0) (set k (or-get oruns receipt (orf-lfirst)))
+              (set pn (+ k (or-get oruns receipt (orf-lcount))))
+              (while (< k pn)
+                (do (if (> (ol-get olines k (lh-count)) 0) (set n (rt-sel-add scr n k))) (set k (+ k 1))))))))
     (return n)))
+
+(defn ^:pub ^I32 rt-receipt-ignored [^Cells rtp ^Cells runs ^I32 which]
+  (comment "D705: the new main/rescue runs are adjacent. Unadopted words stay evidence but cannot change the baseline signature mask. which0 first word, which1 count.")
+  (let [^I32 chosen (cells-at rtp (rtp-primary)) ^:mut ^I32 k 0 ^:mut ^I32 run 0
+        ^:mut ^I32 pass 0 ^:mut ^I32 start 0 ^:mut ^I32 end 0 ^:mut ^I32 lo -1 ^:mut ^I32 hi 0]
+    (while (< k 2)
+      (do (set run (cells-at rtp (rtp-receipt))) (if (== k 1) (set run (cells-at rtp (rtp-frun))))
+          (if (and (>= run 0) (!= run chosen))
+            (do (set pass (or-get runs run (orf-pass)))
+                (if (or (== pass (op-receipt)) (== pass (op-receipt-rescue)))
+                  (do (set start (or-get runs run (orf-wfirst))) (set end (+ start (or-get runs run (orf-wcount))))
+                      (if (> end start)
+                        (do (if (or (< lo 0) (< start lo)) (set lo start)) (if (> end hi) (set hi end))))))))
+          (set k (+ k 1))))
+    (if (< lo 0) (return 0))
+    (if (== which 0) (return lo))
+    (return (- hi lo))))
+
+(defn ^:pub ^I32 rt-mark-adopted [^:mut ^Cells views ^Cells oruns ^Cells rtp]
+  (let [^I32 run (cells-at rtp (rtp-primary)) ^:mut ^I32 pass 0 ^:mut ^I32 view 0 ^:mut ^I32 flags 0]
+    (if (< run 0) (return 0))
+    (set pass (or-get oruns run (orf-pass)))
+    (if (and (!= pass (op-receipt)) (!= pass (op-receipt-rescue))) (return 0))
+    (set view (or-get oruns run (orf-view))) (set flags (vw-get views view (vwf-flags)))
+    (vw-set views view (vwf-flags) (bit-or flags (vg-receipt-adopted)))
+    (return 1)))
 
 (defn ^:pub ^I32 rt-upright [^Cells rtp ^I32 fr ^:mut ^Cells epages ^I32 page1]
   (comment "A page that is read from its turned view (`rtp-primary` is not the first pass) by a quarter turn has the width and height of its upright self: the")

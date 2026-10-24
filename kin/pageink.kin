@@ -18,13 +18,13 @@
 ;; body mask), k0 = `pn-k-text` (8) for the raster the OCR read and `pn-k-clean` (16) for the born-digital page's text-free render; `emon.retarget`
 ;; takes 32 and up.
 (ns emon.pageink
-  (:require [emon.lang :refer [I32 Cells Bitmap BitmapSet]]
-            [emon.port :refer [cells-len cells-at cells-set cells-drop cells-push bms-put bms-get bms-has bitmap-w bitmap-h]]
-            [emon.plan :refer [pu-view-id]]
-            [emon.evidence :refer [ik-count ik-get ikf-role ikf-mask ir-body ir-light ir-background vw-count vw-get vwf-deskew
+  (:require [emon.lang :refer [I32 Cells Bitmap BitmapSet i64 i32]]
+            [emon.port :refer [cells-len cells-at cells-set cells-drop cells-push bms-put bms-get bms-has bitmap-threshold-into bitmap-w bitmap-h bitmap-u8 bitmap-set-u8 cells-grow bitmap-gray-into bitmap-hist-rgb]]
+            [emon.plan :refer [pu-id pi-decode pu-view-id]]
+            [emon.evidence :refer [co-count co-get cf-kind ck-text-like cf-view cf-pxx cf-pxy cf-pxw cf-pxh ik-count ik-get ikf-role ikf-mask ir-body ir-light ir-background vw-count vw-get vwf-deskew vwf-kind vk-decode
                                    ow-get ow-count owf-px owf-py owf-pw owf-ph hd-feat hd-x0 hd-y0 hd-x1 hd-y1]]
-            [emon.norm :refer [nm-reskew nm-view nm-label-into nm-binary-view nm-gray-view nm-paper-gray nm-mask-into nm-role-mask-into nm-feat-ocr]]
-            [emon.trace :refer [tr-trace tr-tints tr-lightfills tr-feat-ocr]]
+            [emon.norm :refer [nm-ws-init nm-ws-hist nm-layers nm-ink-merge nm-ink-paper nm-ink-min nm-ink-spike nm-paper-receipt nm-analysis-into nm-sauvola nm-paper-close nm-permille nm-receipt-trigger nm-reskew nm-view nm-label-into nm-binary-view nm-gray-view nm-paper-gray nm-mask-into nm-role-mask-into nm-feat-ocr]]
+            [emon.trace :refer [tr-runs tr-unify tr-label tr-trace tr-tints tr-lightfills tr-feat-ocr]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
 
@@ -113,6 +113,121 @@
           (set v (+ v 1))))
     (return 0)))
 
+
+;; D704: percentile selection uses bounded integer histograms, not host sorting.
+(defn ^I32 pn-percentile [^Cells hist ^I32 off ^I32 n ^I32 count ^I32 pct]
+  (let [^:mut ^I32 i 0 ^:mut ^I32 acc 0]
+    (while (< i n)
+      (do (set acc (+ acc (cells-at hist (+ off i))))
+          (if (>= (* acc 100) (* count pct)) (return i))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 pn-receipt [^I32 page ^I32 view ^BitmapSet bms ^I32 k0 ^Bitmap src ^Bitmap gray ^Bitmap mask ^Cells comps ^:mut ^Cells ws
+                              ^:mut ^Cells rn ^:mut ^Cells ri ^:mut ^Cells cs ^:mut ^Cells s1 ^:mut ^Cells s2 ^:mut ^Cells s3]
+  (comment "Receipt features only: paper's largest 8-connected region at quarter scale and the central 96 percent of glyph centres.")
+  (let [^I32 w (bitmap-w src) ^I32 h (bitmap-h src)
+        ^:mut ^I32 side w ^:mut ^I32 step 4 ^:mut ^I32 qw 0 ^:mut ^I32 qh 0 ^:mut ^I32 radius 0
+        ^:mut ^I32 x 0 ^:mut ^I32 y 0 ^:mut ^I32 nc 0 ^:mut ^I32 biggest 0
+        ^:mut ^I32 left 0 ^:mut ^I32 top 0 ^:mut ^I32 right 0 ^:mut ^I32 bottom 0
+        ^:mut ^I32 c 0 ^:mut ^I32 ch 0 ^:mut ^I32 cw 0 ^:mut ^I32 cx 0 ^:mut ^I32 cy 0
+        ^:mut ^I32 paper 0 ^:mut ^I32 n 0 ^:mut ^I32 gh 0 ^:mut ^I32 span 0 ^:mut ^I32 chars 0 ^:mut ^I32 aspect 0]
+    (if (> h side) (set side h))
+    (if (> side 3200) (set step (quot (+ side 799) 800)))
+    (set qw (quot (+ w (- step 1)) step)) (set qh (quot (+ h (- step 1)) step))
+    (set radius (quot (+ (* (quot side step) 7) 799) 800))
+    (if (or (< qw 32) (< qh 32)) (set radius 0))
+    (let [^Bitmap small (bms-put bms (pu-view-id (- page 1) (+ k0 5)) qw qh 1)
+          ^Bitmap a (bms-put bms (pu-view-id (- page 1) (+ k0 6)) qw qh 1)
+          ^Bitmap b (bms-put bms (pu-view-id (- page 1) (+ k0 7)) qw qh 1)]
+    (nm-mask-into src ws 0 mask)
+    (while (< y qh)
+      (do (set x 0)
+          (while (< x qw)
+            (do (bitmap-set-u8 small x y 0 (bitmap-u8 mask (* x step) (* y step) 0))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (nm-paper-close small a b radius)
+    (tr-runs small rn ri)
+    (tr-unify rn ri qh)
+    (set nc (tr-label rn ri qh cs s1 s2 s3))
+    (while (< c nc)
+      (do (if (> (cells-at cs (+ (* c 24) 4)) biggest)
+            (do (set biggest (cells-at cs (+ (* c 24) 4)))
+                (set top (cells-at cs (* c 24))) (set left (cells-at cs (+ (* c 24) 1)))
+                (set right (cells-at cs (+ (* c 24) 2))) (set bottom (cells-at cs (+ (* c 24) 3)))))
+          (set c (+ c 1))))
+    (comment "Outer paper area includes enclosed text holes. The complement's border component is not paper.")
+    (bitmap-threshold-into small 127 small)
+    (tr-runs small rn ri)
+    (tr-unify rn ri qh)
+    (set nc (tr-label rn ri qh cs s1 s2 s3))
+    (set c 0)
+    (while (< c nc)
+      (do (if (and (and (> (cells-at cs (* c 24)) top) (> (cells-at cs (+ (* c 24) 1)) left))
+                   (and (< (cells-at cs (+ (* c 24) 2)) right) (< (cells-at cs (+ (* c 24) 3)) bottom)))
+            (set biggest (+ biggest (cells-at cs (+ (* c 24) 4)))))
+          (set c (+ c 1))))
+    (comment "The experiment's glyph population is measured at long side <=1600, with r31/k.20; full-resolution tracer fragments are a different population.")
+    (let [^:mut ^I32 aw w ^:mut ^I32 ah h]
+      (if (> side 1600)
+        (do (set aw (i32 (quot (* (i64 w) 1600) (i64 side))))
+            (set ah (i32 (quot (* (i64 h) 1600) (i64 side))))))
+      (if (< aw 1) (set aw 1)) (if (< ah 1) (set ah 1))
+      (let [^Bitmap analysis (bms-put bms (pu-view-id (- page 1) 112) aw ah 1)
+            ^Bitmap binary (bms-put bms (pu-view-id (- page 1) 113) aw ah 1)]
+        (nm-analysis-into gray analysis)
+        (nm-sauvola analysis binary 31 51 s1)
+        (tr-runs binary rn ri) (tr-unify rn ri ah)
+        (set nc (tr-label rn ri ah cs s1 s2 s3)))
+      (cells-drop s1 0)
+      (cells-grow s1 (+ aw (* ah 2)) 0)
+      (set c 0)
+      (while (< c nc)
+        (do (set ch (- (cells-at cs (+ (* c 24) 3)) (cells-at cs (* c 24))))
+            (set cw (- (cells-at cs (+ (* c 24) 2)) (cells-at cs (+ (* c 24) 1))))
+            (if (and (and (>= ch 4) (<= ch (quot ah 15))) (and (>= cw 2) (<= cw (* ch 3))))
+              (do (set cx (+ (cells-at cs (+ (* c 24) 1)) (quot cw 2)))
+                  (set cy (+ (cells-at cs (* c 24)) (quot ch 2)))
+                  (cells-set s1 cx (+ (cells-at s1 cx) 1))
+                  (cells-set s1 (+ aw cy) (+ (cells-at s1 (+ aw cy)) 1))
+                  (cells-set s1 (+ (+ aw ah) ch) (+ (cells-at s1 (+ (+ aw ah) ch)) 1))
+                  (set n (+ n 1))))
+            (set c (+ c 1))))
+      (if (>= n 30)
+        (do (set gh (pn-percentile s1 (+ aw ah) ah n 50))
+            (set span (- (pn-percentile s1 0 aw n 98) (pn-percentile s1 0 aw n 2)))
+            (if (and (> gh 0) (> span 0))
+              (do (set chars (quot (+ span (- gh 1)) gh))
+                  (set aspect (quot (* (- (pn-percentile s1 aw ah n 98) (pn-percentile s1 aw ah n 2)) 100) span))))))
+      (set gh (quot (* gh h) ah)))
+    (set paper (nm-permille biggest (* qw qh)))
+    (if (== (nm-paper-receipt biggest (* qw qh)) 0) (set paper 0))
+    (cells-set ws 12906 (nm-receipt-trigger 0 paper chars aspect))
+    (cells-set ws 12907 (nm-permille biggest (* qw qh)))
+    (cells-set ws 12908 chars)
+    (cells-set ws 12909 aspect)
+    (cells-set ws 12910 gh)
+    (cells-set ws 12911 biggest)
+    (cells-set ws 12912 (* qw qh))
+    (return (cells-at ws 12906)))))
+
+(defn ^:pub ^I32 pn-receipt-source [^I32 page ^I32 view ^BitmapSet bms ^I32 k0 ^Bitmap src ^Bitmap gray ^Bitmap mask ^Cells comps
+                                      ^:mut ^Cells ws ^:mut ^Cells aux ^:mut ^Cells rn ^:mut ^Cells ri ^:mut ^Cells cs
+                                      ^:mut ^Cells s1 ^:mut ^Cells s2 ^:mut ^Cells s3]
+  (comment "Receipt features always describe the original decoded pixels, independently of OCR-driven enlargement adoption.")
+  (let [^Bitmap original (bms-get bms (pu-id (- page 1) (pi-decode))) ^:mut ^I32 k 12906]
+    (if (and (> (bitmap-w original) 0) (or (!= (bitmap-w original) (bitmap-w src)) (!= (bitmap-h original) (bitmap-h src))))
+      (let [^Bitmap original-gray (bms-put bms (pu-view-id (- page 1) 114) (bitmap-w original) (bitmap-h original) 1)
+            ^Bitmap original-mask (bms-put bms (pu-view-id (- page 1) 115) (bitmap-w original) (bitmap-h original) 1)]
+        (bitmap-gray-into original original-gray)
+        (nm-ws-init aux) (bitmap-hist-rgb original aux (nm-ws-hist))
+        (nm-layers aux (nm-ink-merge) (nm-ink-paper) (nm-ink-min) (nm-ink-spike))
+        (pn-receipt page view bms k0 original original-gray original-mask comps aux rn ri cs s1 s2 s3)
+        (while (< k 12913) (do (cells-set ws k (cells-at aux k)) (set k (+ k 1)))))
+      (pn-receipt page view bms k0 src gray mask comps ws rn ri cs s1 s2 s3))
+    (return (cells-at ws 12906))))
+
 (defn ^:pub ^I32 pn-ink [^I32 page ^I32 srcview ^BitmapSet bms ^I32 k0 ^Bitmap src ^I32 dpi100 ^I32 traced
                          ^:mut ^Cells views ^:mut ^Cells inks ^:mut ^Cells comps ^:mut ^Cells rules ^:mut ^Cells prims
                          ^:mut ^Cells tpts ^:mut ^Cells tlines ^:mut ^Cells refs
@@ -150,7 +265,9 @@
                     (if (or (== role (ir-light)) (== role (ir-background)))
                       (tr-tints views page mv dpi100 mask (+ ink0 k) inks prims refs s1 s2))))
               (set k (+ k 1))))
-        (tr-lightfills views page (nm-gray-view ws) dpi100 gray (nm-paper-gray ws) mask inks prims refs s1 s2)))
+        (tr-lightfills views page (nm-gray-view ws) dpi100 gray (nm-paper-gray ws) mask inks prims refs s1 s2)
+        (if (== (vw-get views srcview (vwf-kind)) (vk-decode))
+          (pn-receipt-source page (nm-binary-view ws) bms k0 src gray mask comps ws aux rn ri cs s1 s2 s3))))
     (return nl)))
 
 (defn ^:pub ^I32 pn-features [^I32 page ^BitmapSet bms ^I32 k0 ^Bitmap src ^I32 engid ^I32 w0 ^I32 nw

@@ -116,6 +116,22 @@ pub(crate) fn oc_flow(nodes: &mut crate::port::Cells, regions: &mut crate::port:
     }
     return 0;
 }
+pub fn oc_page_text(nodes: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, pg: i32, mut bag: &mut crate::port::Cells, mut tokens: &mut crate::port::Cells, mut plain: &mut crate::port::Cells) -> i32 {
+    // D707: count the serialized body and furniture tokens of one page, using the audit's exact projection.
+    let mut n: i32 = 1;
+    crate::port::cells_drop(bag, 0);
+    crate::port::cells_drop(tokens, 0);
+    if node_count(nodes) > 0 {
+        oc_flow(nodes, regions, text, 0, pg, bag, tokens, plain);
+    }
+    while n < node_count(nodes) {
+        if (node_kind(nodes, n) == nk_furniture()) && (node_parent(nodes, n) == -1) {
+            oc_flow(nodes, regions, text, n, pg, bag, tokens, plain);
+        }
+        n += 1;
+    }
+    return crate::port::cells_len(tokens) / 3;
+}
 pub(crate) fn oc_word(owords: &mut crate::port::Cells, w: i32, et: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells, mut text: &mut crate::port::Cells, bag: &mut crate::port::Cells, mut tokens: &mut crate::port::Cells, mut norm: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut rt: &mut crate::port::Cells) -> i32 {
     let mut i: i32 = 0;
     let mut j: i32 = 0;

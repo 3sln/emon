@@ -579,3 +579,285 @@ fn test_a_thermal_reading_does_not_replace_normal_recovery() {
     crate::port::cells_set(rtp, rtp_frun(), tr);
     crate::testport::assert_eq(rtt_adopt(rtp, runs, fr, ol, ow, scr), 1, "normal recovery has priority over emergency text");
 }
+#[test]
+fn test_losing_receipt_view_keeps_original_reading() {
+    crate::testport::assert_eq(rt_receipt_wins(100, 99), 0, "a losing view cannot replace Model text");
+    crate::testport::assert_eq(rt_receipt_wins(100, 100), 0, "ties keep the original");
+    crate::testport::assert_eq(rt_receipt_wins(100, 101), 1, "strictly greater confident characters adopt");
+}
+#[test]
+fn test_unselected_receipt_reading_does_not_enter_the_page_selection() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ol: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rtp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    sc_prep(scr);
+    rtt_line(ol, ow, feats, 0, 900);
+    let first: i32 = rtt_run(runs, ol, ow, 0, 0);
+    let l0: i32 = ol_count(ol);
+    let w0: i32 = ow_count(ow);
+    rtt_line(ol, ow, feats, 60, 400);
+    let candidate: i32 = rtt_run(runs, ol, ow, l0, w0);
+    rt_prep(rtp);
+    crate::port::cells_set(rtp, rtp_receipt(), candidate);
+    crate::port::cells_set(rtp, rtp_receipt_win(), 0);
+    crate::port::cells_set(scr, sc_admit_floor(), 300);
+    crate::port::cells_set(scr, sc_share_base(), 0);
+    crate::testport::assert_eq(rtt_adopt(rtp, runs, first, ol, ow, scr), 1, "only the original line is selected");
+    crate::testport::assert_eq(crate::port::cells_at(scr, sc_sel_base()), 0, "losing receipt text cannot enter the Model");
+    crate::testport::assert_eq(crate::port::cells_at(scr, sc_admit_floor()), 0, "a losing view cannot leak its confidence floor to the baseline");
+    crate::testport::assert_eq(crate::port::cells_at(rtp, rtp_primary()), first, "the original reading remains primary");
+}
+#[test]
+fn test_faint_view_is_black_ink_on_white_paper() {
+    let gray: &crate::port::Bitmap = &crate::port::bitmap_new(5, 5, 1);
+    let image: &crate::port::Bitmap = &crate::port::bitmap_new(5, 5, 1);
+    let pixels: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut x: i32 = 0;
+    let mut y: i32 = 0;
+    while y < 5 {
+        x = 0;
+        while x < 5 {
+            crate::port::bitmap_set_u8(gray, x, y, 0, 230);
+            x += 1;
+        }
+        y += 1;
+    }
+    crate::port::bitmap_set_u8(gray, 2, 2, 0, 100);
+    rt_faint_into(gray, image, 300, pixels);
+    y = 0;
+    while y < 5 {
+        x = 0;
+        while x < 5 {
+            if (x == 2) && (y == 2) {
+                crate::testport::assert_eq(crate::port::bitmap_u8(image, x, y, 0), 0, "faint ink is black");
+            } else {
+                crate::testport::assert_eq(crate::port::bitmap_u8(image, x, y, 0), 255, "paper is white");
+            }
+            x += 1;
+        }
+        y += 1;
+    }
+}
+#[test]
+fn test_empty_receipt_rescue_waits_for_the_view_and_does_not_reread_success() {
+    let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let empty: i32 = an_ocr(ans, 31);
+    an_ocr_end(ans, empty);
+    crate::testport::assert_eq(rt_empty_receipt(1, ans, -1), 0, "wait for the extra view before the all-empty rescue");
+    crate::testport::assert_eq(rt_empty_receipt(1, ans, empty), 1, "an empty view permits the rescue");
+    crate::testport::assert_eq(rt_empty_receipt(0, ans, -1), 1, "non-receipts retain the existing fallback");
+    let full: i32 = an_ocr(ans, 32);
+    let word: i32 = an_ocr_word(ans, full, 0, 0, 10, 10, 900, 0, 0);
+    an_ocr_cp(ans, word, 72);
+    an_ocr_cp(ans, word, 105);
+    an_ocr_end(ans, full);
+    crate::testport::assert_eq(rt_empty_receipt(1, ans, full), 0, "a successful photo view needs no further full-page read");
+    crate::testport::assert_eq(rt_empty_receipt(2, ans, full), 1, "the rejected thermal lane retains the original emergency planner");
+}
+#[test]
+fn test_receipt_view_geometry_does_not_depend_on_ocr_success() {
+    let views: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rtp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let source: i32 = vw_new(views, 1, vk_render(), 4, -1, 40, 60, 60000, 0, -1, 0, 0, 100, 200, 0);
+    rt_prep(rtp);
+    crate::port::cells_set(rtp, rtp_factor(), -2);
+    crate::port::cells_set(rtp, rtp_trigger(), 1);
+    let view: i32 = rt_receipt_view(views, 1, source, 60000, rtp);
+    crate::testport::assert_eq(vw_get(views, view, vwf_pxw()), 20, "original photo width");
+    crate::testport::assert_eq(vw_get(views, view, vwf_pxh()), 30, "original photo height");
+    crate::testport::assert_eq(vw_get(views, view, vwf_dpi()), 30000, "pixel scale maps to the source page");
+    crate::testport::assert_eq(vw_get(views, view, vwf_cropx()), 100, "inset image x origin is inherited");
+    crate::testport::assert_eq(vw_get(views, view, vwf_cropy()), 200, "inset image y origin is inherited");
+}
+#[test]
+fn test_trigger_evidence_retains_orientation_deferrals_without_inventing_a_read() {
+    let views: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rtp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let source: i32 = vw_new(views, 1, vk_render(), 4, -1, 40, 60, 30000, 0, -1, 0, 0, 0, 0, 0);
+    rt_prep(rtp);
+    crate::port::cells_set(rtp, rtp_trigger(), 2);
+    crate::port::cells_set(rtp, rtp_q(), 2);
+    crate::testport::assert_eq(rt_mark_trigger(views, source, rtp), 1, "the classifier fired even when the read was deferred");
+    crate::testport::assert_eq(vw_get(views, source, vwf_flags()), vg_receipt_thermal() + vg_receipt_deferred(), "class and deferral are deterministic evidence");
+}
+#[test]
+fn test_thermal_view_rollback_is_a_policy_not_a_document_exception() {
+    crate::testport::assert_eq(rt_receipt_mode(0), 0, "non-receipts");
+    crate::testport::assert_eq(rt_receipt_mode(1), 1, "photo view retained");
+    crate::testport::assert_eq(rt_receipt_mode(2), 0, "thermal view reverted for every input");
+}
+#[test]
+fn test_winning_receipt_replaces_the_whole_reading_with_its_admission_floor() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ol: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rtp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    sc_prep(scr);
+    rtt_line(ol, ow, feats, 0, 400);
+    let first: i32 = rtt_run(runs, ol, ow, 0, 0);
+    let l0: i32 = ol_count(ol);
+    let w0: i32 = ow_count(ow);
+    rtt_line(ol, ow, feats, 60, 900);
+    let candidate: i32 = rtt_run(runs, ol, ow, l0, w0);
+    rt_prep(rtp);
+    crate::port::cells_set(rtp, rtp_receipt(), candidate);
+    crate::port::cells_set(rtp, rtp_receipt_win(), 1);
+    crate::testport::assert_eq(rtt_adopt(rtp, runs, first, ol, ow, scr), 1, "the winning reading supplies the selection");
+    crate::testport::assert_eq(crate::port::cells_at(scr, sc_sel_base()), l0, "candidate line, rather than the baseline line");
+    crate::testport::assert_eq(crate::port::cells_at(rtp, rtp_primary()), candidate, "the primary run follows the selected view");
+    crate::testport::assert_eq(crate::port::cells_at(scr, sc_admit_floor()), 300, "the word floor accompanies adoption");
+}
+#[test]
+fn test_receipt_score_cannot_erase_a_very_confident_recovered_word() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ol: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rtp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let first: i32 = rtt_run(runs, ol, ow, 0, 0);
+    crate::port::cells_push(et, 49);
+    crate::port::cells_push(et, 50);
+    crate::port::cells_push(et, 51);
+    crate::port::cells_push(et, 52);
+    crate::port::cells_push(et, 53);
+    crate::port::cells_push(et, 54);
+    crate::port::cells_push(et, 55);
+    crate::port::cells_push(et, 56);
+    sc_prep(scr);
+    rtt_line(ol, ow, feats, 0, 900);
+    let body: i32 = rtt_run(runs, ol, ow, 0, 0);
+    let l0: i32 = ol_count(ol);
+    let w0: i32 = ow_count(ow);
+    ol_set(ol, 0, olf_run(), body);
+    rtt_line(ol, ow, feats, 60, 990);
+    ow_set(ow, w0, hd_tstart(), 4);
+    ow_set(ow, w0 + 1, hd_tstart(), 4);
+    let candidate: i32 = rtt_run(runs, ol, ow, l0, w0);
+    rt_prep(rtp);
+    crate::port::cells_set(rtp, rtp_brun(), body);
+    crate::port::cells_set(rtp, rtp_receipt(), candidate);
+    crate::port::cells_set(rtp, rtp_receipt_win(), 1);
+    rt_adopt(rtp, runs, first, ol, ow, et, scr);
+    crate::testport::assert_that(crate::port::cells_at(rtp, rtp_primary()) != candidate, "a higher global score cannot wash away a confident recovered word");
+    crate::testport::assert_eq(crate::port::cells_at(scr, sc_sel_base()), 0, "the baseline recovery remains selected");
+    crate::testport::assert_eq(crate::port::cells_at(scr, sc_admit_floor()), 0, "no receipt word floor on the retained baseline");
+}
+#[test]
+fn test_receipt_recovery_protection_counts_occurrences_and_allows_a_faithful_better_reading() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ol: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rtp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let first: i32 = rtt_run(runs, ol, ow, 0, 0);
+    crate::port::cells_push(et, 49);
+    crate::port::cells_push(et, 50);
+    crate::port::cells_push(et, 51);
+    crate::port::cells_push(et, 52);
+    crate::port::cells_push(et, 53);
+    crate::port::cells_push(et, 54);
+    crate::port::cells_push(et, 55);
+    crate::port::cells_push(et, 56);
+    sc_prep(scr);
+    rtt_line(ol, ow, feats, 0, 950);
+    let body: i32 = rtt_run(runs, ol, ow, 0, 0);
+    let l0: i32 = ol_count(ol);
+    let w0: i32 = ow_count(ow);
+    ol_set(ol, 0, olf_run(), body);
+    rtt_line(ol, ow, feats, 60, 990);
+    ow_set(ow, w0 + 1, hd_tstart(), 4);
+    let candidate: i32 = rtt_run(runs, ol, ow, l0, w0);
+    rt_prep(rtp);
+    crate::port::cells_set(rtp, rtp_brun(), body);
+    crate::port::cells_set(rtp, rtp_receipt(), candidate);
+    crate::port::cells_set(rtp, rtp_receipt_win(), 1);
+    rt_adopt(rtp, runs, first, ol, ow, et, scr);
+    crate::testport::assert_that(crate::port::cells_at(rtp, rtp_primary()) != candidate, "one candidate occurrence cannot cover two confident recovered occurrences");
+    ow_set(ow, w0 + 1, hd_tstart(), 0);
+    rt_adopt(rtp, runs, first, ol, ow, et, scr);
+    crate::testport::assert_eq(crate::port::cells_at(rtp, rtp_primary()), candidate, "a faithful reading with a greater score may replace the recovered baseline");
+    crate::testport::assert_eq(crate::port::cells_at(scr, sc_admit_floor()), 300, "adoption still carries the word floor");
+}
+#[test]
+fn test_initial_reading_retains_the_declared_score_policy() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ol: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rtp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::port::cells_push(et, 49);
+    crate::port::cells_push(et, 50);
+    crate::port::cells_push(et, 51);
+    crate::port::cells_push(et, 52);
+    crate::port::cells_push(et, 53);
+    crate::port::cells_push(et, 54);
+    crate::port::cells_push(et, 55);
+    crate::port::cells_push(et, 56);
+    sc_prep(scr);
+    rtt_line(ol, ow, feats, 0, 950);
+    let first: i32 = rtt_run(runs, ol, ow, 0, 0);
+    let l0: i32 = ol_count(ol);
+    let w0: i32 = ow_count(ow);
+    ol_set(ol, 0, olf_run(), first);
+    rtt_line(ol, ow, feats, 60, 990);
+    ow_set(ow, w0, hd_tstart(), 4);
+    ow_set(ow, w0 + 1, hd_tstart(), 4);
+    let candidate: i32 = rtt_run(runs, ol, ow, l0, w0);
+    rt_prep(rtp);
+    crate::port::cells_set(rtp, rtp_receipt(), candidate);
+    crate::port::cells_set(rtp, rtp_receipt_win(), 1);
+    rt_adopt(rtp, runs, first, ol, ow, et, scr);
+    crate::testport::assert_eq(crate::port::cells_at(rtp, rtp_primary()), candidate, "a better initial full-page reading is allowed; targeted recovery is protected separately");
+}
+#[test]
+fn test_only_unadopted_new_receipt_runs_are_excluded_from_the_signature_mask() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rtp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let first: i32 = or_new(runs, 1, 0);
+    let receipt: i32 = or_new(runs, 1, 1);
+    let rescue: i32 = or_new(runs, 1, 2);
+    or_set(runs, receipt, orf_pass(), op_receipt());
+    or_set(runs, receipt, orf_wfirst(), 5);
+    or_set(runs, receipt, orf_wcount(), 3);
+    or_set(runs, rescue, orf_pass(), op_body_ink());
+    or_set(runs, rescue, orf_wfirst(), 8);
+    or_set(runs, rescue, orf_wcount(), 2);
+    rt_prep(rtp);
+    crate::port::cells_set(rtp, rtp_receipt(), receipt);
+    crate::port::cells_set(rtp, rtp_frun(), rescue);
+    crate::port::cells_set(rtp, rtp_primary(), first);
+    crate::testport::assert_eq(rt_receipt_ignored(rtp, runs, 0), 5, "unadopted receipt word interval");
+    crate::testport::assert_eq(rt_receipt_ignored(rtp, runs, 1), 3, "the legacy emergency reading is not excluded");
+    crate::port::cells_set(rtp, rtp_primary(), receipt);
+    crate::testport::assert_eq(rt_receipt_ignored(rtp, runs, 1), 0, "the chosen receipt reading remains authoritative");
+    or_set(runs, rescue, orf_pass(), op_receipt_rescue());
+    crate::port::cells_set(rtp, rtp_primary(), first);
+    crate::testport::assert_eq(rt_receipt_ignored(rtp, runs, 1), 5, "the adjacent main and rescue alternatives may both be excluded");
+}
+#[test]
+fn test_pdf_scan_photos_defer_without_disabling_image_photos() {
+    let rtp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    rt_prep(rtp);
+    crate::port::cells_set(rtp, rtp_trigger(), 1);
+    rt_receipt_source(rtp, 1);
+    crate::testport::assert_eq(rt_receipt_active(rtp), 1, "image photo keeps its extra view");
+    rt_receipt_source(rtp, 2);
+    crate::testport::assert_eq(rt_receipt_active(rtp), 0, "PDF scan keeps baseline recovery");
+    rt_receipt_source(rtp, 6);
+    crate::testport::assert_eq(rt_receipt_active(rtp), 0, "script flags do not enable a PDF photo");
+    rt_receipt_source(rtp, 5);
+    crate::testport::assert_eq(rt_receipt_active(rtp), 1, "script flags preserve image origin");
+    crate::port::cells_set(rtp, rtp_trigger(), 2);
+    crate::testport::assert_eq(rt_receipt_active(rtp), 0, "thermal lane remains reverted");
+}

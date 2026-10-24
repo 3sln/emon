@@ -116,6 +116,22 @@ public final class Ocrledger {
         }
         return 0;
     }
+    public static int ocPageText(emon.Port.Cells nodes, emon.Port.Cells regions, emon.Port.Cells text, int pg, emon.Port.Cells bag, emon.Port.Cells tokens, emon.Port.Cells plain) {
+        // D707: count the serialized body and furniture tokens of one page, using the audit's exact projection.
+        int n = 1;
+        emon.Port.cellsDrop(bag, 0);
+        emon.Port.cellsDrop(tokens, 0);
+        if (Model.nodeCount(nodes) > 0) {
+            ocFlow(nodes, regions, text, 0, pg, bag, tokens, plain);
+        }
+        while (n < Model.nodeCount(nodes)) {
+            if ((Model.nodeKind(nodes, n) == Model.nkFurniture()) && (Model.nodeParent(nodes, n) == -1)) {
+                ocFlow(nodes, regions, text, n, pg, bag, tokens, plain);
+            }
+            n += 1;
+        }
+        return emon.Port.cellsLen(tokens) / 3;
+    }
     public static int ocWord(emon.Port.Cells owords, int w, emon.Port.Cells et, emon.Port.Cells ledger, emon.Port.Cells text, emon.Port.Cells bag, emon.Port.Cells tokens, emon.Port.Cells norm, emon.Port.Cells tmp, emon.Port.Cells raw, emon.Port.Cells rt) {
         int i = 0;
         int j = 0;

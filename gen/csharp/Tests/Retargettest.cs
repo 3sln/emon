@@ -577,4 +577,286 @@ public static class Retargettest {
         emon.Port.CellsSet(rtp, Retarget.RtpFrun(), tr);
         emon.Testport.AssertEq(RttAdopt(rtp, runs, fr, ol, ow, scr), 1, "normal recovery has priority over emergency text");
     }
+    [Xunit.Fact]
+    public static void TestLosingReceiptViewKeepsOriginalReading() {
+        emon.Testport.AssertEq(Retarget.RtReceiptWins(100, 99), 0, "a losing view cannot replace Model text");
+        emon.Testport.AssertEq(Retarget.RtReceiptWins(100, 100), 0, "ties keep the original");
+        emon.Testport.AssertEq(Retarget.RtReceiptWins(100, 101), 1, "strictly greater confident characters adopt");
+    }
+    [Xunit.Fact]
+    public static void TestUnselectedReceiptReadingDoesNotEnterThePageSelection() {
+        emon.Port.Cells runs = emon.Port.NewCells();
+        emon.Port.Cells ol = emon.Port.NewCells();
+        emon.Port.Cells ow = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells rtp = emon.Port.NewCells();
+        emon.Port.Cells scr = emon.Port.NewCells();
+        Scan.ScPrep(scr);
+        RttLine(ol, ow, feats, 0, 900);
+        int first = RttRun(runs, ol, ow, 0, 0);
+        int l0 = Evidence.OlCount(ol);
+        int w0 = Evidence.OwCount(ow);
+        RttLine(ol, ow, feats, 60, 400);
+        int candidate = RttRun(runs, ol, ow, l0, w0);
+        Retarget.RtPrep(rtp);
+        emon.Port.CellsSet(rtp, Retarget.RtpReceipt(), candidate);
+        emon.Port.CellsSet(rtp, Retarget.RtpReceiptWin(), 0);
+        emon.Port.CellsSet(scr, Scan.ScAdmitFloor(), 300);
+        emon.Port.CellsSet(scr, Scan.ScShareBase(), 0);
+        emon.Testport.AssertEq(RttAdopt(rtp, runs, first, ol, ow, scr), 1, "only the original line is selected");
+        emon.Testport.AssertEq(emon.Port.CellsAt(scr, Scan.ScSelBase()), 0, "losing receipt text cannot enter the Model");
+        emon.Testport.AssertEq(emon.Port.CellsAt(scr, Scan.ScAdmitFloor()), 0, "a losing view cannot leak its confidence floor to the baseline");
+        emon.Testport.AssertEq(emon.Port.CellsAt(rtp, Retarget.RtpPrimary()), first, "the original reading remains primary");
+    }
+    [Xunit.Fact]
+    public static void TestFaintViewIsBlackInkOnWhitePaper() {
+        emon.Port.Bitmap gray = emon.Port.BitmapNew(5, 5, 1);
+        emon.Port.Bitmap image = emon.Port.BitmapNew(5, 5, 1);
+        emon.Port.Cells pixels = emon.Port.NewCells();
+        int x = 0;
+        int y = 0;
+        while (y < 5) {
+            x = 0;
+            while (x < 5) {
+                emon.Port.BitmapSetU8(gray, x, y, 0, 230);
+                x += 1;
+            }
+            y += 1;
+        }
+        emon.Port.BitmapSetU8(gray, 2, 2, 0, 100);
+        Retarget.RtFaintInto(gray, image, 300, pixels);
+        y = 0;
+        while (y < 5) {
+            x = 0;
+            while (x < 5) {
+                if ((x == 2) && (y == 2)) {
+                    emon.Testport.AssertEq(emon.Port.BitmapU8(image, x, y, 0), 0, "faint ink is black");
+                } else {
+                    emon.Testport.AssertEq(emon.Port.BitmapU8(image, x, y, 0), 255, "paper is white");
+                }
+                x += 1;
+            }
+            y += 1;
+        }
+    }
+    [Xunit.Fact]
+    public static void TestEmptyReceiptRescueWaitsForTheViewAndDoesNotRereadSuccess() {
+        emon.Port.Cells ans = emon.Port.NewCells();
+        int empty = Plan.AnOcr(ans, 31);
+        Plan.AnOcrEnd(ans, empty);
+        emon.Testport.AssertEq(Retarget.RtEmptyReceipt(1, ans, -1), 0, "wait for the extra view before the all-empty rescue");
+        emon.Testport.AssertEq(Retarget.RtEmptyReceipt(1, ans, empty), 1, "an empty view permits the rescue");
+        emon.Testport.AssertEq(Retarget.RtEmptyReceipt(0, ans, -1), 1, "non-receipts retain the existing fallback");
+        int full = Plan.AnOcr(ans, 32);
+        int word = Plan.AnOcrWord(ans, full, 0, 0, 10, 10, 900, 0, 0);
+        Plan.AnOcrCp(ans, word, 72);
+        Plan.AnOcrCp(ans, word, 105);
+        Plan.AnOcrEnd(ans, full);
+        emon.Testport.AssertEq(Retarget.RtEmptyReceipt(1, ans, full), 0, "a successful photo view needs no further full-page read");
+        emon.Testport.AssertEq(Retarget.RtEmptyReceipt(2, ans, full), 1, "the rejected thermal lane retains the original emergency planner");
+    }
+    [Xunit.Fact]
+    public static void TestReceiptViewGeometryDoesNotDependOnOcrSuccess() {
+        emon.Port.Cells views = emon.Port.NewCells();
+        emon.Port.Cells rtp = emon.Port.NewCells();
+        int source = Evidence.VwNew(views, 1, Evidence.VkRender(), 4, -1, 40, 60, 60000, 0, -1, 0, 0, 100, 200, 0);
+        Retarget.RtPrep(rtp);
+        emon.Port.CellsSet(rtp, Retarget.RtpFactor(), -2);
+        emon.Port.CellsSet(rtp, Retarget.RtpTrigger(), 1);
+        int view = Retarget.RtReceiptView(views, 1, source, 60000, rtp);
+        emon.Testport.AssertEq(Evidence.VwGet(views, view, Evidence.VwfPxw()), 20, "original photo width");
+        emon.Testport.AssertEq(Evidence.VwGet(views, view, Evidence.VwfPxh()), 30, "original photo height");
+        emon.Testport.AssertEq(Evidence.VwGet(views, view, Evidence.VwfDpi()), 30000, "pixel scale maps to the source page");
+        emon.Testport.AssertEq(Evidence.VwGet(views, view, Evidence.VwfCropx()), 100, "inset image x origin is inherited");
+        emon.Testport.AssertEq(Evidence.VwGet(views, view, Evidence.VwfCropy()), 200, "inset image y origin is inherited");
+    }
+    [Xunit.Fact]
+    public static void TestTriggerEvidenceRetainsOrientationDeferralsWithoutInventingARead() {
+        emon.Port.Cells views = emon.Port.NewCells();
+        emon.Port.Cells rtp = emon.Port.NewCells();
+        int source = Evidence.VwNew(views, 1, Evidence.VkRender(), 4, -1, 40, 60, 30000, 0, -1, 0, 0, 0, 0, 0);
+        Retarget.RtPrep(rtp);
+        emon.Port.CellsSet(rtp, Retarget.RtpTrigger(), 2);
+        emon.Port.CellsSet(rtp, Retarget.RtpQ(), 2);
+        emon.Testport.AssertEq(Retarget.RtMarkTrigger(views, source, rtp), 1, "the classifier fired even when the read was deferred");
+        emon.Testport.AssertEq(Evidence.VwGet(views, source, Evidence.VwfFlags()), Evidence.VgReceiptThermal() + Evidence.VgReceiptDeferred(), "class and deferral are deterministic evidence");
+    }
+    [Xunit.Fact]
+    public static void TestThermalViewRollbackIsAPolicyNotADocumentException() {
+        emon.Testport.AssertEq(Retarget.RtReceiptMode(0), 0, "non-receipts");
+        emon.Testport.AssertEq(Retarget.RtReceiptMode(1), 1, "photo view retained");
+        emon.Testport.AssertEq(Retarget.RtReceiptMode(2), 0, "thermal view reverted for every input");
+    }
+    [Xunit.Fact]
+    public static void TestWinningReceiptReplacesTheWholeReadingWithItsAdmissionFloor() {
+        emon.Port.Cells runs = emon.Port.NewCells();
+        emon.Port.Cells ol = emon.Port.NewCells();
+        emon.Port.Cells ow = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells rtp = emon.Port.NewCells();
+        emon.Port.Cells scr = emon.Port.NewCells();
+        Scan.ScPrep(scr);
+        RttLine(ol, ow, feats, 0, 400);
+        int first = RttRun(runs, ol, ow, 0, 0);
+        int l0 = Evidence.OlCount(ol);
+        int w0 = Evidence.OwCount(ow);
+        RttLine(ol, ow, feats, 60, 900);
+        int candidate = RttRun(runs, ol, ow, l0, w0);
+        Retarget.RtPrep(rtp);
+        emon.Port.CellsSet(rtp, Retarget.RtpReceipt(), candidate);
+        emon.Port.CellsSet(rtp, Retarget.RtpReceiptWin(), 1);
+        emon.Testport.AssertEq(RttAdopt(rtp, runs, first, ol, ow, scr), 1, "the winning reading supplies the selection");
+        emon.Testport.AssertEq(emon.Port.CellsAt(scr, Scan.ScSelBase()), l0, "candidate line, rather than the baseline line");
+        emon.Testport.AssertEq(emon.Port.CellsAt(rtp, Retarget.RtpPrimary()), candidate, "the primary run follows the selected view");
+        emon.Testport.AssertEq(emon.Port.CellsAt(scr, Scan.ScAdmitFloor()), 300, "the word floor accompanies adoption");
+    }
+    [Xunit.Fact]
+    public static void TestReceiptScoreCannotEraseAVeryConfidentRecoveredWord() {
+        emon.Port.Cells runs = emon.Port.NewCells();
+        emon.Port.Cells ol = emon.Port.NewCells();
+        emon.Port.Cells ow = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells rtp = emon.Port.NewCells();
+        emon.Port.Cells scr = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        int first = RttRun(runs, ol, ow, 0, 0);
+        emon.Port.CellsPush(et, 49);
+        emon.Port.CellsPush(et, 50);
+        emon.Port.CellsPush(et, 51);
+        emon.Port.CellsPush(et, 52);
+        emon.Port.CellsPush(et, 53);
+        emon.Port.CellsPush(et, 54);
+        emon.Port.CellsPush(et, 55);
+        emon.Port.CellsPush(et, 56);
+        Scan.ScPrep(scr);
+        RttLine(ol, ow, feats, 0, 900);
+        int body = RttRun(runs, ol, ow, 0, 0);
+        int l0 = Evidence.OlCount(ol);
+        int w0 = Evidence.OwCount(ow);
+        Evidence.OlSet(ol, 0, Evidence.OlfRun(), body);
+        RttLine(ol, ow, feats, 60, 990);
+        Evidence.OwSet(ow, w0, Evidence.HdTstart(), 4);
+        Evidence.OwSet(ow, w0 + 1, Evidence.HdTstart(), 4);
+        int candidate = RttRun(runs, ol, ow, l0, w0);
+        Retarget.RtPrep(rtp);
+        emon.Port.CellsSet(rtp, Retarget.RtpBrun(), body);
+        emon.Port.CellsSet(rtp, Retarget.RtpReceipt(), candidate);
+        emon.Port.CellsSet(rtp, Retarget.RtpReceiptWin(), 1);
+        Retarget.RtAdopt(rtp, runs, first, ol, ow, et, scr);
+        emon.Testport.AssertThat(emon.Port.CellsAt(rtp, Retarget.RtpPrimary()) != candidate, "a higher global score cannot wash away a confident recovered word");
+        emon.Testport.AssertEq(emon.Port.CellsAt(scr, Scan.ScSelBase()), 0, "the baseline recovery remains selected");
+        emon.Testport.AssertEq(emon.Port.CellsAt(scr, Scan.ScAdmitFloor()), 0, "no receipt word floor on the retained baseline");
+    }
+    [Xunit.Fact]
+    public static void TestReceiptRecoveryProtectionCountsOccurrencesAndAllowsAFaithfulBetterReading() {
+        emon.Port.Cells runs = emon.Port.NewCells();
+        emon.Port.Cells ol = emon.Port.NewCells();
+        emon.Port.Cells ow = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells rtp = emon.Port.NewCells();
+        emon.Port.Cells scr = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        int first = RttRun(runs, ol, ow, 0, 0);
+        emon.Port.CellsPush(et, 49);
+        emon.Port.CellsPush(et, 50);
+        emon.Port.CellsPush(et, 51);
+        emon.Port.CellsPush(et, 52);
+        emon.Port.CellsPush(et, 53);
+        emon.Port.CellsPush(et, 54);
+        emon.Port.CellsPush(et, 55);
+        emon.Port.CellsPush(et, 56);
+        Scan.ScPrep(scr);
+        RttLine(ol, ow, feats, 0, 950);
+        int body = RttRun(runs, ol, ow, 0, 0);
+        int l0 = Evidence.OlCount(ol);
+        int w0 = Evidence.OwCount(ow);
+        Evidence.OlSet(ol, 0, Evidence.OlfRun(), body);
+        RttLine(ol, ow, feats, 60, 990);
+        Evidence.OwSet(ow, w0 + 1, Evidence.HdTstart(), 4);
+        int candidate = RttRun(runs, ol, ow, l0, w0);
+        Retarget.RtPrep(rtp);
+        emon.Port.CellsSet(rtp, Retarget.RtpBrun(), body);
+        emon.Port.CellsSet(rtp, Retarget.RtpReceipt(), candidate);
+        emon.Port.CellsSet(rtp, Retarget.RtpReceiptWin(), 1);
+        Retarget.RtAdopt(rtp, runs, first, ol, ow, et, scr);
+        emon.Testport.AssertThat(emon.Port.CellsAt(rtp, Retarget.RtpPrimary()) != candidate, "one candidate occurrence cannot cover two confident recovered occurrences");
+        Evidence.OwSet(ow, w0 + 1, Evidence.HdTstart(), 0);
+        Retarget.RtAdopt(rtp, runs, first, ol, ow, et, scr);
+        emon.Testport.AssertEq(emon.Port.CellsAt(rtp, Retarget.RtpPrimary()), candidate, "a faithful reading with a greater score may replace the recovered baseline");
+        emon.Testport.AssertEq(emon.Port.CellsAt(scr, Scan.ScAdmitFloor()), 300, "adoption still carries the word floor");
+    }
+    [Xunit.Fact]
+    public static void TestInitialReadingRetainsTheDeclaredScorePolicy() {
+        emon.Port.Cells runs = emon.Port.NewCells();
+        emon.Port.Cells ol = emon.Port.NewCells();
+        emon.Port.Cells ow = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells rtp = emon.Port.NewCells();
+        emon.Port.Cells scr = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.CellsPush(et, 49);
+        emon.Port.CellsPush(et, 50);
+        emon.Port.CellsPush(et, 51);
+        emon.Port.CellsPush(et, 52);
+        emon.Port.CellsPush(et, 53);
+        emon.Port.CellsPush(et, 54);
+        emon.Port.CellsPush(et, 55);
+        emon.Port.CellsPush(et, 56);
+        Scan.ScPrep(scr);
+        RttLine(ol, ow, feats, 0, 950);
+        int first = RttRun(runs, ol, ow, 0, 0);
+        int l0 = Evidence.OlCount(ol);
+        int w0 = Evidence.OwCount(ow);
+        Evidence.OlSet(ol, 0, Evidence.OlfRun(), first);
+        RttLine(ol, ow, feats, 60, 990);
+        Evidence.OwSet(ow, w0, Evidence.HdTstart(), 4);
+        Evidence.OwSet(ow, w0 + 1, Evidence.HdTstart(), 4);
+        int candidate = RttRun(runs, ol, ow, l0, w0);
+        Retarget.RtPrep(rtp);
+        emon.Port.CellsSet(rtp, Retarget.RtpReceipt(), candidate);
+        emon.Port.CellsSet(rtp, Retarget.RtpReceiptWin(), 1);
+        Retarget.RtAdopt(rtp, runs, first, ol, ow, et, scr);
+        emon.Testport.AssertEq(emon.Port.CellsAt(rtp, Retarget.RtpPrimary()), candidate, "a better initial full-page reading is allowed; targeted recovery is protected separately");
+    }
+    [Xunit.Fact]
+    public static void TestOnlyUnadoptedNewReceiptRunsAreExcludedFromTheSignatureMask() {
+        emon.Port.Cells runs = emon.Port.NewCells();
+        emon.Port.Cells rtp = emon.Port.NewCells();
+        int first = Evidence.OrNew(runs, 1, 0);
+        int receipt = Evidence.OrNew(runs, 1, 1);
+        int rescue = Evidence.OrNew(runs, 1, 2);
+        Evidence.OrSet(runs, receipt, Evidence.OrfPass(), Evidence.OpReceipt());
+        Evidence.OrSet(runs, receipt, Evidence.OrfWfirst(), 5);
+        Evidence.OrSet(runs, receipt, Evidence.OrfWcount(), 3);
+        Evidence.OrSet(runs, rescue, Evidence.OrfPass(), Evidence.OpBodyInk());
+        Evidence.OrSet(runs, rescue, Evidence.OrfWfirst(), 8);
+        Evidence.OrSet(runs, rescue, Evidence.OrfWcount(), 2);
+        Retarget.RtPrep(rtp);
+        emon.Port.CellsSet(rtp, Retarget.RtpReceipt(), receipt);
+        emon.Port.CellsSet(rtp, Retarget.RtpFrun(), rescue);
+        emon.Port.CellsSet(rtp, Retarget.RtpPrimary(), first);
+        emon.Testport.AssertEq(Retarget.RtReceiptIgnored(rtp, runs, 0), 5, "unadopted receipt word interval");
+        emon.Testport.AssertEq(Retarget.RtReceiptIgnored(rtp, runs, 1), 3, "the legacy emergency reading is not excluded");
+        emon.Port.CellsSet(rtp, Retarget.RtpPrimary(), receipt);
+        emon.Testport.AssertEq(Retarget.RtReceiptIgnored(rtp, runs, 1), 0, "the chosen receipt reading remains authoritative");
+        Evidence.OrSet(runs, rescue, Evidence.OrfPass(), Evidence.OpReceiptRescue());
+        emon.Port.CellsSet(rtp, Retarget.RtpPrimary(), first);
+        emon.Testport.AssertEq(Retarget.RtReceiptIgnored(rtp, runs, 1), 5, "the adjacent main and rescue alternatives may both be excluded");
+    }
+    [Xunit.Fact]
+    public static void TestPdfScanPhotosDeferWithoutDisablingImagePhotos() {
+        emon.Port.Cells rtp = emon.Port.NewCells();
+        Retarget.RtPrep(rtp);
+        emon.Port.CellsSet(rtp, Retarget.RtpTrigger(), 1);
+        Retarget.RtReceiptSource(rtp, 1);
+        emon.Testport.AssertEq(Retarget.RtReceiptActive(rtp), 1, "image photo keeps its extra view");
+        Retarget.RtReceiptSource(rtp, 2);
+        emon.Testport.AssertEq(Retarget.RtReceiptActive(rtp), 0, "PDF scan keeps baseline recovery");
+        Retarget.RtReceiptSource(rtp, 6);
+        emon.Testport.AssertEq(Retarget.RtReceiptActive(rtp), 0, "script flags do not enable a PDF photo");
+        Retarget.RtReceiptSource(rtp, 5);
+        emon.Testport.AssertEq(Retarget.RtReceiptActive(rtp), 1, "script flags preserve image origin");
+        emon.Port.CellsSet(rtp, Retarget.RtpTrigger(), 2);
+        emon.Testport.AssertEq(Retarget.RtReceiptActive(rtp), 0, "thermal lane remains reverted");
+    }
 }

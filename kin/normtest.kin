@@ -3,12 +3,14 @@
 ;; by hand (a page of known colours, so the layer counts are exact); banded Sauvola against P2.7's whole-page
 ;; `ras-sauvola`; deskew against pages drawn at a known skew.
 (ns emon.normtest
-  (:require [emon.lang :refer [I32 I64 Bitmap Cells i64 i32]]
-            [emon.test :refer [deftest assert-eq assert-eq64 assert-that new-cells]]
-            [emon.port :refer [bitmap-new bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8
+  (:require [emon.lang :refer [I32 I64 Bitmap BitmapSet Cells i64 i32]]
+            [emon.test :refer [deftest assert-eq assert-eq64 assert-that new-cells new-bitmap-set]]
+            [emon.port :refer [bms-put bms-get bitmap-new bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8
                                bitmap-gray-into bitmap-hist-rgb bitmap-lut-into bitmap-hash bitmap-quarter-into
                                cells-len cells-at cells-set cells-push cells-grow]]
             [emon.splitmix :refer [sm-seed sm-below]]
+            [emon.plan :refer [pu-id pi-decode pu-view-id]]
+            [emon.pageink :refer [pn-receipt pn-receipt-source]]
             [emon.raster :refer [ras-integral ras-sqrt-table ras-sauvola]]
             [emon.evidence :refer [vw-new vw-get vw-count ik-get ik-count fe-new fe-get
                                    vk-render vk-decode vk-gray vk-binary vk-ink-mask
@@ -25,7 +27,7 @@
                                nm-sqrt-table nm-sauvola nm-sauvola-r
                                nm-skew-points nm-skew-points-cap nm-deskew nm-orient nm-reskew nm-osd-conf
                                nm-box-ink nm-box-both nm-box-gray-sum nm-feat-ocr nm-feat-text nm-box-px
-                               nm-view nm-gray-view nm-binary-view]]
+                               nm-paper-receipt nm-analysis-into nm-paper-close nm-receipt-trigger nm-view nm-gray-view nm-binary-view]]
             [kin.lang :refer [defn let set while do comment return if
                               + - * < > <= >= == != and or quot rem bit-and]]))
 
@@ -864,3 +866,78 @@
       (do (nt-rect b (+ 250 (* k 99)) 200 (+ (+ 250 (* k 99)) 3) 503 255 0 0)
           (set k (+ k 1))))
     (assert-eq (nm-deskew b pts prof) 0 "rules are not lines of text: a table alone has no skew to find")))
+
+;; D704: write the receipt decision laws before wiring any OCR request.
+(deftest test-receipt-trigger-boundaries-and-born-digital-exclusion
+  (assert-eq (nm-receipt-trigger 1 500 20 200) 0 "born digital never triggers")
+  (assert-eq (nm-receipt-trigger 0 80 0 0) 1 "paper lower boundary is inclusive")
+  (assert-eq (nm-receipt-trigger 0 920 0 0) 1 "paper upper boundary is inclusive")
+  (assert-eq (nm-receipt-trigger 0 79 46 150) 0 "outside both receipt features")
+  (assert-eq (nm-receipt-trigger 0 921 45 150) 2 "narrow thermal boundary is inclusive")
+  (assert-eq (nm-receipt-trigger 0 1000 45 149) 0 "a wide text block is not thermal")
+  (assert-eq (nm-receipt-trigger 0 1000 0 200) 0 "missing glyph height is not narrow"))
+
+
+(deftest test-receipt-paper-region-quarter-sample-and-component-share
+  (let [^Bitmap src (bitmap-new 20 20 3) ^Bitmap gray (bitmap-new 20 20 1) ^Bitmap binary (bitmap-new 20 20 1)
+        ^BitmapSet bms (new-bitmap-set)
+        ^Cells views (new-cells) ^Cells inks (new-cells) ^Cells comps (new-cells)
+        ^Cells ws (new-cells) ^Cells sv (new-cells) ^Cells aux (new-cells)
+        ^Cells rn (new-cells) ^Cells ri (new-cells) ^Cells cs (new-cells)
+        ^Cells s1 (new-cells) ^Cells s2 (new-cells) ^Cells s3 (new-cells)
+        ^I32 v (vw-new views 1 (vk-render) -1 -1 20 20 30000 0 -1 0 0 0 0 0)]
+    (nt-rect src 4 4 16 16 255 255 255)
+    (nt-rect src 8 8 12 12 0 0 0)
+    (nm-view views inks 1 v src gray binary ws sv aux)
+    (bms-put bms (pu-view-id 0 11) 20 20 1)
+    (assert-eq (pn-receipt 1 (nm-binary-view ws) bms 8 src gray (bms-get bms (pu-view-id 0 11)) comps ws rn ri cs s1 s2 s3) 1 "one paper island triggers photo")
+    (assert-eq (cells-at ws 12907) 360 "outer paper area is nine quarter pixels, including its text-shaped hole")
+    (assert-eq (cells-at ws 12908) 0 "no glyphs means no narrow-column estimate")))
+
+(deftest test-paper-closing-fills-stroke-holes-without-expanding-paper
+  (let [^Bitmap mask (bitmap-new 9 9 1) ^Bitmap a (bitmap-new 9 9 1) ^Bitmap b (bitmap-new 9 9 1)
+        ^Bitmap expected (bitmap-new 9 9 1)]
+    (nt-rect mask 2 2 7 7 255 0 0)
+    (nt-rect mask 4 4 5 5 0 0 0)
+    (nt-rect expected 2 2 7 7 255 0 0)
+    (nm-paper-close mask a b 1)
+    (assert-eq (nt-same mask expected) 1 "close fills the one pixel text hole and keeps outer paper boundary")))
+
+(deftest test-analysis-reduction-samples-source-coordinates-exactly
+  (let [^Bitmap src (bitmap-new 7 5 1) ^Bitmap dst (bitmap-new 3 2 1)
+        ^:mut ^I32 x 0 ^:mut ^I32 y 0]
+    (while (< y 5)
+      (do (set x 0)
+          (while (< x 7)
+            (do (bitmap-set-u8 src x y 0 (+ x (* 10 y))) (set x (+ x 1))))
+          (set y (+ y 1))))
+    (nm-analysis-into src dst)
+    (assert-eq (bitmap-u8 dst 0 0 0) 0 "origin")
+    (assert-eq (bitmap-u8 dst 1 0 0) 2 "middle column")
+    (assert-eq (bitmap-u8 dst 2 0 0) 4 "last column")
+    (assert-eq (bitmap-u8 dst 0 1 0) 20 "second row")
+    (assert-eq (bitmap-u8 dst 1 1 0) 22 "second row middle")
+    (assert-eq (bitmap-u8 dst 2 1 0) 24 "second row last")))
+
+(deftest test-receipt-paper-bounds-compare-exact-ratios-before-quantisation
+  (assert-eq (nm-paper-receipt 920 1000) 1 "exact upper bound included")
+  (assert-eq (nm-paper-receipt 9201 10000) 0 "92.01 percent must not truncate into 92 percent")
+  (assert-eq (nm-paper-receipt 799 10000) 0 "7.99 percent is below the lower bound")
+  (assert-eq (nm-paper-receipt 800 10000) 1 "exact lower bound included")
+  (assert-eq (nm-paper-receipt 3000000 4000000) 1 "cross products use 64 bits")
+  (assert-eq (nm-paper-receipt 0 0) 0 "no raster is no receipt"))
+
+(deftest test-receipt-trigger-uses-original-decode-when-ocr-selected-an-enlargement
+  (let [^BitmapSet bms (new-bitmap-set)
+        ^Bitmap original (bms-put bms (pu-id 0 (pi-decode)) 20 20 3)
+        ^Bitmap enlarged (bitmap-new 40 40 3) ^Bitmap gray (bitmap-new 40 40 1) ^Bitmap mask (bitmap-new 40 40 1)
+        ^Cells comps (new-cells) ^Cells ws (new-cells) ^Cells aux (new-cells)
+        ^Cells rn (new-cells) ^Cells ri (new-cells) ^Cells cs (new-cells)
+        ^Cells s1 (new-cells) ^Cells s2 (new-cells) ^Cells s3 (new-cells)]
+    (nt-rect original 4 4 16 16 255 255 255)
+    (nm-ws-init ws)
+    (cells-set ws 12901 123)
+    (assert-eq (pn-receipt-source 1 0 bms 8 enlarged gray mask comps ws aux rn ri cs s1 s2 s3) 1 "original paper island decides, not the selected enlargement")
+    (assert-eq (cells-at ws 12911) 9 "original quarter-scale paper pixels")
+    (assert-eq (cells-at ws 12912) 25 "original quarter-scale raster pixels")
+    (assert-eq (cells-at ws 12901) 123 "the selected raster's paper level remains intact")))

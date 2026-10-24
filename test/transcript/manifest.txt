@@ -110,6 +110,8 @@ retarget/replay/raster-72dpi/transcript.edn
 retarget/replay/raster-flate-render/transcript.edn
 retarget/replay/raster-rot180/transcript.edn
 retarget/replay/raster-rot90/transcript.edn
+retarget/replay/receipt-empty/transcript.edn
+retarget/replay/receipt-photo/transcript.edn
 sealpx/replay/ovl-seal-over-text/transcript.edn
 sealpx/replay/ovl-sig-over-name/transcript.edn
 sealpx/replay/ovl-stamp-seal/transcript.edn

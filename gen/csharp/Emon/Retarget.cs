@@ -121,6 +121,47 @@ public static class Retarget {
         // Existing OCR empty-line crops precede traced gaps: this bonus exceeds the largest admitted empty-line area (144000 square points).
         return 1000000;
     }
+    public static int RiReceipt() {
+        return 31;
+    }
+    public static int RvReceipt() {
+        return 41;
+    }
+    public static int RtpReceipt() {
+        return 251;
+    }
+    public static int RtpReceiptWin() {
+        return 252;
+    }
+    public static int RtpReceiptView() {
+        return 258;
+    }
+    public static int RtReceiptMin() {
+        // D705/D707: only receipt words at conf30 or above are admitted to body reconstruction.
+        return 300;
+    }
+    internal static int RtReceiptFlags(int trigger) {
+        if (trigger == 1) {
+            return Evidence.VgReceiptPhoto();
+        }
+        if (trigger == 2) {
+            return Evidence.VgReceiptThermal();
+        }
+        return 0;
+    }
+    public static int RtReceiptMode(int trigger) {
+        // D706: the thermal candidate regressed a non-receipt control; only the photo lane is retained.
+        if (trigger == 1) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int RtReceiptWins(int @base, int candidate) {
+        if (candidate > @base) {
+            return 1;
+        }
+        return 0;
+    }
     public static int RiThermal() {
         return 30;
     }
@@ -240,8 +281,28 @@ public static class Retarget {
         // two cells the pixel hash is written to
         return 254;
     }
-    public static int RtpSize() {
+    public static int RtpFactor() {
         return 256;
+    }
+    public static int RtpTrigger() {
+        return 257;
+    }
+    internal static int RtpSourceDeferred() {
+        return 259;
+    }
+    public static int RtReceiptSource(emon.Port.Cells rtp, int sourceMask) {
+        // D705: PDF scans retain baseline empty recovery; source bit2 is set by pu-scan, image inputs carry bit1.
+        emon.Port.CellsSet(rtp, RtpSourceDeferred(), (sourceMask & 2) / 2);
+        return emon.Port.CellsAt(rtp, RtpSourceDeferred());
+    }
+    public static int RtReceiptActive(emon.Port.Cells rtp) {
+        if (emon.Port.CellsAt(rtp, RtpSourceDeferred()) != 0) {
+            return 0;
+        }
+        return RtReceiptMode(emon.Port.CellsAt(rtp, RtpTrigger()));
+    }
+    public static int RtpSize() {
+        return 260;
     }
     public static int RtPrep(emon.Port.Cells rtp) {
         // Make the scratch (`rtp-size` cells) and clear it: every run row -1, every count 0.
@@ -254,6 +315,8 @@ public static class Retarget {
             i += 1;
         }
         emon.Port.CellsSet(rtp, RtpFrun(), -1);
+        emon.Port.CellsSet(rtp, RtpReceipt(), -1);
+        emon.Port.CellsSet(rtp, RtpReceiptView(), -1);
         emon.Port.CellsSet(rtp, RtpBrun(), -1);
         emon.Port.CellsSet(rtp, RtpRrun(), -1);
         emon.Port.CellsSet(rtp, RtpTrun(), -1);
@@ -1106,18 +1169,92 @@ public static class Retarget {
         }
         return 0;
     }
-    internal static int RtAskThermal(int page, int dpi, emon.Port.Cells loc, emon.Port.Cells ans, emon.Port.BitmapSet bms, emon.Port.Bitmap gray, int paper, emon.Port.Cells rtp, emon.Port.Cells rq) {
+    public static int RtFaintInto(emon.Port.Bitmap gray, emon.Port.Bitmap dst, int dpi, emon.Port.Cells pixels) {
+        Norm.NmSauvola(gray, dst, Norm.NmSauvolaR(dpi * 100), Norm.NmSauvolaKFaint(), pixels);
+        int x = 0;
+        int y = 0;
+        while (y < emon.Port.BitmapH(dst)) {
+            x = 0;
+            while (x < emon.Port.BitmapW(dst)) {
+                emon.Port.BitmapSetU8(dst, x, y, 0, 255 - emon.Port.BitmapU8(dst, x, y, 0));
+                x += 1;
+            }
+            y += 1;
+        }
+        return 0;
+    }
+    public static int RtEmptyReceipt(int trigger, emon.Port.Cells ans, int at) {
+        if (RtReceiptMode(trigger) == 0) {
+            return 1;
+        }
+        if (at < 0) {
+            return 0;
+        }
+        if (Plan.AnOk(ans, at) != 1) {
+            return 1;
+        }
+        if (Plan.AnOcrCount(ans, at) == 0) {
+            return 1;
+        }
+        return 0;
+    }
+    internal static int RtAskThermal(int page, int dpi, emon.Port.Cells loc, emon.Port.Cells ans, emon.Port.BitmapSet bms, emon.Port.Bitmap gray, int paper, emon.Port.Cells rtp, emon.Port.Cells rq, int trigger, emon.Port.Cells pixels) {
         int id = Plan.PuId(page, RiThermal());
         int vid = Plan.PuViewId(page, RvThermal());
+        int psm = 6;
+        if (trigger == 1) {
+            int photo = Plan.PuViewId(page, RvReceipt());
+            emon.Port.Bitmap faint = emon.Port.BmsGet(bms, photo);
+            emon.Port.BitmapHash(faint, rtp, RtpHash());
+            if (Plan.AnFind(ans, id) < 0) {
+                Scan.ScRequestViewPsm(rq, id, photo, emon.Port.CellsAt(rtp, RtpHash()), emon.Port.CellsAt(rtp, RtpHash() + 1), 11, 300, loc);
+            }
+            return 1;
+        }
         emon.Port.Bitmap v = emon.Port.BmsPut(bms, vid, emon.Port.BitmapW(gray), emon.Port.BitmapH(gray), 1);
         RtThermalInto(gray, v, paper);
         emon.Port.BitmapHash(v, rtp, RtpHash());
         if (Plan.AnFind(ans, id) < 0) {
-            Scan.ScRequestViewPsm(rq, id, vid, emon.Port.CellsAt(rtp, RtpHash()), emon.Port.CellsAt(rtp, RtpHash() + 1), 6, dpi, loc);
+            Scan.ScRequestViewPsm(rq, id, vid, emon.Port.CellsAt(rtp, RtpHash()), emon.Port.CellsAt(rtp, RtpHash() + 1), psm, dpi, loc);
         }
         return 1;
     }
-    public static int RtPlan(int page, int input, int born, int wanttext, int rid, int dpi, emon.Port.Cells loc, emon.Port.Cells ans, emon.Port.BitmapSet bms, int k0, emon.Port.Bitmap src, emon.Port.Cells ws, emon.Port.Cells oruns, int run, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells rules, emon.Port.Cells tlines, emon.Port.Cells rtp, emon.Port.Cells rq, emon.Port.Cells scr, emon.Port.Cells comps, emon.Port.Cells inks) {
+    internal static int RtAskReceipt(int page, int dpi, int k0, emon.Port.Cells loc, emon.Port.Cells ans, emon.Port.BitmapSet bms, emon.Port.Cells ws, emon.Port.Cells rtp, emon.Port.Cells rq, emon.Port.Cells scr, int run, emon.Port.Cells oruns) {
+        int id = Plan.PuId(page, RiReceipt());
+        int vid = Plan.PuViewId(page, RvReceipt());
+        emon.Port.Bitmap gray = emon.Port.BmsGet(bms, Plan.PuViewId(page, k0));
+        emon.Port.Bitmap original = emon.Port.BmsGet(bms, Plan.PuId(page, Plan.PiDecode()));
+        int a = Plan.AnFind(ans, id);
+        int first = Plan.AnFind(ans, Evidence.OrGet(oruns, run, Evidence.OrfRequest()));
+        int factor = 1;
+        int w = emon.Port.BitmapW(gray);
+        int h = emon.Port.BitmapH(gray);
+        // Binarise a photo at its decoded size, even when the baseline reading was enlarged.
+        if ((emon.Port.BitmapW(original) > 0) && (w > emon.Port.BitmapW(original))) {
+            factor = 0 - (w / emon.Port.BitmapW(original));
+        }
+        emon.Port.CellsSet(rtp, RtpFactor(), factor);
+        if (factor < 0) {
+            w = emon.Port.BitmapW(original);
+            h = emon.Port.BitmapH(original);
+        }
+        emon.Port.Bitmap v = emon.Port.BmsPut(bms, vid, w, h, 1);
+        if (factor < 0) {
+            emon.Port.Bitmap decodedGray = emon.Port.BmsPut(bms, Plan.PuViewId(page, 42), w, h, 1);
+            emon.Port.BitmapGrayInto(original, decodedGray);
+            RtFaintInto(decodedGray, v, 300, scr);
+        } else {
+            RtFaintInto(gray, v, dpi, scr);
+        }
+        emon.Port.BitmapHash(v, rtp, RtpHash());
+        if (a < 0) {
+            Scan.ScRequestViewPsm(rq, id, vid, emon.Port.CellsAt(rtp, RtpHash()), emon.Port.CellsAt(rtp, RtpHash() + 1), 3, 300, loc);
+        } else if ((Plan.AnOk(ans, a) == 1) && (first >= 0)) {
+            emon.Port.CellsSet(rtp, RtpReceiptWin(), RtReceiptWins(Upscale.UpReceiptScore(ans, first), Upscale.UpReceiptScore(ans, a)));
+        }
+        return 1;
+    }
+    public static int RtPlan(int page, int input, int born, int wanttext, int rid, int dpi, emon.Port.Cells loc, emon.Port.Cells ans, emon.Port.BitmapSet bms, int k0, emon.Port.Bitmap src, emon.Port.Cells ws, emon.Port.Cells oruns, int run, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells rules, emon.Port.Cells tlines, emon.Port.Cells rtp, emon.Port.Cells rq, emon.Port.Cells scr, emon.Port.Cells comps, emon.Port.Cells inks, emon.Port.Cells pixels) {
         // Decide and ask what is not yet answered, in the brief's order: the table cells and the lines, the text-only render and its OCR, the body-ink view,
         // the quarter-turned view. `page` is 0-based (ids), `rid` the request id of the raster `src` that the first pass read at `dpi`, `k0` the id group
         // `emon.pageink` normalized it under, `ws` its layer workspace, `scr` the unit's scratch (`sc-prep`: the measure of every first-pass line is left in it).
@@ -1127,6 +1264,12 @@ public static class Retarget {
         int q = RtTurns(born, oruns, run, tlines, page + 1);
         int touched = 0;
         int asked = 0;
+        if (born == 0) {
+            emon.Port.CellsSet(rtp, RtpTrigger(), emon.Port.CellsAt(ws, 12906));
+        }
+        if ((born == 0) && ((q == 0) && (RtReceiptActive(rtp) == 1))) {
+            asked += RtAskReceipt(page, dpi, k0, loc, ans, bms, ws, rtp, rq, pixels, run, oruns);
+        }
         if ((q == 0) && (born == 0)) {
             RtGapLines(page + 1, dpi, tlines, oruns, run, olines, owords, inks);
         }
@@ -1144,8 +1287,10 @@ public static class Retarget {
         }
         if ((born == 0) && ((q == 0) && (Evidence.OrGet(oruns, run, Evidence.OrfWcount()) == 0))) {
             int ba = Plan.AnFind(ans, Plan.PuId(page, RiBody()));
-            if ((emon.Port.CellsAt(rtp, RtpBody()) == 0) || ((ba >= 0) && ((Plan.AnOk(ans, ba) == 1) && (Plan.AnOcrCount(ans, ba) == 0)))) {
-                asked += RtAskThermal(page, dpi, loc, ans, bms, emon.Port.BmsGet(bms, Plan.PuViewId(page, k0)), Norm.NmPaperGray(ws), rtp, rq);
+            int receipt = Plan.AnFind(ans, Plan.PuId(page, RiReceipt()));
+            int receiptMode = RtReceiptActive(rtp);
+            if ((RtEmptyReceipt(RtReceiptActive(rtp), ans, receipt) == 1) && ((emon.Port.CellsAt(rtp, RtpBody()) == 0) || ((ba >= 0) && ((Plan.AnOk(ans, ba) == 1) && (Plan.AnOcrCount(ans, ba) == 0))))) {
+                asked += RtAskThermal(page, dpi, loc, ans, bms, emon.Port.BmsGet(bms, Plan.PuViewId(page, k0)), Norm.NmPaperGray(ws), rtp, rq, receiptMode, pixels);
             }
         }
         if (q != 0) {
@@ -1168,6 +1313,43 @@ public static class Retarget {
         Evidence.OrSet(oruns, run, Evidence.OrfRh(), h);
         return run;
     }
+    public static int RtReceiptView(emon.Port.Cells views, int pg, int srcview, int dpi100, emon.Port.Cells rtp) {
+        int factor = emon.Port.CellsAt(rtp, RtpFactor());
+        int layer = Evidence.VwGet(views, srcview, Evidence.VwfLayer());
+        int cropx = Evidence.VwGet(views, srcview, Evidence.VwfCropx());
+        int cropy = Evidence.VwGet(views, srcview, Evidence.VwfCropy());
+        int w = Evidence.VwGet(views, srcview, Evidence.VwfPxw());
+        int h = Evidence.VwGet(views, srcview, Evidence.VwfPxh());
+        int dpi = dpi100;
+        int kind = Evidence.VkBinary();
+        if (emon.Port.CellsAt(rtp, RtpTrigger()) == 2) {
+            kind = Evidence.VkGray();
+        }
+        if (factor > 1) {
+            w *= factor;
+            h *= factor;
+            dpi *= factor;
+        }
+        if (factor < 0) {
+            w = (w + ((0 - factor) - 1)) / (0 - factor);
+            h = (h + ((0 - factor) - 1)) / (0 - factor);
+            dpi = dpi / (0 - factor);
+        }
+        return Evidence.VwNew(views, pg, kind, -1, srcview, w, h, dpi, layer, -1, 0, 0, cropx, cropy, RtReceiptFlags(emon.Port.CellsAt(rtp, RtpTrigger())));
+    }
+    public static int RtMarkTrigger(emon.Port.Cells views, int srcview, emon.Port.Cells rtp) {
+        int trigger = emon.Port.CellsAt(rtp, RtpTrigger());
+        int flags = 0;
+        if (trigger == 0) {
+            return 0;
+        }
+        flags = Evidence.VwGet(views, srcview, Evidence.VwfFlags()) | RtReceiptFlags(trigger);
+        if ((emon.Port.CellsAt(rtp, RtpQ()) != 0) || (RtReceiptActive(rtp) == 0)) {
+            flags |= Evidence.VgReceiptDeferred();
+        }
+        Evidence.VwSet(views, srcview, Evidence.VwfFlags(), flags);
+        return 1;
+    }
     public static int RtRecord(int page, int srcview, int dpi100, emon.Port.Cells loc, emon.Port.Cells ans, emon.Port.Cells rtp, emon.Port.Cells views, emon.Port.Cells epages, emon.Port.Cells etext, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells feats) {
         // Write every targeted answer that is in and ok as an OCR run (`sc-answer`) of page `page` (0-based), mapped through the view it
         // was read off: `srcview` (the raster the first pass read) for a line, a cell and the body-ink view (the same raster, as it is), the quarter-turned view
@@ -1182,6 +1364,7 @@ public static class Retarget {
         int run = 0;
         int made = 0;
         int rviews = -1;
+        RtMarkTrigger(views, srcview, rtp);
         while (j < nline) {
             id = Plan.PuId(page, RiLine() + j);
             a = Plan.AnFind(ans, id);
@@ -1245,12 +1428,35 @@ public static class Retarget {
                 made += 1;
             }
         }
+        id = Plan.PuId(page, RiReceipt());
+        a = Plan.AnFind(ans, id);
+        if (a >= 0) {
+            int rv = RtReceiptView(views, pg, srcview, dpi100, rtp);
+            emon.Port.CellsSet(rtp, RtpReceiptView(), rv);
+            if (Plan.AnOk(ans, a) == 1) {
+                run = Scan.ScAnswer(ans, a, pg, rv, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+                RtRunMeta(oruns, run, Evidence.OpReceipt(), 3, 3, 0, 0, 0, 0);
+                emon.Port.CellsSet(rtp, RtpReceipt(), run);
+                made += 1;
+            }
+        }
         id = Plan.PuId(page, RiThermal());
         a = Plan.AnFind(ans, id);
         if (a >= 0) {
             if (Plan.AnOk(ans, a) == 1) {
-                run = Scan.ScAnswer(ans, a, pg, srcview, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
-                RtRunMeta(oruns, run, Evidence.OpBodyInk(), 3 + emon.Port.CellsAt(rtp, RtpBody()), 6, 0, 0, 0, 0);
+                int selectedView = srcview;
+                int psm = 6;
+                int pass = Evidence.OpBodyInk();
+                int trigger = RtReceiptActive(rtp);
+                if (trigger > 0) {
+                    psm = 11;
+                    pass = Evidence.OpReceiptRescue();
+                }
+                if ((trigger == 1) && (emon.Port.CellsAt(rtp, RtpReceiptView()) >= 0)) {
+                    selectedView = emon.Port.CellsAt(rtp, RtpReceiptView());
+                }
+                run = Scan.ScAnswer(ans, a, pg, selectedView, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+                RtRunMeta(oruns, run, pass, 3 + emon.Port.CellsAt(rtp, RtpBody()), psm, 0, 0, 0, 0);
                 emon.Port.CellsSet(rtp, RtpFrun(), run);
                 made += 1;
             }
@@ -1523,6 +1729,114 @@ public static class Retarget {
         }
         return best;
     }
+    internal static int RtReceiptFold(int cp) {
+        if ((cp >= 65) && (cp <= 90)) {
+            return cp + 32;
+        }
+        return cp;
+    }
+    internal static int RtReceiptWordEqual(emon.Port.Cells ow, emon.Port.Cells et, int a, int b) {
+        int n = Evidence.OwGet(ow, a, Evidence.HdTlen());
+        int sa = Evidence.OwGet(ow, a, Evidence.HdTstart());
+        int sb = Evidence.OwGet(ow, b, Evidence.HdTstart());
+        int j = 0;
+        if (n != Evidence.OwGet(ow, b, Evidence.HdTlen())) {
+            return 0;
+        }
+        while (j < n) {
+            if (RtReceiptFold(emon.Port.CellsAt(et, sa + j)) != RtReceiptFold(emon.Port.CellsAt(et, sb + j))) {
+                return 0;
+            }
+            j += 1;
+        }
+        return 1;
+    }
+    internal static int RtReceiptWordAlpha(emon.Port.Cells ow, emon.Port.Cells et, int w) {
+        int s = Evidence.OwGet(ow, w, Evidence.HdTstart());
+        int n = Evidence.OwGet(ow, w, Evidence.HdTlen());
+        int j = 0;
+        while (j < n) {
+            if (Upscale.UpReceiptAlpha(emon.Port.CellsAt(et, s + j)) == 1) {
+                return 1;
+            }
+            j += 1;
+        }
+        return 0;
+    }
+    internal static int RtReceiptProtectConf() {
+        return 900;
+    }
+    internal static int RtReceiptProtected(emon.Port.Cells ow, emon.Port.Cells et, int w) {
+        if ((Evidence.OwGet(ow, w, Evidence.HdConf()) >= RtReceiptProtectConf()) && (Evidence.OwGet(ow, w, Evidence.HdTlen()) >= 2)) {
+            return RtReceiptWordAlpha(ow, et, w);
+        }
+        return 0;
+    }
+    internal static int RtReceiptWordValue(emon.Port.Cells ow, emon.Port.Cells et, int w) {
+        return Upscale.UpReceiptValue(Evidence.OwGet(ow, w, Evidence.HdConf()), Evidence.OwGet(ow, w, Evidence.HdTlen()), RtReceiptWordAlpha(ow, et, w));
+    }
+    internal static int RtReceiptSelectedCount(emon.Port.Cells ol, emon.Port.Cells ow, emon.Port.Cells et, emon.Port.Cells scr, int n, int word, int first) {
+        int k = 0;
+        int w = 0;
+        int end = 0;
+        int count = 0;
+        int line = 0;
+        while (k < n) {
+            line = emon.Port.CellsAt(scr, Scan.ScSelBase() + k);
+            w = Evidence.OlGet(ol, line, Evidence.LhFirst());
+            end = w + Evidence.OlGet(ol, line, Evidence.LhCount());
+            while (w < end) {
+                if ((Evidence.OlGet(ol, line, Evidence.OlfRun()) != first) && ((RtReceiptProtected(ow, et, w) == 1) && (RtReceiptWordEqual(ow, et, w, word) == 1))) {
+                    count += 1;
+                }
+                w += 1;
+            }
+            k += 1;
+        }
+        return count;
+    }
+    internal static int RtReceiptSafe(emon.Port.Cells runs, emon.Port.Cells ol, emon.Port.Cells ow, emon.Port.Cells et, emon.Port.Cells scr, int n, int candidate, int first) {
+        // D705: compare against the completed baseline selection, including its body-ink recovery. A better global score must preserve very confident token occurrences from the selected targeted recovery lines; the initial reading retains its declared score policy.
+        int c0 = Evidence.OrGet(runs, candidate, Evidence.OrfWfirst());
+        int cn = c0 + Evidence.OrGet(runs, candidate, Evidence.OrfWcount());
+        int k = 0;
+        int line = 0;
+        int w = 0;
+        int end = 0;
+        int c = 0;
+        int count = 0;
+        int @base = 0;
+        int quality = 0;
+        while (k < n) {
+            line = emon.Port.CellsAt(scr, Scan.ScSelBase() + k);
+            w = Evidence.OlGet(ol, line, Evidence.LhFirst());
+            end = w + Evidence.OlGet(ol, line, Evidence.LhCount());
+            while (w < end) {
+                @base += RtReceiptWordValue(ow, et, w);
+                if ((Evidence.OlGet(ol, line, Evidence.OlfRun()) != first) && (RtReceiptProtected(ow, et, w) == 1)) {
+                    c = c0;
+                    count = 0;
+                    while (c < cn) {
+                        if ((Evidence.OwGet(ow, c, Evidence.HdConf()) >= RtReceiptMin()) && (RtReceiptWordEqual(ow, et, w, c) == 1)) {
+                            count += 1;
+                        }
+                        c += 1;
+                    }
+                    if (count < RtReceiptSelectedCount(ol, ow, et, scr, n, w, first)) {
+                        return 0;
+                    }
+                }
+                w += 1;
+            }
+            k += 1;
+        }
+        c = c0;
+        while (c < cn) {
+            quality += RtReceiptWordValue(ow, et, c);
+            c += 1;
+        }
+        return RtReceiptWins(@base, quality);
+    }
     public static int RtAdopt(emon.Port.Cells rtp, emon.Port.Cells oruns, int fr, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Cells scr) {
         // The lines a SCANNED page's pipeline reads, in the order it reads them, written to the selection of `scr` (`sc-sel-set`); answers how
         // many. `fr` is the first pass's run. A page that was turned (`rtp-q`) is read from its turned view's run when that scores `rt-turn-gain`
@@ -1552,6 +1866,7 @@ public static class Retarget {
         int bn = 0;
         int ly = 0;
         int mono = 0;
+        emon.Port.CellsSet(scr, Scan.ScAdmitFloor(), 0);
         if ((q != 0) && (rrun >= 0)) {
             sf = RtRunScore(oruns, olines, owords, fr);
             sr = RtRunScore(oruns, olines, owords, rrun);
@@ -1723,10 +2038,91 @@ public static class Retarget {
                 }
                 if (n > 0) {
                     emon.Port.CellsSet(rtp, RtpPrimary(), tr);
+                    if (RtReceiptActive(rtp) == 1) {
+                        emon.Port.CellsSet(scr, Scan.ScAdmitFloor(), RtReceiptMin());
+                    }
+                }
+            }
+        }
+        if ((emon.Port.CellsAt(rtp, RtpReceiptWin()) == 1) && (emon.Port.CellsAt(rtp, RtpReceipt()) >= 0)) {
+            int receipt = emon.Port.CellsAt(rtp, RtpReceipt());
+            if (RtReceiptSafe(oruns, olines, owords, etext, scr, n, receipt, fr) == 1) {
+                emon.Port.CellsSet(rtp, RtpPrimary(), receipt);
+                emon.Port.CellsSet(scr, Scan.ScAdmitFloor(), RtReceiptMin());
+                k = 0;
+                while (k < Scan.ScSelMax()) {
+                    emon.Port.CellsSet(scr, Scan.ScXtraBase() + (k + 1), 0);
+                    k += 1;
+                }
+                n = 0;
+                k = Evidence.OrGet(oruns, receipt, Evidence.OrfLfirst());
+                pn = k + Evidence.OrGet(oruns, receipt, Evidence.OrfLcount());
+                while (k < pn) {
+                    if (Evidence.OlGet(olines, k, Evidence.LhCount()) > 0) {
+                        n = RtSelAdd(scr, n, k);
+                    }
+                    k += 1;
                 }
             }
         }
         return n;
+    }
+    public static int RtReceiptIgnored(emon.Port.Cells rtp, emon.Port.Cells runs, int which) {
+        // D705: the new main/rescue runs are adjacent. Unadopted words stay evidence but cannot change the baseline signature mask. which0 first word, which1 count.
+        int chosen = emon.Port.CellsAt(rtp, RtpPrimary());
+        int k = 0;
+        int run = 0;
+        int pass = 0;
+        int start = 0;
+        int end = 0;
+        int lo = -1;
+        int hi = 0;
+        while (k < 2) {
+            run = emon.Port.CellsAt(rtp, RtpReceipt());
+            if (k == 1) {
+                run = emon.Port.CellsAt(rtp, RtpFrun());
+            }
+            if ((run >= 0) && (run != chosen)) {
+                pass = Evidence.OrGet(runs, run, Evidence.OrfPass());
+                if ((pass == Evidence.OpReceipt()) || (pass == Evidence.OpReceiptRescue())) {
+                    start = Evidence.OrGet(runs, run, Evidence.OrfWfirst());
+                    end = start + Evidence.OrGet(runs, run, Evidence.OrfWcount());
+                    if (end > start) {
+                        if ((lo < 0) || (start < lo)) {
+                            lo = start;
+                        }
+                        if (end > hi) {
+                            hi = end;
+                        }
+                    }
+                }
+            }
+            k += 1;
+        }
+        if (lo < 0) {
+            return 0;
+        }
+        if (which == 0) {
+            return lo;
+        }
+        return hi - lo;
+    }
+    public static int RtMarkAdopted(emon.Port.Cells views, emon.Port.Cells oruns, emon.Port.Cells rtp) {
+        int run = emon.Port.CellsAt(rtp, RtpPrimary());
+        int pass = 0;
+        int view = 0;
+        int flags = 0;
+        if (run < 0) {
+            return 0;
+        }
+        pass = Evidence.OrGet(oruns, run, Evidence.OrfPass());
+        if ((pass != Evidence.OpReceipt()) && (pass != Evidence.OpReceiptRescue())) {
+            return 0;
+        }
+        view = Evidence.OrGet(oruns, run, Evidence.OrfView());
+        flags = Evidence.VwGet(views, view, Evidence.VwfFlags());
+        Evidence.VwSet(views, view, Evidence.VwfFlags(), flags | Evidence.VgReceiptAdopted());
+        return 1;
     }
     public static int RtUpright(emon.Port.Cells rtp, int fr, emon.Port.Cells epages, int page1) {
         // A page that is read from its turned view (`rtp-primary` is not the first pass) by a quarter turn has the width and height of its upright self: the

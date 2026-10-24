@@ -935,4 +935,108 @@ public static class Normtest {
         }
         emon.Testport.AssertEq(Norm.NmDeskew(b, pts, prof), 0, "rules are not lines of text: a table alone has no skew to find");
     }
+    [Xunit.Fact]
+    public static void TestReceiptTriggerBoundariesAndBornDigitalExclusion() {
+        emon.Testport.AssertEq(Norm.NmReceiptTrigger(1, 500, 20, 200), 0, "born digital never triggers");
+        emon.Testport.AssertEq(Norm.NmReceiptTrigger(0, 80, 0, 0), 1, "paper lower boundary is inclusive");
+        emon.Testport.AssertEq(Norm.NmReceiptTrigger(0, 920, 0, 0), 1, "paper upper boundary is inclusive");
+        emon.Testport.AssertEq(Norm.NmReceiptTrigger(0, 79, 46, 150), 0, "outside both receipt features");
+        emon.Testport.AssertEq(Norm.NmReceiptTrigger(0, 921, 45, 150), 2, "narrow thermal boundary is inclusive");
+        emon.Testport.AssertEq(Norm.NmReceiptTrigger(0, 1000, 45, 149), 0, "a wide text block is not thermal");
+        emon.Testport.AssertEq(Norm.NmReceiptTrigger(0, 1000, 0, 200), 0, "missing glyph height is not narrow");
+    }
+    [Xunit.Fact]
+    public static void TestReceiptPaperRegionQuarterSampleAndComponentShare() {
+        emon.Port.Bitmap src = emon.Port.BitmapNew(20, 20, 3);
+        emon.Port.Bitmap gray = emon.Port.BitmapNew(20, 20, 1);
+        emon.Port.Bitmap binary = emon.Port.BitmapNew(20, 20, 1);
+        emon.Port.BitmapSet bms = emon.Port.NewBitmapSet();
+        emon.Port.Cells views = emon.Port.NewCells();
+        emon.Port.Cells inks = emon.Port.NewCells();
+        emon.Port.Cells comps = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        emon.Port.Cells sv = emon.Port.NewCells();
+        emon.Port.Cells aux = emon.Port.NewCells();
+        emon.Port.Cells rn = emon.Port.NewCells();
+        emon.Port.Cells ri = emon.Port.NewCells();
+        emon.Port.Cells cs = emon.Port.NewCells();
+        emon.Port.Cells s1 = emon.Port.NewCells();
+        emon.Port.Cells s2 = emon.Port.NewCells();
+        emon.Port.Cells s3 = emon.Port.NewCells();
+        int v = Evidence.VwNew(views, 1, Evidence.VkRender(), -1, -1, 20, 20, 30000, 0, -1, 0, 0, 0, 0, 0);
+        NtRect(src, 4, 4, 16, 16, 255, 255, 255);
+        NtRect(src, 8, 8, 12, 12, 0, 0, 0);
+        Norm.NmView(views, inks, 1, v, src, gray, binary, ws, sv, aux);
+        emon.Port.BmsPut(bms, Plan.PuViewId(0, 11), 20, 20, 1);
+        emon.Testport.AssertEq(Pageink.PnReceipt(1, Norm.NmBinaryView(ws), bms, 8, src, gray, emon.Port.BmsGet(bms, Plan.PuViewId(0, 11)), comps, ws, rn, ri, cs, s1, s2, s3), 1, "one paper island triggers photo");
+        emon.Testport.AssertEq(emon.Port.CellsAt(ws, 12907), 360, "outer paper area is nine quarter pixels, including its text-shaped hole");
+        emon.Testport.AssertEq(emon.Port.CellsAt(ws, 12908), 0, "no glyphs means no narrow-column estimate");
+    }
+    [Xunit.Fact]
+    public static void TestPaperClosingFillsStrokeHolesWithoutExpandingPaper() {
+        emon.Port.Bitmap mask = emon.Port.BitmapNew(9, 9, 1);
+        emon.Port.Bitmap a = emon.Port.BitmapNew(9, 9, 1);
+        emon.Port.Bitmap b = emon.Port.BitmapNew(9, 9, 1);
+        emon.Port.Bitmap expected = emon.Port.BitmapNew(9, 9, 1);
+        NtRect(mask, 2, 2, 7, 7, 255, 0, 0);
+        NtRect(mask, 4, 4, 5, 5, 0, 0, 0);
+        NtRect(expected, 2, 2, 7, 7, 255, 0, 0);
+        Norm.NmPaperClose(mask, a, b, 1);
+        emon.Testport.AssertEq(NtSame(mask, expected), 1, "close fills the one pixel text hole and keeps outer paper boundary");
+    }
+    [Xunit.Fact]
+    public static void TestAnalysisReductionSamplesSourceCoordinatesExactly() {
+        emon.Port.Bitmap src = emon.Port.BitmapNew(7, 5, 1);
+        emon.Port.Bitmap dst = emon.Port.BitmapNew(3, 2, 1);
+        int x = 0;
+        int y = 0;
+        while (y < 5) {
+            x = 0;
+            while (x < 7) {
+                emon.Port.BitmapSetU8(src, x, y, 0, x + (10 * y));
+                x += 1;
+            }
+            y += 1;
+        }
+        Norm.NmAnalysisInto(src, dst);
+        emon.Testport.AssertEq(emon.Port.BitmapU8(dst, 0, 0, 0), 0, "origin");
+        emon.Testport.AssertEq(emon.Port.BitmapU8(dst, 1, 0, 0), 2, "middle column");
+        emon.Testport.AssertEq(emon.Port.BitmapU8(dst, 2, 0, 0), 4, "last column");
+        emon.Testport.AssertEq(emon.Port.BitmapU8(dst, 0, 1, 0), 20, "second row");
+        emon.Testport.AssertEq(emon.Port.BitmapU8(dst, 1, 1, 0), 22, "second row middle");
+        emon.Testport.AssertEq(emon.Port.BitmapU8(dst, 2, 1, 0), 24, "second row last");
+    }
+    [Xunit.Fact]
+    public static void TestReceiptPaperBoundsCompareExactRatiosBeforeQuantisation() {
+        emon.Testport.AssertEq(Norm.NmPaperReceipt(920, 1000), 1, "exact upper bound included");
+        emon.Testport.AssertEq(Norm.NmPaperReceipt(9201, 10000), 0, "92.01 percent must not truncate into 92 percent");
+        emon.Testport.AssertEq(Norm.NmPaperReceipt(799, 10000), 0, "7.99 percent is below the lower bound");
+        emon.Testport.AssertEq(Norm.NmPaperReceipt(800, 10000), 1, "exact lower bound included");
+        emon.Testport.AssertEq(Norm.NmPaperReceipt(3000000, 4000000), 1, "cross products use 64 bits");
+        emon.Testport.AssertEq(Norm.NmPaperReceipt(0, 0), 0, "no raster is no receipt");
+    }
+    [Xunit.Fact]
+    public static void TestReceiptTriggerUsesOriginalDecodeWhenOcrSelectedAnEnlargement() {
+        emon.Port.BitmapSet bms = emon.Port.NewBitmapSet();
+        emon.Port.Bitmap original = emon.Port.BmsPut(bms, Plan.PuId(0, Plan.PiDecode()), 20, 20, 3);
+        emon.Port.Bitmap enlarged = emon.Port.BitmapNew(40, 40, 3);
+        emon.Port.Bitmap gray = emon.Port.BitmapNew(40, 40, 1);
+        emon.Port.Bitmap mask = emon.Port.BitmapNew(40, 40, 1);
+        emon.Port.Cells comps = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        emon.Port.Cells aux = emon.Port.NewCells();
+        emon.Port.Cells rn = emon.Port.NewCells();
+        emon.Port.Cells ri = emon.Port.NewCells();
+        emon.Port.Cells cs = emon.Port.NewCells();
+        emon.Port.Cells s1 = emon.Port.NewCells();
+        emon.Port.Cells s2 = emon.Port.NewCells();
+        emon.Port.Cells s3 = emon.Port.NewCells();
+        NtRect(original, 4, 4, 16, 16, 255, 255, 255);
+        Norm.NmWsInit(ws);
+        emon.Port.CellsSet(ws, 12901, 123);
+        emon.Testport.AssertEq(Pageink.PnReceiptSource(1, 0, bms, 8, enlarged, gray, mask, comps, ws, aux, rn, ri, cs, s1, s2, s3), 1, "original paper island decides, not the selected enlargement");
+        emon.Testport.AssertEq(emon.Port.CellsAt(ws, 12911), 9, "original quarter-scale paper pixels");
+        emon.Testport.AssertEq(emon.Port.CellsAt(ws, 12912), 25, "original quarter-scale raster pixels");
+        emon.Testport.AssertEq(emon.Port.CellsAt(ws, 12901), 123, "the selected raster's paper level remains intact");
+    }
 }

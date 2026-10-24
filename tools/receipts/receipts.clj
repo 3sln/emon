@@ -5,7 +5,7 @@
 (def custom-bin (or (System/getenv "EMON_RECEIPTS_BIN")
                     (second (drop-while #(not= % "--bin") args))))
 (when (and (not custom-bin) (not-any? #{"--report" "--rescore" "--help" "-h"} args))
-  (p/shell {:extra-env {"EMON_RS_LIVE" "1" "CARGO_TARGET_DIR" "/private/tmp/emon-rc/live"}
+  (p/shell {:extra-env {"EMON_RS_LIVE" "1"}
             :out :err}
            "kin/scripts/emon-rs-build"))
 (apply p/shell "python3" "tools/receipts/receipts.py" args)

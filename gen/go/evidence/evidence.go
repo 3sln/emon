@@ -491,6 +491,18 @@ func VgNonaffine() int32 {
 func VgEngineBinary() int32 {
 	return 4
 }
+func VgReceiptPhoto() int32 {
+	return 8
+}
+func VgReceiptThermal() int32 {
+	return 16
+}
+func VgReceiptAdopted() int32 {
+	return 32
+}
+func VgReceiptDeferred() int32 {
+	return 64
+}
 func VgEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "bilevel")
@@ -502,6 +514,22 @@ func VgEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 4 {
 		port.TextAscii(t, "engine-binary")
+		return 1
+	}
+	if code == 8 {
+		port.TextAscii(t, "receipt-photo")
+		return 1
+	}
+	if code == 16 {
+		port.TextAscii(t, "receipt-thermal")
+		return 1
+	}
+	if code == 32 {
+		port.TextAscii(t, "receipt-adopted")
+		return 1
+	}
+	if code == 64 {
+		port.TextAscii(t, "receipt-deferred")
 		return 1
 	}
 	return 0
@@ -1078,6 +1106,12 @@ func OpReRotated() int32 {
 func OpUpscaled() int32 {
 	return 9
 }
+func OpReceipt() int32 {
+	return 10
+}
+func OpReceiptRescue() int32 {
+	return 11
+}
 func OpEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "first")
@@ -1113,6 +1147,14 @@ func OpEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 9 {
 		port.TextAscii(t, "upscaled")
+		return 1
+	}
+	if code == 10 {
+		port.TextAscii(t, "receipt")
+		return 1
+	}
+	if code == 11 {
+		port.TextAscii(t, "receipt-rescue")
 		return 1
 	}
 	return 0

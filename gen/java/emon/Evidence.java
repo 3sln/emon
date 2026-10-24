@@ -474,6 +474,18 @@ public final class Evidence {
     public static int vgEngineBinary() {
         return 4;
     }
+    public static int vgReceiptPhoto() {
+        return 8;
+    }
+    public static int vgReceiptThermal() {
+        return 16;
+    }
+    public static int vgReceiptAdopted() {
+        return 32;
+    }
+    public static int vgReceiptDeferred() {
+        return 64;
+    }
     public static int vgEmitName(StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.textAscii(t, "bilevel");
@@ -485,6 +497,22 @@ public final class Evidence {
         }
         if (code == 4) {
             emon.Port.textAscii(t, "engine-binary");
+            return 1;
+        }
+        if (code == 8) {
+            emon.Port.textAscii(t, "receipt-photo");
+            return 1;
+        }
+        if (code == 16) {
+            emon.Port.textAscii(t, "receipt-thermal");
+            return 1;
+        }
+        if (code == 32) {
+            emon.Port.textAscii(t, "receipt-adopted");
+            return 1;
+        }
+        if (code == 64) {
+            emon.Port.textAscii(t, "receipt-deferred");
             return 1;
         }
         return 0;
@@ -1050,6 +1078,12 @@ public final class Evidence {
     public static int opUpscaled() {
         return 9;
     }
+    public static int opReceipt() {
+        return 10;
+    }
+    public static int opReceiptRescue() {
+        return 11;
+    }
     public static int opEmitName(StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.textAscii(t, "first");
@@ -1085,6 +1119,14 @@ public final class Evidence {
         }
         if (code == 9) {
             emon.Port.textAscii(t, "upscaled");
+            return 1;
+        }
+        if (code == 10) {
+            emon.Port.textAscii(t, "receipt");
+            return 1;
+        }
+        if (code == 11) {
+            emon.Port.textAscii(t, "receipt-rescue");
             return 1;
         }
         return 0;

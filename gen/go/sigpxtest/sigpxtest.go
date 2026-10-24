@@ -300,3 +300,27 @@ func TestTheLinesTheStrokesMadeAreNotThePagesText(emonT *testing.T) {
 	port.AssertEq(emonT, port.CellsAt(scr, scan.ScSelBase()), 1, "the typed name first")
 	port.AssertEq(emonT, port.CellsAt(scr, scan.ScSelBase()+1), 2, "then the other")
 }
+
+func TestUnadoptedReceiptWordsCannotMaskTheBaselineSignaturePixels(emonT *testing.T) {
+	var b *port.Bitmap = port.BitmapNew(300, 120, 3)
+	var rules *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var cand *port.Cells = port.NewCells()
+	var views *port.Cells = port.NewCells()
+	var mask *port.Cells = port.NewCells()
+	spxPaper(b)
+	spxLine(b, 20, 280, 100)
+	spxZig(b, 40, 98, 150, 24, 36, 20, 40, 120)
+	spxRule(rules, 20, 280, 100)
+	evidence.VwNew(views, 1, evidence.VkRender(), -1, -1, 300, 120, 7200, 0, -1, 0, 0, 0, 0, 0)
+	port.CellsPush(et, 83)
+	port.CellsPush(et, 105)
+	port.CellsPush(et, 103)
+	evidence.OwNew(ow, 1, 3000, 5500, 21000, 10500, 3000, 10500, 21000, 10500, 0, 0, 0, 3, 0, 900, -1)
+	port.AssertEq(emonT, sigpx.SpFind(1, views, 0, rules, ow, et, b, 61200, cand, mask), 0, "an admitted confident reading still masks text")
+	port.AssertEq(emonT, sigpx.SpFindWithout(1, views, 0, rules, ow, et, b, 61200, 0, 1, cand, mask), 1, "an unadopted reading cannot erase a signature and restore its rejected text")
+	port.AssertEq(emonT, sigpx.SpFindWithout(1, views, 0, rules, ow, et, b, 61200, 1, 1, cand, mask), 0, "the interval is half open; other readings still mask text")
+	port.AssertEq(emonT, evidence.OwCount(ow), 1, "the raw alternative remains evidence")
+	port.AssertEq(emonT, evidence.OwGet(ow, 0, evidence.HdConf()), 900, "raw confidence is unchanged")
+}

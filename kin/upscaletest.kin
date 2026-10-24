@@ -6,7 +6,7 @@
             [emon.port :refer [cells-len cells-at bms-put bms-get bms-has bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8]]
             [emon.plan :refer [an-ocr an-ocr-word an-ocr-cp an-ocr-end]]
             [emon.ocr :refer [ox-begin ox-line ox-block ox-word ox-find]]
-            [emon.upscale :refer [up-eff-dpi100 up-xheight up-score up-factor up-weights up-make up-max up-xh-trigger]]
+            [emon.upscale :refer [up-receipt-score up-eff-dpi100 up-xheight up-score up-factor up-weights up-make up-max up-xh-trigger]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
 
@@ -173,3 +173,15 @@
             (set x (+ x 1))))
       (assert-eq (bitmap-u8 big 0 0 0) 0 "black at the left")
       (assert-eq (bitmap-u8 big 11 0 0) 255 "white at the right"))))
+
+(deftest test-receipt-quality-uses-confident-alphanumeric-bearing-token-length
+  (let [^Cells ans (new-cells) ^I32 at (an-ocr ans 31)
+        ^I32 low (an-ocr-word ans at 0 0 10 10 499 0 0)]
+    (an-ocr-cp ans low 65)
+    (let [^I32 edge (an-ocr-word ans at 10 0 10 10 500 0 0)] (an-ocr-cp ans edge 57))
+    (let [^I32 dots (an-ocr-word ans at 20 0 10 10 999 0 0)]
+      (an-ocr-cp ans dots 46) (an-ocr-cp ans dots 46) (an-ocr-cp ans dots 46))
+    (let [^I32 token (an-ocr-word ans at 30 0 10 10 800 0 0)]
+      (an-ocr-cp ans token 36) (an-ocr-cp ans token 65))
+    (an-ocr-end ans at)
+    (assert-eq (up-receipt-score ans at) 131 "conf49 is ignored, conf50 is included, punctuation alone cannot vote; the full alphanumeric-bearing token contributes")))

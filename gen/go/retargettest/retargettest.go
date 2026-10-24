@@ -593,3 +593,285 @@ func TestAThermalReadingDoesNotReplaceNormalRecovery(emonT *testing.T) {
 	port.CellsSet(rtp, retarget.RtpFrun(), tr)
 	port.AssertEq(emonT, rttAdopt(rtp, runs, fr, ol, ow, scr), 1, "normal recovery has priority over emergency text")
 }
+
+func TestLosingReceiptViewKeepsOriginalReading(emonT *testing.T) {
+	port.AssertEq(emonT, retarget.RtReceiptWins(100, 99), 0, "a losing view cannot replace Model text")
+	port.AssertEq(emonT, retarget.RtReceiptWins(100, 100), 0, "ties keep the original")
+	port.AssertEq(emonT, retarget.RtReceiptWins(100, 101), 1, "strictly greater confident characters adopt")
+}
+
+func TestUnselectedReceiptReadingDoesNotEnterThePageSelection(emonT *testing.T) {
+	var runs *port.Cells = port.NewCells()
+	var ol *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var rtp *port.Cells = port.NewCells()
+	var scr *port.Cells = port.NewCells()
+	scan.ScPrep(scr)
+	rttLine(ol, ow, feats, 0, 900)
+	var first int32 = rttRun(runs, ol, ow, 0, 0)
+	var l0 int32 = evidence.OlCount(ol)
+	var w0 int32 = evidence.OwCount(ow)
+	rttLine(ol, ow, feats, 60, 400)
+	var candidate int32 = rttRun(runs, ol, ow, l0, w0)
+	retarget.RtPrep(rtp)
+	port.CellsSet(rtp, retarget.RtpReceipt(), candidate)
+	port.CellsSet(rtp, retarget.RtpReceiptWin(), 0)
+	port.CellsSet(scr, scan.ScAdmitFloor(), 300)
+	port.CellsSet(scr, scan.ScShareBase(), 0)
+	port.AssertEq(emonT, rttAdopt(rtp, runs, first, ol, ow, scr), 1, "only the original line is selected")
+	port.AssertEq(emonT, port.CellsAt(scr, scan.ScSelBase()), 0, "losing receipt text cannot enter the Model")
+	port.AssertEq(emonT, port.CellsAt(scr, scan.ScAdmitFloor()), 0, "a losing view cannot leak its confidence floor to the baseline")
+	port.AssertEq(emonT, port.CellsAt(rtp, retarget.RtpPrimary()), first, "the original reading remains primary")
+}
+
+func TestFaintViewIsBlackInkOnWhitePaper(emonT *testing.T) {
+	var gray *port.Bitmap = port.BitmapNew(5, 5, 1)
+	var image *port.Bitmap = port.BitmapNew(5, 5, 1)
+	var pixels *port.Cells = port.NewCells()
+	var x int32 = 0
+	var y int32 = 0
+	for y < 5 {
+		x = 0
+		for x < 5 {
+			port.BitmapSetU8(gray, x, y, 0, 230)
+			x += 1
+		}
+		y += 1
+	}
+	port.BitmapSetU8(gray, 2, 2, 0, 100)
+	retarget.RtFaintInto(gray, image, 300, pixels)
+	y = 0
+	for y < 5 {
+		x = 0
+		for x < 5 {
+			if (x == 2) && (y == 2) {
+				port.AssertEq(emonT, port.BitmapU8(image, x, y, 0), 0, "faint ink is black")
+			} else {
+				port.AssertEq(emonT, port.BitmapU8(image, x, y, 0), 255, "paper is white")
+			}
+			x += 1
+		}
+		y += 1
+	}
+}
+
+func TestEmptyReceiptRescueWaitsForTheViewAndDoesNotRereadSuccess(emonT *testing.T) {
+	var ans *port.Cells = port.NewCells()
+	var empty int32 = plan.AnOcr(ans, 31)
+	plan.AnOcrEnd(ans, empty)
+	port.AssertEq(emonT, retarget.RtEmptyReceipt(1, ans, -1), 0, "wait for the extra view before the all-empty rescue")
+	port.AssertEq(emonT, retarget.RtEmptyReceipt(1, ans, empty), 1, "an empty view permits the rescue")
+	port.AssertEq(emonT, retarget.RtEmptyReceipt(0, ans, -1), 1, "non-receipts retain the existing fallback")
+	var full int32 = plan.AnOcr(ans, 32)
+	var word int32 = plan.AnOcrWord(ans, full, 0, 0, 10, 10, 900, 0, 0)
+	plan.AnOcrCp(ans, word, 72)
+	plan.AnOcrCp(ans, word, 105)
+	plan.AnOcrEnd(ans, full)
+	port.AssertEq(emonT, retarget.RtEmptyReceipt(1, ans, full), 0, "a successful photo view needs no further full-page read")
+	port.AssertEq(emonT, retarget.RtEmptyReceipt(2, ans, full), 1, "the rejected thermal lane retains the original emergency planner")
+}
+
+func TestReceiptViewGeometryDoesNotDependOnOcrSuccess(emonT *testing.T) {
+	var views *port.Cells = port.NewCells()
+	var rtp *port.Cells = port.NewCells()
+	var source int32 = evidence.VwNew(views, 1, evidence.VkRender(), 4, -1, 40, 60, 60000, 0, -1, 0, 0, 100, 200, 0)
+	retarget.RtPrep(rtp)
+	port.CellsSet(rtp, retarget.RtpFactor(), -2)
+	port.CellsSet(rtp, retarget.RtpTrigger(), 1)
+	var view int32 = retarget.RtReceiptView(views, 1, source, 60000, rtp)
+	port.AssertEq(emonT, evidence.VwGet(views, view, evidence.VwfPxw()), 20, "original photo width")
+	port.AssertEq(emonT, evidence.VwGet(views, view, evidence.VwfPxh()), 30, "original photo height")
+	port.AssertEq(emonT, evidence.VwGet(views, view, evidence.VwfDpi()), 30000, "pixel scale maps to the source page")
+	port.AssertEq(emonT, evidence.VwGet(views, view, evidence.VwfCropx()), 100, "inset image x origin is inherited")
+	port.AssertEq(emonT, evidence.VwGet(views, view, evidence.VwfCropy()), 200, "inset image y origin is inherited")
+}
+
+func TestTriggerEvidenceRetainsOrientationDeferralsWithoutInventingARead(emonT *testing.T) {
+	var views *port.Cells = port.NewCells()
+	var rtp *port.Cells = port.NewCells()
+	var source int32 = evidence.VwNew(views, 1, evidence.VkRender(), 4, -1, 40, 60, 30000, 0, -1, 0, 0, 0, 0, 0)
+	retarget.RtPrep(rtp)
+	port.CellsSet(rtp, retarget.RtpTrigger(), 2)
+	port.CellsSet(rtp, retarget.RtpQ(), 2)
+	port.AssertEq(emonT, retarget.RtMarkTrigger(views, source, rtp), 1, "the classifier fired even when the read was deferred")
+	port.AssertEq(emonT, evidence.VwGet(views, source, evidence.VwfFlags()), evidence.VgReceiptThermal()+evidence.VgReceiptDeferred(), "class and deferral are deterministic evidence")
+}
+
+func TestThermalViewRollbackIsAPolicyNotADocumentException(emonT *testing.T) {
+	port.AssertEq(emonT, retarget.RtReceiptMode(0), 0, "non-receipts")
+	port.AssertEq(emonT, retarget.RtReceiptMode(1), 1, "photo view retained")
+	port.AssertEq(emonT, retarget.RtReceiptMode(2), 0, "thermal view reverted for every input")
+}
+
+func TestWinningReceiptReplacesTheWholeReadingWithItsAdmissionFloor(emonT *testing.T) {
+	var runs *port.Cells = port.NewCells()
+	var ol *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var rtp *port.Cells = port.NewCells()
+	var scr *port.Cells = port.NewCells()
+	scan.ScPrep(scr)
+	rttLine(ol, ow, feats, 0, 400)
+	var first int32 = rttRun(runs, ol, ow, 0, 0)
+	var l0 int32 = evidence.OlCount(ol)
+	var w0 int32 = evidence.OwCount(ow)
+	rttLine(ol, ow, feats, 60, 900)
+	var candidate int32 = rttRun(runs, ol, ow, l0, w0)
+	retarget.RtPrep(rtp)
+	port.CellsSet(rtp, retarget.RtpReceipt(), candidate)
+	port.CellsSet(rtp, retarget.RtpReceiptWin(), 1)
+	port.AssertEq(emonT, rttAdopt(rtp, runs, first, ol, ow, scr), 1, "the winning reading supplies the selection")
+	port.AssertEq(emonT, port.CellsAt(scr, scan.ScSelBase()), l0, "candidate line, rather than the baseline line")
+	port.AssertEq(emonT, port.CellsAt(rtp, retarget.RtpPrimary()), candidate, "the primary run follows the selected view")
+	port.AssertEq(emonT, port.CellsAt(scr, scan.ScAdmitFloor()), 300, "the word floor accompanies adoption")
+}
+
+func TestReceiptScoreCannotEraseAVeryConfidentRecoveredWord(emonT *testing.T) {
+	var runs *port.Cells = port.NewCells()
+	var ol *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var rtp *port.Cells = port.NewCells()
+	var scr *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var first int32 = rttRun(runs, ol, ow, 0, 0)
+	port.CellsPush(et, 49)
+	port.CellsPush(et, 50)
+	port.CellsPush(et, 51)
+	port.CellsPush(et, 52)
+	port.CellsPush(et, 53)
+	port.CellsPush(et, 54)
+	port.CellsPush(et, 55)
+	port.CellsPush(et, 56)
+	scan.ScPrep(scr)
+	rttLine(ol, ow, feats, 0, 900)
+	var body int32 = rttRun(runs, ol, ow, 0, 0)
+	var l0 int32 = evidence.OlCount(ol)
+	var w0 int32 = evidence.OwCount(ow)
+	evidence.OlSet(ol, 0, evidence.OlfRun(), body)
+	rttLine(ol, ow, feats, 60, 990)
+	evidence.OwSet(ow, w0, evidence.HdTstart(), 4)
+	evidence.OwSet(ow, w0+1, evidence.HdTstart(), 4)
+	var candidate int32 = rttRun(runs, ol, ow, l0, w0)
+	retarget.RtPrep(rtp)
+	port.CellsSet(rtp, retarget.RtpBrun(), body)
+	port.CellsSet(rtp, retarget.RtpReceipt(), candidate)
+	port.CellsSet(rtp, retarget.RtpReceiptWin(), 1)
+	retarget.RtAdopt(rtp, runs, first, ol, ow, et, scr)
+	port.AssertThat(emonT, port.CellsAt(rtp, retarget.RtpPrimary()) != candidate, "a higher global score cannot wash away a confident recovered word")
+	port.AssertEq(emonT, port.CellsAt(scr, scan.ScSelBase()), 0, "the baseline recovery remains selected")
+	port.AssertEq(emonT, port.CellsAt(scr, scan.ScAdmitFloor()), 0, "no receipt word floor on the retained baseline")
+}
+
+func TestReceiptRecoveryProtectionCountsOccurrencesAndAllowsAFaithfulBetterReading(emonT *testing.T) {
+	var runs *port.Cells = port.NewCells()
+	var ol *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var rtp *port.Cells = port.NewCells()
+	var scr *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var first int32 = rttRun(runs, ol, ow, 0, 0)
+	port.CellsPush(et, 49)
+	port.CellsPush(et, 50)
+	port.CellsPush(et, 51)
+	port.CellsPush(et, 52)
+	port.CellsPush(et, 53)
+	port.CellsPush(et, 54)
+	port.CellsPush(et, 55)
+	port.CellsPush(et, 56)
+	scan.ScPrep(scr)
+	rttLine(ol, ow, feats, 0, 950)
+	var body int32 = rttRun(runs, ol, ow, 0, 0)
+	var l0 int32 = evidence.OlCount(ol)
+	var w0 int32 = evidence.OwCount(ow)
+	evidence.OlSet(ol, 0, evidence.OlfRun(), body)
+	rttLine(ol, ow, feats, 60, 990)
+	evidence.OwSet(ow, w0+1, evidence.HdTstart(), 4)
+	var candidate int32 = rttRun(runs, ol, ow, l0, w0)
+	retarget.RtPrep(rtp)
+	port.CellsSet(rtp, retarget.RtpBrun(), body)
+	port.CellsSet(rtp, retarget.RtpReceipt(), candidate)
+	port.CellsSet(rtp, retarget.RtpReceiptWin(), 1)
+	retarget.RtAdopt(rtp, runs, first, ol, ow, et, scr)
+	port.AssertThat(emonT, port.CellsAt(rtp, retarget.RtpPrimary()) != candidate, "one candidate occurrence cannot cover two confident recovered occurrences")
+	evidence.OwSet(ow, w0+1, evidence.HdTstart(), 0)
+	retarget.RtAdopt(rtp, runs, first, ol, ow, et, scr)
+	port.AssertEq(emonT, port.CellsAt(rtp, retarget.RtpPrimary()), candidate, "a faithful reading with a greater score may replace the recovered baseline")
+	port.AssertEq(emonT, port.CellsAt(scr, scan.ScAdmitFloor()), 300, "adoption still carries the word floor")
+}
+
+func TestInitialReadingRetainsTheDeclaredScorePolicy(emonT *testing.T) {
+	var runs *port.Cells = port.NewCells()
+	var ol *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var rtp *port.Cells = port.NewCells()
+	var scr *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	port.CellsPush(et, 49)
+	port.CellsPush(et, 50)
+	port.CellsPush(et, 51)
+	port.CellsPush(et, 52)
+	port.CellsPush(et, 53)
+	port.CellsPush(et, 54)
+	port.CellsPush(et, 55)
+	port.CellsPush(et, 56)
+	scan.ScPrep(scr)
+	rttLine(ol, ow, feats, 0, 950)
+	var first int32 = rttRun(runs, ol, ow, 0, 0)
+	var l0 int32 = evidence.OlCount(ol)
+	var w0 int32 = evidence.OwCount(ow)
+	evidence.OlSet(ol, 0, evidence.OlfRun(), first)
+	rttLine(ol, ow, feats, 60, 990)
+	evidence.OwSet(ow, w0, evidence.HdTstart(), 4)
+	evidence.OwSet(ow, w0+1, evidence.HdTstart(), 4)
+	var candidate int32 = rttRun(runs, ol, ow, l0, w0)
+	retarget.RtPrep(rtp)
+	port.CellsSet(rtp, retarget.RtpReceipt(), candidate)
+	port.CellsSet(rtp, retarget.RtpReceiptWin(), 1)
+	retarget.RtAdopt(rtp, runs, first, ol, ow, et, scr)
+	port.AssertEq(emonT, port.CellsAt(rtp, retarget.RtpPrimary()), candidate, "a better initial full-page reading is allowed; targeted recovery is protected separately")
+}
+
+func TestOnlyUnadoptedNewReceiptRunsAreExcludedFromTheSignatureMask(emonT *testing.T) {
+	var runs *port.Cells = port.NewCells()
+	var rtp *port.Cells = port.NewCells()
+	var first int32 = evidence.OrNew(runs, 1, 0)
+	var receipt int32 = evidence.OrNew(runs, 1, 1)
+	var rescue int32 = evidence.OrNew(runs, 1, 2)
+	evidence.OrSet(runs, receipt, evidence.OrfPass(), evidence.OpReceipt())
+	evidence.OrSet(runs, receipt, evidence.OrfWfirst(), 5)
+	evidence.OrSet(runs, receipt, evidence.OrfWcount(), 3)
+	evidence.OrSet(runs, rescue, evidence.OrfPass(), evidence.OpBodyInk())
+	evidence.OrSet(runs, rescue, evidence.OrfWfirst(), 8)
+	evidence.OrSet(runs, rescue, evidence.OrfWcount(), 2)
+	retarget.RtPrep(rtp)
+	port.CellsSet(rtp, retarget.RtpReceipt(), receipt)
+	port.CellsSet(rtp, retarget.RtpFrun(), rescue)
+	port.CellsSet(rtp, retarget.RtpPrimary(), first)
+	port.AssertEq(emonT, retarget.RtReceiptIgnored(rtp, runs, 0), 5, "unadopted receipt word interval")
+	port.AssertEq(emonT, retarget.RtReceiptIgnored(rtp, runs, 1), 3, "the legacy emergency reading is not excluded")
+	port.CellsSet(rtp, retarget.RtpPrimary(), receipt)
+	port.AssertEq(emonT, retarget.RtReceiptIgnored(rtp, runs, 1), 0, "the chosen receipt reading remains authoritative")
+	evidence.OrSet(runs, rescue, evidence.OrfPass(), evidence.OpReceiptRescue())
+	port.CellsSet(rtp, retarget.RtpPrimary(), first)
+	port.AssertEq(emonT, retarget.RtReceiptIgnored(rtp, runs, 1), 5, "the adjacent main and rescue alternatives may both be excluded")
+}
+
+func TestPdfScanPhotosDeferWithoutDisablingImagePhotos(emonT *testing.T) {
+	var rtp *port.Cells = port.NewCells()
+	retarget.RtPrep(rtp)
+	port.CellsSet(rtp, retarget.RtpTrigger(), 1)
+	retarget.RtReceiptSource(rtp, 1)
+	port.AssertEq(emonT, retarget.RtReceiptActive(rtp), 1, "image photo keeps its extra view")
+	retarget.RtReceiptSource(rtp, 2)
+	port.AssertEq(emonT, retarget.RtReceiptActive(rtp), 0, "PDF scan keeps baseline recovery")
+	retarget.RtReceiptSource(rtp, 6)
+	port.AssertEq(emonT, retarget.RtReceiptActive(rtp), 0, "script flags do not enable a PDF photo")
+	retarget.RtReceiptSource(rtp, 5)
+	port.AssertEq(emonT, retarget.RtReceiptActive(rtp), 1, "script flags preserve image origin")
+	port.CellsSet(rtp, retarget.RtpTrigger(), 2)
+	port.AssertEq(emonT, retarget.RtReceiptActive(rtp), 0, "thermal lane remains reverted")
+}

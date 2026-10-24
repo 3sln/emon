@@ -200,7 +200,7 @@ pub(crate) fn sp_framed(page1: i32, rules: &mut crate::port::Cells, r: i32, pw: 
     }
     return 0;
 }
-pub(crate) fn sp_mask_words(page1: i32, owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, views: &mut crate::port::Cells, srcview: i32, zx0: i32, zy0: i32, zw: i32, zh: i32, mut mask: &mut crate::port::Cells) -> i32 {
+pub(crate) fn sp_mask_words(page1: i32, owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, views: &mut crate::port::Cells, srcview: i32, zx0: i32, zy0: i32, zw: i32, zh: i32, skipfirst: i32, skipcount: i32, mut mask: &mut crate::port::Cells) -> i32 {
     // Paper over (mask 0) the boxes of the OCR words of the page that the engine was sure of and that hold at least two letters or digits (D466; a lone digit is a stroke's), inside the zone (px zx0, zy0, zw x zh). Answers the words.
     let n: i32 = ow_count(owords);
     let mut i: i32 = 0;
@@ -216,7 +216,7 @@ pub(crate) fn sp_mask_words(page1: i32, owords: &mut crate::port::Cells, etext: 
     let mut x: i32 = 0;
     let mut y: i32 = 0;
     while i < n {
-        if ow_get(owords, i, hd_page()) == page1 {
+        if (ow_get(owords, i, hd_page()) == page1) && ((i < skipfirst) || (i >= (skipfirst + skipcount))) {
             if ow_get(owords, i, hd_conf()) >= sp_conf() {
                 ts = ow_get(owords, i, hd_tstart());
                 tl = ow_get(owords, i, hd_tlen());
@@ -587,7 +587,7 @@ pub(crate) fn sp_judge(page1: i32, views: &mut crate::port::Cells, srcview: i32,
     rgb = ((r * 65536) + (g * 256)) + b;
     return sp_add(cand, kind, row, x0, y0, x1, y1, ink, rgb, swc, conf);
 }
-pub(crate) fn sp_zone(page1: i32, views: &mut crate::port::Cells, srcview: i32, owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, src: &crate::port::Bitmap, rules: &mut crate::port::Cells, r: i32, mut cand: &mut crate::port::Cells, mut mask: &mut crate::port::Cells) -> i32 {
+pub(crate) fn sp_zone(page1: i32, views: &mut crate::port::Cells, srcview: i32, owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, src: &crate::port::Bitmap, rules: &mut crate::port::Cells, r: i32, skipfirst: i32, skipcount: i32, mut cand: &mut crate::port::Cells, mut mask: &mut crate::port::Cells) -> i32 {
     // Measure the zone of rules row r and, when its ink is a pen's, append a candidate to `cand` (see the head of this file). `mask` is the zone's ink map (one cell a pixel) and the
     // statistics after it. Answers 1 when a candidate was added.
     let rx0: i32 = rl_get(rules, r, rlf_x0()) - sp_side();
@@ -634,14 +634,14 @@ pub(crate) fn sp_zone(page1: i32, views: &mut crate::port::Cells, srcview: i32, 
     if ink < sp_min_ink() {
         return 0;
     }
-    sp_mask_words(page1, owords, etext, views, srcview, zx0, zy0, zw, zh, mask);
+    sp_mask_words(page1, owords, etext, views, srcview, zx0, zy0, zw, zh, skipfirst, skipcount, mask);
     ink = sp_stats(src, zx0, zy0, zw, zh, mask, zw * zh);
     if ink < sp_min_ink() {
         return 0;
     }
     return sp_judge(page1, views, srcview, owords, etext, src, rules, r, zx0, zy0, mask, zw * zh, zw, zh, cand);
 }
-pub fn sp_find(page1: i32, views: &mut crate::port::Cells, srcview: i32, rules: &mut crate::port::Cells, owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, src: &crate::port::Bitmap, pw: i32, mut cand: &mut crate::port::Cells, mut mask: &mut crate::port::Cells) -> i32 {
+pub fn sp_find_without(page1: i32, views: &mut crate::port::Cells, srcview: i32, rules: &mut crate::port::Cells, owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, src: &crate::port::Bitmap, pw: i32, skipfirst: i32, skipcount: i32, mut cand: &mut crate::port::Cells, mut mask: &mut crate::port::Cells) -> i32 {
     // The candidates of page `page1` (1-based) from the tracer's rules of the raster `srcview` (a `views` row; `src` its pixels): see the head of this file; written to `cand` (cleared
     // first). `mask` is scratch. Answers how many.
     let n: i32 = rl_count(rules);
@@ -652,12 +652,15 @@ pub fn sp_find(page1: i32, views: &mut crate::port::Cells, srcview: i32, rules: 
         if rl_get(rules, r, rlf_page()) == page1 {
             if (looked < sp_max()) && ((sp_is_rule(rules, r, pw) == 1) && (sp_framed(page1, rules, r, pw) == 0)) {
                 looked += 1;
-                sp_zone(page1, views, srcview, owords, etext, src, rules, r, cand, mask);
+                sp_zone(page1, views, srcview, owords, etext, src, rules, r, skipfirst, skipcount, cand, mask);
             }
         }
         r += 1;
     }
     return crate::port::cells_len(cand) / sp_w();
+}
+pub fn sp_find(page1: i32, views: &mut crate::port::Cells, srcview: i32, rules: &mut crate::port::Cells, owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, src: &crate::port::Bitmap, pw: i32, mut cand: &mut crate::port::Cells, mut mask: &mut crate::port::Cells) -> i32 {
+    return sp_find_without(page1, views, srcview, rules, owords, etext, src, pw, 0, 0, cand, mask);
 }
 pub fn sp_record(page0: i32, cand: &mut crate::port::Cells, mut cg: &mut crate::port::Cells) -> i32 {
     // One correspondence group a candidate: no word, its box the ink's, its colour code (`sm-hue`) in `rot`, flagged `in-seal`, `seal-px` and `seal-sig` or `seal-init`. Answers the groups written.

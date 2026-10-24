@@ -1166,3 +1166,60 @@ fn test_empty_ocr_is_explicitly_ledgered() {
     or_set(runs, 1, orf_wcount(), 1);
     crate::testport::assert_eq(sc_write_empty_ocr(runs, pages, ledger), 0, "successful retry is not diagnosed empty");
 }
+#[test]
+fn test_receipt_word_admission_floor_is_inclusive_and_resets_between_pages() {
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    sc_prep(scr);
+    crate::testport::assert_eq(sc_admit_word(299, 300), 0, "below conf30 stays evidence");
+    crate::testport::assert_eq(sc_admit_word(300, 300), 1, "conf30 is admitted");
+    crate::testport::assert_eq(sc_admit_word(301, 300), 1, "above conf30 is admitted");
+    crate::testport::assert_eq(sc_admit_word(-1, 0), 1, "disabled floor preserves the existing policy");
+    crate::port::cells_set(scr, sc_admit_floor(), 300);
+    sc_prep(scr);
+    crate::testport::assert_eq(crate::port::cells_at(scr, sc_admit_floor()), 0, "a new page never inherits a receipt floor");
+}
+#[test]
+fn test_rejected_ocr_with_no_admitted_text_keeps_empty_ledger_entry() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let bag: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tokens: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let plain: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    page_new(pages, 1, 10000, 20000, 0, pk_image());
+    node_new(nodes, nk_document(), -1);
+    or_new(runs, 1, 0);
+    or_set(runs, 0, orf_wcount(), 1);
+    crate::testport::assert_eq(sc_write_rejected_ocr(runs, pages, nodes, regions, text, ledger, bag, tokens, plain), 1, "raw words refused by health/admission do not hide an empty Model");
+    crate::testport::assert_eq(ledger_reason(ledger, 0), dr_ocr_empty(), "explicit empty diagnostic");
+    let p: i32 = node_new(nodes, nk_paragraph(), 0);
+    crate::port::cells_push(text, 65);
+    node_set_text(nodes, p, 0, 1);
+    node_add_region(nodes, regions, p, 1, 0, 0, 100, 100);
+    crate::testport::assert_eq(sc_write_rejected_ocr(runs, pages, nodes, regions, text, ledger, bag, tokens, plain), 0, "admitted text is not empty");
+    or_set(runs, 0, orf_wcount(), 0);
+    crate::testport::assert_eq(sc_write_rejected_ocr(runs, pages, nodes, regions, text, ledger, bag, tokens, plain), 0, "raw-empty diagnostics remain owned by the existing path");
+}
+#[test]
+fn test_receipt_admission_floor_filters_body_words_and_preserves_raw_evidence() {
+    let ol: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    st_word(ow, et, 0, 100, 299, 0, 72, 105, 0, 0, 0, 0, 0, 0);
+    st_word(ow, et, 200, 300, 300, 0, 72, 105, 0, 0, 0, 0, 0, 0);
+    st_line(ol, 0, 300, 0, 2);
+    sc_prep(scr);
+    crate::port::cells_set(scr, sc_sel_base(), 0);
+    crate::port::cells_set(scr, sc_admit_floor(), 300);
+    crate::testport::assert_eq(sc_emit_sel(ol, ow, &mut crate::port::Cells::new(), 1, 1, 0, scr, words, lines, et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 1, "one admitted line");
+    crate::testport::assert_eq(wd_count(words), 1, "only the conf30 word enters body reconstruction");
+    crate::testport::assert_eq(wd_get(words, 0, hd_conf()), 300, "the threshold word is retained");
+    crate::testport::assert_eq(ow_count(ow), 2, "both raw OCR occurrences remain evidence");
+    crate::testport::assert_eq(ow_get(ow, 0, owf_flags()) & oe_garbage(), oe_garbage(), "the refused occurrence has a ledger fate");
+}

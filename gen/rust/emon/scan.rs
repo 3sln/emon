@@ -4,6 +4,7 @@
 use crate::emon::evidence::*;
 use crate::emon::model::*;
 use crate::emon::ocr::*;
+use crate::emon::ocrledger::*;
 use crate::emon::pdfdoc::*;
 use crate::emon::pdflex::*;
 use crate::emon::pdfsrc::*;
@@ -786,6 +787,16 @@ pub fn sc_answer(an: &mut crate::port::Cells, at: i32, page: i32, view: i32, req
 pub(crate) fn sc_cap() -> i32 {
     return 400;
 }
+pub fn sc_admit_floor() -> i32 {
+    // D707: optional per-page word-confidence floor, before the selection region.
+    return 2299;
+}
+pub fn sc_admit_word(confidence: i32, floor: i32) -> i32 {
+    if (floor > 0) && (confidence < floor) {
+        return 0;
+    }
+    return 1;
+}
 pub fn sc_sel_base() -> i32 {
     // Where `sc-emit-sel`'s selection starts in the scratch.
     return 2300;
@@ -829,6 +840,7 @@ pub fn sc_prep(mut scr: &mut crate::port::Cells) -> i32 {
     while crate::port::cells_len(scr) < (sc_fate_base() + ((4 * sc_fate_max()) + 2)) {
         crate::port::cells_push(scr, 0);
     }
+    crate::port::cells_set(scr, sc_admit_floor(), 0);
     return 0;
 }
 pub(crate) fn sc_isort(mut c: &mut crate::port::Cells, from: i32, n: i32) -> i32 {
@@ -1945,6 +1957,9 @@ pub(crate) fn sc_fates(mut owords: &mut crate::port::Cells, mut etext: &mut crat
         n = ow_get(owords, w, hd_tlen());
         conf = ow_get(owords, w, hd_conf());
         f = 0;
+        if sc_admit_word(conf, crate::port::cells_at(scr, sc_admit_floor())) == 0 {
+            f = 1;
+        }
         crate::port::cells_set(scr, fb + ((2 * fm) + i), -1);
         crate::port::cells_set(scr, fb + ((3 * fm) + i), 0);
         // a dot leader
@@ -3109,6 +3124,31 @@ pub fn sc_write_empty_ocr(oruns: &mut crate::port::Cells, pages: &mut crate::por
         if (seen == 1) && (words == 0) {
             ledger_add(ledger, dr_ocr_empty(), p + 1, 0, 0, page_w(pages, p), page_h(pages, p), 1000, sr_ocr());
             rows += 1;
+        }
+        p += 1;
+    }
+    return rows;
+}
+pub fn sc_write_rejected_ocr(oruns: &mut crate::port::Cells, pages: &mut crate::port::Cells, nodes: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells, mut bag: &mut crate::port::Cells, mut tokens: &mut crate::port::Cells, mut plain: &mut crate::port::Cells) -> i32 {
+    // D707: nonempty OCR evidence can still yield no admitted Model text. Keep the page's ocr-empty diagnostic as well as the occurrence ledger.
+    let mut p: i32 = 0;
+    let mut r: i32 = 0;
+    let mut words: i32 = 0;
+    let mut rows: i32 = 0;
+    while p < page_count(pages) {
+        r = 0;
+        words = 0;
+        while r < or_count(oruns) {
+            if or_get(oruns, r, 0) == (p + 1) {
+                words += or_get(oruns, r, orf_wcount());
+            }
+            r += 1;
+        }
+        if words > 0 {
+            if oc_page_text(nodes, regions, text, p + 1, bag, tokens, plain) == 0 {
+                ledger_add(ledger, dr_ocr_empty(), p + 1, 0, 0, page_w(pages, p), page_h(pages, p), 1000, sr_ocr());
+                rows += 1;
+            }
         }
         p += 1;
     }

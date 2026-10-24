@@ -735,6 +735,6 @@ public static class Transcripttest {
             }
             at = e + 1;
         }
-        emon.Testport.AssertEq(row, 127, "the transcripts under test/");
+        emon.Testport.AssertEq(row, 129, "the transcripts under test/");
     }
 }

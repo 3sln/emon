@@ -3,6 +3,8 @@
 
 use crate::emon::evidence::*;
 use crate::emon::norm::*;
+use crate::emon::pageink::*;
+use crate::emon::plan::*;
 use crate::emon::raster::*;
 use crate::emon::splitmix::*;
 
@@ -935,4 +937,108 @@ fn test_a_page_of_a_ruled_table_and_no_text_is_not_skewed() {
         k += 1;
     }
     crate::testport::assert_eq(nm_deskew(b, pts, prof), 0, "rules are not lines of text: a table alone has no skew to find");
+}
+#[test]
+fn test_receipt_trigger_boundaries_and_born_digital_exclusion() {
+    crate::testport::assert_eq(nm_receipt_trigger(1, 500, 20, 200), 0, "born digital never triggers");
+    crate::testport::assert_eq(nm_receipt_trigger(0, 80, 0, 0), 1, "paper lower boundary is inclusive");
+    crate::testport::assert_eq(nm_receipt_trigger(0, 920, 0, 0), 1, "paper upper boundary is inclusive");
+    crate::testport::assert_eq(nm_receipt_trigger(0, 79, 46, 150), 0, "outside both receipt features");
+    crate::testport::assert_eq(nm_receipt_trigger(0, 921, 45, 150), 2, "narrow thermal boundary is inclusive");
+    crate::testport::assert_eq(nm_receipt_trigger(0, 1000, 45, 149), 0, "a wide text block is not thermal");
+    crate::testport::assert_eq(nm_receipt_trigger(0, 1000, 0, 200), 0, "missing glyph height is not narrow");
+}
+#[test]
+fn test_receipt_paper_region_quarter_sample_and_component_share() {
+    let src: &crate::port::Bitmap = &crate::port::bitmap_new(20, 20, 3);
+    let gray: &crate::port::Bitmap = &crate::port::bitmap_new(20, 20, 1);
+    let binary: &crate::port::Bitmap = &crate::port::bitmap_new(20, 20, 1);
+    let bms: &crate::port::BitmapSet = &crate::port::BitmapSet::new();
+    let views: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let comps: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sv: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let aux: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rn: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ri: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let v: i32 = vw_new(views, 1, vk_render(), -1, -1, 20, 20, 30000, 0, -1, 0, 0, 0, 0, 0);
+    nt_rect(src, 4, 4, 16, 16, 255, 255, 255);
+    nt_rect(src, 8, 8, 12, 12, 0, 0, 0);
+    nm_view(views, inks, 1, v, src, gray, binary, ws, sv, aux);
+    crate::port::bms_put(bms, pu_view_id(0, 11), 20, 20, 1);
+    crate::testport::assert_eq(pn_receipt(1, nm_binary_view(ws), bms, 8, src, gray, crate::port::bms_get(bms, pu_view_id(0, 11)), comps, ws, rn, ri, cs, s1, s2, s3), 1, "one paper island triggers photo");
+    crate::testport::assert_eq(crate::port::cells_at(ws, 12907), 360, "outer paper area is nine quarter pixels, including its text-shaped hole");
+    crate::testport::assert_eq(crate::port::cells_at(ws, 12908), 0, "no glyphs means no narrow-column estimate");
+}
+#[test]
+fn test_paper_closing_fills_stroke_holes_without_expanding_paper() {
+    let mask: &crate::port::Bitmap = &crate::port::bitmap_new(9, 9, 1);
+    let a: &crate::port::Bitmap = &crate::port::bitmap_new(9, 9, 1);
+    let b: &crate::port::Bitmap = &crate::port::bitmap_new(9, 9, 1);
+    let expected: &crate::port::Bitmap = &crate::port::bitmap_new(9, 9, 1);
+    nt_rect(mask, 2, 2, 7, 7, 255, 0, 0);
+    nt_rect(mask, 4, 4, 5, 5, 0, 0, 0);
+    nt_rect(expected, 2, 2, 7, 7, 255, 0, 0);
+    nm_paper_close(mask, a, b, 1);
+    crate::testport::assert_eq(nt_same(mask, expected), 1, "close fills the one pixel text hole and keeps outer paper boundary");
+}
+#[test]
+fn test_analysis_reduction_samples_source_coordinates_exactly() {
+    let src: &crate::port::Bitmap = &crate::port::bitmap_new(7, 5, 1);
+    let dst: &crate::port::Bitmap = &crate::port::bitmap_new(3, 2, 1);
+    let mut x: i32 = 0;
+    let mut y: i32 = 0;
+    while y < 5 {
+        x = 0;
+        while x < 7 {
+            crate::port::bitmap_set_u8(src, x, y, 0, x + (10 * y));
+            x += 1;
+        }
+        y += 1;
+    }
+    nm_analysis_into(src, dst);
+    crate::testport::assert_eq(crate::port::bitmap_u8(dst, 0, 0, 0), 0, "origin");
+    crate::testport::assert_eq(crate::port::bitmap_u8(dst, 1, 0, 0), 2, "middle column");
+    crate::testport::assert_eq(crate::port::bitmap_u8(dst, 2, 0, 0), 4, "last column");
+    crate::testport::assert_eq(crate::port::bitmap_u8(dst, 0, 1, 0), 20, "second row");
+    crate::testport::assert_eq(crate::port::bitmap_u8(dst, 1, 1, 0), 22, "second row middle");
+    crate::testport::assert_eq(crate::port::bitmap_u8(dst, 2, 1, 0), 24, "second row last");
+}
+#[test]
+fn test_receipt_paper_bounds_compare_exact_ratios_before_quantisation() {
+    crate::testport::assert_eq(nm_paper_receipt(920, 1000), 1, "exact upper bound included");
+    crate::testport::assert_eq(nm_paper_receipt(9201, 10000), 0, "92.01 percent must not truncate into 92 percent");
+    crate::testport::assert_eq(nm_paper_receipt(799, 10000), 0, "7.99 percent is below the lower bound");
+    crate::testport::assert_eq(nm_paper_receipt(800, 10000), 1, "exact lower bound included");
+    crate::testport::assert_eq(nm_paper_receipt(3000000, 4000000), 1, "cross products use 64 bits");
+    crate::testport::assert_eq(nm_paper_receipt(0, 0), 0, "no raster is no receipt");
+}
+#[test]
+fn test_receipt_trigger_uses_original_decode_when_ocr_selected_an_enlargement() {
+    let bms: &crate::port::BitmapSet = &crate::port::BitmapSet::new();
+    let original: &crate::port::Bitmap = crate::port::bms_put(bms, pu_id(0, pi_decode()), 20, 20, 3);
+    let enlarged: &crate::port::Bitmap = &crate::port::bitmap_new(40, 40, 3);
+    let gray: &crate::port::Bitmap = &crate::port::bitmap_new(40, 40, 1);
+    let mask: &crate::port::Bitmap = &crate::port::bitmap_new(40, 40, 1);
+    let comps: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let aux: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rn: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ri: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    nt_rect(original, 4, 4, 16, 16, 255, 255, 255);
+    nm_ws_init(ws);
+    crate::port::cells_set(ws, 12901, 123);
+    crate::testport::assert_eq(pn_receipt_source(1, 0, bms, 8, enlarged, gray, mask, comps, ws, aux, rn, ri, cs, s1, s2, s3), 1, "original paper island decides, not the selected enlargement");
+    crate::testport::assert_eq(crate::port::cells_at(ws, 12911), 9, "original quarter-scale paper pixels");
+    crate::testport::assert_eq(crate::port::cells_at(ws, 12912), 25, "original quarter-scale raster pixels");
+    crate::testport::assert_eq(crate::port::cells_at(ws, 12901), 123, "the selected raster's paper level remains intact");
 }

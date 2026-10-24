@@ -158,7 +158,11 @@
 (defenum ^:pub vg
   [[vg-bilevel 1 "bilevel"]
    [vg-nonaffine 2 "nonaffine"]
-   [vg-engine-binary 4 "engine-binary"]])
+   [vg-engine-binary 4 "engine-binary"]
+   [vg-receipt-photo 8 "receipt-photo"]
+   [vg-receipt-thermal 16 "receipt-thermal"]
+   [vg-receipt-adopted 32 "receipt-adopted"]
+   [vg-receipt-deferred 64 "receipt-deferred"]])
 
 ;; What the engine said of a word (1 2 4), and what emon did with it afterwards (8 16 32, P12.6): `garbage` a word of very low confidence
 ;; and implausible characters (or a dot leader) kept out of the page's words and written to the dropped ledger as an `ocr-ghost`;
@@ -273,7 +277,9 @@
    [op-body-ink 6 "body-ink"]
    [op-text-only 7 "text-only"]
    [op-re-rotated 8 "re-rotated"]
-   [op-upscaled 9 "upscaled"]])
+   [op-upscaled 9 "upscaled"]
+   [op-receipt 10 "receipt"]
+   [op-receipt-rescue 11 "receipt-rescue"]])
 
 (defenum ^:pub ir
   [[ir-body 1 "body"]

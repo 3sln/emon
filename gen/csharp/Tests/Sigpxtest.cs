@@ -287,4 +287,28 @@ public static class Sigpxtest {
         emon.Testport.AssertEq(emon.Port.CellsAt(scr, Scan.ScSelBase()), 1, "the typed name first");
         emon.Testport.AssertEq(emon.Port.CellsAt(scr, Scan.ScSelBase() + 1), 2, "then the other");
     }
+    [Xunit.Fact]
+    public static void TestUnadoptedReceiptWordsCannotMaskTheBaselineSignaturePixels() {
+        emon.Port.Bitmap b = emon.Port.BitmapNew(300, 120, 3);
+        emon.Port.Cells rules = emon.Port.NewCells();
+        emon.Port.Cells ow = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells cand = emon.Port.NewCells();
+        emon.Port.Cells views = emon.Port.NewCells();
+        emon.Port.Cells mask = emon.Port.NewCells();
+        SpxPaper(b);
+        SpxLine(b, 20, 280, 100);
+        SpxZig(b, 40, 98, 150, 24, 36, 20, 40, 120);
+        SpxRule(rules, 20, 280, 100);
+        Evidence.VwNew(views, 1, Evidence.VkRender(), -1, -1, 300, 120, 7200, 0, -1, 0, 0, 0, 0, 0);
+        emon.Port.CellsPush(et, 83);
+        emon.Port.CellsPush(et, 105);
+        emon.Port.CellsPush(et, 103);
+        Evidence.OwNew(ow, 1, 3000, 5500, 21000, 10500, 3000, 10500, 21000, 10500, 0, 0, 0, 3, 0, 900, -1);
+        emon.Testport.AssertEq(Sigpx.SpFind(1, views, 0, rules, ow, et, b, 61200, cand, mask), 0, "an admitted confident reading still masks text");
+        emon.Testport.AssertEq(Sigpx.SpFindWithout(1, views, 0, rules, ow, et, b, 61200, 0, 1, cand, mask), 1, "an unadopted reading cannot erase a signature and restore its rejected text");
+        emon.Testport.AssertEq(Sigpx.SpFindWithout(1, views, 0, rules, ow, et, b, 61200, 1, 1, cand, mask), 0, "the interval is half open; other readings still mask text");
+        emon.Testport.AssertEq(Evidence.OwCount(ow), 1, "the raw alternative remains evidence");
+        emon.Testport.AssertEq(Evidence.OwGet(ow, 0, Evidence.HdConf()), 900, "raw confidence is unchanged");
+    }
 }

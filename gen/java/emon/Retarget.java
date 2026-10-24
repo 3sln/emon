@@ -121,6 +121,47 @@ public final class Retarget {
         // Existing OCR empty-line crops precede traced gaps: this bonus exceeds the largest admitted empty-line area (144000 square points).
         return 1000000;
     }
+    public static int riReceipt() {
+        return 31;
+    }
+    public static int rvReceipt() {
+        return 41;
+    }
+    public static int rtpReceipt() {
+        return 251;
+    }
+    public static int rtpReceiptWin() {
+        return 252;
+    }
+    public static int rtpReceiptView() {
+        return 258;
+    }
+    public static int rtReceiptMin() {
+        // D705/D707: only receipt words at conf30 or above are admitted to body reconstruction.
+        return 300;
+    }
+    public static int rtReceiptFlags(int trigger) {
+        if (trigger == 1) {
+            return Evidence.vgReceiptPhoto();
+        }
+        if (trigger == 2) {
+            return Evidence.vgReceiptThermal();
+        }
+        return 0;
+    }
+    public static int rtReceiptMode(int trigger) {
+        // D706: the thermal candidate regressed a non-receipt control; only the photo lane is retained.
+        if (trigger == 1) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int rtReceiptWins(int base, int candidate) {
+        if (candidate > base) {
+            return 1;
+        }
+        return 0;
+    }
     public static int riThermal() {
         return 30;
     }
@@ -240,8 +281,28 @@ public final class Retarget {
         // two cells the pixel hash is written to
         return 254;
     }
-    public static int rtpSize() {
+    public static int rtpFactor() {
         return 256;
+    }
+    public static int rtpTrigger() {
+        return 257;
+    }
+    public static int rtpSourceDeferred() {
+        return 259;
+    }
+    public static int rtReceiptSource(emon.Port.Cells rtp, int sourceMask) {
+        // D705: PDF scans retain baseline empty recovery; source bit2 is set by pu-scan, image inputs carry bit1.
+        emon.Port.cellsSet(rtp, rtpSourceDeferred(), (sourceMask & 2) / 2);
+        return emon.Port.cellsAt(rtp, rtpSourceDeferred());
+    }
+    public static int rtReceiptActive(emon.Port.Cells rtp) {
+        if (emon.Port.cellsAt(rtp, rtpSourceDeferred()) != 0) {
+            return 0;
+        }
+        return rtReceiptMode(emon.Port.cellsAt(rtp, rtpTrigger()));
+    }
+    public static int rtpSize() {
+        return 260;
     }
     public static int rtPrep(emon.Port.Cells rtp) {
         // Make the scratch (`rtp-size` cells) and clear it: every run row -1, every count 0.
@@ -254,6 +315,8 @@ public final class Retarget {
             i += 1;
         }
         emon.Port.cellsSet(rtp, rtpFrun(), -1);
+        emon.Port.cellsSet(rtp, rtpReceipt(), -1);
+        emon.Port.cellsSet(rtp, rtpReceiptView(), -1);
         emon.Port.cellsSet(rtp, rtpBrun(), -1);
         emon.Port.cellsSet(rtp, rtpRrun(), -1);
         emon.Port.cellsSet(rtp, rtpTrun(), -1);
@@ -1106,18 +1169,92 @@ public final class Retarget {
         }
         return 0;
     }
-    public static int rtAskThermal(int page, int dpi, emon.Port.Cells loc, emon.Port.Cells ans, emon.Port.BitmapSet bms, emon.Port.Bitmap gray, int paper, emon.Port.Cells rtp, emon.Port.Cells rq) {
+    public static int rtFaintInto(emon.Port.Bitmap gray, emon.Port.Bitmap dst, int dpi, emon.Port.Cells pixels) {
+        Norm.nmSauvola(gray, dst, Norm.nmSauvolaR(dpi * 100), Norm.nmSauvolaKFaint(), pixels);
+        int x = 0;
+        int y = 0;
+        while (y < emon.Port.bitmapH(dst)) {
+            x = 0;
+            while (x < emon.Port.bitmapW(dst)) {
+                emon.Port.bitmapSetU8(dst, x, y, 0, 255 - emon.Port.bitmapU8(dst, x, y, 0));
+                x += 1;
+            }
+            y += 1;
+        }
+        return 0;
+    }
+    public static int rtEmptyReceipt(int trigger, emon.Port.Cells ans, int at) {
+        if (rtReceiptMode(trigger) == 0) {
+            return 1;
+        }
+        if (at < 0) {
+            return 0;
+        }
+        if (Plan.anOk(ans, at) != 1) {
+            return 1;
+        }
+        if (Plan.anOcrCount(ans, at) == 0) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int rtAskThermal(int page, int dpi, emon.Port.Cells loc, emon.Port.Cells ans, emon.Port.BitmapSet bms, emon.Port.Bitmap gray, int paper, emon.Port.Cells rtp, emon.Port.Cells rq, int trigger, emon.Port.Cells pixels) {
         int id = Plan.puId(page, riThermal());
         int vid = Plan.puViewId(page, rvThermal());
+        int psm = 6;
+        if (trigger == 1) {
+            int photo = Plan.puViewId(page, rvReceipt());
+            emon.Port.Bitmap faint = emon.Port.bmsGet(bms, photo);
+            emon.Port.bitmapHash(faint, rtp, rtpHash());
+            if (Plan.anFind(ans, id) < 0) {
+                Scan.scRequestViewPsm(rq, id, photo, emon.Port.cellsAt(rtp, rtpHash()), emon.Port.cellsAt(rtp, rtpHash() + 1), 11, 300, loc);
+            }
+            return 1;
+        }
         emon.Port.Bitmap v = emon.Port.bmsPut(bms, vid, emon.Port.bitmapW(gray), emon.Port.bitmapH(gray), 1);
         rtThermalInto(gray, v, paper);
         emon.Port.bitmapHash(v, rtp, rtpHash());
         if (Plan.anFind(ans, id) < 0) {
-            Scan.scRequestViewPsm(rq, id, vid, emon.Port.cellsAt(rtp, rtpHash()), emon.Port.cellsAt(rtp, rtpHash() + 1), 6, dpi, loc);
+            Scan.scRequestViewPsm(rq, id, vid, emon.Port.cellsAt(rtp, rtpHash()), emon.Port.cellsAt(rtp, rtpHash() + 1), psm, dpi, loc);
         }
         return 1;
     }
-    public static int rtPlan(int page, int input, int born, int wanttext, int rid, int dpi, emon.Port.Cells loc, emon.Port.Cells ans, emon.Port.BitmapSet bms, int k0, emon.Port.Bitmap src, emon.Port.Cells ws, emon.Port.Cells oruns, int run, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells rules, emon.Port.Cells tlines, emon.Port.Cells rtp, emon.Port.Cells rq, emon.Port.Cells scr, emon.Port.Cells comps, emon.Port.Cells inks) {
+    public static int rtAskReceipt(int page, int dpi, int k0, emon.Port.Cells loc, emon.Port.Cells ans, emon.Port.BitmapSet bms, emon.Port.Cells ws, emon.Port.Cells rtp, emon.Port.Cells rq, emon.Port.Cells scr, int run, emon.Port.Cells oruns) {
+        int id = Plan.puId(page, riReceipt());
+        int vid = Plan.puViewId(page, rvReceipt());
+        emon.Port.Bitmap gray = emon.Port.bmsGet(bms, Plan.puViewId(page, k0));
+        emon.Port.Bitmap original = emon.Port.bmsGet(bms, Plan.puId(page, Plan.piDecode()));
+        int a = Plan.anFind(ans, id);
+        int first = Plan.anFind(ans, Evidence.orGet(oruns, run, Evidence.orfRequest()));
+        int factor = 1;
+        int w = emon.Port.bitmapW(gray);
+        int h = emon.Port.bitmapH(gray);
+        // Binarise a photo at its decoded size, even when the baseline reading was enlarged.
+        if ((emon.Port.bitmapW(original) > 0) && (w > emon.Port.bitmapW(original))) {
+            factor = 0 - (w / emon.Port.bitmapW(original));
+        }
+        emon.Port.cellsSet(rtp, rtpFactor(), factor);
+        if (factor < 0) {
+            w = emon.Port.bitmapW(original);
+            h = emon.Port.bitmapH(original);
+        }
+        emon.Port.Bitmap v = emon.Port.bmsPut(bms, vid, w, h, 1);
+        if (factor < 0) {
+            emon.Port.Bitmap decodedGray = emon.Port.bmsPut(bms, Plan.puViewId(page, 42), w, h, 1);
+            emon.Port.bitmapGrayInto(original, decodedGray);
+            rtFaintInto(decodedGray, v, 300, scr);
+        } else {
+            rtFaintInto(gray, v, dpi, scr);
+        }
+        emon.Port.bitmapHash(v, rtp, rtpHash());
+        if (a < 0) {
+            Scan.scRequestViewPsm(rq, id, vid, emon.Port.cellsAt(rtp, rtpHash()), emon.Port.cellsAt(rtp, rtpHash() + 1), 3, 300, loc);
+        } else if ((Plan.anOk(ans, a) == 1) && (first >= 0)) {
+            emon.Port.cellsSet(rtp, rtpReceiptWin(), rtReceiptWins(Upscale.upReceiptScore(ans, first), Upscale.upReceiptScore(ans, a)));
+        }
+        return 1;
+    }
+    public static int rtPlan(int page, int input, int born, int wanttext, int rid, int dpi, emon.Port.Cells loc, emon.Port.Cells ans, emon.Port.BitmapSet bms, int k0, emon.Port.Bitmap src, emon.Port.Cells ws, emon.Port.Cells oruns, int run, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells rules, emon.Port.Cells tlines, emon.Port.Cells rtp, emon.Port.Cells rq, emon.Port.Cells scr, emon.Port.Cells comps, emon.Port.Cells inks, emon.Port.Cells pixels) {
         // Decide and ask what is not yet answered, in the brief's order: the table cells and the lines, the text-only render and its OCR, the body-ink view,
         // the quarter-turned view. `page` is 0-based (ids), `rid` the request id of the raster `src` that the first pass read at `dpi`, `k0` the id group
         // `emon.pageink` normalized it under, `ws` its layer workspace, `scr` the unit's scratch (`sc-prep`: the measure of every first-pass line is left in it).
@@ -1127,6 +1264,12 @@ public final class Retarget {
         int q = rtTurns(born, oruns, run, tlines, page + 1);
         int touched = 0;
         int asked = 0;
+        if (born == 0) {
+            emon.Port.cellsSet(rtp, rtpTrigger(), emon.Port.cellsAt(ws, 12906));
+        }
+        if ((born == 0) && ((q == 0) && (rtReceiptActive(rtp) == 1))) {
+            asked += rtAskReceipt(page, dpi, k0, loc, ans, bms, ws, rtp, rq, pixels, run, oruns);
+        }
         if ((q == 0) && (born == 0)) {
             rtGapLines(page + 1, dpi, tlines, oruns, run, olines, owords, inks);
         }
@@ -1144,8 +1287,10 @@ public final class Retarget {
         }
         if ((born == 0) && ((q == 0) && (Evidence.orGet(oruns, run, Evidence.orfWcount()) == 0))) {
             int ba = Plan.anFind(ans, Plan.puId(page, riBody()));
-            if ((emon.Port.cellsAt(rtp, rtpBody()) == 0) || ((ba >= 0) && ((Plan.anOk(ans, ba) == 1) && (Plan.anOcrCount(ans, ba) == 0)))) {
-                asked += rtAskThermal(page, dpi, loc, ans, bms, emon.Port.bmsGet(bms, Plan.puViewId(page, k0)), Norm.nmPaperGray(ws), rtp, rq);
+            int receipt = Plan.anFind(ans, Plan.puId(page, riReceipt()));
+            int receiptMode = rtReceiptActive(rtp);
+            if ((rtEmptyReceipt(rtReceiptActive(rtp), ans, receipt) == 1) && ((emon.Port.cellsAt(rtp, rtpBody()) == 0) || ((ba >= 0) && ((Plan.anOk(ans, ba) == 1) && (Plan.anOcrCount(ans, ba) == 0))))) {
+                asked += rtAskThermal(page, dpi, loc, ans, bms, emon.Port.bmsGet(bms, Plan.puViewId(page, k0)), Norm.nmPaperGray(ws), rtp, rq, receiptMode, pixels);
             }
         }
         if (q != 0) {
@@ -1168,6 +1313,43 @@ public final class Retarget {
         Evidence.orSet(oruns, run, Evidence.orfRh(), h);
         return run;
     }
+    public static int rtReceiptView(emon.Port.Cells views, int pg, int srcview, int dpi100, emon.Port.Cells rtp) {
+        int factor = emon.Port.cellsAt(rtp, rtpFactor());
+        int layer = Evidence.vwGet(views, srcview, Evidence.vwfLayer());
+        int cropx = Evidence.vwGet(views, srcview, Evidence.vwfCropx());
+        int cropy = Evidence.vwGet(views, srcview, Evidence.vwfCropy());
+        int w = Evidence.vwGet(views, srcview, Evidence.vwfPxw());
+        int h = Evidence.vwGet(views, srcview, Evidence.vwfPxh());
+        int dpi = dpi100;
+        int kind = Evidence.vkBinary();
+        if (emon.Port.cellsAt(rtp, rtpTrigger()) == 2) {
+            kind = Evidence.vkGray();
+        }
+        if (factor > 1) {
+            w *= factor;
+            h *= factor;
+            dpi *= factor;
+        }
+        if (factor < 0) {
+            w = (w + ((0 - factor) - 1)) / (0 - factor);
+            h = (h + ((0 - factor) - 1)) / (0 - factor);
+            dpi = dpi / (0 - factor);
+        }
+        return Evidence.vwNew(views, pg, kind, -1, srcview, w, h, dpi, layer, -1, 0, 0, cropx, cropy, rtReceiptFlags(emon.Port.cellsAt(rtp, rtpTrigger())));
+    }
+    public static int rtMarkTrigger(emon.Port.Cells views, int srcview, emon.Port.Cells rtp) {
+        int trigger = emon.Port.cellsAt(rtp, rtpTrigger());
+        int flags = 0;
+        if (trigger == 0) {
+            return 0;
+        }
+        flags = Evidence.vwGet(views, srcview, Evidence.vwfFlags()) | rtReceiptFlags(trigger);
+        if ((emon.Port.cellsAt(rtp, rtpQ()) != 0) || (rtReceiptActive(rtp) == 0)) {
+            flags |= Evidence.vgReceiptDeferred();
+        }
+        Evidence.vwSet(views, srcview, Evidence.vwfFlags(), flags);
+        return 1;
+    }
     public static int rtRecord(int page, int srcview, int dpi100, emon.Port.Cells loc, emon.Port.Cells ans, emon.Port.Cells rtp, emon.Port.Cells views, emon.Port.Cells epages, emon.Port.Cells etext, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells feats) {
         // Write every targeted answer that is in and ok as an OCR run (`sc-answer`) of page `page` (0-based), mapped through the view it
         // was read off: `srcview` (the raster the first pass read) for a line, a cell and the body-ink view (the same raster, as it is), the quarter-turned view
@@ -1182,6 +1364,7 @@ public final class Retarget {
         int run = 0;
         int made = 0;
         int rviews = -1;
+        rtMarkTrigger(views, srcview, rtp);
         while (j < nline) {
             id = Plan.puId(page, riLine() + j);
             a = Plan.anFind(ans, id);
@@ -1245,12 +1428,35 @@ public final class Retarget {
                 made += 1;
             }
         }
+        id = Plan.puId(page, riReceipt());
+        a = Plan.anFind(ans, id);
+        if (a >= 0) {
+            int rv = rtReceiptView(views, pg, srcview, dpi100, rtp);
+            emon.Port.cellsSet(rtp, rtpReceiptView(), rv);
+            if (Plan.anOk(ans, a) == 1) {
+                run = Scan.scAnswer(ans, a, pg, rv, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+                rtRunMeta(oruns, run, Evidence.opReceipt(), 3, 3, 0, 0, 0, 0);
+                emon.Port.cellsSet(rtp, rtpReceipt(), run);
+                made += 1;
+            }
+        }
         id = Plan.puId(page, riThermal());
         a = Plan.anFind(ans, id);
         if (a >= 0) {
             if (Plan.anOk(ans, a) == 1) {
-                run = Scan.scAnswer(ans, a, pg, srcview, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
-                rtRunMeta(oruns, run, Evidence.opBodyInk(), 3 + emon.Port.cellsAt(rtp, rtpBody()), 6, 0, 0, 0, 0);
+                int selectedView = srcview;
+                int psm = 6;
+                int pass = Evidence.opBodyInk();
+                int trigger = rtReceiptActive(rtp);
+                if (trigger > 0) {
+                    psm = 11;
+                    pass = Evidence.opReceiptRescue();
+                }
+                if ((trigger == 1) && (emon.Port.cellsAt(rtp, rtpReceiptView()) >= 0)) {
+                    selectedView = emon.Port.cellsAt(rtp, rtpReceiptView());
+                }
+                run = Scan.scAnswer(ans, a, pg, selectedView, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+                rtRunMeta(oruns, run, pass, 3 + emon.Port.cellsAt(rtp, rtpBody()), psm, 0, 0, 0, 0);
                 emon.Port.cellsSet(rtp, rtpFrun(), run);
                 made += 1;
             }
@@ -1523,6 +1729,114 @@ public final class Retarget {
         }
         return best;
     }
+    public static int rtReceiptFold(int cp) {
+        if ((cp >= 65) && (cp <= 90)) {
+            return cp + 32;
+        }
+        return cp;
+    }
+    public static int rtReceiptWordEqual(emon.Port.Cells ow, emon.Port.Cells et, int a, int b) {
+        int n = Evidence.owGet(ow, a, Evidence.hdTlen());
+        int sa = Evidence.owGet(ow, a, Evidence.hdTstart());
+        int sb = Evidence.owGet(ow, b, Evidence.hdTstart());
+        int j = 0;
+        if (n != Evidence.owGet(ow, b, Evidence.hdTlen())) {
+            return 0;
+        }
+        while (j < n) {
+            if (rtReceiptFold(emon.Port.cellsAt(et, sa + j)) != rtReceiptFold(emon.Port.cellsAt(et, sb + j))) {
+                return 0;
+            }
+            j += 1;
+        }
+        return 1;
+    }
+    public static int rtReceiptWordAlpha(emon.Port.Cells ow, emon.Port.Cells et, int w) {
+        int s = Evidence.owGet(ow, w, Evidence.hdTstart());
+        int n = Evidence.owGet(ow, w, Evidence.hdTlen());
+        int j = 0;
+        while (j < n) {
+            if (Upscale.upReceiptAlpha(emon.Port.cellsAt(et, s + j)) == 1) {
+                return 1;
+            }
+            j += 1;
+        }
+        return 0;
+    }
+    public static int rtReceiptProtectConf() {
+        return 900;
+    }
+    public static int rtReceiptProtected(emon.Port.Cells ow, emon.Port.Cells et, int w) {
+        if ((Evidence.owGet(ow, w, Evidence.hdConf()) >= rtReceiptProtectConf()) && (Evidence.owGet(ow, w, Evidence.hdTlen()) >= 2)) {
+            return rtReceiptWordAlpha(ow, et, w);
+        }
+        return 0;
+    }
+    public static int rtReceiptWordValue(emon.Port.Cells ow, emon.Port.Cells et, int w) {
+        return Upscale.upReceiptValue(Evidence.owGet(ow, w, Evidence.hdConf()), Evidence.owGet(ow, w, Evidence.hdTlen()), rtReceiptWordAlpha(ow, et, w));
+    }
+    public static int rtReceiptSelectedCount(emon.Port.Cells ol, emon.Port.Cells ow, emon.Port.Cells et, emon.Port.Cells scr, int n, int word, int first) {
+        int k = 0;
+        int w = 0;
+        int end = 0;
+        int count = 0;
+        int line = 0;
+        while (k < n) {
+            line = emon.Port.cellsAt(scr, Scan.scSelBase() + k);
+            w = Evidence.olGet(ol, line, Evidence.lhFirst());
+            end = w + Evidence.olGet(ol, line, Evidence.lhCount());
+            while (w < end) {
+                if ((Evidence.olGet(ol, line, Evidence.olfRun()) != first) && ((rtReceiptProtected(ow, et, w) == 1) && (rtReceiptWordEqual(ow, et, w, word) == 1))) {
+                    count += 1;
+                }
+                w += 1;
+            }
+            k += 1;
+        }
+        return count;
+    }
+    public static int rtReceiptSafe(emon.Port.Cells runs, emon.Port.Cells ol, emon.Port.Cells ow, emon.Port.Cells et, emon.Port.Cells scr, int n, int candidate, int first) {
+        // D705: compare against the completed baseline selection, including its body-ink recovery. A better global score must preserve very confident token occurrences from the selected targeted recovery lines; the initial reading retains its declared score policy.
+        int c0 = Evidence.orGet(runs, candidate, Evidence.orfWfirst());
+        int cn = c0 + Evidence.orGet(runs, candidate, Evidence.orfWcount());
+        int k = 0;
+        int line = 0;
+        int w = 0;
+        int end = 0;
+        int c = 0;
+        int count = 0;
+        int base = 0;
+        int quality = 0;
+        while (k < n) {
+            line = emon.Port.cellsAt(scr, Scan.scSelBase() + k);
+            w = Evidence.olGet(ol, line, Evidence.lhFirst());
+            end = w + Evidence.olGet(ol, line, Evidence.lhCount());
+            while (w < end) {
+                base += rtReceiptWordValue(ow, et, w);
+                if ((Evidence.olGet(ol, line, Evidence.olfRun()) != first) && (rtReceiptProtected(ow, et, w) == 1)) {
+                    c = c0;
+                    count = 0;
+                    while (c < cn) {
+                        if ((Evidence.owGet(ow, c, Evidence.hdConf()) >= rtReceiptMin()) && (rtReceiptWordEqual(ow, et, w, c) == 1)) {
+                            count += 1;
+                        }
+                        c += 1;
+                    }
+                    if (count < rtReceiptSelectedCount(ol, ow, et, scr, n, w, first)) {
+                        return 0;
+                    }
+                }
+                w += 1;
+            }
+            k += 1;
+        }
+        c = c0;
+        while (c < cn) {
+            quality += rtReceiptWordValue(ow, et, c);
+            c += 1;
+        }
+        return rtReceiptWins(base, quality);
+    }
     public static int rtAdopt(emon.Port.Cells rtp, emon.Port.Cells oruns, int fr, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Cells scr) {
         // The lines a SCANNED page's pipeline reads, in the order it reads them, written to the selection of `scr` (`sc-sel-set`); answers how
         // many. `fr` is the first pass's run. A page that was turned (`rtp-q`) is read from its turned view's run when that scores `rt-turn-gain`
@@ -1552,6 +1866,7 @@ public final class Retarget {
         int bn = 0;
         int ly = 0;
         int mono = 0;
+        emon.Port.cellsSet(scr, Scan.scAdmitFloor(), 0);
         if ((q != 0) && (rrun >= 0)) {
             sf = rtRunScore(oruns, olines, owords, fr);
             sr = rtRunScore(oruns, olines, owords, rrun);
@@ -1723,10 +2038,91 @@ public final class Retarget {
                 }
                 if (n > 0) {
                     emon.Port.cellsSet(rtp, rtpPrimary(), tr);
+                    if (rtReceiptActive(rtp) == 1) {
+                        emon.Port.cellsSet(scr, Scan.scAdmitFloor(), rtReceiptMin());
+                    }
+                }
+            }
+        }
+        if ((emon.Port.cellsAt(rtp, rtpReceiptWin()) == 1) && (emon.Port.cellsAt(rtp, rtpReceipt()) >= 0)) {
+            int receipt = emon.Port.cellsAt(rtp, rtpReceipt());
+            if (rtReceiptSafe(oruns, olines, owords, etext, scr, n, receipt, fr) == 1) {
+                emon.Port.cellsSet(rtp, rtpPrimary(), receipt);
+                emon.Port.cellsSet(scr, Scan.scAdmitFloor(), rtReceiptMin());
+                k = 0;
+                while (k < Scan.scSelMax()) {
+                    emon.Port.cellsSet(scr, Scan.scXtraBase() + (k + 1), 0);
+                    k += 1;
+                }
+                n = 0;
+                k = Evidence.orGet(oruns, receipt, Evidence.orfLfirst());
+                pn = k + Evidence.orGet(oruns, receipt, Evidence.orfLcount());
+                while (k < pn) {
+                    if (Evidence.olGet(olines, k, Evidence.lhCount()) > 0) {
+                        n = rtSelAdd(scr, n, k);
+                    }
+                    k += 1;
                 }
             }
         }
         return n;
+    }
+    public static int rtReceiptIgnored(emon.Port.Cells rtp, emon.Port.Cells runs, int which) {
+        // D705: the new main/rescue runs are adjacent. Unadopted words stay evidence but cannot change the baseline signature mask. which0 first word, which1 count.
+        int chosen = emon.Port.cellsAt(rtp, rtpPrimary());
+        int k = 0;
+        int run = 0;
+        int pass = 0;
+        int start = 0;
+        int end = 0;
+        int lo = -1;
+        int hi = 0;
+        while (k < 2) {
+            run = emon.Port.cellsAt(rtp, rtpReceipt());
+            if (k == 1) {
+                run = emon.Port.cellsAt(rtp, rtpFrun());
+            }
+            if ((run >= 0) && (run != chosen)) {
+                pass = Evidence.orGet(runs, run, Evidence.orfPass());
+                if ((pass == Evidence.opReceipt()) || (pass == Evidence.opReceiptRescue())) {
+                    start = Evidence.orGet(runs, run, Evidence.orfWfirst());
+                    end = start + Evidence.orGet(runs, run, Evidence.orfWcount());
+                    if (end > start) {
+                        if ((lo < 0) || (start < lo)) {
+                            lo = start;
+                        }
+                        if (end > hi) {
+                            hi = end;
+                        }
+                    }
+                }
+            }
+            k += 1;
+        }
+        if (lo < 0) {
+            return 0;
+        }
+        if (which == 0) {
+            return lo;
+        }
+        return hi - lo;
+    }
+    public static int rtMarkAdopted(emon.Port.Cells views, emon.Port.Cells oruns, emon.Port.Cells rtp) {
+        int run = emon.Port.cellsAt(rtp, rtpPrimary());
+        int pass = 0;
+        int view = 0;
+        int flags = 0;
+        if (run < 0) {
+            return 0;
+        }
+        pass = Evidence.orGet(oruns, run, Evidence.orfPass());
+        if ((pass != Evidence.opReceipt()) && (pass != Evidence.opReceiptRescue())) {
+            return 0;
+        }
+        view = Evidence.orGet(oruns, run, Evidence.orfView());
+        flags = Evidence.vwGet(views, view, Evidence.vwfFlags());
+        Evidence.vwSet(views, view, Evidence.vwfFlags(), flags | Evidence.vgReceiptAdopted());
+        return 1;
     }
     public static int rtUpright(emon.Port.Cells rtp, int fr, emon.Port.Cells epages, int page1) {
         // A page that is read from its turned view (`rtp-primary` is not the first pass) by a quarter turn has the width and height of its upright self: the

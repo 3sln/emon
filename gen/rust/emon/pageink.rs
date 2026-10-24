@@ -92,6 +92,175 @@ pub fn pn_deskew_clear(mut views: &mut crate::port::Cells, srcview: i32) -> i32 
     }
     return 0;
 }
+pub(crate) fn pn_percentile(hist: &mut crate::port::Cells, off: i32, n: i32, count: i32, pct: i32) -> i32 {
+    let mut i: i32 = 0;
+    let mut acc: i32 = 0;
+    while i < n {
+        acc += crate::port::cells_at(hist, off + i);
+        if (acc * 100) >= (count * pct) {
+            return i;
+        }
+        i += 1;
+    }
+    return 0;
+}
+pub fn pn_receipt(page: i32, view: i32, bms: &crate::port::BitmapSet, k0: i32, src: &crate::port::Bitmap, gray: &crate::port::Bitmap, mask: &crate::port::Bitmap, comps: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, mut rn: &mut crate::port::Cells, mut ri: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells) -> i32 {
+    // Receipt features only: paper's largest 8-connected region at quarter scale and the central 96 percent of glyph centres.
+    let w: i32 = crate::port::bitmap_w(src);
+    let h: i32 = crate::port::bitmap_h(src);
+    let mut side: i32 = w;
+    let mut step: i32 = 4;
+    let mut qw: i32 = 0;
+    let mut qh: i32 = 0;
+    let mut radius: i32 = 0;
+    let mut x: i32 = 0;
+    let mut y: i32 = 0;
+    let mut nc: i32 = 0;
+    let mut biggest: i32 = 0;
+    let mut left: i32 = 0;
+    let mut top: i32 = 0;
+    let mut right: i32 = 0;
+    let mut bottom: i32 = 0;
+    let mut c: i32 = 0;
+    let mut ch: i32 = 0;
+    let mut cw: i32 = 0;
+    let mut cx: i32 = 0;
+    let mut cy: i32 = 0;
+    let mut paper: i32 = 0;
+    let mut n: i32 = 0;
+    let mut gh: i32 = 0;
+    let mut span: i32 = 0;
+    let mut chars: i32 = 0;
+    let mut aspect: i32 = 0;
+    if h > side {
+        side = h;
+    }
+    if side > 3200 {
+        step = (side + 799) / 800;
+    }
+    qw = (w + (step - 1)) / step;
+    qh = (h + (step - 1)) / step;
+    radius = (((side / step) * 7) + 799) / 800;
+    if (qw < 32) || (qh < 32) {
+        radius = 0;
+    }
+    let small: &crate::port::Bitmap = crate::port::bms_put(bms, pu_view_id(page - 1, k0 + 5), qw, qh, 1);
+    let a: &crate::port::Bitmap = crate::port::bms_put(bms, pu_view_id(page - 1, k0 + 6), qw, qh, 1);
+    let b: &crate::port::Bitmap = crate::port::bms_put(bms, pu_view_id(page - 1, k0 + 7), qw, qh, 1);
+    nm_mask_into(src, ws, 0, mask);
+    while y < qh {
+        x = 0;
+        while x < qw {
+            crate::port::bitmap_set_u8(small, x, y, 0, crate::port::bitmap_u8(mask, x * step, y * step, 0));
+            x += 1;
+        }
+        y += 1;
+    }
+    nm_paper_close(small, a, b, radius);
+    tr_runs(small, rn, ri);
+    tr_unify(rn, ri, qh);
+    nc = tr_label(rn, ri, qh, cs, s1, s2, s3);
+    while c < nc {
+        if crate::port::cells_at(cs, (c * 24) + 4) > biggest {
+            biggest = crate::port::cells_at(cs, (c * 24) + 4);
+            top = crate::port::cells_at(cs, c * 24);
+            left = crate::port::cells_at(cs, (c * 24) + 1);
+            right = crate::port::cells_at(cs, (c * 24) + 2);
+            bottom = crate::port::cells_at(cs, (c * 24) + 3);
+        }
+        c += 1;
+    }
+    // Outer paper area includes enclosed text holes. The complement's border component is not paper.
+    crate::port::bitmap_threshold_into(small, 127, small);
+    tr_runs(small, rn, ri);
+    tr_unify(rn, ri, qh);
+    nc = tr_label(rn, ri, qh, cs, s1, s2, s3);
+    c = 0;
+    while c < nc {
+        if ((crate::port::cells_at(cs, c * 24) > top) && (crate::port::cells_at(cs, (c * 24) + 1) > left)) && ((crate::port::cells_at(cs, (c * 24) + 2) < right) && (crate::port::cells_at(cs, (c * 24) + 3) < bottom)) {
+            biggest += crate::port::cells_at(cs, (c * 24) + 4);
+        }
+        c += 1;
+    }
+    // The experiment's glyph population is measured at long side <=1600, with r31/k.20; full-resolution tracer fragments are a different population.
+    let mut aw: i32 = w;
+    let mut ah: i32 = h;
+    if side > 1600 {
+        aw = (((w as i64) * 1600) / (side as i64)) as i32;
+        ah = (((h as i64) * 1600) / (side as i64)) as i32;
+    }
+    if aw < 1 {
+        aw = 1;
+    }
+    if ah < 1 {
+        ah = 1;
+    }
+    let analysis: &crate::port::Bitmap = crate::port::bms_put(bms, pu_view_id(page - 1, 112), aw, ah, 1);
+    let binary: &crate::port::Bitmap = crate::port::bms_put(bms, pu_view_id(page - 1, 113), aw, ah, 1);
+    nm_analysis_into(gray, analysis);
+    nm_sauvola(analysis, binary, 31, 51, s1);
+    tr_runs(binary, rn, ri);
+    tr_unify(rn, ri, ah);
+    nc = tr_label(rn, ri, ah, cs, s1, s2, s3);
+    crate::port::cells_drop(s1, 0);
+    crate::port::cells_grow(s1, aw + (ah * 2), 0);
+    c = 0;
+    while c < nc {
+        ch = crate::port::cells_at(cs, (c * 24) + 3) - crate::port::cells_at(cs, c * 24);
+        cw = crate::port::cells_at(cs, (c * 24) + 2) - crate::port::cells_at(cs, (c * 24) + 1);
+        if ((ch >= 4) && (ch <= (ah / 15))) && ((cw >= 2) && (cw <= (ch * 3))) {
+            cx = crate::port::cells_at(cs, (c * 24) + 1) + (cw / 2);
+            cy = crate::port::cells_at(cs, c * 24) + (ch / 2);
+            crate::port::cells_set(s1, cx, crate::port::cells_at(s1, cx) + 1);
+            crate::port::cells_set(s1, aw + cy, crate::port::cells_at(s1, aw + cy) + 1);
+            crate::port::cells_set(s1, (aw + ah) + ch, crate::port::cells_at(s1, (aw + ah) + ch) + 1);
+            n += 1;
+        }
+        c += 1;
+    }
+    if n >= 30 {
+        gh = pn_percentile(s1, aw + ah, ah, n, 50);
+        span = pn_percentile(s1, 0, aw, n, 98) - pn_percentile(s1, 0, aw, n, 2);
+        if (gh > 0) && (span > 0) {
+            chars = (span + (gh - 1)) / gh;
+            aspect = ((pn_percentile(s1, aw, ah, n, 98) - pn_percentile(s1, aw, ah, n, 2)) * 100) / span;
+        }
+    }
+    gh = (gh * h) / ah;
+    paper = nm_permille(biggest, qw * qh);
+    if nm_paper_receipt(biggest, qw * qh) == 0 {
+        paper = 0;
+    }
+    crate::port::cells_set(ws, 12906, nm_receipt_trigger(0, paper, chars, aspect));
+    crate::port::cells_set(ws, 12907, nm_permille(biggest, qw * qh));
+    crate::port::cells_set(ws, 12908, chars);
+    crate::port::cells_set(ws, 12909, aspect);
+    crate::port::cells_set(ws, 12910, gh);
+    crate::port::cells_set(ws, 12911, biggest);
+    crate::port::cells_set(ws, 12912, qw * qh);
+    return crate::port::cells_at(ws, 12906);
+}
+pub fn pn_receipt_source(page: i32, view: i32, bms: &crate::port::BitmapSet, k0: i32, src: &crate::port::Bitmap, gray: &crate::port::Bitmap, mask: &crate::port::Bitmap, comps: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, mut aux: &mut crate::port::Cells, mut rn: &mut crate::port::Cells, mut ri: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells) -> i32 {
+    // Receipt features always describe the original decoded pixels, independently of OCR-driven enlargement adoption.
+    let original: &crate::port::Bitmap = crate::port::bms_get(bms, pu_id(page - 1, pi_decode()));
+    let mut k: i32 = 12906;
+    if (crate::port::bitmap_w(original) > 0) && ((crate::port::bitmap_w(original) != crate::port::bitmap_w(src)) || (crate::port::bitmap_h(original) != crate::port::bitmap_h(src))) {
+        let original_gray: &crate::port::Bitmap = crate::port::bms_put(bms, pu_view_id(page - 1, 114), crate::port::bitmap_w(original), crate::port::bitmap_h(original), 1);
+        let original_mask: &crate::port::Bitmap = crate::port::bms_put(bms, pu_view_id(page - 1, 115), crate::port::bitmap_w(original), crate::port::bitmap_h(original), 1);
+        crate::port::bitmap_gray_into(original, original_gray);
+        nm_ws_init(aux);
+        crate::port::bitmap_hist_rgb(original, aux, nm_ws_hist());
+        nm_layers(aux, nm_ink_merge(), nm_ink_paper(), nm_ink_min(), nm_ink_spike());
+        pn_receipt(page, view, bms, k0, original, original_gray, original_mask, comps, aux, rn, ri, cs, s1, s2, s3);
+        while k < 12913 {
+            crate::port::cells_set(ws, k, crate::port::cells_at(aux, k));
+            k += 1;
+        }
+    } else {
+        pn_receipt(page, view, bms, k0, src, gray, mask, comps, ws, rn, ri, cs, s1, s2, s3);
+    }
+    return crate::port::cells_at(ws, 12906);
+}
 pub fn pn_ink(page: i32, srcview: i32, bms: &crate::port::BitmapSet, k0: i32, src: &crate::port::Bitmap, dpi100: i32, traced: i32, mut views: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut comps: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tpts: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, mut sv: &mut crate::port::Cells, mut aux: &mut crate::port::Cells, mut rn: &mut crate::port::Cells, mut ri: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut vr: &mut crate::port::Cells, mut pc: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut mem: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells, mut s4: &mut crate::port::Cells, mut s5: &mut crate::port::Cells, mut s6: &mut crate::port::Cells) -> i32 {
     // Normalize the raster `src` (the bitmap of `views` row `srcview`, of `page`, at `dpi100`): its gray and binary views, its ink
     // layers and a mask a layer (`nm-view`), and with `traced` 1 trace it as P6.4's harness does: the binary view with the majority
@@ -126,6 +295,9 @@ pub fn pn_ink(page: i32, srcview: i32, bms: &crate::port::BitmapSet, k0: i32, sr
             k += 1;
         }
         tr_lightfills(views, page, nm_gray_view(ws), dpi100, gray, nm_paper_gray(ws), mask, inks, prims, refs, s1, s2);
+        if vw_get(views, srcview, vwf_kind()) == vk_decode() {
+            pn_receipt_source(page, nm_binary_view(ws), bms, k0, src, gray, mask, comps, ws, aux, rn, ri, cs, s1, s2, s3);
+        }
     }
     return nl;
 }
