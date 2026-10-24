@@ -1,0 +1,200 @@
+;; RC5 numeric grammar over recorded code points. This validates; it never repairs text.
+(ns emon.ofmt
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.port :refer [cells-at cells-len]]
+            [kin.lang :refer [defdata defn return let set while if do comment + - * < > <= >= == != and or]]))
+
+;; Decimal digit ranges from the vendored UnicodeData.txt (same Nd class as regex \d).
+(defdata fmt-decimal
+  :emitter kin.lang/flat-array
+  :stride 2
+  :data [1632 1641
+         1776 1785
+         1984 1993
+         2406 2415
+         2534 2543
+         2662 2671
+         2790 2799
+         2918 2927
+         3046 3055
+         3174 3183
+         3302 3311
+         3430 3439
+         3558 3567
+         3664 3673
+         3792 3801
+         3872 3881
+         4160 4169
+         4240 4249
+         6112 6121
+         6160 6169
+         6470 6479
+         6608 6617
+         6784 6793
+         6800 6809
+         6992 7001
+         7088 7097
+         7232 7241
+         7248 7257
+         42528 42537
+         43216 43225
+         43264 43273
+         43472 43481
+         43504 43513
+         43600 43609
+         44016 44025
+         65296 65305
+         66720 66729
+         68912 68921
+         68928 68937
+         69734 69743
+         69872 69881
+         69942 69951
+         70096 70105
+         70384 70393
+         70736 70745
+         70864 70873
+         71248 71257
+         71360 71369
+         71376 71395
+         71472 71481
+         71904 71913
+         72016 72025
+         72688 72697
+         72784 72793
+         73040 73049
+         73120 73129
+         73184 73193
+         73552 73561
+         90416 90425
+         92768 92777
+         92864 92873
+         93008 93017
+         93552 93561
+         118000 118009
+         120782 120831
+         123200 123209
+         123632 123641
+         124144 124153
+         124401 124410
+         125264 125273
+         130032 130041]
+  :accessors {^I32 fmt-decimal-count [^I32 ignored]
+              ^I32 fmt-decimal-at [^I32 ignored ^I32 row ^I32 field]})
+
+(defn ^:pub ^I32 fmt-digit [^I32 cp]
+  (if (and (>= cp 48) (<= cp 57)) (return 1))
+  (if (< cp 128) (return 0))
+  (let [^:mut ^I32 r 0]
+    (while (< r (fmt-decimal-count 0))
+      (do (if (< cp (fmt-decimal-at 0 r 0)) (return 0))
+          (if (<= cp (fmt-decimal-at 0 r 1)) (return 1))
+          (set r (+ r 1))))
+    (return 0)))
+(defn ^I32 fmt-fold [^I32 cp]
+  (if (and (>= cp 65) (<= cp 90)) (return (+ cp 32)))
+  (return cp))
+(defn ^I32 fmt-sep [^I32 cp]
+  (if (or (== cp 46) (== cp 44)) (return 1))
+  (return 0))
+(defn ^I32 fmt-date-sep [^I32 cp]
+  (if (or (== cp 47) (or (== cp 46) (== cp 45))) (return 1))
+  (return 0))
+(defn ^I32 fmt-digits [^Cells text ^I32 start ^I32 end]
+  (let [^:mut ^I32 i start]
+    (while (< i end)
+      (do (if (== (fmt-digit (cells-at text i)) 0) (return i)) (set i (+ i 1))))
+    (return i)))
+
+(defn ^I32 fmt-amount [^Cells text ^I32 start ^I32 end]
+  (let [^:mut ^I32 i start ^:mut ^I32 first 0 ^:mut ^I32 n 0 ^:mut ^I32 tail 0 ^:mut ^I32 groups 0]
+    (if (>= i end) (return 0))
+    (if (or (== (cells-at text i) 45) (== (cells-at text i) 8722)) (set i (+ i 1)))
+    (if (< i end)
+      (if (or (== (cells-at text i) 36) (or (== (cells-at text i) 8364) (== (cells-at text i) 163)))
+        (set i (+ i 1))
+        (if (< (+ i 1) end)
+          (if (and (== (fmt-fold (cells-at text i)) 114)
+                   (or (== (fmt-fold (cells-at text (+ i 1))) 109) (== (fmt-fold (cells-at text (+ i 1))) 112)))
+            (set i (+ i 2))))))
+    (set first i) (set i (fmt-digits text i end)) (set n (- i first))
+    (if (== n 0) (return 0))
+    (if (== i end) (return 1))
+    (comment "A plain amount admits one or two decimal places, of any integer width.")
+    (if (== (fmt-sep (cells-at text i)) 1)
+      (do (set tail (fmt-digits text (+ i 1) end))
+          (if (and (== tail end) (and (>= (- tail i) 2) (<= (- tail i) 3))) (return 1))))
+    (comment "Grouped amounts start with one to three digits; each grouping is three digits, then optional decimals and trailing minus.")
+    (if (> n 3) (return 0))
+    (while (< i end)
+      (do (if (== (cells-at text i) 45)
+            (if (== (+ i 1) end) (return 1) (return 0)))
+          (if (== (fmt-sep (cells-at text i)) 0) (return 0))
+          (set first (+ i 1)) (set tail (fmt-digits text first end)) (set n (- tail first))
+          (if (== n 3) (set groups (+ groups 1))
+            (if (and (>= n 1) (<= n 2))
+              (do (if (== tail end) (return 1))
+                  (if (and (== (+ tail 1) end) (== (cells-at text tail) 45)) (return 1))
+                  (return 0))
+              (return 0)))
+          (set i tail)))
+    (if (>= groups 0) (return 1))
+    (return 0)))
+
+(defn ^I32 fmt-quantity [^Cells text ^I32 start ^I32 end]
+  (let [^:mut ^I32 i start ^:mut ^I32 first 0 ^:mut ^I32 n 0]
+    (if (>= i end) (return 0))
+    (if (== (fmt-fold (cells-at text i)) 120) (set i (+ i 1)))
+    (set first i) (set i (fmt-digits text i end)) (set n (- i first))
+    (if (or (< n 1) (> n 3)) (return 0))
+    (if (< i end) (if (== (fmt-fold (cells-at text i)) 120) (set i (+ i 1))))
+    (if (== i end) (return 1))
+    (return 0)))
+
+(defn ^I32 fmt-date [^Cells text ^I32 start ^I32 end]
+  (let [^:mut ^I32 i (fmt-digits text start end) ^:mut ^I32 a 0 ^:mut ^I32 b 0 ^:mut ^I32 c 0 ^:mut ^I32 first 0]
+    (set a (- i start))
+    (if (or (== a 0) (>= i end)) (return 0))
+    (if (== (fmt-date-sep (cells-at text i)) 0) (return 0))
+    (set first (+ i 1)) (set i (fmt-digits text first end)) (set b (- i first))
+    (if (or (or (< b 1) (> b 2)) (>= i end)) (return 0))
+    (if (== (fmt-date-sep (cells-at text i)) 0) (return 0))
+    (set first (+ i 1)) (set i (fmt-digits text first end)) (set c (- i first))
+    (if (!= i end) (return 0))
+    (if (and (and (>= a 1) (<= a 2)) (and (>= c 2) (<= c 4))) (return 1))
+    (if (and (== a 4) (and (>= c 1) (<= c 2))) (return 1))
+    (return 0)))
+
+(defn ^I32 fmt-time [^Cells text ^I32 start ^I32 end]
+  (let [^:mut ^I32 i (fmt-digits text start end) ^:mut ^I32 first 0]
+    (if (or (< (- i start) 1) (> (- i start) 2)) (return 0))
+    (if (>= i end) (return 0))
+    (if (!= (cells-at text i) 58) (return 0))
+    (set first (+ i 1)) (set i (fmt-digits text first end))
+    (if (!= (- i first) 2) (return 0))
+    (if (== i end) (return 1))
+    (if (!= (cells-at text i) 58) (return 0))
+    (set first (+ i 1)) (set i (fmt-digits text first end))
+    (if (and (== i end) (== (- i first) 2)) (return 1))
+    (return 0)))
+
+(defn ^I32 fmt-percent [^Cells text ^I32 start ^I32 end]
+  (let [^:mut ^I32 i (fmt-digits text start end) ^:mut ^I32 first 0]
+    (if (or (< (- i start) 1) (> (- i start) 3)) (return 0))
+    (if (>= i end) (return 0))
+    (if (== (fmt-sep (cells-at text i)) 1)
+      (do (set first (+ i 1)) (set i (fmt-digits text first end))
+          (if (or (< (- i first) 1) (> (- i first) 2)) (return 0))))
+    (if (>= i end) (return 0))
+    (if (and (== (+ i 1) end) (== (cells-at text i) 37)) (return 1))
+    (return 0)))
+
+(defn ^:pub ^I32 ofmt-valid [^Cells text ^I32 start ^I32 count]
+  (if (or (< start 0) (or (<= count 0) (> start (cells-len text)))) (return 0))
+  (if (> count (- (cells-len text) start)) (return 0))
+  (let [^I32 end (+ start count)]
+    (if (== (fmt-amount text start end) 1) (return 1))
+    (if (== (fmt-quantity text start end) 1) (return 1))
+    (if (== (fmt-date text start end) 1) (return 1))
+    (if (== (fmt-time text start end) 1) (return 1))
+    (return (fmt-percent text start end))))

@@ -126,6 +126,7 @@
   {:glob "kin/{bornlayouttest,pagebounds*,panel*,para*,heading*,table*,columns*,lists,listtest,links,notes,inline*,initial*,hidden*,furniture*,restruct,fields*,tagtable*,health*,tlhealth*,calib*}.kin"
    :gates ["unit" "slice" "identity" "repeat" "accuracy" "ocr" "fusion" "gfuse" "artifacts" "seals" "sealpx" "sigs" "retarget" "asset"]
    :why "layout, structure and confidences: the nodes and `conf` of every Model, so every replay gate's digest and the scoreboard's rows"}
+  {:glob "kin/{ofmt,ofuse,ofusetest}.kin" :gates ["unit" "retarget" "ocr"] :why "RC5 recorded-reading fusion foundations: grammar, distinct-reading aggregation, split/merge selection, deterministic ranking, overlap alignment and verbatim source copies"}
   {:glob "kin/{retarget,retargettest}.kin" :gates ["unit" "retarget" "ocr"] :why "targeted re-OCR rounds (SPEC 8.3): the retarget gate's digests and the committed scans through the whole Engine"}
   {:glob "kin/{gfuse*,gvec*,glayer*,trace*,pdfgfx}.kin" :gates ["unit" "gfuse" "sealpx"] :why "graphics fusion and the tracer: the gfuse digests; the seals-from-pixels set reads the tracer's ink"}
   {:glob "kin/{sealfield*,sealmark*,sealpx*,sigmark*,sigpx*}.kin" :gates ["unit" "seals" "sealpx" "sigs"] :why "seals, stamps and signatures: their three replay gates"}
@@ -165,7 +166,7 @@
   {:glob "kin/scripts/emon-wasm-{build,run}" :gates ["slice" "identity" "repeat"] :hosts ["wasm"] :why "builds and drives the browser module"}
   {:glob "kin/scripts/emon-plandrv-build" :gates ["render" "align"] :hosts ["java" "csharp"] :why "builds the Java and C# plan-gate drivers (render, align)"}
   {:glob "kin/scripts/{asset-fixtures,asset-fig-fixtures,asset-golden,asset-record}" :gates ["unit" "asset"] :why "asset fixtures, goldens and the figures recorder"}
-  {:glob "kin/scripts/{content-*,pdf-*,pdfnames.py,struct-*,vis-*,heading-*,para-*,table-*,json-check.py,html-check.py,gold-check.py,inflate-*,lzw-vectors,png-predictor-vectors,font-*,fontdata.py,fontextra.clj,bididata.clj,bidi-samples.clj,cjkdata.clj,cjkfetch.clj,radicals.clj,ucd.py,trigdata,synth-extras.edn,evidence-goldens}"
+  {:glob "kin/scripts/{content-*,pdf-*,pdfnames.py,struct-*,vis-*,heading-*,para-*,table-*,json-check.py,html-check.py,gold-check.py,inflate-*,lzw-vectors,png-predictor-vectors,font-*,fontdata.py,fontextra.clj,bididata.clj,bidi-samples.clj,cjkdata.clj,cjkfetch.clj,radicals.clj,ucd.py,ofuse-data.py,trigdata,synth-extras.edn,evidence-goldens}"
    :gates ["unit" "slice"] :why "generators and second-opinion checkers that `bb unit` runs first (and `bb slice` for the golden writers)"}
   {:glob "kin/scripts/{ink,trace,png-bench}" :gates [] :why "reports and live recorders (bb ink, bb trace, bb png-bench): not gates"}
 

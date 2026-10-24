@@ -93,6 +93,7 @@ trap 'rm -rf "$work"' EXIT
 # check -- zlib's output differs between zlib versions, so the committed
 # file is authoritative and the script only regenerates it, D046.)
 command -v python3 > /dev/null && python3 kin/scripts/ucd.py --check
+command -v python3 > /dev/null && python3 kin/scripts/ofuse-data.py --check
 # THE PDF NAME TABLE (P1.4) is generated too, and checked the same way.
 command -v python3 > /dev/null && python3 kin/scripts/pdfnames.py --check
 # THE CATALOGUE READERS' NAME TABLE (P3.8, P3.9) is generated too, in babashka (D094), and checked the same way.
