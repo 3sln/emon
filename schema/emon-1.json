@@ -492,7 +492,9 @@
             "rule-ghost",
             "unwitnessed-uncertain-paint",
             "ocr-empty",
-            "ocr-unrepresented"
+            "ocr-unrepresented",
+            "figure-unmeasured",
+            "figure-signature-unmeasured"
           ]
         },
         "page": {

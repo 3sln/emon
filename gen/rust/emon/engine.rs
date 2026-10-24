@@ -307,6 +307,7 @@ pub(crate) fn en_figures(m: &mut crate::emon::enctx::Arenas, s: &mut crate::emon
     // P8.1 (SPEC 10.6): the figures, before `rs-run` (a caption next to one finds it as its object): every output has them, at every level of
     // `assets` (which only decides whether they get pixels, and tells the asset stage's candidate rows `cand` what P8.1 found).
     fc_stage(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut s.fnodes, &mut s.fattrs, &mut s.fregions, &mut s.fnm, &mut d.pa, &mut d.im, &mut d.fi, &mut s.grg, &mut d.grl, &mut d.fw, &mut d.fl, &mut d.et, &mut d.pg, &mut s.sm, &mut d.cand, level, &mut s.fcand, &mut s.fcl, &mut s.fg, &mut s.ffd, &mut s.fab, &mut s.fws);
+    fc_write(&mut s.fcand, &mut s.ffd, &mut m.ledger);
     crate::port::cells_swap(&mut m.nodes, &mut s.fnodes);
     crate::port::cells_swap(&mut m.attrs, &mut s.fattrs);
     crate::port::cells_swap(&mut m.regions, &mut s.fregions);
@@ -347,7 +348,6 @@ pub(crate) fn en_stage3(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::en
             crate::port::text_ascii(&mut d.evidence, ",\"tb\":");
             tt_emit(&mut d.evidence, &mut s.tv);
         }
-        crate::port::text_ascii(&mut d.evidence, "}");
     }
     crate::port::cells_copy_into(&mut s.iloc, &mut c.lcl);
     lc_copy(&mut d.fl, &mut s.lt);
@@ -363,6 +363,12 @@ pub(crate) fn en_stage3(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::en
     pa_build(&mut d.fw, &mut d.et, np, &mut m.pages, &mut m.layout, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut s.ord, &mut s.raw, &mut s.tmp, &mut s.fr, &mut s.gp, &mut s.lt, &mut s.ls, &mut s.sd, &mut s.it, &mut s.io, &mut s.rw, &mut s.gu, &mut s.ac, &mut s.tm, &mut s.cf, &mut s.lo, &mut s.pr, &mut s.dbg, &mut s.hc, &mut s.tb, &mut s.tc, &mut s.tw, &mut s.tq, &mut m.ledger, &mut s.ii, &mut s.al, &mut s.pix);
     if kind == 0 {
         en_figures(m, s, d, c.level);
+    }
+    if c.keep != 0 {
+        if kind == 0 {
+            fc_emit_budget(&mut s.fcand, &mut s.ffd, &mut d.evidence);
+        }
+        crate::port::text_ascii(&mut d.evidence, "}");
     }
     rs_run(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut s.rn, &mut s.ra, &mut s.rr, &mut s.rnm, &mut s.rstk, &mut s.rused, &mut s.rout, &mut m.layout);
     crate::port::cells_swap(&mut m.nodes, &mut s.rn);

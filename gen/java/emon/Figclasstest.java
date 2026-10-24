@@ -502,6 +502,7 @@ public final class Figclasstest {
     }
     public static void testARasterOnOtherPagesIsARecurringLogoByItsObjectOrItsDigest() {
         emon.Port.Cells fi = emon.Port.newCells();
+        emon.Port.Cells counts = emon.Port.newCells();
         emon.Port.Cells pa = emon.Port.newCells();
         emon.Port.Cells pages = emon.Port.newCells();
         emon.Port.Cells cand = emon.Port.newCells();
@@ -517,18 +518,19 @@ public final class Figclasstest {
         ftImgCand(cand, 3, 5000, 5000, 9000, 7000, 7, 0);
         ftImgCand(cand, 4, 5000, 5000, 9000, 7000, 11, 3);
         ftImgCand(cand, 1, 20000, 5000, 24000, 7000, 7, 0);
-        Figclass.fcSignRows(fi, pa, cand);
+        Figclass.fcSignRows(fi, pa, cand, counts);
         emon.Testport.assertEq(Figclass.fcRecur(cand, pages, 1), 160, "the raster of page 2 is on two other pages (its digest equals the others', wherever it stands)");
         emon.Testport.assertEq(Figclass.fcRecur(cand, pages, 0), 160, "the one of page 1: pages 2 (digest) and 3 (object); its second use on page 1 does not count");
         emon.Testport.assertEq(Figclass.fcRecur(cand, pages, 3), 0, "a raster with another digest and object recurs nowhere");
         // the same digest with another pixel size is another raster
         ftImgCand(cand, 3, 5000, 5000, 9000, 7000, 12, 2);
-        Figclass.fcSignRows(fi, pa, cand);
+        Figclass.fcSignRows(fi, pa, cand, counts);
         emon.Testport.assertEq(Figclass.fcRecur(cand, pages, 5), 0, "the same digest of another size is no recurrence");
         emon.Testport.assertEq(Figclass.fcRecur(cand, pages, 3), 0, "and it is not on the others' count");
     }
     public static void testVectorArtRecursAtTheSamePlaceWhateverItsScale() {
         emon.Port.Cells fi = emon.Port.newCells();
+        emon.Port.Cells counts = emon.Port.newCells();
         emon.Port.Cells pa = emon.Port.newCells();
         emon.Port.Cells pages = emon.Port.newCells();
         emon.Port.Cells cand = emon.Port.newCells();
@@ -549,7 +551,7 @@ public final class Figclasstest {
         ftPath(pa, 4, 3, 7300, 7300, 13300, 13300, 43639, -1, 9);
         ftPath(pa, 4, 2, 9700, 9700, 10900, 10900, 16777215, -1, 8);
         ftVecCand(cand, 4, 7300, 7300, 13300, 13300);
-        Figclass.fcSignRows(fi, pa, cand);
+        Figclass.fcSignRows(fi, pa, cand, counts);
         emon.Testport.assertEq(Figclass.fcRecur(cand, pages, 0), 100, "page 1's mark recurs on page 2 only: page 3 is another place and page 4 another scale");
         emon.Testport.assertEq(Figclass.fcRecur(cand, pages, 1), 100, "and page 2's on page 1");
         emon.Testport.assertEq(Figclass.fcRecur(cand, pages, 2), 0, "the same drawing mid-page recurs nowhere");
@@ -561,5 +563,166 @@ public final class Figclasstest {
         emon.Testport.assertEq(Figclass.fcImageKind(fi, 0, 4000, 4000, 30000, 34000, 79200, 0) / 1024, Model.fgUnknown(), "a small flat raster mid-page, seen once");
         emon.Testport.assertEq(Figclass.fcImageKind(fi, 0, 4000, 4000, 30000, 34000, 79200, 100) / 1024, Model.fgLogo(), "the same on another page too: a logo");
         emon.Testport.assertEq(Figclass.fcImageKind(fi, 0, 4000, 4000, 30000, 34000, 79200, 220) % 1024, 800, "and surer for each page it is on");
+    }
+    public static void testMeasureChargesOnlyThePagePrefixVisited() {
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells fw = emon.Port.newCells();
+        emon.Port.Cells fl = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells grl = emon.Port.newCells();
+        emon.Port.Cells ws = emon.Port.newCells();
+        int p = 2;
+        ftPath(pa, 1, 2, 10000, 10000, 30000, 20000, -1, -1, 72);
+        ftWs(ws);
+        emon.Testport.assertEq(Figclass.fcMeasure(pa, grl, fw, fl, et, 1, 10000, 10000, 30000, 20000, ws), 0, "prefix measured");
+        emon.Testport.assertEq(emon.Port.cellsAt(ws, 127), 1, "one indexed path visited");
+        while (p <= 16) {
+            ftPath(pa, p, 2, 10000, 10000, 30000, 20000, -1, -1, 72);
+            p += 1;
+        }
+        emon.Port.cellsSet(ws, 127, 0);
+        emon.Testport.assertEq(Figclass.fcMeasure(pa, grl, fw, fl, et, 1, 10000, 10000, 30000, 20000, ws), 0, "extended prefix measured");
+        emon.Testport.assertEq(emon.Port.cellsAt(ws, 127), 1, "later pages cost no visits");
+        emon.Testport.assertEq(emon.Port.cellsAt(ws, 20), 1, "same shaded fill decision");
+    }
+    public static void testDocumentWorkCapRefusesBeforeVisitingAndClearsFeatures() {
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells fw = emon.Port.newCells();
+        emon.Port.Cells fl = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells grl = emon.Port.newCells();
+        emon.Port.Cells ws = emon.Port.newCells();
+        ftPath(pa, 1, 2, 10000, 10000, 30000, 20000, -1, -1, 72);
+        ftWs(ws);
+        emon.Port.cellsSet(ws, 127, 400000000);
+        emon.Port.cellsSet(ws, 20, 1);
+        emon.Testport.assertEq(Figclass.fcMeasure(pa, grl, fw, fl, et, 1, 10000, 10000, 30000, 20000, ws), 2, "explicit document resource refusal");
+        emon.Testport.assertEq(emon.Port.cellsAt(ws, 127), 400000000, "no visits beyond cap");
+        emon.Testport.assertEq(emon.Port.cellsAt(ws, 20), 0, "no previous candidate's features");
+    }
+    public static void testPageWorkCannotStarveTheFollowingPage() {
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells fw = emon.Port.newCells();
+        emon.Port.Cells fl = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells grl = emon.Port.newCells();
+        emon.Port.Cells ws = emon.Port.newCells();
+        ftPath(pa, 1, 2, 10000, 10000, 30000, 20000, -1, -1, 72);
+        ftPath(pa, 2, 2, 10000, 10000, 30000, 20000, -1, -1, 72);
+        ftWs(ws);
+        emon.Port.cellsSet(ws, 125, 1);
+        emon.Port.cellsSet(ws, 126, 40000000);
+        emon.Testport.assertEq(Figclass.fcMeasure(pa, grl, fw, fl, et, 1, 10000, 10000, 30000, 20000, ws), 1, "page allowance exhausted");
+        emon.Testport.assertEq(Figclass.fcMeasure(pa, grl, fw, fl, et, 2, 10000, 10000, 30000, 20000, ws), 0, "next page has its own allowance");
+        emon.Testport.assertEq(emon.Port.cellsAt(ws, 20), 1, "next page measured");
+    }
+    public static int ftBudgetPages(int emonT, int n) {
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells grg = emon.Port.newCells();
+        emon.Port.Cells fnodes = emon.Port.newCells();
+        emon.Port.Cells fattrs = emon.Port.newCells();
+        emon.Port.Cells fregions = emon.Port.newCells();
+        emon.Port.Cells fnm = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells im = emon.Port.newCells();
+        emon.Port.Cells fi = emon.Port.newCells();
+        emon.Port.Cells grl = emon.Port.newCells();
+        emon.Port.Cells fw = emon.Port.newCells();
+        emon.Port.Cells fl = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pg = emon.Port.newCells();
+        emon.Port.Cells sl = emon.Port.newCells();
+        emon.Port.Cells cand = emon.Port.newCells();
+        emon.Port.Cells fcand = emon.Port.newCells();
+        emon.Port.Cells cl = emon.Port.newCells();
+        emon.Port.Cells fg = emon.Port.newCells();
+        emon.Port.Cells fd = emon.Port.newCells();
+        emon.Port.Cells ab = emon.Port.newCells();
+        emon.Port.Cells ws = emon.Port.newCells();
+        int p = 1;
+        int i = 0;
+        int x = 0;
+        int y = 0;
+        int count = 0;
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        while (p <= n) {
+            Model.pageNew(pages, p, 500000, 792000, 0, Model.pkVector());
+            i = 0;
+            while (i < 129) {
+                x = 1000 + ((i % 20) * 20000);
+                y = 1000 + ((i / 20) * 10000);
+                ftPath(pa, p, 2, x, y, x + 16000, y + 8000, -1, -1, 72);
+                i += 1;
+            }
+            p += 1;
+        }
+        count = Figclass.fcStage(nodes, attrs, regions, text, pages, fnodes, fattrs, fregions, fnm, pa, im, fi, grg, grl, fw, fl, et, pg, sl, cand, 0, fcand, cl, fg, fd, ab, ws);
+        emon.Testport.assertEq(count, n * 128, "each page gets 128 measurements regardless of document length");
+        i = 0;
+        count = 0;
+        while (i < (emon.Port.cellsLen(fd) / 8)) {
+            if (emon.Port.cellsAt(fd, (i * 8) + 5) == 3) {
+                count += 1;
+            }
+            i += 1;
+        }
+        emon.Testport.assertEq(count, n, "every over-limit region has explicit evidence");
+        Figclass.fcWrite(fcand, fd, ledger);
+        emon.Testport.assertEq(Model.ledgerCount(ledger), n, "every unmeasured box reaches the dropped ledger");
+        emon.Testport.assertEq(Model.ledgerReason(ledger, 0), Model.drFigureUnmeasured(), "the ledger names the resource refusal");
+        return count;
+    }
+    public static void testPageCandidatePrefixInvarianceAtOneFourAndSixteen() {
+        emon.Testport.assertEq(ftBudgetPages(0, 1), 1, "one page");
+        emon.Testport.assertEq(ftBudgetPages(0, 4), 4, "four pages");
+        emon.Testport.assertEq(ftBudgetPages(0, 16), 16, "sixteen pages");
+    }
+    public static void testUnmeasuredDocumentRegionIsExplicitInEvidenceAndLedger() {
+        emon.Port.Cells cand = emon.Port.newCells();
+        emon.Port.Cells fd = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        ftCand(cand, 1, 10000, 20000, 30000, 40000);
+        ftFd(fd, 0, 0);
+        emon.Port.cellsSet(fd, 5, 2);
+        emon.Port.cellsSet(cand, 31, 2);
+        emon.Testport.assertEq(Figclass.fcEmitBudget(cand, fd, t), 1, "one explicit resource record");
+        emon.Testport.assertText(t, ",\"fc-unmeasured\":[[1,10000,20000,30000,40000,2,2]]", "document refusals retain both statuses and the exact box");
+        Figclass.fcWrite(cand, fd, ledger);
+        emon.Testport.assertEq(Model.ledgerCount(ledger), 2, "measurement and signature refusal both represented");
+        emon.Testport.assertEq(Model.ledgerReason(ledger, 0), Model.drFigureUnmeasured(), "unmeasured is distinct from measured rejection");
+    }
+    public static int ftSignaturePrefix(int emonT, int npages) {
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells cand = emon.Port.newCells();
+        emon.Port.Cells fi = emon.Port.newCells();
+        emon.Port.Cells counts = emon.Port.newCells();
+        int p = 1;
+        int r = 0;
+        while (p <= npages) {
+            ftPath(pa, p, 3, 7300, 7300, 10300, 10300, 43639, -1, 9);
+            ftPath(pa, p, 2, 8500, 8500, 9100, 9100, 16777215, -1, 8);
+            p += 1;
+        }
+        while (r < 6300) {
+            ftVecCand(cand, 1, 7300, 7300, 10300, 10300);
+            r += 1;
+        }
+        Figclass.fcSignRows(fi, pa, cand, counts);
+        emon.Testport.assertEq(emon.Port.cellsAt(cand, (6299 * 32) + 13), 2, "the last first-page signature survives appended pages");
+        emon.Testport.assertEq(emon.Port.cellsAt(cand, (6299 * 32) + 14), 2, "the unchanged drawing has two paths");
+        emon.Testport.assertEq(emon.Port.cellsAt(cand, (6299 * 32) + 31), 0, "appended pages spend no first-page resource allowance");
+        return 0;
+    }
+    public static void testSignatureBudgetPrefixInvarianceAtOneFourAndSixteen() {
+        ftSignaturePrefix(0, 100);
+        ftSignaturePrefix(0, 400);
+        ftSignaturePrefix(0, 1600);
     }
 }

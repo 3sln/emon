@@ -275,6 +275,7 @@ public final class Engine {
         // P8.1 (SPEC 10.6): the figures, before `rs-run` (a caption next to one finds it as its object): every output has them, at every level of
         // `assets` (which only decides whether they get pixels, and tells the asset stage's candidate rows `cand` what P8.1 found).
         Figclass.fcStage(m.nodes, m.attrs, m.regions, m.text, m.pages, s.fnodes, s.fattrs, s.fregions, s.fnm, d.pa, d.im, d.fi, s.grg, d.grl, d.fw, d.fl, d.et, d.pg, s.sm, d.cand, level, s.fcand, s.fcl, s.fg, s.ffd, s.fab, s.fws);
+        Figclass.fcWrite(s.fcand, s.ffd, m.ledger);
         emon.Port.cellsSwap(m.nodes, s.fnodes);
         emon.Port.cellsSwap(m.attrs, s.fattrs);
         emon.Port.cellsSwap(m.regions, s.fregions);
@@ -315,7 +316,6 @@ public final class Engine {
                 emon.Port.textAscii(d.evidence, ",\"tb\":");
                 Tagtable.ttEmit(d.evidence, s.tv);
             }
-            emon.Port.textAscii(d.evidence, "}");
         }
         emon.Port.cellsCopyInto(s.iloc, c.lcl);
         Columns.lcCopy(d.fl, s.lt);
@@ -331,6 +331,12 @@ public final class Engine {
         Para.paBuild(d.fw, d.et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, s.ord, s.raw, s.tmp, s.fr, s.gp, s.lt, s.ls, s.sd, s.it, s.io, s.rw, s.gu, s.ac, s.tm, s.cf, s.lo, s.pr, s.dbg, s.hc, s.tb, s.tc, s.tw, s.tq, m.ledger, s.ii, s.al, s.pix);
         if (kind == 0) {
             enFigures(m, s, d, c.level);
+        }
+        if (c.keep != 0) {
+            if (kind == 0) {
+                Figclass.fcEmitBudget(s.fcand, s.ffd, d.evidence);
+            }
+            emon.Port.textAscii(d.evidence, "}");
         }
         Restruct.rsRun(m.nodes, m.attrs, m.regions, m.text, s.rn, s.ra, s.rr, s.rnm, s.rstk, s.rused, s.rout, m.layout);
         emon.Port.cellsSwap(m.nodes, s.rn);

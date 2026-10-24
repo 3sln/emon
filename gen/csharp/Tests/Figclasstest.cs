@@ -514,6 +514,7 @@ public static class Figclasstest {
     [Xunit.Fact]
     public static void TestARasterOnOtherPagesIsARecurringLogoByItsObjectOrItsDigest() {
         emon.Port.Cells fi = emon.Port.NewCells();
+        emon.Port.Cells counts = emon.Port.NewCells();
         emon.Port.Cells pa = emon.Port.NewCells();
         emon.Port.Cells pages = emon.Port.NewCells();
         emon.Port.Cells cand = emon.Port.NewCells();
@@ -529,19 +530,20 @@ public static class Figclasstest {
         FtImgCand(cand, 3, 5000, 5000, 9000, 7000, 7, 0);
         FtImgCand(cand, 4, 5000, 5000, 9000, 7000, 11, 3);
         FtImgCand(cand, 1, 20000, 5000, 24000, 7000, 7, 0);
-        Figclass.FcSignRows(fi, pa, cand);
+        Figclass.FcSignRows(fi, pa, cand, counts);
         emon.Testport.AssertEq(Figclass.FcRecur(cand, pages, 1), 160, "the raster of page 2 is on two other pages (its digest equals the others', wherever it stands)");
         emon.Testport.AssertEq(Figclass.FcRecur(cand, pages, 0), 160, "the one of page 1: pages 2 (digest) and 3 (object); its second use on page 1 does not count");
         emon.Testport.AssertEq(Figclass.FcRecur(cand, pages, 3), 0, "a raster with another digest and object recurs nowhere");
         // the same digest with another pixel size is another raster
         FtImgCand(cand, 3, 5000, 5000, 9000, 7000, 12, 2);
-        Figclass.FcSignRows(fi, pa, cand);
+        Figclass.FcSignRows(fi, pa, cand, counts);
         emon.Testport.AssertEq(Figclass.FcRecur(cand, pages, 5), 0, "the same digest of another size is no recurrence");
         emon.Testport.AssertEq(Figclass.FcRecur(cand, pages, 3), 0, "and it is not on the others' count");
     }
     [Xunit.Fact]
     public static void TestVectorArtRecursAtTheSamePlaceWhateverItsScale() {
         emon.Port.Cells fi = emon.Port.NewCells();
+        emon.Port.Cells counts = emon.Port.NewCells();
         emon.Port.Cells pa = emon.Port.NewCells();
         emon.Port.Cells pages = emon.Port.NewCells();
         emon.Port.Cells cand = emon.Port.NewCells();
@@ -562,7 +564,7 @@ public static class Figclasstest {
         FtPath(pa, 4, 3, 7300, 7300, 13300, 13300, 43639, -1, 9);
         FtPath(pa, 4, 2, 9700, 9700, 10900, 10900, 16777215, -1, 8);
         FtVecCand(cand, 4, 7300, 7300, 13300, 13300);
-        Figclass.FcSignRows(fi, pa, cand);
+        Figclass.FcSignRows(fi, pa, cand, counts);
         emon.Testport.AssertEq(Figclass.FcRecur(cand, pages, 0), 100, "page 1's mark recurs on page 2 only: page 3 is another place and page 4 another scale");
         emon.Testport.AssertEq(Figclass.FcRecur(cand, pages, 1), 100, "and page 2's on page 1");
         emon.Testport.AssertEq(Figclass.FcRecur(cand, pages, 2), 0, "the same drawing mid-page recurs nowhere");
@@ -575,5 +577,172 @@ public static class Figclasstest {
         emon.Testport.AssertEq(Figclass.FcImageKind(fi, 0, 4000, 4000, 30000, 34000, 79200, 0) / 1024, Model.FgUnknown(), "a small flat raster mid-page, seen once");
         emon.Testport.AssertEq(Figclass.FcImageKind(fi, 0, 4000, 4000, 30000, 34000, 79200, 100) / 1024, Model.FgLogo(), "the same on another page too: a logo");
         emon.Testport.AssertEq(Figclass.FcImageKind(fi, 0, 4000, 4000, 30000, 34000, 79200, 220) % 1024, 800, "and surer for each page it is on");
+    }
+    [Xunit.Fact]
+    public static void TestMeasureChargesOnlyThePagePrefixVisited() {
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells fw = emon.Port.NewCells();
+        emon.Port.Cells fl = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells grl = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        int p = 2;
+        FtPath(pa, 1, 2, 10000, 10000, 30000, 20000, -1, -1, 72);
+        FtWs(ws);
+        emon.Testport.AssertEq(Figclass.FcMeasure(pa, grl, fw, fl, et, 1, 10000, 10000, 30000, 20000, ws), 0, "prefix measured");
+        emon.Testport.AssertEq(emon.Port.CellsAt(ws, 127), 1, "one indexed path visited");
+        while (p <= 16) {
+            FtPath(pa, p, 2, 10000, 10000, 30000, 20000, -1, -1, 72);
+            p += 1;
+        }
+        emon.Port.CellsSet(ws, 127, 0);
+        emon.Testport.AssertEq(Figclass.FcMeasure(pa, grl, fw, fl, et, 1, 10000, 10000, 30000, 20000, ws), 0, "extended prefix measured");
+        emon.Testport.AssertEq(emon.Port.CellsAt(ws, 127), 1, "later pages cost no visits");
+        emon.Testport.AssertEq(emon.Port.CellsAt(ws, 20), 1, "same shaded fill decision");
+    }
+    [Xunit.Fact]
+    public static void TestDocumentWorkCapRefusesBeforeVisitingAndClearsFeatures() {
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells fw = emon.Port.NewCells();
+        emon.Port.Cells fl = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells grl = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        FtPath(pa, 1, 2, 10000, 10000, 30000, 20000, -1, -1, 72);
+        FtWs(ws);
+        emon.Port.CellsSet(ws, 127, 400000000);
+        emon.Port.CellsSet(ws, 20, 1);
+        emon.Testport.AssertEq(Figclass.FcMeasure(pa, grl, fw, fl, et, 1, 10000, 10000, 30000, 20000, ws), 2, "explicit document resource refusal");
+        emon.Testport.AssertEq(emon.Port.CellsAt(ws, 127), 400000000, "no visits beyond cap");
+        emon.Testport.AssertEq(emon.Port.CellsAt(ws, 20), 0, "no previous candidate's features");
+    }
+    [Xunit.Fact]
+    public static void TestPageWorkCannotStarveTheFollowingPage() {
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells fw = emon.Port.NewCells();
+        emon.Port.Cells fl = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells grl = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        FtPath(pa, 1, 2, 10000, 10000, 30000, 20000, -1, -1, 72);
+        FtPath(pa, 2, 2, 10000, 10000, 30000, 20000, -1, -1, 72);
+        FtWs(ws);
+        emon.Port.CellsSet(ws, 125, 1);
+        emon.Port.CellsSet(ws, 126, 40000000);
+        emon.Testport.AssertEq(Figclass.FcMeasure(pa, grl, fw, fl, et, 1, 10000, 10000, 30000, 20000, ws), 1, "page allowance exhausted");
+        emon.Testport.AssertEq(Figclass.FcMeasure(pa, grl, fw, fl, et, 2, 10000, 10000, 30000, 20000, ws), 0, "next page has its own allowance");
+        emon.Testport.AssertEq(emon.Port.CellsAt(ws, 20), 1, "next page measured");
+    }
+    internal static int FtBudgetPages(int emonT, int n) {
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells grg = emon.Port.NewCells();
+        emon.Port.Cells fnodes = emon.Port.NewCells();
+        emon.Port.Cells fattrs = emon.Port.NewCells();
+        emon.Port.Cells fregions = emon.Port.NewCells();
+        emon.Port.Cells fnm = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells im = emon.Port.NewCells();
+        emon.Port.Cells fi = emon.Port.NewCells();
+        emon.Port.Cells grl = emon.Port.NewCells();
+        emon.Port.Cells fw = emon.Port.NewCells();
+        emon.Port.Cells fl = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pg = emon.Port.NewCells();
+        emon.Port.Cells sl = emon.Port.NewCells();
+        emon.Port.Cells cand = emon.Port.NewCells();
+        emon.Port.Cells fcand = emon.Port.NewCells();
+        emon.Port.Cells cl = emon.Port.NewCells();
+        emon.Port.Cells fg = emon.Port.NewCells();
+        emon.Port.Cells fd = emon.Port.NewCells();
+        emon.Port.Cells ab = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        int p = 1;
+        int i = 0;
+        int x = 0;
+        int y = 0;
+        int count = 0;
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        while (p <= n) {
+            Model.PageNew(pages, p, 500000, 792000, 0, Model.PkVector());
+            i = 0;
+            while (i < 129) {
+                x = 1000 + ((i % 20) * 20000);
+                y = 1000 + ((i / 20) * 10000);
+                FtPath(pa, p, 2, x, y, x + 16000, y + 8000, -1, -1, 72);
+                i += 1;
+            }
+            p += 1;
+        }
+        count = Figclass.FcStage(nodes, attrs, regions, text, pages, fnodes, fattrs, fregions, fnm, pa, im, fi, grg, grl, fw, fl, et, pg, sl, cand, 0, fcand, cl, fg, fd, ab, ws);
+        emon.Testport.AssertEq(count, n * 128, "each page gets 128 measurements regardless of document length");
+        i = 0;
+        count = 0;
+        while (i < (emon.Port.CellsLen(fd) / 8)) {
+            if (emon.Port.CellsAt(fd, (i * 8) + 5) == 3) {
+                count += 1;
+            }
+            i += 1;
+        }
+        emon.Testport.AssertEq(count, n, "every over-limit region has explicit evidence");
+        Figclass.FcWrite(fcand, fd, ledger);
+        emon.Testport.AssertEq(Model.LedgerCount(ledger), n, "every unmeasured box reaches the dropped ledger");
+        emon.Testport.AssertEq(Model.LedgerReason(ledger, 0), Model.DrFigureUnmeasured(), "the ledger names the resource refusal");
+        return count;
+    }
+    [Xunit.Fact]
+    public static void TestPageCandidatePrefixInvarianceAtOneFourAndSixteen() {
+        emon.Testport.AssertEq(FtBudgetPages(0, 1), 1, "one page");
+        emon.Testport.AssertEq(FtBudgetPages(0, 4), 4, "four pages");
+        emon.Testport.AssertEq(FtBudgetPages(0, 16), 16, "sixteen pages");
+    }
+    [Xunit.Fact]
+    public static void TestUnmeasuredDocumentRegionIsExplicitInEvidenceAndLedger() {
+        emon.Port.Cells cand = emon.Port.NewCells();
+        emon.Port.Cells fd = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        FtCand(cand, 1, 10000, 20000, 30000, 40000);
+        FtFd(fd, 0, 0);
+        emon.Port.CellsSet(fd, 5, 2);
+        emon.Port.CellsSet(cand, 31, 2);
+        emon.Testport.AssertEq(Figclass.FcEmitBudget(cand, fd, t), 1, "one explicit resource record");
+        emon.Testport.AssertText(t, ",\"fc-unmeasured\":[[1,10000,20000,30000,40000,2,2]]", "document refusals retain both statuses and the exact box");
+        Figclass.FcWrite(cand, fd, ledger);
+        emon.Testport.AssertEq(Model.LedgerCount(ledger), 2, "measurement and signature refusal both represented");
+        emon.Testport.AssertEq(Model.LedgerReason(ledger, 0), Model.DrFigureUnmeasured(), "unmeasured is distinct from measured rejection");
+    }
+    internal static int FtSignaturePrefix(int emonT, int npages) {
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells cand = emon.Port.NewCells();
+        emon.Port.Cells fi = emon.Port.NewCells();
+        emon.Port.Cells counts = emon.Port.NewCells();
+        int p = 1;
+        int r = 0;
+        while (p <= npages) {
+            FtPath(pa, p, 3, 7300, 7300, 10300, 10300, 43639, -1, 9);
+            FtPath(pa, p, 2, 8500, 8500, 9100, 9100, 16777215, -1, 8);
+            p += 1;
+        }
+        while (r < 6300) {
+            FtVecCand(cand, 1, 7300, 7300, 10300, 10300);
+            r += 1;
+        }
+        Figclass.FcSignRows(fi, pa, cand, counts);
+        emon.Testport.AssertEq(emon.Port.CellsAt(cand, (6299 * 32) + 13), 2, "the last first-page signature survives appended pages");
+        emon.Testport.AssertEq(emon.Port.CellsAt(cand, (6299 * 32) + 14), 2, "the unchanged drawing has two paths");
+        emon.Testport.AssertEq(emon.Port.CellsAt(cand, (6299 * 32) + 31), 0, "appended pages spend no first-page resource allowance");
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestSignatureBudgetPrefixInvarianceAtOneFourAndSixteen() {
+        FtSignaturePrefix(0, 100);
+        FtSignaturePrefix(0, 400);
+        FtSignaturePrefix(0, 1600);
     }
 }

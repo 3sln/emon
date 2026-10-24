@@ -27,11 +27,11 @@
 ;; rules with no axes (a table) is NOT a figure. A region with no caption is a figure only when what it is is clear (confidence at least 500).
 (ns emon.figclass
   (:require [emon.pagebounds :refer [pb-first pb-after]]
-            [emon.lang :refer [I32 I64 Src Cells i64 i32 mul64 add64]]
-            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.lang :refer [I32 I64 Src Cells Text emit-ascii i64 i32 mul64 add64]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop text-i32]]
             [emon.model :refer [node-count node-kind node-aux node-region-head node-region-count region-page region-x0 region-y0 region-x1 region-y1
                                 region-next page-count page-w page-h nk-caption fg-chart fg-diagram fg-photo fg-logo fg-map fg-illustration
-                                fg-screenshot fg-qr fg-barcode fg-unknown sr-vector sr-trace sr-ocr]]
+                                fg-screenshot fg-qr fg-barcode fg-unknown sr-vector sr-trace sr-ocr ledger-add dr-figure-unmeasured dr-figure-signature-unmeasured]]
             [emon.evidence :refer [im-count im-get mf-page mf-x0 mf-y0 mf-x1 mf-y1 mf-obj mf-vis mf-clip
                                    pa-get pf-page pf-kind pf-x0 pf-y0 pf-x1 pf-y1 pf-fill pf-stroke pf-flags pf-vis
                                    pg-clip pg-filled pg-stroked pg-shading pg-pattern pg-closed pa-rect pa-line pa-curve pa-other pa-rect
@@ -49,8 +49,9 @@
 ;; ------------------------------------------------------------------------------------------------ the settings
 
 (defconst ^I32 FC_MAXIMG 4096)      ;; image placements whose dictionaries are read, a document
-(defconst ^I32 FC_MAXREG 128)       ;; candidate regions measured, a document
-(defconst ^I32 FC_WORK 40000000)    ;; rows (paths, words, lines) the measuring may read in all
+(defconst ^I32 FC_MAXREG 128)       ;; candidate regions measured per page
+(defconst ^I32 FC_WORK 40000000)    ;; indexed row visits per page
+(defconst ^I32 FC_DOCWORK 400000000) ;; document safety ceiling, separate from page allowances
 (defconst ^I32 FC_ZONE 1800)        ;; words this close to a region (18 pt) are near it
 (defconst ^I32 FC_PHOTO_BPP 130)    ;; bits per pixel (x100) from which a raster is photographic
 (defconst ^I32 FC_SMALL 15000)      ;; a logo's longest side at most (150 pt)
@@ -62,7 +63,8 @@
 ;; the stride of `fi` (the image placements' rows, made by `fc-images`)
 (defconst ^I32 FI_STRIDE 12)        ;; 0 valid  1 codec  2 class  3 ncomp  4 bpc  5 w  6 h  7 bits a pixel x100  8 hival  9 mask kind  10 11 the stream's digest (P8.4)
 (defconst ^I32 FC_DIGEST_N 4096)    ;; bytes of a stream the digest reads (all of a short one, a stride through a long one, and the last 64)
-(defconst ^I32 FC_RWORK 20000000)   ;; paths the vector signatures (P8.4) may read in all
+(defconst ^I32 FC_RWORK 20000000)   ;; indexed paths per page for vector signatures
+(defconst ^I32 FC_RDOCWORK 200000000) ;; indexed paths per document for signatures
 (defconst ^I32 FC_RPOS 40)          ;; a vector logo's centre may move this much (per mille of the page) between pages, and an eighth of its own size
 (defconst ^I32 FC_RSCALE_LO 750)    ;; a vector logo's size, per mille of its size on the other page: from this ...
 (defconst ^I32 FC_RSCALE_HI 1330)   ;; ... to this
@@ -113,7 +115,9 @@
 (defconst ^I32 FT_SLANT 42)
 (defconst ^I32 FT_RINGS 48)         ;; 16 round paths: centre x, centre y, diameter
 (defconst ^I32 FT_COLS 96)          ;; 8 distinct wedge fills
-(defconst ^I32 FT_WORK 127)         ;; the rows read so far in the document (never cleared between regions)
+(defconst ^I32 FT_PAGE 125)
+(defconst ^I32 FT_PWORK 126)
+(defconst ^I32 FT_WORK 127)         ;; indexed row visits so far in the document (preserved between regions)
 (defconst ^I32 FT_SIZE 128)
 (defconst ^I32 RG_MAX 16)
 (defconst ^I32 BX_STRIDE 6)         ;; a box: x0 y0 x1 y1 words inside, 0
@@ -699,15 +703,26 @@
       (cells-set ws FT_AXES 1)))
   (return 0))
 
+(defn ^I32 fc-charge [^:mut ^Cells ws ^I32 visits]
+  (comment "Admit one complete indexed loop, then charge its exact row visits. Never overrun either cap.")
+  (if (> visits (- FC_DOCWORK (cells-at ws FT_WORK))) (return 2))
+  (if (> visits (- FC_WORK (cells-at ws FT_PWORK))) (return 1))
+  (cells-set ws FT_WORK (+ (cells-at ws FT_WORK) visits))
+  (cells-set ws FT_PWORK (+ (cells-at ws FT_PWORK) visits))
+  (return 0))
+
 (defn ^I32 fc-ticks [^Cells pa ^I32 page ^I32 rx0 ^I32 ry0 ^I32 rx1 ^I32 ry1 ^:mut ^Cells ws]
   (comment "Short rules (1.5 to 11 pt) that cross or touch an axis, along it: its ticks.")
-  (let [^I32 n (quot (cells-len pa) 24)
-        ^:mut ^I32 i 0
+  (let [^I32 n (pb-after pa 24 page)
+        ^I32 first (pb-first pa 24 page)
+        ^I32 status (fc-charge ws (- n first))
+        ^:mut ^I32 i first
         ^:mut ^I32 x0 0
         ^:mut ^I32 y0 0
         ^:mut ^I32 x1 0
         ^:mut ^I32 y1 0
         ^:mut ^I32 kind 0]
+    (if (!= status 0) (return status))
     (while (< i n)
       (do (if (and (== (pa-get pa i (pf-page)) page) (and (== (pa-get pa i (pf-vis)) 0)
                    (== (bit-and (pa-get pa i (pf-flags)) (pg-clip)) 0)))
@@ -772,8 +787,10 @@
 (defn ^I32 fc-words [^Cells fw ^Cells et ^I32 page ^I32 rx0 ^I32 ry0 ^I32 rx1 ^I32 ry1 ^:mut ^Cells ws]
   (comment "The words in the region and within `FC_ZONE` of it: how many, how many are numbers, how many lie in it; the words inside each")
   (comment "box; the small squares with a word at their right.")
-  (let [^I32 n (wd-count fw)
-        ^:mut ^I32 i 0
+  (let [^I32 n (pb-after fw 24 page)
+        ^I32 first (pb-first fw 24 page)
+        ^I32 status (fc-charge ws (- n first))
+        ^:mut ^I32 i first
         ^:mut ^I32 x0 0
         ^:mut ^I32 y0 0
         ^:mut ^I32 x1 0
@@ -784,6 +801,7 @@
         ^:mut ^I32 p 0
         ^I32 nb (fc-min (cells-at ws FT_BOXES) BX_MAX)
         ^I32 ns (fc-min (cells-at ws FT_NSW) SW_MAX)]
+    (if (!= status 0) (return status))
     (while (< i n)
       (do (if (== (wd-get fw i (hd-page)) page)
             (do (set x0 (wd-get fw i (hd-x0)))
@@ -823,14 +841,17 @@
     (while (< k ns)
       (do (if (== (cells-at ws (+ (+ WS_SW (* k SW_STRIDE)) 4)) 1) (fc-inc ws FT_SWATCH))
           (set k (+ k 1))))
-    (return n)))
+    (return 0)))
 
 (defn ^I32 fc-lines [^Cells fl ^I32 page ^I32 rx0 ^I32 ry0 ^I32 rx1 ^I32 ry1 ^:mut ^Cells ws]
   (comment "Lines of five words or more whose centre is in the region: prose. A region with some is a text box, a sidebar or a background.")
-  (let [^I32 n (ln-count fl)
-        ^:mut ^I32 i 0
+  (let [^I32 n (pb-after fl 16 page)
+        ^I32 first (pb-first fl 16 page)
+        ^I32 status (fc-charge ws (- n first))
+        ^:mut ^I32 i first
         ^:mut ^I32 cx 0
         ^:mut ^I32 cy 0]
+    (if (!= status 0) (return status))
     (while (< i n)
       (do (if (and (== (ln-get fl i (lh-page)) page) (>= (ln-get fl i (lh-count)) 5))
             (do (set cx (quot (+ (ln-get fl i (lh-x0)) (ln-get fl i (lh-x1))) 2))
@@ -838,15 +859,19 @@
                 (if (and (>= cx rx0) (and (<= cx rx1) (and (>= cy ry0) (<= cy ry1))))
                   (fc-inc ws FT_PROSE))))
           (set i (+ i 1))))
-    (return n)))
+    (return 0)))
 
 (defn ^:pub ^I32 fc-measure [^Cells pa ^Cells grl ^Cells fw ^Cells fl ^Cells et ^I32 page ^I32 rx0 ^I32 ry0 ^I32 rx1 ^I32 ry1 ^:mut ^Cells ws]
   (comment "Measure the region: `ft`'s slots of `ws`, the boxes, the small squares and the bars. Answers 0, or 1 when the document's")
-  (comment "budget of rows (`FC_WORK`) is spent and the region was left unmeasured.")
+  (comment "page budget of rows (`FC_WORK`) is spent, or 2 for the document cap (`FC_DOCWORK`). No failed measurement is classified.")
   (let [^I32 work (cells-at ws FT_WORK)
-        ^I32 n (quot (cells-len pa) 24)
+        ^I32 first (pb-first pa 24 page)
+        ^I32 oldpage (cells-at ws FT_PAGE)
+        ^I32 oldwork (cells-at ws FT_PWORK)
         ^I32 pend (pb-after pa 24 page)
-        ^I32 ng (grl-count grl)
+        ^I32 ng (pb-after grl 24 page)
+        ^I32 gfirst (pb-first grl 24 page)
+        ^:mut ^I32 status 0
         ^I32 rw (- rx1 rx0)
         ^I32 rh (- ry1 ry0)
         ^:mut ^I32 i 0
@@ -857,8 +882,10 @@
       (do (cells-set ws i 0)
           (set i (+ i 1))))
     (cells-set ws FT_WORK work)
-    (if (> work FC_WORK) (return 1))
-    (cells-set ws FT_WORK (+ work (+ n (+ ng (+ (wd-count fw) (ln-count fl))))))
+    (cells-set ws FT_PAGE page)
+    (if (== oldpage page) (cells-set ws FT_PWORK oldwork))
+    (set status (fc-charge ws (- pend first)))
+    (if (!= status 0) (return status))
     (set i (pb-first pa 24 page))
     (while (< i pend)
       (do (if (and (== (pa-get pa i (pf-page)) page) (and (== (pa-get pa i (pf-vis)) 0)
@@ -869,7 +896,9 @@
                   (fc-one-path pa i rx0 ry0 rx1 ry1 ws))))
           (set i (+ i 1))))
     (if (== (cells-at ws FT_NP) 0)
-      (do (set i 0)
+      (do (set status (fc-charge ws (- ng gfirst)))
+          (if (!= status 0) (return status))
+          (set i gfirst)
           (while (< i ng)
             (do (if (== (grl-get grl i 0) page)
                   (do (set cx (quot (+ (grl-get grl i 1) (grl-get grl i 3)) 2))
@@ -895,11 +924,15 @@
                                               (cells-set ws FT_VY1 (grl-get grl i 4))))))))))))
                 (set i (+ i 1))))))
     (fc-axes ws)
-    (if (== (cells-at ws FT_AXES) 1) (fc-ticks pa page rx0 ry0 rx1 ry1 ws))
+    (if (== (cells-at ws FT_AXES) 1)
+      (do (set status (fc-ticks pa page rx0 ry0 rx1 ry1 ws))
+          (if (!= status 0) (return status))))
     (fc-bar-run ws 0)
     (fc-bar-run ws 1)
-    (fc-words fw et page rx0 ry0 rx1 ry1 ws)
-    (fc-lines fl page rx0 ry0 rx1 ry1 ws)
+    (set status (fc-words fw et page rx0 ry0 rx1 ry1 ws))
+    (if (!= status 0) (return status))
+    (set status (fc-lines fl page rx0 ry0 rx1 ry1 ws))
+    (if (!= status 0) (return status))
     (return 0)))
 
 ;; ------------------------------------------------------------------------------------------------ what a region is
@@ -933,7 +966,6 @@
         ^I32 y0 (cells-at fcand (+ b (+ CR_VX 1)))
         ^I32 w (- (cells-at fcand (+ b (+ CR_VX 2))) x0)
         ^I32 h (- (cells-at fcand (+ b (+ CR_VX 3))) y0)
-        ^I32 n (quot (cells-len pa) 24)
         ^I32 pend (pb-after pa 24 page)
         ^:mut ^I32 i (pb-first pa 24 page)
         ^:mut ^I32 np 0
@@ -960,18 +992,32 @@
       (do (cells-set fcand (+ b CR_SIG) 2)
           (cells-set fcand (+ b (+ CR_SIG 1)) np)
           (cells-set fcand (+ b (+ CR_SIG 2)) mask)))
-    (return n)))
+    (return (- pend (pb-first pa 24 page)))))
 
-(defn ^:pub ^I32 fc-sign-rows [^Cells fi ^Cells pa ^:mut ^Cells fcand]
+(defn ^:pub ^I32 fc-sign-rows [^Cells fi ^Cells pa ^:mut ^Cells fcand ^:mut ^Cells counts]
   (comment "P8.4: the recurrence signature (`CR_SIG`) of every candidate row that could be a logo: an image placement (its object and its stream's")
-  (comment "digest, `fc-digest`) and a small vector region (`fc-sign-vector`). Rows of regions beyond the document's budget (`FC_RWORK`) have none.")
+  (comment "digest, `fc-digest`) and a small vector region (`fc-sign-vector`). Rows beyond page (`FC_RWORK`) or document (`FC_RDOCWORK`) budgets are explicitly marked in cell 31.")
   (let [^I32 n (quot (cells-len fcand) CR_STRIDE)
         ^:mut ^I32 r 0
         ^:mut ^I32 b 0
         ^:mut ^I32 fb 0
-        ^:mut ^I32 work 0]
+        ^:mut ^I32 work 0
+        ^:mut ^I32 page 0
+        ^:mut ^I32 visits 0
+        ^:mut ^I32 maxpage 0]
+    (while (< r n)
+      (do (set maxpage (fc-max maxpage (cells-at fcand (* r CR_STRIDE))))
+          (set r (+ r 1))))
+    (cells-drop counts 0)
+    (set r 0)
+    (while (<= r maxpage)
+      (do (cells-push counts 0) (set r (+ r 1))))
+    (set r 0)
     (while (< r n)
       (do (set b (* r CR_STRIDE))
+          (cells-set fcand (+ b 31) 0)
+          (set page (cells-at fcand b))
+          (set visits (- (pb-after pa 24 page) (pb-first pa 24 page)))
           (if (== (cells-at fcand (+ b CR_KORI)) -1)
             (do (set fb (* (cells-at fcand (+ b CR_ROW)) FI_STRIDE))
                 (if (and (>= fb 0) (and (<= (+ fb FI_STRIDE) (cells-len fi)) (== (cells-at fi fb) 1)))
@@ -980,10 +1026,16 @@
                       (cells-set fcand (+ b (+ CR_SIG 2)) (cells-at fi (+ fb 11)))
                       (cells-set fcand (+ b (+ CR_SIG 3)) (cells-at fi (+ fb 5)))
                       (cells-set fcand (+ b (+ CR_SIG 4)) (cells-at fi (+ fb 6))))))
-            (if (and (== (cells-at fcand (+ b CR_KORI)) -2) (< work FC_RWORK))
+            (if (== (cells-at fcand (+ b CR_KORI)) -2)
               (if (and (<= (- (cells-at fcand (+ b (+ CR_VX 2))) (cells-at fcand (+ b CR_VX))) FC_SMALL)
                        (<= (- (cells-at fcand (+ b (+ CR_VX 3))) (cells-at fcand (+ b (+ CR_VX 1)))) FC_SMALL))
-                (set work (+ work (fc-sign-vector pa fcand r))))))
+                (if (> visits (- FC_RDOCWORK work))
+                  (cells-set fcand (+ b 31) 2)
+                  (if (> visits (- FC_RWORK (cells-at counts page)))
+                    (cells-set fcand (+ b 31) 1)
+                    (do (set visits (fc-sign-vector pa fcand r))
+                        (set work (+ work visits))
+                        (cells-set counts page (+ (cells-at counts page) visits))))))))
           (set r (+ r 1))))
     (return 0)))
 
@@ -1269,7 +1321,7 @@
         ^:mut ^I32 capt 0
         ^:mut ^I32 rej 0
         ^:mut ^I32 out 1
-        ^:mut ^I32 measured 0
+        ^:mut ^I32 status 0
         ^:mut ^I32 pageh 0
         ^:mut ^I32 recur 0
         ^:mut ^I32 srcs 0
@@ -1286,7 +1338,7 @@
     (fc-shading-regions pa pages fcand)
     (fc-grg-regions grg pages fcand)
     (as-figure-rows fcand pages nodes regions 2 fg)
-    (fc-sign-rows fi pa fcand)
+    (fc-sign-rows fi pa fcand cl)
     (set nr (as-count fcand))
     (set i 0)
     (while (< i (* nr FD_STRIDE))
@@ -1297,6 +1349,10 @@
       (do (cells-set fd (+ (* i FD_STRIDE) 3) -1)
           (cells-set fd (+ (* i FD_STRIDE) 4) -1)
           (set i (+ i 1))))
+    (cells-drop cl 0)
+    (set i 0)
+    (while (<= i (page-count pages))
+      (do (cells-push cl 0) (set i (+ i 1))))
     (set i 1)
     (while (< i (cells-len fg))
       (do (set row (cells-at fg i))
@@ -1309,11 +1365,14 @@
           (set pageh (page-h pages (- page 1)))
           (set recur (fc-recur fcand pages row))
           (set rej 1)
-          (if (< measured FC_MAXREG)
-            (do (set measured (+ measured 1))
-                (set rej 0)
-                (if (== (fc-measure pa grl fw fl et page x0 y0 x1 y1 ws) 0)
-                  (set rej (fc-reject ws)))))
+          (set status 3)
+          (if (< (cells-at cl page) FC_MAXREG)
+            (do (cells-set cl page (+ (cells-at cl page) 1))
+                (set status (fc-measure pa grl fw fl et page x0 y0 x1 y1 ws))
+                (if (== status 0) (set rej (fc-reject ws)))))
+          ;; fd slot 5: 0 measured; 1 page work; 2 document work; 3 page candidate limit.
+          (cells-set fd (+ (* row FD_STRIDE) 5) status)
+          (cells-set fd (+ (* row FD_STRIDE) 6) (cells-at fcand (+ b 31)))
           (if (== (fc-signature-over sl page x0 y0 x1 y1) 1) (set rej 1))
           (if (== (cells-at fcand (+ b CR_KORI)) -2)
             (if (== (fc-claimed fl page x0 y0 x1 y1) 1) (set rej 1)))
@@ -1344,3 +1403,44 @@
     (cells-drop fg out)
     (rs-figures nodes attrs regions text fnodes fattrs fregions fnm fcand fg fd ab)
     (return (- out 1))))
+
+
+(defn ^:pub ^I32 fc-write [^Cells fcand ^Cells fd ^:mut ^Cells ledger]
+  (comment "Budget evidence: fd slot 5 is measurement status, slot 6 signature status. Preserve each unmeasured box in the dropped ledger.")
+  (let [^I32 n (quot (cells-len fd) FD_STRIDE)
+        ^:mut ^I32 r 0 ^:mut ^I32 b 0]
+    (while (< r n)
+      (do (set b (* r CR_STRIDE))
+          (if (> (cells-at fd (+ (* r FD_STRIDE) 5)) 0)
+            (ledger-add ledger (dr-figure-unmeasured) (cells-at fcand b)
+              (cells-at fcand (+ b 5)) (cells-at fcand (+ b 6)) (cells-at fcand (+ b 7)) (cells-at fcand (+ b 8)) -1 (cells-at fcand (+ b CR_SRC))))
+          (if (> (cells-at fcand (+ b 31)) 0)
+            (ledger-add ledger (dr-figure-signature-unmeasured) (cells-at fcand b)
+              (cells-at fcand (+ b 5)) (cells-at fcand (+ b 6)) (cells-at fcand (+ b 7)) (cells-at fcand (+ b 8)) -1 (cells-at fcand (+ b CR_SRC))))
+          (set r (+ r 1))))
+    (return 0)))
+
+
+(defn ^:pub ^I32 fc-emit-budget [^Cells fcand ^Cells fd ^:mut ^Text t]
+  (comment "Optional evidence member: [page,x0,y0,x1,y1,measurement-status,signature-status]. 1 page work, 2 document work, 3 page candidate count.")
+  (let [^I32 n (quot (cells-len fd) FD_STRIDE)
+        ^:mut ^I32 r 0 ^:mut ^I32 k 0 ^:mut ^I32 out 0]
+    (while (< r n)
+      (do (if (or (> (cells-at fd (+ (* r FD_STRIDE) 5)) 0) (> (cells-at fcand (+ (* r CR_STRIDE) 31)) 0))
+            (do (if (== out 0) (emit-ascii t ",\"fc-unmeasured\":[") (emit-ascii t ","))
+                (emit-ascii t "[")
+                (text-i32 t (cells-at fcand (* r CR_STRIDE)))
+                (set k 5)
+                (while (< k 9)
+                  (do (emit-ascii t ",")
+                      (text-i32 t (cells-at fcand (+ (* r CR_STRIDE) k)))
+                      (set k (+ k 1))))
+                (emit-ascii t ",")
+                (text-i32 t (cells-at fd (+ (* r FD_STRIDE) 5)))
+                (emit-ascii t ",")
+                (text-i32 t (cells-at fcand (+ (* r CR_STRIDE) 31)))
+                (emit-ascii t "]")
+                (set out (+ out 1))))
+          (set r (+ r 1))))
+    (if (> out 0) (emit-ascii t "]"))
+    (return out)))

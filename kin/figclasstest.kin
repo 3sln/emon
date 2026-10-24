@@ -7,14 +7,14 @@
 ;;   THE PLACEHOLDER: a short paragraph on a figure is its label and not body text, a long one stays; a figure with a caption goes in
 ;;   just before it, whatever its top edge says (a column of text between).
 (ns emon.figclasstest
-  (:require [emon.lang :refer [I32 Cells]]
-            [emon.test :refer [deftest assert-eq assert-that new-cells]]
+  (:require [emon.lang :refer [I32 Cells Text]]
+            [emon.test :refer [deftest assert-eq assert-that assert-text new-text new-cells test-t TestT]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
             [emon.model :refer [model-init node-new node-set-text node-add-region node-set-aux node-count node-kind node-parent node-attr
-                                node-sub node-conf page-new pk-vector text-append-cp
+                                node-sub node-conf ledger-count ledger-reason dr-figure-unmeasured page-new pk-vector text-append-cp
                                 nk-figure nk-paragraph nk-caption nk-document fg-chart fg-diagram fg-photo fg-logo fg-screenshot fg-qr
                                 fg-barcode fg-illustration fg-unknown fk-labels fk-image]]
-            [emon.figclass :refer [fc-measure fc-vector-kind fc-image-kind fc-reject fc-sign-rows fc-recur fc-stage]]
+            [emon.figclass :refer [fc-emit-budget fc-write fc-measure fc-vector-kind fc-image-kind fc-reject fc-sign-rows fc-recur fc-stage]]
             [emon.glayer :refer [grg-new rk-figure]]
             [emon.restruct :refer [rs-figures]]
             [kin.lang :refer [defn return let set while if do comment
@@ -494,6 +494,7 @@
 
 (deftest test-a-raster-on-other-pages-is-a-recurring-logo-by-its-object-or-its-digest
   (let [^Cells fi (new-cells)
+        ^Cells counts (new-cells)
         ^Cells pa (new-cells)
         ^Cells pages (new-cells)
         ^Cells cand (new-cells)]
@@ -509,18 +510,19 @@
     (ft-img-cand cand 3 5000 5000 9000 7000 7 0)
     (ft-img-cand cand 4 5000 5000 9000 7000 11 3)
     (ft-img-cand cand 1 20000 5000 24000 7000 7 0)
-    (fc-sign-rows fi pa cand)
+    (fc-sign-rows fi pa cand counts)
     (assert-eq (fc-recur cand pages 1) 160 "the raster of page 2 is on two other pages (its digest equals the others', wherever it stands)")
     (assert-eq (fc-recur cand pages 0) 160 "the one of page 1: pages 2 (digest) and 3 (object); its second use on page 1 does not count")
     (assert-eq (fc-recur cand pages 3) 0 "a raster with another digest and object recurs nowhere")
     (comment "the same digest with another pixel size is another raster")
     (ft-img-cand cand 3 5000 5000 9000 7000 12 2)
-    (fc-sign-rows fi pa cand)
+    (fc-sign-rows fi pa cand counts)
     (assert-eq (fc-recur cand pages 5) 0 "the same digest of another size is no recurrence")
     (assert-eq (fc-recur cand pages 3) 0 "and it is not on the others' count")))
 
 (deftest test-vector-art-recurs-at-the-same-place-whatever-its-scale
   (let [^Cells fi (new-cells)
+        ^Cells counts (new-cells)
         ^Cells pa (new-cells)
         ^Cells pages (new-cells)
         ^Cells cand (new-cells)]
@@ -541,7 +543,7 @@
     (ft-path pa 4 3 7300 7300 13300 13300 43639 -1 9)
     (ft-path pa 4 2 9700 9700 10900 10900 16777215 -1 8)
     (ft-vec-cand cand 4 7300 7300 13300 13300)
-    (fc-sign-rows fi pa cand)
+    (fc-sign-rows fi pa cand counts)
     (assert-eq (fc-recur cand pages 0) 100 "page 1's mark recurs on page 2 only: page 3 is another place and page 4 another scale")
     (assert-eq (fc-recur cand pages 1) 100 "and page 2's on page 1")
     (assert-eq (fc-recur cand pages 2) 0 "the same drawing mid-page recurs nowhere")
@@ -553,3 +555,114 @@
     (assert-eq (quot (fc-image-kind fi 0 4000 4000 30000 34000 79200 0) 1024) (fg-unknown) "a small flat raster mid-page, seen once")
     (assert-eq (quot (fc-image-kind fi 0 4000 4000 30000 34000 79200 100) 1024) (fg-logo) "the same on another page too: a logo")
     (assert-eq (rem (fc-image-kind fi 0 4000 4000 30000 34000 79200 220) 1024) 800 "and surer for each page it is on")))
+
+(deftest test-measure-charges-only-the-page-prefix-visited
+  (let [^Cells pa (new-cells) ^Cells fw (new-cells) ^Cells fl (new-cells)
+        ^Cells et (new-cells) ^Cells grl (new-cells) ^Cells ws (new-cells)
+        ^:mut ^I32 p 2]
+    (ft-path pa 1 2 10000 10000 30000 20000 -1 -1 72)
+    (ft-ws ws)
+    (assert-eq (fc-measure pa grl fw fl et 1 10000 10000 30000 20000 ws) 0 "prefix measured")
+    (assert-eq (cells-at ws 127) 1 "one indexed path visited")
+    (while (<= p 16)
+      (do (ft-path pa p 2 10000 10000 30000 20000 -1 -1 72)
+          (set p (+ p 1))))
+    (cells-set ws 127 0)
+    (assert-eq (fc-measure pa grl fw fl et 1 10000 10000 30000 20000 ws) 0 "extended prefix measured")
+    (assert-eq (cells-at ws 127) 1 "later pages cost no visits")
+    (assert-eq (cells-at ws 20) 1 "same shaded fill decision")))
+
+(deftest test-document-work-cap-refuses-before-visiting-and-clears-features
+  (let [^Cells pa (new-cells) ^Cells fw (new-cells) ^Cells fl (new-cells)
+        ^Cells et (new-cells) ^Cells grl (new-cells) ^Cells ws (new-cells)]
+    (ft-path pa 1 2 10000 10000 30000 20000 -1 -1 72)
+    (ft-ws ws)
+    (cells-set ws 127 400000000)
+    (cells-set ws 20 1)
+    (assert-eq (fc-measure pa grl fw fl et 1 10000 10000 30000 20000 ws) 2 "explicit document resource refusal")
+    (assert-eq (cells-at ws 127) 400000000 "no visits beyond cap")
+    (assert-eq (cells-at ws 20) 0 "no previous candidate's features")))
+
+(deftest test-page-work-cannot-starve-the-following-page
+  (let [^Cells pa (new-cells) ^Cells fw (new-cells) ^Cells fl (new-cells)
+        ^Cells et (new-cells) ^Cells grl (new-cells) ^Cells ws (new-cells)]
+    (ft-path pa 1 2 10000 10000 30000 20000 -1 -1 72)
+    (ft-path pa 2 2 10000 10000 30000 20000 -1 -1 72)
+    (ft-ws ws)
+    (cells-set ws 125 1)
+    (cells-set ws 126 40000000)
+    (assert-eq (fc-measure pa grl fw fl et 1 10000 10000 30000 20000 ws) 1 "page allowance exhausted")
+    (assert-eq (fc-measure pa grl fw fl et 2 10000 10000 30000 20000 ws) 0 "next page has its own allowance")
+    (assert-eq (cells-at ws 20) 1 "next page measured")))
+
+(defn ^I32 ft-budget-pages [^TestT emon-t ^I32 n]
+  (let [^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells) ^Cells pages (new-cells)
+        ^Cells ledger (new-cells) ^Cells layout (new-cells) ^Cells grg (new-cells)
+        ^Cells fnodes (new-cells) ^Cells fattrs (new-cells) ^Cells fregions (new-cells) ^Cells fnm (new-cells)
+        ^Cells pa (new-cells) ^Cells im (new-cells) ^Cells fi (new-cells) ^Cells grl (new-cells)
+        ^Cells fw (new-cells) ^Cells fl (new-cells) ^Cells et (new-cells) ^Cells pg (new-cells) ^Cells sl (new-cells)
+        ^Cells cand (new-cells) ^Cells fcand (new-cells) ^Cells cl (new-cells) ^Cells fg (new-cells) ^Cells fd (new-cells)
+        ^Cells ab (new-cells) ^Cells ws (new-cells)
+        ^:mut ^I32 p 1 ^:mut ^I32 i 0 ^:mut ^I32 x 0 ^:mut ^I32 y 0 ^:mut ^I32 count 0]
+    (model-init nodes attrs regions text pages ledger layout)
+    (while (<= p n)
+      (do (page-new pages p 500000 792000 0 (pk-vector))
+          (set i 0)
+          (while (< i 129)
+            (do (set x (+ 1000 (* (rem i 20) 20000)))
+                (set y (+ 1000 (* (quot i 20) 10000)))
+                (ft-path pa p 2 x y (+ x 16000) (+ y 8000) -1 -1 72)
+                (set i (+ i 1))))
+          (set p (+ p 1))))
+    (set count (fc-stage nodes attrs regions text pages fnodes fattrs fregions fnm pa im fi grg grl fw fl et pg sl cand 0 fcand cl fg fd ab ws))
+    (assert-eq count (* n 128) "each page gets 128 measurements regardless of document length")
+    (set i 0)
+    (set count 0)
+    (while (< i (quot (cells-len fd) 8))
+      (do (if (== (cells-at fd (+ (* i 8) 5)) 3) (set count (+ count 1)))
+          (set i (+ i 1))))
+    (assert-eq count n "every over-limit region has explicit evidence")
+    (fc-write fcand fd ledger)
+    (assert-eq (ledger-count ledger) n "every unmeasured box reaches the dropped ledger")
+    (assert-eq (ledger-reason ledger 0) (dr-figure-unmeasured) "the ledger names the resource refusal")
+    (return count)))
+
+(deftest test-page-candidate-prefix-invariance-at-one-four-and-sixteen
+  (assert-eq (ft-budget-pages (test-t) 1) 1 "one page")
+  (assert-eq (ft-budget-pages (test-t) 4) 4 "four pages")
+  (assert-eq (ft-budget-pages (test-t) 16) 16 "sixteen pages"))
+
+
+(deftest test-unmeasured-document-region-is-explicit-in-evidence-and-ledger
+  (let [^Cells cand (new-cells) ^Cells fd (new-cells) ^Cells ledger (new-cells)
+        ^Text t (new-text)]
+    (ft-cand cand 1 10000 20000 30000 40000)
+    (ft-fd fd 0 0)
+    (cells-set fd 5 2)
+    (cells-set cand 31 2)
+    (assert-eq (fc-emit-budget cand fd t) 1 "one explicit resource record")
+    (assert-text t ",\"fc-unmeasured\":[[1,10000,20000,30000,40000,2,2]]" "document refusals retain both statuses and the exact box")
+    (fc-write cand fd ledger)
+    (assert-eq (ledger-count ledger) 2 "measurement and signature refusal both represented")
+    (assert-eq (ledger-reason ledger 0) (dr-figure-unmeasured) "unmeasured is distinct from measured rejection")))
+
+(defn ^I32 ft-signature-prefix [^TestT emon-t ^I32 npages]
+  (let [^Cells pa (new-cells) ^Cells cand (new-cells) ^Cells fi (new-cells) ^Cells counts (new-cells)
+        ^:mut ^I32 p 1 ^:mut ^I32 r 0]
+    (while (<= p npages)
+      (do (ft-path pa p 3 7300 7300 10300 10300 43639 -1 9)
+          (ft-path pa p 2 8500 8500 9100 9100 16777215 -1 8)
+          (set p (+ p 1))))
+    (while (< r 6300)
+      (do (ft-vec-cand cand 1 7300 7300 10300 10300)
+          (set r (+ r 1))))
+    (fc-sign-rows fi pa cand counts)
+    (assert-eq (cells-at cand (+ (* 6299 32) 13)) 2 "the last first-page signature survives appended pages")
+    (assert-eq (cells-at cand (+ (* 6299 32) 14)) 2 "the unchanged drawing has two paths")
+    (assert-eq (cells-at cand (+ (* 6299 32) 31)) 0 "appended pages spend no first-page resource allowance")
+    (return 0)))
+
+(deftest test-signature-budget-prefix-invariance-at-one-four-and-sixteen
+  (ft-signature-prefix (test-t) 100)
+  (ft-signature-prefix (test-t) 400)
+  (ft-signature-prefix (test-t) 1600))

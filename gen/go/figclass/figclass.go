@@ -14,6 +14,7 @@ import (
 	"emon/pdfsrc"
 	"emon/port"
 	"emon/restruct"
+	"strings"
 )
 
 const fcMaximg int32 = 4096
@@ -21,6 +22,8 @@ const fcMaximg int32 = 4096
 const fcMaxreg int32 = 128
 
 const fcWork int32 = 40000000
+
+const fcDocwork int32 = 400000000
 
 const fcZone int32 = 1800
 
@@ -41,6 +44,8 @@ const fiStride int32 = 12
 const fcDigestN int32 = 4096
 
 const fcRwork int32 = 20000000
+
+const fcRdocwork int32 = 200000000
 
 const fcRpos int32 = 40
 
@@ -137,6 +142,10 @@ const ftSlant int32 = 42
 const ftRings int32 = 48
 
 const ftCols int32 = 96
+
+const ftPage int32 = 125
+
+const ftPwork int32 = 126
 
 const ftWork int32 = 127
 
@@ -914,15 +923,33 @@ func fcAxes(ws *port.Cells) int32 {
 	return 0
 }
 
+func fcCharge(ws *port.Cells, visits int32) int32 {
+	// Admit one complete indexed loop, then charge its exact row visits. Never overrun either cap.
+	if visits > (fcDocwork - port.CellsAt(ws, ftWork)) {
+		return 2
+	}
+	if visits > (fcWork - port.CellsAt(ws, ftPwork)) {
+		return 1
+	}
+	port.CellsSet(ws, ftWork, port.CellsAt(ws, ftWork)+visits)
+	port.CellsSet(ws, ftPwork, port.CellsAt(ws, ftPwork)+visits)
+	return 0
+}
+
 func fcTicks(pa *port.Cells, page int32, rx0 int32, ry0 int32, rx1 int32, ry1 int32, ws *port.Cells) int32 {
 	// Short rules (1.5 to 11 pt) that cross or touch an axis, along it: its ticks.
-	var n int32 = port.CellsLen(pa) / 24
-	var i int32 = 0
+	var n int32 = pagebounds.PbAfter(pa, 24, page)
+	var first int32 = pagebounds.PbFirst(pa, 24, page)
+	var status int32 = fcCharge(ws, n-first)
+	var i int32 = first
 	var x0 int32 = 0
 	var y0 int32 = 0
 	var x1 int32 = 0
 	var y1 int32 = 0
 	var kind int32 = 0
+	if status != 0 {
+		return status
+	}
 	for i < n {
 		if (evidence.PaGet(pa, i, evidence.PfPage()) == page) && ((evidence.PaGet(pa, i, evidence.PfVis()) == 0) && ((evidence.PaGet(pa, i, evidence.PfFlags()) & evidence.PgClip()) == 0)) {
 			kind = evidence.PaGet(pa, i, evidence.PfKind())
@@ -1002,8 +1029,10 @@ func fcBarRun(ws *port.Cells, dir int32) int32 {
 func fcWords(fw *port.Cells, et *port.Cells, page int32, rx0 int32, ry0 int32, rx1 int32, ry1 int32, ws *port.Cells) int32 {
 	// The words in the region and within `FC_ZONE` of it: how many, how many are numbers, how many lie in it; the words inside each
 	// box; the small squares with a word at their right.
-	var n int32 = evidence.WdCount(fw)
-	var i int32 = 0
+	var n int32 = pagebounds.PbAfter(fw, 24, page)
+	var first int32 = pagebounds.PbFirst(fw, 24, page)
+	var status int32 = fcCharge(ws, n-first)
+	var i int32 = first
 	var x0 int32 = 0
 	var y0 int32 = 0
 	var x1 int32 = 0
@@ -1014,6 +1043,9 @@ func fcWords(fw *port.Cells, et *port.Cells, page int32, rx0 int32, ry0 int32, r
 	var p int32 = 0
 	var nb int32 = fcMin(port.CellsAt(ws, ftBoxes), bxMax)
 	var ns int32 = fcMin(port.CellsAt(ws, ftNsw), swMax)
+	if status != 0 {
+		return status
+	}
 	for i < n {
 		if evidence.WdGet(fw, i, evidence.HdPage()) == page {
 			x0 = evidence.WdGet(fw, i, evidence.HdX0())
@@ -1065,15 +1097,20 @@ func fcWords(fw *port.Cells, et *port.Cells, page int32, rx0 int32, ry0 int32, r
 		}
 		k += 1
 	}
-	return n
+	return 0
 }
 
 func fcLines(fl *port.Cells, page int32, rx0 int32, ry0 int32, rx1 int32, ry1 int32, ws *port.Cells) int32 {
 	// Lines of five words or more whose centre is in the region: prose. A region with some is a text box, a sidebar or a background.
-	var n int32 = evidence.LnCount(fl)
-	var i int32 = 0
+	var n int32 = pagebounds.PbAfter(fl, 16, page)
+	var first int32 = pagebounds.PbFirst(fl, 16, page)
+	var status int32 = fcCharge(ws, n-first)
+	var i int32 = first
 	var cx int32 = 0
 	var cy int32 = 0
+	if status != 0 {
+		return status
+	}
 	for i < n {
 		if (evidence.LnGet(fl, i, evidence.LhPage()) == page) && (evidence.LnGet(fl, i, evidence.LhCount()) >= 5) {
 			cx = (evidence.LnGet(fl, i, evidence.LhX0()) + evidence.LnGet(fl, i, evidence.LhX1())) / 2
@@ -1084,16 +1121,20 @@ func fcLines(fl *port.Cells, page int32, rx0 int32, ry0 int32, rx1 int32, ry1 in
 		}
 		i += 1
 	}
-	return n
+	return 0
 }
 
 func FcMeasure(pa *port.Cells, grl *port.Cells, fw *port.Cells, fl *port.Cells, et *port.Cells, page int32, rx0 int32, ry0 int32, rx1 int32, ry1 int32, ws *port.Cells) int32 {
 	// Measure the region: `ft`'s slots of `ws`, the boxes, the small squares and the bars. Answers 0, or 1 when the document's
-	// budget of rows (`FC_WORK`) is spent and the region was left unmeasured.
+	// page budget of rows (`FC_WORK`) is spent, or 2 for the document cap (`FC_DOCWORK`). No failed measurement is classified.
 	var work int32 = port.CellsAt(ws, ftWork)
-	var n int32 = port.CellsLen(pa) / 24
+	var first int32 = pagebounds.PbFirst(pa, 24, page)
+	var oldpage int32 = port.CellsAt(ws, ftPage)
+	var oldwork int32 = port.CellsAt(ws, ftPwork)
 	var pend int32 = pagebounds.PbAfter(pa, 24, page)
-	var ng int32 = glayer.GrlCount(grl)
+	var ng int32 = pagebounds.PbAfter(grl, 24, page)
+	var gfirst int32 = pagebounds.PbFirst(grl, 24, page)
+	var status int32 = 0
 	var rw int32 = rx1 - rx0
 	var rh int32 = ry1 - ry0
 	var i int32 = 0
@@ -1105,10 +1146,14 @@ func FcMeasure(pa *port.Cells, grl *port.Cells, fw *port.Cells, fl *port.Cells, 
 		i += 1
 	}
 	port.CellsSet(ws, ftWork, work)
-	if work > fcWork {
-		return 1
+	port.CellsSet(ws, ftPage, page)
+	if oldpage == page {
+		port.CellsSet(ws, ftPwork, oldwork)
 	}
-	port.CellsSet(ws, ftWork, work+(n+(ng+(evidence.WdCount(fw)+evidence.LnCount(fl)))))
+	status = fcCharge(ws, pend-first)
+	if status != 0 {
+		return status
+	}
 	i = pagebounds.PbFirst(pa, 24, page)
 	for i < pend {
 		if (evidence.PaGet(pa, i, evidence.PfPage()) == page) && ((evidence.PaGet(pa, i, evidence.PfVis()) == 0) && ((evidence.PaGet(pa, i, evidence.PfFlags()) & evidence.PgClip()) == 0)) {
@@ -1121,7 +1166,11 @@ func FcMeasure(pa *port.Cells, grl *port.Cells, fw *port.Cells, fl *port.Cells, 
 		i += 1
 	}
 	if port.CellsAt(ws, ftNp) == 0 {
-		i = 0
+		status = fcCharge(ws, ng-gfirst)
+		if status != 0 {
+			return status
+		}
+		i = gfirst
 		for i < ng {
 			if glayer.GrlGet(grl, i, 0) == page {
 				cx = (glayer.GrlGet(grl, i, 1) + glayer.GrlGet(grl, i, 3)) / 2
@@ -1158,12 +1207,21 @@ func FcMeasure(pa *port.Cells, grl *port.Cells, fw *port.Cells, fl *port.Cells, 
 	}
 	fcAxes(ws)
 	if port.CellsAt(ws, ftAxes) == 1 {
-		fcTicks(pa, page, rx0, ry0, rx1, ry1, ws)
+		status = fcTicks(pa, page, rx0, ry0, rx1, ry1, ws)
+		if status != 0 {
+			return status
+		}
 	}
 	fcBarRun(ws, 0)
 	fcBarRun(ws, 1)
-	fcWords(fw, et, page, rx0, ry0, rx1, ry1, ws)
-	fcLines(fl, page, rx0, ry0, rx1, ry1, ws)
+	status = fcWords(fw, et, page, rx0, ry0, rx1, ry1, ws)
+	if status != 0 {
+		return status
+	}
+	status = fcLines(fl, page, rx0, ry0, rx1, ry1, ws)
+	if status != 0 {
+		return status
+	}
 	return 0
 }
 
@@ -1203,7 +1261,6 @@ func fcSignVector(pa *port.Cells, fcand *port.Cells, row int32) int32 {
 	var y0 int32 = port.CellsAt(fcand, b+(crVx+1))
 	var w int32 = port.CellsAt(fcand, b+(crVx+2)) - x0
 	var h int32 = port.CellsAt(fcand, b+(crVx+3)) - y0
-	var n int32 = port.CellsLen(pa) / 24
 	var pend int32 = pagebounds.PbAfter(pa, 24, page)
 	var i int32 = pagebounds.PbFirst(pa, 24, page)
 	var np int32 = 0
@@ -1237,19 +1294,36 @@ func fcSignVector(pa *port.Cells, fcand *port.Cells, row int32) int32 {
 		port.CellsSet(fcand, b+(crSig+1), np)
 		port.CellsSet(fcand, b+(crSig+2), mask)
 	}
-	return n
+	return pend - pagebounds.PbFirst(pa, 24, page)
 }
 
-func FcSignRows(fi *port.Cells, pa *port.Cells, fcand *port.Cells) int32 {
+func FcSignRows(fi *port.Cells, pa *port.Cells, fcand *port.Cells, counts *port.Cells) int32 {
 	// P8.4: the recurrence signature (`CR_SIG`) of every candidate row that could be a logo: an image placement (its object and its stream's
-	// digest, `fc-digest`) and a small vector region (`fc-sign-vector`). Rows of regions beyond the document's budget (`FC_RWORK`) have none.
+	// digest, `fc-digest`) and a small vector region (`fc-sign-vector`). Rows beyond page (`FC_RWORK`) or document (`FC_RDOCWORK`) budgets are explicitly marked in cell 31.
 	var n int32 = port.CellsLen(fcand) / crStride
 	var r int32 = 0
 	var b int32 = 0
 	var fb int32 = 0
 	var work int32 = 0
+	var page int32 = 0
+	var visits int32 = 0
+	var maxpage int32 = 0
+	for r < n {
+		maxpage = fcMax(maxpage, port.CellsAt(fcand, r*crStride))
+		r += 1
+	}
+	port.CellsDrop(counts, 0)
+	r = 0
+	for r <= maxpage {
+		port.CellsPush(counts, 0)
+		r += 1
+	}
+	r = 0
 	for r < n {
 		b = r * crStride
+		port.CellsSet(fcand, b+31, 0)
+		page = port.CellsAt(fcand, b)
+		visits = pagebounds.PbAfter(pa, 24, page) - pagebounds.PbFirst(pa, 24, page)
 		if port.CellsAt(fcand, b+crKori) == -1 {
 			fb = port.CellsAt(fcand, b+crRow) * fiStride
 			if (fb >= 0) && (((fb + fiStride) <= port.CellsLen(fi)) && (port.CellsAt(fi, fb) == 1)) {
@@ -1259,9 +1333,17 @@ func FcSignRows(fi *port.Cells, pa *port.Cells, fcand *port.Cells) int32 {
 				port.CellsSet(fcand, b+(crSig+3), port.CellsAt(fi, fb+5))
 				port.CellsSet(fcand, b+(crSig+4), port.CellsAt(fi, fb+6))
 			}
-		} else if (port.CellsAt(fcand, b+crKori) == -2) && (work < fcRwork) {
+		} else if port.CellsAt(fcand, b+crKori) == -2 {
 			if ((port.CellsAt(fcand, b+(crVx+2)) - port.CellsAt(fcand, b+crVx)) <= fcSmall) && ((port.CellsAt(fcand, b+(crVx+3)) - port.CellsAt(fcand, b+(crVx+1))) <= fcSmall) {
-				work += fcSignVector(pa, fcand, r)
+				if visits > (fcRdocwork - work) {
+					port.CellsSet(fcand, b+31, 2)
+				} else if visits > (fcRwork - port.CellsAt(counts, page)) {
+					port.CellsSet(fcand, b+31, 1)
+				} else {
+					visits = fcSignVector(pa, fcand, r)
+					work += visits
+					port.CellsSet(counts, page, port.CellsAt(counts, page)+visits)
+				}
 			}
 		}
 		r += 1
@@ -1650,7 +1732,7 @@ func FcStage(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 	var capt int32 = 0
 	var rej int32 = 0
 	var out int32 = 1
-	var measured int32 = 0
+	var status int32 = 0
 	var pageh int32 = 0
 	var recur int32 = 0
 	var srcs int32 = 0
@@ -1668,7 +1750,7 @@ func FcStage(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 	fcShadingRegions(pa, pages, fcand)
 	fcGrgRegions(grg, pages, fcand)
 	asset.AsFigureRows(fcand, pages, nodes, regions, 2, fg)
-	FcSignRows(fi, pa, fcand)
+	FcSignRows(fi, pa, fcand, cl)
 	nr = asset.AsCount(fcand)
 	i = 0
 	for i < (nr * fdStride) {
@@ -1679,6 +1761,12 @@ func FcStage(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 	for i < nr {
 		port.CellsSet(fd, (i*fdStride)+3, -1)
 		port.CellsSet(fd, (i*fdStride)+4, -1)
+		i += 1
+	}
+	port.CellsDrop(cl, 0)
+	i = 0
+	for i <= model.PageCount(pages) {
+		port.CellsPush(cl, 0)
 		i += 1
 	}
 	i = 1
@@ -1693,13 +1781,16 @@ func FcStage(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 		pageh = model.PageH(pages, page-1)
 		recur = FcRecur(fcand, pages, row)
 		rej = 1
-		if measured < fcMaxreg {
-			measured += 1
-			rej = 0
-			if FcMeasure(pa, grl, fw, fl, et, page, x0, y0, x1, y1, ws) == 0 {
+		status = 3
+		if port.CellsAt(cl, page) < fcMaxreg {
+			port.CellsSet(cl, page, port.CellsAt(cl, page)+1)
+			status = FcMeasure(pa, grl, fw, fl, et, page, x0, y0, x1, y1, ws)
+			if status == 0 {
 				rej = FcReject(ws)
 			}
 		}
+		port.CellsSet(fd, (row*fdStride)+5, status)
+		port.CellsSet(fd, (row*fdStride)+6, port.CellsAt(fcand, b+31))
 		if fcSignatureOver(sl, page, x0, y0, x1, y1) == 1 {
 			rej = 1
 		}
@@ -1745,4 +1836,58 @@ func FcStage(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 	port.CellsDrop(fg, out)
 	restruct.RsFigures(nodes, attrs, regions, text, fnodes, fattrs, fregions, fnm, fcand, fg, fd, ab)
 	return out - 1
+}
+
+func FcWrite(fcand *port.Cells, fd *port.Cells, ledger *port.Cells) int32 {
+	// Budget evidence: fd slot 5 is measurement status, slot 6 signature status. Preserve each unmeasured box in the dropped ledger.
+	var n int32 = port.CellsLen(fd) / fdStride
+	var r int32 = 0
+	var b int32 = 0
+	for r < n {
+		b = r * crStride
+		if port.CellsAt(fd, (r*fdStride)+5) > 0 {
+			model.LedgerAdd(ledger, model.DrFigureUnmeasured(), port.CellsAt(fcand, b), port.CellsAt(fcand, b+5), port.CellsAt(fcand, b+6), port.CellsAt(fcand, b+7), port.CellsAt(fcand, b+8), -1, port.CellsAt(fcand, b+crSrc))
+		}
+		if port.CellsAt(fcand, b+31) > 0 {
+			model.LedgerAdd(ledger, model.DrFigureSignatureUnmeasured(), port.CellsAt(fcand, b), port.CellsAt(fcand, b+5), port.CellsAt(fcand, b+6), port.CellsAt(fcand, b+7), port.CellsAt(fcand, b+8), -1, port.CellsAt(fcand, b+crSrc))
+		}
+		r += 1
+	}
+	return 0
+}
+
+func FcEmitBudget(fcand *port.Cells, fd *port.Cells, t *strings.Builder) int32 {
+	// Optional evidence member: [page,x0,y0,x1,y1,measurement-status,signature-status]. 1 page work, 2 document work, 3 page candidate count.
+	var n int32 = port.CellsLen(fd) / fdStride
+	var r int32 = 0
+	var k int32 = 0
+	var out int32 = 0
+	for r < n {
+		if (port.CellsAt(fd, (r*fdStride)+5) > 0) || (port.CellsAt(fcand, (r*crStride)+31) > 0) {
+			if out == 0 {
+				port.TextAscii(t, ",\"fc-unmeasured\":[")
+			} else {
+				port.TextAscii(t, ",")
+			}
+			port.TextAscii(t, "[")
+			port.TextI32(t, port.CellsAt(fcand, r*crStride))
+			k = 5
+			for k < 9 {
+				port.TextAscii(t, ",")
+				port.TextI32(t, port.CellsAt(fcand, (r*crStride)+k))
+				k += 1
+			}
+			port.TextAscii(t, ",")
+			port.TextI32(t, port.CellsAt(fd, (r*fdStride)+5))
+			port.TextAscii(t, ",")
+			port.TextI32(t, port.CellsAt(fcand, (r*crStride)+31))
+			port.TextAscii(t, "]")
+			out += 1
+		}
+		r += 1
+	}
+	if out > 0 {
+		port.TextAscii(t, "]")
+	}
+	return out
 }
