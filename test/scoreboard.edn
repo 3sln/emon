@@ -3988,7 +3988,7 @@
         :furniture-r 0.0
         :ghost-rate 0.0
         :order-tau 1.0
-        :page-label-acc 0.7
+        :page-label-acc 1.0
         :para-boundary-f1 0.460938
         :para-boundary-p 0.504274
         :para-boundary-r 0.42446

@@ -76,3 +76,31 @@ the same output/recording options; shared-machine timing is not a ratchet.
 `--transcript-dir DIR` separates external transcript input/output from numerical
 reports and bundles. In replay mode it lets a policy experiment preserve the
 original live bundles while writing new results to `EMON_RECEIPTS_OUT`.
+
+`--bounds` adds `completeness_bounds` with numerical per-document rows and
+pooled counts for both the selected `words` and all-attempt `owords`. Exact
+word completeness uses a multiset occurrence budget, ignores order and geometry,
+and is an optimistic ceiling for reconstruction that keeps token boundaries.
+The all-attempt pool includes rejected views and repeated reads: it is not an
+adoptable reading. Entity and item ceilings are independent, so they may reuse
+an occurrence across separate annotations.
+
+`numeric_join_oracle` and `decimal_join_oracle` additionally count whole-token
+concatenations within one known page/run/line. They preserve every character
+(including locale punctuation and signs), never bridge OCR reads, and count
+candidate intervals. They ignore gaps and competition between overlapping
+intervals, so they are optimistic ceilings, not safe joins or measured gains.
+Unknown line IDs authorize no joins. These counters do not change scores,
+baseline rows, OCR planning, or historical accuracy populations.
+
+With `--bounds`, CORD also reports a separate `sub_items` cohort for annotated
+`menu.sub` name-and-price groups, keyed by native group and subgroup. The
+historical 151-parent-item metric retains its definition and population.
+`items_numeric_join_complete` and the corresponding entity counters also allow
+those optimistic numeric concatenations when testing completeness, so split
+amounts do not incorrectly make a combined grouping-and-joining target appear
+unreachable. They retain the oracle's relaxed geometry and overlap assumptions.
+
+The join oracle is conditional on existing OCR line identities. It is not a
+ceiling for repairing tokens across separate OCR lines that share a physical
+baseline; the exact-token completeness counters remain independent of geometry.
