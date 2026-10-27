@@ -7089,6 +7089,122 @@ public static class Table {
         }
         return 0;
     }
+    internal static int TbDescriptionSpill(int page, emon.Port.Cells wd, emon.Port.Cells et, int w0, int w1, emon.Port.Cells tb, int k, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tx, emon.Port.Cells wl, emon.Port.Cells rw, emon.Port.Cells sg, emon.Port.Cells pr, emon.Port.Cells so) {
+        int b = k * Tagtable.Tbs;
+        int first = emon.Port.CellsAt(tb, b + 9);
+        int end = first + emon.Port.CellsAt(tb, b + 10);
+        int head = emon.Port.CellsAt(tb, b + 11);
+        int lastrow = emon.Port.CellsAt(tb, b + 7) - 1;
+        int cuts = emon.Port.CellsAt(tb, b + 16);
+        int bottom = emon.Port.CellsAt(tb, b + 4);
+        int c = first;
+        int j = 0;
+        int sem = 0;
+        int mask = 0;
+        int desc = -1;
+        int size = 0;
+        int r = 0;
+        int tails = 0;
+        int prev = bottom;
+        int ok = 1;
+        int other = 0;
+        if ((emon.Port.CellsAt(tb, b + 8) != 5) || ((head == 0) || (lastrow < head))) {
+            return 0;
+        }
+        if ((emon.Port.CellsAt(tb, b + 5) == PfRuled) || ((emon.Port.CellsAt(tb, b + 5) == PfStruct) || ((emon.Port.CellsAt(tb, b + 25) >= 0) || ((emon.Port.CellsAt(tb, b + 31) & TbWidgetPage) != 0)))) {
+            return 0;
+        }
+        while (c < end) {
+            if (emon.Port.CellsAt(tc, c * Tcs) < head) {
+                j = 0;
+                while (j < emon.Port.CellsAt(tc, (c * Tcs) + 9)) {
+                    sem = TbColSem(wd, et, emon.Port.CellsAt(tw, emon.Port.CellsAt(tc, (c * Tcs) + 8) + j));
+                    int col = emon.Port.CellsAt(tc, (c * Tcs) + 1);
+                    if ((col == 0) && (sem == 1)) {
+                        mask |= 1;
+                    }
+                    if ((col == 1) && (sem == 2)) {
+                        mask |= 2;
+                    }
+                    if ((col == 2) && (sem == 4)) {
+                        mask |= 4;
+                    }
+                    if ((col == 3) && (sem == 3)) {
+                        mask |= 8;
+                    }
+                    if ((col == 4) && (sem == 5)) {
+                        mask |= 16;
+                    }
+                    j += 1;
+                }
+            }
+            if ((emon.Port.CellsAt(tc, c * Tcs) == lastrow) && ((emon.Port.CellsAt(tc, (c * Tcs) + 1) == 1) && ((emon.Port.CellsAt(tc, (c * Tcs) + 3) == 1) && (emon.Port.CellsAt(tc, (c * Tcs) + 9) > 0)))) {
+                desc = c;
+            }
+            c += 1;
+        }
+        if ((mask != 31) || (desc < 0)) {
+            return 0;
+        }
+        size = Evidence.WdGet(wd, emon.Port.CellsAt(tw, emon.Port.CellsAt(tc, (desc * Tcs) + 8)), Evidence.WfSize());
+        if (size <= 0) {
+            return 0;
+        }
+        int nr = TbRows(wd, et, w0, w1, emon.Port.CellsAt(tb, b + 1), bottom + 1, emon.Port.CellsAt(tb, b + 3), bottom + (size * 8), wl, rw, sg);
+        while ((r < nr) && ((tails < 6) && (ok == 1))) {
+            if ((emon.Port.CellsAt(rw, (r * Rws) + 9) != 1) || ((10 * (emon.Port.CellsAt(rw, (r * Rws) + 6) - prev)) > (size * 6))) {
+                ok = 0;
+            }
+            int s = emon.Port.CellsAt(rw, (r * Rws) + 8) * Sgs;
+            if ((TbAbs(emon.Port.CellsAt(sg, s + 1) - emon.Port.CellsAt(tc, (desc * Tcs) + 13)) > 100) || (emon.Port.CellsAt(sg, s + 2) > emon.Port.CellsAt(tx, cuts + 2))) {
+                ok = 0;
+            }
+            j = 0;
+            while (j < emon.Port.CellsAt(rw, (r * Rws) + 1)) {
+                int w = emon.Port.CellsAt(wl, emon.Port.CellsAt(rw, r * Rws) + j);
+                if ((Evidence.WdGet(wd, w, Evidence.HdRot()) != 0) || (((Evidence.WdGet(wd, w, Evidence.WfStyle()) & Model.SyBold()) != 0) || ((Evidence.WdGet(wd, w, Evidence.WfSize()) * 100) > (size * 115)))) {
+                    ok = 0;
+                }
+                j += 1;
+            }
+            other = 0;
+            while (other < TbRowsOf(tb, Tagtable.Tbs)) {
+                if ((other != k) && (emon.Port.CellsAt(tb, other * Tagtable.Tbs) == page)) {
+                    if ((emon.Port.CellsAt(rw, (r * Rws) + 2) >= emon.Port.CellsAt(tb, (other * Tagtable.Tbs) + 2)) && (emon.Port.CellsAt(rw, (r * Rws) + 2) <= emon.Port.CellsAt(tb, (other * Tagtable.Tbs) + 4))) {
+                        ok = 0;
+                    }
+                }
+                other += 1;
+            }
+            if (ok == 1) {
+                tails += 1;
+                prev = emon.Port.CellsAt(rw, (r * Rws) + 7);
+            }
+            r += 1;
+        }
+        if (tails == 0) {
+            return 0;
+        }
+        emon.Port.CellsDrop(pr, 0);
+        j = 0;
+        while (j < emon.Port.CellsAt(tc, (desc * Tcs) + 9)) {
+            TbPairAdd(pr, wd, desc, emon.Port.CellsAt(tw, emon.Port.CellsAt(tc, (desc * Tcs) + 8) + j));
+            j += 1;
+        }
+        r = 0;
+        while (r < tails) {
+            j = 0;
+            while (j < emon.Port.CellsAt(rw, (r * Rws) + 1)) {
+                TbPairAdd(pr, wd, desc, emon.Port.CellsAt(wl, emon.Port.CellsAt(rw, r * Rws) + j));
+                j += 1;
+            }
+            r += 1;
+        }
+        TbFlushPairs(pr, so, wd, tc, tw);
+        emon.Port.CellsSet(tc, (desc * Tcs) + 7, prev);
+        emon.Port.CellsSet(tb, b + 4, prev);
+        return tails;
+    }
     internal static int TbModelTail(emon.Port.Cells wd, emon.Port.Cells et, int w0, int w1, emon.Port.Cells tb, int k, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tx, emon.Port.Cells tbk, emon.Port.Cells wl, emon.Port.Cells rw, emon.Port.Cells sg, emon.Port.Cells pr, emon.Port.Cells so) {
         int b = k * Tagtable.Tbs;
         int bottom = emon.Port.CellsAt(tb, b + 4);
@@ -8640,6 +8756,7 @@ public static class Table {
                     TbHeadBind(p, wd, et, ln, wi, wj, an, tb, k, tc, tw, tx, tbk, s10, s11, s12, s13, s7, s3);
                     TbFinish(tb, k, wd, et, tc, tw, ln, li, lj, tq, g1, g2, g3, wi, g4);
                     TbModel(tb, k, wd, et, tc, tw, tx, tbk, g4);
+                    TbDescriptionSpill(p, wd, et, wi, wj, tb, k, tc, tw, tx, s10, s11, s12, s7, s3);
                     TbModelTail(wd, et, wi, wj, tb, k, tc, tw, tx, tbk, s10, s11, s12, s7, s3);
                     if (TbLedgerTail(p, wd, et, wi, wj, tb, k, tc, tw, tx, tbk, s10, s11, s12, s13, s7, s3) > 0) {
                         TbAligns(tb, k, wd, tc, tw);

@@ -5139,3 +5139,125 @@ func TestACentredNumberIsNotAStatisticalSubgroup(emonT *testing.T) {
 	port.AssertEq(emonT, port.CellsAt(tc, (owner*16)+3), 1, "a centred count has no full-width section span")
 	port.AssertEq(emonT, port.CellsAt(tc, (owner*16)+12), 0, "a numeric label has no section proof")
 }
+
+func TestLedgerDescriptionSpillKeepsItsFinalTransactionOwner(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var k int32 = 0
+	var ledger int32 = -1
+	var amount int32 = -1
+	ttRule(pa, 7000, 9500, 50000, 9550)
+	ttAt(wd, ln, et, port.TextBlob("Total deposits"), 7600, 10000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("2"), 20000, 10000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Total withdrawals"), 30000, 10000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("3"), 49000, 10000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Deposit count"), 7600, 11300, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Withdrawal count"), 30000, 11300, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Deposit amount"), 7600, 13000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("10.00"), 20000, 13000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Withdrawal amount"), 30000, 13000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("20.00"), 49000, 13000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Credits"), 7600, 14300, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Debits"), 30000, 14300, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("USD Savings Account"), 7600, 16000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("817-002"), 49000, 16000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("Date"), 7600, 18000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Details"), 15000, 18000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Deposit"), 32000, 18000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("Withdrawal"), 41000, 18000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("Balance"), 50000, 18000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("D"), 7600, 19200, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("T"), 15000, 19200, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("C"), 32000, 19200, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("W"), 41000, 19200, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("B"), 50000, 19200, 0, 1)
+	ttRule(pa, 7000, 20700, 50000, 20750)
+	ttAt(wd, ln, et, port.TextBlob("20Sep"), 7600, 22000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Payment"), 15000, 22000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("181.04"), 41000, 22000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("149818.96"), 50000, 22000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Reference"), 15000, 23250, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Merchant"), 15000, 24450, 0, 0)
+	ttRule(pa, 7000, 23200, 50000, 23250)
+	port.AssertEq(emonT, ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 2, "totals and a newly headed ledger have different owners")
+	for k < (port.CellsLen(tb) / 32) {
+		amount = ttWordOwner(tb, k, tc, tw, 26)
+		if amount >= 0 {
+			ledger = k
+			port.AssertEq(emonT, port.CellsAt(tb, (k*32)+8), 5, "the new ledger has five explicit columns")
+			port.AssertEq(emonT, port.CellsAt(tc, (amount*16)+1), 3, "181.04 belongs under Withdrawal")
+			port.AssertEq(emonT, ttWordOwner(tb, k, tc, tw, 25), ttWordOwner(tb, k, tc, tw, 28), "the transaction owns its reference line")
+			port.AssertEq(emonT, ttWordOwner(tb, k, tc, tw, 25), ttWordOwner(tb, k, tc, tw, 29), "the transaction owns its merchant continuation")
+			port.AssertEq(emonT, ttWordOwner(tb, k, tc, tw, 7), -1, "the ledger does not own the previous account's total")
+			port.AssertEq(emonT, ttWordOwner(tb, k, tc, tw, 12), -1, "the account title is outside the data grid")
+		}
+		k += 1
+	}
+	port.AssertThat(emonT, ledger >= 0, "the first USD transaction retains an independent ledger owner")
+}
+
+func TestLedgerDoesNotClaimOffsetProseBelowItsFrame(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var k int32 = 0
+	var ledger int32 = -1
+	var amount int32 = -1
+	ttRule(pa, 7000, 9500, 50000, 9550)
+	ttAt(wd, ln, et, port.TextBlob("Total deposits"), 7600, 10000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("2"), 20000, 10000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Total withdrawals"), 30000, 10000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("3"), 49000, 10000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Deposit count"), 7600, 11300, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Withdrawal count"), 30000, 11300, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Deposit amount"), 7600, 13000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("10.00"), 20000, 13000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Withdrawal amount"), 30000, 13000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("20.00"), 49000, 13000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Credits"), 7600, 14300, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Debits"), 30000, 14300, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("USD Savings Account"), 7600, 16000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("817-002"), 49000, 16000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("Date"), 7600, 18000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Details"), 15000, 18000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Deposit"), 32000, 18000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("Withdrawal"), 41000, 18000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("Balance"), 50000, 18000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("D"), 7600, 19200, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("T"), 15000, 19200, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("C"), 32000, 19200, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("W"), 41000, 19200, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("B"), 50000, 19200, 0, 1)
+	ttRule(pa, 7000, 20700, 50000, 20750)
+	ttAt(wd, ln, et, port.TextBlob("20Sep"), 7600, 22000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Payment"), 15000, 22000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("181.04"), 41000, 22000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("149818.96"), 50000, 22000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Reference"), 17000, 23250, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Merchant"), 17000, 24450, 0, 0)
+	ttRule(pa, 7000, 23200, 50000, 23250)
+	port.AssertEq(emonT, ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 2, "totals and a newly headed ledger have different owners")
+	for k < (port.CellsLen(tb) / 32) {
+		amount = ttWordOwner(tb, k, tc, tw, 26)
+		if amount >= 0 {
+			ledger = k
+			port.AssertEq(emonT, port.CellsAt(tb, (k*32)+8), 5, "the new ledger has five explicit columns")
+			port.AssertEq(emonT, port.CellsAt(tc, (amount*16)+1), 3, "181.04 belongs under Withdrawal")
+			port.AssertEq(emonT, ttWordOwner(tb, k, tc, tw, 28), -1, "offset prose remains outside the ledger")
+			port.AssertEq(emonT, ttWordOwner(tb, k, tc, tw, 29), -1, "later offset prose remains outside the ledger")
+			port.AssertEq(emonT, ttWordOwner(tb, k, tc, tw, 7), -1, "the ledger does not own the previous account's total")
+			port.AssertEq(emonT, ttWordOwner(tb, k, tc, tw, 12), -1, "the account title is outside the data grid")
+		}
+		k += 1
+	}
+	port.AssertThat(emonT, ledger >= 0, "the first USD transaction retains an independent ledger owner")
+}

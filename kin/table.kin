@@ -5539,6 +5539,75 @@
     (return 0)))
 
 ;; D652: model-aligned foot rows following selection.
+;; D775: a headed five-column ledger can end before its last description does.
+;; Keep the selected row/column map; only extend the final description cell.
+(defn ^I32 tb-description-spill [^I32 page ^Cells wd ^Cells et ^I32 w0 ^I32 w1
+                                ^:mut ^Cells tb ^I32 k ^:mut ^Cells tc ^:mut ^Cells tw ^Cells tx
+                                ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg ^:mut ^Cells pr ^:mut ^Cells so]
+  (let [^I32 b (* k TBS) ^I32 first (cells-at tb (+ b 9)) ^I32 end (+ first (cells-at tb (+ b 10)))
+        ^I32 head (cells-at tb (+ b 11)) ^I32 lastrow (- (cells-at tb (+ b 7)) 1)
+        ^I32 cuts (cells-at tb (+ b 16)) ^I32 bottom (cells-at tb (+ b 4))
+        ^:mut ^I32 c first ^:mut ^I32 j 0 ^:mut ^I32 sem 0 ^:mut ^I32 mask 0
+        ^:mut ^I32 desc -1 ^:mut ^I32 size 0 ^:mut ^I32 r 0 ^:mut ^I32 tails 0
+        ^:mut ^I32 prev bottom ^:mut ^I32 ok 1 ^:mut ^I32 other 0]
+    (if (or (!= (cells-at tb (+ b 8)) 5) (or (== head 0) (< lastrow head))) (return 0))
+    (if (or (== (cells-at tb (+ b 5)) PF_RULED) (or (== (cells-at tb (+ b 5)) PF_STRUCT)
+            (or (>= (cells-at tb (+ b 25)) 0) (!= (bit-and (cells-at tb (+ b 31)) TB_WIDGET_PAGE) 0)))) (return 0))
+    (while (< c end)
+      (do (if (< (cells-at tc (* c TCS)) head)
+            (do (set j 0)
+                (while (< j (cells-at tc (+ (* c TCS) 9)))
+                  (do (set sem (tb-col-sem wd et (cells-at tw (+ (cells-at tc (+ (* c TCS) 8)) j))))
+                      (let [^I32 col (cells-at tc (+ (* c TCS) 1))]
+                        (if (and (== col 0) (== sem 1)) (set mask (bit-or mask 1)))
+                        (if (and (== col 1) (== sem 2)) (set mask (bit-or mask 2)))
+                        (if (and (== col 2) (== sem 4)) (set mask (bit-or mask 4)))
+                        (if (and (== col 3) (== sem 3)) (set mask (bit-or mask 8)))
+                        (if (and (== col 4) (== sem 5)) (set mask (bit-or mask 16))))
+                      (set j (+ j 1))))))
+          (if (and (== (cells-at tc (* c TCS)) lastrow) (and (== (cells-at tc (+ (* c TCS) 1)) 1)
+                   (and (== (cells-at tc (+ (* c TCS) 3)) 1) (> (cells-at tc (+ (* c TCS) 9)) 0)))) (set desc c))
+          (set c (+ c 1))))
+    (if (or (!= mask 31) (< desc 0)) (return 0))
+    (set size (wd-get wd (cells-at tw (cells-at tc (+ (* desc TCS) 8))) (wf-size)))
+    (if (<= size 0) (return 0))
+    (let [^I32 nr (tb-rows wd et w0 w1 (cells-at tb (+ b 1)) (+ bottom 1) (cells-at tb (+ b 3)) (+ bottom (* size 8)) wl rw sg)]
+      (while (and (< r nr) (and (< tails 6) (== ok 1)))
+        (do (if (or (!= (cells-at rw (+ (* r RWS) 9)) 1)
+                    (> (* 10 (- (cells-at rw (+ (* r RWS) 6)) prev)) (* size 6))) (set ok 0))
+            (let [^I32 s (* (cells-at rw (+ (* r RWS) 8)) SGS)]
+              (if (or (> (tb-abs (- (cells-at sg (+ s 1)) (cells-at tc (+ (* desc TCS) 13)))) 100)
+                      (> (cells-at sg (+ s 2)) (cells-at tx (+ cuts 2)))) (set ok 0)))
+            (set j 0)
+            (while (< j (cells-at rw (+ (* r RWS) 1)))
+              (do (let [^I32 w (cells-at wl (+ (cells-at rw (* r RWS)) j))]
+                    (if (or (!= (wd-get wd w (hd-rot)) 0)
+                            (or (!= (bit-and (wd-get wd w (wf-style)) (sy-bold)) 0)
+                                (> (* (wd-get wd w (wf-size)) 100) (* size 115)))) (set ok 0)))
+                  (set j (+ j 1))))
+            (set other 0)
+            (while (< other (tb-rows-of tb TBS))
+              (do (if (and (!= other k) (== (cells-at tb (* other TBS)) page))
+                    (if (and (>= (cells-at rw (+ (* r RWS) 2)) (cells-at tb (+ (* other TBS) 2)))
+                             (<= (cells-at rw (+ (* r RWS) 2)) (cells-at tb (+ (* other TBS) 4)))) (set ok 0)))
+                  (set other (+ other 1))))
+            (if (== ok 1) (do (set tails (+ tails 1)) (set prev (cells-at rw (+ (* r RWS) 7)))))
+            (set r (+ r 1))))
+      (if (== tails 0) (return 0))
+      (cells-drop pr 0) (set j 0)
+      (while (< j (cells-at tc (+ (* desc TCS) 9)))
+        (do (tb-pair-add pr wd desc (cells-at tw (+ (cells-at tc (+ (* desc TCS) 8)) j))) (set j (+ j 1))))
+      (set r 0)
+      (while (< r tails)
+        (do (set j 0)
+            (while (< j (cells-at rw (+ (* r RWS) 1)))
+              (do (tb-pair-add pr wd desc (cells-at wl (+ (cells-at rw (* r RWS)) j))) (set j (+ j 1))))
+            (set r (+ r 1))))
+      (tb-flush-pairs pr so wd tc tw)
+      (cells-set tc (+ (* desc TCS) 7) prev)
+      (cells-set tb (+ b 4) prev))
+    (return tails)))
+
 (defn ^I32 tb-model-tail [^Cells wd ^Cells et ^I32 w0 ^I32 w1 ^:mut ^Cells tb ^I32 k
                           ^:mut ^Cells tc ^:mut ^Cells tw ^Cells tx ^Cells tbk
                           ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg ^:mut ^Cells pr ^:mut ^Cells so]
@@ -6527,6 +6596,7 @@
                       (tb-head-bind p wd et ln wi wj an tb k tc tw tx tbk s10 s11 s12 s13 s7 s3)
                       (tb-finish tb k wd et tc tw ln li lj tq g1 g2 g3 wi g4)
                       (tb-model tb k wd et tc tw tx tbk g4)
+                      (tb-description-spill p wd et wi wj tb k tc tw tx s10 s11 s12 s7 s3)
                       (tb-model-tail wd et wi wj tb k tc tw tx tbk s10 s11 s12 s7 s3)
                       (if (> (tb-ledger-tail p wd et wi wj tb k tc tw tx tbk s10 s11 s12 s13 s7 s3) 0)
                         (do (tb-aligns tb k wd tc tw) (tb-model tb k wd et tc tw tx tbk g4)))

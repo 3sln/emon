@@ -4954,4 +4954,124 @@ public final class Tabletest {
         emon.Testport.assertEq(emon.Port.cellsAt(tc, (owner * 16) + 3), 1, "a centred count has no full-width section span");
         emon.Testport.assertEq(emon.Port.cellsAt(tc, (owner * 16) + 12), 0, "a numeric label has no section proof");
     }
+    public static void testLedgerDescriptionSpillKeepsItsFinalTransactionOwner() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        int k = 0;
+        int ledger = -1;
+        int amount = -1;
+        ttRule(pa, 7000, 9500, 50000, 9550);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Total deposits"), 7600, 10000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("2"), 20000, 10000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Total withdrawals"), 30000, 10000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("3"), 49000, 10000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Deposit count"), 7600, 11300, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Withdrawal count"), 30000, 11300, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Deposit amount"), 7600, 13000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("10.00"), 20000, 13000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Withdrawal amount"), 30000, 13000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("20.00"), 49000, 13000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Credits"), 7600, 14300, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Debits"), 30000, 14300, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("USD Savings Account"), 7600, 16000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("817-002"), 49000, 16000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Date"), 7600, 18000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Details"), 15000, 18000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Deposit"), 32000, 18000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Withdrawal"), 41000, 18000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Balance"), 50000, 18000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("D"), 7600, 19200, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("T"), 15000, 19200, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("C"), 32000, 19200, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("W"), 41000, 19200, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("B"), 50000, 19200, 0, 1);
+        ttRule(pa, 7000, 20700, 50000, 20750);
+        ttAt(wd, ln, et, emon.Testport.textBlob("20Sep"), 7600, 22000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Payment"), 15000, 22000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("181.04"), 41000, 22000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("149818.96"), 50000, 22000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Reference"), 15000, 23250, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Merchant"), 15000, 24450, 0, 0);
+        ttRule(pa, 7000, 23200, 50000, 23250);
+        emon.Testport.assertEq(ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 2, "totals and a newly headed ledger have different owners");
+        while (k < (emon.Port.cellsLen(tb) / 32)) {
+            amount = ttWordOwner(tb, k, tc, tw, 26);
+            if (amount >= 0) {
+                ledger = k;
+                emon.Testport.assertEq(emon.Port.cellsAt(tb, (k * 32) + 8), 5, "the new ledger has five explicit columns");
+                emon.Testport.assertEq(emon.Port.cellsAt(tc, (amount * 16) + 1), 3, "181.04 belongs under Withdrawal");
+                emon.Testport.assertEq(ttWordOwner(tb, k, tc, tw, 25), ttWordOwner(tb, k, tc, tw, 28), "the transaction owns its reference line");
+                emon.Testport.assertEq(ttWordOwner(tb, k, tc, tw, 25), ttWordOwner(tb, k, tc, tw, 29), "the transaction owns its merchant continuation");
+                emon.Testport.assertEq(ttWordOwner(tb, k, tc, tw, 7), -1, "the ledger does not own the previous account's total");
+                emon.Testport.assertEq(ttWordOwner(tb, k, tc, tw, 12), -1, "the account title is outside the data grid");
+            }
+            k += 1;
+        }
+        emon.Testport.assertThat(ledger >= 0, "the first USD transaction retains an independent ledger owner");
+    }
+    public static void testLedgerDoesNotClaimOffsetProseBelowItsFrame() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        int k = 0;
+        int ledger = -1;
+        int amount = -1;
+        ttRule(pa, 7000, 9500, 50000, 9550);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Total deposits"), 7600, 10000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("2"), 20000, 10000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Total withdrawals"), 30000, 10000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("3"), 49000, 10000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Deposit count"), 7600, 11300, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Withdrawal count"), 30000, 11300, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Deposit amount"), 7600, 13000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("10.00"), 20000, 13000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Withdrawal amount"), 30000, 13000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("20.00"), 49000, 13000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Credits"), 7600, 14300, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Debits"), 30000, 14300, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("USD Savings Account"), 7600, 16000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("817-002"), 49000, 16000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Date"), 7600, 18000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Details"), 15000, 18000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Deposit"), 32000, 18000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Withdrawal"), 41000, 18000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Balance"), 50000, 18000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("D"), 7600, 19200, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("T"), 15000, 19200, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("C"), 32000, 19200, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("W"), 41000, 19200, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("B"), 50000, 19200, 0, 1);
+        ttRule(pa, 7000, 20700, 50000, 20750);
+        ttAt(wd, ln, et, emon.Testport.textBlob("20Sep"), 7600, 22000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Payment"), 15000, 22000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("181.04"), 41000, 22000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("149818.96"), 50000, 22000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Reference"), 17000, 23250, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Merchant"), 17000, 24450, 0, 0);
+        ttRule(pa, 7000, 23200, 50000, 23250);
+        emon.Testport.assertEq(ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 2, "totals and a newly headed ledger have different owners");
+        while (k < (emon.Port.cellsLen(tb) / 32)) {
+            amount = ttWordOwner(tb, k, tc, tw, 26);
+            if (amount >= 0) {
+                ledger = k;
+                emon.Testport.assertEq(emon.Port.cellsAt(tb, (k * 32) + 8), 5, "the new ledger has five explicit columns");
+                emon.Testport.assertEq(emon.Port.cellsAt(tc, (amount * 16) + 1), 3, "181.04 belongs under Withdrawal");
+                emon.Testport.assertEq(ttWordOwner(tb, k, tc, tw, 28), -1, "offset prose remains outside the ledger");
+                emon.Testport.assertEq(ttWordOwner(tb, k, tc, tw, 29), -1, "later offset prose remains outside the ledger");
+                emon.Testport.assertEq(ttWordOwner(tb, k, tc, tw, 7), -1, "the ledger does not own the previous account's total");
+                emon.Testport.assertEq(ttWordOwner(tb, k, tc, tw, 12), -1, "the account title is outside the data grid");
+            }
+            k += 1;
+        }
+        emon.Testport.assertThat(ledger >= 0, "the first USD transaction retains an independent ledger owner");
+    }
 }

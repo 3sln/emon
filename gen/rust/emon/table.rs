@@ -7095,6 +7095,122 @@ pub(crate) fn tb_ctx(mut tb: &mut crate::port::Cells, k: i32, wd: &mut crate::po
     }
     return 0;
 }
+pub(crate) fn tb_description_spill(page: i32, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w0: i32, w1: i32, mut tb: &mut crate::port::Cells, k: i32, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, tx: &mut crate::port::Cells, mut wl: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut so: &mut crate::port::Cells) -> i32 {
+    let b: i32 = k * TBS;
+    let first: i32 = crate::port::cells_at(tb, b + 9);
+    let end: i32 = first + crate::port::cells_at(tb, b + 10);
+    let head: i32 = crate::port::cells_at(tb, b + 11);
+    let lastrow: i32 = crate::port::cells_at(tb, b + 7) - 1;
+    let cuts: i32 = crate::port::cells_at(tb, b + 16);
+    let bottom: i32 = crate::port::cells_at(tb, b + 4);
+    let mut c: i32 = first;
+    let mut j: i32 = 0;
+    let mut sem: i32 = 0;
+    let mut mask: i32 = 0;
+    let mut desc: i32 = -1;
+    let mut size: i32 = 0;
+    let mut r: i32 = 0;
+    let mut tails: i32 = 0;
+    let mut prev: i32 = bottom;
+    let mut ok: i32 = 1;
+    let mut other: i32 = 0;
+    if (crate::port::cells_at(tb, b + 8) != 5) || ((head == 0) || (lastrow < head)) {
+        return 0;
+    }
+    if (crate::port::cells_at(tb, b + 5) == PF_RULED) || ((crate::port::cells_at(tb, b + 5) == PF_STRUCT) || ((crate::port::cells_at(tb, b + 25) >= 0) || ((crate::port::cells_at(tb, b + 31) & TB_WIDGET_PAGE) != 0))) {
+        return 0;
+    }
+    while c < end {
+        if crate::port::cells_at(tc, c * TCS) < head {
+            j = 0;
+            while j < crate::port::cells_at(tc, (c * TCS) + 9) {
+                sem = tb_col_sem(wd, et, crate::port::cells_at(tw, crate::port::cells_at(tc, (c * TCS) + 8) + j));
+                let col: i32 = crate::port::cells_at(tc, (c * TCS) + 1);
+                if (col == 0) && (sem == 1) {
+                    mask |= 1;
+                }
+                if (col == 1) && (sem == 2) {
+                    mask |= 2;
+                }
+                if (col == 2) && (sem == 4) {
+                    mask |= 4;
+                }
+                if (col == 3) && (sem == 3) {
+                    mask |= 8;
+                }
+                if (col == 4) && (sem == 5) {
+                    mask |= 16;
+                }
+                j += 1;
+            }
+        }
+        if (crate::port::cells_at(tc, c * TCS) == lastrow) && ((crate::port::cells_at(tc, (c * TCS) + 1) == 1) && ((crate::port::cells_at(tc, (c * TCS) + 3) == 1) && (crate::port::cells_at(tc, (c * TCS) + 9) > 0))) {
+            desc = c;
+        }
+        c += 1;
+    }
+    if (mask != 31) || (desc < 0) {
+        return 0;
+    }
+    size = wd_get(wd, crate::port::cells_at(tw, crate::port::cells_at(tc, (desc * TCS) + 8)), wf_size());
+    if size <= 0 {
+        return 0;
+    }
+    let nr: i32 = tb_rows(wd, et, w0, w1, crate::port::cells_at(tb, b + 1), bottom + 1, crate::port::cells_at(tb, b + 3), bottom + (size * 8), wl, rw, sg);
+    while (r < nr) && ((tails < 6) && (ok == 1)) {
+        if (crate::port::cells_at(rw, (r * RWS) + 9) != 1) || ((10 * (crate::port::cells_at(rw, (r * RWS) + 6) - prev)) > (size * 6)) {
+            ok = 0;
+        }
+        let s: i32 = crate::port::cells_at(rw, (r * RWS) + 8) * SGS;
+        if (tb_abs(crate::port::cells_at(sg, s + 1) - crate::port::cells_at(tc, (desc * TCS) + 13)) > 100) || (crate::port::cells_at(sg, s + 2) > crate::port::cells_at(tx, cuts + 2)) {
+            ok = 0;
+        }
+        j = 0;
+        while j < crate::port::cells_at(rw, (r * RWS) + 1) {
+            let w: i32 = crate::port::cells_at(wl, crate::port::cells_at(rw, r * RWS) + j);
+            if (wd_get(wd, w, hd_rot()) != 0) || (((wd_get(wd, w, wf_style()) & sy_bold()) != 0) || ((wd_get(wd, w, wf_size()) * 100) > (size * 115))) {
+                ok = 0;
+            }
+            j += 1;
+        }
+        other = 0;
+        while other < tb_rows_of(tb, TBS) {
+            if (other != k) && (crate::port::cells_at(tb, other * TBS) == page) {
+                if (crate::port::cells_at(rw, (r * RWS) + 2) >= crate::port::cells_at(tb, (other * TBS) + 2)) && (crate::port::cells_at(rw, (r * RWS) + 2) <= crate::port::cells_at(tb, (other * TBS) + 4)) {
+                    ok = 0;
+                }
+            }
+            other += 1;
+        }
+        if ok == 1 {
+            tails += 1;
+            prev = crate::port::cells_at(rw, (r * RWS) + 7);
+        }
+        r += 1;
+    }
+    if tails == 0 {
+        return 0;
+    }
+    crate::port::cells_drop(pr, 0);
+    j = 0;
+    while j < crate::port::cells_at(tc, (desc * TCS) + 9) {
+        tb_pair_add(pr, wd, desc, crate::port::cells_at(tw, crate::port::cells_at(tc, (desc * TCS) + 8) + j));
+        j += 1;
+    }
+    r = 0;
+    while r < tails {
+        j = 0;
+        while j < crate::port::cells_at(rw, (r * RWS) + 1) {
+            tb_pair_add(pr, wd, desc, crate::port::cells_at(wl, crate::port::cells_at(rw, r * RWS) + j));
+            j += 1;
+        }
+        r += 1;
+    }
+    tb_flush_pairs(pr, so, wd, tc, tw);
+    crate::port::cells_set(tc, (desc * TCS) + 7, prev);
+    crate::port::cells_set(tb, b + 4, prev);
+    return tails;
+}
 pub(crate) fn tb_model_tail(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w0: i32, w1: i32, mut tb: &mut crate::port::Cells, k: i32, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, tx: &mut crate::port::Cells, tbk: &mut crate::port::Cells, mut wl: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut so: &mut crate::port::Cells) -> i32 {
     let b: i32 = k * TBS;
     let bottom: i32 = crate::port::cells_at(tb, b + 4);
@@ -8646,6 +8762,7 @@ pub fn tb_build(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et
                 tb_head_bind(p, wd, et, ln, wi, wj, an, tb, k, tc, tw, tx, tbk, s10, s11, s12, s13, s7, s3);
                 tb_finish(tb, k, wd, et, tc, tw, ln, li, lj, tq, g1, g2, g3, wi, g4);
                 tb_model(tb, k, wd, et, tc, tw, tx, tbk, g4);
+                tb_description_spill(p, wd, et, wi, wj, tb, k, tc, tw, tx, s10, s11, s12, s7, s3);
                 tb_model_tail(wd, et, wi, wj, tb, k, tc, tw, tx, tbk, s10, s11, s12, s7, s3);
                 if tb_ledger_tail(p, wd, et, wi, wj, tb, k, tc, tw, tx, tbk, s10, s11, s12, s13, s7, s3) > 0 {
                     tb_aligns(tb, k, wd, tc, tw);

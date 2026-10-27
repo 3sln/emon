@@ -12939,3 +12939,74 @@ All required final commands pass: `gates drift`, `ci core`, `rederive --check`, 
 No commit, corpus fetch or prune. Decisions and evidence are in `emon-scratch/b19`, with the final report/checkpoints in the coordinator directory. Task-owned internal builds are removed after verification; shared caches are retained. The coordinator commits.
 
 - [ ] **Signed off** (maintainer)
+
+### D775 — Preserve the final ledger description owner below a partial frame
+
+Batch 22's D16 USD row already owns its date, 181.04 withdrawal and
+149,818.96 balance, but its four tightly aligned description lines fall
+outside the selected table. A failing-first law reproduces the lost owner.
+Extend only the last description cell of an explicitly headed five-column
+Date/Details/Deposit/Withdrawal/Balance ledger, retaining every selected
+row, column and value. Accept at most six tightly aligned, unbolded lines
+in the description band, stopping at another table or unrelated text.
+A companion law keeps offset prose outside. This does not establish safe
+cross-page currency linking or repair incomplete raster ledgers.
+
+- [ ] **Signed off** (maintainer)
+
+### D776 — Keep the D16 description repair; leave unproved framing and links unmet
+
+Batch 22 retains only D775's last-description extension. Fresh source-relative
+before/after review keeps D16 usable: four loose description lines now have the
+existing USD transaction owner, with its date, empty deposit, 181.04 withdrawal
+and 149,818.96 balance unchanged. The two new ownership/value and offset-prose
+laws fail/pass respectively against HEAD's table module and both pass finally.
+
+Other acceptance outcomes are explicitly unmet, with no change promoted:
+
+- F01 remains poor. Table 9 still has only the partial frame, rather than all
+  thirteen numbered data rows and their year headers. The earlier frame design
+  lost a row; its numbered-frame preservation laws remain green.
+- E09 remains broken. Merging scanned fragments alone cannot establish stable
+  debit/credit ownership in the absence of reliable headers. No value projection
+  or OCR-arbitration change is retained.
+- D16 currency links remain unmet. Matching column geometry does not establish
+  account/currency identity across its HKD, total and USD blocks.
+- F17 remains usable, with headers and forward balances outside the transaction
+  table. Its intervening currency banner/opening balance and shifted closing
+  anchors need their own ownership proof; short header/tail rules are unchanged.
+- F06/F16/F18/F20/F11 retain their previous table models and grades. No diagnostic
+  or recognition-only result is presented as reconstruction.
+
+Fresh named checks preserve D28's complete net-earnings stub, values, p95 and
+section rows; F13's eleven subgroup rows, A-2 link and B-1 wraps; E10 activity/APR;
+F05/F10 two/four-page links; and F03/F15 summaries. All 54 live controls, including
+both Berkshire documents and receipt controls, preserve all 353,307 words over
+817 pages: zero lost and zero gained. Their table counts, grids and numeric-value
+owners are unchanged; only the intended D16 description ownership changes.
+
+All fifteen final gate commands pass: drift, core, both re-derivation commands,
+accuracy, samples, all seven replay gates, unit and package checks. Accuracy
+passes 3,449 metrics within the existing 0.002 tolerance; 232 cross-host Models
+match Rust. Each of Go/Rust/Java/C# passes 1,298 laws, and all seven package
+consumers agree. Every calibration refresh changed zero rows; no golden, sample,
+scoreboard, receipt baseline or API snapshot moved. Both live sixty-document
+receipt populations meet their precision floors: SROIE 0.6820745632 against
+0.6816742393, CORD 0.4223602484 against 0.42. These existing gains relative to the
+tracked receipt baseline are not attributed to this table-only change.
+
+Java packaging used javac/java because Maven is absent; C/pod packaging omitted
+optional native OCR/render engines. Packaging resolved the same pdfium symlink
+and rebuilt the final live driver with equivalent source/features but a different
+binary hash; the exact measured executable was restored and verified before the
+full final control sweep. An initial quick-runner shell read-offset error and an
+empty-row comparison-reader assumption were corrected; full final gates and the
+complete control ownership audit pass. No production redo or ratchet reduction
+was needed.
+
+Evidence, exact commands, source/input/binary hashes, acceptance reasons and
+live judgments are in `/Volumes/SSK SSD/emon-scratch/b22/`; the coordinator report
+is `.claude/coord/b22-report.md`. No commit, corpus fetch/prune, or reserved OCR
+module edit was made. Task-owned internal build outputs are deleted at completion.
+
+- [ ] **Signed off** (maintainer)

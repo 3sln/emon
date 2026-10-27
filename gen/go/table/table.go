@@ -7354,6 +7354,123 @@ func tbCtx(tb *port.Cells, k int32, wd *port.Cells, ln *port.Cells, l0 int32, l1
 	return 0
 }
 
+func tbDescriptionSpill(page int32, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, tb *port.Cells, k int32, tc *port.Cells, tw *port.Cells, tx *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, pr *port.Cells, so *port.Cells) int32 {
+	var b int32 = k * tagtable.Tbs
+	var first int32 = port.CellsAt(tb, b+9)
+	var end int32 = first + port.CellsAt(tb, b+10)
+	var head int32 = port.CellsAt(tb, b+11)
+	var lastrow int32 = port.CellsAt(tb, b+7) - 1
+	var cuts int32 = port.CellsAt(tb, b+16)
+	var bottom int32 = port.CellsAt(tb, b+4)
+	var c int32 = first
+	var j int32 = 0
+	var sem int32 = 0
+	var mask int32 = 0
+	var desc int32 = -1
+	var size int32 = 0
+	var r int32 = 0
+	var tails int32 = 0
+	var prev int32 = bottom
+	var ok int32 = 1
+	var other int32 = 0
+	if (port.CellsAt(tb, b+8) != 5) || ((head == 0) || (lastrow < head)) {
+		return 0
+	}
+	if (port.CellsAt(tb, b+5) == pfRuled) || ((port.CellsAt(tb, b+5) == pfStruct) || ((port.CellsAt(tb, b+25) >= 0) || ((port.CellsAt(tb, b+31) & tbWidgetPage) != 0))) {
+		return 0
+	}
+	for c < end {
+		if port.CellsAt(tc, c*tcs) < head {
+			j = 0
+			for j < port.CellsAt(tc, (c*tcs)+9) {
+				sem = tbColSem(wd, et, port.CellsAt(tw, port.CellsAt(tc, (c*tcs)+8)+j))
+				var col int32 = port.CellsAt(tc, (c*tcs)+1)
+				if (col == 0) && (sem == 1) {
+					mask |= 1
+				}
+				if (col == 1) && (sem == 2) {
+					mask |= 2
+				}
+				if (col == 2) && (sem == 4) {
+					mask |= 4
+				}
+				if (col == 3) && (sem == 3) {
+					mask |= 8
+				}
+				if (col == 4) && (sem == 5) {
+					mask |= 16
+				}
+				j += 1
+			}
+		}
+		if (port.CellsAt(tc, c*tcs) == lastrow) && ((port.CellsAt(tc, (c*tcs)+1) == 1) && ((port.CellsAt(tc, (c*tcs)+3) == 1) && (port.CellsAt(tc, (c*tcs)+9) > 0))) {
+			desc = c
+		}
+		c += 1
+	}
+	if (mask != 31) || (desc < 0) {
+		return 0
+	}
+	size = evidence.WdGet(wd, port.CellsAt(tw, port.CellsAt(tc, (desc*tcs)+8)), evidence.WfSize())
+	if size <= 0 {
+		return 0
+	}
+	var nr int32 = tbRows(wd, et, w0, w1, port.CellsAt(tb, b+1), bottom+1, port.CellsAt(tb, b+3), bottom+(size*8), wl, rw, sg)
+	for (r < nr) && ((tails < 6) && (ok == 1)) {
+		if (port.CellsAt(rw, (r*rws)+9) != 1) || ((10 * (port.CellsAt(rw, (r*rws)+6) - prev)) > (size * 6)) {
+			ok = 0
+		}
+		var s int32 = port.CellsAt(rw, (r*rws)+8) * sgs
+		if (tbAbs(port.CellsAt(sg, s+1)-port.CellsAt(tc, (desc*tcs)+13)) > 100) || (port.CellsAt(sg, s+2) > port.CellsAt(tx, cuts+2)) {
+			ok = 0
+		}
+		j = 0
+		for j < port.CellsAt(rw, (r*rws)+1) {
+			var w int32 = port.CellsAt(wl, port.CellsAt(rw, r*rws)+j)
+			if (evidence.WdGet(wd, w, evidence.HdRot()) != 0) || (((evidence.WdGet(wd, w, evidence.WfStyle()) & model.SyBold()) != 0) || ((evidence.WdGet(wd, w, evidence.WfSize()) * 100) > (size * 115))) {
+				ok = 0
+			}
+			j += 1
+		}
+		other = 0
+		for other < tbRowsOf(tb, tagtable.Tbs) {
+			if (other != k) && (port.CellsAt(tb, other*tagtable.Tbs) == page) {
+				if (port.CellsAt(rw, (r*rws)+2) >= port.CellsAt(tb, (other*tagtable.Tbs)+2)) && (port.CellsAt(rw, (r*rws)+2) <= port.CellsAt(tb, (other*tagtable.Tbs)+4)) {
+					ok = 0
+				}
+			}
+			other += 1
+		}
+		if ok == 1 {
+			tails += 1
+			prev = port.CellsAt(rw, (r*rws)+7)
+		}
+		r += 1
+	}
+	if tails == 0 {
+		return 0
+	}
+	port.CellsDrop(pr, 0)
+	j = 0
+	for j < port.CellsAt(tc, (desc*tcs)+9) {
+		tbPairAdd(pr, wd, desc, port.CellsAt(tw, port.CellsAt(tc, (desc*tcs)+8)+j))
+		j += 1
+	}
+	r = 0
+	for r < tails {
+		j = 0
+		for j < port.CellsAt(rw, (r*rws)+1) {
+			tbPairAdd(pr, wd, desc, port.CellsAt(wl, port.CellsAt(rw, r*rws)+j))
+			j += 1
+		}
+		r += 1
+	}
+	tbFlushPairs(pr, so, wd, tc, tw)
+	port.CellsSet(tc, (desc*tcs)+7, prev)
+	port.CellsSet(tb, b+4, prev)
+	return tails
+}
+
 func tbModelTail(wd *port.Cells, et *port.Cells, w0 int32, w1 int32, tb *port.Cells, k int32, tc *port.Cells, tw *port.Cells, tx *port.Cells, tbk *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, pr *port.Cells, so *port.Cells) int32 {
 	var b int32 = k * tagtable.Tbs
 	var bottom int32 = port.CellsAt(tb, b+4)
@@ -8923,6 +9040,7 @@ func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gf
 				tbHeadBind(p, wd, et, ln, wi, wj, an, tb, k, tc, tw, tx, tbk, s10, s11, s12, s13, s7, s3)
 				tbFinish(tb, k, wd, et, tc, tw, ln, li, lj, tq, g1, g2, g3, wi, g4)
 				tbModel(tb, k, wd, et, tc, tw, tx, tbk, g4)
+				tbDescriptionSpill(p, wd, et, wi, wj, tb, k, tc, tw, tx, s10, s11, s12, s7, s3)
 				tbModelTail(wd, et, wi, wj, tb, k, tc, tw, tx, tbk, s10, s11, s12, s7, s3)
 				if tbLedgerTail(p, wd, et, wi, wj, tb, k, tc, tw, tx, tbk, s10, s11, s12, s13, s7, s3) > 0 {
 					tbAligns(tb, k, wd, tc, tw)

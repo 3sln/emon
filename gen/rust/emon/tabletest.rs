@@ -5076,3 +5076,125 @@ fn test_a_centred_number_is_not_a_statistical_subgroup() {
     crate::testport::assert_eq(crate::port::cells_at(tc, (owner * 16) + 3), 1, "a centred count has no full-width section span");
     crate::testport::assert_eq(crate::port::cells_at(tc, (owner * 16) + 12), 0, "a numeric label has no section proof");
 }
+#[test]
+fn test_ledger_description_spill_keeps_its_final_transaction_owner() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut k: i32 = 0;
+    let mut ledger: i32 = -1;
+    let mut amount: i32 = -1;
+    tt_rule(pa, 7000, 9500, 50000, 9550);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Total deposits")[..], 7600, 10000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("2")[..], 20000, 10000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Total withdrawals")[..], 30000, 10000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("3")[..], 49000, 10000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Deposit count")[..], 7600, 11300, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Withdrawal count")[..], 30000, 11300, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Deposit amount")[..], 7600, 13000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("10.00")[..], 20000, 13000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Withdrawal amount")[..], 30000, 13000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("20.00")[..], 49000, 13000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Credits")[..], 7600, 14300, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Debits")[..], 30000, 14300, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("USD Savings Account")[..], 7600, 16000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("817-002")[..], 49000, 16000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Date")[..], 7600, 18000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Details")[..], 15000, 18000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Deposit")[..], 32000, 18000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Withdrawal")[..], 41000, 18000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Balance")[..], 50000, 18000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("D")[..], 7600, 19200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("T")[..], 15000, 19200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("C")[..], 32000, 19200, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("W")[..], 41000, 19200, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("B")[..], 50000, 19200, 0, 1);
+    tt_rule(pa, 7000, 20700, 50000, 20750);
+    tt_at(wd, ln, et, &crate::testport::text_blob("20Sep")[..], 7600, 22000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Payment")[..], 15000, 22000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("181.04")[..], 41000, 22000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("149818.96")[..], 50000, 22000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Reference")[..], 15000, 23250, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Merchant")[..], 15000, 24450, 0, 0);
+    tt_rule(pa, 7000, 23200, 50000, 23250);
+    crate::testport::assert_eq(tt_ruled_build(wd, ln, et, pa, tb, tc, tw), 2, "totals and a newly headed ledger have different owners");
+    while k < (crate::port::cells_len(tb) / 32) {
+        amount = tt_word_owner(tb, k, tc, tw, 26);
+        if amount >= 0 {
+            ledger = k;
+            crate::testport::assert_eq(crate::port::cells_at(tb, (k * 32) + 8), 5, "the new ledger has five explicit columns");
+            crate::testport::assert_eq(crate::port::cells_at(tc, (amount * 16) + 1), 3, "181.04 belongs under Withdrawal");
+            crate::testport::assert_eq(tt_word_owner(tb, k, tc, tw, 25), tt_word_owner(tb, k, tc, tw, 28), "the transaction owns its reference line");
+            crate::testport::assert_eq(tt_word_owner(tb, k, tc, tw, 25), tt_word_owner(tb, k, tc, tw, 29), "the transaction owns its merchant continuation");
+            crate::testport::assert_eq(tt_word_owner(tb, k, tc, tw, 7), -1, "the ledger does not own the previous account's total");
+            crate::testport::assert_eq(tt_word_owner(tb, k, tc, tw, 12), -1, "the account title is outside the data grid");
+        }
+        k += 1;
+    }
+    crate::testport::assert_that(ledger >= 0, "the first USD transaction retains an independent ledger owner");
+}
+#[test]
+fn test_ledger_does_not_claim_offset_prose_below_its_frame() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut k: i32 = 0;
+    let mut ledger: i32 = -1;
+    let mut amount: i32 = -1;
+    tt_rule(pa, 7000, 9500, 50000, 9550);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Total deposits")[..], 7600, 10000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("2")[..], 20000, 10000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Total withdrawals")[..], 30000, 10000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("3")[..], 49000, 10000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Deposit count")[..], 7600, 11300, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Withdrawal count")[..], 30000, 11300, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Deposit amount")[..], 7600, 13000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("10.00")[..], 20000, 13000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Withdrawal amount")[..], 30000, 13000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("20.00")[..], 49000, 13000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Credits")[..], 7600, 14300, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Debits")[..], 30000, 14300, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("USD Savings Account")[..], 7600, 16000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("817-002")[..], 49000, 16000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Date")[..], 7600, 18000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Details")[..], 15000, 18000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Deposit")[..], 32000, 18000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Withdrawal")[..], 41000, 18000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Balance")[..], 50000, 18000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("D")[..], 7600, 19200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("T")[..], 15000, 19200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("C")[..], 32000, 19200, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("W")[..], 41000, 19200, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("B")[..], 50000, 19200, 0, 1);
+    tt_rule(pa, 7000, 20700, 50000, 20750);
+    tt_at(wd, ln, et, &crate::testport::text_blob("20Sep")[..], 7600, 22000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Payment")[..], 15000, 22000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("181.04")[..], 41000, 22000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("149818.96")[..], 50000, 22000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Reference")[..], 17000, 23250, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Merchant")[..], 17000, 24450, 0, 0);
+    tt_rule(pa, 7000, 23200, 50000, 23250);
+    crate::testport::assert_eq(tt_ruled_build(wd, ln, et, pa, tb, tc, tw), 2, "totals and a newly headed ledger have different owners");
+    while k < (crate::port::cells_len(tb) / 32) {
+        amount = tt_word_owner(tb, k, tc, tw, 26);
+        if amount >= 0 {
+            ledger = k;
+            crate::testport::assert_eq(crate::port::cells_at(tb, (k * 32) + 8), 5, "the new ledger has five explicit columns");
+            crate::testport::assert_eq(crate::port::cells_at(tc, (amount * 16) + 1), 3, "181.04 belongs under Withdrawal");
+            crate::testport::assert_eq(tt_word_owner(tb, k, tc, tw, 28), -1, "offset prose remains outside the ledger");
+            crate::testport::assert_eq(tt_word_owner(tb, k, tc, tw, 29), -1, "later offset prose remains outside the ledger");
+            crate::testport::assert_eq(tt_word_owner(tb, k, tc, tw, 7), -1, "the ledger does not own the previous account's total");
+            crate::testport::assert_eq(tt_word_owner(tb, k, tc, tw, 12), -1, "the account title is outside the data grid");
+        }
+        k += 1;
+    }
+    crate::testport::assert_that(ledger >= 0, "the first USD transaction retains an independent ledger owner");
+}
