@@ -4934,3 +4934,145 @@ fn test_a_labelled_form_is_not_a_blank_entry_grid() {
     }
     crate::testport::assert_eq(ruled, 0, "labels and scattered widgets do not prove a blank entry lattice");
 }
+#[test]
+fn test_equally_spaced_incoming_stub_owns_the_following_values() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tbo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut r: i32 = 0;
+    let mut q: i32 = 0;
+    let mut label: i32 = -1;
+    let mut tail: i32 = -1;
+    let mut value: i32 = -1;
+    tt_at(wd, ln, et, &crate::testport::text_blob("Description")[..], 4500, 10000, 1, 0);
+    while q < 3 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("2023")[..], 35000 + (q * 7000), 10000, 1, 1);
+        q += 1;
+    }
+    while r < 6 {
+        if r == 4 {
+            label = wd_count(wd);
+            tt_at(wd, ln, et, &crate::testport::text_blob("Net earnings attributable to company")[..], 4500, 19000, 1, 0);
+        }
+        if r == 4 {
+            tail = wd_count(wd);
+        }
+        tt_at(wd, ln, et, &crate::testport::text_blob("shareholders")[..], 4500, 12000 + (r * 2000), 0, 0);
+        if r == 4 {
+            value = wd_count(wd);
+        }
+        q = 0;
+        while q < 3 {
+            if q == 0 {
+                tt_at(wd, ln, et, &crate::testport::text_blob("96,223")[..], 35000 + (q * 7000), 12000 + (r * 2000), 0, 1);
+            } else if q == 1 {
+                tt_at(wd, ln, et, &crate::testport::text_blob("(22,759)")[..], 35000 + (q * 7000), 12000 + (r * 2000), 0, 1);
+            } else {
+                tt_at(wd, ln, et, &crate::testport::text_blob("89,937")[..], 35000 + (q * 7000), 12000 + (r * 2000), 0, 1);
+            }
+            q += 1;
+        }
+        r += 1;
+    }
+    crate::testport::assert_eq(tt_own_build(wd, ln, et, tb, tc, tw, tbo), 1, "one financial table");
+    let owner: i32 = tt_word_owner(tb, 0, tc, tw, label);
+    let tailowner: i32 = tt_word_owner(tb, 0, tc, tw, tail);
+    let valueowner: i32 = tt_word_owner(tb, 0, tc, tw, value);
+    crate::testport::assert_that(owner >= 0, "incoming stub is owned");
+    crate::testport::assert_eq(owner, tailowner, "complete net earnings label shares one cell");
+    crate::testport::assert_eq(crate::port::cells_at(tc, owner * 16), crate::port::cells_at(tc, valueowner * 16), "net earnings label owns 96,223");
+    q = 0;
+    while q < 3 {
+        let amountowner: i32 = tt_word_owner(tb, 0, tc, tw, value + q);
+        crate::testport::assert_eq(crate::port::cells_at(tc, amountowner * 16), crate::port::cells_at(tc, owner * 16), "each signed earnings value belongs to the complete label");
+        crate::testport::assert_eq(crate::port::cells_at(tc, (amountowner * 16) + 1), q + 1, "each earnings value keeps its year column");
+        q += 1;
+    }
+}
+#[test]
+fn test_centred_mixed_case_subgroup_has_an_independent_row() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tbo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut r: i32 = 0;
+    let mut q: i32 = 0;
+    let mut group: i32 = -1;
+    let mut before: i32 = -1;
+    let mut after: i32 = -1;
+    tt_at(wd, ln, et, &crate::testport::text_blob("Status")[..], 7600, 10000, 1, 0);
+    while q < 6 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("2026")[..], 26000 + (q * 5000), 10000, 1, 1);
+        q += 1;
+    }
+    tt_at(wd, ln, et, &crate::testport::text_blob("TOTAL")[..], 7600, 12500, 0, 0);
+    while r < 6 {
+        if r == 3 {
+            group = wd_count(wd);
+            tt_word(wd, ln, et, &crate::testport::text_blob("Men, 20 years and over")[..], 8526, 20000, 16366, 20700, 0);
+            after = wd_count(wd);
+        }
+        if r == 2 {
+            before = wd_count(wd);
+        }
+        tt_word(wd, ln, et, &crate::testport::text_blob("Civilian........................")[..], 4490, 14500 + (r * 2200), 21100, 15200 + (r * 2200), 0);
+        q = 0;
+        while q < 6 {
+            tt_at(wd, ln, et, &crate::testport::text_blob("100.00")[..], 26000 + (q * 5000), 14500 + (r * 2200), 0, 1);
+            q += 1;
+        }
+        r += 1;
+    }
+    crate::testport::assert_eq(tt_own_build(wd, ln, et, tb, tc, tw, tbo), 1, "one statistical table");
+    let owner: i32 = tt_word_owner(tb, 0, tc, tw, group);
+    let beforeowner: i32 = tt_word_owner(tb, 0, tc, tw, before);
+    let afterowner: i32 = tt_word_owner(tb, 0, tc, tw, after);
+    crate::testport::assert_that(owner >= 0, "subgroup has an owner");
+    crate::testport::assert_eq(crate::port::cells_at(tc, (owner * 16) + 9), 1, "subgroup owns only its label");
+    crate::testport::assert_that(crate::port::cells_at(tc, owner * 16) != crate::port::cells_at(tc, beforeowner * 16), "preceding values exclude subgroup");
+    crate::testport::assert_that(crate::port::cells_at(tc, owner * 16) != crate::port::cells_at(tc, afterowner * 16), "following values exclude subgroup");
+}
+#[test]
+fn test_a_centred_number_is_not_a_statistical_subgroup() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tbo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut r: i32 = 0;
+    let mut q: i32 = 0;
+    let mut group: i32 = -1;
+    tt_at(wd, ln, et, &crate::testport::text_blob("Status")[..], 7600, 10000, 1, 0);
+    while q < 6 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("2026")[..], 26000 + (q * 5000), 10000, 1, 1);
+        q += 1;
+    }
+    tt_at(wd, ln, et, &crate::testport::text_blob("TOTAL")[..], 7600, 12500, 0, 0);
+    while r < 6 {
+        if r == 3 {
+            group = wd_count(wd);
+            tt_word(wd, ln, et, &crate::testport::text_blob("12345")[..], 8526, 20000, 16366, 20700, 0);
+        }
+        tt_word(wd, ln, et, &crate::testport::text_blob("Civilian........................")[..], 4490, 14500 + (r * 2200), 21100, 15200 + (r * 2200), 0);
+        q = 0;
+        while q < 6 {
+            tt_at(wd, ln, et, &crate::testport::text_blob("100.00")[..], 26000 + (q * 5000), 14500 + (r * 2200), 0, 1);
+            q += 1;
+        }
+        r += 1;
+    }
+    crate::testport::assert_eq(tt_own_build(wd, ln, et, tb, tc, tw, tbo), 1, "one statistical table");
+    let owner: i32 = tt_word_owner(tb, 0, tc, tw, group);
+    crate::testport::assert_that(owner >= 0, "subgroup has an owner");
+    crate::testport::assert_eq(crate::port::cells_at(tc, (owner * 16) + 3), 1, "a centred count has no full-width section span");
+    crate::testport::assert_eq(crate::port::cells_at(tc, (owner * 16) + 12), 0, "a numeric label has no section proof");
+}

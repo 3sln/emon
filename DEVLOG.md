@@ -12881,3 +12881,41 @@ All fifteen required commands pass: `bb gates drift`, `bb ci core`, `bb rederive
 Packaging limitations remain the existing ones: Java's consumer uses javac/java because Maven is absent; the Maven bundle is unsigned, and C/pod omit optional native PDF/OCR engines. Nonfatal sandbox process-enumeration shutdown diagnostics appear in logs; all fifteen commands return zero without dependency or gate changes. Evidence and reproduction scripts are retained under external `emon-scratch/b18/`; temporary builds and task-owned cache links are removed at handoff. No commit, corpus fetch/prune, or real-index staging; the coordinator commits.
 
 - [ ] **Signed off** (maintainer)
+
+### D769 — Bisect label ownership rather than surviving word sets
+
+Fresh builds of the immediate parent and result of Batch 12 (`6210776c`) reproduce the D28 p96 regression: the complete net-earnings label belongs to 96,223/(22,759)/89,937 before that batch; afterwards only “shareholders” remains beside those values. Batch 14's parent already has that defect. Fresh parent/result builds of Batch 14 (`115951a4`) separately reproduce F13 p12's five subgroup labels moving from following data stubs to preceding populated rows. The live starting build reproduces both defects. The two regressions have different introduction boundaries; neither is an OCR recognition failure.
+
+Write failing ownership laws before production changes: an incoming financial stub must share its cell with its last line and its row with the named amount; a centred mixed-case subgroup must have an independent row excluding both adjacent populated stubs. Run the generated laws against the unchanged table module to record failures. Keep the existing principal-group, uppercase-wrap and numeric-column controls. Fresh boundary Models and logs are under `emon-scratch/b19/{pre12,post12,pre14,post14,before}`. No ratchet or corpus changes.
+
+- [ ] **Signed off** (maintainer)
+
+### D770 — Keep incoming financial wraps out of preceding valued rows
+
+Row fitting may misclassify a bold incoming first line as a section, then reject its fit and preserve the wrong original owner. Prove an incoming wrap from a long label-only baseline and a shorter flush-left populated stub below it, with the following gap no more than the preceding gap plus one-fifth of type size. Require populated neighbours and the existing tight baseline bound; a trailing colon excludes a true section label. This proof can override advisory bold section classification. Preserve coherent selected continuation ownership when no stronger incoming-wrap proof applies. Allow a same-row-count refit only with this explicit proof; keep exact retained-word and column-cut checks.
+
+The final failing-first financial law uses bold source text and asserts the complete cell, all three signed values and their year columns. An early unbolded synthetic case passed while live D28 still failed; tracing the live bold classification exposed the missing case. An initial bold override swallowed an existing colon-ended business section; reject that variant and exclude colons. The existing section and wrap laws pass with the narrowed proof. Fresh D28 p96 owns its complete net-earnings stub beside 96,223/(22,759)/89,937, preserves the noncontrolling-interests row and six section rows, and leaves the p95 table identical. No word is added or dropped on the named samples.
+
+- [ ] **Signed off** (maintainer)
+
+### D771 — Prove mixed-case statistical subgroups from their stub whitespace
+
+Extend the existing wide-table section proof to mixed-case labels only when they contain substantive alphabetic text and have clear whitespace on both sides inside the supported text-stub anchors. Retain the centre, baseline-gap and following mixed-case-stub/two-numeric-anchor checks. Numeric-only centred content is not a demographic label. This distinguishes independent subgroups from ordinary wraps without a document-specific vocabulary. Principal uppercase groups keep their existing proof and spanning treatment; digit-bearing subgroup labels remain independent rows without an unsupported full-width span claim.
+
+A new ownership law fails against the unchanged table module and passes after the repair; a negative centred-number law and the existing uppercase-wrap law protect the boundary. Fresh F13 has eleven independent subgroup labels (five on source p11 and six on source p12, including the five regressed owners); no adjacent valued row contains one. All numeric/header text-column pairs remain identical, all three table models retain ten columns, A-2 still continues over two pages, and B-1's entire table is identical apart from node-ID renumbering caused by the new rows. TOTAL/WHITE/BLACK OR AFRICAN AMERICAN/ASIAN remain independent spanning groups. Fresh E10/F05/D16/F03/F15 table models are exactly unchanged, preserving the fifteen transaction parents and APR sections, separate debit/deposit headers, 181.04 withdrawal and invoice summaries. Three added laws run on each generated host; full gate results follow in D772.
+
+- [ ] **Signed off** (maintainer)
+
+### D772 — Final Batch 19 gates and ownership acceptance
+
+Both regression checks are green. Live source-relative re-judging remains D28 poor→poor and F13 usable→usable: row identity is repaired, while year/header roles, spanner semantics and explicit hierarchy/indentation remain open. E10/F05/D16/F03/F15 retain their complete table Models. F13's p11 source render additionally confirms both 16-and-over subgroups, bringing the independent mixed-case subgroup count to eleven (five on p11, six on p12). All 54 live controls / 817 pages / 353,307 counter words lose and gain zero words, including both Berkshire documents, all 74 Arabic booklet pages and receipt controls 07/10/11. All furniture trees remain identical apart from node IDs; F14's form body remains identical as well.
+
+Fresh 60-document SROIE/CORD populations meet the frozen precision floors: .682074563213647 ≥ .6816742392950571 and .422360248447205 ≥ .42. These are the already-retained OCR policy's scores, not an OCR gain attributed to this table repair. No receipt baseline or accuracy ratchet changes.
+
+The first full unit run passed 1,295 laws on Go/Java/C# but Rust rejected seven nested-borrow expressions in the new assertions. Bind scalar owner IDs before calling `cells-at`; regenerate only the four test modules. A private-index diff proves that production and all other gate inputs remain unchanged. Rust then passes 1,295 laws, and the complete final four-host `bb unit` rerun passes 1,295 each. Drift, core and the registry check are repeated after that test-only refactor. All original failures and resumed attempts are retained in the evidence.
+
+All required final commands pass: `gates drift`, `ci core`, `rederive --check`, full `rederive` (25 steps), `accuracy` (3,449 metrics within the existing .002 tolerance, 232 documents byte-identical to Rust on Go/Java/C#/C/pod), `samples` (29/29), all seven OCR/fusion/retarget/seals/sealpx/sigs/asset replay gates, four-host `unit`, and `package --check` (all seven clean consumers produce the same 3,653-byte HTML). All eight calibration refreshes change zero rows. No golden, sample, scoreboard or API snapshot moves. Java packaging uses javac/java because Maven is unavailable; C/pod consumers omit optional pdfium/Tesseract engines. Package verification does not exercise Maven resolution or certify release-native bundles.
+
+No commit, corpus fetch or prune. Decisions and evidence are in `emon-scratch/b19`, with the final report/checkpoints in the coordinator directory. Task-owned internal builds are removed after verification; shared caches are retained. The coordinator commits.
+
+- [ ] **Signed off** (maintainer)

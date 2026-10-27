@@ -4997,3 +4997,145 @@ func TestALabelledFormIsNotABlankEntryGrid(emonT *testing.T) {
 	}
 	port.AssertEq(emonT, ruled, 0, "labels and scattered widgets do not prove a blank entry lattice")
 }
+
+func TestEquallySpacedIncomingStubOwnsTheFollowingValues(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var tbo *port.Cells = port.NewCells()
+	var r int32 = 0
+	var q int32 = 0
+	var label int32 = -1
+	var tail int32 = -1
+	var value int32 = -1
+	ttAt(wd, ln, et, port.TextBlob("Description"), 4500, 10000, 1, 0)
+	for q < 3 {
+		ttAt(wd, ln, et, port.TextBlob("2023"), 35000+(q*7000), 10000, 1, 1)
+		q += 1
+	}
+	for r < 6 {
+		if r == 4 {
+			label = evidence.WdCount(wd)
+			ttAt(wd, ln, et, port.TextBlob("Net earnings attributable to company"), 4500, 19000, 1, 0)
+		}
+		if r == 4 {
+			tail = evidence.WdCount(wd)
+		}
+		ttAt(wd, ln, et, port.TextBlob("shareholders"), 4500, 12000+(r*2000), 0, 0)
+		if r == 4 {
+			value = evidence.WdCount(wd)
+		}
+		q = 0
+		for q < 3 {
+			if q == 0 {
+				ttAt(wd, ln, et, port.TextBlob("96,223"), 35000+(q*7000), 12000+(r*2000), 0, 1)
+			} else if q == 1 {
+				ttAt(wd, ln, et, port.TextBlob("(22,759)"), 35000+(q*7000), 12000+(r*2000), 0, 1)
+			} else {
+				ttAt(wd, ln, et, port.TextBlob("89,937"), 35000+(q*7000), 12000+(r*2000), 0, 1)
+			}
+			q += 1
+		}
+		r += 1
+	}
+	port.AssertEq(emonT, ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one financial table")
+	var owner int32 = ttWordOwner(tb, 0, tc, tw, label)
+	var tailowner int32 = ttWordOwner(tb, 0, tc, tw, tail)
+	var valueowner int32 = ttWordOwner(tb, 0, tc, tw, value)
+	port.AssertThat(emonT, owner >= 0, "incoming stub is owned")
+	port.AssertEq(emonT, owner, tailowner, "complete net earnings label shares one cell")
+	port.AssertEq(emonT, port.CellsAt(tc, owner*16), port.CellsAt(tc, valueowner*16), "net earnings label owns 96,223")
+	q = 0
+	for q < 3 {
+		var amountowner int32 = ttWordOwner(tb, 0, tc, tw, value+q)
+		port.AssertEq(emonT, port.CellsAt(tc, amountowner*16), port.CellsAt(tc, owner*16), "each signed earnings value belongs to the complete label")
+		port.AssertEq(emonT, port.CellsAt(tc, (amountowner*16)+1), q+1, "each earnings value keeps its year column")
+		q += 1
+	}
+}
+
+func TestCentredMixedCaseSubgroupHasAnIndependentRow(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var tbo *port.Cells = port.NewCells()
+	var r int32 = 0
+	var q int32 = 0
+	var group int32 = -1
+	var before int32 = -1
+	var after int32 = -1
+	ttAt(wd, ln, et, port.TextBlob("Status"), 7600, 10000, 1, 0)
+	for q < 6 {
+		ttAt(wd, ln, et, port.TextBlob("2026"), 26000+(q*5000), 10000, 1, 1)
+		q += 1
+	}
+	ttAt(wd, ln, et, port.TextBlob("TOTAL"), 7600, 12500, 0, 0)
+	for r < 6 {
+		if r == 3 {
+			group = evidence.WdCount(wd)
+			ttWord(wd, ln, et, port.TextBlob("Men, 20 years and over"), 8526, 20000, 16366, 20700, 0)
+			after = evidence.WdCount(wd)
+		}
+		if r == 2 {
+			before = evidence.WdCount(wd)
+		}
+		ttWord(wd, ln, et, port.TextBlob("Civilian........................"), 4490, 14500+(r*2200), 21100, 15200+(r*2200), 0)
+		q = 0
+		for q < 6 {
+			ttAt(wd, ln, et, port.TextBlob("100.00"), 26000+(q*5000), 14500+(r*2200), 0, 1)
+			q += 1
+		}
+		r += 1
+	}
+	port.AssertEq(emonT, ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one statistical table")
+	var owner int32 = ttWordOwner(tb, 0, tc, tw, group)
+	var beforeowner int32 = ttWordOwner(tb, 0, tc, tw, before)
+	var afterowner int32 = ttWordOwner(tb, 0, tc, tw, after)
+	port.AssertThat(emonT, owner >= 0, "subgroup has an owner")
+	port.AssertEq(emonT, port.CellsAt(tc, (owner*16)+9), 1, "subgroup owns only its label")
+	port.AssertThat(emonT, port.CellsAt(tc, owner*16) != port.CellsAt(tc, beforeowner*16), "preceding values exclude subgroup")
+	port.AssertThat(emonT, port.CellsAt(tc, owner*16) != port.CellsAt(tc, afterowner*16), "following values exclude subgroup")
+}
+
+func TestACentredNumberIsNotAStatisticalSubgroup(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var tbo *port.Cells = port.NewCells()
+	var r int32 = 0
+	var q int32 = 0
+	var group int32 = -1
+	ttAt(wd, ln, et, port.TextBlob("Status"), 7600, 10000, 1, 0)
+	for q < 6 {
+		ttAt(wd, ln, et, port.TextBlob("2026"), 26000+(q*5000), 10000, 1, 1)
+		q += 1
+	}
+	ttAt(wd, ln, et, port.TextBlob("TOTAL"), 7600, 12500, 0, 0)
+	for r < 6 {
+		if r == 3 {
+			group = evidence.WdCount(wd)
+			ttWord(wd, ln, et, port.TextBlob("12345"), 8526, 20000, 16366, 20700, 0)
+		}
+		ttWord(wd, ln, et, port.TextBlob("Civilian........................"), 4490, 14500+(r*2200), 21100, 15200+(r*2200), 0)
+		q = 0
+		for q < 6 {
+			ttAt(wd, ln, et, port.TextBlob("100.00"), 26000+(q*5000), 14500+(r*2200), 0, 1)
+			q += 1
+		}
+		r += 1
+	}
+	port.AssertEq(emonT, ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one statistical table")
+	var owner int32 = ttWordOwner(tb, 0, tc, tw, group)
+	port.AssertThat(emonT, owner >= 0, "subgroup has an owner")
+	port.AssertEq(emonT, port.CellsAt(tc, (owner*16)+3), 1, "a centred count has no full-width section span")
+	port.AssertEq(emonT, port.CellsAt(tc, (owner*16)+12), 0, "a numeric label has no section proof")
+}

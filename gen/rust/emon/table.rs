@@ -5370,10 +5370,25 @@ pub(crate) fn tb_centred_section(wd: &mut crate::port::Cells, et: &mut crate::po
     let sf: i32 = crate::port::cells_at(rw, (r * RWS) + 8);
     let s: i32 = sf * SGS;
     let mut stub: i32 = 0;
+    let mut i: i32 = 0;
+    let mut j: i32 = 0;
+    let mut letters: i32 = 0;
     if (n < 6) || ((crate::port::cells_at(rw, (r * RWS) + 9) != 1) || ((r + 1) >= tb_rows_of(rw, RWS))) {
         return 0;
     }
-    if tb_upper_label(wd, et, wl, crate::port::cells_at(sg, s + 3), crate::port::cells_at(sg, s + 4)) == 0 {
+    while i < crate::port::cells_at(sg, s + 4) {
+        let w: i32 = crate::port::cells_at(wl, crate::port::cells_at(sg, s + 3) + i);
+        j = 0;
+        while j < wd_get(wd, w, hd_tlen()) {
+            let cp: i32 = crate::port::cells_at(et, wd_get(wd, w, hd_tstart()) + j);
+            if ((cp >= 65) && (cp <= 90)) || ((cp >= 97) && (cp <= 122)) {
+                letters += 1;
+            }
+            j += 1;
+        }
+        i += 1;
+    }
+    if (letters < 5) || (letters > 60) {
         return 0;
     }
     while (stub < n) && (crate::port::cells_at(tbk, ((first + stub) * KS) + 5) == 0) {
@@ -5381,6 +5396,11 @@ pub(crate) fn tb_centred_section(wd: &mut crate::port::Cells, et: &mut crate::po
     }
     if (stub >= n) || (crate::port::cells_at(tbk, ((first + stub) * KS) + 5) != 1) {
         return 0;
+    }
+    if tb_upper_label(wd, et, wl, crate::port::cells_at(sg, s + 3), crate::port::cells_at(sg, s + 4)) == 0 {
+        if (crate::port::cells_at(sg, s + 1) <= (crate::port::cells_at(tbk, ((first + stub) * KS) + 2) + (size * 2))) || (crate::port::cells_at(sg, s + 2) >= (crate::port::cells_at(tbk, ((first + stub) * KS) + 3) - (size * 2))) {
+            return 0;
+        }
     }
     if tb_abs(((crate::port::cells_at(sg, s + 1) + crate::port::cells_at(sg, s + 2)) / 2) - ((crate::port::cells_at(tbk, ((first + stub) * KS) + 2) + crate::port::cells_at(tbk, ((first + stub) * KS) + 3)) / 2)) > (size * 2) {
         return 0;
@@ -5469,7 +5489,24 @@ pub(crate) fn tb_row_fit(wd: &mut crate::port::Cells, et: &mut crate::port::Cell
     }
     return 2;
 }
-pub(crate) fn tb_own_rows(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, wl: &mut crate::port::Cells, rw: &mut crate::port::Cells, sg: &mut crate::port::Cells, a: i32, b: i32, head: i32, tbk: &mut crate::port::Cells, first: i32, n: i32, size: i32, needed: i32, mut rmap: &mut crate::port::Cells, mut fits: &mut crate::port::Cells) -> i32 {
+pub(crate) fn tb_incoming_stub(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, wl: &mut crate::port::Cells, rw: &mut crate::port::Cells, sg: &mut crate::port::Cells, r: i32, prev: i32, next: i32, size: i32, head: i32, end: i32) -> i32 {
+    // A long incoming first line followed by a shorter flush-left stub, with nearly equal gaps.
+    if (next >= end) || ((prev < head) || (crate::port::cells_at(rw, (r * RWS) + 9) != 1)) {
+        return 0;
+    }
+    let here: i32 = crate::port::cells_at(rw, (r * RWS) + 8) * SGS;
+    let following: i32 = crate::port::cells_at(rw, (next * RWS) + 8) * SGS;
+    let last: i32 = crate::port::cells_at(wl, (crate::port::cells_at(rw, r * RWS) + crate::port::cells_at(rw, (r * RWS) + 1)) - 1);
+    let length: i32 = wd_get(wd, last, hd_tlen());
+    if (length > 0) && (crate::port::cells_at(et, (wd_get(wd, last, hd_tstart()) + length) - 1) == 58) {
+        return 0;
+    }
+    if (tb_abs(crate::port::cells_at(sg, here + 1) - crate::port::cells_at(sg, following + 1)) <= TB_HEAD_TOL) && ((crate::port::cells_at(sg, here + 2) > (crate::port::cells_at(sg, following + 2) + (size * 2))) && ((crate::port::cells_at(rw, (next * RWS) + 2) - crate::port::cells_at(rw, (r * RWS) + 2)) <= ((crate::port::cells_at(rw, (r * RWS) + 2) - crate::port::cells_at(rw, (prev * RWS) + 2)) + (size / 5)))) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn tb_own_rows(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, wl: &mut crate::port::Cells, rw: &mut crate::port::Cells, sg: &mut crate::port::Cells, a: i32, b: i32, head: i32, tbk: &mut crate::port::Cells, first: i32, n: i32, size: i32, needed: i32, kept: &mut crate::port::Cells, mut rmap: &mut crate::port::Cells, mut fits: &mut crate::port::Cells) -> i32 {
     let mut r: i32 = a;
     let mut rows: i32 = -1;
     let mut prev: i32 = -1;
@@ -5478,12 +5515,18 @@ pub(crate) fn tb_own_rows(wd: &mut crate::port::Cells, et: &mut crate::port::Cel
     let mut start: i32 = 0;
     let mut lastmode: i32 = 0;
     let mut cls: i32 = 0;
+    let mut prefer: i32 = 0;
     let mut anchors: i32 = 0;
     let mut conts: i32 = 0;
     let mut sections: i32 = 0;
     crate::port::cells_drop(fits, 0);
     while r < b {
         cls = tb_row_fit(wd, et, wl, rw, sg, r, tbk, first, n, size, a + head);
+        if (cls == 3) && ((r > (a + head)) && ((r + 1) < b)) {
+            if (crate::port::cells_at(fits, (r - 1) - a) == 1) && ((tb_incoming_stub(wd, et, wl, rw, sg, r, r - 1, r + 1, size, a + head, b) == 1) && (tb_row_fit(wd, et, wl, rw, sg, r + 1, tbk, first, n, size, a + head) == 1)) {
+                cls = 2;
+            }
+        }
         crate::port::cells_push(fits, cls);
         if r >= (a + head) {
             if cls == 0 {
@@ -5528,11 +5571,23 @@ pub(crate) fn tb_own_rows(wd: &mut crate::port::Cells, et: &mut crate::port::Cel
             while (next < b) && (crate::port::cells_at(fits, next - a) == 2) {
                 next += 1;
             }
+            prefer = 0;
+            if crate::port::cells_len(kept) == (b - a) {
+                if (next < b) && (crate::port::cells_at(kept, r - a) == crate::port::cells_at(kept, next - a)) {
+                    prefer = 1;
+                }
+                if (prev >= (a + head)) && (crate::port::cells_at(kept, r - a) == crate::port::cells_at(kept, prev - a)) {
+                    prefer = -1;
+                }
+            }
+            if (start == r) && (tb_incoming_stub(wd, et, wl, rw, sg, r, prev, next, size, a + head, b) == 1) {
+                prefer = 1;
+            }
             j = r;
             while (j < next) && ((j + 1) < b) && (((crate::port::cells_at(rw, ((j + 1) * RWS) + 2) - crate::port::cells_at(rw, (j * RWS) + 2)) * 10) <= (size * 16)) {
                 j += 1;
             }
-            if (next < b) && ((j >= next) && (crate::port::cells_at(fits, next - a) == 1)) && ((lastmode == 1) || ((prev < (a + head)) || ((crate::port::cells_at(rw, (next * RWS) + 2) - crate::port::cells_at(rw, ((next - 1) * RWS) + 2)) < (crate::port::cells_at(rw, (start * RWS) + 2) - crate::port::cells_at(rw, (prev * RWS) + 2))))) {
+            if (next < b) && ((j >= next) && (crate::port::cells_at(fits, next - a) == 1)) && ((prefer == 1) || ((prefer == 0) && ((lastmode == 1) || ((prev < (a + head)) || ((crate::port::cells_at(rw, (next * RWS) + 2) - crate::port::cells_at(rw, ((next - 1) * RWS) + 2)) < (crate::port::cells_at(rw, (start * RWS) + 2) - crate::port::cells_at(rw, (prev * RWS) + 2))))))) {
                 crate::port::cells_push(rmap, rows + 1);
             } else if (prev >= (a + head)) && (((crate::port::cells_at(rw, (r * RWS) + 2) - crate::port::cells_at(rw, ((r - 1) * RWS) + 2)) * 10) <= (size * 16)) {
                 crate::port::cells_push(rmap, rows);
@@ -8175,6 +8230,7 @@ pub(crate) fn tb_fit_kept(page: i32, wd: &mut crate::port::Cells, et: &mut crate
     let mut fit: i32 = 0;
     let mut same: i32 = 1;
     let mut sections: i32 = 0;
+    let mut repairs: i32 = 0;
     let mut needed: i32 = 2;
     if (profile == PF_RULED) || ((profile == PF_STRUCT) || (crate::port::cells_at(tb, b + 25) >= 0)) {
         return 0;
@@ -8224,7 +8280,10 @@ pub(crate) fn tb_fit_kept(page: i32, wd: &mut crate::port::Cells, et: &mut crate
     if (crate::port::cells_at(tb, b + 31) & TB_LEDGER_SPLIT) != 0 {
         needed = 1;
     }
-    fit = tb_own_rows(wd, et, wl, rw, sg, 0, nr, rawhead, tbk, crate::port::cells_at(tb, b + 28), crate::port::cells_at(tb, b + 29), size, needed, rmap, en);
+    if tb_kept_row_map(wl, rw, nr, w0, w1, tc, tw, first, count, gm, gs) <= 0 {
+        crate::port::cells_drop(gm, 0);
+    }
+    fit = tb_own_rows(wd, et, wl, rw, sg, 0, nr, rawhead, tbk, crate::port::cells_at(tb, b + 28), crate::port::cells_at(tb, b + 29), size, needed, gm, rmap, en);
     if (fit > 0) && (rawhead > head) {
         fit = (fit - rawhead) + head;
         r = 0;
@@ -8233,6 +8292,17 @@ pub(crate) fn tb_fit_kept(page: i32, wd: &mut crate::port::Cells, et: &mut crate
                 crate::port::cells_set(rmap, r, tb_min(r, head - 1));
             } else {
                 crate::port::cells_set(rmap, r, (crate::port::cells_at(rmap, r) - rawhead) + head);
+            }
+            r += 1;
+        }
+    }
+    if fit > 0 {
+        r = rawhead + 1;
+        while (r + 1) < nr {
+            if (crate::port::cells_at(en, r) == 2) && ((crate::port::cells_at(en, r - 1) == 1) && (crate::port::cells_at(en, r + 1) == 1)) {
+                if tb_incoming_stub(wd, et, wl, rw, sg, r, r - 1, r + 1, size, rawhead, nr) == 1 {
+                    repairs = 1;
+                }
             }
             r += 1;
         }
@@ -8247,7 +8317,7 @@ pub(crate) fn tb_fit_kept(page: i32, wd: &mut crate::port::Cells, et: &mut crate
             r += 1;
         }
     }
-    if (fit <= 0) || ((fit >= crate::port::cells_at(tb, b + 7)) && (sections == 0)) {
+    if (fit <= 0) || (((fit > crate::port::cells_at(tb, b + 7)) || ((fit == crate::port::cells_at(tb, b + 7)) && (repairs == 0))) && (sections == 0)) {
         if tb_span_amount(wd, et, tc, tw, first, count, head) == 1 {
             fit = tb_kept_row_map(wl, rw, nr, w0, w1, tc, tw, first, count, rmap, en);
             if fit != crate::port::cells_at(tb, b + 7) {

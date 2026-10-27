@@ -4920,4 +4920,146 @@ public static class Tabletest {
         }
         emon.Testport.AssertEq(ruled, 0, "labels and scattered widgets do not prove a blank entry lattice");
     }
+    [Xunit.Fact]
+    public static void TestEquallySpacedIncomingStubOwnsTheFollowingValues() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        emon.Port.Cells tbo = emon.Port.NewCells();
+        int r = 0;
+        int q = 0;
+        int label = -1;
+        int tail = -1;
+        int value = -1;
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Description"), 4500, 10000, 1, 0);
+        while (q < 3) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("2023"), 35000 + (q * 7000), 10000, 1, 1);
+            q += 1;
+        }
+        while (r < 6) {
+            if (r == 4) {
+                label = Evidence.WdCount(wd);
+                TtAt(wd, ln, et, emon.Testport.TextBlob("Net earnings attributable to company"), 4500, 19000, 1, 0);
+            }
+            if (r == 4) {
+                tail = Evidence.WdCount(wd);
+            }
+            TtAt(wd, ln, et, emon.Testport.TextBlob("shareholders"), 4500, 12000 + (r * 2000), 0, 0);
+            if (r == 4) {
+                value = Evidence.WdCount(wd);
+            }
+            q = 0;
+            while (q < 3) {
+                if (q == 0) {
+                    TtAt(wd, ln, et, emon.Testport.TextBlob("96,223"), 35000 + (q * 7000), 12000 + (r * 2000), 0, 1);
+                } else if (q == 1) {
+                    TtAt(wd, ln, et, emon.Testport.TextBlob("(22,759)"), 35000 + (q * 7000), 12000 + (r * 2000), 0, 1);
+                } else {
+                    TtAt(wd, ln, et, emon.Testport.TextBlob("89,937"), 35000 + (q * 7000), 12000 + (r * 2000), 0, 1);
+                }
+                q += 1;
+            }
+            r += 1;
+        }
+        emon.Testport.AssertEq(TtOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one financial table");
+        int owner = TtWordOwner(tb, 0, tc, tw, label);
+        int tailowner = TtWordOwner(tb, 0, tc, tw, tail);
+        int valueowner = TtWordOwner(tb, 0, tc, tw, value);
+        emon.Testport.AssertThat(owner >= 0, "incoming stub is owned");
+        emon.Testport.AssertEq(owner, tailowner, "complete net earnings label shares one cell");
+        emon.Testport.AssertEq(emon.Port.CellsAt(tc, owner * 16), emon.Port.CellsAt(tc, valueowner * 16), "net earnings label owns 96,223");
+        q = 0;
+        while (q < 3) {
+            int amountowner = TtWordOwner(tb, 0, tc, tw, value + q);
+            emon.Testport.AssertEq(emon.Port.CellsAt(tc, amountowner * 16), emon.Port.CellsAt(tc, owner * 16), "each signed earnings value belongs to the complete label");
+            emon.Testport.AssertEq(emon.Port.CellsAt(tc, (amountowner * 16) + 1), q + 1, "each earnings value keeps its year column");
+            q += 1;
+        }
+    }
+    [Xunit.Fact]
+    public static void TestCentredMixedCaseSubgroupHasAnIndependentRow() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        emon.Port.Cells tbo = emon.Port.NewCells();
+        int r = 0;
+        int q = 0;
+        int group = -1;
+        int before = -1;
+        int after = -1;
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Status"), 7600, 10000, 1, 0);
+        while (q < 6) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("2026"), 26000 + (q * 5000), 10000, 1, 1);
+            q += 1;
+        }
+        TtAt(wd, ln, et, emon.Testport.TextBlob("TOTAL"), 7600, 12500, 0, 0);
+        while (r < 6) {
+            if (r == 3) {
+                group = Evidence.WdCount(wd);
+                TtWord(wd, ln, et, emon.Testport.TextBlob("Men, 20 years and over"), 8526, 20000, 16366, 20700, 0);
+                after = Evidence.WdCount(wd);
+            }
+            if (r == 2) {
+                before = Evidence.WdCount(wd);
+            }
+            TtWord(wd, ln, et, emon.Testport.TextBlob("Civilian........................"), 4490, 14500 + (r * 2200), 21100, 15200 + (r * 2200), 0);
+            q = 0;
+            while (q < 6) {
+                TtAt(wd, ln, et, emon.Testport.TextBlob("100.00"), 26000 + (q * 5000), 14500 + (r * 2200), 0, 1);
+                q += 1;
+            }
+            r += 1;
+        }
+        emon.Testport.AssertEq(TtOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one statistical table");
+        int owner = TtWordOwner(tb, 0, tc, tw, group);
+        int beforeowner = TtWordOwner(tb, 0, tc, tw, before);
+        int afterowner = TtWordOwner(tb, 0, tc, tw, after);
+        emon.Testport.AssertThat(owner >= 0, "subgroup has an owner");
+        emon.Testport.AssertEq(emon.Port.CellsAt(tc, (owner * 16) + 9), 1, "subgroup owns only its label");
+        emon.Testport.AssertThat(emon.Port.CellsAt(tc, owner * 16) != emon.Port.CellsAt(tc, beforeowner * 16), "preceding values exclude subgroup");
+        emon.Testport.AssertThat(emon.Port.CellsAt(tc, owner * 16) != emon.Port.CellsAt(tc, afterowner * 16), "following values exclude subgroup");
+    }
+    [Xunit.Fact]
+    public static void TestACentredNumberIsNotAStatisticalSubgroup() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        emon.Port.Cells tbo = emon.Port.NewCells();
+        int r = 0;
+        int q = 0;
+        int group = -1;
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Status"), 7600, 10000, 1, 0);
+        while (q < 6) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("2026"), 26000 + (q * 5000), 10000, 1, 1);
+            q += 1;
+        }
+        TtAt(wd, ln, et, emon.Testport.TextBlob("TOTAL"), 7600, 12500, 0, 0);
+        while (r < 6) {
+            if (r == 3) {
+                group = Evidence.WdCount(wd);
+                TtWord(wd, ln, et, emon.Testport.TextBlob("12345"), 8526, 20000, 16366, 20700, 0);
+            }
+            TtWord(wd, ln, et, emon.Testport.TextBlob("Civilian........................"), 4490, 14500 + (r * 2200), 21100, 15200 + (r * 2200), 0);
+            q = 0;
+            while (q < 6) {
+                TtAt(wd, ln, et, emon.Testport.TextBlob("100.00"), 26000 + (q * 5000), 14500 + (r * 2200), 0, 1);
+                q += 1;
+            }
+            r += 1;
+        }
+        emon.Testport.AssertEq(TtOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one statistical table");
+        int owner = TtWordOwner(tb, 0, tc, tw, group);
+        emon.Testport.AssertThat(owner >= 0, "subgroup has an owner");
+        emon.Testport.AssertEq(emon.Port.CellsAt(tc, (owner * 16) + 3), 1, "a centred count has no full-width section span");
+        emon.Testport.AssertEq(emon.Port.CellsAt(tc, (owner * 16) + 12), 0, "a numeric label has no section proof");
+    }
 }

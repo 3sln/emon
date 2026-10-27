@@ -4815,4 +4815,143 @@ public final class Tabletest {
         }
         emon.Testport.assertEq(ruled, 0, "labels and scattered widgets do not prove a blank entry lattice");
     }
+    public static void testEquallySpacedIncomingStubOwnsTheFollowingValues() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells tbo = emon.Port.newCells();
+        int r = 0;
+        int q = 0;
+        int label = -1;
+        int tail = -1;
+        int value = -1;
+        ttAt(wd, ln, et, emon.Testport.textBlob("Description"), 4500, 10000, 1, 0);
+        while (q < 3) {
+            ttAt(wd, ln, et, emon.Testport.textBlob("2023"), 35000 + (q * 7000), 10000, 1, 1);
+            q += 1;
+        }
+        while (r < 6) {
+            if (r == 4) {
+                label = Evidence.wdCount(wd);
+                ttAt(wd, ln, et, emon.Testport.textBlob("Net earnings attributable to company"), 4500, 19000, 1, 0);
+            }
+            if (r == 4) {
+                tail = Evidence.wdCount(wd);
+            }
+            ttAt(wd, ln, et, emon.Testport.textBlob("shareholders"), 4500, 12000 + (r * 2000), 0, 0);
+            if (r == 4) {
+                value = Evidence.wdCount(wd);
+            }
+            q = 0;
+            while (q < 3) {
+                if (q == 0) {
+                    ttAt(wd, ln, et, emon.Testport.textBlob("96,223"), 35000 + (q * 7000), 12000 + (r * 2000), 0, 1);
+                } else if (q == 1) {
+                    ttAt(wd, ln, et, emon.Testport.textBlob("(22,759)"), 35000 + (q * 7000), 12000 + (r * 2000), 0, 1);
+                } else {
+                    ttAt(wd, ln, et, emon.Testport.textBlob("89,937"), 35000 + (q * 7000), 12000 + (r * 2000), 0, 1);
+                }
+                q += 1;
+            }
+            r += 1;
+        }
+        emon.Testport.assertEq(ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one financial table");
+        int owner = ttWordOwner(tb, 0, tc, tw, label);
+        int tailowner = ttWordOwner(tb, 0, tc, tw, tail);
+        int valueowner = ttWordOwner(tb, 0, tc, tw, value);
+        emon.Testport.assertThat(owner >= 0, "incoming stub is owned");
+        emon.Testport.assertEq(owner, tailowner, "complete net earnings label shares one cell");
+        emon.Testport.assertEq(emon.Port.cellsAt(tc, owner * 16), emon.Port.cellsAt(tc, valueowner * 16), "net earnings label owns 96,223");
+        q = 0;
+        while (q < 3) {
+            int amountowner = ttWordOwner(tb, 0, tc, tw, value + q);
+            emon.Testport.assertEq(emon.Port.cellsAt(tc, amountowner * 16), emon.Port.cellsAt(tc, owner * 16), "each signed earnings value belongs to the complete label");
+            emon.Testport.assertEq(emon.Port.cellsAt(tc, (amountowner * 16) + 1), q + 1, "each earnings value keeps its year column");
+            q += 1;
+        }
+    }
+    public static void testCentredMixedCaseSubgroupHasAnIndependentRow() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells tbo = emon.Port.newCells();
+        int r = 0;
+        int q = 0;
+        int group = -1;
+        int before = -1;
+        int after = -1;
+        ttAt(wd, ln, et, emon.Testport.textBlob("Status"), 7600, 10000, 1, 0);
+        while (q < 6) {
+            ttAt(wd, ln, et, emon.Testport.textBlob("2026"), 26000 + (q * 5000), 10000, 1, 1);
+            q += 1;
+        }
+        ttAt(wd, ln, et, emon.Testport.textBlob("TOTAL"), 7600, 12500, 0, 0);
+        while (r < 6) {
+            if (r == 3) {
+                group = Evidence.wdCount(wd);
+                ttWord(wd, ln, et, emon.Testport.textBlob("Men, 20 years and over"), 8526, 20000, 16366, 20700, 0);
+                after = Evidence.wdCount(wd);
+            }
+            if (r == 2) {
+                before = Evidence.wdCount(wd);
+            }
+            ttWord(wd, ln, et, emon.Testport.textBlob("Civilian........................"), 4490, 14500 + (r * 2200), 21100, 15200 + (r * 2200), 0);
+            q = 0;
+            while (q < 6) {
+                ttAt(wd, ln, et, emon.Testport.textBlob("100.00"), 26000 + (q * 5000), 14500 + (r * 2200), 0, 1);
+                q += 1;
+            }
+            r += 1;
+        }
+        emon.Testport.assertEq(ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one statistical table");
+        int owner = ttWordOwner(tb, 0, tc, tw, group);
+        int beforeowner = ttWordOwner(tb, 0, tc, tw, before);
+        int afterowner = ttWordOwner(tb, 0, tc, tw, after);
+        emon.Testport.assertThat(owner >= 0, "subgroup has an owner");
+        emon.Testport.assertEq(emon.Port.cellsAt(tc, (owner * 16) + 9), 1, "subgroup owns only its label");
+        emon.Testport.assertThat(emon.Port.cellsAt(tc, owner * 16) != emon.Port.cellsAt(tc, beforeowner * 16), "preceding values exclude subgroup");
+        emon.Testport.assertThat(emon.Port.cellsAt(tc, owner * 16) != emon.Port.cellsAt(tc, afterowner * 16), "following values exclude subgroup");
+    }
+    public static void testACentredNumberIsNotAStatisticalSubgroup() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells tbo = emon.Port.newCells();
+        int r = 0;
+        int q = 0;
+        int group = -1;
+        ttAt(wd, ln, et, emon.Testport.textBlob("Status"), 7600, 10000, 1, 0);
+        while (q < 6) {
+            ttAt(wd, ln, et, emon.Testport.textBlob("2026"), 26000 + (q * 5000), 10000, 1, 1);
+            q += 1;
+        }
+        ttAt(wd, ln, et, emon.Testport.textBlob("TOTAL"), 7600, 12500, 0, 0);
+        while (r < 6) {
+            if (r == 3) {
+                group = Evidence.wdCount(wd);
+                ttWord(wd, ln, et, emon.Testport.textBlob("12345"), 8526, 20000, 16366, 20700, 0);
+            }
+            ttWord(wd, ln, et, emon.Testport.textBlob("Civilian........................"), 4490, 14500 + (r * 2200), 21100, 15200 + (r * 2200), 0);
+            q = 0;
+            while (q < 6) {
+                ttAt(wd, ln, et, emon.Testport.textBlob("100.00"), 26000 + (q * 5000), 14500 + (r * 2200), 0, 1);
+                q += 1;
+            }
+            r += 1;
+        }
+        emon.Testport.assertEq(ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one statistical table");
+        int owner = ttWordOwner(tb, 0, tc, tw, group);
+        emon.Testport.assertThat(owner >= 0, "subgroup has an owner");
+        emon.Testport.assertEq(emon.Port.cellsAt(tc, (owner * 16) + 3), 1, "a centred count has no full-width section span");
+        emon.Testport.assertEq(emon.Port.cellsAt(tc, (owner * 16) + 12), 0, "a numeric label has no section proof");
+    }
 }

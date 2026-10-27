@@ -4257,12 +4257,26 @@
 (defn ^I32 tb-centred-section [^Cells wd ^Cells et ^Cells wl ^Cells rw ^Cells sg ^I32 r
                                ^Cells tbk ^I32 first ^I32 n ^I32 size ^I32 head]
   (let [^I32 sf (cells-at rw (+ (* r RWS) 8)) ^I32 s (* sf SGS)
-        ^:mut ^I32 stub 0]
+        ^:mut ^I32 stub 0 ^:mut ^I32 i 0 ^:mut ^I32 j 0 ^:mut ^I32 letters 0]
     (if (or (< n 6) (or (!= (cells-at rw (+ (* r RWS) 9)) 1)
                          (>= (+ r 1) (tb-rows-of rw RWS)))) (return 0))
-    (if (== (tb-upper-label wd et wl (cells-at sg (+ s 3)) (cells-at sg (+ s 4))) 0) (return 0))
+    (while (< i (cells-at sg (+ s 4)))
+      (do (let [^I32 w (cells-at wl (+ (cells-at sg (+ s 3)) i))]
+            (set j 0)
+            (while (< j (wd-get wd w (hd-tlen)))
+              (do (let [^I32 cp (cells-at et (+ (wd-get wd w (hd-tstart)) j))]
+                    (if (or (and (>= cp 65) (<= cp 90)) (and (>= cp 97) (<= cp 122)))
+                      (set letters (+ letters 1))))
+                  (set j (+ j 1)))))
+          (set i (+ i 1))))
+    (if (or (< letters 5) (> letters 60)) (return 0))
     (while (and (< stub n) (== (cells-at tbk (+ (* (+ first stub) KS) 5)) 0)) (set stub (+ stub 1)))
     (if (or (>= stub n) (!= (cells-at tbk (+ (* (+ first stub) KS) 5)) 1)) (return 0))
+    ;; Mixed-case groups need whitespace on both sides within the stub.
+    ;; An ordinary left-aligned wrap is not a statistical section.
+    (if (== (tb-upper-label wd et wl (cells-at sg (+ s 3)) (cells-at sg (+ s 4))) 0)
+      (if (or (<= (cells-at sg (+ s 1)) (+ (cells-at tbk (+ (* (+ first stub) KS) 2)) (* size 2)))
+              (>= (cells-at sg (+ s 2)) (- (cells-at tbk (+ (* (+ first stub) KS) 3)) (* size 2)))) (return 0)))
     (if (> (tb-abs (- (quot (+ (cells-at sg (+ s 1)) (cells-at sg (+ s 2))) 2)
                        (quot (+ (cells-at tbk (+ (* (+ first stub) KS) 2)) (cells-at tbk (+ (* (+ first stub) KS) 3))) 2))) (* size 2)) (return 0))
     (if (and (!= r head) (> r 0)
@@ -4319,14 +4333,35 @@
     (if (== anchor 1) (return 1))
     (return 2)))
 
+(defn ^I32 tb-incoming-stub [^Cells wd ^Cells et ^Cells wl ^Cells rw ^Cells sg ^I32 r ^I32 prev ^I32 next ^I32 size ^I32 head ^I32 end]
+  (comment "A long incoming first line followed by a shorter flush-left stub, with nearly equal gaps.")
+  (if (or (>= next end) (or (< prev head) (!= (cells-at rw (+ (* r RWS) 9)) 1))) (return 0))
+  (let [^I32 here (* (cells-at rw (+ (* r RWS) 8)) SGS)
+        ^I32 following (* (cells-at rw (+ (* next RWS) 8)) SGS)
+        ^I32 last (cells-at wl (- (+ (cells-at rw (* r RWS)) (cells-at rw (+ (* r RWS) 1))) 1))
+        ^I32 length (wd-get wd last (hd-tlen))]
+    (if (and (> length 0) (== (cells-at et (- (+ (wd-get wd last (hd-tstart)) length) 1)) 58)) (return 0))
+    (if (and (<= (tb-abs (- (cells-at sg (+ here 1)) (cells-at sg (+ following 1)))) TB_HEAD_TOL)
+             (and (> (cells-at sg (+ here 2)) (+ (cells-at sg (+ following 2)) (* size 2)))
+                  (<= (- (cells-at rw (+ (* next RWS) 2)) (cells-at rw (+ (* r RWS) 2)))
+                      (+ (- (cells-at rw (+ (* r RWS) 2)) (cells-at rw (+ (* prev RWS) 2))) (quot size 5)))))
+      (return 1)))
+  (return 0))
+
 (defn ^I32 tb-own-rows [^Cells wd ^Cells et ^Cells wl ^Cells rw ^Cells sg ^I32 a ^I32 b ^I32 head
-                       ^Cells tbk ^I32 first ^I32 n ^I32 size ^I32 needed ^:mut ^Cells rmap ^:mut ^Cells fits]
+                       ^Cells tbk ^I32 first ^I32 n ^I32 size ^I32 needed ^Cells kept ^:mut ^Cells rmap ^:mut ^Cells fits]
   (let [^:mut ^I32 r a ^:mut ^I32 rows -1 ^:mut ^I32 prev -1 ^:mut ^I32 next -1
-        ^:mut ^I32 j 0 ^:mut ^I32 start 0 ^:mut ^I32 lastmode 0 ^:mut ^I32 cls 0
+        ^:mut ^I32 j 0 ^:mut ^I32 start 0 ^:mut ^I32 lastmode 0 ^:mut ^I32 cls 0 ^:mut ^I32 prefer 0
         ^:mut ^I32 anchors 0 ^:mut ^I32 conts 0 ^:mut ^I32 sections 0]
     (cells-drop fits 0)
     (while (< r b)
       (do (set cls (tb-row-fit wd et wl rw sg r tbk first n size (+ a head)))
+          ;; Bold is advisory: a proved incoming wrap is not a section row.
+          (if (and (== cls 3) (and (> r (+ a head)) (< (+ r 1) b)))
+            (if (and (== (cells-at fits (- (- r 1) a)) 1)
+                     (and (== (tb-incoming-stub wd et wl rw sg r (- r 1) (+ r 1) size (+ a head) b) 1)
+                          (== (tb-row-fit wd et wl rw sg (+ r 1) tbk first n size (+ a head)) 1)))
+              (set cls 2)))
           (cells-push fits cls)
           (if (>= r (+ a head))
             (do (if (== cls 0) (return 0))
@@ -4347,16 +4382,24 @@
                 (while (and (> start (+ a head)) (== (cells-at fits (- (- start 1) a)) 2)) (set start (- start 1)))
                 (set next (+ r 1))
                 (while (and (< next b) (== (cells-at fits (- next a)) 2)) (set next (+ next 1)))
+                (set prefer 0)
+                ;; A coherent selected wrap is stronger than gap rounding.
+                (if (== (cells-len kept) (- b a))
+                  (do (if (and (< next b) (== (cells-at kept (- r a)) (cells-at kept (- next a)))) (set prefer 1))
+                      (if (and (>= prev (+ a head)) (== (cells-at kept (- r a)) (cells-at kept (- prev a)))) (set prefer -1))))
+                (if (and (== start r) (== (tb-incoming-stub wd et wl rw sg r prev next size (+ a head) b) 1)) (set prefer 1))
                 (set j r)
                 ;; Every intervening baseline must remain within 1.6 sizes.
                 (while (and (< j next) (< (+ j 1) b)
                             (<= (* (- (cells-at rw (+ (* (+ j 1) RWS) 2)) (cells-at rw (+ (* j RWS) 2))) 10) (* size 16)))
                   (set j (+ j 1)))
                 (if (and (< next b) (and (>= j next) (== (cells-at fits (- next a)) 1))
-                         (or (== lastmode 1)
-                             (or (< prev (+ a head))
-                                 (< (- (cells-at rw (+ (* next RWS) 2)) (cells-at rw (+ (* (- next 1) RWS) 2)))
-                                    (- (cells-at rw (+ (* start RWS) 2)) (cells-at rw (+ (* prev RWS) 2)))))))
+                         (or (== prefer 1)
+                             (and (== prefer 0)
+                                  (or (== lastmode 1)
+                                      (or (< prev (+ a head))
+                                          (< (- (cells-at rw (+ (* next RWS) 2)) (cells-at rw (+ (* (- next 1) RWS) 2)))
+                                             (- (cells-at rw (+ (* start RWS) 2)) (cells-at rw (+ (* prev RWS) 2)))))))))
                   (cells-push rmap (+ rows 1))
                   (if (and (>= prev (+ a head))
                            (<= (* (- (cells-at rw (+ (* r RWS) 2)) (cells-at rw (+ (* (- r 1) RWS) 2))) 10) (* size 16)))
@@ -6185,7 +6228,7 @@
         ^I32 k0 (cells-len tbk)
         ^:mut ^I32 c first ^:mut ^I32 i 0 ^:mut ^I32 w 0 ^:mut ^I32 r 0
         ^:mut ^I32 headend -2000000000 ^:mut ^I32 rawhead 0 ^:mut ^I32 size 0
-        ^:mut ^I32 fit 0 ^:mut ^I32 same 1 ^:mut ^I32 sections 0 ^:mut ^I32 needed 2]
+        ^:mut ^I32 fit 0 ^:mut ^I32 same 1 ^:mut ^I32 sections 0 ^:mut ^I32 repairs 0 ^:mut ^I32 needed 2]
     (if (or (== profile PF_RULED) (or (== profile PF_STRUCT) (>= (cells-at tb (+ b 25)) 0))) (return 0))
     (if (> (tb-field-cells tc first (+ first count) an page) 0) (return 0))
     (let [^I32 nr (tb-rows wd et w0 w1 (cells-at tb (+ b 1)) (cells-at tb (+ b 2)) (cells-at tb (+ b 3)) (cells-at tb (+ b 4)) wl rw sg)]
@@ -6211,7 +6254,8 @@
       (tb-sort-nums st)
       (set size (cells-at st (quot (cells-len st) 2)))
       (if (!= (bit-and (cells-at tb (+ b 31)) TB_LEDGER_SPLIT) 0) (set needed 1))
-      (set fit (tb-own-rows wd et wl rw sg 0 nr rawhead tbk (cells-at tb (+ b 28)) (cells-at tb (+ b 29)) size needed rmap en))
+      (if (<= (tb-kept-row-map wl rw nr w0 w1 tc tw first count gm gs) 0) (cells-drop gm 0))
+      (set fit (tb-own-rows wd et wl rw sg 0 nr rawhead tbk (cells-at tb (+ b 28)) (cells-at tb (+ b 29)) size needed gm rmap en))
       (if (and (> fit 0) (> rawhead head))
         (do (set fit (+ (- fit rawhead) head))
             (set r 0)
@@ -6220,6 +6264,14 @@
                     (cells-set rmap r (tb-min r (- head 1)))
                     (cells-set rmap r (+ (- (cells-at rmap r) rawhead) head)))
                   (set r (+ r 1))))))
+      ;; A proved incoming wrap may change ownership without changing row count.
+      (if (> fit 0)
+        (do (set r (+ rawhead 1))
+            (while (< (+ r 1) nr)
+              (do (if (and (== (cells-at en r) 2)
+                           (and (== (cells-at en (- r 1)) 1) (== (cells-at en (+ r 1)) 1)))
+                    (if (== (tb-incoming-stub wd et wl rw sg r (- r 1) (+ r 1) size rawhead nr) 1) (set repairs 1)))
+                  (set r (+ r 1))))))
       ;; Preserve the proved centred SECTION rows past the text-grid scratch.
       (if (> fit 0)
         (do (set r rawhead)
@@ -6227,7 +6279,7 @@
               (do (if (== (cells-at en r) 4)
                     (do (set sections (+ sections 1)) (cells-push rmap (cells-at rmap r))))
                   (set r (+ r 1))))))
-      (if (or (<= fit 0) (and (>= fit (cells-at tb (+ b 7))) (== sections 0)))
+      (if (or (<= fit 0) (and (or (> fit (cells-at tb (+ b 7))) (and (== fit (cells-at tb (+ b 7))) (== repairs 0))) (== sections 0)))
         (if (== (tb-span-amount wd et tc tw first count head) 1)
           (do (set fit (tb-kept-row-map wl rw nr w0 w1 tc tw first count rmap en))
               (if (!= fit (cells-at tb (+ b 7))) (set fit 0)))

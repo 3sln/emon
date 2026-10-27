@@ -5588,10 +5588,25 @@ func tbCentredSection(wd *port.Cells, et *port.Cells, wl *port.Cells, rw *port.C
 	var sf int32 = port.CellsAt(rw, (r*rws)+8)
 	var s int32 = sf * sgs
 	var stub int32 = 0
+	var i int32 = 0
+	var j int32 = 0
+	var letters int32 = 0
 	if (n < 6) || ((port.CellsAt(rw, (r*rws)+9) != 1) || ((r + 1) >= tbRowsOf(rw, rws))) {
 		return 0
 	}
-	if tbUpperLabel(wd, et, wl, port.CellsAt(sg, s+3), port.CellsAt(sg, s+4)) == 0 {
+	for i < port.CellsAt(sg, s+4) {
+		var w int32 = port.CellsAt(wl, port.CellsAt(sg, s+3)+i)
+		j = 0
+		for j < evidence.WdGet(wd, w, evidence.HdTlen()) {
+			var cp int32 = port.CellsAt(et, evidence.WdGet(wd, w, evidence.HdTstart())+j)
+			if ((cp >= 65) && (cp <= 90)) || ((cp >= 97) && (cp <= 122)) {
+				letters += 1
+			}
+			j += 1
+		}
+		i += 1
+	}
+	if (letters < 5) || (letters > 60) {
 		return 0
 	}
 	for (stub < n) && (port.CellsAt(tbk, ((first+stub)*ks)+5) == 0) {
@@ -5599,6 +5614,11 @@ func tbCentredSection(wd *port.Cells, et *port.Cells, wl *port.Cells, rw *port.C
 	}
 	if (stub >= n) || (port.CellsAt(tbk, ((first+stub)*ks)+5) != 1) {
 		return 0
+	}
+	if tbUpperLabel(wd, et, wl, port.CellsAt(sg, s+3), port.CellsAt(sg, s+4)) == 0 {
+		if (port.CellsAt(sg, s+1) <= (port.CellsAt(tbk, ((first+stub)*ks)+2) + (size * 2))) || (port.CellsAt(sg, s+2) >= (port.CellsAt(tbk, ((first+stub)*ks)+3) - (size * 2))) {
+			return 0
+		}
 	}
 	if tbAbs(((port.CellsAt(sg, s+1)+port.CellsAt(sg, s+2))/2)-((port.CellsAt(tbk, ((first+stub)*ks)+2)+port.CellsAt(tbk, ((first+stub)*ks)+3))/2)) > (size * 2) {
 		return 0
@@ -5689,7 +5709,25 @@ func tbRowFit(wd *port.Cells, et *port.Cells, wl *port.Cells, rw *port.Cells, sg
 	return 2
 }
 
-func tbOwnRows(wd *port.Cells, et *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, a int32, b int32, head int32, tbk *port.Cells, first int32, n int32, size int32, needed int32, rmap *port.Cells, fits *port.Cells) int32 {
+func tbIncomingStub(wd *port.Cells, et *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, r int32, prev int32, next int32, size int32, head int32, end int32) int32 {
+	// A long incoming first line followed by a shorter flush-left stub, with nearly equal gaps.
+	if (next >= end) || ((prev < head) || (port.CellsAt(rw, (r*rws)+9) != 1)) {
+		return 0
+	}
+	var here int32 = port.CellsAt(rw, (r*rws)+8) * sgs
+	var following int32 = port.CellsAt(rw, (next*rws)+8) * sgs
+	var last int32 = port.CellsAt(wl, (port.CellsAt(rw, r*rws)+port.CellsAt(rw, (r*rws)+1))-1)
+	var length int32 = evidence.WdGet(wd, last, evidence.HdTlen())
+	if (length > 0) && (port.CellsAt(et, (evidence.WdGet(wd, last, evidence.HdTstart())+length)-1) == 58) {
+		return 0
+	}
+	if (tbAbs(port.CellsAt(sg, here+1)-port.CellsAt(sg, following+1)) <= tbHeadTol) && ((port.CellsAt(sg, here+2) > (port.CellsAt(sg, following+2) + (size * 2))) && ((port.CellsAt(rw, (next*rws)+2) - port.CellsAt(rw, (r*rws)+2)) <= ((port.CellsAt(rw, (r*rws)+2) - port.CellsAt(rw, (prev*rws)+2)) + (size / 5)))) {
+		return 1
+	}
+	return 0
+}
+
+func tbOwnRows(wd *port.Cells, et *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, a int32, b int32, head int32, tbk *port.Cells, first int32, n int32, size int32, needed int32, kept *port.Cells, rmap *port.Cells, fits *port.Cells) int32 {
 	var r int32 = a
 	var rows int32 = -1
 	var prev int32 = -1
@@ -5698,12 +5736,18 @@ func tbOwnRows(wd *port.Cells, et *port.Cells, wl *port.Cells, rw *port.Cells, s
 	var start int32 = 0
 	var lastmode int32 = 0
 	var cls int32 = 0
+	var prefer int32 = 0
 	var anchors int32 = 0
 	var conts int32 = 0
 	var sections int32 = 0
 	port.CellsDrop(fits, 0)
 	for r < b {
 		cls = tbRowFit(wd, et, wl, rw, sg, r, tbk, first, n, size, a+head)
+		if (cls == 3) && ((r > (a + head)) && ((r + 1) < b)) {
+			if (port.CellsAt(fits, (r-1)-a) == 1) && ((tbIncomingStub(wd, et, wl, rw, sg, r, r-1, r+1, size, a+head, b) == 1) && (tbRowFit(wd, et, wl, rw, sg, r+1, tbk, first, n, size, a+head) == 1)) {
+				cls = 2
+			}
+		}
 		port.CellsPush(fits, cls)
 		if r >= (a + head) {
 			if cls == 0 {
@@ -5748,11 +5792,23 @@ func tbOwnRows(wd *port.Cells, et *port.Cells, wl *port.Cells, rw *port.Cells, s
 			for (next < b) && (port.CellsAt(fits, next-a) == 2) {
 				next += 1
 			}
+			prefer = 0
+			if port.CellsLen(kept) == (b - a) {
+				if (next < b) && (port.CellsAt(kept, r-a) == port.CellsAt(kept, next-a)) {
+					prefer = 1
+				}
+				if (prev >= (a + head)) && (port.CellsAt(kept, r-a) == port.CellsAt(kept, prev-a)) {
+					prefer = -1
+				}
+			}
+			if (start == r) && (tbIncomingStub(wd, et, wl, rw, sg, r, prev, next, size, a+head, b) == 1) {
+				prefer = 1
+			}
 			j = r
 			for (j < next) && ((j + 1) < b) && (((port.CellsAt(rw, ((j+1)*rws)+2) - port.CellsAt(rw, (j*rws)+2)) * 10) <= (size * 16)) {
 				j += 1
 			}
-			if (next < b) && ((j >= next) && (port.CellsAt(fits, next-a) == 1)) && ((lastmode == 1) || ((prev < (a + head)) || ((port.CellsAt(rw, (next*rws)+2) - port.CellsAt(rw, ((next-1)*rws)+2)) < (port.CellsAt(rw, (start*rws)+2) - port.CellsAt(rw, (prev*rws)+2))))) {
+			if (next < b) && ((j >= next) && (port.CellsAt(fits, next-a) == 1)) && ((prefer == 1) || ((prefer == 0) && ((lastmode == 1) || ((prev < (a + head)) || ((port.CellsAt(rw, (next*rws)+2) - port.CellsAt(rw, ((next-1)*rws)+2)) < (port.CellsAt(rw, (start*rws)+2) - port.CellsAt(rw, (prev*rws)+2))))))) {
 				port.CellsPush(rmap, rows+1)
 			} else if (prev >= (a + head)) && (((port.CellsAt(rw, (r*rws)+2) - port.CellsAt(rw, ((r-1)*rws)+2)) * 10) <= (size * 16)) {
 				port.CellsPush(rmap, rows)
@@ -8446,6 +8502,7 @@ func tbFitKept(page int32, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, r
 	var fit int32 = 0
 	var same int32 = 1
 	var sections int32 = 0
+	var repairs int32 = 0
 	var needed int32 = 2
 	if (profile == pfRuled) || ((profile == pfStruct) || (port.CellsAt(tb, b+25) >= 0)) {
 		return 0
@@ -8495,7 +8552,10 @@ func tbFitKept(page int32, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, r
 	if (port.CellsAt(tb, b+31) & tbLedgerSplit) != 0 {
 		needed = 1
 	}
-	fit = tbOwnRows(wd, et, wl, rw, sg, 0, nr, rawhead, tbk, port.CellsAt(tb, b+28), port.CellsAt(tb, b+29), size, needed, rmap, en)
+	if tbKeptRowMap(wl, rw, nr, w0, w1, tc, tw, first, count, gm, gs) <= 0 {
+		port.CellsDrop(gm, 0)
+	}
+	fit = tbOwnRows(wd, et, wl, rw, sg, 0, nr, rawhead, tbk, port.CellsAt(tb, b+28), port.CellsAt(tb, b+29), size, needed, gm, rmap, en)
 	if (fit > 0) && (rawhead > head) {
 		fit = (fit - rawhead) + head
 		r = 0
@@ -8504,6 +8564,17 @@ func tbFitKept(page int32, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, r
 				port.CellsSet(rmap, r, tbMin(r, head-1))
 			} else {
 				port.CellsSet(rmap, r, (port.CellsAt(rmap, r)-rawhead)+head)
+			}
+			r += 1
+		}
+	}
+	if fit > 0 {
+		r = rawhead + 1
+		for (r + 1) < nr {
+			if (port.CellsAt(en, r) == 2) && ((port.CellsAt(en, r-1) == 1) && (port.CellsAt(en, r+1) == 1)) {
+				if tbIncomingStub(wd, et, wl, rw, sg, r, r-1, r+1, size, rawhead, nr) == 1 {
+					repairs = 1
+				}
 			}
 			r += 1
 		}
@@ -8518,7 +8589,7 @@ func tbFitKept(page int32, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, r
 			r += 1
 		}
 	}
-	if (fit <= 0) || ((fit >= port.CellsAt(tb, b+7)) && (sections == 0)) {
+	if (fit <= 0) || (((fit > port.CellsAt(tb, b+7)) || ((fit == port.CellsAt(tb, b+7)) && (repairs == 0))) && (sections == 0)) {
 		if tbSpanAmount(wd, et, tc, tw, first, count, head) == 1 {
 			fit = tbKeptRowMap(wl, rw, nr, w0, w1, tc, tw, first, count, rmap, en)
 			if fit != port.CellsAt(tb, b+7) {
