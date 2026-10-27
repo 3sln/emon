@@ -238,4 +238,91 @@ public static class Ocrledger {
         }
         return rows;
     }
+    internal static int OcInkEligible(emon.Port.Cells tlines, emon.Port.Cells inks, emon.Port.Cells mask, int t) {
+        int pg = Evidence.TlGet(tlines, t, 0);
+        int ink = Evidence.TlGet(tlines, t, Evidence.TlfInk());
+        int w = Evidence.TlGet(tlines, t, 3) - Evidence.TlGet(tlines, t, 1);
+        int h = Evidence.TlGet(tlines, t, 4) - Evidence.TlGet(tlines, t, 2);
+        int rot = Evidence.TlGet(tlines, t, 9);
+        if ((pg <= 0) || (pg > emon.Port.CellsLen(mask))) {
+            return 0;
+        }
+        if ((emon.Port.CellsAt(mask, pg - 1) & 3) == 0) {
+            return 0;
+        }
+        if ((Evidence.TlGet(tlines, t, Evidence.TlfConf()) < 600) || (Evidence.TlGet(tlines, t, 12) < 3)) {
+            return 0;
+        }
+        if ((ink < 0) || (ink >= Evidence.IkCount(inks))) {
+            return 0;
+        }
+        if (Evidence.IkGet(inks, ink, Evidence.IkfRole()) != Evidence.IrBody()) {
+            return 0;
+        }
+        if ((rot > 300) && (rot < 35700)) {
+            return 0;
+        }
+        if ((h < 300) || (h > 6000)) {
+            return 0;
+        }
+        if ((w < 2500) || ((w <= h) || (w > (40 * h)))) {
+            return 0;
+        }
+        return 1;
+    }
+    public static int OcInkAccount(emon.Port.Cells tlines, emon.Port.Cells inks, emon.Port.Cells words, emon.Port.Cells rules, emon.Port.Cells mask, emon.Port.Cells ledger, emon.Port.Cells wix, emon.Port.Cells rix) {
+        // D738: a separate pixel diagnostic for sure horizontal body text-like traces with no OCR observation in ANY reading. This is not a word count or a claim of complete pixel coverage.
+        int nw = Evidence.OwCount(words);
+        int nr = Evidence.RlCount(rules);
+        int np = emon.Port.CellsLen(mask);
+        int t = 0;
+        int pg = 0;
+        int x0 = 0;
+        int y0 = 0;
+        int x1 = 0;
+        int y1 = 0;
+        int j = 0;
+        int end = 0;
+        int covered = 0;
+        int made = 0;
+        if (Evidence.TlCount(tlines) == 0) {
+            return 0;
+        }
+        Pagebounds.PbBuildRanges(words, Evidence.OwStride(), 0, nw, np, wix);
+        Pagebounds.PbBuildRanges(rules, Evidence.RlStride(), 0, nr, np, rix);
+        while (t < Evidence.TlCount(tlines)) {
+            if (OcInkEligible(tlines, inks, mask, t) == 1) {
+                pg = Evidence.TlGet(tlines, t, 0);
+                x0 = Evidence.TlGet(tlines, t, 1);
+                y0 = Evidence.TlGet(tlines, t, 2);
+                x1 = Evidence.TlGet(tlines, t, 3);
+                y1 = Evidence.TlGet(tlines, t, 4);
+                covered = 0;
+                j = emon.Port.CellsAt(wix, pg * 2);
+                end = emon.Port.CellsAt(wix, (pg * 2) + 1);
+                while ((j < end) && (covered == 0)) {
+                    if ((Evidence.OwGet(words, j, Evidence.HdPage()) == pg) && (Evidence.OwGet(words, j, Evidence.HdTlen()) > 0)) {
+                        if (Evidence.EvOverlapSmall(x0, y0, x1, y1, Evidence.OwGet(words, j, Evidence.HdX0()), Evidence.OwGet(words, j, Evidence.HdY0()), Evidence.OwGet(words, j, Evidence.HdX1()), Evidence.OwGet(words, j, Evidence.HdY1())) > 100) {
+                            covered = 1;
+                        }
+                    }
+                    j += 1;
+                }
+                j = emon.Port.CellsAt(rix, pg * 2);
+                end = emon.Port.CellsAt(rix, (pg * 2) + 1);
+                while ((j < end) && (covered == 0)) {
+                    if ((Evidence.RlGet(rules, j, Evidence.RlfPage()) == pg) && (((Evidence.RlGet(rules, j, Evidence.RlfY0()) >= y0) && (Evidence.RlGet(rules, j, Evidence.RlfY0()) <= y1)) && (((Evidence.RlGet(rules, j, Evidence.RlfY1()) - Evidence.RlGet(rules, j, Evidence.RlfY0())) <= ((y1 - y0) / 3)) && ((Evidence.RlGet(rules, j, Evidence.RlfX0()) <= x0) && (Evidence.RlGet(rules, j, Evidence.RlfX1()) >= x1))))) {
+                        covered = 1;
+                    }
+                    j += 1;
+                }
+                if (covered == 0) {
+                    Model.LedgerAdd(ledger, Model.DrOcrUnreadInk(), pg, x0, y0, x1, y1, -1, Model.SrOcr());
+                    made += 1;
+                }
+            }
+            t += 1;
+        }
+        return made;
+    }
 }

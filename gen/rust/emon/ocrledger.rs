@@ -4,6 +4,7 @@
 use crate::emon::evidence::*;
 use crate::emon::model::*;
 use crate::emon::normalize::*;
+use crate::emon::pagebounds::*;
 
 pub(crate) fn oc_space(c: i32) -> i32 {
     if (c <= 32) || ((c == 160) || ((c == 8239) || ((c >= 8192) && (c <= 8202)))) {
@@ -237,4 +238,91 @@ pub fn oc_account(runs: &mut crate::port::Cells, owords: &mut crate::port::Cells
         pg += 1;
     }
     return rows;
+}
+pub(crate) fn oc_ink_eligible(tlines: &mut crate::port::Cells, inks: &mut crate::port::Cells, mask: &mut crate::port::Cells, t: i32) -> i32 {
+    let pg: i32 = tl_get(tlines, t, 0);
+    let ink: i32 = tl_get(tlines, t, tlf_ink());
+    let w: i32 = tl_get(tlines, t, 3) - tl_get(tlines, t, 1);
+    let h: i32 = tl_get(tlines, t, 4) - tl_get(tlines, t, 2);
+    let rot: i32 = tl_get(tlines, t, 9);
+    if (pg <= 0) || (pg > crate::port::cells_len(mask)) {
+        return 0;
+    }
+    if (crate::port::cells_at(mask, pg - 1) & 3) == 0 {
+        return 0;
+    }
+    if (tl_get(tlines, t, tlf_conf()) < 600) || (tl_get(tlines, t, 12) < 3) {
+        return 0;
+    }
+    if (ink < 0) || (ink >= ik_count(inks)) {
+        return 0;
+    }
+    if ik_get(inks, ink, ikf_role()) != ir_body() {
+        return 0;
+    }
+    if (rot > 300) && (rot < 35700) {
+        return 0;
+    }
+    if (h < 300) || (h > 6000) {
+        return 0;
+    }
+    if (w < 2500) || ((w <= h) || (w > (40 * h))) {
+        return 0;
+    }
+    return 1;
+}
+pub fn oc_ink_account(tlines: &mut crate::port::Cells, inks: &mut crate::port::Cells, words: &mut crate::port::Cells, rules: &mut crate::port::Cells, mask: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells, mut wix: &mut crate::port::Cells, mut rix: &mut crate::port::Cells) -> i32 {
+    // D738: a separate pixel diagnostic for sure horizontal body text-like traces with no OCR observation in ANY reading. This is not a word count or a claim of complete pixel coverage.
+    let nw: i32 = ow_count(words);
+    let nr: i32 = rl_count(rules);
+    let np: i32 = crate::port::cells_len(mask);
+    let mut t: i32 = 0;
+    let mut pg: i32 = 0;
+    let mut x0: i32 = 0;
+    let mut y0: i32 = 0;
+    let mut x1: i32 = 0;
+    let mut y1: i32 = 0;
+    let mut j: i32 = 0;
+    let mut end: i32 = 0;
+    let mut covered: i32 = 0;
+    let mut made: i32 = 0;
+    if tl_count(tlines) == 0 {
+        return 0;
+    }
+    pb_build_ranges(words, ow_stride(), 0, nw, np, wix);
+    pb_build_ranges(rules, rl_stride(), 0, nr, np, rix);
+    while t < tl_count(tlines) {
+        if oc_ink_eligible(tlines, inks, mask, t) == 1 {
+            pg = tl_get(tlines, t, 0);
+            x0 = tl_get(tlines, t, 1);
+            y0 = tl_get(tlines, t, 2);
+            x1 = tl_get(tlines, t, 3);
+            y1 = tl_get(tlines, t, 4);
+            covered = 0;
+            j = crate::port::cells_at(wix, pg * 2);
+            end = crate::port::cells_at(wix, (pg * 2) + 1);
+            while (j < end) && (covered == 0) {
+                if (ow_get(words, j, hd_page()) == pg) && (ow_get(words, j, hd_tlen()) > 0) {
+                    if ev_overlap_small(x0, y0, x1, y1, ow_get(words, j, hd_x0()), ow_get(words, j, hd_y0()), ow_get(words, j, hd_x1()), ow_get(words, j, hd_y1())) > 100 {
+                        covered = 1;
+                    }
+                }
+                j += 1;
+            }
+            j = crate::port::cells_at(rix, pg * 2);
+            end = crate::port::cells_at(rix, (pg * 2) + 1);
+            while (j < end) && (covered == 0) {
+                if (rl_get(rules, j, rlf_page()) == pg) && (((rl_get(rules, j, rlf_y0()) >= y0) && (rl_get(rules, j, rlf_y0()) <= y1)) && (((rl_get(rules, j, rlf_y1()) - rl_get(rules, j, rlf_y0())) <= ((y1 - y0) / 3)) && ((rl_get(rules, j, rlf_x0()) <= x0) && (rl_get(rules, j, rlf_x1()) >= x1)))) {
+                    covered = 1;
+                }
+                j += 1;
+            }
+            if covered == 0 {
+                ledger_add(ledger, dr_ocr_unread_ink(), pg, x0, y0, x1, y1, -1, sr_ocr());
+                made += 1;
+            }
+        }
+        t += 1;
+    }
+    return made;
 }

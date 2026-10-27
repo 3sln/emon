@@ -861,3 +861,60 @@ fn test_pdf_scan_photos_defer_without_disabling_image_photos() {
     crate::port::cells_set(rtp, rtp_trigger(), 2);
     crate::testport::assert_eq(rt_receipt_active(rtp), 0, "thermal lane remains reverted");
 }
+#[test]
+fn test_receipt_block_request_owns_the_original_raster_and_does_not_select_it() {
+    let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rtp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let loc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    rt_prep(rtp);
+    rt_receipt_source(rtp, 1);
+    crate::port::cells_set(rtp, rtp_trigger(), 1);
+    crate::testport::assert_eq(rt_ask_receipt_block(0, 260, 300, 0, ans, loc, &crate::port::BitmapSet::new(), rtp, rq), 1, "photo image gets one alternative");
+    crate::testport::assert_eq(rec_count(rq), 1, "one bounded request");
+    crate::testport::assert_eq(rec_id(rq, 0), 278, "request 22 is independent of script retry 28");
+    crate::testport::assert_eq(rq_arg(rq, 0, 0), 260, "source raster owns the read");
+    crate::testport::assert_eq(rq_arg(rq, 0, 1), 6, "block segmentation");
+    crate::testport::assert_eq(crate::port::cells_at(rtp, rtp_primary()), -1, "a request cannot adopt a reading");
+}
+#[test]
+fn test_receipt_block_request_does_not_read_pdf_or_turned_or_unclassified_pages() {
+    let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rtp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let loc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    rt_prep(rtp);
+    rt_receipt_source(rtp, 2);
+    crate::port::cells_set(rtp, rtp_trigger(), 2);
+    crate::testport::assert_eq(rt_ask_receipt_block(0, 260, 300, 0, ans, loc, &crate::port::BitmapSet::new(), rtp, rq), 0, "PDF scan excluded");
+    rt_receipt_source(rtp, 1);
+    crate::testport::assert_eq(rt_ask_receipt_block(0, 260, 300, 0, ans, loc, &crate::port::BitmapSet::new(), rtp, rq), 0, "thermal lane rejected after wrong source amounts");
+    crate::port::cells_set(rtp, rtp_trigger(), 1);
+    crate::testport::assert_eq(rt_ask_receipt_block(0, 260, 300, 1, ans, loc, &crate::port::BitmapSet::new(), rtp, rq), 0, "turned page excluded");
+    crate::port::cells_set(rtp, rtp_trigger(), 0);
+    crate::testport::assert_eq(rt_ask_receipt_block(0, 260, 300, 0, ans, loc, &crate::port::BitmapSet::new(), rtp, rq), 0, "unclassified excluded");
+    crate::testport::assert_eq(rec_count(rq), 0, "no speculative requests");
+}
+#[test]
+fn test_receipt_block_view_request_carries_the_actual_pixel_hash() {
+    let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rtp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let loc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let bms: &crate::port::BitmapSet = &crate::port::BitmapSet::new();
+    let vid: i32 = pu_view_id(0, 120);
+    crate::port::bms_put(bms, vid, 5, 5, 1);
+    rt_prep(rtp);
+    rt_receipt_source(rtp, 1);
+    crate::port::cells_set(rtp, rtp_trigger(), 1);
+    crate::testport::assert_eq(rt_ask_receipt_block(0, vid, 300, 0, ans, loc, bms, rtp, rq), 1, "one read of the enlarged raster");
+    crate::testport::assert_eq(rq_arg(rq, 0, 0), vid, "the enlarged raster owns the read");
+    crate::testport::assert_eq(rq_arg(rq, 0, 1), 6, "the view keeps block segmentation");
+    crate::testport::assert_eq(rq_nargs(rq, 0), 9, "a view request includes both hash cells");
+    let hi: i32 = rq_arg(rq, 0, 7);
+    let lo: i32 = rq_arg(rq, 0, 8);
+    crate::port::bitmap_set_u8(crate::port::bms_get(bms, vid), 0, 0, 0, 255);
+    rt_ask_receipt_block(0, vid, 300, 0, ans, loc, bms, rtp, rq2);
+    crate::testport::assert_that((hi != rq_arg(rq2, 0, 7)) || (lo != rq_arg(rq2, 0, 8)), "one changed source pixel changes this request's identity");
+}

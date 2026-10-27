@@ -327,7 +327,7 @@
    "furnitureItem.src" "As for a block."
    "furnitureItem.conf" "As for a block."
    "furnitureItem.flags" "As for a block."
-   "droppedItem.reason" "Why it was left out: `watermark`, `background`, `page-number`, `running-title`, `bleed-through`, `duplicate-header-row`, `ocr-ghost`, `clipped`, `offpage`, `invisible`, `rule-ghost`, `unwitnessed-uncertain-paint`, `ocr-empty`, `ocr-unrepresented`, `figure-unmeasured`, `figure-signature-unmeasured`."
+   "droppedItem.reason" "Why it was left out: `watermark`, `background`, `page-number`, `running-title`, `bleed-through`, `duplicate-header-row`, `ocr-ghost`, `clipped`, `offpage`, `invisible`, `rule-ghost`, `unwitnessed-uncertain-paint`, `ocr-empty`, `ocr-unrepresented`, `figure-unmeasured`, `figure-signature-unmeasured`, `ocr-unread-ink` (a text-like source trace with no recorded OCR word; no transcription is inferred)."
    "droppedItem.page" "The page it was on."
    "droppedItem.at" "Its region `[page, x0, y0, x1, y1]`."
    "droppedItem.text" "Its text, when it had any."

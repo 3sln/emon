@@ -1,11 +1,13 @@
 ;; Residual OCR accounting after reconstruction. Corpus-free, page-local, occurrence-aware.
 (ns emon.ocrledger
   (:require [emon.lang :refer [I32 Cells]]
+            [emon.pagebounds :refer [pb-build-ranges]]
             [emon.port :refer [cells-len cells-at cells-push cells-set cells-drop]]
             [emon.model :refer [node-count node-kind node-is-inline node-has-text node-first-child node-next nk-furniture nk-linebreak node-text-start node-text-len node-region-head node-parent region-page
-                                ledger-count ledger-page ledger-text-start ledger-text-len ledger-add ledger-set-text sr-ocr dr-ocr-unrepresented]]
+                                ledger-count ledger-page ledger-text-start ledger-text-len ledger-add ledger-set-text sr-ocr dr-ocr-unrepresented dr-ocr-unread-ink]]
             [emon.normalize :refer [nz-nfc nz-flag-ligatures nz-flag-radicals]]
-            [emon.evidence :refer [or-count or-get orf-wfirst orf-wcount orf-pass op-fused ow-get hd-page hd-tstart hd-tlen hd-x0 hd-y0 hd-x1 hd-y1 hd-conf]]
+            [emon.evidence :refer [or-count or-get orf-wfirst orf-wcount orf-pass op-fused ow-get hd-page hd-tstart hd-tlen hd-x0 hd-y0 hd-x1 hd-y1 hd-conf ow-stride rl-stride ow-count tl-count tl-get tlf-conf tlf-ink ik-count ik-get ikf-role ir-body
+                                   rl-count rl-get rlf-page rlf-x0 rlf-y0 rlf-x1 rlf-y1 ev-overlap-small]]
             [kin.lang :refer [defn return let set while if do comment + - * < > <= >= == != and or quot bit-and]]))
 
 (defn ^I32 oc-space [^I32 c]
@@ -145,3 +147,53 @@
                       (set r (+ r 1))))))
           (set pg (+ pg 1))))
     (return rows)))
+
+(defn ^I32 oc-ink-eligible [^Cells tlines ^Cells inks ^Cells mask ^I32 t]
+  (let [^I32 pg (tl-get tlines t 0) ^I32 ink (tl-get tlines t (tlf-ink))
+        ^I32 w (- (tl-get tlines t 3) (tl-get tlines t 1))
+        ^I32 h (- (tl-get tlines t 4) (tl-get tlines t 2)) ^I32 rot (tl-get tlines t 9)]
+    (if (or (<= pg 0) (> pg (cells-len mask))) (return 0))
+    (if (== (bit-and (cells-at mask (- pg 1)) 3) 0) (return 0))
+    (if (or (< (tl-get tlines t (tlf-conf)) 600) (< (tl-get tlines t 12) 3)) (return 0))
+    (if (or (< ink 0) (>= ink (ik-count inks))) (return 0))
+    (if (!= (ik-get inks ink (ikf-role)) (ir-body)) (return 0))
+    (if (and (> rot 300) (< rot 35700)) (return 0))
+    (if (or (< h 300) (> h 6000)) (return 0))
+    (if (or (< w 2500) (or (<= w h) (> w (* 40 h)))) (return 0))
+    (return 1)))
+
+(defn ^:pub ^I32 oc-ink-account [^Cells tlines ^Cells inks ^Cells words ^Cells rules ^Cells mask ^:mut ^Cells ledger ^:mut ^Cells wix ^:mut ^Cells rix]
+  (comment "D738: a separate pixel diagnostic for sure horizontal body text-like traces with no OCR observation in ANY reading. This is not a word count or a claim of complete pixel coverage.")
+  (let [^I32 nw (ow-count words) ^I32 nr (rl-count rules) ^I32 np (cells-len mask)
+        ^:mut ^I32 t 0 ^:mut ^I32 pg 0 ^:mut ^I32 x0 0 ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0 ^:mut ^I32 y1 0 ^:mut ^I32 j 0 ^:mut ^I32 end 0 ^:mut ^I32 covered 0 ^:mut ^I32 made 0]
+    (if (== (tl-count tlines) 0) (return 0))
+    (pb-build-ranges words (ow-stride) 0 nw np wix)
+    (pb-build-ranges rules (rl-stride) 0 nr np rix)
+    (while (< t (tl-count tlines))
+      (do (if (== (oc-ink-eligible tlines inks mask t) 1)
+            (do (set pg (tl-get tlines t 0))
+                (set x0 (tl-get tlines t 1)) (set y0 (tl-get tlines t 2))
+                (set x1 (tl-get tlines t 3)) (set y1 (tl-get tlines t 4))
+                (set covered 0) (set j (cells-at wix (* pg 2)))
+                (set end (cells-at wix (+ (* pg 2) 1)))
+                (while (and (< j end) (== covered 0))
+                  (do (if (and (== (ow-get words j (hd-page)) pg) (> (ow-get words j (hd-tlen)) 0))
+                        (if (> (ev-overlap-small x0 y0 x1 y1 (ow-get words j (hd-x0)) (ow-get words j (hd-y0))
+                                               (ow-get words j (hd-x1)) (ow-get words j (hd-y1))) 100)
+                          (set covered 1)))
+                      (set j (+ j 1))))
+                (set j (cells-at rix (* pg 2)))
+                (set end (cells-at rix (+ (* pg 2) 1)))
+                (while (and (< j end) (== covered 0))
+                  (do (if (and (== (rl-get rules j (rlf-page)) pg)
+                               (and (and (>= (rl-get rules j (rlf-y0)) y0) (<= (rl-get rules j (rlf-y0)) y1))
+                                    (and (<= (- (rl-get rules j (rlf-y1)) (rl-get rules j (rlf-y0))) (quot (- y1 y0) 3))
+                                         (and (<= (rl-get rules j (rlf-x0)) x0) (>= (rl-get rules j (rlf-x1)) x1)))))
+                        (set covered 1))
+                      (set j (+ j 1))))
+                (if (== covered 0)
+                  (do (ledger-add ledger (dr-ocr-unread-ink) pg x0 y0 x1 y1 -1 (sr-ocr))
+                      (set made (+ made 1))))))
+          (set t (+ t 1))))
+    (return made)))

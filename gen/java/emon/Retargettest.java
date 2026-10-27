@@ -826,4 +826,58 @@ public final class Retargettest {
         emon.Port.cellsSet(rtp, Retarget.rtpTrigger(), 2);
         emon.Testport.assertEq(Retarget.rtReceiptActive(rtp), 0, "thermal lane remains reverted");
     }
+    public static void testReceiptBlockRequestOwnsTheOriginalRasterAndDoesNotSelectIt() {
+        emon.Port.Cells rq = emon.Port.newCells();
+        emon.Port.Cells rtp = emon.Port.newCells();
+        emon.Port.Cells ans = emon.Port.newCells();
+        emon.Port.Cells loc = emon.Port.newCells();
+        Retarget.rtPrep(rtp);
+        Retarget.rtReceiptSource(rtp, 1);
+        emon.Port.cellsSet(rtp, Retarget.rtpTrigger(), 1);
+        emon.Testport.assertEq(Retarget.rtAskReceiptBlock(0, 260, 300, 0, ans, loc, emon.Port.newBitmapSet(), rtp, rq), 1, "photo image gets one alternative");
+        emon.Testport.assertEq(Plan.recCount(rq), 1, "one bounded request");
+        emon.Testport.assertEq(Plan.recId(rq, 0), 278, "request 22 is independent of script retry 28");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, 0), 260, "source raster owns the read");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, 1), 6, "block segmentation");
+        emon.Testport.assertEq(emon.Port.cellsAt(rtp, Retarget.rtpPrimary()), -1, "a request cannot adopt a reading");
+    }
+    public static void testReceiptBlockRequestDoesNotReadPdfOrTurnedOrUnclassifiedPages() {
+        emon.Port.Cells rq = emon.Port.newCells();
+        emon.Port.Cells rtp = emon.Port.newCells();
+        emon.Port.Cells ans = emon.Port.newCells();
+        emon.Port.Cells loc = emon.Port.newCells();
+        Retarget.rtPrep(rtp);
+        Retarget.rtReceiptSource(rtp, 2);
+        emon.Port.cellsSet(rtp, Retarget.rtpTrigger(), 2);
+        emon.Testport.assertEq(Retarget.rtAskReceiptBlock(0, 260, 300, 0, ans, loc, emon.Port.newBitmapSet(), rtp, rq), 0, "PDF scan excluded");
+        Retarget.rtReceiptSource(rtp, 1);
+        emon.Testport.assertEq(Retarget.rtAskReceiptBlock(0, 260, 300, 0, ans, loc, emon.Port.newBitmapSet(), rtp, rq), 0, "thermal lane rejected after wrong source amounts");
+        emon.Port.cellsSet(rtp, Retarget.rtpTrigger(), 1);
+        emon.Testport.assertEq(Retarget.rtAskReceiptBlock(0, 260, 300, 1, ans, loc, emon.Port.newBitmapSet(), rtp, rq), 0, "turned page excluded");
+        emon.Port.cellsSet(rtp, Retarget.rtpTrigger(), 0);
+        emon.Testport.assertEq(Retarget.rtAskReceiptBlock(0, 260, 300, 0, ans, loc, emon.Port.newBitmapSet(), rtp, rq), 0, "unclassified excluded");
+        emon.Testport.assertEq(Plan.recCount(rq), 0, "no speculative requests");
+    }
+    public static void testReceiptBlockViewRequestCarriesTheActualPixelHash() {
+        emon.Port.Cells rq = emon.Port.newCells();
+        emon.Port.Cells rq2 = emon.Port.newCells();
+        emon.Port.Cells rtp = emon.Port.newCells();
+        emon.Port.Cells ans = emon.Port.newCells();
+        emon.Port.Cells loc = emon.Port.newCells();
+        emon.Port.BitmapSet bms = emon.Port.newBitmapSet();
+        int vid = Plan.puViewId(0, 120);
+        emon.Port.bmsPut(bms, vid, 5, 5, 1);
+        Retarget.rtPrep(rtp);
+        Retarget.rtReceiptSource(rtp, 1);
+        emon.Port.cellsSet(rtp, Retarget.rtpTrigger(), 1);
+        emon.Testport.assertEq(Retarget.rtAskReceiptBlock(0, vid, 300, 0, ans, loc, bms, rtp, rq), 1, "one read of the enlarged raster");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, 0), vid, "the enlarged raster owns the read");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, 1), 6, "the view keeps block segmentation");
+        emon.Testport.assertEq(Plan.rqNargs(rq, 0), 9, "a view request includes both hash cells");
+        int hi = Plan.rqArg(rq, 0, 7);
+        int lo = Plan.rqArg(rq, 0, 8);
+        emon.Port.bitmapSetU8(emon.Port.bmsGet(bms, vid), 0, 0, 0, 255);
+        Retarget.rtAskReceiptBlock(0, vid, 300, 0, ans, loc, bms, rtp, rq2);
+        emon.Testport.assertThat((hi != Plan.rqArg(rq2, 0, 7)) || (lo != Plan.rqArg(rq2, 0, 8)), "one changed source pixel changes this request's identity");
+    }
 }

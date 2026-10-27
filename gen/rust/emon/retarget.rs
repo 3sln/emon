@@ -124,6 +124,9 @@ pub(crate) fn rt_native_empty_priority() -> i32 {
     // Existing OCR empty-line crops precede traced gaps: this bonus exceeds the largest admitted empty-line area (144000 square points).
     return 1000000;
 }
+pub fn ri_receipt_block() -> i32 {
+    return 22;
+}
 pub fn ri_receipt() -> i32 {
     return 31;
 }
@@ -1257,6 +1260,28 @@ pub(crate) fn rt_ask_receipt(page: i32, dpi: i32, k0: i32, loc: &mut crate::port
     }
     return 1;
 }
+pub fn rt_ask_receipt_block(page: i32, raster: i32, dpi: i32, turns: i32, ans: &mut crate::port::Cells, loc: &mut crate::port::Cells, bms: &crate::port::BitmapSet, mut rtp: &mut crate::port::Cells, mut rq: &mut crate::port::Cells) -> i32 {
+    // D737 trial: one additional segmentation of the original raster; recorded evidence only, never a primary-page adoption.
+    if crate::port::cells_at(rtp, rtp_source_deferred()) != 0 {
+        return 0;
+    }
+    if turns != 0 {
+        return 0;
+    }
+    if crate::port::cells_at(rtp, rtp_trigger()) != 1 {
+        return 0;
+    }
+    if an_find(ans, pu_id(page, ri_receipt_block())) >= 0 {
+        return 0;
+    }
+    if raster >= view_base() {
+        crate::port::bitmap_hash(crate::port::bms_get(bms, raster), rtp, rtp_hash());
+        sc_request_view_psm(rq, pu_id(page, ri_receipt_block()), raster, crate::port::cells_at(rtp, rtp_hash()), crate::port::cells_at(rtp, rtp_hash() + 1), 6, dpi, loc);
+    } else {
+        sc_request_at(rq, pu_id(page, ri_receipt_block()), raster, 6, dpi, 0, 0, 0, 0, loc);
+    }
+    return 1;
+}
 pub fn rt_plan(page: i32, input: i32, born: i32, wanttext: i32, rid: i32, dpi: i32, loc: &mut crate::port::Cells, ans: &mut crate::port::Cells, bms: &crate::port::BitmapSet, k0: i32, src: &crate::port::Bitmap, mut ws: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, run: i32, mut olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, rules: &mut crate::port::Cells, tlines: &mut crate::port::Cells, mut rtp: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, comps: &mut crate::port::Cells, inks: &mut crate::port::Cells, mut pixels: &mut crate::port::Cells) -> i32 {
     // Decide and ask what is not yet answered, in the brief's order: the table cells and the lines, the text-only render and its OCR, the body-ink view,
     // the quarter-turned view. `page` is 0-based (ids), `rid` the request id of the raster `src` that the first pass read at `dpi`, `k0` the id group
@@ -1272,6 +1297,9 @@ pub fn rt_plan(page: i32, input: i32, born: i32, wanttext: i32, rid: i32, dpi: i
     }
     if (born == 0) && ((q == 0) && (rt_receipt_active(rtp) == 1)) {
         asked += rt_ask_receipt(page, dpi, k0, loc, ans, bms, ws, rtp, rq, pixels, run, oruns);
+    }
+    if born == 0 {
+        asked += rt_ask_receipt_block(page, rid, dpi, q, ans, loc, bms, rtp, rq);
     }
     if (q == 0) && (born == 0) {
         rt_gap_lines(page + 1, dpi, tlines, oruns, run, olines, owords, inks);
@@ -1428,6 +1456,15 @@ pub fn rt_record(page: i32, srcview: i32, dpi100: i32, loc: &mut crate::port::Ce
             run = sc_answer(ans, a, pg, srcview, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
             rt_run_meta(oruns, run, op_body_ink(), 3, 3, 0, 0, 0, 0);
             crate::port::cells_set(rtp, rtp_brun(), run);
+            made += 1;
+        }
+    }
+    id = pu_id(page, ri_receipt_block());
+    a = an_find(ans, id);
+    if a >= 0 {
+        if an_ok(ans, a) == 1 {
+            run = sc_answer(ans, a, pg, srcview, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+            rt_run_meta(oruns, run, op_receipt(), 3, 6, 0, 0, 0, 0);
             made += 1;
         }
     }

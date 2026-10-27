@@ -12611,3 +12611,51 @@ Guards, each document live with the candidate (recording) and its transcript rep
 Integrated fusion edits the selection before emission rather than the emitted layer, so: (1) a selected line that changes is emitted as a revised line, and `sc-fates`' safe corrections apply to its copies as to any OCR word (one CORD insertion is a recorded amount with its thousands separator corrected); (2) new lines follow the page's last selected line and pass through the document stages, so an insertion inside a kept seal is kept out of the body by the seal stage (one CORD gold word the prototype counted); (3) the 25×-median box bound uses integer centipoint areas over the selected and reading words, so a box at the bound can fall either side of it (one CORD slot). PDF scans and turned pages are outside the gate. Line-item and total grouping remains the next lever (D721): fused tokens still land in emon's existing lines.
 
 - [ ] **Signed off** (maintainer)
+
+### D737 — Test a receipt block reading as evidence before adoption
+
+Batch 13 starts from 9068fcec. The six source images and fresh live Models reproduce the sweep findings. Write request ownership, segmentation, no-adoption, PDF and orientation laws before adding one bounded PSM 6 read of the current raster. Record it as another `receipt` reading with request 22; do not assign it as primary. A request-identity law protects the existing script-directed retry at 28. The initial external prototype used 28 and was corrected during request-space review before final validation. Existing detector, image-source, upright and keyword guards, distinct-reading fusion, verbatim source copies, numeric format protection and occurrence accounting continue to govern emission.
+
+The broad photo/thermal trial gives F12 its exact 50.000 total, Small and one zero without losing a word, but E04 gains incorrect amounts 4.38 and 5.88 where source ink shows 4.30 and 5.00. Reject the thermal lane despite aggregate SROIE gains. The narrowed photo lane is subject to the frozen receipt precision floors and all live controls; a recovered total alone does not establish complete item rows. Full outcomes and any rejection are recorded in b13-report.md and external b13 evidence. No receipt baseline or historical accuracy population is rewritten to obtain acceptance.
+
+- [ ] **Signed off** (maintainer)
+
+### D738 — Separate unread traced ink from rejected OCR readings
+
+Write five laws asserting source page and all four box coordinates, an empty transcription, rejected-reading versus unread-ink ownership, page separation, uncertainty/foreign-ink exclusion and rule-stroke protection. Keep D699's occurrence ledger intact. Separately append `ocr-unread-ink` for sure horizontal body text-like traces with no overlapping word in any recorded attempt. The rule is deliberately conservative: three components, confidence at least 600, width at least 25 pt, height 3–60 pt, aspect at most 40, upright within three degrees, an OCR-enabled page and a body ink layer. Exclude long horizontal rule strokes. Never infer characters, change body text, or turn diagnostic counts into lost-source-word counts. Keep the diagnostic unscored: trace confidence is not an OCR word confidence and must not be fed to the dropped-word calibration map.
+
+Any recorded alternative, even rejected low-confidence OCR, suppresses this diagnostic. Partial readings and untraced source text remain outside its coverage. This is an explicitly incomplete trace diagnostic, not proof that the page has been read. Add its dropped-reason enum to the Model schema and API snapshot using D527's additive policy, and regenerate the model documentation. Calibrated node scores and low-confidence caps are untouched.
+
+- [ ] **Signed off** (maintainer)
+
+### D739 — Keep source recovery claims within the live word guard
+
+F06's Overruns sentence remains omitted; alternate full-page segmentation reads only a damaged version. F08's tested values remain recognition errors. F16 has a recorded line retry containing the correct 4,423,867.15, but the existing equal-word-count adoption guard retains the split, incorrect incumbent. F19's minus is visible in source pixels but absent in both the first and body-ink readings. Full-page PSM 6/11/12 alternatives and a source crop do not reliably recover that sign. Do not manufacture punctuation, rewrite amounts from expected answers, relax recognition confidence, or remove real rules.
+
+All four non-receipt targets belong to the task's literal zero-loss/zero-gain control set. Apply the task's literal zero-loss/zero-gain guard to these samples; preserve their words and record these acceptance failures openly. No table, tagtable or nftable changes are made. Retaining better accounting or an isolated receipt total does not close these source-recovery defects. The coordinator commits; this task makes no commit.
+
+- [ ] **Signed off** (maintainer)
+
+### D740 — Bound unread-ink checks to their page's evidence
+
+Use D703's explicit first/last page ranges for OCR words and rules, retaining the page predicate inside each range. This avoids repeatedly scanning the entire document for each trace. The range builder supports interleaved fixture rows: words or rules on another page cannot cover the trace, and a final same-page reading cannot be skipped. Add that ownership law before changing the lookup. The predicate, threshold, ledger values, OCR requests and reconstruction remain unchanged; no live speed claim is made on the shared machine. The optimization is confined to the new diagnostic after occurrence accounting.
+
+- [ ] **Signed off** (maintainer)
+
+### D741 — Bind the enlarged block reading to its pixel hash
+
+The retarget protocol gate correctly rejected the prototype's block request when its current raster was a kin-made enlarged view: it named the view without its two hash cells. Keep the gate intact. Decoded rasters still use the ordinary bitmap request; enlarged views use `sc-request-view-psm` and the actual bitmap's hash. Add a law asserting source-view ownership, PSM 6, both hash cells and changed request identity after one changed source pixel. Refresh the affected live recordings and replay fixtures, retaining their original recordings for comparison. The OCR pixels, segmentation, language, source-copy rules and adoption policy are unchanged.
+
+- [ ] **Signed off** (maintainer)
+
+### D742 — Batch 13 validation and every moved replay digest
+
+All 15 required final gates pass; Go, Rust, Java and C# each run 1,266 laws (nine added). Accuracy checks 3,449 metrics without a ratchet change; 232 Models agree across hosts. Samples are unchanged. All eight calibration rebaseline passes change zero rows. The frozen receipt baseline, scoreboard and table modules are untouched. Full live paired controls cover 54 documents and 817 pages, including both Berkshire inputs: zero words lost; only F12 gains Small, 0 and 50.000 under D716. The other 53 body/furniture/page trees are identical to HEAD. The full Arabic booklet also reproduces its Model byte for byte after page-range indexing.
+
+Audit all five moved replay digests against both HEAD and the retained candidate, reproducing both frozen hashes. Retarget ovl-h-numbered adds one unscored unread-ink region; ovl-watermark-draft adds 70; sealpx ovl-seal-over-text adds ten. Those three change only the diagnostic: body, furniture, pages and OCR evidence remain identical. Retarget receipt-empty changes evidence for one additional empty PSM 6 reading, without changing Model words or ownership. Retarget receipt-photo changes evidence for the additional reading and substitutes five source-backed words: vou: → your, studs → study, tor → for, betore → before and tigure → figure. All five resulting words occur in its h-plain gold; fusion choice ranges retain their recorded source words and boxes. Its existing other token moves within the first paragraph through the selected source range; furniture and pages remain identical. These synthetic receipt fixtures are outside the live control population. Only their two transcripts are refreshed, each adding the new reading while retaining prior answers and bitmap files. No other golden or sample moves.
+
+On the same frozen 60+60 receipt populations, SROIE precision .6816742393 → .6820745632 and CORD .4200000000 → .4223602484; recall .7035668609 → .7045616030 and .5530474041 → .5628291949. Numeric matches rise 1,319 → 1,324 and 247 → 253; CORD line items 21 → 22/151. Two SROIE and four CORD documents nevertheless have lower per-document gold-match counts; aggregate gains do not imply universal improvement. All 61 photo live bundles replay byte for byte. Non-photo replay uses documented subsets of earlier live recordings that omit only the rejected prototype request, preserving originals. Eighteen enlarged photo requests were re-recorded with pixel hashes; every full bundle remains byte-identical to its pre-hash result. Existing 18 receipt contracts pass.
+
+This is partial retention. Live grades remain E04/F12 broken and F06/F08/F16/F19 poor. F12's exact total is retained with its source identity and box; item rows remain incomplete. E04's incorrect thermal alternatives are rejected. The four non-receipt source-recovery defects remain open under the literal control guard. The trace diagnostic remains incomplete and cannot certify source coverage. Detailed before/after judgments, protocol provenance, five-digest audit and final gate logs are in emon-scratch/b13; b13-report.md records the handoff. No commit is made.
+
+- [ ] **Signed off** (maintainer)

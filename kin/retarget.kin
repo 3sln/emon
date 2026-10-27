@@ -34,7 +34,7 @@
   (:require [emon.lang :refer [I32 Cells Bitmap BitmapSet i64 i32]]
             [emon.port :refer [cells-len cells-at cells-set cells-push bms-put bms-get bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8
                                bitmap-gray-into bitmap-hash bitmap-quarter-into bitmap-lut-into]]
-            [emon.plan :refer [an-ocr-count an-ocr-first aw-next aw-get aw-w aw-h aw-conf rq-render an-find an-ok an-arg pu-id pu-view-id pi-decode pi-ocr pi-render-text-only lay-text-only]]
+            [emon.plan :refer [an-ocr-count an-ocr-first aw-next aw-get aw-w aw-h aw-conf rq-render an-find an-ok an-arg view-base pu-id pu-view-id pi-decode pi-ocr pi-render-text-only lay-text-only]]
             [emon.evidence :refer [ik-count ik-get ikf-count ikf-role ir-body ir-light ir-color ir-background
                                    co-count co-get cf-page cf-pxx cf-pxy cf-pxw cf-pxh cf-fill cf-holes cf-gray cf-ink cf-conf
                                    ol-new ol-set olf-run olf-retry-gap tlf-ink tlf-conf ol-get ow-get ow-count ol-count or-get or-set or-count fe-get xo-body-share rl-count rl-get rlf-page rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1
@@ -85,6 +85,7 @@
 (defn ^I32 rt-native-empty-priority [] (comment "Existing OCR empty-line crops precede traced gaps: this bonus exceeds the largest admitted empty-line area (144000 square points).") (return 1000000))
 
 ;; ids (page-local `k`, `pu-id`): 16-127 are OCR (`pi-ocr`'s range), 128 and up crops and later kinds
+(defn ^:pub ^I32 ri-receipt-block [] (return 22))
 (defn ^:pub ^I32 ri-receipt [] (return 31))
 (defn ^:pub ^I32 rv-receipt [] (return 41))
 (defn ^:pub ^I32 rtp-receipt [] (return 251))
@@ -862,6 +863,19 @@
         (cells-set rtp (rtp-receipt-win) (rt-receipt-wins (up-receipt-score ans first) (up-receipt-score ans a)))))
     (return 1)))
 
+(defn ^:pub ^I32 rt-ask-receipt-block [^I32 page ^I32 raster ^I32 dpi ^I32 turns ^Cells ans ^Cells loc ^BitmapSet bms ^:mut ^Cells rtp ^:mut ^Cells rq]
+  (comment "D737 trial: one additional segmentation of the original raster; recorded evidence only, never a primary-page adoption.")
+  (if (!= (cells-at rtp (rtp-source-deferred)) 0) (return 0))
+  (if (!= turns 0) (return 0))
+  (if (!= (cells-at rtp (rtp-trigger)) 1) (return 0))
+  (if (>= (an-find ans (pu-id page (ri-receipt-block))) 0) (return 0))
+  (if (>= raster (view-base))
+    (do (bitmap-hash (bms-get bms raster) rtp (rtp-hash))
+        (sc-request-view-psm rq (pu-id page (ri-receipt-block)) raster
+                             (cells-at rtp (rtp-hash)) (cells-at rtp (+ (rtp-hash) 1)) 6 dpi loc))
+    (sc-request-at rq (pu-id page (ri-receipt-block)) raster 6 dpi 0 0 0 0 loc))
+  (return 1))
+
 (defn ^:pub ^I32 rt-plan [^I32 page ^I32 input ^I32 born ^I32 wanttext ^I32 rid ^I32 dpi ^Cells loc ^Cells ans ^BitmapSet bms ^I32 k0
                           ^Bitmap src ^:mut ^Cells ws ^:mut ^Cells oruns ^I32 run ^:mut ^Cells olines ^Cells owords ^Cells rules ^Cells tlines
                           ^:mut ^Cells rtp ^:mut ^Cells rq ^:mut ^Cells scr ^Cells comps ^Cells inks ^:mut ^Cells pixels]
@@ -877,6 +891,7 @@
     (if (== born 0) (cells-set rtp (rtp-trigger) (cells-at ws 12906)))
     (if (and (== born 0) (and (== q 0) (== (rt-receipt-active rtp) 1)))
       (set asked (+ asked (rt-ask-receipt page dpi k0 loc ans bms ws rtp rq pixels run oruns))))
+    (if (== born 0) (set asked (+ asked (rt-ask-receipt-block page rid dpi q ans loc bms rtp rq))))
     (if (and (== q 0) (== born 0)) (rt-gap-lines (+ page 1) dpi tlines oruns run olines owords inks))
     (if (== q 0)
       (set touched (rt-measure page bms k0 src ws dpi oruns run olines owords scr rtp comps inks)))
@@ -1004,6 +1019,13 @@
         (do (set run (sc-answer ans a pg srcview id lang views epages etext oruns oblocks olines owords osyms oalts feats))
             (rt-run-meta oruns run (op-body-ink) 3 3 0 0 0 0)
             (cells-set rtp (rtp-brun) run)
+            (set made (+ made 1)))))
+    (set id (pu-id page (ri-receipt-block)))
+    (set a (an-find ans id))
+    (if (>= a 0)
+      (if (== (an-ok ans a) 1)
+        (do (set run (sc-answer ans a pg srcview id lang views epages etext oruns oblocks olines owords osyms oalts feats))
+            (rt-run-meta oruns run (op-receipt) 3 6 0 0 0 0)
             (set made (+ made 1)))))
     (set id (pu-id page (ri-receipt)))
     (set a (an-find ans id))

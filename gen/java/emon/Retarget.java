@@ -121,6 +121,9 @@ public final class Retarget {
         // Existing OCR empty-line crops precede traced gaps: this bonus exceeds the largest admitted empty-line area (144000 square points).
         return 1000000;
     }
+    public static int riReceiptBlock() {
+        return 22;
+    }
     public static int riReceipt() {
         return 31;
     }
@@ -1254,6 +1257,28 @@ public final class Retarget {
         }
         return 1;
     }
+    public static int rtAskReceiptBlock(int page, int raster, int dpi, int turns, emon.Port.Cells ans, emon.Port.Cells loc, emon.Port.BitmapSet bms, emon.Port.Cells rtp, emon.Port.Cells rq) {
+        // D737 trial: one additional segmentation of the original raster; recorded evidence only, never a primary-page adoption.
+        if (emon.Port.cellsAt(rtp, rtpSourceDeferred()) != 0) {
+            return 0;
+        }
+        if (turns != 0) {
+            return 0;
+        }
+        if (emon.Port.cellsAt(rtp, rtpTrigger()) != 1) {
+            return 0;
+        }
+        if (Plan.anFind(ans, Plan.puId(page, riReceiptBlock())) >= 0) {
+            return 0;
+        }
+        if (raster >= Plan.viewBase()) {
+            emon.Port.bitmapHash(emon.Port.bmsGet(bms, raster), rtp, rtpHash());
+            Scan.scRequestViewPsm(rq, Plan.puId(page, riReceiptBlock()), raster, emon.Port.cellsAt(rtp, rtpHash()), emon.Port.cellsAt(rtp, rtpHash() + 1), 6, dpi, loc);
+        } else {
+            Scan.scRequestAt(rq, Plan.puId(page, riReceiptBlock()), raster, 6, dpi, 0, 0, 0, 0, loc);
+        }
+        return 1;
+    }
     public static int rtPlan(int page, int input, int born, int wanttext, int rid, int dpi, emon.Port.Cells loc, emon.Port.Cells ans, emon.Port.BitmapSet bms, int k0, emon.Port.Bitmap src, emon.Port.Cells ws, emon.Port.Cells oruns, int run, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells rules, emon.Port.Cells tlines, emon.Port.Cells rtp, emon.Port.Cells rq, emon.Port.Cells scr, emon.Port.Cells comps, emon.Port.Cells inks, emon.Port.Cells pixels) {
         // Decide and ask what is not yet answered, in the brief's order: the table cells and the lines, the text-only render and its OCR, the body-ink view,
         // the quarter-turned view. `page` is 0-based (ids), `rid` the request id of the raster `src` that the first pass read at `dpi`, `k0` the id group
@@ -1269,6 +1294,9 @@ public final class Retarget {
         }
         if ((born == 0) && ((q == 0) && (rtReceiptActive(rtp) == 1))) {
             asked += rtAskReceipt(page, dpi, k0, loc, ans, bms, ws, rtp, rq, pixels, run, oruns);
+        }
+        if (born == 0) {
+            asked += rtAskReceiptBlock(page, rid, dpi, q, ans, loc, bms, rtp, rq);
         }
         if ((q == 0) && (born == 0)) {
             rtGapLines(page + 1, dpi, tlines, oruns, run, olines, owords, inks);
@@ -1425,6 +1453,15 @@ public final class Retarget {
                 run = Scan.scAnswer(ans, a, pg, srcview, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
                 rtRunMeta(oruns, run, Evidence.opBodyInk(), 3, 3, 0, 0, 0, 0);
                 emon.Port.cellsSet(rtp, rtpBrun(), run);
+                made += 1;
+            }
+        }
+        id = Plan.puId(page, riReceiptBlock());
+        a = Plan.anFind(ans, id);
+        if (a >= 0) {
+            if (Plan.anOk(ans, a) == 1) {
+                run = Scan.scAnswer(ans, a, pg, srcview, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+                rtRunMeta(oruns, run, Evidence.opReceipt(), 3, 6, 0, 0, 0, 0);
                 made += 1;
             }
         }

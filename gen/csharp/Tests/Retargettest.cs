@@ -859,4 +859,61 @@ public static class Retargettest {
         emon.Port.CellsSet(rtp, Retarget.RtpTrigger(), 2);
         emon.Testport.AssertEq(Retarget.RtReceiptActive(rtp), 0, "thermal lane remains reverted");
     }
+    [Xunit.Fact]
+    public static void TestReceiptBlockRequestOwnsTheOriginalRasterAndDoesNotSelectIt() {
+        emon.Port.Cells rq = emon.Port.NewCells();
+        emon.Port.Cells rtp = emon.Port.NewCells();
+        emon.Port.Cells ans = emon.Port.NewCells();
+        emon.Port.Cells loc = emon.Port.NewCells();
+        Retarget.RtPrep(rtp);
+        Retarget.RtReceiptSource(rtp, 1);
+        emon.Port.CellsSet(rtp, Retarget.RtpTrigger(), 1);
+        emon.Testport.AssertEq(Retarget.RtAskReceiptBlock(0, 260, 300, 0, ans, loc, emon.Port.NewBitmapSet(), rtp, rq), 1, "photo image gets one alternative");
+        emon.Testport.AssertEq(Plan.RecCount(rq), 1, "one bounded request");
+        emon.Testport.AssertEq(Plan.RecId(rq, 0), 278, "request 22 is independent of script retry 28");
+        emon.Testport.AssertEq(Plan.RqArg(rq, 0, 0), 260, "source raster owns the read");
+        emon.Testport.AssertEq(Plan.RqArg(rq, 0, 1), 6, "block segmentation");
+        emon.Testport.AssertEq(emon.Port.CellsAt(rtp, Retarget.RtpPrimary()), -1, "a request cannot adopt a reading");
+    }
+    [Xunit.Fact]
+    public static void TestReceiptBlockRequestDoesNotReadPdfOrTurnedOrUnclassifiedPages() {
+        emon.Port.Cells rq = emon.Port.NewCells();
+        emon.Port.Cells rtp = emon.Port.NewCells();
+        emon.Port.Cells ans = emon.Port.NewCells();
+        emon.Port.Cells loc = emon.Port.NewCells();
+        Retarget.RtPrep(rtp);
+        Retarget.RtReceiptSource(rtp, 2);
+        emon.Port.CellsSet(rtp, Retarget.RtpTrigger(), 2);
+        emon.Testport.AssertEq(Retarget.RtAskReceiptBlock(0, 260, 300, 0, ans, loc, emon.Port.NewBitmapSet(), rtp, rq), 0, "PDF scan excluded");
+        Retarget.RtReceiptSource(rtp, 1);
+        emon.Testport.AssertEq(Retarget.RtAskReceiptBlock(0, 260, 300, 0, ans, loc, emon.Port.NewBitmapSet(), rtp, rq), 0, "thermal lane rejected after wrong source amounts");
+        emon.Port.CellsSet(rtp, Retarget.RtpTrigger(), 1);
+        emon.Testport.AssertEq(Retarget.RtAskReceiptBlock(0, 260, 300, 1, ans, loc, emon.Port.NewBitmapSet(), rtp, rq), 0, "turned page excluded");
+        emon.Port.CellsSet(rtp, Retarget.RtpTrigger(), 0);
+        emon.Testport.AssertEq(Retarget.RtAskReceiptBlock(0, 260, 300, 0, ans, loc, emon.Port.NewBitmapSet(), rtp, rq), 0, "unclassified excluded");
+        emon.Testport.AssertEq(Plan.RecCount(rq), 0, "no speculative requests");
+    }
+    [Xunit.Fact]
+    public static void TestReceiptBlockViewRequestCarriesTheActualPixelHash() {
+        emon.Port.Cells rq = emon.Port.NewCells();
+        emon.Port.Cells rq2 = emon.Port.NewCells();
+        emon.Port.Cells rtp = emon.Port.NewCells();
+        emon.Port.Cells ans = emon.Port.NewCells();
+        emon.Port.Cells loc = emon.Port.NewCells();
+        emon.Port.BitmapSet bms = emon.Port.NewBitmapSet();
+        int vid = Plan.PuViewId(0, 120);
+        emon.Port.BmsPut(bms, vid, 5, 5, 1);
+        Retarget.RtPrep(rtp);
+        Retarget.RtReceiptSource(rtp, 1);
+        emon.Port.CellsSet(rtp, Retarget.RtpTrigger(), 1);
+        emon.Testport.AssertEq(Retarget.RtAskReceiptBlock(0, vid, 300, 0, ans, loc, bms, rtp, rq), 1, "one read of the enlarged raster");
+        emon.Testport.AssertEq(Plan.RqArg(rq, 0, 0), vid, "the enlarged raster owns the read");
+        emon.Testport.AssertEq(Plan.RqArg(rq, 0, 1), 6, "the view keeps block segmentation");
+        emon.Testport.AssertEq(Plan.RqNargs(rq, 0), 9, "a view request includes both hash cells");
+        int hi = Plan.RqArg(rq, 0, 7);
+        int lo = Plan.RqArg(rq, 0, 8);
+        emon.Port.BitmapSetU8(emon.Port.BmsGet(bms, vid), 0, 0, 0, 255);
+        Retarget.RtAskReceiptBlock(0, vid, 300, 0, ans, loc, bms, rtp, rq2);
+        emon.Testport.AssertThat((hi != Plan.RqArg(rq2, 0, 7)) || (lo != Plan.RqArg(rq2, 0, 8)), "one changed source pixel changes this request's identity");
+    }
 }

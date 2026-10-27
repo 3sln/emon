@@ -446,6 +446,7 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 	}
 	scan.ScWriteRejectedOcr(ev.Oruns, m.Pages, m.Nodes, m.Regions, m.Text, m.Ledger, s.S0, s.S1, s.S2)
 	ocrledger.OcAccount(ev.Oruns, ev.Owords, d.Et, m.Nodes, m.Regions, d.Mask, m.Ledger, m.Text, s.S0, s.S1, s.S2, s.S3, s.S4, s.S5)
+	ocrledger.OcInkAccount(ev.Tlines, ev.Inks, ev.Owords, ev.Rules, d.Mask, m.Ledger, s.S0, s.S1)
 	if kind == 0 {
 		if c.Level == 2 {
 			pending = 1

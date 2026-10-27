@@ -494,7 +494,8 @@
             "ocr-empty",
             "ocr-unrepresented",
             "figure-unmeasured",
-            "figure-signature-unmeasured"
+            "figure-signature-unmeasured",
+            "ocr-unread-ink"
           ]
         },
         "page": {

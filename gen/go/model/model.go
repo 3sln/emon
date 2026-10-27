@@ -1459,6 +1459,9 @@ func DrFigureUnmeasured() int32 {
 func DrFigureSignatureUnmeasured() int32 {
 	return 16
 }
+func DrOcrUnreadInk() int32 {
+	return 17
+}
 func DrEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "watermark")
@@ -1522,6 +1525,10 @@ func DrEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 16 {
 		port.TextAscii(t, "figure-signature-unmeasured")
+		return 1
+	}
+	if code == 17 {
+		port.TextAscii(t, "ocr-unread-ink")
 		return 1
 	}
 	return 0

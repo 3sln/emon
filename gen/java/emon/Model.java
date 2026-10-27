@@ -1442,6 +1442,9 @@ public final class Model {
     public static int drFigureSignatureUnmeasured() {
         return 16;
     }
+    public static int drOcrUnreadInk() {
+        return 17;
+    }
     public static int drEmitName(StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.textAscii(t, "watermark");
@@ -1505,6 +1508,10 @@ public final class Model {
         }
         if (code == 16) {
             emon.Port.textAscii(t, "figure-signature-unmeasured");
+            return 1;
+        }
+        if (code == 17) {
+            emon.Port.textAscii(t, "ocr-unread-ink");
             return 1;
         }
         return 0;
