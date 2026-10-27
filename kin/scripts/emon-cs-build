@@ -24,6 +24,9 @@
 # the arm out on purpose). The project targets the SDK's own framework (net8.0, net9.0, net10.0 ...). A BUILD FAILURE OTHER THAN THE SDK'S
 # ABSENCE EXITS 1 and fails the gate.
 #
+# THE COMPILER SERVER: builds share Roslyn's server (`UseSharedCompilation`) unless EMON_CS_SHARED_COMPILATION=false. A server
+# started inside another sandbox cannot write this tree (CS2012), so sandboxed or parallel agents set it to false.
+#
 # THE NATIVE BINDINGS (pdfium, Tesseract) are .NET P/Invoke: the libraries are found at RUN time (EMON_PDFIUM_LIB,
 # EMON_TESS_LIB), so nothing here links them and no gate needs them. DEVLOG D454.
 set -e
@@ -104,7 +107,7 @@ lint=""
 [ "${EMON_CS_LINT:-}" = 1 ] && lint="--no-incremental"
 
 # msbuild's own up-to-date check makes this cheap when nothing changed
-out=$("$DOTNET" build "$mod/emon-cs.csproj" -c Release -o "$mod/out" --nologo -v q -clp:NoSummary -p:UseSharedCompilation=true $lint 2>&1) || {
+out=$("$DOTNET" build "$mod/emon-cs.csproj" -c Release -o "$mod/out" --nologo -v q -clp:NoSummary -p:UseSharedCompilation=${EMON_CS_SHARED_COMPILATION:-true} $lint 2>&1) || {
   echo "$out" | head -80 >&2
   echo "emon-cs: build failed" >&2
   exit 1
