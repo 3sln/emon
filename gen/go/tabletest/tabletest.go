@@ -4327,3 +4327,557 @@ func TestCaptionedDisconnectedPanelsOwnTheirLabelsBeforeTables(emonT *testing.T)
 	ttAt(wd, ln, et, port.TextBlob("Alignment"), 15500, 32500, 0, 0)
 	port.AssertEq(emonT, ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 0, "one captioned diagram owns all panel labels; there are zero tables")
 }
+
+func TestAdjacentAmountHeadersBindToTheirOwnValues(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var tbo *port.Cells = port.NewCells()
+	var r int32 = 0
+	var c int32 = 0
+	var debit int32 = -1
+	var credit int32 = -1
+	ttAt(wd, ln, et, port.TextBlob("Details"), 7600, 10000, 1, 0)
+	ttWord(wd, ln, et, port.TextBlob("Debit"), 27160, 10000, 35320, 10800, 1)
+	ttWord(wd, ln, et, port.TextBlob("Credit"), 35920, 10000, 45960, 10800, 1)
+	ttAt(wd, ln, et, port.TextBlob("Balance"), 56600, 10000, 1, 1)
+	for r < 6 {
+		ttAt(wd, ln, et, port.TextBlob("Transfer"), 7600, 12500+(r*2200), 0, 0)
+		ttAt(wd, ln, et, port.TextBlob("15.00"), 35320, 12500+(r*2200), 0, 1)
+		ttAt(wd, ln, et, port.TextBlob("20.00"), 45960, 12500+(r*2200), 0, 1)
+		ttAt(wd, ln, et, port.TextBlob("100.00"), 56600, 12500+(r*2200), 0, 1)
+		r += 1
+	}
+	port.AssertEq(emonT, ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one four-column ledger owns every value once")
+	port.AssertEq(emonT, port.CellsAt(tb, 8), 4, "headers do not change amount cuts")
+	c = port.CellsAt(tb, 9)
+	for c < (port.CellsAt(tb, 9) + port.CellsAt(tb, 10)) {
+		if port.CellsAt(tc, c*16) == 0 {
+			if port.CellsAt(tc, (c*16)+1) == 1 {
+				debit = c
+			}
+			if port.CellsAt(tc, (c*16)+1) == 2 {
+				credit = c
+			}
+		}
+		c += 1
+	}
+	port.AssertThat(emonT, debit >= 0, "debit header cell exists")
+	port.AssertThat(emonT, credit >= 0, "credit header cell exists")
+	if (debit >= 0) && (credit >= 0) {
+		port.AssertEq(emonT, port.CellsAt(tc, (debit*16)+9), 1, "Debit owns only its own header word")
+		port.AssertEq(emonT, port.CellsAt(tw, port.CellsAt(tc, (debit*16)+8)), 1, "Debit is over 15.00")
+		port.AssertEq(emonT, port.CellsAt(tc, (credit*16)+9), 1, "Credit is not an empty header")
+		if port.CellsAt(tc, (credit*16)+9) > 0 {
+			port.AssertEq(emonT, port.CellsAt(tw, port.CellsAt(tc, (credit*16)+8)), 2, "Credit is over 20.00")
+		}
+	}
+}
+
+func TestASpanningTotalDoesNotCreateAnExtraLeadingColumn(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var tbo *port.Cells = port.NewCells()
+	var r int32 = 0
+	ttAt(wd, ln, et, port.TextBlob("Industry"), 7600, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("2023"), 32000, 10000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("2022"), 43000, 10000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("Total nonfarm"), 5500, 12500, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("158,424"), 32000, 12500, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("159,734"), 43000, 12500, 0, 1)
+	for r < 6 {
+		ttAt(wd, ln, et, port.TextBlob("Manufacturing"), 7600, 15000+(r*2200), 0, 0)
+		ttAt(wd, ln, et, port.TextBlob("100.00"), 32000, 15000+(r*2200), 0, 1)
+		ttAt(wd, ln, et, port.TextBlob("200.00"), 43000, 15000+(r*2200), 0, 1)
+		r += 1
+	}
+	port.AssertEq(emonT, ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one table owns all total and industry values once")
+	port.AssertEq(emonT, port.CellsAt(tb, 8), 3, "the indented Industry and spanning Total share one stub column")
+}
+
+func TestOneGenuineSpanningAmountHeaderRemainsASpanner(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var tbo *port.Cells = port.NewCells()
+	var r int32 = 0
+	var c int32 = 0
+	var found int32 = 0
+	ttAt(wd, ln, et, port.TextBlob("Kind"), 7600, 10000, 1, 0)
+	ttWord(wd, ln, et, port.TextBlob("Combined"), 27160, 10000, 33000, 10800, 1)
+	ttWord(wd, ln, et, port.TextBlob("Amounts"), 33500, 10000, 45960, 10800, 1)
+	for r < 6 {
+		ttAt(wd, ln, et, port.TextBlob("Transfer"), 7600, 12500+(r*2200), 0, 0)
+		ttAt(wd, ln, et, port.TextBlob("15.00"), 35320, 12500+(r*2200), 0, 1)
+		ttAt(wd, ln, et, port.TextBlob("20.00"), 45960, 12500+(r*2200), 0, 1)
+		r += 1
+	}
+	port.AssertEq(emonT, ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one grouped amount table")
+	c = port.CellsAt(tb, 9)
+	for c < (port.CellsAt(tb, 9) + port.CellsAt(tb, 10)) {
+		if (port.CellsAt(tc, c*16) == 0) && (port.CellsAt(tc, (c*16)+9) > 0) {
+			if port.CellsAt(tw, port.CellsAt(tc, (c*16)+8)) == 1 {
+				found += 1
+				port.AssertEq(emonT, port.CellsAt(tc, (c*16)+3), 2, "a single Amounts label still owns both numeric columns")
+			}
+		}
+		c += 1
+	}
+	port.AssertEq(emonT, found, 1, "the spanning label retains exactly one owner")
+}
+
+func TestMerchantSublinesStayInTheirDatedParentRows(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	var r int32 = 0
+	ttRule(pa, 7000, 9500, 50000, 9550)
+	ttAt(wd, ln, et, port.TextBlob("PostDate"), 7600, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("TransDate"), 15000, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Description"), 26000, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Amount"), 49000, 10000, 1, 1)
+	ttRule(pa, 7000, 11500, 50000, 11550)
+	for r < 4 {
+		ttAt(wd, ln, et, port.TextBlob("09/01"), 7600, 13000+(r*5000), 0, 0)
+		ttAt(wd, ln, et, port.TextBlob("09/01"), 15000, 13000+(r*5000), 0, 0)
+		ttAt(wd, ln, et, port.TextBlob("Merchant"), 26000, 13000+(r*5000), 0, 0)
+		ttAt(wd, ln, et, port.TextBlob("15.00"), 49000, 13000+(r*5000), 0, 1)
+		ttAt(wd, ln, et, port.TextBlob("Reference"), 30000, 14200+(r*5000), 0, 0)
+		ttAt(wd, ln, et, port.TextBlob("Submerchant"), 26000, 15400+(r*5000), 0, 0)
+		ttAt(wd, ln, et, port.TextBlob("0.00"), 49000, 15400+(r*5000), 0, 1)
+		r += 1
+	}
+	ttAt(wd, ln, et, port.TextBlob("Unrelated prose"), 7600, 35000, 0, 0)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "ledger evidence is well formed")
+	port.AssertText(emonT, t, "T4w;Gh;R;Ch[PostDate];Ch[TransDate];Ch[Description];Ch[Amount];Gb;R;C[09/01];C[09/01];C[Merchant Reference Submerchant];C[15.00 0.00];R;C[09/01];C[09/01];C[Merchant Reference Submerchant];C[15.00 0.00];R;C[09/01];C[09/01];C[Merchant Reference Submerchant];C[15.00 0.00];R;C[09/01];C[09/01];C[Merchant Reference Submerchant];C[15.00 0.00];P[Unrelated prose];", "every merchant subline belongs to its preceding dated row and prose remains outside")
+}
+
+func TestAWrappedChangeHeaderDoesNotAddATrailingDataColumn(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var tbo *port.Cells = port.NewCells()
+	var r int32 = 0
+	var q int32 = 0
+	ttWord(wd, ln, et, port.TextBlob("Unadjusted"), 25672, 7017, 33164, 7712, 0)
+	ttWord(wd, ln, et, port.TextBlob("Adjusted"), 44361, 7017, 50650, 7712, 0)
+	ttWord(wd, ln, et, port.TextBlob("Industry"), 11202, 8713, 13687, 9408, 0)
+	for q < 8 {
+		ttWord(wd, ln, et, port.TextBlob("Aug."), 22668+(q*4020), 8838, 24105+(q*4020), 9533, 0)
+		ttWord(wd, ln, et, port.TextBlob("2026"), 22610+(q*4020), 9636, 24163+(q*4020), 10331, 0)
+		q += 1
+	}
+	ttWord(wd, ln, et, port.TextBlob("Change"), 54321, 8189, 56767, 8884, 0)
+	ttWord(wd, ln, et, port.TextBlob("from:"), 54748, 8888, 56339, 9583, 0)
+	ttWord(wd, ln, et, port.TextBlob("July2026"), 53914, 9586, 56709, 10281, 0)
+	ttWord(wd, ln, et, port.TextBlob("-"), 56942, 9586, 57174, 10281, 0)
+	ttWord(wd, ln, et, port.TextBlob("Aug.2026"), 53896, 10204, 57191, 10980, 0)
+	for r < 12 {
+		ttWord(wd, ln, et, port.TextBlob("Industry"), 4490, 12056+(r*963), 21100, 12751+(r*963), 0)
+		q = 0
+		for q < 8 {
+			ttWord(wd, ln, et, port.TextBlob("100,000"), 21834+(q*4020), 12056+(r*963), 24359+(q*4020), 12751+(r*963), 0)
+			q += 1
+		}
+		ttWord(wd, ln, et, port.TextBlob("127"), 54673, 12056+(r*963), 55838, 12751+(r*963), 0)
+		r += 1
+	}
+	r = 0
+	for r < evidence.WdCount(wd) {
+		evidence.WdSet(wd, r, evidence.WfSize(), 700)
+		r += 1
+	}
+	port.AssertEq(emonT, ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one table owns every original count once")
+	port.AssertEq(emonT, port.CellsAt(tb, 8), 10, "one stub plus nine value columns; the wrapped header adds no data column")
+}
+
+func TestUnboldedDemographicGroupsOwnRowsAboveTheirValues(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var tbo *port.Cells = port.NewCells()
+	var r int32 = 0
+	var q int32 = 0
+	var c int32 = 0
+	var groups int32 = 0
+	ttAt(wd, ln, et, port.TextBlob("Status"), 7600, 10000, 1, 0)
+	for q < 6 {
+		ttAt(wd, ln, et, port.TextBlob("2026"), 24000+(q*5000), 10000, 1, 1)
+		q += 1
+	}
+	ttAt(wd, ln, et, port.TextBlob("TOTAL"), 7600, 12500, 0, 0)
+	for r < 6 {
+		if r == 3 {
+			ttAt(wd, ln, et, port.TextBlob("WHITE"), 7600, 13500+(r*2200), 0, 0)
+		}
+		ttAt(wd, ln, et, port.TextBlob("Civilian"), 7600, 14500+(r*2200), 0, 0)
+		q = 0
+		for q < 6 {
+			ttAt(wd, ln, et, port.TextBlob("100.00"), 24000+(q*5000), 14500+(r*2200), 0, 1)
+			q += 1
+		}
+		r += 1
+	}
+	port.AssertEq(emonT, ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one statistical table owns all six value columns")
+	port.AssertEq(emonT, port.CellsAt(tb, 8), 7, "no group creates a phantom numeric column")
+	c = port.CellsAt(tb, 9)
+	for c < (port.CellsAt(tb, 9) + port.CellsAt(tb, 10)) {
+		if (port.CellsAt(tc, c*16) > 0) && (port.CellsAt(tc, (c*16)+9) == 1) {
+			if (port.CellsAt(tw, port.CellsAt(tc, (c*16)+8)) == 7) || (port.CellsAt(tw, port.CellsAt(tc, (c*16)+8)) == 29) {
+				groups += 1
+				port.AssertEq(emonT, port.CellsAt(tc, (c*16)+3), 7, "the group label has its own full-width row")
+			}
+		}
+		c += 1
+	}
+	port.AssertEq(emonT, groups, 2, "TOTAL and WHITE are independent of the following Civilian values")
+}
+
+func ttWordOwner(tb *port.Cells, k int32, tc *port.Cells, tw *port.Cells, word int32) int32 {
+	var first int32 = port.CellsAt(tb, (k*32)+9)
+	var end int32 = first + port.CellsAt(tb, (k*32)+10)
+	var c int32 = first
+	var i int32 = 0
+	for c < end {
+		i = 0
+		for i < port.CellsAt(tc, (c*16)+9) {
+			if port.CellsAt(tw, port.CellsAt(tc, (c*16)+8)+i) == word {
+				return c
+			}
+			i += 1
+		}
+		c += 1
+	}
+	return -1
+}
+
+func TestUppercaseWrappedStubsAreNotDemographicGroups(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var tbo *port.Cells = port.NewCells()
+	var r int32 = 0
+	var q int32 = 0
+	var owner int32 = -1
+	ttAt(wd, ln, et, port.TextBlob("Status"), 7600, 10000, 1, 0)
+	for q < 6 {
+		ttAt(wd, ln, et, port.TextBlob("2026"), 24000+(q*5000), 10000, 1, 1)
+		q += 1
+	}
+	for r < 6 {
+		if r == 3 {
+			ttAt(wd, ln, et, port.TextBlob("GROSS"), 8350, 20100, 0, 0)
+		}
+		ttAt(wd, ln, et, port.TextBlob("DOMESTIC"), 7600, 14500+(r*2200), 0, 0)
+		q = 0
+		for q < 6 {
+			ttAt(wd, ln, et, port.TextBlob("100.00"), 24000+(q*5000), 14500+(r*2200), 0, 1)
+			q += 1
+		}
+		r += 1
+	}
+	port.AssertEq(emonT, ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one table keeps its wrapped uppercase label")
+	owner = ttWordOwner(tb, 0, tc, tw, 28)
+	port.AssertThat(emonT, owner >= 0, "GROSS has a cell owner")
+	if owner >= 0 {
+		port.AssertEq(emonT, port.CellsAt(tc, (owner*16)+3), 1, "an uppercase continuation is not promoted to a spanning group")
+		port.AssertEq(emonT, port.CellsAt(tc, (owner*16)+12), 0, "an uppercase continuation has no proved-section flag")
+	}
+}
+
+func TestALongTwoDateLedgerStopsBeforeABoxedSummary(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var r int32 = 0
+	var k int32 = 0
+	var ledger int32 = -1
+	var owner int32 = -1
+	ttRule(pa, 7000, 7500, 50000, 7550)
+	ttAt(wd, ln, et, port.TextBlob("ACTIVITY"), 7600, 8000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("PostDate"), 7600, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("TransDate"), 15000, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Description"), 26000, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Amount"), 49000, 10000, 1, 1)
+	ttRule(pa, 7000, 11500, 50000, 11550)
+	for r < 8 {
+		ttAt(wd, ln, et, port.TextBlob("09/01"), 7600, 13000+(r*5000), 0, 0)
+		ttAt(wd, ln, et, port.TextBlob("09/01"), 15000, 13000+(r*5000), 0, 0)
+		ttAt(wd, ln, et, port.TextBlob("Merchant"), 26000, 13000+(r*5000), 0, 0)
+		ttAt(wd, ln, et, port.TextBlob("15.00"), 49000, 13000+(r*5000), 0, 1)
+		ttAt(wd, ln, et, port.TextBlob("Reference"), 30000, 14200+(r*5000), 0, 0)
+		ttAt(wd, ln, et, port.TextBlob("Submerchant"), 26000, 15400+(r*5000), 0, 0)
+		ttAt(wd, ln, et, port.TextBlob("0.00"), 49000, 15400+(r*5000), 0, 1)
+		r += 1
+	}
+	ttRule(pa, 23500, 52600, 46000, 52650)
+	ttRule(pa, 23500, 58000, 46000, 58050)
+	ttRule(pa, 23500, 52600, 23550, 58000)
+	ttRule(pa, 45950, 52600, 46000, 58000)
+	ttAt(wd, ln, et, port.TextBlob("Totals"), 24500, 53200, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Fees"), 24500, 54800, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("100.02"), 45000, 54800, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Interest"), 24500, 56300, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("12.43"), 45000, 56300, 0, 1)
+	port.AssertEq(emonT, ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 2, "the ledger and boxed summary have independent owners")
+	for k < (port.CellsLen(tb) / 32) {
+		if ttWordOwner(tb, k, tc, tw, 0) >= 0 {
+			ledger = k
+		}
+		k += 1
+	}
+	port.AssertThat(emonT, ledger >= 0, "the dated ledger survives")
+	if ledger >= 0 {
+		port.AssertEq(emonT, port.CellsAt(tb, (ledger*32)+8), 4, "the ledger keeps four stable columns")
+		r = 0
+		for r < 8 {
+			owner = ttWordOwner(tb, ledger, tc, tw, 7+(r*7))
+			port.AssertThat(emonT, owner >= 0, "the merchant has a parent row")
+			port.AssertEq(emonT, owner, ttWordOwner(tb, ledger, tc, tw, 9+(r*7)), "the reference stays in its merchant cell")
+			port.AssertEq(emonT, owner, ttWordOwner(tb, ledger, tc, tw, 10+(r*7)), "the undated merchant subline stays in its parent cell")
+			port.AssertEq(emonT, ttWordOwner(tb, ledger, tc, tw, 8+(r*7)), ttWordOwner(tb, ledger, tc, tw, 11+(r*7)), "the printed zero remains in the parent amount cell")
+			r += 1
+		}
+		port.AssertEq(emonT, ttWordOwner(tb, ledger, tc, tw, 63), -1, "the summary amount is outside the ledger")
+	}
+}
+
+func ttIndexWord(wd *port.Cells, ln *port.Cells, et *port.Cells, n int32, x int32, y int32, right int32) int32 {
+	if n == 1 {
+		ttAt(wd, ln, et, port.TextBlob("1"), x, y, 0, right)
+		return 0
+	}
+	if n == 2 {
+		ttAt(wd, ln, et, port.TextBlob("2"), x, y, 0, right)
+		return 0
+	}
+	if n == 3 {
+		ttAt(wd, ln, et, port.TextBlob("3"), x, y, 0, right)
+		return 0
+	}
+	if n == 4 {
+		ttAt(wd, ln, et, port.TextBlob("4"), x, y, 0, right)
+		return 0
+	}
+	if n == 5 {
+		ttAt(wd, ln, et, port.TextBlob("5"), x, y, 0, right)
+		return 0
+	}
+	if n == 6 {
+		ttAt(wd, ln, et, port.TextBlob("6"), x, y, 0, right)
+		return 0
+	}
+	if n == 7 {
+		ttAt(wd, ln, et, port.TextBlob("7"), x, y, 0, right)
+		return 0
+	}
+	ttAt(wd, ln, et, port.TextBlob("8"), x, y, 0, right)
+	return 0
+}
+
+func ttNumberedShade(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, base int32) int32 {
+	var r int32 = 0
+	var y int32 = 0
+	ttRule(pa, 7000, base+10000, 7050, base+37600)
+	ttRule(pa, 12000, base+10000, 12050, base+37600)
+	ttRule(pa, 27000, base+10000, 27050, base+37600)
+	ttRule(pa, 38000, base+10000, 38050, base+37600)
+	ttRule(pa, 47000, base+10000, 47050, base+37600)
+	ttRule(pa, 50000, base+10000, 50050, base+37600)
+	ttFill(pa, 7000, base+13800, 50000, base+16600, 14737632)
+	ttFill(pa, 7000, base+21800, 50000, base+24600, 14737632)
+	ttFill(pa, 7000, base+27000, 50000, base+29800, 14737632)
+	ttFill(pa, 7000, base+32200, 50000, base+35000, 14737632)
+	ttAt(wd, ln, et, port.TextBlob("Line"), 7600, base+11000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Item"), 13000, base+11000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("2023"), 32000, base+11000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("2022"), 43000, base+11000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Line"), 49000, base+11000, 0, 1)
+	for r < 8 {
+		y = base + (14000 + (r * 2600))
+		if r >= 2 {
+			y += 2800
+		}
+		ttIndexWord(wd, ln, et, r+1, 8000, y, 0)
+		if r == 1 {
+			ttAt(wd, ln, et, port.TextBlob("Wrapped"), 13000, y, 0, 0)
+			ttIndexWord(wd, ln, et, r+1, 49000, y, 1)
+			ttAt(wd, ln, et, port.TextBlob("and"), 13000, y+1200, 0, 0)
+			ttAt(wd, ln, et, port.TextBlob("Other"), 13000, y+2400, 0, 0)
+			ttAt(wd, ln, et, port.TextBlob("Workers"), 13000, y+3600, 0, 0)
+			ttAt(wd, ln, et, port.TextBlob("100.00"), 32000, y+3600, 0, 1)
+			ttAt(wd, ln, et, port.TextBlob("200.00"), 43000, y+3600, 0, 1)
+		} else {
+			ttAt(wd, ln, et, port.TextBlob("Workers"), 13000, y, 0, 0)
+			ttAt(wd, ln, et, port.TextBlob("100.00"), 32000, y, 0, 1)
+			ttAt(wd, ln, et, port.TextBlob("200.00"), 43000, y, 0, 1)
+			ttIndexWord(wd, ln, et, r+1, 49000, y, 1)
+		}
+		r += 1
+	}
+	return 0
+}
+
+func TestNumberedShadingKeepsTallWhiteRowsAndTheFinalRow(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var c int32 = -1
+	ttNumberedShade(wd, ln, et, pa, 0)
+	port.AssertEq(emonT, ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 1, "one framed numbered table")
+	port.AssertEq(emonT, port.CellsAt(tb, 8), 5, "the two year columns keep their own identities")
+	port.AssertEq(emonT, port.CellsAt(tb, 7), 9, "header and all eight printed row numbers remain coherent")
+	port.AssertEq(emonT, ttWordOwner(tb, 0, tc, tw, 11), ttWordOwner(tb, 0, tc, tw, 15), "the tall white row owns its entire wrapped stub")
+	c = ttWordOwner(tb, 0, tc, tw, 45)
+	port.AssertThat(emonT, c >= 0, "the final unshaded row's 2023 value is owned")
+	if c >= 0 {
+		port.AssertEq(emonT, port.CellsAt(tc, (c*16)+1), 2, "the final 100.00 stays under 2023")
+	}
+	c = ttWordOwner(tb, 0, tc, tw, 46)
+	port.AssertThat(emonT, c >= 0, "the final unshaded row's 2022 value is owned")
+	if c >= 0 {
+		port.AssertEq(emonT, port.CellsAt(tc, (c*16)+1), 3, "the final 200.00 stays under 2022")
+	}
+}
+
+func TestSeparateNumberedFramesRemainSeparateTables(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	ttNumberedShade(wd, ln, et, pa, 0)
+	ttNumberedShade(wd, ln, et, pa, 39000)
+	port.AssertEq(emonT, ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 2, "adjacent independent frames cannot become one table")
+}
+
+func TestANewLedgerHeaderSeparatesAWithdrawalFromAccountTotals(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var k int32 = 0
+	var ledger int32 = -1
+	var amount int32 = -1
+	ttRule(pa, 7000, 9500, 50000, 9550)
+	ttAt(wd, ln, et, port.TextBlob("Total deposits"), 7600, 10000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("2"), 20000, 10000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Total withdrawals"), 30000, 10000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("3"), 49000, 10000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Deposit count"), 7600, 11300, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Withdrawal count"), 30000, 11300, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Deposit amount"), 7600, 13000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("10.00"), 20000, 13000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Withdrawal amount"), 30000, 13000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("20.00"), 49000, 13000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Credits"), 7600, 14300, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Debits"), 30000, 14300, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("USD Savings Account"), 7600, 16000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("817-002"), 49000, 16000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("Date"), 7600, 18000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Details"), 15000, 18000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Deposit"), 32000, 18000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("Withdrawal"), 41000, 18000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("Balance"), 50000, 18000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("D"), 7600, 19200, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("T"), 15000, 19200, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("C"), 32000, 19200, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("W"), 41000, 19200, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("B"), 50000, 19200, 0, 1)
+	ttRule(pa, 7000, 20700, 50000, 20750)
+	ttAt(wd, ln, et, port.TextBlob("20Sep"), 7600, 22000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Payment"), 15000, 22000, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("181.04"), 41000, 22000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("149818.96"), 50000, 22000, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Reference"), 15000, 23200, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Merchant"), 15000, 24400, 0, 0)
+	ttRule(pa, 7000, 26000, 50000, 26050)
+	port.AssertEq(emonT, ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 2, "totals and a newly headed ledger have different owners")
+	for k < (port.CellsLen(tb) / 32) {
+		amount = ttWordOwner(tb, k, tc, tw, 26)
+		if amount >= 0 {
+			ledger = k
+			port.AssertEq(emonT, port.CellsAt(tb, (k*32)+8), 5, "the new ledger has five explicit columns")
+			port.AssertEq(emonT, port.CellsAt(tc, (amount*16)+1), 3, "181.04 belongs under Withdrawal")
+			port.AssertEq(emonT, ttWordOwner(tb, k, tc, tw, 25), ttWordOwner(tb, k, tc, tw, 28), "the transaction owns its reference line")
+			port.AssertEq(emonT, ttWordOwner(tb, k, tc, tw, 25), ttWordOwner(tb, k, tc, tw, 29), "the transaction owns its merchant continuation")
+			port.AssertEq(emonT, ttWordOwner(tb, k, tc, tw, 7), -1, "the ledger does not own the previous account's total")
+			port.AssertEq(emonT, ttWordOwner(tb, k, tc, tw, 12), -1, "the account title is outside the data grid")
+		}
+		k += 1
+	}
+	port.AssertThat(emonT, ledger >= 0, "the first USD transaction retains an independent ledger owner")
+}
+
+func TestLedgerGrowthDoesNotHideUnownedRotatedText(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var r int32 = 0
+	var k int32 = 0
+	var owner int32 = -1
+	ttRule(pa, 7000, 7500, 50000, 7550)
+	ttAt(wd, ln, et, port.TextBlob("ACTIVITY"), 7600, 8000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("PostDate"), 7600, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("TransDate"), 15000, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Description"), 26000, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Amount"), 49000, 10000, 1, 1)
+	ttRule(pa, 7000, 11500, 50000, 11550)
+	for r < 8 {
+		ttAt(wd, ln, et, port.TextBlob("09/01"), 7600, 13000+(r*5000), 0, 0)
+		ttAt(wd, ln, et, port.TextBlob("09/01"), 15000, 13000+(r*5000), 0, 0)
+		ttAt(wd, ln, et, port.TextBlob("Merchant"), 26000, 13000+(r*5000), 0, 0)
+		ttAt(wd, ln, et, port.TextBlob("15.00"), 49000, 13000+(r*5000), 0, 1)
+		ttAt(wd, ln, et, port.TextBlob("Reference"), 30000, 14200+(r*5000), 0, 0)
+		ttAt(wd, ln, et, port.TextBlob("Submerchant"), 26000, 15400+(r*5000), 0, 0)
+		ttAt(wd, ln, et, port.TextBlob("0.00"), 49000, 15400+(r*5000), 0, 1)
+		r += 1
+	}
+	ttAt(wd, ln, et, port.TextBlob("WATERMARK"), 30000, 30000, 0, 0)
+	evidence.WdSet(wd, 61, evidence.HdRot(), 4500)
+	port.AssertEq(emonT, ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 1, "the original ledger remains selected")
+	for k < (port.CellsLen(tb) / 32) {
+		owner = ttWordOwner(tb, k, tc, tw, 61)
+		port.AssertEq(emonT, owner, -1, "rotated context has no amount or description cell owner")
+		k += 1
+	}
+	port.AssertEq(emonT, evidence.LnGet(ln, 61, 15), 0, "unowned rotated context remains outside claimed ledger lines")
+}

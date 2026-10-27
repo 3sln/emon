@@ -4163,4 +4163,543 @@ public final class Tabletest {
         ttAt(wd, ln, et, emon.Testport.textBlob("Alignment"), 15500, 32500, 0, 0);
         emon.Testport.assertEq(ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 0, "one captioned diagram owns all panel labels; there are zero tables");
     }
+    public static void testAdjacentAmountHeadersBindToTheirOwnValues() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells tbo = emon.Port.newCells();
+        int r = 0;
+        int c = 0;
+        int debit = -1;
+        int credit = -1;
+        ttAt(wd, ln, et, emon.Testport.textBlob("Details"), 7600, 10000, 1, 0);
+        ttWord(wd, ln, et, emon.Testport.textBlob("Debit"), 27160, 10000, 35320, 10800, 1);
+        ttWord(wd, ln, et, emon.Testport.textBlob("Credit"), 35920, 10000, 45960, 10800, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Balance"), 56600, 10000, 1, 1);
+        while (r < 6) {
+            ttAt(wd, ln, et, emon.Testport.textBlob("Transfer"), 7600, 12500 + (r * 2200), 0, 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("15.00"), 35320, 12500 + (r * 2200), 0, 1);
+            ttAt(wd, ln, et, emon.Testport.textBlob("20.00"), 45960, 12500 + (r * 2200), 0, 1);
+            ttAt(wd, ln, et, emon.Testport.textBlob("100.00"), 56600, 12500 + (r * 2200), 0, 1);
+            r += 1;
+        }
+        emon.Testport.assertEq(ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one four-column ledger owns every value once");
+        emon.Testport.assertEq(emon.Port.cellsAt(tb, 8), 4, "headers do not change amount cuts");
+        c = emon.Port.cellsAt(tb, 9);
+        while (c < (emon.Port.cellsAt(tb, 9) + emon.Port.cellsAt(tb, 10))) {
+            if (emon.Port.cellsAt(tc, c * 16) == 0) {
+                if (emon.Port.cellsAt(tc, (c * 16) + 1) == 1) {
+                    debit = c;
+                }
+                if (emon.Port.cellsAt(tc, (c * 16) + 1) == 2) {
+                    credit = c;
+                }
+            }
+            c += 1;
+        }
+        emon.Testport.assertThat(debit >= 0, "debit header cell exists");
+        emon.Testport.assertThat(credit >= 0, "credit header cell exists");
+        if ((debit >= 0) && (credit >= 0)) {
+            emon.Testport.assertEq(emon.Port.cellsAt(tc, (debit * 16) + 9), 1, "Debit owns only its own header word");
+            emon.Testport.assertEq(emon.Port.cellsAt(tw, emon.Port.cellsAt(tc, (debit * 16) + 8)), 1, "Debit is over 15.00");
+            emon.Testport.assertEq(emon.Port.cellsAt(tc, (credit * 16) + 9), 1, "Credit is not an empty header");
+            if (emon.Port.cellsAt(tc, (credit * 16) + 9) > 0) {
+                emon.Testport.assertEq(emon.Port.cellsAt(tw, emon.Port.cellsAt(tc, (credit * 16) + 8)), 2, "Credit is over 20.00");
+            }
+        }
+    }
+    public static void testASpanningTotalDoesNotCreateAnExtraLeadingColumn() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells tbo = emon.Port.newCells();
+        int r = 0;
+        ttAt(wd, ln, et, emon.Testport.textBlob("Industry"), 7600, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("2023"), 32000, 10000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("2022"), 43000, 10000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Total nonfarm"), 5500, 12500, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("158,424"), 32000, 12500, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("159,734"), 43000, 12500, 0, 1);
+        while (r < 6) {
+            ttAt(wd, ln, et, emon.Testport.textBlob("Manufacturing"), 7600, 15000 + (r * 2200), 0, 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("100.00"), 32000, 15000 + (r * 2200), 0, 1);
+            ttAt(wd, ln, et, emon.Testport.textBlob("200.00"), 43000, 15000 + (r * 2200), 0, 1);
+            r += 1;
+        }
+        emon.Testport.assertEq(ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one table owns all total and industry values once");
+        emon.Testport.assertEq(emon.Port.cellsAt(tb, 8), 3, "the indented Industry and spanning Total share one stub column");
+    }
+    public static void testOneGenuineSpanningAmountHeaderRemainsASpanner() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells tbo = emon.Port.newCells();
+        int r = 0;
+        int c = 0;
+        int found = 0;
+        ttAt(wd, ln, et, emon.Testport.textBlob("Kind"), 7600, 10000, 1, 0);
+        ttWord(wd, ln, et, emon.Testport.textBlob("Combined"), 27160, 10000, 33000, 10800, 1);
+        ttWord(wd, ln, et, emon.Testport.textBlob("Amounts"), 33500, 10000, 45960, 10800, 1);
+        while (r < 6) {
+            ttAt(wd, ln, et, emon.Testport.textBlob("Transfer"), 7600, 12500 + (r * 2200), 0, 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("15.00"), 35320, 12500 + (r * 2200), 0, 1);
+            ttAt(wd, ln, et, emon.Testport.textBlob("20.00"), 45960, 12500 + (r * 2200), 0, 1);
+            r += 1;
+        }
+        emon.Testport.assertEq(ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one grouped amount table");
+        c = emon.Port.cellsAt(tb, 9);
+        while (c < (emon.Port.cellsAt(tb, 9) + emon.Port.cellsAt(tb, 10))) {
+            if ((emon.Port.cellsAt(tc, c * 16) == 0) && (emon.Port.cellsAt(tc, (c * 16) + 9) > 0)) {
+                if (emon.Port.cellsAt(tw, emon.Port.cellsAt(tc, (c * 16) + 8)) == 1) {
+                    found += 1;
+                    emon.Testport.assertEq(emon.Port.cellsAt(tc, (c * 16) + 3), 2, "a single Amounts label still owns both numeric columns");
+                }
+            }
+            c += 1;
+        }
+        emon.Testport.assertEq(found, 1, "the spanning label retains exactly one owner");
+    }
+    public static void testMerchantSublinesStayInTheirDatedParentRows() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        int r = 0;
+        ttRule(pa, 7000, 9500, 50000, 9550);
+        ttAt(wd, ln, et, emon.Testport.textBlob("PostDate"), 7600, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("TransDate"), 15000, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Description"), 26000, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Amount"), 49000, 10000, 1, 1);
+        ttRule(pa, 7000, 11500, 50000, 11550);
+        while (r < 4) {
+            ttAt(wd, ln, et, emon.Testport.textBlob("09/01"), 7600, 13000 + (r * 5000), 0, 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("09/01"), 15000, 13000 + (r * 5000), 0, 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("Merchant"), 26000, 13000 + (r * 5000), 0, 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("15.00"), 49000, 13000 + (r * 5000), 0, 1);
+            ttAt(wd, ln, et, emon.Testport.textBlob("Reference"), 30000, 14200 + (r * 5000), 0, 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("Submerchant"), 26000, 15400 + (r * 5000), 0, 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("0.00"), 49000, 15400 + (r * 5000), 0, 1);
+            r += 1;
+        }
+        ttAt(wd, ln, et, emon.Testport.textBlob("Unrelated prose"), 7600, 35000, 0, 0);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "ledger evidence is well formed");
+        emon.Testport.assertText(t, "T4w;Gh;R;Ch[PostDate];Ch[TransDate];Ch[Description];Ch[Amount];Gb;R;C[09/01];C[09/01];C[Merchant Reference Submerchant];C[15.00 0.00];R;C[09/01];C[09/01];C[Merchant Reference Submerchant];C[15.00 0.00];R;C[09/01];C[09/01];C[Merchant Reference Submerchant];C[15.00 0.00];R;C[09/01];C[09/01];C[Merchant Reference Submerchant];C[15.00 0.00];P[Unrelated prose];", "every merchant subline belongs to its preceding dated row and prose remains outside");
+    }
+    public static void testAWrappedChangeHeaderDoesNotAddATrailingDataColumn() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells tbo = emon.Port.newCells();
+        int r = 0;
+        int q = 0;
+        ttWord(wd, ln, et, emon.Testport.textBlob("Unadjusted"), 25672, 7017, 33164, 7712, 0);
+        ttWord(wd, ln, et, emon.Testport.textBlob("Adjusted"), 44361, 7017, 50650, 7712, 0);
+        ttWord(wd, ln, et, emon.Testport.textBlob("Industry"), 11202, 8713, 13687, 9408, 0);
+        while (q < 8) {
+            ttWord(wd, ln, et, emon.Testport.textBlob("Aug."), 22668 + (q * 4020), 8838, 24105 + (q * 4020), 9533, 0);
+            ttWord(wd, ln, et, emon.Testport.textBlob("2026"), 22610 + (q * 4020), 9636, 24163 + (q * 4020), 10331, 0);
+            q += 1;
+        }
+        ttWord(wd, ln, et, emon.Testport.textBlob("Change"), 54321, 8189, 56767, 8884, 0);
+        ttWord(wd, ln, et, emon.Testport.textBlob("from:"), 54748, 8888, 56339, 9583, 0);
+        ttWord(wd, ln, et, emon.Testport.textBlob("July2026"), 53914, 9586, 56709, 10281, 0);
+        ttWord(wd, ln, et, emon.Testport.textBlob("-"), 56942, 9586, 57174, 10281, 0);
+        ttWord(wd, ln, et, emon.Testport.textBlob("Aug.2026"), 53896, 10204, 57191, 10980, 0);
+        while (r < 12) {
+            ttWord(wd, ln, et, emon.Testport.textBlob("Industry"), 4490, 12056 + (r * 963), 21100, 12751 + (r * 963), 0);
+            q = 0;
+            while (q < 8) {
+                ttWord(wd, ln, et, emon.Testport.textBlob("100,000"), 21834 + (q * 4020), 12056 + (r * 963), 24359 + (q * 4020), 12751 + (r * 963), 0);
+                q += 1;
+            }
+            ttWord(wd, ln, et, emon.Testport.textBlob("127"), 54673, 12056 + (r * 963), 55838, 12751 + (r * 963), 0);
+            r += 1;
+        }
+        r = 0;
+        while (r < Evidence.wdCount(wd)) {
+            Evidence.wdSet(wd, r, Evidence.wfSize(), 700);
+            r += 1;
+        }
+        emon.Testport.assertEq(ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one table owns every original count once");
+        emon.Testport.assertEq(emon.Port.cellsAt(tb, 8), 10, "one stub plus nine value columns; the wrapped header adds no data column");
+    }
+    public static void testUnboldedDemographicGroupsOwnRowsAboveTheirValues() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells tbo = emon.Port.newCells();
+        int r = 0;
+        int q = 0;
+        int c = 0;
+        int groups = 0;
+        ttAt(wd, ln, et, emon.Testport.textBlob("Status"), 7600, 10000, 1, 0);
+        while (q < 6) {
+            ttAt(wd, ln, et, emon.Testport.textBlob("2026"), 24000 + (q * 5000), 10000, 1, 1);
+            q += 1;
+        }
+        ttAt(wd, ln, et, emon.Testport.textBlob("TOTAL"), 7600, 12500, 0, 0);
+        while (r < 6) {
+            if (r == 3) {
+                ttAt(wd, ln, et, emon.Testport.textBlob("WHITE"), 7600, 13500 + (r * 2200), 0, 0);
+            }
+            ttAt(wd, ln, et, emon.Testport.textBlob("Civilian"), 7600, 14500 + (r * 2200), 0, 0);
+            q = 0;
+            while (q < 6) {
+                ttAt(wd, ln, et, emon.Testport.textBlob("100.00"), 24000 + (q * 5000), 14500 + (r * 2200), 0, 1);
+                q += 1;
+            }
+            r += 1;
+        }
+        emon.Testport.assertEq(ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one statistical table owns all six value columns");
+        emon.Testport.assertEq(emon.Port.cellsAt(tb, 8), 7, "no group creates a phantom numeric column");
+        c = emon.Port.cellsAt(tb, 9);
+        while (c < (emon.Port.cellsAt(tb, 9) + emon.Port.cellsAt(tb, 10))) {
+            if ((emon.Port.cellsAt(tc, c * 16) > 0) && (emon.Port.cellsAt(tc, (c * 16) + 9) == 1)) {
+                if ((emon.Port.cellsAt(tw, emon.Port.cellsAt(tc, (c * 16) + 8)) == 7) || (emon.Port.cellsAt(tw, emon.Port.cellsAt(tc, (c * 16) + 8)) == 29)) {
+                    groups += 1;
+                    emon.Testport.assertEq(emon.Port.cellsAt(tc, (c * 16) + 3), 7, "the group label has its own full-width row");
+                }
+            }
+            c += 1;
+        }
+        emon.Testport.assertEq(groups, 2, "TOTAL and WHITE are independent of the following Civilian values");
+    }
+    public static int ttWordOwner(emon.Port.Cells tb, int k, emon.Port.Cells tc, emon.Port.Cells tw, int word) {
+        int first = emon.Port.cellsAt(tb, (k * 32) + 9);
+        int end = first + emon.Port.cellsAt(tb, (k * 32) + 10);
+        int c = first;
+        int i = 0;
+        while (c < end) {
+            i = 0;
+            while (i < emon.Port.cellsAt(tc, (c * 16) + 9)) {
+                if (emon.Port.cellsAt(tw, emon.Port.cellsAt(tc, (c * 16) + 8) + i) == word) {
+                    return c;
+                }
+                i += 1;
+            }
+            c += 1;
+        }
+        return -1;
+    }
+    public static void testUppercaseWrappedStubsAreNotDemographicGroups() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells tbo = emon.Port.newCells();
+        int r = 0;
+        int q = 0;
+        int owner = -1;
+        ttAt(wd, ln, et, emon.Testport.textBlob("Status"), 7600, 10000, 1, 0);
+        while (q < 6) {
+            ttAt(wd, ln, et, emon.Testport.textBlob("2026"), 24000 + (q * 5000), 10000, 1, 1);
+            q += 1;
+        }
+        while (r < 6) {
+            if (r == 3) {
+                ttAt(wd, ln, et, emon.Testport.textBlob("GROSS"), 8350, 20100, 0, 0);
+            }
+            ttAt(wd, ln, et, emon.Testport.textBlob("DOMESTIC"), 7600, 14500 + (r * 2200), 0, 0);
+            q = 0;
+            while (q < 6) {
+                ttAt(wd, ln, et, emon.Testport.textBlob("100.00"), 24000 + (q * 5000), 14500 + (r * 2200), 0, 1);
+                q += 1;
+            }
+            r += 1;
+        }
+        emon.Testport.assertEq(ttOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one table keeps its wrapped uppercase label");
+        owner = ttWordOwner(tb, 0, tc, tw, 28);
+        emon.Testport.assertThat(owner >= 0, "GROSS has a cell owner");
+        if (owner >= 0) {
+            emon.Testport.assertEq(emon.Port.cellsAt(tc, (owner * 16) + 3), 1, "an uppercase continuation is not promoted to a spanning group");
+            emon.Testport.assertEq(emon.Port.cellsAt(tc, (owner * 16) + 12), 0, "an uppercase continuation has no proved-section flag");
+        }
+    }
+    public static void testALongTwoDateLedgerStopsBeforeABoxedSummary() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        int r = 0;
+        int k = 0;
+        int ledger = -1;
+        int owner = -1;
+        ttRule(pa, 7000, 7500, 50000, 7550);
+        ttAt(wd, ln, et, emon.Testport.textBlob("ACTIVITY"), 7600, 8000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("PostDate"), 7600, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("TransDate"), 15000, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Description"), 26000, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Amount"), 49000, 10000, 1, 1);
+        ttRule(pa, 7000, 11500, 50000, 11550);
+        while (r < 8) {
+            ttAt(wd, ln, et, emon.Testport.textBlob("09/01"), 7600, 13000 + (r * 5000), 0, 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("09/01"), 15000, 13000 + (r * 5000), 0, 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("Merchant"), 26000, 13000 + (r * 5000), 0, 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("15.00"), 49000, 13000 + (r * 5000), 0, 1);
+            ttAt(wd, ln, et, emon.Testport.textBlob("Reference"), 30000, 14200 + (r * 5000), 0, 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("Submerchant"), 26000, 15400 + (r * 5000), 0, 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("0.00"), 49000, 15400 + (r * 5000), 0, 1);
+            r += 1;
+        }
+        ttRule(pa, 23500, 52600, 46000, 52650);
+        ttRule(pa, 23500, 58000, 46000, 58050);
+        ttRule(pa, 23500, 52600, 23550, 58000);
+        ttRule(pa, 45950, 52600, 46000, 58000);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Totals"), 24500, 53200, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Fees"), 24500, 54800, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("100.02"), 45000, 54800, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Interest"), 24500, 56300, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("12.43"), 45000, 56300, 0, 1);
+        emon.Testport.assertEq(ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 2, "the ledger and boxed summary have independent owners");
+        while (k < (emon.Port.cellsLen(tb) / 32)) {
+            if (ttWordOwner(tb, k, tc, tw, 0) >= 0) {
+                ledger = k;
+            }
+            k += 1;
+        }
+        emon.Testport.assertThat(ledger >= 0, "the dated ledger survives");
+        if (ledger >= 0) {
+            emon.Testport.assertEq(emon.Port.cellsAt(tb, (ledger * 32) + 8), 4, "the ledger keeps four stable columns");
+            r = 0;
+            while (r < 8) {
+                owner = ttWordOwner(tb, ledger, tc, tw, 7 + (r * 7));
+                emon.Testport.assertThat(owner >= 0, "the merchant has a parent row");
+                emon.Testport.assertEq(owner, ttWordOwner(tb, ledger, tc, tw, 9 + (r * 7)), "the reference stays in its merchant cell");
+                emon.Testport.assertEq(owner, ttWordOwner(tb, ledger, tc, tw, 10 + (r * 7)), "the undated merchant subline stays in its parent cell");
+                emon.Testport.assertEq(ttWordOwner(tb, ledger, tc, tw, 8 + (r * 7)), ttWordOwner(tb, ledger, tc, tw, 11 + (r * 7)), "the printed zero remains in the parent amount cell");
+                r += 1;
+            }
+            emon.Testport.assertEq(ttWordOwner(tb, ledger, tc, tw, 63), -1, "the summary amount is outside the ledger");
+        }
+    }
+    public static int ttIndexWord(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int n, int x, int y, int right) {
+        if (n == 1) {
+            ttAt(wd, ln, et, emon.Testport.textBlob("1"), x, y, 0, right);
+            return 0;
+        }
+        if (n == 2) {
+            ttAt(wd, ln, et, emon.Testport.textBlob("2"), x, y, 0, right);
+            return 0;
+        }
+        if (n == 3) {
+            ttAt(wd, ln, et, emon.Testport.textBlob("3"), x, y, 0, right);
+            return 0;
+        }
+        if (n == 4) {
+            ttAt(wd, ln, et, emon.Testport.textBlob("4"), x, y, 0, right);
+            return 0;
+        }
+        if (n == 5) {
+            ttAt(wd, ln, et, emon.Testport.textBlob("5"), x, y, 0, right);
+            return 0;
+        }
+        if (n == 6) {
+            ttAt(wd, ln, et, emon.Testport.textBlob("6"), x, y, 0, right);
+            return 0;
+        }
+        if (n == 7) {
+            ttAt(wd, ln, et, emon.Testport.textBlob("7"), x, y, 0, right);
+            return 0;
+        }
+        ttAt(wd, ln, et, emon.Testport.textBlob("8"), x, y, 0, right);
+        return 0;
+    }
+    public static int ttNumberedShade(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa, int base) {
+        int r = 0;
+        int y = 0;
+        ttRule(pa, 7000, base + 10000, 7050, base + 37600);
+        ttRule(pa, 12000, base + 10000, 12050, base + 37600);
+        ttRule(pa, 27000, base + 10000, 27050, base + 37600);
+        ttRule(pa, 38000, base + 10000, 38050, base + 37600);
+        ttRule(pa, 47000, base + 10000, 47050, base + 37600);
+        ttRule(pa, 50000, base + 10000, 50050, base + 37600);
+        ttFill(pa, 7000, base + 13800, 50000, base + 16600, 14737632);
+        ttFill(pa, 7000, base + 21800, 50000, base + 24600, 14737632);
+        ttFill(pa, 7000, base + 27000, 50000, base + 29800, 14737632);
+        ttFill(pa, 7000, base + 32200, 50000, base + 35000, 14737632);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Line"), 7600, base + 11000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Item"), 13000, base + 11000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("2023"), 32000, base + 11000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("2022"), 43000, base + 11000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Line"), 49000, base + 11000, 0, 1);
+        while (r < 8) {
+            y = base + (14000 + (r * 2600));
+            if (r >= 2) {
+                y += 2800;
+            }
+            ttIndexWord(wd, ln, et, r + 1, 8000, y, 0);
+            if (r == 1) {
+                ttAt(wd, ln, et, emon.Testport.textBlob("Wrapped"), 13000, y, 0, 0);
+                ttIndexWord(wd, ln, et, r + 1, 49000, y, 1);
+                ttAt(wd, ln, et, emon.Testport.textBlob("and"), 13000, y + 1200, 0, 0);
+                ttAt(wd, ln, et, emon.Testport.textBlob("Other"), 13000, y + 2400, 0, 0);
+                ttAt(wd, ln, et, emon.Testport.textBlob("Workers"), 13000, y + 3600, 0, 0);
+                ttAt(wd, ln, et, emon.Testport.textBlob("100.00"), 32000, y + 3600, 0, 1);
+                ttAt(wd, ln, et, emon.Testport.textBlob("200.00"), 43000, y + 3600, 0, 1);
+            } else {
+                ttAt(wd, ln, et, emon.Testport.textBlob("Workers"), 13000, y, 0, 0);
+                ttAt(wd, ln, et, emon.Testport.textBlob("100.00"), 32000, y, 0, 1);
+                ttAt(wd, ln, et, emon.Testport.textBlob("200.00"), 43000, y, 0, 1);
+                ttIndexWord(wd, ln, et, r + 1, 49000, y, 1);
+            }
+            r += 1;
+        }
+        return 0;
+    }
+    public static void testNumberedShadingKeepsTallWhiteRowsAndTheFinalRow() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        int c = -1;
+        ttNumberedShade(wd, ln, et, pa, 0);
+        emon.Testport.assertEq(ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 1, "one framed numbered table");
+        emon.Testport.assertEq(emon.Port.cellsAt(tb, 8), 5, "the two year columns keep their own identities");
+        emon.Testport.assertEq(emon.Port.cellsAt(tb, 7), 9, "header and all eight printed row numbers remain coherent");
+        emon.Testport.assertEq(ttWordOwner(tb, 0, tc, tw, 11), ttWordOwner(tb, 0, tc, tw, 15), "the tall white row owns its entire wrapped stub");
+        c = ttWordOwner(tb, 0, tc, tw, 45);
+        emon.Testport.assertThat(c >= 0, "the final unshaded row's 2023 value is owned");
+        if (c >= 0) {
+            emon.Testport.assertEq(emon.Port.cellsAt(tc, (c * 16) + 1), 2, "the final 100.00 stays under 2023");
+        }
+        c = ttWordOwner(tb, 0, tc, tw, 46);
+        emon.Testport.assertThat(c >= 0, "the final unshaded row's 2022 value is owned");
+        if (c >= 0) {
+            emon.Testport.assertEq(emon.Port.cellsAt(tc, (c * 16) + 1), 3, "the final 200.00 stays under 2022");
+        }
+    }
+    public static void testSeparateNumberedFramesRemainSeparateTables() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        ttNumberedShade(wd, ln, et, pa, 0);
+        ttNumberedShade(wd, ln, et, pa, 39000);
+        emon.Testport.assertEq(ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 2, "adjacent independent frames cannot become one table");
+    }
+    public static void testANewLedgerHeaderSeparatesAWithdrawalFromAccountTotals() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        int k = 0;
+        int ledger = -1;
+        int amount = -1;
+        ttRule(pa, 7000, 9500, 50000, 9550);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Total deposits"), 7600, 10000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("2"), 20000, 10000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Total withdrawals"), 30000, 10000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("3"), 49000, 10000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Deposit count"), 7600, 11300, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Withdrawal count"), 30000, 11300, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Deposit amount"), 7600, 13000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("10.00"), 20000, 13000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Withdrawal amount"), 30000, 13000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("20.00"), 49000, 13000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Credits"), 7600, 14300, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Debits"), 30000, 14300, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("USD Savings Account"), 7600, 16000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("817-002"), 49000, 16000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Date"), 7600, 18000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Details"), 15000, 18000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Deposit"), 32000, 18000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Withdrawal"), 41000, 18000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Balance"), 50000, 18000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("D"), 7600, 19200, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("T"), 15000, 19200, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("C"), 32000, 19200, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("W"), 41000, 19200, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("B"), 50000, 19200, 0, 1);
+        ttRule(pa, 7000, 20700, 50000, 20750);
+        ttAt(wd, ln, et, emon.Testport.textBlob("20Sep"), 7600, 22000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Payment"), 15000, 22000, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("181.04"), 41000, 22000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("149818.96"), 50000, 22000, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Reference"), 15000, 23200, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Merchant"), 15000, 24400, 0, 0);
+        ttRule(pa, 7000, 26000, 50000, 26050);
+        emon.Testport.assertEq(ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 2, "totals and a newly headed ledger have different owners");
+        while (k < (emon.Port.cellsLen(tb) / 32)) {
+            amount = ttWordOwner(tb, k, tc, tw, 26);
+            if (amount >= 0) {
+                ledger = k;
+                emon.Testport.assertEq(emon.Port.cellsAt(tb, (k * 32) + 8), 5, "the new ledger has five explicit columns");
+                emon.Testport.assertEq(emon.Port.cellsAt(tc, (amount * 16) + 1), 3, "181.04 belongs under Withdrawal");
+                emon.Testport.assertEq(ttWordOwner(tb, k, tc, tw, 25), ttWordOwner(tb, k, tc, tw, 28), "the transaction owns its reference line");
+                emon.Testport.assertEq(ttWordOwner(tb, k, tc, tw, 25), ttWordOwner(tb, k, tc, tw, 29), "the transaction owns its merchant continuation");
+                emon.Testport.assertEq(ttWordOwner(tb, k, tc, tw, 7), -1, "the ledger does not own the previous account's total");
+                emon.Testport.assertEq(ttWordOwner(tb, k, tc, tw, 12), -1, "the account title is outside the data grid");
+            }
+            k += 1;
+        }
+        emon.Testport.assertThat(ledger >= 0, "the first USD transaction retains an independent ledger owner");
+    }
+    public static void testLedgerGrowthDoesNotHideUnownedRotatedText() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        int r = 0;
+        int k = 0;
+        int owner = -1;
+        ttRule(pa, 7000, 7500, 50000, 7550);
+        ttAt(wd, ln, et, emon.Testport.textBlob("ACTIVITY"), 7600, 8000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("PostDate"), 7600, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("TransDate"), 15000, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Description"), 26000, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Amount"), 49000, 10000, 1, 1);
+        ttRule(pa, 7000, 11500, 50000, 11550);
+        while (r < 8) {
+            ttAt(wd, ln, et, emon.Testport.textBlob("09/01"), 7600, 13000 + (r * 5000), 0, 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("09/01"), 15000, 13000 + (r * 5000), 0, 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("Merchant"), 26000, 13000 + (r * 5000), 0, 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("15.00"), 49000, 13000 + (r * 5000), 0, 1);
+            ttAt(wd, ln, et, emon.Testport.textBlob("Reference"), 30000, 14200 + (r * 5000), 0, 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("Submerchant"), 26000, 15400 + (r * 5000), 0, 0);
+            ttAt(wd, ln, et, emon.Testport.textBlob("0.00"), 49000, 15400 + (r * 5000), 0, 1);
+            r += 1;
+        }
+        ttAt(wd, ln, et, emon.Testport.textBlob("WATERMARK"), 30000, 30000, 0, 0);
+        Evidence.wdSet(wd, 61, Evidence.hdRot(), 4500);
+        emon.Testport.assertEq(ttRuledBuild(wd, ln, et, pa, tb, tc, tw), 1, "the original ledger remains selected");
+        while (k < (emon.Port.cellsLen(tb) / 32)) {
+            owner = ttWordOwner(tb, k, tc, tw, 61);
+            emon.Testport.assertEq(owner, -1, "rotated context has no amount or description cell owner");
+            k += 1;
+        }
+        emon.Testport.assertEq(Evidence.lnGet(ln, 61, 15), 0, "unowned rotated context remains outside claimed ledger lines");
+    }
 }

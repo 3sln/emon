@@ -12611,3 +12611,87 @@ Guards, each document live with the candidate (recording) and its transcript rep
 Integrated fusion edits the selection before emission rather than the emitted layer, so: (1) a selected line that changes is emitted as a revised line, and `sc-fates`' safe corrections apply to its copies as to any OCR word (one CORD insertion is a recorded amount with its thousands separator corrected); (2) new lines follow the page's last selected line and pass through the document stages, so an insertion inside a kept seal is kept out of the body by the seal stage (one CORD gold word the prototype counted); (3) the 25×-median box bound uses integer centipoint areas over the selected and reading words, so a box at the bound can fall either side of it (one CORD slot). PDF scans and turned pages are outside the gate. Line-item and total grouping remains the next lever (D721): fused tokens still land in emon's existing lines.
 
 - [ ] **Signed off** (maintainer)
+
+### D743 — Bind packed debit and deposit labels to distinct amount columns
+
+A selected unruled header cell may contain both debit and credit labels even though its body has separate amount columns. Partition that cell only when every same-baseline group ends within one point of an independently supported numeric right anchor, the first group remains in its original column, and every destination is empty or covered by the proved source span. Require both debit and credit semantics; add the French plural labels used by the statement to the existing advisory column vocabulary. A genuine spanning label without these independent endpoints remains intact. Body values and cuts do not move. Producer-tagged candidates defer to their existing ownership.
+
+Apply the repair after continuation linking, so an amount-sparse continuation still matches its original repeated header. Rebuild the repaired model and refresh last-page ownership pointers after copying cells. The failing-first law asserts which header word owns each column. Fresh F05 has separate debit/deposit headers and retains its two-page transaction link; its words are unchanged. The two invoices, F10's four-page link and E14's years remain unchanged in the initial live checks. Full batch guards are recorded in the batch report.
+
+- [ ] **Signed off** (maintainer)
+
+### D744 — Remove unsupported marginal bands without moving values
+
+The leading-band cleanup now permits a label that spans the unused margin and the real stub column, retaining the label while shrinking that span. Add the corresponding trailing cleanup for wide tables and the independently proved split summaries of D748: no unabsorbed word may start in the final band; a header spanner reaching it shrinks by one. Preserve occupied bands, explicit ruled/tagged grids and widget-bearing tables. The remaining table edge keeps its original extent, and the column model is rebuilt.
+
+The wrapped-change-header law fails first with eleven columns instead of ten. An initial general trailing cleanup also removed an intentional empty column from an existing short bank-grid law; restrict it to at least six columns. Fresh F13 has ten columns in A-1, linked A-2 and B-1. The existing header-spanner, invoice and short-bank controls remain protected; final numeric ownership and live word audits are required before acceptance.
+
+- [ ] **Signed off** (maintainer)
+
+### D745 — Reconstruct two-date ledger parents across unruled sub-lines
+
+For a selected four-column partial/whitespace ledger, require its retained leading body cells to contain two explicit slash dates. Reconstruct from the retained header to the next selected table, with bounded baseline gaps and type size. Two dates start a parent row. Undated description/reference lines with an absent or printed zero amount belong to the preceding parent. An undated nonzero amount, foreign column, large heading, or unsupported gap stops the proposal. Require explicit date headers for both leading columns, plausible day/month bounds, at least three dated parents and exact once-only coverage of every retained body word before adopting it. Keep the original column cuts and copy headers intact; producer-tagged candidates defer.
+
+The ownership laws cover description/reference/zero cells, a long ledger ending before a boxed summary, and adjacent prose. The short synthetic ledger was already coherent as whitespace on the baseline; it is a preservation control, not a claimed failing-first recovery. The live E10 baseline independently fails completeness (one transaction). Fresh live E10 has all fifteen dated transactions with merchant sub-lines and their printed zeros in their parent cells; the separate year-to-date summary and APR sections remain independent. Initial live words are identical.
+
+- [ ] **Signed off** (maintainer)
+
+### D746 — Preserve unbolded demographic groups as statistical section rows
+
+After selection, recognize a centred, uppercase group label in a wide text-stub table only when the following baseline contains a mixed-case stub and multiple numeric cells. Require a substantive label, position within the text-column anchors, and a supported baseline gap. Uppercase wrapped continuations are excluded. Record a proved-section class separately from the existing bold/colon class, allow the selected row fit to restore those independent rows, and carry that proof to cell flags before the normal section-span stage. The retained-word and identical-cut checks still apply; candidate scores and selection are unchanged.
+
+The demographic ownership law fails first when group words merge with following values or lack their own spans. Fresh F13 emits separate TOTAL, WHITE, BLACK OR AFRICAN AMERICAN and ASIAN group rows, preserving its A-2 link. Existing B-1 wrapped-stub and numerical-cell laws pass. The negative uppercase continuation asserts that it receives no demographic span or proved-section flag; it does not claim to repair a pre-existing wrap association.
+
+- [ ] **Signed off** (maintainer)
+
+### D747 — Revert framed-shading recovery after a structural regression
+
+The F01 Table 9 source has paired marginal row numbers and long vertical rails across unequal-height shaded and white rows. Trialled a candidate using three agreeing rails spanning most of the fill width, increasing paired row indices, frame bounds for header/body reach, and explicit numbered-row ownership. Two laws written before the trial protect a tall white wrapped row, the final unshaded values under their years, and adjacent independent frames. Both laws already pass on the baseline; they are preservation controls rather than a claimed minimal reproduction of F01's live omission.
+
+The prototype passes the numerical-cell ownership checks but changes the valid fixture from nine rows to eight. Revert the production framing code rather than retain a word-preserving structural regression. No live F01 improvement is claimed; its full Table 9 acceptance remains unmet. Retain the two protective laws. The first compile also exposed unsupported expression-form conditionals in generated Go; the trial used a scalar-return helper instead, without modifying kin itself.
+
+- [ ] **Signed off** (maintainer)
+
+### D748 — Separate a new account ledger from the preceding totals
+
+Inside the last selected unruled table of a page, a new five-column header must explicitly match Date, Description/Details, Deposit, Withdrawal and Balance in that order, immediately below a bold context label. Keep the preceding retained cells and cuts as the upper table. Reconstruct the lower interval independently, then check that its emitted header cells retain those five semantic column identities. The old selected words must partition exactly once between the two tables and the released context label; otherwise reject the split. Ruled, tagged and widget-bearing candidates defer.
+
+The failing-first law reproduces 181.04 in the previous totals owner's third column instead of Withdrawal. A first reconstruction fixed that ownership but re-inferred six columns in the bilingual totals; replace that with copies of the retained prefix cells. Only this proved split summary can use marginal-band pruning below the wide-table threshold, preserving the existing intentional empty short-grid control. The split's explicit headers can bind above a single body row, and its row fitting can join that single anchored transaction's wrapped lines. Ordinary tables retain the two-anchor and header/body guards.
+
+Fresh D16 has a separate five-column USD ledger with English/Chinese column headers, 181.04 under Withdrawal and 149,818.96 under Balance. Its HKD totals have four columns and do not own the USD transaction. Source references still outside the selected interval remain outside; no recovery of those loose lines or continuation linking is claimed. HKD/USD page links remain unmet, with the existing conservative body/furniture checks preserved. Initial live words are unchanged; final guards are recorded below and in the batch report.
+
+- [ ] **Signed off** (maintainer)
+
+### D749 — Keep partial outcomes explicit and protect the unchanged models
+
+Fresh final-source live conversions cover all thirteen Batch 14 samples with the sweep's exact inputs/options. Every sample has zero lost and zero gained words. E10's fifteen dated parents match the source dates; merchant/zero sub-lines, APR section spans and the separate year-to-date summary have independent ownership checks. F05's debit/deposit headers and two-page link, F13's ten-column numeric models/four main group spans/A-2 link/B-1 wrapped values, and D16's four-column totals versus five-column USD withdrawal ledger are checked by owner and column, not merely word sets.
+
+E09 only loses two wholly unsupported trailing bands (9→8 and 8→7): its seven fragments, row counts, retained cell strings and their starting columns are unchanged. It still has inconsistent seven/eight/nine-column models and incorrect original OCR/amount associations; a complete debit/credit/balance ledger is not claimed. F13's mixed-case subgroup hierarchy/indentation remains incomplete. D16's continuation links remain unmet. F17's detached headers/forward balances, F09's caption/header/note roles and D28 p94's year/header binding remain unmet; their complete table trees are unchanged. F01's rejected frame trial is D747, and its complete table trees are unchanged as well. No broad header reach across account/currency/opening-balance context or unsupported role promotion is retained.
+
+F03/F15's complete separate item/summary table trees, F10's complete linked table trees, E14's year-header table and D28's complete repaired table trees are byte-identical to the live baseline. The sweep judgment changes E10 from broken to usable; F01/D28 remain poor, E09 broken, F10 good, and the other named samples usable. Full live controls, receipt floors and final replay/build gates must also pass before the retained batch is accepted; their results and any moved artifacts are recorded in the batch report and external gate status.
+
+- [ ] **Signed off** (maintainer)
+
+### D750 — Explain the single re-derived retarget digest
+
+Full re-derivation changes only `born-icdar-us-034` in `test/retarget/replay/DIGESTS.edn`: `d2835cef…`→`650014ae…`. Replaying the same committed input/transcript with the initial HEAD build and retained build reproduces both exact digests. D744 removes one unsupported leading band (nine columns→eight), while preserving all 39 rows and all 273 populated cell strings. Every occupied column is reindexed by one, except a spanning column-zero label stays at zero with its span reduced by one. The before/after owner-column/span audit covers every populated cell. Words lost/gained are both zero; evidence bytes are identical.
+
+This is a table-model/HTML change, not a new OCR reading or a reinterpreted amount. External before/after bundles, Models and the assertion record are in `b14/retarget-explanation/`. All eight confidence refreshes change zero calibration rows; the scoreboard and receipt baseline are byte-identical to the initial hashes. No accuracy ratchet is lowered. The subsequent accuracy gate passes; other final gates and live guards are recorded in the batch report.
+
+- [ ] **Signed off** (maintainer)
+
+### D751 — Refuse ledger growth across unowned rotated context
+
+The full live guard caught six lost watermark tokens on `bsb-002`: the D745 reconstruction enlarged the selected ledger across rotated text that `tb-rows` omits, then geometric claiming suppressed that text without a cell owner. A new preservation law first fails with its rotated context line held despite having no cell owner. The recovery now refuses the proposal if unowned rotated text has its centre inside the proposed body extent. It retains the original candidate and claims instead. The law passes, together with the existing dated parent/amount ownership laws (1,269 Go laws). This conservative guard preserves the watermark rather than promoting it into a merchant/amount cell. Final-source live and gate results are recorded in the report.
+
+- [ ] **Signed off** (maintainer)
+
+### D752 — Final Batch 14 validation and partial acceptance
+
+After D751, all thirteen named live conversions pass ownership/value assertions and have zero lost/gained words; E10 is rejudged broken→usable and the other grades remain unchanged (D749). The complete live control sweep passes all 54 documents / 817 pages, including the 152-page Berkshire annual report and the 16-page letter, with zero words lost or gained. Fresh 60-document SROIE and CORD populations match the baseline population and totals exactly: precision 0.6816742392950571 and 0.42 respectively. The watermark regression in the earlier sweep is retained in the evidence history, not counted as a pass.
+
+Final-source `bb gates drift`, all 17 `bb ci core` steps, `bb rederive --check`, full `bb rederive`, `bb accuracy` (3,449 metrics within the existing 0.002 tolerance; 232 cross-host Models identical to Rust), `bb samples`, all seven OCR/fusion/retarget/seals/sealpx/sigs/asset replay gates, full `bb unit` (1,269 laws on Go/Rust/Java/C#) and `bb package --check` (all seven consumers) pass. The earlier C# restore certificate failure is resolved with a task-local cached-package source; no host is skipped. C/pod package consumers pass without native pdfium/Tesseract, as their package gate reports. All eight calibration refreshes change zero rows; no ratchet, scoreboard or receipt baseline moves. The only re-derived test artifact is D750's explained retarget digest; no sample changes.
+
+This is a partial batch: D747's frame trial is reverted; F13 mixed-case hierarchy, D16 continuation links, E09 coherent ledger ownership, F17 detached headers/forward balances, F09 roles and D28 p94 binding remain unmet. No commit is made. Logs, before/after Models, judgments, receipt/word audits and reproduction scripts are retained under the external `b14/` evidence directory. Task-owned internal build outputs are deleted after verification.
+
+- [ ] **Signed off** (maintainer)
