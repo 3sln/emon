@@ -12659,3 +12659,39 @@ On the same frozen 60+60 receipt populations, SROIE precision .6816742393 → .6
 This is partial retention. Live grades remain E04/F12 broken and F06/F08/F16/F19 poor. F12's exact total is retained with its source identity and box; item rows remain incomplete. E04's incorrect thermal alternatives are rejected. The four non-receipt source-recovery defects remain open under the literal control guard. The trace diagnostic remains incomplete and cannot certify source coverage. Detailed before/after judgments, protocol provenance, five-digest audit and final gate logs are in emon-scratch/b13; b13-report.md records the handoff. No commit is made.
 
 - [ ] **Signed off** (maintainer)
+
+### D753 — Batch 16 evidence and diagnostic ownership laws
+
+The live batch-16 baseline uses the archived sweep-4 trims and language options. The coord selection.tsv files named by the assignment are absent; the archived manifest identifies the exact inputs. n09's four first passes identify Arab at script confidence 20–38, below the routing threshold, yet English marks 67–87% of their words as dictionary entries. Dictionary membership cannot establish that those pages were read. G18's first passes contain substantial Khmer with residual Ethiopic characters. F18 remains an English reading; G04 retains mixed Japanese/English errors. Grades remain n09 broken, G18 poor, F18 poor and G04 broken.
+
+Write diagnostic ownership laws before retaining production changes: the affected page owns its flags, exact Latin names/numbers and text spans survive, the adjacent clean page stays high, clean Khmer/Ethiopic and native Arabic remain high, and alternate crops cannot accuse selected text. A weak OSD observation alone does not authorize replacing words or selecting a Latin language.
+
+- [ ] **Signed off** (maintainer)
+
+### D754 — Flag corroborated unread scripts without changing language requests
+
+Add a diagnostic after provenance/trust assignment. Three distinct first-pass pages with Arabic OSD confidence at least 2.0, at least forty ASCII letters and no Arabic-block characters corroborate unread content. A primary reading with at least one hundred Khmer-block characters and two Ethiopic-block characters exposes mixed-script contamination. Flag represented text on those pages script-unread/low-conf with confidence capped at 100, including legacy text-layer fragments. Preserve all text, ownership, recorded evidence, requests and routing. This is partial unread-content accounting, not language identification or an accuracy claim. The thresholds are named and boundary/negative laws protect clean scripts and genuine Latin values.
+
+Automatic German selection and deletion of English intrusions are not retained: the existing language inventory is not language evidence, and word-changing arbitration requires an exception to the assignment's zero-loss/zero-gain control. Explicit language requests remain authoritative. Do not lower ratchets or touch table modules.
+
+- [ ] **Signed off** (maintainer)
+
+### D755 — Propagate unread diagnostics through inline and cross-page text owners
+
+The first live audit found that flat-text paragraphs were flagged but serialized inline paragraphs were not: their block has an empty direct text span and their values live in inline children. Extend diagnostic ownership to text/hidden-text/OCR source blocks, cap inline values as well, and inspect every region of the nearest region-owning ancestor. A paragraph spanning pages must expose a warning when any of its pages has the conflicting evidence. The mixed-script law now owns its exact value in an inline child and places the affected page after an unrelated first region. Keep its parent, exact value and span unchanged, and retain the clean-script/alternative-reading negatives.
+
+The live German candidate (installed inventory, forced deu+eng) changes 48 whitespace tokens out and 51 in relative to inventory discovery. No automatic German policy is retained. The explicit por+eng, spa+eng, chi_sim+eng, jpn+eng and fas+eng readings retain their selected models and byte-identical OCR evidence. Neither this diagnostic nor that candidate establishes safe rejection of English intrusions; that acceptance item remains unmet rather than deleting genuine Latin values.
+
+- [ ] **Signed off** (maintainer)
+
+### D756 — Batch 16 final verification and retained limits
+
+The corrected final source passes all 54 full live controls, 817 pages and 353,307 whitespace tokens under the control counter: zero words lost/gained, with byte-equivalent values, ownership and layout after excluding confidence/flags. Both Berkshire inputs and receipt controls 07/10/11 are included. Only the full Urdu control changes its confidence/flag statistics; all other 53 controls retain theirs. The named four-page n09 excerpt has 74 unread nodes; G18 has 12 on pages 2–4, including every Ethiopic-bearing paragraph and the inline/cross-page owners. Flagged serialized text stays at or below confidence 100. Named characters/words and recorded evidence are unchanged. All five explicit-language controls retain byte-identical full Models and OCR evidence. Grades remain n09 broken, G18 poor, F18 poor and G04 broken. Automatic German selection and English-intrusion rejection remain unmet; no word-changing policy is retained.
+
+Live receipts use the same 60 documents per set. Precision is SROIE 0.6820745632 against floor 0.6816742393 and CORD 0.4223602484 against 0.4200000000. The tracked baseline is unchanged; these comparisons do not attribute prior merged recognition gains to this diagnostic.
+
+Passed gates: drift, core CI (17 steps), rederive --check, full rederive (all eight calibration refreshes changed zero rows), accuracy (3,449 metrics, no regression beyond the existing 0.002 tolerance; 232 cross-host Models identical), samples (29/29), OCR/fusion/retarget/seals/sealpx/sigs/asset replay, four-host unit (1,270 laws each), and package --check (seven clean consumers, identical 3,653-byte HTML). The first unit run passed Go/Rust/Java but C# restore failed with NU1301/TLS bad certificate format. A canonical bb unit csharp retry passes against a task-local feed of 20 already cached packages, preserving declared dependencies and certificate validation. The source fingerprints are unchanged across the retry. Packaging uses javac/java because Maven is unavailable; C/pod omit optional bundled OCR/render engines. Sandbox process-enumeration shutdown diagnostics are nonfatal.
+
+No golden, sample, scoreboard, API snapshot or ratchet moved. The drift check used an isolated review index/object store; the real index is untouched. No corpus fetch/prune or commit. Evidence and reproducible runner scripts remain under /Volumes/SSK SSD/emon-scratch/b16/; temporary compiled builds and the task-local restore feed are removed at handoff. The coordinator commits.
+
+- [ ] **Signed off** (maintainer)

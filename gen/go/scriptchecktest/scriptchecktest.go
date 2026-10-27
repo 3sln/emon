@@ -4,6 +4,8 @@
 package scriptchecktest
 
 import (
+	"emon/evidence"
+	"emon/model"
 	"emon/ocr"
 	"emon/plan"
 	"emon/port"
@@ -108,4 +110,167 @@ func TestOsdRoutesAnUnreadPageThroughItsScriptAndEnglish(emonT *testing.T) {
 func TestChineseWordLanguageAliasesCountAsInstalledHanModels(emonT *testing.T) {
 	port.AssertEq(emonT, unreadOf(5, 1214344809, 629, 1667789568, 1667789568), 0, "chi_sim words are recorded as chs and read Han")
 	port.AssertEq(emonT, unreadOf(5, 1214344809, 629, 1667789824, 1667789824), 0, "chi_tra words are recorded as cht and read Han")
+}
+
+func TestScriptConflictFlagsAreOwnedByTheAffectedPageWithValuesKept(emonT *testing.T) {
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var runs *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	var bad int32 = model.NodeNew(nodes, model.NkParagraph(), 0)
+	var clean int32 = model.NodeNew(nodes, model.NkParagraph(), 0)
+	var pg int32 = 1
+	var i int32 = 0
+	var r int32 = 0
+	port.CellsPush(text, 65)
+	port.CellsPush(text, 55)
+	model.NodeSetText(nodes, bad, 0, 2)
+	model.NodeSetText(nodes, clean, 0, 2)
+	model.NodeSetConf(nodes, bad, 900)
+	model.NodeSetConf(nodes, clean, 900)
+	model.NodeAddRegion(nodes, regions, bad, 1, 0, 0, 100, 100)
+	model.NodeAddRegion(nodes, regions, clean, 4, 0, 0, 100, 100)
+	for i < 60 {
+		port.CellsPush(et, 65)
+		i += 1
+	}
+	for pg <= 3 {
+		r = evidence.OrNew(runs, pg, 0)
+		evidence.OrSet(runs, r, evidence.OrfPass(), evidence.OpFirst())
+		evidence.OrSet(runs, r, evidence.OrfScript(), 1098015074)
+		evidence.OrSet(runs, r, evidence.OrfSconf(), 32)
+		evidence.OrSet(runs, r, evidence.OrfWfirst(), pg-1)
+		evidence.OrSet(runs, r, evidence.OrfWcount(), 1)
+		evidence.OwNew(words, pg, 0, 0, 100, 100, 0, 0, 100, 100, 0, 0, 0, 60, 0, 900, 0)
+		pg += 1
+	}
+	port.AssertEq(emonT, scriptcheck.SkTagConflicts(nodes, regions, runs, words, et), 1, "only represented text on the corroborated pages is held")
+	port.AssertEq(emonT, model.NodeConf(nodes, bad), 100, "suspect text has the unread cap")
+	port.AssertEq(emonT, model.NodeFlags(nodes, bad)&model.FlScriptUnread(), model.FlScriptUnread(), "explicit unread flag")
+	port.AssertEq(emonT, model.NodeConf(nodes, clean), 900, "adjacent clean page stays high")
+	port.AssertEq(emonT, model.NodeFlags(nodes, clean), 0, "no flag crosses the page boundary")
+	port.AssertEq(emonT, model.NodeParent(nodes, bad), 0, "owner retained")
+	port.AssertEq(emonT, model.NodeTextStart(nodes, bad), 0, "text span retained")
+	port.AssertEq(emonT, model.NodeTextLen(nodes, bad), 2, "Latin name and number retained")
+	port.AssertEq(emonT, port.CellsAt(text, 0), 65, "A retained")
+	port.AssertEq(emonT, port.CellsAt(text, 1), 55, "7 retained")
+}
+
+func skMixedTrial(emonT *testing.T, khmer int32, ethiopic int32, pass int32) int32 {
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var runs *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	var n int32 = model.NodeNew(nodes, model.NkParagraph(), 0)
+	var child int32 = model.NodeNew(nodes, model.NkText(), n)
+	var r int32 = evidence.OrNew(runs, 1, 0)
+	var i int32 = 0
+	port.CellsPush(text, 55)
+	model.NodeSetText(nodes, child, 0, 1)
+	model.NodeAddSrc(nodes, n, model.SrText())
+	model.NodeAddSrc(nodes, child, model.SrText())
+	model.NodeSetConf(nodes, n, 900)
+	model.NodeSetConf(nodes, child, 900)
+	model.NodeAddRegion(nodes, regions, n, 9, 0, 0, 100, 100)
+	model.NodeAddRegion(nodes, regions, n, 1, 0, 0, 100, 100)
+	for i < khmer {
+		port.CellsPush(et, 6016)
+		i += 1
+	}
+	i = 0
+	for i < ethiopic {
+		port.CellsPush(et, 4608)
+		i += 1
+	}
+	evidence.OrSet(runs, r, evidence.OrfPass(), pass)
+	evidence.OrSet(runs, r, evidence.OrfWfirst(), 0)
+	evidence.OrSet(runs, r, evidence.OrfWcount(), 1)
+	evidence.OwNew(words, 1, 0, 0, 100, 100, 0, 0, 100, 100, 0, 0, 0, khmer+ethiopic, 0, 900, 0)
+	scriptcheck.SkTagConflicts(nodes, regions, runs, words, et)
+	port.AssertEq(emonT, model.NodeParent(nodes, n), 0, "owner is unchanged by diagnostic")
+	port.AssertEq(emonT, model.NodeParent(nodes, child), n, "inline value keeps its paragraph owner")
+	port.AssertEq(emonT, model.NodeConf(nodes, child), model.NodeConf(nodes, n), "the inline value and its block share the confidence bound")
+	port.AssertEq(emonT, model.NodeTextLen(nodes, child), 1, "number remains represented")
+	port.AssertEq(emonT, port.CellsAt(text, 0), 55, "exact value 7 survives")
+	return model.NodeConf(nodes, n)
+}
+
+func TestKhmerEthiopicContaminationIsExplicitWithoutDeletingLegacyValues(emonT *testing.T) {
+	port.AssertEq(emonT, skMixedTrial(emonT, 100, 2, evidence.OpFirst()), 100, "mixed primary reading is flagged")
+}
+
+func TestCleanScriptsAndRejectedAlternativesCannotAccuseTheBody(emonT *testing.T) {
+	port.AssertEq(emonT, skMixedTrial(emonT, 100, 0, evidence.OpFirst()), 900, "clean Khmer stays high")
+	port.AssertEq(emonT, skMixedTrial(emonT, 0, 100, evidence.OpFirst()), 900, "clean Ethiopic stays high")
+	port.AssertEq(emonT, skMixedTrial(emonT, 99, 2, evidence.OpFirst()), 900, "too little script evidence")
+	port.AssertEq(emonT, skMixedTrial(emonT, 100, 2, evidence.OpLine()), 900, "a rejected crop is no page-level claim")
+}
+
+func skArabicTrial(emonT *testing.T, np int32, hasarabic int32, samepage int32) int32 {
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var runs *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	var n int32 = model.NodeNew(nodes, model.NkParagraph(), 0)
+	var i int32 = 0
+	var r int32 = 0
+	var pg int32 = 0
+	port.CellsPush(text, 65)
+	model.NodeSetText(nodes, n, 0, 1)
+	model.NodeSetConf(nodes, n, 900)
+	model.NodeAddRegion(nodes, regions, n, 1, 0, 0, 100, 100)
+	for i < 60 {
+		port.CellsPush(et, 65)
+		i += 1
+	}
+	if hasarabic == 1 {
+		port.CellsSet(et, 0, 1575)
+	}
+	i = 0
+	for i < np {
+		pg = i + 1
+		if samepage == 1 {
+			pg = 1
+		}
+		r = evidence.OrNew(runs, pg, 0)
+		evidence.OrSet(runs, r, evidence.OrfPass(), evidence.OpFirst())
+		evidence.OrSet(runs, r, evidence.OrfScript(), 1098015074)
+		evidence.OrSet(runs, r, evidence.OrfSconf(), 32)
+		evidence.OrSet(runs, r, evidence.OrfWfirst(), i)
+		evidence.OrSet(runs, r, evidence.OrfWcount(), 1)
+		evidence.OwNew(words, pg, 0, 0, 100, 100, 0, 0, 100, 100, 0, 0, 0, 60, 0, 900, 0)
+		i += 1
+	}
+	scriptcheck.SkTagConflicts(nodes, regions, runs, words, et)
+	port.AssertEq(emonT, model.NodeTextLen(nodes, n), 1, "Latin name remains owned")
+	port.AssertEq(emonT, port.CellsAt(text, 0), 65, "Latin name remains exact")
+	return model.NodeConf(nodes, n)
+}
+
+func TestWeakOsdNeedsDistinctPagesAndCannotCondemnANativeReading(emonT *testing.T) {
+	port.AssertEq(emonT, skArabicTrial(emonT, 2, 0, 0), 900, "two weak pages do not establish the script")
+	port.AssertEq(emonT, skArabicTrial(emonT, 3, 0, 1), 900, "three reads of one page are not corroboration")
+	port.AssertEq(emonT, skArabicTrial(emonT, 3, 1, 0), 900, "native Arabic with Latin names remains high")
+	port.AssertEq(emonT, skArabicTrial(emonT, 3, 0, 0), 100, "three conflicting page readings are explicitly unread")
 }

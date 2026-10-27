@@ -4,6 +4,8 @@
 package scriptcheck
 
 import (
+	"emon/evidence"
+	"emon/model"
 	"emon/ocr"
 	"emon/ocrport"
 	"emon/plan"
@@ -132,4 +134,153 @@ func SkRoute(ans *port.Cells, at int32, id int32, bitmap int32, dpi int32, rq *p
 	plan.RqOcrLang(rq, 101, 110, 103, 0)
 	plan.RqOcrEnd(rq, q)
 	return -1
+}
+
+func SkConflictConf() int32 {
+	// Minimum weak OSD confidence, in tenths, for corroboration only.
+	return 20
+}
+
+func SkConflictLatin() int32 {
+	// Minimum ASCII letters in a conflicting primary reading.
+	return 40
+}
+
+func SkConflictPages() int32 {
+	// Distinct primary pages required before weak OSD can flag unread text.
+	return 3
+}
+
+func SkConflictKhmer() int32 {
+	// Minimum Khmer-block characters for the mixed legacy-reading diagnostic.
+	return 100
+}
+
+func SkConflictEthiopic() int32 {
+	// Minimum Ethiopic-block characters alongside substantial Khmer.
+	return 2
+}
+
+func SkConflictCap() int32 {
+	// Maximum confidence of text with corroborated unread/contamination evidence.
+	return 100
+}
+
+func skRunConflict(runs *port.Cells, r int32, words *port.Cells, text *port.Cells) int32 {
+	// 1: weak Arabic OSD with substantial Latin but no Arabic characters. 2: Khmer mixed with Ethiopic. Only first passes count; alternatives cannot accuse selected text.
+	if evidence.OrGet(runs, r, evidence.OrfPass()) != evidence.OpFirst() {
+		return 0
+	}
+	var first int32 = evidence.OrGet(runs, r, evidence.OrfWfirst())
+	var end int32 = first + evidence.OrGet(runs, r, evidence.OrfWcount())
+	var w int32 = first
+	var j int32 = 0
+	var cp int32 = 0
+	var latin int32 = 0
+	var arabic int32 = 0
+	var khmer int32 = 0
+	var ethiopic int32 = 0
+	for w < end {
+		j = 0
+		for j < evidence.OwGet(words, w, evidence.HdTlen()) {
+			cp = port.CellsAt(text, evidence.OwGet(words, w, evidence.HdTstart())+j)
+			if ((cp >= 65) && (cp <= 90)) || ((cp >= 97) && (cp <= 122)) {
+				latin += 1
+			}
+			if (cp >= 1536) && (cp <= 1791) {
+				arabic += 1
+			}
+			if (cp >= 6016) && (cp <= 6143) {
+				khmer += 1
+			}
+			if (cp >= 4608) && (cp <= 4991) {
+				ethiopic += 1
+			}
+			j += 1
+		}
+		w += 1
+	}
+	if (khmer >= SkConflictKhmer()) && (ethiopic >= SkConflictEthiopic()) {
+		return 2
+	}
+	if (evidence.OrGet(runs, r, evidence.OrfScript()) == ocrport.ScArab()) && (evidence.OrGet(runs, r, evidence.OrfSconf()) >= SkConflictConf()) && (arabic == 0) && (latin >= SkConflictLatin()) {
+		return 1
+	}
+	return 0
+}
+
+func skConflictOnPage(nodes *port.Cells, regions *port.Cells, n int32, pg int32) int32 {
+	// All regions of the nearest region-owning node count, including cross-page paragraphs and inline children inheriting their block's regions.
+	var p int32 = n
+	var r int32 = 0
+	for p >= 0 {
+		if model.NodeRegionCount(nodes, p) > 0 {
+			r = model.NodeRegionHead(nodes, p)
+			for r >= 0 {
+				if model.RegionPage(regions, r) == pg {
+					return 1
+				}
+				r = model.RegionNext(regions, r)
+			}
+			return 0
+		}
+		p = model.NodeParent(nodes, p)
+	}
+	return 0
+}
+
+func SkTagConflicts(nodes *port.Cells, regions *port.Cells, runs *port.Cells, words *port.Cells, text *port.Cells) int32 {
+	// D754: preserve all text/ownership and explicit model choices, but flag represented text on corroborated unread pages or Khmer/Ethiopic contamination. Runs are immutable. No routing or retargeting changes.
+	var r int32 = 0
+	var k int32 = 0
+	var j int32 = 0
+	var seen int32 = 0
+	var pages int32 = 0
+	var kind int32 = 0
+	var n int32 = 0
+	var held int32 = 0
+	for r < evidence.OrCount(runs) {
+		kind = skRunConflict(runs, r, words, text)
+		if kind == 1 {
+			k = 0
+			pages = 0
+			for k < evidence.OrCount(runs) {
+				if skRunConflict(runs, k, words, text) == 1 {
+					j = 0
+					seen = 0
+					for j < k {
+						if (evidence.OrGet(runs, j, evidence.OrfPage()) == evidence.OrGet(runs, k, evidence.OrfPage())) && (skRunConflict(runs, j, words, text) == 1) {
+							seen = 1
+						}
+						j += 1
+					}
+					if seen == 0 {
+						pages += 1
+					}
+				}
+				k += 1
+			}
+			if pages < SkConflictPages() {
+				kind = 0
+			}
+		}
+		if kind > 0 {
+			n = 1
+			for n < model.NodeCount(nodes) {
+				if ((model.NodeTextLen(nodes, n) > 0) || ((model.NodeSrc(nodes, n) & (model.SrText() | (model.SrHiddenText() | model.SrOcr()))) != 0)) && (skConflictOnPage(nodes, regions, n, evidence.OrGet(runs, r, evidence.OrfPage())) == 1) {
+					if model.NkIsInline(model.NodeKind(nodes, n)) == 0 {
+						model.NodeAddFlag(nodes, n, model.FlScriptUnread())
+						model.NodeAddFlag(nodes, n, model.FlLowConf())
+					}
+					if model.NodeConf(nodes, n) > SkConflictCap() {
+						model.NodeSetConf(nodes, n, SkConflictCap())
+					}
+					held += 1
+				}
+				n += 1
+			}
+		}
+		r += 1
+	}
+	return held
 }

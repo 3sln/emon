@@ -365,6 +365,7 @@ public static class Engine {
         }
         Scan.ScTrust(m.Nodes, m.Regions, ev.Owords, d.Et, ev.Oruns);
         Scan.ScTagUnread(m.Nodes, m.Regions, d.Mask);
+        Scriptcheck.SkTagConflicts(m.Nodes, m.Regions, ev.Oruns, ev.Owords, d.Et);
         Scan.ScCleanText(m.Nodes, m.Text);
         Scan.ScWriteEmptyOcr(ev.Oruns, m.Pages, m.Ledger);
         Scan.ScWriteEmptyRegions(ev.Olines, m.Nodes, m.Regions, m.Ledger);

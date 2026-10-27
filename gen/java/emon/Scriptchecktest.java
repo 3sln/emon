@@ -95,4 +95,161 @@ public final class Scriptchecktest {
         emon.Testport.assertEq(unreadOf(5, 1214344809, 629, 1667789568, 1667789568), 0, "chi_sim words are recorded as chs and read Han");
         emon.Testport.assertEq(unreadOf(5, 1214344809, 629, 1667789824, 1667789824), 0, "chi_tra words are recorded as cht and read Han");
     }
+    public static void testScriptConflictFlagsAreOwnedByTheAffectedPageWithValuesKept() {
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        int bad = Model.nodeNew(nodes, Model.nkParagraph(), 0);
+        int clean = Model.nodeNew(nodes, Model.nkParagraph(), 0);
+        int pg = 1;
+        int i = 0;
+        int r = 0;
+        emon.Port.cellsPush(text, 65);
+        emon.Port.cellsPush(text, 55);
+        Model.nodeSetText(nodes, bad, 0, 2);
+        Model.nodeSetText(nodes, clean, 0, 2);
+        Model.nodeSetConf(nodes, bad, 900);
+        Model.nodeSetConf(nodes, clean, 900);
+        Model.nodeAddRegion(nodes, regions, bad, 1, 0, 0, 100, 100);
+        Model.nodeAddRegion(nodes, regions, clean, 4, 0, 0, 100, 100);
+        while (i < 60) {
+            emon.Port.cellsPush(et, 65);
+            i += 1;
+        }
+        while (pg <= 3) {
+            r = Evidence.orNew(runs, pg, 0);
+            Evidence.orSet(runs, r, Evidence.orfPass(), Evidence.opFirst());
+            Evidence.orSet(runs, r, Evidence.orfScript(), 1098015074);
+            Evidence.orSet(runs, r, Evidence.orfSconf(), 32);
+            Evidence.orSet(runs, r, Evidence.orfWfirst(), pg - 1);
+            Evidence.orSet(runs, r, Evidence.orfWcount(), 1);
+            Evidence.owNew(words, pg, 0, 0, 100, 100, 0, 0, 100, 100, 0, 0, 0, 60, 0, 900, 0);
+            pg += 1;
+        }
+        emon.Testport.assertEq(Scriptcheck.skTagConflicts(nodes, regions, runs, words, et), 1, "only represented text on the corroborated pages is held");
+        emon.Testport.assertEq(Model.nodeConf(nodes, bad), 100, "suspect text has the unread cap");
+        emon.Testport.assertEq(Model.nodeFlags(nodes, bad) & Model.flScriptUnread(), Model.flScriptUnread(), "explicit unread flag");
+        emon.Testport.assertEq(Model.nodeConf(nodes, clean), 900, "adjacent clean page stays high");
+        emon.Testport.assertEq(Model.nodeFlags(nodes, clean), 0, "no flag crosses the page boundary");
+        emon.Testport.assertEq(Model.nodeParent(nodes, bad), 0, "owner retained");
+        emon.Testport.assertEq(Model.nodeTextStart(nodes, bad), 0, "text span retained");
+        emon.Testport.assertEq(Model.nodeTextLen(nodes, bad), 2, "Latin name and number retained");
+        emon.Testport.assertEq(emon.Port.cellsAt(text, 0), 65, "A retained");
+        emon.Testport.assertEq(emon.Port.cellsAt(text, 1), 55, "7 retained");
+    }
+    public static int skMixedTrial(int emonT, int khmer, int ethiopic, int pass) {
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        int n = Model.nodeNew(nodes, Model.nkParagraph(), 0);
+        int child = Model.nodeNew(nodes, Model.nkText(), n);
+        int r = Evidence.orNew(runs, 1, 0);
+        int i = 0;
+        emon.Port.cellsPush(text, 55);
+        Model.nodeSetText(nodes, child, 0, 1);
+        Model.nodeAddSrc(nodes, n, Model.srText());
+        Model.nodeAddSrc(nodes, child, Model.srText());
+        Model.nodeSetConf(nodes, n, 900);
+        Model.nodeSetConf(nodes, child, 900);
+        Model.nodeAddRegion(nodes, regions, n, 9, 0, 0, 100, 100);
+        Model.nodeAddRegion(nodes, regions, n, 1, 0, 0, 100, 100);
+        while (i < khmer) {
+            emon.Port.cellsPush(et, 6016);
+            i += 1;
+        }
+        i = 0;
+        while (i < ethiopic) {
+            emon.Port.cellsPush(et, 4608);
+            i += 1;
+        }
+        Evidence.orSet(runs, r, Evidence.orfPass(), pass);
+        Evidence.orSet(runs, r, Evidence.orfWfirst(), 0);
+        Evidence.orSet(runs, r, Evidence.orfWcount(), 1);
+        Evidence.owNew(words, 1, 0, 0, 100, 100, 0, 0, 100, 100, 0, 0, 0, khmer + ethiopic, 0, 900, 0);
+        Scriptcheck.skTagConflicts(nodes, regions, runs, words, et);
+        emon.Testport.assertEq(Model.nodeParent(nodes, n), 0, "owner is unchanged by diagnostic");
+        emon.Testport.assertEq(Model.nodeParent(nodes, child), n, "inline value keeps its paragraph owner");
+        emon.Testport.assertEq(Model.nodeConf(nodes, child), Model.nodeConf(nodes, n), "the inline value and its block share the confidence bound");
+        emon.Testport.assertEq(Model.nodeTextLen(nodes, child), 1, "number remains represented");
+        emon.Testport.assertEq(emon.Port.cellsAt(text, 0), 55, "exact value 7 survives");
+        return Model.nodeConf(nodes, n);
+    }
+    public static void testKhmerEthiopicContaminationIsExplicitWithoutDeletingLegacyValues() {
+        emon.Testport.assertEq(skMixedTrial(0, 100, 2, Evidence.opFirst()), 100, "mixed primary reading is flagged");
+    }
+    public static void testCleanScriptsAndRejectedAlternativesCannotAccuseTheBody() {
+        emon.Testport.assertEq(skMixedTrial(0, 100, 0, Evidence.opFirst()), 900, "clean Khmer stays high");
+        emon.Testport.assertEq(skMixedTrial(0, 0, 100, Evidence.opFirst()), 900, "clean Ethiopic stays high");
+        emon.Testport.assertEq(skMixedTrial(0, 99, 2, Evidence.opFirst()), 900, "too little script evidence");
+        emon.Testport.assertEq(skMixedTrial(0, 100, 2, Evidence.opLine()), 900, "a rejected crop is no page-level claim");
+    }
+    public static int skArabicTrial(int emonT, int np, int hasarabic, int samepage) {
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        int n = Model.nodeNew(nodes, Model.nkParagraph(), 0);
+        int i = 0;
+        int r = 0;
+        int pg = 0;
+        emon.Port.cellsPush(text, 65);
+        Model.nodeSetText(nodes, n, 0, 1);
+        Model.nodeSetConf(nodes, n, 900);
+        Model.nodeAddRegion(nodes, regions, n, 1, 0, 0, 100, 100);
+        while (i < 60) {
+            emon.Port.cellsPush(et, 65);
+            i += 1;
+        }
+        if (hasarabic == 1) {
+            emon.Port.cellsSet(et, 0, 1575);
+        }
+        i = 0;
+        while (i < np) {
+            pg = i + 1;
+            if (samepage == 1) {
+                pg = 1;
+            }
+            r = Evidence.orNew(runs, pg, 0);
+            Evidence.orSet(runs, r, Evidence.orfPass(), Evidence.opFirst());
+            Evidence.orSet(runs, r, Evidence.orfScript(), 1098015074);
+            Evidence.orSet(runs, r, Evidence.orfSconf(), 32);
+            Evidence.orSet(runs, r, Evidence.orfWfirst(), i);
+            Evidence.orSet(runs, r, Evidence.orfWcount(), 1);
+            Evidence.owNew(words, pg, 0, 0, 100, 100, 0, 0, 100, 100, 0, 0, 0, 60, 0, 900, 0);
+            i += 1;
+        }
+        Scriptcheck.skTagConflicts(nodes, regions, runs, words, et);
+        emon.Testport.assertEq(Model.nodeTextLen(nodes, n), 1, "Latin name remains owned");
+        emon.Testport.assertEq(emon.Port.cellsAt(text, 0), 65, "Latin name remains exact");
+        return Model.nodeConf(nodes, n);
+    }
+    public static void testWeakOsdNeedsDistinctPagesAndCannotCondemnANativeReading() {
+        emon.Testport.assertEq(skArabicTrial(0, 2, 0, 0), 900, "two weak pages do not establish the script");
+        emon.Testport.assertEq(skArabicTrial(0, 3, 0, 1), 900, "three reads of one page are not corroboration");
+        emon.Testport.assertEq(skArabicTrial(0, 3, 1, 0), 900, "native Arabic with Latin names remains high");
+        emon.Testport.assertEq(skArabicTrial(0, 3, 0, 0), 100, "three conflicting page readings are explicitly unread");
+    }
 }

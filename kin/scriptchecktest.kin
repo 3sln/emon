@@ -2,13 +2,15 @@
 ;; reads the script, a Latin page, a page OSD is unsure of, and a page of too few words are not.
 (ns emon.scriptchecktest
   (:require [emon.lang :refer [I32 Cells]]
-            [emon.test :refer [deftest assert-eq assert-that new-cells]]
-            [emon.port :refer [cells-at cells-drop]]
+            [emon.test :refer [deftest assert-eq assert-that new-cells test-t TestT]]
+            [emon.port :refer [cells-at cells-drop cells-push cells-set]]
             [emon.plan :refer [an-ocr an-ocr-word an-ocr-cp an-ocr-end rq-arg rec-count an-find]]
             [emon.ocr :refer [ox-begin ox-line ox-block ox-word]]
-            [emon.scriptcheck :refer [sk-route sk-unread sk-unpack sk-min-conf sk-weak-conf]]
+            [emon.scriptcheck :refer [sk-route sk-unread sk-unpack sk-min-conf sk-weak-conf sk-tag-conflicts]]
+            [emon.evidence :refer [or-new or-set ow-new orf-pass orf-script orf-sconf orf-wfirst orf-wcount op-first op-line]]
+            [emon.model :refer [model-init node-new nk-paragraph node-add-region node-set-text node-set-conf node-conf node-flags node-text-start node-text-len node-parent fl-script-unread node-add-src sr-text nk-text]]
             [kin.lang :refer [defn return let set while if do comment
-                              + - * < > <= >= == != and or quot]]))
+                              + - * < > <= >= == != and or quot bit-and]]))
 
 (defn ^I32 sk-answer [^:mut ^Cells ans ^I32 id ^I32 n ^I32 script ^I32 sconf ^I32 lang ^I32 lang0 ^I32 dflags]
   (comment "An OCR answer of `n` words, one a line, each read in the language cell `lang` (the first in `lang0`), whose page OSD says is in `script` at the confidence `sconf`;")
@@ -91,3 +93,116 @@
 (deftest test-chinese-word-language-aliases-count-as-installed-han-models
   (assert-eq (unread-of 5 1214344809 629 1667789568 1667789568) 0 "chi_sim words are recorded as chs and read Han")
   (assert-eq (unread-of 5 1214344809 629 1667789824 1667789824) 0 "chi_tra words are recorded as cht and read Han"))
+
+;; D753: confidence is a claim about this page's text, including an unhealthy legacy layer.
+(deftest test-script-conflict-flags-are-owned-by-the-affected-page-with-values-kept
+  (let [^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells)
+        ^Cells text (new-cells) ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells runs (new-cells) ^Cells words (new-cells) ^Cells et (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (let [^I32 bad (node-new nodes (nk-paragraph) 0)
+          ^I32 clean (node-new nodes (nk-paragraph) 0)
+          ^:mut ^I32 pg 1 ^:mut ^I32 i 0 ^:mut ^I32 r 0]
+      (cells-push text 65)
+      (cells-push text 55)
+      (node-set-text nodes bad 0 2)
+      (node-set-text nodes clean 0 2)
+      (node-set-conf nodes bad 900)
+      (node-set-conf nodes clean 900)
+      (node-add-region nodes regions bad 1 0 0 100 100)
+      (node-add-region nodes regions clean 4 0 0 100 100)
+      (while (< i 60) (do (cells-push et 65) (set i (+ i 1))))
+      (while (<= pg 3)
+        (do (set r (or-new runs pg 0))
+            (or-set runs r (orf-pass) (op-first))
+            (or-set runs r (orf-script) 1098015074)
+            (or-set runs r (orf-sconf) 32)
+            (or-set runs r (orf-wfirst) (- pg 1))
+            (or-set runs r (orf-wcount) 1)
+            (ow-new words pg 0 0 100 100 0 0 100 100 0 0 0 60 0 900 0)
+            (set pg (+ pg 1))))
+      (assert-eq (sk-tag-conflicts nodes regions runs words et) 1 "only represented text on the corroborated pages is held")
+      (assert-eq (node-conf nodes bad) 100 "suspect text has the unread cap")
+      (assert-eq (bit-and (node-flags nodes bad) (fl-script-unread)) (fl-script-unread) "explicit unread flag")
+      (assert-eq (node-conf nodes clean) 900 "adjacent clean page stays high")
+      (assert-eq (node-flags nodes clean) 0 "no flag crosses the page boundary")
+      (assert-eq (node-parent nodes bad) 0 "owner retained")
+      (assert-eq (node-text-start nodes bad) 0 "text span retained")
+      (assert-eq (node-text-len nodes bad) 2 "Latin name and number retained")
+      (assert-eq (cells-at text 0) 65 "A retained")
+      (assert-eq (cells-at text 1) 55 "7 retained"))))
+
+(defn ^I32 sk-mixed-trial [^TestT emon-t ^I32 khmer ^I32 ethiopic ^I32 pass]
+  (let [^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells)
+        ^Cells text (new-cells) ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells runs (new-cells) ^Cells words (new-cells) ^Cells et (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (let [^I32 n (node-new nodes (nk-paragraph) 0)
+          ^I32 child (node-new nodes (nk-text) n)
+          ^I32 r (or-new runs 1 0) ^:mut ^I32 i 0]
+      (cells-push text 55)
+      (node-set-text nodes child 0 1)
+      (node-add-src nodes n (sr-text))
+      (node-add-src nodes child (sr-text))
+      (node-set-conf nodes n 900)
+      (node-set-conf nodes child 900)
+      (node-add-region nodes regions n 9 0 0 100 100)
+      (node-add-region nodes regions n 1 0 0 100 100)
+      (while (< i khmer) (do (cells-push et 6016) (set i (+ i 1))))
+      (set i 0)
+      (while (< i ethiopic) (do (cells-push et 4608) (set i (+ i 1))))
+      (or-set runs r (orf-pass) pass)
+      (or-set runs r (orf-wfirst) 0)
+      (or-set runs r (orf-wcount) 1)
+      (ow-new words 1 0 0 100 100 0 0 100 100 0 0 0 (+ khmer ethiopic) 0 900 0)
+      (sk-tag-conflicts nodes regions runs words et)
+      (assert-eq (node-parent nodes n) 0 "owner is unchanged by diagnostic")
+      (assert-eq (node-parent nodes child) n "inline value keeps its paragraph owner")
+      (assert-eq (node-conf nodes child) (node-conf nodes n) "the inline value and its block share the confidence bound")
+      (assert-eq (node-text-len nodes child) 1 "number remains represented")
+      (assert-eq (cells-at text 0) 55 "exact value 7 survives")
+      (return (node-conf nodes n)))))
+
+(deftest test-khmer-ethiopic-contamination-is-explicit-without-deleting-legacy-values
+  (assert-eq (sk-mixed-trial (test-t) 100 2 (op-first)) 100 "mixed primary reading is flagged"))
+
+(deftest test-clean-scripts-and-rejected-alternatives-cannot-accuse-the-body
+  (assert-eq (sk-mixed-trial (test-t) 100 0 (op-first)) 900 "clean Khmer stays high")
+  (assert-eq (sk-mixed-trial (test-t) 0 100 (op-first)) 900 "clean Ethiopic stays high")
+  (assert-eq (sk-mixed-trial (test-t) 99 2 (op-first)) 900 "too little script evidence")
+  (assert-eq (sk-mixed-trial (test-t) 100 2 (op-line)) 900 "a rejected crop is no page-level claim"))
+
+(defn ^I32 sk-arabic-trial [^TestT emon-t ^I32 np ^I32 hasarabic ^I32 samepage]
+  (let [^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells)
+        ^Cells text (new-cells) ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells runs (new-cells) ^Cells words (new-cells) ^Cells et (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (let [^I32 n (node-new nodes (nk-paragraph) 0) ^:mut ^I32 i 0 ^:mut ^I32 r 0 ^:mut ^I32 pg 0]
+      (cells-push text 65)
+      (node-set-text nodes n 0 1)
+      (node-set-conf nodes n 900)
+      (node-add-region nodes regions n 1 0 0 100 100)
+      (while (< i 60) (do (cells-push et 65) (set i (+ i 1))))
+      (if (== hasarabic 1) (cells-set et 0 1575))
+      (set i 0)
+      (while (< i np)
+        (do (set pg (+ i 1))
+            (if (== samepage 1) (set pg 1))
+            (set r (or-new runs pg 0))
+            (or-set runs r (orf-pass) (op-first))
+            (or-set runs r (orf-script) 1098015074)
+            (or-set runs r (orf-sconf) 32)
+            (or-set runs r (orf-wfirst) i)
+            (or-set runs r (orf-wcount) 1)
+            (ow-new words pg 0 0 100 100 0 0 100 100 0 0 0 60 0 900 0)
+            (set i (+ i 1))))
+      (sk-tag-conflicts nodes regions runs words et)
+      (assert-eq (node-text-len nodes n) 1 "Latin name remains owned")
+      (assert-eq (cells-at text 0) 65 "Latin name remains exact")
+      (return (node-conf nodes n)))))
+
+(deftest test-weak-osd-needs-distinct-pages-and-cannot-condemn-a-native-reading
+  (assert-eq (sk-arabic-trial (test-t) 2 0 0) 900 "two weak pages do not establish the script")
+  (assert-eq (sk-arabic-trial (test-t) 3 0 1) 900 "three reads of one page are not corroboration")
+  (assert-eq (sk-arabic-trial (test-t) 3 1 0) 900 "native Arabic with Latin names remains high")
+  (assert-eq (sk-arabic-trial (test-t) 3 0 0) 100 "three conflicting page readings are explicitly unread"))

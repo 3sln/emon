@@ -36,6 +36,7 @@ import (
 	"emon/rasterplan"
 	"emon/restruct"
 	"emon/scan"
+	"emon/scriptcheck"
 	"emon/sealmark"
 	"emon/sigmark"
 	"emon/table"
@@ -429,6 +430,7 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 	}
 	scan.ScTrust(m.Nodes, m.Regions, ev.Owords, d.Et, ev.Oruns)
 	scan.ScTagUnread(m.Nodes, m.Regions, d.Mask)
+	scriptcheck.SkTagConflicts(m.Nodes, m.Regions, ev.Oruns, ev.Owords, d.Et)
 	scan.ScCleanText(m.Nodes, m.Text)
 	scan.ScWriteEmptyOcr(ev.Oruns, m.Pages, m.Ledger)
 	scan.ScWriteEmptyRegions(ev.Olines, m.Nodes, m.Regions, m.Ledger)

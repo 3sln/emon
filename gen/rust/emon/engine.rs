@@ -31,6 +31,7 @@ use crate::emon::rasterin::*;
 use crate::emon::rasterplan::*;
 use crate::emon::restruct::*;
 use crate::emon::scan::*;
+use crate::emon::scriptcheck::*;
 use crate::emon::sealmark::*;
 use crate::emon::sigmark::*;
 use crate::emon::table::*;
@@ -397,6 +398,7 @@ pub(crate) fn en_stage3(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::en
     }
     sc_trust(&mut m.nodes, &mut m.regions, &mut ev.owords, &mut d.et, &mut ev.oruns);
     sc_tag_unread(&mut m.nodes, &mut m.regions, &mut d.mask);
+    sk_tag_conflicts(&mut m.nodes, &mut m.regions, &mut ev.oruns, &mut ev.owords, &mut d.et);
     sc_clean_text(&mut m.nodes, &mut m.text);
     sc_write_empty_ocr(&mut ev.oruns, &mut m.pages, &mut m.ledger);
     sc_write_empty_regions(&mut ev.olines, &mut m.nodes, &mut m.regions, &mut m.ledger);

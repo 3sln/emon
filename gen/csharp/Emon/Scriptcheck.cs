@@ -121,4 +121,144 @@ public static class Scriptcheck {
         Plan.RqOcrEnd(rq, q);
         return -1;
     }
+    public static int SkConflictConf() {
+        // Minimum weak OSD confidence, in tenths, for corroboration only.
+        return 20;
+    }
+    public static int SkConflictLatin() {
+        // Minimum ASCII letters in a conflicting primary reading.
+        return 40;
+    }
+    public static int SkConflictPages() {
+        // Distinct primary pages required before weak OSD can flag unread text.
+        return 3;
+    }
+    public static int SkConflictKhmer() {
+        // Minimum Khmer-block characters for the mixed legacy-reading diagnostic.
+        return 100;
+    }
+    public static int SkConflictEthiopic() {
+        // Minimum Ethiopic-block characters alongside substantial Khmer.
+        return 2;
+    }
+    public static int SkConflictCap() {
+        // Maximum confidence of text with corroborated unread/contamination evidence.
+        return 100;
+    }
+    internal static int SkRunConflict(emon.Port.Cells runs, int r, emon.Port.Cells words, emon.Port.Cells text) {
+        // 1: weak Arabic OSD with substantial Latin but no Arabic characters. 2: Khmer mixed with Ethiopic. Only first passes count; alternatives cannot accuse selected text.
+        if (Evidence.OrGet(runs, r, Evidence.OrfPass()) != Evidence.OpFirst()) {
+            return 0;
+        }
+        int first = Evidence.OrGet(runs, r, Evidence.OrfWfirst());
+        int end = first + Evidence.OrGet(runs, r, Evidence.OrfWcount());
+        int w = first;
+        int j = 0;
+        int cp = 0;
+        int latin = 0;
+        int arabic = 0;
+        int khmer = 0;
+        int ethiopic = 0;
+        while (w < end) {
+            j = 0;
+            while (j < Evidence.OwGet(words, w, Evidence.HdTlen())) {
+                cp = emon.Port.CellsAt(text, Evidence.OwGet(words, w, Evidence.HdTstart()) + j);
+                if (((cp >= 65) && (cp <= 90)) || ((cp >= 97) && (cp <= 122))) {
+                    latin += 1;
+                }
+                if ((cp >= 1536) && (cp <= 1791)) {
+                    arabic += 1;
+                }
+                if ((cp >= 6016) && (cp <= 6143)) {
+                    khmer += 1;
+                }
+                if ((cp >= 4608) && (cp <= 4991)) {
+                    ethiopic += 1;
+                }
+                j += 1;
+            }
+            w += 1;
+        }
+        if ((khmer >= SkConflictKhmer()) && (ethiopic >= SkConflictEthiopic())) {
+            return 2;
+        }
+        if ((Evidence.OrGet(runs, r, Evidence.OrfScript()) == Ocrport.ScArab()) && (Evidence.OrGet(runs, r, Evidence.OrfSconf()) >= SkConflictConf()) && (arabic == 0) && (latin >= SkConflictLatin())) {
+            return 1;
+        }
+        return 0;
+    }
+    internal static int SkConflictOnPage(emon.Port.Cells nodes, emon.Port.Cells regions, int n, int pg) {
+        // All regions of the nearest region-owning node count, including cross-page paragraphs and inline children inheriting their block's regions.
+        int p = n;
+        int r = 0;
+        while (p >= 0) {
+            if (Model.NodeRegionCount(nodes, p) > 0) {
+                r = Model.NodeRegionHead(nodes, p);
+                while (r >= 0) {
+                    if (Model.RegionPage(regions, r) == pg) {
+                        return 1;
+                    }
+                    r = Model.RegionNext(regions, r);
+                }
+                return 0;
+            }
+            p = Model.NodeParent(nodes, p);
+        }
+        return 0;
+    }
+    public static int SkTagConflicts(emon.Port.Cells nodes, emon.Port.Cells regions, emon.Port.Cells runs, emon.Port.Cells words, emon.Port.Cells text) {
+        // D754: preserve all text/ownership and explicit model choices, but flag represented text on corroborated unread pages or Khmer/Ethiopic contamination. Runs are immutable. No routing or retargeting changes.
+        int r = 0;
+        int k = 0;
+        int j = 0;
+        int seen = 0;
+        int pages = 0;
+        int kind = 0;
+        int n = 0;
+        int held = 0;
+        while (r < Evidence.OrCount(runs)) {
+            kind = SkRunConflict(runs, r, words, text);
+            if (kind == 1) {
+                k = 0;
+                pages = 0;
+                while (k < Evidence.OrCount(runs)) {
+                    if (SkRunConflict(runs, k, words, text) == 1) {
+                        j = 0;
+                        seen = 0;
+                        while (j < k) {
+                            if ((Evidence.OrGet(runs, j, Evidence.OrfPage()) == Evidence.OrGet(runs, k, Evidence.OrfPage())) && (SkRunConflict(runs, j, words, text) == 1)) {
+                                seen = 1;
+                            }
+                            j += 1;
+                        }
+                        if (seen == 0) {
+                            pages += 1;
+                        }
+                    }
+                    k += 1;
+                }
+                if (pages < SkConflictPages()) {
+                    kind = 0;
+                }
+            }
+            if (kind > 0) {
+                n = 1;
+                while (n < Model.NodeCount(nodes)) {
+                    if (((Model.NodeTextLen(nodes, n) > 0) || ((Model.NodeSrc(nodes, n) & (Model.SrText() | (Model.SrHiddenText() | Model.SrOcr()))) != 0)) && (SkConflictOnPage(nodes, regions, n, Evidence.OrGet(runs, r, Evidence.OrfPage())) == 1)) {
+                        if (Model.NkIsInline(Model.NodeKind(nodes, n)) == 0) {
+                            Model.NodeAddFlag(nodes, n, Model.FlScriptUnread());
+                            Model.NodeAddFlag(nodes, n, Model.FlLowConf());
+                        }
+                        if (Model.NodeConf(nodes, n) > SkConflictCap()) {
+                            Model.NodeSetConf(nodes, n, SkConflictCap());
+                        }
+                        held += 1;
+                    }
+                    n += 1;
+                }
+            }
+            r += 1;
+        }
+        return held;
+    }
 }

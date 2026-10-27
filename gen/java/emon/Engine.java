@@ -365,6 +365,7 @@ public final class Engine {
         }
         Scan.scTrust(m.nodes, m.regions, ev.owords, d.et, ev.oruns);
         Scan.scTagUnread(m.nodes, m.regions, d.mask);
+        Scriptcheck.skTagConflicts(m.nodes, m.regions, ev.oruns, ev.owords, d.et);
         Scan.scCleanText(m.nodes, m.text);
         Scan.scWriteEmptyOcr(ev.oruns, m.pages, m.ledger);
         Scan.scWriteEmptyRegions(ev.olines, m.nodes, m.regions, m.ledger);

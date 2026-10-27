@@ -101,4 +101,165 @@ public static class Scriptchecktest {
         emon.Testport.AssertEq(UnreadOf(5, 1214344809, 629, 1667789568, 1667789568), 0, "chi_sim words are recorded as chs and read Han");
         emon.Testport.AssertEq(UnreadOf(5, 1214344809, 629, 1667789824, 1667789824), 0, "chi_tra words are recorded as cht and read Han");
     }
+    [Xunit.Fact]
+    public static void TestScriptConflictFlagsAreOwnedByTheAffectedPageWithValuesKept() {
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells runs = emon.Port.NewCells();
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        int bad = Model.NodeNew(nodes, Model.NkParagraph(), 0);
+        int clean = Model.NodeNew(nodes, Model.NkParagraph(), 0);
+        int pg = 1;
+        int i = 0;
+        int r = 0;
+        emon.Port.CellsPush(text, 65);
+        emon.Port.CellsPush(text, 55);
+        Model.NodeSetText(nodes, bad, 0, 2);
+        Model.NodeSetText(nodes, clean, 0, 2);
+        Model.NodeSetConf(nodes, bad, 900);
+        Model.NodeSetConf(nodes, clean, 900);
+        Model.NodeAddRegion(nodes, regions, bad, 1, 0, 0, 100, 100);
+        Model.NodeAddRegion(nodes, regions, clean, 4, 0, 0, 100, 100);
+        while (i < 60) {
+            emon.Port.CellsPush(et, 65);
+            i += 1;
+        }
+        while (pg <= 3) {
+            r = Evidence.OrNew(runs, pg, 0);
+            Evidence.OrSet(runs, r, Evidence.OrfPass(), Evidence.OpFirst());
+            Evidence.OrSet(runs, r, Evidence.OrfScript(), 1098015074);
+            Evidence.OrSet(runs, r, Evidence.OrfSconf(), 32);
+            Evidence.OrSet(runs, r, Evidence.OrfWfirst(), pg - 1);
+            Evidence.OrSet(runs, r, Evidence.OrfWcount(), 1);
+            Evidence.OwNew(words, pg, 0, 0, 100, 100, 0, 0, 100, 100, 0, 0, 0, 60, 0, 900, 0);
+            pg += 1;
+        }
+        emon.Testport.AssertEq(Scriptcheck.SkTagConflicts(nodes, regions, runs, words, et), 1, "only represented text on the corroborated pages is held");
+        emon.Testport.AssertEq(Model.NodeConf(nodes, bad), 100, "suspect text has the unread cap");
+        emon.Testport.AssertEq(Model.NodeFlags(nodes, bad) & Model.FlScriptUnread(), Model.FlScriptUnread(), "explicit unread flag");
+        emon.Testport.AssertEq(Model.NodeConf(nodes, clean), 900, "adjacent clean page stays high");
+        emon.Testport.AssertEq(Model.NodeFlags(nodes, clean), 0, "no flag crosses the page boundary");
+        emon.Testport.AssertEq(Model.NodeParent(nodes, bad), 0, "owner retained");
+        emon.Testport.AssertEq(Model.NodeTextStart(nodes, bad), 0, "text span retained");
+        emon.Testport.AssertEq(Model.NodeTextLen(nodes, bad), 2, "Latin name and number retained");
+        emon.Testport.AssertEq(emon.Port.CellsAt(text, 0), 65, "A retained");
+        emon.Testport.AssertEq(emon.Port.CellsAt(text, 1), 55, "7 retained");
+    }
+    internal static int SkMixedTrial(int emonT, int khmer, int ethiopic, int pass) {
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells runs = emon.Port.NewCells();
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        int n = Model.NodeNew(nodes, Model.NkParagraph(), 0);
+        int child = Model.NodeNew(nodes, Model.NkText(), n);
+        int r = Evidence.OrNew(runs, 1, 0);
+        int i = 0;
+        emon.Port.CellsPush(text, 55);
+        Model.NodeSetText(nodes, child, 0, 1);
+        Model.NodeAddSrc(nodes, n, Model.SrText());
+        Model.NodeAddSrc(nodes, child, Model.SrText());
+        Model.NodeSetConf(nodes, n, 900);
+        Model.NodeSetConf(nodes, child, 900);
+        Model.NodeAddRegion(nodes, regions, n, 9, 0, 0, 100, 100);
+        Model.NodeAddRegion(nodes, regions, n, 1, 0, 0, 100, 100);
+        while (i < khmer) {
+            emon.Port.CellsPush(et, 6016);
+            i += 1;
+        }
+        i = 0;
+        while (i < ethiopic) {
+            emon.Port.CellsPush(et, 4608);
+            i += 1;
+        }
+        Evidence.OrSet(runs, r, Evidence.OrfPass(), pass);
+        Evidence.OrSet(runs, r, Evidence.OrfWfirst(), 0);
+        Evidence.OrSet(runs, r, Evidence.OrfWcount(), 1);
+        Evidence.OwNew(words, 1, 0, 0, 100, 100, 0, 0, 100, 100, 0, 0, 0, khmer + ethiopic, 0, 900, 0);
+        Scriptcheck.SkTagConflicts(nodes, regions, runs, words, et);
+        emon.Testport.AssertEq(Model.NodeParent(nodes, n), 0, "owner is unchanged by diagnostic");
+        emon.Testport.AssertEq(Model.NodeParent(nodes, child), n, "inline value keeps its paragraph owner");
+        emon.Testport.AssertEq(Model.NodeConf(nodes, child), Model.NodeConf(nodes, n), "the inline value and its block share the confidence bound");
+        emon.Testport.AssertEq(Model.NodeTextLen(nodes, child), 1, "number remains represented");
+        emon.Testport.AssertEq(emon.Port.CellsAt(text, 0), 55, "exact value 7 survives");
+        return Model.NodeConf(nodes, n);
+    }
+    [Xunit.Fact]
+    public static void TestKhmerEthiopicContaminationIsExplicitWithoutDeletingLegacyValues() {
+        emon.Testport.AssertEq(SkMixedTrial(0, 100, 2, Evidence.OpFirst()), 100, "mixed primary reading is flagged");
+    }
+    [Xunit.Fact]
+    public static void TestCleanScriptsAndRejectedAlternativesCannotAccuseTheBody() {
+        emon.Testport.AssertEq(SkMixedTrial(0, 100, 0, Evidence.OpFirst()), 900, "clean Khmer stays high");
+        emon.Testport.AssertEq(SkMixedTrial(0, 0, 100, Evidence.OpFirst()), 900, "clean Ethiopic stays high");
+        emon.Testport.AssertEq(SkMixedTrial(0, 99, 2, Evidence.OpFirst()), 900, "too little script evidence");
+        emon.Testport.AssertEq(SkMixedTrial(0, 100, 2, Evidence.OpLine()), 900, "a rejected crop is no page-level claim");
+    }
+    internal static int SkArabicTrial(int emonT, int np, int hasarabic, int samepage) {
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells runs = emon.Port.NewCells();
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        int n = Model.NodeNew(nodes, Model.NkParagraph(), 0);
+        int i = 0;
+        int r = 0;
+        int pg = 0;
+        emon.Port.CellsPush(text, 65);
+        Model.NodeSetText(nodes, n, 0, 1);
+        Model.NodeSetConf(nodes, n, 900);
+        Model.NodeAddRegion(nodes, regions, n, 1, 0, 0, 100, 100);
+        while (i < 60) {
+            emon.Port.CellsPush(et, 65);
+            i += 1;
+        }
+        if (hasarabic == 1) {
+            emon.Port.CellsSet(et, 0, 1575);
+        }
+        i = 0;
+        while (i < np) {
+            pg = i + 1;
+            if (samepage == 1) {
+                pg = 1;
+            }
+            r = Evidence.OrNew(runs, pg, 0);
+            Evidence.OrSet(runs, r, Evidence.OrfPass(), Evidence.OpFirst());
+            Evidence.OrSet(runs, r, Evidence.OrfScript(), 1098015074);
+            Evidence.OrSet(runs, r, Evidence.OrfSconf(), 32);
+            Evidence.OrSet(runs, r, Evidence.OrfWfirst(), i);
+            Evidence.OrSet(runs, r, Evidence.OrfWcount(), 1);
+            Evidence.OwNew(words, pg, 0, 0, 100, 100, 0, 0, 100, 100, 0, 0, 0, 60, 0, 900, 0);
+            i += 1;
+        }
+        Scriptcheck.SkTagConflicts(nodes, regions, runs, words, et);
+        emon.Testport.AssertEq(Model.NodeTextLen(nodes, n), 1, "Latin name remains owned");
+        emon.Testport.AssertEq(emon.Port.CellsAt(text, 0), 65, "Latin name remains exact");
+        return Model.NodeConf(nodes, n);
+    }
+    [Xunit.Fact]
+    public static void TestWeakOsdNeedsDistinctPagesAndCannotCondemnANativeReading() {
+        emon.Testport.AssertEq(SkArabicTrial(0, 2, 0, 0), 900, "two weak pages do not establish the script");
+        emon.Testport.AssertEq(SkArabicTrial(0, 3, 0, 1), 900, "three reads of one page are not corroboration");
+        emon.Testport.AssertEq(SkArabicTrial(0, 3, 1, 0), 900, "native Arabic with Latin names remains high");
+        emon.Testport.AssertEq(SkArabicTrial(0, 3, 0, 0), 100, "three conflicting page readings are explicitly unread");
+    }
 }

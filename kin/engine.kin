@@ -53,6 +53,7 @@
             [emon.restruct :refer [rs-run]]
             [emon.fields :refer [fl-run]]
             [emon.figclass :refer [fc-emit-budget fc-write fc-stage fc-images]]
+            [emon.scriptcheck :refer [sk-tag-conflicts]]
             [emon.scan :refer [sc-write-rejected-ocr sc-write-empty-ocr sc-write-empty-regions sc-clean-text sc-trust sc-tag sc-tag-unread sc-write-bare]]
             [emon.ocrledger :refer [oc-account oc-ink-account]]
             [emon.rasterplan :refer [rp-settings]]
@@ -420,6 +421,7 @@
     ;; after the provenance stages above (the scan's and fusion's) have said what is OCR's
     (sc-trust (fd m nodes) (fd m regions) (fd ev owords) (fd d et) (fd ev oruns))
     (sc-tag-unread (fd m nodes) (fd m regions) (fd d mask))
+    (sk-tag-conflicts (fd m nodes) (fd m regions) (fd ev oruns) (fd ev owords) (fd d et))
     (sc-clean-text (fd m nodes) (fd m text))
     (sc-write-empty-ocr (fd ev oruns) (fd m pages) (fd m ledger))
     (sc-write-empty-regions (fd ev olines) (fd m nodes) (fd m regions) (fd m ledger))

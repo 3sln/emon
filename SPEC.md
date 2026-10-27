@@ -286,7 +286,7 @@ API expose.
 | `at` | Zero or more regions `[page, x0, y0, x1, y1]` in page space (§3.4). A node spanning pages or columns has one region per **fragment** (per page and column, in reading order; D112); the column of a region is the page's `layout` cell that contains it (§3.7). Inline `text` nodes have regions only at `detail: words` (§13). |
 | `src` | Provenance: the set of sources that contributed (§3.5). |
 | `conf` | Confidence, integer 0..1000 (§3.5). |
-| `flags` | Small closed set of warnings: `low-conf`, `ocr-only`, `text-layer-suspect`, `reconstructed` (e.g. a repaired table), `dpi-unknown`, `rotated`, `vertical`, `struct-disagree` (a table's tags disagree with its geometry, D225), `tag-span-conflict` (a tagged span crosses an edge the rules close), `in-table-image` (an OCR-only word admitted as the text of a table drawn in an image, §9.9, D224; carried by the fused flow's verdict rows, not by Model nodes), `script-unread` (a block of an OCR'd page whose script the engine has no model for: OSD names a script that no model the engine read it with reads, §8.3, D564; the text is the engine's guess, the block is `low-conf` and its confidence is held at 100). |
+| `flags` | Small closed set of warnings: `low-conf`, `ocr-only`, `text-layer-suspect`, `reconstructed` (e.g. a repaired table), `dpi-unknown`, `rotated`, `vertical`, `struct-disagree` (a table's tags disagree with its geometry, D225), `tag-span-conflict` (a tagged span crosses an edge the rules close), `in-table-image` (an OCR-only word admitted as the text of a table drawn in an image, §9.9, D224; carried by the fused flow's verdict rows, not by Model nodes), `script-unread` (a block of an OCR'd page whose script the engine has no model for, or whose primary readings show corroborated script conflict/contamination: §8.3, D564, D754; the text is the engine's guess, the block is `low-conf` and its confidence is held at 100). |
 
 ### 3.4 Geometry and units (D009)
 
@@ -1277,6 +1277,8 @@ Catmull-Rom cubic of kin's own, as a kin-made view, and the engine reads THAT vi
 reading replaces the first when it reads at least as much; a page OSD says is turned is first read upright. (4) *A page in a script the engine has no model for*: OSD sure
 (script confidence 15.0) of a script that no model the engine read with (the language of its words) reads, with at least three words: the blocks of the page whose text is OCR's are
 flagged `script-unread` and `low-conf` and their confidence is held at 100, written uncalibrated (`cal-node-conf`).
+
+**Corroborated script conflicts (D754).** A diagnostic after provenance assignment also flags represented text on a page when three distinct primary page readings name Arabic at script confidence at least 2.0 but each contains at least forty ASCII letters and no Arabic-block characters. A primary reading containing at least one hundred Khmer-block characters and two Ethiopic-block characters flags mixed-script contamination on its page, including retained legacy text-layer fragments. These checks preserve text and ownership and cap confidence at 100; they neither change OCR requests nor select a language or delete Latin names/numbers. Alternative crop readings cannot trigger this page-level warning. The flags indicate unread/contaminated content, not a measured recognition score. Clean native-script readings remain outside these diagnostics.
 
 ### 8.4 The evidence schema, v2 (D056, revised by D096)
 
