@@ -4254,4 +4254,555 @@ public static class Tabletest {
         TtAt(wd, ln, et, emon.Testport.TextBlob("Alignment"), 15500, 32500, 0, 0);
         emon.Testport.AssertEq(TtRuledBuild(wd, ln, et, pa, tb, tc, tw), 0, "one captioned diagram owns all panel labels; there are zero tables");
     }
+    [Xunit.Fact]
+    public static void TestAdjacentAmountHeadersBindToTheirOwnValues() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        emon.Port.Cells tbo = emon.Port.NewCells();
+        int r = 0;
+        int c = 0;
+        int debit = -1;
+        int credit = -1;
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Details"), 7600, 10000, 1, 0);
+        TtWord(wd, ln, et, emon.Testport.TextBlob("Debit"), 27160, 10000, 35320, 10800, 1);
+        TtWord(wd, ln, et, emon.Testport.TextBlob("Credit"), 35920, 10000, 45960, 10800, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Balance"), 56600, 10000, 1, 1);
+        while (r < 6) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Transfer"), 7600, 12500 + (r * 2200), 0, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("15.00"), 35320, 12500 + (r * 2200), 0, 1);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("20.00"), 45960, 12500 + (r * 2200), 0, 1);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("100.00"), 56600, 12500 + (r * 2200), 0, 1);
+            r += 1;
+        }
+        emon.Testport.AssertEq(TtOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one four-column ledger owns every value once");
+        emon.Testport.AssertEq(emon.Port.CellsAt(tb, 8), 4, "headers do not change amount cuts");
+        c = emon.Port.CellsAt(tb, 9);
+        while (c < (emon.Port.CellsAt(tb, 9) + emon.Port.CellsAt(tb, 10))) {
+            if (emon.Port.CellsAt(tc, c * 16) == 0) {
+                if (emon.Port.CellsAt(tc, (c * 16) + 1) == 1) {
+                    debit = c;
+                }
+                if (emon.Port.CellsAt(tc, (c * 16) + 1) == 2) {
+                    credit = c;
+                }
+            }
+            c += 1;
+        }
+        emon.Testport.AssertThat(debit >= 0, "debit header cell exists");
+        emon.Testport.AssertThat(credit >= 0, "credit header cell exists");
+        if ((debit >= 0) && (credit >= 0)) {
+            emon.Testport.AssertEq(emon.Port.CellsAt(tc, (debit * 16) + 9), 1, "Debit owns only its own header word");
+            emon.Testport.AssertEq(emon.Port.CellsAt(tw, emon.Port.CellsAt(tc, (debit * 16) + 8)), 1, "Debit is over 15.00");
+            emon.Testport.AssertEq(emon.Port.CellsAt(tc, (credit * 16) + 9), 1, "Credit is not an empty header");
+            if (emon.Port.CellsAt(tc, (credit * 16) + 9) > 0) {
+                emon.Testport.AssertEq(emon.Port.CellsAt(tw, emon.Port.CellsAt(tc, (credit * 16) + 8)), 2, "Credit is over 20.00");
+            }
+        }
+    }
+    [Xunit.Fact]
+    public static void TestASpanningTotalDoesNotCreateAnExtraLeadingColumn() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        emon.Port.Cells tbo = emon.Port.NewCells();
+        int r = 0;
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Industry"), 7600, 10000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("2023"), 32000, 10000, 1, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("2022"), 43000, 10000, 1, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Total nonfarm"), 5500, 12500, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("158,424"), 32000, 12500, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("159,734"), 43000, 12500, 0, 1);
+        while (r < 6) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Manufacturing"), 7600, 15000 + (r * 2200), 0, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("100.00"), 32000, 15000 + (r * 2200), 0, 1);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("200.00"), 43000, 15000 + (r * 2200), 0, 1);
+            r += 1;
+        }
+        emon.Testport.AssertEq(TtOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one table owns all total and industry values once");
+        emon.Testport.AssertEq(emon.Port.CellsAt(tb, 8), 3, "the indented Industry and spanning Total share one stub column");
+    }
+    [Xunit.Fact]
+    public static void TestOneGenuineSpanningAmountHeaderRemainsASpanner() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        emon.Port.Cells tbo = emon.Port.NewCells();
+        int r = 0;
+        int c = 0;
+        int found = 0;
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Kind"), 7600, 10000, 1, 0);
+        TtWord(wd, ln, et, emon.Testport.TextBlob("Combined"), 27160, 10000, 33000, 10800, 1);
+        TtWord(wd, ln, et, emon.Testport.TextBlob("Amounts"), 33500, 10000, 45960, 10800, 1);
+        while (r < 6) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Transfer"), 7600, 12500 + (r * 2200), 0, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("15.00"), 35320, 12500 + (r * 2200), 0, 1);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("20.00"), 45960, 12500 + (r * 2200), 0, 1);
+            r += 1;
+        }
+        emon.Testport.AssertEq(TtOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one grouped amount table");
+        c = emon.Port.CellsAt(tb, 9);
+        while (c < (emon.Port.CellsAt(tb, 9) + emon.Port.CellsAt(tb, 10))) {
+            if ((emon.Port.CellsAt(tc, c * 16) == 0) && (emon.Port.CellsAt(tc, (c * 16) + 9) > 0)) {
+                if (emon.Port.CellsAt(tw, emon.Port.CellsAt(tc, (c * 16) + 8)) == 1) {
+                    found += 1;
+                    emon.Testport.AssertEq(emon.Port.CellsAt(tc, (c * 16) + 3), 2, "a single Amounts label still owns both numeric columns");
+                }
+            }
+            c += 1;
+        }
+        emon.Testport.AssertEq(found, 1, "the spanning label retains exactly one owner");
+    }
+    [Xunit.Fact]
+    public static void TestMerchantSublinesStayInTheirDatedParentRows() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        int r = 0;
+        TtRule(pa, 7000, 9500, 50000, 9550);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("PostDate"), 7600, 10000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("TransDate"), 15000, 10000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Description"), 26000, 10000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Amount"), 49000, 10000, 1, 1);
+        TtRule(pa, 7000, 11500, 50000, 11550);
+        while (r < 4) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("09/01"), 7600, 13000 + (r * 5000), 0, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("09/01"), 15000, 13000 + (r * 5000), 0, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Merchant"), 26000, 13000 + (r * 5000), 0, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("15.00"), 49000, 13000 + (r * 5000), 0, 1);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Reference"), 30000, 14200 + (r * 5000), 0, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Submerchant"), 26000, 15400 + (r * 5000), 0, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("0.00"), 49000, 15400 + (r * 5000), 0, 1);
+            r += 1;
+        }
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Unrelated prose"), 7600, 35000, 0, 0);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "ledger evidence is well formed");
+        emon.Testport.AssertText(t, "T4w;Gh;R;Ch[PostDate];Ch[TransDate];Ch[Description];Ch[Amount];Gb;R;C[09/01];C[09/01];C[Merchant Reference Submerchant];C[15.00 0.00];R;C[09/01];C[09/01];C[Merchant Reference Submerchant];C[15.00 0.00];R;C[09/01];C[09/01];C[Merchant Reference Submerchant];C[15.00 0.00];R;C[09/01];C[09/01];C[Merchant Reference Submerchant];C[15.00 0.00];P[Unrelated prose];", "every merchant subline belongs to its preceding dated row and prose remains outside");
+    }
+    [Xunit.Fact]
+    public static void TestAWrappedChangeHeaderDoesNotAddATrailingDataColumn() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        emon.Port.Cells tbo = emon.Port.NewCells();
+        int r = 0;
+        int q = 0;
+        TtWord(wd, ln, et, emon.Testport.TextBlob("Unadjusted"), 25672, 7017, 33164, 7712, 0);
+        TtWord(wd, ln, et, emon.Testport.TextBlob("Adjusted"), 44361, 7017, 50650, 7712, 0);
+        TtWord(wd, ln, et, emon.Testport.TextBlob("Industry"), 11202, 8713, 13687, 9408, 0);
+        while (q < 8) {
+            TtWord(wd, ln, et, emon.Testport.TextBlob("Aug."), 22668 + (q * 4020), 8838, 24105 + (q * 4020), 9533, 0);
+            TtWord(wd, ln, et, emon.Testport.TextBlob("2026"), 22610 + (q * 4020), 9636, 24163 + (q * 4020), 10331, 0);
+            q += 1;
+        }
+        TtWord(wd, ln, et, emon.Testport.TextBlob("Change"), 54321, 8189, 56767, 8884, 0);
+        TtWord(wd, ln, et, emon.Testport.TextBlob("from:"), 54748, 8888, 56339, 9583, 0);
+        TtWord(wd, ln, et, emon.Testport.TextBlob("July2026"), 53914, 9586, 56709, 10281, 0);
+        TtWord(wd, ln, et, emon.Testport.TextBlob("-"), 56942, 9586, 57174, 10281, 0);
+        TtWord(wd, ln, et, emon.Testport.TextBlob("Aug.2026"), 53896, 10204, 57191, 10980, 0);
+        while (r < 12) {
+            TtWord(wd, ln, et, emon.Testport.TextBlob("Industry"), 4490, 12056 + (r * 963), 21100, 12751 + (r * 963), 0);
+            q = 0;
+            while (q < 8) {
+                TtWord(wd, ln, et, emon.Testport.TextBlob("100,000"), 21834 + (q * 4020), 12056 + (r * 963), 24359 + (q * 4020), 12751 + (r * 963), 0);
+                q += 1;
+            }
+            TtWord(wd, ln, et, emon.Testport.TextBlob("127"), 54673, 12056 + (r * 963), 55838, 12751 + (r * 963), 0);
+            r += 1;
+        }
+        r = 0;
+        while (r < Evidence.WdCount(wd)) {
+            Evidence.WdSet(wd, r, Evidence.WfSize(), 700);
+            r += 1;
+        }
+        emon.Testport.AssertEq(TtOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one table owns every original count once");
+        emon.Testport.AssertEq(emon.Port.CellsAt(tb, 8), 10, "one stub plus nine value columns; the wrapped header adds no data column");
+    }
+    [Xunit.Fact]
+    public static void TestUnboldedDemographicGroupsOwnRowsAboveTheirValues() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        emon.Port.Cells tbo = emon.Port.NewCells();
+        int r = 0;
+        int q = 0;
+        int c = 0;
+        int groups = 0;
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Status"), 7600, 10000, 1, 0);
+        while (q < 6) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("2026"), 24000 + (q * 5000), 10000, 1, 1);
+            q += 1;
+        }
+        TtAt(wd, ln, et, emon.Testport.TextBlob("TOTAL"), 7600, 12500, 0, 0);
+        while (r < 6) {
+            if (r == 3) {
+                TtAt(wd, ln, et, emon.Testport.TextBlob("WHITE"), 7600, 13500 + (r * 2200), 0, 0);
+            }
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Civilian"), 7600, 14500 + (r * 2200), 0, 0);
+            q = 0;
+            while (q < 6) {
+                TtAt(wd, ln, et, emon.Testport.TextBlob("100.00"), 24000 + (q * 5000), 14500 + (r * 2200), 0, 1);
+                q += 1;
+            }
+            r += 1;
+        }
+        emon.Testport.AssertEq(TtOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one statistical table owns all six value columns");
+        emon.Testport.AssertEq(emon.Port.CellsAt(tb, 8), 7, "no group creates a phantom numeric column");
+        c = emon.Port.CellsAt(tb, 9);
+        while (c < (emon.Port.CellsAt(tb, 9) + emon.Port.CellsAt(tb, 10))) {
+            if ((emon.Port.CellsAt(tc, c * 16) > 0) && (emon.Port.CellsAt(tc, (c * 16) + 9) == 1)) {
+                if ((emon.Port.CellsAt(tw, emon.Port.CellsAt(tc, (c * 16) + 8)) == 7) || (emon.Port.CellsAt(tw, emon.Port.CellsAt(tc, (c * 16) + 8)) == 29)) {
+                    groups += 1;
+                    emon.Testport.AssertEq(emon.Port.CellsAt(tc, (c * 16) + 3), 7, "the group label has its own full-width row");
+                }
+            }
+            c += 1;
+        }
+        emon.Testport.AssertEq(groups, 2, "TOTAL and WHITE are independent of the following Civilian values");
+    }
+    internal static int TtWordOwner(emon.Port.Cells tb, int k, emon.Port.Cells tc, emon.Port.Cells tw, int word) {
+        int first = emon.Port.CellsAt(tb, (k * 32) + 9);
+        int end = first + emon.Port.CellsAt(tb, (k * 32) + 10);
+        int c = first;
+        int i = 0;
+        while (c < end) {
+            i = 0;
+            while (i < emon.Port.CellsAt(tc, (c * 16) + 9)) {
+                if (emon.Port.CellsAt(tw, emon.Port.CellsAt(tc, (c * 16) + 8) + i) == word) {
+                    return c;
+                }
+                i += 1;
+            }
+            c += 1;
+        }
+        return -1;
+    }
+    [Xunit.Fact]
+    public static void TestUppercaseWrappedStubsAreNotDemographicGroups() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        emon.Port.Cells tbo = emon.Port.NewCells();
+        int r = 0;
+        int q = 0;
+        int owner = -1;
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Status"), 7600, 10000, 1, 0);
+        while (q < 6) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("2026"), 24000 + (q * 5000), 10000, 1, 1);
+            q += 1;
+        }
+        while (r < 6) {
+            if (r == 3) {
+                TtAt(wd, ln, et, emon.Testport.TextBlob("GROSS"), 8350, 20100, 0, 0);
+            }
+            TtAt(wd, ln, et, emon.Testport.TextBlob("DOMESTIC"), 7600, 14500 + (r * 2200), 0, 0);
+            q = 0;
+            while (q < 6) {
+                TtAt(wd, ln, et, emon.Testport.TextBlob("100.00"), 24000 + (q * 5000), 14500 + (r * 2200), 0, 1);
+                q += 1;
+            }
+            r += 1;
+        }
+        emon.Testport.AssertEq(TtOwnBuild(wd, ln, et, tb, tc, tw, tbo), 1, "one table keeps its wrapped uppercase label");
+        owner = TtWordOwner(tb, 0, tc, tw, 28);
+        emon.Testport.AssertThat(owner >= 0, "GROSS has a cell owner");
+        if (owner >= 0) {
+            emon.Testport.AssertEq(emon.Port.CellsAt(tc, (owner * 16) + 3), 1, "an uppercase continuation is not promoted to a spanning group");
+            emon.Testport.AssertEq(emon.Port.CellsAt(tc, (owner * 16) + 12), 0, "an uppercase continuation has no proved-section flag");
+        }
+    }
+    [Xunit.Fact]
+    public static void TestALongTwoDateLedgerStopsBeforeABoxedSummary() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        int r = 0;
+        int k = 0;
+        int ledger = -1;
+        int owner = -1;
+        TtRule(pa, 7000, 7500, 50000, 7550);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("ACTIVITY"), 7600, 8000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("PostDate"), 7600, 10000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("TransDate"), 15000, 10000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Description"), 26000, 10000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Amount"), 49000, 10000, 1, 1);
+        TtRule(pa, 7000, 11500, 50000, 11550);
+        while (r < 8) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("09/01"), 7600, 13000 + (r * 5000), 0, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("09/01"), 15000, 13000 + (r * 5000), 0, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Merchant"), 26000, 13000 + (r * 5000), 0, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("15.00"), 49000, 13000 + (r * 5000), 0, 1);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Reference"), 30000, 14200 + (r * 5000), 0, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Submerchant"), 26000, 15400 + (r * 5000), 0, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("0.00"), 49000, 15400 + (r * 5000), 0, 1);
+            r += 1;
+        }
+        TtRule(pa, 23500, 52600, 46000, 52650);
+        TtRule(pa, 23500, 58000, 46000, 58050);
+        TtRule(pa, 23500, 52600, 23550, 58000);
+        TtRule(pa, 45950, 52600, 46000, 58000);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Totals"), 24500, 53200, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Fees"), 24500, 54800, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("100.02"), 45000, 54800, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Interest"), 24500, 56300, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("12.43"), 45000, 56300, 0, 1);
+        emon.Testport.AssertEq(TtRuledBuild(wd, ln, et, pa, tb, tc, tw), 2, "the ledger and boxed summary have independent owners");
+        while (k < (emon.Port.CellsLen(tb) / 32)) {
+            if (TtWordOwner(tb, k, tc, tw, 0) >= 0) {
+                ledger = k;
+            }
+            k += 1;
+        }
+        emon.Testport.AssertThat(ledger >= 0, "the dated ledger survives");
+        if (ledger >= 0) {
+            emon.Testport.AssertEq(emon.Port.CellsAt(tb, (ledger * 32) + 8), 4, "the ledger keeps four stable columns");
+            r = 0;
+            while (r < 8) {
+                owner = TtWordOwner(tb, ledger, tc, tw, 7 + (r * 7));
+                emon.Testport.AssertThat(owner >= 0, "the merchant has a parent row");
+                emon.Testport.AssertEq(owner, TtWordOwner(tb, ledger, tc, tw, 9 + (r * 7)), "the reference stays in its merchant cell");
+                emon.Testport.AssertEq(owner, TtWordOwner(tb, ledger, tc, tw, 10 + (r * 7)), "the undated merchant subline stays in its parent cell");
+                emon.Testport.AssertEq(TtWordOwner(tb, ledger, tc, tw, 8 + (r * 7)), TtWordOwner(tb, ledger, tc, tw, 11 + (r * 7)), "the printed zero remains in the parent amount cell");
+                r += 1;
+            }
+            emon.Testport.AssertEq(TtWordOwner(tb, ledger, tc, tw, 63), -1, "the summary amount is outside the ledger");
+        }
+    }
+    internal static int TtIndexWord(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int n, int x, int y, int right) {
+        if (n == 1) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("1"), x, y, 0, right);
+            return 0;
+        }
+        if (n == 2) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("2"), x, y, 0, right);
+            return 0;
+        }
+        if (n == 3) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("3"), x, y, 0, right);
+            return 0;
+        }
+        if (n == 4) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("4"), x, y, 0, right);
+            return 0;
+        }
+        if (n == 5) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("5"), x, y, 0, right);
+            return 0;
+        }
+        if (n == 6) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("6"), x, y, 0, right);
+            return 0;
+        }
+        if (n == 7) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("7"), x, y, 0, right);
+            return 0;
+        }
+        TtAt(wd, ln, et, emon.Testport.TextBlob("8"), x, y, 0, right);
+        return 0;
+    }
+    internal static int TtNumberedShade(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa, int @base) {
+        int r = 0;
+        int y = 0;
+        TtRule(pa, 7000, @base + 10000, 7050, @base + 37600);
+        TtRule(pa, 12000, @base + 10000, 12050, @base + 37600);
+        TtRule(pa, 27000, @base + 10000, 27050, @base + 37600);
+        TtRule(pa, 38000, @base + 10000, 38050, @base + 37600);
+        TtRule(pa, 47000, @base + 10000, 47050, @base + 37600);
+        TtRule(pa, 50000, @base + 10000, 50050, @base + 37600);
+        TtFill(pa, 7000, @base + 13800, 50000, @base + 16600, 14737632);
+        TtFill(pa, 7000, @base + 21800, 50000, @base + 24600, 14737632);
+        TtFill(pa, 7000, @base + 27000, 50000, @base + 29800, 14737632);
+        TtFill(pa, 7000, @base + 32200, 50000, @base + 35000, 14737632);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Line"), 7600, @base + 11000, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Item"), 13000, @base + 11000, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("2023"), 32000, @base + 11000, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("2022"), 43000, @base + 11000, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Line"), 49000, @base + 11000, 0, 1);
+        while (r < 8) {
+            y = @base + (14000 + (r * 2600));
+            if (r >= 2) {
+                y += 2800;
+            }
+            TtIndexWord(wd, ln, et, r + 1, 8000, y, 0);
+            if (r == 1) {
+                TtAt(wd, ln, et, emon.Testport.TextBlob("Wrapped"), 13000, y, 0, 0);
+                TtIndexWord(wd, ln, et, r + 1, 49000, y, 1);
+                TtAt(wd, ln, et, emon.Testport.TextBlob("and"), 13000, y + 1200, 0, 0);
+                TtAt(wd, ln, et, emon.Testport.TextBlob("Other"), 13000, y + 2400, 0, 0);
+                TtAt(wd, ln, et, emon.Testport.TextBlob("Workers"), 13000, y + 3600, 0, 0);
+                TtAt(wd, ln, et, emon.Testport.TextBlob("100.00"), 32000, y + 3600, 0, 1);
+                TtAt(wd, ln, et, emon.Testport.TextBlob("200.00"), 43000, y + 3600, 0, 1);
+            } else {
+                TtAt(wd, ln, et, emon.Testport.TextBlob("Workers"), 13000, y, 0, 0);
+                TtAt(wd, ln, et, emon.Testport.TextBlob("100.00"), 32000, y, 0, 1);
+                TtAt(wd, ln, et, emon.Testport.TextBlob("200.00"), 43000, y, 0, 1);
+                TtIndexWord(wd, ln, et, r + 1, 49000, y, 1);
+            }
+            r += 1;
+        }
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestNumberedShadingKeepsTallWhiteRowsAndTheFinalRow() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        int c = -1;
+        TtNumberedShade(wd, ln, et, pa, 0);
+        emon.Testport.AssertEq(TtRuledBuild(wd, ln, et, pa, tb, tc, tw), 1, "one framed numbered table");
+        emon.Testport.AssertEq(emon.Port.CellsAt(tb, 8), 5, "the two year columns keep their own identities");
+        emon.Testport.AssertEq(emon.Port.CellsAt(tb, 7), 9, "header and all eight printed row numbers remain coherent");
+        emon.Testport.AssertEq(TtWordOwner(tb, 0, tc, tw, 11), TtWordOwner(tb, 0, tc, tw, 15), "the tall white row owns its entire wrapped stub");
+        c = TtWordOwner(tb, 0, tc, tw, 45);
+        emon.Testport.AssertThat(c >= 0, "the final unshaded row's 2023 value is owned");
+        if (c >= 0) {
+            emon.Testport.AssertEq(emon.Port.CellsAt(tc, (c * 16) + 1), 2, "the final 100.00 stays under 2023");
+        }
+        c = TtWordOwner(tb, 0, tc, tw, 46);
+        emon.Testport.AssertThat(c >= 0, "the final unshaded row's 2022 value is owned");
+        if (c >= 0) {
+            emon.Testport.AssertEq(emon.Port.CellsAt(tc, (c * 16) + 1), 3, "the final 200.00 stays under 2022");
+        }
+    }
+    [Xunit.Fact]
+    public static void TestSeparateNumberedFramesRemainSeparateTables() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        TtNumberedShade(wd, ln, et, pa, 0);
+        TtNumberedShade(wd, ln, et, pa, 39000);
+        emon.Testport.AssertEq(TtRuledBuild(wd, ln, et, pa, tb, tc, tw), 2, "adjacent independent frames cannot become one table");
+    }
+    [Xunit.Fact]
+    public static void TestANewLedgerHeaderSeparatesAWithdrawalFromAccountTotals() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        int k = 0;
+        int ledger = -1;
+        int amount = -1;
+        TtRule(pa, 7000, 9500, 50000, 9550);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Total deposits"), 7600, 10000, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("2"), 20000, 10000, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Total withdrawals"), 30000, 10000, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("3"), 49000, 10000, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Deposit count"), 7600, 11300, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Withdrawal count"), 30000, 11300, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Deposit amount"), 7600, 13000, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("10.00"), 20000, 13000, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Withdrawal amount"), 30000, 13000, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("20.00"), 49000, 13000, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Credits"), 7600, 14300, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Debits"), 30000, 14300, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("USD Savings Account"), 7600, 16000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("817-002"), 49000, 16000, 1, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Date"), 7600, 18000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Details"), 15000, 18000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Deposit"), 32000, 18000, 1, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Withdrawal"), 41000, 18000, 1, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Balance"), 50000, 18000, 1, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("D"), 7600, 19200, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("T"), 15000, 19200, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("C"), 32000, 19200, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("W"), 41000, 19200, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("B"), 50000, 19200, 0, 1);
+        TtRule(pa, 7000, 20700, 50000, 20750);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("20Sep"), 7600, 22000, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Payment"), 15000, 22000, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("181.04"), 41000, 22000, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("149818.96"), 50000, 22000, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Reference"), 15000, 23200, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Merchant"), 15000, 24400, 0, 0);
+        TtRule(pa, 7000, 26000, 50000, 26050);
+        emon.Testport.AssertEq(TtRuledBuild(wd, ln, et, pa, tb, tc, tw), 2, "totals and a newly headed ledger have different owners");
+        while (k < (emon.Port.CellsLen(tb) / 32)) {
+            amount = TtWordOwner(tb, k, tc, tw, 26);
+            if (amount >= 0) {
+                ledger = k;
+                emon.Testport.AssertEq(emon.Port.CellsAt(tb, (k * 32) + 8), 5, "the new ledger has five explicit columns");
+                emon.Testport.AssertEq(emon.Port.CellsAt(tc, (amount * 16) + 1), 3, "181.04 belongs under Withdrawal");
+                emon.Testport.AssertEq(TtWordOwner(tb, k, tc, tw, 25), TtWordOwner(tb, k, tc, tw, 28), "the transaction owns its reference line");
+                emon.Testport.AssertEq(TtWordOwner(tb, k, tc, tw, 25), TtWordOwner(tb, k, tc, tw, 29), "the transaction owns its merchant continuation");
+                emon.Testport.AssertEq(TtWordOwner(tb, k, tc, tw, 7), -1, "the ledger does not own the previous account's total");
+                emon.Testport.AssertEq(TtWordOwner(tb, k, tc, tw, 12), -1, "the account title is outside the data grid");
+            }
+            k += 1;
+        }
+        emon.Testport.AssertThat(ledger >= 0, "the first USD transaction retains an independent ledger owner");
+    }
+    [Xunit.Fact]
+    public static void TestLedgerGrowthDoesNotHideUnownedRotatedText() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        int r = 0;
+        int k = 0;
+        int owner = -1;
+        TtRule(pa, 7000, 7500, 50000, 7550);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("ACTIVITY"), 7600, 8000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("PostDate"), 7600, 10000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("TransDate"), 15000, 10000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Description"), 26000, 10000, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Amount"), 49000, 10000, 1, 1);
+        TtRule(pa, 7000, 11500, 50000, 11550);
+        while (r < 8) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("09/01"), 7600, 13000 + (r * 5000), 0, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("09/01"), 15000, 13000 + (r * 5000), 0, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Merchant"), 26000, 13000 + (r * 5000), 0, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("15.00"), 49000, 13000 + (r * 5000), 0, 1);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Reference"), 30000, 14200 + (r * 5000), 0, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Submerchant"), 26000, 15400 + (r * 5000), 0, 0);
+            TtAt(wd, ln, et, emon.Testport.TextBlob("0.00"), 49000, 15400 + (r * 5000), 0, 1);
+            r += 1;
+        }
+        TtAt(wd, ln, et, emon.Testport.TextBlob("WATERMARK"), 30000, 30000, 0, 0);
+        Evidence.WdSet(wd, 61, Evidence.HdRot(), 4500);
+        emon.Testport.AssertEq(TtRuledBuild(wd, ln, et, pa, tb, tc, tw), 1, "the original ledger remains selected");
+        while (k < (emon.Port.CellsLen(tb) / 32)) {
+            owner = TtWordOwner(tb, k, tc, tw, 61);
+            emon.Testport.AssertEq(owner, -1, "rotated context has no amount or description cell owner");
+            k += 1;
+        }
+        emon.Testport.AssertEq(Evidence.LnGet(ln, 61, 15), 0, "unowned rotated context remains outside claimed ledger lines");
+    }
 }

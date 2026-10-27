@@ -4268,3 +4268,554 @@ fn test_captioned_disconnected_panels_own_their_labels_before_tables() {
     tt_at(wd, ln, et, &crate::testport::text_blob("Alignment")[..], 15500, 32500, 0, 0);
     crate::testport::assert_eq(tt_ruled_build(wd, ln, et, pa, tb, tc, tw), 0, "one captioned diagram owns all panel labels; there are zero tables");
 }
+#[test]
+fn test_adjacent_amount_headers_bind_to_their_own_values() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tbo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut r: i32 = 0;
+    let mut c: i32 = 0;
+    let mut debit: i32 = -1;
+    let mut credit: i32 = -1;
+    tt_at(wd, ln, et, &crate::testport::text_blob("Details")[..], 7600, 10000, 1, 0);
+    tt_word(wd, ln, et, &crate::testport::text_blob("Debit")[..], 27160, 10000, 35320, 10800, 1);
+    tt_word(wd, ln, et, &crate::testport::text_blob("Credit")[..], 35920, 10000, 45960, 10800, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Balance")[..], 56600, 10000, 1, 1);
+    while r < 6 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("Transfer")[..], 7600, 12500 + (r * 2200), 0, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("15.00")[..], 35320, 12500 + (r * 2200), 0, 1);
+        tt_at(wd, ln, et, &crate::testport::text_blob("20.00")[..], 45960, 12500 + (r * 2200), 0, 1);
+        tt_at(wd, ln, et, &crate::testport::text_blob("100.00")[..], 56600, 12500 + (r * 2200), 0, 1);
+        r += 1;
+    }
+    crate::testport::assert_eq(tt_own_build(wd, ln, et, tb, tc, tw, tbo), 1, "one four-column ledger owns every value once");
+    crate::testport::assert_eq(crate::port::cells_at(tb, 8), 4, "headers do not change amount cuts");
+    c = crate::port::cells_at(tb, 9);
+    while c < (crate::port::cells_at(tb, 9) + crate::port::cells_at(tb, 10)) {
+        if crate::port::cells_at(tc, c * 16) == 0 {
+            if crate::port::cells_at(tc, (c * 16) + 1) == 1 {
+                debit = c;
+            }
+            if crate::port::cells_at(tc, (c * 16) + 1) == 2 {
+                credit = c;
+            }
+        }
+        c += 1;
+    }
+    crate::testport::assert_that(debit >= 0, "debit header cell exists");
+    crate::testport::assert_that(credit >= 0, "credit header cell exists");
+    if (debit >= 0) && (credit >= 0) {
+        crate::testport::assert_eq(crate::port::cells_at(tc, (debit * 16) + 9), 1, "Debit owns only its own header word");
+        crate::testport::assert_eq(crate::port::cells_at(tw, crate::port::cells_at(tc, (debit * 16) + 8)), 1, "Debit is over 15.00");
+        crate::testport::assert_eq(crate::port::cells_at(tc, (credit * 16) + 9), 1, "Credit is not an empty header");
+        if crate::port::cells_at(tc, (credit * 16) + 9) > 0 {
+            crate::testport::assert_eq(crate::port::cells_at(tw, crate::port::cells_at(tc, (credit * 16) + 8)), 2, "Credit is over 20.00");
+        }
+    }
+}
+#[test]
+fn test_a_spanning_total_does_not_create_an_extra_leading_column() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tbo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut r: i32 = 0;
+    tt_at(wd, ln, et, &crate::testport::text_blob("Industry")[..], 7600, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("2023")[..], 32000, 10000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("2022")[..], 43000, 10000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Total nonfarm")[..], 5500, 12500, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("158,424")[..], 32000, 12500, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("159,734")[..], 43000, 12500, 0, 1);
+    while r < 6 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("Manufacturing")[..], 7600, 15000 + (r * 2200), 0, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("100.00")[..], 32000, 15000 + (r * 2200), 0, 1);
+        tt_at(wd, ln, et, &crate::testport::text_blob("200.00")[..], 43000, 15000 + (r * 2200), 0, 1);
+        r += 1;
+    }
+    crate::testport::assert_eq(tt_own_build(wd, ln, et, tb, tc, tw, tbo), 1, "one table owns all total and industry values once");
+    crate::testport::assert_eq(crate::port::cells_at(tb, 8), 3, "the indented Industry and spanning Total share one stub column");
+}
+#[test]
+fn test_one_genuine_spanning_amount_header_remains_a_spanner() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tbo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut r: i32 = 0;
+    let mut c: i32 = 0;
+    let mut found: i32 = 0;
+    tt_at(wd, ln, et, &crate::testport::text_blob("Kind")[..], 7600, 10000, 1, 0);
+    tt_word(wd, ln, et, &crate::testport::text_blob("Combined")[..], 27160, 10000, 33000, 10800, 1);
+    tt_word(wd, ln, et, &crate::testport::text_blob("Amounts")[..], 33500, 10000, 45960, 10800, 1);
+    while r < 6 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("Transfer")[..], 7600, 12500 + (r * 2200), 0, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("15.00")[..], 35320, 12500 + (r * 2200), 0, 1);
+        tt_at(wd, ln, et, &crate::testport::text_blob("20.00")[..], 45960, 12500 + (r * 2200), 0, 1);
+        r += 1;
+    }
+    crate::testport::assert_eq(tt_own_build(wd, ln, et, tb, tc, tw, tbo), 1, "one grouped amount table");
+    c = crate::port::cells_at(tb, 9);
+    while c < (crate::port::cells_at(tb, 9) + crate::port::cells_at(tb, 10)) {
+        if (crate::port::cells_at(tc, c * 16) == 0) && (crate::port::cells_at(tc, (c * 16) + 9) > 0) {
+            if crate::port::cells_at(tw, crate::port::cells_at(tc, (c * 16) + 8)) == 1 {
+                found += 1;
+                crate::testport::assert_eq(crate::port::cells_at(tc, (c * 16) + 3), 2, "a single Amounts label still owns both numeric columns");
+            }
+        }
+        c += 1;
+    }
+    crate::testport::assert_eq(found, 1, "the spanning label retains exactly one owner");
+}
+#[test]
+fn test_merchant_sublines_stay_in_their_dated_parent_rows() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    let mut r: i32 = 0;
+    tt_rule(pa, 7000, 9500, 50000, 9550);
+    tt_at(wd, ln, et, &crate::testport::text_blob("PostDate")[..], 7600, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("TransDate")[..], 15000, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Description")[..], 26000, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Amount")[..], 49000, 10000, 1, 1);
+    tt_rule(pa, 7000, 11500, 50000, 11550);
+    while r < 4 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("09/01")[..], 7600, 13000 + (r * 5000), 0, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("09/01")[..], 15000, 13000 + (r * 5000), 0, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("Merchant")[..], 26000, 13000 + (r * 5000), 0, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("15.00")[..], 49000, 13000 + (r * 5000), 0, 1);
+        tt_at(wd, ln, et, &crate::testport::text_blob("Reference")[..], 30000, 14200 + (r * 5000), 0, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("Submerchant")[..], 26000, 15400 + (r * 5000), 0, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("0.00")[..], 49000, 15400 + (r * 5000), 0, 1);
+        r += 1;
+    }
+    tt_at(wd, ln, et, &crate::testport::text_blob("Unrelated prose")[..], 7600, 35000, 0, 0);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "ledger evidence is well formed");
+    crate::testport::assert_text(t, "T4w;Gh;R;Ch[PostDate];Ch[TransDate];Ch[Description];Ch[Amount];Gb;R;C[09/01];C[09/01];C[Merchant Reference Submerchant];C[15.00 0.00];R;C[09/01];C[09/01];C[Merchant Reference Submerchant];C[15.00 0.00];R;C[09/01];C[09/01];C[Merchant Reference Submerchant];C[15.00 0.00];R;C[09/01];C[09/01];C[Merchant Reference Submerchant];C[15.00 0.00];P[Unrelated prose];", "every merchant subline belongs to its preceding dated row and prose remains outside");
+}
+#[test]
+fn test_a_wrapped_change_header_does_not_add_a_trailing_data_column() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tbo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut r: i32 = 0;
+    let mut q: i32 = 0;
+    tt_word(wd, ln, et, &crate::testport::text_blob("Unadjusted")[..], 25672, 7017, 33164, 7712, 0);
+    tt_word(wd, ln, et, &crate::testport::text_blob("Adjusted")[..], 44361, 7017, 50650, 7712, 0);
+    tt_word(wd, ln, et, &crate::testport::text_blob("Industry")[..], 11202, 8713, 13687, 9408, 0);
+    while q < 8 {
+        tt_word(wd, ln, et, &crate::testport::text_blob("Aug.")[..], 22668 + (q * 4020), 8838, 24105 + (q * 4020), 9533, 0);
+        tt_word(wd, ln, et, &crate::testport::text_blob("2026")[..], 22610 + (q * 4020), 9636, 24163 + (q * 4020), 10331, 0);
+        q += 1;
+    }
+    tt_word(wd, ln, et, &crate::testport::text_blob("Change")[..], 54321, 8189, 56767, 8884, 0);
+    tt_word(wd, ln, et, &crate::testport::text_blob("from:")[..], 54748, 8888, 56339, 9583, 0);
+    tt_word(wd, ln, et, &crate::testport::text_blob("July2026")[..], 53914, 9586, 56709, 10281, 0);
+    tt_word(wd, ln, et, &crate::testport::text_blob("-")[..], 56942, 9586, 57174, 10281, 0);
+    tt_word(wd, ln, et, &crate::testport::text_blob("Aug.2026")[..], 53896, 10204, 57191, 10980, 0);
+    while r < 12 {
+        tt_word(wd, ln, et, &crate::testport::text_blob("Industry")[..], 4490, 12056 + (r * 963), 21100, 12751 + (r * 963), 0);
+        q = 0;
+        while q < 8 {
+            tt_word(wd, ln, et, &crate::testport::text_blob("100,000")[..], 21834 + (q * 4020), 12056 + (r * 963), 24359 + (q * 4020), 12751 + (r * 963), 0);
+            q += 1;
+        }
+        tt_word(wd, ln, et, &crate::testport::text_blob("127")[..], 54673, 12056 + (r * 963), 55838, 12751 + (r * 963), 0);
+        r += 1;
+    }
+    r = 0;
+    while r < wd_count(wd) {
+        wd_set(wd, r, wf_size(), 700);
+        r += 1;
+    }
+    crate::testport::assert_eq(tt_own_build(wd, ln, et, tb, tc, tw, tbo), 1, "one table owns every original count once");
+    crate::testport::assert_eq(crate::port::cells_at(tb, 8), 10, "one stub plus nine value columns; the wrapped header adds no data column");
+}
+#[test]
+fn test_unbolded_demographic_groups_own_rows_above_their_values() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tbo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut r: i32 = 0;
+    let mut q: i32 = 0;
+    let mut c: i32 = 0;
+    let mut groups: i32 = 0;
+    tt_at(wd, ln, et, &crate::testport::text_blob("Status")[..], 7600, 10000, 1, 0);
+    while q < 6 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("2026")[..], 24000 + (q * 5000), 10000, 1, 1);
+        q += 1;
+    }
+    tt_at(wd, ln, et, &crate::testport::text_blob("TOTAL")[..], 7600, 12500, 0, 0);
+    while r < 6 {
+        if r == 3 {
+            tt_at(wd, ln, et, &crate::testport::text_blob("WHITE")[..], 7600, 13500 + (r * 2200), 0, 0);
+        }
+        tt_at(wd, ln, et, &crate::testport::text_blob("Civilian")[..], 7600, 14500 + (r * 2200), 0, 0);
+        q = 0;
+        while q < 6 {
+            tt_at(wd, ln, et, &crate::testport::text_blob("100.00")[..], 24000 + (q * 5000), 14500 + (r * 2200), 0, 1);
+            q += 1;
+        }
+        r += 1;
+    }
+    crate::testport::assert_eq(tt_own_build(wd, ln, et, tb, tc, tw, tbo), 1, "one statistical table owns all six value columns");
+    crate::testport::assert_eq(crate::port::cells_at(tb, 8), 7, "no group creates a phantom numeric column");
+    c = crate::port::cells_at(tb, 9);
+    while c < (crate::port::cells_at(tb, 9) + crate::port::cells_at(tb, 10)) {
+        if (crate::port::cells_at(tc, c * 16) > 0) && (crate::port::cells_at(tc, (c * 16) + 9) == 1) {
+            if (crate::port::cells_at(tw, crate::port::cells_at(tc, (c * 16) + 8)) == 7) || (crate::port::cells_at(tw, crate::port::cells_at(tc, (c * 16) + 8)) == 29) {
+                groups += 1;
+                crate::testport::assert_eq(crate::port::cells_at(tc, (c * 16) + 3), 7, "the group label has its own full-width row");
+            }
+        }
+        c += 1;
+    }
+    crate::testport::assert_eq(groups, 2, "TOTAL and WHITE are independent of the following Civilian values");
+}
+pub(crate) fn tt_word_owner(tb: &mut crate::port::Cells, k: i32, tc: &mut crate::port::Cells, tw: &mut crate::port::Cells, word: i32) -> i32 {
+    let first: i32 = crate::port::cells_at(tb, (k * 32) + 9);
+    let end: i32 = first + crate::port::cells_at(tb, (k * 32) + 10);
+    let mut c: i32 = first;
+    let mut i: i32 = 0;
+    while c < end {
+        i = 0;
+        while i < crate::port::cells_at(tc, (c * 16) + 9) {
+            if crate::port::cells_at(tw, crate::port::cells_at(tc, (c * 16) + 8) + i) == word {
+                return c;
+            }
+            i += 1;
+        }
+        c += 1;
+    }
+    return -1;
+}
+#[test]
+fn test_uppercase_wrapped_stubs_are_not_demographic_groups() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tbo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut r: i32 = 0;
+    let mut q: i32 = 0;
+    let mut owner: i32 = -1;
+    tt_at(wd, ln, et, &crate::testport::text_blob("Status")[..], 7600, 10000, 1, 0);
+    while q < 6 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("2026")[..], 24000 + (q * 5000), 10000, 1, 1);
+        q += 1;
+    }
+    while r < 6 {
+        if r == 3 {
+            tt_at(wd, ln, et, &crate::testport::text_blob("GROSS")[..], 8350, 20100, 0, 0);
+        }
+        tt_at(wd, ln, et, &crate::testport::text_blob("DOMESTIC")[..], 7600, 14500 + (r * 2200), 0, 0);
+        q = 0;
+        while q < 6 {
+            tt_at(wd, ln, et, &crate::testport::text_blob("100.00")[..], 24000 + (q * 5000), 14500 + (r * 2200), 0, 1);
+            q += 1;
+        }
+        r += 1;
+    }
+    crate::testport::assert_eq(tt_own_build(wd, ln, et, tb, tc, tw, tbo), 1, "one table keeps its wrapped uppercase label");
+    owner = tt_word_owner(tb, 0, tc, tw, 28);
+    crate::testport::assert_that(owner >= 0, "GROSS has a cell owner");
+    if owner >= 0 {
+        crate::testport::assert_eq(crate::port::cells_at(tc, (owner * 16) + 3), 1, "an uppercase continuation is not promoted to a spanning group");
+        crate::testport::assert_eq(crate::port::cells_at(tc, (owner * 16) + 12), 0, "an uppercase continuation has no proved-section flag");
+    }
+}
+#[test]
+fn test_a_long_two_date_ledger_stops_before_a_boxed_summary() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut r: i32 = 0;
+    let mut k: i32 = 0;
+    let mut ledger: i32 = -1;
+    let mut owner: i32 = -1;
+    tt_rule(pa, 7000, 7500, 50000, 7550);
+    tt_at(wd, ln, et, &crate::testport::text_blob("ACTIVITY")[..], 7600, 8000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("PostDate")[..], 7600, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("TransDate")[..], 15000, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Description")[..], 26000, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Amount")[..], 49000, 10000, 1, 1);
+    tt_rule(pa, 7000, 11500, 50000, 11550);
+    while r < 8 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("09/01")[..], 7600, 13000 + (r * 5000), 0, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("09/01")[..], 15000, 13000 + (r * 5000), 0, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("Merchant")[..], 26000, 13000 + (r * 5000), 0, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("15.00")[..], 49000, 13000 + (r * 5000), 0, 1);
+        tt_at(wd, ln, et, &crate::testport::text_blob("Reference")[..], 30000, 14200 + (r * 5000), 0, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("Submerchant")[..], 26000, 15400 + (r * 5000), 0, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("0.00")[..], 49000, 15400 + (r * 5000), 0, 1);
+        r += 1;
+    }
+    tt_rule(pa, 23500, 52600, 46000, 52650);
+    tt_rule(pa, 23500, 58000, 46000, 58050);
+    tt_rule(pa, 23500, 52600, 23550, 58000);
+    tt_rule(pa, 45950, 52600, 46000, 58000);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Totals")[..], 24500, 53200, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Fees")[..], 24500, 54800, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("100.02")[..], 45000, 54800, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Interest")[..], 24500, 56300, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("12.43")[..], 45000, 56300, 0, 1);
+    crate::testport::assert_eq(tt_ruled_build(wd, ln, et, pa, tb, tc, tw), 2, "the ledger and boxed summary have independent owners");
+    while k < (crate::port::cells_len(tb) / 32) {
+        if tt_word_owner(tb, k, tc, tw, 0) >= 0 {
+            ledger = k;
+        }
+        k += 1;
+    }
+    crate::testport::assert_that(ledger >= 0, "the dated ledger survives");
+    if ledger >= 0 {
+        crate::testport::assert_eq(crate::port::cells_at(tb, (ledger * 32) + 8), 4, "the ledger keeps four stable columns");
+        r = 0;
+        while r < 8 {
+            owner = tt_word_owner(tb, ledger, tc, tw, 7 + (r * 7));
+            crate::testport::assert_that(owner >= 0, "the merchant has a parent row");
+            crate::testport::assert_eq(owner, tt_word_owner(tb, ledger, tc, tw, 9 + (r * 7)), "the reference stays in its merchant cell");
+            crate::testport::assert_eq(owner, tt_word_owner(tb, ledger, tc, tw, 10 + (r * 7)), "the undated merchant subline stays in its parent cell");
+            crate::testport::assert_eq(tt_word_owner(tb, ledger, tc, tw, 8 + (r * 7)), tt_word_owner(tb, ledger, tc, tw, 11 + (r * 7)), "the printed zero remains in the parent amount cell");
+            r += 1;
+        }
+        crate::testport::assert_eq(tt_word_owner(tb, ledger, tc, tw, 63), -1, "the summary amount is outside the ledger");
+    }
+}
+pub(crate) fn tt_index_word(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, n: i32, x: i32, y: i32, right: i32) -> i32 {
+    if n == 1 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("1")[..], x, y, 0, right);
+        return 0;
+    }
+    if n == 2 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("2")[..], x, y, 0, right);
+        return 0;
+    }
+    if n == 3 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("3")[..], x, y, 0, right);
+        return 0;
+    }
+    if n == 4 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("4")[..], x, y, 0, right);
+        return 0;
+    }
+    if n == 5 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("5")[..], x, y, 0, right);
+        return 0;
+    }
+    if n == 6 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("6")[..], x, y, 0, right);
+        return 0;
+    }
+    if n == 7 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("7")[..], x, y, 0, right);
+        return 0;
+    }
+    tt_at(wd, ln, et, &crate::testport::text_blob("8")[..], x, y, 0, right);
+    return 0;
+}
+pub(crate) fn tt_numbered_shade(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut pa: &mut crate::port::Cells, base: i32) -> i32 {
+    let mut r: i32 = 0;
+    let mut y: i32 = 0;
+    tt_rule(pa, 7000, base + 10000, 7050, base + 37600);
+    tt_rule(pa, 12000, base + 10000, 12050, base + 37600);
+    tt_rule(pa, 27000, base + 10000, 27050, base + 37600);
+    tt_rule(pa, 38000, base + 10000, 38050, base + 37600);
+    tt_rule(pa, 47000, base + 10000, 47050, base + 37600);
+    tt_rule(pa, 50000, base + 10000, 50050, base + 37600);
+    tt_fill(pa, 7000, base + 13800, 50000, base + 16600, 14737632);
+    tt_fill(pa, 7000, base + 21800, 50000, base + 24600, 14737632);
+    tt_fill(pa, 7000, base + 27000, 50000, base + 29800, 14737632);
+    tt_fill(pa, 7000, base + 32200, 50000, base + 35000, 14737632);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Line")[..], 7600, base + 11000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Item")[..], 13000, base + 11000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("2023")[..], 32000, base + 11000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("2022")[..], 43000, base + 11000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Line")[..], 49000, base + 11000, 0, 1);
+    while r < 8 {
+        y = base + (14000 + (r * 2600));
+        if r >= 2 {
+            y += 2800;
+        }
+        tt_index_word(wd, ln, et, r + 1, 8000, y, 0);
+        if r == 1 {
+            tt_at(wd, ln, et, &crate::testport::text_blob("Wrapped")[..], 13000, y, 0, 0);
+            tt_index_word(wd, ln, et, r + 1, 49000, y, 1);
+            tt_at(wd, ln, et, &crate::testport::text_blob("and")[..], 13000, y + 1200, 0, 0);
+            tt_at(wd, ln, et, &crate::testport::text_blob("Other")[..], 13000, y + 2400, 0, 0);
+            tt_at(wd, ln, et, &crate::testport::text_blob("Workers")[..], 13000, y + 3600, 0, 0);
+            tt_at(wd, ln, et, &crate::testport::text_blob("100.00")[..], 32000, y + 3600, 0, 1);
+            tt_at(wd, ln, et, &crate::testport::text_blob("200.00")[..], 43000, y + 3600, 0, 1);
+        } else {
+            tt_at(wd, ln, et, &crate::testport::text_blob("Workers")[..], 13000, y, 0, 0);
+            tt_at(wd, ln, et, &crate::testport::text_blob("100.00")[..], 32000, y, 0, 1);
+            tt_at(wd, ln, et, &crate::testport::text_blob("200.00")[..], 43000, y, 0, 1);
+            tt_index_word(wd, ln, et, r + 1, 49000, y, 1);
+        }
+        r += 1;
+    }
+    return 0;
+}
+#[test]
+fn test_numbered_shading_keeps_tall_white_rows_and_the_final_row() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut c: i32 = -1;
+    tt_numbered_shade(wd, ln, et, pa, 0);
+    crate::testport::assert_eq(tt_ruled_build(wd, ln, et, pa, tb, tc, tw), 1, "one framed numbered table");
+    crate::testport::assert_eq(crate::port::cells_at(tb, 8), 5, "the two year columns keep their own identities");
+    crate::testport::assert_eq(crate::port::cells_at(tb, 7), 9, "header and all eight printed row numbers remain coherent");
+    crate::testport::assert_eq(tt_word_owner(tb, 0, tc, tw, 11), tt_word_owner(tb, 0, tc, tw, 15), "the tall white row owns its entire wrapped stub");
+    c = tt_word_owner(tb, 0, tc, tw, 45);
+    crate::testport::assert_that(c >= 0, "the final unshaded row's 2023 value is owned");
+    if c >= 0 {
+        crate::testport::assert_eq(crate::port::cells_at(tc, (c * 16) + 1), 2, "the final 100.00 stays under 2023");
+    }
+    c = tt_word_owner(tb, 0, tc, tw, 46);
+    crate::testport::assert_that(c >= 0, "the final unshaded row's 2022 value is owned");
+    if c >= 0 {
+        crate::testport::assert_eq(crate::port::cells_at(tc, (c * 16) + 1), 3, "the final 200.00 stays under 2022");
+    }
+}
+#[test]
+fn test_separate_numbered_frames_remain_separate_tables() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    tt_numbered_shade(wd, ln, et, pa, 0);
+    tt_numbered_shade(wd, ln, et, pa, 39000);
+    crate::testport::assert_eq(tt_ruled_build(wd, ln, et, pa, tb, tc, tw), 2, "adjacent independent frames cannot become one table");
+}
+#[test]
+fn test_a_new_ledger_header_separates_a_withdrawal_from_account_totals() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut k: i32 = 0;
+    let mut ledger: i32 = -1;
+    let mut amount: i32 = -1;
+    tt_rule(pa, 7000, 9500, 50000, 9550);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Total deposits")[..], 7600, 10000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("2")[..], 20000, 10000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Total withdrawals")[..], 30000, 10000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("3")[..], 49000, 10000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Deposit count")[..], 7600, 11300, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Withdrawal count")[..], 30000, 11300, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Deposit amount")[..], 7600, 13000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("10.00")[..], 20000, 13000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Withdrawal amount")[..], 30000, 13000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("20.00")[..], 49000, 13000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Credits")[..], 7600, 14300, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Debits")[..], 30000, 14300, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("USD Savings Account")[..], 7600, 16000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("817-002")[..], 49000, 16000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Date")[..], 7600, 18000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Details")[..], 15000, 18000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Deposit")[..], 32000, 18000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Withdrawal")[..], 41000, 18000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Balance")[..], 50000, 18000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("D")[..], 7600, 19200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("T")[..], 15000, 19200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("C")[..], 32000, 19200, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("W")[..], 41000, 19200, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("B")[..], 50000, 19200, 0, 1);
+    tt_rule(pa, 7000, 20700, 50000, 20750);
+    tt_at(wd, ln, et, &crate::testport::text_blob("20Sep")[..], 7600, 22000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Payment")[..], 15000, 22000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("181.04")[..], 41000, 22000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("149818.96")[..], 50000, 22000, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Reference")[..], 15000, 23200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Merchant")[..], 15000, 24400, 0, 0);
+    tt_rule(pa, 7000, 26000, 50000, 26050);
+    crate::testport::assert_eq(tt_ruled_build(wd, ln, et, pa, tb, tc, tw), 2, "totals and a newly headed ledger have different owners");
+    while k < (crate::port::cells_len(tb) / 32) {
+        amount = tt_word_owner(tb, k, tc, tw, 26);
+        if amount >= 0 {
+            ledger = k;
+            crate::testport::assert_eq(crate::port::cells_at(tb, (k * 32) + 8), 5, "the new ledger has five explicit columns");
+            crate::testport::assert_eq(crate::port::cells_at(tc, (amount * 16) + 1), 3, "181.04 belongs under Withdrawal");
+            crate::testport::assert_eq(tt_word_owner(tb, k, tc, tw, 25), tt_word_owner(tb, k, tc, tw, 28), "the transaction owns its reference line");
+            crate::testport::assert_eq(tt_word_owner(tb, k, tc, tw, 25), tt_word_owner(tb, k, tc, tw, 29), "the transaction owns its merchant continuation");
+            crate::testport::assert_eq(tt_word_owner(tb, k, tc, tw, 7), -1, "the ledger does not own the previous account's total");
+            crate::testport::assert_eq(tt_word_owner(tb, k, tc, tw, 12), -1, "the account title is outside the data grid");
+        }
+        k += 1;
+    }
+    crate::testport::assert_that(ledger >= 0, "the first USD transaction retains an independent ledger owner");
+}
+#[test]
+fn test_ledger_growth_does_not_hide_unowned_rotated_text() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut r: i32 = 0;
+    let mut k: i32 = 0;
+    let mut owner: i32 = -1;
+    tt_rule(pa, 7000, 7500, 50000, 7550);
+    tt_at(wd, ln, et, &crate::testport::text_blob("ACTIVITY")[..], 7600, 8000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("PostDate")[..], 7600, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("TransDate")[..], 15000, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Description")[..], 26000, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Amount")[..], 49000, 10000, 1, 1);
+    tt_rule(pa, 7000, 11500, 50000, 11550);
+    while r < 8 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("09/01")[..], 7600, 13000 + (r * 5000), 0, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("09/01")[..], 15000, 13000 + (r * 5000), 0, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("Merchant")[..], 26000, 13000 + (r * 5000), 0, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("15.00")[..], 49000, 13000 + (r * 5000), 0, 1);
+        tt_at(wd, ln, et, &crate::testport::text_blob("Reference")[..], 30000, 14200 + (r * 5000), 0, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("Submerchant")[..], 26000, 15400 + (r * 5000), 0, 0);
+        tt_at(wd, ln, et, &crate::testport::text_blob("0.00")[..], 49000, 15400 + (r * 5000), 0, 1);
+        r += 1;
+    }
+    tt_at(wd, ln, et, &crate::testport::text_blob("WATERMARK")[..], 30000, 30000, 0, 0);
+    wd_set(wd, 61, hd_rot(), 4500);
+    crate::testport::assert_eq(tt_ruled_build(wd, ln, et, pa, tb, tc, tw), 1, "the original ledger remains selected");
+    while k < (crate::port::cells_len(tb) / 32) {
+        owner = tt_word_owner(tb, k, tc, tw, 61);
+        crate::testport::assert_eq(owner, -1, "rotated context has no amount or description cell owner");
+        k += 1;
+    }
+    crate::testport::assert_eq(ln_get(ln, 61, 15), 0, "unowned rotated context remains outside claimed ledger lines");
+}
