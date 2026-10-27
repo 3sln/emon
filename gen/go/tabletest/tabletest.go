@@ -512,6 +512,7 @@ func ttWidget(an *port.Cells, x0 int32, y0 int32, x1 int32, y1 int32) int32 {
 	}
 	var r int32 = (port.CellsLen(an) / 38) - 1
 	port.CellsSet(an, (r*38)+1, pdfannot.AnField())
+	port.CellsSet(an, (r*38)+8, 4)
 	port.CellsSet(an, (r*38)+4, x0)
 	port.CellsSet(an, (r*38)+5, y0)
 	port.CellsSet(an, (r*38)+6, x1)
@@ -4880,4 +4881,119 @@ func TestLedgerGrowthDoesNotHideUnownedRotatedText(emonT *testing.T) {
 		k += 1
 	}
 	port.AssertEq(emonT, evidence.LnGet(ln, 61, 15), 0, "unowned rotated context remains outside claimed ledger lines")
+}
+
+func TestAnEntryGridKeepsElevenEmptyRowsAndTheTotalInTheirColumns(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var an *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	var r int32 = 0
+	var c int32 = 0
+	// D757: a regular three-column entry ledger has eleven empty widget rows between its header and total. The adjacent open-label form remains covered by D583.
+	for r <= 12 {
+		ttRule(pa, 7200, (10000+(r*2000))-50, 37200, (10000+(r*2000))+50)
+		r += 1
+	}
+	ttRule(pa, 7200, 39950, 37200, 40050)
+	for c <= 3 {
+		ttRule(pa, (7200+(c*10000))-50, 10000, (7200+(c*10000))+50, 40000)
+		c += 1
+	}
+	ttAt(wd, ln, et, port.TextBlob("Item"), 7600, 10600, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Cost"), 17600, 10600, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Gain"), 27600, 10600, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Total"), 7600, 34600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("123"), 17600, 34600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("456"), 27600, 34600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("More"), 7600, 36600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("234"), 17600, 36600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("567"), 27600, 36600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("End"), 7600, 38600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("345"), 17600, 38600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("678"), 27600, 38600, 0, 0)
+	var totalat int32 = port.CellsLen(an)
+	ttWidget(an, 17600, 38300, 26600, 39700)
+	port.CellsSet(an, totalat+8, 4)
+	r = 1
+	for r <= 11 {
+		c = 0
+		for c < 3 {
+			ttWidget(an, 7600+(c*10000), 10300+(r*2000), 16600+(c*10000), 11700+(r*2000))
+			c += 1
+		}
+		r += 1
+	}
+	ttRule(pa, 8000, 9050, 8800, 9150)
+	ttRule(pa, 8000, 9850, 8800, 9950)
+	ttRule(pa, 7950, 9100, 8050, 9900)
+	ttRule(pa, 8750, 9100, 8850, 9900)
+	var at int32 = port.CellsLen(an)
+	ttWidget(an, 8000, 9100, 8800, 9900)
+	port.CellsSet(an, at+8, 2)
+	port.AssertEq(emonT, ttRunAn(wd, ln, et, pa, t, 1, an), 0, "entry grid: valid Model")
+	port.AssertText(emonT, t, "T3r;Gh;R;Ch[Item];Ch[Cost];Ch[Gain];Gb;R;C[];C[];C[];R;C[];C[];C[];R;C[];C[];C[];R;C[];C[];C[];R;C[];C[];C[];R;C[];C[];C[];R;C[];C[];C[];R;C[];C[];C[];R;C[];C[];C[];R;C[];C[];C[];R;C[];C[];C[];R;C[Total More End];C[123 234 345];C[456 567 678];", "eleven rows survive, and total values stay under Cost and Gain")
+}
+
+func ttWidgetBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, an *port.Cells) int32 {
+	var pages *port.Cells = port.NewCells()
+	var grl *port.Cells = port.NewCells()
+	var gfl *port.Cells = port.NewCells()
+	model.PageNew(pages, 1, 61200, 79200, 0, model.PkVector())
+	gfuse.GfDoc(pa, port.NewCells(), port.NewCells(), port.NewCells(), 1, gfuse.GfxMode(), grl, gfl, port.NewCells(), port.NewCells())
+	table.TbBuild(wd, ln, et, grl, gfl, 1, tb, tc, tw, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), pages, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), an)
+	if ttBodyAudit(wd, et, tb, tc, tw) != 0 {
+		return -7
+	}
+	return port.CellsLen(tb) / 32
+}
+
+func TestALabelledFormIsNotABlankEntryGrid(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var an *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var r int32 = 0
+	var c int32 = 0
+	var k int32 = 0
+	var ruled int32 = 0
+	// D759: adjacent-form control. A label on every body row is not a repeated blank entry row, even when most cells hold widgets. Do not promote the whole form to a ruled grid.
+	for r <= 13 {
+		ttRule(pa, 7200, (10000+(r*2000))-50, 37200, (10000+(r*2000))+50)
+		r += 1
+	}
+	for c <= 3 {
+		ttRule(pa, (7200+(c*10000))-50, 10000, (7200+(c*10000))+50, 36000)
+		c += 1
+	}
+	ttAt(wd, ln, et, port.TextBlob("Item"), 7600, 10600, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Cost"), 17600, 10600, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Gain"), 27600, 10600, 1, 0)
+	r = 1
+	for r <= 11 {
+		ttAt(wd, ln, et, port.TextBlob("Label"), 7600, 10600+(r*2000), 0, 0)
+		c = 1
+		for c < 3 {
+			ttWidget(an, 7600+(c*10000), 10300+(r*2000), 16600+(c*10000), 11700+(r*2000))
+			c += 1
+		}
+		r += 1
+	}
+	ttAt(wd, ln, et, port.TextBlob("Total"), 7600, 34600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("123"), 17600, 34600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("456"), 27600, 34600, 0, 0)
+	port.AssertThat(emonT, ttWidgetBuild(wd, ln, et, pa, tb, tc, tw, an) >= 0, "all source words retain an owner")
+	for k < (port.CellsLen(tb) / 32) {
+		if port.CellsAt(tb, (k*32)+5) == 1 {
+			ruled = 1
+		}
+		k += 1
+	}
+	port.AssertEq(emonT, ruled, 0, "labels and scattered widgets do not prove a blank entry lattice")
 }

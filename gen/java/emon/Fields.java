@@ -391,13 +391,20 @@ public final class Fields {
     }
     public static int flPlace(emon.Port.Cells bt, int nb, int kind, int page, int x0, int y0, int x1, int y1, emon.Port.Cells out) {
         // Where the field with this box goes: out[0] the target node and out[1] the slot (0 before a block's text, 1 after it, 2 a paragraph after the block, 3 before it).
-        // `out` has four cells; the last two are scratch.
+        // D757: an empty cell containing the widget owns it before labels in neighbouring columns. `out` has four cells; the last two are scratch.
         int b = -1;
         int l = -1;
         int a = -1;
         int c = -1;
         int costl = 0;
         int costa = 0;
+        c = flCell(bt, nb, page, x0, y0, x1, y1);
+        if (c >= 0) {
+            emon.Port.cellsSet(out, 0, emon.Port.cellsAt(bt, c * FL_B));
+            emon.Port.cellsSet(out, 1, 1);
+            emon.Port.cellsSet(out, 2, 4);
+            return 0;
+        }
         if ((kind == 2) || (kind == 3)) {
             b = flRight(bt, nb, page, x0, y0, x1, y1);
             if (b >= 0) {
@@ -429,13 +436,6 @@ public final class Fields {
             emon.Port.cellsSet(out, 0, emon.Port.cellsAt(bt, l * FL_B));
             emon.Port.cellsSet(out, 1, 1);
             emon.Port.cellsSet(out, 2, 2);
-            return 0;
-        }
-        c = flCell(bt, nb, page, x0, y0, x1, y1);
-        if (c >= 0) {
-            emon.Port.cellsSet(out, 0, emon.Port.cellsAt(bt, c * FL_B));
-            emon.Port.cellsSet(out, 1, 1);
-            emon.Port.cellsSet(out, 2, 4);
             return 0;
         }
         flAnchor(bt, nb, page, y0, out);

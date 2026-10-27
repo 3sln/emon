@@ -475,6 +475,7 @@ public static class Tabletest {
         }
         int r = (emon.Port.CellsLen(an) / 38) - 1;
         emon.Port.CellsSet(an, (r * 38) + 1, Pdfannot.AnField());
+        emon.Port.CellsSet(an, (r * 38) + 8, 4);
         emon.Port.CellsSet(an, (r * 38) + 4, x0);
         emon.Port.CellsSet(an, (r * 38) + 5, y0);
         emon.Port.CellsSet(an, (r * 38) + 6, x1);
@@ -4804,5 +4805,119 @@ public static class Tabletest {
             k += 1;
         }
         emon.Testport.AssertEq(Evidence.LnGet(ln, 61, 15), 0, "unowned rotated context remains outside claimed ledger lines");
+    }
+    [Xunit.Fact]
+    public static void TestAnEntryGridKeepsElevenEmptyRowsAndTheTotalInTheirColumns() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells an = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        int r = 0;
+        int c = 0;
+        // D757: a regular three-column entry ledger has eleven empty widget rows between its header and total. The adjacent open-label form remains covered by D583.
+        while (r <= 12) {
+            TtRule(pa, 7200, (10000 + (r * 2000)) - 50, 37200, (10000 + (r * 2000)) + 50);
+            r += 1;
+        }
+        TtRule(pa, 7200, 39950, 37200, 40050);
+        while (c <= 3) {
+            TtRule(pa, (7200 + (c * 10000)) - 50, 10000, (7200 + (c * 10000)) + 50, 40000);
+            c += 1;
+        }
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Item"), 7600, 10600, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Cost"), 17600, 10600, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Gain"), 27600, 10600, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Total"), 7600, 34600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("123"), 17600, 34600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("456"), 27600, 34600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("More"), 7600, 36600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("234"), 17600, 36600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("567"), 27600, 36600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("End"), 7600, 38600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("345"), 17600, 38600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("678"), 27600, 38600, 0, 0);
+        int totalat = emon.Port.CellsLen(an);
+        TtWidget(an, 17600, 38300, 26600, 39700);
+        emon.Port.CellsSet(an, totalat + 8, 4);
+        r = 1;
+        while (r <= 11) {
+            c = 0;
+            while (c < 3) {
+                TtWidget(an, 7600 + (c * 10000), 10300 + (r * 2000), 16600 + (c * 10000), 11700 + (r * 2000));
+                c += 1;
+            }
+            r += 1;
+        }
+        TtRule(pa, 8000, 9050, 8800, 9150);
+        TtRule(pa, 8000, 9850, 8800, 9950);
+        TtRule(pa, 7950, 9100, 8050, 9900);
+        TtRule(pa, 8750, 9100, 8850, 9900);
+        int at = emon.Port.CellsLen(an);
+        TtWidget(an, 8000, 9100, 8800, 9900);
+        emon.Port.CellsSet(an, at + 8, 2);
+        emon.Testport.AssertEq(TtRunAn(wd, ln, et, pa, t, 1, an), 0, "entry grid: valid Model");
+        emon.Testport.AssertText(t, "T3r;Gh;R;Ch[Item];Ch[Cost];Ch[Gain];Gb;R;C[];C[];C[];R;C[];C[];C[];R;C[];C[];C[];R;C[];C[];C[];R;C[];C[];C[];R;C[];C[];C[];R;C[];C[];C[];R;C[];C[];C[];R;C[];C[];C[];R;C[];C[];C[];R;C[];C[];C[];R;C[Total More End];C[123 234 345];C[456 567 678];", "eleven rows survive, and total values stay under Cost and Gain");
+    }
+    internal static int TtWidgetBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells an) {
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells grl = emon.Port.NewCells();
+        emon.Port.Cells gfl = emon.Port.NewCells();
+        Model.PageNew(pages, 1, 61200, 79200, 0, Model.PkVector());
+        Gfuse.GfDoc(pa, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), 1, Gfuse.GfxMode(), grl, gfl, emon.Port.NewCells(), emon.Port.NewCells());
+        Table.TbBuild(wd, ln, et, grl, gfl, 1, tb, tc, tw, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), pages, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), an);
+        if (TtBodyAudit(wd, et, tb, tc, tw) != 0) {
+            return -7;
+        }
+        return emon.Port.CellsLen(tb) / 32;
+    }
+    [Xunit.Fact]
+    public static void TestALabelledFormIsNotABlankEntryGrid() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells an = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        int r = 0;
+        int c = 0;
+        int k = 0;
+        int ruled = 0;
+        // D759: adjacent-form control. A label on every body row is not a repeated blank entry row, even when most cells hold widgets. Do not promote the whole form to a ruled grid.
+        while (r <= 13) {
+            TtRule(pa, 7200, (10000 + (r * 2000)) - 50, 37200, (10000 + (r * 2000)) + 50);
+            r += 1;
+        }
+        while (c <= 3) {
+            TtRule(pa, (7200 + (c * 10000)) - 50, 10000, (7200 + (c * 10000)) + 50, 36000);
+            c += 1;
+        }
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Item"), 7600, 10600, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Cost"), 17600, 10600, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Gain"), 27600, 10600, 1, 0);
+        r = 1;
+        while (r <= 11) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Label"), 7600, 10600 + (r * 2000), 0, 0);
+            c = 1;
+            while (c < 3) {
+                TtWidget(an, 7600 + (c * 10000), 10300 + (r * 2000), 16600 + (c * 10000), 11700 + (r * 2000));
+                c += 1;
+            }
+            r += 1;
+        }
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Total"), 7600, 34600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("123"), 17600, 34600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("456"), 27600, 34600, 0, 0);
+        emon.Testport.AssertThat(TtWidgetBuild(wd, ln, et, pa, tb, tc, tw, an) >= 0, "all source words retain an owner");
+        while (k < (emon.Port.CellsLen(tb) / 32)) {
+            if (emon.Port.CellsAt(tb, (k * 32) + 5) == 1) {
+                ruled = 1;
+            }
+            k += 1;
+        }
+        emon.Testport.AssertEq(ruled, 0, "labels and scattered widgets do not prove a blank entry lattice");
     }
 }

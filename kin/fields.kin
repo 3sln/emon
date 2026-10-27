@@ -15,6 +15,7 @@
 ;; whose text has a letter or a digit can be a LABEL; the others (dot leaders, a dash between the boxes of a number, a rule's remains) never are, but a leader
 ;; between a label and a field is what joins them, however far apart. THE RULE, in the order it is tried, `same line` meaning that the vertical extents overlap
 ;; by at least half of the shorter:
+;;   0. IN AN EMPTY CELL: the smallest empty table cell holding the widget centre owns it before a neighbouring label (D757).
 ;;   1. A CHECK BOX OR RADIO BUTTON: the label to its RIGHT, on its line, whose left edge is no further than 12 pt (or 1.5 times the box's height) from the box's
 ;;      right edge, the nearest. The box comes BEFORE the block's text (`[ ] Individual`).
 ;;   2. A LABEL TO ITS LEFT, on its line, whose right edge is no further than 24 pt from the box's left edge, or has a leader between it and the box, the nearest.
@@ -23,7 +24,7 @@
 ;;      by that gap plus the distance sideways to the box (none when they overlap); no further than 40 pt sideways. The field comes AFTER the block's text.
 ;;      The left label wins unless the one above is nearer by more than 8 pt (a label that stands over a row of boxes, `Social security number`, is not the
 ;;      instruction line that happens to end at the first box).
-;;   4. NO LABEL, BUT IN A CELL: a table cell with nothing in it that holds the centre of the box (the smallest one) holds the field (the cell is no longer `empty`).
+;;   A containing empty cell is no longer `empty` after it receives its field.
 ;;   5. NO LABEL AND NO CELL: the field gets a paragraph of its own (its fields on one page together), put after the last paragraph, heading or caption of the
 ;;      document or a section on its page that starts above it, else before the first one of the page, else at the end of the document.
 ;; Fields in one block are in reading order (page, top, left). The field node's `at` is the widget's rectangle, its `src` is `annot`, and its `conf` is how well
@@ -342,13 +343,19 @@
 
 (defn ^I32 fl-place [^Cells bt ^I32 nb ^I32 kind ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^:mut ^Cells out]
   (comment "Where the field with this box goes: out[0] the target node and out[1] the slot (0 before a block's text, 1 after it, 2 a paragraph after the block, 3 before it).")
-  (comment "`out` has four cells; the last two are scratch.")
+  (comment "D757: an empty cell containing the widget owns it before labels in neighbouring columns. `out` has four cells; the last two are scratch.")
   (let [^:mut ^I32 b -1
         ^:mut ^I32 l -1
         ^:mut ^I32 a -1
         ^:mut ^I32 c -1
         ^:mut ^I32 costl 0
         ^:mut ^I32 costa 0]
+    (set c (fl-cell bt nb page x0 y0 x1 y1))
+    (if (>= c 0)
+      (do (cells-set out 0 (cells-at bt (* c FL_B)))
+          (cells-set out 1 1)
+          (cells-set out 2 4)
+          (return 0)))
     (if (or (== kind 2) (== kind 3))
       (do (set b (fl-right bt nb page x0 y0 x1 y1))
           (if (>= b 0)
@@ -375,12 +382,6 @@
       (do (cells-set out 0 (cells-at bt (* l FL_B)))
           (cells-set out 1 1)
           (cells-set out 2 2)
-          (return 0)))
-    (set c (fl-cell bt nb page x0 y0 x1 y1))
-    (if (>= c 0)
-      (do (cells-set out 0 (cells-at bt (* c FL_B)))
-          (cells-set out 1 1)
-          (cells-set out 2 4)
           (return 0)))
     (fl-anchor bt nb page y0 out)
     (cells-set out 2 5)
