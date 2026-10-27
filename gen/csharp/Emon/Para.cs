@@ -680,6 +680,59 @@ public static class Para {
         }
         return 1 == 1;
     }
+    internal static bool PaClauseHang(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int a, int b) {
+        // D764: a dotted clause number may precede a hanging prose line without being a list item. Only waive the indent boundary: all heading, gap, style and region boundaries still apply.
+        if ((Evidence.LnGet(ln, a, Evidence.LhCount()) < 8) || (Evidence.LnGet(ln, b, Evidence.LhCount()) < 1)) {
+            return 0 == 1;
+        }
+        if (!PaOpenEnd(wd, ln, et, a)) {
+            return 0 == 1;
+        }
+        if (Evidence.LnGet(ln, a, Evidence.LhPage()) != Evidence.LnGet(ln, b, Evidence.LhPage())) {
+            return 0 == 1;
+        }
+        int w = Evidence.LnGet(ln, a, Evidence.LhFirst());
+        int ts = Evidence.WdGet(wd, w, Evidence.HdTstart());
+        int n = Evidence.WdGet(wd, w, Evidence.HdTlen());
+        int size = PaSize(wd, ln, a);
+        int tx = Evidence.WdGet(wd, w + 1, Evidence.HdX0());
+        int j = 0;
+        int dots = 0;
+        int digits = 0;
+        if ((ts < 0) || ((n < 3) || (n > 7))) {
+            return 0 == 1;
+        }
+        while (j < n) {
+            int c = emon.Port.CellsAt(et, ts + j);
+            if (c == 46) {
+                if ((digits == 0) || ((j == (n - 1)) || (dots > 0))) {
+                    return 0 == 1;
+                }
+                dots += 1;
+                digits = 0;
+            } else {
+                if ((c < 48) || (c > 57)) {
+                    return 0 == 1;
+                }
+                digits += 1;
+                if (digits > 3) {
+                    return 0 == 1;
+                }
+            }
+            j += 1;
+        }
+        if (dots != 1) {
+            return 0 == 1;
+        }
+        // The hanging margin may fall inside the number: justified spacing shifts the title word right. Allow three quarters of an em leftward, only one quarter rightward.
+        if ((((tx - PaStart(ln, b)) * 4) > (size * 3)) || (((PaStart(ln, b) - tx) * 4) > size)) {
+            return 0 == 1;
+        }
+        if ((PaGap(ln, a, b) * 4) > (size * 3)) {
+            return 0 == 1;
+        }
+        return 1 == 1;
+    }
     internal static bool PaNewPar(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int a, int b, int med, int margin, emon.Port.Cells hc) {
         // Does line b, the next one on the page, start a paragraph after line a (D135). The heading analysis
         // (P4.4) decides first where it has an opinion: a heading is a block of its own (D167).
@@ -741,7 +794,7 @@ public static class Para {
                 return 1 == 1;
             }
         }
-        if ((((PaStart(ln, b) - PaStart(ln, a)) * PaIndentDiv) > sb) && (((PaStart(ln, a) - margin) * PaIndentDiv) <= sb) && (Lists.LsHang(hc, ln, a, b) == 0)) {
+        if ((((PaStart(ln, b) - PaStart(ln, a)) * PaIndentDiv) > sb) && (((PaStart(ln, a) - margin) * PaIndentDiv) <= sb) && (Lists.LsHang(hc, ln, a, b) == 0) && !PaClauseHang(wd, ln, et, a, b)) {
             return 1 == 1;
         }
         // OCR prose has quantized, inferred x-heights: tolerate 20 percent variation between lines of at least four words. Short labels keep their stricter boundary.

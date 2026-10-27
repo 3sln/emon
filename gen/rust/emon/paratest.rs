@@ -1446,3 +1446,84 @@ fn test_ocr_size_jitter_does_not_join_short_labels_to_values() {
     pt_brief(t, nodes, regions, text);
     crate::testport::assert_text(t, "P1:Bill to;P1:Harwell and Sons Oxford;", "short labels retain paragraph boundaries");
 }
+#[test]
+fn test_dotted_clause_hanging_text_has_one_owner() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ord: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let raw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut String = &mut crate::port::new_text();
+    pt_cline(wd, ln, et, &crate::testport::text_blob("2.15 Documentation means all material supplied with the purchased equipment including")[..], 1, 7200, 10000, 3000, 1000);
+    pt_cline(wd, ln, et, &crate::testport::text_blob("instructions and source code.")[..], 1, 9500, 11400, 3000, 1000);
+    pt_cline(wd, ln, et, &crate::testport::text_blob("2.16 Testing means an independent check of the equipment before delivery.")[..], 1, 7200, 15000, 3000, 1000);
+    pt_cline(wd, ln, et, &crate::testport::text_blob("A separate paragraph stays separate.")[..], 1, 10200, 19000, 3000, 1000);
+    crate::testport::assert_eq(pt_run(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "clauses: valid model");
+    pt_brief(out, nodes, regions, text);
+    crate::testport::assert_text(out, "P1:2.15 Documentation means all material supplied with the purchased equipment including instructions and source code.;P1:2.16 Testing means an independent check of the equipment before delivery.;P1:A separate paragraph stays separate.;", "continuation belongs to 2.15; 2.16 and the spaced paragraph have independent owners");
+}
+#[test]
+fn test_closed_dotted_clause_does_not_absorb_an_indented_paragraph() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ord: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let raw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut String = &mut crate::port::new_text();
+    pt_cline(wd, ln, et, &crate::testport::text_blob("2.15 Documentation means all material supplied with the purchased equipment including fees.")[..], 1, 7200, 10000, 3000, 1000);
+    pt_cline(wd, ln, et, &crate::testport::text_blob("instructions and source code.")[..], 1, 10200, 11400, 3000, 1000);
+    pt_cline(wd, ln, et, &crate::testport::text_blob("2.16 Testing means an independent check of the equipment before delivery.")[..], 1, 7200, 15000, 3000, 1000);
+    pt_cline(wd, ln, et, &crate::testport::text_blob("A separate paragraph stays separate.")[..], 1, 10200, 19000, 3000, 1000);
+    crate::testport::assert_eq(pt_run(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "clauses: valid model");
+    pt_brief(out, nodes, regions, text);
+    crate::testport::assert_text(out, "P1:2.15 Documentation means all material supplied with the purchased equipment including fees.;P1:instructions and source code.;P1:2.16 Testing means an independent check of the equipment before delivery.;P1:A separate paragraph stays separate.;", "a completed clause and the next indented paragraph keep separate owners");
+}
+#[test]
+fn test_dotted_clause_keeps_its_one_word_final_line() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ord: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let raw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut String = &mut crate::port::new_text();
+    pt_cline(wd, ln, et, &crate::testport::text_blob("2.15 Documentation means all material supplied with the purchased equipment including")[..], 1, 7200, 10000, 3000, 1000);
+    pt_cline(wd, ln, et, &crate::testport::text_blob("instructions.")[..], 1, 9500, 11400, 3000, 1000);
+    pt_cline(wd, ln, et, &crate::testport::text_blob("2.16 Testing means an independent check of the equipment before delivery.")[..], 1, 7200, 15000, 3000, 1000);
+    pt_cline(wd, ln, et, &crate::testport::text_blob("A separate paragraph stays separate.")[..], 1, 10200, 19000, 3000, 1000);
+    crate::testport::assert_eq(pt_run(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "clauses: valid model");
+    pt_brief(out, nodes, regions, text);
+    crate::testport::assert_text(out, "P1:2.15 Documentation means all material supplied with the purchased equipment including instructions.;P1:2.16 Testing means an independent check of the equipment before delivery.;P1:A separate paragraph stays separate.;", "continuation belongs to 2.15; 2.16 and the spaced paragraph have independent owners");
+}

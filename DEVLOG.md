@@ -12851,3 +12851,33 @@ Core's first map checks failed because the initially empty private review index 
 Evidence, methods, before/after judgments and all failed-first/corrected attempts are retained under the external b17 scratch directory. The coordinator commits the retained partial repair; no commit, corpus fetch or corpus prune was performed.
 
 - [ ] **Signed off** (maintainer)
+
+### D764 — Batch 18: join dotted clauses at their hanging text margin
+
+G12b's source page 9 puts clause 2.15 and its wrapped definition in one paragraph, but the generic first-line-indent rule split it after the first line. A dotted clause marker is deliberately not an ordinary numbered-list marker. Recognize its hanging geometry in the paragraph stage, without changing list/heading classification: a long, unfinished line with a two-component dotted number, on the same page, followed closely by text at the hanging margin. Justification can put the following line inside the number's box, up to three quarters of an em left of the title word. Rightward tolerance is only one quarter em. The exception waives only the indent boundary; heading opinions, new list/note starts, line order, direction, region, gap and style checks remain in force. No cross-page join or character rewriting is introduced.
+
+Laws were written before implementation and assert complete paragraph text and independent owners for the next numbered clause and a genuinely spaced paragraph. The initial law fails on HEAD. A separate closed-sentence control remains separate; a one-word final-line law fails on the first implementation and motivates accepting that supported short tail. Live first-trial evidence showed the quarter-em alignment was too strict; the source's justified word positions informed the asymmetric tolerance. The live second trial joins 2.15 with all its wrapped text and loses/gains no words. Final live and preservation results are recorded separately.
+
+- [ ] **Signed off** (maintainer)
+
+### D765 — Batch 18 acceptance limits and furniture projection rejection
+
+The final live G12b run removes nineteen false paragraph boundaries, 44→25 paragraph nodes. All twenty-one definitions 2.15–2.35 have one paragraph owner, with text exactly equal to the source evidence lines, including their short final lines. All fifteen named before/after runs lose and gain zero words; G12b is the only changed Model. G12's combined qualitative grade remains poor because notices and the first excerpt's other structure remain defective. G19's caption and G10's diagram ownership remain identical, as do E10/D16's tables, n12's table/link/RTL properties, and n01's notes/body.
+
+Furniture acceptance remains open. In an external policy projection, ordinary exact-template deduplication of d06's four repeated grey title lines loses 33 word occurrences, and deduplication of the short G12/G12b notice loses 6 on each excerpt. These projections are rejected under the literal zero-loss guard; they are not implemented/tested furniture-stage changes. No broad zone expansion or fuzzy-header production change is retained. G09's varying header readings and page-spanning emitted heading regions need stronger source ownership evidence. G02/E10/D16 running furniture remains unchanged.
+
+G06's same-baseline OCR sentence gaps, n11/n04/F17's region/line/list boundaries, G10/d06's page/float joins, n12's bracket/niqqud/final-line defects, and n01's URL/continued-note ownership remain unmet. The retained same-page dotted-clause indent exception does not address those paths, and no improvement is claimed. Exact acceptance dispositions and fresh sweep-rubric judgments are retained externally under `emon-scratch/b18/acceptance.md` and `rejudgment-{before,after}.md`. No corpus fetch/prune, ratchet change, or commit.
+
+- [ ] **Signed off** (maintainer)
+
+### D766 — Batch 18 final guards and gates
+
+All 54 paired live controls pass on 817 pages and 353,505 counted words, including furniture template text: zero words lost or gained. Both Berkshire documents and the full Arabic booklet are preserved. Fifty-three control Models are identical; the full 71-page contract alone changes, with 49 joins that exactly concatenate adjacent baseline paragraphs. Tables, figures, notes and headings retain their semantic owners and values across all 54 controls. The fifteen named live runs also pass; only G12b changes, with all 21 definitions checked against their exact source evidence lines. No receipt control changes under D716.
+
+Fresh 60-document populations pass both frozen precision floors: SROIE 0.6820745632 >= 0.6816742393 and CORD 0.4223602484 >= 0.42. These scores retain the earlier receipt improvements; no receipt policy or tracked baseline changes in this batch.
+
+All fifteen required commands pass: `bb gates drift`, `bb ci core`, `bb rederive --check`, full `bb rederive`, `bb accuracy`, `bb samples`, the OCR/fusion/retarget/seals/sealpx/sigs/asset replay gates, full `bb unit`, and `bb package --check`. Accuracy passes 3,449 metrics within the existing 0.002 tolerance; 232 Models match across hosts. All four hosts run 1,292 laws, including the three new paragraph ownership/control laws. All 29 samples and seven package consumers pass. All eight calibration refreshes change zero rows. No golden, sample, scoreboard, API snapshot or ratchet moves, so there are no moved goldens/samples to explain. Final production/law source hashes match the live-tested build.
+
+Packaging limitations remain the existing ones: Java's consumer uses javac/java because Maven is absent; the Maven bundle is unsigned, and C/pod omit optional native PDF/OCR engines. Nonfatal sandbox process-enumeration shutdown diagnostics appear in logs; all fifteen commands return zero without dependency or gate changes. Evidence and reproduction scripts are retained under external `emon-scratch/b18/`; temporary builds and task-owned cache links are removed at handoff. No commit, corpus fetch/prune, or real-index staging; the coordinator commits.
+
+- [ ] **Signed off** (maintainer)

@@ -772,6 +772,60 @@ func paReferenceStart(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32) b
 	return 1 == 1
 }
 
+func paClauseHang(wd *port.Cells, ln *port.Cells, et *port.Cells, a int32, b int32) bool {
+	// D764: a dotted clause number may precede a hanging prose line without being a list item. Only waive the indent boundary: all heading, gap, style and region boundaries still apply.
+	if (evidence.LnGet(ln, a, evidence.LhCount()) < 8) || (evidence.LnGet(ln, b, evidence.LhCount()) < 1) {
+		return 0 == 1
+	}
+	if !paOpenEnd(wd, ln, et, a) {
+		return 0 == 1
+	}
+	if evidence.LnGet(ln, a, evidence.LhPage()) != evidence.LnGet(ln, b, evidence.LhPage()) {
+		return 0 == 1
+	}
+	var w int32 = evidence.LnGet(ln, a, evidence.LhFirst())
+	var ts int32 = evidence.WdGet(wd, w, evidence.HdTstart())
+	var n int32 = evidence.WdGet(wd, w, evidence.HdTlen())
+	var size int32 = paSize(wd, ln, a)
+	var tx int32 = evidence.WdGet(wd, w+1, evidence.HdX0())
+	var j int32 = 0
+	var dots int32 = 0
+	var digits int32 = 0
+	if (ts < 0) || ((n < 3) || (n > 7)) {
+		return 0 == 1
+	}
+	for j < n {
+		var c int32 = port.CellsAt(et, ts+j)
+		if c == 46 {
+			if (digits == 0) || ((j == (n - 1)) || (dots > 0)) {
+				return 0 == 1
+			}
+			dots += 1
+			digits = 0
+		} else {
+			if (c < 48) || (c > 57) {
+				return 0 == 1
+			}
+			digits += 1
+			if digits > 3 {
+				return 0 == 1
+			}
+		}
+		j += 1
+	}
+	if dots != 1 {
+		return 0 == 1
+	}
+	// The hanging margin may fall inside the number: justified spacing shifts the title word right. Allow three quarters of an em leftward, only one quarter rightward.
+	if (((tx - paStart(ln, b)) * 4) > (size * 3)) || (((paStart(ln, b) - tx) * 4) > size) {
+		return 0 == 1
+	}
+	if (paGap(ln, a, b) * 4) > (size * 3) {
+		return 0 == 1
+	}
+	return 1 == 1
+}
+
 func paNewPar(wd *port.Cells, ln *port.Cells, et *port.Cells, a int32, b int32, med int32, margin int32, hc *port.Cells) bool {
 	// Does line b, the next one on the page, start a paragraph after line a (D135). The heading analysis
 	// (P4.4) decides first where it has an opinion: a heading is a block of its own (D167).
@@ -833,7 +887,7 @@ func paNewPar(wd *port.Cells, ln *port.Cells, et *port.Cells, a int32, b int32, 
 			return 1 == 1
 		}
 	}
-	if (((paStart(ln, b) - paStart(ln, a)) * paIndentDiv) > sb) && (((paStart(ln, a) - margin) * paIndentDiv) <= sb) && (lists.LsHang(hc, ln, a, b) == 0) {
+	if (((paStart(ln, b) - paStart(ln, a)) * paIndentDiv) > sb) && (((paStart(ln, a) - margin) * paIndentDiv) <= sb) && (lists.LsHang(hc, ln, a, b) == 0) && !paClauseHang(wd, ln, et, a, b) {
 		return 1 == 1
 	}
 	// OCR prose has quantized, inferred x-heights: tolerate 20 percent variation between lines of at least four words. Short labels keep their stricter boundary.

@@ -1410,4 +1410,82 @@ public final class Paratest {
         ptBrief(t, nodes, regions, text);
         emon.Testport.assertText(t, "P1:Bill to;P1:Harwell and Sons Oxford;", "short labels retain paragraph boundaries");
     }
+    public static void testDottedClauseHangingTextHasOneOwner() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells ord = emon.Port.newCells();
+        emon.Port.Cells raw = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        emon.Port.Cells fr = emon.Port.newCells();
+        emon.Port.Cells gp = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        StringBuilder out = emon.Testport.newText();
+        ptCline(wd, ln, et, emon.Testport.textBlob("2.15 Documentation means all material supplied with the purchased equipment including"), 1, 7200, 10000, 3000, 1000);
+        ptCline(wd, ln, et, emon.Testport.textBlob("instructions and source code."), 1, 9500, 11400, 3000, 1000);
+        ptCline(wd, ln, et, emon.Testport.textBlob("2.16 Testing means an independent check of the equipment before delivery."), 1, 7200, 15000, 3000, 1000);
+        ptCline(wd, ln, et, emon.Testport.textBlob("A separate paragraph stays separate."), 1, 10200, 19000, 3000, 1000);
+        emon.Testport.assertEq(ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "clauses: valid model");
+        ptBrief(out, nodes, regions, text);
+        emon.Testport.assertText(out, "P1:2.15 Documentation means all material supplied with the purchased equipment including instructions and source code.;P1:2.16 Testing means an independent check of the equipment before delivery.;P1:A separate paragraph stays separate.;", "continuation belongs to 2.15; 2.16 and the spaced paragraph have independent owners");
+    }
+    public static void testClosedDottedClauseDoesNotAbsorbAnIndentedParagraph() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells ord = emon.Port.newCells();
+        emon.Port.Cells raw = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        emon.Port.Cells fr = emon.Port.newCells();
+        emon.Port.Cells gp = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        StringBuilder out = emon.Testport.newText();
+        ptCline(wd, ln, et, emon.Testport.textBlob("2.15 Documentation means all material supplied with the purchased equipment including fees."), 1, 7200, 10000, 3000, 1000);
+        ptCline(wd, ln, et, emon.Testport.textBlob("instructions and source code."), 1, 10200, 11400, 3000, 1000);
+        ptCline(wd, ln, et, emon.Testport.textBlob("2.16 Testing means an independent check of the equipment before delivery."), 1, 7200, 15000, 3000, 1000);
+        ptCline(wd, ln, et, emon.Testport.textBlob("A separate paragraph stays separate."), 1, 10200, 19000, 3000, 1000);
+        emon.Testport.assertEq(ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "clauses: valid model");
+        ptBrief(out, nodes, regions, text);
+        emon.Testport.assertText(out, "P1:2.15 Documentation means all material supplied with the purchased equipment including fees.;P1:instructions and source code.;P1:2.16 Testing means an independent check of the equipment before delivery.;P1:A separate paragraph stays separate.;", "a completed clause and the next indented paragraph keep separate owners");
+    }
+    public static void testDottedClauseKeepsItsOneWordFinalLine() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells ord = emon.Port.newCells();
+        emon.Port.Cells raw = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        emon.Port.Cells fr = emon.Port.newCells();
+        emon.Port.Cells gp = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        StringBuilder out = emon.Testport.newText();
+        ptCline(wd, ln, et, emon.Testport.textBlob("2.15 Documentation means all material supplied with the purchased equipment including"), 1, 7200, 10000, 3000, 1000);
+        ptCline(wd, ln, et, emon.Testport.textBlob("instructions."), 1, 9500, 11400, 3000, 1000);
+        ptCline(wd, ln, et, emon.Testport.textBlob("2.16 Testing means an independent check of the equipment before delivery."), 1, 7200, 15000, 3000, 1000);
+        ptCline(wd, ln, et, emon.Testport.textBlob("A separate paragraph stays separate."), 1, 10200, 19000, 3000, 1000);
+        emon.Testport.assertEq(ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "clauses: valid model");
+        ptBrief(out, nodes, regions, text);
+        emon.Testport.assertText(out, "P1:2.15 Documentation means all material supplied with the purchased equipment including instructions.;P1:2.16 Testing means an independent check of the equipment before delivery.;P1:A separate paragraph stays separate.;", "continuation belongs to 2.15; 2.16 and the spaced paragraph have independent owners");
+    }
 }

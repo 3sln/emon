@@ -689,6 +689,59 @@ pub(crate) fn pa_reference_start(wd: &mut crate::port::Cells, ln: &mut crate::po
     }
     return 1 == 1;
 }
+pub(crate) fn pa_clause_hang(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, a: i32, b: i32) -> bool {
+    // D764: a dotted clause number may precede a hanging prose line without being a list item. Only waive the indent boundary: all heading, gap, style and region boundaries still apply.
+    if (ln_get(ln, a, lh_count()) < 8) || (ln_get(ln, b, lh_count()) < 1) {
+        return 0 == 1;
+    }
+    if !pa_open_end(wd, ln, et, a) {
+        return 0 == 1;
+    }
+    if ln_get(ln, a, lh_page()) != ln_get(ln, b, lh_page()) {
+        return 0 == 1;
+    }
+    let w: i32 = ln_get(ln, a, lh_first());
+    let ts: i32 = wd_get(wd, w, hd_tstart());
+    let n: i32 = wd_get(wd, w, hd_tlen());
+    let size: i32 = pa_size(wd, ln, a);
+    let tx: i32 = wd_get(wd, w + 1, hd_x0());
+    let mut j: i32 = 0;
+    let mut dots: i32 = 0;
+    let mut digits: i32 = 0;
+    if (ts < 0) || ((n < 3) || (n > 7)) {
+        return 0 == 1;
+    }
+    while j < n {
+        let c: i32 = crate::port::cells_at(et, ts + j);
+        if c == 46 {
+            if (digits == 0) || ((j == (n - 1)) || (dots > 0)) {
+                return 0 == 1;
+            }
+            dots += 1;
+            digits = 0;
+        } else {
+            if (c < 48) || (c > 57) {
+                return 0 == 1;
+            }
+            digits += 1;
+            if digits > 3 {
+                return 0 == 1;
+            }
+        }
+        j += 1;
+    }
+    if dots != 1 {
+        return 0 == 1;
+    }
+    // The hanging margin may fall inside the number: justified spacing shifts the title word right. Allow three quarters of an em leftward, only one quarter rightward.
+    if (((tx - pa_start(ln, b)) * 4) > (size * 3)) || (((pa_start(ln, b) - tx) * 4) > size) {
+        return 0 == 1;
+    }
+    if (pa_gap(ln, a, b) * 4) > (size * 3) {
+        return 0 == 1;
+    }
+    return 1 == 1;
+}
 pub(crate) fn pa_new_par(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, a: i32, b: i32, med: i32, margin: i32, hc: &mut crate::port::Cells) -> bool {
     // Does line b, the next one on the page, start a paragraph after line a (D135). The heading analysis
     // (P4.4) decides first where it has an opinion: a heading is a block of its own (D167).
@@ -750,7 +803,7 @@ pub(crate) fn pa_new_par(wd: &mut crate::port::Cells, ln: &mut crate::port::Cell
             return 1 == 1;
         }
     }
-    if (((pa_start(ln, b) - pa_start(ln, a)) * PA_INDENT_DIV) > sb) && (((pa_start(ln, a) - margin) * PA_INDENT_DIV) <= sb) && (ls_hang(hc, ln, a, b) == 0) {
+    if (((pa_start(ln, b) - pa_start(ln, a)) * PA_INDENT_DIV) > sb) && (((pa_start(ln, a) - margin) * PA_INDENT_DIV) <= sb) && (ls_hang(hc, ln, a, b) == 0) && !pa_clause_hang(wd, ln, et, a, b) {
         return 1 == 1;
     }
     // OCR prose has quantized, inferred x-heights: tolerate 20 percent variation between lines of at least four words. Short labels keep their stricter boundary.

@@ -48,7 +48,7 @@
             [emon.lang :refer [I32 Bool Cells Text emit-ascii]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop text-i32 text-cp]]
             [emon.evidence :refer [wd-get ln-get ln-count lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-by0 lh-by1
-                                   lh-rot lh-dir lf-src lh-first lh-count hd-tstart hd-tlen wf-font wf-size wf-style]]
+                                   lh-rot lh-dir lf-src lh-first lh-count hd-tstart hd-tlen hd-x0 wf-font wf-size wf-style]]
             [emon.columns :refer [lc-copy lc-page]]
             [emon.table :refer [tb-due tb-due-for tb-skip tb-emit tb-claimed]]
             [emon.initial :refer [in-retire in-row in-get-ii in-cell]]
@@ -609,6 +609,37 @@
             (set j (+ j 1))))
       (return (== 1 1)))))
 
+(defn ^Bool pa-clause-hang [^Cells wd ^Cells ln ^Cells et ^I32 a ^I32 b]
+  (comment "D764: a dotted clause number may precede a hanging prose line without being a list item. Only waive the indent boundary: all heading, gap, style and region boundaries still apply.")
+  (if (or (< (ln-get ln a (lh-count)) 8) (< (ln-get ln b (lh-count)) 1)) (return (== 0 1)))
+  (if (not (pa-open-end wd ln et a)) (return (== 0 1)))
+  (if (!= (ln-get ln a (lh-page)) (ln-get ln b (lh-page))) (return (== 0 1)))
+  (let [^I32 w (ln-get ln a (lh-first))
+        ^I32 ts (wd-get wd w (hd-tstart))
+        ^I32 n (wd-get wd w (hd-tlen))
+        ^I32 size (pa-size wd ln a)
+        ^I32 tx (wd-get wd (+ w 1) (hd-x0))
+        ^:mut ^I32 j 0
+        ^:mut ^I32 dots 0
+        ^:mut ^I32 digits 0]
+    (if (or (< ts 0) (or (< n 3) (> n 7))) (return (== 0 1)))
+    (while (< j n)
+      (do (let [^I32 c (cells-at et (+ ts j))]
+            (if (== c 46)
+              (do (if (or (== digits 0) (or (== j (- n 1)) (> dots 0))) (return (== 0 1)))
+                  (set dots (+ dots 1))
+                  (set digits 0))
+              (do (if (or (< c 48) (> c 57)) (return (== 0 1)))
+                  (set digits (+ digits 1))
+                  (if (> digits 3) (return (== 0 1))))))
+          (set j (+ j 1))))
+    (if (!= dots 1) (return (== 0 1)))
+    (comment "The hanging margin may fall inside the number: justified spacing shifts the title word right. Allow three quarters of an em leftward, only one quarter rightward.")
+    (if (or (> (* (- tx (pa-start ln b)) 4) (* size 3))
+            (> (* (- (pa-start ln b) tx) 4) size)) (return (== 0 1)))
+    (if (> (* (pa-gap ln a b) 4) (* size 3)) (return (== 0 1)))
+    (return (== 1 1))))
+
 (defn ^Bool pa-new-par [^Cells wd ^Cells ln ^Cells et ^I32 a ^I32 b ^I32 med ^I32 margin ^Cells hc]
   (comment "Does line b, the next one on the page, start a paragraph after line a (D135). The heading analysis")
   (comment "(P4.4) decides first where it has an opinion: a heading is a block of its own (D167).")
@@ -651,7 +682,8 @@
         (return (== 1 1))))
     (if (and (> (* (- (pa-start ln b) (pa-start ln a)) PA_INDENT_DIV) sb)
              (<= (* (- (pa-start ln a) margin) PA_INDENT_DIV) sb)
-             (== (ls-hang hc ln a b) 0))
+             (== (ls-hang hc ln a b) 0)
+             (not (pa-clause-hang wd ln et a b)))
       (return (== 1 1)))
     (comment "OCR prose has quantized, inferred x-heights: tolerate 20 percent variation between lines of at least four words. Short labels keep their stricter boundary.")
     (if (and (and (== (bit-and (ln-get ln a (lf-src)) 255) (sr-ocr)) (== (bit-and (ln-get ln b (lf-src)) 255) (sr-ocr)))
