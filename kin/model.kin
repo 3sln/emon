@@ -313,7 +313,8 @@
    [dr-ocr-empty 13 "ocr-empty"]
    [dr-ocr-unrepresented 14 "ocr-unrepresented"]
    [dr-figure-unmeasured 15 "figure-unmeasured"]
-   [dr-figure-signature-unmeasured 16 "figure-signature-unmeasured"]])
+   [dr-figure-signature-unmeasured 16 "figure-signature-unmeasured"]
+   [dr-ocr-unread-ink 17 "ocr-unread-ink"]])
 
 ;; ASSETS (P3.13, D117, SPEC 10.11). Codes assigned once, never reused (D050).
 ;; An asset's origin: what its pixels are.

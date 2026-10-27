@@ -238,4 +238,91 @@ public final class Ocrledger {
         }
         return rows;
     }
+    public static int ocInkEligible(emon.Port.Cells tlines, emon.Port.Cells inks, emon.Port.Cells mask, int t) {
+        int pg = Evidence.tlGet(tlines, t, 0);
+        int ink = Evidence.tlGet(tlines, t, Evidence.tlfInk());
+        int w = Evidence.tlGet(tlines, t, 3) - Evidence.tlGet(tlines, t, 1);
+        int h = Evidence.tlGet(tlines, t, 4) - Evidence.tlGet(tlines, t, 2);
+        int rot = Evidence.tlGet(tlines, t, 9);
+        if ((pg <= 0) || (pg > emon.Port.cellsLen(mask))) {
+            return 0;
+        }
+        if ((emon.Port.cellsAt(mask, pg - 1) & 3) == 0) {
+            return 0;
+        }
+        if ((Evidence.tlGet(tlines, t, Evidence.tlfConf()) < 600) || (Evidence.tlGet(tlines, t, 12) < 3)) {
+            return 0;
+        }
+        if ((ink < 0) || (ink >= Evidence.ikCount(inks))) {
+            return 0;
+        }
+        if (Evidence.ikGet(inks, ink, Evidence.ikfRole()) != Evidence.irBody()) {
+            return 0;
+        }
+        if ((rot > 300) && (rot < 35700)) {
+            return 0;
+        }
+        if ((h < 300) || (h > 6000)) {
+            return 0;
+        }
+        if ((w < 2500) || ((w <= h) || (w > (40 * h)))) {
+            return 0;
+        }
+        return 1;
+    }
+    public static int ocInkAccount(emon.Port.Cells tlines, emon.Port.Cells inks, emon.Port.Cells words, emon.Port.Cells rules, emon.Port.Cells mask, emon.Port.Cells ledger, emon.Port.Cells wix, emon.Port.Cells rix) {
+        // D738: a separate pixel diagnostic for sure horizontal body text-like traces with no OCR observation in ANY reading. This is not a word count or a claim of complete pixel coverage.
+        int nw = Evidence.owCount(words);
+        int nr = Evidence.rlCount(rules);
+        int np = emon.Port.cellsLen(mask);
+        int t = 0;
+        int pg = 0;
+        int x0 = 0;
+        int y0 = 0;
+        int x1 = 0;
+        int y1 = 0;
+        int j = 0;
+        int end = 0;
+        int covered = 0;
+        int made = 0;
+        if (Evidence.tlCount(tlines) == 0) {
+            return 0;
+        }
+        Pagebounds.pbBuildRanges(words, Evidence.owStride(), 0, nw, np, wix);
+        Pagebounds.pbBuildRanges(rules, Evidence.rlStride(), 0, nr, np, rix);
+        while (t < Evidence.tlCount(tlines)) {
+            if (ocInkEligible(tlines, inks, mask, t) == 1) {
+                pg = Evidence.tlGet(tlines, t, 0);
+                x0 = Evidence.tlGet(tlines, t, 1);
+                y0 = Evidence.tlGet(tlines, t, 2);
+                x1 = Evidence.tlGet(tlines, t, 3);
+                y1 = Evidence.tlGet(tlines, t, 4);
+                covered = 0;
+                j = emon.Port.cellsAt(wix, pg * 2);
+                end = emon.Port.cellsAt(wix, (pg * 2) + 1);
+                while ((j < end) && (covered == 0)) {
+                    if ((Evidence.owGet(words, j, Evidence.hdPage()) == pg) && (Evidence.owGet(words, j, Evidence.hdTlen()) > 0)) {
+                        if (Evidence.evOverlapSmall(x0, y0, x1, y1, Evidence.owGet(words, j, Evidence.hdX0()), Evidence.owGet(words, j, Evidence.hdY0()), Evidence.owGet(words, j, Evidence.hdX1()), Evidence.owGet(words, j, Evidence.hdY1())) > 100) {
+                            covered = 1;
+                        }
+                    }
+                    j += 1;
+                }
+                j = emon.Port.cellsAt(rix, pg * 2);
+                end = emon.Port.cellsAt(rix, (pg * 2) + 1);
+                while ((j < end) && (covered == 0)) {
+                    if ((Evidence.rlGet(rules, j, Evidence.rlfPage()) == pg) && (((Evidence.rlGet(rules, j, Evidence.rlfY0()) >= y0) && (Evidence.rlGet(rules, j, Evidence.rlfY0()) <= y1)) && (((Evidence.rlGet(rules, j, Evidence.rlfY1()) - Evidence.rlGet(rules, j, Evidence.rlfY0())) <= ((y1 - y0) / 3)) && ((Evidence.rlGet(rules, j, Evidence.rlfX0()) <= x0) && (Evidence.rlGet(rules, j, Evidence.rlfX1()) >= x1))))) {
+                        covered = 1;
+                    }
+                    j += 1;
+                }
+                if (covered == 0) {
+                    Model.ledgerAdd(ledger, Model.drOcrUnreadInk(), pg, x0, y0, x1, y1, -1, Model.srOcr());
+                    made += 1;
+                }
+            }
+            t += 1;
+        }
+        return made;
+    }
 }

@@ -12,7 +12,7 @@
                                    fe-new fe-set ea-owords xo-body-share wd-count wd-get ln-get hd-tstart hd-x0 wf-gap lh-x1]]
             [emon.norm :refer [nm-view nm-paper-gray]]
             [emon.scan :refer [sc-admit-floor sc-prep sc-sel-base sc-sel-max sc-aux-base sc-share-base sc-partner-base sc-xtra-base sc-emit-sel]]
-            [emon.retarget :refer [rt-receipt-source rt-receipt-active rt-receipt-ignored rt-receipt-mode rt-receipt-view rt-mark-trigger rtp-factor rtp-trigger rt-faint-into rt-empty-receipt rt-receipt-wins rt-thermal-into rt-gap-lines rt-answer-score rt-prep rt-decide rt-turns rt-erase-into rt-ask-view rt-adopt rt-line-state
+            [emon.retarget :refer [rt-ask-receipt-block ri-receipt-block rt-receipt-source rt-receipt-active rt-receipt-ignored rt-receipt-mode rt-receipt-view rt-mark-trigger rtp-factor rtp-trigger rt-faint-into rt-empty-receipt rt-receipt-wins rt-thermal-into rt-gap-lines rt-answer-score rt-prep rt-decide rt-turns rt-erase-into rt-ask-view rt-adopt rt-line-state
                                    rtp-receipt rtp-receipt-win rtp-frun rtp-q rtp-body rtp-erased rtp-nl rtp-nc rtp-cell0 rtp-line0 rtp-brun rtp-primary rtp-hash rt-lines rt-line-conf rt-max rt-cap rt-permille rt-empty-area rt-invert-bands]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
@@ -701,3 +701,46 @@
     (assert-eq (rt-receipt-active rtp) 1 "script flags preserve image origin")
     (cells-set rtp (rtp-trigger) 2)
     (assert-eq (rt-receipt-active rtp) 0 "thermal lane remains reverted")))
+
+(deftest test-receipt-block-request-owns-the-original-raster-and-does-not-select-it
+  (let [^Cells rq (new-cells) ^Cells rtp (new-cells) ^Cells ans (new-cells) ^Cells loc (new-cells)]
+    (rt-prep rtp)
+    (rt-receipt-source rtp 1)
+    (cells-set rtp (rtp-trigger) 1)
+    (assert-eq (rt-ask-receipt-block 0 260 300 0 ans loc (new-bitmap-set) rtp rq) 1 "photo image gets one alternative")
+    (assert-eq (rec-count rq) 1 "one bounded request")
+    (assert-eq (rec-id rq 0) 278 "request 22 is independent of script retry 28")
+    (assert-eq (rq-arg rq 0 0) 260 "source raster owns the read")
+    (assert-eq (rq-arg rq 0 1) 6 "block segmentation")
+    (assert-eq (cells-at rtp (rtp-primary)) -1 "a request cannot adopt a reading")))
+
+(deftest test-receipt-block-request-does-not-read-pdf-or-turned-or-unclassified-pages
+  (let [^Cells rq (new-cells) ^Cells rtp (new-cells) ^Cells ans (new-cells) ^Cells loc (new-cells)]
+    (rt-prep rtp)
+    (rt-receipt-source rtp 2)
+    (cells-set rtp (rtp-trigger) 2)
+    (assert-eq (rt-ask-receipt-block 0 260 300 0 ans loc (new-bitmap-set) rtp rq) 0 "PDF scan excluded")
+    (rt-receipt-source rtp 1)
+    (assert-eq (rt-ask-receipt-block 0 260 300 0 ans loc (new-bitmap-set) rtp rq) 0 "thermal lane rejected after wrong source amounts")
+    (cells-set rtp (rtp-trigger) 1)
+    (assert-eq (rt-ask-receipt-block 0 260 300 1 ans loc (new-bitmap-set) rtp rq) 0 "turned page excluded")
+    (cells-set rtp (rtp-trigger) 0)
+    (assert-eq (rt-ask-receipt-block 0 260 300 0 ans loc (new-bitmap-set) rtp rq) 0 "unclassified excluded")
+    (assert-eq (rec-count rq) 0 "no speculative requests")))
+
+(deftest test-receipt-block-view-request-carries-the-actual-pixel-hash
+  (let [^Cells rq (new-cells) ^Cells rq2 (new-cells) ^Cells rtp (new-cells)
+        ^Cells ans (new-cells) ^Cells loc (new-cells) ^BitmapSet bms (new-bitmap-set)
+        ^I32 vid (pu-view-id 0 120)]
+    (bms-put bms vid 5 5 1)
+    (rt-prep rtp)
+    (rt-receipt-source rtp 1)
+    (cells-set rtp (rtp-trigger) 1)
+    (assert-eq (rt-ask-receipt-block 0 vid 300 0 ans loc bms rtp rq) 1 "one read of the enlarged raster")
+    (assert-eq (rq-arg rq 0 0) vid "the enlarged raster owns the read")
+    (assert-eq (rq-arg rq 0 1) 6 "the view keeps block segmentation")
+    (assert-eq (rq-nargs rq 0) 9 "a view request includes both hash cells")
+    (let [^I32 hi (rq-arg rq 0 7) ^I32 lo (rq-arg rq 0 8)]
+      (bitmap-set-u8 (bms-get bms vid) 0 0 0 255)
+      (rt-ask-receipt-block 0 vid 300 0 ans loc bms rtp rq2)
+      (assert-that (or (!= hi (rq-arg rq2 0 7)) (!= lo (rq-arg rq2 0 8))) "one changed source pixel changes this request's identity"))))

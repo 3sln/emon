@@ -1,0 +1,85 @@
+(ns emon.ocrinktest
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.test :refer [deftest assert-eq new-cells]]
+            [emon.port :refer [cells-push]]
+            [emon.evidence :refer [tl-new tl-set tlf-conf tlf-ink ik-new ik-set ikf-role ir-body ir-color ow-new rl-new]]
+            [emon.model :refer [ledger-count ledger-page ledger-x0 ledger-y0 ledger-x1 ledger-y1 ledger-text-len ledger-conf ledger-reason dr-ocr-unread-ink]]
+            [emon.ocrledger :refer [oc-ink-account]]
+            [kin.lang :refer [defn return let]]))
+
+(defn ^I32 oi-line [^:mut ^Cells lines ^I32 page ^I32 conf]
+  (let [^I32 t (tl-new lines page 1000 2000 5000 2500 1000 2500 5000 2500 0 0 0 6)]
+    (tl-set lines t (tlf-conf) conf)
+    (tl-set lines t (tlf-ink) 0)
+    (return t)))
+
+(deftest test-unread-ink-keeps-source-page-and-box-without-invented-text
+  (let [^Cells lines (new-cells) ^Cells inks (new-cells) ^Cells mask (new-cells) ^Cells ledger (new-cells)]
+    (oi-line lines 1 800)
+    (ik-new inks 1 0)
+    (ik-set inks 0 (ikf-role) (ir-body))
+    (cells-push mask 1)
+    (assert-eq (oc-ink-account lines inks (new-cells) (new-cells) mask ledger (new-cells) (new-cells)) 1 "source region has no recorded reading")
+    (assert-eq (ledger-count ledger) 1 "one region, not a guessed word count")
+    (assert-eq (ledger-reason ledger 0) (dr-ocr-unread-ink) "distinct from rejected OCR alternatives")
+    (assert-eq (ledger-page ledger 0) 1 "source page owns the diagnostic")
+    (assert-eq (ledger-x0 ledger 0) 1000 "source left")
+    (assert-eq (ledger-y0 ledger 0) 2000 "source top")
+    (assert-eq (ledger-x1 ledger 0) 5000 "source right")
+    (assert-eq (ledger-y1 ledger 0) 2500 "source bottom")
+    (assert-eq (ledger-text-len ledger 0) 0 "pixels supply no invented transcription")
+    (assert-eq (ledger-conf ledger 0) -1 "trace confidence is not a calibrated OCR word confidence")))
+
+(deftest test-a-rejected-reading-is-not-unread-source-ink
+  (let [^Cells lines (new-cells) ^Cells inks (new-cells) ^Cells words (new-cells) ^Cells mask (new-cells) ^Cells ledger (new-cells)]
+    (oi-line lines 1 800)
+    (ik-new inks 1 0)
+    (ik-set inks 0 (ikf-role) (ir-body))
+    (cells-push mask 1)
+    (ow-new words 1 1000 2000 5000 2500 1000 2500 5000 2500 0 0 0 3 0 100 -1)
+    (assert-eq (oc-ink-account lines inks words (new-cells) mask ledger (new-cells) (new-cells)) 0 "any recorded reading, even rejected low confidence, is OCR evidence")
+    (assert-eq (ledger-count ledger) 0 "word rejection cannot masquerade as unrecognized pixels")))
+
+(deftest test-a-reading-on-another-page-cannot-cover-source-ink
+  (let [^Cells lines (new-cells) ^Cells inks (new-cells) ^Cells words (new-cells) ^Cells mask (new-cells) ^Cells ledger (new-cells)]
+    (oi-line lines 1 800)
+    (ik-new inks 1 0)
+    (ik-set inks 0 (ikf-role) (ir-body))
+    (cells-push mask 1)
+    (ow-new words 2 1000 2000 5000 2500 1000 2500 5000 2500 0 0 0 3 0 900 -1)
+    (assert-eq (oc-ink-account lines inks words (new-cells) mask ledger (new-cells) (new-cells)) 1 "coverage is page-local")))
+
+(deftest test-uncertain-or-foreign-ink-is-not-asserted-as-unread-text
+  (let [^Cells lines (new-cells) ^Cells inks (new-cells) ^Cells mask (new-cells) ^Cells ledger (new-cells)]
+    (oi-line lines 1 599)
+    (ik-new inks 1 0)
+    (ik-set inks 0 (ikf-role) (ir-body))
+    (cells-push mask 1)
+    (assert-eq (oc-ink-account lines inks (new-cells) (new-cells) mask ledger (new-cells) (new-cells)) 0 "uncertain trace is not text evidence")
+    (oi-line lines 1 900)
+    (ik-set inks 0 (ikf-role) (ir-color))
+    (assert-eq (oc-ink-account lines inks (new-cells) (new-cells) mask ledger (new-cells) (new-cells)) 0 "foreign ink is not body evidence")))
+
+(deftest test-a-rule-stroke-is-not-reported-as-unread-text
+  (let [^Cells lines (new-cells) ^Cells inks (new-cells) ^Cells rules (new-cells) ^Cells mask (new-cells) ^Cells ledger (new-cells)]
+    (oi-line lines 1 900)
+    (ik-new inks 1 0)
+    (ik-set inks 0 (ikf-role) (ir-body))
+    (rl-new rules 1 500 2250 5500 2250 0)
+    (cells-push mask 1)
+    (assert-eq (oc-ink-account lines inks (new-cells) rules mask ledger (new-cells) (new-cells)) 0 "a long horizontal stroke owns its ink as a rule")))
+
+(deftest test-page-ranges-retain-page-ownership-in-unordered-evidence
+  (let [^Cells lines (new-cells) ^Cells inks (new-cells) ^Cells words (new-cells) ^Cells mask (new-cells) ^Cells ledger (new-cells)]
+    (oi-line lines 1 800)
+    (ik-new inks 1 0)
+    (ik-set inks 0 (ikf-role) (ir-body))
+    (cells-push mask 1)
+    (cells-push mask 1)
+    (ow-new words 1 10000 2000 11000 2500 10000 2500 11000 2500 0 0 0 3 0 900 -1)
+    (ow-new words 2 1000 2000 5000 2500 1000 2500 5000 2500 0 0 0 3 0 900 -1)
+    (ow-new words 1 12000 2000 13000 2500 12000 2500 13000 2500 0 0 0 3 0 900 -1)
+    (assert-eq (oc-ink-account lines inks words (new-cells) mask ledger (new-cells) (new-cells)) 1 "interleaved foreign-page word cannot cover this trace")
+    (assert-eq (ledger-page ledger 0) 1 "trace retains page ownership")
+    (ow-new words 1 1000 2000 5000 2500 1000 2500 5000 2500 0 0 0 3 0 900 -1)
+    (assert-eq (oc-ink-account lines inks words (new-cells) mask (new-cells) (new-cells) (new-cells)) 0 "the final same-page reading must still be considered")))

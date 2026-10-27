@@ -54,7 +54,7 @@
             [emon.fields :refer [fl-run]]
             [emon.figclass :refer [fc-emit-budget fc-write fc-stage fc-images]]
             [emon.scan :refer [sc-write-rejected-ocr sc-write-empty-ocr sc-write-empty-regions sc-clean-text sc-trust sc-tag sc-tag-unread sc-write-bare]]
-            [emon.ocrledger :refer [oc-account]]
+            [emon.ocrledger :refer [oc-account oc-ink-account]]
             [emon.rasterplan :refer [rp-settings]]
             [emon.asset :refer [as-settings as-run as-page-cands as-collect as-run-figures]]
             [kin.lang :refer [defn return let set while if do comment + - * < > >= == != and or quot]]))
@@ -437,6 +437,7 @@
                            (fd m ledger) (fd s s0) (fd s s1) (fd s s2))
     (oc-account (fd ev oruns) (fd ev owords) (fd d et) (fd m nodes) (fd m regions) (fd d mask)
                 (fd m ledger) (fd m text) (fd s s0) (fd s s1) (fd s s2) (fd s s3) (fd s s4) (fd s s5))
+    (oc-ink-account (fd ev tlines) (fd ev inks) (fd ev owords) (fd ev rules) (fd d mask) (fd m ledger) (fd s s0) (fd s s1))
     ;; the asset stage. A PDF's candidates are the asset unit's; a raster input is one picture a page: its own image is the candidate
     (if (== kind 0)
       (do (if (== (fd c level) 2) (set pending 1))

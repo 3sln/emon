@@ -7,6 +7,7 @@ import (
 	"emon/evidence"
 	"emon/model"
 	"emon/normalize"
+	"emon/pagebounds"
 	"emon/port"
 )
 
@@ -250,4 +251,93 @@ func OcAccount(runs *port.Cells, owords *port.Cells, et *port.Cells, nodes *port
 		pg += 1
 	}
 	return rows
+}
+
+func ocInkEligible(tlines *port.Cells, inks *port.Cells, mask *port.Cells, t int32) int32 {
+	var pg int32 = evidence.TlGet(tlines, t, 0)
+	var ink int32 = evidence.TlGet(tlines, t, evidence.TlfInk())
+	var w int32 = evidence.TlGet(tlines, t, 3) - evidence.TlGet(tlines, t, 1)
+	var h int32 = evidence.TlGet(tlines, t, 4) - evidence.TlGet(tlines, t, 2)
+	var rot int32 = evidence.TlGet(tlines, t, 9)
+	if (pg <= 0) || (pg > port.CellsLen(mask)) {
+		return 0
+	}
+	if (port.CellsAt(mask, pg-1) & 3) == 0 {
+		return 0
+	}
+	if (evidence.TlGet(tlines, t, evidence.TlfConf()) < 600) || (evidence.TlGet(tlines, t, 12) < 3) {
+		return 0
+	}
+	if (ink < 0) || (ink >= evidence.IkCount(inks)) {
+		return 0
+	}
+	if evidence.IkGet(inks, ink, evidence.IkfRole()) != evidence.IrBody() {
+		return 0
+	}
+	if (rot > 300) && (rot < 35700) {
+		return 0
+	}
+	if (h < 300) || (h > 6000) {
+		return 0
+	}
+	if (w < 2500) || ((w <= h) || (w > (40 * h))) {
+		return 0
+	}
+	return 1
+}
+
+func OcInkAccount(tlines *port.Cells, inks *port.Cells, words *port.Cells, rules *port.Cells, mask *port.Cells, ledger *port.Cells, wix *port.Cells, rix *port.Cells) int32 {
+	// D738: a separate pixel diagnostic for sure horizontal body text-like traces with no OCR observation in ANY reading. This is not a word count or a claim of complete pixel coverage.
+	var nw int32 = evidence.OwCount(words)
+	var nr int32 = evidence.RlCount(rules)
+	var np int32 = port.CellsLen(mask)
+	var t int32 = 0
+	var pg int32 = 0
+	var x0 int32 = 0
+	var y0 int32 = 0
+	var x1 int32 = 0
+	var y1 int32 = 0
+	var j int32 = 0
+	var end int32 = 0
+	var covered int32 = 0
+	var made int32 = 0
+	if evidence.TlCount(tlines) == 0 {
+		return 0
+	}
+	pagebounds.PbBuildRanges(words, evidence.OwStride(), 0, nw, np, wix)
+	pagebounds.PbBuildRanges(rules, evidence.RlStride(), 0, nr, np, rix)
+	for t < evidence.TlCount(tlines) {
+		if ocInkEligible(tlines, inks, mask, t) == 1 {
+			pg = evidence.TlGet(tlines, t, 0)
+			x0 = evidence.TlGet(tlines, t, 1)
+			y0 = evidence.TlGet(tlines, t, 2)
+			x1 = evidence.TlGet(tlines, t, 3)
+			y1 = evidence.TlGet(tlines, t, 4)
+			covered = 0
+			j = port.CellsAt(wix, pg*2)
+			end = port.CellsAt(wix, (pg*2)+1)
+			for (j < end) && (covered == 0) {
+				if (evidence.OwGet(words, j, evidence.HdPage()) == pg) && (evidence.OwGet(words, j, evidence.HdTlen()) > 0) {
+					if evidence.EvOverlapSmall(x0, y0, x1, y1, evidence.OwGet(words, j, evidence.HdX0()), evidence.OwGet(words, j, evidence.HdY0()), evidence.OwGet(words, j, evidence.HdX1()), evidence.OwGet(words, j, evidence.HdY1())) > 100 {
+						covered = 1
+					}
+				}
+				j += 1
+			}
+			j = port.CellsAt(rix, pg*2)
+			end = port.CellsAt(rix, (pg*2)+1)
+			for (j < end) && (covered == 0) {
+				if (evidence.RlGet(rules, j, evidence.RlfPage()) == pg) && (((evidence.RlGet(rules, j, evidence.RlfY0()) >= y0) && (evidence.RlGet(rules, j, evidence.RlfY0()) <= y1)) && (((evidence.RlGet(rules, j, evidence.RlfY1()) - evidence.RlGet(rules, j, evidence.RlfY0())) <= ((y1 - y0) / 3)) && ((evidence.RlGet(rules, j, evidence.RlfX0()) <= x0) && (evidence.RlGet(rules, j, evidence.RlfX1()) >= x1)))) {
+					covered = 1
+				}
+				j += 1
+			}
+			if covered == 0 {
+				model.LedgerAdd(ledger, model.DrOcrUnreadInk(), pg, x0, y0, x1, y1, -1, model.SrOcr())
+				made += 1
+			}
+		}
+		t += 1
+	}
+	return made
 }

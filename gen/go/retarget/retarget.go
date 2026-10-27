@@ -158,6 +158,10 @@ func rtNativeEmptyPriority() int32 {
 	return 1000000
 }
 
+func RiReceiptBlock() int32 {
+	return 22
+}
+
 func RiReceipt() int32 {
 	return 31
 }
@@ -1379,6 +1383,29 @@ func rtAskReceipt(page int32, dpi int32, k0 int32, loc *port.Cells, ans *port.Ce
 	return 1
 }
 
+func RtAskReceiptBlock(page int32, raster int32, dpi int32, turns int32, ans *port.Cells, loc *port.Cells, bms *port.BitmapSet, rtp *port.Cells, rq *port.Cells) int32 {
+	// D737 trial: one additional segmentation of the original raster; recorded evidence only, never a primary-page adoption.
+	if port.CellsAt(rtp, rtpSourceDeferred()) != 0 {
+		return 0
+	}
+	if turns != 0 {
+		return 0
+	}
+	if port.CellsAt(rtp, RtpTrigger()) != 1 {
+		return 0
+	}
+	if plan.AnFind(ans, plan.PuId(page, RiReceiptBlock())) >= 0 {
+		return 0
+	}
+	if raster >= plan.ViewBase() {
+		port.BitmapHash(port.BmsGet(bms, raster), rtp, RtpHash())
+		scan.ScRequestViewPsm(rq, plan.PuId(page, RiReceiptBlock()), raster, port.CellsAt(rtp, RtpHash()), port.CellsAt(rtp, RtpHash()+1), 6, dpi, loc)
+	} else {
+		scan.ScRequestAt(rq, plan.PuId(page, RiReceiptBlock()), raster, 6, dpi, 0, 0, 0, 0, loc)
+	}
+	return 1
+}
+
 func RtPlan(page int32, input int32, born int32, wanttext int32, rid int32, dpi int32, loc *port.Cells, ans *port.Cells, bms *port.BitmapSet, k0 int32, src *port.Bitmap, ws *port.Cells, oruns *port.Cells, run int32, olines *port.Cells, owords *port.Cells, rules *port.Cells, tlines *port.Cells, rtp *port.Cells, rq *port.Cells, scr *port.Cells, comps *port.Cells, inks *port.Cells, pixels *port.Cells) int32 {
 	// Decide and ask what is not yet answered, in the brief's order: the table cells and the lines, the text-only render and its OCR, the body-ink view,
 	// the quarter-turned view. `page` is 0-based (ids), `rid` the request id of the raster `src` that the first pass read at `dpi`, `k0` the id group
@@ -1394,6 +1421,9 @@ func RtPlan(page int32, input int32, born int32, wanttext int32, rid int32, dpi 
 	}
 	if (born == 0) && ((q == 0) && (RtReceiptActive(rtp) == 1)) {
 		asked += rtAskReceipt(page, dpi, k0, loc, ans, bms, ws, rtp, rq, pixels, run, oruns)
+	}
+	if born == 0 {
+		asked += RtAskReceiptBlock(page, rid, dpi, q, ans, loc, bms, rtp, rq)
 	}
 	if (q == 0) && (born == 0) {
 		RtGapLines(page+1, dpi, tlines, oruns, run, olines, owords, inks)
@@ -1554,6 +1584,15 @@ func RtRecord(page int32, srcview int32, dpi100 int32, loc *port.Cells, ans *por
 			run = scan.ScAnswer(ans, a, pg, srcview, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
 			RtRunMeta(oruns, run, evidence.OpBodyInk(), 3, 3, 0, 0, 0, 0)
 			port.CellsSet(rtp, RtpBrun(), run)
+			made += 1
+		}
+	}
+	id = plan.PuId(page, RiReceiptBlock())
+	a = plan.AnFind(ans, id)
+	if a >= 0 {
+		if plan.AnOk(ans, a) == 1 {
+			run = scan.ScAnswer(ans, a, pg, srcview, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
+			RtRunMeta(oruns, run, evidence.OpReceipt(), 3, 6, 0, 0, 0, 0)
 			made += 1
 		}
 	}

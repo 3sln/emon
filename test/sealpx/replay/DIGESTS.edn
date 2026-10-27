@@ -1,6 +1,6 @@
 ;; The SHA-256 of each replayed bundle (JSON, HTML, evidence) of test/sealpx/replay/ID, as `bb sealpx-record` made it (P8.2, D414).
 {"ovl-seal-over-text"
- "e3b9fa04a260952cd19fa7ad73ae3333758c58518d81a3570cc96cfae343d00d",
+ "38a6e5c6de8161422eb8f4b8559afeda124e7c522c300222a2d35d4c56c55b4c",
  "ovl-sig-over-name"
  "28baf84fe51c180a13fd42f4377325232c13e6bc6d1e3c1f39cc6a182b477755",
  "ovl-stamp-seal"
