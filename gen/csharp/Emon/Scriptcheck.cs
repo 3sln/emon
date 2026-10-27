@@ -207,7 +207,7 @@ public static class Scriptcheck {
         return 0;
     }
     public static int SkTagConflicts(emon.Port.Cells nodes, emon.Port.Cells regions, emon.Port.Cells runs, emon.Port.Cells words, emon.Port.Cells text) {
-        // D754: preserve all text/ownership and explicit model choices, but flag represented text on corroborated unread pages or Khmer/Ethiopic contamination. Runs are immutable. No routing or retargeting changes.
+        // D767: weak Arabic OSD conflicts accuse selected OCR text only: an auxiliary OCR reading cannot condemn an independent PDF text layer. The separate Khmer/Ethiopic contamination diagnostic still includes legacy born text (D754). Runs, text, ownership and explicit model choices remain immutable.
         int r = 0;
         int k = 0;
         int j = 0;
@@ -244,7 +244,7 @@ public static class Scriptcheck {
             if (kind > 0) {
                 n = 1;
                 while (n < Model.NodeCount(nodes)) {
-                    if (((Model.NodeTextLen(nodes, n) > 0) || ((Model.NodeSrc(nodes, n) & (Model.SrText() | (Model.SrHiddenText() | Model.SrOcr()))) != 0)) && (SkConflictOnPage(nodes, regions, n, Evidence.OrGet(runs, r, Evidence.OrfPage())) == 1)) {
+                    if (((kind == 2) || ((Model.NodeSrc(nodes, n) & Model.SrOcr()) != 0)) && ((Model.NodeTextLen(nodes, n) > 0) || ((Model.NodeSrc(nodes, n) & (Model.SrText() | (Model.SrHiddenText() | Model.SrOcr()))) != 0)) && (SkConflictOnPage(nodes, regions, n, Evidence.OrGet(runs, r, Evidence.OrfPage())) == 1)) {
                         if (Model.NkIsInline(Model.NodeKind(nodes, n)) == 0) {
                             Model.NodeAddFlag(nodes, n, Model.FlScriptUnread());
                             Model.NodeAddFlag(nodes, n, Model.FlLowConf());

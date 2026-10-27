@@ -132,6 +132,7 @@ func TestScriptConflictFlagsAreOwnedByTheAffectedPageWithValuesKept(emonT *testi
 	port.CellsPush(text, 65)
 	port.CellsPush(text, 55)
 	model.NodeSetText(nodes, bad, 0, 2)
+	model.NodeAddSrc(nodes, bad, model.SrOcr())
 	model.NodeSetText(nodes, clean, 0, 2)
 	model.NodeSetConf(nodes, bad, 900)
 	model.NodeSetConf(nodes, clean, 900)
@@ -238,6 +239,7 @@ func skArabicTrial(emonT *testing.T, np int32, hasarabic int32, samepage int32) 
 	var pg int32 = 0
 	port.CellsPush(text, 65)
 	model.NodeSetText(nodes, n, 0, 1)
+	model.NodeAddSrc(nodes, n, model.SrOcr())
 	model.NodeSetConf(nodes, n, 900)
 	model.NodeAddRegion(nodes, regions, n, 1, 0, 0, 100, 100)
 	for i < 60 {
@@ -273,4 +275,64 @@ func TestWeakOsdNeedsDistinctPagesAndCannotCondemnANativeReading(emonT *testing.
 	port.AssertEq(emonT, skArabicTrial(emonT, 3, 0, 1), 900, "three reads of one page are not corroboration")
 	port.AssertEq(emonT, skArabicTrial(emonT, 3, 1, 0), 900, "native Arabic with Latin names remains high")
 	port.AssertEq(emonT, skArabicTrial(emonT, 3, 0, 0), 100, "three conflicting page readings are explicitly unread")
+}
+
+func TestConflictingOcrPreservesBornArabicAndItsInlineValueOnTheSamePage(emonT *testing.T) {
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var runs *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	var born int32 = model.NodeNew(nodes, model.NkParagraph(), 0)
+	var value int32 = model.NodeNew(nodes, model.NkText(), born)
+	var scan int32 = model.NodeNew(nodes, model.NkParagraph(), 0)
+	var pg int32 = 1
+	var i int32 = 0
+	var r int32 = 0
+	port.CellsPush(text, 1575)
+	port.CellsPush(text, 55)
+	model.NodeSetText(nodes, born, 0, 2)
+	model.NodeSetText(nodes, value, 1, 1)
+	model.NodeSetText(nodes, scan, 1, 1)
+	model.NodeAddSrc(nodes, born, model.SrText())
+	model.NodeAddSrc(nodes, value, model.SrText())
+	model.NodeAddSrc(nodes, scan, model.SrOcr())
+	model.NodeSetConf(nodes, born, 947)
+	model.NodeSetConf(nodes, value, 998)
+	model.NodeSetConf(nodes, scan, 900)
+	model.NodeAddRegion(nodes, regions, born, 1, 0, 0, 100, 100)
+	model.NodeAddRegion(nodes, regions, scan, 1, 200, 0, 300, 100)
+	for i < 60 {
+		port.CellsPush(et, 65)
+		i += 1
+	}
+	for pg <= 3 {
+		r = evidence.OrNew(runs, pg, 0)
+		evidence.OrSet(runs, r, evidence.OrfPass(), evidence.OpFirst())
+		evidence.OrSet(runs, r, evidence.OrfScript(), 1098015074)
+		evidence.OrSet(runs, r, evidence.OrfSconf(), 32)
+		evidence.OrSet(runs, r, evidence.OrfWfirst(), pg-1)
+		evidence.OrSet(runs, r, evidence.OrfWcount(), 1)
+		evidence.OwNew(words, pg, 200, 0, 300, 100, 200, 0, 300, 100, 0, 0, 0, 60, 0, 900, 0)
+		pg += 1
+	}
+	port.AssertEq(emonT, scriptcheck.SkTagConflicts(nodes, regions, runs, words, et), 1, "only the selected OCR block is accused")
+	port.AssertEq(emonT, model.NodeConf(nodes, born), 947, "born Arabic retains confidence")
+	port.AssertEq(emonT, model.NodeConf(nodes, value), 998, "inline number retains its own confidence")
+	port.AssertEq(emonT, model.NodeFlags(nodes, born), 0, "born Arabic is not unread")
+	port.AssertEq(emonT, model.NodeFlags(nodes, value), 0, "inline number is not unread")
+	port.AssertEq(emonT, model.NodeConf(nodes, scan), 100, "selected unsupported OCR remains capped")
+	port.AssertEq(emonT, model.NodeFlags(nodes, scan)&model.FlScriptUnread(), model.FlScriptUnread(), "OCR warning remains")
+	port.AssertEq(emonT, model.NodeParent(nodes, value), born, "number keeps its Arabic owner")
+	port.AssertEq(emonT, model.NodeParent(nodes, scan), 0, "OCR owner stays separate")
+	port.AssertEq(emonT, model.NodeTextStart(nodes, value), 1, "number span stays exact")
+	port.AssertEq(emonT, model.NodeTextLen(nodes, born), 2, "complete born span survives")
+	port.AssertEq(emonT, port.CellsAt(text, 0), 1575, "Arabic scalar survives")
+	port.AssertEq(emonT, port.CellsAt(text, 1), 55, "value 7 survives")
 }

@@ -124,6 +124,7 @@ fn test_script_conflict_flags_are_owned_by_the_affected_page_with_values_kept() 
     crate::port::cells_push(text, 65);
     crate::port::cells_push(text, 55);
     node_set_text(nodes, bad, 0, 2);
+    node_add_src(nodes, bad, sr_ocr());
     node_set_text(nodes, clean, 0, 2);
     node_set_conf(nodes, bad, 900);
     node_set_conf(nodes, clean, 900);
@@ -228,6 +229,7 @@ pub(crate) fn sk_arabic_trial(emon_t: i32, np: i32, hasarabic: i32, samepage: i3
     let mut pg: i32 = 0;
     crate::port::cells_push(text, 65);
     node_set_text(nodes, n, 0, 1);
+    node_add_src(nodes, n, sr_ocr());
     node_set_conf(nodes, n, 900);
     node_add_region(nodes, regions, n, 1, 0, 0, 100, 100);
     while i < 60 {
@@ -263,4 +265,64 @@ fn test_weak_osd_needs_distinct_pages_and_cannot_condemn_a_native_reading() {
     crate::testport::assert_eq(sk_arabic_trial(0, 3, 0, 1), 900, "three reads of one page are not corroboration");
     crate::testport::assert_eq(sk_arabic_trial(0, 3, 1, 0), 900, "native Arabic with Latin names remains high");
     crate::testport::assert_eq(sk_arabic_trial(0, 3, 0, 0), 100, "three conflicting page readings are explicitly unread");
+}
+#[test]
+fn test_conflicting_ocr_preserves_born_arabic_and_its_inline_value_on_the_same_page() {
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    let born: i32 = node_new(nodes, nk_paragraph(), 0);
+    let value: i32 = node_new(nodes, nk_text(), born);
+    let scan: i32 = node_new(nodes, nk_paragraph(), 0);
+    let mut pg: i32 = 1;
+    let mut i: i32 = 0;
+    let mut r: i32 = 0;
+    crate::port::cells_push(text, 1575);
+    crate::port::cells_push(text, 55);
+    node_set_text(nodes, born, 0, 2);
+    node_set_text(nodes, value, 1, 1);
+    node_set_text(nodes, scan, 1, 1);
+    node_add_src(nodes, born, sr_text());
+    node_add_src(nodes, value, sr_text());
+    node_add_src(nodes, scan, sr_ocr());
+    node_set_conf(nodes, born, 947);
+    node_set_conf(nodes, value, 998);
+    node_set_conf(nodes, scan, 900);
+    node_add_region(nodes, regions, born, 1, 0, 0, 100, 100);
+    node_add_region(nodes, regions, scan, 1, 200, 0, 300, 100);
+    while i < 60 {
+        crate::port::cells_push(et, 65);
+        i += 1;
+    }
+    while pg <= 3 {
+        r = or_new(runs, pg, 0);
+        or_set(runs, r, orf_pass(), op_first());
+        or_set(runs, r, orf_script(), 1098015074);
+        or_set(runs, r, orf_sconf(), 32);
+        or_set(runs, r, orf_wfirst(), pg - 1);
+        or_set(runs, r, orf_wcount(), 1);
+        ow_new(words, pg, 200, 0, 300, 100, 200, 0, 300, 100, 0, 0, 0, 60, 0, 900, 0);
+        pg += 1;
+    }
+    crate::testport::assert_eq(sk_tag_conflicts(nodes, regions, runs, words, et), 1, "only the selected OCR block is accused");
+    crate::testport::assert_eq(node_conf(nodes, born), 947, "born Arabic retains confidence");
+    crate::testport::assert_eq(node_conf(nodes, value), 998, "inline number retains its own confidence");
+    crate::testport::assert_eq(node_flags(nodes, born), 0, "born Arabic is not unread");
+    crate::testport::assert_eq(node_flags(nodes, value), 0, "inline number is not unread");
+    crate::testport::assert_eq(node_conf(nodes, scan), 100, "selected unsupported OCR remains capped");
+    crate::testport::assert_eq(node_flags(nodes, scan) & fl_script_unread(), fl_script_unread(), "OCR warning remains");
+    crate::testport::assert_eq(node_parent(nodes, value), born, "number keeps its Arabic owner");
+    crate::testport::assert_eq(node_parent(nodes, scan), 0, "OCR owner stays separate");
+    crate::testport::assert_eq(node_text_start(nodes, value), 1, "number span stays exact");
+    crate::testport::assert_eq(node_text_len(nodes, born), 2, "complete born span survives");
+    crate::testport::assert_eq(crate::port::cells_at(text, 0), 1575, "Arabic scalar survives");
+    crate::testport::assert_eq(crate::port::cells_at(text, 1), 55, "value 7 survives");
 }

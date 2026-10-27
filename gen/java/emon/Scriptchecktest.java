@@ -115,6 +115,7 @@ public final class Scriptchecktest {
         emon.Port.cellsPush(text, 65);
         emon.Port.cellsPush(text, 55);
         Model.nodeSetText(nodes, bad, 0, 2);
+        Model.nodeAddSrc(nodes, bad, Model.srOcr());
         Model.nodeSetText(nodes, clean, 0, 2);
         Model.nodeSetConf(nodes, bad, 900);
         Model.nodeSetConf(nodes, clean, 900);
@@ -217,6 +218,7 @@ public final class Scriptchecktest {
         int pg = 0;
         emon.Port.cellsPush(text, 65);
         Model.nodeSetText(nodes, n, 0, 1);
+        Model.nodeAddSrc(nodes, n, Model.srOcr());
         Model.nodeSetConf(nodes, n, 900);
         Model.nodeAddRegion(nodes, regions, n, 1, 0, 0, 100, 100);
         while (i < 60) {
@@ -251,5 +253,64 @@ public final class Scriptchecktest {
         emon.Testport.assertEq(skArabicTrial(0, 3, 0, 1), 900, "three reads of one page are not corroboration");
         emon.Testport.assertEq(skArabicTrial(0, 3, 1, 0), 900, "native Arabic with Latin names remains high");
         emon.Testport.assertEq(skArabicTrial(0, 3, 0, 0), 100, "three conflicting page readings are explicitly unread");
+    }
+    public static void testConflictingOcrPreservesBornArabicAndItsInlineValueOnTheSamePage() {
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        int born = Model.nodeNew(nodes, Model.nkParagraph(), 0);
+        int value = Model.nodeNew(nodes, Model.nkText(), born);
+        int scan = Model.nodeNew(nodes, Model.nkParagraph(), 0);
+        int pg = 1;
+        int i = 0;
+        int r = 0;
+        emon.Port.cellsPush(text, 1575);
+        emon.Port.cellsPush(text, 55);
+        Model.nodeSetText(nodes, born, 0, 2);
+        Model.nodeSetText(nodes, value, 1, 1);
+        Model.nodeSetText(nodes, scan, 1, 1);
+        Model.nodeAddSrc(nodes, born, Model.srText());
+        Model.nodeAddSrc(nodes, value, Model.srText());
+        Model.nodeAddSrc(nodes, scan, Model.srOcr());
+        Model.nodeSetConf(nodes, born, 947);
+        Model.nodeSetConf(nodes, value, 998);
+        Model.nodeSetConf(nodes, scan, 900);
+        Model.nodeAddRegion(nodes, regions, born, 1, 0, 0, 100, 100);
+        Model.nodeAddRegion(nodes, regions, scan, 1, 200, 0, 300, 100);
+        while (i < 60) {
+            emon.Port.cellsPush(et, 65);
+            i += 1;
+        }
+        while (pg <= 3) {
+            r = Evidence.orNew(runs, pg, 0);
+            Evidence.orSet(runs, r, Evidence.orfPass(), Evidence.opFirst());
+            Evidence.orSet(runs, r, Evidence.orfScript(), 1098015074);
+            Evidence.orSet(runs, r, Evidence.orfSconf(), 32);
+            Evidence.orSet(runs, r, Evidence.orfWfirst(), pg - 1);
+            Evidence.orSet(runs, r, Evidence.orfWcount(), 1);
+            Evidence.owNew(words, pg, 200, 0, 300, 100, 200, 0, 300, 100, 0, 0, 0, 60, 0, 900, 0);
+            pg += 1;
+        }
+        emon.Testport.assertEq(Scriptcheck.skTagConflicts(nodes, regions, runs, words, et), 1, "only the selected OCR block is accused");
+        emon.Testport.assertEq(Model.nodeConf(nodes, born), 947, "born Arabic retains confidence");
+        emon.Testport.assertEq(Model.nodeConf(nodes, value), 998, "inline number retains its own confidence");
+        emon.Testport.assertEq(Model.nodeFlags(nodes, born), 0, "born Arabic is not unread");
+        emon.Testport.assertEq(Model.nodeFlags(nodes, value), 0, "inline number is not unread");
+        emon.Testport.assertEq(Model.nodeConf(nodes, scan), 100, "selected unsupported OCR remains capped");
+        emon.Testport.assertEq(Model.nodeFlags(nodes, scan) & Model.flScriptUnread(), Model.flScriptUnread(), "OCR warning remains");
+        emon.Testport.assertEq(Model.nodeParent(nodes, value), born, "number keeps its Arabic owner");
+        emon.Testport.assertEq(Model.nodeParent(nodes, scan), 0, "OCR owner stays separate");
+        emon.Testport.assertEq(Model.nodeTextStart(nodes, value), 1, "number span stays exact");
+        emon.Testport.assertEq(Model.nodeTextLen(nodes, born), 2, "complete born span survives");
+        emon.Testport.assertEq(emon.Port.cellsAt(text, 0), 1575, "Arabic scalar survives");
+        emon.Testport.assertEq(emon.Port.cellsAt(text, 1), 55, "value 7 survives");
     }
 }

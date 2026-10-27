@@ -209,7 +209,7 @@ pub(crate) fn sk_conflict_on_page(nodes: &mut crate::port::Cells, regions: &mut 
     return 0;
 }
 pub fn sk_tag_conflicts(mut nodes: &mut crate::port::Cells, regions: &mut crate::port::Cells, runs: &mut crate::port::Cells, words: &mut crate::port::Cells, text: &mut crate::port::Cells) -> i32 {
-    // D754: preserve all text/ownership and explicit model choices, but flag represented text on corroborated unread pages or Khmer/Ethiopic contamination. Runs are immutable. No routing or retargeting changes.
+    // D767: weak Arabic OSD conflicts accuse selected OCR text only: an auxiliary OCR reading cannot condemn an independent PDF text layer. The separate Khmer/Ethiopic contamination diagnostic still includes legacy born text (D754). Runs, text, ownership and explicit model choices remain immutable.
     let mut r: i32 = 0;
     let mut k: i32 = 0;
     let mut j: i32 = 0;
@@ -246,7 +246,7 @@ pub fn sk_tag_conflicts(mut nodes: &mut crate::port::Cells, regions: &mut crate:
         if kind > 0 {
             n = 1;
             while n < node_count(nodes) {
-                if ((node_text_len(nodes, n) > 0) || ((node_src(nodes, n) & (sr_text() | (sr_hidden_text() | sr_ocr()))) != 0)) && (sk_conflict_on_page(nodes, regions, n, or_get(runs, r, orf_page())) == 1) {
+                if ((kind == 2) || ((node_src(nodes, n) & sr_ocr()) != 0)) && ((node_text_len(nodes, n) > 0) || ((node_src(nodes, n) & (sr_text() | (sr_hidden_text() | sr_ocr()))) != 0)) && (sk_conflict_on_page(nodes, regions, n, or_get(runs, r, orf_page())) == 1) {
                     if nk_is_inline(node_kind(nodes, n)) == 0 {
                         node_add_flag(nodes, n, fl_script_unread());
                         node_add_flag(nodes, n, fl_low_conf());
