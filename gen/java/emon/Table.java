@@ -271,6 +271,95 @@ public final class Table {
         }
         return best;
     }
+    public static int tbWidgetMatrix(emon.Port.Cells an, int page) {
+        // D759: prune button strokes only on pages dominated by a repeated matrix of text fields. At least three fields share a row, at least three share its column extents, and those fields are three quarters of the page's text fields.
+        int na = emon.Port.cellsLen(an) / AN_STRIDE;
+        int i = 0;
+        int j = 0;
+        int total = 0;
+        int matched = 0;
+        int rows = 0;
+        int cols = 0;
+        while (i < na) {
+            int o = i * AN_STRIDE;
+            if ((emon.Port.cellsAt(an, o + 1) == Pdfannot.anField()) && ((emon.Port.cellsAt(an, o) + 1) == page) && (emon.Port.cellsAt(an, o + 8) >= 4)) {
+                total += 1;
+                rows = 0;
+                cols = 0;
+                j = 0;
+                while (j < na) {
+                    int p = j * AN_STRIDE;
+                    if ((emon.Port.cellsAt(an, p + 1) == Pdfannot.anField()) && ((emon.Port.cellsAt(an, p) + 1) == page) && (emon.Port.cellsAt(an, p + 8) >= 4)) {
+                        if (tbAbs((emon.Port.cellsAt(an, o + 5) + emon.Port.cellsAt(an, o + 7)) - (emon.Port.cellsAt(an, p + 5) + emon.Port.cellsAt(an, p + 7))) <= (POS_TOL * 2)) {
+                            rows += 1;
+                        }
+                        if ((tbAbs(emon.Port.cellsAt(an, o + 4) - emon.Port.cellsAt(an, p + 4)) <= POS_TOL) && (tbAbs(emon.Port.cellsAt(an, o + 6) - emon.Port.cellsAt(an, p + 6)) <= POS_TOL)) {
+                            cols += 1;
+                        }
+                    }
+                    j += 1;
+                }
+                if ((rows >= 3) && (cols >= 3)) {
+                    matched += 1;
+                }
+            }
+            i += 1;
+        }
+        if ((matched >= 9) && ((matched * 4) >= (total * 3))) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int tbDropButtonRules(emon.Port.Cells rl, emon.Port.Cells an, int page) {
+        // D757: checkbox/radio appearance strokes belong to their widget, not to a neighbouring entry grid. Remove only strokes wholly inside an actual button before rule-position clustering.
+        if (tbWidgetMatrix(an, page) == 0) {
+            return 0;
+        }
+        int nr = tbRowsOf(rl, RLS);
+        int na = emon.Port.cellsLen(an) / AN_STRIDE;
+        int i = 0;
+        int j = 0;
+        int keep = 0;
+        int drop = 0;
+        int x0 = 0;
+        int y0 = 0;
+        int x1 = 0;
+        int y1 = 0;
+        int f = 0;
+        while (i < nr) {
+            drop = 0;
+            j = 0;
+            x0 = emon.Port.cellsAt(rl, (i * RLS) + 2);
+            x1 = emon.Port.cellsAt(rl, (i * RLS) + 3);
+            y0 = emon.Port.cellsAt(rl, (i * RLS) + 1);
+            y1 = y0;
+            if (emon.Port.cellsAt(rl, i * RLS) == 1) {
+                x0 = y0;
+                x1 = y0;
+                y0 = emon.Port.cellsAt(rl, (i * RLS) + 2);
+                y1 = emon.Port.cellsAt(rl, (i * RLS) + 3);
+            }
+            while ((j < na) && (drop == 0)) {
+                int o = j * AN_STRIDE;
+                int kind = emon.Port.cellsAt(an, o + 8);
+                if ((emon.Port.cellsAt(an, o + 1) == Pdfannot.anField()) && ((emon.Port.cellsAt(an, o) + 1) == page) && ((kind == 2) || (kind == 3)) && (x0 >= (emon.Port.cellsAt(an, o + 4) - 100)) && (x1 <= (emon.Port.cellsAt(an, o + 6) + 100)) && (y0 >= (emon.Port.cellsAt(an, o + 5) - 100)) && (y1 <= (emon.Port.cellsAt(an, o + 7) + 100))) {
+                    drop = 1;
+                }
+                j += 1;
+            }
+            if (drop == 0) {
+                f = 0;
+                while (f < RLS) {
+                    emon.Port.cellsSet(rl, (keep * RLS) + f, emon.Port.cellsAt(rl, (i * RLS) + f));
+                    f += 1;
+                }
+                keep += 1;
+            }
+            i += 1;
+        }
+        emon.Port.cellsDrop(rl, keep * RLS);
+        return nr - keep;
+    }
     public static int tbMergeRules(emon.Port.Cells rl, emon.Port.Cells rm, emon.Port.Cells so, emon.Port.Cells vals) {
         // Merge the rules of `rl` into `rm`: first the positions of each orientation clustered (POS_TOL), then
         // collinear pieces that touch (GAP_TOL) are one. `rm` rows are `rl` rows with the parent (a union-find
@@ -692,6 +781,34 @@ public final class Table {
         }
         return n;
     }
+    public static int tbEntryRun(emon.Port.Cells tc, int first, int end, int nr, int nc, emon.Port.Cells an, int page) {
+        // D759: an entry ledger has consecutive full blank rows, each column a simple widget-owned cell. Labels and scattered fields across an ordinary form do not prove an entry grid.
+        int r = 0;
+        int c = 0;
+        int count = 0;
+        int run = 0;
+        int best = 0;
+        while (r < nr) {
+            count = 0;
+            c = first;
+            while (c < end) {
+                if ((emon.Port.cellsAt(tc, c * TCS) == r) && (emon.Port.cellsAt(tc, (c * TCS) + 2) == 1) && (emon.Port.cellsAt(tc, (c * TCS) + 3) == 1) && (emon.Port.cellsAt(tc, (c * TCS) + 9) == 0)) {
+                    if (tbFieldCells(tc, c, c + 1, an, page) == 1) {
+                        count += 1;
+                    }
+                }
+                c += 1;
+            }
+            if (count == nc) {
+                run += 1;
+            } else {
+                run = 0;
+            }
+            best = tbMax(best, run);
+            r += 1;
+        }
+        return best;
+    }
     public static int tbPageFrame(emon.Port.Cells tc, int cfirst, int cend, int gx0, int gy0, int gx1, int gy1, int pw, int ph) {
         // 1 when the grid (box gx0..gx1, gy0..gy1) is the page's frame: at least 80 per cent of the page's width and of its height, with a cell of at least 30 per cent of the page's area in it
         // (the drawing's sheet of an engineering drawing, its title block under it); 0 for a page of unknown size.
@@ -731,13 +848,14 @@ public final class Table {
         int cross = 0;
         int prevc = -1;
         int prevw = -1;
+        int entry = 0;
         if ((nc < 2) || (nr < 2)) {
             return -1;
         }
         if ((nc * nr) > 4000) {
             return -1;
         }
-        tbSplitRows(rm, root, wd, et, w0, w1, xs, ys, wl, rw, sg, ch, st, rmap, so, bd);
+        tbSplitRows(rm, root, wd, et, w0, w1, xs, ys, wl, rw, sg, ch, st, rmap, so, bd, an, page);
         nr = emon.Port.cellsLen(ys) - 1;
         if ((nc * nr) > 4000) {
             return -1;
@@ -830,7 +948,11 @@ public final class Table {
             }
             k += 1;
         }
-        if ((filled < 4) || ((filled * 5) < (total * 2))) {
+        int entryfields = tbFieldCells(tc, cfirst, cfirst + total, an, page);
+        if ((nc >= 3) && (nr >= 4) && (filled >= nc) && (entryfields >= (nc * 2)) && ((entryfields * 2) >= total) && ((tbSingleCells(tc, cfirst, cfirst + total) * 5) >= (total * 4)) && (tbEntryRun(tc, cfirst, cfirst + total, nr, nc, an, page) >= 3)) {
+            entry = 1;
+        }
+        if ((entry == 0) && ((filled < 4) || ((filled * 5) < (total * 2)))) {
             emon.Port.cellsDrop(tc, cfirst * TCS);
             emon.Port.cellsDrop(tw, tw0);
             return -1;
@@ -843,7 +965,7 @@ public final class Table {
         // D583 (smoke review A issue 10): the rules of a form's page are its fields' boxes: a grid with more empty cells that hold a form field's widget (and at least four) than cells with text is the
         // page's boxes, not a table; the labels are the page's lines and the fields go to them (`emon.fields`)
         int fcn = tbFieldCells(tc, cfirst, cfirst + total, an, page);
-        if ((fcn >= 4) && (fcn > filled)) {
+        if ((entry == 0) && (fcn >= 4) && (fcn > filled)) {
             emon.Port.cellsDrop(tc, cfirst * TCS);
             emon.Port.cellsDrop(tw, tw0);
             return -1;
@@ -2345,7 +2467,27 @@ public final class Table {
         }
         return 0 == 1;
     }
-    public static int tbSplitRows(emon.Port.Cells rm, int root, emon.Port.Cells wd, emon.Port.Cells et, int w0, int w1, emon.Port.Cells xs, emon.Port.Cells ys, emon.Port.Cells wl, emon.Port.Cells rw, emon.Port.Cells sg, emon.Port.Cells ch, emon.Port.Cells occ, emon.Port.Cells rmap, emon.Port.Cells so, emon.Port.Cells bd) {
+    public static int tbSingleWidgetBand(emon.Port.Cells an, int page, int x0, int y0, int x1, int y1) {
+        // D757: a ruled band with text fields on a single baseline is one form row, including a tall wrapped total label. Printed digits in its instructions do not prove extra rows.
+        int i = 0;
+        int first = -1;
+        int found = 0;
+        while (i < (emon.Port.cellsLen(an) / AN_STRIDE)) {
+            int o = i * AN_STRIDE;
+            int cx = (emon.Port.cellsAt(an, o + 4) + emon.Port.cellsAt(an, o + 6)) / 2;
+            int cy = (emon.Port.cellsAt(an, o + 5) + emon.Port.cellsAt(an, o + 7)) / 2;
+            if ((emon.Port.cellsAt(an, o + 1) == Pdfannot.anField()) && ((emon.Port.cellsAt(an, o) + 1) == page) && (emon.Port.cellsAt(an, o + 8) >= 4) && (cx >= x0) && (cx <= x1) && (cy >= y0) && (cy < y1)) {
+                if ((first >= 0) && (tbAbs(cy - first) > POS_TOL)) {
+                    return 0;
+                }
+                first = cy;
+                found = 1;
+            }
+            i += 1;
+        }
+        return found;
+    }
+    public static int tbSplitRows(emon.Port.Cells rm, int root, emon.Port.Cells wd, emon.Port.Cells et, int w0, int w1, emon.Port.Cells xs, emon.Port.Cells ys, emon.Port.Cells wl, emon.Port.Cells rw, emon.Port.Cells sg, emon.Port.Cells ch, emon.Port.Cells occ, emon.Port.Cells rmap, emon.Port.Cells so, emon.Port.Cells bd, emon.Port.Cells an, int page) {
         // P12.2 (smoke review, issue 2: BLS, BEA, a 10-K): the rows of a lattice with fewer row cuts than its text has rows. A band between two
         // rules that are drawn across every column, with no word crossing an undrawn outer boundary, holds the rows of a table when the baselines of its words, told into table rows as an unruled table's
         // D634: words may cross undrawn interior boundaries: those labels span columns in their own row, rather than blocking every row cut in the band. The baseline rows, told as an unruled table's
@@ -2394,7 +2536,7 @@ public final class Table {
                 }
                 c += 1;
             }
-            if (closed == 1) {
+            if ((closed == 1) && (tbSingleWidgetBand(an, page, emon.Port.cellsAt(xs, 0), emon.Port.cellsAt(ys, r), emon.Port.cellsAt(xs, nc), emon.Port.cellsAt(ys, r + 1)) == 0)) {
                 nb = tbRows(wd, et, w0, w1, emon.Port.cellsAt(xs, 0), emon.Port.cellsAt(ys, r), emon.Port.cellsAt(xs, nc), emon.Port.cellsAt(ys, r + 1), wl, rw, sg);
                 if (nb >= TB_SPLIT_MIN) {
                     emon.Port.cellsDrop(ch, 0);
@@ -8392,6 +8534,7 @@ public final class Table {
             if ((wj - wi) > 0) {
                 tbCollect(grl, qi, qj, gfl, ui, uj, Model.pageH(pages, p - 1), s0, s2);
                 if (tbRowsOf(s0, RLS) <= MAX_RULES) {
+                    tbDropButtonRules(s0, an, p);
                     tbMergeRules(s0, s1, s3, s9);
                     tbRuledPage(s1, p, s4, s5, s6, tb, tc, wd, et, wi, wj, s7, s3, tw, tx, s10, s11, s12, s13, s14, s16, s15, an, Model.pageW(pages, p - 1), Model.pageH(pages, p - 1));
                     tbPartialPage(s1, tbo, p, wd, et, wi, wj, s9, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx);

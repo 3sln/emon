@@ -484,3 +484,20 @@
     (fdt-field an txt 4 -1 (text-blob "orphan") (text-blob "") (text-blob "") 50000 13000 56000 14200)
     (fdt-html (test-t) nodes attrs regions text an txt out)
     (assert-text out "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p><span data-emon=\"field\" data-emon-name=\"orphan\" data-emon-type=\"text\"></span></p><p>...</p><p>Label</p></main></body></html>" "printing leaders disappear, a meaningful ellipsis and the anchored field remain")))
+
+(deftest test-an-empty-entry-cell-owns-its-widget-before-a-neighbour-label
+  (let [^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells an (new-cells) ^Cells txt (new-cells) ^Text out (new-text)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (fdt-par nodes regions text (text-blob "Total") 1000 2000 2900 3000)
+    (let [^I32 tb (node-new nodes (nk-table) 0)
+          ^I32 rg (node-new nodes (nk-rowgroup) tb)
+          ^I32 rw (node-new nodes (nk-row) rg)
+          ^I32 c (node-new nodes (nk-cell) rw)]
+      (node-set-sub nodes rg 2)
+      (node-set-aux nodes c 1)
+      (node-add-region nodes regions c 1 3000 2000 6000 3000))
+    (fdt-field an txt 4 -1 (text-blob "gain") (text-blob "123.45") (text-blob "") 3200 2100 5800 2900)
+    (fdt-html (test-t) nodes attrs regions text an txt out)
+    (assert-text out "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>Total</p><table><tbody><tr><td><span data-emon=\"field\" data-emon-name=\"gain\" data-emon-type=\"text\">123.45</span></td></tr></tbody></table></main></body></html>" "the containing cell owns the named field and value exactly once")))

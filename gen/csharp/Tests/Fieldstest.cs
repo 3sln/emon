@@ -506,4 +506,29 @@ public static class Fieldstest {
         FdtHtml(0, nodes, attrs, regions, text, an, txt, @out);
         emon.Testport.AssertText(@out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p><span data-emon=\"field\" data-emon-name=\"orphan\" data-emon-type=\"text\"></span></p><p>...</p><p>Label</p></main></body></html>", "printing leaders disappear, a meaningful ellipsis and the anchored field remain");
     }
+    [Xunit.Fact]
+    public static void TestAnEmptyEntryCellOwnsItsWidgetBeforeANeighbourLabel() {
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells an = emon.Port.NewCells();
+        emon.Port.Cells txt = emon.Port.NewCells();
+        System.Text.StringBuilder @out = emon.Testport.NewText();
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        FdtPar(nodes, regions, text, emon.Testport.TextBlob("Total"), 1000, 2000, 2900, 3000);
+        int tb = Model.NodeNew(nodes, Model.NkTable(), 0);
+        int rg = Model.NodeNew(nodes, Model.NkRowgroup(), tb);
+        int rw = Model.NodeNew(nodes, Model.NkRow(), rg);
+        int c = Model.NodeNew(nodes, Model.NkCell(), rw);
+        Model.NodeSetSub(nodes, rg, 2);
+        Model.NodeSetAux(nodes, c, 1);
+        Model.NodeAddRegion(nodes, regions, c, 1, 3000, 2000, 6000, 3000);
+        FdtField(an, txt, 4, -1, emon.Testport.TextBlob("gain"), emon.Testport.TextBlob("123.45"), emon.Testport.TextBlob(""), 3200, 2100, 5800, 2900);
+        FdtHtml(0, nodes, attrs, regions, text, an, txt, @out);
+        emon.Testport.AssertText(@out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>Total</p><table><tbody><tr><td><span data-emon=\"field\" data-emon-name=\"gain\" data-emon-type=\"text\">123.45</span></td></tr></tbody></table></main></body></html>", "the containing cell owns the named field and value exactly once");
+    }
 }

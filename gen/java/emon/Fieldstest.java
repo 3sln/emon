@@ -490,4 +490,28 @@ public final class Fieldstest {
         fdtHtml(0, nodes, attrs, regions, text, an, txt, out);
         emon.Testport.assertText(out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p><span data-emon=\"field\" data-emon-name=\"orphan\" data-emon-type=\"text\"></span></p><p>...</p><p>Label</p></main></body></html>", "printing leaders disappear, a meaningful ellipsis and the anchored field remain");
     }
+    public static void testAnEmptyEntryCellOwnsItsWidgetBeforeANeighbourLabel() {
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells an = emon.Port.newCells();
+        emon.Port.Cells txt = emon.Port.newCells();
+        StringBuilder out = emon.Testport.newText();
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        fdtPar(nodes, regions, text, emon.Testport.textBlob("Total"), 1000, 2000, 2900, 3000);
+        int tb = Model.nodeNew(nodes, Model.nkTable(), 0);
+        int rg = Model.nodeNew(nodes, Model.nkRowgroup(), tb);
+        int rw = Model.nodeNew(nodes, Model.nkRow(), rg);
+        int c = Model.nodeNew(nodes, Model.nkCell(), rw);
+        Model.nodeSetSub(nodes, rg, 2);
+        Model.nodeSetAux(nodes, c, 1);
+        Model.nodeAddRegion(nodes, regions, c, 1, 3000, 2000, 6000, 3000);
+        fdtField(an, txt, 4, -1, emon.Testport.textBlob("gain"), emon.Testport.textBlob("123.45"), emon.Testport.textBlob(""), 3200, 2100, 5800, 2900);
+        fdtHtml(0, nodes, attrs, regions, text, an, txt, out);
+        emon.Testport.assertText(out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>Total</p><table><tbody><tr><td><span data-emon=\"field\" data-emon-name=\"gain\" data-emon-type=\"text\">123.45</span></td></tr></tbody></table></main></body></html>", "the containing cell owns the named field and value exactly once");
+    }
 }

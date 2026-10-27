@@ -508,3 +508,28 @@ fn test_unattached_printing_dots_are_not_form_paragraphs_and_do_not_drop_fields(
     fdt_html(0, nodes, attrs, regions, text, an, txt, out);
     crate::testport::assert_text(out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p><span data-emon=\"field\" data-emon-name=\"orphan\" data-emon-type=\"text\"></span></p><p>...</p><p>Label</p></main></body></html>", "printing leaders disappear, a meaningful ellipsis and the anchored field remain");
 }
+#[test]
+fn test_an_empty_entry_cell_owns_its_widget_before_a_neighbour_label() {
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let an: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let txt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut String = &mut crate::port::new_text();
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    fdt_par(nodes, regions, text, &crate::testport::text_blob("Total")[..], 1000, 2000, 2900, 3000);
+    let tb: i32 = node_new(nodes, nk_table(), 0);
+    let rg: i32 = node_new(nodes, nk_rowgroup(), tb);
+    let rw: i32 = node_new(nodes, nk_row(), rg);
+    let c: i32 = node_new(nodes, nk_cell(), rw);
+    node_set_sub(nodes, rg, 2);
+    node_set_aux(nodes, c, 1);
+    node_add_region(nodes, regions, c, 1, 3000, 2000, 6000, 3000);
+    fdt_field(an, txt, 4, -1, &crate::testport::text_blob("gain")[..], &crate::testport::text_blob("123.45")[..], &crate::testport::text_blob("")[..], 3200, 2100, 5800, 2900);
+    fdt_html(0, nodes, attrs, regions, text, an, txt, out);
+    crate::testport::assert_text(out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>Total</p><table><tbody><tr><td><span data-emon=\"field\" data-emon-name=\"gain\" data-emon-type=\"text\">123.45</span></td></tr></tbody></table></main></body></html>", "the containing cell owns the named field and value exactly once");
+}

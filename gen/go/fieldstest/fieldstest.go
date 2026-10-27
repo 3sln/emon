@@ -520,3 +520,28 @@ func TestUnattachedPrintingDotsAreNotFormParagraphsAndDoNotDropFields(emonT *tes
 	fdtHtml(emonT, nodes, attrs, regions, text, an, txt, out)
 	port.AssertText(emonT, out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p><span data-emon=\"field\" data-emon-name=\"orphan\" data-emon-type=\"text\"></span></p><p>...</p><p>Label</p></main></body></html>", "printing leaders disappear, a meaningful ellipsis and the anchored field remain")
 }
+
+func TestAnEmptyEntryCellOwnsItsWidgetBeforeANeighbourLabel(emonT *testing.T) {
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var an *port.Cells = port.NewCells()
+	var txt *port.Cells = port.NewCells()
+	var out *strings.Builder = port.NewText()
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	fdtPar(nodes, regions, text, port.TextBlob("Total"), 1000, 2000, 2900, 3000)
+	var tb int32 = model.NodeNew(nodes, model.NkTable(), 0)
+	var rg int32 = model.NodeNew(nodes, model.NkRowgroup(), tb)
+	var rw int32 = model.NodeNew(nodes, model.NkRow(), rg)
+	var c int32 = model.NodeNew(nodes, model.NkCell(), rw)
+	model.NodeSetSub(nodes, rg, 2)
+	model.NodeSetAux(nodes, c, 1)
+	model.NodeAddRegion(nodes, regions, c, 1, 3000, 2000, 6000, 3000)
+	fdtField(an, txt, 4, -1, port.TextBlob("gain"), port.TextBlob("123.45"), port.TextBlob(""), 3200, 2100, 5800, 2900)
+	fdtHtml(emonT, nodes, attrs, regions, text, an, txt, out)
+	port.AssertText(emonT, out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>Total</p><table><tbody><tr><td><span data-emon=\"field\" data-emon-name=\"gain\" data-emon-type=\"text\">123.45</span></td></tr></tbody></table></main></body></html>", "the containing cell owns the named field and value exactly once")
+}

@@ -424,13 +424,20 @@ func flAnchor(bt *port.Cells, nb int32, page int32, y0 int32, out *port.Cells) i
 
 func flPlace(bt *port.Cells, nb int32, kind int32, page int32, x0 int32, y0 int32, x1 int32, y1 int32, out *port.Cells) int32 {
 	// Where the field with this box goes: out[0] the target node and out[1] the slot (0 before a block's text, 1 after it, 2 a paragraph after the block, 3 before it).
-	// `out` has four cells; the last two are scratch.
+	// D757: an empty cell containing the widget owns it before labels in neighbouring columns. `out` has four cells; the last two are scratch.
 	var b int32 = -1
 	var l int32 = -1
 	var a int32 = -1
 	var c int32 = -1
 	var costl int32 = 0
 	var costa int32 = 0
+	c = flCell(bt, nb, page, x0, y0, x1, y1)
+	if c >= 0 {
+		port.CellsSet(out, 0, port.CellsAt(bt, c*flB))
+		port.CellsSet(out, 1, 1)
+		port.CellsSet(out, 2, 4)
+		return 0
+	}
 	if (kind == 2) || (kind == 3) {
 		b = flRight(bt, nb, page, x0, y0, x1, y1)
 		if b >= 0 {
@@ -462,13 +469,6 @@ func flPlace(bt *port.Cells, nb int32, kind int32, page int32, x0 int32, y0 int3
 		port.CellsSet(out, 0, port.CellsAt(bt, l*flB))
 		port.CellsSet(out, 1, 1)
 		port.CellsSet(out, 2, 2)
-		return 0
-	}
-	c = flCell(bt, nb, page, x0, y0, x1, y1)
-	if c >= 0 {
-		port.CellsSet(out, 0, port.CellsAt(bt, c*flB))
-		port.CellsSet(out, 1, 1)
-		port.CellsSet(out, 2, 4)
 		return 0
 	}
 	flAnchor(bt, nb, page, y0, out)

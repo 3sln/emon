@@ -489,6 +489,7 @@ pub(crate) fn tt_widget(mut an: &mut crate::port::Cells, x0: i32, y0: i32, x1: i
     }
     let r: i32 = (crate::port::cells_len(an) / 38) - 1;
     crate::port::cells_set(an, (r * 38) + 1, an_field());
+    crate::port::cells_set(an, (r * 38) + 8, 4);
     crate::port::cells_set(an, (r * 38) + 4, x0);
     crate::port::cells_set(an, (r * 38) + 5, y0);
     crate::port::cells_set(an, (r * 38) + 6, x1);
@@ -4818,4 +4819,118 @@ fn test_ledger_growth_does_not_hide_unowned_rotated_text() {
         k += 1;
     }
     crate::testport::assert_eq(ln_get(ln, 61, 15), 0, "unowned rotated context remains outside claimed ledger lines");
+}
+#[test]
+fn test_an_entry_grid_keeps_eleven_empty_rows_and_the_total_in_their_columns() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let an: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    let mut r: i32 = 0;
+    let mut c: i32 = 0;
+    // D757: a regular three-column entry ledger has eleven empty widget rows between its header and total. The adjacent open-label form remains covered by D583.
+    while r <= 12 {
+        tt_rule(pa, 7200, (10000 + (r * 2000)) - 50, 37200, (10000 + (r * 2000)) + 50);
+        r += 1;
+    }
+    tt_rule(pa, 7200, 39950, 37200, 40050);
+    while c <= 3 {
+        tt_rule(pa, (7200 + (c * 10000)) - 50, 10000, (7200 + (c * 10000)) + 50, 40000);
+        c += 1;
+    }
+    tt_at(wd, ln, et, &crate::testport::text_blob("Item")[..], 7600, 10600, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Cost")[..], 17600, 10600, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Gain")[..], 27600, 10600, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Total")[..], 7600, 34600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("123")[..], 17600, 34600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("456")[..], 27600, 34600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("More")[..], 7600, 36600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("234")[..], 17600, 36600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("567")[..], 27600, 36600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("End")[..], 7600, 38600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("345")[..], 17600, 38600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("678")[..], 27600, 38600, 0, 0);
+    let totalat: i32 = crate::port::cells_len(an);
+    tt_widget(an, 17600, 38300, 26600, 39700);
+    crate::port::cells_set(an, totalat + 8, 4);
+    r = 1;
+    while r <= 11 {
+        c = 0;
+        while c < 3 {
+            tt_widget(an, 7600 + (c * 10000), 10300 + (r * 2000), 16600 + (c * 10000), 11700 + (r * 2000));
+            c += 1;
+        }
+        r += 1;
+    }
+    tt_rule(pa, 8000, 9050, 8800, 9150);
+    tt_rule(pa, 8000, 9850, 8800, 9950);
+    tt_rule(pa, 7950, 9100, 8050, 9900);
+    tt_rule(pa, 8750, 9100, 8850, 9900);
+    let at: i32 = crate::port::cells_len(an);
+    tt_widget(an, 8000, 9100, 8800, 9900);
+    crate::port::cells_set(an, at + 8, 2);
+    crate::testport::assert_eq(tt_run_an(wd, ln, et, pa, t, 1, an), 0, "entry grid: valid Model");
+    crate::testport::assert_text(t, "T3r;Gh;R;Ch[Item];Ch[Cost];Ch[Gain];Gb;R;C[];C[];C[];R;C[];C[];C[];R;C[];C[];C[];R;C[];C[];C[];R;C[];C[];C[];R;C[];C[];C[];R;C[];C[];C[];R;C[];C[];C[];R;C[];C[];C[];R;C[];C[];C[];R;C[];C[];C[];R;C[Total More End];C[123 234 345];C[456 567 678];", "eleven rows survive, and total values stay under Cost and Gain");
+}
+pub(crate) fn tt_widget_build(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et: &mut crate::port::Cells, pa: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, an: &mut crate::port::Cells) -> i32 {
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gfl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    page_new(pages, 1, 61200, 79200, 0, pk_vector());
+    gf_doc(pa, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), 1, gfx_mode(), grl, gfl, &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+    tb_build(wd, ln, et, grl, gfl, 1, tb, tc, tw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), an);
+    if tt_body_audit(wd, et, tb, tc, tw) != 0 {
+        return -7;
+    }
+    return crate::port::cells_len(tb) / 32;
+}
+#[test]
+fn test_a_labelled_form_is_not_a_blank_entry_grid() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let an: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut r: i32 = 0;
+    let mut c: i32 = 0;
+    let mut k: i32 = 0;
+    let mut ruled: i32 = 0;
+    // D759: adjacent-form control. A label on every body row is not a repeated blank entry row, even when most cells hold widgets. Do not promote the whole form to a ruled grid.
+    while r <= 13 {
+        tt_rule(pa, 7200, (10000 + (r * 2000)) - 50, 37200, (10000 + (r * 2000)) + 50);
+        r += 1;
+    }
+    while c <= 3 {
+        tt_rule(pa, (7200 + (c * 10000)) - 50, 10000, (7200 + (c * 10000)) + 50, 36000);
+        c += 1;
+    }
+    tt_at(wd, ln, et, &crate::testport::text_blob("Item")[..], 7600, 10600, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Cost")[..], 17600, 10600, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Gain")[..], 27600, 10600, 1, 0);
+    r = 1;
+    while r <= 11 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("Label")[..], 7600, 10600 + (r * 2000), 0, 0);
+        c = 1;
+        while c < 3 {
+            tt_widget(an, 7600 + (c * 10000), 10300 + (r * 2000), 16600 + (c * 10000), 11700 + (r * 2000));
+            c += 1;
+        }
+        r += 1;
+    }
+    tt_at(wd, ln, et, &crate::testport::text_blob("Total")[..], 7600, 34600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("123")[..], 17600, 34600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("456")[..], 27600, 34600, 0, 0);
+    crate::testport::assert_that(tt_widget_build(wd, ln, et, pa, tb, tc, tw, an) >= 0, "all source words retain an owner");
+    while k < (crate::port::cells_len(tb) / 32) {
+        if crate::port::cells_at(tb, (k * 32) + 5) == 1 {
+            ruled = 1;
+        }
+        k += 1;
+    }
+    crate::testport::assert_eq(ruled, 0, "labels and scattered widgets do not prove a blank entry lattice");
 }

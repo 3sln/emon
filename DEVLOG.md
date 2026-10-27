@@ -12741,3 +12741,47 @@ Final-source `bb gates drift`, all 17 `bb ci core` steps, `bb rederive --check`,
 This is a partial batch: D747's frame trial is reverted; F13 mixed-case hierarchy, D16 continuation links, E09 coherent ledger ownership, F17 detached headers/forward balances, F09 roles and D28 p94 binding remain unmet. No commit is made. Logs, before/after Models, judgments, receipt/word audits and reproduction scripts are retained under the external `b14/` evidence directory. Task-owned internal build outputs are deleted after verification.
 
 - [ ] **Signed off** (maintainer)
+
+### D757 — Blank entry grids own their rows and widgets
+
+Batch 15's ownership laws precede the implementation: eleven empty entry rows must remain between the header and total, literal total values must remain under their columns, and an empty containing cell must own a named field/value exactly once before a label in the neighbouring column. The initial laws fail on the baseline (external b15/ownership-red.log). Existing D583 open-label forms and adjacent table/paragraph laws remain controls.
+
+A sparse ruled lattice is admitted as an entry grid only with at least three columns/four rows, header text, widgets in at least two rows' worth of cells and at least half the cells, and at least 80% simple cells. Other sparse/diagram guards remain. Actual checkbox/radio appearance strokes are removed from table-rule scratch before position clustering; annotations and their geometry are untouched. This prevents a nearby checkbox from adding phantom grid columns. A ruled band whose text widgets share one baseline remains one row despite digits in its wrapped instructions. Empty containing cells take precedence during field placement.
+
+Live refinement on F14 recovers its eleven entry rows on both pages and eight columns, retaining all 202 widgets. Final totals ownership, word controls and gates are recorded separately when complete. No corpus document is added to the repository.
+
+- [ ] **Signed off** (maintainer)
+
+### D758 — Reject the rotated-run grouping trial under the word guard
+
+n13's selected re-rotated OCR run has horizontal coordinates while emitted lines subtract the discarded run's rotation median. A trial selecting the later run's upright median reduces 162 standalone paragraphs to 51 and establishes four main column regions; the rotated provenance flag remains. However, existing paragraph hyphen joining changes eight source tokens into four joined tokens. This violates the required zero-lost/zero-gained control, so the scan implementation and its trial law are restored to HEAD. The rejected patch, fresh before/trial bundles and token differences remain under external b15/. No engine or scriptcheck changes are retained.
+
+F02's cover/TOC and multiline-cell defects, d16/n12/G01 infobox ownership, the OCR form ownership failures on G03/G04/G20 and G17's misplaced approval X remain unresolved by this retained form-grid work. Their qualitative grades are not upgraded merely because other samples improve. G15's existing three-column improvement is a protected control.
+
+- [ ] **Signed off** (maintainer)
+
+### D759 — Require repeated full entry rows; reject the IRS 1040 overreach
+
+The first D757 admission was too broad on the real IRS 1040 sample: preserving all 199 widget attributes did not justify three extra tables, added dot-leader tokens or the loss of a figure owner. That sample update is rejected and restored, rather than accepted as a new golden. The initial validation run is held; its exit-75 replay/unit/package commands are not counted as passes.
+
+A failing-first adjacent-form law reproduces the overreach: labels on every row plus scattered empty widgets do not prove a blank entry ledger. Admission now additionally requires at least three consecutive rows whose every column is a simple, empty cell holding a widget. This is a repeated row/column ownership pattern, rather than a page-wide count of fields. The eleven-row/value ownership law remains positive. The initial broad-grid patch, rejected sample and failing-law log remain under external b15/; final validation is rerun after the refinement.
+
+Button-stroke pruning is also limited to pages dominated by a repeated text-widget matrix: a field must belong to a row group and an aligned column group of at least three fields, and qualifying fields must be three quarters of the page's text fields. This excludes IRS 1040's scattered fields while retaining F14's entry matrix. The synthetic widget helper now records its intended text-field kind, so these laws exercise native field metadata.
+
+The refined F14 Model is identical to the accepted eight-column/eleven-entry-row result. The final IRS 1040 sample keeps all seven tables, 31 rows, 139 cells, both figures and every word. Seven widgets move to the actual cell containing their source centre; all attributes of all 199 widgets are unchanged. Its JSON/HTML and the sample index change only for those bounded field-owner moves, not for the rejected extra-table/leader-token/figure-loss trial. External `sample-1040-final-owners.json` names every moved field and its old/new owner.
+
+- [ ] **Signed off** (maintainer)
+
+### D760 — Final Batch 15 validation and bounded acceptance
+
+The narrowed final source passes fresh live conversions of all eleven named targets. F14 is rejudged poor→usable: each page has eight columns, eleven entry rows and one totals row with five widgets; all 202 widget attributes are preserved exactly, and all 176 entry widgets' source row names and centres match their row/column owners. Other named Models are byte-identical to their fresh baseline. D758's n13 trial is reverted; the remaining region/OCR-form acceptances listed there remain unmet. G15's improvement and rotation flags remain protected.
+
+The final live word control passes all 54 documents / 817 pages / 353,307 reference words, including both Berkshire inputs and receipt controls 07/10/11: zero lost/gained words, with all 53 non-F14 Models byte-identical to HEAD. Every final-source conversion is fresh; the unchanged, previously measured HEAD reference is reused. Live receipt measurements on both original 60-document populations pass precision floors: SROIE 0.682074563213647 versus 0.6816742392950571; CORD 0.422360248447205 versus 0.42. All 120 recorded live Models match both the original HEAD replay and final-source replay, so improvements over the frozen receipt file are inherited main behavior, not claimed B15 OCR gains. The tracked receipt baseline is unchanged.
+
+All fifteen requested final commands pass: `bb gates drift`, all 17 `bb ci core` steps, `bb rederive --check`, full `bb rederive`, `bb accuracy` (3,449 metrics within the existing 0.002 tolerance; all 232 cross-host Models match Rust), `bb samples` (29 samples), all seven OCR/fusion/retarget/seals/sealpx/sigs/asset replay gates, `bb unit` (exactly 1,281 laws each on Go/Rust/Java/C#), and `bb package --check` (seven clean consumers, identical 3,653-byte HTML). Both final positive ownership laws also reject the original HEAD implementation. No host is skipped.
+
+All eight calibration refreshes change zero rows. No test golden, scoreboard, API snapshot or accuracy ratchet moves. Only the three D759 IRS 1040 sample files change for seven widget-owner corrections; source words, all 199 widget attributes, both figures and every non-inline block property/structure are preserved. The first asset attempt failed because a live-only `OMP_THREAD_LIMIT=1` warning contaminated ImageMagick's numeric comparison output; removing that runner limit makes the complete asset gate pass, without changing source or fixtures. C# uses shared compilation disabled and the existing cached-package feed. Java package checking uses javac/java because Maven is absent; C/pod archives omit optional native OCR/render engines, as their gate reports.
+
+Final status, live Models, source fingerprints, word/widget/receipt audits, rejected trials, judgments and reproduction scripts are retained under external `emon-scratch/b15/`; `verify/all-final-gates-pass.json` is the authoritative gate result. Earlier broad-grid/OMP failures remain as superseded evidence. No commit, corpus fetch/prune or main-checkout edit is made. Task-owned internal builds are deleted after verification; the coordinator commits this partial batch.
+
+- [ ] **Signed off** (maintainer)

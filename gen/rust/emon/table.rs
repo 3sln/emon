@@ -277,6 +277,95 @@ pub(crate) fn tb_canon(rl: &mut crate::port::Cells, vals: &mut crate::port::Cell
     }
     return best;
 }
+pub(crate) fn tb_widget_matrix(an: &mut crate::port::Cells, page: i32) -> i32 {
+    // D759: prune button strokes only on pages dominated by a repeated matrix of text fields. At least three fields share a row, at least three share its column extents, and those fields are three quarters of the page's text fields.
+    let na: i32 = crate::port::cells_len(an) / AN_STRIDE;
+    let mut i: i32 = 0;
+    let mut j: i32 = 0;
+    let mut total: i32 = 0;
+    let mut matched: i32 = 0;
+    let mut rows: i32 = 0;
+    let mut cols: i32 = 0;
+    while i < na {
+        let o: i32 = i * AN_STRIDE;
+        if (crate::port::cells_at(an, o + 1) == an_field()) && ((crate::port::cells_at(an, o) + 1) == page) && (crate::port::cells_at(an, o + 8) >= 4) {
+            total += 1;
+            rows = 0;
+            cols = 0;
+            j = 0;
+            while j < na {
+                let p: i32 = j * AN_STRIDE;
+                if (crate::port::cells_at(an, p + 1) == an_field()) && ((crate::port::cells_at(an, p) + 1) == page) && (crate::port::cells_at(an, p + 8) >= 4) {
+                    if tb_abs((crate::port::cells_at(an, o + 5) + crate::port::cells_at(an, o + 7)) - (crate::port::cells_at(an, p + 5) + crate::port::cells_at(an, p + 7))) <= (POS_TOL * 2) {
+                        rows += 1;
+                    }
+                    if (tb_abs(crate::port::cells_at(an, o + 4) - crate::port::cells_at(an, p + 4)) <= POS_TOL) && (tb_abs(crate::port::cells_at(an, o + 6) - crate::port::cells_at(an, p + 6)) <= POS_TOL) {
+                        cols += 1;
+                    }
+                }
+                j += 1;
+            }
+            if (rows >= 3) && (cols >= 3) {
+                matched += 1;
+            }
+        }
+        i += 1;
+    }
+    if (matched >= 9) && ((matched * 4) >= (total * 3)) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn tb_drop_button_rules(mut rl: &mut crate::port::Cells, an: &mut crate::port::Cells, page: i32) -> i32 {
+    // D757: checkbox/radio appearance strokes belong to their widget, not to a neighbouring entry grid. Remove only strokes wholly inside an actual button before rule-position clustering.
+    if tb_widget_matrix(an, page) == 0 {
+        return 0;
+    }
+    let nr: i32 = tb_rows_of(rl, RLS);
+    let na: i32 = crate::port::cells_len(an) / AN_STRIDE;
+    let mut i: i32 = 0;
+    let mut j: i32 = 0;
+    let mut keep: i32 = 0;
+    let mut drop: i32 = 0;
+    let mut x0: i32 = 0;
+    let mut y0: i32 = 0;
+    let mut x1: i32 = 0;
+    let mut y1: i32 = 0;
+    let mut f: i32 = 0;
+    while i < nr {
+        drop = 0;
+        j = 0;
+        x0 = crate::port::cells_at(rl, (i * RLS) + 2);
+        x1 = crate::port::cells_at(rl, (i * RLS) + 3);
+        y0 = crate::port::cells_at(rl, (i * RLS) + 1);
+        y1 = y0;
+        if crate::port::cells_at(rl, i * RLS) == 1 {
+            x0 = y0;
+            x1 = y0;
+            y0 = crate::port::cells_at(rl, (i * RLS) + 2);
+            y1 = crate::port::cells_at(rl, (i * RLS) + 3);
+        }
+        while (j < na) && (drop == 0) {
+            let o: i32 = j * AN_STRIDE;
+            let kind: i32 = crate::port::cells_at(an, o + 8);
+            if (crate::port::cells_at(an, o + 1) == an_field()) && ((crate::port::cells_at(an, o) + 1) == page) && ((kind == 2) || (kind == 3)) && (x0 >= (crate::port::cells_at(an, o + 4) - 100)) && (x1 <= (crate::port::cells_at(an, o + 6) + 100)) && (y0 >= (crate::port::cells_at(an, o + 5) - 100)) && (y1 <= (crate::port::cells_at(an, o + 7) + 100)) {
+                drop = 1;
+            }
+            j += 1;
+        }
+        if drop == 0 {
+            f = 0;
+            while f < RLS {
+                crate::port::cells_set(rl, (keep * RLS) + f, crate::port::cells_at(rl, (i * RLS) + f));
+                f += 1;
+            }
+            keep += 1;
+        }
+        i += 1;
+    }
+    crate::port::cells_drop(rl, keep * RLS);
+    return nr - keep;
+}
 pub(crate) fn tb_merge_rules(mut rl: &mut crate::port::Cells, mut rm: &mut crate::port::Cells, mut so: &mut crate::port::Cells, mut vals: &mut crate::port::Cells) -> i32 {
     // Merge the rules of `rl` into `rm`: first the positions of each orientation clustered (POS_TOL), then
     // collinear pieces that touch (GAP_TOL) are one. `rm` rows are `rl` rows with the parent (a union-find
@@ -698,6 +787,34 @@ pub(crate) fn tb_single_cells(tc: &mut crate::port::Cells, cfirst: i32, cend: i3
     }
     return n;
 }
+pub(crate) fn tb_entry_run(tc: &mut crate::port::Cells, first: i32, end: i32, nr: i32, nc: i32, an: &mut crate::port::Cells, page: i32) -> i32 {
+    // D759: an entry ledger has consecutive full blank rows, each column a simple widget-owned cell. Labels and scattered fields across an ordinary form do not prove an entry grid.
+    let mut r: i32 = 0;
+    let mut c: i32 = 0;
+    let mut count: i32 = 0;
+    let mut run: i32 = 0;
+    let mut best: i32 = 0;
+    while r < nr {
+        count = 0;
+        c = first;
+        while c < end {
+            if (crate::port::cells_at(tc, c * TCS) == r) && (crate::port::cells_at(tc, (c * TCS) + 2) == 1) && (crate::port::cells_at(tc, (c * TCS) + 3) == 1) && (crate::port::cells_at(tc, (c * TCS) + 9) == 0) {
+                if tb_field_cells(tc, c, c + 1, an, page) == 1 {
+                    count += 1;
+                }
+            }
+            c += 1;
+        }
+        if count == nc {
+            run += 1;
+        } else {
+            run = 0;
+        }
+        best = tb_max(best, run);
+        r += 1;
+    }
+    return best;
+}
 pub(crate) fn tb_page_frame(tc: &mut crate::port::Cells, cfirst: i32, cend: i32, gx0: i32, gy0: i32, gx1: i32, gy1: i32, pw: i32, ph: i32) -> i32 {
     // 1 when the grid (box gx0..gx1, gy0..gy1) is the page's frame: at least 80 per cent of the page's width and of its height, with a cell of at least 30 per cent of the page's area in it
     // (the drawing's sheet of an engineering drawing, its title block under it); 0 for a page of unknown size.
@@ -737,13 +854,14 @@ pub(crate) fn tb_lattice(rm: &mut crate::port::Cells, root: i32, xs: &mut crate:
     let mut cross: i32 = 0;
     let mut prevc: i32 = -1;
     let mut prevw: i32 = -1;
+    let mut entry: i32 = 0;
     if (nc < 2) || (nr < 2) {
         return -1;
     }
     if (nc * nr) > 4000 {
         return -1;
     }
-    tb_split_rows(rm, root, wd, et, w0, w1, xs, ys, wl, rw, sg, ch, st, rmap, so, bd);
+    tb_split_rows(rm, root, wd, et, w0, w1, xs, ys, wl, rw, sg, ch, st, rmap, so, bd, an, page);
     nr = crate::port::cells_len(ys) - 1;
     if (nc * nr) > 4000 {
         return -1;
@@ -836,7 +954,11 @@ pub(crate) fn tb_lattice(rm: &mut crate::port::Cells, root: i32, xs: &mut crate:
         }
         k += 1;
     }
-    if (filled < 4) || ((filled * 5) < (total * 2)) {
+    let entryfields: i32 = tb_field_cells(tc, cfirst, cfirst + total, an, page);
+    if (nc >= 3) && (nr >= 4) && (filled >= nc) && (entryfields >= (nc * 2)) && ((entryfields * 2) >= total) && ((tb_single_cells(tc, cfirst, cfirst + total) * 5) >= (total * 4)) && (tb_entry_run(tc, cfirst, cfirst + total, nr, nc, an, page) >= 3) {
+        entry = 1;
+    }
+    if (entry == 0) && ((filled < 4) || ((filled * 5) < (total * 2))) {
         crate::port::cells_drop(tc, cfirst * TCS);
         crate::port::cells_drop(tw, tw0);
         return -1;
@@ -849,7 +971,7 @@ pub(crate) fn tb_lattice(rm: &mut crate::port::Cells, root: i32, xs: &mut crate:
     // D583 (smoke review A issue 10): the rules of a form's page are its fields' boxes: a grid with more empty cells that hold a form field's widget (and at least four) than cells with text is the
     // page's boxes, not a table; the labels are the page's lines and the fields go to them (`emon.fields`)
     let fcn: i32 = tb_field_cells(tc, cfirst, cfirst + total, an, page);
-    if (fcn >= 4) && (fcn > filled) {
+    if (entry == 0) && (fcn >= 4) && (fcn > filled) {
         crate::port::cells_drop(tc, cfirst * TCS);
         crate::port::cells_drop(tw, tw0);
         return -1;
@@ -2351,7 +2473,27 @@ pub(crate) fn tb_crossed(wd: &mut crate::port::Cells, w0: i32, w1: i32, x: i32, 
     }
     return 0 == 1;
 }
-pub(crate) fn tb_split_rows(rm: &mut crate::port::Cells, root: i32, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w0: i32, w1: i32, xs: &mut crate::port::Cells, mut ys: &mut crate::port::Cells, mut wl: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut ch: &mut crate::port::Cells, mut occ: &mut crate::port::Cells, mut rmap: &mut crate::port::Cells, mut so: &mut crate::port::Cells, mut bd: &mut crate::port::Cells) -> i32 {
+pub(crate) fn tb_single_widget_band(an: &mut crate::port::Cells, page: i32, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
+    // D757: a ruled band with text fields on a single baseline is one form row, including a tall wrapped total label. Printed digits in its instructions do not prove extra rows.
+    let mut i: i32 = 0;
+    let mut first: i32 = -1;
+    let mut found: i32 = 0;
+    while i < (crate::port::cells_len(an) / AN_STRIDE) {
+        let o: i32 = i * AN_STRIDE;
+        let cx: i32 = (crate::port::cells_at(an, o + 4) + crate::port::cells_at(an, o + 6)) / 2;
+        let cy: i32 = (crate::port::cells_at(an, o + 5) + crate::port::cells_at(an, o + 7)) / 2;
+        if (crate::port::cells_at(an, o + 1) == an_field()) && ((crate::port::cells_at(an, o) + 1) == page) && (crate::port::cells_at(an, o + 8) >= 4) && (cx >= x0) && (cx <= x1) && (cy >= y0) && (cy < y1) {
+            if (first >= 0) && (tb_abs(cy - first) > POS_TOL) {
+                return 0;
+            }
+            first = cy;
+            found = 1;
+        }
+        i += 1;
+    }
+    return found;
+}
+pub(crate) fn tb_split_rows(rm: &mut crate::port::Cells, root: i32, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w0: i32, w1: i32, xs: &mut crate::port::Cells, mut ys: &mut crate::port::Cells, mut wl: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut ch: &mut crate::port::Cells, mut occ: &mut crate::port::Cells, mut rmap: &mut crate::port::Cells, mut so: &mut crate::port::Cells, mut bd: &mut crate::port::Cells, an: &mut crate::port::Cells, page: i32) -> i32 {
     // P12.2 (smoke review, issue 2: BLS, BEA, a 10-K): the rows of a lattice with fewer row cuts than its text has rows. A band between two
     // rules that are drawn across every column, with no word crossing an undrawn outer boundary, holds the rows of a table when the baselines of its words, told into table rows as an unruled table's
     // D634: words may cross undrawn interior boundaries: those labels span columns in their own row, rather than blocking every row cut in the band. The baseline rows, told as an unruled table's
@@ -2400,7 +2542,7 @@ pub(crate) fn tb_split_rows(rm: &mut crate::port::Cells, root: i32, wd: &mut cra
             }
             c += 1;
         }
-        if closed == 1 {
+        if (closed == 1) && (tb_single_widget_band(an, page, crate::port::cells_at(xs, 0), crate::port::cells_at(ys, r), crate::port::cells_at(xs, nc), crate::port::cells_at(ys, r + 1)) == 0) {
             nb = tb_rows(wd, et, w0, w1, crate::port::cells_at(xs, 0), crate::port::cells_at(ys, r), crate::port::cells_at(xs, nc), crate::port::cells_at(ys, r + 1), wl, rw, sg);
             if nb >= TB_SPLIT_MIN {
                 crate::port::cells_drop(ch, 0);
@@ -8398,6 +8540,7 @@ pub fn tb_build(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et
         if (wj - wi) > 0 {
             tb_collect(grl, qi, qj, gfl, ui, uj, page_h(pages, p - 1), s0, s2);
             if tb_rows_of(s0, RLS) <= MAX_RULES {
+                tb_drop_button_rules(s0, an, p);
                 tb_merge_rules(s0, s1, s3, s9);
                 tb_ruled_page(s1, p, s4, s5, s6, tb, tc, wd, et, wi, wj, s7, s3, tw, tx, s10, s11, s12, s13, s14, s16, s15, an, page_w(pages, p - 1), page_h(pages, p - 1));
                 tb_partial_page(s1, tbo, p, wd, et, wi, wj, s9, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx);

@@ -339,6 +339,97 @@ func tbCanon(rl *port.Cells, vals *port.Cells, i int32) int32 {
 	return best
 }
 
+func tbWidgetMatrix(an *port.Cells, page int32) int32 {
+	// D759: prune button strokes only on pages dominated by a repeated matrix of text fields. At least three fields share a row, at least three share its column extents, and those fields are three quarters of the page's text fields.
+	var na int32 = port.CellsLen(an) / anStride
+	var i int32 = 0
+	var j int32 = 0
+	var total int32 = 0
+	var matched int32 = 0
+	var rows int32 = 0
+	var cols int32 = 0
+	for i < na {
+		var o int32 = i * anStride
+		if (port.CellsAt(an, o+1) == pdfannot.AnField()) && ((port.CellsAt(an, o) + 1) == page) && (port.CellsAt(an, o+8) >= 4) {
+			total += 1
+			rows = 0
+			cols = 0
+			j = 0
+			for j < na {
+				var p int32 = j * anStride
+				if (port.CellsAt(an, p+1) == pdfannot.AnField()) && ((port.CellsAt(an, p) + 1) == page) && (port.CellsAt(an, p+8) >= 4) {
+					if tbAbs((port.CellsAt(an, o+5)+port.CellsAt(an, o+7))-(port.CellsAt(an, p+5)+port.CellsAt(an, p+7))) <= (posTol * 2) {
+						rows += 1
+					}
+					if (tbAbs(port.CellsAt(an, o+4)-port.CellsAt(an, p+4)) <= posTol) && (tbAbs(port.CellsAt(an, o+6)-port.CellsAt(an, p+6)) <= posTol) {
+						cols += 1
+					}
+				}
+				j += 1
+			}
+			if (rows >= 3) && (cols >= 3) {
+				matched += 1
+			}
+		}
+		i += 1
+	}
+	if (matched >= 9) && ((matched * 4) >= (total * 3)) {
+		return 1
+	}
+	return 0
+}
+
+func tbDropButtonRules(rl *port.Cells, an *port.Cells, page int32) int32 {
+	// D757: checkbox/radio appearance strokes belong to their widget, not to a neighbouring entry grid. Remove only strokes wholly inside an actual button before rule-position clustering.
+	if tbWidgetMatrix(an, page) == 0 {
+		return 0
+	}
+	var nr int32 = tbRowsOf(rl, rls)
+	var na int32 = port.CellsLen(an) / anStride
+	var i int32 = 0
+	var j int32 = 0
+	var keep int32 = 0
+	var drop int32 = 0
+	var x0 int32 = 0
+	var y0 int32 = 0
+	var x1 int32 = 0
+	var y1 int32 = 0
+	var f int32 = 0
+	for i < nr {
+		drop = 0
+		j = 0
+		x0 = port.CellsAt(rl, (i*rls)+2)
+		x1 = port.CellsAt(rl, (i*rls)+3)
+		y0 = port.CellsAt(rl, (i*rls)+1)
+		y1 = y0
+		if port.CellsAt(rl, i*rls) == 1 {
+			x0 = y0
+			x1 = y0
+			y0 = port.CellsAt(rl, (i*rls)+2)
+			y1 = port.CellsAt(rl, (i*rls)+3)
+		}
+		for (j < na) && (drop == 0) {
+			var o int32 = j * anStride
+			var kind int32 = port.CellsAt(an, o+8)
+			if (port.CellsAt(an, o+1) == pdfannot.AnField()) && ((port.CellsAt(an, o) + 1) == page) && ((kind == 2) || (kind == 3)) && (x0 >= (port.CellsAt(an, o+4) - 100)) && (x1 <= (port.CellsAt(an, o+6) + 100)) && (y0 >= (port.CellsAt(an, o+5) - 100)) && (y1 <= (port.CellsAt(an, o+7) + 100)) {
+				drop = 1
+			}
+			j += 1
+		}
+		if drop == 0 {
+			f = 0
+			for f < rls {
+				port.CellsSet(rl, (keep*rls)+f, port.CellsAt(rl, (i*rls)+f))
+				f += 1
+			}
+			keep += 1
+		}
+		i += 1
+	}
+	port.CellsDrop(rl, keep*rls)
+	return nr - keep
+}
+
 func tbMergeRules(rl *port.Cells, rm *port.Cells, so *port.Cells, vals *port.Cells) int32 {
 	// Merge the rules of `rl` into `rm`: first the positions of each orientation clustered (POS_TOL), then
 	// collinear pieces that touch (GAP_TOL) are one. `rm` rows are `rl` rows with the parent (a union-find
@@ -778,6 +869,35 @@ func tbSingleCells(tc *port.Cells, cfirst int32, cend int32) int32 {
 	return n
 }
 
+func tbEntryRun(tc *port.Cells, first int32, end int32, nr int32, nc int32, an *port.Cells, page int32) int32 {
+	// D759: an entry ledger has consecutive full blank rows, each column a simple widget-owned cell. Labels and scattered fields across an ordinary form do not prove an entry grid.
+	var r int32 = 0
+	var c int32 = 0
+	var count int32 = 0
+	var run int32 = 0
+	var best int32 = 0
+	for r < nr {
+		count = 0
+		c = first
+		for c < end {
+			if (port.CellsAt(tc, c*tcs) == r) && (port.CellsAt(tc, (c*tcs)+2) == 1) && (port.CellsAt(tc, (c*tcs)+3) == 1) && (port.CellsAt(tc, (c*tcs)+9) == 0) {
+				if tbFieldCells(tc, c, c+1, an, page) == 1 {
+					count += 1
+				}
+			}
+			c += 1
+		}
+		if count == nc {
+			run += 1
+		} else {
+			run = 0
+		}
+		best = tbMax(best, run)
+		r += 1
+	}
+	return best
+}
+
 func tbPageFrame(tc *port.Cells, cfirst int32, cend int32, gx0 int32, gy0 int32, gx1 int32, gy1 int32, pw int32, ph int32) int32 {
 	// 1 when the grid (box gx0..gx1, gy0..gy1) is the page's frame: at least 80 per cent of the page's width and of its height, with a cell of at least 30 per cent of the page's area in it
 	// (the drawing's sheet of an engineering drawing, its title block under it); 0 for a page of unknown size.
@@ -818,13 +938,14 @@ func tbLattice(rm *port.Cells, root int32, xs *port.Cells, ys *port.Cells, page 
 	var cross int32 = 0
 	var prevc int32 = -1
 	var prevw int32 = -1
+	var entry int32 = 0
 	if (nc < 2) || (nr < 2) {
 		return -1
 	}
 	if (nc * nr) > 4000 {
 		return -1
 	}
-	tbSplitRows(rm, root, wd, et, w0, w1, xs, ys, wl, rw, sg, ch, st, rmap, so, bd)
+	tbSplitRows(rm, root, wd, et, w0, w1, xs, ys, wl, rw, sg, ch, st, rmap, so, bd, an, page)
 	nr = port.CellsLen(ys) - 1
 	if (nc * nr) > 4000 {
 		return -1
@@ -917,7 +1038,11 @@ func tbLattice(rm *port.Cells, root int32, xs *port.Cells, ys *port.Cells, page 
 		}
 		k += 1
 	}
-	if (filled < 4) || ((filled * 5) < (total * 2)) {
+	var entryfields int32 = tbFieldCells(tc, cfirst, cfirst+total, an, page)
+	if (nc >= 3) && (nr >= 4) && (filled >= nc) && (entryfields >= (nc * 2)) && ((entryfields * 2) >= total) && ((tbSingleCells(tc, cfirst, cfirst+total) * 5) >= (total * 4)) && (tbEntryRun(tc, cfirst, cfirst+total, nr, nc, an, page) >= 3) {
+		entry = 1
+	}
+	if (entry == 0) && ((filled < 4) || ((filled * 5) < (total * 2))) {
 		port.CellsDrop(tc, cfirst*tcs)
 		port.CellsDrop(tw, tw0)
 		return -1
@@ -930,7 +1055,7 @@ func tbLattice(rm *port.Cells, root int32, xs *port.Cells, ys *port.Cells, page 
 	// D583 (smoke review A issue 10): the rules of a form's page are its fields' boxes: a grid with more empty cells that hold a form field's widget (and at least four) than cells with text is the
 	// page's boxes, not a table; the labels are the page's lines and the fields go to them (`emon.fields`)
 	var fcn int32 = tbFieldCells(tc, cfirst, cfirst+total, an, page)
-	if (fcn >= 4) && (fcn > filled) {
+	if (entry == 0) && (fcn >= 4) && (fcn > filled) {
 		port.CellsDrop(tc, cfirst*tcs)
 		port.CellsDrop(tw, tw0)
 		return -1
@@ -2489,7 +2614,28 @@ func tbCrossed(wd *port.Cells, w0 int32, w1 int32, x int32, ya int32, yb int32) 
 	return 0 == 1
 }
 
-func tbSplitRows(rm *port.Cells, root int32, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, xs *port.Cells, ys *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, occ *port.Cells, rmap *port.Cells, so *port.Cells, bd *port.Cells) int32 {
+func tbSingleWidgetBand(an *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32) int32 {
+	// D757: a ruled band with text fields on a single baseline is one form row, including a tall wrapped total label. Printed digits in its instructions do not prove extra rows.
+	var i int32 = 0
+	var first int32 = -1
+	var found int32 = 0
+	for i < (port.CellsLen(an) / anStride) {
+		var o int32 = i * anStride
+		var cx int32 = (port.CellsAt(an, o+4) + port.CellsAt(an, o+6)) / 2
+		var cy int32 = (port.CellsAt(an, o+5) + port.CellsAt(an, o+7)) / 2
+		if (port.CellsAt(an, o+1) == pdfannot.AnField()) && ((port.CellsAt(an, o) + 1) == page) && (port.CellsAt(an, o+8) >= 4) && (cx >= x0) && (cx <= x1) && (cy >= y0) && (cy < y1) {
+			if (first >= 0) && (tbAbs(cy-first) > posTol) {
+				return 0
+			}
+			first = cy
+			found = 1
+		}
+		i += 1
+	}
+	return found
+}
+
+func tbSplitRows(rm *port.Cells, root int32, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, xs *port.Cells, ys *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, occ *port.Cells, rmap *port.Cells, so *port.Cells, bd *port.Cells, an *port.Cells, page int32) int32 {
 	// P12.2 (smoke review, issue 2: BLS, BEA, a 10-K): the rows of a lattice with fewer row cuts than its text has rows. A band between two
 	// rules that are drawn across every column, with no word crossing an undrawn outer boundary, holds the rows of a table when the baselines of its words, told into table rows as an unruled table's
 	// D634: words may cross undrawn interior boundaries: those labels span columns in their own row, rather than blocking every row cut in the band. The baseline rows, told as an unruled table's
@@ -2538,7 +2684,7 @@ func tbSplitRows(rm *port.Cells, root int32, wd *port.Cells, et *port.Cells, w0 
 			}
 			c += 1
 		}
-		if closed == 1 {
+		if (closed == 1) && (tbSingleWidgetBand(an, page, port.CellsAt(xs, 0), port.CellsAt(ys, r), port.CellsAt(xs, nc), port.CellsAt(ys, r+1)) == 0) {
 			nb = tbRows(wd, et, w0, w1, port.CellsAt(xs, 0), port.CellsAt(ys, r), port.CellsAt(xs, nc), port.CellsAt(ys, r+1), wl, rw, sg)
 			if nb >= tbSplitMin {
 				port.CellsDrop(ch, 0)
@@ -8670,6 +8816,7 @@ func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gf
 		if (wj - wi) > 0 {
 			tbCollect(grl, qi, qj, gfl, ui, uj, model.PageH(pages, p-1), s0, s2)
 			if tbRowsOf(s0, rls) <= maxRules {
+				tbDropButtonRules(s0, an, p)
 				tbMergeRules(s0, s1, s3, s9)
 				tbRuledPage(s1, p, s4, s5, s6, tb, tc, wd, et, wi, wj, s7, s3, tw, tx, s10, s11, s12, s13, s14, s16, s15, an, model.PageW(pages, p-1), model.PageH(pages, p-1))
 				tbPartialPage(s1, tbo, p, wd, et, wi, wj, s9, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx)

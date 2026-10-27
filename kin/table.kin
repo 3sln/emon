@@ -310,6 +310,57 @@
           (set j (+ j 1))))
     (return best)))
 
+(defn ^I32 tb-widget-matrix [^Cells an ^I32 page]
+  (comment "D759: prune button strokes only on pages dominated by a repeated matrix of text fields. At least three fields share a row, at least three share its column extents, and those fields are three quarters of the page's text fields.")
+  (let [^I32 na (quot (cells-len an) AN_STRIDE)
+        ^:mut ^I32 i 0 ^:mut ^I32 j 0 ^:mut ^I32 total 0 ^:mut ^I32 matched 0
+        ^:mut ^I32 rows 0 ^:mut ^I32 cols 0]
+    (while (< i na)
+      (do (let [^I32 o (* i AN_STRIDE)]
+            (if (and (== (cells-at an (+ o 1)) (an-field)) (== (+ (cells-at an o) 1) page) (>= (cells-at an (+ o 8)) 4))
+              (do (set total (+ total 1)) (set rows 0) (set cols 0) (set j 0)
+                  (while (< j na)
+                    (do (let [^I32 p (* j AN_STRIDE)]
+                          (if (and (== (cells-at an (+ p 1)) (an-field)) (== (+ (cells-at an p) 1) page) (>= (cells-at an (+ p 8)) 4))
+                            (do (if (<= (tb-abs (- (+ (cells-at an (+ o 5)) (cells-at an (+ o 7))) (+ (cells-at an (+ p 5)) (cells-at an (+ p 7))))) (* POS_TOL 2)) (set rows (+ rows 1)))
+                                (if (and (<= (tb-abs (- (cells-at an (+ o 4)) (cells-at an (+ p 4)))) POS_TOL)
+                                         (<= (tb-abs (- (cells-at an (+ o 6)) (cells-at an (+ p 6)))) POS_TOL)) (set cols (+ cols 1))))))
+                        (set j (+ j 1))))
+                  (if (and (>= rows 3) (>= cols 3)) (set matched (+ matched 1))))))
+          (set i (+ i 1))))
+    (if (and (>= matched 9) (>= (* matched 4) (* total 3))) (return 1))
+    (return 0)))
+
+(defn ^I32 tb-drop-button-rules [^:mut ^Cells rl ^Cells an ^I32 page]
+  (comment "D757: checkbox/radio appearance strokes belong to their widget, not to a neighbouring entry grid. Remove only strokes wholly inside an actual button before rule-position clustering.")
+  (if (== (tb-widget-matrix an page) 0) (return 0))
+  (let [^I32 nr (tb-rows-of rl RLS) ^I32 na (quot (cells-len an) AN_STRIDE)
+        ^:mut ^I32 i 0 ^:mut ^I32 j 0 ^:mut ^I32 keep 0 ^:mut ^I32 drop 0
+        ^:mut ^I32 x0 0 ^:mut ^I32 y0 0 ^:mut ^I32 x1 0 ^:mut ^I32 y1 0 ^:mut ^I32 f 0]
+    (while (< i nr)
+      (do (set drop 0) (set j 0)
+          (set x0 (cells-at rl (+ (* i RLS) 2))) (set x1 (cells-at rl (+ (* i RLS) 3)))
+          (set y0 (cells-at rl (+ (* i RLS) 1))) (set y1 y0)
+          (if (== (cells-at rl (* i RLS)) 1)
+            (do (set x0 y0) (set x1 y0)
+                (set y0 (cells-at rl (+ (* i RLS) 2))) (set y1 (cells-at rl (+ (* i RLS) 3)))))
+          (while (and (< j na) (== drop 0))
+            (do (let [^I32 o (* j AN_STRIDE) ^I32 kind (cells-at an (+ o 8))]
+                  (if (and (== (cells-at an (+ o 1)) (an-field)) (== (+ (cells-at an o) 1) page)
+                           (or (== kind 2) (== kind 3))
+                           (>= x0 (- (cells-at an (+ o 4)) 100)) (<= x1 (+ (cells-at an (+ o 6)) 100))
+                           (>= y0 (- (cells-at an (+ o 5)) 100)) (<= y1 (+ (cells-at an (+ o 7)) 100)))
+                    (set drop 1)))
+                (set j (+ j 1))))
+          (if (== drop 0)
+            (do (set f 0)
+                (while (< f RLS)
+                  (do (cells-set rl (+ (* keep RLS) f) (cells-at rl (+ (* i RLS) f))) (set f (+ f 1))))
+                (set keep (+ keep 1))))
+          (set i (+ i 1))))
+    (cells-drop rl (* keep RLS))
+    (return (- nr keep))))
+
 (defn ^I32 tb-merge-rules [^:mut ^Cells rl ^:mut ^Cells rm ^:mut ^Cells so ^:mut ^Cells vals]
   (comment "Merge the rules of `rl` into `rm`: first the positions of each orientation clustered (POS_TOL), then")
   (comment "collinear pieces that touch (GAP_TOL) are one. `rm` rows are `rl` rows with the parent (a union-find")
@@ -667,6 +718,21 @@
           (set c (+ c 1))))
     (return n)))
 
+(defn ^I32 tb-entry-run [^Cells tc ^I32 first ^I32 end ^I32 nr ^I32 nc ^Cells an ^I32 page]
+  (comment "D759: an entry ledger has consecutive full blank rows, each column a simple widget-owned cell. Labels and scattered fields across an ordinary form do not prove an entry grid.")
+  (let [^:mut ^I32 r 0 ^:mut ^I32 c 0 ^:mut ^I32 count 0 ^:mut ^I32 run 0 ^:mut ^I32 best 0]
+    (while (< r nr)
+      (do (set count 0) (set c first)
+          (while (< c end)
+            (do (if (and (== (cells-at tc (* c TCS)) r)
+                         (== (cells-at tc (+ (* c TCS) 2)) 1) (== (cells-at tc (+ (* c TCS) 3)) 1)
+                         (== (cells-at tc (+ (* c TCS) 9)) 0))
+                  (if (== (tb-field-cells tc c (+ c 1) an page) 1) (set count (+ count 1))))
+                (set c (+ c 1))))
+          (if (== count nc) (set run (+ run 1)) (set run 0))
+          (set best (tb-max best run)) (set r (+ r 1))))
+    (return best)))
+
 (defn ^I32 tb-page-frame [^Cells tc ^I32 cfirst ^I32 cend ^I32 gx0 ^I32 gy0 ^I32 gx1 ^I32 gy1 ^I32 pw ^I32 ph]
   (comment "1 when the grid (box gx0..gx1, gy0..gy1) is the page's frame: at least 80 per cent of the page's width and of its height, with a cell of at least 30 per cent of the page's area in it")
   (comment "(the drawing's sheet of an engineering drawing, its title block under it); 0 for a page of unknown size.")
@@ -703,10 +769,11 @@
         ^:mut ^I32 cc 0
         ^:mut ^I32 cross 0
         ^:mut ^I32 prevc -1
-        ^:mut ^I32 prevw -1]
+        ^:mut ^I32 prevw -1
+        ^:mut ^I32 entry 0]
     (if (or (< nc 2) (< nr 2)) (return -1))
     (if (> (* nc nr) 4000) (return -1))
-    (tb-split-rows rm root wd et w0 w1 xs ys wl rw sg ch st rmap so bd)
+    (tb-split-rows rm root wd et w0 w1 xs ys wl rw sg ch st rmap so bd an page)
     (set nr (- (cells-len ys) 1))
     (if (> (* nc nr) 4000) (return -1))
     (cells-drop gm 0)
@@ -783,7 +850,15 @@
       (while (< k (tb-rows-of tc TCS))
         (do (if (> (cells-at tc (+ (* k TCS) 9)) 0) (set filled (+ filled 1)))
             (set k (+ k 1))))
-      (if (or (< filled 4) (< (* filled 5) (* total 2)))
+      ;; D757: a dense regular grid of widgets is an entry ledger even while blank.
+      ;; Open-label forms (D583) fail the simple-cell/column guards and retain their old path.
+      (let [^I32 entryfields (tb-field-cells tc cfirst (+ cfirst total) an page)]
+        (if (and (>= nc 3) (>= nr 4) (>= filled nc)
+                 (>= entryfields (* nc 2)) (>= (* entryfields 2) total)
+                 (>= (* (tb-single-cells tc cfirst (+ cfirst total)) 5) (* total 4))
+                 (>= (tb-entry-run tc cfirst (+ cfirst total) nr nc an page) 3))
+          (set entry 1)))
+      (if (and (== entry 0) (or (< filled 4) (< (* filled 5) (* total 2))))
         (do (cells-drop tc (* cfirst TCS))
             (cells-drop tw tw0)
             (return -1)))
@@ -794,7 +869,7 @@
       (comment "D583 (smoke review A issue 10): the rules of a form's page are its fields' boxes: a grid with more empty cells that hold a form field's widget (and at least four) than cells with text is the")
       (comment "page's boxes, not a table; the labels are the page's lines and the fields go to them (`emon.fields`)")
       (let [^I32 fcn (tb-field-cells tc cfirst (+ cfirst total) an page)]
-        (if (and (>= fcn 4) (> fcn filled))
+        (if (and (== entry 0) (>= fcn 4) (> fcn filled))
           (do (cells-drop tc (* cfirst TCS))
               (cells-drop tw tw0)
               (return -1))))
@@ -1999,8 +2074,22 @@
           (set w (+ w 1))))
     (return (== 0 1))))
 
+(defn ^I32 tb-single-widget-band [^Cells an ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "D757: a ruled band with text fields on a single baseline is one form row, including a tall wrapped total label. Printed digits in its instructions do not prove extra rows.")
+  (let [^:mut ^I32 i 0 ^:mut ^I32 first -1 ^:mut ^I32 found 0]
+    (while (< i (quot (cells-len an) AN_STRIDE))
+      (do (let [^I32 o (* i AN_STRIDE)
+                ^I32 cx (quot (+ (cells-at an (+ o 4)) (cells-at an (+ o 6))) 2)
+                ^I32 cy (quot (+ (cells-at an (+ o 5)) (cells-at an (+ o 7))) 2)]
+            (if (and (== (cells-at an (+ o 1)) (an-field)) (== (+ (cells-at an o) 1) page)
+                     (>= (cells-at an (+ o 8)) 4) (>= cx x0) (<= cx x1) (>= cy y0) (< cy y1))
+              (do (if (and (>= first 0) (> (tb-abs (- cy first)) POS_TOL)) (return 0))
+                  (set first cy) (set found 1))))
+          (set i (+ i 1))))
+    (return found)))
+
 (defn ^I32 tb-split-rows [^Cells rm ^I32 root ^Cells wd ^Cells et ^I32 w0 ^I32 w1 ^Cells xs ^:mut ^Cells ys
-                          ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg ^:mut ^Cells ch ^:mut ^Cells occ ^:mut ^Cells rmap ^:mut ^Cells so ^:mut ^Cells bd]
+                          ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg ^:mut ^Cells ch ^:mut ^Cells occ ^:mut ^Cells rmap ^:mut ^Cells so ^:mut ^Cells bd ^Cells an ^I32 page]
   (comment "P12.2 (smoke review, issue 2: BLS, BEA, a 10-K): the rows of a lattice with fewer row cuts than its text has rows. A band between two")
   (comment "rules that are drawn across every column, with no word crossing an undrawn outer boundary, holds the rows of a table when the baselines of its words, told into table rows as an unruled table's")
   (comment "D634: words may cross undrawn interior boundaries: those labels span columns in their own row, rather than blocking every row cut in the band. The baseline rows, told as an unruled table's")
@@ -2039,7 +2128,7 @@
                   (if (or (== c 0) (== c nc))
                     (if (tb-crossed wd w0 w1 (cells-at xs c) (cells-at ys r) (cells-at ys (+ r 1))) (set closed 0))))
                 (set c (+ c 1))))
-          (if (== closed 1)
+          (if (and (== closed 1) (== (tb-single-widget-band an page (cells-at xs 0) (cells-at ys r) (cells-at xs nc) (cells-at ys (+ r 1))) 0))
             (do (set nb (tb-rows wd et w0 w1 (cells-at xs 0) (cells-at ys r) (cells-at xs nc) (cells-at ys (+ r 1)) wl rw sg))
                 (if (>= nb TB_SPLIT_MIN)
                   (do (cells-drop ch 0)
@@ -6360,7 +6449,8 @@
           (if (> (- wj wi) 0)
             (do (tb-collect grl qi qj gfl ui uj (page-h pages (- p 1)) s0 s2)
                 (if (<= (tb-rows-of s0 RLS) MAX_RULES)
-                  (do (tb-merge-rules s0 s1 s3 s9)
+                  (do (tb-drop-button-rules s0 an p)
+                      (tb-merge-rules s0 s1 s3 s9)
                       (tb-ruled-page s1 p s4 s5 s6 tb tc wd et wi wj s7 s3 tw tx s10 s11 s12 s13 s14 s16 s15 an (page-w pages (- p 1)) (page-h pages (- p 1)))
                       (tb-partial-page s1 tbo p wd et wi wj s9 s10 s11 s12 s13 s14 s15 s16 s6 s17 s18 s7 s3 tb tc tw tx))
                   (cells-drop s1 0))
