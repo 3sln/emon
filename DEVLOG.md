@@ -12882,6 +12882,26 @@ Packaging limitations remain the existing ones: Java's consumer uses javac/java 
 
 - [ ] **Signed off** (maintainer)
 
+### D767 — Scope weak script conflicts to selected OCR provenance
+
+The D754 weak Arabic OSD conflict measures an OCR first pass: substantial Latin without Arabic across three distinct pages. It is not evidence that an independent born-digital Arabic text layer is unreadable. G01/G02 kept their PDF text but were blanket flagged and capped at 100. Restrict this conflict kind to Model nodes whose selected provenance includes OCR. The separate Khmer/Ethiopic mixed-script diagnostic retains its legacy-text scope; it must still warn on G18's damaged born/inline content. No OCR routing, language choice, text, values, regions or ownership changes.
+
+A failing-first law puts born Arabic and its exact inline number beside conflicting OCR on the same page, asserting distinct owners, spans, values, flags and original confidences. It fails before the fix (both born confidences become 100); the existing weak-page laws now explicitly declare selected OCR provenance. Existing mixed-script laws continue to assert that damaged legacy/inline values are retained and capped.
+
+- [ ] **Signed off** (maintainer)
+
+### D768 — Batch 20 acceptance and preservation evidence
+
+Retain D767. Fresh four-page live conversions on the sweep-5 inputs remove G01/G02's 114/23 false body `script-unread` flags and restore body-text confidence ranges 795–998/795–947. Their exact text, values, ownership, provenance, boxes and OCR evidence remain. n09/G18 retain their entire Models, including inline diagnostics, and exactly 74/12 flagged body nodes. Per-node source/script-character/box audits are external. Live rubric grades remain usable/usable/broken/poor. Explicit `ara+eng`, `urd+eng` and `khm+eng` preserve values/ownership and all recorded OCR evidence.
+
+All 54 live controls (817 pages, 353,307 represented words), including Berkshire and D716 receipt controls 07/10/11, have identical complete Models: zero words lost or gained. Fresh `bb receipts --n 60` uses the same populations and holds both unchanged baseline precision floors: SROIE .6820745632 >= .6816742393; CORD .4223602484 >= .42. These comparisons with the older tracked receipt baseline are guards, not recognition gains attributed to this diagnostic-only change.
+
+All final gates pass: `bb gates drift`, `bb ci core`, `bb rederive --check`, full `bb rederive` (25 steps), `bb accuracy` (3,449 metrics, no regression beyond existing .002 tolerance; 232 cross-host Models identical), `bb samples` (29, zero failures), `bb ocr`, `bb fusion`, `bb retarget`, `bb seals`, `bb sealpx`, `bb sigs`, `bb asset`, `bb unit` (1,293 laws each on Go/Rust/Java/C#), and `bb package --check` (seven clean consumers, identical 3,653-byte HTML). All eight calibration refreshes changed zero rows. No golden, sample, API snapshot, calibration data or accuracy ratchet moved.
+
+Verification uses an isolated internal build/cache root, private review index/objects, a task-scoped Git wrapper, cached NuGet feed and disabled shared C# compilation. Runner-only failures were corrected and the affected gates rerun completely: private Git variables leaked into temporary-repository self-tests, then incorrectly overrode their own indexes; relocated Rust native tests needed the supported `EMON_ROOT`; an OpenMP warning contaminated ImageMagick's otherwise-zero comparison output. Initial and passing logs are retained. Java packaging uses javac/java because Maven is absent; C/pod archives omit optional bundled OCR/render engines, and the optional JS native snippet is not exercised. No publication, commit, corpus fetch or prune.
+
+Evidence and reproducible runner scripts: `/Volumes/SSK SSD/emon-scratch/b20/`, especially `judgments.json`, `node-audit.json`, `explicit-language-checks.json`, `controls/audit.json`, `receipt-floors.json`, `final-gates.json`, and `gates/`. Task-owned internal builds are removed at completion; the coordinator commits.
+
 ### D769 — Bisect label ownership rather than surviving word sets
 
 Fresh builds of the immediate parent and result of Batch 12 (`6210776c`) reproduce the D28 p96 regression: the complete net-earnings label belongs to 96,223/(22,759)/89,937 before that batch; afterwards only “shareholders” remains beside those values. Batch 14's parent already has that defect. Fresh parent/result builds of Batch 14 (`115951a4`) separately reproduce F13 p12's five subgroup labels moving from following data stubs to preceding populated rows. The live starting build reproduces both defects. The two regressions have different introduction boundaries; neither is an OCR recognition failure.

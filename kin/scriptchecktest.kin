@@ -8,7 +8,7 @@
             [emon.ocr :refer [ox-begin ox-line ox-block ox-word]]
             [emon.scriptcheck :refer [sk-route sk-unread sk-unpack sk-min-conf sk-weak-conf sk-tag-conflicts]]
             [emon.evidence :refer [or-new or-set ow-new orf-pass orf-script orf-sconf orf-wfirst orf-wcount op-first op-line]]
-            [emon.model :refer [model-init node-new nk-paragraph node-add-region node-set-text node-set-conf node-conf node-flags node-text-start node-text-len node-parent fl-script-unread node-add-src sr-text nk-text]]
+            [emon.model :refer [model-init node-new nk-paragraph node-add-region node-set-text node-set-conf node-conf node-flags node-text-start node-text-len node-parent fl-script-unread node-add-src sr-text sr-ocr nk-text]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot bit-and]]))
 
@@ -106,6 +106,7 @@
       (cells-push text 65)
       (cells-push text 55)
       (node-set-text nodes bad 0 2)
+      (node-add-src nodes bad (sr-ocr))
       (node-set-text nodes clean 0 2)
       (node-set-conf nodes bad 900)
       (node-set-conf nodes clean 900)
@@ -180,6 +181,7 @@
     (let [^I32 n (node-new nodes (nk-paragraph) 0) ^:mut ^I32 i 0 ^:mut ^I32 r 0 ^:mut ^I32 pg 0]
       (cells-push text 65)
       (node-set-text nodes n 0 1)
+      (node-add-src nodes n (sr-ocr))
       (node-set-conf nodes n 900)
       (node-add-region nodes regions n 1 0 0 100 100)
       (while (< i 60) (do (cells-push et 65) (set i (+ i 1))))
@@ -206,3 +208,50 @@
   (assert-eq (sk-arabic-trial (test-t) 3 0 1) 900 "three reads of one page are not corroboration")
   (assert-eq (sk-arabic-trial (test-t) 3 1 0) 900 "native Arabic with Latin names remains high")
   (assert-eq (sk-arabic-trial (test-t) 3 0 0) 100 "three conflicting page readings are explicitly unread"))
+
+;; D767: auxiliary OCR cannot condemn an independent born-text reading.
+(deftest test-conflicting-ocr-preserves-born-arabic-and-its-inline-value-on-the-same-page
+  (let [^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells)
+        ^Cells text (new-cells) ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells runs (new-cells) ^Cells words (new-cells) ^Cells et (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (let [^I32 born (node-new nodes (nk-paragraph) 0)
+          ^I32 value (node-new nodes (nk-text) born)
+          ^I32 scan (node-new nodes (nk-paragraph) 0)
+          ^:mut ^I32 pg 1 ^:mut ^I32 i 0 ^:mut ^I32 r 0]
+      (cells-push text 1575)
+      (cells-push text 55)
+      (node-set-text nodes born 0 2)
+      (node-set-text nodes value 1 1)
+      (node-set-text nodes scan 1 1)
+      (node-add-src nodes born (sr-text))
+      (node-add-src nodes value (sr-text))
+      (node-add-src nodes scan (sr-ocr))
+      (node-set-conf nodes born 947)
+      (node-set-conf nodes value 998)
+      (node-set-conf nodes scan 900)
+      (node-add-region nodes regions born 1 0 0 100 100)
+      (node-add-region nodes regions scan 1 200 0 300 100)
+      (while (< i 60) (do (cells-push et 65) (set i (+ i 1))))
+      (while (<= pg 3)
+        (do (set r (or-new runs pg 0))
+            (or-set runs r (orf-pass) (op-first))
+            (or-set runs r (orf-script) 1098015074)
+            (or-set runs r (orf-sconf) 32)
+            (or-set runs r (orf-wfirst) (- pg 1))
+            (or-set runs r (orf-wcount) 1)
+            (ow-new words pg 200 0 300 100 200 0 300 100 0 0 0 60 0 900 0)
+            (set pg (+ pg 1))))
+      (assert-eq (sk-tag-conflicts nodes regions runs words et) 1 "only the selected OCR block is accused")
+      (assert-eq (node-conf nodes born) 947 "born Arabic retains confidence")
+      (assert-eq (node-conf nodes value) 998 "inline number retains its own confidence")
+      (assert-eq (node-flags nodes born) 0 "born Arabic is not unread")
+      (assert-eq (node-flags nodes value) 0 "inline number is not unread")
+      (assert-eq (node-conf nodes scan) 100 "selected unsupported OCR remains capped")
+      (assert-eq (bit-and (node-flags nodes scan) (fl-script-unread)) (fl-script-unread) "OCR warning remains")
+      (assert-eq (node-parent nodes value) born "number keeps its Arabic owner")
+      (assert-eq (node-parent nodes scan) 0 "OCR owner stays separate")
+      (assert-eq (node-text-start nodes value) 1 "number span stays exact")
+      (assert-eq (node-text-len nodes born) 2 "complete born span survives")
+      (assert-eq (cells-at text 0) 1575 "Arabic scalar survives")
+      (assert-eq (cells-at text 1) 55 "value 7 survives"))))

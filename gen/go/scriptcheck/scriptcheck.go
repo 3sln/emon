@@ -230,7 +230,7 @@ func skConflictOnPage(nodes *port.Cells, regions *port.Cells, n int32, pg int32)
 }
 
 func SkTagConflicts(nodes *port.Cells, regions *port.Cells, runs *port.Cells, words *port.Cells, text *port.Cells) int32 {
-	// D754: preserve all text/ownership and explicit model choices, but flag represented text on corroborated unread pages or Khmer/Ethiopic contamination. Runs are immutable. No routing or retargeting changes.
+	// D767: weak Arabic OSD conflicts accuse selected OCR text only: an auxiliary OCR reading cannot condemn an independent PDF text layer. The separate Khmer/Ethiopic contamination diagnostic still includes legacy born text (D754). Runs, text, ownership and explicit model choices remain immutable.
 	var r int32 = 0
 	var k int32 = 0
 	var j int32 = 0
@@ -267,7 +267,7 @@ func SkTagConflicts(nodes *port.Cells, regions *port.Cells, runs *port.Cells, wo
 		if kind > 0 {
 			n = 1
 			for n < model.NodeCount(nodes) {
-				if ((model.NodeTextLen(nodes, n) > 0) || ((model.NodeSrc(nodes, n) & (model.SrText() | (model.SrHiddenText() | model.SrOcr()))) != 0)) && (skConflictOnPage(nodes, regions, n, evidence.OrGet(runs, r, evidence.OrfPage())) == 1) {
+				if ((kind == 2) || ((model.NodeSrc(nodes, n) & model.SrOcr()) != 0)) && ((model.NodeTextLen(nodes, n) > 0) || ((model.NodeSrc(nodes, n) & (model.SrText() | (model.SrHiddenText() | model.SrOcr()))) != 0)) && (skConflictOnPage(nodes, regions, n, evidence.OrGet(runs, r, evidence.OrfPage())) == 1) {
 					if model.NkIsInline(model.NodeKind(nodes, n)) == 0 {
 						model.NodeAddFlag(nodes, n, model.FlScriptUnread())
 						model.NodeAddFlag(nodes, n, model.FlLowConf())
