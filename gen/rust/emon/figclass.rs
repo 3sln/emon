@@ -1507,6 +1507,49 @@ pub(crate) fn fc_captioned(nodes: &mut crate::port::Cells, regions: &mut crate::
     }
     return 0;
 }
+pub(crate) fn fc_captioned_grid(nodes: &mut crate::port::Cells, regions: &mut crate::port::Cells, grg: &mut crate::port::Cells, row: i32) -> i32 {
+    let page: i32 = grg_get(grg, row, 0);
+    let x0: i32 = grg_get(grg, row, 1);
+    let y0: i32 = grg_get(grg, row, 2);
+    let x1: i32 = grg_get(grg, row, 3);
+    let y1: i32 = grg_get(grg, row, 4);
+    let mut g: i32 = 0;
+    let mut grid: i32 = 0;
+    let mut n: i32 = 0;
+    let mut r: i32 = 0;
+    let mut gap: i32 = 0;
+    if grg_get(grg, row, 5) != rk_figure() {
+        return 0;
+    }
+    if (grg_get(grg, row, 6) & gs_image()) == 0 {
+        return 0;
+    }
+    if ((x1 - x0) < 15000) || (((y1 - y0) < 8000) || ((y1 - y0) > 40000)) {
+        return 0;
+    }
+    while g < grg_count(grg) {
+        if (grg_get(grg, g, 0) == page) && ((grg_get(grg, g, 5) == rk_table_in_image()) && ((grg_get(grg, g, 1) >= x0) && ((grg_get(grg, g, 2) >= y0) && ((grg_get(grg, g, 3) <= x1) && (grg_get(grg, g, 4) <= y1))))) {
+            grid = 1;
+        }
+        g += 1;
+    }
+    if grid == 0 {
+        return 0;
+    }
+    while n < node_count(nodes) {
+        if (node_kind(nodes, n) == nk_caption()) && (node_aux(nodes, n) == 1) {
+            r = node_region_head(nodes, n);
+            if (r >= 0) && (region_page(regions, r) == page) {
+                gap = region_y0(regions, r) - y1;
+                if (gap >= 0) && ((gap <= 2400) && ((region_x0(regions, r) >= (x0 - 10000)) && (region_x0(regions, r) <= (x0 + 2000)))) {
+                    return 1;
+                }
+            }
+        }
+        n += 1;
+    }
+    return 0;
+}
 pub(crate) fn fc_link(cand: &mut crate::port::Cells, page: i32, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
     // The asset stage's candidate row (an image's) with this placement box on this page, or -1.
     let n: i32 = crate::port::cells_len(cand) / CR_STRIDE;
@@ -1618,6 +1661,14 @@ pub fn fc_stage(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, 
     as_vector_regions(pa, pg, fcand, cl);
     fc_shading_regions(pa, pages, fcand);
     fc_grg_regions(grg, pages, fcand);
+    i = 0;
+    while i < grg_count(grg) {
+        if fc_captioned_grid(nodes, regions, grg, i) == 1 {
+            row = fc_panel_row(fcand, grg_get(grg, i, 0), grg_get(grg, i, 1), grg_get(grg, i, 2), grg_get(grg, i, 3), grg_get(grg, i, 4));
+            crate::port::cells_set(fcand, (row * CR_STRIDE) + CR_ORG, 5);
+        }
+        i += 1;
+    }
     page = 1;
     while page <= page_count(pages) {
         if pn_owner(fw, et, grl, page, ab, cl) > 0 {
@@ -1682,7 +1733,7 @@ pub fn fc_stage(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, 
         }
         kind = pk / 1024;
         conf = pk % 1024;
-        if (crate::port::cells_at(fcand, b + CR_ORG) == 4) && ((status == 0) && ((fc_signature_over(sl, page, x0, y0, x1, y1) == 0) && (fc_claimed(fl, page, x0, y0, x1, y1) == 0))) {
+        if (crate::port::cells_at(fcand, b + CR_ORG) >= 4) && ((status == 0) && ((fc_signature_over(sl, page, x0, y0, x1, y1) == 0) && ((crate::port::cells_at(fcand, b + CR_ORG) == 5) || (fc_claimed(fl, page, x0, y0, x1, y1) == 0)))) {
             rej = 0;
             kind = fg_diagram();
             conf = 700;
@@ -1690,7 +1741,7 @@ pub fn fc_stage(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, 
         k = 0;
         while k < nr {
             let ob: i32 = k * CR_STRIDE;
-            if (k != row) && ((crate::port::cells_at(fcand, ob + CR_ORG) == 4) && ((crate::port::cells_at(fcand, ob) == page) && ((x0 >= (crate::port::cells_at(fcand, ob + CR_VX) - FC_ZONE)) && ((y0 >= (crate::port::cells_at(fcand, ob + (CR_VX + 1)) - FC_ZONE)) && ((x1 <= (crate::port::cells_at(fcand, ob + (CR_VX + 2)) + FC_ZONE)) && (y1 <= (crate::port::cells_at(fcand, ob + (CR_VX + 3)) + FC_ZONE))))))) {
+            if (k != row) && ((crate::port::cells_at(fcand, ob + CR_ORG) >= 4) && ((crate::port::cells_at(fcand, ob) == page) && ((x0 >= (crate::port::cells_at(fcand, ob + CR_VX) - FC_ZONE)) && ((y0 >= (crate::port::cells_at(fcand, ob + (CR_VX + 1)) - FC_ZONE)) && ((x1 <= (crate::port::cells_at(fcand, ob + (CR_VX + 2)) + FC_ZONE)) && (y1 <= (crate::port::cells_at(fcand, ob + (CR_VX + 3)) + FC_ZONE))))))) {
                 rej = 1;
             }
             k += 1;

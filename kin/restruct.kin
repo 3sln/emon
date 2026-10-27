@@ -987,6 +987,27 @@
                 (set c (node-next on c))))))
     (return 0)))
 
+(defn ^I32 rf-mark-grid [^Cells on ^:mut ^Cells ab ^I32 n ^I32 row]
+  (let [^:mut ^I32 c (node-first-child on n)]
+    (cells-set ab n row)
+    (while (>= c 0)
+      (do (rf-mark-grid on ab c row) (set c (node-next on c))))
+    (return 0)))
+
+(defn ^I32 rf-grid-owner [^Cells on ^Cells orr ^Cells cand ^Cells fg ^I32 n]
+  (let [^I32 r (node-region-head on n) ^:mut ^I32 i 1 ^:mut ^I32 row 0]
+    (if (or (< r 0) (!= (node-region-count on n) 1)) (return -1))
+    (if (rs-has-caption on n) (return -1))
+    (while (< i (cells-len fg))
+      (do (set row (cells-at fg i))
+          (if (and (== (as-get cand row 30) 5) (and (== (region-page orr r) (as-get cand row 0))
+                   (and (>= (region-x0 orr r) (as-get cand row 5))
+                        (and (>= (region-y0 orr r) (as-get cand row 6))
+                             (and (<= (region-x1 orr r) (as-get cand row 7))
+                                  (<= (region-y1 orr r) (as-get cand row 8))))))) (return row))
+          (set i (+ i 1))))
+    (return -1)))
+
 (defn ^I32 rf-absorb [^Cells on ^Cells orr ^Cells text ^Cells cand ^Cells fg ^Cells fd ^:mut ^Cells ab ^I32 p]
   (comment "Mark, among the blocks of p (the document or a section) and of the sections in it, the paragraphs that label a figure.")
   (let [^:mut ^I32 c (node-first-child on p)
@@ -997,6 +1018,9 @@
             (rf-absorb on orr text cand fg fd ab c))
           (if (== (node-kind on c) (nk-note))
             (rf-absorb-note on orr text cand fg fd ab c))
+          (if (== (node-kind on c) (nk-table))
+            (do (set f (rf-grid-owner on orr cand fg c))
+                (if (>= f 0) (rf-mark-grid on ab c f))))
           (if (== (node-kind on c) (nk-paragraph))
             (do (set f (rf-label-of on orr text cand fg fd ab nall c))
                 (if (>= f 0) (cells-set ab c f))))
@@ -1008,7 +1032,7 @@
   (let [^I32 n (node-count on)
         ^:mut ^I32 c 0]
     (while (< c n)
-      (do (if (and (== (cells-at ab c) row) (== (node-kind on c) (nk-paragraph)))
+      (do (if (and (== (cells-at ab c) row) (or (== (node-kind on c) (nk-paragraph)) (and (== (node-kind on c) (nk-cell)) (== (node-has-text on c) 1))))
             (node-add-attr-text nodes attrs nn (fk-labels) (node-text-start on c) (node-text-len on c)))
           (set c (+ c 1))))
     (return 0)))

@@ -1185,6 +1185,34 @@ pub(crate) fn rf_absorb_note(on: &mut crate::port::Cells, orr: &mut crate::port:
     }
     return 0;
 }
+pub(crate) fn rf_mark_grid(on: &mut crate::port::Cells, mut ab: &mut crate::port::Cells, n: i32, row: i32) -> i32 {
+    let mut c: i32 = node_first_child(on, n);
+    crate::port::cells_set(ab, n, row);
+    while c >= 0 {
+        rf_mark_grid(on, ab, c, row);
+        c = node_next(on, c);
+    }
+    return 0;
+}
+pub(crate) fn rf_grid_owner(on: &mut crate::port::Cells, orr: &mut crate::port::Cells, cand: &mut crate::port::Cells, fg: &mut crate::port::Cells, n: i32) -> i32 {
+    let r: i32 = node_region_head(on, n);
+    let mut i: i32 = 1;
+    let mut row: i32 = 0;
+    if (r < 0) || (node_region_count(on, n) != 1) {
+        return -1;
+    }
+    if rs_has_caption(on, n) {
+        return -1;
+    }
+    while i < crate::port::cells_len(fg) {
+        row = crate::port::cells_at(fg, i);
+        if (as_get(cand, row, 30) == 5) && ((region_page(orr, r) == as_get(cand, row, 0)) && ((region_x0(orr, r) >= as_get(cand, row, 5)) && ((region_y0(orr, r) >= as_get(cand, row, 6)) && ((region_x1(orr, r) <= as_get(cand, row, 7)) && (region_y1(orr, r) <= as_get(cand, row, 8)))))) {
+            return row;
+        }
+        i += 1;
+    }
+    return -1;
+}
 pub(crate) fn rf_absorb(on: &mut crate::port::Cells, orr: &mut crate::port::Cells, text: &mut crate::port::Cells, cand: &mut crate::port::Cells, fg: &mut crate::port::Cells, fd: &mut crate::port::Cells, mut ab: &mut crate::port::Cells, p: i32) -> i32 {
     // Mark, among the blocks of p (the document or a section) and of the sections in it, the paragraphs that label a figure.
     let mut c: i32 = node_first_child(on, p);
@@ -1196,6 +1224,12 @@ pub(crate) fn rf_absorb(on: &mut crate::port::Cells, orr: &mut crate::port::Cell
         }
         if node_kind(on, c) == nk_note() {
             rf_absorb_note(on, orr, text, cand, fg, fd, ab, c);
+        }
+        if node_kind(on, c) == nk_table() {
+            f = rf_grid_owner(on, orr, cand, fg, c);
+            if f >= 0 {
+                rf_mark_grid(on, ab, c, f);
+            }
         }
         if node_kind(on, c) == nk_paragraph() {
             f = rf_label_of(on, orr, text, cand, fg, fd, ab, nall, c);
@@ -1212,7 +1246,7 @@ pub(crate) fn rf_labels(on: &mut crate::port::Cells, ab: &mut crate::port::Cells
     let n: i32 = node_count(on);
     let mut c: i32 = 0;
     while c < n {
-        if (crate::port::cells_at(ab, c) == row) && (node_kind(on, c) == nk_paragraph()) {
+        if (crate::port::cells_at(ab, c) == row) && ((node_kind(on, c) == nk_paragraph()) || ((node_kind(on, c) == nk_cell()) && (node_has_text(on, c) == 1))) {
             node_add_attr_text(nodes, attrs, nn, fk_labels(), node_text_start(on, c), node_text_len(on, c));
         }
         c += 1;

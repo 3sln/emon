@@ -1185,6 +1185,34 @@ public static class Restruct {
         }
         return 0;
     }
+    internal static int RfMarkGrid(emon.Port.Cells on, emon.Port.Cells ab, int n, int row) {
+        int c = Model.NodeFirstChild(on, n);
+        emon.Port.CellsSet(ab, n, row);
+        while (c >= 0) {
+            RfMarkGrid(on, ab, c, row);
+            c = Model.NodeNext(on, c);
+        }
+        return 0;
+    }
+    internal static int RfGridOwner(emon.Port.Cells on, emon.Port.Cells orr, emon.Port.Cells cand, emon.Port.Cells fg, int n) {
+        int r = Model.NodeRegionHead(on, n);
+        int i = 1;
+        int row = 0;
+        if ((r < 0) || (Model.NodeRegionCount(on, n) != 1)) {
+            return -1;
+        }
+        if (RsHasCaption(on, n)) {
+            return -1;
+        }
+        while (i < emon.Port.CellsLen(fg)) {
+            row = emon.Port.CellsAt(fg, i);
+            if ((Asset.AsGet(cand, row, 30) == 5) && ((Model.RegionPage(orr, r) == Asset.AsGet(cand, row, 0)) && ((Model.RegionX0(orr, r) >= Asset.AsGet(cand, row, 5)) && ((Model.RegionY0(orr, r) >= Asset.AsGet(cand, row, 6)) && ((Model.RegionX1(orr, r) <= Asset.AsGet(cand, row, 7)) && (Model.RegionY1(orr, r) <= Asset.AsGet(cand, row, 8))))))) {
+                return row;
+            }
+            i += 1;
+        }
+        return -1;
+    }
     internal static int RfAbsorb(emon.Port.Cells on, emon.Port.Cells orr, emon.Port.Cells text, emon.Port.Cells cand, emon.Port.Cells fg, emon.Port.Cells fd, emon.Port.Cells ab, int p) {
         // Mark, among the blocks of p (the document or a section) and of the sections in it, the paragraphs that label a figure.
         int c = Model.NodeFirstChild(on, p);
@@ -1196,6 +1224,12 @@ public static class Restruct {
             }
             if (Model.NodeKind(on, c) == Model.NkNote()) {
                 RfAbsorbNote(on, orr, text, cand, fg, fd, ab, c);
+            }
+            if (Model.NodeKind(on, c) == Model.NkTable()) {
+                f = RfGridOwner(on, orr, cand, fg, c);
+                if (f >= 0) {
+                    RfMarkGrid(on, ab, c, f);
+                }
             }
             if (Model.NodeKind(on, c) == Model.NkParagraph()) {
                 f = RfLabelOf(on, orr, text, cand, fg, fd, ab, nall, c);
@@ -1212,7 +1246,7 @@ public static class Restruct {
         int n = Model.NodeCount(on);
         int c = 0;
         while (c < n) {
-            if ((emon.Port.CellsAt(ab, c) == row) && (Model.NodeKind(on, c) == Model.NkParagraph())) {
+            if ((emon.Port.CellsAt(ab, c) == row) && ((Model.NodeKind(on, c) == Model.NkParagraph()) || ((Model.NodeKind(on, c) == Model.NkCell()) && (Model.NodeHasText(on, c) == 1)))) {
                 Model.NodeAddAttrText(nodes, attrs, nn, Model.FkLabels(), Model.NodeTextStart(on, c), Model.NodeTextLen(on, c));
             }
             c += 1;

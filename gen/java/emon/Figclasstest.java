@@ -769,4 +769,163 @@ public final class Figclasstest {
         emon.Testport.assertEq(emon.Port.cellsAt(cand, 30), 4, "the existing region becomes the captioned panel owner");
         emon.Testport.assertEq(emon.Port.cellsAt(cand, 7), 31500, "retain all of its original vector ink bounds");
     }
+    public static int ftCaptionWord(emon.Port.Cells fw, emon.Port.Cells et, byte[] value, int x, int y) {
+        int at = emon.Port.cellsLen(et);
+        int f = 0;
+        Model.textAppendUtf8(et, value, 0, emon.Port.blobLen(value));
+        while (f < 24) {
+            emon.Port.cellsPush(fw, 0);
+            f += 1;
+        }
+        int b = emon.Port.cellsLen(fw) - 24;
+        emon.Port.cellsSet(fw, b, 1);
+        emon.Port.cellsSet(fw, b + 1, x);
+        emon.Port.cellsSet(fw, b + 2, y);
+        emon.Port.cellsSet(fw, b + 3, x + 3000);
+        emon.Port.cellsSet(fw, b + 4, y + 900);
+        emon.Port.cellsSet(fw, b + 11, at);
+        emon.Port.cellsSet(fw, b + 12, emon.Port.cellsLen(et) - at);
+        return 0;
+    }
+    public static int ftCaptionedRaster(int emonT, int source, int gap, int hint) {
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells grg = emon.Port.newCells();
+        emon.Port.Cells fnodes = emon.Port.newCells();
+        emon.Port.Cells fattrs = emon.Port.newCells();
+        emon.Port.Cells fregions = emon.Port.newCells();
+        emon.Port.Cells fnm = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells im = emon.Port.newCells();
+        emon.Port.Cells fi = emon.Port.newCells();
+        emon.Port.Cells grl = emon.Port.newCells();
+        emon.Port.Cells fw = emon.Port.newCells();
+        emon.Port.Cells fl = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pg = emon.Port.newCells();
+        emon.Port.Cells sl = emon.Port.newCells();
+        emon.Port.Cells cand = emon.Port.newCells();
+        emon.Port.Cells fcand = emon.Port.newCells();
+        emon.Port.Cells cl = emon.Port.newCells();
+        emon.Port.Cells fg = emon.Port.newCells();
+        emon.Port.Cells fd = emon.Port.newCells();
+        emon.Port.Cells ab = emon.Port.newCells();
+        emon.Port.Cells ws = emon.Port.newCells();
+        int c = 0;
+        int count = 0;
+        int a = 0;
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Model.pageNew(pages, 1, 61200, 79200, 0, Model.pkVector());
+        Glayer.grgNew(grg, 1, 10000, 10000, 40000, 30000, Glayer.rkFigure());
+        Glayer.grgSet(grg, 0, 6, source);
+        if (hint == 1) {
+            Glayer.grgNew(grg, 1, 12000, 12000, 35000, 28000, 1);
+        }
+        ftLine(fl, 1, 12000, 15000, 30000, 16000, 5);
+        ftLine(fl, 1, 12000, 17000, 30000, 18000, 5);
+        ftCaptionWord(fw, et, emon.Testport.textBlob("Figure"), 10000, 30000 + gap);
+        ftCaptionWord(fw, et, emon.Testport.textBlob("1.1:"), 13500, 30000 + gap);
+        ftPara(nodes, regions, text, Model.nkParagraph(), 7, 15000, 15000, 19000, 16000);
+        c = ftPara(nodes, regions, text, Model.nkCaption(), 20, 10000, 30000 + gap, 40000, 31000 + gap);
+        Model.nodeSetAux(nodes, c, 1);
+        emon.Port.cellsSet(fw, 36, 0);
+        count = Figclass.fcStage(nodes, attrs, regions, text, pages, fnodes, fattrs, fregions, fnm, pa, im, fi, grg, grl, fw, fl, et, pg, sl, cand, 0, fcand, cl, fg, fd, ab, ws);
+        if ((hint == 1) && ((source == 16) && (gap == 800))) {
+            emon.Testport.assertEq(count, 1, "the captioned image has one figure owner");
+            emon.Testport.assertEq(Model.nodeCount(fnodes), 3, "the label leaves body flow; document, figure and caption survive");
+            emon.Testport.assertEq(Model.nodeKind(fnodes, 1), Model.nkFigure(), "figure is before caption");
+            emon.Testport.assertEq(Model.nodeSub(fnodes, 1), Model.fgDiagram(), "captioned flat diagram is a diagram");
+            a = Model.nodeAttr(fnodes, fattrs, 1, Model.fkLabels());
+            emon.Testport.assertThat(a >= 0, "the figure owns the label value");
+            if (a >= 0) {
+                emon.Testport.assertEq(Model.attrLen(fattrs, a), 7, "the label value is complete");
+                emon.Testport.assertEq(Model.textAt(text, Model.attrValue(fattrs, a)), 97, "the label value is copied verbatim");
+            }
+            emon.Testport.assertEq(Model.nodeKind(fnodes, 2), Model.nkCaption(), "caption remains available for binding");
+        }
+        return count;
+    }
+    public static void testCaptionedImageRolePrecedesShadedBoxTables() {
+        emon.Testport.assertEq(ftCaptionedRaster(0, 16, 800, 1), 1, "numbered caption owns its raster diagram");
+    }
+    public static void testACaptionAloneDoesNotReclassifyNativeTables() {
+        emon.Testport.assertEq(ftCaptionedRaster(0, 1, 800, 1), 0, "native rules keep their table claim");
+        emon.Testport.assertEq(ftCaptionedRaster(0, 16, 5000, 1), 0, "a remote figure reference cannot claim the image");
+    }
+    public static void testCaptionedImagesWithoutACompetingGridKeepTheirRole() {
+        emon.Testport.assertEq(ftCaptionedRaster(0, 16, 800, 0), 0, "a caption alone does not force an existing photograph or chart into a diagram");
+    }
+    public static void testACaptionedDiagramOwnsGridValuesWithoutRefittingThem() {
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells nn = emon.Port.newCells();
+        emon.Port.Cells na = emon.Port.newCells();
+        emon.Port.Cells nr = emon.Port.newCells();
+        emon.Port.Cells nm = emon.Port.newCells();
+        StringBuilder values = emon.Testport.newText();
+        emon.Port.Cells cand = emon.Port.newCells();
+        emon.Port.Cells fg = emon.Port.newCells();
+        emon.Port.Cells fd = emon.Port.newCells();
+        emon.Port.Cells ab = emon.Port.newCells();
+        int table = 0;
+        int cell = 0;
+        int at = 0;
+        int a = 0;
+        int i = 0;
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Model.pageNew(pages, 1, 61200, 79200, 0, Model.pkVector());
+        table = Model.nodeNew(nodes, Model.nkTable(), 0);
+        Model.nodeAddRegion(nodes, regions, table, 1, 12000, 12000, 30000, 20000);
+        cell = Model.nodeNew(nodes, Model.nkCell(), table);
+        at = emon.Port.cellsLen(text);
+        Model.textAppendUtf8(text, emon.Testport.textBlob("34,647"), 0, 6);
+        Model.nodeSetText(nodes, cell, at, 6);
+        cell = Model.nodeNew(nodes, Model.nkCell(), table);
+        at = emon.Port.cellsLen(text);
+        Model.textAppendUtf8(text, emon.Testport.textBlob("35,415"), 0, 6);
+        Model.nodeSetText(nodes, cell, at, 6);
+        table = Model.nodeNew(nodes, Model.nkTable(), 0);
+        Model.nodeAddRegion(nodes, regions, table, 1, 12000, 50000, 30000, 56000);
+        cell = Model.nodeNew(nodes, Model.nkCell(), table);
+        at = emon.Port.cellsLen(text);
+        Model.textAppendUtf8(text, emon.Testport.textBlob("100"), 0, 3);
+        Model.nodeSetText(nodes, cell, at, 3);
+        ftCand(cand, 1, 10000, 10000, 40000, 30000);
+        emon.Port.cellsSet(cand, 30, 5);
+        ftFd(fd, Model.fgDiagram(), 700);
+        emon.Port.cellsPush(fg, 0);
+        emon.Port.cellsPush(fg, 0);
+        Restruct.rsFigures(nodes, attrs, regions, text, nn, na, nr, nm, cand, fg, fd, ab);
+        emon.Testport.assertEq(Model.nodeCount(nn), 4, "document, diagram and the independent true table with its cell");
+        emon.Testport.assertEq(Model.nodeKind(nn, 1), Model.nkFigure(), "the diagram owns the inner grid");
+        a = Model.nodeAttr(nn, na, 1, Model.fkLabels());
+        emon.Testport.assertThat(a >= 0, "the numeric cells survive as figure labels");
+        if (a >= 0) {
+            emon.Testport.assertEq(Model.attrLen(na, a), 6, "first value survives whole");
+            emon.Testport.assertEq(Model.textAt(text, Model.attrValue(na, a)), 51, "first value starts with its recorded digit");
+        }
+        while (a >= 0) {
+            i = 0;
+            while (i < Model.attrLen(na, a)) {
+                emon.Port.textCp(values, Model.textAt(text, Model.attrValue(na, a) + i));
+                i += 1;
+            }
+            emon.Port.textCp(values, 124);
+            a = Model.attrNext(na, a);
+        }
+        emon.Testport.assertText(values, "34,647|35,415|", "both selected numeric values transfer verbatim, once each");
+        emon.Testport.assertEq(Model.nodeKind(nn, 2), Model.nkTable(), "the separate short table retains table ownership");
+        cell = Model.nodeFirstChild(nn, 2);
+        emon.Testport.assertEq(Model.nodeTextLen(nn, cell), 3, "the true table keeps its numeric value");
+    }
 }

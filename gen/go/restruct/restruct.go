@@ -1256,6 +1256,36 @@ func rfAbsorbNote(on *port.Cells, orr *port.Cells, text *port.Cells, cand *port.
 	return 0
 }
 
+func rfMarkGrid(on *port.Cells, ab *port.Cells, n int32, row int32) int32 {
+	var c int32 = model.NodeFirstChild(on, n)
+	port.CellsSet(ab, n, row)
+	for c >= 0 {
+		rfMarkGrid(on, ab, c, row)
+		c = model.NodeNext(on, c)
+	}
+	return 0
+}
+
+func rfGridOwner(on *port.Cells, orr *port.Cells, cand *port.Cells, fg *port.Cells, n int32) int32 {
+	var r int32 = model.NodeRegionHead(on, n)
+	var i int32 = 1
+	var row int32 = 0
+	if (r < 0) || (model.NodeRegionCount(on, n) != 1) {
+		return -1
+	}
+	if rsHasCaption(on, n) {
+		return -1
+	}
+	for i < port.CellsLen(fg) {
+		row = port.CellsAt(fg, i)
+		if (asset.AsGet(cand, row, 30) == 5) && ((model.RegionPage(orr, r) == asset.AsGet(cand, row, 0)) && ((model.RegionX0(orr, r) >= asset.AsGet(cand, row, 5)) && ((model.RegionY0(orr, r) >= asset.AsGet(cand, row, 6)) && ((model.RegionX1(orr, r) <= asset.AsGet(cand, row, 7)) && (model.RegionY1(orr, r) <= asset.AsGet(cand, row, 8)))))) {
+			return row
+		}
+		i += 1
+	}
+	return -1
+}
+
 func rfAbsorb(on *port.Cells, orr *port.Cells, text *port.Cells, cand *port.Cells, fg *port.Cells, fd *port.Cells, ab *port.Cells, p int32) int32 {
 	// Mark, among the blocks of p (the document or a section) and of the sections in it, the paragraphs that label a figure.
 	var c int32 = model.NodeFirstChild(on, p)
@@ -1267,6 +1297,12 @@ func rfAbsorb(on *port.Cells, orr *port.Cells, text *port.Cells, cand *port.Cell
 		}
 		if model.NodeKind(on, c) == model.NkNote() {
 			rfAbsorbNote(on, orr, text, cand, fg, fd, ab, c)
+		}
+		if model.NodeKind(on, c) == model.NkTable() {
+			f = rfGridOwner(on, orr, cand, fg, c)
+			if f >= 0 {
+				rfMarkGrid(on, ab, c, f)
+			}
 		}
 		if model.NodeKind(on, c) == model.NkParagraph() {
 			f = rfLabelOf(on, orr, text, cand, fg, fd, ab, nall, c)
@@ -1284,7 +1320,7 @@ func rfLabels(on *port.Cells, ab *port.Cells, nodes *port.Cells, attrs *port.Cel
 	var n int32 = model.NodeCount(on)
 	var c int32 = 0
 	for c < n {
-		if (port.CellsAt(ab, c) == row) && (model.NodeKind(on, c) == model.NkParagraph()) {
+		if (port.CellsAt(ab, c) == row) && ((model.NodeKind(on, c) == model.NkParagraph()) || ((model.NodeKind(on, c) == model.NkCell()) && (model.NodeHasText(on, c) == 1))) {
 			model.NodeAddAttrText(nodes, attrs, nn, model.FkLabels(), model.NodeTextStart(on, c), model.NodeTextLen(on, c))
 		}
 		c += 1

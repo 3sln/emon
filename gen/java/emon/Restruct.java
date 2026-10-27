@@ -1185,6 +1185,34 @@ public final class Restruct {
         }
         return 0;
     }
+    public static int rfMarkGrid(emon.Port.Cells on, emon.Port.Cells ab, int n, int row) {
+        int c = Model.nodeFirstChild(on, n);
+        emon.Port.cellsSet(ab, n, row);
+        while (c >= 0) {
+            rfMarkGrid(on, ab, c, row);
+            c = Model.nodeNext(on, c);
+        }
+        return 0;
+    }
+    public static int rfGridOwner(emon.Port.Cells on, emon.Port.Cells orr, emon.Port.Cells cand, emon.Port.Cells fg, int n) {
+        int r = Model.nodeRegionHead(on, n);
+        int i = 1;
+        int row = 0;
+        if ((r < 0) || (Model.nodeRegionCount(on, n) != 1)) {
+            return -1;
+        }
+        if (rsHasCaption(on, n)) {
+            return -1;
+        }
+        while (i < emon.Port.cellsLen(fg)) {
+            row = emon.Port.cellsAt(fg, i);
+            if ((Asset.asGet(cand, row, 30) == 5) && ((Model.regionPage(orr, r) == Asset.asGet(cand, row, 0)) && ((Model.regionX0(orr, r) >= Asset.asGet(cand, row, 5)) && ((Model.regionY0(orr, r) >= Asset.asGet(cand, row, 6)) && ((Model.regionX1(orr, r) <= Asset.asGet(cand, row, 7)) && (Model.regionY1(orr, r) <= Asset.asGet(cand, row, 8))))))) {
+                return row;
+            }
+            i += 1;
+        }
+        return -1;
+    }
     public static int rfAbsorb(emon.Port.Cells on, emon.Port.Cells orr, emon.Port.Cells text, emon.Port.Cells cand, emon.Port.Cells fg, emon.Port.Cells fd, emon.Port.Cells ab, int p) {
         // Mark, among the blocks of p (the document or a section) and of the sections in it, the paragraphs that label a figure.
         int c = Model.nodeFirstChild(on, p);
@@ -1196,6 +1224,12 @@ public final class Restruct {
             }
             if (Model.nodeKind(on, c) == Model.nkNote()) {
                 rfAbsorbNote(on, orr, text, cand, fg, fd, ab, c);
+            }
+            if (Model.nodeKind(on, c) == Model.nkTable()) {
+                f = rfGridOwner(on, orr, cand, fg, c);
+                if (f >= 0) {
+                    rfMarkGrid(on, ab, c, f);
+                }
             }
             if (Model.nodeKind(on, c) == Model.nkParagraph()) {
                 f = rfLabelOf(on, orr, text, cand, fg, fd, ab, nall, c);
@@ -1212,7 +1246,7 @@ public final class Restruct {
         int n = Model.nodeCount(on);
         int c = 0;
         while (c < n) {
-            if ((emon.Port.cellsAt(ab, c) == row) && (Model.nodeKind(on, c) == Model.nkParagraph())) {
+            if ((emon.Port.cellsAt(ab, c) == row) && ((Model.nodeKind(on, c) == Model.nkParagraph()) || ((Model.nodeKind(on, c) == Model.nkCell()) && (Model.nodeHasText(on, c) == 1)))) {
                 Model.nodeAddAttrText(nodes, attrs, nn, Model.fkLabels(), Model.nodeTextStart(on, c), Model.nodeTextLen(on, c));
             }
             c += 1;

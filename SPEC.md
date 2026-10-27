@@ -2556,6 +2556,14 @@ blocks by its top edge, or just before its caption when it has one just below it
 that the caption finds it as its object. A short one-line paragraph on a figure or within 24 pt of it (an axis tick, a word in
 a box, a logo's name) is not body text: its text is the figure's `labels`, in reading order. `alt` is not yet read from the PDF.
 
+**Captioned raster diagrams (D761).** An image-sourced graphic region that contains a `table-in-image` region can instead own a
+numbered Figure caption directly below it: the region is at least 150 pt wide and 80 pt high, no more than 400 pt high, and the
+caption starts within 24 pt below it and between 100 pt left and 20 pt right of its left edge. The parsed Model caption is used;
+the notes stage may already have consumed its number in the word arena. This diagram owner may take the small tables wholly
+inside its box as labels, preserving their selected cell strings verbatim. A table with its own caption keeps its ownership.
+Captioned images without the competing grid retain their existing classification. The usual page, measurement and signature
+checks still apply; no early table filtering or paragraph refitting is needed.
+
 **Logos that recur (P8.4; D399-D403).** A logo is often the one thing a letterhead or a report's running head repeats, so what
 the same drawing does on other pages is evidence (a small region that has no band to stand in is a logo when it recurs, and a logo
 that recurs is surer: +100 per mille for one other page, +160 for two, +220 for three or more; pages, not placements, so a

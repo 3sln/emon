@@ -12777,3 +12777,35 @@ Passed gates: drift, core CI (17 steps), rederive --check, full rederive (all ei
 No golden, sample, scoreboard, API snapshot or ratchet moved. The drift check used an isolated review index/object store; the real index is untouched. No corpus fetch/prune or commit. Evidence and reproducible runner scripts remain under /Volumes/SSK SSD/emon-scratch/b16/; temporary compiled builds and the task-local restore feed are removed at handoff. The coordinator commits.
 
 - [ ] **Signed off** (maintainer)
+
+### D761 — A numbered caption gives its raster diagram ownership
+
+Batch 17's live baseline preserves Batch 12's one Figure 34 owner and zero G07 tables. G10 still fits two shaded tables inside its raster diagram, then rejects the drawing because the tables claimed its lines. A trial that filtered the tables before paragraph assembly removed them but lost five words and gained five; reject that trial. It also exposed the notes stage's consumption of caption-number tokens before figure classification.
+
+Instead, use the parsed Model caption and the image-backed graphic region with a competing table-in-image region to choose the diagram role. Keep the selected cell values until figure restructuring transfers the contained grid's text verbatim to labels. An independently captioned table or a table outside the image retains its ownership. Existing captioned images without a competing grid retain their prior role. No early table filtering, table-hint activation, paragraph changes or engine wiring is retained. Failing-first ownership/value laws cover the consumed number, the label values and the true table. Live word controls decide retention.
+
+- [ ] **Signed off** (maintainer)
+
+### D762 — Retain the measured ownership repair and preserve the other roles
+
+The six named samples were converted live before and after with the exact archived sweep inputs and options. G10's selected excerpt now has a page-3 diagram at the actual illustration box, 34 label entries, its Figure 1.1 caption as a child, and no false tables or loose paragraphs inside the drawing. Its exact word counter is unchanged. The page-4 figure retains its content and image SHA-256; only node/asset identifiers and their references shift. The full 75-page paper already had a figure there and remains byte-identical.
+
+G07 remains one captioned diagram with zero tables. G11, G13, n01 and n04 remain byte-identical: screenshot labels, the missing chart figure, composite-diagram tables, and poster/stamp plus outlined-title/watermark competition are still unmet targets. The single-raster predicate does not establish ownership of disconnected composite panels, screenshot prose or a whole raster plot. No broader image, stamp-size or watermark override is retained. A missing G13 figure is not counted as an asset-budget success. All six qualitative verdicts remain usable, with the remaining defects recorded externally.
+
+All 54 full live controls pass across 817 pages and 353,307 baseline words: zero lost or gained, with every Model byte-identical to the baseline replay of the same recorded answers. This preserves the prior table/region, unread-diagnostic and receipt-control gains, including both Berkshire inputs. The table fitter and the parallel batch's region/form modules are untouched. Final receipts, FC1 and release gates are recorded separately.
+
+- [ ] **Signed off** (maintainer)
+
+### D763 — Verify the retained ownership change on every host
+
+All requested final gates pass: gates drift, ci core, rederive --check, the full 25-step re-derivation, accuracy, samples, OCR/fusion/retarget/seals/sealpx/signature/asset replay, unit and package --check. Accuracy holds 3,449 metrics at the existing tolerance, and all 232 cross-host documents match Rust. Samples pass 29/29. All eight calibration refreshes change zero rows; no golden, sample, API snapshot or accuracy ratchet moves.
+
+A fresh full unit run passes exactly 1,286 laws on Go, Rust, Java and C#. The first full run exposed a nested mutable borrow in a new test assertion on Rust; splitting its two getters into sequential statements fixes it without changing the assertion. All four law hosts and then drift/core were rerun. Hash comparison proves that every production kin, generated and host file is unchanged from the live guard runs; only the law source and its four generated test files changed for this portability fix.
+
+The two 60-document receipt populations keep their tracked precision floors: SROIE .68207456 >= .68167424 and CORD .42236025 >= .42000000. These historical-baseline differences are not attributed to this PDF-only change. FC1 retains 6/24/96 figures at 152/608/2,432 pages, including unchanged earlier-page decisions. The 54 full controls remain byte-identical, including the full Arabic booklet and both Berkshire inputs.
+
+Core's first map checks failed because the initially empty private review index omitted normally tracked ignored corpus paths. Initializing that index from HEAD and staging the proposed tree restores the full 3,390-path set; core passes without CI-map changes. The real index and HEAD remain untouched. C# verification uses a task-local feed of existing cached SDK/test packages, with unchanged dependency declarations and certificate checks. All seven package consumers emit the same 3,653-byte HTML; Java uses javac/java because Maven is absent, and the C/pod archives omit optional bundled native engines. Nonfatal process-enumeration shutdown diagnostics remain in logs.
+
+Evidence, methods, before/after judgments and all failed-first/corrected attempts are retained under the external b17 scratch directory. The coordinator commits the retained partial repair; no commit, corpus fetch or corpus prune was performed.
+
+- [ ] **Signed off** (maintainer)

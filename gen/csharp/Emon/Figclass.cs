@@ -1500,6 +1500,49 @@ public static class Figclass {
         }
         return 0;
     }
+    internal static int FcCaptionedGrid(emon.Port.Cells nodes, emon.Port.Cells regions, emon.Port.Cells grg, int row) {
+        int page = Glayer.GrgGet(grg, row, 0);
+        int x0 = Glayer.GrgGet(grg, row, 1);
+        int y0 = Glayer.GrgGet(grg, row, 2);
+        int x1 = Glayer.GrgGet(grg, row, 3);
+        int y1 = Glayer.GrgGet(grg, row, 4);
+        int g = 0;
+        int grid = 0;
+        int n = 0;
+        int r = 0;
+        int gap = 0;
+        if (Glayer.GrgGet(grg, row, 5) != Glayer.RkFigure()) {
+            return 0;
+        }
+        if ((Glayer.GrgGet(grg, row, 6) & Glayer.GsImage()) == 0) {
+            return 0;
+        }
+        if (((x1 - x0) < 15000) || (((y1 - y0) < 8000) || ((y1 - y0) > 40000))) {
+            return 0;
+        }
+        while (g < Glayer.GrgCount(grg)) {
+            if ((Glayer.GrgGet(grg, g, 0) == page) && ((Glayer.GrgGet(grg, g, 5) == Glayer.RkTableInImage()) && ((Glayer.GrgGet(grg, g, 1) >= x0) && ((Glayer.GrgGet(grg, g, 2) >= y0) && ((Glayer.GrgGet(grg, g, 3) <= x1) && (Glayer.GrgGet(grg, g, 4) <= y1)))))) {
+                grid = 1;
+            }
+            g += 1;
+        }
+        if (grid == 0) {
+            return 0;
+        }
+        while (n < Model.NodeCount(nodes)) {
+            if ((Model.NodeKind(nodes, n) == Model.NkCaption()) && (Model.NodeAux(nodes, n) == 1)) {
+                r = Model.NodeRegionHead(nodes, n);
+                if ((r >= 0) && (Model.RegionPage(regions, r) == page)) {
+                    gap = Model.RegionY0(regions, r) - y1;
+                    if ((gap >= 0) && ((gap <= 2400) && ((Model.RegionX0(regions, r) >= (x0 - 10000)) && (Model.RegionX0(regions, r) <= (x0 + 2000))))) {
+                        return 1;
+                    }
+                }
+            }
+            n += 1;
+        }
+        return 0;
+    }
     internal static int FcLink(emon.Port.Cells cand, int page, int x0, int y0, int x1, int y1) {
         // The asset stage's candidate row (an image's) with this placement box on this page, or -1.
         int n = emon.Port.CellsLen(cand) / CrStride;
@@ -1611,6 +1654,14 @@ public static class Figclass {
         Asset.AsVectorRegions(pa, pg, fcand, cl);
         FcShadingRegions(pa, pages, fcand);
         FcGrgRegions(grg, pages, fcand);
+        i = 0;
+        while (i < Glayer.GrgCount(grg)) {
+            if (FcCaptionedGrid(nodes, regions, grg, i) == 1) {
+                row = FcPanelRow(fcand, Glayer.GrgGet(grg, i, 0), Glayer.GrgGet(grg, i, 1), Glayer.GrgGet(grg, i, 2), Glayer.GrgGet(grg, i, 3), Glayer.GrgGet(grg, i, 4));
+                emon.Port.CellsSet(fcand, (row * CrStride) + CrOrg, 5);
+            }
+            i += 1;
+        }
         page = 1;
         while (page <= Model.PageCount(pages)) {
             if (Panel.PnOwner(fw, et, grl, page, ab, cl) > 0) {
@@ -1675,7 +1726,7 @@ public static class Figclass {
             }
             kind = pk / 1024;
             conf = pk % 1024;
-            if ((emon.Port.CellsAt(fcand, b + CrOrg) == 4) && ((status == 0) && ((FcSignatureOver(sl, page, x0, y0, x1, y1) == 0) && (FcClaimed(fl, page, x0, y0, x1, y1) == 0)))) {
+            if ((emon.Port.CellsAt(fcand, b + CrOrg) >= 4) && ((status == 0) && ((FcSignatureOver(sl, page, x0, y0, x1, y1) == 0) && ((emon.Port.CellsAt(fcand, b + CrOrg) == 5) || (FcClaimed(fl, page, x0, y0, x1, y1) == 0))))) {
                 rej = 0;
                 kind = Model.FgDiagram();
                 conf = 700;
@@ -1683,7 +1734,7 @@ public static class Figclass {
             k = 0;
             while (k < nr) {
                 int ob = k * CrStride;
-                if ((k != row) && ((emon.Port.CellsAt(fcand, ob + CrOrg) == 4) && ((emon.Port.CellsAt(fcand, ob) == page) && ((x0 >= (emon.Port.CellsAt(fcand, ob + CrVx) - FcZone)) && ((y0 >= (emon.Port.CellsAt(fcand, ob + (CrVx + 1)) - FcZone)) && ((x1 <= (emon.Port.CellsAt(fcand, ob + (CrVx + 2)) + FcZone)) && (y1 <= (emon.Port.CellsAt(fcand, ob + (CrVx + 3)) + FcZone)))))))) {
+                if ((k != row) && ((emon.Port.CellsAt(fcand, ob + CrOrg) >= 4) && ((emon.Port.CellsAt(fcand, ob) == page) && ((x0 >= (emon.Port.CellsAt(fcand, ob + CrVx) - FcZone)) && ((y0 >= (emon.Port.CellsAt(fcand, ob + (CrVx + 1)) - FcZone)) && ((x1 <= (emon.Port.CellsAt(fcand, ob + (CrVx + 2)) + FcZone)) && (y1 <= (emon.Port.CellsAt(fcand, ob + (CrVx + 3)) + FcZone)))))))) {
                     rej = 1;
                 }
                 k += 1;

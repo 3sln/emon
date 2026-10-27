@@ -38,7 +38,7 @@
                                    pg-clip pg-filled pg-stroked pg-shading pg-pattern pg-closed pa-rect pa-line pa-curve pa-other pa-rect
                                    wd-get wd-count hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-tstart hd-tlen
                                    ln-get ln-count lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-count]]
-            [emon.glayer :refer [grg-count grg-get rk-figure grl-count grl-get go-h go-v]]
+            [emon.glayer :refer [grg-count grg-get rk-figure rk-table-in-image gs-image grl-count grl-get go-h go-v]]
             [emon.asset :refer [as-vector-regions as-figure-rows as-region-add as-count as-get]]
             [emon.pdfdoc :refer [pd-get pd-pg-count]]
             [emon.pdfsrc :refer [ps-missed ps-len ps-u8]]
@@ -1252,6 +1252,31 @@
           (set n (+ n 1))))
     (return 0)))
 
+;; D761: use the Model caption. The notes stage consumed its number in fw.
+(defn ^I32 fc-captioned-grid [^Cells nodes ^Cells regions ^Cells grg ^I32 row]
+  (let [^I32 page (grg-get grg row 0) ^I32 x0 (grg-get grg row 1) ^I32 y0 (grg-get grg row 2)
+        ^I32 x1 (grg-get grg row 3) ^I32 y1 (grg-get grg row 4)
+        ^:mut ^I32 g 0 ^:mut ^I32 grid 0 ^:mut ^I32 n 0 ^:mut ^I32 r 0 ^:mut ^I32 gap 0]
+    (if (!= (grg-get grg row 5) (rk-figure)) (return 0))
+    (if (== (bit-and (grg-get grg row 6) (gs-image)) 0) (return 0))
+    (if (or (< (- x1 x0) 15000) (or (< (- y1 y0) 8000) (> (- y1 y0) 40000))) (return 0))
+    (while (< g (grg-count grg))
+      (do (if (and (== (grg-get grg g 0) page) (and (== (grg-get grg g 5) (rk-table-in-image))
+                   (and (>= (grg-get grg g 1) x0) (and (>= (grg-get grg g 2) y0)
+                        (and (<= (grg-get grg g 3) x1) (<= (grg-get grg g 4) y1)))))) (set grid 1))
+          (set g (+ g 1))))
+    (if (== grid 0) (return 0))
+    (while (< n (node-count nodes))
+      (do (if (and (== (node-kind nodes n) (nk-caption)) (== (node-aux nodes n) 1))
+            (do (set r (node-region-head nodes n))
+                (if (and (>= r 0) (== (region-page regions r) page))
+                  (do (set gap (- (region-y0 regions r) y1))
+                      (if (and (>= gap 0) (and (<= gap 2400)
+                               (and (>= (region-x0 regions r) (- x0 10000))
+                                    (<= (region-x0 regions r) (+ x0 2000))))) (return 1))))))
+          (set n (+ n 1))))
+    (return 0)))
+
 ;; ------------------------------------------------------------------------------------------------ the stage
 
 (defn ^I32 fc-link [^Cells cand ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
@@ -1356,6 +1381,12 @@
     (as-vector-regions pa pg fcand cl)
     (fc-shading-regions pa pages fcand)
     (fc-grg-regions grg pages fcand)
+    (set i 0)
+    (while (< i (grg-count grg))
+      (do (if (== (fc-captioned-grid nodes regions grg i) 1)
+            (do (set row (fc-panel-row fcand (grg-get grg i 0) (grg-get grg i 1) (grg-get grg i 2) (grg-get grg i 3) (grg-get grg i 4)))
+                (cells-set fcand (+ (* row CR_STRIDE) CR_ORG) 5)))
+          (set i (+ i 1))))
     (set page 1)
     (while (<= page (page-count pages))
       (do (if (> (pn-owner fw et grl page ab cl) 0)
@@ -1405,14 +1436,14 @@
             (set pk (fc-vector-kind ws x0 y0 x1 y1 pageh recur)))
           (set kind (quot pk 1024))
           (set conf (rem pk 1024))
-          (if (and (== (cells-at fcand (+ b CR_ORG)) 4)
+          (if (and (>= (cells-at fcand (+ b CR_ORG)) 4)
                    (and (== status 0) (and (== (fc-signature-over sl page x0 y0 x1 y1) 0)
-                                          (== (fc-claimed fl page x0 y0 x1 y1) 0))))
+                                          (or (== (cells-at fcand (+ b CR_ORG)) 5) (== (fc-claimed fl page x0 y0 x1 y1) 0)))))
             (do (set rej 0) (set kind (fg-diagram)) (set conf 700)))
           (set k 0)
           (while (< k nr)
             (do (let [^I32 ob (* k CR_STRIDE)]
-                  (if (and (!= k row) (and (== (cells-at fcand (+ ob CR_ORG)) 4)
+                  (if (and (!= k row) (and (>= (cells-at fcand (+ ob CR_ORG)) 4)
                        (and (== (cells-at fcand ob) page)
                             (and (>= x0 (- (cells-at fcand (+ ob CR_VX)) FC_ZONE))
                                  (and (>= y0 (- (cells-at fcand (+ ob (+ CR_VX 1))) FC_ZONE))

@@ -1651,6 +1651,50 @@ func fcCaptioned(nodes *port.Cells, regions *port.Cells, fcand *port.Cells, row 
 	return 0
 }
 
+func fcCaptionedGrid(nodes *port.Cells, regions *port.Cells, grg *port.Cells, row int32) int32 {
+	var page int32 = glayer.GrgGet(grg, row, 0)
+	var x0 int32 = glayer.GrgGet(grg, row, 1)
+	var y0 int32 = glayer.GrgGet(grg, row, 2)
+	var x1 int32 = glayer.GrgGet(grg, row, 3)
+	var y1 int32 = glayer.GrgGet(grg, row, 4)
+	var g int32 = 0
+	var grid int32 = 0
+	var n int32 = 0
+	var r int32 = 0
+	var gap int32 = 0
+	if glayer.GrgGet(grg, row, 5) != glayer.RkFigure() {
+		return 0
+	}
+	if (glayer.GrgGet(grg, row, 6) & glayer.GsImage()) == 0 {
+		return 0
+	}
+	if ((x1 - x0) < 15000) || (((y1 - y0) < 8000) || ((y1 - y0) > 40000)) {
+		return 0
+	}
+	for g < glayer.GrgCount(grg) {
+		if (glayer.GrgGet(grg, g, 0) == page) && ((glayer.GrgGet(grg, g, 5) == glayer.RkTableInImage()) && ((glayer.GrgGet(grg, g, 1) >= x0) && ((glayer.GrgGet(grg, g, 2) >= y0) && ((glayer.GrgGet(grg, g, 3) <= x1) && (glayer.GrgGet(grg, g, 4) <= y1))))) {
+			grid = 1
+		}
+		g += 1
+	}
+	if grid == 0 {
+		return 0
+	}
+	for n < model.NodeCount(nodes) {
+		if (model.NodeKind(nodes, n) == model.NkCaption()) && (model.NodeAux(nodes, n) == 1) {
+			r = model.NodeRegionHead(nodes, n)
+			if (r >= 0) && (model.RegionPage(regions, r) == page) {
+				gap = model.RegionY0(regions, r) - y1
+				if (gap >= 0) && ((gap <= 2400) && ((model.RegionX0(regions, r) >= (x0 - 10000)) && (model.RegionX0(regions, r) <= (x0 + 2000)))) {
+					return 1
+				}
+			}
+		}
+		n += 1
+	}
+	return 0
+}
+
 func fcLink(cand *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32) int32 {
 	// The asset stage's candidate row (an image's) with this placement box on this page, or -1.
 	var n int32 = port.CellsLen(cand) / crStride
@@ -1765,6 +1809,14 @@ func FcStage(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 	asset.AsVectorRegions(pa, pg, fcand, cl)
 	fcShadingRegions(pa, pages, fcand)
 	fcGrgRegions(grg, pages, fcand)
+	i = 0
+	for i < glayer.GrgCount(grg) {
+		if fcCaptionedGrid(nodes, regions, grg, i) == 1 {
+			row = FcPanelRow(fcand, glayer.GrgGet(grg, i, 0), glayer.GrgGet(grg, i, 1), glayer.GrgGet(grg, i, 2), glayer.GrgGet(grg, i, 3), glayer.GrgGet(grg, i, 4))
+			port.CellsSet(fcand, (row*crStride)+crOrg, 5)
+		}
+		i += 1
+	}
 	page = 1
 	for page <= model.PageCount(pages) {
 		if panel.PnOwner(fw, et, grl, page, ab, cl) > 0 {
@@ -1829,7 +1881,7 @@ func FcStage(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 		}
 		kind = pk / 1024
 		conf = pk % 1024
-		if (port.CellsAt(fcand, b+crOrg) == 4) && ((status == 0) && ((fcSignatureOver(sl, page, x0, y0, x1, y1) == 0) && (FcClaimed(fl, page, x0, y0, x1, y1) == 0))) {
+		if (port.CellsAt(fcand, b+crOrg) >= 4) && ((status == 0) && ((fcSignatureOver(sl, page, x0, y0, x1, y1) == 0) && ((port.CellsAt(fcand, b+crOrg) == 5) || (FcClaimed(fl, page, x0, y0, x1, y1) == 0)))) {
 			rej = 0
 			kind = model.FgDiagram()
 			conf = 700
@@ -1837,7 +1889,7 @@ func FcStage(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 		k = 0
 		for k < nr {
 			var ob int32 = k * crStride
-			if (k != row) && ((port.CellsAt(fcand, ob+crOrg) == 4) && ((port.CellsAt(fcand, ob) == page) && ((x0 >= (port.CellsAt(fcand, ob+crVx) - fcZone)) && ((y0 >= (port.CellsAt(fcand, ob+(crVx+1)) - fcZone)) && ((x1 <= (port.CellsAt(fcand, ob+(crVx+2)) + fcZone)) && (y1 <= (port.CellsAt(fcand, ob+(crVx+3)) + fcZone))))))) {
+			if (k != row) && ((port.CellsAt(fcand, ob+crOrg) >= 4) && ((port.CellsAt(fcand, ob) == page) && ((x0 >= (port.CellsAt(fcand, ob+crVx) - fcZone)) && ((y0 >= (port.CellsAt(fcand, ob+(crVx+1)) - fcZone)) && ((x1 <= (port.CellsAt(fcand, ob+(crVx+2)) + fcZone)) && (y1 <= (port.CellsAt(fcand, ob+(crVx+3)) + fcZone))))))) {
 				rej = 1
 			}
 			k += 1

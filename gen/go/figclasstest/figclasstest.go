@@ -815,3 +815,168 @@ func TestAnExistingVectorRegionAndItsPanelsHaveOneOwner(emonT *testing.T) {
 	port.AssertEq(emonT, port.CellsAt(cand, 30), 4, "the existing region becomes the captioned panel owner")
 	port.AssertEq(emonT, port.CellsAt(cand, 7), 31500, "retain all of its original vector ink bounds")
 }
+
+func ftCaptionWord(fw *port.Cells, et *port.Cells, value []byte, x int32, y int32) int32 {
+	var at int32 = port.CellsLen(et)
+	var f int32 = 0
+	model.TextAppendUtf8(et, value, 0, port.BlobLen(value))
+	for f < 24 {
+		port.CellsPush(fw, 0)
+		f += 1
+	}
+	var b int32 = port.CellsLen(fw) - 24
+	port.CellsSet(fw, b, 1)
+	port.CellsSet(fw, b+1, x)
+	port.CellsSet(fw, b+2, y)
+	port.CellsSet(fw, b+3, x+3000)
+	port.CellsSet(fw, b+4, y+900)
+	port.CellsSet(fw, b+11, at)
+	port.CellsSet(fw, b+12, port.CellsLen(et)-at)
+	return 0
+}
+
+func ftCaptionedRaster(emonT *testing.T, source int32, gap int32, hint int32) int32 {
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var grg *port.Cells = port.NewCells()
+	var fnodes *port.Cells = port.NewCells()
+	var fattrs *port.Cells = port.NewCells()
+	var fregions *port.Cells = port.NewCells()
+	var fnm *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var fi *port.Cells = port.NewCells()
+	var grl *port.Cells = port.NewCells()
+	var fw *port.Cells = port.NewCells()
+	var fl *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pg *port.Cells = port.NewCells()
+	var sl *port.Cells = port.NewCells()
+	var cand *port.Cells = port.NewCells()
+	var fcand *port.Cells = port.NewCells()
+	var cl *port.Cells = port.NewCells()
+	var fg *port.Cells = port.NewCells()
+	var fd *port.Cells = port.NewCells()
+	var ab *port.Cells = port.NewCells()
+	var ws *port.Cells = port.NewCells()
+	var c int32 = 0
+	var count int32 = 0
+	var a int32 = 0
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	model.PageNew(pages, 1, 61200, 79200, 0, model.PkVector())
+	glayer.GrgNew(grg, 1, 10000, 10000, 40000, 30000, glayer.RkFigure())
+	glayer.GrgSet(grg, 0, 6, source)
+	if hint == 1 {
+		glayer.GrgNew(grg, 1, 12000, 12000, 35000, 28000, 1)
+	}
+	ftLine(fl, 1, 12000, 15000, 30000, 16000, 5)
+	ftLine(fl, 1, 12000, 17000, 30000, 18000, 5)
+	ftCaptionWord(fw, et, port.TextBlob("Figure"), 10000, 30000+gap)
+	ftCaptionWord(fw, et, port.TextBlob("1.1:"), 13500, 30000+gap)
+	ftPara(nodes, regions, text, model.NkParagraph(), 7, 15000, 15000, 19000, 16000)
+	c = ftPara(nodes, regions, text, model.NkCaption(), 20, 10000, 30000+gap, 40000, 31000+gap)
+	model.NodeSetAux(nodes, c, 1)
+	port.CellsSet(fw, 36, 0)
+	count = figclass.FcStage(nodes, attrs, regions, text, pages, fnodes, fattrs, fregions, fnm, pa, im, fi, grg, grl, fw, fl, et, pg, sl, cand, 0, fcand, cl, fg, fd, ab, ws)
+	if (hint == 1) && ((source == 16) && (gap == 800)) {
+		port.AssertEq(emonT, count, 1, "the captioned image has one figure owner")
+		port.AssertEq(emonT, model.NodeCount(fnodes), 3, "the label leaves body flow; document, figure and caption survive")
+		port.AssertEq(emonT, model.NodeKind(fnodes, 1), model.NkFigure(), "figure is before caption")
+		port.AssertEq(emonT, model.NodeSub(fnodes, 1), model.FgDiagram(), "captioned flat diagram is a diagram")
+		a = model.NodeAttr(fnodes, fattrs, 1, model.FkLabels())
+		port.AssertThat(emonT, a >= 0, "the figure owns the label value")
+		if a >= 0 {
+			port.AssertEq(emonT, model.AttrLen(fattrs, a), 7, "the label value is complete")
+			port.AssertEq(emonT, model.TextAt(text, model.AttrValue(fattrs, a)), 97, "the label value is copied verbatim")
+		}
+		port.AssertEq(emonT, model.NodeKind(fnodes, 2), model.NkCaption(), "caption remains available for binding")
+	}
+	return count
+}
+
+func TestCaptionedImageRolePrecedesShadedBoxTables(emonT *testing.T) {
+	port.AssertEq(emonT, ftCaptionedRaster(emonT, 16, 800, 1), 1, "numbered caption owns its raster diagram")
+}
+
+func TestACaptionAloneDoesNotReclassifyNativeTables(emonT *testing.T) {
+	port.AssertEq(emonT, ftCaptionedRaster(emonT, 1, 800, 1), 0, "native rules keep their table claim")
+	port.AssertEq(emonT, ftCaptionedRaster(emonT, 16, 5000, 1), 0, "a remote figure reference cannot claim the image")
+}
+
+func TestCaptionedImagesWithoutACompetingGridKeepTheirRole(emonT *testing.T) {
+	port.AssertEq(emonT, ftCaptionedRaster(emonT, 16, 800, 0), 0, "a caption alone does not force an existing photograph or chart into a diagram")
+}
+
+func TestACaptionedDiagramOwnsGridValuesWithoutRefittingThem(emonT *testing.T) {
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var nn *port.Cells = port.NewCells()
+	var na *port.Cells = port.NewCells()
+	var nr *port.Cells = port.NewCells()
+	var nm *port.Cells = port.NewCells()
+	var values *strings.Builder = port.NewText()
+	var cand *port.Cells = port.NewCells()
+	var fg *port.Cells = port.NewCells()
+	var fd *port.Cells = port.NewCells()
+	var ab *port.Cells = port.NewCells()
+	var table int32 = 0
+	var cell int32 = 0
+	var at int32 = 0
+	var a int32 = 0
+	var i int32 = 0
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	model.PageNew(pages, 1, 61200, 79200, 0, model.PkVector())
+	table = model.NodeNew(nodes, model.NkTable(), 0)
+	model.NodeAddRegion(nodes, regions, table, 1, 12000, 12000, 30000, 20000)
+	cell = model.NodeNew(nodes, model.NkCell(), table)
+	at = port.CellsLen(text)
+	model.TextAppendUtf8(text, port.TextBlob("34,647"), 0, 6)
+	model.NodeSetText(nodes, cell, at, 6)
+	cell = model.NodeNew(nodes, model.NkCell(), table)
+	at = port.CellsLen(text)
+	model.TextAppendUtf8(text, port.TextBlob("35,415"), 0, 6)
+	model.NodeSetText(nodes, cell, at, 6)
+	table = model.NodeNew(nodes, model.NkTable(), 0)
+	model.NodeAddRegion(nodes, regions, table, 1, 12000, 50000, 30000, 56000)
+	cell = model.NodeNew(nodes, model.NkCell(), table)
+	at = port.CellsLen(text)
+	model.TextAppendUtf8(text, port.TextBlob("100"), 0, 3)
+	model.NodeSetText(nodes, cell, at, 3)
+	ftCand(cand, 1, 10000, 10000, 40000, 30000)
+	port.CellsSet(cand, 30, 5)
+	ftFd(fd, model.FgDiagram(), 700)
+	port.CellsPush(fg, 0)
+	port.CellsPush(fg, 0)
+	restruct.RsFigures(nodes, attrs, regions, text, nn, na, nr, nm, cand, fg, fd, ab)
+	port.AssertEq(emonT, model.NodeCount(nn), 4, "document, diagram and the independent true table with its cell")
+	port.AssertEq(emonT, model.NodeKind(nn, 1), model.NkFigure(), "the diagram owns the inner grid")
+	a = model.NodeAttr(nn, na, 1, model.FkLabels())
+	port.AssertThat(emonT, a >= 0, "the numeric cells survive as figure labels")
+	if a >= 0 {
+		port.AssertEq(emonT, model.AttrLen(na, a), 6, "first value survives whole")
+		port.AssertEq(emonT, model.TextAt(text, model.AttrValue(na, a)), 51, "first value starts with its recorded digit")
+	}
+	for a >= 0 {
+		i = 0
+		for i < model.AttrLen(na, a) {
+			port.TextCp(values, model.TextAt(text, model.AttrValue(na, a)+i))
+			i += 1
+		}
+		port.TextCp(values, 124)
+		a = model.AttrNext(na, a)
+	}
+	port.AssertText(emonT, values, "34,647|35,415|", "both selected numeric values transfer verbatim, once each")
+	port.AssertEq(emonT, model.NodeKind(nn, 2), model.NkTable(), "the separate short table retains table ownership")
+	cell = model.NodeFirstChild(nn, 2)
+	port.AssertEq(emonT, model.NodeTextLen(nn, cell), 3, "the true table keeps its numeric value")
+}

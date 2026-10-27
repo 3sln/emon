@@ -791,4 +791,167 @@ public static class Figclasstest {
         emon.Testport.AssertEq(emon.Port.CellsAt(cand, 30), 4, "the existing region becomes the captioned panel owner");
         emon.Testport.AssertEq(emon.Port.CellsAt(cand, 7), 31500, "retain all of its original vector ink bounds");
     }
+    internal static int FtCaptionWord(emon.Port.Cells fw, emon.Port.Cells et, byte[] value, int x, int y) {
+        int at = emon.Port.CellsLen(et);
+        int f = 0;
+        Model.TextAppendUtf8(et, value, 0, emon.Port.BlobLen(value));
+        while (f < 24) {
+            emon.Port.CellsPush(fw, 0);
+            f += 1;
+        }
+        int b = emon.Port.CellsLen(fw) - 24;
+        emon.Port.CellsSet(fw, b, 1);
+        emon.Port.CellsSet(fw, b + 1, x);
+        emon.Port.CellsSet(fw, b + 2, y);
+        emon.Port.CellsSet(fw, b + 3, x + 3000);
+        emon.Port.CellsSet(fw, b + 4, y + 900);
+        emon.Port.CellsSet(fw, b + 11, at);
+        emon.Port.CellsSet(fw, b + 12, emon.Port.CellsLen(et) - at);
+        return 0;
+    }
+    internal static int FtCaptionedRaster(int emonT, int source, int gap, int hint) {
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells grg = emon.Port.NewCells();
+        emon.Port.Cells fnodes = emon.Port.NewCells();
+        emon.Port.Cells fattrs = emon.Port.NewCells();
+        emon.Port.Cells fregions = emon.Port.NewCells();
+        emon.Port.Cells fnm = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells im = emon.Port.NewCells();
+        emon.Port.Cells fi = emon.Port.NewCells();
+        emon.Port.Cells grl = emon.Port.NewCells();
+        emon.Port.Cells fw = emon.Port.NewCells();
+        emon.Port.Cells fl = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pg = emon.Port.NewCells();
+        emon.Port.Cells sl = emon.Port.NewCells();
+        emon.Port.Cells cand = emon.Port.NewCells();
+        emon.Port.Cells fcand = emon.Port.NewCells();
+        emon.Port.Cells cl = emon.Port.NewCells();
+        emon.Port.Cells fg = emon.Port.NewCells();
+        emon.Port.Cells fd = emon.Port.NewCells();
+        emon.Port.Cells ab = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        int c = 0;
+        int count = 0;
+        int a = 0;
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Model.PageNew(pages, 1, 61200, 79200, 0, Model.PkVector());
+        Glayer.GrgNew(grg, 1, 10000, 10000, 40000, 30000, Glayer.RkFigure());
+        Glayer.GrgSet(grg, 0, 6, source);
+        if (hint == 1) {
+            Glayer.GrgNew(grg, 1, 12000, 12000, 35000, 28000, 1);
+        }
+        FtLine(fl, 1, 12000, 15000, 30000, 16000, 5);
+        FtLine(fl, 1, 12000, 17000, 30000, 18000, 5);
+        FtCaptionWord(fw, et, emon.Testport.TextBlob("Figure"), 10000, 30000 + gap);
+        FtCaptionWord(fw, et, emon.Testport.TextBlob("1.1:"), 13500, 30000 + gap);
+        FtPara(nodes, regions, text, Model.NkParagraph(), 7, 15000, 15000, 19000, 16000);
+        c = FtPara(nodes, regions, text, Model.NkCaption(), 20, 10000, 30000 + gap, 40000, 31000 + gap);
+        Model.NodeSetAux(nodes, c, 1);
+        emon.Port.CellsSet(fw, 36, 0);
+        count = Figclass.FcStage(nodes, attrs, regions, text, pages, fnodes, fattrs, fregions, fnm, pa, im, fi, grg, grl, fw, fl, et, pg, sl, cand, 0, fcand, cl, fg, fd, ab, ws);
+        if ((hint == 1) && ((source == 16) && (gap == 800))) {
+            emon.Testport.AssertEq(count, 1, "the captioned image has one figure owner");
+            emon.Testport.AssertEq(Model.NodeCount(fnodes), 3, "the label leaves body flow; document, figure and caption survive");
+            emon.Testport.AssertEq(Model.NodeKind(fnodes, 1), Model.NkFigure(), "figure is before caption");
+            emon.Testport.AssertEq(Model.NodeSub(fnodes, 1), Model.FgDiagram(), "captioned flat diagram is a diagram");
+            a = Model.NodeAttr(fnodes, fattrs, 1, Model.FkLabels());
+            emon.Testport.AssertThat(a >= 0, "the figure owns the label value");
+            if (a >= 0) {
+                emon.Testport.AssertEq(Model.AttrLen(fattrs, a), 7, "the label value is complete");
+                emon.Testport.AssertEq(Model.TextAt(text, Model.AttrValue(fattrs, a)), 97, "the label value is copied verbatim");
+            }
+            emon.Testport.AssertEq(Model.NodeKind(fnodes, 2), Model.NkCaption(), "caption remains available for binding");
+        }
+        return count;
+    }
+    [Xunit.Fact]
+    public static void TestCaptionedImageRolePrecedesShadedBoxTables() {
+        emon.Testport.AssertEq(FtCaptionedRaster(0, 16, 800, 1), 1, "numbered caption owns its raster diagram");
+    }
+    [Xunit.Fact]
+    public static void TestACaptionAloneDoesNotReclassifyNativeTables() {
+        emon.Testport.AssertEq(FtCaptionedRaster(0, 1, 800, 1), 0, "native rules keep their table claim");
+        emon.Testport.AssertEq(FtCaptionedRaster(0, 16, 5000, 1), 0, "a remote figure reference cannot claim the image");
+    }
+    [Xunit.Fact]
+    public static void TestCaptionedImagesWithoutACompetingGridKeepTheirRole() {
+        emon.Testport.AssertEq(FtCaptionedRaster(0, 16, 800, 0), 0, "a caption alone does not force an existing photograph or chart into a diagram");
+    }
+    [Xunit.Fact]
+    public static void TestACaptionedDiagramOwnsGridValuesWithoutRefittingThem() {
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells nn = emon.Port.NewCells();
+        emon.Port.Cells na = emon.Port.NewCells();
+        emon.Port.Cells nr = emon.Port.NewCells();
+        emon.Port.Cells nm = emon.Port.NewCells();
+        System.Text.StringBuilder values = emon.Testport.NewText();
+        emon.Port.Cells cand = emon.Port.NewCells();
+        emon.Port.Cells fg = emon.Port.NewCells();
+        emon.Port.Cells fd = emon.Port.NewCells();
+        emon.Port.Cells ab = emon.Port.NewCells();
+        int table = 0;
+        int cell = 0;
+        int at = 0;
+        int a = 0;
+        int i = 0;
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Model.PageNew(pages, 1, 61200, 79200, 0, Model.PkVector());
+        table = Model.NodeNew(nodes, Model.NkTable(), 0);
+        Model.NodeAddRegion(nodes, regions, table, 1, 12000, 12000, 30000, 20000);
+        cell = Model.NodeNew(nodes, Model.NkCell(), table);
+        at = emon.Port.CellsLen(text);
+        Model.TextAppendUtf8(text, emon.Testport.TextBlob("34,647"), 0, 6);
+        Model.NodeSetText(nodes, cell, at, 6);
+        cell = Model.NodeNew(nodes, Model.NkCell(), table);
+        at = emon.Port.CellsLen(text);
+        Model.TextAppendUtf8(text, emon.Testport.TextBlob("35,415"), 0, 6);
+        Model.NodeSetText(nodes, cell, at, 6);
+        table = Model.NodeNew(nodes, Model.NkTable(), 0);
+        Model.NodeAddRegion(nodes, regions, table, 1, 12000, 50000, 30000, 56000);
+        cell = Model.NodeNew(nodes, Model.NkCell(), table);
+        at = emon.Port.CellsLen(text);
+        Model.TextAppendUtf8(text, emon.Testport.TextBlob("100"), 0, 3);
+        Model.NodeSetText(nodes, cell, at, 3);
+        FtCand(cand, 1, 10000, 10000, 40000, 30000);
+        emon.Port.CellsSet(cand, 30, 5);
+        FtFd(fd, Model.FgDiagram(), 700);
+        emon.Port.CellsPush(fg, 0);
+        emon.Port.CellsPush(fg, 0);
+        Restruct.RsFigures(nodes, attrs, regions, text, nn, na, nr, nm, cand, fg, fd, ab);
+        emon.Testport.AssertEq(Model.NodeCount(nn), 4, "document, diagram and the independent true table with its cell");
+        emon.Testport.AssertEq(Model.NodeKind(nn, 1), Model.NkFigure(), "the diagram owns the inner grid");
+        a = Model.NodeAttr(nn, na, 1, Model.FkLabels());
+        emon.Testport.AssertThat(a >= 0, "the numeric cells survive as figure labels");
+        if (a >= 0) {
+            emon.Testport.AssertEq(Model.AttrLen(na, a), 6, "first value survives whole");
+            emon.Testport.AssertEq(Model.TextAt(text, Model.AttrValue(na, a)), 51, "first value starts with its recorded digit");
+        }
+        while (a >= 0) {
+            i = 0;
+            while (i < Model.AttrLen(na, a)) {
+                emon.Port.TextCp(values, Model.TextAt(text, Model.AttrValue(na, a) + i));
+                i += 1;
+            }
+            emon.Port.TextCp(values, 124);
+            a = Model.AttrNext(na, a);
+        }
+        emon.Testport.AssertText(values, "34,647|35,415|", "both selected numeric values transfer verbatim, once each");
+        emon.Testport.AssertEq(Model.NodeKind(nn, 2), Model.NkTable(), "the separate short table retains table ownership");
+        cell = Model.NodeFirstChild(nn, 2);
+        emon.Testport.AssertEq(Model.NodeTextLen(nn, cell), 3, "the true table keeps its numeric value");
+    }
 }

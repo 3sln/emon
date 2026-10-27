@@ -792,3 +792,166 @@ fn test_an_existing_vector_region_and_its_panels_have_one_owner() {
     crate::testport::assert_eq(crate::port::cells_at(cand, 30), 4, "the existing region becomes the captioned panel owner");
     crate::testport::assert_eq(crate::port::cells_at(cand, 7), 31500, "retain all of its original vector ink bounds");
 }
+pub(crate) fn ft_caption_word(mut fw: &mut crate::port::Cells, mut et: &mut crate::port::Cells, value: &[u8], x: i32, y: i32) -> i32 {
+    let at: i32 = crate::port::cells_len(et);
+    let mut f: i32 = 0;
+    text_append_utf8(et, value, 0, crate::port::blob_len(value));
+    while f < 24 {
+        crate::port::cells_push(fw, 0);
+        f += 1;
+    }
+    let b: i32 = crate::port::cells_len(fw) - 24;
+    crate::port::cells_set(fw, b, 1);
+    crate::port::cells_set(fw, b + 1, x);
+    crate::port::cells_set(fw, b + 2, y);
+    crate::port::cells_set(fw, b + 3, x + 3000);
+    crate::port::cells_set(fw, b + 4, y + 900);
+    crate::port::cells_set(fw, b + 11, at);
+    crate::port::cells_set(fw, b + 12, crate::port::cells_len(et) - at);
+    return 0;
+}
+pub(crate) fn ft_captioned_raster(emon_t: i32, source: i32, gap: i32, hint: i32) -> i32 {
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fnodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fattrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fregions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fnm: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fi: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fcand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ab: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut c: i32 = 0;
+    let mut count: i32 = 0;
+    let mut a: i32 = 0;
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    page_new(pages, 1, 61200, 79200, 0, pk_vector());
+    grg_new(grg, 1, 10000, 10000, 40000, 30000, rk_figure());
+    grg_set(grg, 0, 6, source);
+    if hint == 1 {
+        grg_new(grg, 1, 12000, 12000, 35000, 28000, 1);
+    }
+    ft_line(fl, 1, 12000, 15000, 30000, 16000, 5);
+    ft_line(fl, 1, 12000, 17000, 30000, 18000, 5);
+    ft_caption_word(fw, et, &crate::testport::text_blob("Figure")[..], 10000, 30000 + gap);
+    ft_caption_word(fw, et, &crate::testport::text_blob("1.1:")[..], 13500, 30000 + gap);
+    ft_para(nodes, regions, text, nk_paragraph(), 7, 15000, 15000, 19000, 16000);
+    c = ft_para(nodes, regions, text, nk_caption(), 20, 10000, 30000 + gap, 40000, 31000 + gap);
+    node_set_aux(nodes, c, 1);
+    crate::port::cells_set(fw, 36, 0);
+    count = fc_stage(nodes, attrs, regions, text, pages, fnodes, fattrs, fregions, fnm, pa, im, fi, grg, grl, fw, fl, et, pg, sl, cand, 0, fcand, cl, fg, fd, ab, ws);
+    if (hint == 1) && ((source == 16) && (gap == 800)) {
+        crate::testport::assert_eq(count, 1, "the captioned image has one figure owner");
+        crate::testport::assert_eq(node_count(fnodes), 3, "the label leaves body flow; document, figure and caption survive");
+        crate::testport::assert_eq(node_kind(fnodes, 1), nk_figure(), "figure is before caption");
+        crate::testport::assert_eq(node_sub(fnodes, 1), fg_diagram(), "captioned flat diagram is a diagram");
+        a = node_attr(fnodes, fattrs, 1, fk_labels());
+        crate::testport::assert_that(a >= 0, "the figure owns the label value");
+        if a >= 0 {
+            crate::testport::assert_eq(attr_len(fattrs, a), 7, "the label value is complete");
+            crate::testport::assert_eq(text_at(text, attr_value(fattrs, a)), 97, "the label value is copied verbatim");
+        }
+        crate::testport::assert_eq(node_kind(fnodes, 2), nk_caption(), "caption remains available for binding");
+    }
+    return count;
+}
+#[test]
+fn test_captioned_image_role_precedes_shaded_box_tables() {
+    crate::testport::assert_eq(ft_captioned_raster(0, 16, 800, 1), 1, "numbered caption owns its raster diagram");
+}
+#[test]
+fn test_a_caption_alone_does_not_reclassify_native_tables() {
+    crate::testport::assert_eq(ft_captioned_raster(0, 1, 800, 1), 0, "native rules keep their table claim");
+    crate::testport::assert_eq(ft_captioned_raster(0, 16, 5000, 1), 0, "a remote figure reference cannot claim the image");
+}
+#[test]
+fn test_captioned_images_without_a_competing_grid_keep_their_role() {
+    crate::testport::assert_eq(ft_captioned_raster(0, 16, 800, 0), 0, "a caption alone does not force an existing photograph or chart into a diagram");
+}
+#[test]
+fn test_a_captioned_diagram_owns_grid_values_without_refitting_them() {
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nn: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let na: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nm: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let values: &mut String = &mut crate::port::new_text();
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ab: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut table: i32 = 0;
+    let mut cell: i32 = 0;
+    let mut at: i32 = 0;
+    let mut a: i32 = 0;
+    let mut i: i32 = 0;
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    page_new(pages, 1, 61200, 79200, 0, pk_vector());
+    table = node_new(nodes, nk_table(), 0);
+    node_add_region(nodes, regions, table, 1, 12000, 12000, 30000, 20000);
+    cell = node_new(nodes, nk_cell(), table);
+    at = crate::port::cells_len(text);
+    text_append_utf8(text, &crate::testport::text_blob("34,647")[..], 0, 6);
+    node_set_text(nodes, cell, at, 6);
+    cell = node_new(nodes, nk_cell(), table);
+    at = crate::port::cells_len(text);
+    text_append_utf8(text, &crate::testport::text_blob("35,415")[..], 0, 6);
+    node_set_text(nodes, cell, at, 6);
+    table = node_new(nodes, nk_table(), 0);
+    node_add_region(nodes, regions, table, 1, 12000, 50000, 30000, 56000);
+    cell = node_new(nodes, nk_cell(), table);
+    at = crate::port::cells_len(text);
+    text_append_utf8(text, &crate::testport::text_blob("100")[..], 0, 3);
+    node_set_text(nodes, cell, at, 3);
+    ft_cand(cand, 1, 10000, 10000, 40000, 30000);
+    crate::port::cells_set(cand, 30, 5);
+    ft_fd(fd, fg_diagram(), 700);
+    crate::port::cells_push(fg, 0);
+    crate::port::cells_push(fg, 0);
+    rs_figures(nodes, attrs, regions, text, nn, na, nr, nm, cand, fg, fd, ab);
+    crate::testport::assert_eq(node_count(nn), 4, "document, diagram and the independent true table with its cell");
+    crate::testport::assert_eq(node_kind(nn, 1), nk_figure(), "the diagram owns the inner grid");
+    a = node_attr(nn, na, 1, fk_labels());
+    crate::testport::assert_that(a >= 0, "the numeric cells survive as figure labels");
+    if a >= 0 {
+        crate::testport::assert_eq(attr_len(na, a), 6, "first value survives whole");
+        crate::testport::assert_eq(text_at(text, attr_value(na, a)), 51, "first value starts with its recorded digit");
+    }
+    while a >= 0 {
+        i = 0;
+        while i < attr_len(na, a) {
+            crate::port::text_cp(values, text_at(text, attr_value(na, a) + i));
+            i += 1;
+        }
+        crate::port::text_cp(values, 124);
+        a = attr_next(na, a);
+    }
+    crate::testport::assert_text(values, "34,647|35,415|", "both selected numeric values transfer verbatim, once each");
+    crate::testport::assert_eq(node_kind(nn, 2), nk_table(), "the separate short table retains table ownership");
+    cell = node_first_child(nn, 2);
+    crate::testport::assert_eq(node_text_len(nn, cell), 3, "the true table keeps its numeric value");
+}
