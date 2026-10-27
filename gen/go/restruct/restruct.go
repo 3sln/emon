@@ -943,17 +943,25 @@ func RsRun(on *port.Cells, oa *port.Cells, orr *port.Cells, text *port.Cells, no
 	return model.NodeCount(nodes)
 }
 
-func rfNode(on *port.Cells, oa *port.Cells, orr *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, nm *port.Cells, n int32, np int32) int32 {
+func rfNode(on *port.Cells, oa *port.Cells, orr *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, nm *port.Cells, n int32, np int32, caption int32) int32 {
 	// `rs-node`, but every attribute is kept (the item's private `fk-box` too: `rs-run` reads it).
-	var nn int32 = model.NodeNew(nodes, model.NodeKind(on, n), np)
+	var kind int32 = model.NodeKind(on, n)
+	if caption == 1 {
+		kind = model.NkCaption()
+	}
+	var nn int32 = model.NodeNew(nodes, kind, np)
 	if nn < 0 {
-		nn = model.NodeNew(nodes, model.NodeKind(on, n), 0)
+		nn = model.NodeNew(nodes, kind, 0)
 	}
 	if nn < 0 {
 		return -1
 	}
 	model.NodeSetSub(nodes, nn, model.NodeSub(on, n))
 	model.NodeSetAux(nodes, nn, model.NodeAux(on, n))
+	if caption == 1 {
+		model.NodeSetAux(nodes, nn, 1)
+		model.NodeSetSub(nodes, nn, 0)
+	}
 	model.NodeSetSrc(nodes, nn, model.NodeSrc(on, n))
 	model.NodeSetConf(nodes, nn, model.NodeConf(on, n))
 	model.NodeSetFlags(nodes, nn, model.NodeFlags(on, n))
@@ -966,7 +974,15 @@ func rfNode(on *port.Cells, oa *port.Cells, orr *port.Cells, nodes *port.Cells, 
 		var vk int32 = model.AttrVkind(oa, a)
 		var v int32 = model.AttrValue(oa, a)
 		var l int32 = model.AttrLen(oa, a)
-		if vk == model.AvText() {
+		if caption == 1 {
+			if k == model.FkNumber() {
+				k = model.FkLabel()
+			}
+			if k == model.FkNumbering() {
+				k = -1
+			}
+		}
+		if (k >= 0) && (vk == model.AvText()) {
 			model.NodeAddAttrText(nodes, attrs, nn, k, v, l)
 		}
 		if vk == model.AvInt() {
@@ -1337,7 +1353,7 @@ func rfFlushAnchor(on *port.Cells, ab *port.Cells, cand *port.Cells, fd *port.Ce
 	return 0
 }
 
-func rfAnchor(on *port.Cells, orr *port.Cells, cand *port.Cells, fg *port.Cells, fd *port.Cells) int32 {
+func rfAnchor(on *port.Cells, oa *port.Cells, orr *port.Cells, cand *port.Cells, fg *port.Cells, fd *port.Cells) int32 {
 	// Each figure that has a figure caption (`caption`, kind 1) among the blocks of the document or a section just below it, within
 	// `RF_CAPGAP`, and overlapping it in x, is anchored to the nearest one: `fd` cell 4 is that caption, and the figure leaves `fg`
 	// (it goes in before its caption, `rf-flush-anchor`).
@@ -1357,7 +1373,7 @@ func rfAnchor(on *port.Cells, orr *port.Cells, cand *port.Cells, fg *port.Cells,
 		bestgap = 1000000
 		c = 0
 		for c < n {
-			if (model.NodeKind(on, c) == model.NkCaption()) && (model.NodeAux(on, c) == 1) {
+			if ((model.NodeKind(on, c) == model.NkCaption()) && (model.NodeAux(on, c) == 1)) || ((asset.AsGet(cand, row, 30) == 4) && ((model.NodeKind(on, c) == model.NkHeading()) && (model.NodeAttr(on, oa, c, model.FkNumber()) >= 0))) {
 				p = model.NodeParent(on, c)
 				r = model.NodeRegionHead(on, c)
 				if (p >= 0) && (r >= 0) {
@@ -1395,6 +1411,8 @@ func rfChildren(on *port.Cells, oa *port.Cells, orr *port.Cells, nodes *port.Cel
 	var y2 int32 = 0
 	var bp int32 = 0
 	var nn int32 = 0
+	var caption int32 = 0
+	var ri int32 = 0
 	for c >= 0 {
 		if (port.CellsLen(ab) == 0) || (port.CellsAt(ab, c) < 0) {
 			if (flush == 1) && (model.NodeKind(on, c) == model.NkBreak()) {
@@ -1407,10 +1425,18 @@ func rfChildren(on *port.Cells, oa *port.Cells, orr *port.Cells, nodes *port.Cel
 					rfFlush(on, ab, cand, fg, fd, nodes, attrs, regions, np, model.RegionPage(orr, r), model.RegionY0(orr, r))
 				}
 			}
-			if (flush == 1) && ((port.CellsLen(fd) > 0) && (model.NodeKind(on, c) == model.NkCaption())) {
+			caption = 0
+			ri = 0
+			for ri < (port.CellsLen(fd) / rfFd) {
+				if (port.CellsAt(fd, (ri*rfFd)+4) == c) && (asset.AsGet(cand, ri, 30) == 4) {
+					caption = 1
+				}
+				ri += 1
+			}
+			if (flush == 1) && ((port.CellsLen(fd) > 0) && ((model.NodeKind(on, c) == model.NkCaption()) || (caption == 1))) {
 				rfFlushAnchor(on, ab, cand, fd, nodes, attrs, regions, np, c)
 			}
-			nn = rfNode(on, oa, orr, nodes, attrs, regions, nm, c, np)
+			nn = rfNode(on, oa, orr, nodes, attrs, regions, nm, c, np, caption)
 			if nn >= 0 {
 				if (flush == 1) && (model.NodeKind(on, c) == model.NkSection()) {
 					r2 = rfNextRegion(on, c)
@@ -1464,12 +1490,12 @@ func RsFigures(on *port.Cells, oa *port.Cells, orr *port.Cells, text *port.Cells
 			}
 			r += 1
 		}
-		rfAnchor(on, orr, cand, fg, fd)
+		rfAnchor(on, oa, orr, cand, fg, fd)
 		r = 0
 	}
 	for r < n {
 		if model.NodeParent(on, r) < 0 {
-			nr = rfNode(on, oa, orr, nodes, attrs, regions, nm, r, -1)
+			nr = rfNode(on, oa, orr, nodes, attrs, regions, nm, r, -1, 0)
 			if nr >= 0 {
 				if model.NodeKind(on, r) == model.NkDocument() {
 					rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, fd, ab, r, nr, 1, -1, -1)

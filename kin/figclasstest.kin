@@ -11,10 +11,10 @@
             [emon.test :refer [deftest assert-eq assert-that assert-text new-text new-cells test-t TestT]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
             [emon.model :refer [model-init node-new node-set-text node-add-region node-set-aux node-count node-kind node-parent node-attr
-                                node-sub node-conf ledger-count ledger-reason dr-figure-unmeasured page-new pk-vector text-append-cp
-                                nk-figure nk-paragraph nk-caption nk-document fg-chart fg-diagram fg-photo fg-logo fg-screenshot fg-qr
-                                fg-barcode fg-illustration fg-unknown fk-labels fk-image]]
-            [emon.figclass :refer [fc-emit-budget fc-write fc-measure fc-vector-kind fc-image-kind fc-reject fc-sign-rows fc-recur fc-stage]]
+                                node-add-attr-text node-sub node-conf ledger-count ledger-reason dr-figure-unmeasured page-new pk-vector text-append-cp
+                                nk-heading nk-figure nk-paragraph nk-caption nk-document fg-chart fg-diagram fg-photo fg-logo fg-screenshot fg-qr
+                                fg-barcode fg-illustration fg-unknown fk-label fk-number fk-labels fk-image]]
+            [emon.figclass :refer [fc-panel-row fc-emit-budget fc-write fc-measure fc-vector-kind fc-image-kind fc-reject fc-sign-rows fc-recur fc-stage]]
             [emon.glayer :refer [grg-new rk-figure]]
             [emon.restruct :refer [rs-figures]]
             [kin.lang :refer [defn return let set while if do comment
@@ -666,3 +666,35 @@
   (ft-signature-prefix (test-t) 100)
   (ft-signature-prefix (test-t) 400)
   (ft-signature-prefix (test-t) 1600))
+
+(deftest test-a-captioned-panel-group-owns-a-numbered-heading-as-its-caption
+  (let [^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells nn (new-cells) ^Cells na (new-cells) ^Cells nr (new-cells) ^Cells nm (new-cells)
+        ^Cells cand (new-cells) ^Cells fg (new-cells) ^Cells fd (new-cells) ^Cells ab (new-cells)
+        ^:mut ^I32 c 0]
+    (model-init nodes attrs regions text pages ledger layout)
+    (page-new pages 1 61200 79200 0 (pk-vector))
+    (ft-para nodes regions text (nk-paragraph) 12 12000 12000 18000 13000)
+    (set c (ft-para nodes regions text (nk-heading) 20 10000 32500 30000 33500))
+    (node-add-attr-text nodes attrs c (fk-number) 0 9)
+    (ft-cand cand 1 10000 10000 30000 30000)
+    (cells-set cand 30 4)
+    (ft-fd fd (fg-diagram) 700)
+    (cells-push fg 0) (cells-push fg 0)
+    (rs-figures nodes attrs regions text nn na nr nm cand fg fd ab)
+    (assert-eq (node-count nn) 3 "the document, one figure with labels, and its caption")
+    (assert-eq (node-kind nn 1) (nk-figure) "one diagram owner")
+    (assert-that (>= (node-attr nn na 1 (fk-labels)) 0) "the diagram owns its labels")
+    (assert-eq (node-kind nn 2) (nk-caption) "the numbered heading becomes the diagram caption")
+    (assert-that (>= (node-attr nn na 2 (fk-label)) 0) "the caption keeps its figure number")
+    (assert-eq (node-attr nn na 2 (fk-number)) -1 "heading-only number metadata is removed")))
+
+(deftest test-an-existing-vector-region-and-its-panels-have-one-owner
+  (let [^Cells cand (new-cells)]
+    (ft-cand cand 1 9900 9900 31500 30100)
+    (cells-set cand 27 -2)
+    (assert-eq (fc-panel-row cand 1 10000 10000 30000 30000) 0 "the existing graphic owns the disconnected panels")
+    (assert-eq (cells-len cand) 32 "one graphic candidate, never an overlapping second owner")
+    (assert-eq (cells-at cand 30) 4 "the existing region becomes the captioned panel owner")
+    (assert-eq (cells-at cand 7) 31500 "retain all of its original vector ink bounds")))

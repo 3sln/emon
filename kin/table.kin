@@ -32,6 +32,7 @@
 ;; `emon.para` leaves such lines out of its paragraphs and calls `tb-emit` where the table belongs.
 (ns emon.table
   (:require [emon.pagebounds :refer [pb-first pb-after]]
+            [emon.panel :refer [pn-owner]]
             [emon.lang :refer [I32 I64 Bool Cells i64 i32 add64 mul64]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
             [emon.evidence :refer [wd-get wd-count ln-get ln-set ln-count wf-gfirst
@@ -2422,6 +2423,10 @@
                             (if (and (== ext 2) (== (tb-part-number wd et wl ks (- kx ks)) 0))
                               (while (and (> b a) (< (wd-get wd (cells-at wl (- kx 1)) (hd-x1)) (cells-at ch (+ (* (- b 1) 2) 1))))
                                 (set b (- b 1))))
+                            (if (and (== ext 2) (< (+ s 1) (cells-at rw (+ (* r RWS) 9))))
+                              (let [^I32 ns (+ q 1)
+                                    ^I32 nextcol (tb-chunk-a wd et wl sg ch ns)]
+                                (if (> nextcol a) (set b (tb-min b (- nextcol 1))))))
                             (if (== (cells-at gm (+ (* tr ncols) a)) -1)
                               (do (let [^:mut ^I32 free 1
                                         ^:mut ^I32 kf a]
@@ -4149,7 +4154,7 @@
       (let [^I32 s (* sf SGS) ^I32 w (cells-at wl (cells-at sg (+ (* sf SGS) 3)))
             ^I32 ts (wd-get wd (cells-at wl (- (+ (cells-at sg (+ (* sf SGS) 3)) (cells-at sg (+ (* sf SGS) 4))) 1)) (hd-tstart))
             ^I32 tl (wd-get wd (cells-at wl (- (+ (cells-at sg (+ (* sf SGS) 3)) (cells-at sg (+ (* sf SGS) 4))) 1)) (hd-tlen))]
-        (if (and (<= (tb-abs (- (cells-at sg (+ s 1)) (cells-at tbk (+ (* first KS) 2)))) TB_HEAD_TOL)
+        (if (and (<= (cells-at sg (+ s 1)) (+ (cells-at tbk (+ (* first KS) 2)) TB_HEAD_TOL))
                  (or (> (bit-and (wd-get wd w (wf-style)) (sy-bold)) 0)
                      (or (and (> tl 0) (== (cells-at et (- (+ ts tl) 1)) 58))
                          (> (cells-at sg (+ s 2)) sectionx))))
@@ -5577,6 +5582,53 @@
         (cells-set tb (+ b 31) (bit-or (cells-at tb (+ b 31)) 1))))
     (return nh)))
 
+;; Only selected ownership can refine a spanning label beside an amount.
+(defn ^I32 tb-span-amount [^Cells wd ^Cells et ^Cells tc ^Cells tw ^I32 first ^I32 count ^I32 head]
+  (let [^:mut ^I32 c first ^:mut ^I32 i 1]
+    (while (< c (+ first count))
+      (do (if (and (>= (cells-at tc (* c TCS)) head)
+                   (and (> (cells-at tc (+ (* c TCS) 3)) 1)
+                        (== (bit-and (cells-at tc (+ (* c TCS) 12)) 1) 0)))
+            (do (set i 1)
+                (while (< i (cells-at tc (+ (* c TCS) 9)))
+                  (do (let [^I32 w (cells-at tw (+ (cells-at tc (+ (* c TCS) 8)) i))
+                            ^I32 prev (cells-at tw (+ (cells-at tc (+ (* c TCS) 8)) (- i 1)))]
+                        (if (and (== (tb-number-word wd et w) 1)
+                                 (and (not (tb-currency-lead wd et prev w))
+                                      (> (* (- (wd-get wd w (hd-x0)) (wd-get wd prev (hd-x1))) SEG_DEN)
+                                         (* (wd-get wd w (wf-size)) SEG_NUM)))) (return 1)))
+                      (set i (+ i 1))))))
+          (set c (+ c 1))))
+    (return 0)))
+
+(defn ^I32 tb-kept-row-map [^Cells wl ^Cells rw ^I32 nr ^I32 w0 ^I32 w1
+                            ^Cells tc ^Cells tw ^I32 first ^I32 count ^:mut ^Cells rmap ^:mut ^Cells byword]
+  (let [^:mut ^I32 w w0 ^:mut ^I32 c first ^:mut ^I32 i 0 ^:mut ^I32 r 0
+        ^:mut ^I32 owner 0 ^:mut ^I32 row -1 ^:mut ^I32 rows 0]
+    (cells-drop byword 0) (cells-drop rmap 0)
+    (while (< w w1) (do (cells-push byword 0) (set w (+ w 1))))
+    (while (< c (+ first count))
+      (do (if (== (bit-and (cells-at tc (+ (* c TCS) 12)) 1) 0)
+            (do (set i 0)
+                (while (< i (cells-at tc (+ (* c TCS) 9)))
+                  (do (set w (cells-at tw (+ (cells-at tc (+ (* c TCS) 8)) i)))
+                      (if (and (>= w w0) (< w w1)) (cells-set byword (- w w0) (+ (cells-at tc (* c TCS)) 1)))
+                      (set i (+ i 1))))))
+          (set c (+ c 1))))
+    (while (< r nr)
+      (do (set row -1) (set i 0)
+          (while (< i (cells-at rw (+ (* r RWS) 1)))
+            (do (set w (cells-at wl (+ (cells-at rw (* r RWS)) i)))
+                (if (or (< w w0) (>= w w1)) (return 0))
+                (set owner (cells-at byword (- w w0)))
+                (if (or (== owner 0) (and (>= row 0) (!= row (- owner 1)))) (return 0))
+                (set row (- owner 1))
+                (set i (+ i 1))))
+          (if (< row 0) (return 0))
+          (cells-push rmap row) (set rows (tb-max rows (+ row 1)))
+          (set r (+ r 1))))
+    (return rows)))
+
 (defn ^I32 tb-fit-kept [^I32 page ^Cells wd ^Cells et ^I32 w0 ^I32 w1 ^Cells rm ^Cells an ^:mut ^Cells kc ^:mut ^Cells tbk ^:mut ^Cells marks
                        ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg ^:mut ^Cells ch ^:mut ^Cells st ^:mut ^Cells en ^:mut ^Cells rmap
                        ^:mut ^Cells gm ^:mut ^Cells gs ^:mut ^Cells ry ^:mut ^Cells pr ^:mut ^Cells so
@@ -5623,8 +5675,13 @@
                     (cells-set rmap r (tb-min r (- head 1)))
                     (cells-set rmap r (+ (- (cells-at rmap r) rawhead) head)))
                   (set r (+ r 1))))))
+      (if (or (<= fit 0) (>= fit (cells-at tb (+ b 7))))
+        (if (== (tb-span-amount wd et tc tw first count head) 1)
+          (do (set fit (tb-kept-row-map wl rw nr w0 w1 tc tw first count rmap en))
+              (if (!= fit (cells-at tb (+ b 7))) (set fit 0)))
+          (set fit 0)))
       (cells-drop tbk k0)
-      (if (or (<= fit 0) (>= fit (cells-at tb (+ b 7)))) (return 0))
+      (if (<= fit 0) (return 0))
       (let [^I32 t (tb-text-grid wd et wl rw sg rm kc ch st en rmap gm gs ry pr so tb tc tw tx
                                 page 0 nr profile (cells-at tb (+ b 6)) 2
                                 (cells-at tb (+ b 1)) (cells-at tb (+ b 2)) (cells-at tb (+ b 3)) (cells-at tb (+ b 4)))]
@@ -5682,6 +5739,52 @@
       (do (if (and (== (+ (cells-at an (* i AN_STRIDE)) 1) page)
                    (== (cells-at an (+ (* i AN_STRIDE) 1)) (an-field))) (return 1))
           (set i (+ i 1))))
+    (return 0)))
+
+;; Removing an unused band must not alter candidate scores or selection.
+(defn ^I32 tb-prune-leading [^:mut ^Cells tb ^I32 k ^:mut ^Cells tc ^:mut ^Cells tx]
+  (let [^I32 b (* k TBS) ^I32 n (cells-at tb (+ b 8))
+        ^I32 first (cells-at tb (+ b 9)) ^I32 end (+ first (cells-at tb (+ b 10)))
+        ^I32 cuts (cells-at tb (+ b 16)) ^I32 next (cells-len tx)
+        ^:mut ^I32 c first ^:mut ^I32 i 2]
+    (if (or (< n 3) (or (== (cells-at tb (+ b 5)) PF_RULED)
+                        (or (== (cells-at tb (+ b 5)) PF_STRUCT)
+                            (!= (bit-and (cells-at tb (+ b 31)) TB_WIDGET_PAGE) 0)))) (return 0))
+    (if (>= (cells-at tb (+ b 25)) 0) (return 0))
+    (while (< c end)
+      (do (if (and (== (cells-at tc (+ (* c TCS) 1)) 0)
+                   (and (> (cells-at tc (+ (* c TCS) 9)) 0)
+                        (== (bit-and (cells-at tc (+ (* c TCS) 12)) 1) 0))) (return 0))
+          (set c (+ c 1))))
+    (cells-push tx (cells-at tx cuts))
+    (while (<= i n) (do (cells-push tx (cells-at tx (+ cuts i))) (set i (+ i 1))))
+    (cells-set tb (+ b 16) next) (cells-set tb (+ b 17) n)
+    (cells-set tb (+ b 8) (- n 1))
+    (set c first)
+    (while (< c end)
+      (do (if (> (cells-at tc (+ (* c TCS) 1)) 0)
+            (do (cells-set tc (+ (* c TCS) 1) (- (cells-at tc (+ (* c TCS) 1)) 1))
+                (if (== (cells-at tc (+ (* c TCS) 1)) 0) (cells-set tc (+ (* c TCS) 4) (cells-at tb (+ b 1)))))
+            (if (> (cells-at tc (+ (* c TCS) 3)) 1)
+              (cells-set tc (+ (* c TCS) 3) (- (cells-at tc (+ (* c TCS) 3)) 1))
+              (cells-set tc (+ (* c TCS) 12) (bit-or (cells-at tc (+ (* c TCS) 12)) 1))))
+          (set c (+ c 1))))
+    (return 1)))
+
+(defn ^I32 tb-panel-filter [^:mut ^Cells tb ^I32 first ^Cells owner]
+  (let [^:mut ^I32 i first ^:mut ^I32 out first ^:mut ^I32 f 0]
+    (if (< (cells-len owner) 4) (return 0))
+    (while (< i (tb-rows-of tb TBS))
+      (do (if (not (and (>= (cells-at tb (+ (* i TBS) 1)) (- (cells-at owner 0) 100))
+                       (and (>= (cells-at tb (+ (* i TBS) 2)) (- (cells-at owner 1) 100))
+                            (and (<= (cells-at tb (+ (* i TBS) 3)) (+ (cells-at owner 2) 100))
+                                 (<= (cells-at tb (+ (* i TBS) 4)) (+ (cells-at owner 3) 100))))))
+            (do (set f 0)
+                (while (< f TBS)
+                  (do (cells-set tb (+ (* out TBS) f) (cells-at tb (+ (* i TBS) f))) (set f (+ f 1))))
+                (set out (+ out 1))))
+          (set i (+ i 1))))
+    (cells-drop tb (* out TBS))
     (return 0)))
 
 (defn ^:pub ^I32 tb-build [^Cells wd ^:mut ^Cells ln ^Cells et ^Cells grl ^Cells gfl ^I32 np
@@ -5761,6 +5864,7 @@
                   (tb-shaded-page s2 p wd et wi wj s1 tbo s8 s9 s10 s11 s12 s13 s14 s15 s16 s6 s17 s18 s7 s3 tb tc tw tx))
                 (tb-whitespace-page p wd et wi wj s1 tbo tbk s0 s10 s11 s12 s13 s14 s15 s16 s6 s17 s18 s7 s3 tb tc tw tx)
                 (if (>= (tg-trust ss) TB_TAG_VETO_TRUST) (tb-veto tb t0 wd tc tw se sc gl mk g0))
+                (if (> (pn-owner wd et grl p g4 g5) 0) (tb-panel-filter tb t0 g5))
                 (tb-select tb t0 s3 s9 s8 grg tc wd et tw)
                 ;; the tags are checked against the candidates that were kept (a table of the tags alone joins them and is selected with them)
                 (set nk (tb-rows-of tb TBS))
@@ -5777,6 +5881,7 @@
                       (tb-finish tb k wd et tc tw ln li lj tq g1 g2 g3 wi g4)
                       (tb-model tb k wd et tc tw tx tbk g4)
                       (tb-model-tail wd et wi wj tb k tc tw tx tbk s10 s11 s12 s7 s3)
+                      (if (> (tb-prune-leading tb k tc tx) 0) (tb-model tb k wd et tc tw tx tbk g4))
                       (set k (+ k 1))))
                 (tb-own-claim tb t0 tc tw wd et wi wj tbo ln li lj)
                 (set k t0)

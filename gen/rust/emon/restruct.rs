@@ -894,17 +894,25 @@ pub fn rs_run(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, orr: &mu
     rs_scrub_text(text);
     return node_count(nodes);
 }
-pub(crate) fn rf_node(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, orr: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut nm: &mut crate::port::Cells, n: i32, np: i32) -> i32 {
+pub(crate) fn rf_node(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, orr: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut nm: &mut crate::port::Cells, n: i32, np: i32, caption: i32) -> i32 {
     // `rs-node`, but every attribute is kept (the item's private `fk-box` too: `rs-run` reads it).
-    let mut nn: i32 = node_new(nodes, node_kind(on, n), np);
+    let mut kind: i32 = node_kind(on, n);
+    if caption == 1 {
+        kind = nk_caption();
+    }
+    let mut nn: i32 = node_new(nodes, kind, np);
     if nn < 0 {
-        nn = node_new(nodes, node_kind(on, n), 0);
+        nn = node_new(nodes, kind, 0);
     }
     if nn < 0 {
         return -1;
     }
     node_set_sub(nodes, nn, node_sub(on, n));
     node_set_aux(nodes, nn, node_aux(on, n));
+    if caption == 1 {
+        node_set_aux(nodes, nn, 1);
+        node_set_sub(nodes, nn, 0);
+    }
     node_set_src(nodes, nn, node_src(on, n));
     node_set_conf(nodes, nn, node_conf(on, n));
     node_set_flags(nodes, nn, node_flags(on, n));
@@ -913,11 +921,19 @@ pub(crate) fn rf_node(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, 
     }
     let mut a: i32 = node_attr_head(on, n);
     while a >= 0 {
-        let k: i32 = attr_key(oa, a);
+        let mut k: i32 = attr_key(oa, a);
         let vk: i32 = attr_vkind(oa, a);
         let v: i32 = attr_value(oa, a);
         let l: i32 = attr_len(oa, a);
-        if vk == av_text() {
+        if caption == 1 {
+            if k == fk_number() {
+                k = fk_label();
+            }
+            if k == fk_numbering() {
+                k = -1;
+            }
+        }
+        if (k >= 0) && (vk == av_text()) {
             node_add_attr_text(nodes, attrs, nn, k, v, l);
         }
         if vk == av_int() {
@@ -1261,7 +1277,7 @@ pub(crate) fn rf_flush_anchor(on: &mut crate::port::Cells, ab: &mut crate::port:
     }
     return 0;
 }
-pub(crate) fn rf_anchor(on: &mut crate::port::Cells, orr: &mut crate::port::Cells, cand: &mut crate::port::Cells, mut fg: &mut crate::port::Cells, mut fd: &mut crate::port::Cells) -> i32 {
+pub(crate) fn rf_anchor(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, orr: &mut crate::port::Cells, cand: &mut crate::port::Cells, mut fg: &mut crate::port::Cells, mut fd: &mut crate::port::Cells) -> i32 {
     // Each figure that has a figure caption (`caption`, kind 1) among the blocks of the document or a section just below it, within
     // `RF_CAPGAP`, and overlapping it in x, is anchored to the nearest one: `fd` cell 4 is that caption, and the figure leaves `fg`
     // (it goes in before its caption, `rf-flush-anchor`).
@@ -1281,7 +1297,7 @@ pub(crate) fn rf_anchor(on: &mut crate::port::Cells, orr: &mut crate::port::Cell
         bestgap = 1000000;
         c = 0;
         while c < n {
-            if (node_kind(on, c) == nk_caption()) && (node_aux(on, c) == 1) {
+            if ((node_kind(on, c) == nk_caption()) && (node_aux(on, c) == 1)) || ((as_get(cand, row, 30) == 4) && ((node_kind(on, c) == nk_heading()) && (node_attr(on, oa, c, fk_number()) >= 0))) {
                 p = node_parent(on, c);
                 r = node_region_head(on, c);
                 if (p >= 0) && (r >= 0) {
@@ -1318,6 +1334,8 @@ pub(crate) fn rf_children(on: &mut crate::port::Cells, oa: &mut crate::port::Cel
     let mut y2: i32 = 0;
     let mut bp: i32 = 0;
     let mut nn: i32 = 0;
+    let mut caption: i32 = 0;
+    let mut ri: i32 = 0;
     while c >= 0 {
         if (crate::port::cells_len(ab) == 0) || (crate::port::cells_at(ab, c) < 0) {
             if (flush == 1) && (node_kind(on, c) == nk_break()) {
@@ -1330,10 +1348,18 @@ pub(crate) fn rf_children(on: &mut crate::port::Cells, oa: &mut crate::port::Cel
                     rf_flush(on, ab, cand, fg, fd, nodes, attrs, regions, np, region_page(orr, r), region_y0(orr, r));
                 }
             }
-            if (flush == 1) && ((crate::port::cells_len(fd) > 0) && (node_kind(on, c) == nk_caption())) {
+            caption = 0;
+            ri = 0;
+            while ri < (crate::port::cells_len(fd) / RF_FD) {
+                if (crate::port::cells_at(fd, (ri * RF_FD) + 4) == c) && (as_get(cand, ri, 30) == 4) {
+                    caption = 1;
+                }
+                ri += 1;
+            }
+            if (flush == 1) && ((crate::port::cells_len(fd) > 0) && ((node_kind(on, c) == nk_caption()) || (caption == 1))) {
                 rf_flush_anchor(on, ab, cand, fd, nodes, attrs, regions, np, c);
             }
-            nn = rf_node(on, oa, orr, nodes, attrs, regions, nm, c, np);
+            nn = rf_node(on, oa, orr, nodes, attrs, regions, nm, c, np, caption);
             if nn >= 0 {
                 if (flush == 1) && (node_kind(on, c) == nk_section()) {
                     r2 = rf_next_region(on, c);
@@ -1386,12 +1412,12 @@ pub fn rs_figures(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, orr:
             }
             r += 1;
         }
-        rf_anchor(on, orr, cand, fg, fd);
+        rf_anchor(on, oa, orr, cand, fg, fd);
         r = 0;
     }
     while r < n {
         if node_parent(on, r) < 0 {
-            nr = rf_node(on, oa, orr, nodes, attrs, regions, nm, r, -1);
+            nr = rf_node(on, oa, orr, nodes, attrs, regions, nm, r, -1, 0);
             if nr >= 0 {
                 if node_kind(on, r) == nk_document() {
                     rf_children(on, oa, orr, nodes, attrs, regions, nm, cand, fg, fd, ab, r, nr, 1, -1, -1);

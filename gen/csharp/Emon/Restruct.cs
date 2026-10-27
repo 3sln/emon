@@ -894,17 +894,25 @@ public static class Restruct {
         RsScrubText(text);
         return Model.NodeCount(nodes);
     }
-    internal static int RfNode(emon.Port.Cells on, emon.Port.Cells oa, emon.Port.Cells orr, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells nm, int n, int np) {
+    internal static int RfNode(emon.Port.Cells on, emon.Port.Cells oa, emon.Port.Cells orr, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells nm, int n, int np, int caption) {
         // `rs-node`, but every attribute is kept (the item's private `fk-box` too: `rs-run` reads it).
-        int nn = Model.NodeNew(nodes, Model.NodeKind(on, n), np);
+        int kind = Model.NodeKind(on, n);
+        if (caption == 1) {
+            kind = Model.NkCaption();
+        }
+        int nn = Model.NodeNew(nodes, kind, np);
         if (nn < 0) {
-            nn = Model.NodeNew(nodes, Model.NodeKind(on, n), 0);
+            nn = Model.NodeNew(nodes, kind, 0);
         }
         if (nn < 0) {
             return -1;
         }
         Model.NodeSetSub(nodes, nn, Model.NodeSub(on, n));
         Model.NodeSetAux(nodes, nn, Model.NodeAux(on, n));
+        if (caption == 1) {
+            Model.NodeSetAux(nodes, nn, 1);
+            Model.NodeSetSub(nodes, nn, 0);
+        }
         Model.NodeSetSrc(nodes, nn, Model.NodeSrc(on, n));
         Model.NodeSetConf(nodes, nn, Model.NodeConf(on, n));
         Model.NodeSetFlags(nodes, nn, Model.NodeFlags(on, n));
@@ -917,7 +925,15 @@ public static class Restruct {
             int vk = Model.AttrVkind(oa, a);
             int v = Model.AttrValue(oa, a);
             int l = Model.AttrLen(oa, a);
-            if (vk == Model.AvText()) {
+            if (caption == 1) {
+                if (k == Model.FkNumber()) {
+                    k = Model.FkLabel();
+                }
+                if (k == Model.FkNumbering()) {
+                    k = -1;
+                }
+            }
+            if ((k >= 0) && (vk == Model.AvText())) {
                 Model.NodeAddAttrText(nodes, attrs, nn, k, v, l);
             }
             if (vk == Model.AvInt()) {
@@ -1261,7 +1277,7 @@ public static class Restruct {
         }
         return 0;
     }
-    internal static int RfAnchor(emon.Port.Cells on, emon.Port.Cells orr, emon.Port.Cells cand, emon.Port.Cells fg, emon.Port.Cells fd) {
+    internal static int RfAnchor(emon.Port.Cells on, emon.Port.Cells oa, emon.Port.Cells orr, emon.Port.Cells cand, emon.Port.Cells fg, emon.Port.Cells fd) {
         // Each figure that has a figure caption (`caption`, kind 1) among the blocks of the document or a section just below it, within
         // `RF_CAPGAP`, and overlapping it in x, is anchored to the nearest one: `fd` cell 4 is that caption, and the figure leaves `fg`
         // (it goes in before its caption, `rf-flush-anchor`).
@@ -1281,7 +1297,7 @@ public static class Restruct {
             bestgap = 1000000;
             c = 0;
             while (c < n) {
-                if ((Model.NodeKind(on, c) == Model.NkCaption()) && (Model.NodeAux(on, c) == 1)) {
+                if (((Model.NodeKind(on, c) == Model.NkCaption()) && (Model.NodeAux(on, c) == 1)) || ((Asset.AsGet(cand, row, 30) == 4) && ((Model.NodeKind(on, c) == Model.NkHeading()) && (Model.NodeAttr(on, oa, c, Model.FkNumber()) >= 0)))) {
                     p = Model.NodeParent(on, c);
                     r = Model.NodeRegionHead(on, c);
                     if ((p >= 0) && (r >= 0)) {
@@ -1318,6 +1334,8 @@ public static class Restruct {
         int y2 = 0;
         int bp = 0;
         int nn = 0;
+        int caption = 0;
+        int ri = 0;
         while (c >= 0) {
             if ((emon.Port.CellsLen(ab) == 0) || (emon.Port.CellsAt(ab, c) < 0)) {
                 if ((flush == 1) && (Model.NodeKind(on, c) == Model.NkBreak())) {
@@ -1330,10 +1348,18 @@ public static class Restruct {
                         RfFlush(on, ab, cand, fg, fd, nodes, attrs, regions, np, Model.RegionPage(orr, r), Model.RegionY0(orr, r));
                     }
                 }
-                if ((flush == 1) && ((emon.Port.CellsLen(fd) > 0) && (Model.NodeKind(on, c) == Model.NkCaption()))) {
+                caption = 0;
+                ri = 0;
+                while (ri < (emon.Port.CellsLen(fd) / RfFd)) {
+                    if ((emon.Port.CellsAt(fd, (ri * RfFd) + 4) == c) && (Asset.AsGet(cand, ri, 30) == 4)) {
+                        caption = 1;
+                    }
+                    ri += 1;
+                }
+                if ((flush == 1) && ((emon.Port.CellsLen(fd) > 0) && ((Model.NodeKind(on, c) == Model.NkCaption()) || (caption == 1)))) {
                     RfFlushAnchor(on, ab, cand, fd, nodes, attrs, regions, np, c);
                 }
-                nn = RfNode(on, oa, orr, nodes, attrs, regions, nm, c, np);
+                nn = RfNode(on, oa, orr, nodes, attrs, regions, nm, c, np, caption);
                 if (nn >= 0) {
                     if ((flush == 1) && (Model.NodeKind(on, c) == Model.NkSection())) {
                         r2 = RfNextRegion(on, c);
@@ -1386,12 +1412,12 @@ public static class Restruct {
                 }
                 r += 1;
             }
-            RfAnchor(on, orr, cand, fg, fd);
+            RfAnchor(on, oa, orr, cand, fg, fd);
             r = 0;
         }
         while (r < n) {
             if (Model.NodeParent(on, r) < 0) {
-                nr = RfNode(on, oa, orr, nodes, attrs, regions, nm, r, -1);
+                nr = RfNode(on, oa, orr, nodes, attrs, regions, nm, r, -1, 0);
                 if (nr >= 0) {
                     if (Model.NodeKind(on, r) == Model.NkDocument()) {
                         RfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, fd, ab, r, nr, 1, -1, -1);

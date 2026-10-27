@@ -12526,6 +12526,48 @@ This completes candidate primitives, not production activation. There is still n
 
 Receipt reading eligibility uses Unicode letter/number ranges generated from the repository's UnicodeData.txt rather than an ASCII approximation or host-specific character library. `kin/scripts/ofuse-data.py --check` verifies those ranges during `bb unit`; its regeneration mode writes only the delimited table. Numeric format classification reuses the existing decimal-digit validator. The new generator has gate coverage. All four language trees are regenerated from the same kin sources; native and gate outcomes are recorded in the RC5b report and scratch logs.
 
+### D725 — Restore table value and section ownership after sweep 4
+
+Batch 12 pins sweep 3 to 7f6e17c7 and reproduces D28/E10 on live conversions at HEAD 2bfc8091. The first batch 11 commit d14c8fcf already reproduces both regressions: promoting the larger liabilities reading exposes a leading channel without any primary word centre, and its long label spans the following independently segmented numeric value; selected-model fitting admits section labels as continuations when their left edge precedes the body's observed text anchor.
+
+After selection, remove a leading column only when no visible nonempty cell starts there; retain ruled, tagged and widget-bearing grids. This preserves candidate scores, header binding and selection. During selected-table reconstruction, an independent following chunk limits the preceding chunk's span. A table that needs only that ownership repair reuses its existing word-to-row map; the selected box, cuts, score and exact word multiset must remain unchanged. Recognize bold or colon-ended section labels at or left of the body text anchor, retaining the existing wrapped-stub machinery. Synthetic evidence uses generic text and the relevant geometry; laws inspect the numeric cell's column, span and word count and each section's span. Live trial: D28 source p95 has three columns and independent 34,647/35,415 cells; source p96 retains its sections and wrapped net-earnings row; E10's APR table retains both four-column section rows.
+
+- [ ] **Signed off** (maintainer)
+
+### D726 — Establish ownership for captioned disconnected figure panels
+
+Live history comparison leaves G07 at three false tables through d14c8fcf; cd3cb8f1's boxed-summary boundary change increases the count to eight. These candidates are alignment-example panels under Figure 34, not independent tables. Table claiming before figure classification prevents the later classifier from repairing their ownership.
+
+A shared bounded panel recognizer requires a numbered figure caption and at least four closed rectangles with positive gutters. Shared edges disqualify a table lattice. The recognizer is limited to 128 indexed rules on a page and returns no owner when its evidence is ambiguous. Its owner excludes contained table candidates and joins component graphic regions into one measured diagram candidate. Normal figure budgets and unmeasured reporting remain in force. A numbered heading matching that owned group becomes its caption during figure restructuring, retaining the number as the caption label. Existing short numeric-table laws remain controls.
+
+- [ ] **Signed off** (maintainer)
+
+### D727 — Preserve the live word population while repairing ownership
+
+The first channel-discovery trial passed the target pages and laws but failed the full controls: Berkshire gained five words, and the BERT paper lost five and gained five. Removing an unused leading band before selection changed candidate competition and exposed unrelated body/header recoveries. That trial is rejected. Leading-column cleanup moves after selection, header binding and tail recovery; numeric-cell and section repairs remain independent. The full control baseline covers 54 documents and 817 pages. Final verification must retain the exact word population, including figure labels and caption/heading number metadata, without lowering a ratchet.
+
+The private review index is isolated from nested temporary Git repositories during core self-tests; the real index and branch remain untouched. npm uses a task-owned cache. The new internal panel module joins the existing layout gate-map entry; the API snapshot changes only the four internal module counts from 109 to 110.
+
+- [ ] **Signed off** (maintainer)
+
+### D728 — Reuse an existing graphic owner for disconnected panels
+
+The sweep invocation and the live-word control's explicit `--ocr=auto` expose different graphic candidates on G07. In the latter, a pre-existing vector illustration already encloses the panels. Adding the panel region duplicates the figure. Reuse a vector candidate that encloses the panel group within the bounded figure zone, preserving its original ink bounds; suppress contained component candidates. The additional ownership law reproduces the enclosing-region case and requires one candidate, the diagram role, and retained ink bounds. Both real-page modes must have exactly one figure and zero tables.
+
+The word audit includes figure labels and caption/heading number text. A figure's `label` duplicates its child caption's `label` by Model convention, so that metadata is counted once, using the same rule in both versions. This does not remove or normalize any source text token.
+
+- [ ] **Signed off** (maintainer)
+
+### D729 — Keep span ownership repair out of candidate competition
+
+The full sample run exposed a second pre-selection effect: clipping every candidate's spans let a larger false table claim IRS 1040 form prose. All 199 widget records survived, but that structural expansion is rejected. Span clipping now applies only to the selected-model reconstruction (`ext=2`); widget-bearing, ruled and tagged candidates retain their previous paths. When an otherwise unchanged selected table has a formatted amount separated by a real chunk gap inside a spanning label, reconstruct using its existing word-to-row ownership. Require identical row count, column cuts and word multiset. This repairs D28's amount ownership without changing seed discovery or candidate scores.
+
+- [ ] **Signed off** (maintainer)
+
+### D730 — Audit graphic labels against source ownership
+
+The frozen 54-document live-word control uses the FC1 invocation (`--ocr=auto`, full documents). G07 is also judged in the sweep invocation, which supplies OCR labels for its outlined panel text. In that sweep mode the old false tables repeat labels already emitted as paragraphs: the old Model has 17 `Lines` instances for 12 in the fused source. The single figure has exactly 12. Across all changed label tokens, its multiplicities equal the fused source evidence; 20 duplicate emissions disappear, with no genuine label instance lost. The raw before/after count and the source reconciliation are retained separately from the frozen live-word control. No oracle, tolerance, historical population or scoreboard value changes.
+
 - [ ] **Signed off** (maintainer)
 
 ### D731 — RC5c: guarded recorded-reading fusion is active on gated receipt pages

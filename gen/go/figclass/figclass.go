@@ -9,6 +9,7 @@ import (
 	"emon/glayer"
 	"emon/model"
 	"emon/pagebounds"
+	"emon/panel"
 	"emon/pdfdoc"
 	"emon/pdfimage"
 	"emon/pdfsrc"
@@ -519,6 +520,21 @@ func fcNewRow(cand *port.Cells, page int32, bx0 int32, by0 int32, bx1 int32, by1
 	port.CellsSet(cand, (r*crStride)+crSrc, srcs)
 	port.CellsSet(cand, (r*crStride)+crOrg, org)
 	return r
+}
+
+func FcPanelRow(cand *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32) int32 {
+	var row int32 = 0
+	for row < asset.AsCount(cand) {
+		var b int32 = row * crStride
+		if (port.CellsAt(cand, b) == page) && (port.CellsAt(cand, b+crKori) == -2) {
+			if (port.CellsAt(cand, b+crVx) >= (x0 - fcZone)) && ((port.CellsAt(cand, b+crVx) <= (x0 + 100)) && ((port.CellsAt(cand, b+(crVx+1)) >= (y0 - fcZone)) && ((port.CellsAt(cand, b+(crVx+1)) <= (y0 + 100)) && ((port.CellsAt(cand, b+(crVx+2)) >= (x1 - 100)) && ((port.CellsAt(cand, b+(crVx+2)) <= (x1 + fcZone)) && ((port.CellsAt(cand, b+(crVx+3)) >= (y1 - 100)) && (port.CellsAt(cand, b+(crVx+3)) <= (y1 + fcZone)))))))) {
+				port.CellsSet(cand, b+crOrg, 4)
+				return row
+			}
+		}
+		row += 1
+	}
+	return fcNewRow(cand, page, x0, y0, x1, y1, x0, y0, x1, y1, -1, -2, -1, model.SrVector(), 4)
 }
 
 func fcImageRows(im *port.Cells, pa *port.Cells, pg *port.Cells, cand *port.Cells) int32 {
@@ -1749,6 +1765,13 @@ func FcStage(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 	asset.AsVectorRegions(pa, pg, fcand, cl)
 	fcShadingRegions(pa, pages, fcand)
 	fcGrgRegions(grg, pages, fcand)
+	page = 1
+	for page <= model.PageCount(pages) {
+		if panel.PnOwner(fw, et, grl, page, ab, cl) > 0 {
+			FcPanelRow(fcand, page, port.CellsAt(cl, 0), port.CellsAt(cl, 1), port.CellsAt(cl, 2), port.CellsAt(cl, 3))
+		}
+		page += 1
+	}
 	asset.AsFigureRows(fcand, pages, nodes, regions, 2, fg)
 	FcSignRows(fi, pa, fcand, cl)
 	nr = asset.AsCount(fcand)
@@ -1806,6 +1829,19 @@ func FcStage(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 		}
 		kind = pk / 1024
 		conf = pk % 1024
+		if (port.CellsAt(fcand, b+crOrg) == 4) && ((status == 0) && ((fcSignatureOver(sl, page, x0, y0, x1, y1) == 0) && (FcClaimed(fl, page, x0, y0, x1, y1) == 0))) {
+			rej = 0
+			kind = model.FgDiagram()
+			conf = 700
+		}
+		k = 0
+		for k < nr {
+			var ob int32 = k * crStride
+			if (k != row) && ((port.CellsAt(fcand, ob+crOrg) == 4) && ((port.CellsAt(fcand, ob) == page) && ((x0 >= (port.CellsAt(fcand, ob+crVx) - fcZone)) && ((y0 >= (port.CellsAt(fcand, ob+(crVx+1)) - fcZone)) && ((x1 <= (port.CellsAt(fcand, ob+(crVx+2)) + fcZone)) && (y1 <= (port.CellsAt(fcand, ob+(crVx+3)) + fcZone))))))) {
+				rej = 1
+			}
+			k += 1
+		}
 		capt = fcCaptioned(nodes, regions, fcand, row, page, x0, y0, x1, y1)
 		if (rej == 0) && ((conf >= fcEmit) || (capt == 1)) {
 			if conf < fcEmit {

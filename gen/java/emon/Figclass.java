@@ -402,6 +402,20 @@ public final class Figclass {
         emon.Port.cellsSet(cand, (r * CR_STRIDE) + CR_ORG, org);
         return r;
     }
+    public static int fcPanelRow(emon.Port.Cells cand, int page, int x0, int y0, int x1, int y1) {
+        int row = 0;
+        while (row < Asset.asCount(cand)) {
+            int b = row * CR_STRIDE;
+            if ((emon.Port.cellsAt(cand, b) == page) && (emon.Port.cellsAt(cand, b + CR_KORI) == -2)) {
+                if ((emon.Port.cellsAt(cand, b + CR_VX) >= (x0 - FC_ZONE)) && ((emon.Port.cellsAt(cand, b + CR_VX) <= (x0 + 100)) && ((emon.Port.cellsAt(cand, b + (CR_VX + 1)) >= (y0 - FC_ZONE)) && ((emon.Port.cellsAt(cand, b + (CR_VX + 1)) <= (y0 + 100)) && ((emon.Port.cellsAt(cand, b + (CR_VX + 2)) >= (x1 - 100)) && ((emon.Port.cellsAt(cand, b + (CR_VX + 2)) <= (x1 + FC_ZONE)) && ((emon.Port.cellsAt(cand, b + (CR_VX + 3)) >= (y1 - 100)) && (emon.Port.cellsAt(cand, b + (CR_VX + 3)) <= (y1 + FC_ZONE))))))))) {
+                    emon.Port.cellsSet(cand, b + CR_ORG, 4);
+                    return row;
+                }
+            }
+            row += 1;
+        }
+        return fcNewRow(cand, page, x0, y0, x1, y1, x0, y0, x1, y1, -1, -2, -1, Model.srVector(), 4);
+    }
     public static int fcImageRows(emon.Port.Cells im, emon.Port.Cells pa, emon.Port.Cells pg, emon.Port.Cells cand) {
         // A candidate row for every image placement that passed P3.6's checks and has a visible box (`emon.asset`'s `as-collect` makes the
         // same rows with their pixels; here only the boxes are wanted): the box, and the box cut to its clip's box. The row's
@@ -1597,6 +1611,13 @@ public final class Figclass {
         Asset.asVectorRegions(pa, pg, fcand, cl);
         fcShadingRegions(pa, pages, fcand);
         fcGrgRegions(grg, pages, fcand);
+        page = 1;
+        while (page <= Model.pageCount(pages)) {
+            if (Panel.pnOwner(fw, et, grl, page, ab, cl) > 0) {
+                fcPanelRow(fcand, page, emon.Port.cellsAt(cl, 0), emon.Port.cellsAt(cl, 1), emon.Port.cellsAt(cl, 2), emon.Port.cellsAt(cl, 3));
+            }
+            page += 1;
+        }
         Asset.asFigureRows(fcand, pages, nodes, regions, 2, fg);
         fcSignRows(fi, pa, fcand, cl);
         nr = Asset.asCount(fcand);
@@ -1654,6 +1675,19 @@ public final class Figclass {
             }
             kind = pk / 1024;
             conf = pk % 1024;
+            if ((emon.Port.cellsAt(fcand, b + CR_ORG) == 4) && ((status == 0) && ((fcSignatureOver(sl, page, x0, y0, x1, y1) == 0) && (fcClaimed(fl, page, x0, y0, x1, y1) == 0)))) {
+                rej = 0;
+                kind = Model.fgDiagram();
+                conf = 700;
+            }
+            k = 0;
+            while (k < nr) {
+                int ob = k * CR_STRIDE;
+                if ((k != row) && ((emon.Port.cellsAt(fcand, ob + CR_ORG) == 4) && ((emon.Port.cellsAt(fcand, ob) == page) && ((x0 >= (emon.Port.cellsAt(fcand, ob + CR_VX) - FC_ZONE)) && ((y0 >= (emon.Port.cellsAt(fcand, ob + (CR_VX + 1)) - FC_ZONE)) && ((x1 <= (emon.Port.cellsAt(fcand, ob + (CR_VX + 2)) + FC_ZONE)) && (y1 <= (emon.Port.cellsAt(fcand, ob + (CR_VX + 3)) + FC_ZONE)))))))) {
+                    rej = 1;
+                }
+                k += 1;
+            }
             capt = fcCaptioned(nodes, regions, fcand, row, page, x0, y0, x1, y1);
             if ((rej == 0) && ((conf >= FC_EMIT) || (capt == 1))) {
                 if (conf < FC_EMIT) {

@@ -745,4 +745,50 @@ public static class Figclasstest {
         FtSignaturePrefix(0, 400);
         FtSignaturePrefix(0, 1600);
     }
+    [Xunit.Fact]
+    public static void TestACaptionedPanelGroupOwnsANumberedHeadingAsItsCaption() {
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells nn = emon.Port.NewCells();
+        emon.Port.Cells na = emon.Port.NewCells();
+        emon.Port.Cells nr = emon.Port.NewCells();
+        emon.Port.Cells nm = emon.Port.NewCells();
+        emon.Port.Cells cand = emon.Port.NewCells();
+        emon.Port.Cells fg = emon.Port.NewCells();
+        emon.Port.Cells fd = emon.Port.NewCells();
+        emon.Port.Cells ab = emon.Port.NewCells();
+        int c = 0;
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Model.PageNew(pages, 1, 61200, 79200, 0, Model.PkVector());
+        FtPara(nodes, regions, text, Model.NkParagraph(), 12, 12000, 12000, 18000, 13000);
+        c = FtPara(nodes, regions, text, Model.NkHeading(), 20, 10000, 32500, 30000, 33500);
+        Model.NodeAddAttrText(nodes, attrs, c, Model.FkNumber(), 0, 9);
+        FtCand(cand, 1, 10000, 10000, 30000, 30000);
+        emon.Port.CellsSet(cand, 30, 4);
+        FtFd(fd, Model.FgDiagram(), 700);
+        emon.Port.CellsPush(fg, 0);
+        emon.Port.CellsPush(fg, 0);
+        Restruct.RsFigures(nodes, attrs, regions, text, nn, na, nr, nm, cand, fg, fd, ab);
+        emon.Testport.AssertEq(Model.NodeCount(nn), 3, "the document, one figure with labels, and its caption");
+        emon.Testport.AssertEq(Model.NodeKind(nn, 1), Model.NkFigure(), "one diagram owner");
+        emon.Testport.AssertThat(Model.NodeAttr(nn, na, 1, Model.FkLabels()) >= 0, "the diagram owns its labels");
+        emon.Testport.AssertEq(Model.NodeKind(nn, 2), Model.NkCaption(), "the numbered heading becomes the diagram caption");
+        emon.Testport.AssertThat(Model.NodeAttr(nn, na, 2, Model.FkLabel()) >= 0, "the caption keeps its figure number");
+        emon.Testport.AssertEq(Model.NodeAttr(nn, na, 2, Model.FkNumber()), -1, "heading-only number metadata is removed");
+    }
+    [Xunit.Fact]
+    public static void TestAnExistingVectorRegionAndItsPanelsHaveOneOwner() {
+        emon.Port.Cells cand = emon.Port.NewCells();
+        FtCand(cand, 1, 9900, 9900, 31500, 30100);
+        emon.Port.CellsSet(cand, 27, -2);
+        emon.Testport.AssertEq(Figclass.FcPanelRow(cand, 1, 10000, 10000, 30000, 30000), 0, "the existing graphic owns the disconnected panels");
+        emon.Testport.AssertEq(emon.Port.CellsLen(cand), 32, "one graphic candidate, never an overlapping second owner");
+        emon.Testport.AssertEq(emon.Port.CellsAt(cand, 30), 4, "the existing region becomes the captioned panel owner");
+        emon.Testport.AssertEq(emon.Port.CellsAt(cand, 7), 31500, "retain all of its original vector ink bounds");
+    }
 }

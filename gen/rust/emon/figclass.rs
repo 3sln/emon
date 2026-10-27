@@ -6,6 +6,7 @@ use crate::emon::evidence::*;
 use crate::emon::glayer::*;
 use crate::emon::model::*;
 use crate::emon::pagebounds::*;
+use crate::emon::panel::*;
 use crate::emon::pdfdoc::*;
 use crate::emon::pdfimage::*;
 use crate::emon::pdfsrc::*;
@@ -407,6 +408,20 @@ pub(crate) fn fc_new_row(mut cand: &mut crate::port::Cells, page: i32, bx0: i32,
     crate::port::cells_set(cand, (r * CR_STRIDE) + CR_SRC, srcs);
     crate::port::cells_set(cand, (r * CR_STRIDE) + CR_ORG, org);
     return r;
+}
+pub fn fc_panel_row(mut cand: &mut crate::port::Cells, page: i32, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
+    let mut row: i32 = 0;
+    while row < as_count(cand) {
+        let b: i32 = row * CR_STRIDE;
+        if (crate::port::cells_at(cand, b) == page) && (crate::port::cells_at(cand, b + CR_KORI) == -2) {
+            if (crate::port::cells_at(cand, b + CR_VX) >= (x0 - FC_ZONE)) && ((crate::port::cells_at(cand, b + CR_VX) <= (x0 + 100)) && ((crate::port::cells_at(cand, b + (CR_VX + 1)) >= (y0 - FC_ZONE)) && ((crate::port::cells_at(cand, b + (CR_VX + 1)) <= (y0 + 100)) && ((crate::port::cells_at(cand, b + (CR_VX + 2)) >= (x1 - 100)) && ((crate::port::cells_at(cand, b + (CR_VX + 2)) <= (x1 + FC_ZONE)) && ((crate::port::cells_at(cand, b + (CR_VX + 3)) >= (y1 - 100)) && (crate::port::cells_at(cand, b + (CR_VX + 3)) <= (y1 + FC_ZONE)))))))) {
+                crate::port::cells_set(cand, b + CR_ORG, 4);
+                return row;
+            }
+        }
+        row += 1;
+    }
+    return fc_new_row(cand, page, x0, y0, x1, y1, x0, y0, x1, y1, -1, -2, -1, sr_vector(), 4);
 }
 pub(crate) fn fc_image_rows(im: &mut crate::port::Cells, pa: &mut crate::port::Cells, pg: &mut crate::port::Cells, mut cand: &mut crate::port::Cells) -> i32 {
     // A candidate row for every image placement that passed P3.6's checks and has a visible box (`emon.asset`'s `as-collect` makes the
@@ -1603,6 +1618,13 @@ pub fn fc_stage(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, 
     as_vector_regions(pa, pg, fcand, cl);
     fc_shading_regions(pa, pages, fcand);
     fc_grg_regions(grg, pages, fcand);
+    page = 1;
+    while page <= page_count(pages) {
+        if pn_owner(fw, et, grl, page, ab, cl) > 0 {
+            fc_panel_row(fcand, page, crate::port::cells_at(cl, 0), crate::port::cells_at(cl, 1), crate::port::cells_at(cl, 2), crate::port::cells_at(cl, 3));
+        }
+        page += 1;
+    }
     as_figure_rows(fcand, pages, nodes, regions, 2, fg);
     fc_sign_rows(fi, pa, fcand, cl);
     nr = as_count(fcand);
@@ -1660,6 +1682,19 @@ pub fn fc_stage(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, 
         }
         kind = pk / 1024;
         conf = pk % 1024;
+        if (crate::port::cells_at(fcand, b + CR_ORG) == 4) && ((status == 0) && ((fc_signature_over(sl, page, x0, y0, x1, y1) == 0) && (fc_claimed(fl, page, x0, y0, x1, y1) == 0))) {
+            rej = 0;
+            kind = fg_diagram();
+            conf = 700;
+        }
+        k = 0;
+        while k < nr {
+            let ob: i32 = k * CR_STRIDE;
+            if (k != row) && ((crate::port::cells_at(fcand, ob + CR_ORG) == 4) && ((crate::port::cells_at(fcand, ob) == page) && ((x0 >= (crate::port::cells_at(fcand, ob + CR_VX) - FC_ZONE)) && ((y0 >= (crate::port::cells_at(fcand, ob + (CR_VX + 1)) - FC_ZONE)) && ((x1 <= (crate::port::cells_at(fcand, ob + (CR_VX + 2)) + FC_ZONE)) && (y1 <= (crate::port::cells_at(fcand, ob + (CR_VX + 3)) + FC_ZONE))))))) {
+                rej = 1;
+            }
+            k += 1;
+        }
         capt = fc_captioned(nodes, regions, fcand, row, page, x0, y0, x1, y1);
         if (rej == 0) && ((conf >= FC_EMIT) || (capt == 1)) {
             if conf < FC_EMIT {
