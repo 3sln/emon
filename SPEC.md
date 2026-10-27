@@ -1424,10 +1424,10 @@ structure tree; §9.5 defence 1 walks a glyph's `mark` chain for an
 
 | arena | stride | fields |
 | --- | --- | --- |
-| `oruns` | 28 | page, view read, binarised view (the engine's thresholded image, -1 not asked), request id, round, pass kind (`op`: first, region, line, cell, seal-strip, body-ink, text-only, re-rotated, upscaled), `psm`, region x y w h (view px), languages `tstart tlen` ("eng+deu"), orientation (quarter turns clockwise to upright), writing direction, line order, deskew (centi-degrees), OSD degrees (-1 none), script (ISO 15924 packed), script confidence, orientation confidence (x10, -1), request flags, `bfirst bcount`, `lfirst lcount`, `wfirst wcount` |
+| `oruns` | 28 | page, view read, binarised view (the engine's thresholded image, -1 not asked), request id, round, pass kind (`op`: first, region, line, cell, seal-strip, body-ink, text-only, re-rotated, upscaled, receipt, receipt-rescue, fused: D731's synthetic run of verbatim copies, request -1), `psm`, region x y w h (view px), languages `tstart tlen` ("eng+deu"), orientation (quarter turns clockwise to upright), writing direction, line order, deskew (centi-degrees), OSD degrees (-1 none), script (ISO 15924 packed), script confidence, orientation confidence (x10, -1), request flags, `bfirst bcount`, `lfirst lcount`, `wfirst wcount` |
 | `oblocks` | 16 | page, box, kind (`ob`: block, paragraph), parent block (-1), run, block type (`bt`, D095), orientation, writing direction (per block: Tesseract reports them per block), child run `first count` (a block's paragraphs, a paragraph's lines), raw confidence, spare |
 | `olines` | 24 | line head (13); paragraph (`oblocks` row); run; raw confidence; x-height, ascender, descender (cpt, -1 unknown); pixel box x y w h; spare |
-| `owords` | 28 | word head (16); style (`sy`); run; `sfirst scount` (its symbols); language (packed); engine flags (`oe`: from-dictionary, numeric, from the engine's fallback model; and what emon did with the word, P12.6: kept out as garbage, kept out as a rule's ghost, text corrected in the page's words); engine point size (cpt, -1); pixel box x y w h; spare |
+| `owords` | 28 | word head (16); style (`sy`); run; `sfirst scount` (its symbols); language (packed); engine flags (`oe`: from-dictionary, numeric, from the engine's fallback model; and what emon did with the word, P12.6: kept out as garbage, kept out as a rule's ghost, text corrected in the page's words); engine point size (cpt, -1); pixel box x y w h; `from` (D731: a fused copy's source `owords` row, stored + 1 so that a recorded reading's 0 is none and is not written) |
 | `osyms` | 20 | char head (9); raw confidence; `afirst acount` (its alternatives); flags (`os`: superscript, subscript, drop-cap); pixel box x y w h; spare |
 | `oalts` | 4 | symbol, `tstart tlen` (the candidate's text: any number of code points), confidence (x10) — a contiguous run per symbol, in engine order, verbatim |
 | `inks` | 12 | page, view clustered, centroid colour, lightness (0..1000), chroma, pixel count, role guess (`ir`: body, light, colour, background, unknown), mask view (-1), spread, spare |
@@ -1442,6 +1442,19 @@ from one answer in the engine's iteration order, so every level is a range
 of the level below and `ev-check` verifies the nesting. Block and paragraph
 share `oblocks` (a `kind` column) because both are few and have the same
 fields.
+
+**Guarded fusion (D731).** On an upright image page that the receipt detector fired on and whose recorded readings hold a
+receipt keyword, the distinct recorded readings (first, upscaled, body-ink, receipt, receipt-rescue, line and cell passes)
+are aligned word by word (half of the smaller box shared) and each slot is decided by the guarded policy: a format-valid
+number is never replaced, a number is replaced only by format-valid words, a word only by dictionary words or by two
+agreeing readings, a replacement needs more agreeing readings or a 300 per mille confidence margin, an insertion 700, and
+nothing is deleted. A changed selected line is read from a run of pass `fused` whose words are copies of recorded words
+(`from`); every other line keeps its own row, and no recorded row changes. One row per considered slot is dumped as the
+member `ofuse` after the arenas, only when the page has one: page, slot box, the slot's first selected word and their
+count (`incumbent`), the copies chosen (`choice`, a run of the `fused` run), the rule (`keep`, `agree`, `margin`,
+`insert`, `blocked-format`, `blocked-lexicon`, `blocked-slot`), the agreeing readings for the choice (or the best
+alternative) and for the selected words, the full readings silent there, the confidence margin, a bit set of the readings
+present, and what was done (`replace`, `insert`, `newline`; keeping is not written). The D699 audit skips `fused` runs.
 
 **Alternatives.** An alternative is text, not a code point, and a symbol's
 alternatives are a run, not a chain; the engine's own list is kept verbatim

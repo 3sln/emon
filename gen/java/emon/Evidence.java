@@ -1084,6 +1084,9 @@ public final class Evidence {
     public static int opReceiptRescue() {
         return 11;
     }
+    public static int opFused() {
+        return 12;
+    }
     public static int opEmitName(StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.textAscii(t, "first");
@@ -1127,6 +1130,93 @@ public final class Evidence {
         }
         if (code == 11) {
             emon.Port.textAscii(t, "receipt-rescue");
+            return 1;
+        }
+        if (code == 12) {
+            emon.Port.textAscii(t, "fused");
+            return 1;
+        }
+        return 0;
+    }
+    public static int ofrKeep() {
+        return 1;
+    }
+    public static int ofrAgree() {
+        return 2;
+    }
+    public static int ofrMargin() {
+        return 3;
+    }
+    public static int ofrInsert() {
+        return 4;
+    }
+    public static int ofrBlockedFormat() {
+        return 5;
+    }
+    public static int ofrBlockedLexicon() {
+        return 6;
+    }
+    public static int ofrBlockedSlot() {
+        return 7;
+    }
+    public static int ofrEmitName(StringBuilder t, int code) {
+        if (code == 1) {
+            emon.Port.textAscii(t, "keep");
+            return 1;
+        }
+        if (code == 2) {
+            emon.Port.textAscii(t, "agree");
+            return 1;
+        }
+        if (code == 3) {
+            emon.Port.textAscii(t, "margin");
+            return 1;
+        }
+        if (code == 4) {
+            emon.Port.textAscii(t, "insert");
+            return 1;
+        }
+        if (code == 5) {
+            emon.Port.textAscii(t, "blocked-format");
+            return 1;
+        }
+        if (code == 6) {
+            emon.Port.textAscii(t, "blocked-lexicon");
+            return 1;
+        }
+        if (code == 7) {
+            emon.Port.textAscii(t, "blocked-slot");
+            return 1;
+        }
+        return 0;
+    }
+    public static int ofoKeep() {
+        return 1;
+    }
+    public static int ofoReplace() {
+        return 2;
+    }
+    public static int ofoInsert() {
+        return 3;
+    }
+    public static int ofoNewline() {
+        return 4;
+    }
+    public static int ofoEmitName(StringBuilder t, int code) {
+        if (code == 1) {
+            emon.Port.textAscii(t, "keep");
+            return 1;
+        }
+        if (code == 2) {
+            emon.Port.textAscii(t, "replace");
+            return 1;
+        }
+        if (code == 3) {
+            emon.Port.textAscii(t, "insert");
+            return 1;
+        }
+        if (code == 4) {
+            emon.Port.textAscii(t, "newline");
             return 1;
         }
         return 0;
@@ -1746,6 +1836,36 @@ public final class Evidence {
     public static int ekPlacement() {
         return 152;
     }
+    public static int ekFrom() {
+        return 153;
+    }
+    public static int ekOfuse() {
+        return 154;
+    }
+    public static int ekIncumbent() {
+        return 155;
+    }
+    public static int ekChoice() {
+        return 156;
+    }
+    public static int ekRule() {
+        return 157;
+    }
+    public static int ekVotes() {
+        return 158;
+    }
+    public static int ekIvotes() {
+        return 159;
+    }
+    public static int ekNulls() {
+        return 160;
+    }
+    public static int ekMargin() {
+        return 161;
+    }
+    public static int ekReadings() {
+        return 162;
+    }
     public static int ekEmitName(StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.textAscii(t, "emon-evidence");
@@ -2353,6 +2473,46 @@ public final class Evidence {
         }
         if (code == 152) {
             emon.Port.textAscii(t, "placement");
+            return 1;
+        }
+        if (code == 153) {
+            emon.Port.textAscii(t, "from");
+            return 1;
+        }
+        if (code == 154) {
+            emon.Port.textAscii(t, "ofuse");
+            return 1;
+        }
+        if (code == 155) {
+            emon.Port.textAscii(t, "incumbent");
+            return 1;
+        }
+        if (code == 156) {
+            emon.Port.textAscii(t, "choice");
+            return 1;
+        }
+        if (code == 157) {
+            emon.Port.textAscii(t, "rule");
+            return 1;
+        }
+        if (code == 158) {
+            emon.Port.textAscii(t, "votes");
+            return 1;
+        }
+        if (code == 159) {
+            emon.Port.textAscii(t, "ivotes");
+            return 1;
+        }
+        if (code == 160) {
+            emon.Port.textAscii(t, "nulls");
+            return 1;
+        }
+        if (code == 161) {
+            emon.Port.textAscii(t, "margin");
+            return 1;
+        }
+        if (code == 162) {
+            emon.Port.textAscii(t, "readings");
             return 1;
         }
         return 0;
@@ -3607,6 +3767,10 @@ public final class Evidence {
     public static int owfPh() {
         return 26;
     }
+    public static int owfFrom() {
+        // RC5c (D731): a fused copy's source `owords` row + 1; 0 for every recorded reading. Printed as the row (`from`), omitted when 0.
+        return 27;
+    }
     public static int osfConf() {
         return 9;
     }
@@ -4079,6 +4243,7 @@ public final class Evidence {
         17, 21, 9, 28, 0, 9,
         17, 22, 2, 136, -1, 0,
         17, 23, 10, 36, -2147483648, 0,
+        17, 27, 14, 153, 0, 0,
         18, 0, 1, 9, -2147483648, 0,
         18, 1, 3, 15, -2147483648, 0,
         18, 5, 1, 10, -1, 0,
@@ -4170,14 +4335,14 @@ public final class Evidence {
         147, 21,
         168, 10,
         178, 13,
-        191, 16,
-        207, 9,
-        216, 3,
-        219, 9,
-        228, 16,
-        244, 11,
-        255, 15,
-        270, 10
+        191, 17,
+        208, 9,
+        217, 3,
+        220, 9,
+        229, 16,
+        245, 11,
+        256, 15,
+        271, 10
     };
     public static final int[] EV_STRIDES = {
         12, 24, 3, 2, 1, 32, 32, 24, 16, 24, 16, 24, 20, 28, 16, 24,
@@ -6102,6 +6267,16 @@ public final class Evidence {
         Json.jsCpt(t, v);
         return 1;
     }
+    public static int evFplus(StringBuilder t, int pr, int d, emon.Port.Cells c, int stride, int row, int f, int key, int started) {
+        // Kind 14 (D731): a row index stored + 1, so that a zero cell is none and is not written; printed as the row.
+        int v = evGet(c, stride, row, f);
+        if (v <= 0) {
+            return started;
+        }
+        evBegin(t, pr, d, started, key);
+        emon.Port.textI32(t, v - 1);
+        return 1;
+    }
     public static int evFquad(StringBuilder t, int pr, int d, emon.Port.Cells c, int stride, int row, int f, int key, int started) {
         // `"key":[a,b,c,d]`, four cells f..f+3, in points: a box, a baseline.
         evBegin(t, pr, d, started, key);
@@ -6388,6 +6563,9 @@ public final class Evidence {
         if (kind == 13) {
             return evFpair(t, pr, d, c, stride, row, f, key, dflt, arg, 1, started);
         }
+        if (kind == 14) {
+            return evFplus(t, pr, d, c, stride, row, f, key, started);
+        }
         return started;
     }
     public static int evRow(StringBuilder t, int pr, int d, int ea, emon.Port.Cells c, emon.Port.Cells etext, int row) {
@@ -6502,6 +6680,104 @@ public final class Evidence {
                     emon.Port.textI32(t, evGet(feats, 32, i, col));
                 }
                 col += 1;
+            }
+            Json.jsClose(t, pr, 2, s);
+            i += 1;
+        }
+        Json.jsAend(t, pr, 1, n);
+        return 1;
+    }
+    public static int ozStride() {
+        return 16;
+    }
+    public static int ozfPage() {
+        return 0;
+    }
+    public static int ozfX0() {
+        // slot box x0 y0 x1 y1 (cpt): every aligned node of the slot
+        return 1;
+    }
+    public static int ozfIfirst() {
+        // the slot's first selected `owords` row (-1 none) and how many selected words
+        return 5;
+    }
+    public static int ozfIcount() {
+        return 6;
+    }
+    public static int ozfCfirst() {
+        // the chosen words as copied into the `fused` run (-1, 0 kept)
+        return 7;
+    }
+    public static int ozfCcount() {
+        return 8;
+    }
+    public static int ozfRule() {
+        // the decision (`ofr` code - 1): the chosen candidate's, else the best-ranked alternative's
+        return 9;
+    }
+    public static int ozfVotes() {
+        // distinct readings voting for that candidate
+        return 10;
+    }
+    public static int ozfIvotes() {
+        // distinct readings voting for the selected words
+        return 11;
+    }
+    public static int ozfNulls() {
+        // full-page readings with no word in the slot
+        return 12;
+    }
+    public static int ozfMargin() {
+        // candidate minus selected mean confidence (per mille)
+        return 13;
+    }
+    public static int ozfReadings() {
+        // bit q: distinct reading q has a word in the slot
+        return 14;
+    }
+    public static int ozfOp() {
+        // what was done (`ofo` code - 1)
+        return 15;
+    }
+    public static int evEmitOfuse(StringBuilder t, int pr, int started, emon.Port.Cells ofz) {
+        // `"ofuse":[{...}]` when there is a row, else nothing at all (answers `started` unchanged).
+        int n = emon.Port.cellsLen(ofz) / ozStride();
+        int i = 0;
+        int s = 0;
+        int v = 0;
+        if (n == 0) {
+            return started;
+        }
+        evBegin(t, pr, 0, started, ekOfuse());
+        emon.Port.textAscii(t, "[");
+        while (i < n) {
+            Json.jsAelem(t, pr, 1, i);
+            emon.Port.textAscii(t, "{");
+            s = 0;
+            s = evFint(t, pr, 2, ofz, ozStride(), i, ozfPage(), ekPage(), -2147483648, s);
+            s = evFquad(t, pr, 2, ofz, ozStride(), i, ozfX0(), ekBox(), s);
+            if (evGet(ofz, ozStride(), i, ozfIcount()) > 0) {
+                s = evFrun(t, pr, 2, ofz, ozStride(), i, ozfIfirst(), ekIncumbent(), s);
+            }
+            if (evGet(ofz, ozStride(), i, ozfCcount()) > 0) {
+                s = evFrun(t, pr, 2, ofz, ozStride(), i, ozfCfirst(), ekChoice(), s);
+            }
+            v = evGet(ofz, ozStride(), i, ozfRule());
+            s = evBegin(t, pr, 2, s, ekRule());
+            emon.Port.textAscii(t, "\"");
+            ofrEmitName(t, v + 1);
+            emon.Port.textAscii(t, "\"");
+            s = evFint(t, pr, 2, ofz, ozStride(), i, ozfVotes(), ekVotes(), 0, s);
+            s = evFint(t, pr, 2, ofz, ozStride(), i, ozfIvotes(), ekIvotes(), 0, s);
+            s = evFint(t, pr, 2, ofz, ozStride(), i, ozfNulls(), ekNulls(), 0, s);
+            s = evFint(t, pr, 2, ofz, ozStride(), i, ozfMargin(), ekMargin(), 0, s);
+            s = evFint(t, pr, 2, ofz, ozStride(), i, ozfReadings(), ekReadings(), 0, s);
+            v = evGet(ofz, ozStride(), i, ozfOp());
+            if (v > 0) {
+                s = evBegin(t, pr, 2, s, ekOp());
+                emon.Port.textAscii(t, "\"");
+                ofoEmitName(t, v + 1);
+                emon.Port.textAscii(t, "\"");
             }
             Json.jsClose(t, pr, 2, s);
             i += 1;

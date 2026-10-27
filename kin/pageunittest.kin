@@ -59,7 +59,7 @@
                       (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
                       (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
                       (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
-                      (new-cells) (new-cells) (new-cells) (new-cells))))
+                      (new-cells) (new-cells) (new-cells) (new-cells) (new-cells))))
 
 (defn ^I32 run-page [^I32 i ^I32 policy ^Cells pl ^Cells ans ^Cells rq]
   (return (run-page-fused i policy 0 pl ans rq)))
@@ -74,7 +74,7 @@
                       (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
                       (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
                       (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
-                      (new-cells) (new-cells) (new-cells) (new-cells))))
+                      (new-cells) (new-cells) (new-cells) (new-cells) (new-cells))))
 
 (defn ^I32 watched-len [^Cells mask ^Cells epages ^Cells views ^Cells olines ^Cells owords ^Cells words ^Cells lines]
   (comment "How many cells the page unit's written arenas hold in all (the mask is sized by the caller, so its length is not counted).")

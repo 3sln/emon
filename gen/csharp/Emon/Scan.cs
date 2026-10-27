@@ -1586,7 +1586,7 @@ public static class Scan {
         }
         return k;
     }
-    internal static int ScLineWords(emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells etext, int l, int xl, emon.Port.Cells scr) {
+    public static int ScLineWords(emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells etext, int l, int xl, emon.Port.Cells scr) {
         // The words line `l` is emitted with, in the order along it, written to `scr` from `sc-fate-base`: its own, and with them those of the body-ink line `xl` (-1 none) that
         // lie over none of its own (`sc-xtra-ok`). Answers how many; 0 when they are more than the scratch holds (the line is then emitted as it is, with nothing added).
         int fb = ScFateBase();
@@ -1901,6 +1901,104 @@ public static class Scan {
         Evidence.OwSet(owords, w, Evidence.OwfFlags(), v);
         return 0;
     }
+    internal static int ScDropFate(emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Cells rules, int page, int m, int w, int lmean, int mx, int tch, int floor) {
+        // Whether word `w` of a line of `m` words (mean confidence `lmean`, best `mx`, `tch` characters in all) is no text: 0 it stays, 1 garbage, 2 a rule's ghost, 3 a dot leader
+        // (`sc-fates`' first four fates, which read nothing but the word, its line and the page's rules, and change nothing). D731 shares it with `sc-kept-words`.
+        int ts = Evidence.OwGet(owords, w, Evidence.HdTstart());
+        int n = Evidence.OwGet(owords, w, Evidence.HdTlen());
+        int conf = Evidence.OwGet(owords, w, Evidence.HdConf());
+        int f = 0;
+        int c = 0;
+        if (ScAdmitWord(conf, floor) == 0) {
+            f = 1;
+        }
+        // a dot leader
+        if (ScLeader(etext, ts, n) == 1) {
+            f = 3;
+        }
+        // An isolated punctuation speck at most one point each way is no text even when the engine is confident. Keep its evidence for the ledger.
+        if ((f == 0) && ((m == 1) && (n == 1))) {
+            if (((Evidence.OwGet(owords, w, Evidence.HdX1()) - Evidence.OwGet(owords, w, Evidence.HdX0())) <= 100) && ((Evidence.OwGet(owords, w, Evidence.HdY1()) - Evidence.OwGet(owords, w, Evidence.HdY0())) <= 100)) {
+                c = emon.Port.CellsAt(etext, ts);
+                if ((c == 46) || ((c == 44) || ((c == 39) || ((c == 96) || (c == 183))))) {
+                    f = 1;
+                }
+            }
+        }
+        // texture: a line of three words or more, all of them unsure
+        if (f == 0) {
+            if ((m >= 3) && ((lmean <= ScLoConf()) && ((mx <= 450) && (tch <= (4 * m))))) {
+                f = 1;
+            }
+        }
+        // very unsure and no word, alone or among such words
+        if (f == 0) {
+            if (conf <= ScLoConf()) {
+                if (ScImplausible(etext, ts, n) == 1) {
+                    if ((m <= 2) || (lmean <= 450)) {
+                        f = 1;
+                    }
+                }
+            }
+        }
+        // a rule read as a character
+        if ((f == 0) && (n == 1)) {
+            c = emon.Port.CellsAt(etext, ts);
+            if ((c == 124) || ((c == 73) || ((c == 108) || (c == 33)))) {
+                if (ScOnVrule(rules, page, (Evidence.OwGet(owords, w, Evidence.HdX0()) + Evidence.OwGet(owords, w, Evidence.HdX1())) / 2, (Evidence.OwGet(owords, w, Evidence.HdY0()) + Evidence.OwGet(owords, w, Evidence.HdY1())) / 2, ScRuleSlack()) == 1) {
+                    f = 2;
+                }
+            }
+        }
+        return f;
+    }
+    public static int ScKeptWords(emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Cells rules, int page, int m, int mark, emon.Port.Cells scr) {
+        // D731: the `m` words of a line listed at `sc-fate-base` (`sc-line-words`) less the ones `sc-fates` would keep out as no text, packed to the front;
+        // answers how many stay. Nothing is corrected and no text is appended; with `mark` 1 the words kept out are flagged in `owords` as `sc-fates` flags them.
+        int fb = ScFateBase();
+        int i = 0;
+        int w = 0;
+        int conf = 0;
+        int sum = 0;
+        int tch = 0;
+        int mx = 0;
+        int lmean = 0;
+        int f = 0;
+        int kept = 0;
+        if (m <= 0) {
+            return 0;
+        }
+        while (i < m) {
+            w = emon.Port.CellsAt(scr, fb + i);
+            conf = Evidence.OwGet(owords, w, Evidence.HdConf());
+            sum += conf;
+            tch += Evidence.OwGet(owords, w, Evidence.HdTlen());
+            if (conf > mx) {
+                mx = conf;
+            }
+            i += 1;
+        }
+        lmean = sum / m;
+        i = 0;
+        while (i < m) {
+            w = emon.Port.CellsAt(scr, fb + i);
+            f = ScDropFate(owords, etext, rules, page, m, w, lmean, mx, tch, emon.Port.CellsAt(scr, ScAdmitFloor()));
+            if (f == 0) {
+                emon.Port.CellsSet(scr, fb + kept, w);
+                kept += 1;
+            }
+            if (mark == 1) {
+                if ((f == 1) || (f == 3)) {
+                    ScFlag(owords, w, Evidence.OeGarbage());
+                }
+                if (f == 2) {
+                    ScFlag(owords, w, Evidence.OeRuleGhost());
+                }
+            }
+            i += 1;
+        }
+        return kept;
+    }
     internal static int ScFates(emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Cells osyms, emon.Port.Cells rules, emon.Port.Cells comps, emon.Port.Cells inks, int page, int m, emon.Port.Cells scr) {
         // What becomes of each of the `m` words of a line (listed at `sc-fate-base`): 0 it stays, 1 it is garbage (confidence at most `sc-lo-conf` and implausible characters (`sc-implausible`) on a line of
         // two words or fewer or of a mean confidence of 450 or less; or a word of a line of three or more whose mean is at most `sc-lo-conf`, best at most 450 and words of four characters or fewer on average: texture), 2 it is the ghost of a rule (a lone bar, `I`, `l` or `!`
@@ -1951,50 +2049,9 @@ public static class Scan {
             ts = Evidence.OwGet(owords, w, Evidence.HdTstart());
             n = Evidence.OwGet(owords, w, Evidence.HdTlen());
             conf = Evidence.OwGet(owords, w, Evidence.HdConf());
-            f = 0;
-            if (ScAdmitWord(conf, emon.Port.CellsAt(scr, ScAdmitFloor())) == 0) {
-                f = 1;
-            }
+            f = ScDropFate(owords, etext, rules, page, m, w, lmean, mx, tch, emon.Port.CellsAt(scr, ScAdmitFloor()));
             emon.Port.CellsSet(scr, fb + ((2 * fm) + i), -1);
             emon.Port.CellsSet(scr, fb + ((3 * fm) + i), 0);
-            // a dot leader
-            if (ScLeader(etext, ts, n) == 1) {
-                f = 3;
-            }
-            // An isolated punctuation speck at most one point each way is no text even when the engine is confident. Keep its evidence for the ledger.
-            if ((f == 0) && ((m == 1) && (n == 1))) {
-                if (((Evidence.OwGet(owords, w, Evidence.HdX1()) - Evidence.OwGet(owords, w, Evidence.HdX0())) <= 100) && ((Evidence.OwGet(owords, w, Evidence.HdY1()) - Evidence.OwGet(owords, w, Evidence.HdY0())) <= 100)) {
-                    c = emon.Port.CellsAt(etext, ts);
-                    if ((c == 46) || ((c == 44) || ((c == 39) || ((c == 96) || (c == 183))))) {
-                        f = 1;
-                    }
-                }
-            }
-            // texture: a line of three words or more, all of them unsure
-            if (f == 0) {
-                if ((m >= 3) && ((lmean <= ScLoConf()) && ((mx <= 450) && (tch <= (4 * m))))) {
-                    f = 1;
-                }
-            }
-            // very unsure and no word, alone or among such words
-            if (f == 0) {
-                if (conf <= ScLoConf()) {
-                    if (ScImplausible(etext, ts, n) == 1) {
-                        if ((m <= 2) || (lmean <= 450)) {
-                            f = 1;
-                        }
-                    }
-                }
-            }
-            // a rule read as a character
-            if ((f == 0) && (n == 1)) {
-                c = emon.Port.CellsAt(etext, ts);
-                if ((c == 124) || ((c == 73) || ((c == 108) || (c == 33)))) {
-                    if (ScOnVrule(rules, page, (Evidence.OwGet(owords, w, Evidence.HdX0()) + Evidence.OwGet(owords, w, Evidence.HdX1())) / 2, (Evidence.OwGet(owords, w, Evidence.HdY0()) + Evidence.OwGet(owords, w, Evidence.HdY1())) / 2, ScRuleSlack()) == 1) {
-                        f = 2;
-                    }
-                }
-            }
             // a rule's stroke glued to the end of a word
             if ((f == 0) && (n >= 2)) {
                 if (emon.Port.CellsAt(etext, ts + (n - 1)) == 124) {
@@ -2968,6 +3025,10 @@ public static class Scan {
                         cx = (Evidence.OwGet(owords, w, Evidence.HdX0()) + Evidence.OwGet(owords, w, Evidence.HdX1())) / 2;
                         cy = (Evidence.OwGet(owords, w, Evidence.HdY0()) + Evidence.OwGet(owords, w, Evidence.HdY1())) / 2;
                         eligible = 1;
+                        // D731: a fused copy is not another reading of its word
+                        if (Evidence.OwGet(owords, w, Evidence.OwfFrom()) > 0) {
+                            eligible = 0;
+                        }
                         if (rotated == 1) {
                             run = Evidence.OwGet(owords, w, Evidence.OwfRun());
                             eligible = 0;

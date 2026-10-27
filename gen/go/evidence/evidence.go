@@ -1112,6 +1112,9 @@ func OpReceipt() int32 {
 func OpReceiptRescue() int32 {
 	return 11
 }
+func OpFused() int32 {
+	return 12
+}
 func OpEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "first")
@@ -1155,6 +1158,95 @@ func OpEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 11 {
 		port.TextAscii(t, "receipt-rescue")
+		return 1
+	}
+	if code == 12 {
+		port.TextAscii(t, "fused")
+		return 1
+	}
+	return 0
+}
+
+func OfrKeep() int32 {
+	return 1
+}
+func OfrAgree() int32 {
+	return 2
+}
+func OfrMargin() int32 {
+	return 3
+}
+func OfrInsert() int32 {
+	return 4
+}
+func OfrBlockedFormat() int32 {
+	return 5
+}
+func OfrBlockedLexicon() int32 {
+	return 6
+}
+func OfrBlockedSlot() int32 {
+	return 7
+}
+func OfrEmitName(t *strings.Builder, code int32) int32 {
+	if code == 1 {
+		port.TextAscii(t, "keep")
+		return 1
+	}
+	if code == 2 {
+		port.TextAscii(t, "agree")
+		return 1
+	}
+	if code == 3 {
+		port.TextAscii(t, "margin")
+		return 1
+	}
+	if code == 4 {
+		port.TextAscii(t, "insert")
+		return 1
+	}
+	if code == 5 {
+		port.TextAscii(t, "blocked-format")
+		return 1
+	}
+	if code == 6 {
+		port.TextAscii(t, "blocked-lexicon")
+		return 1
+	}
+	if code == 7 {
+		port.TextAscii(t, "blocked-slot")
+		return 1
+	}
+	return 0
+}
+
+func OfoKeep() int32 {
+	return 1
+}
+func OfoReplace() int32 {
+	return 2
+}
+func OfoInsert() int32 {
+	return 3
+}
+func OfoNewline() int32 {
+	return 4
+}
+func OfoEmitName(t *strings.Builder, code int32) int32 {
+	if code == 1 {
+		port.TextAscii(t, "keep")
+		return 1
+	}
+	if code == 2 {
+		port.TextAscii(t, "replace")
+		return 1
+	}
+	if code == 3 {
+		port.TextAscii(t, "insert")
+		return 1
+	}
+	if code == 4 {
+		port.TextAscii(t, "newline")
 		return 1
 	}
 	return 0
@@ -1779,6 +1871,36 @@ func EkBackdrop() int32 {
 func EkPlacement() int32 {
 	return 152
 }
+func EkFrom() int32 {
+	return 153
+}
+func EkOfuse() int32 {
+	return 154
+}
+func EkIncumbent() int32 {
+	return 155
+}
+func EkChoice() int32 {
+	return 156
+}
+func EkRule() int32 {
+	return 157
+}
+func EkVotes() int32 {
+	return 158
+}
+func EkIvotes() int32 {
+	return 159
+}
+func EkNulls() int32 {
+	return 160
+}
+func EkMargin() int32 {
+	return 161
+}
+func EkReadings() int32 {
+	return 162
+}
 func EkEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "emon-evidence")
@@ -2386,6 +2508,46 @@ func EkEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 152 {
 		port.TextAscii(t, "placement")
+		return 1
+	}
+	if code == 153 {
+		port.TextAscii(t, "from")
+		return 1
+	}
+	if code == 154 {
+		port.TextAscii(t, "ofuse")
+		return 1
+	}
+	if code == 155 {
+		port.TextAscii(t, "incumbent")
+		return 1
+	}
+	if code == 156 {
+		port.TextAscii(t, "choice")
+		return 1
+	}
+	if code == 157 {
+		port.TextAscii(t, "rule")
+		return 1
+	}
+	if code == 158 {
+		port.TextAscii(t, "votes")
+		return 1
+	}
+	if code == 159 {
+		port.TextAscii(t, "ivotes")
+		return 1
+	}
+	if code == 160 {
+		port.TextAscii(t, "nulls")
+		return 1
+	}
+	if code == 161 {
+		port.TextAscii(t, "margin")
+		return 1
+	}
+	if code == 162 {
+		port.TextAscii(t, "readings")
 		return 1
 	}
 	return 0
@@ -3924,6 +4086,11 @@ func OwfPh() int32 {
 	return 26
 }
 
+func OwfFrom() int32 {
+	// RC5c (D731): a fused copy's source `owords` row + 1; 0 for every recorded reading. Printed as the row (`from`), omitted when 0.
+	return 27
+}
+
 func OsfConf() int32 {
 	return 9
 }
@@ -4276,7 +4443,7 @@ func TlfConf() int32 {
 	return 16
 }
 
-var EvFd [1680]int32 = [1680]int32{
+var EvFd [1686]int32 = [1686]int32{
 	1, 0, 1, 9, -2147483648, 0,
 	1, 1, 2, 34, 0, 0,
 	1, 2, 2, 74, 0, 0,
@@ -4484,6 +4651,7 @@ var EvFd [1680]int32 = [1680]int32{
 	17, 21, 9, 28, 0, 9,
 	17, 22, 2, 136, -1, 0,
 	17, 23, 10, 36, -2147483648, 0,
+	17, 27, 14, 153, 0, 0,
 	18, 0, 1, 9, -2147483648, 0,
 	18, 1, 3, 15, -2147483648, 0,
 	18, 5, 1, 10, -1, 0,
@@ -4576,14 +4744,14 @@ var EvFx [48]int32 = [48]int32{
 	147, 21,
 	168, 10,
 	178, 13,
-	191, 16,
-	207, 9,
-	216, 3,
-	219, 9,
-	228, 16,
-	244, 11,
-	255, 15,
-	270, 10,
+	191, 17,
+	208, 9,
+	217, 3,
+	220, 9,
+	229, 16,
+	245, 11,
+	256, 15,
+	271, 10,
 }
 
 var EvStrides [24]int32 = [24]int32{
@@ -6652,6 +6820,17 @@ func evFcpt(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32, 
 	return 1
 }
 
+func evFplus(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32, row int32, f int32, key int32, started int32) int32 {
+	// Kind 14 (D731): a row index stored + 1, so that a zero cell is none and is not written; printed as the row.
+	var v int32 = evGet(c, stride, row, f)
+	if v <= 0 {
+		return started
+	}
+	EvBegin(t, pr, d, started, key)
+	port.TextI32(t, v-1)
+	return 1
+}
+
 func evFquad(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32, row int32, f int32, key int32, started int32) int32 {
 	// `"key":[a,b,c,d]`, four cells f..f+3, in points: a box, a baseline.
 	EvBegin(t, pr, d, started, key)
@@ -6947,6 +7126,9 @@ func evField(t *strings.Builder, pr int32, d int32, c *port.Cells, etext *port.C
 	if kind == 13 {
 		return evFpair(t, pr, d, c, stride, row, f, key, dflt, arg, 1, started)
 	}
+	if kind == 14 {
+		return evFplus(t, pr, d, c, stride, row, f, key, started)
+	}
 	return started
 }
 
@@ -7066,6 +7248,119 @@ func evArenaFeats(t *strings.Builder, pr int32, started int32, feats *port.Cells
 				port.TextI32(t, evGet(feats, 32, i, col))
 			}
 			col += 1
+		}
+		json.JsClose(t, pr, 2, s)
+		i += 1
+	}
+	json.JsAend(t, pr, 1, n)
+	return 1
+}
+
+func OzStride() int32 {
+	return 16
+}
+
+func OzfPage() int32 {
+	return 0
+}
+
+func OzfX0() int32 {
+	// slot box x0 y0 x1 y1 (cpt): every aligned node of the slot
+	return 1
+}
+
+func OzfIfirst() int32 {
+	// the slot's first selected `owords` row (-1 none) and how many selected words
+	return 5
+}
+
+func OzfIcount() int32 {
+	return 6
+}
+
+func OzfCfirst() int32 {
+	// the chosen words as copied into the `fused` run (-1, 0 kept)
+	return 7
+}
+
+func OzfCcount() int32 {
+	return 8
+}
+
+func OzfRule() int32 {
+	// the decision (`ofr` code - 1): the chosen candidate's, else the best-ranked alternative's
+	return 9
+}
+
+func OzfVotes() int32 {
+	// distinct readings voting for that candidate
+	return 10
+}
+
+func OzfIvotes() int32 {
+	// distinct readings voting for the selected words
+	return 11
+}
+
+func OzfNulls() int32 {
+	// full-page readings with no word in the slot
+	return 12
+}
+
+func OzfMargin() int32 {
+	// candidate minus selected mean confidence (per mille)
+	return 13
+}
+
+func OzfReadings() int32 {
+	// bit q: distinct reading q has a word in the slot
+	return 14
+}
+
+func OzfOp() int32 {
+	// what was done (`ofo` code - 1)
+	return 15
+}
+
+func EvEmitOfuse(t *strings.Builder, pr int32, started int32, ofz *port.Cells) int32 {
+	// `"ofuse":[{...}]` when there is a row, else nothing at all (answers `started` unchanged).
+	var n int32 = port.CellsLen(ofz) / OzStride()
+	var i int32 = 0
+	var s int32 = 0
+	var v int32 = 0
+	if n == 0 {
+		return started
+	}
+	EvBegin(t, pr, 0, started, EkOfuse())
+	port.TextAscii(t, "[")
+	for i < n {
+		json.JsAelem(t, pr, 1, i)
+		port.TextAscii(t, "{")
+		s = 0
+		s = evFint(t, pr, 2, ofz, OzStride(), i, OzfPage(), EkPage(), -2147483648, s)
+		s = evFquad(t, pr, 2, ofz, OzStride(), i, OzfX0(), EkBox(), s)
+		if evGet(ofz, OzStride(), i, OzfIcount()) > 0 {
+			s = evFrun(t, pr, 2, ofz, OzStride(), i, OzfIfirst(), EkIncumbent(), s)
+		}
+		if evGet(ofz, OzStride(), i, OzfCcount()) > 0 {
+			s = evFrun(t, pr, 2, ofz, OzStride(), i, OzfCfirst(), EkChoice(), s)
+		}
+		v = evGet(ofz, OzStride(), i, OzfRule())
+		s = EvBegin(t, pr, 2, s, EkRule())
+		port.TextAscii(t, "\"")
+		OfrEmitName(t, v+1)
+		port.TextAscii(t, "\"")
+		s = evFint(t, pr, 2, ofz, OzStride(), i, OzfVotes(), EkVotes(), 0, s)
+		s = evFint(t, pr, 2, ofz, OzStride(), i, OzfIvotes(), EkIvotes(), 0, s)
+		s = evFint(t, pr, 2, ofz, OzStride(), i, OzfNulls(), EkNulls(), 0, s)
+		s = evFint(t, pr, 2, ofz, OzStride(), i, OzfMargin(), EkMargin(), 0, s)
+		s = evFint(t, pr, 2, ofz, OzStride(), i, OzfReadings(), EkReadings(), 0, s)
+		v = evGet(ofz, OzStride(), i, OzfOp())
+		if v > 0 {
+			s = EvBegin(t, pr, 2, s, EkOp())
+			port.TextAscii(t, "\"")
+			OfoEmitName(t, v+1)
+			port.TextAscii(t, "\"")
 		}
 		json.JsClose(t, pr, 2, s)
 		i += 1

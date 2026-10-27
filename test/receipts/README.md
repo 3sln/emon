@@ -41,7 +41,8 @@ Inspection of the external bundles is required to assign a failure stage.
 ExpressExpense SRD is image-only and intentionally cannot be text-scored.
 Its page-only gold must never be treated as empty-transcription truth.
 
-Baseline run: RC3 worktree from `cbc79751` (D704–D709), Tesseract 5.5.3,
+Baseline run: RC5c worktree from `aedbde7f` with guarded recorded-reading fusion
+active (D731–D735; RC3 `cbc79751`, D704–D709, before it), Tesseract 5.5.3,
 Leptonica 1.87.0;
 default installed models and engine options. Near-empty counts include empty.
 The compact baseline has a shared column list; absent counters are zero.
@@ -60,7 +61,10 @@ can require a fresh live recording.
 
 `input_views` is deterministic evidence metadata: the classifier (`photo`,
 `thermal`, or `none`), whether its read was deferred, successful OCR runs,
-receipt/rescue runs and the adopted view. Thermal classification is retained
+receipt/rescue runs and the adopted view. The synthetic `fused` run is not an OCR
+run; `fused_slots`, `fused_replacements`, `fused_insertions` and `fused_new_lines`
+count the page's `ofuse` decision rows (D734), and OCR presence counters ignore
+fused copies. Thermal classification is retained
 although the extra thermal view was reverted (D706). PDF scan pages retain
 classification but defer RC3 photo reads and rescues to preserve baseline
 empty recovery (D705). Actual `ocr_reads` count

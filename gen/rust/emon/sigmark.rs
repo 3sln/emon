@@ -471,7 +471,7 @@ pub fn sg_legible_words(owords: &mut crate::port::Cells, et: &mut crate::port::C
     let mut ts: i32 = 0;
     let mut tl: i32 = 0;
     while i < n {
-        if ow_get(owords, i, hd_page()) == page {
+        if (ow_get(owords, i, hd_page()) == page) && (ow_get(owords, i, owf_from()) == 0) {
             if ow_get(owords, i, hd_conf()) >= sg_legible() {
                 cx = (ow_get(owords, i, hd_x0()) + ow_get(owords, i, hd_x1())) / 2;
                 cy = (ow_get(owords, i, hd_y0()) + ow_get(owords, i, hd_y1())) / 2;

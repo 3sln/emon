@@ -3,6 +3,7 @@
 
 use crate::emon::evidence::*;
 use crate::emon::ofmt::*;
+use crate::emon::scan::*;
 
 pub fn of_margin() -> i32 {
     return 300;
@@ -51,10 +52,15 @@ pub fn of_rule(incumbent: i32, numeric: i32, incumbent_valid: i32, candidate_val
     return 0;
 }
 pub fn of_from() -> i32 {
-    return 27;
+    return owf_from();
+}
+pub fn of_source(words: &mut crate::port::Cells, w: i32) -> i32 {
+    // D731: the `owords` row a fused copy was copied from, or -1 for a recorded reading (`owf-from` holds the row + 1, so a recorded word's 0 is none).
+    return ow_get(words, w, owf_from()) - 1;
 }
 pub fn of_copy(mut words: &mut crate::port::Cells, source: i32, run: i32, line: i32) -> i32 {
-    // Reserved oword cell27 holds the source row. The etext span, box, flags and confidence are copied verbatim; no character is emitted here.
+    // Oword cell 27 (`owf-from`) holds the source row + 1. The etext span, box, flags, symbols and confidence are copied verbatim; no character is emitted here.
+    // The copy has no `feats` row of its own (`ev-check` 102: a feature row names exactly one word).
     let row: i32 = ow_count(words);
     let mut f: i32 = 0;
     let mut value: i32 = 0;
@@ -63,7 +69,8 @@ pub fn of_copy(mut words: &mut crate::port::Cells, source: i32, run: i32, line: 
         crate::port::cells_push(words, value);
         f += 1;
     }
-    ow_set(words, row, of_from(), source);
+    ow_set(words, row, owf_from(), source + 1);
+    ow_set(words, row, hd_feat(), -1);
     ow_set(words, row, owf_run(), run);
     ow_set(words, row, hd_line(), line);
     return row;
@@ -1409,4 +1416,621 @@ pub fn of_null_votes(runs: &mut crate::port::Cells, words: &mut crate::port::Cel
         i += 3;
     }
     return count;
+}
+pub fn of_page_keyword(words: &mut crate::port::Cells, text: &mut crate::port::Cells, page: i32) -> i32 {
+    // 1 when some recorded word of the page (any pass) is a receipt keyword (`of-keyword`).
+    let mut w: i32 = 0;
+    while w < ow_count(words) {
+        if (ow_get(words, w, hd_page()) == page) && (of_source(words, w) == -1) {
+            if of_keyword(text, ow_get(words, w, hd_tstart()), ow_get(words, w, hd_tlen())) == 1 {
+                return 1;
+            }
+        }
+        w += 1;
+    }
+    return 0;
+}
+pub(crate) fn of_ranked(c: &mut crate::port::Cells) -> i32 {
+    // The best-ranked alternative ignoring eligibility (votes, then confidence, then run order), -1 none: what a kept slot's row reports.
+    let mut i: i32 = 1;
+    let mut best: i32 = -1;
+    while i < (crate::port::cells_len(c) / of_cstride()) {
+        if of_cget(c, i, 2) > 0 {
+            if best < 0 {
+                best = i;
+            } else if (of_cget(c, i, 3) > of_cget(c, best, 3)) || ((of_cget(c, i, 3) == of_cget(c, best, 3)) && ((of_cget(c, i, 4) > of_cget(c, best, 4)) || ((of_cget(c, i, 4) == of_cget(c, best, 4)) && (of_cget(c, i, 0) < of_cget(c, best, 0))))) {
+                best = i;
+            }
+        }
+        i += 1;
+    }
+    return best;
+}
+pub fn of_rule_of(c: &mut crate::port::Cells, i: i32, incumbent_count: i32) -> i32 {
+    // The rule code (`of-rule`) of candidate `i` as `of-choice` judges it; 0 keep for none, 6 for an oversized slot.
+    let mut k: i32 = 0;
+    let mut numeric: i32 = 0;
+    let mut incumbent: i32 = 0;
+    if incumbent_count > of_slot_max() {
+        return 6;
+    }
+    if i < 1 {
+        return 0;
+    }
+    while k < (crate::port::cells_len(c) / of_cstride()) {
+        if of_cget(c, k, 7) == 1 {
+            numeric = 1;
+        }
+        k += 1;
+    }
+    if incumbent_count > 0 {
+        incumbent = 1;
+    }
+    return of_rule(incumbent, numeric, of_cget(c, 0, 6), of_cget(c, i, 6), of_cget(c, i, 5), of_cget(c, i, 3), of_cget(c, 0, 3), of_cget(c, i, 4), of_cget(c, 0, 4));
+}
+pub(crate) fn of_chunk(mut plan: &mut crate::port::Cells, row: i32, c: &mut crate::port::Cells, crefs: &mut crate::port::Cells, cand: i32) -> i32 {
+    // A plan chunk: [ofuse row, n, n source rows, next chunk (-1)]. Answers its offset.
+    let at: i32 = crate::port::cells_len(plan);
+    let first: i32 = of_cget(c, cand, 1);
+    let n: i32 = of_cget(c, cand, 2);
+    let mut i: i32 = 0;
+    crate::port::cells_push(plan, row);
+    crate::port::cells_push(plan, n);
+    while i < n {
+        crate::port::cells_push(plan, crate::port::cells_at(crefs, first + i));
+        i += 1;
+    }
+    crate::port::cells_push(plan, -1);
+    return at;
+}
+pub(crate) fn of_chain(mut plan: &mut crate::port::Cells, head: i32, at: i32) -> i32 {
+    // Append chunk `at` to the chain whose head cell is `head` (insertions keep slot order).
+    let mut p: i32 = crate::port::cells_at(plan, head);
+    let mut nx: i32 = 0;
+    if p < 0 {
+        crate::port::cells_set(plan, head, at);
+        return 0;
+    }
+    while crate::port::cells_at(plan, p + (2 + crate::port::cells_at(plan, p + 1))) >= 0 {
+        p = crate::port::cells_at(plan, p + (2 + crate::port::cells_at(plan, p + 1)));
+    }
+    nx = p + (2 + crate::port::cells_at(plan, p + 1));
+    crate::port::cells_set(plan, nx, at);
+    return 1;
+}
+pub(crate) fn of_mn(a: i32, b: i32) -> i32 {
+    if a < b {
+        return a;
+    }
+    return b;
+}
+pub(crate) fn of_mx(a: i32, b: i32) -> i32 {
+    if a > b {
+        return a;
+    }
+    return b;
+}
+pub(crate) fn of_bit(q: i32) -> i32 {
+    let mut v: i32 = 1;
+    let mut i: i32 = 0;
+    while i < q {
+        v *= 2;
+        i += 1;
+    }
+    return v;
+}
+pub(crate) fn of_later(ofz: &mut crate::port::Cells, a: i32, b: i32) -> i32 {
+    // 1 when slot row `a` sorts after row `b`: by the middle of the slot's height, then its left edge.
+    let ma: i32 = crate::port::cells_at(ofz, (a * oz_stride()) + (ozf_x0() + 1)) + crate::port::cells_at(ofz, (a * oz_stride()) + (ozf_x0() + 3));
+    let mb: i32 = crate::port::cells_at(ofz, (b * oz_stride()) + (ozf_x0() + 1)) + crate::port::cells_at(ofz, (b * oz_stride()) + (ozf_x0() + 3));
+    if ma > mb {
+        return 1;
+    }
+    if ma < mb {
+        return 0;
+    }
+    if crate::port::cells_at(ofz, (a * oz_stride()) + ozf_x0()) > crate::port::cells_at(ofz, (b * oz_stride()) + ozf_x0()) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn of_anchor(words: &mut crate::port::Cells, sel: &mut crate::port::Cells, page: i32, x0: i32, y0: i32, y1: i32) -> i32 {
+    // The selected word an insertion follows: on the slot's baseline (half the smaller height shared), ending no more than a point after the
+    // slot starts and less than six slot heights before it; the rightmost such word, the first on a tie. -1: the slot opens a new line.
+    let h: i32 = y1 - y0;
+    let mut i: i32 = 0;
+    let mut w: i32 = 0;
+    let mut best: i32 = -1;
+    let mut bh: i32 = 0;
+    let mut vo: i32 = 0;
+    let mut m: i32 = 0;
+    while i < crate::port::cells_len(sel) {
+        w = crate::port::cells_at(sel, i);
+        if ow_get(words, w, hd_page()) == page {
+            bh = ow_get(words, w, hd_y1()) - ow_get(words, w, hd_y0());
+            vo = of_mn(ow_get(words, w, hd_y1()), y1) - of_mx(ow_get(words, w, hd_y0()), y0);
+            m = h;
+            if bh < m {
+                m = bh;
+            }
+            if (vo * 2) >= m {
+                if (ow_get(words, w, hd_x1()) <= (x0 + 100)) && ((x0 - ow_get(words, w, hd_x1())) < (6 * h)) {
+                    if (best < 0) || (ow_get(words, w, hd_x1()) > ow_get(words, crate::port::cells_at(sel, best), hd_x1())) {
+                        best = i;
+                    }
+                }
+            }
+        }
+        i += 1;
+    }
+    return best;
+}
+pub(crate) fn of_emit(mut words: &mut crate::port::Cells, mut ofz: &mut crate::port::Cells, plan: &mut crate::port::Cells, at: i32, run: i32, line: i32) -> i32 {
+    // Copy chunk `at`'s source words into `line` of the fused run and name the copies in its `ofuse` row. Answers how many.
+    let row: i32 = crate::port::cells_at(plan, at);
+    let n: i32 = crate::port::cells_at(plan, at + 1);
+    let first: i32 = ow_count(words);
+    let mut i: i32 = 0;
+    while i < n {
+        of_copy(words, crate::port::cells_at(plan, at + (2 + i)), run, line);
+        i += 1;
+    }
+    if crate::port::cells_at(ofz, (row * oz_stride()) + ozf_ccount()) == 0 {
+        crate::port::cells_set(ofz, (row * oz_stride()) + ozf_cfirst(), first);
+        crate::port::cells_set(ofz, (row * oz_stride()) + ozf_ccount(), n);
+    }
+    return n;
+}
+pub(crate) fn of_fit_line(mut lines: &mut crate::port::Cells, words: &mut crate::port::Cells, l: i32, grow: i32) -> i32 {
+    // Widen line `l` to its words (x only when `grow` is 0: a copied line keeps its own height and baseline; a new line takes all of its words' box and baseline).
+    let w0: i32 = ol_get(lines, l, lh_first());
+    let n: i32 = ol_get(lines, l, lh_count());
+    let mut i: i32 = 0;
+    let mut w: i32 = 0;
+    if n <= 0 {
+        return 0;
+    }
+    if grow == 1 {
+        ol_set(lines, l, lh_x0(), ow_get(words, w0, hd_x0()));
+        ol_set(lines, l, lh_y0(), ow_get(words, w0, hd_y0()));
+        ol_set(lines, l, lh_x1(), ow_get(words, w0, hd_x1()));
+        ol_set(lines, l, lh_y1(), ow_get(words, w0, hd_y1()));
+        ol_set(lines, l, lh_bx0(), ow_get(words, w0, hd_bx0()));
+        ol_set(lines, l, lh_by0(), ow_get(words, w0, hd_by0()));
+        ol_set(lines, l, lh_bx1(), ow_get(words, w0 + (n - 1), hd_bx1()));
+        ol_set(lines, l, lh_by1(), ow_get(words, w0 + (n - 1), hd_by1()));
+        ol_set(lines, l, lh_rot(), ow_get(words, w0, hd_rot()));
+        ol_set(lines, l, lh_dir(), ow_get(words, w0, hd_dir()));
+    }
+    while i < n {
+        w = w0 + i;
+        if ow_get(words, w, hd_x0()) < ol_get(lines, l, lh_x0()) {
+            ol_set(lines, l, lh_x0(), ow_get(words, w, hd_x0()));
+        }
+        if ow_get(words, w, hd_x1()) > ol_get(lines, l, lh_x1()) {
+            ol_set(lines, l, lh_x1(), ow_get(words, w, hd_x1()));
+        }
+        if grow == 1 {
+            if ow_get(words, w, hd_y0()) < ol_get(lines, l, lh_y0()) {
+                ol_set(lines, l, lh_y0(), ow_get(words, w, hd_y0()));
+            }
+            if ow_get(words, w, hd_y1()) > ol_get(lines, l, lh_y1()) {
+                ol_set(lines, l, lh_y1(), ow_get(words, w, hd_y1()));
+            }
+        }
+        i += 1;
+    }
+    return n;
+}
+pub(crate) fn of_clear_xtra(mut scr: &mut crate::port::Cells, l: i32) -> i32 {
+    // A fused line reads no body-ink partner of its own (its partner's words, if any, were copied into it): clear its `sc-xtra-base` cell.
+    let kk: i32 = l - crate::port::cells_at(scr, sc_xtra_base());
+    if (kk >= 0) && (kk < sc_sel_max()) {
+        crate::port::cells_set(scr, sc_xtra_base() + (kk + 1), 0);
+    }
+    return 0;
+}
+pub(crate) fn of_zrow(mut ofz: &mut crate::port::Cells, page: i32, x0: i32, y0: i32, x1: i32, y1: i32, ifirst: i32, icount: i32, rule: i32, votes: i32, ivotes: i32, nulls: i32, margin: i32, readings: i32) -> i32 {
+    let r: i32 = crate::port::cells_len(ofz) / oz_stride();
+    crate::port::cells_push(ofz, page);
+    crate::port::cells_push(ofz, x0);
+    crate::port::cells_push(ofz, y0);
+    crate::port::cells_push(ofz, x1);
+    crate::port::cells_push(ofz, y1);
+    crate::port::cells_push(ofz, ifirst);
+    crate::port::cells_push(ofz, icount);
+    crate::port::cells_push(ofz, -1);
+    crate::port::cells_push(ofz, 0);
+    crate::port::cells_push(ofz, rule);
+    crate::port::cells_push(ofz, votes);
+    crate::port::cells_push(ofz, ivotes);
+    crate::port::cells_push(ofz, nulls);
+    crate::port::cells_push(ofz, margin);
+    crate::port::cells_push(ofz, readings);
+    crate::port::cells_push(ofz, 0);
+    return r;
+}
+pub(crate) fn of_zget(ofz: &mut crate::port::Cells, r: i32, f: i32) -> i32 {
+    return crate::port::cells_at(ofz, (r * oz_stride()) + f);
+}
+pub(crate) fn of_line_words(lines: &mut crate::port::Cells, mut words: &mut crate::port::Cells, text: &mut crate::port::Cells, rules: &mut crate::port::Cells, page: i32, l: i32, mut scr: &mut crate::port::Cells, mark: i32) -> i32 {
+    // The words selected line `l` is emitted with, at `sc-fate-base`: `sc-line-words` (with the body-ink partner `sc-xtra-base` names) less `sc-kept-words`'
+    // no-text words; 0 when the line is emitted as it is (more words than the scratch holds), which leaves its own words to the caller.
+    let j: i32 = l - crate::port::cells_at(scr, sc_xtra_base());
+    let mut xl: i32 = -1;
+    let mut n: i32 = 0;
+    if (j >= 0) && (j < sc_sel_max()) {
+        xl = crate::port::cells_at(scr, sc_xtra_base() + (j + 1)) - 1;
+    }
+    if ol_get(lines, l, lh_dir()) != 0 {
+        xl = -1;
+    }
+    n = sc_line_words(lines, words, text, l, xl, scr);
+    if n == 0 {
+        return -1;
+    }
+    return sc_kept_words(words, text, rules, page, n, mark, scr);
+}
+pub fn of_fuse(page: i32, image: i32, trigger: i32, mut runs: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut words: &mut crate::port::Cells, text: &mut crate::port::Cells, rules: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, nsel: i32, mut ofz: &mut crate::port::Cells, mut reads: &mut crate::port::Cells, mut rrefs: &mut crate::port::Cells, mut rows: &mut crate::port::Cells, mut parents: &mut crate::port::Cells, mut plan: &mut crate::port::Cells, mut sel: &mut crate::port::Cells, mut selk: &mut crate::port::Cells, mut c: &mut crate::port::Cells, mut crefs: &mut crate::port::Cells, mut seq: &mut crate::port::Cells) -> i32 {
+    // The guarded fusion of page `page` (1-based) whose `nsel` selected lines are at `scr` `sc-sel-base`: answers the new count. `image` 1 an image
+    // input page read upright, `trigger` the receipt detector's lane (1 photo, 2 thermal). A page outside the gate is left exactly as it is and no scratch
+    // is touched; a gated page with fewer than two distinct readings gets only the no-text flags its emission sets anyway. The ten scratch arenas are the caller's.
+    let mut k: i32 = 0;
+    let mut i: i32 = 0;
+    let mut j: i32 = 0;
+    let mut q: i32 = 0;
+    let mut l: i32 = 0;
+    let mut n: i32 = 0;
+    let mut w: i32 = 0;
+    let mut ns: i32 = 0;
+    let mut r: i32 = 0;
+    let mut count: i32 = 0;
+    let mut first: i32 = 0;
+    let mut best: i32 = 0;
+    let mut alt: i32 = 0;
+    let mut x0: i32 = 0;
+    let mut y0: i32 = 0;
+    let mut x1: i32 = 0;
+    let mut y1: i32 = 0;
+    let mut mask: i32 = 0;
+    let mut zr: i32 = 0;
+    let mut at: i32 = 0;
+    let mut changed: i32 = 0;
+    let mut fr: i32 = 0;
+    let mut nl: i32 = 0;
+    let mut n2: i32 = 0;
+    let mut ng: i32 = 0;
+    let mut g: i32 = 0;
+    let mut h: i32 = 0;
+    let mut view: i32 = 0;
+    let mut margin: i32 = 0;
+    let mut votes: i32 = 0;
+    let mut mine: i32 = 0;
+    let mut pick: i32 = 0;
+    if (image != 1) || ((trigger != 1) && (trigger != 2)) {
+        return nsel;
+    }
+    if of_page_keyword(words, text, page) == 0 {
+        return nsel;
+    }
+    // the selected words, line by line as `sc-emit-vetted` will emit them: a body-ink partner's words in their place along the line, and without
+    // the words `sc-fates` will keep out as no text (`sc-kept-words`): what is not emitted is no incumbent and is not copied. Those words are flagged
+    // now exactly as the emission flags them (it would flag the same words of the same lines), so a replaced line's kept-out words keep their ledger fate.
+    crate::port::cells_drop(sel, 0);
+    crate::port::cells_drop(selk, 0);
+    while k < nsel {
+        l = crate::port::cells_at(scr, sc_sel_base() + k);
+        n = of_line_words(lines, words, text, rules, page, l, scr, 1);
+        i = 0;
+        if n >= 0 {
+            while i < n {
+                crate::port::cells_push(sel, crate::port::cells_at(scr, sc_fate_base() + i));
+                crate::port::cells_push(selk, k);
+                i += 1;
+            }
+        } else {
+            while i < ol_get(lines, l, lh_count()) {
+                crate::port::cells_push(sel, ol_get(lines, l, lh_first()) + i);
+                crate::port::cells_push(selk, k);
+                i += 1;
+            }
+        }
+        k += 1;
+    }
+    // the distinct readings, once the words the emission keeps out are flagged as it flags them (so they are no reading's either)
+    if of_readings(runs, words, text, page, reads, rrefs) < 2 {
+        return nsel;
+    }
+    ns = crate::port::cells_len(sel);
+    crate::port::cells_drop(rows, 0);
+    i = 0;
+    while i < ns {
+        crate::port::cells_push(rows, crate::port::cells_at(sel, i));
+        i += 1;
+    }
+    i = 0;
+    while i < crate::port::cells_len(rrefs) {
+        crate::port::cells_push(rows, crate::port::cells_at(rrefs, i));
+        i += 1;
+    }
+    of_align(words, rows, parents, plan);
+    i = 0;
+    while i < crate::port::cells_len(rows) {
+        if crate::port::cells_at(parents, i) >= 0 {
+            j = of_root(parents, i);
+            crate::port::cells_set(parents, i, j);
+        }
+        i += 1;
+    }
+    // the plan: per selected word its fate (-1 kept, -2 its slot's replacement went to an earlier word, else a chunk), per selected word
+    // the chain of insertions after it, then the chain of insertions that open new lines; chunks after that
+    crate::port::cells_drop(plan, 0);
+    i = 0;
+    while i < ((2 * ns) + 1) {
+        crate::port::cells_push(plan, -1);
+        i += 1;
+    }
+    r = 0;
+    while r < crate::port::cells_len(rows) {
+        if crate::port::cells_at(parents, r) == r {
+            count = 0;
+            first = -1;
+            i = 0;
+            while i < ns {
+                if crate::port::cells_at(parents, i) == r {
+                    count += 1;
+                    if first < 0 {
+                        first = i;
+                    }
+                }
+                i += 1;
+            }
+            x0 = 2147483647;
+            y0 = 2147483647;
+            x1 = -2147483647;
+            y1 = -2147483647;
+            mask = 0;
+            j = 0;
+            while j < crate::port::cells_len(rows) {
+                if crate::port::cells_at(parents, j) == r {
+                    w = crate::port::cells_at(rows, j);
+                    if ow_get(words, w, hd_x0()) < x0 {
+                        x0 = ow_get(words, w, hd_x0());
+                    }
+                    if ow_get(words, w, hd_y0()) < y0 {
+                        y0 = ow_get(words, w, hd_y0());
+                    }
+                    if ow_get(words, w, hd_x1()) > x1 {
+                        x1 = ow_get(words, w, hd_x1());
+                    }
+                    if ow_get(words, w, hd_y1()) > y1 {
+                        y1 = ow_get(words, w, hd_y1());
+                    }
+                    q = 0;
+                    while q < (crate::port::cells_len(reads) / 3) {
+                        if (q < 30) && (crate::port::cells_at(reads, q * 3) == ow_get(words, w, owf_run())) {
+                            mask |= of_bit(q);
+                        }
+                        q += 1;
+                    }
+                }
+                j += 1;
+            }
+            if count > of_slot_max() {
+                of_zrow(ofz, page, x0, y0, x1, y1, crate::port::cells_at(sel, first), count, 6, 0, 0, 0, 0, mask);
+            } else {
+                of_candidates(words, text, rows, parents, r, sel, reads, c, crefs, seq);
+                best = of_choice(c, count);
+                alt = best;
+                if alt < 0 {
+                    alt = of_ranked(c);
+                }
+                votes = 0;
+                margin = 0;
+                if alt >= 1 {
+                    votes = of_cget(c, alt, 3);
+                    margin = of_cget(c, alt, 4) - of_cget(c, 0, 4);
+                }
+                pick = -1;
+                if first >= 0 {
+                    pick = crate::port::cells_at(sel, first);
+                }
+                zr = of_zrow(ofz, page, x0, y0, x1, y1, pick, count, of_rule_of(c, alt, count), votes, of_cget(c, 0, 3), of_null_votes(runs, words, reads, rows, parents, r), margin, mask);
+                if best >= 1 {
+                    changed = 1;
+                    at = of_chunk(plan, zr, c, crefs, best);
+                    if count > 0 {
+                        crate::port::cells_set(ofz, (zr * oz_stride()) + ozf_op(), 1);
+                        crate::port::cells_set(plan, first, at);
+                        i = first + 1;
+                        while i < ns {
+                            if crate::port::cells_at(parents, i) == r {
+                                crate::port::cells_set(plan, i, -2);
+                            }
+                            i += 1;
+                        }
+                    } else {
+                        j = of_anchor(words, sel, page, x0, y0, y1);
+                        if j >= 0 {
+                            crate::port::cells_set(ofz, (zr * oz_stride()) + ozf_op(), 2);
+                            of_chain(plan, ns + j, at);
+                        } else {
+                            crate::port::cells_set(ofz, (zr * oz_stride()) + ozf_op(), 3);
+                            of_chain(plan, 2 * ns, at);
+                        }
+                    }
+                }
+            }
+        }
+        r += 1;
+    }
+    if changed == 0 {
+        return nsel;
+    }
+    // the fused run: changed selected lines become copies, in the selection's order; new lines follow the page's last line
+    view = or_get(runs, crate::port::cells_at(reads, 0), orf_view());
+    if nsel > 0 {
+        view = or_get(runs, ol_get(lines, crate::port::cells_at(scr, sc_sel_base()), olf_run()), orf_view());
+    }
+    fr = or_new(runs, page, view);
+    or_set(runs, fr, orf_pass(), op_fused());
+    or_set(runs, fr, orf_lfirst(), ol_count(lines));
+    or_set(runs, fr, orf_wfirst(), ow_count(words));
+    k = 0;
+    n2 = 0;
+    while k < nsel {
+        l = crate::port::cells_at(scr, sc_sel_base() + k);
+        mine = 0;
+        i = 0;
+        while i < ns {
+            if (crate::port::cells_at(selk, i) == k) && ((crate::port::cells_at(plan, i) != -1) || (crate::port::cells_at(plan, ns + i) != -1)) {
+                mine = 1;
+            }
+            i += 1;
+        }
+        if mine == 0 {
+            crate::port::cells_set(scr, sc_sel_base() + n2, l);
+            n2 += 1;
+        } else {
+            nl = ol_new(lines, page, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ow_count(words), 0);
+            j = lh_x0();
+            while j <= lh_dir() {
+                q = ol_get(lines, l, j);
+                ol_set(lines, nl, j, q);
+                j += 1;
+            }
+            j = 15;
+            while j <= 22 {
+                q = ol_get(lines, l, j);
+                ol_set(lines, nl, j, q);
+                j += 1;
+            }
+            ol_set(lines, nl, olf_run(), fr);
+            first = ow_count(words);
+            i = 0;
+            while i < ns {
+                if crate::port::cells_at(selk, i) == k {
+                    at = crate::port::cells_at(plan, i);
+                    if at == -1 {
+                        of_copy(words, crate::port::cells_at(sel, i), fr, nl);
+                    }
+                    if at >= 0 {
+                        of_emit(words, ofz, plan, at, fr, nl);
+                    }
+                    at = crate::port::cells_at(plan, ns + i);
+                    while at >= 0 {
+                        of_emit(words, ofz, plan, at, fr, nl);
+                        at = crate::port::cells_at(plan, at + (2 + crate::port::cells_at(plan, at + 1)));
+                    }
+                }
+                i += 1;
+            }
+            ol_set(lines, nl, lh_count(), ow_count(words) - first);
+            of_fit_line(lines, words, nl, 0);
+            if ol_get(lines, nl, lh_count()) > 0 {
+                crate::port::cells_set(scr, sc_sel_base() + n2, nl);
+                n2 += 1;
+                of_clear_xtra(scr, nl);
+            }
+        }
+        k += 1;
+    }
+    // insertions over no selected line: sorted by the middle of their slot's height then its left, grouped greedily by baseline, each group a line
+    crate::port::cells_drop(seq, 0);
+    crate::port::cells_drop(crefs, 0);
+    crate::port::cells_drop(c, 0);
+    at = crate::port::cells_at(plan, 2 * ns);
+    while at >= 0 {
+        zr = crate::port::cells_at(plan, at);
+        i = crate::port::cells_len(seq);
+        crate::port::cells_push(seq, at);
+        while (i > 0) && (of_later(ofz, crate::port::cells_at(plan, crate::port::cells_at(seq, i - 1)), zr) == 1) {
+            j = crate::port::cells_at(seq, i - 1);
+            crate::port::cells_set(seq, i, j);
+            i -= 1;
+        }
+        crate::port::cells_set(seq, i, at);
+        at = crate::port::cells_at(plan, at + (2 + crate::port::cells_at(plan, at + 1)));
+    }
+    i = 0;
+    ng = 0;
+    while i < crate::port::cells_len(seq) {
+        zr = crate::port::cells_at(plan, crate::port::cells_at(seq, i));
+        x0 = of_zget(ofz, zr, ozf_x0());
+        y0 = of_zget(ofz, zr, ozf_x0() + 1);
+        x1 = of_zget(ofz, zr, ozf_x0() + 2);
+        y1 = of_zget(ofz, zr, ozf_x0() + 3);
+        g = 0;
+        pick = -1;
+        while (g < ng) && (pick < 0) {
+            h = crate::port::cells_at(c, (g * 4) + 3) - crate::port::cells_at(c, (g * 4) + 1);
+            if (y1 - y0) < h {
+                h = y1 - y0;
+            }
+            if (2 * (of_mn(crate::port::cells_at(c, (g * 4) + 3), y1) - of_mx(crate::port::cells_at(c, (g * 4) + 1), y0))) >= h {
+                pick = g;
+            }
+            g += 1;
+        }
+        if pick < 0 {
+            pick = ng;
+            ng += 1;
+            crate::port::cells_push(c, x0);
+            crate::port::cells_push(c, y0);
+            crate::port::cells_push(c, x1);
+            crate::port::cells_push(c, y1);
+        } else {
+            if x0 < crate::port::cells_at(c, pick * 4) {
+                crate::port::cells_set(c, pick * 4, x0);
+            }
+            if y0 < crate::port::cells_at(c, (pick * 4) + 1) {
+                crate::port::cells_set(c, (pick * 4) + 1, y0);
+            }
+            if x1 > crate::port::cells_at(c, (pick * 4) + 2) {
+                crate::port::cells_set(c, (pick * 4) + 2, x1);
+            }
+            if y1 > crate::port::cells_at(c, (pick * 4) + 3) {
+                crate::port::cells_set(c, (pick * 4) + 3, y1);
+            }
+        }
+        crate::port::cells_push(crefs, pick);
+        i += 1;
+    }
+    g = 0;
+    while g < ng {
+        nl = ol_new(lines, page, crate::port::cells_at(c, g * 4), crate::port::cells_at(c, (g * 4) + 1), crate::port::cells_at(c, (g * 4) + 2), crate::port::cells_at(c, (g * 4) + 3), 0, 0, 0, 0, 0, 0, ow_count(words), 0);
+        ol_set(lines, nl, olf_run(), fr);
+        first = ow_count(words);
+        // the group's slots left to right (sorted order breaks a tie); a used slot's group cell becomes -1
+        pick = 0;
+        while pick >= 0 {
+            pick = -1;
+            i = 0;
+            while i < crate::port::cells_len(seq) {
+                if crate::port::cells_at(crefs, i) == g {
+                    if (pick < 0) || (of_zget(ofz, crate::port::cells_at(plan, crate::port::cells_at(seq, i)), ozf_x0()) < of_zget(ofz, crate::port::cells_at(plan, crate::port::cells_at(seq, pick)), ozf_x0())) {
+                        pick = i;
+                    }
+                }
+                i += 1;
+            }
+            if pick >= 0 {
+                of_emit(words, ofz, plan, crate::port::cells_at(seq, pick), fr, nl);
+                crate::port::cells_set(crefs, pick, -1);
+            }
+        }
+        ol_set(lines, nl, lh_count(), ow_count(words) - first);
+        of_fit_line(lines, words, nl, 1);
+        if n2 < sc_sel_max() {
+            crate::port::cells_set(scr, sc_sel_base() + n2, nl);
+            n2 += 1;
+            of_clear_xtra(scr, nl);
+        }
+        g += 1;
+    }
+    j = ol_count(lines) - or_get(runs, fr, orf_lfirst());
+    or_set(runs, fr, orf_lcount(), j);
+    j = ow_count(words) - or_get(runs, fr, orf_wfirst());
+    or_set(runs, fr, orf_wcount(), j);
+    return n2;
 }

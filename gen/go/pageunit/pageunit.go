@@ -6,6 +6,7 @@ package pageunit
 import (
 	"emon/evidence"
 	"emon/health"
+	"emon/ofuse"
 	"emon/pageink"
 	"emon/pdfdoc"
 	"emon/pdfsrc"
@@ -478,7 +479,7 @@ func puScanPixels(i int32, did int32, oid int32, ao int32, pxw int32, pxh int32,
 	return k
 }
 
-func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 int32, obj int32, bx0 int32, by0 int32, bx1 int32, by1 int32, pw int32, ph int32, maskv int32, seals int32, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, mask *port.Cells, scr *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, refs *port.Cells, tlines *port.Cells, cg *port.Cells, inks *port.Cells, comps *port.Cells, rules *port.Cells, prims *port.Cells, tpts *port.Cells, ws *port.Cells, sv *port.Cells, aux *port.Cells, snap *port.Cells, rtp *port.Cells, rn *port.Cells, ri *port.Cells, cs *port.Cells, vr *port.Cells, pc *port.Cells, sg *port.Cells, mem *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells) int32 {
+func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 int32, obj int32, bx0 int32, by0 int32, bx1 int32, by1 int32, pw int32, ph int32, maskv int32, seals int32, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, mask *port.Cells, scr *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, refs *port.Cells, tlines *port.Cells, cg *port.Cells, inks *port.Cells, comps *port.Cells, rules *port.Cells, prims *port.Cells, tpts *port.Cells, ws *port.Cells, sv *port.Cells, aux *port.Cells, snap *port.Cells, rtp *port.Cells, rn *port.Cells, ri *port.Cells, cs *port.Cells, vr *port.Cells, pc *port.Cells, sg *port.Cells, mem *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells, ofz *port.Cells) int32 {
 	// A SCANNED page whose raster is in (the decode or the render under `did`, its answer at `ad`; `dpi100` its resolution, `obj` the image's object, the page
 	// region it shows is (`bx0` `by0`)-(`bx1` `by1`) of a page `pw` x `ph`, all centipoints): the OCR of the bitmap, the ink layers of the bitmap and the
 	// targeted passes they and the first pass call for, then the lines the pipeline reads (`rt-adopt`). With no pixel in the decode answer (a transcript recorded
@@ -607,6 +608,10 @@ func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 in
 		nsel = sealpx.SxDropLines(scr, nsel, olines, owords, s1)
 		nsel = sigpx.SpDropLines(scr, nsel, olines, owords, s5)
 	}
+	// RC5c (D731): guarded fusion of the recorded readings of an upright image page the receipt detector fired on, with a receipt keyword (`of-fuse`)
+	if (port.CellsAt(rtp, retarget.RtpPrimary()) == run) || (port.CellsAt(rtp, retarget.RtpQ()) == 0) {
+		nsel = ofuse.OfFuse(i+1, maskv, port.CellsAt(rtp, retarget.RtpTrigger()), oruns, olines, owords, etext, rules, scr, nsel, ofz, s1, s2, s3, s4, s5, s6, rn, ri, cs, vr)
+	}
 	retarget.RtUpright(rtp, run, epages, i+1)
 	rotmed = evidence.EvRotMedian(olines, l0, nl)
 	scan.ScEmitSel(olines, owords, osyms, nsel, i+1, rotmed, scr, words, lines, etext, rules, comps, inks)
@@ -617,7 +622,7 @@ func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 in
 	return plan.UsDone()
 }
 
-func puRunScan(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, mask *port.Cells, scr *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, refs *port.Cells, tlines *port.Cells, cg *port.Cells, inks *port.Cells, comps *port.Cells, rules *port.Cells, prims *port.Cells, tpts *port.Cells, ws *port.Cells, sv *port.Cells, aux *port.Cells, snap *port.Cells, rtp *port.Cells, rn *port.Cells, ri *port.Cells, cs *port.Cells, vr *port.Cells, pc *port.Cells, sg *port.Cells, mem *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells) int32 {
+func puRunScan(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, mask *port.Cells, scr *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, refs *port.Cells, tlines *port.Cells, cg *port.Cells, inks *port.Cells, comps *port.Cells, rules *port.Cells, prims *port.Cells, tpts *port.Cells, ws *port.Cells, sv *port.Cells, aux *port.Cells, snap *port.Cells, rtp *port.Cells, rn *port.Cells, ri *port.Cells, cs *port.Cells, vr *port.Cells, pc *port.Cells, sg *port.Cells, mem *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells, ofz *port.Cells) int32 {
 	// A SCANNED page of a PDF: `decode` of its stream (the host reads the DCT bytes in place) or, in the plan's render mode (D564: an image in any other codec),
 	// `render` of the page, then `pu-scan-core`: the OCR of the bitmap and what it calls for. A failed raster is `us-done`: the page is left as the text layer made it.
 	var did int32 = plan.PuId(i, plan.PiDecode())
@@ -634,10 +639,10 @@ func puRunScan(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells
 	if plan.AnOk(ans, ad) != 1 {
 		return plan.UsDone()
 	}
-	return PuScanCore(i, input, fuse, did, ad, int32(((int64(plan.AnArg(ans, ad, 0))*int64(720000))+int64(wp/2))/int64(wp)), PuField(pl, i, 1), PuField(pl, i, 4), PuField(pl, i, 5), PuField(pl, i, 6), PuField(pl, i, 7), PuField(pl, i, 8), PuField(pl, i, 9), 2, 1, ans, rq, loc, bms, mask, scr, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, refs, tlines, cg, inks, comps, rules, prims, tpts, ws, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6)
+	return PuScanCore(i, input, fuse, did, ad, int32(((int64(plan.AnArg(ans, ad, 0))*int64(720000))+int64(wp/2))/int64(wp)), PuField(pl, i, 1), PuField(pl, i, 4), PuField(pl, i, 5), PuField(pl, i, 6), PuField(pl, i, 7), PuField(pl, i, 8), PuField(pl, i, 9), 2, 1, ans, rq, loc, bms, mask, scr, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, refs, tlines, cg, inks, comps, rules, prims, tpts, ws, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6, ofz)
 }
 
-func PuRunPdf(i int32, input int32, policy int32, pl *port.Cells, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, mask *port.Cells, scr *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, fuse int32, fw *port.Cells, fl *port.Cells, hl *port.Cells, refs *port.Cells, cg *port.Cells, tlines *port.Cells, xscr *port.Cells, xgp *port.Cells, xdp *port.Cells, xta *port.Cells, xtb *port.Cells, xtt *port.Cells, inks *port.Cells, comps *port.Cells, rules *port.Cells, prims *port.Cells, tpts *port.Cells, ws *port.Cells, ws2 *port.Cells, sv *port.Cells, aux *port.Cells, snap *port.Cells, rtp *port.Cells, rn *port.Cells, ri *port.Cells, cs *port.Cells, vr *port.Cells, pc *port.Cells, sg *port.Cells, mem *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells) int32 {
+func PuRunPdf(i int32, input int32, policy int32, pl *port.Cells, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, mask *port.Cells, scr *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, fuse int32, fw *port.Cells, fl *port.Cells, hl *port.Cells, refs *port.Cells, cg *port.Cells, tlines *port.Cells, xscr *port.Cells, xgp *port.Cells, xdp *port.Cells, xta *port.Cells, xtb *port.Cells, xtt *port.Cells, inks *port.Cells, comps *port.Cells, rules *port.Cells, prims *port.Cells, tpts *port.Cells, ws *port.Cells, ws2 *port.Cells, sv *port.Cells, aux *port.Cells, snap *port.Cells, rtp *port.Cells, rn *port.Cells, ri *port.Cells, cs *port.Cells, vr *port.Cells, pc *port.Cells, sg *port.Cells, mem *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells, ofz *port.Cells) int32 {
 	// The unit of PDF page `i` (0-based). A `pk-scan` page asks `decode` of its stream's bytes (id `pi-decode`), then OCR
 	// of the bitmap (id `pi-ocr`); where the answers are in its evidence and lines are appended to `words` and `lines`
 	// and `mask[i]` is 2 (D212). A `pk-born` page asks what its plan says (`rp-plan`: `pu-run-born`). Any other page asks nothing and is
@@ -652,5 +657,5 @@ func PuRunPdf(i int32, input int32, policy int32, pl *port.Cells, ans *port.Cell
 	if PuKind(pl, i) != PkScan() {
 		return plan.UsDone()
 	}
-	return puRunScan(i, input, fuse, pl, ans, rq, loc, bms, mask, scr, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, refs, tlines, cg, inks, comps, rules, prims, tpts, ws, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6)
+	return puRunScan(i, input, fuse, pl, ans, rq, loc, bms, mask, scr, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, refs, tlines, cg, inks, comps, rules, prims, tpts, ws, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6, ofz)
 }

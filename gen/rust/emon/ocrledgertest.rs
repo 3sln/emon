@@ -247,3 +247,51 @@ fn test_empty_diagnostic_counts_only_serialized_page_text() {
     crate::testport::assert_eq(oc_page_text(nodes, regions, text, 1, bag, tokens, plain), 1, "actual furniture text prevents an empty diagnostic");
     crate::testport::assert_eq(oc_page_text(nodes, regions, text, 2, bag, tokens, plain), 0, "another page has its own text population");
 }
+#[test]
+fn test_fused_copies_are_not_audited_twice_and_the_displaced_word_keeps_a_fate() {
+    // D731: run 0 read B (selected, then displaced), run 1 read A (chosen), run 2 is the fused run whose word copies run 1's. The Model holds A once.
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mask: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let bag: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tokens: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let norm: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let raw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    crate::port::cells_push(mask, 1);
+    crate::port::cells_push(et, 66);
+    crate::port::cells_push(et, 65);
+    crate::port::cells_push(text, 65);
+    let n: i32 = node_new(nodes, nk_paragraph(), 0);
+    node_set_text(nodes, n, 0, 1);
+    node_add_region(nodes, regions, n, 1, 0, 0, 100, 100);
+    or_new(runs, 1, 0);
+    or_set(runs, 0, orf_pass(), op_first());
+    or_set(runs, 0, orf_wfirst(), 0);
+    or_set(runs, 0, orf_wcount(), 1);
+    or_new(runs, 1, 0);
+    or_set(runs, 1, orf_pass(), op_body_ink());
+    or_set(runs, 1, orf_wfirst(), 1);
+    or_set(runs, 1, orf_wcount(), 1);
+    or_new(runs, 1, 0);
+    or_set(runs, 2, orf_pass(), op_fused());
+    or_set(runs, 2, orf_wfirst(), 2);
+    or_set(runs, 2, orf_wcount(), 1);
+    ow_new(words, 1, 0, 0, 100, 100, 0, 100, 100, 100, 0, 0, 0, 1, 0, 400, -1);
+    ow_new(words, 1, 0, 0, 100, 100, 0, 100, 100, 100, 0, 0, 1, 1, 0, 900, -1);
+    ow_new(words, 1, 0, 0, 100, 100, 0, 100, 100, 100, 0, 0, 1, 1, 0, 900, -1);
+    ow_set(words, 2, owf_from(), 2);
+    crate::testport::assert_eq(oc_account(runs, words, et, nodes, regions, mask, ledger, text, bag, tokens, norm, tmp, raw, rt), 1, "only the displaced reading is residual");
+    crate::testport::assert_eq(ledger_count(ledger), 1, "the copy neither consumes nor claims the Model's A");
+    crate::testport::assert_eq(ledger_text_len(ledger, 0), 1, "the displaced word's own text");
+}

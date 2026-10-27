@@ -1591,7 +1591,7 @@ pub fn sc_xtra_count(olines: &mut crate::port::Cells, owords: &mut crate::port::
     }
     return k;
 }
-pub(crate) fn sc_line_words(olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, l: i32, xl: i32, mut scr: &mut crate::port::Cells) -> i32 {
+pub fn sc_line_words(olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, l: i32, xl: i32, mut scr: &mut crate::port::Cells) -> i32 {
     // The words line `l` is emitted with, in the order along it, written to `scr` from `sc-fate-base`: its own, and with them those of the body-ink line `xl` (-1 none) that
     // lie over none of its own (`sc-xtra-ok`). Answers how many; 0 when they are more than the scratch holds (the line is then emitted as it is, with nothing added).
     let fb: i32 = sc_fate_base();
@@ -1906,6 +1906,104 @@ pub(crate) fn sc_flag(mut owords: &mut crate::port::Cells, w: i32, bit: i32) -> 
     ow_set(owords, w, owf_flags(), v);
     return 0;
 }
+pub(crate) fn sc_drop_fate(owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, rules: &mut crate::port::Cells, page: i32, m: i32, w: i32, lmean: i32, mx: i32, tch: i32, floor: i32) -> i32 {
+    // Whether word `w` of a line of `m` words (mean confidence `lmean`, best `mx`, `tch` characters in all) is no text: 0 it stays, 1 garbage, 2 a rule's ghost, 3 a dot leader
+    // (`sc-fates`' first four fates, which read nothing but the word, its line and the page's rules, and change nothing). D731 shares it with `sc-kept-words`.
+    let ts: i32 = ow_get(owords, w, hd_tstart());
+    let n: i32 = ow_get(owords, w, hd_tlen());
+    let conf: i32 = ow_get(owords, w, hd_conf());
+    let mut f: i32 = 0;
+    let mut c: i32 = 0;
+    if sc_admit_word(conf, floor) == 0 {
+        f = 1;
+    }
+    // a dot leader
+    if sc_leader(etext, ts, n) == 1 {
+        f = 3;
+    }
+    // An isolated punctuation speck at most one point each way is no text even when the engine is confident. Keep its evidence for the ledger.
+    if (f == 0) && ((m == 1) && (n == 1)) {
+        if ((ow_get(owords, w, hd_x1()) - ow_get(owords, w, hd_x0())) <= 100) && ((ow_get(owords, w, hd_y1()) - ow_get(owords, w, hd_y0())) <= 100) {
+            c = crate::port::cells_at(etext, ts);
+            if (c == 46) || ((c == 44) || ((c == 39) || ((c == 96) || (c == 183)))) {
+                f = 1;
+            }
+        }
+    }
+    // texture: a line of three words or more, all of them unsure
+    if f == 0 {
+        if (m >= 3) && ((lmean <= sc_lo_conf()) && ((mx <= 450) && (tch <= (4 * m)))) {
+            f = 1;
+        }
+    }
+    // very unsure and no word, alone or among such words
+    if f == 0 {
+        if conf <= sc_lo_conf() {
+            if sc_implausible(etext, ts, n) == 1 {
+                if (m <= 2) || (lmean <= 450) {
+                    f = 1;
+                }
+            }
+        }
+    }
+    // a rule read as a character
+    if (f == 0) && (n == 1) {
+        c = crate::port::cells_at(etext, ts);
+        if (c == 124) || ((c == 73) || ((c == 108) || (c == 33))) {
+            if sc_on_vrule(rules, page, (ow_get(owords, w, hd_x0()) + ow_get(owords, w, hd_x1())) / 2, (ow_get(owords, w, hd_y0()) + ow_get(owords, w, hd_y1())) / 2, sc_rule_slack()) == 1 {
+                f = 2;
+            }
+        }
+    }
+    return f;
+}
+pub fn sc_kept_words(mut owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, rules: &mut crate::port::Cells, page: i32, m: i32, mark: i32, mut scr: &mut crate::port::Cells) -> i32 {
+    // D731: the `m` words of a line listed at `sc-fate-base` (`sc-line-words`) less the ones `sc-fates` would keep out as no text, packed to the front;
+    // answers how many stay. Nothing is corrected and no text is appended; with `mark` 1 the words kept out are flagged in `owords` as `sc-fates` flags them.
+    let fb: i32 = sc_fate_base();
+    let mut i: i32 = 0;
+    let mut w: i32 = 0;
+    let mut conf: i32 = 0;
+    let mut sum: i32 = 0;
+    let mut tch: i32 = 0;
+    let mut mx: i32 = 0;
+    let mut lmean: i32 = 0;
+    let mut f: i32 = 0;
+    let mut kept: i32 = 0;
+    if m <= 0 {
+        return 0;
+    }
+    while i < m {
+        w = crate::port::cells_at(scr, fb + i);
+        conf = ow_get(owords, w, hd_conf());
+        sum += conf;
+        tch += ow_get(owords, w, hd_tlen());
+        if conf > mx {
+            mx = conf;
+        }
+        i += 1;
+    }
+    lmean = sum / m;
+    i = 0;
+    while i < m {
+        w = crate::port::cells_at(scr, fb + i);
+        f = sc_drop_fate(owords, etext, rules, page, m, w, lmean, mx, tch, crate::port::cells_at(scr, sc_admit_floor()));
+        if f == 0 {
+            crate::port::cells_set(scr, fb + kept, w);
+            kept += 1;
+        }
+        if mark == 1 {
+            if (f == 1) || (f == 3) {
+                sc_flag(owords, w, oe_garbage());
+            }
+            if f == 2 {
+                sc_flag(owords, w, oe_rule_ghost());
+            }
+        }
+        i += 1;
+    }
+    return kept;
+}
 pub(crate) fn sc_fates(mut owords: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, osyms: &mut crate::port::Cells, rules: &mut crate::port::Cells, comps: &mut crate::port::Cells, inks: &mut crate::port::Cells, page: i32, m: i32, mut scr: &mut crate::port::Cells) -> i32 {
     // What becomes of each of the `m` words of a line (listed at `sc-fate-base`): 0 it stays, 1 it is garbage (confidence at most `sc-lo-conf` and implausible characters (`sc-implausible`) on a line of
     // two words or fewer or of a mean confidence of 450 or less; or a word of a line of three or more whose mean is at most `sc-lo-conf`, best at most 450 and words of four characters or fewer on average: texture), 2 it is the ghost of a rule (a lone bar, `I`, `l` or `!`
@@ -1956,50 +2054,9 @@ pub(crate) fn sc_fates(mut owords: &mut crate::port::Cells, mut etext: &mut crat
         ts = ow_get(owords, w, hd_tstart());
         n = ow_get(owords, w, hd_tlen());
         conf = ow_get(owords, w, hd_conf());
-        f = 0;
-        if sc_admit_word(conf, crate::port::cells_at(scr, sc_admit_floor())) == 0 {
-            f = 1;
-        }
+        f = sc_drop_fate(owords, etext, rules, page, m, w, lmean, mx, tch, crate::port::cells_at(scr, sc_admit_floor()));
         crate::port::cells_set(scr, fb + ((2 * fm) + i), -1);
         crate::port::cells_set(scr, fb + ((3 * fm) + i), 0);
-        // a dot leader
-        if sc_leader(etext, ts, n) == 1 {
-            f = 3;
-        }
-        // An isolated punctuation speck at most one point each way is no text even when the engine is confident. Keep its evidence for the ledger.
-        if (f == 0) && ((m == 1) && (n == 1)) {
-            if ((ow_get(owords, w, hd_x1()) - ow_get(owords, w, hd_x0())) <= 100) && ((ow_get(owords, w, hd_y1()) - ow_get(owords, w, hd_y0())) <= 100) {
-                c = crate::port::cells_at(etext, ts);
-                if (c == 46) || ((c == 44) || ((c == 39) || ((c == 96) || (c == 183)))) {
-                    f = 1;
-                }
-            }
-        }
-        // texture: a line of three words or more, all of them unsure
-        if f == 0 {
-            if (m >= 3) && ((lmean <= sc_lo_conf()) && ((mx <= 450) && (tch <= (4 * m)))) {
-                f = 1;
-            }
-        }
-        // very unsure and no word, alone or among such words
-        if f == 0 {
-            if conf <= sc_lo_conf() {
-                if sc_implausible(etext, ts, n) == 1 {
-                    if (m <= 2) || (lmean <= 450) {
-                        f = 1;
-                    }
-                }
-            }
-        }
-        // a rule read as a character
-        if (f == 0) && (n == 1) {
-            c = crate::port::cells_at(etext, ts);
-            if (c == 124) || ((c == 73) || ((c == 108) || (c == 33))) {
-                if sc_on_vrule(rules, page, (ow_get(owords, w, hd_x0()) + ow_get(owords, w, hd_x1())) / 2, (ow_get(owords, w, hd_y0()) + ow_get(owords, w, hd_y1())) / 2, sc_rule_slack()) == 1 {
-                    f = 2;
-                }
-            }
-        }
         // a rule's stroke glued to the end of a word
         if (f == 0) && (n >= 2) {
             if crate::port::cells_at(etext, ts + (n - 1)) == 124 {
@@ -2973,6 +3030,10 @@ pub fn sc_trust(mut nodes: &mut crate::port::Cells, regions: &mut crate::port::C
                     cx = (ow_get(owords, w, hd_x0()) + ow_get(owords, w, hd_x1())) / 2;
                     cy = (ow_get(owords, w, hd_y0()) + ow_get(owords, w, hd_y1())) / 2;
                     eligible = 1;
+                    // D731: a fused copy is not another reading of its word
+                    if ow_get(owords, w, owf_from()) > 0 {
+                        eligible = 0;
+                    }
                     if rotated == 1 {
                         run = ow_get(owords, w, owf_run());
                         eligible = 0;

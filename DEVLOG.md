@@ -12527,3 +12527,45 @@ This completes candidate primitives, not production activation. There is still n
 Receipt reading eligibility uses Unicode letter/number ranges generated from the repository's UnicodeData.txt rather than an ASCII approximation or host-specific character library. `kin/scripts/ofuse-data.py --check` verifies those ranges during `bb unit`; its regeneration mode writes only the delimited table. Numeric format classification reuses the existing decimal-digit validator. The new generator has gate coverage. All four language trees are regenerated from the same kin sources; native and gate outcomes are recorded in the RC5b report and scratch logs.
 
 - [ ] **Signed off** (maintainer)
+
+### D731 — RC5c: guarded recorded-reading fusion is active on gated receipt pages
+
+`of-fuse` (kin/ofuse.kin) runs in `pu-scan-core` once a scanned page's selection is final (after adoption and the seal and signature line drops) and before `sc-emit-sel`. It fires only on an image input page read upright (not a PDF scan, not a page read from its turned view) whose receipt detector lane is photo or thermal and whose recorded words include a receipt keyword (`of-active`, `of-page-keyword`); any other page is left byte for byte as it was and no scratch is touched. It reads only recorded evidence and asks for nothing. The distinct readings (`of-readings`) and the selected words are aligned at half the smaller box (`of-align`), each slot's candidates are aggregated per distinct reading (`of-candidates`) and decided by the D718/D723 guarded policy (`of-choice`: margin 300, insertion 700, at most four selected words a slot, a format-valid number never replaced, alpha words only by dictionary or agreement, never a deletion), with ties by votes, confidence, then run order. A replacement takes the first selected word's place (the slot's other selected words go with it); an insertion follows the rightmost selected word on its baseline, else it opens a new line (greedy baseline groups, left to right) after the page's last selected line. A changed line is read from a synthetic run of pass `fused`; every unchanged line keeps its own row. This is the full scope of D722's remaining items 4–6: no narrower first version was needed.
+
+- [ ] **Signed off** (maintainer)
+
+### D732 — Fused copies point back to their sources; one `ofuse` row per considered slot
+
+A fused line's words are `of-copy` copies of recorded `owords` rows: same text span, box, symbols, flags and confidence, run and line the fused run's, no feature row (`ev-check` 102 requires a feature row to name one word). Oword cell 27 (`owf-from`, formerly spare) holds the source row + 1, so every existing word's 0 means none; the dump prints it as `from` (field kind 14, omitted when 0), so no existing dump changes. `op-fused` (12) is the run's pass; its request is -1. The decision rows are a new `EvArenas` field `ofuse` (stride 16: page, slot box, first selected word and count, the copies chosen, rule, votes, selected-word votes, silent full readings, margin, a reading bit set, op), dumped by `ev-emit-ofuse` as a member after the arenas only when non-empty (raster documents), so every non-fused dump is byte-identical. It is not an `ea` arena. Every input is recorded evidence and every tie-break fixed, so replay rebuilds identical rows, copies and Models (law and the receipt live/replay check). SPEC 8.4.4 documents the pass, `from` and the member.
+
+- [ ] **Signed off** (maintainer)
+
+### D733 — Incumbents and readings are what the emission keeps
+
+The first activation measured SROIE precision 0.67682, under RC3's 0.678611 floor: on sroie_00280 one replaced word raised its line's mean confidence above `sc-fates`' texture threshold, and 35 junk words its original line had kept out were emitted. The design's prototype fused the emitted words layer, where those words were already gone. `sc-fates`' four no-text fates now live in a pure `sc-drop-fate`, shared by `sc-fates` (unchanged results) and `sc-kept-words`, which `of-fuse` applies to every selected line: kept-out words are neither incumbents nor copied, and they are flagged now exactly as the emission flags them (the same words of the same lines), so their ledger fate is unchanged and they are no reading of their own either. With this, all receipt aggregates match the design's prototype targets (D735).
+
+- [ ] **Signed off** (maintainer)
+
+### D734 — D699 and other consumers of OCR words see copies once
+
+`oc-account` skips `fused` runs: copies neither consume nor claim the page's occurrence budget, and every original attempt — the displaced selected word and every rejected alternative — is still audited and ledgered `ocr-unrepresented` when it is not in the Model (law). `sc-trust` and `sg-legible-words` ignore copies, so node confidence and signature legibility do not double count. `tools/receipts` counts OCR runs without the fused run, reports `fused_slots`, `fused_replacements`, `fused_insertions` and `fused_new_lines` from the `ofuse` rows, and computes OCR presence from recorded words only.
+
+- [ ] **Signed off** (maintainer)
+
+### D735 — RC5c measured: the design's gains hold; guards hold; receipt baseline refreshed
+
+Fresh live `bb receipts --n 60 --bounds` (Tesseract 5.5.3), against the RC3 baseline:
+- CORD word recall .506396 → .553047, precision .397989 → .420000, numeric 221 → 247/608, decimal 118 → 128/354, line items 17 → 21/151; selected numeric join 239 → 265, decimal join 131 → 141, selected items 25 → 35.
+- SROIE recall .699730 → .703567, precision .678611 → .681674 (above RC3's floor), numeric 1310 → 1319/2343, decimal 489 → 491/845; selected numeric join 1368 → 1377; companies/addresses completeness 35/19 unchanged.
+- Tokens lost/gained CORD 29/88 (2 gold lost), SROIE 51/58 (13 gold lost); documents better/worse 20/1 and 15/2. OCR requests unchanged (466 SROIE, 605 CORD); OCR-present-silent words unchanged (214, 20). 49 SROIE and 44 CORD pages pass the gate; 22 and 28 change.
+- All 120 live bundles replay byte for byte from their transcripts; totals, bounds and non-CPU metadata equal.
+
+Guards, each document live with the candidate (recording) and its transcript replayed by a HEAD `aedbde7f` build, compared byte for byte: of the 54 named controls (both Berkshire documents included) 51 bundles are identical; controls 10 and 11 differ only by the `ofuse` member (Models identical, nothing fused); control 07 loses nothing and gains 6 words, all gold and verbatim (gold matched 6 → 12), the D716 allowance. RVL 160 and XFUND 40 pools: 200/200 bundles identical (7 and 1 detector triggers, none keyword-gated). The retarget fixture `receipt-photo` (a synthetic receipt-classified page) fuses two words, both gold corrections; its digest is re-derived. Accuracy: 3,449 metrics, none regressed, all 232 Models identical across hosts; no ratchet changed. `test/receipts/baseline.json` now holds this run (deltas zero against it).
+
+- [ ] **Signed off** (maintainer)
+
+### D736 — RC5c differences from the prototype, and what remains
+
+Integrated fusion edits the selection before emission rather than the emitted layer, so: (1) a selected line that changes is emitted as a revised line, and `sc-fates`' safe corrections apply to its copies as to any OCR word (one CORD insertion is a recorded amount with its thousands separator corrected); (2) new lines follow the page's last selected line and pass through the document stages, so an insertion inside a kept seal is kept out of the body by the seal stage (one CORD gold word the prototype counted); (3) the 25×-median box bound uses integer centipoint areas over the selected and reading words, so a box at the bound can fall either side of it (one CORD slot). PDF scans and turned pages are outside the gate. Line-item and total grouping remains the next lever (D721): fused tokens still land in emon's existing lines.
+
+- [ ] **Signed off** (maintainer)

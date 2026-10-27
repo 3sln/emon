@@ -1187,7 +1187,7 @@ fn test_every_cell_of_every_stride_is_printed_or_spare() {
             if (kind == 6) || ((kind == 7) || ((kind == 12) || (kind == 13))) {
                 cells += 2;
             }
-            if (kind == 1) || ((kind == 2) || ((kind == 5) || ((kind == 8) || ((kind == 9) || (kind == 11))))) {
+            if (kind == 1) || ((kind == 2) || ((kind == 5) || ((kind == 8) || ((kind == 9) || ((kind == 11) || (kind == 14)))))) {
                 cells += 1;
             }
             r += 1;
@@ -1232,7 +1232,7 @@ fn test_every_cell_of_every_stride_is_printed_or_spare() {
             crate::testport::assert_eq(EV_STRIDES[(15) as usize] - cells, 1, "olines: one spare");
         }
         if ea == 17 {
-            crate::testport::assert_eq(EV_STRIDES[(16) as usize] - cells, 1, "owords: one spare");
+            crate::testport::assert_eq(cells, 28, "owords: every cell (D731 printed a fused copy's source, `from`)");
         }
         if ea == 18 {
             crate::testport::assert_eq(EV_STRIDES[(17) as usize] - cells, 3, "osyms: three spare");

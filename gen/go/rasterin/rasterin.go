@@ -213,7 +213,7 @@ func RsDoc(src *port.Src, input int32, fmt int32, ans *port.Cells, rq *port.Cell
 	return 0
 }
 
-func RsPage(f int32, input int32, nbytes int32, policy int32, fuse int32, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, mask *port.Cells, scr *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, refs *port.Cells, tlines *port.Cells, cg *port.Cells, inks *port.Cells, comps *port.Cells, rules *port.Cells, prims *port.Cells, tpts *port.Cells, ws *port.Cells, sv *port.Cells, aux *port.Cells, snap *port.Cells, rtp *port.Cells, rn *port.Cells, ri *port.Cells, cs *port.Cells, vr *port.Cells, pc *port.Cells, sg *port.Cells, mem *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells) int32 {
+func RsPage(f int32, input int32, nbytes int32, policy int32, fuse int32, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, mask *port.Cells, scr *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, refs *port.Cells, tlines *port.Cells, cg *port.Cells, inks *port.Cells, comps *port.Cells, rules *port.Cells, prims *port.Cells, tpts *port.Cells, ws *port.Cells, sv *port.Cells, aux *port.Cells, snap *port.Cells, rtp *port.Cells, rn *port.Cells, ri *port.Cells, cs *port.Cells, vr *port.Cells, pc *port.Cells, sg *port.Cells, mem *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells, ofz *port.Cells) int32 {
 	// `fuse` is the page unit's flags (`emon.pageunit`'s `pu-px` and `pu-dry`: bit 2 the hidden setting `no-retarget`, bit 4 a DRY attempt, P10.2: it stops
 	// before the write, having asked what the rounds up to there ask).
 	// The unit of frame `f` (0-based) of a raster input: its pixels (`decode` id `pi-decode`, a whole image file, whose
@@ -237,5 +237,5 @@ func RsPage(f int32, input int32, nbytes int32, policy int32, fuse int32, ans *p
 	var eff int32 = rsEffDpi100(plan.AnArg(ans, ad, 3))
 	var wc int32 = RsCpt(plan.AnArg(ans, ad, 0), eff)
 	var hc int32 = RsCpt(plan.AnArg(ans, ad, 1), eff)
-	return pageunit.PuScanCore(f, input, fuse, did, ad, eff, 0, 0, 0, wc, hc, wc, hc, 1, 1, ans, rq, loc, bms, mask, scr, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, refs, tlines, cg, inks, comps, rules, prims, tpts, ws, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6)
+	return pageunit.PuScanCore(f, input, fuse, did, ad, eff, 0, 0, 0, wc, hc, wc, hc, 1, 1, ans, rq, loc, bms, mask, scr, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, refs, tlines, cg, inks, comps, rules, prims, tpts, ws, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6, ofz)
 }

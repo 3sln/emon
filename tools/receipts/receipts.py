@@ -123,6 +123,9 @@ def completeness_bounds(g, ev, entities, items):
             result[name][kind+'_join_oracle']=sum((collections.Counter(target)&(candidates|available)).values())
     return result
 
+def recorded_words(ev):
+    # D731: a fused copy (`from`) repeats a recorded word; OCR presence counts the recorded readings only.
+    return [w for w in ev.get('owords',[]) if 'from' not in w]
 def score(g,model,ev,entities,items):
     us=units(model); expected=words(text(g['model']['body'])); actual=words(' '.join(text(root) for root in [model.get('body',{})]+model.get('furniture',[])))
     dropped=words(' '.join(text(x) for x in model.get('dropped',[])))
@@ -137,8 +140,8 @@ def score(g,model,ev,entities,items):
         line_items_ok=sum(intact(' '.join(item),row_us) or (intact(' '.join(item),line_us) and intact(' '.join(item),us)) for item in items),
         silent_regions=sum(bool(words(text(n))) and not overlap(words(text(n)),actual+dropped) for n in g['model']['body'].get('children',[])),
         numeric=len(nums(expected)),numeric_ok=overlap(nums(expected),nums(actual)),
-        ocr_missing_words=sum((gc-collections.Counter(words(' '.join(w.get('text','') for w in ev.get('owords',[]))))).values()),
-        ocr_present_silent_words=sum(((gc-covered)&collections.Counter(words(' '.join(w.get('text','') for w in ev.get('owords',[]))))).values()),
+        ocr_missing_words=sum((gc-collections.Counter(words(' '.join(w.get('text','') for w in recorded_words(ev))))).values()),
+        ocr_present_silent_words=sum(((gc-covered)&collections.Counter(words(' '.join(w.get('text','') for w in recorded_words(ev))))).values()),
         skewed_lines=sum(angle(l.get('rot',0))>2 for l in ev.get('lines',[])),
         rotation_retry_runs=sum(r.get('pass')=='re-rotated' for r in ev.get('oruns',[])),
         rotated_pages=sum(p.get('rot',0)!=0 for p in model.get('pages',[])))
@@ -161,7 +164,10 @@ def input_views(ev):
         if 'receipt-adopted' in f:
             adopted=('faint-psm11' if run.get('pass')=='receipt-rescue' else
                      'photo-sauvola' if 'receipt-photo' in f else 'thermal-gamma')
-    return dict(ocr_runs=len(runs), receipt_reads=len(receipt),
+    fusion=ev.get('ofuse',[])
+    ops=collections.Counter(z.get('op','keep') for z in fusion)
+    return dict(ocr_runs=sum(r.get('pass')!='fused' for r in runs), receipt_reads=len(receipt),
+                fused_slots=len(fusion), fused_replacements=ops['replace'], fused_insertions=ops['insert'], fused_new_lines=ops['newline'],
                 receipt_rescue_reads=sum(r.get('pass')=='receipt-rescue' for r in receipt),
                 receipt_trigger='photo' if any('receipt-photo' in f for f in all_flags) else
                                 'thermal' if any('receipt-thermal' in f for f in all_flags) else 'none',

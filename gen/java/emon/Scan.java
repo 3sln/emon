@@ -1901,6 +1901,104 @@ public final class Scan {
         Evidence.owSet(owords, w, Evidence.owfFlags(), v);
         return 0;
     }
+    public static int scDropFate(emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Cells rules, int page, int m, int w, int lmean, int mx, int tch, int floor) {
+        // Whether word `w` of a line of `m` words (mean confidence `lmean`, best `mx`, `tch` characters in all) is no text: 0 it stays, 1 garbage, 2 a rule's ghost, 3 a dot leader
+        // (`sc-fates`' first four fates, which read nothing but the word, its line and the page's rules, and change nothing). D731 shares it with `sc-kept-words`.
+        int ts = Evidence.owGet(owords, w, Evidence.hdTstart());
+        int n = Evidence.owGet(owords, w, Evidence.hdTlen());
+        int conf = Evidence.owGet(owords, w, Evidence.hdConf());
+        int f = 0;
+        int c = 0;
+        if (scAdmitWord(conf, floor) == 0) {
+            f = 1;
+        }
+        // a dot leader
+        if (scLeader(etext, ts, n) == 1) {
+            f = 3;
+        }
+        // An isolated punctuation speck at most one point each way is no text even when the engine is confident. Keep its evidence for the ledger.
+        if ((f == 0) && ((m == 1) && (n == 1))) {
+            if (((Evidence.owGet(owords, w, Evidence.hdX1()) - Evidence.owGet(owords, w, Evidence.hdX0())) <= 100) && ((Evidence.owGet(owords, w, Evidence.hdY1()) - Evidence.owGet(owords, w, Evidence.hdY0())) <= 100)) {
+                c = emon.Port.cellsAt(etext, ts);
+                if ((c == 46) || ((c == 44) || ((c == 39) || ((c == 96) || (c == 183))))) {
+                    f = 1;
+                }
+            }
+        }
+        // texture: a line of three words or more, all of them unsure
+        if (f == 0) {
+            if ((m >= 3) && ((lmean <= scLoConf()) && ((mx <= 450) && (tch <= (4 * m))))) {
+                f = 1;
+            }
+        }
+        // very unsure and no word, alone or among such words
+        if (f == 0) {
+            if (conf <= scLoConf()) {
+                if (scImplausible(etext, ts, n) == 1) {
+                    if ((m <= 2) || (lmean <= 450)) {
+                        f = 1;
+                    }
+                }
+            }
+        }
+        // a rule read as a character
+        if ((f == 0) && (n == 1)) {
+            c = emon.Port.cellsAt(etext, ts);
+            if ((c == 124) || ((c == 73) || ((c == 108) || (c == 33)))) {
+                if (scOnVrule(rules, page, (Evidence.owGet(owords, w, Evidence.hdX0()) + Evidence.owGet(owords, w, Evidence.hdX1())) / 2, (Evidence.owGet(owords, w, Evidence.hdY0()) + Evidence.owGet(owords, w, Evidence.hdY1())) / 2, scRuleSlack()) == 1) {
+                    f = 2;
+                }
+            }
+        }
+        return f;
+    }
+    public static int scKeptWords(emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Cells rules, int page, int m, int mark, emon.Port.Cells scr) {
+        // D731: the `m` words of a line listed at `sc-fate-base` (`sc-line-words`) less the ones `sc-fates` would keep out as no text, packed to the front;
+        // answers how many stay. Nothing is corrected and no text is appended; with `mark` 1 the words kept out are flagged in `owords` as `sc-fates` flags them.
+        int fb = scFateBase();
+        int i = 0;
+        int w = 0;
+        int conf = 0;
+        int sum = 0;
+        int tch = 0;
+        int mx = 0;
+        int lmean = 0;
+        int f = 0;
+        int kept = 0;
+        if (m <= 0) {
+            return 0;
+        }
+        while (i < m) {
+            w = emon.Port.cellsAt(scr, fb + i);
+            conf = Evidence.owGet(owords, w, Evidence.hdConf());
+            sum += conf;
+            tch += Evidence.owGet(owords, w, Evidence.hdTlen());
+            if (conf > mx) {
+                mx = conf;
+            }
+            i += 1;
+        }
+        lmean = sum / m;
+        i = 0;
+        while (i < m) {
+            w = emon.Port.cellsAt(scr, fb + i);
+            f = scDropFate(owords, etext, rules, page, m, w, lmean, mx, tch, emon.Port.cellsAt(scr, scAdmitFloor()));
+            if (f == 0) {
+                emon.Port.cellsSet(scr, fb + kept, w);
+                kept += 1;
+            }
+            if (mark == 1) {
+                if ((f == 1) || (f == 3)) {
+                    scFlag(owords, w, Evidence.oeGarbage());
+                }
+                if (f == 2) {
+                    scFlag(owords, w, Evidence.oeRuleGhost());
+                }
+            }
+            i += 1;
+        }
+        return kept;
+    }
     public static int scFates(emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Cells osyms, emon.Port.Cells rules, emon.Port.Cells comps, emon.Port.Cells inks, int page, int m, emon.Port.Cells scr) {
         // What becomes of each of the `m` words of a line (listed at `sc-fate-base`): 0 it stays, 1 it is garbage (confidence at most `sc-lo-conf` and implausible characters (`sc-implausible`) on a line of
         // two words or fewer or of a mean confidence of 450 or less; or a word of a line of three or more whose mean is at most `sc-lo-conf`, best at most 450 and words of four characters or fewer on average: texture), 2 it is the ghost of a rule (a lone bar, `I`, `l` or `!`
@@ -1951,50 +2049,9 @@ public final class Scan {
             ts = Evidence.owGet(owords, w, Evidence.hdTstart());
             n = Evidence.owGet(owords, w, Evidence.hdTlen());
             conf = Evidence.owGet(owords, w, Evidence.hdConf());
-            f = 0;
-            if (scAdmitWord(conf, emon.Port.cellsAt(scr, scAdmitFloor())) == 0) {
-                f = 1;
-            }
+            f = scDropFate(owords, etext, rules, page, m, w, lmean, mx, tch, emon.Port.cellsAt(scr, scAdmitFloor()));
             emon.Port.cellsSet(scr, fb + ((2 * fm) + i), -1);
             emon.Port.cellsSet(scr, fb + ((3 * fm) + i), 0);
-            // a dot leader
-            if (scLeader(etext, ts, n) == 1) {
-                f = 3;
-            }
-            // An isolated punctuation speck at most one point each way is no text even when the engine is confident. Keep its evidence for the ledger.
-            if ((f == 0) && ((m == 1) && (n == 1))) {
-                if (((Evidence.owGet(owords, w, Evidence.hdX1()) - Evidence.owGet(owords, w, Evidence.hdX0())) <= 100) && ((Evidence.owGet(owords, w, Evidence.hdY1()) - Evidence.owGet(owords, w, Evidence.hdY0())) <= 100)) {
-                    c = emon.Port.cellsAt(etext, ts);
-                    if ((c == 46) || ((c == 44) || ((c == 39) || ((c == 96) || (c == 183))))) {
-                        f = 1;
-                    }
-                }
-            }
-            // texture: a line of three words or more, all of them unsure
-            if (f == 0) {
-                if ((m >= 3) && ((lmean <= scLoConf()) && ((mx <= 450) && (tch <= (4 * m))))) {
-                    f = 1;
-                }
-            }
-            // very unsure and no word, alone or among such words
-            if (f == 0) {
-                if (conf <= scLoConf()) {
-                    if (scImplausible(etext, ts, n) == 1) {
-                        if ((m <= 2) || (lmean <= 450)) {
-                            f = 1;
-                        }
-                    }
-                }
-            }
-            // a rule read as a character
-            if ((f == 0) && (n == 1)) {
-                c = emon.Port.cellsAt(etext, ts);
-                if ((c == 124) || ((c == 73) || ((c == 108) || (c == 33)))) {
-                    if (scOnVrule(rules, page, (Evidence.owGet(owords, w, Evidence.hdX0()) + Evidence.owGet(owords, w, Evidence.hdX1())) / 2, (Evidence.owGet(owords, w, Evidence.hdY0()) + Evidence.owGet(owords, w, Evidence.hdY1())) / 2, scRuleSlack()) == 1) {
-                        f = 2;
-                    }
-                }
-            }
             // a rule's stroke glued to the end of a word
             if ((f == 0) && (n >= 2)) {
                 if (emon.Port.cellsAt(etext, ts + (n - 1)) == 124) {
@@ -2968,6 +3025,10 @@ public final class Scan {
                         cx = (Evidence.owGet(owords, w, Evidence.hdX0()) + Evidence.owGet(owords, w, Evidence.hdX1())) / 2;
                         cy = (Evidence.owGet(owords, w, Evidence.hdY0()) + Evidence.owGet(owords, w, Evidence.hdY1())) / 2;
                         eligible = 1;
+                        // D731: a fused copy is not another reading of its word
+                        if (Evidence.owGet(owords, w, Evidence.owfFrom()) > 0) {
+                            eligible = 0;
+                        }
                         if (rotated == 1) {
                             run = Evidence.owGet(owords, w, Evidence.owfRun());
                             eligible = 0;

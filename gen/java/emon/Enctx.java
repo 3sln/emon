@@ -52,6 +52,7 @@ public final class Enctx {
         public emon.Port.Cells rules = emon.Port.newCells();
         public emon.Port.Cells prims = emon.Port.newCells();
         public emon.Port.Cells tlines = emon.Port.newCells();
+        public emon.Port.Cells ofuse = emon.Port.newCells();
         public EvArenas() {
         }
         @Override
@@ -75,6 +76,7 @@ public final class Enctx {
             emon.Port.cellsCopyInto(c.rules, this.rules);
             emon.Port.cellsCopyInto(c.prims, this.prims);
             emon.Port.cellsCopyInto(c.tlines, this.tlines);
+            emon.Port.cellsCopyInto(c.ofuse, this.ofuse);
             return c;
         }
     }

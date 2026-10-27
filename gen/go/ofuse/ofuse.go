@@ -7,6 +7,7 @@ import (
 	"emon/evidence"
 	"emon/ofmt"
 	"emon/port"
+	"emon/scan"
 )
 
 func OfMargin() int32 {
@@ -62,11 +63,17 @@ func OfRule(incumbent int32, numeric int32, incumbentValid int32, candidateValid
 }
 
 func OfFrom() int32 {
-	return 27
+	return evidence.OwfFrom()
+}
+
+func OfSource(words *port.Cells, w int32) int32 {
+	// D731: the `owords` row a fused copy was copied from, or -1 for a recorded reading (`owf-from` holds the row + 1, so a recorded word's 0 is none).
+	return evidence.OwGet(words, w, evidence.OwfFrom()) - 1
 }
 
 func OfCopy(words *port.Cells, source int32, run int32, line int32) int32 {
-	// Reserved oword cell27 holds the source row. The etext span, box, flags and confidence are copied verbatim; no character is emitted here.
+	// Oword cell 27 (`owf-from`) holds the source row + 1. The etext span, box, flags, symbols and confidence are copied verbatim; no character is emitted here.
+	// The copy has no `feats` row of its own (`ev-check` 102: a feature row names exactly one word).
 	var row int32 = evidence.OwCount(words)
 	var f int32 = 0
 	var value int32 = 0
@@ -75,7 +82,8 @@ func OfCopy(words *port.Cells, source int32, run int32, line int32) int32 {
 		port.CellsPush(words, value)
 		f += 1
 	}
-	evidence.OwSet(words, row, OfFrom(), source)
+	evidence.OwSet(words, row, evidence.OwfFrom(), source+1)
+	evidence.OwSet(words, row, evidence.HdFeat(), -1)
 	evidence.OwSet(words, row, evidence.OwfRun(), run)
 	evidence.OwSet(words, row, evidence.HdLine(), line)
 	return row
@@ -1442,4 +1450,638 @@ func OfNullVotes(runs *port.Cells, words *port.Cells, reads *port.Cells, rows *p
 		i += 3
 	}
 	return count
+}
+
+func OfPageKeyword(words *port.Cells, text *port.Cells, page int32) int32 {
+	// 1 when some recorded word of the page (any pass) is a receipt keyword (`of-keyword`).
+	var w int32 = 0
+	for w < evidence.OwCount(words) {
+		if (evidence.OwGet(words, w, evidence.HdPage()) == page) && (OfSource(words, w) == -1) {
+			if OfKeyword(text, evidence.OwGet(words, w, evidence.HdTstart()), evidence.OwGet(words, w, evidence.HdTlen())) == 1 {
+				return 1
+			}
+		}
+		w += 1
+	}
+	return 0
+}
+
+func ofRanked(c *port.Cells) int32 {
+	// The best-ranked alternative ignoring eligibility (votes, then confidence, then run order), -1 none: what a kept slot's row reports.
+	var i int32 = 1
+	var best int32 = -1
+	for i < (port.CellsLen(c) / OfCstride()) {
+		if OfCget(c, i, 2) > 0 {
+			if best < 0 {
+				best = i
+			} else if (OfCget(c, i, 3) > OfCget(c, best, 3)) || ((OfCget(c, i, 3) == OfCget(c, best, 3)) && ((OfCget(c, i, 4) > OfCget(c, best, 4)) || ((OfCget(c, i, 4) == OfCget(c, best, 4)) && (OfCget(c, i, 0) < OfCget(c, best, 0))))) {
+				best = i
+			}
+		}
+		i += 1
+	}
+	return best
+}
+
+func OfRuleOf(c *port.Cells, i int32, incumbentCount int32) int32 {
+	// The rule code (`of-rule`) of candidate `i` as `of-choice` judges it; 0 keep for none, 6 for an oversized slot.
+	var k int32 = 0
+	var numeric int32 = 0
+	var incumbent int32 = 0
+	if incumbentCount > OfSlotMax() {
+		return 6
+	}
+	if i < 1 {
+		return 0
+	}
+	for k < (port.CellsLen(c) / OfCstride()) {
+		if OfCget(c, k, 7) == 1 {
+			numeric = 1
+		}
+		k += 1
+	}
+	if incumbentCount > 0 {
+		incumbent = 1
+	}
+	return OfRule(incumbent, numeric, OfCget(c, 0, 6), OfCget(c, i, 6), OfCget(c, i, 5), OfCget(c, i, 3), OfCget(c, 0, 3), OfCget(c, i, 4), OfCget(c, 0, 4))
+}
+
+func ofChunk(plan *port.Cells, row int32, c *port.Cells, crefs *port.Cells, cand int32) int32 {
+	// A plan chunk: [ofuse row, n, n source rows, next chunk (-1)]. Answers its offset.
+	var at int32 = port.CellsLen(plan)
+	var first int32 = OfCget(c, cand, 1)
+	var n int32 = OfCget(c, cand, 2)
+	var i int32 = 0
+	port.CellsPush(plan, row)
+	port.CellsPush(plan, n)
+	for i < n {
+		port.CellsPush(plan, port.CellsAt(crefs, first+i))
+		i += 1
+	}
+	port.CellsPush(plan, -1)
+	return at
+}
+
+func ofChain(plan *port.Cells, head int32, at int32) int32 {
+	// Append chunk `at` to the chain whose head cell is `head` (insertions keep slot order).
+	var p int32 = port.CellsAt(plan, head)
+	var nx int32 = 0
+	if p < 0 {
+		port.CellsSet(plan, head, at)
+		return 0
+	}
+	for port.CellsAt(plan, p+(2+port.CellsAt(plan, p+1))) >= 0 {
+		p = port.CellsAt(plan, p+(2+port.CellsAt(plan, p+1)))
+	}
+	nx = p + (2 + port.CellsAt(plan, p+1))
+	port.CellsSet(plan, nx, at)
+	return 1
+}
+
+func ofMn(a int32, b int32) int32 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func ofMx(a int32, b int32) int32 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func ofBit(q int32) int32 {
+	var v int32 = 1
+	var i int32 = 0
+	for i < q {
+		v *= 2
+		i += 1
+	}
+	return v
+}
+
+func ofLater(ofz *port.Cells, a int32, b int32) int32 {
+	// 1 when slot row `a` sorts after row `b`: by the middle of the slot's height, then its left edge.
+	var ma int32 = port.CellsAt(ofz, (a*evidence.OzStride())+(evidence.OzfX0()+1)) + port.CellsAt(ofz, (a*evidence.OzStride())+(evidence.OzfX0()+3))
+	var mb int32 = port.CellsAt(ofz, (b*evidence.OzStride())+(evidence.OzfX0()+1)) + port.CellsAt(ofz, (b*evidence.OzStride())+(evidence.OzfX0()+3))
+	if ma > mb {
+		return 1
+	}
+	if ma < mb {
+		return 0
+	}
+	if port.CellsAt(ofz, (a*evidence.OzStride())+evidence.OzfX0()) > port.CellsAt(ofz, (b*evidence.OzStride())+evidence.OzfX0()) {
+		return 1
+	}
+	return 0
+}
+
+func ofAnchor(words *port.Cells, sel *port.Cells, page int32, x0 int32, y0 int32, y1 int32) int32 {
+	// The selected word an insertion follows: on the slot's baseline (half the smaller height shared), ending no more than a point after the
+	// slot starts and less than six slot heights before it; the rightmost such word, the first on a tie. -1: the slot opens a new line.
+	var h int32 = y1 - y0
+	var i int32 = 0
+	var w int32 = 0
+	var best int32 = -1
+	var bh int32 = 0
+	var vo int32 = 0
+	var m int32 = 0
+	for i < port.CellsLen(sel) {
+		w = port.CellsAt(sel, i)
+		if evidence.OwGet(words, w, evidence.HdPage()) == page {
+			bh = evidence.OwGet(words, w, evidence.HdY1()) - evidence.OwGet(words, w, evidence.HdY0())
+			vo = ofMn(evidence.OwGet(words, w, evidence.HdY1()), y1) - ofMx(evidence.OwGet(words, w, evidence.HdY0()), y0)
+			m = h
+			if bh < m {
+				m = bh
+			}
+			if (vo * 2) >= m {
+				if (evidence.OwGet(words, w, evidence.HdX1()) <= (x0 + 100)) && ((x0 - evidence.OwGet(words, w, evidence.HdX1())) < (6 * h)) {
+					if (best < 0) || (evidence.OwGet(words, w, evidence.HdX1()) > evidence.OwGet(words, port.CellsAt(sel, best), evidence.HdX1())) {
+						best = i
+					}
+				}
+			}
+		}
+		i += 1
+	}
+	return best
+}
+
+func ofEmit(words *port.Cells, ofz *port.Cells, plan *port.Cells, at int32, run int32, line int32) int32 {
+	// Copy chunk `at`'s source words into `line` of the fused run and name the copies in its `ofuse` row. Answers how many.
+	var row int32 = port.CellsAt(plan, at)
+	var n int32 = port.CellsAt(plan, at+1)
+	var first int32 = evidence.OwCount(words)
+	var i int32 = 0
+	for i < n {
+		OfCopy(words, port.CellsAt(plan, at+(2+i)), run, line)
+		i += 1
+	}
+	if port.CellsAt(ofz, (row*evidence.OzStride())+evidence.OzfCcount()) == 0 {
+		port.CellsSet(ofz, (row*evidence.OzStride())+evidence.OzfCfirst(), first)
+		port.CellsSet(ofz, (row*evidence.OzStride())+evidence.OzfCcount(), n)
+	}
+	return n
+}
+
+func ofFitLine(lines *port.Cells, words *port.Cells, l int32, grow int32) int32 {
+	// Widen line `l` to its words (x only when `grow` is 0: a copied line keeps its own height and baseline; a new line takes all of its words' box and baseline).
+	var w0 int32 = evidence.OlGet(lines, l, evidence.LhFirst())
+	var n int32 = evidence.OlGet(lines, l, evidence.LhCount())
+	var i int32 = 0
+	var w int32 = 0
+	if n <= 0 {
+		return 0
+	}
+	if grow == 1 {
+		evidence.OlSet(lines, l, evidence.LhX0(), evidence.OwGet(words, w0, evidence.HdX0()))
+		evidence.OlSet(lines, l, evidence.LhY0(), evidence.OwGet(words, w0, evidence.HdY0()))
+		evidence.OlSet(lines, l, evidence.LhX1(), evidence.OwGet(words, w0, evidence.HdX1()))
+		evidence.OlSet(lines, l, evidence.LhY1(), evidence.OwGet(words, w0, evidence.HdY1()))
+		evidence.OlSet(lines, l, evidence.LhBx0(), evidence.OwGet(words, w0, evidence.HdBx0()))
+		evidence.OlSet(lines, l, evidence.LhBy0(), evidence.OwGet(words, w0, evidence.HdBy0()))
+		evidence.OlSet(lines, l, evidence.LhBx1(), evidence.OwGet(words, w0+(n-1), evidence.HdBx1()))
+		evidence.OlSet(lines, l, evidence.LhBy1(), evidence.OwGet(words, w0+(n-1), evidence.HdBy1()))
+		evidence.OlSet(lines, l, evidence.LhRot(), evidence.OwGet(words, w0, evidence.HdRot()))
+		evidence.OlSet(lines, l, evidence.LhDir(), evidence.OwGet(words, w0, evidence.HdDir()))
+	}
+	for i < n {
+		w = w0 + i
+		if evidence.OwGet(words, w, evidence.HdX0()) < evidence.OlGet(lines, l, evidence.LhX0()) {
+			evidence.OlSet(lines, l, evidence.LhX0(), evidence.OwGet(words, w, evidence.HdX0()))
+		}
+		if evidence.OwGet(words, w, evidence.HdX1()) > evidence.OlGet(lines, l, evidence.LhX1()) {
+			evidence.OlSet(lines, l, evidence.LhX1(), evidence.OwGet(words, w, evidence.HdX1()))
+		}
+		if grow == 1 {
+			if evidence.OwGet(words, w, evidence.HdY0()) < evidence.OlGet(lines, l, evidence.LhY0()) {
+				evidence.OlSet(lines, l, evidence.LhY0(), evidence.OwGet(words, w, evidence.HdY0()))
+			}
+			if evidence.OwGet(words, w, evidence.HdY1()) > evidence.OlGet(lines, l, evidence.LhY1()) {
+				evidence.OlSet(lines, l, evidence.LhY1(), evidence.OwGet(words, w, evidence.HdY1()))
+			}
+		}
+		i += 1
+	}
+	return n
+}
+
+func ofClearXtra(scr *port.Cells, l int32) int32 {
+	// A fused line reads no body-ink partner of its own (its partner's words, if any, were copied into it): clear its `sc-xtra-base` cell.
+	var kk int32 = l - port.CellsAt(scr, scan.ScXtraBase())
+	if (kk >= 0) && (kk < scan.ScSelMax()) {
+		port.CellsSet(scr, scan.ScXtraBase()+(kk+1), 0)
+	}
+	return 0
+}
+
+func ofZrow(ofz *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32, ifirst int32, icount int32, rule int32, votes int32, ivotes int32, nulls int32, margin int32, readings int32) int32 {
+	var r int32 = port.CellsLen(ofz) / evidence.OzStride()
+	port.CellsPush(ofz, page)
+	port.CellsPush(ofz, x0)
+	port.CellsPush(ofz, y0)
+	port.CellsPush(ofz, x1)
+	port.CellsPush(ofz, y1)
+	port.CellsPush(ofz, ifirst)
+	port.CellsPush(ofz, icount)
+	port.CellsPush(ofz, -1)
+	port.CellsPush(ofz, 0)
+	port.CellsPush(ofz, rule)
+	port.CellsPush(ofz, votes)
+	port.CellsPush(ofz, ivotes)
+	port.CellsPush(ofz, nulls)
+	port.CellsPush(ofz, margin)
+	port.CellsPush(ofz, readings)
+	port.CellsPush(ofz, 0)
+	return r
+}
+
+func ofZget(ofz *port.Cells, r int32, f int32) int32 {
+	return port.CellsAt(ofz, (r*evidence.OzStride())+f)
+}
+
+func ofLineWords(lines *port.Cells, words *port.Cells, text *port.Cells, rules *port.Cells, page int32, l int32, scr *port.Cells, mark int32) int32 {
+	// The words selected line `l` is emitted with, at `sc-fate-base`: `sc-line-words` (with the body-ink partner `sc-xtra-base` names) less `sc-kept-words`'
+	// no-text words; 0 when the line is emitted as it is (more words than the scratch holds), which leaves its own words to the caller.
+	var j int32 = l - port.CellsAt(scr, scan.ScXtraBase())
+	var xl int32 = -1
+	var n int32 = 0
+	if (j >= 0) && (j < scan.ScSelMax()) {
+		xl = port.CellsAt(scr, scan.ScXtraBase()+(j+1)) - 1
+	}
+	if evidence.OlGet(lines, l, evidence.LhDir()) != 0 {
+		xl = -1
+	}
+	n = scan.ScLineWords(lines, words, text, l, xl, scr)
+	if n == 0 {
+		return -1
+	}
+	return scan.ScKeptWords(words, text, rules, page, n, mark, scr)
+}
+
+func OfFuse(page int32, image int32, trigger int32, runs *port.Cells, lines *port.Cells, words *port.Cells, text *port.Cells, rules *port.Cells, scr *port.Cells, nsel int32, ofz *port.Cells, reads *port.Cells, rrefs *port.Cells, rows *port.Cells, parents *port.Cells, plan *port.Cells, sel *port.Cells, selk *port.Cells, c *port.Cells, crefs *port.Cells, seq *port.Cells) int32 {
+	// The guarded fusion of page `page` (1-based) whose `nsel` selected lines are at `scr` `sc-sel-base`: answers the new count. `image` 1 an image
+	// input page read upright, `trigger` the receipt detector's lane (1 photo, 2 thermal). A page outside the gate is left exactly as it is and no scratch
+	// is touched; a gated page with fewer than two distinct readings gets only the no-text flags its emission sets anyway. The ten scratch arenas are the caller's.
+	var k int32 = 0
+	var i int32 = 0
+	var j int32 = 0
+	var q int32 = 0
+	var l int32 = 0
+	var n int32 = 0
+	var w int32 = 0
+	var ns int32 = 0
+	var r int32 = 0
+	var count int32 = 0
+	var first int32 = 0
+	var best int32 = 0
+	var alt int32 = 0
+	var x0 int32 = 0
+	var y0 int32 = 0
+	var x1 int32 = 0
+	var y1 int32 = 0
+	var mask int32 = 0
+	var zr int32 = 0
+	var at int32 = 0
+	var changed int32 = 0
+	var fr int32 = 0
+	var nl int32 = 0
+	var n2 int32 = 0
+	var ng int32 = 0
+	var g int32 = 0
+	var h int32 = 0
+	var view int32 = 0
+	var margin int32 = 0
+	var votes int32 = 0
+	var mine int32 = 0
+	var pick int32 = 0
+	if (image != 1) || ((trigger != 1) && (trigger != 2)) {
+		return nsel
+	}
+	if OfPageKeyword(words, text, page) == 0 {
+		return nsel
+	}
+	// the selected words, line by line as `sc-emit-vetted` will emit them: a body-ink partner's words in their place along the line, and without
+	// the words `sc-fates` will keep out as no text (`sc-kept-words`): what is not emitted is no incumbent and is not copied. Those words are flagged
+	// now exactly as the emission flags them (it would flag the same words of the same lines), so a replaced line's kept-out words keep their ledger fate.
+	port.CellsDrop(sel, 0)
+	port.CellsDrop(selk, 0)
+	for k < nsel {
+		l = port.CellsAt(scr, scan.ScSelBase()+k)
+		n = ofLineWords(lines, words, text, rules, page, l, scr, 1)
+		i = 0
+		if n >= 0 {
+			for i < n {
+				port.CellsPush(sel, port.CellsAt(scr, scan.ScFateBase()+i))
+				port.CellsPush(selk, k)
+				i += 1
+			}
+		} else {
+			for i < evidence.OlGet(lines, l, evidence.LhCount()) {
+				port.CellsPush(sel, evidence.OlGet(lines, l, evidence.LhFirst())+i)
+				port.CellsPush(selk, k)
+				i += 1
+			}
+		}
+		k += 1
+	}
+	// the distinct readings, once the words the emission keeps out are flagged as it flags them (so they are no reading's either)
+	if OfReadings(runs, words, text, page, reads, rrefs) < 2 {
+		return nsel
+	}
+	ns = port.CellsLen(sel)
+	port.CellsDrop(rows, 0)
+	i = 0
+	for i < ns {
+		port.CellsPush(rows, port.CellsAt(sel, i))
+		i += 1
+	}
+	i = 0
+	for i < port.CellsLen(rrefs) {
+		port.CellsPush(rows, port.CellsAt(rrefs, i))
+		i += 1
+	}
+	OfAlign(words, rows, parents, plan)
+	i = 0
+	for i < port.CellsLen(rows) {
+		if port.CellsAt(parents, i) >= 0 {
+			j = OfRoot(parents, i)
+			port.CellsSet(parents, i, j)
+		}
+		i += 1
+	}
+	// the plan: per selected word its fate (-1 kept, -2 its slot's replacement went to an earlier word, else a chunk), per selected word
+	// the chain of insertions after it, then the chain of insertions that open new lines; chunks after that
+	port.CellsDrop(plan, 0)
+	i = 0
+	for i < ((2 * ns) + 1) {
+		port.CellsPush(plan, -1)
+		i += 1
+	}
+	r = 0
+	for r < port.CellsLen(rows) {
+		if port.CellsAt(parents, r) == r {
+			count = 0
+			first = -1
+			i = 0
+			for i < ns {
+				if port.CellsAt(parents, i) == r {
+					count += 1
+					if first < 0 {
+						first = i
+					}
+				}
+				i += 1
+			}
+			x0 = 2147483647
+			y0 = 2147483647
+			x1 = -2147483647
+			y1 = -2147483647
+			mask = 0
+			j = 0
+			for j < port.CellsLen(rows) {
+				if port.CellsAt(parents, j) == r {
+					w = port.CellsAt(rows, j)
+					if evidence.OwGet(words, w, evidence.HdX0()) < x0 {
+						x0 = evidence.OwGet(words, w, evidence.HdX0())
+					}
+					if evidence.OwGet(words, w, evidence.HdY0()) < y0 {
+						y0 = evidence.OwGet(words, w, evidence.HdY0())
+					}
+					if evidence.OwGet(words, w, evidence.HdX1()) > x1 {
+						x1 = evidence.OwGet(words, w, evidence.HdX1())
+					}
+					if evidence.OwGet(words, w, evidence.HdY1()) > y1 {
+						y1 = evidence.OwGet(words, w, evidence.HdY1())
+					}
+					q = 0
+					for q < (port.CellsLen(reads) / 3) {
+						if (q < 30) && (port.CellsAt(reads, q*3) == evidence.OwGet(words, w, evidence.OwfRun())) {
+							mask |= ofBit(q)
+						}
+						q += 1
+					}
+				}
+				j += 1
+			}
+			if count > OfSlotMax() {
+				ofZrow(ofz, page, x0, y0, x1, y1, port.CellsAt(sel, first), count, 6, 0, 0, 0, 0, mask)
+			} else {
+				OfCandidates(words, text, rows, parents, r, sel, reads, c, crefs, seq)
+				best = OfChoice(c, count)
+				alt = best
+				if alt < 0 {
+					alt = ofRanked(c)
+				}
+				votes = 0
+				margin = 0
+				if alt >= 1 {
+					votes = OfCget(c, alt, 3)
+					margin = OfCget(c, alt, 4) - OfCget(c, 0, 4)
+				}
+				pick = -1
+				if first >= 0 {
+					pick = port.CellsAt(sel, first)
+				}
+				zr = ofZrow(ofz, page, x0, y0, x1, y1, pick, count, OfRuleOf(c, alt, count), votes, OfCget(c, 0, 3), OfNullVotes(runs, words, reads, rows, parents, r), margin, mask)
+				if best >= 1 {
+					changed = 1
+					at = ofChunk(plan, zr, c, crefs, best)
+					if count > 0 {
+						port.CellsSet(ofz, (zr*evidence.OzStride())+evidence.OzfOp(), 1)
+						port.CellsSet(plan, first, at)
+						i = first + 1
+						for i < ns {
+							if port.CellsAt(parents, i) == r {
+								port.CellsSet(plan, i, -2)
+							}
+							i += 1
+						}
+					} else {
+						j = ofAnchor(words, sel, page, x0, y0, y1)
+						if j >= 0 {
+							port.CellsSet(ofz, (zr*evidence.OzStride())+evidence.OzfOp(), 2)
+							ofChain(plan, ns+j, at)
+						} else {
+							port.CellsSet(ofz, (zr*evidence.OzStride())+evidence.OzfOp(), 3)
+							ofChain(plan, 2*ns, at)
+						}
+					}
+				}
+			}
+		}
+		r += 1
+	}
+	if changed == 0 {
+		return nsel
+	}
+	// the fused run: changed selected lines become copies, in the selection's order; new lines follow the page's last line
+	view = evidence.OrGet(runs, port.CellsAt(reads, 0), evidence.OrfView())
+	if nsel > 0 {
+		view = evidence.OrGet(runs, evidence.OlGet(lines, port.CellsAt(scr, scan.ScSelBase()), evidence.OlfRun()), evidence.OrfView())
+	}
+	fr = evidence.OrNew(runs, page, view)
+	evidence.OrSet(runs, fr, evidence.OrfPass(), evidence.OpFused())
+	evidence.OrSet(runs, fr, evidence.OrfLfirst(), evidence.OlCount(lines))
+	evidence.OrSet(runs, fr, evidence.OrfWfirst(), evidence.OwCount(words))
+	k = 0
+	n2 = 0
+	for k < nsel {
+		l = port.CellsAt(scr, scan.ScSelBase()+k)
+		mine = 0
+		i = 0
+		for i < ns {
+			if (port.CellsAt(selk, i) == k) && ((port.CellsAt(plan, i) != -1) || (port.CellsAt(plan, ns+i) != -1)) {
+				mine = 1
+			}
+			i += 1
+		}
+		if mine == 0 {
+			port.CellsSet(scr, scan.ScSelBase()+n2, l)
+			n2 += 1
+		} else {
+			nl = evidence.OlNew(lines, page, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, evidence.OwCount(words), 0)
+			j = evidence.LhX0()
+			for j <= evidence.LhDir() {
+				q = evidence.OlGet(lines, l, j)
+				evidence.OlSet(lines, nl, j, q)
+				j += 1
+			}
+			j = 15
+			for j <= 22 {
+				q = evidence.OlGet(lines, l, j)
+				evidence.OlSet(lines, nl, j, q)
+				j += 1
+			}
+			evidence.OlSet(lines, nl, evidence.OlfRun(), fr)
+			first = evidence.OwCount(words)
+			i = 0
+			for i < ns {
+				if port.CellsAt(selk, i) == k {
+					at = port.CellsAt(plan, i)
+					if at == -1 {
+						OfCopy(words, port.CellsAt(sel, i), fr, nl)
+					}
+					if at >= 0 {
+						ofEmit(words, ofz, plan, at, fr, nl)
+					}
+					at = port.CellsAt(plan, ns+i)
+					for at >= 0 {
+						ofEmit(words, ofz, plan, at, fr, nl)
+						at = port.CellsAt(plan, at+(2+port.CellsAt(plan, at+1)))
+					}
+				}
+				i += 1
+			}
+			evidence.OlSet(lines, nl, evidence.LhCount(), evidence.OwCount(words)-first)
+			ofFitLine(lines, words, nl, 0)
+			if evidence.OlGet(lines, nl, evidence.LhCount()) > 0 {
+				port.CellsSet(scr, scan.ScSelBase()+n2, nl)
+				n2 += 1
+				ofClearXtra(scr, nl)
+			}
+		}
+		k += 1
+	}
+	// insertions over no selected line: sorted by the middle of their slot's height then its left, grouped greedily by baseline, each group a line
+	port.CellsDrop(seq, 0)
+	port.CellsDrop(crefs, 0)
+	port.CellsDrop(c, 0)
+	at = port.CellsAt(plan, 2*ns)
+	for at >= 0 {
+		zr = port.CellsAt(plan, at)
+		i = port.CellsLen(seq)
+		port.CellsPush(seq, at)
+		for (i > 0) && (ofLater(ofz, port.CellsAt(plan, port.CellsAt(seq, i-1)), zr) == 1) {
+			j = port.CellsAt(seq, i-1)
+			port.CellsSet(seq, i, j)
+			i -= 1
+		}
+		port.CellsSet(seq, i, at)
+		at = port.CellsAt(plan, at+(2+port.CellsAt(plan, at+1)))
+	}
+	i = 0
+	ng = 0
+	for i < port.CellsLen(seq) {
+		zr = port.CellsAt(plan, port.CellsAt(seq, i))
+		x0 = ofZget(ofz, zr, evidence.OzfX0())
+		y0 = ofZget(ofz, zr, evidence.OzfX0()+1)
+		x1 = ofZget(ofz, zr, evidence.OzfX0()+2)
+		y1 = ofZget(ofz, zr, evidence.OzfX0()+3)
+		g = 0
+		pick = -1
+		for (g < ng) && (pick < 0) {
+			h = port.CellsAt(c, (g*4)+3) - port.CellsAt(c, (g*4)+1)
+			if (y1 - y0) < h {
+				h = y1 - y0
+			}
+			if (2 * (ofMn(port.CellsAt(c, (g*4)+3), y1) - ofMx(port.CellsAt(c, (g*4)+1), y0))) >= h {
+				pick = g
+			}
+			g += 1
+		}
+		if pick < 0 {
+			pick = ng
+			ng += 1
+			port.CellsPush(c, x0)
+			port.CellsPush(c, y0)
+			port.CellsPush(c, x1)
+			port.CellsPush(c, y1)
+		} else {
+			if x0 < port.CellsAt(c, pick*4) {
+				port.CellsSet(c, pick*4, x0)
+			}
+			if y0 < port.CellsAt(c, (pick*4)+1) {
+				port.CellsSet(c, (pick*4)+1, y0)
+			}
+			if x1 > port.CellsAt(c, (pick*4)+2) {
+				port.CellsSet(c, (pick*4)+2, x1)
+			}
+			if y1 > port.CellsAt(c, (pick*4)+3) {
+				port.CellsSet(c, (pick*4)+3, y1)
+			}
+		}
+		port.CellsPush(crefs, pick)
+		i += 1
+	}
+	g = 0
+	for g < ng {
+		nl = evidence.OlNew(lines, page, port.CellsAt(c, g*4), port.CellsAt(c, (g*4)+1), port.CellsAt(c, (g*4)+2), port.CellsAt(c, (g*4)+3), 0, 0, 0, 0, 0, 0, evidence.OwCount(words), 0)
+		evidence.OlSet(lines, nl, evidence.OlfRun(), fr)
+		first = evidence.OwCount(words)
+		// the group's slots left to right (sorted order breaks a tie); a used slot's group cell becomes -1
+		pick = 0
+		for pick >= 0 {
+			pick = -1
+			i = 0
+			for i < port.CellsLen(seq) {
+				if port.CellsAt(crefs, i) == g {
+					if (pick < 0) || (ofZget(ofz, port.CellsAt(plan, port.CellsAt(seq, i)), evidence.OzfX0()) < ofZget(ofz, port.CellsAt(plan, port.CellsAt(seq, pick)), evidence.OzfX0())) {
+						pick = i
+					}
+				}
+				i += 1
+			}
+			if pick >= 0 {
+				ofEmit(words, ofz, plan, port.CellsAt(seq, pick), fr, nl)
+				port.CellsSet(crefs, pick, -1)
+			}
+		}
+		evidence.OlSet(lines, nl, evidence.LhCount(), evidence.OwCount(words)-first)
+		ofFitLine(lines, words, nl, 1)
+		if n2 < scan.ScSelMax() {
+			port.CellsSet(scr, scan.ScSelBase()+n2, nl)
+			n2 += 1
+			ofClearXtra(scr, nl)
+		}
+		g += 1
+	}
+	j = evidence.OlCount(lines) - evidence.OrGet(runs, fr, evidence.OrfLfirst())
+	evidence.OrSet(runs, fr, evidence.OrfLcount(), j)
+	j = evidence.OwCount(words) - evidence.OrGet(runs, fr, evidence.OrfWfirst())
+	evidence.OrSet(runs, fr, evidence.OrfWcount(), j)
+	return n2
 }

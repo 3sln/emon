@@ -68,8 +68,8 @@ class Contracts(unittest.TestCase):
     def test_input_views_replay_metadata(self):
         ev={'views':[{}, {'flags':['receipt-photo','receipt-adopted']}, {'flags':['receipt-thermal']}],
             'oruns':[{'pass':'first','view':0},{'pass':'receipt','view':1},{'pass':'receipt','view':2}]}
-        self.assertEqual(input_views(ev),dict(ocr_runs=3,receipt_reads=2,receipt_rescue_reads=0,receipt_trigger='photo',receipt_deferred=False,receipt_adopted=True,adopted_view='photo-sauvola'))
-        self.assertEqual(input_views({}),dict(ocr_runs=0,receipt_reads=0,receipt_rescue_reads=0,receipt_trigger='none',receipt_deferred=False,receipt_adopted=False,adopted_view='baseline'))
+        self.assertEqual(input_views(ev),dict(ocr_runs=3,receipt_reads=2,fused_slots=0,fused_replacements=0,fused_insertions=0,fused_new_lines=0,receipt_rescue_reads=0,receipt_trigger='photo',receipt_deferred=False,receipt_adopted=True,adopted_view='photo-sauvola'))
+        self.assertEqual(input_views({}),dict(ocr_runs=0,receipt_reads=0,fused_slots=0,fused_replacements=0,fused_insertions=0,fused_new_lines=0,receipt_rescue_reads=0,receipt_trigger='none',receipt_deferred=False,receipt_adopted=False,adopted_view='baseline'))
     def test_trigger_without_a_receipt_response(self):
         ev={'views':[{'flags':['receipt-thermal','receipt-deferred']}],
             'oruns':[{'pass':'first','view':0}]}
@@ -85,6 +85,16 @@ class Contracts(unittest.TestCase):
         self.assertEqual(result['receipt_reads'],2)
         self.assertEqual(result['receipt_rescue_reads'],1)
         self.assertEqual(result['adopted_view'],'faint-psm11')
+    def test_fusion_metadata_and_copies(self):
+        ev={'oruns':[{'pass':'first','view':0},{'pass':'body-ink','view':0},{'pass':'fused','view':0}],
+            'owords':[{'text':'8.00'},{'text':'8.00','from':0}],
+            'ofuse':[{'rule':'keep'},{'rule':'agree','op':'replace'},{'rule':'insert','op':'newline'},{'rule':'insert','op':'insert'}]}
+        result=input_views(ev)
+        self.assertEqual(result['ocr_runs'],2)
+        self.assertEqual((result['fused_slots'],result['fused_replacements'],result['fused_insertions'],result['fused_new_lines']),(4,1,1,1))
+        g={'model':{'body':{'text':'8.00 8.00'}}}
+        r=score(g,{'body':{'text':'Soup'}},ev,[],[])
+        self.assertEqual(r['ocr_missing_words'],1)
     def test_wrapped_angles(self):
         self.assertAlmostEqual(angle(359.9),.1)
         self.assertAlmostEqual(angle(-.1),.1)

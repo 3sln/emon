@@ -1084,6 +1084,9 @@ pub fn op_receipt() -> i32 {
 pub fn op_receipt_rescue() -> i32 {
     return 11;
 }
+pub fn op_fused() -> i32 {
+    return 12;
+}
 pub fn op_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "first");
@@ -1127,6 +1130,93 @@ pub fn op_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 11 {
         crate::port::text_ascii(t, "receipt-rescue");
+        return 1;
+    }
+    if code == 12 {
+        crate::port::text_ascii(t, "fused");
+        return 1;
+    }
+    return 0;
+}
+pub fn ofr_keep() -> i32 {
+    return 1;
+}
+pub fn ofr_agree() -> i32 {
+    return 2;
+}
+pub fn ofr_margin() -> i32 {
+    return 3;
+}
+pub fn ofr_insert() -> i32 {
+    return 4;
+}
+pub fn ofr_blocked_format() -> i32 {
+    return 5;
+}
+pub fn ofr_blocked_lexicon() -> i32 {
+    return 6;
+}
+pub fn ofr_blocked_slot() -> i32 {
+    return 7;
+}
+pub fn ofr_emit_name(mut t: &mut String, code: i32) -> i32 {
+    if code == 1 {
+        crate::port::text_ascii(t, "keep");
+        return 1;
+    }
+    if code == 2 {
+        crate::port::text_ascii(t, "agree");
+        return 1;
+    }
+    if code == 3 {
+        crate::port::text_ascii(t, "margin");
+        return 1;
+    }
+    if code == 4 {
+        crate::port::text_ascii(t, "insert");
+        return 1;
+    }
+    if code == 5 {
+        crate::port::text_ascii(t, "blocked-format");
+        return 1;
+    }
+    if code == 6 {
+        crate::port::text_ascii(t, "blocked-lexicon");
+        return 1;
+    }
+    if code == 7 {
+        crate::port::text_ascii(t, "blocked-slot");
+        return 1;
+    }
+    return 0;
+}
+pub fn ofo_keep() -> i32 {
+    return 1;
+}
+pub fn ofo_replace() -> i32 {
+    return 2;
+}
+pub fn ofo_insert() -> i32 {
+    return 3;
+}
+pub fn ofo_newline() -> i32 {
+    return 4;
+}
+pub fn ofo_emit_name(mut t: &mut String, code: i32) -> i32 {
+    if code == 1 {
+        crate::port::text_ascii(t, "keep");
+        return 1;
+    }
+    if code == 2 {
+        crate::port::text_ascii(t, "replace");
+        return 1;
+    }
+    if code == 3 {
+        crate::port::text_ascii(t, "insert");
+        return 1;
+    }
+    if code == 4 {
+        crate::port::text_ascii(t, "newline");
         return 1;
     }
     return 0;
@@ -1746,6 +1836,36 @@ pub fn ek_backdrop() -> i32 {
 pub fn ek_placement() -> i32 {
     return 152;
 }
+pub fn ek_from() -> i32 {
+    return 153;
+}
+pub fn ek_ofuse() -> i32 {
+    return 154;
+}
+pub fn ek_incumbent() -> i32 {
+    return 155;
+}
+pub fn ek_choice() -> i32 {
+    return 156;
+}
+pub fn ek_rule() -> i32 {
+    return 157;
+}
+pub fn ek_votes() -> i32 {
+    return 158;
+}
+pub fn ek_ivotes() -> i32 {
+    return 159;
+}
+pub fn ek_nulls() -> i32 {
+    return 160;
+}
+pub fn ek_margin() -> i32 {
+    return 161;
+}
+pub fn ek_readings() -> i32 {
+    return 162;
+}
 pub fn ek_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "emon-evidence");
@@ -2353,6 +2473,46 @@ pub fn ek_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 152 {
         crate::port::text_ascii(t, "placement");
+        return 1;
+    }
+    if code == 153 {
+        crate::port::text_ascii(t, "from");
+        return 1;
+    }
+    if code == 154 {
+        crate::port::text_ascii(t, "ofuse");
+        return 1;
+    }
+    if code == 155 {
+        crate::port::text_ascii(t, "incumbent");
+        return 1;
+    }
+    if code == 156 {
+        crate::port::text_ascii(t, "choice");
+        return 1;
+    }
+    if code == 157 {
+        crate::port::text_ascii(t, "rule");
+        return 1;
+    }
+    if code == 158 {
+        crate::port::text_ascii(t, "votes");
+        return 1;
+    }
+    if code == 159 {
+        crate::port::text_ascii(t, "ivotes");
+        return 1;
+    }
+    if code == 160 {
+        crate::port::text_ascii(t, "nulls");
+        return 1;
+    }
+    if code == 161 {
+        crate::port::text_ascii(t, "margin");
+        return 1;
+    }
+    if code == 162 {
+        crate::port::text_ascii(t, "readings");
         return 1;
     }
     return 0;
@@ -3607,6 +3767,10 @@ pub fn owf_pw() -> i32 {
 pub fn owf_ph() -> i32 {
     return 26;
 }
+pub fn owf_from() -> i32 {
+    // RC5c (D731): a fused copy's source `owords` row + 1; 0 for every recorded reading. Printed as the row (`from`), omitted when 0.
+    return 27;
+}
 pub fn osf_conf() -> i32 {
     return 9;
 }
@@ -3871,7 +4035,7 @@ pub fn tlf_gap() -> i32 {
 pub fn tlf_conf() -> i32 {
     return 16;
 }
-pub static EV_FD: [i32; 1680] = [
+pub static EV_FD: [i32; 1686] = [
     1, 0, 1, 9, -2147483648, 0,
     1, 1, 2, 34, 0, 0,
     1, 2, 2, 74, 0, 0,
@@ -4079,6 +4243,7 @@ pub static EV_FD: [i32; 1680] = [
     17, 21, 9, 28, 0, 9,
     17, 22, 2, 136, -1, 0,
     17, 23, 10, 36, -2147483648, 0,
+    17, 27, 14, 153, 0, 0,
     18, 0, 1, 9, -2147483648, 0,
     18, 1, 3, 15, -2147483648, 0,
     18, 5, 1, 10, -1, 0,
@@ -4170,14 +4335,14 @@ pub static EV_FX: [i32; 48] = [
     147, 21,
     168, 10,
     178, 13,
-    191, 16,
-    207, 9,
-    216, 3,
-    219, 9,
-    228, 16,
-    244, 11,
-    255, 15,
-    270, 10
+    191, 17,
+    208, 9,
+    217, 3,
+    220, 9,
+    229, 16,
+    245, 11,
+    256, 15,
+    271, 10
 ];
 pub static EV_STRIDES: [i32; 24] = [
     12, 24, 3, 2, 1, 32, 32, 24, 16, 24, 16, 24, 20, 28, 16, 24,
@@ -6102,6 +6267,16 @@ pub(crate) fn ev_fcpt(mut t: &mut String, pr: i32, d: i32, c: &mut crate::port::
     js_cpt(t, v);
     return 1;
 }
+pub(crate) fn ev_fplus(mut t: &mut String, pr: i32, d: i32, c: &mut crate::port::Cells, stride: i32, row: i32, f: i32, key: i32, started: i32) -> i32 {
+    // Kind 14 (D731): a row index stored + 1, so that a zero cell is none and is not written; printed as the row.
+    let v: i32 = ev_get(c, stride, row, f);
+    if v <= 0 {
+        return started;
+    }
+    ev_begin(t, pr, d, started, key);
+    crate::port::text_i32(t, v - 1);
+    return 1;
+}
 pub(crate) fn ev_fquad(mut t: &mut String, pr: i32, d: i32, c: &mut crate::port::Cells, stride: i32, row: i32, f: i32, key: i32, started: i32) -> i32 {
     // `"key":[a,b,c,d]`, four cells f..f+3, in points: a box, a baseline.
     ev_begin(t, pr, d, started, key);
@@ -6388,6 +6563,9 @@ pub(crate) fn ev_field(mut t: &mut String, pr: i32, d: i32, c: &mut crate::port:
     if kind == 13 {
         return ev_fpair(t, pr, d, c, stride, row, f, key, dflt, arg, 1, started);
     }
+    if kind == 14 {
+        return ev_fplus(t, pr, d, c, stride, row, f, key, started);
+    }
     return started;
 }
 pub fn ev_row(mut t: &mut String, pr: i32, d: i32, ea: i32, c: &mut crate::port::Cells, etext: &mut crate::port::Cells, row: i32) -> i32 {
@@ -6502,6 +6680,104 @@ pub(crate) fn ev_arena_feats(mut t: &mut String, pr: i32, started: i32, feats: &
                 crate::port::text_i32(t, ev_get(feats, 32, i, col));
             }
             col += 1;
+        }
+        js_close(t, pr, 2, s);
+        i += 1;
+    }
+    js_aend(t, pr, 1, n);
+    return 1;
+}
+pub fn oz_stride() -> i32 {
+    return 16;
+}
+pub fn ozf_page() -> i32 {
+    return 0;
+}
+pub fn ozf_x0() -> i32 {
+    // slot box x0 y0 x1 y1 (cpt): every aligned node of the slot
+    return 1;
+}
+pub fn ozf_ifirst() -> i32 {
+    // the slot's first selected `owords` row (-1 none) and how many selected words
+    return 5;
+}
+pub fn ozf_icount() -> i32 {
+    return 6;
+}
+pub fn ozf_cfirst() -> i32 {
+    // the chosen words as copied into the `fused` run (-1, 0 kept)
+    return 7;
+}
+pub fn ozf_ccount() -> i32 {
+    return 8;
+}
+pub fn ozf_rule() -> i32 {
+    // the decision (`ofr` code - 1): the chosen candidate's, else the best-ranked alternative's
+    return 9;
+}
+pub fn ozf_votes() -> i32 {
+    // distinct readings voting for that candidate
+    return 10;
+}
+pub fn ozf_ivotes() -> i32 {
+    // distinct readings voting for the selected words
+    return 11;
+}
+pub fn ozf_nulls() -> i32 {
+    // full-page readings with no word in the slot
+    return 12;
+}
+pub fn ozf_margin() -> i32 {
+    // candidate minus selected mean confidence (per mille)
+    return 13;
+}
+pub fn ozf_readings() -> i32 {
+    // bit q: distinct reading q has a word in the slot
+    return 14;
+}
+pub fn ozf_op() -> i32 {
+    // what was done (`ofo` code - 1)
+    return 15;
+}
+pub fn ev_emit_ofuse(mut t: &mut String, pr: i32, started: i32, ofz: &mut crate::port::Cells) -> i32 {
+    // `"ofuse":[{...}]` when there is a row, else nothing at all (answers `started` unchanged).
+    let n: i32 = crate::port::cells_len(ofz) / oz_stride();
+    let mut i: i32 = 0;
+    let mut s: i32 = 0;
+    let mut v: i32 = 0;
+    if n == 0 {
+        return started;
+    }
+    ev_begin(t, pr, 0, started, ek_ofuse());
+    crate::port::text_ascii(t, "[");
+    while i < n {
+        js_aelem(t, pr, 1, i);
+        crate::port::text_ascii(t, "{");
+        s = 0;
+        s = ev_fint(t, pr, 2, ofz, oz_stride(), i, ozf_page(), ek_page(), -2147483648, s);
+        s = ev_fquad(t, pr, 2, ofz, oz_stride(), i, ozf_x0(), ek_box(), s);
+        if ev_get(ofz, oz_stride(), i, ozf_icount()) > 0 {
+            s = ev_frun(t, pr, 2, ofz, oz_stride(), i, ozf_ifirst(), ek_incumbent(), s);
+        }
+        if ev_get(ofz, oz_stride(), i, ozf_ccount()) > 0 {
+            s = ev_frun(t, pr, 2, ofz, oz_stride(), i, ozf_cfirst(), ek_choice(), s);
+        }
+        v = ev_get(ofz, oz_stride(), i, ozf_rule());
+        s = ev_begin(t, pr, 2, s, ek_rule());
+        crate::port::text_ascii(t, "\"");
+        ofr_emit_name(t, v + 1);
+        crate::port::text_ascii(t, "\"");
+        s = ev_fint(t, pr, 2, ofz, oz_stride(), i, ozf_votes(), ek_votes(), 0, s);
+        s = ev_fint(t, pr, 2, ofz, oz_stride(), i, ozf_ivotes(), ek_ivotes(), 0, s);
+        s = ev_fint(t, pr, 2, ofz, oz_stride(), i, ozf_nulls(), ek_nulls(), 0, s);
+        s = ev_fint(t, pr, 2, ofz, oz_stride(), i, ozf_margin(), ek_margin(), 0, s);
+        s = ev_fint(t, pr, 2, ofz, oz_stride(), i, ozf_readings(), ek_readings(), 0, s);
+        v = ev_get(ofz, oz_stride(), i, ozf_op());
+        if v > 0 {
+            s = ev_begin(t, pr, 2, s, ek_op());
+            crate::port::text_ascii(t, "\"");
+            ofo_emit_name(t, v + 1);
+            crate::port::text_ascii(t, "\"");
         }
         js_close(t, pr, 2, s);
         i += 1;

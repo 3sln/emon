@@ -222,7 +222,8 @@ public final class Ocrledger {
                 }
                 r = 0;
                 while (r < Evidence.orCount(runs)) {
-                    if (Evidence.orGet(runs, r, 0) == pg) {
+                    // D731: a `fused` run's words are copies of recorded words, which are audited themselves
+                    if ((Evidence.orGet(runs, r, 0) == pg) && (Evidence.orGet(runs, r, Evidence.orfPass()) != Evidence.opFused())) {
                         w = Evidence.orGet(runs, r, Evidence.orfWfirst());
                         end = w + Evidence.orGet(runs, r, Evidence.orfWcount());
                         while (w < end) {

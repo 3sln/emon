@@ -279,7 +279,24 @@
    [op-re-rotated 8 "re-rotated"]
    [op-upscaled 9 "upscaled"]
    [op-receipt 10 "receipt"]
-   [op-receipt-rescue 11 "receipt-rescue"]])
+   [op-receipt-rescue 11 "receipt-rescue"]
+   [op-fused 12 "fused"]])
+
+;; RC5c (D731): what a guarded fusion decision was (`ofuse` rows, printed as the code + 1) and what it did.
+(defenum ^:pub ofr
+  [[ofr-keep 1 "keep"]
+   [ofr-agree 2 "agree"]
+   [ofr-margin 3 "margin"]
+   [ofr-insert 4 "insert"]
+   [ofr-blocked-format 5 "blocked-format"]
+   [ofr-blocked-lexicon 6 "blocked-lexicon"]
+   [ofr-blocked-slot 7 "blocked-slot"]])
+
+(defenum ^:pub ofo
+  [[ofo-keep 1 "keep"]
+   [ofo-replace 2 "replace"]
+   [ofo-insert 3 "insert"]
+   [ofo-newline 4 "newline"]])
 
 (defenum ^:pub ir
   [[ir-body 1 "body"]
@@ -466,7 +483,17 @@
    [ek-radii 149 "radii"]
    [ek-outline 150 "outline"]
    [ek-backdrop 151 "backdrop"]
-   [ek-placement 152 "placement"]])
+   [ek-placement 152 "placement"]
+   [ek-from 153 "from"]
+   [ek-ofuse 154 "ofuse"]
+   [ek-incumbent 155 "incumbent"]
+   [ek-choice 156 "choice"]
+   [ek-rule 157 "rule"]
+   [ek-votes 158 "votes"]
+   [ek-ivotes 159 "ivotes"]
+   [ek-nulls 160 "nulls"]
+   [ek-margin 161 "margin"]
+   [ek-readings 162 "readings"]])
 
 ;; Feature columns of `feats` (SPEC 8.4.5): the column number and, as the spelling, its name in the dump.
 (defenum ^:pub xo
@@ -851,6 +878,7 @@
 (defn ^:pub ^I32 owf-py [] (return 24))
 (defn ^:pub ^I32 owf-pw [] (return 25))
 (defn ^:pub ^I32 owf-ph [] (return 26))
+(defn ^:pub ^I32 owf-from [] (comment "RC5c (D731): a fused copy's source `owords` row + 1; 0 for every recorded reading. Printed as the row (`from`), omitted when 0.") (return 27))
 
 ;; osyms (stride 20), head char
 (defn ^:pub ^I32 osf-conf [] (return 9))
@@ -958,7 +986,7 @@
 ;; (A resolution is kept as dots per inch x 100 -- `dpi100` -- and is printed as kind 2, so that 300 dpi is `300`, not `30000`: P12.6.)
 ;; kind 1 int, 2 centi-units as points, 3 box (4 cells), 4 segment (4 cells, `[x0,y0,x1,y1]` in points), 5 colour,
 ;; 6 text run (2 cells), 7 run `[first,count]`, 8 enum (arg: the `ev-fenum` table), 9 bit set (arg: the `ev-fbits` table),
-;; 10 pixel box `[x,y,w,h]`, 11 packed ASCII, 12 two ints, 13 two centi-unit values in points.
+;; 10 pixel box `[x,y,w,h]`, 11 packed ASCII, 12 two ints, 13 two centi-unit values in points, 14 a row index stored + 1 (0 none, D731).
 ;; A field equal to its default is not written (MIN: never omitted). A run is omitted when its first cell is the default and
 ;; its second the arg; a two-int `z` likewise.
 (defdata ^:pub ev-fd
@@ -1171,6 +1199,7 @@
          17 21 9 28 0 9
          17 22 2 136 -1 0
          17 23 10 36 -2147483648 0
+         17 27 14 153 0 0
          18 0 1 9 -2147483648 0
          18 1 3 15 -2147483648 0
          18 5 1 10 -1 0
@@ -1267,14 +1296,14 @@
          147 21
          168 10
          178 13
-         191 16
-         207 9
-         216 3
-         219 9
-         228 16
-         244 11
-         255 15
-         270 10]
+         191 17
+         208 9
+         217 3
+         220 9
+         229 16
+         245 11
+         256 15
+         271 10]
   :accessors {^I32 ev-fx-count [^I32 ignored]
               ^I32 ev-fx-at [^I32 ignored ^I32 row ^I32 field]})
 
@@ -2703,6 +2732,15 @@
     (js-cpt t v)
     (return 1)))
 
+(defn ^I32 ev-fplus [^:mut ^Text t ^I32 pr ^I32 d ^Cells c ^I32 stride ^I32 row
+                    ^I32 f ^I32 key ^I32 started]
+  (comment "Kind 14 (D731): a row index stored + 1, so that a zero cell is none and is not written; printed as the row.")
+  (let [^I32 v (ev-get c stride row f)]
+    (if (<= v 0) (return started))
+    (ev-begin t pr d started key)
+    (text-i32 t (- v 1))
+    (return 1)))
+
 (defn ^I32 ev-fquad [^:mut ^Text t ^I32 pr ^I32 d ^Cells c ^I32 stride ^I32 row
                      ^I32 f ^I32 key ^I32 started]
   (comment "`\"key\":[a,b,c,d]`, four cells f..f+3, in points: a box, a baseline.")
@@ -2887,6 +2925,7 @@
     (if (== kind 11) (return (ev-fpacked t pr d c stride row f key started)))
     (if (== kind 12) (return (ev-fpair t pr d c stride row f key dflt arg 0 started)))
     (if (== kind 13) (return (ev-fpair t pr d c stride row f key dflt arg 1 started)))
+    (if (== kind 14) (return (ev-fplus t pr d c stride row f key started)))
     (return started)))
 
 (defn ^:pub ^I32 ev-row [^:mut ^Text t ^I32 pr ^I32 d ^I32 ea ^Cells c ^Cells etext ^I32 row]
@@ -2981,6 +3020,63 @@
                       (if (== pr 1) (emit-ascii t " "))
                       (text-i32 t (ev-get feats 32 i col))))
                 (set col (+ col 1))))
+          (js-close t pr 2 s)
+          (set i (+ i 1))))
+    (js-aend t pr 1 n)
+    (return 1)))
+
+;; RC5c (D731): one `ofuse` row per fusion slot a gated receipt page considered, kept or changed. Not an `ea` arena: the dump's member is
+;; written after the arenas only when a page fused (`ev-emit-ofuse`), so every other dump is unchanged. Stride 16.
+(defn ^:pub ^I32 oz-stride [] (return 16))
+(defn ^:pub ^I32 ozf-page [] (return 0))
+(defn ^:pub ^I32 ozf-x0 [] (comment "slot box x0 y0 x1 y1 (cpt): every aligned node of the slot") (return 1))
+(defn ^:pub ^I32 ozf-ifirst [] (comment "the slot's first selected `owords` row (-1 none) and how many selected words") (return 5))
+(defn ^:pub ^I32 ozf-icount [] (return 6))
+(defn ^:pub ^I32 ozf-cfirst [] (comment "the chosen words as copied into the `fused` run (-1, 0 kept)") (return 7))
+(defn ^:pub ^I32 ozf-ccount [] (return 8))
+(defn ^:pub ^I32 ozf-rule [] (comment "the decision (`ofr` code - 1): the chosen candidate's, else the best-ranked alternative's") (return 9))
+(defn ^:pub ^I32 ozf-votes [] (comment "distinct readings voting for that candidate") (return 10))
+(defn ^:pub ^I32 ozf-ivotes [] (comment "distinct readings voting for the selected words") (return 11))
+(defn ^:pub ^I32 ozf-nulls [] (comment "full-page readings with no word in the slot") (return 12))
+(defn ^:pub ^I32 ozf-margin [] (comment "candidate minus selected mean confidence (per mille)") (return 13))
+(defn ^:pub ^I32 ozf-readings [] (comment "bit q: distinct reading q has a word in the slot") (return 14))
+(defn ^:pub ^I32 ozf-op [] (comment "what was done (`ofo` code - 1)") (return 15))
+
+(defn ^:pub ^I32 ev-emit-ofuse [^:mut ^Text t ^I32 pr ^I32 started ^Cells ofz]
+  (comment "`\"ofuse\":[{...}]` when there is a row, else nothing at all (answers `started` unchanged).")
+  (let [^I32 n (quot (cells-len ofz) (oz-stride))
+        ^:mut ^I32 i 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 v 0]
+    (if (== n 0) (return started))
+    (ev-begin t pr 0 started (ek-ofuse))
+    (emit-ascii t "[")
+    (while (< i n)
+      (do (js-aelem t pr 1 i)
+          (emit-ascii t "{")
+          (set s 0)
+          (set s (ev-fint t pr 2 ofz (oz-stride) i (ozf-page) (ek-page) -2147483648 s))
+          (set s (ev-fquad t pr 2 ofz (oz-stride) i (ozf-x0) (ek-box) s))
+          (if (> (ev-get ofz (oz-stride) i (ozf-icount)) 0)
+            (set s (ev-frun t pr 2 ofz (oz-stride) i (ozf-ifirst) (ek-incumbent) s)))
+          (if (> (ev-get ofz (oz-stride) i (ozf-ccount)) 0)
+            (set s (ev-frun t pr 2 ofz (oz-stride) i (ozf-cfirst) (ek-choice) s)))
+          (set v (ev-get ofz (oz-stride) i (ozf-rule)))
+          (set s (ev-begin t pr 2 s (ek-rule)))
+          (emit-ascii t "\"")
+          (ofr-emit-name t (+ v 1))
+          (emit-ascii t "\"")
+          (set s (ev-fint t pr 2 ofz (oz-stride) i (ozf-votes) (ek-votes) 0 s))
+          (set s (ev-fint t pr 2 ofz (oz-stride) i (ozf-ivotes) (ek-ivotes) 0 s))
+          (set s (ev-fint t pr 2 ofz (oz-stride) i (ozf-nulls) (ek-nulls) 0 s))
+          (set s (ev-fint t pr 2 ofz (oz-stride) i (ozf-margin) (ek-margin) 0 s))
+          (set s (ev-fint t pr 2 ofz (oz-stride) i (ozf-readings) (ek-readings) 0 s))
+          (set v (ev-get ofz (oz-stride) i (ozf-op)))
+          (if (> v 0)
+            (do (set s (ev-begin t pr 2 s (ek-op)))
+                (emit-ascii t "\"")
+                (ofo-emit-name t (+ v 1))
+                (emit-ascii t "\"")))
           (js-close t pr 2 s)
           (set i (+ i 1))))
     (js-aend t pr 1 n)

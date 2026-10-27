@@ -212,9 +212,9 @@ public static class Engine {
         // on an earlier one, with nothing in `d` or `ev` changed (the scratch `pscr` aside).
         emon.Port.CellsDrop(d.Pscr, 0);
         if (d.Kind == EnKindPdf()) {
-            return Pageunit.PuRunPdf(i, idx, c.Ocr, d.Plan, ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, (2 * c.Nort) + (4 * c.Dry), d.Fw, d.Fl, d.Hl, ev.Refs, d.Cg, ev.Tlines, d.Xs0, d.Xs1, d.Xs2, d.Xs3, d.Xs4, d.Xs5, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys1, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18);
+            return Pageunit.PuRunPdf(i, idx, c.Ocr, d.Plan, ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, (2 * c.Nort) + (4 * c.Dry), d.Fw, d.Fl, d.Hl, ev.Refs, d.Cg, ev.Tlines, d.Xs0, d.Xs1, d.Xs2, d.Xs3, d.Xs4, d.Xs5, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys1, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse);
         }
-        return Rasterin.RsPage(i, idx, nbytes, c.Ocr, (2 * c.Nort) + (4 * c.Dry), ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, ev.Refs, ev.Tlines, d.Cg, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18);
+        return Rasterin.RsPage(i, idx, nbytes, c.Ocr, (2 * c.Nort) + (4 * c.Dry), ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, ev.Refs, ev.Tlines, d.Cg, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse);
     }
     public static int EnAssetUnit(emon.Port.Src view, emon.Port.Src pw, emon.Enctx.Cfg c, emon.Enctx.Doc d, emon.Enctx.Pass p, int idx, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms, emon.Port.Buf payload) {
         // THE ASSET UNIT (P6.1a, D117, D291, SPEC 10.11): the candidates of the document's image placements, in its own plan/fulfil loop. It re-opens the document
@@ -426,6 +426,7 @@ public static class Engine {
         Gfuse.GfFuse(np, ev.Epages, ev.Inks, ev.Rules, ev.Prims, ev.Oblocks, ev.Owords, d.Wd, d.Et, d.Pa, d.Im, ev.Feats, d.Grl, d.Gfl, s.Ggp, s.Grg, ev.Refs, d.Hl, s.Fx, s.Gfa, s.Ga0, s.Ga1, s.Ga2, s.Ga3, s.Ga4, s.Ga5, s.Ga6);
         if (c.Keep != 0) {
             EnDump(d.Et, d.Gl, d.Wd, d.Ln, d.Mk, d.Fnt, d.Grl, d.Gfl, s.Ggp, s.Grg, ev, d.Evidence);
+            Evidence.EvEmitOfuse(d.Evidence, 0, 1, ev.Ofuse);
         }
         Tlhealth.ThAppend(d.Wd, d.Ln, d.Fw, d.Fl, 0);
         if (emon.Port.CellsLen(d.Cg) > 0) {

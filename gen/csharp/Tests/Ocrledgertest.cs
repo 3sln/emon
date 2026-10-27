@@ -247,4 +247,52 @@ public static class Ocrledgertest {
         emon.Testport.AssertEq(Ocrledger.OcPageText(nodes, regions, text, 1, bag, tokens, plain), 1, "actual furniture text prevents an empty diagnostic");
         emon.Testport.AssertEq(Ocrledger.OcPageText(nodes, regions, text, 2, bag, tokens, plain), 0, "another page has its own text population");
     }
+    [Xunit.Fact]
+    public static void TestFusedCopiesAreNotAuditedTwiceAndTheDisplacedWordKeepsAFate() {
+        // D731: run 0 read B (selected, then displaced), run 1 read A (chosen), run 2 is the fused run whose word copies run 1's. The Model holds A once.
+        emon.Port.Cells runs = emon.Port.NewCells();
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells mask = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells bag = emon.Port.NewCells();
+        emon.Port.Cells tokens = emon.Port.NewCells();
+        emon.Port.Cells norm = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells raw = emon.Port.NewCells();
+        emon.Port.Cells rt = emon.Port.NewCells();
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        emon.Port.CellsPush(mask, 1);
+        emon.Port.CellsPush(et, 66);
+        emon.Port.CellsPush(et, 65);
+        emon.Port.CellsPush(text, 65);
+        int n = Model.NodeNew(nodes, Model.NkParagraph(), 0);
+        Model.NodeSetText(nodes, n, 0, 1);
+        Model.NodeAddRegion(nodes, regions, n, 1, 0, 0, 100, 100);
+        Evidence.OrNew(runs, 1, 0);
+        Evidence.OrSet(runs, 0, Evidence.OrfPass(), Evidence.OpFirst());
+        Evidence.OrSet(runs, 0, Evidence.OrfWfirst(), 0);
+        Evidence.OrSet(runs, 0, Evidence.OrfWcount(), 1);
+        Evidence.OrNew(runs, 1, 0);
+        Evidence.OrSet(runs, 1, Evidence.OrfPass(), Evidence.OpBodyInk());
+        Evidence.OrSet(runs, 1, Evidence.OrfWfirst(), 1);
+        Evidence.OrSet(runs, 1, Evidence.OrfWcount(), 1);
+        Evidence.OrNew(runs, 1, 0);
+        Evidence.OrSet(runs, 2, Evidence.OrfPass(), Evidence.OpFused());
+        Evidence.OrSet(runs, 2, Evidence.OrfWfirst(), 2);
+        Evidence.OrSet(runs, 2, Evidence.OrfWcount(), 1);
+        Evidence.OwNew(words, 1, 0, 0, 100, 100, 0, 100, 100, 100, 0, 0, 0, 1, 0, 400, -1);
+        Evidence.OwNew(words, 1, 0, 0, 100, 100, 0, 100, 100, 100, 0, 0, 1, 1, 0, 900, -1);
+        Evidence.OwNew(words, 1, 0, 0, 100, 100, 0, 100, 100, 100, 0, 0, 1, 1, 0, 900, -1);
+        Evidence.OwSet(words, 2, Evidence.OwfFrom(), 2);
+        emon.Testport.AssertEq(Ocrledger.OcAccount(runs, words, et, nodes, regions, mask, ledger, text, bag, tokens, norm, tmp, raw, rt), 1, "only the displaced reading is residual");
+        emon.Testport.AssertEq(Model.LedgerCount(ledger), 1, "the copy neither consumes nor claims the Model's A");
+        emon.Testport.AssertEq(Model.LedgerTextLen(ledger, 0), 1, "the displaced word's own text");
+    }
 }

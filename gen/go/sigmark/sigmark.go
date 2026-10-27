@@ -520,7 +520,7 @@ func SgLegibleWords(owords *port.Cells, et *port.Cells, fw *port.Cells, page int
 	var ts int32 = 0
 	var tl int32 = 0
 	for i < n {
-		if evidence.OwGet(owords, i, evidence.HdPage()) == page {
+		if (evidence.OwGet(owords, i, evidence.HdPage()) == page) && (evidence.OwGet(owords, i, evidence.OwfFrom()) == 0) {
 			if evidence.OwGet(owords, i, evidence.HdConf()) >= SgLegible() {
 				cx = (evidence.OwGet(owords, i, evidence.HdX0()) + evidence.OwGet(owords, i, evidence.HdX1())) / 2
 				cy = (evidence.OwGet(owords, i, evidence.HdY0()) + evidence.OwGet(owords, i, evidence.HdY1())) / 2

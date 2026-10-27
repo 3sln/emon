@@ -1,12 +1,15 @@
 ;; RC5 policy laws precede implementation. No corpus inputs or OCR requests.
 (ns emon.ofusetest
   (:require [emon.lang :refer [I32 Cells]]
-            [emon.test :refer [deftest assert-eq new-cells]]
+            [emon.test :refer [deftest assert-eq assert-text new-cells new-text TestT test-t]]
             [emon.port :refer [cells-push cells-at cells-len cells-set]]
-            [emon.evidence :refer [ow-new ow-get ow-count hd-tstart hd-tlen hd-conf hd-x0 hd-line owf-run ow-set owf-flags or-new or-set orf-pass orf-wfirst orf-wcount]]
+            [emon.evidence :refer [oe-garbage ow-new ow-get ow-count hd-tstart hd-tlen hd-conf hd-x0 hd-line hd-feat owf-run ow-set owf-flags or-new or-set or-get or-count orf-pass orf-wfirst orf-wcount
+                                   orf-lfirst orf-lcount ol-new ol-set ol-get ol-count olf-run lh-first lh-count op-fused ev-check ev-row ev-emit-ofuse
+                                   oz-stride ozf-ifirst ozf-icount ozf-cfirst ozf-ccount ozf-rule ozf-votes ozf-ivotes ozf-nulls ozf-margin ozf-readings ozf-op]]
+            [emon.scan :refer [sc-prep sc-sel-base sc-xtra-base sc-admit-floor]]
             [emon.ofmt :refer [ofmt-valid]]
-            [emon.ofuse :refer [of-active of-rule of-margin of-insert-conf of-slot-max of-copy of-from of-align of-root of-keyword of-readings of-candidates of-choice of-cget of-cstride of-null-votes of-eligible]]
-            [kin.lang :refer [defn return let + *]]))
+            [emon.ofuse :refer [of-active of-rule of-margin of-insert-conf of-slot-max of-copy of-from of-source of-align of-root of-keyword of-readings of-candidates of-choice of-cget of-cstride of-null-votes of-eligible of-fuse of-page-keyword]]
+            [kin.lang :refer [defn return let set while if do comment + - * < > >= == != and or bit-and quot]]))
 
 (defn ^I32 oft-447-0 []
   (let [^Cells c (new-cells)]
@@ -492,7 +495,9 @@
     (assert-eq (ow-get words copied (hd-tlen)) 7 "same recorded character count")
     (assert-eq (ow-get words copied (hd-conf)) 876 "same source confidence")
     (assert-eq (ow-get words copied (hd-x0)) 10 "same source box")
-    (assert-eq (ow-get words copied (of-from)) source "source row is explicit")
+    (assert-eq (of-source words copied) source "source row is explicit")
+    (assert-eq (of-source words source) -1 "a recorded reading is no copy")
+    (assert-eq (ow-get words copied (hd-feat)) -1 "a copy has no feature row of its own")
     (assert-eq (ow-get words copied (owf-run)) 9 "synthetic run")
     (assert-eq (ow-get words copied (hd-line)) 8 "synthetic line")
     (assert-eq (ow-count words) 2 "original remains for D699")
@@ -809,3 +814,257 @@
   (let [^Cells c (new-cells)]
     (assert-eq (of-choice c 0) -1 "empty table is a no-op")
     (assert-eq (of-choice c 4) -1 "missing table never deletes selected words")))
+
+;; ------------------------------------------------------------- D731: the integration, laws written before `of-fuse`
+;;
+;; One receipt page. Run 0 is the first pass and its one line is the selection; runs 1 (body-ink) and 2 (receipt) are later readings
+;; of the same page. Text: TOTAL 0..5, 12.O0 5..10, 12.00 10..15, CASH 15..19, ZZ 19..21, 13.00 21..26. `variant` bits:
+;;   1 the selected number is the valid 12.00   2 the readings say 13.00   4 run 0 is the only reading   8 no keyword (ZZ for TOTAL)
+;;   16 an extra selected ZZ no other reading sees   32 a confident CASH (dictionary) below the line in runs 1 and 2   64 that CASH at 650
+;;   128 CASH on the line just after TOTAL   256 a reading word whose text span is hostile   512 five chained selected words over one reading word
+;;   1024 a selected ZZ at 200 under a 300 admission floor (the emission keeps it out)
+(defn ^I32 oft-cps [^:mut ^Cells text]
+  (cells-push text 84) (cells-push text 79) (cells-push text 84) (cells-push text 65) (cells-push text 76)
+  (cells-push text 49) (cells-push text 50) (cells-push text 46) (cells-push text 79) (cells-push text 48)
+  (cells-push text 49) (cells-push text 50) (cells-push text 46) (cells-push text 48) (cells-push text 48)
+  (cells-push text 67) (cells-push text 65) (cells-push text 83) (cells-push text 72)
+  (cells-push text 90) (cells-push text 90)
+  (cells-push text 49) (cells-push text 51) (cells-push text 46) (cells-push text 48) (cells-push text 48)
+  (return 26))
+
+(defn ^I32 oft-w [^:mut ^Cells words ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 ts ^I32 tl ^I32 run ^I32 line ^I32 conf ^I32 flags]
+  (let [^I32 w (ow-new words 1 x0 y0 x1 y1 x0 y1 x1 y1 0 0 ts tl line conf -1)]
+    (ow-set words w (owf-run) run)
+    (ow-set words w (owf-flags) flags)
+    (return w)))
+
+(defn ^I32 oft-close [^:mut ^Cells runs ^:mut ^Cells lines ^I32 pass ^I32 w0 ^I32 w1 ^I32 x1 ^I32 y1]
+  (comment "Run `pass` of words [w0, w1), one line over all of them.")
+  (let [^I32 r (or-new runs 1 -1) ^I32 l (ol-new lines 1 1000 1000 x1 y1 1000 y1 x1 y1 0 0 w0 (- w1 w0))]
+    (ol-set lines l (olf-run) r)
+    (or-set runs r (orf-pass) pass)
+    (or-set runs r (orf-lfirst) l) (or-set runs r (orf-lcount) 1)
+    (or-set runs r (orf-wfirst) w0) (or-set runs r (orf-wcount) (- w1 w0))
+    (return r)))
+
+(defn ^I32 oft-reading [^:mut ^Cells runs ^:mut ^Cells lines ^:mut ^Cells words ^I32 variant ^I32 pass ^I32 dx ^I32 conf ^I32 run ^I32 line]
+  (let [^I32 w0 (ow-count words) ^:mut ^I32 ts 0 ^:mut ^I32 cash 800]
+    (if (!= (bit-and variant 8) 0) (oft-w words (+ 1000 dx) 1000 (+ 1500 dx) 1200 19 2 run line 950 1)
+      (oft-w words (+ 1000 dx) 1000 (+ 1500 dx) 1200 0 5 run line 950 1))
+    (set ts 10)
+    (if (!= (bit-and variant 2) 0) (set ts 21))
+    (if (== (bit-and variant 512) 0) (oft-w words (+ 3000 dx) 1000 (+ 3500 dx) 1200 ts 5 run line conf 2)
+      (oft-w words (+ 7000 dx) 1000 (+ 7260 dx) 1200 21 5 run line conf 2))
+    (if (!= (bit-and variant 64) 0) (set cash 650))
+    (if (!= (bit-and variant 96) 0) (oft-w words (+ 1000 dx) 3000 (+ 1500 dx) 3200 15 4 run line cash 1))
+    (if (!= (bit-and variant 128) 0) (oft-w words (+ 1600 dx) 1000 (+ 2000 dx) 1200 15 4 run line cash 1))
+    (if (!= (bit-and variant 256) 0) (oft-w words 6000 1000 6500 1200 2147483647 5 run line 990 2))
+    (return (oft-close runs lines pass w0 (ow-count words) 7600 3200))))
+
+(defn ^I32 oft-page [^:mut ^Cells runs ^:mut ^Cells lines ^:mut ^Cells words ^:mut ^Cells text ^:mut ^Cells scr ^I32 variant]
+  (comment "The page; answers the selection's count (1).")
+  (let [^:mut ^I32 ts 5 ^:mut ^I32 k 0]
+    (oft-cps text)
+    (if (!= (bit-and variant 8) 0) (oft-w words 1000 1000 1500 1200 19 2 0 0 950 1) (oft-w words 1000 1000 1500 1200 0 5 0 0 950 1))
+    (if (!= (bit-and variant 1) 0) (set ts 10))
+    (if (== (bit-and variant 512) 0) (oft-w words 3000 1000 3500 1200 ts 5 0 0 400 0)
+      (while (< k 5) (do (oft-w words (+ 7000 (* k 40)) 1000 (+ 7100 (* k 40)) 1200 19 2 0 0 400 0) (set k (+ k 1)))))
+    (if (!= (bit-and variant 16) 0) (oft-w words 5000 1000 5300 1200 19 2 0 0 300 0))
+    (if (!= (bit-and variant 1024) 0) (oft-w words 5000 1000 5300 1200 19 2 0 0 200 0))
+    (oft-close runs lines 1 0 (ow-count words) 7600 1200)
+    (if (== (bit-and variant 4) 0)
+      (do (oft-reading runs lines words variant 6 0 900 1 1)
+          (oft-reading runs lines words variant 10 20 920 2 2)))
+    (sc-prep scr)
+    (cells-set scr (sc-xtra-base) 0)
+    (cells-set scr (+ (sc-xtra-base) 1) 0)
+    (cells-set scr (sc-sel-base) 0)
+    (if (!= (bit-and variant 1024) 0) (cells-set scr (sc-admit-floor) 300))
+    (return 1)))
+
+(defn ^I32 oft-fuse [^Cells runs ^Cells lines ^Cells words ^Cells text ^Cells scr ^Cells ofz ^I32 image ^I32 trigger ^Cells r1]
+  (return (of-fuse 1 image trigger runs lines words text (new-cells) scr 1 ofz r1 (new-cells) (new-cells) (new-cells) (new-cells)
+                   (new-cells) (new-cells) (new-cells) (new-cells) (new-cells))))
+
+(defn ^I32 oft-z [^Cells ofz ^I32 row ^I32 f] (return (cells-at ofz (+ (* row (oz-stride)) f))))
+
+(deftest test-fusion-replaces-a-malformed-number-with-an-agreed-verbatim-copy
+  (let [^Cells runs (new-cells) ^Cells lines (new-cells) ^Cells words (new-cells) ^Cells text (new-cells) ^Cells scr (new-cells) ^Cells ofz (new-cells)]
+    (oft-page runs lines words text scr 0)
+    (assert-eq (oft-fuse runs lines words text scr ofz 1 1 (new-cells)) 1 "one selected line")
+    (assert-eq (or-count runs) 4 "one synthetic run")
+    (assert-eq (or-get runs 3 (orf-pass)) (op-fused) "pass fused")
+    (assert-eq (cells-at scr (sc-sel-base)) 3 "the selection reads the fused line")
+    (assert-eq (ol-get lines 3 (lh-count)) 2 "both words of the line")
+    (assert-eq (ol-get lines 3 (lh-first)) 6 "copies follow every recorded word")
+    (assert-eq (of-source words 6) 0 "TOTAL is a copy of the selected word")
+    (assert-eq (of-source words 7) 3 "12.00 is a copy of the earliest agreeing reading")
+    (assert-eq (ow-get words 7 (hd-tstart)) 10 "the copy's text is the recorded text")
+    (assert-eq (ow-get words 7 (hd-conf)) 900 "and its confidence")
+    (assert-eq (ow-get words 1 (hd-tstart)) 5 "the displaced word is unchanged evidence")
+    (assert-eq (ow-get words 1 (owf-run)) 0 "in its own run")
+    (assert-eq (quot (cells-len ofz) (oz-stride)) 2 "one row per considered slot")
+    (assert-eq (oft-z ofz 0 (ozf-rule)) 0 "TOTAL is kept")
+    (assert-eq (oft-z ofz 0 (ozf-op)) 0 "keep")
+    (assert-eq (oft-z ofz 0 (ozf-ivotes)) 3 "every reading agrees with it")
+    (assert-eq (oft-z ofz 0 (ozf-ccount)) 0 "nothing chosen")
+    (assert-eq (oft-z ofz 1 (ozf-rule)) 1 "agreement")
+    (assert-eq (oft-z ofz 1 (ozf-op)) 1 "replace")
+    (assert-eq (oft-z ofz 1 (ozf-ifirst)) 1 "the selected word")
+    (assert-eq (oft-z ofz 1 (ozf-icount)) 1 "one selected word")
+    (assert-eq (oft-z ofz 1 (ozf-cfirst)) 7 "the copy")
+    (assert-eq (oft-z ofz 1 (ozf-ccount)) 1 "one copied word")
+    (assert-eq (oft-z ofz 1 (ozf-votes)) 2 "two readings")
+    (assert-eq (oft-z ofz 1 (ozf-ivotes)) 1 "against one")
+    (assert-eq (oft-z ofz 1 (ozf-nulls)) 0 "no silent full reading")
+    (assert-eq (oft-z ofz 1 (ozf-margin)) 520 "920 against 400")
+    (assert-eq (oft-z ofz 1 (ozf-readings)) 7 "all three readings")))
+
+(deftest test-fusion-outside-the-gate-touches-nothing
+  (let [^Cells runs (new-cells) ^Cells lines (new-cells) ^Cells words (new-cells) ^Cells text (new-cells) ^Cells scr (new-cells)
+        ^Cells ofz (new-cells) ^Cells r1 (new-cells)]
+    (oft-page runs lines words text scr 0)
+    (cells-push r1 77)
+    (assert-eq (oft-fuse runs lines words text scr ofz 0 1 r1) 1 "PDF or turned page")
+    (assert-eq (oft-fuse runs lines words text scr ofz 1 0 r1) 1 "detector silent")
+    (assert-eq (oft-fuse runs lines words text scr ofz 1 3 r1) 1 "no such lane")
+    (assert-eq (or-count runs) 3 "no run")
+    (assert-eq (ow-count words) 6 "no word")
+    (assert-eq (ol-count lines) 3 "no line")
+    (assert-eq (cells-len ofz) 0 "no row")
+    (assert-eq (cells-len r1) 1 "scratch untouched")
+    (assert-eq (cells-at scr (sc-sel-base)) 0 "selection untouched")))
+
+(deftest test-a-page-without-a-receipt-keyword-is-untouched
+  (let [^Cells runs (new-cells) ^Cells lines (new-cells) ^Cells words (new-cells) ^Cells text (new-cells) ^Cells scr (new-cells)
+        ^Cells ofz (new-cells) ^Cells r1 (new-cells)]
+    (oft-page runs lines words text scr 8)
+    (cells-push r1 77)
+    (assert-eq (of-page-keyword words text 1) 0 "no receipt keyword")
+    (assert-eq (oft-fuse runs lines words text scr ofz 1 1 r1) 1 "keyword gate is stacked")
+    (assert-eq (or-count runs) 3 "no run without a keyword")
+    (assert-eq (cells-len ofz) 0 "no row without a keyword")
+    (assert-eq (cells-len r1) 1 "scratch untouched without a keyword")))
+
+(deftest test-a-page-with-one-reading-is-a-noop
+  (let [^Cells runs (new-cells) ^Cells lines (new-cells) ^Cells words (new-cells) ^Cells text (new-cells) ^Cells scr (new-cells) ^Cells ofz (new-cells)]
+    (oft-page runs lines words text scr 4)
+    (assert-eq (oft-fuse runs lines words text scr ofz 1 1 (new-cells)) 1 "selection unchanged")
+    (assert-eq (or-count runs) 1 "no synthetic run")
+    (assert-eq (cells-len ofz) 0 "nothing to decide")
+    (assert-eq (cells-at scr (sc-sel-base)) 0 "the recorded line")))
+
+(deftest test-a-valid-selected-number-survives-unanimous-confident-alternatives
+  (let [^Cells runs (new-cells) ^Cells lines (new-cells) ^Cells words (new-cells) ^Cells text (new-cells) ^Cells scr (new-cells) ^Cells ofz (new-cells)]
+    (oft-page runs lines words text scr 3)
+    (assert-eq (oft-fuse runs lines words text scr ofz 1 1 (new-cells)) 1 "selection unchanged")
+    (assert-eq (or-count runs) 3 "nothing copied")
+    (assert-eq (cells-at scr (sc-sel-base)) 0 "the recorded line")
+    (assert-eq (oft-z ofz 1 (ozf-rule)) 4 "blocked by the format rule")
+    (assert-eq (oft-z ofz 1 (ozf-votes)) 2 "though two readings agree")
+    (assert-eq (oft-z ofz 1 (ozf-op)) 0 "kept")))
+
+(deftest test-fusion-never-deletes-a-selected-word-no-other-reading-sees
+  (let [^Cells runs (new-cells) ^Cells lines (new-cells) ^Cells words (new-cells) ^Cells text (new-cells) ^Cells scr (new-cells) ^Cells ofz (new-cells)]
+    (oft-page runs lines words text scr 16)
+    (oft-fuse runs lines words text scr ofz 1 1 (new-cells))
+    (assert-eq (ol-get lines (cells-at scr (sc-sel-base)) (lh-count)) 3 "every selected word is still read")
+    (assert-eq (of-source words (+ (ol-get lines (cells-at scr (sc-sel-base)) (lh-first)) 2)) 2 "the unseen word, copied verbatim")))
+
+(deftest test-a-confident-unselected-reading-opens-a-new-line
+  (let [^Cells runs (new-cells) ^Cells lines (new-cells) ^Cells words (new-cells) ^Cells text (new-cells) ^Cells scr (new-cells) ^Cells ofz (new-cells)]
+    (oft-page runs lines words text scr 33)
+    (assert-eq (oft-fuse runs lines words text scr ofz 1 1 (new-cells)) 2 "a new line after the page's last")
+    (assert-eq (cells-at scr (sc-sel-base)) 0 "the unchanged line keeps its own row")
+    (assert-eq (ol-get lines (cells-at scr (+ (sc-sel-base) 1)) (olf-run)) 3 "the new line is the fused run's")
+    (assert-eq (of-source words (ol-get lines (cells-at scr (+ (sc-sel-base) 1)) (lh-first))) 4 "CASH from the earliest reading")
+    (assert-eq (oft-z ofz 2 (ozf-op)) 3 "newline")
+    (assert-eq (oft-z ofz 2 (ozf-rule)) 3 "insert")))
+
+(deftest test-a-weak-unselected-reading-is-not-inserted
+  (let [^Cells runs (new-cells) ^Cells lines (new-cells) ^Cells words (new-cells) ^Cells text (new-cells) ^Cells scr (new-cells) ^Cells ofz (new-cells)]
+    (oft-page runs lines words text scr 65)
+    (assert-eq (oft-fuse runs lines words text scr ofz 1 1 (new-cells)) 1 "650 is below the insertion floor")
+    (assert-eq (or-count runs) 3 "nothing copied")
+    (assert-eq (oft-z ofz 2 (ozf-op)) 0 "the slot is recorded, kept")))
+
+(deftest test-an-insertion-on-a-selected-baseline-follows-its-anchor
+  (let [^Cells runs (new-cells) ^Cells lines (new-cells) ^Cells words (new-cells) ^Cells text (new-cells) ^Cells scr (new-cells) ^Cells ofz (new-cells)
+        ^:mut ^I32 l 0]
+    (oft-page runs lines words text scr 129)
+    (assert-eq (oft-fuse runs lines words text scr ofz 1 1 (new-cells)) 1 "no new line")
+    (set l (cells-at scr (sc-sel-base)))
+    (assert-eq (ol-get lines l (lh-count)) 3 "TOTAL CASH 12.00")
+    (assert-eq (of-source words (+ (ol-get lines l (lh-first)) 1)) 4 "CASH after TOTAL")
+    (assert-eq (of-source words (+ (ol-get lines l (lh-first)) 2)) 1 "the valid number kept in place")))
+
+(deftest test-an-oversized-slot-is-recorded-and-left-alone
+  (let [^Cells runs (new-cells) ^Cells lines (new-cells) ^Cells words (new-cells) ^Cells text (new-cells) ^Cells scr (new-cells) ^Cells ofz (new-cells)]
+    (oft-page runs lines words text scr 512)
+    (assert-eq (oft-fuse runs lines words text scr ofz 1 1 (new-cells)) 1 "selection unchanged")
+    (assert-eq (or-count runs) 3 "nothing copied")
+    (assert-eq (oft-z ofz 1 (ozf-icount)) 5 "five chained selected words")
+    (assert-eq (oft-z ofz 1 (ozf-rule)) 6 "blocked-slot")))
+
+(deftest test-a-hostile-reading-span-is-never-read
+  (let [^Cells runs (new-cells) ^Cells lines (new-cells) ^Cells words (new-cells) ^Cells text (new-cells) ^Cells scr (new-cells) ^Cells ofz (new-cells)]
+    (oft-page runs lines words text scr 256)
+    (assert-eq (oft-fuse runs lines words text scr ofz 1 1 (new-cells)) 1 "one selected line")
+    (assert-eq (quot (cells-len ofz) (oz-stride)) 2 "the hostile word makes no slot")
+    (assert-eq (of-source words (+ (ol-get lines (cells-at scr (sc-sel-base)) (lh-first)) 1)) 3 "the same decision")))
+
+(defn ^I32 oft-same [^TestT emon-t ^Cells a ^Cells b]
+  (let [^:mut ^I32 i 0]
+    (assert-eq (cells-len a) (cells-len b) "same length")
+    (while (and (< i (cells-len a)) (< i (cells-len b)))
+      (do (assert-eq (cells-at a i) (cells-at b i) "same cell") (set i (+ i 1))))
+    (return 0)))
+
+(deftest test-fusion-replays-to-identical-evidence
+  (let [^Cells runs (new-cells) ^Cells lines (new-cells) ^Cells words (new-cells) ^Cells text (new-cells) ^Cells scr (new-cells) ^Cells ofz (new-cells)
+        ^Cells runs2 (new-cells) ^Cells lines2 (new-cells) ^Cells words2 (new-cells) ^Cells text2 (new-cells) ^Cells scr2 (new-cells) ^Cells ofz2 (new-cells)]
+    (oft-page runs lines words text scr 177)
+    (oft-page runs2 lines2 words2 text2 scr2 177)
+    (oft-fuse runs lines words text scr ofz 1 1 (new-cells))
+    (oft-fuse runs2 lines2 words2 text2 scr2 ofz2 1 1 (new-cells))
+    (oft-same (test-t) runs runs2)
+    (oft-same (test-t) lines lines2)
+    (oft-same (test-t) words words2)
+    (oft-same (test-t) ofz ofz2)
+    (assert-eq (cells-at scr (sc-sel-base)) (cells-at scr2 (sc-sel-base)) "same selection")))
+
+(deftest test-a-fused-page-is-well-formed-evidence
+  (let [^Cells runs (new-cells) ^Cells lines (new-cells) ^Cells words (new-cells) ^Cells text (new-cells) ^Cells scr (new-cells) ^Cells ofz (new-cells)]
+    (oft-page runs lines words text scr 48)
+    (oft-fuse runs lines words text scr ofz 1 1 (new-cells))
+    (assert-eq (ev-check (new-cells) (new-cells) (new-cells) (new-cells) text (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                         (new-cells) (new-cells) (new-cells) runs (new-cells) lines words (new-cells) (new-cells) (new-cells)
+                         (new-cells) (new-cells) (new-cells) (new-cells)) 0 "runs, lines and copies nest; no copy claims a feature row")))
+
+(deftest test-a-copy-prints-its-source-and-a-recorded-word-does-not
+  (let [^Cells words (new-cells) ^Cells text (new-cells) ^Text a (new-text) ^Text b (new-text)
+        ^I32 source (ow-new words 1 10 20 110 40 10 40 110 40 0 0 0 1 2 876 -1)
+        ^I32 copied (of-copy words source 9 8)]
+    (cells-push text 65)
+    (ev-row a 0 0 17 words text source)
+    (ev-row b 0 0 17 words text copied)
+    (assert-text a "{\"page\":1,\"box\":[0.1,0.2,1.1,0.4],\"baseline\":[0.1,0.4,1.1,0.4],\"text\":\"A\",\"line\":2,\"conf\":876}" "a recorded reading has no from")
+    (assert-text b "{\"page\":1,\"box\":[0.1,0.2,1.1,0.4],\"baseline\":[0.1,0.4,1.1,0.4],\"text\":\"A\",\"line\":8,\"conf\":876,\"run\":9,\"from\":0}" "a copy names its source row")))
+
+(deftest test-the-decision-rows-print-only-when-a-page-fused
+  (let [^Cells runs (new-cells) ^Cells lines (new-cells) ^Cells words (new-cells) ^Cells text (new-cells) ^Cells scr (new-cells) ^Cells ofz (new-cells)
+        ^Text none (new-text) ^Text some (new-text)]
+    (assert-eq (ev-emit-ofuse none 0 1 ofz) 1 "no rows: the state is unchanged")
+    (assert-text none "" "and nothing is written")
+    (oft-page runs lines words text scr 0)
+    (oft-fuse runs lines words text scr ofz 1 1 (new-cells))
+    (ev-emit-ofuse some 0 1 ofz)
+    (assert-text some ",\"ofuse\":[{\"page\":1,\"box\":[10,10,15.2,12],\"incumbent\":[0,1],\"rule\":\"keep\",\"ivotes\":3,\"readings\":7},{\"page\":1,\"box\":[30,10,35.2,12],\"incumbent\":[1,1],\"choice\":[7,1],\"rule\":\"agree\",\"votes\":2,\"ivotes\":1,\"margin\":520,\"readings\":7,\"op\":\"replace\"}]" "one row per slot")))
+
+(deftest test-a-word-the-emission-keeps-out-is-no-incumbent-and-is-not-copied
+  (let [^Cells runs (new-cells) ^Cells lines (new-cells) ^Cells words (new-cells) ^Cells text (new-cells) ^Cells scr (new-cells) ^Cells ofz (new-cells)]
+    (oft-page runs lines words text scr 1024)
+    (assert-eq (oft-fuse runs lines words text scr ofz 1 1 (new-cells)) 1 "one selected line")
+    (assert-eq (ol-get lines (cells-at scr (sc-sel-base)) (lh-count)) 2 "TOTAL and the chosen number; the kept-out word is not copied")
+    (assert-eq (bit-and (ow-get words 2 (owf-flags)) (oe-garbage)) (oe-garbage) "it is flagged as its emission flags it, so its ledger fate is unchanged")
+    (assert-eq (quot (cells-len ofz) (oz-stride)) 2 "it makes no slot of its own")))

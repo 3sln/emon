@@ -471,7 +471,7 @@ public static class Sigmark {
         int ts = 0;
         int tl = 0;
         while (i < n) {
-            if (Evidence.OwGet(owords, i, Evidence.HdPage()) == page) {
+            if ((Evidence.OwGet(owords, i, Evidence.HdPage()) == page) && (Evidence.OwGet(owords, i, Evidence.OwfFrom()) == 0)) {
                 if (Evidence.OwGet(owords, i, Evidence.HdConf()) >= SgLegible()) {
                     cx = (Evidence.OwGet(owords, i, Evidence.HdX0()) + Evidence.OwGet(owords, i, Evidence.HdX1())) / 2;
                     cy = (Evidence.OwGet(owords, i, Evidence.HdY0()) + Evidence.OwGet(owords, i, Evidence.HdY1())) / 2;

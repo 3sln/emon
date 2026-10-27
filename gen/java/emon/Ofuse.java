@@ -52,10 +52,15 @@ public final class Ofuse {
         return 0;
     }
     public static int ofFrom() {
-        return 27;
+        return Evidence.owfFrom();
+    }
+    public static int ofSource(emon.Port.Cells words, int w) {
+        // D731: the `owords` row a fused copy was copied from, or -1 for a recorded reading (`owf-from` holds the row + 1, so a recorded word's 0 is none).
+        return Evidence.owGet(words, w, Evidence.owfFrom()) - 1;
     }
     public static int ofCopy(emon.Port.Cells words, int source, int run, int line) {
-        // Reserved oword cell27 holds the source row. The etext span, box, flags and confidence are copied verbatim; no character is emitted here.
+        // Oword cell 27 (`owf-from`) holds the source row + 1. The etext span, box, flags, symbols and confidence are copied verbatim; no character is emitted here.
+        // The copy has no `feats` row of its own (`ev-check` 102: a feature row names exactly one word).
         int row = Evidence.owCount(words);
         int f = 0;
         int value = 0;
@@ -64,7 +69,8 @@ public final class Ofuse {
             emon.Port.cellsPush(words, value);
             f += 1;
         }
-        Evidence.owSet(words, row, ofFrom(), source);
+        Evidence.owSet(words, row, Evidence.owfFrom(), source + 1);
+        Evidence.owSet(words, row, Evidence.hdFeat(), -1);
         Evidence.owSet(words, row, Evidence.owfRun(), run);
         Evidence.owSet(words, row, Evidence.hdLine(), line);
         return row;
@@ -1410,5 +1416,622 @@ public final class Ofuse {
             i += 3;
         }
         return count;
+    }
+    public static int ofPageKeyword(emon.Port.Cells words, emon.Port.Cells text, int page) {
+        // 1 when some recorded word of the page (any pass) is a receipt keyword (`of-keyword`).
+        int w = 0;
+        while (w < Evidence.owCount(words)) {
+            if ((Evidence.owGet(words, w, Evidence.hdPage()) == page) && (ofSource(words, w) == -1)) {
+                if (ofKeyword(text, Evidence.owGet(words, w, Evidence.hdTstart()), Evidence.owGet(words, w, Evidence.hdTlen())) == 1) {
+                    return 1;
+                }
+            }
+            w += 1;
+        }
+        return 0;
+    }
+    public static int ofRanked(emon.Port.Cells c) {
+        // The best-ranked alternative ignoring eligibility (votes, then confidence, then run order), -1 none: what a kept slot's row reports.
+        int i = 1;
+        int best = -1;
+        while (i < (emon.Port.cellsLen(c) / ofCstride())) {
+            if (ofCget(c, i, 2) > 0) {
+                if (best < 0) {
+                    best = i;
+                } else if ((ofCget(c, i, 3) > ofCget(c, best, 3)) || ((ofCget(c, i, 3) == ofCget(c, best, 3)) && ((ofCget(c, i, 4) > ofCget(c, best, 4)) || ((ofCget(c, i, 4) == ofCget(c, best, 4)) && (ofCget(c, i, 0) < ofCget(c, best, 0)))))) {
+                    best = i;
+                }
+            }
+            i += 1;
+        }
+        return best;
+    }
+    public static int ofRuleOf(emon.Port.Cells c, int i, int incumbentCount) {
+        // The rule code (`of-rule`) of candidate `i` as `of-choice` judges it; 0 keep for none, 6 for an oversized slot.
+        int k = 0;
+        int numeric = 0;
+        int incumbent = 0;
+        if (incumbentCount > ofSlotMax()) {
+            return 6;
+        }
+        if (i < 1) {
+            return 0;
+        }
+        while (k < (emon.Port.cellsLen(c) / ofCstride())) {
+            if (ofCget(c, k, 7) == 1) {
+                numeric = 1;
+            }
+            k += 1;
+        }
+        if (incumbentCount > 0) {
+            incumbent = 1;
+        }
+        return ofRule(incumbent, numeric, ofCget(c, 0, 6), ofCget(c, i, 6), ofCget(c, i, 5), ofCget(c, i, 3), ofCget(c, 0, 3), ofCget(c, i, 4), ofCget(c, 0, 4));
+    }
+    public static int ofChunk(emon.Port.Cells plan, int row, emon.Port.Cells c, emon.Port.Cells crefs, int cand) {
+        // A plan chunk: [ofuse row, n, n source rows, next chunk (-1)]. Answers its offset.
+        int at = emon.Port.cellsLen(plan);
+        int first = ofCget(c, cand, 1);
+        int n = ofCget(c, cand, 2);
+        int i = 0;
+        emon.Port.cellsPush(plan, row);
+        emon.Port.cellsPush(plan, n);
+        while (i < n) {
+            emon.Port.cellsPush(plan, emon.Port.cellsAt(crefs, first + i));
+            i += 1;
+        }
+        emon.Port.cellsPush(plan, -1);
+        return at;
+    }
+    public static int ofChain(emon.Port.Cells plan, int head, int at) {
+        // Append chunk `at` to the chain whose head cell is `head` (insertions keep slot order).
+        int p = emon.Port.cellsAt(plan, head);
+        int nx = 0;
+        if (p < 0) {
+            emon.Port.cellsSet(plan, head, at);
+            return 0;
+        }
+        while (emon.Port.cellsAt(plan, p + (2 + emon.Port.cellsAt(plan, p + 1))) >= 0) {
+            p = emon.Port.cellsAt(plan, p + (2 + emon.Port.cellsAt(plan, p + 1)));
+        }
+        nx = p + (2 + emon.Port.cellsAt(plan, p + 1));
+        emon.Port.cellsSet(plan, nx, at);
+        return 1;
+    }
+    public static int ofMn(int a, int b) {
+        if (a < b) {
+            return a;
+        }
+        return b;
+    }
+    public static int ofMx(int a, int b) {
+        if (a > b) {
+            return a;
+        }
+        return b;
+    }
+    public static int ofBit(int q) {
+        int v = 1;
+        int i = 0;
+        while (i < q) {
+            v *= 2;
+            i += 1;
+        }
+        return v;
+    }
+    public static int ofLater(emon.Port.Cells ofz, int a, int b) {
+        // 1 when slot row `a` sorts after row `b`: by the middle of the slot's height, then its left edge.
+        int ma = emon.Port.cellsAt(ofz, (a * Evidence.ozStride()) + (Evidence.ozfX0() + 1)) + emon.Port.cellsAt(ofz, (a * Evidence.ozStride()) + (Evidence.ozfX0() + 3));
+        int mb = emon.Port.cellsAt(ofz, (b * Evidence.ozStride()) + (Evidence.ozfX0() + 1)) + emon.Port.cellsAt(ofz, (b * Evidence.ozStride()) + (Evidence.ozfX0() + 3));
+        if (ma > mb) {
+            return 1;
+        }
+        if (ma < mb) {
+            return 0;
+        }
+        if (emon.Port.cellsAt(ofz, (a * Evidence.ozStride()) + Evidence.ozfX0()) > emon.Port.cellsAt(ofz, (b * Evidence.ozStride()) + Evidence.ozfX0())) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int ofAnchor(emon.Port.Cells words, emon.Port.Cells sel, int page, int x0, int y0, int y1) {
+        // The selected word an insertion follows: on the slot's baseline (half the smaller height shared), ending no more than a point after the
+        // slot starts and less than six slot heights before it; the rightmost such word, the first on a tie. -1: the slot opens a new line.
+        int h = y1 - y0;
+        int i = 0;
+        int w = 0;
+        int best = -1;
+        int bh = 0;
+        int vo = 0;
+        int m = 0;
+        while (i < emon.Port.cellsLen(sel)) {
+            w = emon.Port.cellsAt(sel, i);
+            if (Evidence.owGet(words, w, Evidence.hdPage()) == page) {
+                bh = Evidence.owGet(words, w, Evidence.hdY1()) - Evidence.owGet(words, w, Evidence.hdY0());
+                vo = ofMn(Evidence.owGet(words, w, Evidence.hdY1()), y1) - ofMx(Evidence.owGet(words, w, Evidence.hdY0()), y0);
+                m = h;
+                if (bh < m) {
+                    m = bh;
+                }
+                if ((vo * 2) >= m) {
+                    if ((Evidence.owGet(words, w, Evidence.hdX1()) <= (x0 + 100)) && ((x0 - Evidence.owGet(words, w, Evidence.hdX1())) < (6 * h))) {
+                        if ((best < 0) || (Evidence.owGet(words, w, Evidence.hdX1()) > Evidence.owGet(words, emon.Port.cellsAt(sel, best), Evidence.hdX1()))) {
+                            best = i;
+                        }
+                    }
+                }
+            }
+            i += 1;
+        }
+        return best;
+    }
+    public static int ofEmit(emon.Port.Cells words, emon.Port.Cells ofz, emon.Port.Cells plan, int at, int run, int line) {
+        // Copy chunk `at`'s source words into `line` of the fused run and name the copies in its `ofuse` row. Answers how many.
+        int row = emon.Port.cellsAt(plan, at);
+        int n = emon.Port.cellsAt(plan, at + 1);
+        int first = Evidence.owCount(words);
+        int i = 0;
+        while (i < n) {
+            ofCopy(words, emon.Port.cellsAt(plan, at + (2 + i)), run, line);
+            i += 1;
+        }
+        if (emon.Port.cellsAt(ofz, (row * Evidence.ozStride()) + Evidence.ozfCcount()) == 0) {
+            emon.Port.cellsSet(ofz, (row * Evidence.ozStride()) + Evidence.ozfCfirst(), first);
+            emon.Port.cellsSet(ofz, (row * Evidence.ozStride()) + Evidence.ozfCcount(), n);
+        }
+        return n;
+    }
+    public static int ofFitLine(emon.Port.Cells lines, emon.Port.Cells words, int l, int grow) {
+        // Widen line `l` to its words (x only when `grow` is 0: a copied line keeps its own height and baseline; a new line takes all of its words' box and baseline).
+        int w0 = Evidence.olGet(lines, l, Evidence.lhFirst());
+        int n = Evidence.olGet(lines, l, Evidence.lhCount());
+        int i = 0;
+        int w = 0;
+        if (n <= 0) {
+            return 0;
+        }
+        if (grow == 1) {
+            Evidence.olSet(lines, l, Evidence.lhX0(), Evidence.owGet(words, w0, Evidence.hdX0()));
+            Evidence.olSet(lines, l, Evidence.lhY0(), Evidence.owGet(words, w0, Evidence.hdY0()));
+            Evidence.olSet(lines, l, Evidence.lhX1(), Evidence.owGet(words, w0, Evidence.hdX1()));
+            Evidence.olSet(lines, l, Evidence.lhY1(), Evidence.owGet(words, w0, Evidence.hdY1()));
+            Evidence.olSet(lines, l, Evidence.lhBx0(), Evidence.owGet(words, w0, Evidence.hdBx0()));
+            Evidence.olSet(lines, l, Evidence.lhBy0(), Evidence.owGet(words, w0, Evidence.hdBy0()));
+            Evidence.olSet(lines, l, Evidence.lhBx1(), Evidence.owGet(words, w0 + (n - 1), Evidence.hdBx1()));
+            Evidence.olSet(lines, l, Evidence.lhBy1(), Evidence.owGet(words, w0 + (n - 1), Evidence.hdBy1()));
+            Evidence.olSet(lines, l, Evidence.lhRot(), Evidence.owGet(words, w0, Evidence.hdRot()));
+            Evidence.olSet(lines, l, Evidence.lhDir(), Evidence.owGet(words, w0, Evidence.hdDir()));
+        }
+        while (i < n) {
+            w = w0 + i;
+            if (Evidence.owGet(words, w, Evidence.hdX0()) < Evidence.olGet(lines, l, Evidence.lhX0())) {
+                Evidence.olSet(lines, l, Evidence.lhX0(), Evidence.owGet(words, w, Evidence.hdX0()));
+            }
+            if (Evidence.owGet(words, w, Evidence.hdX1()) > Evidence.olGet(lines, l, Evidence.lhX1())) {
+                Evidence.olSet(lines, l, Evidence.lhX1(), Evidence.owGet(words, w, Evidence.hdX1()));
+            }
+            if (grow == 1) {
+                if (Evidence.owGet(words, w, Evidence.hdY0()) < Evidence.olGet(lines, l, Evidence.lhY0())) {
+                    Evidence.olSet(lines, l, Evidence.lhY0(), Evidence.owGet(words, w, Evidence.hdY0()));
+                }
+                if (Evidence.owGet(words, w, Evidence.hdY1()) > Evidence.olGet(lines, l, Evidence.lhY1())) {
+                    Evidence.olSet(lines, l, Evidence.lhY1(), Evidence.owGet(words, w, Evidence.hdY1()));
+                }
+            }
+            i += 1;
+        }
+        return n;
+    }
+    public static int ofClearXtra(emon.Port.Cells scr, int l) {
+        // A fused line reads no body-ink partner of its own (its partner's words, if any, were copied into it): clear its `sc-xtra-base` cell.
+        int kk = l - emon.Port.cellsAt(scr, Scan.scXtraBase());
+        if ((kk >= 0) && (kk < Scan.scSelMax())) {
+            emon.Port.cellsSet(scr, Scan.scXtraBase() + (kk + 1), 0);
+        }
+        return 0;
+    }
+    public static int ofZrow(emon.Port.Cells ofz, int page, int x0, int y0, int x1, int y1, int ifirst, int icount, int rule, int votes, int ivotes, int nulls, int margin, int readings) {
+        int r = emon.Port.cellsLen(ofz) / Evidence.ozStride();
+        emon.Port.cellsPush(ofz, page);
+        emon.Port.cellsPush(ofz, x0);
+        emon.Port.cellsPush(ofz, y0);
+        emon.Port.cellsPush(ofz, x1);
+        emon.Port.cellsPush(ofz, y1);
+        emon.Port.cellsPush(ofz, ifirst);
+        emon.Port.cellsPush(ofz, icount);
+        emon.Port.cellsPush(ofz, -1);
+        emon.Port.cellsPush(ofz, 0);
+        emon.Port.cellsPush(ofz, rule);
+        emon.Port.cellsPush(ofz, votes);
+        emon.Port.cellsPush(ofz, ivotes);
+        emon.Port.cellsPush(ofz, nulls);
+        emon.Port.cellsPush(ofz, margin);
+        emon.Port.cellsPush(ofz, readings);
+        emon.Port.cellsPush(ofz, 0);
+        return r;
+    }
+    public static int ofZget(emon.Port.Cells ofz, int r, int f) {
+        return emon.Port.cellsAt(ofz, (r * Evidence.ozStride()) + f);
+    }
+    public static int ofLineWords(emon.Port.Cells lines, emon.Port.Cells words, emon.Port.Cells text, emon.Port.Cells rules, int page, int l, emon.Port.Cells scr, int mark) {
+        // The words selected line `l` is emitted with, at `sc-fate-base`: `sc-line-words` (with the body-ink partner `sc-xtra-base` names) less `sc-kept-words`'
+        // no-text words; 0 when the line is emitted as it is (more words than the scratch holds), which leaves its own words to the caller.
+        int j = l - emon.Port.cellsAt(scr, Scan.scXtraBase());
+        int xl = -1;
+        int n = 0;
+        if ((j >= 0) && (j < Scan.scSelMax())) {
+            xl = emon.Port.cellsAt(scr, Scan.scXtraBase() + (j + 1)) - 1;
+        }
+        if (Evidence.olGet(lines, l, Evidence.lhDir()) != 0) {
+            xl = -1;
+        }
+        n = Scan.scLineWords(lines, words, text, l, xl, scr);
+        if (n == 0) {
+            return -1;
+        }
+        return Scan.scKeptWords(words, text, rules, page, n, mark, scr);
+    }
+    public static int ofFuse(int page, int image, int trigger, emon.Port.Cells runs, emon.Port.Cells lines, emon.Port.Cells words, emon.Port.Cells text, emon.Port.Cells rules, emon.Port.Cells scr, int nsel, emon.Port.Cells ofz, emon.Port.Cells reads, emon.Port.Cells rrefs, emon.Port.Cells rows, emon.Port.Cells parents, emon.Port.Cells plan, emon.Port.Cells sel, emon.Port.Cells selk, emon.Port.Cells c, emon.Port.Cells crefs, emon.Port.Cells seq) {
+        // The guarded fusion of page `page` (1-based) whose `nsel` selected lines are at `scr` `sc-sel-base`: answers the new count. `image` 1 an image
+        // input page read upright, `trigger` the receipt detector's lane (1 photo, 2 thermal). A page outside the gate is left exactly as it is and no scratch
+        // is touched; a gated page with fewer than two distinct readings gets only the no-text flags its emission sets anyway. The ten scratch arenas are the caller's.
+        int k = 0;
+        int i = 0;
+        int j = 0;
+        int q = 0;
+        int l = 0;
+        int n = 0;
+        int w = 0;
+        int ns = 0;
+        int r = 0;
+        int count = 0;
+        int first = 0;
+        int best = 0;
+        int alt = 0;
+        int x0 = 0;
+        int y0 = 0;
+        int x1 = 0;
+        int y1 = 0;
+        int mask = 0;
+        int zr = 0;
+        int at = 0;
+        int changed = 0;
+        int fr = 0;
+        int nl = 0;
+        int n2 = 0;
+        int ng = 0;
+        int g = 0;
+        int h = 0;
+        int view = 0;
+        int margin = 0;
+        int votes = 0;
+        int mine = 0;
+        int pick = 0;
+        if ((image != 1) || ((trigger != 1) && (trigger != 2))) {
+            return nsel;
+        }
+        if (ofPageKeyword(words, text, page) == 0) {
+            return nsel;
+        }
+        // the selected words, line by line as `sc-emit-vetted` will emit them: a body-ink partner's words in their place along the line, and without
+        // the words `sc-fates` will keep out as no text (`sc-kept-words`): what is not emitted is no incumbent and is not copied. Those words are flagged
+        // now exactly as the emission flags them (it would flag the same words of the same lines), so a replaced line's kept-out words keep their ledger fate.
+        emon.Port.cellsDrop(sel, 0);
+        emon.Port.cellsDrop(selk, 0);
+        while (k < nsel) {
+            l = emon.Port.cellsAt(scr, Scan.scSelBase() + k);
+            n = ofLineWords(lines, words, text, rules, page, l, scr, 1);
+            i = 0;
+            if (n >= 0) {
+                while (i < n) {
+                    emon.Port.cellsPush(sel, emon.Port.cellsAt(scr, Scan.scFateBase() + i));
+                    emon.Port.cellsPush(selk, k);
+                    i += 1;
+                }
+            } else {
+                while (i < Evidence.olGet(lines, l, Evidence.lhCount())) {
+                    emon.Port.cellsPush(sel, Evidence.olGet(lines, l, Evidence.lhFirst()) + i);
+                    emon.Port.cellsPush(selk, k);
+                    i += 1;
+                }
+            }
+            k += 1;
+        }
+        // the distinct readings, once the words the emission keeps out are flagged as it flags them (so they are no reading's either)
+        if (ofReadings(runs, words, text, page, reads, rrefs) < 2) {
+            return nsel;
+        }
+        ns = emon.Port.cellsLen(sel);
+        emon.Port.cellsDrop(rows, 0);
+        i = 0;
+        while (i < ns) {
+            emon.Port.cellsPush(rows, emon.Port.cellsAt(sel, i));
+            i += 1;
+        }
+        i = 0;
+        while (i < emon.Port.cellsLen(rrefs)) {
+            emon.Port.cellsPush(rows, emon.Port.cellsAt(rrefs, i));
+            i += 1;
+        }
+        ofAlign(words, rows, parents, plan);
+        i = 0;
+        while (i < emon.Port.cellsLen(rows)) {
+            if (emon.Port.cellsAt(parents, i) >= 0) {
+                j = ofRoot(parents, i);
+                emon.Port.cellsSet(parents, i, j);
+            }
+            i += 1;
+        }
+        // the plan: per selected word its fate (-1 kept, -2 its slot's replacement went to an earlier word, else a chunk), per selected word
+        // the chain of insertions after it, then the chain of insertions that open new lines; chunks after that
+        emon.Port.cellsDrop(plan, 0);
+        i = 0;
+        while (i < ((2 * ns) + 1)) {
+            emon.Port.cellsPush(plan, -1);
+            i += 1;
+        }
+        r = 0;
+        while (r < emon.Port.cellsLen(rows)) {
+            if (emon.Port.cellsAt(parents, r) == r) {
+                count = 0;
+                first = -1;
+                i = 0;
+                while (i < ns) {
+                    if (emon.Port.cellsAt(parents, i) == r) {
+                        count += 1;
+                        if (first < 0) {
+                            first = i;
+                        }
+                    }
+                    i += 1;
+                }
+                x0 = 2147483647;
+                y0 = 2147483647;
+                x1 = -2147483647;
+                y1 = -2147483647;
+                mask = 0;
+                j = 0;
+                while (j < emon.Port.cellsLen(rows)) {
+                    if (emon.Port.cellsAt(parents, j) == r) {
+                        w = emon.Port.cellsAt(rows, j);
+                        if (Evidence.owGet(words, w, Evidence.hdX0()) < x0) {
+                            x0 = Evidence.owGet(words, w, Evidence.hdX0());
+                        }
+                        if (Evidence.owGet(words, w, Evidence.hdY0()) < y0) {
+                            y0 = Evidence.owGet(words, w, Evidence.hdY0());
+                        }
+                        if (Evidence.owGet(words, w, Evidence.hdX1()) > x1) {
+                            x1 = Evidence.owGet(words, w, Evidence.hdX1());
+                        }
+                        if (Evidence.owGet(words, w, Evidence.hdY1()) > y1) {
+                            y1 = Evidence.owGet(words, w, Evidence.hdY1());
+                        }
+                        q = 0;
+                        while (q < (emon.Port.cellsLen(reads) / 3)) {
+                            if ((q < 30) && (emon.Port.cellsAt(reads, q * 3) == Evidence.owGet(words, w, Evidence.owfRun()))) {
+                                mask |= ofBit(q);
+                            }
+                            q += 1;
+                        }
+                    }
+                    j += 1;
+                }
+                if (count > ofSlotMax()) {
+                    ofZrow(ofz, page, x0, y0, x1, y1, emon.Port.cellsAt(sel, first), count, 6, 0, 0, 0, 0, mask);
+                } else {
+                    ofCandidates(words, text, rows, parents, r, sel, reads, c, crefs, seq);
+                    best = ofChoice(c, count);
+                    alt = best;
+                    if (alt < 0) {
+                        alt = ofRanked(c);
+                    }
+                    votes = 0;
+                    margin = 0;
+                    if (alt >= 1) {
+                        votes = ofCget(c, alt, 3);
+                        margin = ofCget(c, alt, 4) - ofCget(c, 0, 4);
+                    }
+                    pick = -1;
+                    if (first >= 0) {
+                        pick = emon.Port.cellsAt(sel, first);
+                    }
+                    zr = ofZrow(ofz, page, x0, y0, x1, y1, pick, count, ofRuleOf(c, alt, count), votes, ofCget(c, 0, 3), ofNullVotes(runs, words, reads, rows, parents, r), margin, mask);
+                    if (best >= 1) {
+                        changed = 1;
+                        at = ofChunk(plan, zr, c, crefs, best);
+                        if (count > 0) {
+                            emon.Port.cellsSet(ofz, (zr * Evidence.ozStride()) + Evidence.ozfOp(), 1);
+                            emon.Port.cellsSet(plan, first, at);
+                            i = first + 1;
+                            while (i < ns) {
+                                if (emon.Port.cellsAt(parents, i) == r) {
+                                    emon.Port.cellsSet(plan, i, -2);
+                                }
+                                i += 1;
+                            }
+                        } else {
+                            j = ofAnchor(words, sel, page, x0, y0, y1);
+                            if (j >= 0) {
+                                emon.Port.cellsSet(ofz, (zr * Evidence.ozStride()) + Evidence.ozfOp(), 2);
+                                ofChain(plan, ns + j, at);
+                            } else {
+                                emon.Port.cellsSet(ofz, (zr * Evidence.ozStride()) + Evidence.ozfOp(), 3);
+                                ofChain(plan, 2 * ns, at);
+                            }
+                        }
+                    }
+                }
+            }
+            r += 1;
+        }
+        if (changed == 0) {
+            return nsel;
+        }
+        // the fused run: changed selected lines become copies, in the selection's order; new lines follow the page's last line
+        view = Evidence.orGet(runs, emon.Port.cellsAt(reads, 0), Evidence.orfView());
+        if (nsel > 0) {
+            view = Evidence.orGet(runs, Evidence.olGet(lines, emon.Port.cellsAt(scr, Scan.scSelBase()), Evidence.olfRun()), Evidence.orfView());
+        }
+        fr = Evidence.orNew(runs, page, view);
+        Evidence.orSet(runs, fr, Evidence.orfPass(), Evidence.opFused());
+        Evidence.orSet(runs, fr, Evidence.orfLfirst(), Evidence.olCount(lines));
+        Evidence.orSet(runs, fr, Evidence.orfWfirst(), Evidence.owCount(words));
+        k = 0;
+        n2 = 0;
+        while (k < nsel) {
+            l = emon.Port.cellsAt(scr, Scan.scSelBase() + k);
+            mine = 0;
+            i = 0;
+            while (i < ns) {
+                if ((emon.Port.cellsAt(selk, i) == k) && ((emon.Port.cellsAt(plan, i) != -1) || (emon.Port.cellsAt(plan, ns + i) != -1))) {
+                    mine = 1;
+                }
+                i += 1;
+            }
+            if (mine == 0) {
+                emon.Port.cellsSet(scr, Scan.scSelBase() + n2, l);
+                n2 += 1;
+            } else {
+                nl = Evidence.olNew(lines, page, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, Evidence.owCount(words), 0);
+                j = Evidence.lhX0();
+                while (j <= Evidence.lhDir()) {
+                    q = Evidence.olGet(lines, l, j);
+                    Evidence.olSet(lines, nl, j, q);
+                    j += 1;
+                }
+                j = 15;
+                while (j <= 22) {
+                    q = Evidence.olGet(lines, l, j);
+                    Evidence.olSet(lines, nl, j, q);
+                    j += 1;
+                }
+                Evidence.olSet(lines, nl, Evidence.olfRun(), fr);
+                first = Evidence.owCount(words);
+                i = 0;
+                while (i < ns) {
+                    if (emon.Port.cellsAt(selk, i) == k) {
+                        at = emon.Port.cellsAt(plan, i);
+                        if (at == -1) {
+                            ofCopy(words, emon.Port.cellsAt(sel, i), fr, nl);
+                        }
+                        if (at >= 0) {
+                            ofEmit(words, ofz, plan, at, fr, nl);
+                        }
+                        at = emon.Port.cellsAt(plan, ns + i);
+                        while (at >= 0) {
+                            ofEmit(words, ofz, plan, at, fr, nl);
+                            at = emon.Port.cellsAt(plan, at + (2 + emon.Port.cellsAt(plan, at + 1)));
+                        }
+                    }
+                    i += 1;
+                }
+                Evidence.olSet(lines, nl, Evidence.lhCount(), Evidence.owCount(words) - first);
+                ofFitLine(lines, words, nl, 0);
+                if (Evidence.olGet(lines, nl, Evidence.lhCount()) > 0) {
+                    emon.Port.cellsSet(scr, Scan.scSelBase() + n2, nl);
+                    n2 += 1;
+                    ofClearXtra(scr, nl);
+                }
+            }
+            k += 1;
+        }
+        // insertions over no selected line: sorted by the middle of their slot's height then its left, grouped greedily by baseline, each group a line
+        emon.Port.cellsDrop(seq, 0);
+        emon.Port.cellsDrop(crefs, 0);
+        emon.Port.cellsDrop(c, 0);
+        at = emon.Port.cellsAt(plan, 2 * ns);
+        while (at >= 0) {
+            zr = emon.Port.cellsAt(plan, at);
+            i = emon.Port.cellsLen(seq);
+            emon.Port.cellsPush(seq, at);
+            while ((i > 0) && (ofLater(ofz, emon.Port.cellsAt(plan, emon.Port.cellsAt(seq, i - 1)), zr) == 1)) {
+                j = emon.Port.cellsAt(seq, i - 1);
+                emon.Port.cellsSet(seq, i, j);
+                i -= 1;
+            }
+            emon.Port.cellsSet(seq, i, at);
+            at = emon.Port.cellsAt(plan, at + (2 + emon.Port.cellsAt(plan, at + 1)));
+        }
+        i = 0;
+        ng = 0;
+        while (i < emon.Port.cellsLen(seq)) {
+            zr = emon.Port.cellsAt(plan, emon.Port.cellsAt(seq, i));
+            x0 = ofZget(ofz, zr, Evidence.ozfX0());
+            y0 = ofZget(ofz, zr, Evidence.ozfX0() + 1);
+            x1 = ofZget(ofz, zr, Evidence.ozfX0() + 2);
+            y1 = ofZget(ofz, zr, Evidence.ozfX0() + 3);
+            g = 0;
+            pick = -1;
+            while ((g < ng) && (pick < 0)) {
+                h = emon.Port.cellsAt(c, (g * 4) + 3) - emon.Port.cellsAt(c, (g * 4) + 1);
+                if ((y1 - y0) < h) {
+                    h = y1 - y0;
+                }
+                if ((2 * (ofMn(emon.Port.cellsAt(c, (g * 4) + 3), y1) - ofMx(emon.Port.cellsAt(c, (g * 4) + 1), y0))) >= h) {
+                    pick = g;
+                }
+                g += 1;
+            }
+            if (pick < 0) {
+                pick = ng;
+                ng += 1;
+                emon.Port.cellsPush(c, x0);
+                emon.Port.cellsPush(c, y0);
+                emon.Port.cellsPush(c, x1);
+                emon.Port.cellsPush(c, y1);
+            } else {
+                if (x0 < emon.Port.cellsAt(c, pick * 4)) {
+                    emon.Port.cellsSet(c, pick * 4, x0);
+                }
+                if (y0 < emon.Port.cellsAt(c, (pick * 4) + 1)) {
+                    emon.Port.cellsSet(c, (pick * 4) + 1, y0);
+                }
+                if (x1 > emon.Port.cellsAt(c, (pick * 4) + 2)) {
+                    emon.Port.cellsSet(c, (pick * 4) + 2, x1);
+                }
+                if (y1 > emon.Port.cellsAt(c, (pick * 4) + 3)) {
+                    emon.Port.cellsSet(c, (pick * 4) + 3, y1);
+                }
+            }
+            emon.Port.cellsPush(crefs, pick);
+            i += 1;
+        }
+        g = 0;
+        while (g < ng) {
+            nl = Evidence.olNew(lines, page, emon.Port.cellsAt(c, g * 4), emon.Port.cellsAt(c, (g * 4) + 1), emon.Port.cellsAt(c, (g * 4) + 2), emon.Port.cellsAt(c, (g * 4) + 3), 0, 0, 0, 0, 0, 0, Evidence.owCount(words), 0);
+            Evidence.olSet(lines, nl, Evidence.olfRun(), fr);
+            first = Evidence.owCount(words);
+            // the group's slots left to right (sorted order breaks a tie); a used slot's group cell becomes -1
+            pick = 0;
+            while (pick >= 0) {
+                pick = -1;
+                i = 0;
+                while (i < emon.Port.cellsLen(seq)) {
+                    if (emon.Port.cellsAt(crefs, i) == g) {
+                        if ((pick < 0) || (ofZget(ofz, emon.Port.cellsAt(plan, emon.Port.cellsAt(seq, i)), Evidence.ozfX0()) < ofZget(ofz, emon.Port.cellsAt(plan, emon.Port.cellsAt(seq, pick)), Evidence.ozfX0()))) {
+                            pick = i;
+                        }
+                    }
+                    i += 1;
+                }
+                if (pick >= 0) {
+                    ofEmit(words, ofz, plan, emon.Port.cellsAt(seq, pick), fr, nl);
+                    emon.Port.cellsSet(crefs, pick, -1);
+                }
+            }
+            Evidence.olSet(lines, nl, Evidence.lhCount(), Evidence.owCount(words) - first);
+            ofFitLine(lines, words, nl, 1);
+            if (n2 < Scan.scSelMax()) {
+                emon.Port.cellsSet(scr, Scan.scSelBase() + n2, nl);
+                n2 += 1;
+                ofClearXtra(scr, nl);
+            }
+            g += 1;
+        }
+        j = Evidence.olCount(lines) - Evidence.orGet(runs, fr, Evidence.orfLfirst());
+        Evidence.orSet(runs, fr, Evidence.orfLcount(), j);
+        j = Evidence.owCount(words) - Evidence.orGet(runs, fr, Evidence.orfWfirst());
+        Evidence.orSet(runs, fr, Evidence.orfWcount(), j);
+        return n2;
     }
 }

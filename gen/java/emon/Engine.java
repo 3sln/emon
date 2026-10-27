@@ -212,9 +212,9 @@ public final class Engine {
         // on an earlier one, with nothing in `d` or `ev` changed (the scratch `pscr` aside).
         emon.Port.cellsDrop(d.pscr, 0);
         if (d.kind == enKindPdf()) {
-            return Pageunit.puRunPdf(i, idx, c.ocr, d.plan, ans, rq, d.loc, bms, d.mask, d.pscr, ev.epages, ev.views, d.et, ev.feats, ev.images, ev.oruns, ev.oblocks, ev.olines, ev.owords, ev.osyms, ev.oalts, d.wd, d.ln, (2 * c.nort) + (4 * c.dry), d.fw, d.fl, d.hl, ev.refs, d.cg, ev.tlines, d.xs0, d.xs1, d.xs2, d.xs3, d.xs4, d.xs5, ev.inks, ev.comps, ev.rules, ev.prims, ev.pts, d.ys0, d.ys1, d.ys2, d.ys3, d.ys4, d.ys5, d.ys6, d.ys7, d.ys8, d.ys9, d.ys10, d.ys11, d.ys12, d.ys13, d.ys14, d.ys15, d.ys16, d.ys17, d.ys18);
+            return Pageunit.puRunPdf(i, idx, c.ocr, d.plan, ans, rq, d.loc, bms, d.mask, d.pscr, ev.epages, ev.views, d.et, ev.feats, ev.images, ev.oruns, ev.oblocks, ev.olines, ev.owords, ev.osyms, ev.oalts, d.wd, d.ln, (2 * c.nort) + (4 * c.dry), d.fw, d.fl, d.hl, ev.refs, d.cg, ev.tlines, d.xs0, d.xs1, d.xs2, d.xs3, d.xs4, d.xs5, ev.inks, ev.comps, ev.rules, ev.prims, ev.pts, d.ys0, d.ys1, d.ys2, d.ys3, d.ys4, d.ys5, d.ys6, d.ys7, d.ys8, d.ys9, d.ys10, d.ys11, d.ys12, d.ys13, d.ys14, d.ys15, d.ys16, d.ys17, d.ys18, ev.ofuse);
         }
-        return Rasterin.rsPage(i, idx, nbytes, c.ocr, (2 * c.nort) + (4 * c.dry), ans, rq, d.loc, bms, d.mask, d.pscr, ev.epages, ev.views, d.et, ev.feats, ev.images, ev.oruns, ev.oblocks, ev.olines, ev.owords, ev.osyms, ev.oalts, d.wd, d.ln, ev.refs, ev.tlines, d.cg, ev.inks, ev.comps, ev.rules, ev.prims, ev.pts, d.ys0, d.ys2, d.ys3, d.ys4, d.ys5, d.ys6, d.ys7, d.ys8, d.ys9, d.ys10, d.ys11, d.ys12, d.ys13, d.ys14, d.ys15, d.ys16, d.ys17, d.ys18);
+        return Rasterin.rsPage(i, idx, nbytes, c.ocr, (2 * c.nort) + (4 * c.dry), ans, rq, d.loc, bms, d.mask, d.pscr, ev.epages, ev.views, d.et, ev.feats, ev.images, ev.oruns, ev.oblocks, ev.olines, ev.owords, ev.osyms, ev.oalts, d.wd, d.ln, ev.refs, ev.tlines, d.cg, ev.inks, ev.comps, ev.rules, ev.prims, ev.pts, d.ys0, d.ys2, d.ys3, d.ys4, d.ys5, d.ys6, d.ys7, d.ys8, d.ys9, d.ys10, d.ys11, d.ys12, d.ys13, d.ys14, d.ys15, d.ys16, d.ys17, d.ys18, ev.ofuse);
     }
     public static int enAssetUnit(emon.Port.Src view, emon.Port.Src pw, emon.Enctx.Cfg c, emon.Enctx.Doc d, emon.Enctx.Pass p, int idx, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms, emon.Port.Buf payload) {
         // THE ASSET UNIT (P6.1a, D117, D291, SPEC 10.11): the candidates of the document's image placements, in its own plan/fulfil loop. It re-opens the document
@@ -426,6 +426,7 @@ public final class Engine {
         Gfuse.gfFuse(np, ev.epages, ev.inks, ev.rules, ev.prims, ev.oblocks, ev.owords, d.wd, d.et, d.pa, d.im, ev.feats, d.grl, d.gfl, s.ggp, s.grg, ev.refs, d.hl, s.fx, s.gfa, s.ga0, s.ga1, s.ga2, s.ga3, s.ga4, s.ga5, s.ga6);
         if (c.keep != 0) {
             enDump(d.et, d.gl, d.wd, d.ln, d.mk, d.fnt, d.grl, d.gfl, s.ggp, s.grg, ev, d.evidence);
+            Evidence.evEmitOfuse(d.evidence, 0, 1, ev.ofuse);
         }
         Tlhealth.thAppend(d.wd, d.ln, d.fw, d.fl, 0);
         if (emon.Port.cellsLen(d.cg) > 0) {

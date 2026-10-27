@@ -51,6 +51,7 @@ public static class Enctx {
         public emon.Port.Cells Rules = emon.Port.NewCells();
         public emon.Port.Cells Prims = emon.Port.NewCells();
         public emon.Port.Cells Tlines = emon.Port.NewCells();
+        public emon.Port.Cells Ofuse = emon.Port.NewCells();
         public EvArenas() {
         }
         public EvArenas Clone() {
@@ -73,6 +74,7 @@ public static class Enctx {
             emon.Port.CellsCopyInto(c.Rules, this.Rules);
             emon.Port.CellsCopyInto(c.Prims, this.Prims);
             emon.Port.CellsCopyInto(c.Tlines, this.Tlines);
+            emon.Port.CellsCopyInto(c.Ofuse, this.Ofuse);
             return c;
         }
     }

@@ -1649,7 +1649,7 @@ func ScXtraCount(olines *port.Cells, owords *port.Cells, etext *port.Cells, l in
 	return k
 }
 
-func scLineWords(olines *port.Cells, owords *port.Cells, etext *port.Cells, l int32, xl int32, scr *port.Cells) int32 {
+func ScLineWords(olines *port.Cells, owords *port.Cells, etext *port.Cells, l int32, xl int32, scr *port.Cells) int32 {
 	// The words line `l` is emitted with, in the order along it, written to `scr` from `sc-fate-base`: its own, and with them those of the body-ink line `xl` (-1 none) that
 	// lie over none of its own (`sc-xtra-ok`). Answers how many; 0 when they are more than the scratch holds (the line is then emitted as it is, with nothing added).
 	var fb int32 = ScFateBase()
@@ -1978,6 +1978,106 @@ func scFlag(owords *port.Cells, w int32, bit int32) int32 {
 	return 0
 }
 
+func scDropFate(owords *port.Cells, etext *port.Cells, rules *port.Cells, page int32, m int32, w int32, lmean int32, mx int32, tch int32, floor int32) int32 {
+	// Whether word `w` of a line of `m` words (mean confidence `lmean`, best `mx`, `tch` characters in all) is no text: 0 it stays, 1 garbage, 2 a rule's ghost, 3 a dot leader
+	// (`sc-fates`' first four fates, which read nothing but the word, its line and the page's rules, and change nothing). D731 shares it with `sc-kept-words`.
+	var ts int32 = evidence.OwGet(owords, w, evidence.HdTstart())
+	var n int32 = evidence.OwGet(owords, w, evidence.HdTlen())
+	var conf int32 = evidence.OwGet(owords, w, evidence.HdConf())
+	var f int32 = 0
+	var c int32 = 0
+	if ScAdmitWord(conf, floor) == 0 {
+		f = 1
+	}
+	// a dot leader
+	if ScLeader(etext, ts, n) == 1 {
+		f = 3
+	}
+	// An isolated punctuation speck at most one point each way is no text even when the engine is confident. Keep its evidence for the ledger.
+	if (f == 0) && ((m == 1) && (n == 1)) {
+		if ((evidence.OwGet(owords, w, evidence.HdX1()) - evidence.OwGet(owords, w, evidence.HdX0())) <= 100) && ((evidence.OwGet(owords, w, evidence.HdY1()) - evidence.OwGet(owords, w, evidence.HdY0())) <= 100) {
+			c = port.CellsAt(etext, ts)
+			if (c == 46) || ((c == 44) || ((c == 39) || ((c == 96) || (c == 183)))) {
+				f = 1
+			}
+		}
+	}
+	// texture: a line of three words or more, all of them unsure
+	if f == 0 {
+		if (m >= 3) && ((lmean <= scLoConf()) && ((mx <= 450) && (tch <= (4 * m)))) {
+			f = 1
+		}
+	}
+	// very unsure and no word, alone or among such words
+	if f == 0 {
+		if conf <= scLoConf() {
+			if ScImplausible(etext, ts, n) == 1 {
+				if (m <= 2) || (lmean <= 450) {
+					f = 1
+				}
+			}
+		}
+	}
+	// a rule read as a character
+	if (f == 0) && (n == 1) {
+		c = port.CellsAt(etext, ts)
+		if (c == 124) || ((c == 73) || ((c == 108) || (c == 33))) {
+			if ScOnVrule(rules, page, (evidence.OwGet(owords, w, evidence.HdX0())+evidence.OwGet(owords, w, evidence.HdX1()))/2, (evidence.OwGet(owords, w, evidence.HdY0())+evidence.OwGet(owords, w, evidence.HdY1()))/2, scRuleSlack()) == 1 {
+				f = 2
+			}
+		}
+	}
+	return f
+}
+
+func ScKeptWords(owords *port.Cells, etext *port.Cells, rules *port.Cells, page int32, m int32, mark int32, scr *port.Cells) int32 {
+	// D731: the `m` words of a line listed at `sc-fate-base` (`sc-line-words`) less the ones `sc-fates` would keep out as no text, packed to the front;
+	// answers how many stay. Nothing is corrected and no text is appended; with `mark` 1 the words kept out are flagged in `owords` as `sc-fates` flags them.
+	var fb int32 = ScFateBase()
+	var i int32 = 0
+	var w int32 = 0
+	var conf int32 = 0
+	var sum int32 = 0
+	var tch int32 = 0
+	var mx int32 = 0
+	var lmean int32 = 0
+	var f int32 = 0
+	var kept int32 = 0
+	if m <= 0 {
+		return 0
+	}
+	for i < m {
+		w = port.CellsAt(scr, fb+i)
+		conf = evidence.OwGet(owords, w, evidence.HdConf())
+		sum += conf
+		tch += evidence.OwGet(owords, w, evidence.HdTlen())
+		if conf > mx {
+			mx = conf
+		}
+		i += 1
+	}
+	lmean = sum / m
+	i = 0
+	for i < m {
+		w = port.CellsAt(scr, fb+i)
+		f = scDropFate(owords, etext, rules, page, m, w, lmean, mx, tch, port.CellsAt(scr, ScAdmitFloor()))
+		if f == 0 {
+			port.CellsSet(scr, fb+kept, w)
+			kept += 1
+		}
+		if mark == 1 {
+			if (f == 1) || (f == 3) {
+				scFlag(owords, w, evidence.OeGarbage())
+			}
+			if f == 2 {
+				scFlag(owords, w, evidence.OeRuleGhost())
+			}
+		}
+		i += 1
+	}
+	return kept
+}
+
 func scFates(owords *port.Cells, etext *port.Cells, osyms *port.Cells, rules *port.Cells, comps *port.Cells, inks *port.Cells, page int32, m int32, scr *port.Cells) int32 {
 	// What becomes of each of the `m` words of a line (listed at `sc-fate-base`): 0 it stays, 1 it is garbage (confidence at most `sc-lo-conf` and implausible characters (`sc-implausible`) on a line of
 	// two words or fewer or of a mean confidence of 450 or less; or a word of a line of three or more whose mean is at most `sc-lo-conf`, best at most 450 and words of four characters or fewer on average: texture), 2 it is the ghost of a rule (a lone bar, `I`, `l` or `!`
@@ -2028,50 +2128,9 @@ func scFates(owords *port.Cells, etext *port.Cells, osyms *port.Cells, rules *po
 		ts = evidence.OwGet(owords, w, evidence.HdTstart())
 		n = evidence.OwGet(owords, w, evidence.HdTlen())
 		conf = evidence.OwGet(owords, w, evidence.HdConf())
-		f = 0
-		if ScAdmitWord(conf, port.CellsAt(scr, ScAdmitFloor())) == 0 {
-			f = 1
-		}
+		f = scDropFate(owords, etext, rules, page, m, w, lmean, mx, tch, port.CellsAt(scr, ScAdmitFloor()))
 		port.CellsSet(scr, fb+((2*fm)+i), -1)
 		port.CellsSet(scr, fb+((3*fm)+i), 0)
-		// a dot leader
-		if ScLeader(etext, ts, n) == 1 {
-			f = 3
-		}
-		// An isolated punctuation speck at most one point each way is no text even when the engine is confident. Keep its evidence for the ledger.
-		if (f == 0) && ((m == 1) && (n == 1)) {
-			if ((evidence.OwGet(owords, w, evidence.HdX1()) - evidence.OwGet(owords, w, evidence.HdX0())) <= 100) && ((evidence.OwGet(owords, w, evidence.HdY1()) - evidence.OwGet(owords, w, evidence.HdY0())) <= 100) {
-				c = port.CellsAt(etext, ts)
-				if (c == 46) || ((c == 44) || ((c == 39) || ((c == 96) || (c == 183)))) {
-					f = 1
-				}
-			}
-		}
-		// texture: a line of three words or more, all of them unsure
-		if f == 0 {
-			if (m >= 3) && ((lmean <= scLoConf()) && ((mx <= 450) && (tch <= (4 * m)))) {
-				f = 1
-			}
-		}
-		// very unsure and no word, alone or among such words
-		if f == 0 {
-			if conf <= scLoConf() {
-				if ScImplausible(etext, ts, n) == 1 {
-					if (m <= 2) || (lmean <= 450) {
-						f = 1
-					}
-				}
-			}
-		}
-		// a rule read as a character
-		if (f == 0) && (n == 1) {
-			c = port.CellsAt(etext, ts)
-			if (c == 124) || ((c == 73) || ((c == 108) || (c == 33))) {
-				if ScOnVrule(rules, page, (evidence.OwGet(owords, w, evidence.HdX0())+evidence.OwGet(owords, w, evidence.HdX1()))/2, (evidence.OwGet(owords, w, evidence.HdY0())+evidence.OwGet(owords, w, evidence.HdY1()))/2, scRuleSlack()) == 1 {
-					f = 2
-				}
-			}
-		}
 		// a rule's stroke glued to the end of a word
 		if (f == 0) && (n >= 2) {
 			if port.CellsAt(etext, ts+(n-1)) == 124 {
@@ -2481,7 +2540,7 @@ func ScEmitVetted(olines *port.Cells, owords *port.Cells, osyms *port.Cells, nse
 			}
 			mg = 0
 			mc = cnt
-			j = scLineWords(olines, owords, etext, l, xl, scr)
+			j = ScLineWords(olines, owords, etext, l, xl, scr)
 			if j > 0 {
 				mg = 1
 				mc = scFates(owords, etext, osyms, rules, comps, inks, page, j, scr)
@@ -3068,6 +3127,10 @@ func ScTrust(nodes *port.Cells, regions *port.Cells, owords *port.Cells, etext *
 					cx = (evidence.OwGet(owords, w, evidence.HdX0()) + evidence.OwGet(owords, w, evidence.HdX1())) / 2
 					cy = (evidence.OwGet(owords, w, evidence.HdY0()) + evidence.OwGet(owords, w, evidence.HdY1())) / 2
 					eligible = 1
+					// D731: a fused copy is not another reading of its word
+					if evidence.OwGet(owords, w, evidence.OwfFrom()) > 0 {
+						eligible = 0
+					}
 					if rotated == 1 {
 						run = evidence.OwGet(owords, w, evidence.OwfRun())
 						eligible = 0

@@ -32,7 +32,7 @@
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
             [emon.sealfield :refer [sf-script sf-digit]]
             [emon.pdfannot :refer [an-digsig]]
-            [emon.evidence :refer [pa-get pt-get ow-get ow-count hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-tstart hd-tlen hd-conf
+            [emon.evidence :refer [pa-get pt-get ow-get ow-count owf-from hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-tstart hd-tlen hd-conf
                                    pf-kind pf-x0 pf-y0 pf-x1 pf-y1 pf-stroke pf-width pf-flags pf-pfirst pf-pcount
                                    ptf-x ptf-y ptf-op pg-closed pg-filled pg-stroked pg-clip pa-line pa-rect pa-curve po-curve]]
             [kin.lang :refer [defn return let set while if do comment
@@ -322,7 +322,7 @@
         ^:mut ^I32 ts 0
         ^:mut ^I32 tl 0]
     (while (< i n)
-      (do (if (== (ow-get owords i (hd-page)) page)
+      (do (if (and (== (ow-get owords i (hd-page)) page) (== (ow-get owords i (owf-from)) 0))
             (if (>= (ow-get owords i (hd-conf)) (sg-legible))
               (do (set cx (quot (+ (ow-get owords i (hd-x0)) (ow-get owords i (hd-x1))) 2))
                   (set cy (quot (+ (ow-get owords i (hd-y0)) (ow-get owords i (hd-y1))) 2))

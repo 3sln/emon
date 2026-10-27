@@ -1188,7 +1188,7 @@ public static class Evidencetest {
                 if ((kind == 6) || ((kind == 7) || ((kind == 12) || (kind == 13)))) {
                     cells += 2;
                 }
-                if ((kind == 1) || ((kind == 2) || ((kind == 5) || ((kind == 8) || ((kind == 9) || (kind == 11)))))) {
+                if ((kind == 1) || ((kind == 2) || ((kind == 5) || ((kind == 8) || ((kind == 9) || ((kind == 11) || (kind == 14))))))) {
                     cells += 1;
                 }
                 r += 1;
@@ -1233,7 +1233,7 @@ public static class Evidencetest {
                 emon.Testport.AssertEq(Evidence.EvStrides[15] - cells, 1, "olines: one spare");
             }
             if (ea == 17) {
-                emon.Testport.AssertEq(Evidence.EvStrides[16] - cells, 1, "owords: one spare");
+                emon.Testport.AssertEq(cells, 28, "owords: every cell (D731 printed a fused copy's source, `from`)");
             }
             if (ea == 18) {
                 emon.Testport.AssertEq(Evidence.EvStrides[17] - cells, 3, "osyms: three spare");

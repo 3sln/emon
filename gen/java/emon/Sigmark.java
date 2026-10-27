@@ -471,7 +471,7 @@ public final class Sigmark {
         int ts = 0;
         int tl = 0;
         while (i < n) {
-            if (Evidence.owGet(owords, i, Evidence.hdPage()) == page) {
+            if ((Evidence.owGet(owords, i, Evidence.hdPage()) == page) && (Evidence.owGet(owords, i, Evidence.owfFrom()) == 0)) {
                 if (Evidence.owGet(owords, i, Evidence.hdConf()) >= sgLegible()) {
                     cx = (Evidence.owGet(owords, i, Evidence.hdX0()) + Evidence.owGet(owords, i, Evidence.hdX1())) / 2;
                     cy = (Evidence.owGet(owords, i, Evidence.hdY0()) + Evidence.owGet(owords, i, Evidence.hdY1())) / 2;

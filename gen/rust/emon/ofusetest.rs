@@ -4,6 +4,7 @@
 use crate::emon::evidence::*;
 use crate::emon::ofmt::*;
 use crate::emon::ofuse::*;
+use crate::emon::scan::*;
 
 pub(crate) fn oft_447_0() -> i32 {
     let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -498,7 +499,9 @@ fn test_fused_copy_cannot_invent_characters() {
     crate::testport::assert_eq(ow_get(words, copied, hd_tlen()), 7, "same recorded character count");
     crate::testport::assert_eq(ow_get(words, copied, hd_conf()), 876, "same source confidence");
     crate::testport::assert_eq(ow_get(words, copied, hd_x0()), 10, "same source box");
-    crate::testport::assert_eq(ow_get(words, copied, of_from()), source, "source row is explicit");
+    crate::testport::assert_eq(of_source(words, copied), source, "source row is explicit");
+    crate::testport::assert_eq(of_source(words, source), -1, "a recorded reading is no copy");
+    crate::testport::assert_eq(ow_get(words, copied, hd_feat()), -1, "a copy has no feature row of its own");
     crate::testport::assert_eq(ow_get(words, copied, owf_run()), 9, "synthetic run");
     crate::testport::assert_eq(ow_get(words, copied, hd_line()), 8, "synthetic line");
     crate::testport::assert_eq(ow_count(words), 2, "original remains for D699");
@@ -974,4 +977,411 @@ fn test_zero_candidates_cannot_delete_or_read_an_absent_incumbent() {
     let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
     crate::testport::assert_eq(of_choice(c, 0), -1, "empty table is a no-op");
     crate::testport::assert_eq(of_choice(c, 4), -1, "missing table never deletes selected words");
+}
+pub(crate) fn oft_cps(mut text: &mut crate::port::Cells) -> i32 {
+    crate::port::cells_push(text, 84);
+    crate::port::cells_push(text, 79);
+    crate::port::cells_push(text, 84);
+    crate::port::cells_push(text, 65);
+    crate::port::cells_push(text, 76);
+    crate::port::cells_push(text, 49);
+    crate::port::cells_push(text, 50);
+    crate::port::cells_push(text, 46);
+    crate::port::cells_push(text, 79);
+    crate::port::cells_push(text, 48);
+    crate::port::cells_push(text, 49);
+    crate::port::cells_push(text, 50);
+    crate::port::cells_push(text, 46);
+    crate::port::cells_push(text, 48);
+    crate::port::cells_push(text, 48);
+    crate::port::cells_push(text, 67);
+    crate::port::cells_push(text, 65);
+    crate::port::cells_push(text, 83);
+    crate::port::cells_push(text, 72);
+    crate::port::cells_push(text, 90);
+    crate::port::cells_push(text, 90);
+    crate::port::cells_push(text, 49);
+    crate::port::cells_push(text, 51);
+    crate::port::cells_push(text, 46);
+    crate::port::cells_push(text, 48);
+    crate::port::cells_push(text, 48);
+    return 26;
+}
+pub(crate) fn oft_w(mut words: &mut crate::port::Cells, x0: i32, y0: i32, x1: i32, y1: i32, ts: i32, tl: i32, run: i32, line: i32, conf: i32, flags: i32) -> i32 {
+    let w: i32 = ow_new(words, 1, x0, y0, x1, y1, x0, y1, x1, y1, 0, 0, ts, tl, line, conf, -1);
+    ow_set(words, w, owf_run(), run);
+    ow_set(words, w, owf_flags(), flags);
+    return w;
+}
+pub(crate) fn oft_close(mut runs: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, pass: i32, w0: i32, w1: i32, x1: i32, y1: i32) -> i32 {
+    // Run `pass` of words [w0, w1), one line over all of them.
+    let r: i32 = or_new(runs, 1, -1);
+    let l: i32 = ol_new(lines, 1, 1000, 1000, x1, y1, 1000, y1, x1, y1, 0, 0, w0, w1 - w0);
+    ol_set(lines, l, olf_run(), r);
+    or_set(runs, r, orf_pass(), pass);
+    or_set(runs, r, orf_lfirst(), l);
+    or_set(runs, r, orf_lcount(), 1);
+    or_set(runs, r, orf_wfirst(), w0);
+    or_set(runs, r, orf_wcount(), w1 - w0);
+    return r;
+}
+pub(crate) fn oft_reading(mut runs: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut words: &mut crate::port::Cells, variant: i32, pass: i32, dx: i32, conf: i32, run: i32, line: i32) -> i32 {
+    let w0: i32 = ow_count(words);
+    let mut ts: i32 = 0;
+    let mut cash: i32 = 800;
+    if (variant & 8) != 0 {
+        oft_w(words, 1000 + dx, 1000, 1500 + dx, 1200, 19, 2, run, line, 950, 1);
+    } else {
+        oft_w(words, 1000 + dx, 1000, 1500 + dx, 1200, 0, 5, run, line, 950, 1);
+    }
+    ts = 10;
+    if (variant & 2) != 0 {
+        ts = 21;
+    }
+    if (variant & 512) == 0 {
+        oft_w(words, 3000 + dx, 1000, 3500 + dx, 1200, ts, 5, run, line, conf, 2);
+    } else {
+        oft_w(words, 7000 + dx, 1000, 7260 + dx, 1200, 21, 5, run, line, conf, 2);
+    }
+    if (variant & 64) != 0 {
+        cash = 650;
+    }
+    if (variant & 96) != 0 {
+        oft_w(words, 1000 + dx, 3000, 1500 + dx, 3200, 15, 4, run, line, cash, 1);
+    }
+    if (variant & 128) != 0 {
+        oft_w(words, 1600 + dx, 1000, 2000 + dx, 1200, 15, 4, run, line, cash, 1);
+    }
+    if (variant & 256) != 0 {
+        oft_w(words, 6000, 1000, 6500, 1200, 2147483647, 5, run, line, 990, 2);
+    }
+    return oft_close(runs, lines, pass, w0, ow_count(words), 7600, 3200);
+}
+pub(crate) fn oft_page(mut runs: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, variant: i32) -> i32 {
+    // The page; answers the selection's count (1).
+    let mut ts: i32 = 5;
+    let mut k: i32 = 0;
+    oft_cps(text);
+    if (variant & 8) != 0 {
+        oft_w(words, 1000, 1000, 1500, 1200, 19, 2, 0, 0, 950, 1);
+    } else {
+        oft_w(words, 1000, 1000, 1500, 1200, 0, 5, 0, 0, 950, 1);
+    }
+    if (variant & 1) != 0 {
+        ts = 10;
+    }
+    if (variant & 512) == 0 {
+        oft_w(words, 3000, 1000, 3500, 1200, ts, 5, 0, 0, 400, 0);
+    } else {
+        while k < 5 {
+            oft_w(words, 7000 + (k * 40), 1000, 7100 + (k * 40), 1200, 19, 2, 0, 0, 400, 0);
+            k += 1;
+        }
+    }
+    if (variant & 16) != 0 {
+        oft_w(words, 5000, 1000, 5300, 1200, 19, 2, 0, 0, 300, 0);
+    }
+    if (variant & 1024) != 0 {
+        oft_w(words, 5000, 1000, 5300, 1200, 19, 2, 0, 0, 200, 0);
+    }
+    oft_close(runs, lines, 1, 0, ow_count(words), 7600, 1200);
+    if (variant & 4) == 0 {
+        oft_reading(runs, lines, words, variant, 6, 0, 900, 1, 1);
+        oft_reading(runs, lines, words, variant, 10, 20, 920, 2, 2);
+    }
+    sc_prep(scr);
+    crate::port::cells_set(scr, sc_xtra_base(), 0);
+    crate::port::cells_set(scr, sc_xtra_base() + 1, 0);
+    crate::port::cells_set(scr, sc_sel_base(), 0);
+    if (variant & 1024) != 0 {
+        crate::port::cells_set(scr, sc_admit_floor(), 300);
+    }
+    return 1;
+}
+pub(crate) fn oft_fuse(runs: &mut crate::port::Cells, lines: &mut crate::port::Cells, words: &mut crate::port::Cells, text: &mut crate::port::Cells, scr: &mut crate::port::Cells, ofz: &mut crate::port::Cells, image: i32, trigger: i32, r1: &mut crate::port::Cells) -> i32 {
+    return of_fuse(1, image, trigger, runs, lines, words, text, &mut crate::port::Cells::new(), scr, 1, ofz, r1, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+}
+pub(crate) fn oft_z(ofz: &mut crate::port::Cells, row: i32, f: i32) -> i32 {
+    return crate::port::cells_at(ofz, (row * oz_stride()) + f);
+}
+#[test]
+fn test_fusion_replaces_a_malformed_number_with_an_agreed_verbatim_copy() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ofz: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    oft_page(runs, lines, words, text, scr, 0);
+    crate::testport::assert_eq(oft_fuse(runs, lines, words, text, scr, ofz, 1, 1, &mut crate::port::Cells::new()), 1, "one selected line");
+    crate::testport::assert_eq(or_count(runs), 4, "one synthetic run");
+    crate::testport::assert_eq(or_get(runs, 3, orf_pass()), op_fused(), "pass fused");
+    crate::testport::assert_eq(crate::port::cells_at(scr, sc_sel_base()), 3, "the selection reads the fused line");
+    crate::testport::assert_eq(ol_get(lines, 3, lh_count()), 2, "both words of the line");
+    crate::testport::assert_eq(ol_get(lines, 3, lh_first()), 6, "copies follow every recorded word");
+    crate::testport::assert_eq(of_source(words, 6), 0, "TOTAL is a copy of the selected word");
+    crate::testport::assert_eq(of_source(words, 7), 3, "12.00 is a copy of the earliest agreeing reading");
+    crate::testport::assert_eq(ow_get(words, 7, hd_tstart()), 10, "the copy's text is the recorded text");
+    crate::testport::assert_eq(ow_get(words, 7, hd_conf()), 900, "and its confidence");
+    crate::testport::assert_eq(ow_get(words, 1, hd_tstart()), 5, "the displaced word is unchanged evidence");
+    crate::testport::assert_eq(ow_get(words, 1, owf_run()), 0, "in its own run");
+    crate::testport::assert_eq(crate::port::cells_len(ofz) / oz_stride(), 2, "one row per considered slot");
+    crate::testport::assert_eq(oft_z(ofz, 0, ozf_rule()), 0, "TOTAL is kept");
+    crate::testport::assert_eq(oft_z(ofz, 0, ozf_op()), 0, "keep");
+    crate::testport::assert_eq(oft_z(ofz, 0, ozf_ivotes()), 3, "every reading agrees with it");
+    crate::testport::assert_eq(oft_z(ofz, 0, ozf_ccount()), 0, "nothing chosen");
+    crate::testport::assert_eq(oft_z(ofz, 1, ozf_rule()), 1, "agreement");
+    crate::testport::assert_eq(oft_z(ofz, 1, ozf_op()), 1, "replace");
+    crate::testport::assert_eq(oft_z(ofz, 1, ozf_ifirst()), 1, "the selected word");
+    crate::testport::assert_eq(oft_z(ofz, 1, ozf_icount()), 1, "one selected word");
+    crate::testport::assert_eq(oft_z(ofz, 1, ozf_cfirst()), 7, "the copy");
+    crate::testport::assert_eq(oft_z(ofz, 1, ozf_ccount()), 1, "one copied word");
+    crate::testport::assert_eq(oft_z(ofz, 1, ozf_votes()), 2, "two readings");
+    crate::testport::assert_eq(oft_z(ofz, 1, ozf_ivotes()), 1, "against one");
+    crate::testport::assert_eq(oft_z(ofz, 1, ozf_nulls()), 0, "no silent full reading");
+    crate::testport::assert_eq(oft_z(ofz, 1, ozf_margin()), 520, "920 against 400");
+    crate::testport::assert_eq(oft_z(ofz, 1, ozf_readings()), 7, "all three readings");
+}
+#[test]
+fn test_fusion_outside_the_gate_touches_nothing() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ofz: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let r1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    oft_page(runs, lines, words, text, scr, 0);
+    crate::port::cells_push(r1, 77);
+    crate::testport::assert_eq(oft_fuse(runs, lines, words, text, scr, ofz, 0, 1, r1), 1, "PDF or turned page");
+    crate::testport::assert_eq(oft_fuse(runs, lines, words, text, scr, ofz, 1, 0, r1), 1, "detector silent");
+    crate::testport::assert_eq(oft_fuse(runs, lines, words, text, scr, ofz, 1, 3, r1), 1, "no such lane");
+    crate::testport::assert_eq(or_count(runs), 3, "no run");
+    crate::testport::assert_eq(ow_count(words), 6, "no word");
+    crate::testport::assert_eq(ol_count(lines), 3, "no line");
+    crate::testport::assert_eq(crate::port::cells_len(ofz), 0, "no row");
+    crate::testport::assert_eq(crate::port::cells_len(r1), 1, "scratch untouched");
+    crate::testport::assert_eq(crate::port::cells_at(scr, sc_sel_base()), 0, "selection untouched");
+}
+#[test]
+fn test_a_page_without_a_receipt_keyword_is_untouched() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ofz: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let r1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    oft_page(runs, lines, words, text, scr, 8);
+    crate::port::cells_push(r1, 77);
+    crate::testport::assert_eq(of_page_keyword(words, text, 1), 0, "no receipt keyword");
+    crate::testport::assert_eq(oft_fuse(runs, lines, words, text, scr, ofz, 1, 1, r1), 1, "keyword gate is stacked");
+    crate::testport::assert_eq(or_count(runs), 3, "no run without a keyword");
+    crate::testport::assert_eq(crate::port::cells_len(ofz), 0, "no row without a keyword");
+    crate::testport::assert_eq(crate::port::cells_len(r1), 1, "scratch untouched without a keyword");
+}
+#[test]
+fn test_a_page_with_one_reading_is_a_noop() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ofz: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    oft_page(runs, lines, words, text, scr, 4);
+    crate::testport::assert_eq(oft_fuse(runs, lines, words, text, scr, ofz, 1, 1, &mut crate::port::Cells::new()), 1, "selection unchanged");
+    crate::testport::assert_eq(or_count(runs), 1, "no synthetic run");
+    crate::testport::assert_eq(crate::port::cells_len(ofz), 0, "nothing to decide");
+    crate::testport::assert_eq(crate::port::cells_at(scr, sc_sel_base()), 0, "the recorded line");
+}
+#[test]
+fn test_a_valid_selected_number_survives_unanimous_confident_alternatives() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ofz: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    oft_page(runs, lines, words, text, scr, 3);
+    crate::testport::assert_eq(oft_fuse(runs, lines, words, text, scr, ofz, 1, 1, &mut crate::port::Cells::new()), 1, "selection unchanged");
+    crate::testport::assert_eq(or_count(runs), 3, "nothing copied");
+    crate::testport::assert_eq(crate::port::cells_at(scr, sc_sel_base()), 0, "the recorded line");
+    crate::testport::assert_eq(oft_z(ofz, 1, ozf_rule()), 4, "blocked by the format rule");
+    crate::testport::assert_eq(oft_z(ofz, 1, ozf_votes()), 2, "though two readings agree");
+    crate::testport::assert_eq(oft_z(ofz, 1, ozf_op()), 0, "kept");
+}
+#[test]
+fn test_fusion_never_deletes_a_selected_word_no_other_reading_sees() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ofz: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    oft_page(runs, lines, words, text, scr, 16);
+    oft_fuse(runs, lines, words, text, scr, ofz, 1, 1, &mut crate::port::Cells::new());
+    crate::testport::assert_eq(ol_get(lines, crate::port::cells_at(scr, sc_sel_base()), lh_count()), 3, "every selected word is still read");
+    crate::testport::assert_eq(of_source(words, ol_get(lines, crate::port::cells_at(scr, sc_sel_base()), lh_first()) + 2), 2, "the unseen word, copied verbatim");
+}
+#[test]
+fn test_a_confident_unselected_reading_opens_a_new_line() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ofz: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    oft_page(runs, lines, words, text, scr, 33);
+    crate::testport::assert_eq(oft_fuse(runs, lines, words, text, scr, ofz, 1, 1, &mut crate::port::Cells::new()), 2, "a new line after the page's last");
+    crate::testport::assert_eq(crate::port::cells_at(scr, sc_sel_base()), 0, "the unchanged line keeps its own row");
+    crate::testport::assert_eq(ol_get(lines, crate::port::cells_at(scr, sc_sel_base() + 1), olf_run()), 3, "the new line is the fused run's");
+    crate::testport::assert_eq(of_source(words, ol_get(lines, crate::port::cells_at(scr, sc_sel_base() + 1), lh_first())), 4, "CASH from the earliest reading");
+    crate::testport::assert_eq(oft_z(ofz, 2, ozf_op()), 3, "newline");
+    crate::testport::assert_eq(oft_z(ofz, 2, ozf_rule()), 3, "insert");
+}
+#[test]
+fn test_a_weak_unselected_reading_is_not_inserted() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ofz: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    oft_page(runs, lines, words, text, scr, 65);
+    crate::testport::assert_eq(oft_fuse(runs, lines, words, text, scr, ofz, 1, 1, &mut crate::port::Cells::new()), 1, "650 is below the insertion floor");
+    crate::testport::assert_eq(or_count(runs), 3, "nothing copied");
+    crate::testport::assert_eq(oft_z(ofz, 2, ozf_op()), 0, "the slot is recorded, kept");
+}
+#[test]
+fn test_an_insertion_on_a_selected_baseline_follows_its_anchor() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ofz: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut l: i32 = 0;
+    oft_page(runs, lines, words, text, scr, 129);
+    crate::testport::assert_eq(oft_fuse(runs, lines, words, text, scr, ofz, 1, 1, &mut crate::port::Cells::new()), 1, "no new line");
+    l = crate::port::cells_at(scr, sc_sel_base());
+    crate::testport::assert_eq(ol_get(lines, l, lh_count()), 3, "TOTAL CASH 12.00");
+    crate::testport::assert_eq(of_source(words, ol_get(lines, l, lh_first()) + 1), 4, "CASH after TOTAL");
+    crate::testport::assert_eq(of_source(words, ol_get(lines, l, lh_first()) + 2), 1, "the valid number kept in place");
+}
+#[test]
+fn test_an_oversized_slot_is_recorded_and_left_alone() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ofz: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    oft_page(runs, lines, words, text, scr, 512);
+    crate::testport::assert_eq(oft_fuse(runs, lines, words, text, scr, ofz, 1, 1, &mut crate::port::Cells::new()), 1, "selection unchanged");
+    crate::testport::assert_eq(or_count(runs), 3, "nothing copied");
+    crate::testport::assert_eq(oft_z(ofz, 1, ozf_icount()), 5, "five chained selected words");
+    crate::testport::assert_eq(oft_z(ofz, 1, ozf_rule()), 6, "blocked-slot");
+}
+#[test]
+fn test_a_hostile_reading_span_is_never_read() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ofz: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    oft_page(runs, lines, words, text, scr, 256);
+    crate::testport::assert_eq(oft_fuse(runs, lines, words, text, scr, ofz, 1, 1, &mut crate::port::Cells::new()), 1, "one selected line");
+    crate::testport::assert_eq(crate::port::cells_len(ofz) / oz_stride(), 2, "the hostile word makes no slot");
+    crate::testport::assert_eq(of_source(words, ol_get(lines, crate::port::cells_at(scr, sc_sel_base()), lh_first()) + 1), 3, "the same decision");
+}
+pub(crate) fn oft_same(emon_t: i32, a: &mut crate::port::Cells, b: &mut crate::port::Cells) -> i32 {
+    let mut i: i32 = 0;
+    crate::testport::assert_eq(crate::port::cells_len(a), crate::port::cells_len(b), "same length");
+    while (i < crate::port::cells_len(a)) && (i < crate::port::cells_len(b)) {
+        crate::testport::assert_eq(crate::port::cells_at(a, i), crate::port::cells_at(b, i), "same cell");
+        i += 1;
+    }
+    return 0;
+}
+#[test]
+fn test_fusion_replays_to_identical_evidence() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ofz: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let runs2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ofz2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    oft_page(runs, lines, words, text, scr, 177);
+    oft_page(runs2, lines2, words2, text2, scr2, 177);
+    oft_fuse(runs, lines, words, text, scr, ofz, 1, 1, &mut crate::port::Cells::new());
+    oft_fuse(runs2, lines2, words2, text2, scr2, ofz2, 1, 1, &mut crate::port::Cells::new());
+    oft_same(0, runs, runs2);
+    oft_same(0, lines, lines2);
+    oft_same(0, words, words2);
+    oft_same(0, ofz, ofz2);
+    crate::testport::assert_eq(crate::port::cells_at(scr, sc_sel_base()), crate::port::cells_at(scr2, sc_sel_base()), "same selection");
+}
+#[test]
+fn test_a_fused_page_is_well_formed_evidence() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ofz: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    oft_page(runs, lines, words, text, scr, 48);
+    oft_fuse(runs, lines, words, text, scr, ofz, 1, 1, &mut crate::port::Cells::new());
+    crate::testport::assert_eq(ev_check(&mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), text, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), runs, &mut crate::port::Cells::new(), lines, words, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 0, "runs, lines and copies nest; no copy claims a feature row");
+}
+#[test]
+fn test_a_copy_prints_its_source_and_a_recorded_word_does_not() {
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let a: &mut String = &mut crate::port::new_text();
+    let b: &mut String = &mut crate::port::new_text();
+    let source: i32 = ow_new(words, 1, 10, 20, 110, 40, 10, 40, 110, 40, 0, 0, 0, 1, 2, 876, -1);
+    let copied: i32 = of_copy(words, source, 9, 8);
+    crate::port::cells_push(text, 65);
+    ev_row(a, 0, 0, 17, words, text, source);
+    ev_row(b, 0, 0, 17, words, text, copied);
+    crate::testport::assert_text(a, "{\"page\":1,\"box\":[0.1,0.2,1.1,0.4],\"baseline\":[0.1,0.4,1.1,0.4],\"text\":\"A\",\"line\":2,\"conf\":876}", "a recorded reading has no from");
+    crate::testport::assert_text(b, "{\"page\":1,\"box\":[0.1,0.2,1.1,0.4],\"baseline\":[0.1,0.4,1.1,0.4],\"text\":\"A\",\"line\":8,\"conf\":876,\"run\":9,\"from\":0}", "a copy names its source row");
+}
+#[test]
+fn test_the_decision_rows_print_only_when_a_page_fused() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ofz: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let none: &mut String = &mut crate::port::new_text();
+    let some: &mut String = &mut crate::port::new_text();
+    crate::testport::assert_eq(ev_emit_ofuse(none, 0, 1, ofz), 1, "no rows: the state is unchanged");
+    crate::testport::assert_text(none, "", "and nothing is written");
+    oft_page(runs, lines, words, text, scr, 0);
+    oft_fuse(runs, lines, words, text, scr, ofz, 1, 1, &mut crate::port::Cells::new());
+    ev_emit_ofuse(some, 0, 1, ofz);
+    crate::testport::assert_text(some, ",\"ofuse\":[{\"page\":1,\"box\":[10,10,15.2,12],\"incumbent\":[0,1],\"rule\":\"keep\",\"ivotes\":3,\"readings\":7},{\"page\":1,\"box\":[30,10,35.2,12],\"incumbent\":[1,1],\"choice\":[7,1],\"rule\":\"agree\",\"votes\":2,\"ivotes\":1,\"margin\":520,\"readings\":7,\"op\":\"replace\"}]", "one row per slot");
+}
+#[test]
+fn test_a_word_the_emission_keeps_out_is_no_incumbent_and_is_not_copied() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ofz: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    oft_page(runs, lines, words, text, scr, 1024);
+    crate::testport::assert_eq(oft_fuse(runs, lines, words, text, scr, ofz, 1, 1, &mut crate::port::Cells::new()), 1, "one selected line");
+    crate::testport::assert_eq(ol_get(lines, crate::port::cells_at(scr, sc_sel_base()), lh_count()), 2, "TOTAL and the chosen number; the kept-out word is not copied");
+    crate::testport::assert_eq(ow_get(words, 2, owf_flags()) & oe_garbage(), oe_garbage(), "it is flagged as its emission flags it, so its ledger fate is unchanged");
+    crate::testport::assert_eq(crate::port::cells_len(ofz) / oz_stride(), 2, "it makes no slot of its own");
 }

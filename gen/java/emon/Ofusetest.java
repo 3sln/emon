@@ -482,7 +482,9 @@ public final class Ofusetest {
         emon.Testport.assertEq(Evidence.owGet(words, copied, Evidence.hdTlen()), 7, "same recorded character count");
         emon.Testport.assertEq(Evidence.owGet(words, copied, Evidence.hdConf()), 876, "same source confidence");
         emon.Testport.assertEq(Evidence.owGet(words, copied, Evidence.hdX0()), 10, "same source box");
-        emon.Testport.assertEq(Evidence.owGet(words, copied, Ofuse.ofFrom()), source, "source row is explicit");
+        emon.Testport.assertEq(Ofuse.ofSource(words, copied), source, "source row is explicit");
+        emon.Testport.assertEq(Ofuse.ofSource(words, source), -1, "a recorded reading is no copy");
+        emon.Testport.assertEq(Evidence.owGet(words, copied, Evidence.hdFeat()), -1, "a copy has no feature row of its own");
         emon.Testport.assertEq(Evidence.owGet(words, copied, Evidence.owfRun()), 9, "synthetic run");
         emon.Testport.assertEq(Evidence.owGet(words, copied, Evidence.hdLine()), 8, "synthetic line");
         emon.Testport.assertEq(Evidence.owCount(words), 2, "original remains for D699");
@@ -934,5 +936,396 @@ public final class Ofusetest {
         emon.Port.Cells c = emon.Port.newCells();
         emon.Testport.assertEq(Ofuse.ofChoice(c, 0), -1, "empty table is a no-op");
         emon.Testport.assertEq(Ofuse.ofChoice(c, 4), -1, "missing table never deletes selected words");
+    }
+    public static int oftCps(emon.Port.Cells text) {
+        emon.Port.cellsPush(text, 84);
+        emon.Port.cellsPush(text, 79);
+        emon.Port.cellsPush(text, 84);
+        emon.Port.cellsPush(text, 65);
+        emon.Port.cellsPush(text, 76);
+        emon.Port.cellsPush(text, 49);
+        emon.Port.cellsPush(text, 50);
+        emon.Port.cellsPush(text, 46);
+        emon.Port.cellsPush(text, 79);
+        emon.Port.cellsPush(text, 48);
+        emon.Port.cellsPush(text, 49);
+        emon.Port.cellsPush(text, 50);
+        emon.Port.cellsPush(text, 46);
+        emon.Port.cellsPush(text, 48);
+        emon.Port.cellsPush(text, 48);
+        emon.Port.cellsPush(text, 67);
+        emon.Port.cellsPush(text, 65);
+        emon.Port.cellsPush(text, 83);
+        emon.Port.cellsPush(text, 72);
+        emon.Port.cellsPush(text, 90);
+        emon.Port.cellsPush(text, 90);
+        emon.Port.cellsPush(text, 49);
+        emon.Port.cellsPush(text, 51);
+        emon.Port.cellsPush(text, 46);
+        emon.Port.cellsPush(text, 48);
+        emon.Port.cellsPush(text, 48);
+        return 26;
+    }
+    public static int oftW(emon.Port.Cells words, int x0, int y0, int x1, int y1, int ts, int tl, int run, int line, int conf, int flags) {
+        int w = Evidence.owNew(words, 1, x0, y0, x1, y1, x0, y1, x1, y1, 0, 0, ts, tl, line, conf, -1);
+        Evidence.owSet(words, w, Evidence.owfRun(), run);
+        Evidence.owSet(words, w, Evidence.owfFlags(), flags);
+        return w;
+    }
+    public static int oftClose(emon.Port.Cells runs, emon.Port.Cells lines, int pass, int w0, int w1, int x1, int y1) {
+        // Run `pass` of words [w0, w1), one line over all of them.
+        int r = Evidence.orNew(runs, 1, -1);
+        int l = Evidence.olNew(lines, 1, 1000, 1000, x1, y1, 1000, y1, x1, y1, 0, 0, w0, w1 - w0);
+        Evidence.olSet(lines, l, Evidence.olfRun(), r);
+        Evidence.orSet(runs, r, Evidence.orfPass(), pass);
+        Evidence.orSet(runs, r, Evidence.orfLfirst(), l);
+        Evidence.orSet(runs, r, Evidence.orfLcount(), 1);
+        Evidence.orSet(runs, r, Evidence.orfWfirst(), w0);
+        Evidence.orSet(runs, r, Evidence.orfWcount(), w1 - w0);
+        return r;
+    }
+    public static int oftReading(emon.Port.Cells runs, emon.Port.Cells lines, emon.Port.Cells words, int variant, int pass, int dx, int conf, int run, int line) {
+        int w0 = Evidence.owCount(words);
+        int ts = 0;
+        int cash = 800;
+        if ((variant & 8) != 0) {
+            oftW(words, 1000 + dx, 1000, 1500 + dx, 1200, 19, 2, run, line, 950, 1);
+        } else {
+            oftW(words, 1000 + dx, 1000, 1500 + dx, 1200, 0, 5, run, line, 950, 1);
+        }
+        ts = 10;
+        if ((variant & 2) != 0) {
+            ts = 21;
+        }
+        if ((variant & 512) == 0) {
+            oftW(words, 3000 + dx, 1000, 3500 + dx, 1200, ts, 5, run, line, conf, 2);
+        } else {
+            oftW(words, 7000 + dx, 1000, 7260 + dx, 1200, 21, 5, run, line, conf, 2);
+        }
+        if ((variant & 64) != 0) {
+            cash = 650;
+        }
+        if ((variant & 96) != 0) {
+            oftW(words, 1000 + dx, 3000, 1500 + dx, 3200, 15, 4, run, line, cash, 1);
+        }
+        if ((variant & 128) != 0) {
+            oftW(words, 1600 + dx, 1000, 2000 + dx, 1200, 15, 4, run, line, cash, 1);
+        }
+        if ((variant & 256) != 0) {
+            oftW(words, 6000, 1000, 6500, 1200, 2147483647, 5, run, line, 990, 2);
+        }
+        return oftClose(runs, lines, pass, w0, Evidence.owCount(words), 7600, 3200);
+    }
+    public static int oftPage(emon.Port.Cells runs, emon.Port.Cells lines, emon.Port.Cells words, emon.Port.Cells text, emon.Port.Cells scr, int variant) {
+        // The page; answers the selection's count (1).
+        int ts = 5;
+        int k = 0;
+        oftCps(text);
+        if ((variant & 8) != 0) {
+            oftW(words, 1000, 1000, 1500, 1200, 19, 2, 0, 0, 950, 1);
+        } else {
+            oftW(words, 1000, 1000, 1500, 1200, 0, 5, 0, 0, 950, 1);
+        }
+        if ((variant & 1) != 0) {
+            ts = 10;
+        }
+        if ((variant & 512) == 0) {
+            oftW(words, 3000, 1000, 3500, 1200, ts, 5, 0, 0, 400, 0);
+        } else {
+            while (k < 5) {
+                oftW(words, 7000 + (k * 40), 1000, 7100 + (k * 40), 1200, 19, 2, 0, 0, 400, 0);
+                k += 1;
+            }
+        }
+        if ((variant & 16) != 0) {
+            oftW(words, 5000, 1000, 5300, 1200, 19, 2, 0, 0, 300, 0);
+        }
+        if ((variant & 1024) != 0) {
+            oftW(words, 5000, 1000, 5300, 1200, 19, 2, 0, 0, 200, 0);
+        }
+        oftClose(runs, lines, 1, 0, Evidence.owCount(words), 7600, 1200);
+        if ((variant & 4) == 0) {
+            oftReading(runs, lines, words, variant, 6, 0, 900, 1, 1);
+            oftReading(runs, lines, words, variant, 10, 20, 920, 2, 2);
+        }
+        Scan.scPrep(scr);
+        emon.Port.cellsSet(scr, Scan.scXtraBase(), 0);
+        emon.Port.cellsSet(scr, Scan.scXtraBase() + 1, 0);
+        emon.Port.cellsSet(scr, Scan.scSelBase(), 0);
+        if ((variant & 1024) != 0) {
+            emon.Port.cellsSet(scr, Scan.scAdmitFloor(), 300);
+        }
+        return 1;
+    }
+    public static int oftFuse(emon.Port.Cells runs, emon.Port.Cells lines, emon.Port.Cells words, emon.Port.Cells text, emon.Port.Cells scr, emon.Port.Cells ofz, int image, int trigger, emon.Port.Cells r1) {
+        return Ofuse.ofFuse(1, image, trigger, runs, lines, words, text, emon.Port.newCells(), scr, 1, ofz, r1, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells());
+    }
+    public static int oftZ(emon.Port.Cells ofz, int row, int f) {
+        return emon.Port.cellsAt(ofz, (row * Evidence.ozStride()) + f);
+    }
+    public static void testFusionReplacesAMalformedNumberWithAnAgreedVerbatimCopy() {
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        emon.Port.Cells ofz = emon.Port.newCells();
+        oftPage(runs, lines, words, text, scr, 0);
+        emon.Testport.assertEq(oftFuse(runs, lines, words, text, scr, ofz, 1, 1, emon.Port.newCells()), 1, "one selected line");
+        emon.Testport.assertEq(Evidence.orCount(runs), 4, "one synthetic run");
+        emon.Testport.assertEq(Evidence.orGet(runs, 3, Evidence.orfPass()), Evidence.opFused(), "pass fused");
+        emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scSelBase()), 3, "the selection reads the fused line");
+        emon.Testport.assertEq(Evidence.olGet(lines, 3, Evidence.lhCount()), 2, "both words of the line");
+        emon.Testport.assertEq(Evidence.olGet(lines, 3, Evidence.lhFirst()), 6, "copies follow every recorded word");
+        emon.Testport.assertEq(Ofuse.ofSource(words, 6), 0, "TOTAL is a copy of the selected word");
+        emon.Testport.assertEq(Ofuse.ofSource(words, 7), 3, "12.00 is a copy of the earliest agreeing reading");
+        emon.Testport.assertEq(Evidence.owGet(words, 7, Evidence.hdTstart()), 10, "the copy's text is the recorded text");
+        emon.Testport.assertEq(Evidence.owGet(words, 7, Evidence.hdConf()), 900, "and its confidence");
+        emon.Testport.assertEq(Evidence.owGet(words, 1, Evidence.hdTstart()), 5, "the displaced word is unchanged evidence");
+        emon.Testport.assertEq(Evidence.owGet(words, 1, Evidence.owfRun()), 0, "in its own run");
+        emon.Testport.assertEq(emon.Port.cellsLen(ofz) / Evidence.ozStride(), 2, "one row per considered slot");
+        emon.Testport.assertEq(oftZ(ofz, 0, Evidence.ozfRule()), 0, "TOTAL is kept");
+        emon.Testport.assertEq(oftZ(ofz, 0, Evidence.ozfOp()), 0, "keep");
+        emon.Testport.assertEq(oftZ(ofz, 0, Evidence.ozfIvotes()), 3, "every reading agrees with it");
+        emon.Testport.assertEq(oftZ(ofz, 0, Evidence.ozfCcount()), 0, "nothing chosen");
+        emon.Testport.assertEq(oftZ(ofz, 1, Evidence.ozfRule()), 1, "agreement");
+        emon.Testport.assertEq(oftZ(ofz, 1, Evidence.ozfOp()), 1, "replace");
+        emon.Testport.assertEq(oftZ(ofz, 1, Evidence.ozfIfirst()), 1, "the selected word");
+        emon.Testport.assertEq(oftZ(ofz, 1, Evidence.ozfIcount()), 1, "one selected word");
+        emon.Testport.assertEq(oftZ(ofz, 1, Evidence.ozfCfirst()), 7, "the copy");
+        emon.Testport.assertEq(oftZ(ofz, 1, Evidence.ozfCcount()), 1, "one copied word");
+        emon.Testport.assertEq(oftZ(ofz, 1, Evidence.ozfVotes()), 2, "two readings");
+        emon.Testport.assertEq(oftZ(ofz, 1, Evidence.ozfIvotes()), 1, "against one");
+        emon.Testport.assertEq(oftZ(ofz, 1, Evidence.ozfNulls()), 0, "no silent full reading");
+        emon.Testport.assertEq(oftZ(ofz, 1, Evidence.ozfMargin()), 520, "920 against 400");
+        emon.Testport.assertEq(oftZ(ofz, 1, Evidence.ozfReadings()), 7, "all three readings");
+    }
+    public static void testFusionOutsideTheGateTouchesNothing() {
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        emon.Port.Cells ofz = emon.Port.newCells();
+        emon.Port.Cells r1 = emon.Port.newCells();
+        oftPage(runs, lines, words, text, scr, 0);
+        emon.Port.cellsPush(r1, 77);
+        emon.Testport.assertEq(oftFuse(runs, lines, words, text, scr, ofz, 0, 1, r1), 1, "PDF or turned page");
+        emon.Testport.assertEq(oftFuse(runs, lines, words, text, scr, ofz, 1, 0, r1), 1, "detector silent");
+        emon.Testport.assertEq(oftFuse(runs, lines, words, text, scr, ofz, 1, 3, r1), 1, "no such lane");
+        emon.Testport.assertEq(Evidence.orCount(runs), 3, "no run");
+        emon.Testport.assertEq(Evidence.owCount(words), 6, "no word");
+        emon.Testport.assertEq(Evidence.olCount(lines), 3, "no line");
+        emon.Testport.assertEq(emon.Port.cellsLen(ofz), 0, "no row");
+        emon.Testport.assertEq(emon.Port.cellsLen(r1), 1, "scratch untouched");
+        emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scSelBase()), 0, "selection untouched");
+    }
+    public static void testAPageWithoutAReceiptKeywordIsUntouched() {
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        emon.Port.Cells ofz = emon.Port.newCells();
+        emon.Port.Cells r1 = emon.Port.newCells();
+        oftPage(runs, lines, words, text, scr, 8);
+        emon.Port.cellsPush(r1, 77);
+        emon.Testport.assertEq(Ofuse.ofPageKeyword(words, text, 1), 0, "no receipt keyword");
+        emon.Testport.assertEq(oftFuse(runs, lines, words, text, scr, ofz, 1, 1, r1), 1, "keyword gate is stacked");
+        emon.Testport.assertEq(Evidence.orCount(runs), 3, "no run without a keyword");
+        emon.Testport.assertEq(emon.Port.cellsLen(ofz), 0, "no row without a keyword");
+        emon.Testport.assertEq(emon.Port.cellsLen(r1), 1, "scratch untouched without a keyword");
+    }
+    public static void testAPageWithOneReadingIsANoop() {
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        emon.Port.Cells ofz = emon.Port.newCells();
+        oftPage(runs, lines, words, text, scr, 4);
+        emon.Testport.assertEq(oftFuse(runs, lines, words, text, scr, ofz, 1, 1, emon.Port.newCells()), 1, "selection unchanged");
+        emon.Testport.assertEq(Evidence.orCount(runs), 1, "no synthetic run");
+        emon.Testport.assertEq(emon.Port.cellsLen(ofz), 0, "nothing to decide");
+        emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scSelBase()), 0, "the recorded line");
+    }
+    public static void testAValidSelectedNumberSurvivesUnanimousConfidentAlternatives() {
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        emon.Port.Cells ofz = emon.Port.newCells();
+        oftPage(runs, lines, words, text, scr, 3);
+        emon.Testport.assertEq(oftFuse(runs, lines, words, text, scr, ofz, 1, 1, emon.Port.newCells()), 1, "selection unchanged");
+        emon.Testport.assertEq(Evidence.orCount(runs), 3, "nothing copied");
+        emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scSelBase()), 0, "the recorded line");
+        emon.Testport.assertEq(oftZ(ofz, 1, Evidence.ozfRule()), 4, "blocked by the format rule");
+        emon.Testport.assertEq(oftZ(ofz, 1, Evidence.ozfVotes()), 2, "though two readings agree");
+        emon.Testport.assertEq(oftZ(ofz, 1, Evidence.ozfOp()), 0, "kept");
+    }
+    public static void testFusionNeverDeletesASelectedWordNoOtherReadingSees() {
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        emon.Port.Cells ofz = emon.Port.newCells();
+        oftPage(runs, lines, words, text, scr, 16);
+        oftFuse(runs, lines, words, text, scr, ofz, 1, 1, emon.Port.newCells());
+        emon.Testport.assertEq(Evidence.olGet(lines, emon.Port.cellsAt(scr, Scan.scSelBase()), Evidence.lhCount()), 3, "every selected word is still read");
+        emon.Testport.assertEq(Ofuse.ofSource(words, Evidence.olGet(lines, emon.Port.cellsAt(scr, Scan.scSelBase()), Evidence.lhFirst()) + 2), 2, "the unseen word, copied verbatim");
+    }
+    public static void testAConfidentUnselectedReadingOpensANewLine() {
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        emon.Port.Cells ofz = emon.Port.newCells();
+        oftPage(runs, lines, words, text, scr, 33);
+        emon.Testport.assertEq(oftFuse(runs, lines, words, text, scr, ofz, 1, 1, emon.Port.newCells()), 2, "a new line after the page's last");
+        emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scSelBase()), 0, "the unchanged line keeps its own row");
+        emon.Testport.assertEq(Evidence.olGet(lines, emon.Port.cellsAt(scr, Scan.scSelBase() + 1), Evidence.olfRun()), 3, "the new line is the fused run's");
+        emon.Testport.assertEq(Ofuse.ofSource(words, Evidence.olGet(lines, emon.Port.cellsAt(scr, Scan.scSelBase() + 1), Evidence.lhFirst())), 4, "CASH from the earliest reading");
+        emon.Testport.assertEq(oftZ(ofz, 2, Evidence.ozfOp()), 3, "newline");
+        emon.Testport.assertEq(oftZ(ofz, 2, Evidence.ozfRule()), 3, "insert");
+    }
+    public static void testAWeakUnselectedReadingIsNotInserted() {
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        emon.Port.Cells ofz = emon.Port.newCells();
+        oftPage(runs, lines, words, text, scr, 65);
+        emon.Testport.assertEq(oftFuse(runs, lines, words, text, scr, ofz, 1, 1, emon.Port.newCells()), 1, "650 is below the insertion floor");
+        emon.Testport.assertEq(Evidence.orCount(runs), 3, "nothing copied");
+        emon.Testport.assertEq(oftZ(ofz, 2, Evidence.ozfOp()), 0, "the slot is recorded, kept");
+    }
+    public static void testAnInsertionOnASelectedBaselineFollowsItsAnchor() {
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        emon.Port.Cells ofz = emon.Port.newCells();
+        int l = 0;
+        oftPage(runs, lines, words, text, scr, 129);
+        emon.Testport.assertEq(oftFuse(runs, lines, words, text, scr, ofz, 1, 1, emon.Port.newCells()), 1, "no new line");
+        l = emon.Port.cellsAt(scr, Scan.scSelBase());
+        emon.Testport.assertEq(Evidence.olGet(lines, l, Evidence.lhCount()), 3, "TOTAL CASH 12.00");
+        emon.Testport.assertEq(Ofuse.ofSource(words, Evidence.olGet(lines, l, Evidence.lhFirst()) + 1), 4, "CASH after TOTAL");
+        emon.Testport.assertEq(Ofuse.ofSource(words, Evidence.olGet(lines, l, Evidence.lhFirst()) + 2), 1, "the valid number kept in place");
+    }
+    public static void testAnOversizedSlotIsRecordedAndLeftAlone() {
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        emon.Port.Cells ofz = emon.Port.newCells();
+        oftPage(runs, lines, words, text, scr, 512);
+        emon.Testport.assertEq(oftFuse(runs, lines, words, text, scr, ofz, 1, 1, emon.Port.newCells()), 1, "selection unchanged");
+        emon.Testport.assertEq(Evidence.orCount(runs), 3, "nothing copied");
+        emon.Testport.assertEq(oftZ(ofz, 1, Evidence.ozfIcount()), 5, "five chained selected words");
+        emon.Testport.assertEq(oftZ(ofz, 1, Evidence.ozfRule()), 6, "blocked-slot");
+    }
+    public static void testAHostileReadingSpanIsNeverRead() {
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        emon.Port.Cells ofz = emon.Port.newCells();
+        oftPage(runs, lines, words, text, scr, 256);
+        emon.Testport.assertEq(oftFuse(runs, lines, words, text, scr, ofz, 1, 1, emon.Port.newCells()), 1, "one selected line");
+        emon.Testport.assertEq(emon.Port.cellsLen(ofz) / Evidence.ozStride(), 2, "the hostile word makes no slot");
+        emon.Testport.assertEq(Ofuse.ofSource(words, Evidence.olGet(lines, emon.Port.cellsAt(scr, Scan.scSelBase()), Evidence.lhFirst()) + 1), 3, "the same decision");
+    }
+    public static int oftSame(int emonT, emon.Port.Cells a, emon.Port.Cells b) {
+        int i = 0;
+        emon.Testport.assertEq(emon.Port.cellsLen(a), emon.Port.cellsLen(b), "same length");
+        while ((i < emon.Port.cellsLen(a)) && (i < emon.Port.cellsLen(b))) {
+            emon.Testport.assertEq(emon.Port.cellsAt(a, i), emon.Port.cellsAt(b, i), "same cell");
+            i += 1;
+        }
+        return 0;
+    }
+    public static void testFusionReplaysToIdenticalEvidence() {
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        emon.Port.Cells ofz = emon.Port.newCells();
+        emon.Port.Cells runs2 = emon.Port.newCells();
+        emon.Port.Cells lines2 = emon.Port.newCells();
+        emon.Port.Cells words2 = emon.Port.newCells();
+        emon.Port.Cells text2 = emon.Port.newCells();
+        emon.Port.Cells scr2 = emon.Port.newCells();
+        emon.Port.Cells ofz2 = emon.Port.newCells();
+        oftPage(runs, lines, words, text, scr, 177);
+        oftPage(runs2, lines2, words2, text2, scr2, 177);
+        oftFuse(runs, lines, words, text, scr, ofz, 1, 1, emon.Port.newCells());
+        oftFuse(runs2, lines2, words2, text2, scr2, ofz2, 1, 1, emon.Port.newCells());
+        oftSame(0, runs, runs2);
+        oftSame(0, lines, lines2);
+        oftSame(0, words, words2);
+        oftSame(0, ofz, ofz2);
+        emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scSelBase()), emon.Port.cellsAt(scr2, Scan.scSelBase()), "same selection");
+    }
+    public static void testAFusedPageIsWellFormedEvidence() {
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        emon.Port.Cells ofz = emon.Port.newCells();
+        oftPage(runs, lines, words, text, scr, 48);
+        oftFuse(runs, lines, words, text, scr, ofz, 1, 1, emon.Port.newCells());
+        emon.Testport.assertEq(Evidence.evCheck(emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), text, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), runs, emon.Port.newCells(), lines, words, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 0, "runs, lines and copies nest; no copy claims a feature row");
+    }
+    public static void testACopyPrintsItsSourceAndARecordedWordDoesNot() {
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        StringBuilder a = emon.Testport.newText();
+        StringBuilder b = emon.Testport.newText();
+        int source = Evidence.owNew(words, 1, 10, 20, 110, 40, 10, 40, 110, 40, 0, 0, 0, 1, 2, 876, -1);
+        int copied = Ofuse.ofCopy(words, source, 9, 8);
+        emon.Port.cellsPush(text, 65);
+        Evidence.evRow(a, 0, 0, 17, words, text, source);
+        Evidence.evRow(b, 0, 0, 17, words, text, copied);
+        emon.Testport.assertText(a, "{\"page\":1,\"box\":[0.1,0.2,1.1,0.4],\"baseline\":[0.1,0.4,1.1,0.4],\"text\":\"A\",\"line\":2,\"conf\":876}", "a recorded reading has no from");
+        emon.Testport.assertText(b, "{\"page\":1,\"box\":[0.1,0.2,1.1,0.4],\"baseline\":[0.1,0.4,1.1,0.4],\"text\":\"A\",\"line\":8,\"conf\":876,\"run\":9,\"from\":0}", "a copy names its source row");
+    }
+    public static void testTheDecisionRowsPrintOnlyWhenAPageFused() {
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        emon.Port.Cells ofz = emon.Port.newCells();
+        StringBuilder none = emon.Testport.newText();
+        StringBuilder some = emon.Testport.newText();
+        emon.Testport.assertEq(Evidence.evEmitOfuse(none, 0, 1, ofz), 1, "no rows: the state is unchanged");
+        emon.Testport.assertText(none, "", "and nothing is written");
+        oftPage(runs, lines, words, text, scr, 0);
+        oftFuse(runs, lines, words, text, scr, ofz, 1, 1, emon.Port.newCells());
+        Evidence.evEmitOfuse(some, 0, 1, ofz);
+        emon.Testport.assertText(some, ",\"ofuse\":[{\"page\":1,\"box\":[10,10,15.2,12],\"incumbent\":[0,1],\"rule\":\"keep\",\"ivotes\":3,\"readings\":7},{\"page\":1,\"box\":[30,10,35.2,12],\"incumbent\":[1,1],\"choice\":[7,1],\"rule\":\"agree\",\"votes\":2,\"ivotes\":1,\"margin\":520,\"readings\":7,\"op\":\"replace\"}]", "one row per slot");
+    }
+    public static void testAWordTheEmissionKeepsOutIsNoIncumbentAndIsNotCopied() {
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        emon.Port.Cells ofz = emon.Port.newCells();
+        oftPage(runs, lines, words, text, scr, 1024);
+        emon.Testport.assertEq(oftFuse(runs, lines, words, text, scr, ofz, 1, 1, emon.Port.newCells()), 1, "one selected line");
+        emon.Testport.assertEq(Evidence.olGet(lines, emon.Port.cellsAt(scr, Scan.scSelBase()), Evidence.lhCount()), 2, "TOTAL and the chosen number; the kept-out word is not copied");
+        emon.Testport.assertEq(Evidence.owGet(words, 2, Evidence.owfFlags()) & Evidence.oeGarbage(), Evidence.oeGarbage(), "it is flagged as its emission flags it, so its ledger fate is unchanged");
+        emon.Testport.assertEq(emon.Port.cellsLen(ofz) / Evidence.ozStride(), 2, "it makes no slot of its own");
     }
 }

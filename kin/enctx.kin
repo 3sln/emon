@@ -3,7 +3,7 @@
 ;; with `fd`. A tag defined by a file is not in that file's own scope (found in kin), so the contexts live in a namespace of their own.
 ;;
 ;;   Arenas      the Model's seven arenas (SPEC 3.8) and the asset table, its uses and bytes (SPEC 10.11: empty unless `assets` is on)
-;;   EvArenas    the evidence arenas the OCR stages fill (SPEC 8.4.6)
+;;   EvArenas    the evidence arenas the OCR stages fill (SPEC 8.4.6), and RC5c's `ofuse` decision rows (D731: not an `ea` arena; dumped only when non-empty)
 ;;   Doc         what the document pass leaves for the page units and the document unit (P7.U, D195): the union of the PDF's and the raster
 ;;               input's (an image has no text layer: its glyph arenas, tagged tree and the rest stay empty)
 ;;   Scratch     the document unit's scratch, one field a scratch
@@ -16,7 +16,7 @@
 
 (defctx ^:pub EvArenas [^Cells epages ^Cells views ^Cells pts ^Cells refs ^Cells feats ^Cells paths
       ^Cells images ^Cells oruns ^Cells oblocks ^Cells olines ^Cells owords ^Cells osyms
-      ^Cells oalts ^Cells inks ^Cells comps ^Cells rules ^Cells prims ^Cells tlines])
+      ^Cells oalts ^Cells inks ^Cells comps ^Cells rules ^Cells prims ^Cells tlines ^Cells ofuse])
 
 ;; Cfg is also what `emon.config` parses an options text into (P10.10, D434): `chunk`, `maxr` and `fetchr` are the Engine's own, `rec`, `jsocr` and `jsrender` the browser
 ;; binding's, `lims` the `limit.NAME=N` pairs (kind, value) and `prod` the `producer.NAME=V` records, `num` the parser's scratch and `msg` its refusal.

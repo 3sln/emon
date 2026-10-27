@@ -66,7 +66,7 @@
                                    obf-btype obf-orient obf-wdir obf-first obf-count obf-x0 obf-y0 obf-x1 obf-y1
                                    olf-retry-gap olf-par olf-run olf-xheight olf-asc olf-desc olf-px olf-py olf-pw olf-ph
                                    owf-style owf-run owf-sfirst owf-scount owf-lang owf-flags owf-psize
-                                   owf-px owf-py owf-pw owf-ph
+                                   owf-px owf-py owf-pw owf-ph owf-from
                                    osf-conf osf-afirst osf-acount osf-px osf-py osf-pw osf-ph
                                    wf-style wf-size wf-font wf-gap wf-wbreak wf-src lf-src lf-order ls-revised
                                    ch-x0 ch-y0 ch-x1 ch-y1 ch-cp ld-rtl ld-ttb ob-block ob-paragraph
@@ -1169,7 +1169,7 @@
           (set j (+ j 1))))
     (return k)))
 
-(defn ^I32 sc-line-words [^Cells olines ^Cells owords ^Cells etext ^I32 l ^I32 xl ^:mut ^Cells scr]
+(defn ^:pub ^I32 sc-line-words [^Cells olines ^Cells owords ^Cells etext ^I32 l ^I32 xl ^:mut ^Cells scr]
   (comment "The words line `l` is emitted with, in the order along it, written to `scr` from `sc-fate-base`: its own, and with them those of the body-ink line `xl` (-1 none) that")
   (comment "lie over none of its own (`sc-xtra-ok`). Answers how many; 0 when they are more than the scratch holds (the line is then emitted as it is, with nothing added).")
   (let [^I32 fb (sc-fate-base)
@@ -1382,6 +1382,69 @@
     (ow-set owords w (owf-flags) v)
     (return 0)))
 
+(defn ^I32 sc-drop-fate [^Cells owords ^Cells etext ^Cells rules ^I32 page ^I32 m ^I32 w ^I32 lmean ^I32 mx ^I32 tch ^I32 floor]
+  (comment "Whether word `w` of a line of `m` words (mean confidence `lmean`, best `mx`, `tch` characters in all) is no text: 0 it stays, 1 garbage, 2 a rule's ghost, 3 a dot leader")
+  (comment "(`sc-fates`' first four fates, which read nothing but the word, its line and the page's rules, and change nothing). D731 shares it with `sc-kept-words`.")
+  (let [^I32 ts (ow-get owords w (hd-tstart))
+        ^I32 n (ow-get owords w (hd-tlen))
+        ^I32 conf (ow-get owords w (hd-conf))
+        ^:mut ^I32 f 0
+        ^:mut ^I32 c 0]
+    (if (== (sc-admit-word conf floor) 0) (set f 1))
+    (comment "a dot leader")
+    (if (== (sc-leader etext ts n) 1) (set f 3))
+    (comment "An isolated punctuation speck at most one point each way is no text even when the engine is confident. Keep its evidence for the ledger.")
+    (if (and (== f 0) (and (== m 1) (== n 1)))
+      (if (and (<= (- (ow-get owords w (hd-x1)) (ow-get owords w (hd-x0))) 100)
+               (<= (- (ow-get owords w (hd-y1)) (ow-get owords w (hd-y0))) 100))
+        (do (set c (cells-at etext ts))
+            (if (or (== c 46) (or (== c 44) (or (== c 39) (or (== c 96) (== c 183))))) (set f 1)))))
+    (comment "texture: a line of three words or more, all of them unsure")
+    (if (== f 0)
+      (if (and (>= m 3) (and (<= lmean (sc-lo-conf)) (and (<= mx 450) (<= tch (* 4 m))))) (set f 1)))
+    (comment "very unsure and no word, alone or among such words")
+    (if (== f 0)
+      (if (<= conf (sc-lo-conf))
+        (if (== (sc-implausible etext ts n) 1)
+          (if (or (<= m 2) (<= lmean 450)) (set f 1)))))
+    (comment "a rule read as a character")
+    (if (and (== f 0) (== n 1))
+      (do (set c (cells-at etext ts))
+          (if (or (== c 124) (or (== c 73) (or (== c 108) (== c 33))))
+            (if (== (sc-on-vrule rules page
+                                 (quot (+ (ow-get owords w (hd-x0)) (ow-get owords w (hd-x1))) 2)
+                                 (quot (+ (ow-get owords w (hd-y0)) (ow-get owords w (hd-y1))) 2)
+                                 (sc-rule-slack)) 1)
+              (set f 2)))))
+    (return f)))
+
+(defn ^:pub ^I32 sc-kept-words [^:mut ^Cells owords ^Cells etext ^Cells rules ^I32 page ^I32 m ^I32 mark ^:mut ^Cells scr]
+  (comment "D731: the `m` words of a line listed at `sc-fate-base` (`sc-line-words`) less the ones `sc-fates` would keep out as no text, packed to the front;")
+  (comment "answers how many stay. Nothing is corrected and no text is appended; with `mark` 1 the words kept out are flagged in `owords` as `sc-fates` flags them.")
+  (let [^I32 fb (sc-fate-base)
+        ^:mut ^I32 i 0 ^:mut ^I32 w 0 ^:mut ^I32 conf 0 ^:mut ^I32 sum 0 ^:mut ^I32 tch 0 ^:mut ^I32 mx 0
+        ^:mut ^I32 lmean 0 ^:mut ^I32 f 0 ^:mut ^I32 kept 0]
+    (if (<= m 0) (return 0))
+    (while (< i m)
+      (do (set w (cells-at scr (+ fb i)))
+          (set conf (ow-get owords w (hd-conf)))
+          (set sum (+ sum conf))
+          (set tch (+ tch (ow-get owords w (hd-tlen))))
+          (if (> conf mx) (set mx conf))
+          (set i (+ i 1))))
+    (set lmean (quot sum m))
+    (set i 0)
+    (while (< i m)
+      (do (set w (cells-at scr (+ fb i)))
+          (set f (sc-drop-fate owords etext rules page m w lmean mx tch (cells-at scr (sc-admit-floor))))
+          (if (== f 0)
+            (do (cells-set scr (+ fb kept) w) (set kept (+ kept 1))))
+          (if (== mark 1)
+            (do (if (or (== f 1) (== f 3)) (sc-flag owords w (oe-garbage)))
+                (if (== f 2) (sc-flag owords w (oe-rule-ghost)))))
+          (set i (+ i 1))))
+    (return kept)))
+
 (defn ^I32 sc-fates [^:mut ^Cells owords ^:mut ^Cells etext ^Cells osyms ^Cells rules ^Cells comps ^Cells inks ^I32 page ^I32 m ^:mut ^Cells scr]
   (comment "What becomes of each of the `m` words of a line (listed at `sc-fate-base`): 0 it stays, 1 it is garbage (confidence at most `sc-lo-conf` and implausible characters (`sc-implausible`) on a line of")
   (comment "two words or fewer or of a mean confidence of 450 or less; or a word of a line of three or more whose mean is at most `sc-lo-conf`, best at most 450 and words of four characters or fewer on average: texture), 2 it is the ghost of a rule (a lone bar, `I`, `l` or `!`")
@@ -1429,35 +1492,9 @@
           (set ts (ow-get owords w (hd-tstart)))
           (set n (ow-get owords w (hd-tlen)))
           (set conf (ow-get owords w (hd-conf)))
-          (set f 0)
-          (if (== (sc-admit-word conf (cells-at scr (sc-admit-floor))) 0) (set f 1))
+          (set f (sc-drop-fate owords etext rules page m w lmean mx tch (cells-at scr (sc-admit-floor))))
           (cells-set scr (+ fb (+ (* 2 fm) i)) -1)
           (cells-set scr (+ fb (+ (* 3 fm) i)) 0)
-          (comment "a dot leader")
-          (if (== (sc-leader etext ts n) 1) (set f 3))
-          (comment "An isolated punctuation speck at most one point each way is no text even when the engine is confident. Keep its evidence for the ledger.")
-          (if (and (== f 0) (and (== m 1) (== n 1)))
-            (if (and (<= (- (ow-get owords w (hd-x1)) (ow-get owords w (hd-x0))) 100)
-                     (<= (- (ow-get owords w (hd-y1)) (ow-get owords w (hd-y0))) 100))
-              (do (set c (cells-at etext ts))
-                  (if (or (== c 46) (or (== c 44) (or (== c 39) (or (== c 96) (== c 183))))) (set f 1)))))
-          (comment "texture: a line of three words or more, all of them unsure")
-          (if (== f 0)
-            (if (and (>= m 3) (and (<= lmean (sc-lo-conf)) (and (<= mx 450) (<= tch (* 4 m))))) (set f 1)))
-          (comment "very unsure and no word, alone or among such words")
-          (if (== f 0)
-            (if (<= conf (sc-lo-conf))
-              (if (== (sc-implausible etext ts n) 1)
-                (if (or (<= m 2) (<= lmean 450)) (set f 1)))))
-          (comment "a rule read as a character")
-          (if (and (== f 0) (== n 1))
-            (do (set c (cells-at etext ts))
-                (if (or (== c 124) (or (== c 73) (or (== c 108) (== c 33))))
-                  (if (== (sc-on-vrule rules page
-                                       (quot (+ (ow-get owords w (hd-x0)) (ow-get owords w (hd-x1))) 2)
-                                       (quot (+ (ow-get owords w (hd-y0)) (ow-get owords w (hd-y1))) 2)
-                                       (sc-rule-slack)) 1)
-                    (set f 2)))))
           (comment "a rule's stroke glued to the end of a word")
           (if (and (== f 0) (>= n 2))
             (if (== (cells-at etext (+ ts (- n 1))) 124)
@@ -2203,6 +2240,8 @@
                         (do (set cx (quot (+ (ow-get owords w (hd-x0)) (ow-get owords w (hd-x1))) 2))
                             (set cy (quot (+ (ow-get owords w (hd-y0)) (ow-get owords w (hd-y1))) 2))
                             (set eligible 1)
+                            (comment "D731: a fused copy is not another reading of its word")
+                            (if (> (ow-get owords w (owf-from)) 0) (set eligible 0))
                             (if (== rotated 1)
                               (do (set run (ow-get owords w (owf-run)))
                                   (set eligible 0)
