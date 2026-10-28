@@ -337,4 +337,215 @@ public final class Ofmt {
         }
         return fmtPercent(text, start, end);
     }
+    public static int fmtAsciiDigit(int cp) {
+        if ((cp >= 48) && (cp <= 57)) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int fmtCurrencyEnd(emon.Port.Cells text, int start, int end) {
+        if (start >= end) {
+            return start;
+        }
+        int cp = emon.Port.cellsAt(text, start);
+        if (((cp == 36) || (cp == 8364)) || ((cp == 163) || (cp == 165))) {
+            return start + 1;
+        }
+        if ((start + 1) < end) {
+            if (fmtFold(cp) == 114) {
+                if ((fmtFold(emon.Port.cellsAt(text, start + 1)) == 109) || (fmtFold(emon.Port.cellsAt(text, start + 1)) == 112)) {
+                    return start + 2;
+                } else if (((start + 2) < end) && ((fmtFold(emon.Port.cellsAt(text, start + 1)) == 115) && (emon.Port.cellsAt(text, start + 2) == 46))) {
+                    return start + 3;
+                }
+            }
+        }
+        if ((start + 2) < end) {
+            if (((fmtFold(cp) == 117) && ((fmtFold(emon.Port.cellsAt(text, start + 1)) == 115) && (fmtFold(emon.Port.cellsAt(text, start + 2)) == 100))) || ((fmtFold(cp) == 101) && ((fmtFold(emon.Port.cellsAt(text, start + 1)) == 117) && (fmtFold(emon.Port.cellsAt(text, start + 2)) == 114)))) {
+                return start + 3;
+            }
+        }
+        return start;
+    }
+    public static long fmtValue(emon.Port.Cells text, int start, int count, emon.Port.Cells meta) {
+        emon.Port.cellsDrop(meta, 0);
+        int z = 0;
+        while (z < 8) {
+            emon.Port.cellsPush(meta, 0);
+            z += 1;
+        }
+        if ((start < 0) || ((count <= 0) || (start > emon.Port.cellsLen(text)))) {
+            return (long) 0;
+        }
+        if (count > (emon.Port.cellsLen(text) - start)) {
+            return (long) 0;
+        }
+        int i = start;
+        int end = start + count;
+        int negative = 0;
+        int style = 0;
+        int paren = 0;
+        int prefix = start;
+        int pend = start;
+        int grouped = 0;
+        int group = 0;
+        int dec = 0;
+        int digits = 0;
+        int cp = 0;
+        long value = (long) 0;
+        if (emon.Port.cellsAt(text, end - 1) == 37) {
+            emon.Port.cellsSet(meta, 4, 1);
+            end -= 1;
+        }
+        if (i >= end) {
+            return (long) 0;
+        }
+        pend = fmtCurrencyEnd(text, i, end);
+        if (pend > i) {
+            prefix = i;
+            i = pend;
+        }
+        if (i >= end) {
+            return (long) 0;
+        }
+        if (emon.Port.cellsAt(text, i) == 40) {
+            paren = 1;
+            negative = 1;
+            style = 3;
+            i += 1;
+        }
+        if (i >= end) {
+            return (long) 0;
+        }
+        if (((emon.Port.cellsAt(text, i) == 45) || (emon.Port.cellsAt(text, i) == 8722)) || (emon.Port.cellsAt(text, i) == 43)) {
+            if (paren == 1) {
+                return (long) 0;
+            }
+            if (emon.Port.cellsAt(text, i) != 43) {
+                negative = 1;
+            }
+            style = 1;
+            i += 1;
+        }
+        if (pend == prefix) {
+            prefix = i;
+            pend = fmtCurrencyEnd(text, i, end);
+            i = pend;
+        }
+        if (paren == 1) {
+            if ((i >= end) || (emon.Port.cellsAt(text, end - 1) != 41)) {
+                return (long) 0;
+            }
+            end -= 1;
+        } else if (i < end) {
+            if (emon.Port.cellsAt(text, end - 1) == 45) {
+                if (style != 0) {
+                    return (long) 0;
+                }
+                style = 2;
+                negative = 1;
+                end -= 1;
+            }
+        }
+        while (i < end) {
+            cp = emon.Port.cellsAt(text, i);
+            if (fmtAsciiDigit(cp) == 1) {
+                digits += 1;
+                if (digits > 15) {
+                    return (long) 0;
+                }
+                value = (value * ((long) 10)) + ((long) (cp - 48));
+                group += 1;
+            } else if (cp == 44) {
+                if ((group == 0) || ((grouped == 0) && (group > 3))) {
+                    return (long) 0;
+                }
+                if ((grouped == 1) && (group != 3)) {
+                    return (long) 0;
+                }
+                grouped = 1;
+                group = 0;
+            } else if (cp == 46) {
+                if ((group == 0) || ((grouped == 1) && (group != 3))) {
+                    return (long) 0;
+                }
+                i += 1;
+                while (i < end) {
+                    cp = emon.Port.cellsAt(text, i);
+                    if (fmtAsciiDigit(cp) == 0) {
+                        return (long) 0;
+                    }
+                    digits += 1;
+                    dec += 1;
+                    if ((digits > 15) || (dec > 6)) {
+                        return (long) 0;
+                    }
+                    value = (value * ((long) 10)) + ((long) (cp - 48));
+                    i += 1;
+                }
+                if (dec == 0) {
+                    return (long) 0;
+                }
+            } else {
+                return (long) 0;
+            }
+            i += 1;
+        }
+        if ((digits == 0) || ((dec == 0) && ((group == 0) || ((grouped == 1) && (group != 3))))) {
+            return (long) 0;
+        }
+        emon.Port.cellsSet(meta, 0, 1);
+        emon.Port.cellsSet(meta, 1, dec);
+        emon.Port.cellsSet(meta, 2, grouped);
+        emon.Port.cellsSet(meta, 3, style);
+        emon.Port.cellsSet(meta, 5, digits);
+        emon.Port.cellsSet(meta, 6, prefix);
+        emon.Port.cellsSet(meta, 7, pend - prefix);
+        if (negative == 1) {
+            return ((long) 0) - value;
+        }
+        return value;
+    }
+    public static int fmtOneDigitSub(emon.Port.Cells text, int a, int an, int b, int bn) {
+        if ((an != bn) || ((a < 0) || (b < 0))) {
+            return 0;
+        }
+        if ((an > (emon.Port.cellsLen(text) - a)) || (bn > (emon.Port.cellsLen(text) - b))) {
+            return 0;
+        }
+        int i = 0;
+        int diff = 0;
+        int x = 0;
+        int y = 0;
+        while (i < an) {
+            x = emon.Port.cellsAt(text, a + i);
+            y = emon.Port.cellsAt(text, b + i);
+            if (x != y) {
+                if ((fmtAsciiDigit(x) == 0) || (fmtAsciiDigit(y) == 0)) {
+                    return 0;
+                }
+                diff += 1;
+            }
+            i += 1;
+        }
+        if (diff == 1) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int fmtColType(emon.Port.Cells meta, int decimals, int grouped, int percent) {
+        if (emon.Port.cellsLen(meta) < 8) {
+            return 0;
+        }
+        if ((emon.Port.cellsAt(meta, 0) == 0) || (emon.Port.cellsAt(meta, 1) != decimals)) {
+            return 0;
+        }
+        if (emon.Port.cellsAt(meta, 4) != percent) {
+            return 0;
+        }
+        if ((grouped == 1) && ((emon.Port.cellsAt(meta, 5) >= (decimals + 4)) && (emon.Port.cellsAt(meta, 2) == 0))) {
+            return 0;
+        }
+        return 1;
+    }
 }

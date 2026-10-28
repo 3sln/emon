@@ -38,6 +38,7 @@
                                    or-count op-region op-first op-upscaled]]
             [emon.retarget :refer [rt-receipt-source rt-receipt-ignored rt-mark-adopted rt-prep rt-plan rt-record rt-adopt rt-upright rt-witness rt-run-meta rt-pad rtp-q rtp-primary rtp-hash rtp-trigger]]
             [emon.ofuse :refer [of-fuse]]
+            [emon.oaline :refer [oa-line-fuse]]
             [emon.rasterplan :refer [rp-w rp-f-ask rp-f-wat rp-f-wn rp-f-scripts rp-ww rp-ask-none rp-ask-full rp-ask-witness rp-plan rp-request rp-weak
                                      ri-escalate ri-witness ri-none]]
             [emon.player :refer [cg-count]]
@@ -413,7 +414,7 @@
                          ^:mut ^Cells inks ^:mut ^Cells comps ^:mut ^Cells rules ^:mut ^Cells prims ^:mut ^Cells tpts
                          ^:mut ^Cells ws ^:mut ^Cells sv ^:mut ^Cells aux ^:mut ^Cells snap ^:mut ^Cells rtp
                          ^:mut ^Cells rn ^:mut ^Cells ri ^:mut ^Cells cs ^:mut ^Cells vr ^:mut ^Cells pc ^:mut ^Cells sg ^:mut ^Cells mem
-                         ^:mut ^Cells s1 ^:mut ^Cells s2 ^:mut ^Cells s3 ^:mut ^Cells s4 ^:mut ^Cells s5 ^:mut ^Cells s6 ^:mut ^Cells ofz]
+                         ^:mut ^Cells s1 ^:mut ^Cells s2 ^:mut ^Cells s3 ^:mut ^Cells s4 ^:mut ^Cells s5 ^:mut ^Cells s6 ^:mut ^Cells ofz ^:mut ^Cells oaz]
   (comment "A SCANNED page whose raster is in (the decode or the render under `did`, its answer at `ad`; `dpi100` its resolution, `obj` the image's object, the page")
   (comment "region it shows is (`bx0` `by0`)-(`bx1` `by1`) of a page `pw` x `ph`, all centipoints): the OCR of the bitmap, the ink layers of the bitmap and the")
   (comment "targeted passes they and the first pass call for, then the lines the pipeline reads (`rt-adopt`). With no pixel in the decode answer (a transcript recorded")
@@ -525,6 +526,8 @@
     (if (or (== (cells-at rtp (rtp-primary)) run) (== (cells-at rtp (rtp-q)) 0))
       (set nsel (of-fuse (+ i 1) maskv (cells-at rtp (rtp-trigger)) oruns olines owords etext rules scr nsel ofz
                          s1 s2 s3 s4 s5 s6 rn ri cs vr)))
+    (if (or (== (cells-at rtp (rtp-primary)) run) (== (cells-at rtp (rtp-q)) 0))
+      (set nsel (oa-line-fuse (+ i 1) rtp oruns olines owords etext scr nsel oaz s1 s2 s3 s4)))
     (rt-upright rtp run epages (+ i 1))
     (set rotmed (ev-rot-median olines l0 nl))
     (sc-emit-sel olines owords osyms nsel (+ i 1) rotmed scr words lines etext rules comps inks)
@@ -540,7 +543,7 @@
                         ^:mut ^Cells inks ^:mut ^Cells comps ^:mut ^Cells rules ^:mut ^Cells prims ^:mut ^Cells tpts
                         ^:mut ^Cells ws ^:mut ^Cells sv ^:mut ^Cells aux ^:mut ^Cells snap ^:mut ^Cells rtp
                         ^:mut ^Cells rn ^:mut ^Cells ri ^:mut ^Cells cs ^:mut ^Cells vr ^:mut ^Cells pc ^:mut ^Cells sg ^:mut ^Cells mem
-                        ^:mut ^Cells s1 ^:mut ^Cells s2 ^:mut ^Cells s3 ^:mut ^Cells s4 ^:mut ^Cells s5 ^:mut ^Cells s6 ^:mut ^Cells ofz]
+                        ^:mut ^Cells s1 ^:mut ^Cells s2 ^:mut ^Cells s3 ^:mut ^Cells s4 ^:mut ^Cells s5 ^:mut ^Cells s6 ^:mut ^Cells ofz ^:mut ^Cells oaz]
   (comment "A SCANNED page of a PDF: `decode` of its stream (the host reads the DCT bytes in place) or, in the plan's render mode (D564: an image in any other codec),")
   (comment "`render` of the page, then `pu-scan-core`: the OCR of the bitmap and what it calls for. A failed raster is `us-done`: the page is left as the text layer made it.")
   (let [^I32 did (pu-id i (pi-decode))
@@ -556,7 +559,7 @@
                           (i32 (quot (add64 (mul64 (i64 (an-arg ans ad 0)) (i64 720000)) (i64 (quot wp 2))) (i64 wp)))
                           (pu-field pl i 1) (pu-field pl i 4) (pu-field pl i 5) (pu-field pl i 6) (pu-field pl i 7) (pu-field pl i 8) (pu-field pl i 9) 2 1
                           ans rq loc bms mask scr epages views etext feats images oruns oblocks olines owords osyms oalts words lines refs tlines cg
-                          inks comps rules prims tpts ws sv aux snap rtp rn ri cs vr pc sg mem s1 s2 s3 s4 s5 s6 ofz))))
+                          inks comps rules prims tpts ws sv aux snap rtp rn ri cs vr pc sg mem s1 s2 s3 s4 s5 s6 ofz oaz))))
 
 (defn ^:pub ^I32 pu-run-pdf [^I32 i ^I32 input ^I32 policy ^Cells pl ^Cells ans ^:mut ^Cells rq ^Cells loc
                              ^BitmapSet bms ^:mut ^Cells mask ^:mut ^Cells scr
@@ -569,7 +572,7 @@
                              ^:mut ^Cells inks ^:mut ^Cells comps ^:mut ^Cells rules ^:mut ^Cells prims ^:mut ^Cells tpts
                              ^:mut ^Cells ws ^:mut ^Cells ws2 ^:mut ^Cells sv ^:mut ^Cells aux ^:mut ^Cells snap ^:mut ^Cells rtp
                              ^:mut ^Cells rn ^:mut ^Cells ri ^:mut ^Cells cs ^:mut ^Cells vr ^:mut ^Cells pc ^:mut ^Cells sg ^:mut ^Cells mem
-                             ^:mut ^Cells s1 ^:mut ^Cells s2 ^:mut ^Cells s3 ^:mut ^Cells s4 ^:mut ^Cells s5 ^:mut ^Cells s6 ^:mut ^Cells ofz]
+                             ^:mut ^Cells s1 ^:mut ^Cells s2 ^:mut ^Cells s3 ^:mut ^Cells s4 ^:mut ^Cells s5 ^:mut ^Cells s6 ^:mut ^Cells ofz ^:mut ^Cells oaz]
   (comment "The unit of PDF page `i` (0-based). A `pk-scan` page asks `decode` of its stream's bytes (id `pi-decode`), then OCR")
   (comment "of the bitmap (id `pi-ocr`); where the answers are in its evidence and lines are appended to `words` and `lines`")
   (comment "and `mask[i]` is 2 (D212). A `pk-born` page asks what its plan says (`rp-plan`: `pu-run-born`). Any other page asks nothing and is")
@@ -582,4 +585,4 @@
                          inks comps rules prims tpts ws ws2 sv aux snap rtp rn ri cs vr pc sg mem s1 s2 s3 s4 s5 s6)))
   (if (!= (pu-kind pl i) (pk-scan)) (return (us-done)))
   (return (pu-run-scan i input fuse pl ans rq loc bms mask scr epages views etext feats images oruns oblocks olines owords osyms oalts words lines refs tlines cg
-                       inks comps rules prims tpts ws sv aux snap rtp rn ri cs vr pc sg mem s1 s2 s3 s4 s5 s6 ofz)))
+                       inks comps rules prims tpts ws sv aux snap rtp rn ri cs vr pc sg mem s1 s2 s3 s4 s5 s6 ofz oaz)))

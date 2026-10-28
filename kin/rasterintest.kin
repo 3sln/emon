@@ -48,7 +48,7 @@
                    (new-cells) (new-cells) (new-cells)
                    (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
                    (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
-                   (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells))))
+                   (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells))))
 
 (deftest test-the-document-pass-asks-for-frame-zeros-header-and-nothing-more
   (let [^Cells ans (new-cells)
@@ -275,7 +275,7 @@
                    (new-cells) (new-cells) (new-cells)
                    (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
                    (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
-                   (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells))))
+                   (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells))))
 
 (deftest test-a-frame-fed-sideways-is-read-from-its-turned-view
   (comment "P12.3 I-5: an image page went through `rs-page`, which wrote the first pass's lines and never looked at what OSD said, so a PNG turned a quarter or a half was")

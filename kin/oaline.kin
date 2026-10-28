@@ -1,0 +1,145 @@
+;; P-ARB's engine-line-retry exception, applied to slots after selection. A
+;; retry never replaces a whole line merely because it joins an amount.
+(ns emon.oaline
+  (:require [emon.lang :refer [I32 Cells i64]]
+            [emon.port :refer [cells-at cells-len cells-push cells-set cells-drop]]
+            [emon.oarb :refer [oa-line-merge-meta]]
+            [emon.ofmt :refer [fmt-value fmt-digit]]
+            [emon.ofuse :refer [of-copy]]
+            [emon.scan :refer [sc-sel-base sc-xtra-base sc-sel-max]]
+            [emon.retarget :refer [rtp-nl rtp-line0 rtp-q]]
+            [emon.evidence :refer [or-new or-count or-get or-set orf-page orf-view orf-pass orf-lfirst orf-lcount orf-wfirst orf-wcount
+                                   op-line op-arb ol-new ol-count ol-get ol-set olf-run lh-first lh-count lh-dir lh-x0 lh-y0 lh-x1 lh-y1
+                                   ow-count ow-get hd-x0 hd-y0 hd-x1 hd-y1 hd-conf hd-tstart hd-tlen ev-overlap-small]]
+            [kin.lang :refer [defn return let set while if do + - * < > <= >= == != and or]]))
+
+(defn ^I32 oal-digits [^Cells text ^I32 start ^I32 count]
+  (let [^:mut ^I32 i 0]
+    (while (< i count)
+      (do (if (== (fmt-digit (cells-at text (+ start i))) 1) (return 1)) (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 oal-text [^Cells text ^I32 start ^I32 count ^:mut ^Cells joined]
+  (let [^:mut ^I32 i 0]
+    (while (< i count)
+      (do (cells-push joined (cells-at text (+ start i))) (set i (+ i 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 oa-line-fuse [^I32 page ^Cells rtp ^:mut ^Cells runs ^:mut ^Cells lines ^:mut ^Cells words ^Cells text
+                               ^:mut ^Cells scr ^I32 nsel ^:mut ^Cells oaz ^:mut ^Cells plan ^:mut ^Cells joined
+                               ^:mut ^Cells im ^:mut ^Cells cm]
+  (if (!= (cells-at rtp (rtp-q)) 0) (return nsel))
+  (let [^:mut ^I32 k 0 ^:mut ^I32 l 0 ^:mut ^I32 tr -1 ^:mut ^I32 j 0 ^:mut ^I32 q 0
+        ^:mut ^I32 first 0 ^:mut ^I32 count 0 ^:mut ^I32 cw 0 ^:mut ^I32 w 0
+        ^:mut ^I32 a -1 ^:mut ^I32 b -1 ^:mut ^I32 hits 0 ^:mut ^I32 conf 1000
+        ^:mut ^I32 margin 0 ^:mut ^I32 start 0 ^:mut ^I32 compactstart 0 ^:mut ^I32 compactlen 0 ^:mut ^I32 rawlen 0 ^:mut ^I32 cn 0
+        ^:mut ^I32 changed 0 ^:mut ^I32 malformed 0 ^:mut ^I32 compact 1 ^:mut ^I32 h 0 ^:mut ^I32 ph 0 ^:mut ^I32 conflict 0 ^:mut ^I32 run -1 ^:mut ^I32 nl 0 ^:mut ^I32 f 0 ^:mut ^I32 value 0
+        ^:mut ^I32 xk 0]
+    (while (< k nsel)
+      (do (set l (cells-at scr (+ (sc-sel-base) k))) (set tr -1) (set j 0)
+          (while (< j (cells-at rtp (rtp-nl)))
+            (do (if (== (cells-at rtp (+ (rtp-line0) (* j 2))) l)
+                  (set tr (cells-at rtp (+ (rtp-line0) (+ (* j 2) 1)))))
+                (set j (+ j 1))))
+          (set xk (- l (cells-at scr (sc-xtra-base))))
+          (if (and (>= xk 0) (< xk (sc-sel-max)))
+            (if (> (cells-at scr (+ (sc-xtra-base) (+ xk 1))) 0) (set tr -1)))
+          (set count (ol-get lines l (lh-count))) (set first (ol-get lines l (lh-first)))
+          (if (and (>= tr 0) (and (>= count 2) (<= count 64)))
+            (if (and (== (or-get runs tr (orf-pass)) (op-line)) (== (ol-get lines l (lh-dir)) 0))
+              (do (cells-drop plan 0) (set j 0)
+                  (while (< j count) (do (cells-push plan -1) (set j (+ j 1))))
+                  (set changed 0) (set conflict 0) (set q 0)
+                  (while (< q (or-get runs tr (orf-wcount)))
+                    (do (set cw (+ (or-get runs tr (orf-wfirst)) q))
+                        (fmt-value text (ow-get words cw (hd-tstart)) (ow-get words cw (hd-tlen)) cm)
+                        (if (and (== (cells-at cm 0) 1) (== (cells-at cm 1) 2))
+                          (do (set a -1) (set b -1) (set hits 0) (set conf 1000) (set j 0)
+                              (while (< j count)
+                                (do (set w (+ first j))
+                                    (if (>= (ev-overlap-small (ow-get words w (hd-x0)) (ow-get words w (hd-y0)) (ow-get words w (hd-x1)) (ow-get words w (hd-y1))
+                                                             (ow-get words cw (hd-x0)) (ow-get words cw (hd-y0)) (ow-get words cw (hd-x1)) (ow-get words cw (hd-y1))) 200)
+                                      (do (if (< a 0) (set a j)) (set b j) (set hits (+ hits 1))
+                                          (if (< (ow-get words w (hd-conf)) conf) (set conf (ow-get words w (hd-conf))))))
+                                    (set j (+ j 1))))
+                              (if (and (== hits 2) (== hits (+ (- b a) 1)))
+                                (do (cells-drop joined 0) (set j a) (set malformed 0) (set compact 1)
+                                    (while (<= j b)
+                                      (do (if (> j a) (cells-push joined 32))
+                                          (set w (+ first j))
+                                          (if (> j a)
+                                            (do (set h (- (ow-get words w (hd-y1)) (ow-get words w (hd-y0))))
+                                                (set ph (- (ow-get words (- w 1) (hd-y1)) (ow-get words (- w 1) (hd-y0))))
+                                                (if (< ph h) (set h ph))
+                                                (if (or (<= h 0) (> (* (- (i64 (ow-get words w (hd-x0))) (i64 (ow-get words (- w 1) (hd-x1)))) (i64 10)) (* (i64 h) (i64 16)))) (set compact 0))))
+                                          (if (== (oal-digits text (ow-get words w (hd-tstart)) (ow-get words w (hd-tlen))) 0) (set compact 0))
+                                          (fmt-value text (ow-get words w (hd-tstart)) (ow-get words w (hd-tlen)) im)
+                                          (if (== (cells-at im 0) 0) (set malformed 1))
+                                          (oal-text text (ow-get words w (hd-tstart)) (ow-get words w (hd-tlen)) joined)
+                                          (set j (+ j 1))))
+                                    (set rawlen (cells-len joined)) (set start rawlen)
+                                    (set cn (ow-get words cw (hd-tlen)))
+                                    (oal-text text (ow-get words cw (hd-tstart)) cn joined)
+                                    (set compactstart (cells-len joined)) (set j a)
+                                    (while (<= j b)
+                                      (do (set w (+ first j))
+                                          (oal-text text (ow-get words w (hd-tstart)) (ow-get words w (hd-tlen)) joined)
+                                          (set j (+ j 1))))
+                                    (set compactlen (- (cells-len joined) compactstart))
+                                    (fmt-value joined compactstart compactlen im)
+                                    (if (or (== (cells-at im 0) 0) (!= (cells-at im 1) 2)) (set compact 0))
+                                    (set margin (- (ow-get words cw (hd-conf)) conf))
+                                    (if (and (== compact 1) (and (== malformed 1) (== (oa-line-merge-meta joined 0 rawlen start cn hits 1 margin im cm) 1)))
+                                      (do (set j a)
+                                          (while (<= j b)
+                                            (do (if (!= (cells-at plan j) -1) (set conflict 1)) (set j (+ j 1))))
+                                          (cells-set plan a cw) (set j (+ a 1))
+                                          (while (<= j b) (do (cells-set plan j -2) (set j (+ j 1))))
+                                          (set changed 1)))))))
+                        (set q (+ q 1))))
+                  (if (and (== changed 1) (== conflict 0))
+                    (do (if (< run 0)
+                          (do (set value (or-get runs (ol-get lines l (olf-run)) (orf-view)))
+                              (set run (or-new runs page value))
+                              (or-set runs run (orf-pass) (op-arb))
+                              (or-set runs run (orf-lfirst) (ol-count lines))
+                              (or-set runs run (orf-wfirst) (ow-count words))))
+                        (set nl (ol-new lines page 0 0 0 0 0 0 0 0 0 0 (ow-count words) 0))
+                        (set f (lh-x0))
+                        (while (<= f (lh-dir))
+                          (do (set value (ol-get lines l f)) (ol-set lines nl f value) (set f (+ f 1))))
+                        (set f 15)
+                        (while (<= f 22)
+                          (do (set value (ol-get lines l f)) (ol-set lines nl f value) (set f (+ f 1))))
+                        (ol-set lines nl (olf-run) run) (set j 0)
+                        (while (< j count)
+                          (do (set cw (cells-at plan j))
+                              (if (== cw -1) (of-copy words (+ first j) run nl))
+                              (if (>= cw 0)
+                                (do (set hits 1) (set q (+ j 1))
+                                    (while (and (< q count) (== (cells-at plan q) -2))
+                                      (do (set hits (+ hits 1)) (set q (+ q 1))))
+                                    (cells-push oaz page)
+                                    (cells-push oaz (ow-get words cw (hd-x0))) (cells-push oaz (ow-get words cw (hd-y0)))
+                                    (cells-push oaz (ow-get words cw (hd-x1))) (cells-push oaz (ow-get words cw (hd-y1)))
+                                    (cells-push oaz (+ first j)) (cells-push oaz hits)
+                                    (cells-push oaz cw) (cells-push oaz 1) (cells-push oaz 3)
+                                    (cells-push oaz tr) (cells-push oaz 1)
+                                    (set conf 1000) (set q j)
+                                    (while (< q (+ j hits))
+                                      (do (if (< (ow-get words (+ first q) (hd-conf)) conf) (set conf (ow-get words (+ first q) (hd-conf))))
+                                          (set q (+ q 1))))
+                                    (cells-push oaz (- (ow-get words cw (hd-conf)) conf))
+                                    (cells-push oaz l) (cells-push oaz tr) (cells-push oaz 1)
+                                    (of-copy words cw run nl)))
+                              (set j (+ j 1))))
+                        (set value (- (ow-count words) (ol-get lines nl (lh-first))))
+                        (ol-set lines nl (lh-count) value)
+                        (cells-set scr (+ (sc-sel-base) k) nl)
+                        (set xk (- nl (cells-at scr (sc-xtra-base))))
+                        (if (and (>= xk 0) (< xk (sc-sel-max))) (cells-set scr (+ (sc-xtra-base) (+ xk 1)) 0)))))))
+          (set k (+ k 1))))
+    (if (>= run 0)
+      (do (set value (- (ol-count lines) (or-get runs run (orf-lfirst)))) (or-set runs run (orf-lcount) value)
+          (set value (- (ow-count words) (or-get runs run (orf-wfirst)))) (or-set runs run (orf-wcount) value)))
+    (return nsel)))

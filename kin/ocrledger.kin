@@ -6,7 +6,7 @@
             [emon.model :refer [node-count node-kind node-is-inline node-has-text node-first-child node-next nk-furniture nk-linebreak node-text-start node-text-len node-region-head node-parent region-page
                                 ledger-count ledger-page ledger-text-start ledger-text-len ledger-add ledger-set-text sr-ocr dr-ocr-unrepresented dr-ocr-unread-ink]]
             [emon.normalize :refer [nz-nfc nz-flag-ligatures nz-flag-radicals]]
-            [emon.evidence :refer [or-count or-get orf-wfirst orf-wcount orf-pass op-fused ow-get hd-page hd-tstart hd-tlen hd-x0 hd-y0 hd-x1 hd-y1 hd-conf ow-stride rl-stride ow-count tl-count tl-get tlf-conf tlf-ink ik-count ik-get ikf-role ir-body
+            [emon.evidence :refer [or-count or-get orf-wfirst orf-wcount orf-pass op-fused op-arb ow-get hd-page hd-tstart hd-tlen hd-x0 hd-y0 hd-x1 hd-y1 hd-conf ow-stride rl-stride ow-count tl-count tl-get tlf-conf tlf-ink ik-count ik-get ikf-role ir-body
                                    rl-count rl-get rlf-page rlf-x0 rlf-y0 rlf-x1 rlf-y1 ev-overlap-small]]
             [kin.lang :refer [defn return let set while if do comment + - * < > <= >= == != and or quot bit-and]]))
 
@@ -138,7 +138,7 @@
                 (set r 0)
                 (while (< r (or-count runs))
                   (do (comment "D731: a `fused` run's words are copies of recorded words, which are audited themselves")
-                      (if (and (== (or-get runs r 0) pg) (!= (or-get runs r (orf-pass)) (op-fused)))
+                      (if (and (== (or-get runs r 0) pg) (and (!= (or-get runs r (orf-pass)) (op-fused)) (!= (or-get runs r (orf-pass)) (op-arb))))
                         (do (set w (or-get runs r (orf-wfirst)))
                             (set end (+ w (or-get runs r (orf-wcount))))
                             (while (< w end)

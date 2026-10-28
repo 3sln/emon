@@ -166,8 +166,8 @@ def input_views(ev):
                      'photo-sauvola' if 'receipt-photo' in f else 'thermal-gamma')
     fusion=ev.get('ofuse',[])
     ops=collections.Counter(z.get('op','keep') for z in fusion)
-    return dict(ocr_runs=sum(r.get('pass')!='fused' for r in runs), receipt_reads=len(receipt),
-                fused_slots=len(fusion), fused_replacements=ops['replace'], fused_insertions=ops['insert'], fused_new_lines=ops['newline'],
+    return dict(ocr_runs=sum(r.get('pass') not in ('fused','arb') for r in runs), receipt_reads=len(receipt),
+                oarb_slots=len(ev.get("oarb",[])), fused_slots=len(fusion), fused_replacements=ops['replace'], fused_insertions=ops['insert'], fused_new_lines=ops['newline'],
                 receipt_rescue_reads=sum(r.get('pass')=='receipt-rescue' for r in receipt),
                 receipt_trigger='photo' if any('receipt-photo' in f for f in all_flags) else
                                 'thermal' if any('receipt-thermal' in f for f in all_flags) else 'none',

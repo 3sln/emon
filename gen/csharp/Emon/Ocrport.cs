@@ -600,6 +600,35 @@ public static class Ocrport {
         }
         return 0;
     }
+    public static int OpModelSelector(emon.Port.Cells req) {
+        // D787: low flags bit 4 asks for the explicitly configured optional eng_best model. Zero is the standard model. DPI occupies the high bytes as before.
+        return (Plan.RqArg(req, 0, 2) / 4) % 2;
+    }
+    internal static int OpBestEntry(emon.Port.Cells inst, int from, int to) {
+        if ((to - from) != 8) {
+            return 0;
+        }
+        if (((emon.Port.CellsAt(inst, from) == 101) && (emon.Port.CellsAt(inst, from + 1) == 110)) && ((emon.Port.CellsAt(inst, from + 2) == 103) && (emon.Port.CellsAt(inst, from + 3) == 95))) {
+            if (((emon.Port.CellsAt(inst, from + 4) == 98) && (emon.Port.CellsAt(inst, from + 5) == 101)) && ((emon.Port.CellsAt(inst, from + 6) == 115) && (emon.Port.CellsAt(inst, from + 7) == 116))) {
+                return 1;
+            }
+        }
+        return 0;
+    }
+    internal static int OpBestModel(emon.Port.Cells inst) {
+        int from = 0;
+        int to = 0;
+        int i = 0;
+        while (from < emon.Port.CellsLen(inst)) {
+            to = OpEntryEnd(inst, from);
+            if (OpBestEntry(inst, from, to) == 1) {
+                return i;
+            }
+            from = to + 1;
+            i += 1;
+        }
+        return -1;
+    }
     public static int OpModels(emon.Port.Cells req, emon.Port.Cells inst, emon.Port.Cells @out) {
         // Which installed models read the request, as indices into `inst` (code-point Cells separated by 0), appended to `out`;
         // answers how many. A script (`Cyrl`) is every installed model that reads it, once; a language is its model; a language
@@ -612,6 +641,14 @@ public static class Ocrport {
         int i = 0;
         int from = 0;
         int to = 0;
+        if (OpModelSelector(req) == 1) {
+            i = OpBestModel(inst);
+            if (i >= 0) {
+                emon.Port.CellsPush(@out, i);
+                return 1;
+            }
+            return 0;
+        }
         while (k < end) {
             p = Plan.RqArg(req, 0, k);
             if (OpIsScript(p) == 1) {
@@ -619,7 +656,7 @@ public static class Ocrport {
                 from = 0;
                 while (i < n) {
                     to = OpEntryEnd(inst, from);
-                    if (OpScriptReads(p, OpModelScript(inst, from, to)) == 1) {
+                    if ((OpBestEntry(inst, from, to) == 0) && (OpScriptReads(p, OpModelScript(inst, from, to)) == 1)) {
                         if (OpHas(@out, @base, i) == 0) {
                             emon.Port.CellsPush(@out, i);
                         }
@@ -638,9 +675,18 @@ public static class Ocrport {
         if (emon.Port.CellsLen(@out) == @base) {
             i = OpModelIndex(inst, 1701734144);
             if (i < 0) {
-                i = 0;
+                from = 0;
+                k = 0;
+                while (k < n) {
+                    to = OpEntryEnd(inst, from);
+                    if ((i < 0) && (OpBestEntry(inst, from, to) == 0)) {
+                        i = k;
+                    }
+                    from = to + 1;
+                    k += 1;
+                }
             }
-            if (n > 0) {
+            if (i >= 0) {
                 emon.Port.CellsPush(@out, i);
             }
         }
@@ -687,6 +733,21 @@ public static class Ocrport {
     public static int OpDropped(emon.Port.Cells req, emon.Port.Cells inst, emon.Port.Cells @out) {
         // The languages `op-models` dropped for want of an installed model, appended to `out` as the model's name: code points then
         // a 0, each. Answers how many. (A host's note, nothing more.)
+        if (OpModelSelector(req) == 1) {
+            if (OpBestModel(inst) >= 0) {
+                return 0;
+            }
+            emon.Port.CellsPush(@out, 101);
+            emon.Port.CellsPush(@out, 110);
+            emon.Port.CellsPush(@out, 103);
+            emon.Port.CellsPush(@out, 95);
+            emon.Port.CellsPush(@out, 98);
+            emon.Port.CellsPush(@out, 101);
+            emon.Port.CellsPush(@out, 115);
+            emon.Port.CellsPush(@out, 116);
+            emon.Port.CellsPush(@out, 0);
+            return 1;
+        }
         int end = emon.Port.CellsLen(req) - 3;
         int k = OpLangFirst(req);
         int p = 0;
@@ -707,6 +768,9 @@ public static class Ocrport {
     public static int OpWordLang(emon.Port.Cells model) {
         // The language the engine read a word in (its model's name), as a request names it: `chi_sim` is `chs`, `chi_tra` `cht`,
         // anything else cut to four chars, packed. 0 for none.
+        if (OpBestEntry(model, 0, emon.Port.CellsLen(model)) == 1) {
+            return 1701734144;
+        }
         int v = OpFind(3, model, 0, emon.Port.CellsLen(model));
         if (v != 0) {
             return v;
@@ -957,7 +1021,7 @@ public static class Ocrport {
     }
     public static int OpModelsConfigured(emon.Port.Cells req, emon.Port.Cells inst, int configured, emon.Port.Cells @out) {
         // D678: an explicit provider model set is authoritative when the request has no language hint. An unfiltered inventory uses discovery; a named request still wins.
-        if (configured == 0) {
+        if ((configured == 0) || (OpModelSelector(req) == 1)) {
             return OpModels(req, inst, @out);
         }
         int @base = emon.Port.CellsLen(@out);

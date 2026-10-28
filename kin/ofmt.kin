@@ -1,8 +1,8 @@
 ;; RC5 numeric grammar over recorded code points. This validates; it never repairs text.
 (ns emon.ofmt
-  (:require [emon.lang :refer [I32 Cells]]
-            [emon.port :refer [cells-at cells-len]]
-            [kin.lang :refer [defdata defn return let set while if do comment + - * < > <= >= == != and or]]))
+  (:require [emon.lang :refer [I32 I64 Cells i64]]
+            [emon.port :refer [cells-at cells-len cells-drop cells-push cells-set]]
+            [kin.lang :refer [defdata defn return let set while if do comment + - * < > <= >= == != and or quot rem]]))
 
 ;; Decimal digit ranges from the vendored UnicodeData.txt (same Nd class as regex \d).
 (defdata fmt-decimal
@@ -198,3 +198,112 @@
     (if (== (fmt-date text start end) 1) (return 1))
     (if (== (fmt-time text start end) 1) (return 1))
     (return (fmt-percent text start end))))
+
+;; D786: arithmetic amounts have a deliberately narrower, unambiguous grammar
+;; than ofmt-valid. Commas group; a dot is decimal; at most six decimals and
+;; fifteen digits. No float, locale guess, normalization or generated OCR text.
+;; meta: valid, decimals, grouped, sign-style (0/lead1/trail2/paren3), percent,
+;; digit-count, prefix-start, prefix-count. Invalid values return 0 with valid=0.
+(defn ^I32 fmt-ascii-digit [^I32 cp]
+  (if (and (>= cp 48) (<= cp 57)) (return 1))
+  (return 0))
+
+(defn ^I32 fmt-currency-end [^Cells text ^I32 start ^I32 end]
+  (if (>= start end) (return start))
+  (let [^I32 cp (cells-at text start)]
+    (if (or (or (== cp 36) (== cp 8364)) (or (== cp 163) (== cp 165))) (return (+ start 1)))
+    (if (< (+ start 1) end)
+      (if (== (fmt-fold cp) 114)
+        (if (or (== (fmt-fold (cells-at text (+ start 1))) 109) (== (fmt-fold (cells-at text (+ start 1))) 112))
+          (return (+ start 2))
+          (if (and (< (+ start 2) end) (and (== (fmt-fold (cells-at text (+ start 1))) 115) (== (cells-at text (+ start 2)) 46)))
+            (return (+ start 3))))))
+    (if (< (+ start 2) end)
+      (if (or (and (== (fmt-fold cp) 117) (and (== (fmt-fold (cells-at text (+ start 1))) 115) (== (fmt-fold (cells-at text (+ start 2))) 100)))
+              (and (== (fmt-fold cp) 101) (and (== (fmt-fold (cells-at text (+ start 1))) 117) (== (fmt-fold (cells-at text (+ start 2))) 114))))
+        (return (+ start 3))))
+    (return start)))
+
+(defn ^:pub ^I64 fmt-value [^Cells text ^I32 start ^I32 count ^:mut ^Cells meta]
+  (cells-drop meta 0)
+  (let [^:mut ^I32 z 0]
+    (while (< z 8) (do (cells-push meta 0) (set z (+ z 1)))))
+  (if (or (< start 0) (or (<= count 0) (> start (cells-len text)))) (return (i64 0)))
+  (if (> count (- (cells-len text) start)) (return (i64 0)))
+  (let [^:mut ^I32 i start ^:mut ^I32 end (+ start count)
+        ^:mut ^I32 negative 0 ^:mut ^I32 style 0 ^:mut ^I32 paren 0
+        ^:mut ^I32 prefix start ^:mut ^I32 pend start
+        ^:mut ^I32 grouped 0 ^:mut ^I32 group 0 ^:mut ^I32 dec 0
+        ^:mut ^I32 digits 0 ^:mut ^I32 cp 0 ^:mut ^I64 value (i64 0)]
+    (if (== (cells-at text (- end 1)) 37)
+      (do (cells-set meta 4 1) (set end (- end 1))))
+    (if (>= i end) (return (i64 0)))
+    (set pend (fmt-currency-end text i end))
+    (if (> pend i) (do (set prefix i) (set i pend)))
+    (if (>= i end) (return (i64 0)))
+    (if (== (cells-at text i) 40)
+      (do (set paren 1) (set negative 1) (set style 3) (set i (+ i 1))))
+    (if (>= i end) (return (i64 0)))
+    (if (or (or (== (cells-at text i) 45) (== (cells-at text i) 8722)) (== (cells-at text i) 43))
+      (do (if (== paren 1) (return (i64 0)))
+          (if (!= (cells-at text i) 43) (set negative 1))
+          (set style 1) (set i (+ i 1))))
+    (if (== pend prefix)
+      (do (set prefix i) (set pend (fmt-currency-end text i end)) (set i pend)))
+    (if (== paren 1)
+      (do (if (or (>= i end) (!= (cells-at text (- end 1)) 41)) (return (i64 0)))
+          (set end (- end 1)))
+      (if (< i end)
+        (if (== (cells-at text (- end 1)) 45)
+          (do (if (!= style 0) (return (i64 0)))
+              (set style 2) (set negative 1) (set end (- end 1))))))
+    (while (< i end)
+      (do (set cp (cells-at text i))
+          (if (== (fmt-ascii-digit cp) 1)
+            (do (set digits (+ digits 1))
+                (if (> digits 15) (return (i64 0)))
+                (set value (+ (* value (i64 10)) (i64 (- cp 48))))
+                (set group (+ group 1)))
+            (if (== cp 44)
+              (do (if (or (== group 0) (and (== grouped 0) (> group 3))) (return (i64 0)))
+                  (if (and (== grouped 1) (!= group 3)) (return (i64 0)))
+                  (set grouped 1) (set group 0))
+              (if (== cp 46)
+                (do (if (or (== group 0) (and (== grouped 1) (!= group 3))) (return (i64 0)))
+                    (set i (+ i 1))
+                    (while (< i end)
+                      (do (set cp (cells-at text i))
+                          (if (== (fmt-ascii-digit cp) 0) (return (i64 0)))
+                          (set digits (+ digits 1)) (set dec (+ dec 1))
+                          (if (or (> digits 15) (> dec 6)) (return (i64 0)))
+                          (set value (+ (* value (i64 10)) (i64 (- cp 48))))
+                          (set i (+ i 1))))
+                    (if (== dec 0) (return (i64 0))))
+                (return (i64 0)))))
+          (set i (+ i 1))))
+    (if (or (== digits 0) (and (== dec 0) (or (== group 0) (and (== grouped 1) (!= group 3))))) (return (i64 0)))
+    (cells-set meta 0 1) (cells-set meta 1 dec) (cells-set meta 2 grouped)
+    (cells-set meta 3 style) (cells-set meta 5 digits)
+    (cells-set meta 6 prefix) (cells-set meta 7 (- pend prefix))
+    (if (== negative 1) (return (- (i64 0) value)))
+    (return value)))
+
+(defn ^:pub ^I32 fmt-one-digit-sub [^Cells text ^I32 a ^I32 an ^I32 b ^I32 bn]
+  (if (or (!= an bn) (or (< a 0) (< b 0))) (return 0))
+  (if (or (> an (- (cells-len text) a)) (> bn (- (cells-len text) b))) (return 0))
+  (let [^:mut ^I32 i 0 ^:mut ^I32 diff 0 ^:mut ^I32 x 0 ^:mut ^I32 y 0]
+    (while (< i an)
+      (do (set x (cells-at text (+ a i))) (set y (cells-at text (+ b i)))
+          (if (!= x y)
+            (do (if (or (== (fmt-ascii-digit x) 0) (== (fmt-ascii-digit y) 0)) (return 0))
+                (set diff (+ diff 1))))
+          (set i (+ i 1))))
+    (if (== diff 1) (return 1))
+    (return 0)))
+
+(defn ^:pub ^I32 fmt-col-type [^Cells meta ^I32 decimals ^I32 grouped ^I32 percent]
+  (if (< (cells-len meta) 8) (return 0))
+  (if (or (== (cells-at meta 0) 0) (!= (cells-at meta 1) decimals)) (return 0))
+  (if (!= (cells-at meta 4) percent) (return 0))
+  (if (and (== grouped 1) (and (>= (cells-at meta 5) (+ decimals 4)) (== (cells-at meta 2) 0))) (return 0))
+  (return 1))

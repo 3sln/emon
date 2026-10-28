@@ -280,7 +280,8 @@
    [op-upscaled 9 "upscaled"]
    [op-receipt 10 "receipt"]
    [op-receipt-rescue 11 "receipt-rescue"]
-   [op-fused 12 "fused"]])
+   [op-fused 12 "fused"]
+   [op-arb 13 "arb"]])
 
 ;; RC5c (D731): what a guarded fusion decision was (`ofuse` rows, printed as the code + 1) and what it did.
 (defenum ^:pub ofr
@@ -493,7 +494,9 @@
    [ek-ivotes 159 "ivotes"]
    [ek-nulls 160 "nulls"]
    [ek-margin 161 "margin"]
-   [ek-readings 162 "readings"]])
+   [ek-readings 162 "readings"]
+   [ek-oarb 163 "oarb"]
+   [ek-identity 164 "identity"]])
 
 ;; Feature columns of `feats` (SPEC 8.4.5): the column number and, as the spelling, its name in the dump.
 (defenum ^:pub xo
@@ -2928,6 +2931,16 @@
     (if (== kind 14) (return (ev-fplus t pr d c stride row f key started)))
     (return started)))
 
+(defn ^:pub ^I32 ev-emit-ocr-model [^:mut ^Text t ^I32 pr ^I32 d ^I32 started ^I32 selector]
+  (comment "D787: an explicit optional model is additive evidence. Standard requests keep their byte-identical evidence. No fallback is permitted for selector 1.")
+  (if (!= selector 1) (return started))
+  (if (== started 1) (emit-ascii t ","))
+  (if (== pr 1) (js-indent t (+ d 1)))
+  (emit-ascii t "\"model\":")
+  (if (== pr 1) (emit-ascii t " "))
+  (emit-ascii t "\"eng_best\"")
+  (return 1))
+
 (defn ^:pub ^I32 ev-row [^:mut ^Text t ^I32 pr ^I32 d ^I32 ea ^Cells c ^Cells etext ^I32 row]
   (comment "One row of arena `ea` as an object, its fields in stride order (the table `ev-fd`).")
   (let [^I32 stride (ev-strides-at 0 (- ea 1))
@@ -2939,6 +2952,9 @@
     (while (< k cnt)
       (do (set s (ev-field t pr d c etext stride row (+ first k) s))
           (set k (+ k 1))))
+    (if (== ea 14)
+      (if (== (rem (quot (or-get c row (orf-flags)) 4) 2) 1)
+        (set s (ev-emit-ocr-model t pr d s 1))))
     (js-close t pr d s)
     (return 0)))
 
@@ -3120,6 +3136,26 @@
     (set s (ev-arena t pretty s 23 prims etext))
     (set s (ev-arena t pretty s 24 tlines etext))
     (return s)))
+
+(defn ^:pub ^I32 ev-emit-oarb [^:mut ^Text t ^I32 pr ^I32 started ^Cells rows]
+  (let [^I32 n (quot (cells-len rows) 16) ^:mut ^I32 i 0 ^:mut ^I32 s 0]
+    (if (== n 0) (return started))
+    (ev-begin t pr 0 started (ek-oarb)) (emit-ascii t "[")
+    (while (< i n)
+      (do (js-aelem t pr 1 i) (emit-ascii t "{")
+          (set s (ev-fint t pr 2 rows 16 i 0 (ek-page) -2147483648 0))
+          (set s (ev-fquad t pr 2 rows 16 i 1 (ek-box) s))
+          (set s (ev-frun t pr 2 rows 16 i 5 (ek-incumbent) s))
+          (set s (ev-frun t pr 2 rows 16 i 7 (ek-choice) s))
+          (set s (ev-begin t pr 2 s (ek-rule))) (emit-ascii t "\"line-merge\"")
+          (set s (ev-fint t pr 2 rows 16 i 10 (ek-run) -1 s))
+          (set s (ev-fint t pr 2 rows 16 i 11 (ek-votes) 0 s))
+          (set s (ev-fint t pr 2 rows 16 i 12 (ek-margin) -2147483648 s))
+          (set s (ev-begin t pr 2 s (ek-identity))) (emit-ascii t "[")
+          (text-i32 t (ev-get rows 16 i 13)) (js-fsep t pr 1)
+          (text-i32 t (ev-get rows 16 i 14)) (emit-ascii t "]")
+          (js-close t pr 2 s) (set i (+ i 1))))
+    (js-aend t pr 1 n) (return 1)))
 
 (defn ^:pub ^I32 ev-emit-open [^:mut ^Text t ^I32 pretty
                           ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells pts

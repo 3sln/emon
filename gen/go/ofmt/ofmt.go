@@ -351,3 +351,219 @@ func OfmtValid(text *port.Cells, start int32, count int32) int32 {
 	}
 	return fmtPercent(text, start, end)
 }
+
+func fmtAsciiDigit(cp int32) int32 {
+	if (cp >= 48) && (cp <= 57) {
+		return 1
+	}
+	return 0
+}
+
+func fmtCurrencyEnd(text *port.Cells, start int32, end int32) int32 {
+	if start >= end {
+		return start
+	}
+	var cp int32 = port.CellsAt(text, start)
+	if ((cp == 36) || (cp == 8364)) || ((cp == 163) || (cp == 165)) {
+		return start + 1
+	}
+	if (start + 1) < end {
+		if fmtFold(cp) == 114 {
+			if (fmtFold(port.CellsAt(text, start+1)) == 109) || (fmtFold(port.CellsAt(text, start+1)) == 112) {
+				return start + 2
+			} else if ((start + 2) < end) && ((fmtFold(port.CellsAt(text, start+1)) == 115) && (port.CellsAt(text, start+2) == 46)) {
+				return start + 3
+			}
+		}
+	}
+	if (start + 2) < end {
+		if ((fmtFold(cp) == 117) && ((fmtFold(port.CellsAt(text, start+1)) == 115) && (fmtFold(port.CellsAt(text, start+2)) == 100))) || ((fmtFold(cp) == 101) && ((fmtFold(port.CellsAt(text, start+1)) == 117) && (fmtFold(port.CellsAt(text, start+2)) == 114))) {
+			return start + 3
+		}
+	}
+	return start
+}
+
+func FmtValue(text *port.Cells, start int32, count int32, meta *port.Cells) int64 {
+	port.CellsDrop(meta, 0)
+	var z int32 = 0
+	for z < 8 {
+		port.CellsPush(meta, 0)
+		z += 1
+	}
+	if (start < 0) || ((count <= 0) || (start > port.CellsLen(text))) {
+		return int64(0)
+	}
+	if count > (port.CellsLen(text) - start) {
+		return int64(0)
+	}
+	var i int32 = start
+	var end int32 = start + count
+	var negative int32 = 0
+	var style int32 = 0
+	var paren int32 = 0
+	var prefix int32 = start
+	var pend int32 = start
+	var grouped int32 = 0
+	var group int32 = 0
+	var dec int32 = 0
+	var digits int32 = 0
+	var cp int32 = 0
+	var value int64 = int64(0)
+	if port.CellsAt(text, end-1) == 37 {
+		port.CellsSet(meta, 4, 1)
+		end -= 1
+	}
+	if i >= end {
+		return int64(0)
+	}
+	pend = fmtCurrencyEnd(text, i, end)
+	if pend > i {
+		prefix = i
+		i = pend
+	}
+	if i >= end {
+		return int64(0)
+	}
+	if port.CellsAt(text, i) == 40 {
+		paren = 1
+		negative = 1
+		style = 3
+		i += 1
+	}
+	if i >= end {
+		return int64(0)
+	}
+	if ((port.CellsAt(text, i) == 45) || (port.CellsAt(text, i) == 8722)) || (port.CellsAt(text, i) == 43) {
+		if paren == 1 {
+			return int64(0)
+		}
+		if port.CellsAt(text, i) != 43 {
+			negative = 1
+		}
+		style = 1
+		i += 1
+	}
+	if pend == prefix {
+		prefix = i
+		pend = fmtCurrencyEnd(text, i, end)
+		i = pend
+	}
+	if paren == 1 {
+		if (i >= end) || (port.CellsAt(text, end-1) != 41) {
+			return int64(0)
+		}
+		end -= 1
+	} else if i < end {
+		if port.CellsAt(text, end-1) == 45 {
+			if style != 0 {
+				return int64(0)
+			}
+			style = 2
+			negative = 1
+			end -= 1
+		}
+	}
+	for i < end {
+		cp = port.CellsAt(text, i)
+		if fmtAsciiDigit(cp) == 1 {
+			digits += 1
+			if digits > 15 {
+				return int64(0)
+			}
+			value = (value * int64(10)) + int64(cp-48)
+			group += 1
+		} else if cp == 44 {
+			if (group == 0) || ((grouped == 0) && (group > 3)) {
+				return int64(0)
+			}
+			if (grouped == 1) && (group != 3) {
+				return int64(0)
+			}
+			grouped = 1
+			group = 0
+		} else if cp == 46 {
+			if (group == 0) || ((grouped == 1) && (group != 3)) {
+				return int64(0)
+			}
+			i += 1
+			for i < end {
+				cp = port.CellsAt(text, i)
+				if fmtAsciiDigit(cp) == 0 {
+					return int64(0)
+				}
+				digits += 1
+				dec += 1
+				if (digits > 15) || (dec > 6) {
+					return int64(0)
+				}
+				value = (value * int64(10)) + int64(cp-48)
+				i += 1
+			}
+			if dec == 0 {
+				return int64(0)
+			}
+		} else {
+			return int64(0)
+		}
+		i += 1
+	}
+	if (digits == 0) || ((dec == 0) && ((group == 0) || ((grouped == 1) && (group != 3)))) {
+		return int64(0)
+	}
+	port.CellsSet(meta, 0, 1)
+	port.CellsSet(meta, 1, dec)
+	port.CellsSet(meta, 2, grouped)
+	port.CellsSet(meta, 3, style)
+	port.CellsSet(meta, 5, digits)
+	port.CellsSet(meta, 6, prefix)
+	port.CellsSet(meta, 7, pend-prefix)
+	if negative == 1 {
+		return int64(0) - value
+	}
+	return value
+}
+
+func FmtOneDigitSub(text *port.Cells, a int32, an int32, b int32, bn int32) int32 {
+	if (an != bn) || ((a < 0) || (b < 0)) {
+		return 0
+	}
+	if (an > (port.CellsLen(text) - a)) || (bn > (port.CellsLen(text) - b)) {
+		return 0
+	}
+	var i int32 = 0
+	var diff int32 = 0
+	var x int32 = 0
+	var y int32 = 0
+	for i < an {
+		x = port.CellsAt(text, a+i)
+		y = port.CellsAt(text, b+i)
+		if x != y {
+			if (fmtAsciiDigit(x) == 0) || (fmtAsciiDigit(y) == 0) {
+				return 0
+			}
+			diff += 1
+		}
+		i += 1
+	}
+	if diff == 1 {
+		return 1
+	}
+	return 0
+}
+
+func FmtColType(meta *port.Cells, decimals int32, grouped int32, percent int32) int32 {
+	if port.CellsLen(meta) < 8 {
+		return 0
+	}
+	if (port.CellsAt(meta, 0) == 0) || (port.CellsAt(meta, 1) != decimals) {
+		return 0
+	}
+	if port.CellsAt(meta, 4) != percent {
+		return 0
+	}
+	if (grouped == 1) && ((port.CellsAt(meta, 5) >= (decimals + 4)) && (port.CellsAt(meta, 2) == 0)) {
+		return 0
+	}
+	return 1
+}

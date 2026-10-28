@@ -1087,6 +1087,9 @@ public final class Evidence {
     public static int opFused() {
         return 12;
     }
+    public static int opArb() {
+        return 13;
+    }
     public static int opEmitName(StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.textAscii(t, "first");
@@ -1134,6 +1137,10 @@ public final class Evidence {
         }
         if (code == 12) {
             emon.Port.textAscii(t, "fused");
+            return 1;
+        }
+        if (code == 13) {
+            emon.Port.textAscii(t, "arb");
             return 1;
         }
         return 0;
@@ -1866,6 +1873,12 @@ public final class Evidence {
     public static int ekReadings() {
         return 162;
     }
+    public static int ekOarb() {
+        return 163;
+    }
+    public static int ekIdentity() {
+        return 164;
+    }
     public static int ekEmitName(StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.textAscii(t, "emon-evidence");
@@ -2513,6 +2526,14 @@ public final class Evidence {
         }
         if (code == 162) {
             emon.Port.textAscii(t, "readings");
+            return 1;
+        }
+        if (code == 163) {
+            emon.Port.textAscii(t, "oarb");
+            return 1;
+        }
+        if (code == 164) {
+            emon.Port.textAscii(t, "identity");
             return 1;
         }
         return 0;
@@ -6568,6 +6589,24 @@ public final class Evidence {
         }
         return started;
     }
+    public static int evEmitOcrModel(StringBuilder t, int pr, int d, int started, int selector) {
+        // D787: an explicit optional model is additive evidence. Standard requests keep their byte-identical evidence. No fallback is permitted for selector 1.
+        if (selector != 1) {
+            return started;
+        }
+        if (started == 1) {
+            emon.Port.textAscii(t, ",");
+        }
+        if (pr == 1) {
+            Json.jsIndent(t, d + 1);
+        }
+        emon.Port.textAscii(t, "\"model\":");
+        if (pr == 1) {
+            emon.Port.textAscii(t, " ");
+        }
+        emon.Port.textAscii(t, "\"eng_best\"");
+        return 1;
+    }
     public static int evRow(StringBuilder t, int pr, int d, int ea, emon.Port.Cells c, emon.Port.Cells etext, int row) {
         // One row of arena `ea` as an object, its fields in stride order (the table `ev-fd`).
         int stride = EV_STRIDES[ea - 1];
@@ -6579,6 +6618,11 @@ public final class Evidence {
         while (k < cnt) {
             s = evField(t, pr, d, c, etext, stride, row, first + k, s);
             k += 1;
+        }
+        if (ea == 14) {
+            if (((orGet(c, row, orfFlags()) / 4) % 2) == 1) {
+                s = evEmitOcrModel(t, pr, d, s, 1);
+            }
         }
         Json.jsClose(t, pr, d, s);
         return 0;
@@ -6814,6 +6858,39 @@ public final class Evidence {
         s = evArena(t, pretty, s, 23, prims, etext);
         s = evArena(t, pretty, s, 24, tlines, etext);
         return s;
+    }
+    public static int evEmitOarb(StringBuilder t, int pr, int started, emon.Port.Cells rows) {
+        int n = emon.Port.cellsLen(rows) / 16;
+        int i = 0;
+        int s = 0;
+        if (n == 0) {
+            return started;
+        }
+        evBegin(t, pr, 0, started, ekOarb());
+        emon.Port.textAscii(t, "[");
+        while (i < n) {
+            Json.jsAelem(t, pr, 1, i);
+            emon.Port.textAscii(t, "{");
+            s = evFint(t, pr, 2, rows, 16, i, 0, ekPage(), -2147483648, 0);
+            s = evFquad(t, pr, 2, rows, 16, i, 1, ekBox(), s);
+            s = evFrun(t, pr, 2, rows, 16, i, 5, ekIncumbent(), s);
+            s = evFrun(t, pr, 2, rows, 16, i, 7, ekChoice(), s);
+            s = evBegin(t, pr, 2, s, ekRule());
+            emon.Port.textAscii(t, "\"line-merge\"");
+            s = evFint(t, pr, 2, rows, 16, i, 10, ekRun(), -1, s);
+            s = evFint(t, pr, 2, rows, 16, i, 11, ekVotes(), 0, s);
+            s = evFint(t, pr, 2, rows, 16, i, 12, ekMargin(), -2147483648, s);
+            s = evBegin(t, pr, 2, s, ekIdentity());
+            emon.Port.textAscii(t, "[");
+            emon.Port.textI32(t, evGet(rows, 16, i, 13));
+            Json.jsFsep(t, pr, 1);
+            emon.Port.textI32(t, evGet(rows, 16, i, 14));
+            emon.Port.textAscii(t, "]");
+            Json.jsClose(t, pr, 2, s);
+            i += 1;
+        }
+        Json.jsAend(t, pr, 1, n);
+        return 1;
     }
     public static int evEmitOpen(StringBuilder t, int pretty, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines) {
         // The evidence as `emon-evidence` JSON (SPEC 4.5, 8.4.6), version "1": one array per arena,

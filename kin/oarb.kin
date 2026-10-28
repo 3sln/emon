@@ -1,0 +1,316 @@
+;; P-ARB bounded arithmetic decision kernels (D786). Text spans always refer
+;; to recorded readings. No synthesized numeric spelling can become output.
+(ns emon.oarb
+  (:require [emon.lang :refer [I32 I64 Cells i64 fd]]
+            [emon.oarbctx :refer [OaWork]]
+            [emon.port :refer [cells-at cells-len cells-push cells-set cells-drop]]
+            [emon.ofmt :refer [fmt-value fmt-digit]]
+            [kin.lang :refer [defn return let set while if do comment + - * quot rem < > <= >= == != and or]]))
+
+;; Production activation is deliberately separate from these decision kernels.
+;; It stays forced-keep until the live, fresh-holdout and ledger gates pass.
+
+(defn ^:pub ^I32 oa-active [] (return 0))
+
+(defn ^I32 oa-span [^Cells text ^I32 start ^I32 count]
+  (if (or (< start 0) (or (<= count 0) (> start (cells-len text)))) (return 0))
+  (if (> count (- (cells-len text) start)) (return 0))
+  (return 1))
+
+(defn ^I32 oa-equal [^Cells text ^I32 a ^I32 an ^I32 b ^I32 bn]
+  (if (!= an bn) (return 0))
+  (let [^:mut ^I32 i 0]
+    (while (< i an)
+      (do (if (!= (cells-at text (+ a i)) (cells-at text (+ b i))) (return 0))
+          (set i (+ i 1))))
+    (return 1)))
+
+(defn ^I32 oa-alnum [^Cells text ^I32 start ^I32 count]
+  (let [^:mut ^I32 i 0 ^:mut ^I32 n 0 ^:mut ^I32 cp 0]
+    (while (< i count)
+      (do (set cp (cells-at text (+ start i)))
+          (if (or (== (fmt-digit cp) 1)
+                  (or (and (>= cp 65) (<= cp 90)) (and (>= cp 97) (<= cp 122))))
+            (set n (+ n 1)))
+          (set i (+ i 1))))
+    (return n)))
+
+(defn ^I32 oa-affix [^I32 cp]
+  (if (or (or (== cp 36) (== cp 8364)) (or (or (== cp 163) (== cp 165)) (== cp 37))) (return 1))
+  (return 0))
+
+(defn ^I32 oa-affixes-kept [^Cells text ^I32 a ^I32 an ^I32 b ^I32 bn]
+  (let [^:mut ^I32 i 0 ^:mut ^I32 j 0 ^:mut ^I32 cp 0 ^:mut ^I32 balance 0]
+    (while (< i (+ an bn))
+      (do (if (< i an) (set cp (cells-at text (+ a i))) (set cp (cells-at text (+ b (- i an)))))
+          (if (== (oa-affix cp) 1)
+            (do (set j 0) (set balance 0)
+                (while (< j an)
+                  (do (if (== (cells-at text (+ a j)) cp) (set balance (+ balance 1))) (set j (+ j 1))))
+                (set j 0)
+                (while (< j bn)
+                  (do (if (== (cells-at text (+ b j)) cp) (set balance (- balance 1))) (set j (+ j 1))))
+                (if (!= balance 0) (return 0))))
+          (set i (+ i 1))))
+    (return 1)))
+
+(defn ^I32 oa-compatible [^Cells text ^I32 a ^I32 an ^I32 b ^I32 bn ^:mut ^Cells im ^:mut ^Cells cm]
+  (if (or (== (oa-span text a an) 0) (== (oa-span text b bn) 0)) (return 0))
+  (if (== (oa-affixes-kept text a an b bn) 0) (return 0))
+  (fmt-value text a an im) (fmt-value text b bn cm)
+  (if (== (cells-at cm 0) 0) (return 0))
+  (if (== (cells-at im 0) 1)
+    (do (if (and (<= (cells-at im 1) 2) (!= (cells-at im 1) (cells-at cm 1))) (return 0))
+        (if (!= (cells-at im 4) (cells-at cm 4)) (return 0))
+        (if (== (oa-equal text (cells-at im 6) (cells-at im 7) (cells-at cm 6) (cells-at cm 7)) 0) (return 0))
+        (if (and (== (cells-at im 2) 1) (and (>= (cells-at cm 5) (+ (cells-at cm 1) 4)) (== (cells-at cm 2) 0))) (return 0))
+        (if (!= (cells-at im 5) (cells-at cm 5)) (return 0)))
+    (if (!= (oa-alnum text a an) (cells-at cm 5)) (return 0)))
+  (return 1))
+
+;; Whether changing exactly one existing digit could give wanted. This is only
+;; a counter-explanation veto; it never emits that hypothetical reading.
+(defn ^I32 oa-one-digit-value [^Cells text ^I32 start ^I32 count ^I64 wanted ^I32 decimals ^:mut ^Cells meta]
+  (let [^I64 value (fmt-value text start count meta)
+        ^:mut ^I64 place (i64 1) ^:mut ^I64 direction (i64 1)
+        ^:mut ^I32 i (- (+ start count) 1) ^:mut ^I32 cp 0 ^:mut ^I32 digit 0]
+    (if (or (== (cells-at meta 0) 0) (!= (cells-at meta 1) decimals)) (return 0))
+    (if (or (< value (i64 0)) (or (== (cells-at meta 3) 2) (== (cells-at meta 3) 3))) (set direction (i64 -1)))
+    (while (>= i start)
+      (do (set cp (cells-at text i))
+          (if (and (>= cp 48) (<= cp 57))
+            (do (set digit 0)
+                (while (< digit 10)
+                  (do (if (!= digit (- cp 48))
+                        (if (== (+ value (* (* (i64 (- digit (- cp 48))) place) direction)) wanted) (return 1)))
+                      (set digit (+ digit 1))))
+                (set place (* place (i64 10)))))
+          (set i (- i 1))))
+    (return 0)))
+
+;; inc rows: [text-start, text-count]. candidates: [row, start, count].
+;; out is one candidate row index per identity cell, or -1 for the incumbent.
+;; Returns 1 closed, 0 keep, -2 ambiguous, -3 alternative, -5 search cap.
+;; Candidate indexes preserve the source range; callers must copy verbatim.
+(defn ^:pub ^I32 oa-block [^Cells text ^Cells inc ^Cells candidates ^I32 s ^I32 t ^I32 support ^:mut ^Cells out ^OaWork work]
+  (cells-drop out 0)
+  (if (or (!= (rem (cells-len inc) 2) 0) (!= (rem (cells-len candidates) 3) 0)) (return 0))
+  (if (or (< s 0) (or (< (- t s) 2) (or (> (- t s) 12) (>= t (quot (cells-len inc) 2))))) (return 0))
+  (cells-drop (fd work options) 0) (cells-drop (fd work offsets) 0) (cells-drop (fd work counts) 0)
+  (cells-drop (fd work choices) 0) (cells-drop (fd work best) 0) (cells-drop (fd work anchored) 0)
+  (let [^:mut ^I32 r s ^:mut ^I32 j 0 ^:mut ^I32 k 0 ^:mut ^I32 a 0 ^:mut ^I32 an 0
+        ^:mut ^I32 b 0 ^:mut ^I32 bn 0 ^:mut ^I32 n 0 ^:mut ^I32 distinct 0 ^:mut ^I32 seen 0
+        ^:mut ^I32 dec -1 ^:mut ^I32 valid 0 ^:mut ^I32 changed 0 ^:mut ^I32 bestchanges 14
+        ^:mut ^I32 ties 0 ^:mut ^I32 solutions 0 ^:mut ^I32 carry 0 ^:mut ^I32 iterations 0
+        ^:mut ^I32 cs 0 ^:mut ^I32 ct 0 ^:mut ^I32 q 0
+        ^:mut ^I64 value (i64 0) ^:mut ^I64 sum (i64 0) ^:mut ^I64 total (i64 0)
+        ^:mut ^I64 inctotal (i64 0) ^:mut ^I64 incsum (i64 0) ^:mut ^I64 need (i64 0)
+        ^:mut ^I64 unit (i64 1)]
+    (while (< j (quot (cells-len inc) 2))
+      (do (if (== (oa-span text (cells-at inc (* j 2)) (cells-at inc (+ (* j 2) 1))) 0) (return 0))
+          (set j (+ j 1))))
+    (set j 0)
+    (while (< j (quot (cells-len candidates) 3))
+      (do (if (== (oa-span text (cells-at candidates (+ (* j 3) 1)) (cells-at candidates (+ (* j 3) 2))) 0) (return 0))
+          (set j (+ j 1))))
+    (while (<= r t)
+      (do (cells-push out -1) (cells-push (fd work best) -1) (cells-push (fd work choices) 0) (cells-push (fd work anchored) 0)
+          (set a (cells-at inc (* r 2))) (set an (cells-at inc (+ (* r 2) 1)))
+          (set seen 0) (set q s)
+          (while (< q r)
+            (do (if (== (oa-equal text a an (cells-at inc (* q 2)) (cells-at inc (+ (* q 2) 1))) 1) (set seen 1))
+                (set q (+ q 1))))
+          (if (== seen 0) (set distinct (+ distinct 1)))
+          (cells-push (fd work offsets) (cells-len (fd work options))) (set n 0)
+          (fmt-value text a an (fd work im))
+          (if (and (== (cells-at (fd work im) 0) 1) (== (cells-at (fd work im) 4) 0))
+            (do (cells-push (fd work options) -1) (set n 1)))
+          (set j 0)
+          (while (< j (quot (cells-len candidates) 3))
+            (do (if (== (cells-at candidates (* j 3)) r)
+                  (do (set b (cells-at candidates (+ (* j 3) 1))) (set bn (cells-at candidates (+ (* j 3) 2)))
+                      (if (and (== (oa-compatible text a an b bn (fd work im) (fd work cm)) 1) (== (cells-at (fd work cm) 4) 0))
+                        (do (set seen 0) (set k (cells-at (fd work offsets) (- r s)))
+                            (while (< k (cells-len (fd work options)))
+                              (do (set q (cells-at (fd work options) k))
+                                  (if (< q 0)
+                                    (if (== (oa-equal text a an b bn) 1) (set seen 1))
+                                    (if (== (oa-equal text b bn (cells-at candidates (+ (* q 3) 1)) (cells-at candidates (+ (* q 3) 2))) 1) (set seen 1)))
+                                  (set k (+ k 1))))
+                            (if (== seen 0) (do (cells-push (fd work options) j) (set n (+ n 1))))))))
+                (set j (+ j 1))))
+          (if (== n 0) (return 0))
+          (if (> n 4) (return -5))
+          (cells-push (fd work counts) n) (set r (+ r 1))))
+    (if (<= distinct 2) (return 0))
+    (set carry 0)
+    (while (== carry 0)
+      (do (set iterations (+ iterations 1))
+          (if (> iterations 65536) (return -5))
+          (set sum (i64 0)) (set total (i64 0)) (set changed 0) (set valid 1) (set dec -1) (set r s)
+          (while (<= r t)
+            (do (set j (cells-at (fd work options) (+ (cells-at (fd work offsets) (- r s)) (cells-at (fd work choices) (- r s)))))
+                (if (< j 0)
+                  (do (set a (cells-at inc (* r 2))) (set an (cells-at inc (+ (* r 2) 1))))
+                  (do (set a (cells-at candidates (+ (* j 3) 1))) (set an (cells-at candidates (+ (* j 3) 2))) (set changed (+ changed 1))))
+                (set value (fmt-value text a an (fd work cm)))
+                (if (== dec -1) (set dec (cells-at (fd work cm) 1)))
+                (if (or (or (== value (i64 0)) (== (cells-at (fd work cm) 0) 0)) (!= dec (cells-at (fd work cm) 1))) (set valid 0))
+                (if (< r t) (set sum (+ sum value)) (set total value))
+                (set r (+ r 1))))
+          (if (and (== valid 1) (== sum total))
+            (do (set solutions (+ solutions 1))
+            (if (< changed bestchanges)
+              (do (set bestchanges changed) (set ties 1) (set r s)
+                  (while (<= r t)
+                    (do (cells-set (fd work best) (- r s) (cells-at (fd work options) (+ (cells-at (fd work offsets) (- r s)) (cells-at (fd work choices) (- r s)))))
+                        (set r (+ r 1)))))
+              (if (== changed bestchanges) (set ties (+ ties 1))))))
+          (set carry 1) (set r s)
+          (while (and (<= r t) (== carry 1))
+            (do (set j (+ (cells-at (fd work choices) (- r s)) 1))
+                (if (< j (cells-at (fd work counts) (- r s)))
+                  (do (cells-set (fd work choices) (- r s) j) (set carry 0))
+                  (cells-set (fd work choices) (- r s) 0))
+                (set r (+ r 1))))))
+    (if (== ties 0) (return 0))
+    (if (> ties 1) (return -2))
+    (if (== bestchanges 0) (return 0))
+    ;; A single-column identity must have a unique solution and a total >=100.
+    ;; Find the total in the unique minimum, not the last enumerated proposal.
+    (set j (cells-at (fd work best) (- t s)))
+    (if (< j 0)
+      (set total (fmt-value text (cells-at inc (* t 2)) (cells-at inc (+ (* t 2) 1)) (fd work cm)))
+      (set total (fmt-value text (cells-at candidates (+ (* j 3) 1)) (cells-at candidates (+ (* j 3) 2)) (fd work cm))))
+    (set dec (cells-at (fd work cm) 1)) (set unit (i64 1)) (set j 0)
+    (while (< j dec) (do (set unit (* unit (i64 10))) (set j (+ j 1))))
+    (if (and (< support 2) (!= solutions 1)) (return -2))
+    (if (< support 2)
+      (if (and (< total (* unit (i64 100))) (> total (* unit (i64 -100)))) (return 0)))
+    ;; Anchor only with another identity that holds entirely on incumbents.
+    (set ct 2)
+    (while (< ct (quot (cells-len inc) 2))
+      (do (set cs 0)
+          (if (> ct 12) (set cs (- ct 12)))
+          (while (<= cs (- ct 2))
+            (do (if (or (!= cs s) (!= ct t))
+                  (do (set sum (i64 0)) (set valid 1) (set q cs)
+                      (while (<= q ct)
+                        (do (set value (fmt-value text (cells-at inc (* q 2)) (cells-at inc (+ (* q 2) 1)) (fd work cm)))
+                            (if (or (== (cells-at (fd work cm) 0) 0) (or (!= (cells-at (fd work cm) 1) dec) (== value (i64 0)))) (set valid 0))
+                            (if (< q ct) (set sum (+ sum value)) (set value (- value sum)))
+                            (set q (+ q 1))))
+                      (if (and (== valid 1) (== value (i64 0)))
+                        (do (set q s)
+                            (while (<= q t)
+                              (do (if (and (>= q cs) (<= q ct)) (cells-set (fd work anchored) (- q s) 1))
+                                  (set q (+ q 1))))))))
+                (set cs (+ cs 1))))
+          (set ct (+ ct 1))))
+    (set r s) (set valid 1) (set incsum (i64 0))
+    (while (<= r t)
+      (do (set value (fmt-value text (cells-at inc (* r 2)) (cells-at inc (+ (* r 2) 1)) (fd work cm)))
+          (if (or (== (cells-at (fd work cm) 0) 0) (!= (cells-at (fd work cm) 1) dec)) (set valid 0))
+          (if (< r t) (set incsum (+ incsum value)) (set inctotal value))
+          (set r (+ r 1))))
+    (if (== valid 1)
+      (do (set r s)
+          (while (<= r t)
+            (do (if (and (< (cells-at (fd work best) (- r s)) 0) (== (cells-at (fd work anchored) (- r s)) 0))
+                  (do (set a (cells-at inc (* r 2))) (set an (cells-at inc (+ (* r 2) 1)))
+                      (set value (fmt-value text a an (fd work cm)))
+                      (if (< r t) (set need (- inctotal (- incsum value))) (set need incsum))
+                      (if (== (oa-one-digit-value text a an need dec (fd work cm)) 1) (return -3))))
+                (set r (+ r 1))))))
+    (set r s)
+    (while (<= r t)
+      (do (cells-set out (- r s) (cells-at (fd work best) (- r s))) (set r (+ r 1))))
+    (return 1)))
+
+;; Percent candidates use the same [row,start,count] source index arena.
+;; Half away from zero is explicit and identical on every host.
+(defn ^:pub ^I32 oa-pct [^Cells text ^I32 a ^I32 an ^I32 b ^I32 bn ^I32 p ^I32 pn
+                         ^Cells candidates ^I32 row ^I32 holds ^I32 rows ^OaWork work]
+  (if (!= (rem (cells-len candidates) 3) 0) (return -1))
+  (if (or (< holds 4) (or (< (* holds 4) (* rows 3)) (> holds rows))) (return -1))
+  (let [^I64 av (fmt-value text a an (fd work am)) ^I64 bv (fmt-value text b bn (fd work bm))
+        ^:mut ^I64 pv (fmt-value text p pn (fd work pm))
+        ^:mut ^I64 scale (i64 100) ^:mut ^I64 numerator (i64 0) ^:mut ^I64 denominator av
+        ^:mut ^I64 expected (i64 0) ^:mut ^I64 residue (i64 0)
+        ^:mut ^I32 i 0 ^:mut ^I32 chosen -1 ^:mut ^I32 start 0 ^:mut ^I32 count 0]
+    (if (or (or (== (cells-at (fd work am) 0) 0) (== (cells-at (fd work bm) 0) 0)) (or (== av (i64 0)) (!= (cells-at (fd work am) 1) (cells-at (fd work bm) 1)))) (return -1))
+    (if (or (== (cells-at (fd work pm) 0) 0) (> (cells-at (fd work pm) 1) 2)) (return -1))
+    (while (< i (cells-at (fd work pm) 1)) (do (set scale (* scale (i64 10))) (set i (+ i 1))))
+    ;; Parser bound (15 digits) times scale <= 10^4 fits signed I64 only
+    ;; below this conservative bound. A large value is kept, never overflowed.
+    (if (or (> bv (i64 400000000000000)) (< bv (i64 -400000000000000))) (return -1))
+    (if (or (> av (i64 400000000000000)) (< av (i64 -400000000000000))) (return -1))
+    (set numerator (* (- bv av) scale))
+    (if (< denominator (i64 0)) (do (set denominator (- (i64 0) denominator)) (set numerator (- (i64 0) numerator))))
+    (set expected (quot numerator denominator)) (set residue (rem numerator denominator))
+    (if (>= (* residue (i64 2)) denominator) (set expected (+ expected (i64 1))))
+    (if (<= (* residue (i64 2)) (- (i64 0) denominator)) (set expected (- expected (i64 1))))
+    (if (== expected pv) (return -1))
+    (set i 0)
+    (while (< i (quot (cells-len candidates) 3))
+      (do (if (== (cells-at candidates (* i 3)) row)
+            (do (set start (cells-at candidates (+ (* i 3) 1))) (set count (cells-at candidates (+ (* i 3) 2)))
+                (if (== (oa-compatible text p pn start count (fd work pm) (fd work cm)) 1)
+                  (do (set pv (fmt-value text start count (fd work cm)))
+                      (if (== pv expected)
+                        (if (< chosen 0) (set chosen i)
+                          (if (== (oa-equal text start count (cells-at candidates (+ (* chosen 3) 1)) (cells-at candidates (+ (* chosen 3) 2))) 0) (return -1))))))))
+          (set i (+ i 1))))
+    (return chosen)))
+
+(defn ^:pub ^I32 oa-line-merge-meta [^Cells text ^I32 joined ^I32 jn ^I32 candidate ^I32 cn
+                                     ^I32 tokens ^I32 line-retry ^I32 margin ^:mut ^Cells im ^:mut ^Cells cm]
+  (if (or (< tokens 2) (!= line-retry 1)) (return 0))
+  (if (or (== (oa-span text joined jn) 0) (== (oa-span text candidate cn) 0)) (return 0))
+  (fmt-value text candidate cn cm)
+  (if (or (== (cells-at cm 0) 0) (!= (cells-at cm 1) 2)) (return 0))
+  (let [^:mut ^I32 i joined ^:mut ^I32 j candidate ^:mut ^I32 equal 1
+        ^:mut ^I32 first joined ^:mut ^I32 malformed 0]
+    ;; Only the separators introduced between source tokens are ignored for
+    ;; the segmentation-only case. All OCR characters remain verbatim.
+    (while (< i (+ joined jn))
+      (do (if (!= (cells-at text i) 32)
+            (do (if (>= j (+ candidate cn)) (set equal 0)
+                  (if (!= (cells-at text i) (cells-at text j)) (set equal 0)))
+                (set j (+ j 1))))
+          (set i (+ i 1))))
+    (if (and (== equal 1) (== j (+ candidate cn))) (return 1))
+    (if (< margin 300) (return 0))
+    (set i joined)
+    (while (<= i (+ joined jn))
+      (do (if (or (== i (+ joined jn)) (== (cells-at text i) 32))
+            (do (if (> i first)
+                  (do (fmt-value text first (- i first) im)
+                      (if (== (cells-at im 0) 0) (set malformed 1))))
+                (set first (+ i 1))))
+          (set i (+ i 1))))
+    (if (== malformed 0) (return 0))
+    (if (== (oa-compatible text joined jn candidate cn im cm) 1) (return 1))
+    (return 0)))
+
+(defn ^:pub ^I32 oa-line-merge [^Cells text ^I32 joined ^I32 jn ^I32 candidate ^I32 cn
+                                ^I32 tokens ^I32 line-retry ^I32 margin ^OaWork work]
+  (return (oa-line-merge-meta text joined jn candidate cn tokens line-retry margin (fd work im) (fd work cm))))
+
+(defn ^:pub ^I32 oa-band-word [^I32 numeric ^I32 votes ^I32 dictionary ^I32 tie]
+  (if (or (!= numeric 0) (!= tie 0)) (return 0))
+  (if (or (>= votes 3) (and (>= votes 2) (== dictionary 1))) (return 1))
+  (return 0))
+(defn ^:pub ^I32 oa-band-rule [^I32 accepted ^I32 unagreed ^I32 coverage]
+  (if (and (>= accepted 3) (and (== unagreed 0) (>= coverage 600))) (return 1))
+  (return 0))
+(defn ^:pub ^I32 oa-view-factor [^I32 height ^I32 target]
+  (if (or (<= height 0) (<= target 0)) (return 1))
+  (let [^:mut ^I32 f (quot (+ target (quot height 2)) height)]
+    (if (< f 1) (set f 1)) (if (> f 6) (set f 6))
+    (return f)))
+(defn ^:pub ^I32 oa-view-allowed [^I32 raster ^I32 kind ^I32 prior]
+  (if (or (!= raster 1) (< prior 0)) (return 0))
+  (if (and (== kind 0) (< prior 4)) (return 1))
+  (if (and (== kind 1) (< prior 12)) (return 1))
+  (return 0))

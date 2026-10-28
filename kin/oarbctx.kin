@@ -1,0 +1,4 @@
+;; Caller-owned P-ARB scratch. No engine state, IO or allocation in kin.
+(ns emon.oarbctx (:require [emon.lang :refer [Cells defctx]]))
+
+(defctx ^:pub OaWork [^Cells options ^Cells offsets ^Cells counts ^Cells choices ^Cells best ^Cells im ^Cells cm ^Cells anchored ^Cells am ^Cells bm ^Cells pm])

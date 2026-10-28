@@ -4,6 +4,7 @@
 package ocrporttest
 
 import (
+	"emon/evidence"
 	"emon/ocr"
 	"emon/ocrport"
 	"emon/plan"
@@ -532,4 +533,76 @@ func TestExplicitProviderLanguagesAreNotReplacedByDiscovery(emonT *testing.T) {
 	var picked *port.Cells = port.NewCells()
 	tReq1(named, 101, 110, 103, 0)
 	port.AssertEq(emonT, ocrport.OpModelsConfigured(named, inst, 1, picked), 1, "a named request wins over provider defaults")
+}
+
+func tEngBest(c *port.Cells) int32 {
+	tEng(c)
+	port.CellsPush(c, 95)
+	port.CellsPush(c, 98)
+	port.CellsPush(c, 101)
+	port.CellsPush(c, 115)
+	port.CellsPush(c, 116)
+	return 0
+}
+
+func TestBestModelIsExplicitAndNeverAnImplicitLanguage(emonT *testing.T) {
+	var req *port.Cells = port.NewCells()
+	var inst *port.Cells = port.NewCells()
+	var out *port.Cells = port.NewCells()
+	var at int32 = 0
+	tEng(inst)
+	tSep(inst)
+	tEngBest(inst)
+	at = plan.RqOcr(req, 12, 4, 11, 1, 0, 0, 0, 0)
+	plan.RqOcrLang(req, 101, 110, 103, 0)
+	plan.RqOcrEnd(req, at)
+	port.AssertEq(emonT, ocrport.OpModelSelector(req), 0, "default English model")
+	port.AssertEq(emonT, ocrport.OpModels(req, inst, out), 1, "one fast English model by default")
+	port.AssertEq(emonT, port.CellsAt(out, 0), 0, "eng_best is not taken merely because installed")
+	port.CellsDrop(req, 0)
+	port.CellsDrop(out, 0)
+	at = plan.RqOcr(req, 12, 4, 11, 5, 0, 0, 0, 0)
+	plan.RqOcrLang(req, 101, 110, 103, 0)
+	plan.RqOcrEnd(req, at)
+	port.AssertEq(emonT, ocrport.OpModelSelector(req), 1, "explicit crop model selector")
+	port.AssertEq(emonT, ocrport.OpModels(req, inst, out), 1, "best English when explicitly requested")
+	port.AssertEq(emonT, port.CellsAt(out, 0), 1, "eng_best is selected by its whole name")
+	port.CellsDrop(out, 0)
+	port.AssertEq(emonT, ocrport.OpDropped(req, inst, out), 0, "installed best model is not reported as a dropped language")
+	port.CellsDrop(inst, 0)
+	port.CellsDrop(out, 0)
+	tEng(inst)
+	port.AssertEq(emonT, ocrport.OpModels(req, inst, out), 0, "missing best fails this optional request instead of mislabelling a fast read")
+	port.AssertEq(emonT, ocrport.OpDropped(req, inst, out), 1, "missing optional model is reported by model name")
+	port.AssertEq(emonT, port.CellsLen(out), 9, "eng_best and its separator")
+	port.AssertEq(emonT, port.CellsAt(out, 3), 95, "eng_best, not eng")
+}
+
+func TestBestDoesNotJoinDefaultScriptDiscovery(emonT *testing.T) {
+	var req *port.Cells = port.NewCells()
+	var inst *port.Cells = port.NewCells()
+	var out *port.Cells = port.NewCells()
+	var at int32 = plan.RqOcr(req, 12, 4, 11, 1, 0, 0, 0, 0)
+	tEngBest(inst)
+	tSep(inst)
+	tEng(inst)
+	port.CellsPush(req, ocrport.ScLatn())
+	plan.RqOcrEnd(req, at)
+	port.AssertEq(emonT, ocrport.OpModels(req, inst, out), 1, "default Latin discovery excludes optional variants")
+	port.AssertEq(emonT, port.CellsAt(out, 0), 1, "only the standard model is selected")
+}
+
+func TestBestModelEvidenceIsAdditive(emonT *testing.T) {
+	var standard *strings.Builder = port.NewText()
+	var best *strings.Builder = port.NewText()
+	port.AssertEq(emonT, evidence.EvEmitOcrModel(standard, 0, 0, 0, 0), 0, "standard model adds no field")
+	port.AssertText(emonT, standard, "", "standard evidence stays byte identical")
+	port.AssertEq(emonT, evidence.EvEmitOcrModel(best, 0, 0, 0, 1), 1, "explicit model is recorded")
+	port.AssertText(emonT, best, "\"model\":\"eng_best\"", "model name matches the request selector")
+}
+
+func TestOptionalBestModelKeepsTheEnglishWordLanguage(emonT *testing.T) {
+	var model *port.Cells = port.NewCells()
+	tEngBest(model)
+	port.AssertEq(emonT, ocrport.OpWordLang(model), 1701734144, "the selected model changes; the word language is still eng")
 }

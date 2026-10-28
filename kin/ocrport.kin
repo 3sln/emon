@@ -319,6 +319,26 @@
           (set i (+ i 1))))
     (return 0)))
 
+(defn ^:pub ^I32 op-model-selector [^Cells req]
+  (comment "D787: low flags bit 4 asks for the explicitly configured optional eng_best model. Zero is the standard model. DPI occupies the high bytes as before.")
+  (return (rem (quot (rq-arg req 0 2) 4) 2)))
+
+(defn ^I32 op-best-entry [^Cells inst ^I32 from ^I32 to]
+  (if (!= (- to from) 8) (return 0))
+  (if (and (and (== (cells-at inst from) 101) (== (cells-at inst (+ from 1)) 110))
+           (and (== (cells-at inst (+ from 2)) 103) (== (cells-at inst (+ from 3)) 95)))
+    (if (and (and (== (cells-at inst (+ from 4)) 98) (== (cells-at inst (+ from 5)) 101))
+             (and (== (cells-at inst (+ from 6)) 115) (== (cells-at inst (+ from 7)) 116))) (return 1)))
+  (return 0))
+
+(defn ^I32 op-best-model [^Cells inst]
+  (let [^:mut ^I32 from 0 ^:mut ^I32 to 0 ^:mut ^I32 i 0]
+    (while (< from (cells-len inst))
+      (do (set to (op-entry-end inst from))
+          (if (== (op-best-entry inst from to) 1) (return i))
+          (set from (+ to 1)) (set i (+ i 1))))
+    (return -1)))
+
 (defn ^:pub ^I32 op-models [^Cells req ^Cells inst ^:mut ^Cells out]
   (comment "Which installed models read the request, as indices into `inst` (code-point Cells separated by 0), appended to `out`;")
   (comment "answers how many. A script (`Cyrl`) is every installed model that reads it, once; a language is its model; a language")
@@ -331,6 +351,10 @@
         ^:mut ^I32 i 0
         ^:mut ^I32 from 0
         ^:mut ^I32 to 0]
+    (if (== (op-model-selector req) 1)
+      (do (set i (op-best-model inst))
+          (if (>= i 0) (do (cells-push out i) (return 1)))
+          (return 0)))
     (while (< k end)
       (do (set p (rq-arg req 0 k))
           (if (== (op-is-script p) 1)
@@ -338,7 +362,7 @@
                 (set from 0)
                 (while (< i n)
                   (do (set to (op-entry-end inst from))
-                      (if (== (op-script-reads p (op-model-script inst from to)) 1)
+                      (if (and (== (op-best-entry inst from to) 0) (== (op-script-reads p (op-model-script inst from to)) 1))
                         (if (== (op-has out base i) 0) (cells-push out i)))
                       (set from (+ to 1))
                       (set i (+ i 1)))))
@@ -347,8 +371,13 @@
           (set k (+ k 1))))
     (if (== (cells-len out) base)
       (do (set i (op-model-index inst 1701734144))
-          (if (< i 0) (set i 0))
-          (if (> n 0) (cells-push out i))))
+          (if (< i 0)
+            (do (set from 0) (set k 0)
+                (while (< k n)
+                  (do (set to (op-entry-end inst from))
+                      (if (and (< i 0) (== (op-best-entry inst from to) 0)) (set i k))
+                      (set from (+ to 1)) (set k (+ k 1))))))
+          (if (>= i 0) (cells-push out i))))
     (return (- (cells-len out) base))))
 
 (defn ^I32 op-push-model-name [^I32 p ^:mut ^Cells out]
@@ -382,6 +411,11 @@
 (defn ^:pub ^I32 op-dropped [^Cells req ^Cells inst ^:mut ^Cells out]
   (comment "The languages `op-models` dropped for want of an installed model, appended to `out` as the model's name: code points then")
   (comment "a 0, each. Answers how many. (A host's note, nothing more.)")
+  (if (== (op-model-selector req) 1)
+    (do (if (>= (op-best-model inst) 0) (return 0))
+        (cells-push out 101) (cells-push out 110) (cells-push out 103) (cells-push out 95)
+        (cells-push out 98) (cells-push out 101) (cells-push out 115) (cells-push out 116)
+        (cells-push out 0) (return 1)))
   (let [^I32 end (- (cells-len req) 3)
         ^:mut ^I32 k (op-lang-first req)
         ^:mut ^I32 p 0
@@ -401,6 +435,7 @@
 (defn ^:pub ^I32 op-word-lang [^Cells model]
   (comment "The language the engine read a word in (its model's name), as a request names it: `chi_sim` is `chs`, `chi_tra` `cht`,")
   (comment "anything else cut to four chars, packed. 0 for none.")
+  (if (== (op-best-entry model 0 (cells-len model)) 1) (return 1701734144))
   (let [^I32 v (op-find 3 model 0 (cells-len model))]
     (if (!= v 0) (return v))
     (return (op-pack-cells model))))
@@ -585,7 +620,7 @@
 
 (defn ^:pub ^I32 op-models-configured [^Cells req ^Cells inst ^I32 configured ^:mut ^Cells out]
   (comment "D678: an explicit provider model set is authoritative when the request has no language hint. An unfiltered inventory uses discovery; a named request still wins.")
-  (if (== configured 0) (return (op-models req inst out)))
+  (if (or (== configured 0) (== (op-model-selector req) 1)) (return (op-models req inst out)))
   (let [^I32 base (cells-len out)
         ^I32 end (- (cells-len req) 3)
         ^:mut ^I32 k (op-lang-first req)

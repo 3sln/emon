@@ -9,6 +9,9 @@ pub fn ocf_symbols() -> i32 {
 pub fn ocf_osd() -> i32 {
     return 2;
 }
+pub fn ocf_best() -> i32 {
+    return 4;
+}
 pub fn ocf_dpi_unit() -> i32 {
     return 256;
 }

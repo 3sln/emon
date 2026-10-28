@@ -64,6 +64,7 @@
 
 (defn ^:pub ^I32 ocf-symbols [] (return 1))   ;; request flag: symbols and their alternatives
 (defn ^:pub ^I32 ocf-osd [] (return 2))       ;; request flag: orientation and script detection
+(defn ^:pub ^I32 ocf-best [] (return 4)) ;; optional eng_best, explicit request only (D787)
 (defn ^:pub ^I32 ocf-dpi-unit [] (return 256)) ;; the request's flags above the low byte are the resolution hint, dpi (D211)
 
 (defn ^:pub ^I32 ocf-dpi [^I32 flags]

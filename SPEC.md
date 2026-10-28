@@ -879,7 +879,7 @@ which kin names as the `pixels` limit).
 
 **`ocr`** 3 (`bitmap psm flags x y w h lang...`; D211, D214) is `Ocr`: `bitmap` names the `render` or `decode` request whose
 bitmap is read, `w` 0 the whole of it; `flags` bit 1 asks for symbols and their alternatives, bit 2 for orientation and script
-detection, and the flags above the low byte are the bitmap's resolution in dpi, a hint (`flags / 256`); each `lang` is an ISO
+detection. Low-byte bit 4 explicitly selects the optional `eng_best` model (D787); it is never selected by ordinary language/script discovery, and a missing model fails that optional request. Its request flag is replay identity and its OCR run records `model: "eng_best"` in evidence. The flags above the low byte are the bitmap's resolution in dpi, a hint (`flags / 256`); each `lang` is an ISO
 639-3 code of up to four ASCII chars (`chs`/`cht` for simplified and traditional Chinese): none means every model the engine has
 (D038). The answer is `status nwords word...` and then, in the same record, the extension `emon.ocr` version 2 (`kin/ocr.kin`:
 lines with baselines, a block table with each block's own orientation, symbols and alternatives, each word's dictionary and
@@ -3760,3 +3760,15 @@ in one conversion; D058).
 **D737/D741: receipt block evidence.** An upright image input classified as a receipt photo gets one additional PSM 6 reading of the raster already read by the first pass (request 22). An enlarged kin-made raster is named with its pixel hash, as D196 requires; a decoded raster uses the ordinary bitmap request. Record the answer as a `receipt` reading with PSM 6, without making it the primary page reading. Existing keyword-gated distinct-reading fusion, verbatim source copies, format protection and occurrence accounting govern adoption. This does not enable thermal reads or PDF receipt reads, and makes no completeness claim.
 
 **D738: unread traced ink.** After occurrence accounting, sure upright body text-like traces (at least three components, confidence ≥600, width ≥25 pt, height 3–60 pt, aspect ≤40) with no overlapping word in any recorded OCR reading receive a separate `ocr-unread-ink` dropped region. Page identity and geometry are retained; there is no invented transcription or calibrated word confidence (the diagnostic is unscored). Horizontal rule strokes are excluded. `ocr-unrepresented` continues to account for rejected or displaced readings; those entries are not unread-source counts. The trace diagnostic is conservative and incomplete: a partial reading suppresses it, untraced text is not measured, and a text-like trace is not ground-truth text. Neither ledger establishes complete source coverage.
+
+
+P-ARB staged arbitration (D786–D791): an engine line retry can join a
+split two-decimal amount without replacing valid neighbours. Its synthetic
+`arb` run copies recorded `owords` verbatim, with `from` links. Additive `oarb`
+rows (printed only when nonempty) record page, box, incumbent and choice
+`owords` ranges, rule `line-merge`, source run, votes, margin, and identity
+`[incumbent-line, retry-run]`. The internal row stride is 16. Synthetic copies
+are excluded from raw OCR counts and residual accounting. Numeric closure
+and uncovered-band insertion remain forced-keep pending their separate
+view-planning and population gates; their decision kernels are not a claim
+of live recovery. No optional model is included in default packages.

@@ -56,6 +56,7 @@ pub struct EvArenas {
     pub prims: crate::port::Cells,
     pub tlines: crate::port::Cells,
     pub ofuse: crate::port::Cells,
+    pub oarb: crate::port::Cells,
 }
 impl EvArenas {
     pub fn new() -> EvArenas {
@@ -79,6 +80,7 @@ impl EvArenas {
             prims: crate::port::Cells::new(),
             tlines: crate::port::Cells::new(),
             ofuse: crate::port::Cells::new(),
+            oarb: crate::port::Cells::new(),
         }
     }
 }
