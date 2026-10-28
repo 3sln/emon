@@ -123,6 +123,9 @@ def require(reg, task, args):
         needed = [aliases[x] for x in selected if x in aliases]
     if task == 'ocr-live' and '--no-gold' in args:
         return
+    # `bb unit red ARM` inverts every law to prove each can fail; it reads no corpus (CI runs it without one).
+    if task == 'unit' and args[:1] == ['red']:
+        return
     missing = []
     for s in reg['shards']:
         if s['id'] in needed:
