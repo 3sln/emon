@@ -4,6 +4,7 @@
 package figclasstest
 
 import (
+	"emon/evidence"
 	"emon/figclass"
 	"emon/glayer"
 	"emon/model"
@@ -979,4 +980,134 @@ func TestACaptionedDiagramOwnsGridValuesWithoutRefittingThem(emonT *testing.T) {
 	port.AssertEq(emonT, model.NodeKind(nn, 2), model.NkTable(), "the separate short table retains table ownership")
 	cell = model.NodeFirstChild(nn, 2)
 	port.AssertEq(emonT, model.NodeTextLen(nn, cell), 3, "the true table keeps its numeric value")
+}
+
+func ftScreen(emonT *testing.T, height int32, held int32, expected int32) int32 {
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var grg *port.Cells = port.NewCells()
+	var fnodes *port.Cells = port.NewCells()
+	var fattrs *port.Cells = port.NewCells()
+	var fregions *port.Cells = port.NewCells()
+	var fnm *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var fi *port.Cells = port.NewCells()
+	var grl *port.Cells = port.NewCells()
+	var fw *port.Cells = port.NewCells()
+	var fl *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pg *port.Cells = port.NewCells()
+	var sl *port.Cells = port.NewCells()
+	var cand *port.Cells = port.NewCells()
+	var fcand *port.Cells = port.NewCells()
+	var cl *port.Cells = port.NewCells()
+	var fg *port.Cells = port.NewCells()
+	var fd *port.Cells = port.NewCells()
+	var ab *port.Cells = port.NewCells()
+	var ws *port.Cells = port.NewCells()
+	var i int32 = 0
+	var count int32 = 0
+	var a int32 = 0
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	model.PageNew(pages, 1, 61200, 79200, 0, model.PkVector())
+	for i < 16 {
+		port.CellsPush(pg, 0)
+		i += 1
+	}
+	evidence.ImNew(im, 1, 10000, 20000, 40000, 20000+height, 1, 1000, 500)
+	ftFi(fi, 1, 0, 2, 3, 8, 60, 0)
+	ftWord(fw, et, 1, 12000, 22000, 14000, 22600, 52, 50)
+	ftWord(fw, et, 1, 16000, 22000, 18000, 22600, 79, 75)
+	ftHeldLine(fl, 22000, held)
+	ftPara(nodes, regions, text, model.NkParagraph(), 2, 12000, 22000, 14000, 22600)
+	port.CellsSet(text, 0, 52)
+	port.CellsSet(text, 1, 50)
+	ftPara(nodes, regions, text, model.NkParagraph(), 3, 10000, 75000, 30000, 76000)
+	count = figclass.FcStage(nodes, attrs, regions, text, pages, fnodes, fattrs, fregions, fnm, pa, im, fi, grg, grl, fw, fl, et, pg, sl, cand, 0, fcand, cl, fg, fd, ab, ws)
+	port.AssertEq(emonT, count, expected, "only a bounded unclaimed embedded panel gets an owner")
+	if expected == 1 {
+		port.AssertEq(emonT, model.NodeCount(fnodes), 3, "one figure owns the label; outside prose stays independent")
+		port.AssertEq(emonT, model.NodeKind(fnodes, 1), model.NkFigure(), "panel owner is a figure")
+		port.AssertEq(emonT, model.NodeSub(fnodes, 1), model.FgScreenshot(), "panel is a screenshot")
+		a = model.NodeAttr(fnodes, fattrs, 1, model.FkLabels())
+		port.AssertThat(emonT, a >= 0, "exact numeric label belongs to the screenshot")
+		if a >= 0 {
+			port.AssertEq(emonT, model.AttrLen(fattrs, a), 2, "label is exactly two codepoints")
+			port.AssertEq(emonT, model.TextAt(text, model.AttrValue(fattrs, a)), 52, "first digit is 4")
+			port.AssertEq(emonT, model.TextAt(text, model.AttrValue(fattrs, a)+1), 50, "second digit is 2")
+		}
+		port.AssertEq(emonT, model.NodeKind(fnodes, 2), model.NkParagraph(), "outside prose retains its paragraph owner")
+	}
+	return count
+}
+
+func TestEmbeddedDialogOwnsItsNumericLabel(emonT *testing.T) {
+	ftScreen(emonT, 15000, 0, 1)
+}
+
+func TestWideShallowScreenOwnsItsNumericLabel(emonT *testing.T) {
+	ftScreen(emonT, 7000, 0, 1)
+}
+
+func TestEmbeddedTableClaimPreventsScreenPromotion(emonT *testing.T) {
+	ftScreen(emonT, 15000, 1, 0)
+}
+
+func TestLargePageImageIsNotPromotedByFlatCompression(emonT *testing.T) {
+	ftScreen(emonT, 50000, 0, 0)
+}
+
+func TestScreenshotLabelsStopAtTheRasterBoundary(emonT *testing.T) {
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var nn *port.Cells = port.NewCells()
+	var na *port.Cells = port.NewCells()
+	var nr *port.Cells = port.NewCells()
+	var nm *port.Cells = port.NewCells()
+	var cand *port.Cells = port.NewCells()
+	var fg *port.Cells = port.NewCells()
+	var fd *port.Cells = port.NewCells()
+	var ab *port.Cells = port.NewCells()
+	var a int32 = 0
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	model.PageNew(pages, 1, 61200, 79200, 0, model.PkVector())
+	ftPara(nodes, regions, text, model.NkParagraph(), 2, 12000, 15000, 14000, 15600)
+	port.CellsSet(text, 0, 52)
+	port.CellsSet(text, 1, 50)
+	ftPara(nodes, regions, text, model.NkParagraph(), 3, 12000, 31000, 14000, 31600)
+	ftCand(cand, 1, 10000, 10000, 40000, 30000)
+	ftCand(cand, 1, 10000, 32000, 15000, 36000)
+	ftFd(fd, model.FgScreenshot(), 580)
+	ftFd(fd, model.FgPhoto(), 760)
+	port.CellsPush(fg, 0)
+	port.CellsPush(fg, 0)
+	port.CellsPush(fg, 1)
+	restruct.RsFigures(nodes, attrs, regions, text, nn, na, nr, nm, cand, fg, fd, ab)
+	port.AssertEq(emonT, model.NodeCount(nn), 3, "the screenshot and neighboring illustration each own their own label")
+	port.AssertEq(emonT, model.NodeSub(nn, 1), model.FgScreenshot(), "first owner is the screenshot")
+	a = model.NodeAttr(nn, na, 1, model.FkLabels())
+	port.AssertThat(emonT, a >= 0, "screenshot owns 42")
+	if a >= 0 {
+		port.AssertEq(emonT, model.AttrLen(na, a), 2, "exact internal value")
+		port.AssertEq(emonT, model.TextAt(text, model.AttrValue(na, a)), 52, "digit 4")
+		port.AssertEq(emonT, model.TextAt(text, model.AttrValue(na, a)+1), 50, "digit 2")
+		port.AssertEq(emonT, model.AttrNext(na, a), -1, "no neighboring label is stolen by the screenshot")
+	}
+	port.AssertEq(emonT, model.NodeSub(nn, 2), model.FgPhoto(), "second owner remains the neighboring illustration")
+	a = model.NodeAttr(nn, na, 2, model.FkLabels())
+	port.AssertThat(emonT, a >= 0, "outside label belongs to the illustration")
+	if a >= 0 {
+		port.AssertEq(emonT, model.AttrLen(na, a), 3, "outside label remains complete")
+	}
 }

@@ -15,6 +15,7 @@
                                 nk-table nk-cell nk-heading nk-figure nk-paragraph nk-caption nk-document fg-chart fg-diagram fg-photo fg-logo fg-screenshot fg-qr
                                 fg-barcode fg-illustration fg-unknown fk-label fk-number fk-labels fk-image]]
             [emon.figclass :refer [fc-panel-row fc-emit-budget fc-write fc-measure fc-vector-kind fc-image-kind fc-reject fc-sign-rows fc-recur fc-stage]]
+            [emon.evidence :refer [im-new]]
             [emon.glayer :refer [grg-new grg-set rk-figure]]
             [emon.restruct :refer [rs-figures]]
             [kin.lang :refer [defn return let set while if do comment
@@ -802,3 +803,80 @@
     (assert-eq (node-kind nn 2) (nk-table) "the separate short table retains table ownership")
     (set cell (node-first-child nn 2))
     (assert-eq (node-text-len nn cell) 3 "the true table keeps its numeric value")))
+
+;; D793: embedded flat panels must own their exact text, while table claims
+;; and page-sized scans retain their existing owners.
+(defn ^I32 ft-screen [^TestT emon-t ^I32 height ^I32 held ^I32 expected]
+  (let [^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells) ^Cells pages (new-cells)
+        ^Cells ledger (new-cells) ^Cells layout (new-cells) ^Cells grg (new-cells)
+        ^Cells fnodes (new-cells) ^Cells fattrs (new-cells) ^Cells fregions (new-cells) ^Cells fnm (new-cells)
+        ^Cells pa (new-cells) ^Cells im (new-cells) ^Cells fi (new-cells) ^Cells grl (new-cells)
+        ^Cells fw (new-cells) ^Cells fl (new-cells) ^Cells et (new-cells) ^Cells pg (new-cells) ^Cells sl (new-cells)
+        ^Cells cand (new-cells) ^Cells fcand (new-cells) ^Cells cl (new-cells) ^Cells fg (new-cells) ^Cells fd (new-cells)
+        ^Cells ab (new-cells) ^Cells ws (new-cells)
+        ^:mut ^I32 i 0 ^:mut ^I32 count 0 ^:mut ^I32 a 0]
+    (model-init nodes attrs regions text pages ledger layout)
+    (page-new pages 1 61200 79200 0 (pk-vector))
+    (while (< i 16) (do (cells-push pg 0) (set i (+ i 1))))
+    (im-new im 1 10000 20000 40000 (+ 20000 height) 1 1000 500)
+    (ft-fi fi 1 0 2 3 8 60 0)
+    (ft-word fw et 1 12000 22000 14000 22600 52 50)
+    (ft-word fw et 1 16000 22000 18000 22600 79 75)
+    (ft-held-line fl 22000 held)
+    (ft-para nodes regions text (nk-paragraph) 2 12000 22000 14000 22600)
+    (cells-set text 0 52) (cells-set text 1 50)
+    (ft-para nodes regions text (nk-paragraph) 3 10000 75000 30000 76000)
+    (set count (fc-stage nodes attrs regions text pages fnodes fattrs fregions fnm pa im fi grg grl fw fl et pg sl cand 0 fcand cl fg fd ab ws))
+    (assert-eq count expected "only a bounded unclaimed embedded panel gets an owner")
+    (if (== expected 1)
+      (do (assert-eq (node-count fnodes) 3 "one figure owns the label; outside prose stays independent")
+          (assert-eq (node-kind fnodes 1) (nk-figure) "panel owner is a figure")
+          (assert-eq (node-sub fnodes 1) (fg-screenshot) "panel is a screenshot")
+          (set a (node-attr fnodes fattrs 1 (fk-labels)))
+          (assert-that (>= a 0) "exact numeric label belongs to the screenshot")
+          (if (>= a 0)
+            (do (assert-eq (attr-len fattrs a) 2 "label is exactly two codepoints")
+                (assert-eq (text-at text (attr-value fattrs a)) 52 "first digit is 4")
+                (assert-eq (text-at text (+ (attr-value fattrs a) 1)) 50 "second digit is 2")))
+          (assert-eq (node-kind fnodes 2) (nk-paragraph) "outside prose retains its paragraph owner")))
+    (return count)))
+
+(deftest test-embedded-dialog-owns-its-numeric-label
+  (ft-screen (test-t) 15000 0 1))
+(deftest test-wide-shallow-screen-owns-its-numeric-label
+  (ft-screen (test-t) 7000 0 1))
+(deftest test-embedded-table-claim-prevents-screen-promotion
+  (ft-screen (test-t) 15000 1 0))
+(deftest test-large-page-image-is-not-promoted-by-flat-compression
+  (ft-screen (test-t) 50000 0 0))
+
+(deftest test-screenshot-labels-stop-at-the-raster-boundary
+  (let [^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells nn (new-cells) ^Cells na (new-cells) ^Cells nr (new-cells) ^Cells nm (new-cells)
+        ^Cells cand (new-cells) ^Cells fg (new-cells) ^Cells fd (new-cells) ^Cells ab (new-cells)
+        ^:mut ^I32 a 0]
+    (model-init nodes attrs regions text pages ledger layout)
+    (page-new pages 1 61200 79200 0 (pk-vector))
+    (ft-para nodes regions text (nk-paragraph) 2 12000 15000 14000 15600)
+    (cells-set text 0 52) (cells-set text 1 50)
+    (ft-para nodes regions text (nk-paragraph) 3 12000 31000 14000 31600)
+    (ft-cand cand 1 10000 10000 40000 30000)
+    (ft-cand cand 1 10000 32000 15000 36000)
+    (ft-fd fd (fg-screenshot) 580)
+    (ft-fd fd (fg-photo) 760)
+    (cells-push fg 0) (cells-push fg 0) (cells-push fg 1)
+    (rs-figures nodes attrs regions text nn na nr nm cand fg fd ab)
+    (assert-eq (node-count nn) 3 "the screenshot and neighboring illustration each own their own label")
+    (assert-eq (node-sub nn 1) (fg-screenshot) "first owner is the screenshot")
+    (set a (node-attr nn na 1 (fk-labels)))
+    (assert-that (>= a 0) "screenshot owns 42")
+    (if (>= a 0)
+      (do (assert-eq (attr-len na a) 2 "exact internal value")
+          (assert-eq (text-at text (attr-value na a)) 52 "digit 4")
+          (assert-eq (text-at text (+ (attr-value na a) 1)) 50 "digit 2")
+          (assert-eq (attr-next na a) -1 "no neighboring label is stolen by the screenshot")))
+    (assert-eq (node-sub nn 2) (fg-photo) "second owner remains the neighboring illustration")
+    (set a (node-attr nn na 2 (fk-labels)))
+    (assert-that (>= a 0) "outside label belongs to the illustration")
+    (if (>= a 0) (assert-eq (attr-len na a) 3 "outside label remains complete"))))

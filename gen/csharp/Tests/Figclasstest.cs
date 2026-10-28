@@ -954,4 +954,133 @@ public static class Figclasstest {
         cell = Model.NodeFirstChild(nn, 2);
         emon.Testport.AssertEq(Model.NodeTextLen(nn, cell), 3, "the true table keeps its numeric value");
     }
+    internal static int FtScreen(int emonT, int height, int held, int expected) {
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells grg = emon.Port.NewCells();
+        emon.Port.Cells fnodes = emon.Port.NewCells();
+        emon.Port.Cells fattrs = emon.Port.NewCells();
+        emon.Port.Cells fregions = emon.Port.NewCells();
+        emon.Port.Cells fnm = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells im = emon.Port.NewCells();
+        emon.Port.Cells fi = emon.Port.NewCells();
+        emon.Port.Cells grl = emon.Port.NewCells();
+        emon.Port.Cells fw = emon.Port.NewCells();
+        emon.Port.Cells fl = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pg = emon.Port.NewCells();
+        emon.Port.Cells sl = emon.Port.NewCells();
+        emon.Port.Cells cand = emon.Port.NewCells();
+        emon.Port.Cells fcand = emon.Port.NewCells();
+        emon.Port.Cells cl = emon.Port.NewCells();
+        emon.Port.Cells fg = emon.Port.NewCells();
+        emon.Port.Cells fd = emon.Port.NewCells();
+        emon.Port.Cells ab = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        int i = 0;
+        int count = 0;
+        int a = 0;
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Model.PageNew(pages, 1, 61200, 79200, 0, Model.PkVector());
+        while (i < 16) {
+            emon.Port.CellsPush(pg, 0);
+            i += 1;
+        }
+        Evidence.ImNew(im, 1, 10000, 20000, 40000, 20000 + height, 1, 1000, 500);
+        FtFi(fi, 1, 0, 2, 3, 8, 60, 0);
+        FtWord(fw, et, 1, 12000, 22000, 14000, 22600, 52, 50);
+        FtWord(fw, et, 1, 16000, 22000, 18000, 22600, 79, 75);
+        FtHeldLine(fl, 22000, held);
+        FtPara(nodes, regions, text, Model.NkParagraph(), 2, 12000, 22000, 14000, 22600);
+        emon.Port.CellsSet(text, 0, 52);
+        emon.Port.CellsSet(text, 1, 50);
+        FtPara(nodes, regions, text, Model.NkParagraph(), 3, 10000, 75000, 30000, 76000);
+        count = Figclass.FcStage(nodes, attrs, regions, text, pages, fnodes, fattrs, fregions, fnm, pa, im, fi, grg, grl, fw, fl, et, pg, sl, cand, 0, fcand, cl, fg, fd, ab, ws);
+        emon.Testport.AssertEq(count, expected, "only a bounded unclaimed embedded panel gets an owner");
+        if (expected == 1) {
+            emon.Testport.AssertEq(Model.NodeCount(fnodes), 3, "one figure owns the label; outside prose stays independent");
+            emon.Testport.AssertEq(Model.NodeKind(fnodes, 1), Model.NkFigure(), "panel owner is a figure");
+            emon.Testport.AssertEq(Model.NodeSub(fnodes, 1), Model.FgScreenshot(), "panel is a screenshot");
+            a = Model.NodeAttr(fnodes, fattrs, 1, Model.FkLabels());
+            emon.Testport.AssertThat(a >= 0, "exact numeric label belongs to the screenshot");
+            if (a >= 0) {
+                emon.Testport.AssertEq(Model.AttrLen(fattrs, a), 2, "label is exactly two codepoints");
+                emon.Testport.AssertEq(Model.TextAt(text, Model.AttrValue(fattrs, a)), 52, "first digit is 4");
+                emon.Testport.AssertEq(Model.TextAt(text, Model.AttrValue(fattrs, a) + 1), 50, "second digit is 2");
+            }
+            emon.Testport.AssertEq(Model.NodeKind(fnodes, 2), Model.NkParagraph(), "outside prose retains its paragraph owner");
+        }
+        return count;
+    }
+    [Xunit.Fact]
+    public static void TestEmbeddedDialogOwnsItsNumericLabel() {
+        FtScreen(0, 15000, 0, 1);
+    }
+    [Xunit.Fact]
+    public static void TestWideShallowScreenOwnsItsNumericLabel() {
+        FtScreen(0, 7000, 0, 1);
+    }
+    [Xunit.Fact]
+    public static void TestEmbeddedTableClaimPreventsScreenPromotion() {
+        FtScreen(0, 15000, 1, 0);
+    }
+    [Xunit.Fact]
+    public static void TestLargePageImageIsNotPromotedByFlatCompression() {
+        FtScreen(0, 50000, 0, 0);
+    }
+    [Xunit.Fact]
+    public static void TestScreenshotLabelsStopAtTheRasterBoundary() {
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells nn = emon.Port.NewCells();
+        emon.Port.Cells na = emon.Port.NewCells();
+        emon.Port.Cells nr = emon.Port.NewCells();
+        emon.Port.Cells nm = emon.Port.NewCells();
+        emon.Port.Cells cand = emon.Port.NewCells();
+        emon.Port.Cells fg = emon.Port.NewCells();
+        emon.Port.Cells fd = emon.Port.NewCells();
+        emon.Port.Cells ab = emon.Port.NewCells();
+        int a = 0;
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Model.PageNew(pages, 1, 61200, 79200, 0, Model.PkVector());
+        FtPara(nodes, regions, text, Model.NkParagraph(), 2, 12000, 15000, 14000, 15600);
+        emon.Port.CellsSet(text, 0, 52);
+        emon.Port.CellsSet(text, 1, 50);
+        FtPara(nodes, regions, text, Model.NkParagraph(), 3, 12000, 31000, 14000, 31600);
+        FtCand(cand, 1, 10000, 10000, 40000, 30000);
+        FtCand(cand, 1, 10000, 32000, 15000, 36000);
+        FtFd(fd, Model.FgScreenshot(), 580);
+        FtFd(fd, Model.FgPhoto(), 760);
+        emon.Port.CellsPush(fg, 0);
+        emon.Port.CellsPush(fg, 0);
+        emon.Port.CellsPush(fg, 1);
+        Restruct.RsFigures(nodes, attrs, regions, text, nn, na, nr, nm, cand, fg, fd, ab);
+        emon.Testport.AssertEq(Model.NodeCount(nn), 3, "the screenshot and neighboring illustration each own their own label");
+        emon.Testport.AssertEq(Model.NodeSub(nn, 1), Model.FgScreenshot(), "first owner is the screenshot");
+        a = Model.NodeAttr(nn, na, 1, Model.FkLabels());
+        emon.Testport.AssertThat(a >= 0, "screenshot owns 42");
+        if (a >= 0) {
+            emon.Testport.AssertEq(Model.AttrLen(na, a), 2, "exact internal value");
+            emon.Testport.AssertEq(Model.TextAt(text, Model.AttrValue(na, a)), 52, "digit 4");
+            emon.Testport.AssertEq(Model.TextAt(text, Model.AttrValue(na, a) + 1), 50, "digit 2");
+            emon.Testport.AssertEq(Model.AttrNext(na, a), -1, "no neighboring label is stolen by the screenshot");
+        }
+        emon.Testport.AssertEq(Model.NodeSub(nn, 2), Model.FgPhoto(), "second owner remains the neighboring illustration");
+        a = Model.NodeAttr(nn, na, 2, Model.FkLabels());
+        emon.Testport.AssertThat(a >= 0, "outside label belongs to the illustration");
+        if (a >= 0) {
+            emon.Testport.AssertEq(Model.AttrLen(na, a), 3, "outside label remains complete");
+        }
+    }
 }

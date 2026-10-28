@@ -1590,7 +1590,7 @@ func FcImageKind(fi *port.Cells, imx int32, rw int32, rh int32, ry0 int32, ry1 i
 	if (fcMax(rw, rh) <= fcSmall) && ((fcInBand(ry0, ry1, pageh) == 1) || ((port.CellsAt(fi, b+9) >= 1) || (recur > 0))) {
 		return fcPack(model.FgLogo(), fcMin(1000, 580+recur))
 	}
-	if (rw >= 20000) && (rh >= 12000) {
+	if (rw >= 20000) && (rh >= 6000) {
 		return fcPack(model.FgScreenshot(), 450)
 	}
 	return fcPack(model.FgUnknown(), 300)
@@ -1881,6 +1881,10 @@ func FcStage(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 		}
 		kind = pk / 1024
 		conf = pk % 1024
+		if (port.CellsAt(fcand, b+crKori) == -1) && ((status == 0) && ((rej == 0) && ((kind == model.FgScreenshot()) && (((x1 - x0) >= 20000) && (((y1 - y0) >= 6000) && (((y1 - y0) <= 35000) && (((2 * (y1 - y0)) < pageh) && ((y0 > 0) && ((y1 < pageh) && ((port.CellsAt(ws, ftInside) >= 2) && (FcClaimed(fl, page, x0, y0, x1, y1) == 0))))))))))) {
+			kind = model.FgScreenshot()
+			conf = 580
+		}
 		if (port.CellsAt(fcand, b+crOrg) >= 4) && ((status == 0) && ((fcSignatureOver(sl, page, x0, y0, x1, y1) == 0) && ((port.CellsAt(fcand, b+crOrg) == 5) || (FcClaimed(fl, page, x0, y0, x1, y1) == 0)))) {
 			rej = 0
 			kind = model.FgDiagram()
