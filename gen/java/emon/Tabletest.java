@@ -5319,4 +5319,141 @@ public final class Tabletest {
         emon.Testport.assertEq(ttScreening(t, 0), 0, "open grid is well formed");
         emon.Testport.assertText(t, "T3p;Gh;R;Ch[Question];Ch[Response];Ch[];Gb;R;C[Will project one collect personal information?];C[Yes];C[No];R;C[Will project two collect personal information?];C[Yes];C[No];R;C[Will project three collect personal information?];C[Yes];C[No];", "unruled alternatives remain independent columns");
     }
+    public static void testAnEntryGridOwnsTwoUnboldHeaderRowsBeforeEmptyFields() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells an = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        int r = 0;
+        int c = 0;
+        // D757: a regular three-column entry ledger has eleven empty widget rows between its header and total. The adjacent open-label form remains covered by D583.
+        while (r <= 12) {
+            ttRule(pa, 7200, (10000 + (r * 2000)) - 50, 37200, (10000 + (r * 2000)) + 50);
+            r += 1;
+        }
+        ttRule(pa, 7200, 39950, 37200, 40050);
+        while (c <= 3) {
+            ttRule(pa, (7200 + (c * 10000)) - 50, 10000, (7200 + (c * 10000)) + 50, 40000);
+            c += 1;
+        }
+        ttAt(wd, ln, et, emon.Testport.textBlob("1 Item"), 7600, 10600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Cost"), 17600, 10600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Gain"), 27600, 10600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Total"), 7600, 34600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("123"), 17600, 34600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("456"), 27600, 34600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("More"), 7600, 36600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("234"), 17600, 36600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("567"), 27600, 36600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("End"), 7600, 38600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("345"), 17600, 38600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("678"), 27600, 38600, 0, 0);
+        int totalat = emon.Port.cellsLen(an);
+        ttWidget(an, 17600, 38300, 26600, 39700);
+        emon.Port.cellsSet(an, totalat + 8, 4);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Code"), 7600, 12600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Basis"), 17600, 12600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Adjustment"), 27600, 12600, 0, 0);
+        r = 2;
+        while (r <= 11) {
+            c = 0;
+            while (c < 3) {
+                ttWidget(an, 7600 + (c * 10000), 10300 + (r * 2000), 16600 + (c * 10000), 11700 + (r * 2000));
+                c += 1;
+            }
+            r += 1;
+        }
+        ttRule(pa, 8000, 9050, 8800, 9150);
+        ttRule(pa, 8000, 9850, 8800, 9950);
+        ttRule(pa, 7950, 9100, 8050, 9900);
+        ttRule(pa, 8750, 9100, 8850, 9900);
+        int at = emon.Port.cellsLen(an);
+        ttWidget(an, 8000, 9100, 8800, 9900);
+        emon.Port.cellsSet(an, at + 8, 2);
+        emon.Testport.assertEq(ttWidgetBuild(wd, ln, et, pa, tb, tc, tw, an), 1, "one entry grid owns every source word");
+        emon.Testport.assertEq(emon.Port.cellsAt(tb, 11), 2, "both unbold rows are column headers before the blank entry rows");
+        emon.Testport.assertEq(emon.Port.cellsAt(tb, 7), 13, "headers, ten entries and the original wrapped total survive");
+        int first = emon.Port.cellsAt(tb, 9);
+        emon.Testport.assertEq(emon.Port.cellsAt(tc, (first * 16) + 10), 1, "Item is a column header");
+        emon.Testport.assertEq(emon.Port.cellsAt(tc, ((first + 3) * 16) + 10), 1, "Code is a column header");
+        emon.Testport.assertEq(ttWordOwner(tb, 0, tc, tw, 0), first, "Item owns its original first column");
+        emon.Testport.assertEq(ttWordOwner(tb, 0, tc, tw, 4), first + 37, "123 stays in the total Cost cell");
+    }
+    public static void testFilledEntryFieldsCannotBePromotedToColumnHeaders() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells an = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        int r = 0;
+        int c = 0;
+        // D757: a regular three-column entry ledger has eleven empty widget rows between its header and total. The adjacent open-label form remains covered by D583.
+        while (r <= 12) {
+            ttRule(pa, 7200, (10000 + (r * 2000)) - 50, 37200, (10000 + (r * 2000)) + 50);
+            r += 1;
+        }
+        ttRule(pa, 7200, 39950, 37200, 40050);
+        while (c <= 3) {
+            ttRule(pa, (7200 + (c * 10000)) - 50, 10000, (7200 + (c * 10000)) + 50, 40000);
+            c += 1;
+        }
+        ttAt(wd, ln, et, emon.Testport.textBlob("123"), 7600, 10600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("456"), 17600, 10600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("789"), 27600, 10600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Total"), 7600, 34600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("123"), 17600, 34600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("456"), 27600, 34600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("More"), 7600, 36600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("234"), 17600, 36600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("567"), 27600, 36600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("End"), 7600, 38600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("345"), 17600, 38600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("678"), 27600, 38600, 0, 0);
+        int totalat = emon.Port.cellsLen(an);
+        ttWidget(an, 17600, 38300, 26600, 39700);
+        emon.Port.cellsSet(an, totalat + 8, 4);
+        ttAt(wd, ln, et, emon.Testport.textBlob("234"), 7600, 12600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("567"), 17600, 12600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("890"), 27600, 12600, 0, 0);
+        r = 0;
+        while (r < 2) {
+            c = 0;
+            while (c < 3) {
+                ttWidget(an, 7600 + (c * 10000), 10300 + (r * 2000), 16600 + (c * 10000), 11700 + (r * 2000));
+                c += 1;
+            }
+            r += 1;
+        }
+        r = 2;
+        while (r <= 11) {
+            c = 0;
+            while (c < 3) {
+                ttWidget(an, 7600 + (c * 10000), 10300 + (r * 2000), 16600 + (c * 10000), 11700 + (r * 2000));
+                c += 1;
+            }
+            r += 1;
+        }
+        ttRule(pa, 8000, 9050, 8800, 9150);
+        ttRule(pa, 8000, 9850, 8800, 9950);
+        ttRule(pa, 7950, 9100, 8050, 9900);
+        ttRule(pa, 8750, 9100, 8850, 9900);
+        int at = emon.Port.cellsLen(an);
+        ttWidget(an, 8000, 9100, 8800, 9900);
+        emon.Port.cellsSet(an, at + 8, 2);
+        emon.Testport.assertEq(ttWidgetBuild(wd, ln, et, pa, tb, tc, tw, an), 1, "one entry grid owns every source word");
+        emon.Testport.assertEq(emon.Port.cellsAt(tb, 11), 0, "entered values in widgets are body rows before the remaining blank fields");
+        emon.Testport.assertEq(emon.Port.cellsAt(tb, 7), 13, "two filled entries, ten blank entries and the original total survive");
+        int first = emon.Port.cellsAt(tb, 9);
+        emon.Testport.assertEq(emon.Port.cellsAt(tc, (first * 16) + 10), 0, "123 is a body value");
+        emon.Testport.assertEq(emon.Port.cellsAt(tc, ((first + 3) * 16) + 10), 0, "234 is a body value");
+        emon.Testport.assertEq(ttWordOwner(tb, 0, tc, tw, 0), first, "123 owns its original first column");
+        emon.Testport.assertEq(ttWordOwner(tb, 0, tc, tw, 4), first + 37, "the original total stays in its second column");
+    }
 }

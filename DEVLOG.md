@@ -13241,3 +13241,43 @@ All 15 required final commands pass: drift; fast core; rederive check and full r
 Evidence and reviewable methods are under `/Volumes/SSK SSD/emon-scratch/b27/`, especially `final-audit.json`, `gates/status.json`, `acceptance.md`, the live judgments and source ownership checks. The original incomplete word-counter result is retained beside its corrected rescore; no loss allowance or document exclusion is introduced. Builds and a private review index are isolated under `/private/tmp/emon-b27/`; final drift and cleanup are recorded separately. No corpus fetch/prune, OCR arbitration edit or commit; the coordinator commits.
 
 - [ ] **Signed off** (maintainer)
+
+### D808 — Column headers above repeated blank entry fields
+
+Batch 28's table subgroup is partial: a ruled lattice already proved to contain repeated full widget-entry rows can identify up to three populated header rows before the first full blank field row. Reject a boundary crossed by a header rowspan, a mixed populated/field row, or an empty non-field row. Store this boundary through the existing confirmed-header count; existing emission supplies column headers and header alignment. No words, cells, spans, field attributes or value owners are rewritten.
+
+A failing-first kin ownership law asserts two unbold header rows, the Item and Code header roles, the original first-column owner and the exact Cost total owner. Live F14 has two head rows on both pages, eleven eight-cell entries and its original Totals row. All 202 widget attributes are unchanged apart from generated node IDs, and the exact word population is unchanged. The Code header gains centered alignment through the existing header aligner. Existing adjacent-form laws remain guards. The initial synthetic row-count expectation was corrected from fourteen to thirteen; the source fixture has two header rows, ten blank entries and one wrapped total.
+
+F09 exhibit captions, F17's currency-summary caption/header, F13's remaining spanner hierarchy, D28 p94's outside year headers and broader tfoot inference remain open. Preserve F17's already repaired transaction header/forward balances and the D16, D28, F13 and F14 ownership repairs. This change does not claim to solve every semantic-finishing target.
+
+- [ ] **Signed off** (maintainer)
+
+### D809 — Independently reject blanket RTL text finishing
+
+Review RTL after the table subgroup. Fresh n12 reproduces mirrored brackets, niqqud gaps and detached short final lines against its source render; G01 retains repaired logical cell order, RTL direction and links. An external blanket bracket-mirroring policy probe loses and gains 56 n12 tokens and also affects correct brackets, so it is rejected without changing production. Removing niqqud-induced spaces would likewise change the protected Hebrew word population. No general final-line concatenation is retained without distinguishing source paragraphs and infobox ownership. These recognition/flow defects remain open; no diagnostic or unchanged output is called a fix.
+
+The Hebrew and Arabic inputs are themselves hard zero-loss/zero-gain controls. Retain no RTL production edit and independently preserve their before/after Models, logical order, direction, link and cell ownership. Batch 24's language-selection modules are untouched.
+
+- [ ] **Signed off** (maintainer)
+
+### D810 — Entered values are never inferred column headers
+
+Adversarial review of the new entry-grid inference found that two completely filled widget rows preceding the remaining blank entries could be marked as headers. A second failing-first law proves the problem with numeric values in all three columns: the initial inference reports two head rows and column-header roles, while the required result is zero head rows and unchanged first-column/total value owners. Reject the inference whenever a populated prospective header cell contains a field widget's centre. Blank-field counting alone cannot establish that populated rows are labels.
+
+The first gate run passed through retarget but was stopped by the runner's source fingerprint after adding this law. Those logs remain under `initial-gates`; they are not final-source certification. Restart final validation after the guard refinement. This does not broaden the retained subgroup or change the independent RTL rejection.
+
+- [ ] **Signed off** (maintainer)
+
+### D811 — Batch 28 partial verification and handoff
+
+Retain the independently reviewed table subgroup only: F14 has two semantic head rows on each page, eleven eight-cell entries and its original total. Both ownership laws pass, including the filled-widget rejection. All 202 widgets retain their exact attributes and cell owners, excluding generated node IDs. All ten other selected Models are identical; protected numeric triples and all earlier D16/F17/D28/F13 ownership repairs remain. Grades are unchanged. Caption, total, span and Hebrew text targets remain open as recorded in the external acceptance map; retain no RTL production change.
+
+All 54 fresh live candidate/baseline-replay controls cover 817 pages and 358,433 represented words: zero lost and zero gained. Only F14 changes. Both Berkshire documents, the full Hebrew/Arabic documents and the 74-page Arabic booklet have identical Models. The complete counter traverses inline text, every block child, furniture, labels and templates. SROIE precision is .682074563213647 >= .6816742392950571 and CORD is .422360248447205 >= .42, over the same 60+60 populations. These are guards, not recognition improvements attributed to headers. No accuracy ratchet or receipt baseline is lowered or changed.
+
+All required final gates pass: drift, core, rederive check/full, accuracy (3,449 metrics within the existing .002 tolerance; 232 Models identical across hosts), all 29 samples, OCR/fusion/retarget/seals/sealpx/signature/asset replays, unit laws and package check. Go, Rust, Java and C# each pass 1,350 laws. The first full unit invocation's C# restore failed with NuGet TLS NU1301; a task-local cached package feed fixes the environment, and official `bb unit csharp` passes on unchanged source with no dependency rewrite or certificate bypass. Logs retain the initial failure and the resumed arm. All seven clean package consumers emit the same 3,653-byte HTML; Java uses javac/java without Maven, and C/pod omit optional native OCR/render engines.
+
+No golden, sample or scoreboard moves. The API snapshot only corrects four inherited internal counts from 115 to 117; HEAD already has 117 runtime modules and no public signature changes. One extra EOF blank line in the law source is removed after measurement; every emitted module is byte-identical, and final drift/whitespace checks pass. Preserve the tested source fingerprint alongside this whitespace-only final source hash.
+
+Evidence: `/Volumes/SSK SSD/emon-scratch/b28/`, especially `acceptance.json`, `judgments.json`, `after-verification.json`, `control-ownership.json`, `receipt-floors.json`, `gates/status.json` and the C# retry log. No corpus fetch/prune, language-selection edit or commit; the coordinator commits. Task-owned temporary builds are removed at handoff.
+
+- [ ] **Signed off** (maintainer)

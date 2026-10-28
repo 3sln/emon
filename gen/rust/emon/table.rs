@@ -815,6 +815,61 @@ pub(crate) fn tb_entry_run(tc: &mut crate::port::Cells, first: i32, end: i32, nr
     }
     return best;
 }
+pub(crate) fn tb_entry_head(tc: &mut crate::port::Cells, first: i32, end: i32, nc: i32, an: &mut crate::port::Cells, page: i32) -> i32 {
+    // D808: only a proved repeated widget-entry lattice can infer unbold column labels from its blank entry boundary. At most three populated rows precede the first full field row; no header cell may span into that row.
+    let mut r: i32 = 0;
+    let mut c: i32 = first;
+    let mut filled: i32 = 0;
+    let mut fields: i32 = 0;
+    let mut a: i32 = 0;
+    let mut cx: i32 = 0;
+    let mut cy: i32 = 0;
+    while r < 4 {
+        c = first;
+        filled = 0;
+        fields = 0;
+        while c < end {
+            if crate::port::cells_at(tc, c * TCS) == r {
+                if crate::port::cells_at(tc, (c * TCS) + 9) > 0 {
+                    filled += 1;
+                    a = 0;
+                    while a < (crate::port::cells_len(an) / AN_STRIDE) {
+                        if (crate::port::cells_at(an, (a * AN_STRIDE) + 1) == an_field()) && ((crate::port::cells_at(an, a * AN_STRIDE) + 1) == page) {
+                            cx = (crate::port::cells_at(an, (a * AN_STRIDE) + 4) + crate::port::cells_at(an, (a * AN_STRIDE) + 6)) / 2;
+                            cy = (crate::port::cells_at(an, (a * AN_STRIDE) + 5) + crate::port::cells_at(an, (a * AN_STRIDE) + 7)) / 2;
+                            if (cx >= crate::port::cells_at(tc, (c * TCS) + 4)) && (cx <= crate::port::cells_at(tc, (c * TCS) + 6)) && (cy >= crate::port::cells_at(tc, (c * TCS) + 5)) && (cy <= crate::port::cells_at(tc, (c * TCS) + 7)) {
+                                return 0;
+                            }
+                        }
+                        a += 1;
+                    }
+                }
+                if (crate::port::cells_at(tc, (c * TCS) + 9) == 0) && (crate::port::cells_at(tc, (c * TCS) + 2) == 1) && (crate::port::cells_at(tc, (c * TCS) + 3) == 1) && (tb_field_cells(tc, c, c + 1, an, page) == 1) {
+                    fields += 1;
+                }
+            }
+            c += 1;
+        }
+        if fields == nc {
+            if (r == 0) || (filled > 0) {
+                return 0;
+            }
+            c = first;
+            while c < end {
+                if (crate::port::cells_at(tc, c * TCS) < r) && ((crate::port::cells_at(tc, c * TCS) + crate::port::cells_at(tc, (c * TCS) + 2)) > r) {
+                    return 0;
+                }
+                c += 1;
+            }
+            return r;
+        }
+        if (filled == 0) || (fields > 0) {
+            return 0;
+        }
+        r += 1;
+    }
+    return 0;
+}
 pub(crate) fn tb_page_frame(tc: &mut crate::port::Cells, cfirst: i32, cend: i32, gx0: i32, gy0: i32, gx1: i32, gy1: i32, pw: i32, ph: i32) -> i32 {
     // 1 when the grid (box gx0..gx1, gy0..gy1) is the page's frame: at least 80 per cent of the page's width and of its height, with a cell of at least 30 per cent of the page's area in it
     // (the drawing's sheet of an engineering drawing, its title block under it); 0 for a page of unknown size.
@@ -1020,6 +1075,9 @@ pub(crate) fn tb_lattice(rm: &mut crate::port::Cells, root: i32, xs: &mut crate:
     }
     let t: i32 = tb_add(tb, page, crate::port::cells_at(xs, 0), crate::port::cells_at(ys, 0), crate::port::cells_at(xs, nc), crate::port::cells_at(ys, nr), PF_RULED, 900, nr, nc, cfirst, total);
     let mut i: i32 = 0;
+    if entry == 1 {
+        crate::port::cells_set(tb, (t * TBS) + 22, tb_entry_head(tc, cfirst, cfirst + total, nc, an, page));
+    }
     crate::port::cells_set(tb, (t * TBS) + 16, crate::port::cells_len(tx));
     crate::port::cells_set(tb, (t * TBS) + 17, nc + 1);
     while i <= nc {
