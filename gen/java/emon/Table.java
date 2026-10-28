@@ -830,6 +830,30 @@ public final class Table {
         }
         return 0;
     }
+    public static boolean tbClosedResponseGrid(emon.Port.Cells rm, int root, emon.Port.Cells xs, emon.Port.Cells ys, int nc, int nr, emon.Port.Cells tc, int first, int end) {
+        // D783: a two-column question/response grid has every edge explicitly drawn. Its response options may be widely separated inside their shared cell.
+        if ((nc != 2) || (nr < 4)) {
+            return 0 == 1;
+        }
+        if (tbSingleCells(tc, first, end) != (end - first)) {
+            return 0 == 1;
+        }
+        int i = 0;
+        while (i <= nr) {
+            if (!tbClosed(rm, root, 0, emon.Port.cellsAt(ys, i), emon.Port.cellsAt(xs, 0), emon.Port.cellsAt(xs, nc))) {
+                return 0 == 1;
+            }
+            i += 1;
+        }
+        i = 0;
+        while (i <= nc) {
+            if (!tbClosed(rm, root, 1, emon.Port.cellsAt(xs, i), emon.Port.cellsAt(ys, 0), emon.Port.cellsAt(ys, nr))) {
+                return 0 == 1;
+            }
+            i += 1;
+        }
+        return 1 == 1;
+    }
     public static int tbLattice(emon.Port.Cells rm, int root, emon.Port.Cells xs, emon.Port.Cells ys, int page, emon.Port.Cells gm, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells wd, emon.Port.Cells et, int w0, int w1, emon.Port.Cells pr, emon.Port.Cells so, emon.Port.Cells tw, emon.Port.Cells tx, emon.Port.Cells wl, emon.Port.Cells rw, emon.Port.Cells sg, emon.Port.Cells ch, emon.Port.Cells st, emon.Port.Cells rmap, emon.Port.Cells bd, emon.Port.Cells an, int pw, int ph) {
         // The cells of one component's lattice, their words, and the candidate table. Answers its index, -1
         // when it is not a table. P12.2: a band between two rules that holds the rows of a table with no rule between them is cut into
@@ -957,7 +981,7 @@ public final class Table {
             emon.Port.cellsDrop(tw, tw0);
             return -1;
         }
-        if ((tbWideCells(tc, cfirst, cfirst + total, wd, tw) * 10) >= (filled * 3)) {
+        if (((tbWideCells(tc, cfirst, cfirst + total, wd, tw) * 10) >= (filled * 3)) && !tbClosedResponseGrid(rm, root, xs, ys, nc, nr, tc, cfirst, cfirst + total)) {
             emon.Port.cellsDrop(tc, cfirst * TCS);
             emon.Port.cellsDrop(tw, tw0);
             return -1;

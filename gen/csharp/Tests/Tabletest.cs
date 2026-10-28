@@ -5388,4 +5388,50 @@ public static class Tabletest {
         emon.Testport.AssertEq(TtExplainedForward(0, 0, 3), 0, "swapping withdrawal and deposit sums must not swap their semantic columns");
         emon.Testport.AssertEq(TtExplainedForward(0, 0, 1), 1, "offset carried amounts use column sums and the closing balance in monotone order");
     }
+    internal static int TtScreening(System.Text.StringBuilder t, int closed) {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        int r = 0;
+        // D783: large gaps inside a fully bordered response cell do not move its alternatives into another row or discard the question grid.
+        while (r <= 4) {
+            TtRule(pa, 10000, (20000 + (r * 4000)) - 25, 50000, (20000 + (r * 4000)) + 25);
+            r += 1;
+        }
+        TtRule(pa, 9975, 20000, 10025, 36000);
+        if (closed == 1) {
+            TtRule(pa, 29975, 20000, 30025, 36000);
+        }
+        TtRule(pa, 49975, 20000, 50025, 36000);
+        TtWord(wd, ln, et, emon.Testport.TextBlob("Question"), 10500, 20500, 15000, 21300, 1);
+        TtWord(wd, ln, et, emon.Testport.TextBlob("Response"), 30500, 20500, 35000, 21300, 1);
+        r = 1;
+        while (r < 4) {
+            if (r == 1) {
+                TtWord(wd, ln, et, emon.Testport.TextBlob("Will project one collect"), 10500, 20500 + (r * 4000), 27000, 21300 + (r * 4000), 0);
+            } else if (r == 2) {
+                TtWord(wd, ln, et, emon.Testport.TextBlob("Will project two collect"), 10500, 20500 + (r * 4000), 27000, 21300 + (r * 4000), 0);
+            } else {
+                TtWord(wd, ln, et, emon.Testport.TextBlob("Will project three collect"), 10500, 20500 + (r * 4000), 27000, 21300 + (r * 4000), 0);
+            }
+            TtWord(wd, ln, et, emon.Testport.TextBlob("personal information?"), 10500, 21700 + (r * 4000), 27000, 22500 + (r * 4000), 0);
+            TtWord(wd, ln, et, emon.Testport.TextBlob("Yes"), 30500, 20500 + (r * 4000), 32000, 21300 + (r * 4000), 0);
+            TtWord(wd, ln, et, emon.Testport.TextBlob("No"), 45500, 20500 + (r * 4000), 46500, 21300 + (r * 4000), 0);
+            r += 1;
+        }
+        return TtRun(wd, ln, et, pa, t);
+    }
+    [Xunit.Fact]
+    public static void TestAClosedScreeningGridOwnsWrappedQuestionsAndSpacedResponses() {
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        emon.Testport.AssertEq(TtScreening(t, 1), 0, "screening grid is well formed");
+        emon.Testport.AssertText(t, "T2r;Gh;R;Ch[Question];Ch[Response];Gb;R;C[Will project one collect personal information?];C[Yes No];R;C[Will project two collect personal information?];C[Yes No];R;C[Will project three collect personal information?];C[Yes No];", "each complete question and both response values belong to the same ruled row");
+    }
+    [Xunit.Fact]
+    public static void TestResponseGapsWithoutACompleteGridKeepTheirColumnAnalysis() {
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        emon.Testport.AssertEq(TtScreening(t, 0), 0, "open grid is well formed");
+        emon.Testport.AssertText(t, "T3p;Gh;R;Ch[Question];Ch[Response];Ch[];Gb;R;C[Will project one collect personal information?];C[Yes];C[No];R;C[Will project two collect personal information?];C[Yes];C[No];R;C[Will project three collect personal information?];C[Yes];C[No];", "unruled alternatives remain independent columns");
+    }
 }

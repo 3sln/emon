@@ -920,6 +920,31 @@ func tbPageFrame(tc *port.Cells, cfirst int32, cend int32, gx0 int32, gy0 int32,
 	return 0
 }
 
+func tbClosedResponseGrid(rm *port.Cells, root int32, xs *port.Cells, ys *port.Cells, nc int32, nr int32, tc *port.Cells, first int32, end int32) bool {
+	// D783: a two-column question/response grid has every edge explicitly drawn. Its response options may be widely separated inside their shared cell.
+	if (nc != 2) || (nr < 4) {
+		return 0 == 1
+	}
+	if tbSingleCells(tc, first, end) != (end - first) {
+		return 0 == 1
+	}
+	var i int32 = 0
+	for i <= nr {
+		if !tbClosed(rm, root, 0, port.CellsAt(ys, i), port.CellsAt(xs, 0), port.CellsAt(xs, nc)) {
+			return 0 == 1
+		}
+		i += 1
+	}
+	i = 0
+	for i <= nc {
+		if !tbClosed(rm, root, 1, port.CellsAt(xs, i), port.CellsAt(ys, 0), port.CellsAt(ys, nr)) {
+			return 0 == 1
+		}
+		i += 1
+	}
+	return 1 == 1
+}
+
 func tbLattice(rm *port.Cells, root int32, xs *port.Cells, ys *port.Cells, page int32, gm *port.Cells, tb *port.Cells, tc *port.Cells, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, pr *port.Cells, so *port.Cells, tw *port.Cells, tx *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, rmap *port.Cells, bd *port.Cells, an *port.Cells, pw int32, ph int32) int32 {
 	// The cells of one component's lattice, their words, and the candidate table. Answers its index, -1
 	// when it is not a table. P12.2: a band between two rules that holds the rows of a table with no rule between them is cut into
@@ -1047,7 +1072,7 @@ func tbLattice(rm *port.Cells, root int32, xs *port.Cells, ys *port.Cells, page 
 		port.CellsDrop(tw, tw0)
 		return -1
 	}
-	if (tbWideCells(tc, cfirst, cfirst+total, wd, tw) * 10) >= (filled * 3) {
+	if ((tbWideCells(tc, cfirst, cfirst+total, wd, tw) * 10) >= (filled * 3)) && !tbClosedResponseGrid(rm, root, xs, ys, nc, nr, tc, cfirst, cfirst+total) {
 		port.CellsDrop(tc, cfirst*tcs)
 		port.CellsDrop(tw, tw0)
 		return -1

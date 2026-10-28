@@ -5275,4 +5275,48 @@ public final class Tabletest {
         emon.Testport.assertEq(ttExplainedForward(0, 0, 3), 0, "swapping withdrawal and deposit sums must not swap their semantic columns");
         emon.Testport.assertEq(ttExplainedForward(0, 0, 1), 1, "offset carried amounts use column sums and the closing balance in monotone order");
     }
+    public static int ttScreening(StringBuilder t, int closed) {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        int r = 0;
+        // D783: large gaps inside a fully bordered response cell do not move its alternatives into another row or discard the question grid.
+        while (r <= 4) {
+            ttRule(pa, 10000, (20000 + (r * 4000)) - 25, 50000, (20000 + (r * 4000)) + 25);
+            r += 1;
+        }
+        ttRule(pa, 9975, 20000, 10025, 36000);
+        if (closed == 1) {
+            ttRule(pa, 29975, 20000, 30025, 36000);
+        }
+        ttRule(pa, 49975, 20000, 50025, 36000);
+        ttWord(wd, ln, et, emon.Testport.textBlob("Question"), 10500, 20500, 15000, 21300, 1);
+        ttWord(wd, ln, et, emon.Testport.textBlob("Response"), 30500, 20500, 35000, 21300, 1);
+        r = 1;
+        while (r < 4) {
+            if (r == 1) {
+                ttWord(wd, ln, et, emon.Testport.textBlob("Will project one collect"), 10500, 20500 + (r * 4000), 27000, 21300 + (r * 4000), 0);
+            } else if (r == 2) {
+                ttWord(wd, ln, et, emon.Testport.textBlob("Will project two collect"), 10500, 20500 + (r * 4000), 27000, 21300 + (r * 4000), 0);
+            } else {
+                ttWord(wd, ln, et, emon.Testport.textBlob("Will project three collect"), 10500, 20500 + (r * 4000), 27000, 21300 + (r * 4000), 0);
+            }
+            ttWord(wd, ln, et, emon.Testport.textBlob("personal information?"), 10500, 21700 + (r * 4000), 27000, 22500 + (r * 4000), 0);
+            ttWord(wd, ln, et, emon.Testport.textBlob("Yes"), 30500, 20500 + (r * 4000), 32000, 21300 + (r * 4000), 0);
+            ttWord(wd, ln, et, emon.Testport.textBlob("No"), 45500, 20500 + (r * 4000), 46500, 21300 + (r * 4000), 0);
+            r += 1;
+        }
+        return ttRun(wd, ln, et, pa, t);
+    }
+    public static void testAClosedScreeningGridOwnsWrappedQuestionsAndSpacedResponses() {
+        StringBuilder t = emon.Testport.newText();
+        emon.Testport.assertEq(ttScreening(t, 1), 0, "screening grid is well formed");
+        emon.Testport.assertText(t, "T2r;Gh;R;Ch[Question];Ch[Response];Gb;R;C[Will project one collect personal information?];C[Yes No];R;C[Will project two collect personal information?];C[Yes No];R;C[Will project three collect personal information?];C[Yes No];", "each complete question and both response values belong to the same ruled row");
+    }
+    public static void testResponseGapsWithoutACompleteGridKeepTheirColumnAnalysis() {
+        StringBuilder t = emon.Testport.newText();
+        emon.Testport.assertEq(ttScreening(t, 0), 0, "open grid is well formed");
+        emon.Testport.assertText(t, "T3p;Gh;R;Ch[Question];Ch[Response];Ch[];Gb;R;C[Will project one collect personal information?];C[Yes];C[No];R;C[Will project two collect personal information?];C[Yes];C[No];R;C[Will project three collect personal information?];C[Yes];C[No];", "unruled alternatives remain independent columns");
+    }
 }

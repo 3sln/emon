@@ -748,6 +748,20 @@
           (set c (+ c 1))))
     (return 0)))
 
+(defn ^Bool tb-closed-response-grid [^Cells rm ^I32 root ^Cells xs ^Cells ys ^I32 nc ^I32 nr ^Cells tc ^I32 first ^I32 end]
+  (comment "D783: a two-column question/response grid has every edge explicitly drawn. Its response options may be widely separated inside their shared cell.")
+  (if (or (!= nc 2) (< nr 4)) (return (== 0 1)))
+  (if (!= (tb-single-cells tc first end) (- end first)) (return (== 0 1)))
+  (let [^:mut ^I32 i 0]
+    (while (<= i nr)
+      (do (if (not (tb-closed rm root 0 (cells-at ys i) (cells-at xs 0) (cells-at xs nc))) (return (== 0 1)))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (<= i nc)
+      (do (if (not (tb-closed rm root 1 (cells-at xs i) (cells-at ys 0) (cells-at ys nr))) (return (== 0 1)))
+          (set i (+ i 1))))
+    (return (== 1 1))))
+
 (defn ^I32 tb-lattice [^Cells rm ^I32 root ^Cells xs ^:mut ^Cells ys ^I32 page ^:mut ^Cells gm
                        ^:mut ^Cells tb ^:mut ^Cells tc ^Cells wd ^Cells et ^I32 w0 ^I32 w1
                        ^:mut ^Cells pr ^:mut ^Cells so ^:mut ^Cells tw ^:mut ^Cells tx
@@ -862,7 +876,8 @@
         (do (cells-drop tc (* cfirst TCS))
             (cells-drop tw tw0)
             (return -1)))
-      (if (>= (* (tb-wide-cells tc cfirst (+ cfirst total) wd tw) 10) (* filled 3))
+      (if (and (>= (* (tb-wide-cells tc cfirst (+ cfirst total) wd tw) 10) (* filled 3))
+               (not (tb-closed-response-grid rm root xs ys nc nr tc cfirst (+ cfirst total))))
         (do (cells-drop tc (* cfirst TCS))
             (cells-drop tw tw0)
             (return -1)))

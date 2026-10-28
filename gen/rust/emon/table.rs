@@ -836,6 +836,30 @@ pub(crate) fn tb_page_frame(tc: &mut crate::port::Cells, cfirst: i32, cend: i32,
     }
     return 0;
 }
+pub(crate) fn tb_closed_response_grid(rm: &mut crate::port::Cells, root: i32, xs: &mut crate::port::Cells, ys: &mut crate::port::Cells, nc: i32, nr: i32, tc: &mut crate::port::Cells, first: i32, end: i32) -> bool {
+    // D783: a two-column question/response grid has every edge explicitly drawn. Its response options may be widely separated inside their shared cell.
+    if (nc != 2) || (nr < 4) {
+        return 0 == 1;
+    }
+    if tb_single_cells(tc, first, end) != (end - first) {
+        return 0 == 1;
+    }
+    let mut i: i32 = 0;
+    while i <= nr {
+        if !tb_closed(rm, root, 0, crate::port::cells_at(ys, i), crate::port::cells_at(xs, 0), crate::port::cells_at(xs, nc)) {
+            return 0 == 1;
+        }
+        i += 1;
+    }
+    i = 0;
+    while i <= nc {
+        if !tb_closed(rm, root, 1, crate::port::cells_at(xs, i), crate::port::cells_at(ys, 0), crate::port::cells_at(ys, nr)) {
+            return 0 == 1;
+        }
+        i += 1;
+    }
+    return 1 == 1;
+}
 pub(crate) fn tb_lattice(rm: &mut crate::port::Cells, root: i32, xs: &mut crate::port::Cells, mut ys: &mut crate::port::Cells, page: i32, mut gm: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w0: i32, w1: i32, mut pr: &mut crate::port::Cells, mut so: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tx: &mut crate::port::Cells, mut wl: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut ch: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut rmap: &mut crate::port::Cells, mut bd: &mut crate::port::Cells, an: &mut crate::port::Cells, pw: i32, ph: i32) -> i32 {
     // The cells of one component's lattice, their words, and the candidate table. Answers its index, -1
     // when it is not a table. P12.2: a band between two rules that holds the rows of a table with no rule between them is cut into
@@ -963,7 +987,7 @@ pub(crate) fn tb_lattice(rm: &mut crate::port::Cells, root: i32, xs: &mut crate:
         crate::port::cells_drop(tw, tw0);
         return -1;
     }
-    if (tb_wide_cells(tc, cfirst, cfirst + total, wd, tw) * 10) >= (filled * 3) {
+    if ((tb_wide_cells(tc, cfirst, cfirst + total, wd, tw) * 10) >= (filled * 3)) && !tb_closed_response_grid(rm, root, xs, ys, nc, nr, tc, cfirst, cfirst + total) {
         crate::port::cells_drop(tc, cfirst * TCS);
         crate::port::cells_drop(tw, tw0);
         return -1;

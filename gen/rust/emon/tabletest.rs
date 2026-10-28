@@ -5402,3 +5402,49 @@ fn test_carried_forward_requires_column_sums_in_monotone_order() {
     crate::testport::assert_eq(tt_explained_forward(0, 0, 3), 0, "swapping withdrawal and deposit sums must not swap their semantic columns");
     crate::testport::assert_eq(tt_explained_forward(0, 0, 1), 1, "offset carried amounts use column sums and the closing balance in monotone order");
 }
+pub(crate) fn tt_screening(mut t: &mut String, closed: i32) -> i32 {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut r: i32 = 0;
+    // D783: large gaps inside a fully bordered response cell do not move its alternatives into another row or discard the question grid.
+    while r <= 4 {
+        tt_rule(pa, 10000, (20000 + (r * 4000)) - 25, 50000, (20000 + (r * 4000)) + 25);
+        r += 1;
+    }
+    tt_rule(pa, 9975, 20000, 10025, 36000);
+    if closed == 1 {
+        tt_rule(pa, 29975, 20000, 30025, 36000);
+    }
+    tt_rule(pa, 49975, 20000, 50025, 36000);
+    tt_word(wd, ln, et, &crate::testport::text_blob("Question")[..], 10500, 20500, 15000, 21300, 1);
+    tt_word(wd, ln, et, &crate::testport::text_blob("Response")[..], 30500, 20500, 35000, 21300, 1);
+    r = 1;
+    while r < 4 {
+        if r == 1 {
+            tt_word(wd, ln, et, &crate::testport::text_blob("Will project one collect")[..], 10500, 20500 + (r * 4000), 27000, 21300 + (r * 4000), 0);
+        } else if r == 2 {
+            tt_word(wd, ln, et, &crate::testport::text_blob("Will project two collect")[..], 10500, 20500 + (r * 4000), 27000, 21300 + (r * 4000), 0);
+        } else {
+            tt_word(wd, ln, et, &crate::testport::text_blob("Will project three collect")[..], 10500, 20500 + (r * 4000), 27000, 21300 + (r * 4000), 0);
+        }
+        tt_word(wd, ln, et, &crate::testport::text_blob("personal information?")[..], 10500, 21700 + (r * 4000), 27000, 22500 + (r * 4000), 0);
+        tt_word(wd, ln, et, &crate::testport::text_blob("Yes")[..], 30500, 20500 + (r * 4000), 32000, 21300 + (r * 4000), 0);
+        tt_word(wd, ln, et, &crate::testport::text_blob("No")[..], 45500, 20500 + (r * 4000), 46500, 21300 + (r * 4000), 0);
+        r += 1;
+    }
+    return tt_run(wd, ln, et, pa, t);
+}
+#[test]
+fn test_a_closed_screening_grid_owns_wrapped_questions_and_spaced_responses() {
+    let t: &mut String = &mut crate::port::new_text();
+    crate::testport::assert_eq(tt_screening(t, 1), 0, "screening grid is well formed");
+    crate::testport::assert_text(t, "T2r;Gh;R;Ch[Question];Ch[Response];Gb;R;C[Will project one collect personal information?];C[Yes No];R;C[Will project two collect personal information?];C[Yes No];R;C[Will project three collect personal information?];C[Yes No];", "each complete question and both response values belong to the same ruled row");
+}
+#[test]
+fn test_response_gaps_without_a_complete_grid_keep_their_column_analysis() {
+    let t: &mut String = &mut crate::port::new_text();
+    crate::testport::assert_eq(tt_screening(t, 0), 0, "open grid is well formed");
+    crate::testport::assert_text(t, "T3p;Gh;R;Ch[Question];Ch[Response];Ch[];Gb;R;C[Will project one collect personal information?];C[Yes];C[No];R;C[Will project two collect personal information?];C[Yes];C[No];R;C[Will project three collect personal information?];C[Yes];C[No];", "unruled alternatives remain independent columns");
+}

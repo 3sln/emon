@@ -13077,3 +13077,39 @@ Reject stage 4 at preflight without a production change. The required eight-colu
 Stage 5 requires stages 1–4 to be green. Stages 2 and 4 are rejected, so keep the shape-specific passes. Final retained runtime is stages 1 and 3, with all 4,904 triples intact, full live guards green and all final gates passing. Whole-document grades are F01 poor, E09 broken, F17 usable and D16 usable. The coordinator commits.
 
 - [ ] **Signed off** (maintainer)
+
+### D782 — Reject the pagination-border rescue after the full word control
+
+Batch 23's F02 source page 32 tags table borders as pagination artifacts. The top/bottom-eighth rule filter drops the upper border fragments, leaving only final date lines in the selected cells. A failing-first ownership/value law reproduced the defect with fragmented vertical rules. A connected-grid rescue repaired the four complete date cells and the source page 33 header in the selected live excerpt.
+
+The first broad trial introduced a false footer list table and gained 13 represented words. A stricter trial required at least three borders in each direction, filtered original fragments, and restored their original positions before the final merge. Its focused laws passed, including the framed-list rejection. The full 59-page p15 control nevertheless lost 18 words and gained 55 after verified repeated-header accounting. This violates the hard zero-loss/zero-gain guard. Revert the entire pagination implementation and its proposed positive law; preserve its patch, failing-first proofs and live evidence externally under emon-scratch/b23. F02 title/TOC separation and complete multiline-cell acceptance remain open. No ratchet or word guard is relaxed.
+
+- [ ] **Signed off** (maintainer)
+
+### D783 — Explicit response-cell borders outweigh internal option gaps
+
+Batch 23's G20 screening table has a fully ruled question column and a response column containing widely spaced Yes/No alternatives. The existing wide-cell rejection treats those gaps as missing column boundaries and rejects the grid. Permit that gap only for a two-column grid of at least four rows whose cells are all unspanned and whose horizontal and vertical boundaries are explicitly covered by rules. The other fill, crossing-text, widget and page-frame guards still apply.
+
+Laws assert complete, distinct multiline questions and both response values under their exact row owners. A control omitting the middle vertical border retains the previous three-column partial interpretation. The original ownership law fails before the exception with separate Yes and No columns. Existing diagram and widget laws remain binding.
+
+- [ ] **Signed off** (maintainer)
+
+### D784 — Record the partial region-ownership outcome without recognition claims
+
+Batch 23 retains the screening-grid repair only. The named live G20 Model owns all eight complete screening questions and their Yes/No values in independent ruled rows; its sweep grade improves from poor to usable. Header and form-field semantics remain repairable follow-up work. F02's attempted border repair is reverted under D782.
+
+G01, n12 and d16 retain their infobox/body defects. The observed fills describe separate shaded rows rather than a whole container; relaxing the current aside-height rule does not establish ownership of the complete box. G03/G04 retain missing or corrupted selected labels/values, which assignment to fields alone cannot recover. G17's X remains in the same approval/denial paragraph; no new inferred checkbox state or ownership claim is retained. These acceptance checks remain open. Their fresh Models are unchanged. F14's fresh Model, including all 202 widget attributes and owners, is unchanged. The source-backed OCR modules assigned to OA1 are untouched.
+
+The combined external named-output directory initially collided financial D16 with Russian d16 on the case-insensitive scratch volume. Give the latter the output name d16-russian and reconvert both. The original financial sweep input is retained; after this tooling correction D16 and F17 match TF1's accepted Models and the unchanged protected checker preserves all 4,904 frozen cells. Full controls already use unique indexed filenames and were unaffected by this collision.
+
+- [ ] **Signed off** (maintainer)
+
+### D785 — Verify the retained screening-grid repair and preserve the baselines
+
+All 54 fresh paired live controls / 817 pages pass with zero words lost or gained. All 53 control Models other than G20 are identical; G20 alone gains the intended first-page screening table. All 4,904 protected cells survive, D16/F17 retain TF1's accepted Models, and F14 retains all 202 widget attributes and owners. Same-population 60+60 receipt precision meets the unchanged floors: SROIE 0.682074563213647 >= 0.6816742392950571; CORD 0.422360248447205 >= 0.42. These inherited OCR scores are not attributed to this table change.
+
+All 15 requested final commands pass: drift, CI core, both rederive forms, accuracy, samples, OCR/fusion/retarget/seals/sealpx/signature/asset replays, full unit, and package --check. Accuracy checks 3,449 metrics against the unchanged ratchets and 232 Models across Rust/Go/Java/C#/C/pod. All eight calibration refreshes change zero rows; no golden or sample moves. Go, Rust, Java and C# each run 1,303 laws. All seven clean package consumers produce identical 3,653-byte HTML. Java packaging uses javac/java because Maven is absent; the C/pod archives omit optional native OCR/render engines, as the gate reports.
+
+Verification uses an index scoped to this worktree and a task-local feed of 20 existing NuGet packages; the real index and declared dependencies are unchanged. Earlier Git-index runner failures are corrected and the full CI core passes. A final trailing-blank-line cleanup regenerates all 820 generated files byte-identically; drift passes again. No ratchet is lowered, no corpus is fetched or pruned, and no commit is made. Evidence and runners are retained under /Volumes/SSK SSD/emon-scratch/b23/; temporary builds are removed before handoff.
+
+- [ ] **Signed off** (maintainer)
