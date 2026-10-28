@@ -13174,3 +13174,38 @@ Fresh live sweep inputs reproduce n01's three false tables inside Figure 1, G13'
 The first live G11 candidate preserved every word but reassigned the nearby NOTE label from its illustration to the preceding screenshot. Reject that ownership result. A fifth failing-first law requires the exact internal value 42 to stay with the screenshot and the exterior label to retain its neighboring illustration owner. Screenshots may absorb their interior text but do not grow over exterior labels or claim them by proximity. Diagram/chart/photo proximity behavior is retained. This distinction follows the explicit raster placement boundary rather than word content.
 
 - [ ] **Signed off** (maintainer)
+
+
+### D799 — Batch 27 terminal small-print footer ownership
+
+The G12/G12b confidentiality and disclosure notices sit around 70–80% of page height, with a large unused bottom margin. Add a conservative interior-footer candidate: type at most 8.5 pt in the lower 35%, no type more than half a point larger below, no four-cell row, recurrence on at least three pages covering 60% of the document, and the existing isolation/tagged-tree qualification. Ordinary margin detection is unchanged.
+
+Each newly classified source line is preserved verbatim in a footer root with its source page and box. An internal output-row marker exempts only these occurrences from template deduplication; digit abstraction and title dropping are not applied. This preserves the hard word guard while moving notices out of body flow. Interior numeric text does not infer a page label. Explicit keep/drop modes retain their meanings. SPEC 10.2 describes this bounded exception to the ordinary margin-template policy.
+
+Two ownership/value laws preceded implementation: the terminal footer and an adversarial repeated-small-body case with larger body text below. The first failed with complete notices still in body paragraphs; the second passed. Supplemental laws cover insufficient recurrence and verbatim numeric occurrences. Generated code is derived for all four hosts. Live and final-gate disposition is recorded in the following decision.
+
+- [ ] **Signed off** (maintainer)
+
+
+### D800 — Batch 27 acceptance limits and complete word traversal
+
+The fresh 11-run selected-sample audit changes only G12/G12b: 9/12 new footer roots have exact source line values, pages and boxes. All 21 G12b definitions retain one complete paragraph owner; all named table/figure/note trees and G05's complete Model remain unchanged. Whole-document grades do not change. d06 grey headers, G02/G09/n04 running titles, G06 OCR sentence tails, general float/page/column joins and n01 URL/continued-note ownership remain open. Detailed dispositions and live judgments are in the external batch evidence.
+
+The full 71-page contract exposes a defect in the borrowed external word helper: when a list item had its own `text`, it skipped the item's additional block `children`. Removing furniture permits existing list flow to attach those continuations, making that incomplete traversal report an apparent 205-word loss. Counting the item's text and every block child gives 34,288 represented words before and after, zero lost/gained. Alternate `inlines` remain uncounted when the complete `text` is present, so styling is not duplicated. Three hand-written measurement contracts cover parent-plus-child text, alternate inline serialization and movement into furniture. Every fresh full-control pair is rescored with the complete traversal; there is no document exclusion, loss allowance or ratchet change. The repository's protected table checker remains unchanged.
+
+Five newly joined cross-page list items and two ordinary paragraph joins in the full contract are exact concatenations of the original blocks; all 274 list markers are unchanged. Every one of the 247 new full-contract footer roots also matches an exact baseline source value inside its source box. All seven source-page render pairs confirm actual sentence continuation. These source block/value checks are additional to the word counter, not inferred from it. No paragraph threshold or OCR arbitration module is modified.
+
+- [ ] **Signed off** (maintainer)
+
+
+### D801 — Batch 27 final verification and handoff
+
+All 54 fresh live candidate/baseline-replay controls cover 817 pages and 358,433 represented words under the complete block traversal: zero lost and zero gained, including both Berkshire inputs and receipt controls 07/10/11. Only the full G12 Model changes. All table, figure and note trees retain their source owners and values, and all 31,242 table ownership triples are identical. The 11 selected runs also retain every word; all 21 G12b definitions match their literal source lines with one paragraph owner each. Every one of the 247 new full-contract footer roots matches its original value and box; all seven newly joined page continuations are exact original-block concatenations, confirmed against source renders. Grades and remaining acceptance defects are recorded externally.
+
+Fresh `bb receipts --n 60` retains both precision floors: SROIE .682074563213647 >= .6816742392950571, CORD .422360248447205 >= .42. The same two 60-document populations reproduce the prior main measurements; these are guards, not recognition improvements attributed to this change. The tracked receipt baseline and accuracy scoreboard are unchanged.
+
+All 15 required final commands pass: drift; fast core; rederive check and full rederive; accuracy (3,449 metrics, no regression beyond the existing .002 tolerance, 232 Models equal across hosts); 29 samples; OCR/fusion/retarget/seals/sealpx/signatures/assets replays; the full unit gate (1,342 laws each on Go, Rust, Java and C#); and package check (seven clean consumers with identical 3,653-byte HTML). No golden, sample, API snapshot or ratchet moves. Java packaging uses javac/java because Maven is absent; C/pod packaging omits optional native OCR/render engines. Nonfatal process-enumeration shutdown diagnostics are retained in logs.
+
+Evidence and reviewable methods are under `/Volumes/SSK SSD/emon-scratch/b27/`, especially `final-audit.json`, `gates/status.json`, `acceptance.md`, the live judgments and source ownership checks. The original incomplete word-counter result is retained beside its corrected rescore; no loss allowance or document exclusion is introduced. Builds and a private review index are isolated under `/private/tmp/emon-b27/`; final drift and cleanup are recorded separately. No corpus fetch/prune, OCR arbitration edit or commit; the coordinator commits.
+
+- [ ] **Signed off** (maintainer)

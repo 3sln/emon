@@ -2321,6 +2321,17 @@ line that the body already says (the Info `/Title`, or a line of the body) is
 dropped, anything else is kept; the page's `label` is `/PageLabels` when the
 catalogue has it, else the number as printed.
 
+D799 additionally recognizes terminal small print above a blank bottom margin:
+at most 8.5 pt, starting in the lower 35% of the page, with no text more than
+0.5 pt larger below it. Four-cell rows are excluded. The template must recur
+on at least three pages and cover at least 60% of the document; isolation and
+tagged-content evidence still apply. This more conservative interior candidate
+path keeps each source occurrence verbatim in a separate page-bound footer
+root, including numeric text. It does not deduplicate or decompose these new
+occurrences: reclassifying body content must preserve its represented words.
+The ordinary margin-template policy and explicit keep/drop settings continue
+to apply as above. Interior numeric text alone does not infer a page label.
+
 ### 10.3 Headings and their levels (D018)
 
 Visual size alone is a trap: a document's chapter titles can be smaller than

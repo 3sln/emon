@@ -962,4 +962,77 @@ public static class Furnituretest {
         emon.Testport.AssertEq(FlFile(emon.Testport.TestFile("pdf/tagged/good.pdf"), 1, t3), 0, "good, keep: well formed");
         emon.Testport.AssertText(t3, "", "keep: nothing leaves the flow, and nothing is said");
     }
+    [Xunit.Fact]
+    public static void TestRepeatedSmallPrintAboveABlankBottomMarginHasFooterOwnership() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells txt = emon.Port.NewCells();
+        emon.Port.Cells md = emon.Port.NewCells();
+        emon.Port.Cells lb = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        int p = 1;
+        while (p <= 3) {
+            FlBody(wd, ln, et, emon.Testport.TextBlob("Complete definition."), p, 0);
+            FlLine(wd, ln, et, emon.Testport.TextBlob("Proprietary and Confidential"), p, 25000, 58600, 35000, 59400, 0, 750);
+            FlLine(wd, ln, et, emon.Testport.TextBlob("Disclosure requires written agreement."), p, 10000, 60300, 51000, 61100, 0, 750);
+            p += 1;
+        }
+        emon.Testport.AssertEq(FlRun(wd, ln, et, 3, 0, 0, txt, md, lb, t), 0, "footer and definitions form a valid Model");
+        emon.Testport.AssertText(t, "Ff1:Disclosure requires written agreement.;Ff2:Disclosure requires written agreement.;Ff3:Disclosure requires written agreement.;Ff1:Proprietary and Confidential;Ff2:Proprietary and Confidential;Ff3:Proprietary and Confidential;P:Complete definition.;P:Complete definition.;P:Complete definition.;", "both small-print lines belong to footer roots, with complete values and body definitions retained");
+    }
+    [Xunit.Fact]
+    public static void TestSmallRepeatedBodyTextWithLargerTextBelowStaysInFlow() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells txt = emon.Port.NewCells();
+        emon.Port.Cells md = emon.Port.NewCells();
+        emon.Port.Cells lb = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        int p = 1;
+        while (p <= 3) {
+            FlLine(wd, ln, et, emon.Testport.TextBlob("Important repeated condition."), p, 10000, 58600, 51000, 59400, 0, 750);
+            FlLine(wd, ln, et, emon.Testport.TextBlob("Ordinary body continues."), p, 10000, 63000, 51000, 64100, 0, 1100);
+            p += 1;
+        }
+        emon.Testport.AssertEq(FlRun(wd, ln, et, 3, 0, 0, txt, md, lb, t), 0, "body condition Model is valid");
+        emon.Testport.AssertText(t, "P:Important repeated condition.;P:Ordinary body continues.;P:Important repeated condition.;P:Ordinary body continues.;P:Important repeated condition.;P:Ordinary body continues.;", "small type and recurrence alone never take ownership from the body");
+    }
+    [Xunit.Fact]
+    public static void TestTwoInteriorSmallPrintOccurrencesDoNotEstablishAFooter() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells txt = emon.Port.NewCells();
+        emon.Port.Cells md = emon.Port.NewCells();
+        emon.Port.Cells lb = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        int p = 1;
+        while (p <= 2) {
+            FlBody(wd, ln, et, emon.Testport.TextBlob("Complete definition."), p, 0);
+            FlLine(wd, ln, et, emon.Testport.TextBlob("Proprietary and Confidential"), p, 25000, 58600, 35000, 59400, 0, 750);
+            p += 1;
+        }
+        emon.Testport.AssertEq(FlRun(wd, ln, et, 2, 0, 0, txt, md, lb, t), 0, "two occurrences form a valid Model");
+        emon.Testport.AssertText(t, "P:Complete definition.;P:Proprietary and Confidential;P:Complete definition.;P:Proprietary and Confidential;", "two repeated small-print lines retain their complete body values and owners");
+    }
+    [Xunit.Fact]
+    public static void TestNewInteriorFooterOwnershipPreservesEveryNumericOccurrence() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells txt = emon.Port.NewCells();
+        emon.Port.Cells md = emon.Port.NewCells();
+        emon.Port.Cells lb = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        FlBody(wd, ln, et, emon.Testport.TextBlob("Complete definition."), 1, 0);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("4"), 1, 25000, 61600, 26000, 62400, 0, 750);
+        FlBody(wd, ln, et, emon.Testport.TextBlob("Complete definition."), 2, 0);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("5"), 2, 25000, 61600, 26000, 62400, 0, 750);
+        FlBody(wd, ln, et, emon.Testport.TextBlob("Complete definition."), 3, 0);
+        FlLine(wd, ln, et, emon.Testport.TextBlob("6"), 3, 25000, 61600, 26000, 62400, 0, 750);
+        emon.Testport.AssertEq(FlRun(wd, ln, et, 3, 0, 0, txt, md, lb, t), 0, "numeric footer occurrences form a valid Model");
+        emon.Testport.AssertText(t, "Ff1:4;Ff2:5;Ff3:6;P:Complete definition.;P:Complete definition.;P:Complete definition.;", "newly classified interior numbers retain exact page-bound values instead of abstracting or dropping words");
+    }
 }

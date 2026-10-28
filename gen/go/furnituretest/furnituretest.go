@@ -992,3 +992,76 @@ func TestTheTaggedFixturesLoseTheirRunningHeaderFooterAndWatermark(emonT *testin
 	port.AssertEq(emonT, flFile(port.TestFile("pdf/tagged/good.pdf"), 1, t3), 0, "good, keep: well formed")
 	port.AssertText(emonT, t3, "", "keep: nothing leaves the flow, and nothing is said")
 }
+
+func TestRepeatedSmallPrintAboveABlankBottomMarginHasFooterOwnership(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var txt *port.Cells = port.NewCells()
+	var md *port.Cells = port.NewCells()
+	var lb *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	var p int32 = 1
+	for p <= 3 {
+		flBody(wd, ln, et, port.TextBlob("Complete definition."), p, 0)
+		flLine(wd, ln, et, port.TextBlob("Proprietary and Confidential"), p, 25000, 58600, 35000, 59400, 0, 750)
+		flLine(wd, ln, et, port.TextBlob("Disclosure requires written agreement."), p, 10000, 60300, 51000, 61100, 0, 750)
+		p += 1
+	}
+	port.AssertEq(emonT, flRun(wd, ln, et, 3, 0, 0, txt, md, lb, t), 0, "footer and definitions form a valid Model")
+	port.AssertText(emonT, t, "Ff1:Disclosure requires written agreement.;Ff2:Disclosure requires written agreement.;Ff3:Disclosure requires written agreement.;Ff1:Proprietary and Confidential;Ff2:Proprietary and Confidential;Ff3:Proprietary and Confidential;P:Complete definition.;P:Complete definition.;P:Complete definition.;", "both small-print lines belong to footer roots, with complete values and body definitions retained")
+}
+
+func TestSmallRepeatedBodyTextWithLargerTextBelowStaysInFlow(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var txt *port.Cells = port.NewCells()
+	var md *port.Cells = port.NewCells()
+	var lb *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	var p int32 = 1
+	for p <= 3 {
+		flLine(wd, ln, et, port.TextBlob("Important repeated condition."), p, 10000, 58600, 51000, 59400, 0, 750)
+		flLine(wd, ln, et, port.TextBlob("Ordinary body continues."), p, 10000, 63000, 51000, 64100, 0, 1100)
+		p += 1
+	}
+	port.AssertEq(emonT, flRun(wd, ln, et, 3, 0, 0, txt, md, lb, t), 0, "body condition Model is valid")
+	port.AssertText(emonT, t, "P:Important repeated condition.;P:Ordinary body continues.;P:Important repeated condition.;P:Ordinary body continues.;P:Important repeated condition.;P:Ordinary body continues.;", "small type and recurrence alone never take ownership from the body")
+}
+
+func TestTwoInteriorSmallPrintOccurrencesDoNotEstablishAFooter(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var txt *port.Cells = port.NewCells()
+	var md *port.Cells = port.NewCells()
+	var lb *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	var p int32 = 1
+	for p <= 2 {
+		flBody(wd, ln, et, port.TextBlob("Complete definition."), p, 0)
+		flLine(wd, ln, et, port.TextBlob("Proprietary and Confidential"), p, 25000, 58600, 35000, 59400, 0, 750)
+		p += 1
+	}
+	port.AssertEq(emonT, flRun(wd, ln, et, 2, 0, 0, txt, md, lb, t), 0, "two occurrences form a valid Model")
+	port.AssertText(emonT, t, "P:Complete definition.;P:Proprietary and Confidential;P:Complete definition.;P:Proprietary and Confidential;", "two repeated small-print lines retain their complete body values and owners")
+}
+
+func TestNewInteriorFooterOwnershipPreservesEveryNumericOccurrence(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var txt *port.Cells = port.NewCells()
+	var md *port.Cells = port.NewCells()
+	var lb *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	flBody(wd, ln, et, port.TextBlob("Complete definition."), 1, 0)
+	flLine(wd, ln, et, port.TextBlob("4"), 1, 25000, 61600, 26000, 62400, 0, 750)
+	flBody(wd, ln, et, port.TextBlob("Complete definition."), 2, 0)
+	flLine(wd, ln, et, port.TextBlob("5"), 2, 25000, 61600, 26000, 62400, 0, 750)
+	flBody(wd, ln, et, port.TextBlob("Complete definition."), 3, 0)
+	flLine(wd, ln, et, port.TextBlob("6"), 3, 25000, 61600, 26000, 62400, 0, 750)
+	port.AssertEq(emonT, flRun(wd, ln, et, 3, 0, 0, txt, md, lb, t), 0, "numeric footer occurrences form a valid Model")
+	port.AssertText(emonT, t, "Ff1:4;Ff2:5;Ff3:6;P:Complete definition.;P:Complete definition.;P:Complete definition.;", "newly classified interior numbers retain exact page-bound values instead of abstracting or dropping words")
+}

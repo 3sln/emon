@@ -30,6 +30,11 @@ pub(crate) const FU_FCAP: i32 = 170;
 pub(crate) const FU_STAMP: i32 = 60;
 pub(crate) const FU_STAMPLEN: i32 = 8;
 pub(crate) const FU_CELLS: i32 = 4;
+pub(crate) const FU_INTERIOR_SIZE: i32 = 850;
+pub(crate) const FU_INTERIOR_TOP: i32 = 650;
+pub(crate) const FU_INTERIOR_SIZETOL: i32 = 50;
+pub(crate) const FU_INTERIOR_PAGES: i32 = 3;
+pub(crate) const FU_INTERIOR_COVER: i32 = 60;
 pub(crate) const FU_CHAIN_GAP: i32 = 1300;
 pub(crate) const CD: i32 = 16;
 pub(crate) const SL: i32 = 10;
@@ -743,6 +748,28 @@ pub(crate) fn fu_row_cells(ln: &mut crate::port::Cells, l: i32) -> i32 {
     }
     return n;
 }
+pub(crate) fn fu_interior_footer(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, l: i32, h: i32) -> i32 {
+    // D799: small print at the end of the text can precede a large blank bottom margin. This is only a candidate:
+    // recurrence, isolation and coverage still decide ownership. Any larger text below keeps it in the body.
+    let sz: i32 = wd_get(wd, ln_get(ln, l, lh_first()), wf_size());
+    let p: i32 = ln_get(ln, l, lh_page());
+    let mut q: i32 = 0;
+    if (sz <= 0) || (sz > FU_INTERIOR_SIZE) {
+        return 0;
+    }
+    if (ln_get(ln, l, lh_y0()) * 1000) < (h * FU_INTERIOR_TOP) {
+        return 0;
+    }
+    while q < ln_count(ln) {
+        if (ln_get(ln, q, lh_page()) == p) && (ln_get(ln, q, lh_y0()) > ln_get(ln, l, lh_y0())) {
+            if wd_get(wd, ln_get(ln, q, lh_first()), wf_size()) > (sz + FU_INTERIOR_SIZETOL) {
+                return 0;
+            }
+        }
+        q += 1;
+    }
+    return 1;
+}
 pub(crate) fn fu_scan(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, gl: &mut crate::port::Cells, mk: &mut crate::port::Cells, pages: &mut crate::port::Cells, npages: i32, mut cd: &mut crate::port::Cells, mut sl: &mut crate::port::Cells, mut tx: &mut crate::port::Cells) -> i32 {
     // Every candidate line of the document as a row of `cd`, in line order. Answers the number of rows, or -1 when the
     // lines are not in page order (nothing here is then safe to say).
@@ -793,6 +820,11 @@ pub(crate) fn fu_scan(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, 
             }
             if (zone == 1) && (fu_row_cells(ln, l) >= FU_CELLS) {
                 zone = 0;
+            }
+            if (zone == 0) && ((rot < 100) || (rot > 35900)) {
+                if (fu_row_cells(ln, l) < FU_CELLS) && (fu_interior_footer(wd, ln, l, h) == 1) {
+                    zone = 4;
+                }
             }
             if zone > 0 {
                 ts = crate::port::cells_len(tx);
@@ -1096,7 +1128,7 @@ pub(crate) fn fu_iso(ln: &mut crate::port::Cells, mut cd: &mut crate::port::Cell
                                 }
                             }
                         }
-                        if cd_get(cd, r, 2) == 2 {
+                        if (cd_get(cd, r, 2) == 2) || (cd_get(cd, r, 2) == 4) {
                             if cy2 < (2 * y0) {
                                 gap = y0 - ln_get(ln, l2, lh_y1());
                                 if gap < best {
@@ -1246,6 +1278,11 @@ pub(crate) fn fu_qualify(ord: &mut crate::port::Cells, cd: &mut crate::port::Cel
     gr_set(gr, g, 8, 0);
     if ns < 0 {
         return 0;
+    }
+    if gr_get(gr, g, 3) == 4 {
+        if (c < FU_INTERIOR_PAGES) || ((c * 100) < (npages * FU_INTERIOR_COVER)) {
+            return 0;
+        }
     }
     if (gr_get(gr, g, 12) == 1) && (fu_caption_lead(tx, cd, rep) == 1) {
         return 0;
@@ -1907,11 +1944,43 @@ pub(crate) fn fu_role(zone: i32) -> i32 {
     }
     return rl_margin();
 }
+pub(crate) fn fu_emit_interior_footer(ln: &mut crate::port::Cells, mut cd: &mut crate::port::Cells, gr: &mut crate::port::Cells, ord: &mut crate::port::Cells, tx: &mut crate::port::Cells, mut fo: &mut crate::port::Cells, mut fp: &mut crate::port::Cells, mut ft: &mut crate::port::Cells, g: i32, mode: i32) -> i32 {
+    // Keep each newly classified occurrence verbatim outside body flow. Existing margin-template deduplication
+    // would lose repeated source words. Field 11 exempts these page-bound roots from that deduplication.
+    let f: i32 = gr_get(gr, g, 0);
+    let m: i32 = gr_get(gr, g, 1);
+    let mut i: i32 = 0;
+    let mut r: i32 = 0;
+    let mut l: i32 = 0;
+    let mut ts: i32 = 0;
+    let mut f0: i32 = 0;
+    let mut row: i32 = 0;
+    while i < m {
+        r = crate::port::cells_at(ord, f + i);
+        l = cd_get(cd, r, 0);
+        ts = fu_copy(tx, cd_get(cd, r, 11), cd_get(cd, r, 12), ft);
+        if mode == 2 {
+            fu_out_ledger(fo, dr_running_title(), cd_get(cd, r, 1), ln_get(ln, l, lh_x0()), ln_get(ln, l, lh_y0()), ln_get(ln, l, lh_x1()), ln_get(ln, l, lh_y1()), gr_get(gr, g, 8), sr_text() + sr_infer(), ts, cd_get(cd, r, 12));
+        } else {
+            f0 = crate::port::cells_len(fp) / 5;
+            fu_fp_push(fp, cd_get(cd, r, 1), ln_get(ln, l, lh_x0()), ln_get(ln, l, lh_y0()), ln_get(ln, l, lh_x1()), ln_get(ln, l, lh_y1()));
+            row = crate::port::cells_len(fo) / 12;
+            fu_out_furniture(fo, rl_footer(), gr_get(gr, g, 8), sr_text() + sr_infer(), ts, cd_get(cd, r, 12), f0, 1);
+            crate::port::cells_set(fo, (row * 12) + 11, 1);
+        }
+        cd_set(cd, r, 15, 1);
+        i += 1;
+    }
+    return 0;
+}
 pub(crate) fn fu_emit_group(ln: &mut crate::port::Cells, mut cd: &mut crate::port::Cells, sl: &mut crate::port::Cells, gr: &mut crate::port::Cells, ord: &mut crate::port::Cells, tx: &mut crate::port::Cells, bh: &mut crate::port::Cells, mut fo: &mut crate::port::Cells, mut fp: &mut crate::port::Cells, mut ft: &mut crate::port::Cells, mut pl: &mut crate::port::Cells, g: i32, mode: i32) -> i32 {
     // Decide a qualified group (SPEC 10.2 step 3) and write the outcomes: per member the page label and the ledger rows,
     // and the furniture rows. A template group whose members are the same beyond the page (not `varying`) is one furniture
     // row for all of them; a style group, or a group with a varying slot, is decomposed member by member. `mode` 2 drops what
     // policy would keep (a `running-title` row says so). Marks the members' lines for removal (cd 15). Answers 0.
+    if gr_get(gr, g, 3) == 4 {
+        return fu_emit_interior_footer(ln, cd, gr, ord, tx, fo, fp, ft, g, mode);
+    }
     let f: i32 = gr_get(gr, g, 0);
     let m: i32 = gr_get(gr, g, 1);
     let rep: i32 = crate::port::cells_at(ord, f);
@@ -2135,7 +2204,7 @@ pub(crate) fn fu_style_pass(wd: &mut crate::port::Cells, ln: &mut crate::port::C
                 cd_set(cd, r, 2, 0);
             }
         }
-        if cd_get(cd, r, 2) == 3 {
+        if (cd_get(cd, r, 2) == 3) || (cd_get(cd, r, 2) == 4) {
             cd_set(cd, r, 2, 0);
         }
         r += 1;
@@ -2375,7 +2444,7 @@ pub(crate) fn fu_merge_furniture(mut fo: &mut crate::port::Cells, mut fp: &mut c
     let mut m: i32 = 0;
     let mut hh: i64 = 0;
     while r < nr {
-        if fo_get(fo, r, 0) == 2 {
+        if (fo_get(fo, r, 0) == 2) && (fo_get(fo, r, 11) == 0) {
             ts = fo_get(fo, r, 4);
             tl = fo_get(fo, r, 5);
             hh = fu_basis();

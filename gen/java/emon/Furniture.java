@@ -29,6 +29,11 @@ public final class Furniture {
     public static final int FU_STAMP = 60;
     public static final int FU_STAMPLEN = 8;
     public static final int FU_CELLS = 4;
+    public static final int FU_INTERIOR_SIZE = 850;
+    public static final int FU_INTERIOR_TOP = 650;
+    public static final int FU_INTERIOR_SIZETOL = 50;
+    public static final int FU_INTERIOR_PAGES = 3;
+    public static final int FU_INTERIOR_COVER = 60;
     public static final int FU_CHAIN_GAP = 1300;
     public static final int CD = 16;
     public static final int SL = 10;
@@ -742,6 +747,28 @@ public final class Furniture {
         }
         return n;
     }
+    public static int fuInteriorFooter(emon.Port.Cells wd, emon.Port.Cells ln, int l, int h) {
+        // D799: small print at the end of the text can precede a large blank bottom margin. This is only a candidate:
+        // recurrence, isolation and coverage still decide ownership. Any larger text below keeps it in the body.
+        int sz = Evidence.wdGet(wd, Evidence.lnGet(ln, l, Evidence.lhFirst()), Evidence.wfSize());
+        int p = Evidence.lnGet(ln, l, Evidence.lhPage());
+        int q = 0;
+        if ((sz <= 0) || (sz > FU_INTERIOR_SIZE)) {
+            return 0;
+        }
+        if ((Evidence.lnGet(ln, l, Evidence.lhY0()) * 1000) < (h * FU_INTERIOR_TOP)) {
+            return 0;
+        }
+        while (q < Evidence.lnCount(ln)) {
+            if ((Evidence.lnGet(ln, q, Evidence.lhPage()) == p) && (Evidence.lnGet(ln, q, Evidence.lhY0()) > Evidence.lnGet(ln, l, Evidence.lhY0()))) {
+                if (Evidence.wdGet(wd, Evidence.lnGet(ln, q, Evidence.lhFirst()), Evidence.wfSize()) > (sz + FU_INTERIOR_SIZETOL)) {
+                    return 0;
+                }
+            }
+            q += 1;
+        }
+        return 1;
+    }
     public static int fuScan(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells pages, int npages, emon.Port.Cells cd, emon.Port.Cells sl, emon.Port.Cells tx) {
         // Every candidate line of the document as a row of `cd`, in line order. Answers the number of rows, or -1 when the
         // lines are not in page order (nothing here is then safe to say).
@@ -792,6 +819,11 @@ public final class Furniture {
                 }
                 if ((zone == 1) && (fuRowCells(ln, l) >= FU_CELLS)) {
                     zone = 0;
+                }
+                if ((zone == 0) && ((rot < 100) || (rot > 35900))) {
+                    if ((fuRowCells(ln, l) < FU_CELLS) && (fuInteriorFooter(wd, ln, l, h) == 1)) {
+                        zone = 4;
+                    }
                 }
                 if (zone > 0) {
                     ts = emon.Port.cellsLen(tx);
@@ -1095,7 +1127,7 @@ public final class Furniture {
                                     }
                                 }
                             }
-                            if (cdGet(cd, r, 2) == 2) {
+                            if ((cdGet(cd, r, 2) == 2) || (cdGet(cd, r, 2) == 4)) {
                                 if (cy2 < (2 * y0)) {
                                     gap = y0 - Evidence.lnGet(ln, l2, Evidence.lhY1());
                                     if (gap < best) {
@@ -1245,6 +1277,11 @@ public final class Furniture {
         grSet(gr, g, 8, 0);
         if (ns < 0) {
             return 0;
+        }
+        if (grGet(gr, g, 3) == 4) {
+            if ((c < FU_INTERIOR_PAGES) || ((c * 100) < (npages * FU_INTERIOR_COVER))) {
+                return 0;
+            }
         }
         if ((grGet(gr, g, 12) == 1) && (fuCaptionLead(tx, cd, rep) == 1)) {
             return 0;
@@ -1906,11 +1943,43 @@ public final class Furniture {
         }
         return Model.rlMargin();
     }
+    public static int fuEmitInteriorFooter(emon.Port.Cells ln, emon.Port.Cells cd, emon.Port.Cells gr, emon.Port.Cells ord, emon.Port.Cells tx, emon.Port.Cells fo, emon.Port.Cells fp, emon.Port.Cells ft, int g, int mode) {
+        // Keep each newly classified occurrence verbatim outside body flow. Existing margin-template deduplication
+        // would lose repeated source words. Field 11 exempts these page-bound roots from that deduplication.
+        int f = grGet(gr, g, 0);
+        int m = grGet(gr, g, 1);
+        int i = 0;
+        int r = 0;
+        int l = 0;
+        int ts = 0;
+        int f0 = 0;
+        int row = 0;
+        while (i < m) {
+            r = emon.Port.cellsAt(ord, f + i);
+            l = cdGet(cd, r, 0);
+            ts = fuCopy(tx, cdGet(cd, r, 11), cdGet(cd, r, 12), ft);
+            if (mode == 2) {
+                fuOutLedger(fo, Model.drRunningTitle(), cdGet(cd, r, 1), Evidence.lnGet(ln, l, Evidence.lhX0()), Evidence.lnGet(ln, l, Evidence.lhY0()), Evidence.lnGet(ln, l, Evidence.lhX1()), Evidence.lnGet(ln, l, Evidence.lhY1()), grGet(gr, g, 8), Model.srText() + Model.srInfer(), ts, cdGet(cd, r, 12));
+            } else {
+                f0 = emon.Port.cellsLen(fp) / 5;
+                fuFpPush(fp, cdGet(cd, r, 1), Evidence.lnGet(ln, l, Evidence.lhX0()), Evidence.lnGet(ln, l, Evidence.lhY0()), Evidence.lnGet(ln, l, Evidence.lhX1()), Evidence.lnGet(ln, l, Evidence.lhY1()));
+                row = emon.Port.cellsLen(fo) / 12;
+                fuOutFurniture(fo, Model.rlFooter(), grGet(gr, g, 8), Model.srText() + Model.srInfer(), ts, cdGet(cd, r, 12), f0, 1);
+                emon.Port.cellsSet(fo, (row * 12) + 11, 1);
+            }
+            cdSet(cd, r, 15, 1);
+            i += 1;
+        }
+        return 0;
+    }
     public static int fuEmitGroup(emon.Port.Cells ln, emon.Port.Cells cd, emon.Port.Cells sl, emon.Port.Cells gr, emon.Port.Cells ord, emon.Port.Cells tx, emon.Port.Cells bh, emon.Port.Cells fo, emon.Port.Cells fp, emon.Port.Cells ft, emon.Port.Cells pl, int g, int mode) {
         // Decide a qualified group (SPEC 10.2 step 3) and write the outcomes: per member the page label and the ledger rows,
         // and the furniture rows. A template group whose members are the same beyond the page (not `varying`) is one furniture
         // row for all of them; a style group, or a group with a varying slot, is decomposed member by member. `mode` 2 drops what
         // policy would keep (a `running-title` row says so). Marks the members' lines for removal (cd 15). Answers 0.
+        if (grGet(gr, g, 3) == 4) {
+            return fuEmitInteriorFooter(ln, cd, gr, ord, tx, fo, fp, ft, g, mode);
+        }
         int f = grGet(gr, g, 0);
         int m = grGet(gr, g, 1);
         int rep = emon.Port.cellsAt(ord, f);
@@ -2134,7 +2203,7 @@ public final class Furniture {
                     cdSet(cd, r, 2, 0);
                 }
             }
-            if (cdGet(cd, r, 2) == 3) {
+            if ((cdGet(cd, r, 2) == 3) || (cdGet(cd, r, 2) == 4)) {
                 cdSet(cd, r, 2, 0);
             }
             r += 1;
@@ -2374,7 +2443,7 @@ public final class Furniture {
         int m = 0;
         long hh = 0;
         while (r < nr) {
-            if (foGet(fo, r, 0) == 2) {
+            if ((foGet(fo, r, 0) == 2) && (foGet(fo, r, 11) == 0)) {
                 ts = foGet(fo, r, 4);
                 tl = foGet(fo, r, 5);
                 hh = fuBasis();
