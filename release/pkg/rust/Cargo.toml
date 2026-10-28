@@ -5,7 +5,7 @@
 # Unlike the gates' crate (kin/scripts/emon-rs-build) it has no driver binary and no `__test_hooks` feature.
 [package]
 name = "emon"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "PDFs and images to semantic HTML and a JSON model, for scraping and indexing: reading order, tables, lists, footnotes, figures, OCR. One specification, generated; byte-identical to the Go, Java, C#, WASM and C builds."
 license = "MIT"
