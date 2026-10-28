@@ -333,6 +333,10 @@ func lcSplit(wd *port.Cells, et *port.Cells, lt *port.Cells, ls *port.Cells, l i
 	// Split line l at the gutter [gx0, gx1] when its words are on both sides of it, each side's together
 	// (left to right or right to left): l keeps the first run, a new line (appended to `lt` and `ls`) the
 	// second. Answers 1 when it split.
+	// D814: a corrected OCR frame recovers existing physical line owners. An internal word gap must not split those owners into new columns; the gutters between intact line boxes remain available.
+	if (evidence.LnGet(lt, l, evidence.LfSrc()) & evidence.LsFrame()) != 0 {
+		return 0
+	}
 	var w0 int32 = evidence.LnGet(lt, l, evidence.LhFirst())
 	var wn int32 = evidence.LnGet(lt, l, evidence.LhCount())
 	var gm2 int32 = gx0 + gx1

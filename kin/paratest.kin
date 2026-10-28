@@ -25,7 +25,7 @@
                                 sr-ocr page-layout-count page-layout-first layout-band layout-col layout-role layout-x0]]
             [emon.json :refer [js-emit]]
             [emon.html :refer [html-emit]]
-            [emon.evidence :refer [wd-new wd-set wd-get wd-count ln-new ln-set lf-src wf-src wf-size wf-font wf-style hd-x0 hd-x1]]
+            [emon.evidence :refer [wd-new wd-set wd-get wd-count ln-new ln-set lf-src ls-frame wf-src wf-size wf-font wf-style hd-x0 hd-x1]]
             [emon.pdfdoc :refer [pd-open]]
             [emon.pdfcontent :refer [pc-document]]
             [emon.para :refer [pa-pages pa-build pa-dump]]
@@ -1100,3 +1100,19 @@
     (pt-brief out nodes regions text)
     (assert-text out "P1:2.15 Documentation means all material supplied with the purchased equipment including instructions.;P1:2.16 Testing means an independent check of the equipment before delivery.;P1:A separate paragraph stays separate.;"
       "continuation belongs to 2.15; 2.16 and the spaced paragraph have independent owners")))
+
+(deftest test-corrected-ocr-frame-joins-paragraph-with-literal-word-boundaries
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp (new-cells) ^Cells fr (new-cells)
+        ^Cells gp (new-cells) ^Cells st (new-cells) ^Text brief (new-text)]
+    (pt-line wd ln et (text-blob "A multi-") 1 7200 10000 50000 11200 0 0 1000)
+    (pt-line wd ln et (text-blob "part paragraph") 1 7200 11500 50000 12700 0 0 1000)
+    (ln-set ln 0 (lf-src) (+ (sr-ocr) (ls-frame)))
+    (ln-set ln 1 (lf-src) (+ (sr-ocr) (ls-frame)))
+    (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "corrected OCR frame has a valid Model")
+    (assert-eq (node-count nodes) 2 "both lines have one paragraph owner")
+    (assert-eq (node-kind nodes 1) (nk-paragraph) "the owner is a paragraph")
+    (pt-brief brief nodes regions text)
+    (assert-text brief "P1:A multi- part paragraph;" "paragraph grouping preserves both literal OCR tokens")))

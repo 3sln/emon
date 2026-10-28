@@ -1225,4 +1225,53 @@ public final class Scantest {
     public static void testJapaneseMixedReadingRetainsSourceBackedLatinIdentifiers() {
         scMultilingualOwners(0, 1785753088, 1248878958, 23665, 30000, 12373);
     }
+    public static void testSelectedRerotatedLinesUseTheSelectedRunsUprightFrame() {
+        emon.Port.Cells ol = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells scr = emon.Port.newCells();
+        int i = 0;
+        // D815: a dense four-region selection has six lines per region. Sparse and mixed-run selections keep the original frame.
+        Evidence.olNew(ol, 1, 1000, 1000, 2000, 9000, 1500, 1000, 1500, 9000, 27000, 2, 0, 0);
+        while (i < 4) {
+            emon.Port.cellsPush(et, 65);
+            i += 1;
+        }
+        Scan.scPrep(scr);
+        i = 0;
+        while (i < 24) {
+            int x = 1000 + ((i % 4) * 10000);
+            int y = 2000 + ((i / 4) * 1500);
+            int w = Evidence.owNew(ow, 1, x, y, x + 5000, y + 800, x, y + 600, x + 5000, y + 600, 0, 0, 0, 4, i + 1, 950, -1);
+            Evidence.owSet(ow, w, Evidence.owfRun(), 1);
+            Evidence.olNew(ol, 1, x, y, x + 5000, y + 800, x, y + 600, x + 5000, y + 600, 0, 0, i, 1);
+            Evidence.olSet(ol, i + 1, Evidence.olfRun(), 1);
+            emon.Port.cellsSet(scr, Scan.scSelBase() + i, i + 1);
+            i += 1;
+        }
+        emon.Testport.assertEq(Scan.scEmitSel(ol, ow, emon.Port.newCells(), 24, 1, 27000, scr, words, lines, et, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 24, "all dense selected lines survive");
+        emon.Testport.assertEq(Evidence.lnGet(lines, 0, Evidence.lhRot()), 0, "dense horizontal selected lines enter column and paragraph grouping");
+        emon.Testport.assertEq(Evidence.lnGet(lines, 0, Evidence.lhFirst()), 0, "the selected line owns its emitted word");
+        emon.Testport.assertEq(Evidence.lnGet(lines, 0, Evidence.lhCount()), 1, "the selected word appears once");
+        emon.Testport.assertEq(Evidence.wdGet(words, 0, Evidence.hdTlen()), 4, "the value is retained");
+        emon.Testport.assertEq(Evidence.wdGet(words, 0, Evidence.hdTstart()), 0, "the emitted word refers to the unchanged source value");
+        emon.Testport.assertEq(Evidence.lnGet(lines, 0, Evidence.lfSrc()) & Evidence.lsFrame(), Evidence.lsFrame(), "literal token boundaries survive later grouping");
+        emon.Port.cellsSet(scr, Scan.scSelBase(), 0);
+        emon.Testport.assertEq(Scan.scEmitSel(ol, ow, emon.Port.newCells(), 24, 1, 27000, scr, words, lines, et, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 23, "mixed-run selection retains the existing frame");
+        emon.Testport.assertEq(Evidence.lnGet(lines, 24, Evidence.lhRot()), 9000, "mixed runs cannot borrow a later run's median");
+        emon.Testport.assertEq(Evidence.lnGet(lines, 24, Evidence.lfSrc()) & Evidence.lsFrame(), 0, "mixed runs do not acquire the corrected-frame marker");
+        emon.Port.cellsSet(scr, Scan.scSelBase(), 1);
+        emon.Testport.assertEq(Scan.scEmitSel(ol, ow, emon.Port.newCells(), 24, 1, 500, scr, words, lines, et, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 24, "a small angle disagreement is not a quarter-turn recovery");
+        emon.Testport.assertEq(Evidence.lnGet(lines, 47, Evidence.lhRot()), 35500, "ordinary skew remains unchanged");
+        emon.Testport.assertEq(Evidence.lnGet(lines, 47, Evidence.lfSrc()) & Evidence.lsFrame(), 0, "ordinary skew keeps its existing join policy");
+        emon.Testport.assertEq(Scan.scEmitSel(ol, ow, emon.Port.newCells(), 1, 1, 27000, scr, words, lines, et, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 1, "a sparse OCR selection keeps its original owner");
+        emon.Testport.assertEq(Evidence.lnGet(lines, 71, Evidence.lhRot()), 9000, "sparse booklet fragments do not enter the dense-region recovery");
+        emon.Testport.assertEq(Evidence.lnGet(lines, 71, Evidence.lfSrc()) & Evidence.lsFrame(), 0, "sparse fragments keep the previous paragraph policy");
+        Evidence.olSet(ol, 24, Evidence.lhCount(), 0);
+        emon.Testport.assertEq(Scan.scEmitSel(ol, ow, emon.Port.newCells(), 24, 1, 27000, scr, words, lines, et, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 23, "empty OCR rows do not count toward dense-region evidence");
+        emon.Testport.assertEq(Evidence.lnGet(lines, 72, Evidence.lhRot()), 9000, "twenty-three nonempty lines still keep the previous frame");
+        emon.Testport.assertEq(Evidence.lnGet(lines, 72, Evidence.lfSrc()) & Evidence.lsFrame(), 0, "empty rows cannot activate recovery");
+    }
 }

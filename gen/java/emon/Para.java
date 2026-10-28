@@ -853,6 +853,10 @@ public final class Para {
         if (n == 0) {
             return 0;
         }
+        if ((Evidence.lnGet(ln, l, Evidence.lfSrc()) & Evidence.lsFrame()) != 0) {
+            emon.Port.cellsPush(raw, 32);
+            return 0;
+        }
         int last = emon.Port.cellsAt(raw, n - 1);
         if (last == 173) {
             emon.Port.cellsDrop(raw, n - 1);

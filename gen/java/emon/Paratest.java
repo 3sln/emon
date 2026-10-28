@@ -1488,4 +1488,32 @@ public final class Paratest {
         ptBrief(out, nodes, regions, text);
         emon.Testport.assertText(out, "P1:2.15 Documentation means all material supplied with the purchased equipment including instructions.;P1:2.16 Testing means an independent check of the equipment before delivery.;P1:A separate paragraph stays separate.;", "continuation belongs to 2.15; 2.16 and the spaced paragraph have independent owners");
     }
+    public static void testCorrectedOcrFrameJoinsParagraphWithLiteralWordBoundaries() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells ord = emon.Port.newCells();
+        emon.Port.Cells raw = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        emon.Port.Cells fr = emon.Port.newCells();
+        emon.Port.Cells gp = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        StringBuilder brief = emon.Testport.newText();
+        ptLine(wd, ln, et, emon.Testport.textBlob("A multi-"), 1, 7200, 10000, 50000, 11200, 0, 0, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("part paragraph"), 1, 7200, 11500, 50000, 12700, 0, 0, 1000);
+        Evidence.lnSet(ln, 0, Evidence.lfSrc(), Model.srOcr() + Evidence.lsFrame());
+        Evidence.lnSet(ln, 1, Evidence.lfSrc(), Model.srOcr() + Evidence.lsFrame());
+        emon.Testport.assertEq(ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "corrected OCR frame has a valid Model");
+        emon.Testport.assertEq(Model.nodeCount(nodes), 2, "both lines have one paragraph owner");
+        emon.Testport.assertEq(Model.nodeKind(nodes, 1), Model.nkParagraph(), "the owner is a paragraph");
+        ptBrief(brief, nodes, regions, text);
+        emon.Testport.assertText(brief, "P1:A multi- part paragraph;", "paragraph grouping preserves both literal OCR tokens");
+    }
 }

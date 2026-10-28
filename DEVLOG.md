@@ -13291,3 +13291,43 @@ All 15 requested final gates pass: drift, core CI, both rederive modes, accuracy
 Evidence and methods are under `/Volumes/SSK SSD/emon-scratch/b24b/`, especially `final-audit.json`, `source-review.md`, `source-line-checks.tsv`, `named-audit.json`, `missing-unread-counts.json` and `gates/status.json`. The coordinator report is `b24b-report.md`. Builds and the private review index are isolated under `/private/tmp/emon-b24b/` for deletion after the final drift check. No commit, corpus fetch or prune; the coordinator commits.
 
 - [ ] **Signed off** (maintainer)
+
+### D812 — Use the uniformly selected OCR run's upright coordinate frame
+
+Batch 25 revisits the rejected D758 trial. A selected later OCR run can already have upright page-space coordinates while emission still subtracts the discarded run's quarter-turn median. Only a uniform later-run selection, an upright selected-run median and a quarter-turn disagreement permit using that median. Mixed-run selection, the initial run and ordinary skew retain the previous frame. No recorded OCR coordinates or text are modified. A failing-first law asserts emitted word ownership and value references as well as rotation; mixed-run and ordinary-skew assertions protect the fallback.
+
+- [ ] **Signed off** (maintainer)
+
+### D813 — Preserve literal OCR word boundaries during recovered paragraph grouping
+
+Correcting the frame makes previously standalone lines eligible for column and paragraph grouping. D758 rejected this because normal line-end hyphen joining changed eight tokens into four. An internal line source metadata bit, `ls-frame`, marks only lines emitted under the corrected frame. Paragraph joins on those lines use a space, retaining the literal OCR words, including hyphens. Ordinary OCR and born-text joins keep their existing behavior. A failing-first law asserts a single paragraph owner and its exact text value, rather than merely checking the word set.
+
+Fresh live n13 evidence changes 162 standalone paragraphs to 51 with four main column regions and a separate spanning title paragraph; no words are lost or gained. G15 and G06 Models remain byte-identical. This is partial acceptance: third-column fragments remain, the title is not classified as a heading, and recognition errors remain. Final control and gate results are recorded separately.
+
+- [ ] **Signed off** (maintainer)
+
+### D814 — Keep recovered OCR line values under their existing owners
+
+An ownership audit of the first D813 trial found four third-column n13 lines split by a spurious within-line gutter. Although the word multiset passed, four physical line strings no longer had a single matching geometric owner. That trial is superseded. A failing-first column law asserts that three amount values remain with their labels in each complete line; it also retains the ordinary unmarked line-splitting control. The column stage now keeps only `ls-frame` lines intact at the gutter splitting step. Gutters between separate physical line boxes remain active.
+
+Final live n13 has four clean main body-column regions and 46 paragraphs, retaining a separate spanning title paragraph. All 162 original physical line strings have exactly one new text/geometric owner, zero words are lost or gained, and every text owner retains rotated/OCR provenance. G15's three columns and G06's Model are byte-identical to the fresh original build. The title remains a paragraph and short OCR paragraph fragments/recognition errors remain, so the batch is retained as a partial improvement (n13 broken to poor), not a claim of complete reconstruction. The narrow guard adds no behavior to ordinary OCR or born-text lines. The full controls and final gates establish its broader preservation separately.
+
+- [ ] **Signed off** (maintainer)
+
+### D815 — Reserve coordinate recovery for dense OCR selections
+
+The first full 54-control run found unrelated structural changes in the 74-page Arabic booklet and an 18-line budget scan. The booklet's apparent one-token loss (`57`) was a page-break label moved from a block milestone into an inline milestone, not missing source text. Nevertheless, changing its paragraph structure is outside this batch and violates the stronger preservation guard; the broad scope is rejected.
+
+The frame correction now requires at least 24 nonempty selected OCR lines, a conservative dense-selection floor corresponding to six lines for each of four potential columns. This floor does not claim to detect columns; the existing column stage still determines their geometry. Empty rows do not count. A failing-first boundary law protects sparse and empty-row selections while retaining the dense four-region ownership/value assertions, mixed-run fallback and ordinary-skew control. Sparse rescue fragments keep their original frame and paragraph behavior. Final acceptance requires all 53 non-n13 control Models to match the original build, in addition to zero words lost/gained on all 54 controls. No historical accuracy threshold is changed.
+
+- [ ] **Signed off** (maintainer)
+
+### D816 — Count block continuations and explain the rotated replay digest
+
+The borrowed external control helper skipped a node's block children when the node had its own canonical text, the same measurement limitation recorded in D800. Re-counting every saved fresh before/after control pair with canonical text plus every block child (and without duplicating alternate styled inlines) yields 356,120 represented tokens, zero lost and zero gained across all 54 controls/817 pages. Three external measurement contracts cover parent text plus block children, alternate inline serialization and furniture movement. The earlier 350,963-token total was incomplete. Independently, every non-n13 raw Model JSON is byte-identical, so this measurement correction changes no preservation conclusion and relaxes no guard.
+
+Full re-derivation moves the `raster-rot90` retarget digest from `0f4545d2...` to `34489925...`. Fresh replay with the original build reproduces the old digest exactly; final replay reproduces the new one. Its 27 dense re-rotated OCR line paragraphs become 20, retaining all 224 literal tokens with zero losses/gains. This is the same selected-frame correction exercised by n13. The committed transcript, image input and source truth are unchanged. No accuracy ratchet is lowered.
+
+`api/surface.edn` also refreshes four already-stale internal module counts from 115 to 117; this batch adds no module and changes no shipped public signature. Every moved golden or sample is reviewed separately from metadata; the retarget digest is the only replay-golden change observed at this point.
+
+- [ ] **Signed off** (maintainer)

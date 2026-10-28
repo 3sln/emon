@@ -949,6 +949,10 @@ func paJoin(wd *port.Cells, ln *port.Cells, et *port.Cells, raw *port.Cells, l i
 	if n == 0 {
 		return 0
 	}
+	if (evidence.LnGet(ln, l, evidence.LfSrc()) & evidence.LsFrame()) != 0 {
+		port.CellsPush(raw, 32)
+		return 0
+	}
 	var last int32 = port.CellsAt(raw, n-1)
 	if last == 173 {
 		port.CellsDrop(raw, n-1)

@@ -2557,12 +2557,66 @@ pub fn sc_emit_lines(olines: &mut crate::port::Cells, owords: &mut crate::port::
     // the shared `etext`'s: `hd-tstart` and `hd-tlen` of an OCR word are read as they are. Answers the lines made.
     return sc_emit_core(olines, owords, osyms, l0, nl, page, rotmed, scr, words, lines, 0);
 }
+pub(crate) fn sc_frame_min() -> i32 {
+    // D815: dense-region recovery needs at least six nonempty lines per four intended columns. Sparse rescue fragments retain their existing frame.
+    return 24;
+}
+pub(crate) fn sc_selected_rotation(olines: &mut crate::port::Cells, nsel: i32, scr: &mut crate::port::Cells, fallback: i32) -> i32 {
+    // D812: a uniformly selected later run may be in a new coordinate frame. Only a quarter-turn disagreement with that run's upright median replaces the original median; mixed-run fusion keeps its existing frame.
+    if nsel < sc_frame_min() {
+        return fallback;
+    }
+    let first: i32 = crate::port::cells_at(scr, sc_sel_base());
+    let run: i32 = ol_get(olines, first, olf_run());
+    let mut i: i32 = 0;
+    let mut nonempty: i32 = 0;
+    let mut lo: i32 = first;
+    let mut hi: i32 = first + 1;
+    if run <= 0 {
+        return fallback;
+    }
+    while i < nsel {
+        if ol_get(olines, crate::port::cells_at(scr, sc_sel_base() + i), olf_run()) != run {
+            return fallback;
+        }
+        if ol_get(olines, crate::port::cells_at(scr, sc_sel_base() + i), lh_count()) > 0 {
+            nonempty += 1;
+        }
+        i += 1;
+    }
+    if nonempty < sc_frame_min() {
+        return fallback;
+    }
+    while (lo > 0) && (ol_get(olines, lo - 1, olf_run()) == run) {
+        lo -= 1;
+    }
+    while (hi < ol_count(olines)) && (ol_get(olines, hi, olf_run()) == run) {
+        hi += 1;
+    }
+    let med: i32 = ev_rot_median(olines, lo, hi - lo);
+    let delta: i32 = ((fallback - med) + 36000) % 36000;
+    if ((med < 600) || (med > 35400)) && (((delta > 8400) && (delta < 9600)) || ((delta > 26400) && (delta < 27600))) {
+        return med;
+    }
+    return fallback;
+}
 pub fn sc_emit_sel(olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, osyms: &mut crate::port::Cells, nsel: i32, page: i32, rotmed: i32, mut scr: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, rules: &mut crate::port::Cells, comps: &mut crate::port::Cells, inks: &mut crate::port::Cells) -> i32 {
     // `sc-emit-lines` over the OCR lines the scratch names (P7.4): `nsel` `olines` rows, in the order to emit them, at `scr`
     // cells `sc-sel-base` and up (`sc-sel-set`; `sc-prep` makes room for `sc-sel-max` of them): the lines of several runs chosen
     // line by line, their size clustered over the chosen lines; and (P12.6, `sc-emit-vetted`) with the words a body-ink line adds, the words that
     // are no text left out and the safe corrections made, `rules`, `comps` and `inks` being the tracer's rules, components and ink layers. Answers the lines made.
-    return sc_emit_vetted(olines, owords, osyms, nsel, page, rotmed, scr, words, lines, etext, rules, comps, inks);
+    let angle: i32 = sc_selected_rotation(olines, nsel, scr, rotmed);
+    let first: i32 = ln_count(lines);
+    let made: i32 = sc_emit_vetted(olines, owords, osyms, nsel, page, angle, scr, words, lines, etext, rules, comps, inks);
+    let mut l: i32 = first;
+    if angle != rotmed {
+        while l < (first + made) {
+            let source: i32 = ln_get(lines, l, lf_src());
+            ln_set(lines, l, lf_src(), source + ls_frame());
+            l += 1;
+        }
+    }
+    return made;
 }
 pub fn sc_sel_set(mut scr: &mut crate::port::Cells, k: i32, row: i32) -> i32 {
     crate::port::cells_set(scr, sc_sel_base() + k, row);

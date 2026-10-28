@@ -1277,4 +1277,54 @@ public static class Scantest {
     public static void TestJapaneseMixedReadingRetainsSourceBackedLatinIdentifiers() {
         ScMultilingualOwners(0, 1785753088, 1248878958, 23665, 30000, 12373);
     }
+    [Xunit.Fact]
+    public static void TestSelectedRerotatedLinesUseTheSelectedRunsUprightFrame() {
+        emon.Port.Cells ol = emon.Port.NewCells();
+        emon.Port.Cells ow = emon.Port.NewCells();
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells lines = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells scr = emon.Port.NewCells();
+        int i = 0;
+        // D815: a dense four-region selection has six lines per region. Sparse and mixed-run selections keep the original frame.
+        Evidence.OlNew(ol, 1, 1000, 1000, 2000, 9000, 1500, 1000, 1500, 9000, 27000, 2, 0, 0);
+        while (i < 4) {
+            emon.Port.CellsPush(et, 65);
+            i += 1;
+        }
+        Scan.ScPrep(scr);
+        i = 0;
+        while (i < 24) {
+            int x = 1000 + ((i % 4) * 10000);
+            int y = 2000 + ((i / 4) * 1500);
+            int w = Evidence.OwNew(ow, 1, x, y, x + 5000, y + 800, x, y + 600, x + 5000, y + 600, 0, 0, 0, 4, i + 1, 950, -1);
+            Evidence.OwSet(ow, w, Evidence.OwfRun(), 1);
+            Evidence.OlNew(ol, 1, x, y, x + 5000, y + 800, x, y + 600, x + 5000, y + 600, 0, 0, i, 1);
+            Evidence.OlSet(ol, i + 1, Evidence.OlfRun(), 1);
+            emon.Port.CellsSet(scr, Scan.ScSelBase() + i, i + 1);
+            i += 1;
+        }
+        emon.Testport.AssertEq(Scan.ScEmitSel(ol, ow, emon.Port.NewCells(), 24, 1, 27000, scr, words, lines, et, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), 24, "all dense selected lines survive");
+        emon.Testport.AssertEq(Evidence.LnGet(lines, 0, Evidence.LhRot()), 0, "dense horizontal selected lines enter column and paragraph grouping");
+        emon.Testport.AssertEq(Evidence.LnGet(lines, 0, Evidence.LhFirst()), 0, "the selected line owns its emitted word");
+        emon.Testport.AssertEq(Evidence.LnGet(lines, 0, Evidence.LhCount()), 1, "the selected word appears once");
+        emon.Testport.AssertEq(Evidence.WdGet(words, 0, Evidence.HdTlen()), 4, "the value is retained");
+        emon.Testport.AssertEq(Evidence.WdGet(words, 0, Evidence.HdTstart()), 0, "the emitted word refers to the unchanged source value");
+        emon.Testport.AssertEq(Evidence.LnGet(lines, 0, Evidence.LfSrc()) & Evidence.LsFrame(), Evidence.LsFrame(), "literal token boundaries survive later grouping");
+        emon.Port.CellsSet(scr, Scan.ScSelBase(), 0);
+        emon.Testport.AssertEq(Scan.ScEmitSel(ol, ow, emon.Port.NewCells(), 24, 1, 27000, scr, words, lines, et, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), 23, "mixed-run selection retains the existing frame");
+        emon.Testport.AssertEq(Evidence.LnGet(lines, 24, Evidence.LhRot()), 9000, "mixed runs cannot borrow a later run's median");
+        emon.Testport.AssertEq(Evidence.LnGet(lines, 24, Evidence.LfSrc()) & Evidence.LsFrame(), 0, "mixed runs do not acquire the corrected-frame marker");
+        emon.Port.CellsSet(scr, Scan.ScSelBase(), 1);
+        emon.Testport.AssertEq(Scan.ScEmitSel(ol, ow, emon.Port.NewCells(), 24, 1, 500, scr, words, lines, et, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), 24, "a small angle disagreement is not a quarter-turn recovery");
+        emon.Testport.AssertEq(Evidence.LnGet(lines, 47, Evidence.LhRot()), 35500, "ordinary skew remains unchanged");
+        emon.Testport.AssertEq(Evidence.LnGet(lines, 47, Evidence.LfSrc()) & Evidence.LsFrame(), 0, "ordinary skew keeps its existing join policy");
+        emon.Testport.AssertEq(Scan.ScEmitSel(ol, ow, emon.Port.NewCells(), 1, 1, 27000, scr, words, lines, et, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), 1, "a sparse OCR selection keeps its original owner");
+        emon.Testport.AssertEq(Evidence.LnGet(lines, 71, Evidence.LhRot()), 9000, "sparse booklet fragments do not enter the dense-region recovery");
+        emon.Testport.AssertEq(Evidence.LnGet(lines, 71, Evidence.LfSrc()) & Evidence.LsFrame(), 0, "sparse fragments keep the previous paragraph policy");
+        Evidence.OlSet(ol, 24, Evidence.LhCount(), 0);
+        emon.Testport.AssertEq(Scan.ScEmitSel(ol, ow, emon.Port.NewCells(), 24, 1, 27000, scr, words, lines, et, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), 23, "empty OCR rows do not count toward dense-region evidence");
+        emon.Testport.AssertEq(Evidence.LnGet(lines, 72, Evidence.LhRot()), 9000, "twenty-three nonempty lines still keep the previous frame");
+        emon.Testport.AssertEq(Evidence.LnGet(lines, 72, Evidence.LfSrc()) & Evidence.LsFrame(), 0, "empty rows cannot activate recovery");
+    }
 }

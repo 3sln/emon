@@ -3518,6 +3518,11 @@ func LsRevised() int32 {
 	return 256
 }
 
+func LsFrame() int32 {
+	// Selected OCR run corrected to its own upright coordinate frame; preserve literal word boundaries when grouping its previously standalone lines.
+	return 512
+}
+
 func MkfPage() int32 {
 	return 0
 }

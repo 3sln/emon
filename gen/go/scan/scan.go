@@ -2635,12 +2635,68 @@ func ScEmitLines(olines *port.Cells, owords *port.Cells, osyms *port.Cells, l0 i
 	return scEmitCore(olines, owords, osyms, l0, nl, page, rotmed, scr, words, lines, 0)
 }
 
+func scFrameMin() int32 {
+	// D815: dense-region recovery needs at least six nonempty lines per four intended columns. Sparse rescue fragments retain their existing frame.
+	return 24
+}
+
+func scSelectedRotation(olines *port.Cells, nsel int32, scr *port.Cells, fallback int32) int32 {
+	// D812: a uniformly selected later run may be in a new coordinate frame. Only a quarter-turn disagreement with that run's upright median replaces the original median; mixed-run fusion keeps its existing frame.
+	if nsel < scFrameMin() {
+		return fallback
+	}
+	var first int32 = port.CellsAt(scr, ScSelBase())
+	var run int32 = evidence.OlGet(olines, first, evidence.OlfRun())
+	var i int32 = 0
+	var nonempty int32 = 0
+	var lo int32 = first
+	var hi int32 = first + 1
+	if run <= 0 {
+		return fallback
+	}
+	for i < nsel {
+		if evidence.OlGet(olines, port.CellsAt(scr, ScSelBase()+i), evidence.OlfRun()) != run {
+			return fallback
+		}
+		if evidence.OlGet(olines, port.CellsAt(scr, ScSelBase()+i), evidence.LhCount()) > 0 {
+			nonempty += 1
+		}
+		i += 1
+	}
+	if nonempty < scFrameMin() {
+		return fallback
+	}
+	for (lo > 0) && (evidence.OlGet(olines, lo-1, evidence.OlfRun()) == run) {
+		lo -= 1
+	}
+	for (hi < evidence.OlCount(olines)) && (evidence.OlGet(olines, hi, evidence.OlfRun()) == run) {
+		hi += 1
+	}
+	var med int32 = evidence.EvRotMedian(olines, lo, hi-lo)
+	var delta int32 = ((fallback - med) + 36000) % 36000
+	if ((med < 600) || (med > 35400)) && (((delta > 8400) && (delta < 9600)) || ((delta > 26400) && (delta < 27600))) {
+		return med
+	}
+	return fallback
+}
+
 func ScEmitSel(olines *port.Cells, owords *port.Cells, osyms *port.Cells, nsel int32, page int32, rotmed int32, scr *port.Cells, words *port.Cells, lines *port.Cells, etext *port.Cells, rules *port.Cells, comps *port.Cells, inks *port.Cells) int32 {
 	// `sc-emit-lines` over the OCR lines the scratch names (P7.4): `nsel` `olines` rows, in the order to emit them, at `scr`
 	// cells `sc-sel-base` and up (`sc-sel-set`; `sc-prep` makes room for `sc-sel-max` of them): the lines of several runs chosen
 	// line by line, their size clustered over the chosen lines; and (P12.6, `sc-emit-vetted`) with the words a body-ink line adds, the words that
 	// are no text left out and the safe corrections made, `rules`, `comps` and `inks` being the tracer's rules, components and ink layers. Answers the lines made.
-	return ScEmitVetted(olines, owords, osyms, nsel, page, rotmed, scr, words, lines, etext, rules, comps, inks)
+	var angle int32 = scSelectedRotation(olines, nsel, scr, rotmed)
+	var first int32 = evidence.LnCount(lines)
+	var made int32 = ScEmitVetted(olines, owords, osyms, nsel, page, angle, scr, words, lines, etext, rules, comps, inks)
+	var l int32 = first
+	if angle != rotmed {
+		for l < (first + made) {
+			var source int32 = evidence.LnGet(lines, l, evidence.LfSrc())
+			evidence.LnSet(lines, l, evidence.LfSrc(), source+evidence.LsFrame())
+			l += 1
+		}
+	}
+	return made
 }
 
 func ScSelSet(scr *port.Cells, k int32, row int32) int32 {

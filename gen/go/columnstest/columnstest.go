@@ -159,3 +159,56 @@ func TestStaggeredNarrowOcrColumnsUseLineGutters(emonT *testing.T) {
 	}
 	port.AssertEq(emonT, ctPage(wd, et, ln, gfl, 0), 10+model.RlBody(), "claimed table cells do not vote as prose columns")
 }
+
+func TestCorrectedOcrLinesKeepTheirValuesUnderOneOwner(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var lt *port.Cells = port.NewCells()
+	var ls *port.Cells = port.NewCells()
+	var sd *port.Cells = port.NewCells()
+	var it *port.Cells = port.NewCells()
+	var io *port.Cells = port.NewCells()
+	var rw *port.Cells = port.NewCells()
+	var gu *port.Cells = port.NewCells()
+	var ac *port.Cells = port.NewCells()
+	var tm *port.Cells = port.NewCells()
+	var cf *port.Cells = port.NewCells()
+	var lo *port.Cells = port.NewCells()
+	var pr *port.Cells = port.NewCells()
+	var i int32 = 0
+	var j int32 = 0
+	for i < 3 {
+		ctLine(wd, ln, et, port.TextBlob("alpha beta gamma 1.00 2.00 3.00"), 1000, 10000+(i*1500))
+		j = (i * 6) + 3
+		for j < ((i + 1) * 6) {
+			var x0 int32 = evidence.WdGet(wd, j, evidence.HdX0())
+			var x1 int32 = evidence.WdGet(wd, j, evidence.HdX1())
+			evidence.WdSet(wd, j, evidence.HdX0(), x0+10000)
+			evidence.WdSet(wd, j, evidence.HdX1(), x1+10000)
+			evidence.WdSet(wd, j, evidence.HdBx0(), x0+10000)
+			evidence.WdSet(wd, j, evidence.HdBx1(), x1+10000)
+			j += 1
+		}
+		evidence.LnSet(ln, i, evidence.LhX1(), 28250)
+		evidence.LnSet(ln, i, evidence.LhBx1(), 28250)
+		evidence.LnSet(ln, i, evidence.LfSrc(), 4)
+		i += 1
+	}
+	port.AssertEq(emonT, ctPage(wd, et, ln, port.NewCells(), 0), 22, "ordinary lines still split at an established internal gutter")
+	i = 0
+	for i < 3 {
+		evidence.LnSet(ln, i, evidence.LfSrc(), 4+evidence.LsFrame())
+		port.CellsPush(ls, i)
+		i += 1
+	}
+	columns.LcCopy(ln, lt)
+	port.AssertEq(emonT, columns.LcPage(wd, et, lt, 1, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr), 1, "a recovered OCR frame keeps its intact physical lines")
+	port.AssertEq(emonT, evidence.LnCount(lt), 3, "no value suffix is given a new line owner")
+	i = 0
+	for i < 3 {
+		port.AssertEq(emonT, evidence.LnGet(lt, i, evidence.LhFirst()), i*6, "each physical line owns its original first word")
+		port.AssertEq(emonT, evidence.LnGet(lt, i, evidence.LhCount()), 6, "labels and all three amount values remain together")
+		i += 1
+	}
+}

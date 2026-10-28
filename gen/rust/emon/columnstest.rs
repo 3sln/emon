@@ -152,3 +152,56 @@ fn test_staggered_narrow_ocr_columns_use_line_gutters() {
     }
     crate::testport::assert_eq(ct_page(wd, et, ln, gfl, 0), 10 + rl_body(), "claimed table cells do not vote as prose columns");
 }
+#[test]
+fn test_corrected_ocr_lines_keep_their_values_under_one_owner() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ls: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let it: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let io: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gu: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ac: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tm: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut i: i32 = 0;
+    let mut j: i32 = 0;
+    while i < 3 {
+        ct_line(wd, ln, et, &crate::testport::text_blob("alpha beta gamma 1.00 2.00 3.00")[..], 1000, 10000 + (i * 1500));
+        j = (i * 6) + 3;
+        while j < ((i + 1) * 6) {
+            let x0: i32 = wd_get(wd, j, hd_x0());
+            let x1: i32 = wd_get(wd, j, hd_x1());
+            wd_set(wd, j, hd_x0(), x0 + 10000);
+            wd_set(wd, j, hd_x1(), x1 + 10000);
+            wd_set(wd, j, hd_bx0(), x0 + 10000);
+            wd_set(wd, j, hd_bx1(), x1 + 10000);
+            j += 1;
+        }
+        ln_set(ln, i, lh_x1(), 28250);
+        ln_set(ln, i, lh_bx1(), 28250);
+        ln_set(ln, i, lf_src(), 4);
+        i += 1;
+    }
+    crate::testport::assert_eq(ct_page(wd, et, ln, &mut crate::port::Cells::new(), 0), 22, "ordinary lines still split at an established internal gutter");
+    i = 0;
+    while i < 3 {
+        ln_set(ln, i, lf_src(), 4 + ls_frame());
+        crate::port::cells_push(ls, i);
+        i += 1;
+    }
+    lc_copy(ln, lt);
+    crate::testport::assert_eq(lc_page(wd, et, lt, 1, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr), 1, "a recovered OCR frame keeps its intact physical lines");
+    crate::testport::assert_eq(ln_count(lt), 3, "no value suffix is given a new line owner");
+    i = 0;
+    while i < 3 {
+        crate::testport::assert_eq(ln_get(lt, i, lh_first()), i * 6, "each physical line owns its original first word");
+        crate::testport::assert_eq(ln_get(lt, i, lh_count()), 6, "labels and all three amount values remain together");
+        i += 1;
+    }
+}

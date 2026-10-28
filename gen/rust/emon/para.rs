@@ -862,6 +862,10 @@ pub(crate) fn pa_join(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, 
     if n == 0 {
         return 0;
     }
+    if (ln_get(ln, l, lf_src()) & ls_frame()) != 0 {
+        crate::port::cells_push(raw, 32);
+        return 0;
+    }
     let last: i32 = crate::port::cells_at(raw, n - 1);
     if last == 173 {
         crate::port::cells_drop(raw, n - 1);

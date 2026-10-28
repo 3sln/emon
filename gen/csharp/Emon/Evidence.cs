@@ -3346,6 +3346,10 @@ public static class Evidence {
         // Source metadata bit: OCR line composed or recovered after the first reading; no independent heading evidence.
         return 256;
     }
+    public static int LsFrame() {
+        // Selected OCR run corrected to its own upright coordinate frame; preserve literal word boundaries when grouping its previously standalone lines.
+        return 512;
+    }
     public static int MkfPage() {
         return 0;
     }

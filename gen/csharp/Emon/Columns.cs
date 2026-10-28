@@ -251,6 +251,10 @@ public static class Columns {
         // Split line l at the gutter [gx0, gx1] when its words are on both sides of it, each side's together
         // (left to right or right to left): l keeps the first run, a new line (appended to `lt` and `ls`) the
         // second. Answers 1 when it split.
+        // D814: a corrected OCR frame recovers existing physical line owners. An internal word gap must not split those owners into new columns; the gutters between intact line boxes remain available.
+        if ((Evidence.LnGet(lt, l, Evidence.LfSrc()) & Evidence.LsFrame()) != 0) {
+            return 0;
+        }
         int w0 = Evidence.LnGet(lt, l, Evidence.LhFirst());
         int wn = Evidence.LnGet(lt, l, Evidence.LhCount());
         int gm2 = gx0 + gx1;

@@ -148,4 +148,56 @@ public final class Columnstest {
         }
         emon.Testport.assertEq(ctPage(wd, et, ln, gfl, 0), 10 + Model.rlBody(), "claimed table cells do not vote as prose columns");
     }
+    public static void testCorrectedOcrLinesKeepTheirValuesUnderOneOwner() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells lt = emon.Port.newCells();
+        emon.Port.Cells ls = emon.Port.newCells();
+        emon.Port.Cells sd = emon.Port.newCells();
+        emon.Port.Cells it = emon.Port.newCells();
+        emon.Port.Cells io = emon.Port.newCells();
+        emon.Port.Cells rw = emon.Port.newCells();
+        emon.Port.Cells gu = emon.Port.newCells();
+        emon.Port.Cells ac = emon.Port.newCells();
+        emon.Port.Cells tm = emon.Port.newCells();
+        emon.Port.Cells cf = emon.Port.newCells();
+        emon.Port.Cells lo = emon.Port.newCells();
+        emon.Port.Cells pr = emon.Port.newCells();
+        int i = 0;
+        int j = 0;
+        while (i < 3) {
+            ctLine(wd, ln, et, emon.Testport.textBlob("alpha beta gamma 1.00 2.00 3.00"), 1000, 10000 + (i * 1500));
+            j = (i * 6) + 3;
+            while (j < ((i + 1) * 6)) {
+                int x0 = Evidence.wdGet(wd, j, Evidence.hdX0());
+                int x1 = Evidence.wdGet(wd, j, Evidence.hdX1());
+                Evidence.wdSet(wd, j, Evidence.hdX0(), x0 + 10000);
+                Evidence.wdSet(wd, j, Evidence.hdX1(), x1 + 10000);
+                Evidence.wdSet(wd, j, Evidence.hdBx0(), x0 + 10000);
+                Evidence.wdSet(wd, j, Evidence.hdBx1(), x1 + 10000);
+                j += 1;
+            }
+            Evidence.lnSet(ln, i, Evidence.lhX1(), 28250);
+            Evidence.lnSet(ln, i, Evidence.lhBx1(), 28250);
+            Evidence.lnSet(ln, i, Evidence.lfSrc(), 4);
+            i += 1;
+        }
+        emon.Testport.assertEq(ctPage(wd, et, ln, emon.Port.newCells(), 0), 22, "ordinary lines still split at an established internal gutter");
+        i = 0;
+        while (i < 3) {
+            Evidence.lnSet(ln, i, Evidence.lfSrc(), 4 + Evidence.lsFrame());
+            emon.Port.cellsPush(ls, i);
+            i += 1;
+        }
+        Columns.lcCopy(ln, lt);
+        emon.Testport.assertEq(Columns.lcPage(wd, et, lt, 1, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr), 1, "a recovered OCR frame keeps its intact physical lines");
+        emon.Testport.assertEq(Evidence.lnCount(lt), 3, "no value suffix is given a new line owner");
+        i = 0;
+        while (i < 3) {
+            emon.Testport.assertEq(Evidence.lnGet(lt, i, Evidence.lhFirst()), i * 6, "each physical line owns its original first word");
+            emon.Testport.assertEq(Evidence.lnGet(lt, i, Evidence.lhCount()), 6, "labels and all three amount values remain together");
+            i += 1;
+        }
+    }
 }

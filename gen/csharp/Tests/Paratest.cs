@@ -1519,4 +1519,33 @@ public static class Paratest {
         PtBrief(@out, nodes, regions, text);
         emon.Testport.AssertText(@out, "P1:2.15 Documentation means all material supplied with the purchased equipment including instructions.;P1:2.16 Testing means an independent check of the equipment before delivery.;P1:A separate paragraph stays separate.;", "continuation belongs to 2.15; 2.16 and the spaced paragraph have independent owners");
     }
+    [Xunit.Fact]
+    public static void TestCorrectedOcrFrameJoinsParagraphWithLiteralWordBoundaries() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells ord = emon.Port.NewCells();
+        emon.Port.Cells raw = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells fr = emon.Port.NewCells();
+        emon.Port.Cells gp = emon.Port.NewCells();
+        emon.Port.Cells st = emon.Port.NewCells();
+        System.Text.StringBuilder brief = emon.Testport.NewText();
+        PtLine(wd, ln, et, emon.Testport.TextBlob("A multi-"), 1, 7200, 10000, 50000, 11200, 0, 0, 1000);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("part paragraph"), 1, 7200, 11500, 50000, 12700, 0, 0, 1000);
+        Evidence.LnSet(ln, 0, Evidence.LfSrc(), Model.SrOcr() + Evidence.LsFrame());
+        Evidence.LnSet(ln, 1, Evidence.LfSrc(), Model.SrOcr() + Evidence.LsFrame());
+        emon.Testport.AssertEq(PtRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "corrected OCR frame has a valid Model");
+        emon.Testport.AssertEq(Model.NodeCount(nodes), 2, "both lines have one paragraph owner");
+        emon.Testport.AssertEq(Model.NodeKind(nodes, 1), Model.NkParagraph(), "the owner is a paragraph");
+        PtBrief(brief, nodes, regions, text);
+        emon.Testport.AssertText(brief, "P1:A multi- part paragraph;", "paragraph grouping preserves both literal OCR tokens");
+    }
 }

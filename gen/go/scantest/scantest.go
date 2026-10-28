@@ -1306,3 +1306,53 @@ func TestUrduNativeValuesDoNotAuthorizeDeletingLatinIdentifiers(emonT *testing.T
 func TestJapaneseMixedReadingRetainsSourceBackedLatinIdentifiers(emonT *testing.T) {
 	scMultilingualOwners(emonT, 1785753088, 1248878958, 23665, 30000, 12373)
 }
+
+func TestSelectedRerotatedLinesUseTheSelectedRunsUprightFrame(emonT *testing.T) {
+	var ol *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var scr *port.Cells = port.NewCells()
+	var i int32 = 0
+	// D815: a dense four-region selection has six lines per region. Sparse and mixed-run selections keep the original frame.
+	evidence.OlNew(ol, 1, 1000, 1000, 2000, 9000, 1500, 1000, 1500, 9000, 27000, 2, 0, 0)
+	for i < 4 {
+		port.CellsPush(et, 65)
+		i += 1
+	}
+	scan.ScPrep(scr)
+	i = 0
+	for i < 24 {
+		var x int32 = 1000 + ((i % 4) * 10000)
+		var y int32 = 2000 + ((i / 4) * 1500)
+		var w int32 = evidence.OwNew(ow, 1, x, y, x+5000, y+800, x, y+600, x+5000, y+600, 0, 0, 0, 4, i+1, 950, -1)
+		evidence.OwSet(ow, w, evidence.OwfRun(), 1)
+		evidence.OlNew(ol, 1, x, y, x+5000, y+800, x, y+600, x+5000, y+600, 0, 0, i, 1)
+		evidence.OlSet(ol, i+1, evidence.OlfRun(), 1)
+		port.CellsSet(scr, scan.ScSelBase()+i, i+1)
+		i += 1
+	}
+	port.AssertEq(emonT, scan.ScEmitSel(ol, ow, port.NewCells(), 24, 1, 27000, scr, words, lines, et, port.NewCells(), port.NewCells(), port.NewCells()), 24, "all dense selected lines survive")
+	port.AssertEq(emonT, evidence.LnGet(lines, 0, evidence.LhRot()), 0, "dense horizontal selected lines enter column and paragraph grouping")
+	port.AssertEq(emonT, evidence.LnGet(lines, 0, evidence.LhFirst()), 0, "the selected line owns its emitted word")
+	port.AssertEq(emonT, evidence.LnGet(lines, 0, evidence.LhCount()), 1, "the selected word appears once")
+	port.AssertEq(emonT, evidence.WdGet(words, 0, evidence.HdTlen()), 4, "the value is retained")
+	port.AssertEq(emonT, evidence.WdGet(words, 0, evidence.HdTstart()), 0, "the emitted word refers to the unchanged source value")
+	port.AssertEq(emonT, evidence.LnGet(lines, 0, evidence.LfSrc())&evidence.LsFrame(), evidence.LsFrame(), "literal token boundaries survive later grouping")
+	port.CellsSet(scr, scan.ScSelBase(), 0)
+	port.AssertEq(emonT, scan.ScEmitSel(ol, ow, port.NewCells(), 24, 1, 27000, scr, words, lines, et, port.NewCells(), port.NewCells(), port.NewCells()), 23, "mixed-run selection retains the existing frame")
+	port.AssertEq(emonT, evidence.LnGet(lines, 24, evidence.LhRot()), 9000, "mixed runs cannot borrow a later run's median")
+	port.AssertEq(emonT, evidence.LnGet(lines, 24, evidence.LfSrc())&evidence.LsFrame(), 0, "mixed runs do not acquire the corrected-frame marker")
+	port.CellsSet(scr, scan.ScSelBase(), 1)
+	port.AssertEq(emonT, scan.ScEmitSel(ol, ow, port.NewCells(), 24, 1, 500, scr, words, lines, et, port.NewCells(), port.NewCells(), port.NewCells()), 24, "a small angle disagreement is not a quarter-turn recovery")
+	port.AssertEq(emonT, evidence.LnGet(lines, 47, evidence.LhRot()), 35500, "ordinary skew remains unchanged")
+	port.AssertEq(emonT, evidence.LnGet(lines, 47, evidence.LfSrc())&evidence.LsFrame(), 0, "ordinary skew keeps its existing join policy")
+	port.AssertEq(emonT, scan.ScEmitSel(ol, ow, port.NewCells(), 1, 1, 27000, scr, words, lines, et, port.NewCells(), port.NewCells(), port.NewCells()), 1, "a sparse OCR selection keeps its original owner")
+	port.AssertEq(emonT, evidence.LnGet(lines, 71, evidence.LhRot()), 9000, "sparse booklet fragments do not enter the dense-region recovery")
+	port.AssertEq(emonT, evidence.LnGet(lines, 71, evidence.LfSrc())&evidence.LsFrame(), 0, "sparse fragments keep the previous paragraph policy")
+	evidence.OlSet(ol, 24, evidence.LhCount(), 0)
+	port.AssertEq(emonT, scan.ScEmitSel(ol, ow, port.NewCells(), 24, 1, 27000, scr, words, lines, et, port.NewCells(), port.NewCells(), port.NewCells()), 23, "empty OCR rows do not count toward dense-region evidence")
+	port.AssertEq(emonT, evidence.LnGet(lines, 72, evidence.LhRot()), 9000, "twenty-three nonempty lines still keep the previous frame")
+	port.AssertEq(emonT, evidence.LnGet(lines, 72, evidence.LfSrc())&evidence.LsFrame(), 0, "empty rows cannot activate recovery")
+}

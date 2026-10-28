@@ -151,4 +151,57 @@ public static class Columnstest {
         }
         emon.Testport.AssertEq(CtPage(wd, et, ln, gfl, 0), 10 + Model.RlBody(), "claimed table cells do not vote as prose columns");
     }
+    [Xunit.Fact]
+    public static void TestCorrectedOcrLinesKeepTheirValuesUnderOneOwner() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells lt = emon.Port.NewCells();
+        emon.Port.Cells ls = emon.Port.NewCells();
+        emon.Port.Cells sd = emon.Port.NewCells();
+        emon.Port.Cells it = emon.Port.NewCells();
+        emon.Port.Cells io = emon.Port.NewCells();
+        emon.Port.Cells rw = emon.Port.NewCells();
+        emon.Port.Cells gu = emon.Port.NewCells();
+        emon.Port.Cells ac = emon.Port.NewCells();
+        emon.Port.Cells tm = emon.Port.NewCells();
+        emon.Port.Cells cf = emon.Port.NewCells();
+        emon.Port.Cells lo = emon.Port.NewCells();
+        emon.Port.Cells pr = emon.Port.NewCells();
+        int i = 0;
+        int j = 0;
+        while (i < 3) {
+            CtLine(wd, ln, et, emon.Testport.TextBlob("alpha beta gamma 1.00 2.00 3.00"), 1000, 10000 + (i * 1500));
+            j = (i * 6) + 3;
+            while (j < ((i + 1) * 6)) {
+                int x0 = Evidence.WdGet(wd, j, Evidence.HdX0());
+                int x1 = Evidence.WdGet(wd, j, Evidence.HdX1());
+                Evidence.WdSet(wd, j, Evidence.HdX0(), x0 + 10000);
+                Evidence.WdSet(wd, j, Evidence.HdX1(), x1 + 10000);
+                Evidence.WdSet(wd, j, Evidence.HdBx0(), x0 + 10000);
+                Evidence.WdSet(wd, j, Evidence.HdBx1(), x1 + 10000);
+                j += 1;
+            }
+            Evidence.LnSet(ln, i, Evidence.LhX1(), 28250);
+            Evidence.LnSet(ln, i, Evidence.LhBx1(), 28250);
+            Evidence.LnSet(ln, i, Evidence.LfSrc(), 4);
+            i += 1;
+        }
+        emon.Testport.AssertEq(CtPage(wd, et, ln, emon.Port.NewCells(), 0), 22, "ordinary lines still split at an established internal gutter");
+        i = 0;
+        while (i < 3) {
+            Evidence.LnSet(ln, i, Evidence.LfSrc(), 4 + Evidence.LsFrame());
+            emon.Port.CellsPush(ls, i);
+            i += 1;
+        }
+        Columns.LcCopy(ln, lt);
+        emon.Testport.AssertEq(Columns.LcPage(wd, et, lt, 1, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr), 1, "a recovered OCR frame keeps its intact physical lines");
+        emon.Testport.AssertEq(Evidence.LnCount(lt), 3, "no value suffix is given a new line owner");
+        i = 0;
+        while (i < 3) {
+            emon.Testport.AssertEq(Evidence.LnGet(lt, i, Evidence.LhFirst()), i * 6, "each physical line owns its original first word");
+            emon.Testport.AssertEq(Evidence.LnGet(lt, i, Evidence.LhCount()), 6, "labels and all three amount values remain together");
+            i += 1;
+        }
+    }
 }

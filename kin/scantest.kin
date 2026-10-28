@@ -7,7 +7,7 @@
             [emon.pdfdoc :refer [pd-open]]
             [emon.plan :refer [rec-kind rec-id rq-arg rq-nargs an-ocr an-ocr-word an-ocr-cp an-ocr-end pk-ocr]]
             [emon.ocr :refer [ox-begin ox-line ox-block ox-word ox-sym ox-sym-cp ocf-dpi]]
-            [emon.evidence :refer [or-new or-set orf-wcount orf-pass op-re-rotated ol-set ol-new ow-new ow-set os-new rl-new rl-set rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1 rlf-thick olf-retry-gap owf-sfirst owf-scount
+            [emon.evidence :refer [or-new or-set orf-wcount orf-pass op-re-rotated ol-set ol-new ow-new ow-set os-new rl-new rl-set rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1 rlf-thick olf-retry-gap olf-run ls-frame owf-sfirst owf-scount
                                    co-new co-set cf-conf cf-ink ik-new ik-set ikf-role ir-body im-new
                                    oe-garbage oe-rule-ghost oe-corrected
                                    wd-count wd-get ln-count ln-get ol-count ol-get ow-count ow-get or-count or-get
@@ -27,7 +27,7 @@
                                 ledger-count ledger-page ledger-reason ledger-x1 dr-background
                                 dr-ocr-empty dr-ocr-ghost pk-image fk-ocr]]
             [kin.lang :refer [defn return let set while if do comment
-                              + - * < > <= >= == != and or quot bit-and]]))
+                              + - * < > <= >= == != and or quot rem bit-and]]))
 
 ;; ------------------------------------------------------------------------------------------------- the language
 
@@ -1148,3 +1148,42 @@
 
 (deftest test-japanese-mixed-reading-retains-source-backed-latin-identifiers
   (sc-multilingual-owners (test-t) 1785753088 1248878958 23665 30000 12373))
+
+(deftest test-selected-rerotated-lines-use-the-selected-runs-upright-frame
+  (let [^Cells ol (new-cells) ^Cells ow (new-cells) ^Cells words (new-cells) ^Cells lines (new-cells)
+        ^Cells et (new-cells) ^Cells scr (new-cells) ^:mut ^I32 i 0]
+    (comment "D815: a dense four-region selection has six lines per region. Sparse and mixed-run selections keep the original frame.")
+    (ol-new ol 1 1000 1000 2000 9000 1500 1000 1500 9000 27000 2 0 0)
+    (while (< i 4) (do (cells-push et 65) (set i (+ i 1))))
+    (sc-prep scr)
+    (set i 0)
+    (while (< i 24)
+      (do (let [^I32 x (+ 1000 (* (rem i 4) 10000)) ^I32 y (+ 2000 (* (quot i 4) 1500))]
+            (let [^I32 w (ow-new ow 1 x y (+ x 5000) (+ y 800) x (+ y 600) (+ x 5000) (+ y 600) 0 0 0 4 (+ i 1) 950 -1)]
+              (ow-set ow w (owf-run) 1))
+            (ol-new ol 1 x y (+ x 5000) (+ y 800) x (+ y 600) (+ x 5000) (+ y 600) 0 0 i 1)
+            (ol-set ol (+ i 1) (olf-run) 1))
+          (cells-set scr (+ (sc-sel-base) i) (+ i 1))
+          (set i (+ i 1))))
+    (assert-eq (sc-emit-sel ol ow (new-cells) 24 1 27000 scr words lines et (new-cells) (new-cells) (new-cells)) 24 "all dense selected lines survive")
+    (assert-eq (ln-get lines 0 (lh-rot)) 0 "dense horizontal selected lines enter column and paragraph grouping")
+    (assert-eq (ln-get lines 0 (lh-first)) 0 "the selected line owns its emitted word")
+    (assert-eq (ln-get lines 0 (lh-count)) 1 "the selected word appears once")
+    (assert-eq (wd-get words 0 (hd-tlen)) 4 "the value is retained")
+    (assert-eq (wd-get words 0 (hd-tstart)) 0 "the emitted word refers to the unchanged source value")
+    (assert-eq (bit-and (ln-get lines 0 (lf-src)) (ls-frame)) (ls-frame) "literal token boundaries survive later grouping")
+    (cells-set scr (sc-sel-base) 0)
+    (assert-eq (sc-emit-sel ol ow (new-cells) 24 1 27000 scr words lines et (new-cells) (new-cells) (new-cells)) 23 "mixed-run selection retains the existing frame")
+    (assert-eq (ln-get lines 24 (lh-rot)) 9000 "mixed runs cannot borrow a later run's median")
+    (assert-eq (bit-and (ln-get lines 24 (lf-src)) (ls-frame)) 0 "mixed runs do not acquire the corrected-frame marker")
+    (cells-set scr (sc-sel-base) 1)
+    (assert-eq (sc-emit-sel ol ow (new-cells) 24 1 500 scr words lines et (new-cells) (new-cells) (new-cells)) 24 "a small angle disagreement is not a quarter-turn recovery")
+    (assert-eq (ln-get lines 47 (lh-rot)) 35500 "ordinary skew remains unchanged")
+    (assert-eq (bit-and (ln-get lines 47 (lf-src)) (ls-frame)) 0 "ordinary skew keeps its existing join policy")
+    (assert-eq (sc-emit-sel ol ow (new-cells) 1 1 27000 scr words lines et (new-cells) (new-cells) (new-cells)) 1 "a sparse OCR selection keeps its original owner")
+    (assert-eq (ln-get lines 71 (lh-rot)) 9000 "sparse booklet fragments do not enter the dense-region recovery")
+    (assert-eq (bit-and (ln-get lines 71 (lf-src)) (ls-frame)) 0 "sparse fragments keep the previous paragraph policy")
+    (ol-set ol 24 (lh-count) 0)
+    (assert-eq (sc-emit-sel ol ow (new-cells) 24 1 27000 scr words lines et (new-cells) (new-cells) (new-cells)) 23 "empty OCR rows do not count toward dense-region evidence")
+    (assert-eq (ln-get lines 72 (lh-rot)) 9000 "twenty-three nonempty lines still keep the previous frame")
+    (assert-eq (bit-and (ln-get lines 72 (lf-src)) (ls-frame)) 0 "empty rows cannot activate recovery")))

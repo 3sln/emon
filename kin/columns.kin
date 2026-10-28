@@ -39,7 +39,7 @@
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
             [emon.evidence :refer [wd-get ln-get ln-count lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-bx0 lh-by0 lh-bx1
                                    lh-by1 lh-rot lh-dir lh-first lh-count hd-x0 hd-x1 hd-y0 hd-y1 hd-bx0 hd-by0
-                                   hd-bx1 hd-by1 hd-tstart hd-tlen hd-line wf-size lf-src]]
+                                   hd-bx1 hd-by1 hd-tstart hd-tlen hd-line wf-size lf-src ls-frame]]
             [emon.lists :refer [ls-s-item]]
             [emon.model :refer [rl-body rl-margin rl-sidebar page-w]]
             [emon.glayer :refer [gfl-count gfl-get gff-page gff-x0 gff-y0 gff-x1 gff-y1 gff-colour]]
@@ -276,6 +276,8 @@
   (comment "Split line l at the gutter [gx0, gx1] when its words are on both sides of it, each side's together")
   (comment "(left to right or right to left): l keeps the first run, a new line (appended to `lt` and `ls`) the")
   (comment "second. Answers 1 when it split.")
+  (comment "D814: a corrected OCR frame recovers existing physical line owners. An internal word gap must not split those owners into new columns; the gutters between intact line boxes remain available.")
+  (if (!= (bit-and (ln-get lt l (lf-src)) (ls-frame)) 0) (return 0))
   (let [^I32 w0 (ln-get lt l (lh-first))
         ^I32 wn (ln-get lt l (lh-count))
         ^I32 gm2 (+ gx0 gx1)

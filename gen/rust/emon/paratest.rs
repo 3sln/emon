@@ -1527,3 +1527,32 @@ fn test_dotted_clause_keeps_its_one_word_final_line() {
     pt_brief(out, nodes, regions, text);
     crate::testport::assert_text(out, "P1:2.15 Documentation means all material supplied with the purchased equipment including instructions.;P1:2.16 Testing means an independent check of the equipment before delivery.;P1:A separate paragraph stays separate.;", "continuation belongs to 2.15; 2.16 and the spaced paragraph have independent owners");
 }
+#[test]
+fn test_corrected_ocr_frame_joins_paragraph_with_literal_word_boundaries() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ord: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let raw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let brief: &mut String = &mut crate::port::new_text();
+    pt_line(wd, ln, et, &crate::testport::text_blob("A multi-")[..], 1, 7200, 10000, 50000, 11200, 0, 0, 1000);
+    pt_line(wd, ln, et, &crate::testport::text_blob("part paragraph")[..], 1, 7200, 11500, 50000, 12700, 0, 0, 1000);
+    ln_set(ln, 0, lf_src(), sr_ocr() + ls_frame());
+    ln_set(ln, 1, lf_src(), sr_ocr() + ls_frame());
+    crate::testport::assert_eq(pt_run(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "corrected OCR frame has a valid Model");
+    crate::testport::assert_eq(node_count(nodes), 2, "both lines have one paragraph owner");
+    crate::testport::assert_eq(node_kind(nodes, 1), nk_paragraph(), "the owner is a paragraph");
+    pt_brief(brief, nodes, regions, text);
+    crate::testport::assert_text(brief, "P1:A multi- part paragraph;", "paragraph grouping preserves both literal OCR tokens");
+}

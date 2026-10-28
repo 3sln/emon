@@ -1281,3 +1281,53 @@ fn test_urdu_native_values_do_not_authorize_deleting_latin_identifiers() {
 fn test_japanese_mixed_reading_retains_source_backed_latin_identifiers() {
     sc_multilingual_owners(0, 1785753088, 1248878958, 23665, 30000, 12373);
 }
+#[test]
+fn test_selected_rerotated_lines_use_the_selected_runs_upright_frame() {
+    let ol: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut i: i32 = 0;
+    // D815: a dense four-region selection has six lines per region. Sparse and mixed-run selections keep the original frame.
+    ol_new(ol, 1, 1000, 1000, 2000, 9000, 1500, 1000, 1500, 9000, 27000, 2, 0, 0);
+    while i < 4 {
+        crate::port::cells_push(et, 65);
+        i += 1;
+    }
+    sc_prep(scr);
+    i = 0;
+    while i < 24 {
+        let x: i32 = 1000 + ((i % 4) * 10000);
+        let y: i32 = 2000 + ((i / 4) * 1500);
+        let w: i32 = ow_new(ow, 1, x, y, x + 5000, y + 800, x, y + 600, x + 5000, y + 600, 0, 0, 0, 4, i + 1, 950, -1);
+        ow_set(ow, w, owf_run(), 1);
+        ol_new(ol, 1, x, y, x + 5000, y + 800, x, y + 600, x + 5000, y + 600, 0, 0, i, 1);
+        ol_set(ol, i + 1, olf_run(), 1);
+        crate::port::cells_set(scr, sc_sel_base() + i, i + 1);
+        i += 1;
+    }
+    crate::testport::assert_eq(sc_emit_sel(ol, ow, &mut crate::port::Cells::new(), 24, 1, 27000, scr, words, lines, et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 24, "all dense selected lines survive");
+    crate::testport::assert_eq(ln_get(lines, 0, lh_rot()), 0, "dense horizontal selected lines enter column and paragraph grouping");
+    crate::testport::assert_eq(ln_get(lines, 0, lh_first()), 0, "the selected line owns its emitted word");
+    crate::testport::assert_eq(ln_get(lines, 0, lh_count()), 1, "the selected word appears once");
+    crate::testport::assert_eq(wd_get(words, 0, hd_tlen()), 4, "the value is retained");
+    crate::testport::assert_eq(wd_get(words, 0, hd_tstart()), 0, "the emitted word refers to the unchanged source value");
+    crate::testport::assert_eq(ln_get(lines, 0, lf_src()) & ls_frame(), ls_frame(), "literal token boundaries survive later grouping");
+    crate::port::cells_set(scr, sc_sel_base(), 0);
+    crate::testport::assert_eq(sc_emit_sel(ol, ow, &mut crate::port::Cells::new(), 24, 1, 27000, scr, words, lines, et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 23, "mixed-run selection retains the existing frame");
+    crate::testport::assert_eq(ln_get(lines, 24, lh_rot()), 9000, "mixed runs cannot borrow a later run's median");
+    crate::testport::assert_eq(ln_get(lines, 24, lf_src()) & ls_frame(), 0, "mixed runs do not acquire the corrected-frame marker");
+    crate::port::cells_set(scr, sc_sel_base(), 1);
+    crate::testport::assert_eq(sc_emit_sel(ol, ow, &mut crate::port::Cells::new(), 24, 1, 500, scr, words, lines, et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 24, "a small angle disagreement is not a quarter-turn recovery");
+    crate::testport::assert_eq(ln_get(lines, 47, lh_rot()), 35500, "ordinary skew remains unchanged");
+    crate::testport::assert_eq(ln_get(lines, 47, lf_src()) & ls_frame(), 0, "ordinary skew keeps its existing join policy");
+    crate::testport::assert_eq(sc_emit_sel(ol, ow, &mut crate::port::Cells::new(), 1, 1, 27000, scr, words, lines, et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 1, "a sparse OCR selection keeps its original owner");
+    crate::testport::assert_eq(ln_get(lines, 71, lh_rot()), 9000, "sparse booklet fragments do not enter the dense-region recovery");
+    crate::testport::assert_eq(ln_get(lines, 71, lf_src()) & ls_frame(), 0, "sparse fragments keep the previous paragraph policy");
+    ol_set(ol, 24, lh_count(), 0);
+    crate::testport::assert_eq(sc_emit_sel(ol, ow, &mut crate::port::Cells::new(), 24, 1, 27000, scr, words, lines, et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 23, "empty OCR rows do not count toward dense-region evidence");
+    crate::testport::assert_eq(ln_get(lines, 72, lh_rot()), 9000, "twenty-three nonempty lines still keep the previous frame");
+    crate::testport::assert_eq(ln_get(lines, 72, lf_src()) & ls_frame(), 0, "empty rows cannot activate recovery");
+}

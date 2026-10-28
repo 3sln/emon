@@ -3346,6 +3346,10 @@ pub fn ls_revised() -> i32 {
     // Source metadata bit: OCR line composed or recovered after the first reading; no independent heading evidence.
     return 256;
 }
+pub fn ls_frame() -> i32 {
+    // Selected OCR run corrected to its own upright coordinate frame; preserve literal word boundaries when grouping its previously standalone lines.
+    return 512;
+}
 pub fn mkf_page() -> i32 {
     return 0;
 }

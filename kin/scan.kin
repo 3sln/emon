@@ -50,7 +50,7 @@
                                    or-new or-get or-set or-count op-re-rotated ob-new ob-set ob-get ob-count
                                    ol-new ol-set ol-get ol-count ow-new ow-set ow-get ow-count
                                    os-new os-set os-get os-count oa-add oa-count wd-new wd-set wd-get wd-count
-                                   ln-new ln-set ln-count etx-append-cp etx-len ev-angle ev-baseline-at
+                                   ln-new ln-set ln-get ln-count etx-append-cp etx-len ev-angle ev-baseline-at
                                    ev-overlap-small ev-rot-median ev-feat-ocr
                                    hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-bx0 hd-by0 hd-bx1 hd-by1 hd-rot hd-dir
                                    hd-tstart hd-tlen hd-conf
@@ -68,7 +68,7 @@
                                    owf-style owf-run owf-sfirst owf-scount owf-lang owf-flags owf-psize
                                    owf-px owf-py owf-pw owf-ph owf-from
                                    osf-conf osf-afirst osf-acount osf-px osf-py osf-pw osf-ph
-                                   wf-style wf-size wf-font wf-gap wf-wbreak wf-src lf-src lf-order ls-revised
+                                   wf-style wf-size wf-font wf-gap wf-wbreak wf-src lf-src lf-order ls-revised ls-frame
                                    ch-x0 ch-y0 ch-x1 ch-y1 ch-cp ld-rtl ld-ttb ob-block ob-paragraph
                                    vk-decode vk-engine-binary eg-raster wb-space wb-line-end
                                    mf-page mf-x0 mf-y0 mf-x1 mf-y1 mf-obj mf-pxw mf-pxh mf-flags mf-rot
@@ -1901,13 +1901,49 @@
   (comment "the shared `etext`'s: `hd-tstart` and `hd-tlen` of an OCR word are read as they are. Answers the lines made.")
   (return (sc-emit-core olines owords osyms l0 nl page rotmed scr words lines 0)))
 
+(defn ^I32 sc-frame-min []
+  (comment "D815: dense-region recovery needs at least six nonempty lines per four intended columns. Sparse rescue fragments retain their existing frame.")
+  (return 24))
+
+(defn ^I32 sc-selected-rotation [^Cells olines ^I32 nsel ^Cells scr ^I32 fallback]
+  (comment "D812: a uniformly selected later run may be in a new coordinate frame. Only a quarter-turn disagreement with that run's upright median replaces the original median; mixed-run fusion keeps its existing frame.")
+  (if (< nsel (sc-frame-min)) (return fallback))
+  (let [^I32 first (cells-at scr (sc-sel-base))
+        ^I32 run (ol-get olines first (olf-run))
+        ^:mut ^I32 i 0 ^:mut ^I32 nonempty 0 ^:mut ^I32 lo first ^:mut ^I32 hi (+ first 1)]
+    (if (<= run 0) (return fallback))
+    (while (< i nsel)
+      (do (if (!= (ol-get olines (cells-at scr (+ (sc-sel-base) i)) (olf-run)) run) (return fallback))
+          (if (> (ol-get olines (cells-at scr (+ (sc-sel-base) i)) (lh-count)) 0)
+            (set nonempty (+ nonempty 1)))
+          (set i (+ i 1))))
+    (if (< nonempty (sc-frame-min)) (return fallback))
+    (while (and (> lo 0) (== (ol-get olines (- lo 1) (olf-run)) run)) (set lo (- lo 1)))
+    (while (and (< hi (ol-count olines)) (== (ol-get olines hi (olf-run)) run)) (set hi (+ hi 1)))
+    (let [^I32 med (ev-rot-median olines lo (- hi lo))
+          ^I32 delta (rem (+ (- fallback med) 36000) 36000)]
+      (if (and (or (< med 600) (> med 35400))
+               (or (and (> delta 8400) (< delta 9600)) (and (> delta 26400) (< delta 27600))))
+        (return med)))
+    (return fallback)))
+
+
 (defn ^:pub ^I32 sc-emit-sel [^Cells olines ^:mut ^Cells owords ^Cells osyms ^I32 nsel ^I32 page ^I32 rotmed
                               ^:mut ^Cells scr ^:mut ^Cells words ^:mut ^Cells lines ^:mut ^Cells etext ^Cells rules ^Cells comps ^Cells inks]
   (comment "`sc-emit-lines` over the OCR lines the scratch names (P7.4): `nsel` `olines` rows, in the order to emit them, at `scr`")
   (comment "cells `sc-sel-base` and up (`sc-sel-set`; `sc-prep` makes room for `sc-sel-max` of them): the lines of several runs chosen")
   (comment "line by line, their size clustered over the chosen lines; and (P12.6, `sc-emit-vetted`) with the words a body-ink line adds, the words that")
   (comment "are no text left out and the safe corrections made, `rules`, `comps` and `inks` being the tracer's rules, components and ink layers. Answers the lines made.")
-  (return (sc-emit-vetted olines owords osyms nsel page rotmed scr words lines etext rules comps inks)))
+  (let [^I32 angle (sc-selected-rotation olines nsel scr rotmed)
+        ^I32 first (ln-count lines)
+        ^I32 made (sc-emit-vetted olines owords osyms nsel page angle scr words lines etext rules comps inks)
+        ^:mut ^I32 l first]
+    (if (!= angle rotmed)
+      (while (< l (+ first made))
+        (do (let [^I32 source (ln-get lines l (lf-src))]
+              (ln-set lines l (lf-src) (+ source (ls-frame))))
+            (set l (+ l 1)))))
+    (return made)))
 
 (defn ^:pub ^I32 sc-sel-set [^:mut ^Cells scr ^I32 k ^I32 row]
   (cells-set scr (+ (sc-sel-base) k) row)
