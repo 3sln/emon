@@ -2495,8 +2495,12 @@ the OCR words admitted by rule 610; its `src` says `trace` and `ocr`.
 
 **Cells**: text assigned to cells by containment; spanning cells from
 missing internal rules (ruled) or from text crossing column boundaries
-(whitespace); multi-line cells from row geometry, not line count. **Header
-rows** from style (bold, fill, rule below), position, and repetition.
+(whitespace); multi-line cells from row geometry, not line count. A two-column
+grid with at least four rows, no spanning cells, and every horizontal and
+vertical boundary meeting the rule-coverage threshold may contain widely
+spaced alternatives within a cell; that internal gap does not reject the
+grid or create another column (D783). **Header rows** from style (bold,
+fill, rule below), position, and repetition.
 Numeric columns detected locale-independently (digits with separators);
 the decimal separator is chosen from the locale hint when given, otherwise
 inferred per column and never rewritten.

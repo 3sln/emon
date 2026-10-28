@@ -371,6 +371,107 @@ func ttRunAn(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *
 	return model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st)
 }
 
+func ttCountAn(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *strings.Builder, np int32, an *port.Cells) int32 {
+	// `tt-run-n` over a document whose annotations (rows of `an`, `AN_STRIDE` cells) are `an`: the form fields' widgets (D583).
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var ord *port.Cells = port.NewCells()
+	var raw *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var fr *port.Cells = port.NewCells()
+	var gp *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	var ii *port.Cells = port.NewCells()
+	var al *port.Cells = port.NewCells()
+	var lt *port.Cells = port.NewCells()
+	var ls *port.Cells = port.NewCells()
+	var sd *port.Cells = port.NewCells()
+	var it *port.Cells = port.NewCells()
+	var io *port.Cells = port.NewCells()
+	var rw *port.Cells = port.NewCells()
+	var gu *port.Cells = port.NewCells()
+	var ac *port.Cells = port.NewCells()
+	var tm *port.Cells = port.NewCells()
+	var cf *port.Cells = port.NewCells()
+	var lo *port.Cells = port.NewCells()
+	var pr *port.Cells = port.NewCells()
+	var dbg *port.Cells = port.NewCells()
+	var hc *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var tq *port.Cells = port.NewCells()
+	var tx *port.Cells = port.NewCells()
+	var s0 *port.Cells = port.NewCells()
+	var s1 *port.Cells = port.NewCells()
+	var s2 *port.Cells = port.NewCells()
+	var s3 *port.Cells = port.NewCells()
+	var s4 *port.Cells = port.NewCells()
+	var s5 *port.Cells = port.NewCells()
+	var s6 *port.Cells = port.NewCells()
+	var s7 *port.Cells = port.NewCells()
+	var s8 *port.Cells = port.NewCells()
+	var s9 *port.Cells = port.NewCells()
+	var s10 *port.Cells = port.NewCells()
+	var s11 *port.Cells = port.NewCells()
+	var s12 *port.Cells = port.NewCells()
+	var s13 *port.Cells = port.NewCells()
+	var s14 *port.Cells = port.NewCells()
+	var s15 *port.Cells = port.NewCells()
+	var s16 *port.Cells = port.NewCells()
+	var s17 *port.Cells = port.NewCells()
+	var s18 *port.Cells = port.NewCells()
+	var grl *port.Cells = port.NewCells()
+	var gfl *port.Cells = port.NewCells()
+	var cand *port.Cells = port.NewCells()
+	var gpts *port.Cells = port.NewCells()
+	var gmk *port.Cells = port.NewCells()
+	var gim *port.Cells = port.NewCells()
+	var t0e *port.Cells = port.NewCells()
+	var t1e *port.Cells = port.NewCells()
+	var t2e *port.Cells = port.NewCells()
+	var t3e *port.Cells = port.NewCells()
+	var t4e *port.Cells = port.NewCells()
+	var t5e *port.Cells = port.NewCells()
+	var t6e *port.Cells = port.NewCells()
+	var t7e *port.Cells = port.NewCells()
+	var t8e *port.Cells = port.NewCells()
+	var t9e *port.Cells = port.NewCells()
+	var t10e *port.Cells = port.NewCells()
+	var t11e *port.Cells = port.NewCells()
+	var t12e *port.Cells = port.NewCells()
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	model.PageNew(pages, 1, 61200, 79200, 0, model.PkVector())
+	if np == 2 {
+		model.PageNew(pages, 2, 61200, 79200, 0, model.PkVector())
+	}
+	gfuse.GfDoc(pa, gpts, gmk, gim, np, gfuse.GfxMode(), grl, gfl, cand, port.NewCells())
+	table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, port.NewCells(), port.NewCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an)
+	if ttBodyAudit(wd, et, tb, tc, tw) != 0 {
+		return 7
+	}
+	columns.LcCopy(ln, lt)
+	para.PaBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, port.NewCells())
+	ttBrief(t, nodes, attrs, text)
+	if model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st) != 0 {
+		return -1
+	}
+	var i int32 = 0
+	var count int32 = 0
+	for i < model.NodeCount(nodes) {
+		if model.NodeKind(nodes, i) == model.NkTable() {
+			count += 1
+		}
+		i += 1
+	}
+	return count
+}
+
 func ttRunN(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *strings.Builder, np int32) int32 {
 	// Tables, then paragraphs, then the brief of the Model, of a document of `np` pages (1 or 2). Answers `model-check`'s verdict.
 	return ttRunAn(wd, ln, et, pa, t, np, port.NewCells())
@@ -5260,4 +5361,157 @@ func TestLedgerDoesNotClaimOffsetProseBelowItsFrame(emonT *testing.T) {
 		k += 1
 	}
 	port.AssertThat(emonT, ledger >= 0, "the first USD transaction retains an independent ledger owner")
+}
+
+func ttCurrencyLinks(first []byte, second []byte) int32 {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	var p int32 = 1
+	var r int32 = 0
+	for p <= 2 {
+		if p == 1 {
+			ttAtp(wd, ln, et, first, 7600, 10000, 0, 0, p)
+		} else {
+			ttAtp(wd, ln, et, second, 7600, 10000, 0, 0, p)
+		}
+		ttCols5(wd, ln, et, p, 11600, 1, port.TextBlob("Date"), port.TextBlob("Details"), port.TextBlob("Debit"), port.TextBlob("Credit"), port.TextBlob("Balance"))
+		r = 0
+		for r < 6 {
+			ttCols5(wd, ln, et, p, 13200+(r*1600), 0, port.TextBlob("02 Jan"), port.TextBlob("Salary"), port.TextBlob(""), port.TextBlob("10.33"), port.TextBlob("10,609.03"))
+			r += 1
+		}
+		p += 1
+	}
+	return ttCountAn(wd, ln, et, pa, t, 2, port.NewCells())
+}
+
+func TestTwoCurrencyLedgersLinkByTheirOwnColumns(emonT *testing.T) {
+	port.AssertEq(emonT, ttCurrencyLinks(port.TextBlob("HKD current account 817 890692 838"), port.TextBlob("HKD current account 817 890692 838 (Continued)")), 1, "a matching account signature explains the continued context above the next header")
+	port.AssertEq(emonT, ttCurrencyLinks(port.TextBlob("HKD current account 817 890692 838"), port.TextBlob("USD current account 817 890692 838 (Continued)")), 2, "identical headers and columns never merge different currency accounts")
+	port.AssertEq(emonT, ttCurrencyLinks(port.TextBlob("HKD current account 817 890692 838"), port.TextBlob("HKD current account 817 890692 839")), 2, "different account numbers refuse even without a continued marker")
+}
+
+func ttExplainedForward(prose int32, wrong int32, foot int32) int32 {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var r int32 = 0
+	ttCols5(wd, ln, et, 1, 10000, 0, port.TextBlob("Date"), port.TextBlob("Description"), port.TextBlob("Withdrawal"), port.TextBlob("Deposit"), port.TextBlob("Balance"))
+	ttRule(pa, 7600, 12300, 22000, 12350)
+	ttRule(pa, 7600, 13950, 22000, 14000)
+	ttRule(pa, 7600, 12300, 7650, 14000)
+	ttRule(pa, 21950, 12300, 22000, 14000)
+	ttAt(wd, ln, et, port.TextBlob("CURRENCY SGD"), 8000, 12500, 0, 0)
+	if prose == 1 {
+		ttAt(wd, ln, et, port.TextBlob("Unexplained ordinary prose"), 8000, 16500, 0, 0)
+	}
+	if prose == 2 {
+		ttAt(wd, ln, et, port.TextBlob("Ordinary prose amount"), 15000, 14500, 0, 0)
+	} else {
+		ttAt(wd, ln, et, port.TextBlob("Balance Brought Forward"), 15000, 14500, 0, 0)
+	}
+	if wrong == 1 {
+		ttAt(wd, ln, et, port.TextBlob("91.00"), 48800, 14500, 0, 1)
+	} else {
+		ttAt(wd, ln, et, port.TextBlob("90.00"), 48800, 14500, 0, 1)
+	}
+	for r < 6 {
+		ttCols5(wd, ln, et, 1, 19000+(r*1600), 0, port.TextBlob("02 Jan"), port.TextBlob("Salary"), port.TextBlob("1.00"), port.TextBlob("10.33"), port.TextBlob("99.33"))
+		r += 1
+	}
+	if foot > 0 {
+		ttAt(wd, ln, et, port.TextBlob("Balance Carried Forward"), 7600, 30900, 0, 0)
+		if foot == 3 {
+			ttAt(wd, ln, et, port.TextBlob("61.98"), 25000, 30900, 0, 1)
+			ttAt(wd, ln, et, port.TextBlob("6.00"), 35000, 30900, 0, 1)
+		} else {
+			if foot == 2 {
+				ttAt(wd, ln, et, port.TextBlob("6.01"), 25000, 30900, 0, 1)
+			} else {
+				ttAt(wd, ln, et, port.TextBlob("6.00"), 25000, 30900, 0, 1)
+			}
+			ttAt(wd, ln, et, port.TextBlob("61.98"), 35000, 30900, 0, 1)
+		}
+		ttAt(wd, ln, et, port.TextBlob("99.33"), 45000, 30900, 0, 1)
+	}
+	ttRuledBuild(wd, ln, et, pa, tb, tc, tw)
+	r = 0
+	for r < (port.CellsLen(tb) / 32) {
+		if foot > 0 {
+			if (port.CellsAt(tb, (r*32)+12) > 0) && ((port.CellsAt(tb, (r*32)+31) & 4) != 0) {
+				return 1
+			}
+		} else if port.CellsAt(tb, (r*32)+22) > 0 {
+			return 1
+		}
+		r += 1
+	}
+	return 0
+}
+
+func TestExplainedHeaderRefusesProseAndABrokenOpeningIdentity(emonT *testing.T) {
+	port.AssertEq(emonT, ttExplainedForward(1, 0, 0), 0, "unexplained prose prevents reaching past it for a header")
+	port.AssertEq(emonT, ttExplainedForward(0, 1, 0), 0, "a forward row without the opening identity is unexplained")
+	port.AssertEq(emonT, ttExplainedForward(2, 0, 0), 0, "an unrelated prose amount is not a forward row even when its value fits the identity")
+	port.AssertEq(emonT, ttExplainedForward(0, 0, 0), 1, "a boxed label and arithmetically placed opening row explain the header gap")
+}
+
+func TestCarriedForwardRequiresColumnSumsInMonotoneOrder(emonT *testing.T) {
+	port.AssertEq(emonT, ttExplainedForward(0, 0, 2), 0, "a carried amount differing from its column sum stays outside the ledger")
+	port.AssertEq(emonT, ttExplainedForward(0, 0, 3), 0, "swapping withdrawal and deposit sums must not swap their semantic columns")
+	port.AssertEq(emonT, ttExplainedForward(0, 0, 1), 1, "offset carried amounts use column sums and the closing balance in monotone order")
+}
+
+func ttScreening(t *strings.Builder, closed int32) int32 {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var r int32 = 0
+	// D783: large gaps inside a fully bordered response cell do not move its alternatives into another row or discard the question grid.
+	for r <= 4 {
+		ttRule(pa, 10000, (20000+(r*4000))-25, 50000, (20000+(r*4000))+25)
+		r += 1
+	}
+	ttRule(pa, 9975, 20000, 10025, 36000)
+	if closed == 1 {
+		ttRule(pa, 29975, 20000, 30025, 36000)
+	}
+	ttRule(pa, 49975, 20000, 50025, 36000)
+	ttWord(wd, ln, et, port.TextBlob("Question"), 10500, 20500, 15000, 21300, 1)
+	ttWord(wd, ln, et, port.TextBlob("Response"), 30500, 20500, 35000, 21300, 1)
+	r = 1
+	for r < 4 {
+		if r == 1 {
+			ttWord(wd, ln, et, port.TextBlob("Will project one collect"), 10500, 20500+(r*4000), 27000, 21300+(r*4000), 0)
+		} else if r == 2 {
+			ttWord(wd, ln, et, port.TextBlob("Will project two collect"), 10500, 20500+(r*4000), 27000, 21300+(r*4000), 0)
+		} else {
+			ttWord(wd, ln, et, port.TextBlob("Will project three collect"), 10500, 20500+(r*4000), 27000, 21300+(r*4000), 0)
+		}
+		ttWord(wd, ln, et, port.TextBlob("personal information?"), 10500, 21700+(r*4000), 27000, 22500+(r*4000), 0)
+		ttWord(wd, ln, et, port.TextBlob("Yes"), 30500, 20500+(r*4000), 32000, 21300+(r*4000), 0)
+		ttWord(wd, ln, et, port.TextBlob("No"), 45500, 20500+(r*4000), 46500, 21300+(r*4000), 0)
+		r += 1
+	}
+	return ttRun(wd, ln, et, pa, t)
+}
+
+func TestAClosedScreeningGridOwnsWrappedQuestionsAndSpacedResponses(emonT *testing.T) {
+	var t *strings.Builder = port.NewText()
+	port.AssertEq(emonT, ttScreening(t, 1), 0, "screening grid is well formed")
+	port.AssertText(emonT, t, "T2r;Gh;R;Ch[Question];Ch[Response];Gb;R;C[Will project one collect personal information?];C[Yes No];R;C[Will project two collect personal information?];C[Yes No];R;C[Will project three collect personal information?];C[Yes No];", "each complete question and both response values belong to the same ruled row")
+}
+
+func TestResponseGapsWithoutACompleteGridKeepTheirColumnAnalysis(emonT *testing.T) {
+	var t *strings.Builder = port.NewText()
+	port.AssertEq(emonT, ttScreening(t, 0), 0, "open grid is well formed")
+	port.AssertText(emonT, t, "T3p;Gh;R;Ch[Question];Ch[Response];Ch[];Gb;R;C[Will project one collect personal information?];C[Yes];C[No];R;C[Will project two collect personal information?];C[Yes];C[No];R;C[Will project three collect personal information?];C[Yes];C[No];", "unruled alternatives remain independent columns")
 }

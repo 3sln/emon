@@ -352,6 +352,106 @@ pub(crate) fn tt_run_an(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells
     tt_brief(t, nodes, attrs, text);
     return model_check(nodes, attrs, regions, text, pages, ledger, layout, st);
 }
+pub(crate) fn tt_count_an(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, pa: &mut crate::port::Cells, mut t: &mut String, np: i32, an: &mut crate::port::Cells) -> i32 {
+    // `tt-run-n` over a document whose annotations (rows of `an`, `AN_STRIDE` cells) are `an`: the form fields' widgets (D583).
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ord: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let raw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ii: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let al: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ls: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let it: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let io: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gu: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ac: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tm: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let dbg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tq: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tx: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s0: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s4: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s5: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s6: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s7: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s8: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s9: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s10: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s11: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s12: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s13: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s14: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s15: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s16: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s17: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s18: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gfl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gpts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gmk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gim: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t0e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t1e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t2e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t3e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t4e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t5e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t6e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t7e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t8e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t9e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t10e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t11e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t12e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    page_new(pages, 1, 61200, 79200, 0, pk_vector());
+    if np == 2 {
+        page_new(pages, 2, 61200, 79200, 0, pk_vector());
+    }
+    gf_doc(pa, gpts, gmk, gim, np, gfx_mode(), grl, gfl, cand, &mut crate::port::Cells::new());
+    tb_build(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
+    if tt_body_audit(wd, et, tb, tc, tw) != 0 {
+        return 7;
+    }
+    lc_copy(ln, lt);
+    pa_build(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, &mut crate::port::Cells::new());
+    tt_brief(t, nodes, attrs, text);
+    if model_check(nodes, attrs, regions, text, pages, ledger, layout, st) != 0 {
+        return -1;
+    }
+    let mut i: i32 = 0;
+    let mut count: i32 = 0;
+    while i < node_count(nodes) {
+        if node_kind(nodes, i) == nk_table() {
+            count += 1;
+        }
+        i += 1;
+    }
+    return count;
+}
 pub(crate) fn tt_run_n(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, pa: &mut crate::port::Cells, mut t: &mut String, np: i32) -> i32 {
     // Tables, then paragraphs, then the brief of the Model, of a document of `np` pages (1 or 2). Answers `model-check`'s verdict.
     return tt_run_an(wd, ln, et, pa, t, np, &mut crate::port::Cells::new());
@@ -5197,4 +5297,154 @@ fn test_ledger_does_not_claim_offset_prose_below_its_frame() {
         k += 1;
     }
     crate::testport::assert_that(ledger >= 0, "the first USD transaction retains an independent ledger owner");
+}
+pub(crate) fn tt_currency_links(first: &[u8], second: &[u8]) -> i32 {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    let mut p: i32 = 1;
+    let mut r: i32 = 0;
+    while p <= 2 {
+        if p == 1 {
+            tt_atp(wd, ln, et, first, 7600, 10000, 0, 0, p);
+        } else {
+            tt_atp(wd, ln, et, second, 7600, 10000, 0, 0, p);
+        }
+        tt_cols5(wd, ln, et, p, 11600, 1, &crate::testport::text_blob("Date")[..], &crate::testport::text_blob("Details")[..], &crate::testport::text_blob("Debit")[..], &crate::testport::text_blob("Credit")[..], &crate::testport::text_blob("Balance")[..]);
+        r = 0;
+        while r < 6 {
+            tt_cols5(wd, ln, et, p, 13200 + (r * 1600), 0, &crate::testport::text_blob("02 Jan")[..], &crate::testport::text_blob("Salary")[..], &crate::testport::text_blob("")[..], &crate::testport::text_blob("10.33")[..], &crate::testport::text_blob("10,609.03")[..]);
+            r += 1;
+        }
+        p += 1;
+    }
+    return tt_count_an(wd, ln, et, pa, t, 2, &mut crate::port::Cells::new());
+}
+#[test]
+fn test_two_currency_ledgers_link_by_their_own_columns() {
+    crate::testport::assert_eq(tt_currency_links(&crate::testport::text_blob("HKD current account 817 890692 838")[..], &crate::testport::text_blob("HKD current account 817 890692 838 (Continued)")[..]), 1, "a matching account signature explains the continued context above the next header");
+    crate::testport::assert_eq(tt_currency_links(&crate::testport::text_blob("HKD current account 817 890692 838")[..], &crate::testport::text_blob("USD current account 817 890692 838 (Continued)")[..]), 2, "identical headers and columns never merge different currency accounts");
+    crate::testport::assert_eq(tt_currency_links(&crate::testport::text_blob("HKD current account 817 890692 838")[..], &crate::testport::text_blob("HKD current account 817 890692 839")[..]), 2, "different account numbers refuse even without a continued marker");
+}
+pub(crate) fn tt_explained_forward(prose: i32, wrong: i32, foot: i32) -> i32 {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut r: i32 = 0;
+    tt_cols5(wd, ln, et, 1, 10000, 0, &crate::testport::text_blob("Date")[..], &crate::testport::text_blob("Description")[..], &crate::testport::text_blob("Withdrawal")[..], &crate::testport::text_blob("Deposit")[..], &crate::testport::text_blob("Balance")[..]);
+    tt_rule(pa, 7600, 12300, 22000, 12350);
+    tt_rule(pa, 7600, 13950, 22000, 14000);
+    tt_rule(pa, 7600, 12300, 7650, 14000);
+    tt_rule(pa, 21950, 12300, 22000, 14000);
+    tt_at(wd, ln, et, &crate::testport::text_blob("CURRENCY SGD")[..], 8000, 12500, 0, 0);
+    if prose == 1 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("Unexplained ordinary prose")[..], 8000, 16500, 0, 0);
+    }
+    if prose == 2 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("Ordinary prose amount")[..], 15000, 14500, 0, 0);
+    } else {
+        tt_at(wd, ln, et, &crate::testport::text_blob("Balance Brought Forward")[..], 15000, 14500, 0, 0);
+    }
+    if wrong == 1 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("91.00")[..], 48800, 14500, 0, 1);
+    } else {
+        tt_at(wd, ln, et, &crate::testport::text_blob("90.00")[..], 48800, 14500, 0, 1);
+    }
+    while r < 6 {
+        tt_cols5(wd, ln, et, 1, 19000 + (r * 1600), 0, &crate::testport::text_blob("02 Jan")[..], &crate::testport::text_blob("Salary")[..], &crate::testport::text_blob("1.00")[..], &crate::testport::text_blob("10.33")[..], &crate::testport::text_blob("99.33")[..]);
+        r += 1;
+    }
+    if foot > 0 {
+        tt_at(wd, ln, et, &crate::testport::text_blob("Balance Carried Forward")[..], 7600, 30900, 0, 0);
+        if foot == 3 {
+            tt_at(wd, ln, et, &crate::testport::text_blob("61.98")[..], 25000, 30900, 0, 1);
+            tt_at(wd, ln, et, &crate::testport::text_blob("6.00")[..], 35000, 30900, 0, 1);
+        } else {
+            if foot == 2 {
+                tt_at(wd, ln, et, &crate::testport::text_blob("6.01")[..], 25000, 30900, 0, 1);
+            } else {
+                tt_at(wd, ln, et, &crate::testport::text_blob("6.00")[..], 25000, 30900, 0, 1);
+            }
+            tt_at(wd, ln, et, &crate::testport::text_blob("61.98")[..], 35000, 30900, 0, 1);
+        }
+        tt_at(wd, ln, et, &crate::testport::text_blob("99.33")[..], 45000, 30900, 0, 1);
+    }
+    tt_ruled_build(wd, ln, et, pa, tb, tc, tw);
+    r = 0;
+    while r < (crate::port::cells_len(tb) / 32) {
+        if foot > 0 {
+            if (crate::port::cells_at(tb, (r * 32) + 12) > 0) && ((crate::port::cells_at(tb, (r * 32) + 31) & 4) != 0) {
+                return 1;
+            }
+        } else if crate::port::cells_at(tb, (r * 32) + 22) > 0 {
+            return 1;
+        }
+        r += 1;
+    }
+    return 0;
+}
+#[test]
+fn test_explained_header_refuses_prose_and_a_broken_opening_identity() {
+    crate::testport::assert_eq(tt_explained_forward(1, 0, 0), 0, "unexplained prose prevents reaching past it for a header");
+    crate::testport::assert_eq(tt_explained_forward(0, 1, 0), 0, "a forward row without the opening identity is unexplained");
+    crate::testport::assert_eq(tt_explained_forward(2, 0, 0), 0, "an unrelated prose amount is not a forward row even when its value fits the identity");
+    crate::testport::assert_eq(tt_explained_forward(0, 0, 0), 1, "a boxed label and arithmetically placed opening row explain the header gap");
+}
+#[test]
+fn test_carried_forward_requires_column_sums_in_monotone_order() {
+    crate::testport::assert_eq(tt_explained_forward(0, 0, 2), 0, "a carried amount differing from its column sum stays outside the ledger");
+    crate::testport::assert_eq(tt_explained_forward(0, 0, 3), 0, "swapping withdrawal and deposit sums must not swap their semantic columns");
+    crate::testport::assert_eq(tt_explained_forward(0, 0, 1), 1, "offset carried amounts use column sums and the closing balance in monotone order");
+}
+pub(crate) fn tt_screening(mut t: &mut String, closed: i32) -> i32 {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut r: i32 = 0;
+    // D783: large gaps inside a fully bordered response cell do not move its alternatives into another row or discard the question grid.
+    while r <= 4 {
+        tt_rule(pa, 10000, (20000 + (r * 4000)) - 25, 50000, (20000 + (r * 4000)) + 25);
+        r += 1;
+    }
+    tt_rule(pa, 9975, 20000, 10025, 36000);
+    if closed == 1 {
+        tt_rule(pa, 29975, 20000, 30025, 36000);
+    }
+    tt_rule(pa, 49975, 20000, 50025, 36000);
+    tt_word(wd, ln, et, &crate::testport::text_blob("Question")[..], 10500, 20500, 15000, 21300, 1);
+    tt_word(wd, ln, et, &crate::testport::text_blob("Response")[..], 30500, 20500, 35000, 21300, 1);
+    r = 1;
+    while r < 4 {
+        if r == 1 {
+            tt_word(wd, ln, et, &crate::testport::text_blob("Will project one collect")[..], 10500, 20500 + (r * 4000), 27000, 21300 + (r * 4000), 0);
+        } else if r == 2 {
+            tt_word(wd, ln, et, &crate::testport::text_blob("Will project two collect")[..], 10500, 20500 + (r * 4000), 27000, 21300 + (r * 4000), 0);
+        } else {
+            tt_word(wd, ln, et, &crate::testport::text_blob("Will project three collect")[..], 10500, 20500 + (r * 4000), 27000, 21300 + (r * 4000), 0);
+        }
+        tt_word(wd, ln, et, &crate::testport::text_blob("personal information?")[..], 10500, 21700 + (r * 4000), 27000, 22500 + (r * 4000), 0);
+        tt_word(wd, ln, et, &crate::testport::text_blob("Yes")[..], 30500, 20500 + (r * 4000), 32000, 21300 + (r * 4000), 0);
+        tt_word(wd, ln, et, &crate::testport::text_blob("No")[..], 45500, 20500 + (r * 4000), 46500, 21300 + (r * 4000), 0);
+        r += 1;
+    }
+    return tt_run(wd, ln, et, pa, t);
+}
+#[test]
+fn test_a_closed_screening_grid_owns_wrapped_questions_and_spaced_responses() {
+    let t: &mut String = &mut crate::port::new_text();
+    crate::testport::assert_eq(tt_screening(t, 1), 0, "screening grid is well formed");
+    crate::testport::assert_text(t, "T2r;Gh;R;Ch[Question];Ch[Response];Gb;R;C[Will project one collect personal information?];C[Yes No];R;C[Will project two collect personal information?];C[Yes No];R;C[Will project three collect personal information?];C[Yes No];", "each complete question and both response values belong to the same ruled row");
+}
+#[test]
+fn test_response_gaps_without_a_complete_grid_keep_their_column_analysis() {
+    let t: &mut String = &mut crate::port::new_text();
+    crate::testport::assert_eq(tt_screening(t, 0), 0, "open grid is well formed");
+    crate::testport::assert_text(t, "T3p;Gh;R;Ch[Question];Ch[Response];Ch[];Gb;R;C[Will project one collect personal information?];C[Yes];C[No];R;C[Will project two collect personal information?];C[Yes];C[No];R;C[Will project three collect personal information?];C[Yes];C[No];", "unruled alternatives remain independent columns");
 }

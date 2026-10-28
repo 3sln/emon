@@ -317,6 +317,188 @@ public final class Engine {
                 Tagtable.ttEmit(d.evidence, s.tv);
             }
         }
+        if ((c.keep != 0) && (emon.Port.cellsLen(s.s0) > 0)) {
+            int i = 0;
+            int j = 0;
+            int reasons = 0;
+            int comma = 0;
+            emon.Port.textAscii(d.evidence, ",\"tbx\":[");
+            while (i < emon.Port.cellsLen(s.s0)) {
+                if (i > 0) {
+                    emon.Port.textAscii(d.evidence, ",");
+                }
+                if (emon.Port.cellsAt(s.s0, i) >= 0) {
+                    emon.Port.textAscii(d.evidence, "{\"kind\":\"link\"");
+                    j = 0;
+                    while (j < 8) {
+                        if (j == 0) {
+                            emon.Port.textAscii(d.evidence, ",\"a\":");
+                        }
+                        if (j == 1) {
+                            emon.Port.textAscii(d.evidence, ",\"b\":");
+                        }
+                        if (j == 2) {
+                            emon.Port.textAscii(d.evidence, ",\"score\":");
+                        }
+                        if (j == 3) {
+                            emon.Port.textAscii(d.evidence, ",\"reason_bits\":");
+                        }
+                        if (j == 4) {
+                            emon.Port.textAscii(d.evidence, ",\"column_map\":");
+                        }
+                        if (j == 5) {
+                            emon.Port.textAscii(d.evidence, ",\"signature\":");
+                        }
+                        if (j == 6) {
+                            emon.Port.textAscii(d.evidence, ",\"unexplained\":");
+                        }
+                        if (j == 7) {
+                            emon.Port.textAscii(d.evidence, ",\"winner\":");
+                        }
+                        emon.Port.textI32(d.evidence, emon.Port.cellsAt(s.s0, i + j));
+                        j += 1;
+                    }
+                    emon.Port.textAscii(d.evidence, ",\"reasons\":[");
+                    reasons = emon.Port.cellsAt(s.s0, i + 3);
+                    comma = 0;
+                    if ((reasons & 1) != 0) {
+                        if (comma == 1) {
+                            emon.Port.textAscii(d.evidence, ",");
+                        }
+                        emon.Port.textAscii(d.evidence, "\"context-differs\"");
+                        comma = 1;
+                    }
+                    if ((reasons & 2) != 0) {
+                        if (comma == 1) {
+                            emon.Port.textAscii(d.evidence, ",");
+                        }
+                        emon.Port.textAscii(d.evidence, "\"columns-unmappable\"");
+                        comma = 1;
+                    }
+                    if ((reasons & 4) != 0) {
+                        if (comma == 1) {
+                            emon.Port.textAscii(d.evidence, ",");
+                        }
+                        emon.Port.textAscii(d.evidence, "\"header-differs\"");
+                        comma = 1;
+                    }
+                    if ((reasons & 8) != 0) {
+                        if (comma == 1) {
+                            emon.Port.textAscii(d.evidence, ",");
+                        }
+                        emon.Port.textAscii(d.evidence, "\"table-between\"");
+                        comma = 1;
+                    }
+                    if ((reasons & 16) != 0) {
+                        if (comma == 1) {
+                            emon.Port.textAscii(d.evidence, ",");
+                        }
+                        emon.Port.textAscii(d.evidence, "\"caption-differs\"");
+                        comma = 1;
+                    }
+                    if ((reasons & 32) != 0) {
+                        if (comma == 1) {
+                            emon.Port.textAscii(d.evidence, ",");
+                        }
+                        emon.Port.textAscii(d.evidence, "\"unexplained-lines\"");
+                        comma = 1;
+                    }
+                    if ((reasons & 64) != 0) {
+                        if (comma == 1) {
+                            emon.Port.textAscii(d.evidence, ",");
+                        }
+                        emon.Port.textAscii(d.evidence, "\"balance-chain\"");
+                        comma = 1;
+                    }
+                    if ((reasons & 128) != 0) {
+                        if (comma == 1) {
+                            emon.Port.textAscii(d.evidence, ",");
+                        }
+                        emon.Port.textAscii(d.evidence, "\"context-equal\"");
+                        comma = 1;
+                    }
+                    if ((reasons & 256) != 0) {
+                        if (comma == 1) {
+                            emon.Port.textAscii(d.evidence, ",");
+                        }
+                        emon.Port.textAscii(d.evidence, "\"continued-marker\"");
+                        comma = 1;
+                    }
+                    if ((reasons & 512) != 0) {
+                        if (comma == 1) {
+                            emon.Port.textAscii(d.evidence, ",");
+                        }
+                        emon.Port.textAscii(d.evidence, "\"columns-map\"");
+                        comma = 1;
+                    }
+                    if ((reasons & 1024) != 0) {
+                        if (comma == 1) {
+                            emon.Port.textAscii(d.evidence, ",");
+                        }
+                        emon.Port.textAscii(d.evidence, "\"header-equal\"");
+                        comma = 1;
+                    }
+                    emon.Port.textAscii(d.evidence, "]}");
+                } else {
+                    if (emon.Port.cellsAt(s.s0, i) == -1) {
+                        emon.Port.textAscii(d.evidence, "{\"kind\":\"head\",\"winner\":1,\"header_columns\":");
+                        emon.Port.textI32(d.evidence, emon.Port.cellsAt(s.tb, (emon.Port.cellsAt(s.s0, i + 1) * 32) + 8));
+                    } else {
+                        emon.Port.textAscii(d.evidence, "{\"kind\":\"extend\"");
+                    }
+                    j = 1;
+                    while (j < 8) {
+                        if (j == 1) {
+                            emon.Port.textAscii(d.evidence, ",\"table\":");
+                        }
+                        if (emon.Port.cellsAt(s.s0, i) == -1) {
+                            if (j == 2) {
+                                emon.Port.textAscii(d.evidence, ",\"opening_cents\":");
+                            }
+                            if (j == 3) {
+                                emon.Port.textAscii(d.evidence, ",\"withdrawal_cents\":");
+                            }
+                            if (j == 4) {
+                                emon.Port.textAscii(d.evidence, ",\"deposit_cents\":");
+                            }
+                            if (j == 5) {
+                                emon.Port.textAscii(d.evidence, ",\"first_balance_cents\":");
+                            }
+                            if (j == 6) {
+                                emon.Port.textAscii(d.evidence, ",\"offset_cpt\":");
+                            }
+                            if (j == 7) {
+                                emon.Port.textAscii(d.evidence, ",\"column\":");
+                            }
+                        } else {
+                            if (j == 2) {
+                                emon.Port.textAscii(d.evidence, ",\"column\":");
+                            }
+                            if (j == 3) {
+                                emon.Port.textAscii(d.evidence, ",\"value_cents\":");
+                            }
+                            if (j == 4) {
+                                emon.Port.textAscii(d.evidence, ",\"target_cents\":");
+                            }
+                            if (j == 5) {
+                                emon.Port.textAscii(d.evidence, ",\"offset_cpt\":");
+                            }
+                            if (j == 6) {
+                                emon.Port.textAscii(d.evidence, ",\"semantic\":");
+                            }
+                            if (j == 7) {
+                                emon.Port.textAscii(d.evidence, ",\"winner\":");
+                            }
+                        }
+                        emon.Port.textI32(d.evidence, emon.Port.cellsAt(s.s0, i + j));
+                        j += 1;
+                    }
+                    emon.Port.textAscii(d.evidence, "}");
+                }
+                i += 8;
+            }
+            emon.Port.textAscii(d.evidence, "]");
+        }
         emon.Port.cellsCopyInto(s.iloc, c.lcl);
         Columns.lcCopy(d.fl, s.lt);
         Columns.lcMarkAsides(s.lt, d.gfl, m.pages, np);

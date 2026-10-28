@@ -748,6 +748,20 @@
           (set c (+ c 1))))
     (return 0)))
 
+(defn ^Bool tb-closed-response-grid [^Cells rm ^I32 root ^Cells xs ^Cells ys ^I32 nc ^I32 nr ^Cells tc ^I32 first ^I32 end]
+  (comment "D783: a two-column question/response grid has every edge explicitly drawn. Its response options may be widely separated inside their shared cell.")
+  (if (or (!= nc 2) (< nr 4)) (return (== 0 1)))
+  (if (!= (tb-single-cells tc first end) (- end first)) (return (== 0 1)))
+  (let [^:mut ^I32 i 0]
+    (while (<= i nr)
+      (do (if (not (tb-closed rm root 0 (cells-at ys i) (cells-at xs 0) (cells-at xs nc))) (return (== 0 1)))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (<= i nc)
+      (do (if (not (tb-closed rm root 1 (cells-at xs i) (cells-at ys 0) (cells-at ys nr))) (return (== 0 1)))
+          (set i (+ i 1))))
+    (return (== 1 1))))
+
 (defn ^I32 tb-lattice [^Cells rm ^I32 root ^Cells xs ^:mut ^Cells ys ^I32 page ^:mut ^Cells gm
                        ^:mut ^Cells tb ^:mut ^Cells tc ^Cells wd ^Cells et ^I32 w0 ^I32 w1
                        ^:mut ^Cells pr ^:mut ^Cells so ^:mut ^Cells tw ^:mut ^Cells tx
@@ -862,7 +876,8 @@
         (do (cells-drop tc (* cfirst TCS))
             (cells-drop tw tw0)
             (return -1)))
-      (if (>= (* (tb-wide-cells tc cfirst (+ cfirst total) wd tw) 10) (* filled 3))
+      (if (and (>= (* (tb-wide-cells tc cfirst (+ cfirst total) wd tw) 10) (* filled 3))
+               (not (tb-closed-response-grid rm root xs ys nc nr tc cfirst (+ cfirst total))))
         (do (cells-drop tc (* cfirst TCS))
             (cells-drop tw tw0)
             (return -1)))
@@ -3935,16 +3950,18 @@
         ^I32 nrows (cells-at tb (+ b 7))
         ^I32 bodyend (- nrows (cells-at tb (+ b 12)))
         ^I32 nhead (cells-at tb (+ b 11))
+        ^:mut ^I32 bodyfirst (cells-at tb (+ b 11))
         ^I32 xfirst (cells-at tb (+ b 16))
         ^I32 kfirst (quot (cells-len tbk) KS)
         ^:mut ^I32 col 0]
     (cells-set tb (+ b 28) kfirst)
     (cells-set tb (+ b 29) ncols)
+    (if (!= (bit-and (cells-at tb (+ b 31)) 4) 0) (set bodyfirst (+ nhead 1)))
     (while (< col ncols)
       (do (let [^I32 x0 (cells-at tx (+ xfirst col))
                 ^I32 x1 (cells-at tx (+ (+ xfirst col) 1))
-                ^I32 left (tb-model-anchor tc first end col nhead bodyend 13 x0 ws)
-                ^I32 right (tb-model-anchor tc first end col nhead bodyend 14 x1 ws)
+                ^I32 left (tb-model-anchor tc first end col bodyfirst bodyend 13 x0 ws)
+                ^I32 right (tb-model-anchor tc first end col bodyfirst bodyend 14 x1 ws)
                 ^:mut ^I32 c first
                 ^:mut ^I32 occ 0
                 ^:mut ^I32 nums 0
@@ -3969,7 +3986,7 @@
                                             (set hleft (cells-at tc (+ cb 13)))
                                             (set hright (cells-at tc (+ cb 14)))))
                                       (set hcount (+ hcount (cells-at tc (+ cb 9))))))
-                                (if (and (>= row nhead) (< row bodyend))
+                                (if (and (>= row bodyfirst) (< row bodyend))
                                   (do (set occ (+ occ 1))
                                       (if (== (tb-cell-numeric wd et tw tc c) 1)
                                         (do (set nums (+ nums 1))
@@ -4871,11 +4888,130 @@
           (set f (- (cells-at tb (+ (* f TBS) 19)) 1))))
     (return 0)))
 
+;; D777: canonical account signatures retain digits and token boundaries.
+(defn ^I32 tb-context-key [^Cells ln ^Cells wd ^Cells et ^I32 line ^:mut ^Cells key]
+  (cells-drop key 0)
+  (if (< line 0) (return 0))
+  (let [^I32 first (ln-get ln line (lh-first)) ^I32 n (ln-get ln line (lh-count))
+        ^:mut ^I32 w first ^:mut ^I32 i 0 ^:mut ^I32 pending 0 ^:mut ^I32 continued 0]
+    (while (< w (+ first n))
+      (do (set i 0)
+          (while (< i (wd-get wd w (hd-tlen)))
+            (do (let [^I32 cp (tb-lower (cells-at et (+ (wd-get wd w (hd-tstart)) i)))]
+                  (if (or (<= cp 32) (or (== cp 45) (or (== cp 58) (or (== cp 40) (or (== cp 41) (or (== cp 46) (or (== cp 8211) (== cp 8212))))))))
+                    (set pending 1)
+                    (do (if (and (== pending 1) (> (cells-len key) 0)) (cells-push key 32))
+                        (cells-push key cp) (set pending 0))))
+                (set i (+ i 1))))
+          (set pending 1)
+          (set w (+ w 1))))
+    (let [^I32 end (cells-len key)]
+      (if (>= end 10)
+        (if (and (== (cells-at key (- end 10)) 32)
+                 (and (== (cells-at key (- end 9)) 99)
+                 (and (== (cells-at key (- end 8)) 111)
+                 (and (== (cells-at key (- end 7)) 110)
+                 (and (== (cells-at key (- end 6)) 116)
+                 (and (== (cells-at key (- end 5)) 105)
+                 (and (== (cells-at key (- end 4)) 110)
+                 (and (== (cells-at key (- end 3)) 117)
+                 (and (== (cells-at key (- end 2)) 101) (== (cells-at key (- end 1)) 100))))))))))
+          (do (cells-drop key (- end 10)) (set continued 1)))))
+    (return continued)))
+
+(defn ^Bool tb-key-same [^Cells a ^Cells b]
+  (let [^:mut ^I32 i 0]
+    (if (or (== (cells-len a) 0) (!= (cells-len a) (cells-len b))) (return (== 0 1)))
+    (while (< i (cells-len a))
+      (do (if (!= (cells-at a i) (cells-at b i)) (return (== 0 1))) (set i (+ i 1))))
+    (return (== 1 1))))
+
+(defn ^Bool tb-digit-variant [^Cells wd ^Cells et ^I32 a ^I32 b]
+  (let [^I32 sa (wd-get wd a (hd-tstart)) ^I32 sb (wd-get wd b (hd-tstart))
+        ^I32 na (wd-get wd a (hd-tlen)) ^I32 nb (wd-get wd b (hd-tlen))
+        ^:mut ^I32 i 0 ^:mut ^I32 j 0]
+    (while (and (< i na) (< j nb))
+      (do (let [^I32 ca (cells-at et (+ sa i)) ^I32 cb (cells-at et (+ sb j))]
+            (if (and (and (>= ca 48) (<= ca 57)) (and (>= cb 48) (<= cb 57)))
+              (do (while (and (< i na) (and (>= (cells-at et (+ sa i)) 48) (<= (cells-at et (+ sa i)) 57))) (set i (+ i 1)))
+                  (while (and (< j nb) (and (>= (cells-at et (+ sb j)) 48) (<= (cells-at et (+ sb j)) 57))) (set j (+ j 1))))
+              (do (if (!= ca cb) (return (== 0 1))) (set i (+ i 1)) (set j (+ j 1)))))))
+    (return (and (== i na) (== j nb)))))
+
+(defn ^Bool tb-line-variant [^Cells ln ^Cells wd ^Cells et ^I32 l]
+  (let [^I32 n (ln-count ln) ^I32 count (ln-get ln l (lh-count))
+        ^:mut ^I32 m 0 ^:mut ^I32 i 0 ^:mut ^I32 same 0]
+    (while (< m n)
+      (do (if (and (!= (ln-get ln m (lh-page)) (ln-get ln l (lh-page)))
+                   (and (== (ln-get ln m (lh-count)) count)
+                   (and (<= (tb-abs (- (ln-get ln m (lh-y0)) (ln-get ln l (lh-y0)))) 300)
+                        (<= (tb-abs (- (ln-get ln m (lh-x0)) (ln-get ln l (lh-x0)))) 300))))
+            (do (set same 1) (set i 0)
+                (while (< i count)
+                  (do (if (not (tb-digit-variant wd et (+ (ln-get ln l (lh-first)) i) (+ (ln-get ln m (lh-first)) i))) (set same 0))
+                      (set i (+ i 1))))
+                (if (== same 1) (return (== 1 1)))))
+          (set m (+ m 1))))
+    (return (== 0 1))))
+
+(defn ^I32 tb-unexplained [^Cells ln ^Cells wd ^Cells et ^I32 page ^I32 y0 ^I32 y1 ^I32 height ^I32 context]
+  (let [^I32 n (pb-after ln 16 page) ^:mut ^I32 l (pb-first ln 16 page) ^:mut ^I32 count 0]
+    (while (< l n)
+      (do (let [^I32 cy (quot (+ (ln-get ln l (lh-y0)) (ln-get ln l (lh-y1))) 2)]
+            (if (and (!= l context) (and (== (ln-get ln l 15) 0)
+                     (and (>= cy y0) (and (<= cy y1) (and (> cy (quot (* height 8) 100)) (< cy (quot (* height 92) 100)))))))
+              (if (not (tb-line-variant ln wd et l)) (set count (+ count 1)))))
+          (set l (+ l 1))))
+    (return count)))
+
+;; Confirming arithmetic only. Unknown/oversized/non-decimal cells earn no weight.
+(defn ^I32 tb-link-cents [^Cells wd ^Cells et ^Cells tc ^Cells tw ^I32 c ^I32 semantic]
+  (let [^I32 count (cells-at tc (+ (* c TCS) 9)) ^:mut ^I32 value 0 ^:mut ^I32 decimal -1 ^:mut ^I32 i 0]
+    (if (== count 0) (do (if (== semantic 5) (return -1)) (return 0)))
+    (if (!= count 1) (return -1))
+    (let [^I32 w (cells-at tw (cells-at tc (+ (* c TCS) 8)))
+          ^I32 ts (wd-get wd w (hd-tstart)) ^I32 n (wd-get wd w (hd-tlen))]
+      (while (< i n)
+        (do (let [^I32 cp (cells-at et (+ ts i))]
+              (if (and (>= cp 48) (<= cp 57))
+                (do (if (> value 100000000) (return -1))
+                    (set value (+ (* value 10) (- cp 48)))
+                    (if (>= decimal 0) (set decimal (+ decimal 1))))
+                (if (and (== cp 46) (< decimal 0)) (set decimal 0)
+                  (if (!= cp 44) (return -1)))))
+            (set i (+ i 1))))
+      (if (!= decimal 2) (return -1))
+      (return value))))
+
+(defn ^I32 tb-link-value [^Cells tb ^Cells tc ^Cells tw ^Cells tbk ^Cells wd ^Cells et ^I32 table ^I32 row ^I32 semantic]
+  (let [^I32 first (cells-at tb (+ (* table TBS) 9)) ^I32 end (+ first (cells-at tb (+ (* table TBS) 10)))
+        ^:mut ^I32 c first ^:mut ^I32 col -1 ^:mut ^I32 j 0]
+    (while (< j (cells-at tb (+ (* table TBS) 29)))
+      (do (if (== (tb-model-col tb tbk table j 6) semantic) (set col j)) (set j (+ j 1))))
+    (if (< col 0) (return -1))
+    (while (< c end)
+      (do (if (and (== (cells-at tc (* c TCS)) row) (== (cells-at tc (+ (* c TCS) 1)) col))
+            (return (tb-link-cents wd et tc tw c semantic)))
+          (set c (+ c 1))))
+    (if (== semantic 5) (return -1))
+    (return 0)))
+
+(defn ^Bool tb-link-balance [^Cells tb ^Cells tc ^Cells tw ^Cells tbk ^Cells wd ^Cells et ^I32 a ^I32 b]
+  (let [^I32 last (tb-link-value tb tc tw tbk wd et a (- (cells-at tb (+ (* a TBS) 7)) 1) 5)
+        ^I32 row (cells-at tb (+ (* b TBS) 11))
+        ^I32 balance (tb-link-value tb tc tw tbk wd et b row 5)
+        ^I32 debit (tb-link-value tb tc tw tbk wd et b row 3)
+        ^I32 credit (tb-link-value tb tc tw tbk wd et b row 4)]
+    (if (or (< last 0) (or (< balance 0) (or (< debit 0) (< credit 0)))) (return (== 0 1)))
+    (return (== (+ (- last debit) credit) balance))))
+
 (defn ^I32 tb-link [^:mut ^Cells tb ^:mut ^Cells tc ^Cells tw ^Cells tx ^Cells tq ^Cells wd ^Cells et ^:mut ^Cells ln
-                    ^Cells pages]
+                    ^Cells pages ^Cells tbk ^:mut ^Cells decisions ^:mut ^Cells keya ^:mut ^Cells keyb]
   (comment "Link the fragments of tables that go on across a page break (see the head of this section).")
   (let [^I32 n (tb-rows-of tb TBS)
         ^:mut ^I32 fit 0
+        ^:mut ^I32 signature 0 ^:mut ^I32 contexta -1 ^:mut ^I32 contextb -1
+        ^:mut ^I32 marker 0 ^:mut ^I32 score 0 ^:mut ^I32 unexplained 0 ^:mut ^I32 reasons 0
         ^:mut ^I32 j 1
         ^:mut ^I32 a 0
         ^:mut ^I32 head 0
@@ -4884,15 +5020,41 @@
         ^:mut ^I32 skip 0
         ^:mut ^I32 span 0
         ^:mut ^I32 r 0]
+    (cells-drop decisions 0)
+    ;; Record the veto for other cross-page pairs as well: a table lies between.
+    (while (< j n)
+      (do (set a 0)
+          (while (< a (- j 1))
+            (do (if (== (cells-at tb (* a TBS)) (- (cells-at tb (* j TBS)) 1))
+                  (do (set reasons 8)
+                      (tb-context-key ln wd et (cells-at tb (+ (* a TBS) 30)) keya)
+                      (tb-context-key ln wd et (cells-at tb (+ (* j TBS) 30)) keyb)
+                      (if (and (> (cells-len keya) 0) (and (> (cells-len keyb) 0) (not (tb-key-same keya keyb))))
+                        (set reasons (bit-or reasons 1)))
+                      (cells-push decisions a) (cells-push decisions j) (cells-push decisions 0)
+                      (cells-push decisions reasons) (cells-push decisions 0) (cells-push decisions 0)
+                      (cells-push decisions 0) (cells-push decisions 0)))
+                (set a (+ a 1))))
+          (set j (+ j 1))))
+    (set j 1)
     (while (< j n)
       (do (set a (- j 1))
           (set head a)
           (if (!= (cells-at tb (+ (* a TBS) 21)) 0) (set head (- (cells-at tb (+ (* a TBS) 21)) 1)))
           (if (and (== (cells-at tb (+ (* a TBS) 0)) (- (cells-at tb (* j TBS)) 1))
                    (== (cells-at tb (+ (* a TBS) 19)) 0))
-            (do (set ok 1)
+            (do (set ok 1) (set score 0) (set reasons 0) (set unexplained 0)
+                (set contexta (cells-at tb (+ (* a TBS) 30)))
+                (set contextb (cells-at tb (+ (* j TBS) 30)))
+                (tb-context-key ln wd et contexta keya)
+                (set marker (tb-context-key ln wd et contextb keyb))
+                (set signature 0)
+                (if (tb-key-same keya keyb)
+                  (do (set score 3) (set reasons (bit-or reasons 128))
+                      (if (== marker 1) (do (set score (+ score 2)) (set signature 1) (set reasons (bit-or reasons 256)))))
+                  (if (and (> (cells-len keya) 0) (> (cells-len keyb) 0)) (do (set ok 0) (set reasons 1))))
                 (set fit (tb-fit-columns tb a j tx tc))
-                (if (== fit 0) (set ok 0))
+                (if (== fit 0) (do (set ok 0) (set reasons (bit-or reasons 2))) (do (set score (+ score 2)) (set reasons (bit-or reasons 512))))
                 (if (and (== fit 2) (not (tb-no-spans-down tb j tc))) (set ok 0))
                 (if (and (== fit 3) (not (tb-chain-plain tb head a tc))) (set ok 0))
                 (if (== ok 1)
@@ -4900,12 +5062,17 @@
                             ^I32 pj (cells-at tb (* j TBS))
                             ^I32 hpa (page-h pages (- pg0 1))
                             ^I32 hpj (page-h pages (- pj 1))]
-                        (if (tb-body-line-outside ln wd et pg0 (cells-at tb (+ (* a TBS) 4)) hpa (quot (* hpa 8) 100) (quot (* hpa 92) 100) 0)
-                          (set ok 0))
-                        (if (tb-body-line-outside ln wd et pj 0 (cells-at tb (+ (* j TBS) 2)) (quot (* hpj 8) 100) (quot (* hpj 92) 100) pg0)
-                          (set ok 0)))))
+                        (if (== signature 1)
+                          (do (set unexplained (+ (tb-unexplained ln wd et pg0 (cells-at tb (+ (* a TBS) 4)) hpa hpa contexta)
+                                                  (tb-unexplained ln wd et pj 0 (cells-at tb (+ (* j TBS) 2)) hpj contextb)))
+                              (set score (- score unexplained))
+                              (if (> unexplained 0) (set reasons (bit-or reasons 32))))
+                          (do (if (tb-body-line-outside ln wd et pg0 (cells-at tb (+ (* a TBS) 4)) hpa (quot (* hpa 8) 100) (quot (* hpa 92) 100) 0)
+                                (set ok 0))
+                              (if (tb-body-line-outside ln wd et pj 0 (cells-at tb (+ (* j TBS) 2)) (quot (* hpj 8) 100) (quot (* hpj 92) 100) pg0)
+                                (set ok 0)))))))
                 (if (and (== ok 1) (> (cells-at tb (+ (* j TBS) 15)) 0))
-                  (if (not (tb-caption-again tb head j wd et ln tq)) (set ok 0)))
+                  (if (not (tb-caption-again tb head j wd et ln tq)) (do (set ok 0) (set reasons (bit-or reasons 16)))))
                 (set skip 0)
                 (if (and (== ok 1) (> (cells-at tb (+ (* j TBS) 11)) 0))
                   (do (set h (cells-at tb (+ (* head TBS) 11)))
@@ -4917,7 +5084,15 @@
                                     (if (not (tb-row-same tb head r j r tc tw wd et)) (set ok 0))
                                     (if (not (tb-row-words-same tb head r j r tc tw wd et)) (set ok 0)))
                                   (set r (+ r 1))))
-                            (set skip h)))))
+                            (set skip h)
+                            (if (== ok 1) (do (set score (+ score 3)) (set reasons (bit-or reasons 1024)))
+                              (set reasons (bit-or reasons 4)))))))
+                (if (and (== signature 1) (tb-link-balance tb tc tw tbk wd et a j))
+                  (do (set score (+ score 3)) (set reasons (bit-or reasons 64))))
+                (if (and (== signature 1) (< score 3)) (set ok 0))
+                (cells-push decisions a) (cells-push decisions j) (cells-push decisions score)
+                (cells-push decisions reasons) (cells-push decisions fit) (cells-push decisions signature)
+                (cells-push decisions unexplained) (cells-push decisions ok)
                 (if (== ok 1)
                   (do (if (== fit 2) (tb-widen tb j a tc tx))
                       (if (== fit 3) (tb-chain-widen tb head a j tc tx))
@@ -5505,7 +5680,9 @@
                                           (do (set c (- owner 1))
                                               (if (and (>= c (cells-at tb (+ (* k TBS) 9)))
                                                        (< c (+ (cells-at tb (+ (* k TBS) 9)) (cells-at tb (+ (* k TBS) 10)))))
-                                                (do (if (and (< (cells-at tc (* c TCS)) (cells-at tb (+ (* k TBS) 11)))
+                                                (do (if (and (== (cells-at tc (* c TCS)) 1)
+                                                             (!= (bit-and (cells-at tb (+ (* k TBS) 31)) 4) 0)) (set bound 1))
+                                                    (if (and (< (cells-at tc (* c TCS)) (cells-at tb (+ (* k TBS) 11)))
                                                              (!= (bit-and (cells-at tb (+ (* k TBS) 31)) 1) 0)) (set bound 1))
                                                     (if (and (>= (cells-at tc (* c TCS)) (- (cells-at tb (+ (* k TBS) 7)) (cells-at tb (+ (* k TBS) 12))))
                                                              (!= (bit-and (cells-at tb (+ (* k TBS) 31)) 2) 0)) (set bound 1)))
@@ -6501,6 +6678,361 @@
     (cells-drop tb (* out TBS))
     (return 0)))
 
+(defdata te-fwdkw
+  :emitter kin.lang/flat-array
+  :stride 8
+  :data [7 98 114 111 117 103 104 116
+         7 99 97 114 114 105 101 100
+         7 102 111 114 119 97 114 100]
+  :accessors {^I32 te-fwdkw-at [^I32 ignored ^I32 row ^I32 field]})
+
+(defn ^Bool te-label-has [^Cells wd ^Cells et ^Cells wl ^I32 from ^I32 count ^I32 kind]
+  (let [^I32 wanted (te-fwdkw-at 0 kind 0) ^:mut ^I32 i 0 ^:mut ^I32 pos 0
+        ^:mut ^I32 q 0 ^:mut ^I32 same 0 ^:mut ^I32 cp 0]
+    (while (< i count)
+      (do (let [^I32 w (cells-at wl (+ from i)) ^I32 ts (wd-get wd w (hd-tstart)) ^I32 n (wd-get wd w (hd-tlen))]
+            (set pos 0)
+            (while (<= (+ pos wanted) n)
+              (do (set same 1) (set q 0)
+                  (if (> pos 0)
+                    (do (set cp (tb-lower (cells-at et (+ ts (- pos 1)))))
+                        (if (or (and (>= cp 97) (<= cp 122)) (and (>= cp 48) (<= cp 57))) (set same 0))))
+                  (if (< (+ pos wanted) n)
+                    (do (set cp (tb-lower (cells-at et (+ ts (+ pos wanted)))))
+                        (if (or (and (>= cp 97) (<= cp 122)) (and (>= cp 48) (<= cp 57))) (set same 0))))
+                  (while (< q wanted)
+                    (do (if (!= (tb-lower (cells-at et (+ ts (+ pos q)))) (te-fwdkw-at 0 kind (+ q 1))) (set same 0))
+                        (set q (+ q 1))))
+                  (if (== same 1) (return (== 1 1)))
+                  (set pos (+ pos 1)))))
+          (set i (+ i 1))))
+    (return (== 0 1))))
+
+;; Explained-line binding trial: all arithmetic is exact integer cents.
+(defn ^I32 te-value [^Cells tb ^I32 k ^Cells tc ^Cells tw ^Cells wd ^Cells et ^I32 row ^I32 col ^I32 semantic]
+  (let [^I32 first (cells-at tb (+ (* k TBS) 9))
+        ^I32 end (+ first (cells-at tb (+ (* k TBS) 10))) ^:mut ^I32 c first]
+    (while (< c end)
+      (do (if (and (== (cells-at tc (* c TCS)) row) (== (cells-at tc (+ (* c TCS) 1)) col))
+            (return (tb-link-cents wd et tc tw c semantic)))
+          (set c (+ c 1))))
+    (if (== semantic 5) (return -1)) (return 0)))
+
+(defn ^I32 te-word-cents [^Cells wd ^Cells et ^I32 w]
+  (let [^I32 start (wd-get wd w (hd-tstart)) ^I32 n (wd-get wd w (hd-tlen))
+        ^:mut ^I32 i 0 ^:mut ^I32 result 0 ^:mut ^I32 decimal -1]
+    (while (< i n)
+      (do (let [^I32 cp (cells-at et (+ start i))]
+            (if (and (>= cp 48) (<= cp 57))
+              (do (if (> result 100000000) (return -1))
+                  (set result (+ (* result 10) (- cp 48)))
+                  (if (>= decimal 0) (set decimal (+ decimal 1))))
+              (if (and (== cp 46) (< decimal 0)) (set decimal 0)
+                (if (!= cp 44) (return -1)))))
+          (set i (+ i 1))))
+    (if (!= decimal 2) (return -1)) (return result)))
+
+(defn ^I32 te-label-box [^Cells rm ^I32 x0 ^I32 x1 ^I32 y0 ^I32 y1]
+  (let [^I32 n (tb-rows-of rm RLS) ^:mut ^I32 a 0 ^:mut ^I32 b 0 ^:mut ^I32 v 0
+        ^:mut ^I32 lv 0 ^:mut ^I32 rv 0]
+    (while (< a n)
+      (do (if (and (== (cells-at rm (* a RLS)) 0)
+                   (and (<= (cells-at rm (+ (* a RLS) 1)) y0)
+                        (>= (cells-at rm (+ (* a RLS) 1)) (- y0 3000))))
+            (do (set b (+ a 1))
+                (while (< b n)
+                  (do (if (and (== (cells-at rm (* b RLS)) 0)
+                               (and (>= (cells-at rm (+ (* b RLS) 1)) y1)
+                                    (<= (cells-at rm (+ (* b RLS) 1)) (+ y1 3000))))
+                        (let [^I32 left (cells-at rm (+ (* a RLS) 2)) ^I32 right (cells-at rm (+ (* a RLS) 3))
+                              ^I32 top (cells-at rm (+ (* a RLS) 1)) ^I32 bottom (cells-at rm (+ (* b RLS) 1))]
+                          (if (and (and (<= left (+ x0 400)) (>= right (- x1 400)))
+                                   (and (<= (- right left) 20000)
+                                        (and (<= (tb-abs (- left (cells-at rm (+ (* b RLS) 2)))) 400)
+                                             (<= (tb-abs (- right (cells-at rm (+ (* b RLS) 3)))) 400))))
+                            (do (set v 0) (set lv 0) (set rv 0)
+                                (while (< v n)
+                                  (do (if (and (== (cells-at rm (* v RLS)) 1)
+                                               (and (<= (cells-at rm (+ (* v RLS) 2)) (+ top 400))
+                                                    (>= (cells-at rm (+ (* v RLS) 3)) (- bottom 400))))
+                                        (do (if (<= (tb-abs (- (cells-at rm (+ (* v RLS) 1)) left)) 400) (set lv 1))
+                                            (if (<= (tb-abs (- (cells-at rm (+ (* v RLS) 1)) right)) 400) (set rv 1))))
+                                      (set v (+ v 1))))
+                                (if (and (== lv 1) (== rv 1)) (return 1))))))
+                      (set b (+ b 1))))))
+          (set a (+ a 1))))
+    (return 0)))
+
+
+(defn ^I32 te-free [^Cells tb ^I32 k ^Cells tc ^Cells tw ^Cells wl ^Cells rw ^I32 row]
+  (let [^I32 from (cells-at rw (* row RWS)) ^I32 count (cells-at rw (+ (* row RWS) 1))
+        ^:mut ^I32 i 0 ^:mut ^I32 t 0 ^:mut ^I32 c 0 ^:mut ^I32 j 0]
+    (while (< i count)
+      (do (set t 0)
+          (while (< t (tb-rows-of tb TBS))
+            (do (if (and (!= t k) (== (cells-at tb (* t TBS)) (cells-at tb (* k TBS))))
+                  (do (set c (cells-at tb (+ (* t TBS) 9)))
+                      (while (< c (+ (cells-at tb (+ (* t TBS) 9)) (cells-at tb (+ (* t TBS) 10))))
+                        (do (set j 0)
+                            (while (< j (cells-at tc (+ (* c TCS) 9)))
+                              (do (if (== (cells-at wl (+ from i)) (cells-at tw (+ (cells-at tc (+ (* c TCS) 8)) j))) (return 0))
+                                  (set j (+ j 1))))
+                            (set c (+ c 1))))))
+                (set t (+ t 1))))
+          (set i (+ i 1))))
+    (return 1)))
+
+(defn ^I32 te-bind [^I32 page ^Cells wd ^Cells et ^I32 w0 ^I32 w1 ^Cells rm
+                   ^:mut ^Cells tb ^I32 k ^:mut ^Cells tc ^:mut ^Cells tw ^Cells tx ^Cells tbk
+                   ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg ^:mut ^Cells sem
+                   ^:mut ^Cells pr ^:mut ^Cells so]
+  (let [^I32 b (* k TBS) ^I32 top (cells-at tb (+ b 2))
+        ^I32 cols (cells-at tb (+ b 8)) ^I32 model (cells-at tb (+ b 28))
+        ^I32 first (cells-at tb (+ b 9)) ^I32 count (cells-at tb (+ b 10))
+        ^I32 rows (cells-at tb (+ b 7)) ^I32 cuts (cells-at tb (+ b 16))
+        ^:mut ^I32 nr 0 ^:mut ^I32 r 0 ^:mut ^I32 q 0 ^:mut ^I32 j 0
+        ^:mut ^I32 col 0 ^:mut ^I32 s 0 ^:mut ^I32 w 0 ^:mut ^I32 c 0
+        ^:mut ^I32 header -1 ^:mut ^I32 brought -1 ^:mut ^I32 amount -1
+        ^:mut ^I32 debit -1 ^:mut ^I32 credit -1 ^:mut ^I32 balance -1
+        ^:mut ^I32 good 0 ^:mut ^I32 field 0 ^:mut ^I32 newfirst 0
+        ^:mut ^I32 bd 0 ^:mut ^I32 bc 0 ^:mut ^I32 bb 0]
+    (if (or (> (cells-at tb (+ b 11)) 0) (< cols 3)) (return 0))
+    (if (or (== (cells-at tb (+ b 5)) PF_RULED) (== (cells-at tb (+ b 5)) PF_STRUCT)) (return 0))
+    (set nr (tb-rows wd et w0 w1 (- (cells-at tb (+ b 1)) 2000) (- top 9000) (+ (cells-at tb (+ b 3)) 4000) (- top 1) wl rw sg))
+    (set r (- nr 1))
+    (while (and (>= r 0) (< header 0))
+      (do (cells-drop sem 0) (set col 0)
+          (while (< col (* 2 cols)) (do (cells-push sem 0) (set col (+ col 1))))
+          (set good 1) (set q 0) (set debit -1) (set credit -1) (set balance -1)
+          (if (!= (cells-at rw (+ (* r RWS) 9)) cols) (set good 0))
+          (while (< q (cells-at rw (+ (* r RWS) 9)))
+            (do (let [^I32 sb (* (+ (cells-at rw (+ (* r RWS) 8)) q) SGS)
+                      ^I32 from (cells-at sg (+ sb 3))]
+                  (set s (tb-col-sem wd et (cells-at wl from)))
+                  (set col -1) (set j 0)
+                  (while (< j cols)
+                    (do (if (or (and (or (== s 3) (or (== s 4) (== s 5)))
+                                      (<= (tb-abs (- (cells-at sg (+ sb 2)) (cells-at tbk (+ (* (+ model j) KS) 3)))) 300))
+                                (and (not (or (== s 3) (or (== s 4) (== s 5))))
+                                     (<= (tb-abs (- (cells-at sg (+ sb 1)) (cells-at tbk (+ (* (+ model j) KS) 2)))) 300)))
+                          (do (if (>= col 0) (set good 0)) (set col j)))
+                        (set j (+ j 1))))
+                  (if (< col 0) (set good 0)
+                    (do (if (!= (cells-at sem col) 0) (set good 0))
+                        (if (== s 0) (set good 0))
+                        (cells-set sem col (+ s 1))
+                        (if (< q cols) (cells-set sem (+ cols q) col))
+                        (if (== s 3) (do (if (>= debit 0) (set good 0)) (set debit col)))
+                        (if (== s 4) (do (if (>= credit 0) (set good 0)) (set credit col)))
+                        (if (== s 5) (do (if (>= balance 0) (set good 0)) (set balance col))))))
+                (set q (+ q 1))))
+          (if (and (== good 1) (and (>= debit 0) (and (>= credit 0) (>= balance 0)))) (set header r))
+          (set r (- r 1))))
+    (if (or (< header 0) (<= balance 0)) (return 0))
+    (set bd (te-value tb k tc tw wd et 0 debit 3))
+    (set bc (te-value tb k tc tw wd et 0 credit 4))
+    (set bb (te-value tb k tc tw wd et 0 balance 5))
+    (if (or (< bd 0) (or (< bc 0) (< bb 0))) (return 0))
+    (set r (+ header 1))
+    (while (< r nr)
+      (do (if (== (te-label-box rm (cells-at rw (+ (* r RWS) 4)) (cells-at rw (+ (* r RWS) 5))
+                                     (cells-at rw (+ (* r RWS) 6)) (cells-at rw (+ (* r RWS) 7))) 0)
+            (do (if (>= brought 0) (return 0))
+                (if (!= (cells-at rw (+ (* r RWS) 9)) 2) (return 0))
+                (let [^I32 sb (* (cells-at rw (+ (* r RWS) 8)) SGS)
+                      ^I32 from (cells-at sg (+ sb 3)) ^I32 n (cells-at sg (+ sb 4))]
+                  (if (not (and (te-label-has wd et wl from n 0) (te-label-has wd et wl from n 2))) (return 0)))
+                (set w (cells-at wl (- (+ (cells-at rw (* r RWS)) (cells-at rw (+ (* r RWS) 1))) 1)))
+                (set amount (te-word-cents wd et w))
+                (if (or (< amount 0) (!= (+ (- amount bd) bc) bb)) (return 0))
+                (set brought r)))
+          (set r (+ r 1))))
+    (if (< brought 0) (return 0))
+    (if (or (== (te-free tb k tc tw wl rw header) 0) (== (te-free tb k tc tw wl rw brought) 0)) (return 0))
+    ;; Publish the header and arithmetically verified opening row together.
+    (set newfirst (tb-rows-of tc TCS)) (cells-drop pr 0) (set r 0)
+    (while (< r 2)
+      (do (set col 0)
+          (while (< col cols)
+            (do (let [^:mut ^I32 source header]
+                      (if (== r 1) (set source brought))
+                      (tb-cell-add tc r col 1 1 (cells-at tx (+ cuts col)) (cells-at rw (+ (* source RWS) 6))
+                                       (cells-at tx (+ (+ cuts col) 1)) (cells-at rw (+ (* source RWS) 7)))
+                      (if (== r 0) (cells-set tc (- (cells-len tc) 6) 1)))
+                    (set col (+ col 1))))
+          (set r (+ r 1))))
+    (set q 0)
+    (while (< q cols)
+      (do (let [^I32 sb (* (+ (cells-at rw (+ (* header RWS) 8)) q) SGS)
+                ^I32 from (cells-at sg (+ sb 3)) ^I32 n (cells-at sg (+ sb 4))]
+            (set col (cells-at sem (+ cols q)))
+            (set j 0)
+            (while (< j n)
+              (do (tb-pair-add pr wd (+ newfirst col) (cells-at wl (+ from j))) (set j (+ j 1)))))
+          (set q (+ q 1))))
+    (set q 0)
+    (while (< q 2)
+      (do (let [^I32 sb (* (+ (cells-at rw (+ (* brought RWS) 8)) q) SGS)
+                ^I32 from (cells-at sg (+ sb 3)) ^I32 n (cells-at sg (+ sb 4))]
+            (set col 0) (if (== q 1) (set col balance)) (set j 0)
+            (while (< j n)
+              (do (tb-pair-add pr wd (+ (+ newfirst cols) col) (cells-at wl (+ from j))) (set j (+ j 1)))))
+          (set q (+ q 1))))
+    (let [^I32 stub (+ newfirst cols)]
+      (cells-set tc (+ (* stub TCS) 3) balance)
+      (cells-set tc (+ (* stub TCS) 6) (cells-at tx (+ cuts balance)))
+      (set col 1)
+      (while (< col balance) (do (cells-set tc (+ (* (+ stub col) TCS) 12) 1) (set col (+ col 1)))))
+    (tb-flush-pairs pr so wd tc tw)
+    (set c first)
+    (while (< c (+ first count))
+      (do (set field 0)
+          (while (< field TCS) (do (cells-push tc (cells-at tc (+ (* c TCS) field))) (set field (+ field 1))))
+          (cells-set tc (- (cells-len tc) TCS) (+ (cells-at tc (* c TCS)) 2))
+          (set c (+ c 1))))
+    (cells-set tb (+ b 9) newfirst) (cells-set tb (+ b 10) (+ count (* 2 cols)))
+    (cells-set tb (+ b 7) (+ rows 2)) (cells-set tb (+ b 11) 1) (cells-set tb (+ b 22) 1)
+    (cells-set tb (+ b 31) (bit-or (cells-at tb (+ b 31)) 5))
+    (return 1)))
+
+(defn ^I32 te-carried [^I32 page ^Cells wd ^Cells et ^I32 w0 ^I32 w1
+                      ^:mut ^Cells tb ^I32 k ^:mut ^Cells tc ^:mut ^Cells tw ^Cells tx ^Cells tbk
+                      ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg ^:mut ^Cells targets
+                      ^:mut ^Cells pr ^:mut ^Cells so]
+  (let [^I32 b (* k TBS) ^I32 cols (cells-at tb (+ b 8)) ^I32 rows (cells-at tb (+ b 7))
+        ^I32 first (cells-at tb (+ b 9)) ^I32 count (cells-at tb (+ b 10))
+        ^I32 cuts (cells-at tb (+ b 16))
+        ^:mut ^I32 debit -1 ^:mut ^I32 credit -1 ^:mut ^I32 balance -1
+        ^:mut ^I32 col 0 ^:mut ^I32 r 0 ^:mut ^I32 q 0 ^:mut ^I32 c 0
+        ^:mut ^I32 sum 0 ^:mut ^I32 value 0 ^:mut ^I32 nr 0 ^:mut ^I32 good 0
+        ^:mut ^I32 chosen -1 ^:mut ^I32 newfirst 0 ^:mut ^I32 field 0 ^:mut ^I32 j 0]
+    (if (or (== (bit-and (cells-at tb (+ b 31)) 4) 0) (> (cells-at tb (+ b 12)) 0)) (return 0))
+    (while (< col cols)
+      (do (let [^I32 s (tb-model-col tb tbk k col 6)]
+            (if (== s 3) (set debit col)) (if (== s 4) (set credit col)) (if (== s 5) (set balance col)))
+          (set col (+ col 1))))
+    (if (or (< debit 1) (or (< credit 1) (< balance 1))) (return 0))
+    (cells-drop targets 0) (set col 0)
+    (while (< col cols)
+      (do (set sum -1)
+          (if (or (== col debit) (== col credit))
+            (do (set sum 0) (set r 2)
+                (while (< r rows)
+                  (do (set value (te-value tb k tc tw wd et r col 3))
+                      (if (< value 0) (return 0))
+                      (if (> sum (- 1000000000 value)) (return 0))
+                      (set sum (+ sum value)) (set r (+ r 1))))))
+          (if (== col balance) (set sum (te-value tb k tc tw wd et (- rows 1) col 5)))
+          (cells-push targets sum) (set col (+ col 1))))
+    (set nr (tb-rows wd et w0 w1 (cells-at tb (+ b 1)) (+ (cells-at tb (+ b 4)) 1)
+                     (cells-at tb (+ b 3)) (+ (cells-at tb (+ b 4)) 4000) wl rw sg))
+    (set r 0)
+    (while (and (< r nr) (< chosen 0))
+      (do (if (== (cells-at rw (+ (* r RWS) 9)) 4)
+            (do (set good 1) (set col 0) (set q 1)
+                (let [^I32 ls (* (cells-at rw (+ (* r RWS) 8)) SGS)
+                      ^I32 lfrm (cells-at sg (+ ls 3)) ^I32 m (cells-at sg (+ ls 4))]
+                  (if (not (and (te-label-has wd et wl lfrm m 1) (te-label-has wd et wl lfrm m 2))) (set good 0)))
+                (while (< col cols)
+                  (do (if (>= (cells-at targets col) 0)
+                        (do (if (>= q 4) (set good 0)
+                              (let [^I32 sb (* (+ (cells-at rw (+ (* r RWS) 8)) q) SGS)
+                                    ^I32 from (cells-at sg (+ sb 3)) ^I32 n (cells-at sg (+ sb 4))]
+                                (if (!= n 1) (set good 0))
+                                (if (!= (te-word-cents wd et (cells-at wl (+ from (- n 1)))) (cells-at targets col)) (set good 0))))
+                            (set q (+ q 1))))
+                      (set col (+ col 1))))
+                (if (and (== good 1) (== q 4)) (set chosen r))))
+          (set r (+ r 1))))
+    (if (< chosen 0) (return 0))
+    (if (== (te-free tb k tc tw wl rw chosen) 0) (return 0))
+    (set newfirst (tb-rows-of tc TCS)) (set c first)
+    (while (< c (+ first count))
+      (do (set field 0)
+          (while (< field TCS) (do (cells-push tc (cells-at tc (+ (* c TCS) field))) (set field (+ field 1))))
+          (set c (+ c 1))))
+    (set c (tb-rows-of tc TCS)) (set col 0)
+    (while (< col cols)
+      (do (tb-cell-add tc rows col 1 1 (cells-at tx (+ cuts col)) (cells-at rw (+ (* chosen RWS) 6))
+                             (cells-at tx (+ (+ cuts col) 1)) (cells-at rw (+ (* chosen RWS) 7)))
+          (cells-set tc (- (cells-len tc) 6) 2)
+          (set col (+ col 1))))
+    (set col 0)
+    (while (and (< col cols) (< (cells-at targets col) 0)) (set col (+ col 1)))
+    (if (> col 1)
+      (do (cells-set tc (+ (* c TCS) 3) col)
+          (cells-set tc (+ (* c TCS) 6) (cells-at tx (+ cuts col)))
+          (set j 1)
+          (while (< j col) (do (cells-set tc (+ (* (+ c j) TCS) 12) 1) (set j (+ j 1))))))
+    (cells-drop pr 0) (set q 0) (set col 0)
+    (while (< q 4)
+      (do (if (> q 0)
+            (do (if (== q 1) (set col 0) (set col (+ col 1)))
+                (while (and (< col cols) (< (cells-at targets col) 0)) (set col (+ col 1)))))
+          (let [^I32 sb (* (+ (cells-at rw (+ (* chosen RWS) 8)) q) SGS)
+                ^I32 from (cells-at sg (+ sb 3)) ^I32 n (cells-at sg (+ sb 4))]
+            (set j 0)
+            (while (< j n)
+              (do (tb-pair-add pr wd (+ c col) (cells-at wl (+ from j))) (set j (+ j 1)))))
+          (set q (+ q 1))))
+    (tb-flush-pairs pr so wd tc tw)
+    (cells-set tb (+ b 9) newfirst) (cells-set tb (+ b 10) (+ count cols))
+    (cells-set tb (+ b 7) (+ rows 1)) (cells-set tb (+ b 12) 1)
+    (cells-set tb (+ b 31) (bit-or (cells-at tb (+ b 31)) 2))
+    (return 1)))
+
+(defn ^I32 te-record [^Cells tb ^Cells tc ^Cells tw ^Cells tbk ^Cells wd ^Cells et ^:mut ^Cells decisions]
+  (let [^:mut ^I32 k 0 ^:mut ^I32 col 0 ^:mut ^I32 c 0 ^:mut ^I32 w 0
+        ^:mut ^I32 balance -1 ^:mut ^I32 debit -1 ^:mut ^I32 credit -1
+        ^:mut ^I32 r 0 ^:mut ^I32 target 0 ^:mut ^I32 value 0]
+    (while (< k (tb-rows-of tb TBS))
+      (do (let [^I32 b (* k TBS) ^I32 first (cells-at tb (+ b 9))
+                ^I32 end (+ first (cells-at tb (+ b 10))) ^I32 rows (cells-at tb (+ b 7))
+                ^I32 bodyend (- rows (cells-at tb (+ b 12)))]
+            (if (!= (bit-and (cells-at tb (+ b 31)) 4) 0)
+              (do (set col 0) (set balance -1) (set debit -1) (set credit -1)
+                  (while (< col (cells-at tb (+ b 8)))
+                    (do (let [^I32 sem (tb-model-col tb tbk k col 6)]
+                          (if (== sem 3) (set debit col)) (if (== sem 4) (set credit col)) (if (== sem 5) (set balance col)))
+                        (set col (+ col 1))))
+                  (if (and (>= balance 0) (and (>= debit 0) (>= credit 0)))
+                    (do (set c first)
+                        (while (< c end)
+                          (do (if (and (== (cells-at tc (* c TCS)) 1)
+                                       (and (== (cells-at tc (+ (* c TCS) 1)) balance) (> (cells-at tc (+ (* c TCS) 9)) 0)))
+                                (do (set w (cells-at tw (+ (cells-at tc (+ (* c TCS) 8)) (- (cells-at tc (+ (* c TCS) 9)) 1))))
+                                    (cells-push decisions -1) (cells-push decisions k)
+                                    (cells-push decisions (te-word-cents wd et w))
+                                    (cells-push decisions (te-value tb k tc tw wd et 2 debit 3))
+                                    (cells-push decisions (te-value tb k tc tw wd et 2 credit 4))
+                                    (cells-push decisions (te-value tb k tc tw wd et 2 balance 5))
+                                    (cells-push decisions (- (wd-get wd w (hd-x1)) (tb-model-col tb tbk k balance 3)))
+                                    (cells-push decisions balance)))
+                              (set c (+ c 1))))
+                        (if (> (cells-at tb (+ b 12)) 0)
+                          (do (set col 0)
+                              (while (< col (cells-at tb (+ b 8)))
+                                (do (if (or (== col debit) (or (== col credit) (== col balance)))
+                                      (do (set target 0)
+                                          (if (== col balance) (set target (te-value tb k tc tw wd et (- bodyend 1) col 5))
+                                            (do (set r 2)
+                                                (while (< r bodyend)
+                                                  (do (set target (+ target (te-value tb k tc tw wd et r col 3))) (set r (+ r 1))))))
+                                          (set value (te-value tb k tc tw wd et bodyend col 3))
+                                          (set c first)
+                                          (while (< c end)
+                                            (do (if (and (== (cells-at tc (* c TCS)) bodyend)
+                                                         (and (== (cells-at tc (+ (* c TCS) 1)) col) (> (cells-at tc (+ (* c TCS) 9)) 0)))
+                                                  (do (set w (cells-at tw (+ (cells-at tc (+ (* c TCS) 8)) (- (cells-at tc (+ (* c TCS) 9)) 1))))
+                                                      (cells-push decisions -2) (cells-push decisions k) (cells-push decisions col)
+                                                      (cells-push decisions value) (cells-push decisions target)
+                                                      (cells-push decisions (- (wd-get wd w (hd-x1)) (tb-model-col tb tbk k col 3)))
+                                                      (cells-push decisions (tb-model-col tb tbk k col 6)) (cells-push decisions 1)))
+                                                (set c (+ c 1))))))
+                                    (set col (+ col 1)))))))))))
+          (set k (+ k 1))))
+    (return 0)))
+
 (defn ^:pub ^I32 tb-build [^Cells wd ^:mut ^Cells ln ^Cells et ^Cells grl ^Cells gfl ^I32 np
                            ^:mut ^Cells tb ^:mut ^Cells tc ^:mut ^Cells tw ^:mut ^Cells tq ^:mut ^Cells tx
                            ^:mut ^Cells tbk ^:mut ^Cells tbo
@@ -6602,6 +7134,10 @@
                         (do (tb-aligns tb k wd tc tw) (tb-model tb k wd et tc tw tx tbk g4)))
                       (if (> (tb-prune-trailing tb k tc tx) 0) (tb-model tb k wd et tc tw tx tbk g4))
                       (if (> (tb-prune-leading tb k tc tx) 0) (tb-model tb k wd et tc tw tx tbk g4))
+                      (if (> (te-bind p wd et wi wj s1 tb k tc tw tx tbk s10 s11 s12 s13 s7 s3) 0)
+                        (do (tb-aligns tb k wd tc tw) (tb-model tb k wd et tc tw tx tbk g4)
+                            (te-carried p wd et wi wj tb k tc tw tx tbk s10 s11 s12 s13 s7 s3)
+                            (tb-aligns tb k wd tc tw) (tb-model tb k wd et tc tw tx tbk g4)))
                       (set k (+ k 1))))
                 (tb-own-claim tb t0 tc tw wd et wi wj tbo ln li lj)
                 (set k t0)
@@ -6612,7 +7148,7 @@
           (set qi qj)
           (set ui uj)
           (set p (+ p 1))))
-    (tb-link tb tc tw tx tq wd et ln pages)
+    (tb-link tb tc tw tx tq wd et ln pages tbk s0 s1 s2)
     (set k 0)
     (while (< k (tb-rows-of tb TBS))
       (do (if (> (tb-head-amounts tb k wd et tc tw tx tbk s10 s7 s3) 0)
@@ -6631,4 +7167,5 @@
                                 (set j (+ j 1))))
                           (set c (+ c 1))))))))
           (set k (+ k 1))))
+    (te-record tb tc tw tbk wd et s0)
     (return (tb-rows-of tb TBS))))

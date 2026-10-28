@@ -1,6 +1,6 @@
 ;; The SHA-256 of each replayed bundle (JSON, HTML, evidence) of test/fusion/replay/ID, as `bb fusion-record` made it (P7.3, D285-D290; P7.5, D307).
 {"bank-statement"
- "4682dbad31e80f97335ac12c4ae103bc393a6505b47bd5efb0b3ff17a4e619a5",
+ "aadcd2e2093a2ee1406e26cda749f2644540afd3e201e7daee5a8992ee82b94f",
  "bg-texture"
  "dfc848623a391feb0beca2e15ac09b911e68733e3c7aa0659183da72e58974f8",
  "columns-two"
