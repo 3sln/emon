@@ -5434,4 +5434,143 @@ public static class Tabletest {
         emon.Testport.AssertEq(TtScreening(t, 0), 0, "open grid is well formed");
         emon.Testport.AssertText(t, "T3p;Gh;R;Ch[Question];Ch[Response];Ch[];Gb;R;C[Will project one collect personal information?];C[Yes];C[No];R;C[Will project two collect personal information?];C[Yes];C[No];R;C[Will project three collect personal information?];C[Yes];C[No];", "unruled alternatives remain independent columns");
     }
+    [Xunit.Fact]
+    public static void TestAnEntryGridOwnsTwoUnboldHeaderRowsBeforeEmptyFields() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells an = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        int r = 0;
+        int c = 0;
+        // D757: a regular three-column entry ledger has eleven empty widget rows between its header and total. The adjacent open-label form remains covered by D583.
+        while (r <= 12) {
+            TtRule(pa, 7200, (10000 + (r * 2000)) - 50, 37200, (10000 + (r * 2000)) + 50);
+            r += 1;
+        }
+        TtRule(pa, 7200, 39950, 37200, 40050);
+        while (c <= 3) {
+            TtRule(pa, (7200 + (c * 10000)) - 50, 10000, (7200 + (c * 10000)) + 50, 40000);
+            c += 1;
+        }
+        TtAt(wd, ln, et, emon.Testport.TextBlob("1 Item"), 7600, 10600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Cost"), 17600, 10600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Gain"), 27600, 10600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Total"), 7600, 34600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("123"), 17600, 34600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("456"), 27600, 34600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("More"), 7600, 36600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("234"), 17600, 36600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("567"), 27600, 36600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("End"), 7600, 38600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("345"), 17600, 38600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("678"), 27600, 38600, 0, 0);
+        int totalat = emon.Port.CellsLen(an);
+        TtWidget(an, 17600, 38300, 26600, 39700);
+        emon.Port.CellsSet(an, totalat + 8, 4);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Code"), 7600, 12600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Basis"), 17600, 12600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Adjustment"), 27600, 12600, 0, 0);
+        r = 2;
+        while (r <= 11) {
+            c = 0;
+            while (c < 3) {
+                TtWidget(an, 7600 + (c * 10000), 10300 + (r * 2000), 16600 + (c * 10000), 11700 + (r * 2000));
+                c += 1;
+            }
+            r += 1;
+        }
+        TtRule(pa, 8000, 9050, 8800, 9150);
+        TtRule(pa, 8000, 9850, 8800, 9950);
+        TtRule(pa, 7950, 9100, 8050, 9900);
+        TtRule(pa, 8750, 9100, 8850, 9900);
+        int at = emon.Port.CellsLen(an);
+        TtWidget(an, 8000, 9100, 8800, 9900);
+        emon.Port.CellsSet(an, at + 8, 2);
+        emon.Testport.AssertEq(TtWidgetBuild(wd, ln, et, pa, tb, tc, tw, an), 1, "one entry grid owns every source word");
+        emon.Testport.AssertEq(emon.Port.CellsAt(tb, 11), 2, "both unbold rows are column headers before the blank entry rows");
+        emon.Testport.AssertEq(emon.Port.CellsAt(tb, 7), 13, "headers, ten entries and the original wrapped total survive");
+        int first = emon.Port.CellsAt(tb, 9);
+        emon.Testport.AssertEq(emon.Port.CellsAt(tc, (first * 16) + 10), 1, "Item is a column header");
+        emon.Testport.AssertEq(emon.Port.CellsAt(tc, ((first + 3) * 16) + 10), 1, "Code is a column header");
+        emon.Testport.AssertEq(TtWordOwner(tb, 0, tc, tw, 0), first, "Item owns its original first column");
+        emon.Testport.AssertEq(TtWordOwner(tb, 0, tc, tw, 4), first + 37, "123 stays in the total Cost cell");
+    }
+    [Xunit.Fact]
+    public static void TestFilledEntryFieldsCannotBePromotedToColumnHeaders() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells an = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        int r = 0;
+        int c = 0;
+        // D757: a regular three-column entry ledger has eleven empty widget rows between its header and total. The adjacent open-label form remains covered by D583.
+        while (r <= 12) {
+            TtRule(pa, 7200, (10000 + (r * 2000)) - 50, 37200, (10000 + (r * 2000)) + 50);
+            r += 1;
+        }
+        TtRule(pa, 7200, 39950, 37200, 40050);
+        while (c <= 3) {
+            TtRule(pa, (7200 + (c * 10000)) - 50, 10000, (7200 + (c * 10000)) + 50, 40000);
+            c += 1;
+        }
+        TtAt(wd, ln, et, emon.Testport.TextBlob("123"), 7600, 10600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("456"), 17600, 10600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("789"), 27600, 10600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Total"), 7600, 34600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("123"), 17600, 34600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("456"), 27600, 34600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("More"), 7600, 36600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("234"), 17600, 36600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("567"), 27600, 36600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("End"), 7600, 38600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("345"), 17600, 38600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("678"), 27600, 38600, 0, 0);
+        int totalat = emon.Port.CellsLen(an);
+        TtWidget(an, 17600, 38300, 26600, 39700);
+        emon.Port.CellsSet(an, totalat + 8, 4);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("234"), 7600, 12600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("567"), 17600, 12600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("890"), 27600, 12600, 0, 0);
+        r = 0;
+        while (r < 2) {
+            c = 0;
+            while (c < 3) {
+                TtWidget(an, 7600 + (c * 10000), 10300 + (r * 2000), 16600 + (c * 10000), 11700 + (r * 2000));
+                c += 1;
+            }
+            r += 1;
+        }
+        r = 2;
+        while (r <= 11) {
+            c = 0;
+            while (c < 3) {
+                TtWidget(an, 7600 + (c * 10000), 10300 + (r * 2000), 16600 + (c * 10000), 11700 + (r * 2000));
+                c += 1;
+            }
+            r += 1;
+        }
+        TtRule(pa, 8000, 9050, 8800, 9150);
+        TtRule(pa, 8000, 9850, 8800, 9950);
+        TtRule(pa, 7950, 9100, 8050, 9900);
+        TtRule(pa, 8750, 9100, 8850, 9900);
+        int at = emon.Port.CellsLen(an);
+        TtWidget(an, 8000, 9100, 8800, 9900);
+        emon.Port.CellsSet(an, at + 8, 2);
+        emon.Testport.AssertEq(TtWidgetBuild(wd, ln, et, pa, tb, tc, tw, an), 1, "one entry grid owns every source word");
+        emon.Testport.AssertEq(emon.Port.CellsAt(tb, 11), 0, "entered values in widgets are body rows before the remaining blank fields");
+        emon.Testport.AssertEq(emon.Port.CellsAt(tb, 7), 13, "two filled entries, ten blank entries and the original total survive");
+        int first = emon.Port.CellsAt(tb, 9);
+        emon.Testport.AssertEq(emon.Port.CellsAt(tc, (first * 16) + 10), 0, "123 is a body value");
+        emon.Testport.AssertEq(emon.Port.CellsAt(tc, ((first + 3) * 16) + 10), 0, "234 is a body value");
+        emon.Testport.AssertEq(TtWordOwner(tb, 0, tc, tw, 0), first, "123 owns its original first column");
+        emon.Testport.AssertEq(TtWordOwner(tb, 0, tc, tw, 4), first + 37, "the original total stays in its second column");
+    }
 }

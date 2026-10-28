@@ -898,6 +898,62 @@ func tbEntryRun(tc *port.Cells, first int32, end int32, nr int32, nc int32, an *
 	return best
 }
 
+func tbEntryHead(tc *port.Cells, first int32, end int32, nc int32, an *port.Cells, page int32) int32 {
+	// D808: only a proved repeated widget-entry lattice can infer unbold column labels from its blank entry boundary. At most three populated rows precede the first full field row; no header cell may span into that row.
+	var r int32 = 0
+	var c int32 = first
+	var filled int32 = 0
+	var fields int32 = 0
+	var a int32 = 0
+	var cx int32 = 0
+	var cy int32 = 0
+	for r < 4 {
+		c = first
+		filled = 0
+		fields = 0
+		for c < end {
+			if port.CellsAt(tc, c*tcs) == r {
+				if port.CellsAt(tc, (c*tcs)+9) > 0 {
+					filled += 1
+					a = 0
+					for a < (port.CellsLen(an) / anStride) {
+						if (port.CellsAt(an, (a*anStride)+1) == pdfannot.AnField()) && ((port.CellsAt(an, a*anStride) + 1) == page) {
+							cx = (port.CellsAt(an, (a*anStride)+4) + port.CellsAt(an, (a*anStride)+6)) / 2
+							cy = (port.CellsAt(an, (a*anStride)+5) + port.CellsAt(an, (a*anStride)+7)) / 2
+							if (cx >= port.CellsAt(tc, (c*tcs)+4)) && (cx <= port.CellsAt(tc, (c*tcs)+6)) && (cy >= port.CellsAt(tc, (c*tcs)+5)) && (cy <= port.CellsAt(tc, (c*tcs)+7)) {
+								return 0
+							}
+						}
+						a += 1
+					}
+				}
+				if (port.CellsAt(tc, (c*tcs)+9) == 0) && (port.CellsAt(tc, (c*tcs)+2) == 1) && (port.CellsAt(tc, (c*tcs)+3) == 1) && (tbFieldCells(tc, c, c+1, an, page) == 1) {
+					fields += 1
+				}
+			}
+			c += 1
+		}
+		if fields == nc {
+			if (r == 0) || (filled > 0) {
+				return 0
+			}
+			c = first
+			for c < end {
+				if (port.CellsAt(tc, c*tcs) < r) && ((port.CellsAt(tc, c*tcs) + port.CellsAt(tc, (c*tcs)+2)) > r) {
+					return 0
+				}
+				c += 1
+			}
+			return r
+		}
+		if (filled == 0) || (fields > 0) {
+			return 0
+		}
+		r += 1
+	}
+	return 0
+}
+
 func tbPageFrame(tc *port.Cells, cfirst int32, cend int32, gx0 int32, gy0 int32, gx1 int32, gy1 int32, pw int32, ph int32) int32 {
 	// 1 when the grid (box gx0..gx1, gy0..gy1) is the page's frame: at least 80 per cent of the page's width and of its height, with a cell of at least 30 per cent of the page's area in it
 	// (the drawing's sheet of an engineering drawing, its title block under it); 0 for a page of unknown size.
@@ -1105,6 +1161,9 @@ func tbLattice(rm *port.Cells, root int32, xs *port.Cells, ys *port.Cells, page 
 	}
 	var t int32 = TbAdd(tb, page, port.CellsAt(xs, 0), port.CellsAt(ys, 0), port.CellsAt(xs, nc), port.CellsAt(ys, nr), pfRuled, 900, nr, nc, cfirst, total)
 	var i int32 = 0
+	if entry == 1 {
+		port.CellsSet(tb, (t*tagtable.Tbs)+22, tbEntryHead(tc, cfirst, cfirst+total, nc, an, page))
+	}
 	port.CellsSet(tb, (t*tagtable.Tbs)+16, port.CellsLen(tx))
 	port.CellsSet(tb, (t*tagtable.Tbs)+17, nc+1)
 	for i <= nc {

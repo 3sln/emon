@@ -809,6 +809,61 @@ public static class Table {
         }
         return best;
     }
+    internal static int TbEntryHead(emon.Port.Cells tc, int first, int end, int nc, emon.Port.Cells an, int page) {
+        // D808: only a proved repeated widget-entry lattice can infer unbold column labels from its blank entry boundary. At most three populated rows precede the first full field row; no header cell may span into that row.
+        int r = 0;
+        int c = first;
+        int filled = 0;
+        int fields = 0;
+        int a = 0;
+        int cx = 0;
+        int cy = 0;
+        while (r < 4) {
+            c = first;
+            filled = 0;
+            fields = 0;
+            while (c < end) {
+                if (emon.Port.CellsAt(tc, c * Tcs) == r) {
+                    if (emon.Port.CellsAt(tc, (c * Tcs) + 9) > 0) {
+                        filled += 1;
+                        a = 0;
+                        while (a < (emon.Port.CellsLen(an) / AnStride)) {
+                            if ((emon.Port.CellsAt(an, (a * AnStride) + 1) == Pdfannot.AnField()) && ((emon.Port.CellsAt(an, a * AnStride) + 1) == page)) {
+                                cx = (emon.Port.CellsAt(an, (a * AnStride) + 4) + emon.Port.CellsAt(an, (a * AnStride) + 6)) / 2;
+                                cy = (emon.Port.CellsAt(an, (a * AnStride) + 5) + emon.Port.CellsAt(an, (a * AnStride) + 7)) / 2;
+                                if ((cx >= emon.Port.CellsAt(tc, (c * Tcs) + 4)) && (cx <= emon.Port.CellsAt(tc, (c * Tcs) + 6)) && (cy >= emon.Port.CellsAt(tc, (c * Tcs) + 5)) && (cy <= emon.Port.CellsAt(tc, (c * Tcs) + 7))) {
+                                    return 0;
+                                }
+                            }
+                            a += 1;
+                        }
+                    }
+                    if ((emon.Port.CellsAt(tc, (c * Tcs) + 9) == 0) && (emon.Port.CellsAt(tc, (c * Tcs) + 2) == 1) && (emon.Port.CellsAt(tc, (c * Tcs) + 3) == 1) && (TbFieldCells(tc, c, c + 1, an, page) == 1)) {
+                        fields += 1;
+                    }
+                }
+                c += 1;
+            }
+            if (fields == nc) {
+                if ((r == 0) || (filled > 0)) {
+                    return 0;
+                }
+                c = first;
+                while (c < end) {
+                    if ((emon.Port.CellsAt(tc, c * Tcs) < r) && ((emon.Port.CellsAt(tc, c * Tcs) + emon.Port.CellsAt(tc, (c * Tcs) + 2)) > r)) {
+                        return 0;
+                    }
+                    c += 1;
+                }
+                return r;
+            }
+            if ((filled == 0) || (fields > 0)) {
+                return 0;
+            }
+            r += 1;
+        }
+        return 0;
+    }
     internal static int TbPageFrame(emon.Port.Cells tc, int cfirst, int cend, int gx0, int gy0, int gx1, int gy1, int pw, int ph) {
         // 1 when the grid (box gx0..gx1, gy0..gy1) is the page's frame: at least 80 per cent of the page's width and of its height, with a cell of at least 30 per cent of the page's area in it
         // (the drawing's sheet of an engineering drawing, its title block under it); 0 for a page of unknown size.
@@ -1014,6 +1069,9 @@ public static class Table {
         }
         int t = TbAdd(tb, page, emon.Port.CellsAt(xs, 0), emon.Port.CellsAt(ys, 0), emon.Port.CellsAt(xs, nc), emon.Port.CellsAt(ys, nr), PfRuled, 900, nr, nc, cfirst, total);
         int i = 0;
+        if (entry == 1) {
+            emon.Port.CellsSet(tb, (t * Tagtable.Tbs) + 22, TbEntryHead(tc, cfirst, cfirst + total, nc, an, page));
+        }
         emon.Port.CellsSet(tb, (t * Tagtable.Tbs) + 16, emon.Port.CellsLen(tx));
         emon.Port.CellsSet(tb, (t * Tagtable.Tbs) + 17, nc + 1);
         while (i <= nc) {

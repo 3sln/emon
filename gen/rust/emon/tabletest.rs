@@ -5448,3 +5448,142 @@ fn test_response_gaps_without_a_complete_grid_keep_their_column_analysis() {
     crate::testport::assert_eq(tt_screening(t, 0), 0, "open grid is well formed");
     crate::testport::assert_text(t, "T3p;Gh;R;Ch[Question];Ch[Response];Ch[];Gb;R;C[Will project one collect personal information?];C[Yes];C[No];R;C[Will project two collect personal information?];C[Yes];C[No];R;C[Will project three collect personal information?];C[Yes];C[No];", "unruled alternatives remain independent columns");
 }
+#[test]
+fn test_an_entry_grid_owns_two_unbold_header_rows_before_empty_fields() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let an: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut r: i32 = 0;
+    let mut c: i32 = 0;
+    // D757: a regular three-column entry ledger has eleven empty widget rows between its header and total. The adjacent open-label form remains covered by D583.
+    while r <= 12 {
+        tt_rule(pa, 7200, (10000 + (r * 2000)) - 50, 37200, (10000 + (r * 2000)) + 50);
+        r += 1;
+    }
+    tt_rule(pa, 7200, 39950, 37200, 40050);
+    while c <= 3 {
+        tt_rule(pa, (7200 + (c * 10000)) - 50, 10000, (7200 + (c * 10000)) + 50, 40000);
+        c += 1;
+    }
+    tt_at(wd, ln, et, &crate::testport::text_blob("1 Item")[..], 7600, 10600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Cost")[..], 17600, 10600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Gain")[..], 27600, 10600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Total")[..], 7600, 34600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("123")[..], 17600, 34600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("456")[..], 27600, 34600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("More")[..], 7600, 36600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("234")[..], 17600, 36600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("567")[..], 27600, 36600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("End")[..], 7600, 38600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("345")[..], 17600, 38600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("678")[..], 27600, 38600, 0, 0);
+    let totalat: i32 = crate::port::cells_len(an);
+    tt_widget(an, 17600, 38300, 26600, 39700);
+    crate::port::cells_set(an, totalat + 8, 4);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Code")[..], 7600, 12600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Basis")[..], 17600, 12600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Adjustment")[..], 27600, 12600, 0, 0);
+    r = 2;
+    while r <= 11 {
+        c = 0;
+        while c < 3 {
+            tt_widget(an, 7600 + (c * 10000), 10300 + (r * 2000), 16600 + (c * 10000), 11700 + (r * 2000));
+            c += 1;
+        }
+        r += 1;
+    }
+    tt_rule(pa, 8000, 9050, 8800, 9150);
+    tt_rule(pa, 8000, 9850, 8800, 9950);
+    tt_rule(pa, 7950, 9100, 8050, 9900);
+    tt_rule(pa, 8750, 9100, 8850, 9900);
+    let at: i32 = crate::port::cells_len(an);
+    tt_widget(an, 8000, 9100, 8800, 9900);
+    crate::port::cells_set(an, at + 8, 2);
+    crate::testport::assert_eq(tt_widget_build(wd, ln, et, pa, tb, tc, tw, an), 1, "one entry grid owns every source word");
+    crate::testport::assert_eq(crate::port::cells_at(tb, 11), 2, "both unbold rows are column headers before the blank entry rows");
+    crate::testport::assert_eq(crate::port::cells_at(tb, 7), 13, "headers, ten entries and the original wrapped total survive");
+    let first: i32 = crate::port::cells_at(tb, 9);
+    crate::testport::assert_eq(crate::port::cells_at(tc, (first * 16) + 10), 1, "Item is a column header");
+    crate::testport::assert_eq(crate::port::cells_at(tc, ((first + 3) * 16) + 10), 1, "Code is a column header");
+    crate::testport::assert_eq(tt_word_owner(tb, 0, tc, tw, 0), first, "Item owns its original first column");
+    crate::testport::assert_eq(tt_word_owner(tb, 0, tc, tw, 4), first + 37, "123 stays in the total Cost cell");
+}
+#[test]
+fn test_filled_entry_fields_cannot_be_promoted_to_column_headers() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let an: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut r: i32 = 0;
+    let mut c: i32 = 0;
+    // D757: a regular three-column entry ledger has eleven empty widget rows between its header and total. The adjacent open-label form remains covered by D583.
+    while r <= 12 {
+        tt_rule(pa, 7200, (10000 + (r * 2000)) - 50, 37200, (10000 + (r * 2000)) + 50);
+        r += 1;
+    }
+    tt_rule(pa, 7200, 39950, 37200, 40050);
+    while c <= 3 {
+        tt_rule(pa, (7200 + (c * 10000)) - 50, 10000, (7200 + (c * 10000)) + 50, 40000);
+        c += 1;
+    }
+    tt_at(wd, ln, et, &crate::testport::text_blob("123")[..], 7600, 10600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("456")[..], 17600, 10600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("789")[..], 27600, 10600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Total")[..], 7600, 34600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("123")[..], 17600, 34600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("456")[..], 27600, 34600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("More")[..], 7600, 36600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("234")[..], 17600, 36600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("567")[..], 27600, 36600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("End")[..], 7600, 38600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("345")[..], 17600, 38600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("678")[..], 27600, 38600, 0, 0);
+    let totalat: i32 = crate::port::cells_len(an);
+    tt_widget(an, 17600, 38300, 26600, 39700);
+    crate::port::cells_set(an, totalat + 8, 4);
+    tt_at(wd, ln, et, &crate::testport::text_blob("234")[..], 7600, 12600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("567")[..], 17600, 12600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("890")[..], 27600, 12600, 0, 0);
+    r = 0;
+    while r < 2 {
+        c = 0;
+        while c < 3 {
+            tt_widget(an, 7600 + (c * 10000), 10300 + (r * 2000), 16600 + (c * 10000), 11700 + (r * 2000));
+            c += 1;
+        }
+        r += 1;
+    }
+    r = 2;
+    while r <= 11 {
+        c = 0;
+        while c < 3 {
+            tt_widget(an, 7600 + (c * 10000), 10300 + (r * 2000), 16600 + (c * 10000), 11700 + (r * 2000));
+            c += 1;
+        }
+        r += 1;
+    }
+    tt_rule(pa, 8000, 9050, 8800, 9150);
+    tt_rule(pa, 8000, 9850, 8800, 9950);
+    tt_rule(pa, 7950, 9100, 8050, 9900);
+    tt_rule(pa, 8750, 9100, 8850, 9900);
+    let at: i32 = crate::port::cells_len(an);
+    tt_widget(an, 8000, 9100, 8800, 9900);
+    crate::port::cells_set(an, at + 8, 2);
+    crate::testport::assert_eq(tt_widget_build(wd, ln, et, pa, tb, tc, tw, an), 1, "one entry grid owns every source word");
+    crate::testport::assert_eq(crate::port::cells_at(tb, 11), 0, "entered values in widgets are body rows before the remaining blank fields");
+    crate::testport::assert_eq(crate::port::cells_at(tb, 7), 13, "two filled entries, ten blank entries and the original total survive");
+    let first: i32 = crate::port::cells_at(tb, 9);
+    crate::testport::assert_eq(crate::port::cells_at(tc, (first * 16) + 10), 0, "123 is a body value");
+    crate::testport::assert_eq(crate::port::cells_at(tc, ((first + 3) * 16) + 10), 0, "234 is a body value");
+    crate::testport::assert_eq(tt_word_owner(tb, 0, tc, tw, 0), first, "123 owns its original first column");
+    crate::testport::assert_eq(tt_word_owner(tb, 0, tc, tw, 4), first + 37, "the original total stays in its second column");
+}
