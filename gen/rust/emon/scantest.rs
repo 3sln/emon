@@ -1223,3 +1223,61 @@ fn test_receipt_admission_floor_filters_body_words_and_preserves_raw_evidence() 
     crate::testport::assert_eq(ow_count(ow), 2, "both raw OCR occurrences remain evidence");
     crate::testport::assert_eq(ow_get(ow, 0, owf_flags()) & oe_garbage(), oe_garbage(), "the refused occurrence has a ledger fate");
 }
+pub(crate) fn sc_multilingual_owners(emon_t: i32, lang: i32, script: i32, c0: i32, c1: i32, c2: i32) -> i32 {
+    let an: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let at: i32 = an_ocr(an, 2);
+    let wnative: i32 = an_ocr_word(an, at, 10, 20, 60, 40, 900, 0, 0);
+    an_ocr_cp(an, wnative, c0);
+    an_ocr_cp(an, wnative, c1);
+    an_ocr_cp(an, wnative, c2);
+    let identifier: i32 = an_ocr_word(an, at, 90, 20, 60, 40, 900, 0, 0);
+    an_ocr_cp(an, identifier, 65);
+    an_ocr_cp(an, identifier, 55);
+    ox_begin(an, 0, 0, 0, 0, 0, script, 629, 500, 1, 1, 0, 0, 0);
+    ox_line(an, 10, 20, 140, 40, 10, 55, 150, 55, 0, 0, 0, 20, 14, 6);
+    ox_block(an, 10, 20, 140, 40, 0, 0, 0);
+    ox_word(an, 0, lang, -1, 1);
+    ox_word(an, 0, 1701734144, -1, 1);
+    an_ocr_end(an, at);
+    sc_page(an, at, 1, 2, 1, 17712, 22848, 738, 952, 30000, 0, 0, 0, 0, 0, 17712, 22848, lang / 256, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), runs, &mut crate::port::Cells::new(), olines, owords, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), wd, ln, &mut crate::port::Cells::new());
+    crate::testport::assert_eq(or_get(runs, 0, orf_request()), 2, "reading belongs to its actual OCR request");
+    crate::testport::assert_eq(or_get(runs, 0, orf_langlen()), 3, "request language is recorded independently of word models");
+    crate::testport::assert_eq(crate::port::cells_at(et, or_get(runs, 0, orf_lang())), lang / 16777216, "request language first letter");
+    crate::testport::assert_eq(ow_count(owords), 2, "both recorded words remain evidence");
+    crate::testport::assert_eq(wd_count(wd), 2, "native text and Latin identifier remain selected");
+    crate::testport::assert_eq(ow_get(owords, 0, owf_run()), 0, "native word belongs to this run");
+    crate::testport::assert_eq(ow_get(owords, 1, owf_run()), 0, "Latin identifier belongs to the same run");
+    crate::testport::assert_eq(ow_get(owords, 0, owf_lang()), lang, "native word keeps its engine model");
+    crate::testport::assert_eq(ow_get(owords, 1, owf_lang()), 1701734144, "identifier keeps its English model");
+    crate::testport::assert_eq(ln_count(ln), 1, "one selected source row");
+    crate::testport::assert_eq(ow_get(owords, 0, hd_line()), 0, "native evidence word belongs to the recorded row");
+    crate::testport::assert_eq(ow_get(owords, 1, hd_line()), 0, "identifier evidence word belongs to the recorded row");
+    crate::testport::assert_eq(wd_get(wd, 0, hd_line()), 0, "source row zero owns the native value");
+    crate::testport::assert_eq(wd_get(wd, 1, hd_line()), 0, "source row zero owns the identifier value");
+    crate::testport::assert_eq(wd_get(wd, 0, hd_tlen()), 3, "complete native span");
+    crate::testport::assert_eq(wd_get(wd, 1, hd_tlen()), 2, "complete identifier span");
+    crate::testport::assert_eq(crate::port::cells_at(et, wd_get(wd, 0, hd_tstart())), c0, "first native scalar");
+    crate::testport::assert_eq(crate::port::cells_at(et, wd_get(wd, 0, hd_tstart()) + 1), c1, "native diacritic or script scalar");
+    crate::testport::assert_eq(crate::port::cells_at(et, wd_get(wd, 0, hd_tstart()) + 2), c2, "last native scalar");
+    crate::testport::assert_eq(crate::port::cells_at(et, wd_get(wd, 1, hd_tstart())), 65, "identifier A stays exact");
+    crate::testport::assert_eq(crate::port::cells_at(et, wd_get(wd, 1, hd_tstart()) + 1), 55, "identifier value 7 stays exact");
+    return 0;
+}
+#[test]
+fn test_german_umlaut_and_latin_identifier_keep_their_reading_and_row() {
+    sc_multilingual_owners(0, 1684370688, 1281455214, 102, 252, 114);
+}
+#[test]
+fn test_urdu_native_values_do_not_authorize_deleting_latin_identifiers() {
+    sc_multilingual_owners(0, 1970430976, 1098015074, 1593, 1575, 1605);
+}
+#[test]
+fn test_japanese_mixed_reading_retains_source_backed_latin_identifiers() {
+    sc_multilingual_owners(0, 1785753088, 1248878958, 23665, 30000, 12373);
+}

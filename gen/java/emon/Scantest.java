@@ -1170,4 +1170,59 @@ public final class Scantest {
         emon.Testport.assertEq(Evidence.owCount(ow), 2, "both raw OCR occurrences remain evidence");
         emon.Testport.assertEq(Evidence.owGet(ow, 0, Evidence.owfFlags()) & Evidence.oeGarbage(), Evidence.oeGarbage(), "the refused occurrence has a ledger fate");
     }
+    public static int scMultilingualOwners(int emonT, int lang, int script, int c0, int c1, int c2) {
+        emon.Port.Cells an = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        int at = Plan.anOcr(an, 2);
+        int wnative = Plan.anOcrWord(an, at, 10, 20, 60, 40, 900, 0, 0);
+        Plan.anOcrCp(an, wnative, c0);
+        Plan.anOcrCp(an, wnative, c1);
+        Plan.anOcrCp(an, wnative, c2);
+        int identifier = Plan.anOcrWord(an, at, 90, 20, 60, 40, 900, 0, 0);
+        Plan.anOcrCp(an, identifier, 65);
+        Plan.anOcrCp(an, identifier, 55);
+        Ocr.oxBegin(an, 0, 0, 0, 0, 0, script, 629, 500, 1, 1, 0, 0, 0);
+        Ocr.oxLine(an, 10, 20, 140, 40, 10, 55, 150, 55, 0, 0, 0, 20, 14, 6);
+        Ocr.oxBlock(an, 10, 20, 140, 40, 0, 0, 0);
+        Ocr.oxWord(an, 0, lang, -1, 1);
+        Ocr.oxWord(an, 0, 1701734144, -1, 1);
+        Plan.anOcrEnd(an, at);
+        Scan.scPage(an, at, 1, 2, 1, 17712, 22848, 738, 952, 30000, 0, 0, 0, 0, 0, 17712, 22848, lang / 256, emon.Port.newCells(), emon.Port.newCells(), et, emon.Port.newCells(), emon.Port.newCells(), runs, emon.Port.newCells(), olines, owords, emon.Port.newCells(), emon.Port.newCells(), wd, ln, emon.Port.newCells());
+        emon.Testport.assertEq(Evidence.orGet(runs, 0, Evidence.orfRequest()), 2, "reading belongs to its actual OCR request");
+        emon.Testport.assertEq(Evidence.orGet(runs, 0, Evidence.orfLanglen()), 3, "request language is recorded independently of word models");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.orGet(runs, 0, Evidence.orfLang())), lang / 16777216, "request language first letter");
+        emon.Testport.assertEq(Evidence.owCount(owords), 2, "both recorded words remain evidence");
+        emon.Testport.assertEq(Evidence.wdCount(wd), 2, "native text and Latin identifier remain selected");
+        emon.Testport.assertEq(Evidence.owGet(owords, 0, Evidence.owfRun()), 0, "native word belongs to this run");
+        emon.Testport.assertEq(Evidence.owGet(owords, 1, Evidence.owfRun()), 0, "Latin identifier belongs to the same run");
+        emon.Testport.assertEq(Evidence.owGet(owords, 0, Evidence.owfLang()), lang, "native word keeps its engine model");
+        emon.Testport.assertEq(Evidence.owGet(owords, 1, Evidence.owfLang()), 1701734144, "identifier keeps its English model");
+        emon.Testport.assertEq(Evidence.lnCount(ln), 1, "one selected source row");
+        emon.Testport.assertEq(Evidence.owGet(owords, 0, Evidence.hdLine()), 0, "native evidence word belongs to the recorded row");
+        emon.Testport.assertEq(Evidence.owGet(owords, 1, Evidence.hdLine()), 0, "identifier evidence word belongs to the recorded row");
+        emon.Testport.assertEq(Evidence.wdGet(wd, 0, Evidence.hdLine()), 0, "source row zero owns the native value");
+        emon.Testport.assertEq(Evidence.wdGet(wd, 1, Evidence.hdLine()), 0, "source row zero owns the identifier value");
+        emon.Testport.assertEq(Evidence.wdGet(wd, 0, Evidence.hdTlen()), 3, "complete native span");
+        emon.Testport.assertEq(Evidence.wdGet(wd, 1, Evidence.hdTlen()), 2, "complete identifier span");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.wdGet(wd, 0, Evidence.hdTstart())), c0, "first native scalar");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.wdGet(wd, 0, Evidence.hdTstart()) + 1), c1, "native diacritic or script scalar");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.wdGet(wd, 0, Evidence.hdTstart()) + 2), c2, "last native scalar");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.wdGet(wd, 1, Evidence.hdTstart())), 65, "identifier A stays exact");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.wdGet(wd, 1, Evidence.hdTstart()) + 1), 55, "identifier value 7 stays exact");
+        return 0;
+    }
+    public static void testGermanUmlautAndLatinIdentifierKeepTheirReadingAndRow() {
+        scMultilingualOwners(0, 1684370688, 1281455214, 102, 252, 114);
+    }
+    public static void testUrduNativeValuesDoNotAuthorizeDeletingLatinIdentifiers() {
+        scMultilingualOwners(0, 1970430976, 1098015074, 1593, 1575, 1605);
+    }
+    public static void testJapaneseMixedReadingRetainsSourceBackedLatinIdentifiers() {
+        scMultilingualOwners(0, 1785753088, 1248878958, 23665, 30000, 12373);
+    }
 }

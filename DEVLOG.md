@@ -13240,6 +13240,56 @@ All 15 required final commands pass: drift; fast core; rederive check and full r
 
 Evidence and reviewable methods are under `/Volumes/SSK SSD/emon-scratch/b27/`, especially `final-audit.json`, `gates/status.json`, `acceptance.md`, the live judgments and source ownership checks. The original incomplete word-counter result is retained beside its corrected rescore; no loss allowance or document exclusion is introduced. Builds and a private review index are isolated under `/private/tmp/emon-b27/`; final drift and cleanup are recorded separately. No corpus fetch/prune, OCR arbitration edit or commit; the coordinator commits.
 
+### D802 — Multilingual reading trials must preserve source owners and values
+
+Batch 24 evaluates default Urdu/German selection, damaged legacy Khmer, and English contamination in explicit Japanese/Hindi mixed reads. Three new scan laws precede selection experiments. They require exact native Unicode values, the actual OCR request and run owners, both words' engine languages, shared source-row ownership and an exact Latin identifier beside the native text. A blanket English-word filter would remove legitimate identifiers. These laws protect existing partial support; they are not a recognition repair.
+
+Live candidates use separately recorded full-page engine readings (`urd`, `khm`, `deu+eng`, `jpn`, `hin`) against the sweep's original options. Installation and OSD script alone do not establish the language or authorize replacement of legacy text. No unsupported legacy mapping or deletion is permitted. The hard word-population guard and exact n09/G18 diagnostic counts apply to these candidates as to every other change. Acceptance and rejection evidence is recorded externally under `emon-scratch/b24` and in the coordinator report.
+
+- [ ] **Signed off** (maintainer)
+
+### D803 — Reject word-changing multilingual candidates under Batch 24's guards
+
+Fresh sweep-option reads and independent candidate bundles give these whitespace-token changes (old tokens removed/new tokens added): F18 `deu+eng` 48/51, G04 `jpn` 53/46, G09 `hin` 79/73, G18 `khm` 34/28, n09 `urd` 268/739. German gains eight umlaut characters and Urdu gains Arabic-script text, but script presence alone is not recognition accuracy. These counts compare the named original reading with an explicit-language candidate; they are not a full-control run of a shipped selector. Automatic word-changing replacement is constrained by the control word guard, and G18/n09 directly remove the mandated 12/74 unread flags. Pure jpn/hin would override the caller's explicit mixed request and do not establish safe source-linked word arbitration. All candidates are rejected; existing explicit model choices remain authoritative. No automatic language choice, legacy substitution, or blanket English filter is retained.
+
+Fresh before/after live bundles on the retained source have byte-identical complete Models and OCR evidence for all seven named samples. n09/G18 retain 74/12 unread flags; readable born-text G01/G02 retain zero. Source renders and live output retain the sweep grades: n09 broken, G18 poor, F18 poor, G04 broken, G09 usable; G01/G02 usable. These grades refer to the retained defaults/options, not the rejected candidates. Existing native-script and Latin identifier support is partly kept without regression. Urdu routing, legacy cleanup, automatic German choice and safe mixed-model intrusion rejection remain unmet. No diagnostic-only change is claimed as recognition.
+
+- [ ] **Signed off** (maintainer)
+
+### D804 — Final preservation gates and explicit limits of the Batch 24 evidence
+
+All 54 fresh live controls pass on 817 pages and 353,283 words: zero lost/gained, with all 54 complete Models identical, including values, owners, provenance, confidence, flags and layout. Both Berkshire inputs and receipt controls 07/10/11 are included; inherited F16/F19 recoveries remain. Named before/after Models and OCR evidence are byte-identical, retaining n09/G18's 74/12 flags and G01/G02's zero. All 249 production input hashes are unchanged; the patch contains only laws/generated tests and these decisions. Candidate word counts concern separately requested named readings, not a full-control measurement of an implemented selector.
+
+Live 60+60 receipt precision is .6820745632 SROIE and .4223602484 CORD, above the tracked floors .6816742393/.42. Compared with that frozen baseline, two SROIE/four CORD documents have fewer matches (3/9 fewer in total); positive per-document matched-count deltas total 10/22. These current-runtime-versus-frozen-baseline figures are not attributed to Batch 24's test-only patch. The tracked baseline is unchanged.
+
+All requested final gates pass: drift, core CI, coverage/full re-derivation (25 steps, eight calibration refreshes, zero rows changed), accuracy (3,449 metrics; 232 cross-host Models equal to Rust), all 29 live samples, OCR/fusion/retarget/seals/sealpx/signatures/assets replay, 1,347 laws on each of Go/Rust/Java/C#, and package checking on seven consumers. No golden, sample, scoreboard or ratchet moved. Asset's first attempt failed because my OpenMP hard limit polluted a zero pixel-comparison result with a warning; removing that runner limit passed the unchanged assertion. Packaging's first C# consumer attempt failed because my RestoreSources override hid its generated local feed; removing that override passed the full seven-consumer check. Original failure logs are retained. Java packaging used javac/java without Maven resolution; C/pod archives omit optional native OCR/render engines, and optional native snippets were not exercised. No commit or corpus fetch/prune.
+
+- [ ] **Signed off** (maintainer)
+
+### D805 — Retry Urdu and Khmer with the corrected unread guard
+
+Batch 24b supersedes D803's exact-count rejection: unread flags may clear when independent script evidence agrees, the selected text is well formed in that script without Latin/Ethiopic contamination, confidence clears the existing cap, and source comparison reaches approximately 80% correct lines. Explicit language requests remain authoritative. Installed Urdu and Khmer traineddata are present; installation alone does not establish a correct reading. Fresh candidate trials and source-line review are recorded externally under `/Volumes/SSK SSD/emon-scratch/b24b/`. No ratchet or diagnostic threshold is lowered.
+
+- [ ] **Signed off** (maintainer)
+
+### D806 — Reject script-only Urdu/Khmer recovery on source accuracy
+
+Fresh installed-model trials reproduce the previous candidate Models and OCR evidence byte for byte. Under the corrected guard, source review now supplies the rejection reason: twenty prose lines across n09 pages 1–2 give 0/20 correct complete lines; thirteen text lines on G18 page 2 plus seven on page 3 give 5/20 correct, ignoring whitespace/wrapping. Both fall below approximately 80%. Urdu's OSD agrees with Arabic script, but the selected words are badly misrecognized. Khmer retains 191 Latin letters in the selected body, despite removing Ethiopic characters; its OSD still reports Latin on pages 2–4. Merely selecting the installed model and clearing all flags is not a recovery. These are explicit-language recognition experiments, not evidence of a shipped automatic selector. No production change is retained and the recognition acceptance checks remain unmet.
+
+Retained unread nodes, counted once by the first source region, remain n09 pages 1–4: 6/25/15/28 (74 total), and G18: 0/7/2/3 (12 total); G01/G02 remain zero on every page. Cross-page region membership counts some G18 nodes twice and is not the distinct-node total. Removing urd/khm from a private copy of the installation leaves n09's Model/evidence unchanged, while G18 follows the existing mixed-model fallback and changes because the current default already uses khm. Missing-model preservation must compare baseline and retained output under the same installation, not compare installed versus absent. Evidence, source renders, review method and traineddata hashes remain external under `emon-scratch/b24b`; no corpus content or baseline is added to the repository.
+
+- [ ] **Signed off** (maintainer)
+
+### D807 — Batch 24b preservation gates and handoff
+
+All 54 fresh live controls cover 817 pages and 358,433 represented words under the complete block traversal: zero lost/gained against the consistent batch 24 retained baseline, including Berkshire, receipt controls and the inherited F16/F19 recoveries. Fifty-three complete Models match that baseline; the full contract's inherited furniture change matches batch 27's retained Model. An initial additional full-Model assertion against the older batch 27 snapshot failed on control 53: that snapshot has 6.9, whereas this reading preserves the required -6.9 and exactly matches batch 24. Snapshot versions must not be mixed for the word guard. All current production inputs match this worktree's HEAD; no recognition change is attributed to these older differences.
+
+Both 60-document live receipt floors pass: SROIE .6820745632 >= .6816742393 and CORD .4223602484 >= .42. Named retained Models and OCR evidence are byte-identical before/after with the installed models, and also under the same installation with urd/khm absent. In that absent installation n09 retains 74 flags and G18 retains its existing zero-flag fallback, which is not a recovery. The original traineddata installation is untouched; presence, hashes, missing-model comparisons and per-page counts are recorded externally.
+
+All 15 requested final gates pass: drift, core CI, both rederive modes, accuracy, samples, all seven replay gates, unit and packaging. Full rederive runs 25 steps and eight calibration refreshes without changing a row or tracked output. Accuracy holds 3,449 metrics at the existing .002 tolerance and 232 cross-host Models equal Rust. All 29 samples pass; all four hosts run 1,351 laws. Seven package consumers produce identical HTML. Java packaging uses javac/java without Maven resolution; C/pod packages omit optional bundled OCR/render engines and optional native snippets are not exercised. No golden, sample, scoreboard, receipt baseline or ratchet changes. No production or law changes are retained; automatic Urdu/Khmer recovery remains unmet because both installed-model readings fail the corrected source-accuracy guard.
+
+Evidence and methods are under `/Volumes/SSK SSD/emon-scratch/b24b/`, especially `final-audit.json`, `source-review.md`, `source-line-checks.tsv`, `named-audit.json`, `missing-unread-counts.json` and `gates/status.json`. The coordinator report is `b24b-report.md`. Builds and the private review index are isolated under `/private/tmp/emon-b24b/` for deletion after the final drift check. No commit, corpus fetch or prune; the coordinator commits.
+
 - [ ] **Signed off** (maintainer)
 
 ### D808 — Column headers above repeated blank entry fields

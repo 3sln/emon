@@ -2,7 +2,7 @@
 ;; and the pipeline's lines made from it (size, box and rotation of a line, D213), and the provenance of OCR text in the Model.
 (ns emon.scantest
   (:require [emon.lang :refer [I32 Cells Src]]
-            [emon.test :refer [deftest assert-eq assert-that new-cells test-file Str]]
+            [emon.test :refer [deftest assert-eq assert-that new-cells test-file Str test-t TestT]]
             [emon.port :refer [cells-len cells-at cells-push cells-set src-of-blob]]
             [emon.pdfdoc :refer [pd-open]]
             [emon.plan :refer [rec-kind rec-id rq-arg rq-nargs an-ocr an-ocr-word an-ocr-cp an-ocr-end pk-ocr]]
@@ -15,7 +15,7 @@
                                    lh-first lh-count lh-rot lh-dir lh-x0 lh-x1 lh-y0 lh-y1 lh-by0 lh-by1
                                    wf-size wf-style wf-gap wf-wbreak wf-src wf-font lf-src lf-order hd-tstart hd-tlen hd-line
                                    hd-x0 hd-x1 hd-y0 hd-y1 hd-conf owf-run olf-xheight olf-asc olf-desc owf-psize owf-flags
-                                   orf-bview orf-lang orf-langlen orf-osd orf-script orf-view
+                                   orf-request owf-lang orf-bview orf-lang orf-langlen orf-osd orf-script orf-view
                                    obf-orient obf-wdir obf-btype vwf-kind vk-engine-binary wb-space wb-line-end
                                    epf-page epf-flags eg-raster ep-count]]
             [emon.scan :refer [sc-write-rejected-ocr sc-admit-floor sc-admit-word sc-write-empty-ocr sc-trust sc-write-empty-regions sc-on-vrule sc-clean-text sc-word-agreement sc-format-control sc-unspaced sc-word-trust sc-lang sc-request sc-page sc-tag sc-tag-unread sc-mask-unread sc-unread-conf sc-eligible sc-write-bare sc-dct-span
@@ -1093,3 +1093,58 @@
     (assert-eq (wd-get words 0 (hd-conf)) 300 "the threshold word is retained")
     (assert-eq (ow-count ow) 2 "both raw OCR occurrences remain evidence")
     (assert-eq (bit-and (ow-get ow 0 (owf-flags)) (oe-garbage)) (oe-garbage) "the refused occurrence has a ledger fate")))
+
+;; D802: multilingual selection must preserve recorded owners and values.
+;; These guards deliberately include a Latin identifier beside native text:
+;; deleting every English-model word is not a source-backed replacement.
+(defn ^I32 sc-multilingual-owners [^TestT emon-t ^I32 lang ^I32 script ^I32 c0 ^I32 c1 ^I32 c2]
+  (let [^Cells an (new-cells) ^Cells et (new-cells) ^Cells runs (new-cells)
+        ^Cells olines (new-cells) ^Cells owords (new-cells)
+        ^Cells wd (new-cells) ^Cells ln (new-cells)
+        ^I32 at (an-ocr an 2)
+        ^I32 wnative (an-ocr-word an at 10 20 60 40 900 0 0)]
+    (an-ocr-cp an wnative c0)
+    (an-ocr-cp an wnative c1)
+    (an-ocr-cp an wnative c2)
+    (let [^I32 identifier (an-ocr-word an at 90 20 60 40 900 0 0)]
+      (an-ocr-cp an identifier 65)
+      (an-ocr-cp an identifier 55))
+    (ox-begin an 0 0 0 0 0 script 629 500 1 1 0 0 0)
+    (ox-line an 10 20 140 40 10 55 150 55 0 0 0 20 14 6)
+    (ox-block an 10 20 140 40 0 0 0)
+    (ox-word an 0 lang -1 1)
+    (ox-word an 0 1701734144 -1 1)
+    (an-ocr-end an at)
+    (sc-page an at 1 2 1 17712 22848 738 952 30000 0 0 0 0 0 17712 22848 (quot lang 256)
+             (new-cells) (new-cells) et (new-cells) (new-cells) runs (new-cells) olines owords (new-cells) (new-cells) wd ln (new-cells))
+    (assert-eq (or-get runs 0 (orf-request)) 2 "reading belongs to its actual OCR request")
+    (assert-eq (or-get runs 0 (orf-langlen)) 3 "request language is recorded independently of word models")
+    (assert-eq (cells-at et (or-get runs 0 (orf-lang))) (quot lang 16777216) "request language first letter")
+    (assert-eq (ow-count owords) 2 "both recorded words remain evidence")
+    (assert-eq (wd-count wd) 2 "native text and Latin identifier remain selected")
+    (assert-eq (ow-get owords 0 (owf-run)) 0 "native word belongs to this run")
+    (assert-eq (ow-get owords 1 (owf-run)) 0 "Latin identifier belongs to the same run")
+    (assert-eq (ow-get owords 0 (owf-lang)) lang "native word keeps its engine model")
+    (assert-eq (ow-get owords 1 (owf-lang)) 1701734144 "identifier keeps its English model")
+    (assert-eq (ln-count ln) 1 "one selected source row")
+    (assert-eq (ow-get owords 0 (hd-line)) 0 "native evidence word belongs to the recorded row")
+    (assert-eq (ow-get owords 1 (hd-line)) 0 "identifier evidence word belongs to the recorded row")
+    (assert-eq (wd-get wd 0 (hd-line)) 0 "source row zero owns the native value")
+    (assert-eq (wd-get wd 1 (hd-line)) 0 "source row zero owns the identifier value")
+    (assert-eq (wd-get wd 0 (hd-tlen)) 3 "complete native span")
+    (assert-eq (wd-get wd 1 (hd-tlen)) 2 "complete identifier span")
+    (assert-eq (cells-at et (wd-get wd 0 (hd-tstart))) c0 "first native scalar")
+    (assert-eq (cells-at et (+ (wd-get wd 0 (hd-tstart)) 1)) c1 "native diacritic or script scalar")
+    (assert-eq (cells-at et (+ (wd-get wd 0 (hd-tstart)) 2)) c2 "last native scalar")
+    (assert-eq (cells-at et (wd-get wd 1 (hd-tstart))) 65 "identifier A stays exact")
+    (assert-eq (cells-at et (+ (wd-get wd 1 (hd-tstart)) 1)) 55 "identifier value 7 stays exact")
+    (return 0)))
+
+(deftest test-german-umlaut-and-latin-identifier-keep-their-reading-and-row
+  (sc-multilingual-owners (test-t) 1684370688 1281455214 102 252 114))
+
+(deftest test-urdu-native-values-do-not-authorize-deleting-latin-identifiers
+  (sc-multilingual-owners (test-t) 1970430976 1098015074 1593 1575 1605))
+
+(deftest test-japanese-mixed-reading-retains-source-backed-latin-identifiers
+  (sc-multilingual-owners (test-t) 1785753088 1248878958 23665 30000 12373))
