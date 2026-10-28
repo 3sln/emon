@@ -22,7 +22,7 @@
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
 
     <PackageId>Emon</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Authors>raystubbs</Authors>
     <Company>3sln</Company>
     <Product>emon</Product>

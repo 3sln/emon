@@ -758,7 +758,7 @@ fn invoke(var: &str, args: &[Edn]) -> Result<Edn, PodError> {
             _ => Err(PodError::usage("emon/option-key? wants a name")),
         },
         "capabilities" => Ok(map(vec![
-            ("version", s("0.1.0")),
+            ("version", s("0.2.0")),
             ("pdfium", Edn::Bool(capabilities() & 1 != 0)),
             ("tesseract", Edn::Bool(capabilities() & 2 != 0)),
             ("codecs", Edn::Bool(capabilities() & 4 != 0)),

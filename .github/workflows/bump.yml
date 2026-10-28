@@ -72,6 +72,7 @@ jobs:
         run: |
           bb version set "$VERSION"
           bb version --check "v$VERSION"
+          bb docs   # the generated docs quote the version (docs/hosts/java.md's Maven snippet)
           git add -u
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Release v$VERSION"
           git push origin HEAD:main
