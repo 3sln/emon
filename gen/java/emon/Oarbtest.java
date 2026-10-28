@@ -802,7 +802,7 @@ public final class Oarbtest {
         emon.Testport.assertEq(Oarb.oaViewAllowed(1, 0, 4), 0, "two tables times two views");
         emon.Testport.assertEq(Oarb.oaViewAllowed(1, 1, 11), 1, "last band view");
         emon.Testport.assertEq(Oarb.oaViewAllowed(1, 1, 12), 0, "three bands times four views");
-        emon.Testport.assertEq(Oarb.oaActive(), 0, "forced keep until live population guards pass");
+        emon.Testport.assertEq(Oarb.oaActive(), 0, "bulk arbitration stays off; the separate percent sign path is bounded in oapct");
     }
     public static void testArbMalformedSplitLineAmountNeedsTheFullMargin() {
         emon.Port.Cells text = emon.Port.newCells();

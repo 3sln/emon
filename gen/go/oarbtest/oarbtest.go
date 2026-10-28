@@ -881,7 +881,7 @@ func TestArbViewBudgetAndIntegerFactor(emonT *testing.T) {
 	port.AssertEq(emonT, oarb.OaViewAllowed(1, 0, 4), 0, "two tables times two views")
 	port.AssertEq(emonT, oarb.OaViewAllowed(1, 1, 11), 1, "last band view")
 	port.AssertEq(emonT, oarb.OaViewAllowed(1, 1, 12), 0, "three bands times four views")
-	port.AssertEq(emonT, oarb.OaActive(), 0, "forced keep until live population guards pass")
+	port.AssertEq(emonT, oarb.OaActive(), 0, "bulk arbitration stays off; the separate percent sign path is bounded in oapct")
 }
 
 func TestArbMalformedSplitLineAmountNeedsTheFullMargin(emonT *testing.T) {

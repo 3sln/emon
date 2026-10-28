@@ -815,7 +815,7 @@ public static class Oarbtest {
         emon.Testport.AssertEq(Oarb.OaViewAllowed(1, 0, 4), 0, "two tables times two views");
         emon.Testport.AssertEq(Oarb.OaViewAllowed(1, 1, 11), 1, "last band view");
         emon.Testport.AssertEq(Oarb.OaViewAllowed(1, 1, 12), 0, "three bands times four views");
-        emon.Testport.AssertEq(Oarb.OaActive(), 0, "forced keep until live population guards pass");
+        emon.Testport.AssertEq(Oarb.OaActive(), 0, "bulk arbitration stays off; the separate percent sign path is bounded in oapct");
     }
     [Xunit.Fact]
     public static void TestArbMalformedSplitLineAmountNeedsTheFullMargin() {

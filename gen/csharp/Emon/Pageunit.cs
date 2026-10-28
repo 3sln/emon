@@ -549,6 +549,9 @@ public static class Pageunit {
         Retarget.RtPrep(rtp);
         Retarget.RtReceiptSource(rtp, maskv);
         asked = Retarget.RtPlan(i, input, 0, 0, rid, hint, loc, ans, bms, Pageink.PnKText(), emon.Port.BmsGet(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr, comps, inks, s6);
+        if (emon.Port.CellsAt(rtp, Retarget.RtpQ()) == 0) {
+            asked += Oapct.PctAsk(i, dpi100, bx0, by0, emon.Port.BmsGet(bms, did), ans, loc, bms, owords, etext, w0, nw, rq, s1, s2, s3, s4, s5, s6);
+        }
         // the seals and stamps in the page's pixels (P8.2): their strips and crops are asked in the same round as the targeted passes
         if (seals == 1) {
             Sealpx.SxFind(i + 1, views, vdec, prims, inks, pw, ph, s1);
@@ -580,6 +583,14 @@ public static class Pageunit {
         }
         if ((emon.Port.CellsAt(rtp, Retarget.RtpPrimary()) == run) || (emon.Port.CellsAt(rtp, Retarget.RtpQ()) == 0)) {
             nsel = Oaline.OaLineFuse(i + 1, rtp, oruns, olines, owords, etext, scr, nsel, oaz, s1, s2, s3, s4);
+        }
+        if (emon.Port.CellsAt(rtp, Retarget.RtpQ()) == 0) {
+            Oapct.PctRows(owords, etext, w0, nw, s1, s3, s4, s5);
+            Oapct.PctPlan(owords, s1, s2);
+            // Recreate the crop plan without requesting; all answers are now in.
+            Oapct.PctAsk(i, dpi100, bx0, by0, emon.Port.BmsGet(bms, did), ans, loc, bms, owords, etext, w0, nw, rq, s1, s2, s3, s4, s5, s6);
+            ua = Oapct.PctRecord(i, dpi100, bx0, by0, ans, loc, s2, vdec, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+            nsel = Oapct.PctFuse(i + 1, s2, s1, ua, etext, oruns, olines, owords, scr, nsel, oaz, s3, s4, s5, s6, ri);
         }
         Retarget.RtUpright(rtp, run, epages, i + 1);
         rotmed = Evidence.EvRotMedian(olines, l0, nl);

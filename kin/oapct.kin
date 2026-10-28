@@ -1,0 +1,249 @@
+;; Source-backed percent families. Geometry proposes rows; only exact arithmetic
+;; can admit a recorded candidate. The planner uses the original raster.
+(ns emon.oapct
+  (:require [emon.lang :refer [I32 I64 Cells Bitmap BitmapSet i64 i32]]
+            [emon.port :refer [cells-at cells-len cells-push cells-set cells-drop bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8 bitmap-gray-into bitmap-hash bms-put bms-get]]
+            [emon.plan :refer [pu-id pu-view-id an-find an-ok]]
+            [emon.scan :refer [sc-request-view-psm sc-answer sc-lang sc-sel-base sc-xtra-base sc-sel-max]]
+            [emon.oacrop :refer [oa-three]]
+            [emon.ofmt :refer [fmt-value]]
+            [emon.oarb :refer [oa-pct-meta]]
+            [emon.ofuse :refer [of-copy]]
+            [emon.evidence :refer [or-get or-new or-set or-count orf-pass orf-page orf-wfirst orf-wcount orf-lfirst orf-lcount orf-view orf-request orf-psm orf-round
+                                   ol-get ol-new ol-set ol-count olf-run lh-first lh-count lh-dir lh-x0
+                                   ow-get ow-count hd-x0 hd-y0 hd-x1 hd-y1 hd-tstart hd-tlen op-arb op-line op-cell
+                                   vw-new vw-get vwf-kind vwf-layer vwf-cropx vwf-cropy vwf-dpi vk-gray ev-overlap-small]]
+            [kin.lang :refer [defn return let set while if do + - * quot rem < > <= >= == != and or]]))
+
+;; Reserved page-local request 88, bitmap ids 122-125. Retarget ends at 87.
+(defn ^I32 pct-abs [^I32 x] (if (< x 0) (return (- 0 x))) (return x))
+(defn ^I32 pct-near [^Cells words ^I32 a ^I32 b ^I32 h]
+  (if (and (< (ow-get words a (hd-x1)) (ow-get words b (hd-x0)))
+           (<= (pct-abs (- (+ (ow-get words a (hd-y0)) (ow-get words a (hd-y1)))
+                                (+ (ow-get words b (hd-y0)) (ow-get words b (hd-y1))))) h)) (return 1))
+  (return 0))
+
+;; A row is three distinct, consecutive numeric cells, with one or two decimal
+;; places in the last. Never infer a missing digit or join adjacent valid cells.
+;; Rows: [a,b,p,state]: 1 closes, 0 is an exact lost-minus shape, -1 held.
+;; OA2 activates sign restoration only; digit substitutions remain inactive.
+;; Rows: [a,b,p,state]. Bounded to 256 rows before quadratic family matching.
+(defn ^:pub ^I32 pct-rows [^Cells words ^Cells text ^I32 first ^I32 count ^:mut ^Cells rows ^:mut ^Cells am ^:mut ^Cells bm ^:mut ^Cells pm]
+  (cells-drop rows 0)
+  (if (> count 4096) (return 0))
+  (let [^:mut ^I32 p first ^:mut ^I32 b -1 ^:mut ^I32 a -1 ^:mut ^I32 w 0 ^:mut ^I32 h 0
+        ^:mut ^I32 dec 0 ^:mut ^I32 valid 0 ^:mut ^I32 holds 0 ^:mut ^I32 i 0
+        ^:mut ^I64 av (i64 0) ^:mut ^I64 bv (i64 0) ^:mut ^I64 pv (i64 0)
+        ^:mut ^I64 scale (i64 100) ^:mut ^I64 numerator (i64 0) ^:mut ^I64 denominator (i64 0) ^:mut ^I64 expected (i64 0) ^:mut ^I64 residue (i64 0)]
+    (while (and (< p (+ first count)) (< (cells-len rows) 1024))
+      (do (set pv (fmt-value text (ow-get words p (hd-tstart)) (ow-get words p (hd-tlen)) pm))
+          (set dec (cells-at pm 1))
+          (if (and (== (cells-at pm 0) 1) (and (> dec 0) (<= dec 2)))
+            (do (set h (- (ow-get words p (hd-y1)) (ow-get words p (hd-y0)))) (set b -1) (set a -1) (set w first)
+                (while (< w (+ first count))
+                  (do (if (== (pct-near words w p h) 1)
+                        (do (fmt-value text (ow-get words w (hd-tstart)) (ow-get words w (hd-tlen)) am)
+                            (if (and (== (cells-at am 0) 1) (== (cells-at am 1) 0))
+                              (if (or (< b 0) (> (ow-get words w (hd-x1)) (ow-get words b (hd-x1)))) (set b w)))))
+                      (set w (+ w 1))))
+                (if (>= b 0)
+                  (do (set w first)
+                      (while (< w (+ first count))
+                        (do (if (== (pct-near words w b h) 1)
+                              (do (fmt-value text (ow-get words w (hd-tstart)) (ow-get words w (hd-tlen)) am)
+                                  (if (and (== (cells-at am 0) 1) (== (cells-at am 1) 0))
+                                    (if (or (< a 0) (> (ow-get words w (hd-x1)) (ow-get words a (hd-x1)))) (set a w)))))
+                            (set w (+ w 1))))))
+                (if (>= a 0)
+                  (do (set av (fmt-value text (ow-get words a (hd-tstart)) (ow-get words a (hd-tlen)) am))
+                      (set bv (fmt-value text (ow-get words b (hd-tstart)) (ow-get words b (hd-tlen)) bm))
+                      (set valid 1) (set holds -1)
+                      (if (or (== av (i64 0)) (or (> av (i64 400000000000000)) (> bv (i64 400000000000000)))) (set valid 0))
+                      (if (or (< av (i64 -400000000000000)) (< bv (i64 -400000000000000))) (set valid 0))
+                      (if (== valid 1)
+                        (do (set scale (i64 100)) (set i 0)
+                            (while (< i dec) (do (set scale (* scale (i64 10))) (set i (+ i 1))))
+                            (set numerator (* (- bv av) scale)) (set denominator av)
+                            (if (< denominator (i64 0)) (do (set denominator (- (i64 0) denominator)) (set numerator (- (i64 0) numerator))))
+                            (set expected (quot numerator denominator)) (set residue (rem numerator denominator))
+                            (if (>= (* residue (i64 2)) denominator) (set expected (+ expected (i64 1))))
+                            (if (<= (* residue (i64 2)) (- (i64 0) denominator)) (set expected (- expected (i64 1))))
+                            (if (== pv expected) (set holds 1)
+                              (if (and (> pv (i64 0)) (== pv (- (i64 0) expected))) (set holds 0)))))
+                      (cells-push rows a) (cells-push rows b) (cells-push rows p) (cells-push rows holds)))))
+          (set p (+ p 1))))
+    (return (quot (cells-len rows) 4))))
+
+;; Family must align all three right edges and remain within a connected table.
+;; A large whitespace gap ends a family; unrelated tables cannot lend support.
+(defn ^I32 pct-same [^Cells words ^Cells rows ^I32 r ^I32 q]
+  (let [^I32 p (cells-at rows (+ (* r 4) 2)) ^I32 other (cells-at rows (+ (* q 4) 2))
+        ^I32 h (- (ow-get words p (hd-y1)) (ow-get words p (hd-y0))) ^:mut ^I32 i 0]
+    (while (< i 3)
+      (do (if (> (* (pct-abs (- (ow-get words (cells-at rows (+ (* r 4) i)) (hd-x1))
+                                 (ow-get words (cells-at rows (+ (* q 4) i)) (hd-x1)))) 10) (* h 12)) (return 0))
+          (set i (+ i 1))))
+    (if (> (pct-abs (- (ow-get words p (hd-y0)) (ow-get words other (hd-y0)))) (* h 36)) (return 0))
+    (return 1)))
+
+;; Plans a crop of a failing percent cell only after its family is established.
+;; proposal: [word,row,holds,rows], followed by pixel [x,y,w,h] after cropping.
+;; A second failing cell is held (one crop cap).
+(defn ^:pub ^I32 pct-plan [^Cells words ^Cells rows ^:mut ^Cells proposal]
+  (cells-drop proposal 0)
+  (let [^:mut ^I32 r 0 ^:mut ^I32 q 0 ^:mut ^I32 holds 0 ^:mut ^I32 n 0 ^:mut ^I32 p 0 ^:mut ^I32 h 0 ^:mut ^I32 lo 0 ^:mut ^I32 hi 0
+        ^:mut ^I32 oldlo -1 ^:mut ^I32 oldhi -1 ^:mut ^I32 y 0]
+    (while (< r (quot (cells-len rows) 4))
+      (do (if (== (cells-at rows (+ (* r 4) 3)) 0)
+            (do (set p (cells-at rows (+ (* r 4) 2)))
+                (set h (- (ow-get words p (hd-y1)) (ow-get words p (hd-y0))))
+                (set lo (ow-get words p (hd-y0))) (set hi lo) (set oldlo -1) (set oldhi -1)
+                (while (or (!= oldlo lo) (!= oldhi hi))
+                  (do (set oldlo lo) (set oldhi hi) (set q 0)
+                      (while (< q (quot (cells-len rows) 4))
+                        (do (if (== (pct-same words rows r q) 1)
+                              (do (set y (ow-get words (cells-at rows (+ (* q 4) 2)) (hd-y0)))
+                                  (if (and (>= y (- lo (* h 4))) (<= y (+ hi (* h 4))))
+                                    (do (if (< y lo) (set lo y)) (if (> y hi) (set hi y))))))
+                            (set q (+ q 1))))))
+                (set q 0) (set n 0) (set holds 0)
+                (while (< q (quot (cells-len rows) 4))
+                  (do (set y (ow-get words (cells-at rows (+ (* q 4) 2)) (hd-y0)))
+                      (if (and (== (pct-same words rows r q) 1) (and (>= y lo) (<= y hi)))
+                        (do (set n (+ n 1)) (if (== (cells-at rows (+ (* q 4) 3)) 1) (set holds (+ holds 1)))))
+                      (set q (+ q 1))))
+                (if (and (>= holds 4) (>= (* holds 4) (* n 3)))
+                  (do (if (> (cells-len proposal) 0) (do (cells-drop proposal 0) (return 0)))
+                      (set p (cells-at rows (+ (* r 4) 2)))
+                      (cells-push proposal p) (cells-push proposal r) (cells-push proposal holds) (cells-push proposal n)))))
+          (set r (+ r 1))))
+    (return (cells-len proposal))))
+
+(defn ^:pub ^I32 pct-ask [^I32 page ^I32 dpi100 ^I32 bx ^I32 by ^Bitmap src ^Cells ans ^Cells loc ^BitmapSet bms
+                          ^Cells words ^Cells text ^I32 first ^I32 count ^:mut ^Cells rq ^:mut ^Cells rows ^:mut ^Cells proposal
+                          ^:mut ^Cells am ^:mut ^Cells bm ^:mut ^Cells pm ^:mut ^Cells weights]
+  (pct-rows words text first count rows am bm pm)
+  (if (== (pct-plan words rows proposal) 0) (return 0))
+  (let [^I32 p (cells-at proposal 0) ^I32 id (pu-id page 88) ^I32 vid (pu-view-id page 125)
+        ^I32 h (- (ow-get words p (hd-y1)) (ow-get words p (hd-y0)))
+        ^:mut ^I32 x0 (i32 (quot (* (i64 (- (- (ow-get words p (hd-x0)) h) bx)) (i64 dpi100)) (i64 720000)))
+        ^:mut ^I32 y0 (i32 (quot (* (i64 (- (- (ow-get words p (hd-y0)) h) by)) (i64 dpi100)) (i64 720000)))
+        ^:mut ^I32 x1 (i32 (quot (* (i64 (- (+ (ow-get words p (hd-x1)) h) bx)) (i64 dpi100)) (i64 720000)))
+        ^:mut ^I32 y1 (i32 (quot (* (i64 (- (+ (ow-get words p (hd-y1)) h) by)) (i64 dpi100)) (i64 720000)))
+        ^:mut ^I32 x 0 ^:mut ^I32 y 0 ^:mut ^I32 val 255]
+    (if (< x0 0) (set x0 0)) (if (< y0 0) (set y0 0))
+    (if (> x1 (bitmap-w src)) (set x1 (bitmap-w src)))
+    (if (> y1 (bitmap-h src)) (set y1 (bitmap-h src)))
+    (if (or (<= x1 x0) (<= y1 y0)) (do (cells-drop proposal 0) (return 0)))
+    (if (> (* (i64 (- x1 x0)) (i64 (- y1 y0))) (i64 250000)) (do (cells-drop proposal 0) (return 0)))
+    (cells-push proposal x0) (cells-push proposal y0) (cells-push proposal (- x1 x0)) (cells-push proposal (- y1 y0))
+    (if (>= (an-find ans id) 0) (return 0))
+    (let [^Bitmap crop (bms-put bms (pu-view-id page 122) (- x1 x0) (- y1 y0) 1)]
+      (while (< y (- y1 y0))
+        (do (set x 0)
+            (while (< x (- x1 x0))
+              (do (set val (bitmap-u8 src (+ x0 x) (+ y0 y) 0))
+                  (if (>= (bitmap-channels src) 3)
+                    (set val (quot (+ (+ (* val 299) (* (bitmap-u8 src (+ x0 x) (+ y0 y) 1) 587))
+                                         (* (bitmap-u8 src (+ x0 x) (+ y0 y) 2) 114)) 1000)))
+                  (bitmap-set-u8 crop x y 0 val) (set x (+ x 1))))
+            (set y (+ y 1))))
+      (oa-three bms (pu-view-id page 124) (pu-view-id page 123) crop))
+    (let [^Bitmap scaled (bms-get bms (pu-view-id page 124))
+          ^Bitmap dst (bms-put bms vid (+ (* (- x1 x0) 3) 32) (+ (* (- y1 y0) 3) 32) 1)]
+      (set y 0)
+      (while (< y (bitmap-h dst))
+        (do (set x 0)
+            (while (< x (bitmap-w dst))
+              (do (set val 255)
+                  (if (and (and (>= x 16) (< x (- (bitmap-w dst) 16))) (and (>= y 16) (< y (- (bitmap-h dst) 16))))
+                    (set val (bitmap-u8 scaled (- x 16) (- y 16) 0)))
+                  (bitmap-set-u8 dst x y 0 val) (set x (+ x 1))))
+            (set y (+ y 1))))
+      (while (< (cells-len weights) 2) (cells-push weights 0))
+      (bitmap-hash dst weights 0)
+      (sc-request-view-psm rq id vid (cells-at weights 0) (cells-at weights 1) 11 300 loc))
+    (return 1)))
+
+(defn ^:pub ^I32 pct-record [^I32 page ^I32 dpi100 ^I32 bx ^I32 by ^Cells ans ^Cells loc ^Cells proposal ^I32 srcview
+                             ^:mut ^Cells views ^Cells epages ^:mut ^Cells text ^:mut ^Cells runs ^:mut ^Cells blocks
+                             ^:mut ^Cells lines ^:mut ^Cells words ^:mut ^Cells syms ^:mut ^Cells alts ^:mut ^Cells feats]
+  (if (!= (cells-len proposal) 8) (return -1))
+  (let [^I32 id (pu-id page 88) ^I32 a (an-find ans id) ^:mut ^I32 view 0 ^:mut ^I32 run 0]
+    (if (< a 0) (return -1))
+    (if (!= (an-ok ans a) 1) (return -1))
+    (set view (vw-new views (+ page 1) (vk-gray) -1 srcview
+                     (+ (* (cells-at proposal 6) 3) 32) (+ (* (cells-at proposal 7) 3) 32) (* dpi100 3) -1 -1 0 0
+                     (+ bx (- (i32 (quot (* (i64 (cells-at proposal 4)) (i64 720000)) (i64 dpi100))) (quot 11520000 (* dpi100 3))))
+                     (+ by (- (i32 (quot (* (i64 (cells-at proposal 5)) (i64 720000)) (i64 dpi100))) (quot 11520000 (* dpi100 3)))) 0))
+    (set run (sc-answer ans a (+ page 1) view id (sc-lang loc) views epages text runs blocks lines words syms alts feats))
+    (or-set runs run (orf-pass) (op-cell))
+    (or-set runs run (orf-psm) 11) (or-set runs run (orf-round) 4)
+    (return run)))
+
+(defn ^I32 pct-minus [^Cells text ^I32 incumbent ^I32 count ^I32 candidate ^I32 n]
+  (if (!= n (+ count 1)) (return 0))
+  (if (!= (cells-at text candidate) 45) (return 0))
+  (let [^:mut ^I32 i 0]
+    (while (< i count)
+      (do (if (!= (cells-at text (+ incumbent i)) (cells-at text (+ (+ candidate 1) i))) (return 0))
+          (set i (+ i 1))))
+    (return 1)))
+
+(defn ^:pub ^I32 pct-fuse [^I32 page ^Cells proposal ^Cells rows ^I32 trial ^Cells text ^:mut ^Cells runs ^:mut ^Cells lines ^:mut ^Cells words
+                           ^:mut ^Cells scr ^I32 nsel ^:mut ^Cells oaz ^:mut ^Cells candidates ^:mut ^Cells am ^:mut ^Cells bm ^:mut ^Cells pm ^:mut ^Cells cm]
+  (if (or (< trial 0) (!= (cells-len proposal) 8)) (return nsel))
+  (let [^I32 p (cells-at proposal 0) ^I32 row (cells-at proposal 1)
+        ^I32 a (cells-at rows (* row 4)) ^I32 b (cells-at rows (+ (* row 4) 1))
+        ^:mut ^I32 w (or-get runs trial (orf-wfirst)) ^:mut ^I32 end (+ w (or-get runs trial (orf-wcount)))
+        ^:mut ^I32 chosen -1 ^:mut ^I32 k 0 ^:mut ^I32 l 0 ^:mut ^I32 j 0 ^:mut ^I32 hit -1
+        ^:mut ^I32 run 0 ^:mut ^I32 nl 0 ^:mut ^I32 f 0 ^:mut ^I32 value 0 ^:mut ^I32 source 0]
+    (cells-drop candidates 0)
+    (while (< w end)
+      (do (if (and (== (pct-minus text (ow-get words p (hd-tstart)) (ow-get words p (hd-tlen))
+                                       (ow-get words w (hd-tstart)) (ow-get words w (hd-tlen))) 1)
+                       (> (ev-overlap-small (ow-get words p (hd-x0)) (ow-get words p (hd-y0)) (ow-get words p (hd-x1)) (ow-get words p (hd-y1))
+                                   (ow-get words w (hd-x0)) (ow-get words w (hd-y0)) (ow-get words w (hd-x1)) (ow-get words w (hd-y1))) 500))
+            (do (cells-push candidates 0) (cells-push candidates (ow-get words w (hd-tstart))) (cells-push candidates (ow-get words w (hd-tlen)))))
+          (set w (+ w 1))))
+    (set chosen (oa-pct-meta text (ow-get words a (hd-tstart)) (ow-get words a (hd-tlen))
+                                 (ow-get words b (hd-tstart)) (ow-get words b (hd-tlen))
+                                 (ow-get words p (hd-tstart)) (ow-get words p (hd-tlen))
+                                 candidates 0 (cells-at proposal 2) (cells-at proposal 3) am bm pm cm))
+    (if (< chosen 0) (return nsel))
+    (set w (or-get runs trial (orf-wfirst))) (set source -1)
+    (while (< w end)
+      (do (if (== (ow-get words w (hd-tstart)) (cells-at candidates (+ (* chosen 3) 1))) (set source w)) (set w (+ w 1))))
+    (if (< source 0) (return nsel))
+    ;; Only replace exactly the selected source slot. A selection/fusion that
+    ;; changed it since planning invalidates this proposal.
+    (while (< k nsel)
+      (do (set l (cells-at scr (+ (sc-sel-base) k))) (set j 0) (set hit -1)
+          (while (< j (ol-get lines l (lh-count)))
+            (do (if (== (+ (ol-get lines l (lh-first)) j) p) (set hit j)) (set j (+ j 1))))
+          (if (>= hit 0)
+            (do (set value (or-get runs trial (orf-view))) (set run (or-new runs page value))
+                (or-set runs run (orf-pass) (op-arb)) (or-set runs run (orf-lfirst) (ol-count lines)) (or-set runs run (orf-wfirst) (ow-count words))
+                (set nl (ol-new lines page 0 0 0 0 0 0 0 0 0 0 (ow-count words) 0))
+                (set f (lh-x0))
+                (while (<= f (lh-dir)) (do (set value (ol-get lines l f)) (ol-set lines nl f value) (set f (+ f 1))))
+                (set f 15)
+                (while (<= f 22) (do (set value (ol-get lines l f)) (ol-set lines nl f value) (set f (+ f 1))))
+                (ol-set lines nl (olf-run) run) (set j 0)
+                (while (< j (ol-get lines l (lh-count)))
+                  (do (set w (+ (ol-get lines l (lh-first)) j))
+                      (if (== j hit) (set w source))
+                      (of-copy words w run nl) (set j (+ j 1))))
+                (set value (ol-get lines l (lh-count))) (ol-set lines nl (lh-count) value)
+                (or-set runs run (orf-lcount) 1) (or-set runs run (orf-wcount) (ol-get lines nl (lh-count)))
+                (cells-set scr (+ (sc-sel-base) k) nl)
+                (set value (- nl (cells-at scr (sc-xtra-base))))
+                (if (and (>= value 0) (< value (sc-sel-max))) (cells-set scr (+ (sc-xtra-base) (+ value 1)) 0))
+                (cells-push oaz page) (cells-push oaz (ow-get words p (hd-x0))) (cells-push oaz (ow-get words p (hd-y0)))
+                (cells-push oaz (ow-get words p (hd-x1))) (cells-push oaz (ow-get words p (hd-y1)))
+                (cells-push oaz p) (cells-push oaz 1) (cells-push oaz source) (cells-push oaz 1) (cells-push oaz 2)
+                (cells-push oaz trial) (cells-push oaz 1) (cells-push oaz 0)
+                (cells-push oaz a) (cells-push oaz b) (cells-push oaz p)
+                (return nsel)))
+          (set k (+ k 1))))
+    (return nsel)))

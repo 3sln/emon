@@ -451,16 +451,16 @@ func OaBlock(text *port.Cells, inc *port.Cells, candidates *port.Cells, s int32,
 	return 1
 }
 
-func OaPct(text *port.Cells, a int32, an int32, b int32, bn int32, p int32, pn int32, candidates *port.Cells, row int32, holds int32, rows int32, work *oarbctx.OaWork) int32 {
+func OaPctMeta(text *port.Cells, a int32, an int32, b int32, bn int32, p int32, pn int32, candidates *port.Cells, row int32, holds int32, rows int32, am *port.Cells, bm *port.Cells, pm *port.Cells, cm *port.Cells) int32 {
 	if (port.CellsLen(candidates) % 3) != 0 {
 		return -1
 	}
 	if (holds < 4) || (((holds * 4) < (rows * 3)) || (holds > rows)) {
 		return -1
 	}
-	var av int64 = ofmt.FmtValue(text, a, an, work.Am)
-	var bv int64 = ofmt.FmtValue(text, b, bn, work.Bm)
-	var pv int64 = ofmt.FmtValue(text, p, pn, work.Pm)
+	var av int64 = ofmt.FmtValue(text, a, an, am)
+	var bv int64 = ofmt.FmtValue(text, b, bn, bm)
+	var pv int64 = ofmt.FmtValue(text, p, pn, pm)
 	var scale int64 = int64(100)
 	var numerator int64 = int64(0)
 	var denominator int64 = av
@@ -470,13 +470,13 @@ func OaPct(text *port.Cells, a int32, an int32, b int32, bn int32, p int32, pn i
 	var chosen int32 = -1
 	var start int32 = 0
 	var count int32 = 0
-	if ((port.CellsAt(work.Am, 0) == 0) || (port.CellsAt(work.Bm, 0) == 0)) || ((av == int64(0)) || (port.CellsAt(work.Am, 1) != port.CellsAt(work.Bm, 1))) {
+	if ((port.CellsAt(am, 0) == 0) || (port.CellsAt(bm, 0) == 0)) || ((av == int64(0)) || (port.CellsAt(am, 1) != port.CellsAt(bm, 1))) {
 		return -1
 	}
-	if (port.CellsAt(work.Pm, 0) == 0) || (port.CellsAt(work.Pm, 1) > 2) {
+	if (port.CellsAt(pm, 0) == 0) || (port.CellsAt(pm, 1) > 2) {
 		return -1
 	}
-	for i < port.CellsAt(work.Pm, 1) {
+	for i < port.CellsAt(pm, 1) {
 		scale *= int64(10)
 		i += 1
 	}
@@ -507,8 +507,8 @@ func OaPct(text *port.Cells, a int32, an int32, b int32, bn int32, p int32, pn i
 		if port.CellsAt(candidates, i*3) == row {
 			start = port.CellsAt(candidates, (i*3)+1)
 			count = port.CellsAt(candidates, (i*3)+2)
-			if oaCompatible(text, p, pn, start, count, work.Pm, work.Cm) == 1 {
-				pv = ofmt.FmtValue(text, start, count, work.Cm)
+			if oaCompatible(text, p, pn, start, count, pm, cm) == 1 {
+				pv = ofmt.FmtValue(text, start, count, cm)
 				if pv == expected {
 					if chosen < 0 {
 						chosen = i
@@ -521,6 +521,10 @@ func OaPct(text *port.Cells, a int32, an int32, b int32, bn int32, p int32, pn i
 		i += 1
 	}
 	return chosen
+}
+
+func OaPct(text *port.Cells, a int32, an int32, b int32, bn int32, p int32, pn int32, candidates *port.Cells, row int32, holds int32, rows int32, work *oarbctx.OaWork) int32 {
+	return OaPctMeta(text, a, an, b, bn, p, pn, candidates, row, holds, rows, work.Am, work.Bm, work.Pm, work.Cm)
 }
 
 func OaLineMergeMeta(text *port.Cells, joined int32, jn int32, candidate int32, cn int32, tokens int32, lineRetry int32, margin int32, im *port.Cells, cm *port.Cells) int32 {

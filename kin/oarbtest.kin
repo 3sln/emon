@@ -717,7 +717,7 @@
   (assert-eq (oa-view-allowed 1 0 4) 0 "two tables times two views")
   (assert-eq (oa-view-allowed 1 1 11) 1 "last band view")
   (assert-eq (oa-view-allowed 1 1 12) 0 "three bands times four views")
-  (assert-eq (oa-active) 0 "forced keep until live population guards pass"))
+  (assert-eq (oa-active) 0 "bulk arbitration stays off; the separate percent sign path is bounded in oapct"))
 
 (deftest test-arb-malformed-split-line-amount-needs-the-full-margin
   (let [^Cells text (new-cells) ^I32 old (oat-text-48 text) ^I32 chosen (oat-text-19 text)

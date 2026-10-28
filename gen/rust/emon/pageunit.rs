@@ -4,6 +4,7 @@
 use crate::emon::evidence::*;
 use crate::emon::health::*;
 use crate::emon::oaline::*;
+use crate::emon::oapct::*;
 use crate::emon::ofuse::*;
 use crate::emon::pageink::*;
 use crate::emon::pdfdoc::*;
@@ -563,6 +564,9 @@ pub fn pu_scan_core(i: i32, input: i32, fuse: i32, did: i32, ad: i32, dpi100: i3
     rt_prep(rtp);
     rt_receipt_source(rtp, maskv);
     asked = rt_plan(i, input, 0, 0, rid, hint, loc, ans, bms, pn_k_text(), crate::port::bms_get(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr, comps, inks, s6);
+    if crate::port::cells_at(rtp, rtp_q()) == 0 {
+        asked += pct_ask(i, dpi100, bx0, by0, crate::port::bms_get(bms, did), ans, loc, bms, owords, etext, w0, nw, rq, s1, s2, s3, s4, s5, s6);
+    }
     // the seals and stamps in the page's pixels (P8.2): their strips and crops are asked in the same round as the targeted passes
     if seals == 1 {
         sx_find(i + 1, views, vdec, prims, inks, pw, ph, s1);
@@ -594,6 +598,14 @@ pub fn pu_scan_core(i: i32, input: i32, fuse: i32, did: i32, ad: i32, dpi100: i3
     }
     if (crate::port::cells_at(rtp, rtp_primary()) == run) || (crate::port::cells_at(rtp, rtp_q()) == 0) {
         nsel = oa_line_fuse(i + 1, rtp, oruns, olines, owords, etext, scr, nsel, oaz, s1, s2, s3, s4);
+    }
+    if crate::port::cells_at(rtp, rtp_q()) == 0 {
+        pct_rows(owords, etext, w0, nw, s1, s3, s4, s5);
+        pct_plan(owords, s1, s2);
+        // Recreate the crop plan without requesting; all answers are now in.
+        pct_ask(i, dpi100, bx0, by0, crate::port::bms_get(bms, did), ans, loc, bms, owords, etext, w0, nw, rq, s1, s2, s3, s4, s5, s6);
+        ua = pct_record(i, dpi100, bx0, by0, ans, loc, s2, vdec, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+        nsel = pct_fuse(i + 1, s2, s1, ua, etext, oruns, olines, owords, scr, nsel, oaz, s3, s4, s5, s6, ri);
     }
     rt_upright(rtp, run, epages, i + 1);
     rotmed = ev_rot_median(olines, l0, nl);

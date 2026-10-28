@@ -6876,7 +6876,11 @@ pub fn ev_emit_oarb(mut t: &mut String, pr: i32, started: i32, rows: &mut crate:
         s = ev_frun(t, pr, 2, rows, 16, i, 5, ek_incumbent(), s);
         s = ev_frun(t, pr, 2, rows, 16, i, 7, ek_choice(), s);
         s = ev_begin(t, pr, 2, s, ek_rule());
-        crate::port::text_ascii(t, "\"line-merge\"");
+        if ev_get(rows, 16, i, 9) == 2 {
+            crate::port::text_ascii(t, "\"closure-pct\"");
+        } else {
+            crate::port::text_ascii(t, "\"line-merge\"");
+        }
         s = ev_fint(t, pr, 2, rows, 16, i, 10, ek_run(), -1, s);
         s = ev_fint(t, pr, 2, rows, 16, i, 11, ek_votes(), 0, s);
         s = ev_fint(t, pr, 2, rows, 16, i, 12, ek_margin(), -2147483648, s);
@@ -6885,6 +6889,10 @@ pub fn ev_emit_oarb(mut t: &mut String, pr: i32, started: i32, rows: &mut crate:
         crate::port::text_i32(t, ev_get(rows, 16, i, 13));
         js_fsep(t, pr, 1);
         crate::port::text_i32(t, ev_get(rows, 16, i, 14));
+        if ev_get(rows, 16, i, 9) == 2 {
+            js_fsep(t, pr, 1);
+            crate::port::text_i32(t, ev_get(rows, 16, i, 15));
+        }
         crate::port::text_ascii(t, "]");
         js_close(t, pr, 2, s);
         i += 1;
