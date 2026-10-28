@@ -13206,3 +13206,29 @@ Live receipts cover the same 60 SROIE and 60 CORD documents as the parent. Preci
 Live re-judgments remain F06 poor, F08 poor, F19 poor and E04 broken. F19's minus is repaired, while its duplicate/merged headers remain. The rejected column and band trials of D797 do not establish activation of those mechanisms. This is a retained F19 recovery, not completion of bulk P-ARB or band insertion.
 
 - [ ] **Signed off** (maintainer)
+
+### D802 — Multilingual reading trials must preserve source owners and values
+
+Batch 24 evaluates default Urdu/German selection, damaged legacy Khmer, and English contamination in explicit Japanese/Hindi mixed reads. Three new scan laws precede selection experiments. They require exact native Unicode values, the actual OCR request and run owners, both words' engine languages, shared source-row ownership and an exact Latin identifier beside the native text. A blanket English-word filter would remove legitimate identifiers. These laws protect existing partial support; they are not a recognition repair.
+
+Live candidates use separately recorded full-page engine readings (`urd`, `khm`, `deu+eng`, `jpn`, `hin`) against the sweep's original options. Installation and OSD script alone do not establish the language or authorize replacement of legacy text. No unsupported legacy mapping or deletion is permitted. The hard word-population guard and exact n09/G18 diagnostic counts apply to these candidates as to every other change. Acceptance and rejection evidence is recorded externally under `emon-scratch/b24` and in the coordinator report.
+
+- [ ] **Signed off** (maintainer)
+
+### D803 — Reject word-changing multilingual candidates under Batch 24's guards
+
+Fresh sweep-option reads and independent candidate bundles give these whitespace-token changes (old tokens removed/new tokens added): F18 `deu+eng` 48/51, G04 `jpn` 53/46, G09 `hin` 79/73, G18 `khm` 34/28, n09 `urd` 268/739. German gains eight umlaut characters and Urdu gains Arabic-script text, but script presence alone is not recognition accuracy. These counts compare the named original reading with an explicit-language candidate; they are not a full-control run of a shipped selector. Automatic word-changing replacement is constrained by the control word guard, and G18/n09 directly remove the mandated 12/74 unread flags. Pure jpn/hin would override the caller's explicit mixed request and do not establish safe source-linked word arbitration. All candidates are rejected; existing explicit model choices remain authoritative. No automatic language choice, legacy substitution, or blanket English filter is retained.
+
+Fresh before/after live bundles on the retained source have byte-identical complete Models and OCR evidence for all seven named samples. n09/G18 retain 74/12 unread flags; readable born-text G01/G02 retain zero. Source renders and live output retain the sweep grades: n09 broken, G18 poor, F18 poor, G04 broken, G09 usable; G01/G02 usable. These grades refer to the retained defaults/options, not the rejected candidates. Existing native-script and Latin identifier support is partly kept without regression. Urdu routing, legacy cleanup, automatic German choice and safe mixed-model intrusion rejection remain unmet. No diagnostic-only change is claimed as recognition.
+
+- [ ] **Signed off** (maintainer)
+
+### D804 — Final preservation gates and explicit limits of the Batch 24 evidence
+
+All 54 fresh live controls pass on 817 pages and 353,283 words: zero lost/gained, with all 54 complete Models identical, including values, owners, provenance, confidence, flags and layout. Both Berkshire inputs and receipt controls 07/10/11 are included; inherited F16/F19 recoveries remain. Named before/after Models and OCR evidence are byte-identical, retaining n09/G18's 74/12 flags and G01/G02's zero. All 249 production input hashes are unchanged; the patch contains only laws/generated tests and these decisions. Candidate word counts concern separately requested named readings, not a full-control measurement of an implemented selector.
+
+Live 60+60 receipt precision is .6820745632 SROIE and .4223602484 CORD, above the tracked floors .6816742393/.42. Compared with that frozen baseline, two SROIE/four CORD documents have fewer matches (3/9 fewer in total); positive per-document matched-count deltas total 10/22. These current-runtime-versus-frozen-baseline figures are not attributed to Batch 24's test-only patch. The tracked baseline is unchanged.
+
+All requested final gates pass: drift, core CI, coverage/full re-derivation (25 steps, eight calibration refreshes, zero rows changed), accuracy (3,449 metrics; 232 cross-host Models equal to Rust), all 29 live samples, OCR/fusion/retarget/seals/sealpx/signatures/assets replay, 1,347 laws on each of Go/Rust/Java/C#, and package checking on seven consumers. No golden, sample, scoreboard or ratchet moved. Asset's first attempt failed because my OpenMP hard limit polluted a zero pixel-comparison result with a warning; removing that runner limit passed the unchanged assertion. Packaging's first C# consumer attempt failed because my RestoreSources override hid its generated local feed; removing that override passed the full seven-consumer check. Original failure logs are retained. Java packaging used javac/java without Maven resolution; C/pod archives omit optional native OCR/render engines, and optional native snippets were not exercised. No commit or corpus fetch/prune.
+
+- [ ] **Signed off** (maintainer)

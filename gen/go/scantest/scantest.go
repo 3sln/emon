@@ -1247,3 +1247,62 @@ func TestReceiptAdmissionFloorFiltersBodyWordsAndPreservesRawEvidence(emonT *tes
 	port.AssertEq(emonT, evidence.OwCount(ow), 2, "both raw OCR occurrences remain evidence")
 	port.AssertEq(emonT, evidence.OwGet(ow, 0, evidence.OwfFlags())&evidence.OeGarbage(), evidence.OeGarbage(), "the refused occurrence has a ledger fate")
 }
+
+func scMultilingualOwners(emonT *testing.T, lang int32, script int32, c0 int32, c1 int32, c2 int32) int32 {
+	var an *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var runs *port.Cells = port.NewCells()
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var at int32 = plan.AnOcr(an, 2)
+	var wnative int32 = plan.AnOcrWord(an, at, 10, 20, 60, 40, 900, 0, 0)
+	plan.AnOcrCp(an, wnative, c0)
+	plan.AnOcrCp(an, wnative, c1)
+	plan.AnOcrCp(an, wnative, c2)
+	var identifier int32 = plan.AnOcrWord(an, at, 90, 20, 60, 40, 900, 0, 0)
+	plan.AnOcrCp(an, identifier, 65)
+	plan.AnOcrCp(an, identifier, 55)
+	ocr.OxBegin(an, 0, 0, 0, 0, 0, script, 629, 500, 1, 1, 0, 0, 0)
+	ocr.OxLine(an, 10, 20, 140, 40, 10, 55, 150, 55, 0, 0, 0, 20, 14, 6)
+	ocr.OxBlock(an, 10, 20, 140, 40, 0, 0, 0)
+	ocr.OxWord(an, 0, lang, -1, 1)
+	ocr.OxWord(an, 0, 1701734144, -1, 1)
+	plan.AnOcrEnd(an, at)
+	scan.ScPage(an, at, 1, 2, 1, 17712, 22848, 738, 952, 30000, 0, 0, 0, 0, 0, 17712, 22848, lang/256, port.NewCells(), port.NewCells(), et, port.NewCells(), port.NewCells(), runs, port.NewCells(), olines, owords, port.NewCells(), port.NewCells(), wd, ln, port.NewCells())
+	port.AssertEq(emonT, evidence.OrGet(runs, 0, evidence.OrfRequest()), 2, "reading belongs to its actual OCR request")
+	port.AssertEq(emonT, evidence.OrGet(runs, 0, evidence.OrfLanglen()), 3, "request language is recorded independently of word models")
+	port.AssertEq(emonT, port.CellsAt(et, evidence.OrGet(runs, 0, evidence.OrfLang())), lang/16777216, "request language first letter")
+	port.AssertEq(emonT, evidence.OwCount(owords), 2, "both recorded words remain evidence")
+	port.AssertEq(emonT, evidence.WdCount(wd), 2, "native text and Latin identifier remain selected")
+	port.AssertEq(emonT, evidence.OwGet(owords, 0, evidence.OwfRun()), 0, "native word belongs to this run")
+	port.AssertEq(emonT, evidence.OwGet(owords, 1, evidence.OwfRun()), 0, "Latin identifier belongs to the same run")
+	port.AssertEq(emonT, evidence.OwGet(owords, 0, evidence.OwfLang()), lang, "native word keeps its engine model")
+	port.AssertEq(emonT, evidence.OwGet(owords, 1, evidence.OwfLang()), 1701734144, "identifier keeps its English model")
+	port.AssertEq(emonT, evidence.LnCount(ln), 1, "one selected source row")
+	port.AssertEq(emonT, evidence.OwGet(owords, 0, evidence.HdLine()), 0, "native evidence word belongs to the recorded row")
+	port.AssertEq(emonT, evidence.OwGet(owords, 1, evidence.HdLine()), 0, "identifier evidence word belongs to the recorded row")
+	port.AssertEq(emonT, evidence.WdGet(wd, 0, evidence.HdLine()), 0, "source row zero owns the native value")
+	port.AssertEq(emonT, evidence.WdGet(wd, 1, evidence.HdLine()), 0, "source row zero owns the identifier value")
+	port.AssertEq(emonT, evidence.WdGet(wd, 0, evidence.HdTlen()), 3, "complete native span")
+	port.AssertEq(emonT, evidence.WdGet(wd, 1, evidence.HdTlen()), 2, "complete identifier span")
+	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(wd, 0, evidence.HdTstart())), c0, "first native scalar")
+	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(wd, 0, evidence.HdTstart())+1), c1, "native diacritic or script scalar")
+	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(wd, 0, evidence.HdTstart())+2), c2, "last native scalar")
+	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(wd, 1, evidence.HdTstart())), 65, "identifier A stays exact")
+	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(wd, 1, evidence.HdTstart())+1), 55, "identifier value 7 stays exact")
+	return 0
+}
+
+func TestGermanUmlautAndLatinIdentifierKeepTheirReadingAndRow(emonT *testing.T) {
+	scMultilingualOwners(emonT, 1684370688, 1281455214, 102, 252, 114)
+}
+
+func TestUrduNativeValuesDoNotAuthorizeDeletingLatinIdentifiers(emonT *testing.T) {
+	scMultilingualOwners(emonT, 1970430976, 1098015074, 1593, 1575, 1605)
+}
+
+func TestJapaneseMixedReadingRetainsSourceBackedLatinIdentifiers(emonT *testing.T) {
+	scMultilingualOwners(emonT, 1785753088, 1248878958, 23665, 30000, 12373)
+}

@@ -1219,4 +1219,62 @@ public static class Scantest {
         emon.Testport.AssertEq(Evidence.OwCount(ow), 2, "both raw OCR occurrences remain evidence");
         emon.Testport.AssertEq(Evidence.OwGet(ow, 0, Evidence.OwfFlags()) & Evidence.OeGarbage(), Evidence.OeGarbage(), "the refused occurrence has a ledger fate");
     }
+    internal static int ScMultilingualOwners(int emonT, int lang, int script, int c0, int c1, int c2) {
+        emon.Port.Cells an = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells runs = emon.Port.NewCells();
+        emon.Port.Cells olines = emon.Port.NewCells();
+        emon.Port.Cells owords = emon.Port.NewCells();
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        int at = Plan.AnOcr(an, 2);
+        int wnative = Plan.AnOcrWord(an, at, 10, 20, 60, 40, 900, 0, 0);
+        Plan.AnOcrCp(an, wnative, c0);
+        Plan.AnOcrCp(an, wnative, c1);
+        Plan.AnOcrCp(an, wnative, c2);
+        int identifier = Plan.AnOcrWord(an, at, 90, 20, 60, 40, 900, 0, 0);
+        Plan.AnOcrCp(an, identifier, 65);
+        Plan.AnOcrCp(an, identifier, 55);
+        Ocr.OxBegin(an, 0, 0, 0, 0, 0, script, 629, 500, 1, 1, 0, 0, 0);
+        Ocr.OxLine(an, 10, 20, 140, 40, 10, 55, 150, 55, 0, 0, 0, 20, 14, 6);
+        Ocr.OxBlock(an, 10, 20, 140, 40, 0, 0, 0);
+        Ocr.OxWord(an, 0, lang, -1, 1);
+        Ocr.OxWord(an, 0, 1701734144, -1, 1);
+        Plan.AnOcrEnd(an, at);
+        Scan.ScPage(an, at, 1, 2, 1, 17712, 22848, 738, 952, 30000, 0, 0, 0, 0, 0, 17712, 22848, lang / 256, emon.Port.NewCells(), emon.Port.NewCells(), et, emon.Port.NewCells(), emon.Port.NewCells(), runs, emon.Port.NewCells(), olines, owords, emon.Port.NewCells(), emon.Port.NewCells(), wd, ln, emon.Port.NewCells());
+        emon.Testport.AssertEq(Evidence.OrGet(runs, 0, Evidence.OrfRequest()), 2, "reading belongs to its actual OCR request");
+        emon.Testport.AssertEq(Evidence.OrGet(runs, 0, Evidence.OrfLanglen()), 3, "request language is recorded independently of word models");
+        emon.Testport.AssertEq(emon.Port.CellsAt(et, Evidence.OrGet(runs, 0, Evidence.OrfLang())), lang / 16777216, "request language first letter");
+        emon.Testport.AssertEq(Evidence.OwCount(owords), 2, "both recorded words remain evidence");
+        emon.Testport.AssertEq(Evidence.WdCount(wd), 2, "native text and Latin identifier remain selected");
+        emon.Testport.AssertEq(Evidence.OwGet(owords, 0, Evidence.OwfRun()), 0, "native word belongs to this run");
+        emon.Testport.AssertEq(Evidence.OwGet(owords, 1, Evidence.OwfRun()), 0, "Latin identifier belongs to the same run");
+        emon.Testport.AssertEq(Evidence.OwGet(owords, 0, Evidence.OwfLang()), lang, "native word keeps its engine model");
+        emon.Testport.AssertEq(Evidence.OwGet(owords, 1, Evidence.OwfLang()), 1701734144, "identifier keeps its English model");
+        emon.Testport.AssertEq(Evidence.LnCount(ln), 1, "one selected source row");
+        emon.Testport.AssertEq(Evidence.OwGet(owords, 0, Evidence.HdLine()), 0, "native evidence word belongs to the recorded row");
+        emon.Testport.AssertEq(Evidence.OwGet(owords, 1, Evidence.HdLine()), 0, "identifier evidence word belongs to the recorded row");
+        emon.Testport.AssertEq(Evidence.WdGet(wd, 0, Evidence.HdLine()), 0, "source row zero owns the native value");
+        emon.Testport.AssertEq(Evidence.WdGet(wd, 1, Evidence.HdLine()), 0, "source row zero owns the identifier value");
+        emon.Testport.AssertEq(Evidence.WdGet(wd, 0, Evidence.HdTlen()), 3, "complete native span");
+        emon.Testport.AssertEq(Evidence.WdGet(wd, 1, Evidence.HdTlen()), 2, "complete identifier span");
+        emon.Testport.AssertEq(emon.Port.CellsAt(et, Evidence.WdGet(wd, 0, Evidence.HdTstart())), c0, "first native scalar");
+        emon.Testport.AssertEq(emon.Port.CellsAt(et, Evidence.WdGet(wd, 0, Evidence.HdTstart()) + 1), c1, "native diacritic or script scalar");
+        emon.Testport.AssertEq(emon.Port.CellsAt(et, Evidence.WdGet(wd, 0, Evidence.HdTstart()) + 2), c2, "last native scalar");
+        emon.Testport.AssertEq(emon.Port.CellsAt(et, Evidence.WdGet(wd, 1, Evidence.HdTstart())), 65, "identifier A stays exact");
+        emon.Testport.AssertEq(emon.Port.CellsAt(et, Evidence.WdGet(wd, 1, Evidence.HdTstart()) + 1), 55, "identifier value 7 stays exact");
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestGermanUmlautAndLatinIdentifierKeepTheirReadingAndRow() {
+        ScMultilingualOwners(0, 1684370688, 1281455214, 102, 252, 114);
+    }
+    [Xunit.Fact]
+    public static void TestUrduNativeValuesDoNotAuthorizeDeletingLatinIdentifiers() {
+        ScMultilingualOwners(0, 1970430976, 1098015074, 1593, 1575, 1605);
+    }
+    [Xunit.Fact]
+    public static void TestJapaneseMixedReadingRetainsSourceBackedLatinIdentifiers() {
+        ScMultilingualOwners(0, 1785753088, 1248878958, 23665, 30000, 12373);
+    }
 }
