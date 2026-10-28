@@ -126,12 +126,21 @@ def require(reg, task, args):
     # `bb unit red ARM` inverts every law to prove each can fail; it reads no corpus (CI runs it without one).
     if task == 'unit' and args[:1] == ['red']:
         return
-    missing = []
+    missing, partial = [], []
     for s in reg['shards']:
         if s['id'] in needed:
             count = len(files(s))
-            if count == 0 or count < s['files']:
+            if count == 0:
                 missing.append(s['id'])
+            elif count < s['files']:
+                partial.append(s['id'])
+    # CI pulls its corpus from the bucket by category (a different subset than a local copy): there the
+    # guard only reports; each gate still fails on any file it reads that is absent.
+    if os.environ.get('CI') == 'true':
+        if missing or partial:
+            print('corpus: CI subset; absent ' + (', '.join(missing) or '-') + '; partial ' + (', '.join(partial) or '-'), file=sys.stderr)
+        return
+    missing += partial
     if missing:
         raise ValueError('missing or incomplete corpus shards: ' + ', '.join(missing) + '; run: bb corpus fetch ' + ' '.join(missing))
 
