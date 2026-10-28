@@ -11,6 +11,9 @@ public final class Ocr {
     public static int ocfOsd() {
         return 2;
     }
+    public static int ocfBest() {
+        return 4;
+    }
     public static int ocfDpiUnit() {
         return 256;
     }

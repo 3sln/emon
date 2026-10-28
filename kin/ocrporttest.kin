@@ -7,14 +7,15 @@
 ;;   turned into the very record the builders write (and refused when its counts run past it).
 (ns emon.ocrporttest
   (:require [emon.lang :refer [I32 Cells Text]]
-            [emon.test :refer [deftest assert-eq assert-that new-cells new-text test-t TestT Str]]
+            [emon.test :refer [deftest assert-eq assert-text assert-that new-cells new-text test-t TestT Str]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
             [emon.plan :refer [view-base rq-ocr rq-ocr-view rq-ocr-lang rq-ocr-end an-ocr an-ocr-word an-ocr-cp an-ocr-end]]
+            [emon.evidence :refer [ev-emit-ocr-model]]
             [emon.ocr :refer [bt-text bt-table bt-image bt-line bt-other
                               ox-begin ox-line ox-block ox-word ox-sym ox-sym-cp ox-alt ox-alt-cp]]
             [emon.ocrport :refer [sc-latn sc-latf sc-cyrl sc-hani sc-jpan sc-cans sc-emit-name zh-chs zh-cht zh-emit-name
                                   pb-table pb-noise pb-flowing-text pb-heading-image pb-horz-line pb-equation
-                                  op-lang-first op-lang-count op-lang-at op-models op-models-configured op-dropped op-find op-names-count op-names-at
+                                  op-lang-first op-lang-count op-lang-at op-model-selector op-models op-models-configured op-dropped op-find op-names-count op-names-at
                                   op-word-lang op-osd-script op-block-type op-is-script op-pack-cells ox-flat]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem]]))
@@ -409,3 +410,51 @@
     (let [^Cells named (new-cells) ^Cells picked (new-cells)]
       (t-req1 named 101 110 103 0)
       (assert-eq (op-models-configured named inst 1 picked) 1 "a named request wins over provider defaults"))))
+
+;; D787: a model is part of request identity, independent of the language.
+(defn ^I32 t-eng-best [^:mut ^Cells c]
+  (t-eng c) (cells-push c 95) (cells-push c 98) (cells-push c 101)
+  (cells-push c 115) (cells-push c 116) (return 0))
+
+(deftest test-best-model-is-explicit-and-never-an-implicit-language
+  (let [^Cells req (new-cells) ^Cells inst (new-cells) ^Cells out (new-cells)
+        ^:mut ^I32 at 0]
+    (t-eng inst) (t-sep inst) (t-eng-best inst)
+    (set at (rq-ocr req 12 4 11 1 0 0 0 0))
+    (rq-ocr-lang req 101 110 103 0) (rq-ocr-end req at)
+    (assert-eq (op-model-selector req) 0 "default English model")
+    (assert-eq (op-models req inst out) 1 "one fast English model by default")
+    (assert-eq (cells-at out 0) 0 "eng_best is not taken merely because installed")
+    (cells-drop req 0) (cells-drop out 0)
+    (set at (rq-ocr req 12 4 11 5 0 0 0 0))
+    (rq-ocr-lang req 101 110 103 0) (rq-ocr-end req at)
+    (assert-eq (op-model-selector req) 1 "explicit crop model selector")
+    (assert-eq (op-models req inst out) 1 "best English when explicitly requested")
+    (assert-eq (cells-at out 0) 1 "eng_best is selected by its whole name")
+    (cells-drop out 0)
+    (assert-eq (op-dropped req inst out) 0 "installed best model is not reported as a dropped language")
+    (cells-drop inst 0) (cells-drop out 0) (t-eng inst)
+    (assert-eq (op-models req inst out) 0 "missing best fails this optional request instead of mislabelling a fast read")
+    (assert-eq (op-dropped req inst out) 1 "missing optional model is reported by model name")
+    (assert-eq (cells-len out) 9 "eng_best and its separator")
+    (assert-eq (cells-at out 3) 95 "eng_best, not eng")))
+
+(deftest test-best-does-not-join-default-script-discovery
+  (let [^Cells req (new-cells) ^Cells inst (new-cells) ^Cells out (new-cells)
+        ^I32 at (rq-ocr req 12 4 11 1 0 0 0 0)]
+    (t-eng-best inst) (t-sep inst) (t-eng inst)
+    (cells-push req (sc-latn)) (rq-ocr-end req at)
+    (assert-eq (op-models req inst out) 1 "default Latin discovery excludes optional variants")
+    (assert-eq (cells-at out 0) 1 "only the standard model is selected")))
+
+(deftest test-best-model-evidence-is-additive
+  (let [^Text standard (new-text) ^Text best (new-text)]
+    (assert-eq (ev-emit-ocr-model standard 0 0 0 0) 0 "standard model adds no field")
+    (assert-text standard "" "standard evidence stays byte identical")
+    (assert-eq (ev-emit-ocr-model best 0 0 0 1) 1 "explicit model is recorded")
+    (assert-text best "\"model\":\"eng_best\"" "model name matches the request selector")))
+
+(deftest test-optional-best-model-keeps-the-english-word-language
+  (let [^Cells model (new-cells)]
+    (t-eng-best model)
+    (assert-eq (op-word-lang model) 1701734144 "the selected model changes; the word language is still eng")))

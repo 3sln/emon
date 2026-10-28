@@ -1,0 +1,763 @@
+;; P-ARB adversarial laws. Written before the implementation (D786).
+(ns emon.oarbtest
+  (:require [emon.lang :refer [I32 I64 Cells i64]]
+            [emon.test :refer [deftest assert-eq assert-eq64 new-cells new-ctx TestT test-t]]
+            [emon.port :refer [cells-push cells-at cells-len]]
+            [emon.ofmt :refer [fmt-value fmt-one-digit-sub]]
+            [emon.oarbctx :refer [OaWork]]
+            [emon.oarb :refer [oa-block oa-pct oa-line-merge oa-band-word oa-band-rule oa-view-factor oa-view-allowed oa-active]]
+            [kin.lang :refer [defn return let set while if do + - * < ==]]))
+
+(defn ^I32 oat-text-0 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 57)
+    (cells-push text 55)
+    (return start)))
+
+(defn ^I32 oat-text-1 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 49)
+    (cells-push text 52)
+    (cells-push text 52)
+    (return start)))
+
+(defn ^I32 oat-text-2 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 50)
+    (cells-push text 52)
+    (cells-push text 49)
+    (return start)))
+
+(defn ^I32 oat-text-3 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 57)
+    (cells-push text 70)
+    (return start)))
+
+(defn ^I32 oat-text-4 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 49)
+    (cells-push text 48)
+    (cells-push text 48)
+    (return start)))
+
+(defn ^I32 oat-text-5 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 48)
+    (return start)))
+
+(defn ^I32 oat-text-6 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 50)
+    (cells-push text 48)
+    (cells-push text 48)
+    (return start)))
+
+(defn ^I32 oat-text-7 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 51)
+    (cells-push text 53)
+    (cells-push text 50)
+    (return start)))
+
+(defn ^I32 oat-text-8 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 52)
+    (cells-push text 53)
+    (cells-push text 52)
+    (return start)))
+
+(defn ^I32 oat-text-9 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 55)
+    (cells-push text 56)
+    (cells-push text 54)
+    (return start)))
+
+(defn ^I32 oat-text-10 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 51)
+    (cells-push text 51)
+    (cells-push text 50)
+    (return start)))
+
+(defn ^I32 oat-text-11 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 51)
+    (cells-push text 52)
+    (cells-push text 55)
+    (cells-push text 46)
+    (cells-push text 56)
+    (return start)))
+
+(defn ^I32 oat-text-12 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 51)
+    (cells-push text 52)
+    (cells-push text 55)
+    (cells-push text 56)
+    (return start)))
+
+(defn ^I32 oat-text-13 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 82)
+    (cells-push text 115)
+    (cells-push text 46)
+    (cells-push text 53)
+    (cells-push text 55)
+    (cells-push text 57)
+    (cells-push text 44)
+    (cells-push text 56)
+    (cells-push text 53)
+    (cells-push text 56)
+    (cells-push text 46)
+    (cells-push text 49)
+    (cells-push text 49)
+    (return start)))
+
+(defn ^I32 oat-text-14 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 53)
+    (cells-push text 55)
+    (cells-push text 57)
+    (cells-push text 44)
+    (cells-push text 56)
+    (cells-push text 53)
+    (cells-push text 56)
+    (cells-push text 46)
+    (cells-push text 49)
+    (cells-push text 49)
+    (return start)))
+
+(defn ^I32 oat-text-15 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 51)
+    (cells-push text 56)
+    (return start)))
+
+(defn ^I32 oat-text-16 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 53)
+    (cells-push text 56)
+    (return start)))
+
+(defn ^I32 oat-text-17 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 57)
+    (cells-push text 54)
+    (return start)))
+
+(defn ^I32 oat-text-18 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 52)
+    (cells-push text 44)
+    (cells-push text 52)
+    (cells-push text 50)
+    (cells-push text 57)
+    (cells-push text 44)
+    (cells-push text 56)
+    (cells-push text 54)
+    (cells-push text 55)
+    (cells-push text 46)
+    (cells-push text 49)
+    (cells-push text 53)
+    (return start)))
+
+(defn ^I32 oat-text-19 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 52)
+    (cells-push text 44)
+    (cells-push text 52)
+    (cells-push text 50)
+    (cells-push text 51)
+    (cells-push text 44)
+    (cells-push text 56)
+    (cells-push text 54)
+    (cells-push text 55)
+    (cells-push text 46)
+    (cells-push text 49)
+    (cells-push text 53)
+    (return start)))
+
+(defn ^I32 oat-text-20 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 52)
+    (cells-push text 44)
+    (cells-push text 52)
+    (cells-push text 48)
+    (cells-push text 48)
+    (cells-push text 44)
+    (cells-push text 56)
+    (cells-push text 49)
+    (cells-push text 57)
+    (cells-push text 46)
+    (cells-push text 49)
+    (cells-push text 53)
+    (return start)))
+
+(defn ^I32 oat-text-21 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 49)
+    (cells-push text 57)
+    (cells-push text 48)
+    (cells-push text 52)
+    (return start)))
+
+(defn ^I32 oat-text-22 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 49)
+    (cells-push text 57)
+    (cells-push text 57)
+    (cells-push text 52)
+    (return start)))
+
+(defn ^I32 oat-text-23 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 45)
+    (cells-push text 54)
+    (cells-push text 46)
+    (cells-push text 57)
+    (return start)))
+
+(defn ^I32 oat-text-24 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 54)
+    (cells-push text 46)
+    (cells-push text 57)
+    (return start)))
+
+(defn ^I32 oat-text-25 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 50)
+    (cells-push text 44)
+    (cells-push text 48)
+    (cells-push text 52)
+    (cells-push text 53)
+    (return start)))
+
+(defn ^I32 oat-text-26 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 49)
+    (cells-push text 44)
+    (cells-push text 57)
+    (cells-push text 48)
+    (cells-push text 51)
+    (return start)))
+
+(defn ^I32 oat-text-27 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 49)
+    (cells-push text 50)
+    (cells-push text 46)
+    (cells-push text 51)
+    (cells-push text 48)
+    (return start)))
+
+(defn ^I32 oat-text-28 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 40)
+    (cells-push text 49)
+    (cells-push text 44)
+    (cells-push text 50)
+    (cells-push text 51)
+    (cells-push text 52)
+    (cells-push text 46)
+    (cells-push text 53)
+    (cells-push text 48)
+    (cells-push text 41)
+    (return start)))
+
+(defn ^I32 oat-text-29 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 49)
+    (cells-push text 44)
+    (cells-push text 50)
+    (cells-push text 51)
+    (cells-push text 52)
+    (cells-push text 46)
+    (cells-push text 53)
+    (cells-push text 48)
+    (cells-push text 45)
+    (return start)))
+
+(defn ^I32 oat-text-30 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 45)
+    (cells-push text 49)
+    (cells-push text 44)
+    (cells-push text 50)
+    (cells-push text 51)
+    (cells-push text 52)
+    (cells-push text 46)
+    (cells-push text 53)
+    (cells-push text 48)
+    (return start)))
+
+(defn ^I32 oat-text-31 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 85)
+    (cells-push text 83)
+    (cells-push text 68)
+    (cells-push text 49)
+    (cells-push text 50)
+    (cells-push text 46)
+    (cells-push text 51)
+    (cells-push text 48)
+    (return start)))
+
+(defn ^I32 oat-text-32 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 49)
+    (cells-push text 44)
+    (cells-push text 50)
+    (cells-push text 51)
+    (return start)))
+
+(defn ^I32 oat-text-33 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 49)
+    (cells-push text 50)
+    (cells-push text 46)
+    (return start)))
+
+(defn ^I32 oat-text-34 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 49)
+    (cells-push text 50)
+    (cells-push text 46)
+    (cells-push text 51)
+    (cells-push text 52)
+    (cells-push text 53)
+    (cells-push text 54)
+    (cells-push text 55)
+    (cells-push text 56)
+    (cells-push text 57)
+    (return start)))
+
+(defn ^I32 oat-text-35 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 57)
+    (cells-push text 50)
+    (cells-push text 50)
+    (cells-push text 51)
+    (cells-push text 51)
+    (cells-push text 55)
+    (cells-push text 50)
+    (cells-push text 48)
+    (cells-push text 51)
+    (cells-push text 54)
+    (cells-push text 56)
+    (cells-push text 53)
+    (cells-push text 52)
+    (cells-push text 55)
+    (cells-push text 55)
+    (cells-push text 53)
+    (cells-push text 56)
+    (cells-push text 48)
+    (cells-push text 56)
+    (return start)))
+
+(defn ^I32 oat-text-36 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 49)
+    (cells-push text 44)
+    (cells-push text 50)
+    (cells-push text 51)
+    (cells-push text 52)
+    (return start)))
+
+(defn ^I32 oat-text-37 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 50)
+    (cells-push text 51)
+    (cells-push text 52)
+    (return start)))
+
+(defn ^I32 oat-text-38 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 51)
+    (cells-push text 51)
+    (return start)))
+
+(defn ^I32 oat-text-39 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 53)
+    (cells-push text 51)
+    (return start)))
+
+(defn ^I32 oat-text-40 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 53)
+    (cells-push text 50)
+    (cells-push text 50)
+    (return start)))
+
+(defn ^I32 oat-text-41 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 51)
+    (cells-push text 50)
+    (cells-push text 50)
+    (return start)))
+
+(defn ^I32 oat-text-42 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 54)
+    (cells-push text 49)
+    (cells-push text 57)
+    (return start)))
+
+(defn ^I32 oat-text-43 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 49)
+    (cells-push text 44)
+    (cells-push text 50)
+    (cells-push text 51)
+    (cells-push text 52)
+    (cells-push text 44)
+    (cells-push text 53)
+    (cells-push text 54)
+    (cells-push text 55)
+    (cells-push text 46)
+    (cells-push text 56)
+    (cells-push text 57)
+    (return start)))
+
+(defn ^I32 oat-text-44 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 48)
+    (cells-push text 46)
+    (cells-push text 48)
+    (cells-push text 49)
+    (return start)))
+
+(defn ^I32 oat-text-45 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 45)
+    (cells-push text 48)
+    (cells-push text 46)
+    (cells-push text 48)
+    (cells-push text 49)
+    (return start)))
+
+(defn ^I32 oat-text-46 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 49)
+    (cells-push text 44)
+    (cells-push text 48)
+    (cells-push text 48)
+    (cells-push text 48)
+    (cells-push text 46)
+    (cells-push text 48)
+    (cells-push text 48)
+    (return start)))
+
+(defn ^I32 oat-text-47 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 43)
+    (cells-push text 49)
+    (cells-push text 50)
+    (cells-push text 46)
+    (cells-push text 51)
+    (cells-push text 48)
+    (return start)))
+
+(defn ^I32 oat-text-48 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 52)
+    (cells-push text 44)
+    (cells-push text 52)
+    (cells-push text 50)
+    (cells-push text 57)
+    (cells-push text 44)
+    (cells-push text 56)
+    (cells-push text 54)
+    (cells-push text 55)
+    (cells-push text 46)
+    (cells-push text 32)
+    (cells-push text 49)
+    (cells-push text 53)
+    (return start)))
+
+(defn ^I32 oat-text-49 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 52)
+    (cells-push text 44)
+    (cells-push text 52)
+    (cells-push text 48)
+    (cells-push text 48)
+    (cells-push text 44)
+    (cells-push text 56)
+    (cells-push text 49)
+    (cells-push text 57)
+    (cells-push text 46)
+    (cells-push text 32)
+    (cells-push text 49)
+    (cells-push text 53)
+    (return start)))
+
+(defn ^I32 oat-text-50 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 51)
+    (cells-push text 53)
+    (cells-push text 55)
+    (cells-push text 56)
+    (return start)))
+
+(defn ^I32 oat-text-51 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 49)
+    (cells-push text 48)
+    (cells-push text 48)
+    (cells-push text 46)
+    (cells-push text 48)
+    (cells-push text 48)
+    (return start)))
+
+(defn ^I32 oat-text-52 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 53)
+    (cells-push text 55)
+    (cells-push text 57)
+    (cells-push text 44)
+    (cells-push text 57)
+    (cells-push text 53)
+    (cells-push text 56)
+    (cells-push text 46)
+    (cells-push text 49)
+    (cells-push text 49)
+    (return start)))
+
+(defn ^I32 oat-text-53 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 82)
+    (cells-push text 115)
+    (cells-push text 46)
+    (cells-push text 53)
+    (cells-push text 55)
+    (cells-push text 57)
+    (cells-push text 44)
+    (cells-push text 57)
+    (cells-push text 53)
+    (cells-push text 56)
+    (cells-push text 46)
+    (cells-push text 49)
+    (cells-push text 49)
+    (return start)))
+
+(defn ^I32 oat-text-54 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 56)
+    (cells-push text 55)
+    (return start)))
+
+(defn ^I32 oat-text-55 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 49)
+    (cells-push text 53)
+    (cells-push text 52)
+    (return start)))
+
+(defn ^I32 oat-text-56 [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 73)
+    (cells-push text 52)
+    (cells-push text 52)
+    (return start)))
+
+(defn ^I32 oat-currency-split [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 36)
+    (cells-push text 49)
+    (cells-push text 50)
+    (cells-push text 46)
+    (cells-push text 32)
+    (cells-push text 51)
+    (cells-push text 52)
+    (return start)))
+
+(defn ^I32 oat-currency-free [^:mut ^Cells text]
+  (let [^I32 start (cells-len text)]
+    (cells-push text 49)
+    (cells-push text 50)
+    (cells-push text 46)
+    (cells-push text 51)
+    (cells-push text 52)
+    (return start)))
+
+(defn ^I32 oat-inc [^:mut ^Cells inc ^I32 start ^I32 count]
+  (cells-push inc start) (cells-push inc count) (return 0))
+(defn ^I32 oat-candidate [^:mut ^Cells candidates ^I32 row ^I32 start ^I32 count]
+  (cells-push candidates row) (cells-push candidates start) (cells-push candidates count) (return 0))
+
+(deftest test-arb-values-are-exact-minor-units
+  (let [^Cells text (new-cells) ^I32 s27 (oat-text-27 text) ^I32 s28 (oat-text-28 text) ^I32 s29 (oat-text-29 text) ^I32 s30 (oat-text-30 text) ^I32 s31 (oat-text-31 text) ^I32 s13 (oat-text-13 text) ^I32 s43 (oat-text-43 text) ^I32 s44 (oat-text-44 text) ^I32 s45 (oat-text-45 text) ^I32 s47 (oat-text-47 text) ^Cells meta (new-cells)]
+    (assert-eq64 (fmt-value text s27 5 meta) (i64 1230) "exact signed minor units")
+    (assert-eq (cells-at meta 0) 1 "valid amount")
+    (assert-eq64 (fmt-value text s28 10 meta) (i64 -123450) "exact signed minor units")
+    (assert-eq (cells-at meta 0) 1 "valid amount")
+    (assert-eq64 (fmt-value text s29 9 meta) (i64 -123450) "exact signed minor units")
+    (assert-eq (cells-at meta 0) 1 "valid amount")
+    (assert-eq64 (fmt-value text s30 9 meta) (i64 -123450) "exact signed minor units")
+    (assert-eq (cells-at meta 0) 1 "valid amount")
+    (assert-eq64 (fmt-value text s31 8 meta) (i64 1230) "exact signed minor units")
+    (assert-eq (cells-at meta 0) 1 "valid amount")
+    (assert-eq64 (fmt-value text s13 13 meta) (i64 57985811) "exact signed minor units")
+    (assert-eq (cells-at meta 0) 1 "valid amount")
+    (assert-eq64 (fmt-value text s43 12 meta) (i64 123456789) "exact signed minor units")
+    (assert-eq (cells-at meta 0) 1 "valid amount")
+    (assert-eq64 (fmt-value text s44 4 meta) (i64 1) "exact signed minor units")
+    (assert-eq (cells-at meta 0) 1 "valid amount")
+    (assert-eq64 (fmt-value text s45 5 meta) (i64 -1) "exact signed minor units")
+    (assert-eq (cells-at meta 0) 1 "valid amount")
+    (assert-eq64 (fmt-value text s47 6 meta) (i64 1230) "exact signed minor units")
+    (assert-eq (cells-at meta 0) 1 "valid amount")
+    (assert-eq (cells-at meta 1) 2 "decimal places are recorded")))
+
+(deftest test-arb-ambiguous-grammar-and-overflow-stay-invalid
+  (let [^Cells text (new-cells) ^I32 s3 (oat-text-3 text) ^I32 s32 (oat-text-32 text) ^I32 s33 (oat-text-33 text) ^I32 s34 (oat-text-34 text) ^I32 s35 (oat-text-35 text) ^Cells meta (new-cells)]
+    (fmt-value text s3 2 meta)
+    (assert-eq (cells-at meta 0) 0 "invalid syntax or bounded overflow cannot be arithmetic evidence")
+    (fmt-value text s32 4 meta)
+    (assert-eq (cells-at meta 0) 0 "invalid syntax or bounded overflow cannot be arithmetic evidence")
+    (fmt-value text s33 3 meta)
+    (assert-eq (cells-at meta 0) 0 "invalid syntax or bounded overflow cannot be arithmetic evidence")
+    (fmt-value text s34 10 meta)
+    (assert-eq (cells-at meta 0) 0 "invalid syntax or bounded overflow cannot be arithmetic evidence")
+    (fmt-value text s35 19 meta)
+    (assert-eq (cells-at meta 0) 0 "invalid syntax or bounded overflow cannot be arithmetic evidence")))
+
+(deftest test-arb-f08-block
+  (let [^Cells text (new-cells) ^I32 s3 (oat-text-3 text) ^I32 s1 (oat-text-1 text) ^I32 s2 (oat-text-2 text) ^I32 s0 (oat-text-0 text) ^Cells inc (new-cells) ^Cells candidates (new-cells) ^Cells out (new-cells) ^OaWork work (new-ctx OaWork)]
+    (oat-inc inc s3 2)
+    (oat-inc inc s1 3)
+    (oat-inc inc s2 3)
+    (oat-candidate candidates 0 s0 2)
+    (assert-eq (oa-block text inc candidates 0 2 2 out work) 1 "f08-block guard")
+    (assert-eq (cells-at out 0) 0 "first slot chooses the recorded candidate")
+    (assert-eq (cells-at out 1) -1 "valid second slot stays incumbent")))
+
+(deftest test-arb-constant-column-100-to-zero
+  (let [^Cells text (new-cells) ^I32 s4 (oat-text-4 text) ^I32 s6 (oat-text-6 text) ^I32 s5 (oat-text-5 text) ^Cells inc (new-cells) ^Cells candidates (new-cells) ^Cells out (new-cells) ^OaWork work (new-ctx OaWork)]
+    (oat-inc inc s4 3)
+    (oat-inc inc s4 3)
+    (oat-inc inc s6 3)
+    (oat-candidate candidates 0 s5 1)
+    (oat-candidate candidates 1 s5 1)
+    (oat-candidate candidates 2 s5 1)
+    (assert-eq (oa-block text inc candidates 0 2 2 out work) 0 "constant-column-100-to-zero guard")))
+
+(deftest test-arb-compensating-error
+  (let [^Cells text (new-cells) ^I32 s7 (oat-text-7 text) ^I32 s8 (oat-text-8 text) ^I32 s9 (oat-text-9 text) ^I32 s10 (oat-text-10 text) ^Cells inc (new-cells) ^Cells candidates (new-cells) ^Cells out (new-cells) ^OaWork work (new-ctx OaWork)]
+    (oat-inc inc s7 3)
+    (oat-inc inc s8 3)
+    (oat-inc inc s9 3)
+    (oat-candidate candidates 0 s10 3)
+    (assert-eq (oa-block text inc candidates 0 2 2 out work) -3 "compensating-error guard")))
+
+(deftest test-arb-dropped-decimal
+  (let [^Cells text (new-cells) ^I32 s11 (oat-text-11 text) ^I32 s37 (oat-text-37 text) ^I32 s42 (oat-text-42 text) ^I32 s12 (oat-text-12 text) ^Cells inc (new-cells) ^Cells candidates (new-cells) ^Cells out (new-cells) ^OaWork work (new-ctx OaWork)]
+    (oat-inc inc s11 5)
+    (oat-inc inc s37 3)
+    (oat-inc inc s42 3)
+    (oat-candidate candidates 0 s12 4)
+    (assert-eq (oa-block text inc candidates 0 2 2 out work) 0 "dropped-decimal guard")))
+
+(deftest test-arb-dropped-currency
+  (let [^Cells text (new-cells) ^I32 s13 (oat-text-13 text) ^I32 s27 (oat-text-27 text) ^I32 s46 (oat-text-46 text) ^I32 s14 (oat-text-14 text) ^Cells inc (new-cells) ^Cells candidates (new-cells) ^Cells out (new-cells) ^OaWork work (new-ctx OaWork)]
+    (oat-inc inc s13 13)
+    (oat-inc inc s27 5)
+    (oat-inc inc s46 8)
+    (oat-candidate candidates 0 s14 10)
+    (assert-eq (oa-block text inc candidates 0 2 2 out work) 0 "dropped-currency guard")))
+
+(deftest test-arb-shared-digit-confusion
+  (let [^Cells text (new-cells) ^I32 s15 (oat-text-15 text) ^I32 s16 (oat-text-16 text) ^I32 s17 (oat-text-17 text) ^Cells inc (new-cells) ^Cells candidates (new-cells) ^Cells out (new-cells) ^OaWork work (new-ctx OaWork)]
+    (oat-inc inc s15 2)
+    (oat-inc inc s16 2)
+    (oat-inc inc s17 2)
+    (oat-candidate candidates 0 s16 2)
+    (assert-eq (oa-block text inc candidates 0 2 2 out work) 0 "shared-digit-confusion guard")))
+
+(deftest test-arb-zero-term
+  (let [^Cells text (new-cells) ^I32 s5 (oat-text-5 text) ^I32 s0 (oat-text-0 text) ^I32 s6 (oat-text-6 text) ^Cells inc (new-cells) ^Cells candidates (new-cells) ^Cells out (new-cells) ^OaWork work (new-ctx OaWork)]
+    (oat-inc inc s5 1)
+    (oat-inc inc s0 2)
+    (oat-inc inc s6 3)
+    (oat-candidate candidates 2 s0 2)
+    (assert-eq (oa-block text inc candidates 0 2 2 out work) 0 "zero-term guard")))
+
+(deftest test-arb-percent-needs-an-established-family
+  (let [^Cells text (new-cells) ^I32 s23 (oat-text-23 text) ^I32 s25 (oat-text-25 text) ^I32 s26 (oat-text-26 text) ^I32 s24 (oat-text-24 text) ^Cells candidates (new-cells) ^OaWork work (new-ctx OaWork)]
+    (oat-candidate candidates 0 s23 4)
+    (assert-eq (oa-pct text s25 5 s26 5 s24 3 candidates 0 8 9 work) 0 "only established families can restore a minus")
+    (assert-eq (oa-pct text s25 5 s26 5 s24 3 candidates 0 3 9 work) -1 "only established families can restore a minus")))
+
+(deftest test-arb-line-join-does-not-adopt-the-whole-retry
+  (let [^Cells text (new-cells) ^I32 s20 (oat-text-20 text) ^I32 s18 (oat-text-18 text) ^I32 s19 (oat-text-19 text) ^I32 s21 (oat-text-21 text) ^I32 s22 (oat-text-22 text) ^OaWork work (new-ctx OaWork)]
+    (assert-eq (oa-line-merge text s20 12 s20 12 2 1 0 work) 1 "valid incumbent and one-token neighbours stay")
+    (assert-eq (oa-line-merge text s18 12 s19 12 2 1 606 work) 0 "valid incumbent and one-token neighbours stay")
+    (assert-eq (oa-line-merge text s21 4 s22 4 1 1 900 work) 0 "valid incumbent and one-token neighbours stay")))
+
+(deftest test-arb-band-numbers-and-ties-are-held
+  (assert-eq (oa-band-word 1 4 1 0) 0 "numbers held even with unanimous agreement")
+  (assert-eq (oa-band-word 0 2 1 0) 1 "dictionary word agreed by two views")
+  (assert-eq (oa-band-word 0 3 0 0) 1 "three views agree on a lexical form")
+  (assert-eq (oa-band-word 0 3 1 1) 0 "tie blocks")
+  (assert-eq (oa-band-rule 2 0 900) 0 "at least three accepted words")
+  (assert-eq (oa-band-rule 5 1 900) 0 "one unagreed lexical word blocks the band")
+  (assert-eq (oa-band-rule 5 0 599) 0 "at least sixty percent coverage")
+  (assert-eq (oa-band-rule 5 0 600) 1 "coverage boundary"))
+
+(deftest test-arb-view-budget-and-integer-factor
+  (assert-eq (oa-view-factor 7 36) 5 "seven pixel text gets integer x5")
+  (assert-eq (oa-view-factor 1 36) 6 "upscale cap")
+  (assert-eq (oa-view-factor 40 36) 1 "no downscale")
+  (assert-eq (oa-view-allowed 0 0 0) 0 "born digital cannot request arbitration")
+  (assert-eq (oa-view-allowed 1 0 3) 1 "last table view")
+  (assert-eq (oa-view-allowed 1 0 4) 0 "two tables times two views")
+  (assert-eq (oa-view-allowed 1 1 11) 1 "last band view")
+  (assert-eq (oa-view-allowed 1 1 12) 0 "three bands times four views")
+  (assert-eq (oa-active) 0 "forced keep until live population guards pass"))
+
+(deftest test-arb-malformed-split-line-amount-needs-the-full-margin
+  (let [^Cells text (new-cells) ^I32 old (oat-text-48 text) ^I32 chosen (oat-text-19 text)
+        ^OaWork work (new-ctx OaWork)]
+    (assert-eq (oa-line-merge text old 13 chosen 12 2 1 299 work) 0 "margin below 300 holds")
+    (assert-eq (oa-line-merge text old 13 chosen 12 2 1 300 work) 1 "malformed split amount plus engine line retry")
+    (assert-eq (oa-line-merge text old 13 chosen 12 2 0 900 work) 0 "a different crop is not the engine line retry")))
+
+(deftest test-arb-decimal-loss-would-close-but-is-blocked
+  (let [^Cells text (new-cells) ^I32 old (oat-text-11 text) ^I32 candidate (oat-text-12 text)
+        ^I32 term (oat-text-4 text) ^I32 total (oat-text-50 text)
+        ^Cells inc (new-cells) ^Cells candidates (new-cells) ^Cells out (new-cells)
+        ^OaWork work (new-ctx OaWork)]
+    (oat-inc inc old 5) (oat-inc inc term 3) (oat-inc inc total 4)
+    (oat-candidate candidates 0 candidate 4)
+    (assert-eq (oa-block text inc candidates 0 2 2 out work) 0 "3478 + 100 = 3578 cannot erase the decimal of 347.8")))
+
+(deftest test-arb-currency-loss-would-close-but-is-blocked
+  (let [^Cells text (new-cells) ^I32 old (oat-text-13 text) ^I32 term (oat-text-51 text)
+        ^I32 total (oat-text-52 text) ^I32 candidate (oat-text-14 text)
+        ^Cells inc (new-cells) ^Cells candidates (new-cells) ^Cells out (new-cells)
+        ^OaWork work (new-ctx OaWork)]
+    (oat-inc inc old 13) (oat-inc inc term 6) (oat-inc inc total 10)
+    (oat-candidate candidates 0 candidate 10)
+    (assert-eq (oa-block text inc candidates 0 2 2 out work) 0 "a verbatim source currency is never dropped")))
+
+(deftest test-arb-equal-minima-block-and-duplicate-readings-do-not-vote
+  (let [^Cells text (new-cells) ^I32 bad (oat-text-3 text) ^I32 bad2 (oat-text-56 text)
+        ^I32 total (oat-text-2 text) ^I32 a (oat-text-0 text) ^I32 b (oat-text-1 text)
+        ^I32 c (oat-text-54 text) ^I32 d (oat-text-55 text)
+        ^Cells inc (new-cells) ^Cells candidates (new-cells) ^Cells out (new-cells)
+        ^OaWork work (new-ctx OaWork)]
+    (oat-inc inc bad 2) (oat-inc inc bad2 3) (oat-inc inc total 3)
+    (oat-candidate candidates 0 a 2) (oat-candidate candidates 0 a 2)
+    (oat-candidate candidates 1 b 3)
+    (assert-eq (oa-block text inc candidates 0 2 2 out work) 1 "duplicate readings are one possible assignment")
+    (oat-candidate candidates 0 c 2) (oat-candidate candidates 1 d 3)
+    (assert-eq (oa-block text inc candidates 0 2 2 out work) -2 "97+144 and 87+154 tie; agreement cannot decide")))
+
+(deftest test-arb-line-join-keeps-source-currency-affixes
+  (let [^Cells text (new-cells) ^I32 old (oat-currency-split text) ^I32 chosen (oat-currency-free text)
+        ^OaWork work (new-ctx OaWork)]
+    (assert-eq (oa-line-merge text old 7 chosen 5 2 1 999 work) 0 "a source currency symbol cannot disappear even at a large margin")))

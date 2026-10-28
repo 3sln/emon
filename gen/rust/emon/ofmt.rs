@@ -334,3 +334,214 @@ pub fn ofmt_valid(text: &mut crate::port::Cells, start: i32, count: i32) -> i32 
     }
     return fmt_percent(text, start, end);
 }
+pub(crate) fn fmt_ascii_digit(cp: i32) -> i32 {
+    if (cp >= 48) && (cp <= 57) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn fmt_currency_end(text: &mut crate::port::Cells, start: i32, end: i32) -> i32 {
+    if start >= end {
+        return start;
+    }
+    let cp: i32 = crate::port::cells_at(text, start);
+    if ((cp == 36) || (cp == 8364)) || ((cp == 163) || (cp == 165)) {
+        return start + 1;
+    }
+    if (start + 1) < end {
+        if fmt_fold(cp) == 114 {
+            if (fmt_fold(crate::port::cells_at(text, start + 1)) == 109) || (fmt_fold(crate::port::cells_at(text, start + 1)) == 112) {
+                return start + 2;
+            } else if ((start + 2) < end) && ((fmt_fold(crate::port::cells_at(text, start + 1)) == 115) && (crate::port::cells_at(text, start + 2) == 46)) {
+                return start + 3;
+            }
+        }
+    }
+    if (start + 2) < end {
+        if ((fmt_fold(cp) == 117) && ((fmt_fold(crate::port::cells_at(text, start + 1)) == 115) && (fmt_fold(crate::port::cells_at(text, start + 2)) == 100))) || ((fmt_fold(cp) == 101) && ((fmt_fold(crate::port::cells_at(text, start + 1)) == 117) && (fmt_fold(crate::port::cells_at(text, start + 2)) == 114))) {
+            return start + 3;
+        }
+    }
+    return start;
+}
+pub fn fmt_value(text: &mut crate::port::Cells, start: i32, count: i32, mut meta: &mut crate::port::Cells) -> i64 {
+    crate::port::cells_drop(meta, 0);
+    let mut z: i32 = 0;
+    while z < 8 {
+        crate::port::cells_push(meta, 0);
+        z += 1;
+    }
+    if (start < 0) || ((count <= 0) || (start > crate::port::cells_len(text))) {
+        return 0 as i64;
+    }
+    if count > (crate::port::cells_len(text) - start) {
+        return 0 as i64;
+    }
+    let mut i: i32 = start;
+    let mut end: i32 = start + count;
+    let mut negative: i32 = 0;
+    let mut style: i32 = 0;
+    let mut paren: i32 = 0;
+    let mut prefix: i32 = start;
+    let mut pend: i32 = start;
+    let mut grouped: i32 = 0;
+    let mut group: i32 = 0;
+    let mut dec: i32 = 0;
+    let mut digits: i32 = 0;
+    let mut cp: i32 = 0;
+    let mut value: i64 = 0 as i64;
+    if crate::port::cells_at(text, end - 1) == 37 {
+        crate::port::cells_set(meta, 4, 1);
+        end -= 1;
+    }
+    if i >= end {
+        return 0 as i64;
+    }
+    pend = fmt_currency_end(text, i, end);
+    if pend > i {
+        prefix = i;
+        i = pend;
+    }
+    if i >= end {
+        return 0 as i64;
+    }
+    if crate::port::cells_at(text, i) == 40 {
+        paren = 1;
+        negative = 1;
+        style = 3;
+        i += 1;
+    }
+    if i >= end {
+        return 0 as i64;
+    }
+    if ((crate::port::cells_at(text, i) == 45) || (crate::port::cells_at(text, i) == 8722)) || (crate::port::cells_at(text, i) == 43) {
+        if paren == 1 {
+            return 0 as i64;
+        }
+        if crate::port::cells_at(text, i) != 43 {
+            negative = 1;
+        }
+        style = 1;
+        i += 1;
+    }
+    if pend == prefix {
+        prefix = i;
+        pend = fmt_currency_end(text, i, end);
+        i = pend;
+    }
+    if paren == 1 {
+        if (i >= end) || (crate::port::cells_at(text, end - 1) != 41) {
+            return 0 as i64;
+        }
+        end -= 1;
+    } else if i < end {
+        if crate::port::cells_at(text, end - 1) == 45 {
+            if style != 0 {
+                return 0 as i64;
+            }
+            style = 2;
+            negative = 1;
+            end -= 1;
+        }
+    }
+    while i < end {
+        cp = crate::port::cells_at(text, i);
+        if fmt_ascii_digit(cp) == 1 {
+            digits += 1;
+            if digits > 15 {
+                return 0 as i64;
+            }
+            value = (value * (10 as i64)) + ((cp - 48) as i64);
+            group += 1;
+        } else if cp == 44 {
+            if (group == 0) || ((grouped == 0) && (group > 3)) {
+                return 0 as i64;
+            }
+            if (grouped == 1) && (group != 3) {
+                return 0 as i64;
+            }
+            grouped = 1;
+            group = 0;
+        } else if cp == 46 {
+            if (group == 0) || ((grouped == 1) && (group != 3)) {
+                return 0 as i64;
+            }
+            i += 1;
+            while i < end {
+                cp = crate::port::cells_at(text, i);
+                if fmt_ascii_digit(cp) == 0 {
+                    return 0 as i64;
+                }
+                digits += 1;
+                dec += 1;
+                if (digits > 15) || (dec > 6) {
+                    return 0 as i64;
+                }
+                value = (value * (10 as i64)) + ((cp - 48) as i64);
+                i += 1;
+            }
+            if dec == 0 {
+                return 0 as i64;
+            }
+        } else {
+            return 0 as i64;
+        }
+        i += 1;
+    }
+    if (digits == 0) || ((dec == 0) && ((group == 0) || ((grouped == 1) && (group != 3)))) {
+        return 0 as i64;
+    }
+    crate::port::cells_set(meta, 0, 1);
+    crate::port::cells_set(meta, 1, dec);
+    crate::port::cells_set(meta, 2, grouped);
+    crate::port::cells_set(meta, 3, style);
+    crate::port::cells_set(meta, 5, digits);
+    crate::port::cells_set(meta, 6, prefix);
+    crate::port::cells_set(meta, 7, pend - prefix);
+    if negative == 1 {
+        return (0 as i64) - value;
+    }
+    return value;
+}
+pub fn fmt_one_digit_sub(text: &mut crate::port::Cells, a: i32, an: i32, b: i32, bn: i32) -> i32 {
+    if (an != bn) || ((a < 0) || (b < 0)) {
+        return 0;
+    }
+    if (an > (crate::port::cells_len(text) - a)) || (bn > (crate::port::cells_len(text) - b)) {
+        return 0;
+    }
+    let mut i: i32 = 0;
+    let mut diff: i32 = 0;
+    let mut x: i32 = 0;
+    let mut y: i32 = 0;
+    while i < an {
+        x = crate::port::cells_at(text, a + i);
+        y = crate::port::cells_at(text, b + i);
+        if x != y {
+            if (fmt_ascii_digit(x) == 0) || (fmt_ascii_digit(y) == 0) {
+                return 0;
+            }
+            diff += 1;
+        }
+        i += 1;
+    }
+    if diff == 1 {
+        return 1;
+    }
+    return 0;
+}
+pub fn fmt_col_type(meta: &mut crate::port::Cells, decimals: i32, grouped: i32, percent: i32) -> i32 {
+    if crate::port::cells_len(meta) < 8 {
+        return 0;
+    }
+    if (crate::port::cells_at(meta, 0) == 0) || (crate::port::cells_at(meta, 1) != decimals) {
+        return 0;
+    }
+    if crate::port::cells_at(meta, 4) != percent {
+        return 0;
+    }
+    if (grouped == 1) && ((crate::port::cells_at(meta, 5) >= (decimals + 4)) && (crate::port::cells_at(meta, 2) == 0)) {
+        return 0;
+    }
+    return 1;
+}

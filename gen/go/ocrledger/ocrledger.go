@@ -237,7 +237,7 @@ func OcAccount(runs *port.Cells, owords *port.Cells, et *port.Cells, nodes *port
 			r = 0
 			for r < evidence.OrCount(runs) {
 				// D731: a `fused` run's words are copies of recorded words, which are audited themselves
-				if (evidence.OrGet(runs, r, 0) == pg) && (evidence.OrGet(runs, r, evidence.OrfPass()) != evidence.OpFused()) {
+				if (evidence.OrGet(runs, r, 0) == pg) && ((evidence.OrGet(runs, r, evidence.OrfPass()) != evidence.OpFused()) && (evidence.OrGet(runs, r, evidence.OrfPass()) != evidence.OpArb())) {
 					w = evidence.OrGet(runs, r, evidence.OrfWfirst())
 					end = w + evidence.OrGet(runs, r, evidence.OrfWcount())
 					for w < end {

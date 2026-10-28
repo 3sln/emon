@@ -223,7 +223,7 @@ public static class Ocrledger {
                 r = 0;
                 while (r < Evidence.OrCount(runs)) {
                     // D731: a `fused` run's words are copies of recorded words, which are audited themselves
-                    if ((Evidence.OrGet(runs, r, 0) == pg) && (Evidence.OrGet(runs, r, Evidence.OrfPass()) != Evidence.OpFused())) {
+                    if ((Evidence.OrGet(runs, r, 0) == pg) && ((Evidence.OrGet(runs, r, Evidence.OrfPass()) != Evidence.OpFused()) && (Evidence.OrGet(runs, r, Evidence.OrfPass()) != Evidence.OpArb()))) {
                         w = Evidence.OrGet(runs, r, Evidence.OrfWfirst());
                         end = w + Evidence.OrGet(runs, r, Evidence.OrfWcount());
                         while (w < end) {

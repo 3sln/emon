@@ -3,7 +3,7 @@
             [emon.test :refer [deftest assert-eq new-cells]]
             [emon.port :refer [cells-push]]
             [emon.model :refer [model-init node-new node-set-text node-add-region nk-paragraph nk-text nk-furniture ledger-count ledger-text-len]]
-            [emon.evidence :refer [or-new or-set orf-wfirst orf-wcount orf-pass op-first op-body-ink op-fused ow-new ow-set owf-from]]
+            [emon.evidence :refer [or-new or-set orf-wfirst orf-wcount orf-pass op-first op-body-ink op-fused op-arb ow-new ow-set owf-from]]
             [emon.ocrledger :refer [oc-account oc-page-text]]
             [kin.lang :refer [defn return let comment]]))
 
@@ -175,6 +175,32 @@
     (or-new runs 1 0) (or-set runs 0 (orf-pass) (op-first)) (or-set runs 0 (orf-wfirst) 0) (or-set runs 0 (orf-wcount) 1)
     (or-new runs 1 0) (or-set runs 1 (orf-pass) (op-body-ink)) (or-set runs 1 (orf-wfirst) 1) (or-set runs 1 (orf-wcount) 1)
     (or-new runs 1 0) (or-set runs 2 (orf-pass) (op-fused)) (or-set runs 2 (orf-wfirst) 2) (or-set runs 2 (orf-wcount) 1)
+    (ow-new words 1 0 0 100 100 0 100 100 100 0 0 0 1 0 400 -1)
+    (ow-new words 1 0 0 100 100 0 100 100 100 0 0 1 1 0 900 -1)
+    (ow-new words 1 0 0 100 100 0 100 100 100 0 0 1 1 0 900 -1)
+    (ow-set words 2 (owf-from) 2)
+    (assert-eq (oc-account runs words et nodes regions mask ledger text bag tokens norm tmp raw rt) 1 "only the displaced reading is residual")
+    (assert-eq (ledger-count ledger) 1 "the copy neither consumes nor claims the Model's A")
+    (assert-eq (ledger-text-len ledger 0) 1 "the displaced word's own text")))
+
+
+(deftest test-arbitration-copies-are-not-audited-twice-and-the-displaced-word-keeps-a-fate
+  (comment "D788: run 0 read B (selected, then displaced), run 1 read A (chosen), run 2 is the fused run whose word copies run 1's. The Model holds A once.")
+  (let [^Cells runs (new-cells) ^Cells words (new-cells) ^Cells et (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells mask (new-cells)
+        ^Cells ledger (new-cells) ^Cells text (new-cells) ^Cells pages (new-cells) ^Cells layout (new-cells) ^Cells bag (new-cells) ^Cells tokens (new-cells)
+        ^Cells norm (new-cells) ^Cells tmp (new-cells) ^Cells raw (new-cells) ^Cells rt (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (cells-push mask 1)
+    (cells-push et 66)
+    (cells-push et 65)
+    (cells-push text 65)
+    (let [^I32 n (node-new nodes (nk-paragraph) 0)]
+      (node-set-text nodes n 0 1)
+      (node-add-region nodes regions n 1 0 0 100 100))
+    (or-new runs 1 0) (or-set runs 0 (orf-pass) (op-first)) (or-set runs 0 (orf-wfirst) 0) (or-set runs 0 (orf-wcount) 1)
+    (or-new runs 1 0) (or-set runs 1 (orf-pass) (op-body-ink)) (or-set runs 1 (orf-wfirst) 1) (or-set runs 1 (orf-wcount) 1)
+    (or-new runs 1 0) (or-set runs 2 (orf-pass) (op-arb)) (or-set runs 2 (orf-wfirst) 2) (or-set runs 2 (orf-wcount) 1)
     (ow-new words 1 0 0 100 100 0 100 100 100 0 0 0 1 0 400 -1)
     (ow-new words 1 0 0 100 100 0 100 100 100 0 0 1 1 0 900 -1)
     (ow-new words 1 0 0 100 100 0 100 100 100 0 0 1 1 0 900 -1)

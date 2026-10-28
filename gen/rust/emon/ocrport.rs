@@ -599,6 +599,35 @@ pub(crate) fn op_has(out: &mut crate::port::Cells, base: i32, v: i32) -> i32 {
     }
     return 0;
 }
+pub fn op_model_selector(req: &mut crate::port::Cells) -> i32 {
+    // D787: low flags bit 4 asks for the explicitly configured optional eng_best model. Zero is the standard model. DPI occupies the high bytes as before.
+    return (rq_arg(req, 0, 2) / 4) % 2;
+}
+pub(crate) fn op_best_entry(inst: &mut crate::port::Cells, from: i32, to: i32) -> i32 {
+    if (to - from) != 8 {
+        return 0;
+    }
+    if ((crate::port::cells_at(inst, from) == 101) && (crate::port::cells_at(inst, from + 1) == 110)) && ((crate::port::cells_at(inst, from + 2) == 103) && (crate::port::cells_at(inst, from + 3) == 95)) {
+        if ((crate::port::cells_at(inst, from + 4) == 98) && (crate::port::cells_at(inst, from + 5) == 101)) && ((crate::port::cells_at(inst, from + 6) == 115) && (crate::port::cells_at(inst, from + 7) == 116)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+pub(crate) fn op_best_model(inst: &mut crate::port::Cells) -> i32 {
+    let mut from: i32 = 0;
+    let mut to: i32 = 0;
+    let mut i: i32 = 0;
+    while from < crate::port::cells_len(inst) {
+        to = op_entry_end(inst, from);
+        if op_best_entry(inst, from, to) == 1 {
+            return i;
+        }
+        from = to + 1;
+        i += 1;
+    }
+    return -1;
+}
 pub fn op_models(req: &mut crate::port::Cells, inst: &mut crate::port::Cells, mut out: &mut crate::port::Cells) -> i32 {
     // Which installed models read the request, as indices into `inst` (code-point Cells separated by 0), appended to `out`;
     // answers how many. A script (`Cyrl`) is every installed model that reads it, once; a language is its model; a language
@@ -611,6 +640,14 @@ pub fn op_models(req: &mut crate::port::Cells, inst: &mut crate::port::Cells, mu
     let mut i: i32 = 0;
     let mut from: i32 = 0;
     let mut to: i32 = 0;
+    if op_model_selector(req) == 1 {
+        i = op_best_model(inst);
+        if i >= 0 {
+            crate::port::cells_push(out, i);
+            return 1;
+        }
+        return 0;
+    }
     while k < end {
         p = rq_arg(req, 0, k);
         if op_is_script(p) == 1 {
@@ -618,7 +655,7 @@ pub fn op_models(req: &mut crate::port::Cells, inst: &mut crate::port::Cells, mu
             from = 0;
             while i < n {
                 to = op_entry_end(inst, from);
-                if op_script_reads(p, op_model_script(inst, from, to)) == 1 {
+                if (op_best_entry(inst, from, to) == 0) && (op_script_reads(p, op_model_script(inst, from, to)) == 1) {
                     if op_has(out, base, i) == 0 {
                         crate::port::cells_push(out, i);
                     }
@@ -637,9 +674,18 @@ pub fn op_models(req: &mut crate::port::Cells, inst: &mut crate::port::Cells, mu
     if crate::port::cells_len(out) == base {
         i = op_model_index(inst, 1701734144);
         if i < 0 {
-            i = 0;
+            from = 0;
+            k = 0;
+            while k < n {
+                to = op_entry_end(inst, from);
+                if (i < 0) && (op_best_entry(inst, from, to) == 0) {
+                    i = k;
+                }
+                from = to + 1;
+                k += 1;
+            }
         }
-        if n > 0 {
+        if i >= 0 {
             crate::port::cells_push(out, i);
         }
     }
@@ -686,6 +732,21 @@ pub(crate) fn op_push_model_name(p: i32, mut out: &mut crate::port::Cells) -> i3
 pub fn op_dropped(req: &mut crate::port::Cells, inst: &mut crate::port::Cells, mut out: &mut crate::port::Cells) -> i32 {
     // The languages `op-models` dropped for want of an installed model, appended to `out` as the model's name: code points then
     // a 0, each. Answers how many. (A host's note, nothing more.)
+    if op_model_selector(req) == 1 {
+        if op_best_model(inst) >= 0 {
+            return 0;
+        }
+        crate::port::cells_push(out, 101);
+        crate::port::cells_push(out, 110);
+        crate::port::cells_push(out, 103);
+        crate::port::cells_push(out, 95);
+        crate::port::cells_push(out, 98);
+        crate::port::cells_push(out, 101);
+        crate::port::cells_push(out, 115);
+        crate::port::cells_push(out, 116);
+        crate::port::cells_push(out, 0);
+        return 1;
+    }
     let end: i32 = crate::port::cells_len(req) - 3;
     let mut k: i32 = op_lang_first(req);
     let mut p: i32 = 0;
@@ -706,6 +767,9 @@ pub fn op_dropped(req: &mut crate::port::Cells, inst: &mut crate::port::Cells, m
 pub fn op_word_lang(model: &mut crate::port::Cells) -> i32 {
     // The language the engine read a word in (its model's name), as a request names it: `chi_sim` is `chs`, `chi_tra` `cht`,
     // anything else cut to four chars, packed. 0 for none.
+    if op_best_entry(model, 0, crate::port::cells_len(model)) == 1 {
+        return 1701734144;
+    }
     let v: i32 = op_find(3, model, 0, crate::port::cells_len(model));
     if v != 0 {
         return v;
@@ -956,7 +1020,7 @@ pub fn ox_flat(v: &mut crate::port::Cells, id: i32, mut c: &mut crate::port::Cel
 }
 pub fn op_models_configured(req: &mut crate::port::Cells, inst: &mut crate::port::Cells, configured: i32, mut out: &mut crate::port::Cells) -> i32 {
     // D678: an explicit provider model set is authoritative when the request has no language hint. An unfiltered inventory uses discovery; a named request still wins.
-    if configured == 0 {
+    if (configured == 0) || (op_model_selector(req) == 1) {
         return op_models(req, inst, out);
     }
     let base: i32 = crate::port::cells_len(out);

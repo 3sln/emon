@@ -1115,6 +1115,9 @@ func OpReceiptRescue() int32 {
 func OpFused() int32 {
 	return 12
 }
+func OpArb() int32 {
+	return 13
+}
 func OpEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "first")
@@ -1162,6 +1165,10 @@ func OpEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 12 {
 		port.TextAscii(t, "fused")
+		return 1
+	}
+	if code == 13 {
+		port.TextAscii(t, "arb")
 		return 1
 	}
 	return 0
@@ -1901,6 +1908,12 @@ func EkMargin() int32 {
 func EkReadings() int32 {
 	return 162
 }
+func EkOarb() int32 {
+	return 163
+}
+func EkIdentity() int32 {
+	return 164
+}
 func EkEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "emon-evidence")
@@ -2548,6 +2561,14 @@ func EkEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 162 {
 		port.TextAscii(t, "readings")
+		return 1
+	}
+	if code == 163 {
+		port.TextAscii(t, "oarb")
+		return 1
+	}
+	if code == 164 {
+		port.TextAscii(t, "identity")
 		return 1
 	}
 	return 0
@@ -7132,6 +7153,25 @@ func evField(t *strings.Builder, pr int32, d int32, c *port.Cells, etext *port.C
 	return started
 }
 
+func EvEmitOcrModel(t *strings.Builder, pr int32, d int32, started int32, selector int32) int32 {
+	// D787: an explicit optional model is additive evidence. Standard requests keep their byte-identical evidence. No fallback is permitted for selector 1.
+	if selector != 1 {
+		return started
+	}
+	if started == 1 {
+		port.TextAscii(t, ",")
+	}
+	if pr == 1 {
+		json.JsIndent(t, d+1)
+	}
+	port.TextAscii(t, "\"model\":")
+	if pr == 1 {
+		port.TextAscii(t, " ")
+	}
+	port.TextAscii(t, "\"eng_best\"")
+	return 1
+}
+
 func EvRow(t *strings.Builder, pr int32, d int32, ea int32, c *port.Cells, etext *port.Cells, row int32) int32 {
 	// One row of arena `ea` as an object, its fields in stride order (the table `ev-fd`).
 	var stride int32 = EvStrides[ea-1]
@@ -7143,6 +7183,11 @@ func EvRow(t *strings.Builder, pr int32, d int32, ea int32, c *port.Cells, etext
 	for k < cnt {
 		s = evField(t, pr, d, c, etext, stride, row, first+k, s)
 		k += 1
+	}
+	if ea == 14 {
+		if ((OrGet(c, row, OrfFlags()) / 4) % 2) == 1 {
+			s = EvEmitOcrModel(t, pr, d, s, 1)
+		}
 	}
 	json.JsClose(t, pr, d, s)
 	return 0
@@ -7398,6 +7443,40 @@ func EvEmitBody(t *strings.Builder, pretty int32, s0 int32, epages *port.Cells, 
 	s = evArena(t, pretty, s, 23, prims, etext)
 	s = evArena(t, pretty, s, 24, tlines, etext)
 	return s
+}
+
+func EvEmitOarb(t *strings.Builder, pr int32, started int32, rows *port.Cells) int32 {
+	var n int32 = port.CellsLen(rows) / 16
+	var i int32 = 0
+	var s int32 = 0
+	if n == 0 {
+		return started
+	}
+	EvBegin(t, pr, 0, started, EkOarb())
+	port.TextAscii(t, "[")
+	for i < n {
+		json.JsAelem(t, pr, 1, i)
+		port.TextAscii(t, "{")
+		s = evFint(t, pr, 2, rows, 16, i, 0, EkPage(), -2147483648, 0)
+		s = evFquad(t, pr, 2, rows, 16, i, 1, EkBox(), s)
+		s = evFrun(t, pr, 2, rows, 16, i, 5, EkIncumbent(), s)
+		s = evFrun(t, pr, 2, rows, 16, i, 7, EkChoice(), s)
+		s = EvBegin(t, pr, 2, s, EkRule())
+		port.TextAscii(t, "\"line-merge\"")
+		s = evFint(t, pr, 2, rows, 16, i, 10, EkRun(), -1, s)
+		s = evFint(t, pr, 2, rows, 16, i, 11, EkVotes(), 0, s)
+		s = evFint(t, pr, 2, rows, 16, i, 12, EkMargin(), -2147483648, s)
+		s = EvBegin(t, pr, 2, s, EkIdentity())
+		port.TextAscii(t, "[")
+		port.TextI32(t, evGet(rows, 16, i, 13))
+		json.JsFsep(t, pr, 1)
+		port.TextI32(t, evGet(rows, 16, i, 14))
+		port.TextAscii(t, "]")
+		json.JsClose(t, pr, 2, s)
+		i += 1
+	}
+	json.JsAend(t, pr, 1, n)
+	return 1
 }
 
 func EvEmitOpen(t *strings.Builder, pretty int32, epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells) int32 {

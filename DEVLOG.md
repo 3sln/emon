@@ -13034,3 +13034,48 @@ is `.claude/coord/b22-report.md`. No commit, corpus fetch/prune, or reserved OCR
 module edit was made. Task-owned internal build outputs are deleted at completion.
 
 - [ ] **Signed off** (maintainer)
+
+
+### D786 — P-ARB arbitration is a source-backed slot decision
+
+Implement the OCR-design brief in independently gated stages. Numeric agreement or confidence is not an authorization to rewrite a value: same-engine views share digit confusions. The arithmetic kernel uses exact signed I64 minor units, a bounded candidate search, a unique minimum, a constant-column veto, no zero terms, retained digit lengths/currency/decimals, and the anchored alternative-explanation veto. Percent families require at least four incumbent identities and at least 75 percent support. Candidate indexes name recorded text spans; the kernel never formats replacement OCR text. The existing OCR validation grammar remains unchanged. Closure remains forced-keep in production until its page extraction and fresh-population audits pass.
+
+- [ ] **Signed off** (maintainer)
+
+### D787 — Optional best OCR model belongs to the crop request
+
+Maintainer decision (2026-10-27): tessdata_best is optional and off by default; default packages must not grow. An explicit low-byte request flag selects the separately installed/configured eng_best.traineddata. A missing eng_best fails that optional request rather than returning a fast answer under a best label. Standard English and script discovery do not implicitly select it. The selector is in the transcript request, and an explicitly marked OCR run prints its model additively in evidence. No model is downloaded or bundled by this change. The full table/band crop planner remains a separately gated stage.
+
+- [ ] **Signed off** (maintainer)
+
+### D788 — A line retry may join an amount without replacing its neighbours
+
+On an upright scan only, a recorded engine line retry may contribute one format-valid two-decimal amount over two adjacent digit-containing incumbent tokens. The compacted incumbent must itself be a valid two-decimal amount: a failing split-date witness showed why numeric characters alone cannot establish an amount cell. Bare currency tokens stay separate, as in the prototype numeric-cell extractor; a failing currency-token witness enforces this. A character-identical join needs no confidence gain. A changed reading requires a malformed incumbent part and a margin of at least 300 per mille. Gap comparisons use I64 intermediates, including at large coordinates. The source tokens must be adjacent (a gap no greater than 1.6 times the smaller token height); a distant-column failing witness enforces this. At least one incumbent part must be malformed. A second adversarial failing witness showed that two valid cells (12 and 3.45) could otherwise concatenate into 123.45; such a join is now held even when the characters concatenate identically. An adversarial failing witness exposed a dropped dollar symbol in a malformed join; currency and percent affix multiplicities are now preserved even when the incumbent does not parse. The line's other words remain incumbent copies, including F16's 1904. Output uses a synthetic arb run and verbatim from-linked copies. Its oarb row records the incumbent and chosen source ranges, source run, box, rule and margin. Synthetic arb copies are excluded from residual OCR accounting and receipt read counters; the displaced source reading remains auditable. Activation is subject to the live control and receipt guards.
+
+- [ ] **Signed off** (maintainer)
+
+### D789 — Target controls have the maintainer's bounded exception
+
+Maintainer decision (2026-10-27): extend D716 treatment to controls 39, 44, 47 and 53 (F16, F06, F08, F19). Only the OCR-design report's target slots may change, with zero source-word loss and no other change. All other controls stay byte-identical apart from already authorized receipt changes and E04's thank-you band. The exception does not authorize whole-reading adoption or changes to valid neighbouring readings.
+
+- [ ] **Signed off** (maintainer)
+
+### D790 — Non-receipt verification needs a genuinely fresh holdout
+
+Maintainer decision (2026-10-27): RVL/XFUND fixes are allowed only through closed arithmetic, engine line-retry joins, or multi-view lexical agreement, with every change ledgered. Zero wrong changes are permitted on a fresh corpus holdout, excluding both design pools and the design FinTabNet holdout. Neither agreement/confidence-only numeric repair (including the source Rs. loss and eight wrong holdout changes) nor whole-reading adoption churn is acceptable. No accuracy ratchet may be lowered.
+
+- [ ] **Signed off** (maintainer)
+
+### D791 — Unread source ink is not an inferred amount
+
+Band guard kernels hold all numbers, block ties or any unagreed lexical word, require three accepted words and sixty percent ink coverage. These guards alone do not authorize insertion: component detection, new-view requests and unread-ink ledger integration must pass their own population gates first. E04 totals/payment/change remain unrecoverable with the current engine views and need a dot-matrix-specific reader. F06's 5 percent and initial case, and F16's 1904 remain open.
+
+- [ ] **Signed off** (maintainer)
+
+### D792 — Retain the bounded line recovery and explicitly partial stages
+
+Stage 1 retains the signed fixed-point grammar metadata and closure kernels with adversarial laws; it remains inactive because page cell/column extraction is not integrated. Stage 2 retains the explicit optional-model selector, model evidence and view-budget kernels, with unchanged default model packaging; crop planners and the required best/absent-best F08/F19 recoveries are not implemented. Stage 3 retains the live own-line retry join: final-source controls change only F16’s two authorized amounts (4,423,867.15 and 4,400,819.15), preserving every other selected word/property and keeping 1904. Every other one of 54 control Models is byte-identical to the fresh parent baseline. Stage 4 retains inactive band guard kernels; band discovery, insertion and unread-ink ledger rows are not integrated. Stage 5 records the maintainer decisions, rejected policies and live re-judgments: F06/F08/F16/F19 remain poor, E04 broken. This is a partial P-ARB implementation, not completion of the recovery brief.
+
+Final-source population validation: fresh excluded FinTabNet holdout 100 pages, zero changes (zero correct, zero wrong); RVL 160 plus XFUND 40, all Models unchanged. Receipts 60 per set: SROIE precision 0.6820745632, CORD 0.4223602484, zero new per-document gold losses against a freshly measured parent baseline, all 120 live/replay JSON/evidence/HTML outputs identical. Re-derivation moves no goldens or calibration rows. Accuracy retains all 3,449 metrics and all 232 Models match Rust across Go, Java, C#, C and pod. Final repository gates pass, including 1,328 laws on each of Go/Rust/Java/C# and seven package consumers. All 29 regenerated samples are unchanged. Initial CI/private-index, ImageMagick thread-warning and exFAT staging/npm-cache failures were resolved by correcting the validation environment, without changing output goldens. Maven resolution and optional JS/C/pod native snippets were not exercised. Detailed logs are in the OA1 handoff; these observations do not establish recovery by the inactive stages.
+
+- [ ] **Signed off** (maintainer)

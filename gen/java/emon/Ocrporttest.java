@@ -478,4 +478,71 @@ public final class Ocrporttest {
         tReq1(named, 101, 110, 103, 0);
         emon.Testport.assertEq(Ocrport.opModelsConfigured(named, inst, 1, picked), 1, "a named request wins over provider defaults");
     }
+    public static int tEngBest(emon.Port.Cells c) {
+        tEng(c);
+        emon.Port.cellsPush(c, 95);
+        emon.Port.cellsPush(c, 98);
+        emon.Port.cellsPush(c, 101);
+        emon.Port.cellsPush(c, 115);
+        emon.Port.cellsPush(c, 116);
+        return 0;
+    }
+    public static void testBestModelIsExplicitAndNeverAnImplicitLanguage() {
+        emon.Port.Cells req = emon.Port.newCells();
+        emon.Port.Cells inst = emon.Port.newCells();
+        emon.Port.Cells out = emon.Port.newCells();
+        int at = 0;
+        tEng(inst);
+        tSep(inst);
+        tEngBest(inst);
+        at = Plan.rqOcr(req, 12, 4, 11, 1, 0, 0, 0, 0);
+        Plan.rqOcrLang(req, 101, 110, 103, 0);
+        Plan.rqOcrEnd(req, at);
+        emon.Testport.assertEq(Ocrport.opModelSelector(req), 0, "default English model");
+        emon.Testport.assertEq(Ocrport.opModels(req, inst, out), 1, "one fast English model by default");
+        emon.Testport.assertEq(emon.Port.cellsAt(out, 0), 0, "eng_best is not taken merely because installed");
+        emon.Port.cellsDrop(req, 0);
+        emon.Port.cellsDrop(out, 0);
+        at = Plan.rqOcr(req, 12, 4, 11, 5, 0, 0, 0, 0);
+        Plan.rqOcrLang(req, 101, 110, 103, 0);
+        Plan.rqOcrEnd(req, at);
+        emon.Testport.assertEq(Ocrport.opModelSelector(req), 1, "explicit crop model selector");
+        emon.Testport.assertEq(Ocrport.opModels(req, inst, out), 1, "best English when explicitly requested");
+        emon.Testport.assertEq(emon.Port.cellsAt(out, 0), 1, "eng_best is selected by its whole name");
+        emon.Port.cellsDrop(out, 0);
+        emon.Testport.assertEq(Ocrport.opDropped(req, inst, out), 0, "installed best model is not reported as a dropped language");
+        emon.Port.cellsDrop(inst, 0);
+        emon.Port.cellsDrop(out, 0);
+        tEng(inst);
+        emon.Testport.assertEq(Ocrport.opModels(req, inst, out), 0, "missing best fails this optional request instead of mislabelling a fast read");
+        emon.Testport.assertEq(Ocrport.opDropped(req, inst, out), 1, "missing optional model is reported by model name");
+        emon.Testport.assertEq(emon.Port.cellsLen(out), 9, "eng_best and its separator");
+        emon.Testport.assertEq(emon.Port.cellsAt(out, 3), 95, "eng_best, not eng");
+    }
+    public static void testBestDoesNotJoinDefaultScriptDiscovery() {
+        emon.Port.Cells req = emon.Port.newCells();
+        emon.Port.Cells inst = emon.Port.newCells();
+        emon.Port.Cells out = emon.Port.newCells();
+        int at = Plan.rqOcr(req, 12, 4, 11, 1, 0, 0, 0, 0);
+        tEngBest(inst);
+        tSep(inst);
+        tEng(inst);
+        emon.Port.cellsPush(req, Ocrport.scLatn());
+        Plan.rqOcrEnd(req, at);
+        emon.Testport.assertEq(Ocrport.opModels(req, inst, out), 1, "default Latin discovery excludes optional variants");
+        emon.Testport.assertEq(emon.Port.cellsAt(out, 0), 1, "only the standard model is selected");
+    }
+    public static void testBestModelEvidenceIsAdditive() {
+        StringBuilder standard = emon.Testport.newText();
+        StringBuilder best = emon.Testport.newText();
+        emon.Testport.assertEq(Evidence.evEmitOcrModel(standard, 0, 0, 0, 0), 0, "standard model adds no field");
+        emon.Testport.assertText(standard, "", "standard evidence stays byte identical");
+        emon.Testport.assertEq(Evidence.evEmitOcrModel(best, 0, 0, 0, 1), 1, "explicit model is recorded");
+        emon.Testport.assertText(best, "\"model\":\"eng_best\"", "model name matches the request selector");
+    }
+    public static void testOptionalBestModelKeepsTheEnglishWordLanguage() {
+        emon.Port.Cells model = emon.Port.newCells();
+        tEngBest(model);
+        emon.Testport.assertEq(Ocrport.opWordLang(model), 1701734144, "the selected model changes; the word language is still eng");
+    }
 }

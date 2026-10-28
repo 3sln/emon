@@ -224,7 +224,7 @@ pub fn oc_account(runs: &mut crate::port::Cells, owords: &mut crate::port::Cells
             r = 0;
             while r < or_count(runs) {
                 // D731: a `fused` run's words are copies of recorded words, which are audited themselves
-                if (or_get(runs, r, 0) == pg) && (or_get(runs, r, orf_pass()) != op_fused()) {
+                if (or_get(runs, r, 0) == pg) && ((or_get(runs, r, orf_pass()) != op_fused()) && (or_get(runs, r, orf_pass()) != op_arb())) {
                     w = or_get(runs, r, orf_wfirst());
                     end = w + or_get(runs, r, orf_wcount());
                     while w < end {

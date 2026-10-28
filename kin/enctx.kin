@@ -16,7 +16,7 @@
 
 (defctx ^:pub EvArenas [^Cells epages ^Cells views ^Cells pts ^Cells refs ^Cells feats ^Cells paths
       ^Cells images ^Cells oruns ^Cells oblocks ^Cells olines ^Cells owords ^Cells osyms
-      ^Cells oalts ^Cells inks ^Cells comps ^Cells rules ^Cells prims ^Cells tlines ^Cells ofuse])
+      ^Cells oalts ^Cells inks ^Cells comps ^Cells rules ^Cells prims ^Cells tlines ^Cells ofuse ^Cells oarb])
 
 ;; Cfg is also what `emon.config` parses an options text into (P10.10, D434): `chunk`, `maxr` and `fetchr` are the Engine's own, `rec`, `jsocr` and `jsrender` the browser
 ;; binding's, `lims` the `limit.NAME=N` pairs (kind, value) and `prod` the `producer.NAME=V` records, `num` the parser's scratch and `msg` its refusal.

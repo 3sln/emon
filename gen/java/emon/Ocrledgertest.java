@@ -287,4 +287,51 @@ public final class Ocrledgertest {
         emon.Testport.assertEq(Model.ledgerCount(ledger), 1, "the copy neither consumes nor claims the Model's A");
         emon.Testport.assertEq(Model.ledgerTextLen(ledger, 0), 1, "the displaced word's own text");
     }
+    public static void testArbitrationCopiesAreNotAuditedTwiceAndTheDisplacedWordKeepsAFate() {
+        // D788: run 0 read B (selected, then displaced), run 1 read A (chosen), run 2 is the fused run whose word copies run 1's. The Model holds A once.
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells mask = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells bag = emon.Port.newCells();
+        emon.Port.Cells tokens = emon.Port.newCells();
+        emon.Port.Cells norm = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        emon.Port.Cells raw = emon.Port.newCells();
+        emon.Port.Cells rt = emon.Port.newCells();
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        emon.Port.cellsPush(mask, 1);
+        emon.Port.cellsPush(et, 66);
+        emon.Port.cellsPush(et, 65);
+        emon.Port.cellsPush(text, 65);
+        int n = Model.nodeNew(nodes, Model.nkParagraph(), 0);
+        Model.nodeSetText(nodes, n, 0, 1);
+        Model.nodeAddRegion(nodes, regions, n, 1, 0, 0, 100, 100);
+        Evidence.orNew(runs, 1, 0);
+        Evidence.orSet(runs, 0, Evidence.orfPass(), Evidence.opFirst());
+        Evidence.orSet(runs, 0, Evidence.orfWfirst(), 0);
+        Evidence.orSet(runs, 0, Evidence.orfWcount(), 1);
+        Evidence.orNew(runs, 1, 0);
+        Evidence.orSet(runs, 1, Evidence.orfPass(), Evidence.opBodyInk());
+        Evidence.orSet(runs, 1, Evidence.orfWfirst(), 1);
+        Evidence.orSet(runs, 1, Evidence.orfWcount(), 1);
+        Evidence.orNew(runs, 1, 0);
+        Evidence.orSet(runs, 2, Evidence.orfPass(), Evidence.opArb());
+        Evidence.orSet(runs, 2, Evidence.orfWfirst(), 2);
+        Evidence.orSet(runs, 2, Evidence.orfWcount(), 1);
+        Evidence.owNew(words, 1, 0, 0, 100, 100, 0, 100, 100, 100, 0, 0, 0, 1, 0, 400, -1);
+        Evidence.owNew(words, 1, 0, 0, 100, 100, 0, 100, 100, 100, 0, 0, 1, 1, 0, 900, -1);
+        Evidence.owNew(words, 1, 0, 0, 100, 100, 0, 100, 100, 100, 0, 0, 1, 1, 0, 900, -1);
+        Evidence.owSet(words, 2, Evidence.owfFrom(), 2);
+        emon.Testport.assertEq(Ocrledger.ocAccount(runs, words, et, nodes, regions, mask, ledger, text, bag, tokens, norm, tmp, raw, rt), 1, "only the displaced reading is residual");
+        emon.Testport.assertEq(Model.ledgerCount(ledger), 1, "the copy neither consumes nor claims the Model's A");
+        emon.Testport.assertEq(Model.ledgerTextLen(ledger, 0), 1, "the displaced word's own text");
+    }
 }

@@ -623,6 +623,38 @@ func opHas(out *port.Cells, base int32, v int32) int32 {
 	return 0
 }
 
+func OpModelSelector(req *port.Cells) int32 {
+	// D787: low flags bit 4 asks for the explicitly configured optional eng_best model. Zero is the standard model. DPI occupies the high bytes as before.
+	return (plan.RqArg(req, 0, 2) / 4) % 2
+}
+
+func opBestEntry(inst *port.Cells, from int32, to int32) int32 {
+	if (to - from) != 8 {
+		return 0
+	}
+	if ((port.CellsAt(inst, from) == 101) && (port.CellsAt(inst, from+1) == 110)) && ((port.CellsAt(inst, from+2) == 103) && (port.CellsAt(inst, from+3) == 95)) {
+		if ((port.CellsAt(inst, from+4) == 98) && (port.CellsAt(inst, from+5) == 101)) && ((port.CellsAt(inst, from+6) == 115) && (port.CellsAt(inst, from+7) == 116)) {
+			return 1
+		}
+	}
+	return 0
+}
+
+func opBestModel(inst *port.Cells) int32 {
+	var from int32 = 0
+	var to int32 = 0
+	var i int32 = 0
+	for from < port.CellsLen(inst) {
+		to = OpEntryEnd(inst, from)
+		if opBestEntry(inst, from, to) == 1 {
+			return i
+		}
+		from = to + 1
+		i += 1
+	}
+	return -1
+}
+
 func OpModels(req *port.Cells, inst *port.Cells, out *port.Cells) int32 {
 	// Which installed models read the request, as indices into `inst` (code-point Cells separated by 0), appended to `out`;
 	// answers how many. A script (`Cyrl`) is every installed model that reads it, once; a language is its model; a language
@@ -635,6 +667,14 @@ func OpModels(req *port.Cells, inst *port.Cells, out *port.Cells) int32 {
 	var i int32 = 0
 	var from int32 = 0
 	var to int32 = 0
+	if OpModelSelector(req) == 1 {
+		i = opBestModel(inst)
+		if i >= 0 {
+			port.CellsPush(out, i)
+			return 1
+		}
+		return 0
+	}
 	for k < end {
 		p = plan.RqArg(req, 0, k)
 		if OpIsScript(p) == 1 {
@@ -642,7 +682,7 @@ func OpModels(req *port.Cells, inst *port.Cells, out *port.Cells) int32 {
 			from = 0
 			for i < n {
 				to = OpEntryEnd(inst, from)
-				if OpScriptReads(p, OpModelScript(inst, from, to)) == 1 {
+				if (opBestEntry(inst, from, to) == 0) && (OpScriptReads(p, OpModelScript(inst, from, to)) == 1) {
 					if opHas(out, base, i) == 0 {
 						port.CellsPush(out, i)
 					}
@@ -661,9 +701,18 @@ func OpModels(req *port.Cells, inst *port.Cells, out *port.Cells) int32 {
 	if port.CellsLen(out) == base {
 		i = OpModelIndex(inst, 1701734144)
 		if i < 0 {
-			i = 0
+			from = 0
+			k = 0
+			for k < n {
+				to = OpEntryEnd(inst, from)
+				if (i < 0) && (opBestEntry(inst, from, to) == 0) {
+					i = k
+				}
+				from = to + 1
+				k += 1
+			}
 		}
-		if n > 0 {
+		if i >= 0 {
 			port.CellsPush(out, i)
 		}
 	}
@@ -712,6 +761,21 @@ func opPushModelName(p int32, out *port.Cells) int32 {
 func OpDropped(req *port.Cells, inst *port.Cells, out *port.Cells) int32 {
 	// The languages `op-models` dropped for want of an installed model, appended to `out` as the model's name: code points then
 	// a 0, each. Answers how many. (A host's note, nothing more.)
+	if OpModelSelector(req) == 1 {
+		if opBestModel(inst) >= 0 {
+			return 0
+		}
+		port.CellsPush(out, 101)
+		port.CellsPush(out, 110)
+		port.CellsPush(out, 103)
+		port.CellsPush(out, 95)
+		port.CellsPush(out, 98)
+		port.CellsPush(out, 101)
+		port.CellsPush(out, 115)
+		port.CellsPush(out, 116)
+		port.CellsPush(out, 0)
+		return 1
+	}
 	var end int32 = port.CellsLen(req) - 3
 	var k int32 = OpLangFirst(req)
 	var p int32 = 0
@@ -733,6 +797,9 @@ func OpDropped(req *port.Cells, inst *port.Cells, out *port.Cells) int32 {
 func OpWordLang(model *port.Cells) int32 {
 	// The language the engine read a word in (its model's name), as a request names it: `chi_sim` is `chs`, `chi_tra` `cht`,
 	// anything else cut to four chars, packed. 0 for none.
+	if opBestEntry(model, 0, port.CellsLen(model)) == 1 {
+		return 1701734144
+	}
 	var v int32 = OpFind(3, model, 0, port.CellsLen(model))
 	if v != 0 {
 		return v
@@ -991,7 +1058,7 @@ func OxFlat(v *port.Cells, id int32, c *port.Cells) int32 {
 
 func OpModelsConfigured(req *port.Cells, inst *port.Cells, configured int32, out *port.Cells) int32 {
 	// D678: an explicit provider model set is authoritative when the request has no language hint. An unfiltered inventory uses discovery; a named request still wins.
-	if configured == 0 {
+	if (configured == 0) || (OpModelSelector(req) == 1) {
 		return OpModels(req, inst, out)
 	}
 	var base int32 = port.CellsLen(out)

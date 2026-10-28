@@ -497,4 +497,75 @@ public static class Ocrporttest {
         TReq1(named, 101, 110, 103, 0);
         emon.Testport.AssertEq(Ocrport.OpModelsConfigured(named, inst, 1, picked), 1, "a named request wins over provider defaults");
     }
+    internal static int TEngBest(emon.Port.Cells c) {
+        TEng(c);
+        emon.Port.CellsPush(c, 95);
+        emon.Port.CellsPush(c, 98);
+        emon.Port.CellsPush(c, 101);
+        emon.Port.CellsPush(c, 115);
+        emon.Port.CellsPush(c, 116);
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestBestModelIsExplicitAndNeverAnImplicitLanguage() {
+        emon.Port.Cells req = emon.Port.NewCells();
+        emon.Port.Cells inst = emon.Port.NewCells();
+        emon.Port.Cells @out = emon.Port.NewCells();
+        int at = 0;
+        TEng(inst);
+        TSep(inst);
+        TEngBest(inst);
+        at = Plan.RqOcr(req, 12, 4, 11, 1, 0, 0, 0, 0);
+        Plan.RqOcrLang(req, 101, 110, 103, 0);
+        Plan.RqOcrEnd(req, at);
+        emon.Testport.AssertEq(Ocrport.OpModelSelector(req), 0, "default English model");
+        emon.Testport.AssertEq(Ocrport.OpModels(req, inst, @out), 1, "one fast English model by default");
+        emon.Testport.AssertEq(emon.Port.CellsAt(@out, 0), 0, "eng_best is not taken merely because installed");
+        emon.Port.CellsDrop(req, 0);
+        emon.Port.CellsDrop(@out, 0);
+        at = Plan.RqOcr(req, 12, 4, 11, 5, 0, 0, 0, 0);
+        Plan.RqOcrLang(req, 101, 110, 103, 0);
+        Plan.RqOcrEnd(req, at);
+        emon.Testport.AssertEq(Ocrport.OpModelSelector(req), 1, "explicit crop model selector");
+        emon.Testport.AssertEq(Ocrport.OpModels(req, inst, @out), 1, "best English when explicitly requested");
+        emon.Testport.AssertEq(emon.Port.CellsAt(@out, 0), 1, "eng_best is selected by its whole name");
+        emon.Port.CellsDrop(@out, 0);
+        emon.Testport.AssertEq(Ocrport.OpDropped(req, inst, @out), 0, "installed best model is not reported as a dropped language");
+        emon.Port.CellsDrop(inst, 0);
+        emon.Port.CellsDrop(@out, 0);
+        TEng(inst);
+        emon.Testport.AssertEq(Ocrport.OpModels(req, inst, @out), 0, "missing best fails this optional request instead of mislabelling a fast read");
+        emon.Testport.AssertEq(Ocrport.OpDropped(req, inst, @out), 1, "missing optional model is reported by model name");
+        emon.Testport.AssertEq(emon.Port.CellsLen(@out), 9, "eng_best and its separator");
+        emon.Testport.AssertEq(emon.Port.CellsAt(@out, 3), 95, "eng_best, not eng");
+    }
+    [Xunit.Fact]
+    public static void TestBestDoesNotJoinDefaultScriptDiscovery() {
+        emon.Port.Cells req = emon.Port.NewCells();
+        emon.Port.Cells inst = emon.Port.NewCells();
+        emon.Port.Cells @out = emon.Port.NewCells();
+        int at = Plan.RqOcr(req, 12, 4, 11, 1, 0, 0, 0, 0);
+        TEngBest(inst);
+        TSep(inst);
+        TEng(inst);
+        emon.Port.CellsPush(req, Ocrport.ScLatn());
+        Plan.RqOcrEnd(req, at);
+        emon.Testport.AssertEq(Ocrport.OpModels(req, inst, @out), 1, "default Latin discovery excludes optional variants");
+        emon.Testport.AssertEq(emon.Port.CellsAt(@out, 0), 1, "only the standard model is selected");
+    }
+    [Xunit.Fact]
+    public static void TestBestModelEvidenceIsAdditive() {
+        System.Text.StringBuilder standard = emon.Testport.NewText();
+        System.Text.StringBuilder best = emon.Testport.NewText();
+        emon.Testport.AssertEq(Evidence.EvEmitOcrModel(standard, 0, 0, 0, 0), 0, "standard model adds no field");
+        emon.Testport.AssertText(standard, "", "standard evidence stays byte identical");
+        emon.Testport.AssertEq(Evidence.EvEmitOcrModel(best, 0, 0, 0, 1), 1, "explicit model is recorded");
+        emon.Testport.AssertText(best, "\"model\":\"eng_best\"", "model name matches the request selector");
+    }
+    [Xunit.Fact]
+    public static void TestOptionalBestModelKeepsTheEnglishWordLanguage() {
+        emon.Port.Cells model = emon.Port.NewCells();
+        TEngBest(model);
+        emon.Testport.AssertEq(Ocrport.OpWordLang(model), 1701734144, "the selected model changes; the word language is still eng");
+    }
 }

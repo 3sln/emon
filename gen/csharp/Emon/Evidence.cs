@@ -1087,6 +1087,9 @@ public static class Evidence {
     public static int OpFused() {
         return 12;
     }
+    public static int OpArb() {
+        return 13;
+    }
     public static int OpEmitName(System.Text.StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.TextAscii(t, "first");
@@ -1134,6 +1137,10 @@ public static class Evidence {
         }
         if (code == 12) {
             emon.Port.TextAscii(t, "fused");
+            return 1;
+        }
+        if (code == 13) {
+            emon.Port.TextAscii(t, "arb");
             return 1;
         }
         return 0;
@@ -1866,6 +1873,12 @@ public static class Evidence {
     public static int EkReadings() {
         return 162;
     }
+    public static int EkOarb() {
+        return 163;
+    }
+    public static int EkIdentity() {
+        return 164;
+    }
     public static int EkEmitName(System.Text.StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.TextAscii(t, "emon-evidence");
@@ -2513,6 +2526,14 @@ public static class Evidence {
         }
         if (code == 162) {
             emon.Port.TextAscii(t, "readings");
+            return 1;
+        }
+        if (code == 163) {
+            emon.Port.TextAscii(t, "oarb");
+            return 1;
+        }
+        if (code == 164) {
+            emon.Port.TextAscii(t, "identity");
             return 1;
         }
         return 0;
@@ -6568,6 +6589,24 @@ public static class Evidence {
         }
         return started;
     }
+    public static int EvEmitOcrModel(System.Text.StringBuilder t, int pr, int d, int started, int selector) {
+        // D787: an explicit optional model is additive evidence. Standard requests keep their byte-identical evidence. No fallback is permitted for selector 1.
+        if (selector != 1) {
+            return started;
+        }
+        if (started == 1) {
+            emon.Port.TextAscii(t, ",");
+        }
+        if (pr == 1) {
+            Json.JsIndent(t, d + 1);
+        }
+        emon.Port.TextAscii(t, "\"model\":");
+        if (pr == 1) {
+            emon.Port.TextAscii(t, " ");
+        }
+        emon.Port.TextAscii(t, "\"eng_best\"");
+        return 1;
+    }
     public static int EvRow(System.Text.StringBuilder t, int pr, int d, int ea, emon.Port.Cells c, emon.Port.Cells etext, int row) {
         // One row of arena `ea` as an object, its fields in stride order (the table `ev-fd`).
         int stride = EvStrides[ea - 1];
@@ -6579,6 +6618,11 @@ public static class Evidence {
         while (k < cnt) {
             s = EvField(t, pr, d, c, etext, stride, row, first + k, s);
             k += 1;
+        }
+        if (ea == 14) {
+            if (((OrGet(c, row, OrfFlags()) / 4) % 2) == 1) {
+                s = EvEmitOcrModel(t, pr, d, s, 1);
+            }
         }
         Json.JsClose(t, pr, d, s);
         return 0;
@@ -6814,6 +6858,39 @@ public static class Evidence {
         s = EvArena(t, pretty, s, 23, prims, etext);
         s = EvArena(t, pretty, s, 24, tlines, etext);
         return s;
+    }
+    public static int EvEmitOarb(System.Text.StringBuilder t, int pr, int started, emon.Port.Cells rows) {
+        int n = emon.Port.CellsLen(rows) / 16;
+        int i = 0;
+        int s = 0;
+        if (n == 0) {
+            return started;
+        }
+        EvBegin(t, pr, 0, started, EkOarb());
+        emon.Port.TextAscii(t, "[");
+        while (i < n) {
+            Json.JsAelem(t, pr, 1, i);
+            emon.Port.TextAscii(t, "{");
+            s = EvFint(t, pr, 2, rows, 16, i, 0, EkPage(), -2147483648, 0);
+            s = EvFquad(t, pr, 2, rows, 16, i, 1, EkBox(), s);
+            s = EvFrun(t, pr, 2, rows, 16, i, 5, EkIncumbent(), s);
+            s = EvFrun(t, pr, 2, rows, 16, i, 7, EkChoice(), s);
+            s = EvBegin(t, pr, 2, s, EkRule());
+            emon.Port.TextAscii(t, "\"line-merge\"");
+            s = EvFint(t, pr, 2, rows, 16, i, 10, EkRun(), -1, s);
+            s = EvFint(t, pr, 2, rows, 16, i, 11, EkVotes(), 0, s);
+            s = EvFint(t, pr, 2, rows, 16, i, 12, EkMargin(), -2147483648, s);
+            s = EvBegin(t, pr, 2, s, EkIdentity());
+            emon.Port.TextAscii(t, "[");
+            emon.Port.TextI32(t, EvGet(rows, 16, i, 13));
+            Json.JsFsep(t, pr, 1);
+            emon.Port.TextI32(t, EvGet(rows, 16, i, 14));
+            emon.Port.TextAscii(t, "]");
+            Json.JsClose(t, pr, 2, s);
+            i += 1;
+        }
+        Json.JsAend(t, pr, 1, n);
+        return 1;
     }
     public static int EvEmitOpen(System.Text.StringBuilder t, int pretty, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines) {
         // The evidence as `emon-evidence` JSON (SPEC 4.5, 8.4.6), version "1": one array per arena,

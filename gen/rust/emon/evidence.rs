@@ -1087,6 +1087,9 @@ pub fn op_receipt_rescue() -> i32 {
 pub fn op_fused() -> i32 {
     return 12;
 }
+pub fn op_arb() -> i32 {
+    return 13;
+}
 pub fn op_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "first");
@@ -1134,6 +1137,10 @@ pub fn op_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 12 {
         crate::port::text_ascii(t, "fused");
+        return 1;
+    }
+    if code == 13 {
+        crate::port::text_ascii(t, "arb");
         return 1;
     }
     return 0;
@@ -1866,6 +1873,12 @@ pub fn ek_margin() -> i32 {
 pub fn ek_readings() -> i32 {
     return 162;
 }
+pub fn ek_oarb() -> i32 {
+    return 163;
+}
+pub fn ek_identity() -> i32 {
+    return 164;
+}
 pub fn ek_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "emon-evidence");
@@ -2513,6 +2526,14 @@ pub fn ek_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 162 {
         crate::port::text_ascii(t, "readings");
+        return 1;
+    }
+    if code == 163 {
+        crate::port::text_ascii(t, "oarb");
+        return 1;
+    }
+    if code == 164 {
+        crate::port::text_ascii(t, "identity");
         return 1;
     }
     return 0;
@@ -6568,6 +6589,24 @@ pub(crate) fn ev_field(mut t: &mut String, pr: i32, d: i32, c: &mut crate::port:
     }
     return started;
 }
+pub fn ev_emit_ocr_model(mut t: &mut String, pr: i32, d: i32, started: i32, selector: i32) -> i32 {
+    // D787: an explicit optional model is additive evidence. Standard requests keep their byte-identical evidence. No fallback is permitted for selector 1.
+    if selector != 1 {
+        return started;
+    }
+    if started == 1 {
+        crate::port::text_ascii(t, ",");
+    }
+    if pr == 1 {
+        js_indent(t, d + 1);
+    }
+    crate::port::text_ascii(t, "\"model\":");
+    if pr == 1 {
+        crate::port::text_ascii(t, " ");
+    }
+    crate::port::text_ascii(t, "\"eng_best\"");
+    return 1;
+}
 pub fn ev_row(mut t: &mut String, pr: i32, d: i32, ea: i32, c: &mut crate::port::Cells, etext: &mut crate::port::Cells, row: i32) -> i32 {
     // One row of arena `ea` as an object, its fields in stride order (the table `ev-fd`).
     let stride: i32 = EV_STRIDES[(ea - 1) as usize];
@@ -6579,6 +6618,11 @@ pub fn ev_row(mut t: &mut String, pr: i32, d: i32, ea: i32, c: &mut crate::port:
     while k < cnt {
         s = ev_field(t, pr, d, c, etext, stride, row, first + k, s);
         k += 1;
+    }
+    if ea == 14 {
+        if ((or_get(c, row, orf_flags()) / 4) % 2) == 1 {
+            s = ev_emit_ocr_model(t, pr, d, s, 1);
+        }
     }
     js_close(t, pr, d, s);
     return 0;
@@ -6814,6 +6858,39 @@ pub fn ev_emit_body(mut t: &mut String, pretty: i32, s0: i32, mut epages: &mut c
     s = ev_arena(t, pretty, s, 23, prims, etext);
     s = ev_arena(t, pretty, s, 24, tlines, etext);
     return s;
+}
+pub fn ev_emit_oarb(mut t: &mut String, pr: i32, started: i32, rows: &mut crate::port::Cells) -> i32 {
+    let n: i32 = crate::port::cells_len(rows) / 16;
+    let mut i: i32 = 0;
+    let mut s: i32 = 0;
+    if n == 0 {
+        return started;
+    }
+    ev_begin(t, pr, 0, started, ek_oarb());
+    crate::port::text_ascii(t, "[");
+    while i < n {
+        js_aelem(t, pr, 1, i);
+        crate::port::text_ascii(t, "{");
+        s = ev_fint(t, pr, 2, rows, 16, i, 0, ek_page(), -2147483648, 0);
+        s = ev_fquad(t, pr, 2, rows, 16, i, 1, ek_box(), s);
+        s = ev_frun(t, pr, 2, rows, 16, i, 5, ek_incumbent(), s);
+        s = ev_frun(t, pr, 2, rows, 16, i, 7, ek_choice(), s);
+        s = ev_begin(t, pr, 2, s, ek_rule());
+        crate::port::text_ascii(t, "\"line-merge\"");
+        s = ev_fint(t, pr, 2, rows, 16, i, 10, ek_run(), -1, s);
+        s = ev_fint(t, pr, 2, rows, 16, i, 11, ek_votes(), 0, s);
+        s = ev_fint(t, pr, 2, rows, 16, i, 12, ek_margin(), -2147483648, s);
+        s = ev_begin(t, pr, 2, s, ek_identity());
+        crate::port::text_ascii(t, "[");
+        crate::port::text_i32(t, ev_get(rows, 16, i, 13));
+        js_fsep(t, pr, 1);
+        crate::port::text_i32(t, ev_get(rows, 16, i, 14));
+        crate::port::text_ascii(t, "]");
+        js_close(t, pr, 2, s);
+        i += 1;
+    }
+    js_aend(t, pr, 1, n);
+    return 1;
 }
 pub fn ev_emit_open(mut t: &mut String, pretty: i32, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut marks: &mut crate::port::Cells, mut fonts: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells) -> i32 {
     // The evidence as `emon-evidence` JSON (SPEC 4.5, 8.4.6), version "1": one array per arena,
