@@ -753,3 +753,55 @@
                 "bad: the same page told wrongly by the tree is cleaned up the same way (D034: verified, not obeyed)")
     (assert-eq (fl-file (test-file "pdf/tagged/good.pdf") 1 t3) 0 "good, keep: well formed")
     (assert-text t3 "" "keep: nothing leaves the flow, and nothing is said")))
+
+;; D799: a footer may precede a large unused bottom margin.
+(deftest test-repeated-small-print-above-a-blank-bottom-margin-has-footer-ownership
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells txt (new-cells) ^Cells md (new-cells) ^Cells lb (new-cells)
+        ^Text t (new-text) ^:mut ^I32 p 1]
+    (while (<= p 3)
+      (do (fl-body wd ln et (text-blob "Complete definition.") p 0)
+          (fl-line wd ln et (text-blob "Proprietary and Confidential") p 25000 58600 35000 59400 0 750)
+          (fl-line wd ln et (text-blob "Disclosure requires written agreement.") p 10000 60300 51000 61100 0 750)
+          (set p (+ p 1))))
+    (assert-eq (fl-run wd ln et 3 0 0 txt md lb t) 0 "footer and definitions form a valid Model")
+    (assert-text t "Ff1:Disclosure requires written agreement.;Ff2:Disclosure requires written agreement.;Ff3:Disclosure requires written agreement.;Ff1:Proprietary and Confidential;Ff2:Proprietary and Confidential;Ff3:Proprietary and Confidential;P:Complete definition.;P:Complete definition.;P:Complete definition.;"
+                 "both small-print lines belong to footer roots, with complete values and body definitions retained")))
+
+(deftest test-small-repeated-body-text-with-larger-text-below-stays-in-flow
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells txt (new-cells) ^Cells md (new-cells) ^Cells lb (new-cells)
+        ^Text t (new-text) ^:mut ^I32 p 1]
+    (while (<= p 3)
+      (do (fl-line wd ln et (text-blob "Important repeated condition.") p 10000 58600 51000 59400 0 750)
+          (fl-line wd ln et (text-blob "Ordinary body continues.") p 10000 63000 51000 64100 0 1100)
+          (set p (+ p 1))))
+    (assert-eq (fl-run wd ln et 3 0 0 txt md lb t) 0 "body condition Model is valid")
+    (assert-text t "P:Important repeated condition.;P:Ordinary body continues.;P:Important repeated condition.;P:Ordinary body continues.;P:Important repeated condition.;P:Ordinary body continues.;"
+                 "small type and recurrence alone never take ownership from the body")))
+
+(deftest test-two-interior-small-print-occurrences-do-not-establish-a-footer
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells txt (new-cells) ^Cells md (new-cells) ^Cells lb (new-cells)
+        ^Text t (new-text) ^:mut ^I32 p 1]
+    (while (<= p 2)
+      (do (fl-body wd ln et (text-blob "Complete definition.") p 0)
+          (fl-line wd ln et (text-blob "Proprietary and Confidential") p 25000 58600 35000 59400 0 750)
+          (set p (+ p 1))))
+    (assert-eq (fl-run wd ln et 2 0 0 txt md lb t) 0 "two occurrences form a valid Model")
+    (assert-text t "P:Complete definition.;P:Proprietary and Confidential;P:Complete definition.;P:Proprietary and Confidential;"
+                 "two repeated small-print lines retain their complete body values and owners")))
+
+(deftest test-new-interior-footer-ownership-preserves-every-numeric-occurrence
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells txt (new-cells) ^Cells md (new-cells) ^Cells lb (new-cells)
+        ^Text t (new-text)]
+    (fl-body wd ln et (text-blob "Complete definition.") 1 0)
+    (fl-line wd ln et (text-blob "4") 1 25000 61600 26000 62400 0 750)
+    (fl-body wd ln et (text-blob "Complete definition.") 2 0)
+    (fl-line wd ln et (text-blob "5") 2 25000 61600 26000 62400 0 750)
+    (fl-body wd ln et (text-blob "Complete definition.") 3 0)
+    (fl-line wd ln et (text-blob "6") 3 25000 61600 26000 62400 0 750)
+    (assert-eq (fl-run wd ln et 3 0 0 txt md lb t) 0 "numeric footer occurrences form a valid Model")
+    (assert-text t "Ff1:4;Ff2:5;Ff3:6;P:Complete definition.;P:Complete definition.;P:Complete definition.;"
+                 "newly classified interior numbers retain exact page-bound values instead of abstracting or dropping words")))

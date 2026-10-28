@@ -59,6 +59,16 @@ const fuStamplen int32 = 8
 
 const fuCells int32 = 4
 
+const fuInteriorSize int32 = 850
+
+const fuInteriorTop int32 = 650
+
+const fuInteriorSizetol int32 = 50
+
+const fuInteriorPages int32 = 3
+
+const fuInteriorCover int32 = 60
+
 const fuChainGap int32 = 1300
 
 const cd int32 = 16
@@ -816,6 +826,29 @@ func fuRowCells(ln *port.Cells, l int32) int32 {
 	return n
 }
 
+func fuInteriorFooter(wd *port.Cells, ln *port.Cells, l int32, h int32) int32 {
+	// D799: small print at the end of the text can precede a large blank bottom margin. This is only a candidate:
+	// recurrence, isolation and coverage still decide ownership. Any larger text below keeps it in the body.
+	var sz int32 = evidence.WdGet(wd, evidence.LnGet(ln, l, evidence.LhFirst()), evidence.WfSize())
+	var p int32 = evidence.LnGet(ln, l, evidence.LhPage())
+	var q int32 = 0
+	if (sz <= 0) || (sz > fuInteriorSize) {
+		return 0
+	}
+	if (evidence.LnGet(ln, l, evidence.LhY0()) * 1000) < (h * fuInteriorTop) {
+		return 0
+	}
+	for q < evidence.LnCount(ln) {
+		if (evidence.LnGet(ln, q, evidence.LhPage()) == p) && (evidence.LnGet(ln, q, evidence.LhY0()) > evidence.LnGet(ln, l, evidence.LhY0())) {
+			if evidence.WdGet(wd, evidence.LnGet(ln, q, evidence.LhFirst()), evidence.WfSize()) > (sz + fuInteriorSizetol) {
+				return 0
+			}
+		}
+		q += 1
+	}
+	return 1
+}
+
 func fuScan(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, mk *port.Cells, pages *port.Cells, npages int32, cd *port.Cells, sl *port.Cells, tx *port.Cells) int32 {
 	// Every candidate line of the document as a row of `cd`, in line order. Answers the number of rows, or -1 when the
 	// lines are not in page order (nothing here is then safe to say).
@@ -866,6 +899,11 @@ func fuScan(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, mk *
 			}
 			if (zone == 1) && (fuRowCells(ln, l) >= fuCells) {
 				zone = 0
+			}
+			if (zone == 0) && ((rot < 100) || (rot > 35900)) {
+				if (fuRowCells(ln, l) < fuCells) && (fuInteriorFooter(wd, ln, l, h) == 1) {
+					zone = 4
+				}
 			}
 			if zone > 0 {
 				ts = port.CellsLen(tx)
@@ -1176,7 +1214,7 @@ func fuIso(ln *port.Cells, cd *port.Cells, gr *port.Cells, ncd int32) int32 {
 								}
 							}
 						}
-						if cdGet(cd, r, 2) == 2 {
+						if (cdGet(cd, r, 2) == 2) || (cdGet(cd, r, 2) == 4) {
 							if cy2 < (2 * y0) {
 								gap = y0 - evidence.LnGet(ln, l2, evidence.LhY1())
 								if gap < best {
@@ -1331,6 +1369,11 @@ func fuQualify(ord *port.Cells, cd *port.Cells, sl *port.Cells, tx *port.Cells, 
 	grSet(gr, g, 8, 0)
 	if ns < 0 {
 		return 0
+	}
+	if grGet(gr, g, 3) == 4 {
+		if (c < fuInteriorPages) || ((c * 100) < (npages * fuInteriorCover)) {
+			return 0
+		}
 	}
 	if (grGet(gr, g, 12) == 1) && (fuCaptionLead(tx, cd, rep) == 1) {
 		return 0
@@ -2015,11 +2058,44 @@ func fuRole(zone int32) int32 {
 	return model.RlMargin()
 }
 
+func fuEmitInteriorFooter(ln *port.Cells, cd *port.Cells, gr *port.Cells, ord *port.Cells, tx *port.Cells, fo *port.Cells, fp *port.Cells, ft *port.Cells, g int32, mode int32) int32 {
+	// Keep each newly classified occurrence verbatim outside body flow. Existing margin-template deduplication
+	// would lose repeated source words. Field 11 exempts these page-bound roots from that deduplication.
+	var f int32 = grGet(gr, g, 0)
+	var m int32 = grGet(gr, g, 1)
+	var i int32 = 0
+	var r int32 = 0
+	var l int32 = 0
+	var ts int32 = 0
+	var f0 int32 = 0
+	var row int32 = 0
+	for i < m {
+		r = port.CellsAt(ord, f+i)
+		l = cdGet(cd, r, 0)
+		ts = fuCopy(tx, cdGet(cd, r, 11), cdGet(cd, r, 12), ft)
+		if mode == 2 {
+			fuOutLedger(fo, model.DrRunningTitle(), cdGet(cd, r, 1), evidence.LnGet(ln, l, evidence.LhX0()), evidence.LnGet(ln, l, evidence.LhY0()), evidence.LnGet(ln, l, evidence.LhX1()), evidence.LnGet(ln, l, evidence.LhY1()), grGet(gr, g, 8), model.SrText()+model.SrInfer(), ts, cdGet(cd, r, 12))
+		} else {
+			f0 = port.CellsLen(fp) / 5
+			fuFpPush(fp, cdGet(cd, r, 1), evidence.LnGet(ln, l, evidence.LhX0()), evidence.LnGet(ln, l, evidence.LhY0()), evidence.LnGet(ln, l, evidence.LhX1()), evidence.LnGet(ln, l, evidence.LhY1()))
+			row = port.CellsLen(fo) / 12
+			fuOutFurniture(fo, model.RlFooter(), grGet(gr, g, 8), model.SrText()+model.SrInfer(), ts, cdGet(cd, r, 12), f0, 1)
+			port.CellsSet(fo, (row*12)+11, 1)
+		}
+		cdSet(cd, r, 15, 1)
+		i += 1
+	}
+	return 0
+}
+
 func fuEmitGroup(ln *port.Cells, cd *port.Cells, sl *port.Cells, gr *port.Cells, ord *port.Cells, tx *port.Cells, bh *port.Cells, fo *port.Cells, fp *port.Cells, ft *port.Cells, pl *port.Cells, g int32, mode int32) int32 {
 	// Decide a qualified group (SPEC 10.2 step 3) and write the outcomes: per member the page label and the ledger rows,
 	// and the furniture rows. A template group whose members are the same beyond the page (not `varying`) is one furniture
 	// row for all of them; a style group, or a group with a varying slot, is decomposed member by member. `mode` 2 drops what
 	// policy would keep (a `running-title` row says so). Marks the members' lines for removal (cd 15). Answers 0.
+	if grGet(gr, g, 3) == 4 {
+		return fuEmitInteriorFooter(ln, cd, gr, ord, tx, fo, fp, ft, g, mode)
+	}
 	var f int32 = grGet(gr, g, 0)
 	var m int32 = grGet(gr, g, 1)
 	var rep int32 = port.CellsAt(ord, f)
@@ -2246,7 +2322,7 @@ func fuStylePass(wd *port.Cells, ln *port.Cells, et *port.Cells, txt *port.Cells
 				cdSet(cd, r, 2, 0)
 			}
 		}
-		if cdGet(cd, r, 2) == 3 {
+		if (cdGet(cd, r, 2) == 3) || (cdGet(cd, r, 2) == 4) {
 			cdSet(cd, r, 2, 0)
 		}
 		r += 1
@@ -2491,7 +2567,7 @@ func fuMergeFurniture(fo *port.Cells, fp *port.Cells, ft *port.Cells, ord *port.
 	var m int32 = 0
 	var hh int64 = 0
 	for r < nr {
-		if foGet(fo, r, 0) == 2 {
+		if (foGet(fo, r, 0) == 2) && (foGet(fo, r, 11) == 0) {
 			ts = foGet(fo, r, 4)
 			tl = foGet(fo, r, 5)
 			hh = fuBasis()

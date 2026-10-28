@@ -99,6 +99,11 @@
 (defconst ^I32 FU_STAMP 60)         ;; a sideways line this near a side edge (per mille of the width, centre) is a margin stamp (D583) ...
 (defconst ^I32 FU_STAMPLEN 8)       ;; ... of at least this many characters
 (defconst ^I32 FU_CELLS 4)       ;; a row of this many candidates or more on one baseline is a table's row, not a running header (D583)
+(defconst ^I32 FU_INTERIOR_SIZE 850) ;; terminal small print, at most 8.5 pt
+(defconst ^I32 FU_INTERIOR_TOP 650)  ;; only the lower 35 percent of a page
+(defconst ^I32 FU_INTERIOR_SIZETOL 50)
+(defconst ^I32 FU_INTERIOR_PAGES 3)
+(defconst ^I32 FU_INTERIOR_COVER 60)
 (defconst ^I32 FU_CHAIN_GAP 1300)   ;; a line this close under (per mille of its height) a header line that qualified goes with it (D583)
 
 ;; the work arenas' strides (documented where each is made)
@@ -605,6 +610,21 @@
           (set q (+ q 1))))
     (return n)))
 
+(defn ^I32 fu-interior-footer [^Cells wd ^Cells ln ^I32 l ^I32 h]
+  (comment "D799: small print at the end of the text can precede a large blank bottom margin. This is only a candidate:")
+  (comment "recurrence, isolation and coverage still decide ownership. Any larger text below keeps it in the body.")
+  (let [^I32 sz (wd-get wd (ln-get ln l (lh-first)) (wf-size))
+        ^I32 p (ln-get ln l (lh-page))
+        ^:mut ^I32 q 0]
+    (if (or (<= sz 0) (> sz FU_INTERIOR_SIZE)) (return 0))
+    (if (< (* (ln-get ln l (lh-y0)) 1000) (* h FU_INTERIOR_TOP)) (return 0))
+    (while (< q (ln-count ln))
+      (do (if (and (== (ln-get ln q (lh-page)) p)
+                   (> (ln-get ln q (lh-y0)) (ln-get ln l (lh-y0))))
+            (if (> (wd-get wd (ln-get ln q (lh-first)) (wf-size)) (+ sz FU_INTERIOR_SIZETOL)) (return 0)))
+          (set q (+ q 1))))
+    (return 1)))
+
 (defn ^I32 fu-scan [^Cells wd ^Cells ln ^Cells et ^Cells gl ^Cells mk ^Cells pages ^I32 npages
                     ^:mut ^Cells cd ^:mut ^Cells sl ^:mut ^Cells tx]
   (comment "Every candidate line of the document as a row of `cd`, in line order. Answers the number of rows, or -1 when the")
@@ -643,6 +663,8 @@
                     (if (or (< cx2 (quot (* w FU_SIDE) 500)) (> cx2 (quot (* w (- 1000 FU_SIDE)) 500)))
                       (set zone 3))))
                 (if (and (== zone 1) (>= (fu-row-cells ln l) FU_CELLS)) (set zone 0))
+                (if (and (== zone 0) (or (< rot 100) (> rot 35900)))
+                  (if (and (< (fu-row-cells ln l) FU_CELLS) (== (fu-interior-footer wd ln l h) 1)) (set zone 4)))
                 (if (> zone 0)
                   (do (set ts (cells-len tx))
                       (set tl (fu-line-text wd ln et tx l))
@@ -874,7 +896,7 @@
                                     (if (> cy2 (* 2 y1))
                                       (do (set gap (- (ln-get ln l2 (lh-y0)) y1))
                                           (if (< gap best) (set best gap)))))
-                                  (if (== (cd-get cd r 2) 2)
+                                  (if (or (== (cd-get cd r 2) 2) (== (cd-get cd r 2) 4))
                                     (if (< cy2 (* 2 y0))
                                       (do (set gap (- y0 (ln-get ln l2 (lh-y1))))
                                           (if (< gap best) (set best gap)))))))
@@ -992,6 +1014,8 @@
     (gr-set gr g 4 0)
     (gr-set gr g 8 0)
     (if (< ns 0) (return 0))
+    (if (== (gr-get gr g 3) 4)
+      (if (or (< c FU_INTERIOR_PAGES) (< (* c 100) (* npages FU_INTERIOR_COVER))) (return 0)))
     ;; a caption that changes from page to page is content
     (if (and (== (gr-get gr g 12) 1) (== (fu-caption-lead tx cd rep) 1)) (return 0))
     (if (>= c 2) (set er (fu-min 1000 (+ 500 (* 150 c)))))
@@ -1492,12 +1516,37 @@
   (if (== zone 2) (return (rl-footer)))
   (return (rl-margin)))
 
+(defn ^I32 fu-emit-interior-footer [^Cells ln ^:mut ^Cells cd ^Cells gr ^Cells ord ^Cells tx
+                                      ^:mut ^Cells fo ^:mut ^Cells fp ^:mut ^Cells ft ^I32 g ^I32 mode]
+  (comment "Keep each newly classified occurrence verbatim outside body flow. Existing margin-template deduplication")
+  (comment "would lose repeated source words. Field 11 exempts these page-bound roots from that deduplication.")
+  (let [^I32 f (gr-get gr g 0) ^I32 m (gr-get gr g 1)
+        ^:mut ^I32 i 0 ^:mut ^I32 r 0 ^:mut ^I32 l 0 ^:mut ^I32 ts 0 ^:mut ^I32 f0 0 ^:mut ^I32 row 0]
+    (while (< i m)
+      (do (set r (cells-at ord (+ f i)))
+          (set l (cd-get cd r 0))
+          (set ts (fu-copy tx (cd-get cd r 11) (cd-get cd r 12) ft))
+          (if (== mode 2)
+            (fu-out-ledger fo (dr-running-title) (cd-get cd r 1)
+                           (ln-get ln l (lh-x0)) (ln-get ln l (lh-y0)) (ln-get ln l (lh-x1)) (ln-get ln l (lh-y1))
+                           (gr-get gr g 8) (+ (sr-text) (sr-infer)) ts (cd-get cd r 12))
+            (do (set f0 (quot (cells-len fp) 5))
+                (fu-fp-push fp (cd-get cd r 1) (ln-get ln l (lh-x0)) (ln-get ln l (lh-y0)) (ln-get ln l (lh-x1)) (ln-get ln l (lh-y1)))
+                (set row (quot (cells-len fo) 12))
+                (fu-out-furniture fo (rl-footer) (gr-get gr g 8) (+ (sr-text) (sr-infer)) ts (cd-get cd r 12) f0 1)
+                (cells-set fo (+ (* row 12) 11) 1)))
+          (cd-set cd r 15 1)
+          (set i (+ i 1))))
+    (return 0)))
+
 (defn ^I32 fu-emit-group [^Cells ln ^:mut ^Cells cd ^Cells sl ^Cells gr ^Cells ord ^Cells tx ^Cells bh
                           ^:mut ^Cells fo ^:mut ^Cells fp ^:mut ^Cells ft ^:mut ^Cells pl ^I32 g ^I32 mode]
   (comment "Decide a qualified group (SPEC 10.2 step 3) and write the outcomes: per member the page label and the ledger rows,")
   (comment "and the furniture rows. A template group whose members are the same beyond the page (not `varying`) is one furniture")
   (comment "row for all of them; a style group, or a group with a varying slot, is decomposed member by member. `mode` 2 drops what")
   (comment "policy would keep (a `running-title` row says so). Marks the members' lines for removal (cd 15). Answers 0.")
+  (if (== (gr-get gr g 3) 4)
+    (return (fu-emit-interior-footer ln cd gr ord tx fo fp ft g mode)))
   (let [^I32 f (gr-get gr g 0)
         ^I32 m (gr-get gr g 1)
         ^I32 rep (cells-at ord f)
@@ -1684,7 +1733,7 @@
             (if (>= cy2 (quot (* h FU_STOP) 500)) (cd-set cd r 2 0)))
           (if (== (cd-get cd r 2) 2)
             (if (<= cy2 (quot (* h FU_SBOT) 500)) (cd-set cd r 2 0)))
-          (if (== (cd-get cd r 2) 3) (cd-set cd r 2 0))
+          (if (or (== (cd-get cd r 2) 3) (== (cd-get cd r 2) 4)) (cd-set cd r 2 0))
           (set r (+ r 1))))
     ;; what the output will say, once the tight-band candidates are out of it: a header must not be its own title
     (set r 0)
@@ -1857,7 +1906,7 @@
         ^:mut ^I32 m 0
         ^:mut ^I64 hh 0]
     (while (< r nr)
-      (do (if (== (fo-get fo r 0) 2)
+      (do (if (and (== (fo-get fo r 0) 2) (== (fo-get fo r 11) 0))
             (do (set ts (fo-get fo r 4))
                 (set tl (fo-get fo r 5))
                 (set hh (fu-basis))

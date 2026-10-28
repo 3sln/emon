@@ -943,4 +943,73 @@ public final class Furnituretest {
         emon.Testport.assertEq(flFile(emon.Testport.testFile("pdf/tagged/good.pdf"), 1, t3), 0, "good, keep: well formed");
         emon.Testport.assertText(t3, "", "keep: nothing leaves the flow, and nothing is said");
     }
+    public static void testRepeatedSmallPrintAboveABlankBottomMarginHasFooterOwnership() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells txt = emon.Port.newCells();
+        emon.Port.Cells md = emon.Port.newCells();
+        emon.Port.Cells lb = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        int p = 1;
+        while (p <= 3) {
+            flBody(wd, ln, et, emon.Testport.textBlob("Complete definition."), p, 0);
+            flLine(wd, ln, et, emon.Testport.textBlob("Proprietary and Confidential"), p, 25000, 58600, 35000, 59400, 0, 750);
+            flLine(wd, ln, et, emon.Testport.textBlob("Disclosure requires written agreement."), p, 10000, 60300, 51000, 61100, 0, 750);
+            p += 1;
+        }
+        emon.Testport.assertEq(flRun(wd, ln, et, 3, 0, 0, txt, md, lb, t), 0, "footer and definitions form a valid Model");
+        emon.Testport.assertText(t, "Ff1:Disclosure requires written agreement.;Ff2:Disclosure requires written agreement.;Ff3:Disclosure requires written agreement.;Ff1:Proprietary and Confidential;Ff2:Proprietary and Confidential;Ff3:Proprietary and Confidential;P:Complete definition.;P:Complete definition.;P:Complete definition.;", "both small-print lines belong to footer roots, with complete values and body definitions retained");
+    }
+    public static void testSmallRepeatedBodyTextWithLargerTextBelowStaysInFlow() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells txt = emon.Port.newCells();
+        emon.Port.Cells md = emon.Port.newCells();
+        emon.Port.Cells lb = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        int p = 1;
+        while (p <= 3) {
+            flLine(wd, ln, et, emon.Testport.textBlob("Important repeated condition."), p, 10000, 58600, 51000, 59400, 0, 750);
+            flLine(wd, ln, et, emon.Testport.textBlob("Ordinary body continues."), p, 10000, 63000, 51000, 64100, 0, 1100);
+            p += 1;
+        }
+        emon.Testport.assertEq(flRun(wd, ln, et, 3, 0, 0, txt, md, lb, t), 0, "body condition Model is valid");
+        emon.Testport.assertText(t, "P:Important repeated condition.;P:Ordinary body continues.;P:Important repeated condition.;P:Ordinary body continues.;P:Important repeated condition.;P:Ordinary body continues.;", "small type and recurrence alone never take ownership from the body");
+    }
+    public static void testTwoInteriorSmallPrintOccurrencesDoNotEstablishAFooter() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells txt = emon.Port.newCells();
+        emon.Port.Cells md = emon.Port.newCells();
+        emon.Port.Cells lb = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        int p = 1;
+        while (p <= 2) {
+            flBody(wd, ln, et, emon.Testport.textBlob("Complete definition."), p, 0);
+            flLine(wd, ln, et, emon.Testport.textBlob("Proprietary and Confidential"), p, 25000, 58600, 35000, 59400, 0, 750);
+            p += 1;
+        }
+        emon.Testport.assertEq(flRun(wd, ln, et, 2, 0, 0, txt, md, lb, t), 0, "two occurrences form a valid Model");
+        emon.Testport.assertText(t, "P:Complete definition.;P:Proprietary and Confidential;P:Complete definition.;P:Proprietary and Confidential;", "two repeated small-print lines retain their complete body values and owners");
+    }
+    public static void testNewInteriorFooterOwnershipPreservesEveryNumericOccurrence() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells txt = emon.Port.newCells();
+        emon.Port.Cells md = emon.Port.newCells();
+        emon.Port.Cells lb = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        flBody(wd, ln, et, emon.Testport.textBlob("Complete definition."), 1, 0);
+        flLine(wd, ln, et, emon.Testport.textBlob("4"), 1, 25000, 61600, 26000, 62400, 0, 750);
+        flBody(wd, ln, et, emon.Testport.textBlob("Complete definition."), 2, 0);
+        flLine(wd, ln, et, emon.Testport.textBlob("5"), 2, 25000, 61600, 26000, 62400, 0, 750);
+        flBody(wd, ln, et, emon.Testport.textBlob("Complete definition."), 3, 0);
+        flLine(wd, ln, et, emon.Testport.textBlob("6"), 3, 25000, 61600, 26000, 62400, 0, 750);
+        emon.Testport.assertEq(flRun(wd, ln, et, 3, 0, 0, txt, md, lb, t), 0, "numeric footer occurrences form a valid Model");
+        emon.Testport.assertText(t, "Ff1:4;Ff2:5;Ff3:6;P:Complete definition.;P:Complete definition.;P:Complete definition.;", "newly classified interior numbers retain exact page-bound values instead of abstracting or dropping words");
+    }
 }
