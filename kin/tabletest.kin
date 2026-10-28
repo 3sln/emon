@@ -42,7 +42,7 @@
             [emon.gfuse :refer [gf-doc gfx-mode]]
             [emon.heading :refer [hd-analyze]]
             [kin.lang :refer [defn return let set while if do comment
-                              + - * < > <= >= == != and or quot rem]]))
+                              + - * < > <= >= == != and or quot rem bit-and]]))
 
 ;; ------------------------------------------------------------ hand-made evidence
 
@@ -247,6 +247,37 @@
     (pa-build wd et np pages layout nodes attrs regions text ord raw tmp fr gp lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al (new-cells))
     (tt-brief t nodes attrs text)
     (return (model-check nodes attrs regions text pages ledger layout st))))
+
+(defn ^I32 tt-count-an [^Cells wd ^Cells ln ^Cells et ^Cells pa ^:mut ^Text t ^I32 np ^Cells an]
+  (comment "`tt-run-n` over a document whose annotations (rows of `an`, `AN_STRIDE` cells) are `an`: the form fields' widgets (D583).")
+  (let [^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp (new-cells) ^Cells fr (new-cells)
+        ^Cells gp (new-cells) ^Cells st (new-cells) ^Cells ii (new-cells) ^Cells al (new-cells)
+        ^Cells lt (new-cells) ^Cells ls (new-cells) ^Cells sd (new-cells) ^Cells it (new-cells)
+        ^Cells io (new-cells) ^Cells rw (new-cells) ^Cells gu (new-cells) ^Cells ac (new-cells)
+        ^Cells tm (new-cells) ^Cells cf (new-cells) ^Cells lo (new-cells) ^Cells pr (new-cells) ^Cells dbg (new-cells) ^Cells hc (new-cells)
+        ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^Cells tq (new-cells) ^Cells tx (new-cells)
+        ^Cells s0 (new-cells) ^Cells s1 (new-cells) ^Cells s2 (new-cells) ^Cells s3 (new-cells) ^Cells s4 (new-cells)
+        ^Cells s5 (new-cells) ^Cells s6 (new-cells) ^Cells s7 (new-cells) ^Cells s8 (new-cells) ^Cells s9 (new-cells)
+        ^Cells s10 (new-cells) ^Cells s11 (new-cells) ^Cells s12 (new-cells) ^Cells s13 (new-cells) ^Cells s14 (new-cells)
+        ^Cells s15 (new-cells) ^Cells s16 (new-cells) ^Cells s17 (new-cells) ^Cells s18 (new-cells)
+        ^Cells grl (new-cells) ^Cells gfl (new-cells) ^Cells cand (new-cells) ^Cells gpts (new-cells) ^Cells gmk (new-cells) ^Cells gim (new-cells) ^Cells t0e (new-cells) ^Cells t1e (new-cells) ^Cells t2e (new-cells) ^Cells t3e (new-cells) ^Cells t4e (new-cells) ^Cells t5e (new-cells) ^Cells t6e (new-cells) ^Cells t7e (new-cells) ^Cells t8e (new-cells) ^Cells t9e (new-cells) ^Cells t10e (new-cells) ^Cells t11e (new-cells) ^Cells t12e (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (page-new pages 1 61200 79200 0 (pk-vector))
+    (if (== np 2) (page-new pages 2 61200 79200 0 (pk-vector)))
+    (gf-doc pa gpts gmk gim np (gfx-mode) grl gfl cand (new-cells))
+    (tb-build wd ln et grl gfl np tb tc tw tq tx (new-cells) (new-cells) s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 pages t0e t1e t2e t3e t4e t5e t6e t7e t8e t9e t10e t11e t12e an)
+    (if (!= (tt-body-audit wd et tb tc tw) 0) (return 7))
+    (lc-copy ln lt)
+    (pa-build wd et np pages layout nodes attrs regions text ord raw tmp fr gp lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al (new-cells))
+    (tt-brief t nodes attrs text)
+    (if (!= (model-check nodes attrs regions text pages ledger layout st) 0) (return -1))
+    (let [^:mut ^I32 i 0 ^:mut ^I32 count 0]
+      (while (< i (node-count nodes))
+        (do (if (== (node-kind nodes i) (nk-table)) (set count (+ count 1)))
+            (set i (+ i 1))))
+      (return count))))
 
 (defn ^I32 tt-run-n [^Cells wd ^Cells ln ^Cells et ^Cells pa ^:mut ^Text t ^I32 np]
   (comment "Tables, then paragraphs, then the brief of the Model, of a document of `np` pages (1 or 2). Answers `model-check`'s verdict.")
@@ -4241,3 +4272,79 @@
                 (assert-eq (tt-word-owner tb k tc tw 12) -1 "the account title is outside the data grid")))
           (set k (+ k 1))))
     (assert-that (>= ledger 0) "the first USD transaction retains an independent ledger owner")))
+
+
+;; D777: ownership precedes continuation, even with identical columns/headers.
+(defn ^I32 tt-currency-links [^Blob first ^Blob second]
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text) ^:mut ^I32 p 1 ^:mut ^I32 r 0]
+    (while (<= p 2)
+      (do (if (== p 1)
+            (tt-atp wd ln et first 7600 10000 0 0 p)
+            (tt-atp wd ln et second 7600 10000 0 0 p))
+          (tt-cols5 wd ln et p 11600 1 (text-blob "Date") (text-blob "Details") (text-blob "Debit") (text-blob "Credit") (text-blob "Balance"))
+          (set r 0)
+          (while (< r 6)
+            (do (tt-cols5 wd ln et p (+ 13200 (* r 1600)) 0 (text-blob "02 Jan") (text-blob "Salary") (text-blob "") (text-blob "10.33") (text-blob "10,609.03"))
+                (set r (+ r 1))))
+          (set p (+ p 1))))
+    (return (tt-count-an wd ln et pa t 2 (new-cells)))))
+
+(deftest test-two-currency-ledgers-link-by-their-own-columns
+  (do
+    (assert-eq (tt-currency-links (text-blob "HKD current account 817 890692 838")
+                                (text-blob "HKD current account 817 890692 838 (Continued)")) 1
+               "a matching account signature explains the continued context above the next header")
+    (assert-eq (tt-currency-links (text-blob "HKD current account 817 890692 838")
+                                (text-blob "USD current account 817 890692 838 (Continued)")) 2
+               "identical headers and columns never merge different currency accounts")
+    (assert-eq (tt-currency-links (text-blob "HKD current account 817 890692 838")
+                                (text-blob "HKD current account 817 890692 839")) 2
+               "different account numbers refuse even without a continued marker")))
+
+(defn ^I32 tt-explained-forward [^I32 prose ^I32 wrong ^I32 foot]
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^:mut ^I32 r 0]
+    (tt-cols5 wd ln et 1 10000 0 (text-blob "Date") (text-blob "Description") (text-blob "Withdrawal") (text-blob "Deposit") (text-blob "Balance"))
+    (tt-rule pa 7600 12300 22000 12350)
+    (tt-rule pa 7600 13950 22000 14000)
+    (tt-rule pa 7600 12300 7650 14000)
+    (tt-rule pa 21950 12300 22000 14000)
+    (tt-at wd ln et (text-blob "CURRENCY SGD") 8000 12500 0 0)
+    (if (== prose 1) (tt-at wd ln et (text-blob "Unexplained ordinary prose") 8000 16500 0 0))
+    (if (== prose 2) (tt-at wd ln et (text-blob "Ordinary prose amount") 15000 14500 0 0)
+                    (tt-at wd ln et (text-blob "Balance Brought Forward") 15000 14500 0 0))
+    (if (== wrong 1) (tt-at wd ln et (text-blob "91.00") 48800 14500 0 1)
+                    (tt-at wd ln et (text-blob "90.00") 48800 14500 0 1))
+    (while (< r 6)
+      (do (tt-cols5 wd ln et 1 (+ 19000 (* r 1600)) 0 (text-blob "02 Jan") (text-blob "Salary") (text-blob "1.00") (text-blob "10.33") (text-blob "99.33"))
+          (set r (+ r 1))))
+    (if (> foot 0)
+      (do (tt-at wd ln et (text-blob "Balance Carried Forward") 7600 30900 0 0)
+          (if (== foot 3)
+            (do (tt-at wd ln et (text-blob "61.98") 25000 30900 0 1)
+                (tt-at wd ln et (text-blob "6.00") 35000 30900 0 1))
+            (do (if (== foot 2) (tt-at wd ln et (text-blob "6.01") 25000 30900 0 1)
+                                (tt-at wd ln et (text-blob "6.00") 25000 30900 0 1))
+                (tt-at wd ln et (text-blob "61.98") 35000 30900 0 1)))
+          (tt-at wd ln et (text-blob "99.33") 45000 30900 0 1)))
+    (tt-ruled-build wd ln et pa tb tc tw)
+    (set r 0)
+    (while (< r (quot (cells-len tb) 32))
+      (do (if (> foot 0)
+            (do (if (and (> (cells-at tb (+ (* r 32) 12)) 0)
+                         (!= (bit-and (cells-at tb (+ (* r 32) 31)) 4) 0)) (return 1)))
+            (if (> (cells-at tb (+ (* r 32) 22)) 0) (return 1)))
+          (set r (+ r 1))))
+    (return 0)))
+
+(deftest test-explained-header-refuses-prose-and-a-broken-opening-identity
+  (do (assert-eq (tt-explained-forward 1 0 0) 0 "unexplained prose prevents reaching past it for a header")
+      (assert-eq (tt-explained-forward 0 1 0) 0 "a forward row without the opening identity is unexplained")
+      (assert-eq (tt-explained-forward 2 0 0) 0 "an unrelated prose amount is not a forward row even when its value fits the identity")
+      (assert-eq (tt-explained-forward 0 0 0) 1 "a boxed label and arithmetically placed opening row explain the header gap")))
+
+(deftest test-carried-forward-requires-column-sums-in-monotone-order
+  (do (assert-eq (tt-explained-forward 0 0 2) 0 "a carried amount differing from its column sum stays outside the ledger")
+      (assert-eq (tt-explained-forward 0 0 3) 0 "swapping withdrawal and deposit sums must not swap their semantic columns")
+      (assert-eq (tt-explained-forward 0 0 1) 1 "offset carried amounts use column sums and the closing balance in monotone order")))

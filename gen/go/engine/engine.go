@@ -382,6 +382,188 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 			tagtable.TtEmit(d.Evidence, s.Tv)
 		}
 	}
+	if (c.Keep != 0) && (port.CellsLen(s.S0) > 0) {
+		var i int32 = 0
+		var j int32 = 0
+		var reasons int32 = 0
+		var comma int32 = 0
+		port.TextAscii(d.Evidence, ",\"tbx\":[")
+		for i < port.CellsLen(s.S0) {
+			if i > 0 {
+				port.TextAscii(d.Evidence, ",")
+			}
+			if port.CellsAt(s.S0, i) >= 0 {
+				port.TextAscii(d.Evidence, "{\"kind\":\"link\"")
+				j = 0
+				for j < 8 {
+					if j == 0 {
+						port.TextAscii(d.Evidence, ",\"a\":")
+					}
+					if j == 1 {
+						port.TextAscii(d.Evidence, ",\"b\":")
+					}
+					if j == 2 {
+						port.TextAscii(d.Evidence, ",\"score\":")
+					}
+					if j == 3 {
+						port.TextAscii(d.Evidence, ",\"reason_bits\":")
+					}
+					if j == 4 {
+						port.TextAscii(d.Evidence, ",\"column_map\":")
+					}
+					if j == 5 {
+						port.TextAscii(d.Evidence, ",\"signature\":")
+					}
+					if j == 6 {
+						port.TextAscii(d.Evidence, ",\"unexplained\":")
+					}
+					if j == 7 {
+						port.TextAscii(d.Evidence, ",\"winner\":")
+					}
+					port.TextI32(d.Evidence, port.CellsAt(s.S0, i+j))
+					j += 1
+				}
+				port.TextAscii(d.Evidence, ",\"reasons\":[")
+				reasons = port.CellsAt(s.S0, i+3)
+				comma = 0
+				if (reasons & 1) != 0 {
+					if comma == 1 {
+						port.TextAscii(d.Evidence, ",")
+					}
+					port.TextAscii(d.Evidence, "\"context-differs\"")
+					comma = 1
+				}
+				if (reasons & 2) != 0 {
+					if comma == 1 {
+						port.TextAscii(d.Evidence, ",")
+					}
+					port.TextAscii(d.Evidence, "\"columns-unmappable\"")
+					comma = 1
+				}
+				if (reasons & 4) != 0 {
+					if comma == 1 {
+						port.TextAscii(d.Evidence, ",")
+					}
+					port.TextAscii(d.Evidence, "\"header-differs\"")
+					comma = 1
+				}
+				if (reasons & 8) != 0 {
+					if comma == 1 {
+						port.TextAscii(d.Evidence, ",")
+					}
+					port.TextAscii(d.Evidence, "\"table-between\"")
+					comma = 1
+				}
+				if (reasons & 16) != 0 {
+					if comma == 1 {
+						port.TextAscii(d.Evidence, ",")
+					}
+					port.TextAscii(d.Evidence, "\"caption-differs\"")
+					comma = 1
+				}
+				if (reasons & 32) != 0 {
+					if comma == 1 {
+						port.TextAscii(d.Evidence, ",")
+					}
+					port.TextAscii(d.Evidence, "\"unexplained-lines\"")
+					comma = 1
+				}
+				if (reasons & 64) != 0 {
+					if comma == 1 {
+						port.TextAscii(d.Evidence, ",")
+					}
+					port.TextAscii(d.Evidence, "\"balance-chain\"")
+					comma = 1
+				}
+				if (reasons & 128) != 0 {
+					if comma == 1 {
+						port.TextAscii(d.Evidence, ",")
+					}
+					port.TextAscii(d.Evidence, "\"context-equal\"")
+					comma = 1
+				}
+				if (reasons & 256) != 0 {
+					if comma == 1 {
+						port.TextAscii(d.Evidence, ",")
+					}
+					port.TextAscii(d.Evidence, "\"continued-marker\"")
+					comma = 1
+				}
+				if (reasons & 512) != 0 {
+					if comma == 1 {
+						port.TextAscii(d.Evidence, ",")
+					}
+					port.TextAscii(d.Evidence, "\"columns-map\"")
+					comma = 1
+				}
+				if (reasons & 1024) != 0 {
+					if comma == 1 {
+						port.TextAscii(d.Evidence, ",")
+					}
+					port.TextAscii(d.Evidence, "\"header-equal\"")
+					comma = 1
+				}
+				port.TextAscii(d.Evidence, "]}")
+			} else {
+				if port.CellsAt(s.S0, i) == -1 {
+					port.TextAscii(d.Evidence, "{\"kind\":\"head\",\"winner\":1,\"header_columns\":")
+					port.TextI32(d.Evidence, port.CellsAt(s.Tb, (port.CellsAt(s.S0, i+1)*32)+8))
+				} else {
+					port.TextAscii(d.Evidence, "{\"kind\":\"extend\"")
+				}
+				j = 1
+				for j < 8 {
+					if j == 1 {
+						port.TextAscii(d.Evidence, ",\"table\":")
+					}
+					if port.CellsAt(s.S0, i) == -1 {
+						if j == 2 {
+							port.TextAscii(d.Evidence, ",\"opening_cents\":")
+						}
+						if j == 3 {
+							port.TextAscii(d.Evidence, ",\"withdrawal_cents\":")
+						}
+						if j == 4 {
+							port.TextAscii(d.Evidence, ",\"deposit_cents\":")
+						}
+						if j == 5 {
+							port.TextAscii(d.Evidence, ",\"first_balance_cents\":")
+						}
+						if j == 6 {
+							port.TextAscii(d.Evidence, ",\"offset_cpt\":")
+						}
+						if j == 7 {
+							port.TextAscii(d.Evidence, ",\"column\":")
+						}
+					} else {
+						if j == 2 {
+							port.TextAscii(d.Evidence, ",\"column\":")
+						}
+						if j == 3 {
+							port.TextAscii(d.Evidence, ",\"value_cents\":")
+						}
+						if j == 4 {
+							port.TextAscii(d.Evidence, ",\"target_cents\":")
+						}
+						if j == 5 {
+							port.TextAscii(d.Evidence, ",\"offset_cpt\":")
+						}
+						if j == 6 {
+							port.TextAscii(d.Evidence, ",\"semantic\":")
+						}
+						if j == 7 {
+							port.TextAscii(d.Evidence, ",\"winner\":")
+						}
+					}
+					port.TextI32(d.Evidence, port.CellsAt(s.S0, i+j))
+					j += 1
+				}
+				port.TextAscii(d.Evidence, "}")
+			}
+			i += 8
+		}
+		port.TextAscii(d.Evidence, "]")
+	}
 	port.CellsCopyInto(s.Iloc, c.Lcl)
 	columns.LcCopy(d.Fl, s.Lt)
 	columns.LcMarkAsides(s.Lt, d.Gfl, m.Pages, np)

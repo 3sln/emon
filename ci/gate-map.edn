@@ -186,6 +186,7 @@
   {:glob "tools/fusion/explain.py" :gates [] :why "a report helper"}
   {:glob "tools/fusion/live-sets.edn" :gates [] :why "the live sets' list (never committed data)"}
   {:glob "tools/fuzz/**" :gates ["fuzz"] :why "the fuzzer"}
+  {:glob "tools/table/**" :gates [] :why "offline protected-ownership and word controls over private Models; not a public CI gate"}
   {:glob "tools/receipts/**" :gates [] :why "live receipt measurement, not a gate"}
   {:glob "test/receipts/**" :gates [] :why "numerical live receipt baselines and metric documentation"}
   {:glob "test/controls/**" :gates [] :why "named live control selections (corpus paths only); read by tools/shards to keep their shards"}

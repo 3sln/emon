@@ -338,6 +338,106 @@ public static class Tabletest {
         TtBrief(t, nodes, attrs, text);
         return Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st);
     }
+    internal static int TtCountAn(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa, System.Text.StringBuilder t, int np, emon.Port.Cells an) {
+        // `tt-run-n` over a document whose annotations (rows of `an`, `AN_STRIDE` cells) are `an`: the form fields' widgets (D583).
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells ord = emon.Port.NewCells();
+        emon.Port.Cells raw = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells fr = emon.Port.NewCells();
+        emon.Port.Cells gp = emon.Port.NewCells();
+        emon.Port.Cells st = emon.Port.NewCells();
+        emon.Port.Cells ii = emon.Port.NewCells();
+        emon.Port.Cells al = emon.Port.NewCells();
+        emon.Port.Cells lt = emon.Port.NewCells();
+        emon.Port.Cells ls = emon.Port.NewCells();
+        emon.Port.Cells sd = emon.Port.NewCells();
+        emon.Port.Cells it = emon.Port.NewCells();
+        emon.Port.Cells io = emon.Port.NewCells();
+        emon.Port.Cells rw = emon.Port.NewCells();
+        emon.Port.Cells gu = emon.Port.NewCells();
+        emon.Port.Cells ac = emon.Port.NewCells();
+        emon.Port.Cells tm = emon.Port.NewCells();
+        emon.Port.Cells cf = emon.Port.NewCells();
+        emon.Port.Cells lo = emon.Port.NewCells();
+        emon.Port.Cells pr = emon.Port.NewCells();
+        emon.Port.Cells dbg = emon.Port.NewCells();
+        emon.Port.Cells hc = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        emon.Port.Cells tq = emon.Port.NewCells();
+        emon.Port.Cells tx = emon.Port.NewCells();
+        emon.Port.Cells s0 = emon.Port.NewCells();
+        emon.Port.Cells s1 = emon.Port.NewCells();
+        emon.Port.Cells s2 = emon.Port.NewCells();
+        emon.Port.Cells s3 = emon.Port.NewCells();
+        emon.Port.Cells s4 = emon.Port.NewCells();
+        emon.Port.Cells s5 = emon.Port.NewCells();
+        emon.Port.Cells s6 = emon.Port.NewCells();
+        emon.Port.Cells s7 = emon.Port.NewCells();
+        emon.Port.Cells s8 = emon.Port.NewCells();
+        emon.Port.Cells s9 = emon.Port.NewCells();
+        emon.Port.Cells s10 = emon.Port.NewCells();
+        emon.Port.Cells s11 = emon.Port.NewCells();
+        emon.Port.Cells s12 = emon.Port.NewCells();
+        emon.Port.Cells s13 = emon.Port.NewCells();
+        emon.Port.Cells s14 = emon.Port.NewCells();
+        emon.Port.Cells s15 = emon.Port.NewCells();
+        emon.Port.Cells s16 = emon.Port.NewCells();
+        emon.Port.Cells s17 = emon.Port.NewCells();
+        emon.Port.Cells s18 = emon.Port.NewCells();
+        emon.Port.Cells grl = emon.Port.NewCells();
+        emon.Port.Cells gfl = emon.Port.NewCells();
+        emon.Port.Cells cand = emon.Port.NewCells();
+        emon.Port.Cells gpts = emon.Port.NewCells();
+        emon.Port.Cells gmk = emon.Port.NewCells();
+        emon.Port.Cells gim = emon.Port.NewCells();
+        emon.Port.Cells t0e = emon.Port.NewCells();
+        emon.Port.Cells t1e = emon.Port.NewCells();
+        emon.Port.Cells t2e = emon.Port.NewCells();
+        emon.Port.Cells t3e = emon.Port.NewCells();
+        emon.Port.Cells t4e = emon.Port.NewCells();
+        emon.Port.Cells t5e = emon.Port.NewCells();
+        emon.Port.Cells t6e = emon.Port.NewCells();
+        emon.Port.Cells t7e = emon.Port.NewCells();
+        emon.Port.Cells t8e = emon.Port.NewCells();
+        emon.Port.Cells t9e = emon.Port.NewCells();
+        emon.Port.Cells t10e = emon.Port.NewCells();
+        emon.Port.Cells t11e = emon.Port.NewCells();
+        emon.Port.Cells t12e = emon.Port.NewCells();
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Model.PageNew(pages, 1, 61200, 79200, 0, Model.PkVector());
+        if (np == 2) {
+            Model.PageNew(pages, 2, 61200, 79200, 0, Model.PkVector());
+        }
+        Gfuse.GfDoc(pa, gpts, gmk, gim, np, Gfuse.GfxMode(), grl, gfl, cand, emon.Port.NewCells());
+        Table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, emon.Port.NewCells(), emon.Port.NewCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
+        if (TtBodyAudit(wd, et, tb, tc, tw) != 0) {
+            return 7;
+        }
+        Columns.LcCopy(ln, lt);
+        Para.PaBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.NewCells());
+        TtBrief(t, nodes, attrs, text);
+        if (Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st) != 0) {
+            return -1;
+        }
+        int i = 0;
+        int count = 0;
+        while (i < Model.NodeCount(nodes)) {
+            if (Model.NodeKind(nodes, i) == Model.NkTable()) {
+                count += 1;
+            }
+            i += 1;
+        }
+        return count;
+    }
     internal static int TtRunN(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa, System.Text.StringBuilder t, int np) {
         // Tables, then paragraphs, then the brief of the Model, of a document of `np` pages (1 or 2). Answers `model-check`'s verdict.
         return TtRunAn(wd, ln, et, pa, t, np, emon.Port.NewCells());
@@ -5183,5 +5283,109 @@ public static class Tabletest {
             k += 1;
         }
         emon.Testport.AssertThat(ledger >= 0, "the first USD transaction retains an independent ledger owner");
+    }
+    internal static int TtCurrencyLinks(byte[] first, byte[] second) {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        int p = 1;
+        int r = 0;
+        while (p <= 2) {
+            if (p == 1) {
+                TtAtp(wd, ln, et, first, 7600, 10000, 0, 0, p);
+            } else {
+                TtAtp(wd, ln, et, second, 7600, 10000, 0, 0, p);
+            }
+            TtCols5(wd, ln, et, p, 11600, 1, emon.Testport.TextBlob("Date"), emon.Testport.TextBlob("Details"), emon.Testport.TextBlob("Debit"), emon.Testport.TextBlob("Credit"), emon.Testport.TextBlob("Balance"));
+            r = 0;
+            while (r < 6) {
+                TtCols5(wd, ln, et, p, 13200 + (r * 1600), 0, emon.Testport.TextBlob("02 Jan"), emon.Testport.TextBlob("Salary"), emon.Testport.TextBlob(""), emon.Testport.TextBlob("10.33"), emon.Testport.TextBlob("10,609.03"));
+                r += 1;
+            }
+            p += 1;
+        }
+        return TtCountAn(wd, ln, et, pa, t, 2, emon.Port.NewCells());
+    }
+    [Xunit.Fact]
+    public static void TestTwoCurrencyLedgersLinkByTheirOwnColumns() {
+        emon.Testport.AssertEq(TtCurrencyLinks(emon.Testport.TextBlob("HKD current account 817 890692 838"), emon.Testport.TextBlob("HKD current account 817 890692 838 (Continued)")), 1, "a matching account signature explains the continued context above the next header");
+        emon.Testport.AssertEq(TtCurrencyLinks(emon.Testport.TextBlob("HKD current account 817 890692 838"), emon.Testport.TextBlob("USD current account 817 890692 838 (Continued)")), 2, "identical headers and columns never merge different currency accounts");
+        emon.Testport.AssertEq(TtCurrencyLinks(emon.Testport.TextBlob("HKD current account 817 890692 838"), emon.Testport.TextBlob("HKD current account 817 890692 839")), 2, "different account numbers refuse even without a continued marker");
+    }
+    internal static int TtExplainedForward(int prose, int wrong, int foot) {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        int r = 0;
+        TtCols5(wd, ln, et, 1, 10000, 0, emon.Testport.TextBlob("Date"), emon.Testport.TextBlob("Description"), emon.Testport.TextBlob("Withdrawal"), emon.Testport.TextBlob("Deposit"), emon.Testport.TextBlob("Balance"));
+        TtRule(pa, 7600, 12300, 22000, 12350);
+        TtRule(pa, 7600, 13950, 22000, 14000);
+        TtRule(pa, 7600, 12300, 7650, 14000);
+        TtRule(pa, 21950, 12300, 22000, 14000);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("CURRENCY SGD"), 8000, 12500, 0, 0);
+        if (prose == 1) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Unexplained ordinary prose"), 8000, 16500, 0, 0);
+        }
+        if (prose == 2) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Ordinary prose amount"), 15000, 14500, 0, 0);
+        } else {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Balance Brought Forward"), 15000, 14500, 0, 0);
+        }
+        if (wrong == 1) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("91.00"), 48800, 14500, 0, 1);
+        } else {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("90.00"), 48800, 14500, 0, 1);
+        }
+        while (r < 6) {
+            TtCols5(wd, ln, et, 1, 19000 + (r * 1600), 0, emon.Testport.TextBlob("02 Jan"), emon.Testport.TextBlob("Salary"), emon.Testport.TextBlob("1.00"), emon.Testport.TextBlob("10.33"), emon.Testport.TextBlob("99.33"));
+            r += 1;
+        }
+        if (foot > 0) {
+            TtAt(wd, ln, et, emon.Testport.TextBlob("Balance Carried Forward"), 7600, 30900, 0, 0);
+            if (foot == 3) {
+                TtAt(wd, ln, et, emon.Testport.TextBlob("61.98"), 25000, 30900, 0, 1);
+                TtAt(wd, ln, et, emon.Testport.TextBlob("6.00"), 35000, 30900, 0, 1);
+            } else {
+                if (foot == 2) {
+                    TtAt(wd, ln, et, emon.Testport.TextBlob("6.01"), 25000, 30900, 0, 1);
+                } else {
+                    TtAt(wd, ln, et, emon.Testport.TextBlob("6.00"), 25000, 30900, 0, 1);
+                }
+                TtAt(wd, ln, et, emon.Testport.TextBlob("61.98"), 35000, 30900, 0, 1);
+            }
+            TtAt(wd, ln, et, emon.Testport.TextBlob("99.33"), 45000, 30900, 0, 1);
+        }
+        TtRuledBuild(wd, ln, et, pa, tb, tc, tw);
+        r = 0;
+        while (r < (emon.Port.CellsLen(tb) / 32)) {
+            if (foot > 0) {
+                if ((emon.Port.CellsAt(tb, (r * 32) + 12) > 0) && ((emon.Port.CellsAt(tb, (r * 32) + 31) & 4) != 0)) {
+                    return 1;
+                }
+            } else if (emon.Port.CellsAt(tb, (r * 32) + 22) > 0) {
+                return 1;
+            }
+            r += 1;
+        }
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestExplainedHeaderRefusesProseAndABrokenOpeningIdentity() {
+        emon.Testport.AssertEq(TtExplainedForward(1, 0, 0), 0, "unexplained prose prevents reaching past it for a header");
+        emon.Testport.AssertEq(TtExplainedForward(0, 1, 0), 0, "a forward row without the opening identity is unexplained");
+        emon.Testport.AssertEq(TtExplainedForward(2, 0, 0), 0, "an unrelated prose amount is not a forward row even when its value fits the identity");
+        emon.Testport.AssertEq(TtExplainedForward(0, 0, 0), 1, "a boxed label and arithmetically placed opening row explain the header gap");
+    }
+    [Xunit.Fact]
+    public static void TestCarriedForwardRequiresColumnSumsInMonotoneOrder() {
+        emon.Testport.AssertEq(TtExplainedForward(0, 0, 2), 0, "a carried amount differing from its column sum stays outside the ledger");
+        emon.Testport.AssertEq(TtExplainedForward(0, 0, 3), 0, "swapping withdrawal and deposit sums must not swap their semantic columns");
+        emon.Testport.AssertEq(TtExplainedForward(0, 0, 1), 1, "offset carried amounts use column sums and the closing balance in monotone order");
     }
 }

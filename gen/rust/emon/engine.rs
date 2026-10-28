@@ -350,6 +350,188 @@ pub(crate) fn en_stage3(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::en
             tt_emit(&mut d.evidence, &mut s.tv);
         }
     }
+    if (c.keep != 0) && (crate::port::cells_len(&mut s.s0) > 0) {
+        let mut i: i32 = 0;
+        let mut j: i32 = 0;
+        let mut reasons: i32 = 0;
+        let mut comma: i32 = 0;
+        crate::port::text_ascii(&mut d.evidence, ",\"tbx\":[");
+        while i < crate::port::cells_len(&mut s.s0) {
+            if i > 0 {
+                crate::port::text_ascii(&mut d.evidence, ",");
+            }
+            if crate::port::cells_at(&mut s.s0, i) >= 0 {
+                crate::port::text_ascii(&mut d.evidence, "{\"kind\":\"link\"");
+                j = 0;
+                while j < 8 {
+                    if j == 0 {
+                        crate::port::text_ascii(&mut d.evidence, ",\"a\":");
+                    }
+                    if j == 1 {
+                        crate::port::text_ascii(&mut d.evidence, ",\"b\":");
+                    }
+                    if j == 2 {
+                        crate::port::text_ascii(&mut d.evidence, ",\"score\":");
+                    }
+                    if j == 3 {
+                        crate::port::text_ascii(&mut d.evidence, ",\"reason_bits\":");
+                    }
+                    if j == 4 {
+                        crate::port::text_ascii(&mut d.evidence, ",\"column_map\":");
+                    }
+                    if j == 5 {
+                        crate::port::text_ascii(&mut d.evidence, ",\"signature\":");
+                    }
+                    if j == 6 {
+                        crate::port::text_ascii(&mut d.evidence, ",\"unexplained\":");
+                    }
+                    if j == 7 {
+                        crate::port::text_ascii(&mut d.evidence, ",\"winner\":");
+                    }
+                    crate::port::text_i32(&mut d.evidence, crate::port::cells_at(&mut s.s0, i + j));
+                    j += 1;
+                }
+                crate::port::text_ascii(&mut d.evidence, ",\"reasons\":[");
+                reasons = crate::port::cells_at(&mut s.s0, i + 3);
+                comma = 0;
+                if (reasons & 1) != 0 {
+                    if comma == 1 {
+                        crate::port::text_ascii(&mut d.evidence, ",");
+                    }
+                    crate::port::text_ascii(&mut d.evidence, "\"context-differs\"");
+                    comma = 1;
+                }
+                if (reasons & 2) != 0 {
+                    if comma == 1 {
+                        crate::port::text_ascii(&mut d.evidence, ",");
+                    }
+                    crate::port::text_ascii(&mut d.evidence, "\"columns-unmappable\"");
+                    comma = 1;
+                }
+                if (reasons & 4) != 0 {
+                    if comma == 1 {
+                        crate::port::text_ascii(&mut d.evidence, ",");
+                    }
+                    crate::port::text_ascii(&mut d.evidence, "\"header-differs\"");
+                    comma = 1;
+                }
+                if (reasons & 8) != 0 {
+                    if comma == 1 {
+                        crate::port::text_ascii(&mut d.evidence, ",");
+                    }
+                    crate::port::text_ascii(&mut d.evidence, "\"table-between\"");
+                    comma = 1;
+                }
+                if (reasons & 16) != 0 {
+                    if comma == 1 {
+                        crate::port::text_ascii(&mut d.evidence, ",");
+                    }
+                    crate::port::text_ascii(&mut d.evidence, "\"caption-differs\"");
+                    comma = 1;
+                }
+                if (reasons & 32) != 0 {
+                    if comma == 1 {
+                        crate::port::text_ascii(&mut d.evidence, ",");
+                    }
+                    crate::port::text_ascii(&mut d.evidence, "\"unexplained-lines\"");
+                    comma = 1;
+                }
+                if (reasons & 64) != 0 {
+                    if comma == 1 {
+                        crate::port::text_ascii(&mut d.evidence, ",");
+                    }
+                    crate::port::text_ascii(&mut d.evidence, "\"balance-chain\"");
+                    comma = 1;
+                }
+                if (reasons & 128) != 0 {
+                    if comma == 1 {
+                        crate::port::text_ascii(&mut d.evidence, ",");
+                    }
+                    crate::port::text_ascii(&mut d.evidence, "\"context-equal\"");
+                    comma = 1;
+                }
+                if (reasons & 256) != 0 {
+                    if comma == 1 {
+                        crate::port::text_ascii(&mut d.evidence, ",");
+                    }
+                    crate::port::text_ascii(&mut d.evidence, "\"continued-marker\"");
+                    comma = 1;
+                }
+                if (reasons & 512) != 0 {
+                    if comma == 1 {
+                        crate::port::text_ascii(&mut d.evidence, ",");
+                    }
+                    crate::port::text_ascii(&mut d.evidence, "\"columns-map\"");
+                    comma = 1;
+                }
+                if (reasons & 1024) != 0 {
+                    if comma == 1 {
+                        crate::port::text_ascii(&mut d.evidence, ",");
+                    }
+                    crate::port::text_ascii(&mut d.evidence, "\"header-equal\"");
+                    comma = 1;
+                }
+                crate::port::text_ascii(&mut d.evidence, "]}");
+            } else {
+                if crate::port::cells_at(&mut s.s0, i) == -1 {
+                    crate::port::text_ascii(&mut d.evidence, "{\"kind\":\"head\",\"winner\":1,\"header_columns\":");
+                    crate::port::text_i32(&mut d.evidence, crate::port::cells_at(&mut s.tb, (crate::port::cells_at(&mut s.s0, i + 1) * 32) + 8));
+                } else {
+                    crate::port::text_ascii(&mut d.evidence, "{\"kind\":\"extend\"");
+                }
+                j = 1;
+                while j < 8 {
+                    if j == 1 {
+                        crate::port::text_ascii(&mut d.evidence, ",\"table\":");
+                    }
+                    if crate::port::cells_at(&mut s.s0, i) == -1 {
+                        if j == 2 {
+                            crate::port::text_ascii(&mut d.evidence, ",\"opening_cents\":");
+                        }
+                        if j == 3 {
+                            crate::port::text_ascii(&mut d.evidence, ",\"withdrawal_cents\":");
+                        }
+                        if j == 4 {
+                            crate::port::text_ascii(&mut d.evidence, ",\"deposit_cents\":");
+                        }
+                        if j == 5 {
+                            crate::port::text_ascii(&mut d.evidence, ",\"first_balance_cents\":");
+                        }
+                        if j == 6 {
+                            crate::port::text_ascii(&mut d.evidence, ",\"offset_cpt\":");
+                        }
+                        if j == 7 {
+                            crate::port::text_ascii(&mut d.evidence, ",\"column\":");
+                        }
+                    } else {
+                        if j == 2 {
+                            crate::port::text_ascii(&mut d.evidence, ",\"column\":");
+                        }
+                        if j == 3 {
+                            crate::port::text_ascii(&mut d.evidence, ",\"value_cents\":");
+                        }
+                        if j == 4 {
+                            crate::port::text_ascii(&mut d.evidence, ",\"target_cents\":");
+                        }
+                        if j == 5 {
+                            crate::port::text_ascii(&mut d.evidence, ",\"offset_cpt\":");
+                        }
+                        if j == 6 {
+                            crate::port::text_ascii(&mut d.evidence, ",\"semantic\":");
+                        }
+                        if j == 7 {
+                            crate::port::text_ascii(&mut d.evidence, ",\"winner\":");
+                        }
+                    }
+                    crate::port::text_i32(&mut d.evidence, crate::port::cells_at(&mut s.s0, i + j));
+                    j += 1;
+                }
+                crate::port::text_ascii(&mut d.evidence, "}");
+            }
+            i += 8;
+        }
+        crate::port::text_ascii(&mut d.evidence, "]");
+    }
     crate::port::cells_copy_into(&mut s.iloc, &mut c.lcl);
     lc_copy(&mut d.fl, &mut s.lt);
     lc_mark_asides(&mut s.lt, &mut d.gfl, &mut m.pages, np);

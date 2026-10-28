@@ -5145,16 +5145,20 @@ func tbModel(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc *port.C
 	var nrows int32 = port.CellsAt(tb, b+7)
 	var bodyend int32 = nrows - port.CellsAt(tb, b+12)
 	var nhead int32 = port.CellsAt(tb, b+11)
+	var bodyfirst int32 = port.CellsAt(tb, b+11)
 	var xfirst int32 = port.CellsAt(tb, b+16)
 	var kfirst int32 = port.CellsLen(tbk) / ks
 	var col int32 = 0
 	port.CellsSet(tb, b+28, kfirst)
 	port.CellsSet(tb, b+29, ncols)
+	if (port.CellsAt(tb, b+31) & 4) != 0 {
+		bodyfirst = nhead + 1
+	}
 	for col < ncols {
 		var x0 int32 = port.CellsAt(tx, xfirst+col)
 		var x1 int32 = port.CellsAt(tx, (xfirst+col)+1)
-		var left int32 = tbModelAnchor(tc, first, end, col, nhead, bodyend, 13, x0, ws)
-		var right int32 = tbModelAnchor(tc, first, end, col, nhead, bodyend, 14, x1, ws)
+		var left int32 = tbModelAnchor(tc, first, end, col, bodyfirst, bodyend, 13, x0, ws)
+		var right int32 = tbModelAnchor(tc, first, end, col, bodyfirst, bodyend, 14, x1, ws)
 		var c int32 = first
 		var occ int32 = 0
 		var nums int32 = 0
@@ -5181,7 +5185,7 @@ func tbModel(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc *port.C
 						}
 						hcount += port.CellsAt(tc, cb+9)
 					}
-					if (row >= nhead) && (row < bodyend) {
+					if (row >= bodyfirst) && (row < bodyend) {
 						occ += 1
 						if tbCellNumeric(wd, et, tw, tc, c) == 1 {
 							nums += 1
@@ -6488,10 +6492,218 @@ func tbChainWiden(tb *port.Cells, head int32, a int32, w int32, tc *port.Cells, 
 	return 0
 }
 
-func tbLink(tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, tq *port.Cells, wd *port.Cells, et *port.Cells, ln *port.Cells, pages *port.Cells) int32 {
+func tbContextKey(ln *port.Cells, wd *port.Cells, et *port.Cells, line int32, key *port.Cells) int32 {
+	port.CellsDrop(key, 0)
+	if line < 0 {
+		return 0
+	}
+	var first int32 = evidence.LnGet(ln, line, evidence.LhFirst())
+	var n int32 = evidence.LnGet(ln, line, evidence.LhCount())
+	var w int32 = first
+	var i int32 = 0
+	var pending int32 = 0
+	var continued int32 = 0
+	for w < (first + n) {
+		i = 0
+		for i < evidence.WdGet(wd, w, evidence.HdTlen()) {
+			var cp int32 = tbLower(port.CellsAt(et, evidence.WdGet(wd, w, evidence.HdTstart())+i))
+			if (cp <= 32) || ((cp == 45) || ((cp == 58) || ((cp == 40) || ((cp == 41) || ((cp == 46) || ((cp == 8211) || (cp == 8212))))))) {
+				pending = 1
+			} else {
+				if (pending == 1) && (port.CellsLen(key) > 0) {
+					port.CellsPush(key, 32)
+				}
+				port.CellsPush(key, cp)
+				pending = 0
+			}
+			i += 1
+		}
+		pending = 1
+		w += 1
+	}
+	var end int32 = port.CellsLen(key)
+	if end >= 10 {
+		if (port.CellsAt(key, end-10) == 32) && ((port.CellsAt(key, end-9) == 99) && ((port.CellsAt(key, end-8) == 111) && ((port.CellsAt(key, end-7) == 110) && ((port.CellsAt(key, end-6) == 116) && ((port.CellsAt(key, end-5) == 105) && ((port.CellsAt(key, end-4) == 110) && ((port.CellsAt(key, end-3) == 117) && ((port.CellsAt(key, end-2) == 101) && (port.CellsAt(key, end-1) == 100))))))))) {
+			port.CellsDrop(key, end-10)
+			continued = 1
+		}
+	}
+	return continued
+}
+
+func tbKeySame(a *port.Cells, b *port.Cells) bool {
+	var i int32 = 0
+	if (port.CellsLen(a) == 0) || (port.CellsLen(a) != port.CellsLen(b)) {
+		return 0 == 1
+	}
+	for i < port.CellsLen(a) {
+		if port.CellsAt(a, i) != port.CellsAt(b, i) {
+			return 0 == 1
+		}
+		i += 1
+	}
+	return 1 == 1
+}
+
+func tbDigitVariant(wd *port.Cells, et *port.Cells, a int32, b int32) bool {
+	var sa int32 = evidence.WdGet(wd, a, evidence.HdTstart())
+	var sb int32 = evidence.WdGet(wd, b, evidence.HdTstart())
+	var na int32 = evidence.WdGet(wd, a, evidence.HdTlen())
+	var nb int32 = evidence.WdGet(wd, b, evidence.HdTlen())
+	var i int32 = 0
+	var j int32 = 0
+	for (i < na) && (j < nb) {
+		var ca int32 = port.CellsAt(et, sa+i)
+		var cb int32 = port.CellsAt(et, sb+j)
+		if ((ca >= 48) && (ca <= 57)) && ((cb >= 48) && (cb <= 57)) {
+			for (i < na) && ((port.CellsAt(et, sa+i) >= 48) && (port.CellsAt(et, sa+i) <= 57)) {
+				i += 1
+			}
+			for (j < nb) && ((port.CellsAt(et, sb+j) >= 48) && (port.CellsAt(et, sb+j) <= 57)) {
+				j += 1
+			}
+		} else {
+			if ca != cb {
+				return 0 == 1
+			}
+			i += 1
+			j += 1
+		}
+	}
+	return (i == na) && (j == nb)
+}
+
+func tbLineVariant(ln *port.Cells, wd *port.Cells, et *port.Cells, l int32) bool {
+	var n int32 = evidence.LnCount(ln)
+	var count int32 = evidence.LnGet(ln, l, evidence.LhCount())
+	var m int32 = 0
+	var i int32 = 0
+	var same int32 = 0
+	for m < n {
+		if (evidence.LnGet(ln, m, evidence.LhPage()) != evidence.LnGet(ln, l, evidence.LhPage())) && ((evidence.LnGet(ln, m, evidence.LhCount()) == count) && ((tbAbs(evidence.LnGet(ln, m, evidence.LhY0())-evidence.LnGet(ln, l, evidence.LhY0())) <= 300) && (tbAbs(evidence.LnGet(ln, m, evidence.LhX0())-evidence.LnGet(ln, l, evidence.LhX0())) <= 300))) {
+			same = 1
+			i = 0
+			for i < count {
+				if !tbDigitVariant(wd, et, evidence.LnGet(ln, l, evidence.LhFirst())+i, evidence.LnGet(ln, m, evidence.LhFirst())+i) {
+					same = 0
+				}
+				i += 1
+			}
+			if same == 1 {
+				return 1 == 1
+			}
+		}
+		m += 1
+	}
+	return 0 == 1
+}
+
+func tbUnexplained(ln *port.Cells, wd *port.Cells, et *port.Cells, page int32, y0 int32, y1 int32, height int32, context int32) int32 {
+	var n int32 = pagebounds.PbAfter(ln, 16, page)
+	var l int32 = pagebounds.PbFirst(ln, 16, page)
+	var count int32 = 0
+	for l < n {
+		var cy int32 = (evidence.LnGet(ln, l, evidence.LhY0()) + evidence.LnGet(ln, l, evidence.LhY1())) / 2
+		if (l != context) && ((evidence.LnGet(ln, l, 15) == 0) && ((cy >= y0) && ((cy <= y1) && ((cy > ((height * 8) / 100)) && (cy < ((height * 92) / 100)))))) {
+			if !tbLineVariant(ln, wd, et, l) {
+				count += 1
+			}
+		}
+		l += 1
+	}
+	return count
+}
+
+func tbLinkCents(wd *port.Cells, et *port.Cells, tc *port.Cells, tw *port.Cells, c int32, semantic int32) int32 {
+	var count int32 = port.CellsAt(tc, (c*tcs)+9)
+	var value int32 = 0
+	var decimal int32 = -1
+	var i int32 = 0
+	if count == 0 {
+		if semantic == 5 {
+			return -1
+		}
+		return 0
+	}
+	if count != 1 {
+		return -1
+	}
+	var w int32 = port.CellsAt(tw, port.CellsAt(tc, (c*tcs)+8))
+	var ts int32 = evidence.WdGet(wd, w, evidence.HdTstart())
+	var n int32 = evidence.WdGet(wd, w, evidence.HdTlen())
+	for i < n {
+		var cp int32 = port.CellsAt(et, ts+i)
+		if (cp >= 48) && (cp <= 57) {
+			if value > 100000000 {
+				return -1
+			}
+			value = (value * 10) + (cp - 48)
+			if decimal >= 0 {
+				decimal += 1
+			}
+		} else if (cp == 46) && (decimal < 0) {
+			decimal = 0
+		} else if cp != 44 {
+			return -1
+		}
+		i += 1
+	}
+	if decimal != 2 {
+		return -1
+	}
+	return value
+}
+
+func tbLinkValue(tb *port.Cells, tc *port.Cells, tw *port.Cells, tbk *port.Cells, wd *port.Cells, et *port.Cells, table int32, row int32, semantic int32) int32 {
+	var first int32 = port.CellsAt(tb, (table*tagtable.Tbs)+9)
+	var end int32 = first + port.CellsAt(tb, (table*tagtable.Tbs)+10)
+	var c int32 = first
+	var col int32 = -1
+	var j int32 = 0
+	for j < port.CellsAt(tb, (table*tagtable.Tbs)+29) {
+		if TbModelCol(tb, tbk, table, j, 6) == semantic {
+			col = j
+		}
+		j += 1
+	}
+	if col < 0 {
+		return -1
+	}
+	for c < end {
+		if (port.CellsAt(tc, c*tcs) == row) && (port.CellsAt(tc, (c*tcs)+1) == col) {
+			return tbLinkCents(wd, et, tc, tw, c, semantic)
+		}
+		c += 1
+	}
+	if semantic == 5 {
+		return -1
+	}
+	return 0
+}
+
+func tbLinkBalance(tb *port.Cells, tc *port.Cells, tw *port.Cells, tbk *port.Cells, wd *port.Cells, et *port.Cells, a int32, b int32) bool {
+	var last int32 = tbLinkValue(tb, tc, tw, tbk, wd, et, a, port.CellsAt(tb, (a*tagtable.Tbs)+7)-1, 5)
+	var row int32 = port.CellsAt(tb, (b*tagtable.Tbs)+11)
+	var balance int32 = tbLinkValue(tb, tc, tw, tbk, wd, et, b, row, 5)
+	var debit int32 = tbLinkValue(tb, tc, tw, tbk, wd, et, b, row, 3)
+	var credit int32 = tbLinkValue(tb, tc, tw, tbk, wd, et, b, row, 4)
+	if (last < 0) || ((balance < 0) || ((debit < 0) || (credit < 0))) {
+		return 0 == 1
+	}
+	return ((last - debit) + credit) == balance
+}
+
+func tbLink(tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, tq *port.Cells, wd *port.Cells, et *port.Cells, ln *port.Cells, pages *port.Cells, tbk *port.Cells, decisions *port.Cells, keya *port.Cells, keyb *port.Cells) int32 {
 	// Link the fragments of tables that go on across a page break (see the head of this section).
 	var n int32 = tbRowsOf(tb, tagtable.Tbs)
 	var fit int32 = 0
+	var signature int32 = 0
+	var contexta int32 = -1
+	var contextb int32 = -1
+	var marker int32 = 0
+	var score int32 = 0
+	var unexplained int32 = 0
+	var reasons int32 = 0
 	var j int32 = 1
 	var a int32 = 0
 	var head int32 = 0
@@ -6500,6 +6712,31 @@ func tbLink(tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, tq *
 	var skip int32 = 0
 	var span int32 = 0
 	var r int32 = 0
+	port.CellsDrop(decisions, 0)
+	for j < n {
+		a = 0
+		for a < (j - 1) {
+			if port.CellsAt(tb, a*tagtable.Tbs) == (port.CellsAt(tb, j*tagtable.Tbs) - 1) {
+				reasons = 8
+				tbContextKey(ln, wd, et, port.CellsAt(tb, (a*tagtable.Tbs)+30), keya)
+				tbContextKey(ln, wd, et, port.CellsAt(tb, (j*tagtable.Tbs)+30), keyb)
+				if (port.CellsLen(keya) > 0) && ((port.CellsLen(keyb) > 0) && !tbKeySame(keya, keyb)) {
+					reasons |= 1
+				}
+				port.CellsPush(decisions, a)
+				port.CellsPush(decisions, j)
+				port.CellsPush(decisions, 0)
+				port.CellsPush(decisions, reasons)
+				port.CellsPush(decisions, 0)
+				port.CellsPush(decisions, 0)
+				port.CellsPush(decisions, 0)
+				port.CellsPush(decisions, 0)
+			}
+			a += 1
+		}
+		j += 1
+	}
+	j = 1
 	for j < n {
 		a = j - 1
 		head = a
@@ -6508,9 +6745,33 @@ func tbLink(tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, tq *
 		}
 		if (port.CellsAt(tb, (a*tagtable.Tbs)+0) == (port.CellsAt(tb, j*tagtable.Tbs) - 1)) && (port.CellsAt(tb, (a*tagtable.Tbs)+19) == 0) {
 			ok = 1
+			score = 0
+			reasons = 0
+			unexplained = 0
+			contexta = port.CellsAt(tb, (a*tagtable.Tbs)+30)
+			contextb = port.CellsAt(tb, (j*tagtable.Tbs)+30)
+			tbContextKey(ln, wd, et, contexta, keya)
+			marker = tbContextKey(ln, wd, et, contextb, keyb)
+			signature = 0
+			if tbKeySame(keya, keyb) {
+				score = 3
+				reasons |= 128
+				if marker == 1 {
+					score += 2
+					signature = 1
+					reasons |= 256
+				}
+			} else if (port.CellsLen(keya) > 0) && (port.CellsLen(keyb) > 0) {
+				ok = 0
+				reasons = 1
+			}
 			fit = tbFitColumns(tb, a, j, tx, tc)
 			if fit == 0 {
 				ok = 0
+				reasons |= 2
+			} else {
+				score += 2
+				reasons |= 512
 			}
 			if (fit == 2) && !tbNoSpansDown(tb, j, tc) {
 				ok = 0
@@ -6523,16 +6784,25 @@ func tbLink(tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, tq *
 				var pj int32 = port.CellsAt(tb, j*tagtable.Tbs)
 				var hpa int32 = model.PageH(pages, pg0-1)
 				var hpj int32 = model.PageH(pages, pj-1)
-				if tbBodyLineOutside(ln, wd, et, pg0, port.CellsAt(tb, (a*tagtable.Tbs)+4), hpa, (hpa*8)/100, (hpa*92)/100, 0) {
-					ok = 0
-				}
-				if tbBodyLineOutside(ln, wd, et, pj, 0, port.CellsAt(tb, (j*tagtable.Tbs)+2), (hpj*8)/100, (hpj*92)/100, pg0) {
-					ok = 0
+				if signature == 1 {
+					unexplained = tbUnexplained(ln, wd, et, pg0, port.CellsAt(tb, (a*tagtable.Tbs)+4), hpa, hpa, contexta) + tbUnexplained(ln, wd, et, pj, 0, port.CellsAt(tb, (j*tagtable.Tbs)+2), hpj, contextb)
+					score -= unexplained
+					if unexplained > 0 {
+						reasons |= 32
+					}
+				} else {
+					if tbBodyLineOutside(ln, wd, et, pg0, port.CellsAt(tb, (a*tagtable.Tbs)+4), hpa, (hpa*8)/100, (hpa*92)/100, 0) {
+						ok = 0
+					}
+					if tbBodyLineOutside(ln, wd, et, pj, 0, port.CellsAt(tb, (j*tagtable.Tbs)+2), (hpj*8)/100, (hpj*92)/100, pg0) {
+						ok = 0
+					}
 				}
 			}
 			if (ok == 1) && (port.CellsAt(tb, (j*tagtable.Tbs)+15) > 0) {
 				if !tbCaptionAgain(tb, head, j, wd, et, ln, tq) {
 					ok = 0
+					reasons |= 16
 				}
 			}
 			skip = 0
@@ -6553,8 +6823,29 @@ func tbLink(tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, tq *
 						r += 1
 					}
 					skip = h
+					if ok == 1 {
+						score += 3
+						reasons |= 1024
+					} else {
+						reasons |= 4
+					}
 				}
 			}
+			if (signature == 1) && tbLinkBalance(tb, tc, tw, tbk, wd, et, a, j) {
+				score += 3
+				reasons |= 64
+			}
+			if (signature == 1) && (score < 3) {
+				ok = 0
+			}
+			port.CellsPush(decisions, a)
+			port.CellsPush(decisions, j)
+			port.CellsPush(decisions, score)
+			port.CellsPush(decisions, reasons)
+			port.CellsPush(decisions, fit)
+			port.CellsPush(decisions, signature)
+			port.CellsPush(decisions, unexplained)
+			port.CellsPush(decisions, ok)
 			if ok == 1 {
 				if fit == 2 {
 					tbWiden(tb, j, a, tc, tx)
@@ -7293,6 +7584,9 @@ func tbOwnClaim(tb *port.Cells, t0 int32, tc *port.Cells, tw *port.Cells, wd *po
 							if owner > 0 {
 								c = owner - 1
 								if (c >= port.CellsAt(tb, (k*tagtable.Tbs)+9)) && (c < (port.CellsAt(tb, (k*tagtable.Tbs)+9) + port.CellsAt(tb, (k*tagtable.Tbs)+10))) {
+									if (port.CellsAt(tc, c*tcs) == 1) && ((port.CellsAt(tb, (k*tagtable.Tbs)+31) & 4) != 0) {
+										bound = 1
+									}
 									if (port.CellsAt(tc, c*tcs) < port.CellsAt(tb, (k*tagtable.Tbs)+11)) && ((port.CellsAt(tb, (k*tagtable.Tbs)+31) & 1) != 0) {
 										bound = 1
 									}
@@ -8935,6 +9229,659 @@ func tbPanelFilter(tb *port.Cells, first int32, owner *port.Cells) int32 {
 	return 0
 }
 
+var teFwdkw [24]int32 = [24]int32{
+	7, 98, 114, 111, 117, 103, 104, 116,
+	7, 99, 97, 114, 114, 105, 101, 100,
+	7, 102, 111, 114, 119, 97, 114, 100,
+}
+
+func teLabelHas(wd *port.Cells, et *port.Cells, wl *port.Cells, from int32, count int32, kind int32) bool {
+	var wanted int32 = teFwdkw[kind*8+0]
+	var i int32 = 0
+	var pos int32 = 0
+	var q int32 = 0
+	var same int32 = 0
+	var cp int32 = 0
+	for i < count {
+		var w int32 = port.CellsAt(wl, from+i)
+		var ts int32 = evidence.WdGet(wd, w, evidence.HdTstart())
+		var n int32 = evidence.WdGet(wd, w, evidence.HdTlen())
+		pos = 0
+		for (pos + wanted) <= n {
+			same = 1
+			q = 0
+			if pos > 0 {
+				cp = tbLower(port.CellsAt(et, ts+(pos-1)))
+				if ((cp >= 97) && (cp <= 122)) || ((cp >= 48) && (cp <= 57)) {
+					same = 0
+				}
+			}
+			if (pos + wanted) < n {
+				cp = tbLower(port.CellsAt(et, ts+(pos+wanted)))
+				if ((cp >= 97) && (cp <= 122)) || ((cp >= 48) && (cp <= 57)) {
+					same = 0
+				}
+			}
+			for q < wanted {
+				if tbLower(port.CellsAt(et, ts+(pos+q))) != teFwdkw[kind*8+(q+1)] {
+					same = 0
+				}
+				q += 1
+			}
+			if same == 1 {
+				return 1 == 1
+			}
+			pos += 1
+		}
+		i += 1
+	}
+	return 0 == 1
+}
+
+func teValue(tb *port.Cells, k int32, tc *port.Cells, tw *port.Cells, wd *port.Cells, et *port.Cells, row int32, col int32, semantic int32) int32 {
+	var first int32 = port.CellsAt(tb, (k*tagtable.Tbs)+9)
+	var end int32 = first + port.CellsAt(tb, (k*tagtable.Tbs)+10)
+	var c int32 = first
+	for c < end {
+		if (port.CellsAt(tc, c*tcs) == row) && (port.CellsAt(tc, (c*tcs)+1) == col) {
+			return tbLinkCents(wd, et, tc, tw, c, semantic)
+		}
+		c += 1
+	}
+	if semantic == 5 {
+		return -1
+	}
+	return 0
+}
+
+func teWordCents(wd *port.Cells, et *port.Cells, w int32) int32 {
+	var start int32 = evidence.WdGet(wd, w, evidence.HdTstart())
+	var n int32 = evidence.WdGet(wd, w, evidence.HdTlen())
+	var i int32 = 0
+	var result int32 = 0
+	var decimal int32 = -1
+	for i < n {
+		var cp int32 = port.CellsAt(et, start+i)
+		if (cp >= 48) && (cp <= 57) {
+			if result > 100000000 {
+				return -1
+			}
+			result = (result * 10) + (cp - 48)
+			if decimal >= 0 {
+				decimal += 1
+			}
+		} else if (cp == 46) && (decimal < 0) {
+			decimal = 0
+		} else if cp != 44 {
+			return -1
+		}
+		i += 1
+	}
+	if decimal != 2 {
+		return -1
+	}
+	return result
+}
+
+func teLabelBox(rm *port.Cells, x0 int32, x1 int32, y0 int32, y1 int32) int32 {
+	var n int32 = tbRowsOf(rm, rls)
+	var a int32 = 0
+	var b int32 = 0
+	var v int32 = 0
+	var lv int32 = 0
+	var rv int32 = 0
+	for a < n {
+		if (port.CellsAt(rm, a*rls) == 0) && ((port.CellsAt(rm, (a*rls)+1) <= y0) && (port.CellsAt(rm, (a*rls)+1) >= (y0 - 3000))) {
+			b = a + 1
+			for b < n {
+				if (port.CellsAt(rm, b*rls) == 0) && ((port.CellsAt(rm, (b*rls)+1) >= y1) && (port.CellsAt(rm, (b*rls)+1) <= (y1 + 3000))) {
+					var left int32 = port.CellsAt(rm, (a*rls)+2)
+					var right int32 = port.CellsAt(rm, (a*rls)+3)
+					var top int32 = port.CellsAt(rm, (a*rls)+1)
+					var bottom int32 = port.CellsAt(rm, (b*rls)+1)
+					if ((left <= (x0 + 400)) && (right >= (x1 - 400))) && (((right - left) <= 20000) && ((tbAbs(left-port.CellsAt(rm, (b*rls)+2)) <= 400) && (tbAbs(right-port.CellsAt(rm, (b*rls)+3)) <= 400))) {
+						v = 0
+						lv = 0
+						rv = 0
+						for v < n {
+							if (port.CellsAt(rm, v*rls) == 1) && ((port.CellsAt(rm, (v*rls)+2) <= (top + 400)) && (port.CellsAt(rm, (v*rls)+3) >= (bottom - 400))) {
+								if tbAbs(port.CellsAt(rm, (v*rls)+1)-left) <= 400 {
+									lv = 1
+								}
+								if tbAbs(port.CellsAt(rm, (v*rls)+1)-right) <= 400 {
+									rv = 1
+								}
+							}
+							v += 1
+						}
+						if (lv == 1) && (rv == 1) {
+							return 1
+						}
+					}
+				}
+				b += 1
+			}
+		}
+		a += 1
+	}
+	return 0
+}
+
+func teFree(tb *port.Cells, k int32, tc *port.Cells, tw *port.Cells, wl *port.Cells, rw *port.Cells, row int32) int32 {
+	var from int32 = port.CellsAt(rw, row*rws)
+	var count int32 = port.CellsAt(rw, (row*rws)+1)
+	var i int32 = 0
+	var t int32 = 0
+	var c int32 = 0
+	var j int32 = 0
+	for i < count {
+		t = 0
+		for t < tbRowsOf(tb, tagtable.Tbs) {
+			if (t != k) && (port.CellsAt(tb, t*tagtable.Tbs) == port.CellsAt(tb, k*tagtable.Tbs)) {
+				c = port.CellsAt(tb, (t*tagtable.Tbs)+9)
+				for c < (port.CellsAt(tb, (t*tagtable.Tbs)+9) + port.CellsAt(tb, (t*tagtable.Tbs)+10)) {
+					j = 0
+					for j < port.CellsAt(tc, (c*tcs)+9) {
+						if port.CellsAt(wl, from+i) == port.CellsAt(tw, port.CellsAt(tc, (c*tcs)+8)+j) {
+							return 0
+						}
+						j += 1
+					}
+					c += 1
+				}
+			}
+			t += 1
+		}
+		i += 1
+	}
+	return 1
+}
+
+func teBind(page int32, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, rm *port.Cells, tb *port.Cells, k int32, tc *port.Cells, tw *port.Cells, tx *port.Cells, tbk *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, sem *port.Cells, pr *port.Cells, so *port.Cells) int32 {
+	var b int32 = k * tagtable.Tbs
+	var top int32 = port.CellsAt(tb, b+2)
+	var cols int32 = port.CellsAt(tb, b+8)
+	var model int32 = port.CellsAt(tb, b+28)
+	var first int32 = port.CellsAt(tb, b+9)
+	var count int32 = port.CellsAt(tb, b+10)
+	var rows int32 = port.CellsAt(tb, b+7)
+	var cuts int32 = port.CellsAt(tb, b+16)
+	var nr int32 = 0
+	var r int32 = 0
+	var q int32 = 0
+	var j int32 = 0
+	var col int32 = 0
+	var s int32 = 0
+	var w int32 = 0
+	var c int32 = 0
+	var header int32 = -1
+	var brought int32 = -1
+	var amount int32 = -1
+	var debit int32 = -1
+	var credit int32 = -1
+	var balance int32 = -1
+	var good int32 = 0
+	var field int32 = 0
+	var newfirst int32 = 0
+	var bd int32 = 0
+	var bc int32 = 0
+	var bb int32 = 0
+	if (port.CellsAt(tb, b+11) > 0) || (cols < 3) {
+		return 0
+	}
+	if (port.CellsAt(tb, b+5) == pfRuled) || (port.CellsAt(tb, b+5) == pfStruct) {
+		return 0
+	}
+	nr = tbRows(wd, et, w0, w1, port.CellsAt(tb, b+1)-2000, top-9000, port.CellsAt(tb, b+3)+4000, top-1, wl, rw, sg)
+	r = nr - 1
+	for (r >= 0) && (header < 0) {
+		port.CellsDrop(sem, 0)
+		col = 0
+		for col < (2 * cols) {
+			port.CellsPush(sem, 0)
+			col += 1
+		}
+		good = 1
+		q = 0
+		debit = -1
+		credit = -1
+		balance = -1
+		if port.CellsAt(rw, (r*rws)+9) != cols {
+			good = 0
+		}
+		for q < port.CellsAt(rw, (r*rws)+9) {
+			var sb int32 = (port.CellsAt(rw, (r*rws)+8) + q) * sgs
+			var from int32 = port.CellsAt(sg, sb+3)
+			s = tbColSem(wd, et, port.CellsAt(wl, from))
+			col = -1
+			j = 0
+			for j < cols {
+				if (((s == 3) || ((s == 4) || (s == 5))) && (tbAbs(port.CellsAt(sg, sb+2)-port.CellsAt(tbk, ((model+j)*ks)+3)) <= 300)) || (!((s == 3) || ((s == 4) || (s == 5))) && (tbAbs(port.CellsAt(sg, sb+1)-port.CellsAt(tbk, ((model+j)*ks)+2)) <= 300)) {
+					if col >= 0 {
+						good = 0
+					}
+					col = j
+				}
+				j += 1
+			}
+			if col < 0 {
+				good = 0
+			} else {
+				if port.CellsAt(sem, col) != 0 {
+					good = 0
+				}
+				if s == 0 {
+					good = 0
+				}
+				port.CellsSet(sem, col, s+1)
+				if q < cols {
+					port.CellsSet(sem, cols+q, col)
+				}
+				if s == 3 {
+					if debit >= 0 {
+						good = 0
+					}
+					debit = col
+				}
+				if s == 4 {
+					if credit >= 0 {
+						good = 0
+					}
+					credit = col
+				}
+				if s == 5 {
+					if balance >= 0 {
+						good = 0
+					}
+					balance = col
+				}
+			}
+			q += 1
+		}
+		if (good == 1) && ((debit >= 0) && ((credit >= 0) && (balance >= 0))) {
+			header = r
+		}
+		r -= 1
+	}
+	if (header < 0) || (balance <= 0) {
+		return 0
+	}
+	bd = teValue(tb, k, tc, tw, wd, et, 0, debit, 3)
+	bc = teValue(tb, k, tc, tw, wd, et, 0, credit, 4)
+	bb = teValue(tb, k, tc, tw, wd, et, 0, balance, 5)
+	if (bd < 0) || ((bc < 0) || (bb < 0)) {
+		return 0
+	}
+	r = header + 1
+	for r < nr {
+		if teLabelBox(rm, port.CellsAt(rw, (r*rws)+4), port.CellsAt(rw, (r*rws)+5), port.CellsAt(rw, (r*rws)+6), port.CellsAt(rw, (r*rws)+7)) == 0 {
+			if brought >= 0 {
+				return 0
+			}
+			if port.CellsAt(rw, (r*rws)+9) != 2 {
+				return 0
+			}
+			var sb int32 = port.CellsAt(rw, (r*rws)+8) * sgs
+			var from int32 = port.CellsAt(sg, sb+3)
+			var n int32 = port.CellsAt(sg, sb+4)
+			if !(teLabelHas(wd, et, wl, from, n, 0) && teLabelHas(wd, et, wl, from, n, 2)) {
+				return 0
+			}
+			w = port.CellsAt(wl, (port.CellsAt(rw, r*rws)+port.CellsAt(rw, (r*rws)+1))-1)
+			amount = teWordCents(wd, et, w)
+			if (amount < 0) || (((amount - bd) + bc) != bb) {
+				return 0
+			}
+			brought = r
+		}
+		r += 1
+	}
+	if brought < 0 {
+		return 0
+	}
+	if (teFree(tb, k, tc, tw, wl, rw, header) == 0) || (teFree(tb, k, tc, tw, wl, rw, brought) == 0) {
+		return 0
+	}
+	newfirst = tbRowsOf(tc, tcs)
+	port.CellsDrop(pr, 0)
+	r = 0
+	for r < 2 {
+		col = 0
+		for col < cols {
+			var source int32 = header
+			if r == 1 {
+				source = brought
+			}
+			tbCellAdd(tc, r, col, 1, 1, port.CellsAt(tx, cuts+col), port.CellsAt(rw, (source*rws)+6), port.CellsAt(tx, (cuts+col)+1), port.CellsAt(rw, (source*rws)+7))
+			if r == 0 {
+				port.CellsSet(tc, port.CellsLen(tc)-6, 1)
+			}
+			col += 1
+		}
+		r += 1
+	}
+	q = 0
+	for q < cols {
+		var sb int32 = (port.CellsAt(rw, (header*rws)+8) + q) * sgs
+		var from int32 = port.CellsAt(sg, sb+3)
+		var n int32 = port.CellsAt(sg, sb+4)
+		col = port.CellsAt(sem, cols+q)
+		j = 0
+		for j < n {
+			tbPairAdd(pr, wd, newfirst+col, port.CellsAt(wl, from+j))
+			j += 1
+		}
+		q += 1
+	}
+	q = 0
+	for q < 2 {
+		var sb int32 = (port.CellsAt(rw, (brought*rws)+8) + q) * sgs
+		var from int32 = port.CellsAt(sg, sb+3)
+		var n int32 = port.CellsAt(sg, sb+4)
+		col = 0
+		if q == 1 {
+			col = balance
+		}
+		j = 0
+		for j < n {
+			tbPairAdd(pr, wd, (newfirst+cols)+col, port.CellsAt(wl, from+j))
+			j += 1
+		}
+		q += 1
+	}
+	var stub int32 = newfirst + cols
+	port.CellsSet(tc, (stub*tcs)+3, balance)
+	port.CellsSet(tc, (stub*tcs)+6, port.CellsAt(tx, cuts+balance))
+	col = 1
+	for col < balance {
+		port.CellsSet(tc, ((stub+col)*tcs)+12, 1)
+		col += 1
+	}
+	tbFlushPairs(pr, so, wd, tc, tw)
+	c = first
+	for c < (first + count) {
+		field = 0
+		for field < tcs {
+			port.CellsPush(tc, port.CellsAt(tc, (c*tcs)+field))
+			field += 1
+		}
+		port.CellsSet(tc, port.CellsLen(tc)-tcs, port.CellsAt(tc, c*tcs)+2)
+		c += 1
+	}
+	port.CellsSet(tb, b+9, newfirst)
+	port.CellsSet(tb, b+10, count+(2*cols))
+	port.CellsSet(tb, b+7, rows+2)
+	port.CellsSet(tb, b+11, 1)
+	port.CellsSet(tb, b+22, 1)
+	port.CellsSet(tb, b+31, port.CellsAt(tb, b+31)|5)
+	return 1
+}
+
+func teCarried(page int32, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, tb *port.Cells, k int32, tc *port.Cells, tw *port.Cells, tx *port.Cells, tbk *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, targets *port.Cells, pr *port.Cells, so *port.Cells) int32 {
+	var b int32 = k * tagtable.Tbs
+	var cols int32 = port.CellsAt(tb, b+8)
+	var rows int32 = port.CellsAt(tb, b+7)
+	var first int32 = port.CellsAt(tb, b+9)
+	var count int32 = port.CellsAt(tb, b+10)
+	var cuts int32 = port.CellsAt(tb, b+16)
+	var debit int32 = -1
+	var credit int32 = -1
+	var balance int32 = -1
+	var col int32 = 0
+	var r int32 = 0
+	var q int32 = 0
+	var c int32 = 0
+	var sum int32 = 0
+	var value int32 = 0
+	var nr int32 = 0
+	var good int32 = 0
+	var chosen int32 = -1
+	var newfirst int32 = 0
+	var field int32 = 0
+	var j int32 = 0
+	if ((port.CellsAt(tb, b+31) & 4) == 0) || (port.CellsAt(tb, b+12) > 0) {
+		return 0
+	}
+	for col < cols {
+		var s int32 = TbModelCol(tb, tbk, k, col, 6)
+		if s == 3 {
+			debit = col
+		}
+		if s == 4 {
+			credit = col
+		}
+		if s == 5 {
+			balance = col
+		}
+		col += 1
+	}
+	if (debit < 1) || ((credit < 1) || (balance < 1)) {
+		return 0
+	}
+	port.CellsDrop(targets, 0)
+	col = 0
+	for col < cols {
+		sum = -1
+		if (col == debit) || (col == credit) {
+			sum = 0
+			r = 2
+			for r < rows {
+				value = teValue(tb, k, tc, tw, wd, et, r, col, 3)
+				if value < 0 {
+					return 0
+				}
+				if sum > (1000000000 - value) {
+					return 0
+				}
+				sum += value
+				r += 1
+			}
+		}
+		if col == balance {
+			sum = teValue(tb, k, tc, tw, wd, et, rows-1, col, 5)
+		}
+		port.CellsPush(targets, sum)
+		col += 1
+	}
+	nr = tbRows(wd, et, w0, w1, port.CellsAt(tb, b+1), port.CellsAt(tb, b+4)+1, port.CellsAt(tb, b+3), port.CellsAt(tb, b+4)+4000, wl, rw, sg)
+	r = 0
+	for (r < nr) && (chosen < 0) {
+		if port.CellsAt(rw, (r*rws)+9) == 4 {
+			good = 1
+			col = 0
+			q = 1
+			var ls int32 = port.CellsAt(rw, (r*rws)+8) * sgs
+			var lfrm int32 = port.CellsAt(sg, ls+3)
+			var m int32 = port.CellsAt(sg, ls+4)
+			if !(teLabelHas(wd, et, wl, lfrm, m, 1) && teLabelHas(wd, et, wl, lfrm, m, 2)) {
+				good = 0
+			}
+			for col < cols {
+				if port.CellsAt(targets, col) >= 0 {
+					if q >= 4 {
+						good = 0
+					} else {
+						var sb int32 = (port.CellsAt(rw, (r*rws)+8) + q) * sgs
+						var from int32 = port.CellsAt(sg, sb+3)
+						var n int32 = port.CellsAt(sg, sb+4)
+						if n != 1 {
+							good = 0
+						}
+						if teWordCents(wd, et, port.CellsAt(wl, from+(n-1))) != port.CellsAt(targets, col) {
+							good = 0
+						}
+					}
+					q += 1
+				}
+				col += 1
+			}
+			if (good == 1) && (q == 4) {
+				chosen = r
+			}
+		}
+		r += 1
+	}
+	if chosen < 0 {
+		return 0
+	}
+	if teFree(tb, k, tc, tw, wl, rw, chosen) == 0 {
+		return 0
+	}
+	newfirst = tbRowsOf(tc, tcs)
+	c = first
+	for c < (first + count) {
+		field = 0
+		for field < tcs {
+			port.CellsPush(tc, port.CellsAt(tc, (c*tcs)+field))
+			field += 1
+		}
+		c += 1
+	}
+	c = tbRowsOf(tc, tcs)
+	col = 0
+	for col < cols {
+		tbCellAdd(tc, rows, col, 1, 1, port.CellsAt(tx, cuts+col), port.CellsAt(rw, (chosen*rws)+6), port.CellsAt(tx, (cuts+col)+1), port.CellsAt(rw, (chosen*rws)+7))
+		port.CellsSet(tc, port.CellsLen(tc)-6, 2)
+		col += 1
+	}
+	col = 0
+	for (col < cols) && (port.CellsAt(targets, col) < 0) {
+		col += 1
+	}
+	if col > 1 {
+		port.CellsSet(tc, (c*tcs)+3, col)
+		port.CellsSet(tc, (c*tcs)+6, port.CellsAt(tx, cuts+col))
+		j = 1
+		for j < col {
+			port.CellsSet(tc, ((c+j)*tcs)+12, 1)
+			j += 1
+		}
+	}
+	port.CellsDrop(pr, 0)
+	q = 0
+	col = 0
+	for q < 4 {
+		if q > 0 {
+			if q == 1 {
+				col = 0
+			} else {
+				col += 1
+			}
+			for (col < cols) && (port.CellsAt(targets, col) < 0) {
+				col += 1
+			}
+		}
+		var sb int32 = (port.CellsAt(rw, (chosen*rws)+8) + q) * sgs
+		var from int32 = port.CellsAt(sg, sb+3)
+		var n int32 = port.CellsAt(sg, sb+4)
+		j = 0
+		for j < n {
+			tbPairAdd(pr, wd, c+col, port.CellsAt(wl, from+j))
+			j += 1
+		}
+		q += 1
+	}
+	tbFlushPairs(pr, so, wd, tc, tw)
+	port.CellsSet(tb, b+9, newfirst)
+	port.CellsSet(tb, b+10, count+cols)
+	port.CellsSet(tb, b+7, rows+1)
+	port.CellsSet(tb, b+12, 1)
+	port.CellsSet(tb, b+31, port.CellsAt(tb, b+31)|2)
+	return 1
+}
+
+func teRecord(tb *port.Cells, tc *port.Cells, tw *port.Cells, tbk *port.Cells, wd *port.Cells, et *port.Cells, decisions *port.Cells) int32 {
+	var k int32 = 0
+	var col int32 = 0
+	var c int32 = 0
+	var w int32 = 0
+	var balance int32 = -1
+	var debit int32 = -1
+	var credit int32 = -1
+	var r int32 = 0
+	var target int32 = 0
+	var value int32 = 0
+	for k < tbRowsOf(tb, tagtable.Tbs) {
+		var b int32 = k * tagtable.Tbs
+		var first int32 = port.CellsAt(tb, b+9)
+		var end int32 = first + port.CellsAt(tb, b+10)
+		var rows int32 = port.CellsAt(tb, b+7)
+		var bodyend int32 = rows - port.CellsAt(tb, b+12)
+		if (port.CellsAt(tb, b+31) & 4) != 0 {
+			col = 0
+			balance = -1
+			debit = -1
+			credit = -1
+			for col < port.CellsAt(tb, b+8) {
+				var sem int32 = TbModelCol(tb, tbk, k, col, 6)
+				if sem == 3 {
+					debit = col
+				}
+				if sem == 4 {
+					credit = col
+				}
+				if sem == 5 {
+					balance = col
+				}
+				col += 1
+			}
+			if (balance >= 0) && ((debit >= 0) && (credit >= 0)) {
+				c = first
+				for c < end {
+					if (port.CellsAt(tc, c*tcs) == 1) && ((port.CellsAt(tc, (c*tcs)+1) == balance) && (port.CellsAt(tc, (c*tcs)+9) > 0)) {
+						w = port.CellsAt(tw, port.CellsAt(tc, (c*tcs)+8)+(port.CellsAt(tc, (c*tcs)+9)-1))
+						port.CellsPush(decisions, -1)
+						port.CellsPush(decisions, k)
+						port.CellsPush(decisions, teWordCents(wd, et, w))
+						port.CellsPush(decisions, teValue(tb, k, tc, tw, wd, et, 2, debit, 3))
+						port.CellsPush(decisions, teValue(tb, k, tc, tw, wd, et, 2, credit, 4))
+						port.CellsPush(decisions, teValue(tb, k, tc, tw, wd, et, 2, balance, 5))
+						port.CellsPush(decisions, evidence.WdGet(wd, w, evidence.HdX1())-TbModelCol(tb, tbk, k, balance, 3))
+						port.CellsPush(decisions, balance)
+					}
+					c += 1
+				}
+				if port.CellsAt(tb, b+12) > 0 {
+					col = 0
+					for col < port.CellsAt(tb, b+8) {
+						if (col == debit) || ((col == credit) || (col == balance)) {
+							target = 0
+							if col == balance {
+								target = teValue(tb, k, tc, tw, wd, et, bodyend-1, col, 5)
+							} else {
+								r = 2
+								for r < bodyend {
+									target += teValue(tb, k, tc, tw, wd, et, r, col, 3)
+									r += 1
+								}
+							}
+							value = teValue(tb, k, tc, tw, wd, et, bodyend, col, 3)
+							c = first
+							for c < end {
+								if (port.CellsAt(tc, c*tcs) == bodyend) && ((port.CellsAt(tc, (c*tcs)+1) == col) && (port.CellsAt(tc, (c*tcs)+9) > 0)) {
+									w = port.CellsAt(tw, port.CellsAt(tc, (c*tcs)+8)+(port.CellsAt(tc, (c*tcs)+9)-1))
+									port.CellsPush(decisions, -2)
+									port.CellsPush(decisions, k)
+									port.CellsPush(decisions, col)
+									port.CellsPush(decisions, value)
+									port.CellsPush(decisions, target)
+									port.CellsPush(decisions, evidence.WdGet(wd, w, evidence.HdX1())-TbModelCol(tb, tbk, k, col, 3))
+									port.CellsPush(decisions, TbModelCol(tb, tbk, k, col, 6))
+									port.CellsPush(decisions, 1)
+								}
+								c += 1
+							}
+						}
+						col += 1
+					}
+				}
+			}
+		}
+		k += 1
+	}
+	return 0
+}
+
 func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gfl *port.Cells, np int32, tb *port.Cells, tc *port.Cells, tw *port.Cells, tq *port.Cells, tx *port.Cells, tbk *port.Cells, tbo *port.Cells, s0 *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells, s7 *port.Cells, s8 *port.Cells, s9 *port.Cells, s10 *port.Cells, s11 *port.Cells, s12 *port.Cells, s13 *port.Cells, s14 *port.Cells, s15 *port.Cells, s16 *port.Cells, s17 *port.Cells, s18 *port.Cells, pages *port.Cells, gl *port.Cells, mk *port.Cells, se *port.Cells, sc *port.Cells, ss *port.Cells, grg *port.Cells, g0 *port.Cells, g1 *port.Cells, g2 *port.Cells, g3 *port.Cells, g4 *port.Cells, g5 *port.Cells, tv *port.Cells, an *port.Cells) int32 {
 	// Find the tables of every page and claim their lines. `tb tc tw tq tx` are emptied first; s0..s18 are
 	// scratch: rules, merged rules, fills, a sort order, x and y boundaries, the grid, word pairs, a copy of tb
@@ -9052,6 +9999,13 @@ func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gf
 				if tbPruneLeading(tb, k, tc, tx) > 0 {
 					tbModel(tb, k, wd, et, tc, tw, tx, tbk, g4)
 				}
+				if teBind(p, wd, et, wi, wj, s1, tb, k, tc, tw, tx, tbk, s10, s11, s12, s13, s7, s3) > 0 {
+					tbAligns(tb, k, wd, tc, tw)
+					tbModel(tb, k, wd, et, tc, tw, tx, tbk, g4)
+					teCarried(p, wd, et, wi, wj, tb, k, tc, tw, tx, tbk, s10, s11, s12, s13, s7, s3)
+					tbAligns(tb, k, wd, tc, tw)
+					tbModel(tb, k, wd, et, tc, tw, tx, tbk, g4)
+				}
 				k += 1
 			}
 			tbOwnClaim(tb, t0, tc, tw, wd, et, wi, wj, tbo, ln, li, lj)
@@ -9067,7 +10021,7 @@ func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gf
 		ui = uj
 		p += 1
 	}
-	tbLink(tb, tc, tw, tx, tq, wd, et, ln, pages)
+	tbLink(tb, tc, tw, tx, tq, wd, et, ln, pages, tbk, s0, s1, s2)
 	k = 0
 	for k < tbRowsOf(tb, tagtable.Tbs) {
 		if tbHeadAmounts(tb, k, wd, et, tc, tw, tx, tbk, s10, s7, s3) > 0 {
@@ -9090,5 +10044,6 @@ func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gf
 		}
 		k += 1
 	}
+	teRecord(tb, tc, tw, tbk, wd, et, s0)
 	return tbRowsOf(tb, tagtable.Tbs)
 }

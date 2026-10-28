@@ -13034,3 +13034,46 @@ is `.claude/coord/b22-report.md`. No commit, corpus fetch/prune, or reserved OCR
 module edit was made. Task-owned internal build outputs are deleted at completion.
 
 - [ ] **Signed off** (maintainer)
+
+### D777 — Reject scored continuation at the live word guard (TF1 stage 1)
+
+Trial signature continuation with normalized context keys (account digits and token boundaries retained), repeated digit-variant furniture, the existing column fitting path, confirming balance arithmetic and scored link evidence. The new `test-two-currency-ledgers-link-by-their-own-columns` law fails first against the original table module and passes in the trial, including different-currency and different-account-number ownership negatives. All 111 focused table laws pass. Fresh live D16 gains its HKD and USD links; F05, F10 and F13 A-2 retain their links, with their Models byte-identical. F01, F17 and E09 also remain byte-identical. Checked protected cells in those seven samples do not move.
+
+Reject and restore the complete production/law/generated trial: the full five-page sweep3 control 05 loses 22 represented words and gains zero. The missing occurrences are the two repeated bilingual transaction headers. Existing continuation emission deliberately writes these to the duplicate-header ledger, while the established live control counts the Model body and furniture. The ledger records do not satisfy that zero-word-loss guard. Do not relax the control, change the duplicate-header emission contract, or start stage 2 to bypass this failure. Stages 2–5 remain unstarted. No ratchet, golden or sample changed; no commit was made.
+
+Retain only `tools/table/protected.py` and its synthetic adversarial tests as independent guard infrastructure. The checker reads the external frozen triples and Models, preserves multiplicity, and checks page, numeric row key, column and exact value without embedding corpus text. All 4,904 triples pass against the design baseline. Evidence, the rejected patch, red/green logs, live Models, decision dumps and the failing full-control result are under `/Volumes/SSK SSD/emon-scratch/tf1/`. Full final gates and the remaining controls were not run after stage rejection.
+- [ ] **Signed off** (maintainer)
+
+### D778 — Restore D16 continuation under exact repeated-header accounting
+
+The coordinator's corrected guard counts newly linked repeated headers in the established `duplicate-header-row` ledger. Reapply D777's preserved signature continuation and decision evidence unchanged. The fresh live binary is byte-identical to the first trial's final binary. Both D16 currency links score 13 with confirming balance identities and zero unexplained lines; different account signatures and intervening tables veto other pairs. Existing F05, F10 and F13 A-2 links survive.
+
+The retained multiset checker preserves all 4,904 frozen triples on all 13 fresh Models. Twelve named Models are byte-identical to the baseline; D16 alone changes. All 54 full paired live controls, 817 pages including both Berkshire inputs and D716 receipt controls, lose and gain zero accounted words. D16 control 05 alone newly accounts 22 words in four exact repetitions of its first-fragment header rows. Every other new loss and every gain still fails. The new word checker preserves historical ledger multiplicities and verifies each newly added repeated header against the same continued table. Its eight Python guard tests pass; private Models and triples remain outside the repository. Register these offline controls in the CI coverage map.
+
+Fresh same-population 60-document receipt sets preserve precision floors: SROIE .6820745632 >= .6816742393 and CORD .4223602484 >= .42. These inherited main OCR differences are not linking gains. Go, Rust, Java and C# each pass 1,299 laws; the C# arm uses an existing cached NuGet feed after the system TLS failure. The scoreboard and receipt baseline remain byte-identical. Re-derived fusion/bank-statement changes only its `tbx` evidence: its JSON and HTML remain byte-identical, and deleting that added field makes the evidence identical too. All samples remain unchanged. All requested final gates, including package --check, pass before the next stage starts.
+
+Live source-relative grades remain F01 poor, E09 broken, F17 usable and D16 usable. D16's continuation ownership is repaired; its separate continuation context sections and fragmented statement metadata remain. The coordinator commits.
+
+- [ ] **Signed off** (maintainer)
+
+### D779 — Reject open-frame trial at the word and F01 repair guards
+
+The trial adds open frames, common-score subset selection, global row segmentation and lattice headers. Its focused open-frame, tall-stub and currency ownership laws pass. Live F01 produces the target Table 9 row pairing, sections and header spans, but loses 21 leader tokens outside the permitted repeated-header ledger. It also preserves all 1,023 F01 triples, so it fails to make the specified eleven p11 repairs. Reject and restore stage 1 exactly; retain the trial patch and checks only as external evidence. Stages are independent under the coordinator decision, so proceed to stage 3.
+
+- [ ] **Signed off** (maintainer)
+
+### D780 — F17 explained-line header binding and arithmetic forward rows
+
+Bind headers by existing column anchors through closed label boxes and an opening row whose exact cents satisfy the first balance identity. Require recognizable brought/forward words; unexplained prose, an unrelated prose amount and a broken identity refuse. Publish the header and opening row together. Place carried-forward amounts by column sums and the closing balance in monotone semantic order, refusing an incorrect sum or swapped values. Record the opening identity, semantic columns and geometric offsets in `tbx` head/extend evidence. Keep the verified opening row out of numeric-anchor fitting.
+
+The opening and carried-forward ownership laws fail first against the saved accepted stage-1 implementation, then pass with their adversarial cases. Fresh F17 binds five header columns; opening Balance is confirmed at +28.67 pt, and Withdrawal/Deposit/Balance foot cells at -10.34/-13.97/-17.60 pt. All 4,904 triples survive across all 13 named Models; only F17 changes from stage 1. All 54 fresh controls / 817 pages preserve represented words and link sets except the already accepted D16 links. Control 03 is F17 itself, verified by input hash and identical table-cell projection and numeric triples; the other 53 acquire no header or footer. Retain this stage: fresh same-population receipt floors pass at SROIE .6820745632 and CORD .4223602484. Go, Rust, Java and C# each pass 1,301 laws. All requested final gates pass, including package --check. A local-name scope fix for Java/C# produces the identical live-tested native binary. The scoreboard, receipt baseline and all samples remain unchanged; no golden moves beyond D778's independently explained tbx-only fusion digest. F17 remains usable overall because its first-page currency breakdown and account summary still share an imperfect table.
+
+- [ ] **Signed off** (maintainer)
+
+### D781 — Reject the inconsistent E09 rebuild guard; retain legacy passes
+
+Reject stage 4 at preflight without a production change. The required eight-column E09 ledger has valid zero-based columns 0–7, while 23 frozen E09 triples on pages 1 and 2 require column 8. Only the eleven F01 repairs are exempt. A valid rebuild must therefore change at least 23 protected cells; retaining an extra column or duplicate owners would fail the target and ownership guards. The prototype's `output_triples` never reads its `led` or `ext` arguments, so its protection claim does not check the proposed ledger or extension output. The retained native-Model checker does.
+
+Stage 5 requires stages 1–4 to be green. Stages 2 and 4 are rejected, so keep the shape-specific passes. Final retained runtime is stages 1 and 3, with all 4,904 triples intact, full live guards green and all final gates passing. Whole-document grades are F01 poor, E09 broken, F17 usable and D16 usable. The coordinator commits.
+
+- [ ] **Signed off** (maintainer)

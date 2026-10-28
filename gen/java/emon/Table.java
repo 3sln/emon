@@ -4933,16 +4933,20 @@ public final class Table {
         int nrows = emon.Port.cellsAt(tb, b + 7);
         int bodyend = nrows - emon.Port.cellsAt(tb, b + 12);
         int nhead = emon.Port.cellsAt(tb, b + 11);
+        int bodyfirst = emon.Port.cellsAt(tb, b + 11);
         int xfirst = emon.Port.cellsAt(tb, b + 16);
         int kfirst = emon.Port.cellsLen(tbk) / KS;
         int col = 0;
         emon.Port.cellsSet(tb, b + 28, kfirst);
         emon.Port.cellsSet(tb, b + 29, ncols);
+        if ((emon.Port.cellsAt(tb, b + 31) & 4) != 0) {
+            bodyfirst = nhead + 1;
+        }
         while (col < ncols) {
             int x0 = emon.Port.cellsAt(tx, xfirst + col);
             int x1 = emon.Port.cellsAt(tx, (xfirst + col) + 1);
-            int left = tbModelAnchor(tc, first, end, col, nhead, bodyend, 13, x0, ws);
-            int right = tbModelAnchor(tc, first, end, col, nhead, bodyend, 14, x1, ws);
+            int left = tbModelAnchor(tc, first, end, col, bodyfirst, bodyend, 13, x0, ws);
+            int right = tbModelAnchor(tc, first, end, col, bodyfirst, bodyend, 14, x1, ws);
             int c = first;
             int occ = 0;
             int nums = 0;
@@ -4969,7 +4973,7 @@ public final class Table {
                             }
                             hcount += emon.Port.cellsAt(tc, cb + 9);
                         }
-                        if ((row >= nhead) && (row < bodyend)) {
+                        if ((row >= bodyfirst) && (row < bodyend)) {
                             occ += 1;
                             if (tbCellNumeric(wd, et, tw, tc, c) == 1) {
                                 nums += 1;
@@ -6239,10 +6243,210 @@ public final class Table {
         }
         return 0;
     }
-    public static int tbLink(emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tx, emon.Port.Cells tq, emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells ln, emon.Port.Cells pages) {
+    public static int tbContextKey(emon.Port.Cells ln, emon.Port.Cells wd, emon.Port.Cells et, int line, emon.Port.Cells key) {
+        emon.Port.cellsDrop(key, 0);
+        if (line < 0) {
+            return 0;
+        }
+        int first = Evidence.lnGet(ln, line, Evidence.lhFirst());
+        int n = Evidence.lnGet(ln, line, Evidence.lhCount());
+        int w = first;
+        int i = 0;
+        int pending = 0;
+        int continued = 0;
+        while (w < (first + n)) {
+            i = 0;
+            while (i < Evidence.wdGet(wd, w, Evidence.hdTlen())) {
+                int cp = tbLower(emon.Port.cellsAt(et, Evidence.wdGet(wd, w, Evidence.hdTstart()) + i));
+                if ((cp <= 32) || ((cp == 45) || ((cp == 58) || ((cp == 40) || ((cp == 41) || ((cp == 46) || ((cp == 8211) || (cp == 8212)))))))) {
+                    pending = 1;
+                } else {
+                    if ((pending == 1) && (emon.Port.cellsLen(key) > 0)) {
+                        emon.Port.cellsPush(key, 32);
+                    }
+                    emon.Port.cellsPush(key, cp);
+                    pending = 0;
+                }
+                i += 1;
+            }
+            pending = 1;
+            w += 1;
+        }
+        int end = emon.Port.cellsLen(key);
+        if (end >= 10) {
+            if ((emon.Port.cellsAt(key, end - 10) == 32) && ((emon.Port.cellsAt(key, end - 9) == 99) && ((emon.Port.cellsAt(key, end - 8) == 111) && ((emon.Port.cellsAt(key, end - 7) == 110) && ((emon.Port.cellsAt(key, end - 6) == 116) && ((emon.Port.cellsAt(key, end - 5) == 105) && ((emon.Port.cellsAt(key, end - 4) == 110) && ((emon.Port.cellsAt(key, end - 3) == 117) && ((emon.Port.cellsAt(key, end - 2) == 101) && (emon.Port.cellsAt(key, end - 1) == 100)))))))))) {
+                emon.Port.cellsDrop(key, end - 10);
+                continued = 1;
+            }
+        }
+        return continued;
+    }
+    public static boolean tbKeySame(emon.Port.Cells a, emon.Port.Cells b) {
+        int i = 0;
+        if ((emon.Port.cellsLen(a) == 0) || (emon.Port.cellsLen(a) != emon.Port.cellsLen(b))) {
+            return 0 == 1;
+        }
+        while (i < emon.Port.cellsLen(a)) {
+            if (emon.Port.cellsAt(a, i) != emon.Port.cellsAt(b, i)) {
+                return 0 == 1;
+            }
+            i += 1;
+        }
+        return 1 == 1;
+    }
+    public static boolean tbDigitVariant(emon.Port.Cells wd, emon.Port.Cells et, int a, int b) {
+        int sa = Evidence.wdGet(wd, a, Evidence.hdTstart());
+        int sb = Evidence.wdGet(wd, b, Evidence.hdTstart());
+        int na = Evidence.wdGet(wd, a, Evidence.hdTlen());
+        int nb = Evidence.wdGet(wd, b, Evidence.hdTlen());
+        int i = 0;
+        int j = 0;
+        while ((i < na) && (j < nb)) {
+            int ca = emon.Port.cellsAt(et, sa + i);
+            int cb = emon.Port.cellsAt(et, sb + j);
+            if (((ca >= 48) && (ca <= 57)) && ((cb >= 48) && (cb <= 57))) {
+                while ((i < na) && ((emon.Port.cellsAt(et, sa + i) >= 48) && (emon.Port.cellsAt(et, sa + i) <= 57))) {
+                    i += 1;
+                }
+                while ((j < nb) && ((emon.Port.cellsAt(et, sb + j) >= 48) && (emon.Port.cellsAt(et, sb + j) <= 57))) {
+                    j += 1;
+                }
+            } else {
+                if (ca != cb) {
+                    return 0 == 1;
+                }
+                i += 1;
+                j += 1;
+            }
+        }
+        return (i == na) && (j == nb);
+    }
+    public static boolean tbLineVariant(emon.Port.Cells ln, emon.Port.Cells wd, emon.Port.Cells et, int l) {
+        int n = Evidence.lnCount(ln);
+        int count = Evidence.lnGet(ln, l, Evidence.lhCount());
+        int m = 0;
+        int i = 0;
+        int same = 0;
+        while (m < n) {
+            if ((Evidence.lnGet(ln, m, Evidence.lhPage()) != Evidence.lnGet(ln, l, Evidence.lhPage())) && ((Evidence.lnGet(ln, m, Evidence.lhCount()) == count) && ((tbAbs(Evidence.lnGet(ln, m, Evidence.lhY0()) - Evidence.lnGet(ln, l, Evidence.lhY0())) <= 300) && (tbAbs(Evidence.lnGet(ln, m, Evidence.lhX0()) - Evidence.lnGet(ln, l, Evidence.lhX0())) <= 300)))) {
+                same = 1;
+                i = 0;
+                while (i < count) {
+                    if (!tbDigitVariant(wd, et, Evidence.lnGet(ln, l, Evidence.lhFirst()) + i, Evidence.lnGet(ln, m, Evidence.lhFirst()) + i)) {
+                        same = 0;
+                    }
+                    i += 1;
+                }
+                if (same == 1) {
+                    return 1 == 1;
+                }
+            }
+            m += 1;
+        }
+        return 0 == 1;
+    }
+    public static int tbUnexplained(emon.Port.Cells ln, emon.Port.Cells wd, emon.Port.Cells et, int page, int y0, int y1, int height, int context) {
+        int n = Pagebounds.pbAfter(ln, 16, page);
+        int l = Pagebounds.pbFirst(ln, 16, page);
+        int count = 0;
+        while (l < n) {
+            int cy = (Evidence.lnGet(ln, l, Evidence.lhY0()) + Evidence.lnGet(ln, l, Evidence.lhY1())) / 2;
+            if ((l != context) && ((Evidence.lnGet(ln, l, 15) == 0) && ((cy >= y0) && ((cy <= y1) && ((cy > ((height * 8) / 100)) && (cy < ((height * 92) / 100))))))) {
+                if (!tbLineVariant(ln, wd, et, l)) {
+                    count += 1;
+                }
+            }
+            l += 1;
+        }
+        return count;
+    }
+    public static int tbLinkCents(emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells tc, emon.Port.Cells tw, int c, int semantic) {
+        int count = emon.Port.cellsAt(tc, (c * TCS) + 9);
+        int value = 0;
+        int decimal = -1;
+        int i = 0;
+        if (count == 0) {
+            if (semantic == 5) {
+                return -1;
+            }
+            return 0;
+        }
+        if (count != 1) {
+            return -1;
+        }
+        int w = emon.Port.cellsAt(tw, emon.Port.cellsAt(tc, (c * TCS) + 8));
+        int ts = Evidence.wdGet(wd, w, Evidence.hdTstart());
+        int n = Evidence.wdGet(wd, w, Evidence.hdTlen());
+        while (i < n) {
+            int cp = emon.Port.cellsAt(et, ts + i);
+            if ((cp >= 48) && (cp <= 57)) {
+                if (value > 100000000) {
+                    return -1;
+                }
+                value = (value * 10) + (cp - 48);
+                if (decimal >= 0) {
+                    decimal += 1;
+                }
+            } else if ((cp == 46) && (decimal < 0)) {
+                decimal = 0;
+            } else if (cp != 44) {
+                return -1;
+            }
+            i += 1;
+        }
+        if (decimal != 2) {
+            return -1;
+        }
+        return value;
+    }
+    public static int tbLinkValue(emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tbk, emon.Port.Cells wd, emon.Port.Cells et, int table, int row, int semantic) {
+        int first = emon.Port.cellsAt(tb, (table * Tagtable.TBS) + 9);
+        int end = first + emon.Port.cellsAt(tb, (table * Tagtable.TBS) + 10);
+        int c = first;
+        int col = -1;
+        int j = 0;
+        while (j < emon.Port.cellsAt(tb, (table * Tagtable.TBS) + 29)) {
+            if (tbModelCol(tb, tbk, table, j, 6) == semantic) {
+                col = j;
+            }
+            j += 1;
+        }
+        if (col < 0) {
+            return -1;
+        }
+        while (c < end) {
+            if ((emon.Port.cellsAt(tc, c * TCS) == row) && (emon.Port.cellsAt(tc, (c * TCS) + 1) == col)) {
+                return tbLinkCents(wd, et, tc, tw, c, semantic);
+            }
+            c += 1;
+        }
+        if (semantic == 5) {
+            return -1;
+        }
+        return 0;
+    }
+    public static boolean tbLinkBalance(emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tbk, emon.Port.Cells wd, emon.Port.Cells et, int a, int b) {
+        int last = tbLinkValue(tb, tc, tw, tbk, wd, et, a, emon.Port.cellsAt(tb, (a * Tagtable.TBS) + 7) - 1, 5);
+        int row = emon.Port.cellsAt(tb, (b * Tagtable.TBS) + 11);
+        int balance = tbLinkValue(tb, tc, tw, tbk, wd, et, b, row, 5);
+        int debit = tbLinkValue(tb, tc, tw, tbk, wd, et, b, row, 3);
+        int credit = tbLinkValue(tb, tc, tw, tbk, wd, et, b, row, 4);
+        if ((last < 0) || ((balance < 0) || ((debit < 0) || (credit < 0)))) {
+            return 0 == 1;
+        }
+        return ((last - debit) + credit) == balance;
+    }
+    public static int tbLink(emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tx, emon.Port.Cells tq, emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells ln, emon.Port.Cells pages, emon.Port.Cells tbk, emon.Port.Cells decisions, emon.Port.Cells keya, emon.Port.Cells keyb) {
         // Link the fragments of tables that go on across a page break (see the head of this section).
         int n = tbRowsOf(tb, Tagtable.TBS);
         int fit = 0;
+        int signature = 0;
+        int contexta = -1;
+        int contextb = -1;
+        int marker = 0;
+        int score = 0;
+        int unexplained = 0;
+        int reasons = 0;
         int j = 1;
         int a = 0;
         int head = 0;
@@ -6251,6 +6455,31 @@ public final class Table {
         int skip = 0;
         int span = 0;
         int r = 0;
+        emon.Port.cellsDrop(decisions, 0);
+        while (j < n) {
+            a = 0;
+            while (a < (j - 1)) {
+                if (emon.Port.cellsAt(tb, a * Tagtable.TBS) == (emon.Port.cellsAt(tb, j * Tagtable.TBS) - 1)) {
+                    reasons = 8;
+                    tbContextKey(ln, wd, et, emon.Port.cellsAt(tb, (a * Tagtable.TBS) + 30), keya);
+                    tbContextKey(ln, wd, et, emon.Port.cellsAt(tb, (j * Tagtable.TBS) + 30), keyb);
+                    if ((emon.Port.cellsLen(keya) > 0) && ((emon.Port.cellsLen(keyb) > 0) && !tbKeySame(keya, keyb))) {
+                        reasons |= 1;
+                    }
+                    emon.Port.cellsPush(decisions, a);
+                    emon.Port.cellsPush(decisions, j);
+                    emon.Port.cellsPush(decisions, 0);
+                    emon.Port.cellsPush(decisions, reasons);
+                    emon.Port.cellsPush(decisions, 0);
+                    emon.Port.cellsPush(decisions, 0);
+                    emon.Port.cellsPush(decisions, 0);
+                    emon.Port.cellsPush(decisions, 0);
+                }
+                a += 1;
+            }
+            j += 1;
+        }
+        j = 1;
         while (j < n) {
             a = j - 1;
             head = a;
@@ -6259,9 +6488,33 @@ public final class Table {
             }
             if ((emon.Port.cellsAt(tb, (a * Tagtable.TBS) + 0) == (emon.Port.cellsAt(tb, j * Tagtable.TBS) - 1)) && (emon.Port.cellsAt(tb, (a * Tagtable.TBS) + 19) == 0)) {
                 ok = 1;
+                score = 0;
+                reasons = 0;
+                unexplained = 0;
+                contexta = emon.Port.cellsAt(tb, (a * Tagtable.TBS) + 30);
+                contextb = emon.Port.cellsAt(tb, (j * Tagtable.TBS) + 30);
+                tbContextKey(ln, wd, et, contexta, keya);
+                marker = tbContextKey(ln, wd, et, contextb, keyb);
+                signature = 0;
+                if (tbKeySame(keya, keyb)) {
+                    score = 3;
+                    reasons |= 128;
+                    if (marker == 1) {
+                        score += 2;
+                        signature = 1;
+                        reasons |= 256;
+                    }
+                } else if ((emon.Port.cellsLen(keya) > 0) && (emon.Port.cellsLen(keyb) > 0)) {
+                    ok = 0;
+                    reasons = 1;
+                }
                 fit = tbFitColumns(tb, a, j, tx, tc);
                 if (fit == 0) {
                     ok = 0;
+                    reasons |= 2;
+                } else {
+                    score += 2;
+                    reasons |= 512;
                 }
                 if ((fit == 2) && !tbNoSpansDown(tb, j, tc)) {
                     ok = 0;
@@ -6274,16 +6527,25 @@ public final class Table {
                     int pj = emon.Port.cellsAt(tb, j * Tagtable.TBS);
                     int hpa = Model.pageH(pages, pg0 - 1);
                     int hpj = Model.pageH(pages, pj - 1);
-                    if (tbBodyLineOutside(ln, wd, et, pg0, emon.Port.cellsAt(tb, (a * Tagtable.TBS) + 4), hpa, (hpa * 8) / 100, (hpa * 92) / 100, 0)) {
-                        ok = 0;
-                    }
-                    if (tbBodyLineOutside(ln, wd, et, pj, 0, emon.Port.cellsAt(tb, (j * Tagtable.TBS) + 2), (hpj * 8) / 100, (hpj * 92) / 100, pg0)) {
-                        ok = 0;
+                    if (signature == 1) {
+                        unexplained = tbUnexplained(ln, wd, et, pg0, emon.Port.cellsAt(tb, (a * Tagtable.TBS) + 4), hpa, hpa, contexta) + tbUnexplained(ln, wd, et, pj, 0, emon.Port.cellsAt(tb, (j * Tagtable.TBS) + 2), hpj, contextb);
+                        score -= unexplained;
+                        if (unexplained > 0) {
+                            reasons |= 32;
+                        }
+                    } else {
+                        if (tbBodyLineOutside(ln, wd, et, pg0, emon.Port.cellsAt(tb, (a * Tagtable.TBS) + 4), hpa, (hpa * 8) / 100, (hpa * 92) / 100, 0)) {
+                            ok = 0;
+                        }
+                        if (tbBodyLineOutside(ln, wd, et, pj, 0, emon.Port.cellsAt(tb, (j * Tagtable.TBS) + 2), (hpj * 8) / 100, (hpj * 92) / 100, pg0)) {
+                            ok = 0;
+                        }
                     }
                 }
                 if ((ok == 1) && (emon.Port.cellsAt(tb, (j * Tagtable.TBS) + 15) > 0)) {
                     if (!tbCaptionAgain(tb, head, j, wd, et, ln, tq)) {
                         ok = 0;
+                        reasons |= 16;
                     }
                 }
                 skip = 0;
@@ -6304,8 +6566,29 @@ public final class Table {
                             r += 1;
                         }
                         skip = h;
+                        if (ok == 1) {
+                            score += 3;
+                            reasons |= 1024;
+                        } else {
+                            reasons |= 4;
+                        }
                     }
                 }
+                if ((signature == 1) && tbLinkBalance(tb, tc, tw, tbk, wd, et, a, j)) {
+                    score += 3;
+                    reasons |= 64;
+                }
+                if ((signature == 1) && (score < 3)) {
+                    ok = 0;
+                }
+                emon.Port.cellsPush(decisions, a);
+                emon.Port.cellsPush(decisions, j);
+                emon.Port.cellsPush(decisions, score);
+                emon.Port.cellsPush(decisions, reasons);
+                emon.Port.cellsPush(decisions, fit);
+                emon.Port.cellsPush(decisions, signature);
+                emon.Port.cellsPush(decisions, unexplained);
+                emon.Port.cellsPush(decisions, ok);
                 if (ok == 1) {
                     if (fit == 2) {
                         tbWiden(tb, j, a, tc, tx);
@@ -7030,6 +7313,9 @@ public final class Table {
                                 if (owner > 0) {
                                     c = owner - 1;
                                     if ((c >= emon.Port.cellsAt(tb, (k * Tagtable.TBS) + 9)) && (c < (emon.Port.cellsAt(tb, (k * Tagtable.TBS) + 9) + emon.Port.cellsAt(tb, (k * Tagtable.TBS) + 10)))) {
+                                        if ((emon.Port.cellsAt(tc, c * TCS) == 1) && ((emon.Port.cellsAt(tb, (k * Tagtable.TBS) + 31) & 4) != 0)) {
+                                            bound = 1;
+                                        }
                                         if ((emon.Port.cellsAt(tc, c * TCS) < emon.Port.cellsAt(tb, (k * Tagtable.TBS) + 11)) && ((emon.Port.cellsAt(tb, (k * Tagtable.TBS) + 31) & 1) != 0)) {
                                             bound = 1;
                                         }
@@ -8651,6 +8937,650 @@ public final class Table {
         emon.Port.cellsDrop(tb, out * Tagtable.TBS);
         return 0;
     }
+    public static final int[] TE_FWDKW = {
+        7, 98, 114, 111, 117, 103, 104, 116,
+        7, 99, 97, 114, 114, 105, 101, 100,
+        7, 102, 111, 114, 119, 97, 114, 100
+    };
+    public static boolean teLabelHas(emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells wl, int from, int count, int kind) {
+        int wanted = TE_FWDKW[kind * 8 + 0];
+        int i = 0;
+        int pos = 0;
+        int q = 0;
+        int same = 0;
+        int cp = 0;
+        while (i < count) {
+            int w = emon.Port.cellsAt(wl, from + i);
+            int ts = Evidence.wdGet(wd, w, Evidence.hdTstart());
+            int n = Evidence.wdGet(wd, w, Evidence.hdTlen());
+            pos = 0;
+            while ((pos + wanted) <= n) {
+                same = 1;
+                q = 0;
+                if (pos > 0) {
+                    cp = tbLower(emon.Port.cellsAt(et, ts + (pos - 1)));
+                    if (((cp >= 97) && (cp <= 122)) || ((cp >= 48) && (cp <= 57))) {
+                        same = 0;
+                    }
+                }
+                if ((pos + wanted) < n) {
+                    cp = tbLower(emon.Port.cellsAt(et, ts + (pos + wanted)));
+                    if (((cp >= 97) && (cp <= 122)) || ((cp >= 48) && (cp <= 57))) {
+                        same = 0;
+                    }
+                }
+                while (q < wanted) {
+                    if (tbLower(emon.Port.cellsAt(et, ts + (pos + q))) != TE_FWDKW[kind * 8 + (q + 1)]) {
+                        same = 0;
+                    }
+                    q += 1;
+                }
+                if (same == 1) {
+                    return 1 == 1;
+                }
+                pos += 1;
+            }
+            i += 1;
+        }
+        return 0 == 1;
+    }
+    public static int teValue(emon.Port.Cells tb, int k, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells wd, emon.Port.Cells et, int row, int col, int semantic) {
+        int first = emon.Port.cellsAt(tb, (k * Tagtable.TBS) + 9);
+        int end = first + emon.Port.cellsAt(tb, (k * Tagtable.TBS) + 10);
+        int c = first;
+        while (c < end) {
+            if ((emon.Port.cellsAt(tc, c * TCS) == row) && (emon.Port.cellsAt(tc, (c * TCS) + 1) == col)) {
+                return tbLinkCents(wd, et, tc, tw, c, semantic);
+            }
+            c += 1;
+        }
+        if (semantic == 5) {
+            return -1;
+        }
+        return 0;
+    }
+    public static int teWordCents(emon.Port.Cells wd, emon.Port.Cells et, int w) {
+        int start = Evidence.wdGet(wd, w, Evidence.hdTstart());
+        int n = Evidence.wdGet(wd, w, Evidence.hdTlen());
+        int i = 0;
+        int result = 0;
+        int decimal = -1;
+        while (i < n) {
+            int cp = emon.Port.cellsAt(et, start + i);
+            if ((cp >= 48) && (cp <= 57)) {
+                if (result > 100000000) {
+                    return -1;
+                }
+                result = (result * 10) + (cp - 48);
+                if (decimal >= 0) {
+                    decimal += 1;
+                }
+            } else if ((cp == 46) && (decimal < 0)) {
+                decimal = 0;
+            } else if (cp != 44) {
+                return -1;
+            }
+            i += 1;
+        }
+        if (decimal != 2) {
+            return -1;
+        }
+        return result;
+    }
+    public static int teLabelBox(emon.Port.Cells rm, int x0, int x1, int y0, int y1) {
+        int n = tbRowsOf(rm, RLS);
+        int a = 0;
+        int b = 0;
+        int v = 0;
+        int lv = 0;
+        int rv = 0;
+        while (a < n) {
+            if ((emon.Port.cellsAt(rm, a * RLS) == 0) && ((emon.Port.cellsAt(rm, (a * RLS) + 1) <= y0) && (emon.Port.cellsAt(rm, (a * RLS) + 1) >= (y0 - 3000)))) {
+                b = a + 1;
+                while (b < n) {
+                    if ((emon.Port.cellsAt(rm, b * RLS) == 0) && ((emon.Port.cellsAt(rm, (b * RLS) + 1) >= y1) && (emon.Port.cellsAt(rm, (b * RLS) + 1) <= (y1 + 3000)))) {
+                        int left = emon.Port.cellsAt(rm, (a * RLS) + 2);
+                        int right = emon.Port.cellsAt(rm, (a * RLS) + 3);
+                        int top = emon.Port.cellsAt(rm, (a * RLS) + 1);
+                        int bottom = emon.Port.cellsAt(rm, (b * RLS) + 1);
+                        if (((left <= (x0 + 400)) && (right >= (x1 - 400))) && (((right - left) <= 20000) && ((tbAbs(left - emon.Port.cellsAt(rm, (b * RLS) + 2)) <= 400) && (tbAbs(right - emon.Port.cellsAt(rm, (b * RLS) + 3)) <= 400)))) {
+                            v = 0;
+                            lv = 0;
+                            rv = 0;
+                            while (v < n) {
+                                if ((emon.Port.cellsAt(rm, v * RLS) == 1) && ((emon.Port.cellsAt(rm, (v * RLS) + 2) <= (top + 400)) && (emon.Port.cellsAt(rm, (v * RLS) + 3) >= (bottom - 400)))) {
+                                    if (tbAbs(emon.Port.cellsAt(rm, (v * RLS) + 1) - left) <= 400) {
+                                        lv = 1;
+                                    }
+                                    if (tbAbs(emon.Port.cellsAt(rm, (v * RLS) + 1) - right) <= 400) {
+                                        rv = 1;
+                                    }
+                                }
+                                v += 1;
+                            }
+                            if ((lv == 1) && (rv == 1)) {
+                                return 1;
+                            }
+                        }
+                    }
+                    b += 1;
+                }
+            }
+            a += 1;
+        }
+        return 0;
+    }
+    public static int teFree(emon.Port.Cells tb, int k, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells wl, emon.Port.Cells rw, int row) {
+        int from = emon.Port.cellsAt(rw, row * RWS);
+        int count = emon.Port.cellsAt(rw, (row * RWS) + 1);
+        int i = 0;
+        int t = 0;
+        int c = 0;
+        int j = 0;
+        while (i < count) {
+            t = 0;
+            while (t < tbRowsOf(tb, Tagtable.TBS)) {
+                if ((t != k) && (emon.Port.cellsAt(tb, t * Tagtable.TBS) == emon.Port.cellsAt(tb, k * Tagtable.TBS))) {
+                    c = emon.Port.cellsAt(tb, (t * Tagtable.TBS) + 9);
+                    while (c < (emon.Port.cellsAt(tb, (t * Tagtable.TBS) + 9) + emon.Port.cellsAt(tb, (t * Tagtable.TBS) + 10))) {
+                        j = 0;
+                        while (j < emon.Port.cellsAt(tc, (c * TCS) + 9)) {
+                            if (emon.Port.cellsAt(wl, from + i) == emon.Port.cellsAt(tw, emon.Port.cellsAt(tc, (c * TCS) + 8) + j)) {
+                                return 0;
+                            }
+                            j += 1;
+                        }
+                        c += 1;
+                    }
+                }
+                t += 1;
+            }
+            i += 1;
+        }
+        return 1;
+    }
+    public static int teBind(int page, emon.Port.Cells wd, emon.Port.Cells et, int w0, int w1, emon.Port.Cells rm, emon.Port.Cells tb, int k, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tx, emon.Port.Cells tbk, emon.Port.Cells wl, emon.Port.Cells rw, emon.Port.Cells sg, emon.Port.Cells sem, emon.Port.Cells pr, emon.Port.Cells so) {
+        int b = k * Tagtable.TBS;
+        int top = emon.Port.cellsAt(tb, b + 2);
+        int cols = emon.Port.cellsAt(tb, b + 8);
+        int model = emon.Port.cellsAt(tb, b + 28);
+        int first = emon.Port.cellsAt(tb, b + 9);
+        int count = emon.Port.cellsAt(tb, b + 10);
+        int rows = emon.Port.cellsAt(tb, b + 7);
+        int cuts = emon.Port.cellsAt(tb, b + 16);
+        int nr = 0;
+        int r = 0;
+        int q = 0;
+        int j = 0;
+        int col = 0;
+        int s = 0;
+        int w = 0;
+        int c = 0;
+        int header = -1;
+        int brought = -1;
+        int amount = -1;
+        int debit = -1;
+        int credit = -1;
+        int balance = -1;
+        int good = 0;
+        int field = 0;
+        int newfirst = 0;
+        int bd = 0;
+        int bc = 0;
+        int bb = 0;
+        if ((emon.Port.cellsAt(tb, b + 11) > 0) || (cols < 3)) {
+            return 0;
+        }
+        if ((emon.Port.cellsAt(tb, b + 5) == PF_RULED) || (emon.Port.cellsAt(tb, b + 5) == PF_STRUCT)) {
+            return 0;
+        }
+        nr = tbRows(wd, et, w0, w1, emon.Port.cellsAt(tb, b + 1) - 2000, top - 9000, emon.Port.cellsAt(tb, b + 3) + 4000, top - 1, wl, rw, sg);
+        r = nr - 1;
+        while ((r >= 0) && (header < 0)) {
+            emon.Port.cellsDrop(sem, 0);
+            col = 0;
+            while (col < (2 * cols)) {
+                emon.Port.cellsPush(sem, 0);
+                col += 1;
+            }
+            good = 1;
+            q = 0;
+            debit = -1;
+            credit = -1;
+            balance = -1;
+            if (emon.Port.cellsAt(rw, (r * RWS) + 9) != cols) {
+                good = 0;
+            }
+            while (q < emon.Port.cellsAt(rw, (r * RWS) + 9)) {
+                int sb = (emon.Port.cellsAt(rw, (r * RWS) + 8) + q) * SGS;
+                int from = emon.Port.cellsAt(sg, sb + 3);
+                s = tbColSem(wd, et, emon.Port.cellsAt(wl, from));
+                col = -1;
+                j = 0;
+                while (j < cols) {
+                    if ((((s == 3) || ((s == 4) || (s == 5))) && (tbAbs(emon.Port.cellsAt(sg, sb + 2) - emon.Port.cellsAt(tbk, ((model + j) * KS) + 3)) <= 300)) || (!((s == 3) || ((s == 4) || (s == 5))) && (tbAbs(emon.Port.cellsAt(sg, sb + 1) - emon.Port.cellsAt(tbk, ((model + j) * KS) + 2)) <= 300))) {
+                        if (col >= 0) {
+                            good = 0;
+                        }
+                        col = j;
+                    }
+                    j += 1;
+                }
+                if (col < 0) {
+                    good = 0;
+                } else {
+                    if (emon.Port.cellsAt(sem, col) != 0) {
+                        good = 0;
+                    }
+                    if (s == 0) {
+                        good = 0;
+                    }
+                    emon.Port.cellsSet(sem, col, s + 1);
+                    if (q < cols) {
+                        emon.Port.cellsSet(sem, cols + q, col);
+                    }
+                    if (s == 3) {
+                        if (debit >= 0) {
+                            good = 0;
+                        }
+                        debit = col;
+                    }
+                    if (s == 4) {
+                        if (credit >= 0) {
+                            good = 0;
+                        }
+                        credit = col;
+                    }
+                    if (s == 5) {
+                        if (balance >= 0) {
+                            good = 0;
+                        }
+                        balance = col;
+                    }
+                }
+                q += 1;
+            }
+            if ((good == 1) && ((debit >= 0) && ((credit >= 0) && (balance >= 0)))) {
+                header = r;
+            }
+            r -= 1;
+        }
+        if ((header < 0) || (balance <= 0)) {
+            return 0;
+        }
+        bd = teValue(tb, k, tc, tw, wd, et, 0, debit, 3);
+        bc = teValue(tb, k, tc, tw, wd, et, 0, credit, 4);
+        bb = teValue(tb, k, tc, tw, wd, et, 0, balance, 5);
+        if ((bd < 0) || ((bc < 0) || (bb < 0))) {
+            return 0;
+        }
+        r = header + 1;
+        while (r < nr) {
+            if (teLabelBox(rm, emon.Port.cellsAt(rw, (r * RWS) + 4), emon.Port.cellsAt(rw, (r * RWS) + 5), emon.Port.cellsAt(rw, (r * RWS) + 6), emon.Port.cellsAt(rw, (r * RWS) + 7)) == 0) {
+                if (brought >= 0) {
+                    return 0;
+                }
+                if (emon.Port.cellsAt(rw, (r * RWS) + 9) != 2) {
+                    return 0;
+                }
+                int sb = emon.Port.cellsAt(rw, (r * RWS) + 8) * SGS;
+                int from = emon.Port.cellsAt(sg, sb + 3);
+                int n = emon.Port.cellsAt(sg, sb + 4);
+                if (!(teLabelHas(wd, et, wl, from, n, 0) && teLabelHas(wd, et, wl, from, n, 2))) {
+                    return 0;
+                }
+                w = emon.Port.cellsAt(wl, (emon.Port.cellsAt(rw, r * RWS) + emon.Port.cellsAt(rw, (r * RWS) + 1)) - 1);
+                amount = teWordCents(wd, et, w);
+                if ((amount < 0) || (((amount - bd) + bc) != bb)) {
+                    return 0;
+                }
+                brought = r;
+            }
+            r += 1;
+        }
+        if (brought < 0) {
+            return 0;
+        }
+        if ((teFree(tb, k, tc, tw, wl, rw, header) == 0) || (teFree(tb, k, tc, tw, wl, rw, brought) == 0)) {
+            return 0;
+        }
+        newfirst = tbRowsOf(tc, TCS);
+        emon.Port.cellsDrop(pr, 0);
+        r = 0;
+        while (r < 2) {
+            col = 0;
+            while (col < cols) {
+                int source = header;
+                if (r == 1) {
+                    source = brought;
+                }
+                tbCellAdd(tc, r, col, 1, 1, emon.Port.cellsAt(tx, cuts + col), emon.Port.cellsAt(rw, (source * RWS) + 6), emon.Port.cellsAt(tx, (cuts + col) + 1), emon.Port.cellsAt(rw, (source * RWS) + 7));
+                if (r == 0) {
+                    emon.Port.cellsSet(tc, emon.Port.cellsLen(tc) - 6, 1);
+                }
+                col += 1;
+            }
+            r += 1;
+        }
+        q = 0;
+        while (q < cols) {
+            int sb = (emon.Port.cellsAt(rw, (header * RWS) + 8) + q) * SGS;
+            int from = emon.Port.cellsAt(sg, sb + 3);
+            int n = emon.Port.cellsAt(sg, sb + 4);
+            col = emon.Port.cellsAt(sem, cols + q);
+            j = 0;
+            while (j < n) {
+                tbPairAdd(pr, wd, newfirst + col, emon.Port.cellsAt(wl, from + j));
+                j += 1;
+            }
+            q += 1;
+        }
+        q = 0;
+        while (q < 2) {
+            int sb = (emon.Port.cellsAt(rw, (brought * RWS) + 8) + q) * SGS;
+            int from = emon.Port.cellsAt(sg, sb + 3);
+            int n = emon.Port.cellsAt(sg, sb + 4);
+            col = 0;
+            if (q == 1) {
+                col = balance;
+            }
+            j = 0;
+            while (j < n) {
+                tbPairAdd(pr, wd, (newfirst + cols) + col, emon.Port.cellsAt(wl, from + j));
+                j += 1;
+            }
+            q += 1;
+        }
+        int stub = newfirst + cols;
+        emon.Port.cellsSet(tc, (stub * TCS) + 3, balance);
+        emon.Port.cellsSet(tc, (stub * TCS) + 6, emon.Port.cellsAt(tx, cuts + balance));
+        col = 1;
+        while (col < balance) {
+            emon.Port.cellsSet(tc, ((stub + col) * TCS) + 12, 1);
+            col += 1;
+        }
+        tbFlushPairs(pr, so, wd, tc, tw);
+        c = first;
+        while (c < (first + count)) {
+            field = 0;
+            while (field < TCS) {
+                emon.Port.cellsPush(tc, emon.Port.cellsAt(tc, (c * TCS) + field));
+                field += 1;
+            }
+            emon.Port.cellsSet(tc, emon.Port.cellsLen(tc) - TCS, emon.Port.cellsAt(tc, c * TCS) + 2);
+            c += 1;
+        }
+        emon.Port.cellsSet(tb, b + 9, newfirst);
+        emon.Port.cellsSet(tb, b + 10, count + (2 * cols));
+        emon.Port.cellsSet(tb, b + 7, rows + 2);
+        emon.Port.cellsSet(tb, b + 11, 1);
+        emon.Port.cellsSet(tb, b + 22, 1);
+        emon.Port.cellsSet(tb, b + 31, emon.Port.cellsAt(tb, b + 31) | 5);
+        return 1;
+    }
+    public static int teCarried(int page, emon.Port.Cells wd, emon.Port.Cells et, int w0, int w1, emon.Port.Cells tb, int k, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tx, emon.Port.Cells tbk, emon.Port.Cells wl, emon.Port.Cells rw, emon.Port.Cells sg, emon.Port.Cells targets, emon.Port.Cells pr, emon.Port.Cells so) {
+        int b = k * Tagtable.TBS;
+        int cols = emon.Port.cellsAt(tb, b + 8);
+        int rows = emon.Port.cellsAt(tb, b + 7);
+        int first = emon.Port.cellsAt(tb, b + 9);
+        int count = emon.Port.cellsAt(tb, b + 10);
+        int cuts = emon.Port.cellsAt(tb, b + 16);
+        int debit = -1;
+        int credit = -1;
+        int balance = -1;
+        int col = 0;
+        int r = 0;
+        int q = 0;
+        int c = 0;
+        int sum = 0;
+        int value = 0;
+        int nr = 0;
+        int good = 0;
+        int chosen = -1;
+        int newfirst = 0;
+        int field = 0;
+        int j = 0;
+        if (((emon.Port.cellsAt(tb, b + 31) & 4) == 0) || (emon.Port.cellsAt(tb, b + 12) > 0)) {
+            return 0;
+        }
+        while (col < cols) {
+            int s = tbModelCol(tb, tbk, k, col, 6);
+            if (s == 3) {
+                debit = col;
+            }
+            if (s == 4) {
+                credit = col;
+            }
+            if (s == 5) {
+                balance = col;
+            }
+            col += 1;
+        }
+        if ((debit < 1) || ((credit < 1) || (balance < 1))) {
+            return 0;
+        }
+        emon.Port.cellsDrop(targets, 0);
+        col = 0;
+        while (col < cols) {
+            sum = -1;
+            if ((col == debit) || (col == credit)) {
+                sum = 0;
+                r = 2;
+                while (r < rows) {
+                    value = teValue(tb, k, tc, tw, wd, et, r, col, 3);
+                    if (value < 0) {
+                        return 0;
+                    }
+                    if (sum > (1000000000 - value)) {
+                        return 0;
+                    }
+                    sum += value;
+                    r += 1;
+                }
+            }
+            if (col == balance) {
+                sum = teValue(tb, k, tc, tw, wd, et, rows - 1, col, 5);
+            }
+            emon.Port.cellsPush(targets, sum);
+            col += 1;
+        }
+        nr = tbRows(wd, et, w0, w1, emon.Port.cellsAt(tb, b + 1), emon.Port.cellsAt(tb, b + 4) + 1, emon.Port.cellsAt(tb, b + 3), emon.Port.cellsAt(tb, b + 4) + 4000, wl, rw, sg);
+        r = 0;
+        while ((r < nr) && (chosen < 0)) {
+            if (emon.Port.cellsAt(rw, (r * RWS) + 9) == 4) {
+                good = 1;
+                col = 0;
+                q = 1;
+                int ls = emon.Port.cellsAt(rw, (r * RWS) + 8) * SGS;
+                int lfrm = emon.Port.cellsAt(sg, ls + 3);
+                int m = emon.Port.cellsAt(sg, ls + 4);
+                if (!(teLabelHas(wd, et, wl, lfrm, m, 1) && teLabelHas(wd, et, wl, lfrm, m, 2))) {
+                    good = 0;
+                }
+                while (col < cols) {
+                    if (emon.Port.cellsAt(targets, col) >= 0) {
+                        if (q >= 4) {
+                            good = 0;
+                        } else {
+                            int sb = (emon.Port.cellsAt(rw, (r * RWS) + 8) + q) * SGS;
+                            int from = emon.Port.cellsAt(sg, sb + 3);
+                            int n = emon.Port.cellsAt(sg, sb + 4);
+                            if (n != 1) {
+                                good = 0;
+                            }
+                            if (teWordCents(wd, et, emon.Port.cellsAt(wl, from + (n - 1))) != emon.Port.cellsAt(targets, col)) {
+                                good = 0;
+                            }
+                        }
+                        q += 1;
+                    }
+                    col += 1;
+                }
+                if ((good == 1) && (q == 4)) {
+                    chosen = r;
+                }
+            }
+            r += 1;
+        }
+        if (chosen < 0) {
+            return 0;
+        }
+        if (teFree(tb, k, tc, tw, wl, rw, chosen) == 0) {
+            return 0;
+        }
+        newfirst = tbRowsOf(tc, TCS);
+        c = first;
+        while (c < (first + count)) {
+            field = 0;
+            while (field < TCS) {
+                emon.Port.cellsPush(tc, emon.Port.cellsAt(tc, (c * TCS) + field));
+                field += 1;
+            }
+            c += 1;
+        }
+        c = tbRowsOf(tc, TCS);
+        col = 0;
+        while (col < cols) {
+            tbCellAdd(tc, rows, col, 1, 1, emon.Port.cellsAt(tx, cuts + col), emon.Port.cellsAt(rw, (chosen * RWS) + 6), emon.Port.cellsAt(tx, (cuts + col) + 1), emon.Port.cellsAt(rw, (chosen * RWS) + 7));
+            emon.Port.cellsSet(tc, emon.Port.cellsLen(tc) - 6, 2);
+            col += 1;
+        }
+        col = 0;
+        while ((col < cols) && (emon.Port.cellsAt(targets, col) < 0)) {
+            col += 1;
+        }
+        if (col > 1) {
+            emon.Port.cellsSet(tc, (c * TCS) + 3, col);
+            emon.Port.cellsSet(tc, (c * TCS) + 6, emon.Port.cellsAt(tx, cuts + col));
+            j = 1;
+            while (j < col) {
+                emon.Port.cellsSet(tc, ((c + j) * TCS) + 12, 1);
+                j += 1;
+            }
+        }
+        emon.Port.cellsDrop(pr, 0);
+        q = 0;
+        col = 0;
+        while (q < 4) {
+            if (q > 0) {
+                if (q == 1) {
+                    col = 0;
+                } else {
+                    col += 1;
+                }
+                while ((col < cols) && (emon.Port.cellsAt(targets, col) < 0)) {
+                    col += 1;
+                }
+            }
+            int sb = (emon.Port.cellsAt(rw, (chosen * RWS) + 8) + q) * SGS;
+            int from = emon.Port.cellsAt(sg, sb + 3);
+            int n = emon.Port.cellsAt(sg, sb + 4);
+            j = 0;
+            while (j < n) {
+                tbPairAdd(pr, wd, c + col, emon.Port.cellsAt(wl, from + j));
+                j += 1;
+            }
+            q += 1;
+        }
+        tbFlushPairs(pr, so, wd, tc, tw);
+        emon.Port.cellsSet(tb, b + 9, newfirst);
+        emon.Port.cellsSet(tb, b + 10, count + cols);
+        emon.Port.cellsSet(tb, b + 7, rows + 1);
+        emon.Port.cellsSet(tb, b + 12, 1);
+        emon.Port.cellsSet(tb, b + 31, emon.Port.cellsAt(tb, b + 31) | 2);
+        return 1;
+    }
+    public static int teRecord(emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tbk, emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells decisions) {
+        int k = 0;
+        int col = 0;
+        int c = 0;
+        int w = 0;
+        int balance = -1;
+        int debit = -1;
+        int credit = -1;
+        int r = 0;
+        int target = 0;
+        int value = 0;
+        while (k < tbRowsOf(tb, Tagtable.TBS)) {
+            int b = k * Tagtable.TBS;
+            int first = emon.Port.cellsAt(tb, b + 9);
+            int end = first + emon.Port.cellsAt(tb, b + 10);
+            int rows = emon.Port.cellsAt(tb, b + 7);
+            int bodyend = rows - emon.Port.cellsAt(tb, b + 12);
+            if ((emon.Port.cellsAt(tb, b + 31) & 4) != 0) {
+                col = 0;
+                balance = -1;
+                debit = -1;
+                credit = -1;
+                while (col < emon.Port.cellsAt(tb, b + 8)) {
+                    int sem = tbModelCol(tb, tbk, k, col, 6);
+                    if (sem == 3) {
+                        debit = col;
+                    }
+                    if (sem == 4) {
+                        credit = col;
+                    }
+                    if (sem == 5) {
+                        balance = col;
+                    }
+                    col += 1;
+                }
+                if ((balance >= 0) && ((debit >= 0) && (credit >= 0))) {
+                    c = first;
+                    while (c < end) {
+                        if ((emon.Port.cellsAt(tc, c * TCS) == 1) && ((emon.Port.cellsAt(tc, (c * TCS) + 1) == balance) && (emon.Port.cellsAt(tc, (c * TCS) + 9) > 0))) {
+                            w = emon.Port.cellsAt(tw, emon.Port.cellsAt(tc, (c * TCS) + 8) + (emon.Port.cellsAt(tc, (c * TCS) + 9) - 1));
+                            emon.Port.cellsPush(decisions, -1);
+                            emon.Port.cellsPush(decisions, k);
+                            emon.Port.cellsPush(decisions, teWordCents(wd, et, w));
+                            emon.Port.cellsPush(decisions, teValue(tb, k, tc, tw, wd, et, 2, debit, 3));
+                            emon.Port.cellsPush(decisions, teValue(tb, k, tc, tw, wd, et, 2, credit, 4));
+                            emon.Port.cellsPush(decisions, teValue(tb, k, tc, tw, wd, et, 2, balance, 5));
+                            emon.Port.cellsPush(decisions, Evidence.wdGet(wd, w, Evidence.hdX1()) - tbModelCol(tb, tbk, k, balance, 3));
+                            emon.Port.cellsPush(decisions, balance);
+                        }
+                        c += 1;
+                    }
+                    if (emon.Port.cellsAt(tb, b + 12) > 0) {
+                        col = 0;
+                        while (col < emon.Port.cellsAt(tb, b + 8)) {
+                            if ((col == debit) || ((col == credit) || (col == balance))) {
+                                target = 0;
+                                if (col == balance) {
+                                    target = teValue(tb, k, tc, tw, wd, et, bodyend - 1, col, 5);
+                                } else {
+                                    r = 2;
+                                    while (r < bodyend) {
+                                        target += teValue(tb, k, tc, tw, wd, et, r, col, 3);
+                                        r += 1;
+                                    }
+                                }
+                                value = teValue(tb, k, tc, tw, wd, et, bodyend, col, 3);
+                                c = first;
+                                while (c < end) {
+                                    if ((emon.Port.cellsAt(tc, c * TCS) == bodyend) && ((emon.Port.cellsAt(tc, (c * TCS) + 1) == col) && (emon.Port.cellsAt(tc, (c * TCS) + 9) > 0))) {
+                                        w = emon.Port.cellsAt(tw, emon.Port.cellsAt(tc, (c * TCS) + 8) + (emon.Port.cellsAt(tc, (c * TCS) + 9) - 1));
+                                        emon.Port.cellsPush(decisions, -2);
+                                        emon.Port.cellsPush(decisions, k);
+                                        emon.Port.cellsPush(decisions, col);
+                                        emon.Port.cellsPush(decisions, value);
+                                        emon.Port.cellsPush(decisions, target);
+                                        emon.Port.cellsPush(decisions, Evidence.wdGet(wd, w, Evidence.hdX1()) - tbModelCol(tb, tbk, k, col, 3));
+                                        emon.Port.cellsPush(decisions, tbModelCol(tb, tbk, k, col, 6));
+                                        emon.Port.cellsPush(decisions, 1);
+                                    }
+                                    c += 1;
+                                }
+                            }
+                            col += 1;
+                        }
+                    }
+                }
+            }
+            k += 1;
+        }
+        return 0;
+    }
     public static int tbBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells grl, emon.Port.Cells gfl, int np, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells tx, emon.Port.Cells tbk, emon.Port.Cells tbo, emon.Port.Cells s0, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6, emon.Port.Cells s7, emon.Port.Cells s8, emon.Port.Cells s9, emon.Port.Cells s10, emon.Port.Cells s11, emon.Port.Cells s12, emon.Port.Cells s13, emon.Port.Cells s14, emon.Port.Cells s15, emon.Port.Cells s16, emon.Port.Cells s17, emon.Port.Cells s18, emon.Port.Cells pages, emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells se, emon.Port.Cells sc, emon.Port.Cells ss, emon.Port.Cells grg, emon.Port.Cells g0, emon.Port.Cells g1, emon.Port.Cells g2, emon.Port.Cells g3, emon.Port.Cells g4, emon.Port.Cells g5, emon.Port.Cells tv, emon.Port.Cells an) {
         // Find the tables of every page and claim their lines. `tb tc tw tq tx` are emptied first; s0..s18 are
         // scratch: rules, merged rules, fills, a sort order, x and y boundaries, the grid, word pairs, a copy of tb
@@ -8768,6 +9698,13 @@ public final class Table {
                     if (tbPruneLeading(tb, k, tc, tx) > 0) {
                         tbModel(tb, k, wd, et, tc, tw, tx, tbk, g4);
                     }
+                    if (teBind(p, wd, et, wi, wj, s1, tb, k, tc, tw, tx, tbk, s10, s11, s12, s13, s7, s3) > 0) {
+                        tbAligns(tb, k, wd, tc, tw);
+                        tbModel(tb, k, wd, et, tc, tw, tx, tbk, g4);
+                        teCarried(p, wd, et, wi, wj, tb, k, tc, tw, tx, tbk, s10, s11, s12, s13, s7, s3);
+                        tbAligns(tb, k, wd, tc, tw);
+                        tbModel(tb, k, wd, et, tc, tw, tx, tbk, g4);
+                    }
                     k += 1;
                 }
                 tbOwnClaim(tb, t0, tc, tw, wd, et, wi, wj, tbo, ln, li, lj);
@@ -8783,7 +9720,7 @@ public final class Table {
             ui = uj;
             p += 1;
         }
-        tbLink(tb, tc, tw, tx, tq, wd, et, ln, pages);
+        tbLink(tb, tc, tw, tx, tq, wd, et, ln, pages, tbk, s0, s1, s2);
         k = 0;
         while (k < tbRowsOf(tb, Tagtable.TBS)) {
             if (tbHeadAmounts(tb, k, wd, et, tc, tw, tx, tbk, s10, s7, s3) > 0) {
@@ -8806,6 +9743,7 @@ public final class Table {
             }
             k += 1;
         }
+        teRecord(tb, tc, tw, tbk, wd, et, s0);
         return tbRowsOf(tb, Tagtable.TBS);
     }
 }
