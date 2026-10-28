@@ -1443,7 +1443,7 @@ public static class Figclass {
         if ((FcMax(rw, rh) <= FcSmall) && ((FcInBand(ry0, ry1, pageh) == 1) || ((emon.Port.CellsAt(fi, b + 9) >= 1) || (recur > 0)))) {
             return FcPack(Model.FgLogo(), FcMin(1000, 580 + recur));
         }
-        if ((rw >= 20000) && (rh >= 12000)) {
+        if ((rw >= 20000) && (rh >= 6000)) {
             return FcPack(Model.FgScreenshot(), 450);
         }
         return FcPack(Model.FgUnknown(), 300);
@@ -1726,6 +1726,10 @@ public static class Figclass {
             }
             kind = pk / 1024;
             conf = pk % 1024;
+            if ((emon.Port.CellsAt(fcand, b + CrKori) == -1) && ((status == 0) && ((rej == 0) && ((kind == Model.FgScreenshot()) && (((x1 - x0) >= 20000) && (((y1 - y0) >= 6000) && (((y1 - y0) <= 35000) && (((2 * (y1 - y0)) < pageh) && ((y0 > 0) && ((y1 < pageh) && ((emon.Port.CellsAt(ws, FtInside) >= 2) && (FcClaimed(fl, page, x0, y0, x1, y1) == 0)))))))))))) {
+                kind = Model.FgScreenshot();
+                conf = 580;
+            }
             if ((emon.Port.CellsAt(fcand, b + CrOrg) >= 4) && ((status == 0) && ((FcSignatureOver(sl, page, x0, y0, x1, y1) == 0) && ((emon.Port.CellsAt(fcand, b + CrOrg) == 5) || (FcClaimed(fl, page, x0, y0, x1, y1) == 0))))) {
                 rej = 0;
                 kind = Model.FgDiagram();

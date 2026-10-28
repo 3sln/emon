@@ -1072,7 +1072,7 @@ public final class Restruct {
         i = 1;
         while (i < emon.Port.cellsLen(fg)) {
             row = emon.Port.cellsAt(fg, i);
-            if ((Asset.asGet(cand, row, 0) == Model.regionPage(orr, r)) && ((Model.regionX1(orr, r) > (rfEb(ab, n, i, cand, row, 0) - RF_ZONE)) && ((Model.regionX0(orr, r) < (rfEb(ab, n, i, cand, row, 2) + RF_ZONE)) && ((cy >= (rfEb(ab, n, i, cand, row, 1) - RF_ZONE)) && ((cy <= (rfEb(ab, n, i, cand, row, 3) + RF_ZONE)) && ((Model.regionX1(orr, r) - Model.regionX0(orr, r)) <= ((2 * (rfEb(ab, n, i, cand, row, 2) - rfEb(ab, n, i, cand, row, 0))) + 2000))))))) {
+            if ((rfFdv(fd, row, 0, Model.fgUnknown()) != Model.fgScreenshot()) && ((Asset.asGet(cand, row, 0) == Model.regionPage(orr, r)) && ((Model.regionX1(orr, r) > (rfEb(ab, n, i, cand, row, 0) - RF_ZONE)) && ((Model.regionX0(orr, r) < (rfEb(ab, n, i, cand, row, 2) + RF_ZONE)) && ((cy >= (rfEb(ab, n, i, cand, row, 1) - RF_ZONE)) && ((cy <= (rfEb(ab, n, i, cand, row, 3) + RF_ZONE)) && ((Model.regionX1(orr, r) - Model.regionX0(orr, r)) <= ((2 * (rfEb(ab, n, i, cand, row, 2) - rfEb(ab, n, i, cand, row, 0))) + 2000)))))))) {
                 return row;
             }
             i += 1;
@@ -1082,6 +1082,9 @@ public final class Restruct {
     public static int rfGrows(emon.Port.Cells fd, int row) {
         // 1 when the figure of candidate row `row` may grow over its labels: a drawing, a chart, a picture; not a logo, a barcode or a code (a name, a number beside them is text).
         int k = rfFdv(fd, row, 0, Model.fgUnknown());
+        if (k == Model.fgScreenshot()) {
+            return 0;
+        }
         if ((k == Model.fgLogo()) || ((k == Model.fgBarcode()) || (k == Model.fgQr()))) {
             return 0;
         }

@@ -13113,3 +13113,21 @@ All 15 requested final commands pass: drift, CI core, both rederive forms, accur
 Verification uses an index scoped to this worktree and a task-local feed of 20 existing NuGet packages; the real index and declared dependencies are unchanged. Earlier Git-index runner failures are corrected and the full CI core passes. A final trailing-blank-line cleanup regenerates all 820 generated files byte-identically; drift passes again. No ratchet is lowered, no corpus is fetched or pruned, and no commit is made. Evidence and runners are retained under /Volumes/SSK SSD/emon-scratch/b23/; temporary builds are removed before handoff.
 
 - [ ] **Signed off** (maintainer)
+
+### D793 — BATCH26: require an embedded screenshot to own its exact label values
+
+The sweep-5 G11 screenshots have image-placement bounds but their OCR paragraphs remain in body flow. Four failing-first laws exercise a bounded dialog and a shallow screen, requiring a screenshot owner for the exact numeric label 42 and an independent owner for outside prose. Table-held lines and page-sized images are negative controls. The candidate promotes only successfully measured embedded flat rasters with at least two interior words, with no existing rejection or table claim, at least 200 by 60 pt and no taller than 350 pt or half the page. Existing photographic, code, seal, signature and prose exclusions remain in force. The shallow screenshot shape floor is 60 pt; compression alone still has confidence 450 and cannot emit a captionless figure.
+
+- [ ] **Signed off** (maintainer)
+
+### D794 — BATCH26: disposition of remaining figure ownership requests
+
+Fresh live sweep inputs reproduce n01's three false tables inside Figure 1, G13's loose chart prose and n04's poster stamp plus missing outlined titles. G07 and G10 retain their previously repaired owners. No speculative owner is assigned to those defective regions in this candidate. A numbered caption alone cannot prove a diagram's union bounds, a page-wide raster alone cannot establish chart identity, and changing a late figure kind cannot restore text already removed by OCR arbitration. That arbitration is concurrently owned by OA1. The acceptance checks remain open; no recognition fix is claimed. Live before/after outcomes and all preservation/final-gate results are recorded in the coordination report and external task evidence.
+
+- [ ] **Signed off** (maintainer)
+
+### D795 — Screenshots do not grow across their raster boundary
+
+The first live G11 candidate preserved every word but reassigned the nearby NOTE label from its illustration to the preceding screenshot. Reject that ownership result. A fifth failing-first law requires the exact internal value 42 to stay with the screenshot and the exterior label to retain its neighboring illustration owner. Screenshots may absorb their interior text but do not grow over exterior labels or claim them by proximity. Diagram/chart/photo proximity behavior is retained. This distinction follows the explicit raster placement boundary rather than word content.
+
+- [ ] **Signed off** (maintainer)

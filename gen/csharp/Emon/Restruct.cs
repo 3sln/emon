@@ -1072,7 +1072,7 @@ public static class Restruct {
         i = 1;
         while (i < emon.Port.CellsLen(fg)) {
             row = emon.Port.CellsAt(fg, i);
-            if ((Asset.AsGet(cand, row, 0) == Model.RegionPage(orr, r)) && ((Model.RegionX1(orr, r) > (RfEb(ab, n, i, cand, row, 0) - RfZone)) && ((Model.RegionX0(orr, r) < (RfEb(ab, n, i, cand, row, 2) + RfZone)) && ((cy >= (RfEb(ab, n, i, cand, row, 1) - RfZone)) && ((cy <= (RfEb(ab, n, i, cand, row, 3) + RfZone)) && ((Model.RegionX1(orr, r) - Model.RegionX0(orr, r)) <= ((2 * (RfEb(ab, n, i, cand, row, 2) - RfEb(ab, n, i, cand, row, 0))) + 2000))))))) {
+            if ((RfFdv(fd, row, 0, Model.FgUnknown()) != Model.FgScreenshot()) && ((Asset.AsGet(cand, row, 0) == Model.RegionPage(orr, r)) && ((Model.RegionX1(orr, r) > (RfEb(ab, n, i, cand, row, 0) - RfZone)) && ((Model.RegionX0(orr, r) < (RfEb(ab, n, i, cand, row, 2) + RfZone)) && ((cy >= (RfEb(ab, n, i, cand, row, 1) - RfZone)) && ((cy <= (RfEb(ab, n, i, cand, row, 3) + RfZone)) && ((Model.RegionX1(orr, r) - Model.RegionX0(orr, r)) <= ((2 * (RfEb(ab, n, i, cand, row, 2) - RfEb(ab, n, i, cand, row, 0))) + 2000)))))))) {
                 return row;
             }
             i += 1;
@@ -1082,6 +1082,9 @@ public static class Restruct {
     internal static int RfGrows(emon.Port.Cells fd, int row) {
         // 1 when the figure of candidate row `row` may grow over its labels: a drawing, a chart, a picture; not a logo, a barcode or a code (a name, a number beside them is text).
         int k = RfFdv(fd, row, 0, Model.FgUnknown());
+        if (k == Model.FgScreenshot()) {
+            return 0;
+        }
         if ((k == Model.FgLogo()) || ((k == Model.FgBarcode()) || (k == Model.FgQr()))) {
             return 0;
         }

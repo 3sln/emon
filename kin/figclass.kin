@@ -1208,7 +1208,7 @@
     (if (and (<= (fc-max rw rh) FC_SMALL)
              (or (== (fc-in-band ry0 ry1 pageh) 1) (or (>= (cells-at fi (+ b 9)) 1) (> recur 0))))
       (return (fc-pack (fg-logo) (fc-min 1000 (+ 580 recur)))))
-    (if (and (>= rw 20000) (>= rh 12000)) (return (fc-pack (fg-screenshot) 450)))
+    (if (and (>= rw 20000) (>= rh 6000)) (return (fc-pack (fg-screenshot) 450)))
     (return (fc-pack (fg-unknown) 300))))
 
 (defn ^:pub ^I32 fc-reject [^Cells ws]
@@ -1436,6 +1436,19 @@
             (set pk (fc-vector-kind ws x0 y0 x1 y1 pageh recur)))
           (set kind (quot pk 1024))
           (set conf (rem pk 1024))
+          ;; D793: a flat embedded panel with its own text is an image owner,
+          ;; even without a caption. Require a measured, bounded placement and
+          ;; leave table claims, prose backgrounds, seals and signatures alone.
+          (if (and (== (cells-at fcand (+ b CR_KORI)) -1)
+                   (and (== status 0) (and (== rej 0)
+                     (and (== kind (fg-screenshot))
+                       (and (>= (- x1 x0) 20000)
+                         (and (>= (- y1 y0) 6000) (and (<= (- y1 y0) 35000)
+                           (and (< (* 2 (- y1 y0)) pageh)
+                             (and (> y0 0) (and (< y1 pageh)
+                               (and (>= (cells-at ws FT_INSIDE) 2)
+                                    (== (fc-claimed fl page x0 y0 x1 y1) 0))))))))))))
+            (do (set kind (fg-screenshot)) (set conf 580)))
           (if (and (>= (cells-at fcand (+ b CR_ORG)) 4)
                    (and (== status 0) (and (== (fc-signature-over sl page x0 y0 x1 y1) 0)
                                           (or (== (cells-at fcand (+ b CR_ORG)) 5) (== (fc-claimed fl page x0 y0 x1 y1) 0)))))

@@ -1450,7 +1450,7 @@ pub fn fc_image_kind(fi: &mut crate::port::Cells, imx: i32, rw: i32, rh: i32, ry
     if (fc_max(rw, rh) <= FC_SMALL) && ((fc_in_band(ry0, ry1, pageh) == 1) || ((crate::port::cells_at(fi, b + 9) >= 1) || (recur > 0))) {
         return fc_pack(fg_logo(), fc_min(1000, 580 + recur));
     }
-    if (rw >= 20000) && (rh >= 12000) {
+    if (rw >= 20000) && (rh >= 6000) {
         return fc_pack(fg_screenshot(), 450);
     }
     return fc_pack(fg_unknown(), 300);
@@ -1733,6 +1733,10 @@ pub fn fc_stage(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, 
         }
         kind = pk / 1024;
         conf = pk % 1024;
+        if (crate::port::cells_at(fcand, b + CR_KORI) == -1) && ((status == 0) && ((rej == 0) && ((kind == fg_screenshot()) && (((x1 - x0) >= 20000) && (((y1 - y0) >= 6000) && (((y1 - y0) <= 35000) && (((2 * (y1 - y0)) < pageh) && ((y0 > 0) && ((y1 < pageh) && ((crate::port::cells_at(ws, FT_INSIDE) >= 2) && (fc_claimed(fl, page, x0, y0, x1, y1) == 0))))))))))) {
+            kind = fg_screenshot();
+            conf = 580;
+        }
         if (crate::port::cells_at(fcand, b + CR_ORG) >= 4) && ((status == 0) && ((fc_signature_over(sl, page, x0, y0, x1, y1) == 0) && ((crate::port::cells_at(fcand, b + CR_ORG) == 5) || (fc_claimed(fl, page, x0, y0, x1, y1) == 0)))) {
             rej = 0;
             kind = fg_diagram();

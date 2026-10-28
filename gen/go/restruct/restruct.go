@@ -1139,7 +1139,7 @@ func rfLabelOf(on *port.Cells, orr *port.Cells, text *port.Cells, cand *port.Cel
 	i = 1
 	for i < port.CellsLen(fg) {
 		row = port.CellsAt(fg, i)
-		if (asset.AsGet(cand, row, 0) == model.RegionPage(orr, r)) && ((model.RegionX1(orr, r) > (rfEb(ab, n, i, cand, row, 0) - rfZone)) && ((model.RegionX0(orr, r) < (rfEb(ab, n, i, cand, row, 2) + rfZone)) && ((cy >= (rfEb(ab, n, i, cand, row, 1) - rfZone)) && ((cy <= (rfEb(ab, n, i, cand, row, 3) + rfZone)) && ((model.RegionX1(orr, r) - model.RegionX0(orr, r)) <= ((2 * (rfEb(ab, n, i, cand, row, 2) - rfEb(ab, n, i, cand, row, 0))) + 2000)))))) {
+		if (rfFdv(fd, row, 0, model.FgUnknown()) != model.FgScreenshot()) && ((asset.AsGet(cand, row, 0) == model.RegionPage(orr, r)) && ((model.RegionX1(orr, r) > (rfEb(ab, n, i, cand, row, 0) - rfZone)) && ((model.RegionX0(orr, r) < (rfEb(ab, n, i, cand, row, 2) + rfZone)) && ((cy >= (rfEb(ab, n, i, cand, row, 1) - rfZone)) && ((cy <= (rfEb(ab, n, i, cand, row, 3) + rfZone)) && ((model.RegionX1(orr, r) - model.RegionX0(orr, r)) <= ((2 * (rfEb(ab, n, i, cand, row, 2) - rfEb(ab, n, i, cand, row, 0))) + 2000))))))) {
 			return row
 		}
 		i += 1
@@ -1150,6 +1150,9 @@ func rfLabelOf(on *port.Cells, orr *port.Cells, text *port.Cells, cand *port.Cel
 func rfGrows(fd *port.Cells, row int32) int32 {
 	// 1 when the figure of candidate row `row` may grow over its labels: a drawing, a chart, a picture; not a logo, a barcode or a code (a name, a number beside them is text).
 	var k int32 = rfFdv(fd, row, 0, model.FgUnknown())
+	if k == model.FgScreenshot() {
+		return 0
+	}
 	if (k == model.FgLogo()) || ((k == model.FgBarcode()) || (k == model.FgQr())) {
 		return 0
 	}

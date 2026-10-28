@@ -1072,7 +1072,7 @@ pub(crate) fn rf_label_of(on: &mut crate::port::Cells, orr: &mut crate::port::Ce
     i = 1;
     while i < crate::port::cells_len(fg) {
         row = crate::port::cells_at(fg, i);
-        if (as_get(cand, row, 0) == region_page(orr, r)) && ((region_x1(orr, r) > (rf_eb(ab, n, i, cand, row, 0) - RF_ZONE)) && ((region_x0(orr, r) < (rf_eb(ab, n, i, cand, row, 2) + RF_ZONE)) && ((cy >= (rf_eb(ab, n, i, cand, row, 1) - RF_ZONE)) && ((cy <= (rf_eb(ab, n, i, cand, row, 3) + RF_ZONE)) && ((region_x1(orr, r) - region_x0(orr, r)) <= ((2 * (rf_eb(ab, n, i, cand, row, 2) - rf_eb(ab, n, i, cand, row, 0))) + 2000)))))) {
+        if (rf_fdv(fd, row, 0, fg_unknown()) != fg_screenshot()) && ((as_get(cand, row, 0) == region_page(orr, r)) && ((region_x1(orr, r) > (rf_eb(ab, n, i, cand, row, 0) - RF_ZONE)) && ((region_x0(orr, r) < (rf_eb(ab, n, i, cand, row, 2) + RF_ZONE)) && ((cy >= (rf_eb(ab, n, i, cand, row, 1) - RF_ZONE)) && ((cy <= (rf_eb(ab, n, i, cand, row, 3) + RF_ZONE)) && ((region_x1(orr, r) - region_x0(orr, r)) <= ((2 * (rf_eb(ab, n, i, cand, row, 2) - rf_eb(ab, n, i, cand, row, 0))) + 2000))))))) {
             return row;
         }
         i += 1;
@@ -1082,6 +1082,9 @@ pub(crate) fn rf_label_of(on: &mut crate::port::Cells, orr: &mut crate::port::Ce
 pub(crate) fn rf_grows(fd: &mut crate::port::Cells, row: i32) -> i32 {
     // 1 when the figure of candidate row `row` may grow over its labels: a drawing, a chart, a picture; not a logo, a barcode or a code (a name, a number beside them is text).
     let k: i32 = rf_fdv(fd, row, 0, fg_unknown());
+    if k == fg_screenshot() {
+        return 0;
+    }
     if (k == fg_logo()) || ((k == fg_barcode()) || (k == fg_qr())) {
         return 0;
     }

@@ -928,4 +928,128 @@ public final class Figclasstest {
         cell = Model.nodeFirstChild(nn, 2);
         emon.Testport.assertEq(Model.nodeTextLen(nn, cell), 3, "the true table keeps its numeric value");
     }
+    public static int ftScreen(int emonT, int height, int held, int expected) {
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells grg = emon.Port.newCells();
+        emon.Port.Cells fnodes = emon.Port.newCells();
+        emon.Port.Cells fattrs = emon.Port.newCells();
+        emon.Port.Cells fregions = emon.Port.newCells();
+        emon.Port.Cells fnm = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells im = emon.Port.newCells();
+        emon.Port.Cells fi = emon.Port.newCells();
+        emon.Port.Cells grl = emon.Port.newCells();
+        emon.Port.Cells fw = emon.Port.newCells();
+        emon.Port.Cells fl = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pg = emon.Port.newCells();
+        emon.Port.Cells sl = emon.Port.newCells();
+        emon.Port.Cells cand = emon.Port.newCells();
+        emon.Port.Cells fcand = emon.Port.newCells();
+        emon.Port.Cells cl = emon.Port.newCells();
+        emon.Port.Cells fg = emon.Port.newCells();
+        emon.Port.Cells fd = emon.Port.newCells();
+        emon.Port.Cells ab = emon.Port.newCells();
+        emon.Port.Cells ws = emon.Port.newCells();
+        int i = 0;
+        int count = 0;
+        int a = 0;
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Model.pageNew(pages, 1, 61200, 79200, 0, Model.pkVector());
+        while (i < 16) {
+            emon.Port.cellsPush(pg, 0);
+            i += 1;
+        }
+        Evidence.imNew(im, 1, 10000, 20000, 40000, 20000 + height, 1, 1000, 500);
+        ftFi(fi, 1, 0, 2, 3, 8, 60, 0);
+        ftWord(fw, et, 1, 12000, 22000, 14000, 22600, 52, 50);
+        ftWord(fw, et, 1, 16000, 22000, 18000, 22600, 79, 75);
+        ftHeldLine(fl, 22000, held);
+        ftPara(nodes, regions, text, Model.nkParagraph(), 2, 12000, 22000, 14000, 22600);
+        emon.Port.cellsSet(text, 0, 52);
+        emon.Port.cellsSet(text, 1, 50);
+        ftPara(nodes, regions, text, Model.nkParagraph(), 3, 10000, 75000, 30000, 76000);
+        count = Figclass.fcStage(nodes, attrs, regions, text, pages, fnodes, fattrs, fregions, fnm, pa, im, fi, grg, grl, fw, fl, et, pg, sl, cand, 0, fcand, cl, fg, fd, ab, ws);
+        emon.Testport.assertEq(count, expected, "only a bounded unclaimed embedded panel gets an owner");
+        if (expected == 1) {
+            emon.Testport.assertEq(Model.nodeCount(fnodes), 3, "one figure owns the label; outside prose stays independent");
+            emon.Testport.assertEq(Model.nodeKind(fnodes, 1), Model.nkFigure(), "panel owner is a figure");
+            emon.Testport.assertEq(Model.nodeSub(fnodes, 1), Model.fgScreenshot(), "panel is a screenshot");
+            a = Model.nodeAttr(fnodes, fattrs, 1, Model.fkLabels());
+            emon.Testport.assertThat(a >= 0, "exact numeric label belongs to the screenshot");
+            if (a >= 0) {
+                emon.Testport.assertEq(Model.attrLen(fattrs, a), 2, "label is exactly two codepoints");
+                emon.Testport.assertEq(Model.textAt(text, Model.attrValue(fattrs, a)), 52, "first digit is 4");
+                emon.Testport.assertEq(Model.textAt(text, Model.attrValue(fattrs, a) + 1), 50, "second digit is 2");
+            }
+            emon.Testport.assertEq(Model.nodeKind(fnodes, 2), Model.nkParagraph(), "outside prose retains its paragraph owner");
+        }
+        return count;
+    }
+    public static void testEmbeddedDialogOwnsItsNumericLabel() {
+        ftScreen(0, 15000, 0, 1);
+    }
+    public static void testWideShallowScreenOwnsItsNumericLabel() {
+        ftScreen(0, 7000, 0, 1);
+    }
+    public static void testEmbeddedTableClaimPreventsScreenPromotion() {
+        ftScreen(0, 15000, 1, 0);
+    }
+    public static void testLargePageImageIsNotPromotedByFlatCompression() {
+        ftScreen(0, 50000, 0, 0);
+    }
+    public static void testScreenshotLabelsStopAtTheRasterBoundary() {
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells nn = emon.Port.newCells();
+        emon.Port.Cells na = emon.Port.newCells();
+        emon.Port.Cells nr = emon.Port.newCells();
+        emon.Port.Cells nm = emon.Port.newCells();
+        emon.Port.Cells cand = emon.Port.newCells();
+        emon.Port.Cells fg = emon.Port.newCells();
+        emon.Port.Cells fd = emon.Port.newCells();
+        emon.Port.Cells ab = emon.Port.newCells();
+        int a = 0;
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Model.pageNew(pages, 1, 61200, 79200, 0, Model.pkVector());
+        ftPara(nodes, regions, text, Model.nkParagraph(), 2, 12000, 15000, 14000, 15600);
+        emon.Port.cellsSet(text, 0, 52);
+        emon.Port.cellsSet(text, 1, 50);
+        ftPara(nodes, regions, text, Model.nkParagraph(), 3, 12000, 31000, 14000, 31600);
+        ftCand(cand, 1, 10000, 10000, 40000, 30000);
+        ftCand(cand, 1, 10000, 32000, 15000, 36000);
+        ftFd(fd, Model.fgScreenshot(), 580);
+        ftFd(fd, Model.fgPhoto(), 760);
+        emon.Port.cellsPush(fg, 0);
+        emon.Port.cellsPush(fg, 0);
+        emon.Port.cellsPush(fg, 1);
+        Restruct.rsFigures(nodes, attrs, regions, text, nn, na, nr, nm, cand, fg, fd, ab);
+        emon.Testport.assertEq(Model.nodeCount(nn), 3, "the screenshot and neighboring illustration each own their own label");
+        emon.Testport.assertEq(Model.nodeSub(nn, 1), Model.fgScreenshot(), "first owner is the screenshot");
+        a = Model.nodeAttr(nn, na, 1, Model.fkLabels());
+        emon.Testport.assertThat(a >= 0, "screenshot owns 42");
+        if (a >= 0) {
+            emon.Testport.assertEq(Model.attrLen(na, a), 2, "exact internal value");
+            emon.Testport.assertEq(Model.textAt(text, Model.attrValue(na, a)), 52, "digit 4");
+            emon.Testport.assertEq(Model.textAt(text, Model.attrValue(na, a) + 1), 50, "digit 2");
+            emon.Testport.assertEq(Model.attrNext(na, a), -1, "no neighboring label is stolen by the screenshot");
+        }
+        emon.Testport.assertEq(Model.nodeSub(nn, 2), Model.fgPhoto(), "second owner remains the neighboring illustration");
+        a = Model.nodeAttr(nn, na, 2, Model.fkLabels());
+        emon.Testport.assertThat(a >= 0, "outside label belongs to the illustration");
+        if (a >= 0) {
+            emon.Testport.assertEq(Model.attrLen(na, a), 3, "outside label remains complete");
+        }
+    }
 }
