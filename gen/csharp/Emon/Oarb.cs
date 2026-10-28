@@ -438,16 +438,16 @@ public static class Oarb {
         }
         return 1;
     }
-    public static int OaPct(emon.Port.Cells text, int a, int an, int b, int bn, int p, int pn, emon.Port.Cells candidates, int row, int holds, int rows, emon.Oarbctx.OaWork work) {
+    public static int OaPctMeta(emon.Port.Cells text, int a, int an, int b, int bn, int p, int pn, emon.Port.Cells candidates, int row, int holds, int rows, emon.Port.Cells am, emon.Port.Cells bm, emon.Port.Cells pm, emon.Port.Cells cm) {
         if ((emon.Port.CellsLen(candidates) % 3) != 0) {
             return -1;
         }
         if ((holds < 4) || (((holds * 4) < (rows * 3)) || (holds > rows))) {
             return -1;
         }
-        long av = Ofmt.FmtValue(text, a, an, work.Am);
-        long bv = Ofmt.FmtValue(text, b, bn, work.Bm);
-        long pv = Ofmt.FmtValue(text, p, pn, work.Pm);
+        long av = Ofmt.FmtValue(text, a, an, am);
+        long bv = Ofmt.FmtValue(text, b, bn, bm);
+        long pv = Ofmt.FmtValue(text, p, pn, pm);
         long scale = (long) 100;
         long numerator = (long) 0;
         long denominator = av;
@@ -457,13 +457,13 @@ public static class Oarb {
         int chosen = -1;
         int start = 0;
         int count = 0;
-        if (((emon.Port.CellsAt(work.Am, 0) == 0) || (emon.Port.CellsAt(work.Bm, 0) == 0)) || ((av == ((long) 0)) || (emon.Port.CellsAt(work.Am, 1) != emon.Port.CellsAt(work.Bm, 1)))) {
+        if (((emon.Port.CellsAt(am, 0) == 0) || (emon.Port.CellsAt(bm, 0) == 0)) || ((av == ((long) 0)) || (emon.Port.CellsAt(am, 1) != emon.Port.CellsAt(bm, 1)))) {
             return -1;
         }
-        if ((emon.Port.CellsAt(work.Pm, 0) == 0) || (emon.Port.CellsAt(work.Pm, 1) > 2)) {
+        if ((emon.Port.CellsAt(pm, 0) == 0) || (emon.Port.CellsAt(pm, 1) > 2)) {
             return -1;
         }
-        while (i < emon.Port.CellsAt(work.Pm, 1)) {
+        while (i < emon.Port.CellsAt(pm, 1)) {
             scale *= (long) 10;
             i += 1;
         }
@@ -494,8 +494,8 @@ public static class Oarb {
             if (emon.Port.CellsAt(candidates, i * 3) == row) {
                 start = emon.Port.CellsAt(candidates, (i * 3) + 1);
                 count = emon.Port.CellsAt(candidates, (i * 3) + 2);
-                if (OaCompatible(text, p, pn, start, count, work.Pm, work.Cm) == 1) {
-                    pv = Ofmt.FmtValue(text, start, count, work.Cm);
+                if (OaCompatible(text, p, pn, start, count, pm, cm) == 1) {
+                    pv = Ofmt.FmtValue(text, start, count, cm);
                     if (pv == expected) {
                         if (chosen < 0) {
                             chosen = i;
@@ -508,6 +508,9 @@ public static class Oarb {
             i += 1;
         }
         return chosen;
+    }
+    public static int OaPct(emon.Port.Cells text, int a, int an, int b, int bn, int p, int pn, emon.Port.Cells candidates, int row, int holds, int rows, emon.Oarbctx.OaWork work) {
+        return OaPctMeta(text, a, an, b, bn, p, pn, candidates, row, holds, rows, work.Am, work.Bm, work.Pm, work.Cm);
     }
     public static int OaLineMergeMeta(emon.Port.Cells text, int joined, int jn, int candidate, int cn, int tokens, int lineRetry, int margin, emon.Port.Cells im, emon.Port.Cells cm) {
         if ((tokens < 2) || (lineRetry != 1)) {

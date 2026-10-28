@@ -7462,7 +7462,11 @@ func EvEmitOarb(t *strings.Builder, pr int32, started int32, rows *port.Cells) i
 		s = evFrun(t, pr, 2, rows, 16, i, 5, EkIncumbent(), s)
 		s = evFrun(t, pr, 2, rows, 16, i, 7, EkChoice(), s)
 		s = EvBegin(t, pr, 2, s, EkRule())
-		port.TextAscii(t, "\"line-merge\"")
+		if evGet(rows, 16, i, 9) == 2 {
+			port.TextAscii(t, "\"closure-pct\"")
+		} else {
+			port.TextAscii(t, "\"line-merge\"")
+		}
 		s = evFint(t, pr, 2, rows, 16, i, 10, EkRun(), -1, s)
 		s = evFint(t, pr, 2, rows, 16, i, 11, EkVotes(), 0, s)
 		s = evFint(t, pr, 2, rows, 16, i, 12, EkMargin(), -2147483648, s)
@@ -7471,6 +7475,10 @@ func EvEmitOarb(t *strings.Builder, pr int32, started int32, rows *port.Cells) i
 		port.TextI32(t, evGet(rows, 16, i, 13))
 		json.JsFsep(t, pr, 1)
 		port.TextI32(t, evGet(rows, 16, i, 14))
+		if evGet(rows, 16, i, 9) == 2 {
+			json.JsFsep(t, pr, 1)
+			port.TextI32(t, evGet(rows, 16, i, 15))
+		}
 		port.TextAscii(t, "]")
 		json.JsClose(t, pr, 2, s)
 		i += 1

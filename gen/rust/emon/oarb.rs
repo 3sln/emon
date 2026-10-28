@@ -436,16 +436,16 @@ pub fn oa_block(text: &mut crate::port::Cells, inc: &mut crate::port::Cells, can
     }
     return 1;
 }
-pub fn oa_pct(text: &mut crate::port::Cells, a: i32, an: i32, b: i32, bn: i32, p: i32, pn: i32, candidates: &mut crate::port::Cells, row: i32, holds: i32, rows: i32, work: &mut crate::emon::oarbctx::OaWork) -> i32 {
+pub fn oa_pct_meta(text: &mut crate::port::Cells, a: i32, an: i32, b: i32, bn: i32, p: i32, pn: i32, candidates: &mut crate::port::Cells, row: i32, holds: i32, rows: i32, mut am: &mut crate::port::Cells, mut bm: &mut crate::port::Cells, mut pm: &mut crate::port::Cells, mut cm: &mut crate::port::Cells) -> i32 {
     if (crate::port::cells_len(candidates) % 3) != 0 {
         return -1;
     }
     if (holds < 4) || (((holds * 4) < (rows * 3)) || (holds > rows)) {
         return -1;
     }
-    let av: i64 = fmt_value(text, a, an, &mut work.am);
-    let bv: i64 = fmt_value(text, b, bn, &mut work.bm);
-    let mut pv: i64 = fmt_value(text, p, pn, &mut work.pm);
+    let av: i64 = fmt_value(text, a, an, am);
+    let bv: i64 = fmt_value(text, b, bn, bm);
+    let mut pv: i64 = fmt_value(text, p, pn, pm);
     let mut scale: i64 = 100 as i64;
     let mut numerator: i64 = 0 as i64;
     let mut denominator: i64 = av;
@@ -455,13 +455,13 @@ pub fn oa_pct(text: &mut crate::port::Cells, a: i32, an: i32, b: i32, bn: i32, p
     let mut chosen: i32 = -1;
     let mut start: i32 = 0;
     let mut count: i32 = 0;
-    if ((crate::port::cells_at(&mut work.am, 0) == 0) || (crate::port::cells_at(&mut work.bm, 0) == 0)) || ((av == (0 as i64)) || (crate::port::cells_at(&mut work.am, 1) != crate::port::cells_at(&mut work.bm, 1))) {
+    if ((crate::port::cells_at(am, 0) == 0) || (crate::port::cells_at(bm, 0) == 0)) || ((av == (0 as i64)) || (crate::port::cells_at(am, 1) != crate::port::cells_at(bm, 1))) {
         return -1;
     }
-    if (crate::port::cells_at(&mut work.pm, 0) == 0) || (crate::port::cells_at(&mut work.pm, 1) > 2) {
+    if (crate::port::cells_at(pm, 0) == 0) || (crate::port::cells_at(pm, 1) > 2) {
         return -1;
     }
-    while i < crate::port::cells_at(&mut work.pm, 1) {
+    while i < crate::port::cells_at(pm, 1) {
         scale *= 10 as i64;
         i += 1;
     }
@@ -492,8 +492,8 @@ pub fn oa_pct(text: &mut crate::port::Cells, a: i32, an: i32, b: i32, bn: i32, p
         if crate::port::cells_at(candidates, i * 3) == row {
             start = crate::port::cells_at(candidates, (i * 3) + 1);
             count = crate::port::cells_at(candidates, (i * 3) + 2);
-            if oa_compatible(text, p, pn, start, count, &mut work.pm, &mut work.cm) == 1 {
-                pv = fmt_value(text, start, count, &mut work.cm);
+            if oa_compatible(text, p, pn, start, count, pm, cm) == 1 {
+                pv = fmt_value(text, start, count, cm);
                 if pv == expected {
                     if chosen < 0 {
                         chosen = i;
@@ -506,6 +506,9 @@ pub fn oa_pct(text: &mut crate::port::Cells, a: i32, an: i32, b: i32, bn: i32, p
         i += 1;
     }
     return chosen;
+}
+pub fn oa_pct(text: &mut crate::port::Cells, a: i32, an: i32, b: i32, bn: i32, p: i32, pn: i32, candidates: &mut crate::port::Cells, row: i32, holds: i32, rows: i32, work: &mut crate::emon::oarbctx::OaWork) -> i32 {
+    return oa_pct_meta(text, a, an, b, bn, p, pn, candidates, row, holds, rows, &mut work.am, &mut work.bm, &mut work.pm, &mut work.cm);
 }
 pub fn oa_line_merge_meta(text: &mut crate::port::Cells, joined: i32, jn: i32, candidate: i32, cn: i32, tokens: i32, line_retry: i32, margin: i32, mut im: &mut crate::port::Cells, mut cm: &mut crate::port::Cells) -> i32 {
     if (tokens < 2) || (line_retry != 1) {

@@ -39,6 +39,7 @@
             [emon.retarget :refer [rt-receipt-source rt-receipt-ignored rt-mark-adopted rt-prep rt-plan rt-record rt-adopt rt-upright rt-witness rt-run-meta rt-pad rtp-q rtp-primary rtp-hash rtp-trigger]]
             [emon.ofuse :refer [of-fuse]]
             [emon.oaline :refer [oa-line-fuse]]
+            [emon.oapct :refer [pct-ask pct-record pct-rows pct-plan pct-fuse]]
             [emon.rasterplan :refer [rp-w rp-f-ask rp-f-wat rp-f-wn rp-f-scripts rp-ww rp-ask-none rp-ask-full rp-ask-witness rp-plan rp-request rp-weak
                                      ri-escalate ri-witness ri-none]]
             [emon.player :refer [cg-count]]
@@ -502,6 +503,8 @@
     (rt-prep rtp)
     (rt-receipt-source rtp maskv)
     (set asked (rt-plan i input 0 0 rid hint loc ans bms (pn-k-text) (bms-get bms rid) ws oruns run olines owords rules tlines rtp rq scr comps inks s6))
+    (if (== (cells-at rtp (rtp-q)) 0)
+      (set asked (+ asked (pct-ask i dpi100 bx0 by0 (bms-get bms did) ans loc bms owords etext w0 nw rq s1 s2 s3 s4 s5 s6))))
     (comment "the seals and stamps in the page's pixels (P8.2): their strips and crops are asked in the same round as the targeted passes")
     (if (== seals 1)
       (do (sx-find (+ i 1) views vdec prims inks pw ph s1)
@@ -528,6 +531,13 @@
                          s1 s2 s3 s4 s5 s6 rn ri cs vr)))
     (if (or (== (cells-at rtp (rtp-primary)) run) (== (cells-at rtp (rtp-q)) 0))
       (set nsel (oa-line-fuse (+ i 1) rtp oruns olines owords etext scr nsel oaz s1 s2 s3 s4)))
+    (if (== (cells-at rtp (rtp-q)) 0)
+      (do (pct-rows owords etext w0 nw s1 s3 s4 s5)
+          (pct-plan owords s1 s2)
+          (comment "Recreate the crop plan without requesting; all answers are now in.")
+          (pct-ask i dpi100 bx0 by0 (bms-get bms did) ans loc bms owords etext w0 nw rq s1 s2 s3 s4 s5 s6)
+          (set ua (pct-record i dpi100 bx0 by0 ans loc s2 vdec views epages etext oruns oblocks olines owords osyms oalts feats))
+          (set nsel (pct-fuse (+ i 1) s2 s1 ua etext oruns olines owords scr nsel oaz s3 s4 s5 s6 ri))))
     (rt-upright rtp run epages (+ i 1))
     (set rotmed (ev-rot-median olines l0 nl))
     (sc-emit-sel olines owords osyms nsel (+ i 1) rotmed scr words lines etext rules comps inks)

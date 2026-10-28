@@ -7,8 +7,8 @@
             [emon.ofmt :refer [fmt-value fmt-digit]]
             [kin.lang :refer [defn return let set while if do comment + - * quot rem < > <= >= == != and or]]))
 
-;; Production activation is deliberately separate from these decision kernels.
-;; It stays forced-keep until the live, fresh-holdout and ledger gates pass.
+;; Bulk activation stays separate from these kernels. OA2 uses oa-pct-meta
+;; through the narrower, independently guarded sign-only path in oapct.
 
 (defn ^:pub ^I32 oa-active [] (return 0))
 
@@ -229,18 +229,18 @@
 
 ;; Percent candidates use the same [row,start,count] source index arena.
 ;; Half away from zero is explicit and identical on every host.
-(defn ^:pub ^I32 oa-pct [^Cells text ^I32 a ^I32 an ^I32 b ^I32 bn ^I32 p ^I32 pn
-                         ^Cells candidates ^I32 row ^I32 holds ^I32 rows ^OaWork work]
+(defn ^:pub ^I32 oa-pct-meta [^Cells text ^I32 a ^I32 an ^I32 b ^I32 bn ^I32 p ^I32 pn
+                         ^Cells candidates ^I32 row ^I32 holds ^I32 rows ^:mut ^Cells am ^:mut ^Cells bm ^:mut ^Cells pm ^:mut ^Cells cm]
   (if (!= (rem (cells-len candidates) 3) 0) (return -1))
   (if (or (< holds 4) (or (< (* holds 4) (* rows 3)) (> holds rows))) (return -1))
-  (let [^I64 av (fmt-value text a an (fd work am)) ^I64 bv (fmt-value text b bn (fd work bm))
-        ^:mut ^I64 pv (fmt-value text p pn (fd work pm))
+  (let [^I64 av (fmt-value text a an am) ^I64 bv (fmt-value text b bn bm)
+        ^:mut ^I64 pv (fmt-value text p pn pm)
         ^:mut ^I64 scale (i64 100) ^:mut ^I64 numerator (i64 0) ^:mut ^I64 denominator av
         ^:mut ^I64 expected (i64 0) ^:mut ^I64 residue (i64 0)
         ^:mut ^I32 i 0 ^:mut ^I32 chosen -1 ^:mut ^I32 start 0 ^:mut ^I32 count 0]
-    (if (or (or (== (cells-at (fd work am) 0) 0) (== (cells-at (fd work bm) 0) 0)) (or (== av (i64 0)) (!= (cells-at (fd work am) 1) (cells-at (fd work bm) 1)))) (return -1))
-    (if (or (== (cells-at (fd work pm) 0) 0) (> (cells-at (fd work pm) 1) 2)) (return -1))
-    (while (< i (cells-at (fd work pm) 1)) (do (set scale (* scale (i64 10))) (set i (+ i 1))))
+    (if (or (or (== (cells-at am 0) 0) (== (cells-at bm 0) 0)) (or (== av (i64 0)) (!= (cells-at am 1) (cells-at bm 1)))) (return -1))
+    (if (or (== (cells-at pm 0) 0) (> (cells-at pm 1) 2)) (return -1))
+    (while (< i (cells-at pm 1)) (do (set scale (* scale (i64 10))) (set i (+ i 1))))
     ;; Parser bound (15 digits) times scale <= 10^4 fits signed I64 only
     ;; below this conservative bound. A large value is kept, never overflowed.
     (if (or (> bv (i64 400000000000000)) (< bv (i64 -400000000000000))) (return -1))
@@ -255,13 +255,17 @@
     (while (< i (quot (cells-len candidates) 3))
       (do (if (== (cells-at candidates (* i 3)) row)
             (do (set start (cells-at candidates (+ (* i 3) 1))) (set count (cells-at candidates (+ (* i 3) 2)))
-                (if (== (oa-compatible text p pn start count (fd work pm) (fd work cm)) 1)
-                  (do (set pv (fmt-value text start count (fd work cm)))
+                (if (== (oa-compatible text p pn start count pm cm) 1)
+                  (do (set pv (fmt-value text start count cm))
                       (if (== pv expected)
                         (if (< chosen 0) (set chosen i)
                           (if (== (oa-equal text start count (cells-at candidates (+ (* chosen 3) 1)) (cells-at candidates (+ (* chosen 3) 2))) 0) (return -1))))))))
           (set i (+ i 1))))
     (return chosen)))
+
+(defn ^:pub ^I32 oa-pct [^Cells text ^I32 a ^I32 an ^I32 b ^I32 bn ^I32 p ^I32 pn
+                         ^Cells candidates ^I32 row ^I32 holds ^I32 rows ^OaWork work]
+  (return (oa-pct-meta text a an b bn p pn candidates row holds rows (fd work am) (fd work bm) (fd work pm) (fd work cm))))
 
 (defn ^:pub ^I32 oa-line-merge-meta [^Cells text ^I32 joined ^I32 jn ^I32 candidate ^I32 cn
                                      ^I32 tokens ^I32 line-retry ^I32 margin ^:mut ^Cells im ^:mut ^Cells cm]

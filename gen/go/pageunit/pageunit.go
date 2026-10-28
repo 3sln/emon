@@ -7,6 +7,7 @@ import (
 	"emon/evidence"
 	"emon/health"
 	"emon/oaline"
+	"emon/oapct"
 	"emon/ofuse"
 	"emon/pageink"
 	"emon/pdfdoc"
@@ -584,6 +585,9 @@ func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 in
 	retarget.RtPrep(rtp)
 	retarget.RtReceiptSource(rtp, maskv)
 	asked = retarget.RtPlan(i, input, 0, 0, rid, hint, loc, ans, bms, pageink.PnKText(), port.BmsGet(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr, comps, inks, s6)
+	if port.CellsAt(rtp, retarget.RtpQ()) == 0 {
+		asked += oapct.PctAsk(i, dpi100, bx0, by0, port.BmsGet(bms, did), ans, loc, bms, owords, etext, w0, nw, rq, s1, s2, s3, s4, s5, s6)
+	}
 	// the seals and stamps in the page's pixels (P8.2): their strips and crops are asked in the same round as the targeted passes
 	if seals == 1 {
 		sealpx.SxFind(i+1, views, vdec, prims, inks, pw, ph, s1)
@@ -615,6 +619,14 @@ func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 in
 	}
 	if (port.CellsAt(rtp, retarget.RtpPrimary()) == run) || (port.CellsAt(rtp, retarget.RtpQ()) == 0) {
 		nsel = oaline.OaLineFuse(i+1, rtp, oruns, olines, owords, etext, scr, nsel, oaz, s1, s2, s3, s4)
+	}
+	if port.CellsAt(rtp, retarget.RtpQ()) == 0 {
+		oapct.PctRows(owords, etext, w0, nw, s1, s3, s4, s5)
+		oapct.PctPlan(owords, s1, s2)
+		// Recreate the crop plan without requesting; all answers are now in.
+		oapct.PctAsk(i, dpi100, bx0, by0, port.BmsGet(bms, did), ans, loc, bms, owords, etext, w0, nw, rq, s1, s2, s3, s4, s5, s6)
+		ua = oapct.PctRecord(i, dpi100, bx0, by0, ans, loc, s2, vdec, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
+		nsel = oapct.PctFuse(i+1, s2, s1, ua, etext, oruns, olines, owords, scr, nsel, oaz, s3, s4, s5, s6, ri)
 	}
 	retarget.RtUpright(rtp, run, epages, i+1)
 	rotmed = evidence.EvRotMedian(olines, l0, nl)

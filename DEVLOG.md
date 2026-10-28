@@ -13173,6 +13173,38 @@ Fresh live sweep inputs reproduce n01's three false tables inside Figure 1, G13'
 
 The first live G11 candidate preserved every word but reassigned the nearby NOTE label from its illustration to the preceding screenshot. Reject that ownership result. A fifth failing-first law requires the exact internal value 42 to stay with the screenshot and the exterior label to retain its neighboring illustration owner. Screenshots may absorb their interior text but do not grow over exterior labels or claim them by proximity. Diagram/chart/photo proximity behavior is retained. This distinction follows the explicit raster placement boundary rather than word content.
 
+### D796 — Restore a source-read minus only inside an established percent family
+
+OA2 activates a narrow percent-change path on upright raster pages. Three right-aligned numeric cells form a row; at least four incumbent rows and at least 75 percent of the connected family must close with exact fixed-point arithmetic. A whitespace gap prevents borrowing support from another table. Only a failing positive percentage whose magnitude already equals the rounded negative change can request a crop. Digit substitutions, changes to the operands, and more than one failing sign slot are held. Born-digital pages do not enter this path.
+
+The planner reads one cell from the original raster at exactly three times its size, with an explicit white border, both pixel-hash cells, fixed request/view identities, and the default model. The ordinary cubic enlargement misses F19's dash; a separate fixed-integer Q22 Lanczos crop filter supplies a verbatim `-6.9` candidate. Existing page enlargement is unchanged. The candidate must consist of the exact incumbent characters preceded by the source-read minus, and `oa-pct-meta` must uniquely close the established identity. The selected line is rebuilt from source-linked copies, preserving every neighbouring word and its properties. The `oarb` row says `closure-pct` and names both operands and the incumbent slot. Bulk column arbitration remains inactive; the legacy `oa-active` switch does not govern this narrow path.
+
+The live F19 trial changes exactly `6.9` to `-6.9`, backed by the crop and the 2,045 to 1,903 identity. This entry is subject to the final control, fresh-holdout, receipt and repository gates recorded in the OA2 report.
+
+- [ ] **Signed off** (maintainer)
+
+### D797 — Reject the remaining crop trials without weakening the arbitration guards
+
+OA2 separately measures the existing P-ARB prototype with the repository's exact integer cubic view kernel and live Tesseract reads. The default F08 table views supply 97 and 144. Optional best-model views supply those and the three remaining target spellings, but the only new reading for incumbent 322 is `$522`; the other reading is still 322. The retained symmetric currency-affix guard rejects adding that symbol to this numeric slot. The separately selected incumbent dollar token cannot be silently removed, duplicated, or joined to make this pass. The full optional F08 recovery therefore fails the unchanged slot/affix guard in this trial. The column-sum activation trial is not retained. This is a failed integration recipe, not a claim that other crop recipes cannot recover it.
+
+For F06 the tilted component band is found, and six lexical words agree with 88 percent component coverage. The remaining slot is an unagreed lexical-looking OCR form rather than an admitted numeric candidate; both default and optional-best configurations block the band under the unchanged whole-band unagreed-word veto. The band activation trial is not retained. No number is inserted. Consequently there is no retained band mechanism for conditional E04 activation. Its optional-model crop does read the five-word thank-you line, all present in SROIE gold, but it is not inserted through a separate exception. Financial amounts, the F06 percent/case and F16's 1904 remain open.
+
+The optional model is installed only in task scratch, never bundled, downloaded by production code, or selected implicitly. Its TSV configuration directory must also be present: a missing `configs/tsv` initially produced plain text instead of TSV in the measurement harness, was corrected, and all optional measurements were repeated. Scripts, model hash, per-view candidates and blocking decisions are retained in the OA2 scratch audit. No ratchet, golden, corpus document or batch-26 module is changed by these rejected trials.
+
+- [ ] **Signed off** (maintainer)
+
+### D798 — Verify and retain only the bounded F19 activation
+
+Paired live validation of all 54 controls passes D789: 53 Models are byte-identical to the parent binary; F19 alone replaces `6.9` with the source-read `-6.9`. Its other 298 selected word objects and their properties are identical. An independent exact-decimal audit reconstructs eight incumbent identities out of nine rows. F16's existing two line joins remain byte-identical to the parent. The default F19 Model, evidence and HTML replay identically on Rust, Go, Java and C#. Installing the optional model alongside all standard models also leaves those three outputs identical when both runs use the same recording mode. A preliminary comparison mixed recording and ordinary conversion and therefore differed only in engine-ink diagnostics; the matching-mode test was repeated and passes.
+
+The genuinely fresh FinTabNet holdout contains 100 pages, excludes both the design and OA1 holdouts and the target controls, and changes zero Models: zero correct and zero wrong changes, with gold-token matches 8,054 before and after. All 160 RVL and 40 XFUND Models are byte-identical to the fresh parent runs. All changes retained by OA2 are therefore the one authorized F19 slot, with no source-word loss. The manifest, hashes, per-document results and independent identity audit are in the OA2 handoff.
+
+All fifteen requested repository gates pass: drift, CI core, both rederive forms, accuracy, samples, OCR/fusion/retarget/seals/sealpx/signatures/assets replay, full unit, and package check. CI's explicit module map now includes the three new namespaces; its initial missing-map failure is corrected. Re-derivation executes 25 steps and all eight calibration refreshes change zero rows. No golden, sample or ratchet changes. Accuracy checks 3,449 metrics without regression and 232 Models match Rust across Go, Java, C#, C and pod. Go, Rust, Java and C# each pass 1,339 laws. All 29 samples regenerate unchanged. Seven clean package consumers produce identical 3,653-byte HTML. Maven's own resolution and the JS/C/pod native snippets are not exercised; the C/pod test archives omit optional native OCR/render engines.
+
+Live receipts cover the same 60 SROIE and 60 CORD documents as the parent. Precision is unchanged at 0.682074563213647 and 0.422360248447205, above the unchanged floors; zero documents lose gold words, and numeric recall is unchanged. All 120 live/replay JSON, evidence and HTML bundles match. Builds use the task-local internal cache, a scoped review index and a local feed of already cached NuGet packages; the real index and main checkout are untouched. No corpus is fetched or pruned and no branch commit is made. Temporary builds are removed at handoff.
+
+Live re-judgments remain F06 poor, F08 poor, F19 poor and E04 broken. F19's minus is repaired, while its duplicate/merged headers remain. The rejected column and band trials of D797 do not establish activation of those mechanisms. This is a retained F19 recovery, not completion of bulk P-ARB or band insertion.
+
 - [ ] **Signed off** (maintainer)
 
 

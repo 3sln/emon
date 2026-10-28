@@ -6876,7 +6876,11 @@ public static class Evidence {
             s = EvFrun(t, pr, 2, rows, 16, i, 5, EkIncumbent(), s);
             s = EvFrun(t, pr, 2, rows, 16, i, 7, EkChoice(), s);
             s = EvBegin(t, pr, 2, s, EkRule());
-            emon.Port.TextAscii(t, "\"line-merge\"");
+            if (EvGet(rows, 16, i, 9) == 2) {
+                emon.Port.TextAscii(t, "\"closure-pct\"");
+            } else {
+                emon.Port.TextAscii(t, "\"line-merge\"");
+            }
             s = EvFint(t, pr, 2, rows, 16, i, 10, EkRun(), -1, s);
             s = EvFint(t, pr, 2, rows, 16, i, 11, EkVotes(), 0, s);
             s = EvFint(t, pr, 2, rows, 16, i, 12, EkMargin(), -2147483648, s);
@@ -6885,6 +6889,10 @@ public static class Evidence {
             emon.Port.TextI32(t, EvGet(rows, 16, i, 13));
             Json.JsFsep(t, pr, 1);
             emon.Port.TextI32(t, EvGet(rows, 16, i, 14));
+            if (EvGet(rows, 16, i, 9) == 2) {
+                Json.JsFsep(t, pr, 1);
+                emon.Port.TextI32(t, EvGet(rows, 16, i, 15));
+            }
             emon.Port.TextAscii(t, "]");
             Json.JsClose(t, pr, 2, s);
             i += 1;

@@ -814,7 +814,7 @@ fn test_arb_view_budget_and_integer_factor() {
     crate::testport::assert_eq(oa_view_allowed(1, 0, 4), 0, "two tables times two views");
     crate::testport::assert_eq(oa_view_allowed(1, 1, 11), 1, "last band view");
     crate::testport::assert_eq(oa_view_allowed(1, 1, 12), 0, "three bands times four views");
-    crate::testport::assert_eq(oa_active(), 0, "forced keep until live population guards pass");
+    crate::testport::assert_eq(oa_active(), 0, "bulk arbitration stays off; the separate percent sign path is bounded in oapct");
 }
 #[test]
 fn test_arb_malformed_split_line_amount_needs_the_full_margin() {
