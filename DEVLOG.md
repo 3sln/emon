@@ -13370,6 +13370,31 @@ Full re-derivation moves the `raster-rot90` retarget digest from `0f4545d2...` t
 
 - [ ] **Signed off** (maintainer)
 
+
+### D817 — Permit best English as the default, subject to the TB1 accuracy guard
+
+Maintainer decision (2026-10-29, TB1): tessdata_best may replace fast English in the CLI, native C/pod archives, packaging and pinned model fetch, accepting roughly 15.4 MB instead of 4.1 MB and roughly 2–3 times the OCR cost. This supersedes D787’s prohibition on default package growth; retain an explicit documented fast choice and model provenance. Activation remains conditional on the task’s measurements: never lower an accuracy ratchet, and stop before changing the default if any metric drops. This entry records the decision, not a completed default switch.
+
+- [ ] **Signed off** (maintainer)
+
+### D818 — TB1 stops before activation because paired best accuracy regresses
+
+Fresh measurements at a39535b1 use identical generated/host code, Tesseract settings and English-plus-OSD inventory, changing only eng.traineddata through TESSDATA_PREFIX. Ordinary `bb accuracy` passes 3,449 metrics and 232 cross-host Models. Paired `bb accuracy --predictor emon-live --variants scan` covers 71 documents. Against fresh fast results, best makes 311 metrics worse (296 by more than 0.002), improves 276, leaves 521 unchanged, removes six screenshot-kind metric keys and introduces fourteen keys. Overall CER worsens 0.091663 → 0.092016; table F1 0.657143 → 0.647887; heading recall 0.731092 → 0.714286. WER improves 0.171519 → 0.169242. The task explicitly requires stopping on any accuracy drop, so no shipping default, ratchet, golden or transcript changes are made. Receipt/control/performance/package measurements and final implementation gates are deferred at this stop, not claimed as passing.
+
+Best English revision e12c65a915945e4c28e237a9b52bc4a8f39a0cec has SHA-256 8280aed0782fe27257a68ea10fe7ef324ca0f8d85bd2fd145d1c2b560bcb66ba (15,400,601 bytes); fast has SHA-256 7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2 (4,113,088 bytes). The uncompressed model delta is +11,287,513 bytes; archive size deltas were not measured. Full results, measurement-only instrumentation and logs are under /Volumes/SSK SSD/emon-scratch/tb1/. Live commands exit 1 against the historical scoreboard; their scan-only scope also reports omitted historical variants, so the model decision uses freshly paired raw metrics, not that exit status. Baseline accuracy exits 0; babashka shutdown additionally logs a sandbox process-enumeration exception. No corpus fetch/prune or commit.
+
+- [ ] **Signed off** (maintainer)
+
+### D819 — TB1 measurement-only follow-up recommends retaining fast
+
+Completed the coordinator follow-up without activating best or changing any runtime default, ratchet, golden or tracked recording. Paired configured runs use the same a39535b1 native executable and pinned English/OSD data. Both 71-document synthetic reruns exactly reproduce D818's aggregate metrics; per-document CER worsens on 37 documents (only eight changes <=.002), heading recall worsens on four versus one improvement, and a multipage table's detection F1 drops .666667 to zero. Small CER changes do not excuse large structural losses on the same document.
+
+Receipts (60 SROIE +60 CORD per model) hold both precision floors: fast .6820745632/.4223602484, best .6832701678/.4869617950. Best nevertheless loses matched gold on 23/12 documents. All 54 controls/817 pages are paired. The established complete represented-word counter reproduces fast's reference 358,433 words; best has 357,665, with 5,695 lost and 4,927 gained tokens across 31 controls (token deltas are not error counts). The complete traversal includes block children, furniture, labels/markers/templates, and avoids alternate inline/caption duplication; body-only counts are retained separately. Source review covers 34 distinct changed lines across five documents: conservative complete-token tally 13 repairs versus 20 newly corrupted/omitted correct tokens, excluding spacing, partial tokens and hallucination removal. The zero-new-source-word-loss guard fails.
+
+F08 fixes only 97/58 of the five named slots, but total numeric matches fall 23/28 to 21/28; F06/E04 remain unrecovered. Best breaks the inherited F16 amount 4,400,819.15 to 4,400,818.15 and F19 sign -6.9 to 6.9; both are verified against source and serialized output. Fast keeps those recoveries. Receipt mean CPU/page grows 1.24x/1.38x; reconstructed perf-study scan points (1/2/4/8/16 pages, one pair each) cost about 1.52–1.59x with best. Paired model-only repacks of existing macOS CLI/C/pod archives grow 10.8426–10.8475 MB compressed. Full-best JS language data exists, but installed JS7's automatically selected relaxed-SIMD core crashes on float best; a scratch ordinary-SIMD check works. No JS workaround was shipped and live cross-host parity is not claimed.
+
+Recommend option (c), keep fast now. Option (b), guarded best crops, remains a separate implementation/holdout-validation task; neither whole-receipt aggregate improvements nor the prior prototype prove a safe routing policy. Option (a) fails the measured guards. Full before/after tables, per-document deltas, source judgments, model hashes, CPU data and package/JS evidence are in `.claude/coord/tb1-report.md` and external scratch `tb1/`. Activation/rederivation/final implementation gates were not rerun for this measurement-only follow-up. No commit or corpus fetch/prune; temporary internal builds removed at completion.
+
 ### D820 — Table redesign: `bb tables-ab` harness, frozen baseline and pre-registered acceptance criteria
 
 The maintainer decided (2026-10-29) that the table model will be redesigned as a scored, global model, and that the new engine must be compared against the old one and proven better before it is accepted. `bb tables-ab` (a not_gate) runs both engines on the same recorded OCR and render answers and scores them against gold. The populations total 857 inputs, frozen by sha256 in `test/tables-ab/populations.json`:
