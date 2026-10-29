@@ -13369,3 +13369,28 @@ Full re-derivation moves the `raster-rot90` retarget digest from `0f4545d2...` t
 `api/surface.edn` also refreshes four already-stale internal module counts from 115 to 117; this batch adds no module and changes no shipped public signature. Every moved golden or sample is reviewed separately from metadata; the retarget digest is the only replay-golden change observed at this point.
 
 - [ ] **Signed off** (maintainer)
+
+### D820 — Table redesign: `bb tables-ab` harness, frozen baseline and pre-registered acceptance criteria
+
+The maintainer decided (2026-10-29) that the table model will be redesigned as a scored, global model, and that the new engine must be compared against the old one and proven better before it is accepted. `bb tables-ab` (a not_gate) runs both engines on the same recorded OCR and render answers and scores them against gold. The populations total 857 inputs, frozen by sha256 in `test/tables-ab/populations.json`:
+- the synthetic corpus and the 16 `test/table` goldens;
+- ICDAR 2013, FinTabNet, cTDaR test and an agami ledger set;
+- the 14 named documents, with the 4,904 protected triples;
+- a 227-item held-out sample that no batch has tuned on;
+- the 54 live controls.
+
+The current engine's baseline is in `test/tables-ab/baseline.json`; its aggregate headline is 0.6201 and its held-out headline 0.5344. The acceptance criteria are fixed in advance in `test/tables-ab/criteria.edn`:
+- every population at or above the baseline;
+- the aggregate up by at least 0.01;
+- the held-out sample up by at least 0.005, with a paired-bootstrap lower bound above zero;
+- no protected triple lost, beyond the listed F01 p11 repairs;
+- zero words lost or gained on the controls;
+- CPU at most 1.5× on replays and 1.10× live, and memory at most 1.25×.
+
+The new engine sits behind an option, `tables=legacy|scored`, with legacy the default. The default flips only when the criteria accept it, and the old passes are removed in a later change. The scorer now rescales pixel gold to points, and it parses amounts written as "Rs. …". The plan and the staged brief are in the coordinator's `tr-design-report.md`.
+
+**Open items:**
+- `tools/table/ab_checks.py` and `ab_freeze.py` are Python. That is against the scripting rule (babashka only; Python only for reference oracles under `tools/oracle/`), so the first implementation stage ports them.
+- The current engine fails on 19 inputs (17 cTDaR and 2 held-out): 12 overflow panics, 4 unsupported-image, and 3 "unit is done and left requests". These need their own batch.
+
+- [ ] **Signed off** (maintainer)

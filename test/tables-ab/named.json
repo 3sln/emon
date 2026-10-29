@@ -1,0 +1,135 @@
+{
+  "note" : "Source-reviewed expectations of the named table documents (TR-design, frozen 2026-10-29). Pages are the frozen inputs' pages (trims: F01 = source pp1/10/11/20, E09/D16/F10 = pp1-4, F13 = pp11-13/28, D28 = pp94-96). Expected values come from the batch reports' source reviews (TF-design, TF1, b14, b19, b28): F01 Table 9 has 13 numbered rows with 15 values and a year header over 15+ columns; F01 p11 rows carry equal left and right line numbers; E09 is one 112-row ledger linked over its 4 pages; F17's ledger header spans 5 columns; E10 has 15 dated transactions; F14 has two header rows per page; F05's French headers span its 4 columns. Links are page pairs of one table; `from`/`to` are 12-hex SHA-1 fingerprints of the numeric cells of the incumbent's rows on each side (the incumbent links of D16, F05, F10 and F13 A-2 are source-verified in TF-design), `any` matches the page pair alone. A predicted link that matches no expected link is a false link.",
+  "docs" : {
+    "E09" : [ {
+      "name" : "dated-rows",
+      "kind" : "dated-rows",
+      "expect" : 112
+    }, {
+      "name" : "links",
+      "kind" : "links",
+      "links" : [ {
+        "pages" : [ 1, 2 ],
+        "any" : true
+      }, {
+        "pages" : [ 2, 3 ],
+        "any" : true
+      }, {
+        "pages" : [ 3, 4 ],
+        "any" : true
+      } ]
+    } ],
+    "F14" : [ {
+      "name" : "two-header-rows-per-page",
+      "kind" : "head-rows",
+      "pages" : [ 1, 2 ],
+      "expect" : 2
+    }, {
+      "name" : "links",
+      "kind" : "links",
+      "links" : [ ]
+    } ],
+    "F01" : [ {
+      "name" : "t9-numbered-rows",
+      "kind" : "numbered-rows",
+      "page" : 4,
+      "expect" : 13,
+      "min_values" : 12
+    }, {
+      "name" : "t9-year-header",
+      "kind" : "head-cover",
+      "page" : 4,
+      "min_cols" : 15
+    }, {
+      "name" : "p11-paired-line-numbers",
+      "kind" : "paired-numbers",
+      "page" : 3
+    }, {
+      "name" : "links",
+      "kind" : "links",
+      "links" : [ ]
+    } ],
+    "F13" : [ {
+      "name" : "links",
+      "kind" : "links",
+      "links" : [ {
+        "pages" : [ 2, 3 ],
+        "from" : [ "053b0f3fd416", "0756a7954525", "1098edc362da", "1250c03a4053", "15d06f665b9d", "2512439eb64a", "28781466f870", "291402dab53e", "2a35cf618257", "30142d6e1d02", "35ccae5dab8e", "3d8c61d7fd06", "4217be5869d6", "4fcbe3935024", "52eeb5e92fb2", "542e03100ee6", "563faff19de6", "593e84b8c9b3", "606d3b454ebb", "679e8a93e8e4", "6c05c0998605", "6cfa966c7f3c", "6e68a7a44635", "708ede626989", "73afafb16cbe", "7d11e2ddfa1b", "7f8e9048ec07", "87ebb6224525", "8ac7f677c096", "8fb371b8dbea", "9e28762e13c4", "9e2972be24f7", "a1db6ef91494", "b1420d41313c", "b232aaf92f7f", "b336f8e0d76a", "b77de343cfa9", "ba1210979f39", "c07b756c4b3f", "c2c710033894", "ce03ae5686d8", "d1868ac5efac", "d4188a9e226a", "d52d54b642ee", "d59cee40235e", "dac34d961886", "e6a3f3a484ff", "eb416c04f734", "ee13f7e83eef", "ef6614564cba", "f00869704f39", "fc9b2f752d56" ],
+        "to" : [ "08d8d0b28584", "43e613230bbd", "62ed58d6d657", "9d06f02a8f21", "a48f968270ab", "a8891c20edbd", "d4549c408dcd", "eaef364d8866" ]
+      } ]
+    } ],
+    "E10" : [ {
+      "name" : "dated-rows",
+      "kind" : "dated-rows",
+      "expect" : 15
+    }, {
+      "name" : "links",
+      "kind" : "links",
+      "links" : [ ]
+    } ],
+    "F10" : [ {
+      "name" : "links",
+      "kind" : "links",
+      "links" : [ {
+        "pages" : [ 1, 2 ],
+        "from" : [ "1ab7092248f0", "48edb49357c3", "6b924334ba49", "76a93eb97ffb", "82a04655a2f2", "872f4393d69b", "b6920f56c6cd", "eaef10381a9b" ],
+        "to" : [ "02fd95a4c448", "1ab7092248f0", "20c4cfd5c6b2", "254c79d55b6c", "368b4a89967b", "3caba1857ed2", "76a93eb97ffb", "872f4393d69b", "a33838c1bb29", "b6920f56c6cd" ]
+      }, {
+        "pages" : [ 2, 3 ],
+        "from" : [ "02fd95a4c448", "1ab7092248f0", "20c4cfd5c6b2", "254c79d55b6c", "368b4a89967b", "3caba1857ed2", "76a93eb97ffb", "872f4393d69b", "a33838c1bb29", "b6920f56c6cd" ],
+        "to" : [ "05a7b9895222", "0e36bc8afbb3", "1066164cafa4", "1a8277691ae0", "1ab7092248f0", "303b0a98a390", "68a82509202c", "76a93eb97ffb", "872f4393d69b", "ae4abbdbf8e4", "b6920f56c6cd", "ccb40977e5db", "dea2094043d1", "ea69f27799ac", "f0e258c6406e" ]
+      }, {
+        "pages" : [ 3, 4 ],
+        "from" : [ "05a7b9895222", "0e36bc8afbb3", "1066164cafa4", "1a8277691ae0", "1ab7092248f0", "303b0a98a390", "68a82509202c", "76a93eb97ffb", "872f4393d69b", "ae4abbdbf8e4", "b6920f56c6cd", "ccb40977e5db", "dea2094043d1", "ea69f27799ac", "f0e258c6406e" ],
+        "to" : [ "1ab7092248f0", "72978bee60ac", "7465817cee10", "76a93eb97ffb", "872f4393d69b", "b6920f56c6cd" ]
+      } ]
+    } ],
+    "F05" : [ {
+      "name" : "french-headers",
+      "kind" : "head-cover",
+      "page" : 1,
+      "min_cols" : 4
+    }, {
+      "name" : "links",
+      "kind" : "links",
+      "links" : [ {
+        "pages" : [ 1, 2 ],
+        "from" : [ "09602d5b050a", "2a591babc481", "3c4dcdf20d8a", "3e219ae49eb9", "51b16e3434b8", "636ee9b8d59e", "762bacee6fea", "9eb48aef0a60", "a52a4a4eb2fb", "af14b314e085", "b2a7502c7b87", "bc907ee645fa", "c8cf383f38eb", "d251a43926dd", "e494276e614c", "ec35e1a951ff", "f2c5fa930e1a" ],
+        "to" : [ "11fe438d7098", "74607ef707b9", "97558e94b561", "efc787bc7b63", "fe877b17ff85" ]
+      } ]
+    } ],
+    "F09" : [ {
+      "name" : "links",
+      "kind" : "links",
+      "links" : [ ]
+    } ],
+    "F17" : [ {
+      "name" : "ledger-header",
+      "kind" : "head-cover",
+      "page" : 2,
+      "min_cols" : 5
+    }, {
+      "name" : "links",
+      "kind" : "links",
+      "links" : [ ]
+    } ],
+    "D28" : [ {
+      "name" : "links",
+      "kind" : "links",
+      "links" : [ ]
+    } ],
+    "D16" : [ {
+      "name" : "links",
+      "kind" : "links",
+      "links" : [ {
+        "pages" : [ 2, 3 ],
+        "from" : [ "036716da882c", "2c3275d27d48", "379bb96358e9", "3b53249a9d16", "50a36c87b40d", "84d162bda77d", "a48f223dd94d", "b3751dd35d3d", "e395366e28f1" ],
+        "to" : [ "12d50930ef4c", "1c140f2f7c63", "5edb274e16ad", "9d65434e7ac3", "f3882bd93a5a", "ffbe04a15f9a" ]
+      }, {
+        "pages" : [ 3, 4 ],
+        "from" : [ "b7f4e0243e8d" ],
+        "to" : [ "2291346c90fc", "3ac7f64c6deb", "5e2d147961e1", "75e61db183fd", "9197965ba6c2", "9dd889ffc040", "be1db6cd4db8", "f3ca9539fa05" ]
+      } ]
+    } ]
+  }
+}

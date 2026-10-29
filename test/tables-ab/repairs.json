@@ -1,0 +1,6 @@
+{
+ "note": "Pre-registered ownership repairs (TR-design, 2026-10-29, before any implementation). Each entry may change only the stub-text and line-number cells of the named rows of one page; no numeric value of a row key is ever covered. F01 trim page 3 is source p11: the wrapped stubs 22, 32 and 41 and the GDI superscript (row 36), smoke-5 defects that TF-design's prototype repairs (7 changed and 4 extended cells there).",
+ "repairs": [
+  {"doc": "F01", "page": 3, "line_numbers": [22, 32, 36, 41], "line_cols": [0, 21]}
+ ]
+}

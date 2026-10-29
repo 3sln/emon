@@ -1,0 +1,22 @@
+;; THE ACCEPTANCE CRITERIA of the scored table engine (TR-design), PRE-REGISTERED on 2026-10-29 at main a39535b1, before any implementation.
+;; `bb tables-ab compare --a A --b B` (and `bb tables-ab ab`) applies them to two runs of ONE build: A = `--tables=legacy`, B = `--tables=scored`.
+;; B is accepted only when EVERY check holds. Changing a number here after the implementation starts is a new decision (DEVLOG) and voids
+;; the comparisons made under the old one. The justification of each number is in .claude/coord/tr-design-report.md section 3.
+{:populations ["synth" "icdar2013" "fintabnet" "ctdar" "ledgers" "named" "heldout"]
+ ;; the aggregate: the mean of these populations' headlines (held-out is judged on its own, controls by words and cost)
+ :aggregate ["synth" "icdar2013" "fintabnet" "ctdar" "ledgers" "named"]
+ ;; 1. better or equal on every population's headline (replays are deterministic: equal means equal; scores are rounded to 1e-6)
+ :tolerance 0.0
+ ;;    and no single component metric of any population worse by more than this (a headline may not hide a broken component)
+ :metric-tolerance 0.01
+ ;; 2. strictly better on the aggregate by this absolute margin, and on the held-out sample by this margin with a paired
+ ;;    bootstrap 95% lower bound above zero
+ :aggregate-margin 0.01
+ :heldout-margin 0.005
+ ;; 3. no protected triple lost: structural ownership changed = 0 (only test/tables-ab/repairs.json may excuse a change)
+ ;; 4. zero words lost and zero gained on the 54 controls
+ ;; 5. cost: total CPU of B over A, replayed populations (the engine without OCR) and live controls; peak resident memory
+ :replay-cost ["synth" "icdar2013" "fintabnet" "ctdar" "ledgers" "named" "heldout"]
+ :cpu-replay 1.5
+ :cpu-live 1.10
+ :rss 1.25}
